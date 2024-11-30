@@ -1,4 +1,4 @@
-import { Modal, Button, Group, Text, Select } from "@mantine/core";
+import { Modal, Button, Group, Text, Select, Switch } from "@mantine/core";
 import { exportPage } from "@/features/page/services/page-service.ts";
 import { useState } from "react";
 import * as React from "react";
@@ -57,7 +57,17 @@ export default function PageExportModal({
               <Text size="md">Format</Text>
             </div>
             <ExportFormatSelection format={format} onChange={handleChange} />
+
           </Group>
+
+          <Group justify="space-between" wrap="nowrap" pt="md">
+            <div>
+              <Text size="md">Include subpages</Text>
+            </div>
+            <Switch defaultChecked />
+
+          </Group>
+
 
           <Group justify="center" mt="md">
             <Button onClick={onClose} variant="default">
