@@ -48,7 +48,7 @@ function CommentMenu({
             {t("Edit comment")}
           </Menu.Item>
         )}
-        {isParentComment && canResolve && (
+        {isParentComment && (
           <Tooltip
             label={
               isResolved

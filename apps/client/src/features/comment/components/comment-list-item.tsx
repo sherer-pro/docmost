@@ -17,7 +17,6 @@ import { IComment } from "@/features/comment/types/comment.types";
 import { CustomAvatar } from "@/components/ui/custom-avatar.tsx";
 import { currentUserAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { useQueryEmit } from "@/features/websocket/use-query-emit";
-import { useIsCloudEE } from "@/hooks/use-is-cloud-ee";
 
 interface CommentListItemProps {
   comment: IComment;
@@ -43,7 +42,6 @@ function CommentListItem({
   const resolveCommentMutation = useResolveCommentMutation();
   const [currentUser] = useAtom(currentUserAtom);
   const emit = useQueryEmit();
-  const isCloudEE = useIsCloudEE();
 
   useEffect(() => {
     setContent(comment.content);
@@ -89,12 +87,6 @@ function CommentListItem({
   }
 
   async function handleResolveComment() {
-    // Защита от вызова EE-endpoint в окружениях, где эта возможность недоступна.
-    // Без этой проверки клиент пытается вызвать `/comments/resolve`, и сервер отвечает 404.
-    if (!isCloudEE) {
-      return;
-    }
-
     // Переключаем статус комментария между "активным" и "решённым".
     // Это нужно, чтобы решённые обсуждения не смешивались с открытыми в общем списке.
     try {
@@ -164,7 +156,6 @@ function CommentListItem({
                   canEdit={currentUser?.user?.id === comment.creatorId}
                   isResolved={comment.resolvedAt != null}
                   isParentComment={!comment.parentCommentId && canComment}
-                  canResolve={isCloudEE}
                 />
               )}
             </div>
