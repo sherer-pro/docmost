@@ -1,6 +1,15 @@
 import React, { useState, useRef, useCallback, memo, useMemo } from "react";
 import { useParams } from "react-router-dom";
-import { Divider, Paper, Tabs, Badge, Text, ScrollArea } from "@mantine/core";
+import {
+  Divider,
+  Paper,
+  Text,
+  ScrollArea,
+  Button,
+  Badge,
+  Collapse,
+  Group,
+} from "@mantine/core";
 import CommentListItem from "@/features/comment/components/comment-list-item";
 import {
   useCommentsQuery,
@@ -15,7 +24,6 @@ import { IPagination } from "@/lib/types.ts";
 import { extractPageSlugId } from "@/lib";
 import { useTranslation } from "react-i18next";
 import { useQueryEmit } from "@/features/websocket/use-query-emit";
-import { useIsCloudEE } from "@/hooks/use-is-cloud-ee";
 import { useGetSpaceBySlugQuery } from "@/features/space/queries/space-query.ts";
 import { useSpaceAbility } from "@/features/space/permissions/use-space-ability.ts";
 import {
@@ -34,20 +42,22 @@ function CommentListWithTabs() {
   } = useCommentsQuery({ pageId: page?.id, limit: 100 });
   const createCommentMutation = useCreateCommentMutation();
   const [isLoading, setIsLoading] = useState(false);
+  const [showResolved, setShowResolved] = useState(false);
   const emit = useQueryEmit();
-  const isCloudEE = useIsCloudEE();
   const { data: space } = useGetSpaceBySlugQuery(page?.space?.slug);
 
   const spaceRules = space?.membership?.permissions;
   const spaceAbility = useSpaceAbility(spaceRules);
-
 
   const canComment: boolean = spaceAbility.can(
     SpaceCaslAction.Manage,
     SpaceCaslSubject.Page
   );
 
-  // Separate active and resolved comments
+  /**
+   * Разделяем только корневые комментарии на активные и решённые.
+   * Дочерние комментарии выводятся рядом с родителем в общем дереве.
+   */
   const { activeComments, resolvedComments } = useMemo(() => {
     if (!comments?.items) {
       return { activeComments: [], resolvedComments: [] };
@@ -131,7 +141,7 @@ function CommentListWithTabs() {
         )}
       </Paper>
     ),
-    [comments, handleAddReply, isLoading, space?.membership?.role]
+    [canComment, comments, handleAddReply, isLoading, page?.id, space?.membership?.role]
   );
 
   if (isCommentsLoading) {
@@ -144,114 +154,62 @@ function CommentListWithTabs() {
 
   const totalComments = activeComments.length + resolvedComments.length;
 
-  // If not cloud/enterprise, show simple list without tabs
-  if (!isCloudEE) {
-    if (totalComments === 0) {
-      return <>{t("No comments yet.")}</>;
-    }
-
-    return (
-      <ScrollArea style={{ height: "85vh" }} scrollbarSize={5} type="scroll">
-        <div style={{ paddingBottom: "200px" }}>
-          {comments?.items
-            .filter((comment: IComment) => comment.parentCommentId === null)
-            .map((comment) => (
-              <Paper
-                shadow="sm"
-                radius="md"
-                p="sm"
-                mb="sm"
-                withBorder
-                key={comment.id}
-                data-comment-id={comment.id}
-              >
-                <div>
-                  <CommentListItem
-                    comment={comment}
-                    pageId={page?.id}
-                    canComment={canComment}
-                    userSpaceRole={space?.membership?.role}
-                  />
-                  <MemoizedChildComments
-                    comments={comments}
-                    parentId={comment.id}
-                    pageId={page?.id}
-                    canComment={canComment}
-                    userSpaceRole={space?.membership?.role}
-                  />
-                </div>
-
-                {canComment && (
-                  <>
-                    <Divider my={4} />
-                    <CommentEditorWithActions
-                      commentId={comment.id}
-                      onSave={handleAddReply}
-                      isLoading={isLoading}
-                    />
-                  </>
-                )}
-              </Paper>
-            ))}
-        </div>
-      </ScrollArea>
-    );
+  if (totalComments === 0) {
+    return <>{t("No comments yet.")}</>;
   }
 
   return (
-    <div style={{ height: "85vh", display: "flex", flexDirection: "column", marginTop: '-15px' }}>
-      <Tabs defaultValue="open" variant="default" style={{ flex: "0 0 auto" }}>
-        <Tabs.List justify="center">
-          <Tabs.Tab
-            value="open"
-            leftSection={
-              <Badge size="sm" variant="light" color="blue">
-                {activeComments.length}
-              </Badge>
-            }
-          >
-            {t("Open")}
-          </Tabs.Tab>
-          <Tabs.Tab
-            value="resolved"
-            leftSection={
-              <Badge size="sm" variant="light" color="green">
-                {resolvedComments.length}
-              </Badge>
-            }
-          >
-            {t("Resolved")}
-          </Tabs.Tab>
-        </Tabs.List>
+    <div
+      style={{
+        height: "85vh",
+        display: "flex",
+        flexDirection: "column",
+        marginTop: "-15px",
+      }}
+    >
+      <Group justify="space-between" mb="sm">
+        <Text size="sm" fw={600}>
+          {t("Open comments")}
+        </Text>
 
-        <ScrollArea
-          style={{ flex: "1 1 auto", height: "calc(85vh - 60px)" }}
-          scrollbarSize={5}
-          type="scroll"
+        <Button
+          variant="light"
+          size="xs"
+          onClick={() => setShowResolved((prev) => !prev)}
         >
-          <div style={{ paddingBottom: "200px" }}>
-            <Tabs.Panel value="open" pt="xs">
-              {activeComments.length === 0 ? (
-                <Text size="sm" c="dimmed" ta="center" py="md">
-                  {t("No open comments.")}
-                </Text>
-              ) : (
-                activeComments.map(renderComments)
-              )}
-            </Tabs.Panel>
+          {showResolved ? t("Hide resolved") : t("Show resolved")}
+          <Badge ml="xs" size="sm" variant="filled" color="green">
+            {resolvedComments.length}
+          </Badge>
+        </Button>
+      </Group>
 
-            <Tabs.Panel value="resolved" pt="xs">
-              {resolvedComments.length === 0 ? (
-                <Text size="sm" c="dimmed" ta="center" py="md">
-                  {t("No resolved comments.")}
-                </Text>
-              ) : (
-                resolvedComments.map(renderComments)
-              )}
-            </Tabs.Panel>
-          </div>
-        </ScrollArea>
-      </Tabs>
+      <ScrollArea style={{ flex: "1 1 auto" }} scrollbarSize={5} type="scroll">
+        <div style={{ paddingBottom: "200px" }}>
+          {activeComments.length === 0 ? (
+            <Text size="sm" c="dimmed" ta="center" py="md">
+              {t("No open comments.")}
+            </Text>
+          ) : (
+            activeComments.map(renderComments)
+          )}
+
+          <Collapse in={showResolved}>
+            <Divider my="sm" />
+            <Text size="sm" fw={600} mb="sm">
+              {t("Resolved comments")}
+            </Text>
+
+            {resolvedComments.length === 0 ? (
+              <Text size="sm" c="dimmed" ta="center" py="md">
+                {t("No resolved comments.")}
+              </Text>
+            ) : (
+              resolvedComments.map(renderComments)
+            )}
+          </Collapse>
+        </div>
+      </ScrollArea>
     </div>
   );
 }
