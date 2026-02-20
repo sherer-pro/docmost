@@ -8,6 +8,7 @@ type CommentMenuProps = {
   onDeleteComment: () => void;
   onResolveComment?: () => void;
   canEdit?: boolean;
+  canDelete?: boolean;
   isResolved?: boolean;
   isParentComment?: boolean;
   canResolve?: boolean;
@@ -18,6 +19,7 @@ function CommentMenu({
   onDeleteComment, 
   onResolveComment,
   canEdit = true,
+  canDelete = true,
   isResolved = false,
   isParentComment = false,
   canResolve = false
@@ -48,7 +50,7 @@ function CommentMenu({
             {t("Edit comment")}
           </Menu.Item>
         )}
-        {isParentComment && (
+        {isParentComment && canResolve && (
           <Tooltip
             label={
               isResolved
@@ -71,12 +73,14 @@ function CommentMenu({
             </Menu.Item>
           </Tooltip>
         )}
-        <Menu.Item
-          leftSection={<IconTrash size={14} />}
-          onClick={openDeleteModal}
-        >
-          {t("Delete comment")}
-        </Menu.Item>
+        {canDelete && (
+          <Menu.Item
+            leftSection={<IconTrash size={14} />}
+            onClick={openDeleteModal}
+          >
+            {t("Delete comment")}
+          </Menu.Item>
+        )}
       </Menu.Dropdown>
     </Menu>
   );
