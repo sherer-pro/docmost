@@ -179,7 +179,6 @@ function CommentListWithTabs() {
         height: "85vh",
         display: "flex",
         flexDirection: "column",
-        marginTop: "-15px",
       }}
     >
       <Group justify="space-between" mb="sm">
@@ -187,16 +186,6 @@ function CommentListWithTabs() {
           {t("Open comments")}
         </Text>
 
-        <Button
-          variant="light"
-          size="xs"
-          onClick={() => setShowResolved((prev) => !prev)}
-        >
-          {showResolved ? t("Hide resolved") : t("Show resolved")}
-          <Badge ml="xs" size="sm" variant="filled" color="green">
-            {resolvedComments.length}
-          </Badge>
-        </Button>
       </Group>
 
       <ScrollArea style={{ flex: "1 1 auto" }} scrollbarSize={5} type="scroll">
@@ -209,8 +198,22 @@ function CommentListWithTabs() {
             activeComments.map(renderComments)
           )}
 
+          <Button
+            variant="default" color="gray"
+            size="xs"
+            onClick={() => setShowResolved((prev) => !prev)}
+            style={{
+              marginTop: "15px",
+              marginBottom: "15px",
+            }}
+          >
+            {showResolved ? t("Hide resolved") : t("Show resolved")}
+            <Badge ml="xs" size="sm" variant="default" color="gray">
+              {resolvedComments.length}
+            </Badge>
+          </Button>
+
           <Collapse in={showResolved}>
-            <Divider my="sm" />
             <Text size="sm" fw={600} mb="sm">
               {t("Resolved comments")}
             </Text>
