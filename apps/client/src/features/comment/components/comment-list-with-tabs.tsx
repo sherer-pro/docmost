@@ -198,34 +198,35 @@ function CommentListWithTabs() {
             activeComments.map(renderComments)
           )}
 
-          <Button
-            variant="default" color="gray"
-            size="xs"
-            onClick={() => setShowResolved((prev) => !prev)}
-            style={{
-              marginTop: "15px",
-              marginBottom: "15px",
-            }}
-          >
-            {showResolved ? t("Hide resolved") : t("Show resolved")}
-            <Badge ml="xs" size="sm" variant="default" color="gray">
-              {resolvedComments.length}
-            </Badge>
-          </Button>
+          {/*
+            Если решённых комментариев нет, не показываем кнопку и секцию resolved.
+            Это убирает «пустое» действие из интерфейса и соответствует ожидаемому UX.
+          */}
+          {resolvedComments.length > 0 && (
+            <>
+              <Button
+                variant="default" color="gray"
+                size="xs"
+                onClick={() => setShowResolved((prev) => !prev)}
+                style={{
+                  marginTop: "15px",
+                  marginBottom: "15px",
+                }}
+              >
+                {showResolved ? t("Hide resolved") : t("Show resolved")}
+                <Badge ml="xs" size="sm" variant="default" color="gray">
+                  {resolvedComments.length}
+                </Badge>
+              </Button>
 
-          <Collapse in={showResolved}>
-            <Text size="sm" fw={600} mb="sm">
-              {t("Resolved comments")}
-            </Text>
-
-            {resolvedComments.length === 0 ? (
-              <Text size="sm" c="dimmed" ta="center" py="md">
-                {t("No resolved comments.")}
-              </Text>
-            ) : (
-              resolvedComments.map(renderComments)
-            )}
-          </Collapse>
+              <Collapse in={showResolved}>
+                <Text size="sm" fw={600} mb="sm">
+                  {t("Resolved comments")}
+                </Text>
+                {resolvedComments.map(renderComments)}
+              </Collapse>
+            </>
+          )}
         </div>
       </ScrollArea>
     </div>
