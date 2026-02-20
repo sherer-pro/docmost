@@ -7,10 +7,12 @@ import {
   UseGuards,
   NotFoundException,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { CommentService } from './comment.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { UpdateCommentDto } from './dto/update-comment.dto';
+import { ResolveCommentDto } from './dto/resolve-comment.dto';
 import { PageIdDto, CommentIdDto } from './dto/comments.input';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
 import { AuthWorkspace } from '../../common/decorators/auth-workspace.decorator';
@@ -121,6 +123,30 @@ export class CommentController {
     }
 
     return this.commentService.update(comment, dto, user);
+  }
+
+
+  @HttpCode(HttpStatus.OK)
+  @Post('resolve')
+  async resolve(@Body() dto: ResolveCommentDto, @AuthUser() user: User) {
+    const comment = await this.commentRepo.findById(dto.commentId);
+    if (!comment) {
+      throw new NotFoundException('Comment not found');
+    }
+
+    if (comment.pageId !== dto.pageId) {
+      throw new BadRequestException('Comment does not belong to page');
+    }
+
+    const ability = await this.spaceAbility.createForUser(user, comment.spaceId);
+
+    // Разрешение комментария — это изменение состояния обсуждения,
+    // поэтому требуется право редактирования страницы.
+    if (ability.cannot(SpaceCaslAction.Edit, SpaceCaslSubject.Page)) {
+      throw new ForbiddenException();
+    }
+
+    return this.commentService.resolve(comment, dto, user);
   }
 
   @HttpCode(HttpStatus.OK)
