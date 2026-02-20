@@ -22,6 +22,7 @@ interface CommentListItemProps {
   comment: IComment;
   pageId: string;
   canComment: boolean;
+  canResolve: boolean;
   userSpaceRole?: string;
 }
 
@@ -29,6 +30,7 @@ function CommentListItem({
   comment,
   pageId,
   canComment,
+  canResolve,
   userSpaceRole,
 }: CommentListItemProps) {
   const { hovered, ref } = useHover();
@@ -132,6 +134,13 @@ function CommentListItem({
     setIsEditing(false);
   }
 
+  const isOwner = currentUser?.user?.id === comment.creatorId;
+  const isAdmin = userSpaceRole === "admin";
+  const canEditComment = isOwner;
+  const canDeleteComment = isOwner || isAdmin;
+  const canResolveComment = canResolve && !comment.parentCommentId;
+  const shouldShowMenu = canEditComment || canDeleteComment || canResolveComment;
+
   return (
     <Box ref={ref} pb="xs">
       <Group>
@@ -148,14 +157,16 @@ function CommentListItem({
             </Text>
 
             <div style={{ visibility: hovered ? "visible" : "hidden" }}>
-              {(currentUser?.user?.id === comment.creatorId || userSpaceRole === 'admin') && (
+              {shouldShowMenu && (
                 <CommentMenu
                   onEditComment={handleEditToggle}
                   onDeleteComment={handleDeleteComment}
                   onResolveComment={handleResolveComment}
-                  canEdit={currentUser?.user?.id === comment.creatorId}
+                  canEdit={canEditComment}
+                  canDelete={canDeleteComment}
                   isResolved={comment.resolvedAt != null}
                   isParentComment={!comment.parentCommentId && canComment}
+                  canResolve={canResolveComment}
                 />
               )}
             </div>
