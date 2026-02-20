@@ -615,5 +615,15 @@
   "Today": "오늘",
   "Yesterday": "어제",
   "This week": "이번 주",
-  "Older": "이전"
+  "Older": "이전",
+  "Open comments": "열린 댓글",
+  "Resolved comments": "해결된 댓글",
+  "Hide resolved": "해결된 항목 숨기기",
+  "Show resolved": "해결된 항목 보기",
+  "Image preview": "이미지 미리보기",
+  "No open comments.": "열린 댓글이 없습니다.",
+  "Move comment to resolved list": "댓글을 해결된 목록으로 이동",
+  "Return comment to active list": "댓글을 활성 목록으로 되돌리기",
+  "Re-open comment": "댓글 다시 열기",
+  "Re-Open comment": "댓글 다시 열기"
 }
