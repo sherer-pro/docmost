@@ -10,6 +10,7 @@ type CommentMenuProps = {
   canEdit?: boolean;
   isResolved?: boolean;
   isParentComment?: boolean;
+  canResolve?: boolean;
 };
 
 function CommentMenu({ 
@@ -18,7 +19,8 @@ function CommentMenu({
   onResolveComment,
   canEdit = true,
   isResolved = false,
-  isParentComment = false
+  isParentComment = false,
+  canResolve = false
 }: CommentMenuProps) {
   const { t } = useTranslation();
 
