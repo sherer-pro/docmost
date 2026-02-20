@@ -50,7 +50,14 @@ function CommentListWithTabs() {
   const spaceAbility = useSpaceAbility(spaceRules);
 
   const canComment: boolean = spaceAbility.can(
-    SpaceCaslAction.Manage,
+    SpaceCaslAction.Create,
+    SpaceCaslSubject.Page
+  );
+
+  // Для перевода комментария в resolved/re-open используется серверная проверка на Edit Page.
+  // На клиенте зеркалим это поведение, чтобы не показывать пользователю недоступное действие.
+  const canResolveComments: boolean = spaceAbility.can(
+    SpaceCaslAction.Edit,
     SpaceCaslSubject.Page
   );
 
@@ -102,6 +109,12 @@ function CommentListWithTabs() {
     [createCommentMutation, page?.id]
   );
 
+  /**
+   * Рендерит карточку корневого комментария вместе с дочерней веткой и формой ответа.
+   *
+   * Отдельно передаём флаг `canResolveComments`, чтобы меню не показывало
+   * действие Resolve/Re-open пользователям без права редактирования страницы.
+   */
   const renderComments = useCallback(
     (comment: IComment) => (
       <Paper
@@ -118,6 +131,7 @@ function CommentListWithTabs() {
             comment={comment}
             pageId={page?.id}
             canComment={canComment}
+            canResolve={canResolveComments}
             userSpaceRole={space?.membership?.role}
           />
           <MemoizedChildComments
@@ -125,6 +139,7 @@ function CommentListWithTabs() {
             parentId={comment.id}
             pageId={page?.id}
             canComment={canComment}
+            canResolve={canResolveComments}
             userSpaceRole={space?.membership?.role}
           />
         </div>
@@ -141,7 +156,7 @@ function CommentListWithTabs() {
         )}
       </Paper>
     ),
-    [canComment, comments, handleAddReply, isLoading, page?.id, space?.membership?.role]
+    [canComment, canResolveComments, comments, handleAddReply, isLoading, page?.id, space?.membership?.role]
   );
 
   if (isCommentsLoading) {
@@ -219,6 +234,7 @@ interface ChildCommentsProps {
   parentId: string;
   pageId: string;
   canComment: boolean;
+  canResolve: boolean;
   userSpaceRole?: string;
 }
 const ChildComments = ({
@@ -226,6 +242,7 @@ const ChildComments = ({
   parentId,
   pageId,
   canComment,
+  canResolve,
   userSpaceRole,
 }: ChildCommentsProps) => {
   const getChildComments = useCallback(
@@ -244,6 +261,7 @@ const ChildComments = ({
             comment={childComment}
             pageId={pageId}
             canComment={canComment}
+            canResolve={canResolve}
             userSpaceRole={userSpaceRole}
           />
           <MemoizedChildComments
@@ -251,6 +269,7 @@ const ChildComments = ({
             parentId={childComment.id}
             pageId={pageId}
             canComment={canComment}
+            canResolve={canResolve}
             userSpaceRole={userSpaceRole}
           />
         </div>

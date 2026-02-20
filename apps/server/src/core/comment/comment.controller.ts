@@ -126,6 +126,12 @@ export class CommentController {
   }
 
 
+  /**
+   * Обновляет статус комментария (resolve/re-open).
+   *
+   * Дополнительно валидируем связку commentId + pageId, чтобы исключить
+   * случайное изменение комментария с другой страницы через подмену payload.
+   */
   @HttpCode(HttpStatus.OK)
   @Post('resolve')
   async resolve(@Body() dto: ResolveCommentDto, @AuthUser() user: User) {
