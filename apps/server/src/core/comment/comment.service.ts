@@ -9,6 +9,7 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { UpdateCommentDto } from './dto/update-comment.dto';
+import { ResolveCommentDto } from './dto/resolve-comment.dto';
 import { CommentRepo } from '@docmost/db/repos/comment/comment.repo';
 import { Comment, Page, User } from '@docmost/db/types/entity.types';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
@@ -16,7 +17,10 @@ import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { CursorPaginationResult } from '@docmost/db/pagination/cursor-pagination';
 import { QueueJob, QueueName } from '../../integrations/queue/constants';
 import { extractUserMentionIdsFromJson } from '../../common/helpers/prosemirror/utils';
-import { ICommentNotificationJob } from '../../integrations/queue/constants/queue.interface';
+import {
+  ICommentNotificationJob,
+  ICommentResolvedNotificationJob,
+} from '../../integrations/queue/constants/queue.interface';
 
 @Injectable()
 export class CommentService {
@@ -155,6 +159,49 @@ export class CommentService {
     comment.updatedAt = editedAt;
 
     return comment;
+  }
+
+
+  /**
+   * Переводит комментарий в состояние "решён" или возвращает его в открытые.
+   *
+   * При установке статуса "решён" сохраняем автора действия и время,
+   * а также ставим фоновую задачу уведомления создателю комментария.
+   */
+  async resolve(
+    comment: Comment,
+    resolveCommentDto: ResolveCommentDto,
+    authUser: User,
+  ): Promise<Comment> {
+    const resolvedAt = resolveCommentDto.resolved ? new Date() : null;
+    const resolvedById = resolveCommentDto.resolved ? authUser.id : null;
+
+    await this.commentRepo.updateComment(
+      {
+        resolvedAt,
+        resolvedById,
+        updatedAt: new Date(),
+      },
+      comment.id,
+    );
+
+    if (resolveCommentDto.resolved) {
+      const jobData: ICommentResolvedNotificationJob = {
+        commentId: comment.id,
+        commentCreatorId: comment.creatorId,
+        pageId: comment.pageId,
+        spaceId: comment.spaceId,
+        workspaceId: comment.workspaceId,
+        actorId: authUser.id,
+      };
+
+      await this.notificationQueue.add(
+        QueueJob.COMMENT_RESOLVED_NOTIFICATION,
+        jobData,
+      );
+    }
+
+    return this.findById(comment.id);
   }
 
   private async queueCommentNotification(
