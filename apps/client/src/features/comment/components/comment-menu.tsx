@@ -2,7 +2,6 @@ import { ActionIcon, Menu, Tooltip } from "@mantine/core";
 import { IconDots, IconEdit, IconTrash, IconCircleCheck, IconCircleCheckFilled } from "@tabler/icons-react";
 import { modals } from "@mantine/modals";
 import { useTranslation } from "react-i18next";
-import { useIsCloudEE } from "@/hooks/use-is-cloud-ee";
 
 type CommentMenuProps = {
   onEditComment: () => void;
@@ -22,7 +21,6 @@ function CommentMenu({
   isParentComment = false
 }: CommentMenuProps) {
   const { t } = useTranslation();
-  const isCloudEE = useIsCloudEE();
 
   //@ts-ignore
   const openDeleteModal = () =>
@@ -49,27 +47,27 @@ function CommentMenu({
           </Menu.Item>
         )}
         {isParentComment && (
-          isCloudEE ? (
-            <Menu.Item 
-              onClick={onResolveComment} 
+          <Tooltip
+            label={
+              isResolved
+                ? t("Return comment to active list")
+                : t("Move comment to resolved list")
+            }
+            position="left"
+          >
+            <Menu.Item
+              onClick={onResolveComment}
               leftSection={
-                isResolved ? 
-                  <IconCircleCheckFilled size={14} /> : 
+                isResolved ? (
+                  <IconCircleCheckFilled size={14} />
+                ) : (
                   <IconCircleCheck size={14} />
+                )
               }
             >
               {isResolved ? t("Re-open comment") : t("Resolve comment")}
             </Menu.Item>
-          ) : (
-            <Tooltip label={t("Available in enterprise edition")} position="left">
-              <Menu.Item 
-                disabled
-                leftSection={<IconCircleCheck size={14} />}
-              >
-                {t("Resolve comment")}
-              </Menu.Item>
-            </Tooltip>
-          )
+          </Tooltip>
         )}
         <Menu.Item
           leftSection={<IconTrash size={14} />}
