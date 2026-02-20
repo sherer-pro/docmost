@@ -615,5 +615,15 @@
   "Today": "Today",
   "Yesterday": "Yesterday",
   "This week": "This week",
-  "Older": "Older"
+  "Older": "Older",
+  "Open comments": "Open comments",
+  "Resolved comments": "Resolved comments",
+  "Hide resolved": "Hide resolved",
+  "Show resolved": "Show resolved",
+  "Image preview": "Image preview",
+  "No open comments.": "No open comments.",
+  "Move comment to resolved list": "Move comment to resolved list",
+  "Return comment to active list": "Return comment to active list",
+  "Re-open comment": "Re-open comment",
+  "Re-Open comment": "Re-open comment"
 }

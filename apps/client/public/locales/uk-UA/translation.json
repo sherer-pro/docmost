@@ -615,5 +615,15 @@
   "Today": "Сьогодні",
   "Yesterday": "Вчора",
   "This week": "Цього тижня",
-  "Older": "Старіші"
+  "Older": "Старіші",
+  "Open comments": "Відкриті коментарі",
+  "Resolved comments": "Вирішені коментарі",
+  "Hide resolved": "Приховати вирішені",
+  "Show resolved": "Показати вирішені",
+  "Image preview": "Попередній перегляд зображення",
+  "No open comments.": "Немає відкритих коментарів.",
+  "Move comment to resolved list": "Перемістити коментар до списку вирішених",
+  "Return comment to active list": "Повернути коментар до списку активних",
+  "Re-open comment": "Повторно відкрити коментар",
+  "Re-Open comment": "Повторно відкрити коментар"
 }
