@@ -615,5 +615,15 @@
   "Today": "今天",
   "Yesterday": "昨天",
   "This week": "本周",
-  "Older": "较早"
+  "Older": "较早",
+  "Open comments": "打开的评论",
+  "Resolved comments": "已解决评论",
+  "Hide resolved": "隐藏已解决",
+  "Show resolved": "显示已解决",
+  "Image preview": "图片预览",
+  "No open comments.": "暂无打开的评论。",
+  "Move comment to resolved list": "将评论移至已解决列表",
+  "Return comment to active list": "将评论移回活动列表",
+  "Re-open comment": "重新打开评论",
+  "Re-Open comment": "重新打开评论"
 }

@@ -615,5 +615,15 @@
   "Today": "Сегодня",
   "Yesterday": "Вчера",
   "This week": "На этой неделе",
-  "Older": "Старше"
+  "Older": "Старше",
+  "Open comments": "Открытые комментарии",
+  "Resolved comments": "Решённые комментарии",
+  "Hide resolved": "Скрыть решённые",
+  "Show resolved": "Показать решённые",
+  "Image preview": "Предпросмотр изображения",
+  "No open comments.": "Нет открытых комментариев.",
+  "Move comment to resolved list": "Переместить комментарий в список решённых",
+  "Return comment to active list": "Вернуть комментарий в список активных",
+  "Re-open comment": "Переоткрыть комментарий",
+  "Re-Open comment": "Переоткрыть комментарий"
 }

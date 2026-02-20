@@ -615,5 +615,15 @@
   "Today": "今日",
   "Yesterday": "昨日",
   "This week": "今週",
-  "Older": "以前のもの"
+  "Older": "以前のもの",
+  "Open comments": "未解決のコメント",
+  "Resolved comments": "解決済みコメント",
+  "Hide resolved": "解決済みを非表示",
+  "Show resolved": "解決済みを表示",
+  "Image preview": "画像プレビュー",
+  "No open comments.": "未解決のコメントはありません。",
+  "Move comment to resolved list": "コメントを解決済み一覧に移動",
+  "Return comment to active list": "コメントを未解決一覧に戻す",
+  "Re-open comment": "コメントを再オープン",
+  "Re-Open comment": "コメントを再オープン"
 }

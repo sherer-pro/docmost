@@ -615,5 +615,15 @@
   "Today": "Heute",
   "Yesterday": "Gestern",
   "This week": "Diese Woche",
-  "Older": "Älter"
+  "Older": "Älter",
+  "Open comments": "Offene Kommentare",
+  "Resolved comments": "Erledigte Kommentare",
+  "Hide resolved": "Erledigte ausblenden",
+  "Show resolved": "Erledigte anzeigen",
+  "Image preview": "Bildvorschau",
+  "No open comments.": "Keine offenen Kommentare.",
+  "Move comment to resolved list": "Kommentar als erledigt markieren",
+  "Return comment to active list": "Kommentar wieder als offen markieren",
+  "Re-open comment": "Kommentar erneut öffnen",
+  "Re-Open comment": "Kommentar erneut öffnen"
 }

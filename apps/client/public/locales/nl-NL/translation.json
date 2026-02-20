@@ -615,5 +615,15 @@
   "Today": "Vandaag",
   "Yesterday": "Gisteren",
   "This week": "Deze week",
-  "Older": "Ouder"
+  "Older": "Ouder",
+  "Open comments": "Open opmerkingen",
+  "Resolved comments": "Opgeloste opmerkingen",
+  "Hide resolved": "Opgeloste verbergen",
+  "Show resolved": "Opgeloste tonen",
+  "Image preview": "Afbeeldingsvoorbeeld",
+  "No open comments.": "Geen open opmerkingen.",
+  "Move comment to resolved list": "Opmerking naar de opgeloste lijst verplaatsen",
+  "Return comment to active list": "Opmerking terugzetten naar de actieve lijst",
+  "Re-open comment": "Opmerking opnieuw openen",
+  "Re-Open comment": "Opmerking opnieuw openen"
 }
