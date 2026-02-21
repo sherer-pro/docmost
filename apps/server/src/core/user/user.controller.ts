@@ -13,6 +13,8 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { AuthWorkspace } from '../../common/decorators/auth-workspace.decorator';
 import { User, Workspace } from '@docmost/db/types/entity.types';
 import { WorkspaceRepo } from '@docmost/db/repos/workspace/workspace.repo';
+import { UserRepo } from '@docmost/db/repos/user/user.repo';
+import { UserRole } from '../../common/helpers/types/permission';
 
 @UseGuards(JwtAuthGuard)
 @Controller('users')
@@ -20,6 +22,7 @@ export class UserController {
   constructor(
     private readonly userService: UserService,
     private readonly workspaceRepo: WorkspaceRepo,
+    private readonly userRepo: UserRepo,
   ) {}
 
   @HttpCode(HttpStatus.OK)
@@ -40,7 +43,25 @@ export class UserController {
       hasLicenseKey: Boolean(licenseKey),
     };
 
-    return { user: authUser, workspace: workspaceInfo };
+    /**
+     * Флаг для управления видимостью пункта "Manage members" на клиенте.
+     *
+     * Правила:
+     * - owner/admin всегда имеют доступ;
+     * - member имеет доступ только если состоит хотя бы в одной НЕ-дефолтной группе.
+     */
+    const canAccessMembersDirectory =
+      authUser.role === UserRole.OWNER ||
+      authUser.role === UserRole.ADMIN ||
+      (await this.userRepo.hasNonDefaultGroupMembership(authUser.id, workspace.id));
+
+    return {
+      user: {
+        ...authUser,
+        canAccessMembersDirectory,
+      },
+      workspace: workspaceInfo,
+    };
   }
 
   @HttpCode(HttpStatus.OK)

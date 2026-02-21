@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB, KyselyTransaction } from '@docmost/db/types/kysely.types';
 import { DB, Users } from '@docmost/db/types/db';
@@ -13,6 +13,7 @@ import { PaginationOptions } from '../../pagination/pagination-options';
 import { executeWithCursorPagination } from '@docmost/db/pagination/cursor-pagination';
 import { ExpressionBuilder, sql } from 'kysely';
 import { jsonObjectFrom } from 'kysely/helpers/postgres';
+import { UserRole } from '../../../common/helpers/types/permission';
 
 @Injectable()
 export class UserRepo {
@@ -140,12 +141,78 @@ export class UserRepo {
     return count as number;
   }
 
-  async getUsersPaginated(workspaceId: string, pagination: PaginationOptions) {
+  /**
+   * Проверяет, состоит ли пользователь хотя бы в одной НЕ-дефолтной группе внутри workspace.
+   *
+   * Это используется для управления доступом member-пользователей к списку участников workspace.
+   */
+  async hasNonDefaultGroupMembership(
+    userId: string,
+    workspaceId: string,
+  ): Promise<boolean> {
+    const groupMembership = await this.db
+      .selectFrom('groupUsers as groupUsers')
+      .innerJoin('groups as groups', 'groups.id', 'groupUsers.groupId')
+      .select('groupUsers.groupId')
+      .where('groupUsers.userId', '=', userId)
+      .where('groups.workspaceId', '=', workspaceId)
+      .where('groups.isDefault', '=', false)
+      .executeTakeFirst();
+
+    return Boolean(groupMembership);
+  }
+
+  /**
+   * Возвращает пользователей workspace с учётом ограничений по группам.
+   *
+   * Правила доступа:
+   * - администратор/владелец видит всех пользователей workspace;
+   * - обычный пользователь видит только тех, кто состоит с ним хотя бы в одной НЕ-дефолтной группе;
+   * - если пользователь не состоит ни в одной НЕ-дефолтной группе, доступ к списку запрещается.
+   */
+  async getUsersPaginated(
+    workspaceId: string,
+    pagination: PaginationOptions,
+    authUser: User,
+  ) {
     let query = this.db
       .selectFrom('users')
       .select(this.baseFields)
       .where('workspaceId', '=', workspaceId)
       .where('deletedAt', 'is', null);
+
+    if (authUser.role === UserRole.MEMBER) {
+      const hasNonDefaultGroup = await this.hasNonDefaultGroupMembership(
+        authUser.id,
+        workspaceId,
+      );
+
+      // Если у пользователя нет ни одной кастомной группы, страница участников ему недоступна.
+      if (!hasNonDefaultGroup) {
+        throw new ForbiddenException('You are not a member of any group');
+      }
+
+      // Ограничиваем выборку только теми пользователями, у которых есть общая группа с текущим пользователем.
+      query = query.whereExists((eb) =>
+        eb
+          .selectFrom('groupUsers as viewerGroupUsers')
+          .innerJoin(
+            'groups as viewerGroups',
+            'viewerGroups.id',
+            'viewerGroupUsers.groupId',
+          )
+          .innerJoin(
+            'groupUsers as candidateGroupUsers',
+            'candidateGroupUsers.groupId',
+            'viewerGroupUsers.groupId',
+          )
+          .select('candidateGroupUsers.groupId')
+          .whereRef('candidateGroupUsers.userId', '=', 'users.id')
+          .where('viewerGroupUsers.userId', '=', authUser.id)
+          .where('viewerGroups.workspaceId', '=', workspaceId)
+          .where('viewerGroups.isDefault', '=', false),
+      );
+    }
 
     if (pagination.query) {
       query = query.where((eb) =>
