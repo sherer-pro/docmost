@@ -33,9 +33,35 @@
     }
   }
 
+  .attachment-pdf-embed {
+    width: 100%;
+    height: 480px;
+    border-radius: var(--mantine-radius-default);
+    overflow: hidden;
+
+    @mixin light {
+      border: 1px solid var(--mantine-color-gray-3);
+    }
+
+    @mixin dark {
+      border: 1px solid var(--mantine-color-dark-4);
+    }
+
+    @media (max-width: $mantine-breakpoint-sm) {
+      height: 360px;
+    }
+  }
+
+  .attachment-pdf-embed__frame {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    display: block;
+    background-color: var(--mantine-color-body);
+  }
+
   .uploading-text {
     font-size: var(--mantine-font-size-md);
     line-height: var(--mantine-line-height-md);
   }
 }
-
