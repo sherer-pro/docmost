@@ -193,24 +193,27 @@ export class UserRepo {
       }
 
       // Ограничиваем выборку только теми пользователями, у которых есть общая группа с текущим пользователем.
-      query = query.whereExists((eb) =>
-        eb
-          .selectFrom('groupUsers as viewerGroupUsers')
-          .innerJoin(
-            'groups as viewerGroups',
-            'viewerGroups.id',
-            'viewerGroupUsers.groupId',
-          )
-          .innerJoin(
-            'groupUsers as candidateGroupUsers',
-            'candidateGroupUsers.groupId',
-            'viewerGroupUsers.groupId',
-          )
-          .select('candidateGroupUsers.groupId')
-          .whereRef('candidateGroupUsers.userId', '=', 'users.id')
-          .where('viewerGroupUsers.userId', '=', authUser.id)
-          .where('viewerGroups.workspaceId', '=', workspaceId)
-          .where('viewerGroups.isDefault', '=', false),
+      // Используем `where(... exists(...))`, так как в текущей версии Kysely метод `whereExists` отсутствует.
+      query = query.where((eb) =>
+        eb.exists(
+          eb
+            .selectFrom('groupUsers as viewerGroupUsers')
+            .innerJoin(
+              'groups as viewerGroups',
+              'viewerGroups.id',
+              'viewerGroupUsers.groupId',
+            )
+            .innerJoin(
+              'groupUsers as candidateGroupUsers',
+              'candidateGroupUsers.groupId',
+              'viewerGroupUsers.groupId',
+            )
+            .select('candidateGroupUsers.groupId')
+            .whereRef('candidateGroupUsers.userId', '=', 'users.id')
+            .where('viewerGroupUsers.userId', '=', authUser.id)
+            .where('viewerGroups.workspaceId', '=', workspaceId)
+            .where('viewerGroups.isDefault', '=', false),
+        ),
       );
     }
 
