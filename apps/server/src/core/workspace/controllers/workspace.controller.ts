@@ -103,7 +103,7 @@ export class WorkspaceController {
       throw new ForbiddenException();
     }
 
-    return this.workspaceService.getWorkspaceUsers(workspace.id, pagination);
+    return this.workspaceService.getWorkspaceUsers(user, workspace.id, pagination);
   }
 
   @HttpCode(HttpStatus.OK)
