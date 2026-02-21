@@ -20,7 +20,10 @@ import { useTranslation } from "react-i18next";
 import { isCloud } from "@/lib/config.ts";
 import useUserRole from "@/hooks/use-user-role.tsx";
 import { useAtom } from "jotai";
-import { workspaceAtom } from "@/features/user/atoms/current-user-atom.ts";
+import {
+  currentUserAtom,
+  workspaceAtom,
+} from "@/features/user/atoms/current-user-atom.ts";
 import {
   prefetchApiKeyManagement,
   prefetchApiKeys,
@@ -137,6 +140,7 @@ export default function SettingsSidebar() {
   const { goBack } = useSettingsNavigation();
   const { isAdmin } = useUserRole();
   const [workspace] = useAtom(workspaceAtom);
+  const [currentUser] = useAtom(currentUserAtom);
   const [mobileSidebarOpened] = useAtom(mobileSidebarAtom);
   const toggleMobileSidebar = useToggleSidebar(mobileSidebarAtom);
 
@@ -144,7 +148,20 @@ export default function SettingsSidebar() {
     setActive(location.pathname);
   }, [location.pathname]);
 
+  /**
+   * Проверяет, нужно ли показывать конкретный пункт в разделе настроек.
+   *
+   * Дополнительно скрывает пункт "Members" для member-пользователей,
+   * у которых нет доступа к каталогу участников (нет не-дефолтных групп).
+   */
   const canShowItem = (item: DataItem) => {
+    if (
+      item.path === "/settings/members" &&
+      currentUser?.user?.canAccessMembersDirectory === false
+    ) {
+      return false;
+    }
+
     if (item.showDisabledInNonEE && item.isEnterprise) {
       // Check admin permission regardless of license
       return item.isAdmin ? isAdmin : true;

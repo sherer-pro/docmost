@@ -408,10 +408,11 @@ export class WorkspaceService {
   }
 
   async getWorkspaceUsers(
+    user: User,
     workspaceId: string,
     pagination: PaginationOptions,
   ): Promise<CursorPaginationResult<User>> {
-    return this.userRepo.getUsersPaginated(workspaceId, pagination);
+    return this.userRepo.getUsersPaginated(workspaceId, pagination, user);
   }
 
   async updateWorkspaceUserRole(
