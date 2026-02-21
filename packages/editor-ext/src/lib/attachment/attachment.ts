@@ -6,12 +6,18 @@ export interface AttachmentOptions {
   view: any;
 }
 
+/**
+ * Режим отображения вложения в редакторе.
+ */
+export type AttachmentDisplayMode = "file" | "embed";
+
 export interface AttachmentAttributes {
   url?: string;
   name?: string;
   mime?: string; // e.g. application/zip
   size?: number;
   attachmentId?: string;
+  displayMode?: AttachmentDisplayMode;
   placeholder?: string;
 }
 
@@ -73,6 +79,14 @@ export const Attachment = Node.create<AttachmentOptions>({
         parseHTML: (element) => element.getAttribute("data-attachment-id"),
         renderHTML: (attributes: AttachmentAttributes) => ({
           "data-attachment-id": attributes.attachmentId,
+        }),
+      },
+      displayMode: {
+        default: "file",
+        parseHTML: (element) =>
+          element.getAttribute("data-attachment-display-mode") ?? "file",
+        renderHTML: (attributes: AttachmentAttributes) => ({
+          "data-attachment-display-mode": attributes.displayMode,
         }),
       },
       placeholder: {
