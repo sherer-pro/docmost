@@ -60,14 +60,19 @@ export default function AttachmentView(props: NodeViewProps) {
                 <Group gap="xs" wrap="nowrap">
                   <ActionIcon
                     variant="default"
-                    aria-label={t("Show as file")}
+                    aria-label={t("View PDF as file")}
+                    title={t("View PDF as file")}
                     onClick={toggleDisplayMode}
                   >
                     <IconLayoutList size={18} />
                   </ActionIcon>
 
                   <a href={fileUrl} target="_blank" rel="noreferrer">
-                    <ActionIcon variant="default" aria-label="download file">
+                    <ActionIcon
+                      variant="default"
+                      aria-label={t("Download attachment")}
+                      title={t("Download attachment")}
+                    >
                       <IconDownload size={18} />
                     </ActionIcon>
                   </a>
@@ -78,7 +83,7 @@ export default function AttachmentView(props: NodeViewProps) {
             <div className="attachment-pdf-embed">
               <iframe
                 src={fileUrl}
-                title={name || t("PDF preview")}
+                title={name || t("PDF embedded document preview")}
                 loading="lazy"
                 className="attachment-pdf-embed__frame"
               />
@@ -113,7 +118,8 @@ export default function AttachmentView(props: NodeViewProps) {
                 {isPdf && (
                   <ActionIcon
                     variant="default"
-                    aria-label={t("Show embedded preview")}
+                    aria-label={t("View PDF as embedded document")}
+                    title={t("View PDF as embedded document")}
                     onClick={toggleDisplayMode}
                   >
                     <IconFileTypography size={18} />
@@ -121,7 +127,11 @@ export default function AttachmentView(props: NodeViewProps) {
                 )}
 
                 <a href={fileUrl} target="_blank" rel="noreferrer">
-                  <ActionIcon variant="default" aria-label="download file">
+                  <ActionIcon
+                    variant="default"
+                    aria-label={t("Download attachment")}
+                    title={t("Download attachment")}
+                  >
                     <IconDownload size={18} />
                   </ActionIcon>
                 </a>
