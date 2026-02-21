@@ -3,6 +3,21 @@ import { MediaUploadOptions, UploadFn } from "../media-utils";
 import { IAttachment } from "../types";
 import { generateNodeId } from "../utils";
 import { Command } from "@tiptap/core";
+import { AttachmentDisplayMode } from "./attachment";
+
+const getAttachmentDisplayMode = (
+  attachment: IAttachment,
+): AttachmentDisplayMode => {
+  const mimeType = attachment.mimeType?.toLowerCase();
+  const fileName = attachment.fileName?.toLowerCase();
+  const isPdf = mimeType === "application/pdf" || fileName?.endsWith(".pdf");
+
+  if (isPdf) {
+    return "file";
+  }
+
+  return "file";
+};
 
 const findAttachmentNodeByPlaceholderId = (
   doc: Node,
@@ -76,6 +91,7 @@ const handleAttachmentUpload =
           mime: attachment.mimeType,
           size: attachment.fileSize,
           attachmentId: attachment.id,
+          displayMode: getAttachmentDisplayMode(attachment),
         });
 
         return true;
