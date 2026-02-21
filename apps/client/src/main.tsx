@@ -1,7 +1,7 @@
 import "@mantine/core/styles.css";
 import "@mantine/spotlight/styles.css";
 import "@mantine/notifications/styles.css";
-import '@mantine/dates/styles.css';
+import "@mantine/dates/styles.css";
 
 import ReactDOM from "react-dom/client";
 import App from "./App.tsx";
@@ -21,6 +21,7 @@ import {
   isPostHogEnabled,
 } from "@/lib/config.ts";
 import posthog from "posthog-js";
+import { registerServiceWorker } from "@/lib/pwa/register-service-worker.ts";
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -62,3 +63,7 @@ root.render(
     </MantineProvider>
   </BrowserRouter>,
 );
+
+// Регистрируем PWA-воркер отдельно от React-дерева, чтобы логика офлайн-кэша
+// работала независимо от жизненного цикла компонентов приложения.
+registerServiceWorker();

@@ -1,10 +1,16 @@
 {
+  "id": "/",
   "name": "Docmost",
   "short_name": "Docmost",
+  "description": "Open-source collaborative wiki and knowledge base",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#222",
-  "theme_color": "#222",
+  "display_override": ["window-controls-overlay", "standalone", "browser"],
+  "orientation": "any",
+  "background_color": "#101113",
+  "theme_color": "#1f1f1f",
+  "categories": ["productivity", "business", "utilities"],
   "icons": [
     {
       "src": "icons/favicon-16x16.png",
@@ -19,12 +25,14 @@
     {
       "src": "icons/app-icon-192x192.png",
       "type": "image/png",
-      "sizes": "180x180 192x192"
+      "sizes": "192x192",
+      "purpose": "any maskable"
     },
     {
       "src": "icons/app-icon-512x512.png",
       "type": "image/png",
-      "sizes": "512x512"
+      "sizes": "512x512",
+      "purpose": "any maskable"
     }
   ]
 }
