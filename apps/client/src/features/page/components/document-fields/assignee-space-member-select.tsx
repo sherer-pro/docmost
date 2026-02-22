@@ -1,6 +1,7 @@
 import React from "react";
 import { Group, Select, SelectProps, Text } from "@mantine/core";
 import { CustomAvatar } from "@/components/ui/custom-avatar.tsx";
+import { useTranslation } from "react-i18next";
 import {
   SpaceMemberSelectOption,
   useSpaceMemberSelectOptions,
@@ -27,11 +28,13 @@ const renderSelectOption: SelectProps["renderOption"] = ({ option }) => {
 };
 
 export function AssigneeSpaceMemberSelect({ spaceId, value, onChange }: AssigneeSpaceMemberSelectProps) {
+  const { t } = useTranslation();
   const { options, searchValue, setSearchValue, isLoading, knownUsersById } = useSpaceMemberSelectOptions(
     spaceId,
     value ? [value] : [],
   );
 
+  // В readOnly/controlled-состоянии показываем аватар текущего выбранного участника.
   const selectedMember = value ? knownUsersById[value] : undefined;
 
   return (
@@ -39,7 +42,7 @@ export function AssigneeSpaceMemberSelect({ spaceId, value, onChange }: Assignee
       data={options}
       value={value}
       onChange={(nextValue) => onChange(nextValue || null)}
-      placeholder="Select assignee"
+      placeholder={t("Select assignee")}
       searchable
       clearable
       filter={({ options }) => options}
@@ -51,7 +54,7 @@ export function AssigneeSpaceMemberSelect({ spaceId, value, onChange }: Assignee
           <CustomAvatar avatarUrl={selectedMember.avatarUrl} size={18} name={selectedMember.label} />
         ) : undefined
       }
-      nothingFoundMessage={isLoading ? "Loading..." : "No members found"}
+      nothingFoundMessage={isLoading ? t("Loading...") : t("No members found")}
     />
   );
 }
