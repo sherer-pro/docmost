@@ -12,6 +12,155 @@ import fastifyMultipart from '@fastify/multipart';
 import fastifyCookie from '@fastify/cookie';
 import { InternalLogFilter } from './common/logger/internal-log-filter';
 
+/**
+ * Возвращает origin из URL-строки, если её удалось корректно распарсить.
+ *
+ * @param value Строка URL из переменной окружения.
+ * @returns Origin (`https://example.com`) или `null`, если вход невалидный.
+ */
+function safeGetOrigin(value?: string): string | null {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    return new URL(value).origin;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Строит базовый набор CSP-директив для API/статических ответов без inline-скриптов.
+ *
+ * В `connect-src` явно добавляем websocket-схемы, чтобы не ломать realtime-подключения
+ * и клиентские запросы к отдельному collab endpoint.
+ *
+ * @returns CSP-директивы для заголовка `Content-Security-Policy`.
+ */
+function buildBaseCspDirectives() {
+  const appOrigin = safeGetOrigin(process.env.APP_URL);
+  const collabOrigin = safeGetOrigin(process.env.COLLAB_URL);
+
+  const connectSrc = [
+    "'self'",
+    'https:',
+    'wss:',
+    'ws:',
+    appOrigin,
+    collabOrigin,
+  ].filter(Boolean);
+
+  return {
+    defaultSrc: ["'self'"],
+    baseUri: ["'self'"],
+    frameAncestors: ["'self'"],
+    objectSrc: ["'none'"],
+    imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
+    fontSrc: ["'self'", 'data:', 'https:'],
+    styleSrc: ["'self'", "'unsafe-inline'", 'https:'],
+    scriptSrc: ["'self'"],
+    connectSrc,
+    upgradeInsecureRequests: [],
+  };
+}
+
+/**
+ * Преобразует объект CSP-директив в строку заголовка `Content-Security-Policy`.
+ *
+ * @param directives Набор директив CSP.
+ * @returns Строка формата `directive value; directive value`.
+ */
+function buildCspHeaderValue(
+  directives: Record<string, Array<string>>,
+): string {
+  return Object.entries(directives)
+    .map(([directive, values]) => {
+      if (!values.length) {
+        return directive;
+      }
+
+      return `${directive} ${values.join(' ')}`;
+    })
+    .join('; ');
+}
+
+/**
+ * Формирует смягчённую CSP для SPA-страниц, где используется inline-конфиг (`window.CONFIG`).
+ *
+ * Это точечное послабление применяется только к HTML-роутам (например, editor/preview/share),
+ * чтобы не ослаблять политику для API-ответов.
+ *
+ * @returns CSP-директивы для «relaxed» режима.
+ */
+function buildRelaxedCspDirectives() {
+  return {
+    ...buildBaseCspDirectives(),
+    scriptSrc: ["'self'", "'unsafe-inline'"],
+  };
+}
+
+/**
+ * Определяет, нужен ли relaxed CSP для текущего URL.
+ *
+ * @param requestUrl URL запроса.
+ * @returns `true`, если это страница frontend/share, где ожидаются inline-скрипты.
+ */
+function shouldUseRelaxedCsp(requestUrl: string): boolean {
+  return !requestUrl.startsWith('/api');
+}
+
+/**
+ * Собирает security-заголовки для конкретного запроса.
+ *
+ * HSTS включаем только для HTTPS-трафика (включая проксированный через `x-forwarded-proto`).
+ *
+ * @param requestUrl URL запроса.
+ * @param isHttps Флаг HTTPS-соединения.
+ * @returns Набор заголовков безопасности для текущего ответа.
+ */
+function getSecurityHeaders(
+  requestUrl: string,
+  isHttps: boolean,
+): Record<string, string> {
+  const cspDirectives = shouldUseRelaxedCsp(requestUrl)
+    ? buildRelaxedCspDirectives()
+    : buildBaseCspDirectives();
+
+  const headers: Record<string, string> = {
+    'content-security-policy': buildCspHeaderValue(cspDirectives),
+    'referrer-policy': 'strict-origin-when-cross-origin',
+    'x-content-type-options': 'nosniff',
+    'x-frame-options': 'SAMEORIGIN',
+  };
+
+  if (isHttps) {
+    headers['strict-transport-security'] =
+      'max-age=31536000; includeSubDomains; preload';
+  }
+
+  return headers;
+}
+
+/**
+ * Применяет security-заголовки к ответу.
+ *
+ * @param requestUrl URL запроса.
+ * @param isHttps Флаг HTTPS-соединения.
+ * @param reply Fastify-ответ.
+ */
+function applySecurityHeaders(
+  requestUrl: string,
+  isHttps: boolean,
+  reply: { header: (name: string, value: string) => void },
+) {
+  const headers = getSecurityHeaders(requestUrl, isHttps);
+
+  for (const [name, value] of Object.entries(headers)) {
+    reply.header(name, value);
+  }
+}
+
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
@@ -58,6 +207,14 @@ async function bootstrap() {
       this.send('');
     })
     .addHook('preHandler', function (req, reply, done) {
+      const forwardedProtoHeader = req.headers['x-forwarded-proto'];
+      const isForwardedHttps = Array.isArray(forwardedProtoHeader)
+        ? forwardedProtoHeader.some((value) => value.includes('https'))
+        : forwardedProtoHeader?.includes('https');
+      const isHttps = req.protocol === 'https' || Boolean(isForwardedHttps);
+
+      applySecurityHeaders(req.originalUrl, isHttps, reply);
+
       // don't require workspaceId for the following paths
       const excludedPaths = [
         '/api/auth/setup',
