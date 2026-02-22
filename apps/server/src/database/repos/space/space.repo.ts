@@ -5,6 +5,7 @@ import { dbOrTx } from '@docmost/db/utils';
 import {
   InsertableSpace,
   Space,
+  SpaceDocumentFieldsSettings,
   UpdatableSpace,
 } from '@docmost/db/types/entity.types';
 import { ExpressionBuilder, sql } from 'kysely';
@@ -109,21 +110,17 @@ export class SpaceRepo {
       .executeTakeFirst();
   }
 
-  /**
-   * Обновляет флаги доступности документных полей в spaces.settings.documentFields.
-   */
   async updateDocumentFieldsSettings(
     spaceId: string,
     workspaceId: string,
-    fieldKey: 'status' | 'assignee' | 'stakeholders',
-    enabled: boolean,
+    documentFields: SpaceDocumentFieldsSettings,
   ) {
     return this.db
       .updateTable('spaces')
       .set({
         settings: sql`COALESCE(settings, '{}'::jsonb)
           || jsonb_build_object('documentFields', COALESCE(settings->'documentFields', '{}'::jsonb)
-          || jsonb_build_object('${sql.raw(fieldKey)}', ${sql.lit(enabled)}))`,
+          || ${sql.lit(JSON.stringify(documentFields))}::jsonb)`,
         updatedAt: new Date(),
       })
       .where('id', '=', spaceId)
