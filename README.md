@@ -48,6 +48,26 @@ All files in the following directories are licensed under the Docmost Enterprise
 
 See the [development documentation](https://docmost.com/docs/self-hosting/development)
 
+
+## Test toolchain version matrix
+
+Validated backend coverage stack (Node 22) used in this repository:
+
+| Component | Version | Notes |
+| --- | --- | --- |
+| Node.js | 22.x | Runtime baseline for local/dev and container builds. |
+| Jest | 30.2.0 | Main test runner for backend unit/integration tests. |
+| ts-jest | 29.4.6 | Single TypeScript transformer for backend Jest config. |
+| babel-jest | 30.2.0 | Version pinned at workspace level to avoid accidental mismatches. |
+| test-exclude | 6.0.0 | Coverage include/exclude helper used in Jest/Istanbul ecosystem. |
+| coverageProvider | v8 | Native Node V8 coverage provider (no Babel Istanbul transform). |
+
+Backend smoke command for early coverage regressions:
+
+```bash
+pnpm --filter ./apps/server test:cov:smoke
+```
+
 ## Thanks
 Special thanks to;
 
