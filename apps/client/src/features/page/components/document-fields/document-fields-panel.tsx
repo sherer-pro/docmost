@@ -31,6 +31,8 @@ interface DocumentFieldsPanelProps {
 }
 
 const STATUS_OPTIONS: { value: PageCustomFieldStatus; label: string; color: string }[] = [
+  // Статусы храним в виде фиксированных enum-значений, а label оставляем
+  // на английском как source key для стандартной локализации через t().
   { value: PageCustomFieldStatus.TODO, label: "TODO", color: "gray" },
   { value: PageCustomFieldStatus.IN_PROGRESS, label: "In progress", color: "blue" },
   { value: PageCustomFieldStatus.IN_REVIEW, label: "In review", color: "indigo" },
@@ -40,6 +42,7 @@ const STATUS_OPTIONS: { value: PageCustomFieldStatus; label: string; color: stri
 ];
 
 function normalizeCustomFields(customFields?: PageCustomFields): Required<PageCustomFields> {
+  // Нормализуем nullable-поля из API в предсказуемую форму для controlled-компонентов.
   return {
     status: customFields?.status ?? null,
     assigneeId: customFields?.assigneeId ?? null,
@@ -53,6 +56,7 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
 
   const enabledFields = useMemo(
     () => ({
+      // Отрисовываем только те поля, которые включены на уровне настроек пространства.
       status: !!documentFields?.status,
       assignee: !!documentFields?.assignee,
       stakeholders: !!documentFields?.stakeholders,
@@ -85,6 +89,7 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
   });
 
   const debouncedSave = useDebouncedCallback((nextFields: Required<PageCustomFields>) => {
+    // Дебаунс уменьшает количество запросов при быстром изменении полей.
     mutate(nextFields);
   }, 600);
 
@@ -111,7 +116,13 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
           <Stack gap={4}>
             <Group gap={6}>
               <Text size="sm" fw={600}>{t("Status")}</Text>
-              <Tooltip label={t("Current document status")}>
+              <Tooltip
+                multiline
+                w={300}
+                label={t(
+                  "Shows the current lifecycle stage of the document. Use this field to make progress transparent for everyone in the space.",
+                )}
+              >
                 <ActionIcon variant="subtle" size="sm" aria-label={t("Status info")}>
                   <IconInfoCircle size={14} />
                 </ActionIcon>
@@ -124,7 +135,7 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
                   {t(selectedStatus.label)}
                 </Badge>
               ) : (
-                <Text size="sm" c="dimmed">{t("No data")}</Text>
+                <Text size="sm" c="dimmed">{t("no data")}</Text>
               )
             ) : (
               <Select
@@ -144,7 +155,13 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
           <Stack gap={4}>
             <Group gap={6}>
               <Text size="sm" fw={600}>{t("Assignee")}</Text>
-              <Tooltip label={t("Document owner responsible for updates")}>
+              <Tooltip
+                multiline
+                w={300}
+                label={t(
+                  "The assignee is the space member responsible for keeping this document up to date and driving work to completion.",
+                )}
+              >
                 <ActionIcon variant="subtle" size="sm" aria-label={t("Assignee info")}>
                   <IconInfoCircle size={14} />
                 </ActionIcon>
@@ -162,7 +179,7 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
                   <Text size="sm">{knownUsersById[fields.assigneeId]?.label ?? fields.assigneeId}</Text>
                 </Group>
               ) : (
-                <Text size="sm" c="dimmed">{t("No data")}</Text>
+                <Text size="sm" c="dimmed">{t("no data")}</Text>
               )
             ) : (
               <AssigneeSpaceMemberSelect
@@ -178,7 +195,13 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
           <Stack gap={4}>
             <Group gap={6}>
               <Text size="sm" fw={600}>{t("Stakeholders")}</Text>
-              <Tooltip label={t("People involved in this document")}>
+              <Tooltip
+                multiline
+                w={300}
+                label={t(
+                  "Stakeholders are space members who are affected by this document, contribute context, or should be notified about important changes.",
+                )}
+              >
                 <ActionIcon variant="subtle" size="sm" aria-label={t("Stakeholders info")}>
                   <IconInfoCircle size={14} />
                 </ActionIcon>
@@ -200,7 +223,7 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
                   ))}
                 </Stack>
               ) : (
-                <Text size="sm" c="dimmed">{t("No data")}</Text>
+                <Text size="sm" c="dimmed">{t("no data")}</Text>
               )
             ) : (
               <StakeholdersSpaceMemberMultiSelect
