@@ -22,8 +22,36 @@ import {
   UserMfa as _UserMFA,
   ApiKeys,
   Watchers,
+  JsonValue,
 } from './db';
 import { PageEmbeddings } from '@docmost/db/types/embeddings.types';
+
+/**
+ * Настройки документных полей на уровне space.
+ */
+export interface SpaceDocumentFieldsSettings {
+  status?: boolean;
+  assignee?: boolean;
+  stakeholders?: boolean;
+}
+
+/**
+ * Контейнер настроек space.
+ */
+export interface SpaceSettings {
+  documentFields?: SpaceDocumentFieldsSettings;
+  [key: string]: JsonValue | undefined;
+}
+
+/**
+ * Расширяемые настройки страницы.
+ */
+export interface PageSettings {
+  status?: string | null;
+  assigneeId?: string | null;
+  stakeholderIds?: string[] | null;
+  [key: string]: JsonValue | undefined;
+}
 
 // Workspace
 export type Workspace = Selectable<Workspaces>;

@@ -109,6 +109,29 @@ export class SpaceRepo {
       .executeTakeFirst();
   }
 
+  /**
+   * Обновляет флаги доступности документных полей в spaces.settings.documentFields.
+   */
+  async updateDocumentFieldsSettings(
+    spaceId: string,
+    workspaceId: string,
+    fieldKey: 'status' | 'assignee' | 'stakeholders',
+    enabled: boolean,
+  ) {
+    return this.db
+      .updateTable('spaces')
+      .set({
+        settings: sql`COALESCE(settings, '{}'::jsonb)
+          || jsonb_build_object('documentFields', COALESCE(settings->'documentFields', '{}'::jsonb)
+          || jsonb_build_object('${sql.raw(fieldKey)}', ${sql.lit(enabled)}))`,
+        updatedAt: new Date(),
+      })
+      .where('id', '=', spaceId)
+      .where('workspaceId', '=', workspaceId)
+      .returningAll()
+      .executeTakeFirst();
+  }
+
   async insertSpace(
     insertableSpace: InsertableSpace,
     trx?: KyselyTransaction,
