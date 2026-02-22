@@ -8,12 +8,14 @@ import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { Reflector } from '@nestjs/core';
 import { EnvironmentService } from '../../integrations/environment/environment.service';
 import { addDays } from 'date-fns';
+import { CsrfService } from '../security/csrf.service';
 
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
   constructor(
     private reflector: Reflector,
     private environmentService: EnvironmentService,
+    private csrfService: CsrfService,
   ) {
     super();
   }
@@ -37,7 +39,23 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     }
 
     this.setJoinedWorkspacesCookie(user, ctx);
+    this.ensureCsrfCookie(ctx);
     return user;
+  }
+
+  /**
+   * Гарантирует наличие CSRF-cookie для уже авторизованного пользователя.
+   * Это позволяет клиенту автоматически отправлять токен в `x-csrf-token`.
+   */
+  ensureCsrfCookie(ctx: ExecutionContext) {
+    const req = ctx.switchToHttp().getRequest();
+    const res = ctx.switchToHttp().getResponse();
+
+    if (req.cookies?.[CsrfService.COOKIE_NAME]) {
+      return;
+    }
+
+    this.csrfService.setCsrfCookie(res, this.csrfService.generateToken());
   }
 
   setJoinedWorkspacesCookie(user: any, ctx: ExecutionContext) {

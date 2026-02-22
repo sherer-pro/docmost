@@ -7,6 +7,42 @@ const api: AxiosInstance = axios.create({
   withCredentials: true,
 });
 
+/**
+ * Читает значение cookie по имени.
+ *
+ * Нужен для double-submit CSRF: клиент берёт токен из `csrfToken` cookie
+ * и отправляет его в `x-csrf-token` заголовке на мутирующие запросы.
+ */
+function getCookieValue(name: string): string | null {
+  const escapedName = name.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
+  const match = document.cookie.match(
+    new RegExp(`(?:^|; )${escapedName}=([^;]*)`),
+  );
+
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+api.interceptors.request.use((config) => {
+  const method = config.method?.toUpperCase() ?? "GET";
+  const isMutatingRequest = !["GET", "HEAD", "OPTIONS"].includes(method);
+
+  if (isMutatingRequest) {
+    const csrfToken = getCookieValue("csrfToken");
+    if (csrfToken) {
+      if (config.headers?.set) {
+        config.headers.set("x-csrf-token", csrfToken);
+      } else {
+        config.headers = {
+          ...(config.headers ?? {}),
+          "x-csrf-token": csrfToken,
+        };
+      }
+    }
+  }
+
+  return config;
+});
+
 api.interceptors.response.use(
   (response) => {
     // we need the response headers for these endpoints
