@@ -18,6 +18,7 @@ import { IconAlertTriangle, IconFileOff } from "@tabler/icons-react";
 import { Button } from "@mantine/core";
 import { Link } from "react-router-dom";
 import { ErrorBoundary } from "react-error-boundary";
+import DocumentFieldsPanel from "@/features/page/components/document-fields/document-fields-panel.tsx";
 
 const MemoizedFullEditor = React.memo(FullEditor);
 const MemoizedPageHeader = React.memo(PageHeader);
@@ -102,6 +103,14 @@ function PageContent({ pageSlug }: { pageSlug: string | undefined }) {
         </Helmet>
 
         <MemoizedPageHeader
+          readOnly={spaceAbility.cannot(
+            SpaceCaslAction.Manage,
+            SpaceCaslSubject.Page,
+          )}
+        />
+
+        <DocumentFieldsPanel
+          page={page}
           readOnly={spaceAbility.cannot(
             SpaceCaslAction.Manage,
             SpaceCaslSubject.Page,

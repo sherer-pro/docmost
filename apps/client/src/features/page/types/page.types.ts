@@ -21,7 +21,16 @@ export interface IPage {
   creator: ICreator;
   lastUpdatedBy: ILastUpdatedBy;
   deletedBy: IDeletedBy;
+  customFields?: PageCustomFields;
   space: Partial<ISpace>;
+}
+
+export type PageCustomFieldStatus = 'not_started' | 'in_progress' | 'done';
+
+export interface PageCustomFields {
+  status?: PageCustomFieldStatus | null;
+  assigneeId?: string | null;
+  stakeholderIds?: string[];
 }
 
 interface ICreator {
@@ -73,6 +82,7 @@ export interface IPageInput {
   coverPhoto: string;
   position: string;
   isLocked: boolean;
+  customFields?: PageCustomFields;
 }
 
 export interface IExportPageParams {
