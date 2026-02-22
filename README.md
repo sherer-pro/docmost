@@ -68,6 +68,16 @@ Backend smoke command for early coverage regressions:
 pnpm --filter ./apps/server test:cov:smoke
 ```
 
+## Local quality-check checklist
+
+Run these commands before opening a PR for backend changes:
+
+```bash
+pnpm --filter ./apps/server lint
+pnpm --filter ./apps/server test
+pnpm --filter ./apps/server test:alias:smoke
+```
+
 ## Thanks
 Special thanks to;
 
