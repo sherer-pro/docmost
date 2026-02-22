@@ -191,6 +191,61 @@ export class SpaceMemberRepo {
     return result;
   }
 
+
+  /**
+   * Returns effective user members of a space.
+   * Includes direct user members and users inherited through group memberships.
+   */
+  async getSpaceUserMembers(
+    spaceId: string,
+    pagination: PaginationOptions,
+  ) {
+    const limit = pagination.limit && pagination.limit > 0 ? pagination.limit : 20;
+
+    let query = this.db
+      .selectFrom('users')
+      .select(['users.id', 'users.name', 'users.email', 'users.avatarUrl'])
+      .where('users.id', 'in', (eb) =>
+        eb
+          .selectFrom('spaceMembers as sm')
+          .select('sm.userId as userId')
+          .where('sm.spaceId', '=', spaceId)
+          .where('sm.userId', 'is not', null)
+          .union(
+            eb
+              .selectFrom('spaceMembers as sm')
+              .innerJoin('groupUsers as gu', 'gu.groupId', 'sm.groupId')
+              .select('gu.userId as userId')
+              .where('sm.spaceId', '=', spaceId),
+          ),
+      );
+
+    if (pagination.query) {
+      query = query.where((eb) =>
+        eb(
+          sql`f_unaccent(users.name)`,
+          'ilike',
+          sql`f_unaccent(${'%' + pagination.query + '%'})`,
+        ).or(
+          sql`users.email`,
+          'ilike',
+          sql`f_unaccent(${'%' + pagination.query + '%'})`,
+        ),
+      );
+    }
+
+    const items = await query
+      .distinct()
+      .orderBy('users.name', 'asc')
+      .limit(limit)
+      .execute();
+
+    return {
+      items: items.map((user) => ({ ...user, type: 'user' })),
+      limit,
+    };
+  }
+
   /*
    * we want to get a user's role in a space.
    * they user can be a member either directly or via a group

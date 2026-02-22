@@ -8,6 +8,7 @@ import {
   ISpaceMember,
 } from "@/features/space/types/space.types";
 import { IPagination, QueryParams } from "@/lib/types.ts";
+import { SpaceUserInfo } from "@/features/space/types/space.types.ts";
 import { saveAs } from "file-saver";
 
 export async function getSpaces(
@@ -77,4 +78,13 @@ export async function exportSpace(data: IExportSpaceParams): Promise<void> {
   }
 
   saveAs(req.data, decodedFileName);
+}
+
+
+export async function getSpaceMemberUsers(
+  spaceId: string,
+  params?: QueryParams,
+): Promise<{ items: SpaceUserInfo[]; limit: number }> {
+  const req = await api.post("/spaces/member-users", { spaceId, ...params });
+  return req.data;
 }

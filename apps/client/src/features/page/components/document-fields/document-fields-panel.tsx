@@ -6,6 +6,7 @@ import {
   Paper,
   Select,
   Stack,
+  Table,
   Text,
   Tooltip,
 } from "@mantine/core";
@@ -21,6 +22,9 @@ import {
   PageCustomFieldStatus,
 } from "@/features/page/types/page.types.ts";
 import { queryClient } from "@/main.tsx";
+import { currentUserAtom } from "@/features/user/atoms/current-user-atom.ts";
+import { useAtomValue } from "jotai";
+import { PageEditMode } from "@/features/user/types/user.types.ts";
 import { AssigneeSpaceMemberSelect } from "@/features/page/components/document-fields/assignee-space-member-select.tsx";
 import { StakeholdersSpaceMemberMultiSelect } from "@/features/page/components/document-fields/stakeholders-space-member-multiselect.tsx";
 import { useSpaceMemberSelectOptions } from "@/features/page/components/document-fields/space-member-select-utils.ts";
@@ -52,7 +56,11 @@ function normalizeCustomFields(customFields?: PageCustomFields): Required<PageCu
 
 export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps) {
   const { t } = useTranslation();
+  const currentUser = useAtomValue(currentUserAtom);
   const documentFields = page.space?.settings?.documentFields;
+  const userPageEditMode =
+    currentUser?.user?.settings?.preferences?.pageEditMode ?? PageEditMode.Edit;
+  const isEditable = !readOnly && userPageEditMode === PageEditMode.Edit;
 
   const enabledFields = useMemo(
     () => ({
@@ -96,7 +104,7 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
   const handleFieldChange = (nextFields: Required<PageCustomFields>) => {
     setFields(nextFields);
 
-    if (readOnly) {
+    if (!isEditable) {
       return;
     }
 
@@ -176,7 +184,21 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
                     size={18}
                     name={knownUsersById[fields.assigneeId]?.label ?? fields.assigneeId}
                   />
-                  <Text size="sm">{knownUsersById[fields.assigneeId]?.label ?? fields.assigneeId}</Text>
+                )}
+              </Table.Td>
+            </Table.Tr>
+          )}
+
+          {enabledFields.assignee && (
+            <Table.Tr>
+              <Table.Td>
+                <Group gap={6}>
+                  <Text size="sm" fw={600}>{t("Assignee")}</Text>
+                  <Tooltip multiline w={300} label={t("The assignee is the space member responsible for keeping this document up to date and driving work to completion.")}>
+                    <ActionIcon variant="subtle" size="sm" aria-label={t("Assignee info")}>
+                      <IconInfoCircle size={14} />
+                    </ActionIcon>
+                  </Tooltip>
                 </Group>
               ) : (
                 <Text size="sm" c="dimmed">{t("no data")}</Text>
