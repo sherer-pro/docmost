@@ -14,6 +14,8 @@ import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 import { UserRepo } from '@docmost/db/repos/user/user.repo';
 import { executeTx } from '@docmost/db/utils';
 import { WatcherRepo } from '@docmost/db/repos/watcher/watcher.repo';
+import { User } from '@docmost/db/types/entity.types';
+import { UserRole } from '../../../common/helpers/types/permission';
 
 @Injectable()
 export class GroupUserService {
@@ -31,8 +33,13 @@ export class GroupUserService {
     groupId: string,
     workspaceId: string,
     pagination: PaginationOptions,
+    authUser?: User,
   ) {
-    await this.groupService.findAndValidateGroup(groupId, workspaceId);
+    const group = await this.groupService.findAndValidateGroup(groupId, workspaceId);
+
+    if (authUser?.role === UserRole.MEMBER && group.isDefault) {
+      throw new NotFoundException('Group not found');
+    }
 
     const groupUsers = await this.groupUserRepo.getGroupUsersPaginated(
       groupId,

@@ -103,12 +103,20 @@ export class GroupRepo {
     return this.insertGroup(insertableGroup, trx);
   }
 
-  async getGroupsPaginated(workspaceId: string, pagination: PaginationOptions) {
+  async getGroupsPaginated(
+    workspaceId: string,
+    pagination: PaginationOptions,
+    opts?: { excludeDefaultGroup?: boolean },
+  ) {
     let baseQuery = this.db
       .selectFrom('groups')
       .selectAll('groups')
       .select((eb) => this.withMemberCount(eb))
       .where('workspaceId', '=', workspaceId);
+
+    if (opts?.excludeDefaultGroup) {
+      baseQuery = baseQuery.where('isDefault', '=', false);
+    }
 
     if (pagination.query) {
       baseQuery = baseQuery.where((eb) =>
