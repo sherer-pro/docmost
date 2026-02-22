@@ -6,6 +6,7 @@ import classes from "./code-block.module.css";
 import { useTranslation } from "react-i18next";
 import { useComputedColorScheme } from "@mantine/core";
 import DOMPurify from "dompurify";
+import { sanitizeMermaidSvg } from "./mermaid-sanitizer";
 
 interface MermaidViewProps {
   props: NodeViewProps;
@@ -19,7 +20,14 @@ export default function MermaidView({ props }: MermaidViewProps) {
 
   // Update Mermaid config when theme changes.
   useEffect(() => {
+    /**
+     * Политика безопасности рендеринга Mermaid:
+     * - securityLevel: 'strict' задаём явно, чтобы не зависеть от дефолтов конкретной версии mermaid.
+     * - startOnLoad выключен, потому что рендерим диаграмму программно через mermaid.render.
+     * - suppressErrorRendering оставляем включённым, чтобы безопасно контролировать вывод ошибок сами.
+     */
     mermaid.initialize({
+      securityLevel: "strict",
       startOnLoad: false,
       suppressErrorRendering: true,
       theme: computedColorScheme === "light" ? "default" : "dark",
@@ -33,7 +41,7 @@ export default function MermaidView({ props }: MermaidViewProps) {
       mermaid
         .render(id, node.textContent)
         .then((item) => {
-          setPreview(item.svg);
+          setPreview(sanitizeMermaidSvg(item.svg));
         })
         .catch((err) => {
           if (props.editor.isEditable) {
