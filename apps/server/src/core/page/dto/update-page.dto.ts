@@ -16,9 +16,12 @@ import { PageSettings } from '@docmost/db/types/entity.types';
 export type ContentOperation = 'append' | 'prepend' | 'replace';
 
 export const PAGE_CUSTOM_FIELD_STATUS_VALUES = [
-  'not_started',
-  'in_progress',
-  'done',
+  'TODO',
+  'IN_PROGRESS',
+  'IN_REVIEW',
+  'DONE',
+  'REJECTED',
+  'ARCHIVED',
 ] as const;
 
 export class UpdatePageCustomFieldsDto {
