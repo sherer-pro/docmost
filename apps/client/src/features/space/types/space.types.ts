@@ -34,6 +34,7 @@ export interface ISpace {
   spaceId?: string;
   membership?: IMembership;
   settings?: ISpaceSettings;
+  documentFields?: ISpaceDocumentFieldsSettings;
   // for updates
   disablePublicSharing?: boolean;
 }
