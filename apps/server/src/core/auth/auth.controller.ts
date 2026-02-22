@@ -27,6 +27,8 @@ import { validateSsoEnforcement } from './auth.util';
 import { ModuleRef } from '@nestjs/core';
 import { CsrfService } from '../../common/security/csrf.service';
 import { CsrfExempt } from '../../common/decorators/csrf-exempt.decorator';
+import { AuthRateLimitGuard } from './rate-limit/auth-rate-limit.guard';
+import { AuthRateLimit } from './rate-limit/auth-rate-limit.decorator';
 
 @Controller('auth')
 export class AuthController {
@@ -42,6 +44,8 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @Post('login')
   @CsrfExempt()
+  @UseGuards(AuthRateLimitGuard)
+  @AuthRateLimit({ endpoint: 'login', accountField: 'email' })
   async login(
     @AuthWorkspace() workspace: Workspace,
     @Res({ passthrough: true }) res: FastifyReply,
@@ -121,6 +125,8 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @Post('forgot-password')
   @CsrfExempt()
+  @UseGuards(AuthRateLimitGuard)
+  @AuthRateLimit({ endpoint: 'forgotPassword', accountField: 'email' })
   async forgotPassword(
     @Body() forgotPasswordDto: ForgotPasswordDto,
     @AuthWorkspace() workspace: Workspace,
@@ -132,6 +138,8 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @Post('password-reset')
   @CsrfExempt()
+  @UseGuards(AuthRateLimitGuard)
+  @AuthRateLimit({ endpoint: 'passwordReset', accountField: 'token' })
   async passwordReset(
     @Res({ passthrough: true }) res: FastifyReply,
     @Body() passwordResetDto: PasswordResetDto,
@@ -158,6 +166,8 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @Post('verify-token')
   @CsrfExempt()
+  @UseGuards(AuthRateLimitGuard)
+  @AuthRateLimit({ endpoint: 'verifyToken', accountField: 'token' })
   async verifyResetToken(
     @Body() verifyUserTokenDto: VerifyUserTokenDto,
     @AuthWorkspace() workspace: Workspace,
