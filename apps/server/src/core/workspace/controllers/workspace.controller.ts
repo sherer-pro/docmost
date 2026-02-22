@@ -34,6 +34,7 @@ import { FastifyReply } from 'fastify';
 import { EnvironmentService } from '../../../integrations/environment/environment.service';
 import { CheckHostnameDto } from '../dto/check-hostname.dto';
 import { RemoveWorkspaceUserDto } from '../dto/remove-workspace-user.dto';
+import { DeactivateWorkspaceUserDto } from '../dto/deactivate-workspace-user.dto';
 import { CsrfService } from '../../../common/security/csrf.service';
 
 @UseGuards(JwtAuthGuard)
@@ -112,6 +113,7 @@ export class WorkspaceController {
   @HttpCode(HttpStatus.OK)
   @Post('members/deactivate')
   async deactivateWorkspaceMember(
+    @Body() dto: DeactivateWorkspaceUserDto,
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
@@ -121,6 +123,8 @@ export class WorkspaceController {
     ) {
       throw new ForbiddenException();
     }
+
+    return this.workspaceService.deactivateUser(user, dto.userId, workspace.id);
   }
 
   @HttpCode(HttpStatus.OK)
