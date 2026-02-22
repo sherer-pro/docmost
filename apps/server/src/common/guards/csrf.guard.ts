@@ -17,7 +17,7 @@ export class CsrfGuard implements CanActivate {
     const req = context.switchToHttp().getRequest();
     const method = req.method?.toUpperCase?.() ?? 'GET';
 
-    // CSRF-проверка не нужна для read-only методов.
+    // CSRF validation is not required for read-only methods.
     if (['GET', 'HEAD', 'OPTIONS'].includes(method)) {
       return true;
     }
@@ -32,7 +32,7 @@ export class CsrfGuard implements CanActivate {
       [context.getHandler(), context.getClass()],
     );
 
-    // Публичные endpoint'ы и явно исключённые маршруты пропускаем.
+    // Skip public endpoints and routes explicitly marked as CSRF-exempt.
     if (isPublic || isCsrfExempt) {
       return true;
     }

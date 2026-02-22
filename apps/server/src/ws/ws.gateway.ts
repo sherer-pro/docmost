@@ -29,6 +29,12 @@ export class WsGateway implements OnGatewayConnection, OnModuleDestroy {
     private spaceMemberRepo: SpaceMemberRepo,
   ) {}
 
+  /**
+   * Authenticates a newly connected socket and joins it to all authorized rooms.
+   *
+   * The authorized room list is also cached on `client.data` and used later to
+   * hard-enforce relay permissions in `handleMessage`.
+   */
   async handleConnection(client: Socket, ...args: any[]): Promise<void> {
     try {
       const cookies = cookie.parse(client.handshake.headers.cookie);
@@ -48,9 +54,9 @@ export class WsGateway implements OnGatewayConnection, OnModuleDestroy {
       const authorizedRooms = new Set([userRoom, workspaceRoom, ...spaceRooms]);
 
       /**
-       * Сохраняем список разрешённых комнат в контексте сокета.
-       * Это нужно для жёсткой серверной проверки, чтобы клиент не мог
-       * ретранслировать событие в произвольную комнату через подмену payload.
+       * Keep allowed room names in socket context for strict server-side checks.
+       * This prevents a client from relaying events to arbitrary rooms by
+       * tampering with payload values.
        */
       client.data.authorizedRooms = authorizedRooms;
 
@@ -61,6 +67,12 @@ export class WsGateway implements OnGatewayConnection, OnModuleDestroy {
     }
   }
 
+  /**
+   * Validates and relays a message to exactly one authorized room.
+   *
+   * The method enforces DTO validation, room authorization, payload consistency,
+   * and real Socket.IO room membership before rebroadcasting.
+   */
   @SubscribeMessage('message')
   handleMessage(client: Socket, data: any): void {
     const payload = plainToInstance(WsMessageDto, data);
@@ -71,7 +83,7 @@ export class WsGateway implements OnGatewayConnection, OnModuleDestroy {
 
     if (validationErrors.length > 0) {
       this.logger.warn(
-        `Невалидный WS payload от клиента ${client.id}: ${JSON.stringify(validationErrors)}`,
+        `Invalid WS payload from client ${client.id}: ${JSON.stringify(validationErrors)}`,
       );
       return;
     }
@@ -80,29 +92,29 @@ export class WsGateway implements OnGatewayConnection, OnModuleDestroy {
 
     if (!this.isPayloadConsistent(payload)) {
       this.logger.warn(
-        `Невалидная связка targetRoom/spaceId/workspaceId от клиента ${client.id}`,
+        `Invalid targetRoom/spaceId/workspaceId combination from client ${client.id}`,
       );
       return;
     }
 
     /**
-     * Запрещаем global broadcast по умолчанию.
-     * Ретрансляция разрешена только в явно указанную комнату, выданную на connect.
+     * Block global broadcast by default.
+     * Relay is allowed only to an explicit room granted on connect.
      */
     if (!authorizedRooms.has(payload.targetRoom)) {
       this.logger.warn(
-        `Клиент ${client.id} попытался отправить событие в неразрешённую комнату ${payload.targetRoom}`,
+        `Client ${client.id} tried to relay an event to unauthorized room ${payload.targetRoom}`,
       );
       return;
     }
 
     /**
-     * Дополнительная проверка членства в комнате на уровне socket.io.
-     * Даже если комната есть в списке разрешённых, клиент должен реально состоять в ней.
+     * Extra room-membership validation at Socket.IO level.
+     * Even when a room is authorized, the socket must actually be joined to it.
      */
     if (!client.rooms.has(payload.targetRoom)) {
       this.logger.warn(
-        `Клиент ${client.id} не состоит в комнате ${payload.targetRoom}, ретрансляция отклонена`,
+        `Client ${client.id} is not in room ${payload.targetRoom}; relay rejected`,
       );
       return;
     }
@@ -127,14 +139,21 @@ export class WsGateway implements OnGatewayConnection, OnModuleDestroy {
     }
   }
 
+  /**
+   * Builds a canonical room name for space-scoped realtime events.
+   *
+   * @param spaceId Space identifier.
+   * @returns Room name in `space-${spaceId}` format.
+   */
   getSpaceRoomName(spaceId: string): string {
     return `space-${spaceId}`;
   }
 
   /**
-   * Проверяем логическую целостность payload:
-   * - для `space-*` room ожидаем совпадение с `spaceId`;
-   * - для `workspace-*` room ожидаем совпадение с `workspaceId`.
+   * Validates logical consistency between `targetRoom` and scope identifiers.
+   *
+   * - `space-*` rooms must match `spaceId`.
+   * - `workspace-*` rooms must match `workspaceId`.
    */
   private isPayloadConsistent(payload: WsMessageDto): boolean {
     if (payload.targetRoom.startsWith('space-')) {

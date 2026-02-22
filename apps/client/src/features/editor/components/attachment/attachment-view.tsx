@@ -14,8 +14,8 @@ import { useTranslation } from "react-i18next";
 type AttachmentDisplayMode = "file" | "embed";
 
 /**
- * Проверяет, что вложение можно отображать как встроенный PDF.
- * Поддерживаем оба варианта определения: MIME-тип и расширение имени файла.
+ * Checks whether an attachment can be rendered as an inline PDF.
+ * Supports both detection paths: MIME type and file extension.
  */
 function isPdfAttachment(mime?: string, name?: string): boolean {
   const normalizedMime = mime?.toLowerCase();
@@ -36,7 +36,7 @@ export default function AttachmentView(props: NodeViewProps) {
   const fileUrl = url ? getFileUrl(url) : "";
 
   /**
-   * Переключает режим показа PDF между карточкой файла и встроенным preview.
+   * Toggles PDF rendering mode between file card and inline preview.
    */
   const toggleDisplayMode = () => {
     const nextMode: AttachmentDisplayMode = displayMode === "embed" ? "file" : "embed";

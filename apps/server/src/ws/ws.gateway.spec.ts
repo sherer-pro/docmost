@@ -24,12 +24,12 @@ type SocketMock = {
 };
 
 /**
- * Создаёт минимальный mock сокета для unit-тестов WS gateway.
+ * Creates a minimal socket mock for WS gateway unit tests.
  *
- * Мы явно моделируем:
- * - `authorizedRooms`, которые сервер назначает на этапе `handleConnection`;
- * - `rooms`, где socket.io реально держит членство клиента;
- * - `broadcast.to(...).emit(...)`, чтобы проверить факт и целевую комнату ретрансляции.
+ * The mock explicitly models:
+ * - `authorizedRooms` assigned by the server in `handleConnection`;
+ * - `rooms` where Socket.IO tracks real membership;
+ * - `broadcast.to(...).emit(...)` to assert relay execution and target room.
  */
 const createSocketMock = (
   authorizedRooms: string[],

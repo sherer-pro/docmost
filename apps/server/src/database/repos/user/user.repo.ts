@@ -142,9 +142,9 @@ export class UserRepo {
   }
 
   /**
-   * Возвращает количество активных пользователей с конкретной ролью в рамках workspace.
+   * Returns the number of active users with a specific role in a workspace.
    *
-   * Активными считаются пользователи, которые не удалены и не деактивированы.
+   * Active users are users that are neither deleted nor deactivated.
    */
   async activeRoleCountByWorkspaceId(
     role: string,
@@ -163,9 +163,9 @@ export class UserRepo {
   }
 
   /**
-   * Проверяет, состоит ли пользователь хотя бы в одной НЕ-дефолтной группе внутри workspace.
+   * Checks whether a user belongs to at least one non-default group in a workspace.
    *
-   * Это используется для управления доступом member-пользователей к списку участников workspace.
+   * Used to control access to the workspace members directory for member users.
    */
   async hasNonDefaultGroupMembership(
     userId: string,
@@ -184,12 +184,12 @@ export class UserRepo {
   }
 
   /**
-   * Возвращает пользователей workspace с учётом ограничений по группам.
+   * Returns workspace users with group-based visibility restrictions applied.
    *
-   * Правила доступа:
-   * - администратор/владелец видит всех пользователей workspace;
-   * - обычный пользователь видит только тех, кто состоит с ним хотя бы в одной НЕ-дефолтной группе;
-   * - если пользователь не состоит ни в одной НЕ-дефолтной группе, доступ к списку запрещается.
+   * Access rules:
+   * - admin/owner can see all users in the workspace;
+   * - member users can only see users sharing at least one non-default group;
+   * - if a user belongs to no non-default groups, access is denied.
    */
   async getUsersPaginated(
     workspaceId: string,
@@ -208,13 +208,13 @@ export class UserRepo {
         workspaceId,
       );
 
-      // Если у пользователя нет ни одной кастомной группы, страница участников ему недоступна.
+      // If a user has no custom group memberships, the members page is not accessible.
       if (!hasNonDefaultGroup) {
         throw new ForbiddenException('You are not a member of any group');
       }
 
-      // Ограничиваем выборку только теми пользователями, у которых есть общая группа с текущим пользователем.
-      // Используем `where(... exists(...))`, так как в текущей версии Kysely метод `whereExists` отсутствует.
+      // Limit the result to users who share at least one group with the current user.
+      // Use `where(... exists(...))` because this Kysely version does not expose `whereExists`.
       query = query.where((eb) =>
         eb.exists(
           eb

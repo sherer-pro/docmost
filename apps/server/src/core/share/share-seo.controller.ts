@@ -18,14 +18,13 @@ export class ShareSeoController {
   ) {}
 
   /**
-   * Подготавливает безопасный заголовок для вставки в HTML.
+   * Prepares a safe page title for HTML injection.
    *
-   * Важно: сначала ограничиваем длину исходной строки, и только затем
-   * экранируем специальные символы. Так мы избегаем обрезания HTML-сущностей
-   * посередине (например, `&quot;`), что делает итоговый вывод предсказуемым.
+   * Important: truncate first and escape afterward. This avoids cutting HTML
+   * entities (e.g. `&quot;`) in the middle and keeps the final output predictable.
    *
-   * @param title Исходный заголовок страницы из БД.
-   * @returns Экранированная строка, безопасная для `<title>` и `content` атрибутов мета-тегов.
+   * @param title Original page title from the database.
+   * @returns Escaped string safe for `<title>` and meta `content` attributes.
    */
   private buildSafeMetaTitle(title?: string | null): string {
     const rawTitle = title ?? 'untitled';
@@ -36,11 +35,11 @@ export class ShareSeoController {
   }
 
   /**
-   * Формирует OpenGraph/Twitter/Robots meta-теги для публичной страницы.
+   * Builds OpenGraph/Twitter/Robots meta tags for a public share page.
    *
-   * @param safeTitle Уже экранированный заголовок страницы.
-   * @param searchIndexing Флаг разрешения индексации поисковиками.
-   * @returns Готовый HTML-фрагмент meta-тегов.
+   * @param safeTitle Already escaped page title.
+   * @param searchIndexing Whether search indexing is allowed.
+   * @returns Rendered HTML fragment with meta tags.
    */
   private buildMetaTags(safeTitle: string, searchIndexing: boolean): string {
     return [
