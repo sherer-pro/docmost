@@ -3,7 +3,6 @@ import {
   ActionIcon,
   Badge,
   Group,
-  MultiSelect,
   Paper,
   Select,
   Stack,
@@ -13,6 +12,7 @@ import {
 import { IconInfoCircle } from "@tabler/icons-react";
 import { useDebouncedCallback } from "@mantine/hooks";
 import { useMutation } from "@tanstack/react-query";
+import { CustomAvatar } from "@/components/ui/custom-avatar.tsx";
 import { updatePage } from "@/features/page/services/page-service.ts";
 import {
   IPage,
@@ -20,8 +20,9 @@ import {
   PageCustomFieldStatus,
 } from "@/features/page/types/page.types.ts";
 import { queryClient } from "@/main.tsx";
-import { useSpaceMembersQuery } from "@/features/space/queries/space-query.ts";
-import { ISpaceMember } from "@/features/space/types/space.types.ts";
+import { AssigneeSpaceMemberSelect } from "@/features/page/components/document-fields/assignee-space-member-select.tsx";
+import { StakeholdersSpaceMemberMultiSelect } from "@/features/page/components/document-fields/stakeholders-space-member-multiselect.tsx";
+import { useSpaceMemberSelectOptions } from "@/features/page/components/document-fields/space-member-select-utils.ts";
 
 interface DocumentFieldsPanelProps {
   page: IPage;
@@ -34,9 +35,6 @@ const STATUS_OPTIONS: { value: PageCustomFieldStatus; label: string; color: stri
   { value: "done", label: "Done", color: "green" },
 ];
 
-/**
- * Нормализует значения кастомных полей документа, чтобы UI всегда работал со стабильной формой данных.
- */
 function normalizeCustomFields(customFields?: PageCustomFields): Required<PageCustomFields> {
   return {
     status: customFields?.status ?? null,
@@ -45,12 +43,6 @@ function normalizeCustomFields(customFields?: PageCustomFields): Required<PageCu
   };
 }
 
-/**
- * Панель кастомных полей документа:
- * - рендерит только поля, включенные в настройках Space;
- * - показывает read-only представление с fallback "no data";
- * - в edit-режиме сохраняет изменения через debounced update API.
- */
 export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps) {
   const documentFields = page.space?.settings?.documentFields;
 
@@ -63,20 +55,16 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
     [documentFields],
   );
 
-  const { data: members } = useSpaceMembersQuery(page.spaceId, { limit: 100 });
-
-  const userOptions = useMemo(() => {
-    return (members?.items ?? [])
-      .filter((member: ISpaceMember) => member.type === "user")
-      .map((member: ISpaceMember) => ({
-        value: member.id,
-        label: member.name,
-      }));
-  }, [members]);
-
   const [fields, setFields] = useState<Required<PageCustomFields>>(
     normalizeCustomFields(page.customFields),
   );
+
+  const selectedMemberIds = useMemo(
+    () => [...(fields.assigneeId ? [fields.assigneeId] : []), ...fields.stakeholderIds],
+    [fields.assigneeId, fields.stakeholderIds],
+  );
+
+  const { knownUsersById } = useSpaceMemberSelectOptions(page.spaceId, selectedMemberIds);
 
   useEffect(() => {
     setFields(normalizeCustomFields(page.customFields));
@@ -95,9 +83,6 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
     mutate(nextFields);
   }, 600);
 
-  /**
-   * Обновляет локальный state поля и отправляет отложенное сохранение на backend.
-   */
   const handleFieldChange = (nextFields: Required<PageCustomFields>) => {
     setFields(nextFields);
 
@@ -113,10 +98,6 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
   }
 
   const selectedStatus = STATUS_OPTIONS.find((item) => item.value === fields.status);
-  const assigneeLabel = userOptions.find((item) => item.value === fields.assigneeId)?.label;
-  const stakeholderLabels = fields.stakeholderIds
-    .map((id) => userOptions.find((item) => item.value === id)?.label)
-    .filter(Boolean) as string[];
 
   return (
     <Paper withBorder radius="md" p="md" my="sm">
@@ -166,15 +147,23 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
             </Group>
 
             {readOnly ? (
-              assigneeLabel ? <Text size="sm">{assigneeLabel}</Text> : <Text size="sm" c="dimmed">no data</Text>
+              fields.assigneeId ? (
+                <Group gap="xs" wrap="nowrap">
+                  <CustomAvatar
+                    avatarUrl={knownUsersById[fields.assigneeId]?.avatarUrl}
+                    size={18}
+                    name={knownUsersById[fields.assigneeId]?.label ?? fields.assigneeId}
+                  />
+                  <Text size="sm">{knownUsersById[fields.assigneeId]?.label ?? fields.assigneeId}</Text>
+                </Group>
+              ) : (
+                <Text size="sm" c="dimmed">no data</Text>
+              )
             ) : (
-              <Select
-                data={userOptions}
+              <AssigneeSpaceMemberSelect
+                spaceId={page.spaceId}
                 value={fields.assigneeId}
-                onChange={(value) => handleFieldChange({ ...fields, assigneeId: value || null })}
-                placeholder="Select assignee"
-                searchable
-                clearable
+                onChange={(value) => handleFieldChange({ ...fields, assigneeId: value })}
               />
             )}
           </Stack>
@@ -192,25 +181,27 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
             </Group>
 
             {readOnly ? (
-              stakeholderLabels.length ? (
-                <Group gap="xs">
-                  {stakeholderLabels.map((name) => (
-                    <Badge key={name} variant="light" color="gray">
-                      {name}
-                    </Badge>
+              fields.stakeholderIds.length ? (
+                <Stack gap="xs">
+                  {fields.stakeholderIds.map((id) => (
+                    <Group key={id} gap="xs" wrap="nowrap">
+                      <CustomAvatar
+                        avatarUrl={knownUsersById[id]?.avatarUrl}
+                        size={18}
+                        name={knownUsersById[id]?.label ?? id}
+                      />
+                      <Text size="sm">{knownUsersById[id]?.label ?? id}</Text>
+                    </Group>
                   ))}
-                </Group>
+                </Stack>
               ) : (
                 <Text size="sm" c="dimmed">no data</Text>
               )
             ) : (
-              <MultiSelect
-                data={userOptions}
+              <StakeholdersSpaceMemberMultiSelect
+                spaceId={page.spaceId}
                 value={fields.stakeholderIds}
                 onChange={(value) => handleFieldChange({ ...fields, stakeholderIds: value })}
-                placeholder="Select stakeholders"
-                searchable
-                clearable
               />
             )}
           </Stack>
