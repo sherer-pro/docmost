@@ -40,7 +40,6 @@ export interface SpaceDocumentFieldsSettings {
  */
 export interface SpaceSettings {
   documentFields?: SpaceDocumentFieldsSettings;
-  [key: string]: JsonValue | undefined;
 }
 
 /**
