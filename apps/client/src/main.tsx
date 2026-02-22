@@ -64,6 +64,6 @@ root.render(
   </BrowserRouter>,
 );
 
-// Регистрируем PWA-воркер отдельно от React-дерева, чтобы логика офлайн-кэша
-// работала независимо от жизненного цикла компонентов приложения.
+// Register the PWA worker outside the React tree so offline caching logic
+// is not coupled to the lifecycle of React components.
 registerServiceWorker();

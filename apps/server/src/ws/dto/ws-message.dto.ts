@@ -7,36 +7,36 @@ import {
 } from 'class-validator';
 
 /**
- * DTO для входящих websocket-сообщений типа `message`.
+ * DTO for incoming `message` WebSocket events.
  *
- * Валидация выполняется на сервере до ретрансляции события:
- * - запрещает payload без целевой комнаты;
- * - разрешает только допустимые префиксы комнат (`workspace-*`, `space-*`, `user-*`);
- * - требует `spaceId` для `space-*` комнат;
- * - требует `workspaceId` для `workspace-*` комнат.
+ * Validation happens server-side before rebroadcasting:
+ * - rejects payloads without an explicit target room;
+ * - allows only supported room prefixes (`workspace-*`, `space-*`, `user-*`);
+ * - requires `spaceId` for `space-*` rooms;
+ * - requires `workspaceId` for `workspace-*` rooms.
  */
 export class WsMessageDto {
   /**
-   * Тип операции, которую клиент хочет распространить внутри разрешённой комнаты.
+   * Operation name the client wants to broadcast inside an authorized room.
    */
   @IsString()
   @IsNotEmpty()
   operation: string;
 
   /**
-   * Явная целевая комната.
-   * Глобальный broadcast не поддерживается: клиент обязан указать одну из разрешённых комнат.
+   * Explicit target room.
+   * Global broadcast is not supported: clients must target one authorized room.
    */
   @IsString()
   @IsNotEmpty()
   @Matches(/^(workspace|space|user)-.+$/, {
     message:
-      'targetRoom должен начинаться с одного из префиксов: workspace-, space-, user-',
+      'targetRoom must start with one of the prefixes: workspace-, space-, user-',
   })
   targetRoom: string;
 
   /**
-   * Идентификатор пространства обязателен при отправке в комнату вида `space-*`.
+   * Space identifier, required when the target room uses the `space-*` prefix.
    */
   @ValidateIf((dto: WsMessageDto) => dto.targetRoom?.startsWith('space-'))
   @IsString()
@@ -44,7 +44,7 @@ export class WsMessageDto {
   spaceId?: string;
 
   /**
-   * Идентификатор воркспейса обязателен при отправке в комнату вида `workspace-*`.
+   * Workspace identifier, required when the target room uses `workspace-*`.
    */
   @ValidateIf((dto: WsMessageDto) => dto.targetRoom?.startsWith('workspace-'))
   @IsString()
@@ -52,8 +52,8 @@ export class WsMessageDto {
   workspaceId?: string;
 
   /**
-   * Свободный полезный payload события.
-   * Явно оставляем опциональным, т.к. содержимое зависит от operation.
+   * Free-form event payload.
+   * Kept optional because the structure depends on `operation`.
    */
   @IsOptional()
   data?: unknown;

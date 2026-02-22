@@ -149,10 +149,10 @@ export default function SettingsSidebar() {
   }, [location.pathname]);
 
   /**
-   * Проверяет, нужно ли показывать конкретный пункт в разделе настроек.
+   * Checks whether a specific settings item should be visible.
    *
-   * Дополнительно скрывает пункт "Members" для member-пользователей,
-   * у которых нет доступа к каталогу участников (нет не-дефолтных групп).
+   * Also hides the "Members" item for member users
+   * who cannot access the members directory (no non-default groups).
    */
   const canShowItem = (item: DataItem) => {
     if (
