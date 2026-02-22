@@ -1,22 +1,47 @@
 import { Menu, ActionIcon, Text } from "@mantine/core";
 import React from "react";
-import { IconDots, IconTrash } from "@tabler/icons-react";
+import { IconDots, IconTrash, IconUserOff } from "@tabler/icons-react";
 import { modals } from "@mantine/modals";
-import { useDeleteWorkspaceMemberMutation } from "@/features/workspace/queries/workspace-query.ts";
+import {
+  useDeactivateWorkspaceMemberMutation,
+  useDeleteWorkspaceMemberMutation,
+} from "@/features/workspace/queries/workspace-query.ts";
 import { useTranslation } from "react-i18next";
 import useUserRole from "@/hooks/use-user-role.tsx";
 
 interface Props {
   userId: string;
+  isDeactivated?: boolean;
 }
-export default function MemberActionMenu({ userId }: Props) {
+export default function MemberActionMenu({ userId, isDeactivated = false }: Props) {
   const { t } = useTranslation();
   const deleteWorkspaceMemberMutation = useDeleteWorkspaceMemberMutation();
+  const deactivateWorkspaceMemberMutation = useDeactivateWorkspaceMemberMutation();
   const { isAdmin } = useUserRole();
 
   const onRevoke = async () => {
     await deleteWorkspaceMemberMutation.mutateAsync({ userId });
   };
+
+  const onDeactivate = async () => {
+    await deactivateWorkspaceMemberMutation.mutateAsync({ userId });
+  };
+
+  const openDeactivateModal = () =>
+    modals.openConfirmModal({
+      title: t("Deactivate member"),
+      children: (
+        <Text size="sm">
+          {t(
+            "Are you sure you want to deactivate this workspace member? They will lose access until reactivated.",
+          )}
+        </Text>
+      ),
+      centered: true,
+      labels: { confirm: t("Deactivate"), cancel: t("Don't") },
+      confirmProps: { color: "orange" },
+      onConfirm: onDeactivate,
+    });
 
   const openRevokeModal = () =>
     modals.openConfirmModal({
@@ -51,6 +76,14 @@ export default function MemberActionMenu({ userId }: Props) {
         </Menu.Target>
 
         <Menu.Dropdown>
+          <Menu.Item
+            c="orange"
+            onClick={openDeactivateModal}
+            leftSection={<IconUserOff size={16} />}
+            disabled={!isAdmin || isDeactivated}
+          >
+            {t("Deactivate member")}
+          </Menu.Item>
           <Menu.Item
             c="red"
             onClick={openRevokeModal}

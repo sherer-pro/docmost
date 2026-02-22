@@ -17,6 +17,7 @@ import {
   getWorkspacePublicData,
   getAppVersion,
   deleteWorkspaceMember,
+  deactivateWorkspaceMember,
 } from "@/features/workspace/services/workspace-service";
 import { IPagination, QueryParams } from "@/lib/types.ts";
 import { notifications } from "@mantine/notifications";
@@ -70,6 +71,32 @@ export function useDeleteWorkspaceMemberMutation() {
     mutationFn: (data) => deleteWorkspaceMember(data),
     onSuccess: (data, variables) => {
       notifications.show({ message: "Member deleted successfully" });
+      queryClient.invalidateQueries({
+        queryKey: ["workspaceMembers"],
+      });
+    },
+    onError: (error) => {
+      const errorMessage = error["response"]?.data?.message;
+      notifications.show({ message: errorMessage, color: "red" });
+    },
+  });
+}
+
+
+export function useDeactivateWorkspaceMemberMutation() {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    { success: true },
+    Error,
+    {
+      userId: string;
+    }
+  >({
+    mutationFn: (data) => deactivateWorkspaceMember(data),
+    onSuccess: () => {
+      notifications.show({ message: t("Member deactivated successfully") });
       queryClient.invalidateQueries({
         queryKey: ["workspaceMembers"],
       });
