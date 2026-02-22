@@ -12,6 +12,7 @@ import {
 import { IconInfoCircle } from "@tabler/icons-react";
 import { useDebouncedCallback } from "@mantine/hooks";
 import { useMutation } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { CustomAvatar } from "@/components/ui/custom-avatar.tsx";
 import { updatePage } from "@/features/page/services/page-service.ts";
 import {
@@ -30,9 +31,12 @@ interface DocumentFieldsPanelProps {
 }
 
 const STATUS_OPTIONS: { value: PageCustomFieldStatus; label: string; color: string }[] = [
-  { value: "not_started", label: "Not started", color: "gray" },
-  { value: "in_progress", label: "In progress", color: "blue" },
-  { value: "done", label: "Done", color: "green" },
+  { value: PageCustomFieldStatus.TODO, label: "TODO", color: "gray" },
+  { value: PageCustomFieldStatus.IN_PROGRESS, label: "In progress", color: "blue" },
+  { value: PageCustomFieldStatus.IN_REVIEW, label: "In review", color: "indigo" },
+  { value: PageCustomFieldStatus.DONE, label: "Done", color: "green" },
+  { value: PageCustomFieldStatus.REJECTED, label: "Rejected", color: "red" },
+  { value: PageCustomFieldStatus.ARCHIVED, label: "Archived", color: "dark" },
 ];
 
 function normalizeCustomFields(customFields?: PageCustomFields): Required<PageCustomFields> {
@@ -44,6 +48,7 @@ function normalizeCustomFields(customFields?: PageCustomFields): Required<PageCu
 }
 
 export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps) {
+  const { t } = useTranslation();
   const documentFields = page.space?.settings?.documentFields;
 
   const enabledFields = useMemo(
@@ -105,9 +110,9 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
         {enabledFields.status && (
           <Stack gap={4}>
             <Group gap={6}>
-              <Text size="sm" fw={600}>Status</Text>
-              <Tooltip label="Current document status">
-                <ActionIcon variant="subtle" size="sm" aria-label="Status info">
+              <Text size="sm" fw={600}>{t("Status")}</Text>
+              <Tooltip label={t("Current document status")}>
+                <ActionIcon variant="subtle" size="sm" aria-label={t("Status info")}>
                   <IconInfoCircle size={14} />
                 </ActionIcon>
               </Tooltip>
@@ -116,19 +121,19 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
             {readOnly ? (
               selectedStatus ? (
                 <Badge color={selectedStatus.color} variant="light">
-                  {selectedStatus.label}
+                  {t(selectedStatus.label)}
                 </Badge>
               ) : (
-                <Text size="sm" c="dimmed">no data</Text>
+                <Text size="sm" c="dimmed">{t("No data")}</Text>
               )
             ) : (
               <Select
-                data={STATUS_OPTIONS.map((item) => ({ value: item.value, label: item.label }))}
+                data={STATUS_OPTIONS.map((item) => ({ value: item.value, label: t(item.label) }))}
                 value={fields.status}
                 onChange={(value) =>
                   handleFieldChange({ ...fields, status: (value as PageCustomFieldStatus) || null })
                 }
-                placeholder="Select status"
+                placeholder={t("Select status")}
                 clearable
               />
             )}
@@ -138,9 +143,9 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
         {enabledFields.assignee && (
           <Stack gap={4}>
             <Group gap={6}>
-              <Text size="sm" fw={600}>Assignee</Text>
-              <Tooltip label="Document owner responsible for updates">
-                <ActionIcon variant="subtle" size="sm" aria-label="Assignee info">
+              <Text size="sm" fw={600}>{t("Assignee")}</Text>
+              <Tooltip label={t("Document owner responsible for updates")}>
+                <ActionIcon variant="subtle" size="sm" aria-label={t("Assignee info")}>
                   <IconInfoCircle size={14} />
                 </ActionIcon>
               </Tooltip>
@@ -157,7 +162,7 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
                   <Text size="sm">{knownUsersById[fields.assigneeId]?.label ?? fields.assigneeId}</Text>
                 </Group>
               ) : (
-                <Text size="sm" c="dimmed">no data</Text>
+                <Text size="sm" c="dimmed">{t("No data")}</Text>
               )
             ) : (
               <AssigneeSpaceMemberSelect
@@ -172,9 +177,9 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
         {enabledFields.stakeholders && (
           <Stack gap={4}>
             <Group gap={6}>
-              <Text size="sm" fw={600}>Stakeholders</Text>
-              <Tooltip label="People involved in this document">
-                <ActionIcon variant="subtle" size="sm" aria-label="Stakeholders info">
+              <Text size="sm" fw={600}>{t("Stakeholders")}</Text>
+              <Tooltip label={t("People involved in this document")}>
+                <ActionIcon variant="subtle" size="sm" aria-label={t("Stakeholders info")}>
                   <IconInfoCircle size={14} />
                 </ActionIcon>
               </Tooltip>
@@ -195,7 +200,7 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
                   ))}
                 </Stack>
               ) : (
-                <Text size="sm" c="dimmed">no data</Text>
+                <Text size="sm" c="dimmed">{t("No data")}</Text>
               )
             ) : (
               <StakeholdersSpaceMemberMultiSelect
