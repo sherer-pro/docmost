@@ -19,6 +19,9 @@ import { TelemetryModule } from './integrations/telemetry/telemetry.module';
 import { RedisModule } from '@nestjs-labs/nestjs-ioredis';
 import { RedisConfigService } from './integrations/redis/redis-config.service';
 import { LoggerModule } from './common/logger/logger.module';
+import { APP_GUARD } from '@nestjs/core';
+import { CsrfGuard } from './common/guards/csrf.guard';
+import { CommonSecurityModule } from './common/security/security.module';
 
 const enterpriseModules = [];
 try {
@@ -37,6 +40,7 @@ try {
 @Module({
   imports: [
     LoggerModule,
+    CommonSecurityModule,
     CoreModule,
     DatabaseModule,
     EnvironmentModule,
@@ -62,6 +66,12 @@ try {
     ...enterpriseModules,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_GUARD,
+      useClass: CsrfGuard,
+    },
+  ],
 })
 export class AppModule {}

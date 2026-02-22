@@ -24,6 +24,8 @@ import { VerifyUserTokenDto } from './dto/verify-user-token.dto';
 import { FastifyReply } from 'fastify';
 import { validateSsoEnforcement } from './auth.util';
 import { ModuleRef } from '@nestjs/core';
+import { CsrfService } from '../../common/security/csrf.service';
+import { CsrfExempt } from '../../common/decorators/csrf-exempt.decorator';
 
 @Controller('auth')
 export class AuthController {
@@ -33,10 +35,12 @@ export class AuthController {
     private authService: AuthService,
     private environmentService: EnvironmentService,
     private moduleRef: ModuleRef,
+    private csrfService: CsrfService,
   ) {}
 
   @HttpCode(HttpStatus.OK)
   @Post('login')
+  @CsrfExempt()
   async login(
     @AuthWorkspace() workspace: Workspace,
     @Res({ passthrough: true }) res: FastifyReply,
@@ -90,6 +94,7 @@ export class AuthController {
   @UseGuards(SetupGuard)
   @HttpCode(HttpStatus.OK)
   @Post('setup')
+  @CsrfExempt()
   async setupWorkspace(
     @Res({ passthrough: true }) res: FastifyReply,
     @Body() createAdminUserDto: CreateAdminUserDto,
@@ -114,6 +119,7 @@ export class AuthController {
 
   @HttpCode(HttpStatus.OK)
   @Post('forgot-password')
+  @CsrfExempt()
   async forgotPassword(
     @Body() forgotPasswordDto: ForgotPasswordDto,
     @AuthWorkspace() workspace: Workspace,
@@ -124,6 +130,7 @@ export class AuthController {
 
   @HttpCode(HttpStatus.OK)
   @Post('password-reset')
+  @CsrfExempt()
   async passwordReset(
     @Res({ passthrough: true }) res: FastifyReply,
     @Body() passwordResetDto: PasswordResetDto,
@@ -149,6 +156,7 @@ export class AuthController {
 
   @HttpCode(HttpStatus.OK)
   @Post('verify-token')
+  @CsrfExempt()
   async verifyResetToken(
     @Body() verifyUserTokenDto: VerifyUserTokenDto,
     @AuthWorkspace() workspace: Workspace,
@@ -169,16 +177,29 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   @Post('logout')
+  @CsrfExempt()
   async logout(@Res({ passthrough: true }) res: FastifyReply) {
     res.clearCookie('authToken');
+    this.csrfService.clearCsrfCookie(res);
   }
 
   setAuthCookie(res: FastifyReply, token: string) {
+    const csrfToken = this.csrfService.generateToken();
+
+    /**
+     * Минимально безопасный дефолт — sameSite=lax.
+     * Для cloud SSO разрешаем sameSite=none только вместе с secure=true.
+     */
+    const sameSite = this.csrfService.getSameSite();
+
     res.setCookie('authToken', token, {
       httpOnly: true,
       path: '/',
       expires: this.environmentService.getCookieExpiresIn(),
       secure: this.environmentService.isHttps(),
+      sameSite,
     });
+
+    this.csrfService.setCsrfCookie(res, csrfToken);
   }
 }

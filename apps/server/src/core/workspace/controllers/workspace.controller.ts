@@ -34,6 +34,7 @@ import { FastifyReply } from 'fastify';
 import { EnvironmentService } from '../../../integrations/environment/environment.service';
 import { CheckHostnameDto } from '../dto/check-hostname.dto';
 import { RemoveWorkspaceUserDto } from '../dto/remove-workspace-user.dto';
+import { CsrfService } from '../../../common/security/csrf.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('workspace')
@@ -43,6 +44,7 @@ export class WorkspaceController {
     private readonly workspaceInvitationService: WorkspaceInvitationService,
     private readonly workspaceAbility: WorkspaceAbilityFactory,
     private environmentService: EnvironmentService,
+    private csrfService: CsrfService,
   ) {}
 
   @Public()
@@ -85,6 +87,7 @@ export class WorkspaceController {
     ) {
       // log user out of old hostname
       res.clearCookie('authToken');
+      this.csrfService.clearCsrfCookie(res);
     }
 
     return updatedWorkspace;
@@ -274,7 +277,10 @@ export class WorkspaceController {
       path: '/',
       expires: this.environmentService.getCookieExpiresIn(),
       secure: this.environmentService.isHttps(),
+      sameSite: this.csrfService.getSameSite(),
     });
+
+    this.csrfService.setCsrfCookie(res, this.csrfService.generateToken());
 
     return {
       requiresLogin: false,
