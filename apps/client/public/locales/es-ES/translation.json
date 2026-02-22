@@ -628,5 +628,10 @@
   "Move comment to resolved list": "Mover comentario a la lista de resueltos",
   "Return comment to active list": "Devolver comentario a la lista de activos",
   "Re-open comment": "Reabrir comentario",
-  "Re-Open comment": "Reabrir comentario"
+  "Re-Open comment": "Reabrir comentario",
+  "Deactivate member": "Deactivate member",
+  "Are you sure you want to deactivate this workspace member? They will lose access until reactivated.": "Are you sure you want to deactivate this workspace member? They will lose access until reactivated.",
+  "Deactivate": "Deactivate",
+  "Member deactivated successfully": "Member deactivated successfully",
+  "Deactivated": "Deactivated"
 }

@@ -142,6 +142,27 @@ export class UserRepo {
   }
 
   /**
+   * Возвращает количество активных пользователей с конкретной ролью в рамках workspace.
+   *
+   * Активными считаются пользователи, которые не удалены и не деактивированы.
+   */
+  async activeRoleCountByWorkspaceId(
+    role: string,
+    workspaceId: string,
+  ): Promise<number> {
+    const { count } = await this.db
+      .selectFrom('users')
+      .select((eb) => eb.fn.count('role').as('count'))
+      .where('role', '=', role)
+      .where('workspaceId', '=', workspaceId)
+      .where('deletedAt', 'is', null)
+      .where('deactivatedAt', 'is', null)
+      .executeTakeFirst();
+
+    return count as number;
+  }
+
+  /**
    * Проверяет, состоит ли пользователь хотя бы в одной НЕ-дефолтной группе внутри workspace.
    *
    * Это используется для управления доступом member-пользователей к списку участников workspace.

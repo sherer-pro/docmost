@@ -36,6 +36,8 @@ import { isPageEmbeddingsTableExists } from '@docmost/db/helpers/helpers';
 import { CursorPaginationResult } from '@docmost/db/pagination/cursor-pagination';
 import { ShareRepo } from '@docmost/db/repos/share/share.repo';
 import { WatcherRepo } from '@docmost/db/repos/watcher/watcher.repo';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventName } from '../../../common/events/event.contants';
 
 @Injectable()
 export class WorkspaceService {
@@ -57,6 +59,7 @@ export class WorkspaceService {
     @InjectQueue(QueueName.ATTACHMENT_QUEUE) private attachmentQueue: Queue,
     @InjectQueue(QueueName.BILLING_QUEUE) private billingQueue: Queue,
     @InjectQueue(QueueName.AI_QUEUE) private aiQueue: Queue,
+    private eventEmitter: EventEmitter2,
   ) {}
 
   async findById(workspaceId: string) {
@@ -504,6 +507,73 @@ export class WorkspaceService {
       throw new NotFoundException('Hostname not found');
     }
     return { hostname: this.domainService.getUrl(hostname) };
+  }
+
+
+  /**
+   * Деактивирует участника workspace с набором защитных проверок.
+   *
+   * Защиты:
+   * - нельзя деактивировать самого себя;
+   * - администратор не может деактивировать owner;
+   * - нельзя деактивировать последнего активного owner в workspace.
+   */
+  async deactivateUser(
+    authUser: User,
+    userId: string,
+    workspaceId: string,
+  ): Promise<{ success: true }> {
+    const user = await this.userRepo.findById(userId, workspaceId);
+
+    if (!user || user.deletedAt) {
+      throw new BadRequestException('Workspace member not found');
+    }
+
+    if (authUser.id === userId) {
+      throw new BadRequestException('You cannot deactivate yourself');
+    }
+
+    if (authUser.role === UserRole.ADMIN && user.role === UserRole.OWNER) {
+      throw new BadRequestException(
+        'You cannot deactivate a user with owner role',
+      );
+    }
+
+    const activeWorkspaceOwnerCount =
+      await this.userRepo.activeRoleCountByWorkspaceId(
+        UserRole.OWNER,
+        workspaceId,
+      );
+
+    if (
+      user.role === UserRole.OWNER &&
+      !user.deactivatedAt &&
+      activeWorkspaceOwnerCount === 1
+    ) {
+      throw new BadRequestException(
+        'There must be at least one workspace owner',
+      );
+    }
+
+    if (user.deactivatedAt) {
+      return { success: true };
+    }
+
+    await this.userRepo.updateUser(
+      {
+        deactivatedAt: new Date(),
+      },
+      userId,
+      workspaceId,
+    );
+
+    this.eventEmitter.emit(EventName.WORKSPACE_MEMBER_DEACTIVATED, {
+      workspaceId,
+      userId,
+      actorId: authUser.id,
+    });
+
+    return { success: true };
   }
 
   async deleteUser(
