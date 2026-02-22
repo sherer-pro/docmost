@@ -137,6 +137,14 @@ export class SpaceService {
       }
     }
 
+    if (updateSpaceDto.documentFields) {
+      await this.spaceRepo.updateDocumentFieldsSettings(
+        updateSpaceDto.spaceId,
+        workspaceId,
+        updateSpaceDto.documentFields,
+      );
+    }
+
     return await this.spaceRepo.updateSpace(
       {
         name: updateSpaceDto.name,
