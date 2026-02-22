@@ -633,5 +633,22 @@
   "Are you sure you want to deactivate this workspace member? They will lose access until reactivated.": "Are you sure you want to deactivate this workspace member? They will lose access until reactivated.",
   "Deactivate": "Deactivate",
   "Member deactivated successfully": "Member deactivated successfully",
-  "Deactivated": "Deactivated"
+  "Deactivated": "Deactivated",
+  "Document fields": "Document fields",
+  "Status info": "Status info",
+  "Current document status": "Current document status",
+  "Assignee": "Assignee",
+  "Assignee info": "Assignee info",
+  "Document owner responsible for updates": "Document owner responsible for updates",
+  "Stakeholders": "Stakeholders",
+  "Stakeholders info": "Stakeholders info",
+  "People involved in this document": "People involved in this document",
+  "No data": "No data",
+  "Select status": "Select status",
+  "TODO": "TODO",
+  "In progress": "In progress",
+  "In review": "In review",
+  "Done": "Done",
+  "Rejected": "Rejected",
+  "Archived": "Archived"
 }

@@ -25,7 +25,14 @@ export interface IPage {
   space: Partial<ISpace>;
 }
 
-export type PageCustomFieldStatus = 'not_started' | 'in_progress' | 'done';
+export enum PageCustomFieldStatus {
+  TODO = 'TODO',
+  IN_PROGRESS = 'IN_PROGRESS',
+  IN_REVIEW = 'IN_REVIEW',
+  DONE = 'DONE',
+  REJECTED = 'REJECTED',
+  ARCHIVED = 'ARCHIVED',
+}
 
 export interface PageCustomFields {
   status?: PageCustomFieldStatus | null;
