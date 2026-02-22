@@ -387,7 +387,9 @@ export class PageRepo {
     return jsonObjectFrom(
       eb
         .selectFrom('spaces')
-        .select(['spaces.id', 'spaces.name', 'spaces.slug'])
+        // Добавляем settings пространства, чтобы на странице были доступны
+        // включённые в пространстве кастомные поля (space.settings.documentFields).
+        .select(['spaces.id', 'spaces.name', 'spaces.slug', 'spaces.settings'])
         .whereRef('spaces.id', '=', 'pages.spaceId'),
     ).as('space');
   }
