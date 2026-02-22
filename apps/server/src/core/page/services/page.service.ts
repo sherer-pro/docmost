@@ -7,7 +7,12 @@ import {
 import { CreatePageDto, ContentFormat } from '../dto/create-page.dto';
 import { ContentOperation, UpdatePageDto } from '../dto/update-page.dto';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
-import { InsertablePage, Page, User } from '@docmost/db/types/entity.types';
+import {
+  InsertablePage,
+  Page,
+  PageSettings,
+  User,
+} from '@docmost/db/types/entity.types';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import {
   CursorPaginationResult,
@@ -197,6 +202,10 @@ export class PageService {
     contributors.add(user.id);
     const contributorIds = Array.from(contributors);
 
+    const nextSettings = updatePageDto.toSettingsPayload(
+      (page.settings as PageSettings | null) ?? null,
+    );
+
     await this.pageRepo.updatePage(
       {
         title: updatePageDto.title,
@@ -204,7 +213,7 @@ export class PageService {
         lastUpdatedById: user.id,
         updatedAt: new Date(),
         contributorIds: contributorIds,
-        settings: updatePageDto.settings,
+        settings: nextSettings,
       },
       page.id,
     );

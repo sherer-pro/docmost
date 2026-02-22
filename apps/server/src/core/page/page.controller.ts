@@ -11,7 +11,10 @@ import {
 } from '@nestjs/common';
 import { PageService } from './services/page.service';
 import { CreatePageDto } from './dto/create-page.dto';
-import { UpdatePageDto } from './dto/update-page.dto';
+import {
+  UpdatePageCustomFieldsDto,
+  UpdatePageDto,
+} from './dto/update-page.dto';
 import { MovePageDto, MovePageToSpaceDto } from './dto/move-page.dto';
 import {
   DeletePageDto,
@@ -50,6 +53,21 @@ export class PageController {
     private readonly spaceAbility: SpaceAbilityFactory,
   ) {}
 
+  private getPageCustomFields(page: { settings?: unknown }) {
+    const settings =
+      page.settings && typeof page.settings === 'object'
+        ? (page.settings as Record<string, unknown>)
+        : {};
+
+    return {
+      status: settings.status ?? null,
+      assigneeId: settings.assigneeId ?? null,
+      stakeholderIds: Array.isArray(settings.stakeholderIds)
+        ? settings.stakeholderIds
+        : [],
+    } as UpdatePageCustomFieldsDto;
+  }
+
   @HttpCode(HttpStatus.OK)
   @Post('/info')
   async getPage(@Body() dto: PageInfoDto, @AuthUser() user: User) {
@@ -78,10 +96,11 @@ export class PageController {
       return {
         ...page,
         content: contentOutput,
+        customFields: this.getPageCustomFields(page),
       };
     }
 
-    return page;
+    return { ...page, customFields: this.getPageCustomFields(page) };
   }
 
   @HttpCode(HttpStatus.OK)
@@ -149,10 +168,14 @@ export class PageController {
         updatePageDto.format === 'markdown'
           ? jsonToMarkdown(updatedPage.content)
           : jsonToHtml(updatedPage.content);
-      return { ...updatedPage, content: contentOutput };
+      return {
+        ...updatedPage,
+        content: contentOutput,
+        customFields: this.getPageCustomFields(updatedPage),
+      };
     }
 
-    return updatedPage;
+    return { ...updatedPage, customFields: this.getPageCustomFields(updatedPage) };
   }
 
   @HttpCode(HttpStatus.OK)
