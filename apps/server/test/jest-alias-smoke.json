@@ -1,0 +1,16 @@
+{
+  "moduleFileExtensions": ["js", "json", "ts"],
+  "rootDir": ".",
+  "roots": ["<rootDir>"],
+  "testEnvironment": "node",
+  "testMatch": ["<rootDir>/alias-smoke.spec.ts"],
+  "moduleDirectories": ["node_modules", "<rootDir>/../src"],
+  "moduleNameMapper": {
+    "^@docmost/db/(.*)$": "<rootDir>/../src/database/$1",
+    "^@docmost/transactional/(.*)$": "<rootDir>/../src/integrations/transactional/$1",
+    "^@docmost/ee/(.*)$": "<rootDir>/../src/ee/$1"
+  },
+  "transform": {
+    "^.+\\.(t|j)s$": ["ts-jest", { "tsconfig": "<rootDir>/../tsconfig.json" }]
+  }
+}

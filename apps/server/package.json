@@ -23,12 +23,13 @@
     "migration:reset": "tsx src/database/migrate.ts down-to NO_MIGRATIONS",
     "migration:codegen": "kysely-codegen --dialect=postgres --camel-case --env-file=../../.env --out-file=./src/database/types/db.d.ts",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "test:cov": "jest --coverage",
-    "test:cov:smoke": "jest --coverage --runInBand --testPathPatterns=coverage-smoke.spec.ts",
-    "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "jest --config test/jest-e2e.json"
+    "test": "jest --config jest.config.cjs",
+    "test:watch": "jest --config jest.config.cjs --watch",
+    "test:cov": "jest --config jest.config.cjs --coverage",
+    "test:cov:smoke": "jest --config jest.config.cjs --coverage --runInBand --testPathPatterns=coverage-smoke.spec.ts",
+    "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --config jest.config.cjs --runInBand",
+    "test:e2e": "jest --config test/jest-e2e.json",
+    "test:alias:smoke": "jest --config test/jest-alias-smoke.json --runInBand"
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.29",
@@ -141,31 +142,5 @@
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.7.3",
     "typescript-eslint": "^8.24.1"
-  },
-  "jest": {
-    "moduleFileExtensions": [
-      "js",
-      "json",
-      "ts"
-    ],
-    "rootDir": "src",
-    "testRegex": ".*\\.spec\\.ts$",
-    "coverageProvider": "v8",
-    "transform": {
-      "^.+\\.(t|j)s$": [
-        "ts-jest",
-        {
-          "tsconfig": "<rootDir>/../tsconfig.json"
-        }
-      ]
-    },
-    "collectCoverageFrom": [
-      "**/*.{ts,js}",
-      "!**/*.spec.ts",
-      "!**/*.d.ts",
-      "!main.ts"
-    ],
-    "coverageDirectory": "../coverage",
-    "testEnvironment": "node"
   }
 }
