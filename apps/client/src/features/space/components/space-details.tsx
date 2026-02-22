@@ -84,6 +84,7 @@ export default function SpaceDetails({ spaceId, readOnly }: SpaceDetailsProps) {
     field: keyof ISpaceDocumentFieldsSettings,
     checked: boolean,
   ) => {
+    // Обновляем только конфигурацию полей документов, сохраняя остальные настройки пространства.
     if (!space || readOnly) {
       return;
     }
@@ -151,7 +152,13 @@ export default function SpaceDetails({ spaceId, readOnly }: SpaceDetailsProps) {
                     }
                     disabled={readOnly || isUpdatingSpace}
                   />
-                  <Tooltip label={t("Show document status field")}>
+                  <Tooltip
+                    multiline
+                    w={320}
+                    label={t(
+                      "Adds a status field to every document in this space. The status can be used to track work stages such as TODO, In progress, In review, Done, Rejected, or Archived.",
+                    )}
+                  >
                     <ActionIcon
                       variant="subtle"
                       size="sm"
@@ -174,7 +181,13 @@ export default function SpaceDetails({ spaceId, readOnly }: SpaceDetailsProps) {
                     }
                     disabled={readOnly || isUpdatingSpace}
                   />
-                  <Tooltip label={t("Show assignee field")}>
+                  <Tooltip
+                    multiline
+                    w={320}
+                    label={t(
+                      "Adds an assignee field to every document. The assignee can be selected only from members of this space.",
+                    )}
+                  >
                     <ActionIcon
                       variant="subtle"
                       size="sm"
@@ -197,7 +210,13 @@ export default function SpaceDetails({ spaceId, readOnly }: SpaceDetailsProps) {
                     }
                     disabled={readOnly || isUpdatingSpace}
                   />
-                  <Tooltip label={t("Show stakeholders field")}>
+                  <Tooltip
+                    multiline
+                    w={320}
+                    label={t(
+                      "Adds a stakeholders field to every document. Stakeholders are selected from space members and can include multiple people.",
+                    )}
+                  >
                     <ActionIcon
                       variant="subtle"
                       size="sm"
