@@ -163,6 +163,8 @@
 
 ## 7) Расхождения и подводные камни
 
+- Для всех mutating API-методов (POST/PUT/PATCH/DELETE) действует глобальная CSRF-проверка (double-submit cookie): требуется совпадение `csrfToken` cookie и заголовка `x-csrf-token`.
+- Исключения CSRF по архитектуре: `POST /api/auth/login`, `POST /api/auth/logout`, `POST /api/auth/forgot-password`, `POST /api/auth/password-reset`, `POST /api/auth/verify-token`, `POST /api/auth/setup`.
 - Root-скрипт `start` запускает **backend prod**, но требует заранее собранные `dist` (обычно через `pnpm build`).
 - В compose используются placeholders (`REPLACE_WITH_LONG_SECRET`, `STRONG_DB_PASSWORD`) — не забывать заменять.
 - `migration:codegen` читает env из `../../.env`; при отсутствии файла команда падает.
