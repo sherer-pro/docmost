@@ -1,4 +1,4 @@
-import axios, { AxiosInstance } from "axios";
+import axios, { AxiosHeaders, AxiosInstance } from "axios";
 import APP_ROUTE from "@/lib/app-route.ts";
 import { isCloud } from "@/lib/config.ts";
 
@@ -32,10 +32,9 @@ api.interceptors.request.use((config) => {
       if (config.headers?.set) {
         config.headers.set("x-csrf-token", csrfToken);
       } else {
-        config.headers = {
-          ...(config.headers ?? {}),
-          "x-csrf-token": csrfToken,
-        };
+        const headers = AxiosHeaders.from(config.headers);
+        headers.set("x-csrf-token", csrfToken);
+        config.headers = headers;
       }
     }
   }
