@@ -17,6 +17,41 @@ export class ShareSeoController {
     private environmentService: EnvironmentService,
   ) {}
 
+  /**
+   * Подготавливает безопасный заголовок для вставки в HTML.
+   *
+   * Важно: сначала ограничиваем длину исходной строки, и только затем
+   * экранируем специальные символы. Так мы избегаем обрезания HTML-сущностей
+   * посередине (например, `&quot;`), что делает итоговый вывод предсказуемым.
+   *
+   * @param title Исходный заголовок страницы из БД.
+   * @returns Экранированная строка, безопасная для `<title>` и `content` атрибутов мета-тегов.
+   */
+  private buildSafeMetaTitle(title?: string | null): string {
+    const rawTitle = title ?? 'untitled';
+    const trimmedTitle =
+      rawTitle.length > 80 ? `${rawTitle.slice(0, 77)}…` : rawTitle;
+
+    return htmlEscape(trimmedTitle);
+  }
+
+  /**
+   * Формирует OpenGraph/Twitter/Robots meta-теги для публичной страницы.
+   *
+   * @param safeTitle Уже экранированный заголовок страницы.
+   * @param searchIndexing Флаг разрешения индексации поисковиками.
+   * @returns Готовый HTML-фрагмент meta-тегов.
+   */
+  private buildMetaTags(safeTitle: string, searchIndexing: boolean): string {
+    return [
+      `<meta property="og:title" content="${safeTitle}" />`,
+      `<meta property="twitter:title" content="${safeTitle}" />`,
+      !searchIndexing ? '<meta name="robots" content="noindex" />' : '',
+    ]
+      .filter(Boolean)
+      .join('\n    ');
+  }
+
   /*
    * add meta tags to publicly shared pages
    */
@@ -69,19 +104,11 @@ export class ShareSeoController {
         return this.sendIndex(indexFilePath, res);
       }
 
-      const rawTitle = htmlEscape(share?.sharedPage.title ?? 'untitled');
-      const metaTitle =
-        rawTitle.length > 80 ? `${rawTitle.slice(0, 77)}…` : rawTitle;
+      const metaTitle = this.buildSafeMetaTitle(share?.sharedPage.title);
 
       const metaTagVar = '<!--meta-tags-->';
 
-      const metaTags = [
-        `<meta property="og:title" content="${metaTitle}" />`,
-        `<meta property="twitter:title" content="${metaTitle}" />`,
-        !share.searchIndexing ? `<meta name="robots" content="noindex" />` : '',
-      ]
-        .filter(Boolean)
-        .join('\n    ');
+      const metaTags = this.buildMetaTags(metaTitle, share.searchIndexing);
 
       const html = fs.readFileSync(indexFilePath, 'utf8');
       const transformedHtml = html
