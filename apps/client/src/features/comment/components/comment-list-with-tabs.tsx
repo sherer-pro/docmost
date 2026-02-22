@@ -54,16 +54,16 @@ function CommentListWithTabs() {
     SpaceCaslSubject.Page
   );
 
-  // Для перевода комментария в resolved/re-open используется серверная проверка на Edit Page.
-  // На клиенте зеркалим это поведение, чтобы не показывать пользователю недоступное действие.
+  // Resolve/re-open actions are validated on the server via Edit Page permission.
+  // Mirror that behavior on the client to avoid showing unavailable actions.
   const canResolveComments: boolean = spaceAbility.can(
     SpaceCaslAction.Edit,
     SpaceCaslSubject.Page
   );
 
   /**
-   * Разделяем только корневые комментарии на активные и решённые.
-   * Дочерние комментарии выводятся рядом с родителем в общем дереве.
+   * Split only root comments into active and resolved buckets.
+   * Child comments stay next to their parent in the same tree.
    */
   const { activeComments, resolvedComments } = useMemo(() => {
     if (!comments?.items) {
@@ -110,10 +110,10 @@ function CommentListWithTabs() {
   );
 
   /**
-   * Рендерит карточку корневого комментария вместе с дочерней веткой и формой ответа.
+   * Renders a root comment card with its children and reply form.
    *
-   * Отдельно передаём флаг `canResolveComments`, чтобы меню не показывало
-   * действие Resolve/Re-open пользователям без права редактирования страницы.
+   * Pass `canResolveComments` explicitly so the menu does not show
+   * Resolve/Re-open actions to users without page edit permission.
    */
   const renderComments = useCallback(
     (comment: IComment) => (
@@ -199,8 +199,8 @@ function CommentListWithTabs() {
           )}
 
           {/*
-            Если решённых комментариев нет, не показываем кнопку и секцию resolved.
-            Это убирает «пустое» действие из интерфейса и соответствует ожидаемому UX.
+            If there are no resolved comments, hide the button and resolved section.
+            This removes an empty action from the UI and matches expected UX.
           */}
           {resolvedComments.length > 0 && (
             <>

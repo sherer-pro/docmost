@@ -21,10 +21,10 @@ export default function MermaidView({ props }: MermaidViewProps) {
   // Update Mermaid config when theme changes.
   useEffect(() => {
     /**
-     * Политика безопасности рендеринга Mermaid:
-     * - securityLevel: 'strict' задаём явно, чтобы не зависеть от дефолтов конкретной версии mermaid.
-     * - startOnLoad выключен, потому что рендерим диаграмму программно через mermaid.render.
-     * - suppressErrorRendering оставляем включённым, чтобы безопасно контролировать вывод ошибок сами.
+     * Mermaid rendering security policy:
+     * - Set `securityLevel: 'strict'` explicitly to avoid version-specific defaults.
+     * - Keep `startOnLoad` off because diagrams are rendered programmatically via `mermaid.render`.
+     * - Keep `suppressErrorRendering` enabled to safely control error output ourselves.
      */
     mermaid.initialize({
       securityLevel: "strict",

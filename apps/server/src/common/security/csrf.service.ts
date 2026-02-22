@@ -11,9 +11,10 @@ export class CsrfService {
   constructor(private readonly environmentService: EnvironmentService) {}
 
   /**
-   * Возвращает sameSite для auth/csrf cookie:
-   * - `none` только в cloud + https сценарии (кросс-сайтовый SSO);
-   * - `lax` во всех остальных случаях как безопасный дефолт.
+   * Resolves the SameSite value for auth/CSRF cookies.
+   *
+   * Uses `none` only for cloud + HTTPS scenarios (cross-site SSO).
+   * Uses `lax` in all other cases as a safe default.
    */
   getSameSite(): 'lax' | 'none' {
     if (this.environmentService.isCloud() && this.environmentService.isHttps()) {
@@ -24,14 +25,14 @@ export class CsrfService {
   }
 
   /**
-   * Генерирует CSRF-токен для double-submit cookie pattern.
+   * Generates a CSRF token for the double-submit cookie pattern.
    */
   generateToken(): string {
     return randomBytes(32).toString('hex');
   }
 
   /**
-   * Устанавливает CSRF-cookie, доступную клиентскому JS для отправки в заголовке.
+   * Sets the CSRF cookie that client-side JS reads and mirrors in the header.
    */
   setCsrfCookie(res: FastifyReply, token: string) {
     res.setCookie(CsrfService.COOKIE_NAME, token, {
@@ -44,7 +45,7 @@ export class CsrfService {
   }
 
   /**
-   * Очищает CSRF-cookie при завершении сессии.
+   * Clears the CSRF cookie when the user session is terminated.
    */
   clearCsrfCookie(res: FastifyReply) {
     res.clearCookie(CsrfService.COOKIE_NAME, {

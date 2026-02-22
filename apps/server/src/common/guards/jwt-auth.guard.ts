@@ -44,8 +44,8 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
   }
 
   /**
-   * Гарантирует наличие CSRF-cookie для уже авторизованного пользователя.
-   * Это позволяет клиенту автоматически отправлять токен в `x-csrf-token`.
+   * Ensures that an authenticated user always has a CSRF cookie.
+   * This lets the client automatically send the token in `x-csrf-token`.
    */
   ensureCsrfCookie(ctx: ExecutionContext) {
     const req = ctx.switchToHttp().getRequest();

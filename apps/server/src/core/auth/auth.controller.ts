@@ -187,8 +187,8 @@ export class AuthController {
     const csrfToken = this.csrfService.generateToken();
 
     /**
-     * Минимально безопасный дефолт — sameSite=lax.
-     * Для cloud SSO разрешаем sameSite=none только вместе с secure=true.
+     * `sameSite=lax` is the minimum safe default.
+     * For cloud SSO, `sameSite=none` is allowed only with `secure=true`.
      */
     const sameSite = this.csrfService.getSameSite();
 

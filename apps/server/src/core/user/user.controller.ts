@@ -44,11 +44,11 @@ export class UserController {
     };
 
     /**
-     * Флаг для управления видимостью пункта "Manage members" на клиенте.
+     * Flag used by the client to control visibility of the "Manage members" item.
      *
-     * Правила:
-     * - owner/admin всегда имеют доступ;
-     * - member имеет доступ только если состоит хотя бы в одной НЕ-дефолтной группе.
+     * Rules:
+     * - owner/admin always have access;
+     * - member has access only if they belong to at least one non-default group.
      */
     const canAccessMembersDirectory =
       authUser.role === UserRole.OWNER ||

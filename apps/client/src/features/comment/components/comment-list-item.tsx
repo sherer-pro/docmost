@@ -89,8 +89,8 @@ function CommentListItem({
   }
 
   async function handleResolveComment() {
-    // Переключаем статус комментария между "активным" и "решённым".
-    // Это нужно, чтобы решённые обсуждения не смешивались с открытыми в общем списке.
+    // Toggle comment state between "active" and "resolved".
+    // This keeps resolved discussions separated from open ones in the main list.
     try {
       const isResolved = comment.resolvedAt != null;
       

@@ -1,11 +1,11 @@
 import { IsBoolean, IsUUID } from 'class-validator';
 
 /**
- * DTO для изменения статуса комментария (решён/открыт).
+ * DTO for changing comment status (resolved/open).
  *
- * `pageId` передаётся клиентом и валидируется вместе с `commentId`,
- * чтобы контроллер мог гарантировать, что комментарий действительно
- * принадлежит указанной странице.
+ * `pageId` is sent by the client and validated with `commentId`
+ * so the controller can guarantee the comment actually
+ * belongs to the specified page.
  */
 export class ResolveCommentDto {
   @IsUUID()
