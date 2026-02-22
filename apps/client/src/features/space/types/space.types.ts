@@ -9,8 +9,15 @@ export interface ISpaceSharingSettings {
   disabled?: boolean;
 }
 
+export interface ISpaceDocumentFieldsSettings {
+  status?: boolean;
+  assignee?: boolean;
+  stakeholders?: boolean;
+}
+
 export interface ISpaceSettings {
   sharing?: ISpaceSharingSettings;
+  documentFields?: ISpaceDocumentFieldsSettings;
 }
 
 export interface ISpace {
