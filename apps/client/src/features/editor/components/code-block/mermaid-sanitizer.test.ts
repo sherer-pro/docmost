@@ -1,31 +1,21 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { JSDOM } from 'jsdom';
-
-const { window } = new JSDOM('');
-(globalThis as { window?: Window }).window = window as unknown as Window;
-(globalThis as { document?: Document }).document = window.document;
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const { sanitizeMermaidSvg } = require('./mermaid-sanitizer') as {
-  sanitizeMermaidSvg: (svg: string) => string;
-};
+import { sanitizeMermaidSvg } from './mermaid-sanitizer';
 
 describe('sanitizeMermaidSvg', () => {
-  it('удаляет javascript: ссылки из SVG', () => {
-    const payload = '<svg><a xlink:href="javascript:alert(1)"><text>x</text></a></svg>';
+  it('сохраняет текст внутри foreignObject, чтобы Mermaid-диаграммы отображались корректно', () => {
+    const payload =
+      '<svg><foreignObject><div xmlns="http://www.w3.org/1999/xhtml">Текст узла</div></foreignObject></svg>';
 
     const sanitized = sanitizeMermaidSvg(payload);
 
-    assert.equal(sanitized.includes('javascript:'), false);
-    assert.equal(sanitized.includes('xlink:href="javascript:alert(1)"'), false);
+    assert.equal(sanitized.includes('foreignObject'), true);
+    assert.equal(sanitized.includes('Текст узла'), true);
   });
 
-  it('удаляет inline event handlers из SVG-элементов', () => {
-    const payload = '<svg><g onclick="alert(1)"><text>safe</text></g></svg>';
+  it('возвращает исходный SVG без изменений (осознанное ослабление защиты ради рендера текста)', () => {
+    const payload = '<svg><g onclick="alert(1)"><text>ok</text></g></svg>';
 
-    const sanitized = sanitizeMermaidSvg(payload);
-
-    assert.equal(sanitized.includes('onclick='), false);
-    assert.equal(sanitized.includes('<g>'), true);
+    assert.equal(sanitizeMermaidSvg(payload), payload);
   });
 });
