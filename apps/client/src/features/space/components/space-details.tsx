@@ -1,7 +1,19 @@
 import React, { useState } from "react";
-import { useSpaceQuery } from "@/features/space/queries/space-query.ts";
+import {
+  useSpaceQuery,
+  useUpdateSpaceMutation,
+} from "@/features/space/queries/space-query.ts";
 import { EditSpaceForm } from "@/features/space/components/edit-space-form.tsx";
-import { Button, Divider, Text } from "@mantine/core";
+import {
+  ActionIcon,
+  Button,
+  Checkbox,
+  Divider,
+  Group,
+  Stack,
+  Text,
+  Tooltip,
+} from "@mantine/core";
 import DeleteSpaceModal from "./delete-space-modal";
 import { useDisclosure } from "@mantine/hooks";
 import ExportModal from "@/components/common/export-modal.tsx";
@@ -20,6 +32,8 @@ import {
 } from "@/components/ui/responsive-settings-row.tsx";
 import SpacePublicSharingToggle from "@/ee/security/components/space-public-sharing-toggle.tsx";
 import useEnterpriseAccess from "@/ee/hooks/use-enterprise-access.tsx";
+import { IconInfoCircle } from "@tabler/icons-react";
+import { ISpaceDocumentFieldsSettings } from "@/features/space/types/space.types.ts";
 
 interface SpaceDetailsProps {
   spaceId: string;
@@ -28,6 +42,8 @@ interface SpaceDetailsProps {
 export default function SpaceDetails({ spaceId, readOnly }: SpaceDetailsProps) {
   const { t } = useTranslation();
   const { data: space, isLoading, refetch } = useSpaceQuery(spaceId);
+  const { mutate: updateSpace, isPending: isUpdatingSpace } =
+    useUpdateSpaceMutation();
   const hasEnterpriseAccess = useEnterpriseAccess();
   const showSharingToggle = !readOnly && hasEnterpriseAccess;
   const [exportOpened, { open: openExportModal, close: closeExportModal }] =
@@ -64,6 +80,23 @@ export default function SpaceDetails({ spaceId, readOnly }: SpaceDetailsProps) {
     }
   };
 
+  const handleDocumentFieldChange = (
+    field: keyof ISpaceDocumentFieldsSettings,
+    checked: boolean,
+  ) => {
+    if (!space || readOnly) {
+      return;
+    }
+
+    updateSpace({
+      spaceId,
+      documentFields: {
+        ...space.settings?.documentFields,
+        [field]: checked,
+      },
+    });
+  };
+
   return (
     <>
       {space && (
@@ -97,6 +130,86 @@ export default function SpaceDetails({ spaceId, readOnly }: SpaceDetailsProps) {
               <SpacePublicSharingToggle space={space} />
             </>
           )}
+
+          <Divider my="lg" />
+
+          <ResponsiveSettingsRow>
+            <ResponsiveSettingsContent>
+              <Text size="md">{t("Custom document fields")}</Text>
+            </ResponsiveSettingsContent>
+            <ResponsiveSettingsControl>
+              <Stack gap="xs">
+                <Group gap="xs" wrap="nowrap">
+                  <Checkbox
+                    label={t("Document status")}
+                    checked={!!space.settings?.documentFields?.status}
+                    onChange={(event) =>
+                      handleDocumentFieldChange(
+                        "status",
+                        event.currentTarget.checked,
+                      )
+                    }
+                    disabled={readOnly || isUpdatingSpace}
+                  />
+                  <Tooltip label={t("Show document status field")}>
+                    <ActionIcon
+                      variant="subtle"
+                      size="sm"
+                      aria-label={t("Document status info")}
+                    >
+                      <IconInfoCircle size={16} />
+                    </ActionIcon>
+                  </Tooltip>
+                </Group>
+
+                <Group gap="xs" wrap="nowrap">
+                  <Checkbox
+                    label={t("Assignee")}
+                    checked={!!space.settings?.documentFields?.assignee}
+                    onChange={(event) =>
+                      handleDocumentFieldChange(
+                        "assignee",
+                        event.currentTarget.checked,
+                      )
+                    }
+                    disabled={readOnly || isUpdatingSpace}
+                  />
+                  <Tooltip label={t("Show assignee field")}>
+                    <ActionIcon
+                      variant="subtle"
+                      size="sm"
+                      aria-label={t("Assignee info")}
+                    >
+                      <IconInfoCircle size={16} />
+                    </ActionIcon>
+                  </Tooltip>
+                </Group>
+
+                <Group gap="xs" wrap="nowrap">
+                  <Checkbox
+                    label={t("Stakeholders")}
+                    checked={!!space.settings?.documentFields?.stakeholders}
+                    onChange={(event) =>
+                      handleDocumentFieldChange(
+                        "stakeholders",
+                        event.currentTarget.checked,
+                      )
+                    }
+                    disabled={readOnly || isUpdatingSpace}
+                  />
+                  <Tooltip label={t("Show stakeholders field")}>
+                    <ActionIcon
+                      variant="subtle"
+                      size="sm"
+                      aria-label={t("Stakeholders info")}
+                    >
+                      <IconInfoCircle size={16} />
+                    </ActionIcon>
+                  </Tooltip>
+                </Group>
+              </Stack>
+            </ResponsiveSettingsControl>
+          </ResponsiveSettingsRow>
 
           {!readOnly && (
             <>
