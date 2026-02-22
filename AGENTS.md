@@ -71,6 +71,7 @@
 - Backend unit/integration: `pnpm --filter ./apps/server test`
 - Backend coverage: `pnpm --filter ./apps/server test:cov`
 - Backend coverage smoke (быстрый регресс-чек): `pnpm --filter ./apps/server test:cov:smoke`
+- Backend alias smoke (проверка резолва tsconfig aliases в Jest): `pnpm --filter ./apps/server test:alias:smoke`
 - Backend e2e: `pnpm --filter ./apps/server test:e2e`
 
 ### Миграции БД (backend)
