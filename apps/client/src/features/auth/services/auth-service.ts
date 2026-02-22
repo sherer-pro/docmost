@@ -50,10 +50,10 @@ export async function verifyUserToken(data: IVerifyUserToken): Promise<any> {
 }
 
 /**
- * Запрашивает collab-токен через read-only endpoint.
+ * Requests a collab token via a read-only endpoint.
  *
- * Переход на GET убирает лишнюю зависимость от CSRF-заголовка
- * и предотвращает 403 при стартовой загрузке приложения.
+ * Switching to GET removes the unnecessary CSRF-header dependency
+ * and prevents 403 errors during initial app startup.
  */
 export async function getCollabToken(): Promise<ICollabToken> {
   const req = await api.get<ICollabToken>("/auth/collab-token");
