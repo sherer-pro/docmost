@@ -27,12 +27,12 @@ export class UserController {
   ) {}
 
   /**
-   * Возвращает профиль текущего пользователя и метаданные workspace.
+   * Returns the current user's profile and workspace metadata.
    *
-   * Исторически endpoint был POST (`/users/me`), из-за чего на него
-   * распространялась CSRF-проверка как на mutating-запрос.
-   * Для безопасного read-only сценария поддерживаем GET-вариант,
-   * а POST сохраняем для обратной совместимости со старыми клиентами.
+   * Historically this endpoint was POST (`/users/me`), so it
+   * was subject to CSRF checks as a mutating request.
+   * For a safe read-only scenario, we support a GET variant,
+   * while keeping POST for backward compatibility with older clients.
    */
   @HttpCode(HttpStatus.OK)
   @Get('me')

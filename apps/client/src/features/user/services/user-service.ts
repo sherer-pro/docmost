@@ -2,10 +2,10 @@ import api from "@/lib/api-client";
 import { ICurrentUser, IUser } from "@/features/user/types/user.types";
 
 /**
- * Получает профиль текущего пользователя через read-only endpoint.
+ * Fetches the current user's profile through a read-only endpoint.
  *
- * Используем GET, чтобы запрос не подпадал под CSRF-проверку мутирующих
- * методов и корректно отрабатывал даже до инициализации CSRF-cookie.
+ * We use GET so the request is not treated as a mutating method by CSRF checks
+ * and works correctly even before the CSRF cookie is initialized.
  */
 export async function getMyInfo(): Promise<ICurrentUser> {
   const req = await api.get<ICurrentUser>("/users/me");

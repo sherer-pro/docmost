@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 
 /**
- * Событие для telemetry/alert hook при превышении лимита.
+ * Event for telemetry/alert hooks when the limit is exceeded.
  */
 export interface AuthRateLimitExceededEvent {
   endpoint: string;
@@ -25,22 +25,22 @@ interface TelemetryCounter {
 }
 
 /**
- * Внутренний сервис лимитирования auth endpoint'ов.
+ * Internal rate-limiting service for auth endpoints.
  *
- * Хранит состояние в памяти процесса, чего достаточно для unit/integration сценариев
- * и single-instance deployment. Для multi-instance может быть расширен на Redis.
+ * Stores state in process memory, which is enough for unit/integration scenarios
+ * and single-instance deployments. For multi-instance setups it can be extended with Redis.
  */
 @Injectable()
 export class AuthRateLimitService {
   private readonly logger = new Logger(AuthRateLimitService.name);
 
   /**
-   * Бакеты попыток по ключу.
+   * Attempt buckets by key.
    */
   private readonly buckets = new Map<string, BucketState>();
 
   /**
-   * Простейшие счётчики для telemetry.
+   * Simple telemetry counters.
    */
   private readonly telemetryCounters = new Map<string, TelemetryCounter>();
 
@@ -97,14 +97,14 @@ export class AuthRateLimitService {
   }
 
   /**
-   * Возвращает снимок счётчиков для мониторинга/тестов.
+   * Returns a snapshot of counters for monitoring/tests.
    */
   getTelemetryCounters() {
     return new Map(this.telemetryCounters);
   }
 
   /**
-   * Очистка состояния нужна для тестов.
+   * State reset is needed for tests.
    */
   reset() {
     this.buckets.clear();
