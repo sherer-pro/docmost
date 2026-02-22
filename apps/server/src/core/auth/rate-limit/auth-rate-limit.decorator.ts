@@ -4,19 +4,19 @@ import { AuthRateLimitEndpoint } from './auth-rate-limit.config';
 export const AUTH_RATE_LIMIT_METADATA = 'auth-rate-limit';
 
 /**
- * Metadata для подключения rate-limit guard к конкретному auth endpoint.
+ * Metadata for attaching the rate-limit guard to a specific auth endpoint.
  */
 export interface AuthRateLimitMetadata {
   endpoint: AuthRateLimitEndpoint;
   /**
-   * Название поля из body, которое будет использовано как account identifier.
-   * Пример: email, token, username.
+   * Name of the body field that will be used as the account identifier.
+   * Example: email, token, username.
    */
   accountField: string;
 }
 
 /**
- * Декоратор задаёт правила endpoint-specific лимитирования.
+ * Decorator defines endpoint-specific rate-limiting rules.
  */
 export const AuthRateLimit = (metadata: AuthRateLimitMetadata) =>
   SetMetadata(AUTH_RATE_LIMIT_METADATA, metadata);

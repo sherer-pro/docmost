@@ -16,9 +16,9 @@ import { AUTH_RATE_LIMITS } from './auth-rate-limit.config';
 import { AuthRateLimitService } from './auth-rate-limit.service';
 
 /**
- * Guard применяет двойное лимитирование:
- * 1) по IP клиента;
- * 2) по account identifier (например, email/token).
+ * Guard applies dual rate limiting:
+ * 1) by client IP;
+ * 2) by account identifier (for example, email/token).
  */
 @Injectable()
 export class AuthRateLimitGuard implements CanActivate {

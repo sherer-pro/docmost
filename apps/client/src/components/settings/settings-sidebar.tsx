@@ -72,8 +72,8 @@ const groupedData: DataGroup[] = [
         path: "/settings/account/api-keys",
         isCloud: true,
         isEnterprise: true,
-        // Скрываем пункт от обычных пользователей: доступ к API-ключам
-        // в разделе настроек должен быть только у администраторов workspace.
+        // Hide this item for regular users: API key access
+        // in settings should be available only to workspace admins.
         isAdmin: true,
         showDisabledInNonEE: true,
       },

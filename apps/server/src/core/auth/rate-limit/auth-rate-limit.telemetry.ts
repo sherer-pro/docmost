@@ -7,10 +7,10 @@ export type AuthRateLimitAlertHook = (
 ) => Promise<void> | void;
 
 /**
- * Обработчик telemetry-событий лимитирования.
+ * Handler for rate-limit telemetry events.
  *
- * Позволяет подключать alert hooks программно (например, отправка в Slack/SIEM)
- * без изменения guard/service.
+ * Allows alert hooks to be attached programmatically (for example, Slack/SIEM forwarding)
+ * without modifying guard/service.
  */
 @Injectable()
 export class AuthRateLimitTelemetry {

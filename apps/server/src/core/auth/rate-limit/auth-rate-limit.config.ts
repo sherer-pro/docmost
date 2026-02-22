@@ -1,9 +1,9 @@
 /**
- * Конфигурация лимитов по endpoint'ам аутентификации.
+ * Rate-limit configuration for authentication endpoints.
  *
- * Значения подобраны так, чтобы для чувствительных операций
- * (login/forgot-password) квоты были строже, а для валидационных
- * операций (verify-token) — мягче.
+ * Values are tuned so that sensitive operations
+ * (login/forgot-password) use stricter quotas, while validation
+ * operations (verify-token) use softer limits.
  */
 export const AUTH_RATE_LIMITS = {
   login: {

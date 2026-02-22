@@ -1,10 +1,10 @@
 /**
- * Минимальный smoke-тест для проверки того, что Jest корректно
- * запускает сбор покрытия кода в backend без конфликтов трансформеров.
+ * Minimal smoke test to ensure that Jest can collect backend coverage
+ * without transformer conflicts.
  */
 describe('coverage smoke', () => {
   it('должен успешно проходить в режиме coverage', () => {
-    // Тест специально тривиальный: его цель — ранний сигнал о поломке пайплайна coverage.
+    // The test is intentionally trivial: it gives an early signal if the coverage pipeline breaks.
     expect(true).toBe(true);
   });
 });

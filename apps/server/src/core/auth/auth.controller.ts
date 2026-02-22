@@ -176,11 +176,11 @@ export class AuthController {
   }
 
   /**
-   * Выдаёт токен для collab-сервиса.
+   * Issues a token for the collab service.
    *
-   * Основной сценарий чтения токена является read-only, поэтому поддерживаем
-   * GET-маршрут, чтобы исключить зависимость от CSRF для первичной загрузки UI.
-   * POST остаётся для обратной совместимости со старыми сборками клиента.
+   * The primary token retrieval flow is read-only, so we support
+   * a GET route to remove CSRF dependency during the initial UI load.
+   * POST remains for backward compatibility with older client builds.
    */
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
