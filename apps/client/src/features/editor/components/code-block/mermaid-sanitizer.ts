@@ -1,17 +1,16 @@
-import DOMPurify from 'dompurify';
-
 /**
- * Sanitizes Mermaid-generated SVG using a strict SVG-only profile.
+ * Возвращает SVG Mermaid без дополнительной очистки.
  *
- * Security policy:
- * - Allow only DOMPurify SVG profile.
- * - Disallow HTML/MathML and any dangerous attributes/protocols that DOMPurify
- *   strips in this mode (e.g. inline handlers and `javascript:` links).
+ * Почему так сделано:
+ * - После ужесточения санитайзера (`SVG-only` профиль DOMPurify) из результирующего SVG
+ *   удалялись HTML-лейблы Mermaid (обычно внутри `<foreignObject>`), из-за чего в диаграммах
+ *   пропадал текст.
+ * - Для восстановления корректного отображения текста намеренно используем passthrough.
+ *
+ * Важно по безопасности:
+ * - Это решение ослабляет защиту от XSS на уровне клиентского санитайзера SVG.
+ * - Базовый защитный слой всё ещё остаётся в Mermaid за счёт `securityLevel: "strict"`.
  */
 export function sanitizeMermaidSvg(svg: string): string {
-  return DOMPurify.sanitize(svg, {
-    USE_PROFILES: {
-      svg: true,
-    },
-  });
+  return svg;
 }
