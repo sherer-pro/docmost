@@ -1,16 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { ComboboxItem } from "@mantine/core";
 import { useDebouncedValue } from "@mantine/hooks";
-import { useSpaceMembersQuery } from "@/features/space/queries/space-query.ts";
-import { ISpaceMember, SpaceUserInfo } from "@/features/space/types/space.types.ts";
+import { useQuery } from "@tanstack/react-query";
+import { getSpaceMemberUsers } from "@/features/space/services/space-service.ts";
+import { SpaceUserInfo } from "@/features/space/types/space.types.ts";
 
 export interface SpaceMemberSelectOption extends ComboboxItem {
   avatarUrl?: string;
   email?: string;
-}
-
-function isUserMember(member: ISpaceMember): member is { role: string } & SpaceUserInfo {
-  return member.type === "user";
 }
 
 export function useSpaceMemberSelectOptions(spaceId: string, selectedIds: string[]) {
@@ -18,13 +15,18 @@ export function useSpaceMemberSelectOptions(spaceId: string, selectedIds: string
   const [debouncedQuery] = useDebouncedValue(searchValue, 400);
   const [knownUsersById, setKnownUsersById] = useState<Record<string, SpaceMemberSelectOption>>({});
 
-  const { data, isLoading } = useSpaceMembersQuery(spaceId, {
-    query: debouncedQuery,
-    limit: 20,
+  const { data, isLoading } = useQuery({
+    queryKey: ["spaceMemberUsers", spaceId, debouncedQuery],
+    queryFn: () =>
+      getSpaceMemberUsers(spaceId, {
+        query: debouncedQuery,
+        limit: 20,
+      }),
+    enabled: !!spaceId,
   });
 
   useEffect(() => {
-    const userItems = (data?.items ?? []).filter(isUserMember);
+    const userItems = data?.items ?? [];
 
     if (!userItems.length) {
       return;
@@ -47,9 +49,7 @@ export function useSpaceMemberSelectOptions(spaceId: string, selectedIds: string
   }, [data]);
 
   const options = useMemo(() => {
-    const currentItems = (data?.items ?? [])
-      .filter(isUserMember)
-      .map((member) => ({
+    const currentItems = (data?.items ?? []).map((member) => ({
         value: member.id,
         label: member.name,
         avatarUrl: member.avatarUrl,
