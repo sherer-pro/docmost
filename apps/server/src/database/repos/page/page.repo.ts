@@ -37,12 +37,33 @@ export class PageRepo {
     'lastUpdatedById',
     'spaceId',
     'workspaceId',
+    'settings',
     'isLocked',
     'createdAt',
     'updatedAt',
     'deletedAt',
     'contributorIds',
   ];
+
+  /**
+   * Нормализует jsonb-настройки страницы перед записью в БД.
+   */
+  private normalizeSettings<T extends InsertablePage | UpdatablePage>(
+    payload: T,
+  ): T {
+    if (!('settings' in payload) || payload.settings === undefined) {
+      return payload;
+    }
+
+    if (payload.settings === null || typeof payload.settings === 'object') {
+      return payload;
+    }
+
+    return {
+      ...payload,
+      settings: null,
+    };
+  }
 
   async findById(
     pageId: string,
@@ -105,7 +126,7 @@ export class PageRepo {
     pageId: string,
     trx?: KyselyTransaction,
   ) {
-    return this.updatePages(updatablePage, [pageId], trx);
+    return this.updatePages(this.normalizeSettings(updatablePage), [pageId], trx);
   }
 
   async updatePages(
@@ -115,7 +136,7 @@ export class PageRepo {
   ) {
     const result = await dbOrTx(this.db, trx)
       .updateTable('pages')
-      .set({ ...updatePageData, updatedAt: new Date() })
+      .set({ ...this.normalizeSettings(updatePageData), updatedAt: new Date() })
       .where(
         pageIds.some((pageId) => !isValidUUID(pageId)) ? 'slugId' : 'id',
         'in',
@@ -138,7 +159,7 @@ export class PageRepo {
     const db = dbOrTx(this.db, trx);
     const result = await db
       .insertInto('pages')
-      .values(insertablePage)
+      .values(this.normalizeSettings(insertablePage))
       .returning(this.baseFields)
       .executeTakeFirst();
 
@@ -442,6 +463,7 @@ export class PageRepo {
             'parentPageId',
             'spaceId',
             'workspaceId',
+            'settings',
             'createdAt',
             'updatedAt',
           ])
@@ -460,6 +482,7 @@ export class PageRepo {
                 'p.parentPageId',
                 'p.spaceId',
                 'p.workspaceId',
+                'p.settings',
                 'p.createdAt',
                 'p.updatedAt',
               ])

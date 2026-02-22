@@ -231,6 +231,7 @@ export interface Pages {
   position: string | null;
   slugId: string;
   spaceId: string;
+  settings: Json | null;
   textContent: string | null;
   title: string | null;
   tsv: string | null;

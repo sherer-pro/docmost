@@ -130,6 +130,7 @@ export class PageService {
       content,
       textContent,
       ydoc,
+      settings: createPageDto.settings,
     });
 
     this.generalQueue
@@ -203,6 +204,7 @@ export class PageService {
         lastUpdatedById: user.id,
         updatedAt: new Date(),
         contributorIds: contributorIds,
+        settings: updatePageDto.settings,
       },
       page.id,
     );
