@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Post,
@@ -164,8 +165,16 @@ export class AuthController {
     return this.authService.verifyUserToken(verifyUserTokenDto, workspace.id);
   }
 
+  /**
+   * Выдаёт токен для collab-сервиса.
+   *
+   * Основной сценарий чтения токена является read-only, поэтому поддерживаем
+   * GET-маршрут, чтобы исключить зависимость от CSRF для первичной загрузки UI.
+   * POST остаётся для обратной совместимости со старыми сборками клиента.
+   */
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
+  @Get('collab-token')
   @Post('collab-token')
   async collabToken(
     @AuthUser() user: User,

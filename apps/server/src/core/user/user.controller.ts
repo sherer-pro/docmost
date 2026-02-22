@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Post,
@@ -25,7 +26,16 @@ export class UserController {
     private readonly userRepo: UserRepo,
   ) {}
 
+  /**
+   * Возвращает профиль текущего пользователя и метаданные workspace.
+   *
+   * Исторически endpoint был POST (`/users/me`), из-за чего на него
+   * распространялась CSRF-проверка как на mutating-запрос.
+   * Для безопасного read-only сценария поддерживаем GET-вариант,
+   * а POST сохраняем для обратной совместимости со старыми клиентами.
+   */
   @HttpCode(HttpStatus.OK)
+  @Get('me')
   @Post('me')
   async getUserInfo(
     @AuthUser() authUser: User,
