@@ -3,7 +3,7 @@
   "rootDir": ".",
   "roots": ["<rootDir>"],
   "testEnvironment": "node",
-  "testRegex": ".e2e-spec.ts$",
+  "testMatch": ["<rootDir>/alias-smoke.spec.ts"],
   "moduleDirectories": ["node_modules", "<rootDir>/../src"],
   "moduleNameMapper": {
     "^@docmost/db/(.*)$": "<rootDir>/../src/database/$1",
