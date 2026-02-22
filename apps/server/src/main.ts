@@ -74,13 +74,28 @@ function buildBaseCspDirectives() {
 function buildCspHeaderValue(
   directives: Record<string, Array<string>>,
 ): string {
+  /**
+   * Преобразует имя директивы CSP из camelCase в kebab-case.
+   *
+   * Почему это важно:
+   * браузеры понимают только стандартные имена директив вида
+   * `default-src`, `frame-ancestors`, `upgrade-insecure-requests`.
+   *
+   * @param directive Имя директивы в camelCase или kebab-case.
+   * @returns Нормализованное имя директивы в kebab-case.
+   */
+  const toCspDirectiveName = (directive: string): string =>
+    directive.replace(/[A-Z]/g, (char) => `-${char.toLowerCase()}`);
+
   return Object.entries(directives)
     .map(([directive, values]) => {
+      const normalizedDirective = toCspDirectiveName(directive);
+
       if (!values.length) {
-        return directive;
+        return normalizedDirective;
       }
 
-      return `${directive} ${values.join(' ')}`;
+      return `${normalizedDirective} ${values.join(' ')}`;
     })
     .join('; ');
 }
