@@ -6,7 +6,6 @@ import {
   Paper,
   Select,
   Stack,
-  Table,
   Text,
   Tooltip,
 } from "@mantine/core";
@@ -35,8 +34,6 @@ interface DocumentFieldsPanelProps {
 }
 
 const STATUS_OPTIONS: { value: PageCustomFieldStatus; label: string; color: string }[] = [
-  // Статусы храним в виде фиксированных enum-значений, а label оставляем
-  // на английском как source key для стандартной локализации через t().
   { value: PageCustomFieldStatus.TODO, label: "TODO", color: "gray" },
   { value: PageCustomFieldStatus.IN_PROGRESS, label: "In progress", color: "blue" },
   { value: PageCustomFieldStatus.IN_REVIEW, label: "In review", color: "indigo" },
@@ -46,7 +43,6 @@ const STATUS_OPTIONS: { value: PageCustomFieldStatus; label: string; color: stri
 ];
 
 function normalizeCustomFields(customFields?: PageCustomFields): Required<PageCustomFields> {
-  // Нормализуем nullable-поля из API в предсказуемую форму для controlled-компонентов.
   return {
     status: customFields?.status ?? null,
     assigneeId: customFields?.assigneeId ?? null,
@@ -64,7 +60,6 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
 
   const enabledFields = useMemo(
     () => ({
-      // Отрисовываем только те поля, которые включены на уровне настроек пространства.
       status: !!documentFields?.status,
       assignee: !!documentFields?.assignee,
       stakeholders: !!documentFields?.stakeholders,
@@ -97,7 +92,6 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
   });
 
   const debouncedSave = useDebouncedCallback((nextFields: Required<PageCustomFields>) => {
-    // Дебаунс уменьшает количество запросов при быстром изменении полей.
     mutate(nextFields);
   }, 600);
 
@@ -184,21 +178,7 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
                     size={18}
                     name={knownUsersById[fields.assigneeId]?.label ?? fields.assigneeId}
                   />
-                )}
-              </Table.Td>
-            </Table.Tr>
-          )}
-
-          {enabledFields.assignee && (
-            <Table.Tr>
-              <Table.Td>
-                <Group gap={6}>
-                  <Text size="sm" fw={600}>{t("Assignee")}</Text>
-                  <Tooltip multiline w={300} label={t("The assignee is the space member responsible for keeping this document up to date and driving work to completion.")}>
-                    <ActionIcon variant="subtle" size="sm" aria-label={t("Assignee info")}>
-                      <IconInfoCircle size={14} />
-                    </ActionIcon>
-                  </Tooltip>
+                  <Text size="sm">{knownUsersById[fields.assigneeId]?.label ?? fields.assigneeId}</Text>
                 </Group>
               ) : (
                 <Text size="sm" c="dimmed">{t("no data")}</Text>
