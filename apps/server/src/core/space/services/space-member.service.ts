@@ -69,6 +69,19 @@ export class SpaceMemberService {
    * get members of a space.
    * can be a group or user
    */
+  async getSpaceUserMembers(
+    spaceId: string,
+    workspaceId: string,
+    pagination: PaginationOptions,
+  ) {
+    const space = await this.spaceRepo.findById(spaceId, workspaceId);
+    if (!space) {
+      throw new NotFoundException('Space not found');
+    }
+
+    return this.spaceMemberRepo.getSpaceUserMembers(spaceId, pagination);
+  }
+
   async getSpaceMembers(
     spaceId: string,
     workspaceId: string,

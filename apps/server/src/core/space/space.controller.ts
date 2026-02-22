@@ -144,6 +144,30 @@ export class SpaceController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @Post('member-users')
+  async getSpaceMemberUsers(
+    @Body() spaceIdDto: SpaceIdDto,
+    @Body() pagination: PaginationOptions,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const ability = await this.spaceAbility.createForUser(
+      user,
+      spaceIdDto.spaceId,
+    );
+
+    if (ability.cannot(SpaceCaslAction.Read, SpaceCaslSubject.Member)) {
+      throw new ForbiddenException();
+    }
+
+    return this.spaceMemberService.getSpaceUserMembers(
+      spaceIdDto.spaceId,
+      workspace.id,
+      pagination,
+    );
+  }
+
+  @HttpCode(HttpStatus.OK)
   @Post('members')
   async getSpaceMembers(
     @Body() spaceIdDto: SpaceIdDto,
