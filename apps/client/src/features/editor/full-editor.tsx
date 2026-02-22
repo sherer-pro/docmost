@@ -3,6 +3,7 @@ import React from "react";
 import { TitleEditor } from "@/features/editor/title-editor";
 import PageEditor from "@/features/editor/page-editor";
 import { Container } from "@mantine/core";
+import { ReactNode } from "react";
 import { useAtom } from "jotai";
 import { userAtom } from "@/features/user/atoms/current-user-atom.ts";
 
@@ -16,6 +17,7 @@ export interface FullEditorProps {
   content: string;
   spaceSlug: string;
   editable: boolean;
+  metaPanel?: ReactNode;
 }
 
 export function FullEditor({
@@ -25,6 +27,7 @@ export function FullEditor({
   content,
   spaceSlug,
   editable,
+  metaPanel,
 }: FullEditorProps) {
   const [user] = useAtom(userAtom);
   const fullPageWidth = user.settings?.preferences?.fullPageWidth;
@@ -42,6 +45,7 @@ export function FullEditor({
         spaceSlug={spaceSlug}
         editable={editable}
       />
+      {metaPanel}
       <MemoizedPageEditor
         pageId={pageId}
         editable={editable}
