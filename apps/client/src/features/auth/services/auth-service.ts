@@ -38,7 +38,9 @@ export async function forgotPassword(data: IForgotPassword): Promise<void> {
   await api.post<void>("/auth/forgot-password", data);
 }
 
-export async function passwordReset(data: IPasswordReset): Promise<{ requiresLogin?: boolean; }> {
+export async function passwordReset(
+  data: IPasswordReset,
+): Promise<{ requiresLogin?: boolean }> {
   const req = await api.post("/auth/password-reset", data);
   return req.data;
 }
@@ -47,7 +49,13 @@ export async function verifyUserToken(data: IVerifyUserToken): Promise<any> {
   return api.post<any>("/auth/verify-token", data);
 }
 
+/**
+ * Запрашивает collab-токен через read-only endpoint.
+ *
+ * Переход на GET убирает лишнюю зависимость от CSRF-заголовка
+ * и предотвращает 403 при стартовой загрузке приложения.
+ */
 export async function getCollabToken(): Promise<ICollabToken> {
-  const req = await api.post<ICollabToken>("/auth/collab-token");
+  const req = await api.get<ICollabToken>("/auth/collab-token");
   return req.data;
 }
