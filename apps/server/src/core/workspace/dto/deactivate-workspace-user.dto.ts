@@ -1,10 +1,10 @@
 import { IsNotEmpty, IsUUID } from 'class-validator';
 
 /**
- * DTO для деактивации участника workspace.
+ * DTO for deactivating a workspace member.
  *
- * Передаём только `userId`, так как контекст workspace и авторизованный пользователь
- * уже извлекаются из JWT/декораторов на уровне контроллера.
+ * Only `userId` is required because workspace context and authenticated user
+ * are already resolved from JWT/decorators at the controller layer.
  */
 export class DeactivateWorkspaceUserDto {
   @IsNotEmpty()

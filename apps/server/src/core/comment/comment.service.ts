@@ -163,10 +163,10 @@ export class CommentService {
 
 
   /**
-   * Переводит комментарий в состояние "решён" или возвращает его в открытые.
+   * Moves a comment to "resolved" state or reopens it.
    *
-   * При установке статуса "решён" сохраняем автора действия и время,
-   * а также ставим фоновую задачу уведомления создателю комментария.
+   * When setting status to "resolved", persist actor and timestamp,
+   * and enqueue a background notification for the comment author.
    */
   async resolve(
     comment: Comment,

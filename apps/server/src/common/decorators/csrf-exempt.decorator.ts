@@ -1,10 +1,10 @@
 import { SetMetadata } from '@nestjs/common';
 
 /**
- * Явно помечает endpoint как исключение из CSRF-проверки.
+ * Explicitly marks an endpoint as exempt from CSRF validation.
  *
- * Используется только для маршрутов, где CSRF-токен архитектурно недоступен
- * (например, логин/восстановление пароля до появления сессии).
+ * Use this only for routes where a CSRF token is not available by design
+ * (for example login/password-reset flows before a session exists).
  */
 export const IS_CSRF_EXEMPT_KEY = 'isCsrfExempt';
 export const CsrfExempt = () => SetMetadata(IS_CSRF_EXEMPT_KEY, true);

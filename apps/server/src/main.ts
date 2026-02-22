@@ -13,10 +13,10 @@ import fastifyCookie from '@fastify/cookie';
 import { InternalLogFilter } from './common/logger/internal-log-filter';
 
 /**
- * Возвращает origin из URL-строки, если её удалось корректно распарсить.
+ * Returns the origin from a URL string when parsing succeeds.
  *
- * @param value Строка URL из переменной окружения.
- * @returns Origin (`https://example.com`) или `null`, если вход невалидный.
+ * @param value URL string from an environment variable.
+ * @returns Origin (`https://example.com`) or `null` if the input is invalid.
  */
 function safeGetOrigin(value?: string): string | null {
   if (!value) {
@@ -31,12 +31,12 @@ function safeGetOrigin(value?: string): string | null {
 }
 
 /**
- * Строит базовый набор CSP-директив для API/статических ответов без inline-скриптов.
+ * Builds the baseline CSP directives for API/static responses without inline scripts.
  *
- * В `connect-src` явно добавляем websocket-схемы, чтобы не ломать realtime-подключения
- * и клиентские запросы к отдельному collab endpoint.
+ * WebSocket schemes are included in `connect-src` to keep realtime traffic and
+ * requests to a dedicated collab endpoint working.
  *
- * @returns CSP-директивы для заголовка `Content-Security-Policy`.
+ * @returns CSP directives for the `Content-Security-Policy` header.
  */
 function buildBaseCspDirectives() {
   const appOrigin = safeGetOrigin(process.env.APP_URL);
@@ -66,23 +66,22 @@ function buildBaseCspDirectives() {
 }
 
 /**
- * Преобразует объект CSP-директив в строку заголовка `Content-Security-Policy`.
+ * Converts a CSP directives object into a `Content-Security-Policy` header value.
  *
- * @param directives Набор директив CSP.
- * @returns Строка формата `directive value; directive value`.
+ * @param directives CSP directives map.
+ * @returns Header string in `directive value; directive value` format.
  */
 function buildCspHeaderValue(
   directives: Record<string, Array<string>>,
 ): string {
   /**
-   * Преобразует имя директивы CSP из camelCase в kebab-case.
+   * Converts a CSP directive name from camelCase to kebab-case.
    *
-   * Почему это важно:
-   * браузеры понимают только стандартные имена директив вида
-   * `default-src`, `frame-ancestors`, `upgrade-insecure-requests`.
+   * Browsers only recognize standard directive names such as
+   * `default-src`, `frame-ancestors`, and `upgrade-insecure-requests`.
    *
-   * @param directive Имя директивы в camelCase или kebab-case.
-   * @returns Нормализованное имя директивы в kebab-case.
+   * @param directive Directive name in camelCase or kebab-case.
+   * @returns Normalized directive name in kebab-case.
    */
   const toCspDirectiveName = (directive: string): string =>
     directive.replace(/[A-Z]/g, (char) => `-${char.toLowerCase()}`);
@@ -101,12 +100,12 @@ function buildCspHeaderValue(
 }
 
 /**
- * Формирует смягчённую CSP для SPA-страниц, где используется inline-конфиг (`window.CONFIG`).
+ * Builds a relaxed CSP for SPA routes that rely on inline config (`window.CONFIG`).
  *
- * Это точечное послабление применяется только к HTML-роутам (например, editor/preview/share),
- * чтобы не ослаблять политику для API-ответов.
+ * This relaxation is intentionally scoped to HTML routes (e.g. editor/preview/share)
+ * to avoid weakening CSP for API responses.
  *
- * @returns CSP-директивы для «relaxed» режима.
+ * @returns CSP directives for relaxed mode.
  */
 function buildRelaxedCspDirectives() {
   return {
@@ -116,23 +115,24 @@ function buildRelaxedCspDirectives() {
 }
 
 /**
- * Определяет, нужен ли relaxed CSP для текущего URL.
+ * Determines whether the current URL should use the relaxed CSP policy.
  *
- * @param requestUrl URL запроса.
- * @returns `true`, если это страница frontend/share, где ожидаются inline-скрипты.
+ * @param requestUrl Request URL.
+ * @returns `true` for frontend/share pages that expect inline scripts.
  */
 function shouldUseRelaxedCsp(requestUrl: string): boolean {
   return !requestUrl.startsWith('/api');
 }
 
 /**
- * Собирает security-заголовки для конкретного запроса.
+ * Builds security headers for a request.
  *
- * HSTS включаем только для HTTPS-трафика (включая проксированный через `x-forwarded-proto`).
+ * HSTS is added only for HTTPS traffic, including traffic forwarded as HTTPS
+ * via `x-forwarded-proto`.
  *
- * @param requestUrl URL запроса.
- * @param isHttps Флаг HTTPS-соединения.
- * @returns Набор заголовков безопасности для текущего ответа.
+ * @param requestUrl Request URL.
+ * @param isHttps Indicates whether the request is HTTPS.
+ * @returns Security headers for the response.
  */
 function getSecurityHeaders(
   requestUrl: string,
@@ -158,11 +158,11 @@ function getSecurityHeaders(
 }
 
 /**
- * Применяет security-заголовки к ответу.
+ * Applies request-specific security headers to the Fastify response.
  *
- * @param requestUrl URL запроса.
- * @param isHttps Флаг HTTPS-соединения.
- * @param reply Fastify-ответ.
+ * @param requestUrl Request URL.
+ * @param isHttps Indicates whether the request is HTTPS.
+ * @param reply Fastify reply instance.
  */
 function applySecurityHeaders(
   requestUrl: string,

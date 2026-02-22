@@ -511,12 +511,12 @@ export class WorkspaceService {
 
 
   /**
-   * Деактивирует участника workspace с набором защитных проверок.
+   * Deactivates a workspace member with guardrail validations.
    *
-   * Защиты:
-   * - нельзя деактивировать самого себя;
-   * - администратор не может деактивировать owner;
-   * - нельзя деактивировать последнего активного owner в workspace.
+   * Guardrails:
+   * - self-deactivation is forbidden;
+   * - an admin cannot deactivate an owner;
+   * - the last active owner in a workspace cannot be deactivated.
    */
   async deactivateUser(
     authUser: User,

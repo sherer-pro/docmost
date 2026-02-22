@@ -1,9 +1,9 @@
 /**
- * Регистрирует Service Worker только в production-режиме и только в браузерах,
- * где доступен соответствующий API. Такой guard нужен, чтобы:
- * 1) не мешать DX в dev (HMR + кэш service worker часто конфликтуют);
- * 2) не выполнять лишнюю работу в неподдерживаемых окружениях;
- * 3) централизованно контролировать поведение обновлений PWA.
+ * Registers a Service Worker only in production and only in browsers
+ * that support the required API. This guard helps to:
+ * 1) keep local DX clean in dev (HMR and SW cache often conflict);
+ * 2) avoid unnecessary work in unsupported environments;
+ * 3) keep PWA update behavior centralized and predictable.
  */
 export async function registerServiceWorker(): Promise<void> {
   if (import.meta.env.DEV || !("serviceWorker" in navigator)) {
@@ -17,9 +17,9 @@ export async function registerServiceWorker(): Promise<void> {
       });
 
       /**
-       * Если обнаружили новую версию SW, включаем обработчик её установки.
-       * Когда новый worker активируется, перезагружаем страницу, чтобы
-       * приложение сразу получило свежий bundle/asset-кэш.
+       * When a new SW version is found, attach an install-state listener.
+       * Once the new worker becomes active, reload the page so the app
+       * immediately uses the fresh bundle/asset cache.
        */
       registration.addEventListener("updatefound", () => {
         const nextWorker = registration.installing;
@@ -38,8 +38,8 @@ export async function registerServiceWorker(): Promise<void> {
         });
       });
     } catch (error) {
-      // Ошибку логируем явно: это помогает быстрее диагностировать проблемы
-      // с HTTPS, scope, CSP или некорректным response для /sw.js.
+      // Log the error explicitly to speed up diagnostics for HTTPS, scope,
+      // CSP, or invalid `/sw.js` response issues.
       console.error("Не удалось зарегистрировать Service Worker:", error);
     }
   });

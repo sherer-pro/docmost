@@ -8,10 +8,10 @@ const api: AxiosInstance = axios.create({
 });
 
 /**
- * Читает значение cookie по имени.
+ * Reads a cookie value by its name.
  *
- * Нужен для double-submit CSRF: клиент берёт токен из `csrfToken` cookie
- * и отправляет его в `x-csrf-token` заголовке на мутирующие запросы.
+ * Used by the double-submit CSRF flow: the client reads `csrfToken`
+ * from cookies and forwards it in the `x-csrf-token` header for mutating requests.
  */
 function getCookieValue(name: string): string | null {
   const escapedName = name.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");

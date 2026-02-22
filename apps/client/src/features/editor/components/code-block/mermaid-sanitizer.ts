@@ -1,12 +1,12 @@
 import DOMPurify from 'dompurify';
 
 /**
- * Очищает SVG-строку, полученную от Mermaid, с максимально узким профилем для SVG.
+ * Sanitizes Mermaid-generated SVG using a strict SVG-only profile.
  *
- * Политика безопасности:
- * - Разрешаем только SVG-профиль DOMPurify.
- * - Запрещаем HTML/MathML и любые опасные атрибуты/протоколы, которые DOMPurify
- *   автоматически вычищает в этом режиме (например, inline-обработчики и javascript:-ссылки).
+ * Security policy:
+ * - Allow only DOMPurify SVG profile.
+ * - Disallow HTML/MathML and any dangerous attributes/protocols that DOMPurify
+ *   strips in this mode (e.g. inline handlers and `javascript:` links).
  */
 export function sanitizeMermaidSvg(svg: string): string {
   return DOMPurify.sanitize(svg, {

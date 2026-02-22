@@ -127,10 +127,10 @@ export class CommentController {
 
 
   /**
-   * Обновляет статус комментария (resolve/re-open).
+   * Updates comment status (resolve/re-open).
    *
-   * Дополнительно валидируем связку commentId + pageId, чтобы исключить
-   * случайное изменение комментария с другой страницы через подмену payload.
+   * Additionally validates the commentId + pageId pair to prevent
+   * accidental cross-page updates via payload tampering.
    */
   @HttpCode(HttpStatus.OK)
   @Post('resolve')
@@ -146,8 +146,8 @@ export class CommentController {
 
     const ability = await this.spaceAbility.createForUser(user, comment.spaceId);
 
-    // Разрешение комментария — это изменение состояния обсуждения,
-    // поэтому требуется право редактирования страницы.
+    // Resolving a comment changes discussion state,
+    // so page edit permission is required.
     if (ability.cannot(SpaceCaslAction.Edit, SpaceCaslSubject.Page)) {
       throw new ForbiddenException();
     }
