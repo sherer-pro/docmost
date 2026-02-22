@@ -42,6 +42,16 @@ export async function deleteWorkspaceMember(data: {
   await api.post("/workspace/members/delete", data);
 }
 
+export async function deactivateWorkspaceMember(data: {
+  userId: string;
+}): Promise<{ success: true }> {
+  const req = await api.post<{ success: true }>(
+    "/workspace/members/deactivate",
+    data,
+  );
+  return req.data;
+}
+
 export async function updateWorkspace(data: Partial<IWorkspace>) {
   const req = await api.post<IWorkspace>("/workspace/update", data);
   return req.data;
