@@ -18,6 +18,7 @@ import { GroupUserService } from './group-user.service';
 import { WatcherRepo } from '@docmost/db/repos/watcher/watcher.repo';
 import { executeTx } from '@docmost/db/utils';
 import { InjectKysely } from 'nestjs-kysely';
+import { UserRole } from '../../../common/helpers/types/permission';
 
 @Injectable()
 export class GroupService {
@@ -31,12 +32,20 @@ export class GroupService {
     @InjectKysely() private readonly db: KyselyDB,
   ) {}
 
-  async getGroupInfo(groupId: string, workspaceId: string): Promise<Group> {
+  async getGroupInfo(
+    groupId: string,
+    workspaceId: string,
+    authUser?: User,
+  ): Promise<Group> {
     const group = await this.groupRepo.findById(groupId, workspaceId, {
       includeMemberCount: true,
     });
 
     if (!group) {
+      throw new NotFoundException('Group not found');
+    }
+
+    if (authUser?.role === UserRole.MEMBER && group.isDefault) {
       throw new NotFoundException('Group not found');
     }
 
@@ -127,8 +136,11 @@ export class GroupService {
   async getWorkspaceGroups(
     workspaceId: string,
     paginationOptions: PaginationOptions,
+    authUser?: User,
   ): Promise<CursorPaginationResult<Group>> {
-    return this.groupRepo.getGroupsPaginated(workspaceId, paginationOptions);
+    return this.groupRepo.getGroupsPaginated(workspaceId, paginationOptions, {
+      excludeDefaultGroup: authUser?.role === UserRole.MEMBER,
+    });
   }
 
   async deleteGroup(groupId: string, workspaceId: string): Promise<void> {
