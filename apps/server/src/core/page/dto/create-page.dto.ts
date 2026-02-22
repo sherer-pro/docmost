@@ -1,11 +1,13 @@
 import {
   IsIn,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
   ValidateIf,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
+import { PageSettings } from '@docmost/db/types/entity.types';
 
 export type ContentFormat = 'json' | 'markdown' | 'html';
 
@@ -32,4 +34,11 @@ export class CreatePageDto {
   @Transform(({ value }) => value?.toLowerCase() ?? 'json')
   @IsIn(['json', 'markdown', 'html'])
   format?: ContentFormat;
+
+  /**
+   * Гибкие метаданные документа (status, assigneeId, stakeholderIds и будущие поля).
+   */
+  @IsOptional()
+  @IsObject()
+  settings?: PageSettings;
 }
