@@ -78,33 +78,30 @@ export default function PageHeaderMenu({ readOnly }: PageHeaderMenuProps) {
     setUser(updatedUser);
   }, [readOnly, setUser, user]);
 
-  useHotkeys(
+  useHotkeys([
     [
-      [
-        "mod+E",
-        (event) => {
-          event.preventDefault();
-          void togglePageEditMode();
-        },
-      ],
-      [
-        "mod+F",
-        () => {
-          const event = new CustomEvent("openFindDialogFromEditor", {});
-          document.dispatchEvent(event);
-        },
-      ],
-      [
-        "Escape",
-        () => {
-          const event = new CustomEvent("closeFindDialogFromEditor", {});
-          document.dispatchEvent(event);
-        },
-        { preventDefault: false },
-      ],
+      "mod+E",
+      (event) => {
+        event.preventDefault();
+        void togglePageEditMode();
+      },
     ],
-    [togglePageEditMode],
-  );
+    [
+      "mod+F",
+      () => {
+        const event = new CustomEvent("openFindDialogFromEditor", {});
+        document.dispatchEvent(event);
+      },
+    ],
+    [
+      "Escape",
+      () => {
+        const event = new CustomEvent("closeFindDialogFromEditor", {});
+        document.dispatchEvent(event);
+      },
+      { preventDefault: false },
+    ],
+  ]);
 
   return (
     <>
