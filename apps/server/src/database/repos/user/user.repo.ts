@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB, KyselyTransaction } from '@docmost/db/types/kysely.types';
-import { DB, Users } from '@docmost/db/types/db';
+import { Users } from '@docmost/db/types/db';
 import { hashPassword } from '../../../common/helpers';
 import { dbOrTx } from '@docmost/db/utils';
 import {
@@ -162,6 +162,67 @@ export class UserRepo {
     return count as number;
   }
 
+
+  /**
+   * Checks whether a member can access the members directory.
+   *
+   * A member gets access if they belong to at least one non-default group
+   * or at least one non-default space (directly or through a group).
+   */
+  async hasNonDefaultGroupMembership(
+    userId: string,
+    workspaceId: string,
+  ): Promise<boolean> {
+    const membership = await this.db
+      .selectFrom('workspaces')
+      .select('workspaces.id')
+      .where('workspaces.id', '=', workspaceId)
+      .where((eb) =>
+        eb.exists(
+          eb
+            .selectFrom('groupUsers as viewerGroupUsers')
+            .innerJoin(
+              'groups as viewerGroups',
+              'viewerGroups.id',
+              'viewerGroupUsers.groupId',
+            )
+            .select('viewerGroupUsers.groupId')
+            .where('viewerGroupUsers.userId', '=', userId)
+            .where('viewerGroups.workspaceId', '=', workspaceId)
+            .where('viewerGroups.isDefault', '=', false),
+        ),
+      )
+      .executeTakeFirst();
+
+    if (membership) {
+      return true;
+    }
+
+    const spaceMembership = await this.db
+      .selectFrom('spaceMembers as viewerSpaceMembers')
+      .innerJoin('spaces', 'spaces.id', 'viewerSpaceMembers.spaceId')
+      .innerJoin('workspaces', 'workspaces.id', 'spaces.workspaceId')
+      .leftJoin(
+        'groupUsers as viewerSpaceGroupUsers',
+        'viewerSpaceGroupUsers.groupId',
+        'viewerSpaceMembers.groupId',
+      )
+      .select('viewerSpaceMembers.spaceId')
+      .where('spaces.workspaceId', '=', workspaceId)
+      .where('spaces.deletedAt', 'is', null)
+      .whereRef('spaces.id', '!=', 'workspaces.defaultSpaceId')
+      .where('viewerSpaceMembers.deletedAt', 'is', null)
+      .where((eb) =>
+        eb.or([
+          eb('viewerSpaceMembers.userId', '=', userId),
+          eb('viewerSpaceGroupUsers.userId', '=', userId),
+        ]),
+      )
+      .executeTakeFirst();
+
+    return Boolean(spaceMembership);
+  }
+
   /**
    * Applies member visibility restrictions for workspace members list.
    *
@@ -170,11 +231,11 @@ export class UserRepo {
    * - member users can see users sharing at least one non-default group;
    * - member users can also see users sharing at least one non-default space.
    */
-  private applyWorkspaceMemberVisibility(
-    query: SelectQueryBuilder<DB, 'users', Users>,
+  private applyWorkspaceMemberVisibility<O>(
+    query: SelectQueryBuilder<any, 'users', O>,
     workspaceId: string,
     authUser: User,
-  ) {
+  ): SelectQueryBuilder<any, 'users', O> {
     if (authUser.role !== UserRole.MEMBER) {
       return query;
     }
@@ -353,7 +414,7 @@ export class UserRepo {
       .executeTakeFirst();
   }
 
-  withUserMfa(eb: ExpressionBuilder<DB, 'users'>) {
+  withUserMfa(eb: ExpressionBuilder<any, 'users'>) {
     return jsonObjectFrom(
       eb
         .selectFrom('userMfa')
