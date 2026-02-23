@@ -1,7 +1,7 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB, KyselyTransaction } from '@docmost/db/types/kysely.types';
-import { DB, Users } from '@docmost/db/types/db';
+import { Users } from '@docmost/db/types/db';
 import { hashPassword } from '../../../common/helpers';
 import { dbOrTx } from '@docmost/db/utils';
 import {
@@ -11,7 +11,7 @@ import {
 } from '@docmost/db/types/entity.types';
 import { PaginationOptions } from '../../pagination/pagination-options';
 import { executeWithCursorPagination } from '@docmost/db/pagination/cursor-pagination';
-import { ExpressionBuilder, sql } from 'kysely';
+import { ExpressionBuilder, SelectQueryBuilder, sql } from 'kysely';
 import { jsonObjectFrom } from 'kysely/helpers/postgres';
 import { UserRole } from '../../../common/helpers/types/permission';
 
@@ -162,60 +162,86 @@ export class UserRepo {
     return count as number;
   }
 
+
   /**
-   * Checks whether a user belongs to at least one non-default group in a workspace.
+   * Checks whether a member can access the members directory.
    *
-   * Used to control access to the workspace members directory for member users.
+   * A member gets access if they belong to at least one non-default group
+   * or at least one non-default space (directly or through a group).
    */
   async hasNonDefaultGroupMembership(
     userId: string,
     workspaceId: string,
   ): Promise<boolean> {
-    const groupMembership = await this.db
-      .selectFrom('groupUsers as groupUsers')
-      .innerJoin('groups as groups', 'groups.id', 'groupUsers.groupId')
-      .select('groupUsers.groupId')
-      .where('groupUsers.userId', '=', userId)
-      .where('groups.workspaceId', '=', workspaceId)
-      .where('groups.isDefault', '=', false)
+    const membership = await this.db
+      .selectFrom('workspaces')
+      .select('workspaces.id')
+      .where('workspaces.id', '=', workspaceId)
+      .where((eb) =>
+        eb.exists(
+          eb
+            .selectFrom('groupUsers as viewerGroupUsers')
+            .innerJoin(
+              'groups as viewerGroups',
+              'viewerGroups.id',
+              'viewerGroupUsers.groupId',
+            )
+            .select('viewerGroupUsers.groupId')
+            .where('viewerGroupUsers.userId', '=', userId)
+            .where('viewerGroups.workspaceId', '=', workspaceId)
+            .where('viewerGroups.isDefault', '=', false),
+        ),
+      )
       .executeTakeFirst();
 
-    return Boolean(groupMembership);
+    if (membership) {
+      return true;
+    }
+
+    const spaceMembership = await this.db
+      .selectFrom('spaceMembers as viewerSpaceMembers')
+      .innerJoin('spaces', 'spaces.id', 'viewerSpaceMembers.spaceId')
+      .innerJoin('workspaces', 'workspaces.id', 'spaces.workspaceId')
+      .leftJoin(
+        'groupUsers as viewerSpaceGroupUsers',
+        'viewerSpaceGroupUsers.groupId',
+        'viewerSpaceMembers.groupId',
+      )
+      .select('viewerSpaceMembers.spaceId')
+      .where('spaces.workspaceId', '=', workspaceId)
+      .where('spaces.deletedAt', 'is', null)
+      .whereRef('spaces.id', '!=', 'workspaces.defaultSpaceId')
+      .where('viewerSpaceMembers.deletedAt', 'is', null)
+      .where((eb) =>
+        eb.or([
+          eb('viewerSpaceMembers.userId', '=', userId),
+          eb('viewerSpaceGroupUsers.userId', '=', userId),
+        ]),
+      )
+      .executeTakeFirst();
+
+    return Boolean(spaceMembership);
   }
 
   /**
-   * Returns workspace users with group-based visibility restrictions applied.
+   * Applies member visibility restrictions for workspace members list.
    *
    * Access rules:
    * - admin/owner can see all users in the workspace;
-   * - member users can only see users sharing at least one non-default group;
-   * - if a user belongs to no non-default groups, access is denied.
+   * - member users can see users sharing at least one non-default group;
+   * - member users can also see users sharing at least one non-default space.
    */
-  async getUsersPaginated(
+  private applyWorkspaceMemberVisibility<O>(
+    query: SelectQueryBuilder<any, 'users', O>,
     workspaceId: string,
-    pagination: PaginationOptions,
     authUser: User,
-  ) {
-    let query = this.db
-      .selectFrom('users')
-      .select(this.baseFields)
-      .where('workspaceId', '=', workspaceId)
-      .where('deletedAt', 'is', null);
+  ): SelectQueryBuilder<any, 'users', O> {
+    if (authUser.role !== UserRole.MEMBER) {
+      return query;
+    }
 
-    if (authUser.role === UserRole.MEMBER) {
-      const hasNonDefaultGroup = await this.hasNonDefaultGroupMembership(
-        authUser.id,
-        workspaceId,
-      );
-
-      // If a user has no custom group memberships, the members page is not accessible.
-      if (!hasNonDefaultGroup) {
-        throw new ForbiddenException('You are not a member of any group');
-      }
-
-      // Limit the result to users who share at least one group with the current user.
-      // Use `where(... exists(...))` because this Kysely version does not expose `whereExists`.
-      query = query.where((eb) =>
+    return query.where((eb) =>
+      eb.or([
         eb.exists(
           eb
             .selectFrom('groupUsers as viewerGroupUsers')
@@ -235,8 +261,101 @@ export class UserRepo {
             .where('viewerGroups.workspaceId', '=', workspaceId)
             .where('viewerGroups.isDefault', '=', false),
         ),
-      );
-    }
+        eb.exists(
+          eb
+            .selectFrom('spaceMembers as viewerSpaceMembers')
+            .innerJoin('spaces', 'spaces.id', 'viewerSpaceMembers.spaceId')
+            .innerJoin('workspaces', 'workspaces.id', 'spaces.workspaceId')
+            .leftJoin(
+              'groupUsers as viewerSpaceGroupUsers',
+              'viewerSpaceGroupUsers.groupId',
+              'viewerSpaceMembers.groupId',
+            )
+            .innerJoin(
+              'spaceMembers as candidateSpaceMembers',
+              'candidateSpaceMembers.spaceId',
+              'viewerSpaceMembers.spaceId',
+            )
+            .leftJoin(
+              'groupUsers as candidateSpaceGroupUsers',
+              'candidateSpaceGroupUsers.groupId',
+              'candidateSpaceMembers.groupId',
+            )
+            .select('candidateSpaceMembers.spaceId')
+            .where('spaces.workspaceId', '=', workspaceId)
+            .where('spaces.deletedAt', 'is', null)
+            .whereRef('spaces.id', '!=', 'workspaces.defaultSpaceId')
+            .where('viewerSpaceMembers.deletedAt', 'is', null)
+            .where('candidateSpaceMembers.deletedAt', 'is', null)
+            .where((innerEb) =>
+              innerEb.or([
+                innerEb('viewerSpaceMembers.userId', '=', authUser.id),
+                innerEb('viewerSpaceGroupUsers.userId', '=', authUser.id),
+              ]),
+            )
+            .where((innerEb) =>
+              innerEb.or([
+                innerEb.exists(
+                  innerEb
+                    .selectFrom('users as candidateUsers')
+                    .select('candidateUsers.id')
+                    .whereRef(
+                      'candidateUsers.id',
+                      '=',
+                      'candidateSpaceMembers.userId',
+                    )
+                    .whereRef('candidateUsers.id', '=', 'users.id'),
+                ),
+                innerEb.exists(
+                  innerEb
+                    .selectFrom('users as candidateUsers')
+                    .select('candidateUsers.id')
+                    .whereRef(
+                      'candidateUsers.id',
+                      '=',
+                      'candidateSpaceGroupUsers.userId',
+                    )
+                    .whereRef('candidateUsers.id', '=', 'users.id'),
+                ),
+              ]),
+            ),
+        ),
+      ]),
+    );
+  }
+
+  async getWorkspaceVisibleUsersCount(
+    workspaceId: string,
+    authUser: User,
+  ): Promise<number> {
+    const query = this.applyWorkspaceMemberVisibility(
+      this.db
+        .selectFrom('users')
+        .select((eb) => eb.fn.count('users.id').distinct().as('count'))
+        .where('users.workspaceId', '=', workspaceId)
+        .where('users.deletedAt', 'is', null),
+      workspaceId,
+      authUser,
+    );
+
+    const result = await query.executeTakeFirst();
+    return Number(result?.count ?? 0);
+  }
+
+  async getUsersPaginated(
+    workspaceId: string,
+    pagination: PaginationOptions,
+    authUser: User,
+  ) {
+    let query = this.applyWorkspaceMemberVisibility(
+      this.db
+        .selectFrom('users')
+        .select(this.baseFields)
+        .where('users.workspaceId', '=', workspaceId)
+        .where('users.deletedAt', 'is', null),
+      workspaceId,
+      authUser,
+    );
 
     if (pagination.query) {
       query = query.where((eb) =>
@@ -279,7 +398,7 @@ export class UserRepo {
       .executeTakeFirst();
   }
 
-  withUserMfa(eb: ExpressionBuilder<DB, 'users'>) {
+  withUserMfa(eb: ExpressionBuilder<any, 'users'>) {
     return jsonObjectFrom(
       eb
         .selectFrom('userMfa')
