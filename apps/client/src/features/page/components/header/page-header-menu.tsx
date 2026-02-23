@@ -43,6 +43,9 @@ import { PageStateSegmentedControl } from "@/features/user/components/page-state
 import MovePageModal from "@/features/page/components/move-page-modal.tsx";
 import { useTimeAgo } from "@/hooks/use-time-ago.tsx";
 import ShareModal from "@/features/share/components/share-modal.tsx";
+import { updateUser } from "@/features/user/services/user-service.ts";
+import { PageEditMode } from "@/features/user/types/user.types.ts";
+import { userAtom } from "@/features/user/atoms/current-user-atom.ts";
 
 interface PageHeaderMenuProps {
   readOnly?: boolean;
@@ -50,9 +53,39 @@ interface PageHeaderMenuProps {
 export default function PageHeaderMenu({ readOnly }: PageHeaderMenuProps) {
   const { t } = useTranslation();
   const toggleAside = useToggleAside();
+  const [user, setUser] = useAtom(userAtom);
+
+  /**
+   * Переключает режим страницы между редактированием и просмотром.
+   *
+   * Горячая клавиша работает только для пользователей с правом редактирования.
+   * После смены режима обновляем профиль на сервере и локальный atom, чтобы
+   * состояние мгновенно применилось к title/page editor без перезагрузки.
+   */
+  const togglePageEditMode = async () => {
+    if (readOnly || !user) {
+      return;
+    }
+
+    const currentMode =
+      user.settings?.preferences?.pageEditMode ?? PageEditMode.Edit;
+    const nextMode =
+      currentMode === PageEditMode.Edit
+        ? PageEditMode.Read
+        : PageEditMode.Edit;
+
+    const updatedUser = await updateUser({ pageEditMode: nextMode });
+    setUser(updatedUser);
+  };
 
   useHotkeys(
     [
+      [
+        "mod+E",
+        () => {
+          void togglePageEditMode();
+        },
+      ],
       [
         "mod+F",
         () => {
