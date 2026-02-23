@@ -1,6 +1,38 @@
-node_modules
-.git
-dist
 /data
-.env*
 .nx
+# deps
+**/node_modules
+**/.pnpm-store
+**/.pnp
+**/.pnp.*
+**/.yarn
+**/.yarn-cache
+**/.yarnrc.yml
+**/.npm
+**/.cache
+
+# build outputs
+**/dist
+**/build
+**/.next
+**/out
+**/.turbo
+
+# VCS / IDE
+.git
+.gitignore
+.idea
+.vscode
+
+# OS
+.DS_Store
+Thumbs.db
+
+# env / logs
+.env
+.env*
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
