@@ -62,7 +62,6 @@ export function MfaSetupModal({
   opened,
   onClose,
   onComplete,
-  isRequired = false,
 }: MfaSetupModalProps) {
   const { t } = useTranslation();
   const [active, setActive] = useState(0);
@@ -149,7 +148,7 @@ export function MfaSetupModal({
       title={t("Set up two-factor authentication")}
       size="md"
     >
-      <Stepper active={active} size="sm">
+      <Stepper active={active} size="sm" orientation={"vertical"}>
         <Stepper.Step
           label={t("Setup & Verify")}
           description={t("Add to authenticator")}
