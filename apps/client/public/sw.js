@@ -39,15 +39,15 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const { request } = event;
 
-  // Не перехватываем non-GET запросы и системные chrome-extension URL.
+  // Do not intercept non-GET requests and system chrome-extension URLs.
   if (request.method !== "GET" || !request.url.startsWith("http")) {
     return;
   }
 
   const url = new URL(request.url);
 
-  // Критичные realtime/API запросы всегда отдаем напрямую в сеть,
-  // чтобы не ломать аутентификацию, WebSocket upgrade и синхронизацию.
+  // Always pass critical realtime/API requests directly to the network
+  // to avoid breaking authentication, WebSocket upgrades, and synchronization.
   if (
     url.pathname.startsWith("/api") ||
     url.pathname.startsWith("/socket.io") ||
@@ -65,10 +65,10 @@ self.addEventListener("fetch", (event) => {
 });
 
 /**
- * Стратегия Network First для HTML-навигации.
+ * Network First strategy for HTML navigation.
  *
- * @param {Request} request - Исходный браузерный navigation-request.
- * @returns {Promise<Response>} Актуальный ответ из сети или fallback из кэша/offline-страницы.
+ * @param {Request} request - Original browser navigation request.
+ * @returns {Promise<Response>} Fresh network response or fallback from cache/offline page.
  */
 async function networkFirstForDocuments(request) {
   const cache = await caches.open(RUNTIME_CACHE);
@@ -103,10 +103,10 @@ async function networkFirstForDocuments(request) {
 }
 
 /**
- * Стратегия Stale-While-Revalidate для ассетов (JS/CSS/изображения).
+ * Stale-While-Revalidate strategy for assets (JS/CSS/images).
  *
- * @param {Request} request - Исходный запрос к статическому ресурсу.
- * @returns {Promise<Response>} Быстрый ответ из кэша или из сети с последующим обновлением кэша.
+ * @param {Request} request - Original request for a static resource.
+ * @returns {Promise<Response>} Fast response from cache or network with follow-up cache update.
  */
 async function staleWhileRevalidate(request) {
   const cache = await caches.open(RUNTIME_CACHE);

@@ -33,7 +33,7 @@ export function StakeholdersSpaceMemberMultiSelect({
   onChange,
 }: StakeholdersSpaceMemberMultiSelectProps) {
   const { t } = useTranslation();
-  // Опции ограничены участниками текущего пространства; поиск выполняется на сервере.
+  // Options are limited to members of the current space; search is performed on the server.
   const { options, searchValue, setSearchValue, isLoading } = useSpaceMemberSelectOptions(spaceId, value);
 
   return (

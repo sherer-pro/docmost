@@ -135,8 +135,8 @@ export class MfaController {
   }
 
   /**
-   * Повторяем поведение auth-контроллера:
-   * после успешной MFA-проверки кладём полноценный access-token в cookie.
+   * Match auth controller behavior:
+   * after successful MFA verification, set a full access token in the cookie.
    */
   private setAuthCookie(res: FastifyReply, token: string) {
     const csrfToken = this.csrfService.generateToken();

@@ -46,7 +46,7 @@ export class PageRepo {
   ];
 
   /**
-   * Нормализует jsonb-настройки страницы перед записью в БД.
+   * Normalizes page jsonb settings before writing to the database.
    */
   private normalizeSettings<T extends InsertablePage | UpdatablePage>(
     payload: T,
@@ -387,8 +387,8 @@ export class PageRepo {
     return jsonObjectFrom(
       eb
         .selectFrom('spaces')
-        // Добавляем settings пространства, чтобы на странице были доступны
-        // включённые в пространстве кастомные поля (space.settings.documentFields).
+        // Include space settings so the page can access
+        // custom document fields enabled at the space level (space.settings.documentFields).
         .select(['spaces.id', 'spaces.name', 'spaces.slug', 'spaces.settings'])
         .whereRef('spaces.id', '=', 'pages.spaceId'),
     ).as('space');

@@ -7,7 +7,7 @@ export interface AttachmentOptions {
 }
 
 /**
- * Режим отображения вложения в редакторе.
+ * Attachment display mode in the editor.
  */
 export type AttachmentDisplayMode = "file" | "embed";
 
