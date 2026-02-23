@@ -191,7 +191,7 @@ function CommentListWithTabs() {
       <ScrollArea style={{ flex: "1 1 auto" }} scrollbarSize={5} type="scroll">
         <div style={{ paddingBottom: "200px" }}>
           {activeComments.length === 0 ? (
-            <Text size="sm" c="dimmed" ta="center" py="md">
+            <Text size="sm" c="dimmed" py="md">
               {t("No open comments.")}
             </Text>
           ) : (
