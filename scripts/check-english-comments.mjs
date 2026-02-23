@@ -1,7 +1,13 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, extname } from 'node:path';
 
-const TARGET_DIRS = ['apps/server/src', 'apps/client/src'];
+const TARGET_DIRS = [
+  'apps/server/src',
+  'apps/server/test',
+  'apps/client/src',
+  'apps/client/public',
+  'packages/editor-ext/src',
+];
 const TARGET_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs']);
 const CYRILLIC_RE = /[\u0400-\u04FF]/;
 
@@ -118,4 +124,6 @@ if (violations.length > 0) {
   process.exit(1);
 }
 
-console.log('No Cyrillic comments found in apps/server/src and apps/client/src.');
+console.log(
+  'No Cyrillic comments found in monitored source directories (server/client/editor-ext/public/test).',
+);

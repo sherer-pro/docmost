@@ -26,8 +26,8 @@ class AuthTestController {
   }
 
   /**
-   * Архитектурное исключение: endpoint доступен без сессии,
-   * поэтому CSRF-токен на этом шаге отсутствует.
+   * Architectural exception: the endpoint is accessible without a session,
+   * so a CSRF token is not present at this step.
    */
   @CsrfExempt()
   @HttpCode(HttpStatus.OK)
@@ -37,7 +37,7 @@ class AuthTestController {
   }
 
   /**
-   * Архитектурное исключение: forgot-password вызывается до аутентификации.
+   * Architectural exception: forgot-password is called before authentication.
    */
   @CsrfExempt()
   @HttpCode(HttpStatus.OK)
@@ -47,8 +47,8 @@ class AuthTestController {
   }
 
   /**
-   * Архитектурное исключение: logout допускается без CSRF,
-   * так как выполняет idempotent-очистку сессии и cookie.
+   * Architectural exception: logout is allowed without CSRF,
+   * because it performs idempotent cleanup of session and cookies.
    */
   @CsrfExempt()
   @HttpCode(HttpStatus.OK)

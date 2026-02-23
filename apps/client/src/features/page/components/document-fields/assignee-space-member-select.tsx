@@ -34,7 +34,7 @@ export function AssigneeSpaceMemberSelect({ spaceId, value, onChange }: Assignee
     value ? [value] : [],
   );
 
-  // В readOnly/controlled-состоянии показываем аватар текущего выбранного участника.
+  // In readOnly/controlled state, show the avatar of the currently selected member.
   const selectedMember = value ? knownUsersById[value] : undefined;
 
   return (

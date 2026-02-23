@@ -56,11 +56,11 @@ export default function PageHeaderMenu({ readOnly }: PageHeaderMenuProps) {
   const [user, setUser] = useAtom(userAtom);
 
   /**
-   * Переключает режим страницы между редактированием и просмотром.
+   * Switches the page mode between editing and viewing.
    *
-   * Горячая клавиша работает только для пользователей с правом редактирования.
-   * После смены режима обновляем профиль на сервере и локальный atom, чтобы
-   * состояние мгновенно применилось к title/page editor без перезагрузки.
+   * The hotkey works only for users with edit permission.
+   * After switching mode, update the profile on the server and the local atom so
+   * the state applies instantly to title/page editor without reload.
    */
   const togglePageEditMode = async () => {
     if (readOnly || !user) {

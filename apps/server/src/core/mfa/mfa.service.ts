@@ -23,7 +23,7 @@ export class MfaService {
   ) {}
 
   /**
-   * Проверяет логин/пароль и определяет, нужно ли запускать MFA-челлендж.
+   * Verifies login/password and determines whether an MFA challenge is required.
    */
   async checkMfaRequirements(loginDto: LoginDto, workspace: Workspace) {
     const user = await this.userRepo.findByEmail(loginDto.email, workspace.id, {
@@ -69,7 +69,7 @@ export class MfaService {
   }
 
   /**
-   * Создаёт временный TOTP-секрет и QR-код для пользователя.
+   * Creates a temporary TOTP secret and QR code for the user.
    */
   async setup(user: User, workspace: Workspace) {
     const secret = new OTPAuth.Secret({ size: 20 }).base32;
@@ -225,7 +225,7 @@ export class MfaService {
       await this.tokenService.verifyJwt(token, 'access');
       return { valid: true, isTransferToken: false };
     } catch {
-      // Если это не access-token, пробуем интерпретировать его как временный MFA-token.
+      // If this is not an access token, try interpreting it as a temporary MFA token.
     }
 
     try {
@@ -284,7 +284,7 @@ export class MfaService {
   }
 
   /**
-   * Генерирует одноразовые резервные коды для входа.
+   * Generates one-time backup codes for login.
    */
   private generateBackupCodes() {
     return Array.from({ length: 10 }, () => nanoIdGen(8).toUpperCase());

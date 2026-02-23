@@ -27,7 +27,7 @@ import {
 import { PageEmbeddings } from '@docmost/db/types/embeddings.types';
 
 /**
- * Настройки документных полей на уровне space.
+ * Document field settings at the space level.
  */
 export interface SpaceDocumentFieldsSettings {
   status?: boolean;
@@ -36,14 +36,14 @@ export interface SpaceDocumentFieldsSettings {
 }
 
 /**
- * Контейнер настроек space.
+ * Space settings container.
  */
 export interface SpaceSettings {
   documentFields?: SpaceDocumentFieldsSettings;
 }
 
 /**
- * Расширяемые настройки страницы.
+ * Extendable page settings.
  */
 export interface PageSettings {
   status?: string | null;
