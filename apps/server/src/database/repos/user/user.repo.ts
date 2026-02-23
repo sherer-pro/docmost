@@ -170,8 +170,8 @@ export class UserRepo {
    * - member users can see users sharing at least one non-default group;
    * - member users can also see users sharing at least one non-default space.
    */
-  private applyWorkspaceMemberVisibility<O>(
-    query: SelectQueryBuilder<DB, 'users', O>,
+  private applyWorkspaceMemberVisibility(
+    query: SelectQueryBuilder<DB, 'users', Users>,
     workspaceId: string,
     authUser: User,
   ) {
@@ -234,15 +234,27 @@ export class UserRepo {
             )
             .where((innerEb) =>
               innerEb.or([
-                innerEb(
-                  'candidateSpaceMembers.userId',
-                  '=',
-                  'users.id',
+                innerEb.exists(
+                  innerEb
+                    .selectFrom('users as candidateUsers')
+                    .select('candidateUsers.id')
+                    .whereRef(
+                      'candidateUsers.id',
+                      '=',
+                      'candidateSpaceMembers.userId',
+                    )
+                    .whereRef('candidateUsers.id', '=', 'users.id'),
                 ),
-                innerEb(
-                  'candidateSpaceGroupUsers.userId',
-                  '=',
-                  'users.id',
+                innerEb.exists(
+                  innerEb
+                    .selectFrom('users as candidateUsers')
+                    .select('candidateUsers.id')
+                    .whereRef(
+                      'candidateUsers.id',
+                      '=',
+                      'candidateSpaceGroupUsers.userId',
+                    )
+                    .whereRef('candidateUsers.id', '=', 'users.id'),
                 ),
               ]),
             ),
