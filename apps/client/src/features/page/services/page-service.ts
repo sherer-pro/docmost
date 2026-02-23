@@ -178,3 +178,18 @@ export async function uploadFile(
 
   return req as unknown as IAttachment;
 }
+
+
+export interface QuoteContentInput {
+  sourcePageId: string;
+  quoteId: string;
+}
+
+export interface QuoteContentResult {
+  text: string;
+}
+
+export async function getQuoteContent(data: QuoteContentInput): Promise<QuoteContentResult> {
+  const req = await api.post<QuoteContentResult>("/pages/quote-content", data);
+  return req.data;
+}
