@@ -10,6 +10,7 @@ import {
   IconUnderline,
   IconMessage,
   IconSparkles,
+  IconQuote,
 } from "@tabler/icons-react";
 import clsx from "clsx";
 import classes from "./bubble-menu.module.css";
@@ -120,6 +121,24 @@ export const EditorBubbleMenu: FC<EditorBubbleMenuProps> = (props) => {
       setShowCommentPopup(true);
     },
     icon: IconMessage,
+  };
+
+
+  const quoteSourceItem: BubbleMenuItem = {
+    name: "Mark as quote source",
+    isActive: () => false,
+    command: () => {
+      // @ts-ignore В storage динамически сохраняется pageId при инициализации редактора.
+      const pageId = props.editor?.storage?.pageId;
+      if (!pageId) {
+        return;
+      }
+
+      const quoteId = `${pageId}:${crypto.randomUUID()}`;
+      props.editor.chain().focus().setQuoteSource(quoteId).run();
+      navigator.clipboard?.writeText(quoteId).catch(() => undefined);
+    },
+    icon: IconQuote,
   };
 
   const bubbleMenuProps: EditorBubbleMenuProps = {
@@ -245,6 +264,19 @@ export const EditorBubbleMenu: FC<EditorBubbleMenuProps> = (props) => {
             setIsLinkSelectorOpen(false);
           }}
         />
+
+        <Tooltip label={t(quoteSourceItem.name)} withArrow withinPortal={false}>
+          <ActionIcon
+            variant="default"
+            size="lg"
+            radius="6px"
+            aria-label={t(quoteSourceItem.name)}
+            style={{ border: "none" }}
+            onClick={quoteSourceItem.command}
+          >
+            <IconQuote size={16} stroke={2} />
+          </ActionIcon>
+        </Tooltip>
 
         <Tooltip label={t(commentItem.name)} withArrow withinPortal={false}>
           <ActionIcon

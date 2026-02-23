@@ -38,10 +38,13 @@ import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { RecentPageDto } from './dto/recent-page.dto';
 import { DuplicatePageDto } from './dto/duplicate-page.dto';
 import { DeletedPageDto } from './dto/deleted-page.dto';
+import { QuoteContentDto } from './dto/quote-content.dto';
 import {
   jsonToHtml,
   jsonToMarkdown,
 } from '../../collaboration/collaboration.util';
+import { CollaborationGateway } from '../../collaboration/collaboration.gateway';
+import { TiptapTransformer } from '@hocuspocus/transformer';
 
 @UseGuards(JwtAuthGuard)
 @Controller('pages')
@@ -51,6 +54,7 @@ export class PageController {
     private readonly pageRepo: PageRepo,
     private readonly pageHistoryService: PageHistoryService,
     private readonly spaceAbility: SpaceAbilityFactory,
+    private readonly collaborationGateway: CollaborationGateway,
   ) {}
 
   private getPageCustomFields(page: { settings?: unknown }) {
@@ -66,6 +70,73 @@ export class PageController {
         ? settings.stakeholderIds
         : [],
     } as UpdatePageCustomFieldsDto;
+  }
+
+
+  /**
+   * Извлекает текст всех текстовых узлов, отмеченных заданным идентификатором цитаты.
+   *
+   * Возвращает объединённый плейн-текст, который затем отображается
+   * в целевом документе как синхронизируемая встраиваемая цитата.
+   */
+  private extractQuoteTextFromContent(content: any, quoteId: string): string {
+    const chunks: string[] = [];
+
+    const walk = (node: any) => {
+      if (!node || typeof node !== 'object') {
+        return;
+      }
+
+      if (node.type === 'text' && typeof node.text === 'string') {
+        const hasQuoteMark = Array.isArray(node.marks)
+          ? node.marks.some(
+              (mark) =>
+                mark?.type === 'quoteSource' && mark?.attrs?.quoteId === quoteId,
+            )
+          : false;
+
+        if (hasQuoteMark) {
+          chunks.push(node.text);
+        }
+      }
+
+      if (Array.isArray(node.content)) {
+        node.content.forEach(walk);
+      }
+    };
+
+    walk(content);
+
+    return chunks.join(' ').replace(/\s+/g, ' ').trim();
+  }
+
+  /**
+   * Reads the freshest source page content directly from the active Yjs document.
+   *
+   * This bypasses DB persistence debounce and allows linked quotes to react to
+   * source edits almost immediately while users are collaboratively editing.
+   */
+  private async getLivePageContent(pageId: string, user: User): Promise<any | null> {
+    const documentName = `page.${pageId}`;
+
+    const connection = await this.collaborationGateway.openDirectConnection(
+      documentName,
+      { user },
+    );
+
+    try {
+      let content: any = null;
+
+      await connection.transact((doc) => {
+        content = TiptapTransformer.fromYdoc(doc, 'default');
+      });
+
+      return content;
+    } catch {
+      return null;
+    } finally {
+      await connection.disconnect();
+    }
   }
 
   @HttpCode(HttpStatus.OK)
@@ -101,6 +172,37 @@ export class PageController {
     }
 
     return { ...page, customFields: this.getPageCustomFields(page) };
+  }
+
+
+  @HttpCode(HttpStatus.OK)
+  @Post('/quote-content')
+  async getQuoteContent(
+    @Body() dto: QuoteContentDto,
+    @AuthUser() user: User,
+  ): Promise<{ text: string }> {
+    const page = await this.pageRepo.findById(dto.sourcePageId, {
+      includeContent: true,
+    });
+
+    if (!page) {
+      throw new NotFoundException('Source page not found');
+    }
+
+    const ability = await this.spaceAbility.createForUser(user, page.spaceId);
+    if (ability.cannot(SpaceCaslAction.Read, SpaceCaslSubject.Page)) {
+      throw new ForbiddenException();
+    }
+
+    const liveContent = await this.getLivePageContent(dto.sourcePageId, user);
+    const sourceContent = liveContent ?? page.content;
+    const text = this.extractQuoteTextFromContent(sourceContent, dto.quoteId);
+
+    if (!text) {
+      throw new NotFoundException('Quote content not found');
+    }
+
+    return { text };
   }
 
   @HttpCode(HttpStatus.OK)
