@@ -654,5 +654,18 @@
   "In review": "In review",
   "Done": "Done",
   "Rejected": "Rejected",
-  "Archived": "Archived"
+  "Archived": "Archived",
+  "Custom document fields": "Custom document fields",
+  "Document status": "Document status",
+  "Adds a status field to every document in this space. The status can be used to track work stages such as TODO, In progress, In review, Done, Rejected, or Archived.": "Adds a status field to every document in this space. The status can be used to track work stages such as TODO, In progress, In review, Done, Rejected, or Archived.",
+  "Adds an assignee field to every document. The assignee can be selected only from members of this space.": "Adds an assignee field to every document. The assignee can be selected only from members of this space.",
+  "Adds a stakeholders field to every document. Stakeholders are selected from space members and can include multiple people.": "Adds a stakeholders field to every document. Stakeholders are selected from space members and can include multiple people.",
+  "Shows the current lifecycle stage of the document. Use this field to make progress transparent for everyone in the space.": "Shows the current lifecycle stage of the document. Use this field to make progress transparent for everyone in the space.",
+  "The assignee is the space member responsible for keeping this document up to date and driving work to completion.": "The assignee is the space member responsible for keeping this document up to date and driving work to completion.",
+  "Stakeholders are space members who are affected by this document, contribute context, or should be notified about important changes.": "Stakeholders are space members who are affected by this document, contribute context, or should be notified about important changes.",
+  "no data": "no data",
+  "Select assignee": "Select assignee",
+  "Select stakeholders": "Select stakeholders",
+  "No members found": "No members found",
+  "Loading...": "Loading..."
 }

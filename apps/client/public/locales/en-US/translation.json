@@ -666,5 +666,6 @@
   "no data": "no data",
   "Select assignee": "Select assignee",
   "Select stakeholders": "Select stakeholders",
-  "No members found": "No members found"
+  "No members found": "No members found",
+  "Loading...": "Loading..."
 }
