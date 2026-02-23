@@ -170,8 +170,8 @@ export class UserRepo {
    * - member users can see users sharing at least one non-default group;
    * - member users can also see users sharing at least one non-default space.
    */
-  private applyWorkspaceMemberVisibility(
-    query: SelectQueryBuilder<DB, 'users', Users>,
+  private applyWorkspaceMemberVisibility<O>(
+    query: SelectQueryBuilder<DB, 'users', O>,
     workspaceId: string,
     authUser: User,
   ) {
@@ -237,12 +237,12 @@ export class UserRepo {
                 innerEb(
                   'candidateSpaceMembers.userId',
                   '=',
-                  sql.ref('users.id'),
+                  'users.id',
                 ),
                 innerEb(
                   'candidateSpaceGroupUsers.userId',
                   '=',
-                  sql.ref('users.id'),
+                  'users.id',
                 ),
               ]),
             ),
@@ -276,10 +276,10 @@ export class UserRepo {
   ) {
     let query = this.applyWorkspaceMemberVisibility(
       this.db
-      .selectFrom('users')
-      .select(this.baseFields)
-      .where('users.workspaceId', '=', workspaceId)
-      .where('users.deletedAt', 'is', null),
+        .selectFrom('users')
+        .select(this.baseFields)
+        .where('users.workspaceId', '=', workspaceId)
+        .where('users.deletedAt', 'is', null),
       workspaceId,
       authUser,
     );
@@ -305,6 +305,22 @@ export class UserRepo {
       fields: [{ expression: 'id', direction: 'asc' }],
       parseCursor: (cursor) => ({ id: cursor.id }),
     });
+  }
+
+  async hasNonDefaultGroupMembership(
+    userId: string,
+    workspaceId: string,
+  ): Promise<boolean> {
+    const result = await this.db
+      .selectFrom('groupUsers')
+      .innerJoin('groups', 'groups.id', 'groupUsers.groupId')
+      .select('groupUsers.id')
+      .where('groupUsers.userId', '=', userId)
+      .where('groups.workspaceId', '=', workspaceId)
+      .where('groups.isDefault', '=', false)
+      .executeTakeFirst();
+
+    return !!result;
   }
 
   async updatePreference(
