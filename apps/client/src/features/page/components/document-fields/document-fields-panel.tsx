@@ -134,6 +134,21 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
 
   const selectedStatus = STATUS_OPTIONS.find((item) => item.value === fields.status);
 
+  const renderStatusOption: SelectProps["renderOption"] = ({ option }) => {
+    const selected = STATUS_OPTIONS.find((item) => item.value === option.value);
+
+    if (!selected) {
+      return <Text size="sm">{option.label}</Text>;
+    }
+
+    return (
+      <Group justify="space-between" w="100%" wrap="nowrap">
+        <Text size="sm">{t(option.label)}</Text>
+        <Badge color={selected.color} variant="light">{t(option.label)}</Badge>
+      </Group>
+    );
+  };
+
   return (
     <Paper withBorder radius="md" p="md" my="sm">
       <Stack gap="md">
