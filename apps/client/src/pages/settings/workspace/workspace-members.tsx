@@ -11,6 +11,7 @@ import { Helmet } from "react-helmet-async";
 import { useTranslation } from "react-i18next";
 import { useAtom } from "jotai";
 import { workspaceAtom } from "@/features/user/atoms/current-user-atom.ts";
+import { useWorkspaceVisibleMembersCountQuery } from "@/features/workspace/queries/workspace-query.ts";
 
 export default function WorkspaceMembers() {
   const { t } = useTranslation();
@@ -19,13 +20,19 @@ export default function WorkspaceMembers() {
   const [searchParams] = useSearchParams();
   const { isAdmin } = useUserRole();
   const navigate = useNavigate();
+  const { data: visibleMembersCount } = useWorkspaceVisibleMembersCountQuery();
 
   useEffect(() => {
     const currentTab = searchParams.get("tab");
-    if (currentTab === "invites") {
+    if (currentTab === "invites" && isAdmin) {
       setSegmentValue(currentTab);
+      return;
     }
-  }, [searchParams.get("tab")]);
+
+    if (currentTab === "invites" && !isAdmin) {
+      navigate("", { replace: true });
+    }
+  }, [isAdmin, navigate, searchParams]);
 
   const handleSegmentChange = (value: string) => {
     setSegmentValue(value);
@@ -54,10 +61,12 @@ export default function WorkspaceMembers() {
           onChange={handleSegmentChange}
           data={[
             {
-              label: t("Members") + ` (${workspace?.memberCount})`,
+              label:
+                t("Members") +
+                ` (${visibleMembersCount?.count ?? workspace?.memberCount ?? 0})`,
               value: "members",
             },
-            { label: t("Pending"), value: "invites" },
+            ...(isAdmin ? [{ label: t("Pending"), value: "invites" }] : []),
           ]}
           withItemsBorders={false}
         />
@@ -67,7 +76,7 @@ export default function WorkspaceMembers() {
 
       <Space h="lg" />
 
-      {segmentValue === "invites" ? (
+      {segmentValue === "invites" && isAdmin ? (
         <WorkspaceInvitesTable />
       ) : (
         <WorkspaceMembersTable />

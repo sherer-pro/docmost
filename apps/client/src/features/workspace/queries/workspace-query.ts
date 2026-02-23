@@ -10,6 +10,7 @@ import {
   getInvitationById,
   getPendingInvitations,
   getWorkspaceMembers,
+  getWorkspaceVisibleMembersCount,
   createInvitation,
   resendInvitation,
   revokeInvitation,
@@ -58,6 +59,16 @@ export function useWorkspaceMembersQuery(
   });
 }
 
+export function useWorkspaceVisibleMembersCountQuery(): UseQueryResult<
+  { count: number },
+  Error
+> {
+  return useQuery({
+    queryKey: ["workspaceMembers", "count"],
+    queryFn: () => getWorkspaceVisibleMembersCount(),
+  });
+}
+
 export function useDeleteWorkspaceMemberMutation() {
   const queryClient = useQueryClient();
 
@@ -73,6 +84,9 @@ export function useDeleteWorkspaceMemberMutation() {
       notifications.show({ message: "Member deleted successfully" });
       queryClient.invalidateQueries({
         queryKey: ["workspaceMembers"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["workspaceMembers", "count"],
       });
     },
     onError: (error) => {
@@ -100,6 +114,9 @@ export function useDeactivateWorkspaceMemberMutation() {
       queryClient.invalidateQueries({
         queryKey: ["workspaceMembers"],
       });
+      queryClient.invalidateQueries({
+        queryKey: ["workspaceMembers", "count"],
+      });
     },
     onError: (error) => {
       const errorMessage = error["response"]?.data?.message;
@@ -117,6 +134,9 @@ export function useChangeMemberRoleMutation() {
       notifications.show({ message: "Member role updated successfully" });
       queryClient.refetchQueries({
         queryKey: ["workspaceMembers"],
+      });
+      queryClient.refetchQueries({
+        queryKey: ["workspaceMembers", "count"],
       });
     },
     onError: (error) => {
