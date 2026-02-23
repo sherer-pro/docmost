@@ -132,6 +132,10 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
     return null;
   }
 
+  /**
+   * Resolves currently selected status metadata to keep rendering logic
+   * deterministic in both read and edit modes.
+   */
   const selectedStatus = STATUS_OPTIONS.find((item) => item.value === fields.status);
 
   const renderStatusOption: SelectProps["renderOption"] = ({ option }) => {
