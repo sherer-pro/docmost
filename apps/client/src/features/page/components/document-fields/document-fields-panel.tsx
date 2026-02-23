@@ -173,8 +173,8 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
   }
 
   return (
-    <Paper withBorder radius="md" p="md" my="sm">
-      <Table withColumnBorders verticalSpacing="sm" horizontalSpacing="md" layout="fixed">
+    <Paper withBorder radius="md" my="sm">
+      <Table withColumnBorders verticalSpacing="sm" horizontalSpacing="sm" layout="fixed">
         <Table.Tbody>
           {enabledFields.status && (
             <Table.Tr>
