@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
+  alpha,
   ActionIcon,
   Badge,
   Group,
@@ -7,8 +8,10 @@ import {
   Select,
   SelectProps,
   Stack,
+  Table,
   Text,
   Tooltip,
+  useMantineTheme,
 } from "@mantine/core";
 import { IconInfoCircle } from "@tabler/icons-react";
 import { useDebouncedCallback } from "@mantine/hooks";
@@ -57,6 +60,7 @@ function normalizeCustomFields(customFields?: PageCustomFields): Required<PageCu
 
 export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps) {
   const { t } = useTranslation();
+  const theme = useMantineTheme();
   const currentUser = useAtomValue(currentUserAtom);
   const documentFields = page.space?.settings?.documentFields;
   const userPageEditMode =
@@ -114,11 +118,26 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
     debouncedSave(nextFields);
   };
 
-  if (!enabledFields.status && !enabledFields.assignee && !enabledFields.stakeholders) {
-    return null;
-  }
-
   const selectedStatus = STATUS_OPTIONS.find((item) => item.value === fields.status);
+
+  /**
+   * Вычисляет стили поля статуса на основе цвета выбранного Badge,
+   * чтобы сразу визуально подсветить текущее состояние документа.
+   */
+  const statusInputStyles = useMemo(() => {
+    if (!selectedStatus) {
+      return undefined;
+    }
+
+    const colorScale = theme.colors[selectedStatus.color] ?? theme.colors.gray;
+
+    return {
+      input: {
+        backgroundColor: alpha(colorScale[1], 0.35),
+        borderColor: colorScale[4],
+      },
+    };
+  }, [selectedStatus, theme.colors]);
 
   const renderStatusOption: SelectProps["renderOption"] = ({ option }) => {
     const selected = STATUS_OPTIONS.find((item) => item.value === option.value);
@@ -128,138 +147,139 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
     }
 
     return (
-      <Group justify="space-between" w="100%" wrap="nowrap">
-        <Text size="sm">{t(option.label)}</Text>
-        <Badge color={selected.color} variant="light">
-          {t(option.label)}
-        </Badge>
-      </Group>
+      <Badge color={selected.color} variant="light">
+        {t(option.label)}
+      </Badge>
     );
   };
 
+  /**
+   * Стандартизирует отображение названия поля в левой колонке таблицы,
+   * включая tooltip с кратким описанием назначения поля.
+   */
+  const renderFieldLabel = (label: string, tooltip: string, ariaLabel: string) => (
+    <Group gap={6} wrap="nowrap">
+      <Text size="sm" fw={600}>{t(label)}</Text>
+      <Tooltip multiline w={300} label={t(tooltip)}>
+        <ActionIcon variant="subtle" size="sm" aria-label={t(ariaLabel)}>
+          <IconInfoCircle size={14} />
+        </ActionIcon>
+      </Tooltip>
+    </Group>
+  );
+
+  if (!enabledFields.status && !enabledFields.assignee && !enabledFields.stakeholders) {
+    return null;
+  }
+
   return (
     <Paper withBorder radius="md" p="md" my="sm">
-      <Stack gap="md">
-        {enabledFields.status && (
-          <Stack gap={4}>
-            <Group gap={6}>
-              <Text size="sm" fw={600}>{t("Status")}</Text>
-              <Tooltip
-                multiline
-                w={300}
-                label={t(
+      <Table withColumnBorders verticalSpacing="sm" horizontalSpacing="md" layout="fixed">
+        <Table.Tbody>
+          {enabledFields.status && (
+            <Table.Tr>
+              <Table.Td w="38%">
+                {renderFieldLabel(
+                  "Status",
                   "Shows the current lifecycle stage of the document. Use this field to make progress transparent for everyone in the space.",
+                  "Status info",
                 )}
-              >
-                <ActionIcon variant="subtle" size="sm" aria-label={t("Status info")}>
-                  <IconInfoCircle size={14} />
-                </ActionIcon>
-              </Tooltip>
-            </Group>
-
-            {readOnly ? (
-              selectedStatus ? (
-                <Badge color={selectedStatus.color} variant="light">
-                  {t(selectedStatus.label)}
-                </Badge>
-              ) : (
-                <Text size="sm" c="dimmed">{t("no data")}</Text>
-              )
-            ) : (
-              <Select
-                data={STATUS_OPTIONS.map((item) => ({ value: item.value, label: t(item.label) }))}
-                value={fields.status}
-                onChange={(value) =>
-                  handleFieldChange({ ...fields, status: (value as PageCustomFieldStatus) || null })
-                }
-                placeholder={t("Select status")}
-                clearable
-                renderOption={renderStatusOption}
-              />
-            )}
-          </Stack>
-        )}
-
-        {enabledFields.assignee && (
-          <Stack gap={4}>
-            <Group gap={6}>
-              <Text size="sm" fw={600}>{t("Assignee")}</Text>
-              <Tooltip
-                multiline
-                w={300}
-                label={t(
-                  "The assignee is the space member responsible for keeping this document up to date and driving work to completion.",
-                )}
-              >
-                <ActionIcon variant="subtle" size="sm" aria-label={t("Assignee info")}>
-                  <IconInfoCircle size={14} />
-                </ActionIcon>
-              </Tooltip>
-            </Group>
-
-            {readOnly ? (
-              fields.assigneeId ? (
-                <Group gap="xs" wrap="nowrap">
-                  <CustomAvatar
-                    avatarUrl={knownUsersById[fields.assigneeId]?.avatarUrl}
-                    size={18}
-                    name={knownUsersById[fields.assigneeId]?.label ?? fields.assigneeId}
+              </Table.Td>
+              <Table.Td>
+                {readOnly ? (
+                  selectedStatus ? (
+                    <Badge color={selectedStatus.color} variant="light">
+                      {t(selectedStatus.label)}
+                    </Badge>
+                  ) : (
+                    <Text size="sm" c="dimmed">{t("no data")}</Text>
+                  )
+                ) : (
+                  <Select
+                    data={STATUS_OPTIONS.map((item) => ({ value: item.value, label: t(item.label) }))}
+                    value={fields.status}
+                    onChange={(value) =>
+                      handleFieldChange({ ...fields, status: (value as PageCustomFieldStatus) || null })
+                    }
+                    placeholder={t("Select status")}
+                    clearable
+                    renderOption={renderStatusOption}
+                    styles={statusInputStyles}
                   />
-                  <Text size="sm">{knownUsersById[fields.assigneeId]?.label ?? fields.assigneeId}</Text>
-                </Group>
-              ) : (
-                <Text size="sm" c="dimmed">{t("no data")}</Text>
-              )
-            ) : (
-              <AssigneeSpaceMemberSelect
-                spaceId={page.spaceId}
-                value={fields.assigneeId}
-                onChange={(value) => handleFieldChange({ ...fields, assigneeId: value })}
-              />
-            )}
-          </Stack>
-        )}
-
-        {enabledFields.stakeholders && (
-          <Stack gap={4}>
-            <Group gap={6}>
-              <Text size="sm" fw={600}>{t("Stakeholders")}</Text>
-              <Tooltip
-                multiline
-                w={300}
-                label={t(
-                  "Stakeholders are space members who are affected by this document, contribute context, or should be notified about important changes.",
                 )}
-              >
-                <ActionIcon variant="subtle" size="sm" aria-label={t("Stakeholders info")}>
-                  <IconInfoCircle size={14} />
-                </ActionIcon>
-              </Tooltip>
-            </Group>
+              </Table.Td>
+            </Table.Tr>
+          )}
 
-            {readOnly ? (
-              fields.stakeholderIds.length ? (
-                <Stack gap="xs">
-                  {fields.stakeholderIds.map((id) => (
-                    <Group key={id} gap="xs" wrap="nowrap">
-                      <CustomAvatar avatarUrl={knownUsersById[id]?.avatarUrl} size={18} name={knownUsersById[id]?.label ?? id} />
-                      <Text size="sm">{knownUsersById[id]?.label ?? id}</Text>
+          {enabledFields.assignee && (
+            <Table.Tr>
+              <Table.Td>
+                {renderFieldLabel(
+                  "Assignee",
+                  "The assignee is the space member responsible for keeping this document up to date and driving work to completion.",
+                  "Assignee info",
+                )}
+              </Table.Td>
+              <Table.Td>
+                {readOnly ? (
+                  fields.assigneeId ? (
+                    <Group gap="xs" wrap="nowrap">
+                      <CustomAvatar
+                        avatarUrl={knownUsersById[fields.assigneeId]?.avatarUrl}
+                        size={18}
+                        name={knownUsersById[fields.assigneeId]?.label ?? fields.assigneeId}
+                      />
+                      <Text size="sm">{knownUsersById[fields.assigneeId]?.label ?? fields.assigneeId}</Text>
                     </Group>
-                  ))}
-                </Stack>
-              ) : (
-                <Text size="sm" c="dimmed">{t("no data")}</Text>
-              )
-            ) : (
-              <StakeholdersSpaceMemberMultiSelect
-                spaceId={page.spaceId}
-                value={fields.stakeholderIds}
-                onChange={(value) => handleFieldChange({ ...fields, stakeholderIds: value })}
-              />
-            )}
-          </Stack>
-        )}
-      </Stack>
+                  ) : (
+                    <Text size="sm" c="dimmed">{t("no data")}</Text>
+                  )
+                ) : (
+                  <AssigneeSpaceMemberSelect
+                    spaceId={page.spaceId}
+                    value={fields.assigneeId}
+                    onChange={(value) => handleFieldChange({ ...fields, assigneeId: value })}
+                  />
+                )}
+              </Table.Td>
+            </Table.Tr>
+          )}
+
+          {enabledFields.stakeholders && (
+            <Table.Tr>
+              <Table.Td>
+                {renderFieldLabel(
+                  "Stakeholders",
+                  "Stakeholders are space members who are affected by this document, contribute context, or should be notified about important changes.",
+                  "Stakeholders info",
+                )}
+              </Table.Td>
+              <Table.Td>
+                {readOnly ? (
+                  fields.stakeholderIds.length ? (
+                    <Stack gap="xs">
+                      {fields.stakeholderIds.map((id) => (
+                        <Group key={id} gap="xs" wrap="nowrap">
+                          <CustomAvatar avatarUrl={knownUsersById[id]?.avatarUrl} size={18} name={knownUsersById[id]?.label ?? id} />
+                          <Text size="sm">{knownUsersById[id]?.label ?? id}</Text>
+                        </Group>
+                      ))}
+                    </Stack>
+                  ) : (
+                    <Text size="sm" c="dimmed">{t("no data")}</Text>
+                  )
+                ) : (
+                  <StakeholdersSpaceMemberMultiSelect
+                    spaceId={page.spaceId}
+                    value={fields.stakeholderIds}
+                    onChange={(value) => handleFieldChange({ ...fields, stakeholderIds: value })}
+                  />
+                )}
+              </Table.Td>
+            </Table.Tr>
+          )}
+        </Table.Tbody>
+      </Table>
     </Paper>
   );
 }
