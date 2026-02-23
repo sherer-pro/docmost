@@ -8,9 +8,10 @@ import { TokenModule } from './token.module';
 import { AuthRateLimitService } from './rate-limit/auth-rate-limit.service';
 import { AuthRateLimitGuard } from './rate-limit/auth-rate-limit.guard';
 import { AuthRateLimitTelemetry } from './rate-limit/auth-rate-limit.telemetry';
+import { MfaModule } from '../mfa/mfa.module';
 
 @Module({
-  imports: [TokenModule, WorkspaceModule],
+  imports: [TokenModule, WorkspaceModule, MfaModule],
   controllers: [AuthController],
   providers: [
     AuthService,
