@@ -43,6 +43,8 @@ import {
   Highlight,
   UniqueID,
   SharedStorage,
+  QuoteSourceMark,
+  QuoteEmbed,
 } from "@docmost/editor-ext";
 import {
   randomElement,
@@ -60,6 +62,7 @@ import DrawioView from "../components/drawio/drawio-view";
 import ExcalidrawView from "@/features/editor/components/excalidraw/excalidraw-view.tsx";
 import EmbedView from "@/features/editor/components/embed/embed-view.tsx";
 import SubpagesView from "@/features/editor/components/subpages/subpages-view.tsx";
+import QuoteEmbedView from "@/features/editor/components/quote-embed/quote-embed-view.tsx";
 import { common, createLowlight } from "lowlight";
 import plaintext from "highlight.js/lib/languages/plaintext";
 import powershell from "highlight.js/lib/languages/powershell";
@@ -230,6 +233,10 @@ export const mainExtensions = [
   }),
   Subpages.configure({
     view: SubpagesView,
+  }),
+  QuoteSourceMark,
+  QuoteEmbed.configure({
+    view: QuoteEmbedView,
   }),
   MarkdownClipboard.configure({
     transformPastedText: true,
