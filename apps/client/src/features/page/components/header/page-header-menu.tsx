@@ -14,7 +14,7 @@ import {
   IconTrash,
   IconWifiOff,
 } from "@tabler/icons-react";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import useToggleAside from "@/hooks/use-toggle-aside.tsx";
 import { useAtom, useAtomValue } from "jotai";
 import { CustomAvatar } from "@/components/ui/custom-avatar.tsx";
@@ -43,9 +43,6 @@ import { PageStateSegmentedControl } from "@/features/user/components/page-state
 import MovePageModal from "@/features/page/components/move-page-modal.tsx";
 import { useTimeAgo } from "@/hooks/use-time-ago.tsx";
 import ShareModal from "@/features/share/components/share-modal.tsx";
-import { updateUser } from "@/features/user/services/user-service.ts";
-import { PageEditMode } from "@/features/user/types/user.types.ts";
-import { userAtom } from "@/features/user/atoms/current-user-atom.ts";
 
 interface PageHeaderMenuProps {
   readOnly?: boolean;
@@ -53,39 +50,8 @@ interface PageHeaderMenuProps {
 export default function PageHeaderMenu({ readOnly }: PageHeaderMenuProps) {
   const { t } = useTranslation();
   const toggleAside = useToggleAside();
-  const [user, setUser] = useAtom(userAtom);
-
-  /**
-   * Switches the page mode between editing and viewing.
-   *
-   * The hotkey works only for users with edit permission.
-   * After switching mode, update the profile on the server and the local atom so
-   * the state applies instantly to title/page editor without reload.
-   */
-  const togglePageEditMode = useCallback(async () => {
-    if (readOnly || !user) {
-      return;
-    }
-
-    const currentMode =
-      user.settings?.preferences?.pageEditMode ?? PageEditMode.Edit;
-    const nextMode =
-      currentMode === PageEditMode.Edit
-        ? PageEditMode.Read
-        : PageEditMode.Edit;
-
-    const updatedUser = await updateUser({ pageEditMode: nextMode });
-    setUser(updatedUser);
-  }, [readOnly, setUser, user]);
 
   useHotkeys([
-    [
-      "mod+E",
-      (event) => {
-        event.preventDefault();
-        void togglePageEditMode();
-      },
-    ],
     [
       "mod+F",
       () => {
