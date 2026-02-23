@@ -64,7 +64,7 @@
 - Frontend lint: `pnpm --filter ./apps/client lint`
 - Backend format: `pnpm --filter ./apps/server format`
 - Frontend format: `pnpm --filter ./apps/client format`
-- Check comments language (server/client src): `pnpm check:comments:en`
+- Check comments language (server/client src + server tests + client public + editor-ext src): `pnpm check:comments:en`
 
 ### Тесты
 

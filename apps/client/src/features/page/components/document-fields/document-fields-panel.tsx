@@ -47,8 +47,8 @@ const STATUS_OPTIONS: { value: PageCustomFieldStatus; label: string; color: stri
 ];
 
 /**
- * Нормализует пользовательские поля страницы в полностью заполненную структуру,
- * чтобы все контролы оставались controlled в read/edit режимах и не падали на null/undefined.
+ * Normalizes page custom fields into a fully populated structure,
+ * so all controls remain controlled in read/edit modes and do not break on null/undefined.
  */
 function normalizeCustomFields(customFields?: PageCustomFields): Required<PageCustomFields> {
   return {
@@ -105,8 +105,8 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
   }, 600);
 
   /**
-   * Локально обновляет состояние полей и запускает отложенное сохранение только когда
-   * документ реально редактируемый (не readOnly и пользователь в режиме Edit).
+   * Locally updates field state and triggers deferred save only when
+   * the document is actually editable (not readOnly and user is in Edit mode).
    */
   const handleFieldChange = (nextFields: Required<PageCustomFields>) => {
     setFields(nextFields);
@@ -121,8 +121,8 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
   const selectedStatus = STATUS_OPTIONS.find((item) => item.value === fields.status);
 
   /**
-   * Вычисляет стили поля статуса на основе цвета выбранного Badge,
-   * чтобы сразу визуально подсветить текущее состояние документа.
+   * Computes status field styles based on the selected badge color,
+   * so the current document state is visually highlighted immediately.
    */
   const statusInputStyles = useMemo(() => {
     if (!selectedStatus) {
@@ -154,8 +154,8 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
   };
 
   /**
-   * Стандартизирует отображение названия поля в левой колонке таблицы,
-   * включая tooltip с кратким описанием назначения поля.
+   * Standardizes rendering of the field name in the left table column,
+   * including a tooltip with a short description of the field purpose.
    */
   const renderFieldLabel = (label: string, tooltip: string, ariaLabel: string) => (
     <Group gap={6} wrap="nowrap">

@@ -1,15 +1,15 @@
 /**
- * Возвращает SVG Mermaid без дополнительной очистки.
+ * Returns Mermaid SVG without additional sanitization.
  *
- * Почему так сделано:
- * - После ужесточения санитайзера (`SVG-only` профиль DOMPurify) из результирующего SVG
- *   удалялись HTML-лейблы Mermaid (обычно внутри `<foreignObject>`), из-за чего в диаграммах
- *   пропадал текст.
- * - Для восстановления корректного отображения текста намеренно используем passthrough.
+ * Why this is implemented this way:
+ * - After tightening the sanitizer (DOMPurify `SVG-only` profile), the resulting SVG
+ *   had Mermaid HTML labels removed (usually inside `<foreignObject>`), which caused
+ *   text to disappear in diagrams.
+ * - To restore correct text rendering, we intentionally use passthrough.
  *
- * Важно по безопасности:
- * - Это решение ослабляет защиту от XSS на уровне клиентского санитайзера SVG.
- * - Базовый защитный слой всё ещё остаётся в Mermaid за счёт `securityLevel: "strict"`.
+ * Security note:
+ * - This weakens XSS protection at the client-side SVG sanitizer layer.
+ * - A baseline protection layer is still provided by Mermaid via `securityLevel: "strict"`.
  */
 export function sanitizeMermaidSvg(svg: string): string {
   return svg;

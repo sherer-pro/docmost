@@ -1,8 +1,8 @@
 import { IsOptional, IsString, Length, Matches } from 'class-validator';
 
 /**
- * DTO для инициализации настройки 2FA.
- * Сейчас поддерживается только TOTP-метод через приложения-аутентификаторы.
+ * DTO for initializing 2FA setup.
+ * Currently only the TOTP method via authenticator apps is supported.
  */
 export class MfaSetupDto {
   @IsString()
@@ -10,7 +10,7 @@ export class MfaSetupDto {
 }
 
 /**
- * DTO для подтверждения и включения 2FA после сканирования QR-кода.
+ * DTO for verifying and enabling 2FA after scanning a QR code.
  */
 export class MfaEnableDto {
   @IsString()
@@ -23,8 +23,8 @@ export class MfaEnableDto {
 }
 
 /**
- * DTO для отключения 2FA.
- * Пароль обязателен только для пользователей с локальным паролем.
+ * DTO for disabling 2FA.
+ * Password is required only for users with a local password.
  */
 export class MfaDisableDto {
   @IsOptional()
@@ -33,8 +33,8 @@ export class MfaDisableDto {
 }
 
 /**
- * DTO для проверки кода 2FA на этапе логина.
- * Поддерживается либо 6-значный TOTP, либо 8-символьный backup-code.
+ * DTO for validating a 2FA code during login.
+ * Supports either a 6-digit TOTP or an 8-character backup code.
  */
 export class MfaVerifyDto {
   @IsString()
