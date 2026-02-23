@@ -30,6 +30,7 @@ import { useAtom } from "jotai";
 import useCollaborationUrl from "@/features/editor/hooks/use-collaboration-url";
 import { currentUserAtom } from "@/features/user/atoms/current-user-atom";
 import {
+  activePageUsersAtom,
   pageEditorAtom,
   yjsConnectionStatusAtom,
 } from "@/features/editor/atoms/editor-atoms";
@@ -89,6 +90,7 @@ export default function PageEditor({
 
   const [currentUser] = useAtom(currentUserAtom);
   const [, setEditor] = useAtom(pageEditorAtom);
+  const [, setActivePageUsers] = useAtom(activePageUsersAtom);
   const [, setAsideState] = useAtom(asideStateAtom);
   const [, setActiveCommentId] = useAtom(activeCommentIdAtom);
   const [showCommentPopup, setShowCommentPopup] = useAtom(showCommentPopupAtom);
@@ -161,6 +163,39 @@ export default function PageEditor({
         onSynced: onSyncedHandler,
       });
 
+      /**
+       * Синхронизирует список активных пользователей страницы из Yjs awareness.
+       *
+       * В awareness могут присутствовать несколько подключений одного пользователя
+       * (например, при открытии страницы в нескольких вкладках), поэтому список
+       * дедуплицируется по идентификатору пользователя.
+       */
+      const syncActivePageUsers = () => {
+        const states = Array.from(remote.awareness.getStates().values());
+        const uniqueUsers = new Map<string, { id: string; name: string; avatarUrl: string }>();
+
+        states.forEach((state) => {
+          const awarenessUser = state?.user as
+            | { id?: string; name?: string; avatarUrl?: string }
+            | undefined;
+
+          if (!awarenessUser?.id || !awarenessUser?.name) {
+            return;
+          }
+
+          uniqueUsers.set(awarenessUser.id, {
+            id: awarenessUser.id,
+            name: awarenessUser.name,
+            avatarUrl: awarenessUser.avatarUrl ?? "",
+          });
+        });
+
+        setActivePageUsers(Array.from(uniqueUsers.values()));
+      };
+
+      remote.awareness.on("change", syncActivePageUsers);
+      syncActivePageUsers();
+
       local.on("synced", onLocalSyncedHandler);
       providersRef.current = { socket, local, remote };
       setProvidersReady(true);
@@ -169,12 +204,13 @@ export default function PageEditor({
     }
     // Only destroy on final unmount
     return () => {
+      setActivePageUsers([]);
       providersRef.current?.socket.destroy();
       providersRef.current?.remote.destroy();
       providersRef.current?.local.destroy();
       providersRef.current = null;
     };
-  }, [pageId]);
+  }, [pageId, setActivePageUsers]);
 
   // Only connect/disconnect on tab/idle, not destroy
   useEffect(() => {
