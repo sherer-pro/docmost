@@ -18,6 +18,7 @@ import { DomainMiddleware } from '../common/middlewares/domain.middleware';
 import { ShareModule } from './share/share.module';
 import { NotificationModule } from './notification/notification.module';
 import { WatcherModule } from './watcher/watcher.module';
+import { MfaModule } from './mfa/mfa.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { WatcherModule } from './watcher/watcher.module';
     ShareModule,
     NotificationModule,
     WatcherModule,
+    MfaModule,
   ],
 })
 export class CoreModule implements NestModule {
