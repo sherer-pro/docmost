@@ -14,7 +14,7 @@ import {
   IconTrash,
   IconWifiOff,
 } from "@tabler/icons-react";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import useToggleAside from "@/hooks/use-toggle-aside.tsx";
 import { useAtom, useAtomValue } from "jotai";
 import { CustomAvatar } from "@/components/ui/custom-avatar.tsx";
@@ -62,7 +62,7 @@ export default function PageHeaderMenu({ readOnly }: PageHeaderMenuProps) {
    * After switching mode, update the profile on the server and the local atom so
    * the state applies instantly to title/page editor without reload.
    */
-  const togglePageEditMode = async () => {
+  const togglePageEditMode = useCallback(async () => {
     if (readOnly || !user) {
       return;
     }
@@ -76,13 +76,14 @@ export default function PageHeaderMenu({ readOnly }: PageHeaderMenuProps) {
 
     const updatedUser = await updateUser({ pageEditMode: nextMode });
     setUser(updatedUser);
-  };
+  }, [readOnly, setUser, user]);
 
   useHotkeys(
     [
       [
         "mod+E",
-        () => {
+        (event) => {
+          event.preventDefault();
           void togglePageEditMode();
         },
       ],
@@ -102,7 +103,7 @@ export default function PageHeaderMenu({ readOnly }: PageHeaderMenuProps) {
         { preventDefault: false },
       ],
     ],
-    [],
+    [togglePageEditMode],
   );
 
   return (
