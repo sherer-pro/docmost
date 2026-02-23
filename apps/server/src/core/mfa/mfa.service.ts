@@ -11,7 +11,7 @@ import { comparePasswordHash, nanoIdGen } from '../../common/helpers';
 import { TokenService } from '../auth/services/token.service';
 import { UserRepo } from '@docmost/db/repos/user/user.repo';
 import * as OTPAuth from 'otpauth';
-import QRCode from 'qrcode';
+import * as QRCode from 'qrcode';
 import { MfaDisableDto } from './dto/mfa.dto';
 
 @Injectable()
