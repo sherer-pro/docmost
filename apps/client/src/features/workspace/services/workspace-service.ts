@@ -36,6 +36,13 @@ export async function getWorkspaceMembers(
   return req.data;
 }
 
+export async function getWorkspaceVisibleMembersCount(): Promise<{
+  count: number;
+}> {
+  const req = await api.post<{ count: number }>("/workspace/members/count");
+  return req.data;
+}
+
 export async function deleteWorkspaceMember(data: {
   userId: string;
 }): Promise<void> {
