@@ -1,4 +1,5 @@
 import { ActionIcon, Group, Menu, Text, Tooltip } from "@mantine/core";
+import classes from "./page-header-menu.module.css";
 import {
   IconArrowRight,
   IconArrowsHorizontal,
@@ -16,6 +17,7 @@ import {
 import React, { useEffect, useRef, useState } from "react";
 import useToggleAside from "@/hooks/use-toggle-aside.tsx";
 import { useAtom, useAtomValue } from "jotai";
+import { CustomAvatar } from "@/components/ui/custom-avatar.tsx";
 import { historyAtoms } from "@/features/page-history/atoms/history-atoms.ts";
 import { useDisclosure, useHotkeys } from "@mantine/hooks";
 import { useClipboard } from "@/hooks/use-clipboard";
@@ -32,6 +34,7 @@ import { Trans, useTranslation } from "react-i18next";
 import ExportModal from "@/components/common/export-modal";
 import { htmlToMarkdown } from "@docmost/editor-ext";
 import {
+  activePageUsersAtom,
   pageEditorAtom,
   yjsConnectionStatusAtom,
 } from "@/features/editor/atoms/editor-atoms.ts";
@@ -73,6 +76,8 @@ export default function PageHeaderMenu({ readOnly }: PageHeaderMenuProps) {
     <>
       <ConnectionWarning />
 
+      <ActivePageUsers />
+
       {!readOnly && <PageStateSegmentedControl size="xs" />}
 
       <ShareModal readOnly={readOnly} />
@@ -99,6 +104,33 @@ export default function PageHeaderMenu({ readOnly }: PageHeaderMenuProps) {
 
       <PageActionMenu readOnly={readOnly} />
     </>
+  );
+}
+
+
+function ActivePageUsers() {
+  const activePageUsers = useAtomValue(activePageUsersAtom);
+
+  if (!activePageUsers.length) return null;
+
+  return (
+    <Group
+      gap={6}
+      wrap="nowrap"
+      className={classes.activeUsers}
+      aria-label="Active page users"
+    >
+      {activePageUsers.map((user) => (
+        <Tooltip key={user.id} label={user.name} withArrow openDelay={250}>
+          <CustomAvatar
+            avatarUrl={user.avatarUrl}
+            name={user.name}
+            size={26}
+            radius="xl"
+          />
+        </Tooltip>
+      ))}
+    </Group>
   );
 }
 
