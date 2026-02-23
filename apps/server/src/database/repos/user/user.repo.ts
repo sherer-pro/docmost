@@ -287,9 +287,13 @@ export class UserRepo {
           'userMfa.id',
           'userMfa.method',
           'userMfa.isEnabled',
+          'userMfa.secret',
+          'userMfa.backupCodes',
           'userMfa.createdAt',
+          'userMfa.updatedAt',
         ])
-        .whereRef('userMfa.userId', '=', 'users.id'),
+        .whereRef('userMfa.userId', '=', 'users.id')
+        .whereRef('userMfa.workspaceId', '=', 'users.workspaceId'),
     ).as('mfa');
   }
 }
