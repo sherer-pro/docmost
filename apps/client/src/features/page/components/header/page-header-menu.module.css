@@ -1,0 +1,5 @@
+.activeUsers {
+  @media (max-width: 47.99em) {
+    display: none;
+  }
+}
