@@ -1,18 +1,67 @@
-<div align="center">
-    <h1><b>Docmost</b></h1>
-    <p>
-        Open-source collaborative wiki and documentation software.
-        <br />
-        <a href="https://docmost.com"><strong>Website</strong></a> | 
-        <a href="https://docmost.com/docs"><strong>Documentation</strong></a> |
-        <a href="https://twitter.com/DocmostHQ"><strong>Twitter / X</strong></a>
-    </p>
-</div>
-<br />
+> [!NOTE]
+> This is a custom fork of Docmost that I created to simplify team collaboration and better structure the knowledge base. My goal was to make the system more predictable, secure, and practical for real-world use — without unnecessary complexity and with the ability to evolve faster using AI agents. I have great respect for the Docmost team and the work they’ve done. However, their focus on releasing features primarily for commercial use does not resonate with me, so I decided to develop my own fork — with an emphasis on openness, practicality, and independence.
+
+ ---
+
+# Fork-Specific Enhancements
+
+## PWA / Offline
+
+- Added full Progressive Web App support with limited offline functionality.
+
+## Editor & Attachments
+
+- PDF attachments: added display modes (as a file or as an embedded block) + a UI toggle.
+- Clicking images in the editor opens the full-size preview.
+
+## Comments
+
+- Added the ability to mark comments as resolved.
+- Added the ability to hide/show resolved comments.
+
+## Member Visibility Restrictions
+
+- Users can only see members who share groups and spaces with them.
+
+## MFA / 2FA
+
+- Added two-factor authentication via TOTP.
+
+## Documents & Settings
+
+- Added custom document fields: status, owner, stakeholders.
+- Added space-level configuration for displaying custom fields.
+
+## Admin
+
+- Added the ability to deactivate and reactivate a user.
+
+## Security
+
+- CSRF protection (service/guard, cookie handling, axios v1 header compatibility).
+- Switched some requests to `GET` (e.g., `users/me`, `collab-token`) to reduce CSRF risk.
+- Hardened WebSocket security (payload validation, relay isolation, tests).
+- Server-side Mermaid sanitization.
+- Rate limiting for auth endpoints.
+
+## Dev/Docs
+
+- Created `AGENTS.md` to simplify AI-assisted work (runbook/rules/environment variables).
+- Updated test/package infrastructure (Jest aliasing, package overrides/patches).
+
+---
+
+# Docmost
+
+Open-source collaborative wiki and documentation software.
+
+- [Website](https://docmost.com)
+- [Documentation](https://docmost.com/docs)
+- [Twitter](https://twitter.com/DocmostHQ)
 
 ## Getting started
 
-To get started with Docmost, please refer to our [documentation](https://docmost.com/docs) or try our [cloud version](https://docmost.com/pricing) .
+To get started with Docmost, please refer to our [documentation](https://docmost.com/docs).
 
 ## Features
 
