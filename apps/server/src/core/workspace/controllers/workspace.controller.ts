@@ -111,6 +111,20 @@ export class WorkspaceController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @Post('members/count')
+  async getWorkspaceVisibleMembersCount(
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const ability = this.workspaceAbility.createForUser(user, workspace);
+    if (ability.cannot(WorkspaceCaslAction.Read, WorkspaceCaslSubject.Member)) {
+      throw new ForbiddenException();
+    }
+
+    return this.workspaceService.getWorkspaceVisibleUsersCount(user, workspace.id);
+  }
+
+  @HttpCode(HttpStatus.OK)
   @Post('members/deactivate')
   async deactivateWorkspaceMember(
     @Body() dto: DeactivateWorkspaceUserDto,
@@ -173,7 +187,9 @@ export class WorkspaceController {
     pagination: PaginationOptions,
   ) {
     const ability = this.workspaceAbility.createForUser(user, workspace);
-    if (ability.cannot(WorkspaceCaslAction.Read, WorkspaceCaslSubject.Member)) {
+    if (
+      ability.cannot(WorkspaceCaslAction.Manage, WorkspaceCaslSubject.Member)
+    ) {
       throw new ForbiddenException();
     }
 
