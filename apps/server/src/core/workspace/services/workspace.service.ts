@@ -418,6 +418,18 @@ export class WorkspaceService {
     return this.userRepo.getUsersPaginated(workspaceId, pagination, user);
   }
 
+  async getWorkspaceVisibleUsersCount(
+    user: User,
+    workspaceId: string,
+  ): Promise<{ count: number }> {
+    const count = await this.userRepo.getWorkspaceVisibleUsersCount(
+      workspaceId,
+      user,
+    );
+
+    return { count };
+  }
+
   async updateWorkspaceUserRole(
     authUser: User,
     userRoleDto: UpdateWorkspaceUserRoleDto,
