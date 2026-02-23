@@ -1,3 +1,7 @@
+import { useTranslation } from "react-i18next";
+
 export default function LicenseMessage() {
-  return <>To unlock enterprise features, please contact sales@docmost.com to purchase a license.</>;
+  const { t } = useTranslation();
+
+  return <>{t("license.message.unlockEnterprise")}</>;
 }

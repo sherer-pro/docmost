@@ -161,8 +161,8 @@ function ExportFormatSelection({ format, onChange }: ExportFormatSelection) {
   return (
     <Select
       data={[
-        { value: "markdown", label: "Markdown" },
-        { value: "html", label: "HTML" },
+        { value: "markdown", label: t("export.format.markdown") },
+        { value: "html", label: t("export.format.html") },
       ]}
       defaultValue={format}
       onChange={onChange}
