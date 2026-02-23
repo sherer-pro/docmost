@@ -5,26 +5,17 @@ import {
   Text,
   TextInput,
   Divider,
-  Badge,
   ScrollArea,
   Avatar,
   Group,
   Switch,
   getDefaultZIndex,
 } from "@mantine/core";
-import {
-  IconChevronDown,
-  IconBuilding,
-  IconFileDescription,
-  IconSearch,
-  IconCheck,
-} from "@tabler/icons-react";
+import { IconChevronDown, IconBuilding, IconSearch, IconCheck } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { useDebouncedValue } from "@mantine/hooks";
 import { useGetSpacesQuery } from "@/features/space/queries/space-query";
-import { useLicense } from "@/ee/hooks/use-license";
 import classes from "./search-spotlight-filters.module.css";
-import { isCloud } from "@/lib/config.ts";
 import { useAtom } from "jotai";
 import { workspaceAtom } from "@/features/user/atoms/current-user-atom.ts";
 
@@ -42,13 +33,11 @@ export function SearchSpotlightFilters({
   isAiMode = false,
 }: SearchSpotlightFiltersProps) {
   const { t } = useTranslation();
-  const { hasLicenseKey } = useLicense();
   const [selectedSpaceId, setSelectedSpaceId] = useState<string | null>(
     spaceId || null,
   );
   const [spaceSearchQuery, setSpaceSearchQuery] = useState("");
   const [debouncedSpaceQuery] = useDebouncedValue(spaceSearchQuery, 300);
-  const [contentType, setContentType] = useState<string | null>("page");
   const [workspace] = useAtom(workspaceAtom);
 
   const { data: spacesData } = useGetSpacesQuery({
@@ -77,19 +66,10 @@ export function SearchSpotlightFilters({
     if (onFiltersChange) {
       onFiltersChange({
         spaceId: selectedSpaceId,
-        contentType,
+        contentType: "page",
       });
     }
   }, []);
-
-  const contentTypeOptions = [
-    { value: "page", label: t("Pages") },
-    {
-      value: "attachment",
-      label: t("Attachments"),
-      disabled: !isCloud() && !hasLicenseKey,
-    },
-  ];
 
   const handleSpaceSelect = (spaceId: string | null) => {
     setSelectedSpaceId(spaceId);
@@ -97,30 +77,7 @@ export function SearchSpotlightFilters({
     if (onFiltersChange) {
       onFiltersChange({
         spaceId: spaceId,
-        contentType,
-      });
-    }
-  };
-
-  const handleFilterChange = (filterType: string, value: any) => {
-    let newSelectedSpaceId = selectedSpaceId;
-    let newContentType = contentType;
-
-    switch (filterType) {
-      case "spaceId":
-        newSelectedSpaceId = value;
-        setSelectedSpaceId(value);
-        break;
-      case "contentType":
-        newContentType = value;
-        setContentType(value);
-        break;
-    }
-
-    if (onFiltersChange) {
-      onFiltersChange({
-        spaceId: newSelectedSpaceId,
-        contentType: newContentType,
+        contentType: "page",
       });
     }
   };
@@ -230,63 +187,6 @@ export function SearchSpotlightFilters({
               </Menu.Item>
             ))}
           </ScrollArea.Autosize>
-        </Menu.Dropdown>
-      </Menu>
-
-      <Menu
-        shadow="md"
-        width={220}
-        position="bottom-start"
-        zIndex={getDefaultZIndex("max")}
-      >
-        <Menu.Target>
-          <Button
-            variant="subtle"
-            color="gray"
-            size="sm"
-            rightSection={<IconChevronDown size={14} />}
-            leftSection={<IconFileDescription size={16} />}
-            className={classes.filterButton}
-            fw={500}
-          >
-            {contentType
-              ? `${t("Type")}: ${contentTypeOptions.find((opt) => opt.value === contentType)?.label || t(contentType === "page" ? "Pages" : "Attachments")}`
-              : t("Type")}
-          </Button>
-        </Menu.Target>
-        <Menu.Dropdown>
-          {contentTypeOptions.map((option) => (
-            <Menu.Item
-              key={option.value}
-              onClick={() =>
-                !option.disabled &&
-                contentType !== option.value &&
-                handleFilterChange("contentType", option.value)
-              }
-              disabled={
-                option.disabled || (isAiMode && option.value === "attachment")
-              }
-            >
-              <Group flex="1" gap="xs">
-                <div>
-                  <Text size="sm">{option.label}</Text>
-                  {option.disabled && (
-                    <Badge size="xs" mt={4}>
-                      {t("Enterprise")}
-                    </Badge>
-                  )}
-                  {!option.disabled &&
-                    isAiMode &&
-                    option.value === "attachment" && (
-                      <Text size="xs" mt={4}>
-                        {t("AI Answers not available for attachments")}
-                      </Text>
-                    )}
-                </div>
-                {contentType === option.value && <IconCheck size={20} />}
-              </Group>
-            </Menu.Item>
-          ))}
         </Menu.Dropdown>
       </Menu>
     </div>
