@@ -94,7 +94,7 @@ export class MfaService {
   }
 
   async enable(user: User, workspaceId: string, secret: string, code: string) {
-    if (!this.validateTotp(secret, code)) {
+    if (!this.validateTotp(secret, code, 2)) {
       throw new BadRequestException('Invalid verification code');
     }
 
@@ -186,7 +186,7 @@ export class MfaService {
       throw new BadRequestException('MFA is not enabled for this account');
     }
 
-    let isValid = this.validateTotp(mfa.secret, code);
+    let isValid = this.validateTotp(mfa.secret, code, 1);
 
     if (!isValid) {
       const backupCodes = mfa.backupCodes || [];
@@ -269,7 +269,7 @@ export class MfaService {
     }
   }
 
-  private validateTotp(secret: string, token: string) {
+  private validateTotp(secret: string, token: string, window = 1) {
     const totp = new OTPAuth.TOTP({
       issuer: 'Docmost',
       algorithm: 'SHA1',
@@ -278,7 +278,8 @@ export class MfaService {
       secret,
     });
 
-    const delta = totp.validate({ token, window: 1 });
+    const normalizedToken = token.trim();
+    const delta = totp.validate({ token: normalizedToken, window });
     return delta !== null;
   }
 
