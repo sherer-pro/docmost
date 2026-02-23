@@ -128,4 +128,27 @@ describe('WorkspaceService', () => {
       },
     );
   });
+
+  it('должен повторно активировать деактивированного участника', async () => {
+    const { service, userRepo, eventEmitter } = createService();
+
+    userRepo.findById.mockResolvedValue({
+      id: 'member-id',
+      role: UserRole.MEMBER,
+      deletedAt: null,
+      deactivatedAt: new Date('2024-01-01T00:00:00.000Z'),
+    });
+    userRepo.activeRoleCountByWorkspaceId.mockResolvedValue(2);
+
+    await expect(
+      service.deactivateUser(actor, 'member-id', workspaceId),
+    ).resolves.toEqual({ success: true });
+
+    expect(userRepo.updateUser).toHaveBeenCalledWith(
+      { deactivatedAt: null },
+      'member-id',
+      workspaceId,
+    );
+    expect(eventEmitter.emit).not.toHaveBeenCalled();
+  });
 });
