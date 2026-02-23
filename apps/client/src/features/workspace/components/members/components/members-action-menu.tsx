@@ -1,6 +1,6 @@
 import { Menu, ActionIcon, Text } from "@mantine/core";
 import React from "react";
-import { IconDots, IconTrash, IconUserOff } from "@tabler/icons-react";
+import { IconDots, IconTrash, IconUserCheck, IconUserOff } from "@tabler/icons-react";
 import { modals } from "@mantine/modals";
 import {
   useDeactivateWorkspaceMemberMutation,
@@ -23,24 +23,32 @@ export default function MemberActionMenu({ userId, isDeactivated = false }: Prop
     await deleteWorkspaceMemberMutation.mutateAsync({ userId });
   };
 
-  const onDeactivate = async () => {
-    await deactivateWorkspaceMemberMutation.mutateAsync({ userId });
+  const onToggleActiveStatus = async () => {
+    await deactivateWorkspaceMemberMutation.mutateAsync({
+      userId,
+      isDeactivated,
+    });
   };
 
-  const openDeactivateModal = () =>
+  const openToggleStatusModal = () =>
     modals.openConfirmModal({
-      title: t("Deactivate member"),
+      title: t(isDeactivated ? "Activate member" : "Deactivate member"),
       children: (
         <Text size="sm">
           {t(
-            "Are you sure you want to deactivate this workspace member? They will lose access until reactivated.",
+            isDeactivated
+              ? "Are you sure you want to activate this workspace member? They will regain access."
+              : "Are you sure you want to deactivate this workspace member? They will lose access until reactivated.",
           )}
         </Text>
       ),
       centered: true,
-      labels: { confirm: t("Deactivate"), cancel: t("Don't") },
-      confirmProps: { color: "orange" },
-      onConfirm: onDeactivate,
+      labels: {
+        confirm: t(isDeactivated ? "Activate" : "Deactivate"),
+        cancel: t("Don't"),
+      },
+      confirmProps: { color: isDeactivated ? "green" : "orange" },
+      onConfirm: onToggleActiveStatus,
     });
 
   const openRevokeModal = () =>
@@ -77,12 +85,14 @@ export default function MemberActionMenu({ userId, isDeactivated = false }: Prop
 
         <Menu.Dropdown>
           <Menu.Item
-            c="orange"
-            onClick={openDeactivateModal}
-            leftSection={<IconUserOff size={16} />}
-            disabled={!isAdmin || isDeactivated}
+            c={isDeactivated ? "green" : "orange"}
+            onClick={openToggleStatusModal}
+            leftSection={
+              isDeactivated ? <IconUserCheck size={16} /> : <IconUserOff size={16} />
+            }
+            disabled={!isAdmin}
           >
-            {t("Deactivate member")}
+            {t(isDeactivated ? "Activate member" : "Deactivate member")}
           </Menu.Item>
           <Menu.Item
             c="red"
