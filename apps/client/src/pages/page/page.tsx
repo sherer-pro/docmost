@@ -109,16 +109,17 @@ function PageContent({ pageSlug }: { pageSlug: string | undefined }) {
           )}
         />
 
-        <DocumentFieldsPanel
-          page={page}
-          readOnly={spaceAbility.cannot(
-            SpaceCaslAction.Manage,
-            SpaceCaslSubject.Page,
-          )}
-        />
-
         <MemoizedFullEditor
           key={page.id}
+          metaPanel={
+            <DocumentFieldsPanel
+              page={page}
+              readOnly={spaceAbility.cannot(
+                SpaceCaslAction.Manage,
+                SpaceCaslSubject.Page,
+              )}
+            />
+          }
           pageId={page.id}
           title={page.title}
           content={page.content}
