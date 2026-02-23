@@ -84,7 +84,7 @@ export default function SpaceDetails({ spaceId, readOnly }: SpaceDetailsProps) {
     field: keyof ISpaceDocumentFieldsSettings,
     checked: boolean,
   ) => {
-    // Обновляем только конфигурацию полей документов, сохраняя остальные настройки пространства.
+    // Update only document field configuration while preserving other space settings.
     if (!space || readOnly) {
       return;
     }

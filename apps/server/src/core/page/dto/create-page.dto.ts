@@ -36,7 +36,7 @@ export class CreatePageDto {
   format?: ContentFormat;
 
   /**
-   * Гибкие метаданные документа (status, assigneeId, stakeholderIds и будущие поля).
+   * Flexible document metadata (status, assigneeId, stakeholderIds, and future fields).
    */
   @IsOptional()
   @IsObject()

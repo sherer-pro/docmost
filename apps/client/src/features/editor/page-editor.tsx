@@ -164,11 +164,11 @@ export default function PageEditor({
       });
 
       /**
-       * Синхронизирует список активных пользователей страницы из Yjs awareness.
+       * Synchronizes the list of active page users from Yjs awareness.
        *
-       * В awareness могут присутствовать несколько подключений одного пользователя
-       * (например, при открытии страницы в нескольких вкладках), поэтому список
-       * дедуплицируется по идентификатору пользователя.
+       * Awareness can include multiple connections for the same user
+       * (for example, when the page is open in multiple tabs), so the list is
+       * deduplicated by user identifier.
        */
       const syncActivePageUsers = () => {
         const states = Array.from(remote.awareness.getStates().values());
