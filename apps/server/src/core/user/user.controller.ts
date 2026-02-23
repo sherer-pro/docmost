@@ -58,7 +58,8 @@ export class UserController {
      *
      * Rules:
      * - owner/admin always have access;
-     * - member has access only if they belong to at least one non-default group.
+     * - member has access if they belong to at least one non-default group
+     *   or at least one non-default space.
      */
     const canAccessMembersDirectory =
       authUser.role === UserRole.OWNER ||
