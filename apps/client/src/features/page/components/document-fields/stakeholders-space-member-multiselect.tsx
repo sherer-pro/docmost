@@ -1,6 +1,7 @@
 import React from "react";
 import { Group, MultiSelect, MultiSelectProps, Text } from "@mantine/core";
 import { CustomAvatar } from "@/components/ui/custom-avatar.tsx";
+import { useTranslation } from "react-i18next";
 import {
   SpaceMemberSelectOption,
   useSpaceMemberSelectOptions,
@@ -31,6 +32,8 @@ export function StakeholdersSpaceMemberMultiSelect({
   value,
   onChange,
 }: StakeholdersSpaceMemberMultiSelectProps) {
+  const { t } = useTranslation();
+  // Опции ограничены участниками текущего пространства; поиск выполняется на сервере.
   const { options, searchValue, setSearchValue, isLoading } = useSpaceMemberSelectOptions(spaceId, value);
 
   return (
@@ -38,14 +41,14 @@ export function StakeholdersSpaceMemberMultiSelect({
       data={options}
       value={value}
       onChange={onChange}
-      placeholder="Select stakeholders"
+      placeholder={t("Select stakeholders")}
       searchable
       clearable
       filter={({ options }) => options}
       searchValue={searchValue}
       onSearchChange={setSearchValue}
       renderOption={renderMultiSelectOption}
-      nothingFoundMessage={isLoading ? "Loading..." : "No members found"}
+      nothingFoundMessage={isLoading ? t("Loading...") : t("No members found")}
       hidePickedOptions
     />
   );
