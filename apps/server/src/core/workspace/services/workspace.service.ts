@@ -568,6 +568,14 @@ export class WorkspaceService {
     }
 
     if (user.deactivatedAt) {
+      await this.userRepo.updateUser(
+        {
+          deactivatedAt: null,
+        },
+        userId,
+        workspaceId,
+      );
+
       return { success: true };
     }
 

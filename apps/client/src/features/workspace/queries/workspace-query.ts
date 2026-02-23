@@ -106,11 +106,18 @@ export function useDeactivateWorkspaceMemberMutation() {
     Error,
     {
       userId: string;
+      isDeactivated?: boolean;
     }
   >({
-    mutationFn: (data) => deactivateWorkspaceMember(data),
-    onSuccess: () => {
-      notifications.show({ message: t("Member deactivated successfully") });
+    mutationFn: (data) => deactivateWorkspaceMember({ userId: data.userId }),
+    onSuccess: (_data, variables) => {
+      notifications.show({
+        message: t(
+          variables.isDeactivated
+            ? "Member activated successfully"
+            : "Member deactivated successfully",
+        ),
+      });
       queryClient.invalidateQueries({
         queryKey: ["workspaceMembers"],
       });
