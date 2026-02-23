@@ -173,12 +173,13 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
   }
 
   return (
-    <Paper withBorder radius="md" my="sm">
-      <Table withColumnBorders verticalSpacing="sm" horizontalSpacing="sm" layout="fixed">
+    <Group mx={{ base: 0, sm: 'md' }}>
+    <Paper withBorder radius="md" my="md"  mx={{ base: 0, sm: 'xl' }}>
+      <Table withColumnBorders verticalSpacing="xs" horizontalSpacing="sm" layout="fixed">
         <Table.Tbody>
           {enabledFields.status && (
             <Table.Tr>
-              <Table.Td w="38%">
+              <Table.Td w="38%" visibleFrom="sm">
                 {renderFieldLabel(
                   "Status",
                   "Shows the current lifecycle stage of the document. Use this field to make progress transparent for everyone in the space.",
@@ -213,7 +214,7 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
 
           {enabledFields.assignee && (
             <Table.Tr>
-              <Table.Td>
+              <Table.Td visibleFrom="sm">
                 {renderFieldLabel(
                   "Assignee",
                   "The assignee is the space member responsible for keeping this document up to date and driving work to completion.",
@@ -247,7 +248,7 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
 
           {enabledFields.stakeholders && (
             <Table.Tr>
-              <Table.Td>
+              <Table.Td visibleFrom="sm">
                 {renderFieldLabel(
                   "Stakeholders",
                   "Stakeholders are space members who are affected by this document, contribute context, or should be notified about important changes.",
@@ -281,6 +282,7 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
         </Table.Tbody>
       </Table>
     </Paper>
+    </Group>
   );
 }
 
