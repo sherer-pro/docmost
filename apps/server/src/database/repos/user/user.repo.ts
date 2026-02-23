@@ -380,22 +380,6 @@ export class UserRepo {
     });
   }
 
-  async hasNonDefaultGroupMembership(
-    userId: string,
-    workspaceId: string,
-  ): Promise<boolean> {
-    const result = await this.db
-      .selectFrom('groupUsers')
-      .innerJoin('groups', 'groups.id', 'groupUsers.groupId')
-      .select('groupUsers.id')
-      .where('groupUsers.userId', '=', userId)
-      .where('groups.workspaceId', '=', workspaceId)
-      .where('groups.isDefault', '=', false)
-      .executeTakeFirst();
-
-    return !!result;
-  }
-
   async updatePreference(
     userId: string,
     prefKey: string,
