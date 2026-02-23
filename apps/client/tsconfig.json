@@ -2,7 +2,7 @@
   "compilerOptions": {
     "target": "ES2020",
     "useDefineForClassFields": true,
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "lib": ["ES2021", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "skipLibCheck": true,
 
@@ -23,7 +23,9 @@
     "allowSyntheticDefaultImports": true,
 
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@docmost/editor-ext": ["../../packages/editor-ext/src/index.ts"],
+      "@docmost/editor-ext/*": ["../../packages/editor-ext/src/*"]
     }
   },
   "include": [
