@@ -41,18 +41,18 @@ function LanguageSwitcher() {
     <Select
       label={t("Select language")}
       data={[
-        { value: "en-US", label: "English (US)" },
-        { value: "es-ES", label: "Español (Spanish)" },
-        { value: "de-DE", label: "Deutsch (German)" },
-        { value: "fr-FR", label: "Français (French)" },
-        { value: "nl-NL", label: "Dutch (Netherlands)" },
-        { value: "pt-BR", label: "Português (Brasil)" },
-        { value: "it-IT", label: "Italiano (Italian)" },
-        { value: "ja-JP", label: "日本語 (Japanese)" },
-        { value: "ko-KR", label: "한국어 (Korean)" },
-        { value: "uk-UA", label: "Українська (Ukrainian)" },
-        { value: "ru-RU", label: "Русский (Russian)" },
-        { value: "zh-CN", label: "中文 (简体)" },
+        { value: "en-US", label: t("accountLanguage.locale.enUS") },
+        { value: "es-ES", label: t("accountLanguage.locale.esES") },
+        { value: "de-DE", label: t("accountLanguage.locale.deDE") },
+        { value: "fr-FR", label: t("accountLanguage.locale.frFR") },
+        { value: "nl-NL", label: t("accountLanguage.locale.nlNL") },
+        { value: "pt-BR", label: t("accountLanguage.locale.ptBR") },
+        { value: "it-IT", label: t("accountLanguage.locale.itIT") },
+        { value: "ja-JP", label: t("accountLanguage.locale.jaJP") },
+        { value: "ko-KR", label: t("accountLanguage.locale.koKR") },
+        { value: "uk-UA", label: t("accountLanguage.locale.ukUA") },
+        { value: "ru-RU", label: t("accountLanguage.locale.ruRU") },
+        { value: "zh-CN", label: t("accountLanguage.locale.zhCN") },
       ]}
       value={language || "en-US"}
       onChange={handleChange}
