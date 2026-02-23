@@ -7,7 +7,6 @@ import {
   Select,
   SelectProps,
   Stack,
-  Table,
   Text,
   Tooltip,
 } from "@mantine/core";
@@ -36,8 +35,6 @@ interface DocumentFieldsPanelProps {
 }
 
 const STATUS_OPTIONS: { value: PageCustomFieldStatus; label: string; color: string }[] = [
-  // Статусы храним в виде фиксированных enum-значений, а label оставляем
-  // на английском как source key для стандартной локализации через t().
   { value: PageCustomFieldStatus.TODO, label: "TODO", color: "gray" },
   { value: PageCustomFieldStatus.IN_PROGRESS, label: "In progress", color: "blue" },
   { value: PageCustomFieldStatus.IN_REVIEW, label: "In review", color: "indigo" },
@@ -46,24 +43,11 @@ const STATUS_OPTIONS: { value: PageCustomFieldStatus; label: string; color: stri
   { value: PageCustomFieldStatus.ARCHIVED, label: "Archived", color: "dark" },
 ];
 
-
-const renderStatusOption: SelectProps["renderOption"] = ({ option }) => {
-  const selected = STATUS_OPTIONS.find((item) => item.value === option.value);
-
-  if (!selected) {
-    return <Text size="sm">{option.label}</Text>;
-  }
-
-  return (
-    <Group justify="space-between" w="100%" wrap="nowrap">
-      <Text size="sm">{option.label}</Text>
-      <Badge color={selected.color} variant="light">{option.label}</Badge>
-    </Group>
-  );
-};
-
+/**
+ * Нормализует пользовательские поля страницы в полностью заполненную структуру,
+ * чтобы все контролы оставались controlled в read/edit режимах и не падали на null/undefined.
+ */
 function normalizeCustomFields(customFields?: PageCustomFields): Required<PageCustomFields> {
-  // Нормализуем nullable-поля из API в предсказуемую форму для controlled-компонентов.
   return {
     status: customFields?.status ?? null,
     assigneeId: customFields?.assigneeId ?? null,
@@ -81,7 +65,6 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
 
   const enabledFields = useMemo(
     () => ({
-      // Отрисовываем только те поля, которые включены на уровне настроек пространства.
       status: !!documentFields?.status,
       assignee: !!documentFields?.assignee,
       stakeholders: !!documentFields?.stakeholders,
@@ -114,10 +97,13 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
   });
 
   const debouncedSave = useDebouncedCallback((nextFields: Required<PageCustomFields>) => {
-    // Дебаунс уменьшает количество запросов при быстром изменении полей.
     mutate(nextFields);
   }, 600);
 
+  /**
+   * Локально обновляет состояние полей и запускает отложенное сохранение только когда
+   * документ реально редактируемый (не readOnly и пользователь в режиме Edit).
+   */
   const handleFieldChange = (nextFields: Required<PageCustomFields>) => {
     setFields(nextFields);
 
@@ -132,10 +118,6 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
     return null;
   }
 
-  /**
-   * Resolves currently selected status metadata to keep rendering logic
-   * deterministic in both read and edit modes.
-   */
   const selectedStatus = STATUS_OPTIONS.find((item) => item.value === fields.status);
 
   const renderStatusOption: SelectProps["renderOption"] = ({ option }) => {
@@ -148,7 +130,9 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
     return (
       <Group justify="space-between" w="100%" wrap="nowrap">
         <Text size="sm">{t(option.label)}</Text>
-        <Badge color={selected.color} variant="light">{t(option.label)}</Badge>
+        <Badge color={selected.color} variant="light">
+          {t(option.label)}
+        </Badge>
       </Group>
     );
   };
@@ -190,6 +174,7 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
                 }
                 placeholder={t("Select status")}
                 clearable
+                renderOption={renderStatusOption}
               />
             )}
           </Stack>
@@ -220,21 +205,7 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
                     size={18}
                     name={knownUsersById[fields.assigneeId]?.label ?? fields.assigneeId}
                   />
-                )}
-              </Table.Td>
-            </Table.Tr>
-          )}
-
-          {enabledFields.assignee && (
-            <Table.Tr>
-              <Table.Td>
-                <Group gap={6}>
-                  <Text size="sm" fw={600}>{t("Assignee")}</Text>
-                  <Tooltip multiline w={300} label={t("The assignee is the space member responsible for keeping this document up to date and driving work to completion.")}>
-                    <ActionIcon variant="subtle" size="sm" aria-label={t("Assignee info")}>
-                      <IconInfoCircle size={14} />
-                    </ActionIcon>
-                  </Tooltip>
+                  <Text size="sm">{knownUsersById[fields.assigneeId]?.label ?? fields.assigneeId}</Text>
                 </Group>
               ) : (
                 <Text size="sm" c="dimmed">{t("no data")}</Text>
@@ -271,11 +242,7 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
                 <Stack gap="xs">
                   {fields.stakeholderIds.map((id) => (
                     <Group key={id} gap="xs" wrap="nowrap">
-                      <CustomAvatar
-                        avatarUrl={knownUsersById[id]?.avatarUrl}
-                        size={18}
-                        name={knownUsersById[id]?.label ?? id}
-                      />
+                      <CustomAvatar avatarUrl={knownUsersById[id]?.avatarUrl} size={18} name={knownUsersById[id]?.label ?? id} />
                       <Text size="sm">{knownUsersById[id]?.label ?? id}</Text>
                     </Group>
                   ))}
