@@ -108,8 +108,8 @@ export function AppHeader() {
               visibleFrom="xs"
             >
               {trialDaysLeft === 1
-                ? "1 day left"
-                : `${trialDaysLeft} days left`}
+                ? t("header.trial.oneDayLeft")
+                : t("header.trial.daysLeft", { count: trialDaysLeft })}
             </Badge>
           )}
           <TopMenu />
