@@ -722,5 +722,14 @@
   "header.trial.oneDayLeft": "1 day left",
   "header.trial.daysLeft": "{{count}} days left",
   "export.format.markdown": "Markdown",
-  "export.format.html": "HTML"
+  "export.format.html": "HTML",
+  "Enable push notifications": "Enable push notifications",
+  "Receive browser push notifications for activity updates.": "Receive browser push notifications for activity updates.",
+  "Toggle push notifications": "Toggle push notifications",
+  "Push notification frequency": "Push notification frequency",
+  "Immediately": "Immediately",
+  "Every hour": "Every hour",
+  "Every 3 hours": "Every 3 hours",
+  "Every 6 hours": "Every 6 hours",
+  "Every 24 hours": "Every 24 hours"
 }

@@ -27,6 +27,15 @@ export class UpdateUserDto extends PartialType(
   pageEditMode: string;
 
   @IsOptional()
+  @IsBoolean()
+  pushEnabled: boolean;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['immediate', '1h', '3h', '6h', '24h'])
+  pushFrequency: string;
+
+  @IsOptional()
   @IsString()
   locale: string;
 
