@@ -9,10 +9,12 @@ import {
   ICommentResolvedNotificationJob,
   IPageMentionNotificationJob,
   IPageRecipientNotificationJob,
+  IPushAggregationProcessJob,
 } from '../../integrations/queue/constants/queue.interface';
 import { CommentNotificationService } from './services/comment.notification';
 import { PageNotificationService } from './services/page.notification';
 import { DomainService } from '../../integrations/environment/domain.service';
+import { PushAggregationService } from './services/push-aggregation.service';
 
 @Processor(QueueName.NOTIFICATION_QUEUE)
 export class NotificationProcessor
@@ -24,6 +26,7 @@ export class NotificationProcessor
   constructor(
     private readonly commentNotificationService: CommentNotificationService,
     private readonly pageNotificationService: PageNotificationService,
+    private readonly pushAggregationService: PushAggregationService,
     private readonly domainService: DomainService,
     @InjectKysely() private readonly db: KyselyDB,
   ) {
@@ -35,11 +38,19 @@ export class NotificationProcessor
       | ICommentNotificationJob
       | ICommentResolvedNotificationJob
       | IPageMentionNotificationJob
-      | IPageRecipientNotificationJob,
+      | IPageRecipientNotificationJob
+      | IPushAggregationProcessJob,
       void
     >,
   ): Promise<void> {
     try {
+      if (job.name === QueueJob.PUSH_AGGREGATION_PROCESS) {
+        await this.pushAggregationService.processDueJobs(
+          (job.data as IPushAggregationProcessJob).limit,
+        );
+        return;
+      }
+
       const workspaceId = (job.data as { workspaceId: string }).workspaceId;
       const appUrl = await this.getWorkspaceUrl(workspaceId);
 

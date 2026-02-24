@@ -75,3 +75,7 @@ export interface IPageRecipientNotificationJob {
   actorId: string;
   candidateUserIds?: string[];
 }
+
+export interface IPushAggregationProcessJob {
+  limit?: number;
+}

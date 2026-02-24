@@ -27,6 +27,7 @@ import { ShareRepo } from '@docmost/db/repos/share/share.repo';
 import { NotificationRepo } from '@docmost/db/repos/notification/notification.repo';
 import { WatcherRepo } from '@docmost/db/repos/watcher/watcher.repo';
 import { PushSubscriptionRepo } from '@docmost/db/repos/push-subscription/push-subscription.repo';
+import { PushNotificationJobRepo } from '@docmost/db/repos/push-notification-job/push-notification-job.repo';
 import { PageListener } from '@docmost/db/listeners/page.listener';
 import { PostgresJSDialect } from 'kysely-postgres-js';
 import * as postgres from 'postgres';
@@ -86,6 +87,7 @@ import { normalizePostgresUrl } from '../common/helpers';
     NotificationRepo,
     WatcherRepo,
     PushSubscriptionRepo,
+    PushNotificationJobRepo,
     PageListener,
   ],
   exports: [
@@ -105,6 +107,7 @@ import { normalizePostgresUrl } from '../common/helpers';
     NotificationRepo,
     WatcherRepo,
     PushSubscriptionRepo,
+    PushNotificationJobRepo,
   ],
 })
 export class DatabaseModule
