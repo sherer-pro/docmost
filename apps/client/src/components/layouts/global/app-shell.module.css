@@ -3,13 +3,13 @@
 }
 
 .navbar, .aside {
-  @media (max-width: $mantine-breakpoint-sm) {
+  @media (max-width: var(--mantine-breakpoint-sm)) {
     width: 350px;
   }
 }
 
 .aside {
-  @media (max-width: $mantine-breakpoint-sm) {
+  @media (max-width: var(--mantine-breakpoint-sm)) {
     margin-top: 45px;
   }
 }
