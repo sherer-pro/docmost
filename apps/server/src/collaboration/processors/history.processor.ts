@@ -1,8 +1,11 @@
 import { Logger, OnModuleDestroy } from '@nestjs/common';
-import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
-import { Job } from 'bullmq';
+import { InjectQueue, OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
+import { Job, Queue } from 'bullmq';
 import { QueueJob, QueueName } from '../../integrations/queue/constants';
-import { IPageHistoryJob } from '../../integrations/queue/constants/queue.interface';
+import {
+  IPageHistoryJob,
+  IPageRecipientNotificationJob,
+} from '../../integrations/queue/constants/queue.interface';
 import { PageHistoryRepo } from '@docmost/db/repos/page/page-history.repo';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { isDeepStrictEqual } from 'node:util';
@@ -18,6 +21,8 @@ export class HistoryProcessor extends WorkerHost implements OnModuleDestroy {
     private readonly pageRepo: PageRepo,
     private readonly collabHistory: CollabHistoryService,
     private readonly watcherService: WatcherService,
+    @InjectQueue(QueueName.NOTIFICATION_QUEUE)
+    private readonly notificationQueue: Queue,
   ) {
     super();
   }
@@ -59,6 +64,25 @@ export class HistoryProcessor extends WorkerHost implements OnModuleDestroy {
           );
 
           await this.pageHistoryRepo.saveHistory(page, { contributorIds });
+
+          /**
+           * Отправляем уведомление об изменении документа только после
+           * фактического появления новой записи истории страницы.
+           *
+           * Это предотвращает спам-уведомлениями на каждый промежуточный
+           * onStoreDocument/keyup и использует уже существующую логику
+           * сравнения контента с последней сохранённой ревизией.
+           */
+          if (page.lastUpdatedById) {
+            await this.notificationQueue.add(QueueJob.PAGE_RECIPIENT_NOTIFICATION, {
+              reason: 'document-changed',
+              actorId: page.lastUpdatedById,
+              pageId,
+              spaceId: page.spaceId,
+              workspaceId: page.workspaceId,
+            } as IPageRecipientNotificationJob);
+          }
+
           this.logger.debug(`History created for page: ${pageId}`);
         } catch (err) {
           await this.collabHistory.addContributors(
