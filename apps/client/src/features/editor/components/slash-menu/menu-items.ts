@@ -20,6 +20,7 @@ import {
   IconCalendar,
   IconAppWindow,
   IconSitemap,
+  IconQuote,
 } from "@tabler/icons-react";
 import {
   CommandProps,
@@ -136,6 +137,30 @@ const CommandGroups: SlashMenuGroupedItemsType = {
       icon: IconBlockquote,
       command: ({ editor, range }: CommandProps) =>
         editor.chain().focus().deleteRange(range).toggleBlockquote().run(),
+    },
+    {
+      title: "Linked quote",
+      description: "Insert a synchronized quote by identifier.",
+      searchTerms: ["quote", "citation", "id", "source"],
+      icon: IconQuote,
+      command: ({ editor, range }: CommandProps) => {
+        const quoteIdInput = window.prompt("Paste quote identifier");
+        if (!quoteIdInput) {
+          return;
+        }
+
+        const [sourcePageId] = quoteIdInput.split(":");
+        if (!sourcePageId) {
+          return;
+        }
+
+        editor
+          .chain()
+          .focus()
+          .deleteRange(range)
+          .setQuoteEmbed({ sourcePageId, quoteId: quoteIdInput.trim() })
+          .run();
+      },
     },
     {
       title: "Code",
