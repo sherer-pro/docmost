@@ -7,6 +7,7 @@ import { NotificationType } from '../notification.constants';
 import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 import { PageMentionEmail } from '@docmost/transactional/emails/page-mention-email';
 import { getPageTitle } from '../../../common/helpers';
+import { PushService } from '../../push/push.service';
 
 @Injectable()
 export class PageNotificationService {
@@ -14,6 +15,7 @@ export class PageNotificationService {
     @InjectKysely() private readonly db: KyselyDB,
     private readonly notificationService: NotificationService,
     private readonly spaceMemberRepo: SpaceMemberRepo,
+    private readonly pushService: PushService,
   ) {}
 
   async processPageMention(data: IPageMentionNotificationJob, appUrl: string) {
@@ -94,6 +96,14 @@ export class PageNotificationService {
         subject,
         PageMentionEmail({ actorName: actor.name, pageTitle, pageUrl }),
       );
+
+      await this.pushService.sendToUser(userId, {
+        title: subject,
+        body: pageTitle,
+        url: pageUrl,
+        type: NotificationType.PAGE_USER_MENTION,
+        notificationId: notification.id,
+      });
     }
   }
 
