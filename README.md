@@ -31,6 +31,7 @@
 
 - Added custom document fields: status, owner, stakeholders.
 - Added space-level configuration for displaying custom fields.
+- Added display of participants viewing or editing a document.
 
 ## Admin
 
