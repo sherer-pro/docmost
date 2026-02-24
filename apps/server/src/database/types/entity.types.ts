@@ -22,6 +22,7 @@ import {
   UserMfa as _UserMFA,
   ApiKeys,
   Watchers,
+  PushSubscriptions,
   JsonValue,
 } from './db';
 import { PageEmbeddings } from '@docmost/db/types/embeddings.types';
@@ -170,3 +171,10 @@ export type UpdatableNotification = Updateable<Omit<Notifications, 'id'>>;
 export type Watcher = Selectable<Watchers>;
 export type InsertableWatcher = Insertable<Watchers>;
 export type UpdatableWatcher = Updateable<Omit<Watchers, 'id'>>;
+
+// PushSubscription
+export type PushSubscription = Selectable<PushSubscriptions>;
+export type InsertablePushSubscription = Insertable<PushSubscriptions>;
+export type UpdatablePushSubscription = Updateable<
+  Omit<PushSubscriptions, 'id'>
+>;
