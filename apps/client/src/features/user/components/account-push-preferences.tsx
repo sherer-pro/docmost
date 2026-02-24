@@ -5,8 +5,15 @@ import {
 } from "@/components/ui/responsive-settings-row";
 import { userAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { updateUser } from "@/features/user/services/user-service.ts";
+import {
+  createPushSubscription,
+  getNotificationPermission,
+  removePushSubscription,
+  requestNotificationPermission,
+} from "@/lib/pwa/push-subscription";
 import { PushFrequency } from "@/features/user/types/user.types.ts";
 import { Select, Switch, Text } from "@mantine/core";
+import { notifications } from "@mantine/notifications";
 import { useAtom } from "jotai";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -18,17 +25,6 @@ const PUSH_FREQUENCY_OPTIONS: { value: PushFrequency; labelKey: string }[] = [
   { value: "6h", labelKey: "Every 6 hours" },
   { value: "24h", labelKey: "Every 24 hours" },
 ];
-
-function getNotificationPermission(): NotificationPermission | "unsupported" {
-  if (
-    typeof window === "undefined" ||
-    typeof window.Notification === "undefined"
-  ) {
-    return "unsupported";
-  }
-
-  return window.Notification.permission;
-}
 
 export default function AccountPushPreferences() {
   const { t } = useTranslation();
@@ -70,28 +66,49 @@ export default function AccountPushPreferences() {
 
   const handlePushEnabled = useCallback(
     async (enabled: boolean) => {
-      if (enabled && permission !== "granted") {
+      if (enabled) {
         if (permission === "unsupported") {
+          notifications.show({
+            color: "red",
+            message: t("Push notifications are not supported in this browser."),
+          });
+          setIsPushEnabled(false);
           return;
         }
 
-        const requestedPermission =
-          await window.Notification.requestPermission();
+        const requestedPermission = await requestNotificationPermission();
         setPermission(requestedPermission);
 
         if (requestedPermission !== "granted") {
-          const updatedUser = await updateUser({ pushEnabled: false });
           setIsPushEnabled(false);
-          setUser(updatedUser);
+          notifications.show({
+            color: "red",
+            message: t(
+              "Push permission is blocked. Enable notifications in browser settings.",
+            ),
+          });
           return;
         }
+
+        try {
+          await createPushSubscription();
+        } catch {
+          setIsPushEnabled(false);
+          notifications.show({
+            color: "red",
+            message: t("Failed to enable push notifications. Please try again."),
+          });
+          return;
+        }
+      } else {
+        await removePushSubscription();
       }
 
       const updatedUser = await updateUser({ pushEnabled: enabled });
       setIsPushEnabled(enabled);
       setUser(updatedUser);
     },
-    [permission, setUser],
+    [permission, setUser, t],
   );
 
   const handleFrequencyChange = useCallback(
