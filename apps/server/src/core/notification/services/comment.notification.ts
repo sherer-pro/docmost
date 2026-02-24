@@ -13,6 +13,7 @@ import { CommentMentionEmail } from '@docmost/transactional/emails/comment-menti
 import { CommentCreateEmail } from '@docmost/transactional/emails/comment-created-email';
 import { CommentResolvedEmail } from '@docmost/transactional/emails/comment-resolved-email';
 import { getPageTitle } from '../../../common/helpers';
+import { PushService } from '../../push/push.service';
 
 @Injectable()
 export class CommentNotificationService {
@@ -23,6 +24,7 @@ export class CommentNotificationService {
     private readonly notificationService: NotificationService,
     private readonly spaceMemberRepo: SpaceMemberRepo,
     private readonly watcherRepo: WatcherRepo,
+    private readonly pushService: PushService,
   ) {}
 
   async processComment(data: ICommentNotificationJob, appUrl: string) {
@@ -85,6 +87,14 @@ export class CommentNotificationService {
         CommentMentionEmail({ actorName: actor.name, pageTitle, pageUrl }),
       );
 
+      await this.pushService.sendToUser(userId, {
+        title: `${actor.name} mentioned you in a comment`,
+        body: pageTitle,
+        url: pageUrl,
+        type: NotificationType.COMMENT_USER_MENTION,
+        notificationId: notification.id,
+      });
+
       notifiedUserIds.add(userId);
     }
 
@@ -108,6 +118,14 @@ export class CommentNotificationService {
         `${actor.name} commented on ${pageTitle}`,
         CommentCreateEmail({ actorName: actor.name, pageTitle, pageUrl }),
       );
+
+      await this.pushService.sendToUser(recipientId, {
+        title: `${actor.name} commented on ${pageTitle}`,
+        body: pageTitle,
+        url: pageUrl,
+        type: NotificationType.COMMENT_CREATED,
+        notificationId: notification.id,
+      });
     }
   }
 
@@ -164,6 +182,14 @@ export class CommentNotificationService {
       subject,
       CommentResolvedEmail({ actorName: actor.name, pageTitle, pageUrl }),
     );
+
+    await this.pushService.sendToUser(commentCreatorId, {
+      title: subject,
+      body: pageTitle,
+      url: pageUrl,
+      type: NotificationType.COMMENT_RESOLVED,
+      notificationId: notification.id,
+    });
   }
 
   private async getThreadParticipantIds(

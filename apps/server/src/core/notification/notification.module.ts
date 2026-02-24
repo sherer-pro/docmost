@@ -5,9 +5,10 @@ import { NotificationProcessor } from './notification.processor';
 import { CommentNotificationService } from './services/comment.notification';
 import { PageNotificationService } from './services/page.notification';
 import { WsModule } from '../../ws/ws.module';
+import { PushModule } from '../push/push.module';
 
 @Module({
-  imports: [WsModule],
+  imports: [WsModule, PushModule],
   controllers: [NotificationController],
   providers: [
     NotificationService,
