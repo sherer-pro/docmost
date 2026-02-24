@@ -24,7 +24,7 @@
 
 .breadcrumbDiv {
   overflow: hidden;
-  @media (max-width: $mantine-breakpoint-sm) {
+  @media (max-width: var(--mantine-breakpoint-sm)) {
     overflow: visible;
   }
 }

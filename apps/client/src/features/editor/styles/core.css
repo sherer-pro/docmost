@@ -15,7 +15,7 @@
   padding-left: 3rem;
   padding-right: 3rem;
 
-  @media (max-width: $mantine-breakpoint-sm) {
+  @media (max-width: var(--mantine-breakpoint-sm)) {
     padding-left: 1rem;
     padding-right: 1rem;
   }

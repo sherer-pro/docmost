@@ -5,7 +5,7 @@
     margin-top: 150px;
     margin-bottom: 20px;
 
-    @media (max-width: $mantine-breakpoint-sm) {
+    @media (max-width: var(--mantine-breakpoint-sm)) {
         margin-top: 50px;
         margin-bottom: 20px;
     }

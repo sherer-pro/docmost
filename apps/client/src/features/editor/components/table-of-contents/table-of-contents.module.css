@@ -28,7 +28,7 @@
     );
   }
 
-  @media (max-width: $mantine-breakpoint-sm) {
+  @media (max-width: var(--mantine-breakpoint-sm)) {
     & {
       border: none !important;
       padding-left: 0px;

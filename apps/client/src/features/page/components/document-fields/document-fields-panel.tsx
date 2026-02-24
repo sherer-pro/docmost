@@ -195,11 +195,11 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
               <Table.Td>
                 {isFieldsReadOnly ? (
                   selectedStatus ? (
-                    <Badge color={selectedStatus.color} variant="light">
+                    <Badge color={selectedStatus.color} variant="light" my={8}>
                       {t(selectedStatus.label)}
                     </Badge>
                   ) : (
-                    <Text size="sm" c="dimmed">{t("no data")}</Text>
+                    <Text size="sm" c="dimmed" my={8}>{t("no data")}</Text>
                   )
                 ) : (
                   <Select
@@ -230,7 +230,7 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
               <Table.Td>
                 {isFieldsReadOnly ? (
                   fields.assigneeId ? (
-                    <Group gap="xs" wrap="nowrap">
+                    <Group gap="xs" wrap="nowrap" my={7.5}>
                       <CustomAvatar
                         avatarUrl={knownUsersById[fields.assigneeId]?.avatarUrl}
                         size={18}
@@ -239,7 +239,7 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
                       <Text size="sm">{knownUsersById[fields.assigneeId]?.label ?? fields.assigneeId}</Text>
                     </Group>
                   ) : (
-                    <Text size="sm" c="dimmed">{t("no data")}</Text>
+                    <Text size="sm" c="dimmed" my={7.5}>{t("no data")}</Text>
                   )
                 ) : (
                   <AssigneeSpaceMemberSelect
@@ -264,16 +264,16 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
               <Table.Td>
                 {isFieldsReadOnly ? (
                   fields.stakeholderIds.length ? (
-                    <Stack gap="xs">
+                    <Group gap="xs" my={8} flex="wrap">
                       {fields.stakeholderIds.map((id) => (
                         <Group key={id} gap="xs" wrap="nowrap">
                           <CustomAvatar avatarUrl={knownUsersById[id]?.avatarUrl} size={18} name={knownUsersById[id]?.label ?? id} />
                           <Text size="sm">{knownUsersById[id]?.label ?? id}</Text>
                         </Group>
                       ))}
-                    </Stack>
+                    </Group>
                   ) : (
-                    <Text size="sm" c="dimmed">{t("no data")}</Text>
+                    <Text size="sm" c="dimmed" my={8}>{t("no data")}</Text>
                   )
                 ) : (
                   <StakeholdersSpaceMemberMultiSelect

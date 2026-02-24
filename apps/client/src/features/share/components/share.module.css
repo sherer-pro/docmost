@@ -14,7 +14,7 @@
 
 .navbar,
 .aside {
-  @media (max-width: $mantine-breakpoint-sm) {
+  @media (max-width: var(--mantine-breakpoint-sm)) {
     width: 350px;
   }
 }
