@@ -35,8 +35,16 @@ export class UserService {
     }
 
     // preference update
+    const hasPreferenceUpdates =
+      typeof updateUserDto.fullPageWidth !== 'undefined' ||
+      typeof updateUserDto.pageEditMode !== 'undefined' ||
+      typeof updateUserDto.pushEnabled !== 'undefined' ||
+      typeof updateUserDto.pushFrequency !== 'undefined';
+
+    let preferenceUser = null;
+
     if (typeof updateUserDto.fullPageWidth !== 'undefined') {
-      return this.userRepo.updatePreference(
+      preferenceUser = await this.userRepo.updatePreference(
         userId,
         'fullPageWidth',
         updateUserDto.fullPageWidth,
@@ -44,11 +52,37 @@ export class UserService {
     }
 
     if (typeof updateUserDto.pageEditMode !== 'undefined') {
-      return this.userRepo.updatePreference(
+      preferenceUser = await this.userRepo.updatePreference(
         userId,
         'pageEditMode',
         updateUserDto.pageEditMode.toLowerCase(),
       );
+    }
+
+    if (typeof updateUserDto.pushEnabled !== 'undefined') {
+      preferenceUser = await this.userRepo.updatePreference(
+        userId,
+        'pushEnabled',
+        updateUserDto.pushEnabled,
+      );
+    }
+
+    if (typeof updateUserDto.pushFrequency !== 'undefined') {
+      preferenceUser = await this.userRepo.updatePreference(
+        userId,
+        'pushFrequency',
+        updateUserDto.pushFrequency,
+      );
+    }
+
+    const hasProfileUpdates =
+      updateUserDto.name != null ||
+      updateUserDto.email != null ||
+      updateUserDto.avatarUrl != null ||
+      updateUserDto.locale != null;
+
+    if (hasPreferenceUpdates && !hasProfileUpdates) {
+      return preferenceUser;
     }
 
     if (updateUserDto.name) {
@@ -70,7 +104,9 @@ export class UserService {
       );
 
       if (!isPasswordMatch) {
-        throw new BadRequestException('You must provide the correct password to change your email');
+        throw new BadRequestException(
+          'You must provide the correct password to change your email',
+        );
       }
 
       if (await this.userRepo.findByEmail(updateUserDto.email, workspace.id)) {
