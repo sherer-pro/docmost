@@ -731,5 +731,8 @@
   "Every hour": "Every hour",
   "Every 3 hours": "Every 3 hours",
   "Every 6 hours": "Every 6 hours",
-  "Every 24 hours": "Every 24 hours"
+  "Every 24 hours": "Every 24 hours",
+  "Push notifications are not supported in this browser.": "Push notifications are not supported in this browser.",
+  "Push permission is blocked. Enable notifications in browser settings.": "Push permission is blocked. Enable notifications in browser settings.",
+  "Failed to enable push notifications. Please try again.": "Failed to enable push notifications. Please try again."
 }
