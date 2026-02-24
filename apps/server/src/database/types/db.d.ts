@@ -393,6 +393,22 @@ export interface Notifications {
   createdAt: Generated<Timestamp>;
 }
 
+export interface PushNotificationJobs {
+  id: Generated<string>;
+  userId: string;
+  workspaceId: string;
+  pageId: string;
+  windowKey: string;
+  idempotencyKey: string;
+  sendAfter: Timestamp;
+  status: string;
+  eventsCount: Generated<number>;
+  payload: Json | null;
+  sentAt: Timestamp | null;
+  createdAt: Generated<Timestamp>;
+  updatedAt: Generated<Timestamp>;
+}
+
 export interface Watchers {
   id: Generated<string>;
   userId: string;
@@ -419,6 +435,7 @@ export interface DB {
   notifications: Notifications;
   pageHistory: PageHistory;
   pages: Pages;
+  pushNotificationJobs: PushNotificationJobs;
   pushSubscriptions: PushSubscriptions;
   shares: Shares;
   spaceMembers: SpaceMembers;

@@ -10,6 +10,7 @@ import {
   Groups,
   GroupUsers,
   Notifications,
+  PushNotificationJobs,
   PageHistory,
   Pages,
   Shares,
@@ -36,6 +37,7 @@ export interface DbInterface {
   groups: Groups;
   groupUsers: GroupUsers;
   notifications: Notifications;
+  pushNotificationJobs: PushNotificationJobs;
   pageEmbeddings: PageEmbeddings;
   pageHistory: PageHistory;
   pages: Pages;

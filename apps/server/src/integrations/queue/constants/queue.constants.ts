@@ -68,4 +68,5 @@ export enum QueueJob {
   COMMENT_RESOLVED_NOTIFICATION = 'comment-resolved-notification',
   PAGE_MENTION_NOTIFICATION = 'page-mention-notification',
   PAGE_RECIPIENT_NOTIFICATION = 'page-recipient-notification',
+  PUSH_AGGREGATION_PROCESS = 'push-aggregation-process',
 }
