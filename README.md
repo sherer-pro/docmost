@@ -120,13 +120,31 @@ pnpm --filter ./apps/server test:cov:smoke
 
 ## Local quality-check checklist
 
-Run these commands before opening a PR for backend changes:
+Run these commands before opening a PR:
+
+```bash
+pnpm install --frozen-lockfile
+pnpm build
+```
+
+For backend changes:
 
 ```bash
 pnpm --filter ./apps/server lint
 pnpm --filter ./apps/server test
 pnpm --filter ./apps/server test:alias:smoke
 ```
+
+For frontend changes:
+
+```bash
+pnpm --filter ./apps/client lint
+```
+
+Runtime/tooling baseline used in this repository:
+
+- Node.js 22.x
+- pnpm 10.4.0
 
 ## Thanks
 Special thanks to;
@@ -139,4 +157,3 @@ Special thanks to;
 <img width="48" alt="Algolia-mark-square-white" src="https://github.com/user-attachments/assets/6ccad04a-9589-4965-b6a1-d5cb1f4f9e94" />
 
 [Algolia](https://www.algolia.com/) for providing full-text search to the docs.
-
