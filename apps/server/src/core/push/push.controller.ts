@@ -9,6 +9,7 @@ import {
   NotFoundException,
   Param,
   Post,
+  UseGuards,
 } from '@nestjs/common';
 import { PushSubscriptionRepo } from '@docmost/db/repos/push-subscription/push-subscription.repo';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
@@ -18,7 +19,9 @@ import {
   DeletePushSubscriptionParamsDto,
 } from './dto/push-subscription.dto';
 import { EnvironmentService } from '../../integrations/environment/environment.service';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 
+@UseGuards(JwtAuthGuard)
 @Controller('push')
 export class PushController {
   constructor(
