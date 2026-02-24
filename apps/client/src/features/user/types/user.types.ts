@@ -20,6 +20,8 @@ export interface IUser {
   deletedAt: Date;
   fullPageWidth: boolean; // used for update
   pageEditMode: string; // used for update
+  pushEnabled: boolean; // used for update
+  pushFrequency: PushFrequency; // used for update
   hasGeneratedPassword?: boolean;
   canAccessMembersDirectory?: boolean;
 }
@@ -33,8 +35,12 @@ export interface IUserSettings {
   preferences: {
     fullPageWidth: boolean;
     pageEditMode: string;
+    pushEnabled: boolean;
+    pushFrequency: PushFrequency;
   };
 }
+
+export type PushFrequency = "immediate" | "1h" | "3h" | "6h" | "24h";
 
 export enum PageEditMode {
   Read = "read",
