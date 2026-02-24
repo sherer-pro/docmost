@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  BadRequestException,
   Delete,
   Get,
   HttpCode,
@@ -37,10 +38,23 @@ export class PushController {
     @Body() dto: CreatePushSubscriptionDto,
     @AuthUser() user: User,
   ) {
+    /**
+     * Поддерживаем оба формата payload:
+     * 1) плоский (`p256dh`, `auth`) — используется текущим клиентом;
+     * 2) стандартный Web Push JSON (`keys.p256dh`, `keys.auth`) — часто приходит
+     *    из ручных fetch-запросов или внешних интеграций.
+     */
+    const p256dh = dto.p256dh ?? dto.keys?.p256dh;
+    const auth = dto.auth ?? dto.keys?.auth;
+
+    if (!p256dh || !auth) {
+      throw new BadRequestException('Missing push subscription keys');
+    }
+
     const subscription = await this.pushSubscriptionRepo.upsert({
       endpoint: dto.endpoint,
-      p256dh: dto.p256dh,
-      auth: dto.auth,
+      p256dh,
+      auth,
       userId: user.id,
       workspaceId: user.workspaceId,
       userAgent: dto.userAgent,
