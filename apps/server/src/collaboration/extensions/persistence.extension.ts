@@ -26,6 +26,7 @@ import {
   IPageBacklinkJob,
   IPageHistoryJob,
   IPageMentionNotificationJob,
+  IPageRecipientNotificationJob,
 } from '../../integrations/queue/constants/queue.interface';
 import { Page } from '@docmost/db/types/entity.types';
 import { CollabHistoryService } from '../services/collab-history.service';
@@ -195,6 +196,15 @@ export class PersistenceExtension implements Extension {
         pageIds: [pageId],
         workspaceId: page.workspaceId,
       });
+
+      // Для события изменения документа получатели вычисляются через settings роли страницы.
+      await this.notificationQueue.add(QueueJob.PAGE_RECIPIENT_NOTIFICATION, {
+        reason: 'document-changed',
+        actorId: context.user.id,
+        pageId,
+        spaceId: page.spaceId,
+        workspaceId: page.workspaceId,
+      } as IPageRecipientNotificationJob);
 
       await this.enqueuePageHistory(page);
     }

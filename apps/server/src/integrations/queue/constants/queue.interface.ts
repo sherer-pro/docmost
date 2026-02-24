@@ -60,3 +60,18 @@ export interface IPageMentionNotificationJob {
   spaceId: string;
   workspaceId: string;
 }
+
+export type PageRecipientNotificationReason =
+  | 'document-changed'
+  | 'comment-added'
+  | 'page-assigned'
+  | 'page-stakeholder-added';
+
+export interface IPageRecipientNotificationJob {
+  reason: PageRecipientNotificationReason;
+  pageId: string;
+  spaceId: string;
+  workspaceId: string;
+  actorId: string;
+  candidateUserIds?: string[];
+}
