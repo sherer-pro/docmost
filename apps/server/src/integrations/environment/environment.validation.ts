@@ -2,6 +2,7 @@ import {
   IsIn,
   IsNotEmpty,
   IsNotIn,
+  Matches,
   IsOptional,
   IsString,
   IsUrl,
@@ -53,15 +54,48 @@ export class EnvironmentVariables {
   STORAGE_DRIVER: string;
 
   @IsOptional()
+  @ValidateIf(
+    (obj) =>
+      !!obj.WEB_PUSH_VAPID_PRIVATE_KEY ||
+      !!obj.WEB_PUSH_SUBJECT ||
+      !!obj.WEB_PUSH_VAPID_PUBLIC_KEY,
+  )
+  @IsNotEmpty()
+  @IsNotIn(['VAPID_PUBLIC_KEY'])
   @IsString()
+  @Matches(/^[A-Za-z0-9_-]+$/, {
+    message: 'WEB_PUSH_VAPID_PUBLIC_KEY must be base64url encoded',
+  })
   WEB_PUSH_VAPID_PUBLIC_KEY: string;
 
   @IsOptional()
+  @ValidateIf(
+    (obj) =>
+      !!obj.WEB_PUSH_VAPID_PUBLIC_KEY ||
+      !!obj.WEB_PUSH_SUBJECT ||
+      !!obj.WEB_PUSH_VAPID_PRIVATE_KEY,
+  )
+  @IsNotEmpty()
+  @IsNotIn(['VAPID_PRIVATE_KEY'])
   @IsString()
+  @Matches(/^[A-Za-z0-9_-]+$/, {
+    message: 'WEB_PUSH_VAPID_PRIVATE_KEY must be base64url encoded',
+  })
   WEB_PUSH_VAPID_PRIVATE_KEY: string;
 
   @IsOptional()
+  @ValidateIf(
+    (obj) =>
+      !!obj.WEB_PUSH_VAPID_PUBLIC_KEY ||
+      !!obj.WEB_PUSH_VAPID_PRIVATE_KEY ||
+      !!obj.WEB_PUSH_SUBJECT,
+  )
+  @IsNotEmpty()
+  @IsNotIn(['mailto:hello@example.com'])
   @IsString()
+  @Matches(/^mailto:.+@.+\..+$/, {
+    message: 'WEB_PUSH_SUBJECT must be a valid mailto URL',
+  })
   WEB_PUSH_SUBJECT: string;
 
   @IsOptional()
