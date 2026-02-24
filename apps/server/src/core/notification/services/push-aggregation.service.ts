@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { PushNotificationJobRepo } from '@docmost/db/repos/push-notification-job/push-notification-job.repo';
+import { NotificationRepo } from '@docmost/db/repos/notification/notification.repo';
 import { Notification } from '@docmost/db/types/entity.types';
 import { QueueJob, QueueName } from '../../../integrations/queue/constants';
 import { PushService } from '../../push/push.service';
@@ -31,6 +32,7 @@ export class PushAggregationService {
     @InjectQueue(QueueName.NOTIFICATION_QUEUE)
     private readonly notificationQueue: Queue,
     private readonly pushNotificationJobRepo: PushNotificationJobRepo,
+    private readonly notificationRepo: NotificationRepo,
     private readonly pushService: PushService,
   ) {}
 
@@ -65,12 +67,28 @@ export class PushAggregationService {
     }
 
     if (preferences.pushFrequency === 'immediate' || !notification.pageId) {
+      const canSendImmediate = await this.canSendImmediatePush(
+        notification.userId,
+        payload.notificationId,
+      );
+      if (!canSendImmediate) {
+        return;
+      }
+
       await this.pushService.sendToUser(notification.userId, payload);
       return;
     }
 
     const windowMs = this.frequencyToMs(preferences.pushFrequency);
     if (!windowMs) {
+      const canSendImmediate = await this.canSendImmediatePush(
+        notification.userId,
+        payload.notificationId,
+      );
+      if (!canSendImmediate) {
+        return;
+      }
+
       await this.pushService.sendToUser(notification.userId, payload);
       return;
     }
@@ -105,8 +123,15 @@ export class PushAggregationService {
     }
 
     const sentIds: string[] = [];
+    const cancelledIds: string[] = [];
 
     for (const item of dueItems) {
+      const shouldSend = await this.hasUnreadNotificationsInWindow(item);
+      if (!shouldSend) {
+        cancelledIds.push(item.id);
+        continue;
+      }
+
       const payload = (item.payload ?? {}) as unknown as PushDispatchPayload;
       const pageTitle = payload.pageTitle || payload.body || 'document';
       const eventCount = item.eventsCount ?? 1;
@@ -123,7 +148,62 @@ export class PushAggregationService {
     }
 
     await this.pushNotificationJobRepo.markAsSent(sentIds);
-    this.logger.debug(`Processed ${sentIds.length} aggregated push job(s)`);
+    await this.pushNotificationJobRepo.markAsCancelled(cancelledIds);
+    this.logger.debug(
+      `Processed ${sentIds.length} aggregated push job(s), cancelled ${cancelledIds.length}`,
+    );
+  }
+
+
+  /**
+   * Разрешает immediate отправку только когда связанное уведомление ещё не прочитано.
+   */
+  private async canSendImmediatePush(
+    userId: string,
+    notificationId?: string,
+  ): Promise<boolean> {
+    if (!notificationId) {
+      return true;
+    }
+
+    return this.notificationRepo.isUnreadForUser(notificationId, userId);
+  }
+
+  /**
+   * Проверяет, остались ли в окне агрегирования непрочитанные уведомления по документу.
+   * Если нет, то агрегированный push нужно отменить.
+   */
+  private async hasUnreadNotificationsInWindow(
+    item: { userId: string; pageId: string; sendAfter: Date | string; windowKey: string },
+  ): Promise<boolean> {
+    const windowMs = this.windowMsFromWindowKey(item.windowKey);
+    if (!windowMs) {
+      return true;
+    }
+
+    const sendAfterDate = new Date(item.sendAfter);
+    const windowStart = new Date(sendAfterDate.getTime() - windowMs);
+
+    const unreadCount = await this.notificationRepo.countUnreadByUserPageInWindow({
+      userId: item.userId,
+      pageId: item.pageId,
+      windowStart,
+      windowEnd: sendAfterDate,
+    });
+
+    return unreadCount > 0;
+  }
+
+  /**
+   * Извлекает размер окна в миллисекундах из ключа вида "<frequency>:<iso-date>".
+   */
+  private windowMsFromWindowKey(windowKey: string): number | null {
+    const [frequency] = windowKey.split(':', 1);
+    if (!frequency) {
+      return null;
+    }
+
+    return this.frequencyToMs(frequency);
   }
 
   /**

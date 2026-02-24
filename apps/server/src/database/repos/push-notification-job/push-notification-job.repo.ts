@@ -59,4 +59,17 @@ export class PushNotificationJobRepo {
       .where('id', 'in', ids)
       .execute();
   }
+
+  /**
+   * Помечает записи отменёнными, если к моменту отправки не осталось непрочитанных событий.
+   */
+  async markAsCancelled(ids: string[]): Promise<void> {
+    if (ids.length === 0) return;
+
+    await this.db
+      .updateTable('pushNotificationJobs')
+      .set({ status: 'cancelled', updatedAt: new Date() })
+      .where('id', 'in', ids)
+      .execute();
+  }
 }
