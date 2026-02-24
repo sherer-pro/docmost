@@ -23,6 +23,7 @@ import {
   ApiKeys,
   Watchers,
   PushSubscriptions,
+  PushNotificationJobs,
   JsonValue,
 } from './db';
 import { PageEmbeddings } from '@docmost/db/types/embeddings.types';
@@ -177,4 +178,11 @@ export type PushSubscription = Selectable<PushSubscriptions>;
 export type InsertablePushSubscription = Insertable<PushSubscriptions>;
 export type UpdatablePushSubscription = Updateable<
   Omit<PushSubscriptions, 'id'>
+>;
+
+// PushNotificationJob
+export type PushNotificationJob = Selectable<PushNotificationJobs>;
+export type InsertablePushNotificationJob = Insertable<PushNotificationJobs>;
+export type UpdatablePushNotificationJob = Updateable<
+  Omit<PushNotificationJobs, 'id'>
 >;

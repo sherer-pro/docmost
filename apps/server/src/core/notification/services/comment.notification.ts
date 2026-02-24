@@ -13,7 +13,7 @@ import { CommentMentionEmail } from '@docmost/transactional/emails/comment-menti
 import { CommentCreateEmail } from '@docmost/transactional/emails/comment-created-email';
 import { CommentResolvedEmail } from '@docmost/transactional/emails/comment-resolved-email';
 import { getPageTitle } from '../../../common/helpers';
-import { PushService } from '../../push/push.service';
+import { PushAggregationService } from './push-aggregation.service';
 
 @Injectable()
 export class CommentNotificationService {
@@ -24,7 +24,7 @@ export class CommentNotificationService {
     private readonly notificationService: NotificationService,
     private readonly spaceMemberRepo: SpaceMemberRepo,
     private readonly watcherRepo: WatcherRepo,
-    private readonly pushService: PushService,
+    private readonly pushAggregationService: PushAggregationService,
   ) {}
 
   async processComment(data: ICommentNotificationJob, appUrl: string) {
@@ -87,12 +87,13 @@ export class CommentNotificationService {
         CommentMentionEmail({ actorName: actor.name, pageTitle, pageUrl }),
       );
 
-      await this.pushService.sendToUser(userId, {
+      await this.pushAggregationService.dispatchOrAggregate(notification, {
         title: `${actor.name} mentioned you in a comment`,
         body: pageTitle,
         url: pageUrl,
         type: NotificationType.COMMENT_USER_MENTION,
         notificationId: notification.id,
+        pageTitle,
       });
 
       notifiedUserIds.add(userId);
@@ -119,12 +120,13 @@ export class CommentNotificationService {
         CommentCreateEmail({ actorName: actor.name, pageTitle, pageUrl }),
       );
 
-      await this.pushService.sendToUser(recipientId, {
+      await this.pushAggregationService.dispatchOrAggregate(notification, {
         title: `${actor.name} commented on ${pageTitle}`,
         body: pageTitle,
         url: pageUrl,
         type: NotificationType.COMMENT_CREATED,
         notificationId: notification.id,
+        pageTitle,
       });
     }
   }
@@ -183,12 +185,13 @@ export class CommentNotificationService {
       CommentResolvedEmail({ actorName: actor.name, pageTitle, pageUrl }),
     );
 
-    await this.pushService.sendToUser(commentCreatorId, {
+    await this.pushAggregationService.dispatchOrAggregate(notification, {
       title: subject,
       body: pageTitle,
       url: pageUrl,
       type: NotificationType.COMMENT_RESOLVED,
       notificationId: notification.id,
+      pageTitle,
     });
   }
 

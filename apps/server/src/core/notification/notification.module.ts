@@ -5,6 +5,8 @@ import { NotificationProcessor } from './notification.processor';
 import { CommentNotificationService } from './services/comment.notification';
 import { PageNotificationService } from './services/page.notification';
 import { RecipientResolverService } from './services/recipient-resolver.service';
+import { PushAggregationService } from './services/push-aggregation.service';
+import { PushAggregationBootstrapService } from './services/push-aggregation-bootstrap.service';
 import { WsModule } from '../../ws/ws.module';
 import { PushModule } from '../push/push.module';
 
@@ -17,7 +19,9 @@ import { PushModule } from '../push/push.module';
     CommentNotificationService,
     PageNotificationService,
     RecipientResolverService,
+    PushAggregationService,
+    PushAggregationBootstrapService,
   ],
-  exports: [NotificationService, RecipientResolverService],
+  exports: [NotificationService, RecipientResolverService, PushAggregationService],
 })
 export class NotificationModule {}
