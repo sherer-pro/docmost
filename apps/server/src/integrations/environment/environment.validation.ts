@@ -53,6 +53,18 @@ export class EnvironmentVariables {
   STORAGE_DRIVER: string;
 
   @IsOptional()
+  @IsString()
+  WEB_PUSH_VAPID_PUBLIC_KEY: string;
+
+  @IsOptional()
+  @IsString()
+  WEB_PUSH_VAPID_PRIVATE_KEY: string;
+
+  @IsOptional()
+  @IsString()
+  WEB_PUSH_SUBJECT: string;
+
+  @IsOptional()
   @ValidateIf((obj) => obj.COLLAB_URL != '' && obj.COLLAB_URL != null)
   @IsUrl({ protocols: ['http', 'https'], require_tld: false })
   COLLAB_URL: string;

@@ -254,6 +254,20 @@ export interface Shares {
   workspaceId: string;
 }
 
+export interface PushSubscriptions {
+  id: Generated<string>;
+  userId: string;
+  workspaceId: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  userAgent: string | null;
+  lastSeenAt: Generated<Timestamp>;
+  revokedAt: Timestamp | null;
+  createdAt: Generated<Timestamp>;
+  updatedAt: Generated<Timestamp>;
+}
+
 export interface SpaceMembers {
   addedById: string | null;
   createdAt: Generated<Timestamp>;
@@ -405,6 +419,7 @@ export interface DB {
   notifications: Notifications;
   pageHistory: PageHistory;
   pages: Pages;
+  pushSubscriptions: PushSubscriptions;
   shares: Shares;
   spaceMembers: SpaceMembers;
   spaces: Spaces;

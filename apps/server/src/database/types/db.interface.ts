@@ -13,6 +13,7 @@ import {
   PageHistory,
   Pages,
   Shares,
+  PushSubscriptions,
   SpaceMembers,
   Spaces,
   UserMfa,
@@ -39,6 +40,7 @@ export interface DbInterface {
   pageHistory: PageHistory;
   pages: Pages;
   shares: Shares;
+  pushSubscriptions: PushSubscriptions;
   spaceMembers: SpaceMembers;
   spaces: Spaces;
   userMfa: UserMfa;

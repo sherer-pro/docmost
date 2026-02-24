@@ -161,6 +161,19 @@ export class EnvironmentService {
     return this.configService.get<string>('POSTMARK_TOKEN');
   }
 
+
+  getWebPushVapidPublicKey(): string {
+    return this.configService.get<string>('WEB_PUSH_VAPID_PUBLIC_KEY');
+  }
+
+  getWebPushVapidPrivateKey(): string {
+    return this.configService.get<string>('WEB_PUSH_VAPID_PRIVATE_KEY');
+  }
+
+  getWebPushSubject(): string {
+    return this.configService.get<string>('WEB_PUSH_SUBJECT');
+  }
+
   getDrawioUrl(): string {
     return this.configService.get<string>('DRAWIO_URL');
   }
