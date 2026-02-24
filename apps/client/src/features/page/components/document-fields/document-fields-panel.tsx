@@ -67,6 +67,12 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
     currentUser?.user?.settings?.preferences?.pageEditMode ?? PageEditMode.Edit;
   const isEditable = !readOnly && userPageEditMode === PageEditMode.Edit;
 
+  /**
+   * В режиме просмотра поля документа должны отображаться как только для чтения,
+   * чтобы изменить их можно было исключительно после переключения в режим редактирования.
+   */
+  const isFieldsReadOnly = !isEditable;
+
   const enabledFields = useMemo(
     () => ({
       status: !!documentFields?.status,
@@ -187,7 +193,7 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
                 )}
               </Table.Td>
               <Table.Td>
-                {readOnly ? (
+                {isFieldsReadOnly ? (
                   selectedStatus ? (
                     <Badge color={selectedStatus.color} variant="light">
                       {t(selectedStatus.label)}
@@ -222,7 +228,7 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
                 )}
               </Table.Td>
               <Table.Td>
-                {readOnly ? (
+                {isFieldsReadOnly ? (
                   fields.assigneeId ? (
                     <Group gap="xs" wrap="nowrap">
                       <CustomAvatar
@@ -256,7 +262,7 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
                 )}
               </Table.Td>
               <Table.Td>
-                {readOnly ? (
+                {isFieldsReadOnly ? (
                   fields.stakeholderIds.length ? (
                     <Stack gap="xs">
                       {fields.stakeholderIds.map((id) => (
