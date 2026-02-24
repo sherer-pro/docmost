@@ -42,10 +42,18 @@ export function NotificationItem({
         return t("mentioned you in a comment");
       case "comment.created":
         return t("commented on a page");
+      case "comment.reply":
+        return t("replied to your comment");
       case "comment.resolved":
         return t("resolved a comment");
       case "page.user_mention":
         return t("mentioned you on a page");
+      case "page.updated_for_assignee_or_stakeholder":
+        return t("updated a page you follow");
+      case "page.assigned":
+        return t("assigned you to a page");
+      case "page.stakeholder_added":
+        return t("added you as a stakeholder");
       default:
         return "";
     }

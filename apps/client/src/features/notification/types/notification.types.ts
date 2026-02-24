@@ -1,8 +1,12 @@
 export type NotificationType =
   | "comment.user_mention"
   | "comment.created"
+  | "comment.reply"
   | "comment.resolved"
-  | "page.user_mention";
+  | "page.user_mention"
+  | "page.updated_for_assignee_or_stakeholder"
+  | "page.assigned"
+  | "page.stakeholder_added";
 
 export type INotification = {
   id: string;
