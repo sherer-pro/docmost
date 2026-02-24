@@ -7,7 +7,7 @@ import {
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 
 export class PushSubscriptionKeysDto {
   @IsString()
@@ -35,10 +35,27 @@ export class CreatePushSubscriptionDto {
   auth?: string;
 
   @IsOptional()
+  @Transform(({ value }) => {
+    if (typeof value !== 'string') {
+      return value;
+    }
+
+    try {
+      return JSON.parse(value);
+    } catch {
+      return value;
+    }
+  })
   @IsObject()
   @ValidateNested()
   @Type(() => PushSubscriptionKeysDto)
   keys?: PushSubscriptionKeysDto;
+
+  @IsOptional()
+  @IsObject()
+  @ValidateNested()
+  @Type(() => PushSubscriptionKeysDto)
+  subscriptionKeys?: PushSubscriptionKeysDto;
 
   @IsString()
   @IsOptional()

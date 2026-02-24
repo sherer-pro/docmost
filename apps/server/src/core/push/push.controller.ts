@@ -38,14 +38,9 @@ export class PushController {
     @Body() dto: CreatePushSubscriptionDto,
     @AuthUser() user: User,
   ) {
-    /**
-     * Поддерживаем оба формата payload:
-     * 1) плоский (`p256dh`, `auth`) — используется текущим клиентом;
-     * 2) стандартный Web Push JSON (`keys.p256dh`, `keys.auth`) — часто приходит
-     *    из ручных fetch-запросов или внешних интеграций.
-     */
-    const p256dh = dto.p256dh ?? dto.keys?.p256dh;
-    const auth = dto.auth ?? dto.keys?.auth;
+    const p256dh =
+      dto.p256dh ?? dto.keys?.p256dh ?? dto.subscriptionKeys?.p256dh;
+    const auth = dto.auth ?? dto.keys?.auth ?? dto.subscriptionKeys?.auth;
 
     if (!p256dh || !auth) {
       throw new BadRequestException('Missing push subscription keys');
