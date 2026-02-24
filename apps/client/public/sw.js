@@ -64,6 +64,78 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(staleWhileRevalidate(request));
 });
 
+self.addEventListener("push", (event) => {
+  event.waitUntil(handlePushEvent(event));
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.waitUntil(handleNotificationClick(event));
+});
+
+/**
+ * Обрабатывает входящий push payload и показывает уведомление.
+ *
+ * @param {PushEvent} event - Push-событие от браузера.
+ * @returns {Promise<void>} Promise завершения показа уведомления.
+ */
+async function handlePushEvent(event) {
+  let payload = {};
+
+  if (event.data) {
+    try {
+      payload = event.data.json();
+    } catch {
+      payload = { body: event.data.text() };
+    }
+  }
+
+  const title = payload.title || "Docmost";
+  const body = payload.body || "You have a new notification";
+
+  await self.registration.showNotification(title, {
+    body,
+    icon: "/icons/app-icon-192x192.png",
+    badge: "/icons/favicon-32x32.png",
+    data: {
+      url: payload.url || "/",
+    },
+  });
+}
+
+/**
+ * По клику открывает целевую вкладку или фокусирует уже открытую.
+ *
+ * @param {NotificationEvent} event - Событие клика по системному уведомлению.
+ * @returns {Promise<void>} Promise завершения обработки клика.
+ */
+async function handleNotificationClick(event) {
+  event.notification.close();
+
+  const targetUrl = event.notification.data?.url || "/";
+  const windows = await self.clients.matchAll({
+    type: "window",
+    includeUncontrolled: true,
+  });
+
+  const existingWindow = windows.find((client) => {
+    try {
+      const clientUrl = new URL(client.url);
+      const expectedUrl = new URL(targetUrl, self.location.origin);
+
+      return clientUrl.pathname === expectedUrl.pathname;
+    } catch {
+      return false;
+    }
+  });
+
+  if (existingWindow) {
+    await existingWindow.focus();
+    return;
+  }
+
+  await self.clients.openWindow(targetUrl);
+}
+
 /**
  * Network First strategy for HTML navigation.
  *
