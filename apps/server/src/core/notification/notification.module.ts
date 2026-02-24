@@ -4,6 +4,7 @@ import { NotificationController } from './notification.controller';
 import { NotificationProcessor } from './notification.processor';
 import { CommentNotificationService } from './services/comment.notification';
 import { PageNotificationService } from './services/page.notification';
+import { RecipientResolverService } from './services/recipient-resolver.service';
 import { WsModule } from '../../ws/ws.module';
 import { PushModule } from '../push/push.module';
 
@@ -15,7 +16,8 @@ import { PushModule } from '../push/push.module';
     NotificationProcessor,
     CommentNotificationService,
     PageNotificationService,
+    RecipientResolverService,
   ],
-  exports: [NotificationService],
+  exports: [NotificationService, RecipientResolverService],
 })
 export class NotificationModule {}

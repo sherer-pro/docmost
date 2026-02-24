@@ -53,6 +53,8 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { CollaborationGateway } from '../../../collaboration/collaboration.gateway';
 import { markdownToHtml } from '@docmost/editor-ext';
 import { WatcherService } from '../../watcher/watcher.service';
+import { RecipientResolverService } from '../../notification/services/recipient-resolver.service';
+import { IPageRecipientNotificationJob } from '../../../integrations/queue/constants/queue.interface';
 
 @Injectable()
 export class PageService {
@@ -66,9 +68,11 @@ export class PageService {
     @InjectQueue(QueueName.ATTACHMENT_QUEUE) private attachmentQueue: Queue,
     @InjectQueue(QueueName.AI_QUEUE) private aiQueue: Queue,
     @InjectQueue(QueueName.GENERAL_QUEUE) private generalQueue: Queue,
+    @InjectQueue(QueueName.NOTIFICATION_QUEUE) private notificationQueue: Queue,
     private eventEmitter: EventEmitter2,
     private collaborationGateway: CollaborationGateway,
     private readonly watcherService: WatcherService,
+    private readonly recipientResolverService: RecipientResolverService,
   ) {}
 
   async findById(
@@ -138,6 +142,7 @@ export class PageService {
       settings: createPageDto.settings,
     });
 
+
     this.generalQueue
       .add(QueueJob.ADD_PAGE_WATCHERS, {
         userIds: [userId],
@@ -202,9 +207,8 @@ export class PageService {
     contributors.add(user.id);
     const contributorIds = Array.from(contributors);
 
-    const nextSettings = updatePageDto.toSettingsPayload(
-      (page.settings as PageSettings | null) ?? null,
-    );
+    const currentSettings = (page.settings as PageSettings | null) ?? null;
+    const nextSettings = updatePageDto.toSettingsPayload(currentSettings);
 
     await this.pageRepo.updatePage(
       {
@@ -228,6 +232,35 @@ export class PageService {
       .catch((err) =>
         this.logger.warn(`Failed to queue add-page-watchers: ${err.message}`),
       );
+
+    // Вычисляем дельту назначения сразу после обновления,
+    // чтобы уведомить только новых участников роли.
+    const assignmentDelta = this.recipientResolverService.resolveAssignmentDelta(
+      currentSettings,
+      nextSettings ?? null,
+    );
+
+    if (assignmentDelta.newAssigneeId) {
+      await this.notificationQueue.add(QueueJob.PAGE_RECIPIENT_NOTIFICATION, {
+        reason: 'page-assigned',
+        actorId: user.id,
+        pageId: page.id,
+        spaceId: page.spaceId,
+        workspaceId: page.workspaceId,
+        candidateUserIds: [assignmentDelta.newAssigneeId],
+      } as IPageRecipientNotificationJob);
+    }
+
+    if (assignmentDelta.newStakeholderIds.length > 0) {
+      await this.notificationQueue.add(QueueJob.PAGE_RECIPIENT_NOTIFICATION, {
+        reason: 'page-stakeholder-added',
+        actorId: user.id,
+        pageId: page.id,
+        spaceId: page.spaceId,
+        workspaceId: page.workspaceId,
+        candidateUserIds: assignmentDelta.newStakeholderIds,
+      } as IPageRecipientNotificationJob);
+    }
 
     if (
       updatePageDto.content &&
