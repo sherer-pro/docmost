@@ -1,13 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
-import { IPageMentionNotificationJob } from '../../../integrations/queue/constants/queue.interface';
+import {
+  IPageMentionNotificationJob,
+  IPageRecipientNotificationJob,
+} from '../../../integrations/queue/constants/queue.interface';
 import { NotificationService } from '../notification.service';
 import { NotificationType } from '../notification.constants';
 import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 import { PageMentionEmail } from '@docmost/transactional/emails/page-mention-email';
 import { getPageTitle } from '../../../common/helpers';
 import { PushService } from '../../push/push.service';
+import { RecipientResolverService } from './recipient-resolver.service';
 
 @Injectable()
 export class PageNotificationService {
@@ -16,6 +20,7 @@ export class PageNotificationService {
     private readonly notificationService: NotificationService,
     private readonly spaceMemberRepo: SpaceMemberRepo,
     private readonly pushService: PushService,
+    private readonly recipientResolverService: RecipientResolverService,
   ) {}
 
   async processPageMention(data: IPageMentionNotificationJob, appUrl: string) {
@@ -60,6 +65,88 @@ export class PageNotificationService {
         workspaceId,
         appUrl,
       );
+    }
+  }
+
+
+  /**
+   * Создаёт нотификации для ролей страницы (assignee/stakeholders)
+   * в зависимости от типа события.
+   */
+  async processPageRecipientNotification(
+    data: IPageRecipientNotificationJob,
+    appUrl: string,
+  ) {
+    const { actorId, pageId, spaceId, workspaceId, reason } = data;
+
+    const recipientIds =
+      reason === 'document-changed' || reason === 'comment-added'
+        ? await this.recipientResolverService.resolvePageRoleRecipients(
+            pageId,
+            spaceId,
+            actorId,
+          )
+        : await this.recipientResolverService.filterUsersWithSpaceAccess(
+            data.candidateUserIds ?? [],
+            spaceId,
+            actorId,
+          );
+
+    if (recipientIds.length === 0) return;
+
+    const context = await this.getPageContext(actorId, pageId, spaceId, appUrl);
+    if (!context) return;
+
+    const { actor, pageTitle, basePageUrl } = context;
+
+    const config = this.getRecipientNotificationConfig(reason, actor.name, pageTitle);
+
+    for (const recipientId of recipientIds) {
+      const notification = await this.notificationService.create({
+        userId: recipientId,
+        workspaceId,
+        type: config.notificationType,
+        actorId,
+        pageId,
+        spaceId,
+      });
+
+      await this.pushService.sendToUser(recipientId, {
+        title: config.title,
+        body: pageTitle,
+        url: basePageUrl,
+        type: config.notificationType,
+        notificationId: notification.id,
+      });
+    }
+  }
+
+  private getRecipientNotificationConfig(
+    reason: IPageRecipientNotificationJob['reason'],
+    actorName: string,
+    pageTitle: string,
+  ): { notificationType: NotificationType; title: string } {
+    switch (reason) {
+      case 'page-assigned':
+        return {
+          notificationType: NotificationType.PAGE_ASSIGNED,
+          title: `${actorName} assigned you to ${pageTitle}`,
+        };
+      case 'page-stakeholder-added':
+        return {
+          notificationType: NotificationType.PAGE_STAKEHOLDER_ADDED,
+          title: `${actorName} added you as stakeholder to ${pageTitle}`,
+        };
+      case 'comment-added':
+        return {
+          notificationType: NotificationType.PAGE_UPDATED_FOR_ASSIGNEE_OR_STAKEHOLDER,
+          title: `${actorName} added a comment on ${pageTitle}`,
+        };
+      default:
+        return {
+          notificationType: NotificationType.PAGE_UPDATED_FOR_ASSIGNEE_OR_STAKEHOLDER,
+          title: `${actorName} updated ${pageTitle}`,
+        };
     }
   }
 

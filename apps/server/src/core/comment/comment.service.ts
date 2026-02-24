@@ -20,6 +20,7 @@ import { extractUserMentionIdsFromJson } from '../../common/helpers/prosemirror/
 import {
   ICommentNotificationJob,
   ICommentResolvedNotificationJob,
+  IPageRecipientNotificationJob,
 } from '../../integrations/queue/constants/queue.interface';
 
 @Injectable()
@@ -102,6 +103,15 @@ export class CommentService {
       !isReply,
       createCommentDto.parentCommentId,
     );
+
+    // Отдельно публикуем событие "comment added" для assignee/stakeholders страницы.
+    await this.notificationQueue.add(QueueJob.PAGE_RECIPIENT_NOTIFICATION, {
+      reason: 'comment-added',
+      actorId: userId,
+      pageId: page.id,
+      spaceId: page.spaceId,
+      workspaceId,
+    } as IPageRecipientNotificationJob);
 
     return comment;
   }
