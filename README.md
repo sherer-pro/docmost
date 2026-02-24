@@ -80,7 +80,7 @@ To get started with Docmost, please refer to our [documentation](https://docmost
 
 ### Screenshots
 
-<p align="center">
+<p>
 <img alt="home" src="https://docmost.com/screenshots/home.png" width="70%">
 <img alt="editor" src="https://docmost.com/screenshots/editor.png" width="70%">
 </p>
