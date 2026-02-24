@@ -24,12 +24,24 @@ export class CreatePushSubscriptionDto {
   @IsNotEmpty()
   endpoint: string;
 
-  @ValidateIf((dto: CreatePushSubscriptionDto) => !dto.keys)
+  /**
+   * Ручной fallback: если клиент не прислал объект `keys`/`subscriptionKeys`,
+   * ключ `p256dh` должен прийти отдельным полем.
+   */
+  @ValidateIf(
+    (dto: CreatePushSubscriptionDto) => !dto.keys && !dto.subscriptionKeys,
+  )
   @IsString()
   @IsNotEmpty()
   p256dh?: string;
 
-  @ValidateIf((dto: CreatePushSubscriptionDto) => !dto.keys)
+  /**
+   * Аналогично `p256dh`: в плоском payload поле `auth` обязательно,
+   * но при наличии вложенных ключей повторно его не требуем.
+   */
+  @ValidateIf(
+    (dto: CreatePushSubscriptionDto) => !dto.keys && !dto.subscriptionKeys,
+  )
   @IsString()
   @IsNotEmpty()
   auth?: string;
@@ -52,6 +64,17 @@ export class CreatePushSubscriptionDto {
   keys?: PushSubscriptionKeysDto;
 
   @IsOptional()
+  @Transform(({ value }) => {
+    if (typeof value !== 'string') {
+      return value;
+    }
+
+    try {
+      return JSON.parse(value);
+    } catch {
+      return value;
+    }
+  })
   @IsObject()
   @ValidateNested()
   @Type(() => PushSubscriptionKeysDto)
