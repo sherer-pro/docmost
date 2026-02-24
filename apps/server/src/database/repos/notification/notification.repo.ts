@@ -68,6 +68,60 @@ export class NotificationRepo {
     return Number(result?.count ?? 0);
   }
 
+  /**
+   * Возвращает количество непрочитанных уведомлений пользователя
+   * в рамках конкретного документа и временного окна.
+   */
+  async countUnreadByUserPageInWindow(params: {
+    userId: string;
+    pageId: string;
+    windowStart: Date;
+    windowEnd: Date;
+  }): Promise<number> {
+    const result = await this.db
+      .selectFrom('notifications')
+      .select((eb) => eb.fn.count('id').as('count'))
+      .where('userId', '=', params.userId)
+      .where('pageId', '=', params.pageId)
+      .where('readAt', 'is', null)
+      .where('createdAt', '>=', params.windowStart)
+      .where('createdAt', '<=', params.windowEnd)
+      .where((eb) =>
+        eb.or([
+          eb('spaceId', 'is', null),
+          eb(
+            'spaceId',
+            'in',
+            this.spaceMemberRepo.getUserSpaceIdsQuery(params.userId),
+          ),
+        ]),
+      )
+      .executeTakeFirst();
+
+    return Number(result?.count ?? 0);
+  }
+
+  /**
+   * Проверяет, что уведомление по-прежнему непрочитано и принадлежит пользователю.
+   */
+  async isUnreadForUser(notificationId: string, userId: string): Promise<boolean> {
+    const result = await this.db
+      .selectFrom('notifications')
+      .select('id')
+      .where('id', '=', notificationId)
+      .where('userId', '=', userId)
+      .where('readAt', 'is', null)
+      .where((eb) =>
+        eb.or([
+          eb('spaceId', 'is', null),
+          eb('spaceId', 'in', this.spaceMemberRepo.getUserSpaceIdsQuery(userId)),
+        ]),
+      )
+      .executeTakeFirst();
+
+    return Boolean(result);
+  }
+
   async insert(notification: InsertableNotification): Promise<Notification> {
     return this.db
       .insertInto('notifications')
