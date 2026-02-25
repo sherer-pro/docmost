@@ -43,7 +43,7 @@ export class PushAggregationService {
   ) {}
 
   /**
-   * Планирует периодический BullMQ job, который будет обрабатывать агрегированные push-уведомления.
+   * Schedules a recurring BullMQ job that processes aggregated push notifications.
    */
   async ensureProcessJobScheduled(): Promise<void> {
     await this.notificationQueue.add(
@@ -59,9 +59,9 @@ export class PushAggregationService {
   }
 
   /**
-   * Вызывается сразу после создания in-app notification.
-   * В зависимости от пользовательских настроек отправляет push сразу
-   * или складывает событие в агрегированную очередь.
+   * Called immediately after an in-app notification is created.
+   * Depending on user preferences, sends push immediately
+   * or places the event into the aggregation queue.
    */
   async dispatchOrAggregate(
     notification: Notification,
@@ -120,8 +120,8 @@ export class PushAggregationService {
   }
 
   /**
-   * Атомарно забирает due-записи в processing, отправляет push и финализирует статусы.
-   * Благодаря claim-механике через SKIP LOCKED несколько воркеров могут работать параллельно без дублей.
+   * Atomically claims due records into processing, sends push, and finalizes statuses.
+   * With claim semantics via SKIP LOCKED, multiple workers can run in parallel without duplicates.
    */
   async processDueJobs(limit = 200): Promise<void> {
     const dueItems = await this.pushNotificationJobRepo.claimDuePending(limit);
@@ -192,7 +192,7 @@ export class PushAggregationService {
   }
 
   /**
-   * Разрешает immediate отправку только когда связанное уведомление ещё не прочитано.
+   * Allows immediate delivery only when the related notification is still unread.
    */
   private async canSendImmediatePush(
     userId: string,
@@ -206,8 +206,8 @@ export class PushAggregationService {
   }
 
   /**
-   * Проверяет, остались ли в окне агрегирования непрочитанные уведомления по документу.
-   * Если нет, то агрегированный push нужно отменить.
+   * Checks whether unread document notifications still exist within the aggregation window.
+   * If not, the aggregated push should be canceled.
    */
   private async hasUnreadNotificationsInWindow(
     item: { userId: string; pageId: string; sendAfter: Date | string; windowKey: string },
@@ -231,7 +231,7 @@ export class PushAggregationService {
   }
 
   /**
-   * Извлекает размер окна в миллисекундах из ключа вида "<frequency>:<iso-date>".
+   * Extracts the window size in milliseconds from a key in the "<frequency>:<iso-date>" format.
    */
   private windowMsFromWindowKey(windowKey: string): number | null {
     const [frequency] = windowKey.split(':', 1);
@@ -243,7 +243,7 @@ export class PushAggregationService {
   }
 
   /**
-   * Достаёт пользовательские настройки push из JSON поля users.settings.
+   * Reads user push preferences from the users.settings JSON field.
    */
   private async getUserPushPreference(userId: string): Promise<UserPushPreference> {
     const user = await this.db
@@ -263,7 +263,7 @@ export class PushAggregationService {
   }
 
   /**
-   * Конвертирует строковый интервал в миллисекунды.
+   * Converts a textual interval to milliseconds.
    */
   private frequencyToMs(frequency: string): number | null {
     const mapping: Record<string, number> = {

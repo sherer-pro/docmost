@@ -66,12 +66,12 @@ export class HistoryProcessor extends WorkerHost implements OnModuleDestroy {
           await this.pageHistoryRepo.saveHistory(page, { contributorIds });
 
           /**
-           * Отправляем уведомление об изменении документа только после
-           * фактического появления новой записи истории страницы.
+           * Send the document-changed notification only after
+           * a new page history record is actually created.
            *
-           * Это предотвращает спам-уведомлениями на каждый промежуточный
-           * onStoreDocument/keyup и использует уже существующую логику
-           * сравнения контента с последней сохранённой ревизией.
+           * This avoids notification spam for every intermediate
+           * onStoreDocument/keyup event and reuses the existing logic
+           * that compares content against the latest persisted revision.
            */
           if (page.lastUpdatedById) {
             await this.notificationQueue.add(QueueJob.PAGE_RECIPIENT_NOTIFICATION, {

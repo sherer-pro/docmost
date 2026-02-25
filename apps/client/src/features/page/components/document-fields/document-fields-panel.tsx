@@ -68,8 +68,8 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
   const isEditable = !readOnly && userPageEditMode === PageEditMode.Edit;
 
   /**
-   * В режиме просмотра поля документа должны отображаться как только для чтения,
-   * чтобы изменить их можно было исключительно после переключения в режим редактирования.
+   * In view mode, document fields must be rendered as read-only
+   * so they can be edited only after switching to edit mode.
    */
   const isFieldsReadOnly = !isEditable;
 

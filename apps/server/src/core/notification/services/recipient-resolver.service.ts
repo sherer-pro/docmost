@@ -12,18 +12,18 @@ export class RecipientResolverService {
   ) {}
 
   /**
-   * Общий фильтр, который убирает инициатора события из списка получателей.
+   * Shared filter that removes the event actor from the recipient list.
    *
-   * Дополнительно удаляются дубли и пустые значения, чтобы ниже по пайплайну
-   * работать только с валидным списком потенциальных получателей.
+   * It also removes duplicates and empty values so downstream processing
+   * works only with a valid list of potential recipients.
    */
   excludeActor(userIds: string[], actorId: string): string[] {
     return [...new Set(userIds.filter((userId) => !!userId && userId !== actorId))];
   }
 
   /**
-   * Достаёт получателей для событий «документ изменён» и «комментарий добавлен»
-   * из настроек страницы: assigneeId и stakeholderIds.
+   * Resolves recipients for "document changed" and "comment added" events
+   * from page settings: assigneeId and stakeholderIds.
    */
   async resolvePageRoleRecipients(
     pageId: string,
@@ -47,9 +47,9 @@ export class RecipientResolverService {
   }
 
   /**
-   * Вычисляет дельту назначений при обновлении страницы:
-   * - новый assignee;
-   * - новые stakeholder'ы.
+   * Computes assignment deltas when a page is updated:
+   * - new assignee;
+   * - new stakeholders.
    */
   resolveAssignmentDelta(
     currentSettings: PageSettings | null,
@@ -85,7 +85,7 @@ export class RecipientResolverService {
   }
 
   /**
-   * Применяет общий фильтр (исключить actor) и проверку доступа в space.
+   * Applies the shared filter (exclude actor) and space access checks.
    */
   async filterUsersWithSpaceAccess(
     candidateUserIds: string[],
