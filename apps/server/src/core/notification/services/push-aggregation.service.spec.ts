@@ -17,6 +17,21 @@ describe('PushAggregationService', () => {
     notificationId: 'n-1',
   };
 
+  const dueJob = {
+    id: 'job-1',
+    userId: 'user-1',
+    pageId: 'page-1',
+    windowKey: '1h:2026-02-01T10:00:00.000Z',
+    sendAfter: new Date('2026-02-01T11:00:00.000Z'),
+    eventsCount: 2,
+    payload: {
+      title: 'title',
+      body: 'Doc title',
+      url: '/doc',
+      type: 'page-updated',
+    },
+  };
+
   const createService = (options?: {
     pushFrequency?: string;
     isUnreadForUser?: boolean;
@@ -52,7 +67,14 @@ describe('PushAggregationService', () => {
         .fn()
         .mockResolvedValue(options?.unreadCountInWindow ?? 1),
     } as any;
-    const pushService = { sendToUser: jest.fn() } as any;
+    const pushService = {
+      sendToUser: jest.fn().mockResolvedValue({
+        sent: 1,
+        failed: 0,
+        revoked: 0,
+        outcome: 'success',
+      }),
+    } as any;
 
     const service = new PushAggregationService(
       db,
@@ -86,22 +108,7 @@ describe('PushAggregationService', () => {
     const { service, pushService, pushNotificationJobRepo, notificationRepo } =
       createService({ unreadCountInWindow: 0 });
 
-    pushNotificationJobRepo.findDuePending.mockResolvedValue([
-      {
-        id: 'job-1',
-        userId: 'user-1',
-        pageId: 'page-1',
-        windowKey: '1h:2026-02-01T10:00:00.000Z',
-        sendAfter: new Date('2026-02-01T11:00:00.000Z'),
-        eventsCount: 2,
-        payload: {
-          title: 'title',
-          body: 'Doc title',
-          url: '/doc',
-          type: 'page-updated',
-        },
-      },
-    ]);
+    pushNotificationJobRepo.findDuePending.mockResolvedValue([dueJob]);
 
     await service.processDueJobs();
 
@@ -109,5 +116,39 @@ describe('PushAggregationService', () => {
     expect(pushService.sendToUser).not.toHaveBeenCalled();
     expect(pushNotificationJobRepo.markAsCancelled).toHaveBeenCalledWith(['job-1']);
     expect(pushNotificationJobRepo.markAsSent).toHaveBeenCalledWith([]);
+  });
+
+  it('не помечает job как sent при временной ошибке отправки', async () => {
+    const { service, pushService, pushNotificationJobRepo } = createService();
+
+    pushNotificationJobRepo.findDuePending.mockResolvedValue([dueJob]);
+    pushService.sendToUser.mockResolvedValue({
+      sent: 1,
+      failed: 1,
+      revoked: 0,
+      outcome: 'transient-failure',
+    });
+
+    await service.processDueJobs();
+
+    expect(pushNotificationJobRepo.markAsSent).toHaveBeenCalledWith([]);
+    expect(pushNotificationJobRepo.markAsCancelled).toHaveBeenCalledWith([]);
+  });
+
+  it('оставляет job в pending для retry при полной недоставке из-за временной ошибки', async () => {
+    const { service, pushService, pushNotificationJobRepo } = createService();
+
+    pushNotificationJobRepo.findDuePending.mockResolvedValue([dueJob]);
+    pushService.sendToUser.mockResolvedValue({
+      sent: 0,
+      failed: 2,
+      revoked: 0,
+      outcome: 'transient-failure',
+    });
+
+    await service.processDueJobs();
+
+    expect(pushNotificationJobRepo.markAsSent).toHaveBeenCalledWith([]);
+    expect(pushNotificationJobRepo.markAsCancelled).toHaveBeenCalledWith([]);
   });
 });
