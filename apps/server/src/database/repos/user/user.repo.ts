@@ -381,10 +381,10 @@ export class UserRepo {
   }
 
   /**
-   * Возвращает список пользователей для подсказок с учетом правил видимости.
+   * Returns users for autocomplete based on visibility rules.
    *
-   * Для роли MEMBER применяются те же ограничения, что и в каталоге участников:
-   * пользователь видит только тех, с кем есть общие группы или пространства.
+   * For the MEMBER role, the same restrictions as the participant directory apply:
+   * the user sees only people with shared groups or spaces.
    */
   async getVisibleUsersForSuggestion(
     workspaceId: string,

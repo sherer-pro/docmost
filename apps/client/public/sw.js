@@ -73,10 +73,10 @@ self.addEventListener("notificationclick", (event) => {
 });
 
 /**
- * Обрабатывает входящий push payload и показывает уведомление.
+ * Handles incoming push payload and displays a notification.
  *
- * @param {PushEvent} event - Push-событие от браузера.
- * @returns {Promise<void>} Promise завершения показа уведомления.
+ * @param {PushEvent} event - Push event from the browser.
+ * @returns {Promise<void>} Promise that resolves when notification display completes.
  */
 async function handlePushEvent(event) {
   let payload = {};
@@ -103,10 +103,10 @@ async function handlePushEvent(event) {
 }
 
 /**
- * По клику открывает целевую вкладку или фокусирует уже открытую.
+ * On click, opens the target tab or focuses an existing one.
  *
- * @param {NotificationEvent} event - Событие клика по системному уведомлению.
- * @returns {Promise<void>} Promise завершения обработки клика.
+ * @param {NotificationEvent} event - Click event for a system notification.
+ * @returns {Promise<void>} Promise that resolves when click handling completes.
  */
 async function handleNotificationClick(event) {
   event.notification.close();

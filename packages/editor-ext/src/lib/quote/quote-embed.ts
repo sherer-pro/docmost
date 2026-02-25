@@ -10,9 +10,9 @@ declare module '@tiptap/core' {
 }
 
 /**
- * Блочный узел встраиваемой цитаты.
+ * Block node for an embedded quote.
  *
- * Отображение и синхронизация контента происходят на клиентском node-view.
+ * Rendering and content synchronization are handled in a client-side node view.
  */
 export const QuoteEmbed = Node.create({
   name: 'quoteEmbed',

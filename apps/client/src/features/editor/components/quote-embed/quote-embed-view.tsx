@@ -5,10 +5,10 @@ import { IconQuote, IconAlertCircle } from "@tabler/icons-react";
 import { getQuoteContent } from "@/features/page/services/page-service";
 
 /**
- * Отрисовывает встраиваемую цитату и регулярно обновляет её содержимое.
+ * Renders an embedded quote and refreshes its content periodically.
  *
- * Мы используем короткий polling-интервал, чтобы целевой документ
- * получал изменения из документа-источника практически сразу.
+ * A short polling interval is used so the target document
+ * receives updates from the source document almost immediately.
  */
 export default function QuoteEmbedView(props: NodeViewProps) {
   const { node } = props;

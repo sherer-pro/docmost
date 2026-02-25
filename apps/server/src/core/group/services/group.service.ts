@@ -45,7 +45,7 @@ export class GroupService {
       throw new NotFoundException('Group not found');
     }
 
-    // Для роли MEMBER скрываем любые группы, в которых пользователь не состоит.
+    // For the MEMBER role, hide any groups the user does not belong to.
     if (authUser?.role === UserRole.MEMBER) {
       if (group.isDefault) {
         throw new NotFoundException('Group not found');
@@ -150,7 +150,7 @@ export class GroupService {
     paginationOptions: PaginationOptions,
     authUser?: User,
   ): Promise<CursorPaginationResult<Group>> {
-    // Ограничиваем выдачу групп для MEMBER только его собственными группами.
+    // Restrict groups for MEMBER to only their own groups.
     const isMember = authUser?.role === UserRole.MEMBER;
 
     return this.groupRepo.getGroupsPaginated(workspaceId, paginationOptions, {

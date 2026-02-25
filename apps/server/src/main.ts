@@ -53,9 +53,9 @@ function buildBaseCspDirectives() {
 
   return {
     defaultSrc: ["'self'"],
-    // Осознанно снижаем защиту CSP: разрешаем встраивание любых внешних iframe по требованиям продукта.
+    // Intentionally relax CSP: allow embedding external iframes per product requirements.
     frameSrc: ['*'],
-    // Для совместимости со старыми браузерами дублируем правило для дочерних контекстов.
+    // Duplicate the rule for child contexts to keep compatibility with older browsers.
     childSrc: ['*'],
     baseUri: ["'self'"],
     frameAncestors: ["'self'"],

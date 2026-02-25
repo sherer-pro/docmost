@@ -146,7 +146,7 @@ export class SearchService {
     const limit = suggestion?.limit || 10;
     const query = suggestion.query.toLowerCase().trim();
 
-    // Подсказки по пользователям строим через общий фильтр видимости каталога участников.
+    // Build user suggestions through the shared participant directory visibility filter.
     if (suggestion.includeUsers) {
       users = await this.userRepo.getVisibleUsersForSuggestion(
         workspaceId,
@@ -169,7 +169,7 @@ export class SearchService {
         )
         .where('workspaceId', '=', workspaceId);
 
-      // MEMBER видит только группы, где он состоит.
+      // MEMBER can only see groups they belong to.
       if (authUser.role === UserRole.MEMBER) {
         groupsQuery = groupsQuery.where((eb) =>
           eb.exists(
