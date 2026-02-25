@@ -50,6 +50,18 @@ export class PushSubscriptionRepo {
       .execute();
   }
 
+  async revokeByEndpointForUser(endpoint: string, userId: string): Promise<boolean> {
+    const result = await this.db
+      .updateTable('pushSubscriptions')
+      .set({ revokedAt: new Date(), updatedAt: new Date() })
+      .where('endpoint', '=', endpoint)
+      .where('userId', '=', userId)
+      .where('revokedAt', 'is', null)
+      .executeTakeFirst();
+
+    return Number(result.numUpdatedRows) > 0;
+  }
+
   async revokeByIdForUser(id: string, userId: string): Promise<boolean> {
     const result = await this.db
       .updateTable('pushSubscriptions')

@@ -89,3 +89,9 @@ export class DeletePushSubscriptionParamsDto {
   @IsUUID()
   id: string;
 }
+
+export class DeletePushSubscriptionByEndpointDto {
+  @IsString()
+  @IsNotEmpty()
+  endpoint: string;
+}

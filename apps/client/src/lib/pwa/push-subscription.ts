@@ -98,7 +98,8 @@ export async function createPushSubscription(): Promise<string> {
  */
 export async function removePushSubscription(): Promise<void> {
   const subscriptionId = window.localStorage.getItem(PUSH_SUBSCRIPTION_ID_KEY);
-  const registration = 'serviceWorker' in navigator ? await navigator.serviceWorker.ready : null;
+  const registration =
+    'serviceWorker' in navigator ? await navigator.serviceWorker.ready : null;
   const subscription = registration
     ? await registration.pushManager.getSubscription()
     : null;
@@ -115,6 +116,16 @@ export async function removePushSubscription(): Promise<void> {
     }
 
     window.localStorage.removeItem(PUSH_SUBSCRIPTION_ID_KEY);
+  } else if (subscription?.endpoint) {
+    try {
+      await api.delete('/push/subscriptions', {
+        data: {
+          endpoint: subscription.endpoint,
+        },
+      });
+    } catch (error) {
+      backendError = error;
+    }
   }
 
   if (subscription) {
