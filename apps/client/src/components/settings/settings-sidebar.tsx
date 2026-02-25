@@ -20,6 +20,7 @@ import { useTranslation } from "react-i18next";
 import { isCloud } from "@/lib/config.ts";
 import useUserRole from "@/hooks/use-user-role.tsx";
 import { useAtom } from "jotai";
+import { useQuery } from "@tanstack/react-query";
 import {
   currentUserAtom,
   workspaceAtom,
@@ -39,6 +40,7 @@ import AppVersion from "@/components/settings/app-version.tsx";
 import { mobileSidebarAtom } from "@/components/layouts/global/hooks/atoms/sidebar-atom.ts";
 import { useToggleSidebar } from "@/components/layouts/global/hooks/hooks/use-toggle-sidebar.ts";
 import { useSettingsNavigation } from "@/hooks/use-settings-navigation";
+import { getGroups } from "@/features/group/services/group-service.ts";
 
 interface DataItem {
   label: string;
@@ -146,6 +148,10 @@ export default function SettingsSidebar() {
   const [currentUser] = useAtom(currentUserAtom);
   const [mobileSidebarOpened] = useAtom(mobileSidebarAtom);
   const toggleMobileSidebar = useToggleSidebar(mobileSidebarAtom);
+  const { data: groups } = useQuery({
+    queryKey: ["groups", {}],
+    queryFn: () => getGroups({ limit: 1 }),
+  });
 
   useEffect(() => {
     setActive(location.pathname);
@@ -162,6 +168,10 @@ export default function SettingsSidebar() {
       item.path === "/settings/members" &&
       currentUser?.user?.canAccessMembersDirectory === false
     ) {
+      return false;
+    }
+
+    if (item.path === "/settings/groups" && groups?.items.length === 0) {
       return false;
     }
 
