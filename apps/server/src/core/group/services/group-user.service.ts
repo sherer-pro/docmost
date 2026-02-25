@@ -37,8 +37,20 @@ export class GroupUserService {
   ) {
     const group = await this.groupService.findAndValidateGroup(groupId, workspaceId);
 
-    if (authUser?.role === UserRole.MEMBER && group.isDefault) {
-      throw new NotFoundException('Group not found');
+    // MEMBER может видеть участников только в тех группах, где он сам состоит.
+    if (authUser?.role === UserRole.MEMBER) {
+      if (group.isDefault) {
+        throw new NotFoundException('Group not found');
+      }
+
+      const membership = await this.groupUserRepo.getGroupUserById(
+        authUser.id,
+        group.id,
+      );
+
+      if (!membership) {
+        throw new NotFoundException('Group not found');
+      }
     }
 
     const groupUsers = await this.groupUserRepo.getGroupUsersPaginated(

@@ -380,6 +380,45 @@ export class UserRepo {
     });
   }
 
+  /**
+   * Возвращает список пользователей для подсказок с учетом правил видимости.
+   *
+   * Для роли MEMBER применяются те же ограничения, что и в каталоге участников:
+   * пользователь видит только тех, с кем есть общие группы или пространства.
+   */
+  async getVisibleUsersForSuggestion(
+    workspaceId: string,
+    query: string,
+    limit: number,
+    authUser: User,
+  ) {
+    let usersQuery = this.applyWorkspaceMemberVisibility(
+      this.db
+        .selectFrom('users')
+        .select(['id', 'name', 'email', 'avatarUrl'])
+        .where('users.workspaceId', '=', workspaceId)
+        .where('users.deletedAt', 'is', null),
+      workspaceId,
+      authUser,
+    );
+
+    if (query) {
+      usersQuery = usersQuery.where((eb) =>
+        eb.or([
+          eb(
+            sql`LOWER(f_unaccent(users.name))`,
+            'like',
+            sql`LOWER(f_unaccent(${`%${query}%`}))`,
+          ),
+          eb(sql`users.email`, 'ilike', sql`f_unaccent(${`%${query}%`})`),
+        ]),
+      );
+    }
+
+    return usersQuery.limit(limit).execute();
+  }
+
+
   async updatePreference(
     userId: string,
     prefKey: string,
