@@ -66,49 +66,80 @@ export default function AccountPushPreferences() {
 
   const handlePushEnabled = useCallback(
     async (enabled: boolean) => {
-      if (enabled) {
-        if (permission === "unsupported") {
-          notifications.show({
-            color: "red",
-            message: t("Push notifications are not supported in this browser."),
-          });
-          setIsPushEnabled(false);
+      try {
+        if (enabled) {
+          if (permission === "unsupported") {
+            notifications.show({
+              color: "red",
+              message: t("Push notifications are not supported in this browser."),
+            });
+            setIsPushEnabled(false);
+            return;
+          }
+
+          const requestedPermission = await requestNotificationPermission();
+          setPermission(requestedPermission);
+
+          if (requestedPermission !== "granted") {
+            setIsPushEnabled(false);
+            notifications.show({
+              color: "red",
+              message: t(
+                "Push permission is blocked. Enable notifications in browser settings.",
+              ),
+            });
+            return;
+          }
+
+          try {
+            await createPushSubscription();
+          } catch {
+            setIsPushEnabled(false);
+            notifications.show({
+              color: "red",
+              message: t("Failed to enable push notifications. Please try again."),
+            });
+            return;
+          }
+
+          const updatedUser = await updateUser({ pushEnabled: true });
+          setIsPushEnabled(true);
+          setUser(updatedUser);
           return;
         }
 
-        const requestedPermission = await requestNotificationPermission();
-        setPermission(requestedPermission);
+        // Сначала пробуем удалить браузерную подписку, но не блокируем выключение
+        // настройки в аккаунте, если браузерная операция завершилась с ошибкой.
+        let removeSubscriptionFailed = false;
+        try {
+          await removePushSubscription();
+        } catch {
+          removeSubscriptionFailed = true;
+        }
 
-        if (requestedPermission !== "granted") {
-          setIsPushEnabled(false);
+        // Отдельно сохраняем настройку пользователя на сервере, чтобы push
+        // выключался в аккаунте даже при частичном сбое на стороне браузера.
+        const updatedUser = await updateUser({ pushEnabled: false });
+        setIsPushEnabled(false);
+        setUser(updatedUser);
+
+        if (removeSubscriptionFailed) {
           notifications.show({
-            color: "red",
+            color: "yellow",
             message: t(
-              "Push permission is blocked. Enable notifications in browser settings.",
+              "Browser subscription was not removed, but push was disabled in your account.",
             ),
           });
-          return;
         }
-
-        try {
-          await createPushSubscription();
-        } catch {
-          setIsPushEnabled(false);
-          notifications.show({
-            color: "red",
-            message: t("Failed to enable push notifications. Please try again."),
-          });
-          return;
-        }
-      } else {
-        await removePushSubscription();
+      } catch {
+        setIsPushEnabled(pushEnabled);
+        notifications.show({
+          color: "red",
+          message: t("Failed to update push notification settings. Please try again."),
+        });
       }
-
-      const updatedUser = await updateUser({ pushEnabled: enabled });
-      setIsPushEnabled(enabled);
-      setUser(updatedUser);
     },
-    [permission, setUser, t],
+    [permission, pushEnabled, setUser, t],
   );
 
   const handleFrequencyChange = useCallback(
@@ -137,7 +168,12 @@ export default function AccountPushPreferences() {
       <ResponsiveSettingsControl>
         <Switch
           checked={isPushEnabled}
-          onChange={(event) => handlePushEnabled(event.currentTarget.checked)}
+          onChange={(event) => {
+            void handlePushEnabled(event.currentTarget.checked).catch(() => {
+              // Ошибка уже обрабатывается внутри handlePushEnabled, поэтому здесь
+              // подавляем unhandled rejection для стабильного UI-состояния.
+            });
+          }}
           aria-label={t("Toggle push notifications")}
         />
 
