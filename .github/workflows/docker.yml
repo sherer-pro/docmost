@@ -25,7 +25,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: sherer-pro/docmost
+          images: shererpro/docmost
           tags: |
             type=semver,pattern={{version}}
             type=raw,value=latest
