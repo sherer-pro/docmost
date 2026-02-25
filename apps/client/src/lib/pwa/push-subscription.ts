@@ -6,6 +6,52 @@ interface PushSubscriptionCreateResponse {
   id: string;
 }
 
+const SERVICE_WORKER_URL = '/sw.js';
+const SERVICE_WORKER_SCOPE = '/';
+const SERVICE_WORKER_READY_TIMEOUT_MS = 15_000;
+
+/**
+ * Надёжно получает активную регистрацию Service Worker для push.
+ *
+ * Почему это нужно:
+ * 1) `navigator.serviceWorker.ready` может ждать бесконечно, если SW не был зарегистрирован;
+ * 2) в dev-режиме SW часто не регистрируется автоматически, но push всё равно может быть нужен;
+ * 3) при частичном сбое на старте приложения включение push должно само восстановиться.
+ *
+ * Стратегия:
+ * - сначала пытаемся взять уже существующую регистрацию;
+ * - если её нет, регистрируем `/sw.js` вручную;
+ * - после этого ждём `ready`, но с таймаутом, чтобы не зависнуть навсегда.
+ *
+ * @returns {Promise<ServiceWorkerRegistration>} Активная регистрация SW.
+ */
+async function ensureServiceWorkerRegistration(): Promise<ServiceWorkerRegistration> {
+  if (!('serviceWorker' in navigator)) {
+    throw new Error('Service Worker is not supported');
+  }
+
+  const existingRegistration = await navigator.serviceWorker.getRegistration(
+    SERVICE_WORKER_SCOPE,
+  );
+
+  if (existingRegistration) {
+    return existingRegistration;
+  }
+
+  await navigator.serviceWorker.register(SERVICE_WORKER_URL, {
+    scope: SERVICE_WORKER_SCOPE,
+  });
+
+  const readyRegistrationPromise = navigator.serviceWorker.ready;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    window.setTimeout(() => {
+      reject(new Error('Service Worker registration timed out'));
+    }, SERVICE_WORKER_READY_TIMEOUT_MS);
+  });
+
+  return Promise.race([readyRegistrationPromise, timeoutPromise]);
+}
+
 /**
  * Compares applicationServerKey from an existing browser subscription
  * with the server's current VAPID key.
@@ -94,11 +140,7 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
  * sends it to the backend, and stores the subscription id locally.
  */
 export async function createPushSubscription(): Promise<string> {
-  if (!('serviceWorker' in navigator)) {
-    throw new Error('Service Worker is not supported');
-  }
-
-  const registration = await navigator.serviceWorker.ready;
+  const registration = await ensureServiceWorkerRegistration();
   const vapidResponse = await api.get<{ publicKey: string }>('/push/vapid-public-key');
   const vapidPublicKey = vapidResponse.data.publicKey;
 
@@ -152,7 +194,9 @@ export async function createPushSubscription(): Promise<string> {
 export async function removePushSubscription(): Promise<void> {
   const subscriptionId = window.localStorage.getItem(PUSH_SUBSCRIPTION_ID_KEY);
   const registration =
-    'serviceWorker' in navigator ? await navigator.serviceWorker.ready : null;
+    'serviceWorker' in navigator
+      ? await navigator.serviceWorker.getRegistration(SERVICE_WORKER_SCOPE)
+      : null;
   const subscription = registration
     ? await registration.pushManager.getSubscription()
     : null;
