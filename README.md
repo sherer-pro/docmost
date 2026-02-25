@@ -33,6 +33,13 @@
 - Added space-level configuration for displaying custom fields.
 - Added display of participants viewing or editing a document.
 
+## Notifications
+
+- Notifications are created for mentions, comments, assignments, and important updates.
+- They appear instantly in the interface and are visible only to users with access.
+- Users can view the list, see the unread count, and mark notifications as read.
+- Push notifications can be enabled: receive them instantly or as a digest.
+
 ## Admin
 
 - Added the ability to deactivate and reactivate a user.
