@@ -10,10 +10,10 @@ declare module '@tiptap/core' {
 }
 
 /**
- * Маркер источника цитаты.
+ * Source mark for a quote.
  *
- * Хранит идентификатор выделенного фрагмента, который может быть
- * встроен в другой документ через отдельный блочный узел.
+ * Stores the identifier of a selected fragment that can be
+ * embedded into another document via a separate block node.
  */
 export const QuoteSourceMark = Mark.create({
   name: 'quoteSource',

@@ -4,7 +4,7 @@ import { validateSync } from 'class-validator';
 import { CreatePushSubscriptionDto } from './push-subscription.dto';
 
 /**
- * Прогоняет валидацию DTO в изоляции, чтобы быстро проверить контракт API.
+ * Runs DTO validation in isolation to quickly verify the API contract.
  */
 function getErrors(payload: unknown) {
   const instance = plainToInstance(CreatePushSubscriptionDto, payload);

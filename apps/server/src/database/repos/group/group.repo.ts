@@ -118,7 +118,7 @@ export class GroupRepo {
       baseQuery = baseQuery.where('isDefault', '=', false);
     }
 
-    // Когда задан memberUserId, возвращаем только группы с членством этого пользователя.
+    // When memberUserId is provided, return only groups where this user is a member.
     if (opts?.memberUserId) {
       baseQuery = baseQuery.where((eb) =>
         eb.exists(

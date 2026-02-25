@@ -22,8 +22,8 @@ export class PushNotificationJobRepo {
   constructor(@InjectKysely() private readonly db: KyselyDB) {}
 
   /**
-   * Атомарно создаёт или обновляет агрегированную запись.
-   * Если окно уже существует, увеличиваем счётчик событий и обновляем payload.
+   * Atomically creates or updates an aggregated record.
+   * If the window already exists, increment event count and update payload.
    */
   async upsertPending(job: InsertablePushNotificationJob): Promise<void> {
     await this.db
@@ -44,7 +44,7 @@ export class PushNotificationJobRepo {
   }
 
   /**
-   * Атомарно забирает due-записи в обработку и переводит их в processing.
+   * Atomically claims due records for processing and sets them to processing.
    */
   async claimDuePending(limit: number): Promise<PushNotificationJob[]> {
     if (limit <= 0) {
@@ -76,7 +76,7 @@ export class PushNotificationJobRepo {
   }
 
   /**
-   * Помечает записи отправленными после успешной доставки push.
+   * Marks records as sent after successful push delivery.
    */
   async finalizeClaimed(params: {
     sentIds: string[];
@@ -120,8 +120,8 @@ export class PushNotificationJobRepo {
   }
 
   /**
-   * Централизованное обновление статуса только для job'ов, уже захваченных в processing.
-   * Такой фильтр дополнительно защищает от случайной перезаписи статуса конкурентным воркером.
+   * Centralized status update only for jobs already claimed in processing.
+   * This filter adds protection against accidental status overwrite by a competing worker.
    */
   private async updateStatus(
     trx: KyselyDB,

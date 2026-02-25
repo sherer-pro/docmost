@@ -1,7 +1,7 @@
 import { IsNotEmpty, IsString } from 'class-validator';
 
 /**
- * DTO для получения актуального текста цитаты из документа-источника.
+ * DTO for retrieving the latest quote text from the source document.
  */
 export class QuoteContentDto {
   @IsString()

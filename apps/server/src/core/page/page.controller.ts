@@ -74,10 +74,10 @@ export class PageController {
 
 
   /**
-   * Извлекает текст всех текстовых узлов, отмеченных заданным идентификатором цитаты.
+   * Extracts text from all text nodes marked with the given quote identifier.
    *
-   * Возвращает объединённый плейн-текст, который затем отображается
-   * в целевом документе как синхронизируемая встраиваемая цитата.
+   * Returns merged plain text that is then displayed
+   * in the target document as a synchronized embedded quote.
    */
   private extractQuoteTextFromContent(content: any, quoteId: string): string {
     const chunks: string[] = [];
