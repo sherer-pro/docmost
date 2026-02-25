@@ -7,16 +7,16 @@ interface PushSubscriptionCreateResponse {
 }
 
 /**
- * Сравнивает applicationServerKey из существующей браузерной подписки
- * с текущим VAPID-ключом сервера.
+ * Compares applicationServerKey from an existing browser subscription
+ * with the server's current VAPID key.
  *
- * Это нужно для сценария ротации WEB_PUSH_VAPID_* на backend:
- * старые подписки, созданные с предыдущим ключом, продолжают существовать
- * в браузере, но больше не принимают payload от нового ключа.
+ * This is required for WEB_PUSH_VAPID_* rotation on the backend:
+ * old subscriptions created with the previous key may still exist
+ * in the browser but no longer accept payloads signed by the new key.
  *
- * @param {PushSubscription | null} subscription - Текущая подписка браузера.
- * @param {Uint8Array} expectedVapidKey - Актуальный public VAPID key.
- * @returns {boolean} `true`, если ключи совпадают и подписку можно переиспользовать.
+ * @param {PushSubscription | null} subscription - Current browser subscription.
+ * @param {Uint8Array} expectedVapidKey - Current public VAPID key.
+ * @returns {boolean} `true` when keys match and the subscription can be reused.
  */
 function isSubscriptionBoundToCurrentVapidKey(
   subscription: PushSubscription | null,
@@ -46,8 +46,8 @@ function isSubscriptionBoundToCurrentVapidKey(
 }
 
 /**
- * Преобразует VAPID public key из Base64URL-формата в Uint8Array,
- * который требуется браузерному Push API.
+ * Converts a VAPID public key from Base64URL format into Uint8Array,
+ * which is required by the browser Push API.
  */
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
@@ -65,8 +65,8 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 }
 
 /**
- * Возвращает браузерное разрешение на уведомления.
- * Если API не поддерживается, возвращает `unsupported`.
+ * Returns browser notification permission state.
+ * Returns `unsupported` when the API is not available.
  */
 export function getNotificationPermission(): NotificationPermission | 'unsupported' {
   if (typeof window === 'undefined' || typeof window.Notification === 'undefined') {
@@ -77,7 +77,7 @@ export function getNotificationPermission(): NotificationPermission | 'unsupport
 }
 
 /**
- * Запрашивает разрешение на push-уведомления.
+ * Requests permission for push notifications.
  */
 export async function requestNotificationPermission(): Promise<NotificationPermission | 'unsupported'> {
   const currentPermission = getNotificationPermission();
@@ -90,8 +90,8 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
 }
 
 /**
- * Создаёт (или переиспользует) браузерную push-подписку,
- * отправляет её на backend и сохраняет идентификатор подписки локально.
+ * Creates (or reuses) a browser push subscription,
+ * sends it to the backend, and stores the subscription id locally.
  */
 export async function createPushSubscription(): Promise<string> {
   if (!('serviceWorker' in navigator)) {
@@ -110,9 +110,9 @@ export async function createPushSubscription(): Promise<string> {
   const existingSubscription = await registration.pushManager.getSubscription();
 
   /**
-   * Если подписка существует, но связана с предыдущим VAPID-ключом,
-   * принудительно пересоздаём её.
-   * Без этого push может «тихо» не доставляться после ротации ключей.
+   * If a subscription exists but is tied to a previous VAPID key,
+   * it must be recreated forcibly.
+   * Otherwise push can silently fail after key rotation.
    */
   if (
     existingSubscription &&
@@ -147,7 +147,7 @@ export async function createPushSubscription(): Promise<string> {
 }
 
 /**
- * Отписывает устройство от push-уведомлений на backend и в браузере.
+ * Unsubscribes the device from push notifications on backend and browser.
  */
 export async function removePushSubscription(): Promise<void> {
   const subscriptionId = window.localStorage.getItem(PUSH_SUBSCRIPTION_ID_KEY);
@@ -157,8 +157,8 @@ export async function removePushSubscription(): Promise<void> {
     ? await registration.pushManager.getSubscription()
     : null;
 
-  // Даже если удаление на backend не удалось, всё равно пытаемся отписать
-  // браузер, чтобы устройство перестало получать push локально.
+  // Even if backend deletion fails, still try to unsubscribe the
+  // browser so the device stops receiving push locally.
   let backendError: unknown;
 
   if (subscriptionId) {

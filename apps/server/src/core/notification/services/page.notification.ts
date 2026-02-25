@@ -70,8 +70,8 @@ export class PageNotificationService {
 
 
   /**
-   * Создаёт нотификации для ролей страницы (assignee/stakeholders)
-   * в зависимости от типа события.
+   * Creates notifications for page roles (assignee/stakeholders)
+   * based on the event type.
    */
   async processPageRecipientNotification(
     data: IPageRecipientNotificationJob,

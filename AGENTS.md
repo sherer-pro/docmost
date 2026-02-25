@@ -106,6 +106,7 @@
 - In both backend and frontend, several strict TS rules are intentionally relaxed (`no-explicit-any`, `no-unused-vars`, `ban-ts-comment` are disabled).
 - Backend lint runs with `--fix`; running lint in the touched app before commit is recommended.
 - Write comments in code only in English (ASCII), without Cyrillic.
+- Before opening a PR, run `pnpm check:comments:en` and ensure it passes.
 
 ### Commit message format (based on history)
 
