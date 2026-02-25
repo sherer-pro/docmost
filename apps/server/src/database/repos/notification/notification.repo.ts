@@ -85,7 +85,7 @@ export class NotificationRepo {
       .where('pageId', '=', params.pageId)
       .where('readAt', 'is', null)
       .where('createdAt', '>=', params.windowStart)
-      .where('createdAt', '<=', params.windowEnd)
+      .where('createdAt', '<', params.windowEnd)
       .where((eb) =>
         eb.or([
           eb('spaceId', 'is', null),
