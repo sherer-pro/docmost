@@ -181,7 +181,12 @@ export default function AccountPushPreferences() {
           aria-label={t("Toggle push notifications")}
         />
 
-        {isPushEnabled && permission === "granted" && (
+        {/*
+          Показываем выбор частоты, если пользователь включил уведомления в профиле.
+          Это позволяет сразу видеть и менять частоту, даже если разрешение браузера
+          временно не в состоянии `granted` (например, после перезагрузки страницы).
+        */}
+        {isPushEnabled && (
           <Select
             mt="sm"
             data={frequencyData}
