@@ -36,18 +36,22 @@ describe('PushAggregationService', () => {
     pushFrequency?: string;
     isUnreadForUser?: boolean;
     unreadCountInWindow?: number;
+    userSettings?: unknown;
   }) => {
     const db = {
       selectFrom: jest.fn().mockReturnValue({
         select: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
         executeTakeFirst: jest.fn().mockResolvedValue({
-          settings: {
-            preferences: {
-              pushEnabled: true,
-              pushFrequency: options?.pushFrequency ?? 'immediate',
-            },
-          },
+          settings:
+            typeof options?.userSettings !== 'undefined'
+              ? options.userSettings
+              : {
+                  preferences: {
+                    pushEnabled: true,
+                    pushFrequency: options?.pushFrequency ?? 'immediate',
+                  },
+                },
         }),
       }),
     } as any;
@@ -91,6 +95,18 @@ describe('PushAggregationService', () => {
       notificationRepo,
     };
   };
+
+
+  it('использует продуктовый дефолт для пользователя без settings.preferences', async () => {
+    const { service, pushService, notificationRepo } = createService({
+      userSettings: {},
+    });
+
+    await service.dispatchOrAggregate(baseNotification, basePayload);
+
+    expect(pushService.sendToUser).not.toHaveBeenCalled();
+    expect(notificationRepo.isUnreadForUser).not.toHaveBeenCalled();
+  });
 
   it('не отправляет immediate push, если связанное уведомление уже прочитано', async () => {
     const { service, pushService, notificationRepo } = createService({

@@ -23,6 +23,9 @@ interface UserPushPreference {
   pushFrequency: string;
 }
 
+const DEFAULT_PUSH_ENABLED = false;
+const DEFAULT_PUSH_FREQUENCY = 'immediate';
+
 @Injectable()
 export class PushAggregationService {
   private readonly logger = new Logger(PushAggregationService.name);
@@ -248,8 +251,8 @@ export class PushAggregationService {
     };
 
     return {
-      pushEnabled: settings.preferences?.pushEnabled ?? true,
-      pushFrequency: settings.preferences?.pushFrequency ?? 'immediate',
+      pushEnabled: settings.preferences?.pushEnabled ?? DEFAULT_PUSH_ENABLED,
+      pushFrequency: settings.preferences?.pushFrequency ?? DEFAULT_PUSH_FREQUENCY,
     };
   }
 
