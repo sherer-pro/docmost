@@ -103,12 +103,25 @@ export async function removePushSubscription(): Promise<void> {
     ? await registration.pushManager.getSubscription()
     : null;
 
+  // Даже если удаление на backend не удалось, всё равно пытаемся отписать
+  // браузер, чтобы устройство перестало получать push локально.
+  let backendError: unknown;
+
   if (subscriptionId) {
-    await api.delete(`/push/subscriptions/${subscriptionId}`);
+    try {
+      await api.delete(`/push/subscriptions/${subscriptionId}`);
+    } catch (error) {
+      backendError = error;
+    }
+
     window.localStorage.removeItem(PUSH_SUBSCRIPTION_ID_KEY);
   }
 
   if (subscription) {
     await subscription.unsubscribe();
+  }
+
+  if (backendError) {
+    throw backendError;
   }
 }
