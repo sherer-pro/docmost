@@ -80,7 +80,7 @@ export class SearchController {
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
-    return this.searchService.searchSuggestions(dto, user.id, workspace.id);
+    return this.searchService.searchSuggestions(dto, user, workspace.id);
   }
 
   @Public()
