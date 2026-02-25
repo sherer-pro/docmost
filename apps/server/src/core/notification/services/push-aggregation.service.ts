@@ -1,7 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { PushNotificationJobRepo } from '@docmost/db/repos/push-notification-job/push-notification-job.repo';
+import {
+  PUSH_NOTIFICATION_JOB_STATUS,
+  PushNotificationJobRepo,
+} from '@docmost/db/repos/push-notification-job/push-notification-job.repo';
 import { NotificationRepo } from '@docmost/db/repos/notification/notification.repo';
 import { Notification } from '@docmost/db/types/entity.types';
 import { QueueJob, QueueName } from '../../../integrations/queue/constants';
@@ -108,7 +111,7 @@ export class PushAggregationService {
       windowKey,
       idempotencyKey: `${notification.userId}:${notification.pageId}:${windowKey}`,
       sendAfter: new Date(windowEnd),
-      status: 'pending',
+      status: PUSH_NOTIFICATION_JOB_STATUS.PENDING,
       payload: {
         ...payload,
         pageTitle: payload.pageTitle ?? payload.body,
@@ -117,17 +120,18 @@ export class PushAggregationService {
   }
 
   /**
-   * Забирает due-записи, формирует один push на документ и помечает записи отправленными.
+   * Атомарно забирает due-записи в processing, отправляет push и финализирует статусы.
+   * Благодаря claim-механике через SKIP LOCKED несколько воркеров могут работать параллельно без дублей.
    */
   async processDueJobs(limit = 200): Promise<void> {
-    const dueItems = await this.pushNotificationJobRepo.findDuePending(limit);
+    const dueItems = await this.pushNotificationJobRepo.claimDuePending(limit);
     if (dueItems.length === 0) {
       return;
     }
 
     const sentIds: string[] = [];
     const cancelledIds: string[] = [];
-    const pendingRetryIds: string[] = [];
+    const retryIds: string[] = [];
 
     for (const item of dueItems) {
       const shouldSend = await this.hasUnreadNotificationsInWindow(item);
@@ -148,13 +152,16 @@ export class PushAggregationService {
         notificationId: payload.notificationId,
       });
 
-      this.applyDispatchOutcome(item.id, pushResult, sentIds, cancelledIds, pendingRetryIds);
+      this.applyDispatchOutcome(item.id, pushResult, sentIds, cancelledIds, retryIds);
     }
 
-    await this.pushNotificationJobRepo.markAsSent(sentIds);
-    await this.pushNotificationJobRepo.markAsCancelled(cancelledIds);
+    await this.pushNotificationJobRepo.finalizeClaimed({
+      sentIds,
+      cancelledIds,
+      retryIds,
+    });
     this.logger.debug(
-      `Processed ${sentIds.length} aggregated push job(s), cancelled ${cancelledIds.length}, pending retry ${pendingRetryIds.length}`,
+      `Processed ${sentIds.length} aggregated push job(s), cancelled ${cancelledIds.length}, retry queued ${retryIds.length}`,
     );
   }
 
@@ -163,7 +170,7 @@ export class PushAggregationService {
     pushResult: PushSendResult,
     sentIds: string[],
     cancelledIds: string[],
-    pendingRetryIds: string[],
+    retryIds: string[],
   ): void {
     if (pushResult.outcome === 'success') {
       sentIds.push(jobId);
@@ -171,9 +178,9 @@ export class PushAggregationService {
     }
 
     if (pushResult.outcome === 'transient-failure') {
-      pendingRetryIds.push(jobId);
+      retryIds.push(jobId);
       this.logger.warn(
-        `Push job ${jobId} left pending due to transient delivery failure (failed=${pushResult.failed}, revoked=${pushResult.revoked})`,
+        `Push job ${jobId} returned to pending after transient delivery failure (failed=${pushResult.failed}, revoked=${pushResult.revoked})`,
       );
       return;
     }
@@ -183,7 +190,6 @@ export class PushAggregationService {
       `Push job ${jobId} cancelled with outcome ${pushResult.outcome} (sent=${pushResult.sent}, failed=${pushResult.failed}, revoked=${pushResult.revoked})`,
     );
   }
-
 
   /**
    * Разрешает immediate отправку только когда связанное уведомление ещё не прочитано.
