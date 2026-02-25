@@ -6,7 +6,7 @@ export class PushAggregationBootstrapService implements OnModuleInit {
   constructor(private readonly pushAggregationService: PushAggregationService) {}
 
   /**
-   * Регистрирует повторяемую BullMQ задачу при старте модуля.
+   * Registers a repeatable BullMQ job on module startup.
    */
   async onModuleInit(): Promise<void> {
     await this.pushAggregationService.ensureProcessJobScheduled();

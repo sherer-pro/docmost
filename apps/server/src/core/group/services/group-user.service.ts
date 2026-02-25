@@ -37,7 +37,7 @@ export class GroupUserService {
   ) {
     const group = await this.groupService.findAndValidateGroup(groupId, workspaceId);
 
-    // MEMBER может видеть участников только в тех группах, где он сам состоит.
+    // MEMBER can view participants only in groups they belong to.
     if (authUser?.role === UserRole.MEMBER) {
       if (group.isDefault) {
         throw new NotFoundException('Group not found');
