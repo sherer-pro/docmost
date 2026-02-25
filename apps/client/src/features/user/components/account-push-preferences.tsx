@@ -12,6 +12,10 @@ import {
   requestNotificationPermission,
 } from "@/lib/pwa/push-subscription";
 import { PushFrequency } from "@/features/user/types/user.types.ts";
+import {
+  DEFAULT_PUSH_ENABLED,
+  DEFAULT_PUSH_FREQUENCY,
+} from "@/features/user/constants/push-preferences.ts";
 import { Select, Switch, Text } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useAtom } from "jotai";
@@ -32,9 +36,9 @@ export default function AccountPushPreferences() {
   const [permission, setPermission] = useState<
     NotificationPermission | "unsupported"
   >(getNotificationPermission());
-  const pushEnabled = user.settings?.preferences?.pushEnabled ?? false;
+  const pushEnabled = user.settings?.preferences?.pushEnabled ?? DEFAULT_PUSH_ENABLED;
   const pushFrequency =
-    user.settings?.preferences?.pushFrequency ?? "immediate";
+    user.settings?.preferences?.pushFrequency ?? DEFAULT_PUSH_FREQUENCY;
   const [isPushEnabled, setIsPushEnabled] = useState(pushEnabled);
   const [selectedFrequency, setSelectedFrequency] =
     useState<PushFrequency>(pushFrequency);
