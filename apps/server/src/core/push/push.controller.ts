@@ -16,6 +16,7 @@ import { AuthUser } from '../../common/decorators/auth-user.decorator';
 import { User } from '@docmost/db/types/entity.types';
 import {
   CreatePushSubscriptionDto,
+  DeletePushSubscriptionByEndpointDto,
   DeletePushSubscriptionParamsDto,
 } from './dto/push-subscription.dto';
 import { EnvironmentService } from '../../integrations/environment/environment.service';
@@ -72,6 +73,22 @@ export class PushController {
   ) {
     const deleted = await this.pushSubscriptionRepo.revokeByIdForUser(
       params.id,
+      user.id,
+    );
+
+    if (!deleted) {
+      throw new NotFoundException('Push subscription not found');
+    }
+  }
+
+  @Delete('subscriptions')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteSubscriptionByEndpoint(
+    @Body() dto: DeletePushSubscriptionByEndpointDto,
+    @AuthUser() user: User,
+  ) {
+    const deleted = await this.pushSubscriptionRepo.revokeByEndpointForUser(
+      dto.endpoint,
       user.id,
     );
 
