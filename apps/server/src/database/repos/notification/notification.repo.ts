@@ -69,8 +69,8 @@ export class NotificationRepo {
   }
 
   /**
-   * Возвращает количество непрочитанных уведомлений пользователя
-   * в рамках конкретного документа и временного окна.
+   * Returns the number of unread notifications for a user
+   * within a specific document and time window.
    */
   async countUnreadByUserPageInWindow(params: {
     userId: string;
@@ -102,7 +102,7 @@ export class NotificationRepo {
   }
 
   /**
-   * Проверяет, что уведомление по-прежнему непрочитано и принадлежит пользователю.
+   * Checks that the notification is still unread and belongs to the user.
    */
   async isUnreadForUser(notificationId: string, userId: string): Promise<boolean> {
     const result = await this.db

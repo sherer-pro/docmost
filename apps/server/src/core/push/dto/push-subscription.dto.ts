@@ -25,8 +25,8 @@ export class CreatePushSubscriptionDto {
   endpoint: string;
 
   /**
-   * Ручной fallback: если клиент не прислал объект `keys`/`subscriptionKeys`,
-   * ключ `p256dh` должен прийти отдельным полем.
+   * Manual fallback: if the client does not send a `keys`/`subscriptionKeys` object,
+   * the `p256dh` key must be provided as a separate field.
    */
   @ValidateIf(
     (dto: CreatePushSubscriptionDto) => !dto.keys && !dto.subscriptionKeys,
@@ -36,8 +36,8 @@ export class CreatePushSubscriptionDto {
   p256dh?: string;
 
   /**
-   * Аналогично `p256dh`: в плоском payload поле `auth` обязательно,
-   * но при наличии вложенных ключей повторно его не требуем.
+   * Similar to `p256dh`: for a flat payload, the `auth` field is required,
+   * but it is not required again when nested keys are present.
    */
   @ValidateIf(
     (dto: CreatePushSubscriptionDto) => !dto.keys && !dto.subscriptionKeys,

@@ -112,8 +112,8 @@ export default function AccountPushPreferences() {
           return;
         }
 
-        // Сначала пробуем удалить браузерную подписку, но не блокируем выключение
-        // настройки в аккаунте, если браузерная операция завершилась с ошибкой.
+        // First try to remove the browser subscription, but do not block disabling
+        // the account setting if the browser operation fails.
         let removeSubscriptionFailed = false;
         try {
           await removePushSubscription();
@@ -121,8 +121,8 @@ export default function AccountPushPreferences() {
           removeSubscriptionFailed = true;
         }
 
-        // Отдельно сохраняем настройку пользователя на сервере, чтобы push
-        // выключался в аккаунте даже при частичном сбое на стороне браузера.
+        // Persist the user setting on the server separately so push
+        // is disabled in the account even if the browser-side step partially fails.
         const updatedUser = await updateUser({ pushEnabled: false });
         setIsPushEnabled(false);
         setUser(updatedUser);
@@ -174,8 +174,8 @@ export default function AccountPushPreferences() {
           checked={isPushEnabled}
           onChange={(event) => {
             void handlePushEnabled(event.currentTarget.checked).catch(() => {
-              // Ошибка уже обрабатывается внутри handlePushEnabled, поэтому здесь
-              // подавляем unhandled rejection для стабильного UI-состояния.
+              // The error is already handled inside handlePushEnabled, so here
+              // we suppress unhandled rejection to keep UI state stable.
             });
           }}
           aria-label={t("Toggle push notifications")}

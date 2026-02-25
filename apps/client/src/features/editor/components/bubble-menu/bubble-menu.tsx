@@ -128,7 +128,7 @@ export const EditorBubbleMenu: FC<EditorBubbleMenuProps> = (props) => {
     name: "Mark as quote source",
     isActive: () => false,
     command: () => {
-      // @ts-ignore В storage динамически сохраняется pageId при инициализации редактора.
+      // @ts-ignore pageId is dynamically stored in storage during editor initialization.
       const pageId = props.editor?.storage?.pageId;
       if (!pageId) {
         return;

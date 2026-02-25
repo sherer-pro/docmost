@@ -233,8 +233,8 @@ export class PageService {
         this.logger.warn(`Failed to queue add-page-watchers: ${err.message}`),
       );
 
-    // Вычисляем дельту назначения сразу после обновления,
-    // чтобы уведомить только новых участников роли.
+    // Compute assignment deltas right after the update
+    // to notify only newly assigned role participants.
     const assignmentDelta = this.recipientResolverService.resolveAssignmentDelta(
       currentSettings,
       nextSettings ?? null,
