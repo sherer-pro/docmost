@@ -11,14 +11,17 @@ import {
 import { Type } from 'class-transformer';
 
 export class UpdateSpaceDocumentFieldsDto {
+  @IsOptional()
   @IsBoolean()
-  status: boolean;
+  status?: boolean;
 
+  @IsOptional()
   @IsBoolean()
-  assignee: boolean;
+  assignee?: boolean;
 
+  @IsOptional()
   @IsBoolean()
-  stakeholders: boolean;
+  stakeholders?: boolean;
 }
 
 export class UpdateSpaceDto extends PartialType(CreateSpaceDto) {
