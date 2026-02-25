@@ -18,7 +18,7 @@ export default function WorkspaceMembers() {
   const [segmentValue, setSegmentValue] = useState("members");
   const [workspace] = useAtom(workspaceAtom);
   const [searchParams] = useSearchParams();
-  const { isAdmin } = useUserRole();
+  const { isAdmin, isMember } = useUserRole();
   const navigate = useNavigate();
   const { data: visibleMembersCount } = useWorkspaceVisibleMembersCountQuery();
 
@@ -43,6 +43,14 @@ export default function WorkspaceMembers() {
     }
   };
 
+  /**
+   * For MEMBER role, do not fallback to global `workspace.memberCount`.
+   * If `visibleMembersCount` request fails, this avoids exposing
+   * the total workspace members count.
+   */
+  const membersTabCount =
+    visibleMembersCount?.count ?? (isMember ? 0 : workspace?.memberCount ?? 0);
+
   return (
     <>
       <Helmet>
@@ -63,7 +71,7 @@ export default function WorkspaceMembers() {
             {
               label:
                 t("Members") +
-                ` (${visibleMembersCount?.count ?? workspace?.memberCount ?? 0})`,
+                ` (${membersTabCount})`,
               value: "members",
             },
             ...(isAdmin ? [{ label: t("Pending"), value: "invites" }] : []),

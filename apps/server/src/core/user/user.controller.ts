@@ -41,9 +41,17 @@ export class UserController {
     @AuthUser() authUser: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
-    const memberCount = await this.workspaceRepo.getActiveUserCount(
-      workspace.id,
-    );
+    /**
+     * For MEMBER users, return only the number of users they are allowed to see
+     * (shared non-default groups/spaces).
+     *
+     * This prevents leaking the total workspace member count when
+     * there is no shared context with other users.
+     */
+    const memberCount =
+      authUser.role === UserRole.MEMBER
+        ? await this.userRepo.getWorkspaceVisibleUsersCount(workspace.id, authUser)
+        : await this.workspaceRepo.getActiveUserCount(workspace.id);
 
     const { licenseKey, ...rest } = workspace;
 
