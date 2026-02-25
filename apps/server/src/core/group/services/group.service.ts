@@ -45,8 +45,20 @@ export class GroupService {
       throw new NotFoundException('Group not found');
     }
 
-    if (authUser?.role === UserRole.MEMBER && group.isDefault) {
-      throw new NotFoundException('Group not found');
+    // Для роли MEMBER скрываем любые группы, в которых пользователь не состоит.
+    if (authUser?.role === UserRole.MEMBER) {
+      if (group.isDefault) {
+        throw new NotFoundException('Group not found');
+      }
+
+      const membership = await this.groupUserRepo.getGroupUserById(
+        authUser.id,
+        group.id,
+      );
+
+      if (!membership) {
+        throw new NotFoundException('Group not found');
+      }
     }
 
     return group;
@@ -138,8 +150,12 @@ export class GroupService {
     paginationOptions: PaginationOptions,
     authUser?: User,
   ): Promise<CursorPaginationResult<Group>> {
+    // Ограничиваем выдачу групп для MEMBER только его собственными группами.
+    const isMember = authUser?.role === UserRole.MEMBER;
+
     return this.groupRepo.getGroupsPaginated(workspaceId, paginationOptions, {
-      excludeDefaultGroup: authUser?.role === UserRole.MEMBER,
+      excludeDefaultGroup: isMember,
+      memberUserId: isMember ? authUser.id : undefined,
     });
   }
 

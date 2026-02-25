@@ -7,6 +7,9 @@ import { sql } from 'kysely';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 import { ShareRepo } from '@docmost/db/repos/share/share.repo';
+import { UserRepo } from '@docmost/db/repos/user/user.repo';
+import { User } from '@docmost/db/types/entity.types';
+import { UserRole } from '../../common/helpers/types/permission';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const tsquery = require('pg-tsquery')();
@@ -18,6 +21,7 @@ export class SearchService {
     private pageRepo: PageRepo,
     private shareRepo: ShareRepo,
     private spaceMemberRepo: SpaceMemberRepo,
+    private userRepo: UserRepo,
   ) {}
 
   async searchPage(
@@ -132,7 +136,7 @@ export class SearchService {
 
   async searchSuggestions(
     suggestion: SearchSuggestionDTO,
-    userId: string,
+    authUser: User,
     workspaceId: string,
   ) {
     let users = [];
@@ -142,29 +146,18 @@ export class SearchService {
     const limit = suggestion?.limit || 10;
     const query = suggestion.query.toLowerCase().trim();
 
+    // Подсказки по пользователям строим через общий фильтр видимости каталога участников.
     if (suggestion.includeUsers) {
-      const userQuery = this.db
-        .selectFrom('users')
-        .select(['id', 'name', 'email', 'avatarUrl'])
-        .where('workspaceId', '=', workspaceId)
-        .where('deletedAt', 'is', null)
-        .where((eb) =>
-          eb.or([
-            eb(
-              sql`LOWER(f_unaccent(users.name))`,
-              'like',
-              sql`LOWER(f_unaccent(${`%${query}%`}))`,
-            ),
-            eb(sql`users.email`, 'ilike', sql`f_unaccent(${`%${query}%`})`),
-          ]),
-        )
-        .limit(limit);
-
-      users = await userQuery.execute();
+      users = await this.userRepo.getVisibleUsersForSuggestion(
+        workspaceId,
+        query,
+        limit,
+        authUser,
+      );
     }
 
     if (suggestion.includeGroups) {
-      groups = await this.db
+      let groupsQuery = this.db
         .selectFrom('groups')
         .select(['id', 'name', 'description'])
         .where((eb) =>
@@ -174,9 +167,22 @@ export class SearchService {
             sql`LOWER(f_unaccent(${`%${query}%`}))`,
           ),
         )
-        .where('workspaceId', '=', workspaceId)
-        .limit(limit)
-        .execute();
+        .where('workspaceId', '=', workspaceId);
+
+      // MEMBER видит только группы, где он состоит.
+      if (authUser.role === UserRole.MEMBER) {
+        groupsQuery = groupsQuery.where((eb) =>
+          eb.exists(
+            eb
+              .selectFrom('groupUsers')
+              .select('groupUsers.groupId')
+              .whereRef('groupUsers.groupId', '=', 'groups.id')
+              .where('groupUsers.userId', '=', authUser.id),
+          ),
+        );
+      }
+
+      groups = await groupsQuery.limit(limit).execute();
     }
 
     if (suggestion.includePages) {
@@ -195,7 +201,7 @@ export class SearchService {
         .limit(limit);
 
       // only search spaces the user has access to
-      const userSpaceIds = await this.spaceMemberRepo.getUserSpaceIds(userId);
+      const userSpaceIds = await this.spaceMemberRepo.getUserSpaceIds(authUser.id);
 
       if (suggestion?.spaceId) {
         if (userSpaceIds.includes(suggestion.spaceId)) {

@@ -106,7 +106,7 @@ export class GroupRepo {
   async getGroupsPaginated(
     workspaceId: string,
     pagination: PaginationOptions,
-    opts?: { excludeDefaultGroup?: boolean },
+    opts?: { excludeDefaultGroup?: boolean; memberUserId?: string },
   ) {
     let baseQuery = this.db
       .selectFrom('groups')
@@ -116,6 +116,19 @@ export class GroupRepo {
 
     if (opts?.excludeDefaultGroup) {
       baseQuery = baseQuery.where('isDefault', '=', false);
+    }
+
+    // Когда задан memberUserId, возвращаем только группы с членством этого пользователя.
+    if (opts?.memberUserId) {
+      baseQuery = baseQuery.where((eb) =>
+        eb.exists(
+          eb
+            .selectFrom('groupUsers')
+            .select('groupUsers.groupId')
+            .whereRef('groupUsers.groupId', '=', 'groups.id')
+            .where('groupUsers.userId', '=', opts.memberUserId),
+        ),
+      );
     }
 
     if (pagination.query) {
