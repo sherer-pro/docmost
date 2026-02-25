@@ -175,4 +175,67 @@ describe('PushAggregationService', () => {
       retryIds: ['job-1'],
     });
   });
+
+  it('обрабатывает соседние окна как полуинтервалы [start, end) без пересечения на границе', async () => {
+    const { service, pushService, pushNotificationJobRepo, notificationRepo } =
+      createService();
+
+    const firstWindowJob = {
+      ...dueJob,
+      id: 'job-1',
+      windowKey: '1h:2026-02-01T10:00:00.000Z',
+      sendAfter: new Date('2026-02-01T11:00:00.000Z'),
+    };
+    const secondWindowJob = {
+      ...dueJob,
+      id: 'job-2',
+      windowKey: '1h:2026-02-01T11:00:00.000Z',
+      sendAfter: new Date('2026-02-01T12:00:00.000Z'),
+    };
+
+    pushNotificationJobRepo.claimDuePending.mockResolvedValue([
+      firstWindowJob,
+      secondWindowJob,
+    ]);
+    notificationRepo.countUnreadByUserPageInWindow.mockImplementation(
+      ({ windowStart, windowEnd }) => {
+        if (
+          windowStart.toISOString() === '2026-02-01T10:00:00.000Z' &&
+          windowEnd.toISOString() === '2026-02-01T11:00:00.000Z'
+        ) {
+          return Promise.resolve(0);
+        }
+
+        if (
+          windowStart.toISOString() === '2026-02-01T11:00:00.000Z' &&
+          windowEnd.toISOString() === '2026-02-01T12:00:00.000Z'
+        ) {
+          return Promise.resolve(1);
+        }
+
+        return Promise.resolve(0);
+      },
+    );
+
+    await service.processDueJobs();
+
+    expect(notificationRepo.countUnreadByUserPageInWindow).toHaveBeenNthCalledWith(1, {
+      userId: 'user-1',
+      pageId: 'page-1',
+      windowStart: new Date('2026-02-01T10:00:00.000Z'),
+      windowEnd: new Date('2026-02-01T11:00:00.000Z'),
+    });
+    expect(notificationRepo.countUnreadByUserPageInWindow).toHaveBeenNthCalledWith(2, {
+      userId: 'user-1',
+      pageId: 'page-1',
+      windowStart: new Date('2026-02-01T11:00:00.000Z'),
+      windowEnd: new Date('2026-02-01T12:00:00.000Z'),
+    });
+    expect(pushService.sendToUser).toHaveBeenCalledTimes(1);
+    expect(pushNotificationJobRepo.finalizeClaimed).toHaveBeenCalledWith({
+      sentIds: ['job-2'],
+      cancelledIds: ['job-1'],
+      retryIds: [],
+    });
+  });
 });
