@@ -7,6 +7,45 @@ interface PushSubscriptionCreateResponse {
 }
 
 /**
+ * Сравнивает applicationServerKey из существующей браузерной подписки
+ * с текущим VAPID-ключом сервера.
+ *
+ * Это нужно для сценария ротации WEB_PUSH_VAPID_* на backend:
+ * старые подписки, созданные с предыдущим ключом, продолжают существовать
+ * в браузере, но больше не принимают payload от нового ключа.
+ *
+ * @param {PushSubscription | null} subscription - Текущая подписка браузера.
+ * @param {Uint8Array} expectedVapidKey - Актуальный public VAPID key.
+ * @returns {boolean} `true`, если ключи совпадают и подписку можно переиспользовать.
+ */
+function isSubscriptionBoundToCurrentVapidKey(
+  subscription: PushSubscription | null,
+  expectedVapidKey: Uint8Array,
+): boolean {
+  if (!subscription) {
+    return false;
+  }
+
+  const currentKeyBuffer = subscription.options.applicationServerKey;
+  if (!currentKeyBuffer) {
+    return false;
+  }
+
+  const currentKey = new Uint8Array(currentKeyBuffer);
+  if (currentKey.length !== expectedVapidKey.length) {
+    return false;
+  }
+
+  for (let i = 0; i < currentKey.length; i += 1) {
+    if (currentKey[i] !== expectedVapidKey[i]) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/**
  * Преобразует VAPID public key из Base64URL-формата в Uint8Array,
  * который требуется браузерному Push API.
  */
@@ -67,12 +106,26 @@ export async function createPushSubscription(): Promise<string> {
     throw new Error('Missing WEB_PUSH_VAPID_PUBLIC_KEY on server');
   }
 
+  const applicationServerKey = urlBase64ToUint8Array(vapidPublicKey);
   const existingSubscription = await registration.pushManager.getSubscription();
+
+  /**
+   * Если подписка существует, но связана с предыдущим VAPID-ключом,
+   * принудительно пересоздаём её.
+   * Без этого push может «тихо» не доставляться после ротации ключей.
+   */
+  if (
+    existingSubscription &&
+    !isSubscriptionBoundToCurrentVapidKey(existingSubscription, applicationServerKey)
+  ) {
+    await existingSubscription.unsubscribe();
+  }
+
   const browserSubscription =
-    existingSubscription ??
+    (await registration.pushManager.getSubscription()) ??
     (await registration.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+      applicationServerKey,
     }));
 
   const subscriptionJson = browserSubscription.toJSON();
