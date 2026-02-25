@@ -5,7 +5,7 @@ import { PushNotificationJobRepo } from '@docmost/db/repos/push-notification-job
 import { NotificationRepo } from '@docmost/db/repos/notification/notification.repo';
 import { Notification } from '@docmost/db/types/entity.types';
 import { QueueJob, QueueName } from '../../../integrations/queue/constants';
-import { PushService } from '../../push/push.service';
+import { PushSendResult, PushService } from '../../push/push.service';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 
@@ -124,6 +124,7 @@ export class PushAggregationService {
 
     const sentIds: string[] = [];
     const cancelledIds: string[] = [];
+    const pendingRetryIds: string[] = [];
 
     for (const item of dueItems) {
       const shouldSend = await this.hasUnreadNotificationsInWindow(item);
@@ -136,7 +137,7 @@ export class PushAggregationService {
       const pageTitle = payload.pageTitle || payload.body || 'document';
       const eventCount = item.eventsCount ?? 1;
 
-      await this.pushService.sendToUser(item.userId, {
+      const pushResult = await this.pushService.sendToUser(item.userId, {
         title: `Updates in ${pageTitle}`,
         body: `${eventCount} event(s) in this period`,
         url: payload.url,
@@ -144,13 +145,39 @@ export class PushAggregationService {
         notificationId: payload.notificationId,
       });
 
-      sentIds.push(item.id);
+      this.applyDispatchOutcome(item.id, pushResult, sentIds, cancelledIds, pendingRetryIds);
     }
 
     await this.pushNotificationJobRepo.markAsSent(sentIds);
     await this.pushNotificationJobRepo.markAsCancelled(cancelledIds);
     this.logger.debug(
-      `Processed ${sentIds.length} aggregated push job(s), cancelled ${cancelledIds.length}`,
+      `Processed ${sentIds.length} aggregated push job(s), cancelled ${cancelledIds.length}, pending retry ${pendingRetryIds.length}`,
+    );
+  }
+
+  private applyDispatchOutcome(
+    jobId: string,
+    pushResult: PushSendResult,
+    sentIds: string[],
+    cancelledIds: string[],
+    pendingRetryIds: string[],
+  ): void {
+    if (pushResult.outcome === 'success') {
+      sentIds.push(jobId);
+      return;
+    }
+
+    if (pushResult.outcome === 'transient-failure') {
+      pendingRetryIds.push(jobId);
+      this.logger.warn(
+        `Push job ${jobId} left pending due to transient delivery failure (failed=${pushResult.failed}, revoked=${pushResult.revoked})`,
+      );
+      return;
+    }
+
+    cancelledIds.push(jobId);
+    this.logger.warn(
+      `Push job ${jobId} cancelled with outcome ${pushResult.outcome} (sent=${pushResult.sent}, failed=${pushResult.failed}, revoked=${pushResult.revoked})`,
     );
   }
 
