@@ -31,6 +31,10 @@ export class UpdateUserDto extends PartialType(
   pushEnabled: boolean;
 
   @IsOptional()
+  @IsBoolean()
+  emailEnabled: boolean;
+
+  @IsOptional()
   @IsString()
   @IsIn(['immediate', '1h', '3h', '6h', '24h'])
   pushFrequency: string;
