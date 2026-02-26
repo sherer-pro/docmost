@@ -11,19 +11,19 @@ const SERVICE_WORKER_SCOPE = '/';
 const SERVICE_WORKER_READY_TIMEOUT_MS = 15_000;
 
 /**
- * Надёжно получает активную регистрацию Service Worker для push.
+ * Reliably returns an active Service Worker registration for push.
  *
- * Почему это нужно:
- * 1) `navigator.serviceWorker.ready` может ждать бесконечно, если SW не был зарегистрирован;
- * 2) в dev-режиме SW часто не регистрируется автоматически, но push всё равно может быть нужен;
- * 3) при частичном сбое на старте приложения включение push должно само восстановиться.
+ * Why this is needed:
+ * 1) `navigator.serviceWorker.ready` may wait forever if SW was never registered;
+ * 2) in dev mode SW is often not auto-registered, while push may still be needed;
+ * 3) after partial startup failures, enabling push should self-recover.
  *
- * Стратегия:
- * - сначала пытаемся взять уже существующую регистрацию;
- * - если её нет, регистрируем `/sw.js` вручную;
- * - после этого ждём `ready`, но с таймаутом, чтобы не зависнуть навсегда.
+ * Strategy:
+ * - first, try to reuse an existing registration;
+ * - if none exists, register `/sw.js` manually;
+ * - then wait for `ready`, but with a timeout to avoid hanging forever.
  *
- * @returns {Promise<ServiceWorkerRegistration>} Активная регистрация SW.
+ * @returns {Promise<ServiceWorkerRegistration>} Active SW registration.
  */
 async function ensureServiceWorkerRegistration(): Promise<ServiceWorkerRegistration> {
   if (!('serviceWorker' in navigator)) {
