@@ -27,7 +27,7 @@ export class AuthRateLimitGuard implements CanActivate {
     private readonly authRateLimitService: AuthRateLimitService,
   ) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const metadata = this.reflector.get<AuthRateLimitMetadata>(
       AUTH_RATE_LIMIT_METADATA,
       context.getHandler(),
@@ -43,7 +43,7 @@ export class AuthRateLimitGuard implements CanActivate {
     const clientIp = this.getClientIp(request);
     const accountIdentifier = this.getAccountIdentifier(request, metadata);
 
-    const ipCheck = this.authRateLimitService.consume({
+    const ipCheck = await this.authRateLimitService.consume({
       endpoint: metadata.endpoint,
       scope: 'ip',
       key: clientIp,
@@ -63,7 +63,7 @@ export class AuthRateLimitGuard implements CanActivate {
       );
     }
 
-    const accountCheck = this.authRateLimitService.consume({
+    const accountCheck = await this.authRateLimitService.consume({
       endpoint: metadata.endpoint,
       scope: 'account',
       key: accountIdentifier,
