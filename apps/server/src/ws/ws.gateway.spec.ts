@@ -57,7 +57,7 @@ describe('WsGateway.handleMessage', () => {
     gateway = new WsGatewayClass({} as any, {} as any);
   });
 
-  it('ретранслирует сообщение только в авторизованную space-комнату', () => {
+  it('relays a message only to an authorized space room', () => {
     const socket = createSocketMock(['space-space-a']);
 
     gateway.handleMessage(socket as any, {
@@ -74,7 +74,7 @@ describe('WsGateway.handleMessage', () => {
     );
   });
 
-  it('блокирует межпространственную ретрансляцию в неавторизованную комнату', () => {
+  it('blocks cross-space relay to an unauthorized room', () => {
     const socket = createSocketMock(['space-space-a']);
 
     gateway.handleMessage(socket as any, {
@@ -87,7 +87,7 @@ describe('WsGateway.handleMessage', () => {
     expect(socket.broadcast.to).not.toHaveBeenCalled();
   });
 
-  it('блокирует ретрансляцию, если сокет не состоит в целевой комнате', () => {
+  it('blocks relay when the socket is not joined to the target room', () => {
     const socket = createSocketMock(['workspace-workspace-a'], []);
 
     gateway.handleMessage(socket as any, {
@@ -100,7 +100,7 @@ describe('WsGateway.handleMessage', () => {
     expect(socket.broadcast.to).not.toHaveBeenCalled();
   });
 
-  it('отклоняет payload без обязательного workspaceId для workspace-комнаты', () => {
+  it('rejects payload without required workspaceId for a workspace room', () => {
     const socket = createSocketMock(['workspace-workspace-a']);
 
     gateway.handleMessage(socket as any, {
@@ -112,7 +112,7 @@ describe('WsGateway.handleMessage', () => {
     expect(socket.broadcast.to).not.toHaveBeenCalled();
   });
 
-  it('отклоняет payload с несогласованными room и spaceId', () => {
+  it('rejects payload with mismatched room and spaceId', () => {
     const socket = createSocketMock(['space-space-a']);
 
     gateway.handleMessage(socket as any, {

@@ -45,7 +45,7 @@ describe('WorkspaceService', () => {
     return { service, userRepo, eventEmitter };
   };
 
-  it('должен запрещать self-deactivate', async () => {
+  it('should prevent self-deactivation', async () => {
     const { service, userRepo } = createService();
 
     userRepo.findById.mockResolvedValue({
@@ -60,7 +60,7 @@ describe('WorkspaceService', () => {
     ).rejects.toThrow(new BadRequestException('You cannot deactivate yourself'));
   });
 
-  it('должен запрещать ADMIN деактивировать OWNER', async () => {
+  it('should prevent an ADMIN from deactivating an OWNER', async () => {
     const { service, userRepo } = createService();
 
     userRepo.findById.mockResolvedValue({
@@ -77,7 +77,7 @@ describe('WorkspaceService', () => {
     );
   });
 
-  it('должен запрещать деактивацию последнего активного owner', async () => {
+  it('should prevent deactivating the last active owner', async () => {
     const { service, userRepo } = createService();
 
     userRepo.findById.mockResolvedValue({
@@ -99,7 +99,7 @@ describe('WorkspaceService', () => {
     );
   });
 
-  it('должен деактивировать участника и отправлять audit-событие', async () => {
+  it('should deactivate a workspace member and emit an audit event', async () => {
     const { service, userRepo, eventEmitter } = createService();
 
     userRepo.findById.mockResolvedValue({
@@ -129,7 +129,7 @@ describe('WorkspaceService', () => {
     );
   });
 
-  it('должен повторно активировать деактивированного участника', async () => {
+  it('should reactivate a deactivated workspace member', async () => {
     const { service, userRepo, eventEmitter } = createService();
 
     userRepo.findById.mockResolvedValue({

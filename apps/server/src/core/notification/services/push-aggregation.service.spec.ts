@@ -96,7 +96,7 @@ describe('PushAggregationService', () => {
   };
 
 
-  it('использует продуктовый дефолт для пользователя без settings.preferences', async () => {
+  it('uses the product default for a user without settings.preferences', async () => {
     const { service, pushService, notificationRepo } = createService({
       userSettings: {},
     });
@@ -107,7 +107,7 @@ describe('PushAggregationService', () => {
     expect(notificationRepo.isUnreadForUser).not.toHaveBeenCalled();
   });
 
-  it('не отправляет immediate push, если связанное уведомление уже прочитано', async () => {
+  it('does not send an immediate push when the related notification is already read', async () => {
     const { service, pushService, notificationRepo } = createService({
       pushFrequency: 'immediate',
       isUnreadForUser: false,
@@ -119,7 +119,7 @@ describe('PushAggregationService', () => {
     expect(pushService.sendToUser).not.toHaveBeenCalled();
   });
 
-  it('в delayed режиме отменяет отправку, если до send_after все события прочитаны', async () => {
+  it('cancels delivery in delayed mode if all events are read before sendAfter', async () => {
     const { service, pushService, pushNotificationJobRepo, notificationRepo } =
       createService({ unreadCountInWindow: 0 });
 
@@ -136,7 +136,7 @@ describe('PushAggregationService', () => {
     });
   });
 
-  it('не помечает job как sent при временной ошибке отправки', async () => {
+  it('does not mark a job as sent on transient delivery failure', async () => {
     const { service, pushService, pushNotificationJobRepo } = createService();
 
     pushNotificationJobRepo.claimDuePending.mockResolvedValue([dueJob]);
@@ -156,7 +156,7 @@ describe('PushAggregationService', () => {
     });
   });
 
-  it('оставляет job в pending для retry при полной недоставке из-за временной ошибки', async () => {
+  it('keeps a job pending for retry on complete delivery failure caused by a transient error', async () => {
     const { service, pushService, pushNotificationJobRepo } = createService();
 
     pushNotificationJobRepo.claimDuePending.mockResolvedValue([dueJob]);
@@ -176,7 +176,7 @@ describe('PushAggregationService', () => {
     });
   });
 
-  it('обрабатывает соседние окна как полуинтервалы [start, end) без пересечения на границе', async () => {
+  it('treats adjacent windows as half-open intervals [start, end) without boundary overlap', async () => {
     const { service, pushService, pushNotificationJobRepo, notificationRepo } =
       createService();
 
