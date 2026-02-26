@@ -35,7 +35,7 @@ import { EnvironmentService } from '../../../integrations/environment/environmen
 import { CheckHostnameDto } from '../dto/check-hostname.dto';
 import { RemoveWorkspaceUserDto } from '../dto/remove-workspace-user.dto';
 import { DeactivateWorkspaceUserDto } from '../dto/deactivate-workspace-user.dto';
-import { CsrfService } from '../../../common/security/csrf.service';
+import { AuthCookieService } from '../../../common/security/auth-cookie.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('workspace')
@@ -44,8 +44,8 @@ export class WorkspaceController {
     private readonly workspaceService: WorkspaceService,
     private readonly workspaceInvitationService: WorkspaceInvitationService,
     private readonly workspaceAbility: WorkspaceAbilityFactory,
-    private environmentService: EnvironmentService,
-    private csrfService: CsrfService,
+    private readonly environmentService: EnvironmentService,
+    private authCookieService: AuthCookieService,
   ) {}
 
   @Public()
@@ -87,8 +87,7 @@ export class WorkspaceController {
       workspace.hostname !== updatedWorkspace.hostname
     ) {
       // log user out of old hostname
-      res.clearCookie('authToken');
-      this.csrfService.clearCsrfCookie(res);
+      this.authCookieService.clearAuthCookies(res);
     }
 
     return updatedWorkspace;
@@ -292,15 +291,7 @@ export class WorkspaceController {
       };
     }
 
-    res.setCookie('authToken', result.authToken, {
-      httpOnly: true,
-      path: '/',
-      expires: this.environmentService.getCookieExpiresIn(),
-      secure: this.environmentService.isHttps(),
-      sameSite: this.csrfService.getSameSite(),
-    });
-
-    this.csrfService.setCsrfCookie(res, this.csrfService.generateToken());
+    this.authCookieService.setAuthCookies(res, result.authToken);
 
     return {
       requiresLogin: false,
