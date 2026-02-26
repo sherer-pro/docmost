@@ -14,6 +14,8 @@ module.exports = {
     ],
   },
   moduleNameMapper: {
+    '^@docmost/api-contract$': '<rootDir>/../../packages/api-contract/src/index.ts',
+    '^@docmost/api-contract/(.*)$': '<rootDir>/../../packages/api-contract/src/$1',
     '^@docmost/db/(.*)$': '<rootDir>/src/database/$1',
     '^@docmost/transactional/(.*)$':
       '<rootDir>/src/integrations/transactional/$1',
