@@ -20,6 +20,7 @@ import { extractUserMentionIdsFromJson } from '../../common/helpers/prosemirror/
 import {
   ICommentNotificationJob,
   ICommentResolvedNotificationJob,
+  IPageRecipientNotificationJob,
 } from '../../integrations/queue/constants/queue.interface';
 
 @Injectable()
@@ -102,6 +103,19 @@ export class CommentService {
       !isReply,
       createCommentDto.parentCommentId,
     );
+
+    if (!isReply) {
+      await this.notificationQueue.add(QueueJob.PAGE_RECIPIENT_NOTIFICATION, {
+        reason: 'comment-added',
+        actorId: userId,
+        pageId: page.id,
+        spaceId: page.spaceId,
+        workspaceId,
+      } as IPageRecipientNotificationJob);
+    }
+
+    // Replies intentionally skip PAGE_RECIPIENT_NOTIFICATION
+    // to avoid notifying page roles/watchers on every thread response.
 
     return comment;
   }
