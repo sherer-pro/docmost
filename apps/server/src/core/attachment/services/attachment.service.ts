@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -84,12 +85,15 @@ export class AttachmentService {
         );
       }
 
-      if (
-        existingAttachment.pageId !== pageId &&
-        existingAttachment.fileExt !== preparedFile.fileExtension &&
-        existingAttachment.workspaceId !== workspaceId
-      ) {
-        throw new BadRequestException('File attachment does not match');
+      // Проверяем каждый инвариант отдельно и блокируем перезапись при любом расхождении.
+      const isWorkspaceMismatch =
+        existingAttachment.workspaceId !== workspaceId;
+      const isPageMismatch = existingAttachment.pageId !== pageId;
+      const isExtensionMismatch =
+        existingAttachment.fileExt !== preparedFile.fileExtension;
+
+      if (isWorkspaceMismatch || isPageMismatch || isExtensionMismatch) {
+        throw new ForbiddenException('File attachment does not match');
       }
       attachmentId = opts.attachmentId;
       isUpdate = true;
