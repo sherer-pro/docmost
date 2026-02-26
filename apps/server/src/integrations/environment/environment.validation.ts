@@ -54,6 +54,10 @@ export class EnvironmentVariables {
   STORAGE_DRIVER: string;
 
   @IsOptional()
+  @IsIn(['memory', 'redis'])
+  AUTH_RATE_LIMIT_STORAGE: string;
+
+  @IsOptional()
   @ValidateIf(
     (obj) =>
       !!obj.WEB_PUSH_VAPID_PRIVATE_KEY ||
