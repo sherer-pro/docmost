@@ -45,12 +45,12 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => {
     /**
-     * Контракт backend по умолчанию: { data, success, status }.
-     * Здесь выполняется intentional unwrap до `response.data`, чтобы сервисы в UI
-     * работали с бизнес-данными без envelope-объекта.
+     * Default backend contract: { data, success, status }.
+     * Intentionally unwraps to `response.data` so UI services consume domain payloads
+     * without the envelope object.
      *
-     * Исключение: export endpoint-ы ниже возвращаются без unwrap, потому что
-     * их потребителям нужны response headers (например, filename/content-disposition).
+     * Exception: export endpoints below return the full response because callers
+     * need response headers (for example, filename/content-disposition).
      */
     const exemptEndpoints = ['/api/pages/export', '/api/spaces/export'];
     if (response.request.responseURL) {
