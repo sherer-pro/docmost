@@ -30,12 +30,12 @@ export interface IRoleData {
 }
 
 /**
- * Полный backend payload до client-side unwrap в axios response interceptor.
+ * Full backend payload before client-side unwrap in the axios response interceptor.
  */
 export type ApiResponse<T> = ApiResponseEnvelope<T>;
 
 /**
- * Утилитарный тип для мест, где из axios уже приходит только `data`.
+ * Utility type for places where axios already returns only `data`.
  */
 export type ApiUnwrappedResponse<T> = UnwrappedApiResponse<T>;
 
