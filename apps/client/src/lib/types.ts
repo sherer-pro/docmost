@@ -1,3 +1,8 @@
+import {
+  ApiResponseEnvelope,
+  UnwrappedApiResponse,
+} from '@docmost/api-contract';
+
 export interface QueryParams {
   query?: string;
   cursor?: string;
@@ -7,15 +12,15 @@ export interface QueryParams {
 }
 
 export enum UserRole {
-  OWNER = "owner",
-  ADMIN = "admin",
-  MEMBER = "member",
+  OWNER = 'owner',
+  ADMIN = 'admin',
+  MEMBER = 'member',
 }
 
 export enum SpaceRole {
-  ADMIN = "admin",
-  WRITER = "writer",
-  READER = "reader",
+  ADMIN = 'admin',
+  WRITER = 'writer',
+  READER = 'reader',
 }
 
 export interface IRoleData {
@@ -24,9 +29,15 @@ export interface IRoleData {
   description: string;
 }
 
-export interface ApiResponse<T> {
-  data: T;
-}
+/**
+ * Полный backend payload до client-side unwrap в axios response interceptor.
+ */
+export type ApiResponse<T> = ApiResponseEnvelope<T>;
+
+/**
+ * Утилитарный тип для мест, где из axios уже приходит только `data`.
+ */
+export type ApiUnwrappedResponse<T> = UnwrappedApiResponse<T>;
 
 export type IPaginationMeta = {
   limit: number;
@@ -35,6 +46,7 @@ export type IPaginationMeta = {
   nextCursor: string | null;
   prevCursor: string | null;
 };
+
 export type IPagination<T> = {
   items: T[];
   meta: IPaginationMeta;
