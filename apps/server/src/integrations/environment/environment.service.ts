@@ -60,6 +60,15 @@ export class EnvironmentService {
     );
   }
 
+
+  getAuthRateLimitStorage(): 'memory' | 'redis' {
+    const storage = this.configService
+      .get<string>('AUTH_RATE_LIMIT_STORAGE', 'memory')
+      .toLowerCase();
+
+    return storage === 'redis' ? 'redis' : 'memory';
+  }
+
   getJwtTokenExpiresIn(): string {
     return this.configService.get<string>('JWT_TOKEN_EXPIRES_IN', '90d');
   }
