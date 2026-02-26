@@ -11,7 +11,6 @@ import {
 import { LoginDto } from './dto/login.dto';
 import { AuthService } from './services/auth.service';
 import { SetupGuard } from './guards/setup.guard';
-import { EnvironmentService } from '../../integrations/environment/environment.service';
 import { CreateAdminUserDto } from './dto/create-admin-user.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
@@ -23,18 +22,17 @@ import { PasswordResetDto } from './dto/password-reset.dto';
 import { VerifyUserTokenDto } from './dto/verify-user-token.dto';
 import { FastifyReply } from 'fastify';
 import { validateSsoEnforcement } from './auth.util';
-import { CsrfService } from '../../common/security/csrf.service';
 import { CsrfExempt } from '../../common/decorators/csrf-exempt.decorator';
 import { AuthRateLimitGuard } from './rate-limit/auth-rate-limit.guard';
 import { AuthRateLimit } from './rate-limit/auth-rate-limit.decorator';
 import { MfaService } from '../mfa/mfa.service';
+import { AuthCookieService } from '../../common/security/auth-cookie.service';
 
 @Controller('auth')
 export class AuthController {
   constructor(
     private authService: AuthService,
-    private environmentService: EnvironmentService,
-    private csrfService: CsrfService,
+    private authCookieService: AuthCookieService,
     private mfaService: MfaService,
   ) {}
 
@@ -56,7 +54,7 @@ export class AuthController {
     );
 
     if (mfaResult.userHasMfa || mfaResult.requiresMfaSetup) {
-      this.setAuthCookie(res, mfaResult.mfaToken);
+      this.authCookieService.setAuthCookies(res, mfaResult.mfaToken);
       return {
         userHasMfa: mfaResult.userHasMfa,
         requiresMfaSetup: mfaResult.requiresMfaSetup,
@@ -64,7 +62,7 @@ export class AuthController {
       };
     }
 
-    this.setAuthCookie(res, mfaResult.authToken);
+    this.authCookieService.setAuthCookies(res, mfaResult.authToken);
   }
 
   @UseGuards(SetupGuard)
@@ -78,7 +76,7 @@ export class AuthController {
     const { workspace, authToken } =
       await this.authService.setup(createAdminUserDto);
 
-    this.setAuthCookie(res, authToken);
+    this.authCookieService.setAuthCookies(res, authToken);
     return workspace;
   }
 
@@ -128,7 +126,7 @@ export class AuthController {
     }
 
     // Set auth cookie if no MFA is required
-    this.setAuthCookie(res, result.authToken);
+    this.authCookieService.setAuthCookies(res, result.authToken);
     return {
       requiresLogin: false,
     };
@@ -169,27 +167,6 @@ export class AuthController {
   @Post('logout')
   @CsrfExempt()
   async logout(@Res({ passthrough: true }) res: FastifyReply) {
-    res.clearCookie('authToken');
-    this.csrfService.clearCsrfCookie(res);
-  }
-
-  setAuthCookie(res: FastifyReply, token: string) {
-    const csrfToken = this.csrfService.generateToken();
-
-    /**
-     * `sameSite=lax` is the minimum safe default.
-     * For cloud SSO, `sameSite=none` is allowed only with `secure=true`.
-     */
-    const sameSite = this.csrfService.getSameSite();
-
-    res.setCookie('authToken', token, {
-      httpOnly: true,
-      path: '/',
-      expires: this.environmentService.getCookieExpiresIn(),
-      secure: this.environmentService.isHttps(),
-      sameSite,
-    });
-
-    this.csrfService.setCsrfCookie(res, csrfToken);
+    this.authCookieService.clearAuthCookies(res);
   }
 }
