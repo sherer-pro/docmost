@@ -93,7 +93,7 @@ describe('AuthRateLimitService', () => {
     return new AuthRateLimitService(eventEmitter, environmentService, redisClient as any);
   }
 
-  it('блокирует запросы после превышения лимита и публикует telemetry событие', async () => {
+  it('blocks requests after exceeding the limit and publishes a telemetry event', async () => {
     const service = createService('memory');
 
     const first = await service.consume({
@@ -129,7 +129,7 @@ describe('AuthRateLimitService', () => {
   });
 
   it.each<StorageMode>(['memory', 'redis'])(
-    'сбрасывает окно после TTL-истечения в режиме %s',
+    'resets the rate-limit window after TTL expiration in %s mode',
     async (storage) => {
       const redisClient = storage === 'redis' ? new FakeRedisClient() : undefined;
       const service = createService(storage, redisClient);
@@ -167,7 +167,7 @@ describe('AuthRateLimitService', () => {
   );
 
   it.each<StorageMode>(['memory', 'redis'])(
-    'корректно обрабатывает конкурентные запросы в режиме %s',
+    'handles concurrent requests correctly in %s mode',
     async (storage) => {
       const redisClient = storage === 'redis' ? new FakeRedisClient() : undefined;
       const service = createService(storage, redisClient);
@@ -192,7 +192,7 @@ describe('AuthRateLimitService', () => {
     },
   );
 
-  it('дает одинаковый результат в memory и redis режимах', async () => {
+  it('returns equivalent results in memory and redis modes', async () => {
     const memoryService = createService('memory');
     const redisService = createService('redis', new FakeRedisClient());
 
@@ -221,7 +221,7 @@ describe('AuthRateLimitService', () => {
     expect(memoryMetrics.rejectedRequests).toBe(redisMetrics.rejectedRequests);
   });
 
-  it('возвращает операционные метрики для мониторинга', async () => {
+  it('returns operational metrics for monitoring', async () => {
     const service = createService('memory');
 
     await service.consume({
