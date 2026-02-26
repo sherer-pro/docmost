@@ -8,6 +8,7 @@ import {
 import { NotificationService } from '../notification.service';
 import { NotificationType } from '../notification.constants';
 import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
+import { WatcherRepo } from '@docmost/db/repos/watcher/watcher.repo';
 import { PageMentionEmail } from '@docmost/transactional/emails/page-mention-email';
 import { getPageTitle } from '../../../common/helpers';
 import { RecipientResolverService } from './recipient-resolver.service';
@@ -19,6 +20,7 @@ export class PageNotificationService {
     @InjectKysely() private readonly db: KyselyDB,
     private readonly notificationService: NotificationService,
     private readonly spaceMemberRepo: SpaceMemberRepo,
+    private readonly watcherRepo: WatcherRepo,
     private readonly recipientResolverService: RecipientResolverService,
     private readonly pushAggregationService: PushAggregationService,
   ) {}
@@ -79,18 +81,7 @@ export class PageNotificationService {
   ) {
     const { actorId, pageId, spaceId, workspaceId, reason } = data;
 
-    const recipientIds =
-      reason === 'document-changed' || reason === 'comment-added'
-        ? await this.recipientResolverService.resolvePageRoleRecipients(
-            pageId,
-            spaceId,
-            actorId,
-          )
-        : await this.recipientResolverService.filterUsersWithSpaceAccess(
-            data.candidateUserIds ?? [],
-            spaceId,
-            actorId,
-          );
+    const recipientIds = await this.resolveRecipientIds(data);
 
     if (recipientIds.length === 0) return;
 
@@ -120,6 +111,35 @@ export class PageNotificationService {
         pageTitle,
       });
     }
+  }
+
+  private async resolveRecipientIds(
+    data: IPageRecipientNotificationJob,
+  ): Promise<string[]> {
+    const { actorId, pageId, spaceId, reason } = data;
+
+    if (reason === 'document-changed' || reason === 'comment-added') {
+      const [roleRecipients, watcherIds] = await Promise.all([
+        this.recipientResolverService.resolvePageRoleRecipients(
+          pageId,
+          spaceId,
+          actorId,
+        ),
+        this.watcherRepo.getPageWatcherIds(pageId),
+      ]);
+
+      return this.recipientResolverService.filterUsersWithSpaceAccess(
+        [...new Set([...roleRecipients, ...watcherIds])],
+        spaceId,
+        actorId,
+      );
+    }
+
+    return this.recipientResolverService.filterUsersWithSpaceAccess(
+      data.candidateUserIds ?? [],
+      spaceId,
+      actorId,
+    );
   }
 
   private getRecipientNotificationConfig(
