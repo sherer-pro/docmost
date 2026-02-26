@@ -39,7 +39,8 @@ export class UserService {
       typeof updateUserDto.fullPageWidth !== 'undefined' ||
       typeof updateUserDto.pageEditMode !== 'undefined' ||
       typeof updateUserDto.pushEnabled !== 'undefined' ||
-      typeof updateUserDto.pushFrequency !== 'undefined';
+      typeof updateUserDto.pushFrequency !== 'undefined' ||
+      typeof updateUserDto.emailEnabled !== 'undefined';
 
     let preferenceUser = null;
 
@@ -72,6 +73,14 @@ export class UserService {
         userId,
         'pushFrequency',
         updateUserDto.pushFrequency,
+      );
+    }
+
+    if (typeof updateUserDto.emailEnabled !== 'undefined') {
+      preferenceUser = await this.userRepo.updatePreference(
+        userId,
+        'emailEnabled',
+        updateUserDto.emailEnabled,
       );
     }
 

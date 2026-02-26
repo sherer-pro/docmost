@@ -21,6 +21,7 @@ export interface IUser {
   fullPageWidth: boolean; // used for update
   pageEditMode: string; // used for update
   pushEnabled: boolean; // used for update
+  emailEnabled: boolean; // used for update
   pushFrequency: PushFrequency; // used for update
   hasGeneratedPassword?: boolean;
   canAccessMembersDirectory?: boolean;
@@ -36,6 +37,7 @@ export interface IUserSettings {
     fullPageWidth: boolean;
     pageEditMode: string;
     pushEnabled: boolean;
+    emailEnabled: boolean;
     pushFrequency: PushFrequency;
   };
 }
