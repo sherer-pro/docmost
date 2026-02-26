@@ -734,5 +734,9 @@
   "Every 24 hours": "Every 24 hours",
   "Push notifications are not supported in this browser.": "Push notifications are not supported in this browser.",
   "Push permission is blocked. Enable notifications in browser settings.": "Push permission is blocked. Enable notifications in browser settings.",
-  "Failed to enable push notifications. Please try again.": "Failed to enable push notifications. Please try again."
+  "Failed to enable push notifications. Please try again.": "Failed to enable push notifications. Please try again.",
+  "Enable email notifications": "Enable email notifications",
+  "Receive account activity updates by email.": "Receive account activity updates by email.",
+  "Toggle email notifications": "Toggle email notifications",
+  "Failed to update email notification settings. Please try again.": "Failed to update email notification settings. Please try again."
 }
