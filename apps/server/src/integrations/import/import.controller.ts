@@ -20,10 +20,14 @@ import {
 } from '../../core/casl/interfaces/space-ability.type';
 import { FileInterceptor } from '../../common/interceptors/file.interceptor';
 import * as bytes from 'bytes';
-import * as path from 'path';
 import { ImportService } from './services/import.service';
 import { AuthWorkspace } from '../../common/decorators/auth-workspace.decorator';
 import { EnvironmentService } from '../environment/environment.service';
+import { Readable } from 'stream';
+import {
+  SAFE_FILE_VALIDATION_ERROR_MESSAGE,
+  validateFileExtensionAndSignature,
+} from '../../common/helpers/file-validation';
 
 @Controller()
 export class ImportController {
@@ -66,11 +70,17 @@ export class ImportController {
       throw new BadRequestException('Failed to upload file');
     }
 
-    if (
-      !validFileExtensions.includes(path.extname(file.filename).toLowerCase())
-    ) {
-      throw new BadRequestException('Invalid import file type.');
-    }
+    const fileBuffer = await file.toBuffer();
+
+    await validateFileExtensionAndSignature({
+      fileName: file.filename,
+      fileBuffer,
+      allowedExtensions: validFileExtensions,
+      safeErrorMessage: SAFE_FILE_VALIDATION_ERROR_MESSAGE,
+    });
+
+    // Restore multipart buffer access for downstream import processing.
+    file.toBuffer = async () => fileBuffer;
 
     const spaceId = file.fields?.spaceId?.value;
 
@@ -117,11 +127,18 @@ export class ImportController {
       throw new BadRequestException('Failed to upload file');
     }
 
-    if (
-      !validFileExtensions.includes(path.extname(file.filename).toLowerCase())
-    ) {
-      throw new BadRequestException('Invalid import file extension.');
-    }
+    const fileBuffer = await file.toBuffer();
+
+    await validateFileExtensionAndSignature({
+      fileName: file.filename,
+      fileBuffer,
+      allowedExtensions: validFileExtensions,
+      safeErrorMessage: SAFE_FILE_VALIDATION_ERROR_MESSAGE,
+    });
+
+    // Restore both buffer and stream access for zip import downstream.
+    file.toBuffer = async () => fileBuffer;
+    file.file = Readable.from(fileBuffer);
 
     const spaceId = file.fields?.spaceId?.value;
     const source = file.fields?.source?.value;
