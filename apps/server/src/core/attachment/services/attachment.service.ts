@@ -27,6 +27,11 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { QueueJob, QueueName } from '../../../integrations/queue/constants';
 import { Queue } from 'bullmq';
 import { createByteCountingStream } from '../../../common/helpers/utils';
+import {
+  readMagicBytesFromStream,
+  SAFE_FILE_VALIDATION_ERROR_MESSAGE,
+  validateFileExtensionAndSignature,
+} from '../../../common/helpers/file-validation';
 
 @Injectable()
 export class AttachmentService {
@@ -52,6 +57,16 @@ export class AttachmentService {
     const { filePromise, pageId, spaceId, userId, workspaceId } = opts;
     const preparedFile: PreparedFile = await prepareFile(filePromise, {
       skipBuffer: true,
+    });
+
+    const fileSignatureBuffer = await readMagicBytesFromStream(
+      preparedFile.multiPartFile.file,
+    );
+
+    await validateFileExtensionAndSignature({
+      fileName: preparedFile.fileName,
+      fileBuffer: fileSignatureBuffer,
+      safeErrorMessage: SAFE_FILE_VALIDATION_ERROR_MESSAGE,
     });
 
     let isUpdate = false;
@@ -152,6 +167,13 @@ export class AttachmentService {
   ) {
     const preparedFile: PreparedFile = await prepareFile(filePromise);
     validateFileType(preparedFile.fileExtension, validImageExtensions);
+
+    await validateFileExtensionAndSignature({
+      fileName: preparedFile.fileName,
+      fileBuffer: preparedFile.buffer,
+      allowedExtensions: validImageExtensions,
+      safeErrorMessage: SAFE_FILE_VALIDATION_ERROR_MESSAGE,
+    });
 
     preparedFile.fileName = uuid4() + preparedFile.fileExtension;
 
