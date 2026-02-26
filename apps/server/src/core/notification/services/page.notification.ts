@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type React from 'react';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 import {
@@ -10,6 +11,7 @@ import { NotificationType } from '../notification.constants';
 import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 import { WatcherRepo } from '@docmost/db/repos/watcher/watcher.repo';
 import { PageMentionEmail } from '@docmost/transactional/emails/page-mention-email';
+import { PageRecipientEmail } from '@docmost/transactional/emails/page-recipient-email';
 import { getPageTitle } from '../../../common/helpers';
 import { RecipientResolverService } from './recipient-resolver.service';
 import { PushAggregationService } from './push-aggregation.service';
@@ -70,7 +72,6 @@ export class PageNotificationService {
     }
   }
 
-
   /**
    * Creates notifications for page roles (assignee/stakeholders)
    * based on the event type.
@@ -101,6 +102,17 @@ export class PageNotificationService {
         pageId,
         spaceId,
       });
+
+      await this.notificationService.queueEmail(
+        recipientId,
+        notification.id,
+        config.title,
+        config.createEmail({
+          actorName: actor.name,
+          pageTitle,
+          pageUrl: basePageUrl,
+        }),
+      );
 
       await this.pushAggregationService.dispatchOrAggregate(notification, {
         title: config.title,
@@ -146,27 +158,67 @@ export class PageNotificationService {
     reason: IPageRecipientNotificationJob['reason'],
     actorName: string,
     pageTitle: string,
-  ): { notificationType: NotificationType; title: string } {
+  ): {
+    notificationType: NotificationType;
+    title: string;
+    createEmail: (props: {
+      actorName: string;
+      pageTitle: string;
+      pageUrl: string;
+    }) => React.JSX.Element;
+  } {
+    /**
+     * Единая конфигурация текста для push и email.
+     * Мы используем один источник строки `title`, чтобы формулировки не расходились.
+     */
     switch (reason) {
       case 'page-assigned':
         return {
           notificationType: NotificationType.PAGE_ASSIGNED,
           title: `${actorName} assigned you to ${pageTitle}`,
+          createEmail: ({ actorName, pageTitle, pageUrl }) =>
+            PageRecipientEmail({
+              actorName,
+              pageTitle,
+              pageUrl,
+              actionText: 'assigned you to',
+            }),
         };
       case 'page-stakeholder-added':
         return {
           notificationType: NotificationType.PAGE_STAKEHOLDER_ADDED,
           title: `${actorName} added you as stakeholder to ${pageTitle}`,
+          createEmail: ({ actorName, pageTitle, pageUrl }) =>
+            PageRecipientEmail({
+              actorName,
+              pageTitle,
+              pageUrl,
+              actionText: 'added you as stakeholder to',
+            }),
         };
       case 'comment-added':
         return {
           notificationType: NotificationType.PAGE_UPDATED_FOR_ASSIGNEE_OR_STAKEHOLDER,
           title: `${actorName} added a comment on ${pageTitle}`,
+          createEmail: ({ actorName, pageTitle, pageUrl }) =>
+            PageRecipientEmail({
+              actorName,
+              pageTitle,
+              pageUrl,
+              actionText: 'added a comment on',
+            }),
         };
       default:
         return {
           notificationType: NotificationType.PAGE_UPDATED_FOR_ASSIGNEE_OR_STAKEHOLDER,
           title: `${actorName} updated ${pageTitle}`,
+          createEmail: ({ actorName, pageTitle, pageUrl }) =>
+            PageRecipientEmail({
+              actorName,
+              pageTitle,
+              pageUrl,
+              actionText: 'updated',
+            }),
         };
     }
   }
