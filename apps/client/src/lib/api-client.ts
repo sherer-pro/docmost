@@ -44,8 +44,15 @@ api.interceptors.request.use((config) => {
 
 api.interceptors.response.use(
   (response) => {
-    // we need the response headers for these endpoints
-    const exemptEndpoints = ["/api/pages/export", "/api/spaces/export"];
+    /**
+     * Контракт backend по умолчанию: { data, success, status }.
+     * Здесь выполняется intentional unwrap до `response.data`, чтобы сервисы в UI
+     * работали с бизнес-данными без envelope-объекта.
+     *
+     * Исключение: export endpoint-ы ниже возвращаются без unwrap, потому что
+     * их потребителям нужны response headers (например, filename/content-disposition).
+     */
+    const exemptEndpoints = ['/api/pages/export', '/api/spaces/export'];
     if (response.request.responseURL) {
       const path = new URL(response.request.responseURL)?.pathname;
       if (path && exemptEndpoints.includes(path)) {
