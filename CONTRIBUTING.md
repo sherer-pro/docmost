@@ -5,6 +5,7 @@
 To keep terminology and maintenance consistent across the monorepo:
 
 - Write all source code comments in English (including inline comments, block comments, JSDoc, and TSDoc).
+- Use ASCII-only characters in comments; non-ASCII comments are not allowed.
 - Write all test names and test descriptions in English (`describe`, `it`, and similar test-case labels).
 - Keep domain terminology consistent in security- and collaboration-related areas (for example: `auth`, `security`, `workspace`, `member`).
 

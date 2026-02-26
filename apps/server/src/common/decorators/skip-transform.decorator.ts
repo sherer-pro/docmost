@@ -3,13 +3,13 @@ import { SetMetadata } from '@nestjs/common';
 export const SKIP_TRANSFORM_KEY = 'SKIP_TRANSFORM';
 
 /**
- * Отключает оборачивание ответа в единый envelope `{ data, success, status }`.
+ * Disables wrapping responses into the standard envelope `{ data, success, status }`.
  *
- * Применять только для endpoint-ов, где контракт должен остаться "сырым":
- * - plain text или нестандартный payload (например, `robots.txt`),
- * - health-check endpoint-ы, где внешний мониторинг ожидает формат Terminus.
+ * Use only for endpoints where the contract must stay "raw":
+ * - plain text or non-standard payloads (for example, `robots.txt`),
+ * - health-check endpoints where external monitors expect the Terminus format.
  *
- * Текущие осознанные исключения контракта:
+ * Current intentional contract exceptions:
  * - `GET /api/health`
  * - `GET /api/robots.txt`
  */
