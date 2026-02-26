@@ -182,9 +182,9 @@ export default function AccountPushPreferences() {
         />
 
         {/*
-          Показываем выбор частоты, если пользователь включил уведомления в профиле.
-          Это позволяет сразу видеть и менять частоту, даже если разрешение браузера
-          временно не в состоянии `granted` (например, после перезагрузки страницы).
+          Show frequency selection when the user has enabled push notifications
+          in profile settings. This keeps frequency controls visible and editable
+          even when browser permission is temporarily not in `granted` state.
         */}
         {isPushEnabled && (
           <Select

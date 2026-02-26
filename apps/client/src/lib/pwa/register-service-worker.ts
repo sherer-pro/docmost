@@ -40,7 +40,7 @@ export async function registerServiceWorker(): Promise<void> {
     } catch (error) {
       // Log the error explicitly to speed up diagnostics for HTTPS, scope,
       // CSP, or invalid `/sw.js` response issues.
-      console.error("Не удалось зарегистрировать Service Worker:", error);
+      console.error("Failed to register Service Worker:", error);
     }
   });
 }

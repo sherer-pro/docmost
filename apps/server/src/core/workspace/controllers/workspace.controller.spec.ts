@@ -33,7 +33,7 @@ describe('WorkspaceController', () => {
     return { controller, workspaceService };
   };
 
-  it('должен запрещать деактивацию без прав на управление участниками', async () => {
+  it('should forbid member deactivation without member-management permissions', async () => {
     const { controller } = createController(false);
 
     await expect(
@@ -45,7 +45,7 @@ describe('WorkspaceController', () => {
     ).rejects.toThrow(ForbiddenException);
   });
 
-  it('должен вызывать сервис и возвращать явный контракт ответа', async () => {
+  it('should call the service and return the explicit response contract', async () => {
     const { controller, workspaceService } = createController(true);
 
     workspaceService.deactivateUser.mockResolvedValue({ success: true });
