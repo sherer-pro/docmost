@@ -171,6 +171,7 @@ Minimum:
 - All mutating API methods (POST/PUT/PATCH/DELETE) are protected by global CSRF validation (double-submit cookie): `csrfToken` cookie must match the `x-csrf-token` header.
 - CSRF exceptions by design: `POST /api/auth/login`, `POST /api/auth/logout`, `POST /api/auth/forgot-password`, `POST /api/auth/password-reset`, `POST /api/auth/verify-token`, `POST /api/auth/setup`.
 - Root `start` script runs **backend prod**, but requires prebuilt `dist` (typically via `pnpm build`).
+- Backend production entrypoints are resolved from Nx/Nest build output under `apps/server/dist/apps/server/src/*` (not `apps/server/dist/main`).
 - Compose uses placeholders (`REPLACE_WITH_LONG_SECRET`, `STRONG_DB_PASSWORD`) — do not forget to replace them.
 - `migration:codegen` reads env from `../../.env`; if the file is missing, the command fails.
 - There are Enterprise areas (`*/ee`): edits there may affect license-restricted code.
