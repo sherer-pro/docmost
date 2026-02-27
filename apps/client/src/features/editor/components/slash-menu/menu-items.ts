@@ -8,6 +8,7 @@ import {
   IconH3,
   IconInfoCircle,
   IconList,
+  IconLink,
   IconListNumbers,
   IconMath,
   IconMathFunction,
@@ -29,6 +30,7 @@ import {
 import { uploadImageAction } from "@/features/editor/components/image/upload-image-action.tsx";
 import { uploadVideoAction } from "@/features/editor/components/video/upload-video-action.tsx";
 import { uploadAttachmentAction } from "@/features/editor/components/attachment/upload-attachment-action.tsx";
+import { createLinkPreviewAction } from "@/features/editor/components/link-preview/link-preview-action";
 import IconExcalidraw from "@/components/icons/icon-excalidraw";
 import IconMermaid from "@/components/icons/icon-mermaid";
 import IconDrawio from "@/components/icons/icon-drawio";
@@ -385,6 +387,27 @@ const CommandGroups: SlashMenuGroupedItemsType = {
       icon: IconExcalidraw,
       command: ({ editor, range }: CommandProps) =>
         editor.chain().focus().deleteRange(range).setExcalidraw().run(),
+    },
+    {
+      title: "Link preview",
+      description: "Insert a link card with website metadata",
+      searchTerms: ["link", "url", "preview", "card", "bookmark"],
+      icon: IconLink,
+      command: ({ editor, range }: CommandProps) => {
+        const linkInput = window.prompt("Paste link URL");
+
+        if (!linkInput) {
+          return;
+        }
+
+        editor.chain().focus().deleteRange(range).run();
+
+        void createLinkPreviewAction(editor, linkInput.trim()).then((inserted) => {
+          if (!inserted) {
+            editor.chain().focus().insertContent(linkInput.trim()).run();
+          }
+        });
+      },
     },
     {
       title: "Date",
