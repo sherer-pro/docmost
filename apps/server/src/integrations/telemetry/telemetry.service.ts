@@ -5,8 +5,7 @@ import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { createHmac } from 'node:crypto';
 import { WorkspaceRepo } from '@docmost/db/repos/workspace/workspace.repo';
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const packageJson = require('./../../../package.json');
+import { getAppVersion } from '../../common/helpers/get-app-version';
 
 @Injectable()
 export class TelemetryService {
@@ -65,7 +64,7 @@ export class TelemetryService {
 
       const data = {
         instanceId: anonymizedHash,
-        version: packageJson.version,
+        version: getAppVersion(),
         userCount,
         pageCount,
         spaceCount,
