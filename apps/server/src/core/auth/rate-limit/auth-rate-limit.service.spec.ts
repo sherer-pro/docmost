@@ -1,4 +1,6 @@
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { Test } from '@nestjs/testing';
+import { EnvironmentService } from '../../../integrations/environment/environment.service';
 import { AuthRateLimitService } from './auth-rate-limit.service';
 
 type StorageMode = 'memory' | 'redis';
@@ -92,6 +94,28 @@ describe('AuthRateLimitService', () => {
 
     return new AuthRateLimitService(eventEmitter, environmentService, redisClient as any);
   }
+
+
+  it('is resolved by Nest DI without explicit Redis provider', async () => {
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        AuthRateLimitService,
+        {
+          provide: EventEmitter2,
+          useValue: { emit: jest.fn() },
+        },
+        {
+          provide: EnvironmentService,
+          useValue: {
+            getAuthRateLimitStorage: () => 'memory',
+            getRedisUrl: () => 'redis://127.0.0.1:6379',
+          },
+        },
+      ],
+    }).compile();
+
+    expect(moduleRef.get(AuthRateLimitService)).toBeInstanceOf(AuthRateLimitService);
+  });
 
   it('blocks requests after exceeding the limit and publishes a telemetry event', async () => {
     const service = createService('memory');
