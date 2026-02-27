@@ -1,17 +1,35 @@
 {
-  "moduleFileExtensions": ["js", "json", "ts"],
+  "moduleFileExtensions": [
+    "js",
+    "json",
+    "ts",
+    "tsx"
+  ],
   "rootDir": ".",
-  "roots": ["<rootDir>"],
+  "roots": [
+    "<rootDir>"
+  ],
   "testEnvironment": "node",
   "testRegex": ".e2e-spec.ts$",
-  "moduleDirectories": ["node_modules", "<rootDir>/../src"],
+  "moduleDirectories": [
+    "node_modules",
+    "<rootDir>/../src"
+  ],
   "moduleNameMapper": {
+    "^happy-dom$": "<rootDir>/mocks/happy-dom.mock.ts",
     "^src/(.*)$": "<rootDir>/../src/$1",
     "^@docmost/db/(.*)$": "<rootDir>/../src/database/$1",
     "^@docmost/transactional/(.*)$": "<rootDir>/../src/integrations/transactional/$1",
+    "^@docmost/editor-ext$": "<rootDir>/mocks/editor-ext.mock.ts",
+    "^@docmost/editor-ext/(.*)$": "<rootDir>/mocks/editor-ext.mock.ts",
     "^@docmost/ee/(.*)$": "<rootDir>/../src/ee/$1"
   },
   "transform": {
-    "^.+\\.(t|j)s$": ["ts-jest", { "tsconfig": "<rootDir>/../tsconfig.json" }]
+    "^.+\\.(t|j)sx?$": [
+      "ts-jest",
+      {
+        "tsconfig": "<rootDir>/../tsconfig.json"
+      }
+    ]
   }
 }
