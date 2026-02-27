@@ -95,3 +95,10 @@ Nest is an MIT-licensed open source project. It can grow thanks to the sponsors 
 ## License
 
 Nest is [MIT licensed](LICENSE).
+
+
+## Import style policy
+
+- Use relative imports (`./`, `../`) for modules inside `apps/server/src` to keep local boundaries explicit and avoid mixed patterns in a single file.
+- Use workspace aliases (`@docmost/*`) for shared packages and cross-workspace dependencies.
+- The `src/*` alias is kept in TypeScript and Jest configs as a compatibility contract for tests and legacy imports, but new backend code should prefer relative imports for local modules.
