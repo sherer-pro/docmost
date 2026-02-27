@@ -24,7 +24,7 @@ import { TokenService } from '../../auth/services/token.service';
 import { nanoIdGen } from '../../../common/helpers';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import { executeWithCursorPagination } from '@docmost/db/pagination/cursor-pagination';
-import { DomainService } from 'src/integrations/environment/domain.service';
+import { DomainService } from '../../../integrations/environment/domain.service';
 import { InjectQueue } from '@nestjs/bullmq';
 import { QueueJob, QueueName } from '../../../integrations/queue/constants';
 import { Queue } from 'bullmq';
