@@ -27,7 +27,7 @@ export default function LinkPreviewView(props: NodeViewProps) {
           </Text>
 
           {description ? (
-            <Text lineClamp={2} className={classes.description}>
+            <Text className={classes.description}>
               {description}
             </Text>
           ) : null}
