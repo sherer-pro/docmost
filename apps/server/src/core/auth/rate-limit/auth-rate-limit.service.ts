@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, Optional } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import Redis from 'ioredis';
@@ -90,6 +90,11 @@ export class AuthRateLimitService implements OnModuleDestroy {
   constructor(
     private readonly eventEmitter: EventEmitter2,
     private readonly environmentService: EnvironmentService,
+    /**
+     * Необязательный Redis-клиент используется только в тестах,
+     * в рантайме сервис создаёт собственный клиент через env-конфиг.
+     */
+    @Optional()
     redisClient?: RedisClientLike,
   ) {
     this.storageBackend = this.environmentService.getAuthRateLimitStorage();
