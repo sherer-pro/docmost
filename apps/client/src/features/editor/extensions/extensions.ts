@@ -29,6 +29,7 @@ import {
   Callout,
   TiptapVideo,
   LinkExtension,
+  LinkPreview,
   Selection,
   Attachment,
   CustomCodeBlock,
@@ -61,6 +62,7 @@ import CodeBlockView from "@/features/editor/components/code-block/code-block-vi
 import DrawioView from "../components/drawio/drawio-view";
 import ExcalidrawView from "@/features/editor/components/excalidraw/excalidraw-view.tsx";
 import EmbedView from "@/features/editor/components/embed/embed-view.tsx";
+import LinkPreviewView from "@/features/editor/components/link-preview/link-preview-view.tsx";
 import SubpagesView from "@/features/editor/components/subpages/subpages-view.tsx";
 import QuoteEmbedView from "@/features/editor/components/quote-embed/quote-embed-view.tsx";
 import { common, createLowlight } from "lowlight";
@@ -230,6 +232,9 @@ export const mainExtensions = [
   }),
   Embed.configure({
     view: EmbedView,
+  }),
+  LinkPreview.configure({
+    view: LinkPreviewView,
   }),
   Subpages.configure({
     view: SubpagesView,

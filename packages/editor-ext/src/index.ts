@@ -9,6 +9,7 @@ export * from "./lib/video";
 export * from "./lib/callout";
 export * from "./lib/media-utils";
 export * from "./lib/link";
+export * from "./lib/link-preview";
 export * from "./lib/selection";
 export * from "./lib/attachment";
 export * from "./lib/custom-code-block";
