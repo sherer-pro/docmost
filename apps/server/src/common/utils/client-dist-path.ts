@@ -18,7 +18,9 @@ import * as fs from 'node:fs';
 export function resolveClientDistPath(baseDir: string): string | undefined {
   const candidatePaths = [
     // Nest production build: .../apps/server/dist/apps/server/src/** -> /app/apps/client/dist
-    join(baseDir, '..', '..', '..', '..', '..', '..', 'client', 'dist'),
+    // Важно подняться именно на 7 уровней: без дополнительного ".." путь получается
+    // /app/apps/server/client/dist и фронтенд ошибочно считается отсутствующим.
+    join(baseDir, '..', '..', '..', '..', '..', '..', '..', 'client', 'dist'),
     // Локальный запуск из исходников: .../apps/server/src/** -> .../apps/client/dist
     join(baseDir, '..', '..', '..', '..', 'client', 'dist'),
     // Запуск из корня монорепозитория (или контейнера) с cwd=/app
