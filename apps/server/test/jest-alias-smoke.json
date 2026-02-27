@@ -6,6 +6,7 @@
   "testMatch": ["<rootDir>/alias-smoke.spec.ts"],
   "moduleDirectories": ["node_modules", "<rootDir>/../src"],
   "moduleNameMapper": {
+    "^src/(.*)$": "<rootDir>/../src/$1",
     "^@docmost/db/(.*)$": "<rootDir>/../src/database/$1",
     "^@docmost/transactional/(.*)$": "<rootDir>/../src/integrations/transactional/$1",
     "^@docmost/ee/(.*)$": "<rootDir>/../src/ee/$1"

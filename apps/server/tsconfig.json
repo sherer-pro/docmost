@@ -20,6 +20,7 @@
     "strict": true,
     "jsx": "react",
     "paths": {
+      "src/*": ["./src/*"],
       "@docmost/api-contract": ["../../packages/api-contract/src/index.ts"],
       "@docmost/api-contract/*": ["../../packages/api-contract/src/*"],
       "@docmost/db/*": ["./src/database/*"],
