@@ -20,18 +20,20 @@ import { isCloud } from "@/lib/config.ts";
 import { Link } from "react-router-dom";
 import APP_ROUTE from "@/lib/app-route.ts";
 
-const formSchema = z.object({
-  workspaceName: z.string().trim().max(50).optional(),
-  name: z.string().min(1).max(50),
-  email: z
-    .string()
-    .min(1, { message: "email is required" })
-    .email({ message: "Invalid email address" }),
-  password: z.string().min(8),
-});
+const createFormSchema = (t: (key: string) => string) =>
+  z.object({
+    workspaceName: z.string().trim().max(50).optional(),
+    name: z.string().min(1).max(50),
+    email: z
+      .string()
+      .min(1, { message: t("Email is required") })
+      .email({ message: t("Invalid email address") }),
+    password: z.string().min(8),
+  });
 
 export function SetupWorkspaceForm() {
   const { t } = useTranslation();
+  const formSchema = createFormSchema(t);
   const { setupWorkspace, isLoading } = useAuth();
   // useRedirectIfAuthenticated();
 

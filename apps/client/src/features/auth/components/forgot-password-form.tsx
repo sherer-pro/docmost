@@ -8,15 +8,17 @@ import classes from "./auth.module.css";
 import { useRedirectIfAuthenticated } from "@/features/auth/hooks/use-redirect-if-authenticated.ts";
 import { useTranslation } from "react-i18next";
 
-const formSchema = z.object({
-  email: z
-    .string()
-    .min(1, { message: "Email is required" })
-    .email({ message: "Invalid email address" }),
-});
+const createFormSchema = (t: (key: string) => string) =>
+  z.object({
+    email: z
+      .string()
+      .min(1, { message: t("Email is required") })
+      .email({ message: t("Invalid email address") }),
+  });
 
 export function ForgotPasswordForm() {
   const { t } = useTranslation();
+  const formSchema = createFormSchema(t);
   const { forgotPassword, isLoading } = useAuth();
   const [isTokenSent, setIsTokenSent] = useState<boolean>(false);
   useRedirectIfAuthenticated();
