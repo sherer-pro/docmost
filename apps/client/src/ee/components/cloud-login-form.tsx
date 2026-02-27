@@ -20,12 +20,14 @@ import { useTranslation } from "react-i18next";
 import JoinedWorkspaces from "@/ee/components/joined-workspaces.tsx";
 import { useJoinedWorkspacesQuery } from "@/ee/cloud/query/cloud-query.ts";
 
-const formSchema = z.object({
-  hostname: z.string().min(1, { message: "subdomain is required" }),
-});
+const createFormSchema = (t: (key: string) => string) =>
+  z.object({
+    hostname: z.string().min(1, { message: t("subdomain is required") }),
+  });
 
 export function CloudLoginForm() {
   const { t } = useTranslation();
+  const formSchema = createFormSchema(t);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const { data: joinedWorkspaces } = useJoinedWorkspacesQuery();
 

@@ -52,11 +52,12 @@ interface SetupData {
   manualKey: string;
 }
 
-const formSchema = z.object({
-  verificationCode: z
-    .string()
-    .length(6, { message: "Please enter a 6-digit code" }),
-});
+const createSetupSchema = (t: (key: string) => string) =>
+  z.object({
+    verificationCode: z
+      .string()
+      .length(6, { message: t("Please enter a 6-digit code") }),
+  });
 
 export function MfaSetupModal({
   opened,
@@ -64,13 +65,14 @@ export function MfaSetupModal({
   onComplete,
 }: MfaSetupModalProps) {
   const { t } = useTranslation();
+  const setupSchema = createSetupSchema(t);
   const [active, setActive] = useState(0);
   const [setupData, setSetupData] = useState<SetupData | null>(null);
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
   const [manualEntryOpen, setManualEntryOpen] = useState(false);
 
   const form = useForm({
-    validate: zodResolver(formSchema),
+    validate: zodResolver(setupSchema),
     initialValues: {
       verificationCode: "",
     },

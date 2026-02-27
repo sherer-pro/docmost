@@ -830,5 +830,11 @@
   "Failed to restore page": "Failed to restore page",
   "Invitation resent": "Invitation resent",
   "Invitation revoked": "Invitation revoked",
-  "Failed to add group members": "Failed to add group members"
+  "Failed to add group members": "Failed to add group members",
+  "Email is required": "Email is required",
+  "Invalid email address": "Invalid email address",
+  "Password must contain at least 8 characters": "Password must contain at least 8 characters",
+  "Username is required": "Username is required",
+  "subdomain is required": "subdomain is required",
+  "Enter a 6-digit code or 8-character backup code": "Enter a 6-digit code or 8-character backup code"
 }

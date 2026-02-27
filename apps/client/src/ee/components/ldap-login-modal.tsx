@@ -10,10 +10,11 @@ import { IAuthProvider } from "@/ee/security/types/security.types";
 import APP_ROUTE from "@/lib/app-route";
 import { ldapLogin } from "@/ee/security/services/ldap-auth-service";
 
-const formSchema = z.object({
-  username: z.string().min(1, { message: "Username is required" }),
-  password: z.string().min(1, { message: "Password is required" }),
-});
+const createFormSchema = (t: (key: string) => string) =>
+  z.object({
+    username: z.string().min(1, { message: t("Username is required") }),
+    password: z.string().min(1, { message: t("Password is required") }),
+  });
 
 interface LdapLoginModalProps {
   opened: boolean;
@@ -29,6 +30,7 @@ export function LdapLoginModal({
   workspaceId,
 }: LdapLoginModalProps) {
   const { t } = useTranslation();
+  const formSchema = createFormSchema(t);
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
