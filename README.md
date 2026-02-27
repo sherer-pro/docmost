@@ -39,6 +39,7 @@
 - They appear instantly in the interface and are visible only to users with access.
 - Users can view the list, see the unread count, and mark notifications as read.
 - Push notifications can be enabled: receive them instantly or as a digest.
+- Ability to disable email notifications.
 
 ## Admin
 
