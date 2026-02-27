@@ -22,26 +22,20 @@ import {
 } from '../../core/casl/interfaces/space-ability.type';
 import { FastifyReply } from 'fastify';
 import { sanitize } from 'sanitize-filename-ts';
-import { getExportExtension } from './utils';
-import { getMimeType } from '../../common/helpers';
-import * as path from 'path';
 
-@Controller()
-export class ExportController {
+/**
+ * Общий сервисный слой контроллеров экспорта.
+ * Вынесен для того, чтобы resource-oriented контроллеры `pages` и `spaces`
+ * использовали одну и ту же бизнес-логику без дублирования проверок доступа.
+ */
+class ExportControllerDelegate {
   constructor(
     private readonly exportService: ExportService,
     private readonly pageRepo: PageRepo,
     private readonly spaceAbility: SpaceAbilityFactory,
   ) {}
 
-  @UseGuards(JwtAuthGuard)
-  @HttpCode(HttpStatus.OK)
-  @Post('pages/export')
-  async exportPage(
-    @Body() dto: ExportPageDto,
-    @AuthUser() user: User,
-    @Res() res: FastifyReply,
-  ) {
+  async exportPage(dto: ExportPageDto, user: User, res: FastifyReply) {
     const page = await this.pageRepo.findById(dto.pageId, {
       includeContent: true,
     });
@@ -73,14 +67,7 @@ export class ExportController {
     res.send(zipFileStream);
   }
 
-  @UseGuards(JwtAuthGuard)
-  @HttpCode(HttpStatus.OK)
-  @Post('spaces/export')
-  async exportSpace(
-    @Body() dto: ExportSpaceDto,
-    @AuthUser() user: User,
-    @Res() res: FastifyReply,
-  ) {
+  async exportSpace(dto: ExportSpaceDto, user: User, res: FastifyReply) {
     const ability = await this.spaceAbility.createForUser(user, dto.spaceId);
     if (ability.cannot(SpaceCaslAction.Manage, SpaceCaslSubject.Page)) {
       throw new ForbiddenException();
@@ -101,5 +88,95 @@ export class ExportController {
     });
 
     res.send(exportFile.fileStream);
+  }
+}
+
+@Controller('pages')
+export class PageExportController {
+  private readonly delegate: ExportControllerDelegate;
+
+  constructor(
+    private readonly exportService: ExportService,
+    private readonly pageRepo: PageRepo,
+    private readonly spaceAbility: SpaceAbilityFactory,
+  ) {
+    this.delegate = new ExportControllerDelegate(
+      this.exportService,
+      this.pageRepo,
+      this.spaceAbility,
+    );
+  }
+
+  /**
+   * Командный endpoint нового формата.
+   */
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @Post('actions/export')
+  async exportPageAction(
+    @Body() dto: ExportPageDto,
+    @AuthUser() user: User,
+    @Res() res: FastifyReply,
+  ) {
+    return this.delegate.exportPage(dto, user, res);
+  }
+
+  /**
+   * @deprecated Временный alias для обратной совместимости. Используйте /pages/actions/export.
+   */
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @Post('export')
+  async exportPage(
+    @Body() dto: ExportPageDto,
+    @AuthUser() user: User,
+    @Res() res: FastifyReply,
+  ) {
+    return this.delegate.exportPage(dto, user, res);
+  }
+}
+
+@Controller('spaces')
+export class SpaceExportController {
+  private readonly delegate: ExportControllerDelegate;
+
+  constructor(
+    private readonly exportService: ExportService,
+    private readonly pageRepo: PageRepo,
+    private readonly spaceAbility: SpaceAbilityFactory,
+  ) {
+    this.delegate = new ExportControllerDelegate(
+      this.exportService,
+      this.pageRepo,
+      this.spaceAbility,
+    );
+  }
+
+  /**
+   * Командный endpoint нового формата.
+   */
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @Post('actions/export')
+  async exportSpaceAction(
+    @Body() dto: ExportSpaceDto,
+    @AuthUser() user: User,
+    @Res() res: FastifyReply,
+  ) {
+    return this.delegate.exportSpace(dto, user, res);
+  }
+
+  /**
+   * @deprecated Временный alias для обратной совместимости. Используйте /spaces/actions/export.
+   */
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @Post('export')
+  async exportSpace(
+    @Body() dto: ExportSpaceDto,
+    @AuthUser() user: User,
+    @Res() res: FastifyReply,
+  ) {
+    return this.delegate.exportSpace(dto, user, res);
   }
 }

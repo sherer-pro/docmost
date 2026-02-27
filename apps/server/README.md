@@ -97,6 +97,10 @@ Nest is an MIT-licensed open source project. It can grow thanks to the sponsors 
 Nest is [MIT licensed](LICENSE).
 
 
+## API routing conventions
+
+- See `docs/api-routing-conventions.md` for endpoint grouping (CRUD/commands/computational), routing policy, and the RPC migration plan with deprecated aliases.
+
 ## Import style policy
 
 - Use relative imports (`./`, `../`) for modules inside `apps/server/src` to keep local boundaries explicit and avoid mixed patterns in a single file.
