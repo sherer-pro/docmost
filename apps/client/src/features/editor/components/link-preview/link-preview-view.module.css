@@ -5,6 +5,8 @@
   border: 1px solid var(--mantine-color-gray-3);
   border-radius: 10px;
   overflow: hidden;
+  height: 84px;
+  align-items: stretch;
   text-decoration: none;
   color: inherit;
   background: var(--mantine-color-body);
@@ -12,8 +14,9 @@
 
 .image {
   width: 128px;
-  height: 84px;
+  height: 100%;
   object-fit: cover;
+  object-position: center;
   flex: 0 0 128px;
   border-right: 1px solid var(--mantine-color-gray-2);
 }
@@ -25,6 +28,7 @@
   flex-direction: column;
   justify-content: center;
   gap: 2px;
+  overflow: hidden;
 }
 
 .title {
