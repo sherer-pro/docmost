@@ -24,9 +24,9 @@ import { FastifyReply } from 'fastify';
 import { sanitize } from 'sanitize-filename-ts';
 
 /**
- * Общий сервисный слой контроллеров экспорта.
- * Вынесен для того, чтобы resource-oriented контроллеры `pages` и `spaces`
- * использовали одну и ту же бизнес-логику без дублирования проверок доступа.
+ * Shared service layer for export controllers.
+ * Extracted so that resource-oriented `pages` and `spaces` controllers
+ * reuse the same business logic without duplicating access checks.
  */
 class ExportControllerDelegate {
   constructor(
@@ -108,7 +108,7 @@ export class PageExportController {
   }
 
   /**
-   * Командный endpoint нового формата.
+   * New command-style endpoint.
    */
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
@@ -122,7 +122,7 @@ export class PageExportController {
   }
 
   /**
-   * @deprecated Временный alias для обратной совместимости. Используйте /pages/actions/export.
+   * @deprecated Temporary backward-compatibility alias. Use /pages/actions/export.
    */
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
@@ -153,7 +153,7 @@ export class SpaceExportController {
   }
 
   /**
-   * Командный endpoint нового формата.
+   * New command-style endpoint.
    */
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
@@ -167,7 +167,7 @@ export class SpaceExportController {
   }
 
   /**
-   * @deprecated Временный alias для обратной совместимости. Используйте /spaces/actions/export.
+   * @deprecated Temporary backward-compatibility alias. Use /spaces/actions/export.
    */
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)

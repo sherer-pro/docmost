@@ -133,7 +133,7 @@ describe('AttachmentService uploadFile attachment overwrite validation', () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
-    // Подготавливаем стабильный и безопасный вход для uploadFile без реального парсинга multipart.
+    // Prepare stable and safe input for uploadFile without real multipart parsing.
     jest
       .spyOn(attachmentUtils, 'prepareFile')
       .mockResolvedValue(basePreparedFile as any);
@@ -152,7 +152,7 @@ describe('AttachmentService uploadFile attachment overwrite validation', () => {
   });
 
   /**
-   * Проверка, что несовпадение workspace блокирует перезапись существующего вложения.
+   * Verifies that workspace mismatch blocks overwriting an existing attachment.
    */
   it('throws ForbiddenException when only workspaceId mismatches', async () => {
     attachmentRepo.findById.mockResolvedValue({
@@ -175,7 +175,7 @@ describe('AttachmentService uploadFile attachment overwrite validation', () => {
   });
 
   /**
-   * Проверка, что несовпадение page блокирует перезапись даже при совпадении workspace и extension.
+   * Verifies that page mismatch blocks overwrite even when workspace and extension match.
    */
   it('throws ForbiddenException when only pageId mismatches', async () => {
     attachmentRepo.findById.mockResolvedValue({
@@ -198,7 +198,7 @@ describe('AttachmentService uploadFile attachment overwrite validation', () => {
   });
 
   /**
-   * Проверка инварианта расширения: нельзя перезаписывать файл с другим fileExt.
+   * Verifies extension invariant: overwrite is forbidden for a different fileExt.
    */
   it('throws ForbiddenException when only extension mismatches', async () => {
     attachmentRepo.findById.mockResolvedValue({
@@ -221,7 +221,7 @@ describe('AttachmentService uploadFile attachment overwrite validation', () => {
   });
 
   /**
-   * Полное совпадение всех инвариантов должно разрешать перезапись.
+   * Full match of all invariants must allow overwrite.
    */
   it('updates existing attachment when workspaceId, pageId and extension match', async () => {
     attachmentRepo.findById.mockResolvedValue({
