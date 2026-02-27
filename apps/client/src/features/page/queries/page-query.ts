@@ -124,10 +124,12 @@ export function useUpdatePageMutation() {
 }
 
 export function useRemovePageMutation() {
+  const { t } = useTranslation();
+
   return useMutation({
     mutationFn: (pageId: string) => deletePage(pageId, false),
     onSuccess: (_, pageId) => {
-      notifications.show({ message: "Page moved to trash" });
+      notifications.show({ message: t("Page moved to trash") });
       invalidateOnDeletePage(pageId);
       queryClient.invalidateQueries({
         predicate: (item) =>
@@ -135,7 +137,7 @@ export function useRemovePageMutation() {
       });
     },
     onError: (error) => {
-      notifications.show({ message: "Failed to delete page", color: "red" });
+      notifications.show({ message: t("Failed to delete page"), color: "red" });
     },
   });
 }
@@ -169,11 +171,12 @@ export function useMovePageMutation() {
 export function useRestorePageMutation() {
   const [treeData, setTreeData] = useAtom(treeDataAtom);
   const emit = useQueryEmit();
+  const { t } = useTranslation();
 
   return useMutation({
     mutationFn: (pageId: string) => restorePage(pageId),
     onSuccess: async (restoredPage) => {
-      notifications.show({ message: "Page restored successfully" });
+      notifications.show({ message: t("Page restored successfully") });
 
       // Add the restored page back to the tree
       const treeApi = new SimpleTree<SpaceTreeNode>(treeData);
@@ -239,7 +242,7 @@ export function useRestorePageMutation() {
       });
     },
     onError: (error) => {
-      notifications.show({ message: "Failed to restore page", color: "red" });
+      notifications.show({ message: t("Failed to restore page"), color: "red" });
     },
   });
 }
