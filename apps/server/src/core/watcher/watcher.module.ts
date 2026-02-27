@@ -4,6 +4,7 @@ import { CaslModule } from '../casl/casl.module';
 
 @Module({
   imports: [CaslModule],
+  // Watchers are managed internally; no public watcher HTTP endpoints are registered here.
   controllers: [],
   providers: [WatcherService],
   exports: [WatcherService],
