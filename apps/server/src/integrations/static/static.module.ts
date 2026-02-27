@@ -4,6 +4,7 @@ import { join } from 'path';
 import * as fs from 'node:fs';
 import fastifyStatic from '@fastify/static';
 import { EnvironmentService } from '../environment/environment.service';
+import { resolveClientDistPath } from '../../common/utils/client-dist-path';
 
 @Module({})
 export class StaticModule implements OnModuleInit {
@@ -16,14 +17,12 @@ export class StaticModule implements OnModuleInit {
     const httpAdapter = this.httpAdapterHost.httpAdapter;
     const app = httpAdapter.getInstance();
 
-    const clientDistPath = join(
-      __dirname,
-      '..',
-      '..',
-      '..',
-      '..',
-      'client/dist',
-    );
+    const clientDistPath = resolveClientDistPath(__dirname);
+
+    if (!clientDistPath) {
+      this.registerRootFallback(app);
+      return;
+    }
 
     const indexFilePath = join(clientDistPath, 'index.html');
 
