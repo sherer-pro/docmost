@@ -37,6 +37,7 @@ describe('PushAggregationService', () => {
     isUnreadForUser?: boolean;
     unreadCountInWindow?: number;
     userSettings?: unknown;
+    shouldSend?: boolean;
   }) => {
     const db = {
       selectFrom: jest.fn().mockReturnValue({
@@ -70,6 +71,10 @@ describe('PushAggregationService', () => {
         .fn()
         .mockResolvedValue(options?.unreadCountInWindow ?? 1),
     } as any;
+    const notificationDeliveryPolicyService = {
+      shouldSend: jest.fn().mockResolvedValue(options?.shouldSend ?? true),
+    } as any;
+
     const pushService = {
       sendToUser: jest.fn().mockResolvedValue({
         sent: 1,
@@ -85,6 +90,7 @@ describe('PushAggregationService', () => {
       pushNotificationJobRepo,
       notificationRepo,
       pushService,
+      notificationDeliveryPolicyService,
     );
 
     return {
@@ -92,30 +98,27 @@ describe('PushAggregationService', () => {
       pushService,
       pushNotificationJobRepo,
       notificationRepo,
+      notificationDeliveryPolicyService,
     };
   };
 
 
-  it('uses the product default for a user without settings.preferences', async () => {
-    const { service, pushService, notificationRepo } = createService({
-      userSettings: {},
-    });
-
-    await service.dispatchOrAggregate(baseNotification, basePayload);
-
-    expect(pushService.sendToUser).not.toHaveBeenCalled();
-    expect(notificationRepo.isUnreadForUser).not.toHaveBeenCalled();
-  });
-
-  it('does not send an immediate push when the related notification is already read', async () => {
-    const { service, pushService, notificationRepo } = createService({
+  it('uses delivery policy before immediate push dispatch', async () => {
+    const { service, pushService, notificationDeliveryPolicyService } = createService({
       pushFrequency: 'immediate',
-      isUnreadForUser: false,
+      shouldSend: false,
     });
 
     await service.dispatchOrAggregate(baseNotification, basePayload);
 
-    expect(notificationRepo.isUnreadForUser).toHaveBeenCalledWith('n-1', 'user-1');
+    expect(notificationDeliveryPolicyService.shouldSend).toHaveBeenCalledWith({
+      channel: 'push',
+      userId: 'user-1',
+      notificationId: 'n-1',
+      pageId: 'page-1',
+      actorId: undefined,
+      spaceId: undefined,
+    });
     expect(pushService.sendToUser).not.toHaveBeenCalled();
   });
 

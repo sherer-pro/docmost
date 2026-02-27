@@ -11,6 +11,7 @@ import { QueueJob, QueueName } from '../../../integrations/queue/constants';
 import { PushSendResult, PushService } from '../../push/push.service';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
+import { NotificationDeliveryPolicyService } from './notification-delivery-policy.service';
 
 interface PushDispatchPayload {
   title: string;
@@ -22,11 +23,9 @@ interface PushDispatchPayload {
 }
 
 interface UserPushPreference {
-  pushEnabled: boolean;
   pushFrequency: string;
 }
 
-const DEFAULT_PUSH_ENABLED = false;
 const DEFAULT_PUSH_FREQUENCY = 'immediate';
 
 @Injectable()
@@ -40,6 +39,7 @@ export class PushAggregationService {
     private readonly pushNotificationJobRepo: PushNotificationJobRepo,
     private readonly notificationRepo: NotificationRepo,
     private readonly pushService: PushService,
+    private readonly notificationDeliveryPolicyService: NotificationDeliveryPolicyService,
   ) {}
 
   /**
@@ -68,16 +68,17 @@ export class PushAggregationService {
     payload: PushDispatchPayload,
   ): Promise<void> {
     const preferences = await this.getUserPushPreference(notification.userId);
-    if (!preferences.pushEnabled) {
-      return;
-    }
 
     if (preferences.pushFrequency === 'immediate' || !notification.pageId) {
-      const canSendImmediate = await this.canSendImmediatePush(
-        notification.userId,
-        payload.notificationId,
-      );
-      if (!canSendImmediate) {
+      const shouldSend = await this.notificationDeliveryPolicyService.shouldSend({
+        channel: 'push',
+        userId: notification.userId,
+        notificationId: payload.notificationId,
+        pageId: notification.pageId ?? undefined,
+        actorId: notification.actorId,
+        spaceId: notification.spaceId,
+      });
+      if (!shouldSend) {
         return;
       }
 
@@ -87,11 +88,15 @@ export class PushAggregationService {
 
     const windowMs = this.frequencyToMs(preferences.pushFrequency);
     if (!windowMs) {
-      const canSendImmediate = await this.canSendImmediatePush(
-        notification.userId,
-        payload.notificationId,
-      );
-      if (!canSendImmediate) {
+      const shouldSend = await this.notificationDeliveryPolicyService.shouldSend({
+        channel: 'push',
+        userId: notification.userId,
+        notificationId: payload.notificationId,
+        pageId: notification.pageId ?? undefined,
+        actorId: notification.actorId,
+        spaceId: notification.spaceId,
+      });
+      if (!shouldSend) {
         return;
       }
 
@@ -192,20 +197,6 @@ export class PushAggregationService {
   }
 
   /**
-   * Allows immediate delivery only when the related notification is still unread.
-   */
-  private async canSendImmediatePush(
-    userId: string,
-    notificationId?: string,
-  ): Promise<boolean> {
-    if (!notificationId) {
-      return true;
-    }
-
-    return this.notificationRepo.isUnreadForUser(notificationId, userId);
-  }
-
-  /**
    * Checks whether unread document notifications still exist within the aggregation window.
    * If not, the aggregated push should be canceled.
    */
@@ -253,11 +244,10 @@ export class PushAggregationService {
       .executeTakeFirst();
 
     const settings = (user?.settings ?? {}) as {
-      preferences?: { pushEnabled?: boolean; pushFrequency?: string };
+      preferences?: { pushFrequency?: string };
     };
 
     return {
-      pushEnabled: settings.preferences?.pushEnabled ?? DEFAULT_PUSH_ENABLED,
       pushFrequency: settings.preferences?.pushFrequency ?? DEFAULT_PUSH_FREQUENCY,
     };
   }
