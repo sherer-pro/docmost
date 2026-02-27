@@ -32,6 +32,8 @@
 - Added custom document fields: status, owner, stakeholders.
 - Added space-level configuration for displaying custom fields.
 - Added display of participants viewing or editing a document.
+- Added rich link previews when inserting links.
+- Added the ability to cite a selected fragment in another document.
 
 ## Notifications
 
