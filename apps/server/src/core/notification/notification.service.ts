@@ -6,6 +6,7 @@ import { InsertableNotification } from '@docmost/db/types/entity.types';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import { WsGateway } from '../../ws/ws.gateway';
 import { MailService } from '../../integrations/mail/mail.service';
+import { NotificationDeliveryPolicyService } from './services/notification-delivery-policy.service';
 
 @Injectable()
 export class NotificationService {
@@ -15,6 +16,7 @@ export class NotificationService {
     private readonly notificationRepo: NotificationRepo,
     private readonly wsGateway: WsGateway,
     private readonly mailService: MailService,
+    private readonly notificationDeliveryPolicyService: NotificationDeliveryPolicyService,
     @InjectKysely() private readonly db: KyselyDB,
   ) {}
 
@@ -51,10 +53,24 @@ export class NotificationService {
   async queueEmail(
     userId: string,
     notificationId: string,
+    pageId: string | null,
+    actorId: string,
+    spaceId: string,
     subject: string,
     template: any,
   ) {
     try {
+      const shouldSend = await this.notificationDeliveryPolicyService.shouldSend({
+        channel: 'email',
+        userId,
+        notificationId,
+        pageId: pageId ?? undefined,
+        actorId,
+        spaceId,
+      });
+
+      if (!shouldSend) return;
+
       const user = await this.db
         .selectFrom('users')
         .select(['email'])
