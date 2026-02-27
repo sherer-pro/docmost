@@ -151,7 +151,14 @@ const CommandGroups: SlashMenuGroupedItemsType = {
           return;
         }
 
-        const [sourcePageId] = quoteIdInput.split(":");
+        const normalizedQuoteId = quoteIdInput.trim();
+        const separatorIndex = normalizedQuoteId.indexOf(":");
+
+        if (separatorIndex <= 0 || separatorIndex === normalizedQuoteId.length - 1) {
+          return;
+        }
+
+        const sourcePageId = normalizedQuoteId.slice(0, separatorIndex).trim();
         if (!sourcePageId) {
           return;
         }
@@ -160,7 +167,7 @@ const CommandGroups: SlashMenuGroupedItemsType = {
           .chain()
           .focus()
           .deleteRange(range)
-          .setQuoteEmbed({ sourcePageId, quoteId: quoteIdInput.trim() })
+          .setQuoteEmbed({ sourcePageId, quoteId: normalizedQuoteId })
           .run();
       },
     },
