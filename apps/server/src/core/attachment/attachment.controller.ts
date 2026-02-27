@@ -54,7 +54,7 @@ import { JwtAttachmentPayload, JwtType } from '../auth/dto/jwt-payload';
 import * as path from 'path';
 import { RemoveIconDto } from './dto/attachment.dto';
 
-@Controller()
+@Controller('attachments')
 export class AttachmentController {
   private readonly logger = new Logger(AttachmentController.name);
 
@@ -71,7 +71,7 @@ export class AttachmentController {
 
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
-  @Post('files/upload')
+  @Post('actions/upload-file')
   @UseInterceptors(FileInterceptor)
   async uploadFile(
     @Req() req: any,
@@ -149,7 +149,7 @@ export class AttachmentController {
   }
 
   @UseGuards(JwtAuthGuard)
-  @Get('/files/:fileId/:fileName')
+  @Get('files/:fileId/:fileName')
   async getFile(
     @Req() req: FastifyRequest,
     @Res() res: FastifyReply,
@@ -189,7 +189,7 @@ export class AttachmentController {
     }
   }
 
-  @Get('/files/public/:fileId/:fileName')
+  @Get('files/public/:fileId/:fileName')
   async getPublicFile(
     @Req() req: FastifyRequest,
     @Res() res: FastifyReply,
@@ -239,7 +239,7 @@ export class AttachmentController {
 
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
-  @Post('attachments/upload-image')
+  @Post('actions/upload-image')
   @UseInterceptors(FileInterceptor)
   async uploadAvatarOrLogo(
     @Req() req: any,
@@ -321,7 +321,7 @@ export class AttachmentController {
     }
   }
 
-  @Get('attachments/img/:attachmentType/:fileName')
+  @Get('img/:attachmentType/:fileName')
   async getLogoOrAvatar(
     @Res() res: FastifyReply,
     @AuthWorkspace() workspace: Workspace,
@@ -357,7 +357,7 @@ export class AttachmentController {
 
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
-  @Post('attachments/remove-icon')
+  @Post('actions/remove-icon')
   async removeIcon(
     @Body() dto: RemoveIconDto,
     @AuthUser() user: User,

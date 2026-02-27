@@ -29,7 +29,7 @@ import {
   validateFileExtensionAndSignature,
 } from '../../common/helpers/file-validation';
 
-@Controller()
+@Controller('pages')
 export class ImportController {
   private readonly logger = new Logger(ImportController.name);
 
@@ -39,14 +39,40 @@ export class ImportController {
     private readonly environmentService: EnvironmentService,
   ) {}
 
+  /**
+   * Командный endpoint нового формата: импортирует одну страницу в целевой space.
+   */
   @UseInterceptors(FileInterceptor)
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
-  @Post('pages/import')
+  @Post('actions/import')
+  async importPageAction(
+    @Req() req: any,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.handleImportPage(req, user, workspace);
+  }
+
+  /**
+   * @deprecated Временный alias для обратной совместимости. Используйте /pages/actions/import.
+   */
+  @UseInterceptors(FileInterceptor)
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @Post('import')
   async importPage(
     @Req() req: any,
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.handleImportPage(req, user, workspace);
+  }
+
+  private async handleImportPage(
+    req: any,
+    user: User,
+    workspace: Workspace,
   ) {
     const validFileExtensions = ['.md', '.html', '.docx'];
 
@@ -96,15 +122,37 @@ export class ImportController {
     return this.importService.importPage(file, user.id, spaceId, workspace.id);
   }
 
+  /**
+   * Командный endpoint нового формата: массовый импорт zip-пакета.
+   */
   @UseInterceptors(FileInterceptor)
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
-  @Post('pages/import-zip')
+  @Post('actions/import-zip')
+  async importZipAction(
+    @Req() req: any,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.handleImportZip(req, user, workspace);
+  }
+
+  /**
+   * @deprecated Временный alias для обратной совместимости. Используйте /pages/actions/import-zip.
+   */
+  @UseInterceptors(FileInterceptor)
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @Post('import-zip')
   async importZip(
     @Req() req: any,
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
+    return this.handleImportZip(req, user, workspace);
+  }
+
+  private async handleImportZip(req: any, user: User, workspace: Workspace) {
     const validFileExtensions = ['.zip'];
 
     const maxFileSize = bytes(this.environmentService.getFileImportSizeLimit());
