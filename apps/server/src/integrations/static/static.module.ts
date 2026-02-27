@@ -73,6 +73,24 @@ export class StaticModule implements OnModuleInit {
         const stream = fs.createReadStream(indexFilePath);
         res.type('text/html').send(stream);
       });
+
+      return;
     }
+
+    this.registerRootFallback(app);
+  }
+
+  /**
+   * Регистрирует fallback-обработчик для корневого маршрута, если фронтенд не собран.
+   * Это помогает избежать ответа `Cannot GET /` и сразу подсказать, как запустить UI.
+   */
+  private registerRootFallback(app: any) {
+    app.get('/', (_req: any, res: any) => {
+      res.code(200).send({
+        message:
+          'Docmost server is running, but client assets are not available. Start frontend dev server with "pnpm client:dev" or build the project with "pnpm build".',
+        statusCode: 200,
+      });
+    });
   }
 }
