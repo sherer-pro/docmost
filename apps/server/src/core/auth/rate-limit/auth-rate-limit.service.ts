@@ -91,8 +91,8 @@ export class AuthRateLimitService implements OnModuleDestroy {
     private readonly eventEmitter: EventEmitter2,
     private readonly environmentService: EnvironmentService,
     /**
-     * Необязательный Redis-клиент используется только в тестах,
-     * в рантайме сервис создаёт собственный клиент через env-конфиг.
+     * Optional Redis client is used only in tests,
+     * while runtime creates its own client from environment configuration.
      */
     @Optional()
     redisClient?: RedisClientLike,

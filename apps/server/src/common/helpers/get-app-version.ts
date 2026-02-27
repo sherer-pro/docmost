@@ -2,13 +2,13 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
- * Возвращает версию приложения из ближайшего package.json.
+ * Returns the application version from the nearest package.json.
  *
- * Логика рассчитана на оба сценария запуска:
- * - из исходников (`apps/server/src/...`);
- * - из собранного dist (`apps/server/dist/apps/server/src/...`).
+ * The lookup supports both runtime layouts:
+ * - source execution (`apps/server/src/...`);
+ * - built dist output (`apps/server/dist/apps/server/src/...`).
  *
- * Если package.json не найден или не читается, возвращается `unknown`.
+ * Returns `unknown` when package.json is missing or unreadable.
  */
 export function getAppVersion(): string {
   const candidates = [
@@ -28,7 +28,7 @@ export function getAppVersion(): string {
         return packageJson.version;
       }
     } catch {
-      // Игнорируем некорректные файлы и переходим к следующему кандидату.
+      // Ignore malformed files and continue with the next candidate.
     }
   }
 

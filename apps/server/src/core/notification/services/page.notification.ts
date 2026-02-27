@@ -171,8 +171,8 @@ export class PageNotificationService {
     }) => React.JSX.Element;
   } {
     /**
-     * Единая конфигурация текста для push и email.
-     * Мы используем один источник строки `title`, чтобы формулировки не расходились.
+     * Unified text configuration for push and email.
+     * We use a single `title` source so wording stays consistent across channels.
      */
     switch (reason) {
       case 'page-assigned':
