@@ -2,14 +2,29 @@ import { uploadImageAction } from "@/features/editor/components/image/upload-ima
 import { uploadVideoAction } from "@/features/editor/components/video/upload-video-action.tsx";
 import { uploadAttachmentAction } from "../attachment/upload-attachment-action";
 import { createMentionAction } from "@/features/editor/components/link/internal-link-paste.ts";
+import { createLinkPreviewAction } from "@/features/editor/components/link-preview/link-preview-action";
 import { INTERNAL_LINK_REGEX } from "@/lib/constants.ts";
 import { Editor } from "@tiptap/core";
+
+function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return ["http:", "https:"].includes(url.protocol);
+  } catch {
+    return false;
+  }
+}
+
+export interface HandlePasteOptions {
+  plainTextRequested?: boolean;
+}
 
 export const handlePaste = (
   editor: Editor,
   event: ClipboardEvent,
   pageId: string,
   creatorId?: string,
+  options?: HandlePasteOptions,
 ) => {
   const clipboardData = event.clipboardData.getData("text/plain");
 
@@ -57,6 +72,31 @@ export const handlePaste = (
     }
     return true;
   }
+
+    // Convert plain URL into a preview card only for regular paste actions.
+  // For plain-text paste (Ctrl/Cmd+Shift+V or context menu "Paste as text"),
+  // keep default behavior and skip preview insertion.
+  const trimmedClipboardData = clipboardData.trim();
+  const isPlainTextPaste =
+    options?.plainTextRequested === true ||
+    (event as ClipboardEvent & { shiftKey?: boolean }).shiftKey === true;
+  const hasSelection = !editor.state.selection.empty;
+
+  if (
+    !isPlainTextPaste &&
+    !hasSelection &&
+    isHttpUrl(trimmedClipboardData)
+  ) {
+    event.preventDefault();
+    void createLinkPreviewAction(editor, trimmedClipboardData).then((inserted) => {
+      if (!inserted) {
+        editor.chain().focus().insertContent(trimmedClipboardData).run();
+      }
+    });
+
+    return true;
+  }
+
   return false;
 };
 
