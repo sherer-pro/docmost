@@ -1,3 +1,4 @@
+// TODO(DOC-2471): restore this e2e suite after adding Jest ESM support for collaboration dependencies.
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import * as request from 'supertest';
