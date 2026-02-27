@@ -29,18 +29,18 @@ import { Node } from '@tiptap/pm/model';
 import { EditorState } from '@tiptap/pm/state';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import slugify = require('@sindresorhus/slugify');
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const packageJson = require('../../../package.json');
 import { EnvironmentService } from '../environment/environment.service';
 import {
   getAttachmentIds,
   getProsemirrorContent,
 } from '../../common/helpers/prosemirror/utils';
 import { htmlToMarkdown } from '@docmost/editor-ext';
+import { getAppVersion } from '../../common/helpers/get-app-version';
 
 @Injectable()
 export class ExportService {
   private readonly logger = new Logger(ExportService.name);
+  private readonly appVersion = getAppVersion();
 
   constructor(
     private readonly pageRepo: PageRepo,
@@ -269,7 +269,7 @@ export class ExportService {
     const metadata: ExportMetadata = {
       exportedAt: new Date().toISOString(),
       source: 'docmost',
-      version: packageJson.version,
+      version: this.appVersion,
       pages: pagesMetadata,
     };
 

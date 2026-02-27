@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const packageJson = require('./../../../package.json');
+import { getAppVersion } from '../../common/helpers/get-app-version';
 
 @Injectable()
 export class VersionService {
@@ -20,7 +19,7 @@ export class VersionService {
     }
 
     return {
-      currentVersion: packageJson?.version,
+      currentVersion: getAppVersion(),
       latestVersion: latestVersion,
       releaseUrl: 'https://github.com/docmost/docmost/releases',
     };
