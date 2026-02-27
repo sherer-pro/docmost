@@ -22,16 +22,18 @@ import { useWorkspacePublicDataQuery } from "@/features/workspace/queries/worksp
 import { Error404 } from "@/components/ui/error-404.tsx";
 import React from "react";
 
-const formSchema = z.object({
-  email: z
-    .string()
-    .min(1, { message: "email is required" })
-    .email({ message: "Invalid email address" }),
-  password: z.string().min(1, { message: "Password is required" }),
-});
+const createFormSchema = (t: (key: string) => string) =>
+  z.object({
+    email: z
+      .string()
+      .min(1, { message: t("Email is required") })
+      .email({ message: t("Invalid email address") }),
+    password: z.string().min(1, { message: t("Password is required") }),
+  });
 
 export function LoginForm() {
   const { t } = useTranslation();
+  const formSchema = createFormSchema(t);
   const { signIn, isLoading } = useAuth();
   useRedirectIfAuthenticated();
   const {

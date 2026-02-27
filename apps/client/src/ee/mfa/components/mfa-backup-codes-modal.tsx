@@ -44,7 +44,7 @@ export function MfaBackupCodesModal({
 
   const formSchema = requiresPassword
     ? z.object({
-        confirmPassword: z.string().min(1, { message: "Password is required" }),
+        confirmPassword: z.string().min(1, { message: t("Password is required") }),
       })
     : z.object({
         confirmPassword: z.string().optional(),

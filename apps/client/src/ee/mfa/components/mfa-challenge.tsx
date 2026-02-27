@@ -23,21 +23,22 @@ import { useTranslation } from "react-i18next";
 import * as z from "zod";
 import { MfaBackupCodeInput } from "./mfa-backup-code-input";
 
-const formSchema = z.object({
-  code: z
-    .string()
-    .refine(
-      (val) => (val.length === 6 && /^\d{6}$/.test(val)) || val.length === 8,
-      {
-        message: "Enter a 6-digit code or 8-character backup code",
-      },
-    ),
-});
-
-type MfaChallengeFormValues = z.infer<typeof formSchema>;
+const createFormSchema = (t: (key: string) => string) =>
+  z.object({
+    code: z
+      .string()
+      .refine(
+        (val) => (val.length === 6 && /^\d{6}$/.test(val)) || val.length === 8,
+        {
+          message: t("Enter a 6-digit code or 8-character backup code"),
+        },
+      ),
+  });
 
 export function MfaChallenge() {
   const { t } = useTranslation();
+  const formSchema = createFormSchema(t);
+  type MfaChallengeFormValues = z.infer<typeof formSchema>;
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [useBackupCode, setUseBackupCode] = useState(false);
