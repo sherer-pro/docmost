@@ -102,3 +102,9 @@ Nest is [MIT licensed](LICENSE).
 - Use relative imports (`./`, `../`) for modules inside `apps/server/src` to keep local boundaries explicit and avoid mixed patterns in a single file.
 - Use workspace aliases (`@docmost/*`) for shared packages and cross-workspace dependencies.
 - The `src/*` alias is kept in TypeScript and Jest configs as a compatibility contract for tests and legacy imports, but new backend code should prefer relative imports for local modules.
+
+## Watcher API status
+
+- Public watcher endpoints `POST /api/pages/watch`, `POST /api/pages/unwatch`, and `POST /api/pages/watch-status` are not part of the active API surface.
+- Watcher records are managed internally by backend services and queue processors.
+- If watcher actions are needed in the client again, add explicit API routes and cover them with e2e tests before exposing them.
