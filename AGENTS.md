@@ -28,6 +28,7 @@
 ### Where things are located
 
 - `apps/server/src` — main backend code.
+- `apps/server/docs/api-routing-conventions.md` — API routing policy, endpoint inventory, and RPC migration plan.
 - `apps/client/src` — main frontend code.
 - `apps/client/public/locales/*` — JSON translations.
 - `apps/server/src/database` — migrations and DB tooling.
