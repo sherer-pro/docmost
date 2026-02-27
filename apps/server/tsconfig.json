@@ -20,12 +20,30 @@
     "strict": true,
     "jsx": "react",
     "paths": {
-      "src/*": ["./src/*"],
-      "@docmost/api-contract": ["../../packages/api-contract/src/index.ts"],
-      "@docmost/api-contract/*": ["../../packages/api-contract/src/*"],
-      "@docmost/db/*": ["./src/database/*"],
-      "@docmost/transactional/*": ["./src/integrations/transactional/*"],
-      "@docmost/ee/*": ["./src/ee/*"]
+      "src/*": [
+        "./src/*"
+      ],
+      "@docmost/api-contract": [
+        "../../packages/api-contract/src/index.ts"
+      ],
+      "@docmost/api-contract/*": [
+        "../../packages/api-contract/src/*"
+      ],
+      "@docmost/db/*": [
+        "./src/database/*"
+      ],
+      "@docmost/transactional/*": [
+        "./src/integrations/transactional/*"
+      ],
+      "@docmost/ee/*": [
+        "./src/ee/*"
+      ],
+      "@docmost/editor-ext": [
+        "../../packages/editor-ext/src/index.ts"
+      ],
+      "@docmost/editor-ext/*": [
+        "../../packages/editor-ext/src/*"
+      ]
     }
   }
 }
