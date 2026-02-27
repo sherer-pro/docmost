@@ -1,6 +1,6 @@
 services:
   docmost:
-    image: docmost/docmost:latest
+    image: shererpro/docmost:latest
     depends_on:
       - db
       - redis
@@ -12,6 +12,8 @@ services:
       WEB_PUSH_VAPID_PUBLIC_KEY: "VAPID_PUBLIC_KEY"
       WEB_PUSH_VAPID_PRIVATE_KEY: "VAPID_PRIVATE_KEY"
       WEB_PUSH_SUBJECT: "mailto:hello@example.com"
+      AUTH_RATE_LIMIT_STORAGE: memory
+      DISABLE_TELEMETRY: true
     ports:
       - "3000:3000"
     restart: unless-stopped
