@@ -8,6 +8,7 @@ import { WorkspaceRepo } from '@docmost/db/repos/workspace/workspace.repo';
 import { EnvironmentService } from '../../integrations/environment/environment.service';
 import { Workspace } from '@docmost/db/types/entity.types';
 import { htmlEscape } from '../../common/helpers/html-escaper';
+import { resolveClientDistPath } from '../../common/utils/client-dist-path';
 
 @Controller('share')
 export class ShareSeoController {
@@ -76,16 +77,9 @@ export class ShareSeoController {
       workspace = await this.workspaceRepo.findByHostname(subdomain);
     }
 
-    const clientDistPath = join(
-      __dirname,
-      '..',
-      '..',
-      '..',
-      '..',
-      'client/dist',
-    );
+    const clientDistPath = resolveClientDistPath(__dirname);
 
-    if (fs.existsSync(clientDistPath)) {
+    if (clientDistPath && fs.existsSync(clientDistPath)) {
       const indexFilePath = join(clientDistPath, 'index.html');
 
       if (!workspace) {
