@@ -83,6 +83,7 @@ export default function PageEditor({
   const collaborationURL = useCollaborationUrl();
   const isComponentMounted = useRef(false);
   const editorRef = useRef<Editor | null>(null);
+  const plainTextPasteRequestedRef = useRef(false);
 
   useEffect(() => {
     isComponentMounted.current = true;
@@ -269,6 +270,13 @@ export default function PageEditor({
               searchSpotlight.open();
               return true;
             }
+            if (
+              (event.ctrlKey || event.metaKey) &&
+              event.shiftKey &&
+              event.code === "KeyV"
+            ) {
+              plainTextPasteRequestedRef.current = true;
+            }
             if (["ArrowUp", "ArrowDown", "Enter"].includes(event.key)) {
               const slashCommand = document.querySelector("#slash-command");
               if (slashCommand) {
@@ -290,15 +298,30 @@ export default function PageEditor({
               }
             }
           },
+          beforeinput: (_view, event) => {
+            const inputEvent = event as InputEvent;
+
+            if (inputEvent.inputType === "insertFromPasteAsPlainText") {
+              plainTextPasteRequestedRef.current = true;
+            }
+
+            return false;
+          },
         },
         handlePaste: (_view, event) => {
           if (!editorRef.current) return false;
+
+          const isPlainTextPasteRequested = plainTextPasteRequestedRef.current;
+          plainTextPasteRequestedRef.current = false;
 
           return handlePaste(
             editorRef.current,
             event,
             pageId,
             currentUser?.user.id,
+            {
+              plainTextRequested: isPlainTextPasteRequested,
+            },
           );
         },
         handleDrop: (_view, event, _slice, moved) => {

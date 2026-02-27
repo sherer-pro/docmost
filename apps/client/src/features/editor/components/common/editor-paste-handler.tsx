@@ -15,11 +15,16 @@ function isHttpUrl(value: string): boolean {
   }
 }
 
+export interface HandlePasteOptions {
+  plainTextRequested?: boolean;
+}
+
 export const handlePaste = (
   editor: Editor,
   event: ClipboardEvent,
   pageId: string,
   creatorId?: string,
+  options?: HandlePasteOptions,
 ) => {
   const clipboardData = event.clipboardData.getData("text/plain");
 
@@ -68,11 +73,13 @@ export const handlePaste = (
     return true;
   }
 
-  // Обычная вставка URL (без модификатора Shift) превращается в карточку ссылки с метаданными.
-  // Для Ctrl/Cmd+Shift+V браузер помечает событие флагом shiftKey, поэтому в этом режиме
-  // перехват отключается и сохраняется вставка как обычный текст.
+    // Convert plain URL into a preview card only for regular paste actions.
+  // For plain-text paste (Ctrl/Cmd+Shift+V or context menu "Paste as text"),
+  // keep default behavior and skip preview insertion.
   const trimmedClipboardData = clipboardData.trim();
-  const isPlainTextPaste = (event as ClipboardEvent & { shiftKey?: boolean }).shiftKey === true;
+  const isPlainTextPaste =
+    options?.plainTextRequested === true ||
+    (event as ClipboardEvent & { shiftKey?: boolean }).shiftKey === true;
   const hasSelection = !editor.state.selection.empty;
 
   if (
