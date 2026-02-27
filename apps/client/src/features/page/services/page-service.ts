@@ -193,3 +193,17 @@ export async function getQuoteContent(data: QuoteContentInput): Promise<QuoteCon
   const req = await api.post<QuoteContentResult>("/pages/quote-content", data);
   return req.data;
 }
+
+
+export interface LinkPreviewResult {
+  url: string;
+  title: string;
+  description: string;
+  image: string | null;
+  siteName: string;
+}
+
+export async function getLinkPreview(url: string): Promise<LinkPreviewResult> {
+  const req = await api.post<LinkPreviewResult>("/pages/link-preview", { url });
+  return req.data;
+}

@@ -2,8 +2,18 @@ import { uploadImageAction } from "@/features/editor/components/image/upload-ima
 import { uploadVideoAction } from "@/features/editor/components/video/upload-video-action.tsx";
 import { uploadAttachmentAction } from "../attachment/upload-attachment-action";
 import { createMentionAction } from "@/features/editor/components/link/internal-link-paste.ts";
+import { createLinkPreviewAction } from "@/features/editor/components/link-preview/link-preview-action";
 import { INTERNAL_LINK_REGEX } from "@/lib/constants.ts";
 import { Editor } from "@tiptap/core";
+
+function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return ["http:", "https:"].includes(url.protocol);
+  } catch {
+    return false;
+  }
+}
 
 export const handlePaste = (
   editor: Editor,
@@ -57,6 +67,29 @@ export const handlePaste = (
     }
     return true;
   }
+
+  // Обычная вставка URL (без модификатора Shift) превращается в карточку ссылки с метаданными.
+  // Для Ctrl/Cmd+Shift+V браузер помечает событие флагом shiftKey, поэтому в этом режиме
+  // перехват отключается и сохраняется вставка как обычный текст.
+  const trimmedClipboardData = clipboardData.trim();
+  const isPlainTextPaste = (event as ClipboardEvent & { shiftKey?: boolean }).shiftKey === true;
+  const hasSelection = !editor.state.selection.empty;
+
+  if (
+    !isPlainTextPaste &&
+    !hasSelection &&
+    isHttpUrl(trimmedClipboardData)
+  ) {
+    event.preventDefault();
+    void createLinkPreviewAction(editor, trimmedClipboardData).then((inserted) => {
+      if (!inserted) {
+        editor.chain().focus().insertContent(trimmedClipboardData).run();
+      }
+    });
+
+    return true;
+  }
+
   return false;
 };
 
