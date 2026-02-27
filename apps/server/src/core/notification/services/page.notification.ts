@@ -106,6 +106,9 @@ export class PageNotificationService {
       await this.notificationService.queueEmail(
         recipientId,
         notification.id,
+        pageId,
+        actorId,
+        spaceId,
         config.title,
         config.createEmail({
           actorName: actor.name,
@@ -253,6 +256,9 @@ export class PageNotificationService {
       await this.notificationService.queueEmail(
         userId,
         notification.id,
+        pageId,
+        actorId,
+        spaceId,
         subject,
         PageMentionEmail({ actorName: actor.name, pageTitle, pageUrl }),
       );

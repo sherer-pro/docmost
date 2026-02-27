@@ -83,6 +83,9 @@ export class CommentNotificationService {
       await this.notificationService.queueEmail(
         userId,
         notification.id,
+        pageId,
+        actorId,
+        spaceId,
         `${actor.name} mentioned you in a comment`,
         CommentMentionEmail({ actorName: actor.name, pageTitle, pageUrl }),
       );
@@ -116,6 +119,9 @@ export class CommentNotificationService {
       await this.notificationService.queueEmail(
         recipientId,
         notification.id,
+        pageId,
+        actorId,
+        spaceId,
         `${actor.name} commented on ${pageTitle}`,
         CommentCreateEmail({ actorName: actor.name, pageTitle, pageUrl }),
       );
@@ -181,6 +187,9 @@ export class CommentNotificationService {
     await this.notificationService.queueEmail(
       commentCreatorId,
       notification.id,
+      pageId,
+      actorId,
+      spaceId,
       subject,
       CommentResolvedEmail({ actorName: actor.name, pageTitle, pageUrl }),
     );
