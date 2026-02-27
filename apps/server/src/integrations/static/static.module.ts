@@ -80,9 +80,9 @@ export class StaticModule implements OnModuleInit {
   }
 
   /**
-   * Регистрирует fallback-обработчик для корневого маршрута, если фронтенд не собран.
-   * Для браузера возвращается HTML-страница с пояснением, а статус ответа выставляется 503,
-   * чтобы не маскировать ситуацию как успешный запуск полноценного веб-приложения.
+   * Registers a fallback handler for the root route when the frontend is not built.
+   * For browser requests, returns an explanatory HTML page with HTTP 503,
+   * so the situation is not masked as a successful full web application startup.
    */
   private registerRootFallback(app: any) {
     app.get('/', (_req: any, res: any) => {

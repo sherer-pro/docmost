@@ -16,15 +16,15 @@ interface NotificationDeliveryPolicyInput {
 }
 
 /**
- * Централизованная policy доставки уведомлений.
+ * Centralized notification delivery policy.
  *
- * Для immediate-каналов (email/push immediate) действует единый критерий:
- * не отправляем, если уведомление уже прочитано.
+ * Immediate channels (email/push immediate) use a single criterion:
+ * do not send when the notification is already read.
  *
- * Для агрегированного push окна/частота по-прежнему рассчитываются в
- * PushAggregationService, но эта policy остается общей точкой для
- * базовых проверок (предпочтения пользователя, actor self-case,
- * наличие доступа к пространству и unread-критерий immediate).
+ * Aggregated push window/frequency is still computed in
+ * PushAggregationService, while this policy remains the shared point for
+ * baseline checks (user preferences, actor self-case,
+ * space-access checks, and the immediate unread criterion).
  */
 @Injectable()
 export class NotificationDeliveryPolicyService {
@@ -35,7 +35,7 @@ export class NotificationDeliveryPolicyService {
   ) {}
 
   /**
-   * Проверяет, нужно ли отправлять уведомление в выбранный канал.
+   * Checks whether a notification should be sent via the selected channel.
    */
   async shouldSend(input: NotificationDeliveryPolicyInput): Promise<boolean> {
     const { channel, userId, notificationId, actorId, spaceId } = input;

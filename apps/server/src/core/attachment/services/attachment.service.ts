@@ -85,7 +85,7 @@ export class AttachmentService {
         );
       }
 
-      // Проверяем каждый инвариант отдельно и блокируем перезапись при любом расхождении.
+      // Validate each invariant separately and block overwrite on any mismatch.
       const isWorkspaceMismatch =
         existingAttachment.workspaceId !== workspaceId;
       const isPageMismatch = existingAttachment.pageId !== pageId;

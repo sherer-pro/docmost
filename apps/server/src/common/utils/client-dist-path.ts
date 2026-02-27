@@ -2,28 +2,28 @@ import { join } from 'path';
 import * as fs from 'node:fs';
 
 /**
- * Возвращает абсолютный путь к директории собранного фронтенда (`apps/client/dist`).
+ * Returns the absolute path to the built frontend directory (`apps/client/dist`).
  *
- * Почему нужен перебор нескольких кандидатов:
- * - в dev-режиме `__dirname` указывает на `apps/server/src/...`;
- * - в production-сборке Nest (`nest build`) код находится в `apps/server/dist/apps/server/src/...`;
- * - в Docker-контейнере рабочая директория обычно `/app`, где фронтенд лежит в `/app/apps/client/dist`.
+ * Multiple candidates are required because:
+ * - in dev mode, `__dirname` points to `apps/server/src/...`;
+ * - in the Nest production build (`nest build`), code lives under `apps/server/dist/apps/server/src/...`;
+ * - in Docker, the working directory is typically `/app`, with frontend assets at `/app/apps/client/dist`.
  *
- * Функция проверяет наиболее вероятные варианты и возвращает первый существующий путь.
- * Если директория не найдена, возвращается `undefined` — вызывающий код уже решает,
- * как корректно обработать отсутствие клиентских ассетов.
+ * The function checks the most likely locations and returns the first existing path.
+ * If no directory is found, it returns `undefined`, and the caller decides
+ * how to handle missing client assets.
  *
- * @param baseDir Директория, относительно которой строятся пути (обычно `__dirname`).
+ * @param baseDir Directory used as the path resolution base (usually `__dirname`).
  */
 export function resolveClientDistPath(baseDir: string): string | undefined {
   const candidatePaths = [
     // Nest production build: .../apps/server/dist/apps/server/src/** -> /app/apps/client/dist
-    // Важно подняться именно на 7 уровней: без дополнительного ".." путь получается
-    // /app/apps/server/client/dist и фронтенд ошибочно считается отсутствующим.
+    // Important: go up exactly 7 levels. Without the extra "..", the resolved path becomes
+    // /app/apps/server/client/dist, and the frontend is incorrectly treated as missing.
     join(baseDir, '..', '..', '..', '..', '..', '..', '..', 'client', 'dist'),
-    // Локальный запуск из исходников: .../apps/server/src/** -> .../apps/client/dist
+    // Local run from sources: .../apps/server/src/** -> .../apps/client/dist
     join(baseDir, '..', '..', '..', '..', 'client', 'dist'),
-    // Запуск из корня монорепозитория (или контейнера) с cwd=/app
+    // Run from monorepo root (or container) with cwd=/app
     join(process.cwd(), 'apps', 'client', 'dist'),
   ];
 

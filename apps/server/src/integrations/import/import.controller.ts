@@ -40,7 +40,7 @@ export class ImportController {
   ) {}
 
   /**
-   * Командный endpoint нового формата: импортирует одну страницу в целевой space.
+   * New command-style endpoint: imports a single page into the target space.
    */
   @UseInterceptors(FileInterceptor)
   @UseGuards(JwtAuthGuard)
@@ -55,7 +55,7 @@ export class ImportController {
   }
 
   /**
-   * @deprecated Временный alias для обратной совместимости. Используйте /pages/actions/import.
+   * @deprecated Temporary backward-compatibility alias. Use /pages/actions/import.
    */
   @UseInterceptors(FileInterceptor)
   @UseGuards(JwtAuthGuard)
@@ -123,7 +123,7 @@ export class ImportController {
   }
 
   /**
-   * Командный endpoint нового формата: массовый импорт zip-пакета.
+   * New command-style endpoint: bulk import of a zip package.
    */
   @UseInterceptors(FileInterceptor)
   @UseGuards(JwtAuthGuard)
@@ -138,7 +138,7 @@ export class ImportController {
   }
 
   /**
-   * @deprecated Временный alias для обратной совместимости. Используйте /pages/actions/import-zip.
+   * @deprecated Temporary backward-compatibility alias. Use /pages/actions/import-zip.
    */
   @UseInterceptors(FileInterceptor)
   @UseGuards(JwtAuthGuard)
