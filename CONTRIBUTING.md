@@ -10,3 +10,10 @@ To keep terminology and maintenance consistent across the monorepo:
 - Keep domain terminology consistent in security- and collaboration-related areas (for example: `auth`, `security`, `workspace`, `member`).
 
 These rules apply to changes in `apps/server`, `apps/client`, `packages/editor-ext`, and related tests.
+
+### Quick rule (with examples)
+
+- Comments must be English and ASCII-only.
+- ✅ Allowed: `// Validate CSRF token before mutating request state.`
+- ❌ Not allowed: `// Проверяем CSRF-токен перед изменением состояния.`
+
