@@ -4,6 +4,7 @@ import { UserService } from './user.service';
 import { WorkspaceRepo } from '@docmost/db/repos/workspace/workspace.repo';
 import { UserRepo } from '@docmost/db/repos/user/user.repo';
 import { UserRole } from '../../common/helpers/types/permission';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 
 describe('UserController', () => {
   let controller: UserController;
@@ -24,7 +25,7 @@ describe('UserController', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
 
-    const module: TestingModule = await Test.createTestingModule({
+    const moduleBuilder = Test.createTestingModule({
       controllers: [UserController],
       providers: [
         {
@@ -40,7 +41,12 @@ describe('UserController', () => {
           useValue: userRepoMock,
         },
       ],
-    }).compile();
+    }).overrideGuard(JwtAuthGuard)
+      .useValue({
+        canActivate: jest.fn(() => true),
+      });
+
+    const module: TestingModule = await moduleBuilder.compile();
 
     controller = module.get<UserController>(UserController);
   });

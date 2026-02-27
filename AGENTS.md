@@ -49,6 +49,8 @@
 
 - Install dependencies: `pnpm install --frozen-lockfile`
 - Build the entire monorepo: `pnpm build`
+- Quick local verification (lint + backend test + frontend smoke): `pnpm verify:quick`
+- Full local verification (build → lint → tests): `pnpm verify:full`
 - Clean build artifacts: `pnpm clean`
 
 ### Development
@@ -62,17 +64,22 @@
 
 - Backend lint (with autofixes): `pnpm --filter ./apps/server lint`
 - Frontend lint: `pnpm --filter ./apps/client lint`
+- Combined lint stage (server + client): `pnpm lint`
 - Backend format: `pnpm --filter ./apps/server format`
 - Frontend format: `pnpm --filter ./apps/client format`
 - Check comments language (server/client src + server tests + client public + editor-ext src): `pnpm check:comments:en`
 
 ### Tests
 
+- Combined default test stage (backend + frontend smoke): `pnpm test`
 - Backend unit/integration: `pnpm --filter ./apps/server test`
+- Frontend smoke test equivalent (build-based temporary target): `pnpm --filter ./apps/client build`
 - Backend coverage: `pnpm --filter ./apps/server test:cov`
 - Backend coverage smoke (fast regression check): `pnpm --filter ./apps/server test:cov:smoke`
 - Backend alias smoke (verify tsconfig alias resolution in Jest): `pnpm --filter ./apps/server test:alias:smoke`
 - Backend e2e: `pnpm --filter ./apps/server test:e2e`
+- Backend e2e quarantine note: `apps/server/test/app.e2e-quarantine.ts` is temporarily excluded from Jest by filename until DOC-2471 resolves ESM interoperability for collaboration dependencies.
+- Unit quarantine note: `apps/server/src/core/page/page.controller.quarantine.ts` and `apps/server/src/core/page/services/page.service.quarantine.ts` are temporarily excluded by filename for the same DOC-2471 reason.
 
 ### Database migrations (backend)
 
@@ -160,8 +167,8 @@ Minimum:
 - The repository currently has **no** `.github/workflows` directory or any other explicit CI manifest.
 - De facto required local pipeline before PR:
   1. `pnpm install --frozen-lockfile`
-  2. `pnpm build`
-  3. lint/test only for impacted parts (`apps/server`, `apps/client`).
+  2. for quick checks on day-to-day changes: `pnpm verify:quick`.
+  3. before PR / release candidates: `pnpm verify:full` (build → lint → tests).
   4. for infrastructure changes — `docker build` and/or `docker compose up` smoke check.
 
 ---
