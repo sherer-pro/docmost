@@ -9,6 +9,7 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { load } from 'cheerio';
 import { PageService } from './services/page.service';
 import { CreatePageDto } from './dto/create-page.dto';
 import {
@@ -39,6 +40,7 @@ import { RecentPageDto } from './dto/recent-page.dto';
 import { DuplicatePageDto } from './dto/duplicate-page.dto';
 import { DeletedPageDto } from './dto/deleted-page.dto';
 import { QuoteContentDto } from './dto/quote-content.dto';
+import { LinkPreviewDto } from './dto/link-preview.dto';
 import {
   jsonToHtml,
   jsonToMarkdown,
@@ -139,6 +141,53 @@ export class PageController {
     }
   }
 
+  private getAbsoluteUrl(baseUrl: string, value?: string): string | null {
+    if (!value) {
+      return null;
+    }
+
+    try {
+      return new URL(value, baseUrl).toString();
+    } catch {
+      return null;
+    }
+  }
+
+  private getBestMetaContent(
+    $: ReturnType<typeof load>,
+    selectors: string[],
+  ): string {
+    for (const selector of selectors) {
+      const value = $(selector).attr('content')?.trim();
+      if (value) {
+        return value;
+      }
+    }
+
+    return '';
+  }
+
+  private getBestFaviconUrl($: ReturnType<typeof load>, pageUrl: string): string {
+    const iconSelectors = [
+      'link[rel="icon"]',
+      'link[rel="shortcut icon"]',
+      'link[rel="apple-touch-icon"]',
+      'link[rel="apple-touch-icon-precomposed"]',
+      'link[rel="mask-icon"]',
+    ];
+
+    for (const selector of iconSelectors) {
+      const href = $(selector).attr('href')?.trim();
+      const absoluteHref = this.getAbsoluteUrl(pageUrl, href);
+
+      if (absoluteHref) {
+        return absoluteHref;
+      }
+    }
+
+    return '';
+  }
+
   @HttpCode(HttpStatus.OK)
   @Post('/info')
   async getPage(@Body() dto: PageInfoDto, @AuthUser() user: User) {
@@ -203,6 +252,80 @@ export class PageController {
     }
 
     return { text };
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('/link-preview')
+  async getLinkPreview(@Body() dto: LinkPreviewDto) {
+    let sourceUrl: URL;
+
+    try {
+      sourceUrl = new URL(dto.url);
+    } catch {
+      throw new BadRequestException('Invalid URL');
+    }
+
+    if (!['http:', 'https:'].includes(sourceUrl.protocol)) {
+      throw new BadRequestException('Only HTTP and HTTPS URLs are supported');
+    }
+
+    const response = await fetch(sourceUrl.toString(), {
+      redirect: 'follow',
+      signal: AbortSignal.timeout(7000),
+      headers: {
+        'user-agent':
+          'Mozilla/5.0 (compatible; DocmostBot/1.0; +https://docmost.com)',
+        accept: 'text/html,application/xhtml+xml',
+      },
+    }).catch(() => {
+      throw new BadRequestException('Failed to fetch URL metadata');
+    });
+
+    if (!response.ok) {
+      throw new BadRequestException('Failed to fetch URL metadata');
+    }
+
+    const contentType = response.headers.get('content-type')?.toLowerCase() ?? '';
+    if (!contentType.includes('text/html') && !contentType.includes('application/xhtml+xml')) {
+      throw new BadRequestException('URL does not point to an HTML document');
+    }
+
+    const html = await response.text();
+    const $ = load(html);
+    const finalUrl = response.url || sourceUrl.toString();
+    const title =
+      this.getBestMetaContent($, [
+        'meta[property="og:title"]',
+        'meta[name="twitter:title"]',
+      ]) ||
+      $('title').first().text().trim() ||
+      sourceUrl.hostname;
+    const description = this.getBestMetaContent($, [
+      'meta[property="og:description"]',
+      'meta[name="twitter:description"]',
+      'meta[name="description"]',
+    ]);
+    const image = this.getAbsoluteUrl(
+      finalUrl,
+      this.getBestMetaContent($, [
+        'meta[property="og:image"]',
+        'meta[name="twitter:image"]',
+        'meta[property="twitter:image"]',
+      ]),
+    );
+    const favicon = this.getBestFaviconUrl($, finalUrl);
+
+    return {
+      url: finalUrl,
+      title,
+      description,
+      image: image || favicon || null,
+      siteName:
+        this.getBestMetaContent($, [
+          'meta[property="og:site_name"]',
+          'meta[name="application-name"]',
+        ]) || sourceUrl.hostname,
+    };
   }
 
   @HttpCode(HttpStatus.OK)
