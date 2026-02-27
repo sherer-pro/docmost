@@ -822,5 +822,13 @@
   "e.g acme.com": "e.g acme.com",
   "e.g eyJhb.....": "e.g eyJhb.....",
   "replied to your comment": "replied to your comment",
-  "updated a page you follow": "updated a page you follow"
+  "updated a page you follow": "updated a page you follow",
+  "Deleted successfully": "Deleted successfully",
+  "License activated successfully": "License activated successfully",
+  "Group created successfully": "Group created successfully",
+  "Failed to create group": "Failed to create group",
+  "Failed to restore page": "Failed to restore page",
+  "Invitation resent": "Invitation resent",
+  "Invitation revoked": "Invitation revoked",
+  "Failed to add group members": "Failed to add group members"
 }

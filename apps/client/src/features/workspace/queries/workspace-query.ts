@@ -71,6 +71,7 @@ export function useWorkspaceVisibleMembersCountQuery(): UseQueryResult<
 
 export function useDeleteWorkspaceMemberMutation() {
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
 
   return useMutation<
     void,
@@ -81,7 +82,7 @@ export function useDeleteWorkspaceMemberMutation() {
   >({
     mutationFn: (data) => deleteWorkspaceMember(data),
     onSuccess: (data, variables) => {
-      notifications.show({ message: "Member deleted successfully" });
+      notifications.show({ message: t("Member deleted successfully") });
       queryClient.invalidateQueries({
         queryKey: ["workspaceMembers"],
       });
@@ -95,7 +96,6 @@ export function useDeleteWorkspaceMemberMutation() {
     },
   });
 }
-
 
 export function useDeactivateWorkspaceMemberMutation() {
   const { t } = useTranslation();
@@ -134,11 +134,12 @@ export function useDeactivateWorkspaceMemberMutation() {
 
 export function useChangeMemberRoleMutation() {
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
 
   return useMutation<any, Error, any>({
     mutationFn: (data) => changeMemberRole(data),
     onSuccess: (data, variables) => {
-      notifications.show({ message: "Member role updated successfully" });
+      notifications.show({ message: t("Member role updated successfully") });
       queryClient.refetchQueries({
         queryKey: ["workspaceMembers"],
       });
@@ -183,6 +184,8 @@ export function useCreateInvitationMutation() {
 }
 
 export function useResendInvitationMutation() {
+  const { t } = useTranslation();
+
   return useMutation<
     void,
     Error,
@@ -192,7 +195,7 @@ export function useResendInvitationMutation() {
   >({
     mutationFn: (data) => resendInvitation(data),
     onSuccess: (data, variables) => {
-      notifications.show({ message: "Invitation resent" });
+      notifications.show({ message: t("Invitation resent") });
     },
     onError: (error) => {
       const errorMessage = error["response"]?.data?.message;
@@ -203,6 +206,7 @@ export function useResendInvitationMutation() {
 
 export function useRevokeInvitationMutation() {
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
 
   return useMutation<
     void,
@@ -213,7 +217,7 @@ export function useRevokeInvitationMutation() {
   >({
     mutationFn: (data) => revokeInvitation(data),
     onSuccess: (data, variables) => {
-      notifications.show({ message: "Invitation revoked" });
+      notifications.show({ message: t("Invitation revoked") });
       queryClient.invalidateQueries({
         queryKey: ["invitations"],
       });
