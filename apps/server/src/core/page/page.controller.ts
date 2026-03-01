@@ -657,7 +657,19 @@ export class PageController {
       throw new ForbiddenException();
     }
 
-    return this.pageService.getSidebarPages(spaceId, pagination, dto.pageId);
+    const sidebarPages = await this.pageService.getSidebarPages(
+      spaceId,
+      pagination,
+      dto.pageId,
+    );
+
+    return {
+      ...sidebarPages,
+      items: sidebarPages.items.map((page) => ({
+        ...page,
+        customFields: this.getPageCustomFields(page),
+      })),
+    };
   }
 
   @HttpCode(HttpStatus.OK)
