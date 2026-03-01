@@ -5,16 +5,22 @@ import { getSpaceUrl } from '@/lib/config.ts';
 import DatabaseHeaderMenu from '@/features/database/components/header/database-header-menu.tsx';
 
 interface DatabaseHeaderProps {
+  databaseId: string;
+  databasePageId?: string;
   spaceSlug: string;
   spaceName?: string;
   databaseName?: string;
+  description?: string;
   readOnly?: boolean;
 }
 
 export default function DatabaseHeader({
+  databaseId,
+  databasePageId,
   spaceSlug,
   spaceName,
   databaseName,
+  description,
   readOnly,
 }: DatabaseHeaderProps) {
   return (
@@ -27,7 +33,14 @@ export default function DatabaseHeader({
         </Group>
 
         <Group justify="flex-end" h="100%" px="md" wrap="nowrap" gap="var(--mantine-spacing-xs)">
-          <DatabaseHeaderMenu readOnly={readOnly} />
+          <DatabaseHeaderMenu
+            databaseId={databaseId}
+            databasePageId={databasePageId}
+            spaceSlug={spaceSlug}
+            databaseName={databaseName}
+            description={description}
+            readOnly={readOnly}
+          />
         </Group>
       </Group>
     </div>

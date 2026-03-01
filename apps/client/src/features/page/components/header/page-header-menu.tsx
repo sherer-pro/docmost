@@ -2,15 +2,9 @@ import { ActionIcon, Group, Menu, Text, Tooltip } from "@mantine/core";
 import classes from "./page-header-menu.module.css";
 import {
   IconArrowRight,
-  IconArrowsHorizontal,
   IconDots,
-  IconFileExport,
-  IconHistory,
-  IconLink,
   IconList,
-  IconMarkdown,
   IconMessage,
-  IconPrinter,
   IconTrash,
   IconWifiOff,
 } from "@tabler/icons-react";
@@ -29,7 +23,6 @@ import { getAppUrl } from "@/lib/config.ts";
 import { extractPageSlugId } from "@/lib";
 import { treeApiAtom } from "@/features/page/tree/atoms/tree-api-atom.ts";
 import { useDeletePageModal } from "@/features/page/hooks/use-delete-page-modal.tsx";
-import { PageWidthToggle } from "@/features/user/components/page-width-pref.tsx";
 import { Trans, useTranslation } from "react-i18next";
 import ExportModal from "@/components/common/export-modal";
 import { htmlToMarkdown } from "@docmost/editor-ext";
@@ -43,6 +36,7 @@ import { PageStateSegmentedControl } from "@/features/user/components/page-state
 import MovePageModal from "@/features/page/components/move-page-modal.tsx";
 import { useTimeAgo } from "@/hooks/use-time-ago.tsx";
 import ShareModal from "@/features/share/components/share-modal.tsx";
+import { DocumentCommonActionItems } from "@/features/common/header/document-common-action-items.tsx";
 
 interface PageHeaderMenuProps {
   readOnly?: boolean;
@@ -201,58 +195,25 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
         </Menu.Target>
 
         <Menu.Dropdown>
-          <Menu.Item
-            leftSection={<IconLink size={16} />}
-            onClick={handleCopyLink}
-          >
-            {t("Copy link")}
-          </Menu.Item>
-
-          <Menu.Item
-            leftSection={<IconMarkdown size={16} />}
-            onClick={handleCopyAsMarkdown}
-          >
-            {t("Copy as Markdown")}
-          </Menu.Item>
-          <Menu.Divider />
-
-          <Menu.Item leftSection={<IconArrowsHorizontal size={16} />}>
-            <Group wrap="nowrap">
-              <PageWidthToggle label={t("Full width")} />
-            </Group>
-          </Menu.Item>
-
-          <Menu.Item
-            leftSection={<IconHistory size={16} />}
-            onClick={openHistoryModal}
-          >
-            {t("Page history")}
-          </Menu.Item>
-
-          <Menu.Divider />
+          <DocumentCommonActionItems
+            onCopyLink={handleCopyLink}
+            onCopyAsMarkdown={handleCopyAsMarkdown}
+            onOpenHistory={openHistoryModal}
+            onOpenExport={openExportModal}
+            onPrint={handlePrint}
+          />
 
           {!readOnly && (
-            <Menu.Item
-              leftSection={<IconArrowRight size={16} />}
-              onClick={openMovePageModal}
-            >
-              {t("Move")}
-            </Menu.Item>
+            <>
+              <Menu.Divider />
+              <Menu.Item
+                leftSection={<IconArrowRight size={16} />}
+                onClick={openMovePageModal}
+              >
+                {t("Move")}
+              </Menu.Item>
+            </>
           )}
-
-          <Menu.Item
-            leftSection={<IconFileExport size={16} />}
-            onClick={openExportModal}
-          >
-            {t("Export")}
-          </Menu.Item>
-
-          <Menu.Item
-            leftSection={<IconPrinter size={16} />}
-            onClick={handlePrint}
-          >
-            {t("Print PDF")}
-          </Menu.Item>
 
           {!readOnly && (
             <>

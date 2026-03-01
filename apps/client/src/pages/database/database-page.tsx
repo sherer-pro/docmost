@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import { DatabaseTableView } from '@/features/database/components/database-table-view';
 import DatabaseHeader from '@/features/database/components/header/database-header.tsx';
+import HistoryModal from '@/features/page-history/components/history-modal.tsx';
 import {
   useGetDatabaseQuery,
   useUpdateDatabaseMutation,
@@ -229,11 +230,16 @@ export default function DatabasePage() {
       </Helmet>
 
       <DatabaseHeader
+        databaseId={databaseId}
+        databasePageId={database?.pageId}
         spaceSlug={spaceSlug}
         spaceName={space?.name}
         databaseName={database?.name}
+        description={database?.description}
         readOnly={readOnly}
       />
+
+      {database?.pageId && <HistoryModal pageId={database.pageId} pageTitle={database?.name} />}
 
       <Container size="xl" py="xl" pt={60}>
         <Stack gap="xs" mb="md">
