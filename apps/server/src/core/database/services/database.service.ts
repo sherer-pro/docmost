@@ -1,9 +1,20 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { DatabaseRepo } from '@docmost/db/repos/database/database.repo';
 import { DatabaseRowRepo } from '@docmost/db/repos/database/database-row.repo';
 import { DatabaseCellRepo } from '@docmost/db/repos/database/database-cell.repo';
 import { DatabasePropertyRepo } from '@docmost/db/repos/database/database-property.repo';
 import { DatabaseViewRepo } from '@docmost/db/repos/database/database-view.repo';
+import { PageRepo } from '@docmost/db/repos/page/page.repo';
+import { User } from '@docmost/db/types/entity.types';
+import SpaceAbilityFactory from '../../casl/abilities/space-ability.factory';
+import {
+  SpaceCaslAction,
+  SpaceCaslSubject,
+} from '../../casl/interfaces/space-ability.type';
 import {
   BatchUpdateDatabaseCellsDto,
   CreateDatabaseDto,
@@ -23,6 +34,8 @@ export class DatabaseService {
     private readonly databaseCellRepo: DatabaseCellRepo,
     private readonly databasePropertyRepo: DatabasePropertyRepo,
     private readonly databaseViewRepo: DatabaseViewRepo,
+    private readonly pageRepo: PageRepo,
+    private readonly spaceAbility: SpaceAbilityFactory,
   ) {}
 
   /**
@@ -38,6 +51,44 @@ export class DatabaseService {
     }
 
     return database;
+  }
+
+  /**
+   * Проверяет право пользователя на чтение страниц в пространстве базы данных.
+   */
+  private async assertCanReadDatabasePages(user: User, spaceId: string) {
+    const ability = await this.spaceAbility.createForUser(user, spaceId);
+    if (ability.cannot(SpaceCaslAction.Read, SpaceCaslSubject.Page)) {
+      throw new ForbiddenException();
+    }
+  }
+
+  /**
+   * Проверяет право пользователя на изменение страниц в пространстве базы данных.
+   */
+  private async assertCanManageDatabasePages(user: User, spaceId: string) {
+    const ability = await this.spaceAbility.createForUser(user, spaceId);
+    if (ability.cannot(SpaceCaslAction.Manage, SpaceCaslSubject.Page)) {
+      throw new ForbiddenException();
+    }
+  }
+
+  /**
+   * Валидирует целевую страницу строки в пределах workspace/space и исключает удалённые страницы.
+   */
+  private async assertCanAccessTargetPage(
+    pageId: string,
+    workspaceId: string,
+    spaceId: string,
+  ) {
+    const page = await this.pageRepo.findById(pageId);
+    if (!page || page.workspaceId !== workspaceId || page.spaceId !== spaceId) {
+      throw new NotFoundException('Page not found');
+    }
+
+    if (page.deletedAt) {
+      throw new NotFoundException('Page not found');
+    }
   }
 
   /**
@@ -177,26 +228,34 @@ export class DatabaseService {
   async createRow(
     databaseId: string,
     dto: CreateDatabaseRowDto,
-    actorId: string,
+    user: User,
     workspaceId: string,
   ) {
-    await this.getOrFailDatabase(databaseId, workspaceId);
+    const database = await this.getOrFailDatabase(databaseId, workspaceId);
+    await this.assertCanManageDatabasePages(user, database.spaceId);
+    await this.assertCanAccessTargetPage(dto.pageId, workspaceId, database.spaceId);
 
     return this.databaseRowRepo.insertRow({
       databaseId,
       pageId: dto.pageId,
       workspaceId,
-      createdById: actorId,
-      updatedById: actorId,
+      createdById: user.id,
+      updatedById: user.id,
     });
   }
 
   /**
    * Возвращает все строки базы данных.
    */
-  async listRows(databaseId: string, workspaceId: string) {
-    await this.getOrFailDatabase(databaseId, workspaceId);
-    return this.databaseRowRepo.findByDatabaseId(databaseId);
+  async listRows(databaseId: string, user: User, workspaceId: string) {
+    const database = await this.getOrFailDatabase(databaseId, workspaceId);
+    await this.assertCanReadDatabasePages(user, database.spaceId);
+
+    return this.databaseRowRepo.findByDatabaseId(
+      databaseId,
+      workspaceId,
+      database.spaceId,
+    );
   }
 
   /**
@@ -206,10 +265,12 @@ export class DatabaseService {
     databaseId: string,
     pageId: string,
     dto: BatchUpdateDatabaseCellsDto,
-    actorId: string,
+    user: User,
     workspaceId: string,
   ) {
-    await this.getOrFailDatabase(databaseId, workspaceId);
+    const database = await this.getOrFailDatabase(databaseId, workspaceId);
+    await this.assertCanManageDatabasePages(user, database.spaceId);
+    await this.assertCanAccessTargetPage(pageId, workspaceId, database.spaceId);
 
     const existingRow = await this.databaseRowRepo.findByDatabaseAndPage(
       databaseId,
@@ -222,8 +283,8 @@ export class DatabaseService {
         databaseId,
         pageId,
         workspaceId,
-        createdById: actorId,
-        updatedById: actorId,
+        createdById: user.id,
+        updatedById: user.id,
       }));
 
     const cells = [];
@@ -236,15 +297,15 @@ export class DatabaseService {
           workspaceId,
           value: null,
           attachmentId: null,
-          createdById: actorId,
-          updatedById: actorId,
+          createdById: user.id,
+          updatedById: user.id,
         });
 
         const softDeleted = await this.databaseCellRepo.updateCell(deleted.id, {
           deletedAt: new Date(),
           value: null,
           attachmentId: null,
-          updatedById: actorId,
+          updatedById: user.id,
         });
 
         cells.push(softDeleted);
@@ -258,8 +319,8 @@ export class DatabaseService {
         workspaceId,
         value: (cell.value as never) ?? null,
         attachmentId: cell.attachmentId ?? null,
-        createdById: actorId,
-        updatedById: actorId,
+        createdById: user.id,
+        updatedById: user.id,
       });
 
       cells.push(upserted);
