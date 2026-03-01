@@ -64,7 +64,7 @@ export class DatabaseRowRepo {
         jsonObjectFrom(
           eb
             .selectFrom('pages as p')
-            .select(['p.id', 'p.slugId', 'p.title', 'p.icon'])
+            .select(['p.id', 'p.slugId', 'p.title', 'p.icon', 'p.parentPageId'])
             .whereRef('p.id', '=', 'databaseRows.pageId'),
         ).as('page'),
       )
@@ -131,6 +131,27 @@ export class DatabaseRowRepo {
       .returningAll()
       .executeTakeFirst();
   }
+
+  async archiveByPageIds(
+    databaseId: string,
+    workspaceId: string,
+    pageIds: string[],
+    trx?: KyselyTransaction,
+  ): Promise<void> {
+    if (pageIds.length === 0) {
+      return;
+    }
+
+    await dbOrTx(this.db, trx)
+      .updateTable('databaseRows')
+      .set({ archivedAt: new Date(), updatedAt: new Date() })
+      .where('databaseId', '=', databaseId)
+      .where('workspaceId', '=', workspaceId)
+      .where('pageId', 'in', pageIds)
+      .where('archivedAt', 'is', null)
+      .execute();
+  }
+
   /**
    * Архивирует все строки базы данных при архивировании самой базы.
    */
