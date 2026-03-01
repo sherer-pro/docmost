@@ -35,6 +35,10 @@ export class UpdateUserDto extends PartialType(
   emailEnabled: boolean;
 
   @IsOptional()
+  @IsBoolean()
+  rememberPageScrollPosition: boolean;
+
+  @IsOptional()
   @IsString()
   @IsIn(['immediate', '1h', '3h', '6h', '24h'])
   pushFrequency: string;
