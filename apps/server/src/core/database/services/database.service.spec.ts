@@ -6,11 +6,13 @@ describe('DatabaseService mixed tree flows', () => {
   const databaseRepo = {
     findById: jest.fn(),
     softDeleteDatabase: jest.fn(),
+    updateDatabase: jest.fn(),
   };
   const databaseRowRepo = {
     findByDatabaseAndPage: jest.fn(),
     archiveByPageIds: jest.fn(),
     archiveByDatabaseId: jest.fn(),
+    softDetachRowLink: jest.fn(),
   };
   const databaseCellRepo = {
     softDeleteByDatabaseId: jest.fn(),
@@ -29,6 +31,24 @@ describe('DatabaseService mixed tree flows', () => {
     createForUser: jest.fn(async () => ({ cannot: () => false })),
   };
 
+  const trx = {
+    updateTable: jest.fn(() => ({
+      set: jest.fn(() => ({
+        where: jest.fn(() => ({
+          where: jest.fn(() => ({
+            where: jest.fn(() => ({ execute: jest.fn() })),
+          })),
+        })),
+      })),
+    })),
+  };
+
+  const db = {
+    transaction: jest.fn(() => ({
+      execute: jest.fn(async (cb) => cb(trx)),
+    })),
+  };
+
   const service = new DatabaseService(
     databaseRepo as any,
     databaseRowRepo as any,
@@ -38,6 +58,7 @@ describe('DatabaseService mixed tree flows', () => {
     pageRepo as any,
     pageService as any,
     spaceAbility as any,
+    db as any,
   );
 
   const user = { id: 'u-1' } as any;
@@ -54,7 +75,7 @@ describe('DatabaseService mixed tree flows', () => {
     });
   });
 
-  it('archives descendants rows and removes descendants pages on row delete', async () => {
+  it('soft-detaches descendants row links and removes descendants pages on row delete', async () => {
     pageRepo.findById.mockResolvedValue({
       id: 'row-page-1',
       workspaceId: 'ws-1',
@@ -73,10 +94,18 @@ describe('DatabaseService mixed tree flows', () => {
 
     await service.deleteRow('db-1', 'row-page-1', user, 'ws-1');
 
-    expect(databaseRowRepo.archiveByPageIds).toHaveBeenCalledWith(
+    expect(databaseRowRepo.softDetachRowLink).toHaveBeenCalledTimes(2);
+    expect(databaseRowRepo.softDetachRowLink).toHaveBeenNthCalledWith(
+      1,
       'db-1',
+      'row-page-1',
       'ws-1',
-      ['row-page-1', 'row-page-1-child'],
+    );
+    expect(databaseRowRepo.softDetachRowLink).toHaveBeenNthCalledWith(
+      2,
+      'db-1',
+      'row-page-1-child',
+      'ws-1',
     );
     expect(pageRepo.removePage).toHaveBeenCalledWith('row-page-1', 'u-1', 'ws-1');
   });
@@ -107,5 +136,16 @@ describe('DatabaseService mixed tree flows', () => {
     );
     expect(pageRepo.removePage).toHaveBeenCalledWith('db-root-page', 'u-2', 'ws-1');
     expect(databaseRepo.softDeleteDatabase).toHaveBeenCalledWith('db-1', 'ws-1');
+  });
+
+  it('converts database to page without deleting row cell values', async () => {
+    pageRepo.findById.mockResolvedValue({ id: 'db-root-page' });
+
+    await service.convertDatabaseToPage('db-1', user, 'ws-1');
+
+    expect(databaseRowRepo.archiveByDatabaseId).toHaveBeenCalledWith('db-1', 'ws-1', trx);
+    expect(databaseCellRepo.softDeleteByDatabaseId).not.toHaveBeenCalled();
+    expect(databaseViewRepo.softDeleteByDatabaseId).toHaveBeenCalledWith('db-1', 'ws-1', trx);
+    expect(databaseRepo.updateDatabase).toHaveBeenCalled();
   });
 });

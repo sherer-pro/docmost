@@ -100,4 +100,21 @@ export class DatabaseCellRepo {
       .execute();
   }
 
+  /**
+   * Восстанавливает ячейки базы данных после обратной конвертации в table-view.
+   */
+  async restoreByDatabaseId(
+    databaseId: string,
+    workspaceId: string,
+    trx?: KyselyTransaction,
+  ): Promise<void> {
+    await dbOrTx(this.db, trx)
+      .updateTable('databaseCells')
+      .set({ deletedAt: null, updatedAt: new Date() })
+      .where('databaseId', '=', databaseId)
+      .where('workspaceId', '=', workspaceId)
+      .where('deletedAt', 'is not', null)
+      .execute();
+  }
+
 }
