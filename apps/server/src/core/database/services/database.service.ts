@@ -96,7 +96,7 @@ export class DatabaseService {
 
     const tableRows = rows.map((row) => {
       const titleCell = row.page?.title || row.pageTitle || '';
-      const valueByPropertyId = new Map(
+      const valueByPropertyId = new Map<string, string>(
         (row.cells ?? []).map((cell) => [cell.propertyId, this.stringifyCellValue(cell.value)]),
       );
 
