@@ -101,8 +101,11 @@ export class DatabaseService {
     actorId: string,
     workspaceId: string,
   ) {
+    const normalizedName = dto.name?.trim() || 'Untitled database';
+
     return this.databaseRepo.insertDatabase({
       ...dto,
+      name: normalizedName,
       workspaceId,
       creatorId: actorId,
       lastUpdatedById: actorId,
