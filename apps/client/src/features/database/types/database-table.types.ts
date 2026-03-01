@@ -7,6 +7,18 @@ export interface IDatabaseRowPage {
   title: string | null;
   icon?: string | null;
   parentPageId?: string | null;
+  /**
+   * Кастомные document fields страницы.
+   *
+   * Источник — page.settings на backend (по аналогии с page API),
+   * при этом assignee/stakeholders могут быть скрыты в ответе,
+   * если соответствующие поля отключены в настройках space.
+   */
+  customFields?: {
+    status?: string | null;
+    assigneeId?: string | null;
+    stakeholderIds?: string[];
+  };
 }
 
 /**
