@@ -22,6 +22,7 @@ export interface IPage {
   lastUpdatedBy: ILastUpdatedBy;
   deletedBy: IDeletedBy;
   customFields?: PageCustomFields;
+  databaseId?: string | null;
   space: Partial<ISpace>;
 }
 

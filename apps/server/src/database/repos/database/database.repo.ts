@@ -40,6 +40,19 @@ export class DatabaseRepo {
   }
 
   /**
+   * Возвращает активную базу данных по pageId в пределах workspace.
+   */
+  async findByPageId(pageId: string, workspaceId: string): Promise<Database> {
+    return this.db
+      .selectFrom('databases')
+      .selectAll()
+      .where('pageId', '=', pageId)
+      .where('workspaceId', '=', workspaceId)
+      .where('deletedAt', 'is', null)
+      .executeTakeFirst();
+  }
+
+  /**
    * Возвращает список баз данных в указанном пространстве.
    */
   async findBySpaceId(spaceId: string, workspaceId: string): Promise<Database[]> {

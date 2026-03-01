@@ -57,6 +57,8 @@ import { WatcherService } from '../../watcher/watcher.service';
 import { RecipientResolverService } from '../../notification/services/recipient-resolver.service';
 import { IPageRecipientNotificationJob } from '../../../integrations/queue/constants/queue.interface';
 import { SidebarNodeType } from '../dto/sidebar-page.dto';
+import { DatabaseRepo } from '@docmost/db/repos/database/database.repo';
+import { DatabaseRowRepo } from '@docmost/db/repos/database/database-row.repo';
 
 @Injectable()
 export class PageService {
@@ -75,6 +77,8 @@ export class PageService {
     private collaborationGateway: CollaborationGateway,
     private readonly watcherService: WatcherService,
     private readonly recipientResolverService: RecipientResolverService,
+    private readonly databaseRepo: DatabaseRepo,
+    private readonly databaseRowRepo: DatabaseRowRepo,
   ) {}
 
   async findById(
@@ -302,6 +306,57 @@ export class PageService {
       documentName,
       { operation, prosemirrorJson, user },
     );
+  }
+
+
+  /**
+   * Конвертирует обычную страницу в базу данных.
+   *
+   * В рамках одной транзакции создаётся запись базы, после чего
+   * все текущие прямые дети страницы привязываются как строки базы данных.
+   */
+  async convertPageToDatabase(page: Page, actorId: string): Promise<{ databaseId: string; pageId: string }> {
+    const database = await executeTx(this.db, async (trx) => {
+      const createdDatabase = await this.databaseRepo.insertDatabase(
+        {
+          spaceId: page.spaceId,
+          name: page.title?.trim() || 'Untitled database',
+          icon: page.icon,
+          description: null,
+          workspaceId: page.workspaceId,
+          creatorId: actorId,
+          lastUpdatedById: actorId,
+          pageId: page.id,
+        },
+        trx,
+      );
+
+      const directChildren = await trx
+        .selectFrom('pages')
+        .select(['id'])
+        .where('workspaceId', '=', page.workspaceId)
+        .where('spaceId', '=', page.spaceId)
+        .where('parentPageId', '=', page.id)
+        .where('deletedAt', 'is', null)
+        .execute();
+
+      for (const child of directChildren) {
+        await this.databaseRowRepo.insertRow(
+          {
+            databaseId: createdDatabase.id,
+            pageId: child.id,
+            workspaceId: page.workspaceId,
+            createdById: actorId,
+            updatedById: actorId,
+          },
+          trx,
+        );
+      }
+
+      return createdDatabase;
+    });
+
+    return { databaseId: database.id, pageId: page.id };
   }
 
   async getSidebarPages(
