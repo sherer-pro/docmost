@@ -40,6 +40,37 @@ export class DatabaseRepo {
   }
 
   /**
+   * Возвращает активную базу данных по pageId в пределах workspace.
+   */
+  async findByPageId(pageId: string, workspaceId: string): Promise<Database> {
+    return this.db
+      .selectFrom('databases')
+      .selectAll()
+      .where('pageId', '=', pageId)
+      .where('workspaceId', '=', workspaceId)
+      .where('deletedAt', 'is', null)
+      .executeTakeFirst();
+  }
+
+  /**
+   * Возвращает базу данных по pageId без фильтра по deletedAt.
+   *
+   * Используется для обратимой конвертации page↔database,
+   * когда нужно восстановить ранее деактивированную базу.
+   */
+  async findByPageIdIncludingDeleted(
+    pageId: string,
+    workspaceId: string,
+  ): Promise<Database> {
+    return this.db
+      .selectFrom('databases')
+      .selectAll()
+      .where('pageId', '=', pageId)
+      .where('workspaceId', '=', workspaceId)
+      .executeTakeFirst();
+  }
+
+  /**
    * Возвращает список баз данных в указанном пространстве.
    */
   async findBySpaceId(spaceId: string, workspaceId: string): Promise<Database[]> {
@@ -88,6 +119,28 @@ export class DatabaseRepo {
       .where('id', '=', id)
       .where('workspaceId', '=', workspaceId)
       .where('deletedAt', 'is', null)
+      .returningAll()
+      .executeTakeFirst();
+  }
+
+  /**
+   * Восстанавливает ранее мягко удалённую базу данных.
+   */
+  async restoreDatabase(
+    id: string,
+    workspaceId: string,
+    payload: Pick<UpdatableDatabase, 'lastUpdatedById'>,
+    trx?: KyselyTransaction,
+  ): Promise<Database> {
+    return dbOrTx(this.db, trx)
+      .updateTable('databases')
+      .set({
+        deletedAt: null,
+        lastUpdatedById: payload.lastUpdatedById,
+        updatedAt: new Date(),
+      })
+      .where('id', '=', id)
+      .where('workspaceId', '=', workspaceId)
       .returningAll()
       .executeTakeFirst();
   }

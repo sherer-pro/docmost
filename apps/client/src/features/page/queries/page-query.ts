@@ -20,6 +20,7 @@ import {
   getAllSidebarPages,
   getDeletedPages,
   restorePage,
+  convertPageToDatabase,
 } from "@/features/page/services/page-service";
 import {
   IMovePage,
@@ -195,6 +196,30 @@ export function useDeletePageMutation() {
     },
     onError: (error) => {
       notifications.show({ message: t("Failed to delete page"), color: "red" });
+    },
+  });
+}
+
+
+
+/**
+ * Мутация конвертации страницы в базу данных.
+ *
+ * После успешной операции инвалидируем дерево, карточку страницы и связанные
+ * database-запросы, чтобы UI сразу отразил смену типа узла.
+ */
+export function useConvertPageToDatabaseMutation() {
+  return useMutation({
+    mutationFn: (pageId: string) => convertPageToDatabase(pageId),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['pages', data.pageId] });
+      queryClient.invalidateQueries({ queryKey: ['root-sidebar-pages'] });
+      queryClient.invalidateQueries({ queryKey: ['sidebar-pages'] });
+      queryClient.invalidateQueries({ queryKey: ['database', data.databaseId] });
+      queryClient.invalidateQueries({ queryKey: ['database', data.databaseId, 'rows'] });
+      queryClient.invalidateQueries({ queryKey: ['database', 'row-context'] });
+      queryClient.invalidateQueries({ queryKey: ['databases'] });
+      invalidateDatabaseTreeConsistency();
     },
   });
 }

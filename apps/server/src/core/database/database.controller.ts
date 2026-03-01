@@ -103,6 +103,24 @@ export class DatabaseController {
     await this.databaseService.deleteDatabase(databaseId, workspace.id);
   }
 
+
+  /**
+   * Конвертирует базу данных обратно в обычную страницу.
+   */
+  @HttpCode(HttpStatus.OK)
+  @Post(':databaseId/convert-to-page')
+  async convertToPage(
+    @Param('databaseId', ParseUUIDPipe) databaseId: string,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.databaseService.convertDatabaseToPage(
+      databaseId,
+      user,
+      workspace.id,
+    );
+  }
+
   /**
    * Создаёт новое свойство базы данных.
    */

@@ -215,4 +215,72 @@ export class DatabaseRowRepo {
       .execute();
   }
 
+  /**
+   * Мягко отвязывает строку от активного состояния базы.
+   *
+   * Физическая запись не удаляется и pageId сохраняется как снимок связи,
+   * что позволяет восстановить строку при обратной конвертации.
+   */
+  async softDetachRowLink(
+    databaseId: string,
+    pageId: string,
+    workspaceId: string,
+    trx?: KyselyTransaction,
+  ): Promise<void> {
+    await dbOrTx(this.db, trx)
+      .updateTable('databaseRows')
+      .set({ archivedAt: new Date(), updatedAt: new Date() })
+      .where('databaseId', '=', databaseId)
+      .where('pageId', '=', pageId)
+      .where('workspaceId', '=', workspaceId)
+      .where('archivedAt', 'is', null)
+      .execute();
+  }
+
+  /**
+   * Восстанавливает ранее отвязанную строку базы.
+   */
+  async restoreRowLink(
+    databaseId: string,
+    pageId: string,
+    workspaceId: string,
+    actorId: string,
+    trx?: KyselyTransaction,
+  ): Promise<void> {
+    await dbOrTx(this.db, trx)
+      .updateTable('databaseRows')
+      .set({
+        archivedAt: null,
+        updatedAt: new Date(),
+        updatedById: actorId,
+      })
+      .where('databaseId', '=', databaseId)
+      .where('pageId', '=', pageId)
+      .where('workspaceId', '=', workspaceId)
+      .where('archivedAt', 'is not', null)
+      .execute();
+  }
+
+  /**
+   * Восстанавливает ссылки всех строк базы данных.
+   */
+  async restoreByDatabaseId(
+    databaseId: string,
+    workspaceId: string,
+    actorId: string,
+    trx?: KyselyTransaction,
+  ): Promise<void> {
+    await dbOrTx(this.db, trx)
+      .updateTable('databaseRows')
+      .set({
+        archivedAt: null,
+        updatedAt: new Date(),
+        updatedById: actorId,
+      })
+      .where('databaseId', '=', databaseId)
+      .where('workspaceId', '=', workspaceId)
+      .where('archivedAt', 'is not', null)
+      .execute();
+  }
+
 }

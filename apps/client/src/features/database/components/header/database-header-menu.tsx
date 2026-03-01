@@ -1,9 +1,11 @@
-import { ActionIcon, Menu } from '@mantine/core';
-import { IconArrowRight, IconDots, IconLink, IconTrash } from '@tabler/icons-react';
+import { ActionIcon, Menu, Text } from '@mantine/core';
+import { IconArrowRight, IconArrowsExchange, IconDots, IconLink, IconTrash } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
+import { modals } from '@mantine/modals';
 import { useDisclosure } from '@mantine/hooks';
 import { useAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import ExportModal from '@/components/common/export-modal';
 import { DocumentCommonActionItems } from '@/features/common/header/document-common-action-items.tsx';
 import { exportDatabase, getDatabaseMarkdown } from '@/features/database/services/database-service';
@@ -13,6 +15,7 @@ import MovePageModal from '@/features/page/components/move-page-modal.tsx';
 import { useDeletePageModal } from '@/features/page/hooks/use-delete-page-modal.tsx';
 import { buildPageUrl } from '@/features/page/page.utils.ts';
 import { usePageQuery, useRemovePageMutation } from '@/features/page/queries/page-query.ts';
+import { useConvertDatabaseToPageMutation } from '@/features/database/queries/database-query.ts';
 import ShareModal from '@/features/share/components/share-modal.tsx';
 import { PageStateSegmentedControl } from '@/features/user/components/page-state-pref.tsx';
 import { useClipboard } from '@/hooks/use-clipboard';
@@ -32,6 +35,7 @@ export default function DatabaseHeaderMenu({
   readOnly,
 }: DatabaseHeaderMenuProps) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const clipboard = useClipboard({ timeout: 500 });
   const [, setHistoryModalOpen] = useAtom(historyAtoms);
   const { data: page } = usePageQuery({ pageId: databasePageId });
@@ -41,6 +45,8 @@ export default function DatabaseHeaderMenu({
     useDisclosure(false);
   const [movePageModalOpened, { open: openMovePageModal, close: closeMovePageModal }] =
     useDisclosure(false);
+  const { mutateAsync: convertDatabaseToPageAsync, isPending: isConvertingDatabaseToPage } =
+    useConvertDatabaseToPageMutation(page?.spaceId, databaseId);
 
   /**
    * Для базы всегда оставляем прямую ссылку на database-route.
@@ -111,6 +117,40 @@ export default function DatabaseHeaderMenu({
     });
   };
 
+
+  /**
+   * Подтверждает и запускает обратную конвертацию database -> page.
+   *
+   * После успешной операции переводим пользователя в page-route,
+   * чтобы интерфейс сразу открыл обычную страницу вместо database-view.
+   */
+  const handleConvertToPage = () => {
+    modals.openConfirmModal({
+      title: t('Convert database to page?'),
+      centered: true,
+      children: (
+        <Text size="sm">
+          {t(
+            'The database view, properties and row bindings will be deactivated. Child pages will stay in the tree as regular pages.',
+          )}
+        </Text>
+      ),
+      labels: { confirm: t('Convert to page'), cancel: t('Cancel') },
+      confirmProps: {
+        loading: isConvertingDatabaseToPage,
+        leftSection: <IconArrowsExchange size={14} />,
+      },
+      onConfirm: async () => {
+        const result = await convertDatabaseToPageAsync();
+        notifications.show({ message: t('Database converted to page') });
+
+        if (result?.slugId) {
+          navigate(`/s/${spaceSlug}/p/${result.slugId}`);
+        }
+      },
+    });
+  };
+
   /**
    * Для domain-операций страницы достаточно факта существования связанной pageId.
    * При отсутствии pageId это «корневая» база без page-обвязки — page-операции скрываем.
@@ -167,6 +207,19 @@ export default function DatabaseHeaderMenu({
               <Menu.Divider />
               <Menu.Item leftSection={<IconArrowRight size={16} />} onClick={openMovePageModal}>
                 {t('Move')}
+              </Menu.Item>
+            </>
+          )}
+
+          {!readOnly && (
+            <>
+              <Menu.Divider />
+              <Menu.Item
+                leftSection={<IconArrowsExchange size={16} />}
+                onClick={handleConvertToPage}
+                disabled={isConvertingDatabaseToPage}
+              >
+                {t('Convert to page')}
               </Menu.Item>
             </>
           )}

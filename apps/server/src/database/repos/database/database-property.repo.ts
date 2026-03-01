@@ -83,4 +83,21 @@ export class DatabasePropertyRepo {
       .returningAll()
       .executeTakeFirst();
   }
+  /**
+   * Восстанавливает свойства базы данных, ранее скрытые при конвертации в страницу.
+   */
+  async restoreByDatabaseId(
+    databaseId: string,
+    workspaceId: string,
+    trx?: KyselyTransaction,
+  ): Promise<void> {
+    await dbOrTx(this.db, trx)
+      .updateTable('databaseProperties')
+      .set({ deletedAt: null, updatedAt: new Date() })
+      .where('databaseId', '=', databaseId)
+      .where('workspaceId', '=', workspaceId)
+      .where('deletedAt', 'is not', null)
+      .execute();
+  }
+
 }

@@ -6,7 +6,9 @@ import {
   HttpCode,
   HttpStatus,
   NotFoundException,
+  Param,
   Post,
+  ParseUUIDPipe,
   UseGuards,
 } from '@nestjs/common';
 import { load } from 'cheerio';
@@ -47,6 +49,7 @@ import {
 } from '../../collaboration/collaboration.util';
 import { CollaborationGateway } from '../../collaboration/collaboration.gateway';
 import { TiptapTransformer } from '@hocuspocus/transformer';
+import { DatabaseRepo } from '@docmost/db/repos/database/database.repo';
 
 @UseGuards(JwtAuthGuard)
 @Controller('pages')
@@ -57,6 +60,7 @@ export class PageController {
     private readonly pageHistoryService: PageHistoryService,
     private readonly spaceAbility: SpaceAbilityFactory,
     private readonly collaborationGateway: CollaborationGateway,
+    private readonly databaseRepo: DatabaseRepo,
   ) {}
 
   private getPageCustomFields(page: { settings?: unknown }) {
@@ -282,6 +286,11 @@ export class PageController {
       throw new ForbiddenException();
     }
 
+    const linkedDatabase = await this.databaseRepo.findByPageId(
+      page.id,
+      page.workspaceId,
+    );
+
     if (dto.format && dto.format !== 'json' && page.content) {
       const contentOutput =
         dto.format === 'markdown'
@@ -289,12 +298,17 @@ export class PageController {
           : jsonToHtml(page.content);
       return {
         ...page,
+        databaseId: linkedDatabase?.id ?? null,
         content: contentOutput,
         customFields: this.getPageCustomFields(page),
       };
     }
 
-    return { ...page, customFields: this.getPageCustomFields(page) };
+    return {
+      ...page,
+      databaseId: linkedDatabase?.id ?? null,
+      customFields: this.getPageCustomFields(page),
+    };
   }
 
 
@@ -676,6 +690,32 @@ export class PageController {
           node.nodeType === 'page' ? this.getPageCustomFields(node) : null,
       })),
     };
+  }
+
+
+  @HttpCode(HttpStatus.OK)
+  @Post(':pageId/convert-to-database')
+  async convertToDatabase(
+    @Param('pageId', ParseUUIDPipe) pageId: string,
+    @AuthUser() user: User,
+  ) {
+    const page = await this.pageRepo.findById(pageId);
+
+    if (!page || page.deletedAt) {
+      throw new NotFoundException('Page not found');
+    }
+
+    const ability = await this.spaceAbility.createForUser(user, page.spaceId);
+    if (ability.cannot(SpaceCaslAction.Manage, SpaceCaslSubject.Page)) {
+      throw new ForbiddenException();
+    }
+
+    const existingDatabase = await this.databaseRepo.findByPageId(page.id, page.workspaceId);
+    if (existingDatabase) {
+      throw new BadRequestException('Page is already a database');
+    }
+
+    return this.pageService.convertPageToDatabase(page, user.id);
   }
 
   @HttpCode(HttpStatus.OK)
