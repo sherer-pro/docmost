@@ -371,7 +371,6 @@ export function DatabaseTableView({
           <Table.Thead>
             <Table.Tr>
               <Table.Th miw={280}>Title</Table.Th>
-              <Table.Th w={54}></Table.Th>
               {displayedProperties.map((property) => (
                 <Table.Th key={property.id} miw={220}>
                   <Group justify="space-between" gap="xs" wrap="nowrap">
@@ -394,11 +393,11 @@ export function DatabaseTableView({
             {preparedRows.map((row) => (
               <Table.Tr key={row.id}>
                 <Table.Td>
-                  <Text component={Link} to={`/s/${spaceSlug}/p/${row.pageId}`}>
+                  <Group justify="space-between" >
+                  <Text component={Link} to={`/s/${spaceSlug}/p/${row.pageId}`} >
                     {getRowTitle(row)}
                   </Text>
-                </Table.Td>
-                <Table.Td>
+
                   <ActionIcon
                     variant="subtle"
                     color="red"
@@ -407,6 +406,7 @@ export function DatabaseTableView({
                   >
                     <IconTrash size={14} />
                   </ActionIcon>
+                  </Group>
                 </Table.Td>
 
                 {displayedProperties.map((property) => {
