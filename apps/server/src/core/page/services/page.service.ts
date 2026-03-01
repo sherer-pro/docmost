@@ -533,7 +533,7 @@ export class PageService {
             'databases.id as databaseId',
           ])
           .select((eb) => [
-            sql<boolean>`${eb
+            eb
               .exists(
                 eb
                   .selectFrom('pages as childPage')
@@ -542,7 +542,9 @@ export class PageService {
                   .whereRef('childPage.parentPageId', '=', 'databasePage.id')
                   .where('childPage.deletedAt', 'is', null)
                   .where('childRow.archivedAt', 'is', null),
-              )}`.as('hasChildren'),
+              )
+              .$castTo<boolean>()
+              .as('hasChildren'),
           ])
           .where('databases.deletedAt', 'is', null)
           .where('databasePage.deletedAt', 'is', null)
