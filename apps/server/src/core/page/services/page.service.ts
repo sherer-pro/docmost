@@ -57,6 +57,11 @@ import { WatcherService } from '../../watcher/watcher.service';
 import { RecipientResolverService } from '../../notification/services/recipient-resolver.service';
 import { IPageRecipientNotificationJob } from '../../../integrations/queue/constants/queue.interface';
 import { SidebarNodeType } from '../dto/sidebar-page.dto';
+import { DatabaseRepo } from '@docmost/db/repos/database/database.repo';
+import { DatabaseRowRepo } from '@docmost/db/repos/database/database-row.repo';
+import { DatabaseCellRepo } from '@docmost/db/repos/database/database-cell.repo';
+import { DatabasePropertyRepo } from '@docmost/db/repos/database/database-property.repo';
+import { DatabaseViewRepo } from '@docmost/db/repos/database/database-view.repo';
 
 @Injectable()
 export class PageService {
@@ -75,6 +80,11 @@ export class PageService {
     private collaborationGateway: CollaborationGateway,
     private readonly watcherService: WatcherService,
     private readonly recipientResolverService: RecipientResolverService,
+    private readonly databaseRepo: DatabaseRepo,
+    private readonly databaseRowRepo: DatabaseRowRepo,
+    private readonly databaseCellRepo: DatabaseCellRepo,
+    private readonly databasePropertyRepo: DatabasePropertyRepo,
+    private readonly databaseViewRepo: DatabaseViewRepo,
   ) {}
 
   async findById(
@@ -302,6 +312,101 @@ export class PageService {
       documentName,
       { operation, prosemirrorJson, user },
     );
+  }
+
+
+  /**
+   * Конвертирует обычную страницу в базу данных.
+   *
+   * В рамках одной транзакции создаётся запись базы, после чего
+   * все текущие прямые дети страницы привязываются как строки базы данных.
+   */
+  async convertPageToDatabase(page: Page, actorId: string): Promise<{ databaseId: string; pageId: string }> {
+    const database = await executeTx(this.db, async (trx) => {
+      const existingDatabase = await this.databaseRepo.findByPageIdIncludingDeleted(
+        page.id,
+        page.workspaceId,
+      );
+
+      const basePayload = {
+        spaceId: page.spaceId,
+        name: page.title?.trim() || 'Untitled database',
+        icon: page.icon,
+        description: null,
+        workspaceId: page.workspaceId,
+        creatorId: actorId,
+        lastUpdatedById: actorId,
+        pageId: page.id,
+      };
+
+      const restoredOrCreatedDatabase = existingDatabase
+        ? await this.databaseRepo.restoreDatabase(
+            existingDatabase.id,
+            page.workspaceId,
+            { lastUpdatedById: actorId },
+            trx,
+          )
+        : await this.databaseRepo.insertDatabase(basePayload, trx);
+
+      if (existingDatabase) {
+        await this.databasePropertyRepo.restoreByDatabaseId(
+          existingDatabase.id,
+          page.workspaceId,
+          trx,
+        );
+        await this.databaseViewRepo.restoreByDatabaseId(
+          existingDatabase.id,
+          page.workspaceId,
+          trx,
+        );
+        await this.databaseCellRepo.restoreByDatabaseId(
+          existingDatabase.id,
+          page.workspaceId,
+          trx,
+        );
+      }
+
+      const descendants = await this.pageRepo.getPageAndDescendants(page.id, {
+        includeContent: false,
+      });
+
+      const descendantPageIds = descendants
+        .map((descendant) => descendant.id)
+        .filter((descendantPageId) => descendantPageId !== page.id);
+
+      for (const descendantPageId of descendantPageIds) {
+        const existingRow = await this.databaseRowRepo.findByDatabaseAndPage(
+          restoredOrCreatedDatabase.id,
+          descendantPageId,
+        );
+
+        if (existingRow) {
+          await this.databaseRowRepo.restoreRowLink(
+            restoredOrCreatedDatabase.id,
+            descendantPageId,
+            page.workspaceId,
+            actorId,
+            trx,
+          );
+          continue;
+        }
+
+        await this.databaseRowRepo.insertRow(
+          {
+            databaseId: restoredOrCreatedDatabase.id,
+            pageId: descendantPageId,
+            workspaceId: page.workspaceId,
+            createdById: actorId,
+            updatedById: actorId,
+          },
+          trx,
+        );
+      }
+
+      return restoredOrCreatedDatabase;
+    });
+
+    return { databaseId: database.id, pageId: page.id };
   }
 
   async getSidebarPages(
