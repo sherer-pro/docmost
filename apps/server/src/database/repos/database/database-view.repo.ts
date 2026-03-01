@@ -83,4 +83,21 @@ export class DatabaseViewRepo {
       .returningAll()
       .executeTakeFirst();
   }
+  /**
+   * Мягко удаляет все представления базы данных при архивировании.
+   */
+  async softDeleteByDatabaseId(
+    databaseId: string,
+    workspaceId: string,
+    trx?: KyselyTransaction,
+  ): Promise<void> {
+    await dbOrTx(this.db, trx)
+      .updateTable('databaseViews')
+      .set({ deletedAt: new Date(), updatedAt: new Date() })
+      .where('databaseId', '=', databaseId)
+      .where('workspaceId', '=', workspaceId)
+      .where('deletedAt', 'is', null)
+      .execute();
+  }
+
 }

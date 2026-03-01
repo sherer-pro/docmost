@@ -122,7 +122,9 @@ export interface IUpdateDatabasePropertyPayload {
  * Параметры создания строки базы данных.
  */
 export interface ICreateDatabaseRowPayload {
-  pageId: string;
+  title?: string;
+  icon?: string;
+  parentPageId?: string;
 }
 
 /**

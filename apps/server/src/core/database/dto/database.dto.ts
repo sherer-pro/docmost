@@ -102,8 +102,20 @@ export class UpdateDatabasePropertyDto {
  * DTO для создания новой строки базы данных.
  */
 export class CreateDatabaseRowDto {
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(255)
+  title?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  icon?: string;
+
+  @IsOptional()
   @IsUUID()
-  pageId: string;
+  parentPageId?: string;
 }
 
 /**
