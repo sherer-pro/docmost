@@ -6,11 +6,11 @@ import { getAppName } from "@/lib/config.ts";
 import { useTranslation } from "react-i18next";
 
 /**
- * Страница просмотра database в контексте конкретного Space.
+ * Database page in the context of a specific space.
  *
- * MVP-реализация не вмешивается в текущий editor flow страниц:
- * row-page открывается стандартным page-маршрутом, а здесь отображаются
- * только метаданные выбранной базы данных.
+ * The MVP implementation does not interfere with the current page editor flow:
+ * row pages open via the standard page route, while this screen shows
+ * only metadata for the selected database.
  */
 export default function SpaceDatabase() {
   const { t } = useTranslation();

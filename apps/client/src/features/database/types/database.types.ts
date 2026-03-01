@@ -1,5 +1,5 @@
 /**
- * Базовая сущность database из backend API.
+ * Base database entity from the backend API.
  */
 export interface IDatabase {
   id: string;
@@ -23,7 +23,7 @@ export interface IDatabase {
 }
 
 /**
- * Сущность свойства (колонки) базы данных.
+ * Database property (column) entity.
  */
 export interface IDatabaseProperty {
   id: string;
@@ -40,7 +40,7 @@ export interface IDatabaseProperty {
 }
 
 /**
- * Сущность строки базы данных.
+ * Database row entity.
  */
 export interface IDatabaseRow {
   id: string;
@@ -55,7 +55,7 @@ export interface IDatabaseRow {
 }
 
 /**
- * Сущность ячейки базы данных.
+ * Database cell entity.
  */
 export interface IDatabaseCell {
   id: string;
@@ -73,7 +73,7 @@ export interface IDatabaseCell {
 }
 
 /**
- * Сущность представления базы данных.
+ * Database view entity.
  */
 export interface IDatabaseView {
   id: string;
@@ -89,7 +89,7 @@ export interface IDatabaseView {
 }
 
 /**
- * Параметры создания базы данных.
+ * Database creation payload.
  */
 export interface ICreateDatabasePayload {
   spaceId: string;
@@ -99,7 +99,7 @@ export interface ICreateDatabasePayload {
 }
 
 /**
- * Параметры обновления базы данных.
+ * Database update payload.
  */
 export interface IUpdateDatabasePayload {
   name?: string;
@@ -108,7 +108,7 @@ export interface IUpdateDatabasePayload {
 }
 
 /**
- * Параметры создания свойства базы данных.
+ * Database property creation payload.
  */
 export interface ICreateDatabasePropertyPayload {
   name: string;
@@ -117,7 +117,7 @@ export interface ICreateDatabasePropertyPayload {
 }
 
 /**
- * Параметры обновления свойства базы данных.
+ * Database property update payload.
  */
 export interface IUpdateDatabasePropertyPayload {
   name?: string;
@@ -126,7 +126,7 @@ export interface IUpdateDatabasePropertyPayload {
 }
 
 /**
- * Параметры создания строки базы данных.
+ * Database row creation payload.
  */
 export interface ICreateDatabaseRowPayload {
   title?: string;
@@ -135,7 +135,7 @@ export interface ICreateDatabaseRowPayload {
 }
 
 /**
- * Операция обновления одной ячейки для batch API.
+ * Single-cell update operation for the batch API.
  */
 export interface IDatabaseCellBatchOperation {
   propertyId: string;
@@ -145,14 +145,14 @@ export interface IDatabaseCellBatchOperation {
 }
 
 /**
- * Параметры batch-обновления ячеек строки.
+ * Row cell batch update payload.
  */
 export interface IBatchUpdateDatabaseCellsPayload {
   cells: IDatabaseCellBatchOperation[];
 }
 
 /**
- * Параметры создания представления базы данных.
+ * Database view creation payload.
  */
 export interface ICreateDatabaseViewPayload {
   name: string;
@@ -161,7 +161,7 @@ export interface ICreateDatabaseViewPayload {
 }
 
 /**
- * Параметры обновления представления базы данных.
+ * Database view update payload.
  */
 export interface IUpdateDatabaseViewPayload {
   name?: string;
@@ -170,7 +170,7 @@ export interface IUpdateDatabaseViewPayload {
 }
 
 /**
- * Ответ batch-обновления ячеек.
+ * Batch cell update response.
  */
 export interface IBatchUpdateDatabaseCellsResponse {
   row: IDatabaseRow;
