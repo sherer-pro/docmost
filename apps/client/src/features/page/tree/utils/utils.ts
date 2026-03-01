@@ -20,6 +20,7 @@ export function buildTree(pages: IPage[]): SpaceTreeNode[] {
       slugId: page.slugId,
       name: page.title,
       icon: page.icon,
+      status: page.customFields?.status,
       position: page.position,
       hasChildren: page.hasChildren,
       spaceId: page.spaceId,
