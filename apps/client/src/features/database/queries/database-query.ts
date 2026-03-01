@@ -42,9 +42,9 @@ export function useCreateDatabaseMutation(spaceId?: string) {
   return useMutation({
     mutationFn: (payload: ICreateDatabasePayload) => createDatabase(payload),
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["databases", "space", spaceId],
-      });
+      queryClient.invalidateQueries({ queryKey: ["databases", "space", spaceId] });
+      queryClient.invalidateQueries({ queryKey: ["root-sidebar-pages", spaceId] });
+      queryClient.invalidateQueries({ queryKey: ["sidebar-pages"] });
     },
   });
 }
@@ -64,9 +64,9 @@ export function useUpdateDatabaseMutation(spaceId?: string, databaseId?: string)
       queryClient.invalidateQueries({
         queryKey: ["database", databaseId],
       });
-      queryClient.invalidateQueries({
-        queryKey: ["databases", "space", spaceId],
-      });
+      queryClient.invalidateQueries({ queryKey: ["databases", "space", spaceId] });
+      queryClient.invalidateQueries({ queryKey: ["root-sidebar-pages", spaceId] });
+      queryClient.invalidateQueries({ queryKey: ["sidebar-pages"] });
     },
   });
 }

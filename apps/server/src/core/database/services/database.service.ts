@@ -169,10 +169,31 @@ export class DatabaseService {
    * Выполняет мягкое удаление базы данных.
    */
   async deleteDatabase(databaseId: string, workspaceId: string) {
-    await this.getOrFailDatabase(databaseId, workspaceId);
+    const database = await this.getOrFailDatabase(databaseId, workspaceId);
+
     await this.databaseCellRepo.softDeleteByDatabaseId(databaseId, workspaceId);
     await this.databaseViewRepo.softDeleteByDatabaseId(databaseId, workspaceId);
-    await this.databaseRowRepo.archiveByDatabaseId(databaseId, workspaceId);
+
+    if (database.pageId) {
+      const pages = await this.pageRepo.getPageAndDescendants(database.pageId, {
+        includeContent: false,
+      });
+
+      await this.databaseRowRepo.archiveByPageIds(
+        databaseId,
+        workspaceId,
+        pages.map((page) => page.id),
+      );
+
+      await this.pageRepo.removePage(
+        database.pageId,
+        database.lastUpdatedById ?? database.creatorId,
+        workspaceId,
+      );
+    } else {
+      await this.databaseRowRepo.archiveByDatabaseId(databaseId, workspaceId);
+    }
+
     await this.databaseRepo.softDeleteDatabase(databaseId, workspaceId);
   }
 
@@ -265,6 +286,10 @@ export class DatabaseService {
      */
     const targetParentPageId = dto.parentPageId ?? database.pageId ?? null;
 
+    if (!database.pageId) {
+      throw new NotFoundException('Database root page not found');
+    }
+
     /**
      * Если родитель указан, проверяем базовую доступность страницы в нужном workspace/space.
      */
@@ -338,6 +363,8 @@ export class DatabaseService {
   ) {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
     await this.assertCanManageDatabasePages(user, database.spaceId);
+
+    await this.assertCanAccessTargetPage(pageId, workspaceId, database.spaceId);
 
     const row = await this.databaseRowRepo.findByDatabaseAndPage(databaseId, pageId);
     if (!row || row.archivedAt) {
