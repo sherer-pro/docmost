@@ -1,0 +1,58 @@
+.title {
+  width: 100%;
+  display: block;
+  border: none;
+  outline: none;
+  resize: none;
+  overflow: hidden;
+  background: transparent;
+  font-size: clamp(1.8rem, 3vw, 2.5rem);
+  line-height: 1.2;
+  font-weight: 700;
+  color: inherit;
+  padding: 0;
+  margin: 0;
+  min-height: calc(1em * 1.2);
+}
+
+.title:focus {
+  outline: none;
+}
+
+.title:empty::before {
+  content: attr(data-placeholder);
+  color: var(--mantine-color-dimmed);
+}
+
+textarea.title::placeholder {
+  color: var(--mantine-color-dimmed);
+}
+
+.description {
+  width: 100%;
+  display: block;
+  border: none;
+  outline: none;
+  resize: none;
+  overflow: hidden;
+  background: transparent;
+  font-size: var(--mantine-font-size-md);
+  line-height: var(--mantine-line-height-md);
+  color: inherit;
+  padding: 0;
+  margin: 0;
+  min-height: calc(1em * var(--mantine-line-height-md));
+}
+
+.description:focus {
+  outline: none;
+}
+
+.description:empty::before {
+  content: attr(data-placeholder);
+  color: var(--mantine-color-dimmed);
+}
+
+textarea.description::placeholder {
+  color: var(--mantine-color-dimmed);
+}
