@@ -55,6 +55,7 @@ import {
 import { IDatabase } from "@/features/database/types/database.types";
 import { IDatabaseRowWithCells } from "@/features/database/types/database-table.types";
 import { notifications } from "@mantine/notifications";
+import { StatusIndicator } from "@/components/ui/status-indicator.tsx";
 
 export function SpaceSidebar() {
   const { t } = useTranslation();
@@ -72,6 +73,7 @@ export function SpaceSidebar() {
 
   const { spaceSlug } = useParams();
   const { data: space } = useGetSpaceBySlugQuery(spaceSlug);
+  const isStatusFieldEnabled = !!space?.settings?.documentFields?.status;
 
   const spaceRules = space?.membership?.permissions;
   const spaceAbility = useSpaceAbility(spaceRules);
@@ -278,10 +280,20 @@ export function SpaceSidebar() {
                       className={classes.menuItemIcon}
                       stroke={2}
                     />
-                    <span>{database.name}</span>
+                    <span className={classes.menuItemLabel}>{database.name}</span>
+                    {isStatusFieldEnabled && database.status && (
+                      <StatusIndicator
+                        status={database.status}
+                        className={classes.statusIndicator}
+                      />
+                    )}
                   </div>
                 </UnstyledButton>
-                <DatabaseRowsTree database={database} spaceSlug={spaceSlug || ''} />
+                <DatabaseRowsTree
+                  database={database}
+                  spaceSlug={spaceSlug || ""}
+                  isStatusFieldEnabled={isStatusFieldEnabled}
+                />
               </div>
             ))}
           </div>
@@ -339,9 +351,14 @@ export function SpaceSidebar() {
 interface DatabaseRowsTreeProps {
   database: IDatabase;
   spaceSlug: string;
+  isStatusFieldEnabled: boolean;
 }
 
-function DatabaseRowsTree({ database, spaceSlug }: DatabaseRowsTreeProps) {
+function DatabaseRowsTree({
+  database,
+  spaceSlug,
+  isStatusFieldEnabled,
+}: DatabaseRowsTreeProps) {
   const { t } = useTranslation();
   const { data: rows = [] } = useDatabaseRowsQuery(database.id);
   const createRowMutation = useCreateDatabaseRowMutation(database.id);
@@ -366,17 +383,29 @@ function DatabaseRowsTree({ database, spaceSlug }: DatabaseRowsTreeProps) {
       </Group>
 
       {rootRows.map((row) => {
-        const title = row.page?.title || row.pageTitle || 'untitled';
+        const title = row.page?.title || row.pageTitle || "untitled";
+        const rowStatus = row.page?.customFields?.status;
 
         return (
-          <Group key={row.pageId} gap={4} wrap="nowrap" className={classes.rowTreeItem}>
+          <Group
+            key={row.pageId}
+            gap={4}
+            wrap="nowrap"
+            className={classes.rowTreeItem}
+          >
             <UnstyledButton
               component={Link}
               to={`/s/${spaceSlug}/p/${row.page?.slugId || row.pageId}`}
               className={classes.menu}
             >
               <div className={classes.menuItemInner}>
-                <span>{title}</span>
+                <span className={classes.menuItemLabel}>{title}</span>
+                {isStatusFieldEnabled && rowStatus && (
+                  <StatusIndicator
+                    status={rowStatus}
+                    className={classes.statusIndicator}
+                  />
+                )}
               </div>
             </UnstyledButton>
 

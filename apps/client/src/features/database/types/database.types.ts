@@ -8,6 +8,13 @@ export interface IDatabase {
   name: string;
   description: string | null;
   icon: string | null;
+  /**
+   * Optional database status when backend/domain model provides it.
+   *
+   * Kept optional to preserve backward compatibility while allowing UI
+   * to render a status indicator safely when this field is present.
+   */
+  status?: string | null;
   creatorId: string | null;
   lastUpdatedById: string | null;
   createdAt: string;
