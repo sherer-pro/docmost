@@ -323,7 +323,17 @@ export class PageService {
       ])
       .select((eb) => this.pageRepo.withHasChildren(eb))
       .where('deletedAt', 'is', null)
-      .where('spaceId', '=', spaceId);
+      .where('spaceId', '=', spaceId)
+      .where(({ not, exists, selectFrom }) =>
+        not(
+          exists(
+            selectFrom('databaseRows')
+              .select('databaseRows.id')
+              .whereRef('databaseRows.pageId', '=', 'pages.id')
+              .where('databaseRows.archivedAt', 'is', null),
+          ),
+        ),
+      );
 
     if (pageId) {
       query = query.where('parentPageId', '=', pageId);

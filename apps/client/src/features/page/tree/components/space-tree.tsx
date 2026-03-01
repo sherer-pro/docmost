@@ -13,7 +13,7 @@ import {
   usePageQuery,
   useUpdatePageMutation,
 } from "@/features/page/queries/page-query.ts";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import classes from "@/features/page/tree/styles/tree.module.css";
 import { ActionIcon, Box, Menu, rem, Text } from "@mantine/core";
@@ -150,7 +150,7 @@ export default function SpaceTree({ spaceId, readOnly }: SpaceTreeProps) {
     const effectSpaceId = spaceId;
 
     const fetchData = async () => {
-      if (isDataLoaded && currentPage) {
+      if (isDataLoaded && currentPage && pageSlug) {
         // check if pageId node is present in the tree
         const node = dfs(treeApiRef.current?.root, currentPage.id);
         if (node) {
@@ -214,18 +214,21 @@ export default function SpaceTree({ spaceId, readOnly }: SpaceTreeProps) {
     };
 
     fetchData();
-  }, [isDataLoaded, currentPage?.id]);
+  }, [isDataLoaded, currentPage?.id, pageSlug, spaceId]);
 
   useEffect(() => {
+    if (!pageSlug) {
+      treeApiRef.current?.deselectAll();
+      return;
+    }
+
     if (currentPage?.id) {
       setTimeout(() => {
         // focus on node and open all parents
         treeApiRef.current?.select(currentPage.id, { align: "auto" });
       }, 200);
-    } else {
-      treeApiRef.current?.deselectAll();
     }
-  }, [currentPage?.id]);
+  }, [currentPage?.id, pageSlug]);
 
   // Clean up tree API on unmount
   useEffect(() => {
@@ -235,7 +238,10 @@ export default function SpaceTree({ spaceId, readOnly }: SpaceTreeProps) {
     };
   }, [setTreeApi]);
 
-  const filteredData = data.filter((node) => node?.spaceId === spaceId);
+  const filteredData = useMemo(
+    () => data.filter((node) => node?.spaceId === spaceId),
+    [data, spaceId],
+  );
 
   return (
     <div ref={mergedRef} className={classes.treeContainer}>
