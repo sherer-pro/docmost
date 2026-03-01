@@ -251,7 +251,7 @@ export function SpaceSidebar() {
             )}
           </Group>
 
-          <div className={classes.pages}>
+          <div className={clsx(classes.pages, classes.databaseList)}>
             {databases.map((database) => (
               <UnstyledButton
                 key={database.id}
