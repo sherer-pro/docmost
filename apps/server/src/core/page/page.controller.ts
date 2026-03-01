@@ -167,25 +167,99 @@ export class PageController {
     return '';
   }
 
-  private getBestFaviconUrl($: ReturnType<typeof load>, pageUrl: string): string {
-    const iconSelectors = [
-      'link[rel="icon"]',
-      'link[rel="shortcut icon"]',
-      'link[rel="apple-touch-icon"]',
-      'link[rel="apple-touch-icon-precomposed"]',
-      'link[rel="mask-icon"]',
-    ];
-
-    for (const selector of iconSelectors) {
-      const href = $(selector).attr('href')?.trim();
-      const absoluteHref = this.getAbsoluteUrl(pageUrl, href);
-
-      if (absoluteHref) {
-        return absoluteHref;
-      }
+  private getIconArea(sizeValue?: string): number {
+    if (!sizeValue) {
+      return 0;
     }
 
-    return '';
+    const normalized = sizeValue.toLowerCase();
+    if (normalized.includes('any')) {
+      return Number.MAX_SAFE_INTEGER;
+    }
+
+    return normalized
+      .split(/\s+/)
+      .map((item) => item.trim())
+      .reduce((maxArea, item) => {
+        const match = item.match(/^(\d+)x(\d+)$/);
+        if (!match) {
+          return maxArea;
+        }
+
+        const width = Number(match[1]);
+        const height = Number(match[2]);
+
+        if (!Number.isFinite(width) || !Number.isFinite(height)) {
+          return maxArea;
+        }
+
+        return Math.max(maxArea, width * height);
+      }, 0);
+  }
+
+  private getIconRelPriority(relValue?: string): number {
+    if (!relValue) {
+      return 0;
+    }
+
+    const relTokens = relValue
+      .toLowerCase()
+      .split(/\s+/)
+      .map((token) => token.trim())
+      .filter(Boolean);
+
+    if (relTokens.includes('apple-touch-icon') || relTokens.includes('apple-touch-icon-precomposed')) {
+      return 3;
+    }
+
+    if (relTokens.includes('icon') && relTokens.includes('shortcut')) {
+      return 2;
+    }
+
+    if (relTokens.includes('icon')) {
+      return 1;
+    }
+
+    if (relTokens.includes('mask-icon')) {
+      return 1;
+    }
+
+    return 0;
+  }
+
+  private getBestFaviconUrl($: ReturnType<typeof load>, pageUrl: string): string {
+    let bestUrl = '';
+    let bestArea = -1;
+    let bestPriority = -1;
+
+    $('link[rel]').each((_, element) => {
+      const rel = $(element).attr('rel')?.trim();
+      const priority = this.getIconRelPriority(rel);
+
+      if (priority === 0) {
+        return;
+      }
+
+      const href = $(element).attr('href')?.trim();
+      const absoluteHref = this.getAbsoluteUrl(pageUrl, href);
+      if (!absoluteHref) {
+        return;
+      }
+
+      const area = this.getIconArea($(element).attr('sizes')?.trim());
+      const shouldReplace =
+        area > bestArea || (area === bestArea && priority > bestPriority);
+
+      if (!shouldReplace) {
+        return;
+      }
+
+      bestArea = area;
+      bestPriority = priority;
+      bestUrl = absoluteHref;
+    });
+
+    return bestUrl;
   }
 
   @HttpCode(HttpStatus.OK)
