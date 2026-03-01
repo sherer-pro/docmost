@@ -8,6 +8,8 @@ import React, { useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import clsx from 'clsx';
 import EmojiCommand from '@/features/editor/extensions/emoji-command.ts';
+import SlashCommand from '@/features/editor/extensions/slash-command';
+import { getDatabaseDescriptionSlashItems } from './database-description-slash-items';
 
 export interface DatabaseDescriptionPayload {
   json: JSONContent;
@@ -64,16 +66,18 @@ export function DatabaseDescriptionEditor({
   const descriptionEditor = useEditor({
     extensions: [
       StarterKit.configure({
-        heading: false,
         codeBlock: false,
-        blockquote: false,
-        horizontalRule: false,
       }),
       Placeholder.configure({
         placeholder: t('database.editor.addDescription'),
         showOnlyWhenEditable: false,
       }),
       EmojiCommand,
+      SlashCommand.configure({
+        suggestion: {
+          items: getDatabaseDescriptionSlashItems,
+        },
+      }),
     ],
     onUpdate({ editor }) {
       const payload = {
