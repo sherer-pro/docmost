@@ -281,6 +281,8 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
                 {t("Move")}
               </Menu.Item>
               {!page?.databaseId && (
+                <>
+                <Menu.Divider />
                 <Menu.Item
                   leftSection={<IconArrowsExchange size={16} />}
                   onClick={handleConvertToDatabase}
@@ -288,6 +290,7 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
                 >
                   {t('Convert to database')}
                 </Menu.Item>
+                </>
               )}
             </>
           )}
