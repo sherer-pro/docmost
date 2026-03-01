@@ -6,6 +6,7 @@ export interface IDatabase {
   workspaceId: string;
   spaceId: string;
   name: string;
+  pageId: string | null;
   description: string | null;
   icon: string | null;
   /**
@@ -96,6 +97,7 @@ export interface ICreateDatabasePayload {
   name: string;
   description?: string;
   icon?: string;
+  parentPageId?: string;
 }
 
 /**

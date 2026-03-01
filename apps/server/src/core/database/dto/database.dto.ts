@@ -17,6 +17,16 @@ export class CreateDatabaseDto {
   @IsUUID()
   spaceId: string;
 
+  /**
+   * Идентификатор страницы-родителя в дереве.
+   *
+   * Если передан, database-узел будет создан как дочерний элемент этой страницы.
+   * Если не передан — база создаётся в корне пространства.
+   */
+  @IsOptional()
+  @IsUUID()
+  parentPageId?: string;
+
   @IsOptional()
   @IsString()
   @IsNotEmpty()
