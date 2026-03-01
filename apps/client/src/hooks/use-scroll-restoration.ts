@@ -7,6 +7,17 @@ import { useLocation } from "react-router-dom";
 const SCROLL_POSITION_STORAGE_KEY_PREFIX = "docmost:scroll-position-by-path";
 
 /**
+ * Набор задержек (в миллисекундах) для повторного применения восстановленного скролла.
+ *
+ * Зачем это нужно:
+ * - часть страниц догружается асинхронно уже после первого рендера;
+ * - некоторые компоненты/роутер могут поздно влиять на позицию viewport;
+ * - повторные попытки в коротком окне времени позволяют «перекрыть»
+ *   поздний сброс в 0 и устранить визуальный скачок.
+ */
+const RESTORE_ATTEMPT_DELAYS_MS = [0, 50, 120, 250, 500, 900, 1400] as const;
+
+/**
  * Восстанавливает прокрутку по каждому маршруту, если пользователь включил
  * соответствующую настройку в разделе /settings/account/preferences.
  *
@@ -24,17 +35,8 @@ export function useScrollRestoration() {
   const storageKey = `${SCROLL_POSITION_STORAGE_KEY_PREFIX}:${user?.id ?? "anonymous"}`;
 
   /**
-   * Управляем нативным поведением браузера отдельно от route-эффекта.
-   *
-   * Почему так:
-   * - раньше мы переключали `history.scrollRestoration` в cleanup каждого
-   *   route-эффекта;
-   * - в момент навигации это могло на короткое время вернуть режим `auto`,
-   *   из-за чего браузер или роутер дополнительно трогал позицию и возникал
-   *   визуальный «прыжок» (сначала на сохранённую позицию, затем в начало).
-   *
-   * Теперь, пока опция включена, режим стабильно `manual` на всём жизненном
-   * цикле хука и не «флипается» между страницами.
+   * Управляем нативным поведением браузера отдельно от route-эффекта,
+   * чтобы не было «мигания» между `manual` и `auto` при навигации.
    */
   useEffect(() => {
     const previousScrollRestoration = window.history.scrollRestoration;
@@ -66,24 +68,15 @@ export function useScrollRestoration() {
     const savedPositions = readSavedPositions(storageKey);
     const savedPosition = savedPositions[routeKey];
 
-    if (typeof savedPosition === "number") {
-      /**
-       * Делаем восстановление в два кадра:
-       * - первый кадр ловит самый ранний момент после монтирования;
-       * - второй кадр перекрывает возможный поздний reset скролла
-       *   со стороны UI-библиотеки/роутера при доотрисовке контента.
-       */
-      const scrollToSavedPosition = () => {
-        window.scrollTo({ top: savedPosition, left: 0, behavior: "auto" });
-      };
+    let cancelRestore: (() => void) | undefined;
 
-      scrollToSavedPosition();
-      requestAnimationFrame(() => {
-        scrollToSavedPosition();
-      });
+    if (typeof savedPosition === "number") {
+      cancelRestore = restoreScrollWithDeferredAttempts(savedPosition);
     }
 
     return () => {
+      cancelRestore?.();
+
       const updatedPositions = {
         ...savedPositions,
         [routeKey]: window.scrollY,
@@ -95,6 +88,37 @@ export function useScrollRestoration() {
       );
     };
   }, [location.hash, location.pathname, location.search, rememberPageScrollPosition, storageKey]);
+}
+
+/**
+ * Пытается восстановить скролл не один раз, а серией отложенных попыток.
+ *
+ * Такой подход уменьшает шанс, что поздняя доотрисовка страницы или
+ * внутренняя логика компонентов снова принудительно вернёт viewport к началу.
+ *
+ * @param targetScrollY Позиция по оси Y, которую нужно восстановить.
+ * @returns Функция очистки, отменяющая все запланированные попытки.
+ */
+function restoreScrollWithDeferredAttempts(targetScrollY: number): () => void {
+  const timeoutIds: number[] = [];
+
+  const scrollToTargetPosition = () => {
+    window.scrollTo({ top: targetScrollY, left: 0, behavior: "auto" });
+  };
+
+  for (const delayMs of RESTORE_ATTEMPT_DELAYS_MS) {
+    const timeoutId = window.setTimeout(() => {
+      scrollToTargetPosition();
+    }, delayMs);
+
+    timeoutIds.push(timeoutId);
+  }
+
+  return () => {
+    for (const timeoutId of timeoutIds) {
+      window.clearTimeout(timeoutId);
+    }
+  };
 }
 
 /**
