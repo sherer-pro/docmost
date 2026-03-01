@@ -47,7 +47,7 @@
       border: 1px solid var(--mantine-color-dark-4);
     }
 
-    @media (max-width: var(--mantine-breakpoint-sm)) {
+    @media (max-width: 48em) {
       height: 360px;
     }
   }
