@@ -3,7 +3,10 @@
  */
 export interface IDatabaseRowPage {
   id: string;
-  title: string;
+  slugId?: string;
+  title: string | null;
+  icon?: string | null;
+  parentPageId?: string | null;
 }
 
 /**

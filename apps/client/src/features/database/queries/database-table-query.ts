@@ -7,6 +7,8 @@ import {
   batchUpdateDatabaseCells,
   createDatabaseProperty,
   createDatabaseRow,
+  deleteDatabaseProperty,
+  deleteDatabaseRow,
   getDatabaseProperties,
   getDatabaseRows,
 } from '@/features/database/services';
@@ -75,6 +77,21 @@ export function useCreateDatabasePropertyMutation(databaseId?: string) {
   });
 }
 
+export function useDeleteDatabasePropertyMutation(databaseId?: string) {
+  return useMutation({
+    mutationFn: (propertyId: string) =>
+      deleteDatabaseProperty(databaseId as string, propertyId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['database', databaseId, 'properties'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['database', databaseId, 'rows'],
+      });
+    },
+  });
+}
+
 /**
  * Инлайн-сохранение значения ячейки через batch endpoint.
  */
@@ -87,6 +104,19 @@ export function useBatchUpdateDatabaseCellsMutation(databaseId?: string) {
       pageId: string;
       payload: IBatchUpdateDatabaseCellsPayload;
     }) => batchUpdateDatabaseCells(databaseId as string, pageId, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['database', databaseId, 'rows'],
+      });
+    },
+  });
+}
+
+
+export function useDeleteDatabaseRowMutation(databaseId?: string) {
+  return useMutation({
+    mutationFn: (pageId: string) =>
+      deleteDatabaseRow(databaseId as string, pageId),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ['database', databaseId, 'rows'],

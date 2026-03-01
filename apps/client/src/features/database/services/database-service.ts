@@ -138,6 +138,16 @@ export async function createDatabaseRow(
 }
 
 /**
+ * Deletes a database row by page id.
+ */
+export async function deleteDatabaseRow(
+  databaseId: string,
+  pageId: string,
+): Promise<void> {
+  await api.delete(`/databases/${databaseId}/rows/${pageId}`);
+}
+
+/**
  * Выполняет batch-обновление ячеек строки.
  */
 export async function batchUpdateDatabaseCells(

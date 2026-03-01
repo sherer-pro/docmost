@@ -21,11 +21,14 @@
 
 .sectionPages {
     margin-bottom: 0;
-    overflow-y: hidden;
+    overflow-y: auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
 
     .pages {
-        height: 100%;
-        padding-bottom: 26px;
+        flex: 1;
+        min-height: 0;
     }
 }
 
