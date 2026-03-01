@@ -42,6 +42,12 @@ export class CreateDatabaseDto {
   @IsString()
   description?: string;
 
+  /**
+   * Rich-text контент описания в формате JSON (Tiptap/ProseMirror).
+   */
+  @IsOptional()
+  descriptionContent?: unknown;
+
   @IsOptional()
   @IsString()
   @MaxLength(255)
@@ -61,6 +67,12 @@ export class UpdateDatabaseDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  /**
+   * Rich-text контент описания в формате JSON (Tiptap/ProseMirror).
+   */
+  @IsOptional()
+  descriptionContent?: unknown;
 
   @IsOptional()
   @IsString()

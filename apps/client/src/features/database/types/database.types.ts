@@ -8,6 +8,7 @@ export interface IDatabase {
   name: string;
   pageId: string | null;
   description: string | null;
+  descriptionContent?: unknown | null;
   icon: string | null;
   /**
    * Optional database status when backend/domain model provides it.
@@ -96,6 +97,7 @@ export interface ICreateDatabasePayload {
   spaceId: string;
   name: string;
   description?: string;
+  descriptionContent?: unknown;
   icon?: string;
   parentPageId?: string;
 }
@@ -106,6 +108,7 @@ export interface ICreateDatabasePayload {
 export interface IUpdateDatabasePayload {
   name?: string;
   description?: string;
+  descriptionContent?: unknown;
   icon?: string;
 }
 

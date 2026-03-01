@@ -1,10 +1,15 @@
-import { Box, Container, Stack, Text } from '@mantine/core';
-import { useDebouncedCallback } from '@mantine/hooks';
-import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Container, Stack, Text } from '@mantine/core';
+import { JSONContent } from '@tiptap/react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import { DatabaseTableView } from '@/features/database/components/database-table-view';
+import {
+  DatabaseDescriptionEditor,
+  DatabaseDescriptionPayload,
+} from '@/features/database/components/editors/database-description-editor.tsx';
+import { DatabaseTitleEditor } from '@/features/database/components/editors/database-title-editor.tsx';
 import DatabaseHeader from '@/features/database/components/header/database-header.tsx';
 import HistoryModal from '@/features/page-history/components/history-modal.tsx';
 import {
@@ -26,10 +31,38 @@ import classes from './database-page.module.css';
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
-type DatabaseMetaState = {
-  name: string;
-  description: string;
+const EMPTY_DESCRIPTION_DOC: JSONContent = {
+  type: 'doc',
+  content: [{ type: 'paragraph' }],
 };
+
+/**
+ * Преобразует plain-text описание в Tiptap JSON, если rich-контент отсутствует.
+ */
+function getDescriptionDoc(
+  richDescription?: unknown,
+  plainDescription?: string | null,
+): JSONContent {
+  if (richDescription && typeof richDescription === 'object') {
+    return richDescription as JSONContent;
+  }
+
+  const text = plainDescription?.trim();
+
+  if (!text) {
+    return EMPTY_DESCRIPTION_DOC;
+  }
+
+  return {
+    type: 'doc',
+    content: [
+      {
+        type: 'paragraph',
+        content: [{ type: 'text', text }],
+      },
+    ],
+  };
+}
 
 export default function DatabasePage() {
   const { t } = useTranslation();
@@ -41,18 +74,14 @@ export default function DatabasePage() {
     databaseId,
   );
   const currentUser = useAtomValue(currentUserAtom);
-  const [meta, setMeta] = useState<DatabaseMetaState>({ name: '', description: '' });
-  const [lastSavedMeta, setLastSavedMeta] = useState<DatabaseMetaState>({
-    name: '',
-    description: '',
+  const [draftName, setDraftName] = useState('');
+  const [draftDescription, setDraftDescription] = useState<DatabaseDescriptionPayload>({
+    json: EMPTY_DESCRIPTION_DOC,
+    text: '',
   });
   const [saveState, setSaveState] = useState<SaveState>('idle');
 
   const lastRequestVersionRef = useRef(0);
-  const latestMetaRef = useRef(meta);
-  const latestLastSavedRef = useRef(lastSavedMeta);
-  const titleTextareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const descriptionTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const spaceRules = space?.membership?.permissions;
   const spaceAbility = useSpaceAbility(spaceRules);
@@ -68,62 +97,24 @@ export default function DatabasePage() {
   const isEditable = !readOnly && userPageEditMode === PageEditMode.Edit;
 
   useEffect(() => {
-    latestMetaRef.current = meta;
-  }, [meta]);
-
-  useEffect(() => {
-    latestLastSavedRef.current = lastSavedMeta;
-  }, [lastSavedMeta]);
-
-  useEffect(() => {
     if (!database) {
       return;
     }
 
-    const nextMeta = {
-      name: database.name ?? '',
-      description: database.description ?? '',
-    };
-
-    setMeta(nextMeta);
-    setLastSavedMeta(nextMeta);
+    setDraftName(database.name ?? '');
+    setDraftDescription({
+      json: getDescriptionDoc(database.descriptionContent, database.description),
+      text: database.description ?? '',
+    });
     setSaveState('idle');
   }, [database?.id, database?.updatedAt]);
 
-  const hasPendingChanges = useMemo(
-    () =>
-      meta.name.trim() !== lastSavedMeta.name.trim() ||
-      meta.description.trim() !== lastSavedMeta.description.trim(),
-    [lastSavedMeta.description, lastSavedMeta.name, meta.description, meta.name],
-  );
-
   /**
-   * Автосохраняет редактируемые метаданные базы.
-   *
-   * Примечания:
-   * - маршрут базы id-based (`/databases/:databaseId`), поэтому slug здесь намеренно не используется;
-   * - пустой `name` не отправляется, чтобы не перетирать валидное название пустым значением;
-   * - `description` можно полностью очистить (сохраняем пустую строку при изменении).
+   * Унифицированный автосейв метаданных базы (заголовок/описание).
    */
   const commitMetaChanges = useCallback(
-    async (nextMeta: DatabaseMetaState) => {
-      const nextName = nextMeta.name.trim();
-      const nextDescription = nextMeta.description.trim();
-      const savedName = latestLastSavedRef.current.name.trim();
-      const savedDescription = latestLastSavedRef.current.description.trim();
-
-      const patch: IUpdateDatabasePayload = {};
-
-      if (nextName && nextName !== savedName) {
-        patch.name = nextName;
-      }
-
-      if (nextDescription !== savedDescription) {
-        patch.description = nextDescription;
-      }
-
-      if (Object.keys(patch).length === 0 || !databaseId || !space?.id) {
-        setSaveState('idle');
+    async (patch: IUpdateDatabasePayload) => {
+      if (!databaseId || !space?.id || Object.keys(patch).length === 0) {
         return;
       }
 
@@ -138,13 +129,14 @@ export default function DatabasePage() {
           return;
         }
 
-        const syncedMeta = {
-          name: updatedDatabase.name ?? nextName,
-          description: updatedDatabase.description ?? nextDescription,
-        };
-
-        setMeta(syncedMeta);
-        setLastSavedMeta(syncedMeta);
+        setDraftName(updatedDatabase.name ?? draftName);
+        setDraftDescription({
+          json: getDescriptionDoc(
+            updatedDatabase.descriptionContent,
+            updatedDatabase.description,
+          ),
+          text: updatedDatabase.description ?? '',
+        });
         setSaveState('saved');
       } catch {
         if (requestVersion !== lastRequestVersionRef.current) {
@@ -154,68 +146,50 @@ export default function DatabasePage() {
         setSaveState('error');
       }
     },
-    [databaseId, space?.id, updateDatabaseMutationAsync],
+    [databaseId, draftName, space?.id, updateDatabaseMutationAsync],
   );
 
-  const debouncedSave = useDebouncedCallback((nextMeta: DatabaseMetaState) => {
-    void commitMetaChanges(nextMeta);
-  }, 500);
-
-  useEffect(() => {
-    if (!isEditable || !database || !hasPendingChanges) {
-      return;
-    }
-
-    debouncedSave(meta);
-  }, [database, debouncedSave, hasPendingChanges, isEditable, meta]);
-
-  useEffect(() => {
-    return () => {
-      /**
-       * При смене маршрута принудительно отправляем последние изменения,
-       * чтобы не потерять ввод между debounce-тикaми (паттерн как у `TitleEditor`).
-       */
-      debouncedSave.cancel();
-
-      if (isEditable) {
-        void commitMetaChanges(latestMetaRef.current);
+  const onTitleAutoSave = useCallback(
+    async (nextTitle: string) => {
+      const normalizedTitle = nextTitle.trim();
+      if (!normalizedTitle || normalizedTitle === (database?.name ?? '').trim()) {
+        return;
       }
-    };
-  }, [commitMetaChanges, debouncedSave, isEditable]);
 
-  /**
-   * Синхронно пересчитывает высоту textarea по контенту.
-   */
-  const resizeTextarea = (target: HTMLTextAreaElement) => {
-    target.style.height = 'auto';
-    target.style.height = `${target.scrollHeight}px`;
-  };
+      await commitMetaChanges({ name: normalizedTitle });
+    },
+    [commitMetaChanges, database?.name],
+  );
 
-  const onTitleChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
-    setSaveState('idle');
-    resizeTextarea(event.currentTarget);
-    setMeta((prev) => ({ ...prev, name: event.currentTarget.value }));
-  };
+  const onDescriptionAutoSave = useCallback(
+    async (payload: DatabaseDescriptionPayload) => {
+      const currentSerialized = JSON.stringify(
+        getDescriptionDoc(database?.descriptionContent, database?.description),
+      );
+      const nextSerialized = JSON.stringify(payload.json);
+      const nextText = payload.text.trim();
+      const currentText = (database?.description ?? '').trim();
 
-  const onDescriptionChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
-    setSaveState('idle');
-    resizeTextarea(event.currentTarget);
-    setMeta((prev) => ({ ...prev, description: event.currentTarget.value }));
-  };
+      if (currentSerialized === nextSerialized && nextText === currentText) {
+        return;
+      }
 
-  useEffect(() => {
-    if (!isEditable) {
-      return;
+      await commitMetaChanges({
+        description: payload.text,
+        descriptionContent: payload.json,
+      });
+    },
+    [commitMetaChanges, database?.description, database?.descriptionContent],
+  );
+
+  const databaseDisplayName = useMemo(() => {
+    const normalizedDraft = draftName.trim();
+    if (normalizedDraft) {
+      return normalizedDraft;
     }
 
-    if (titleTextareaRef.current) {
-      resizeTextarea(titleTextareaRef.current);
-    }
-
-    if (descriptionTextareaRef.current) {
-      resizeTextarea(descriptionTextareaRef.current);
-    }
-  }, [isEditable, meta.description, meta.name]);
+    return database?.name?.trim() || t('database.editor.untitled');
+  }, [database?.name, draftName, t]);
 
   if (!databaseId || !spaceSlug) {
     return null;
@@ -225,7 +199,7 @@ export default function DatabasePage() {
     <>
       <Helmet>
         <title>
-          {database?.name || t('Database')} - {getAppName()}
+          {databaseDisplayName} - {getAppName()}
         </title>
       </Helmet>
 
@@ -234,51 +208,35 @@ export default function DatabasePage() {
         databasePageId={database?.pageId}
         spaceSlug={spaceSlug}
         spaceName={space?.name}
-        databaseName={database?.name}
+        databaseName={databaseDisplayName}
         readOnly={readOnly}
       />
 
-      {database?.pageId && <HistoryModal pageId={database.pageId} pageTitle={database?.name} />}
+      {database?.pageId && <HistoryModal pageId={database.pageId} pageTitle={databaseDisplayName} />}
 
       <Container size="xl" py="xl" pt={60}>
         <Stack gap="xs" mb="md">
-          {isEditable ? (
-            <Box
-              component="textarea"
-              className={classes.title}
-              data-placeholder={t('Untitled')}
-              placeholder={t('Untitled')}
-              value={meta.name}
-              ref={titleTextareaRef}
-              onChange={onTitleChange}
+          <div className={classes.titleEditorContainer}>
+            <DatabaseTitleEditor
+              value={draftName}
+              editable={isEditable}
+              onValueChange={setDraftName}
+              onAutoSave={onTitleAutoSave}
             />
-          ) : (
-            <Box component="div" className={classes.title} data-placeholder={t('Untitled')}>
-              {meta.name || t('Untitled')}
-            </Box>
-          )}
+          </div>
 
-          {isEditable ? (
-            <Box
-              component="textarea"
-              className={classes.description}
-              data-placeholder={t('Add description')}
-              placeholder={t('Add description')}
-              value={meta.description}
-              ref={descriptionTextareaRef}
-              onChange={onDescriptionChange}
-            />
-          ) : (
-            <Box component="div" className={classes.description} data-placeholder={t('Add description')}>
-              {meta.description}
-            </Box>
-          )}
+          <DatabaseDescriptionEditor
+            value={draftDescription.json}
+            editable={isEditable}
+            onValueChange={setDraftDescription}
+            onAutoSave={onDescriptionAutoSave}
+          />
 
           {isEditable && (
             <Text size="sm" c="dimmed">
-              {saveState === 'saving' && t('Saving...')}
-              {saveState === 'saved' && t('Saved')}
-              {saveState === 'error' && t('Could not update')}
+              {saveState === 'saving' && t('database.editor.saving')}
+              {saveState === 'saved' && t('database.editor.saved')}
+              {saveState === 'error' && t('database.editor.error')}
             </Text>
           )}
         </Stack>
