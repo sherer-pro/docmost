@@ -7,10 +7,10 @@ import { updateDatabase } from "@/features/database/services/database-service";
 import { queryClient } from "@/main";
 
 /**
- * Возвращает список баз данных для выбранного пространства.
+ * Returns the list of databases for the selected space.
  *
- * Хук используется в боковой панели Space, чтобы отрисовать отдельный
- * раздел Databases без вмешательства в дерево страниц.
+ * This hook is used in the Space sidebar to render a dedicated
+ * Databases section without interfering with the page tree.
  */
 export function useGetDatabasesBySpaceQuery(
   spaceId?: string,
@@ -23,10 +23,10 @@ export function useGetDatabasesBySpaceQuery(
 }
 
 /**
- * Возвращает одну базу данных по идентификатору.
+ * Returns a single database by id.
  *
- * Хук используется страницей маршрута /s/:spaceSlug/databases/:databaseId
- * для загрузки метаданных выбранной базы данных.
+ * This hook is used by the /s/:spaceSlug/databases/:databaseId route page
+ * to load metadata for the selected database.
  */
 export function useGetDatabaseQuery(
   databaseId?: string,
@@ -50,11 +50,11 @@ export function useCreateDatabaseMutation(spaceId?: string) {
 }
 
 /**
- * Обновляет метаданные базы данных и синхронизирует кеш.
+ * Updates database metadata and synchronizes cache.
  *
- * После успешного PATCH инвалидируются:
- * - детальная запись текущей базы;
- * - список баз данных в текущем пространстве.
+ * After a successful PATCH, the following queries are invalidated:
+ * - detailed record of the current database;
+ * - database list for the current space.
  */
 export function useUpdateDatabaseMutation(spaceId?: string, databaseId?: string) {
   return useMutation({

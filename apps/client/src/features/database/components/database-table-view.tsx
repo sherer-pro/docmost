@@ -15,6 +15,7 @@ import { IconEye, IconEyeOff, IconPlus, IconTrash } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 import { useSpaceQuery } from '@/features/space/queries/space-query.ts';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   useBatchUpdateDatabaseCellsMutation,
   useCreateDatabasePropertyMutation,
@@ -44,8 +45,8 @@ const DEFAULT_FILTER: IDatabaseFilterCondition = {
   value: '',
 };
 
-function getRowTitle(row: IDatabaseRowWithCells): string {
-  return row.page?.title || row.pageTitle || 'untitled';
+function getRowTitle(row: IDatabaseRowWithCells, untitledLabel: string): string {
+  return row.page?.title || row.pageTitle || untitledLabel;
 }
 
 function getCellValue(row: IDatabaseRowWithCells, propertyId: string): string {
@@ -70,7 +71,7 @@ interface RowFieldVisibility {
 }
 
 /**
- * Нормализует custom fields строки базы с учётом включённых document fields в space.
+ * Normalizes database row custom fields based on enabled document fields in the space.
  */
 function getVisibleRowCustomFields(
   row: IDatabaseRowWithCells,
@@ -107,15 +108,15 @@ function matchCondition(value: string, condition: IDatabaseFilterCondition): boo
 }
 
 /**
- * Табличное представление базы данных.
+ * Database table view.
  *
- * Компонент реализует MVP-функции:
- * - sticky header и горизонтальный scroll;
- * - dynamic columns из properties;
- * - inline edit с сохранением через batch endpoint;
+ * The component provides MVP functionality:
+ * - sticky header and horizontal scrolling;
+ * - dynamic columns from properties;
+ * - inline editing with batch endpoint persistence;
  * - add property / add row;
  * - visibility menu;
- * - filter (до 3 условий) и sort по одному полю.
+ * - filtering (up to 3 conditions) and single-field sorting.
  */
 export function DatabaseTableView({
   databaseId,
@@ -123,6 +124,7 @@ export function DatabaseTableView({
   spaceSlug,
   isEditable = true,
 }: DatabaseTableViewProps) {
+  const { t } = useTranslation();
   const { data: properties = [] } = useDatabasePropertiesQuery(databaseId);
   const { data: rows = [] } = useDatabaseRowsQuery(databaseId);
   const { data: space } = useSpaceQuery(spaceId);
@@ -225,7 +227,7 @@ export function DatabaseTableView({
       <Group justify="space-between" mb="md" align="flex-end">
         <Group>
           <TextInput
-            placeholder="Новая колонка"
+            placeholder={t('New column')}
             value={newPropertyName}
             onChange={(event) => setNewPropertyName(event.currentTarget.value)}
             disabled={!isEditable}
@@ -245,7 +247,7 @@ export function DatabaseTableView({
               setNewPropertyName('');
             }}
           >
-            Property
+            {t('Property')}
           </Button>
 
           <Button
@@ -254,13 +256,13 @@ export function DatabaseTableView({
             disabled={!isEditable}
             onClick={() => createRowMutation.mutate({})}
           >
-            Row
+            {t('Row')}
           </Button>
         </Group>
 
         <Group>
           <Select
-            placeholder="Sort"
+            placeholder={t('Sort')}
             data={properties.map((property) => ({
               value: property.id,
               label: property.name,
@@ -283,7 +285,7 @@ export function DatabaseTableView({
           <Menu shadow="md" width={220}>
             <Menu.Target>
               <Button variant="default" disabled={properties.length === 0}>
-                Columns
+                {t('Columns')}
               </Button>
             </Menu.Target>
             <Menu.Dropdown>
@@ -323,7 +325,7 @@ export function DatabaseTableView({
                     leftSection={<IconTrash size={14} />}
                     onClick={() => deletePropertyMutation.mutate(property.id)}
                   >
-                    Delete {property.name}
+                    {t('Delete property with name', { name: property.name })}
                   </Menu.Item>
                 ))}
             </Menu.Dropdown>
@@ -335,7 +337,7 @@ export function DatabaseTableView({
         {filters.map((condition, index) => (
           <Group key={`filter-${index}`} align="end" wrap="nowrap">
             <Select
-              placeholder="Поле"
+              placeholder={t('Field')}
               data={properties.map((property) => ({
                 value: property.id,
                 label: property.name,
@@ -353,9 +355,9 @@ export function DatabaseTableView({
             <Select
               w={140}
               data={[
-                { value: 'contains', label: 'contains' },
-                { value: 'equals', label: 'equals' },
-                { value: 'not_equals', label: 'not equals' },
+                { value: 'contains', label: t('contains') },
+                { value: 'equals', label: t('equals') },
+                { value: 'not_equals', label: t('not equals') },
               ]}
               value={condition.operator}
               onChange={(value) => {
@@ -377,7 +379,7 @@ export function DatabaseTableView({
             />
 
             <TextInput
-              placeholder="Значение"
+              placeholder={t('Value')}
               value={condition.value}
               onChange={(event) => {
                 setFilters((prev) =>
@@ -398,7 +400,7 @@ export function DatabaseTableView({
                 setFilters((prev) => prev.filter((_, itemIndex) => itemIndex !== index))
               }
             >
-              Remove
+              {t('Remove')}
             </Button>
           </Group>
         ))}
@@ -410,7 +412,7 @@ export function DatabaseTableView({
           disabled={filters.length >= 3}
           onClick={() => setFilters((prev) => [...prev, { ...DEFAULT_FILTER }])}
         >
-          Filter
+          {t('Filter')}
         </Button>
       </Stack>
 
@@ -418,7 +420,7 @@ export function DatabaseTableView({
         <Table stickyHeader withTableBorder withColumnBorders miw={900}>
           <Table.Thead>
             <Table.Tr>
-              <Table.Th miw={280}>Title</Table.Th>
+              <Table.Th miw={280}>{t('Title')}</Table.Th>
               {displayedProperties.map((property) => (
                 <Table.Th key={property.id} miw={220}>
                   <Group justify="space-between" gap="xs" wrap="nowrap">
@@ -429,7 +431,7 @@ export function DatabaseTableView({
                         color="red"
                         size="sm"
                         onClick={() => deletePropertyMutation.mutate(property.id)}
-                        aria-label={`Delete ${property.name}`}
+                        aria-label={t('Delete property with name', { name: property.name })}
                       >
                         <IconTrash size={14} />
                       </ActionIcon>
@@ -446,12 +448,12 @@ export function DatabaseTableView({
                   <Group justify="space-between" >
                   <div>
                     <Text component={Link} to={`/s/${spaceSlug}/p/${row.pageId}`}>
-                      {getRowTitle(row)}
+                      {getRowTitle(row, t('untitled'))}
                     </Text>
 
                     {/**
-                     * Показываем document fields строки только если поле включено
-                     * в настройках space. Значения берём строго из row.page.customFields.
+                     * Show row document fields only when the field is enabled
+                     * in space settings. Values are read strictly from row.page.customFields.
                      */}
                     {(() => {
                       const customFields = getVisibleRowCustomFields(row, fieldVisibility);
@@ -468,13 +470,15 @@ export function DatabaseTableView({
                         <Text size="xs" c="dimmed">
                           {[
                             customFields.status
-                              ? `Status: ${customFields.status}`
+                              ? t('Status value', { value: customFields.status })
                               : null,
                             customFields.assigneeId
-                              ? `Assignee: ${customFields.assigneeId}`
+                              ? t('Assignee value', { value: customFields.assigneeId })
                               : null,
                             customFields.stakeholderIds.length > 0
-                              ? `Stakeholders: ${customFields.stakeholderIds.length}`
+                              ? t('Stakeholders count', {
+                                  count: customFields.stakeholderIds.length,
+                                })
                               : null,
                           ]
                             .filter(Boolean)
@@ -489,7 +493,7 @@ export function DatabaseTableView({
                       variant="subtle"
                       color="red"
                       onClick={() => deleteRowMutation.mutate(row.pageId)}
-                      aria-label="Delete row"
+                      aria-label={t('Delete row')}
                     >
                       <IconTrash size={14} />
                     </ActionIcon>
@@ -523,7 +527,7 @@ export function DatabaseTableView({
                           }}
                         />
                       ) : (
-                        value || '—'
+                        value || t('Empty value')
                       )}
                     </Table.Td>
                   );

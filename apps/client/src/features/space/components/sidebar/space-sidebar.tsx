@@ -391,7 +391,7 @@ function DatabaseRowsTree({
       </Group>
 
       {rootRows.map((row) => {
-        const title = row.page?.title || row.pageTitle || "untitled";
+        const title = row.page?.title || row.pageTitle || t("untitled");
         const rowStatus = row.page?.customFields?.status;
         const rowLink = `/s/${spaceSlug}/p/${row.page?.slugId || row.pageId}`;
         const isActiveRow =
