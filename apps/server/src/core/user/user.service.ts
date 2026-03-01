@@ -40,8 +40,7 @@ export class UserService {
       typeof updateUserDto.pageEditMode !== 'undefined' ||
       typeof updateUserDto.pushEnabled !== 'undefined' ||
       typeof updateUserDto.pushFrequency !== 'undefined' ||
-      typeof updateUserDto.emailEnabled !== 'undefined' ||
-      typeof updateUserDto.rememberPageScrollPosition !== 'undefined';
+      typeof updateUserDto.emailEnabled !== 'undefined';
 
     let preferenceUser = null;
 
@@ -82,14 +81,6 @@ export class UserService {
         userId,
         'emailEnabled',
         updateUserDto.emailEnabled,
-      );
-    }
-
-    if (typeof updateUserDto.rememberPageScrollPosition !== 'undefined') {
-      preferenceUser = await this.userRepo.updatePreference(
-        userId,
-        'rememberPageScrollPosition',
-        updateUserDto.rememberPageScrollPosition,
       );
     }
 
