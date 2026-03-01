@@ -37,13 +37,11 @@ import SpaceTrash from "@/pages/space/space-trash.tsx";
 import UserApiKeys from "@/ee/api-key/pages/user-api-keys";
 import WorkspaceApiKeys from "@/ee/api-key/pages/workspace-api-keys";
 import AiSettings from "@/ee/ai/pages/ai-settings.tsx";
-import { useScrollRestoration } from "@/hooks/use-scroll-restoration";
 
 export default function App() {
   const { t } = useTranslation();
   useRedirectToCloudSelect();
   useTrackOrigin();
-  useScrollRestoration();
 
   return (
     <>
