@@ -1,5 +1,5 @@
 /**
- * Краткая информация о странице, связанной со строкой базы данных.
+ * Short page info related to a database row.
  */
 export interface IDatabaseRowPage {
   id: string;
@@ -8,11 +8,11 @@ export interface IDatabaseRowPage {
   icon?: string | null;
   parentPageId?: string | null;
   /**
-   * Кастомные document fields страницы.
+   * Custom page document fields.
    *
-   * Источник — page.settings на backend (по аналогии с page API),
-   * при этом assignee/stakeholders могут быть скрыты в ответе,
-   * если соответствующие поля отключены в настройках space.
+   * Source: page.settings on the backend (similar to the page API),
+   * while assignee/stakeholders may be omitted from the response
+   * if corresponding fields are disabled in space settings.
    */
   customFields?: {
     status?: string | null;
@@ -22,7 +22,7 @@ export interface IDatabaseRowPage {
 }
 
 /**
- * Значение конкретной ячейки (связка pageId + propertyId).
+ * Value of a specific cell (pageId + propertyId pair).
  */
 export interface IDatabaseCellValue {
   id: string;
@@ -32,11 +32,11 @@ export interface IDatabaseCellValue {
 }
 
 /**
- * Расширенная модель строки для table view.
+ * Extended row model for the table view.
  *
- * Backend может возвращать только базовые поля строки,
- * поэтому часть полей сделана опциональной и аккуратно
- * обрабатывается на клиенте.
+ * The backend may return only base row fields,
+ * so some fields are optional and are carefully
+ * handled on the client.
  */
 export interface IDatabaseRowWithCells {
   id: string;
@@ -47,7 +47,7 @@ export interface IDatabaseRowWithCells {
 }
 
 /**
- * Состояние одной фильтрации в UI (ограничено 1-3 условиями).
+ * Single filter state in the UI (limited to 1-3 conditions).
  */
 export interface IDatabaseFilterCondition {
   propertyId: string;
@@ -56,7 +56,7 @@ export interface IDatabaseFilterCondition {
 }
 
 /**
- * Состояние сортировки по одному полю.
+ * Single-field sorting state.
  */
 export interface IDatabaseSortState {
   propertyId: string;

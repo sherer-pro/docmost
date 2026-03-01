@@ -19,6 +19,7 @@ import { DatabaseTableView } from '@/features/database/components/database-table
 import { Helmet } from 'react-helmet-async';
 import { getAppName } from '@/lib/config.ts';
 import { PageEditMode } from '@/features/user/types/user.types.ts';
+import { useTranslation } from 'react-i18next';
 
 enum DatabasePageMode {
   View = PageEditMode.Read,
@@ -26,13 +27,13 @@ enum DatabasePageMode {
 }
 
 /**
- * Основная страница database.
+ * Main database page.
  *
- * Здесь размещено табличное представление с inline-редактированием,
- * колонками свойств и базовыми операциями (добавление row/property,
- * фильтрация и сортировка).
+ * Hosts a table view with inline editing, property columns,
+ * and basic operations (row/property creation, filtering, sorting).
  */
 export default function DatabasePage() {
+  const { t } = useTranslation();
   const { databaseId, spaceSlug } = useParams();
   const { data: database } = useGetDatabaseQuery(databaseId);
   const updateDatabaseMutation = useUpdateDatabaseMutation(database?.spaceId, databaseId);
@@ -85,7 +86,7 @@ export default function DatabasePage() {
     <>
       <Helmet>
         <title>
-          {database?.name || 'Database'} - {getAppName()}
+          {database?.name || t('Database')} - {getAppName()}
         </title>
       </Helmet>
 
@@ -96,8 +97,8 @@ export default function DatabasePage() {
               value={mode}
               onChange={(value) => setMode(value as DatabasePageMode)}
               data={[
-                { label: 'View', value: DatabasePageMode.View },
-                { label: 'Edit', value: DatabasePageMode.Edit },
+                { label: t('View'), value: DatabasePageMode.View },
+                { label: t('Edit'), value: DatabasePageMode.Edit },
               ]}
             />
 
@@ -107,7 +108,7 @@ export default function DatabasePage() {
                 loading={updateDatabaseMutation.isPending}
                 disabled={!hasMetaChanges || !name.trim()}
               >
-                Save
+                {t('Save')}
               </Button>
             )}
           </Group>
@@ -115,24 +116,24 @@ export default function DatabasePage() {
           {isEditable ? (
             <>
               <TextInput
-                label="Title"
+                label={t('Title')}
                 value={name}
                 onChange={(event) => setName(event.currentTarget.value)}
-                placeholder="Database"
+                placeholder={t('Database')}
               />
               <Textarea
-                label="Description"
+                label={t('Description')}
                 value={description}
                 onChange={(event) => setDescription(event.currentTarget.value)}
-                placeholder="Table view"
+                placeholder={t('Table view')}
                 autosize
                 minRows={2}
               />
             </>
           ) : (
             <>
-              <Title order={2}>{database?.name || 'Database'}</Title>
-              <Text c="dimmed">{database?.description || 'Table view'}</Text>
+              <Title order={2}>{database?.name || t('Database')}</Title>
+              <Text c="dimmed">{database?.description || t('Table view')}</Text>
             </>
           )}
         </Stack>
