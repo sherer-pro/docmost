@@ -19,6 +19,7 @@ import {
   executeWithCursorPagination,
 } from '@docmost/db/pagination/cursor-pagination';
 import { InjectKysely } from 'nestjs-kysely';
+import { sql } from 'kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { generateJitteredKeyBetween } from 'fractional-indexing-jittered';
 import { MovePageDto } from '../dto/move-page.dto';
@@ -306,24 +307,57 @@ export class PageService {
     spaceId: string,
     pagination: PaginationOptions,
     pageId?: string,
-  ): Promise<CursorPaginationResult<Partial<Page> & { hasChildren: boolean }>> {
-    let query = this.db
+  ): Promise<
+    CursorPaginationResult<
+      Partial<Page> & {
+        hasChildren: boolean;
+        nodeType: string;
+        databaseId: string | null;
+      }
+    >
+  > {
+    /**
+     * Формируем единый поток узлов для sidebar:
+     * - обычные страницы (nodeType = page),
+     * - базы данных (nodeType = database), привязанные к pageId.
+     */
+    const query = this.db
       .selectFrom('pages')
+      .leftJoin('databases as linkedDatabase', (join) =>
+        join
+          .onRef('linkedDatabase.pageId', '=', 'pages.id')
+          .on('linkedDatabase.deletedAt', 'is', null),
+      )
       .select([
-        'id',
-        'slugId',
-        'title',
-        'icon',
-        'position',
-        'parentPageId',
-        'spaceId',
-        'creatorId',
-        'deletedAt',
-        'settings',
+        'pages.id as id',
+        'pages.slugId as slugId',
+        'pages.title as title',
+        'pages.icon as icon',
+        'pages.position as position',
+        'pages.parentPageId as parentPageId',
+        'pages.spaceId as spaceId',
+        'pages.creatorId as creatorId',
+        'pages.deletedAt as deletedAt',
       ])
-      .select((eb) => this.pageRepo.withHasChildren(eb))
-      .where('deletedAt', 'is', null)
-      .where('spaceId', '=', spaceId)
+      .select((eb) => [
+        sql<any>`pages.settings`.as('settings'),
+        sql<string>`'page'`.as('nodeType'),
+        sql<string | null>`null`.as('databaseId'),
+        sql<boolean>`(
+          ${this.pageRepo.withHasChildren(eb)}
+          or exists (
+            select 1
+            from databases child_database
+            inner join pages child_page on child_page.id = child_database.page_id
+            where child_database.deleted_at is null
+              and child_page.deleted_at is null
+              and child_page.parent_page_id = pages.id
+          )
+        )`.as('hasChildren'),
+      ])
+      .where('pages.deletedAt', 'is', null)
+      .where('pages.spaceId', '=', spaceId)
+      .where('linkedDatabase.id', 'is', null)
       .where(({ not, exists, selectFrom }) =>
         not(
           exists(
@@ -333,13 +367,34 @@ export class PageService {
               .where('databaseRows.archivedAt', 'is', null),
           ),
         ),
+      )
+      .$if(!!pageId, (qb) => qb.where('pages.parentPageId', '=', pageId))
+      .$if(!pageId, (qb) => qb.where('pages.parentPageId', 'is', null))
+      .unionAll(
+        this.db
+          .selectFrom('databases')
+          .innerJoin('pages as databasePage', 'databasePage.id', 'databases.pageId')
+          .select([
+            'databases.id as id',
+            sql<string | null>`null`.as('slugId'),
+            'databases.name as title',
+            'databases.icon as icon',
+            'databasePage.position as position',
+            'databasePage.parentPageId as parentPageId',
+            'databases.spaceId as spaceId',
+            'databases.creatorId as creatorId',
+            'databases.deletedAt as deletedAt',
+            sql<any>`null`.as('settings'),
+            sql<string>`'database'`.as('nodeType'),
+            'databases.id as databaseId',
+            sql<boolean>`false`.as('hasChildren'),
+          ])
+          .where('databases.deletedAt', 'is', null)
+          .where('databasePage.deletedAt', 'is', null)
+          .where('databases.spaceId', '=', spaceId)
+          .$if(!!pageId, (qb) => qb.where('databasePage.parentPageId', '=', pageId))
+          .$if(!pageId, (qb) => qb.where('databasePage.parentPageId', 'is', null)),
       );
-
-    if (pageId) {
-      query = query.where('parentPageId', '=', pageId);
-    } else {
-      query = query.where('parentPageId', 'is', null);
-    }
 
     return executeWithCursorPagination(query, {
       perPage: 250,

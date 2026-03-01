@@ -25,6 +25,7 @@ import {
   IMovePage,
   IPage,
   IPageInput,
+  ISidebarNode,
   SidebarPagesParams,
   PageCustomFieldStatus,
 } from "@/features/page/types/page.types";
@@ -198,7 +199,9 @@ export function useRestorePageMutation() {
         // Create the tree node data with hasChildren from backend
         const nodeData: SpaceTreeNode = {
           id: restoredPage.id,
+          nodeType: "page",
           slugId: restoredPage.slugId,
+          databaseId: null,
           name: restoredPage.title || "Untitled",
           icon: restoredPage.icon,
           position: restoredPage.position,
@@ -261,7 +264,7 @@ export function useRestorePageMutation() {
 
 export function useGetSidebarPagesQuery(
   data: SidebarPagesParams | null,
-): UseInfiniteQueryResult<InfiniteData<IPagination<IPage>, unknown>> {
+): UseInfiniteQueryResult<InfiniteData<IPagination<ISidebarNode>, unknown>> {
   return useInfiniteQuery({
     queryKey: ["sidebar-pages", data],
     enabled: !!data?.pageId || !!data?.spaceId,

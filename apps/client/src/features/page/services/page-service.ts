@@ -6,6 +6,7 @@ import {
   IMovePageToSpace,
   IPage,
   IPageInput,
+  ISidebarNode,
   SidebarPagesParams,
 } from '@/features/page/types/page.types';
 import { QueryParams } from "@/lib/types";
@@ -39,7 +40,7 @@ export async function deletePage(pageId: string, permanentlyDelete = false): Pro
 export async function getDeletedPages(
   spaceId: string,
   params?: QueryParams,
-): Promise<IPagination<IPage>> {
+ ): Promise<IPagination<IPage>> {
   const req = await api.post("/pages/trash", { spaceId, ...params });
   return req.data;
 }
@@ -64,22 +65,22 @@ export async function duplicatePage(data: ICopyPageToSpace): Promise<IPage> {
 
 export async function getSidebarPages(
   params: SidebarPagesParams,
-): Promise<IPagination<IPage>> {
+ ): Promise<IPagination<ISidebarNode>> {
   const req = await api.post("/pages/sidebar-pages", params);
   return req.data;
 }
 
 export async function getAllSidebarPages(
   params: SidebarPagesParams,
-): Promise<InfiniteData<IPagination<IPage>, unknown>> {
+): Promise<InfiniteData<IPagination<ISidebarNode>, unknown>> {
   let cursor: string | undefined = undefined;
-  const pages: IPagination<IPage>[] = [];
+  const pages: IPagination<ISidebarNode>[] = [];
   const pageParams: (string | undefined)[] = [];
 
   do {
     const req = await api.post("/pages/sidebar-pages", { ...params, cursor });
 
-    const data: IPagination<IPage> = req.data;
+    const data: IPagination<ISidebarNode> = req.data;
     pages.push(data);
     pageParams.push(cursor);
 

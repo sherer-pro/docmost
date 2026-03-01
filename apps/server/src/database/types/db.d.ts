@@ -169,6 +169,7 @@ export interface Databases {
   id: Generated<string>;
   lastUpdatedById: string | null;
   name: string;
+  pageId: string | null;
   spaceId: string;
   updatedAt: Generated<Timestamp>;
   workspaceId: string;

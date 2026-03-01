@@ -75,6 +75,28 @@ export interface ICopyPageToSpace {
   spaceId?: string;
 }
 
+
+export type SidebarNodeType = 'page' | 'database' | 'databaseRow';
+
+/**
+ * Унифицированный контракт узла для sidebar-дерева.
+ *
+ * nodeType определяет роутинг и набор действий в контекстном меню.
+ */
+export interface ISidebarNode {
+  id: string;
+  nodeType: SidebarNodeType;
+  title: string;
+  icon: string | null;
+  position: string;
+  spaceId: string;
+  parentPageId: string | null;
+  hasChildren: boolean;
+  slugId?: string | null;
+  databaseId?: string | null;
+  customFields?: PageCustomFields | null;
+}
+
 export interface SidebarPagesParams {
   spaceId?: string;
   pageId?: string;
