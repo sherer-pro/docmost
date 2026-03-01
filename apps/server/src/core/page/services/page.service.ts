@@ -427,15 +427,19 @@ export class PageService {
             sql<string>`'database'`.as('nodeType'),
             'databases.id as databaseId',
           ])
-          .select([
-            sql<boolean>`exists (
-              select 1
-              from pages as child_page
-              inner join database_rows as child_row on child_row.page_id = child_page.id
-              where child_page.parent_page_id = databasePage.id
-                and child_page.deleted_at is null
-                and child_row.archived_at is null
-            )`.as('hasChildren'),
+          .select((eb) => [
+            eb
+              .exists(
+                eb
+                  .selectFrom('pages as childPage')
+                  .innerJoin('databaseRows as childRow', 'childRow.pageId', 'childPage.id')
+                  .select('childPage.id')
+                  .whereRef('childPage.parentPageId', '=', 'databasePage.id')
+                  .where('childPage.deletedAt', 'is', null)
+                  .where('childRow.archivedAt', 'is', null),
+              )
+              .$castTo<boolean>()
+              .as('hasChildren'),
           ])
           .where('databases.deletedAt', 'is', null)
           .where('databasePage.deletedAt', 'is', null)
