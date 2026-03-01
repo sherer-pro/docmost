@@ -75,6 +75,7 @@ import { useSpaceQuery } from "@/features/space/queries/space-query.ts";
 import CopyPageModal from "../../components/copy-page-modal.tsx";
 import { duplicatePage } from "../../services/page-service.ts";
 import { StatusIndicator } from "@/components/ui/status-indicator.tsx";
+import { useCreateDatabaseRowMutation } from "@/features/database/queries/database-table-query.ts";
 
 interface SpaceTreeProps {
   spaceId: string;
@@ -461,6 +462,11 @@ function Node({
       ? `/s/${spaceSlug}/databases/${node.data.databaseId ?? node.data.id}`
       : buildPageUrl(spaceSlug, node.data.slugId ?? "", node.data.name);
 
+  const canOpenNode =
+    node.data.nodeType === "page" ||
+    node.data.nodeType === "database" ||
+    node.data.nodeType === "databaseRow";
+
   return (
     <>
       <Box
@@ -471,7 +477,7 @@ function Node({
         // @ts-ignore
         ref={dragHandle}
         onClick={(event) => {
-          if (node.data.nodeType !== "page" && node.data.nodeType !== "database") {
+          if (!canOpenNode) {
             event.preventDefault();
             return;
           }
@@ -485,8 +491,8 @@ function Node({
             toggleMobileSidebar();
           }
         }}
-        onMouseEnter={node.data.nodeType === "page" ? prefetchPage : undefined}
-        onMouseLeave={node.data.nodeType === "page" ? cancelPagePrefetch : undefined}
+        onMouseEnter={node.data.nodeType !== "database" ? prefetchPage : undefined}
+        onMouseLeave={node.data.nodeType !== "database" ? cancelPagePrefetch : undefined}
       >
         <PageArrow node={node} onExpandTree={() => handleLoadChildren(node)} />
 
@@ -517,13 +523,14 @@ function Node({
         <div className={classes.actions}>
           <NodeMenu node={node} treeApi={tree} spaceId={node.data.spaceId} />
 
-          {!tree.props.disableEdit && node.data.nodeType === "page" && (
+          {!tree.props.disableEdit &&
+            (node.data.nodeType === "page" || node.data.nodeType === "database") && (
             <CreateNode
               node={node}
               treeApi={tree}
               onExpandTree={() => handleLoadChildren(node)}
             />
-          )}
+            )}
         </div>
       </Box>
     </>
@@ -537,10 +544,35 @@ interface CreateNodeProps {
 }
 
 function CreateNode({ node, treeApi, onExpandTree }: CreateNodeProps) {
-  function handleCreate() {
+  const createDatabaseRowMutation = useCreateDatabaseRowMutation(
+    node.data.databaseId ?? node.data.id,
+  );
+
+  async function handleCreateDatabaseRow() {
+    if (createDatabaseRowMutation.isPending) {
+      return;
+    }
+
+    await createDatabaseRowMutation.mutateAsync({
+      parentPageId: node.id,
+    });
+
+    if (node.isClosed) {
+      node.open();
+    }
+
+    onExpandTree?.();
+  }
+
+  async function handleCreate() {
+    if (node.data.nodeType === "database") {
+      await handleCreateDatabaseRow();
+      return;
+    }
+
     if (node.data.hasChildren && node.children.length === 0) {
       node.toggle();
-      onExpandTree();
+      onExpandTree?.();
 
       setTimeout(() => {
         treeApi?.create({ type: "internal", parentId: node.id, index: 0 });
@@ -557,7 +589,7 @@ function CreateNode({ node, treeApi, onExpandTree }: CreateNodeProps) {
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
-        handleCreate();
+        void handleCreate();
       }}
     >
       <IconPlus style={{ width: rem(20), height: rem(20) }} stroke={2} />
