@@ -20,7 +20,7 @@ import { useClipboard } from "@/hooks/use-clipboard";
 import { useNavigate, useParams } from "react-router-dom";
 import { useConvertPageToDatabaseMutation, usePageQuery } from "@/features/page/queries/page-query.ts";
 import { useConvertDatabaseToPageMutation } from "@/features/database/queries/database-query.ts";
-import { buildPageUrl } from "@/features/page/page.utils.ts";
+import { buildDatabaseUrl, buildPageUrl } from "@/features/page/page.utils.ts";
 import { notifications } from "@mantine/notifications";
 import { modals } from "@mantine/modals";
 import { getAppUrl } from "@/lib/config.ts";
@@ -238,7 +238,7 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
       onConfirm: async () => {
         const result = await convertPageToDatabaseAsync(page.id);
         notifications.show({ message: t('Page converted to database') });
-        navigate(`/s/${spaceSlug}/databases/${result.databaseId}`);
+        navigate(buildDatabaseUrl(spaceSlug, result.slugId, page.title));
       },
     });
   };

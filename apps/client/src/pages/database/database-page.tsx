@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
+import { extractPageSlugId } from '@/lib';
 import { DatabaseTableView } from '@/features/database/components/database-table-view';
 import {
   DatabaseDescriptionEditor,
@@ -16,6 +17,7 @@ import {
   useGetDatabaseQuery,
   useUpdateDatabaseMutation,
 } from '@/features/database/queries/database-query.ts';
+import { usePageQuery } from '@/features/page/queries/page-query';
 import { IUpdateDatabasePayload } from '@/features/database/types/database.types.ts';
 import {
   SpaceCaslAction,
@@ -66,7 +68,13 @@ function getDescriptionDoc(
 
 export default function DatabasePage() {
   const { t } = useTranslation();
-  const { databaseId, spaceSlug } = useParams();
+  const { databaseSlug, databaseId: legacyDatabaseId, spaceSlug } = useParams();
+  const databasePageSlugId = extractPageSlugId(databaseSlug);
+
+  // Используем slug базы (как у страниц), чтобы получить page-узел и связанный databaseId.
+  const { data: databasePage } = usePageQuery({ pageId: databasePageSlugId });
+  const databaseId = databasePage?.databaseId ?? legacyDatabaseId;
+
   const { data: database } = useGetDatabaseQuery(databaseId);
   const { data: space } = useGetSpaceBySlugQuery(spaceSlug);
   const { mutateAsync: updateDatabaseMutationAsync } = useUpdateDatabaseMutation(

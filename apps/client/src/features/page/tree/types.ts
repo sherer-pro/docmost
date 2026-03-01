@@ -20,7 +20,7 @@ export type SpaceTreeNode = {
    */
   slugId?: string | null;
   /**
-   * Для database — целевой id базы, чтобы роутить на /databases/:id.
+   * Для database — id сущности базы (для API), а роут строится по slugId: /db/:slug.
    * Для page обычно null.
    */
   databaseId?: string | null;

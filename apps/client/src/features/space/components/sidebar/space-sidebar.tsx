@@ -46,6 +46,8 @@ import { notifications } from "@mantine/notifications";
 import { currentUserAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { PageEditMode } from "@/features/user/types/user.types.ts";
 import { queryClient } from "@/main.tsx";
+import { getPageById } from "@/features/page/services/page-service.ts";
+import { buildDatabaseUrl } from "@/features/page/page.utils.ts";
 
 export function SpaceSidebar() {
   const { t } = useTranslation();
@@ -108,6 +110,15 @@ export function SpaceSidebar() {
       });
 
       notifications.show({ message: t("Database created") });
+
+      // После создания базы пробуем открыть canonical URL формата /s/:space/db/:slug.
+      if (createdDatabase.pageId) {
+        const databasePage = await getPageById({ pageId: createdDatabase.pageId });
+        navigate(buildDatabaseUrl(spaceSlug, databasePage.slugId, databasePage.title));
+        return;
+      }
+
+      // Fallback для редких случаев, когда page-узел ещё не связан на момент ответа API.
       navigate(`/s/${spaceSlug}/databases/${createdDatabase.id}`);
     } catch {
       notifications.show({
