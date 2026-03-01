@@ -53,7 +53,6 @@ import {
   useDeleteDatabaseRowMutation,
 } from "@/features/database/queries/database-table-query.ts";
 import { IDatabase } from "@/features/database/types/database.types";
-import { IDatabaseRowWithCells } from "@/features/database/types/database-table.types";
 import { notifications } from "@mantine/notifications";
 import { StatusIndicator } from "@/components/ui/status-indicator.tsx";
 
@@ -63,8 +62,10 @@ export function SpaceSidebar() {
   const location = useLocation();
   const [opened, { open: openSettings, close: closeSettings }] =
     useDisclosure(false);
-  const [createDatabaseOpened, { open: openCreateDatabase, close: closeCreateDatabase }] =
-    useDisclosure(false);
+  const [
+    createDatabaseOpened,
+    { open: openCreateDatabase, close: closeCreateDatabase },
+  ] = useDisclosure(false);
   const [databaseName, setDatabaseName] = React.useState("");
   const [databaseDescription, setDatabaseDescription] = React.useState("");
   const [mobileSidebarOpened] = useAtom(mobileSidebarAtom);
@@ -106,7 +107,10 @@ export function SpaceSidebar() {
       notifications.show({ message: t("Database created") });
       navigate(`/s/${spaceSlug}/databases/${createdDatabase.id}`);
     } catch {
-      notifications.show({ message: t("Failed to create database"), color: "red" });
+      notifications.show({
+        message: t("Failed to create database"),
+        color: "red",
+      });
     }
   }
 
@@ -280,7 +284,9 @@ export function SpaceSidebar() {
                       className={classes.menuItemIcon}
                       stroke={2}
                     />
-                    <span className={classes.menuItemLabel}>{database.name}</span>
+                    <span className={classes.menuItemLabel}>
+                      {database.name}
+                    </span>
                     {isStatusFieldEnabled && database.status && (
                       <StatusIndicator
                         status={database.status}
@@ -324,7 +330,9 @@ export function SpaceSidebar() {
         <Textarea
           label={t("Description")}
           value={databaseDescription}
-          onChange={(event) => setDatabaseDescription(event.currentTarget.value)}
+          onChange={(event) =>
+            setDatabaseDescription(event.currentTarget.value)
+          }
           placeholder={t("Optional")}
           minRows={2}
         />
@@ -347,7 +355,6 @@ export function SpaceSidebar() {
   );
 }
 
-
 interface DatabaseRowsTreeProps {
   database: IDatabase;
   spaceSlug: string;
@@ -360,6 +367,7 @@ function DatabaseRowsTree({
   isStatusFieldEnabled,
 }: DatabaseRowsTreeProps) {
   const { t } = useTranslation();
+  const location = useLocation();
   const { data: rows = [] } = useDatabaseRowsQuery(database.id);
   const createRowMutation = useCreateDatabaseRowMutation(database.id);
   const deleteRowMutation = useDeleteDatabaseRowMutation(database.id);
@@ -378,25 +386,33 @@ function DatabaseRowsTree({
           leftSection={<IconPlus size={14} />}
           onClick={() => createRowMutation.mutate({})}
         >
-          {t('New row')}
+          {t("New row")}
         </Button>
       </Group>
 
       {rootRows.map((row) => {
         const title = row.page?.title || row.pageTitle || "untitled";
         const rowStatus = row.page?.customFields?.status;
+        const rowLink = `/s/${spaceSlug}/p/${row.page?.slugId || row.pageId}`;
+        const isActiveRow =
+          location.pathname.toLowerCase() === rowLink.toLowerCase();
 
         return (
-          <Group
+          <div
             key={row.pageId}
-            gap={4}
-            wrap="nowrap"
-            className={classes.rowTreeItem}
+            className={clsx(
+              classes.rowTreeItem,
+              isActiveRow ? classes.activeRowTreeItem : "",
+            )}
           >
             <UnstyledButton
               component={Link}
-              to={`/s/${spaceSlug}/p/${row.page?.slugId || row.pageId}`}
-              className={classes.menu}
+              to={rowLink}
+              className={clsx(
+                classes.menu,
+                classes.databaseRowLink,
+                isActiveRow ? classes.activeButton : "",
+              )}
             >
               <div className={classes.menuItemInner}>
                 <span className={classes.menuItemLabel}>{title}</span>
@@ -409,34 +425,44 @@ function DatabaseRowsTree({
               </div>
             </UnstyledButton>
 
-            <Menu withArrow position="bottom-end" width={180}>
-              <Menu.Target>
-                <ActionIcon
-                  variant="subtle"
-                  size="xs"
-                  className={classes.rowTreeMenuButton}
-                  aria-label={t('Row actions')}
-                >
-                  <IconDots size={14} />
-                </ActionIcon>
-              </Menu.Target>
-              <Menu.Dropdown>
-                <Menu.Item
-                  color="red"
-                  leftSection={<IconTrash size={14} />}
-                  onClick={() => deleteRowMutation.mutate(row.pageId)}
-                >
-                  {t('Delete')}
-                </Menu.Item>
-              </Menu.Dropdown>
-            </Menu>
-          </Group>
+            <div className={classes.rowTreeActions}>
+              <Menu shadow="md" width={200}>
+                <Menu.Target>
+                  <ActionIcon
+                    variant="transparent"
+                    c="gray"
+                    className={classes.rowTreeMenuButton}
+                    aria-label={t("Row actions")}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }}
+                  >
+                    <IconDots size={20} stroke={2} />
+                  </ActionIcon>
+                </Menu.Target>
+
+                <Menu.Dropdown>
+                  <Menu.Item
+                    color="red"
+                    leftSection={<IconTrash size={14} />}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      deleteRowMutation.mutate(row.pageId);
+                    }}
+                  >
+                    {t("Delete")}
+                  </Menu.Item>
+                </Menu.Dropdown>
+              </Menu>
+            </div>
+          </div>
         );
       })}
     </div>
   );
 }
-
 
 interface SpaceMenuProps {
   spaceId: string;
