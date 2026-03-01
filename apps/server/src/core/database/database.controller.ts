@@ -27,6 +27,7 @@ import {
   UpdateDatabaseDto,
   UpdateDatabasePropertyDto,
   UpdateDatabaseViewDto,
+  DatabaseRowPageIdDto,
 } from './dto/database.dto';
 
 @UseGuards(JwtAuthGuard)
@@ -194,6 +195,16 @@ export class DatabaseController {
     @AuthWorkspace() workspace: Workspace,
   ) {
     await this.databaseService.deleteRow(databaseId, pageId, user, workspace.id);
+  }
+
+
+  @Get('rows/:pageId/context')
+  async getRowContextByPage(
+    @Param() dto: DatabaseRowPageIdDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.databaseService.getRowContextByPage(dto.pageId, user, workspace.id);
   }
 
   /**

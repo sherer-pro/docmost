@@ -102,3 +102,20 @@
     background-color: light-dark(var(--mantine-color-gray-2), var(--mantine-color-dark-6));
     color: light-dark(var(--mantine-color-gray-7), var(--mantine-color-dark-0));
 }
+
+
+.rowTreeItem {
+    .rowTreeMenuButton {
+        opacity: 0;
+    }
+
+    &:hover {
+        .rowTreeMenuButton {
+            opacity: 1;
+        }
+    }
+}
+
+.rowTreeMenuButton {
+    margin-left: auto;
+}

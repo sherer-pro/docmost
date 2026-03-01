@@ -350,7 +350,7 @@ export function DatabaseTableView({
                 setFilters((prev) => prev.filter((_, itemIndex) => itemIndex !== index))
               }
             >
-              <IconTrash size={18} />
+              Remove
             </Button>
           </Group>
         ))}

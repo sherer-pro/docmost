@@ -101,6 +101,20 @@ export class DatabaseRowRepo {
       .execute();
   }
 
+
+  async findActiveByPageId(
+    pageId: string,
+    workspaceId: string,
+  ): Promise<DatabaseRow> {
+    return this.db
+      .selectFrom('databaseRows')
+      .selectAll()
+      .where('pageId', '=', pageId)
+      .where('workspaceId', '=', workspaceId)
+      .where('archivedAt', 'is', null)
+      .executeTakeFirst();
+  }
+
   /**
    * Находит строку по паре databaseId/pageId.
    */

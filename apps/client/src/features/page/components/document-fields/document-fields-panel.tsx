@@ -10,6 +10,7 @@ import {
   Stack,
   Table,
   Text,
+  TextInput,
   Tooltip,
   useMantineTheme,
 } from "@mantine/core";
@@ -31,6 +32,10 @@ import { PageEditMode } from "@/features/user/types/user.types.ts";
 import { AssigneeSpaceMemberSelect } from "@/features/page/components/document-fields/assignee-space-member-select.tsx";
 import { StakeholdersSpaceMemberMultiSelect } from "@/features/page/components/document-fields/stakeholders-space-member-multiselect.tsx";
 import { useSpaceMemberSelectOptions } from "@/features/page/components/document-fields/space-member-select-utils.ts";
+import {
+  useBatchUpdateDatabaseCellsMutation,
+  useDatabaseRowContextQuery,
+} from "@/features/database/queries/database-table-query";
 
 interface DocumentFieldsPanelProps {
   page: IPage;
@@ -92,6 +97,32 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
   );
 
   const { knownUsersById } = useSpaceMemberSelectOptions(page.spaceId, selectedMemberIds);
+  const { data: rowContext } = useDatabaseRowContextQuery(page.id);
+  const updateDatabaseCellsMutation = useBatchUpdateDatabaseCellsMutation(
+    rowContext?.database?.id,
+  );
+
+  const rowCellMap = useMemo(() => {
+    const map: Record<string, string> = {};
+
+    rowContext?.cells?.forEach((cell) => {
+      if (typeof cell.value === 'string') {
+        map[cell.propertyId] = cell.value;
+      } else if (cell.value === null || typeof cell.value === 'undefined') {
+        map[cell.propertyId] = '';
+      } else {
+        map[cell.propertyId] = JSON.stringify(cell.value);
+      }
+    });
+
+    return map;
+  }, [rowContext?.cells]);
+
+  const [dbFieldValues, setDbFieldValues] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    setDbFieldValues(rowCellMap);
+  }, [rowCellMap]);
 
   useEffect(() => {
     setFields(normalizeCustomFields(page.customFields));
@@ -285,6 +316,51 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
               </Table.Td>
             </Table.Tr>
           )}
+
+
+          {rowContext?.properties?.map((property) => (
+            <Table.Tr key={`db-field-${property.id}`}>
+              <Table.Td visibleFrom="sm">
+                <Text size="sm" fw={600}>{property.name}</Text>
+              </Table.Td>
+              <Table.Td>
+                {isFieldsReadOnly ? (
+                  <Text size="sm" my={8}>
+                    {dbFieldValues[property.id] || t('no data')}
+                  </Text>
+                ) : (
+                  <TextInput
+                    value={dbFieldValues[property.id] || ''}
+                    onChange={(event) => {
+                      if (!rowContext) {
+                        return;
+                      }
+
+                      const nextValue = event.currentTarget.value;
+
+                      setDbFieldValues((prev) => ({
+                        ...prev,
+                        [property.id]: nextValue,
+                      }));
+
+                      updateDatabaseCellsMutation.mutate({
+                        pageId: page.id,
+                        payload: {
+                          cells: [
+                            {
+                              propertyId: property.id,
+                              value: nextValue,
+                              operation: 'upsert',
+                            },
+                          ],
+                        },
+                      });
+                    }}
+                  />
+                )}
+              </Table.Td>
+            </Table.Tr>
+          ))}
         </Table.Tbody>
       </Table>
     </Paper>

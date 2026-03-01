@@ -10,6 +10,7 @@ import {
   deleteDatabaseProperty,
   deleteDatabaseRow,
   getDatabaseProperties,
+  getDatabaseRowContextByPage,
   getDatabaseRows,
 } from '@/features/database/services';
 import {
@@ -18,7 +19,7 @@ import {
   ICreateDatabaseRowPayload,
   IDatabaseProperty,
 } from '@/features/database/types/database.types';
-import { IDatabaseRowWithCells } from '@/features/database/types/database-table.types';
+import { IDatabaseRowContext, IDatabaseRowWithCells } from '@/features/database/types/database-table.types';
 import { queryClient } from '@/main.tsx';
 
 /**
@@ -44,6 +45,18 @@ export function useDatabaseRowsQuery(
     queryKey: ['database', databaseId, 'rows'],
     queryFn: () => getDatabaseRows(databaseId as string),
     enabled: Boolean(databaseId),
+  });
+}
+
+
+
+export function useDatabaseRowContextQuery(
+  pageId?: string,
+): UseQueryResult<IDatabaseRowContext | null, Error> {
+  return useQuery({
+    queryKey: ['database', 'row-context', pageId],
+    queryFn: () => getDatabaseRowContextByPage(pageId as string),
+    enabled: Boolean(pageId),
   });
 }
 
