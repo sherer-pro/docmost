@@ -57,7 +57,21 @@
 .menuItemInner {
     display: flex;
     align-items: center;
+    gap: rem(6px);
     flex: 1;
+    min-width: 0;
+}
+
+.menuItemLabel {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.statusIndicator {
+    margin-right: rem(8px);
 }
 
 .menuItemIcon {
@@ -105,6 +119,8 @@
 
 
 .rowTreeItem {
+    width: 100%;
+
     .rowTreeMenuButton {
         opacity: 0;
     }
@@ -118,4 +134,5 @@
 
 .rowTreeMenuButton {
     margin-left: auto;
+    flex-shrink: 0;
 }

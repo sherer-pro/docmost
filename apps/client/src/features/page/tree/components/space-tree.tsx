@@ -74,6 +74,7 @@ import { useToggleSidebar } from "@/components/layouts/global/hooks/hooks/use-to
 import { useSpaceQuery } from "@/features/space/queries/space-query.ts";
 import CopyPageModal from "../../components/copy-page-modal.tsx";
 import { duplicatePage } from "../../services/page-service.ts";
+import { StatusIndicator } from "@/components/ui/status-indicator.tsx";
 
 interface SpaceTreeProps {
   spaceId: string;
@@ -475,7 +476,10 @@ function Node({
         <span className={classes.text}>{node.data.name || t("untitled")}</span>
 
         {isStatusFieldEnabled && node.data.status && (
-          <StatusIndicator status={node.data.status} />
+          <StatusIndicator
+            status={node.data.status}
+            className={classes.statusIndicator}
+          />
         )}
 
         <div className={classes.actions}>
@@ -739,31 +743,6 @@ function NodeMenu({ node, treeApi, spaceId }: NodeMenuProps) {
         onClose={closeExportModal}
       />
     </>
-  );
-}
-
-const STATUS_COLOR_MAP: Record<string, string> = {
-  TODO: "var(--mantine-color-gray-6)",
-  IN_PROGRESS: "var(--mantine-color-blue-6)",
-  IN_REVIEW: "var(--mantine-color-indigo-6)",
-  DONE: "var(--mantine-color-green-6)",
-  REJECTED: "var(--mantine-color-red-6)",
-  ARCHIVED: "var(--mantine-color-dark-4)",
-};
-
-interface StatusIndicatorProps {
-  status: string;
-}
-
-function StatusIndicator({ status }: StatusIndicatorProps) {
-  return (
-    <span
-      className={classes.statusIndicator}
-      style={{
-        backgroundColor:
-          STATUS_COLOR_MAP[status] ?? "var(--mantine-color-gray-5)",
-      }}
-    />
   );
 }
 
