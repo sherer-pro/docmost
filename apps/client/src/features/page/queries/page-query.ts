@@ -25,6 +25,7 @@ import {
   IMovePage,
   IPage,
   IPageInput,
+  SidebarNodeType,
   ISidebarNode,
   SidebarPagesParams,
   PageCustomFieldStatus,
@@ -41,6 +42,23 @@ import { treeDataAtom } from "@/features/page/tree/atoms/tree-data-atom";
 import { SimpleTree } from "react-arborist";
 import { SpaceTreeNode } from "@/features/page/tree/types";
 import { useQueryEmit } from "@/features/websocket/use-query-emit";
+
+const DEFAULT_SIDEBAR_NODE_TYPES: SidebarNodeType[] = ["page", "database"];
+
+/**
+ * Гарантирует, что в запросе sidebar всегда присутствуют базовые типы узлов.
+ * Это нужно, чтобы страницы и базы одновременно отображались в общем SpaceTree.
+ */
+function withDefaultSidebarNodeTypes(params: SidebarPagesParams): SidebarPagesParams {
+  const includeNodeTypes = Array.from(
+    new Set([...(params.includeNodeTypes ?? []), ...DEFAULT_SIDEBAR_NODE_TYPES]),
+  );
+
+  return {
+    ...params,
+    includeNodeTypes,
+  };
+}
 
 export function usePageQuery(
   pageInput: Partial<IPageInput>,
@@ -268,10 +286,18 @@ export function useRestorePageMutation() {
 export function useGetSidebarPagesQuery(
   data: SidebarPagesParams | null,
 ): UseInfiniteQueryResult<InfiniteData<IPagination<ISidebarNode>, unknown>> {
+  const sidebarParams = data ? withDefaultSidebarNodeTypes(data) : null;
+
   return useInfiniteQuery({
-    queryKey: ["sidebar-pages", data],
-    enabled: !!data?.pageId || !!data?.spaceId,
-    queryFn: ({ pageParam }) => getSidebarPages({ ...data, cursor: pageParam }),
+    queryKey: ["sidebar-pages", sidebarParams],
+    enabled: !!sidebarParams?.pageId || !!sidebarParams?.spaceId,
+    queryFn: ({ pageParam }) => {
+      if (!sidebarParams) {
+        throw new Error("Sidebar params are required");
+      }
+
+      return getSidebarPages({ ...sidebarParams, cursor: pageParam });
+    },
     initialPageParam: undefined,
     getNextPageParam: (lastPage) =>
       lastPage.meta?.nextCursor ?? undefined,
@@ -279,10 +305,12 @@ export function useGetSidebarPagesQuery(
 }
 
 export function useGetRootSidebarPagesQuery(data: SidebarPagesParams) {
+  const sidebarParams = withDefaultSidebarNodeTypes(data);
+
   return useInfiniteQuery({
-    queryKey: ["root-sidebar-pages", data.spaceId],
+    queryKey: ["root-sidebar-pages", data.spaceId, sidebarParams.includeNodeTypes],
     queryFn: async ({ pageParam }) => {
-      return getSidebarPages({ ...data, cursor: pageParam });
+      return getSidebarPages({ ...sidebarParams, cursor: pageParam });
     },
     initialPageParam: undefined,
     getNextPageParam: (lastPage) =>
@@ -301,10 +329,12 @@ export function usePageBreadcrumbsQuery(
 }
 
 export async function fetchAllAncestorChildren(params: SidebarPagesParams) {
+  const sidebarParams = withDefaultSidebarNodeTypes(params);
+
   // not using a hook here, so we can call it inside a useEffect hook
   const response = await queryClient.fetchQuery({
-    queryKey: ["sidebar-pages", params],
-    queryFn: () => getAllSidebarPages(params),
+    queryKey: ["sidebar-pages", sidebarParams],
+    queryFn: () => getAllSidebarPages(sidebarParams),
     staleTime: 30 * 60 * 1000,
   });
 
