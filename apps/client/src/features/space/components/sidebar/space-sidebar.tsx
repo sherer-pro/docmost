@@ -9,6 +9,8 @@ import {
 } from "@mantine/core";
 import {
   IconArrowDown,
+  IconChevronDown,
+  IconChevronRight,
   IconDots,
   IconFileDatabase,
   IconFileExport,
@@ -21,6 +23,7 @@ import {
 import classes from "./space-sidebar.module.css";
 import React from "react";
 import { useAtom } from "jotai";
+import { atom } from "jotai";
 import { treeApiAtom } from "@/features/page/tree/atoms/tree-api-atom.ts";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
@@ -54,12 +57,31 @@ import { notifications } from "@mantine/notifications";
 import { StatusIndicator } from "@/components/ui/status-indicator.tsx";
 import { currentUserAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { PageEditMode } from "@/features/user/types/user.types.ts";
-import { MoveHandler, NodeRendererProps, SimpleTree, Tree } from "react-arborist";
+import { MoveHandler, NodeRendererProps, SimpleTree, Tree, TreeApi } from "react-arborist";
 import { useMovePageMutation, updateCacheOnMovePage } from "@/features/page/queries/page-query.ts";
 import { IMovePage } from "@/features/page/types/page.types.ts";
 import { generateJitteredKeyBetween } from "fractional-indexing-jittered";
 import { queryClient } from "@/main.tsx";
 import { useQueryEmit } from "@/features/websocket/use-query-emit.ts";
+import { OpenMap } from "react-arborist/dist/main/state/open-slice";
+import treeClasses from "@/features/page/tree/styles/tree.module.css";
+
+const openDatabaseRowsTreeNodesAtom = atom<Record<string, OpenMap>>({});
+
+/**
+ * Выполняет поверхностную проверку open-state дерева,
+ * чтобы избежать лишних перерисовок при одинаковом наборе раскрытых узлов.
+ */
+function isOpenStateEqual(prev: OpenMap, next: OpenMap) {
+  const prevKeys = Object.keys(prev);
+  const nextKeys = Object.keys(next);
+
+  if (prevKeys.length !== nextKeys.length) {
+    return false;
+  }
+
+  return prevKeys.every((key) => prev[key] === next[key]);
+}
 
 export function SpaceSidebar() {
   const { t } = useTranslation();
@@ -422,6 +444,10 @@ function DatabaseRowsTree({
   const createRowMutation = useCreateDatabaseRowMutation(database.id);
   const deleteRowMutation = useDeleteDatabaseRowMutation(database.id);
   const movePageMutation = useMovePageMutation();
+  const rowsTreeApiRef = React.useRef<TreeApi<DatabaseRowTreeNode> | null>(null);
+  const [openRowsTreeNodes, setOpenRowsTreeNodes] = useAtom(
+    openDatabaseRowsTreeNodesAtom,
+  );
 
   const treeData = React.useMemo(
     () => buildDatabaseRowsTree(rows, database.pageId),
@@ -574,36 +600,58 @@ function DatabaseRowsTree({
     const rowLink = `/s/${spaceSlug}/p/${node.data.slugId || node.data.pageId}`;
     const isActiveRow =
       location.pathname.toLowerCase() === rowLink.toLowerCase();
+    const isExpandable = node.children.length > 0;
 
     return (
-      <div
+      <Link
         style={style}
+        to={rowLink}
         className={clsx(
-          classes.rowTreeItem,
+          treeClasses.node,
+          node.state,
+          classes.databaseRowNode,
           isActiveRow ? classes.activeRowTreeItem : "",
         )}
       >
-        <UnstyledButton
-          component={Link}
-          to={rowLink}
-          className={clsx(
-            classes.menu,
-            classes.databaseRowLink,
-            isActiveRow ? classes.activeButton : "",
-          )}
+        <ActionIcon
+          size={20}
+          variant="subtle"
+          c="gray"
+          className={classes.rowTreeArrow}
+          aria-label={node.isOpen ? t("Collapse") : t("Expand")}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (isExpandable) {
+              node.toggle();
+            }
+          }}
         >
-          <div className={classes.menuItemInner}>
-            <span className={classes.menuItemLabel}>{node.data.title}</span>
-            {isStatusFieldEnabled && node.data.status && (
-              <StatusIndicator
-                status={node.data.status}
-                className={classes.statusIndicator}
-              />
-            )}
-          </div>
-        </UnstyledButton>
+          {isExpandable &&
+            (node.isOpen ? (
+              <IconChevronDown stroke={2} size={18} />
+            ) : (
+              <IconChevronRight stroke={2} size={18} />
+            ))}
+        </ActionIcon>
 
-        <div className={classes.rowTreeActions}>
+        <div
+          className={clsx(classes.menuItemInner, classes.databaseRowLink, {
+            [classes.activeButton]: isActiveRow,
+          })}
+        >
+          <span className={clsx(classes.menuItemLabel, treeClasses.text)}>
+            {node.data.title}
+          </span>
+          {isStatusFieldEnabled && node.data.status && (
+            <StatusIndicator
+              status={node.data.status}
+              className={classes.statusIndicator}
+            />
+          )}
+        </div>
+
+        <div className={treeClasses.actions}>
           <Menu shadow="md" width={200}>
             <Menu.Target>
               <ActionIcon
@@ -622,6 +670,17 @@ function DatabaseRowsTree({
 
             <Menu.Dropdown>
               <Menu.Item
+                leftSection={<IconPlus size={14} />}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  createRowMutation.mutate({ parentPageId: node.data.pageId });
+                }}
+              >
+                {t("New row")}
+              </Menu.Item>
+
+              <Menu.Item
                 color="red"
                 leftSection={<IconTrash size={14} />}
                 onClick={(e) => {
@@ -635,7 +694,7 @@ function DatabaseRowsTree({
             </Menu.Dropdown>
           </Menu>
         </div>
-      </div>
+      </Link>
     );
   };
 
@@ -671,12 +730,33 @@ function DatabaseRowsTree({
           return !rows.some((row) => row.pageId === parentId);
         }}
         rowHeight={30}
+        className={treeClasses.tree}
+        rowClassName={treeClasses.row}
         indent={16}
         paddingTop={4}
         paddingBottom={4}
         width="100%"
         height={Math.min(240, Math.max(40, treeData.length * 34 + 8))}
         onMove={handleMove}
+        ref={(ref) => {
+          rowsTreeApiRef.current = ref;
+        }}
+        onToggle={() => {
+          setOpenRowsTreeNodes((prev) => {
+            const currentState = prev[database.id] ?? {};
+            const nextState = rowsTreeApiRef.current?.openState ?? {};
+
+            if (isOpenStateEqual(currentState, nextState)) {
+              return prev;
+            }
+
+            return {
+              ...prev,
+              [database.id]: nextState,
+            };
+          });
+        }}
+        initialOpenState={openRowsTreeNodes[database.id] ?? {}}
       >
         {renderNode}
       </Tree>

@@ -128,20 +128,8 @@
   color: light-dark(var(--mantine-color-gray-7), var(--mantine-color-dark-0));
 }
 
-.rowTreeItem {
-  width: 100%;
-  position: relative;
-
-  &:hover {
-    background-color: light-dark(
-      var(--mantine-color-gray-3),
-      var(--mantine-color-dark-5)
-    );
-
-    .rowTreeActions {
-      visibility: visible;
-    }
-  }
+.databaseRowNode {
+  width: calc(100% - rem(4px));
 }
 
 .activeRowTreeItem {
@@ -152,8 +140,15 @@
 }
 
 .databaseRowLink {
-  width: calc(100% - rem(4px));
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
   padding-right: rem(34px);
+}
+
+.rowTreeArrow {
+  flex-shrink: 0;
 }
 
 .rowTreeActions {
