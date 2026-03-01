@@ -13,7 +13,7 @@ import { DatabaseExportFormat } from '@/features/database/types/database.types';
 import { historyAtoms } from '@/features/page-history/atoms/history-atoms.ts';
 import MovePageModal from '@/features/page/components/move-page-modal.tsx';
 import { useDeletePageModal } from '@/features/page/hooks/use-delete-page-modal.tsx';
-import { buildPageUrl } from '@/features/page/page.utils.ts';
+import { buildDatabaseUrl, buildPageUrl } from '@/features/page/page.utils.ts';
 import { usePageQuery, useRemovePageMutation } from '@/features/page/queries/page-query.ts';
 import { useConvertDatabaseToPageMutation } from '@/features/database/queries/database-query.ts';
 import ShareModal from '@/features/share/components/share-modal.tsx';
@@ -49,12 +49,15 @@ export default function DatabaseHeaderMenu({
     useConvertDatabaseToPageMutation(page?.spaceId, databaseId);
 
   /**
-   * Для базы всегда оставляем прямую ссылку на database-route.
-   * Этот пункт используется как fallback, даже когда доступна связанная страница.
+   * Копирует canonical-ссылку на database-страницу в формате /s/:space/db/:slug.
+   * Если slug связанной page пока неизвестен, безопасно откатываемся на legacy URL.
    */
   const handleCopyDatabaseLink = () => {
-    const databaseUrl = `${getAppUrl()}/s/${spaceSlug}/databases/${databaseId}`;
-    clipboard.copy(databaseUrl);
+    const databasePath = page?.slugId
+      ? buildDatabaseUrl(spaceSlug, page.slugId, page.title)
+      : `/s/${spaceSlug}/databases/${databaseId}`;
+
+    clipboard.copy(`${getAppUrl()}${databasePath}`);
     notifications.show({ message: t('Link copied') });
   };
 

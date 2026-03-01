@@ -25,7 +25,7 @@ export function useGetDatabasesBySpaceQuery(
 /**
  * Returns a single database by id.
  *
- * This hook is used by the /s/:spaceSlug/databases/:databaseId route page
+ * This hook is used by the /s/:spaceSlug/db/:databaseSlug route page
  * to load metadata for the selected database.
  */
 export function useGetDatabaseQuery(
