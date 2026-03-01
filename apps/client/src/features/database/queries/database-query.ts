@@ -2,6 +2,8 @@ import { useMutation, useQuery, UseQueryResult } from "@tanstack/react-query";
 import { createDatabase, getDatabase, getDatabases } from "@/features/database/services";
 import { IDatabase } from "@/features/database/types/database.types";
 import { ICreateDatabasePayload } from "@/features/database/types/database.types";
+import { IUpdateDatabasePayload } from "@/features/database/types/database.types";
+import { updateDatabase } from "@/features/database/services/database-service";
 import { queryClient } from "@/main";
 
 /**
@@ -40,6 +42,28 @@ export function useCreateDatabaseMutation(spaceId?: string) {
   return useMutation({
     mutationFn: (payload: ICreateDatabasePayload) => createDatabase(payload),
     onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["databases", "space", spaceId],
+      });
+    },
+  });
+}
+
+/**
+ * Обновляет метаданные базы данных и синхронизирует кеш.
+ *
+ * После успешного PATCH инвалидируются:
+ * - детальная запись текущей базы;
+ * - список баз данных в текущем пространстве.
+ */
+export function useUpdateDatabaseMutation(spaceId?: string, databaseId?: string) {
+  return useMutation({
+    mutationFn: (payload: IUpdateDatabasePayload) =>
+      updateDatabase(databaseId as string, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["database", databaseId],
+      });
       queryClient.invalidateQueries({
         queryKey: ["databases", "space", spaceId],
       });
