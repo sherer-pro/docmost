@@ -197,7 +197,7 @@ export function DatabaseTableView({
               setNewPropertyName('');
             }}
           >
-            + property
+            Property
           </Button>
 
           <Button
@@ -205,7 +205,7 @@ export function DatabaseTableView({
             leftSection={<IconPlus size={14} />}
             onClick={() => createRowMutation.mutate({})}
           >
-            + row
+            Row
           </Button>
         </Group>
 
@@ -348,7 +348,7 @@ export function DatabaseTableView({
                 setFilters((prev) => prev.filter((_, itemIndex) => itemIndex !== index))
               }
             >
-              Remove
+              <IconTrash size={18} />
             </Button>
           </Group>
         ))}
@@ -356,10 +356,11 @@ export function DatabaseTableView({
         <Button
           w="fit-content"
           variant="subtle"
+          leftSection={<IconPlus size={14} />}
           disabled={filters.length >= 3}
           onClick={() => setFilters((prev) => [...prev, { ...DEFAULT_FILTER }])}
         >
-          + filter
+          Filter
         </Button>
       </Stack>
 
