@@ -113,7 +113,6 @@ export type Comment = Selectable<Comments>;
 export type InsertableComment = Insertable<Comments>;
 export type UpdatableComment = Updateable<Omit<Comments, 'id'>>;
 
-
 // Database
 export type Database = Selectable<Databases>;
 export type InsertableDatabase = Insertable<Databases>;
