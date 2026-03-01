@@ -14,6 +14,7 @@ import {
   IUpdateDatabasePropertyPayload,
   IUpdateDatabaseViewPayload,
 } from "@/features/database/types/database.types";
+import { IDatabaseRowWithCells } from "@/features/database/types/database-table.types";
 
 /**
  * Создаёт базу данных в выбранном пространстве.
@@ -118,8 +119,10 @@ export async function deleteDatabaseProperty(
 /**
  * Возвращает строки базы данных.
  */
-export async function getDatabaseRows(databaseId: string): Promise<IDatabaseRow[]> {
-  const req = await api.get<IDatabaseRow[]>(`/databases/${databaseId}/rows`);
+export async function getDatabaseRows(
+  databaseId: string,
+): Promise<IDatabaseRowWithCells[]> {
+  const req = await api.get<IDatabaseRowWithCells[]>(`/databases/${databaseId}/rows`);
   return req.data;
 }
 
