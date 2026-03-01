@@ -26,7 +26,6 @@ import { UpdateEvent } from "@/features/websocket/types";
 import localEmitter from "@/lib/local-emitter.ts";
 import { currentUserAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { PageEditMode } from "@/features/user/types/user.types.ts";
-import { DEFAULT_REMEMBER_PAGE_SCROLL_POSITION } from "@/features/user/constants/scroll-preferences.ts";
 import { searchSpotlight } from "@/features/search/constants.ts";
 
 export interface TitleEditorProps {
@@ -55,9 +54,6 @@ export function TitleEditor({
   const [currentUser] = useAtom(currentUserAtom);
   const userPageEditMode =
     currentUser?.user?.settings?.preferences?.pageEditMode ?? PageEditMode.Edit;
-  const rememberPageScrollPosition =
-    currentUser?.user?.settings?.preferences?.rememberPageScrollPosition ??
-    DEFAULT_REMEMBER_PAGE_SCROLL_POSITION;
 
   const titleEditor = useEditor({
     extensions: [
@@ -164,17 +160,6 @@ export function TitleEditor({
       // guard against Cannot access view['hasFocus'] error
       if (!titleEditor?.isInitialized) return;
 
-      /**
-       * Если пользователь включил восстановление скролла и страница уже не в самом верху,
-       * отключаем автофокус заголовка, чтобы избежать конкуренции за позицию viewport.
-       *
-       * На некоторых браузерах/движках даже безопасный focus с scrollIntoView: false
-       * всё равно может провоцировать неожиданный сдвиг прокрутки при позднем монтировании редактора.
-       */
-      if (rememberPageScrollPosition && window.scrollY > 0) {
-        return;
-      }
-
       if (!editable || userPageEditMode !== PageEditMode.Edit) {
         return;
       }
@@ -194,7 +179,7 @@ export function TitleEditor({
     return () => {
       window.clearTimeout(autofocusTimeoutId);
     };
-  }, [editable, rememberPageScrollPosition, titleEditor, userPageEditMode]);
+  }, [editable, titleEditor, userPageEditMode]);
 
   useEffect(() => {
     return () => {
