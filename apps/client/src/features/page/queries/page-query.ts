@@ -212,7 +212,18 @@ export function useConvertPageToDatabaseMutation() {
   return useMutation({
     mutationFn: (pageId: string) => convertPageToDatabase(pageId),
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['pages', data.pageId] });
+      /**
+       * Важно инвалидировать ВСЕ кэши `pages`, а не только ключ по UUID.
+       *
+       * После конвертации роут переходит на `/db/:slug`, где `usePageQuery`
+       * запрашивает страницу именно по slugId. До конвертации в кэше уже
+       * может лежать запись `['pages', slugId]` без `databaseId`, и при
+       * `staleTime` в 5 минут UI временно получает устаревший узел, что
+       * визуально проявляется как «пустая страница» до ручного refresh.
+       */
+      queryClient.invalidateQueries({
+        predicate: (item) => item.queryKey[0] === 'pages',
+      });
       queryClient.invalidateQueries({ queryKey: ['root-sidebar-pages'] });
       queryClient.invalidateQueries({ queryKey: ['sidebar-pages'] });
       queryClient.invalidateQueries({ queryKey: ['database', data.databaseId] });
