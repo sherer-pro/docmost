@@ -577,7 +577,6 @@ export class PageService {
         {
           expression: 'position',
           direction: 'asc',
-          orderModifier: (ob) => ob.collate('C').asc(),
         },
         { expression: 'id', direction: 'asc' },
       ],
