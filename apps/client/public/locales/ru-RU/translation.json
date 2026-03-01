@@ -867,5 +867,13 @@
   "database.editor.addDescription": "Add description",
   "database.editor.saving": "Saving...",
   "database.editor.saved": "Saved",
-  "database.editor.error": "Could not update"
+  "database.editor.error": "Could not update",
+  "Convert to database": "Convert to database",
+  "Convert to page": "Convert to page",
+  "Convert page to database?": "Convert page to database?",
+  "Convert database to page?": "Convert database to page?",
+  "The current page will become a database root. Existing child pages will be attached as database rows and keep their nested structure.": "The current page will become a database root. Existing child pages will be attached as database rows and keep their nested structure.",
+  "The database view, properties and row bindings will be deactivated. Child pages will stay in the tree as regular pages.": "The database view, properties and row bindings will be deactivated. Child pages will stay in the tree as regular pages.",
+  "Page converted to database": "Page converted to database",
+  "Database converted to page": "Database converted to page"
 }
