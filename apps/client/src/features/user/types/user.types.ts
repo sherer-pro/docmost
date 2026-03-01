@@ -23,7 +23,6 @@ export interface IUser {
   pushEnabled: boolean; // used for update
   emailEnabled: boolean; // used for update
   pushFrequency: PushFrequency; // used for update
-  rememberPageScrollPosition: boolean; // used for update
   hasGeneratedPassword?: boolean;
   canAccessMembersDirectory?: boolean;
 }
@@ -40,7 +39,6 @@ export interface IUserSettings {
     pushEnabled: boolean;
     emailEnabled: boolean;
     pushFrequency: PushFrequency;
-    rememberPageScrollPosition: boolean;
   };
 }
 
