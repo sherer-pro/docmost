@@ -318,10 +318,17 @@ export class PageService {
       }
     >
   > {
+    /**
+     * Keep backward-compatible default behavior for sidebar pages endpoint.
+     *
+     * By default, root sidebar fetches only regular page nodes. Database nodes
+     * are opt-in through includeNodeTypes to avoid changing pagination shape
+     * and UX unexpectedly for clients that still render databases separately.
+     */
     const requestedNodeTypes =
       includeNodeTypes && includeNodeTypes.length > 0
         ? includeNodeTypes
-        : (['page', 'database'] satisfies SidebarNodeType[]);
+        : (['page'] satisfies SidebarNodeType[]);
 
     const includePages = requestedNodeTypes.some((type) =>
       ['page', 'databaseRow'].includes(type),
