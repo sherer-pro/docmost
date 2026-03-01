@@ -82,6 +82,22 @@ interface SpaceTreeProps {
 
 const openTreeNodesAtom = atom<OpenMap>({});
 
+/**
+ * Сравнивает два состояния раскрытия дерева.
+ * Нужен лёгкий shallow-check, чтобы не триггерить лишний setState
+ * и не запускать каскадные перерисовки при одинаковом наборе открытых узлов.
+ */
+function isOpenStateEqual(prev: OpenMap, next: OpenMap) {
+  const prevKeys = Object.keys(prev);
+  const nextKeys = Object.keys(next);
+
+  if (prevKeys.length !== nextKeys.length) {
+    return false;
+  }
+
+  return prevKeys.every((key) => prev[key] === next[key]);
+}
+
 export default function SpaceTree({ spaceId, readOnly }: SpaceTreeProps) {
   const { t } = useTranslation();
   const { pageSlug } = useParams();
@@ -274,7 +290,17 @@ export default function SpaceTree({ spaceId, readOnly }: SpaceTreeProps) {
           overscanCount={10}
           dndRootElement={rootElement.current}
           onToggle={() => {
-            setOpenTreeNodes(treeApiRef.current?.openState);
+            const nextOpenState = treeApiRef.current?.openState ?? {};
+
+            setOpenTreeNodes((prevOpenState) => {
+              // Обновляем atom только если состояние действительно поменялось,
+              // иначе получаем «самоподдерживающиеся» обновления при больших ветках.
+              if (isOpenStateEqual(prevOpenState, nextOpenState)) {
+                return prevOpenState;
+              }
+
+              return nextOpenState;
+            });
           }}
           initialOpenState={openTreeNodes}
         >
@@ -330,10 +356,13 @@ function Node({
 
   async function handleLoadChildren(node: NodeApi<SpaceTreeNode>) {
     if (!node.data.hasChildren) return;
-    // in conflict with use-query-subscription.ts => case "addTreeNode","moveTreeNode" etc with websocket
-    // if (node.data.children && node.data.children.length > 0) {
-    //   return;
-    // }
+
+    // Если дети уже подгружены локально, повторный запрос не нужен.
+    // Это особенно важно для длинных списков: лишний appendChildren
+    // приводит к постоянным обновлениям дерева и деградации UI.
+    if (node.children && node.children.length > 0) {
+      return;
+    }
 
     try {
       const params: SidebarPagesParams = {
