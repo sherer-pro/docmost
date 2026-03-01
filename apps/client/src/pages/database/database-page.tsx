@@ -1,82 +1,40 @@
-import {
-  Button,
-  Container,
-  Group,
-  SegmentedControl,
-  Stack,
-  Text,
-  TextInput,
-  Textarea,
-  Title,
-} from '@mantine/core';
-import { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
-import {
-  useGetDatabaseQuery,
-  useUpdateDatabaseMutation,
-} from '@/features/database/queries/database-query.ts';
-import { DatabaseTableView } from '@/features/database/components/database-table-view';
+import { Container } from '@mantine/core';
 import { Helmet } from 'react-helmet-async';
-import { getAppName } from '@/lib/config.ts';
-import { PageEditMode } from '@/features/user/types/user.types.ts';
 import { useTranslation } from 'react-i18next';
+import { useParams } from 'react-router-dom';
+import { DatabaseTableView } from '@/features/database/components/database-table-view';
+import DatabaseHeader from '@/features/database/components/header/database-header.tsx';
+import { useGetDatabaseQuery } from '@/features/database/queries/database-query.ts';
+import { useGetSpaceBySlugQuery } from '@/features/space/queries/space-query.ts';
+import {
+  SpaceCaslAction,
+  SpaceCaslSubject,
+} from '@/features/space/permissions/permissions.type.ts';
+import { useSpaceAbility } from '@/features/space/permissions/use-space-ability.ts';
+import { PageEditMode } from '@/features/user/types/user.types.ts';
+import { userAtom } from '@/features/user/atoms/current-user-atom.ts';
+import { getAppName } from '@/lib/config.ts';
+import { useAtomValue } from 'jotai';
 
-enum DatabasePageMode {
-  View = PageEditMode.Read,
-  Edit = PageEditMode.Edit,
-}
-
-/**
- * Main database page.
- *
- * Hosts a table view with inline editing, property columns,
- * and basic operations (row/property creation, filtering, sorting).
- */
 export default function DatabasePage() {
   const { t } = useTranslation();
   const { databaseId, spaceSlug } = useParams();
   const { data: database } = useGetDatabaseQuery(databaseId);
-  const updateDatabaseMutation = useUpdateDatabaseMutation(database?.spaceId, databaseId);
+  const { data: space } = useGetSpaceBySlugQuery(spaceSlug);
+  const currentUser = useAtomValue(userAtom);
 
-  const [mode, setMode] = useState<DatabasePageMode>(DatabasePageMode.Edit);
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
+  const spaceRules = space?.membership?.permissions;
+  const spaceAbility = useSpaceAbility(spaceRules);
 
-  const isEditable = mode === DatabasePageMode.Edit;
+  const readOnly = spaceAbility.cannot(
+    SpaceCaslAction.Manage,
+    SpaceCaslSubject.Page,
+  );
 
-  useEffect(() => {
-    if (!database) {
-      return;
-    }
+  const userPageEditMode =
+    currentUser?.user?.settings?.preferences?.pageEditMode ?? PageEditMode.Edit;
 
-    setName(database.name || '');
-    setDescription(database.description || '');
-  }, [database?.id, database?.name, database?.description]);
-
-  const hasMetaChanges = useMemo(() => {
-    if (!database) {
-      return false;
-    }
-
-    const normalizedName = name.trim();
-    const normalizedDescription = description.trim();
-
-    return (
-      normalizedName !== (database.name || '').trim() ||
-      normalizedDescription !== (database.description || '').trim()
-    );
-  }, [database, name, description]);
-
-  const handleSaveMeta = async () => {
-    if (!database || !databaseId) {
-      return;
-    }
-
-    await updateDatabaseMutation.mutateAsync({
-      name: name.trim() || database.name,
-      description: description.trim(),
-    });
-  };
+  const isEditable = !readOnly && userPageEditMode === PageEditMode.Edit;
 
   if (!databaseId || !spaceSlug) {
     return null;
@@ -90,54 +48,14 @@ export default function DatabasePage() {
         </title>
       </Helmet>
 
-      <Container size="xl" py="xl">
-        <Stack gap="xs" mb="lg">
-          <Group justify="space-between" align="end">
-            <SegmentedControl
-              value={mode}
-              onChange={(value) => setMode(value as DatabasePageMode)}
-              data={[
-                { label: t('View'), value: DatabasePageMode.View },
-                { label: t('Edit'), value: DatabasePageMode.Edit },
-              ]}
-            />
+      <DatabaseHeader
+        spaceSlug={spaceSlug}
+        spaceName={space?.name}
+        databaseName={database?.name}
+        readOnly={readOnly}
+      />
 
-            {isEditable && (
-              <Button
-                onClick={handleSaveMeta}
-                loading={updateDatabaseMutation.isPending}
-                disabled={!hasMetaChanges || !name.trim()}
-              >
-                {t('Save')}
-              </Button>
-            )}
-          </Group>
-
-          {isEditable ? (
-            <>
-              <TextInput
-                label={t('Title')}
-                value={name}
-                onChange={(event) => setName(event.currentTarget.value)}
-                placeholder={t('Database')}
-              />
-              <Textarea
-                label={t('Description')}
-                value={description}
-                onChange={(event) => setDescription(event.currentTarget.value)}
-                placeholder={t('Table view')}
-                autosize
-                minRows={2}
-              />
-            </>
-          ) : (
-            <>
-              <Title order={2}>{database?.name || t('Database')}</Title>
-              <Text c="dimmed">{database?.description || t('Table view')}</Text>
-            </>
-          )}
-        </Stack>
-
+      <Container size="xl" py="xl" pt={60}>
         {database?.spaceId && (
           <DatabaseTableView
             databaseId={databaseId}
