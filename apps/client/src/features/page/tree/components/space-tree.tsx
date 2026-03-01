@@ -14,7 +14,7 @@ import {
   useUpdatePageMutation,
 } from "@/features/page/queries/page-query.ts";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import classes from "@/features/page/tree/styles/tree.module.css";
 import { ActionIcon, Box, Menu, rem, Text } from "@mantine/core";
 import {
@@ -331,6 +331,7 @@ function Node({
   const [, appendChildren] = useAtom(appendNodeChildrenAtom);
   const emit = useQueryEmit();
   const { spaceSlug } = useParams();
+  const navigate = useNavigate();
   const timerRef = useRef(null);
   const [mobileSidebarOpened] = useAtom(mobileSidebarAtom);
   const toggleMobileSidebar = useToggleSidebar(mobileSidebarAtom);
@@ -390,10 +391,19 @@ function Node({
   const handleEmojiIconClick = (e: any) => {
     e.preventDefault();
     e.stopPropagation();
+
+    // Для баз данных пока не даём inline-редактирование эмодзи через page endpoint.
+    if (node.data.nodeType !== "page") {
+      return;
+    }
   };
 
   const handleEmojiSelect = (emoji: { native: string }) => {
     handleUpdateNodeIcon(node.id, emoji.native);
+    if (node.data.nodeType !== "page") {
+      return;
+    }
+
     updatePageMutation
       .mutateAsync({ pageId: node.id, icon: emoji.native })
       .then((data) => {
@@ -410,6 +420,10 @@ function Node({
   };
 
   const handleRemoveEmoji = () => {
+    if (node.data.nodeType !== "page") {
+      return;
+    }
+
     handleUpdateNodeIcon(node.id, null);
     updatePageMutation.mutateAsync({ pageId: node.id, icon: null });
 
@@ -437,7 +451,15 @@ function Node({
     }, 650);
   }
 
-  const pageUrl = buildPageUrl(spaceSlug, node.data.slugId, node.data.name);
+  /**
+   * Единая маршрутизация по дискриминатору узла:
+   * - page -> /p/:slug
+   * - database -> /databases/:id
+   */
+  const pageUrl =
+    node.data.nodeType === "database"
+      ? `/s/${spaceSlug}/databases/${node.data.databaseId ?? node.data.id}`
+      : buildPageUrl(spaceSlug, node.data.slugId ?? "", node.data.name);
 
   return (
     <>
@@ -448,13 +470,23 @@ function Node({
         to={pageUrl}
         // @ts-ignore
         ref={dragHandle}
-        onClick={() => {
+        onClick={(event) => {
+          if (node.data.nodeType !== "page" && node.data.nodeType !== "database") {
+            event.preventDefault();
+            return;
+          }
+
+          if (node.data.nodeType === "database") {
+            event.preventDefault();
+            navigate(pageUrl);
+          }
+
           if (mobileSidebarOpened) {
             toggleMobileSidebar();
           }
         }}
-        onMouseEnter={prefetchPage}
-        onMouseLeave={cancelPagePrefetch}
+        onMouseEnter={node.data.nodeType === "page" ? prefetchPage : undefined}
+        onMouseLeave={node.data.nodeType === "page" ? cancelPagePrefetch : undefined}
       >
         <PageArrow node={node} onExpandTree={() => handleLoadChildren(node)} />
 
@@ -485,7 +517,7 @@ function Node({
         <div className={classes.actions}>
           <NodeMenu node={node} treeApi={tree} spaceId={node.data.spaceId} />
 
-          {!tree.props.disableEdit && (
+          {!tree.props.disableEdit && node.data.nodeType === "page" && (
             <CreateNode
               node={node}
               treeApi={tree}
@@ -543,6 +575,7 @@ function NodeMenu({ node, treeApi, spaceId }: NodeMenuProps) {
   const { t } = useTranslation();
   const clipboard = useClipboard({ timeout: 500 });
   const { spaceSlug } = useParams();
+  const navigate = useNavigate();
   const { openDeleteModal } = useDeletePageModal();
   const [data, setData] = useAtom(treeDataAtom);
   const emit = useQueryEmit();
@@ -558,9 +591,12 @@ function NodeMenu({ node, treeApi, spaceId }: NodeMenuProps) {
   ] = useDisclosure(false);
 
   const handleCopyLink = () => {
-    const pageUrl =
-      getAppUrl() + buildPageUrl(spaceSlug, node.data.slugId, node.data.name);
-    clipboard.copy(pageUrl);
+    const nodeUrl =
+      node.data.nodeType === "database"
+        ? `${getAppUrl()}/s/${spaceSlug}/databases/${node.data.databaseId ?? node.id}`
+        : getAppUrl() + buildPageUrl(spaceSlug, node.data.slugId ?? "", node.data.name);
+
+    clipboard.copy(nodeUrl);
     notifications.show({ message: t("Link copied") });
   };
 
@@ -583,7 +619,9 @@ function NodeMenu({ node, treeApi, spaceId }: NodeMenuProps) {
       // Add the duplicated page to the tree
       const treeNodeData: SpaceTreeNode = {
         id: duplicatedPage.id,
+        nodeType: "page",
         slugId: duplicatedPage.slugId,
+        databaseId: null,
         name: duplicatedPage.title,
         position: duplicatedPage.position,
         spaceId: duplicatedPage.spaceId,
@@ -669,7 +707,7 @@ function NodeMenu({ node, treeApi, spaceId }: NodeMenuProps) {
             {t("Export page")}
           </Menu.Item>
 
-          {!(treeApi.props.disableEdit as boolean) && (
+          {node.data.nodeType === "page" && !(treeApi.props.disableEdit as boolean) && (
             <>
               <Menu.Item
                 leftSection={<IconCopy size={16} />}
@@ -721,27 +759,31 @@ function NodeMenu({ node, treeApi, spaceId }: NodeMenuProps) {
         </Menu.Dropdown>
       </Menu>
 
-      <MovePageModal
-        pageId={node.id}
-        slugId={node.data.slugId}
-        currentSpaceSlug={spaceSlug}
-        onClose={closeMoveSpaceModal}
-        open={movePageModalOpened}
-      />
+      {node.data.nodeType === "page" && (
+        <>
+          <MovePageModal
+            pageId={node.id}
+            slugId={node.data.slugId ?? ""}
+            currentSpaceSlug={spaceSlug}
+            onClose={closeMoveSpaceModal}
+            open={movePageModalOpened}
+          />
 
-      <CopyPageModal
-        pageId={node.id}
-        currentSpaceSlug={spaceSlug}
-        onClose={closeCopySpaceModal}
-        open={copyPageModalOpened}
-      />
+          <CopyPageModal
+            pageId={node.id}
+            currentSpaceSlug={spaceSlug}
+            onClose={closeCopySpaceModal}
+            open={copyPageModalOpened}
+          />
 
-      <ExportModal
-        type="page"
-        id={node.id}
-        open={exportOpened}
-        onClose={closeExportModal}
-      />
+          <ExportModal
+            type="page"
+            id={node.id}
+            open={exportOpened}
+            onClose={closeExportModal}
+          />
+        </>
+      )}
     </>
   );
 }

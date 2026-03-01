@@ -1,4 +1,4 @@
-import { IPage } from "@/features/page/types/page.types.ts";
+import { IPage, ISidebarNode } from "@/features/page/types/page.types.ts";
 import { SpaceTreeNode } from "@/features/page/tree/types.ts";
 
 export function sortPositionKeys(keys: any[]) {
@@ -9,28 +9,32 @@ export function sortPositionKeys(keys: any[]) {
   });
 }
 
-export function buildTree(pages: IPage[]): SpaceTreeNode[] {
+export function buildTree(nodes: Array<ISidebarNode | IPage>): SpaceTreeNode[] {
   const pageMap: Record<string, SpaceTreeNode> = {};
 
   const tree: SpaceTreeNode[] = [];
 
-  pages.forEach((page) => {
-    pageMap[page.id] = {
-      id: page.id,
-      slugId: page.slugId,
-      name: page.title,
-      icon: page.icon,
-      status: page.customFields?.status,
-      position: page.position,
-      hasChildren: page.hasChildren,
-      spaceId: page.spaceId,
-      parentPageId: page.parentPageId,
+  nodes.forEach((node) => {
+    const isSidebarNode = 'nodeType' in node;
+
+    pageMap[node.id] = {
+      id: node.id,
+      nodeType: isSidebarNode ? node.nodeType : 'page',
+      slugId: isSidebarNode ? (node.slugId ?? null) : node.slugId,
+      databaseId: isSidebarNode ? (node.databaseId ?? null) : null,
+      name: node.title,
+      icon: node.icon,
+      status: node.customFields?.status,
+      position: node.position,
+      hasChildren: node.hasChildren,
+      spaceId: node.spaceId,
+      parentPageId: node.parentPageId,
       children: [],
     };
   });
 
-  pages.forEach((page) => {
-    tree.push(pageMap[page.id]);
+  nodes.forEach((node) => {
+    tree.push(pageMap[node.id]);
   });
 
   return sortPositionKeys(tree);

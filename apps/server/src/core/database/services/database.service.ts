@@ -103,12 +103,28 @@ export class DatabaseService {
   ) {
     const normalizedName = dto.name?.trim() || 'Untitled database';
 
+    /**
+     * Создаём «якорную» страницу базы данных.
+     *
+     * Эта страница хранит каноническую позицию и родителя в едином дереве,
+     * поэтому sidebar и DnD работают по тем же правилам, что и для обычных страниц.
+     */
+    const databasePage = await this.pageService.create(actorId, workspaceId, {
+      title: normalizedName,
+      icon: dto.icon,
+      parentPageId: dto.parentPageId ?? null,
+      spaceId: dto.spaceId,
+    });
+
     return this.databaseRepo.insertDatabase({
-      ...dto,
+      spaceId: dto.spaceId,
       name: normalizedName,
+      description: dto.description,
+      icon: dto.icon,
       workspaceId,
       creatorId: actorId,
       lastUpdatedById: actorId,
+      pageId: databasePage.id,
     });
   }
 
@@ -242,10 +258,16 @@ export class DatabaseService {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
     await this.assertCanManageDatabasePages(user, database.spaceId);
 
+    /**
+     * Строка базы создаётся как обычная страница в том же дереве.
+     *
+     * По умолчанию прикрепляем строку к pageId базы, чтобы структура оставалась
+     * предсказуемой и не разваливалась на «осиротевшие» корневые страницы.
+     */
     const page = await this.pageService.create(user.id, workspaceId, {
       title: dto.title,
       icon: dto.icon,
-      parentPageId: null,
+      parentPageId: dto.parentPageId ?? database.pageId ?? null,
       spaceId: database.spaceId,
     });
 

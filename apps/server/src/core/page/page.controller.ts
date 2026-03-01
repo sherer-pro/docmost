@@ -665,9 +665,10 @@ export class PageController {
 
     return {
       ...sidebarPages,
-      items: sidebarPages.items.map((page) => ({
-        ...page,
-        customFields: this.getPageCustomFields(page),
+      items: sidebarPages.items.map((node) => ({
+        ...node,
+        customFields:
+          node.nodeType === 'page' ? this.getPageCustomFields(node) : null,
       })),
     };
   }
