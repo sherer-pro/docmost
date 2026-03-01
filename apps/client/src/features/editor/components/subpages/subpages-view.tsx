@@ -43,7 +43,11 @@ export default function SubpagesView(props: NodeViewProps) {
 
     // Otherwise use the API data
     if (!data?.pages) return [];
-    const allPages = data.pages.flatMap((page) => page.items);
+    const allPages = data.pages
+      .flatMap((page) => page.items)
+      // В блоке Subpages отображаем только обычные страницы.
+      .filter((node) => node.nodeType === "page");
+
     return sortPositionKeys(allPages);
   }, [data, shareId, sharedSubpages]);
 
