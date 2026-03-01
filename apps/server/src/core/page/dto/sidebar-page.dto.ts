@@ -8,7 +8,7 @@ export class SidebarPageDto {
   spaceId: string;
 
   @IsOptional()
-  @IsString()
+  @IsUUID()
   pageId: string;
 
   @IsOptional()

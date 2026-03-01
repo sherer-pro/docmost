@@ -580,13 +580,17 @@ function DatabaseRowsTree({
             oldParentId,
             index,
             position: newPosition,
-            pageData: {
+            node: {
               id: draggedNode.data.pageId,
               slugId: draggedNode.data.slugId,
-              title: draggedNode.data.title,
+              name: draggedNode.data.title,
+              nodeType: "databaseRow",
+              databaseId: database.id,
+              hasChildren: Boolean(draggedNode.children?.length),
               position: newPosition,
               spaceId: database.spaceId,
               parentPageId: normalizedParentId,
+              children: [],
             },
           },
         });

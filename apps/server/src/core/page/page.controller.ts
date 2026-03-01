@@ -645,8 +645,12 @@ export class PageController {
 
     if (dto.pageId) {
       const page = await this.pageRepo.findById(dto.pageId);
-      if (!page) {
-        throw new ForbiddenException();
+      if (!page || page.deletedAt) {
+        throw new NotFoundException('Page not found');
+      }
+
+      if (dto.spaceId && dto.spaceId !== page.spaceId) {
+        throw new BadRequestException('pageId does not belong to the provided spaceId');
       }
 
       spaceId = page.spaceId;
@@ -746,8 +750,19 @@ export class PageController {
   @Post('move')
   async movePage(@Body() dto: MovePageDto, @AuthUser() user: User) {
     const movedPage = await this.pageRepo.findById(dto.pageId);
-    if (!movedPage) {
+    if (!movedPage || movedPage.deletedAt) {
       throw new NotFoundException('Moved page not found');
+    }
+
+    if (dto.parentPageId && dto.parentPageId === dto.pageId) {
+      throw new BadRequestException('Page cannot be moved under itself');
+    }
+
+    if (dto.parentPageId) {
+      const parentPage = await this.pageRepo.findById(dto.parentPageId);
+      if (!parentPage || parentPage.deletedAt || parentPage.spaceId !== movedPage.spaceId) {
+        throw new NotFoundException('Parent page not found');
+      }
     }
 
     const ability = await this.spaceAbility.createForUser(

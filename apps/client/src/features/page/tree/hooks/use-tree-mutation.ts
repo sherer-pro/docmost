@@ -80,7 +80,7 @@ export function useTreeMutation<T>(spaceId: string) {
         payload: {
           parentId,
           index,
-          data,
+          node: data,
         },
       });
     }, 50);
@@ -190,6 +190,13 @@ export function useTreeMutation<T>(spaceId: string) {
       hasChildren: nodeData.hasChildren,
     };
 
+    const movedNodePayload: SpaceTreeNode = {
+      ...nodeData,
+      name: nodeData.name,
+      position: newPosition,
+      parentPageId: args.parentId,
+    };
+
     try {
       await movePageMutation.mutateAsync(payload);
 
@@ -205,7 +212,7 @@ export function useTreeMutation<T>(spaceId: string) {
             oldParentId,
             index: args.index,
             position: newPosition,
-            pageData,
+            node: movedNodePayload,
           },
         });
       }, 50);

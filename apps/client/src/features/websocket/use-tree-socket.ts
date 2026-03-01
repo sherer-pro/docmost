@@ -75,12 +75,12 @@ export const useTreeSocket = () => {
           }
           break;
         case "addTreeNode":
-          if (treeApi.find(event.payload.data.id)) return;
+          if (treeApi.find(event.payload.node.id)) return;
 
           treeApi.create({
             parentId: event.payload.parentId,
             index: event.payload.index,
-            data: event.payload.data,
+            data: event.payload.node,
           });
           setTreeData(treeApi.data);
 
