@@ -1,5 +1,6 @@
 import {
   ActionIcon,
+  Badge,
   Button,
   Group,
   Menu,
@@ -21,6 +22,8 @@ import {
 } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 import { useSpaceQuery } from '@/features/space/queries/space-query.ts';
+import { CustomAvatar } from '@/components/ui/custom-avatar.tsx';
+import { StatusIndicator } from '@/components/ui/status-indicator.tsx';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -34,10 +37,12 @@ import {
 } from '@/features/database/queries/database-table-query';
 import {
   IDatabaseFilterCondition,
+  IDatabaseRowCustomFields,
   IDatabaseRowWithCells,
   IDatabaseSortState,
 } from '@/features/database/types/database-table.types';
 import { IDatabaseProperty } from '@/features/database/types/database.types';
+import { useSpaceMemberSelectOptions } from '@/features/page/components/document-fields/space-member-select-utils.ts';
 
 interface DatabaseTableViewProps {
   databaseId: string;
@@ -83,7 +88,7 @@ interface RowFieldVisibility {
 function getVisibleRowCustomFields(
   row: IDatabaseRowWithCells,
   fieldVisibility: RowFieldVisibility,
-) {
+): Required<IDatabaseRowCustomFields> {
   const customFields = row.page?.customFields;
 
   return {
@@ -150,6 +155,20 @@ export function DatabaseTableView({
   const [sortState, setSortState] = useState<IDatabaseSortState | null>(null);
   const navigate = useNavigate();
 
+  const selectedMemberIds = useMemo(
+    () =>
+      rows.flatMap((row) => {
+        const customFields = row.page?.customFields;
+
+        return [
+          ...(customFields?.assigneeId ? [customFields.assigneeId] : []),
+          ...(customFields?.stakeholderIds ?? []),
+        ];
+      }),
+    [rows],
+  );
+  const { knownUsersById } = useSpaceMemberSelectOptions(spaceId, selectedMemberIds);
+
   const displayedProperties = useMemo(
     () =>
       properties.filter((property) => {
@@ -197,6 +216,22 @@ export function DatabaseTableView({
       return sortState.direction === 'asc' ? result : -result;
     });
   }, [filteredRows, sortState]);
+
+  const virtualColumns = useMemo(
+    () =>
+      [
+        fieldVisibility.status
+          ? { id: 'status', label: t('Database table system status') }
+          : null,
+        fieldVisibility.assignee
+          ? { id: 'assignee', label: t('Database table system assignee') }
+          : null,
+        fieldVisibility.stakeholders
+          ? { id: 'stakeholders', label: t('Database table system stakeholders') }
+          : null,
+      ].filter(Boolean) as Array<{ id: 'status' | 'assignee' | 'stakeholders'; label: string }>,
+    [fieldVisibility.assignee, fieldVisibility.stakeholders, fieldVisibility.status, t],
+  );
 
   const startEditing = (row: IDatabaseRowWithCells, property: IDatabaseProperty) => {
     if (!isEditable) {
@@ -447,6 +482,16 @@ export function DatabaseTableView({
                   </Group>
                 </Table.Th>
               ))}
+              {virtualColumns.map((column) => (
+                <Table.Th key={column.id} miw={220}>
+                  <Group justify="space-between" gap="xs" wrap="nowrap">
+                    <Text size="sm">{column.label}</Text>
+                    <Badge size="xs" variant="light">
+                      {t('Read-only')}
+                    </Badge>
+                  </Group>
+                </Table.Th>
+              ))}
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
@@ -459,41 +504,6 @@ export function DatabaseTableView({
                       {getRowTitle(row, t('untitled'))}
                     </Text>
 
-                    {/**
-                     * Show row document fields only when the field is enabled
-                     * in space settings. Values are read strictly from row.page.customFields.
-                     */}
-                    {(() => {
-                      const customFields = getVisibleRowCustomFields(row, fieldVisibility);
-
-                      if (
-                        !customFields.status &&
-                        !customFields.assigneeId &&
-                        customFields.stakeholderIds.length === 0
-                      ) {
-                        return null;
-                      }
-
-                      return (
-                        <Text size="xs" c="dimmed">
-                          {[
-                            customFields.status
-                              ? t('Status value', { value: customFields.status })
-                              : null,
-                            customFields.assigneeId
-                              ? t('Assignee value', { value: customFields.assigneeId })
-                              : null,
-                            customFields.stakeholderIds.length > 0
-                              ? t('Stakeholders count', {
-                                  count: customFields.stakeholderIds.length,
-                                })
-                              : null,
-                          ]
-                            .filter(Boolean)
-                            .join(' · ')}
-                        </Text>
-                      );
-                    })()}
                   </div>
 
                   <Menu position="bottom-end" shadow="md" withinPortal>
@@ -563,6 +573,76 @@ export function DatabaseTableView({
                     </Table.Td>
                   );
                 })}
+
+                {fieldVisibility.status && (
+                  <Table.Td>
+                    {(() => {
+                      const customFields = getVisibleRowCustomFields(row, fieldVisibility);
+
+                      if (!customFields.status) {
+                        return <Text c="dimmed">{t('no data')}</Text>;
+                      }
+
+                      return (
+                        <Group gap="xs" wrap="nowrap">
+                          <StatusIndicator status={customFields.status} />
+                          <Text>{customFields.status}</Text>
+                        </Group>
+                      );
+                    })()}
+                  </Table.Td>
+                )}
+
+                {fieldVisibility.assignee && (
+                  <Table.Td>
+                    {(() => {
+                      const customFields = getVisibleRowCustomFields(row, fieldVisibility);
+
+                      if (!customFields.assigneeId) {
+                        return <Text c="dimmed">{t('no data')}</Text>;
+                      }
+
+                      const assignee = knownUsersById[customFields.assigneeId];
+
+                      return (
+                        <Group gap="xs" wrap="nowrap">
+                          <CustomAvatar
+                            avatarUrl={assignee?.avatarUrl}
+                            size={20}
+                            name={assignee?.label ?? customFields.assigneeId}
+                          />
+                          <Text>{assignee?.label ?? customFields.assigneeId}</Text>
+                        </Group>
+                      );
+                    })()}
+                  </Table.Td>
+                )}
+
+                {fieldVisibility.stakeholders && (
+                  <Table.Td>
+                    {(() => {
+                      const customFields = getVisibleRowCustomFields(row, fieldVisibility);
+
+                      if (!customFields.stakeholderIds.length) {
+                        return <Text c="dimmed">{t('no data')}</Text>;
+                      }
+
+                      const stakeholderNames = customFields.stakeholderIds.map(
+                        (id) => knownUsersById[id]?.label ?? id,
+                      );
+
+                      return (
+                        <Text>
+                          {stakeholderNames.length === 1
+                            ? stakeholderNames[0]
+                            : t('Database table stakeholders count', {
+                                count: stakeholderNames.length,
+                              })}
+                        </Text>
+                      );
+                    })()}
+                  </Table.Td>
+                )}
               </Table.Tr>
             ))}
           </Table.Tbody>
