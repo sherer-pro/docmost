@@ -11,6 +11,7 @@ import {
   Post,
   Query,
   UseGuards,
+  Res,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
@@ -28,7 +29,9 @@ import {
   UpdateDatabasePropertyDto,
   UpdateDatabaseViewDto,
   DatabaseRowPageIdDto,
+  ExportDatabaseDto,
 } from './dto/database.dto';
+import { FastifyReply } from 'fastify';
 
 @UseGuards(JwtAuthGuard)
 @Controller('databases')
@@ -227,6 +230,53 @@ export class DatabaseController {
     );
   }
 
+
+
+  /**
+   * Возвращает markdown-представление таблицы базы данных.
+   */
+  @Get(':databaseId/markdown')
+  async getMarkdown(
+    @Param('databaseId', ParseUUIDPipe) databaseId: string,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return {
+      markdown: await this.databaseService.buildDatabaseMarkdown(
+        databaseId,
+        user,
+        workspace.id,
+      ),
+    };
+  }
+
+  /**
+   * Экспортирует базу данных в файл.
+   */
+  @HttpCode(HttpStatus.OK)
+  @Post(':databaseId/export')
+  async exportDatabase(
+    @Param('databaseId', ParseUUIDPipe) databaseId: string,
+    @Body() dto: ExportDatabaseDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+    @Res() res: FastifyReply,
+  ) {
+    const exported = await this.databaseService.exportDatabase(
+      databaseId,
+      dto.format,
+      user,
+      workspace.id,
+    );
+
+    res.headers({
+      'Content-Type': exported.contentType,
+      'Content-Disposition':
+        'attachment; filename="' + encodeURIComponent(exported.fileName) + '"',
+    });
+
+    res.send(exported.fileBuffer);
+  }
   /**
    * Создаёт представление базы данных.
    */

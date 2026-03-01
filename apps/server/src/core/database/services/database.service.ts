@@ -18,6 +18,7 @@ import {
 } from '../../casl/interfaces/space-ability.type';
 import {
   BatchUpdateDatabaseCellsDto,
+  DatabaseExportFormat,
   CreateDatabaseDto,
   CreateDatabasePropertyDto,
   CreateDatabaseRowDto,
@@ -53,6 +54,142 @@ export class DatabaseService {
     }
 
     return database;
+  }
+
+  /**
+   * Экранирует пользовательское значение для markdown-ячейки таблицы.
+   */
+  private escapeMarkdownCell(value: string): string {
+    return value.replace(/\|/g, '\\|').replace(/\n/g, ' ');
+  }
+
+  /**
+   * Преобразует произвольное значение ячейки в безопасную строку.
+   */
+  private stringifyCellValue(value: unknown): string {
+    if (value === null || typeof value === 'undefined') {
+      return '';
+    }
+
+    if (typeof value === 'string') {
+      return value;
+    }
+
+    return JSON.stringify(value);
+  }
+
+  /**
+   * Собирает markdown-представление текущей таблицы базы данных.
+   */
+  async buildDatabaseMarkdown(databaseId: string, user: User, workspaceId: string) {
+    const database = await this.getOrFailDatabase(databaseId, workspaceId);
+    await this.assertCanReadDatabasePages(user, database.spaceId);
+
+    const [properties, rows] = await Promise.all([
+      this.databasePropertyRepo.findByDatabaseId(databaseId),
+      this.databaseRowRepo.findByDatabaseId(databaseId, workspaceId, database.spaceId),
+    ]);
+
+    const title = database.name?.trim() || 'Database';
+    const header = ['Title', ...properties.map((property) => property.name || 'Column')];
+    const separator = header.map(() => '---');
+
+    const tableRows = rows.map((row) => {
+      const titleCell = row.page?.title || row.pageTitle || '';
+      const valueByPropertyId = new Map(
+        (row.cells ?? []).map((cell) => [cell.propertyId, this.stringifyCellValue(cell.value)]),
+      );
+
+      return [
+        this.escapeMarkdownCell(titleCell),
+        ...properties.map((property) =>
+          this.escapeMarkdownCell(valueByPropertyId.get(property.id) ?? ''),
+        ),
+      ];
+    });
+
+    const table = [header, separator, ...tableRows]
+      .map((line) => `| ${line.join(' | ')} |`)
+      .join('\n');
+
+    return `# ${title}\n\n${table}`;
+  }
+
+  /**
+   * Формирует минимальный валидный PDF-документ с текстовым содержимым.
+   */
+  private createSimplePdfBuffer(content: string): Buffer {
+    const escapePdfText = (value: string) =>
+      value.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+
+    const textLines = content
+      .split('\n')
+      .map((line) => line.trimEnd())
+      .filter((line) => line.length > 0)
+      .slice(0, 80);
+
+    const textCommands = textLines
+      .map((line, index) => `1 0 0 1 50 ${770 - index * 14} Tm (${escapePdfText(line)}) Tj`)
+      .join('\n');
+
+    const stream = `BT\n/F1 10 Tf\n${textCommands}\nET`;
+    const streamLength = Buffer.byteLength(stream, 'utf8');
+
+    const objects = [
+      '1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj',
+      '2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj',
+      '3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >> endobj',
+      `4 0 obj << /Length ${streamLength} >> stream\n${stream}\nendstream endobj`,
+      '5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj',
+    ];
+
+    let pdf = '%PDF-1.4\n';
+    const offsets: number[] = [0];
+
+    for (const object of objects) {
+      offsets.push(Buffer.byteLength(pdf, 'utf8'));
+      pdf += `${object}\n`;
+    }
+
+    const xrefOffset = Buffer.byteLength(pdf, 'utf8');
+    pdf += `xref\n0 ${objects.length + 1}\n`;
+    pdf += '0000000000 65535 f \n';
+    for (let i = 1; i <= objects.length; i += 1) {
+      pdf += `${offsets[i].toString().padStart(10, '0')} 00000 n \n`;
+    }
+
+    pdf += `trailer << /Size ${objects.length + 1} /Root 1 0 R >>\n`;
+    pdf += `startxref\n${xrefOffset}\n%%EOF`;
+
+    return Buffer.from(pdf, 'utf8');
+  }
+
+  /**
+   * Экспортирует базу в markdown или pdf.
+   */
+  async exportDatabase(
+    databaseId: string,
+    format: DatabaseExportFormat,
+    user: User,
+    workspaceId: string,
+  ) {
+    const markdown = await this.buildDatabaseMarkdown(databaseId, user, workspaceId);
+    const database = await this.getOrFailDatabase(databaseId, workspaceId);
+    const safeName = (database.name?.trim() || 'database').replace(/\s+/g, '-').toLowerCase();
+
+    if (format === DatabaseExportFormat.PDF) {
+      return {
+        contentType: 'application/pdf',
+        fileName: `${safeName}.pdf`,
+        fileBuffer: this.createSimplePdfBuffer(markdown),
+      };
+    }
+
+    return {
+      contentType: 'text/markdown; charset=utf-8',
+      fileName: `${safeName}.md`,
+      fileBuffer: Buffer.from(markdown, 'utf8'),
+    };
   }
 
   /**

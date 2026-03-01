@@ -178,3 +178,17 @@ export interface IBatchUpdateDatabaseCellsResponse {
   row: IDatabaseRow;
   cells: IDatabaseCell[];
 }
+
+
+export enum DatabaseExportFormat {
+  Markdown = 'markdown',
+  PDF = 'pdf',
+}
+
+export interface IExportDatabasePayload {
+  format: DatabaseExportFormat;
+}
+
+export interface IDatabaseMarkdownResponse {
+  markdown: string;
+}

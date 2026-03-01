@@ -10,7 +10,6 @@ interface DatabaseHeaderProps {
   spaceSlug: string;
   spaceName?: string;
   databaseName?: string;
-  description?: string;
   readOnly?: boolean;
 }
 
@@ -20,7 +19,6 @@ export default function DatabaseHeader({
   spaceSlug,
   spaceName,
   databaseName,
-  description,
   readOnly,
 }: DatabaseHeaderProps) {
   return (
@@ -37,8 +35,6 @@ export default function DatabaseHeader({
             databaseId={databaseId}
             databasePageId={databasePageId}
             spaceSlug={spaceSlug}
-            databaseName={databaseName}
-            description={description}
             readOnly={readOnly}
           />
         </Group>

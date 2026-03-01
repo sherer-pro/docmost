@@ -1,22 +1,16 @@
-import {
-  Modal,
-  Button,
-  Group,
-  Text,
-  Select,
-  Switch,
-  Divider,
-} from "@mantine/core";
-import { exportPage } from "@/features/page/services/page-service.ts";
-import { useState } from "react";
-import { ExportFormat } from "@/features/page/types/page.types.ts";
-import { notifications } from "@mantine/notifications";
-import { exportSpace } from "@/features/space/services/space-service";
-import { useTranslation } from "react-i18next";
+import { Modal, Button, Group, Text, Select, Switch, Divider } from '@mantine/core';
+import { exportPage } from '@/features/page/services/page-service.ts';
+import { useState } from 'react';
+import { ExportFormat } from '@/features/page/types/page.types.ts';
+import { notifications } from '@mantine/notifications';
+import { exportSpace } from '@/features/space/services/space-service';
+import { useTranslation } from 'react-i18next';
+import { exportDatabase as exportDatabaseFile } from '@/features/database/services/database-service';
+import { DatabaseExportFormat } from '@/features/database/types/database.types';
 
 interface ExportModalProps {
   id: string;
-  type: "space" | "page";
+  type: 'space' | 'page' | 'database';
   open: boolean;
   onClose: () => void;
 }
@@ -27,43 +21,76 @@ export default function ExportModal({
   open,
   onClose,
 }: ExportModalProps) {
-  const [format, setFormat] = useState<ExportFormat>(ExportFormat.Markdown);
+  const [format, setFormat] = useState<string>(ExportFormat.Markdown);
   const [includeChildren, setIncludeChildren] = useState<boolean>(false);
   const [includeAttachments, setIncludeAttachments] = useState<boolean>(false);
   const [isExporting, setIsExporting] = useState<boolean>(false);
   const { t } = useTranslation();
 
+  const showIncludeChildren = type === 'page';
+  const showAttachments = type === 'page' || type === 'space';
+
+  const formatOptions =
+    type === 'database'
+      ? [
+          { value: 'markdown', label: t('export.format.markdown') },
+          { value: 'pdf', label: t('Print PDF') },
+        ]
+      : [
+          { value: 'markdown', label: t('export.format.markdown') },
+          { value: 'html', label: t('export.format.html') },
+        ];
+
+  const modalTitle =
+    type === 'database' ? `${t('Export')} ${t('Database')}` : t(`Export ${type}`);
+
   const handleExport = async () => {
     setIsExporting(true);
     try {
-      if (type === "page") {
+      if (type === 'page') {
         await exportPage({
           pageId: id,
-          format,
+          format: format as ExportFormat,
           includeChildren,
           includeAttachments,
         });
       }
-      if (type === "space") {
-        await exportSpace({ spaceId: id, format, includeAttachments });
+
+      if (type === 'space') {
+        await exportSpace({
+          spaceId: id,
+          format: format as ExportFormat,
+          includeAttachments,
+        });
       }
+
+      if (type === 'database') {
+        await exportDatabaseFile(id, {
+          format: format as DatabaseExportFormat,
+        });
+      }
+
       notifications.show({
-        message: t("Export successful"),
+        message: t('Export successful'),
       });
       onClose();
-    } catch (err) {
+    } catch (err: any) {
       notifications.show({
-        message: "Export failed:" + err.response?.data.message,
-        color: "red",
+        message: `Export failed: ${err?.response?.data?.message ?? ''}`,
+        color: 'red',
       });
-      console.error("export error", err);
+      console.error('export error', err);
     } finally {
       setIsExporting(false);
     }
   };
 
-  const handleChange = (format: ExportFormat) => {
-    setFormat(format);
+  const handleChange = (value: string | null) => {
+    if (!value) {
+      return;
+    }
+
+    setFormat(value);
   };
 
   return (
@@ -78,26 +105,30 @@ export default function ExportModal({
       onClick={(e) => e.stopPropagation()}
     >
       <Modal.Overlay />
-      <Modal.Content style={{ overflow: "hidden" }}>
+      <Modal.Content style={{ overflow: 'hidden' }}>
         <Modal.Header py={0}>
-          <Modal.Title fw={500}>{t(`Export ${type}`)}</Modal.Title>
+          <Modal.Title fw={500}>{modalTitle}</Modal.Title>
           <Modal.CloseButton />
         </Modal.Header>
         <Modal.Body>
           <Group justify="space-between" wrap="nowrap">
             <div>
-              <Text size="md">{t("Format")}</Text>
+              <Text size="md">{t('Format')}</Text>
             </div>
-            <ExportFormatSelection format={format} onChange={handleChange} />
+            <ExportFormatSelection
+              format={format}
+              onChange={handleChange}
+              options={formatOptions}
+            />
           </Group>
 
-          {type === "page" && (
+          {showIncludeChildren && (
             <>
               <Divider my="sm" />
 
               <Group justify="space-between" wrap="nowrap">
                 <div>
-                  <Text size="md">{t("Include subpages")}</Text>
+                  <Text size="md">{t('Include subpages')}</Text>
                 </div>
                 <Switch
                   onChange={(event) =>
@@ -109,7 +140,7 @@ export default function ExportModal({
 
               <Group justify="space-between" wrap="nowrap" mt="md">
                 <div>
-                  <Text size="md">{t("Include attachments")}</Text>
+                  <Text size="md">{t('Include attachments')}</Text>
                 </div>
                 <Switch
                   onChange={(event) =>
@@ -121,13 +152,13 @@ export default function ExportModal({
             </>
           )}
 
-          {type === "space" && (
+          {showAttachments && !showIncludeChildren && (
             <>
               <Divider my="sm" />
 
               <Group justify="space-between" wrap="nowrap">
                 <div>
-                  <Text size="md">{t("Include attachments")}</Text>
+                  <Text size="md">{t('Include attachments')}</Text>
                 </div>
                 <Switch
                   onChange={(event) =>
@@ -141,9 +172,11 @@ export default function ExportModal({
 
           <Group justify="center" mt="md">
             <Button onClick={onClose} variant="default">
-              {t("Cancel")}
+              {t('Cancel')}
             </Button>
-            <Button onClick={handleExport} loading={isExporting}>{t("Export")}</Button>
+            <Button onClick={handleExport} loading={isExporting}>
+              {t('Export')}
+            </Button>
           </Group>
         </Modal.Body>
       </Modal.Content>
@@ -151,26 +184,29 @@ export default function ExportModal({
   );
 }
 
-interface ExportFormatSelection {
-  format: ExportFormat;
-  onChange: (value: string) => void;
+interface ExportFormatSelectionProps {
+  format: string;
+  onChange: (value: string | null) => void;
+  options: Array<{ value: string; label: string }>;
 }
-function ExportFormatSelection({ format, onChange }: ExportFormatSelection) {
+
+function ExportFormatSelection({
+  format,
+  onChange,
+  options,
+}: ExportFormatSelectionProps) {
   const { t } = useTranslation();
 
   return (
     <Select
-      data={[
-        { value: "markdown", label: t("export.format.markdown") },
-        { value: "html", label: t("export.format.html") },
-      ]}
-      defaultValue={format}
+      data={options}
+      value={format}
       onChange={onChange}
       styles={{ wrapper: { maxWidth: 120 } }}
-      comboboxProps={{ width: "120" }}
+      comboboxProps={{ width: '120' }}
       allowDeselect={false}
       withCheckIcon={false}
-      aria-label={t("Select export format")}
+      aria-label={t('Select export format')}
     />
   );
 }
