@@ -83,6 +83,10 @@ export default function App() {
           <Route path={"/s/:spaceSlug"} element={<SpaceHome />} />
           <Route path={"/s/:spaceSlug/trash"} element={<SpaceTrash />} />
           <Route
+            path={"/s/:spaceSlug/db/:databaseSlug"}
+            element={<DatabasePage />}
+          />
+          <Route
             path={"/s/:spaceSlug/databases/:databaseId"}
             element={<DatabasePage />}
           />

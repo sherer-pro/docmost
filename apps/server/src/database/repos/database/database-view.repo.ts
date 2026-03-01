@@ -100,4 +100,21 @@ export class DatabaseViewRepo {
       .execute();
   }
 
+  /**
+   * Восстанавливает представления базы после обратной конвертации в database.
+   */
+  async restoreByDatabaseId(
+    databaseId: string,
+    workspaceId: string,
+    trx?: KyselyTransaction,
+  ): Promise<void> {
+    await dbOrTx(this.db, trx)
+      .updateTable('databaseViews')
+      .set({ deletedAt: null, updatedAt: new Date() })
+      .where('databaseId', '=', databaseId)
+      .where('workspaceId', '=', workspaceId)
+      .where('deletedAt', 'is not', null)
+      .execute();
+  }
+
 }

@@ -60,7 +60,7 @@ import {
 import { useClipboard } from "@/hooks/use-clipboard";
 import { dfs } from "react-arborist/dist/module/utils";
 import { useQueryEmit } from "@/features/websocket/use-query-emit.ts";
-import { buildPageUrl } from "@/features/page/page.utils.ts";
+import { buildDatabaseUrl, buildPageUrl } from "@/features/page/page.utils.ts";
 import { notifications } from "@mantine/notifications";
 import { getAppUrl } from "@/lib/config.ts";
 import { extractPageSlugId } from "@/lib";
@@ -456,11 +456,11 @@ function Node({
   /**
    * Единая маршрутизация по дискриминатору узла:
    * - page -> /p/:slug
-   * - database -> /databases/:id
+   * - database -> /db/:slug
    */
   const pageUrl =
     node.data.nodeType === "database"
-      ? `/s/${spaceSlug}/databases/${node.data.databaseId ?? node.data.id}`
+      ? buildDatabaseUrl(spaceSlug, node.data.slugId ?? "", node.data.name)
       : buildPageUrl(spaceSlug, node.data.slugId ?? "", node.data.name);
 
   const canOpenNode =
@@ -626,7 +626,7 @@ function NodeMenu({ node, treeApi, spaceId }: NodeMenuProps) {
   const handleCopyLink = () => {
     const nodeUrl =
       node.data.nodeType === "database"
-        ? `${getAppUrl()}/s/${spaceSlug}/databases/${node.data.databaseId ?? node.id}`
+        ? `${getAppUrl()}${buildDatabaseUrl(spaceSlug, node.data.slugId ?? "", node.data.name)}`
         : getAppUrl() + buildPageUrl(spaceSlug, node.data.slugId ?? "", node.data.name);
 
     clipboard.copy(nodeUrl);
