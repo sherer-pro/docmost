@@ -2,6 +2,11 @@ import { Insertable, Selectable, Updateable } from 'kysely';
 import {
   Attachments,
   Comments,
+  Databases,
+  DatabaseProperties,
+  DatabaseRows,
+  DatabaseCells,
+  DatabaseViews,
   Groups,
   Notifications,
   Pages,
@@ -107,6 +112,34 @@ export type UpdatablePageHistory = Updateable<Omit<History, 'id'>>;
 export type Comment = Selectable<Comments>;
 export type InsertableComment = Insertable<Comments>;
 export type UpdatableComment = Updateable<Omit<Comments, 'id'>>;
+
+
+// Database
+export type Database = Selectable<Databases>;
+export type InsertableDatabase = Insertable<Databases>;
+export type UpdatableDatabase = Updateable<Omit<Databases, 'id'>>;
+
+// DatabaseProperty
+export type DatabaseProperty = Selectable<DatabaseProperties>;
+export type InsertableDatabaseProperty = Insertable<DatabaseProperties>;
+export type UpdatableDatabaseProperty = Updateable<
+  Omit<DatabaseProperties, 'id'>
+>;
+
+// DatabaseRow
+export type DatabaseRow = Selectable<DatabaseRows>;
+export type InsertableDatabaseRow = Insertable<DatabaseRows>;
+export type UpdatableDatabaseRow = Updateable<Omit<DatabaseRows, 'id'>>;
+
+// DatabaseCell
+export type DatabaseCell = Selectable<DatabaseCells>;
+export type InsertableDatabaseCell = Insertable<DatabaseCells>;
+export type UpdatableDatabaseCell = Updateable<Omit<DatabaseCells, 'id'>>;
+
+// DatabaseView
+export type DatabaseView = Selectable<DatabaseViews>;
+export type InsertableDatabaseView = Insertable<DatabaseViews>;
+export type UpdatableDatabaseView = Updateable<Omit<DatabaseViews, 'id'>>;
 
 // Attachment
 export type Attachment = Selectable<Attachments>;

@@ -28,6 +28,11 @@ import { NotificationRepo } from '@docmost/db/repos/notification/notification.re
 import { WatcherRepo } from '@docmost/db/repos/watcher/watcher.repo';
 import { PushSubscriptionRepo } from '@docmost/db/repos/push-subscription/push-subscription.repo';
 import { PushNotificationJobRepo } from '@docmost/db/repos/push-notification-job/push-notification-job.repo';
+import { DatabaseRepo } from './repos/database/database.repo';
+import { DatabasePropertyRepo } from './repos/database/database-property.repo';
+import { DatabaseRowRepo } from './repos/database/database-row.repo';
+import { DatabaseCellRepo } from './repos/database/database-cell.repo';
+import { DatabaseViewRepo } from './repos/database/database-view.repo';
 import { PageListener } from '@docmost/db/listeners/page.listener';
 import { PostgresJSDialect } from 'kysely-postgres-js';
 import * as postgres from 'postgres';
@@ -88,6 +93,11 @@ import { normalizePostgresUrl } from '../common/helpers';
     WatcherRepo,
     PushSubscriptionRepo,
     PushNotificationJobRepo,
+    DatabaseRepo,
+    DatabasePropertyRepo,
+    DatabaseRowRepo,
+    DatabaseCellRepo,
+    DatabaseViewRepo,
     PageListener,
   ],
   exports: [
@@ -108,6 +118,11 @@ import { normalizePostgresUrl } from '../common/helpers';
     WatcherRepo,
     PushSubscriptionRepo,
     PushNotificationJobRepo,
+    DatabaseRepo,
+    DatabasePropertyRepo,
+    DatabaseRowRepo,
+    DatabaseCellRepo,
+    DatabaseViewRepo,
   ],
 })
 export class DatabaseModule

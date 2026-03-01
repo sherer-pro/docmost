@@ -20,6 +20,7 @@ import { NotificationModule } from './notification/notification.module';
 import { WatcherModule } from './watcher/watcher.module';
 import { MfaModule } from './mfa/mfa.module';
 import { PushModule } from './push/push.module';
+import { DatabaseModule } from './database/database.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { PushModule } from './push/push.module';
     WatcherModule,
     MfaModule,
     PushModule,
+    DatabaseModule,
   ],
 })
 export class CoreModule implements NestModule {
