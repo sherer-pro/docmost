@@ -43,7 +43,11 @@ import { SimpleTree } from "react-arborist";
 import { SpaceTreeNode } from "@/features/page/tree/types";
 import { useQueryEmit } from "@/features/websocket/use-query-emit";
 
-const DEFAULT_SIDEBAR_NODE_TYPES: SidebarNodeType[] = ["page", "database"];
+const DEFAULT_SIDEBAR_NODE_TYPES: SidebarNodeType[] = [
+  "page",
+  "database",
+  "databaseRow",
+];
 
 /**
  * Гарантирует, что в запросе sidebar всегда присутствуют базовые типы узлов.
