@@ -197,8 +197,10 @@ export async function executeWithCursorPagination<
       let expression;
 
       for (let i = fields.length - 1; i >= 0; --i) {
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        const field = fields[i]!;
+        const field = fields[i];
+        if (!field) {
+          continue;
+        }
 
         const comparison = field.direction === defaultDirection ? '>' : '<';
         const value = cursor[field.key as keyof typeof cursor];

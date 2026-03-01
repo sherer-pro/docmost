@@ -67,6 +67,27 @@ export class DatabaseRepo {
       .set({ ...payload, updatedAt: new Date() })
       .where('id', '=', id)
       .where('workspaceId', '=', workspaceId)
+      .where('deletedAt', 'is', null)
+      .returningAll()
+      .executeTakeFirst();
+  }
+
+  /**
+   * Выполняет мягкое удаление базы данных.
+   *
+   * Мы не удаляем запись физически, чтобы не терять аудит и не ломать связи.
+   */
+  async softDeleteDatabase(
+    id: string,
+    workspaceId: string,
+    trx?: KyselyTransaction,
+  ): Promise<Database> {
+    return dbOrTx(this.db, trx)
+      .updateTable('databases')
+      .set({ deletedAt: new Date(), updatedAt: new Date() })
+      .where('id', '=', id)
+      .where('workspaceId', '=', workspaceId)
+      .where('deletedAt', 'is', null)
       .returningAll()
       .executeTakeFirst();
   }
