@@ -7,6 +7,7 @@ import {
   batchUpdateDatabaseCells,
   createDatabaseProperty,
   createDatabaseRow,
+  deleteDatabaseProperty,
   getDatabaseProperties,
   getDatabaseRows,
 } from '@/features/database/services';
@@ -70,6 +71,21 @@ export function useCreateDatabasePropertyMutation(databaseId?: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ['database', databaseId, 'properties'],
+      });
+    },
+  });
+}
+
+export function useDeleteDatabasePropertyMutation(databaseId?: string) {
+  return useMutation({
+    mutationFn: (propertyId: string) =>
+      deleteDatabaseProperty(databaseId as string, propertyId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['database', databaseId, 'properties'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['database', databaseId, 'rows'],
       });
     },
   });
