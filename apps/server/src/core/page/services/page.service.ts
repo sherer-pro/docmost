@@ -487,7 +487,7 @@ export class PageService {
               select 1
               from pages as child_page
               inner join database_rows as child_row on child_row.page_id = child_page.id
-              where child_page.parent_page_id = databasePage.id
+              where child_page.parent_page_id = "databasePage".id
                 and child_page.deleted_at is null
                 and child_row.archived_at is null
             )`.as('hasChildren'),
