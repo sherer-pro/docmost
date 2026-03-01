@@ -23,7 +23,7 @@ import { IDatabaseRowContext, IDatabaseRowWithCells } from '@/features/database/
 import { queryClient } from '@/main.tsx';
 
 /**
- * Загружает набор свойств (колонок) выбранной базы.
+ * Loads property set (columns) for the selected database.
  */
 export function useDatabasePropertiesQuery(
   databaseId?: string,
@@ -36,7 +36,7 @@ export function useDatabasePropertiesQuery(
 }
 
 /**
- * Загружает строки базы данных.
+ * Loads database rows.
  */
 export function useDatabaseRowsQuery(
   databaseId?: string,
@@ -61,7 +61,7 @@ export function useDatabaseRowContextQuery(
 }
 
 /**
- * Добавляет новую строку (row) в выбранную базу.
+ * Adds a new row to the selected database.
  */
 export function useCreateDatabaseRowMutation(databaseId?: string) {
   return useMutation({
@@ -76,7 +76,7 @@ export function useCreateDatabaseRowMutation(databaseId?: string) {
 }
 
 /**
- * Добавляет новое свойство (колонку) в базу.
+ * Adds a new property (column) to the database.
  */
 export function useCreateDatabasePropertyMutation(databaseId?: string) {
   return useMutation({
@@ -106,7 +106,7 @@ export function useDeleteDatabasePropertyMutation(databaseId?: string) {
 }
 
 /**
- * Инлайн-сохранение значения ячейки через batch endpoint.
+ * Performs inline cell value persistence through the batch endpoint.
  */
 export function useBatchUpdateDatabaseCellsMutation(databaseId?: string) {
   return useMutation({

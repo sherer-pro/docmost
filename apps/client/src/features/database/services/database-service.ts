@@ -17,7 +17,7 @@ import {
 import { IDatabaseRowContext, IDatabaseRowWithCells } from "@/features/database/types/database-table.types";
 
 /**
- * Создаёт базу данных в выбранном пространстве.
+ * Creates a database in the selected space.
  */
 export async function createDatabase(
   payload: ICreateDatabasePayload,
@@ -27,7 +27,7 @@ export async function createDatabase(
 }
 
 /**
- * Возвращает список баз данных по spaceId.
+ * Returns databases by spaceId.
  */
 export async function getDatabases(spaceId: string): Promise<IDatabase[]> {
   const req = await api.get<IDatabase[]>("/databases", {
@@ -38,7 +38,7 @@ export async function getDatabases(spaceId: string): Promise<IDatabase[]> {
 }
 
 /**
- * Возвращает одну базу данных по идентификатору.
+ * Returns a database by id.
  */
 export async function getDatabase(databaseId: string): Promise<IDatabase> {
   const req = await api.get<IDatabase>(`/databases/${databaseId}`);
@@ -46,7 +46,7 @@ export async function getDatabase(databaseId: string): Promise<IDatabase> {
 }
 
 /**
- * Обновляет базу данных.
+ * Updates a database.
  */
 export async function updateDatabase(
   databaseId: string,
@@ -57,14 +57,14 @@ export async function updateDatabase(
 }
 
 /**
- * Мягко удаляет базу данных.
+ * Soft-deletes a database.
  */
 export async function deleteDatabase(databaseId: string): Promise<void> {
   await api.delete(`/databases/${databaseId}`);
 }
 
 /**
- * Возвращает список свойств базы данных.
+ * Returns database properties.
  */
 export async function getDatabaseProperties(
   databaseId: string,
@@ -76,7 +76,7 @@ export async function getDatabaseProperties(
 }
 
 /**
- * Создаёт свойство базы данных.
+ * Creates a database property.
  */
 export async function createDatabaseProperty(
   databaseId: string,
@@ -91,7 +91,7 @@ export async function createDatabaseProperty(
 }
 
 /**
- * Обновляет свойство базы данных.
+ * Updates a database property.
  */
 export async function updateDatabaseProperty(
   databaseId: string,
@@ -107,7 +107,7 @@ export async function updateDatabaseProperty(
 }
 
 /**
- * Мягко удаляет свойство базы данных.
+ * Soft-deletes a database property.
  */
 export async function deleteDatabaseProperty(
   databaseId: string,
@@ -117,7 +117,7 @@ export async function deleteDatabaseProperty(
 }
 
 /**
- * Возвращает строки базы данных.
+ * Returns database rows.
  */
 export async function getDatabaseRows(
   databaseId: string,
@@ -127,7 +127,7 @@ export async function getDatabaseRows(
 }
 
 /**
- * Создаёт строку базы данных.
+ * Creates a database row.
  */
 export async function createDatabaseRow(
   databaseId: string,
@@ -148,7 +148,7 @@ export async function deleteDatabaseRow(
 }
 
 /**
- * Выполняет batch-обновление ячеек строки.
+ * Performs batch row cell updates.
  */
 export async function batchUpdateDatabaseCells(
   databaseId: string,
@@ -164,7 +164,7 @@ export async function batchUpdateDatabaseCells(
 }
 
 /**
- * Возвращает представления базы данных.
+ * Returns database views.
  */
 export async function getDatabaseViews(databaseId: string): Promise<IDatabaseView[]> {
   const req = await api.get<IDatabaseView[]>(`/databases/${databaseId}/views`);
@@ -172,7 +172,7 @@ export async function getDatabaseViews(databaseId: string): Promise<IDatabaseVie
 }
 
 /**
- * Создаёт представление базы данных.
+ * Creates a database view.
  */
 export async function createDatabaseView(
   databaseId: string,
@@ -183,7 +183,7 @@ export async function createDatabaseView(
 }
 
 /**
- * Обновляет представление базы данных.
+ * Updates a database view.
  */
 export async function updateDatabaseView(
   databaseId: string,
@@ -199,7 +199,7 @@ export async function updateDatabaseView(
 }
 
 /**
- * Мягко удаляет представление базы данных.
+ * Soft-deletes a database view.
  */
 export async function deleteDatabaseView(
   databaseId: string,
