@@ -2,11 +2,8 @@ import {
   ActionIcon,
   Button,
   Group,
-  Modal,
   Menu,
-  TextInput,
   Text,
-  Textarea,
   Tooltip,
   UnstyledButton,
 } from "@mantine/core";
@@ -55,6 +52,8 @@ import {
 import { IDatabase } from "@/features/database/types/database.types";
 import { notifications } from "@mantine/notifications";
 import { StatusIndicator } from "@/components/ui/status-indicator.tsx";
+import { currentUserAtom } from "@/features/user/atoms/current-user-atom.ts";
+import { PageEditMode } from "@/features/user/types/user.types.ts";
 
 export function SpaceSidebar() {
   const { t } = useTranslation();
@@ -62,13 +61,8 @@ export function SpaceSidebar() {
   const location = useLocation();
   const [opened, { open: openSettings, close: closeSettings }] =
     useDisclosure(false);
-  const [
-    createDatabaseOpened,
-    { open: openCreateDatabase, close: closeCreateDatabase },
-  ] = useDisclosure(false);
-  const [databaseName, setDatabaseName] = React.useState("");
-  const [databaseDescription, setDatabaseDescription] = React.useState("");
   const [mobileSidebarOpened] = useAtom(mobileSidebarAtom);
+  const [currentUser, setCurrentUser] = useAtom(currentUserAtom);
   const toggleMobileSidebar = useToggleSidebar(mobileSidebarAtom);
   const navigate = useNavigate();
 
@@ -90,20 +84,35 @@ export function SpaceSidebar() {
   }
 
   async function handleCreateDatabase() {
-    if (!space?.id || !databaseName.trim()) {
+    if (!space?.id || createDatabaseMutation.isPending) {
       return;
     }
 
     try {
       const createdDatabase = await createDatabaseMutation.mutateAsync({
         spaceId: space.id,
-        name: databaseName.trim(),
-        description: databaseDescription.trim() || undefined,
+        name: t("Untitled database"),
       });
 
-      setDatabaseName("");
-      setDatabaseDescription("");
-      closeCreateDatabase();
+      if (
+        currentUser?.user?.settings?.preferences?.pageEditMode !==
+        PageEditMode.Edit
+      ) {
+        setCurrentUser({
+          ...currentUser,
+          user: {
+            ...currentUser.user,
+            settings: {
+              ...currentUser.user.settings,
+              preferences: {
+                ...currentUser.user.settings.preferences,
+                pageEditMode: PageEditMode.Edit,
+              },
+            },
+          },
+        });
+      }
+
       notifications.show({ message: t("Database created") });
       navigate(`/s/${spaceSlug}/databases/${createdDatabase.id}`);
     } catch {
@@ -255,7 +264,8 @@ export function SpaceSidebar() {
                 <ActionIcon
                   variant="default"
                   size={18}
-                  onClick={openCreateDatabase}
+                  onClick={handleCreateDatabase}
+                  disabled={createDatabaseMutation.isPending}
                   aria-label={t("Create database")}
                 >
                   <IconPlus />
@@ -311,46 +321,6 @@ export function SpaceSidebar() {
         onClose={closeSettings}
         spaceId={space?.slug}
       />
-
-      <Modal
-        opened={createDatabaseOpened}
-        onClose={closeCreateDatabase}
-        title={t("Create database")}
-        centered
-      >
-        <TextInput
-          label={t("Name")}
-          value={databaseName}
-          onChange={(event) => setDatabaseName(event.currentTarget.value)}
-          placeholder={t("Untitled database")}
-          mb="sm"
-          autoFocus
-        />
-
-        <Textarea
-          label={t("Description")}
-          value={databaseDescription}
-          onChange={(event) =>
-            setDatabaseDescription(event.currentTarget.value)
-          }
-          placeholder={t("Optional")}
-          minRows={2}
-        />
-
-        <Group justify="flex-end" mt="md">
-          <Button variant="subtle" onClick={closeCreateDatabase}>
-            {t("Cancel")}
-          </Button>
-
-          <Button
-            onClick={handleCreateDatabase}
-            loading={createDatabaseMutation.isPending}
-            disabled={!databaseName.trim()}
-          >
-            {t("Create")}
-          </Button>
-        </Group>
-      </Modal>
     </>
   );
 }

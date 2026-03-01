@@ -17,10 +17,11 @@ export class CreateDatabaseDto {
   @IsUUID()
   spaceId: string;
 
+  @IsOptional()
   @IsString()
   @IsNotEmpty()
   @MaxLength(255)
-  name: string;
+  name?: string;
 
   @IsOptional()
   @IsString()
