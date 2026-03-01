@@ -10,6 +10,7 @@ import { DatabasePropertyRepo } from '@docmost/db/repos/database/database-proper
 import { DatabaseViewRepo } from '@docmost/db/repos/database/database-view.repo';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { User } from '@docmost/db/types/entity.types';
+import { PageService } from '../../page/services/page.service';
 import SpaceAbilityFactory from '../../casl/abilities/space-ability.factory';
 import {
   SpaceCaslAction,
@@ -35,6 +36,7 @@ export class DatabaseService {
     private readonly databasePropertyRepo: DatabasePropertyRepo,
     private readonly databaseViewRepo: DatabaseViewRepo,
     private readonly pageRepo: PageRepo,
+    private readonly pageService: PageService,
     private readonly spaceAbility: SpaceAbilityFactory,
   ) {}
 
@@ -149,6 +151,9 @@ export class DatabaseService {
    */
   async deleteDatabase(databaseId: string, workspaceId: string) {
     await this.getOrFailDatabase(databaseId, workspaceId);
+    await this.databaseCellRepo.softDeleteByDatabaseId(databaseId, workspaceId);
+    await this.databaseViewRepo.softDeleteByDatabaseId(databaseId, workspaceId);
+    await this.databaseRowRepo.archiveByDatabaseId(databaseId, workspaceId);
     await this.databaseRepo.softDeleteDatabase(databaseId, workspaceId);
   }
 
@@ -233,11 +238,17 @@ export class DatabaseService {
   ) {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
     await this.assertCanManageDatabasePages(user, database.spaceId);
-    await this.assertCanAccessTargetPage(dto.pageId, workspaceId, database.spaceId);
+
+    const page = await this.pageService.create(user.id, workspaceId, {
+      title: dto.title,
+      icon: dto.icon,
+      parentPageId: dto.parentPageId,
+      spaceId: database.spaceId,
+    });
 
     return this.databaseRowRepo.insertRow({
       databaseId,
-      pageId: dto.pageId,
+      pageId: page.id,
       workspaceId,
       createdById: user.id,
       updatedById: user.id,

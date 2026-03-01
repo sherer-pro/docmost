@@ -836,5 +836,7 @@
   "Password must contain at least 8 characters": "Password must contain at least 8 characters",
   "Username is required": "Username is required",
   "subdomain is required": "subdomain is required",
-  "Enter a 6-digit code or 8-character backup code": "Enter a 6-digit code or 8-character backup code"
+  "Enter a 6-digit code or 8-character backup code": "Enter a 6-digit code or 8-character backup code",
+  "Databases": "Databases",
+  "Database section is ready for MVP flow": "Database section is ready for MVP flow"
 }

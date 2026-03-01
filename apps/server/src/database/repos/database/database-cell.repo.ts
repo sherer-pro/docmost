@@ -83,4 +83,21 @@ export class DatabaseCellRepo {
       .executeTakeFirst();
   }
 
+  /**
+   * Мягко удаляет все ячейки базы данных при её архивировании.
+   */
+  async softDeleteByDatabaseId(
+    databaseId: string,
+    workspaceId: string,
+    trx?: KyselyTransaction,
+  ): Promise<void> {
+    await dbOrTx(this.db, trx)
+      .updateTable('databaseCells')
+      .set({ deletedAt: new Date(), updatedAt: new Date() })
+      .where('databaseId', '=', databaseId)
+      .where('workspaceId', '=', workspaceId)
+      .where('deletedAt', 'is', null)
+      .execute();
+  }
+
 }
