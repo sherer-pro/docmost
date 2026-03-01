@@ -15,7 +15,19 @@ const SCROLL_POSITION_STORAGE_KEY_PREFIX = "docmost:scroll-position-by-path";
  * - повторные попытки в коротком окне времени позволяют «перекрыть»
  *   поздний сброс в 0 и устранить визуальный скачок.
  */
-const RESTORE_ATTEMPT_DELAYS_MS = [0, 50, 120, 250, 500, 900, 1400] as const;
+const RESTORE_ATTEMPT_DELAYS_MS = [
+  0,
+  50,
+  120,
+  250,
+  500,
+  900,
+  1400,
+  2200,
+  3200,
+  4500,
+  6000,
+] as const;
 
 /**
  * Восстанавливает прокрутку по каждому маршруту, если пользователь включил
