@@ -61,12 +61,13 @@ export class DatabaseRowRepo {
       .select('databaseRows.archivedAt')
       .select('pages.title as pageTitle')
       .select('pages.slugId as pageSlugId')
+      .select('pages.position as pagePosition')
       .select((eb) =>
         jsonObjectFrom(
           eb
             .selectFrom('pages as p')
             .innerJoin('spaces as s', 's.id', 'p.spaceId')
-            .select(['p.id', 'p.slugId', 'p.title', 'p.icon', 'p.parentPageId'])
+            .select(['p.id', 'p.slugId', 'p.title', 'p.icon', 'p.parentPageId', 'p.position'])
             /**
              * Формируем customFields по той же схеме, что и page API:
              * источник данных — page.settings.
@@ -121,7 +122,14 @@ export class DatabaseRowRepo {
       .where('pages.spaceId', '=', spaceId)
       .where('pages.deletedAt', 'is', null)
       .where('databaseRows.archivedAt', 'is', null)
-      .orderBy('databaseRows.createdAt', 'desc')
+      /**
+       * Порядок строк в дереве определяется позицией страницы,
+       * а не временем создания databaseRows.
+       *
+       * COLLATE "C" обеспечивает стабильную лексикографическую сортировку
+       * для fractional indexing ключей.
+       */
+      .orderBy(sql`"pages"."position" collate "C"`, 'desc')
       .execute();
   }
 
