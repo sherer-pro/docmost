@@ -245,7 +245,7 @@ const MentionList = forwardRef<any, MentionListProps>((props, ref) => {
         payload: {
           parentId,
           index: lastIndex,
-          data,
+          node: data,
         },
       });
     }, 50);

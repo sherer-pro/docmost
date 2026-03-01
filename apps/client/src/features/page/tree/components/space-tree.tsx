@@ -649,7 +649,7 @@ function NodeMenu({ node, treeApi, spaceId }: NodeMenuProps) {
           payload: {
             parentId,
             index: newIndex,
-            data: treeNodeData,
+            node: treeNodeData,
           },
         });
       }, 50);

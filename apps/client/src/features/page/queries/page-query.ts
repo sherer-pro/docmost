@@ -65,6 +65,15 @@ export function usePageQuery(
   return query;
 }
 
+
+function invalidateDatabaseTreeConsistency() {
+  queryClient.invalidateQueries({
+    predicate: (item) => item.queryKey[0] === "database" && item.queryKey[2] === "rows",
+  });
+
+  queryClient.invalidateQueries({ queryKey: ["database", "row-context"] });
+}
+
 export function useCreatePageMutation() {
   const { t } = useTranslation();
   return useMutation<IPage, Error, Partial<IPageInput>>({
@@ -107,10 +116,7 @@ export function useUpdateTitlePageMutation() {
   return useMutation<IPage, Error, Partial<IPageInput>>({
     mutationFn: (data) => updatePage(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        predicate: (item) =>
-          item.queryKey[0] === 'database' && item.queryKey[2] === 'rows',
-      });
+      invalidateDatabaseTreeConsistency();
     },
   });
 }
@@ -128,10 +134,7 @@ export function useUpdatePageMutation() {
         data.customFields?.status,
       );
 
-      queryClient.invalidateQueries({
-        predicate: (item) =>
-          item.queryKey[0] === 'database' && item.queryKey[2] === 'rows',
-      });
+      invalidateDatabaseTreeConsistency();
     },
   });
 }
@@ -243,7 +246,7 @@ export function useRestorePageMutation() {
             payload: {
               parentId,
               index,
-              data: nodeData,
+              node: nodeData,
             },
           });
         }, 50);
@@ -429,6 +432,7 @@ export function invalidateOnCreatePage(data: Partial<IPage>) {
   queryClient.invalidateQueries({
     queryKey: ["recent-changes", data.spaceId],
   });
+  invalidateDatabaseTreeConsistency();
 }
 
 export function invalidateOnUpdatePage(
@@ -476,6 +480,7 @@ export function invalidateOnUpdatePage(
   queryClient.invalidateQueries({
     queryKey: ["recent-changes", spaceId],
   });
+  invalidateDatabaseTreeConsistency();
 }
 
 export function updateCacheOnMovePage(
@@ -599,6 +604,8 @@ export function updateCacheOnMovePage(
       });
     });
   }
+
+  invalidateDatabaseTreeConsistency();
 }
 
 export function invalidateOnDeletePage(pageId: string) {
@@ -628,4 +635,5 @@ export function invalidateOnDeletePage(pageId: string) {
   queryClient.invalidateQueries({
     queryKey: ["recent-changes"],
   });
+  invalidateDatabaseTreeConsistency();
 }
