@@ -7,6 +7,7 @@ export interface IDatabaseRowPage {
   title: string | null;
   icon?: string | null;
   parentPageId?: string | null;
+  position?: string | null;
   /**
    * Custom page document fields.
    *

@@ -259,6 +259,41 @@ export class DatabaseService {
     await this.assertCanManageDatabasePages(user, database.spaceId);
 
     /**
+     * Вычисляем родителя новой строки:
+     * - если клиент явно передал parentPageId, используем его;
+     * - иначе привязываем строку к странице базы данных как к корневому узлу дерева строк.
+     */
+    const targetParentPageId = dto.parentPageId ?? database.pageId ?? null;
+
+    /**
+     * Если родитель указан, проверяем базовую доступность страницы в нужном workspace/space.
+     */
+    if (targetParentPageId) {
+      await this.assertCanAccessTargetPage(
+        targetParentPageId,
+        workspaceId,
+        database.spaceId,
+      );
+    }
+
+    /**
+     * Дополнительная защита контекста базы данных:
+     * разрешаем вложенность строки только в:
+     * 1) страницу самой базы, либо
+     * 2) страницу уже существующей (неархивной) строки этой же базы.
+     */
+    if (targetParentPageId && targetParentPageId !== database.pageId) {
+      const parentRow = await this.databaseRowRepo.findByDatabaseAndPage(
+        databaseId,
+        targetParentPageId,
+      );
+
+      if (!parentRow || parentRow.archivedAt) {
+        throw new NotFoundException('Parent row not found');
+      }
+    }
+
+    /**
      * Строка базы создаётся как обычная страница в том же дереве.
      *
      * По умолчанию прикрепляем строку к pageId базы, чтобы структура оставалась
@@ -267,7 +302,7 @@ export class DatabaseService {
     const page = await this.pageService.create(user.id, workspaceId, {
       title: dto.title,
       icon: dto.icon,
-      parentPageId: dto.parentPageId ?? database.pageId ?? null,
+      parentPageId: targetParentPageId,
       spaceId: database.spaceId,
     });
 
