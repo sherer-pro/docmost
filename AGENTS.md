@@ -120,6 +120,7 @@
 
 - Conventional Commits-like style is prevalent: `feat(...)`, `fix(...)`, `docs: ...`.
 - Merge commits from PRs are acceptable.
+- Write commit title and description in code only in English (ASCII), without Cyrillic.
 
 ---
 
