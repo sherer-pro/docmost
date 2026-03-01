@@ -159,7 +159,17 @@ export function TitleEditor({
     setTimeout(() => {
       // guard against Cannot access view['hasFocus'] error
       if (!titleEditor?.isInitialized) return;
-      titleEditor?.commands?.focus("end");
+
+      /**
+       * Важно: при обычном focus() браузер может проскроллить страницу к заголовку,
+       * из-за чего в SPA возникает эффект «сначала восстановили позицию, потом улетели наверх».
+       *
+       * Поэтому явно запрещаем scrollIntoView во время автофокуса заголовка.
+       */
+      titleEditor
+        ?.chain()
+        .focus("end", { scrollIntoView: false })
+        .run();
     }, 300);
   }, [titleEditor]);
 
