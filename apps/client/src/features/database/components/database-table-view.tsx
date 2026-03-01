@@ -33,6 +33,7 @@ import { IDatabaseProperty } from '@/features/database/types/database.types';
 interface DatabaseTableViewProps {
   databaseId: string;
   spaceSlug: string;
+  isEditable?: boolean;
 }
 
 const DEFAULT_FILTER: IDatabaseFilterCondition = {
@@ -92,6 +93,7 @@ function matchCondition(value: string, condition: IDatabaseFilterCondition): boo
 export function DatabaseTableView({
   databaseId,
   spaceSlug,
+  isEditable = true,
 }: DatabaseTableViewProps) {
   const { data: properties = [] } = useDatabasePropertiesQuery(databaseId);
   const { data: rows = [] } = useDatabaseRowsQuery(databaseId);
@@ -149,13 +151,17 @@ export function DatabaseTableView({
   }, [filteredRows, sortState]);
 
   const startEditing = (row: IDatabaseRowWithCells, property: IDatabaseProperty) => {
+    if (!isEditable) {
+      return;
+    }
+
     const key = `${row.pageId}:${property.id}`;
     setEditingCellKey(key);
     setEditingValue(getCellValue(row, property.id));
   };
 
   const saveEditing = async (row: IDatabaseRowWithCells, propertyId: string) => {
-    if (!editingCellKey) {
+    if (!editingCellKey || !isEditable) {
       return;
     }
 
@@ -184,9 +190,11 @@ export function DatabaseTableView({
             placeholder="Новая колонка"
             value={newPropertyName}
             onChange={(event) => setNewPropertyName(event.currentTarget.value)}
+            disabled={!isEditable}
           />
           <Button
             leftSection={<IconPlus size={14} />}
+            disabled={!isEditable}
             onClick={() => {
               if (!newPropertyName.trim()) {
                 return;
@@ -205,6 +213,7 @@ export function DatabaseTableView({
           <Button
             variant="light"
             leftSection={<IconPlus size={14} />}
+            disabled={!isEditable}
             onClick={() => createRowMutation.mutate({})}
           >
             Row
@@ -266,18 +275,19 @@ export function DatabaseTableView({
                 );
               })}
 
-              {properties.length > 0 && <Menu.Divider />}
+              {isEditable && properties.length > 0 && <Menu.Divider />}
 
-              {properties.map((property) => (
-                <Menu.Item
-                  key={`${property.id}-delete`}
-                  color="red"
-                  leftSection={<IconTrash size={14} />}
-                  onClick={() => deletePropertyMutation.mutate(property.id)}
-                >
-                  Delete {property.name}
-                </Menu.Item>
-              ))}
+              {isEditable &&
+                properties.map((property) => (
+                  <Menu.Item
+                    key={`${property.id}-delete`}
+                    color="red"
+                    leftSection={<IconTrash size={14} />}
+                    onClick={() => deletePropertyMutation.mutate(property.id)}
+                  >
+                    Delete {property.name}
+                  </Menu.Item>
+                ))}
             </Menu.Dropdown>
           </Menu>
         </Group>
@@ -375,15 +385,17 @@ export function DatabaseTableView({
                 <Table.Th key={property.id} miw={220}>
                   <Group justify="space-between" gap="xs" wrap="nowrap">
                     <Text size="sm">{property.name}</Text>
-                    <ActionIcon
-                      variant="subtle"
-                      color="red"
-                      size="sm"
-                      onClick={() => deletePropertyMutation.mutate(property.id)}
-                      aria-label={`Delete ${property.name}`}
-                    >
-                      <IconTrash size={14} />
-                    </ActionIcon>
+                    {isEditable && (
+                      <ActionIcon
+                        variant="subtle"
+                        color="red"
+                        size="sm"
+                        onClick={() => deletePropertyMutation.mutate(property.id)}
+                        aria-label={`Delete ${property.name}`}
+                      >
+                        <IconTrash size={14} />
+                      </ActionIcon>
+                    )}
                   </Group>
                 </Table.Th>
               ))}
@@ -398,14 +410,16 @@ export function DatabaseTableView({
                     {getRowTitle(row)}
                   </Text>
 
-                  <ActionIcon
-                    variant="subtle"
-                    color="red"
-                    onClick={() => deleteRowMutation.mutate(row.pageId)}
-                    aria-label="Delete row"
-                  >
-                    <IconTrash size={14} />
-                  </ActionIcon>
+                  {isEditable && (
+                    <ActionIcon
+                      variant="subtle"
+                      color="red"
+                      onClick={() => deleteRowMutation.mutate(row.pageId)}
+                      aria-label="Delete row"
+                    >
+                      <IconTrash size={14} />
+                    </ActionIcon>
+                  )}
                   </Group>
                 </Table.Td>
 
@@ -418,8 +432,9 @@ export function DatabaseTableView({
                     <Table.Td
                       key={property.id}
                       onClick={() => startEditing(row, property)}
+                      style={{ cursor: isEditable ? "text" : "default" }}
                     >
-                      {isEditing ? (
+                      {isEditing && isEditable ? (
                         <TextInput
                           autoFocus
                           value={editingValue}
