@@ -101,6 +101,7 @@ export interface SidebarPagesParams {
   spaceId?: string;
   pageId?: string;
   cursor?: string;
+  includeNodeTypes?: SidebarNodeType[];
 }
 
 export interface IPageInput {

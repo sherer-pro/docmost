@@ -56,6 +56,7 @@ import { markdownToHtml } from '@docmost/editor-ext';
 import { WatcherService } from '../../watcher/watcher.service';
 import { RecipientResolverService } from '../../notification/services/recipient-resolver.service';
 import { IPageRecipientNotificationJob } from '../../../integrations/queue/constants/queue.interface';
+import { SidebarNodeType } from '../dto/sidebar-page.dto';
 
 @Injectable()
 export class PageService {
@@ -307,6 +308,7 @@ export class PageService {
     spaceId: string,
     pagination: PaginationOptions,
     pageId?: string,
+    includeNodeTypes?: SidebarNodeType[],
   ): Promise<
     CursorPaginationResult<
       Partial<Page> & {
@@ -316,12 +318,19 @@ export class PageService {
       }
     >
   > {
-    /**
-     * Формируем единый поток узлов для sidebar:
-     * - обычные страницы (nodeType = page),
-     * - базы данных (nodeType = database), привязанные к pageId.
-     */
-    const query = this.db
+    const requestedNodeTypes =
+      includeNodeTypes && includeNodeTypes.length > 0
+        ? includeNodeTypes
+        : (['page', 'database'] satisfies SidebarNodeType[]);
+
+    const includePages = requestedNodeTypes.some((type) =>
+      ['page', 'databaseRow'].includes(type),
+    );
+    const includePageNodes = requestedNodeTypes.includes('page');
+    const includeDatabaseRowNodes = requestedNodeTypes.includes('databaseRow');
+    const includeDatabases = requestedNodeTypes.includes('database');
+
+    let query = this.db
       .selectFrom('pages')
       .leftJoin('databases as linkedDatabase', (join) =>
         join
@@ -341,7 +350,15 @@ export class PageService {
       ])
       .select((eb) => [
         sql<any>`pages.settings`.as('settings'),
-        sql<string>`'page'`.as('nodeType'),
+        sql<string>`case
+          when exists (
+            select 1
+            from database_rows
+            where database_rows.page_id = pages.id
+              and database_rows.archived_at is null
+          ) then 'databaseRow'
+          else 'page'
+        end`.as('nodeType'),
         sql<string | null>`null`.as('databaseId'),
         sql<boolean>`(
           ${this.pageRepo.withHasChildren(eb)}
@@ -358,8 +375,23 @@ export class PageService {
       .where('pages.deletedAt', 'is', null)
       .where('pages.spaceId', '=', spaceId)
       .where('linkedDatabase.id', 'is', null)
-      .where(({ not, exists, selectFrom }) =>
-        not(
+      .$if(!!pageId, (qb) => qb.where('pages.parentPageId', '=', pageId))
+      .$if(!pageId, (qb) => qb.where('pages.parentPageId', 'is', null))
+      .$if(!includePages, (qb) => qb.where(sql<boolean>`false`, '=', true))
+      .$if(includePageNodes && !includeDatabaseRowNodes, (qb) =>
+        qb.where(({ not, exists, selectFrom }) =>
+          not(
+            exists(
+              selectFrom('databaseRows')
+                .select('databaseRows.id')
+                .whereRef('databaseRows.pageId', '=', 'pages.id')
+                .where('databaseRows.archivedAt', 'is', null),
+            ),
+          ),
+        ),
+      )
+      .$if(!includePageNodes && includeDatabaseRowNodes, (qb) =>
+        qb.where(({ exists, selectFrom }) =>
           exists(
             selectFrom('databaseRows')
               .select('databaseRows.id')
@@ -367,10 +399,10 @@ export class PageService {
               .where('databaseRows.archivedAt', 'is', null),
           ),
         ),
-      )
-      .$if(!!pageId, (qb) => qb.where('pages.parentPageId', '=', pageId))
-      .$if(!pageId, (qb) => qb.where('pages.parentPageId', 'is', null))
-      .unionAll(
+      );
+
+    if (includeDatabases) {
+      query = query.unionAll(
         this.db
           .selectFrom('databases')
           .innerJoin('pages as databasePage', 'databasePage.id', 'databases.pageId')
@@ -395,6 +427,7 @@ export class PageService {
           .$if(!!pageId, (qb) => qb.where('databasePage.parentPageId', '=', pageId))
           .$if(!pageId, (qb) => qb.where('databasePage.parentPageId', 'is', null)),
       );
+    }
 
     return executeWithCursorPagination(query, {
       perPage: 250,
