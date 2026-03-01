@@ -40,6 +40,18 @@ export class DatabasePropertyRepo {
   }
 
   /**
+   * Возвращает одно свойство по идентификатору.
+   */
+  async findById(propertyId: string): Promise<DatabaseProperty> {
+    return this.db
+      .selectFrom('databaseProperties')
+      .selectAll()
+      .where('id', '=', propertyId)
+      .where('deletedAt', 'is', null)
+      .executeTakeFirst();
+  }
+
+  /**
    * Обновляет свойство базы данных.
    */
   async updateProperty(
@@ -51,6 +63,23 @@ export class DatabasePropertyRepo {
       .updateTable('databaseProperties')
       .set({ ...payload, updatedAt: new Date() })
       .where('id', '=', propertyId)
+      .where('deletedAt', 'is', null)
+      .returningAll()
+      .executeTakeFirst();
+  }
+
+  /**
+   * Мягко удаляет свойство.
+   */
+  async softDeleteProperty(
+    propertyId: string,
+    trx?: KyselyTransaction,
+  ): Promise<DatabaseProperty> {
+    return dbOrTx(this.db, trx)
+      .updateTable('databaseProperties')
+      .set({ deletedAt: new Date(), updatedAt: new Date() })
+      .where('id', '=', propertyId)
+      .where('deletedAt', 'is', null)
       .returningAll()
       .executeTakeFirst();
   }

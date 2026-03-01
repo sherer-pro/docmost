@@ -99,6 +99,41 @@
 2. Обновить e2e и контрактные тесты, чтобы покрывали только `actions`-маршруты.
 3. Пересобрать и опубликовать окончательную карту API без legacy RPC путей.
 
+
+## Решение по database API (DOC-DB-MVP)
+
+Принято решение **(B) — ввести REST-роуты для `databases`** и применять их последовательно ко всем подресурсам.
+
+### Единый формат маршрутов для databases
+
+- База данных (CRUD):
+  - `POST /databases`
+  - `GET /databases?spaceId=:spaceId`
+  - `GET /databases/:databaseId`
+  - `PATCH /databases/:databaseId`
+  - `DELETE /databases/:databaseId`
+- Свойства (properties CRUD):
+  - `GET /databases/:databaseId/properties`
+  - `POST /databases/:databaseId/properties`
+  - `PATCH /databases/:databaseId/properties/:propertyId`
+  - `DELETE /databases/:databaseId/properties/:propertyId`
+- Строки (rows list/create):
+  - `GET /databases/:databaseId/rows`
+  - `POST /databases/:databaseId/rows`
+- Ячейки (batch update):
+  - `PATCH /databases/:databaseId/rows/:pageId/cells`
+- Представления (views CRUD):
+  - `GET /databases/:databaseId/views`
+  - `POST /databases/:databaseId/views`
+  - `PATCH /databases/:databaseId/views/:viewId`
+  - `DELETE /databases/:databaseId/views/:viewId`
+
+### Явно зафиксированное исключение
+
+Для `cells` допускается командный semantically-операционный endpoint `PATCH /databases/:databaseId/rows/:pageId/cells` (batch update),
+так как это массовая операция по набору ячеек, а не изменение одной конкретной сущности `cell`.
+Это разрешённое исключение из строгого "one-resource-per-route" и соответствует правилу для командных действий над ресурсом.
+
 ## Практические правила для новых endpoint-ов
 
 - Новый endpoint не должен добавляться в root namespace без префикса контроллера.

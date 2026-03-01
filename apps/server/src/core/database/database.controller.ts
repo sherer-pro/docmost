@@ -1,13 +1,32 @@
-import { Body, Controller, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
 import { AuthWorkspace } from '../../common/decorators/auth-workspace.decorator';
 import { User, Workspace } from '@docmost/db/types/entity.types';
 import { DatabaseService } from './services/database.service';
 import {
+  BatchUpdateDatabaseCellsDto,
   CreateDatabaseDto,
-  ListDatabasesDto,
-  UpsertDatabaseRowCellsDto,
+  CreateDatabasePropertyDto,
+  CreateDatabaseRowDto,
+  CreateDatabaseViewDto,
+  ListDatabasesQueryDto,
+  UpdateDatabaseDto,
+  UpdateDatabasePropertyDto,
+  UpdateDatabaseViewDto,
 } from './dto/database.dto';
 
 @UseGuards(JwtAuthGuard)
@@ -16,10 +35,10 @@ export class DatabaseController {
   constructor(private readonly databaseService: DatabaseService) {}
 
   /**
-   * Создаёт новую сущность базы данных в рамках пространства.
+   * Создаёт базу данных.
    */
   @HttpCode(HttpStatus.OK)
-  @Post('create')
+  @Post()
   async create(
     @Body() dto: CreateDatabaseDto,
     @AuthUser() user: User,
@@ -29,27 +48,208 @@ export class DatabaseController {
   }
 
   /**
-   * Возвращает список баз данных пространства.
+   * Возвращает список баз данных по spaceId.
    */
-  @HttpCode(HttpStatus.OK)
-  @Post('list')
+  @Get()
   async list(
-    @Body() dto: ListDatabasesDto,
+    @Query() query: ListDatabasesQueryDto,
     @AuthWorkspace() workspace: Workspace,
   ) {
-    return this.databaseService.listBySpace(dto.spaceId, workspace.id);
+    return this.databaseService.listBySpace(query.spaceId, workspace.id);
   }
 
   /**
-   * Выполняет upsert значений ячеек для строки базы данных.
+   * Возвращает одну базу данных.
    */
-  @HttpCode(HttpStatus.OK)
-  @Post('rows/upsert-cells')
-  async upsertRowCells(
-    @Body() dto: UpsertDatabaseRowCellsDto,
+  @Get(':databaseId')
+  async getOne(
+    @Param('databaseId', ParseUUIDPipe) databaseId: string,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.databaseService.getDatabase(databaseId, workspace.id);
+  }
+
+  /**
+   * Обновляет базу данных.
+   */
+  @Patch(':databaseId')
+  async update(
+    @Param('databaseId', ParseUUIDPipe) databaseId: string,
+    @Body() dto: UpdateDatabaseDto,
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
-    return this.databaseService.upsertRowCells(dto, user.id, workspace.id);
+    return this.databaseService.updateDatabase(
+      databaseId,
+      dto,
+      user.id,
+      workspace.id,
+    );
+  }
+
+  /**
+   * Удаляет базу данных (soft delete).
+   */
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Delete(':databaseId')
+  async remove(
+    @Param('databaseId', ParseUUIDPipe) databaseId: string,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    await this.databaseService.deleteDatabase(databaseId, workspace.id);
+  }
+
+  /**
+   * Создаёт новое свойство базы данных.
+   */
+  @Post(':databaseId/properties')
+  async createProperty(
+    @Param('databaseId', ParseUUIDPipe) databaseId: string,
+    @Body() dto: CreateDatabasePropertyDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.databaseService.createProperty(
+      databaseId,
+      dto,
+      user.id,
+      workspace.id,
+    );
+  }
+
+  /**
+   * Возвращает список свойств базы данных.
+   */
+  @Get(':databaseId/properties')
+  async listProperties(
+    @Param('databaseId', ParseUUIDPipe) databaseId: string,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.databaseService.listProperties(databaseId, workspace.id);
+  }
+
+  /**
+   * Обновляет свойство базы данных.
+   */
+  @Patch(':databaseId/properties/:propertyId')
+  async updateProperty(
+    @Param('databaseId', ParseUUIDPipe) databaseId: string,
+    @Param('propertyId', ParseUUIDPipe) propertyId: string,
+    @Body() dto: UpdateDatabasePropertyDto,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.databaseService.updateProperty(
+      databaseId,
+      propertyId,
+      dto,
+      workspace.id,
+    );
+  }
+
+  /**
+   * Удаляет свойство базы данных (soft delete).
+   */
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Delete(':databaseId/properties/:propertyId')
+  async removeProperty(
+    @Param('databaseId', ParseUUIDPipe) databaseId: string,
+    @Param('propertyId', ParseUUIDPipe) propertyId: string,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    await this.databaseService.deleteProperty(databaseId, propertyId, workspace.id);
+  }
+
+  /**
+   * Создаёт строку в базе данных.
+   */
+  @Post(':databaseId/rows')
+  async createRow(
+    @Param('databaseId', ParseUUIDPipe) databaseId: string,
+    @Body() dto: CreateDatabaseRowDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.databaseService.createRow(databaseId, dto, user.id, workspace.id);
+  }
+
+  /**
+   * Возвращает список строк базы данных.
+   */
+  @Get(':databaseId/rows')
+  async listRows(
+    @Param('databaseId', ParseUUIDPipe) databaseId: string,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.databaseService.listRows(databaseId, workspace.id);
+  }
+
+  /**
+   * Выполняет батч-обновление ячеек для строки.
+   */
+  @Patch(':databaseId/rows/:pageId/cells')
+  async batchUpdateRowCells(
+    @Param('databaseId', ParseUUIDPipe) databaseId: string,
+    @Param('pageId', ParseUUIDPipe) pageId: string,
+    @Body() dto: BatchUpdateDatabaseCellsDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.databaseService.batchUpdateRowCells(
+      databaseId,
+      pageId,
+      dto,
+      user.id,
+      workspace.id,
+    );
+  }
+
+  /**
+   * Создаёт представление базы данных.
+   */
+  @Post(':databaseId/views')
+  async createView(
+    @Param('databaseId', ParseUUIDPipe) databaseId: string,
+    @Body() dto: CreateDatabaseViewDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.databaseService.createView(databaseId, dto, user.id, workspace.id);
+  }
+
+  /**
+   * Возвращает список представлений базы данных.
+   */
+  @Get(':databaseId/views')
+  async listViews(
+    @Param('databaseId', ParseUUIDPipe) databaseId: string,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.databaseService.listViews(databaseId, workspace.id);
+  }
+
+  /**
+   * Обновляет представление базы данных.
+   */
+  @Patch(':databaseId/views/:viewId')
+  async updateView(
+    @Param('databaseId', ParseUUIDPipe) databaseId: string,
+    @Param('viewId', ParseUUIDPipe) viewId: string,
+    @Body() dto: UpdateDatabaseViewDto,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.databaseService.updateView(databaseId, viewId, dto, workspace.id);
+  }
+
+  /**
+   * Удаляет представление базы данных (soft delete).
+   */
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Delete(':databaseId/views/:viewId')
+  async removeView(
+    @Param('databaseId', ParseUUIDPipe) databaseId: string,
+    @Param('viewId', ParseUUIDPipe) viewId: string,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    await this.databaseService.deleteView(databaseId, viewId, workspace.id);
   }
 }
