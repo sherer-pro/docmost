@@ -54,6 +54,12 @@ import { notifications } from "@mantine/notifications";
 import { StatusIndicator } from "@/components/ui/status-indicator.tsx";
 import { currentUserAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { PageEditMode } from "@/features/user/types/user.types.ts";
+import { MoveHandler, NodeRendererProps, SimpleTree, Tree } from "react-arborist";
+import { useMovePageMutation, updateCacheOnMovePage } from "@/features/page/queries/page-query.ts";
+import { IMovePage } from "@/features/page/types/page.types.ts";
+import { generateJitteredKeyBetween } from "fractional-indexing-jittered";
+import { queryClient } from "@/main.tsx";
+import { useQueryEmit } from "@/features/websocket/use-query-emit.ts";
 
 export function SpaceSidebar() {
   const { t } = useTranslation();
@@ -331,6 +337,79 @@ interface DatabaseRowsTreeProps {
   isStatusFieldEnabled: boolean;
 }
 
+interface DatabaseRowTreeNode {
+  id: string;
+  pageId: string;
+  parentPageId: string | null;
+  title: string;
+  name: string;
+  slugId: string | null;
+  status: string | null;
+  position: string;
+  children: DatabaseRowTreeNode[];
+}
+
+/**
+ * Преобразует плоский список rows в иерархию для react-arborist.
+ *
+ * В дереве показываем только строки текущей базы:
+ * - если parentPageId указывает на страницу базы, нода попадает в корень дерева;
+ * - если parentPageId указывает на другую строку этой же базы, строим вложенность.
+ */
+function buildDatabaseRowsTree(
+  rows: ReturnType<typeof useDatabaseRowsQuery>["data"],
+  databasePageId?: string | null,
+): DatabaseRowTreeNode[] {
+  if (!rows?.length) {
+    return [];
+  }
+
+  const map = new Map<string, DatabaseRowTreeNode>();
+  const roots: DatabaseRowTreeNode[] = [];
+
+  for (const row of rows) {
+    map.set(row.pageId, {
+      id: row.pageId,
+      pageId: row.pageId,
+      parentPageId: row.page?.parentPageId ?? null,
+      title: row.page?.title || row.pageTitle || "Untitled",
+      name: row.page?.title || row.pageTitle || "Untitled",
+      slugId: row.page?.slugId ?? null,
+      status: row.page?.customFields?.status ?? null,
+      position: row.page?.position ?? "",
+      children: [],
+    });
+  }
+
+  for (const node of map.values()) {
+    const parentId = node.parentPageId;
+
+    if (!parentId || parentId === databasePageId) {
+      roots.push(node);
+      continue;
+    }
+
+    const parentNode = map.get(parentId);
+    if (!parentNode) {
+      roots.push(node);
+      continue;
+    }
+
+    parentNode.children.push(node);
+  }
+
+  const sortByPositionDesc = (items: DatabaseRowTreeNode[]) => {
+    items.sort((a, b) => b.position.localeCompare(a.position));
+    for (const item of items) {
+      sortByPositionDesc(item.children);
+    }
+  };
+
+  sortByPositionDesc(roots);
+
+  return roots;
+}
+
 function DatabaseRowsTree({
   database,
   spaceSlug,
@@ -338,14 +417,227 @@ function DatabaseRowsTree({
 }: DatabaseRowsTreeProps) {
   const { t } = useTranslation();
   const location = useLocation();
+  const emit = useQueryEmit();
   const { data: rows = [] } = useDatabaseRowsQuery(database.id);
   const createRowMutation = useCreateDatabaseRowMutation(database.id);
   const deleteRowMutation = useDeleteDatabaseRowMutation(database.id);
+  const movePageMutation = useMovePageMutation();
 
-  const rootRows = React.useMemo(
-    () => rows.filter((row) => !row.page?.parentPageId),
-    [rows],
+  const treeData = React.useMemo(
+    () => buildDatabaseRowsTree(rows, database.pageId),
+    [rows, database.pageId],
   );
+
+  const handleMove: MoveHandler<DatabaseRowTreeNode> = async ({
+    dragIds,
+    dragNodes,
+    parentId,
+    index,
+  }) => {
+    const draggedNodeId = dragIds[0];
+    const draggedNode = dragNodes[0];
+
+    if (!draggedNodeId || !draggedNode) {
+      return;
+    }
+
+    const allowedParentIds = new Set<string>(rows.map((row) => row.pageId));
+    if (database.pageId) {
+      allowedParentIds.add(database.pageId);
+    }
+
+    const normalizedParentId = parentId ?? database.pageId ?? null;
+
+    /**
+     * Защита от некорректных перемещений:
+     * - корень дерева маппим на pageId самой базы;
+     * - запрещаем перенос в родителя, который не принадлежит строкам/базе.
+     */
+    if (!normalizedParentId || !allowedParentIds.has(normalizedParentId)) {
+      return;
+    }
+
+    const tree = new SimpleTree<DatabaseRowTreeNode>(treeData);
+    tree.move({ id: draggedNodeId, parentId, index });
+
+    const newDragIndex = tree.find(draggedNodeId)?.childIndex ?? index;
+    const currentTreeData = parentId ? tree.find(parentId).children : tree.data;
+
+    const afterPosition =
+      // @ts-ignore Нормализуем доступ к данным для root/child коллекций.
+      currentTreeData[newDragIndex - 1]?.position ||
+      // @ts-ignore Нормализуем доступ к данным для root/child коллекций.
+      currentTreeData[index - 1]?.data?.position ||
+      null;
+
+    const beforePosition =
+      // @ts-ignore Нормализуем доступ к данным для root/child коллекций.
+      currentTreeData[newDragIndex + 1]?.position ||
+      // @ts-ignore Нормализуем доступ к данным для root/child коллекций.
+      currentTreeData[index + 1]?.data?.position ||
+      null;
+
+    const newPosition =
+      afterPosition && beforePosition && afterPosition === beforePosition
+        ? generateJitteredKeyBetween(afterPosition, null)
+        : generateJitteredKeyBetween(afterPosition, beforePosition);
+
+    const oldParentId = draggedNode.data.parentPageId ?? null;
+
+    const payload: IMovePage = {
+      pageId: draggedNodeId,
+      position: newPosition,
+      parentPageId: normalizedParentId,
+    };
+
+    try {
+      await movePageMutation.mutateAsync(payload);
+
+      /**
+       * Синхронизация cache для sidebar-дерева страниц.
+       *
+       * Строки базы хранятся как pages, поэтому используем ту же утилиту,
+       * что и для обычного tree move.
+       */
+      updateCacheOnMovePage(
+        database.spaceId,
+        draggedNodeId,
+        oldParentId,
+        normalizedParentId,
+        {
+          id: draggedNode.data.pageId,
+          slugId: draggedNode.data.slugId,
+          title: draggedNode.data.title,
+          position: newPosition,
+          spaceId: database.spaceId,
+          parentPageId: normalizedParentId,
+        },
+      );
+
+      /**
+       * Отдельно актуализируем кэш rows конкретной базы,
+       * чтобы дерево строк в sidebar обновилось без refetch.
+       */
+      queryClient.setQueryData(
+        ["database", database.id, "rows"],
+        (oldRows: any[] | undefined) => {
+          if (!oldRows) {
+            return oldRows;
+          }
+
+          const updated = oldRows.map((row) => {
+            if (row.pageId !== draggedNodeId) {
+              return row;
+            }
+
+            return {
+              ...row,
+              page: {
+                ...row.page,
+                parentPageId: normalizedParentId,
+                position: newPosition,
+              },
+            };
+          });
+
+          return updated;
+        },
+      );
+
+      setTimeout(() => {
+        emit({
+          operation: "moveTreeNode",
+          spaceId: database.spaceId,
+          payload: {
+            id: draggedNodeId,
+            parentId,
+            oldParentId,
+            index,
+            position: newPosition,
+            pageData: {
+              id: draggedNode.data.pageId,
+              slugId: draggedNode.data.slugId,
+              title: draggedNode.data.title,
+              position: newPosition,
+              spaceId: database.spaceId,
+              parentPageId: normalizedParentId,
+            },
+          },
+        });
+      }, 50);
+    } catch (error) {
+      console.error("Failed to move database row", error);
+    }
+  };
+
+  const renderNode = ({ node, style }: NodeRendererProps<DatabaseRowTreeNode>) => {
+    const rowLink = `/s/${spaceSlug}/p/${node.data.slugId || node.data.pageId}`;
+    const isActiveRow =
+      location.pathname.toLowerCase() === rowLink.toLowerCase();
+
+    return (
+      <div
+        style={style}
+        className={clsx(
+          classes.rowTreeItem,
+          isActiveRow ? classes.activeRowTreeItem : "",
+        )}
+      >
+        <UnstyledButton
+          component={Link}
+          to={rowLink}
+          className={clsx(
+            classes.menu,
+            classes.databaseRowLink,
+            isActiveRow ? classes.activeButton : "",
+          )}
+        >
+          <div className={classes.menuItemInner}>
+            <span className={classes.menuItemLabel}>{node.data.title}</span>
+            {isStatusFieldEnabled && node.data.status && (
+              <StatusIndicator
+                status={node.data.status}
+                className={classes.statusIndicator}
+              />
+            )}
+          </div>
+        </UnstyledButton>
+
+        <div className={classes.rowTreeActions}>
+          <Menu shadow="md" width={200}>
+            <Menu.Target>
+              <ActionIcon
+                variant="transparent"
+                c="gray"
+                className={classes.rowTreeMenuButton}
+                aria-label={t("Row actions")}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+              >
+                <IconDots size={20} stroke={2} />
+              </ActionIcon>
+            </Menu.Target>
+
+            <Menu.Dropdown>
+              <Menu.Item
+                color="red"
+                leftSection={<IconTrash size={14} />}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  deleteRowMutation.mutate(node.data.pageId);
+                }}
+              >
+                {t("Delete")}
+              </Menu.Item>
+            </Menu.Dropdown>
+          </Menu>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div>
@@ -354,82 +646,40 @@ function DatabaseRowsTree({
           variant="subtle"
           size="compact-xs"
           leftSection={<IconPlus size={14} />}
-          onClick={() => createRowMutation.mutate({})}
+          onClick={() => createRowMutation.mutate({ parentPageId: database.pageId })}
         >
           {t("New row")}
         </Button>
       </Group>
 
-      {rootRows.map((row) => {
-        const title = row.page?.title || row.pageTitle || t("untitled");
-        const rowStatus = row.page?.customFields?.status;
-        const rowLink = `/s/${spaceSlug}/p/${row.page?.slugId || row.pageId}`;
-        const isActiveRow =
-          location.pathname.toLowerCase() === rowLink.toLowerCase();
+      <Tree<DatabaseRowTreeNode>
+        data={treeData}
+        idAccessor="id"
+        childrenAccessor="children"
+        disableEdit
+        disableDrag={false}
+        disableDrop={(args) => {
+          /**
+           * Ещё одна линия защиты для DnD:
+           * разрешаем drop только в корень текущей базы или в строки этой же базы.
+           */
+          if (!args.parentNode) {
+            return false;
+          }
 
-        return (
-          <div
-            key={row.pageId}
-            className={clsx(
-              classes.rowTreeItem,
-              isActiveRow ? classes.activeRowTreeItem : "",
-            )}
-          >
-            <UnstyledButton
-              component={Link}
-              to={rowLink}
-              className={clsx(
-                classes.menu,
-                classes.databaseRowLink,
-                isActiveRow ? classes.activeButton : "",
-              )}
-            >
-              <div className={classes.menuItemInner}>
-                <span className={classes.menuItemLabel}>{title}</span>
-                {isStatusFieldEnabled && rowStatus && (
-                  <StatusIndicator
-                    status={rowStatus}
-                    className={classes.statusIndicator}
-                  />
-                )}
-              </div>
-            </UnstyledButton>
-
-            <div className={classes.rowTreeActions}>
-              <Menu shadow="md" width={200}>
-                <Menu.Target>
-                  <ActionIcon
-                    variant="transparent"
-                    c="gray"
-                    className={classes.rowTreeMenuButton}
-                    aria-label={t("Row actions")}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                    }}
-                  >
-                    <IconDots size={20} stroke={2} />
-                  </ActionIcon>
-                </Menu.Target>
-
-                <Menu.Dropdown>
-                  <Menu.Item
-                    color="red"
-                    leftSection={<IconTrash size={14} />}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      deleteRowMutation.mutate(row.pageId);
-                    }}
-                  >
-                    {t("Delete")}
-                  </Menu.Item>
-                </Menu.Dropdown>
-              </Menu>
-            </div>
-          </div>
-        );
-      })}
+          const parentId = args.parentNode.data.pageId;
+          return !rows.some((row) => row.pageId === parentId);
+        }}
+        rowHeight={30}
+        indent={16}
+        paddingTop={4}
+        paddingBottom={4}
+        width="100%"
+        height={Math.min(240, Math.max(40, treeData.length * 34 + 8))}
+        onMove={handleMove}
+      >
+        {renderNode}
+      </Tree>
     </div>
   );
 }
