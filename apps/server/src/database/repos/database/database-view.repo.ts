@@ -40,6 +40,18 @@ export class DatabaseViewRepo {
   }
 
   /**
+   * Возвращает одно представление по идентификатору.
+   */
+  async findById(viewId: string): Promise<DatabaseView> {
+    return this.db
+      .selectFrom('databaseViews')
+      .selectAll()
+      .where('id', '=', viewId)
+      .where('deletedAt', 'is', null)
+      .executeTakeFirst();
+  }
+
+  /**
    * Обновляет настройки представления.
    */
   async updateView(
@@ -51,6 +63,23 @@ export class DatabaseViewRepo {
       .updateTable('databaseViews')
       .set({ ...payload, updatedAt: new Date() })
       .where('id', '=', id)
+      .where('deletedAt', 'is', null)
+      .returningAll()
+      .executeTakeFirst();
+  }
+
+  /**
+   * Мягко удаляет представление.
+   */
+  async softDeleteView(
+    id: string,
+    trx?: KyselyTransaction,
+  ): Promise<DatabaseView> {
+    return dbOrTx(this.db, trx)
+      .updateTable('databaseViews')
+      .set({ deletedAt: new Date(), updatedAt: new Date() })
+      .where('id', '=', id)
+      .where('deletedAt', 'is', null)
       .returningAll()
       .executeTakeFirst();
   }
