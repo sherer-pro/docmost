@@ -27,7 +27,6 @@ import {
   IconFileExport,
   IconLink,
   IconPlus,
-  IconPointFilled,
   IconTrash,
 } from "@tabler/icons-react";
 import {
@@ -826,35 +825,43 @@ interface PageArrowProps {
 }
 
 function PageArrow({ node, onExpandTree }: PageArrowProps) {
+  const hasExpandableChildren =
+    (node.children?.length ?? 0) > 0 || !!node.data.hasChildren;
+
   useEffect(() => {
+    /**
+     * При любом раскрытии узла (через клик по шеврону, hotkeys,
+     * DnD hover-open или восстановление openState) инициируем
+     * ленивую догрузку детей через единый обработчик.
+     */
     if (node.isOpen) {
-      onExpandTree();
+      onExpandTree?.();
     }
-  }, []);
+  }, [node.isOpen, onExpandTree]);
 
   return (
     <ActionIcon
       size={20}
       variant="subtle"
       c="gray"
+      disabled={!hasExpandableChildren}
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
+
+        if (!hasExpandableChildren) {
+          return;
+        }
+
         node.toggle();
-        onExpandTree();
+        onExpandTree?.();
       }}
     >
-      {node.isInternal ? (
-        node.children && (node.children.length > 0 || node.data.hasChildren) ? (
-          node.isOpen ? (
-            <IconChevronDown stroke={2} size={18} />
-          ) : (
-            <IconChevronRight stroke={2} size={18} />
-          )
-        ) : (
-          <IconPointFilled size={8} />
-        )
-      ) : null}
+      {hasExpandableChildren
+        ? node.isOpen
+          ? <IconChevronDown stroke={2} size={18} />
+          : <IconChevronRight stroke={2} size={18} />
+        : null}
     </ActionIcon>
   );
 }
