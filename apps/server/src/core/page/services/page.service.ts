@@ -533,7 +533,7 @@ export class PageService {
           .selectFrom('databases')
           .innerJoin('pages as databasePage', 'databasePage.id', 'databases.pageId')
           .select([
-            'databases.id as id',
+            'databasePage.id as id',
             sql<string | null>`null`.as('slugId'),
             'databases.name as title',
             'databases.icon as icon',
