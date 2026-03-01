@@ -21,6 +21,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useConvertPageToDatabaseMutation, usePageQuery } from "@/features/page/queries/page-query.ts";
 import { useConvertDatabaseToPageMutation } from "@/features/database/queries/database-query.ts";
 import { buildDatabaseUrl, buildPageUrl } from "@/features/page/page.utils.ts";
+import { getPageById } from "@/features/page/services/page-service.ts";
 import { notifications } from "@mantine/notifications";
 import { modals } from "@mantine/modals";
 import { getAppUrl } from "@/lib/config.ts";
@@ -238,7 +239,9 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
       onConfirm: async () => {
         const result = await convertPageToDatabaseAsync(page.id);
         notifications.show({ message: t('Page converted to database') });
-        navigate(buildDatabaseUrl(spaceSlug, result.slugId, page.title));
+
+        const convertedDatabasePage = await getPageById({ pageId: result.pageId });
+        navigate(buildDatabaseUrl(spaceSlug, convertedDatabasePage.slugId, convertedDatabasePage.title));
       },
     });
   };
