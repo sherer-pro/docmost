@@ -137,11 +137,14 @@ export default function DatabasePage() {
           )}
         </Stack>
 
-        <DatabaseTableView
-          databaseId={databaseId}
-          spaceSlug={spaceSlug}
-          isEditable={isEditable}
-        />
+        {database?.spaceId && (
+          <DatabaseTableView
+            databaseId={databaseId}
+            spaceId={database.spaceId}
+            spaceSlug={spaceSlug}
+            isEditable={isEditable}
+          />
+        )}
       </Container>
     </>
   );

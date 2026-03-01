@@ -7,6 +7,7 @@ import {
   InsertableDatabaseRow,
   UpdatableDatabaseRow,
 } from '@docmost/db/types/entity.types';
+import { sql } from 'kysely';
 import { jsonArrayFrom, jsonObjectFrom } from 'kysely/helpers/postgres';
 
 @Injectable()
@@ -64,7 +65,30 @@ export class DatabaseRowRepo {
         jsonObjectFrom(
           eb
             .selectFrom('pages as p')
+            .innerJoin('spaces as s', 's.id', 'p.spaceId')
             .select(['p.id', 'p.slugId', 'p.title', 'p.icon', 'p.parentPageId'])
+            /**
+             * Формируем customFields по той же схеме, что и page API:
+             * источник данных — page.settings.
+             *
+             * Дополнительно применяем правила видимости для полей assignee/stakeholders
+             * на основании settings.documentFields конкретного пространства.
+             */
+            .select(
+              sql`jsonb_build_object(
+                'status', p.settings -> 'status',
+                'assigneeId', CASE
+                  WHEN COALESCE((s.settings -> 'documentFields' ->> 'assignee')::boolean, false)
+                    THEN p.settings -> 'assigneeId'
+                  ELSE 'null'::jsonb
+                END,
+                'stakeholderIds', CASE
+                  WHEN COALESCE((s.settings -> 'documentFields' ->> 'stakeholders')::boolean, false)
+                    THEN COALESCE(p.settings -> 'stakeholderIds', '[]'::jsonb)
+                  ELSE '[]'::jsonb
+                END
+              )`.as('customFields'),
+            )
             .whereRef('p.id', '=', 'databaseRows.pageId'),
         ).as('page'),
       )
