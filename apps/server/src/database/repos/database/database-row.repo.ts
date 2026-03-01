@@ -96,4 +96,21 @@ export class DatabaseRowRepo {
       .returningAll()
       .executeTakeFirst();
   }
+  /**
+   * Архивирует все строки базы данных при архивировании самой базы.
+   */
+  async archiveByDatabaseId(
+    databaseId: string,
+    workspaceId: string,
+    trx?: KyselyTransaction,
+  ): Promise<void> {
+    await dbOrTx(this.db, trx)
+      .updateTable('databaseRows')
+      .set({ archivedAt: new Date(), updatedAt: new Date() })
+      .where('databaseId', '=', databaseId)
+      .where('workspaceId', '=', workspaceId)
+      .where('archivedAt', 'is', null)
+      .execute();
+  }
+
 }
