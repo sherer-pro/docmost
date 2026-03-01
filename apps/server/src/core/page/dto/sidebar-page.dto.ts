@@ -1,5 +1,6 @@
-import { IsOptional, IsString, IsUUID } from 'class-validator';
-import { SpaceIdDto } from './page.dto';
+import { IsArray, IsIn, IsOptional, IsString, IsUUID } from 'class-validator';
+export const sidebarNodeTypes = ['page', 'database', 'databaseRow'] as const;
+export type SidebarNodeType = (typeof sidebarNodeTypes)[number];
 
 export class SidebarPageDto {
   @IsOptional()
@@ -9,4 +10,9 @@ export class SidebarPageDto {
   @IsOptional()
   @IsString()
   pageId: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsIn(sidebarNodeTypes, { each: true })
+  includeNodeTypes?: SidebarNodeType[];
 }

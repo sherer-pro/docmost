@@ -661,6 +661,7 @@ export class PageController {
       spaceId,
       pagination,
       dto.pageId,
+      dto.includeNodeTypes,
     );
 
     return {
