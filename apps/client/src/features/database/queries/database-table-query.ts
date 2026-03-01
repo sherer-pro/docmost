@@ -22,6 +22,14 @@ import {
 import { IDatabaseRowContext, IDatabaseRowWithCells } from '@/features/database/types/database-table.types';
 import { queryClient } from '@/main.tsx';
 
+
+function invalidateTreeAndTable(databaseId?: string) {
+  queryClient.invalidateQueries({ queryKey: ['database', databaseId, 'rows'] });
+  queryClient.invalidateQueries({ queryKey: ['database', 'row-context'] });
+  queryClient.invalidateQueries({ queryKey: ['root-sidebar-pages'] });
+  queryClient.invalidateQueries({ queryKey: ['sidebar-pages'] });
+}
+
 /**
  * Loads property set (columns) for the selected database.
  */
@@ -68,9 +76,7 @@ export function useCreateDatabaseRowMutation(databaseId?: string) {
     mutationFn: (payload: ICreateDatabaseRowPayload) =>
       createDatabaseRow(databaseId as string, payload),
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ['database', databaseId, 'rows'],
-      });
+      invalidateTreeAndTable(databaseId);
     },
   });
 }
@@ -98,9 +104,7 @@ export function useDeleteDatabasePropertyMutation(databaseId?: string) {
       queryClient.invalidateQueries({
         queryKey: ['database', databaseId, 'properties'],
       });
-      queryClient.invalidateQueries({
-        queryKey: ['database', databaseId, 'rows'],
-      });
+      invalidateTreeAndTable(databaseId);
     },
   });
 }
@@ -118,9 +122,7 @@ export function useBatchUpdateDatabaseCellsMutation(databaseId?: string) {
       payload: IBatchUpdateDatabaseCellsPayload;
     }) => batchUpdateDatabaseCells(databaseId as string, pageId, payload),
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ['database', databaseId, 'rows'],
-      });
+      invalidateTreeAndTable(databaseId);
     },
   });
 }
@@ -131,9 +133,7 @@ export function useDeleteDatabaseRowMutation(databaseId?: string) {
     mutationFn: (pageId: string) =>
       deleteDatabaseRow(databaseId as string, pageId),
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ['database', databaseId, 'rows'],
-      });
+      invalidateTreeAndTable(databaseId);
     },
   });
 }

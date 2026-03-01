@@ -1,9 +1,8 @@
 import React from "react";
 import { socketAtom } from "@/features/websocket/atoms/socket-atom.ts";
 import { useAtom } from "jotai";
-import { InfiniteData, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { WebSocketEvent } from "@/features/websocket/types";
-import { IPage } from "../page/types/page.types";
 import { IPagination } from "@/lib/types";
 import {
   invalidateOnCreatePage,
@@ -12,8 +11,27 @@ import {
   invalidateOnUpdatePage,
 } from "../page/queries/page-query";
 import { RQ_KEY } from "../comment/queries/comment-query";
-import { queryClient } from "@/main.tsx";
 import { IComment } from "@/features/comment/types/comment.types";
+
+const mapTreeNodeToPage = (node: {
+  id: string;
+  slugId?: string;
+  name?: string;
+  icon?: string;
+  position?: string;
+  spaceId: string;
+  parentPageId?: string | null;
+  hasChildren?: boolean;
+}) => ({
+  id: node.id,
+  slugId: node.slugId,
+  title: node.name,
+  icon: node.icon,
+  position: node.position,
+  spaceId: node.spaceId,
+  parentPageId: node.parentPageId ?? null,
+  hasChildren: node.hasChildren,
+});
 
 export const useQuerySubscription = () => {
   const queryClient = useQueryClient();
@@ -38,7 +56,7 @@ export const useQuerySubscription = () => {
           });
           break;
         case "addTreeNode":
-          invalidateOnCreatePage(data.payload.data);
+          invalidateOnCreatePage(mapTreeNodeToPage(data.payload.node));
           break;
         case "moveTreeNode":
           updateCacheOnMovePage(
@@ -46,7 +64,7 @@ export const useQuerySubscription = () => {
             data.payload.id,
             data.payload.oldParentId,
             data.payload.parentId,
-            data.payload.pageData,
+            mapTreeNodeToPage(data.payload.node),
           );
           break;
         case "deleteTreeNode":
@@ -54,14 +72,8 @@ export const useQuerySubscription = () => {
           break;
         case "updateOne":
           entity = data.entity[0];
-          if (entity === "pages") {
-            // we have to do this because the usePageQuery cache key is the slugId.
-            queryKeyId = data.payload.slugId;
-          } else {
-            queryKeyId = data.id;
-          }
+          queryKeyId = entity === "pages" ? data.payload.slugId : data.id;
 
-          // only update if data was already in cache
           if (queryClient.getQueryData([...data.entity, queryKeyId])) {
             queryClient.setQueryData([...data.entity, queryKeyId], {
               ...queryClient.getQueryData([...data.entity, queryKeyId]),
@@ -79,29 +91,11 @@ export const useQuerySubscription = () => {
               data.payload.customFields?.status,
             );
           }
-
-          /*
-          queryClient.setQueriesData(
-            { queryKey: [data.entity, data.id] },
-            (oldData: any) => {
-              const update = (entity: Record<string, unknown>) =>
-                entity.id === data.id ? { ...entity, ...data.payload } : entity;
-              return Array.isArray(oldData)
-                ? oldData.map(update)
-                : update(oldData as Record<string, unknown>);
-            },
-          );
-      */
           break;
         case "refetchRootTreeNodeEvent": {
           const spaceId = data.spaceId;
-          queryClient.refetchQueries({
-            queryKey: ["root-sidebar-pages", spaceId],
-          });
-
-          queryClient.invalidateQueries({
-            queryKey: ["recent-changes", spaceId],
-          });
+          queryClient.refetchQueries({ queryKey: ["root-sidebar-pages", spaceId] });
+          queryClient.invalidateQueries({ queryKey: ["recent-changes", spaceId] });
           break;
         }
         case "resolveComment": {
@@ -112,15 +106,15 @@ export const useQuerySubscription = () => {
           if (currentComments && currentComments.items) {
             const updatedComments = currentComments.items.map((comment) =>
               comment.id === data.commentId
-                ? { 
-                    ...comment, 
-                    resolvedAt: data.resolvedAt, 
-                    resolvedById: data.resolvedById, 
-                    resolvedBy: data.resolvedBy 
+                ? {
+                    ...comment,
+                    resolvedAt: data.resolvedAt,
+                    resolvedById: data.resolvedById,
+                    resolvedBy: data.resolvedBy,
                   }
                 : comment,
             );
-            
+
             queryClient.setQueryData(RQ_KEY(data.pageId), {
               ...currentComments,
               items: updatedComments,
