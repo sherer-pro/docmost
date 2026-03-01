@@ -27,6 +27,29 @@ export class DatabaseRowRepo {
   }
 
   /**
+   * Находит строку по идентификатору.
+   */
+  async findById(rowId: string): Promise<DatabaseRow> {
+    return this.db
+      .selectFrom('databaseRows')
+      .selectAll()
+      .where('id', '=', rowId)
+      .executeTakeFirst();
+  }
+
+  /**
+   * Возвращает все строки конкретной базы данных.
+   */
+  async findByDatabaseId(databaseId: string): Promise<DatabaseRow[]> {
+    return this.db
+      .selectFrom('databaseRows')
+      .selectAll()
+      .where('databaseId', '=', databaseId)
+      .orderBy('createdAt', 'desc')
+      .execute();
+  }
+
+  /**
    * Находит строку по паре databaseId/pageId.
    */
   async findByDatabaseAndPage(
