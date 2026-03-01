@@ -1,8 +1,12 @@
 import {
   ActionIcon,
+  Button,
   Group,
+  Modal,
   Menu,
+  TextInput,
   Text,
+  Textarea,
   Tooltip,
   UnstyledButton,
 } from "@mantine/core";
@@ -22,6 +26,7 @@ import React from "react";
 import { useAtom } from "jotai";
 import { treeApiAtom } from "@/features/page/tree/atoms/tree-api-atom.ts";
 import { Link, useLocation, useParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import { useDisclosure } from "@mantine/hooks";
 import SpaceSettingsModal from "@/features/space/components/settings-modal.tsx";
@@ -41,6 +46,15 @@ import { mobileSidebarAtom } from "@/components/layouts/global/hooks/atoms/sideb
 import { useToggleSidebar } from "@/components/layouts/global/hooks/hooks/use-toggle-sidebar.ts";
 import { searchSpotlight } from "@/features/search/constants";
 import { useGetDatabasesBySpaceQuery } from "@/features/database/queries/database-query.ts";
+import { useCreateDatabaseMutation } from "@/features/database/queries/database-query.ts";
+import {
+  useCreateDatabaseRowMutation,
+  useDatabaseRowsQuery,
+  useDeleteDatabaseRowMutation,
+} from "@/features/database/queries/database-table-query.ts";
+import { IDatabase } from "@/features/database/types/database.types";
+import { IDatabaseRowWithCells } from "@/features/database/types/database-table.types";
+import { notifications } from "@mantine/notifications";
 
 export function SpaceSidebar() {
   const { t } = useTranslation();
@@ -48,8 +62,13 @@ export function SpaceSidebar() {
   const location = useLocation();
   const [opened, { open: openSettings, close: closeSettings }] =
     useDisclosure(false);
+  const [createDatabaseOpened, { open: openCreateDatabase, close: closeCreateDatabase }] =
+    useDisclosure(false);
+  const [databaseName, setDatabaseName] = React.useState("");
+  const [databaseDescription, setDatabaseDescription] = React.useState("");
   const [mobileSidebarOpened] = useAtom(mobileSidebarAtom);
   const toggleMobileSidebar = useToggleSidebar(mobileSidebarAtom);
+  const navigate = useNavigate();
 
   const { spaceSlug } = useParams();
   const { data: space } = useGetSpaceBySlugQuery(spaceSlug);
@@ -57,6 +76,7 @@ export function SpaceSidebar() {
   const spaceRules = space?.membership?.permissions;
   const spaceAbility = useSpaceAbility(spaceRules);
   const { data: databases = [] } = useGetDatabasesBySpaceQuery(space?.id);
+  const createDatabaseMutation = useCreateDatabaseMutation(space?.id);
 
   if (!space) {
     return <></>;
@@ -64,6 +84,28 @@ export function SpaceSidebar() {
 
   function handleCreatePage() {
     tree?.create({ parentId: null, type: "internal", index: 0 });
+  }
+
+  async function handleCreateDatabase() {
+    if (!space?.id || !databaseName.trim()) {
+      return;
+    }
+
+    try {
+      const createdDatabase = await createDatabaseMutation.mutateAsync({
+        spaceId: space.id,
+        name: databaseName.trim(),
+        description: databaseDescription.trim() || undefined,
+      });
+
+      setDatabaseName("");
+      setDatabaseDescription("");
+      closeCreateDatabase();
+      notifications.show({ message: t("Database created") });
+      navigate(`/s/${spaceSlug}/databases/${createdDatabase.id}`);
+    } catch {
+      notifications.show({ message: t("Failed to create database"), color: "red" });
+    }
   }
 
   return (
@@ -198,31 +240,49 @@ export function SpaceSidebar() {
             <Text size="xs" fw={500} c="dimmed">
               {t("Databases")}
             </Text>
+
+            {spaceAbility.can(
+              SpaceCaslAction.Manage,
+              SpaceCaslSubject.Page,
+            ) && (
+              <Tooltip label={t("Create database")} withArrow position="right">
+                <ActionIcon
+                  variant="default"
+                  size={18}
+                  onClick={openCreateDatabase}
+                  aria-label={t("Create database")}
+                >
+                  <IconPlus />
+                </ActionIcon>
+              </Tooltip>
+            )}
           </Group>
 
           <div className={classes.pages}>
             {databases.map((database) => (
-              <UnstyledButton
-                key={database.id}
-                component={Link}
-                to={`/s/${spaceSlug}/databases/${database.id}`}
-                className={clsx(
-                  classes.menu,
-                  location.pathname.toLowerCase() ===
-                    `/s/${spaceSlug}/databases/${database.id}`.toLowerCase()
-                    ? classes.activeButton
-                    : "",
-                )}
-              >
-                <div className={classes.menuItemInner}>
-                  <IconFileDatabase
-                    size={18}
-                    className={classes.menuItemIcon}
-                    stroke={2}
-                  />
-                  <span>{database.name}</span>
-                </div>
-              </UnstyledButton>
+              <div key={database.id}>
+                <UnstyledButton
+                  component={Link}
+                  to={`/s/${spaceSlug}/databases/${database.id}`}
+                  className={clsx(
+                    classes.menu,
+                    location.pathname.toLowerCase() ===
+                      `/s/${spaceSlug}/databases/${database.id}`.toLowerCase()
+                      ? classes.activeButton
+                      : "",
+                  )}
+                >
+                  <div className={classes.menuItemInner}>
+                    <IconFileDatabase
+                      size={18}
+                      className={classes.menuItemIcon}
+                      stroke={2}
+                    />
+                    <span>{database.name}</span>
+                  </div>
+                </UnstyledButton>
+                <DatabaseRowsTree database={database} spaceSlug={spaceSlug || ''} />
+              </div>
             ))}
           </div>
         </div>
@@ -233,9 +293,121 @@ export function SpaceSidebar() {
         onClose={closeSettings}
         spaceId={space?.slug}
       />
+
+      <Modal
+        opened={createDatabaseOpened}
+        onClose={closeCreateDatabase}
+        title={t("Create database")}
+        centered
+      >
+        <TextInput
+          label={t("Name")}
+          value={databaseName}
+          onChange={(event) => setDatabaseName(event.currentTarget.value)}
+          placeholder={t("Untitled database")}
+          mb="sm"
+          autoFocus
+        />
+
+        <Textarea
+          label={t("Description")}
+          value={databaseDescription}
+          onChange={(event) => setDatabaseDescription(event.currentTarget.value)}
+          placeholder={t("Optional")}
+          minRows={2}
+        />
+
+        <Group justify="flex-end" mt="md">
+          <Button variant="subtle" onClick={closeCreateDatabase}>
+            {t("Cancel")}
+          </Button>
+
+          <Button
+            onClick={handleCreateDatabase}
+            loading={createDatabaseMutation.isPending}
+            disabled={!databaseName.trim()}
+          >
+            {t("Create")}
+          </Button>
+        </Group>
+      </Modal>
     </>
   );
 }
+
+
+interface DatabaseRowsTreeProps {
+  database: IDatabase;
+  spaceSlug: string;
+}
+
+function DatabaseRowsTree({ database, spaceSlug }: DatabaseRowsTreeProps) {
+  const { t } = useTranslation();
+  const { data: rows = [] } = useDatabaseRowsQuery(database.id);
+  const createRowMutation = useCreateDatabaseRowMutation(database.id);
+  const deleteRowMutation = useDeleteDatabaseRowMutation(database.id);
+
+  const rootRows = React.useMemo(
+    () => rows.filter((row) => !row.page?.parentPageId),
+    [rows],
+  );
+
+  return (
+    <div>
+      <Group gap={4} wrap="nowrap">
+        <Button
+          variant="subtle"
+          size="compact-xs"
+          leftSection={<IconPlus size={14} />}
+          onClick={() => createRowMutation.mutate({})}
+        >
+          {t('New row')}
+        </Button>
+      </Group>
+
+      {rootRows.map((row) => {
+        const title = row.page?.title || row.pageTitle || 'untitled';
+
+        return (
+          <Group key={row.pageId} gap={4} wrap="nowrap" className={classes.rowTreeItem}>
+            <UnstyledButton
+              component={Link}
+              to={`/s/${spaceSlug}/p/${row.page?.slugId || row.pageId}`}
+              className={classes.menu}
+            >
+              <div className={classes.menuItemInner}>
+                <span>{title}</span>
+              </div>
+            </UnstyledButton>
+
+            <Menu withArrow position="bottom-end" width={180}>
+              <Menu.Target>
+                <ActionIcon
+                  variant="subtle"
+                  size="xs"
+                  className={classes.rowTreeMenuButton}
+                  aria-label={t('Row actions')}
+                >
+                  <IconDots size={14} />
+                </ActionIcon>
+              </Menu.Target>
+              <Menu.Dropdown>
+                <Menu.Item
+                  color="red"
+                  leftSection={<IconTrash size={14} />}
+                  onClick={() => deleteRowMutation.mutate(row.pageId)}
+                >
+                  {t('Delete')}
+                </Menu.Item>
+              </Menu.Dropdown>
+            </Menu>
+          </Group>
+        );
+      })}
+    </div>
+  );
+}
+
 
 interface SpaceMenuProps {
   spaceId: string;

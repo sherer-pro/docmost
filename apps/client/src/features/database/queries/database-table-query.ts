@@ -7,7 +7,10 @@ import {
   batchUpdateDatabaseCells,
   createDatabaseProperty,
   createDatabaseRow,
+  deleteDatabaseProperty,
+  deleteDatabaseRow,
   getDatabaseProperties,
+  getDatabaseRowContextByPage,
   getDatabaseRows,
 } from '@/features/database/services';
 import {
@@ -16,7 +19,7 @@ import {
   ICreateDatabaseRowPayload,
   IDatabaseProperty,
 } from '@/features/database/types/database.types';
-import { IDatabaseRowWithCells } from '@/features/database/types/database-table.types';
+import { IDatabaseRowContext, IDatabaseRowWithCells } from '@/features/database/types/database-table.types';
 import { queryClient } from '@/main.tsx';
 
 /**
@@ -42,6 +45,18 @@ export function useDatabaseRowsQuery(
     queryKey: ['database', databaseId, 'rows'],
     queryFn: () => getDatabaseRows(databaseId as string),
     enabled: Boolean(databaseId),
+  });
+}
+
+
+
+export function useDatabaseRowContextQuery(
+  pageId?: string,
+): UseQueryResult<IDatabaseRowContext | null, Error> {
+  return useQuery({
+    queryKey: ['database', 'row-context', pageId],
+    queryFn: () => getDatabaseRowContextByPage(pageId as string),
+    enabled: Boolean(pageId),
   });
 }
 
@@ -75,6 +90,21 @@ export function useCreateDatabasePropertyMutation(databaseId?: string) {
   });
 }
 
+export function useDeleteDatabasePropertyMutation(databaseId?: string) {
+  return useMutation({
+    mutationFn: (propertyId: string) =>
+      deleteDatabaseProperty(databaseId as string, propertyId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['database', databaseId, 'properties'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['database', databaseId, 'rows'],
+      });
+    },
+  });
+}
+
 /**
  * Инлайн-сохранение значения ячейки через batch endpoint.
  */
@@ -87,6 +117,19 @@ export function useBatchUpdateDatabaseCellsMutation(databaseId?: string) {
       pageId: string;
       payload: IBatchUpdateDatabaseCellsPayload;
     }) => batchUpdateDatabaseCells(databaseId as string, pageId, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['database', databaseId, 'rows'],
+      });
+    },
+  });
+}
+
+
+export function useDeleteDatabaseRowMutation(databaseId?: string) {
+  return useMutation({
+    mutationFn: (pageId: string) =>
+      deleteDatabaseRow(databaseId as string, pageId),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ['database', databaseId, 'rows'],

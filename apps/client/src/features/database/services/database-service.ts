@@ -14,7 +14,7 @@ import {
   IUpdateDatabasePropertyPayload,
   IUpdateDatabaseViewPayload,
 } from "@/features/database/types/database.types";
-import { IDatabaseRowWithCells } from "@/features/database/types/database-table.types";
+import { IDatabaseRowContext, IDatabaseRowWithCells } from "@/features/database/types/database-table.types";
 
 /**
  * Создаёт базу данных в выбранном пространстве.
@@ -138,6 +138,16 @@ export async function createDatabaseRow(
 }
 
 /**
+ * Deletes a database row by page id.
+ */
+export async function deleteDatabaseRow(
+  databaseId: string,
+  pageId: string,
+): Promise<void> {
+  await api.delete(`/databases/${databaseId}/rows/${pageId}`);
+}
+
+/**
  * Выполняет batch-обновление ячеек строки.
  */
 export async function batchUpdateDatabaseCells(
@@ -196,4 +206,15 @@ export async function deleteDatabaseView(
   viewId: string,
 ): Promise<void> {
   await api.delete(`/databases/${databaseId}/views/${viewId}`);
+}
+
+
+/**
+ * Returns database row context by page id.
+ */
+export async function getDatabaseRowContextByPage(
+  pageId: string,
+): Promise<IDatabaseRowContext | null> {
+  const req = await api.get<IDatabaseRowContext | null>(`/databases/rows/${pageId}/context`);
+  return req.data;
 }

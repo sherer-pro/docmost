@@ -105,6 +105,12 @@ export function updatePageData(data: IPage) {
 export function useUpdateTitlePageMutation() {
   return useMutation<IPage, Error, Partial<IPageInput>>({
     mutationFn: (data) => updatePage(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        predicate: (item) =>
+          item.queryKey[0] === 'database' && item.queryKey[2] === 'rows',
+      });
+    },
   });
 }
 
@@ -112,8 +118,6 @@ export function useUpdatePageMutation() {
   return useMutation<IPage, Error, Partial<IPageInput>>({
     mutationFn: (data) => updatePage(data),
     onSuccess: (data) => {
-      updatePage(data);
-
       invalidateOnUpdatePage(
         data.spaceId,
         data.parentPageId,
@@ -122,6 +126,11 @@ export function useUpdatePageMutation() {
         data.icon,
         data.customFields?.status,
       );
+
+      queryClient.invalidateQueries({
+        predicate: (item) =>
+          item.queryKey[0] === 'database' && item.queryKey[2] === 'rows',
+      });
     },
   });
 }
