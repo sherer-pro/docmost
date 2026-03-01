@@ -1,7 +1,7 @@
 import { userAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { DEFAULT_REMEMBER_PAGE_SCROLL_POSITION } from "@/features/user/constants/scroll-preferences.ts";
 import { useAtomValue } from "jotai";
-import { useLayoutEffect } from "react";
+import { useEffect, useLayoutEffect } from "react";
 import { useLocation } from "react-router-dom";
 
 const SCROLL_POSITION_STORAGE_KEY_PREFIX = "docmost:scroll-position-by-path";
@@ -23,16 +23,42 @@ export function useScrollRestoration() {
     DEFAULT_REMEMBER_PAGE_SCROLL_POSITION;
   const storageKey = `${SCROLL_POSITION_STORAGE_KEY_PREFIX}:${user?.id ?? "anonymous"}`;
 
-  useLayoutEffect(() => {
+  /**
+   * Управляем нативным поведением браузера отдельно от route-эффекта.
+   *
+   * Почему так:
+   * - раньше мы переключали `history.scrollRestoration` в cleanup каждого
+   *   route-эффекта;
+   * - в момент навигации это могло на короткое время вернуть режим `auto`,
+   *   из-за чего браузер или роутер дополнительно трогал позицию и возникал
+   *   визуальный «прыжок» (сначала на сохранённую позицию, затем в начало).
+   *
+   * Теперь, пока опция включена, режим стабильно `manual` на всём жизненном
+   * цикле хука и не «флипается» между страницами.
+   */
+  useEffect(() => {
     const previousScrollRestoration = window.history.scrollRestoration;
 
-    if (!rememberPageScrollPosition) {
-      window.history.scrollRestoration = "auto";
-      sessionStorage.removeItem(storageKey);
-      return;
+    if (rememberPageScrollPosition) {
+      window.history.scrollRestoration = "manual";
+
+      return () => {
+        window.history.scrollRestoration = previousScrollRestoration;
+      };
     }
 
-    window.history.scrollRestoration = "manual";
+    window.history.scrollRestoration = "auto";
+    sessionStorage.removeItem(storageKey);
+
+    return () => {
+      window.history.scrollRestoration = previousScrollRestoration;
+    };
+  }, [rememberPageScrollPosition, storageKey]);
+
+  useLayoutEffect(() => {
+    if (!rememberPageScrollPosition) {
+      return;
+    }
 
     // Используем pathname + query + hash, чтобы корректно различать
     // страницы с разными параметрами и якорями.
@@ -67,8 +93,6 @@ export function useScrollRestoration() {
         storageKey,
         JSON.stringify(updatedPositions),
       );
-
-      window.history.scrollRestoration = previousScrollRestoration;
     };
   }, [location.hash, location.pathname, location.search, rememberPageScrollPosition, storageKey]);
 }
