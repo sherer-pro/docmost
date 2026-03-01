@@ -76,6 +76,7 @@ export const useQuerySubscription = () => {
               data.id,
               data.payload.title,
               data.payload.icon,
+              data.payload.customFields?.status,
             );
           }
 
