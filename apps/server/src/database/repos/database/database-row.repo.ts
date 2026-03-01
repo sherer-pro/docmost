@@ -7,6 +7,7 @@ import {
   InsertableDatabaseRow,
   UpdatableDatabaseRow,
 } from '@docmost/db/types/entity.types';
+import { jsonArrayFrom, jsonObjectFrom } from 'kysely/helpers/postgres';
 
 @Injectable()
 export class DatabaseRowRepo {
@@ -44,7 +45,7 @@ export class DatabaseRowRepo {
     databaseId: string,
     workspaceId: string,
     spaceId: string,
-  ): Promise<DatabaseRow[]> {
+  ): Promise<any[]> {
     return this.db
       .selectFrom('databaseRows')
       .innerJoin('pages', 'pages.id', 'databaseRows.pageId')
@@ -57,11 +58,45 @@ export class DatabaseRowRepo {
       .select('databaseRows.createdAt')
       .select('databaseRows.updatedAt')
       .select('databaseRows.archivedAt')
+      .select('pages.title as pageTitle')
+      .select('pages.slugId as pageSlugId')
+      .select((eb) =>
+        jsonObjectFrom(
+          eb
+            .selectFrom('pages as p')
+            .select(['p.id', 'p.slugId', 'p.title', 'p.icon'])
+            .whereRef('p.id', '=', 'databaseRows.pageId'),
+        ).as('page'),
+      )
+      .select((eb) =>
+        jsonArrayFrom(
+          eb
+            .selectFrom('databaseCells')
+            .select([
+              'id',
+              'databaseId',
+              'workspaceId',
+              'pageId',
+              'propertyId',
+              'value',
+              'attachmentId',
+              'createdById',
+              'updatedById',
+              'createdAt',
+              'updatedAt',
+              'deletedAt',
+            ])
+            .whereRef('databaseCells.databaseId', '=', 'databaseRows.databaseId')
+            .whereRef('databaseCells.pageId', '=', 'databaseRows.pageId')
+            .where('databaseCells.deletedAt', 'is', null),
+        ).as('cells'),
+      )
       .where('databaseId', '=', databaseId)
       .where('databaseRows.workspaceId', '=', workspaceId)
       .where('pages.workspaceId', '=', workspaceId)
       .where('pages.spaceId', '=', spaceId)
       .where('pages.deletedAt', 'is', null)
+      .where('databaseRows.archivedAt', 'is', null)
       .orderBy('databaseRows.createdAt', 'desc')
       .execute();
   }

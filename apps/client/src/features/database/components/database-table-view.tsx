@@ -6,17 +6,19 @@ import {
   Paper,
   ScrollArea,
   Select,
+  Stack,
   Table,
   Text,
   TextInput,
 } from '@mantine/core';
-import { IconEye, IconEyeOff, IconPlus } from '@tabler/icons-react';
+import { IconEye, IconEyeOff, IconPlus, IconTrash } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   useBatchUpdateDatabaseCellsMutation,
   useCreateDatabasePropertyMutation,
   useCreateDatabaseRowMutation,
+  useDeleteDatabasePropertyMutation,
   useDatabasePropertiesQuery,
   useDatabaseRowsQuery,
 } from '@/features/database/queries/database-table-query';
@@ -96,6 +98,7 @@ export function DatabaseTableView({
   const createPropertyMutation = useCreateDatabasePropertyMutation(databaseId);
   const createRowMutation = useCreateDatabaseRowMutation(databaseId);
   const updateCellsMutation = useBatchUpdateDatabaseCellsMutation(databaseId);
+  const deletePropertyMutation = useDeleteDatabasePropertyMutation(databaseId);
 
   const [newPropertyName, setNewPropertyName] = useState('');
   const [editingCellKey, setEditingCellKey] = useState<string | null>(null);
@@ -200,11 +203,7 @@ export function DatabaseTableView({
           <Button
             variant="light"
             leftSection={<IconPlus size={14} />}
-            onClick={() =>
-              createRowMutation.mutate({
-                title: 'New row',
-              })
-            }
+            onClick={() => createRowMutation.mutate({})}
           >
             + row
           </Button>
@@ -234,7 +233,9 @@ export function DatabaseTableView({
 
           <Menu shadow="md" width={220}>
             <Menu.Target>
-              <Button variant="default">Columns</Button>
+              <Button variant="default" disabled={properties.length === 0}>
+                Columns
+              </Button>
             </Menu.Target>
             <Menu.Dropdown>
               {properties.map((property) => {
@@ -262,14 +263,27 @@ export function DatabaseTableView({
                   </Menu.Item>
                 );
               })}
+
+              {properties.length > 0 && <Menu.Divider />}
+
+              {properties.map((property) => (
+                <Menu.Item
+                  key={`${property.id}-delete`}
+                  color="red"
+                  leftSection={<IconTrash size={14} />}
+                  onClick={() => deletePropertyMutation.mutate(property.id)}
+                >
+                  Delete {property.name}
+                </Menu.Item>
+              ))}
             </Menu.Dropdown>
           </Menu>
         </Group>
       </Group>
 
-      <Group mb="md" align="end">
+      <Stack mb="md" gap="xs">
         {filters.map((condition, index) => (
-          <Group key={`filter-${index}`}>
+          <Group key={`filter-${index}`} align="end" wrap="nowrap">
             <Select
               placeholder="Поле"
               data={properties.map((property) => ({
@@ -325,17 +339,29 @@ export function DatabaseTableView({
                 );
               }}
             />
+
+            <Button
+              variant="subtle"
+              color="red"
+              disabled={filters.length === 1}
+              onClick={() =>
+                setFilters((prev) => prev.filter((_, itemIndex) => itemIndex !== index))
+              }
+            >
+              Remove
+            </Button>
           </Group>
         ))}
 
         <Button
+          w="fit-content"
           variant="subtle"
           disabled={filters.length >= 3}
           onClick={() => setFilters((prev) => [...prev, { ...DEFAULT_FILTER }])}
         >
           + filter
         </Button>
-      </Group>
+      </Stack>
 
       <ScrollArea>
         <Table stickyHeader withTableBorder withColumnBorders miw={900}>
@@ -344,7 +370,18 @@ export function DatabaseTableView({
               <Table.Th miw={280}>Title</Table.Th>
               {displayedProperties.map((property) => (
                 <Table.Th key={property.id} miw={220}>
-                  {property.name}
+                  <Group justify="space-between" gap="xs" wrap="nowrap">
+                    <Text size="sm">{property.name}</Text>
+                    <ActionIcon
+                      variant="subtle"
+                      color="red"
+                      size="sm"
+                      onClick={() => deletePropertyMutation.mutate(property.id)}
+                      aria-label={`Delete ${property.name}`}
+                    >
+                      <IconTrash size={14} />
+                    </ActionIcon>
+                  </Group>
                 </Table.Th>
               ))}
             </Table.Tr>
