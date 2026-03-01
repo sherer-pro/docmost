@@ -1,3 +1,9 @@
+export interface IDatabaseRowCustomFields {
+  status?: string | null;
+  assigneeId?: string | null;
+  stakeholderIds?: string[];
+}
+
 /**
  * Short page info related to a database row.
  */
@@ -15,11 +21,7 @@ export interface IDatabaseRowPage {
    * while assignee/stakeholders may be omitted from the response
    * if corresponding fields are disabled in space settings.
    */
-  customFields?: {
-    status?: string | null;
-    assigneeId?: string | null;
-    stakeholderIds?: string[];
-  };
+  customFields?: IDatabaseRowCustomFields;
 }
 
 /**
