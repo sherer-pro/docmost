@@ -199,6 +199,8 @@
   "Your password must be a minimum of 8 characters.": "Votre mot de passe doit contenir au moins 8 caractères.",
   "Sidebar toggle": "Bascule de la barre latérale",
   "Comments": "Commentaires",
+  "Row comments": "Commentaires de ligne",
+  "Row actions": "Actions de ligne",
   "404 page not found": "404 page non trouvée",
   "Sorry, we can't find the page you are looking for.": "Désolé, nous ne pouvons pas trouver la page que vous cherchez.",
   "Take me back to homepage": "Ramenez-moi à la page d'accueil",
