@@ -9,6 +9,7 @@ import {
   MaxLength,
   ValidateNested,
 } from 'class-validator';
+import { JsonValue } from '../../../database/types/db';
 
 export enum DatabaseExportFormat {
   Markdown = 'markdown',
@@ -46,7 +47,7 @@ export class CreateDatabaseDto {
    * Rich-text контент описания в формате JSON (Tiptap/ProseMirror).
    */
   @IsOptional()
-  descriptionContent?: unknown;
+  descriptionContent?: JsonValue;
 
   @IsOptional()
   @IsString()
@@ -72,7 +73,7 @@ export class UpdateDatabaseDto {
    * Rich-text контент описания в формате JSON (Tiptap/ProseMirror).
    */
   @IsOptional()
-  descriptionContent?: unknown;
+  descriptionContent?: JsonValue;
 
   @IsOptional()
   @IsString()
