@@ -159,6 +159,75 @@ export interface Comments {
   workspaceId: string;
 }
 
+
+export interface Databases {
+  createdAt: Generated<Timestamp>;
+  creatorId: string | null;
+  deletedAt: Timestamp | null;
+  description: string | null;
+  icon: string | null;
+  id: Generated<string>;
+  lastUpdatedById: string | null;
+  name: string;
+  spaceId: string;
+  updatedAt: Generated<Timestamp>;
+  workspaceId: string;
+}
+
+export interface DatabaseProperties {
+  createdAt: Generated<Timestamp>;
+  creatorId: string | null;
+  databaseId: string;
+  deletedAt: Timestamp | null;
+  id: Generated<string>;
+  name: string;
+  position: Generated<number>;
+  settings: Json | null;
+  type: string;
+  updatedAt: Generated<Timestamp>;
+  workspaceId: string;
+}
+
+export interface DatabaseRows {
+  archivedAt: Timestamp | null;
+  createdAt: Generated<Timestamp>;
+  createdById: string | null;
+  databaseId: string;
+  id: Generated<string>;
+  pageId: string;
+  updatedAt: Generated<Timestamp>;
+  updatedById: string | null;
+  workspaceId: string;
+}
+
+export interface DatabaseCells {
+  attachmentId: string | null;
+  createdAt: Generated<Timestamp>;
+  createdById: string | null;
+  databaseId: string;
+  deletedAt: Timestamp | null;
+  id: Generated<string>;
+  pageId: string;
+  propertyId: string;
+  updatedAt: Generated<Timestamp>;
+  updatedById: string | null;
+  value: Json | null;
+  workspaceId: string;
+}
+
+export interface DatabaseViews {
+  config: Json | null;
+  createdAt: Generated<Timestamp>;
+  creatorId: string | null;
+  databaseId: string;
+  deletedAt: Timestamp | null;
+  id: Generated<string>;
+  name: string;
+  type: string;
+  updatedAt: Generated<Timestamp>;
+  workspaceId: string;
+}
+
 export interface FileTasks {
   createdAt: Generated<Timestamp>;
   creatorId: string | null;
@@ -429,6 +498,11 @@ export interface DB {
   backlinks: Backlinks;
   billing: Billing;
   comments: Comments;
+  databases: Databases;
+  databaseProperties: DatabaseProperties;
+  databaseRows: DatabaseRows;
+  databaseCells: DatabaseCells;
+  databaseViews: DatabaseViews;
   fileTasks: FileTasks;
   groups: Groups;
   groupUsers: GroupUsers;
