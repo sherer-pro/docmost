@@ -11,10 +11,17 @@ import {
   Text,
   TextInput,
 } from '@mantine/core';
-import { IconEye, IconEyeOff, IconPlus, IconTrash } from '@tabler/icons-react';
+import {
+  IconDotsVertical,
+  IconEye,
+  IconEyeOff,
+  IconMessageCircle,
+  IconPlus,
+  IconTrash,
+} from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 import { useSpaceQuery } from '@/features/space/queries/space-query.ts';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   useBatchUpdateDatabaseCellsMutation,
@@ -141,6 +148,7 @@ export function DatabaseTableView({
   const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({});
   const [filters, setFilters] = useState<IDatabaseFilterCondition[]>([DEFAULT_FILTER]);
   const [sortState, setSortState] = useState<IDatabaseSortState | null>(null);
+  const navigate = useNavigate();
 
   const displayedProperties = useMemo(
     () =>
@@ -488,16 +496,39 @@ export function DatabaseTableView({
                     })()}
                   </div>
 
-                  {isEditable && (
-                    <ActionIcon
-                      variant="subtle"
-                      color="red"
-                      onClick={() => deleteRowMutation.mutate(row.pageId)}
-                      aria-label={t('Delete row')}
-                    >
-                      <IconTrash size={14} />
-                    </ActionIcon>
-                  )}
+                  <Menu position="bottom-end" shadow="md" withinPortal>
+                    <Menu.Target>
+                      <ActionIcon
+                        variant="subtle"
+                        aria-label={t('Row actions')}
+                      >
+                        <IconDotsVertical size={14} />
+                      </ActionIcon>
+                    </Menu.Target>
+
+                    <Menu.Dropdown>
+                      <Menu.Item
+                        leftSection={<IconMessageCircle size={14} />}
+                        onClick={() =>
+                          navigate(`/s/${spaceSlug}/p/${row.pageId}`, {
+                            state: { openCommentsAside: true },
+                          })
+                        }
+                      >
+                        {t('Row comments')}
+                      </Menu.Item>
+
+                      {isEditable && (
+                        <Menu.Item
+                          color="red"
+                          leftSection={<IconTrash size={14} />}
+                          onClick={() => deleteRowMutation.mutate(row.pageId)}
+                        >
+                          {t('Delete row')}
+                        </Menu.Item>
+                      )}
+                    </Menu.Dropdown>
+                  </Menu>
                   </Group>
                 </Table.Td>
 

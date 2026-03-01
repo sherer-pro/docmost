@@ -1,4 +1,4 @@
-import { useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { usePageQuery } from "@/features/page/queries/page-query";
 import { FullEditor } from "@/features/editor/full-editor";
 import HistoryModal from "@/features/page-history/components/history-modal";
@@ -13,12 +13,15 @@ import {
 } from "@/features/space/permissions/permissions.type.ts";
 import { useTranslation } from "react-i18next";
 import React from "react";
+import { useEffect } from "react";
 import { EmptyState } from "@/components/ui/empty-state.tsx";
 import { IconAlertTriangle, IconFileOff } from "@tabler/icons-react";
 import { Button } from "@mantine/core";
 import { Link } from "react-router-dom";
 import { ErrorBoundary } from "react-error-boundary";
 import DocumentFieldsPanel from "@/features/page/components/document-fields/document-fields-panel.tsx";
+import { useAtom } from "jotai";
+import { asideStateAtom } from "@/components/layouts/global/hooks/atoms/sidebar-atom.ts";
 
 const MemoizedFullEditor = React.memo(FullEditor);
 const MemoizedPageHeader = React.memo(PageHeader);
@@ -50,6 +53,9 @@ export default function Page() {
 
 function PageContent({ pageSlug }: { pageSlug: string | undefined }) {
   const { t } = useTranslation();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [, setAsideState] = useAtom(asideStateAtom);
 
   const {
     data: page,
@@ -61,6 +67,19 @@ function PageContent({ pageSlug }: { pageSlug: string | undefined }) {
 
   const spaceRules = space?.membership?.permissions;
   const spaceAbility = useSpaceAbility(spaceRules);
+
+  useEffect(() => {
+    const shouldOpenCommentsAside = Boolean(
+      (location.state as { openCommentsAside?: boolean } | null)?.openCommentsAside,
+    );
+
+    if (!page?.id || !shouldOpenCommentsAside) {
+      return;
+    }
+
+    setAsideState({ tab: "comments", isAsideOpen: true });
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.pathname, location.state, navigate, page?.id, setAsideState]);
 
   if (isLoading) {
     return <></>;

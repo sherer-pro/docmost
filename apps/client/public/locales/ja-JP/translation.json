@@ -199,6 +199,8 @@
   "Your password must be a minimum of 8 characters.": "パスワードは8文字以上にしてください",
   "Sidebar toggle": "サイドバー切り替え",
   "Comments": "コメント",
+  "Row comments": "行コメント",
+  "Row actions": "行アクション",
   "404 page not found": "404 ページが見つかりません",
   "Sorry, we can't find the page you are looking for.": "お探しのページが見つかりません",
   "Take me back to homepage": "ホームに戻る",
