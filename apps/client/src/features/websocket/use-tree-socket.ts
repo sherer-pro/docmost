@@ -61,6 +61,15 @@ export const useTreeSocket = () => {
                   changes: { icon: event.payload.icon },
                 });
               }
+
+              const status = event.payload?.customFields?.status;
+              if (status !== undefined) {
+                treeApi.update({
+                  id: event.id,
+                  changes: { status },
+                });
+              }
+
               setTreeData(treeApi.data);
             }
           }
