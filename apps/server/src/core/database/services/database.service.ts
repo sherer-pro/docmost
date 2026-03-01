@@ -269,6 +269,36 @@ export class DatabaseService {
     );
   }
 
+
+  async deleteRow(
+    databaseId: string,
+    pageId: string,
+    user: User,
+    workspaceId: string,
+  ) {
+    const database = await this.getOrFailDatabase(databaseId, workspaceId);
+    await this.assertCanManageDatabasePages(user, database.spaceId);
+
+    const row = await this.databaseRowRepo.findByDatabaseAndPage(databaseId, pageId);
+    if (!row || row.archivedAt) {
+      throw new NotFoundException('Database row not found');
+    }
+
+    const pages = await this.pageRepo.getPageAndDescendants(pageId, {
+      includeContent: false,
+    });
+
+    const descendantPageIds = pages.map((page) => page.id);
+
+    await this.databaseRowRepo.archiveByPageIds(
+      databaseId,
+      workspaceId,
+      descendantPageIds,
+    );
+
+    await this.pageRepo.removePage(pageId, user.id, workspaceId);
+  }
+
   /**
    * Батч-обновление ячеек в рамках строки (страница является ключом строки).
    */

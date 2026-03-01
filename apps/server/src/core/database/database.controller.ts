@@ -184,6 +184,18 @@ export class DatabaseController {
     return this.databaseService.listRows(databaseId, user, workspace.id);
   }
 
+
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Delete(':databaseId/rows/:pageId')
+  async removeRow(
+    @Param('databaseId', ParseUUIDPipe) databaseId: string,
+    @Param('pageId', ParseUUIDPipe) pageId: string,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    await this.databaseService.deleteRow(databaseId, pageId, user, workspace.id);
+  }
+
   /**
    * Выполняет батч-обновление ячеек для строки.
    */

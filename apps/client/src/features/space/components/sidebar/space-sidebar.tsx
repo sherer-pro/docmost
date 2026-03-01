@@ -47,6 +47,13 @@ import { useToggleSidebar } from "@/components/layouts/global/hooks/hooks/use-to
 import { searchSpotlight } from "@/features/search/constants";
 import { useGetDatabasesBySpaceQuery } from "@/features/database/queries/database-query.ts";
 import { useCreateDatabaseMutation } from "@/features/database/queries/database-query.ts";
+import {
+  useCreateDatabaseRowMutation,
+  useDatabaseRowsQuery,
+  useDeleteDatabaseRowMutation,
+} from "@/features/database/queries/database-table-query.ts";
+import { IDatabase } from "@/features/database/types/database.types";
+import { IDatabaseRowWithCells } from "@/features/database/types/database-table.types";
 import { notifications } from "@mantine/notifications";
 
 export function SpaceSidebar() {
@@ -253,27 +260,29 @@ export function SpaceSidebar() {
 
           <div className={clsx(classes.pages, classes.databaseList)}>
             {databases.map((database) => (
-              <UnstyledButton
-                key={database.id}
-                component={Link}
-                to={`/s/${spaceSlug}/databases/${database.id}`}
-                className={clsx(
-                  classes.menu,
-                  location.pathname.toLowerCase() ===
-                    `/s/${spaceSlug}/databases/${database.id}`.toLowerCase()
-                    ? classes.activeButton
-                    : "",
-                )}
-              >
-                <div className={classes.menuItemInner}>
-                  <IconFileDatabase
-                    size={18}
-                    className={classes.menuItemIcon}
-                    stroke={2}
-                  />
-                  <span>{database.name}</span>
-                </div>
-              </UnstyledButton>
+              <div key={database.id}>
+                <UnstyledButton
+                  component={Link}
+                  to={`/s/${spaceSlug}/databases/${database.id}`}
+                  className={clsx(
+                    classes.menu,
+                    location.pathname.toLowerCase() ===
+                      `/s/${spaceSlug}/databases/${database.id}`.toLowerCase()
+                      ? classes.activeButton
+                      : "",
+                  )}
+                >
+                  <div className={classes.menuItemInner}>
+                    <IconFileDatabase
+                      size={18}
+                      className={classes.menuItemIcon}
+                      stroke={2}
+                    />
+                    <span>{database.name}</span>
+                  </div>
+                </UnstyledButton>
+                <DatabaseRowsTree database={database} spaceSlug={spaceSlug || ''} />
+              </div>
             ))}
           </div>
         </div>
@@ -325,6 +334,113 @@ export function SpaceSidebar() {
     </>
   );
 }
+
+
+interface DatabaseRowsTreeProps {
+  database: IDatabase;
+  spaceSlug: string;
+}
+
+function DatabaseRowsTree({ database, spaceSlug }: DatabaseRowsTreeProps) {
+  const { t } = useTranslation();
+  const { data: rows = [] } = useDatabaseRowsQuery(database.id);
+  const createRowMutation = useCreateDatabaseRowMutation(database.id);
+  const deleteRowMutation = useDeleteDatabaseRowMutation(database.id);
+
+  const [expanded, setExpanded] = React.useState<Record<string, boolean>>({});
+
+  const rowsByParentId = React.useMemo(() => {
+    const map: Record<string, IDatabaseRowWithCells[]> = {};
+
+    rows.forEach((row) => {
+      const parentId = row.page?.parentPageId ?? 'root';
+      if (!map[parentId]) {
+        map[parentId] = [];
+      }
+      map[parentId].push(row);
+    });
+
+    return map;
+  }, [rows]);
+
+  const renderRows = (parentId: string, depth = 0): React.ReactNode => {
+    const children = rowsByParentId[parentId] ?? [];
+
+    return children.map((row) => {
+      const hasChildren = (rowsByParentId[row.pageId] ?? []).length > 0;
+      const isOpen = expanded[row.pageId] ?? true;
+      const title = row.page?.title || row.pageTitle || 'untitled';
+
+      return (
+        <React.Fragment key={row.pageId}>
+          <Group gap={4} wrap="nowrap" style={{ paddingLeft: depth * 12 }}>
+            {hasChildren ? (
+              <ActionIcon
+                variant="subtle"
+                size="xs"
+                onClick={() =>
+                  setExpanded((prev) => ({
+                    ...prev,
+                    [row.pageId]: !isOpen,
+                  }))
+                }
+                aria-label={t('Toggle row children')}
+              >
+                {isOpen ? '▾' : '▸'}
+              </ActionIcon>
+            ) : (
+              <div style={{ width: 18 }} />
+            )}
+
+            <UnstyledButton component={Link} to={`/s/${spaceSlug}/p/${row.page?.slugId || row.pageId}`} className={classes.menu}>
+              <div className={classes.menuItemInner}>
+                <span>{title}</span>
+              </div>
+            </UnstyledButton>
+
+            <ActionIcon
+              variant="subtle"
+              size="xs"
+              onClick={() => createRowMutation.mutate({ parentPageId: row.pageId })}
+              aria-label={t('Create row')}
+            >
+              <IconPlus size={14} />
+            </ActionIcon>
+
+            <ActionIcon
+              variant="subtle"
+              color="red"
+              size="xs"
+              onClick={() => deleteRowMutation.mutate(row.pageId)}
+              aria-label={t('Delete row')}
+            >
+              <IconTrash size={14} />
+            </ActionIcon>
+          </Group>
+
+          {hasChildren && isOpen ? renderRows(row.pageId, depth + 1) : null}
+        </React.Fragment>
+      );
+    });
+  };
+
+  return (
+    <div>
+      <Group gap={4} wrap="nowrap">
+        <Button
+          variant="subtle"
+          size="compact-xs"
+          leftSection={<IconPlus size={14} />}
+          onClick={() => createRowMutation.mutate({})}
+        >
+          {t('New row')}
+        </Button>
+      </Group>
+      {renderRows('root')}
+    </div>
+  );
+}
+
 
 interface SpaceMenuProps {
   spaceId: string;

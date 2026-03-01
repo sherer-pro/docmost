@@ -19,6 +19,7 @@ import {
   useCreateDatabasePropertyMutation,
   useCreateDatabaseRowMutation,
   useDeleteDatabasePropertyMutation,
+  useDeleteDatabaseRowMutation,
   useDatabasePropertiesQuery,
   useDatabaseRowsQuery,
 } from '@/features/database/queries/database-table-query';
@@ -41,7 +42,7 @@ const DEFAULT_FILTER: IDatabaseFilterCondition = {
 };
 
 function getRowTitle(row: IDatabaseRowWithCells): string {
-  return row.page?.title || row.pageTitle || row.pageId;
+  return row.page?.title || row.pageTitle || "untitled";
 }
 
 function getCellValue(row: IDatabaseRowWithCells, propertyId: string): string {
@@ -99,6 +100,7 @@ export function DatabaseTableView({
   const createRowMutation = useCreateDatabaseRowMutation(databaseId);
   const updateCellsMutation = useBatchUpdateDatabaseCellsMutation(databaseId);
   const deletePropertyMutation = useDeleteDatabasePropertyMutation(databaseId);
+  const deleteRowMutation = useDeleteDatabaseRowMutation(databaseId);
 
   const [newPropertyName, setNewPropertyName] = useState('');
   const [editingCellKey, setEditingCellKey] = useState<string | null>(null);
@@ -348,7 +350,7 @@ export function DatabaseTableView({
                 setFilters((prev) => prev.filter((_, itemIndex) => itemIndex !== index))
               }
             >
-              <IconTrash size={18} />
+              Remove
             </Button>
           </Group>
         ))}
@@ -369,6 +371,7 @@ export function DatabaseTableView({
           <Table.Thead>
             <Table.Tr>
               <Table.Th miw={280}>Title</Table.Th>
+              <Table.Th w={54}></Table.Th>
               {displayedProperties.map((property) => (
                 <Table.Th key={property.id} miw={220}>
                   <Group justify="space-between" gap="xs" wrap="nowrap">
@@ -394,6 +397,16 @@ export function DatabaseTableView({
                   <Text component={Link} to={`/s/${spaceSlug}/p/${row.pageId}`}>
                     {getRowTitle(row)}
                   </Text>
+                </Table.Td>
+                <Table.Td>
+                  <ActionIcon
+                    variant="subtle"
+                    color="red"
+                    onClick={() => deleteRowMutation.mutate(row.pageId)}
+                    aria-label="Delete row"
+                  >
+                    <IconTrash size={14} />
+                  </ActionIcon>
                 </Table.Td>
 
                 {displayedProperties.map((property) => {
