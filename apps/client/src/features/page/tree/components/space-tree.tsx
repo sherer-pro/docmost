@@ -319,6 +319,18 @@ interface NodeProps extends NodeRendererProps<SpaceTreeNode> {
   isStatusFieldEnabled: boolean;
 }
 
+const buildDatabaseNodeUrl = (
+  spaceSlug: string,
+  node: SpaceTreeNode,
+): string => {
+  if (node.slugId) {
+    return buildDatabaseUrl(spaceSlug, node.slugId, node.name);
+  }
+
+  const databaseId = node.databaseId ?? node.id;
+  return `/s/${spaceSlug}/databases/${databaseId}`;
+};
+
 function Node({
   node,
   style,
@@ -460,7 +472,7 @@ function Node({
    */
   const pageUrl =
     node.data.nodeType === "database"
-      ? buildDatabaseUrl(spaceSlug, node.data.slugId ?? "", node.data.name)
+      ? buildDatabaseNodeUrl(spaceSlug, node.data)
       : buildPageUrl(spaceSlug, node.data.slugId ?? "", node.data.name);
 
   const canOpenNode =
@@ -626,7 +638,7 @@ function NodeMenu({ node, treeApi, spaceId }: NodeMenuProps) {
   const handleCopyLink = () => {
     const nodeUrl =
       node.data.nodeType === "database"
-        ? `${getAppUrl()}${buildDatabaseUrl(spaceSlug, node.data.slugId ?? "", node.data.name)}`
+        ? `${getAppUrl()}${buildDatabaseNodeUrl(spaceSlug, node.data)}`
         : getAppUrl() + buildPageUrl(spaceSlug, node.data.slugId ?? "", node.data.name);
 
     clipboard.copy(nodeUrl);
