@@ -9,6 +9,7 @@ import {
 import {
   IconArrowDown,
   IconDots,
+  IconFileDatabase,
   IconFileExport,
   IconHome,
   IconPlus,
@@ -39,6 +40,7 @@ import ExportModal from "@/components/common/export-modal";
 import { mobileSidebarAtom } from "@/components/layouts/global/hooks/atoms/sidebar-atom.ts";
 import { useToggleSidebar } from "@/components/layouts/global/hooks/hooks/use-toggle-sidebar.ts";
 import { searchSpotlight } from "@/features/search/constants";
+import { useGetDatabasesBySpaceQuery } from "@/features/database/queries/database-query.ts";
 
 export function SpaceSidebar() {
   const { t } = useTranslation();
@@ -54,6 +56,7 @@ export function SpaceSidebar() {
 
   const spaceRules = space?.membership?.permissions;
   const spaceAbility = useSpaceAbility(spaceRules);
+  const { data: databases = [] } = useGetDatabasesBySpaceQuery(space?.id);
 
   if (!space) {
     return <></>;
@@ -189,6 +192,38 @@ export function SpaceSidebar() {
                 SpaceCaslSubject.Page,
               )}
             />
+          </div>
+
+          <Group className={classes.pagesHeader} justify="space-between">
+            <Text size="xs" fw={500} c="dimmed">
+              {t("Databases")}
+            </Text>
+          </Group>
+
+          <div className={classes.pages}>
+            {databases.map((database) => (
+              <UnstyledButton
+                key={database.id}
+                component={Link}
+                to={`/s/${spaceSlug}/databases/${database.id}`}
+                className={clsx(
+                  classes.menu,
+                  location.pathname.toLowerCase() ===
+                    `/s/${spaceSlug}/databases/${database.id}`.toLowerCase()
+                    ? classes.activeButton
+                    : "",
+                )}
+              >
+                <div className={classes.menuItemInner}>
+                  <IconFileDatabase
+                    size={18}
+                    className={classes.menuItemIcon}
+                    stroke={2}
+                  />
+                  <span>{database.name}</span>
+                </div>
+              </UnstyledButton>
+            ))}
           </div>
         </div>
       </div>
