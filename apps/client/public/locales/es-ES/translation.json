@@ -862,5 +862,10 @@
   "Database": "Database",
   "Table view": "Table view",
   "Title": "Title",
-  "View": "View"
+  "View": "View",
+  "database.editor.untitled": "Untitled",
+  "database.editor.addDescription": "Add description",
+  "database.editor.saving": "Saving...",
+  "database.editor.saved": "Saved",
+  "database.editor.error": "Could not update"
 }
