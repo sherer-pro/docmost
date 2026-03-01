@@ -125,6 +125,16 @@ export function useUpdateSpaceMutation() {
         queryClient.setQueryData(["space", data.slug], updatedSpace);
       }
 
+
+      /**
+       * Обновляем все списки строк баз данных после изменения настроек
+       * document fields в space, чтобы UI таблиц/дерева не требовал
+       * ручного перезахода.
+       */
+      queryClient.invalidateQueries({
+        predicate: (item) =>
+          item.queryKey[0] === 'database' && item.queryKey[2] === 'rows',
+      });
       queryClient.invalidateQueries({
         queryKey: ["spaces"],
       });
