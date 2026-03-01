@@ -472,17 +472,29 @@ export class PageService {
           else 'page'
         end`.as('nodeType'),
         sql<string | null>`null`.as('databaseId'),
-        sql<boolean>`(
-          ${this.pageRepo.withHasChildren(eb)}
-          or exists (
-            select 1
-            from databases child_database
-            inner join pages child_page on child_page.id = child_database.page_id
-            where child_database.deleted_at is null
-              and child_page.deleted_at is null
-              and child_page.parent_page_id = pages.id
-          )
-        )`.as('hasChildren'),
+        // Важно: здесь используем expression builder вместо raw SQL,
+        // чтобы Kysely корректно сгенерировал EXISTS-подзапросы без
+        // вложенного `AS ...` внутри булевого выражения.
+        eb
+          .or([
+            eb.exists(
+              eb
+                .selectFrom('pages as child')
+                .select('child.id')
+                .whereRef('child.parentPageId', '=', 'pages.id')
+                .where('child.deletedAt', 'is', null),
+            ),
+            eb.exists(
+              eb
+                .selectFrom('databases as childDatabase')
+                .innerJoin('pages as childPage', 'childPage.id', 'childDatabase.pageId')
+                .select('childDatabase.id')
+                .where('childDatabase.deletedAt', 'is', null)
+                .where('childPage.deletedAt', 'is', null)
+                .whereRef('childPage.parentPageId', '=', 'pages.id'),
+            ),
+          ])
+          .as('hasChildren'),
       ])
       .where('pages.deletedAt', 'is', null)
       .where('pages.spaceId', '=', spaceId)
