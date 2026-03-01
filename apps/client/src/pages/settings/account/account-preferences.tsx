@@ -3,6 +3,7 @@ import AccountLanguage from "@/features/user/components/account-language.tsx";
 import AccountTheme from "@/features/user/components/account-theme.tsx";
 import AccountPushPreferences from "@/features/user/components/account-push-preferences.tsx";
 import AccountEmailPreferences from "@/features/user/components/account-email-preferences.tsx";
+import AccountScrollPreferences from "@/features/user/components/account-scroll-preferences.tsx";
 import PageWidthPref from "@/features/user/components/page-width-pref.tsx";
 import PageEditPref from "@/features/user/components/page-state-pref";
 import { getAppName } from "@/lib/config.ts";
@@ -35,6 +36,10 @@ export default function AccountPreferences() {
       <Divider my={"md"} />
 
       <PageEditPref />
+
+      <Divider my={"md"} />
+
+      <AccountScrollPreferences />
 
       <Divider my={"md"} />
 
