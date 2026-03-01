@@ -10,13 +10,13 @@ import { historyAtoms } from '@/features/page-history/atoms/history-atoms.ts';
 import { PageStateSegmentedControl } from '@/features/user/components/page-state-pref.tsx';
 import { useClipboard } from '@/hooks/use-clipboard';
 import { getAppUrl } from '@/lib/config.ts';
+import { exportDatabase, getDatabaseMarkdown } from '@/features/database/services/database-service';
+import { DatabaseExportFormat } from '@/features/database/types/database.types';
 
 interface DatabaseHeaderMenuProps {
   databaseId: string;
   databasePageId?: string;
   spaceSlug: string;
-  databaseName?: string;
-  description?: string;
   readOnly?: boolean;
 }
 
@@ -24,14 +24,13 @@ export default function DatabaseHeaderMenu({
   databaseId,
   databasePageId,
   spaceSlug,
-  databaseName,
-  description,
   readOnly,
 }: DatabaseHeaderMenuProps) {
   const { t } = useTranslation();
   const clipboard = useClipboard({ timeout: 500 });
   const [, setHistoryModalOpen] = useAtom(historyAtoms);
-  const [exportOpened, { open: openExportModal, close: closeExportModal }] = useDisclosure(false);
+  const [exportOpened, { open: openExportModal, close: closeExportModal }] =
+    useDisclosure(false);
 
   const handleCopyLink = () => {
     const databaseUrl = `${getAppUrl()}/s/${spaceSlug}/databases/${databaseId}`;
@@ -39,17 +38,32 @@ export default function DatabaseHeaderMenu({
     notifications.show({ message: t('Link copied') });
   };
 
-  const handleCopyAsMarkdown = () => {
-    const title = databaseName?.trim() ? `# ${databaseName.trim()}` : `# ${t('Database')}`;
-    const body = description?.trim() ? `\n\n${description.trim()}` : '';
-    clipboard.copy(`${title}${body}`);
-    notifications.show({ message: t('Copied') });
+  const handleCopyAsMarkdown = async () => {
+    try {
+      const { markdown } = await getDatabaseMarkdown(databaseId);
+      clipboard.copy(markdown);
+      notifications.show({ message: t('Copied') });
+    } catch {
+      notifications.show({
+        message: t('Export failed'),
+        color: 'red',
+      });
+    }
   };
 
-  const handlePrint = () => {
-    setTimeout(() => {
-      window.print();
-    }, 250);
+  const handlePrint = async () => {
+    try {
+      await exportDatabase(databaseId, {
+        format: DatabaseExportFormat.PDF,
+      });
+
+      notifications.show({ message: t('Export successful') });
+    } catch {
+      notifications.show({
+        message: t('Export failed'),
+        color: 'red',
+      });
+    }
   };
 
   const openHistoryModal = () => {
@@ -81,14 +95,16 @@ export default function DatabaseHeaderMenu({
             onOpenHistory={databasePageId ? openHistoryModal : undefined}
             onOpenExport={openExportModal}
             onPrint={handlePrint}
-            disableExport={!databasePageId}
           />
         </Menu.Dropdown>
       </Menu>
 
-      {databasePageId && (
-        <ExportModal type="page" id={databasePageId} open={exportOpened} onClose={closeExportModal} />
-      )}
+      <ExportModal
+        type="database"
+        id={databaseId}
+        open={exportOpened}
+        onClose={closeExportModal}
+      />
     </>
   );
 }

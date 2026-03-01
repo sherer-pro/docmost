@@ -7,13 +7,16 @@ import {
   ICreateDatabaseRowPayload,
   ICreateDatabaseViewPayload,
   IDatabase,
+  IDatabaseMarkdownResponse,
   IDatabaseProperty,
   IDatabaseRow,
   IDatabaseView,
   IUpdateDatabasePayload,
+  IExportDatabasePayload,
   IUpdateDatabasePropertyPayload,
   IUpdateDatabaseViewPayload,
 } from "@/features/database/types/database.types";
+import { saveAs } from "file-saver";
 import { IDatabaseRowContext, IDatabaseRowWithCells } from "@/features/database/types/database-table.types";
 
 /**
@@ -216,5 +219,41 @@ export async function getDatabaseRowContextByPage(
   pageId: string,
 ): Promise<IDatabaseRowContext | null> {
   const req = await api.get<IDatabaseRowContext | null>(`/databases/rows/${pageId}/context`);
+  return req.data;
+}
+
+
+/**
+ * Exports a database as markdown/pdf according to backend contract.
+ */
+export async function exportDatabase(
+  databaseId: string,
+  payload: IExportDatabasePayload,
+): Promise<void> {
+  const req = await api.post(`/databases/${databaseId}/export`, payload, {
+    responseType: 'blob',
+  });
+
+  const fileName = req?.headers['content-disposition']
+    ?.split('filename=')[1]
+    ?.replace(/"/g, '');
+
+  let decodedFileName = fileName || 'database-export';
+  try {
+    decodedFileName = decodeURIComponent(decodedFileName);
+  } catch {
+    // fallback to raw filename
+  }
+
+  saveAs(req.data, decodedFileName);
+}
+
+/**
+ * Returns markdown representation of the current database table.
+ */
+export async function getDatabaseMarkdown(
+  databaseId: string,
+): Promise<IDatabaseMarkdownResponse> {
+  const req = await api.get<IDatabaseMarkdownResponse>(`/databases/${databaseId}/markdown`);
   return req.data;
 }

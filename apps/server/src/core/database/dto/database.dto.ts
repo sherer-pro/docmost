@@ -10,6 +10,11 @@ import {
   ValidateNested,
 } from 'class-validator';
 
+export enum DatabaseExportFormat {
+  Markdown = 'markdown',
+  PDF = 'pdf',
+}
+
 /**
  * DTO для создания базы данных внутри пространства.
  */
@@ -200,4 +205,13 @@ export class UpdateDatabaseViewDto {
 export class DatabaseRowPageIdDto {
   @IsUUID()
   pageId: string;
+}
+
+/**
+ * DTO для экспорта базы данных в файл.
+ */
+export class ExportDatabaseDto {
+  @IsString()
+  @IsIn(['markdown', 'pdf'])
+  format: DatabaseExportFormat;
 }
