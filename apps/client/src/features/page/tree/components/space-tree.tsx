@@ -192,6 +192,7 @@ export default function SpaceTree({ spaceId, readOnly }: SpaceTreeProps) {
             const children = await fetchAllAncestorChildren({
               pageId: ancestor.id,
               spaceId: ancestor.spaceId,
+              includeNodeTypes: ["page", "database", "databaseRow"],
             });
 
             flatTreeItems = [
@@ -370,6 +371,7 @@ function Node({
       const params: SidebarPagesParams = {
         pageId: node.data.id,
         spaceId: node.data.spaceId,
+        includeNodeTypes: ["page", "database", "databaseRow"],
       };
 
       const childrenTree = await fetchAllAncestorChildren(params);

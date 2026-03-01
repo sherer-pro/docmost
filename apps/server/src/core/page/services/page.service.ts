@@ -426,7 +426,19 @@ export class PageService {
             sql<any>`null`.as('settings'),
             sql<string>`'database'`.as('nodeType'),
             'databases.id as databaseId',
-            sql<boolean>`false`.as('hasChildren'),
+          ])
+          .select((eb) => [
+            eb
+              .exists(
+                eb
+                  .selectFrom('pages as childPage')
+                  .innerJoin('databaseRows as childRow', 'childRow.pageId', 'childPage.id')
+                  .select('childPage.id')
+                  .whereRef('childPage.parentPageId', '=', 'databasePage.id')
+                  .where('childPage.deletedAt', 'is', null)
+                  .where('childRow.archivedAt', 'is', null),
+              )
+              .as('hasChildren'),
           ])
           .where('databases.deletedAt', 'is', null)
           .where('databasePage.deletedAt', 'is', null)

@@ -46,7 +46,6 @@ import { useQueryEmit } from "@/features/websocket/use-query-emit";
 const DEFAULT_SIDEBAR_NODE_TYPES: SidebarNodeType[] = [
   "page",
   "database",
-  "databaseRow",
 ];
 
 /**
