@@ -199,6 +199,8 @@
   "Your password must be a minimum of 8 characters.": "您的密码必须至少包含8个字符。",
   "Sidebar toggle": "切换侧边栏",
   "Comments": "评论",
+  "Row comments": "行评论",
+  "Row actions": "行操作",
   "404 page not found": "404 页面未找到",
   "Sorry, we can't find the page you are looking for.": "抱歉，我们无法找到你所需要的页面",
   "Take me back to homepage": "回到主页",
