@@ -347,82 +347,10 @@ function DatabaseRowsTree({ database, spaceSlug }: DatabaseRowsTreeProps) {
   const createRowMutation = useCreateDatabaseRowMutation(database.id);
   const deleteRowMutation = useDeleteDatabaseRowMutation(database.id);
 
-  const [expanded, setExpanded] = React.useState<Record<string, boolean>>({});
-
-  const rowsByParentId = React.useMemo(() => {
-    const map: Record<string, IDatabaseRowWithCells[]> = {};
-
-    rows.forEach((row) => {
-      const parentId = row.page?.parentPageId ?? 'root';
-      if (!map[parentId]) {
-        map[parentId] = [];
-      }
-      map[parentId].push(row);
-    });
-
-    return map;
-  }, [rows]);
-
-  const renderRows = (parentId: string, depth = 0): React.ReactNode => {
-    const children = rowsByParentId[parentId] ?? [];
-
-    return children.map((row) => {
-      const hasChildren = (rowsByParentId[row.pageId] ?? []).length > 0;
-      const isOpen = expanded[row.pageId] ?? true;
-      const title = row.page?.title || row.pageTitle || 'untitled';
-
-      return (
-        <React.Fragment key={row.pageId}>
-          <Group gap={4} wrap="nowrap" style={{ paddingLeft: depth * 12 }}>
-            {hasChildren ? (
-              <ActionIcon
-                variant="subtle"
-                size="xs"
-                onClick={() =>
-                  setExpanded((prev) => ({
-                    ...prev,
-                    [row.pageId]: !isOpen,
-                  }))
-                }
-                aria-label={t('Toggle row children')}
-              >
-                {isOpen ? '▾' : '▸'}
-              </ActionIcon>
-            ) : (
-              <div style={{ width: 18 }} />
-            )}
-
-            <UnstyledButton component={Link} to={`/s/${spaceSlug}/p/${row.page?.slugId || row.pageId}`} className={classes.menu}>
-              <div className={classes.menuItemInner}>
-                <span>{title}</span>
-              </div>
-            </UnstyledButton>
-
-            <ActionIcon
-              variant="subtle"
-              size="xs"
-              onClick={() => createRowMutation.mutate({ parentPageId: row.pageId })}
-              aria-label={t('Create row')}
-            >
-              <IconPlus size={14} />
-            </ActionIcon>
-
-            <ActionIcon
-              variant="subtle"
-              color="red"
-              size="xs"
-              onClick={() => deleteRowMutation.mutate(row.pageId)}
-              aria-label={t('Delete row')}
-            >
-              <IconTrash size={14} />
-            </ActionIcon>
-          </Group>
-
-          {hasChildren && isOpen ? renderRows(row.pageId, depth + 1) : null}
-        </React.Fragment>
-      );
-    });
-  };
+  const rootRows = React.useMemo(
+    () => rows.filter((row) => !row.page?.parentPageId),
+    [rows],
+  );
 
   return (
     <div>
@@ -436,7 +364,46 @@ function DatabaseRowsTree({ database, spaceSlug }: DatabaseRowsTreeProps) {
           {t('New row')}
         </Button>
       </Group>
-      {renderRows('root')}
+
+      {rootRows.map((row) => {
+        const title = row.page?.title || row.pageTitle || 'untitled';
+
+        return (
+          <Group key={row.pageId} gap={4} wrap="nowrap" className={classes.rowTreeItem}>
+            <UnstyledButton
+              component={Link}
+              to={`/s/${spaceSlug}/p/${row.page?.slugId || row.pageId}`}
+              className={classes.menu}
+            >
+              <div className={classes.menuItemInner}>
+                <span>{title}</span>
+              </div>
+            </UnstyledButton>
+
+            <Menu withArrow position="bottom-end" width={180}>
+              <Menu.Target>
+                <ActionIcon
+                  variant="subtle"
+                  size="xs"
+                  className={classes.rowTreeMenuButton}
+                  aria-label={t('Row actions')}
+                >
+                  <IconDots size={14} />
+                </ActionIcon>
+              </Menu.Target>
+              <Menu.Dropdown>
+                <Menu.Item
+                  color="red"
+                  leftSection={<IconTrash size={14} />}
+                  onClick={() => deleteRowMutation.mutate(row.pageId)}
+                >
+                  {t('Delete')}
+                </Menu.Item>
+              </Menu.Dropdown>
+            </Menu>
+          </Group>
+        );
+      })}
     </div>
   );
 }

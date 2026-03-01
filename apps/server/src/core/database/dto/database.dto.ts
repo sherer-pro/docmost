@@ -184,3 +184,9 @@ export class UpdateDatabaseViewDto {
   @IsOptional()
   config?: unknown;
 }
+
+
+export class DatabaseRowPageIdDto {
+  @IsUUID()
+  pageId: string;
+}
