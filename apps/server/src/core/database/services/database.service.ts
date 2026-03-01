@@ -519,11 +519,13 @@ export class DatabaseService {
 
     const descendantPageIds = pages.map((page) => page.id);
 
-    await this.databaseRowRepo.archiveByPageIds(
-      databaseId,
-      workspaceId,
-      descendantPageIds,
-    );
+    for (const descendantPageId of descendantPageIds) {
+      await this.databaseRowRepo.softDetachRowLink(
+        databaseId,
+        descendantPageId,
+        workspaceId,
+      );
+    }
 
     await this.pageRepo.removePage(pageId, user.id, workspaceId);
   }
@@ -698,11 +700,10 @@ export class DatabaseService {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
     await this.assertCanManageDatabasePages(user, database.spaceId);
 
-    const updatedAt = new Date();
+   const updatedAt = new Date();
 
     await executeTx(this.db, async (trx) => {
       await this.databaseRowRepo.archiveByDatabaseId(database.id, workspaceId, trx);
-      await this.databaseCellRepo.softDeleteByDatabaseId(database.id, workspaceId, trx);
       await this.databaseViewRepo.softDeleteByDatabaseId(database.id, workspaceId, trx);
 
       await trx

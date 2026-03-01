@@ -216,6 +216,8 @@ export function useConvertPageToDatabaseMutation() {
       queryClient.invalidateQueries({ queryKey: ['root-sidebar-pages'] });
       queryClient.invalidateQueries({ queryKey: ['sidebar-pages'] });
       queryClient.invalidateQueries({ queryKey: ['database', data.databaseId] });
+      queryClient.invalidateQueries({ queryKey: ['database', data.databaseId, 'rows'] });
+      queryClient.invalidateQueries({ queryKey: ['database', 'row-context'] });
       queryClient.invalidateQueries({ queryKey: ['databases'] });
       invalidateDatabaseTreeConsistency();
     },
