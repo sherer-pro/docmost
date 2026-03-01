@@ -111,7 +111,17 @@ export default function DatabaseHeaderMenu({
     });
   };
 
-  const hasDatabasePage = Boolean(databasePageId && page?.slugId);
+  /**
+   * Для domain-операций страницы достаточно факта существования связанной pageId.
+   * При отсутствии pageId это «корневая» база без page-обвязки — page-операции скрываем.
+   */
+  const hasDatabasePage = Boolean(databasePageId);
+
+  /**
+   * Для перемещения нужен slugId страницы (используется в MovePageModal).
+   * Если страница ещё не догрузилась или slug недоступен, пункт Move скрываем.
+   */
+  const canMoveDatabasePage = Boolean(databasePageId && page?.slugId);
 
   return (
     <>
@@ -152,7 +162,7 @@ export default function DatabaseHeaderMenu({
            * Для database root page (когда pageId отсутствует) операции page-domain
            * (share / history / move / trash) недоступны и намеренно скрыты.
            */}
-          {!readOnly && hasDatabasePage && (
+          {!readOnly && canMoveDatabasePage && (
             <>
               <Menu.Divider />
               <Menu.Item leftSection={<IconArrowRight size={16} />} onClick={openMovePageModal}>
@@ -179,7 +189,7 @@ export default function DatabaseHeaderMenu({
         onClose={closeExportModal}
       />
 
-      {hasDatabasePage && (
+      {canMoveDatabasePage && (
         <MovePageModal
           pageId={databasePageId}
           slugId={page.slugId}
