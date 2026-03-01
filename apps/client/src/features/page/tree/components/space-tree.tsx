@@ -458,10 +458,16 @@ function Node({
    * - page -> /p/:slug
    * - database -> /db/:slug
    */
+  // Some database nodes can temporarily arrive without slugId from the API.
+  // Passing an empty slug to build*Url produces a broken address like
+  // `.../test-database-`, which misses the identifier and leads to a blank page.
+  // Fallback to node.id keeps the route valid until slugId is available.
+  const nodeSlugId = node.data.slugId ?? node.data.id;
+
   const pageUrl =
     node.data.nodeType === "database"
-      ? buildDatabaseUrl(spaceSlug, node.data.slugId ?? "", node.data.name)
-      : buildPageUrl(spaceSlug, node.data.slugId ?? "", node.data.name);
+      ? buildDatabaseUrl(spaceSlug, nodeSlugId, node.data.name)
+      : buildPageUrl(spaceSlug, nodeSlugId, node.data.name);
 
   const canOpenNode =
     node.data.nodeType === "page" ||
