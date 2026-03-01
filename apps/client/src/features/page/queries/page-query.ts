@@ -26,6 +26,7 @@ import {
   IPage,
   IPageInput,
   SidebarPagesParams,
+  PageCustomFieldStatus,
 } from "@/features/page/types/page.types";
 import { notifications } from "@mantine/notifications";
 import { IPagination, QueryParams } from "@/lib/types.ts";
@@ -97,6 +98,7 @@ export function updatePageData(data: IPage) {
     data.id,
     data.title,
     data.icon,
+    data.customFields?.status,
   );
 }
 
@@ -118,6 +120,7 @@ export function useUpdatePageMutation() {
         data.id,
         data.title,
         data.icon,
+        data.customFields?.status,
       );
     },
   });
@@ -422,6 +425,7 @@ export function invalidateOnUpdatePage(
   id: string,
   title: string,
   icon: string,
+  status?: PageCustomFieldStatus | null,
 ) {
   let queryKey: QueryKey = null;
   if (parentPageId === null) {
@@ -440,7 +444,15 @@ export function invalidateOnUpdatePage(
           ...page,
           items: page.items.map((sidebarPage: IPage) =>
             sidebarPage.id === id
-              ? { ...sidebarPage, title: title, icon: icon }
+              ? {
+                  ...sidebarPage,
+                  title: title,
+                  icon: icon,
+                  customFields: {
+                    ...sidebarPage.customFields,
+                    ...(status !== undefined ? { status } : {}),
+                  },
+                }
               : sidebarPage,
           ),
         })),
