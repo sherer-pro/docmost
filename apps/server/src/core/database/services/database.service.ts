@@ -11,6 +11,9 @@ import { DatabaseViewRepo } from '@docmost/db/repos/database/database-view.repo'
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { User } from '@docmost/db/types/entity.types';
 import { PageService } from '../../page/services/page.service';
+import { InjectKysely } from 'nestjs-kysely';
+import { KyselyDB } from '@docmost/db/types/kysely.types';
+import { executeTx } from '@docmost/db/utils';
 import SpaceAbilityFactory from '../../casl/abilities/space-ability.factory';
 import {
   SpaceCaslAction,
@@ -39,6 +42,7 @@ export class DatabaseService {
     private readonly pageRepo: PageRepo,
     private readonly pageService: PageService,
     private readonly spaceAbility: SpaceAbilityFactory,
+    @InjectKysely() private readonly db: KyselyDB,
   ) {}
 
   /**
@@ -292,6 +296,7 @@ export class DatabaseService {
 
     const updated = await this.databaseRepo.updateDatabase(databaseId, workspaceId, {
       ...dto,
+      descriptionContent: dto.descriptionContent as never,
       lastUpdatedById: actorId,
     });
 
@@ -514,11 +519,13 @@ export class DatabaseService {
 
     const descendantPageIds = pages.map((page) => page.id);
 
-    await this.databaseRowRepo.archiveByPageIds(
-      databaseId,
-      workspaceId,
-      descendantPageIds,
-    );
+    for (const descendantPageId of descendantPageIds) {
+      await this.databaseRowRepo.softDetachRowLink(
+        databaseId,
+        descendantPageId,
+        workspaceId,
+      );
+    }
 
     await this.pageRepo.removePage(pageId, user.id, workspaceId);
   }
@@ -676,5 +683,55 @@ export class DatabaseService {
     }
 
     await this.databaseViewRepo.softDeleteView(viewId);
+  }
+
+  /**
+   * Конвертирует базу данных обратно в обычную страницу.
+   *
+   * Транзакционно помечаем database-сущность как удалённую (deactivated),
+   * архивируем строки и очищаем табличные метаданные.
+   * Сами страницы-строки не удаляются и остаются дочерними узлами root-page.
+   */
+  async convertDatabaseToPage(
+    databaseId: string,
+    user: User,
+    workspaceId: string,
+  ) {
+    const database = await this.getOrFailDatabase(databaseId, workspaceId);
+    await this.assertCanManageDatabasePages(user, database.spaceId);
+
+   const updatedAt = new Date();
+
+    await executeTx(this.db, async (trx) => {
+      await this.databaseRowRepo.archiveByDatabaseId(database.id, workspaceId, trx);
+      await this.databaseViewRepo.softDeleteByDatabaseId(database.id, workspaceId, trx);
+
+      await trx
+        .updateTable('databaseProperties')
+        .set({ deletedAt: updatedAt, updatedAt })
+        .where('databaseId', '=', database.id)
+        .where('workspaceId', '=', workspaceId)
+        .where('deletedAt', 'is', null)
+        .execute();
+
+      await this.databaseRepo.updateDatabase(
+        database.id,
+        workspaceId,
+        {
+          deletedAt: updatedAt,
+          lastUpdatedById: user.id,
+        },
+        trx,
+      );
+    });
+
+    if (database.pageId) {
+      const page = await this.pageRepo.findById(database.pageId);
+      if (page) {
+        return page;
+      }
+    }
+
+    return null;
   }
 }

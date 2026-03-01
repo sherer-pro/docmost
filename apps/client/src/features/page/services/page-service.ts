@@ -208,3 +208,20 @@ export async function getLinkPreview(url: string): Promise<LinkPreviewResult> {
   const req = await api.post<LinkPreviewResult>("/pages/link-preview", { url });
   return req.data;
 }
+
+
+/**
+ * DTO результата конвертации page -> database.
+ */
+export interface ConvertPageToDatabaseResult {
+  databaseId: string;
+  pageId: string;
+}
+
+/**
+ * Конвертирует страницу в базу данных.
+ */
+export async function convertPageToDatabase(pageId: string): Promise<ConvertPageToDatabaseResult> {
+  const req = await api.post<ConvertPageToDatabaseResult>(`/pages/${pageId}/convert-to-database`);
+  return req.data;
+}
