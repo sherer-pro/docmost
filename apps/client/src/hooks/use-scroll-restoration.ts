@@ -1,7 +1,7 @@
 import { userAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { DEFAULT_REMEMBER_PAGE_SCROLL_POSITION } from "@/features/user/constants/scroll-preferences.ts";
 import { useAtomValue } from "jotai";
-import { useEffect } from "react";
+import { useLayoutEffect } from "react";
 import { useLocation } from "react-router-dom";
 
 const SCROLL_POSITION_STORAGE_KEY_PREFIX = "docmost:scroll-position-by-path";
@@ -23,11 +23,16 @@ export function useScrollRestoration() {
     DEFAULT_REMEMBER_PAGE_SCROLL_POSITION;
   const storageKey = `${SCROLL_POSITION_STORAGE_KEY_PREFIX}:${user?.id ?? "anonymous"}`;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    const previousScrollRestoration = window.history.scrollRestoration;
+
     if (!rememberPageScrollPosition) {
+      window.history.scrollRestoration = "auto";
       sessionStorage.removeItem(storageKey);
       return;
     }
+
+    window.history.scrollRestoration = "manual";
 
     // Используем pathname + query + hash, чтобы корректно различать
     // страницы с разными параметрами и якорями.
@@ -36,7 +41,20 @@ export function useScrollRestoration() {
     const savedPosition = savedPositions[routeKey];
 
     if (typeof savedPosition === "number") {
-      window.scrollTo({ top: savedPosition, left: 0, behavior: "auto" });
+      /**
+       * Делаем восстановление в два кадра:
+       * - первый кадр ловит самый ранний момент после монтирования;
+       * - второй кадр перекрывает возможный поздний reset скролла
+       *   со стороны UI-библиотеки/роутера при доотрисовке контента.
+       */
+      const scrollToSavedPosition = () => {
+        window.scrollTo({ top: savedPosition, left: 0, behavior: "auto" });
+      };
+
+      scrollToSavedPosition();
+      requestAnimationFrame(() => {
+        scrollToSavedPosition();
+      });
     }
 
     return () => {
@@ -49,6 +67,8 @@ export function useScrollRestoration() {
         storageKey,
         JSON.stringify(updatedPositions),
       );
+
+      window.history.scrollRestoration = previousScrollRestoration;
     };
   }, [location.hash, location.pathname, location.search, rememberPageScrollPosition, storageKey]);
 }
