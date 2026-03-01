@@ -165,6 +165,7 @@ export interface Databases {
   creatorId: string | null;
   deletedAt: Timestamp | null;
   description: string | null;
+  descriptionContent: Json | null;
   icon: string | null;
   id: Generated<string>;
   lastUpdatedById: string | null;

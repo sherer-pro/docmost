@@ -1,58 +1,33 @@
-.title {
+.titleEditorContainer {
   width: 100%;
-  display: block;
-  border: none;
-  outline: none;
-  resize: none;
-  overflow: hidden;
-  background: transparent;
-  font-size: clamp(1.8rem, 3vw, 2.5rem);
-  line-height: 1.2;
-  font-weight: 700;
-  color: inherit;
+}
+
+.titleEditorContainer :global(.ProseMirror) {
   padding: 0;
   margin: 0;
   min-height: calc(1em * 1.2);
-}
-
-.title:focus {
   outline: none;
 }
 
-.title:empty::before {
-  content: attr(data-placeholder);
-  color: var(--mantine-color-dimmed);
+.titleEditorContainer :global(.ProseMirror h1) {
+  margin: 0;
+  font-size: clamp(1.8rem, 3vw, 2.5rem);
+  line-height: 1.2;
 }
 
-textarea.title::placeholder {
-  color: var(--mantine-color-dimmed);
-}
-
-.description {
+.databaseDescriptionEditor {
   width: 100%;
-  display: block;
-  border: none;
-  outline: none;
-  resize: none;
-  overflow: hidden;
-  background: transparent;
-  font-size: var(--mantine-font-size-md);
-  line-height: var(--mantine-line-height-md);
-  color: inherit;
+}
+
+.databaseDescriptionEditor :global(.ProseMirror) {
   padding: 0;
   margin: 0;
   min-height: calc(1em * var(--mantine-line-height-md));
-}
-
-.description:focus {
+  font-size: var(--mantine-font-size-md);
+  line-height: var(--mantine-line-height-md);
   outline: none;
 }
 
-.description:empty::before {
-  content: attr(data-placeholder);
-  color: var(--mantine-color-dimmed);
-}
-
-textarea.description::placeholder {
-  color: var(--mantine-color-dimmed);
+.readOnlyDescription :global(.ProseMirror) {
+  cursor: default;
 }
