@@ -23,7 +23,7 @@ import { useTranslation } from "react-i18next";
 import { usePageQuery } from "@/features/page/queries/page-query.ts";
 import CopyTextButton from "@/components/common/copy.tsx";
 import { getAppUrl, isCloud } from "@/lib/config.ts";
-import { buildPageUrl } from "@/features/page/page.utils.ts";
+import { buildPageUrl, buildSharedPageUrl } from "@/features/page/page.utils.ts";
 import classes from "@/features/share/components/share.module.css";
 import useTrial from "@/ee/hooks/use-trial.tsx";
 import { useAtom } from "jotai";
@@ -31,15 +31,23 @@ import { workspaceAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { useSpaceQuery } from "@/features/space/queries/space-query.ts";
 
 interface ShareModalProps {
-  readOnly: boolean;
+  /**
+   * Явный идентификатор страницы.
+   *
+   * Нужен для сценариев, где контекст страницы не приходит из URL
+   * (например, меню базы данных по `database.pageId`).
+   */
+  pageId?: string;
+  readOnly?: boolean;
 }
-export default function ShareModal({ readOnly }: ShareModalProps) {
+export default function ShareModal({ pageId: pageIdProp, readOnly = false }: ShareModalProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { pageSlug } = useParams();
   const pageSlugId = extractPageSlugId(pageSlug);
-  const { data: page } = usePageQuery({ pageId: pageSlugId });
-  const pageId = page?.id;
+  const queryPageId = pageIdProp ?? pageSlugId;
+  const { data: page } = usePageQuery({ pageId: queryPageId });
+  const pageId = pageIdProp ?? page?.id;
   const { data: share } = useShareForPageQuery(pageId);
   const { spaceSlug } = useParams();
   const { isTrial } = useTrial();
@@ -56,7 +64,15 @@ export default function ShareModal({ readOnly }: ShareModalProps) {
   // if level is greater than zero, then it is a descendant page from a shared page
   const isDescendantShared = share && share.level > 0;
 
-  const publicLink = `${getAppUrl()}/share/${share?.key}/p/${pageSlug}`;
+  /**
+   * Ссылку собираем через стандартный helper, чтобы формат всегда совпадал
+   * с обычными page/share URL, независимо от источника pageId.
+   */
+  const publicLink = `${getAppUrl()}${buildSharedPageUrl({
+    shareId: share?.key,
+    pageSlugId: page?.slugId ?? pageSlugId,
+    pageTitle: page?.title,
+  })}`;
 
   const [isPagePublic, setIsPagePublic] = useState<boolean>(false);
   useEffect(() => {
@@ -198,7 +214,7 @@ export default function ShareModal({ readOnly }: ShareModalProps) {
               }}
               component={Link}
               to={buildPageUrl(
-                spaceSlug,
+                page?.space?.slug ?? spaceSlug,
                 share.sharedPage.slugId,
                 share.sharedPage.title,
               )}
