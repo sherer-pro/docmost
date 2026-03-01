@@ -40,12 +40,29 @@ export class DatabaseRowRepo {
   /**
    * Возвращает все строки конкретной базы данных.
    */
-  async findByDatabaseId(databaseId: string): Promise<DatabaseRow[]> {
+  async findByDatabaseId(
+    databaseId: string,
+    workspaceId: string,
+    spaceId: string,
+  ): Promise<DatabaseRow[]> {
     return this.db
       .selectFrom('databaseRows')
-      .selectAll()
+      .innerJoin('pages', 'pages.id', 'databaseRows.pageId')
+      .select('databaseRows.id')
+      .select('databaseRows.databaseId')
+      .select('databaseRows.workspaceId')
+      .select('databaseRows.pageId')
+      .select('databaseRows.createdById')
+      .select('databaseRows.updatedById')
+      .select('databaseRows.createdAt')
+      .select('databaseRows.updatedAt')
+      .select('databaseRows.archivedAt')
       .where('databaseId', '=', databaseId)
-      .orderBy('createdAt', 'desc')
+      .where('databaseRows.workspaceId', '=', workspaceId)
+      .where('pages.workspaceId', '=', workspaceId)
+      .where('pages.spaceId', '=', spaceId)
+      .where('pages.deletedAt', 'is', null)
+      .orderBy('databaseRows.createdAt', 'desc')
       .execute();
   }
 

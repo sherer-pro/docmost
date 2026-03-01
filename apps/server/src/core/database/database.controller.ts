@@ -169,7 +169,7 @@ export class DatabaseController {
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
-    return this.databaseService.createRow(databaseId, dto, user.id, workspace.id);
+    return this.databaseService.createRow(databaseId, dto, user, workspace.id);
   }
 
   /**
@@ -178,9 +178,10 @@ export class DatabaseController {
   @Get(':databaseId/rows')
   async listRows(
     @Param('databaseId', ParseUUIDPipe) databaseId: string,
+    @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
-    return this.databaseService.listRows(databaseId, workspace.id);
+    return this.databaseService.listRows(databaseId, user, workspace.id);
   }
 
   /**
@@ -198,7 +199,7 @@ export class DatabaseController {
       databaseId,
       pageId,
       dto,
-      user.id,
+      user,
       workspace.id,
     );
   }
