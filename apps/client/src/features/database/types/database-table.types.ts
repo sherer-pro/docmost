@@ -3,7 +3,10 @@
  */
 export interface IDatabaseRowPage {
   id: string;
-  title: string;
+  slugId?: string;
+  title: string | null;
+  icon?: string | null;
+  parentPageId?: string | null;
 }
 
 /**
@@ -46,4 +49,22 @@ export interface IDatabaseFilterCondition {
 export interface IDatabaseSortState {
   propertyId: string;
   direction: 'asc' | 'desc';
+}
+
+
+export interface IDatabaseRowContext {
+  database: {
+    id: string;
+    name: string;
+  };
+  row: {
+    pageId: string;
+    databaseId: string;
+  };
+  properties: Array<{
+    id: string;
+    name: string;
+    type: string;
+  }>;
+  cells: IDatabaseCellValue[];
 }

@@ -21,11 +21,14 @@
 
 .sectionPages {
     margin-bottom: 0;
-    overflow-y: hidden;
+    overflow-y: auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
 
     .pages {
-        height: 100%;
-        padding-bottom: 26px;
+        flex: 1;
+        min-height: 0;
     }
 }
 
@@ -93,4 +96,21 @@
 .activeButton {
     background-color: light-dark(var(--mantine-color-gray-2), var(--mantine-color-dark-6));
     color: light-dark(var(--mantine-color-gray-7), var(--mantine-color-dark-0));
+}
+
+
+.rowTreeItem {
+    .rowTreeMenuButton {
+        opacity: 0;
+    }
+
+    &:hover {
+        .rowTreeMenuButton {
+            opacity: 1;
+        }
+    }
+}
+
+.rowTreeMenuButton {
+    margin-left: auto;
 }

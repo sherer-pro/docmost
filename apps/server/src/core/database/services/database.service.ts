@@ -242,7 +242,7 @@ export class DatabaseService {
     const page = await this.pageService.create(user.id, workspaceId, {
       title: dto.title,
       icon: dto.icon,
-      parentPageId: dto.parentPageId,
+      parentPageId: null,
       spaceId: database.spaceId,
     });
 
@@ -267,6 +267,55 @@ export class DatabaseService {
       workspaceId,
       database.spaceId,
     );
+  }
+
+
+  async deleteRow(
+    databaseId: string,
+    pageId: string,
+    user: User,
+    workspaceId: string,
+  ) {
+    const database = await this.getOrFailDatabase(databaseId, workspaceId);
+    await this.assertCanManageDatabasePages(user, database.spaceId);
+
+    const row = await this.databaseRowRepo.findByDatabaseAndPage(databaseId, pageId);
+    if (!row || row.archivedAt) {
+      throw new NotFoundException('Database row not found');
+    }
+
+    const pages = await this.pageRepo.getPageAndDescendants(pageId, {
+      includeContent: false,
+    });
+
+    const descendantPageIds = pages.map((page) => page.id);
+
+    await this.databaseRowRepo.archiveByPageIds(
+      databaseId,
+      workspaceId,
+      descendantPageIds,
+    );
+
+    await this.pageRepo.removePage(pageId, user.id, workspaceId);
+  }
+
+
+  async getRowContextByPage(pageId: string, user: User, workspaceId: string) {
+    const row = await this.databaseRowRepo.findActiveByPageId(pageId, workspaceId);
+
+    if (!row) {
+      return null;
+    }
+
+    const database = await this.getOrFailDatabase(row.databaseId, workspaceId);
+    await this.assertCanReadDatabasePages(user, database.spaceId);
+
+    const [properties, cells] = await Promise.all([
+      this.databasePropertyRepo.findByDatabaseId(database.id),
+      this.databaseCellRepo.findByDatabaseAndPage(database.id, pageId),
+    ]);
+
+    return { database, row, properties, cells };
   }
 
   /**
