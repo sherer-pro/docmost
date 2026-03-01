@@ -475,8 +475,8 @@ export class PageService {
         // Важно: здесь используем expression builder вместо raw SQL,
         // чтобы Kysely корректно сгенерировал EXISTS-подзапросы без
         // вложенного `AS ...` внутри булевого выражения.
-        eb
-          .or([
+        sql<boolean>`case
+          when ${eb.or([
             eb.exists(
               eb
                 .selectFrom('pages as child')
@@ -493,8 +493,10 @@ export class PageService {
                 .where('childPage.deletedAt', 'is', null)
                 .whereRef('childPage.parentPageId', '=', 'pages.id'),
             ),
-          ])
-          .as('hasChildren'),
+          ])}
+          then true
+          else false
+        end`.as('hasChildren'),
       ])
       .where('pages.deletedAt', 'is', null)
       .where('pages.spaceId', '=', spaceId)
@@ -545,8 +547,8 @@ export class PageService {
             'databases.id as databaseId',
           ])
           .select((eb) => [
-            eb
-              .exists(
+            sql<boolean>`case
+              when ${eb.exists(
                 eb
                   .selectFrom('pages as childPage')
                   .innerJoin('databaseRows as childRow', 'childRow.pageId', 'childPage.id')
@@ -554,9 +556,10 @@ export class PageService {
                   .whereRef('childPage.parentPageId', '=', 'databasePage.id')
                   .where('childPage.deletedAt', 'is', null)
                   .where('childRow.archivedAt', 'is', null),
-              )
-              .$castTo<boolean>()
-              .as('hasChildren'),
+              )}
+              then true
+              else false
+            end`.as('hasChildren'),
           ])
           .where('databases.deletedAt', 'is', null)
           .where('databasePage.deletedAt', 'is', null)
