@@ -1,6 +1,8 @@
-import { useQuery, UseQueryResult } from "@tanstack/react-query";
-import { getDatabase, getDatabases } from "@/features/database/services";
+import { useMutation, useQuery, UseQueryResult } from "@tanstack/react-query";
+import { createDatabase, getDatabase, getDatabases } from "@/features/database/services";
 import { IDatabase } from "@/features/database/types/database.types";
+import { ICreateDatabasePayload } from "@/features/database/types/database.types";
+import { queryClient } from "@/main";
 
 /**
  * Возвращает список баз данных для выбранного пространства.
@@ -31,5 +33,16 @@ export function useGetDatabaseQuery(
     queryKey: ["database", databaseId],
     queryFn: () => getDatabase(databaseId as string),
     enabled: Boolean(databaseId),
+  });
+}
+
+export function useCreateDatabaseMutation(spaceId?: string) {
+  return useMutation({
+    mutationFn: (payload: ICreateDatabasePayload) => createDatabase(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["databases", "space", spaceId],
+      });
+    },
   });
 }
