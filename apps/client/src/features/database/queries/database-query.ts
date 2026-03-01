@@ -3,7 +3,7 @@ import { createDatabase, getDatabase, getDatabases } from "@/features/database/s
 import { IDatabase } from "@/features/database/types/database.types";
 import { ICreateDatabasePayload } from "@/features/database/types/database.types";
 import { IUpdateDatabasePayload } from "@/features/database/types/database.types";
-import { updateDatabase } from "@/features/database/services/database-service";
+import { convertDatabaseToPage, updateDatabase } from "@/features/database/services/database-service";
 import { queryClient } from "@/main";
 
 /**
@@ -67,6 +67,31 @@ export function useUpdateDatabaseMutation(spaceId?: string, databaseId?: string)
       queryClient.invalidateQueries({ queryKey: ["databases", "space", spaceId] });
       queryClient.invalidateQueries({ queryKey: ["root-sidebar-pages", spaceId] });
       queryClient.invalidateQueries({ queryKey: ["sidebar-pages"] });
+    },
+  });
+}
+
+
+/**
+ * Конвертирует базу данных в страницу и синхронно обновляет кэш дерева/деталей.
+ */
+export function useConvertDatabaseToPageMutation(spaceId?: string, databaseId?: string) {
+  return useMutation({
+    mutationFn: () => convertDatabaseToPage(databaseId as string),
+    onSuccess: (page) => {
+      queryClient.invalidateQueries({ queryKey: ['database', databaseId] });
+      queryClient.invalidateQueries({ queryKey: ['databases', 'space', spaceId] });
+      queryClient.invalidateQueries({ queryKey: ['root-sidebar-pages', spaceId] });
+      queryClient.invalidateQueries({ queryKey: ['sidebar-pages'] });
+      queryClient.invalidateQueries({ queryKey: ['database', databaseId, 'rows'] });
+      queryClient.invalidateQueries({ queryKey: ['database', 'row-context'] });
+
+      if (page?.id) {
+        queryClient.invalidateQueries({ queryKey: ['pages', page.id] });
+      }
+      if (page?.slugId) {
+        queryClient.invalidateQueries({ queryKey: ['pages', page.slugId] });
+      }
     },
   });
 }

@@ -2,6 +2,8 @@ import { ActionIcon, Group, Menu, Text, Tooltip } from "@mantine/core";
 import classes from "./page-header-menu.module.css";
 import {
   IconArrowRight,
+  IconArrowsExchange,
+  IconDatabase,
   IconDots,
   IconList,
   IconMessage,
@@ -15,10 +17,12 @@ import { CustomAvatar } from "@/components/ui/custom-avatar.tsx";
 import { historyAtoms } from "@/features/page-history/atoms/history-atoms.ts";
 import { useDisclosure, useHotkeys } from "@mantine/hooks";
 import { useClipboard } from "@/hooks/use-clipboard";
-import { useParams } from "react-router-dom";
-import { usePageQuery } from "@/features/page/queries/page-query.ts";
+import { useNavigate, useParams } from "react-router-dom";
+import { useConvertPageToDatabaseMutation, usePageQuery } from "@/features/page/queries/page-query.ts";
+import { useConvertDatabaseToPageMutation } from "@/features/database/queries/database-query.ts";
 import { buildPageUrl } from "@/features/page/page.utils.ts";
 import { notifications } from "@mantine/notifications";
+import { modals } from "@mantine/modals";
 import { getAppUrl } from "@/lib/config.ts";
 import { extractPageSlugId } from "@/lib";
 import { treeApiAtom } from "@/features/page/tree/atoms/tree-api-atom.ts";
@@ -62,6 +66,7 @@ export default function PageHeaderMenu({ readOnly }: PageHeaderMenuProps) {
       { preventDefault: false },
     ],
   ]);
+
 
   return (
     <>
@@ -146,6 +151,11 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
   ] = useDisclosure(false);
   const [pageEditor] = useAtom(pageEditorAtom);
   const pageUpdatedAt = useTimeAgo(page?.updatedAt);
+  const navigate = useNavigate();
+  const { mutateAsync: convertPageToDatabaseAsync, isPending: isConvertingPageToDatabase } =
+    useConvertPageToDatabaseMutation();
+  const { mutateAsync: convertDatabaseToPageAsync, isPending: isConvertingDatabaseToPage } =
+    useConvertDatabaseToPageMutation(page?.spaceId, page?.databaseId ?? undefined);
 
   const handleCopyLink = () => {
     const pageUrl =
@@ -176,6 +186,61 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
 
   const handleDeletePage = () => {
     openDeleteModal({ onConfirm: () => tree?.delete(page.id) });
+  };
+
+  const handleConvertToPage = () => {
+    if (!page?.databaseId) {
+      return;
+    }
+
+    modals.openConfirmModal({
+      title: t('Convert database to page?'),
+      centered: true,
+      children: (
+        <Text size="sm">
+          {t(
+            'The database view, properties and row bindings will be deactivated. Child pages will stay in the tree as regular pages.',
+          )}
+        </Text>
+      ),
+      labels: { confirm: t('Convert to page'), cancel: t('Cancel') },
+      confirmProps: {
+        loading: isConvertingDatabaseToPage,
+        leftSection: <IconArrowsExchange size={14} />,
+      },
+      onConfirm: async () => {
+        const result = await convertDatabaseToPageAsync();
+        notifications.show({ message: t('Database converted to page') });
+        if (result?.slugId) {
+          navigate(buildPageUrl(spaceSlug, result.slugId, page.title));
+        }
+      },
+    });
+  };
+
+  const handleConvertToDatabase = () => {
+    if (!page?.id) {
+      return;
+    }
+
+    modals.openConfirmModal({
+      title: t('Convert page to database?'),
+      centered: true,
+      children: (
+        <Text size="sm">
+          {t(
+            'The current page will become a database root. Existing child pages will be attached as database rows and keep their nested structure.',
+          )}
+        </Text>
+      ),
+      labels: { confirm: t('Convert to database'), cancel: t('Cancel') },
+      confirmProps: { loading: isConvertingPageToDatabase, leftSection: <IconDatabase size={14} /> },
+      onConfirm: async () => {
+        const result = await convertPageToDatabaseAsync(page.id);
+        notifications.show({ message: t('Page converted to database') });
+        navigate(`/s/${spaceSlug}/databases/${result.databaseId}`);
+      },
+    });
   };
 
   return (
@@ -211,6 +276,28 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
                 onClick={openMovePageModal}
               >
                 {t("Move")}
+              </Menu.Item>
+              {!page?.databaseId && (
+                <Menu.Item
+                  leftSection={<IconArrowsExchange size={16} />}
+                  onClick={handleConvertToDatabase}
+                  disabled={isConvertingPageToDatabase}
+                >
+                  {t('Convert to database')}
+                </Menu.Item>
+              )}
+            </>
+          )}
+
+          {!readOnly && page?.databaseId && (
+            <>
+              <Menu.Divider />
+              <Menu.Item
+                leftSection={<IconArrowsExchange size={16} />}
+                onClick={handleConvertToPage}
+                disabled={isConvertingDatabaseToPage}
+              >
+                {t('Convert to page')}
               </Menu.Item>
             </>
           )}
