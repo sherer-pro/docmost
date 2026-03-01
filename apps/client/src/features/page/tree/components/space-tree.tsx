@@ -86,7 +86,7 @@ export default function SpaceTree({ spaceId, readOnly }: SpaceTreeProps) {
   const { t } = useTranslation();
   const { pageSlug } = useParams();
   const { data, setData, controllers } =
-    useTreeMutation<TreeApi<SpaceTreeNode>>(spaceId);
+    useTreeMutation<SpaceTreeNode>(spaceId);
   const {
     data: pagesData,
     hasNextPage,
@@ -281,7 +281,7 @@ export default function SpaceTree({ spaceId, readOnly }: SpaceTreeProps) {
   );
 }
 
-interface NodeProps extends NodeRendererProps<any> {
+interface NodeProps extends NodeRendererProps<SpaceTreeNode> {
   isStatusFieldEnabled: boolean;
 }
 
