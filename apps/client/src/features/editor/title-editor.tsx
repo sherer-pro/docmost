@@ -156,30 +156,12 @@ export function TitleEditor({
   }, [pageId, title, titleEditor]);
 
   useEffect(() => {
-    const autofocusTimeoutId = window.setTimeout(() => {
+    setTimeout(() => {
       // guard against Cannot access view['hasFocus'] error
       if (!titleEditor?.isInitialized) return;
-
-      if (!editable || userPageEditMode !== PageEditMode.Edit) {
-        return;
-      }
-
-      /**
-       * Важно: при обычном focus() браузер может проскроллить страницу к заголовку,
-       * из-за чего в SPA возникает эффект «сначала восстановили позицию, потом улетели наверх».
-       *
-       * Поэтому явно запрещаем scrollIntoView во время автофокуса заголовка.
-       */
-      titleEditor
-        ?.chain()
-        .focus("end", { scrollIntoView: false })
-        .run();
+      titleEditor?.commands?.focus("end");
     }, 300);
-
-    return () => {
-      window.clearTimeout(autofocusTimeoutId);
-    };
-  }, [editable, titleEditor, userPageEditMode]);
+  }, [titleEditor]);
 
   useEffect(() => {
     return () => {
