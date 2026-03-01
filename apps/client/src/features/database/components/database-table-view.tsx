@@ -13,6 +13,7 @@ import {
 } from '@mantine/core';
 import { IconEye, IconEyeOff, IconPlus, IconTrash } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
+import { useSpaceQuery } from '@/features/space/queries/space-query.ts';
 import { Link } from 'react-router-dom';
 import {
   useBatchUpdateDatabaseCellsMutation,
@@ -32,6 +33,7 @@ import { IDatabaseProperty } from '@/features/database/types/database.types';
 
 interface DatabaseTableViewProps {
   databaseId: string;
+  spaceId: string;
   spaceSlug: string;
   isEditable?: boolean;
 }
@@ -43,7 +45,7 @@ const DEFAULT_FILTER: IDatabaseFilterCondition = {
 };
 
 function getRowTitle(row: IDatabaseRowWithCells): string {
-  return row.page?.title || row.pageTitle || "untitled";
+  return row.page?.title || row.pageTitle || 'untitled';
 }
 
 function getCellValue(row: IDatabaseRowWithCells, propertyId: string): string {
@@ -58,6 +60,31 @@ function getCellValue(row: IDatabaseRowWithCells, propertyId: string): string {
   }
 
   return JSON.stringify(value);
+}
+
+
+interface RowFieldVisibility {
+  status: boolean;
+  assignee: boolean;
+  stakeholders: boolean;
+}
+
+/**
+ * Нормализует custom fields строки базы с учётом включённых document fields в space.
+ */
+function getVisibleRowCustomFields(
+  row: IDatabaseRowWithCells,
+  fieldVisibility: RowFieldVisibility,
+) {
+  const customFields = row.page?.customFields;
+
+  return {
+    status: fieldVisibility.status ? customFields?.status ?? null : null,
+    assigneeId: fieldVisibility.assignee ? customFields?.assigneeId ?? null : null,
+    stakeholderIds: fieldVisibility.stakeholders
+      ? customFields?.stakeholderIds ?? []
+      : [],
+  };
 }
 
 function matchCondition(value: string, condition: IDatabaseFilterCondition): boolean {
@@ -92,11 +119,13 @@ function matchCondition(value: string, condition: IDatabaseFilterCondition): boo
  */
 export function DatabaseTableView({
   databaseId,
+  spaceId,
   spaceSlug,
   isEditable = true,
 }: DatabaseTableViewProps) {
   const { data: properties = [] } = useDatabasePropertiesQuery(databaseId);
   const { data: rows = [] } = useDatabaseRowsQuery(databaseId);
+  const { data: space } = useSpaceQuery(spaceId);
 
   const createPropertyMutation = useCreateDatabasePropertyMutation(databaseId);
   const createRowMutation = useCreateDatabaseRowMutation(databaseId);
@@ -132,6 +161,15 @@ export function DatabaseTableView({
       });
     });
   }, [rows, filters]);
+
+  const fieldVisibility = useMemo(
+    () => ({
+      status: !!space?.settings?.documentFields?.status,
+      assignee: !!space?.settings?.documentFields?.assignee,
+      stakeholders: !!space?.settings?.documentFields?.stakeholders,
+    }),
+    [space?.settings?.documentFields],
+  );
 
   const preparedRows = useMemo(() => {
     if (!sortState) {
@@ -406,9 +444,45 @@ export function DatabaseTableView({
               <Table.Tr key={row.id}>
                 <Table.Td>
                   <Group justify="space-between" >
-                  <Text component={Link} to={`/s/${spaceSlug}/p/${row.pageId}`} >
-                    {getRowTitle(row)}
-                  </Text>
+                  <div>
+                    <Text component={Link} to={`/s/${spaceSlug}/p/${row.pageId}`}>
+                      {getRowTitle(row)}
+                    </Text>
+
+                    {/**
+                     * Показываем document fields строки только если поле включено
+                     * в настройках space. Значения берём строго из row.page.customFields.
+                     */}
+                    {(() => {
+                      const customFields = getVisibleRowCustomFields(row, fieldVisibility);
+
+                      if (
+                        !customFields.status &&
+                        !customFields.assigneeId &&
+                        customFields.stakeholderIds.length === 0
+                      ) {
+                        return null;
+                      }
+
+                      return (
+                        <Text size="xs" c="dimmed">
+                          {[
+                            customFields.status
+                              ? `Status: ${customFields.status}`
+                              : null,
+                            customFields.assigneeId
+                              ? `Assignee: ${customFields.assigneeId}`
+                              : null,
+                            customFields.stakeholderIds.length > 0
+                              ? `Stakeholders: ${customFields.stakeholderIds.length}`
+                              : null,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </Text>
+                      );
+                    })()}
+                  </div>
 
                   {isEditable && (
                     <ActionIcon
