@@ -836,9 +836,5 @@
   "Password must contain at least 8 characters": "Password must contain at least 8 characters",
   "Username is required": "Username is required",
   "subdomain is required": "subdomain is required",
-  "Enter a 6-digit code or 8-character backup code": "Enter a 6-digit code or 8-character backup code",
-  "Remember scroll position": "Remember scroll position",
-  "Save your last position on each page and restore it after navigation or reload.": "Save your last position on each page and restore it after navigation or reload.",
-  "Toggle remember scroll position": "Toggle remember scroll position",
-  "Failed to update scroll position preference. Please try again.": "Failed to update scroll position preference. Please try again."
+  "Enter a 6-digit code or 8-character backup code": "Enter a 6-digit code or 8-character backup code"
 }
