@@ -8,6 +8,7 @@ import {
   invalidateOnCreatePage,
   invalidateOnDeletePage,
   updateCacheOnMovePage,
+  updatePageDataFromPatch,
   invalidateOnUpdatePage,
 } from "../page/queries/page-query";
 import { RQ_KEY } from "../comment/queries/comment-query";
@@ -74,22 +75,32 @@ export const useQuerySubscription = () => {
           entity = data.entity[0];
           queryKeyId = entity === "pages" ? data.payload.slugId : data.id;
 
+          if (entity === "pages") {
+            const updatedPage = updatePageDataFromPatch({
+              id: data.id,
+              spaceId: data.spaceId,
+              ...data.payload,
+            });
+
+            if (!updatedPage) {
+              invalidateOnUpdatePage(
+                data.spaceId,
+                data.payload.parentPageId,
+                data.id,
+                data.payload.title,
+                data.payload.icon,
+                data.payload.customFields?.status,
+              );
+            }
+
+            break;
+          }
+
           if (queryClient.getQueryData([...data.entity, queryKeyId])) {
             queryClient.setQueryData([...data.entity, queryKeyId], {
               ...queryClient.getQueryData([...data.entity, queryKeyId]),
               ...data.payload,
             });
-          }
-
-          if (entity === "pages") {
-            invalidateOnUpdatePage(
-              data.spaceId,
-              data.payload.parentPageId,
-              data.id,
-              data.payload.title,
-              data.payload.icon,
-              data.payload.customFields?.status,
-            );
           }
           break;
         case "refetchRootTreeNodeEvent": {

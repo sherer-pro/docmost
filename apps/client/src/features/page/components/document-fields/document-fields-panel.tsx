@@ -25,7 +25,6 @@ import {
   PageCustomFields,
   PageCustomFieldStatus,
 } from "@/features/page/types/page.types.ts";
-import { queryClient } from "@/main.tsx";
 import { currentUserAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { useAtomValue } from "jotai";
 import { PageEditMode } from "@/features/user/types/user.types.ts";
@@ -36,6 +35,7 @@ import {
   useBatchUpdateDatabaseCellsMutation,
   useDatabaseRowContextQuery,
 } from "@/features/database/queries/database-table-query";
+import { updatePageData } from "@/features/page/queries/page-query";
 
 interface DocumentFieldsPanelProps {
   page: IPage;
@@ -132,8 +132,7 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
     mutationFn: (nextFields: Required<PageCustomFields>) =>
       updatePage({ pageId: page.id, customFields: nextFields }),
     onSuccess: (updatedPage) => {
-      queryClient.setQueryData(["pages", updatedPage.id], updatedPage);
-      queryClient.setQueryData(["pages", updatedPage.slugId], updatedPage);
+      updatePageData(updatedPage);
     },
   });
 
