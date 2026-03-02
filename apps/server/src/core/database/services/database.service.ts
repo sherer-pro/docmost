@@ -64,6 +64,29 @@ export class DatabaseService {
   ) {}
 
   /**
+   * Legacy тип `text` больше не поддерживается контрактом.
+   * Для обратной совместимости нормализуем его в `multiline_text`
+   * перед любыми операциями чтения/конвертации.
+   */
+  private normalizePropertyType(type: string | null | undefined): DatabasePropertyType {
+    if (type === 'text') {
+      return 'multiline_text';
+    }
+
+    return type as DatabasePropertyType;
+  }
+
+  /**
+   * Приводит типы свойств к актуальному контракту в ответах API.
+   */
+  private normalizeProperties<T extends { type: string | null }>(properties: T[]): T[] {
+    return properties.map((property) => ({
+      ...property,
+      type: this.normalizePropertyType(property.type),
+    }));
+  }
+
+  /**
    * Проверяет доступ к базе данных в рамках текущего workspace.
    *
    * Если запись не найдена, выбрасывается 404 — это единая точка валидации
@@ -165,7 +188,7 @@ export class DatabaseService {
       return { converted: normalizedValue, isConvertible: false };
     }
 
-    if (fromType === 'checkbox' && toType === 'text') {
+    if (fromType === 'checkbox' && toType === 'multiline_text') {
       if (typeof normalizedValue === 'boolean') {
         return { converted: normalizedValue ? 'Да' : 'Нет', isConvertible: true };
       }
@@ -174,7 +197,7 @@ export class DatabaseService {
       return { converted: booleanValue ? 'Да' : 'Нет', isConvertible: true };
     }
 
-    if (fromType === 'select' && toType === 'text') {
+    if (fromType === 'select' && toType === 'multiline_text') {
       if (typeof normalizedValue === 'string') {
         return { converted: normalizedValue, isConvertible: true };
       }
@@ -197,7 +220,7 @@ export class DatabaseService {
       return { converted: null, isConvertible: true };
     }
 
-    if (toType === 'multiline_text' || toType === 'text' || toType === 'code') {
+    if (toType === 'multiline_text' || toType === 'code') {
       if (typeof normalizedValue === 'string') {
         return { converted: normalizedValue, isConvertible: true };
       }
@@ -554,7 +577,8 @@ export class DatabaseService {
    */
   async listProperties(databaseId: string, workspaceId: string) {
     await this.getOrFailDatabase(databaseId, workspaceId);
-    return this.databasePropertyRepo.findByDatabaseId(databaseId);
+    const properties = await this.databasePropertyRepo.findByDatabaseId(databaseId);
+    return this.normalizeProperties(properties);
   }
 
   /**
@@ -582,7 +606,7 @@ export class DatabaseService {
       await this.convertPropertyCellValues(
         databaseId,
         propertyId,
-        property.type as DatabasePropertyType,
+        this.normalizePropertyType(property.type),
         dto.type,
         workspaceId,
         database.spaceId,
@@ -743,7 +767,7 @@ export class DatabaseService {
       this.databaseCellRepo.findByDatabaseAndPage(database.id, pageId),
     ]);
 
-    return { database, row, properties, cells };
+    return { database, row, properties: this.normalizeProperties(properties), cells };
   }
 
   /**
@@ -780,10 +804,14 @@ export class DatabaseService {
       this.databasePropertyRepo.findByDatabaseId(databaseId),
     ]);
 
+    const normalizedProperties = this.normalizeProperties(properties);
+
     const previousCellsByPropertyId = new Map(
       existingCells.map((existingCell) => [existingCell.propertyId, existingCell]),
     );
-    const propertyById = new Map(properties.map((property) => [property.id, property]));
+    const propertyById = new Map(
+      normalizedProperties.map((property) => [property.id, property]),
+    );
 
     const cells = [];
     for (const cell of dto.cells) {

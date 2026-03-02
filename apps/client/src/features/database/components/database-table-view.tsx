@@ -101,7 +101,7 @@ export function DatabaseTableView({
   const updatePropertyMutation = useUpdateDatabasePropertyMutation(databaseId);
 
   const [newPropertyName, setNewPropertyName] = useState('');
-  const [newPropertyType, setNewPropertyType] = useState<DatabasePropertyType>('text');
+  const [newPropertyType, setNewPropertyType] = useState<DatabasePropertyType>('multiline_text');
   const [editingCellKey, setEditingCellKey] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState<unknown>('');
   const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({});
@@ -112,6 +112,22 @@ export function DatabaseTableView({
     useState<SelectPropertyCreationDraft | null>(null);
   const setTableExportState = useSetAtom(databaseTableExportStateAtom);
   const navigate = useNavigate();
+
+  /**
+   * Отдельная карта локализованных названий типов для UI.
+   * По задаче показываем `multiline_text` как привычный для пользователя `Text`.
+   */
+  const propertyTypeLabels = useMemo<Record<DatabasePropertyType, string>>(
+    () => ({
+      multiline_text: t('Text'),
+      checkbox: t('Checkbox'),
+      code: t('Code'),
+      select: t('Select'),
+      user: t('User'),
+      page_reference: t('Page reference'),
+    }),
+    [t],
+  );
 
   /**
    * Синхронизируем текущее состояние таблицы с глобальным store,
@@ -315,7 +331,7 @@ export function DatabaseTableView({
       type: newPropertyType,
     });
     setNewPropertyName('');
-    setNewPropertyType('text');
+    setNewPropertyType('multiline_text');
   };
 
   return (
@@ -333,7 +349,7 @@ export function DatabaseTableView({
             value={newPropertyType}
             data={DATABASE_PROPERTY_TYPES.map((propertyType) => ({
               value: propertyType,
-              label: propertyType,
+              label: propertyTypeLabels[propertyType],
             }))}
             onChange={(value) => {
               if (!value) {
@@ -565,7 +581,7 @@ export function DatabaseTableView({
                                     })
                                   }
                                 >
-                                  {propertyType}
+                                  {propertyTypeLabels[propertyType]}
                                 </Menu.Item>
                               ))}
                             </Menu.Sub.Dropdown>
@@ -702,7 +718,7 @@ export function DatabaseTableView({
             },
           });
           setNewPropertyName('');
-          setNewPropertyType('text');
+          setNewPropertyType('multiline_text');
         }}
       />
     </Paper>
