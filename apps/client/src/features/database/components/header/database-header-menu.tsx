@@ -26,6 +26,7 @@ import { useConvertDatabaseToPageMutation } from '@/features/database/queries/da
 import ShareModal from '@/features/share/components/share-modal.tsx';
 import { PageStateSegmentedControl } from '@/features/user/components/page-state-pref.tsx';
 import { useClipboard } from '@/hooks/use-clipboard';
+import { userAtom } from '@/features/user/atoms/current-user-atom.ts';
 import { getAppUrl } from '@/lib/config.ts';
 import {
   databaseTableExportStateAtom,
@@ -49,6 +50,7 @@ export default function DatabaseHeaderMenu({
   const { t } = useTranslation();
   const navigate = useNavigate();
   const clipboard = useClipboard({ timeout: 500 });
+  const [user] = useAtom(userAtom);
   const [, setHistoryModalOpen] = useAtom(historyAtoms);
   const { data: page } = usePageQuery({ pageId: databasePageId });
   const { data: database } = useGetDatabaseQuery(databaseId);
@@ -218,6 +220,14 @@ export default function DatabaseHeaderMenu({
    */
   const canMoveDatabasePage = Boolean(databasePageId && page?.slugId);
 
+  /**
+   * Явный приоритет вычисления ширины страницы:
+   * 1) page.settings.fullPageWidth;
+   * 2) user.settings.preferences.fullPageWidth;
+   * 3) fallback false.
+   */
+  const fullPageWidth = page?.settings?.fullPageWidth ?? user.settings?.preferences?.fullPageWidth ?? false;
+
   return (
     <>
       {!readOnly && <PageStateSegmentedControl size="xs" />}
@@ -245,6 +255,8 @@ export default function DatabaseHeaderMenu({
             onOpenHistory={hasDatabasePage ? openHistoryModal : undefined}
             onOpenExport={openExportModal}
             onPrint={handlePrint}
+            databasePageId={databasePageId}
+            fullPageWidth={fullPageWidth}
           />
 
           {hasDatabasePage && (
