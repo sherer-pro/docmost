@@ -7,7 +7,6 @@ import {
   Paper,
   Select,
   SelectProps,
-  Stack,
   Table,
   Text,
   TextInput,
@@ -71,6 +70,8 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
   const userPageEditMode =
     currentUser?.user?.settings?.preferences?.pageEditMode ?? PageEditMode.Edit;
   const isEditable = !readOnly && userPageEditMode === PageEditMode.Edit;
+
+  const isDatabasePage = Boolean(page.databaseId);
 
   /**
    * In view mode, document fields must be rendered as read-only
@@ -209,8 +210,13 @@ export function DocumentFieldsPanel({ page, readOnly }: DocumentFieldsPanelProps
   }
 
   return (
-    <Group mx={{ base: 0, sm: 'md' }}>
-    <Paper withBorder radius="md" my="md"  mx={{ base: 0, sm: 'xl' }}>
+    <Group mx={isDatabasePage ? 0 : { base: 0, sm: 'md' }}>
+      <Paper
+        withBorder
+        radius="md"
+        my="md"
+        mx={isDatabasePage ? 0 : { base: 0, sm: 'xl' }}
+      >
       <Table withColumnBorders verticalSpacing="xs" horizontalSpacing="sm" layout="fixed">
         <Table.Tbody>
           {enabledFields.status && (
