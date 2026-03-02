@@ -1,10 +1,11 @@
-import { Checkbox, Select, Text, TextInput, Textarea } from '@mantine/core';
+import { Checkbox, Group, Select, Text, TextInput, Textarea } from '@mantine/core';
 import { DatabasePropertyType } from '@docmost/api-contract';
 import { useTranslation } from 'react-i18next';
 import { useMemo } from 'react';
 import { useSpaceMemberSelectOptions } from '@/features/page/components/document-fields/space-member-select-utils.ts';
 import { useGetRootSidebarPagesQuery } from '@/features/page/queries/page-query.ts';
 import { IDatabaseProperty } from '@/features/database/types/database.types.ts';
+import { CustomAvatar } from '@/components/ui/custom-avatar.tsx';
 
 interface DatabaseCellRendererProps {
   property: IDatabaseProperty;
@@ -45,19 +46,27 @@ export function DatabaseCellRenderer({
    * String values are still accepted for backward compatibility.
    */
   const selectedUserId = useMemo(() => {
-    if (typeof editingValue === 'string') {
-      return editingValue;
+    const sourceValue = isEditing ? editingValue : value;
+
+    if (typeof sourceValue === 'string') {
+      return sourceValue;
     }
 
-    if (editingValue && typeof editingValue === 'object' && 'id' in editingValue) {
-      const candidate = (editingValue as { id?: unknown }).id;
+    if (sourceValue && typeof sourceValue === 'object' && 'id' in sourceValue) {
+      const candidate = (sourceValue as { id?: unknown }).id;
       return typeof candidate === 'string' ? candidate : null;
     }
 
     return null;
-  }, [editingValue]);
+  }, [editingValue, isEditing, value]);
 
-  const { options: memberOptions, searchValue, setSearchValue, isLoading: isMembersLoading } =
+  const {
+    options: memberOptions,
+    searchValue,
+    setSearchValue,
+    isLoading: isMembersLoading,
+    knownUsersById,
+  } =
     useSpaceMemberSelectOptions(spaceId, selectedUserId ? [selectedUserId] : []);
 
   const pageQuery = useGetRootSidebarPagesQuery({
@@ -99,21 +108,23 @@ export function DatabaseCellRenderer({
     }
 
     if (property.type === 'user') {
-      if (value && typeof value === 'object' && 'name' in value) {
-        const name = (value as { name?: unknown }).name;
-        if (typeof name === 'string' && name.trim()) {
-          return name;
-        }
+      if (!selectedUserId) {
+        return <Text c="dimmed">{t('Empty value')}</Text>;
       }
 
-      if (value && typeof value === 'object' && 'id' in value) {
-        const id = (value as { id?: unknown }).id;
-        if (typeof id === 'string' && id.trim()) {
-          return id;
-        }
+      const selectedMember = knownUsersById[selectedUserId] ??
+        memberOptions.find((option) => option.value === selectedUserId);
+
+      if (selectedMember) {
+        return (
+          <Group gap="xs" wrap="nowrap">
+            <CustomAvatar avatarUrl={selectedMember.avatarUrl} size={18} name={selectedMember.label} />
+            <Text lineClamp={1}>{selectedMember.label}</Text>
+          </Group>
+        );
       }
 
-      return <Text c="dimmed">{t('Empty value')}</Text>;
+      return <Text c="dimmed">{t('Unknown')}</Text>;
     }
 
     if (property.type === 'page_reference') {

@@ -191,6 +191,12 @@ export class CreateDatabaseRowDto {
   parentPageId?: string;
 }
 
+
+export class DatabaseUserCellValueDto {
+  @IsUUID()
+  id: string;
+}
+
 /**
  * DTO одного значения ячейки при батч-обновлении.
  */
@@ -199,7 +205,7 @@ export class BatchUpdateDatabaseCellValueDto {
   propertyId: string;
 
   @IsOptional()
-  value?: unknown;
+  value?: string | boolean | DatabaseUserCellValueDto | null;
 
   @IsOptional()
   @IsUUID()
