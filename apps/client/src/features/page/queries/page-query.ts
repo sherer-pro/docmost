@@ -147,6 +147,13 @@ export function updatePageDataFromPatch(
   const updatedPage: IPage = {
     ...basePage,
     ...data,
+    settings:
+      data.settings === undefined
+        ? basePage.settings
+        : {
+            ...(basePage.settings ?? {}),
+            ...data.settings,
+          },
     customFields:
       data.customFields === undefined
         ? basePage.customFields
