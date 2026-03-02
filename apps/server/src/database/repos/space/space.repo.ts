@@ -192,7 +192,7 @@ export class SpaceRepo {
 
     return eb
       .selectFrom(subquery)
-      .select((eb) => eb.fn.count('userId').as('count'))
+      .select(() => sql<number>`COUNT("userId")::int`.as('count'))
       .as('memberCount');
   }
 
