@@ -2,7 +2,6 @@
  * Supported database property types shared between client and server.
  */
 export const DATABASE_PROPERTY_TYPES = [
-  'text',
   'multiline_text',
   'checkbox',
   'code',
