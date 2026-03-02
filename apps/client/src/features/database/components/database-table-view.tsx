@@ -19,9 +19,10 @@ import {
   IconPlus,
   IconTrash,
 } from '@tabler/icons-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useSetAtom } from 'jotai';
 import {
   useBatchUpdateDatabaseCellsMutation,
   useCreateDatabasePropertyMutation,
@@ -37,6 +38,15 @@ import {
   IDatabaseSortState,
 } from '@/features/database/types/database-table.types';
 import { IDatabaseProperty } from '@/features/database/types/database.types';
+import {
+  defaultDatabaseTableExportState,
+  databaseTableExportStateAtom,
+} from '@/features/database/atoms/database-table-export-atom';
+import {
+  getCellValue,
+  getRowTitle,
+  matchCondition,
+} from '@/features/database/utils/database-markdown';
 
 interface DatabaseTableViewProps {
   databaseId: string;
@@ -45,49 +55,7 @@ interface DatabaseTableViewProps {
   isEditable?: boolean;
 }
 
-const DEFAULT_FILTER: IDatabaseFilterCondition = {
-  propertyId: '',
-  operator: 'contains',
-  value: '',
-};
-
-function getRowTitle(row: IDatabaseRowWithCells, untitledLabel: string): string {
-  return row.page?.title || row.pageTitle || untitledLabel;
-}
-
-function getCellValue(row: IDatabaseRowWithCells, propertyId: string): string {
-  const value = row.cells?.find((cell) => cell.propertyId === propertyId)?.value;
-
-  if (value === null || typeof value === 'undefined') {
-    return '';
-  }
-
-  if (typeof value === 'string') {
-    return value;
-  }
-
-  return JSON.stringify(value);
-}
-
-
-function matchCondition(value: string, condition: IDatabaseFilterCondition): boolean {
-  const normalizedValue = value.toLowerCase();
-  const normalizedFilter = condition.value.toLowerCase();
-
-  if (!condition.value) {
-    return true;
-  }
-
-  if (condition.operator === 'equals') {
-    return normalizedValue === normalizedFilter;
-  }
-
-  if (condition.operator === 'not_equals') {
-    return normalizedValue !== normalizedFilter;
-  }
-
-  return normalizedValue.includes(normalizedFilter);
-}
+const DEFAULT_FILTER: IDatabaseFilterCondition = defaultDatabaseTableExportState.filters[0];
 
 /**
  * Database table view.
@@ -122,7 +90,24 @@ export function DatabaseTableView({
   const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({});
   const [filters, setFilters] = useState<IDatabaseFilterCondition[]>([DEFAULT_FILTER]);
   const [sortState, setSortState] = useState<IDatabaseSortState | null>(null);
+  const setTableExportState = useSetAtom(databaseTableExportStateAtom);
   const navigate = useNavigate();
+
+  /**
+   * Синхронизируем текущее состояние таблицы с глобальным store,
+   * чтобы действия из header (экспорт/копирование markdown) использовали
+   * те же фильтры, сортировку и видимость колонок, что и текущий экран.
+   */
+  useEffect(() => {
+    setTableExportState((prev) => ({
+      ...prev,
+      [databaseId]: {
+        visibleColumns,
+        filters,
+        sortState,
+      },
+    }));
+  }, [databaseId, filters, setTableExportState, sortState, visibleColumns]);
 
   const displayedProperties = useMemo(
     () =>
