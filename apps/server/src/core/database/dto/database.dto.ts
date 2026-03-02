@@ -7,6 +7,7 @@ import {
   IsString,
   IsUUID,
   MaxLength,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import { DatabasePropertyType, DATABASE_PROPERTY_TYPES } from '@docmost/api-contract';
@@ -90,6 +91,30 @@ export class ListDatabasesQueryDto {
   spaceId: string;
 }
 
+export class SelectPropertyOptionDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(255)
+  label: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(255)
+  value: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  color?: string;
+}
+
+export class SelectPropertySettingsDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SelectPropertyOptionDto)
+  options: SelectPropertyOptionDto[];
+}
+
 /**
  * DTO для создания свойства (колонки) в базе данных.
  */
@@ -106,7 +131,10 @@ export class CreateDatabasePropertyDto {
   type: DatabasePropertyType;
 
   @IsOptional()
-  settings?: unknown;
+  @ValidateIf((_, value) => typeof value !== 'undefined')
+  @ValidateNested()
+  @Type(() => SelectPropertySettingsDto)
+  settings?: SelectPropertySettingsDto;
 }
 
 /**
@@ -127,7 +155,10 @@ export class UpdateDatabasePropertyDto {
   type?: DatabasePropertyType;
 
   @IsOptional()
-  settings?: unknown;
+  @ValidateIf((_, value) => typeof value !== 'undefined')
+  @ValidateNested()
+  @Type(() => SelectPropertySettingsDto)
+  settings?: SelectPropertySettingsDto;
 }
 
 /**

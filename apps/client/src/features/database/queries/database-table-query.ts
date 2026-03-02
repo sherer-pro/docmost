@@ -10,6 +10,7 @@ import {
   deleteDatabaseProperty,
   deleteDatabaseRow,
   getDatabaseProperties,
+  updateDatabaseProperty,
   getDatabaseRowContextByPage,
   getDatabaseRows,
 } from '@/features/database/services';
@@ -18,6 +19,7 @@ import {
   ICreateDatabasePropertyPayload,
   ICreateDatabaseRowPayload,
   IDatabaseProperty,
+  IUpdateDatabasePropertyPayload,
 } from '@/features/database/types/database.types';
 import { IDatabaseRowContext, IDatabaseRowWithCells } from '@/features/database/types/database-table.types';
 import { queryClient } from '@/main.tsx';
@@ -92,6 +94,25 @@ export function useCreateDatabasePropertyMutation(databaseId?: string) {
       queryClient.invalidateQueries({
         queryKey: ['database', databaseId, 'properties'],
       });
+    },
+  });
+}
+
+
+export function useUpdateDatabasePropertyMutation(databaseId?: string) {
+  return useMutation({
+    mutationFn: ({
+      propertyId,
+      payload,
+    }: {
+      propertyId: string;
+      payload: IUpdateDatabasePropertyPayload;
+    }) => updateDatabaseProperty(databaseId as string, propertyId, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['database', databaseId, 'properties'],
+      });
+      invalidateTreeAndTable(databaseId);
     },
   });
 }
