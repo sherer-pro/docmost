@@ -21,6 +21,7 @@ import {
   IconArrowRight,
   IconChevronDown,
   IconChevronRight,
+  IconPointFilled,
   IconCopy,
   IconDotsVertical,
   IconFileDescription,
@@ -864,24 +865,24 @@ function PageArrow({ node, onExpandTree }: PageArrowProps) {
       size={20}
       variant="subtle"
       c="gray"
-      disabled={!hasExpandableChildren}
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
-
-        if (!hasExpandableChildren) {
-          return;
-        }
-
         node.toggle();
-        onExpandTree?.();
+        onExpandTree();
       }}
     >
-      {hasExpandableChildren
-        ? node.isOpen
-          ? <IconChevronDown stroke={2} size={18} />
-          : <IconChevronRight stroke={2} size={18} />
-        : null}
+      {node.isInternal ? (
+        node.children && (node.children.length > 0 || node.data.hasChildren) ? (
+          node.isOpen ? (
+            <IconChevronDown stroke={2} size={18} />
+          ) : (
+            <IconChevronRight stroke={2} size={18} />
+          )
+        ) : (
+          <IconPointFilled size={8} />
+        )
+      ) : null}
     </ActionIcon>
   );
 }
