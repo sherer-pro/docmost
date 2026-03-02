@@ -2,10 +2,13 @@ import { Checkbox, Group, Select, Text, TextInput, Textarea } from '@mantine/cor
 import { DatabasePropertyType } from '@docmost/api-contract';
 import { useTranslation } from 'react-i18next';
 import { useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useSpaceMemberSelectOptions } from '@/features/page/components/document-fields/space-member-select-utils.ts';
 import { useGetRootSidebarPagesQuery } from '@/features/page/queries/page-query.ts';
 import { IDatabaseProperty } from '@/features/database/types/database.types.ts';
-import { CustomAvatar } from '@/components/ui/custom-avatar.tsx';
+import { CustomAvatar } from '@/components/ui/custom-avatar.tsx';        
+import { buildPageUrl } from '@/features/page/page.utils.ts';
+
 
 interface DatabaseCellRendererProps {
   property: IDatabaseProperty;
@@ -14,6 +17,7 @@ interface DatabaseCellRendererProps {
   isEditing: boolean;
   editingValue: unknown;
   spaceId: string;
+  spaceSlug: string;
   getSelectOptionLabel: (property: IDatabaseProperty, value: string) => string;
   onStartEdit: () => void;
   onChange: (value: unknown) => void;
@@ -34,6 +38,7 @@ export function DatabaseCellRenderer({
   isEditing,
   editingValue,
   spaceId,
+  spaceSlug,
   getSelectOptionLabel,
   onStartEdit,
   onChange,
@@ -85,6 +90,23 @@ export function DatabaseCellRenderer({
     [pageQuery.data?.pages, t],
   );
 
+  /**
+   * Возвращает URL страницы для page_reference только если у узла есть slugId.
+   * Если slugId отсутствует, ссылка не строится — это защищает от некорректной навигации.
+   */
+  const pageReferenceUrlById = useMemo(
+    () =>
+      new Map(
+        (pageQuery.data?.pages ?? [])
+          .flatMap((page) => page.items)
+          .map((node) => [
+            node.id,
+            node.slugId ? buildPageUrl(spaceSlug, node.slugId, node.title || t('untitled')) : null,
+          ]),
+      ),
+    [pageQuery.data?.pages, spaceSlug, t],
+  );
+
   const renderViewValue = () => {
     if (property.type === 'checkbox') {
       return <Checkbox checked={Boolean(value)} disabled readOnly />;
@@ -134,6 +156,17 @@ export function DatabaseCellRenderer({
       }
 
       const targetPage = pageOptions.find((option) => option.value === refId);
+      const targetPageUrl = pageReferenceUrlById.get(refId);
+
+      if (targetPageUrl) {
+        return (
+          <Text component={Link} to={targetPageUrl}>
+            {targetPage?.label || refId}
+          </Text>
+        );
+      }
+
+      // Fallback: если страница не найдена (или нет slugId), показываем ID без ссылки.
       return targetPage?.label || refId;
     }
 
