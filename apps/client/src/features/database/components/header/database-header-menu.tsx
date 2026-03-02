@@ -83,12 +83,13 @@ export default function DatabaseHeaderMenu({
 
   /**
    * Копирует canonical-ссылку на database-страницу в формате /s/:space/db/:slug.
-   * Если slug связанной page пока неизвестен, безопасно откатываемся на legacy URL.
    */
   const handleCopyDatabaseLink = () => {
-    const databasePath = page?.slugId
-      ? buildDatabaseUrl(spaceSlug, page.slugId, page.title)
-      : `/s/${spaceSlug}/databases/${databaseId}`;
+    if (!page?.slugId) {
+      return;
+    }
+
+    const databasePath = buildDatabaseUrl(spaceSlug, page.slugId, page.title);
 
     clipboard.copy(`${getAppUrl()}${databasePath}`);
     notifications.show({ message: t('Link copied') });
