@@ -654,6 +654,7 @@ export function DatabaseTableView({
                         isEditing={isEditing}
                         editingValue={editingValue}
                         spaceId={spaceId}
+                        spaceSlug={spaceSlug}
                         getSelectOptionLabel={getSelectOptionLabel}
                         onStartEdit={() => startEditing(row, property)}
                         onChange={setEditingValue}
