@@ -78,6 +78,20 @@ export class PageController {
     } as UpdatePageCustomFieldsDto;
   }
 
+  /**
+   * Нормализует page.settings для API-ответа.
+   *
+   * Возвращаем `undefined`, если в БД лежит `null` или не-объект,
+   * чтобы фронтенд мог корректно откатиться на user preferences.
+   */
+  private getPageSettings(page: { settings?: unknown }) {
+    if (!page.settings || typeof page.settings !== 'object') {
+      return undefined;
+    }
+
+    return page.settings;
+  }
+
 
   /**
    * Extracts text from all text nodes marked with the given quote identifier.
@@ -300,6 +314,7 @@ export class PageController {
         ...page,
         databaseId: linkedDatabase?.id ?? null,
         content: contentOutput,
+        settings: this.getPageSettings(page),
         customFields: this.getPageCustomFields(page),
       };
     }
@@ -307,6 +322,7 @@ export class PageController {
     return {
       ...page,
       databaseId: linkedDatabase?.id ?? null,
+      settings: this.getPageSettings(page),
       customFields: this.getPageCustomFields(page),
     };
   }
@@ -484,11 +500,16 @@ export class PageController {
       return {
         ...updatedPage,
         content: contentOutput,
+        settings: this.getPageSettings(updatedPage),
         customFields: this.getPageCustomFields(updatedPage),
       };
     }
 
-    return { ...updatedPage, customFields: this.getPageCustomFields(updatedPage) };
+    return {
+      ...updatedPage,
+      settings: this.getPageSettings(updatedPage),
+      customFields: this.getPageCustomFields(updatedPage),
+    };
   }
 
   @HttpCode(HttpStatus.OK)
