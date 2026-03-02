@@ -9,8 +9,13 @@ import { isAttachmentNode } from '../../common/helpers/prosemirror/utils';
 
 export type PageExportTree = Record<string, Page[]>;
 
+/**
+ * Поддерживаем только canonical-внутренние ссылки формата
+ * `/s/:spaceSlug/p/:pageSlug` (с опциональным origin).
+ * Legacy-формат `/p/:pageSlug` больше не учитывается как активный.
+ */
 export const INTERNAL_LINK_REGEX =
-  /^(https?:\/\/)?([^\/]+)?(\/s\/([^\/]+)\/)?p\/([a-zA-Z0-9-]+)\/?$/;
+  /^(https?:\/\/)?([^\/]+)?\/s\/([^\/]+)\/p\/([a-zA-Z0-9-]+)\/?$/;
 
 export function getExportExtension(format: string) {
   if (format === ExportFormat.HTML) {
@@ -72,7 +77,7 @@ export function replaceInternalLinks(
         if (match) {
           const markLink = mark.attrs.href;
 
-          const slugId = extractPageSlugId(match[5]);
+          const slugId = extractPageSlugId(match[4]);
           const localPath = slugIdToPath[slugId];
 
           if (!localPath) {
