@@ -22,6 +22,9 @@ export interface IPage {
   lastUpdatedBy: ILastUpdatedBy;
   deletedBy: IDeletedBy;
   customFields?: PageCustomFields;
+  settings?: {
+    fullPageWidth?: boolean;
+  };
   databaseId?: string | null;
   space: Partial<ISpace>;
 }
@@ -114,6 +117,9 @@ export interface IPageInput {
   position: string;
   isLocked: boolean;
   customFields?: PageCustomFields;
+  settings?: {
+    fullPageWidth?: boolean;
+  };
 }
 
 export interface IExportPageParams {

@@ -13,6 +13,7 @@ import {
 import React, { useEffect, useRef, useState } from "react";
 import useToggleAside from "@/hooks/use-toggle-aside.tsx";
 import { useAtom, useAtomValue } from "jotai";
+import { userAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { CustomAvatar } from "@/components/ui/custom-avatar.tsx";
 import { historyAtoms } from "@/features/page-history/atoms/history-atoms.ts";
 import { useDisclosure, useHotkeys } from "@mantine/hooks";
@@ -151,6 +152,15 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
     { open: openMovePageModal, close: closeMoveSpaceModal },
   ] = useDisclosure(false);
   const [pageEditor] = useAtom(pageEditorAtom);
+  const [user] = useAtom(userAtom);
+
+  /**
+   * Явный приоритет вычисления ширины страницы:
+   * 1) локальная настройка документа;
+   * 2) глобальная пользовательская настройка;
+   * 3) безопасный fallback `false`.
+   */
+  const fullPageWidth = page?.settings?.fullPageWidth ?? user.settings?.preferences?.fullPageWidth ?? false;
   const pageUpdatedAt = useTimeAgo(page?.updatedAt);
   const navigate = useNavigate();
   const { mutateAsync: convertPageToDatabaseAsync, isPending: isConvertingPageToDatabase } =
@@ -269,6 +279,8 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
             onOpenHistory={openHistoryModal}
             onOpenExport={openExportModal}
             onPrint={handlePrint}
+            pageId={page?.id}
+            fullPageWidth={fullPageWidth}
           />
 
           {!readOnly && (
