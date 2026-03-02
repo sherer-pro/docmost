@@ -31,7 +31,7 @@ import {
   UpdateDatabasePropertyDto,
   UpdateDatabaseViewDto,
 } from '../dto/database.dto';
-import { DatabasePropertyType } from '@docmost/api-contract';
+import type { DatabasePropertyType } from '@docmost/api-contract';
 
 interface IDatabaseCellValueWithFallback {
   value: unknown;
