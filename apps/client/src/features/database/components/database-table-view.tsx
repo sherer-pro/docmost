@@ -25,10 +25,11 @@ import {
   IconUser,
   IconAlignJustified,
   IconCode,
-  IconListFilled,
+  IconList,
+  type TablerIcon,
   IconFileDescription,
 } from '@tabler/icons-react';
-import { ComponentType, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { DATABASE_PROPERTY_TYPES, DatabasePropertyType } from '@docmost/api-contract';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -80,16 +81,16 @@ interface SelectPropertyCreationDraft {
 
 const DEFAULT_FILTER: IDatabaseFilterCondition = defaultDatabaseTableExportState.filters[0];
 
-const DATABASE_PROPERTY_TYPE_ICONS: Record<DatabasePropertyType, ComponentType<{ size?: number }>> = {
+const DATABASE_PROPERTY_TYPE_ICONS: Record<DatabasePropertyType, TablerIcon> = {
   checkbox: IconSquareCheck,
   user: IconUser,
   multiline_text: IconAlignJustified,
   code: IconCode,
-  select: IconListFilled,
+  select: IconList,
   page_reference: IconFileDescription,
 };
 
-const getPropertyTypeIcon = (propertyType: DatabasePropertyType): ComponentType<{ size?: number }> => {
+const getPropertyTypeIcon = (propertyType: DatabasePropertyType): TablerIcon => {
   return DATABASE_PROPERTY_TYPE_ICONS[propertyType] ?? IconAlignJustified;
 };
 
@@ -163,9 +164,9 @@ export function DatabaseTableView({
   );
 
   /**
-   * Синхронизируем текущее состояние таблицы с глобальным store,
-   * чтобы действия из header (экспорт/копирование markdown) использовали
-   * те же фильтры, сортировку и видимость колонок, что и текущий экран.
+   * Keeps current table state synchronized with the global store,
+   * so header actions (export/markdown copy) use the same filters,
+   * sorting and column visibility as the current screen.
    */
   useEffect(() => {
     setTableExportState((prev) => ({
