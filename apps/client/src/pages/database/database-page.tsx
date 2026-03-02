@@ -105,6 +105,17 @@ export default function DatabasePage() {
   const userPageEditMode =
     currentUser?.user?.settings?.preferences?.pageEditMode ?? PageEditMode.Edit;
 
+  /**
+   * Приоритет режима ширины для database-page синхронизирован с обычной Page:
+   * 1) локальная настройка database-page;
+   * 2) пользовательская настройка по умолчанию;
+   * 3) fallback в `false`.
+   */
+  const resolvedFullWidth =
+    databasePage?.settings?.fullPageWidth ??
+    currentUser?.user?.settings?.preferences?.fullPageWidth ??
+    false;
+
   const isEditable = !readOnly && userPageEditMode === PageEditMode.Edit;
 
   useEffect(() => {
@@ -216,7 +227,7 @@ export default function DatabasePage() {
 
       <DatabaseHeader
         databaseId={databaseId}
-        databasePageId={database?.pageId}
+        databasePageId={databasePage?.id}
         spaceSlug={spaceSlug}
         spaceName={space?.name}
         databaseName={databaseDisplayName}
@@ -225,7 +236,7 @@ export default function DatabasePage() {
 
       {database?.pageId && <HistoryModal pageId={database.pageId} pageTitle={databaseDisplayName} />}
 
-      <Container size="xl" py="xl" pt={60}>
+      <Container fluid={resolvedFullWidth} size={!resolvedFullWidth ? 'xl' : undefined} py="xl" pt={60}>
         <Stack gap="xs" mb="md">
           <div className={classes.titleEditorContainer}>
             <DatabaseTitleEditor
