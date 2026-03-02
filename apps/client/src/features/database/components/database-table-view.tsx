@@ -390,7 +390,13 @@ export function DatabaseTableView({
       </Stack>
 
       <ScrollArea>
-        <Table stickyHeader withTableBorder withColumnBorders miw={900}>
+        <Table
+            stickyHeader
+            withTableBorder
+            withColumnBorders
+            miw={900}
+            layout="auto"
+        >
           <Table.Thead>
             <Table.Tr>
               <Table.Th miw={280}>{t('Title')}</Table.Th>
