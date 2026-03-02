@@ -165,19 +165,19 @@ describe('DatabaseService mixed tree flows', () => {
     expect(databaseRepo.updateDatabase).toHaveBeenCalled();
   });
 
-  it('converts checkbox values to text when property type changes', async () => {
+  it('converts checkbox values to multiline text when property type changes', async () => {
     databasePropertyRepo.findById.mockResolvedValue({
       id: 'prop-1',
       databaseId: 'db-1',
       type: 'checkbox',
     });
-    databasePropertyRepo.updateProperty.mockResolvedValue({ id: 'prop-1', type: 'text' });
+    databasePropertyRepo.updateProperty.mockResolvedValue({ id: 'prop-1', type: 'multiline_text' });
     databaseRowRepo.findByDatabaseId.mockResolvedValue([{ pageId: 'page-1' }]);
     databaseCellRepo.findByDatabaseAndPage.mockResolvedValue([
       { id: 'cell-1', propertyId: 'prop-1', value: true },
     ]);
 
-    await service.updateProperty('db-1', 'prop-1', { type: 'text' }, 'ws-1');
+    await service.updateProperty('db-1', 'prop-1', { type: 'multiline_text' }, 'ws-1');
 
     expect(databaseCellRepo.updateCell).toHaveBeenCalledWith('cell-1', {
       value: 'Да',
@@ -212,7 +212,7 @@ describe('DatabaseService mixed tree flows', () => {
       databaseId: 'db-1',
       type: 'select',
     });
-    databasePropertyRepo.updateProperty.mockResolvedValue({ id: 'prop-1', type: 'text' });
+    databasePropertyRepo.updateProperty.mockResolvedValue({ id: 'prop-1', type: 'multiline_text' });
     databaseRowRepo.findByDatabaseId.mockResolvedValue([{ pageId: 'page-1' }]);
     databaseCellRepo.findByDatabaseAndPage.mockResolvedValue([
       {
@@ -225,7 +225,7 @@ describe('DatabaseService mixed tree flows', () => {
       },
     ]);
 
-    await service.updateProperty('db-1', 'prop-1', { type: 'text' }, 'ws-1');
+    await service.updateProperty('db-1', 'prop-1', { type: 'multiline_text' }, 'ws-1');
 
     expect(databaseCellRepo.updateCell).toHaveBeenCalledWith('cell-1', {
       value: 'legacy',
