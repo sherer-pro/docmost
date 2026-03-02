@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import getSuggestionItems from '@/features/editor/components/slash-menu/menu-items';
 import { getDatabaseDescriptionSlashItems } from './database-description-slash-items';
 
 const flattenTitles = (groups: ReturnType<typeof getDatabaseDescriptionSlashItems>) => {
@@ -7,24 +8,21 @@ const flattenTitles = (groups: ReturnType<typeof getDatabaseDescriptionSlashItem
 };
 
 describe('DatabaseDescriptionEditor slash commands', () => {
-  it('keeps lightweight formatting commands so menu can open on "/"', () => {
-    const items = getDatabaseDescriptionSlashItems({ query: '' });
-    const titles = flattenTitles(items);
+  it('returns the same slash command groups as the page editor menu', () => {
+    const query = '';
+    const databaseItems = getDatabaseDescriptionSlashItems({ query });
+    const pageItems = getSuggestionItems({ query });
 
-    assert.equal(titles.includes('Heading 1'), true);
-    assert.equal(titles.includes('Bullet list'), true);
-    assert.equal(titles.includes('Numbered list'), true);
-    assert.equal(titles.includes('Divider'), true);
-    assert.equal(titles.length > 0, true);
+    assert.deepEqual(databaseItems, pageItems);
   });
 
-  it('filters out heavy slash commands in database description context', () => {
+  it('keeps media and embed commands that were previously filtered out', () => {
     const items = getDatabaseDescriptionSlashItems({ query: '' });
     const titles = flattenTitles(items);
 
-    assert.equal(titles.includes('Image'), false);
-    assert.equal(titles.includes('Video'), false);
-    assert.equal(titles.includes('Table'), false);
-    assert.equal(titles.includes('Embed'), false);
+    assert.equal(titles.includes('Image'), true);
+    assert.equal(titles.includes('Video'), true);
+    assert.equal(titles.includes('Table'), true);
+    assert.equal(titles.includes('Embed'), true);
   });
 });
