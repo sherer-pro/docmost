@@ -13,6 +13,7 @@ import {
 import { DatabaseTitleEditor } from '@/features/database/components/editors/database-title-editor.tsx';
 import DatabaseHeader from '@/features/database/components/header/database-header.tsx';
 import HistoryModal from '@/features/page-history/components/history-modal.tsx';
+import DocumentFieldsPanel from '@/features/page/components/document-fields/document-fields-panel.tsx';
 import {
   useGetDatabaseQuery,
   useUpdateDatabaseMutation,
@@ -71,11 +72,18 @@ export default function DatabasePage() {
   const { databaseSlug, databaseId: legacyDatabaseId, spaceSlug } = useParams();
   const databasePageSlugId = extractPageSlugId(databaseSlug);
 
-  // Используем slug базы (как у страниц), чтобы получить page-узел и связанный databaseId.
-  const { data: databasePage } = usePageQuery({ pageId: databasePageSlugId });
-  const databaseId = databasePage?.databaseId ?? legacyDatabaseId;
+  // In modern routes the database is opened by the database page slug,
+  // so we resolve the page first and read databaseId from it.
+  const { data: databasePageBySlug } = usePageQuery({ pageId: databasePageSlugId });
+  const databaseId = databasePageBySlug?.databaseId ?? legacyDatabaseId;
 
   const { data: database } = useGetDatabaseQuery(databaseId);
+
+  // In legacy routes (where only databaseId is present) customFields are not
+  // available if we rely only on slug-based lookup. Add a fallback lookup by
+  // database.pageId and use it as a source for DocumentFieldsPanel.
+  const { data: databasePageById } = usePageQuery({ pageId: database?.pageId });
+  const databasePage = databasePageBySlug ?? databasePageById;
   const { data: space } = useGetSpaceBySlugQuery(spaceSlug);
   const { mutateAsync: updateDatabaseMutationAsync } = useUpdateDatabaseMutation(
     space?.id,
@@ -246,6 +254,13 @@ export default function DatabasePage() {
               {saveState === 'saved' && t('database.editor.saved')}
               {saveState === 'error' && t('database.editor.error')}
             </Text>
+          )}
+
+          {databasePage && (
+            <DocumentFieldsPanel
+              page={databasePage}
+              readOnly={readOnly}
+            />
           )}
         </Stack>
 
