@@ -13,6 +13,7 @@ import {
 import { DatabaseTitleEditor } from '@/features/database/components/editors/database-title-editor.tsx';
 import DatabaseHeader from '@/features/database/components/header/database-header.tsx';
 import HistoryModal from '@/features/page-history/components/history-modal.tsx';
+import DocumentFieldsPanel from '@/features/page/components/document-fields/document-fields-panel.tsx';
 import {
   useGetDatabaseQuery,
   useUpdateDatabaseMutation,
@@ -246,6 +247,13 @@ export default function DatabasePage() {
               {saveState === 'saved' && t('database.editor.saved')}
               {saveState === 'error' && t('database.editor.error')}
             </Text>
+          )}
+
+          {databasePage && (
+            <DocumentFieldsPanel
+              page={databasePage}
+              readOnly={readOnly}
+            />
           )}
         </Stack>
 
