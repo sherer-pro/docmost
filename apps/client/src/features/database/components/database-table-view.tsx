@@ -56,6 +56,7 @@ import {
   getRowTitle,
   matchCondition,
 } from '@/features/database/utils/database-markdown';
+import { DATABASE_PROPERTY_TYPE_LABEL_KEYS } from '@/features/database/utils/database-property-type-labels';
 import { DatabaseCellRenderer } from '@/features/database/components/database-cell-renderer.tsx';
 
 interface DatabaseTableViewProps {
@@ -114,18 +115,18 @@ export function DatabaseTableView({
   const navigate = useNavigate();
 
   /**
-   * Отдельная карта локализованных названий типов для UI.
-   * По задаче показываем `multiline_text` как привычный для пользователя `Text`.
+   * Localized property type labels for all table selectors.
+   * Raw contract values (`multiline_text`, `page_reference`, etc.)
+   * are kept internal and never shown directly in the UI.
    */
   const propertyTypeLabels = useMemo<Record<DatabasePropertyType, string>>(
-    () => ({
-      multiline_text: t('Text'),
-      checkbox: t('Checkbox'),
-      code: t('Code'),
-      select: t('Select'),
-      user: t('User'),
-      page_reference: t('Page reference'),
-    }),
+    () =>
+      Object.fromEntries(
+        Object.entries(DATABASE_PROPERTY_TYPE_LABEL_KEYS).map(([propertyType, i18nKey]) => [
+          propertyType,
+          t(i18nKey),
+        ]),
+      ) as Record<DatabasePropertyType, string>,
     [t],
   );
 
