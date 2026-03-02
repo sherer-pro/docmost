@@ -110,19 +110,15 @@ export function useCreatePageMutation() {
 }
 
 export function updatePageData(data: IPage) {
-  const pageBySlug = queryClient.getQueryData<IPage>(["pages", data.slugId]);
-  const pageById = queryClient.getQueryData<IPage>(["pages", data.id]);
+  queryClient.setQueryData<IPage>(["pages", data.slugId], (pageBySlug) => ({
+    ...(pageBySlug ?? {}),
+    ...data,
+  }));
 
-  if (pageBySlug) {
-    queryClient.setQueryData(["pages", data.slugId], {
-      ...pageBySlug,
-      ...data,
-    });
-  }
-
-  if (pageById) {
-    queryClient.setQueryData(["pages", data.id], { ...pageById, ...data });
-  }
+  queryClient.setQueryData<IPage>(["pages", data.id], (pageById) => ({
+    ...(pageById ?? {}),
+    ...data,
+  }));
 
   invalidateOnUpdatePage(
     data.spaceId,
@@ -132,6 +128,37 @@ export function updatePageData(data: IPage) {
     data.icon,
     data.customFields?.status,
   );
+}
+
+export function updatePageDataFromPatch(
+  data: Pick<IPage, "id" | "spaceId"> & Partial<IPage>,
+): IPage | undefined {
+  const pageById = queryClient.getQueryData<IPage>(["pages", data.id]);
+  const resolvedSlugId = data.slugId ?? pageById?.slugId;
+  const pageBySlug = resolvedSlugId
+    ? queryClient.getQueryData<IPage>(["pages", resolvedSlugId])
+    : undefined;
+  const basePage = pageById ?? pageBySlug;
+
+  if (!basePage) {
+    return undefined;
+  }
+
+  const updatedPage: IPage = {
+    ...basePage,
+    ...data,
+    customFields:
+      data.customFields === undefined
+        ? basePage.customFields
+        : {
+            ...basePage.customFields,
+            ...data.customFields,
+          },
+  };
+
+  updatePageData(updatedPage);
+
+  return updatedPage;
 }
 
 export function useUpdateTitlePageMutation() {
@@ -147,16 +174,7 @@ export function useUpdatePageMutation() {
   return useMutation<IPage, Error, Partial<IPageInput>>({
     mutationFn: (data) => updatePage(data),
     onSuccess: (data) => {
-      invalidateOnUpdatePage(
-        data.spaceId,
-        data.parentPageId,
-        data.id,
-        data.title,
-        data.icon,
-        data.customFields?.status,
-      );
-
-      invalidateDatabaseTreeConsistency();
+      updatePageData(data);
     },
   });
 }
