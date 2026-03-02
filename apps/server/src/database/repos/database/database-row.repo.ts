@@ -129,7 +129,7 @@ export class DatabaseRowRepo {
        * COLLATE "C" обеспечивает стабильную лексикографическую сортировку
        * для fractional indexing ключей.
        */
-      .orderBy(sql`"pages"."position" collate "C"`, 'desc')
+      .orderBy(sql`"pages"."position" collate "C"`, 'asc')
       .execute();
   }
 
