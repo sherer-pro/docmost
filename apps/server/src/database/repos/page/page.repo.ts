@@ -80,6 +80,52 @@ export class PageRepo {
       trx?: KyselyTransaction;
     },
   ): Promise<Page> {
+    return this.findByIdentifier('id', pageId, opts);
+  }
+
+  /**
+   * Ищет страницу по route/public идентификатору `slugId`.
+   *
+   * Используйте этот метод для входных параметров из URL и публичных API,
+   * чтобы не смешивать их с внутренним UUID поля `id`.
+   */
+  async findBySlugId(
+    pageSlugId: string,
+    opts?: {
+      includeContent?: boolean;
+      includeTextContent?: boolean;
+      includeYdoc?: boolean;
+      includeSpace?: boolean;
+      includeCreator?: boolean;
+      includeLastUpdatedBy?: boolean;
+      includeContributors?: boolean;
+      includeHasChildren?: boolean;
+      withLock?: boolean;
+      trx?: KyselyTransaction;
+    },
+  ): Promise<Page> {
+    return this.findByIdentifier('slugId', pageSlugId, opts);
+  }
+
+  /**
+   * Общая реализация поиска страницы по конкретному полю-идентификатору.
+   */
+  private async findByIdentifier(
+    identifierColumn: 'id' | 'slugId',
+    identifierValue: string,
+    opts?: {
+      includeContent?: boolean;
+      includeTextContent?: boolean;
+      includeYdoc?: boolean;
+      includeSpace?: boolean;
+      includeCreator?: boolean;
+      includeLastUpdatedBy?: boolean;
+      includeContributors?: boolean;
+      includeHasChildren?: boolean;
+      withLock?: boolean;
+      trx?: KyselyTransaction;
+    },
+  ): Promise<Page> {
     const db = dbOrTx(this.db, opts?.trx);
 
     let query = db
@@ -112,11 +158,7 @@ export class PageRepo {
       query = query.forUpdate();
     }
 
-    if (isValidUUID(pageId)) {
-      query = query.where('id', '=', pageId);
-    } else {
-      query = query.where('slugId', '=', pageId);
-    }
+    query = query.where(identifierColumn, '=', identifierValue);
 
     return query.executeTakeFirst();
   }
