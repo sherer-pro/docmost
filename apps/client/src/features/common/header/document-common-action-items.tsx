@@ -17,8 +17,15 @@ interface DocumentCommonActionItemsProps {
   onOpenExport?: () => void;
   onPrint?: () => void;
   disableExport?: boolean;
+  pageId?: string;
+  databasePageId?: string;
+  fullPageWidth: boolean;
 }
 
+/**
+ * Общие пункты меню документа используют page-scope переключатель,
+ * чтобы ширина могла переопределяться на уровне конкретной страницы.
+ */
 export function DocumentCommonActionItems({
   onCopyLink,
   onCopyAsMarkdown,
@@ -26,6 +33,9 @@ export function DocumentCommonActionItems({
   onOpenExport,
   onPrint,
   disableExport,
+  pageId,
+  databasePageId,
+  fullPageWidth,
 }: DocumentCommonActionItemsProps) {
   const { t } = useTranslation();
 
@@ -45,7 +55,12 @@ export function DocumentCommonActionItems({
 
       <Menu.Item leftSection={<IconArrowsHorizontal size={16} />}>
         <Group wrap="nowrap">
-          <PageWidthToggle label={t('Full width')} />
+          <PageWidthToggle
+            label={t('Full width')}
+            scope="page"
+            pageId={pageId ?? databasePageId}
+            checked={fullPageWidth}
+          />
         </Group>
       </Menu.Item>
 
