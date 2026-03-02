@@ -133,15 +133,20 @@ export function DatabaseCellRenderer({
   const renderEditorByType = (type: DatabasePropertyType) => {
     if (type === 'checkbox') {
       return (
-        <Checkbox
-          autoFocus
-          checked={Boolean(editingValue)}
-          onChange={(event) => {
-            const checked = event.currentTarget.checked;
-            onChange(checked);
-            onSave(checked);
-          }}
-        />
+        <div
+          onClick={(event) => event.stopPropagation()}
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <Checkbox
+            autoFocus
+            checked={Boolean(editingValue)}
+            onChange={(event) => {
+              const checked = event.currentTarget.checked;
+              onChange(checked);
+              onSave(checked);
+            }}
+          />
+        </div>
       );
     }
 
@@ -248,7 +253,14 @@ export function DatabaseCellRenderer({
   };
 
   return (
-    <div onClick={onStartEdit} style={{ cursor: isEditable ? 'text' : 'default' }}>
+    <div
+      onClick={() => {
+        if (!isEditing && isEditable) {
+          onStartEdit();
+        }
+      }}
+      style={{ cursor: isEditable ? 'text' : 'default' }}
+    >
       {isEditing && isEditable ? renderEditorByType(property.type) : renderViewValue()}
     </div>
   );
