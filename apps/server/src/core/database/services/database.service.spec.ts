@@ -17,11 +17,13 @@ describe('DatabaseService mixed tree flows', () => {
   };
   const databaseCellRepo = {
     findByDatabaseAndPage: jest.fn(),
+    upsertCell: jest.fn(),
     updateCell: jest.fn(),
     softDeleteByDatabaseId: jest.fn(),
   };
   const databasePropertyRepo = {
     findById: jest.fn(),
+    findByDatabaseId: jest.fn(),
     updateProperty: jest.fn(),
   };
   const databaseViewRepo = {
@@ -36,6 +38,9 @@ describe('DatabaseService mixed tree flows', () => {
   const exportService = { exportPages: jest.fn() };
   const spaceAbility = {
     createForUser: jest.fn(async () => ({ cannot: () => false })),
+  };
+  const notificationQueue = {
+    add: jest.fn(),
   };
 
   const trx = {
@@ -66,6 +71,7 @@ describe('DatabaseService mixed tree flows', () => {
     pageService as any,
     exportService as any,
     spaceAbility as any,
+    notificationQueue as any,
     db as any,
   );
 
@@ -73,6 +79,8 @@ describe('DatabaseService mixed tree flows', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    databasePropertyRepo.findByDatabaseId.mockResolvedValue([]);
+    databaseCellRepo.findByDatabaseAndPage.mockResolvedValue([]);
     databaseRepo.findById.mockResolvedValue({
       id: 'db-1',
       spaceId: 'space-1',
@@ -223,4 +231,79 @@ describe('DatabaseService mixed tree flows', () => {
       value: 'legacy',
     });
   });
+
+  it('sends notification when user cell assignee changes', async () => {
+    pageRepo.findById.mockResolvedValue({
+      id: 'row-page-1',
+      workspaceId: 'ws-1',
+      spaceId: 'space-1',
+      deletedAt: null,
+    });
+    databaseRowRepo.findByDatabaseAndPage.mockResolvedValue({
+      id: 'row-1',
+      databaseId: 'db-1',
+      pageId: 'row-page-1',
+      archivedAt: null,
+    });
+    databasePropertyRepo.findByDatabaseId.mockResolvedValue([{ id: 'prop-user', type: 'user' }]);
+    databaseCellRepo.findByDatabaseAndPage.mockResolvedValue([
+      { id: 'cell-old', propertyId: 'prop-user', value: { id: 'user-old' } },
+    ]);
+    databaseCellRepo.upsertCell.mockResolvedValue({
+      id: 'cell-new',
+      propertyId: 'prop-user',
+      value: { id: 'user-new' },
+    });
+
+    await service.batchUpdateRowCells(
+      'db-1',
+      'row-page-1',
+      { cells: [{ propertyId: 'prop-user', value: { id: 'user-new' } }] },
+      user,
+      'ws-1',
+    );
+
+    expect(notificationQueue.add).toHaveBeenCalledWith(
+      'page-recipient-notification',
+      expect.objectContaining({
+        reason: 'database-user-assigned',
+        candidateUserIds: ['user-new'],
+      }),
+    );
+  });
+
+  it('does not send duplicate notification when user value remains the same', async () => {
+    pageRepo.findById.mockResolvedValue({
+      id: 'row-page-1',
+      workspaceId: 'ws-1',
+      spaceId: 'space-1',
+      deletedAt: null,
+    });
+    databaseRowRepo.findByDatabaseAndPage.mockResolvedValue({
+      id: 'row-1',
+      databaseId: 'db-1',
+      pageId: 'row-page-1',
+      archivedAt: null,
+    });
+    databasePropertyRepo.findByDatabaseId.mockResolvedValue([{ id: 'prop-user', type: 'user' }]);
+    databaseCellRepo.findByDatabaseAndPage.mockResolvedValue([
+      { id: 'cell-old', propertyId: 'prop-user', value: { id: 'user-old' } },
+    ]);
+    databaseCellRepo.upsertCell.mockResolvedValue({
+      id: 'cell-new',
+      propertyId: 'prop-user',
+      value: { id: 'user-old' },
+    });
+
+    await service.batchUpdateRowCells(
+      'db-1',
+      'row-page-1',
+      { cells: [{ propertyId: 'prop-user', value: { id: 'user-old' } }] },
+      user,
+      'ws-1',
+    );
+
+    expect(notificationQueue.add).not.toHaveBeenCalled();
+  });
+
 });
