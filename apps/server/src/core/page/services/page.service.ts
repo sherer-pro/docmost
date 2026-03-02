@@ -542,7 +542,7 @@ export class PageService {
             'databases.spaceId as spaceId',
             'databases.creatorId as creatorId',
             'databases.deletedAt as deletedAt',
-            sql<any>`null`.as('settings'),
+            sql<any>`databasePage.settings`.as('settings'),
             sql<string>`'database'`.as('nodeType'),
             'databases.id as databaseId',
           ])

@@ -687,7 +687,9 @@ export class PageController {
       items: sidebarPages.items.map((node) => ({
         ...node,
         customFields:
-          node.nodeType === 'page' ? this.getPageCustomFields(node) : null,
+          ['page', 'database', 'databaseRow'].includes(node.nodeType)
+            ? this.getPageCustomFields(node)
+            : null,
       })),
     };
   }
