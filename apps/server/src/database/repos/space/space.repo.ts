@@ -12,7 +12,6 @@ import { ExpressionBuilder, sql } from 'kysely';
 import { PaginationOptions } from '../../pagination/pagination-options';
 import { executeWithCursorPagination } from '@docmost/db/pagination/cursor-pagination';
 import { DB } from '@docmost/db/types/db';
-import { validate as isValidUUID } from 'uuid';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EventName } from '../../../common/events/event.contants';
 
@@ -36,20 +35,19 @@ export class SpaceRepo {
       .$if(opts?.includeMemberCount, (qb) => qb.select(this.withMemberCount))
       .where('workspaceId', '=', workspaceId);
 
-    if (isValidUUID(spaceId)) {
-      query = query.where('id', '=', spaceId);
-    } else {
-      query = query.where(sql`LOWER(slug)`, '=', sql`LOWER(${spaceId})`);
-    }
+    query = query.where('id', '=', spaceId);
+
     return query.executeTakeFirst();
   }
 
   async findBySlug(
     slug: string,
     workspaceId: string,
-    opts?: { includeMemberCount: boolean },
+    opts?: { includeMemberCount?: boolean; trx?: KyselyTransaction },
   ): Promise<Space> {
-    return await this.db
+    const db = dbOrTx(this.db, opts?.trx);
+
+    return await db
       .selectFrom('spaces')
       .selectAll('spaces')
       .$if(opts?.includeMemberCount, (qb) => qb.select(this.withMemberCount))
