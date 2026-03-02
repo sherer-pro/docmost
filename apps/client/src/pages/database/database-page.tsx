@@ -241,6 +241,14 @@ export default function DatabasePage() {
             />
           </div>
 
+
+          {databasePage && (
+            <DocumentFieldsPanel
+              page={databasePage}
+              readOnly={readOnly}
+            />
+          )}
+
           <DatabaseDescriptionEditor
             value={draftDescription.json}
             editable={isEditable}
@@ -254,13 +262,6 @@ export default function DatabasePage() {
               {saveState === 'saved' && t('database.editor.saved')}
               {saveState === 'error' && t('database.editor.error')}
             </Text>
-          )}
-
-          {databasePage && (
-            <DocumentFieldsPanel
-              page={databasePage}
-              readOnly={readOnly}
-            />
           )}
         </Stack>
 
