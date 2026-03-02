@@ -13,6 +13,7 @@ interface ExportModalProps {
   type: 'space' | 'page' | 'database';
   open: boolean;
   onClose: () => void;
+  onExportDatabase?: (format: DatabaseExportFormat) => Promise<void>;
 }
 
 export default function ExportModal({
@@ -20,6 +21,7 @@ export default function ExportModal({
   type,
   open,
   onClose,
+  onExportDatabase,
 }: ExportModalProps) {
   const [format, setFormat] = useState<string>(ExportFormat.Markdown);
   const [includeChildren, setIncludeChildren] = useState<boolean>(false);
@@ -65,9 +67,13 @@ export default function ExportModal({
       }
 
       if (type === 'database') {
-        await exportDatabaseFile(id, {
-          format: format as DatabaseExportFormat,
-        });
+        if (onExportDatabase) {
+          await onExportDatabase(format as DatabaseExportFormat);
+        } else {
+          await exportDatabaseFile(id, {
+            format: format as DatabaseExportFormat,
+          });
+        }
       }
 
       notifications.show({
