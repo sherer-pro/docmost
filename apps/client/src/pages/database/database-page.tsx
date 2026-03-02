@@ -69,21 +69,16 @@ function getDescriptionDoc(
 
 export default function DatabasePage() {
   const { t } = useTranslation();
-  const { databaseSlug, databaseId: legacyDatabaseId, spaceSlug } = useParams();
+  const { databaseSlug, spaceSlug } = useParams();
   const databasePageSlugId = extractPageSlugId(databaseSlug);
 
   // In modern routes the database is opened by the database page slug,
   // so we resolve the page first and read databaseId from it.
   const { data: databasePageBySlug } = usePageQuery({ pageId: databasePageSlugId });
-  const databaseId = databasePageBySlug?.databaseId ?? legacyDatabaseId;
+  const databaseId = databasePageBySlug?.databaseId;
 
   const { data: database } = useGetDatabaseQuery(databaseId);
-
-  // In legacy routes (where only databaseId is present) customFields are not
-  // available if we rely only on slug-based lookup. Add a fallback lookup by
-  // database.pageId and use it as a source for DocumentFieldsPanel.
-  const { data: databasePageById } = usePageQuery({ pageId: database?.pageId });
-  const databasePage = databasePageBySlug ?? databasePageById;
+  const databasePage = databasePageBySlug;
   const { data: space } = useGetSpaceBySlugQuery(spaceSlug);
   const { mutateAsync: updateDatabaseMutationAsync } = useUpdateDatabaseMutation(
     space?.id,

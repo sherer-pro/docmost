@@ -111,15 +111,17 @@ export function SpaceSidebar() {
 
       notifications.show({ message: t("Database created") });
 
-      // После создания базы пробуем открыть canonical URL формата /s/:space/db/:slug.
-      if (createdDatabase.pageId) {
-        const databasePage = await getPageById({ pageId: createdDatabase.pageId });
-        navigate(buildDatabaseUrl(spaceSlug, databasePage.slugId, databasePage.title));
+      // После создания базы открываем только canonical URL формата /s/:space/db/:slug.
+      if (!createdDatabase.pageId) {
+        notifications.show({
+          message: t("Failed to create database"),
+          color: "red",
+        });
         return;
       }
 
-      // Fallback для редких случаев, когда page-узел ещё не связан на момент ответа API.
-      navigate(`/s/${spaceSlug}/databases/${createdDatabase.id}`);
+      const databasePage = await getPageById({ pageId: createdDatabase.pageId });
+      navigate(buildDatabaseUrl(spaceSlug, databasePage.slugId, databasePage.title));
     } catch {
       notifications.show({
         message: t("Failed to create database"),
