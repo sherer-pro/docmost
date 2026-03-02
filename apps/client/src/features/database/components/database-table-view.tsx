@@ -6,6 +6,7 @@ import {
   Paper,
   ScrollArea,
   Select,
+  SelectProps,
   Stack,
   Table,
   Text,
@@ -17,11 +18,17 @@ import {
   IconEyeOff,
   IconMessageCircle,
   IconPlus,
+  IconSquareCheck,
   IconSettings,
   IconSwitchHorizontal,
   IconTrash,
+  IconUser,
+  IconAlignJustified,
+  IconCode,
+  IconListFilled,
+  IconFileDescription,
 } from '@tabler/icons-react';
-import { useEffect, useMemo, useState } from 'react';
+import { ComponentType, useEffect, useMemo, useState } from 'react';
 import { DATABASE_PROPERTY_TYPES, DatabasePropertyType } from '@docmost/api-contract';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -72,6 +79,31 @@ interface SelectPropertyCreationDraft {
 }
 
 const DEFAULT_FILTER: IDatabaseFilterCondition = defaultDatabaseTableExportState.filters[0];
+
+const DATABASE_PROPERTY_TYPE_ICONS: Record<DatabasePropertyType, ComponentType<{ size?: number }>> = {
+  checkbox: IconSquareCheck,
+  user: IconUser,
+  multiline_text: IconAlignJustified,
+  code: IconCode,
+  select: IconListFilled,
+  page_reference: IconFileDescription,
+};
+
+const getPropertyTypeIcon = (propertyType: DatabasePropertyType): ComponentType<{ size?: number }> => {
+  return DATABASE_PROPERTY_TYPE_ICONS[propertyType] ?? IconAlignJustified;
+};
+
+const renderPropertyTypeIcon = (propertyType: DatabasePropertyType, size: number) => {
+  const Icon = getPropertyTypeIcon(propertyType);
+  return <Icon size={size} />;
+};
+
+const renderPropertyTypeOption: SelectProps['renderOption'] = ({ option }) => (
+  <Group gap="xs" wrap="nowrap">
+    {renderPropertyTypeIcon(option.value as DatabasePropertyType, 16)}
+    <span>{option.label}</span>
+  </Group>
+);
 
 /**
  * Database table view.
@@ -361,6 +393,8 @@ export function DatabaseTableView({
             }}
             disabled={!isEditable}
             allowDeselect={false}
+            renderOption={renderPropertyTypeOption}
+            leftSection={renderPropertyTypeIcon(newPropertyType, 16)}
           />
           <Button
             leftSection={<IconPlus size={14} />}
@@ -574,6 +608,7 @@ export function DatabaseTableView({
                               {DATABASE_PROPERTY_TYPES.map((propertyType) => (
                                 <Menu.Item
                                   key={`${property.id}-${propertyType}`}
+                                  leftSection={renderPropertyTypeIcon(propertyType, 14)}
                                   disabled={propertyType === property.type}
                                   onClick={() =>
                                     updatePropertyMutation.mutate({
