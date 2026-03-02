@@ -13,6 +13,8 @@ import { User } from '@docmost/db/types/entity.types';
 import { PageService } from '../../page/services/page.service';
 import { ExportService } from '../../../integrations/export/export.service';
 import { InjectKysely } from 'nestjs-kysely';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { executeTx } from '@docmost/db/utils';
 import SpaceAbilityFactory from '../../casl/abilities/space-ability.factory';
@@ -32,10 +34,16 @@ import {
   UpdateDatabaseViewDto,
 } from '../dto/database.dto';
 import type { DatabasePropertyType } from '@docmost/api-contract';
+import { QueueJob, QueueName } from '../../../integrations/queue/constants';
+import { IPageRecipientNotificationJob } from '../../../integrations/queue/constants/queue.interface';
 
 interface IDatabaseCellValueWithFallback {
   value: unknown;
   rawValueBeforeTypeChange: unknown;
+}
+
+interface IDatabaseUserCellValue {
+  id: string;
 }
 
 @Injectable()
@@ -50,6 +58,8 @@ export class DatabaseService {
     private readonly pageService: PageService,
     private readonly exportService: ExportService,
     private readonly spaceAbility: SpaceAbilityFactory,
+    @InjectQueue(QueueName.NOTIFICATION_QUEUE)
+    private readonly notificationQueue: Queue,
     @InjectKysely() private readonly db: KyselyDB,
   ) {}
 
@@ -765,8 +775,23 @@ export class DatabaseService {
         updatedById: user.id,
       }));
 
+    const [existingCells, properties] = await Promise.all([
+      this.databaseCellRepo.findByDatabaseAndPage(databaseId, pageId),
+      this.databasePropertyRepo.findByDatabaseId(databaseId),
+    ]);
+
+    const previousCellsByPropertyId = new Map(
+      existingCells.map((existingCell) => [existingCell.propertyId, existingCell]),
+    );
+    const propertyById = new Map(properties.map((property) => [property.id, property]));
+
     const cells = [];
     for (const cell of dto.cells) {
+      const property = propertyById.get(cell.propertyId);
+      const previousCell = previousCellsByPropertyId.get(cell.propertyId);
+      const previousUserId =
+        property?.type === 'user' ? this.extractUserIdFromCellValue(previousCell?.value) : null;
+
       if (cell.operation === 'delete') {
         const deleted = await this.databaseCellRepo.upsertCell({
           databaseId,
@@ -790,21 +815,73 @@ export class DatabaseService {
         continue;
       }
 
+      const normalizedValue = this.normalizeInputCellValue(cell.value);
       const upserted = await this.databaseCellRepo.upsertCell({
         databaseId,
         pageId,
         propertyId: cell.propertyId,
         workspaceId,
-        value: this.normalizeInputCellValue(cell.value) as never,
+        value: normalizedValue as never,
         attachmentId: cell.attachmentId ?? null,
         createdById: user.id,
         updatedById: user.id,
       });
 
+      if (property?.type === 'user') {
+        const nextUserId = this.extractUserIdFromCellValue(normalizedValue);
+
+        if (nextUserId && nextUserId !== previousUserId && nextUserId !== user.id) {
+          await this.notifyDatabaseUserAssignment({
+            actorId: user.id,
+            pageId,
+            spaceId: database.spaceId,
+            workspaceId,
+            recipientId: nextUserId,
+          });
+        }
+      }
+
+      previousCellsByPropertyId.set(cell.propertyId, upserted);
       cells.push(upserted);
     }
 
     return { row, cells };
+  }
+
+  /**
+   * Извлекает идентификатор пользователя из значения user-ячейки.
+   */
+  private extractUserIdFromCellValue(value: unknown): string | null {
+    if (typeof value === 'string' && value.trim()) {
+      return value;
+    }
+
+    if (!value || typeof value !== 'object' || !('id' in value)) {
+      return null;
+    }
+
+    const candidate = (value as IDatabaseUserCellValue).id;
+    return typeof candidate === 'string' && candidate.trim() ? candidate : null;
+  }
+
+  /**
+   * Уведомляет нового исполнителя при изменении user-ячейки.
+   */
+  private async notifyDatabaseUserAssignment(params: {
+    actorId: string;
+    pageId: string;
+    spaceId: string;
+    workspaceId: string;
+    recipientId: string;
+  }): Promise<void> {
+    await this.notificationQueue.add(QueueJob.PAGE_RECIPIENT_NOTIFICATION, {
+      reason: 'database-user-assigned',
+      actorId: params.actorId,
+      pageId: params.pageId,
+      spaceId: params.spaceId,
+      workspaceId: params.workspaceId,
+      candidateUserIds: [params.recipientId],
+    } as IPageRecipientNotificationJob);
   }
 
   /**
