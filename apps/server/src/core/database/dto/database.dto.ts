@@ -10,8 +10,18 @@ import {
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
-import { DatabasePropertyType, DATABASE_PROPERTY_TYPES } from '@docmost/api-contract';
+import type { DatabasePropertyType } from '@docmost/api-contract';
 import { JsonValue } from '../../../database/types/db';
+
+const DATABASE_PROPERTY_TYPES: DatabasePropertyType[] = [
+  'text',
+  'multiline_text',
+  'checkbox',
+  'code',
+  'select',
+  'user',
+  'page_reference',
+];
 
 export enum DatabaseExportFormat {
   Markdown = 'markdown',
