@@ -22,6 +22,7 @@ import {
   IconChevronDown,
   IconChevronRight,
   IconCopy,
+  IconFileDatabase,
   IconDotsVertical,
   IconFileDescription,
   IconFileExport,
@@ -522,7 +523,11 @@ function Node({
               node.data.icon ? (
                 node.data.icon
               ) : (
-                <IconFileDescription size="18" />
+                node.data.nodeType === "database" ? (
+                  <IconFileDatabase size="18" />
+                ) : (
+                  <IconFileDescription size="18" />
+                )
               )
             }
             readOnly={tree.props.disableEdit as boolean}
