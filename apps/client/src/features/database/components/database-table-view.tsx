@@ -18,6 +18,7 @@ import {
   IconMessageCircle,
   IconPlus,
   IconSettings,
+  IconSwitchHorizontal,
   IconTrash,
 } from '@tabler/icons-react';
 import { useEffect, useMemo, useState } from 'react';
@@ -525,6 +526,29 @@ export function DatabaseTableView({
                         </Menu.Target>
 
                         <Menu.Dropdown>
+                          <Menu.Sub>
+                            <Menu.Sub.Target>
+                              <Menu.Sub.Item leftSection={<IconSwitchHorizontal size={14} />}>
+                                {t('Type')}
+                              </Menu.Sub.Item>
+                            </Menu.Sub.Target>
+                            <Menu.Sub.Dropdown>
+                              {DATABASE_PROPERTY_TYPES.map((propertyType) => (
+                                <Menu.Item
+                                  key={`${property.id}-${propertyType}`}
+                                  disabled={propertyType === property.type}
+                                  onClick={() =>
+                                    updatePropertyMutation.mutate({
+                                      propertyId: property.id,
+                                      payload: { type: propertyType },
+                                    })
+                                  }
+                                >
+                                  {propertyType}
+                                </Menu.Item>
+                              ))}
+                            </Menu.Sub.Dropdown>
+                          </Menu.Sub>
                           {property.type === 'select' && (
                             <Menu.Item
                               leftSection={<IconSettings size={14} />}
