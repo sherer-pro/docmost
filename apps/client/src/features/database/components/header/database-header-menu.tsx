@@ -52,7 +52,7 @@ export default function DatabaseHeaderMenu({
   const clipboard = useClipboard({ timeout: 500 });
   const [user] = useAtom(userAtom);
   const [, setHistoryModalOpen] = useAtom(historyAtoms);
-  const { data: page } = usePageQuery({ pageId: databasePageId });
+  const { data: databasePage } = usePageQuery({ pageId: databasePageId });
   const { data: database } = useGetDatabaseQuery(databaseId);
   const { data: properties = [] } = useDatabasePropertiesQuery(databaseId);
   const { data: rows = [] } = useDatabaseRowsQuery(databaseId);
@@ -64,7 +64,7 @@ export default function DatabaseHeaderMenu({
   const [movePageModalOpened, { open: openMovePageModal, close: closeMovePageModal }] =
     useDisclosure(false);
   const { mutateAsync: convertDatabaseToPageAsync, isPending: isConvertingDatabaseToPage } =
-    useConvertDatabaseToPageMutation(page?.spaceId, databaseId);
+    useConvertDatabaseToPageMutation(databasePage?.spaceId, databaseId);
 
   /**
    * Собирает markdown на клиенте в точном состоянии текущей таблицы:
@@ -74,7 +74,7 @@ export default function DatabaseHeaderMenu({
     const tableExportState = tableExportStateByDatabase[databaseId] ?? defaultDatabaseTableExportState;
 
     return buildDatabaseMarkdownFromState({
-      title: (database?.name || page?.title || t('database.editor.untitled')).trim(),
+      title: (database?.name || databasePage?.title || t('database.editor.untitled')).trim(),
       description: database?.description,
       properties,
       rows,
@@ -87,11 +87,11 @@ export default function DatabaseHeaderMenu({
    * Копирует canonical-ссылку на database-страницу в формате /s/:space/db/:slug.
    */
   const handleCopyDatabaseLink = () => {
-    if (!page?.slugId) {
+    if (!databasePage?.slugId) {
       return;
     }
 
-    const databasePath = buildDatabaseUrl(spaceSlug, page.slugId, page.title);
+    const databasePath = buildDatabaseUrl(spaceSlug, databasePage.slugId, databasePage.title);
 
     clipboard.copy(`${getAppUrl()}${databasePath}`);
     notifications.show({ message: t('Link copied') });
@@ -102,8 +102,8 @@ export default function DatabaseHeaderMenu({
    * Иначе (database root без page) откатываемся к database-route.
    */
   const handleCopyLink = () => {
-    if (page?.slugId) {
-      const pageUrl = `${getAppUrl()}${buildPageUrl(spaceSlug, page.slugId, page.title)}`;
+    if (databasePage?.slugId) {
+      const pageUrl = `${getAppUrl()}${buildPageUrl(spaceSlug, databasePage.slugId, databasePage.title)}`;
       clipboard.copy(pageUrl);
       notifications.show({ message: t('Link copied') });
       return;
@@ -146,7 +146,7 @@ export default function DatabaseHeaderMenu({
   const handleExport = async (format: DatabaseExportFormat) => {
     if (format === DatabaseExportFormat.Markdown) {
       const markdown = getCurrentTableMarkdown();
-      const rawName = (database?.name || page?.title || 'database').trim();
+      const rawName = (database?.name || databasePage?.title || 'database').trim();
       const safeName = rawName.replace(/\s+/g, '-').toLowerCase() || 'database';
 
       saveAs(new Blob([markdown], { type: 'text/markdown;charset=utf-8' }), `${safeName}.md`);
@@ -218,15 +218,22 @@ export default function DatabaseHeaderMenu({
    * Для перемещения нужен slugId страницы (используется в MovePageModal).
    * Если страница ещё не догрузилась или slug недоступен, пункт Move скрываем.
    */
-  const canMoveDatabasePage = Boolean(databasePageId && page?.slugId);
+  const canMoveDatabasePage = Boolean(databasePageId && databasePage?.slugId);
 
   /**
    * Явный приоритет вычисления ширины страницы:
-   * 1) page.settings.fullPageWidth;
+   * 1) databasePage.settings.fullPageWidth;
    * 2) user.settings.preferences.fullPageWidth;
    * 3) fallback false.
    */
-  const fullPageWidth = page?.settings?.fullPageWidth ?? user.settings?.preferences?.fullPageWidth ?? false;
+  const fullPageWidth =
+    databasePage?.settings?.fullPageWidth ?? user.settings?.preferences?.fullPageWidth ?? false;
+
+  /**
+   * Передаем в общий переключатель именно id database-page,
+   * чтобы изменение сохранялось в `databasePage.settings.fullPageWidth`.
+   */
+  const databasePageWidthScopeId = databasePage?.id ?? databasePageId;
 
   return (
     <>
@@ -255,7 +262,7 @@ export default function DatabaseHeaderMenu({
             onOpenHistory={hasDatabasePage ? openHistoryModal : undefined}
             onOpenExport={openExportModal}
             onPrint={handlePrint}
-            databasePageId={databasePageId}
+            databasePageId={databasePageWidthScopeId}
             fullPageWidth={fullPageWidth}
           />
 
@@ -313,7 +320,7 @@ export default function DatabaseHeaderMenu({
       {canMoveDatabasePage && (
         <MovePageModal
           pageId={databasePageId}
-          slugId={page.slugId}
+          slugId={databasePage.slugId}
           currentSpaceSlug={spaceSlug}
           onClose={closeMovePageModal}
           open={movePageModalOpened}
