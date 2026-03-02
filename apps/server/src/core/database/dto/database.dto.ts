@@ -9,6 +9,7 @@ import {
   MaxLength,
   ValidateNested,
 } from 'class-validator';
+import { DatabasePropertyType, DATABASE_PROPERTY_TYPES } from '@docmost/api-contract';
 import { JsonValue } from '../../../database/types/db';
 
 export enum DatabaseExportFormat {
@@ -101,7 +102,8 @@ export class CreateDatabasePropertyDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(64)
-  type: string;
+  @IsIn(DATABASE_PROPERTY_TYPES)
+  type: DatabasePropertyType;
 
   @IsOptional()
   settings?: unknown;
@@ -121,7 +123,8 @@ export class UpdateDatabasePropertyDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(64)
-  type?: string;
+  @IsIn(DATABASE_PROPERTY_TYPES)
+  type?: DatabasePropertyType;
 
   @IsOptional()
   settings?: unknown;
