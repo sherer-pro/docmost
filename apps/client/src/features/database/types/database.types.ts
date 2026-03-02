@@ -36,12 +36,24 @@ export interface IDatabaseProperty {
   name: string;
   type: DatabasePropertyType;
   position: number;
-  settings: unknown;
+  settings: IDatabasePropertySettings;
   creatorId: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
 }
+
+export interface IDatabaseSelectOption {
+  label: string;
+  value: string;
+  color?: string;
+}
+
+export interface IDatabaseSelectPropertySettings {
+  options: IDatabaseSelectOption[];
+}
+
+export type IDatabasePropertySettings = IDatabaseSelectPropertySettings | Record<string, never>;
 
 /**
  * Database row entity.
@@ -120,7 +132,7 @@ export interface IUpdateDatabasePayload {
 export interface ICreateDatabasePropertyPayload {
   name: string;
   type: DatabasePropertyType;
-  settings?: unknown;
+  settings?: IDatabasePropertySettings;
 }
 
 /**
@@ -129,7 +141,7 @@ export interface ICreateDatabasePropertyPayload {
 export interface IUpdateDatabasePropertyPayload {
   name?: string;
   type?: DatabasePropertyType;
-  settings?: unknown;
+  settings?: IDatabasePropertySettings;
 }
 
 /**
