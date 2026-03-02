@@ -293,7 +293,7 @@ export class DatabaseController {
         'attachment; filename="' + encodeURIComponent(exported.fileName) + '"',
     });
 
-    res.send(exported.fileBuffer);
+    res.send(exported.fileBuffer ?? exported.fileStream);
   }
   /**
    * Создаёт представление базы данных.

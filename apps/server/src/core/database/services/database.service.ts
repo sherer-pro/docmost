@@ -11,6 +11,7 @@ import { DatabaseViewRepo } from '@docmost/db/repos/database/database-view.repo'
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { User } from '@docmost/db/types/entity.types';
 import { PageService } from '../../page/services/page.service';
+import { ExportService } from '../../../integrations/export/export.service';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { executeTx } from '@docmost/db/utils';
@@ -41,6 +42,7 @@ export class DatabaseService {
     private readonly databaseViewRepo: DatabaseViewRepo,
     private readonly pageRepo: PageRepo,
     private readonly pageService: PageService,
+    private readonly exportService: ExportService,
     private readonly spaceAbility: SpaceAbilityFactory,
     @InjectKysely() private readonly db: KyselyDB,
   ) {}
@@ -177,11 +179,12 @@ export class DatabaseService {
     user: User,
     workspaceId: string,
   ) {
-    const markdown = await this.buildDatabaseMarkdown(databaseId, user, workspaceId);
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
+    await this.assertCanReadDatabasePages(user, database.spaceId);
     const safeName = (database.name?.trim() || 'database').replace(/\s+/g, '-').toLowerCase();
 
     if (format === DatabaseExportFormat.PDF) {
+      const markdown = await this.buildDatabaseMarkdown(databaseId, user, workspaceId);
       return {
         contentType: 'application/pdf',
         fileName: `${safeName}.pdf`,
@@ -189,10 +192,27 @@ export class DatabaseService {
       };
     }
 
+    if (!database.pageId) {
+      throw new NotFoundException('Database root page not found');
+    }
+
+    /**
+     * Для markdown-экспорта используем стандартный механизм Docmost для страниц:
+     * - формируется zip-архив,
+     * - включаются дочерние страницы (строки базы),
+     * - автоматически добавляется docmost-metadata.json.
+     */
+    const zipFileStream = await this.exportService.exportPages(
+      database.pageId,
+      DatabaseExportFormat.Markdown,
+      false,
+      true,
+    );
+
     return {
-      contentType: 'text/markdown; charset=utf-8',
-      fileName: `${safeName}.md`,
-      fileBuffer: Buffer.from(markdown, 'utf8'),
+      contentType: 'application/zip',
+      fileName: `${safeName}.zip`,
+      fileStream: zipFileStream,
     };
   }
 
