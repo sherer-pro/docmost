@@ -65,7 +65,8 @@ export type PageRecipientNotificationReason =
   | 'document-changed'
   | 'comment-added'
   | 'page-assigned'
-  | 'page-stakeholder-added';
+  | 'page-stakeholder-added'
+  | 'database-user-assigned';
 
 export interface IPageRecipientNotificationJob {
   reason: PageRecipientNotificationReason;

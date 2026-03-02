@@ -199,6 +199,18 @@ export class PageNotificationService {
               actionText: 'added you as stakeholder to',
             }),
         };
+      case 'database-user-assigned':
+        return {
+          notificationType: NotificationType.PAGE_ASSIGNED,
+          title: `${actorName} assigned you in ${pageTitle}`,
+          createEmail: ({ actorName, pageTitle, pageUrl }) =>
+            PageRecipientEmail({
+              actorName,
+              pageTitle,
+              pageUrl,
+              actionText: 'assigned you in',
+            }),
+        };
       case 'comment-added':
         return {
           notificationType: NotificationType.PAGE_UPDATED_FOR_ASSIGNEE_OR_STAKEHOLDER,
