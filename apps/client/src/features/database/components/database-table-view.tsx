@@ -17,6 +17,7 @@ import {
   IconEyeOff,
   IconMessageCircle,
   IconPlus,
+  IconSettings,
   IconTrash,
 } from '@tabler/icons-react';
 import { useEffect, useMemo, useState } from 'react';
@@ -31,6 +32,7 @@ import {
   useDeleteDatabasePropertyMutation,
   useDeleteDatabaseRowMutation,
   useDatabasePropertiesQuery,
+  useUpdateDatabasePropertyMutation,
   useDatabaseRowsQuery,
 } from '@/features/database/queries/database-table-query';
 import {
@@ -38,7 +40,12 @@ import {
   IDatabaseRowWithCells,
   IDatabaseSortState,
 } from '@/features/database/types/database-table.types';
-import { IDatabaseProperty } from '@/features/database/types/database.types';
+import {
+  IDatabaseProperty,
+  IDatabaseSelectOption,
+  IDatabaseSelectPropertySettings,
+} from '@/features/database/types/database.types';
+import { SelectPropertySettingsModal } from '@/features/database/components/select-property-settings-modal';
 import {
   defaultDatabaseTableExportState,
   databaseTableExportStateAtom,
@@ -84,6 +91,7 @@ export function DatabaseTableView({
   const updateCellsMutation = useBatchUpdateDatabaseCellsMutation(databaseId);
   const deletePropertyMutation = useDeleteDatabasePropertyMutation(databaseId);
   const deleteRowMutation = useDeleteDatabaseRowMutation(databaseId);
+  const updatePropertyMutation = useUpdateDatabasePropertyMutation(databaseId);
 
   const [newPropertyName, setNewPropertyName] = useState('');
   const [newPropertyType, setNewPropertyType] = useState<DatabasePropertyType>('text');
@@ -92,6 +100,7 @@ export function DatabaseTableView({
   const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({});
   const [filters, setFilters] = useState<IDatabaseFilterCondition[]>([DEFAULT_FILTER]);
   const [sortState, setSortState] = useState<IDatabaseSortState | null>(null);
+  const [settingsProperty, setSettingsProperty] = useState<IDatabaseProperty | null>(null);
   const setTableExportState = useSetAtom(databaseTableExportStateAtom);
   const navigate = useNavigate();
 
@@ -160,7 +169,11 @@ export function DatabaseTableView({
     setEditingValue(getCellValue(row, property.id));
   };
 
-  const saveEditing = async (row: IDatabaseRowWithCells, propertyId: string) => {
+  const saveEditing = async (
+    row: IDatabaseRowWithCells,
+    propertyId: string,
+    nextValue?: string,
+  ) => {
     if (!editingCellKey || !isEditable) {
       return;
     }
@@ -171,7 +184,7 @@ export function DatabaseTableView({
         cells: [
           {
             propertyId,
-            value: editingValue,
+            value: typeof nextValue === 'string' ? nextValue : editingValue,
             operation: 'upsert',
           },
         ],
@@ -180,6 +193,43 @@ export function DatabaseTableView({
 
     setEditingCellKey(null);
     setEditingValue('');
+  };
+
+
+  const getSelectSettings = (property: IDatabaseProperty): IDatabaseSelectPropertySettings => {
+    if (!property.settings || typeof property.settings !== 'object') {
+      return { options: [] };
+    }
+
+    const maybeOptions = (property.settings as { options?: unknown }).options;
+
+    if (!Array.isArray(maybeOptions)) {
+      return { options: [] };
+    }
+
+    const options: IDatabaseSelectOption[] = maybeOptions
+      .filter((option): option is IDatabaseSelectOption => {
+        if (!option || typeof option !== 'object') {
+          return false;
+        }
+
+        const candidate = option as IDatabaseSelectOption;
+        return typeof candidate.label === 'string' && typeof candidate.value === 'string';
+      })
+      .map((option) => ({
+        label: option.label,
+        value: option.value,
+        color: option.color,
+      }));
+
+    return { options };
+  };
+
+  const getSelectOptionLabel = (property: IDatabaseProperty, value: string): string => {
+    const settings = getSelectSettings(property);
+    const selectedOption = settings.options.find((option) => option.value === value);
+
+    return selectedOption?.label || value;
   };
 
   return (
@@ -422,6 +472,14 @@ export function DatabaseTableView({
                         </Menu.Target>
 
                         <Menu.Dropdown>
+                          {property.type === 'select' && (
+                            <Menu.Item
+                              leftSection={<IconSettings size={14} />}
+                              onClick={() => setSettingsProperty(property)}
+                            >
+                              {t('Select settings')}
+                            </Menu.Item>
+                          )}
                           <Menu.Item
                             color="red"
                             leftSection={<IconTrash size={14} />}
@@ -497,21 +555,41 @@ export function DatabaseTableView({
                       style={{ cursor: isEditable ? "text" : "default" }}
                     >
                       {isEditing && isEditable ? (
-                        <TextInput
-                          autoFocus
-                          value={editingValue}
-                          onChange={(event) =>
-                            setEditingValue(event.currentTarget.value)
-                          }
-                          onBlur={() => saveEditing(row, property.id)}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter') {
-                              saveEditing(row, property.id);
+                        property.type === 'select' ? (
+                          <Select
+                            autoFocus
+                            data={getSelectSettings(property).options.map((option) => ({
+                              value: option.value,
+                              label: option.label,
+                            }))}
+                            value={editingValue || null}
+                            onChange={(nextValue) => {
+                              const normalizedValue = nextValue || '';
+                              setEditingValue(normalizedValue);
+                              saveEditing(row, property.id, normalizedValue);
+                            }}
+                            onBlur={() => saveEditing(row, property.id)}
+                            clearable
+                          />
+                        ) : (
+                          <TextInput
+                            autoFocus
+                            value={editingValue}
+                            onChange={(event) =>
+                              setEditingValue(event.currentTarget.value)
                             }
-                          }}
-                        />
+                            onBlur={() => saveEditing(row, property.id)}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter') {
+                                saveEditing(row, property.id);
+                              }
+                            }}
+                          />
+                        )
                       ) : (
-                        value || t('Empty value')
+                        property.type === 'select'
+                          ? getSelectOptionLabel(property, value) || t('Empty value')
+                          : value || t('Empty value')
                       )}
                     </Table.Td>
                   );
@@ -522,6 +600,22 @@ export function DatabaseTableView({
           </Table.Tbody>
         </Table>
       </ScrollArea>
+      <SelectPropertySettingsModal
+        opened={Boolean(settingsProperty)}
+        propertyName={settingsProperty?.name || ""}
+        initialSettings={settingsProperty ? getSelectSettings(settingsProperty) : { options: [] }}
+        onClose={() => setSettingsProperty(null)}
+        onSave={async (settings) => {
+          if (!settingsProperty) {
+            return;
+          }
+
+          await updatePropertyMutation.mutateAsync({
+            propertyId: settingsProperty.id,
+            payload: { settings },
+          });
+        }}
+      />
     </Paper>
   );
 }
