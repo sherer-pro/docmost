@@ -77,6 +77,7 @@ import CopyPageModal from "../../components/copy-page-modal.tsx";
 import { duplicatePage } from "../../services/page-service.ts";
 import { StatusIndicator } from "@/components/ui/status-indicator.tsx";
 import { useCreateDatabaseRowMutation } from "@/features/database/queries/database-table-query.ts";
+import { useUpdateDatabaseMutation } from "@/features/database/queries/database-query.ts";
 
 interface SpaceTreeProps {
   spaceId: string;
@@ -341,6 +342,10 @@ function Node({
 }: NodeProps) {
   const { t } = useTranslation();
   const updatePageMutation = useUpdatePageMutation();
+  const updateDatabaseMutation = useUpdateDatabaseMutation(
+    node.data.spaceId,
+    node.data.databaseId ?? node.id,
+  );
   const [treeData, setTreeData] = useAtom(treeDataAtom);
   const [, appendChildren] = useAtom(appendNodeChildrenAtom);
   const emit = useQueryEmit();
@@ -406,15 +411,16 @@ function Node({
   const handleEmojiIconClick = (e: any) => {
     e.preventDefault();
     e.stopPropagation();
-
-    // Для баз данных пока не даём inline-редактирование эмодзи через page endpoint.
-    if (node.data.nodeType !== "page") {
-      return;
-    }
   };
 
   const handleEmojiSelect = (emoji: { native: string }) => {
     handleUpdateNodeIcon(node.id, emoji.native);
+
+    if (node.data.nodeType === "database") {
+      updateDatabaseMutation.mutateAsync({ icon: emoji.native });
+      return;
+    }
+
     if (node.data.nodeType !== "page") {
       return;
     }
@@ -435,11 +441,17 @@ function Node({
   };
 
   const handleRemoveEmoji = () => {
+    handleUpdateNodeIcon(node.id, null);
+
+    if (node.data.nodeType === "database") {
+      updateDatabaseMutation.mutateAsync({ icon: null });
+      return;
+    }
+
     if (node.data.nodeType !== "page") {
       return;
     }
 
-    handleUpdateNodeIcon(node.id, null);
     updatePageMutation.mutateAsync({ pageId: node.id, icon: null });
 
     setTimeout(() => {
