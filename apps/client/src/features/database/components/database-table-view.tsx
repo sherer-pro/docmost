@@ -65,6 +65,11 @@ interface DatabaseTableViewProps {
   isEditable?: boolean;
 }
 
+interface SelectPropertyCreationDraft {
+  name: string;
+  initialSettings: IDatabaseSelectPropertySettings;
+}
+
 const DEFAULT_FILTER: IDatabaseFilterCondition = defaultDatabaseTableExportState.filters[0];
 
 /**
@@ -103,6 +108,8 @@ export function DatabaseTableView({
   const [filters, setFilters] = useState<IDatabaseFilterCondition[]>([DEFAULT_FILTER]);
   const [sortState, setSortState] = useState<IDatabaseSortState | null>(null);
   const [settingsProperty, setSettingsProperty] = useState<IDatabaseProperty | null>(null);
+  const [selectPropertyDraft, setSelectPropertyDraft] =
+    useState<SelectPropertyCreationDraft | null>(null);
   const setTableExportState = useSetAtom(databaseTableExportStateAtom);
   const navigate = useNavigate();
 
@@ -286,6 +293,31 @@ export function DatabaseTableView({
     return selectedOption?.label || value;
   };
 
+  const handleCreateProperty = () => {
+    const trimmedName = newPropertyName.trim();
+
+    if (!trimmedName) {
+      return;
+    }
+
+    if (newPropertyType === 'select') {
+      setSelectPropertyDraft({
+        name: trimmedName,
+        initialSettings: {
+          options: [{ label: '', value: '', color: 'gray' }],
+        },
+      });
+      return;
+    }
+
+    createPropertyMutation.mutate({
+      name: trimmedName,
+      type: newPropertyType,
+    });
+    setNewPropertyName('');
+    setNewPropertyType('text');
+  };
+
   return (
     <Paper withBorder radius="md" p="md">
       <Group justify="space-between" mb="md" align="flex-end">
@@ -316,18 +348,7 @@ export function DatabaseTableView({
           <Button
             leftSection={<IconPlus size={14} />}
             disabled={!isEditable}
-            onClick={() => {
-              if (!newPropertyName.trim()) {
-                return;
-              }
-
-              createPropertyMutation.mutate({
-                name: newPropertyName.trim(),
-                type: newPropertyType,
-              });
-              setNewPropertyName('');
-              setNewPropertyType('text');
-            }}
+            onClick={handleCreateProperty}
           >
             {t('Property')}
           </Button>
@@ -648,19 +669,39 @@ export function DatabaseTableView({
         </Table>
       </ScrollArea>
       <SelectPropertySettingsModal
-        opened={Boolean(settingsProperty)}
-        propertyName={settingsProperty?.name || ""}
-        initialSettings={settingsProperty ? getSelectSettings(settingsProperty) : { options: [] }}
-        onClose={() => setSettingsProperty(null)}
+        opened={Boolean(settingsProperty || selectPropertyDraft)}
+        propertyName={settingsProperty?.name || selectPropertyDraft?.name || ''}
+        initialSettings={
+          settingsProperty
+            ? getSelectSettings(settingsProperty)
+            : selectPropertyDraft?.initialSettings || { options: [] }
+        }
+        onClose={() => {
+          setSettingsProperty(null);
+          setSelectPropertyDraft(null);
+        }}
         onSave={async (settings) => {
-          if (!settingsProperty) {
+          if (settingsProperty) {
+            await updatePropertyMutation.mutateAsync({
+              propertyId: settingsProperty.id,
+              payload: { settings },
+            });
             return;
           }
 
-          await updatePropertyMutation.mutateAsync({
-            propertyId: settingsProperty.id,
-            payload: { settings },
+          if (!selectPropertyDraft) {
+            return;
+          }
+
+          await createPropertyMutation.mutateAsync({
+            name: selectPropertyDraft.name,
+            type: 'select',
+            settings: {
+              options: settings.options,
+            },
           });
+          setNewPropertyName('');
+          setNewPropertyType('text');
         }}
       />
     </Paper>
