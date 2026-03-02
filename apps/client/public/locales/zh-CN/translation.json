@@ -880,5 +880,15 @@
   "The current page will become a database root. Existing child pages will be attached as database rows and keep their nested structure.": "The current page will become a database root. Existing child pages will be attached as database rows and keep their nested structure.",
   "The database view, properties and row bindings will be deactivated. Child pages will stay in the tree as regular pages.": "The database view, properties and row bindings will be deactivated. Child pages will stay in the tree as regular pages.",
   "Page converted to database": "Page converted to database",
-  "Database converted to page": "Database converted to page"
+  "Database converted to page": "Database converted to page",
+  "Checkbox": "Checkbox",
+  "Page reference": "Page reference",
+  "Property actions": "Property actions",
+  "Select": "Select",
+  "Select settings": "Select settings",
+  "No pages found": "No pages found",
+  "Each option must have unique value and non-empty label": "Each option must have unique value and non-empty label",
+  "Label": "Label",
+  "Option": "Option",
+  "Select options for property": "Select options for property"
 }
