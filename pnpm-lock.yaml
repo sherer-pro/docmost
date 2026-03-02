@@ -784,6 +784,8 @@ importers:
         specifier: ^8.24.1
         version: 8.24.1(eslint@9.39.2(jiti@2.4.2))(typescript@5.7.3)
 
+  packages/api-contract: {}
+
   packages/editor-ext: {}
 
 packages:

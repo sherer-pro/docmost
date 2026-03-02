@@ -1,3 +1,5 @@
+import { DatabasePropertyType } from '@docmost/api-contract';
+
 /**
  * Base database entity from the backend API.
  */
@@ -32,7 +34,7 @@ export interface IDatabaseProperty {
   databaseId: string;
   workspaceId: string;
   name: string;
-  type: string;
+  type: DatabasePropertyType;
   position: number;
   settings: unknown;
   creatorId: string | null;
@@ -117,7 +119,7 @@ export interface IUpdateDatabasePayload {
  */
 export interface ICreateDatabasePropertyPayload {
   name: string;
-  type: string;
+  type: DatabasePropertyType;
   settings?: unknown;
 }
 
@@ -126,7 +128,7 @@ export interface ICreateDatabasePropertyPayload {
  */
 export interface IUpdateDatabasePropertyPayload {
   name?: string;
-  type?: string;
+  type?: DatabasePropertyType;
   settings?: unknown;
 }
 
