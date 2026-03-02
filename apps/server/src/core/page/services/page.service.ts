@@ -542,7 +542,16 @@ export class PageService {
             'databases.spaceId as spaceId',
             'databases.creatorId as creatorId',
             'databases.deletedAt as deletedAt',
-            sql<any>`databasePage.settings`.as('settings'),
+            /**
+             * Важно использовать ref вместо raw SQL для алиаса с camelCase.
+             *
+             * PostgreSQL приводит некавыченные идентификаторы к нижнему
+             * регистру (`databasepage`), из-за чего при raw-обращении к
+             * `databasePage.settings` получаем ошибку missing FROM-clause.
+             */
+            sql<any>`${this.db.dynamic.ref('databasePage.settings')}`.as(
+              'settings',
+            ),
             sql<string>`'database'`.as('nodeType'),
             'databases.id as databaseId',
           ])
