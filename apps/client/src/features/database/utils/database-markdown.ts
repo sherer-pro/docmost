@@ -15,15 +15,33 @@ export interface IDatabaseTableExportState {
  * Безопасно преобразует произвольное значение ячейки в строку для markdown-таблицы.
  */
 export function stringifyCellValue(value: unknown): string {
-  if (value === null || typeof value === 'undefined') {
+  const normalizedValue = extractCurrentCellValue(value);
+
+  if (normalizedValue === null || typeof normalizedValue === 'undefined') {
     return '';
   }
 
-  if (typeof value === 'string') {
+  if (typeof normalizedValue === 'string') {
+    return normalizedValue;
+  }
+
+  return JSON.stringify(normalizedValue);
+}
+
+/**
+ * Возвращает актуальное значение ячейки из контейнера fallback после смены типа.
+ */
+function extractCurrentCellValue(value: unknown): unknown {
+  if (!value || typeof value !== 'object') {
     return value;
   }
 
-  return JSON.stringify(value);
+  const candidate = value as Record<string, unknown>;
+  if (!('value' in candidate) || !('rawValueBeforeTypeChange' in candidate)) {
+    return value;
+  }
+
+  return candidate.value;
 }
 
 /**
