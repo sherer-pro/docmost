@@ -3,7 +3,6 @@ import { ShareService } from './share.service';
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { join } from 'path';
 import * as fs from 'node:fs';
-import { validate as isValidUUID } from 'uuid';
 import { WorkspaceRepo } from '@docmost/db/repos/workspace/workspace.repo';
 import { EnvironmentService } from '../../integrations/environment/environment.service';
 import { Workspace } from '@docmost/db/types/entity.types';
@@ -120,9 +119,6 @@ export class ShareSeoController {
   extractPageSlugId(slug: string): string {
     if (!slug) {
       return undefined;
-    }
-    if (isValidUUID(slug)) {
-      return slug;
     }
     const parts = slug.split('-');
     return parts.length > 1 ? parts[parts.length - 1] : slug;

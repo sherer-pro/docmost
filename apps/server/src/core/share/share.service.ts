@@ -21,7 +21,6 @@ import { Node } from '@tiptap/pm/model';
 import { ShareRepo } from '@docmost/db/repos/share/share.repo';
 import { updateAttachmentAttr } from './share.util';
 import { Page } from '@docmost/db/types/entity.types';
-import { validate as isValidUUID } from 'uuid';
 import { sql } from 'kysely';
 
 @Injectable()
@@ -103,7 +102,7 @@ export class ShareService {
       throw new NotFoundException('Shared page not found');
     }
 
-    const page = await this.pageRepo.findById(dto.pageId, {
+    const page = await this.pageRepo.findBySlugId(dto.pageId, {
       includeContent: true,
       includeCreator: true,
     });
@@ -140,7 +139,7 @@ export class ShareService {
             'shares.workspaceId',
             'shares.createdAt',
           ])
-          .where(isValidUUID(pageId) ? 'pages.id' : 'pages.slugId', '=', pageId)
+          .where('pages.slugId', '=', pageId)
           .where('pages.deletedAt', 'is', null)
           .unionAll(
             (union) =>
@@ -204,8 +203,8 @@ export class ShareService {
   }
 
   async getShareAncestorPage(
-    ancestorPageId: string,
-    childPageId: string,
+    ancestorPageSlugId: string,
+    childPageSlugId: string,
   ): Promise<any> {
     let ancestor = null;
     try {
@@ -222,13 +221,13 @@ export class ShareService {
               (eb) =>
                 eb
                   .case()
-                  .when(eb.ref('id'), '=', ancestorPageId)
+                  .when(eb.ref('slugId'), '=', ancestorPageSlugId)
                   .then(true)
                   .else(false)
                   .end()
                   .as('found'),
             ])
-            .where(isValidUUID(childPageId) ? 'id' : 'slugId', '=', childPageId)
+            .where('slugId', '=', childPageSlugId)
             .unionAll((exp) =>
               exp
                 .selectFrom('pages as p')
@@ -241,7 +240,7 @@ export class ShareService {
                   (eb) =>
                     eb
                       .case()
-                      .when(eb.ref('p.id'), '=', ancestorPageId)
+                      .when(eb.ref('p.slugId'), '=', ancestorPageSlugId)
                       .then(true)
                       .else(false)
                       .end()
