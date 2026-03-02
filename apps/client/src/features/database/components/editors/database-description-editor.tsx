@@ -1,15 +1,10 @@
 import '@/features/editor/styles/index.css';
 import classes from '@/pages/database/database-page.module.css';
 import { useDebouncedCallback } from '@mantine/hooks';
-import { Placeholder } from '@tiptap/extension-placeholder';
-import { StarterKit } from '@tiptap/starter-kit';
 import { EditorContent, JSONContent, useEditor } from '@tiptap/react';
 import React, { useCallback, useEffect, useRef } from 'react';
-import { useTranslation } from 'react-i18next';
 import clsx from 'clsx';
-import EmojiCommand from '@/features/editor/extensions/emoji-command.ts';
-import SlashCommand from '@/features/editor/extensions/slash-command';
-import { getDatabaseDescriptionSlashItems } from './database-description-slash-items';
+import { mainExtensions } from '@/features/editor/extensions/extensions';
 
 export interface DatabaseDescriptionPayload {
   json: JSONContent;
@@ -35,7 +30,6 @@ export function DatabaseDescriptionEditor({
   onValueChange,
   onAutoSave,
 }: DatabaseDescriptionEditorProps) {
-  const { t } = useTranslation();
   const lastCommittedRef = useRef(JSON.stringify(value ?? {}));
 
   const saveDescription = useCallback(async () => {
@@ -64,21 +58,7 @@ export function DatabaseDescriptionEditor({
   }, 500);
 
   const descriptionEditor = useEditor({
-    extensions: [
-      StarterKit.configure({
-        codeBlock: false,
-      }),
-      Placeholder.configure({
-        placeholder: t('database.editor.addDescription'),
-        showOnlyWhenEditable: false,
-      }),
-      EmojiCommand,
-      SlashCommand.configure({
-        suggestion: {
-          items: getDatabaseDescriptionSlashItems,
-        },
-      }),
-    ],
+    extensions: mainExtensions,
     onUpdate({ editor }) {
       const payload = {
         json: editor.getJSON(),
