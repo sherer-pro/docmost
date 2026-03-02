@@ -16,21 +16,45 @@ import { InfiniteData } from "@tanstack/react-query";
 import { IFileTask } from '@/features/file-task/types/file-task.types.ts';
 import { IAttachment } from '@/features/attachments/types/attachment.types.ts';
 
+
+/**
+ * Приводит `settings` страницы к совместимому клиентскому виду.
+ *
+ * Старые ответы API могли вернуть `settings: null`, а часть ответов —
+ * не вернуть поле вовсе. Для фронтенда это должно выглядеть как
+ * `settings === undefined`, чтобы сработал fallback на user preference.
+ */
+function normalizePage<T extends IPage>(page: T): T {
+  if (!page || typeof page !== 'object') {
+    return page;
+  }
+
+  const rawSettings = (page as { settings?: unknown }).settings;
+  if (rawSettings && typeof rawSettings === 'object') {
+    return page;
+  }
+
+  return {
+    ...page,
+    settings: undefined,
+  };
+}
+
 export async function createPage(data: Partial<IPage>): Promise<IPage> {
   const req = await api.post<IPage>("/pages/create", data);
-  return req.data;
+  return normalizePage(req.data);
 }
 
 export async function getPageById(
   pageInput: Partial<IPageInput>,
 ): Promise<IPage> {
   const req = await api.post<IPage>("/pages/info", pageInput);
-  return req.data;
+  return normalizePage(req.data);
 }
 
 export async function updatePage(data: Partial<IPageInput>): Promise<IPage> {
   const req = await api.post<IPage>("/pages/update", data);
-  return req.data;
+  return normalizePage(req.data);
 }
 
 export async function deletePage(pageId: string, permanentlyDelete = false): Promise<void> {
@@ -47,7 +71,7 @@ export async function getDeletedPages(
 
 export async function restorePage(pageId: string): Promise<IPage> {
   const response = await api.post<IPage>("/pages/restore", { pageId });
-  return response.data;
+  return normalizePage(response.data);
 }
 
 export async function movePage(data: IMovePage): Promise<void> {
@@ -60,7 +84,7 @@ export async function movePageToSpace(data: IMovePageToSpace): Promise<void> {
 
 export async function duplicatePage(data: ICopyPageToSpace): Promise<IPage> {
   const req = await api.post<IPage>("/pages/duplicate", data);
-  return req.data;
+  return normalizePage(req.data);
 }
 
 export async function getSidebarPages(

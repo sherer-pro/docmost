@@ -1,5 +1,16 @@
 import { ISpace } from "@/features/space/types/space.types.ts";
 
+/**
+ * Настройки страницы, хранящиеся в `pages.settings`.
+ *
+ * `fullPageWidth` используется для локального режима ширины страницы,
+ * остальные ключи зарезервированы под расширяемые document fields.
+ */
+export interface PageSettings {
+  fullPageWidth?: boolean;
+  [key: string]: unknown;
+}
+
 export interface IPage {
   id: string;
   slugId: string;
@@ -22,9 +33,7 @@ export interface IPage {
   lastUpdatedBy: ILastUpdatedBy;
   deletedBy: IDeletedBy;
   customFields?: PageCustomFields;
-  settings?: {
-    fullPageWidth?: boolean;
-  };
+  settings?: PageSettings;
   databaseId?: string | null;
   space: Partial<ISpace>;
 }
@@ -117,9 +126,7 @@ export interface IPageInput {
   position: string;
   isLocked: boolean;
   customFields?: PageCustomFields;
-  settings?: {
-    fullPageWidth?: boolean;
-  };
+  settings?: PageSettings;
 }
 
 export interface IExportPageParams {
