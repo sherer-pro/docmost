@@ -201,15 +201,10 @@ export class PageNotificationService {
         };
       case 'database-user-assigned':
         return {
-          notificationType: NotificationType.PAGE_ASSIGNED,
-          title: `${actorName} assigned you in ${pageTitle}`,
+          notificationType: NotificationType.PAGE_USER_MENTION,
+          title: `${actorName} mentioned you on ${pageTitle}`,
           createEmail: ({ actorName, pageTitle, pageUrl }) =>
-            PageRecipientEmail({
-              actorName,
-              pageTitle,
-              pageUrl,
-              actionText: 'assigned you in',
-            }),
+            PageMentionEmail({ actorName, pageTitle, pageUrl }),
         };
       case 'comment-added':
         return {
