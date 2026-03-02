@@ -31,6 +31,12 @@ import {
   UpdateDatabasePropertyDto,
   UpdateDatabaseViewDto,
 } from '../dto/database.dto';
+import { DatabasePropertyType } from '@docmost/api-contract';
+
+interface IDatabaseCellValueWithFallback {
+  value: unknown;
+  rawValueBeforeTypeChange: unknown;
+}
 
 @Injectable()
 export class DatabaseService {
@@ -73,15 +79,163 @@ export class DatabaseService {
    * Преобразует произвольное значение ячейки в безопасную строку.
    */
   private stringifyCellValue(value: unknown): string {
-    if (value === null || typeof value === 'undefined') {
+    const normalizedValue = this.extractCurrentCellValue(value);
+
+    if (normalizedValue === null || typeof normalizedValue === 'undefined') {
       return '';
     }
 
-    if (typeof value === 'string') {
+    if (typeof normalizedValue === 'string') {
+      return normalizedValue;
+    }
+
+    return JSON.stringify(normalizedValue);
+  }
+
+  /**
+   * Возвращает активное значение ячейки с учётом fallback-контейнера.
+   */
+  private extractCurrentCellValue(value: unknown): unknown {
+    if (!this.isCellFallbackValue(value)) {
       return value;
     }
 
-    return JSON.stringify(value);
+    return value.value;
+  }
+
+  /**
+   * Проверяет, что значение хранится в формате fallback-контейнера.
+   */
+  private isCellFallbackValue(value: unknown): value is IDatabaseCellValueWithFallback {
+    if (!value || typeof value !== 'object') {
+      return false;
+    }
+
+    const candidate = value as Record<string, unknown>;
+    return 'value' in candidate && 'rawValueBeforeTypeChange' in candidate;
+  }
+
+  /**
+   * Возвращает исходное значение для сценария обратной смены типа.
+   */
+  private extractValueForConversion(value: unknown): unknown {
+    if (!this.isCellFallbackValue(value)) {
+      return value;
+    }
+
+    if (value.value === null || typeof value.value === 'undefined') {
+      return value.rawValueBeforeTypeChange;
+    }
+
+    return value.value;
+  }
+
+  /**
+   * Определяет, можно ли автоматически привести текущий тип к целевому.
+   */
+  private canConvertToType(nextType: DatabasePropertyType): boolean {
+    return !['user', 'checkbox', 'page_reference', 'select'].includes(nextType);
+  }
+
+  /**
+   * Пытается конвертировать значение в целевой тип свойства.
+   */
+  private convertCellValueByPropertyType(
+    value: unknown,
+    fromType: DatabasePropertyType,
+    toType: DatabasePropertyType,
+  ): { converted: unknown; isConvertible: boolean } {
+    const normalizedValue = this.extractValueForConversion(value);
+
+    if (normalizedValue === null || typeof normalizedValue === 'undefined') {
+      return { converted: null, isConvertible: true };
+    }
+
+    if (!this.canConvertToType(toType)) {
+      return { converted: normalizedValue, isConvertible: false };
+    }
+
+    if (fromType === 'checkbox' && toType === 'text') {
+      if (typeof normalizedValue === 'boolean') {
+        return { converted: normalizedValue ? 'Да' : 'Нет', isConvertible: true };
+      }
+
+      const booleanValue = String(normalizedValue).toLowerCase() === 'true';
+      return { converted: booleanValue ? 'Да' : 'Нет', isConvertible: true };
+    }
+
+    if (fromType === 'select' && toType === 'text') {
+      if (typeof normalizedValue === 'string') {
+        return { converted: normalizedValue, isConvertible: true };
+      }
+
+      if (typeof normalizedValue === 'object') {
+        const option = normalizedValue as Record<string, unknown>;
+        const optionLabel = option.label;
+        const optionValue = option.value;
+        if (typeof optionLabel === 'string') {
+          return { converted: optionLabel, isConvertible: true };
+        }
+
+        if (typeof optionValue === 'string') {
+          return { converted: optionValue, isConvertible: true };
+        }
+      }
+    }
+
+    if (value === null || typeof value === 'undefined') {
+      return { converted: null, isConvertible: true };
+    }
+
+    if (toType === 'multiline_text' || toType === 'text' || toType === 'code') {
+      if (typeof normalizedValue === 'string') {
+        return { converted: normalizedValue, isConvertible: true };
+      }
+
+      return { converted: JSON.stringify(normalizedValue), isConvertible: true };
+    }
+
+    return { converted: normalizedValue, isConvertible: true };
+  }
+
+  /**
+   * Конвертирует значения ячеек свойства при смене типа.
+   */
+  private async convertPropertyCellValues(
+    databaseId: string,
+    propertyId: string,
+    fromType: DatabasePropertyType,
+    toType: DatabasePropertyType,
+    workspaceId: string,
+    spaceId: string,
+  ): Promise<void> {
+    const rows = await this.databaseRowRepo.findByDatabaseId(databaseId, workspaceId, spaceId);
+
+    for (const row of rows) {
+      const cells = await this.databaseCellRepo.findByDatabaseAndPage(databaseId, row.pageId);
+      const targetCell = cells.find((cell) => cell.propertyId === propertyId);
+
+      if (!targetCell) {
+        continue;
+      }
+
+      const { converted, isConvertible } = this.convertCellValueByPropertyType(
+        targetCell.value,
+        fromType,
+        toType,
+      );
+
+      const nextValue = isConvertible
+        ? converted
+        : {
+            value: null,
+            rawValueBeforeTypeChange: this.extractCurrentCellValue(targetCell.value),
+          };
+
+      await this.databaseCellRepo.updateCell(targetCell.id, {
+        value: nextValue as never,
+      });
+    }
   }
 
   /**
@@ -312,7 +466,7 @@ export class DatabaseService {
     actorId: string,
     workspaceId: string,
   ) {
-    await this.getOrFailDatabase(databaseId, workspaceId);
+    const database = await this.getOrFailDatabase(databaseId, workspaceId);
 
     const updated = await this.databaseRepo.updateDatabase(databaseId, workspaceId, {
       ...dto,
@@ -402,17 +556,30 @@ export class DatabaseService {
     dto: UpdateDatabasePropertyDto,
     workspaceId: string,
   ) {
-    await this.getOrFailDatabase(databaseId, workspaceId);
+    const database = await this.getOrFailDatabase(databaseId, workspaceId);
 
     const property = await this.databasePropertyRepo.findById(propertyId);
     if (!property || property.databaseId !== databaseId) {
       throw new NotFoundException('Database property not found');
     }
 
-    return this.databasePropertyRepo.updateProperty(propertyId, {
+    const updatedProperty = await this.databasePropertyRepo.updateProperty(propertyId, {
       ...dto,
       settings: dto.settings as never,
     });
+
+    if (dto.type && dto.type !== property.type) {
+      await this.convertPropertyCellValues(
+        databaseId,
+        propertyId,
+        property.type as DatabasePropertyType,
+        dto.type,
+        workspaceId,
+        database.spaceId,
+      );
+    }
+
+    return updatedProperty;
   }
 
   /**
@@ -628,7 +795,7 @@ export class DatabaseService {
         pageId,
         propertyId: cell.propertyId,
         workspaceId,
-        value: (cell.value as never) ?? null,
+        value: this.normalizeInputCellValue(cell.value) as never,
         attachmentId: cell.attachmentId ?? null,
         createdById: user.id,
         updatedById: user.id,
@@ -638,6 +805,17 @@ export class DatabaseService {
     }
 
     return { row, cells };
+  }
+
+  /**
+   * При первом валидном пользовательском вводе очищает fallback-значение.
+   */
+  private normalizeInputCellValue(value: unknown): unknown {
+    if (!this.isCellFallbackValue(value)) {
+      return value ?? null;
+    }
+
+    return value.value ?? null;
   }
 
   /**

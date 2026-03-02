@@ -10,14 +10,20 @@ describe('DatabaseService mixed tree flows', () => {
   };
   const databaseRowRepo = {
     findByDatabaseAndPage: jest.fn(),
+    findByDatabaseId: jest.fn(),
     archiveByPageIds: jest.fn(),
     archiveByDatabaseId: jest.fn(),
     softDetachRowLink: jest.fn(),
   };
   const databaseCellRepo = {
+    findByDatabaseAndPage: jest.fn(),
+    updateCell: jest.fn(),
     softDeleteByDatabaseId: jest.fn(),
   };
-  const databasePropertyRepo = {};
+  const databasePropertyRepo = {
+    findById: jest.fn(),
+    updateProperty: jest.fn(),
+  };
   const databaseViewRepo = {
     softDeleteByDatabaseId: jest.fn(),
   };
@@ -27,6 +33,7 @@ describe('DatabaseService mixed tree flows', () => {
     removePage: jest.fn(),
   };
   const pageService = { create: jest.fn() };
+  const exportService = { exportPages: jest.fn() };
   const spaceAbility = {
     createForUser: jest.fn(async () => ({ cannot: () => false })),
   };
@@ -57,6 +64,7 @@ describe('DatabaseService mixed tree flows', () => {
     databaseViewRepo as any,
     pageRepo as any,
     pageService as any,
+    exportService as any,
     spaceAbility as any,
     db as any,
   );
@@ -147,5 +155,72 @@ describe('DatabaseService mixed tree flows', () => {
     expect(databaseCellRepo.softDeleteByDatabaseId).not.toHaveBeenCalled();
     expect(databaseViewRepo.softDeleteByDatabaseId).toHaveBeenCalledWith('db-1', 'ws-1', trx);
     expect(databaseRepo.updateDatabase).toHaveBeenCalled();
+  });
+
+  it('converts checkbox values to text when property type changes', async () => {
+    databasePropertyRepo.findById.mockResolvedValue({
+      id: 'prop-1',
+      databaseId: 'db-1',
+      type: 'checkbox',
+    });
+    databasePropertyRepo.updateProperty.mockResolvedValue({ id: 'prop-1', type: 'text' });
+    databaseRowRepo.findByDatabaseId.mockResolvedValue([{ pageId: 'page-1' }]);
+    databaseCellRepo.findByDatabaseAndPage.mockResolvedValue([
+      { id: 'cell-1', propertyId: 'prop-1', value: true },
+    ]);
+
+    await service.updateProperty('db-1', 'prop-1', { type: 'text' }, 'ws-1');
+
+    expect(databaseCellRepo.updateCell).toHaveBeenCalledWith('cell-1', {
+      value: 'Да',
+    });
+  });
+
+  it('stores fallback payload for non-convertible transitions', async () => {
+    databasePropertyRepo.findById.mockResolvedValue({
+      id: 'prop-1',
+      databaseId: 'db-1',
+      type: 'text',
+    });
+    databasePropertyRepo.updateProperty.mockResolvedValue({ id: 'prop-1', type: 'select' });
+    databaseRowRepo.findByDatabaseId.mockResolvedValue([{ pageId: 'page-1' }]);
+    databaseCellRepo.findByDatabaseAndPage.mockResolvedValue([
+      { id: 'cell-1', propertyId: 'prop-1', value: 'legacy' },
+    ]);
+
+    await service.updateProperty('db-1', 'prop-1', { type: 'select' }, 'ws-1');
+
+    expect(databaseCellRepo.updateCell).toHaveBeenCalledWith('cell-1', {
+      value: {
+        value: null,
+        rawValueBeforeTypeChange: 'legacy',
+      },
+    });
+  });
+
+  it('rolls back to source type using preserved fallback value', async () => {
+    databasePropertyRepo.findById.mockResolvedValue({
+      id: 'prop-1',
+      databaseId: 'db-1',
+      type: 'select',
+    });
+    databasePropertyRepo.updateProperty.mockResolvedValue({ id: 'prop-1', type: 'text' });
+    databaseRowRepo.findByDatabaseId.mockResolvedValue([{ pageId: 'page-1' }]);
+    databaseCellRepo.findByDatabaseAndPage.mockResolvedValue([
+      {
+        id: 'cell-1',
+        propertyId: 'prop-1',
+        value: {
+          value: null,
+          rawValueBeforeTypeChange: 'legacy',
+        },
+      },
+    ]);
+
+    await service.updateProperty('db-1', 'prop-1', { type: 'text' }, 'ws-1');
+
+    expect(databaseCellRepo.updateCell).toHaveBeenCalledWith('cell-1', {
+      value: 'legacy',
+    });
   });
 });
