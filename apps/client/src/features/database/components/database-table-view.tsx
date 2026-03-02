@@ -390,15 +390,27 @@ export function DatabaseTableView({
                   <Group justify="space-between" gap="xs" wrap="nowrap">
                     <Text size="sm">{property.name}</Text>
                     {isEditable && (
-                      <ActionIcon
-                        variant="subtle"
-                        color="red"
-                        size="sm"
-                        onClick={() => deletePropertyMutation.mutate(property.id)}
-                        aria-label={t('Delete property with name', { name: property.name })}
-                      >
-                        <IconTrash size={14} />
-                      </ActionIcon>
+                      <Menu position="bottom-end" shadow="md" withinPortal>
+                        <Menu.Target>
+                          <ActionIcon
+                            variant="subtle"
+                            size="sm"
+                            aria-label={t('Property actions')}
+                          >
+                            <IconDotsVertical size={14} />
+                          </ActionIcon>
+                        </Menu.Target>
+
+                        <Menu.Dropdown>
+                          <Menu.Item
+                            color="red"
+                            leftSection={<IconTrash size={14} />}
+                            onClick={() => deletePropertyMutation.mutate(property.id)}
+                          >
+                            {t('Delete property with name', { name: property.name })}
+                          </Menu.Item>
+                        </Menu.Dropdown>
+                      </Menu>
                     )}
                   </Group>
                 </Table.Th>
