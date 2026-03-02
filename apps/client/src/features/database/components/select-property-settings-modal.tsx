@@ -11,6 +11,8 @@ import {
 import { IconPlus, IconTrash } from '@tabler/icons-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import slugify from '@sindresorhus/slugify';
+import { customAlphabet } from 'nanoid';
 import {
   IDatabaseSelectOption,
   IDatabaseSelectPropertySettings,
@@ -40,11 +42,31 @@ const COLOR_OPTIONS = [
   'orange',
 ];
 
-function createEmptyOption(): IDatabaseSelectOption {
+const createShortSuffix = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 4);
+
+type SelectOptionDraft = IDatabaseSelectOption & {
+  isAutoValue?: boolean;
+};
+
+function buildAutoOptionValue(label: string): string {
+  if (!label.trim()) {
+    return '';
+  }
+
+  const normalizedBase = slugify(label.trim(), {
+    separator: '-',
+  });
+
+  const safeBase = normalizedBase || 'option';
+  return `${safeBase}-${createShortSuffix()}`;
+}
+
+function createEmptyOption(): SelectOptionDraft {
   return {
     label: '',
     value: '',
     color: 'gray',
+    isAutoValue: true,
   };
 }
 
@@ -56,7 +78,7 @@ export function SelectPropertySettingsModal({
   onSave,
 }: SelectPropertySettingsModalProps) {
   const { t } = useTranslation();
-  const [options, setOptions] = useState<IDatabaseSelectOption[]>([]);
+  const [options, setOptions] = useState<SelectOptionDraft[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -64,8 +86,11 @@ export function SelectPropertySettingsModal({
       return;
     }
 
-    const normalizedOptions = initialSettings.options.length
-      ? initialSettings.options
+    const normalizedOptions: SelectOptionDraft[] = initialSettings.options.length
+      ? initialSettings.options.map((option) => ({
+          ...option,
+          isAutoValue: false,
+        }))
       : [createEmptyOption()];
 
     setOptions(normalizedOptions);
@@ -137,6 +162,9 @@ export function SelectPropertySettingsModal({
                 next[index] = {
                   ...next[index],
                   label: event.currentTarget.value,
+                  value: next[index].isAutoValue
+                    ? buildAutoOptionValue(event.currentTarget.value)
+                    : next[index].value,
                 };
                 setOptions(next);
               }}
@@ -145,14 +173,7 @@ export function SelectPropertySettingsModal({
               flex={1}
               label={t('Value')}
               value={option.value}
-              onChange={(event) => {
-                const next = [...options];
-                next[index] = {
-                  ...next[index],
-                  value: event.currentTarget.value,
-                };
-                setOptions(next);
-              }}
+              readOnly
             />
             <Select
               w={140}
