@@ -6,6 +6,7 @@ import { StorageModule } from '../storage/storage.module';
 @Module({
   imports: [StorageModule],
   providers: [ExportService],
+  exports: [ExportService],
   controllers: [PageExportController, SpaceExportController],
 })
 export class ExportModule {}
