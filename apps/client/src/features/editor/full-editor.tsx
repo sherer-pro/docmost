@@ -18,6 +18,7 @@ export interface FullEditorProps {
   spaceSlug: string;
   editable: boolean;
   metaPanel?: ReactNode;
+  pageFullPageWidth?: boolean;
 }
 
 export function FullEditor({
@@ -28,9 +29,16 @@ export function FullEditor({
   spaceSlug,
   editable,
   metaPanel,
+  pageFullPageWidth,
 }: FullEditorProps) {
   const [user] = useAtom(userAtom);
-  const fullPageWidth = user.settings?.preferences?.fullPageWidth;
+
+  /**
+   * Явный приоритет ширины редактора: сначала настройка страницы,
+   * затем пользовательский default, и только потом жесткий fallback.
+   */
+  const fullPageWidth =
+    pageFullPageWidth ?? user.settings?.preferences?.fullPageWidth ?? false;
 
   return (
     <Container
