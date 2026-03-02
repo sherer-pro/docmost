@@ -325,12 +325,11 @@ const buildDatabaseNodeUrl = (
   spaceSlug: string,
   node: SpaceTreeNode,
 ): string => {
-  if (node.slugId) {
-    return buildDatabaseUrl(spaceSlug, node.slugId, node.name);
+  if (!node.slugId) {
+    return getSpaceUrl(spaceSlug);
   }
 
-  const databaseId = node.databaseId ?? node.id;
-  return `/s/${spaceSlug}/databases/${databaseId}`;
+  return buildDatabaseUrl(spaceSlug, node.slugId, node.name);
 };
 
 function Node({
