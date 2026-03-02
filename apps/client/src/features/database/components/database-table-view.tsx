@@ -55,6 +55,7 @@ import {
   getRowTitle,
   matchCondition,
 } from '@/features/database/utils/database-markdown';
+import { DatabaseCellRenderer } from '@/features/database/components/database-cell-renderer.tsx';
 
 interface DatabaseTableViewProps {
   databaseId: string;
@@ -96,7 +97,7 @@ export function DatabaseTableView({
   const [newPropertyName, setNewPropertyName] = useState('');
   const [newPropertyType, setNewPropertyType] = useState<DatabasePropertyType>('text');
   const [editingCellKey, setEditingCellKey] = useState<string | null>(null);
-  const [editingValue, setEditingValue] = useState('');
+  const [editingValue, setEditingValue] = useState<unknown>('');
   const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({});
   const [filters, setFilters] = useState<IDatabaseFilterCondition[]>([DEFAULT_FILTER]);
   const [sortState, setSortState] = useState<IDatabaseSortState | null>(null);
@@ -159,6 +160,10 @@ export function DatabaseTableView({
     });
   }, [filteredRows, sortState]);
 
+  const getRawCellValue = (row: IDatabaseRowWithCells, propertyId: string): unknown => {
+    return row.cells?.find((cell) => cell.propertyId === propertyId)?.value;
+  };
+
   const startEditing = (row: IDatabaseRowWithCells, property: IDatabaseProperty) => {
     if (!isEditable) {
       return;
@@ -166,26 +171,74 @@ export function DatabaseTableView({
 
     const key = `${row.pageId}:${property.id}`;
     setEditingCellKey(key);
-    setEditingValue(getCellValue(row, property.id));
+    setEditingValue(getRawCellValue(row, property.id));
+  };
+
+  /**
+   * Normalizes a value according to the property type contract.
+   * This keeps the batch update payload format consistent per cell type.
+   */
+  const buildCellPayloadValue = (property: IDatabaseProperty, value: unknown): unknown => {
+    if (property.type === 'checkbox') {
+      return Boolean(value);
+    }
+
+    if (property.type === 'user') {
+      if (value && typeof value === 'object' && 'id' in value) {
+        const userId = (value as { id?: unknown }).id;
+        return typeof userId === 'string' && userId.trim() ? { id: userId } : null;
+      }
+
+      if (typeof value === 'string' && value.trim()) {
+        return { id: value.trim() };
+      }
+
+      return null;
+    }
+
+    if (property.type === 'page_reference') {
+      if (typeof value === 'string' && value.trim()) {
+        return value.trim();
+      }
+
+      return null;
+    }
+
+    if (typeof value === 'string') {
+      return value;
+    }
+
+    return value ?? '';
   };
 
   const saveEditing = async (
     row: IDatabaseRowWithCells,
-    propertyId: string,
-    nextValue?: string,
+    property: IDatabaseProperty,
+    nextValue?: unknown,
   ) => {
     if (!editingCellKey || !isEditable) {
       return;
     }
+
+    const sourceValue = typeof nextValue === 'undefined' ? editingValue : nextValue;
+    const normalizedValue = buildCellPayloadValue(property, sourceValue);
+    const shouldDelete =
+      property.type !== 'checkbox' &&
+      (normalizedValue === null ||
+        normalizedValue === '' ||
+        (typeof normalizedValue === 'object' &&
+          normalizedValue !== null &&
+          'id' in normalizedValue &&
+          !(normalizedValue as { id?: string }).id));
 
     await updateCellsMutation.mutateAsync({
       pageId: row.pageId,
       payload: {
         cells: [
           {
-            propertyId,
-            value: typeof nextValue === 'string' ? nextValue : editingValue,
-            operation: 'upsert',
+            propertyId: property.id,
+            value: shouldDelete ? null : normalizedValue,
+            operation: shouldDelete ? 'delete' : 'upsert',
           },
         ],
       },
@@ -546,51 +599,21 @@ export function DatabaseTableView({
                 {displayedProperties.map((property) => {
                   const key = `${row.pageId}:${property.id}`;
                   const isEditing = editingCellKey === key;
-                  const value = getCellValue(row, property.id);
 
                   return (
-                    <Table.Td
-                      key={property.id}
-                      onClick={() => startEditing(row, property)}
-                      style={{ cursor: isEditable ? "text" : "default" }}
-                    >
-                      {isEditing && isEditable ? (
-                        property.type === 'select' ? (
-                          <Select
-                            autoFocus
-                            data={getSelectSettings(property).options.map((option) => ({
-                              value: option.value,
-                              label: option.label,
-                            }))}
-                            value={editingValue || null}
-                            onChange={(nextValue) => {
-                              const normalizedValue = nextValue || '';
-                              setEditingValue(normalizedValue);
-                              saveEditing(row, property.id, normalizedValue);
-                            }}
-                            onBlur={() => saveEditing(row, property.id)}
-                            clearable
-                          />
-                        ) : (
-                          <TextInput
-                            autoFocus
-                            value={editingValue}
-                            onChange={(event) =>
-                              setEditingValue(event.currentTarget.value)
-                            }
-                            onBlur={() => saveEditing(row, property.id)}
-                            onKeyDown={(event) => {
-                              if (event.key === 'Enter') {
-                                saveEditing(row, property.id);
-                              }
-                            }}
-                          />
-                        )
-                      ) : (
-                        property.type === 'select'
-                          ? getSelectOptionLabel(property, value) || t('Empty value')
-                          : value || t('Empty value')
-                      )}
+                    <Table.Td key={property.id}>
+                      <DatabaseCellRenderer
+                        property={property}
+                        value={getRawCellValue(row, property.id)}
+                        isEditable={isEditable}
+                        isEditing={isEditing}
+                        editingValue={editingValue}
+                        spaceId={spaceId}
+                        getSelectOptionLabel={getSelectOptionLabel}
+                        onStartEdit={() => startEditing(row, property)}
+                        onChange={setEditingValue}
+                        onSave={(nextValue) => saveEditing(row, property, nextValue)}
+                      />
                     </Table.Td>
                   );
                 })}
