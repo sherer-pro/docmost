@@ -1,8 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  SlashMenuGroupedItemsType,
-  SlashMenuItemType,
-} from "@/features/editor/components/slash-menu/types";
+import { SlashMenuGroupedItemsType } from "@/features/editor/components/slash-menu/types";
 import {
   ActionIcon,
   Group,
@@ -30,8 +27,41 @@ const CommandList = ({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const viewportRef = useRef<HTMLDivElement>(null);
 
+  /**
+   * Преобразуем объект с группами в «плоский» список,
+   * чтобы единообразно работать с клавиатурной навигацией
+   * и выполнением команд по индексу.
+   */
   const flatItems = useMemo(() => {
     return Object.values(items).flat();
+  }, [items]);
+
+  /**
+   * Строим карту «группа + локальный индекс» -> «глобальный индекс в flatItems».
+   *
+   * Это важно для корректной работы кликов: раньше локальный индекс
+   * внутри категории напрямую передавался в flatItems и из-за этого
+   * в категориях после первой выбирался не тот элемент либо не выбирался вовсе.
+   */
+  const groupedItemsWithGlobalIndex = useMemo(() => {
+    let globalIndex = 0;
+
+    return Object.entries(items).map(([category, categoryItems]) => {
+      const categoryItemsWithIndex = categoryItems.map((item) => {
+        const normalizedItem = {
+          item,
+          globalIndex,
+        };
+
+        globalIndex += 1;
+        return normalizedItem;
+      });
+
+      return {
+        category,
+        categoryItems: categoryItemsWithIndex,
+      };
+    });
   }, [items]);
 
   const selectItem = useCallback(
@@ -88,18 +118,18 @@ const CommandList = ({
   return flatItems.length > 0 ? (
     <Paper id="slash-command" shadow="md" p="xs" withBorder>
       <ScrollArea viewportRef={viewportRef} h={350} w={270} scrollbarSize={8}>
-        {Object.entries(items).map(([category, categoryItems]) => (
+        {groupedItemsWithGlobalIndex.map(({ category, categoryItems }) => (
           <div key={category}>
             <Text c="dimmed" mb={4} fw={500} tt="capitalize">
               {category}
             </Text>
-            {categoryItems.map((item: SlashMenuItemType, index: number) => (
+            {categoryItems.map(({ item, globalIndex }) => (
               <UnstyledButton
-                data-item-index={index}
-                key={index}
-                onClick={() => selectItem(index)}
+                data-item-index={globalIndex}
+                key={`${category}-${globalIndex}`}
+                onClick={() => selectItem(globalIndex)}
                 className={clsx(classes.menuBtn, {
-                  [classes.selectedItem]: index === selectedIndex,
+                  [classes.selectedItem]: globalIndex === selectedIndex,
                 })}
               >
                 <Group>
