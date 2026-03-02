@@ -4,12 +4,19 @@ import { notifications } from '@mantine/notifications';
 import { modals } from '@mantine/modals';
 import { useDisclosure } from '@mantine/hooks';
 import { useAtom } from 'jotai';
+import { useAtomValue } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { saveAs } from 'file-saver';
 import ExportModal from '@/components/common/export-modal';
 import { DocumentCommonActionItems } from '@/features/common/header/document-common-action-items.tsx';
-import { exportDatabase, getDatabaseMarkdown } from '@/features/database/services/database-service';
+import { exportDatabase } from '@/features/database/services/database-service';
 import { DatabaseExportFormat } from '@/features/database/types/database.types';
+import {
+  useDatabasePropertiesQuery,
+  useDatabaseRowsQuery,
+} from '@/features/database/queries/database-table-query.ts';
+import { useGetDatabaseQuery } from '@/features/database/queries/database-query.ts';
 import { historyAtoms } from '@/features/page-history/atoms/history-atoms.ts';
 import MovePageModal from '@/features/page/components/move-page-modal.tsx';
 import { useDeletePageModal } from '@/features/page/hooks/use-delete-page-modal.tsx';
@@ -20,6 +27,11 @@ import ShareModal from '@/features/share/components/share-modal.tsx';
 import { PageStateSegmentedControl } from '@/features/user/components/page-state-pref.tsx';
 import { useClipboard } from '@/hooks/use-clipboard';
 import { getAppUrl } from '@/lib/config.ts';
+import {
+  databaseTableExportStateAtom,
+  defaultDatabaseTableExportState,
+} from '@/features/database/atoms/database-table-export-atom';
+import { buildDatabaseMarkdownFromState } from '@/features/database/utils/database-markdown';
 
 interface DatabaseHeaderMenuProps {
   databaseId: string;
@@ -39,6 +51,10 @@ export default function DatabaseHeaderMenu({
   const clipboard = useClipboard({ timeout: 500 });
   const [, setHistoryModalOpen] = useAtom(historyAtoms);
   const { data: page } = usePageQuery({ pageId: databasePageId });
+  const { data: database } = useGetDatabaseQuery(databaseId);
+  const { data: properties = [] } = useDatabasePropertiesQuery(databaseId);
+  const { data: rows = [] } = useDatabaseRowsQuery(databaseId);
+  const tableExportStateByDatabase = useAtomValue(databaseTableExportStateAtom);
   const { openDeleteModal } = useDeletePageModal();
   const { mutateAsync: removePageMutationAsync } = useRemovePageMutation();
   const [exportOpened, { open: openExportModal, close: closeExportModal }] =
@@ -47,6 +63,23 @@ export default function DatabaseHeaderMenu({
     useDisclosure(false);
   const { mutateAsync: convertDatabaseToPageAsync, isPending: isConvertingDatabaseToPage } =
     useConvertDatabaseToPageMutation(page?.spaceId, databaseId);
+
+  /**
+   * Собирает markdown на клиенте в точном состоянии текущей таблицы:
+   * учитываем сортировку, фильтры и видимые колонки из UI.
+   */
+  const getCurrentTableMarkdown = () => {
+    const tableExportState = tableExportStateByDatabase[databaseId] ?? defaultDatabaseTableExportState;
+
+    return buildDatabaseMarkdownFromState({
+      title: (database?.name || page?.title || t('database.editor.untitled')).trim(),
+      description: database?.description,
+      properties,
+      rows,
+      state: tableExportState,
+      untitledLabel: t('Untitled'),
+    });
+  };
 
   /**
    * Копирует canonical-ссылку на database-страницу в формате /s/:space/db/:slug.
@@ -78,8 +111,7 @@ export default function DatabaseHeaderMenu({
 
   const handleCopyAsMarkdown = async () => {
     try {
-      const { markdown } = await getDatabaseMarkdown(databaseId);
-      clipboard.copy(markdown);
+      clipboard.copy(getCurrentTableMarkdown());
       notifications.show({ message: t('Copied') });
     } catch {
       notifications.show({
@@ -102,6 +134,25 @@ export default function DatabaseHeaderMenu({
         color: 'red',
       });
     }
+  };
+
+  /**
+   * Экспорт markdown выполняем локально, чтобы в файл попало текущее
+   * визуальное состояние таблицы, а не "сырые" данные с сервера.
+   */
+  const handleExport = async (format: DatabaseExportFormat) => {
+    if (format === DatabaseExportFormat.Markdown) {
+      const markdown = getCurrentTableMarkdown();
+      const rawName = (database?.name || page?.title || 'database').trim();
+      const safeName = rawName.replace(/\s+/g, '-').toLowerCase() || 'database';
+
+      saveAs(new Blob([markdown], { type: 'text/markdown;charset=utf-8' }), `${safeName}.md`);
+      notifications.show({ message: t('Export successful') });
+      return;
+    }
+
+    await exportDatabase(databaseId, { format });
+    notifications.show({ message: t('Export successful') });
   };
 
   const openHistoryModal = () => {
@@ -243,6 +294,7 @@ export default function DatabaseHeaderMenu({
         id={databaseId}
         open={exportOpened}
         onClose={closeExportModal}
+        onExportDatabase={handleExport}
       />
 
       {canMoveDatabasePage && (
