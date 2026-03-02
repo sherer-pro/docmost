@@ -20,6 +20,7 @@ import {
   IconTrash,
 } from '@tabler/icons-react';
 import { useEffect, useMemo, useState } from 'react';
+import { DATABASE_PROPERTY_TYPES, DatabasePropertyType } from '@docmost/api-contract';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useSetAtom } from 'jotai';
@@ -85,6 +86,7 @@ export function DatabaseTableView({
   const deleteRowMutation = useDeleteDatabaseRowMutation(databaseId);
 
   const [newPropertyName, setNewPropertyName] = useState('');
+  const [newPropertyType, setNewPropertyType] = useState<DatabasePropertyType>('text');
   const [editingCellKey, setEditingCellKey] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState('');
   const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({});
@@ -190,6 +192,23 @@ export function DatabaseTableView({
             onChange={(event) => setNewPropertyName(event.currentTarget.value)}
             disabled={!isEditable}
           />
+          <Select
+            w={180}
+            value={newPropertyType}
+            data={DATABASE_PROPERTY_TYPES.map((propertyType) => ({
+              value: propertyType,
+              label: propertyType,
+            }))}
+            onChange={(value) => {
+              if (!value) {
+                return;
+              }
+
+              setNewPropertyType(value as DatabasePropertyType);
+            }}
+            disabled={!isEditable}
+            allowDeselect={false}
+          />
           <Button
             leftSection={<IconPlus size={14} />}
             disabled={!isEditable}
@@ -200,9 +219,10 @@ export function DatabaseTableView({
 
               createPropertyMutation.mutate({
                 name: newPropertyName.trim(),
-                type: 'text',
+                type: newPropertyType,
               });
               setNewPropertyName('');
+              setNewPropertyType('text');
             }}
           >
             {t('Property')}
