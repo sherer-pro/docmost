@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { map, Observable } from 'rxjs';
 import { Reflector } from '@nestjs/core';
-import { ApiResponseEnvelope } from '@docmost/api-contract';
+import type { ApiResponseEnvelope } from '@docmost/api-contract';
 import { SKIP_TRANSFORM_KEY } from '../decorators/skip-transform.decorator';
 
 @Injectable()
