@@ -326,13 +326,20 @@ const buildDatabaseNodeUrl = (
   spaceSlug: string,
   node: SpaceTreeNode,
 ): string => {
-  const databaseSlugId = node.slugId ?? node.id;
+  if (node.slugId) {
+    return buildDatabaseUrl(spaceSlug, node.slugId, node.name);
+  }
 
-  if (!databaseSlugId) {
+  // Some tree payloads can temporarily miss page slugId for database nodes.
+  // In this case, route through the legacy database path by database entity id,
+  // then let DatabaseLegacyRedirect resolve the canonical /db/:slug URL.
+  const legacyDatabaseId = node.databaseId ?? null;
+
+  if (!legacyDatabaseId) {
     return getSpaceUrl(spaceSlug);
   }
 
-  return buildDatabaseUrl(spaceSlug, databaseSlugId, node.name);
+  return `/s/${spaceSlug}/databases/${legacyDatabaseId}`;
 };
 
 function Node({
