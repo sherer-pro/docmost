@@ -647,6 +647,9 @@ function NodeMenu({ node, treeApi, spaceId }: NodeMenuProps) {
     copyPageModalOpened,
     { open: openCopyPageModal, close: closeCopySpaceModal },
   ] = useDisclosure(false);
+  const canMoveNodeToTrash =
+    (node.data.nodeType === "page" || node.data.nodeType === "database") &&
+    !(treeApi.props.disableEdit as boolean);
 
   const handleCopyLink = () => {
     const nodeUrl =
@@ -806,21 +809,25 @@ function NodeMenu({ node, treeApi, spaceId }: NodeMenuProps) {
                 >
                   {t("Copy to space")}
                 </Menu.Item>
-
-                <Menu.Divider />
-                <Menu.Item
-                  c="red"
-                  leftSection={<IconTrash size={16} />}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    openDeleteModal({ onConfirm: () => treeApi?.delete(node) });
-                  }}
-                >
-                  {t("Move to trash")}
-                </Menu.Item>
               </>
             )}
+
+          {canMoveNodeToTrash && (
+            <>
+              {node.data.nodeType === "page" && <Menu.Divider />}
+              <Menu.Item
+                c="red"
+                leftSection={<IconTrash size={16} />}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  openDeleteModal({ onConfirm: () => treeApi?.delete(node) });
+                }}
+              >
+                {t("Move to trash")}
+              </Menu.Item>
+            </>
+          )}
         </Menu.Dropdown>
       </Menu>
 
