@@ -12,6 +12,7 @@ import { searchSpotlight } from '@/features/search/constants.ts';
 import EmojiCommand from '@/features/editor/extensions/emoji-command.ts';
 
 export interface DatabaseTitleEditorProps {
+  databaseId: string;
   value: string;
   editable: boolean;
   onValueChange?: (value: string) => void;
@@ -29,6 +30,7 @@ export interface DatabaseTitleEditorProps {
  * - блокировка `mod+s` и поддержка `mod+k`.
  */
 export function DatabaseTitleEditor({
+  databaseId,
   value,
   editable,
   onValueChange,
@@ -36,6 +38,8 @@ export function DatabaseTitleEditor({
 }: DatabaseTitleEditorProps) {
   const { t } = useTranslation();
   const lastCommittedRef = useRef(value);
+  const didInitFocusRef = useRef(false);
+  const lastSyncedDatabaseIdRef = useRef(databaseId);
 
   const saveTitle = useCallback(async () => {
     if (!titleEditor) {
@@ -105,10 +109,29 @@ export function DatabaseTitleEditor({
   useEffect(() => {
     lastCommittedRef.current = value;
 
-    if (titleEditor && value !== titleEditor.getText()) {
-      titleEditor.commands.setContent(value);
+    if (!titleEditor) {
+      return;
     }
-  }, [titleEditor, value]);
+
+    const nextTitle = value ?? '';
+    const currentTitle = titleEditor.getText();
+    const isDatabaseChanged = lastSyncedDatabaseIdRef.current !== databaseId;
+    const isFocused = titleEditor.isFocused;
+    const { from, to } = titleEditor.state.selection;
+    const hasCollapsedSelection = from === to;
+
+    if (nextTitle === currentTitle) {
+      lastSyncedDatabaseIdRef.current = databaseId;
+      return;
+    }
+
+    if (!isDatabaseChanged && isFocused && hasCollapsedSelection) {
+      return;
+    }
+
+    titleEditor.commands.setContent(nextTitle);
+    lastSyncedDatabaseIdRef.current = databaseId;
+  }, [databaseId, titleEditor, value]);
 
   useEffect(() => {
     if (!titleEditor) {
@@ -119,6 +142,12 @@ export function DatabaseTitleEditor({
   }, [editable, titleEditor]);
 
   useEffect(() => {
+    if (!titleEditor || didInitFocusRef.current) {
+      return;
+    }
+
+    didInitFocusRef.current = true;
+
     const focusTimer = setTimeout(() => {
       if (!titleEditor?.isInitialized || !editable) {
         return;
