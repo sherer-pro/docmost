@@ -58,8 +58,8 @@ const DEFAULT_SIDEBAR_NODE_TYPES: SidebarNodeType[] = [
 const jotaiStore = getDefaultStore();
 
 /**
- * Гарантирует, что в запросе sidebar всегда присутствуют базовые типы узлов.
- * Это нужно, чтобы страницы и базы одновременно отображались в общем SpaceTree.
+ * Ensures that base node types are always present in a sidebar request.
+ * This is necessary so that pages and databases are simultaneously displayed in the general SpaceTree.
  */
 function withDefaultSidebarNodeTypes(params: SidebarPagesParams): SidebarPagesParams {
   const includeNodeTypes = Array.from(
@@ -232,23 +232,23 @@ export function useDeletePageMutation() {
 
 
 /**
- * Мутация конвертации страницы в базу данных.
+ * Mutation of page to database conversion.
  *
- * После успешной операции инвалидируем дерево, карточку страницы и связанные
- * database-запросы, чтобы UI сразу отразил смену типа узла.
+ * After a successful operation, we invalidate the tree, page card and related
+ * database queries so that the UI immediately reflects the change in node type.
  */
 export function useConvertPageToDatabaseMutation() {
   return useMutation({
     mutationFn: (pageId: string) => convertPageToDatabase(pageId),
     onSuccess: (data) => {
       /**
-       * Важно инвалидировать ВСЕ кэши `pages`, а не только ключ по UUID.
+       * It is important to invalidate ALL `pages` caches, not just the key by UUID.
        *
-       * После конвертации роут переходит на `/db/:slug`, где `usePageQuery`
-       * запрашивает страницу именно по slugId. До конвертации в кэше уже
-       * может лежать запись `['pages', slugId]` без `databaseId`, и при
-       * `staleTime` в 5 минут UI временно получает устаревший узел, что
-       * визуально проявляется как «пустая страница» до ручного refresh.
+       * After conversion, the route goes to `/db/:slug`, where `usePageQuery`
+       * requests a page specifically by slugId. Before conversion in cache already
+       * there may be a record `['pages', slugId]` without `databaseId`, and when
+       * `staleTime` at 5 minutes the UI temporarily gets a stale node, which
+       * visually appears as a “blank page” before manual refresh.
        */
       invalidatePageEntity({ includeAllPages: true }, { client: queryClient });
       invalidateSidebarTree({}, { client: queryClient });
@@ -702,10 +702,10 @@ export function updateCacheOnMovePage(
 
 export function invalidateOnDeletePage(pageId: string) {
   /**
-   * Синхронно удаляем ноду из atom-дерева тем же алгоритмом, что и drag/drop (`SimpleTree.drop`).
+   * We synchronously remove a node from the atom tree using the same algorithm as drag/drop (`SimpleTree.drop`).
    *
-   * Это гарантирует каскадное удаление дочерних узлов (включая `databaseRow`)
-   * и убирает визуальные «призраки» до прихода следующего server-refetch.
+   * This ensures cascading deletion of child nodes (including `databaseRow`)
+   * and removes visual “ghosts” until the next server-refetch arrives.
    */
   jotaiStore.set(dropTreeNodeAtom, pageId);
 

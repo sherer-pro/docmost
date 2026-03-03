@@ -13,7 +13,7 @@ export class DatabaseViewRepo {
   constructor(@InjectKysely() private readonly db: KyselyDB) {}
 
   /**
-   * Создаёт представление (например, table/board/calendar) для базы данных.
+   * Creates a view (for example, table/board/calendar) for the database.
    */
   async insertView(
     payload: InsertableDatabaseView,
@@ -27,7 +27,7 @@ export class DatabaseViewRepo {
   }
 
   /**
-   * Возвращает список представлений базы данных.
+   * Returns a list of database views.
    */
   async findByDatabaseId(databaseId: string): Promise<DatabaseView[]> {
     return this.db
@@ -40,7 +40,7 @@ export class DatabaseViewRepo {
   }
 
   /**
-   * Возвращает одно представление по идентификатору.
+   * Returns one view by id.
    */
   async findById(viewId: string): Promise<DatabaseView> {
     return this.db
@@ -52,7 +52,7 @@ export class DatabaseViewRepo {
   }
 
   /**
-   * Обновляет настройки представления.
+   * Updates view settings.
    */
   async updateView(
     id: string,
@@ -69,7 +69,7 @@ export class DatabaseViewRepo {
   }
 
   /**
-   * Мягко удаляет представление.
+   * Gently deletes the view.
    */
   async softDeleteView(
     id: string,
@@ -84,7 +84,7 @@ export class DatabaseViewRepo {
       .executeTakeFirst();
   }
   /**
-   * Мягко удаляет все представления базы данных при архивировании.
+   * Gently deletes all database views when archiving.
    */
   async softDeleteByDatabaseId(
     databaseId: string,
@@ -101,7 +101,7 @@ export class DatabaseViewRepo {
   }
 
   /**
-   * Восстанавливает представления базы после обратной конвертации в database.
+   * Restores database views after conversion back to database.
    */
   async restoreByDatabaseId(
     databaseId: string,

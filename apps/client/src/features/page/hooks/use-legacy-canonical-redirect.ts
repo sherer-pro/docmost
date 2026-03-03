@@ -10,12 +10,12 @@ interface UseLegacyCanonicalRedirectParams {
 }
 
 /**
- * Общая обвязка для legacy-redirect сценариев.
+ * General framework for legacy-redirect scripts.
  *
- * Хук централизует:
- * - аудит обращений к устаревшему маршруту;
- * - replace-redirect в канонический URL при успешном разрешении;
- * - единое состояние «пока грузим или уже редиректим», чтобы экран не мигал.
+ * The hook centralizes:
+ * - audit of calls to an outdated route;
+ * - replace-redirect to canonical URL upon successful resolution;
+ * - a single state “while loading or already redirecting” so that the screen does not blink.
  */
 export function useLegacyCanonicalRedirect({
   routeType,

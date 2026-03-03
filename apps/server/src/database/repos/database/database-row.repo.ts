@@ -15,7 +15,7 @@ export class DatabaseRowRepo {
   constructor(@InjectKysely() private readonly db: KyselyDB) {}
 
   /**
-   * Создаёт строку базы данных, привязанную к странице.
+   * Creates a database row associated with a page.
    */
   async insertRow(
     payload: InsertableDatabaseRow,
@@ -29,7 +29,7 @@ export class DatabaseRowRepo {
   }
 
   /**
-   * Находит строку по идентификатору.
+   * Finds a string by ID.
    */
   async findById(rowId: string): Promise<DatabaseRow> {
     return this.db
@@ -40,7 +40,7 @@ export class DatabaseRowRepo {
   }
 
   /**
-   * Возвращает все строки конкретной базы данных.
+   * Returns all rows of a specific database.
    */
   async findByDatabaseId(
     databaseId: string,
@@ -69,11 +69,11 @@ export class DatabaseRowRepo {
             .innerJoin('spaces as s', 's.id', 'p.spaceId')
             .select(['p.id', 'p.slugId', 'p.title', 'p.icon', 'p.parentPageId', 'p.position'])
             /**
-             * Формируем customFields по той же схеме, что и page API:
-             * источник данных — page.settings.
+             * We create customFields using the same scheme as the page API:
+             * data source - page.settings.
              *
-             * Дополнительно применяем правила видимости для полей assignee/stakeholders
-             * на основании settings.documentFields конкретного пространства.
+             * Additionally, we apply visibility rules for the assignee/stakeholders fields
+             * based on the settings.documentFields of a specific space.
              */
             .select(
               sql`jsonb_build_object(
@@ -123,11 +123,11 @@ export class DatabaseRowRepo {
       .where('pages.deletedAt', 'is', null)
       .where('databaseRows.archivedAt', 'is', null)
       /**
-       * Порядок строк в дереве определяется позицией страницы,
-       * а не временем создания databaseRows.
+       * The order of rows in the tree is determined by the page position,
+       * and not the creation time of databaseRows.
        *
-       * COLLATE "C" обеспечивает стабильную лексикографическую сортировку
-       * для fractional indexing ключей.
+       * COLLATE "C" provides stable lexicographic collation
+       * for fractional indexing of keys.
        */
       .orderBy(sql`"pages"."position" collate "C"`, 'asc')
       .execute();
@@ -148,7 +148,7 @@ export class DatabaseRowRepo {
   }
 
   /**
-   * Находит строку по паре databaseId/pageId.
+   * Finds a row based on the databaseId/pageId pair.
    */
   async findByDatabaseAndPage(
     databaseId: string,
@@ -163,7 +163,7 @@ export class DatabaseRowRepo {
   }
 
   /**
-   * Обновляет данные строки.
+   * Updates row data.
    */
   async updateRow(
     id: string,
@@ -199,7 +199,7 @@ export class DatabaseRowRepo {
   }
 
   /**
-   * Архивирует все строки базы данных при архивировании самой базы.
+   * Archives all database rows while archiving the database itself.
    */
   async archiveByDatabaseId(
     databaseId: string,
@@ -216,10 +216,10 @@ export class DatabaseRowRepo {
   }
 
   /**
-   * Мягко отвязывает строку от активного состояния базы.
+   * Gently unbinds a row from the active state of the database.
    *
-   * Физическая запись не удаляется и pageId сохраняется как снимок связи,
-   * что позволяет восстановить строку при обратной конвертации.
+   * The physical record is not deleted and the pageId is saved as a snapshot of the connection.
+   * which allows you to restore the string during reverse conversion.
    */
   async softDetachRowLink(
     databaseId: string,
@@ -238,7 +238,7 @@ export class DatabaseRowRepo {
   }
 
   /**
-   * Восстанавливает ранее отвязанную строку базы.
+   * Restores a previously unlinked database row.
    */
   async restoreRowLink(
     databaseId: string,
@@ -262,7 +262,7 @@ export class DatabaseRowRepo {
   }
 
   /**
-   * Восстанавливает ссылки всех строк базы данных.
+   * Restores references of all database rows.
    */
   async restoreByDatabaseId(
     databaseId: string,

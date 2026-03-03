@@ -34,8 +34,8 @@ export function FullEditor({
   const [user] = useAtom(userAtom);
 
   /**
-   * Явный приоритет ширины редактора: сначала настройка страницы,
-   * затем пользовательский default, и только потом жесткий fallback.
+   * Explicit editor width priority: page setup first,
+   * then a user default, and only then a hard fallback.
    */
   const fullPageWidth =
     pageFullPageWidth ?? user.settings?.preferences?.fullPageWidth ?? false;

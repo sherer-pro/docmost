@@ -275,8 +275,8 @@ export function DatabaseTableView({
     nextValue?: unknown,
   ) => {
     /**
-     * Для обычных полей сохраняем только из активного edit-state.
-     * Для checkbox допускаем прямое сохранение из view-режима через nextValue.
+     * For regular fields, we save only from the active edit-state.
+     * For checkboxes, we allow direct saving from view mode via nextValue.
      */
     if (!isEditable || (typeof nextValue === 'undefined' && !editingCellKey)) {
       return;

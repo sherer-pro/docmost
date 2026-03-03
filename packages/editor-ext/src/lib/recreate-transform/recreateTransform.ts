@@ -152,13 +152,13 @@ export class RecreateTransform {
         // if nodetypes differ, the updated node-type and contents might not be compatible
         // with schema and requires a replace
         /**
-         * Безопасно извлекаем текст ошибки из unknown-исключения,
-         * чтобы корректно работать в строгом режиме TypeScript.
+         * Safely extract the error message from an unknown exception,
+         * so this code remains type-safe in strict TypeScript mode.
          */
         const errorMessage = e instanceof Error ? e.message : String(e);
 
-        // Если ошибка связана с несовместимым содержимым при смене типа,
-        // выполняем fallback на replaceWith.
+        // If the error is caused by incompatible content after a node type switch,
+        // fall back to replaceWith.
         if (nodeType && errorMessage.includes("Invalid content")) {
           // @todo add test-case for this scenario
           this.tr.replaceWith(start, start + fromNode.nodeSize, toNode);

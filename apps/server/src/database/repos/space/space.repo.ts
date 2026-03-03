@@ -189,12 +189,12 @@ export class SpaceRepo {
 
   withMemberCount(eb: ExpressionBuilder<DB, 'spaces'>) {
     /**
-     * Формируем унифицированный набор участников пространства:
-     * - прямые участники через space_members.user_id;
-     * - участники, полученные через группы.
+     * We form a unified set of space participants:
+     * - direct members via space_members.user_id;
+     * - participants received through groups.
      *
-     * Для второй ветки явно исключаем null, чтобы COUNT(*) ниже
-     * не учитывал пустые строки от LEFT JOIN.
+     * For the second branch, we explicitly exclude null so that COUNT(*) is lower
+     * did not take into account empty lines from LEFT JOIN.
      */
     const subquery = eb
       .selectFrom('spaceMembers')

@@ -1,9 +1,9 @@
 import { type Kysely, sql } from 'kysely';
 
 /**
- * Миграция совместимости:
- * исторический тип `text` заменяем на поддерживаемый `multiline_text`.
- * Это синхронизирует старые данные с новым контрактом API/UI.
+ * Compatibility Migration:
+ * We replace the historical type `text` with the supported `multiline_text`.
+ * This syncs the old data with the new API/UI contract.
  */
 export async function up(db: Kysely<unknown>): Promise<void> {
   await sql`
@@ -14,7 +14,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
 }
 
 /**
- * Откат возвращает прежнее значение для совместимости rollback-сценариев.
+ * Rollback returns the previous value for compatibility of rollback scripts.
  */
 export async function down(db: Kysely<unknown>): Promise<void> {
   await sql`

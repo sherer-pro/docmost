@@ -74,7 +74,7 @@ export function useUpdateDatabaseMutation(spaceId?: string, databaseId?: string)
 
 
 /**
- * Конвертирует базу данных в страницу и синхронно обновляет кэш дерева/деталей.
+ * Converts the database to a page and synchronously updates the tree/detail cache.
  */
 export function useConvertDatabaseToPageMutation(spaceId?: string, databaseId?: string) {
   return useMutation({
