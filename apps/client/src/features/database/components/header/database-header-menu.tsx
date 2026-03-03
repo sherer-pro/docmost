@@ -1,5 +1,5 @@
 import { ActionIcon, Menu, Text } from '@mantine/core';
-import { IconArrowRight, IconArrowsExchange, IconDots, IconLink, IconTrash } from '@tabler/icons-react';
+import { IconArrowRight, IconArrowsExchange, IconDots, IconLink, IconMessageCircle, IconTrash } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { modals } from '@mantine/modals';
 import { useDisclosure } from '@mantine/hooks';
@@ -33,6 +33,7 @@ import {
 } from '@/features/database/atoms/database-table-export-atom';
 import { buildDatabaseMarkdownFromState } from '@/features/database/utils/database-markdown';
 import { dropTreeNodeAtom } from '@/features/page/tree/atoms/tree-data-atom.ts';
+import { asideStateAtom } from '@/components/layouts/global/hooks/atoms/sidebar-atom.ts';
 
 interface DatabaseHeaderMenuProps {
   databaseId: string;
@@ -60,6 +61,7 @@ export default function DatabaseHeaderMenu({
   const { openDeleteModal } = useDeletePageModal();
   const { mutateAsync: removePageMutationAsync } = useRemovePageMutation();
   const dropTreeNode = useSetAtom(dropTreeNodeAtom);
+  const setAsideState = useSetAtom(asideStateAtom);
   const [exportOpened, { open: openExportModal, close: closeExportModal }] =
     useDisclosure(false);
   const [movePageModalOpened, { open: openMovePageModal, close: closeMovePageModal }] =
@@ -161,6 +163,10 @@ export default function DatabaseHeaderMenu({
 
   const openHistoryModal = () => {
     setHistoryModalOpen(true);
+  };
+
+  const handleOpenCommentsAside = () => {
+    setAsideState({ tab: 'comments', isAsideOpen: true });
   };
 
   const handleDeletePage = () => {
@@ -276,6 +282,12 @@ export default function DatabaseHeaderMenu({
           {hasDatabasePage && (
             <Menu.Item leftSection={<IconLink size={16} />} onClick={handleCopyDatabaseLink}>
               {t('Copy database link')}
+            </Menu.Item>
+          )}
+
+          {hasDatabasePage && (
+            <Menu.Item leftSection={<IconMessageCircle size={16} />} onClick={handleOpenCommentsAside}>
+              {t('Comments')}
             </Menu.Item>
           )}
 

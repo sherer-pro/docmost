@@ -33,8 +33,13 @@ import {
 
 function CommentListWithTabs() {
   const { t } = useTranslation();
-  const { pageSlug } = useParams();
-  const { data: page } = usePageQuery({ pageId: extractPageSlugId(pageSlug) });
+  const { pageSlug, databaseSlug } = useParams();
+  const pageSlugId = extractPageSlugId(pageSlug);
+  const databaseSlugId = extractPageSlugId(databaseSlug);
+
+  const { data: pageBySlug } = usePageQuery({ pageId: pageSlugId });
+  const { data: databasePageBySlug } = usePageQuery({ pageId: databaseSlugId });
+  const page = pageBySlug ?? databasePageBySlug;
   const {
     data: comments,
     isLoading: isCommentsLoading,
