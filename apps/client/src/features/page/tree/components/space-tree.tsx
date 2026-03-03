@@ -570,6 +570,8 @@ interface CreateNodeProps {
 }
 
 function CreateNode({ node, treeApi, onExpandTree }: CreateNodeProps) {
+  const [treeData, setTreeData] = useAtom(treeDataAtom);
+  const emit = useQueryEmit();
   const createDatabaseRowMutation = useCreateDatabaseRowMutation(
     node.data.databaseId ?? node.data.id,
   );
@@ -579,9 +581,49 @@ function CreateNode({ node, treeApi, onExpandTree }: CreateNodeProps) {
       return;
     }
 
-    await createDatabaseRowMutation.mutateAsync({
+    const createdRow = await createDatabaseRowMutation.mutateAsync({
       parentPageId: node.id,
     });
+
+    const treeNodeData: SpaceTreeNode = {
+      id: createdRow.pageId,
+      nodeType: "databaseRow",
+      slugId: null,
+      databaseId: createdRow.databaseId,
+      name: "",
+      position: "",
+      spaceId: node.data.spaceId,
+      parentPageId: node.id,
+      icon: null,
+      status: null,
+      hasChildren: false,
+      children: [],
+    };
+
+    const nextTree = new SimpleTree(treeData);
+    const parentChildrenCount = node.children?.length ?? 0;
+
+    nextTree.create({
+      parentId: node.id,
+      index: parentChildrenCount,
+      data: treeNodeData,
+    });
+    setTreeData(nextTree.data);
+
+    setTimeout(() => {
+      emit({
+        operation: "addTreeNode",
+        spaceId: node.data.spaceId,
+        payload: {
+          parentId: node.id,
+          index: parentChildrenCount,
+          node: treeNodeData,
+        },
+      });
+    }, 50);
+
+    queryClient.invalidateQueries({ queryKey: ["root-sidebar-pages"] });
+    queryClient.invalidateQueries({ queryKey: ["sidebar-pages"] });
 
     if (node.isClosed) {
       node.open();
