@@ -1,10 +1,10 @@
 import { ISpace } from "@/features/space/types/space.types.ts";
 
 /**
- * Настройки страницы, хранящиеся в `pages.settings`.
+ * Page settings stored in `pages.settings`.
  *
- * `fullPageWidth` используется для локального режима ширины страницы,
- * остальные ключи зарезервированы под расширяемые document fields.
+ * `fullPageWidth` is used for local page width mode,
+ * the remaining keys are reserved for expandable document fields.
  */
 export interface PageSettings {
   fullPageWidth?: boolean;
@@ -92,9 +92,9 @@ export interface ICopyPageToSpace {
 export type SidebarNodeType = 'page' | 'database' | 'databaseRow';
 
 /**
- * Унифицированный контракт узла для sidebar-дерева.
+ * Unified node contract for sidebar tree.
  *
- * nodeType определяет роутинг и набор действий в контекстном меню.
+ * nodeType determines the routing and set of actions in the context menu.
  */
 export interface ISidebarNode {
   id: string;

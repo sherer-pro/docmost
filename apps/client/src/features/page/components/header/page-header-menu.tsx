@@ -155,10 +155,10 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
   const [user] = useAtom(userAtom);
 
   /**
-   * Явный приоритет вычисления ширины страницы:
-   * 1) локальная настройка документа;
-   * 2) глобальная пользовательская настройка;
-   * 3) безопасный fallback `false`.
+   * Explicit priority for calculating page width:
+   * 1) local document setup;
+   * 2) global user setting;
+   * 3) safe fallback `false`.
    */
   const fullPageWidth = page?.settings?.fullPageWidth ?? user.settings?.preferences?.fullPageWidth ?? false;
   const pageUpdatedAt = useTimeAgo(page?.updatedAt);

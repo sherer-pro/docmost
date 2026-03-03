@@ -1,10 +1,10 @@
 import { Kysely, sql } from 'kysely';
 
 /**
- * Добавляет каноническую привязку database-узла к странице дерева.
+ * Adds a canonical database node binding to the tree page.
  *
- * page_id указывает на «узел-контейнер» базы в таблице pages,
- * что позволяет использовать единый механизм parent/position для sidebar.
+ * page_id points to the “container node” of the database in the pages table,
+ * which allows you to use a single parent/position mechanism for the sidebar.
  */
 export async function up(db: Kysely<any>): Promise<void> {
   await db.schema

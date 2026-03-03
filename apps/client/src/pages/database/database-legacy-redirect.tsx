@@ -6,13 +6,13 @@ import { useLegacyCanonicalRedirect } from "@/features/page/hooks/use-legacy-can
 import { useParams } from "react-router-dom";
 
 /**
- * Временный обработчик legacy URL формата `/s/:spaceSlug/databases/:databaseId`.
+ * Temporary handler for legacy URL format `/s/:spaceSlug/databases/:databaseId`.
  *
- * Компонент содержит только предметную часть:
- * - загрузка database и связанной page;
- * - построение канонического URL `/s/:spaceSlug/db/:databaseSlug`.
+ * The component contains only the subject part:
+ * - loading the database and related page;
+ * - building the canonical URL `/s/:spaceSlug/db/:databaseSlug`.
  *
- * Повторяющиеся части (аудит, redirect, 410-экран) вынесены в общий слой.
+ * Repeating parts (audit, redirect, 410 screen) are placed in a common layer.
  */
 export default function DatabaseLegacyRedirect() {
   const { databaseId, spaceSlug } = useParams();

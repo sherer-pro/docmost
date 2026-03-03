@@ -13,7 +13,7 @@ export class DatabaseCellRepo {
   constructor(@InjectKysely() private readonly db: KyselyDB) {}
 
   /**
-   * Создаёт значение ячейки для конкретной строки и свойства.
+   * Creates a cell value for a specific row and property.
    */
   async insertCell(
     payload: InsertableDatabaseCell,
@@ -27,7 +27,7 @@ export class DatabaseCellRepo {
   }
 
   /**
-   * Возвращает все ячейки страницы в рамках базы данных.
+   * Returns all page cells within the database.
    */
   async findByDatabaseAndPage(
     databaseId: string,
@@ -43,7 +43,7 @@ export class DatabaseCellRepo {
   }
 
   /**
-   * Обновляет содержимое ячейки.
+   * Updates the contents of a cell.
    */
   async updateCell(
     id: string,
@@ -59,7 +59,7 @@ export class DatabaseCellRepo {
   }
 
   /**
-   * Создаёт или обновляет ячейку по уникальному ключу (databaseId, pageId, propertyId).
+   * Creates or updates a cell using a unique key (databaseId, pageId, propertyId).
    */
   async upsertCell(
     payload: InsertableDatabaseCell,
@@ -84,7 +84,7 @@ export class DatabaseCellRepo {
   }
 
   /**
-   * Мягко удаляет все ячейки базы данных при её архивировании.
+   * Gently deletes all database cells when archiving it.
    */
   async softDeleteByDatabaseId(
     databaseId: string,
@@ -101,7 +101,7 @@ export class DatabaseCellRepo {
   }
 
   /**
-   * Восстанавливает ячейки базы данных после обратной конвертации в table-view.
+   * Restores database cells after converting back to table-view.
    */
   async restoreByDatabaseId(
     databaseId: string,

@@ -43,7 +43,7 @@ const EMPTY_DESCRIPTION_DOC: JSONContent = {
 };
 
 /**
- * Преобразует plain-text описание в Tiptap JSON, если rich-контент отсутствует.
+ * Converts a plain-text description to Tiptap JSON if there is no rich content.
  */
 function getDescriptionDoc(
   richDescription?: unknown,
@@ -119,10 +119,10 @@ export default function DatabasePage() {
     currentUser?.user?.settings?.preferences?.pageEditMode ?? PageEditMode.Edit;
 
   /**
-   * Приоритет режима ширины для database-page синхронизирован с обычной Page:
-   * 1) локальная настройка database-page;
-   * 2) пользовательская настройка по умолчанию;
-   * 3) fallback в `false`.
+   * Width mode precedence for a database page mirrors a regular page:
+   * 1) database-page local setting;
+   * 2) user default preference;
+   * 3) safe fallback to `false`.
    */
   const resolvedFullWidth =
     databasePage?.settings?.fullPageWidth ??
@@ -158,7 +158,7 @@ export default function DatabasePage() {
   }, [database?.id]);
 
   /**
-   * Унифицированный автосейв метаданных базы (заголовок/описание).
+   * Unified autosave of database metadata (title/description).
    */
   const commitMetaChanges = useCallback(
     async (patch: IUpdateDatabasePayload) => {
@@ -178,9 +178,9 @@ export default function DatabasePage() {
         }
 
         /**
-         * После rename backend может вернуть новый slug связанной страницы базы.
-         * Сразу переключаем URL на canonical маршрут, чтобы клиент/адресная строка
-         * оставались синхронизированы без перезагрузки.
+         * After rename, the backend can return a new slug for the linked database page.
+         * Immediately switch to the canonical URL so the client state and address bar
+         * stay synchronized without a full reload.
          */
         if (
           typeof patch.name === 'string' &&

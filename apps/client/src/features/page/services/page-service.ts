@@ -18,11 +18,11 @@ import { IAttachment } from '@/features/attachments/types/attachment.types.ts';
 
 
 /**
- * Приводит `settings` страницы к совместимому клиентскому виду.
+ * Makes the page's `settings` look client-side compatible.
  *
- * Старые ответы API могли вернуть `settings: null`, а часть ответов —
- * не вернуть поле вовсе. Для фронтенда это должно выглядеть как
- * `settings === undefined`, чтобы сработал fallback на user preference.
+ * Old API responses might return `settings: null`, and some of the responses would be
+ * do not return the field at all. For the frontend it should look like
+ * `settings === undefined` so that fallback on user preference works.
  */
 function normalizePage<T extends IPage>(page: T): T {
   if (!page || typeof page !== 'object') {
@@ -235,7 +235,7 @@ export async function getLinkPreview(url: string): Promise<LinkPreviewResult> {
 
 
 /**
- * DTO результата конвертации page -> database.
+ * DTO of the conversion result page -> database.
  */
 export interface ConvertPageToDatabaseResult {
   databaseId: string;
@@ -243,7 +243,7 @@ export interface ConvertPageToDatabaseResult {
 }
 
 /**
- * Конвертирует страницу в базу данных.
+ * Converts a page to a database.
  */
 export async function convertPageToDatabase(pageId: string): Promise<ConvertPageToDatabaseResult> {
   const req = await api.post<ConvertPageToDatabaseResult>(`/pages/${pageId}/convert-to-database`);

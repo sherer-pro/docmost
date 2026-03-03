@@ -39,7 +39,7 @@ export class DatabaseController {
   constructor(private readonly databaseService: DatabaseService) {}
 
   /**
-   * Создаёт базу данных.
+   * Creates a database.
    */
   @HttpCode(HttpStatus.OK)
   @Post()
@@ -52,7 +52,7 @@ export class DatabaseController {
   }
 
   /**
-   * Возвращает список баз данных по spaceId.
+   * Returns a list of databases by spaceId.
    */
   @Get()
   async list(
@@ -63,7 +63,7 @@ export class DatabaseController {
   }
 
   /**
-   * Возвращает одну базу данных.
+   * Returns one database.
    */
   @Get(':databaseId')
   async getOne(
@@ -74,7 +74,7 @@ export class DatabaseController {
   }
 
   /**
-   * Обновляет базу данных.
+   * Updates the database.
    */
   @Patch(':databaseId')
   async update(
@@ -92,7 +92,7 @@ export class DatabaseController {
   }
 
   /**
-   * Удаляет базу данных (soft delete).
+   * Deletes a database (soft delete).
    */
   @HttpCode(HttpStatus.NO_CONTENT)
   @Delete(':databaseId')
@@ -105,7 +105,7 @@ export class DatabaseController {
 
 
   /**
-   * Конвертирует базу данных обратно в обычную страницу.
+   * Converts the database back to a regular page.
    */
   @HttpCode(HttpStatus.OK)
   @Post(':databaseId/convert-to-page')
@@ -122,7 +122,7 @@ export class DatabaseController {
   }
 
   /**
-   * Создаёт новое свойство базы данных.
+   * Creates a new database property.
    */
   @Post(':databaseId/properties')
   async createProperty(
@@ -140,7 +140,7 @@ export class DatabaseController {
   }
 
   /**
-   * Возвращает список свойств базы данных.
+   * Returns a list of database properties.
    */
   @Get(':databaseId/properties')
   async listProperties(
@@ -151,7 +151,7 @@ export class DatabaseController {
   }
 
   /**
-   * Обновляет свойство базы данных.
+   * Updates a database property.
    */
   @Patch(':databaseId/properties/:propertyId')
   async updateProperty(
@@ -169,7 +169,7 @@ export class DatabaseController {
   }
 
   /**
-   * Удаляет свойство базы данных (soft delete).
+   * Deletes a database property (soft delete).
    */
   @HttpCode(HttpStatus.NO_CONTENT)
   @Delete(':databaseId/properties/:propertyId')
@@ -182,7 +182,7 @@ export class DatabaseController {
   }
 
   /**
-   * Создаёт строку в базе данных.
+   * Creates a row in the database.
    */
   @Post(':databaseId/rows')
   async createRow(
@@ -195,7 +195,7 @@ export class DatabaseController {
   }
 
   /**
-   * Возвращает список строк базы данных.
+   * Returns a list of database rows.
    */
   @Get(':databaseId/rows')
   async listRows(
@@ -229,7 +229,7 @@ export class DatabaseController {
   }
 
   /**
-   * Выполняет батч-обновление ячеек для строки.
+   * Performs a batch update of cells for a row.
    */
   @Patch(':databaseId/rows/:pageId/cells')
   async batchUpdateRowCells(
@@ -251,7 +251,7 @@ export class DatabaseController {
 
 
   /**
-   * Возвращает markdown-представление таблицы базы данных.
+   * Returns a markdown representation of the database table.
    */
   @Get(':databaseId/markdown')
   async getMarkdown(
@@ -269,7 +269,7 @@ export class DatabaseController {
   }
 
   /**
-   * Экспортирует базу данных в файл.
+   * Exports the database to a file.
    */
   @HttpCode(HttpStatus.OK)
   @Post(':databaseId/export')
@@ -296,7 +296,7 @@ export class DatabaseController {
     res.send(exported.fileBuffer ?? exported.fileStream);
   }
   /**
-   * Создаёт представление базы данных.
+   * Creates a database view.
    */
   @Post(':databaseId/views')
   async createView(
@@ -309,7 +309,7 @@ export class DatabaseController {
   }
 
   /**
-   * Возвращает список представлений базы данных.
+   * Returns a list of database views.
    */
   @Get(':databaseId/views')
   async listViews(
@@ -320,7 +320,7 @@ export class DatabaseController {
   }
 
   /**
-   * Обновляет представление базы данных.
+   * Updates the database view.
    */
   @Patch(':databaseId/views/:viewId')
   async updateView(
@@ -333,7 +333,7 @@ export class DatabaseController {
   }
 
   /**
-   * Удаляет представление базы данных (soft delete).
+   * Deletes a database view (soft delete).
    */
   @HttpCode(HttpStatus.NO_CONTENT)
   @Delete(':databaseId/views/:viewId')

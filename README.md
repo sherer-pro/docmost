@@ -151,6 +151,12 @@ For frontend changes:
 pnpm --filter ./apps/client lint
 ```
 
+For comment-language validation (required):
+
+```bash
+pnpm check:comments:en
+```
+
 Runtime/tooling baseline used in this repository:
 
 - Node.js 22.x

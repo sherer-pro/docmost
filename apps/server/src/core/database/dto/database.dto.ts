@@ -28,17 +28,17 @@ export enum DatabaseExportFormat {
 }
 
 /**
- * DTO для создания базы данных внутри пространства.
+ * DTO for creating a database within a space.
  */
 export class CreateDatabaseDto {
   @IsUUID()
   spaceId: string;
 
   /**
-   * Идентификатор страницы-родителя в дереве.
+   * ID of the parent page in the tree.
    *
-   * Если передан, database-узел будет создан как дочерний элемент этой страницы.
-   * Если не передан — база создаётся в корне пространства.
+   * If passed, the database node will be created as a child of this page.
+   * If not passed, the base is created at the root of the space.
    */
   @IsOptional()
   @IsUUID()
@@ -55,7 +55,7 @@ export class CreateDatabaseDto {
   description?: string;
 
   /**
-   * Rich-text контент описания в формате JSON (Tiptap/ProseMirror).
+   * Rich-text description content in JSON format (Tiptap/ProseMirror).
    */
   @IsOptional()
   descriptionContent?: JsonValue;
@@ -67,7 +67,7 @@ export class CreateDatabaseDto {
 }
 
 /**
- * DTO для обновления метаданных базы данных.
+ * DTO for updating database metadata.
  */
 export class UpdateDatabaseDto {
   @IsOptional()
@@ -81,7 +81,7 @@ export class UpdateDatabaseDto {
   description?: string;
 
   /**
-   * Rich-text контент описания в формате JSON (Tiptap/ProseMirror).
+   * Rich-text description content in JSON format (Tiptap/ProseMirror).
    */
   @IsOptional()
   descriptionContent?: JsonValue;
@@ -93,7 +93,7 @@ export class UpdateDatabaseDto {
 }
 
 /**
- * DTO query-параметров для фильтрации по пространству.
+ * DTO query parameters for filtering by space.
  */
 export class ListDatabasesQueryDto {
   @IsUUID()
@@ -125,7 +125,7 @@ export class SelectPropertySettingsDto {
 }
 
 /**
- * DTO для создания свойства (колонки) в базе данных.
+ * DTO for creating a property (column) in the database.
  */
 export class CreateDatabasePropertyDto {
   @IsString()
@@ -147,7 +147,7 @@ export class CreateDatabasePropertyDto {
 }
 
 /**
- * DTO для обновления свойства базы данных.
+ * DTO for updating a database property.
  */
 export class UpdateDatabasePropertyDto {
   @IsOptional()
@@ -171,7 +171,7 @@ export class UpdateDatabasePropertyDto {
 }
 
 /**
- * DTO для создания новой строки базы данных.
+ * DTO to create a new database row.
  */
 export class CreateDatabaseRowDto {
   @IsOptional()
@@ -197,7 +197,7 @@ export class DatabaseUserCellValueDto {
 }
 
 /**
- * DTO одного значения ячейки при батч-обновлении.
+ * DTO of one cell value during batch update.
  */
 export class BatchUpdateDatabaseCellValueDto {
   @IsUUID()
@@ -216,7 +216,7 @@ export class BatchUpdateDatabaseCellValueDto {
 }
 
 /**
- * DTO для батч-обновления ячеек строки.
+ * DTO for batch updating row cells.
  */
 export class BatchUpdateDatabaseCellsDto {
   @IsArray()
@@ -226,7 +226,7 @@ export class BatchUpdateDatabaseCellsDto {
 }
 
 /**
- * DTO для создания нового представления базы данных.
+ * DTO to create a new database view.
  */
 export class CreateDatabaseViewDto {
   @IsString()
@@ -244,7 +244,7 @@ export class CreateDatabaseViewDto {
 }
 
 /**
- * DTO для обновления представления базы данных.
+ * DTO for updating the database view.
  */
 export class UpdateDatabaseViewDto {
   @IsOptional()
@@ -270,7 +270,7 @@ export class DatabaseRowPageIdDto {
 }
 
 /**
- * DTO для экспорта базы данных в файл.
+ * DTO for exporting a database to a file.
  */
 export class ExportDatabaseDto {
   @IsString()

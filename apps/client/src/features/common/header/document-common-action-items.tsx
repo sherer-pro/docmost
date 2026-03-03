@@ -24,8 +24,8 @@ interface DocumentCommonActionItemsProps {
 }
 
 /**
- * Общие пункты меню документа используют page-scope переключатель,
- * чтобы ширина могла переопределяться на уровне конкретной страницы.
+ * Common document menu items use the page-scope switch,
+ * so that the width can be overridden at the level of a specific page.
  */
 export function DocumentCommonActionItems({
   onCopyLink,

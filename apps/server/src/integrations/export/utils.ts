@@ -10,9 +10,9 @@ import { isAttachmentNode } from '../../common/helpers/prosemirror/utils';
 export type PageExportTree = Record<string, Page[]>;
 
 /**
- * Поддерживаем только canonical-внутренние ссылки формата
- * `/s/:spaceSlug/p/:pageSlug` (с опциональным origin).
- * Legacy-формат `/p/:pageSlug` больше не учитывается как активный.
+ * We only support canonical internal links format
+ * `/s/:spaceSlug/p/:pageSlug` (with optional origin).
+ * Legacy format `/p/:pageSlug` is no longer counted as active.
  */
 export const INTERNAL_LINK_REGEX =
   /^(https?:\/\/)?([^\/]+)?\/s\/([^\/]+)\/p\/([a-zA-Z0-9-]+)\/?$/;

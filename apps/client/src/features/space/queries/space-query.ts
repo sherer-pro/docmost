@@ -127,9 +127,9 @@ export function useUpdateSpaceMutation() {
 
 
       /**
-       * Обновляем все списки строк баз данных после изменения настроек
-       * document fields в space, чтобы UI таблиц/дерева не требовал
-       * ручного перезахода.
+       * Update all lists of database strings after changing settings
+       * document fields in space so that the UI of tables/trees does not require
+       * manual restart.
        */
       queryClient.invalidateQueries({
         predicate: (item) =>

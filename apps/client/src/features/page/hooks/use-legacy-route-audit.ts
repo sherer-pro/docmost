@@ -4,14 +4,14 @@ import { useEffect } from 'react';
 const LEGACY_ROUTE_AUDIT_KEY = 'docmost.legacyRouteAuditCounters';
 
 /**
- * Временный аудит legacy-роутов.
+ * Temporary audit of legacy routes.
  *
- * Что делает:
- * 1) увеличивает локальный счетчик в sessionStorage, чтобы можно было быстро
- *    посмотреть частоту срабатываний в рамках текущей сессии браузера;
- * 2) отправляет событие в PostHog, чтобы собрать агрегированную метрику
- *    на период наблюдения;
- * 3) пишет предупреждение в консоль для локальной диагностики.
+ * What it does:
+ * 1) increases the local counter in sessionStorage so that you can quickly
+ * see the frequency of responses within the current browser session;
+ * 2) sends an event to PostHog to collect the aggregated metric
+ * for the observation period;
+ * 3) writes a warning to the console for local diagnostics.
  */
 export function useLegacyRouteAudit(routeType: 'legacy_page' | 'legacy_database', legacyPath?: string) {
   const posthog = usePostHog();
@@ -27,7 +27,7 @@ export function useLegacyRouteAudit(routeType: 'legacy_page' | 'legacy_database'
       counters[routeType] = (counters[routeType] ?? 0) + 1;
       window.sessionStorage.setItem(LEGACY_ROUTE_AUDIT_KEY, JSON.stringify(counters));
     } catch {
-      // Хранилище может быть недоступно в ограниченных окружениях браузера.
+      // Storage may not be available in restricted browser environments.
     }
 
     posthog?.capture('legacy_route_hit', {

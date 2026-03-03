@@ -19,10 +19,10 @@ export const appendNodeChildrenAtom = atom(
 );
 
 /**
- * Единая atom-операция удаления узла из дерева.
+ * A single atom operation to remove a node from a tree.
  *
- * Важно: удаление каскадное — вместе с дочерними узлами (например, databaseRow),
- * чтобы локальное дерево после удаления database-page не содержало «висячие» ноды.
+ * Important: cascade deletion - together with child nodes (for example, databaseRow),
+ * so that the local tree after deleting the database-page does not contain “dangling” nodes.
  */
 export const dropTreeNodeAtom = atom(null, (get, set, nodeId: string) => {
   const currentTree = get(treeDataAtom);

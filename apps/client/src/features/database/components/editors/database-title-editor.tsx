@@ -20,14 +20,14 @@ export interface DatabaseTitleEditorProps {
 }
 
 /**
- * Редактор заголовка базы данных.
+ * Database header editor.
  *
- * Адаптер повторяет ключевую UX-логику `TitleEditor`:
- * - H1-структура и placeholder `Untitled`;
- * - debounce-автосохранение;
- * - форс-сохранение при размонтировании;
- * - фокус в конец заголовка после инициализации;
- * - блокировка `mod+s` и поддержка `mod+k`.
+ * The adapter repeats the key UX logic of `TitleEditor`:
+ * - H1-structure and placeholder `Untitled`;
+ * - debounce autosave;
+ * - force saving when unmounting;
+ * - focus to the end of the header after initialization;
+ * - `mod+s` blocking and `mod+k` support.
  */
 export function DatabaseTitleEditor({
   databaseId,
