@@ -106,33 +106,9 @@ export const updateTreeNodeIcon = (
   });
 };
 
-export const deleteTreeNode = (
-  nodes: SpaceTreeNode[],
-  nodeId: string,
-): SpaceTreeNode[] => {
-  return nodes
-    .map((node) => {
-      if (node.id === nodeId) {
-        return null;
-      }
-
-      if (node.children && node.children.length > 0) {
-        return {
-          ...node,
-          children: deleteTreeNode(node.children, nodeId),
-        };
-      }
-      return node;
-    })
-    .filter((node) => node !== null);
-};
-
 /**
- * Удаляет узел и всё его поддерево из локального дерева так же,
- * как это делает `SimpleTree.drop` в drag-n-drop сценариях.
- *
- * Используем этот helper как единый источник правды для page/database удаления,
- * чтобы parent/children связи и флаг `hasChildren` обновлялись консистентно.
+ * Removes a node and its subtree from local tree state by delegating to
+ * `SimpleTree.drop`, so tree structure and parent metadata remain consistent.
  */
 export const dropTreeNode = (
   nodes: SpaceTreeNode[],
@@ -147,6 +123,17 @@ export const dropTreeNode = (
   treeApi.drop({ id: nodeId });
 
   return treeApi.data;
+};
+
+/**
+ * @deprecated Use `dropTreeNode` directly. This compatibility wrapper will be
+ * removed after 2026-06-30.
+ */
+export const deleteTreeNode = (
+  nodes: SpaceTreeNode[],
+  nodeId: string,
+): SpaceTreeNode[] => {
+  return dropTreeNode(nodes, nodeId);
 };
 
 export function buildTreeWithChildren(items: SpaceTreeNode[]): SpaceTreeNode[] {
