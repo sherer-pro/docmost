@@ -17,6 +17,12 @@ import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EventName } from '../../../common/events/event.contants';
 
+/**
+ * Идентификатор страницы, который может быть внутренним UUID (`id`)
+ * либо публичным маршрутизируемым идентификатором (`slugId`).
+ */
+type PageIdentifier = string;
+
 @Injectable()
 export class PageRepo {
   constructor(
@@ -174,25 +180,50 @@ export class PageRepo {
 
   async updatePage(
     updatablePage: UpdatablePage,
-    pageId: string,
+    pageId: PageIdentifier,
     trx?: KyselyTransaction,
   ) {
     return this.updatePages(this.normalizeSettings(updatablePage), [pageId], trx);
   }
 
+  /**
+   * Обновляет страницы по набору смешанных идентификаторов:
+   * UUID поля `id` и/или строковых `slugId`.
+   */
   async updatePages(
     updatePageData: UpdatablePage,
-    pageIds: string[],
+    pageIds: PageIdentifier[],
     trx?: KyselyTransaction,
   ) {
+    const uuidIds = pageIds.filter((pageId) => isValidUUID(pageId));
+    const slugIds = pageIds.filter((pageId) => !isValidUUID(pageId));
+
+    if (uuidIds.length === 0 && slugIds.length === 0) {
+      return {
+        numUpdatedRows: BigInt(0),
+      };
+    }
+
     const result = await dbOrTx(this.db, trx)
       .updateTable('pages')
       .set({ ...this.normalizeSettings(updatePageData), updatedAt: new Date() })
-      .where(
-        pageIds.some((pageId) => !isValidUUID(pageId)) ? 'slugId' : 'id',
-        'in',
-        pageIds,
-      )
+      .where((eb) => {
+        const conditions = [];
+
+        if (uuidIds.length > 0) {
+          conditions.push(eb('id', 'in', uuidIds));
+        }
+
+        if (slugIds.length > 0) {
+          conditions.push(eb('slugId', 'in', slugIds));
+        }
+
+        if (conditions.length === 1) {
+          return conditions[0];
+        }
+
+        return eb.or(conditions);
+      })
       .executeTakeFirst();
 
     this.eventEmitter.emit(EventName.PAGE_UPDATED, {
