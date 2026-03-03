@@ -18,10 +18,18 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EventName } from '../../../common/events/event.contants';
 
 /**
- * Идентификатор страницы, который может быть внутренним UUID (`id`)
- * либо публичным маршрутизируемым идентификатором (`slugId`).
+ * External page identifier that can be either:
+ * - internal UUID from `id`;
+ * - public route identifier from `slugId`.
  */
 type PageIdentifier = string;
+
+/**
+ * Identifier strategy in PageRepo:
+ * - read/update/delete accept mixed identifiers (UUID + slugId);
+ * - remove/restore accept mixed identifiers but always resolve to UUID,
+ *   because recursive CTE queries and relations operate on `pages.id`.
+ */
 
 @Injectable()
 export class PageRepo {
@@ -69,6 +77,23 @@ export class PageRepo {
       ...payload,
       settings: null,
     };
+  }
+
+  /**
+   * Resolves a mixed page identifier into UUID `pages.id`.
+   *
+   * UUID input is returned as-is, while `slugId` is resolved via lookup.
+   */
+  private async resolvePageId(
+    pageIdentifier: PageIdentifier,
+    trx?: KyselyTransaction,
+  ): Promise<string | null> {
+    if (isValidUUID(pageIdentifier)) {
+      return pageIdentifier;
+    }
+
+    const page = await this.findBySlugId(pageIdentifier, { trx });
+    return page?.id ?? null;
   }
 
   async findById(
@@ -266,10 +291,16 @@ export class PageRepo {
   }
 
   async removePage(
-    pageId: string,
+    pageIdentifier: PageIdentifier,
     deletedById: string,
     workspaceId: string,
   ): Promise<void> {
+    const pageId = await this.resolvePageId(pageIdentifier);
+
+    if (!pageId) {
+      return;
+    }
+
     const currentDate = new Date();
 
     const descendants = await this.db
@@ -312,7 +343,16 @@ export class PageRepo {
     }
   }
 
-  async restorePage(pageId: string, workspaceId: string): Promise<void> {
+  async restorePage(
+    pageIdentifier: PageIdentifier,
+    workspaceId: string,
+  ): Promise<void> {
+    const pageId = await this.resolvePageId(pageIdentifier);
+
+    if (!pageId) {
+      return;
+    }
+
     // First, check if the page being restored has a deleted parent
     const pageToRestore = await this.db
       .selectFrom('pages')
