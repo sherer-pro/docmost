@@ -80,6 +80,15 @@ export class PageRepo {
       trx?: KyselyTransaction;
     },
   ): Promise<Page> {
+    /**
+     * Совместимость со старыми клиентами:
+     * endpoint /api/pages/info исторически может получать как UUID `id`,
+     * так и короткий route-идентификатор `slugId`.
+     */
+    if (!isValidUUID(pageId)) {
+      return this.findByIdentifier('slugId', pageId, opts);
+    }
+
     return this.findByIdentifier('id', pageId, opts);
   }
 
