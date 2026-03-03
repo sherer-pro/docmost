@@ -9,20 +9,18 @@ import {
 } from '@docmost/db/types/entity.types';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import { executeWithCursorPagination } from '@docmost/db/pagination/cursor-pagination';
-import { validate as isValidUUID } from 'uuid';
 import { ExpressionBuilder, sql } from 'kysely';
 import { DB } from '@docmost/db/types/db';
 import { jsonArrayFrom, jsonObjectFrom } from 'kysely/helpers/postgres';
 import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EventName } from '../../../common/events/event.contants';
-
-/**
- * External page identifier that can be either:
- * - internal UUID from `id`;
- * - public route identifier from `slugId`.
- */
-type PageIdentifier = string;
+import {
+  getPageIdentifierColumn,
+  PageIdentifier,
+  resolveCanonicalPageId,
+  splitPageIdentifiers,
+} from './page-identifier.util';
 
 /**
  * Identifier strategy in PageRepo:
@@ -88,12 +86,10 @@ export class PageRepo {
     pageIdentifier: PageIdentifier,
     trx?: KyselyTransaction,
   ): Promise<string | null> {
-    if (isValidUUID(pageIdentifier)) {
-      return pageIdentifier;
-    }
-
-    const page = await this.findBySlugId(pageIdentifier, { trx });
-    return page?.id ?? null;
+    return resolveCanonicalPageId(pageIdentifier, async (slugId) => {
+      const page = await this.findBySlugId(slugId, { trx });
+      return page?.id ?? null;
+    });
   }
 
   async findById(
@@ -116,11 +112,7 @@ export class PageRepo {
      * endpoint /api/pages/info исторически может получать как UUID `id`,
      * так и короткий route-идентификатор `slugId`.
      */
-    if (!isValidUUID(pageId)) {
-      return this.findByIdentifier('slugId', pageId, opts);
-    }
-
-    return this.findByIdentifier('id', pageId, opts);
+    return this.findByIdentifier(getPageIdentifierColumn(pageId), pageId, opts);
   }
 
   /**
@@ -220,8 +212,7 @@ export class PageRepo {
     pageIds: PageIdentifier[],
     trx?: KyselyTransaction,
   ) {
-    const uuidIds = pageIds.filter((pageId) => isValidUUID(pageId));
-    const slugIds = pageIds.filter((pageId) => !isValidUUID(pageId));
+    const { uuidIds, slugIds } = splitPageIdentifiers(pageIds);
 
     if (uuidIds.length === 0 && slugIds.length === 0) {
       return {
@@ -281,11 +272,7 @@ export class PageRepo {
   async deletePage(pageId: string): Promise<void> {
     let query = this.db.deleteFrom('pages');
 
-    if (isValidUUID(pageId)) {
-      query = query.where('id', '=', pageId);
-    } else {
-      query = query.where('slugId', '=', pageId);
-    }
+    query = query.where(getPageIdentifierColumn(pageId), '=', pageId);
 
     await query.execute();
   }
