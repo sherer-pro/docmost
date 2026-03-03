@@ -4,17 +4,26 @@
 
 Legacy-маршруты для database/page URL больше не являются основным способом навигации.
 
-- Удалена прямая legacy-ветка для database-экрана в формате:
-  - `/s/:spaceSlug/databases/:databaseId`
-- Canonical формат:
-  - database: `/s/:spaceSlug/db/:databaseSlug`
-  - page: `/s/:spaceSlug/p/:pageSlug`
+- Основной формат database-ссылок в клиенте: `/s/:spaceSlug/db/:databaseSlug` (по `slugId`).
+- Основной формат page-ссылок в клиенте: `/s/:spaceSlug/p/:pageSlug`.
 
-Для оставшихся legacy-переходов включен временный диагностический слой:
+Legacy-ветка `/s/:spaceSlug/databases/:databaseId` оставлена только как **временный fallback** для сценариев, где в tree payload временно отсутствует `slugId` у database-узла.
 
-- аудит обращений (лог + продуктовая метрика `legacy_route_hit`);
-- клиентский redirect в canonical URL, если данные можно разрешить;
-- явный 410-подобный экран, если legacy URL уже не может быть сопоставлен.
+## Текущее поведение клиента (зафиксированный приоритет)
+
+Построение URL для database-узлов централизовано в `buildDatabaseNodeUrl` (`apps/client/src/features/page/page.utils.ts`) и работает в едином порядке:
+
+1. Канонический URL по `slugId`: `/s/:spaceSlug/db/:databaseSlug`.
+2. Временный fallback по `databaseId`: `/s/:spaceSlug/databases/:databaseId`.
+3. Если нет данных для маршрута — возврат на `/s/:spaceSlug`.
+
+Для fallback добавлен явный срок жизни в `DATABASE_ROUTE_FALLBACK_CONFIG`:
+
+- `enabled: true`
+- `removeBy: '2026-03-31'`
+- `ticket: 'DOC-2471'`
+
+После закрытия `DOC-2471` fallback должен быть удален полностью.
 
 ## Проверка на отсутствие legacy-форматов в активных шаблонах/экспортах
 
