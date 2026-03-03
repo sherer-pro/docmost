@@ -5,6 +5,12 @@ import { ICreateDatabasePayload } from "@/features/database/types/database.types
 import { IUpdateDatabasePayload } from "@/features/database/types/database.types";
 import { convertDatabaseToPage, updateDatabase } from "@/features/database/services/database-service";
 import { queryClient } from "@/main";
+import {
+  invalidateDatabaseEntity,
+  invalidateDatabaseRowContext,
+  invalidatePageEntity,
+  invalidateSidebarTree,
+} from "@/features/page/queries/cache-invalidation";
 
 /**
  * Returns the list of databases for the selected space.
@@ -42,9 +48,8 @@ export function useCreateDatabaseMutation(spaceId?: string) {
   return useMutation({
     mutationFn: (payload: ICreateDatabasePayload) => createDatabase(payload),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["databases", "space", spaceId] });
-      queryClient.invalidateQueries({ queryKey: ["root-sidebar-pages", spaceId] });
-      queryClient.invalidateQueries({ queryKey: ["sidebar-pages"] });
+      invalidateDatabaseEntity({ spaceId }, { client: queryClient });
+      invalidateSidebarTree({ spaceId }, { client: queryClient });
     },
   });
 }
@@ -61,12 +66,8 @@ export function useUpdateDatabaseMutation(spaceId?: string, databaseId?: string)
     mutationFn: (payload: IUpdateDatabasePayload) =>
       updateDatabase(databaseId as string, payload),
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["database", databaseId],
-      });
-      queryClient.invalidateQueries({ queryKey: ["databases", "space", spaceId] });
-      queryClient.invalidateQueries({ queryKey: ["root-sidebar-pages", spaceId] });
-      queryClient.invalidateQueries({ queryKey: ["sidebar-pages"] });
+      invalidateDatabaseEntity({ databaseId, spaceId }, { client: queryClient });
+      invalidateSidebarTree({ spaceId }, { client: queryClient });
     },
   });
 }
@@ -79,19 +80,10 @@ export function useConvertDatabaseToPageMutation(spaceId?: string, databaseId?: 
   return useMutation({
     mutationFn: () => convertDatabaseToPage(databaseId as string),
     onSuccess: (page) => {
-      queryClient.invalidateQueries({ queryKey: ['database', databaseId] });
-      queryClient.invalidateQueries({ queryKey: ['databases', 'space', spaceId] });
-      queryClient.invalidateQueries({ queryKey: ['root-sidebar-pages', spaceId] });
-      queryClient.invalidateQueries({ queryKey: ['sidebar-pages'] });
-      queryClient.invalidateQueries({ queryKey: ['database', databaseId, 'rows'] });
-      queryClient.invalidateQueries({ queryKey: ['database', 'row-context'] });
-
-      if (page?.id) {
-        queryClient.invalidateQueries({ queryKey: ['pages', page.id] });
-      }
-      if (page?.slugId) {
-        queryClient.invalidateQueries({ queryKey: ['pages', page.slugId] });
-      }
+      invalidateDatabaseEntity({ databaseId, spaceId }, { client: queryClient });
+      invalidateSidebarTree({ spaceId }, { client: queryClient });
+      invalidateDatabaseRowContext({ databaseId }, { client: queryClient });
+      invalidatePageEntity({ pageId: page?.id, pageSlugId: page?.slugId }, { client: queryClient });
     },
   });
 }
