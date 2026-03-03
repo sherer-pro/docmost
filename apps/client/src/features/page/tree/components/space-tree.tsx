@@ -326,11 +326,13 @@ const buildDatabaseNodeUrl = (
   spaceSlug: string,
   node: SpaceTreeNode,
 ): string => {
-  if (!node.slugId) {
+  const databaseSlugId = node.slugId ?? node.id;
+
+  if (!databaseSlugId) {
     return getSpaceUrl(spaceSlug);
   }
 
-  return buildDatabaseUrl(spaceSlug, node.slugId, node.name);
+  return buildDatabaseUrl(spaceSlug, databaseSlugId, node.name);
 };
 
 function Node({
@@ -483,12 +485,6 @@ function Node({
    * - page -> /p/:slug
    * - database -> /db/:slug
    */
-  // Some database nodes can temporarily arrive without slugId from the API.
-  // Passing an empty slug to build*Url produces a broken address like
-  // `.../test-database-`, which misses the identifier and leads to a blank page.
-  // Fallback to node.id keeps the route valid until slugId is available.
-  const nodeSlugId = node.data.slugId ?? node.data.id;
-
   const pageUrl =
     node.data.nodeType === "database"
       ? buildDatabaseNodeUrl(spaceSlug, node.data)
