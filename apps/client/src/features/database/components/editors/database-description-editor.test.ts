@@ -8,21 +8,25 @@ const flattenTitles = (groups: ReturnType<typeof getDatabaseDescriptionSlashItem
 };
 
 describe('DatabaseDescriptionEditor slash commands', () => {
-  it('returns the same slash command groups as the page editor menu', () => {
+  it('returns only slash commands supported by lightweight description UI', () => {
     const query = '';
     const databaseItems = getDatabaseDescriptionSlashItems({ query });
     const pageItems = getSuggestionItems({ query });
+    const databaseTitles = new Set(flattenTitles(databaseItems));
+    const pageTitles = flattenTitles(pageItems);
 
-    assert.deepEqual(databaseItems, pageItems);
+    assert.equal(pageTitles.length > databaseTitles.size, true);
+    assert.equal(databaseTitles.has('Text'), true);
+    assert.equal(databaseTitles.has('Table'), true);
+    assert.equal(databaseTitles.has('Image'), false);
+    assert.equal(databaseTitles.has('Video'), false);
+    assert.equal(databaseTitles.has('Iframe embed'), false);
   });
 
-  it('keeps media and embed commands that were previously filtered out', () => {
+  it('keeps table command for editable descriptions', () => {
     const items = getDatabaseDescriptionSlashItems({ query: '' });
     const titles = flattenTitles(items);
 
-    assert.equal(titles.includes('Image'), true);
-    assert.equal(titles.includes('Video'), true);
     assert.equal(titles.includes('Table'), true);
-    assert.equal(titles.includes('Embed'), true);
   });
 });
