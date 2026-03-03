@@ -1,10 +1,11 @@
-import { Container, Stack, Text } from '@mantine/core';
+import { Container, Stack } from '@mantine/core';
 import { JSONContent } from '@tiptap/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { extractPageSlugId } from '@/lib';
+import { buildDatabaseUrl } from '@/features/page/page.utils.ts';
 import { DatabaseTableView } from '@/features/database/components/database-table-view';
 import {
   DatabaseDescriptionEditor,
@@ -70,6 +71,7 @@ function getDescriptionDoc(
 export default function DatabasePage() {
   const { t } = useTranslation();
   const { databaseSlug, spaceSlug } = useParams();
+  const navigate = useNavigate();
   const databasePageSlugId = extractPageSlugId(databaseSlug);
 
   // In modern routes the database is opened by the database page slug,
@@ -151,6 +153,26 @@ export default function DatabasePage() {
           return;
         }
 
+        /**
+         * После rename backend может вернуть новый slug связанной страницы базы.
+         * Сразу переключаем URL на canonical маршрут, чтобы клиент/адресная строка
+         * оставались синхронизированы без перезагрузки.
+         */
+        if (
+          typeof patch.name === 'string' &&
+          spaceSlug &&
+          updatedDatabase.pageSlugId &&
+          updatedDatabase.pageSlugId !== databasePageSlugId
+        ) {
+          navigate(
+            buildDatabaseUrl(
+              spaceSlug,
+              updatedDatabase.pageSlugId,
+              updatedDatabase.name,
+            ),
+          );
+        }
+
         setDraftName(updatedDatabase.name ?? draftName);
         setDraftDescription({
           json: getDescriptionDoc(
@@ -168,7 +190,15 @@ export default function DatabasePage() {
         setSaveState('error');
       }
     },
-    [databaseId, draftName, space?.id, updateDatabaseMutationAsync],
+    [
+      databaseId,
+      databasePageSlugId,
+      draftName,
+      navigate,
+      space?.id,
+      spaceSlug,
+      updateDatabaseMutationAsync,
+    ],
   );
 
   const onTitleAutoSave = useCallback(

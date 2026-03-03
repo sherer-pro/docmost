@@ -36,6 +36,7 @@ import {
 import type { DatabasePropertyType } from '@docmost/api-contract';
 import { QueueJob, QueueName } from '../../../integrations/queue/constants';
 import { IPageRecipientNotificationJob } from '../../../integrations/queue/constants/queue.interface';
+import { generateSlugId } from '../../../common/helpers';
 
 interface IDatabaseCellValueWithFallback {
   value: unknown;
@@ -44,6 +45,15 @@ interface IDatabaseCellValueWithFallback {
 
 interface IDatabaseUserCellValue {
   id: string;
+}
+
+/**
+ * Расширенный контракт ответа для updateDatabase:
+ * помимо самой базы возвращаем актуальный slug связанной страницы,
+ * чтобы клиент мог синхронно обновить URL после переименования.
+ */
+interface IUpdatedDatabaseResponse {
+  pageSlugId: string | null;
 }
 
 @Injectable()
@@ -498,8 +508,9 @@ export class DatabaseService {
     dto: UpdateDatabaseDto,
     actorId: string,
     workspaceId: string,
-  ) {
+  ): Promise<Awaited<ReturnType<DatabaseRepo['updateDatabase']>> & IUpdatedDatabaseResponse> {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
+    const hasNameChanged = typeof dto.name === 'string' && dto.name !== database.name;
 
     const updated = await this.databaseRepo.updateDatabase(databaseId, workspaceId, {
       ...dto,
@@ -511,7 +522,30 @@ export class DatabaseService {
       throw new NotFoundException('Database not found');
     }
 
-    return updated;
+    let pageSlugId: string | null = null;
+
+    /**
+     * Для database-страниц держим title/slug в pages синхронизированными с именем базы.
+     * Это гарантирует корректный canonical URL сразу после rename.
+     */
+    if (database.pageId && hasNameChanged) {
+      pageSlugId = generateSlugId();
+
+      await this.pageRepo.updatePage(
+        {
+          title: updated.name,
+          slugId: pageSlugId,
+          lastUpdatedById: actorId,
+          workspaceId,
+        },
+        database.pageId,
+      );
+    }
+
+    return {
+      ...updated,
+      pageSlugId,
+    };
   }
 
   /**
