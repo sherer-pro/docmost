@@ -1,9 +1,9 @@
-import { buildDatabaseUrl } from '@/features/page/page.utils.ts';
-import { useGetDatabaseQuery } from '@/features/database/queries/database-query.ts';
-import { usePageQuery } from '@/features/page/queries/page-query.ts';
-import { LegacyRouteRemoved } from '@/pages/common/legacy-route-removed.tsx';
-import { useLegacyCanonicalRedirect } from '@/features/page/hooks/use-legacy-canonical-redirect.ts';
-import { useParams } from 'react-router-dom';
+import { buildDatabaseNodeUrl } from "@/features/page/page.utils.ts";
+import { useGetDatabaseQuery } from "@/features/database/queries/database-query.ts";
+import { usePageQuery } from "@/features/page/queries/page-query.ts";
+import { LegacyRouteRemoved } from "@/pages/common/legacy-route-removed.tsx";
+import { useLegacyCanonicalRedirect } from "@/features/page/hooks/use-legacy-canonical-redirect.ts";
+import { useParams } from "react-router-dom";
 
 /**
  * Временный обработчик legacy URL формата `/s/:spaceSlug/databases/:databaseId`.
@@ -29,10 +29,18 @@ export default function DatabaseLegacyRedirect() {
     isError: pageIsError,
   } = usePageQuery({ pageId: database?.pageId });
 
-  const canonicalUrl = page && spaceSlug ? buildDatabaseUrl(spaceSlug, page.slugId, page.title) : undefined;
+  const canonicalUrl = page
+    ? buildDatabaseNodeUrl({
+        spaceSlug,
+        pageSlugId: page.slugId,
+        pageTitle: page.title,
+        databaseId,
+        fallbackToLegacy: false,
+      })
+    : undefined;
 
   const { isRedirectingOrLoading } = useLegacyCanonicalRedirect({
-    routeType: 'legacy_database',
+    routeType: "legacy_database",
     legacyPath: window.location.pathname,
     canonicalUrl,
     isLoading: databaseIsLoading || pageIsLoading,
@@ -43,7 +51,9 @@ export default function DatabaseLegacyRedirect() {
   }
 
   if (databaseIsError || pageIsError || !database?.pageId || !page) {
-    return <LegacyRouteRemoved canonicalFormat={'/s/:spaceSlug/db/:databaseSlug'} />;
+    return (
+      <LegacyRouteRemoved canonicalFormat={"/s/:spaceSlug/db/:databaseSlug"} />
+    );
   }
 
   return null;

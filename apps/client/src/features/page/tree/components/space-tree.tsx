@@ -54,17 +54,16 @@ import {
 import { IPage, SidebarPagesParams } from "@/features/page/types/page.types.ts";
 import { queryClient } from "@/main.tsx";
 import { OpenMap } from "react-arborist/dist/main/state/open-slice";
-import {
-  useDisclosure,
-  useElementSize,
-  useMergedRef,
-} from "@mantine/hooks";
+import { useDisclosure, useElementSize, useMergedRef } from "@mantine/hooks";
 import { useClipboard } from "@/hooks/use-clipboard";
 import { dfs } from "react-arborist/dist/module/utils";
 import { useQueryEmit } from "@/features/websocket/use-query-emit.ts";
-import { buildDatabaseUrl, buildPageUrl } from "@/features/page/page.utils.ts";
+import {
+  buildDatabaseNodeUrl,
+  buildPageUrl,
+} from "@/features/page/page.utils.ts";
 import { notifications } from "@mantine/notifications";
-import { getAppUrl, getSpaceUrl } from "@/lib/config.ts";
+import { getAppUrl } from "@/lib/config.ts";
 import { extractPageSlugId } from "@/lib";
 import { useDeletePageModal } from "@/features/page/hooks/use-delete-page-modal.tsx";
 import { useTranslation } from "react-i18next";
@@ -322,26 +321,6 @@ interface NodeProps extends NodeRendererProps<SpaceTreeNode> {
   isStatusFieldEnabled: boolean;
 }
 
-const buildDatabaseNodeUrl = (
-  spaceSlug: string,
-  node: SpaceTreeNode,
-): string => {
-  if (node.slugId) {
-    return buildDatabaseUrl(spaceSlug, node.slugId, node.name);
-  }
-
-  // Some tree payloads can temporarily miss page slugId for database nodes.
-  // In this case, route through the legacy database path by database entity id,
-  // then let DatabaseLegacyRedirect resolve the canonical /db/:slug URL.
-  const legacyDatabaseId = node.databaseId ?? null;
-
-  if (!legacyDatabaseId) {
-    return getSpaceUrl(spaceSlug);
-  }
-
-  return `/s/${spaceSlug}/databases/${legacyDatabaseId}`;
-};
-
 function Node({
   node,
   style,
@@ -494,7 +473,12 @@ function Node({
    */
   const pageUrl =
     node.data.nodeType === "database"
-      ? buildDatabaseNodeUrl(spaceSlug, node.data)
+      ? buildDatabaseNodeUrl({
+          spaceSlug,
+          pageSlugId: node.data.slugId,
+          pageTitle: node.data.name,
+          databaseId: node.data.databaseId,
+        })
       : buildPageUrl(spaceSlug, node.data.slugId ?? "", node.data.name);
 
   const canOpenNode =
@@ -526,8 +510,12 @@ function Node({
             toggleMobileSidebar();
           }
         }}
-        onMouseEnter={node.data.nodeType !== "database" ? prefetchPage : undefined}
-        onMouseLeave={node.data.nodeType !== "database" ? cancelPagePrefetch : undefined}
+        onMouseEnter={
+          node.data.nodeType !== "database" ? prefetchPage : undefined
+        }
+        onMouseLeave={
+          node.data.nodeType !== "database" ? cancelPagePrefetch : undefined
+        }
       >
         <PageArrow node={node} onExpandTree={() => handleLoadChildren(node)} />
 
@@ -537,12 +525,10 @@ function Node({
             icon={
               node.data.icon ? (
                 node.data.icon
+              ) : node.data.nodeType === "database" ? (
+                <IconFileDatabase size="18" />
               ) : (
-                node.data.nodeType === "database" ? (
-                  <IconFileDatabase size="18" />
-                ) : (
-                  <IconFileDescription size="18" />
-                )
+                <IconFileDescription size="18" />
               )
             }
             readOnly={tree.props.disableEdit as boolean}
@@ -563,12 +549,13 @@ function Node({
           <NodeMenu node={node} treeApi={tree} spaceId={node.data.spaceId} />
 
           {!tree.props.disableEdit &&
-            (node.data.nodeType === "page" || node.data.nodeType === "database") && (
-            <CreateNode
-              node={node}
-              treeApi={tree}
-              onExpandTree={() => handleLoadChildren(node)}
-            />
+            (node.data.nodeType === "page" ||
+              node.data.nodeType === "database") && (
+              <CreateNode
+                node={node}
+                treeApi={tree}
+                onExpandTree={() => handleLoadChildren(node)}
+              />
             )}
         </div>
       </Box>
@@ -664,8 +651,14 @@ function NodeMenu({ node, treeApi, spaceId }: NodeMenuProps) {
   const handleCopyLink = () => {
     const nodeUrl =
       node.data.nodeType === "database"
-        ? `${getAppUrl()}${buildDatabaseNodeUrl(spaceSlug, node.data)}`
-        : getAppUrl() + buildPageUrl(spaceSlug, node.data.slugId ?? "", node.data.name);
+        ? `${getAppUrl()}${buildDatabaseNodeUrl({
+            spaceSlug,
+            pageSlugId: node.data.slugId,
+            pageTitle: node.data.name,
+            databaseId: node.data.databaseId,
+          })}`
+        : getAppUrl() +
+          buildPageUrl(spaceSlug, node.data.slugId ?? "", node.data.name);
 
     clipboard.copy(nodeUrl);
     notifications.show({ message: t("Link copied") });
@@ -778,55 +771,56 @@ function NodeMenu({ node, treeApi, spaceId }: NodeMenuProps) {
             {t("Export page")}
           </Menu.Item>
 
-          {node.data.nodeType === "page" && !(treeApi.props.disableEdit as boolean) && (
-            <>
-              <Menu.Item
-                leftSection={<IconCopy size={16} />}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  handleDuplicatePage();
-                }}
-              >
-                {t("Duplicate")}
-              </Menu.Item>
+          {node.data.nodeType === "page" &&
+            !(treeApi.props.disableEdit as boolean) && (
+              <>
+                <Menu.Item
+                  leftSection={<IconCopy size={16} />}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleDuplicatePage();
+                  }}
+                >
+                  {t("Duplicate")}
+                </Menu.Item>
 
-              <Menu.Item
-                leftSection={<IconArrowRight size={16} />}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  openMovePageModal();
-                }}
-              >
-                {t("Move")}
-              </Menu.Item>
+                <Menu.Item
+                  leftSection={<IconArrowRight size={16} />}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    openMovePageModal();
+                  }}
+                >
+                  {t("Move")}
+                </Menu.Item>
 
-              <Menu.Item
-                leftSection={<IconCopy size={16} />}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  openCopyPageModal();
-                }}
-              >
-                {t("Copy to space")}
-              </Menu.Item>
+                <Menu.Item
+                  leftSection={<IconCopy size={16} />}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    openCopyPageModal();
+                  }}
+                >
+                  {t("Copy to space")}
+                </Menu.Item>
 
-              <Menu.Divider />
-              <Menu.Item
-                c="red"
-                leftSection={<IconTrash size={16} />}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  openDeleteModal({ onConfirm: () => treeApi?.delete(node) });
-                }}
-              >
-                {t("Move to trash")}
-              </Menu.Item>
-            </>
-          )}
+                <Menu.Divider />
+                <Menu.Item
+                  c="red"
+                  leftSection={<IconTrash size={16} />}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    openDeleteModal({ onConfirm: () => treeApi?.delete(node) });
+                  }}
+                >
+                  {t("Move to trash")}
+                </Menu.Item>
+              </>
+            )}
         </Menu.Dropdown>
       </Menu>
 

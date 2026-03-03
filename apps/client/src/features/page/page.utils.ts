@@ -23,6 +23,52 @@ export const buildDatabaseUrl = (
   return `/s/${spaceSlug}/db/${buildPageSlug(pageSlugId, pageTitle)}`;
 };
 
+/**
+ * Конфигурация временного fallback-маршрута для database-страниц.
+ *
+ * TODO(DOC-2471): удалить fallback после полной стабилизации slugId во всех tree payload.
+ */
+export const DATABASE_ROUTE_FALLBACK_CONFIG = {
+  enabled: true,
+  removeBy: "2026-03-31",
+  ticket: "DOC-2471",
+} as const;
+
+/**
+ * Строит URL для database-узла по единому приоритету:
+ * 1) канонический `/s/:spaceSlug/db/:databaseSlug` по `slugId`;
+ * 2) временный fallback `/s/:spaceSlug/databases/:databaseId` по `databaseId`.
+ */
+export const buildDatabaseNodeUrl = (opts: {
+  spaceSlug?: string;
+  pageSlugId?: string | null;
+  pageTitle?: string;
+  databaseId?: string | null;
+  fallbackToLegacy?: boolean;
+}): string => {
+  const {
+    spaceSlug,
+    pageSlugId,
+    pageTitle,
+    databaseId,
+    fallbackToLegacy = DATABASE_ROUTE_FALLBACK_CONFIG.enabled,
+  } = opts;
+
+  if (!spaceSlug) {
+    return "/";
+  }
+
+  if (pageSlugId) {
+    return buildDatabaseUrl(spaceSlug, pageSlugId, pageTitle);
+  }
+
+  if (fallbackToLegacy && databaseId) {
+    return `/s/${spaceSlug}/databases/${databaseId}`;
+  }
+
+  return `/s/${spaceSlug}`;
+};
+
 export const buildPageUrl = (
   spaceName: string,
   pageSlugId: string,
