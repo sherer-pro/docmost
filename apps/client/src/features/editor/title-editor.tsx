@@ -1,5 +1,5 @@
 import "@/features/editor/styles/index.css";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { Document } from "@tiptap/extension-document";
 import { Heading } from "@tiptap/extension-heading";
@@ -51,6 +51,8 @@ export function TitleEditor({
   const emit = useQueryEmit();
   const navigate = useNavigate();
   const [activePageId, setActivePageId] = useState(pageId);
+  const didInitFocusRef = useRef(false);
+  const lastSyncedPageIdRef = useRef(pageId);
   const [currentUser] = useAtom(currentUserAtom);
   const userPageEditMode =
     currentUser?.user?.settings?.preferences?.pageEditMode ?? PageEditMode.Edit;
@@ -150,17 +152,46 @@ export function TitleEditor({
   const debounceUpdate = useDebouncedCallback(saveTitle, 500);
 
   useEffect(() => {
-    if (titleEditor && title !== titleEditor.getText()) {
-      titleEditor.commands.setContent(title);
+    if (!titleEditor) {
+      return;
     }
+
+    const nextTitle = title ?? "";
+    const currentTitle = titleEditor.getText();
+    const isPageChanged = lastSyncedPageIdRef.current !== pageId;
+    const isFocused = titleEditor.isFocused;
+    const { from, to } = titleEditor.state.selection;
+    const hasCollapsedSelection = from === to;
+
+    if (nextTitle === currentTitle) {
+      lastSyncedPageIdRef.current = pageId;
+      return;
+    }
+
+    if (!isPageChanged && isFocused && hasCollapsedSelection) {
+      return;
+    }
+
+    titleEditor.commands.setContent(nextTitle);
+    lastSyncedPageIdRef.current = pageId;
   }, [pageId, title, titleEditor]);
 
   useEffect(() => {
-    setTimeout(() => {
+    if (!titleEditor || didInitFocusRef.current) {
+      return;
+    }
+
+    didInitFocusRef.current = true;
+
+    const focusTimer = setTimeout(() => {
       // guard against Cannot access view['hasFocus'] error
-      if (!titleEditor?.isInitialized) return;
-      titleEditor?.commands?.focus("end");
+      if (!titleEditor.isInitialized) return;
+      titleEditor.commands.focus("end");
     }, 300);
+
+    return () => {
+      clearTimeout(focusTimer);
+    };
   }, [titleEditor]);
 
   useEffect(() => {
