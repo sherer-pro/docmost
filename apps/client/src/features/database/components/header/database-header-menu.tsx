@@ -70,8 +70,8 @@ export default function DatabaseHeaderMenu({
     useConvertDatabaseToPageMutation(databasePage?.spaceId, databaseId);
 
   /**
-   * Собирает markdown на клиенте в точном состоянии текущей таблицы:
-   * учитываем сортировку, фильтры и видимые колонки из UI.
+   * Collects markdown on the client in the exact state of the current table:
+   * We take into account sorting, filters and visible columns from the UI.
    */
   const getCurrentTableMarkdown = () => {
     const tableExportState = tableExportStateByDatabase[databaseId] ?? defaultDatabaseTableExportState;
@@ -87,7 +87,7 @@ export default function DatabaseHeaderMenu({
   };
 
   /**
-   * Копирует canonical-ссылку на database-страницу в формате /s/:space/db/:slug.
+   * Copies a canonical link to a database page in the format /s/:space/db/:slug.
    */
   const handleCopyDatabaseLink = () => {
     if (!databasePage?.slugId) {
@@ -132,8 +132,8 @@ export default function DatabaseHeaderMenu({
   };
 
   /**
-   * Экспорт markdown выполняем локально, чтобы в файл попало текущее
-   * визуальное состояние таблицы, а не "сырые" данные с сервера.
+   * We export markdown locally so that the file includes the current
+   * the visual state of the table, and not the “raw” data from the server.
    */
   const handleExport = async (format: DatabaseExportFormat) => {
     if (format === DatabaseExportFormat.Markdown) {
@@ -168,8 +168,8 @@ export default function DatabaseHeaderMenu({
         await removePageMutationAsync(databasePageId);
 
         /**
-         * Дублируем локальное удаление для database-сценария явно в UI-слое меню,
-         * чтобы sidebar и текущий tree-state очищались немедленно даже до refetch.
+         * We duplicate the local deletion for the database script explicitly in the UI layer of the menu,
+         * so that the sidebar and current tree-state are cleared immediately even before refetch.
          */
         dropTreeNode(databasePageId);
       },
@@ -178,10 +178,10 @@ export default function DatabaseHeaderMenu({
 
 
   /**
-   * Подтверждает и запускает обратную конвертацию database -> page.
+   * Confirms and starts the reverse conversion of database -> page.
    *
-   * После успешной операции переводим пользователя в page-route,
-   * чтобы интерфейс сразу открыл обычную страницу вместо database-view.
+   * After a successful operation, we transfer the user to page-route,
+   * so that the interface immediately opens a regular page instead of a database-view.
    */
   const handleConvertToPage = () => {
     modals.openConfirmModal({
@@ -211,19 +211,19 @@ export default function DatabaseHeaderMenu({
   };
 
   /**
-   * Для domain-операций страницы достаточно факта существования связанной pageId.
-   * При отсутствии pageId это «корневая» база без page-обвязки — page-операции скрываем.
+   * For domain operations on a page, the existence of an associated pageId is sufficient.
+   * If there is no pageId, this is the “root” database without page binding - we hide the page operations.
    */
   const hasDatabasePage = Boolean(databasePageId);
 
   /**
-   * Для перемещения нужен slugId страницы (используется в MovePageModal).
-   * Если страница ещё не догрузилась или slug недоступен, пункт Move скрываем.
+   * To move, you need the slugId of the page (used in MovePageModal).
+   * If the page has not yet loaded or the slug is not available, hide the Move item.
    */
   const canMoveDatabasePage = Boolean(databasePageId && databasePage?.slugId);
 
   /**
-   * Явный приоритет вычисления ширины страницы:
+   * Explicit priority for calculating page width:
    * 1) databasePage.settings.fullPageWidth;
    * 2) user.settings.preferences.fullPageWidth;
    * 3) fallback false.
@@ -232,8 +232,8 @@ export default function DatabaseHeaderMenu({
     databasePage?.settings?.fullPageWidth ?? user.settings?.preferences?.fullPageWidth ?? false;
 
   /**
-   * Передаем в общий переключатель именно id database-page,
-   * чтобы изменение сохранялось в `databasePage.settings.fullPageWidth`.
+   * We pass exactly the database-page id to the general switch,
+   * so that the change is saved in `databasePage.settings.fullPageWidth`.
    */
   const databasePageWidthScopeId = databasePage?.id ?? databasePageId;
 
@@ -276,8 +276,8 @@ export default function DatabaseHeaderMenu({
           )}
 
           {/**
-           * Для database root page (когда pageId отсутствует) операции page-domain
-           * (share / history / move / trash) недоступны и намеренно скрыты.
+           * For database root page (when pageId is missing) page-domain operation
+           * (share/history/move/trash) are inaccessible and intentionally hidden.
            */}
           {!readOnly && canMoveDatabasePage && (
             <>

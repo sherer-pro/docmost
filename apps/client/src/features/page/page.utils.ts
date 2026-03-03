@@ -13,8 +13,8 @@ const buildPageSlug = (pageSlugId: string, pageTitle?: string): string => {
 };
 
 /**
- * Строит URL для database-страницы в человекочитаемом формате,
- * аналогичном обычным страницам: /s/:spaceSlug/db/:title-:slugId.
+ * Builds a URL for a database page in a human-readable format,
+ * similar to regular pages: /s/:spaceSlug/db/:title-:slugId.
  */
 export const buildDatabaseUrl = (
   spaceSlug: string,

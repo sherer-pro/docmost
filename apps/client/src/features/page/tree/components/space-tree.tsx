@@ -87,9 +87,9 @@ interface SpaceTreeProps {
 const openTreeNodesAtom = atom<OpenMap>({});
 
 /**
- * Сравнивает два состояния раскрытия дерева.
- * Нужен лёгкий shallow-check, чтобы не триггерить лишний setState
- * и не запускать каскадные перерисовки при одинаковом наборе открытых узлов.
+ * Compares two tree expansion states.
+ * We need an easy shallow-check to avoid triggering an unnecessary setState
+ * and do not launch cascade redraws with the same set of open nodes.
  */
 function isOpenStateEqual(prev: OpenMap, next: OpenMap) {
   const prevKeys = Object.keys(prev);
@@ -298,8 +298,8 @@ export default function SpaceTree({ spaceId, readOnly }: SpaceTreeProps) {
             const nextOpenState = treeApiRef.current?.openState ?? {};
 
             setOpenTreeNodes((prevOpenState) => {
-              // Обновляем atom только если состояние действительно поменялось,
-              // иначе получаем «самоподдерживающиеся» обновления при больших ветках.
+              // We update atom only if the state has actually changed,
+              // otherwise we get “self-sustaining” updates for large branches.
               if (isOpenStateEqual(prevOpenState, nextOpenState)) {
                 return prevOpenState;
               }
@@ -367,9 +367,9 @@ function Node({
   async function handleLoadChildren(node: NodeApi<SpaceTreeNode>) {
     if (!node.data.hasChildren) return;
 
-    // Если дети уже подгружены локально, повторный запрос не нужен.
-    // Это особенно важно для длинных списков: лишний appendChildren
-    // приводит к постоянным обновлениям дерева и деградации UI.
+    // If children have already been loaded locally, a repeated request is not needed.
+    // This is especially important for long lists: extra appendChildren
+    // leads to constant tree updates and UI degradation.
     if (node.children && node.children.length > 0) {
       return;
     }
@@ -468,7 +468,7 @@ function Node({
   }
 
   /**
-   * Единая маршрутизация по дискриминатору узла:
+   * Unified routing by node discriminator:
    * - page -> /p/:slug
    * - database -> /db/:slug
    */
@@ -921,9 +921,9 @@ function PageArrow({ node, onExpandTree }: PageArrowProps) {
 
   useEffect(() => {
     /**
-     * При любом раскрытии узла (через клик по шеврону, hotkeys,
-     * DnD hover-open или восстановление openState) инициируем
-     * ленивую догрузку детей через единый обработчик.
+     * Whenever a node is expanded (by clicking on the chevron, hotkeys,
+     * DnD hover-open or openState recovery) initiate
+     * lazy additional loading of children through a single handler.
      */
     if (node.isOpen) {
       onExpandTree?.();

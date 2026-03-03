@@ -1,10 +1,10 @@
 import { Kysely, sql } from 'kysely';
 
 /**
- * Добавляет canonical JSON-поле для rich description базы.
+ * Adds a canonical JSON field for the rich description of the database.
  *
- * Мы сохраняем старый plain-text `description` для обратной совместимости,
- * а новый `description_content` используем как основной источник для rich UX.
+ * We are keeping the old plain-text `description` for backwards compatibility,
+ * and we use the new `description_content` as the main source for rich UX.
  */
 export async function up(db: Kysely<any>): Promise<void> {
   await db.schema

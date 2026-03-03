@@ -32,10 +32,10 @@ import { useSpaceQuery } from "@/features/space/queries/space-query.ts";
 
 interface ShareModalProps {
   /**
-   * Явный идентификатор страницы.
+   * Explicit page identifier.
    *
-   * Нужен для сценариев, где контекст страницы не приходит из URL
-   * (например, меню базы данных по `database.pageId`).
+   * Needed for scenarios where the page context does not come from the URL
+   * (for example, database menu by `database.pageId`).
    */
   pageId?: string;
   readOnly?: boolean;
@@ -48,12 +48,12 @@ export default function ShareModal({ pageId: pageIdProp, readOnly = false }: Sha
   const queryPageId = pageIdProp ?? pageSlugId;
   const { data: page } = usePageQuery({ pageId: queryPageId });
   /**
-   * Важно: эндпоинт `/shares/for-page` на сервере ищет страницу именно по `slugId`,
-   * а не по UUID `id`.
+   * Important: the `/shares/for-page` server endpoint resolves pages by `slugId`,
+   * not by UUID `id`.
    *
-   * Для обычных страниц slugId приходит из URL, а для сценариев БД сначала может
-   * приходить UUID (через `pageIdProp`), поэтому после загрузки страницы всегда
-   * переключаемся на `page.slugId`.
+   * For regular pages, `slugId` comes from the URL. In database flows, we may
+   * initially receive a UUID (via `pageIdProp`), so after loading we always
+   * switch to `page.slugId`.
    */
   const shareLookupPageId = page?.slugId ?? pageSlugId;
   const pageId = pageIdProp ?? page?.id;
@@ -74,8 +74,8 @@ export default function ShareModal({ pageId: pageIdProp, readOnly = false }: Sha
   const isDescendantShared = share && share.level > 0;
 
   /**
-   * Ссылку собираем через стандартный helper, чтобы формат всегда совпадал
-   * с обычными page/share URL, независимо от источника pageId.
+   * Build the public link through the shared helper so its format always matches
+   * regular page/share URLs, regardless of the pageId source.
    */
   const publicLink = `${getAppUrl()}${buildSharedPageUrl({
     shareId: share?.key,

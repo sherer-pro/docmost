@@ -91,8 +91,8 @@ export function DatabaseCellRenderer({
   );
 
   /**
-   * Возвращает URL страницы для page_reference только если у узла есть slugId.
-   * Если slugId отсутствует, ссылка не строится — это защищает от некорректной навигации.
+   * Returns the page URL for page_reference only if the node has a slugId.
+   * If slugId is missing, the link is not built - this protects against incorrect navigation.
    */
   const pageReferenceUrlById = useMemo(
     () =>
@@ -121,8 +121,8 @@ export function DatabaseCellRenderer({
           onMouseDown={(event) => event.stopPropagation()}
         >
           {/*
-            В view-режиме для редактируемой таблицы чекбокс сохраняет значение сразу,
-            без перехода в отдельный edit-state.
+            In view mode for editable tables, the checkbox persists the value immediately,
+            without switching to a separate edit state.
           */}
           <Checkbox
             checked={checked}
@@ -190,7 +190,7 @@ export function DatabaseCellRenderer({
         );
       }
 
-      // Fallback: если страница не найдена (или нет slugId), показываем ID без ссылки.
+      // Fallback: if the page is not found (or there is no slugId), show the ID without the link.
       return targetPage?.label || refId;
     }
 

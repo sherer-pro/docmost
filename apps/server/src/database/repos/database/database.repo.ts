@@ -13,7 +13,7 @@ export class DatabaseRepo {
   constructor(@InjectKysely() private readonly db: KyselyDB) {}
 
   /**
-   * Создаёт новую запись базы данных в пространстве.
+   * Creates a new database entry in the space.
    */
   async insertDatabase(
     payload: InsertableDatabase,
@@ -27,7 +27,7 @@ export class DatabaseRepo {
   }
 
   /**
-   * Возвращает базу данных по идентификатору с учётом workspace.
+   * Returns a database by identifier taking into account the workspace.
    */
   async findById(id: string, workspaceId: string): Promise<Database> {
     return this.db
@@ -40,7 +40,7 @@ export class DatabaseRepo {
   }
 
   /**
-   * Возвращает активную базу данных по pageId в пределах workspace.
+   * Returns the active database by pageId within the workspace.
    */
   async findByPageId(pageId: string, workspaceId: string): Promise<Database> {
     return this.db
@@ -53,10 +53,10 @@ export class DatabaseRepo {
   }
 
   /**
-   * Возвращает базу данных по pageId без фильтра по deletedAt.
+   * Returns the database by pageId without filtering by deletedAt.
    *
-   * Используется для обратимой конвертации page↔database,
-   * когда нужно восстановить ранее деактивированную базу.
+   * Used for reversible page↔database conversion,
+   * when you need to restore a previously deactivated database.
    */
   async findByPageIdIncludingDeleted(
     pageId: string,
@@ -71,7 +71,7 @@ export class DatabaseRepo {
   }
 
   /**
-   * Возвращает список баз данных в указанном пространстве.
+   * Returns a list of databases in the specified space.
    */
   async findBySpaceId(spaceId: string, workspaceId: string): Promise<Database[]> {
     return this.db
@@ -85,7 +85,7 @@ export class DatabaseRepo {
   }
 
   /**
-   * Обновляет поля базы данных.
+   * Updates database fields.
    */
   async updateDatabase(
     id: string,
@@ -104,9 +104,9 @@ export class DatabaseRepo {
   }
 
   /**
-   * Выполняет мягкое удаление базы данных.
+   * Performs a soft delete of the database.
    *
-   * Мы не удаляем запись физически, чтобы не терять аудит и не ломать связи.
+   * We do not physically delete the record so as not to lose the audit and not break connections.
    */
   async softDeleteDatabase(
     id: string,
@@ -124,7 +124,7 @@ export class DatabaseRepo {
   }
 
   /**
-   * Восстанавливает ранее мягко удалённую базу данных.
+   * Recovers a previously soft-deleted database.
    */
   async restoreDatabase(
     id: string,

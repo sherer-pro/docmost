@@ -2,9 +2,9 @@ import { atom } from 'jotai';
 import { IDatabaseTableExportState } from '@/features/database/utils/database-markdown';
 
 /**
- * Дефолтное состояние представления таблицы для экспорта.
+ * The default state of the table view for export.
  *
- * Важно: дублирует UX таблицы (все колонки видимы, фильтр-заглушка, сортировка выключена).
+ * Important: duplicates the UX of the table (all columns are visible, filter is a placeholder, sorting is disabled).
  */
 export const defaultDatabaseTableExportState: IDatabaseTableExportState = {
   visibleColumns: {},
@@ -19,8 +19,8 @@ export const defaultDatabaseTableExportState: IDatabaseTableExportState = {
 };
 
 /**
- * Хранит UI-состояние таблицы по databaseId,
- * чтобы header-меню могло экспортировать/копировать markdown в том же виде,
- * который пользователь прямо сейчас видит на экране.
+ * Stores the UI state of the table by databaseId,
+ * so that the header menu can export/copy markdown in the same form,
+ * which the user sees on the screen right now.
  */
 export const databaseTableExportStateAtom = atom<Record<string, IDatabaseTableExportState>>({});

@@ -12,7 +12,7 @@ export interface IDatabaseTableExportState {
 }
 
 /**
- * Безопасно преобразует произвольное значение ячейки в строку для markdown-таблицы.
+ * Safely converts an arbitrary cell value into a string for a markdown table.
  */
 export function stringifyCellValue(value: unknown): string {
   const normalizedValue = extractCurrentCellValue(value);
@@ -29,7 +29,7 @@ export function stringifyCellValue(value: unknown): string {
 }
 
 /**
- * Возвращает актуальное значение ячейки из контейнера fallback после смены типа.
+ * Returns the current value of a cell from the fallback container after changing the type.
  */
 function extractCurrentCellValue(value: unknown): unknown {
   if (!value || typeof value !== 'object') {
@@ -45,21 +45,21 @@ function extractCurrentCellValue(value: unknown): unknown {
 }
 
 /**
- * Экранирует спецсимволы markdown-таблицы, чтобы не ломать структуру колонок.
+ * Escapes special characters from a markdown table so as not to break the column structure.
  */
 export function escapeMarkdownCell(value: string): string {
   return value.replace(/\|/g, '\\|').replace(/\n/g, ' ');
 }
 
 /**
- * Возвращает заголовок строки базы данных с fallback на локализованный "Untitled".
+ * Returns the title of a database row from fallback to the localized "Untitled".
  */
 export function getRowTitle(row: IDatabaseRowWithCells, untitledLabel: string): string {
   return row.page?.title || row.pageTitle || untitledLabel;
 }
 
 /**
- * Получает текстовое значение ячейки по propertyId.
+ * Gets the text value of a cell by propertyId.
  */
 export function getCellValue(row: IDatabaseRowWithCells, propertyId: string): string {
   const value = row.cells?.find((cell) => cell.propertyId === propertyId)?.value;
@@ -67,7 +67,7 @@ export function getCellValue(row: IDatabaseRowWithCells, propertyId: string): st
 }
 
 /**
- * Проверяет, проходит ли значение ячейки условие фильтра.
+ * Checks whether the cell value passes the filter condition.
  */
 export function matchCondition(value: string, condition: IDatabaseFilterCondition): boolean {
   const normalizedValue = value.toLowerCase();
@@ -89,8 +89,8 @@ export function matchCondition(value: string, condition: IDatabaseFilterConditio
 }
 
 /**
- * Применяет к строкам ровно те же правила фильтрации/сортировки/видимости,
- * что и в интерактивной таблице на экране.
+ * Applies exactly the same filtering/sorting/visibility rules to rows,
+ * as in the interactive table on the screen.
  */
 export function prepareDatabaseRowsForExport(
   rows: IDatabaseRowWithCells[],
@@ -122,7 +122,7 @@ export function prepareDatabaseRowsForExport(
 }
 
 /**
- * Строит markdown базы данных: заголовок, описание и таблицу в текущем UI-состоянии.
+ * Builds database markdown: title, description and table in the current UI state.
  */
 export function buildDatabaseMarkdownFromState(params: {
   title: string;
