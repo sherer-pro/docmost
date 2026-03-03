@@ -12,6 +12,7 @@ import { PageWidthToggle } from '@/features/user/components/page-width-pref.tsx'
 
 interface DocumentCommonActionItemsProps {
   onCopyLink: () => void;
+  copyLinkLabel?: string;
   onCopyAsMarkdown?: () => void;
   onOpenHistory?: () => void;
   onOpenExport?: () => void;
@@ -28,6 +29,7 @@ interface DocumentCommonActionItemsProps {
  */
 export function DocumentCommonActionItems({
   onCopyLink,
+  copyLinkLabel,
   onCopyAsMarkdown,
   onOpenHistory,
   onOpenExport,
@@ -42,7 +44,7 @@ export function DocumentCommonActionItems({
   return (
     <>
       <Menu.Item leftSection={<IconLink size={16} />} onClick={onCopyLink}>
-        {t('Copy link')}
+        {copyLinkLabel ?? t('Copy link')}
       </Menu.Item>
 
       {onCopyAsMarkdown && (

@@ -1,5 +1,5 @@
 import { ActionIcon, Menu, Text } from '@mantine/core';
-import { IconArrowRight, IconArrowsExchange, IconDots, IconLink, IconMessageCircle, IconTrash } from '@tabler/icons-react';
+import { IconArrowRight, IconArrowsExchange, IconDots, IconMessageCircle, IconTrash } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { modals } from '@mantine/modals';
 import { useDisclosure } from '@mantine/hooks';
@@ -19,7 +19,7 @@ import { useGetDatabaseQuery } from '@/features/database/queries/database-query.
 import { historyAtoms } from '@/features/page-history/atoms/history-atoms.ts';
 import MovePageModal from '@/features/page/components/move-page-modal.tsx';
 import { useDeletePageModal } from '@/features/page/hooks/use-delete-page-modal.tsx';
-import { buildDatabaseUrl, buildPageUrl } from '@/features/page/page.utils.ts';
+import { buildDatabaseUrl } from '@/features/page/page.utils.ts';
 import { usePageQuery, useRemovePageMutation } from '@/features/page/queries/page-query.ts';
 import { useConvertDatabaseToPageMutation } from '@/features/database/queries/database-query.ts';
 import ShareModal from '@/features/share/components/share-modal.tsx';
@@ -100,18 +100,7 @@ export default function DatabaseHeaderMenu({
     notifications.show({ message: t('Link copied') });
   };
 
-  /**
-   * Если у базы есть связанная page, копируем canonical page URL через buildPageUrl.
-   * Иначе (database root без page) откатываемся к database-route.
-   */
   const handleCopyLink = () => {
-    if (databasePage?.slugId) {
-      const pageUrl = `${getAppUrl()}${buildPageUrl(spaceSlug, databasePage.slugId, databasePage.title)}`;
-      clipboard.copy(pageUrl);
-      notifications.show({ message: t('Link copied') });
-      return;
-    }
-
     handleCopyDatabaseLink();
   };
 
@@ -271,6 +260,7 @@ export default function DatabaseHeaderMenu({
         <Menu.Dropdown>
           <DocumentCommonActionItems
             onCopyLink={handleCopyLink}
+            copyLinkLabel={t('Copy database link')}
             onCopyAsMarkdown={handleCopyAsMarkdown}
             onOpenHistory={hasDatabasePage ? openHistoryModal : undefined}
             onOpenExport={openExportModal}
@@ -278,12 +268,6 @@ export default function DatabaseHeaderMenu({
             databasePageId={databasePageWidthScopeId}
             fullPageWidth={fullPageWidth}
           />
-
-          {hasDatabasePage && (
-            <Menu.Item leftSection={<IconLink size={16} />} onClick={handleCopyDatabaseLink}>
-              {t('Copy database link')}
-            </Menu.Item>
-          )}
 
           {hasDatabasePage && (
             <Menu.Item leftSection={<IconMessageCircle size={16} />} onClick={handleOpenCommentsAside}>
