@@ -4,8 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { extractPageSlugId } from '@/lib';
 import { buildDatabaseUrl } from '@/features/page/page.utils.ts';
+import { resolvePageDatabaseIds } from '@/features/page/page-id-adapter.ts';
 import { DatabaseTableView } from '@/features/database/components/database-table-view';
 import {
   DatabaseDescriptionEditor,
@@ -76,12 +76,19 @@ export default function DatabasePage() {
   const location = useLocation();
   const navigate = useNavigate();
   const setAsideState = useSetAtom(asideStateAtom);
-  const databasePageSlugId = extractPageSlugId(databaseSlug);
+  const routeIds = resolvePageDatabaseIds({ routeSlug: databaseSlug });
+  const databasePageSlugId = routeIds.slugId;
 
   // In modern routes the database is opened by the database page slug,
   // so we resolve the page first and read databaseId from it.
-  const { data: databasePageBySlug } = usePageQuery({ pageId: databasePageSlugId });
-  const databaseId = databasePageBySlug?.databaseId;
+  const { data: databasePageBySlug } = usePageQuery({ pageId: routeIds.pageId });
+
+  const resolvedIds = resolvePageDatabaseIds({
+    pageId: databasePageBySlug?.id,
+    slugId: databasePageBySlug?.slugId,
+    databaseId: databasePageBySlug?.databaseId,
+  });
+  const databaseId = resolvedIds.databaseId;
 
   const { data: database } = useGetDatabaseQuery(databaseId);
   const databasePage = databasePageBySlug;
