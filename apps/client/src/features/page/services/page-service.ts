@@ -8,7 +8,7 @@ import {
   IPageInput,
   ISidebarNode,
   SidebarPagesParams,
-} from '@/features/page/types/page.types';
+} from "@/features/page/types/page.types";
 import { QueryParams } from "@/lib/types";
 import { IPagination } from "@/lib/types.ts";
 import { saveAs } from "file-saver";
@@ -42,36 +42,39 @@ function normalizePage<T extends IPage>(page: T): T {
 
 export async function createPage(data: Partial<IPage>): Promise<IPage> {
   const req = await api.post<IPage>("/pages/create", data);
-  return normalizePage(req.data);
+  return req.data;
 }
 
 export async function getPageById(
   pageInput: Partial<IPageInput>,
 ): Promise<IPage> {
   const req = await api.post<IPage>("/pages/info", pageInput);
-  return normalizePage(req.data);
+  return req.data;
 }
 
 export async function updatePage(data: Partial<IPageInput>): Promise<IPage> {
   const req = await api.post<IPage>("/pages/update", data);
-  return normalizePage(req.data);
+  return req.data;
 }
 
-export async function deletePage(pageId: string, permanentlyDelete = false): Promise<void> {
+export async function deletePage(
+  pageId: string,
+  permanentlyDelete = false,
+): Promise<void> {
   await api.post("/pages/delete", { pageId, permanentlyDelete });
 }
 
 export async function getDeletedPages(
   spaceId: string,
   params?: QueryParams,
- ): Promise<IPagination<IPage>> {
+): Promise<IPagination<IPage>> {
   const req = await api.post("/pages/trash", { spaceId, ...params });
   return req.data;
 }
 
 export async function restorePage(pageId: string): Promise<IPage> {
   const response = await api.post<IPage>("/pages/restore", { pageId });
-  return normalizePage(response.data);
+  return response.data;
 }
 
 export async function movePage(data: IMovePage): Promise<void> {
@@ -84,12 +87,12 @@ export async function movePageToSpace(data: IMovePageToSpace): Promise<void> {
 
 export async function duplicatePage(data: ICopyPageToSpace): Promise<IPage> {
   const req = await api.post<IPage>("/pages/duplicate", data);
-  return normalizePage(req.data);
+  return req.data;
 }
 
 export async function getSidebarPages(
   params: SidebarPagesParams,
- ): Promise<IPagination<ISidebarNode>> {
+): Promise<IPagination<ISidebarNode>> {
   const req = await api.post("/pages/sidebar-pages", params);
   return req.data;
 }
@@ -204,7 +207,6 @@ export async function uploadFile(
   return req as unknown as IAttachment;
 }
 
-
 export interface QuoteContentInput {
   sourcePageId: string;
   quoteId: string;
@@ -214,11 +216,12 @@ export interface QuoteContentResult {
   text: string;
 }
 
-export async function getQuoteContent(data: QuoteContentInput): Promise<QuoteContentResult> {
+export async function getQuoteContent(
+  data: QuoteContentInput,
+): Promise<QuoteContentResult> {
   const req = await api.post<QuoteContentResult>("/pages/quote-content", data);
   return req.data;
 }
-
 
 export interface LinkPreviewResult {
   url: string;
@@ -233,7 +236,6 @@ export async function getLinkPreview(url: string): Promise<LinkPreviewResult> {
   return req.data;
 }
 
-
 /**
  * DTO of the conversion result page -> database.
  */
@@ -245,7 +247,11 @@ export interface ConvertPageToDatabaseResult {
 /**
  * Converts a page to a database.
  */
-export async function convertPageToDatabase(pageId: string): Promise<ConvertPageToDatabaseResult> {
-  const req = await api.post<ConvertPageToDatabaseResult>(`/pages/${pageId}/convert-to-database`);
+export async function convertPageToDatabase(
+  pageId: string,
+): Promise<ConvertPageToDatabaseResult> {
+  const req = await api.post<ConvertPageToDatabaseResult>(
+    `/pages/${pageId}/convert-to-database`,
+  );
   return req.data;
 }
