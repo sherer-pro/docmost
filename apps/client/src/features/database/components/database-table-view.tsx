@@ -274,7 +274,11 @@ export function DatabaseTableView({
     property: IDatabaseProperty,
     nextValue?: unknown,
   ) => {
-    if (!editingCellKey || !isEditable) {
+    /**
+     * Для обычных полей сохраняем только из активного edit-state.
+     * Для checkbox допускаем прямое сохранение из view-режима через nextValue.
+     */
+    if (!isEditable || (typeof nextValue === 'undefined' && !editingCellKey)) {
       return;
     }
 
