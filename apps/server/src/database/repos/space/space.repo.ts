@@ -12,6 +12,7 @@ import { ExpressionBuilder, sql } from 'kysely';
 import { PaginationOptions } from '../../pagination/pagination-options';
 import { executeWithCursorPagination } from '@docmost/db/pagination/cursor-pagination';
 import { DB } from '@docmost/db/types/db';
+import { validate as isValidUUID } from 'uuid';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EventName } from '../../../common/events/event.contants';
 
@@ -35,7 +36,19 @@ export class SpaceRepo {
       .$if(opts?.includeMemberCount, (qb) => qb.select(this.withMemberCount))
       .where('workspaceId', '=', workspaceId);
 
-    query = query.where('id', '=', spaceId);
+    /**
+     * Backward compatibility for existing clients:
+     * some API calls still send a space slug (for example "general")
+     * instead of a UUID.
+     *
+     * Without this branch PostgreSQL tries to cast the slug to uuid,
+     * raises 22P02, and breaks critical UI loading flows.
+     */
+    if (isValidUUID(spaceId)) {
+      query = query.where('id', '=', spaceId);
+    } else {
+      query = query.where(sql`LOWER(slug)`, '=', sql`LOWER(${spaceId})`);
+    }
 
     return query.executeTakeFirst();
   }
