@@ -43,6 +43,12 @@ import { dropTreeNodeAtom, treeDataAtom } from "@/features/page/tree/atoms/tree-
 import { SimpleTree } from "react-arborist";
 import { SpaceTreeNode } from "@/features/page/tree/types";
 import { useQueryEmit } from "@/features/websocket/use-query-emit";
+import {
+  invalidateDatabaseEntity,
+  invalidateDatabaseRowContext,
+  invalidatePageEntity,
+  invalidateSidebarTree,
+} from "@/features/page/queries/cache-invalidation";
 
 const DEFAULT_SIDEBAR_NODE_TYPES: SidebarNodeType[] = [
   "page",
@@ -91,11 +97,7 @@ export function usePageQuery(
 
 
 function invalidateDatabaseTreeConsistency() {
-  queryClient.invalidateQueries({
-    predicate: (item) => item.queryKey[0] === "database" && item.queryKey[2] === "rows",
-  });
-
-  queryClient.invalidateQueries({ queryKey: ["database", "row-context"] });
+  invalidateDatabaseRowContext({}, { client: queryClient });
 }
 
 export function useCreatePageMutation() {
@@ -248,16 +250,10 @@ export function useConvertPageToDatabaseMutation() {
        * `staleTime` в 5 минут UI временно получает устаревший узел, что
        * визуально проявляется как «пустая страница» до ручного refresh.
        */
-      queryClient.invalidateQueries({
-        predicate: (item) => item.queryKey[0] === 'pages',
-      });
-      queryClient.invalidateQueries({ queryKey: ['root-sidebar-pages'] });
-      queryClient.invalidateQueries({ queryKey: ['sidebar-pages'] });
-      queryClient.invalidateQueries({ queryKey: ['database', data.databaseId] });
-      queryClient.invalidateQueries({ queryKey: ['database', data.databaseId, 'rows'] });
-      queryClient.invalidateQueries({ queryKey: ['database', 'row-context'] });
-      queryClient.invalidateQueries({ queryKey: ['databases'] });
-      invalidateDatabaseTreeConsistency();
+      invalidatePageEntity({ includeAllPages: true }, { client: queryClient });
+      invalidateSidebarTree({}, { client: queryClient });
+      invalidateDatabaseEntity({ databaseId: data.databaseId }, { client: queryClient });
+      invalidateDatabaseRowContext({ databaseId: data.databaseId }, { client: queryClient });
     },
   });
 }
