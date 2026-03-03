@@ -109,7 +109,31 @@ export function DatabaseCellRenderer({
 
   const renderViewValue = () => {
     if (property.type === 'checkbox') {
-      return <Checkbox checked={Boolean(value)} disabled readOnly />;
+      const checked = Boolean(value);
+
+      if (!isEditable) {
+        return <Checkbox checked={checked} disabled readOnly />;
+      }
+
+      return (
+        <div
+          onClick={(event) => event.stopPropagation()}
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          {/*
+            В view-режиме для редактируемой таблицы чекбокс сохраняет значение сразу,
+            без перехода в отдельный edit-state.
+          */}
+          <Checkbox
+            checked={checked}
+            onChange={(event) => {
+              const nextChecked = event.currentTarget.checked;
+              onChange(nextChecked);
+              onSave(nextChecked);
+            }}
+          />
+        </div>
+      );
     }
 
     if (property.type === 'code') {
@@ -299,11 +323,11 @@ export function DatabaseCellRenderer({
   return (
     <div
       onClick={() => {
-        if (!isEditing && isEditable) {
+        if (!isEditing && isEditable && property.type !== 'checkbox') {
           onStartEdit();
         }
       }}
-      style={{ cursor: isEditable ? 'text' : 'default' }}
+      style={{ cursor: isEditable ? (property.type === 'checkbox' ? 'pointer' : 'text') : 'default' }}
     >
       {isEditing && isEditable ? renderEditorByType(property.type) : renderViewValue()}
     </div>
