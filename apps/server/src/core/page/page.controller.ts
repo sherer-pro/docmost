@@ -64,36 +64,6 @@ export class PageController {
     private readonly databaseRepo: DatabaseRepo,
   ) {}
 
-  private getPageCustomFields(page: { settings?: unknown }) {
-    const settings =
-      page.settings && typeof page.settings === 'object'
-        ? (page.settings as Record<string, unknown>)
-        : {};
-
-    return {
-      status: settings.status ?? null,
-      assigneeId: settings.assigneeId ?? null,
-      stakeholderIds: Array.isArray(settings.stakeholderIds)
-        ? settings.stakeholderIds
-        : [],
-    } as UpdatePageCustomFieldsDto;
-  }
-
-  /**
-   * Normalizes page.settings for the API response.
-   *
-   * We return `undefined` if the database contains `null` or a non-object,
-   * so that the frontend can correctly roll back to user preferences.
-   */
-  private getPageSettings(page: { settings?: unknown }) {
-    if (!page.settings || typeof page.settings !== 'object') {
-      return undefined;
-    }
-
-    return page.settings;
-  }
-
-
   /**
    * Extracts text from all text nodes marked with the given quote identifier.
    *
