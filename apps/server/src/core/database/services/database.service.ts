@@ -52,7 +52,7 @@ interface IDatabaseUserCellValue {
  * помимо самой базы возвращаем актуальный slug связанной страницы,
  * чтобы клиент мог синхронно обновить URL после переименования.
  */
-interface IUpdatedDatabaseResponse {
+export interface IUpdatedDatabaseResponse {
   pageSlugId: string | null;
 }
 
