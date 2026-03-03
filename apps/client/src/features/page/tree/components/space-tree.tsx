@@ -62,6 +62,7 @@ import {
   buildDatabaseNodeUrl,
   buildPageUrl,
 } from "@/features/page/page.utils.ts";
+import { resolvePageDatabaseIds } from "@/features/page/page-id-adapter.ts";
 import { notifications } from "@mantine/notifications";
 import { getAppUrl } from "@/lib/config.ts";
 import { extractPageSlugId } from "@/lib";
@@ -473,12 +474,19 @@ function Node({
    */
   const pageUrl =
     node.data.nodeType === "database"
-      ? buildDatabaseNodeUrl({
-          spaceSlug,
-          pageSlugId: node.data.slugId,
-          pageTitle: node.data.name,
-          databaseId: node.data.databaseId,
-        })
+      ? (() => {
+          const resolvedIds = resolvePageDatabaseIds({
+            pageId: node.data.id,
+            slugId: node.data.slugId,
+            databaseId: node.data.databaseId,
+          });
+
+          return buildDatabaseNodeUrl({
+            spaceSlug,
+            pageSlugId: resolvedIds.slugId,
+            pageTitle: node.data.name,
+          });
+        })()
       : buildPageUrl(spaceSlug, node.data.slugId ?? "", node.data.name);
 
   const canOpenNode =

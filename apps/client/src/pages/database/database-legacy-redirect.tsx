@@ -34,8 +34,6 @@ export default function DatabaseLegacyRedirect() {
         spaceSlug,
         pageSlugId: page.slugId,
         pageTitle: page.title,
-        databaseId,
-        fallbackToLegacy: false,
       })
     : undefined;
 
