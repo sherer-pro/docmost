@@ -326,11 +326,20 @@ const buildDatabaseNodeUrl = (
   spaceSlug: string,
   node: SpaceTreeNode,
 ): string => {
-  if (!node.slugId) {
+  if (node.slugId) {
+    return buildDatabaseUrl(spaceSlug, node.slugId, node.name);
+  }
+
+  // Some tree payloads can temporarily miss page slugId for database nodes.
+  // In this case, route through the legacy database path by database entity id,
+  // then let DatabaseLegacyRedirect resolve the canonical /db/:slug URL.
+  const legacyDatabaseId = node.databaseId ?? null;
+
+  if (!legacyDatabaseId) {
     return getSpaceUrl(spaceSlug);
   }
 
-  return buildDatabaseUrl(spaceSlug, node.slugId, node.name);
+  return `/s/${spaceSlug}/databases/${legacyDatabaseId}`;
 };
 
 function Node({
@@ -483,12 +492,6 @@ function Node({
    * - page -> /p/:slug
    * - database -> /db/:slug
    */
-  // Some database nodes can temporarily arrive without slugId from the API.
-  // Passing an empty slug to build*Url produces a broken address like
-  // `.../test-database-`, which misses the identifier and leads to a blank page.
-  // Fallback to node.id keeps the route valid until slugId is available.
-  const nodeSlugId = node.data.slugId ?? node.data.id;
-
   const pageUrl =
     node.data.nodeType === "database"
       ? buildDatabaseNodeUrl(spaceSlug, node.data)
