@@ -9,6 +9,13 @@ export interface IDatabase {
   spaceId: string;
   name: string;
   pageId: string | null;
+  /**
+   * Актуальный slug связанной database-page.
+   *
+   * Поле приходит из PATCH /databases/:id при rename и используется для
+   * мгновенного обновления маршрута на клиенте.
+   */
+  pageSlugId?: string | null;
   description: string | null;
   descriptionContent?: unknown | null;
   icon: string | null;
