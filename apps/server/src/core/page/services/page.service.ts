@@ -610,7 +610,7 @@ export class PageService {
         .then((pages) => pages.map((page) => page.id));
       // The first id is the root page id
       if (pageIds.length > 1) {
-        // Update sub pages
+        // Здесь передаём только UUID `id`; метод репозитория также поддерживает `slugId`.
         await this.pageRepo.updatePages(
           { spaceId },
           pageIds.filter((id) => id !== rootPage.id),
