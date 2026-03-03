@@ -14,10 +14,7 @@ import {
 import { load } from 'cheerio';
 import { PageService } from './services/page.service';
 import { CreatePageDto } from './dto/create-page.dto';
-import {
-  UpdatePageCustomFieldsDto,
-  UpdatePageDto,
-} from './dto/update-page.dto';
+import { UpdatePageDto } from './dto/update-page.dto';
 import { MovePageDto, MovePageToSpaceDto } from './dto/move-page.dto';
 import {
   DeletePageDto,
@@ -50,6 +47,10 @@ import {
 import { CollaborationGateway } from '../../collaboration/collaboration.gateway';
 import { TiptapTransformer } from '@hocuspocus/transformer';
 import { DatabaseRepo } from '@docmost/db/repos/database/database.repo';
+import {
+  mapPageCustomFields,
+  mapPageResponse,
+} from './mappers/page-response.mapper';
 
 @UseGuards(JwtAuthGuard)
 @Controller('pages')
@@ -62,36 +63,6 @@ export class PageController {
     private readonly collaborationGateway: CollaborationGateway,
     private readonly databaseRepo: DatabaseRepo,
   ) {}
-
-  private getPageCustomFields(page: { settings?: unknown }) {
-    const settings =
-      page.settings && typeof page.settings === 'object'
-        ? (page.settings as Record<string, unknown>)
-        : {};
-
-    return {
-      status: settings.status ?? null,
-      assigneeId: settings.assigneeId ?? null,
-      stakeholderIds: Array.isArray(settings.stakeholderIds)
-        ? settings.stakeholderIds
-        : [],
-    } as UpdatePageCustomFieldsDto;
-  }
-
-  /**
-   * Нормализует page.settings для API-ответа.
-   *
-   * Возвращаем `undefined`, если в БД лежит `null` или не-объект,
-   * чтобы фронтенд мог корректно откатиться на user preferences.
-   */
-  private getPageSettings(page: { settings?: unknown }) {
-    if (!page.settings || typeof page.settings !== 'object') {
-      return undefined;
-    }
-
-    return page.settings;
-  }
-
 
   /**
    * Extracts text from all text nodes marked with the given quote identifier.
@@ -111,7 +82,8 @@ export class PageController {
         const hasQuoteMark = Array.isArray(node.marks)
           ? node.marks.some(
               (mark) =>
-                mark?.type === 'quoteSource' && mark?.attrs?.quoteId === quoteId,
+                mark?.type === 'quoteSource' &&
+                mark?.attrs?.quoteId === quoteId,
             )
           : false;
 
@@ -136,7 +108,10 @@ export class PageController {
    * This bypasses DB persistence debounce and allows linked quotes to react to
    * source edits almost immediately while users are collaboratively editing.
    */
-  private async getLivePageContent(pageId: string, user: User): Promise<any | null> {
+  private async getLivePageContent(
+    pageId: string,
+    user: User,
+  ): Promise<any | null> {
     const documentName = `page.${pageId}`;
 
     const connection = await this.collaborationGateway.openDirectConnection(
@@ -226,7 +201,10 @@ export class PageController {
       .map((token) => token.trim())
       .filter(Boolean);
 
-    if (relTokens.includes('apple-touch-icon') || relTokens.includes('apple-touch-icon-precomposed')) {
+    if (
+      relTokens.includes('apple-touch-icon') ||
+      relTokens.includes('apple-touch-icon-precomposed')
+    ) {
       return 3;
     }
 
@@ -245,7 +223,10 @@ export class PageController {
     return 0;
   }
 
-  private getBestFaviconUrl($: ReturnType<typeof load>, pageUrl: string): string {
+  private getBestFaviconUrl(
+    $: ReturnType<typeof load>,
+    pageUrl: string,
+  ): string {
     let bestUrl = '';
     let bestArea = -1;
     let bestPriority = -1;
@@ -311,22 +292,17 @@ export class PageController {
           ? jsonToMarkdown(page.content)
           : jsonToHtml(page.content);
       return {
-        ...page,
+        ...mapPageResponse(page, { includeCustomFields: true }),
         databaseId: linkedDatabase?.id ?? null,
         content: contentOutput,
-        settings: this.getPageSettings(page),
-        customFields: this.getPageCustomFields(page),
       };
     }
 
     return {
-      ...page,
+      ...mapPageResponse(page, { includeCustomFields: true }),
       databaseId: linkedDatabase?.id ?? null,
-      settings: this.getPageSettings(page),
-      customFields: this.getPageCustomFields(page),
     };
   }
-
 
   @HttpCode(HttpStatus.OK)
   @Post('/quote-content')
@@ -389,8 +365,12 @@ export class PageController {
       throw new BadRequestException('Failed to fetch URL metadata');
     }
 
-    const contentType = response.headers.get('content-type')?.toLowerCase() ?? '';
-    if (!contentType.includes('text/html') && !contentType.includes('application/xhtml+xml')) {
+    const contentType =
+      response.headers.get('content-type')?.toLowerCase() ?? '';
+    if (
+      !contentType.includes('text/html') &&
+      !contentType.includes('application/xhtml+xml')
+    ) {
       throw new BadRequestException('URL does not point to an HTML document');
     }
 
@@ -462,10 +442,10 @@ export class PageController {
         createPageDto.format === 'markdown'
           ? jsonToMarkdown(page.content)
           : jsonToHtml(page.content);
-      return { ...page, content: contentOutput };
+      return { ...mapPageResponse(page), content: contentOutput };
     }
 
-    return page;
+    return mapPageResponse(page);
   }
 
   @HttpCode(HttpStatus.OK)
@@ -498,17 +478,13 @@ export class PageController {
           ? jsonToMarkdown(updatedPage.content)
           : jsonToHtml(updatedPage.content);
       return {
-        ...updatedPage,
+        ...mapPageResponse(updatedPage, { includeCustomFields: true }),
         content: contentOutput,
-        settings: this.getPageSettings(updatedPage),
-        customFields: this.getPageCustomFields(updatedPage),
       };
     }
 
     return {
-      ...updatedPage,
-      settings: this.getPageSettings(updatedPage),
-      customFields: this.getPageCustomFields(updatedPage),
+      ...mapPageResponse(updatedPage, { includeCustomFields: true }),
     };
   }
 
@@ -564,9 +540,11 @@ export class PageController {
 
     await this.pageRepo.restorePage(page.id, workspace.id);
 
-    return this.pageRepo.findById(page.id, {
+    const restoredPage = await this.pageRepo.findById(page.id, {
       includeHasChildren: true,
     });
+
+    return restoredPage ? mapPageResponse(restoredPage) : restoredPage;
   }
 
   @HttpCode(HttpStatus.OK)
@@ -681,7 +659,9 @@ export class PageController {
       }
 
       if (dto.spaceId && dto.spaceId !== page.spaceId) {
-        throw new BadRequestException('pageId does not belong to the provided spaceId');
+        throw new BadRequestException(
+          'pageId does not belong to the provided spaceId',
+        );
       }
 
       spaceId = page.spaceId;
@@ -703,14 +683,14 @@ export class PageController {
       ...sidebarPages,
       items: sidebarPages.items.map((node) => ({
         ...node,
-        customFields:
-          ['page', 'database', 'databaseRow'].includes(node.nodeType)
-            ? this.getPageCustomFields(node)
-            : null,
+        customFields: ['page', 'database', 'databaseRow'].includes(
+          node.nodeType,
+        )
+          ? mapPageCustomFields(node)
+          : null,
       })),
     };
   }
-
 
   @HttpCode(HttpStatus.OK)
   @Post(':pageId/convert-to-database')
@@ -729,7 +709,10 @@ export class PageController {
       throw new ForbiddenException();
     }
 
-    const existingDatabase = await this.databaseRepo.findByPageId(page.id, page.workspaceId);
+    const existingDatabase = await this.databaseRepo.findByPageId(
+      page.id,
+      page.workspaceId,
+    );
     if (existingDatabase) {
       throw new BadRequestException('Page is already a database');
     }
@@ -790,7 +773,13 @@ export class PageController {
         throw new ForbiddenException();
       }
 
-      return this.pageService.duplicatePage(copiedPage, dto.spaceId, user);
+      const duplicatedPage = await this.pageService.duplicatePage(
+        copiedPage,
+        dto.spaceId,
+        user,
+      );
+
+      return mapPageResponse(duplicatedPage);
     } else {
       // If no spaceId, it's a duplicate in same space
       const ability = await this.spaceAbility.createForUser(
@@ -801,7 +790,13 @@ export class PageController {
         throw new ForbiddenException();
       }
 
-      return this.pageService.duplicatePage(copiedPage, undefined, user);
+      const duplicatedPage = await this.pageService.duplicatePage(
+        copiedPage,
+        undefined,
+        user,
+      );
+
+      return mapPageResponse(duplicatedPage);
     }
   }
 
@@ -819,7 +814,11 @@ export class PageController {
 
     if (dto.parentPageId) {
       const parentPage = await this.pageRepo.findById(dto.parentPageId);
-      if (!parentPage || parentPage.deletedAt || parentPage.spaceId !== movedPage.spaceId) {
+      if (
+        !parentPage ||
+        parentPage.deletedAt ||
+        parentPage.spaceId !== movedPage.spaceId
+      ) {
         throw new NotFoundException('Parent page not found');
       }
     }
