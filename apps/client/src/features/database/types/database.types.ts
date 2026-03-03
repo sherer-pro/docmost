@@ -10,10 +10,10 @@ export interface IDatabase {
   name: string;
   pageId: string | null;
   /**
-   * Актуальный slug связанной database-page.
+   * The actual slug of the associated database-page.
    *
-   * Поле приходит из PATCH /databases/:id при rename и используется для
-   * мгновенного обновления маршрута на клиенте.
+   * The field comes from PATCH /databases/:id on rename and is used for
+   * instant route update on the client.
    */
   pageSlugId?: string | null;
   description: string | null;

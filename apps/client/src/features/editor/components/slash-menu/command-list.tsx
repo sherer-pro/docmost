@@ -28,20 +28,20 @@ const CommandList = ({
   const viewportRef = useRef<HTMLDivElement>(null);
 
   /**
-   * Преобразуем объект с группами в «плоский» список,
-   * чтобы единообразно работать с клавиатурной навигацией
-   * и выполнением команд по индексу.
+   * Let's transform an object with groups into a “flat” list,
+   * to provide a consistent experience with keyboard navigation
+   * and executing commands on the index.
    */
   const flatItems = useMemo(() => {
     return Object.values(items).flat();
   }, [items]);
 
   /**
-   * Строим карту «группа + локальный индекс» -> «глобальный индекс в flatItems».
+   * We build a map “group + local index” -> “global index in flatItems”.
    *
-   * Это важно для корректной работы кликов: раньше локальный индекс
-   * внутри категории напрямую передавался в flatItems и из-за этого
-   * в категориях после первой выбирался не тот элемент либо не выбирался вовсе.
+   * This is important for the correct operation of clicks: previously a local index
+   * inside the category was directly passed to flatItems and because of this
+   * in categories after the first, the wrong element was selected or was not selected at all.
    */
   const groupedItemsWithGlobalIndex = useMemo(() => {
     let globalIndex = 0;

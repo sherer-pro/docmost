@@ -48,9 +48,9 @@ interface IDatabaseUserCellValue {
 }
 
 /**
- * Расширенный контракт ответа для updateDatabase:
- * помимо самой базы возвращаем актуальный slug связанной страницы,
- * чтобы клиент мог синхронно обновить URL после переименования.
+ * Extended response contract for updateDatabase:
+ * in addition to the database itself, we return the current slug of the linked page,
+ * so that the client can synchronously update the URL after the rename.
  */
 export interface IUpdatedDatabaseResponse {
   pageSlugId: string | null;
@@ -74,9 +74,9 @@ export class DatabaseService {
   ) {}
 
   /**
-   * Legacy тип `text` больше не поддерживается контрактом.
-   * Для обратной совместимости нормализуем его в `multiline_text`
-   * перед любыми операциями чтения/конвертации.
+   * Legacy type `text` is no longer supported by the contract.
+   * For backward compatibility, let's normalize it to `multiline_text`
+   * before any read/convert operations.
    */
   private normalizePropertyType(type: string | null | undefined): DatabasePropertyType {
     if (type === 'text') {
@@ -87,7 +87,7 @@ export class DatabaseService {
   }
 
   /**
-   * Приводит типы свойств к актуальному контракту в ответах API.
+   * Casts property types to the actual contract in API responses.
    */
   private normalizeProperties<T extends { type: string | null }>(properties: T[]): T[] {
     return properties.map((property) => ({
@@ -97,10 +97,10 @@ export class DatabaseService {
   }
 
   /**
-   * Проверяет доступ к базе данных в рамках текущего workspace.
+   * Checks database access within the current workspace.
    *
-   * Если запись не найдена, выбрасывается 404 — это единая точка валидации
-   * для всех вложенных ресурсов (properties/rows/cells/views).
+   * If the record is not found, a 404 is thrown - this is a single point of validation
+   * for all nested resources (properties/rows/cells/views).
    */
   private async getOrFailDatabase(databaseId: string, workspaceId: string) {
     const database = await this.databaseRepo.findById(databaseId, workspaceId);
@@ -112,14 +112,14 @@ export class DatabaseService {
   }
 
   /**
-   * Экранирует пользовательское значение для markdown-ячейки таблицы.
+   * Escapes a custom value for a markdown table cell.
    */
   private escapeMarkdownCell(value: string): string {
     return value.replace(/\|/g, '\\|').replace(/\n/g, ' ');
   }
 
   /**
-   * Преобразует произвольное значение ячейки в безопасную строку.
+   * Converts an arbitrary cell value to a safe string.
    */
   private stringifyCellValue(value: unknown): string {
     const normalizedValue = this.extractCurrentCellValue(value);
@@ -136,7 +136,7 @@ export class DatabaseService {
   }
 
   /**
-   * Возвращает активное значение ячейки с учётом fallback-контейнера.
+   * Returns the active value of a cell taking into account the fallback container.
    */
   private extractCurrentCellValue(value: unknown): unknown {
     if (!this.isCellFallbackValue(value)) {
@@ -147,7 +147,7 @@ export class DatabaseService {
   }
 
   /**
-   * Проверяет, что значение хранится в формате fallback-контейнера.
+   * Checks that the value is stored in the fallback container format.
    */
   private isCellFallbackValue(value: unknown): value is IDatabaseCellValueWithFallback {
     if (!value || typeof value !== 'object') {
@@ -159,7 +159,7 @@ export class DatabaseService {
   }
 
   /**
-   * Возвращает исходное значение для сценария обратной смены типа.
+   * Returns the original value for the reverse type change script.
    */
   private extractValueForConversion(value: unknown): unknown {
     if (!this.isCellFallbackValue(value)) {
@@ -174,14 +174,14 @@ export class DatabaseService {
   }
 
   /**
-   * Определяет, можно ли автоматически привести текущий тип к целевому.
+   * Determines whether the current type can be automatically cast to the target type.
    */
   private canConvertToType(nextType: DatabasePropertyType): boolean {
     return !['user', 'checkbox', 'page_reference', 'select'].includes(nextType);
   }
 
   /**
-   * Пытается конвертировать значение в целевой тип свойства.
+   * Attempts to convert a value to the target property type.
    */
   private convertCellValueByPropertyType(
     value: unknown,
@@ -242,7 +242,7 @@ export class DatabaseService {
   }
 
   /**
-   * Конвертирует значения ячеек свойства при смене типа.
+   * Converts property cell values ​​when changing type.
    */
   private async convertPropertyCellValues(
     databaseId: string,
@@ -282,7 +282,7 @@ export class DatabaseService {
   }
 
   /**
-   * Собирает markdown-представление текущей таблицы базы данных.
+   * Collects a markdown representation of the current database table.
    */
   async buildDatabaseMarkdown(databaseId: string, user: User, workspaceId: string) {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
@@ -319,7 +319,7 @@ export class DatabaseService {
   }
 
   /**
-   * Формирует минимальный валидный PDF-документ с текстовым содержимым.
+   * Generates a minimal valid PDF document with text content.
    */
   private createSimplePdfBuffer(content: string): Buffer {
     const escapePdfText = (value: string) =>
@@ -368,7 +368,7 @@ export class DatabaseService {
   }
 
   /**
-   * Экспортирует базу в markdown или pdf.
+   * Exports the database to markdown or pdf.
    */
   async exportDatabase(
     databaseId: string,
@@ -394,10 +394,10 @@ export class DatabaseService {
     }
 
     /**
-     * Для markdown-экспорта используем стандартный механизм Docmost для страниц:
-     * - формируется zip-архив,
-     * - включаются дочерние страницы (строки базы),
-     * - автоматически добавляется docmost-metadata.json.
+     * For markdown export we use the standard Docmost mechanism for pages:
+     * - a zip archive is generated,
+     * - child pages (base rows) are included,
+     * - docmost-metadata.json is automatically added.
      */
     const zipFileStream = await this.exportService.exportPages(
       database.pageId,
@@ -414,7 +414,7 @@ export class DatabaseService {
   }
 
   /**
-   * Проверяет право пользователя на чтение страниц в пространстве базы данных.
+   * Checks the user's right to read pages in the database space.
    */
   private async assertCanReadDatabasePages(user: User, spaceId: string) {
     const ability = await this.spaceAbility.createForUser(user, spaceId);
@@ -424,7 +424,7 @@ export class DatabaseService {
   }
 
   /**
-   * Проверяет право пользователя на изменение страниц в пространстве базы данных.
+   * Checks the user's right to modify pages in the database space.
    */
   private async assertCanManageDatabasePages(user: User, spaceId: string) {
     const ability = await this.spaceAbility.createForUser(user, spaceId);
@@ -434,7 +434,7 @@ export class DatabaseService {
   }
 
   /**
-   * Валидирует целевую страницу строки в пределах workspace/space и исключает удалённые страницы.
+   * Validates the target page of a row within the workspace/space and excludes removed pages.
    */
   private async assertCanAccessTargetPage(
     pageId: string,
@@ -452,7 +452,7 @@ export class DatabaseService {
   }
 
   /**
-   * Создаёт новую базу данных в указанном workspace/space.
+   * Creates a new database in the specified workspace/space.
    */
   async createDatabase(
     dto: CreateDatabaseDto,
@@ -462,10 +462,10 @@ export class DatabaseService {
     const normalizedName = dto.name?.trim() || 'Untitled database';
 
     /**
-     * Создаём «якорную» страницу базы данных.
+     * Create an “anchor” database page.
      *
-     * Эта страница хранит каноническую позицию и родителя в едином дереве,
-     * поэтому sidebar и DnD работают по тем же правилам, что и для обычных страниц.
+     * This page stores the canonical position and parent in a single tree,
+     * therefore sidebar and DnD work according to the same rules as for regular pages.
      */
     const databasePage = await this.pageService.create(actorId, workspaceId, {
       title: normalizedName,
@@ -487,21 +487,21 @@ export class DatabaseService {
   }
 
   /**
-   * Возвращает одну базу данных по ID.
+   * Returns one database by ID.
    */
   async getDatabase(databaseId: string, workspaceId: string) {
     return this.getOrFailDatabase(databaseId, workspaceId);
   }
 
   /**
-   * Возвращает список баз данных в пространстве.
+   * Returns a list of databases in the space.
    */
   async listBySpace(spaceId: string, workspaceId: string) {
     return this.databaseRepo.findBySpaceId(spaceId, workspaceId);
   }
 
   /**
-   * Обновляет метаданные базы данных.
+   * Updates database metadata.
    */
   async updateDatabase(
     databaseId: string,
@@ -525,8 +525,8 @@ export class DatabaseService {
     let pageSlugId: string | null = null;
 
     /**
-     * Для database-страниц держим title/slug в pages синхронизированными с именем базы.
-     * Это гарантирует корректный canonical URL сразу после rename.
+     * For database pages, keep the title/slug in pages synchronized with the database name.
+     * This guarantees the correct canonical URL immediately after the rename.
      */
     if (database.pageId && hasNameChanged) {
       pageSlugId = generateSlugId();
@@ -549,7 +549,7 @@ export class DatabaseService {
   }
 
   /**
-   * Выполняет мягкое удаление базы данных.
+   * Performs a soft delete of the database.
    */
   async deleteDatabase(databaseId: string, workspaceId: string) {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
@@ -581,7 +581,7 @@ export class DatabaseService {
   }
 
   /**
-   * Создаёт свойство (колонку) в базе данных.
+   * Creates a property (column) in the database.
    */
   async createProperty(
     databaseId: string,
@@ -607,7 +607,7 @@ export class DatabaseService {
   }
 
   /**
-   * Возвращает список свойств базы данных.
+   * Returns a list of database properties.
    */
   async listProperties(databaseId: string, workspaceId: string) {
     await this.getOrFailDatabase(databaseId, workspaceId);
@@ -616,7 +616,7 @@ export class DatabaseService {
   }
 
   /**
-   * Обновляет свойство базы данных.
+   * Updates a database property.
    */
   async updateProperty(
     databaseId: string,
@@ -651,7 +651,7 @@ export class DatabaseService {
   }
 
   /**
-   * Мягко удаляет свойство базы данных.
+   * Softly deletes a database property.
    */
   async deleteProperty(databaseId: string, propertyId: string, workspaceId: string) {
     await this.getOrFailDatabase(databaseId, workspaceId);
@@ -665,7 +665,7 @@ export class DatabaseService {
   }
 
   /**
-   * Создаёт строку базы данных.
+   * Creates a database row.
    */
   async createRow(
     databaseId: string,
@@ -677,9 +677,9 @@ export class DatabaseService {
     await this.assertCanManageDatabasePages(user, database.spaceId);
 
     /**
-     * Вычисляем родителя новой строки:
-     * - если клиент явно передал parentPageId, используем его;
-     * - иначе привязываем строку к странице базы данных как к корневому узлу дерева строк.
+     * Calculate the parent of the new line:
+     * - if the client explicitly passed parentPageId, use it;
+     * - otherwise we bind the string to the database page as to the root node of the string tree.
      */
     const targetParentPageId = dto.parentPageId ?? database.pageId ?? null;
 
@@ -688,7 +688,7 @@ export class DatabaseService {
     }
 
     /**
-     * Если родитель указан, проверяем базовую доступность страницы в нужном workspace/space.
+     * If the parent is specified, we check the basic accessibility of the page in the desired workspace/space.
      */
     if (targetParentPageId) {
       await this.assertCanAccessTargetPage(
@@ -699,10 +699,10 @@ export class DatabaseService {
     }
 
     /**
-     * Дополнительная защита контекста базы данных:
-     * разрешаем вложенность строки только в:
-     * 1) страницу самой базы, либо
-     * 2) страницу уже существующей (неархивной) строки этой же базы.
+     * Additional database context protection:
+     * We only allow line nesting in:
+     * 1) the page of the database itself, or
+     * 2) a page of an already existing (non-archived) line of the same database.
      */
     if (targetParentPageId && targetParentPageId !== database.pageId) {
       const parentRow = await this.databaseRowRepo.findByDatabaseAndPage(
@@ -716,10 +716,10 @@ export class DatabaseService {
     }
 
     /**
-     * Строка базы создаётся как обычная страница в том же дереве.
+     * The base line is created as a regular page in the same tree.
      *
-     * По умолчанию прикрепляем строку к pageId базы, чтобы структура оставалась
-     * предсказуемой и не разваливалась на «осиротевшие» корневые страницы.
+     * By default, we attach a string to the pageId of the base so that the structure remains
+     * predictable and did not fall apart into “orphaned” root pages.
      */
     const page = await this.pageService.create(user.id, workspaceId, {
       title: dto.title,
@@ -738,7 +738,7 @@ export class DatabaseService {
   }
 
   /**
-   * Возвращает все строки базы данных.
+   * Returns all rows in the database.
    */
   async listRows(databaseId: string, user: User, workspaceId: string) {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
@@ -805,7 +805,7 @@ export class DatabaseService {
   }
 
   /**
-   * Батч-обновление ячеек в рамках строки (страница является ключом строки).
+   * Batch update of cells within a row (page is the row key).
    */
   async batchUpdateRowCells(
     databaseId: string,
@@ -911,7 +911,7 @@ export class DatabaseService {
   }
 
   /**
-   * Извлекает идентификатор пользователя из значения user-ячейки.
+   * Retrieves the user ID from the value of the user cell.
    */
   private extractUserIdFromCellValue(value: unknown): string | null {
     if (typeof value === 'string' && value.trim()) {
@@ -927,7 +927,7 @@ export class DatabaseService {
   }
 
   /**
-   * Уведомляет нового исполнителя при изменении user-ячейки.
+   * Notifies the new executor when the user cell changes.
    */
   private async notifyDatabaseUserAssignment(params: {
     actorId: string;
@@ -947,7 +947,7 @@ export class DatabaseService {
   }
 
   /**
-   * При первом валидном пользовательском вводе очищает fallback-значение.
+   * On the first valid user input, clears the fallback value.
    */
   private normalizeInputCellValue(value: unknown): unknown {
     if (!this.isCellFallbackValue(value)) {
@@ -958,7 +958,7 @@ export class DatabaseService {
   }
 
   /**
-   * Создаёт новое представление базы данных.
+   * Creates a new database view.
    */
   async createView(
     databaseId: string,
@@ -979,7 +979,7 @@ export class DatabaseService {
   }
 
   /**
-   * Возвращает список представлений базы данных.
+   * Returns a list of database views.
    */
   async listViews(databaseId: string, workspaceId: string) {
     await this.getOrFailDatabase(databaseId, workspaceId);
@@ -987,7 +987,7 @@ export class DatabaseService {
   }
 
   /**
-   * Обновляет представление базы данных.
+   * Updates the database view.
    */
   async updateView(
     databaseId: string,
@@ -1009,7 +1009,7 @@ export class DatabaseService {
   }
 
   /**
-   * Мягко удаляет представление базы данных.
+   * Gently deletes a database view.
    */
   async deleteView(databaseId: string, viewId: string, workspaceId: string) {
     await this.getOrFailDatabase(databaseId, workspaceId);
@@ -1023,11 +1023,11 @@ export class DatabaseService {
   }
 
   /**
-   * Конвертирует базу данных обратно в обычную страницу.
+   * Converts the database back to a regular page.
    *
-   * Транзакционно помечаем database-сущность как удалённую (deactivated),
-   * архивируем строки и очищаем табличные метаданные.
-   * Сами страницы-строки не удаляются и остаются дочерними узлами root-page.
+   * Transactionally mark the database entity as deleted (deactivated),
+   * archive rows and clear table metadata.
+   * The row pages themselves are not deleted and remain child nodes of the root-page.
    */
   async convertDatabaseToPage(
     databaseId: string,

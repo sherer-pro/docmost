@@ -7,10 +7,10 @@ interface LegacyRouteRemovedProps {
 }
 
 /**
- * Унифицированный 410-экран для отключенных legacy-маршрутов.
+ * Unified 410 screen for disabled legacy routes.
  *
- * Весь текст и базовое поведение (Helmet + CTA на `/home`) вынесены в одно место,
- * чтобы будущие правки формулировок и UX делались централизованно.
+ * All text and basic behavior (Helmet + CTA on `/home`) are placed in one place,
+ * so that future wording and UX changes are made centrally.
  */
 export function LegacyRouteRemoved({ canonicalFormat }: LegacyRouteRemovedProps) {
   return (

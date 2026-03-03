@@ -6,13 +6,13 @@ import { LegacyRouteRemoved } from '@/pages/common/legacy-route-removed.tsx';
 import { useLegacyCanonicalRedirect } from '@/features/page/hooks/use-legacy-canonical-redirect.ts';
 
 /**
- * Временный обработчик legacy URL формата `/p/:pageSlug`.
+ * Temporary handler for legacy URL format `/p/:pageSlug`.
  *
- * Компонент оставляет у себя только специфичную логику:
- * - получение page по legacy slug;
- * - построение канонического URL страницы.
+ * The component retains only specific logic:
+ * - getting page using legacy slug;
+ * - building the canonical URL of the page.
  *
- * Вся общая инфраструктура (аудит, redirect, 410-экран) вынесена в переиспользуемые сущности.
+ * All common infrastructure (audit, redirect, 410 screen) is transferred to reusable entities.
  */
 export default function PageRedirect() {
   const { pageSlug } = useParams();

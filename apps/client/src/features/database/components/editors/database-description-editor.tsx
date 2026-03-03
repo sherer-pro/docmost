@@ -42,10 +42,10 @@ export interface DatabaseDescriptionEditorProps {
 }
 
 /**
- * Упрощённый rich-text редактор описания базы.
+ * A simplified rich-text database description editor.
  *
- * Используем движок Tiptap (как в page content), но с компактной схемой,
- * чтобы описание оставалось лёгким и не превращалось в «полноценную страницу».
+ * We use the Tiptap engine (as in page content), but with a compact layout,
+ * so that the description remains light and does not turn into a “full page”.
  */
 export function DatabaseDescriptionEditor({
   pageId,

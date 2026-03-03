@@ -79,10 +79,10 @@ export class PageController {
   }
 
   /**
-   * Нормализует page.settings для API-ответа.
+   * Normalizes page.settings for the API response.
    *
-   * Возвращаем `undefined`, если в БД лежит `null` или не-объект,
-   * чтобы фронтенд мог корректно откатиться на user preferences.
+   * We return `undefined` if the database contains `null` or a non-object,
+   * so that the frontend can correctly roll back to user preferences.
    */
   private getPageSettings(page: { settings?: unknown }) {
     if (!page.settings || typeof page.settings !== 'object') {

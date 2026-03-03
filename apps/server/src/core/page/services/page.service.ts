@@ -316,10 +316,10 @@ export class PageService {
 
 
   /**
-   * Конвертирует обычную страницу в базу данных.
+   * Converts a regular page into a database.
    *
-   * В рамках одной транзакции создаётся запись базы, после чего
-   * все текущие прямые дети страницы привязываются как строки базы данных.
+   * Within one transaction, a database record is created, after which
+   * all current direct children of the page are bound as database rows.
    */
   async convertPageToDatabase(page: Page, actorId: string): Promise<{ databaseId: string; pageId: string }> {
     const database = await executeTx(this.db, async (trx) => {
@@ -472,9 +472,9 @@ export class PageService {
           else 'page'
         end`.as('nodeType'),
         sql<string | null>`null`.as('databaseId'),
-        // Важно: здесь используем expression builder вместо raw SQL,
-        // чтобы Kysely корректно сгенерировал EXISTS-подзапросы без
-        // вложенного `AS ...` внутри булевого выражения.
+        // Important: here we use expression builder instead of raw SQL,
+        // so that Kysely correctly generates EXISTS subqueries without
+        // nested `AS ...` inside a boolean expression.
         sql<boolean>`case
           when ${eb.or([
             eb.exists(
@@ -543,11 +543,11 @@ export class PageService {
             'databases.creatorId as creatorId',
             'databases.deletedAt as deletedAt',
             /**
-             * Важно использовать ref вместо raw SQL для алиаса с camelCase.
+             * It is important to use ref instead of raw SQL for camelCase aliases.
              *
-             * PostgreSQL приводит некавыченные идентификаторы к нижнему
-             * регистру (`databasepage`), из-за чего при raw-обращении к
-             * `databasePage.settings` получаем ошибку missing FROM-clause.
+             * PostgreSQL casts unquoted identifiers to lower
+             * register (`databasepage`), which is why when raw accessing
+             * `databasePage.settings` we get the missing FROM-clause error.
              */
             sql<any>`${this.db.dynamic.ref('databasePage.settings')}`.as(
               'settings',
@@ -610,7 +610,7 @@ export class PageService {
         .then((pages) => pages.map((page) => page.id));
       // The first id is the root page id
       if (pageIds.length > 1) {
-        // Здесь передаём только UUID `id`; метод репозитория также поддерживает `slugId`.
+        // Here we pass only the UUID `id`; The repository method also supports `slugId`.
         await this.pageRepo.updatePages(
           { spaceId },
           pageIds.filter((id) => id !== rootPage.id),

@@ -13,7 +13,7 @@ export class DatabasePropertyRepo {
   constructor(@InjectKysely() private readonly db: KyselyDB) {}
 
   /**
-   * Добавляет новое свойство (колонку) в базу данных.
+   * Adds a new property (column) to the database.
    */
   async insertProperty(
     payload: InsertableDatabaseProperty,
@@ -27,7 +27,7 @@ export class DatabasePropertyRepo {
   }
 
   /**
-   * Возвращает активные свойства базы данных, отсортированные по позиции.
+   * Returns active database properties, sorted by position.
    */
   async findByDatabaseId(databaseId: string): Promise<DatabaseProperty[]> {
     return this.db
@@ -40,7 +40,7 @@ export class DatabasePropertyRepo {
   }
 
   /**
-   * Возвращает одно свойство по идентификатору.
+   * Returns one property by identifier.
    */
   async findById(propertyId: string): Promise<DatabaseProperty> {
     return this.db
@@ -52,7 +52,7 @@ export class DatabasePropertyRepo {
   }
 
   /**
-   * Обновляет свойство базы данных.
+   * Updates a database property.
    */
   async updateProperty(
     propertyId: string,
@@ -69,7 +69,7 @@ export class DatabasePropertyRepo {
   }
 
   /**
-   * Мягко удаляет свойство.
+   * Gently removes the property.
    */
   async softDeleteProperty(
     propertyId: string,
@@ -84,7 +84,7 @@ export class DatabasePropertyRepo {
       .executeTakeFirst();
   }
   /**
-   * Восстанавливает свойства базы данных, ранее скрытые при конвертации в страницу.
+   * Restores database properties previously hidden when converted to a page.
    */
   async restoreByDatabaseId(
     databaseId: string,

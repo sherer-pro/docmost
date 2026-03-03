@@ -108,18 +108,18 @@ export class PageRepo {
     },
   ): Promise<Page> {
     /**
-     * Совместимость со старыми клиентами:
-     * endpoint /api/pages/info исторически может получать как UUID `id`,
-     * так и короткий route-идентификатор `slugId`.
+     * Compatibility with old clients:
+     * endpoint /api/pages/info can historically receive both the UUID `id`,
+     * and the short route identifier `slugId`.
      */
     return this.findByIdentifier(getPageIdentifierColumn(pageId), pageId, opts);
   }
 
   /**
-   * Ищет страницу по route/public идентификатору `slugId`.
+   * Searches for a page by route/public identifier `slugId`.
    *
-   * Используйте этот метод для входных параметров из URL и публичных API,
-   * чтобы не смешивать их с внутренним UUID поля `id`.
+   * Use this method for input parameters from URLs and public APIs,
+   * so as not to mix them with the internal UUID of the `id` field.
    */
   async findBySlugId(
     pageSlugId: string,
@@ -140,7 +140,7 @@ export class PageRepo {
   }
 
   /**
-   * Общая реализация поиска страницы по конкретному полю-идентификатору.
+   * General implementation of searching a page using a specific identifier field.
    */
   private async findByIdentifier(
     identifierColumn: 'id' | 'slugId',
@@ -204,8 +204,8 @@ export class PageRepo {
   }
 
   /**
-   * Обновляет страницы по набору смешанных идентификаторов:
-   * UUID поля `id` и/или строковых `slugId`.
+   * Updates pages based on a set of mixed identifiers:
+   * UUID of the `id` field and/or string `slugId`.
    */
   async updatePages(
     updatePageData: UpdatablePage,

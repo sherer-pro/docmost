@@ -260,7 +260,7 @@ export async function getDatabaseMarkdown(
 
 
 /**
- * DTO результата конвертации database -> page.
+ * DTO of the conversion result database -> page.
  */
 export interface ConvertDatabaseToPageResult {
   id: string;
@@ -268,7 +268,7 @@ export interface ConvertDatabaseToPageResult {
 }
 
 /**
- * Конвертирует базу данных в обычную страницу.
+ * Converts the database into a regular page.
  */
 export async function convertDatabaseToPage(databaseId: string): Promise<ConvertDatabaseToPageResult | null> {
   const req = await api.post<ConvertDatabaseToPageResult | null>(`/databases/${databaseId}/convert-to-page`);

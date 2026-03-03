@@ -45,7 +45,7 @@ export default function SubpagesView(props: NodeViewProps) {
     if (!data?.pages) return [];
     const allPages = data.pages
       .flatMap((page) => page.items)
-      // В блоке Subpages отображаем только обычные страницы.
+      // In the Subpages block we display only regular pages.
       .filter((node) => node.nodeType === "page");
 
     return sortPositionKeys(allPages);

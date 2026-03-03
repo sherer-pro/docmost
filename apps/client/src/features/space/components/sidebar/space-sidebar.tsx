@@ -111,7 +111,7 @@ export function SpaceSidebar() {
 
       notifications.show({ message: t("Database created") });
 
-      // После создания базы открываем только canonical URL формата /s/:space/db/:slug.
+      // After creating the database, open only the canonical URL of the /s/:space/db/:slug format.
       if (!createdDatabase.pageId) {
         notifications.show({
           message: t("Failed to create database"),

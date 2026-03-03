@@ -35,9 +35,9 @@ interface PageWidthToggleProps {
 }
 
 /**
- * Переключатель ширины страницы поддерживает два независимых сценария:
- * - `scope="user"` — глобальная пользовательская настройка (дефолт);
- * - `scope="page"` — локальная настройка конкретного документа.
+ * The page width switch supports two independent scenarios:
+ * - `scope="user"` - global user setting (default);
+ * - `scope="page"` - local setting of a specific document.
  */
 export function PageWidthToggle({
   size,
@@ -60,9 +60,9 @@ export function PageWidthToggle({
     const value = event.currentTarget.checked;
 
     /**
-     * В page-режиме сохраняем настройку напрямую в settings документа.
-     * Если pageId недоступен (например, документ еще не инициализирован),
-     * безопасно пропускаем операцию без падения UI.
+     * In page mode, we save the setting directly in the document settings.
+     * If the pageId is not available (for example, the document has not yet been initialized),
+     * we safely skip the operation without crashing the UI.
      */
     if (scope === "page") {
       if (!pageId) {
