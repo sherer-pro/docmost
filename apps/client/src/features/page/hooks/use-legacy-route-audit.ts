@@ -35,6 +35,5 @@ export function useLegacyRouteAudit(routeType: 'legacy_page' | 'legacy_database'
       legacyPath,
     });
 
-    console.warn(`[legacy-route-audit] hit ${routeType}: ${legacyPath}`);
   }, [legacyPath, posthog, routeType]);
 }

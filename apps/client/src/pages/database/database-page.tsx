@@ -261,14 +261,6 @@ export default function DatabasePage() {
             onValueChange={setDraftDescription}
             onAutoSave={onDescriptionAutoSave}
           />
-
-          {isEditable && (
-            <Text size="sm" c="dimmed">
-              {saveState === 'saving' && t('database.editor.saving')}
-              {saveState === 'saved' && t('database.editor.saved')}
-              {saveState === 'error' && t('database.editor.error')}
-            </Text>
-          )}
         </Stack>
 
         {database?.spaceId && (
