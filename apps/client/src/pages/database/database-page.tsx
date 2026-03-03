@@ -3,7 +3,7 @@ import { JSONContent } from '@tiptap/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { extractPageSlugId } from '@/lib';
 import { buildDatabaseUrl } from '@/features/page/page.utils.ts';
 import { DatabaseTableView } from '@/features/database/components/database-table-view';
@@ -31,6 +31,8 @@ import { currentUserAtom } from '@/features/user/atoms/current-user-atom.ts';
 import { PageEditMode } from '@/features/user/types/user.types.ts';
 import { getAppName } from '@/lib/config.ts';
 import { useAtomValue } from 'jotai';
+import { asideStateAtom } from '@/components/layouts/global/hooks/atoms/sidebar-atom.ts';
+import { useSetAtom } from 'jotai';
 import classes from './database-page.module.css';
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
@@ -71,7 +73,9 @@ function getDescriptionDoc(
 export default function DatabasePage() {
   const { t } = useTranslation();
   const { databaseSlug, spaceSlug } = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
+  const setAsideState = useSetAtom(asideStateAtom);
   const databasePageSlugId = extractPageSlugId(databaseSlug);
 
   // In modern routes the database is opened by the database page slug,
@@ -119,6 +123,19 @@ export default function DatabasePage() {
     false;
 
   const isEditable = !readOnly && userPageEditMode === PageEditMode.Edit;
+
+  useEffect(() => {
+    const shouldOpenCommentsAside = Boolean(
+      (location.state as { openCommentsAside?: boolean } | null)?.openCommentsAside,
+    );
+
+    if (!database?.pageId || !shouldOpenCommentsAside) {
+      return;
+    }
+
+    setAsideState({ tab: 'comments', isAsideOpen: true });
+    navigate(location.pathname, { replace: true, state: null });
+  }, [database?.pageId, location.pathname, location.state, navigate, setAsideState]);
 
   useEffect(() => {
     if (!database) {
@@ -284,12 +301,15 @@ export default function DatabasePage() {
             />
           )}
 
-          <DatabaseDescriptionEditor
-            value={draftDescription.json}
-            editable={isEditable}
-            onValueChange={setDraftDescription}
-            onAutoSave={onDescriptionAutoSave}
-          />
+          {database?.pageId && (
+            <DatabaseDescriptionEditor
+              pageId={database.pageId}
+              value={draftDescription.json}
+              editable={isEditable}
+              onValueChange={setDraftDescription}
+              onAutoSave={onDescriptionAutoSave}
+            />
+          )}
         </Stack>
 
         {database?.spaceId && (
