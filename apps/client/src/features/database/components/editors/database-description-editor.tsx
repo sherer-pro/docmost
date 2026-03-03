@@ -10,6 +10,10 @@ import TableMenu from '@/features/editor/components/table/table-menu.tsx';
 import TableCellMenu from '@/features/editor/components/table/table-cell-menu.tsx';
 import LinkMenu from '@/features/editor/components/link/link-menu.tsx';
 import SlashCommand from '@/features/editor/extensions/slash-command';
+import { useAtom } from 'jotai';
+import { asideStateAtom } from '@/components/layouts/global/hooks/atoms/sidebar-atom.ts';
+import { activeCommentIdAtom, showCommentPopupAtom } from '@/features/comment/atoms/comment-atom';
+import CommentDialog from '@/features/comment/components/comment-dialog';
 import { getDatabaseDescriptionSlashItems } from './database-description-slash-items';
 
 const databaseDescriptionExtensions = mainExtensions.map((extension) => {
@@ -30,6 +34,7 @@ export interface DatabaseDescriptionPayload {
 }
 
 export interface DatabaseDescriptionEditorProps {
+  pageId: string;
   value: JSONContent;
   editable: boolean;
   onValueChange?: (value: DatabaseDescriptionPayload) => void;
@@ -43,6 +48,7 @@ export interface DatabaseDescriptionEditorProps {
  * чтобы описание оставалось лёгким и не превращалось в «полноценную страницу».
  */
 export function DatabaseDescriptionEditor({
+  pageId,
   value,
   editable,
   onValueChange,
@@ -50,6 +56,9 @@ export function DatabaseDescriptionEditor({
 }: DatabaseDescriptionEditorProps) {
   const menuContainerRef = useRef<HTMLDivElement | null>(null);
   const lastCommittedRef = useRef(JSON.stringify(value ?? {}));
+  const [, setAsideState] = useAtom(asideStateAtom);
+  const [, setActiveCommentId] = useAtom(activeCommentIdAtom);
+  const [showCommentPopup, setShowCommentPopup] = useAtom(showCommentPopupAtom);
 
   const saveDescription = useCallback(async () => {
     if (!descriptionEditor) {
@@ -91,6 +100,10 @@ export function DatabaseDescriptionEditor({
     content: value,
     immediatelyRender: true,
     shouldRerenderOnTransaction: false,
+    onCreate({ editor }) {
+      // @ts-ignore pageId is dynamically stored in storage during editor initialization.
+      editor.storage.pageId = pageId;
+    },
   });
 
   const editorIsEditable = useEditorState({
@@ -124,6 +137,36 @@ export function DatabaseDescriptionEditor({
     };
   }, [debounceUpdate, saveDescription]);
 
+  const handleActiveCommentEvent = useCallback((event) => {
+    const { commentId, resolved } = event.detail;
+
+    if (resolved) {
+      return;
+    }
+
+    setActiveCommentId(commentId);
+    setAsideState({ tab: 'comments', isAsideOpen: true });
+
+    setTimeout(() => {
+      const selector = `div[data-comment-id="${commentId}"]`;
+      const commentElement = document.querySelector(selector);
+      commentElement?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 400);
+  }, [setActiveCommentId, setAsideState]);
+
+  useEffect(() => {
+    document.addEventListener('ACTIVE_COMMENT_EVENT', handleActiveCommentEvent);
+
+    return () => {
+      document.removeEventListener('ACTIVE_COMMENT_EVENT', handleActiveCommentEvent);
+    };
+  }, [handleActiveCommentEvent]);
+
+  useEffect(() => {
+    setActiveCommentId(null);
+    setShowCommentPopup(false);
+  }, [pageId, setActiveCommentId, setShowCommentPopup]);
+
   return (
     <div ref={menuContainerRef}>
       <EditorContent
@@ -141,6 +184,8 @@ export function DatabaseDescriptionEditor({
           <LinkMenu editor={descriptionEditor} appendTo={menuContainerRef} />
         </>
       )}
+
+      {showCommentPopup && descriptionEditor && <CommentDialog editor={descriptionEditor} pageId={pageId} />}
     </div>
   );
 }
