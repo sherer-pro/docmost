@@ -3,8 +3,7 @@ import { IconArrowRight, IconArrowsExchange, IconDots, IconLink, IconTrash } fro
 import { notifications } from '@mantine/notifications';
 import { modals } from '@mantine/modals';
 import { useDisclosure } from '@mantine/hooks';
-import { useAtom } from 'jotai';
-import { useAtomValue } from 'jotai';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { saveAs } from 'file-saver';
@@ -33,6 +32,7 @@ import {
   defaultDatabaseTableExportState,
 } from '@/features/database/atoms/database-table-export-atom';
 import { buildDatabaseMarkdownFromState } from '@/features/database/utils/database-markdown';
+import { dropTreeNodeAtom } from '@/features/page/tree/atoms/tree-data-atom.ts';
 
 interface DatabaseHeaderMenuProps {
   databaseId: string;
@@ -59,6 +59,7 @@ export default function DatabaseHeaderMenu({
   const tableExportStateByDatabase = useAtomValue(databaseTableExportStateAtom);
   const { openDeleteModal } = useDeletePageModal();
   const { mutateAsync: removePageMutationAsync } = useRemovePageMutation();
+  const dropTreeNode = useSetAtom(dropTreeNodeAtom);
   const [exportOpened, { open: openExportModal, close: closeExportModal }] =
     useDisclosure(false);
   const [movePageModalOpened, { open: openMovePageModal, close: closeMovePageModal }] =
@@ -168,8 +169,14 @@ export default function DatabaseHeaderMenu({
     }
 
     openDeleteModal({
-      onConfirm: () => {
-        void removePageMutationAsync(databasePageId);
+      onConfirm: async () => {
+        await removePageMutationAsync(databasePageId);
+
+        /**
+         * Дублируем локальное удаление для database-сценария явно в UI-слое меню,
+         * чтобы sidebar и текущий tree-state очищались немедленно даже до refetch.
+         */
+        dropTreeNode(databasePageId);
       },
     });
   };

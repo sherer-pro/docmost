@@ -38,8 +38,8 @@ import { buildTree } from "@/features/page/tree/utils";
 import { useEffect } from "react";
 import { validate as isValidUuid } from "uuid";
 import { useTranslation } from "react-i18next";
-import { useAtom } from "jotai";
-import { treeDataAtom } from "@/features/page/tree/atoms/tree-data-atom";
+import { getDefaultStore, useAtom } from "jotai";
+import { dropTreeNodeAtom, treeDataAtom } from "@/features/page/tree/atoms/tree-data-atom";
 import { SimpleTree } from "react-arborist";
 import { SpaceTreeNode } from "@/features/page/tree/types";
 import { useQueryEmit } from "@/features/websocket/use-query-emit";
@@ -48,6 +48,8 @@ const DEFAULT_SIDEBAR_NODE_TYPES: SidebarNodeType[] = [
   "page",
   "database",
 ];
+
+const jotaiStore = getDefaultStore();
 
 /**
  * Гарантирует, что в запросе sidebar всегда присутствуют базовые типы узлов.
@@ -703,6 +705,14 @@ export function updateCacheOnMovePage(
 }
 
 export function invalidateOnDeletePage(pageId: string) {
+  /**
+   * Синхронно удаляем ноду из atom-дерева тем же алгоритмом, что и drag/drop (`SimpleTree.drop`).
+   *
+   * Это гарантирует каскадное удаление дочерних узлов (включая `databaseRow`)
+   * и убирает визуальные «призраки» до прихода следующего server-refetch.
+   */
+  jotaiStore.set(dropTreeNodeAtom, pageId);
+
   //update all sidebar pages
   const allSideBarMatches = queryClient.getQueriesData({
     predicate: (query) =>
