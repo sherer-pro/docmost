@@ -126,7 +126,7 @@ export class SpaceRepo {
     workspaceId: string,
     documentFields: SpaceDocumentFieldsSettings,
   ) {
-    return this.db
+    const query = this.db
       .updateTable('spaces')
       .set({
         settings: sql`COALESCE(settings, '{}'::jsonb)
@@ -136,8 +136,9 @@ export class SpaceRepo {
       })
       .where('id', '=', spaceId)
       .where('workspaceId', '=', workspaceId)
-      .returningAll()
-      .executeTakeFirst();
+      .returningAll();
+
+    return query.executeTakeFirst();
   }
 
   async insertSpace(
