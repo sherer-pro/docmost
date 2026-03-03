@@ -8,70 +8,49 @@ import {
   IPageInput,
   ISidebarNode,
   SidebarPagesParams,
-} from '@/features/page/types/page.types';
+} from "@/features/page/types/page.types";
 import { QueryParams } from "@/lib/types";
 import { IPagination } from "@/lib/types.ts";
 import { saveAs } from "file-saver";
 import { InfiniteData } from "@tanstack/react-query";
-import { IFileTask } from '@/features/file-task/types/file-task.types.ts';
-import { IAttachment } from '@/features/attachments/types/attachment.types.ts';
-
-
-/**
- * Приводит `settings` страницы к совместимому клиентскому виду.
- *
- * Старые ответы API могли вернуть `settings: null`, а часть ответов —
- * не вернуть поле вовсе. Для фронтенда это должно выглядеть как
- * `settings === undefined`, чтобы сработал fallback на user preference.
- */
-function normalizePage<T extends IPage>(page: T): T {
-  if (!page || typeof page !== 'object') {
-    return page;
-  }
-
-  const rawSettings = (page as { settings?: unknown }).settings;
-  if (rawSettings && typeof rawSettings === 'object') {
-    return page;
-  }
-
-  return {
-    ...page,
-    settings: undefined,
-  };
-}
+import { IFileTask } from "@/features/file-task/types/file-task.types.ts";
+import { IAttachment } from "@/features/attachments/types/attachment.types.ts";
 
 export async function createPage(data: Partial<IPage>): Promise<IPage> {
   const req = await api.post<IPage>("/pages/create", data);
-  return normalizePage(req.data);
+  return req.data;
 }
 
 export async function getPageById(
   pageInput: Partial<IPageInput>,
 ): Promise<IPage> {
   const req = await api.post<IPage>("/pages/info", pageInput);
-  return normalizePage(req.data);
+  return req.data;
 }
 
 export async function updatePage(data: Partial<IPageInput>): Promise<IPage> {
   const req = await api.post<IPage>("/pages/update", data);
-  return normalizePage(req.data);
+  return req.data;
 }
 
-export async function deletePage(pageId: string, permanentlyDelete = false): Promise<void> {
+export async function deletePage(
+  pageId: string,
+  permanentlyDelete = false,
+): Promise<void> {
   await api.post("/pages/delete", { pageId, permanentlyDelete });
 }
 
 export async function getDeletedPages(
   spaceId: string,
   params?: QueryParams,
- ): Promise<IPagination<IPage>> {
+): Promise<IPagination<IPage>> {
   const req = await api.post("/pages/trash", { spaceId, ...params });
   return req.data;
 }
 
 export async function restorePage(pageId: string): Promise<IPage> {
   const response = await api.post<IPage>("/pages/restore", { pageId });
-  return normalizePage(response.data);
+  return response.data;
 }
 
 export async function movePage(data: IMovePage): Promise<void> {
@@ -84,12 +63,12 @@ export async function movePageToSpace(data: IMovePageToSpace): Promise<void> {
 
 export async function duplicatePage(data: ICopyPageToSpace): Promise<IPage> {
   const req = await api.post<IPage>("/pages/duplicate", data);
-  return normalizePage(req.data);
+  return req.data;
 }
 
 export async function getSidebarPages(
   params: SidebarPagesParams,
- ): Promise<IPagination<ISidebarNode>> {
+): Promise<IPagination<ISidebarNode>> {
   const req = await api.post("/pages/sidebar-pages", params);
   return req.data;
 }
@@ -204,7 +183,6 @@ export async function uploadFile(
   return req as unknown as IAttachment;
 }
 
-
 export interface QuoteContentInput {
   sourcePageId: string;
   quoteId: string;
@@ -214,11 +192,12 @@ export interface QuoteContentResult {
   text: string;
 }
 
-export async function getQuoteContent(data: QuoteContentInput): Promise<QuoteContentResult> {
+export async function getQuoteContent(
+  data: QuoteContentInput,
+): Promise<QuoteContentResult> {
   const req = await api.post<QuoteContentResult>("/pages/quote-content", data);
   return req.data;
 }
-
 
 export interface LinkPreviewResult {
   url: string;
@@ -233,7 +212,6 @@ export async function getLinkPreview(url: string): Promise<LinkPreviewResult> {
   return req.data;
 }
 
-
 /**
  * DTO результата конвертации page -> database.
  */
@@ -245,7 +223,11 @@ export interface ConvertPageToDatabaseResult {
 /**
  * Конвертирует страницу в базу данных.
  */
-export async function convertPageToDatabase(pageId: string): Promise<ConvertPageToDatabaseResult> {
-  const req = await api.post<ConvertPageToDatabaseResult>(`/pages/${pageId}/convert-to-database`);
+export async function convertPageToDatabase(
+  pageId: string,
+): Promise<ConvertPageToDatabaseResult> {
+  const req = await api.post<ConvertPageToDatabaseResult>(
+    `/pages/${pageId}/convert-to-database`,
+  );
   return req.data;
 }
