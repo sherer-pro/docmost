@@ -131,7 +131,7 @@ export default function DatabasePage() {
       text: database.description ?? '',
     });
     setSaveState('idle');
-  }, [database?.id, database?.updatedAt]);
+  }, [database?.id]);
 
   /**
    * Унифицированный автосейв метаданных базы (заголовок/описание).
@@ -269,6 +269,7 @@ export default function DatabasePage() {
         <Stack gap="xs" mb="md">
           <div className={classes.titleEditorContainer}>
             <DatabaseTitleEditor
+              databaseId={databaseId}
               value={draftName}
               editable={isEditable}
               onValueChange={setDraftName}
