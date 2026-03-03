@@ -347,7 +347,7 @@ export class PageController {
       throw new ForbiddenException();
     }
 
-    const liveContent = await this.getLivePageContent(dto.sourcePageId, user);
+    const liveContent = await this.getLivePageContent(page.id, user);
     const sourceContent = liveContent ?? page.content;
     const text = this.extractQuoteTextFromContent(sourceContent, dto.quoteId);
 
@@ -534,17 +534,13 @@ export class PageController {
           'Only space admins can permanently delete pages',
         );
       }
-      await this.pageService.forceDelete(deletePageDto.pageId, workspace.id);
+      await this.pageService.forceDelete(page.id, workspace.id);
     } else {
       // Soft delete requires page manage permissions
       if (ability.cannot(SpaceCaslAction.Manage, SpaceCaslSubject.Page)) {
         throw new ForbiddenException();
       }
-      await this.pageService.removePage(
-        deletePageDto.pageId,
-        user.id,
-        workspace.id,
-      );
+      await this.pageService.removePage(page.id, user.id, workspace.id);
     }
   }
 
@@ -566,9 +562,9 @@ export class PageController {
       throw new ForbiddenException();
     }
 
-    await this.pageRepo.restorePage(pageIdDto.pageId, workspace.id);
+    await this.pageRepo.restorePage(page.id, workspace.id);
 
-    return this.pageRepo.findById(pageIdDto.pageId, {
+    return this.pageRepo.findById(page.id, {
       includeHasChildren: true,
     });
   }
