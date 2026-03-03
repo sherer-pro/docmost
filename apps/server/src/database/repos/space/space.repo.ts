@@ -174,6 +174,14 @@ export class SpaceRepo {
   }
 
   withMemberCount(eb: ExpressionBuilder<DB, 'spaces'>) {
+    /**
+     * Формируем унифицированный набор участников пространства:
+     * - прямые участники через space_members.user_id;
+     * - участники, полученные через группы.
+     *
+     * Для второй ветки явно исключаем null, чтобы COUNT(*) ниже
+     * не учитывал пустые строки от LEFT JOIN.
+     */
     const subquery = eb
       .selectFrom('spaceMembers')
       .select('spaceMembers.userId')
@@ -186,13 +194,14 @@ export class SpaceRepo {
           .leftJoin('groups', 'groups.id', 'spaceMembers.groupId')
           .leftJoin('groupUsers', 'groupUsers.groupId', 'groups.id')
           .select('groupUsers.userId')
+          .where('groupUsers.userId', 'is not', null)
           .whereRef('spaceMembers.spaceId', '=', 'spaces.id'),
       )
       .as('userId');
 
     return eb
       .selectFrom(subquery)
-      .select(() => sql<number>`COUNT("userId")::int`.as('count'))
+      .select(() => sql<number>`COUNT(*)::int`.as('count'))
       .as('memberCount');
   }
 
