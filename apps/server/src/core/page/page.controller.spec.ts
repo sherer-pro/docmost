@@ -35,7 +35,7 @@ describe('PageController guardrails and mixed-id contract', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     pageService.getSidebarPages.mockResolvedValue({ items: [] });
-    pageService.update.mockResolvedValue({ id: 'uuid-page' });
+    pageService.update.mockResolvedValue({ id: 'uuid-page', settings: null });
     pageRepo.findById.mockResolvedValue({
       id: 'uuid-page',
       slugId: 'docs-home',
@@ -48,7 +48,11 @@ describe('PageController guardrails and mixed-id contract', () => {
   });
 
   it('sidebar-pages rejects mismatched pageId/spaceId', async () => {
-    pageRepo.findById.mockResolvedValue({ id: 'p1', spaceId: 'space-a', deletedAt: null });
+    pageRepo.findById.mockResolvedValue({
+      id: 'p1',
+      spaceId: 'space-a',
+      deletedAt: null,
+    });
 
     await expect(
       controller.getSidebarPages(
@@ -77,7 +81,11 @@ describe('PageController guardrails and mixed-id contract', () => {
   it('move rejects deleted parent page', async () => {
     pageRepo.findById
       .mockResolvedValueOnce({ id: 'p1', spaceId: 'space-a', deletedAt: null })
-      .mockResolvedValueOnce({ id: 'parent', spaceId: 'space-a', deletedAt: new Date() });
+      .mockResolvedValueOnce({
+        id: 'parent',
+        spaceId: 'space-a',
+        deletedAt: new Date(),
+      });
 
     await expect(
       controller.movePage(
@@ -88,10 +96,62 @@ describe('PageController guardrails and mixed-id contract', () => {
   });
 
   it('allows update endpoint with slug identifier via findById mixed-id lookup', async () => {
-    await controller.update({ pageId: 'docs-home' } as any, { id: 'u1' } as any);
+    await controller.update(
+      { pageId: 'docs-home' } as any,
+      { id: 'u1' } as any,
+    );
 
     expect(pageRepo.findById).toHaveBeenCalledWith('docs-home');
     expect(pageService.update).toHaveBeenCalled();
+  });
+
+  it('normalizes settings in pages/info response to undefined when source is null', async () => {
+    pageRepo.findById.mockResolvedValue({
+      id: 'uuid-page',
+      slugId: 'docs-home',
+      spaceId: 'space-a',
+      workspaceId: 'workspace-1',
+      content: { type: 'doc' },
+      settings: null,
+      contributorIds: [],
+    });
+    databaseRepo.findByPageId.mockResolvedValue(null);
+
+    const result = await controller.getPage(
+      { pageId: 'uuid-page' } as any,
+      { id: 'u1' } as any,
+    );
+
+    expect(result.settings).toBeUndefined();
+    expect(result.customFields).toEqual({
+      status: null,
+      assigneeId: null,
+      stakeholderIds: [],
+    });
+  });
+
+  it('normalizes settings in pages/update response to undefined when source is null', async () => {
+    pageService.update.mockResolvedValue({
+      id: 'uuid-page',
+      slugId: 'docs-home',
+      spaceId: 'space-a',
+      workspaceId: 'workspace-1',
+      content: null,
+      settings: null,
+      contributorIds: [],
+    });
+
+    const result = await controller.update(
+      { pageId: 'docs-home' } as any,
+      { id: 'u1' } as any,
+    );
+
+    expect(result.settings).toBeUndefined();
+    expect(result.customFields).toEqual({
+      status: null,
+      assigneeId: null,
+      stakeholderIds: [],
+    });
   });
 
   it('uses resolved UUID for permanent delete even when slug is provided', async () => {
@@ -101,7 +161,10 @@ describe('PageController guardrails and mixed-id contract', () => {
       { id: 'workspace-1' } as any,
     );
 
-    expect(pageService.forceDelete).toHaveBeenCalledWith('uuid-page', 'workspace-1');
+    expect(pageService.forceDelete).toHaveBeenCalledWith(
+      'uuid-page',
+      'workspace-1',
+    );
   });
 
   it('uses resolved UUID for soft delete even when slug is provided', async () => {
@@ -111,7 +174,11 @@ describe('PageController guardrails and mixed-id contract', () => {
       { id: 'workspace-1' } as any,
     );
 
-    expect(pageService.removePage).toHaveBeenCalledWith('uuid-page', 'u1', 'workspace-1');
+    expect(pageService.removePage).toHaveBeenCalledWith(
+      'uuid-page',
+      'u1',
+      'workspace-1',
+    );
   });
 
   it('uses resolved UUID for restore even when slug is provided', async () => {
@@ -121,7 +188,10 @@ describe('PageController guardrails and mixed-id contract', () => {
       { id: 'workspace-1' } as any,
     );
 
-    expect(pageRepo.restorePage).toHaveBeenCalledWith('uuid-page', 'workspace-1');
+    expect(pageRepo.restorePage).toHaveBeenCalledWith(
+      'uuid-page',
+      'workspace-1',
+    );
     expect(pageRepo.findById).toHaveBeenLastCalledWith('uuid-page', {
       includeHasChildren: true,
     });
