@@ -1,97 +1,125 @@
 # Аудит репозитория за последние 48 часов: согласованность и дублирование
 
-## 1) Как проводился анализ
+## 1) Методика
 
-Проверка выполнялась по двум слоям:
+Анализ выполнен в двух плоскостях:
 
-1. **История изменений за 48 часов** (коммиты + файлы, частота правок).
-2. **Текущее состояние кода на `HEAD`** в самых изменяемых местах (роутинг, кэш, меню действий, удаление/конвертация page/database).
+1. **Git-история за 48 часов**: частота правок, повторяемость патчей, характер коммитов.
+2. **Текущее состояние `HEAD`** в наиболее «горячих» местах: page/database routing, меню действий, API normalization, cache invalidation.
 
-### Команды, использованные для анализа
+Команды:
 
 ```bash
-git log --since='48 hours ago' --pretty=format:'%h %ad %an %s' --date=iso
-git log --since='48 hours ago' --oneline --decorate --graph --max-count=80
-git log --since='48 hours ago' --name-only --pretty=format:'--- %h %ad %s' --date=iso > /tmp/log48.txt
-awk '/^apps\//{print}' /tmp/log48.txt | sort | uniq -c | sort -nr | head -n 30
-git show --stat --oneline 77b233fa
-git show --stat --oneline a49e2511
-rg -n "invalidateOnDeletePage|dropTreeNode|handleCopyLink|Convert database to page\?|/s/\$\{spaceSlug\}/p/\$\{result.slugId\}" \
-  apps/client/src/features/page/queries/page-query.ts \
-  apps/client/src/features/database/components/header/database-header-menu.tsx \
-  apps/client/src/features/page/components/header/page-header-menu.tsx
+git log --since='48 hours ago' --pretty=format:'%H %ad %s' --date=iso
+git log --since='48 hours ago' --no-merges --name-only --pretty=format:
+python: подсчёт частоты изменений по файлам
+python: поиск дубликатов patch-id через git patch-id --stable
+rg: поиск дублирующихся handler-ов и route-строителей
 ```
 
-## 2) Что по согласованности
+---
 
-### Позитивная динамика (согласованность повышается)
+## 2) Что улучшилось по согласованности
 
-1. **Централизация инвалидации кэша** появилась в отдельном модуле (`invalidateSidebarTree`, `invalidateDatabaseEntity`, `invalidatePageEntity`, `invalidateDatabaseRowContext`). Это снижает вероятность рассинхронизации между page/database флоу.
-2. **Унификация контракта идентификаторов** (id/slug/databaseId) выделена в адаптер, что уменьшает количество ad-hoc преобразований в UI.
-3. **URL-строитель для database-роутов** вынесен в `buildDatabaseUrl`/`buildDatabaseNodeUrl`, что в целом уменьшает ручную сборку ссылок.
+### 2.1 Единая нормализация API-ответа для page
 
-## 3) Найденные несогласованности
+На сервере добавлен mapper `mapPageResponse`, который централизует нормализацию `settings` и формирование `customFields`.
+Это снижает вероятность расхождения контрактов между endpoint-ами page.
 
-### 3.1. Разные подходы к сборке route в похожем сценарии
+### 2.2 Централизация cache invalidation на клиенте
 
-- В `database-header-menu` после `database -> page` используется **ручной шаблон** `navigate(`/s/${spaceSlug}/p/${result.slugId}`)`.
-- В `page-header-menu` аналогичные переходы строятся через helper (`buildPageUrl`).
+Вынесенные helper-ы `invalidateSidebarTree`, `invalidateDatabaseEntity`, `invalidatePageEntity`, `invalidateDatabaseRowContext`
+используются и в `page-query`, и в `database-query`, что заметно уменьшает риск «забытых» invalidate после мутаций.
 
-**Риск:** повторение логики роутинга в строках увеличивает шанс будущего расхождения (особенно при изменении формата URL).
+### 2.3 Унификация URL helper-ов
 
-### 3.2. Дублирующая «обертка» для copy-link
+В проекте активно используются `buildPageUrl`, `buildDatabaseUrl`, `buildDatabaseNodeUrl`, что в целом уменьшает
+ручную сборку ссылок и повышает предсказуемость роутинга.
 
-- В `database-header-menu` есть `handleCopyDatabaseLink`, а `handleCopyLink` просто проксирует вызов без дополнительной логики.
+---
 
-**Риск:** лишний уровень абстракции без ценности, повышает шум и усложняет поддержку.
+## 3) Найденные несогласованности и дублирование
 
-### 3.3. Повтор модального текста/сценариев конвертации в двух меню
+### 3.1 Локальная несогласованность route-building в похожих conversion-flow
 
-- Подтверждение `Convert database to page?` и близкая бизнес-логика присутствуют одновременно в page- и database-меню.
+- В `page-header-menu` после conversion используется helper (`buildPageUrl`).
+- В `database-header-menu` в аналогичном сценарии остаётся ручной шаблон: `navigate(`/s/${spaceSlug}/p/${result.slugId}`)`.
 
-**Риск:** при последующих правках текст/поведение легко разъедутся (переводы, side effects, invalidate policy).
+**Риск:** при изменении канонического формата page URL поведение в двух меню может разъехаться.
 
-## 4) Дублирование и избыточность в истории коммитов
+### 3.2 Лишняя прокси-обёртка в copy-link
 
-### 4.1. Явно повторённый commit (идентичный патч)
+В `database-header-menu` есть пара:
+- `handleCopyDatabaseLink`
+- `handleCopyLink` (только проксирует вызов первой без добавления логики)
 
-Коммиты:
-- `77b233fa feat(client): add page-scoped full width toggle`
-- `a49e2511 feat(client): add page-scoped full width toggle`
+**Риск:** техдолг небольшого масштаба, но увеличивает шум и когнитивную нагрузку при чтении.
 
-Оба имеют одинаковый набор файлов и одинаковую статистику изменений (7 файлов, +103/-8).
+### 3.3 Дублирование conversion-confirmation текста и flow в двух меню
 
-**Вывод:** в историю попал дублирующийся patch (вероятно из-за параллельных PR-веток и merge-последовательности).
+Подтверждение и сценарий `Convert database to page?` реализованы и в page menu, и в database menu отдельно.
 
-### 4.2. Высокая концентрация правок в «горячих» файлах
+**Риск:** высока вероятность расхождения текстов, i18n-ключей и post-action side effects при будущих изменениях.
 
-Топ по частоте изменений за 48 часов:
-- `database-table-view.tsx` — 22
-- `database-page.tsx` — 21
-- `space-tree.tsx` — 21
-- `page.service.ts` — 18
-- `database.service.ts` — 15
-- `database-header-menu.tsx` — 15
-- `page-query.ts` — 14
+### 3.4 Повторяющийся patch в истории коммитов
 
-**Вывод:** архитектурная область page/database/tree активно стабилизируется, но пока остаётся зоной повышенного риска регрессий и повторов логики.
+Выявлен одинаковый `patch-id` у двух разных коммитов:
 
-## 5) Оценка по API/модулям
+- `77b233fad940c0e6f98d83a7eec5f71da94c63e2`
+- `a49e25113f77041bb6863159e5838de27b4a10be`
 
-1. **API/контракты id/slug:** общий тренд положительный (идёт унификация), но в UI ещё местами есть ручные route-сборки.
-2. **Кэш и state-sync:** после введения общего invalidate-модуля консистентность улучшилась, но часть операций удаления/синхронизации всё ещё размазана между mutation-layer и UI-layer.
-3. **Компонентная архитектура меню:** есть шаг к общим action item (`DocumentCommonActionItems`), однако доменные действия конвертации/удаления пока продублированы в двух крупных меню.
+Это означает фактическое дублирование одного и того же изменения в истории.
 
-## 6) Практические рекомендации
+---
 
-1. **Дожать единый routing adapter**: запретить ручные route-string в feature-компонентах, оставить только helper-функции.
-2. **Вынести conversion flows в общий hook/service** (например, `useDocumentTypeConversion`) и переиспользовать в page/database меню.
-3. **Упростить слой action handlers**: удалить proxy-обертки без добавочной логики (`handleCopyLink -> handleCopyDatabaseLink`).
-4. **Добавить guard в review-процесс на duplicate patch** (например, проверка patch-id в PR-template/checklist).
-5. **Для горячих файлов ввести локальные контрактные тесты** на роутинг/инвалидацию (особенно `space-tree`, `page-query`, `database-page`).
+## 4) «Горячие» файлы (по числу изменений за 48 часов, без merge-коммитов)
 
-## 7) Краткий итог
+1. `apps/client/src/features/database/components/database-table-view.tsx` — 22
+2. `apps/client/src/features/page/tree/components/space-tree.tsx` — 22
+3. `apps/client/src/pages/database/database-page.tsx` — 22
+4. `apps/server/src/core/page/services/page.service.ts` — 19
+5. `apps/client/src/features/database/components/header/database-header-menu.tsx` — 16
+6. `apps/server/src/core/database/services/database.service.ts` — 16
+7. `apps/client/src/features/page/queries/page-query.ts` — 15
 
-- За последние 48 часов команда проделала заметную работу по **унификации** page/database сценариев.
-- Основные риски сейчас не в отсутствии функционала, а в **остаточной дубликации UI-логики** и **повторяемости патчей в истории**.
-- При доведении routing+conversion до единого центра и укреплении проверок на дубли веток консистентность заметно вырастет.
+**Вывод:** зона page/database/tree остаётся наиболее регрессионно-опасной; архитектурная стабилизация идёт,
+но всё ещё сопровождается высокой турбулентностью изменений.
+
+---
+
+## 5) Оценка по запросу
+
+### 5.1 Согласованность функций/компонентов/модулей/API
+
+- **Положительно:**
+  - усилилась согласованность API-контрактов page за счёт mapper-подхода;
+  - усилилась согласованность клиентского state-sync через общий invalidate-модуль;
+  - общий тренд последних коммитов — на унификацию id/slug contract и route helper-ы.
+- **Остаточные проблемы:**
+  - частичная ручная сборка URL в conversion-flow;
+  - дублирование доменных сценариев conversion в двух меню-компонентах.
+
+### 5.2 Избыточность и дублирующая логика/API
+
+- **Подтверждённая избыточность в коде:** proxy-handler для copy-link без самостоятельной логики.
+- **Подтверждённое дублирование в истории:** одинаковый patch в двух коммитах (по `patch-id`).
+- **Частично дублируемая бизнес-логика:** conversion-confirmation flow в двух menu-компонентах.
+
+---
+
+## 6) Приоритетные рекомендации
+
+1. **Убрать ручные page-route шаблоны** из feature-компонентов, оставить только helper-ы (`buildPageUrl`).
+2. **Свести conversion-flow в единый переиспользуемый слой** (например, `useDocumentConversionActions`).
+3. **Удалить proxy-handler без логики** (`handleCopyLink -> handleCopyDatabaseLink`) либо добавить в него отдельную ответственность.
+4. **Добавить lightweight-проверку на duplicate patch в PR-процессе** (patch-id/commit-range check).
+5. Для «горячих» файлов (`database-page`, `space-tree`, `database-table-view`) расширить тесты на
+   route consistency + cache invalidation side effects.
+
+---
+
+## 7) Итог
+
+За последние 48 часов наблюдается выраженный тренд на унификацию и стабилизацию page/database подсистемы.
+Критичных архитектурных конфликтов не обнаружено, но остаются локальные источники расхождения (ручной route-building,
+дублирующиеся conversion-flow и повтор патча в истории). Устранение этих точек даст наиболее быстрый прирост консистентности.
