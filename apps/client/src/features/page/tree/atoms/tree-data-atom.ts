@@ -1,6 +1,6 @@
 import { atom } from "jotai";
 import { SpaceTreeNode } from "@/features/page/tree/types";
-import { appendNodeChildren } from "../utils";
+import { appendNodeChildren, dropTreeNode } from "../utils";
 
 export const treeDataAtom = atom<SpaceTreeNode[]>([]);
 
@@ -17,3 +17,15 @@ export const appendNodeChildrenAtom = atom(
     set(treeDataAtom, updatedTree);
   }
 );
+
+/**
+ * Единая atom-операция удаления узла из дерева.
+ *
+ * Важно: удаление каскадное — вместе с дочерними узлами (например, databaseRow),
+ * чтобы локальное дерево после удаления database-page не содержало «висячие» ноды.
+ */
+export const dropTreeNodeAtom = atom(null, (get, set, nodeId: string) => {
+  const currentTree = get(treeDataAtom);
+  const updatedTree = dropTreeNode(currentTree, nodeId);
+  set(treeDataAtom, updatedTree);
+});

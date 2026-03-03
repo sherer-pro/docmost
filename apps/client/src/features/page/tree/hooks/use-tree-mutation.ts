@@ -21,6 +21,7 @@ import {
 import { generateJitteredKeyBetween } from "fractional-indexing-jittered";
 import { SpaceTreeNode } from "@/features/page/tree/types.ts";
 import { buildPageUrl } from "@/features/page/page.utils.ts";
+import { dropTreeNode } from "@/features/page/tree/utils";
 import { getSpaceUrl } from "@/lib/config.ts";
 import { useQueryEmit } from "@/features/websocket/use-query-emit.ts";
 
@@ -258,8 +259,7 @@ export function useTreeMutation<T>(spaceId: string) {
         return;
       }
 
-      tree.drop({ id: args.ids[0] });
-      setData(tree.data);
+      setData(dropTreeNode(data, args.ids[0]));
 
       if (pageSlug && isPageInNode(node, pageSlug.split("-")[1])) {
         navigate(getSpaceUrl(spaceSlug));
