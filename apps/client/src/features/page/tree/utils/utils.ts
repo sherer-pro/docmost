@@ -1,5 +1,6 @@
 import { IPage, ISidebarNode } from "@/features/page/types/page.types.ts";
 import { SpaceTreeNode } from "@/features/page/tree/types.ts";
+import { SimpleTree } from "react-arborist";
 
 export function sortPositionKeys(keys: any[]) {
   return keys.sort((a, b) => {
@@ -124,6 +125,28 @@ export const deleteTreeNode = (
       return node;
     })
     .filter((node) => node !== null);
+};
+
+/**
+ * Удаляет узел и всё его поддерево из локального дерева так же,
+ * как это делает `SimpleTree.drop` в drag-n-drop сценариях.
+ *
+ * Используем этот helper как единый источник правды для page/database удаления,
+ * чтобы parent/children связи и флаг `hasChildren` обновлялись консистентно.
+ */
+export const dropTreeNode = (
+  nodes: SpaceTreeNode[],
+  nodeId: string,
+): SpaceTreeNode[] => {
+  const treeApi = new SimpleTree<SpaceTreeNode>(nodes);
+
+  if (!treeApi.find(nodeId)) {
+    return nodes;
+  }
+
+  treeApi.drop({ id: nodeId });
+
+  return treeApi.data;
 };
 
 export function buildTreeWithChildren(items: SpaceTreeNode[]): SpaceTreeNode[] {
