@@ -1,15 +1,12 @@
 import { Group } from '@mantine/core';
-import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import classes from '@/features/page/components/header/page-header.module.css';
-import { getSpaceUrl } from '@/lib/config.ts';
 import DatabaseHeaderMenu from '@/features/database/components/header/database-header-menu.tsx';
 
 interface DatabaseHeaderProps {
   databaseId: string;
   databasePageId?: string;
   spaceSlug: string;
-  spaceName?: string;
   databaseName?: string;
   readOnly?: boolean;
 }
@@ -18,7 +15,6 @@ export default function DatabaseHeader({
   databaseId,
   databasePageId,
   spaceSlug,
-  spaceName,
   databaseName,
   readOnly,
 }: DatabaseHeaderProps) {
@@ -29,8 +25,6 @@ export default function DatabaseHeader({
     <div className={classes.header}>
       <Group justify="space-between" h="100%" px="md" wrap="nowrap" className={classes.group}>
         <Group gap="xs" wrap="nowrap">
-          <Link to={getSpaceUrl(spaceSlug)}>{spaceName || spaceSlug}</Link>
-          <span>/</span>
           <span>{displayName}</span>
         </Group>
 
