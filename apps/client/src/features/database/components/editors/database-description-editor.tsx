@@ -1,10 +1,28 @@
 import '@/features/editor/styles/index.css';
 import classes from '@/pages/database/database-page.module.css';
 import { useDebouncedCallback } from '@mantine/hooks';
-import { EditorContent, JSONContent, useEditor } from '@tiptap/react';
+import { EditorContent, JSONContent, useEditor, useEditorState } from '@tiptap/react';
 import React, { useCallback, useEffect, useRef } from 'react';
 import clsx from 'clsx';
 import { mainExtensions } from '@/features/editor/extensions/extensions';
+import { EditorBubbleMenu } from '@/features/editor/components/bubble-menu/bubble-menu';
+import TableMenu from '@/features/editor/components/table/table-menu.tsx';
+import TableCellMenu from '@/features/editor/components/table/table-cell-menu.tsx';
+import LinkMenu from '@/features/editor/components/link/link-menu.tsx';
+import SlashCommand from '@/features/editor/extensions/slash-command';
+import { getDatabaseDescriptionSlashItems } from './database-description-slash-items';
+
+const databaseDescriptionExtensions = mainExtensions.map((extension) => {
+  if (extension?.name !== 'slash-command') {
+    return extension;
+  }
+
+  return SlashCommand.configure({
+    suggestion: {
+      items: getDatabaseDescriptionSlashItems,
+    },
+  });
+});
 
 export interface DatabaseDescriptionPayload {
   json: JSONContent;
@@ -30,6 +48,7 @@ export function DatabaseDescriptionEditor({
   onValueChange,
   onAutoSave,
 }: DatabaseDescriptionEditorProps) {
+  const menuContainerRef = useRef<HTMLDivElement | null>(null);
   const lastCommittedRef = useRef(JSON.stringify(value ?? {}));
 
   const saveDescription = useCallback(async () => {
@@ -58,7 +77,7 @@ export function DatabaseDescriptionEditor({
   }, 500);
 
   const descriptionEditor = useEditor({
-    extensions: mainExtensions,
+    extensions: databaseDescriptionExtensions,
     onUpdate({ editor }) {
       const payload = {
         json: editor.getJSON(),
@@ -72,6 +91,13 @@ export function DatabaseDescriptionEditor({
     content: value,
     immediatelyRender: true,
     shouldRerenderOnTransaction: false,
+  });
+
+  const editorIsEditable = useEditorState({
+    editor: descriptionEditor,
+    selector: (ctx) => {
+      return ctx.editor?.isEditable ?? false;
+    },
   });
 
   useEffect(() => {
@@ -99,11 +125,22 @@ export function DatabaseDescriptionEditor({
   }, [debounceUpdate, saveDescription]);
 
   return (
-    <EditorContent
-      editor={descriptionEditor}
-      className={clsx(classes.databaseDescriptionEditor, {
-        [classes.readOnlyDescription]: !editable,
-      })}
-    />
+    <div ref={menuContainerRef}>
+      <EditorContent
+        editor={descriptionEditor}
+        className={clsx(classes.databaseDescriptionEditor, {
+          [classes.readOnlyDescription]: !editable,
+        })}
+      />
+
+      {descriptionEditor && editorIsEditable && (
+        <>
+          <EditorBubbleMenu editor={descriptionEditor} />
+          <TableMenu editor={descriptionEditor} />
+          <TableCellMenu editor={descriptionEditor} appendTo={menuContainerRef} />
+          <LinkMenu editor={descriptionEditor} appendTo={menuContainerRef} />
+        </>
+      )}
+    </div>
   );
 }
