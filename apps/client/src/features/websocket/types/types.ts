@@ -89,3 +89,13 @@ export type WebSocketEvent =
   | DeleteTreeNodeEvent
   | RefetchRootTreeNodeEvent
   | ResolveCommentEvent;
+
+export type WebSocketEventEnvelope = {
+  operation: "broadcast";
+  targetRoom: string;
+  spaceId?: string;
+  workspaceId?: string;
+  data: WebSocketEvent;
+};
+
+export type WebSocketIncomingEvent = WebSocketEvent | WebSocketEventEnvelope;

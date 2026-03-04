@@ -66,7 +66,7 @@ function CommentListItem({
       emit({
         operation: "invalidateComment",
         pageId: pageId,
-      });
+      }, { workspaceId: comment.workspaceId });
     } catch (error) {
       console.error("Failed to update comment:", error);
     } finally {
@@ -82,7 +82,7 @@ function CommentListItem({
       emit({
         operation: "invalidateComment",
         pageId: pageId,
-      });
+      }, { workspaceId: comment.workspaceId });
     } catch (error) {
       console.error("Failed to delete comment:", error);
     }
@@ -107,7 +107,7 @@ function CommentListItem({
       emit({
         operation: "invalidateComment",
         pageId: pageId,
-      });
+      }, { workspaceId: comment.workspaceId });
     } catch (error) {
       console.error("Failed to toggle resolved state:", error);
     }

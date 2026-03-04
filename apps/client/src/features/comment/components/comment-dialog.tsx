@@ -84,7 +84,7 @@ function CommentDialog({ editor, pageId }: CommentDialogProps) {
       emit({
         operation: "invalidateComment",
         pageId: pageId,
-      });
+      }, { workspaceId: createdComment.workspaceId });
     } finally {
       setShowCommentPopup(false);
       setDraftCommentId("");
