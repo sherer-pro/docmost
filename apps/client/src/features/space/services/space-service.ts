@@ -9,7 +9,7 @@ import {
 } from "@/features/space/types/space.types";
 import { IPagination, QueryParams } from "@/lib/types.ts";
 import { SpaceUserInfo } from "@/features/space/types/space.types.ts";
-import { saveAs } from "file-saver";
+import { downloadBlobFromAxiosResponse } from '@/lib/download';
 
 export async function getSpaces(
   params?: QueryParams,
@@ -63,28 +63,16 @@ export async function changeMemberRole(
 
 export async function exportSpace(data: IExportSpaceParams): Promise<void> {
   /**
-   * Экспорт возвращает бинарный файл + заголовок `content-disposition`,
-   * поэтому явно отключаем unwrap envelope и просим blob-ответ.
+   * Export returns a binary file with `content-disposition` header,
+   * so we explicitly request a blob response and keep full AxiosResponse.
    */
   const req = await api.post('/spaces/actions/export', data, {
     responseType: 'blob',
     skipEnvelopeUnwrap: true,
   });
 
-  const fileName = req?.headers['content-disposition']
-    .split('filename=')[1]
-    .replace(/"/g, "");
-
-  let decodedFileName = fileName;
-  try {
-    decodedFileName = decodeURIComponent(fileName);
-  } catch (err) {
-    // fallback to raw filename
-  }
-
-  saveAs(req.data, decodedFileName);
+  downloadBlobFromAxiosResponse(req);
 }
-
 
 export async function getSpaceMemberUsers(
   spaceId: string,

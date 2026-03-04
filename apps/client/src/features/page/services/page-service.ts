@@ -11,11 +11,10 @@ import {
 } from "@/features/page/types/page.types";
 import { QueryParams } from "@/lib/types";
 import { IPagination } from "@/lib/types.ts";
-import { saveAs } from "file-saver";
 import { InfiniteData } from "@tanstack/react-query";
 import { IFileTask } from '@/features/file-task/types/file-task.types.ts';
 import { IAttachment } from '@/features/attachments/types/attachment.types.ts';
-
+import { downloadBlobFromAxiosResponse } from '@/lib/download';
 
 /**
  * Makes the page's `settings` look client-side compatible.
@@ -136,26 +135,15 @@ export async function getRecentChanges(
 
 export async function exportPage(data: IExportPageParams): Promise<void> {
   /**
-   * Экспорт возвращает бинарный файл + заголовок `content-disposition`,
-   * поэтому явно отключаем unwrap envelope и просим blob-ответ.
+   * Export returns a binary file with `content-disposition` header,
+   * so we explicitly request a blob response and keep full AxiosResponse.
    */
   const req = await api.post('/pages/actions/export', data, {
     responseType: "blob",
     skipEnvelopeUnwrap: true,
   });
 
-  const fileName = req?.headers["content-disposition"]
-    .split("filename=")[1]
-    .replace(/"/g, "");
-
-  let decodedFileName = fileName;
-  try {
-    decodedFileName = decodeURIComponent(fileName);
-  } catch (err) {
-    // fallback to raw filename
-  }
-
-  saveAs(req.data, decodedFileName);
+  downloadBlobFromAxiosResponse(req);
 }
 
 export async function importPage(file: File, spaceId: string) {
