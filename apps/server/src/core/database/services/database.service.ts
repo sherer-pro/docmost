@@ -478,6 +478,7 @@ export class DatabaseService {
       spaceId: dto.spaceId,
       name: normalizedName,
       description: dto.description,
+      descriptionContent: dto.descriptionContent as never,
       icon: dto.icon,
       workspaceId,
       creatorId: actorId,

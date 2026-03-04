@@ -92,6 +92,7 @@ export default function DatabasePage() {
 
   const { data: database } = useGetDatabaseQuery(databaseId);
   const databasePage = databasePageBySlug;
+  const databasePageId = databasePage?.id ?? database?.pageId;
   const { data: space } = useGetSpaceBySlugQuery(spaceSlug);
   const { mutateAsync: updateDatabaseMutationAsync } = useUpdateDatabaseMutation(
     space?.id,
@@ -250,12 +251,15 @@ export default function DatabasePage() {
 
   const onDescriptionAutoSave = useCallback(
     async (payload: DatabaseDescriptionPayload) => {
-      const currentSerialized = JSON.stringify(
-        getDescriptionDoc(database?.descriptionContent, database?.description),
-      );
+      /**
+       * Сравниваем с локальным черновиком, а не только с последним ответом API:
+       * это защищает от лишних PATCH, когда autosave срабатывает повторно
+       * до прихода свежего состояния с сервера.
+       */
+      const currentSerialized = JSON.stringify(draftDescription.json);
       const nextSerialized = JSON.stringify(payload.json);
       const nextText = payload.text.trim();
-      const currentText = (database?.description ?? '').trim();
+      const currentText = draftDescription.text.trim();
 
       if (currentSerialized === nextSerialized && nextText === currentText) {
         return;
@@ -266,7 +270,7 @@ export default function DatabasePage() {
         descriptionContent: payload.json,
       });
     },
-    [commitMetaChanges, database?.description, database?.descriptionContent],
+    [commitMetaChanges, draftDescription.json, draftDescription.text],
   );
 
   const databaseDisplayName = useMemo(() => {
@@ -321,9 +325,9 @@ export default function DatabasePage() {
             />
           )}
 
-          {database?.pageId && (
+          {databasePageId && (
             <DatabaseDescriptionEditor
-              pageId={database.pageId}
+              pageId={databasePageId}
               value={draftDescription.json}
               editable={isEditable}
               onValueChange={setDraftDescription}
