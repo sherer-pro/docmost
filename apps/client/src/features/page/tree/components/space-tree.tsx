@@ -703,13 +703,18 @@ function NodeMenu({ node, treeApi, spaceId }: NodeMenuProps) {
     !(treeApi.props.disableEdit as boolean);
 
   const handleCopyLink = () => {
+    const resolvedDatabaseIds = resolvePageDatabaseIds({
+      pageId: node.data.id,
+      slugId: node.data.slugId,
+      databaseId: node.data.databaseId,
+    });
+
     const nodeUrl =
       node.data.nodeType === "database"
         ? `${getAppUrl()}${buildDatabaseNodeUrl({
             spaceSlug,
-            pageSlugId: node.data.slugId,
+            pageSlugId: resolvedDatabaseIds.slugId,
             pageTitle: node.data.name,
-            databaseId: node.data.databaseId,
           })}`
         : getAppUrl() +
           buildPageUrl(spaceSlug, node.data.slugId ?? "", node.data.name);
