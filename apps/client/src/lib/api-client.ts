@@ -1,4 +1,7 @@
-import axios, { AxiosHeaders, AxiosInstance } from "axios";
+import axios, {
+  AxiosHeaders,
+  AxiosInstance,
+} from "axios";
 import APP_ROUTE from "@/lib/app-route.ts";
 import { isCloud } from "@/lib/config.ts";
 
@@ -6,6 +9,32 @@ const api: AxiosInstance = axios.create({
   baseURL: "/api",
   withCredentials: true,
 });
+
+declare module "axios" {
+  interface AxiosRequestConfig {
+    /**
+     * Явно отключает автоматический unwrap API-envelope (`{ data, success, status }`).
+     *
+     * Используется в особых сценариях (например, file export), где вызывающему коду
+     * нужны заголовки, бинарное тело и другие поля полного `AxiosResponse`.
+     */
+    skipEnvelopeUnwrap?: boolean;
+  }
+}
+
+/**
+ * Определяет, нужно ли вернуть полный `AxiosResponse` без unwrap.
+ *
+ * Правила устойчивые и не зависят от конкретного URL:
+ * 1) responseType === 'blob' — для бинарных загрузок нужен полный ответ (headers + data);
+ * 2) config.skipEnvelopeUnwrap === true — явный opt-out для точечных кейсов.
+ */
+function shouldSkipEnvelopeUnwrap(config: {
+  responseType?: string;
+  skipEnvelopeUnwrap?: boolean;
+}): boolean {
+  return config.responseType === "blob" || Boolean(config.skipEnvelopeUnwrap);
+}
 
 /**
  * Reads a cookie value by its name.
@@ -44,20 +73,8 @@ api.interceptors.request.use((config) => {
 
 api.interceptors.response.use(
   (response) => {
-    /**
-     * Default backend contract: { data, success, status }.
-     * Intentionally unwraps to `response.data` so UI services consume domain payloads
-     * without the envelope object.
-     *
-     * Exception: export endpoints below return the full response because callers
-     * need response headers (for example, filename/content-disposition).
-     */
-    const exemptEndpoints = ['/api/pages/export', '/api/spaces/export'];
-    if (response.request.responseURL) {
-      const path = new URL(response.request.responseURL)?.pathname;
-      if (path && exemptEndpoints.includes(path)) {
-        return response;
-      }
+    if (shouldSkipEnvelopeUnwrap(response.config)) {
+      return response;
     }
 
     return response.data;
