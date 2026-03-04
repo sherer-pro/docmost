@@ -1,15 +1,25 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  breadcrumbsKey,
   databaseKey,
+  databasePropertiesKey,
+  databaseRowContextKey,
+  databaseRowsKey,
   databasesBySpaceKey,
+  invalidateBreadcrumbs,
+  invalidateDatabaseProperties,
   invalidateDatabaseEntity,
   invalidateDatabaseRowContext,
   invalidatePageEntity,
+  invalidateRecentChanges,
   invalidateSidebarTree,
+  invalidateTrashList,
   pageKey,
+  recentChangesKey,
   rootSidebarKey,
   sidebarKey,
+  trashListKey,
 } from "./cache-invalidation";
 import { DATABASE_QUERY_KEYS, PAGE_QUERY_KEYS } from "./query-keys";
 
@@ -70,6 +80,25 @@ describe("cache invalidation scenarios", () => {
       databasesBySpaceKey("space-1"),
     );
     assert.deepEqual(DATABASE_QUERY_KEYS.byId("db-1"), databaseKey("db-1"));
+    assert.deepEqual(
+      DATABASE_QUERY_KEYS.properties("db-1"),
+      databasePropertiesKey("db-1"),
+    );
+    assert.deepEqual(DATABASE_QUERY_KEYS.rows("db-1"), databaseRowsKey("db-1"));
+    assert.deepEqual(
+      DATABASE_QUERY_KEYS.rowContext("page-1"),
+      databaseRowContextKey("page-1"),
+    );
+
+    assert.deepEqual(PAGE_QUERY_KEYS.breadcrumbs("page-1"), breadcrumbsKey("page-1"));
+    assert.deepEqual(
+      PAGE_QUERY_KEYS.recentChanges("space-1"),
+      recentChangesKey("space-1"),
+    );
+    assert.deepEqual(
+      PAGE_QUERY_KEYS.trashList("space-1", { limit: 10 }),
+      trashListKey("space-1", { limit: 10 }),
+    );
   });
   it("page:create инвалидирует дерево, recent-changes остаётся на стороне page-query", () => {
     const { client, calls } = createMockClient();
@@ -179,6 +208,30 @@ describe("cache invalidation scenarios", () => {
       JSON.stringify(["database", "row-context"]),
       JSON.stringify(["pages", "page-1"]),
       JSON.stringify(["pages", "page-slug-1"]),
+    ]);
+  });
+
+  it("invalidate recent-changes, breadcrumbs and trash-list via dedicated helpers", () => {
+    const { client, calls } = createMockClient();
+
+    invalidateRecentChanges({ spaceId: "space-1" }, { client });
+    invalidateBreadcrumbs({ pageId: "page-1" }, { client });
+    invalidateTrashList({ spaceId: "space-1" }, { client });
+
+    assert.deepEqual(keyTrace(calls), [
+      JSON.stringify(["recent-changes", "space-1"]),
+      JSON.stringify(["breadcrumbs", "page-1"]),
+      JSON.stringify(["trash-list", "space-1", undefined]),
+    ]);
+  });
+
+  it("invalidate database properties via dedicated helper", () => {
+    const { client, calls } = createMockClient();
+
+    invalidateDatabaseProperties({ databaseId: "db-1" }, { client });
+
+    assert.deepEqual(keyTrace(calls), [
+      JSON.stringify(["database", "db-1", "properties"]),
     ]);
   });
 });
