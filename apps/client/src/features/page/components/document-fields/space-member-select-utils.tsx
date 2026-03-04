@@ -1,5 +1,5 @@
 import React from "react";
-import { Group, MultiSelectProps, SelectProps, Text } from "@mantine/core";
+import { ComboboxParsedItem, Group, MultiSelectProps, SelectProps, Text } from "@mantine/core";
 import { useDebouncedValue } from "@mantine/hooks";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
@@ -12,11 +12,27 @@ export interface SpaceMemberSelectOption extends ComboboxItem {
   email?: string;
 }
 
+function isSpaceMemberSelectOption(option: ComboboxParsedItem): option is SpaceMemberSelectOption {
+  return "value" in option && "label" in option;
+}
+
 interface SpaceMemberSearchConfig {
   placeholder: string;
   loadingMessage: string;
   nothingFoundMessage: string;
 }
+
+type SpaceMemberSearchProps = Pick<
+  SelectProps,
+  | "placeholder"
+  | "searchable"
+  | "clearable"
+  | "filter"
+  | "searchValue"
+  | "onSearchChange"
+  | "renderOption"
+  | "nothingFoundMessage"
+>;
 
 /**
  * Normalizes member field values to a plain id string.
@@ -73,12 +89,12 @@ export function getSpaceMemberSearchProps(
   searchValue: string,
   setSearchValue: (value: string) => void,
   isLoading: boolean,
-) {
+): SpaceMemberSearchProps {
   return {
     placeholder: config.placeholder,
     searchable: true,
     clearable: true,
-    filter: ({ options }: { options: SpaceMemberSelectOption[] }) => options,
+    filter: ({ options }) => options.filter(isSpaceMemberSelectOption),
     searchValue,
     onSearchChange: setSearchValue,
     renderOption: renderSpaceMemberOption,
