@@ -1,8 +1,7 @@
 import '@/features/editor/styles/index.css';
 import classes from '@/pages/database/database-page.module.css';
-import { useDebouncedCallback } from '@mantine/hooks';
 import { Editor, EditorContent, JSONContent, useEditor, useEditorState } from '@tiptap/react';
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import clsx from 'clsx';
 import { mainExtensions } from '@/features/editor/extensions/extensions';
 import { EditorBubbleMenu } from '@/features/editor/components/bubble-menu/bubble-menu';
@@ -17,12 +16,10 @@ import ExcalidrawMenu from '@/features/editor/components/excalidraw/excalidraw-m
 import DrawioMenu from '@/features/editor/components/drawio/drawio-menu.tsx';
 import SearchAndReplaceDialog from '@/features/editor/components/search-and-replace/search-and-replace-dialog.tsx';
 import SlashCommand from '@/features/editor/extensions/slash-command';
-import { useAtom } from 'jotai';
-import { asideStateAtom } from '@/components/layouts/global/hooks/atoms/sidebar-atom.ts';
-import { activeCommentIdAtom, showCommentPopupAtom } from '@/features/comment/atoms/comment-atom';
 import CommentDialog from '@/features/comment/components/comment-dialog';
 import { getDatabaseDescriptionSlashItems } from './database-description-slash-items';
-import { handleFileDrop, handlePaste } from '@/features/editor/components/common/editor-paste-handler.tsx';
+import { usePageEditorInteractions } from '@/features/editor/hooks/use-page-editor-interactions';
+import { serializeDatabaseDescription } from '@/features/database/utils/database-description';
 
 const databaseDescriptionExtensions = mainExtensions.map((extension) => {
   if (extension?.name !== 'slash-command') {
@@ -36,17 +33,11 @@ const databaseDescriptionExtensions = mainExtensions.map((extension) => {
   });
 });
 
-export interface DatabaseDescriptionPayload {
-  json: JSONContent;
-  text: string;
-}
-
 export interface DatabaseDescriptionEditorProps {
   pageId: string;
   value: JSONContent;
   editable: boolean;
-  onValueChange?: (value: DatabaseDescriptionPayload) => void;
-  onAutoSave: (value: DatabaseDescriptionPayload) => Promise<void>;
+  onValueChange?: (value: JSONContent) => void;
 }
 
 /**
@@ -60,85 +51,30 @@ export function DatabaseDescriptionEditor({
   value,
   editable,
   onValueChange,
-  onAutoSave,
 }: DatabaseDescriptionEditorProps) {
   const menuContainerRef = useRef<HTMLDivElement | null>(null);
-  const lastCommittedRef = useRef(JSON.stringify(value ?? {}));
   const editorRef = useRef<Editor | null>(null);
-  const [, setAsideState] = useAtom(asideStateAtom);
-  const [, setActiveCommentId] = useAtom(activeCommentIdAtom);
-  const [showCommentPopup, setShowCommentPopup] = useAtom(showCommentPopupAtom);
-
-  const saveDescription = useCallback(async () => {
-    if (!descriptionEditor) {
-      return;
-    }
-
-    const json = descriptionEditor.getJSON();
-    const serialized = JSON.stringify(json);
-
-    if (serialized === lastCommittedRef.current) {
-      return;
-    }
-
-    const payload = {
-      json,
-      text: descriptionEditor.getText().trim(),
-    };
-
-    await onAutoSave(payload);
-    lastCommittedRef.current = serialized;
-  }, [onAutoSave]);
-
-  const debounceUpdate = useDebouncedCallback(() => {
-    void saveDescription();
-  }, 500);
+  const {
+    showCommentPopup,
+    handleKeyDown,
+    handleEditorPaste,
+    handleEditorDrop,
+  } = usePageEditorInteractions({
+    pageId,
+    editorRef,
+  });
 
   const descriptionEditor = useEditor({
     extensions: databaseDescriptionExtensions,
     editorProps: {
       handleDOMEvents: {
-        keydown: (_view, event) => {
-          if (['ArrowUp', 'ArrowDown', 'Enter'].includes(event.key)) {
-            const slashCommand = document.querySelector('#slash-command');
-            if (slashCommand) {
-              return true;
-            }
-          }
-
-          if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter'].includes(event.key)) {
-            const emojiCommand = document.querySelector('#emoji-command');
-            if (emojiCommand) {
-              return true;
-            }
-          }
-
-          return false;
-        },
+        keydown: handleKeyDown,
       },
-      handlePaste: (_view, event) => {
-        if (!editorRef.current) {
-          return false;
-        }
-
-        return handlePaste(editorRef.current, event, pageId);
-      },
-      handleDrop: (_view, event, _slice, moved) => {
-        if (!editorRef.current) {
-          return false;
-        }
-
-        return handleFileDrop(editorRef.current, event, moved, pageId);
-      },
+      handlePaste: handleEditorPaste,
+      handleDrop: handleEditorDrop,
     },
     onUpdate({ editor }) {
-      const payload = {
-        json: editor.getJSON(),
-        text: editor.getText().trim(),
-      };
-
-      onValueChange?.(payload);
-      debounceUpdate();
+      onValueChange?.(editor.getJSON());
     },
     editable,
     content: value,
@@ -159,10 +95,15 @@ export function DatabaseDescriptionEditor({
   });
 
   useEffect(() => {
-    const serialized = JSON.stringify(value ?? {});
-    lastCommittedRef.current = serialized;
+    const serializedIncoming = serializeDatabaseDescription(value);
 
-    if (descriptionEditor && serialized !== JSON.stringify(descriptionEditor.getJSON())) {
+    if (!descriptionEditor) {
+      return;
+    }
+
+    const serializedEditor = serializeDatabaseDescription(descriptionEditor.getJSON());
+
+    if (serializedIncoming !== serializedEditor) {
       descriptionEditor.commands.setContent(value);
     }
   }, [descriptionEditor, value]);
@@ -174,43 +115,6 @@ export function DatabaseDescriptionEditor({
 
     descriptionEditor.setEditable(editable);
   }, [descriptionEditor, editable]);
-
-  useEffect(() => {
-    return () => {
-      debounceUpdate.cancel();
-      void saveDescription();
-    };
-  }, [debounceUpdate, saveDescription]);
-
-  const handleActiveCommentEvent = useCallback((event) => {
-    const { commentId, resolved } = event.detail;
-
-    if (resolved) {
-      return;
-    }
-
-    setActiveCommentId(commentId);
-    setAsideState({ tab: 'comments', isAsideOpen: true });
-
-    setTimeout(() => {
-      const selector = `div[data-comment-id="${commentId}"]`;
-      const commentElement = document.querySelector(selector);
-      commentElement?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 400);
-  }, [setActiveCommentId, setAsideState]);
-
-  useEffect(() => {
-    document.addEventListener('ACTIVE_COMMENT_EVENT', handleActiveCommentEvent);
-
-    return () => {
-      document.removeEventListener('ACTIVE_COMMENT_EVENT', handleActiveCommentEvent);
-    };
-  }, [handleActiveCommentEvent]);
-
-  useEffect(() => {
-    setActiveCommentId(null);
-    setShowCommentPopup(false);
-  }, [pageId, setActiveCommentId, setShowCommentPopup]);
 
   return (
     <div ref={menuContainerRef}>
