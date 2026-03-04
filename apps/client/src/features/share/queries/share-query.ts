@@ -64,11 +64,21 @@ export function useSharePageQuery(
 }
 
 export function useShareForPageQuery(
-  pageId: string,
-): UseQueryResult<IShareForPage, Error> {
+  pageId?: string,
+): UseQueryResult<IShareForPage | null, Error> {
   const query = useQuery({
     queryKey: ["share-for-page", pageId],
-    queryFn: () => getShareForPage(pageId),
+    queryFn: async () => {
+      try {
+        return await getShareForPage(pageId as string);
+      } catch (error) {
+        if (error?.["status"] === 404) {
+          return null;
+        }
+
+        throw error;
+      }
+    },
     enabled: !!pageId,
     staleTime: 60 * 1000,
     retry: false,
