@@ -9,6 +9,7 @@ import { History } from '@tiptap/extension-history';
 import { useDebouncedCallback } from '@mantine/hooks';
 import { useTranslation } from 'react-i18next';
 import { searchSpotlight } from '@/features/search/constants.ts';
+import { shouldApplyFocusSafeTitleSync } from '@/features/editor/utils/title-editor-sync.ts';
 import EmojiCommand from '@/features/editor/extensions/emoji-command.ts';
 
 export interface DatabaseTitleEditorProps {
@@ -17,6 +18,7 @@ export interface DatabaseTitleEditorProps {
   editable: boolean;
   onValueChange?: (value: string) => void;
   onAutoSave: (value: string) => Promise<void>;
+  onFocusChange?: (isFocused: boolean) => void;
 }
 
 /**
@@ -35,6 +37,7 @@ export function DatabaseTitleEditor({
   editable,
   onValueChange,
   onAutoSave,
+  onFocusChange,
 }: DatabaseTitleEditorProps) {
   const { t } = useTranslation();
   const lastCommittedRef = useRef(value);
@@ -89,6 +92,14 @@ export function DatabaseTitleEditor({
     shouldRerenderOnTransaction: false,
     editorProps: {
       handleDOMEvents: {
+        focus: () => {
+          onFocusChange?.(true);
+          return false;
+        },
+        blur: () => {
+          onFocusChange?.(false);
+          return false;
+        },
         keydown: (_view, event) => {
           if ((event.ctrlKey || event.metaKey) && event.code === 'KeyS') {
             event.preventDefault();
@@ -115,17 +126,21 @@ export function DatabaseTitleEditor({
 
     const nextTitle = value ?? '';
     const currentTitle = titleEditor.getText();
-    const isDatabaseChanged = lastSyncedDatabaseIdRef.current !== databaseId;
-    const isFocused = titleEditor.isFocused;
     const { from, to } = titleEditor.state.selection;
-    const hasCollapsedSelection = from === to;
 
-    if (nextTitle === currentTitle) {
-      lastSyncedDatabaseIdRef.current = databaseId;
-      return;
-    }
+    const shouldApplySync = shouldApplyFocusSafeTitleSync({
+      entityId: databaseId,
+      lastSyncedEntityId: lastSyncedDatabaseIdRef.current,
+      nextTitle,
+      currentTitle,
+      isFocused: titleEditor.isFocused,
+      hasCollapsedSelection: from === to,
+    });
 
-    if (!isDatabaseChanged && isFocused && hasCollapsedSelection) {
+    if (!shouldApplySync) {
+      if (nextTitle === currentTitle) {
+        lastSyncedDatabaseIdRef.current = databaseId;
+      }
       return;
     }
 
