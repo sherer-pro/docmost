@@ -76,7 +76,25 @@ export function useUpdateDatabaseMutation(
   return useMutation({
     mutationFn: (payload: IUpdateDatabasePayload) =>
       updateDatabase(databaseId as string, payload),
-    onSuccess: () => {
+    onSuccess: (updatedDatabase) => {
+      if (databaseId) {
+        queryClient.setQueryData<IDatabase>(
+          DATABASE_QUERY_KEYS.byId(databaseId),
+          (previous) =>
+            ({
+              ...(previous ?? {}),
+              ...updatedDatabase,
+            }) as IDatabase,
+        );
+      }
+
+      invalidatePageEntity(
+        {
+          pageId: updatedDatabase.pageId ?? undefined,
+          pageSlugId: updatedDatabase.pageSlugId ?? undefined,
+        },
+        { client: queryClient },
+      );
       invalidateDatabaseEntity(
         { databaseId, spaceId },
         { client: queryClient },
