@@ -197,7 +197,9 @@ export default function DatabaseHeaderMenu({
     <>
       {!readOnly && <PageStateSegmentedControl size="xs" />}
 
-      {!readOnly && hasDatabasePage && <ShareModal pageId={databasePageId} readOnly={Boolean(readOnly)} />}
+      {!readOnly && hasDatabasePage && (
+        <ShareModal pageId={databasePage?.id ?? databasePageId} readOnly={Boolean(readOnly)} />
+      )}
 
       {hasDatabasePage && (
         <Tooltip label={t('Comments')} openDelay={250} withArrow>
