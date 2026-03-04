@@ -242,7 +242,7 @@ export class DatabaseService {
   }
 
   /**
-   * Converts property cell values ​​when changing type.
+   * Converts property cell values when changing type.
    */
   private async convertPropertyCellValues(
     databaseId: string,
@@ -728,13 +728,18 @@ export class DatabaseService {
       spaceId: database.spaceId,
     });
 
-    return this.databaseRowRepo.insertRow({
+    const createdRow = await this.databaseRowRepo.insertRow({
       databaseId,
       pageId: page.id,
       workspaceId,
       createdById: user.id,
       updatedById: user.id,
     });
+
+    return {
+      ...createdRow,
+      slugId: page.slugId,
+    };
   }
 
   /**

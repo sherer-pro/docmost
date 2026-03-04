@@ -70,6 +70,10 @@ export interface IDatabaseRow {
   databaseId: string;
   workspaceId: string;
   pageId: string;
+  /**
+   * Page slug id for immediate row navigation from sidebar/table without extra refetch.
+   */
+  slugId?: string | null;
   createdById: string | null;
   updatedById: string | null;
   createdAt: string;

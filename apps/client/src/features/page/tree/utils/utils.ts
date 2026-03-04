@@ -214,6 +214,61 @@ export function appendNodeChildren(
 }
 
 /**
+ * Updates hasChildren for the target node.
+ *
+ * This flag is required for instant sidebar indicator switching:
+ * when the first database row is created, chevron should be shown
+ * immediately instead of a dot, even before tree refetch.
+ */
+export function setTreeNodeHasChildren(
+  treeItems: SpaceTreeNode[],
+  nodeId: string,
+  hasChildren: boolean,
+): SpaceTreeNode[] {
+  return treeItems.map((node) => {
+    if (node.id === nodeId) {
+      return { ...node, hasChildren };
+    }
+
+    if (node.children.length > 0) {
+      return {
+        ...node,
+        children: setTreeNodeHasChildren(node.children, nodeId, hasChildren),
+      };
+    }
+
+    return node;
+  });
+}
+
+/**
+ * Inserts a database row into local tree via SimpleTree and guarantees
+ * parent database node is marked as having children.
+ */
+export function insertDatabaseRowNode(
+  treeItems: SpaceTreeNode[],
+  parentId: string,
+  rowNode: SpaceTreeNode,
+  index?: number,
+): { tree: SpaceTreeNode[]; index: number } {
+  const treeWithParentChildren = setTreeNodeHasChildren(treeItems, parentId, true);
+  const nextTree = new SimpleTree(treeWithParentChildren);
+  const parentNode = nextTree.find(parentId);
+  const insertionIndex = typeof index === 'number' ? index : (parentNode?.children?.length ?? 0);
+
+  nextTree.create({
+    parentId,
+    index: insertionIndex,
+    data: rowNode,
+  });
+
+  return {
+    tree: nextTree.data,
+    index: insertionIndex,
+  };
+}
+
+/**
  * Merge root nodes; keep existing ones intact, append new ones,
  */
 export function mergeRootTrees(
