@@ -21,6 +21,7 @@ import { useClipboard } from "@/hooks/use-clipboard";
 import { useNavigate, useParams } from "react-router-dom";
 import { useConvertPageToDatabaseMutation, usePageQuery } from "@/features/page/queries/page-query.ts";
 import { useConvertDatabaseToPageMutation } from "@/features/database/queries/database-query.ts";
+import { useDocumentConversionActions } from "@/features/page/hooks/use-document-conversion-actions.ts";
 import { buildDatabaseUrl, buildPageUrl } from "@/features/page/page.utils.ts";
 import { getPageById } from "@/features/page/services/page-service.ts";
 import { notifications } from "@mantine/notifications";
@@ -168,6 +169,13 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
   const { mutateAsync: convertDatabaseToPageAsync, isPending: isConvertingDatabaseToPage } =
     useConvertDatabaseToPageMutation(page?.spaceId, page?.databaseId ?? undefined);
 
+  const { openConvertDatabaseToPageConfirm } = useDocumentConversionActions({
+    spaceSlug,
+    pageTitle: page?.title,
+    isConvertingDatabaseToPage,
+    convertDatabaseToPageAsync,
+  });
+
   const handleCopyLink = () => {
     const pageUrl =
       getAppUrl() + buildPageUrl(spaceSlug, page.slugId, page.title);
@@ -204,29 +212,7 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
       return;
     }
 
-    modals.openConfirmModal({
-      title: t('Convert database to page?'),
-      centered: true,
-      children: (
-        <Text size="sm">
-          {t(
-            'The database view, properties and row bindings will be deactivated. Child pages will stay in the tree as regular pages.',
-          )}
-        </Text>
-      ),
-      labels: { confirm: t('Convert to page'), cancel: t('Cancel') },
-      confirmProps: {
-        loading: isConvertingDatabaseToPage,
-        leftSection: <IconArrowsExchange size={14} />,
-      },
-      onConfirm: async () => {
-        const result = await convertDatabaseToPageAsync();
-        notifications.show({ message: t('Database converted to page') });
-        if (result?.slugId) {
-          navigate(buildPageUrl(spaceSlug, result.slugId, page.title));
-        }
-      },
-    });
+    openConvertDatabaseToPageConfirm();
   };
 
   const handleConvertToDatabase = () => {
