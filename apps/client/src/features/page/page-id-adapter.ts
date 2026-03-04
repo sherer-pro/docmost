@@ -29,22 +29,3 @@ export function resolvePageDatabaseIds(input: {
     databaseId: input.databaseId ?? undefined,
   };
 }
-
-export function getPageQueryKey(pageId: NullableId): [string, string] | null {
-  if (!pageId) {
-    return null;
-  }
-
-  return ['pages', pageId];
-}
-
-export function getDatabaseQueryKey(
-  databaseId: NullableId,
-): [string, string] | null {
-  if (!databaseId) {
-    return null;
-  }
-
-  return ['database', databaseId];
-}
-
