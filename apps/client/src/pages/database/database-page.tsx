@@ -29,7 +29,7 @@ import { useSpaceAbility } from '@/features/space/permissions/use-space-ability.
 import { useGetSpaceBySlugQuery } from '@/features/space/queries/space-query.ts';
 import { currentUserAtom } from '@/features/user/atoms/current-user-atom.ts';
 import { PageEditMode } from '@/features/user/types/user.types.ts';
-import { shouldNavigateToCanonicalSlug } from '@/features/editor/utils/title-editor-sync.ts';
+import { useDeferredCanonicalTitleUrlSync } from '@/features/editor/utils/canonical-title-url-sync.ts';
 import { getAppName } from '@/lib/config.ts';
 import { useAtomValue } from 'jotai';
 import { asideStateAtom } from '@/components/layouts/global/hooks/atoms/sidebar-atom.ts';
@@ -78,7 +78,6 @@ export default function DatabasePage() {
   const navigate = useNavigate();
   const setAsideState = useSetAtom(asideStateAtom);
   const routeIds = resolvePageDatabaseIds({ routeSlug: databaseSlug });
-  const databasePageSlugId = routeIds.slugId;
 
   // In modern routes the database is opened by the database page slug,
   // so we resolve the page first and read databaseId from it.
@@ -107,8 +106,6 @@ export default function DatabasePage() {
   const [saveState, setSaveState] = useState<SaveState>('idle');
 
   const lastRequestVersionRef = useRef(0);
-  const isTitleEditingRef = useRef(false);
-  const pendingCanonicalPathRef = useRef<{ slugId: string; name: string } | null>(null);
 
   const spaceRules = space?.membership?.permissions;
   const spaceAbility = useSpaceAbility(spaceRules);
@@ -148,44 +145,13 @@ export default function DatabasePage() {
   }, [database?.pageId, location.pathname, location.state, navigate, setAsideState]);
 
 
-  /**
-   * Applies canonical database URL in place to avoid history stack churn.
-   */
-  const syncCanonicalDatabaseUrl = useCallback(
-    (nextSlugId: string, nextName: string) => {
-      if (!spaceSlug) {
-        return;
-      }
-
-      const canonicalPath = buildDatabaseUrl(spaceSlug, nextSlugId, nextName);
-      const canonicalUrl = `${canonicalPath}${location.search}${location.hash}`;
-      const currentUrl = `${location.pathname}${location.search}${location.hash}`;
-
-      if (canonicalUrl === currentUrl) {
-        return;
-      }
-
-      navigate(canonicalUrl, { replace: true });
-    },
-    [location.hash, location.pathname, location.search, navigate, spaceSlug],
-  );
-
-  /**
-   * Defers slug URL synchronization while title input has active focus.
-   */
-  const onTitleFocusChange = useCallback(
-    (isFocused: boolean) => {
-      isTitleEditingRef.current = isFocused;
-
-      if (isFocused || !pendingCanonicalPathRef.current) {
-        return;
-      }
-
-      const pendingSync = pendingCanonicalPathRef.current;
-      pendingCanonicalPathRef.current = null;
-      syncCanonicalDatabaseUrl(pendingSync.slugId, pendingSync.name);
-    },
-    [syncCanonicalDatabaseUrl],
+  const { onTitleFocusChange, syncCanonicalUrl } = useDeferredCanonicalTitleUrlSync(
+    useCallback(
+      (nextUrl: string) => {
+        navigate(nextUrl, { replace: true });
+      },
+      [navigate],
+    ),
   );
 
   useEffect(() => {
@@ -223,27 +189,21 @@ export default function DatabasePage() {
 
         /**
          * After rename, the backend can return a new slug for the linked database page.
-         * Switch to canonical URL only when slug actually changed and the title input
-         * is not in active typing state. Otherwise keep deferred sync until blur.
+         * The canonical URL synchronization helper applies the same focus/blur/deferred
+         * algorithm as page title editor, so URL updates are consistent across editors.
          */
-        if (typeof patch.name === 'string' && updatedDatabase.pageSlugId) {
-          const shouldSyncNow = shouldNavigateToCanonicalSlug(
-            databasePageSlugId,
+        if (typeof patch.name === 'string' && updatedDatabase.pageSlugId && spaceSlug) {
+          const currentUrl = `${location.pathname}${location.search}${location.hash}`;
+          const canonicalPath = buildDatabaseUrl(
+            spaceSlug,
             updatedDatabase.pageSlugId,
-            isTitleEditingRef.current,
+            updatedDatabase.name ?? patch.name,
           );
 
-          if (shouldSyncNow) {
-            syncCanonicalDatabaseUrl(
-              updatedDatabase.pageSlugId,
-              updatedDatabase.name ?? patch.name,
-            );
-          } else if (databasePageSlugId !== updatedDatabase.pageSlugId) {
-            pendingCanonicalPathRef.current = {
-              slugId: updatedDatabase.pageSlugId,
-              name: updatedDatabase.name ?? patch.name,
-            };
-          }
+          syncCanonicalUrl({
+            currentUrl,
+            nextUrl: `${canonicalPath}${location.search}${location.hash}`,
+          });
         }
 
         setDraftName(updatedDatabase.name ?? draftName);
@@ -265,10 +225,13 @@ export default function DatabasePage() {
     },
     [
       databaseId,
-      databasePageSlugId,
       draftName,
+      location.hash,
+      location.pathname,
+      location.search,
       space?.id,
-      syncCanonicalDatabaseUrl,
+      spaceSlug,
+      syncCanonicalUrl,
       updateDatabaseMutationAsync,
     ],
   );
