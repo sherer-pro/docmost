@@ -19,8 +19,22 @@ export async function getSpaces(
 }
 
 export async function getSpaceById(spaceId: string): Promise<ISpace> {
-  const req = await api.get<ISpace>(`/spaces/${spaceId}`);
+  return getSpaceByIdentifier(spaceId);
+}
+
+/**
+ * Accepts either a space UUID (`id`) or a human-readable slug.
+ * Keep this contract in sync with backend controller changes to avoid UI breakage.
+ */
+export async function getSpaceByIdentifier(
+  spaceIdentifier: string,
+): Promise<ISpace> {
+  const req = await api.get<ISpace>(`/spaces/${spaceIdentifier}`);
   return req.data;
+}
+
+export async function getSpaceBySlug(spaceSlug: string): Promise<ISpace> {
+  return getSpaceByIdentifier(spaceSlug);
 }
 
 export async function createSpace(data: Partial<ISpace>): Promise<ISpace> {
