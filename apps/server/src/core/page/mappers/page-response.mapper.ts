@@ -2,6 +2,11 @@ import {
   PAGE_CUSTOM_FIELD_STATUS_VALUES,
   UpdatePageCustomFieldsDto,
 } from '../dto/update-page.dto';
+import {
+  getPageAssigneeId,
+  getPageStakeholderIds,
+  normalizePageSettings,
+} from '../utils/page-settings.utils';
 
 /**
  * Central mapper for the page API contract.
@@ -13,11 +18,11 @@ import {
 export function mapPageSettings(
   settings: unknown,
 ): Record<string, unknown> | undefined {
-  if (!settings || typeof settings !== 'object') {
-    return undefined;
-  }
+  const normalizedSettings = normalizePageSettings(settings);
 
-  return settings as Record<string, unknown>;
+  return Object.keys(normalizedSettings).length > 0
+    ? (normalizedSettings as Record<string, unknown>)
+    : undefined;
 }
 
 /**
@@ -26,7 +31,7 @@ export function mapPageSettings(
 export function mapPageCustomFields(page: {
   settings?: unknown;
 }): UpdatePageCustomFieldsDto {
-  const settings = mapPageSettings(page.settings) ?? {};
+  const settings = normalizePageSettings(page.settings);
   const status =
     typeof settings.status === 'string' &&
     (PAGE_CUSTOM_FIELD_STATUS_VALUES as readonly string[]).includes(
@@ -34,15 +39,12 @@ export function mapPageCustomFields(page: {
     )
       ? (settings.status as UpdatePageCustomFieldsDto['status'])
       : null;
-  const assigneeId =
-    typeof settings.assigneeId === 'string' ? settings.assigneeId : null;
+  const assigneeId = getPageAssigneeId(settings);
 
   return {
     status,
     assigneeId,
-    stakeholderIds: Array.isArray(settings.stakeholderIds)
-      ? settings.stakeholderIds
-      : [],
+    stakeholderIds: getPageStakeholderIds(settings),
   };
 }
 

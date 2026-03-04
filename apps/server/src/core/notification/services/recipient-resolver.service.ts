@@ -2,6 +2,12 @@ import { Injectable } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { PageSettings } from '@docmost/db/types/entity.types';
+import {
+  getPageAssigneeId,
+  getPageRoleRecipientIds,
+  getPageStakeholderIds,
+  normalizePageSettings,
+} from '../../page/utils/page-settings.utils';
 import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 
 @Injectable()
@@ -40,8 +46,8 @@ export class RecipientResolverService {
       return [];
     }
 
-    const settings = this.normalizeSettings(page.settings);
-    const candidateUserIds = this.extractSettingsRecipients(settings);
+    const settings = normalizePageSettings(page.settings);
+    const candidateUserIds = getPageRoleRecipientIds(settings);
 
     return this.filterUsersWithSpaceAccess(candidateUserIds, spaceId, actorId);
   }
@@ -58,25 +64,20 @@ export class RecipientResolverService {
     newAssigneeId: string | null;
     newStakeholderIds: string[];
   } {
-    const prev = this.normalizeSettings(currentSettings);
-    const next = this.normalizeSettings(nextSettings);
+    const prev = normalizePageSettings(currentSettings);
+    const next = normalizePageSettings(nextSettings);
 
-    const previousAssigneeId = typeof prev.assigneeId === 'string' ? prev.assigneeId : null;
-    const nextAssigneeId = typeof next.assigneeId === 'string' ? next.assigneeId : null;
+    const previousAssigneeId = getPageAssigneeId(prev);
+    const nextAssigneeId = getPageAssigneeId(next);
 
     const newAssigneeId =
       nextAssigneeId && nextAssigneeId !== previousAssigneeId ? nextAssigneeId : null;
 
-    const previousStakeholderIds = new Set(
-      Array.isArray(prev.stakeholderIds) ? prev.stakeholderIds.filter(Boolean) : [],
-    );
+    const previousStakeholderIds = new Set(getPageStakeholderIds(prev));
 
-    const newStakeholderIds = Array.isArray(next.stakeholderIds)
-      ? next.stakeholderIds.filter(
-          (stakeholderId): stakeholderId is string =>
-            !!stakeholderId && !previousStakeholderIds.has(stakeholderId),
-        )
-      : [];
+    const newStakeholderIds = getPageStakeholderIds(next).filter(
+      (stakeholderId) => !previousStakeholderIds.has(stakeholderId),
+    );
 
     return {
       newAssigneeId,
@@ -106,22 +107,4 @@ export class RecipientResolverService {
     return filteredIds.filter((userId) => usersWithAccess.has(userId));
   }
 
-  private extractSettingsRecipients(settings: PageSettings): string[] {
-    const assigneeId = typeof settings.assigneeId === 'string' ? settings.assigneeId : null;
-    const stakeholderIds = Array.isArray(settings.stakeholderIds)
-      ? settings.stakeholderIds.filter(
-          (stakeholderId): stakeholderId is string => !!stakeholderId,
-        )
-      : [];
-
-    return [...new Set([...(assigneeId ? [assigneeId] : []), ...stakeholderIds])];
-  }
-
-  private normalizeSettings(settings: unknown): PageSettings {
-    if (!settings || typeof settings !== 'object') {
-      return {};
-    }
-
-    return settings as PageSettings;
-  }
 }
