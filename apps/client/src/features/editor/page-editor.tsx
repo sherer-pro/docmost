@@ -34,11 +34,6 @@ import {
   pageEditorAtom,
   yjsConnectionStatusAtom,
 } from "@/features/editor/atoms/editor-atoms";
-import { asideStateAtom } from "@/components/layouts/global/hooks/atoms/sidebar-atom";
-import {
-  activeCommentIdAtom,
-  showCommentPopupAtom,
-} from "@/features/comment/atoms/comment-atom";
 import CommentDialog from "@/features/comment/components/comment-dialog";
 import { EditorBubbleMenu } from "@/features/editor/components/bubble-menu/bubble-menu";
 import TableCellMenu from "@/features/editor/components/table/table-cell-menu.tsx";
@@ -47,10 +42,6 @@ import ImageMenu from "@/features/editor/components/image/image-menu.tsx";
 import CalloutMenu from "@/features/editor/components/callout/callout-menu.tsx";
 import VideoMenu from "@/features/editor/components/video/video-menu.tsx";
 import SubpagesMenu from "@/features/editor/components/subpages/subpages-menu.tsx";
-import {
-  handleFileDrop,
-  handlePaste,
-} from "@/features/editor/components/common/editor-paste-handler.tsx";
 import LinkMenu from "@/features/editor/components/link/link-menu.tsx";
 import ExcalidrawMenu from "./components/excalidraw/excalidraw-menu";
 import DrawioMenu from "./components/drawio/drawio-menu";
@@ -68,6 +59,7 @@ import { jwtDecode } from "jwt-decode";
 import { searchSpotlight } from "@/features/search/constants.ts";
 import { useEditorScroll } from "./hooks/use-editor-scroll";
 import { EditorAiMenu } from "@/ee/ai/components/editor/ai-menu/ai-menu";
+import { usePageEditorInteractions } from "@/features/editor/hooks/use-page-editor-interactions";
 
 interface PageEditorProps {
   pageId: string;
@@ -83,7 +75,6 @@ export default function PageEditor({
   const collaborationURL = useCollaborationUrl();
   const isComponentMounted = useRef(false);
   const editorRef = useRef<Editor | null>(null);
-  const plainTextPasteRequestedRef = useRef(false);
 
   useEffect(() => {
     isComponentMounted.current = true;
@@ -92,15 +83,24 @@ export default function PageEditor({
   const [currentUser] = useAtom(currentUserAtom);
   const [, setEditor] = useAtom(pageEditorAtom);
   const [, setActivePageUsers] = useAtom(activePageUsersAtom);
-  const [, setAsideState] = useAtom(asideStateAtom);
-  const [, setActiveCommentId] = useAtom(activeCommentIdAtom);
-  const [showCommentPopup, setShowCommentPopup] = useAtom(showCommentPopupAtom);
   const [isLocalSynced, setIsLocalSynced] = useState(false);
   const [isRemoteSynced, setIsRemoteSynced] = useState(false);
   const [yjsConnectionStatus, setYjsConnectionStatus] = useAtom(
     yjsConnectionStatusAtom,
   );
   const menuContainerRef = useRef(null);
+  const {
+    showCommentPopup: sharedShowCommentPopup,
+    handleKeyDown,
+    handleBeforeInput,
+    handleEditorPaste,
+    handleEditorDrop,
+  } = usePageEditorInteractions({
+    pageId,
+    editorRef,
+    userId: currentUser?.user.id,
+    supportPlainTextPaste: true,
+  });
   const { data: collabQuery, refetch: refetchCollabToken } = useCollabToken();
   const { isIdle, resetIdle } = useIdle(FIVE_MINUTES, { initialState: false });
   const documentState = useDocumentVisibility();
@@ -270,65 +270,13 @@ export default function PageEditor({
               searchSpotlight.open();
               return true;
             }
-            if (
-              (event.ctrlKey || event.metaKey) &&
-              event.shiftKey &&
-              event.code === "KeyV"
-            ) {
-              plainTextPasteRequestedRef.current = true;
-            }
-            if (["ArrowUp", "ArrowDown", "Enter"].includes(event.key)) {
-              const slashCommand = document.querySelector("#slash-command");
-              if (slashCommand) {
-                return true;
-              }
-            }
-            if (
-              [
-                "ArrowUp",
-                "ArrowDown",
-                "ArrowLeft",
-                "ArrowRight",
-                "Enter",
-              ].includes(event.key)
-            ) {
-              const emojiCommand = document.querySelector("#emoji-command");
-              if (emojiCommand) {
-                return true;
-              }
-            }
+
+            return handleKeyDown(_view, event);
           },
-          beforeinput: (_view, event) => {
-            const inputEvent = event as InputEvent;
-
-            if (inputEvent.inputType === "insertFromPasteAsPlainText") {
-              plainTextPasteRequestedRef.current = true;
-            }
-
-            return false;
-          },
+          beforeinput: handleBeforeInput,
         },
-        handlePaste: (_view, event) => {
-          if (!editorRef.current) return false;
-
-          const isPlainTextPasteRequested = plainTextPasteRequestedRef.current;
-          plainTextPasteRequestedRef.current = false;
-
-          return handlePaste(
-            editorRef.current,
-            event,
-            pageId,
-            currentUser?.user.id,
-            {
-              plainTextRequested: isPlainTextPasteRequested,
-            },
-          );
-        },
-        handleDrop: (_view, event, _slice, moved) => {
-          if (!editorRef.current) return false;
-
-          return handleFileDrop(editorRef.current, event, moved, pageId);
-        },
+        handlePaste: handleEditorPaste,
+        handleDrop: handleEditorDrop,
       },
       onCreate({ editor }) {
         if (editor) {
@@ -368,40 +316,6 @@ export default function PageEditor({
       });
     }
   }, 3000);
-
-  const handleActiveCommentEvent = (event) => {
-    const { commentId, resolved } = event.detail;
-
-    if (resolved) {
-      return;
-    }
-
-    setActiveCommentId(commentId);
-    setAsideState({ tab: "comments", isAsideOpen: true });
-
-    //wait if aside is closed
-    setTimeout(() => {
-      const selector = `div[data-comment-id="${commentId}"]`;
-      const commentElement = document.querySelector(selector);
-      commentElement?.scrollIntoView({ behavior: "smooth", block: "center" });
-    }, 400);
-  };
-
-  useEffect(() => {
-    document.addEventListener("ACTIVE_COMMENT_EVENT", handleActiveCommentEvent);
-    return () => {
-      document.removeEventListener(
-        "ACTIVE_COMMENT_EVENT",
-        handleActiveCommentEvent,
-      );
-    };
-  }, []);
-
-  useEffect(() => {
-    setActiveCommentId(null);
-    setShowCommentPopup(false);
-    setAsideState({ tab: "", isAsideOpen: false });
-  }, [pageId]);
 
   const isSynced = isLocalSynced && isRemoteSynced;
 
@@ -478,7 +392,7 @@ export default function PageEditor({
             <LinkMenu editor={editor} appendTo={menuContainerRef} />
           </div>
         )}
-        {showCommentPopup && <CommentDialog editor={editor} pageId={pageId} />}
+        {sharedShowCommentPopup && <CommentDialog editor={editor} pageId={pageId} />}
       </div>
       <div
         onClick={() => editor.commands.focus("end")}

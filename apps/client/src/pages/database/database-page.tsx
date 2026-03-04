@@ -7,10 +7,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { buildDatabaseUrl } from '@/features/page/page.utils.ts';
 import { resolvePageDatabaseIds } from '@/features/page/page-id-adapter.ts';
 import { DatabaseTableView } from '@/features/database/components/database-table-view';
-import {
-  DatabaseDescriptionEditor,
-  DatabaseDescriptionPayload,
-} from '@/features/database/components/editors/database-description-editor.tsx';
+import { DatabaseDescriptionEditor } from '@/features/database/components/editors/database-description-editor.tsx';
 import { DatabaseTitleEditor } from '@/features/database/components/editors/database-title-editor.tsx';
 import DatabaseHeader from '@/features/database/components/header/database-header.tsx';
 import HistoryModal from '@/features/page-history/components/history-modal.tsx';
@@ -34,42 +31,15 @@ import { getAppName } from '@/lib/config.ts';
 import { useAtomValue } from 'jotai';
 import { asideStateAtom } from '@/components/layouts/global/hooks/atoms/sidebar-atom.ts';
 import { useSetAtom } from 'jotai';
+import { useDebouncedCallback } from '@mantine/hooks';
 import classes from './database-page.module.css';
+import {
+  buildDatabaseDescriptionPayload,
+  serializeDatabaseDescription,
+  toDatabaseDescriptionDoc,
+} from '@/features/database/utils/database-description';
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
-
-const EMPTY_DESCRIPTION_DOC: JSONContent = {
-  type: 'doc',
-  content: [{ type: 'paragraph' }],
-};
-
-/**
- * Converts a plain-text description to Tiptap JSON if there is no rich content.
- */
-function getDescriptionDoc(
-  richDescription?: unknown,
-  plainDescription?: string | null,
-): JSONContent {
-  if (richDescription && typeof richDescription === 'object') {
-    return richDescription as JSONContent;
-  }
-
-  const text = plainDescription?.trim();
-
-  if (!text) {
-    return EMPTY_DESCRIPTION_DOC;
-  }
-
-  return {
-    type: 'doc',
-    content: [
-      {
-        type: 'paragraph',
-        content: [{ type: 'text', text }],
-      },
-    ],
-  };
-}
 
 export default function DatabasePage() {
   const { t } = useTranslation();
@@ -100,10 +70,9 @@ export default function DatabasePage() {
   );
   const currentUser = useAtomValue(currentUserAtom);
   const [draftName, setDraftName] = useState('');
-  const [draftDescription, setDraftDescription] = useState<DatabaseDescriptionPayload>({
-    json: EMPTY_DESCRIPTION_DOC,
-    text: '',
-  });
+  const [draftDescription, setDraftDescription] = useState(
+    toDatabaseDescriptionDoc(),
+  );
   const [saveState, setSaveState] = useState<SaveState>('idle');
 
   const lastRequestVersionRef = useRef(0);
@@ -137,13 +106,13 @@ export default function DatabasePage() {
       (location.state as { openCommentsAside?: boolean } | null)?.openCommentsAside,
     );
 
-    if (!database?.pageId || !shouldOpenCommentsAside) {
+    if (!databasePageId || !shouldOpenCommentsAside) {
       return;
     }
 
     setAsideState({ tab: 'comments', isAsideOpen: true });
     navigate(location.pathname, { replace: true, state: null });
-  }, [database?.pageId, location.pathname, location.state, navigate, setAsideState]);
+  }, [databasePageId, location.pathname, location.state, navigate, setAsideState]);
 
 
   const { onTitleFocusChange, syncCanonicalUrl } = useDeferredCanonicalTitleUrlSync(
@@ -161,10 +130,9 @@ export default function DatabasePage() {
     }
 
     setDraftName(database.name ?? '');
-    setDraftDescription({
-      json: getDescriptionDoc(database.descriptionContent, database.description),
-      text: database.description ?? '',
-    });
+    setDraftDescription(
+      toDatabaseDescriptionDoc(database.descriptionContent, database.description),
+    );
     setSaveState('idle');
   }, [database?.id]);
 
@@ -208,13 +176,12 @@ export default function DatabasePage() {
         }
 
         setDraftName(updatedDatabase.name ?? draftName);
-        setDraftDescription({
-          json: getDescriptionDoc(
+        setDraftDescription(
+          toDatabaseDescriptionDoc(
             updatedDatabase.descriptionContent,
             updatedDatabase.description,
           ),
-          text: updatedDatabase.description ?? '',
-        });
+        );
         setSaveState('saved');
       } catch {
         if (requestVersion !== lastRequestVersionRef.current) {
@@ -249,28 +216,44 @@ export default function DatabasePage() {
     [commitMetaChanges, database?.name],
   );
 
-  const onDescriptionAutoSave = useCallback(
-    async (payload: DatabaseDescriptionPayload) => {
-      /**
-       * Сравниваем с локальным черновиком, а не только с последним ответом API:
-       * это защищает от лишних PATCH, когда autosave срабатывает повторно
-       * до прихода свежего состояния с сервера.
-       */
-      const currentSerialized = JSON.stringify(draftDescription.json);
-      const nextSerialized = JSON.stringify(payload.json);
-      const nextText = payload.text.trim();
-      const currentText = draftDescription.text.trim();
+  const saveDescription = useCallback(
+    async (nextDescriptionJson: JSONContent) => {
+      const currentSerialized = serializeDatabaseDescription(draftDescription);
+      const nextSerialized = serializeDatabaseDescription(nextDescriptionJson);
 
-      if (currentSerialized === nextSerialized && currentText === nextText) {
+      if (currentSerialized === nextSerialized) {
         return;
       }
+
+      const payload = buildDatabaseDescriptionPayload(nextDescriptionJson);
 
       await commitMetaChanges({
         description: payload.text,
         descriptionContent: payload.json,
       });
     },
-    [commitMetaChanges, draftDescription.json, draftDescription.text],
+    [commitMetaChanges, draftDescription],
+  );
+
+  const debouncedSaveDescription = useDebouncedCallback(
+    (nextDescriptionJson: JSONContent) => {
+      void saveDescription(nextDescriptionJson);
+    },
+    500,
+  );
+
+  useEffect(() => {
+    return () => {
+      debouncedSaveDescription.flush();
+    };
+  }, [debouncedSaveDescription]);
+
+  const onDescriptionChange = useCallback(
+    (json: JSONContent) => {
+      setDraftDescription(json);
+      debouncedSaveDescription(json);
+    },
+    [debouncedSaveDescription],
   );
 
   const databaseDisplayName = useMemo(() => {
@@ -328,10 +311,9 @@ export default function DatabasePage() {
           {databasePageId && (
             <DatabaseDescriptionEditor
               pageId={databasePageId}
-              value={draftDescription.json}
+              value={draftDescription}
               editable={isEditable}
-              onValueChange={setDraftDescription}
-              onAutoSave={onDescriptionAutoSave}
+              onValueChange={onDescriptionChange}
             />
           )}
         </Stack>
