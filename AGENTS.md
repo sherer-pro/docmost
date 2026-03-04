@@ -166,12 +166,15 @@ Minimum:
 
 ## 6) CI/CD and local reproduction
 
-- The repository currently has **no** `.github/workflows` directory or any other explicit CI manifest.
+- The repository includes a GitHub Actions workflow: `.github/workflows/docker.yml`.
+- Existing CI workflow scope: **release/docker pipeline** (`Docker Build and Push`) triggered on `release.published` and `workflow_dispatch`.
+- This workflow is focused on container image build/push and does **not** replace functional validation of the codebase.
 - De facto required local pipeline before PR:
   1. `pnpm install --frozen-lockfile`
   2. for quick checks on day-to-day changes: `pnpm verify:quick`.
   3. before PR / release candidates: `pnpm verify:full` (build → lint → tests).
   4. for infrastructure changes — `docker build` and/or `docker compose up` smoke check.
+- Functional checks (`build`, `lint`, `test`) remain mandatory local pre-PR validation.
 
 ---
 
