@@ -29,6 +29,7 @@ import { useSpaceAbility } from '@/features/space/permissions/use-space-ability.
 import { useGetSpaceBySlugQuery } from '@/features/space/queries/space-query.ts';
 import { currentUserAtom } from '@/features/user/atoms/current-user-atom.ts';
 import { PageEditMode } from '@/features/user/types/user.types.ts';
+import { shouldNavigateToCanonicalSlug } from '@/features/editor/utils/title-editor-sync.ts';
 import { getAppName } from '@/lib/config.ts';
 import { useAtomValue } from 'jotai';
 import { asideStateAtom } from '@/components/layouts/global/hooks/atoms/sidebar-atom.ts';
@@ -106,6 +107,8 @@ export default function DatabasePage() {
   const [saveState, setSaveState] = useState<SaveState>('idle');
 
   const lastRequestVersionRef = useRef(0);
+  const isTitleEditingRef = useRef(false);
+  const pendingCanonicalPathRef = useRef<{ slugId: string; name: string } | null>(null);
 
   const spaceRules = space?.membership?.permissions;
   const spaceAbility = useSpaceAbility(spaceRules);
@@ -144,6 +147,47 @@ export default function DatabasePage() {
     navigate(location.pathname, { replace: true, state: null });
   }, [database?.pageId, location.pathname, location.state, navigate, setAsideState]);
 
+
+  /**
+   * Applies canonical database URL in place to avoid history stack churn.
+   */
+  const syncCanonicalDatabaseUrl = useCallback(
+    (nextSlugId: string, nextName: string) => {
+      if (!spaceSlug) {
+        return;
+      }
+
+      const canonicalPath = buildDatabaseUrl(spaceSlug, nextSlugId, nextName);
+      const canonicalUrl = `${canonicalPath}${location.search}${location.hash}`;
+      const currentUrl = `${location.pathname}${location.search}${location.hash}`;
+
+      if (canonicalUrl === currentUrl) {
+        return;
+      }
+
+      navigate(canonicalUrl, { replace: true });
+    },
+    [location.hash, location.pathname, location.search, navigate, spaceSlug],
+  );
+
+  /**
+   * Defers slug URL synchronization while title input has active focus.
+   */
+  const onTitleFocusChange = useCallback(
+    (isFocused: boolean) => {
+      isTitleEditingRef.current = isFocused;
+
+      if (isFocused || !pendingCanonicalPathRef.current) {
+        return;
+      }
+
+      const pendingSync = pendingCanonicalPathRef.current;
+      pendingCanonicalPathRef.current = null;
+      syncCanonicalDatabaseUrl(pendingSync.slugId, pendingSync.name);
+    },
+    [syncCanonicalDatabaseUrl],
+  );
+
   useEffect(() => {
     if (!database) {
       return;
@@ -179,22 +223,27 @@ export default function DatabasePage() {
 
         /**
          * After rename, the backend can return a new slug for the linked database page.
-         * Immediately switch to the canonical URL so the client state and address bar
-         * stay synchronized without a full reload.
+         * Switch to canonical URL only when slug actually changed and the title input
+         * is not in active typing state. Otherwise keep deferred sync until blur.
          */
-        if (
-          typeof patch.name === 'string' &&
-          spaceSlug &&
-          updatedDatabase.pageSlugId &&
-          updatedDatabase.pageSlugId !== databasePageSlugId
-        ) {
-          navigate(
-            buildDatabaseUrl(
-              spaceSlug,
-              updatedDatabase.pageSlugId,
-              updatedDatabase.name,
-            ),
+        if (typeof patch.name === 'string' && updatedDatabase.pageSlugId) {
+          const shouldSyncNow = shouldNavigateToCanonicalSlug(
+            databasePageSlugId,
+            updatedDatabase.pageSlugId,
+            isTitleEditingRef.current,
           );
+
+          if (shouldSyncNow) {
+            syncCanonicalDatabaseUrl(
+              updatedDatabase.pageSlugId,
+              updatedDatabase.name ?? patch.name,
+            );
+          } else if (databasePageSlugId !== updatedDatabase.pageSlugId) {
+            pendingCanonicalPathRef.current = {
+              slugId: updatedDatabase.pageSlugId,
+              name: updatedDatabase.name ?? patch.name,
+            };
+          }
         }
 
         setDraftName(updatedDatabase.name ?? draftName);
@@ -218,9 +267,8 @@ export default function DatabasePage() {
       databaseId,
       databasePageSlugId,
       draftName,
-      navigate,
       space?.id,
-      spaceSlug,
+      syncCanonicalDatabaseUrl,
       updateDatabaseMutationAsync,
     ],
   );
@@ -298,6 +346,7 @@ export default function DatabasePage() {
               editable={isEditable}
               onValueChange={setDraftName}
               onAutoSave={onTitleAutoSave}
+              onFocusChange={onTitleFocusChange}
             />
           </div>
 

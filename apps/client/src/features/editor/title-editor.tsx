@@ -27,6 +27,7 @@ import localEmitter from "@/lib/local-emitter.ts";
 import { currentUserAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { PageEditMode } from "@/features/user/types/user.types.ts";
 import { searchSpotlight } from "@/features/search/constants.ts";
+import { shouldApplyFocusSafeTitleSync } from "@/features/editor/utils/title-editor-sync.ts";
 
 export interface TitleEditorProps {
   pageId: string;
@@ -158,17 +159,21 @@ export function TitleEditor({
 
     const nextTitle = title ?? "";
     const currentTitle = titleEditor.getText();
-    const isPageChanged = lastSyncedPageIdRef.current !== pageId;
-    const isFocused = titleEditor.isFocused;
     const { from, to } = titleEditor.state.selection;
-    const hasCollapsedSelection = from === to;
 
-    if (nextTitle === currentTitle) {
-      lastSyncedPageIdRef.current = pageId;
-      return;
-    }
+    const shouldApplySync = shouldApplyFocusSafeTitleSync({
+      entityId: pageId,
+      lastSyncedEntityId: lastSyncedPageIdRef.current,
+      nextTitle,
+      currentTitle,
+      isFocused: titleEditor.isFocused,
+      hasCollapsedSelection: from === to,
+    });
 
-    if (!isPageChanged && isFocused && hasCollapsedSelection) {
+    if (!shouldApplySync) {
+      if (nextTitle === currentTitle) {
+        lastSyncedPageIdRef.current = pageId;
+      }
       return;
     }
 
