@@ -1,9 +1,12 @@
-import { Checkbox, Group, Select, Text, TextInput, Textarea } from '@mantine/core';
+import { Checkbox, Group, Select, SelectProps, Text, TextInput, Textarea } from '@mantine/core';
 import { DatabasePropertyType } from '@docmost/api-contract';
 import { useTranslation } from 'react-i18next';
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { useSpaceMemberSelectOptions } from '@/features/page/components/document-fields/space-member-select-utils.ts';
+import {
+  SpaceMemberSelectOption,
+  useSpaceMemberSelectOptions,
+} from '@/features/page/components/document-fields/space-member-select-utils.ts';
 import { useGetRootSidebarPagesQuery } from '@/features/page/queries/page-query.ts';
 import { IDatabaseProperty } from '@/features/database/types/database.types.ts';
 import { CustomAvatar } from '@/components/ui/custom-avatar.tsx';        
@@ -45,6 +48,20 @@ export function DatabaseCellRenderer({
   onSave,
 }: DatabaseCellRendererProps) {
   const { t } = useTranslation();
+
+  const renderMemberOption: SelectProps['renderOption'] = ({ option }) => {
+    const member = option as SpaceMemberSelectOption;
+
+    return (
+      <Group gap="sm" wrap="nowrap">
+        <CustomAvatar avatarUrl={member.avatarUrl} size={20} name={member.label} />
+        <div>
+          <Text size="sm" lineClamp={1}>{member.label}</Text>
+          {member.email && <Text size="xs" c="dimmed" lineClamp={1}>{member.email}</Text>}
+        </div>
+      </Group>
+    );
+  };
 
   /**
    * The user type stores references in the `{ id }` format.
@@ -170,7 +187,12 @@ export function DatabaseCellRenderer({
         );
       }
 
-      return <Text c="dimmed">{t('Unknown')}</Text>;
+      return (
+        <Group gap="xs" wrap="nowrap">
+          <CustomAvatar avatarUrl="" size={18} name={t('Unknown')} />
+          <Text c="dimmed" lineClamp={1}>{t('Unknown')}</Text>
+        </Group>
+      );
     }
 
     if (property.type === 'page_reference') {
@@ -280,6 +302,7 @@ export function DatabaseCellRenderer({
           filter={({ options }) => options}
           searchValue={searchValue}
           onSearchChange={setSearchValue}
+          renderOption={renderMemberOption}
           nothingFoundMessage={isMembersLoading ? t('Loading...') : t('No members found')}
           onBlur={() => onSave()}
         />
