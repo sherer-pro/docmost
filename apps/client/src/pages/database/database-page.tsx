@@ -121,7 +121,7 @@ export default function DatabasePage() {
     setAsideState,
   ]);
 
-  const { syncCanonicalUrl } = useDeferredCanonicalTitleUrlSync(
+  const { onTitleFocusChange, syncCanonicalUrl } = useDeferredCanonicalTitleUrlSync(
     useCallback(
       (nextUrl: string) => {
         navigate(nextUrl, { replace: true });
@@ -170,10 +170,16 @@ export default function DatabasePage() {
          * The canonical URL synchronization helper applies the same focus/blur/deferred
          * algorithm as page title editor, so URL updates are consistent across editors.
          */
+        /**
+         * URL синхронизируем только по подтверждённым сервером данным:
+         * - slugId берём строго из ответа PATCH;
+         * - если pageSlugId отсутствует, URL не меняем, чтобы не построить
+         *   потенциально устаревший canonical путь.
+         */
         if (
           typeof patch.name === "string" &&
-          updatedDatabase.pageSlugId &&
-          spaceSlug
+          spaceSlug &&
+          updatedDatabase.pageSlugId
         ) {
           const currentUrl = `${location.pathname}${location.search}${location.hash}`;
           const canonicalPath = buildDatabaseUrl(
@@ -281,42 +287,6 @@ export default function DatabasePage() {
     return database?.name?.trim() || t("database.editor.untitled");
   }, [database?.name, draftName, t]);
 
-  /**
-   * Для базы повторяем UX страниц: canonical URL синхронизируется от текущего
-   * заголовка редактора, а не только после ответа PATCH.
-   *
-   * Это убирает задержку до blur и позволяет сразу видеть актуальный title-slug
-   * в адресной строке во время ввода.
-   */
-  useEffect(() => {
-    const pageSlugId = databasePage?.slugId ?? database?.pageSlugId;
-    if (!spaceSlug || !pageSlugId) {
-      return;
-    }
-
-    const currentUrl = `${location.pathname}${location.search}${location.hash}`;
-    const canonicalPath = buildDatabaseUrl(
-      spaceSlug,
-      pageSlugId,
-      draftName || database?.name,
-    );
-
-    syncCanonicalUrl({
-      currentUrl,
-      nextUrl: `${canonicalPath}${location.search}${location.hash}`,
-    });
-  }, [
-    database?.name,
-    database?.pageSlugId,
-    databasePage?.slugId,
-    draftName,
-    location.hash,
-    location.pathname,
-    location.search,
-    spaceSlug,
-    syncCanonicalUrl,
-  ]);
-
   if (!databaseId || !spaceSlug) {
     return null;
   }
@@ -358,6 +328,7 @@ export default function DatabasePage() {
               editable={isEditable}
               onValueChange={setDraftName}
               onAutoSave={onTitleAutoSave}
+              onFocusChange={onTitleFocusChange}
             />
           </div>
 
