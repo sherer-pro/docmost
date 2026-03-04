@@ -164,14 +164,14 @@ export class WatcherRepo {
       .where('spaceId', '=', spaceId)
       .where('userId', 'is not', null)
       .union(
-        this.db
+        db
           .selectFrom('spaceMembers')
           .innerJoin('groupUsers', 'groupUsers.groupId', 'spaceMembers.groupId')
           .select('groupUsers.userId')
           .where('spaceMembers.spaceId', '=', spaceId),
       );
 
-    await this.db
+    await db
       .deleteFrom('watchers')
       .where('userId', 'in', userIds)
       .where('spaceId', '=', spaceId)
