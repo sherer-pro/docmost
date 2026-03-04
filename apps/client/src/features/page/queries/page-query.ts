@@ -46,12 +46,21 @@ import {
 import { SimpleTree } from "react-arborist";
 import { SpaceTreeNode } from "@/features/page/tree/types";
 import { useQueryEmit } from "@/features/websocket/use-query-emit";
-import { PAGE_QUERY_KEYS } from "@/features/page/queries/query-keys";
 import {
+  PAGE_QUERY_KEYS,
+  breadcrumbsKey,
+  recentChangesKey,
+  trashListKey,
+  QUERY_KEY_SPACE,
+} from "@/features/page/queries/query-keys";
+import {
+  invalidateBreadcrumbs,
   invalidateDatabaseEntity,
   invalidateDatabaseRowContext,
   invalidatePageEntity,
+  invalidateRecentChanges,
   invalidateSidebarTree,
+  invalidateTrashList,
 } from "@/features/page/queries/cache-invalidation";
 
 const DEFAULT_SIDEBAR_NODE_TYPES: SidebarNodeType[] = ["page", "database"];
@@ -218,8 +227,7 @@ export function useRemovePageMutation() {
       notifications.show({ message: t("Page moved to trash") });
       invalidateOnDeletePage(pageId);
       queryClient.invalidateQueries({
-        predicate: (item) =>
-          ["trash-list"].includes(item.queryKey[0] as string),
+        queryKey: trashListKey(),
       });
     },
     onError: (error) => {
@@ -238,8 +246,7 @@ export function useDeletePageMutation() {
 
       // Invalidate to refresh trash lists
       queryClient.invalidateQueries({
-        predicate: (item) =>
-          ["trash-list"].includes(item.queryKey[0] as string),
+        queryKey: trashListKey(),
       });
     },
     onError: (error) => {
@@ -355,11 +362,9 @@ export function useRestorePageMutation() {
         }, 50);
       }
 
-      //  await queryClient.invalidateQueries({ queryKey: ["sidebar-pages", restoredPage.spaceId] });
-
       // Also invalidate deleted pages query to refresh the trash list
       await queryClient.invalidateQueries({
-        queryKey: ["trash-list", restoredPage.spaceId],
+        queryKey: trashListKey(restoredPage.spaceId),
       });
     },
     onError: (error) => {
@@ -411,7 +416,7 @@ export function usePageBreadcrumbsQuery(
   pageId: string,
 ): UseQueryResult<Partial<IPage[]>, Error> {
   return useQuery({
-    queryKey: ["breadcrumbs", pageId],
+    queryKey: breadcrumbsKey(pageId),
     queryFn: () => getPageBreadcrumbs(pageId),
     enabled: !!pageId,
   });
@@ -435,7 +440,7 @@ export function useRecentChangesQuery(
   spaceId?: string,
 ): UseQueryResult<IPagination<IPage>, Error> {
   return useQuery({
-    queryKey: ["recent-changes", spaceId],
+    queryKey: recentChangesKey(spaceId),
     queryFn: () => getRecentChanges(spaceId),
     refetchOnMount: true,
   });
@@ -446,7 +451,7 @@ export function useDeletedPagesQuery(
   params?: QueryParams,
 ): UseQueryResult<IPagination<IPage>, Error> {
   return useQuery({
-    queryKey: ["trash-list", spaceId, params],
+    queryKey: trashListKey(spaceId, params),
     queryFn: () => getDeletedPages(spaceId, params),
     enabled: !!spaceId,
     placeholderData: keepPreviousData,
@@ -502,7 +507,7 @@ export function invalidateOnCreatePage(data: Partial<IPage>) {
   if (data.parentPageId !== null) {
     //update sub sidebar pages haschildern
     const subSideBarMatches = queryClient.getQueriesData({
-      queryKey: ["sidebar-pages"],
+      queryKey: [QUERY_KEY_SPACE.sidebarPages],
       exact: false,
     });
 
@@ -548,9 +553,7 @@ export function invalidateOnCreatePage(data: Partial<IPage>) {
   }
 
   //update recent changes
-  queryClient.invalidateQueries({
-    queryKey: ["recent-changes", data.spaceId],
-  });
+  invalidateRecentChanges({ spaceId: data.spaceId }, { client: queryClient });
   invalidateDatabaseTreeConsistency();
 }
 
@@ -599,9 +602,7 @@ export function invalidateOnUpdatePage(
   );
 
   //update recent changes
-  queryClient.invalidateQueries({
-    queryKey: ["recent-changes", spaceId],
-  });
+  invalidateRecentChanges({ spaceId }, { client: queryClient });
   invalidateDatabaseTreeConsistency();
 }
 
@@ -645,8 +646,8 @@ export function updateCacheOnMovePage(
       // Update hasChildren in all caches where old parent appears
       const allSideBarMatches = queryClient.getQueriesData({
         predicate: (query) =>
-          query.queryKey[0] === "root-sidebar-pages" ||
-          query.queryKey[0] === "sidebar-pages",
+          query.queryKey[0] === QUERY_KEY_SPACE.rootSidebarPages ||
+          query.queryKey[0] === QUERY_KEY_SPACE.sidebarPages,
       });
 
       allSideBarMatches.forEach(([key]) => {
@@ -707,8 +708,8 @@ export function updateCacheOnMovePage(
   if (newParentId !== null) {
     const allSideBarMatches = queryClient.getQueriesData({
       predicate: (query) =>
-        query.queryKey[0] === "root-sidebar-pages" ||
-        query.queryKey[0] === "sidebar-pages",
+        query.queryKey[0] === QUERY_KEY_SPACE.rootSidebarPages ||
+        query.queryKey[0] === QUERY_KEY_SPACE.sidebarPages,
     });
 
     allSideBarMatches.forEach(([key]) => {
@@ -742,8 +743,8 @@ export function invalidateOnDeletePage(pageId: string) {
   //update all sidebar pages
   const allSideBarMatches = queryClient.getQueriesData({
     predicate: (query) =>
-      query.queryKey[0] === "root-sidebar-pages" ||
-      query.queryKey[0] === "sidebar-pages",
+      query.queryKey[0] === QUERY_KEY_SPACE.rootSidebarPages ||
+      query.queryKey[0] === QUERY_KEY_SPACE.sidebarPages,
   });
 
   allSideBarMatches.forEach(([key, d]) => {
@@ -762,8 +763,8 @@ export function invalidateOnDeletePage(pageId: string) {
   });
 
   //update recent changes
-  queryClient.invalidateQueries({
-    queryKey: ["recent-changes"],
-  });
+  invalidateRecentChanges({}, { client: queryClient });
+  invalidateBreadcrumbs({}, { client: queryClient });
+  invalidateTrashList({}, { client: queryClient });
   invalidateDatabaseTreeConsistency();
 }
