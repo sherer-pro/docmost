@@ -65,7 +65,7 @@ export class SpaceController {
 
   @Get(':spaceId')
   async getSpace(
-    @Param('spaceId', ParseUUIDPipe) spaceId: string,
+    @Param('spaceId') spaceId: string,
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
