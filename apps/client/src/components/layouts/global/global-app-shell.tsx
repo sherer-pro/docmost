@@ -75,6 +75,8 @@ export default function GlobalAppShell({
   const isHomeRoute = location.pathname.startsWith("/home");
   const isSpacesRoute = location.pathname === "/spaces";
   const isPageRoute = location.pathname.includes("/p/");
+  const isDatabaseRoute = location.pathname.includes("/db/");
+  const shouldShowAside = isPageRoute || isDatabaseRoute;
   const hideSidebar = isHomeRoute || isSpacesRoute;
 
   return (
@@ -91,7 +93,7 @@ export default function GlobalAppShell({
         }
       }
       aside={
-        isPageRoute && {
+        shouldShowAside && {
           width: 350,
           breakpoint: "sm",
           collapsed: { mobile: !isAsideOpen, desktop: !isAsideOpen },
@@ -121,7 +123,7 @@ export default function GlobalAppShell({
         )}
       </AppShell.Main>
 
-      {isPageRoute && (
+      {shouldShowAside && (
         <AppShell.Aside className={classes.aside} p="md" withBorder={false}>
           <Aside />
         </AppShell.Aside>
