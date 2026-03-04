@@ -4,6 +4,7 @@ import {
   IDatabaseSortState,
 } from '@/features/database/types/database-table.types';
 import { IDatabaseProperty } from '@/features/database/types/database.types';
+import { extractCurrentDatabaseCellValue, getDatabaseCellDisplayValue } from '@/features/database/utils/database-cell-value';
 
 export interface IDatabaseTableExportState {
   visibleColumns: Record<string, boolean>;
@@ -20,7 +21,7 @@ interface ICellValueContext {
  * Safely converts an arbitrary cell value into a string for a markdown table.
  */
 export function stringifyCellValue(value: unknown): string {
-  const normalizedValue = extractCurrentCellValue(value);
+  const normalizedValue = extractCurrentDatabaseCellValue(value);
 
   if (normalizedValue === null || typeof normalizedValue === 'undefined') {
     return '';
@@ -33,21 +34,6 @@ export function stringifyCellValue(value: unknown): string {
   return JSON.stringify(normalizedValue);
 }
 
-/**
- * Returns the current value of a cell from the fallback container after changing the type.
- */
-function extractCurrentCellValue(value: unknown): unknown {
-  if (!value || typeof value !== 'object') {
-    return value;
-  }
-
-  const candidate = value as Record<string, unknown>;
-  if (!('value' in candidate) || !('rawValueBeforeTypeChange' in candidate)) {
-    return value;
-  }
-
-  return candidate.value;
-}
 
 /**
  * Escapes special characters from a markdown table so as not to break the column structure.
@@ -64,49 +50,6 @@ export function getRowTitle(row: IDatabaseRowWithCells, untitledLabel: string): 
 }
 
 /**
- * Нормализует значение ячейки с учетом типа свойства.
- *
- * Fallback-логика:
- * - `select`: если опция была удалена и label больше недоступен,
- *   возвращается исходное сохраненное `value`.
- * - `page_reference`: если заголовок страницы не найден в переданном контексте,
- *   возвращается текущий fallback (строковый `pageId` из ячейки).
- */
-function normalizeCellValueByProperty(params: {
-  value: unknown;
-  property?: IDatabaseProperty;
-  pageTitleById?: Record<string, string>;
-}): unknown {
-  const { value, property, pageTitleById } = params;
-
-  if (!property) {
-    return value;
-  }
-
-  if (property.type === 'select') {
-    const selectValue = typeof value === 'string' ? value : '';
-    if (!selectValue) {
-      return value;
-    }
-
-    const options = Array.isArray(property.settings?.options) ? property.settings.options : [];
-    const selectedOption = options.find((option) => option.value === selectValue);
-    return selectedOption?.label || selectValue;
-  }
-
-  if (property.type === 'page_reference') {
-    const pageId = typeof value === 'string' ? value : '';
-    if (!pageId) {
-      return value;
-    }
-
-    return pageTitleById?.[pageId] || pageId;
-  }
-
-  return value;
-}
-
-/**
  * Gets the text value of a cell by propertyId.
  */
 export function getCellValue(
@@ -115,8 +58,8 @@ export function getCellValue(
   context?: ICellValueContext,
 ): string {
   const value = row.cells?.find((cell) => cell.propertyId === propertyId)?.value;
-  const normalizedValue = normalizeCellValueByProperty({
-    value: extractCurrentCellValue(value),
+  const normalizedValue = getDatabaseCellDisplayValue({
+    value,
     property: context?.propertiesById?.[propertyId],
     pageTitleById: context?.pageTitleById,
   });
