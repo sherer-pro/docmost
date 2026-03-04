@@ -1,4 +1,5 @@
-import { Group } from '@mantine/core';
+import { Group, Text, Tooltip } from '@mantine/core';
+import { IconDatabase } from '@tabler/icons-react';
 import { useTranslation } from 'react-i18next';
 import classes from '@/features/page/components/header/page-header.module.css';
 import DatabaseHeaderMenu from '@/features/database/components/header/database-header-menu.tsx';
@@ -25,7 +26,12 @@ export default function DatabaseHeader({
     <div className={classes.header}>
       <Group justify="space-between" h="100%" px="md" wrap="nowrap" className={classes.group}>
         <Group gap="xs" wrap="nowrap">
-          <span>{displayName}</span>
+          <Tooltip label={t('Database')} openDelay={250} withArrow>
+            <IconDatabase size={18} stroke={2} color="var(--mantine-color-dimmed)" />
+          </Tooltip>
+          <Text fz="sm" truncate="end" maw={420} fw={500}>
+            {displayName}
+          </Text>
         </Group>
 
         <Group justify="flex-end" h="100%" px="md" wrap="nowrap" gap="var(--mantine-spacing-xs)">
