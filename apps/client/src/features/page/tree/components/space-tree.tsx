@@ -42,6 +42,7 @@ import {
   appendNodeChildren,
   buildTree,
   buildTreeWithChildren,
+  insertDatabaseRowNode,
   mergeRootTrees,
   updateTreeNodeIcon,
 } from "@/features/page/tree/utils/utils.ts";
@@ -594,11 +595,12 @@ function CreateNode({ node, treeApi, onExpandTree }: CreateNodeProps) {
     const createdRow = await createDatabaseRowMutation.mutateAsync({
       parentPageId: node.id,
     });
+    const createdRowPage = await getPageById({ pageId: createdRow.pageId });
 
     const treeNodeData: SpaceTreeNode = {
       id: createdRow.pageId,
       nodeType: "databaseRow",
-      slugId: null,
+      slugId: createdRow.slugId ?? createdRowPage.slugId,
       databaseId: createdRow.databaseId,
       name: "",
       position: "",
@@ -610,15 +612,12 @@ function CreateNode({ node, treeApi, onExpandTree }: CreateNodeProps) {
       children: [],
     };
 
-    const nextTree = new SimpleTree(treeData);
-    const parentChildrenCount = node.children?.length ?? 0;
-
-    nextTree.create({
-      parentId: node.id,
-      index: parentChildrenCount,
-      data: treeNodeData,
-    });
-    setTreeData(nextTree.data);
+    const { tree: nextTreeData, index: insertionIndex } = insertDatabaseRowNode(
+      treeData,
+      node.id,
+      treeNodeData,
+    );
+    setTreeData(nextTreeData);
 
     setTimeout(() => {
       emit({
@@ -626,7 +625,7 @@ function CreateNode({ node, treeApi, onExpandTree }: CreateNodeProps) {
         spaceId: node.data.spaceId,
         payload: {
           parentId: node.id,
-          index: parentChildrenCount,
+          index: insertionIndex,
           node: treeNodeData,
         },
       });

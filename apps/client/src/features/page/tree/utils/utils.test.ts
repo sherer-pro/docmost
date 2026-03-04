@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { deleteTreeNode, dropTreeNode } from './utils';
+import { deleteTreeNode, dropTreeNode, insertDatabaseRowNode } from './utils';
 import { SpaceTreeNode } from '../types';
 
 function createNode(
@@ -60,5 +60,49 @@ describe('dropTreeNode', () => {
     const deleteResult = deleteTreeNode([parent], 'child');
 
     assert.deepEqual(deleteResult, dropResult);
+  });
+});
+
+describe('insertDatabaseRowNode', () => {
+  it('marks database parent as expandable and inserts first row immediately', () => {
+    const databaseNode: SpaceTreeNode = {
+      id: 'database-page-id',
+      nodeType: 'database',
+      slugId: 'database-slug',
+      databaseId: 'database-id',
+      name: 'Database',
+      icon: null,
+      status: null,
+      position: 'a0',
+      hasChildren: false,
+      spaceId: 'space-1',
+      parentPageId: null,
+      children: [],
+    };
+
+    const rowNode: SpaceTreeNode = {
+      id: 'row-page-id',
+      nodeType: 'databaseRow',
+      slugId: 'row-slug',
+      databaseId: 'database-id',
+      name: '',
+      icon: null,
+      status: null,
+      position: 'a1',
+      hasChildren: false,
+      spaceId: 'space-1',
+      parentPageId: 'database-page-id',
+      children: [],
+    };
+
+    const { tree: nextTree } = insertDatabaseRowNode(
+      [databaseNode],
+      'database-page-id',
+      rowNode,
+    );
+
+    assert.equal(nextTree[0].hasChildren, true);
+    assert.equal(nextTree[0].children.length, 1);
+    assert.equal(nextTree[0].children[0].id, 'row-page-id');
   });
 });

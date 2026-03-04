@@ -34,6 +34,7 @@ import { DATABASE_PROPERTY_TYPES, DatabasePropertyType } from '@docmost/api-cont
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useSetAtom } from 'jotai';
+import { useAtomValue } from 'jotai/react';
 import {
   useBatchUpdateDatabaseCellsMutation,
   useCreateDatabasePropertyMutation,
@@ -66,6 +67,14 @@ import {
 } from '@/features/database/utils/database-markdown';
 import { DATABASE_PROPERTY_TYPE_LABEL_KEYS } from '@/features/database/utils/database-property-type-labels';
 import { DatabaseCellRenderer } from '@/features/database/components/database-cell-renderer.tsx';
+import { treeDataAtom } from '@/features/page/tree/atoms/tree-data-atom.ts';
+import { SpaceTreeNode } from '@/features/page/tree/types.ts';
+import { treeApiAtom } from '@/features/page/tree/atoms/tree-api-atom.ts';
+import { useQueryEmit } from '@/features/websocket/use-query-emit.ts';
+import { insertDatabaseRowNode } from '@/features/page/tree/utils/utils.ts';
+import { queryClient } from '@/main.tsx';
+import { getPageById } from '@/features/page/services/page-service.ts';
+import { PAGE_QUERY_KEYS } from '@/features/page/queries/query-keys.ts';
 
 interface DatabaseTableViewProps {
   databaseId: string;
@@ -145,7 +154,93 @@ export function DatabaseTableView({
   const [selectPropertyDraft, setSelectPropertyDraft] =
     useState<SelectPropertyCreationDraft | null>(null);
   const setTableExportState = useSetAtom(databaseTableExportStateAtom);
+  const treeData = useAtomValue(treeDataAtom);
+  const setTreeData = useSetAtom(treeDataAtom);
+  const treeApi = useAtomValue(treeApiAtom);
+  const emit = useQueryEmit();
   const navigate = useNavigate();
+
+  /**
+   * Locates a database node in the local sidebar tree.
+   *
+   * Table view operates with databaseId, not with tree page id,
+   * so we match by nodeType=database and databaseId.
+   */
+  const findDatabaseNodeInTree = (
+    nodes: SpaceTreeNode[],
+  ): SpaceTreeNode | null => {
+    for (const treeNode of nodes) {
+      if (treeNode.nodeType === 'database' && treeNode.databaseId === databaseId) {
+        return treeNode;
+      }
+
+      const nestedNode = findDatabaseNodeInTree(treeNode.children);
+      if (nestedNode) {
+        return nestedNode;
+      }
+    }
+
+    return null;
+  };
+
+  const handleCreateRow = async () => {
+    const createdRow = await createRowMutation.mutateAsync({});
+    const databaseNode = findDatabaseNodeInTree(treeData);
+
+    if (!databaseNode) {
+      return;
+    }
+
+    const createdRowPage = await queryClient.fetchQuery({
+      queryKey: PAGE_QUERY_KEYS.page(createdRow.pageId),
+      queryFn: () => getPageById({ pageId: createdRow.pageId }),
+    });
+
+    if (createdRowPage?.slugId) {
+      queryClient.setQueryData(PAGE_QUERY_KEYS.page(createdRowPage.slugId), createdRowPage);
+    }
+
+    const treeNodeData: SpaceTreeNode = {
+      id: createdRow.pageId,
+      nodeType: 'databaseRow',
+      slugId: createdRow.slugId ?? createdRowPage.slugId,
+      databaseId: createdRow.databaseId,
+      name: '',
+      position: '',
+      spaceId,
+      parentPageId: databaseNode.id,
+      icon: null,
+      status: null,
+      hasChildren: false,
+      children: [],
+    };
+
+    const wasFirstRow = (databaseNode.children?.length ?? 0) === 0;
+    const { tree: nextTreeData, index: insertionIndex } = insertDatabaseRowNode(
+      treeData,
+      databaseNode.id,
+      treeNodeData,
+    );
+    setTreeData(nextTreeData);
+
+    emit({
+      operation: 'addTreeNode',
+      spaceId,
+      payload: {
+        parentId: databaseNode.id,
+        index: insertionIndex,
+        node: treeNodeData,
+      },
+    });
+
+    /**
+     * UX: when the first row is created, open the database node immediately
+     * so the user can see the newly inserted child without manual interaction.
+     */
+    if (wasFirstRow) {
+      treeApi?.open(databaseNode.id);
+    }
+  };
 
   /**
    * Localized property type labels for all table selectors.
@@ -413,7 +508,7 @@ export function DatabaseTableView({
             variant="light"
             leftSection={<IconPlus size={14} />}
             disabled={!isEditable}
-            onClick={() => createRowMutation.mutate({})}
+            onClick={() => void handleCreateRow()}
           >
             {t('Row')}
           </Button>
