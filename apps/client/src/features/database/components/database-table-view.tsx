@@ -71,10 +71,15 @@ import { treeDataAtom } from '@/features/page/tree/atoms/tree-data-atom.ts';
 import { SpaceTreeNode } from '@/features/page/tree/types.ts';
 import { treeApiAtom } from '@/features/page/tree/atoms/tree-api-atom.ts';
 import { useQueryEmit } from '@/features/websocket/use-query-emit.ts';
-import { insertDatabaseRowNode } from '@/features/page/tree/utils/utils.ts';
+import {
+  appendNodeChildren,
+  insertDatabaseRowNode,
+  setTreeNodeHasChildren,
+} from '@/features/page/tree/utils/utils.ts';
 import { queryClient } from '@/main.tsx';
 import { getPageById } from '@/features/page/services/page-service.ts';
 import { PAGE_QUERY_KEYS } from '@/features/page/queries/query-keys.ts';
+import { fetchAllAncestorChildren } from '@/features/page/queries/page-query.ts';
 
 interface DatabaseTableViewProps {
   databaseId: string;
@@ -239,6 +244,34 @@ export function DatabaseTableView({
      */
     if (wasFirstRow) {
       treeApi?.open(databaseNode.id);
+    }
+
+    /**
+     * Optimistic insert keeps UX responsive, but final consistency must always
+     * come from the canonical sidebar children payload.
+     */
+    try {
+      const actualChildren = await fetchAllAncestorChildren({
+        pageId: databaseNode.id,
+        spaceId,
+        includeNodeTypes: ['page', 'database', 'databaseRow'],
+      });
+
+      setTreeData((currentTreeData) => {
+        const treeWithSyncedChildren = appendNodeChildren(
+          currentTreeData,
+          databaseNode.id,
+          actualChildren,
+        );
+
+        return setTreeNodeHasChildren(
+          treeWithSyncedChildren,
+          databaseNode.id,
+          actualChildren.length > 0,
+        );
+      });
+    } catch (error) {
+      console.error('Failed to synchronize database children after row creation', error);
     }
   };
 
