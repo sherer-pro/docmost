@@ -28,6 +28,8 @@ import {
   SAFE_FILE_VALIDATION_ERROR_MESSAGE,
   validateFileExtensionAndSignature,
 } from '../../common/helpers/file-validation';
+import { DeprecatedRoute } from '../../common/decorators/deprecated-route.decorator';
+import { LEGACY_ALIAS_SUNSET } from '../../common/helpers/deprecated-route';
 
 @Controller('pages')
 export class ImportController {
@@ -59,6 +61,10 @@ export class ImportController {
    */
   @UseInterceptors(FileInterceptor)
   @UseGuards(JwtAuthGuard)
+  @DeprecatedRoute({
+    sunset: LEGACY_ALIAS_SUNSET,
+    replacement: '/pages/actions/import',
+  })
   @HttpCode(HttpStatus.OK)
   @Post('import')
   async importPage(
@@ -142,6 +148,10 @@ export class ImportController {
    */
   @UseInterceptors(FileInterceptor)
   @UseGuards(JwtAuthGuard)
+  @DeprecatedRoute({
+    sunset: LEGACY_ALIAS_SUNSET,
+    replacement: '/pages/actions/import-zip',
+  })
   @HttpCode(HttpStatus.OK)
   @Post('import-zip')
   async importZip(
