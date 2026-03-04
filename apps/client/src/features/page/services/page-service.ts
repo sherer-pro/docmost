@@ -135,7 +135,7 @@ export async function getRecentChanges(
 }
 
 export async function exportPage(data: IExportPageParams): Promise<void> {
-  const req = await api.post("/pages/export", data, {
+  const req = await api.post('/pages/actions/export', data, {
     responseType: "blob",
   });
 
@@ -158,7 +158,7 @@ export async function importPage(file: File, spaceId: string) {
   formData.append("spaceId", spaceId);
   formData.append("file", file);
 
-  const req = await api.post<IPage>("/pages/import", formData, {
+  const req = await api.post<IPage>('/pages/actions/import', formData, {
     headers: {
       "Content-Type": "multipart/form-data",
     },
@@ -177,7 +177,7 @@ export async function importZip(
   formData.append("source", source);
   formData.append("file", file);
 
-  const req = await api.post<any>("/pages/import-zip", formData, {
+  const req = await api.post<any>('/pages/actions/import-zip', formData, {
     headers: {
       "Content-Type": "multipart/form-data",
     },
