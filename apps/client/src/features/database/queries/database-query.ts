@@ -1,10 +1,18 @@
 import { useMutation, useQuery, UseQueryResult } from "@tanstack/react-query";
-import { createDatabase, getDatabase, getDatabases } from "@/features/database/services";
+import {
+  createDatabase,
+  getDatabase,
+  getDatabases,
+} from "@/features/database/services";
 import { IDatabase } from "@/features/database/types/database.types";
 import { ICreateDatabasePayload } from "@/features/database/types/database.types";
 import { IUpdateDatabasePayload } from "@/features/database/types/database.types";
-import { convertDatabaseToPage, updateDatabase } from "@/features/database/services/database-service";
+import {
+  convertDatabaseToPage,
+  updateDatabase,
+} from "@/features/database/services/database-service";
 import { queryClient } from "@/main";
+import { DATABASE_QUERY_KEYS } from "@/features/page/queries/query-keys";
 import {
   invalidateDatabaseEntity,
   invalidateDatabaseRowContext,
@@ -22,7 +30,7 @@ export function useGetDatabasesBySpaceQuery(
   spaceId?: string,
 ): UseQueryResult<IDatabase[], Error> {
   return useQuery({
-    queryKey: ["databases", "space", spaceId],
+    queryKey: DATABASE_QUERY_KEYS.bySpace(spaceId),
     queryFn: () => getDatabases(spaceId as string),
     enabled: Boolean(spaceId),
   });
@@ -38,7 +46,7 @@ export function useGetDatabaseQuery(
   databaseId?: string,
 ): UseQueryResult<IDatabase, Error> {
   return useQuery({
-    queryKey: ["database", databaseId],
+    queryKey: DATABASE_QUERY_KEYS.byId(databaseId),
     queryFn: () => getDatabase(databaseId as string),
     enabled: Boolean(databaseId),
   });
@@ -61,29 +69,43 @@ export function useCreateDatabaseMutation(spaceId?: string) {
  * - detailed record of the current database;
  * - database list for the current space.
  */
-export function useUpdateDatabaseMutation(spaceId?: string, databaseId?: string) {
+export function useUpdateDatabaseMutation(
+  spaceId?: string,
+  databaseId?: string,
+) {
   return useMutation({
     mutationFn: (payload: IUpdateDatabasePayload) =>
       updateDatabase(databaseId as string, payload),
     onSuccess: () => {
-      invalidateDatabaseEntity({ databaseId, spaceId }, { client: queryClient });
+      invalidateDatabaseEntity(
+        { databaseId, spaceId },
+        { client: queryClient },
+      );
       invalidateSidebarTree({ spaceId }, { client: queryClient });
     },
   });
 }
 
-
 /**
  * Converts the database to a page and synchronously updates the tree/detail cache.
  */
-export function useConvertDatabaseToPageMutation(spaceId?: string, databaseId?: string) {
+export function useConvertDatabaseToPageMutation(
+  spaceId?: string,
+  databaseId?: string,
+) {
   return useMutation({
     mutationFn: () => convertDatabaseToPage(databaseId as string),
     onSuccess: (page) => {
-      invalidateDatabaseEntity({ databaseId, spaceId }, { client: queryClient });
+      invalidateDatabaseEntity(
+        { databaseId, spaceId },
+        { client: queryClient },
+      );
       invalidateSidebarTree({ spaceId }, { client: queryClient });
       invalidateDatabaseRowContext({ databaseId }, { client: queryClient });
-      invalidatePageEntity({ pageId: page?.id, pageSlugId: page?.slugId }, { client: queryClient });
+      invalidatePageEntity(
+        { pageId: page?.id, pageSlugId: page?.slugId },
+        { client: queryClient },
+      );
     },
   });
 }
