@@ -306,4 +306,125 @@ describe('DatabaseService mixed tree flows', () => {
     expect(notificationQueue.add).not.toHaveBeenCalled();
   });
 
+  it('updates row cells for checkbox and text/object payloads through batch endpoint flow', async () => {
+    pageRepo.findById.mockResolvedValue({
+      id: 'row-page-1',
+      workspaceId: 'ws-1',
+      spaceId: 'space-1',
+      deletedAt: null,
+    });
+    databaseRowRepo.findByDatabaseAndPage.mockResolvedValue({
+      id: 'row-1',
+      databaseId: 'db-1',
+      pageId: 'row-page-1',
+      archivedAt: null,
+    });
+
+    databaseCellRepo.upsertCell
+      .mockResolvedValueOnce({ id: 'cell-bool-true', propertyId: 'prop-checkbox', value: true })
+      .mockResolvedValueOnce({ id: 'cell-bool-false', propertyId: 'prop-checkbox', value: false })
+      .mockResolvedValueOnce({ id: 'cell-text', propertyId: 'prop-text', value: 'plain text value' })
+      .mockResolvedValueOnce({
+        id: 'cell-object',
+        propertyId: 'prop-object',
+        value: { id: 'user-2' },
+      });
+
+    await service.batchUpdateRowCells(
+      'db-1',
+      'row-page-1',
+      {
+        cells: [
+          { propertyId: 'prop-checkbox', value: true },
+          { propertyId: 'prop-checkbox', value: false },
+          { propertyId: 'prop-text', value: 'plain text value' },
+          { propertyId: 'prop-object', value: { id: 'user-2' } },
+        ],
+      },
+      user,
+      'ws-1',
+    );
+
+    expect(databaseCellRepo.upsertCell).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        propertyId: 'prop-checkbox',
+        value: true,
+      }),
+    );
+    expect(databaseCellRepo.upsertCell).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        propertyId: 'prop-checkbox',
+        value: false,
+      }),
+    );
+    expect(databaseCellRepo.upsertCell).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({
+        propertyId: 'prop-text',
+        value: 'plain text value',
+      }),
+    );
+    expect(databaseCellRepo.upsertCell).toHaveBeenNthCalledWith(
+      4,
+      expect.objectContaining({
+        propertyId: 'prop-object',
+        value: { id: 'user-2' },
+      }),
+    );
+  });
+
+  it('soft-deletes cell with null value when operation=delete', async () => {
+    pageRepo.findById.mockResolvedValue({
+      id: 'row-page-1',
+      workspaceId: 'ws-1',
+      spaceId: 'space-1',
+      deletedAt: null,
+    });
+    databaseRowRepo.findByDatabaseAndPage.mockResolvedValue({
+      id: 'row-1',
+      databaseId: 'db-1',
+      pageId: 'row-page-1',
+      archivedAt: null,
+    });
+    databaseCellRepo.upsertCell.mockResolvedValue({
+      id: 'cell-delete',
+      propertyId: 'prop-delete',
+      value: null,
+    });
+    databaseCellRepo.updateCell.mockResolvedValue({
+      id: 'cell-delete',
+      propertyId: 'prop-delete',
+      value: null,
+      deletedAt: new Date(),
+    });
+
+    await service.batchUpdateRowCells(
+      'db-1',
+      'row-page-1',
+      {
+        cells: [{ propertyId: 'prop-delete', operation: 'delete' }],
+      },
+      user,
+      'ws-1',
+    );
+
+    expect(databaseCellRepo.upsertCell).toHaveBeenCalledWith(
+      expect.objectContaining({
+        propertyId: 'prop-delete',
+        value: null,
+        attachmentId: null,
+      }),
+    );
+    expect(databaseCellRepo.updateCell).toHaveBeenCalledWith(
+      'cell-delete',
+      expect.objectContaining({
+        value: null,
+        attachmentId: null,
+        updatedById: 'u-1',
+      }),
+    );
+  });
+
 });
