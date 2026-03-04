@@ -476,6 +476,11 @@ export function DatabaseTableView({
     return selectedOption?.label || value;
   };
 
+  const getSelectOption = (property: IDatabaseProperty, value: string): IDatabaseSelectOption | null => {
+    const settings = getSelectSettings(property);
+    return settings.options.find((option) => option.value === value) || null;
+  };
+
   const handleCreateProperty = () => {
     const trimmedName = newPropertyName.trim();
 
@@ -888,6 +893,7 @@ export function DatabaseTableView({
                         editingValue={editingValue}
                         spaceId={spaceId}
                         spaceSlug={spaceSlug}
+                        getSelectOption={getSelectOption}
                         getSelectOptionLabel={getSelectOptionLabel}
                         onStartEdit={() => startEditing(row, property)}
                         onChange={setEditingValue}

@@ -1,4 +1,4 @@
-import { Checkbox, Group, Select, SelectProps, Text, TextInput, Textarea } from '@mantine/core';
+import { Badge, Checkbox, Group, Select, SelectProps, Text, TextInput, Textarea } from '@mantine/core';
 import { DatabasePropertyType } from '@docmost/api-contract';
 import { useTranslation } from 'react-i18next';
 import { useMemo } from 'react';
@@ -21,6 +21,7 @@ interface DatabaseCellRendererProps {
   editingValue: unknown;
   spaceId: string;
   spaceSlug: string;
+  getSelectOption: (property: IDatabaseProperty, value: string) => { label: string; color?: string } | null;
   getSelectOptionLabel: (property: IDatabaseProperty, value: string) => string;
   onStartEdit: () => void;
   onChange: (value: unknown) => void;
@@ -42,6 +43,7 @@ export function DatabaseCellRenderer({
   editingValue,
   spaceId,
   spaceSlug,
+  getSelectOption,
   getSelectOptionLabel,
   onStartEdit,
   onChange,
@@ -166,8 +168,18 @@ export function DatabaseCellRenderer({
 
     if (property.type === 'select') {
       const selectValue = typeof value === 'string' ? value : '';
-      const label = selectValue ? getSelectOptionLabel(property, selectValue) : '';
-      return label || <Text c="dimmed">{t('Empty value')}</Text>;
+      if (!selectValue) {
+        return <Text c="dimmed">{t('Empty value')}</Text>;
+      }
+
+      const selectedOption = getSelectOption(property, selectValue);
+      const label = selectedOption?.label || getSelectOptionLabel(property, selectValue);
+
+      return (
+        <Badge color={selectedOption?.color || 'gray'} variant="light">
+          {label}
+        </Badge>
+      );
     }
 
     if (property.type === 'user') {
