@@ -62,8 +62,13 @@ export async function changeMemberRole(
 }
 
 export async function exportSpace(data: IExportSpaceParams): Promise<void> {
+  /**
+   * Экспорт возвращает бинарный файл + заголовок `content-disposition`,
+   * поэтому явно отключаем unwrap envelope и просим blob-ответ.
+   */
   const req = await api.post('/spaces/actions/export', data, {
     responseType: 'blob',
+    skipEnvelopeUnwrap: true,
   });
 
   const fileName = req?.headers['content-disposition']
