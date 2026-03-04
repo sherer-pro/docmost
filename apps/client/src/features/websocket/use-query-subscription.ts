@@ -2,7 +2,7 @@ import React from "react";
 import { socketAtom } from "@/features/websocket/atoms/socket-atom.ts";
 import { useAtom } from "jotai";
 import { useQueryClient } from "@tanstack/react-query";
-import { WebSocketEvent } from "@/features/websocket/types";
+import { WebSocketEvent, WebSocketIncomingEvent } from "@/features/websocket/types";
 import { IPagination } from "@/lib/types";
 import {
   invalidateOnCreatePage,
@@ -39,8 +39,8 @@ export const useQuerySubscription = () => {
   const [socket] = useAtom(socketAtom);
 
   React.useEffect(() => {
-    socket?.on("message", (event) => {
-      const data: WebSocketEvent = event;
+    socket?.on("message", (event: WebSocketIncomingEvent) => {
+      const data: WebSocketEvent = "data" in event ? event.data : event;
 
       let entity = null;
       let queryKeyId = null;

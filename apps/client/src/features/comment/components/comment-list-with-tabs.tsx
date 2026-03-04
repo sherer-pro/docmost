@@ -104,14 +104,14 @@ function CommentListWithTabs() {
         emit({
           operation: "invalidateComment",
           pageId: page?.id,
-        });
+        }, { spaceId: page?.spaceId, workspaceId: page?.workspaceId });
       } catch (error) {
         console.error("Failed to post comment:", error);
       } finally {
         setIsLoading(false);
       }
     },
-    [createCommentMutation, page?.id]
+    [createCommentMutation, emit, page?.id, page?.spaceId, page?.workspaceId]
   );
 
   /**
