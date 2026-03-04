@@ -1,45 +1,45 @@
-import { Container, Stack } from '@mantine/core';
-import { JSONContent } from '@tiptap/react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Helmet } from 'react-helmet-async';
-import { useTranslation } from 'react-i18next';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { buildDatabaseUrl } from '@/features/page/page.utils.ts';
-import { resolvePageDatabaseIds } from '@/features/page/page-id-adapter.ts';
-import { DatabaseTableView } from '@/features/database/components/database-table-view';
-import { DatabaseDescriptionEditor } from '@/features/database/components/editors/database-description-editor.tsx';
-import { DatabaseTitleEditor } from '@/features/database/components/editors/database-title-editor.tsx';
-import DatabaseHeader from '@/features/database/components/header/database-header.tsx';
-import HistoryModal from '@/features/page-history/components/history-modal.tsx';
-import DocumentFieldsPanel from '@/features/page/components/document-fields/document-fields-panel.tsx';
+import { Container, Stack } from "@mantine/core";
+import { JSONContent } from "@tiptap/react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Helmet } from "react-helmet-async";
+import { useTranslation } from "react-i18next";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { buildDatabaseUrl } from "@/features/page/page.utils.ts";
+import { resolvePageDatabaseIds } from "@/features/page/page-id-adapter.ts";
+import { DatabaseTableView } from "@/features/database/components/database-table-view";
+import { DatabaseDescriptionEditor } from "@/features/database/components/editors/database-description-editor.tsx";
+import { DatabaseTitleEditor } from "@/features/database/components/editors/database-title-editor.tsx";
+import DatabaseHeader from "@/features/database/components/header/database-header.tsx";
+import HistoryModal from "@/features/page-history/components/history-modal.tsx";
+import DocumentFieldsPanel from "@/features/page/components/document-fields/document-fields-panel.tsx";
 import {
   useGetDatabaseQuery,
   useUpdateDatabaseMutation,
-} from '@/features/database/queries/database-query.ts';
-import { usePageQuery } from '@/features/page/queries/page-query';
-import { IUpdateDatabasePayload } from '@/features/database/types/database.types.ts';
+} from "@/features/database/queries/database-query.ts";
+import { usePageQuery } from "@/features/page/queries/page-query";
+import { IUpdateDatabasePayload } from "@/features/database/types/database.types.ts";
 import {
   SpaceCaslAction,
   SpaceCaslSubject,
-} from '@/features/space/permissions/permissions.type.ts';
-import { useSpaceAbility } from '@/features/space/permissions/use-space-ability.ts';
-import { useGetSpaceBySlugQuery } from '@/features/space/queries/space-query.ts';
-import { currentUserAtom } from '@/features/user/atoms/current-user-atom.ts';
-import { PageEditMode } from '@/features/user/types/user.types.ts';
-import { useDeferredCanonicalTitleUrlSync } from '@/features/editor/utils/canonical-title-url-sync.ts';
-import { getAppName } from '@/lib/config.ts';
-import { useAtomValue } from 'jotai';
-import { asideStateAtom } from '@/components/layouts/global/hooks/atoms/sidebar-atom.ts';
-import { useSetAtom } from 'jotai';
-import { useDebouncedCallback } from '@mantine/hooks';
-import classes from './database-page.module.css';
+} from "@/features/space/permissions/permissions.type.ts";
+import { useSpaceAbility } from "@/features/space/permissions/use-space-ability.ts";
+import { useGetSpaceBySlugQuery } from "@/features/space/queries/space-query.ts";
+import { currentUserAtom } from "@/features/user/atoms/current-user-atom.ts";
+import { PageEditMode } from "@/features/user/types/user.types.ts";
+import { useDeferredCanonicalTitleUrlSync } from "@/features/editor/utils/canonical-title-url-sync.ts";
+import { getAppName } from "@/lib/config.ts";
+import { useAtomValue } from "jotai";
+import { asideStateAtom } from "@/components/layouts/global/hooks/atoms/sidebar-atom.ts";
+import { useSetAtom } from "jotai";
+import { useDebouncedCallback } from "@mantine/hooks";
+import classes from "./database-page.module.css";
 import {
   buildDatabaseDescriptionPayload,
   serializeDatabaseDescription,
   toDatabaseDescriptionDoc,
-} from '@/features/database/utils/database-description';
+} from "@/features/database/utils/database-description";
 
-type SaveState = 'idle' | 'saving' | 'saved' | 'error';
+type SaveState = "idle" | "saving" | "saved" | "error";
 
 export default function DatabasePage() {
   const { t } = useTranslation();
@@ -51,7 +51,9 @@ export default function DatabasePage() {
 
   // In modern routes the database is opened by the database page slug,
   // so we resolve the page first and read databaseId from it.
-  const { data: databasePageBySlug } = usePageQuery({ pageId: routeIds.pageId });
+  const { data: databasePageBySlug } = usePageQuery({
+    pageId: routeIds.pageId,
+  });
 
   const resolvedIds = resolvePageDatabaseIds({
     pageId: databasePageBySlug?.id,
@@ -64,16 +66,14 @@ export default function DatabasePage() {
   const databasePage = databasePageBySlug;
   const databasePageId = databasePage?.id ?? database?.pageId;
   const { data: space } = useGetSpaceBySlugQuery(spaceSlug);
-  const { mutateAsync: updateDatabaseMutationAsync } = useUpdateDatabaseMutation(
-    space?.id,
-    databaseId,
-  );
+  const { mutateAsync: updateDatabaseMutationAsync } =
+    useUpdateDatabaseMutation(space?.id, databaseId);
   const currentUser = useAtomValue(currentUserAtom);
-  const [draftName, setDraftName] = useState('');
+  const [draftName, setDraftName] = useState("");
   const [draftDescription, setDraftDescription] = useState(
     toDatabaseDescriptionDoc(),
   );
-  const [saveState, setSaveState] = useState<SaveState>('idle');
+  const [saveState, setSaveState] = useState<SaveState>("idle");
 
   const lastRequestVersionRef = useRef(0);
 
@@ -103,19 +103,25 @@ export default function DatabasePage() {
 
   useEffect(() => {
     const shouldOpenCommentsAside = Boolean(
-      (location.state as { openCommentsAside?: boolean } | null)?.openCommentsAside,
+      (location.state as { openCommentsAside?: boolean } | null)
+        ?.openCommentsAside,
     );
 
     if (!databasePageId || !shouldOpenCommentsAside) {
       return;
     }
 
-    setAsideState({ tab: 'comments', isAsideOpen: true });
+    setAsideState({ tab: "comments", isAsideOpen: true });
     navigate(location.pathname, { replace: true, state: null });
-  }, [databasePageId, location.pathname, location.state, navigate, setAsideState]);
+  }, [
+    databasePageId,
+    location.pathname,
+    location.state,
+    navigate,
+    setAsideState,
+  ]);
 
-
-  const { onTitleFocusChange, syncCanonicalUrl } = useDeferredCanonicalTitleUrlSync(
+  const { syncCanonicalUrl } = useDeferredCanonicalTitleUrlSync(
     useCallback(
       (nextUrl: string) => {
         navigate(nextUrl, { replace: true });
@@ -129,11 +135,14 @@ export default function DatabasePage() {
       return;
     }
 
-    setDraftName(database.name ?? '');
+    setDraftName(database.name ?? "");
     setDraftDescription(
-      toDatabaseDescriptionDoc(database.descriptionContent, database.description),
+      toDatabaseDescriptionDoc(
+        database.descriptionContent,
+        database.description,
+      ),
     );
-    setSaveState('idle');
+    setSaveState("idle");
   }, [database?.id]);
 
   /**
@@ -147,7 +156,7 @@ export default function DatabasePage() {
 
       const requestVersion = lastRequestVersionRef.current + 1;
       lastRequestVersionRef.current = requestVersion;
-      setSaveState('saving');
+      setSaveState("saving");
 
       try {
         const updatedDatabase = await updateDatabaseMutationAsync(patch);
@@ -161,7 +170,11 @@ export default function DatabasePage() {
          * The canonical URL synchronization helper applies the same focus/blur/deferred
          * algorithm as page title editor, so URL updates are consistent across editors.
          */
-        if (typeof patch.name === 'string' && updatedDatabase.pageSlugId && spaceSlug) {
+        if (
+          typeof patch.name === "string" &&
+          updatedDatabase.pageSlugId &&
+          spaceSlug
+        ) {
           const currentUrl = `${location.pathname}${location.search}${location.hash}`;
           const canonicalPath = buildDatabaseUrl(
             spaceSlug,
@@ -182,13 +195,13 @@ export default function DatabasePage() {
             updatedDatabase.description,
           ),
         );
-        setSaveState('saved');
+        setSaveState("saved");
       } catch {
         if (requestVersion !== lastRequestVersionRef.current) {
           return;
         }
 
-        setSaveState('error');
+        setSaveState("error");
       }
     },
     [
@@ -207,7 +220,10 @@ export default function DatabasePage() {
   const onTitleAutoSave = useCallback(
     async (nextTitle: string) => {
       const normalizedTitle = nextTitle.trim();
-      if (!normalizedTitle || normalizedTitle === (database?.name ?? '').trim()) {
+      if (
+        !normalizedTitle ||
+        normalizedTitle === (database?.name ?? "").trim()
+      ) {
         return;
       }
 
@@ -262,8 +278,44 @@ export default function DatabasePage() {
       return normalizedDraft;
     }
 
-    return database?.name?.trim() || t('database.editor.untitled');
+    return database?.name?.trim() || t("database.editor.untitled");
   }, [database?.name, draftName, t]);
+
+  /**
+   * Для базы повторяем UX страниц: canonical URL синхронизируется от текущего
+   * заголовка редактора, а не только после ответа PATCH.
+   *
+   * Это убирает задержку до blur и позволяет сразу видеть актуальный title-slug
+   * в адресной строке во время ввода.
+   */
+  useEffect(() => {
+    const pageSlugId = databasePage?.slugId ?? database?.pageSlugId;
+    if (!spaceSlug || !pageSlugId) {
+      return;
+    }
+
+    const currentUrl = `${location.pathname}${location.search}${location.hash}`;
+    const canonicalPath = buildDatabaseUrl(
+      spaceSlug,
+      pageSlugId,
+      draftName || database?.name,
+    );
+
+    syncCanonicalUrl({
+      currentUrl,
+      nextUrl: `${canonicalPath}${location.search}${location.hash}`,
+    });
+  }, [
+    database?.name,
+    database?.pageSlugId,
+    databasePage?.slugId,
+    draftName,
+    location.hash,
+    location.pathname,
+    location.search,
+    spaceSlug,
+    syncCanonicalUrl,
+  ]);
 
   if (!databaseId || !spaceSlug) {
     return null;
@@ -285,9 +337,19 @@ export default function DatabasePage() {
         readOnly={readOnly}
       />
 
-      {database?.pageId && <HistoryModal pageId={database.pageId} pageTitle={databaseDisplayName} />}
+      {database?.pageId && (
+        <HistoryModal
+          pageId={database.pageId}
+          pageTitle={databaseDisplayName}
+        />
+      )}
 
-      <Container fluid={resolvedFullWidth} size={!resolvedFullWidth ? 'xl' : undefined} py="xl" pt={60}>
+      <Container
+        fluid={resolvedFullWidth}
+        size={!resolvedFullWidth ? "xl" : undefined}
+        py="xl"
+        pt={60}
+      >
         <Stack gap="xs" mb="md">
           <div className={classes.titleEditorContainer}>
             <DatabaseTitleEditor
@@ -296,16 +358,11 @@ export default function DatabasePage() {
               editable={isEditable}
               onValueChange={setDraftName}
               onAutoSave={onTitleAutoSave}
-              onFocusChange={onTitleFocusChange}
             />
           </div>
 
-
           {databasePage && (
-            <DocumentFieldsPanel
-              page={databasePage}
-              readOnly={readOnly}
-            />
+            <DocumentFieldsPanel page={databasePage} readOnly={readOnly} />
           )}
 
           {databasePageId && (
