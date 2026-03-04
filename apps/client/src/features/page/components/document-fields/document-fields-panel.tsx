@@ -29,7 +29,7 @@ import { useAtomValue } from "jotai";
 import { PageEditMode } from "@/features/user/types/user.types.ts";
 import { AssigneeSpaceMemberSelect } from "@/features/page/components/document-fields/assignee-space-member-select.tsx";
 import { StakeholdersSpaceMemberMultiSelect } from "@/features/page/components/document-fields/stakeholders-space-member-multiselect.tsx";
-import { useSpaceMemberSelectOptions } from "@/features/page/components/document-fields/space-member-select-utils.ts";
+import { useSpaceMemberSelectOptions } from "@/features/page/components/document-fields/space-member-select-utils.tsx";
 import {
   useBatchUpdateDatabaseCellsMutation,
   useDatabaseRowContextQuery,
@@ -628,6 +628,7 @@ export function DocumentFieldsPanel({
                       onChange={(value) =>
                         handleFieldChange({ ...fields, assigneeId: value })
                       }
+                      onBlur={() => debouncedSave.flush()}
                     />
                   )}
                 </Table.Td>
@@ -672,6 +673,7 @@ export function DocumentFieldsPanel({
                       onChange={(value) =>
                         handleFieldChange({ ...fields, stakeholderIds: value })
                       }
+                      onBlur={() => debouncedSave.flush()}
                     />
                   )}
                 </Table.Td>
