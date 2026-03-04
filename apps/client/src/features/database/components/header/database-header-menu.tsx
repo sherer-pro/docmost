@@ -1,11 +1,9 @@
-import { ActionIcon, Menu, Text, Tooltip } from '@mantine/core';
+import { ActionIcon, Menu, Tooltip } from '@mantine/core';
 import { IconArrowRight, IconArrowsExchange, IconDots, IconMessage, IconTrash } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
-import { modals } from '@mantine/modals';
 import { useDisclosure } from '@mantine/hooks';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 import { saveAs } from 'file-saver';
 import ExportModal from '@/components/common/export-modal';
 import { DocumentCommonActionItems } from '@/features/common/header/document-common-action-items.tsx';
@@ -19,9 +17,10 @@ import { useGetDatabaseQuery } from '@/features/database/queries/database-query.
 import { historyAtoms } from '@/features/page-history/atoms/history-atoms.ts';
 import MovePageModal from '@/features/page/components/move-page-modal.tsx';
 import { useDeletePageModal } from '@/features/page/hooks/use-delete-page-modal.tsx';
-import { buildDatabaseUrl, buildPageUrl } from '@/features/page/page.utils.ts';
+import { buildDatabaseUrl } from '@/features/page/page.utils.ts';
 import { usePageQuery, useRemovePageMutation } from '@/features/page/queries/page-query.ts';
 import { useConvertDatabaseToPageMutation } from '@/features/database/queries/database-query.ts';
+import { useDocumentConversionActions } from '@/features/page/hooks/use-document-conversion-actions.ts';
 import ShareModal from '@/features/share/components/share-modal.tsx';
 import { PageStateSegmentedControl } from '@/features/user/components/page-state-pref.tsx';
 import { useClipboard } from '@/hooks/use-clipboard';
@@ -49,7 +48,6 @@ export default function DatabaseHeaderMenu({
   readOnly,
 }: DatabaseHeaderMenuProps) {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const toggleAside = useToggleAside();
   const clipboard = useClipboard({ timeout: 500 });
   const [user] = useAtom(userAtom);
@@ -68,6 +66,13 @@ export default function DatabaseHeaderMenu({
     useDisclosure(false);
   const { mutateAsync: convertDatabaseToPageAsync, isPending: isConvertingDatabaseToPage } =
     useConvertDatabaseToPageMutation(databasePage?.spaceId, databaseId);
+
+  const { openConvertDatabaseToPageConfirm } = useDocumentConversionActions({
+    spaceSlug,
+    pageTitle: databasePage?.title ?? database?.name,
+    isConvertingDatabaseToPage,
+    convertDatabaseToPageAsync,
+  });
 
   const getCurrentTableMarkdown = () => {
     const tableExportState = tableExportStateByDatabase[databaseId] ?? defaultDatabaseTableExportState;
@@ -160,33 +165,6 @@ export default function DatabaseHeaderMenu({
     });
   };
 
-  const handleConvertToPage = () => {
-    modals.openConfirmModal({
-      title: t('Convert database to page?'),
-      centered: true,
-      children: (
-        <Text size="sm">
-          {t(
-            'The database view, properties and row bindings will be deactivated. Child pages will stay in the tree as regular pages.',
-          )}
-        </Text>
-      ),
-      labels: { confirm: t('Convert to page'), cancel: t('Cancel') },
-      confirmProps: {
-        loading: isConvertingDatabaseToPage,
-        leftSection: <IconArrowsExchange size={14} />,
-      },
-      onConfirm: async () => {
-        const result = await convertDatabaseToPageAsync();
-        notifications.show({ message: t('Database converted to page') });
-
-        if (result?.slugId) {
-          navigate(buildPageUrl(spaceSlug, result.slugId, databasePage?.title ?? database?.name ?? ''));
-        }
-      },
-    });
-  };
-
   const hasDatabasePage = Boolean(databasePageId);
   const canMoveDatabasePage = Boolean(databasePageId && databasePage?.slugId);
   const fullPageWidth =
@@ -249,7 +227,7 @@ export default function DatabaseHeaderMenu({
               <Menu.Divider />
               <Menu.Item
                 leftSection={<IconArrowsExchange size={16} />}
-                onClick={handleConvertToPage}
+                onClick={openConvertDatabaseToPageConfirm}
                 disabled={isConvertingDatabaseToPage}
               >
                 {t('Convert to page')}
