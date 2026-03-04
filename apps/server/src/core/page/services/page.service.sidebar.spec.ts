@@ -65,7 +65,7 @@ describe('PageService getSidebarPages database node mapping', () => {
     await db.destroy();
   });
 
-  it('builds database nodes with page id in `id` and database id in `databaseId`', async () => {
+  it('builds root database nodes with page slug id for sidebar routing compatibility', async () => {
     await service.getSidebarPages('space-1', { limit: 20, query: '', adminView: false }, undefined, ['database']);
 
     expect(executeWithCursorPagination).toHaveBeenCalledTimes(1);
@@ -74,6 +74,8 @@ describe('PageService getSidebarPages database node mapping', () => {
     const compiled = query.compile();
 
     expect(compiled.sql).toContain('"databasePage"."id" as "id"');
+    expect(compiled.sql).toContain('"databasePage"."slugId" as "slugId"');
     expect(compiled.sql).toContain('"databases"."id" as "databaseId"');
+    expect(compiled.sql).not.toContain("null as \"slugId\"");
   });
 });

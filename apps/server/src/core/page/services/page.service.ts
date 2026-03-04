@@ -534,7 +534,7 @@ export class PageService {
           .innerJoin('pages as databasePage', 'databasePage.id', 'databases.pageId')
           .select([
             'databasePage.id as id',
-            sql<string | null>`null`.as('slugId'),
+            'databasePage.slugId as slugId',
             'databases.name as title',
             'databases.icon as icon',
             'databasePage.position as position',
