@@ -21,10 +21,11 @@ import { useFocusWithin } from "@mantine/hooks";
 import { IComment } from "@/features/comment/types/comment.types.ts";
 import { usePageQuery } from "@/features/page/queries/page-query.ts";
 import { IPagination } from "@/lib/types.ts";
-import { extractPageSlugId } from "@/lib";
 import { useTranslation } from "react-i18next";
 import { useQueryEmit } from "@/features/websocket/use-query-emit";
 import { useGetSpaceBySlugQuery } from "@/features/space/queries/space-query.ts";
+import { useGetDatabaseQuery } from "@/features/database/queries/database-query.ts";
+import { resolvePageDatabaseIds } from "@/features/page/page-id-adapter.ts";
 import { useSpaceAbility } from "@/features/space/permissions/use-space-ability.ts";
 import {
   SpaceCaslAction,
@@ -32,41 +33,55 @@ import {
 } from "@/features/space/permissions/permissions.type.ts";
 
 /**
- * Возвращает pageId для комментариев с приоритетом database-контекста.
+ * Первично нормализует slug из роута (страница или база) в route pageId.
  *
- * Для маршрутов `/db/:databaseSlug` всегда должен использоваться pageId,
- * связанный с базой, чтобы не смешивать контекст страницы и базы.
+ * Важно: на этом шаге мы еще не знаем «фактический» database.pageId,
+ * поэтому полученный идентификатор используется только как стартовая точка
+ * для запроса страницы, после чего id верифицируется через database entity.
  */
-function resolveCommentsPageId({
+function resolveCommentsRoutePageId({
   pageSlug,
   databaseSlug,
 }: {
   pageSlug?: string;
   databaseSlug?: string;
 }) {
-  if (databaseSlug) {
-    return extractPageSlugId(databaseSlug);
-  }
-
-  return extractPageSlugId(pageSlug);
+  return resolvePageDatabaseIds({
+    routeSlug: databaseSlug ?? pageSlug,
+  }).pageId;
 }
 
 function CommentListWithTabs() {
   const { t } = useTranslation();
   const { pageSlug, databaseSlug } = useParams();
-  const resolvedCommentsPageId = resolveCommentsPageId({ pageSlug, databaseSlug });
+  const commentsRoutePageId = resolveCommentsRoutePageId({ pageSlug, databaseSlug });
 
-  const { data: page } = usePageQuery({ pageId: resolvedCommentsPageId });
+  const { data: pageByRoute } = usePageQuery({ pageId: commentsRoutePageId });
+  const resolvedIds = resolvePageDatabaseIds({
+    pageId: pageByRoute?.id,
+    slugId: pageByRoute?.slugId,
+    databaseId: pageByRoute?.databaseId,
+  });
+  const { data: database } = useGetDatabaseQuery(resolvedIds.databaseId);
+
+  /**
+   * Единый, уже верифицированный pageId для всех comment-операций.
+   *
+   * Приоритет:
+   * 1) database.pageId — фактическая связка базы и страницы;
+   * 2) pageByRoute.id — fallback для обычных page-маршрутов.
+   */
+  const commentsPageId = database?.pageId ?? pageByRoute?.id ?? "";
   const {
     data: comments,
     isLoading: isCommentsLoading,
     isError,
-  } = useCommentsQuery({ pageId: page?.id, limit: 100 });
+  } = useCommentsQuery({ pageId: commentsPageId, limit: 100 });
   const createCommentMutation = useCreateCommentMutation();
   const [isLoading, setIsLoading] = useState(false);
   const [showResolved, setShowResolved] = useState(false);
   const emit = useQueryEmit();
-  const { data: space } = useGetSpaceBySlugQuery(page?.space?.slug);
+  const { data: space } = useGetSpaceBySlugQuery(pageByRoute?.space?.slug);
 
   const spaceRules = space?.membership?.permissions;
   const spaceAbility = useSpaceAbility(spaceRules);
@@ -109,9 +124,13 @@ function CommentListWithTabs() {
   const handleAddReply = useCallback(
     async (commentId: string, content: string) => {
       try {
+        if (!commentsPageId) {
+          return;
+        }
+
         setIsLoading(true);
         const commentData = {
-          pageId: page?.id,
+          pageId: commentsPageId,
           parentCommentId: commentId,
           content: JSON.stringify(content),
         };
@@ -120,15 +139,15 @@ function CommentListWithTabs() {
 
         emit({
           operation: "invalidateComment",
-          pageId: page?.id,
-        }, { spaceId: page?.spaceId, workspaceId: page?.workspaceId });
+          pageId: commentsPageId,
+        }, { spaceId: pageByRoute?.spaceId, workspaceId: pageByRoute?.workspaceId });
       } catch (error) {
         console.error("Failed to post comment:", error);
       } finally {
         setIsLoading(false);
       }
     },
-    [createCommentMutation, emit, page?.id, page?.spaceId, page?.workspaceId]
+    [commentsPageId, createCommentMutation, emit, pageByRoute?.spaceId, pageByRoute?.workspaceId]
   );
 
   /**
@@ -151,7 +170,7 @@ function CommentListWithTabs() {
         <div>
           <CommentListItem
             comment={comment}
-            pageId={page?.id}
+            pageId={commentsPageId}
             canComment={canComment}
             canResolve={canResolveComments}
             userSpaceRole={space?.membership?.role}
@@ -159,7 +178,7 @@ function CommentListWithTabs() {
           <MemoizedChildComments
             comments={comments}
             parentId={comment.id}
-            pageId={page?.id}
+            pageId={commentsPageId}
             canComment={canComment}
             canResolve={canResolveComments}
             userSpaceRole={space?.membership?.role}
@@ -178,7 +197,7 @@ function CommentListWithTabs() {
         )}
       </Paper>
     ),
-    [canComment, canResolveComments, comments, handleAddReply, isLoading, page?.id, space?.membership?.role]
+    [canComment, canResolveComments, comments, commentsPageId, handleAddReply, isLoading, space?.membership?.role]
   );
 
   if (isCommentsLoading) {
