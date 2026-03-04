@@ -19,7 +19,7 @@ import { useGetDatabaseQuery } from '@/features/database/queries/database-query.
 import { historyAtoms } from '@/features/page-history/atoms/history-atoms.ts';
 import MovePageModal from '@/features/page/components/move-page-modal.tsx';
 import { useDeletePageModal } from '@/features/page/hooks/use-delete-page-modal.tsx';
-import { buildDatabaseUrl } from '@/features/page/page.utils.ts';
+import { buildDatabaseUrl, buildPageUrl } from '@/features/page/page.utils.ts';
 import { usePageQuery, useRemovePageMutation } from '@/features/page/queries/page-query.ts';
 import { useConvertDatabaseToPageMutation } from '@/features/database/queries/database-query.ts';
 import ShareModal from '@/features/share/components/share-modal.tsx';
@@ -204,7 +204,7 @@ export default function DatabaseHeaderMenu({
         notifications.show({ message: t('Database converted to page') });
 
         if (result?.slugId) {
-          navigate(`/s/${spaceSlug}/p/${result.slugId}`);
+          navigate(buildPageUrl(spaceSlug, result.slugId, databasePage?.title ?? database?.name ?? ''));
         }
       },
     });
