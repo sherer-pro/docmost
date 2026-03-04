@@ -2,11 +2,17 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   ForbiddenException,
+  Get,
   HttpCode,
   HttpStatus,
   NotFoundException,
+  Param,
+  ParseUUIDPipe,
+  Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { SpaceService } from './services/space.service';
@@ -26,6 +32,7 @@ import {
   SpaceCaslSubject,
 } from '../casl/interfaces/space-ability.type';
 import { UpdateSpaceDto } from './dto/update-space.dto';
+import { UpdateSpaceResourceDto } from './dto/update-space-resource.dto';
 import { findHighestUserSpaceRole } from '@docmost/db/repos/space/utils';
 import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 import {
@@ -47,26 +54,22 @@ export class SpaceController {
   ) {}
 
   @HttpCode(HttpStatus.OK)
-  @Post('/')
-  async getWorkspaceSpaces(
-    @Body()
+  @Get('/')
+  async listSpaces(
+    @Query()
     pagination: PaginationOptions,
     @AuthUser() user: User,
   ) {
     return this.spaceMemberService.getUserSpaces(user.id, pagination);
   }
 
-  @HttpCode(HttpStatus.OK)
-  @Post('info')
-  async getSpaceInfo(
-    @Body() spaceIdDto: SpaceIdDto,
+  @Get(':spaceId')
+  async getSpace(
+    @Param('spaceId', ParseUUIDPipe) spaceId: string,
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
-    const space = await this.spaceService.getSpaceInfo(
-      spaceIdDto.spaceId,
-      workspace.id,
-    );
+    const space = await this.spaceService.getSpaceInfo(spaceId, workspace.id);
 
     if (!space) {
       throw new NotFoundException('Space not found');
@@ -93,8 +96,21 @@ export class SpaceController {
     return { ...space, membership };
   }
 
+  /**
+   * @deprecated Temporary backward-compatibility alias. Use GET /spaces/:spaceId.
+   */
   @HttpCode(HttpStatus.OK)
-  @Post('create')
+  @Post('info')
+  async getSpaceInfoAlias(
+    @Body() spaceIdDto: SpaceIdDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.getSpace(spaceIdDto.spaceId, user, workspace);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('/')
   createSpace(
     @Body() createSpaceDto: CreateSpaceDto,
     @AuthUser() user: User,
@@ -109,38 +125,80 @@ export class SpaceController {
     return this.spaceService.createSpace(user, workspace.id, createSpaceDto);
   }
 
+  /**
+   * @deprecated Temporary backward-compatibility alias. Use POST /spaces.
+   */
+  @HttpCode(HttpStatus.OK)
+  @Post('create')
+  createSpaceAlias(
+    @Body() createSpaceDto: CreateSpaceDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.createSpace(createSpaceDto, user, workspace);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Patch(':spaceId')
+  async updateSpace(
+    @Param('spaceId', ParseUUIDPipe) spaceId: string,
+    @Body() updateSpaceDto: UpdateSpaceResourceDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const ability = await this.spaceAbility.createForUser(user, spaceId);
+    if (ability.cannot(SpaceCaslAction.Manage, SpaceCaslSubject.Settings)) {
+      throw new ForbiddenException();
+    }
+    return this.spaceService.updateSpace(
+      { ...updateSpaceDto, spaceId },
+      workspace.id,
+    );
+  }
+
+  /**
+   * @deprecated Temporary backward-compatibility alias. Use PATCH /spaces/:spaceId.
+   */
   @HttpCode(HttpStatus.OK)
   @Post('update')
-  async updateSpace(
+  async updateSpaceAlias(
     @Body() updateSpaceDto: UpdateSpaceDto,
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
-    const ability = await this.spaceAbility.createForUser(
-      user,
+    return this.updateSpace(
       updateSpaceDto.spaceId,
+      updateSpaceDto,
+      user,
+      workspace,
     );
-    if (ability.cannot(SpaceCaslAction.Manage, SpaceCaslSubject.Settings)) {
-      throw new ForbiddenException();
-    }
-    return this.spaceService.updateSpace(updateSpaceDto, workspace.id);
   }
 
   @HttpCode(HttpStatus.OK)
-  @Post('delete')
+  @Delete(':spaceId')
   async deleteSpace(
+    @Param('spaceId', ParseUUIDPipe) spaceId: string,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const ability = await this.spaceAbility.createForUser(user, spaceId);
+    if (ability.cannot(SpaceCaslAction.Manage, SpaceCaslSubject.Settings)) {
+      throw new ForbiddenException();
+    }
+    return this.spaceService.deleteSpace(spaceId, workspace.id);
+  }
+
+  /**
+   * @deprecated Temporary backward-compatibility alias. Use DELETE /spaces/:spaceId.
+   */
+  @HttpCode(HttpStatus.OK)
+  @Post('delete')
+  async deleteSpaceAlias(
     @Body() spaceIdDto: SpaceIdDto,
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
-    const ability = await this.spaceAbility.createForUser(
-      user,
-      spaceIdDto.spaceId,
-    );
-    if (ability.cannot(SpaceCaslAction.Manage, SpaceCaslSubject.Settings)) {
-      throw new ForbiddenException();
-    }
-    return this.spaceService.deleteSpace(spaceIdDto.spaceId, workspace.id);
+    return this.deleteSpace(spaceIdDto.spaceId, user, workspace);
   }
 
   @HttpCode(HttpStatus.OK)

@@ -37,7 +37,7 @@
 ### CRUD
 
 - `core/page/page.controller.ts` (`@Controller('pages')`)
-- `core/space/space.controller.ts` (`@Controller('spaces')`)
+- `core/space/space.controller.ts` (`@Controller('spaces')`, ресурсные CRUD-маршруты: `GET /spaces`, `GET /spaces/:spaceId`, `POST /spaces`, `PATCH /spaces/:spaceId`, `DELETE /spaces/:spaceId`)
 - `core/user/user.controller.ts` (`@Controller('users')`)
 - `core/group/group.controller.ts` (`@Controller('groups')`)
 - `core/comment/comment.controller.ts` (`@Controller('comments')`)
@@ -50,9 +50,18 @@
 - `integrations/export/export.controller.ts`
   - `@Controller('pages')`, `POST /pages/actions/export`
   - `@Controller('spaces')`, `POST /spaces/actions/export`
+- `core/space/space.controller.ts` (операции участников `POST /spaces/members/add`, `POST /spaces/members/remove`, `POST /spaces/members/change-role`)
 - `core/attachment/attachment.controller.ts` (`@Controller('attachments')`, команды под `/attachments/actions/*`)
 - `core/auth/auth.controller.ts` (`@Controller('auth')`, доменные команды аутентификации)
 - `core/mfa/mfa.controller.ts` (`@Controller('mfa')`, команды MFA)
+
+### Deprecated aliases (переходный слой совместимости)
+
+- `core/space/space.controller.ts`
+  - `POST /spaces/info` → **deprecated**, новый `GET /spaces/:spaceId`.
+  - `POST /spaces/create` → **deprecated**, новый `POST /spaces`.
+  - `POST /spaces/update` → **deprecated**, новый `PATCH /spaces/:spaceId`.
+  - `POST /spaces/delete` → **deprecated**, новый `DELETE /spaces/:spaceId`.
 
 ### Вычислительные/сервисные операции
 
