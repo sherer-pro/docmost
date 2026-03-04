@@ -45,11 +45,17 @@ export default function ShareModal({ pageId: pageIdProp, readOnly = false }: Sha
   const navigate = useNavigate();
   const { pageSlug } = useParams();
   const pageSlugId = extractPageSlugId(pageSlug);
-  const queryPageId = pageIdProp ?? pageSlugId;
-  const { data: page } = usePageQuery({ pageId: queryPageId });
-  const shareLookupPageId = page?.slugId;
+  const pageQueryId = pageIdProp ?? pageSlugId;
+  const { data: page } = usePageQuery({ pageId: pageQueryId });
+  const hasValidSharePageContext =
+    !!page?.id && !!page?.slugId && (!pageIdProp || page.id === pageIdProp);
+  const shareLookupPageId = hasValidSharePageContext ? page.slugId : undefined;
   const pageId = pageIdProp ?? page?.id;
-  const { data: share } = useShareForPageQuery(shareLookupPageId);
+  const { data: share } = useShareForPageQuery({
+    pageId: shareLookupPageId,
+    queryKeyId: page?.id,
+    enabled: hasValidSharePageContext,
+  });
   const { spaceSlug } = useParams();
   const { isTrial } = useTrial();
   const [workspace] = useAtom(workspaceAtom);
