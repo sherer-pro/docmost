@@ -73,6 +73,7 @@ import { treeApiAtom } from '@/features/page/tree/atoms/tree-api-atom.ts';
 import { useQueryEmit } from '@/features/websocket/use-query-emit.ts';
 import {
   appendNodeChildren,
+  dropTreeNode,
   insertDatabaseRowNode,
   setTreeNodeHasChildren,
 } from '@/features/page/tree/utils/utils.ts';
@@ -500,6 +501,53 @@ export function DatabaseTableView({
     setNewPropertyType('multiline_text');
   };
 
+  /**
+   * Applies optimistic local tree updates after a successful row deletion.
+   *
+   * 1) Removes the row node via `dropTreeNode` to keep tree mutations consistent.
+   * 2) Recomputes parent database `hasChildren` and turns it off when needed.
+   * 3) Emits `deleteTreeNode` websocket event so other clients update instantly.
+   *
+   * Mutation-level invalidation is intentionally preserved as a fallback sync layer.
+   */
+  const handleDeleteRow = (row: IDatabaseRowWithCells) => {
+    deleteRowMutation.mutate(row.pageId, {
+      onSuccess: () => {
+        const databaseNode = findDatabaseNodeInTree(treeData);
+        const rowTreeNode = databaseNode?.children.find((child) => child.id === row.pageId);
+
+        if (!databaseNode || !rowTreeNode) {
+          return;
+        }
+
+        setTreeData((currentTreeData) => {
+          const currentDatabaseNode = findDatabaseNodeInTree(currentTreeData);
+
+          if (!currentDatabaseNode) {
+            return currentTreeData;
+          }
+
+          const treeWithoutDeletedRow = dropTreeNode(currentTreeData, row.pageId);
+          const nextChildrenCount = (currentDatabaseNode.children?.length ?? 0) - 1;
+
+          return setTreeNodeHasChildren(
+            treeWithoutDeletedRow,
+            currentDatabaseNode.id,
+            nextChildrenCount > 0,
+          );
+        });
+
+        emit({
+          operation: 'deleteTreeNode',
+          spaceId,
+          payload: {
+            node: rowTreeNode,
+          },
+        });
+      },
+    });
+  };
+
   return (
     <Paper withBorder radius="md" p="md">
       <Group justify="space-between" mb="md" align="flex-end">
@@ -816,7 +864,7 @@ export function DatabaseTableView({
                         <Menu.Item
                           color="red"
                           leftSection={<IconTrash size={14} />}
-                          onClick={() => deleteRowMutation.mutate(row.pageId)}
+                          onClick={() => handleDeleteRow(row)}
                         >
                           {t('Delete row')}
                         </Menu.Item>
