@@ -63,11 +63,19 @@ export function useSharePageQuery(
   return query;
 }
 
-export function useShareForPageQuery(
-  pageId?: string,
-): UseQueryResult<IShareForPage | null, Error> {
+interface ShareForPageQueryInput {
+  pageId?: string;
+  queryKeyId?: string;
+  enabled?: boolean;
+}
+
+export function useShareForPageQuery({
+  pageId,
+  queryKeyId,
+  enabled = true,
+}: ShareForPageQueryInput): UseQueryResult<IShareForPage | null, Error> {
   const query = useQuery({
-    queryKey: ["share-for-page", pageId],
+    queryKey: ["share-for-page", queryKeyId ?? pageId],
     queryFn: async () => {
       try {
         return await getShareForPage(pageId as string);
@@ -79,7 +87,7 @@ export function useShareForPageQuery(
         throw error;
       }
     },
-    enabled: !!pageId,
+    enabled: enabled && !!pageId,
     staleTime: 60 * 1000,
     retry: false,
   });
