@@ -261,7 +261,7 @@ export default function DatabasePage() {
       const nextText = payload.text.trim();
       const currentText = draftDescription.text.trim();
 
-      if (currentSerialized === nextSerialized && nextText === currentText) {
+      if (currentSerialized === nextSerialized && currentText === nextText) {
         return;
       }
 
