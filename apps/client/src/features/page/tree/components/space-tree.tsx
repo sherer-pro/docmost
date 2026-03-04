@@ -78,6 +78,8 @@ import { duplicatePage } from "../../services/page-service.ts";
 import { StatusIndicator } from "@/components/ui/status-indicator.tsx";
 import { useCreateDatabaseRowMutation } from "@/features/database/queries/database-table-query.ts";
 import { useUpdateDatabaseMutation } from "@/features/database/queries/database-query.ts";
+import { PAGE_QUERY_KEYS } from "@/features/page/queries/query-keys.ts";
+import { invalidateSidebarTree } from "@/features/page/queries/cache-invalidation.ts";
 
 interface SpaceTreeProps {
   spaceId: string;
@@ -347,12 +349,12 @@ function Node({
   const prefetchPage = () => {
     timerRef.current = setTimeout(async () => {
       const page = await queryClient.fetchQuery({
-        queryKey: ["pages", node.data.id],
+        queryKey: PAGE_QUERY_KEYS.page(node.data.id),
         queryFn: () => getPageById({ pageId: node.data.id }),
         staleTime: 5 * 60 * 1000,
       });
       if (page?.slugId) {
-        queryClient.setQueryData(["pages", page.slugId], page);
+        queryClient.setQueryData(PAGE_QUERY_KEYS.page(page.slugId), page);
       }
     }, 150);
   };
@@ -630,8 +632,7 @@ function CreateNode({ node, treeApi, onExpandTree }: CreateNodeProps) {
       });
     }, 50);
 
-    queryClient.invalidateQueries({ queryKey: ["root-sidebar-pages"] });
-    queryClient.invalidateQueries({ queryKey: ["sidebar-pages"] });
+    invalidateSidebarTree({}, { client: queryClient });
 
     if (node.isClosed) {
       node.open();
