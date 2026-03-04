@@ -19,7 +19,7 @@ import { useAtom } from "jotai";
 import { useQueryEmit } from "@/features/websocket/use-query-emit.ts";
 import { History } from "@tiptap/extension-history";
 import { buildPageUrl } from "@/features/page/page.utils.ts";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import EmojiCommand from "@/features/editor/extensions/emoji-command.ts";
 import { UpdateEvent } from "@/features/websocket/types";
@@ -28,6 +28,7 @@ import { currentUserAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { PageEditMode } from "@/features/user/types/user.types.ts";
 import { searchSpotlight } from "@/features/search/constants.ts";
 import { shouldApplyFocusSafeTitleSync } from "@/features/editor/utils/title-editor-sync.ts";
+import { useDeferredCanonicalTitleUrlSync } from "@/features/editor/utils/canonical-title-url-sync.ts";
 
 export interface TitleEditorProps {
   pageId: string;
@@ -51,12 +52,23 @@ export function TitleEditor({
   const [, setTitleEditor] = useAtom(titleEditorAtom);
   const emit = useQueryEmit();
   const navigate = useNavigate();
+  const location = useLocation();
   const [activePageId, setActivePageId] = useState(pageId);
   const didInitFocusRef = useRef(false);
   const lastSyncedPageIdRef = useRef(pageId);
   const [currentUser] = useAtom(currentUserAtom);
   const userPageEditMode =
     currentUser?.user?.settings?.preferences?.pageEditMode ?? PageEditMode.Edit;
+
+  const { onTitleFocusChange, syncCanonicalUrl } =
+    useDeferredCanonicalTitleUrlSync(
+      useCallback(
+        (nextUrl: string) => {
+          navigate(nextUrl, { replace: true });
+        },
+        [navigate],
+      ),
+    );
 
   const titleEditor = useEditor({
     extensions: [
@@ -92,6 +104,14 @@ export function TitleEditor({
     shouldRerenderOnTransaction: false,
     editorProps: {
       handleDOMEvents: {
+        focus: () => {
+          onTitleFocusChange(true);
+          return false;
+        },
+        blur: () => {
+          onTitleFocusChange(false);
+          return false;
+        },
         keydown: (_view, event) => {
           if ((event.ctrlKey || event.metaKey) && event.code === "KeyS") {
             event.preventDefault();
@@ -107,12 +127,22 @@ export function TitleEditor({
   });
 
   useEffect(() => {
-    const anchorId = window.location.hash
-      ? window.location.hash.substring(1)
-      : undefined;
-    const pageSlug = buildPageUrl(spaceSlug, slugId, title, anchorId);
-    navigate(pageSlug, { replace: true });
-  }, [title]);
+    const currentUrl = `${location.pathname}${location.search}${location.hash}`;
+    const canonicalPath = buildPageUrl(spaceSlug, slugId, title);
+
+    syncCanonicalUrl({
+      currentUrl,
+      nextUrl: `${canonicalPath}${location.search}${location.hash}`,
+    });
+  }, [
+    location.hash,
+    location.pathname,
+    location.search,
+    slugId,
+    spaceSlug,
+    syncCanonicalUrl,
+    title,
+  ]);
 
   const saveTitle = useCallback(() => {
     if (!titleEditor || activePageId !== pageId) return;
