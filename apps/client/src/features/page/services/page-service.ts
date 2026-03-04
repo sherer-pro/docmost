@@ -135,8 +135,13 @@ export async function getRecentChanges(
 }
 
 export async function exportPage(data: IExportPageParams): Promise<void> {
+  /**
+   * Экспорт возвращает бинарный файл + заголовок `content-disposition`,
+   * поэтому явно отключаем unwrap envelope и просим blob-ответ.
+   */
   const req = await api.post('/pages/actions/export', data, {
     responseType: "blob",
+    skipEnvelopeUnwrap: true,
   });
 
   const fileName = req?.headers["content-disposition"]
