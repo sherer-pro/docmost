@@ -15,7 +15,8 @@ import {
 import {
   addSpaceMember,
   changeMemberRole,
-  getSpaceById,
+  getSpaceByIdentifier,
+  getSpaceBySlug,
   getSpaceMembers,
   getSpaces,
   removeSpaceMember,
@@ -42,15 +43,15 @@ export function useGetSpacesQuery(
   });
 }
 
-export function useSpaceQuery(spaceId: string): UseQueryResult<ISpace, Error> {
+export function useSpaceQuery(spaceIdentifier: string): UseQueryResult<ISpace, Error> {
   const query = useQuery({
-    queryKey: ["space", spaceId],
-    queryFn: () => getSpaceById(spaceId),
-    enabled: !!spaceId,
+    queryKey: ["space", spaceIdentifier],
+    queryFn: () => getSpaceByIdentifier(spaceIdentifier),
+    enabled: !!spaceIdentifier,
   });
   useEffect(() => {
     if (query.data) {
-      if (isValidUuid(spaceId)) {
+      if (isValidUuid(spaceIdentifier)) {
         queryClient.setQueryData(["space", query.data.slug], query.data);
       } else {
         queryClient.setQueryData(["space", query.data.id], query.data);
@@ -64,7 +65,7 @@ export function useSpaceQuery(spaceId: string): UseQueryResult<ISpace, Error> {
 export const prefetchSpace = (spaceSlug: string, spaceId?: string) => {
   queryClient.prefetchQuery({
     queryKey: ["space", spaceSlug],
-    queryFn: () => getSpaceById(spaceSlug),
+    queryFn: () => getSpaceBySlug(spaceSlug),
   });
 
   if (spaceId) {
@@ -96,12 +97,12 @@ export function useCreateSpaceMutation() {
 }
 
 export function useGetSpaceBySlugQuery(
-  spaceId: string,
+  spaceSlug: string,
 ): UseQueryResult<ISpace, Error> {
   return useQuery({
-    queryKey: ["space", spaceId],
-    queryFn: () => getSpaceById(spaceId),
-    enabled: !!spaceId,
+    queryKey: ["space", spaceSlug],
+    queryFn: () => getSpaceBySlug(spaceSlug),
+    enabled: !!spaceSlug,
     staleTime: 5 * 60 * 1000,
   });
 }
