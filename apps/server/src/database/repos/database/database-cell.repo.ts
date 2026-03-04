@@ -7,10 +7,19 @@ import {
   InsertableDatabaseCell,
   UpdatableDatabaseCell,
 } from '@docmost/db/types/entity.types';
+import { RawBuilder, sql } from 'kysely';
 
 @Injectable()
 export class DatabaseCellRepo {
   constructor(@InjectKysely() private readonly db: KyselyDB) {}
+
+  /**
+   * Converts any cell value into a jsonb expression to keep insert and
+   * conflict-update branches on the same PostgreSQL serialization strategy.
+   */
+  private toJsonbValue(value: InsertableDatabaseCell['value']): RawBuilder<unknown> {
+    return sql`${JSON.stringify(value ?? null)}::jsonb`;
+  }
 
   /**
    * Creates a cell value for a specific row and property.
@@ -65,14 +74,19 @@ export class DatabaseCellRepo {
     payload: InsertableDatabaseCell,
     trx?: KyselyTransaction,
   ): Promise<DatabaseCell> {
+    const serializedValue = this.toJsonbValue(payload.value);
+
     return dbOrTx(this.db, trx)
       .insertInto('databaseCells')
-      .values(payload)
+      .values({
+        ...payload,
+        value: serializedValue as never,
+      })
       .onConflict((oc) =>
         oc
           .columns(['databaseId', 'pageId', 'propertyId'])
           .doUpdateSet({
-            value: payload.value ?? null,
+            value: serializedValue as never,
             attachmentId: payload.attachmentId ?? null,
             updatedById: payload.updatedById ?? null,
             updatedAt: new Date(),
