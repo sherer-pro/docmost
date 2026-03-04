@@ -1,0 +1,88 @@
+import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
+import { IDatabaseProperty } from '../types/database.types';
+import {
+  buildDatabaseCellPayloadValue,
+  getDatabaseCellDisplayValue,
+  normalizeDatabasePageReferenceValue,
+  normalizeDatabaseSelectValue,
+  normalizeDatabaseUserId,
+} from './database-cell-value';
+
+function createProperty(partial: Partial<IDatabaseProperty>): IDatabaseProperty {
+  return {
+    id: 'property-id',
+    databaseId: 'database-id',
+    workspaceId: 'workspace-id',
+    name: 'Property',
+    type: 'multiline_text',
+    position: 0,
+    settings: {},
+    creatorId: null,
+    createdAt: '',
+    updatedAt: '',
+    deletedAt: null,
+    ...partial,
+  };
+}
+
+describe('database-cell-value normalization', () => {
+  it('normalizes user values from string/object/null and builds contract payload', () => {
+    const userProperty = createProperty({ type: 'user' });
+
+    assert.equal(normalizeDatabaseUserId('user-1'), 'user-1');
+    assert.equal(normalizeDatabaseUserId({ id: 'user-2' }), 'user-2');
+    assert.equal(normalizeDatabaseUserId(null), null);
+
+    assert.deepEqual(buildDatabaseCellPayloadValue(userProperty, 'user-3'), { id: 'user-3' });
+    assert.deepEqual(buildDatabaseCellPayloadValue(userProperty, { id: 'user-4' }), { id: 'user-4' });
+    assert.equal(buildDatabaseCellPayloadValue(userProperty, null), null);
+  });
+
+  it('normalizes select values from fallback-object and keeps label fallback for deleted options', () => {
+    const selectProperty = createProperty({
+      type: 'select',
+      settings: {
+        options: [{ label: 'In progress', value: 'in_progress', color: 'blue' }],
+      },
+    });
+
+    assert.equal(normalizeDatabaseSelectValue('in_progress'), 'in_progress');
+    assert.equal(
+      normalizeDatabaseSelectValue({ value: 'in_progress', rawValueBeforeTypeChange: { id: 'legacy' } }),
+      'in_progress',
+    );
+
+    assert.equal(
+      getDatabaseCellDisplayValue({ property: selectProperty, value: 'in_progress' }),
+      'In progress',
+    );
+    assert.equal(
+      getDatabaseCellDisplayValue({ property: selectProperty, value: 'deleted_option' }),
+      'deleted_option',
+    );
+  });
+
+  it('normalizes page_reference from fallback-object and resolves page title when available', () => {
+    const pageReferenceProperty = createProperty({ type: 'page_reference' });
+
+    const fallbackValue = {
+      value: 'page-1',
+      rawValueBeforeTypeChange: { value: 'legacy' },
+    };
+
+    assert.equal(normalizeDatabasePageReferenceValue(fallbackValue), 'page-1');
+    assert.equal(
+      getDatabaseCellDisplayValue({
+        property: pageReferenceProperty,
+        value: fallbackValue,
+        pageTitleById: { 'page-1': 'Sprint planning' },
+      }),
+      'Sprint planning',
+    );
+    assert.equal(
+      getDatabaseCellDisplayValue({ property: pageReferenceProperty, value: 'page-2' }),
+      'page-2',
+    );
+  });
+});
