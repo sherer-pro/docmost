@@ -4,11 +4,11 @@ import {
 } from '../dto/update-page.dto';
 
 /**
- * Единый mapper API-контракта страницы.
+ * Central mapper for the page API contract.
  *
- * Нормализует `settings` до стабильного формата:
- * - объект -> возвращаем как есть;
- * - null/undefined/не-объект -> возвращаем `undefined`.
+ * Normalizes `settings` into a stable shape:
+ * - object -> returns as is;
+ * - null/undefined/non-object -> returns `undefined`.
  */
 export function mapPageSettings(
   settings: unknown,
@@ -21,7 +21,7 @@ export function mapPageSettings(
 }
 
 /**
- * Возвращает контракт custom document fields, который ожидает клиент.
+ * Returns the custom document fields contract expected by the client.
  */
 export function mapPageCustomFields(page: {
   settings?: unknown;
@@ -47,7 +47,7 @@ export function mapPageCustomFields(page: {
 }
 
 /**
- * Нормализует API-ответ страницы в одном месте.
+ * Normalizes the page API response in one place.
  */
 export function mapPageResponse<T extends { settings?: unknown }>(
   page: T,
