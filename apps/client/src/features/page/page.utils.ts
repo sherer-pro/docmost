@@ -1,5 +1,5 @@
 import slugify from "@sindresorhus/slugify";
-import { resolvePageDatabaseIds } from "@/features/page/page-id-adapter.ts";
+import { resolvePageDatabaseIds } from './page-id-adapter.ts';
 
 const buildPageSlug = (pageSlugId: string, pageTitle?: string): string => {
   const titleSlug = slugify(pageTitle?.substring(0, 70) || "untitled", {

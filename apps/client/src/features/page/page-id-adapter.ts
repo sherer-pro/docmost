@@ -1,4 +1,4 @@
-import { extractPageSlugId } from '@/lib';
+import { extractPageSlugId } from '../../lib';
 
 type NullableId = string | null | undefined;
 
