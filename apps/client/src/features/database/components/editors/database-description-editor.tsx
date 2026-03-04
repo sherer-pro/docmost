@@ -1,7 +1,7 @@
 import '@/features/editor/styles/index.css';
 import classes from '@/pages/database/database-page.module.css';
 import { useDebouncedCallback } from '@mantine/hooks';
-import { EditorContent, JSONContent, useEditor, useEditorState } from '@tiptap/react';
+import { Editor, EditorContent, JSONContent, useEditor, useEditorState } from '@tiptap/react';
 import React, { useCallback, useEffect, useRef } from 'react';
 import clsx from 'clsx';
 import { mainExtensions } from '@/features/editor/extensions/extensions';
@@ -9,12 +9,20 @@ import { EditorBubbleMenu } from '@/features/editor/components/bubble-menu/bubbl
 import TableMenu from '@/features/editor/components/table/table-menu.tsx';
 import TableCellMenu from '@/features/editor/components/table/table-cell-menu.tsx';
 import LinkMenu from '@/features/editor/components/link/link-menu.tsx';
+import ImageMenu from '@/features/editor/components/image/image-menu.tsx';
+import VideoMenu from '@/features/editor/components/video/video-menu.tsx';
+import CalloutMenu from '@/features/editor/components/callout/callout-menu.tsx';
+import SubpagesMenu from '@/features/editor/components/subpages/subpages-menu.tsx';
+import ExcalidrawMenu from '@/features/editor/components/excalidraw/excalidraw-menu.tsx';
+import DrawioMenu from '@/features/editor/components/drawio/drawio-menu.tsx';
+import SearchAndReplaceDialog from '@/features/editor/components/search-and-replace/search-and-replace-dialog.tsx';
 import SlashCommand from '@/features/editor/extensions/slash-command';
 import { useAtom } from 'jotai';
 import { asideStateAtom } from '@/components/layouts/global/hooks/atoms/sidebar-atom.ts';
 import { activeCommentIdAtom, showCommentPopupAtom } from '@/features/comment/atoms/comment-atom';
 import CommentDialog from '@/features/comment/components/comment-dialog';
 import { getDatabaseDescriptionSlashItems } from './database-description-slash-items';
+import { handleFileDrop, handlePaste } from '@/features/editor/components/common/editor-paste-handler.tsx';
 
 const databaseDescriptionExtensions = mainExtensions.map((extension) => {
   if (extension?.name !== 'slash-command') {
@@ -56,6 +64,7 @@ export function DatabaseDescriptionEditor({
 }: DatabaseDescriptionEditorProps) {
   const menuContainerRef = useRef<HTMLDivElement | null>(null);
   const lastCommittedRef = useRef(JSON.stringify(value ?? {}));
+  const editorRef = useRef<Editor | null>(null);
   const [, setAsideState] = useAtom(asideStateAtom);
   const [, setActiveCommentId] = useAtom(activeCommentIdAtom);
   const [showCommentPopup, setShowCommentPopup] = useAtom(showCommentPopupAtom);
@@ -87,6 +96,41 @@ export function DatabaseDescriptionEditor({
 
   const descriptionEditor = useEditor({
     extensions: databaseDescriptionExtensions,
+    editorProps: {
+      handleDOMEvents: {
+        keydown: (_view, event) => {
+          if (['ArrowUp', 'ArrowDown', 'Enter'].includes(event.key)) {
+            const slashCommand = document.querySelector('#slash-command');
+            if (slashCommand) {
+              return true;
+            }
+          }
+
+          if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter'].includes(event.key)) {
+            const emojiCommand = document.querySelector('#emoji-command');
+            if (emojiCommand) {
+              return true;
+            }
+          }
+
+          return false;
+        },
+      },
+      handlePaste: (_view, event) => {
+        if (!editorRef.current) {
+          return false;
+        }
+
+        return handlePaste(editorRef.current, event, pageId);
+      },
+      handleDrop: (_view, event, _slice, moved) => {
+        if (!editorRef.current) {
+          return false;
+        }
+
+        return handleFileDrop(editorRef.current, event, moved, pageId);
+      },
+    },
     onUpdate({ editor }) {
       const payload = {
         json: editor.getJSON(),
@@ -103,6 +147,7 @@ export function DatabaseDescriptionEditor({
     onCreate({ editor }) {
       // @ts-ignore pageId is dynamically stored in storage during editor initialization.
       editor.storage.pageId = pageId;
+      editorRef.current = editor;
     },
   });
 
@@ -178,9 +223,16 @@ export function DatabaseDescriptionEditor({
 
       {descriptionEditor && editorIsEditable && (
         <>
+          <SearchAndReplaceDialog editor={descriptionEditor} editable={editable} />
           <EditorBubbleMenu editor={descriptionEditor} />
           <TableMenu editor={descriptionEditor} />
           <TableCellMenu editor={descriptionEditor} appendTo={menuContainerRef} />
+          <ImageMenu editor={descriptionEditor} />
+          <VideoMenu editor={descriptionEditor} />
+          <CalloutMenu editor={descriptionEditor} />
+          <SubpagesMenu editor={descriptionEditor} />
+          <ExcalidrawMenu editor={descriptionEditor} />
+          <DrawioMenu editor={descriptionEditor} />
           <LinkMenu editor={descriptionEditor} appendTo={menuContainerRef} />
         </>
       )}
