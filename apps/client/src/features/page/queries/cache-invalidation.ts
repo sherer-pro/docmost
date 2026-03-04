@@ -1,28 +1,25 @@
-import { QueryClient } from '@tanstack/react-query';
+import { QueryClient } from "@tanstack/react-query";
+import {
+  databaseKey,
+  databasesBySpaceKey,
+  pageKey,
+  QUERY_KEY_SPACE,
+  rootSidebarKey,
+  sidebarKey,
+  SidebarKeyParams,
+} from "./query-keys";
 
-/**
- * Query key-space map for page/database cache domains.
- *
- * - `['root-sidebar-pages', spaceId]` — root SpaceTree nodes for a space.
- * - `['sidebar-pages', params]` — child tree nodes by `pageId`/`spaceId`.
- * - `['databases', 'space', spaceId]` — databases list in current space.
- * - `['database', databaseId]` — single database metadata.
- * - `['database', databaseId, 'rows']` — rows collection for a database.
- * - `['database', 'row-context']` — selected row/context panel state.
- * - `['pages', pageId|slugId]` — single page entity by id/slug.
- * - `['pages', *]` (predicate) — all page entity variants.
- */
-export const QUERY_KEY_SPACE = {
-  rootSidebarPages: 'root-sidebar-pages',
-  sidebarPages: 'sidebar-pages',
-  databases: 'databases',
-  database: 'database',
-  rows: 'rows',
-  rowContext: 'row-context',
-  pages: 'pages',
-} as const;
+export {
+  pageKey,
+  databaseKey,
+  sidebarKey,
+  rootSidebarKey,
+  databasesBySpaceKey,
+  QUERY_KEY_SPACE,
+};
+export type { SidebarKeyParams };
 
-type QueryClientLike = Pick<QueryClient, 'invalidateQueries'>;
+type QueryClientLike = Pick<QueryClient, "invalidateQueries">;
 
 interface InvalidateOptions {
   client: QueryClientLike;
@@ -42,7 +39,7 @@ export function invalidateSidebarTree(
   { client }: InvalidateOptions,
 ) {
   if (spaceId) {
-    client.invalidateQueries({ queryKey: [QUERY_KEY_SPACE.rootSidebarPages, spaceId] });
+    client.invalidateQueries({ queryKey: rootSidebarKey(spaceId) });
   } else {
     client.invalidateQueries({ queryKey: [QUERY_KEY_SPACE.rootSidebarPages] });
   }
@@ -68,13 +65,13 @@ export function invalidateDatabaseEntity(
   { client }: InvalidateOptions,
 ) {
   if (databaseId) {
-    client.invalidateQueries({ queryKey: [QUERY_KEY_SPACE.database, databaseId] });
+    client.invalidateQueries({ queryKey: databaseKey(databaseId) });
   }
 
   if (includeSpaceList) {
     if (spaceId) {
       client.invalidateQueries({
-        queryKey: [QUERY_KEY_SPACE.databases, 'space', spaceId],
+        queryKey: databasesBySpaceKey(spaceId),
       });
     }
 
@@ -105,11 +102,11 @@ export function invalidatePageEntity(
   }
 
   if (pageId) {
-    client.invalidateQueries({ queryKey: [QUERY_KEY_SPACE.pages, pageId] });
+    client.invalidateQueries({ queryKey: pageKey(pageId) });
   }
 
   if (pageSlugId) {
-    client.invalidateQueries({ queryKey: [QUERY_KEY_SPACE.pages, pageSlugId] });
+    client.invalidateQueries({ queryKey: pageKey(pageSlugId) });
   }
 }
 
@@ -135,7 +132,8 @@ export function invalidateDatabaseRowContext(
   if (includeRows && !databaseId) {
     client.invalidateQueries({
       predicate: (item) =>
-        item.queryKey[0] === QUERY_KEY_SPACE.database && item.queryKey[2] === QUERY_KEY_SPACE.rows,
+        item.queryKey[0] === QUERY_KEY_SPACE.database &&
+        item.queryKey[2] === QUERY_KEY_SPACE.rows,
     });
   }
 

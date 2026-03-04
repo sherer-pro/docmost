@@ -39,10 +39,14 @@ import { useEffect } from "react";
 import { validate as isValidUuid } from "uuid";
 import { useTranslation } from "react-i18next";
 import { getDefaultStore, useAtom } from "jotai";
-import { dropTreeNodeAtom, treeDataAtom } from "@/features/page/tree/atoms/tree-data-atom";
+import {
+  dropTreeNodeAtom,
+  treeDataAtom,
+} from "@/features/page/tree/atoms/tree-data-atom";
 import { SimpleTree } from "react-arborist";
 import { SpaceTreeNode } from "@/features/page/tree/types";
 import { useQueryEmit } from "@/features/websocket/use-query-emit";
+import { PAGE_QUERY_KEYS } from "@/features/page/queries/query-keys";
 import {
   invalidateDatabaseEntity,
   invalidateDatabaseRowContext,
@@ -50,10 +54,7 @@ import {
   invalidateSidebarTree,
 } from "@/features/page/queries/cache-invalidation";
 
-const DEFAULT_SIDEBAR_NODE_TYPES: SidebarNodeType[] = [
-  "page",
-  "database",
-];
+const DEFAULT_SIDEBAR_NODE_TYPES: SidebarNodeType[] = ["page", "database"];
 
 const jotaiStore = getDefaultStore();
 
@@ -61,9 +62,14 @@ const jotaiStore = getDefaultStore();
  * Ensures that base node types are always present in a sidebar request.
  * This is necessary so that pages and databases are simultaneously displayed in the general SpaceTree.
  */
-function withDefaultSidebarNodeTypes(params: SidebarPagesParams): SidebarPagesParams {
+function withDefaultSidebarNodeTypes(
+  params: SidebarPagesParams,
+): SidebarPagesParams {
   const includeNodeTypes = Array.from(
-    new Set([...(params.includeNodeTypes ?? []), ...DEFAULT_SIDEBAR_NODE_TYPES]),
+    new Set([
+      ...(params.includeNodeTypes ?? []),
+      ...DEFAULT_SIDEBAR_NODE_TYPES,
+    ]),
   );
 
   return {
@@ -76,7 +82,7 @@ export function usePageQuery(
   pageInput: Partial<IPageInput>,
 ): UseQueryResult<IPage, Error> {
   const query = useQuery({
-    queryKey: ["pages", pageInput.pageId],
+    queryKey: PAGE_QUERY_KEYS.page(pageInput.pageId),
     queryFn: () => getPageById(pageInput),
     enabled: !!pageInput.pageId,
     staleTime: 5 * 60 * 1000,
@@ -85,16 +91,21 @@ export function usePageQuery(
   useEffect(() => {
     if (query.data) {
       if (isValidUuid(pageInput.pageId)) {
-        queryClient.setQueryData(["pages", query.data.slugId], query.data);
+        queryClient.setQueryData(
+          PAGE_QUERY_KEYS.page(query.data.slugId),
+          query.data,
+        );
       } else {
-        queryClient.setQueryData(["pages", query.data.id], query.data);
+        queryClient.setQueryData(
+          PAGE_QUERY_KEYS.page(query.data.id),
+          query.data,
+        );
       }
     }
   }, [query.data]);
 
   return query;
 }
-
 
 function invalidateDatabaseTreeConsistency() {
   invalidateDatabaseRowContext({}, { client: queryClient });
@@ -114,15 +125,21 @@ export function useCreatePageMutation() {
 }
 
 export function updatePageData(data: IPage) {
-  queryClient.setQueryData<IPage>(["pages", data.slugId], (pageBySlug) => ({
-    ...(pageBySlug ?? {}),
-    ...data,
-  }));
+  queryClient.setQueryData<IPage>(
+    PAGE_QUERY_KEYS.page(data.slugId),
+    (pageBySlug) => ({
+      ...(pageBySlug ?? {}),
+      ...data,
+    }),
+  );
 
-  queryClient.setQueryData<IPage>(["pages", data.id], (pageById) => ({
-    ...(pageById ?? {}),
-    ...data,
-  }));
+  queryClient.setQueryData<IPage>(
+    PAGE_QUERY_KEYS.page(data.id),
+    (pageById) => ({
+      ...(pageById ?? {}),
+      ...data,
+    }),
+  );
 
   invalidateOnUpdatePage(
     data.spaceId,
@@ -137,10 +154,12 @@ export function updatePageData(data: IPage) {
 export function updatePageDataFromPatch(
   data: Pick<IPage, "id" | "spaceId"> & Partial<IPage>,
 ): IPage | undefined {
-  const pageById = queryClient.getQueryData<IPage>(["pages", data.id]);
+  const pageById = queryClient.getQueryData<IPage>(
+    PAGE_QUERY_KEYS.page(data.id),
+  );
   const resolvedSlugId = data.slugId ?? pageById?.slugId;
   const pageBySlug = resolvedSlugId
-    ? queryClient.getQueryData<IPage>(["pages", resolvedSlugId])
+    ? queryClient.getQueryData<IPage>(PAGE_QUERY_KEYS.page(resolvedSlugId))
     : undefined;
   const basePage = pageById ?? pageBySlug;
 
@@ -229,8 +248,6 @@ export function useDeletePageMutation() {
   });
 }
 
-
-
 /**
  * Mutation of page to database conversion.
  *
@@ -252,8 +269,14 @@ export function useConvertPageToDatabaseMutation() {
        */
       invalidatePageEntity({ includeAllPages: true }, { client: queryClient });
       invalidateSidebarTree({}, { client: queryClient });
-      invalidateDatabaseEntity({ databaseId: data.databaseId }, { client: queryClient });
-      invalidateDatabaseRowContext({ databaseId: data.databaseId }, { client: queryClient });
+      invalidateDatabaseEntity(
+        { databaseId: data.databaseId },
+        { client: queryClient },
+      );
+      invalidateDatabaseRowContext(
+        { databaseId: data.databaseId },
+        { client: queryClient },
+      );
     },
   });
 }
@@ -340,7 +363,10 @@ export function useRestorePageMutation() {
       });
     },
     onError: (error) => {
-      notifications.show({ message: t("Failed to restore page"), color: "red" });
+      notifications.show({
+        message: t("Failed to restore page"),
+        color: "red",
+      });
     },
   });
 }
@@ -351,7 +377,7 @@ export function useGetSidebarPagesQuery(
   const sidebarParams = data ? withDefaultSidebarNodeTypes(data) : null;
 
   return useInfiniteQuery({
-    queryKey: ["sidebar-pages", sidebarParams],
+    queryKey: PAGE_QUERY_KEYS.sidebar(sidebarParams),
     enabled: !!sidebarParams?.pageId || !!sidebarParams?.spaceId,
     queryFn: ({ pageParam }) => {
       if (!sidebarParams) {
@@ -361,8 +387,7 @@ export function useGetSidebarPagesQuery(
       return getSidebarPages({ ...sidebarParams, cursor: pageParam });
     },
     initialPageParam: undefined,
-    getNextPageParam: (lastPage) =>
-      lastPage.meta?.nextCursor ?? undefined,
+    getNextPageParam: (lastPage) => lastPage.meta?.nextCursor ?? undefined,
   });
 }
 
@@ -370,13 +395,15 @@ export function useGetRootSidebarPagesQuery(data: SidebarPagesParams) {
   const sidebarParams = withDefaultSidebarNodeTypes(data);
 
   return useInfiniteQuery({
-    queryKey: ["root-sidebar-pages", data.spaceId, sidebarParams.includeNodeTypes],
+    queryKey: PAGE_QUERY_KEYS.rootSidebar(
+      data.spaceId,
+      sidebarParams.includeNodeTypes,
+    ),
     queryFn: async ({ pageParam }) => {
       return getSidebarPages({ ...sidebarParams, cursor: pageParam });
     },
     initialPageParam: undefined,
-    getNextPageParam: (lastPage) =>
-      lastPage.meta?.nextCursor ?? undefined,
+    getNextPageParam: (lastPage) => lastPage.meta?.nextCursor ?? undefined,
   });
 }
 
@@ -395,7 +422,7 @@ export async function fetchAllAncestorChildren(params: SidebarPagesParams) {
 
   // not using a hook here, so we can call it inside a useEffect hook
   const response = await queryClient.fetchQuery({
-    queryKey: ["sidebar-pages", sidebarParams],
+    queryKey: PAGE_QUERY_KEYS.sidebar(sidebarParams),
     queryFn: () => getAllSidebarPages(sidebarParams),
     staleTime: 30 * 60 * 1000,
   });
@@ -443,12 +470,12 @@ export function invalidateOnCreatePage(data: Partial<IPage>) {
 
   let queryKey: QueryKey = null;
   if (data.parentPageId === null) {
-    queryKey = ["root-sidebar-pages", data.spaceId];
+    queryKey = PAGE_QUERY_KEYS.rootSidebar(data.spaceId);
   } else {
-    queryKey = [
-      "sidebar-pages",
-      { pageId: data.parentPageId, spaceId: data.spaceId },
-    ];
+    queryKey = PAGE_QUERY_KEYS.sidebar({
+      pageId: data.parentPageId,
+      spaceId: data.spaceId,
+    });
   }
 
   //update all sidebar pages
@@ -498,7 +525,7 @@ export function invalidateOnCreatePage(data: Partial<IPage>) {
 
     //update root sidebar pages haschildern
     const rootSideBarMatches = queryClient.getQueriesData({
-      queryKey: ["root-sidebar-pages", data.spaceId],
+      queryKey: PAGE_QUERY_KEYS.rootSidebar(data.spaceId),
       exact: false,
     });
 
@@ -537,9 +564,12 @@ export function invalidateOnUpdatePage(
 ) {
   let queryKey: QueryKey = null;
   if (parentPageId === null) {
-    queryKey = ["root-sidebar-pages", spaceId];
+    queryKey = PAGE_QUERY_KEYS.rootSidebar(spaceId);
   } else {
-    queryKey = ["sidebar-pages", { pageId: parentPageId, spaceId: spaceId }];
+    queryKey = PAGE_QUERY_KEYS.sidebar({
+      pageId: parentPageId,
+      spaceId: spaceId,
+    });
   }
   //update all sidebar pages
   queryClient.setQueryData<InfiniteData<IPagination<IPage>>>(
@@ -585,8 +615,8 @@ export function updateCacheOnMovePage(
   // Remove page from old parent's cache
   const oldQueryKey =
     oldParentId === null
-      ? ["root-sidebar-pages", spaceId]
-      : ["sidebar-pages", { pageId: oldParentId, spaceId }];
+      ? PAGE_QUERY_KEYS.rootSidebar(spaceId)
+      : PAGE_QUERY_KEYS.sidebar({ pageId: oldParentId, spaceId });
 
   queryClient.setQueryData<InfiniteData<IPagination<IPage>>>(
     oldQueryKey,
@@ -606,7 +636,7 @@ export function updateCacheOnMovePage(
   if (oldParentId !== null) {
     const oldParentCache = queryClient.getQueryData<
       InfiniteData<IPagination<IPage>>
-    >(["sidebar-pages", { pageId: oldParentId, spaceId }]);
+    >(PAGE_QUERY_KEYS.sidebar({ pageId: oldParentId, spaceId }));
 
     const remainingChildren =
       oldParentCache?.pages.flatMap((p) => p.items).length ?? 0;
@@ -644,8 +674,8 @@ export function updateCacheOnMovePage(
   // Add page to new parent's cache
   const newQueryKey =
     newParentId === null
-      ? ["root-sidebar-pages", spaceId]
-      : ["sidebar-pages", { pageId: newParentId, spaceId }];
+      ? PAGE_QUERY_KEYS.rootSidebar(spaceId)
+      : PAGE_QUERY_KEYS.sidebar({ pageId: newParentId, spaceId });
 
   queryClient.setQueryData<InfiniteData<IPagination<Partial<IPage>>>>(
     newQueryKey,
