@@ -93,8 +93,9 @@
 Требования к alias:
 
 - одинаковая авторизация/валидация;
-- в логах и метриках проставлять тег `deprecated_route=true`;
-- добавлять заголовок ответа `Deprecation: true` и дату sunset в `Sunset`.
+- использовать единый backend-декоратор `DeprecatedRoute(...)`, чтобы не дублировать поведение в контроллерах;
+- в структурированных логах и метриках проставлять тег `deprecated_route=true`;
+- добавлять заголовки ответа `Deprecation: true` и `Sunset: Wed, 31 Dec 2025 23:59:59 GMT` (HTTP-date, RFC 7231).
 
 ### Фаза 2 — soft deprecation
 
