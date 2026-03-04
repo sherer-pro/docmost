@@ -61,6 +61,21 @@ function buildAutoOptionValue(label: string): string {
   return `${safeBase}-${createShortSuffix()}`;
 }
 
+/**
+ * Возвращает итоговое value для опции.
+ *
+ * Для auto-режима value всегда генерируется только через buildAutoOptionValue.
+ * Для существующих опций с уже сохранённым value возвращается исходное значение,
+ * чтобы сохранить обратную совместимость при редактировании.
+ */
+function resolveOptionValue(option: SelectOptionDraft): string {
+  if (option.isAutoValue) {
+    return buildAutoOptionValue(option.label);
+  }
+
+  return option.value;
+}
+
 function createEmptyOption(): SelectOptionDraft {
   return {
     label: '',
@@ -89,7 +104,9 @@ export function SelectPropertySettingsModal({
     const normalizedOptions: SelectOptionDraft[] = initialSettings.options.length
       ? initialSettings.options.map((option) => ({
           ...option,
-          isAutoValue: false,
+          // Для старых записей без value включаем авто-режим, чтобы value
+          // восстанавливался из label и пересчитывался при его изменении.
+          isAutoValue: !option.value.trim(),
         }))
       : [createEmptyOption()];
 
@@ -97,9 +114,12 @@ export function SelectPropertySettingsModal({
   }, [initialSettings.options, opened]);
 
   const hasInvalidOptions = useMemo(() => {
-    const nonEmptyOptions = options.filter(
-      (option) => option.label.trim() || option.value.trim(),
-    );
+    const nonEmptyOptions = options.filter((option) => {
+      const label = option.label.trim();
+      const value = resolveOptionValue(option).trim();
+
+      return label || value;
+    });
 
     if (nonEmptyOptions.length === 0) {
       return true;
@@ -109,7 +129,7 @@ export function SelectPropertySettingsModal({
 
     for (const option of nonEmptyOptions) {
       const label = option.label.trim();
-      const value = option.value.trim();
+      const value = resolveOptionValue(option).trim();
 
       if (!label || !value) {
         return true;
@@ -129,7 +149,7 @@ export function SelectPropertySettingsModal({
     const normalizedOptions = options
       .map((option) => ({
         label: option.label.trim(),
-        value: option.value.trim(),
+        value: resolveOptionValue(option).trim(),
         color: option.color || 'gray',
       }))
       .filter((option) => option.label && option.value);
@@ -162,18 +182,9 @@ export function SelectPropertySettingsModal({
                 next[index] = {
                   ...next[index],
                   label: event.currentTarget.value,
-                  value: next[index].isAutoValue
-                    ? buildAutoOptionValue(event.currentTarget.value)
-                    : next[index].value,
                 };
                 setOptions(next);
               }}
-            />
-            <TextInput
-              flex={1}
-              label={t('Value')}
-              value={option.value}
-              readOnly
             />
             <Select
               w={140}
@@ -222,7 +233,7 @@ export function SelectPropertySettingsModal({
 
         {hasInvalidOptions && (
           <Text c="red" size="sm">
-            {t('Each option must have unique value and non-empty label')}
+            {t('Each option must have a label. Value is hidden and generated automatically for new options')}
           </Text>
         )}
       </Stack>
