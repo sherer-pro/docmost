@@ -31,15 +31,32 @@ import {
   SpaceCaslSubject,
 } from "@/features/space/permissions/permissions.type.ts";
 
+/**
+ * Возвращает pageId для комментариев с приоритетом database-контекста.
+ *
+ * Для маршрутов `/db/:databaseSlug` всегда должен использоваться pageId,
+ * связанный с базой, чтобы не смешивать контекст страницы и базы.
+ */
+function resolveCommentsPageId({
+  pageSlug,
+  databaseSlug,
+}: {
+  pageSlug?: string;
+  databaseSlug?: string;
+}) {
+  if (databaseSlug) {
+    return extractPageSlugId(databaseSlug);
+  }
+
+  return extractPageSlugId(pageSlug);
+}
+
 function CommentListWithTabs() {
   const { t } = useTranslation();
   const { pageSlug, databaseSlug } = useParams();
-  const pageSlugId = extractPageSlugId(pageSlug);
-  const databaseSlugId = extractPageSlugId(databaseSlug);
+  const resolvedCommentsPageId = resolveCommentsPageId({ pageSlug, databaseSlug });
 
-  const { data: pageBySlug } = usePageQuery({ pageId: pageSlugId });
-  const { data: databasePageBySlug } = usePageQuery({ pageId: databaseSlugId });
-  const page = pageBySlug ?? databasePageBySlug;
+  const { data: page } = usePageQuery({ pageId: resolvedCommentsPageId });
   const {
     data: comments,
     isLoading: isCommentsLoading,

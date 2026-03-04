@@ -39,7 +39,7 @@ export default function Aside() {
           </Text>
 
           {tab === "comments" ? (
-            <CommentListWithTabs />
+            component
           ) : (
             <ScrollArea
               style={{ height: "85vh" }}
