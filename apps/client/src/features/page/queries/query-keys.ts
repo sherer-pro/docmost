@@ -12,7 +12,7 @@ export const QUERY_KEY_SPACE = {
   pages: "pages",
 } as const;
 
-export type QueryParamsKey = Record<string, unknown>;
+export type QueryParamsKey = object;
 
 export type SidebarKeyParams = {
   pageId?: string;
