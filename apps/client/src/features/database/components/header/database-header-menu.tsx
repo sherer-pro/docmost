@@ -1,5 +1,5 @@
-import { ActionIcon, Menu, Text } from '@mantine/core';
-import { IconArrowRight, IconArrowsExchange, IconDots, IconMessageCircle, IconTrash } from '@tabler/icons-react';
+import { ActionIcon, Menu, Text, Tooltip } from '@mantine/core';
+import { IconArrowRight, IconArrowsExchange, IconDots, IconMessage, IconTrash } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { modals } from '@mantine/modals';
 import { useDisclosure } from '@mantine/hooks';
@@ -33,7 +33,7 @@ import {
 } from '@/features/database/atoms/database-table-export-atom';
 import { buildDatabaseMarkdownFromState } from '@/features/database/utils/database-markdown';
 import { dropTreeNodeAtom } from '@/features/page/tree/atoms/tree-data-atom.ts';
-import { asideStateAtom } from '@/components/layouts/global/hooks/atoms/sidebar-atom.ts';
+import useToggleAside from '@/hooks/use-toggle-aside.tsx';
 
 interface DatabaseHeaderMenuProps {
   databaseId: string;
@@ -50,6 +50,7 @@ export default function DatabaseHeaderMenu({
 }: DatabaseHeaderMenuProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const toggleAside = useToggleAside();
   const clipboard = useClipboard({ timeout: 500 });
   const [user] = useAtom(userAtom);
   const [, setHistoryModalOpen] = useAtom(historyAtoms);
@@ -61,7 +62,6 @@ export default function DatabaseHeaderMenu({
   const { openDeleteModal } = useDeletePageModal();
   const { mutateAsync: removePageMutationAsync } = useRemovePageMutation();
   const dropTreeNode = useSetAtom(dropTreeNodeAtom);
-  const setAsideState = useSetAtom(asideStateAtom);
   const [exportOpened, { open: openExportModal, close: closeExportModal }] =
     useDisclosure(false);
   const [movePageModalOpened, { open: openMovePageModal, close: closeMovePageModal }] =
@@ -69,10 +69,6 @@ export default function DatabaseHeaderMenu({
   const { mutateAsync: convertDatabaseToPageAsync, isPending: isConvertingDatabaseToPage } =
     useConvertDatabaseToPageMutation(databasePage?.spaceId, databaseId);
 
-  /**
-   * Collects markdown on the client in the exact state of the current table:
-   * We take into account sorting, filters and visible columns from the UI.
-   */
   const getCurrentTableMarkdown = () => {
     const tableExportState = tableExportStateByDatabase[databaseId] ?? defaultDatabaseTableExportState;
 
@@ -86,9 +82,6 @@ export default function DatabaseHeaderMenu({
     });
   };
 
-  /**
-   * Copies a canonical link to a database page in the format /s/:space/db/:slug.
-   */
   const handleCopyDatabaseLink = () => {
     if (!databasePage?.slugId) {
       return;
@@ -131,10 +124,6 @@ export default function DatabaseHeaderMenu({
     }
   };
 
-  /**
-   * We export markdown locally so that the file includes the current
-   * the visual state of the table, and not the “raw” data from the server.
-   */
   const handleExport = async (format: DatabaseExportFormat) => {
     if (format === DatabaseExportFormat.Markdown) {
       const markdown = getCurrentTableMarkdown();
@@ -155,7 +144,7 @@ export default function DatabaseHeaderMenu({
   };
 
   const handleOpenCommentsAside = () => {
-    setAsideState({ tab: 'comments', isAsideOpen: true });
+    toggleAside('comments');
   };
 
   const handleDeletePage = () => {
@@ -166,23 +155,11 @@ export default function DatabaseHeaderMenu({
     openDeleteModal({
       onConfirm: async () => {
         await removePageMutationAsync(databasePageId);
-
-        /**
-         * We duplicate the local deletion for the database script explicitly in the UI layer of the menu,
-         * so that the sidebar and current tree-state are cleared immediately even before refetch.
-         */
         dropTreeNode(databasePageId);
       },
     });
   };
 
-
-  /**
-   * Confirms and starts the reverse conversion of database -> page.
-   *
-   * After a successful operation, we transfer the user to page-route,
-   * so that the interface immediately opens a regular page instead of a database-view.
-   */
   const handleConvertToPage = () => {
     modals.openConfirmModal({
       title: t('Convert database to page?'),
@@ -210,31 +187,10 @@ export default function DatabaseHeaderMenu({
     });
   };
 
-  /**
-   * For domain operations on a page, the existence of an associated pageId is sufficient.
-   * If there is no pageId, this is the “root” database without page binding - we hide the page operations.
-   */
   const hasDatabasePage = Boolean(databasePageId);
-
-  /**
-   * To move, you need the slugId of the page (used in MovePageModal).
-   * If the page has not yet loaded or the slug is not available, hide the Move item.
-   */
   const canMoveDatabasePage = Boolean(databasePageId && databasePage?.slugId);
-
-  /**
-   * Explicit priority for calculating page width:
-   * 1) databasePage.settings.fullPageWidth;
-   * 2) user.settings.preferences.fullPageWidth;
-   * 3) fallback false.
-   */
   const fullPageWidth =
     databasePage?.settings?.fullPageWidth ?? user.settings?.preferences?.fullPageWidth ?? false;
-
-  /**
-   * We pass exactly the database-page id to the general switch,
-   * so that the change is saved in `databasePage.settings.fullPageWidth`.
-   */
   const databasePageWidthScopeId = databasePage?.id ?? databasePageId;
 
   return (
@@ -242,6 +198,14 @@ export default function DatabaseHeaderMenu({
       {!readOnly && <PageStateSegmentedControl size="xs" />}
 
       {!readOnly && hasDatabasePage && <ShareModal pageId={databasePageId} readOnly={Boolean(readOnly)} />}
+
+      {hasDatabasePage && (
+        <Tooltip label={t('Comments')} openDelay={250} withArrow>
+          <ActionIcon variant="subtle" color="dark" onClick={handleOpenCommentsAside}>
+            <IconMessage size={20} stroke={2} />
+          </ActionIcon>
+        </Tooltip>
+      )}
 
       <Menu
         shadow="xl"
@@ -269,16 +233,6 @@ export default function DatabaseHeaderMenu({
             fullPageWidth={fullPageWidth}
           />
 
-          {hasDatabasePage && (
-            <Menu.Item leftSection={<IconMessageCircle size={16} />} onClick={handleOpenCommentsAside}>
-              {t('Comments')}
-            </Menu.Item>
-          )}
-
-          {/**
-           * For database root page (when pageId is missing) page-domain operation
-           * (share/history/move/trash) are inaccessible and intentionally hidden.
-           */}
           {!readOnly && canMoveDatabasePage && (
             <>
               <Menu.Divider />
