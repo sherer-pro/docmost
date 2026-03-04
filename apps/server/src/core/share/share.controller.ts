@@ -114,7 +114,7 @@ export class ShareController {
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
-    const page = await this.pageRepo.findBySlugId(dto.pageId);
+    const page = await this.pageRepo.findById(dto.pageId);
     if (!page) {
       throw new NotFoundException('Shared page not found');
     }

@@ -47,15 +47,7 @@ export default function ShareModal({ pageId: pageIdProp, readOnly = false }: Sha
   const pageSlugId = extractPageSlugId(pageSlug);
   const queryPageId = pageIdProp ?? pageSlugId;
   const { data: page } = usePageQuery({ pageId: queryPageId });
-  /**
-   * Important: the `/shares/for-page` server endpoint resolves pages by `slugId`,
-   * not by UUID `id`.
-   *
-   * For regular pages, `slugId` comes from the URL. In database flows, we may
-   * initially receive a UUID (via `pageIdProp`), so after loading we always
-   * switch to `page.slugId`.
-   */
-  const shareLookupPageId = page?.slugId ?? pageSlugId;
+  const shareLookupPageId = page?.slugId;
   const pageId = pageIdProp ?? page?.id;
   const { data: share } = useShareForPageQuery(shareLookupPageId);
   const { spaceSlug } = useParams();
