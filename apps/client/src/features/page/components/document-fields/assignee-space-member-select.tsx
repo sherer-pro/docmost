@@ -1,33 +1,20 @@
 import React from "react";
-import { Group, Select, SelectProps, Text } from "@mantine/core";
-import { CustomAvatar } from "@/components/ui/custom-avatar.tsx";
+import { Select } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 import {
-  SpaceMemberSelectOption,
+  getSpaceMemberSearchProps,
+  renderSpaceMemberValue,
   useSpaceMemberSelectOptions,
-} from "@/features/page/components/document-fields/space-member-select-utils.ts";
+} from "@/features/page/components/document-fields/space-member-select-utils.tsx";
 
 interface AssigneeSpaceMemberSelectProps {
   spaceId: string;
   value: string | null;
   onChange: (value: string | null) => void;
+  onBlur?: () => void;
 }
 
-const renderSelectOption: SelectProps["renderOption"] = ({ option }) => {
-  const member = option as SpaceMemberSelectOption;
-
-  return (
-    <Group gap="sm" wrap="nowrap">
-      <CustomAvatar avatarUrl={member.avatarUrl} size={20} name={member.label} />
-      <div>
-        <Text size="sm" lineClamp={1}>{member.label}</Text>
-        {member.email && <Text size="xs" c="dimmed" lineClamp={1}>{member.email}</Text>}
-      </div>
-    </Group>
-  );
-};
-
-export function AssigneeSpaceMemberSelect({ spaceId, value, onChange }: AssigneeSpaceMemberSelectProps) {
+export function AssigneeSpaceMemberSelect({ spaceId, value, onChange, onBlur }: AssigneeSpaceMemberSelectProps) {
   const { t } = useTranslation();
   const { options, searchValue, setSearchValue, isLoading, knownUsersById } = useSpaceMemberSelectOptions(
     spaceId,
@@ -42,19 +29,18 @@ export function AssigneeSpaceMemberSelect({ spaceId, value, onChange }: Assignee
       data={options}
       value={value}
       onChange={(nextValue) => onChange(nextValue || null)}
-      placeholder={t("Select assignee")}
-      searchable
-      clearable
-      filter={({ options }) => options}
-      searchValue={searchValue}
-      onSearchChange={setSearchValue}
-      renderOption={renderSelectOption}
-      leftSection={
-        selectedMember ? (
-          <CustomAvatar avatarUrl={selectedMember.avatarUrl} size={18} name={selectedMember.label} />
-        ) : undefined
-      }
-      nothingFoundMessage={isLoading ? t("Loading...") : t("No members found")}
+      {...getSpaceMemberSearchProps(
+        {
+          placeholder: t("Select member"),
+          loadingMessage: t("Loading..."),
+          nothingFoundMessage: t("No members found"),
+        },
+        searchValue,
+        setSearchValue,
+        isLoading,
+      )}
+      leftSection={renderSpaceMemberValue(selectedMember)}
+      onBlur={onBlur}
     />
   );
 }

@@ -1,15 +1,17 @@
-import { Badge, Checkbox, Group, Select, SelectProps, Text, TextInput, Textarea } from '@mantine/core';
+import { Badge, Checkbox, Group, Select, Text, TextInput, Textarea } from '@mantine/core';
 import { DatabasePropertyType } from '@docmost/api-contract';
 import { useTranslation } from 'react-i18next';
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  SpaceMemberSelectOption,
+  getSpaceMemberSearchProps,
+  normalizeSpaceMemberValue,
+  renderSpaceMemberOption,
   useSpaceMemberSelectOptions,
-} from '@/features/page/components/document-fields/space-member-select-utils.ts';
+} from '@/features/page/components/document-fields/space-member-select-utils.tsx';
 import { useGetRootSidebarPagesQuery } from '@/features/page/queries/page-query.ts';
 import { IDatabaseProperty } from '@/features/database/types/database.types.ts';
-import { CustomAvatar } from '@/components/ui/custom-avatar.tsx';        
+import { CustomAvatar } from '@/components/ui/custom-avatar.tsx';
 import { buildPageUrl } from '@/features/page/page.utils.ts';
 
 
@@ -51,37 +53,8 @@ export function DatabaseCellRenderer({
 }: DatabaseCellRendererProps) {
   const { t } = useTranslation();
 
-  const renderMemberOption: SelectProps['renderOption'] = ({ option }) => {
-    const member = option as SpaceMemberSelectOption;
-
-    return (
-      <Group gap="sm" wrap="nowrap">
-        <CustomAvatar avatarUrl={member.avatarUrl} size={20} name={member.label} />
-        <div>
-          <Text size="sm" lineClamp={1}>{member.label}</Text>
-          {member.email && <Text size="xs" c="dimmed" lineClamp={1}>{member.email}</Text>}
-        </div>
-      </Group>
-    );
-  };
-
-  /**
-   * The user type stores references in the `{ id }` format.
-   * String values are still accepted for backward compatibility.
-   */
   const selectedUserId = useMemo(() => {
-    const sourceValue = isEditing ? editingValue : value;
-
-    if (typeof sourceValue === 'string') {
-      return sourceValue;
-    }
-
-    if (sourceValue && typeof sourceValue === 'object' && 'id' in sourceValue) {
-      const candidate = (sourceValue as { id?: unknown }).id;
-      return typeof candidate === 'string' ? candidate : null;
-    }
-
-    return null;
+    return normalizeSpaceMemberValue(isEditing ? editingValue : value);
   }, [editingValue, isEditing, value]);
 
   const {
@@ -302,8 +275,6 @@ export function DatabaseCellRenderer({
       return (
         <Select
           autoFocus
-          searchable
-          clearable
           data={memberOptions}
           value={selectedUserId}
           onChange={(nextValue) => {
@@ -311,11 +282,17 @@ export function DatabaseCellRenderer({
             onChange(normalizedValue);
             onSave(normalizedValue);
           }}
-          filter={({ options }) => options}
-          searchValue={searchValue}
-          onSearchChange={setSearchValue}
-          renderOption={renderMemberOption}
-          nothingFoundMessage={isMembersLoading ? t('Loading...') : t('No members found')}
+          {...getSpaceMemberSearchProps(
+            {
+              placeholder: t('Select member'),
+              loadingMessage: t('Loading...'),
+              nothingFoundMessage: t('No members found'),
+            },
+            searchValue,
+            setSearchValue,
+            isMembersLoading,
+          )}
+          renderOption={renderSpaceMemberOption}
           onBlur={() => onSave()}
         />
       );
