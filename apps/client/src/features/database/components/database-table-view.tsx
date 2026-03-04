@@ -52,7 +52,6 @@ import {
 } from '@/features/database/types/database-table.types';
 import {
   IDatabaseProperty,
-  IDatabaseSelectOption,
   IDatabaseSelectPropertySettings,
 } from '@/features/database/types/database.types';
 import { SelectPropertySettingsModal } from '@/features/database/components/select-property-settings-modal';
@@ -60,11 +59,7 @@ import {
   defaultDatabaseTableExportState,
   databaseTableExportStateAtom,
 } from '@/features/database/atoms/database-table-export-atom';
-import {
-  getCellValue,
-  getRowTitle,
-  matchCondition,
-} from '@/features/database/utils/database-markdown';
+import { getRowTitle, matchCondition } from '@/features/database/utils/database-markdown';
 import { DATABASE_PROPERTY_TYPE_LABEL_KEYS } from '@/features/database/utils/database-property-type-labels';
 import { DatabaseCellRenderer } from '@/features/database/components/database-cell-renderer.tsx';
 import { treeDataAtom } from '@/features/page/tree/atoms/tree-data-atom.ts';
@@ -81,6 +76,12 @@ import { queryClient } from '@/main.tsx';
 import { getPageById } from '@/features/page/services/page-service.ts';
 import { PAGE_QUERY_KEYS } from '@/features/page/queries/query-keys.ts';
 import { fetchAllAncestorChildren } from '@/features/page/queries/page-query.ts';
+import {
+  buildDatabaseCellPayloadValue,
+  extractCurrentDatabaseCellValue,
+  getDatabaseCellDisplayValue,
+  getDatabaseSelectSettings,
+} from '@/features/database/utils/database-cell-value.ts';
 
 interface DatabaseTableViewProps {
   databaseId: string;
@@ -308,6 +309,10 @@ export function DatabaseTableView({
     }));
   }, [databaseId, filters, setTableExportState, sortState, visibleColumns]);
 
+  const getRawCellValue = (row: IDatabaseRowWithCells, propertyId: string): unknown => {
+    return row.cells?.find((cell) => cell.propertyId === propertyId)?.value;
+  };
+
   const displayedProperties = useMemo(
     () =>
       properties.filter((property) => {
@@ -324,11 +329,13 @@ export function DatabaseTableView({
 
     return rows.filter((row) => {
       return activeFilters.every((condition) => {
-        const value = getCellValue(row, condition.propertyId);
+        const property = properties.find((item) => item.id === condition.propertyId);
+        const rawValue = getRawCellValue(row, condition.propertyId);
+        const value = getDatabaseCellDisplayValue({ property, value: rawValue });
         return matchCondition(value, condition);
       });
     });
-  }, [rows, filters]);
+  }, [rows, filters, properties]);
 
   const preparedRows = useMemo(() => {
     if (!sortState) {
@@ -336,8 +343,15 @@ export function DatabaseTableView({
     }
 
     return [...filteredRows].sort((left, right) => {
-      const leftValue = getCellValue(left, sortState.propertyId);
-      const rightValue = getCellValue(right, sortState.propertyId);
+      const property = properties.find((item) => item.id === sortState.propertyId);
+      const leftValue = getDatabaseCellDisplayValue({
+        property,
+        value: getRawCellValue(left, sortState.propertyId),
+      });
+      const rightValue = getDatabaseCellDisplayValue({
+        property,
+        value: getRawCellValue(right, sortState.propertyId),
+      });
       const result = leftValue.localeCompare(rightValue, undefined, {
         numeric: true,
         sensitivity: 'base',
@@ -345,11 +359,7 @@ export function DatabaseTableView({
 
       return sortState.direction === 'asc' ? result : -result;
     });
-  }, [filteredRows, sortState]);
-
-  const getRawCellValue = (row: IDatabaseRowWithCells, propertyId: string): unknown => {
-    return row.cells?.find((cell) => cell.propertyId === propertyId)?.value;
-  };
+  }, [filteredRows, properties, sortState]);
 
   const startEditing = (row: IDatabaseRowWithCells, property: IDatabaseProperty) => {
     if (!isEditable) {
@@ -358,44 +368,7 @@ export function DatabaseTableView({
 
     const key = `${row.pageId}:${property.id}`;
     setEditingCellKey(key);
-    setEditingValue(getRawCellValue(row, property.id));
-  };
-
-  /**
-   * Normalizes a value according to the property type contract.
-   * This keeps the batch update payload format consistent per cell type.
-   */
-  const buildCellPayloadValue = (property: IDatabaseProperty, value: unknown): unknown => {
-    if (property.type === 'checkbox') {
-      return Boolean(value);
-    }
-
-    if (property.type === 'user') {
-      if (value && typeof value === 'object' && 'id' in value) {
-        const userId = (value as { id?: unknown }).id;
-        return typeof userId === 'string' && userId.trim() ? { id: userId } : null;
-      }
-
-      if (typeof value === 'string' && value.trim()) {
-        return { id: value.trim() };
-      }
-
-      return null;
-    }
-
-    if (property.type === 'page_reference') {
-      if (typeof value === 'string' && value.trim()) {
-        return value.trim();
-      }
-
-      return null;
-    }
-
-    if (typeof value === 'string') {
-      return value;
-    }
-
-    return value ?? '';
+    setEditingValue(extractCurrentDatabaseCellValue(getRawCellValue(row, property.id)));
   };
 
   const saveEditing = async (
@@ -412,7 +385,7 @@ export function DatabaseTableView({
     }
 
     const sourceValue = typeof nextValue === 'undefined' ? editingValue : nextValue;
-    const normalizedValue = buildCellPayloadValue(property, sourceValue);
+    const normalizedValue = buildDatabaseCellPayloadValue(property, sourceValue);
     const shouldDelete =
       property.type !== 'checkbox' &&
       (normalizedValue === null ||
@@ -439,47 +412,6 @@ export function DatabaseTableView({
     setEditingValue('');
   };
 
-
-  const getSelectSettings = (property: IDatabaseProperty): IDatabaseSelectPropertySettings => {
-    if (!property.settings || typeof property.settings !== 'object') {
-      return { options: [] };
-    }
-
-    const maybeOptions = (property.settings as { options?: unknown }).options;
-
-    if (!Array.isArray(maybeOptions)) {
-      return { options: [] };
-    }
-
-    const options: IDatabaseSelectOption[] = maybeOptions
-      .filter((option): option is IDatabaseSelectOption => {
-        if (!option || typeof option !== 'object') {
-          return false;
-        }
-
-        const candidate = option as IDatabaseSelectOption;
-        return typeof candidate.label === 'string' && typeof candidate.value === 'string';
-      })
-      .map((option) => ({
-        label: option.label,
-        value: option.value,
-        color: option.color,
-      }));
-
-    return { options };
-  };
-
-  const getSelectOptionLabel = (property: IDatabaseProperty, value: string): string => {
-    const settings = getSelectSettings(property);
-    const selectedOption = settings.options.find((option) => option.value === value);
-
-    return selectedOption?.label || value;
-  };
-
-  const getSelectOption = (property: IDatabaseProperty, value: string): IDatabaseSelectOption | null => {
-    const settings = getSelectSettings(property);
-    return settings.options.find((option) => option.value === value) || null;
-  };
 
   const handleCreateProperty = () => {
     const trimmedName = newPropertyName.trim();
@@ -893,8 +825,6 @@ export function DatabaseTableView({
                         editingValue={editingValue}
                         spaceId={spaceId}
                         spaceSlug={spaceSlug}
-                        getSelectOption={getSelectOption}
-                        getSelectOptionLabel={getSelectOptionLabel}
                         onStartEdit={() => startEditing(row, property)}
                         onChange={setEditingValue}
                         onSave={(nextValue) => saveEditing(row, property, nextValue)}
@@ -913,7 +843,7 @@ export function DatabaseTableView({
         propertyName={settingsProperty?.name || selectPropertyDraft?.name || ''}
         initialSettings={
           settingsProperty
-            ? getSelectSettings(settingsProperty)
+            ? getDatabaseSelectSettings(settingsProperty)
             : selectPropertyDraft?.initialSettings || { options: [] }
         }
         onClose={() => {

@@ -7,12 +7,18 @@ import {
   getSpaceMemberSearchProps,
   normalizeSpaceMemberValue,
   renderSpaceMemberOption,
+  renderSpaceMemberValue,
   useSpaceMemberSelectOptions,
 } from '@/features/page/components/document-fields/space-member-select-utils.tsx';
 import { useGetRootSidebarPagesQuery } from '@/features/page/queries/page-query.ts';
 import { IDatabaseProperty } from '@/features/database/types/database.types.ts';
 import { CustomAvatar } from '@/components/ui/custom-avatar.tsx';
 import { buildPageUrl } from '@/features/page/page.utils.ts';
+import {
+  getDatabaseSelectOption,
+  normalizeDatabasePageReferenceValue,
+  normalizeDatabaseSelectValue,
+} from '@/features/database/utils/database-cell-value.ts';
 
 
 interface DatabaseCellRendererProps {
@@ -23,8 +29,6 @@ interface DatabaseCellRendererProps {
   editingValue: unknown;
   spaceId: string;
   spaceSlug: string;
-  getSelectOption: (property: IDatabaseProperty, value: string) => { label: string; color?: string } | null;
-  getSelectOptionLabel: (property: IDatabaseProperty, value: string) => string;
   onStartEdit: () => void;
   onChange: (value: unknown) => void;
   onSave: (value?: unknown) => void;
@@ -45,8 +49,6 @@ export function DatabaseCellRenderer({
   editingValue,
   spaceId,
   spaceSlug,
-  getSelectOption,
-  getSelectOptionLabel,
   onStartEdit,
   onChange,
   onSave,
@@ -140,13 +142,13 @@ export function DatabaseCellRenderer({
     }
 
     if (property.type === 'select') {
-      const selectValue = typeof value === 'string' ? value : '';
+      const selectValue = normalizeDatabaseSelectValue(value);
       if (!selectValue) {
         return <Text c="dimmed">{t('Empty value')}</Text>;
       }
 
-      const selectedOption = getSelectOption(property, selectValue);
-      const label = selectedOption?.label || getSelectOptionLabel(property, selectValue);
+      const selectedOption = getDatabaseSelectOption(property, selectValue);
+      const label = selectedOption?.label || selectValue;
 
       return (
         <Badge color={selectedOption?.color || 'gray'} variant="light">
@@ -166,7 +168,7 @@ export function DatabaseCellRenderer({
       if (selectedMember) {
         return (
           <Group gap="xs" wrap="nowrap">
-            <CustomAvatar avatarUrl={selectedMember.avatarUrl} size={18} name={selectedMember.label} />
+            {renderSpaceMemberValue(selectedMember)}
             <Text lineClamp={1}>{selectedMember.label}</Text>
           </Group>
         );
@@ -181,7 +183,7 @@ export function DatabaseCellRenderer({
     }
 
     if (property.type === 'page_reference') {
-      const refId = typeof value === 'string' ? value : '';
+      const refId = normalizeDatabasePageReferenceValue(value);
       if (!refId) {
         return <Text c="dimmed">{t('Empty value')}</Text>;
       }
@@ -254,12 +256,13 @@ export function DatabaseCellRenderer({
 
     if (type === 'select') {
       const settings = property.settings && 'options' in property.settings ? property.settings.options : [];
+      const selectValue = normalizeDatabaseSelectValue(editingValue);
 
       return (
         <Select
           autoFocus
           data={settings.map((option) => ({ value: option.value, label: option.label }))}
-          value={typeof editingValue === 'string' ? editingValue : null}
+          value={selectValue || null}
           onChange={(nextValue) => {
             const normalizedValue = nextValue || '';
             onChange(normalizedValue);
@@ -299,13 +302,15 @@ export function DatabaseCellRenderer({
     }
 
     if (type === 'page_reference') {
+      const pageReferenceValue = normalizeDatabasePageReferenceValue(editingValue);
+
       return (
         <Select
           autoFocus
           searchable
           clearable
           data={pageOptions}
-          value={typeof editingValue === 'string' ? editingValue : null}
+          value={pageReferenceValue || null}
           onChange={(nextValue) => {
             const normalizedValue = nextValue || '';
             onChange(normalizedValue);
