@@ -1,13 +1,13 @@
-# Аудит репозитория за последние 48 часов: согласованность и дублирование
+# Repository Audit for the Last 48 Hours: Consistency and Duplication
 
-## 1) Как проводился анализ
+## 1) Analysis Method
 
-Проверка выполнялась по двум слоям:
+The review was performed across two layers:
 
-1. **История изменений за 48 часов** (коммиты + файлы, частота правок).
-2. **Текущее состояние кода на `HEAD`** в самых изменяемых местах (роутинг, кэш, меню действий, удаление/конвертация page/database).
+1. **Change history over the last 48 hours** (commits + files, edit frequency).
+2. **Current code state at `HEAD`** in the most frequently changed areas (routing, cache, action menus, page/database deletion and conversion).
 
-### Команды, использованные для анализа
+### Commands used for the analysis
 
 ```bash
 git log --since='48 hours ago' --pretty=format:'%h %ad %an %s' --date=iso
@@ -22,50 +22,50 @@ rg -n "invalidateOnDeletePage|dropTreeNode|handleCopyLink|Convert database to pa
   apps/client/src/features/page/components/header/page-header-menu.tsx
 ```
 
-## 2) Что по согласованности
+## 2) Consistency Status
 
-### Позитивная динамика (согласованность повышается)
+### Positive trend (consistency is improving)
 
-1. **Централизация инвалидации кэша** появилась в отдельном модуле (`invalidateSidebarTree`, `invalidateDatabaseEntity`, `invalidatePageEntity`, `invalidateDatabaseRowContext`). Это снижает вероятность рассинхронизации между page/database флоу.
-2. **Унификация контракта идентификаторов** (id/slug/databaseId) выделена в адаптер, что уменьшает количество ad-hoc преобразований в UI.
-3. **URL-строитель для database-роутов** вынесен в `buildDatabaseUrl`/`buildDatabaseNodeUrl`, что в целом уменьшает ручную сборку ссылок.
+1. **Cache invalidation centralization** has been introduced in a dedicated module (`invalidateSidebarTree`, `invalidateDatabaseEntity`, `invalidatePageEntity`, `invalidateDatabaseRowContext`). This reduces the risk of desynchronization across page/database flows.
+2. **Identifier contract unification** (id/slug/databaseId) has been moved into an adapter, which decreases the number of ad-hoc transformations in the UI.
+3. **URL builders for database routes** have been extracted into `buildDatabaseUrl`/`buildDatabaseNodeUrl`, which generally reduces manual link construction.
 
-## 3) Найденные несогласованности
+## 3) Identified Inconsistencies
 
-### 3.1. Разные подходы к сборке route в похожем сценарии
+### 3.1. Different route construction approaches in similar scenarios
 
-- В `database-header-menu` после `database -> page` используется **ручной шаблон** `navigate(`/s/${spaceSlug}/p/${result.slugId}`)`.
-- В `page-header-menu` аналогичные переходы строятся через helper (`buildPageUrl`).
+- In `database-header-menu`, after `database -> page`, a **manual template** is used: `navigate(`/s/${spaceSlug}/p/${result.slugId}`)`.
+- In `page-header-menu`, similar transitions are built through a helper (`buildPageUrl`).
 
-**Риск:** повторение логики роутинга в строках увеличивает шанс будущего расхождения (особенно при изменении формата URL).
+**Risk:** duplicated routing logic in string templates increases the chance of future divergence (especially when URL format changes).
 
-### 3.2. Дублирующая «обертка» для copy-link
+### 3.2. Duplicate wrapper for copy-link
 
-- В `database-header-menu` есть `handleCopyDatabaseLink`, а `handleCopyLink` просто проксирует вызов без дополнительной логики.
+- In `database-header-menu`, there is `handleCopyDatabaseLink`, while `handleCopyLink` only proxies the call without additional logic.
 
-**Риск:** лишний уровень абстракции без ценности, повышает шум и усложняет поддержку.
+**Risk:** an extra abstraction layer without added value increases noise and complicates maintenance.
 
-### 3.3. Повтор модального текста/сценариев конвертации в двух меню
+### 3.3. Repeated conversion modal text/scenario in two menus
 
-- Подтверждение `Convert database to page?` и близкая бизнес-логика присутствуют одновременно в page- и database-меню.
+- The `Convert database to page?` confirmation and closely related business logic are present in both page and database menus.
 
-**Риск:** при последующих правках текст/поведение легко разъедутся (переводы, side effects, invalidate policy).
+**Risk:** on future updates, text and behavior can easily drift apart (translations, side effects, invalidation policy).
 
-## 4) Дублирование и избыточность в истории коммитов
+## 4) Duplication and Redundancy in Commit History
 
-### 4.1. Явно повторённый commit (идентичный патч)
+### 4.1. Explicitly duplicated commit (identical patch)
 
-Коммиты:
+Commits:
 - `77b233fa feat(client): add page-scoped full width toggle`
 - `a49e2511 feat(client): add page-scoped full width toggle`
 
-Оба имеют одинаковый набор файлов и одинаковую статистику изменений (7 файлов, +103/-8).
+Both have the same file set and the same change statistics (7 files, +103/-8).
 
-**Вывод:** в историю попал дублирующийся patch (вероятно из-за параллельных PR-веток и merge-последовательности).
+**Conclusion:** a duplicate patch was introduced into history (likely due to parallel PR branches and merge sequencing).
 
-### 4.2. Высокая концентрация правок в «горячих» файлах
+### 4.2. High edit concentration in “hot” files
 
-Топ по частоте изменений за 48 часов:
+Top files by edit frequency over 48 hours:
 - `database-table-view.tsx` — 22
 - `database-page.tsx` — 21
 - `space-tree.tsx` — 21
@@ -74,24 +74,24 @@ rg -n "invalidateOnDeletePage|dropTreeNode|handleCopyLink|Convert database to pa
 - `database-header-menu.tsx` — 15
 - `page-query.ts` — 14
 
-**Вывод:** архитектурная область page/database/tree активно стабилизируется, но пока остаётся зоной повышенного риска регрессий и повторов логики.
+**Conclusion:** the page/database/tree architectural area is being actively stabilized, but it remains a high-risk zone for regressions and repeated logic.
 
-## 5) Оценка по API/модулям
+## 5) Assessment by API/Modules
 
-1. **API/контракты id/slug:** общий тренд положительный (идёт унификация), но в UI ещё местами есть ручные route-сборки.
-2. **Кэш и state-sync:** после введения общего invalidate-модуля консистентность улучшилась, но часть операций удаления/синхронизации всё ещё размазана между mutation-layer и UI-layer.
-3. **Компонентная архитектура меню:** есть шаг к общим action item (`DocumentCommonActionItems`), однако доменные действия конвертации/удаления пока продублированы в двух крупных меню.
+1. **API/id/slug contracts:** the overall trend is positive (unification is in progress), but there are still manual route constructions in some UI paths.
+2. **Cache and state sync:** after introducing the shared invalidation module, consistency improved, but part of deletion/synchronization operations is still split across the mutation layer and UI layer.
+3. **Menu component architecture:** there is progress toward shared action items (`DocumentCommonActionItems`), but conversion/deletion domain actions are still duplicated across two major menus.
 
-## 6) Практические рекомендации
+## 6) Practical Recommendations
 
-1. **Дожать единый routing adapter**: запретить ручные route-string в feature-компонентах, оставить только helper-функции.
-2. **Вынести conversion flows в общий hook/service** (например, `useDocumentTypeConversion`) и переиспользовать в page/database меню.
-3. **Упростить слой action handlers**: удалить proxy-обертки без добавочной логики (`handleCopyLink -> handleCopyDatabaseLink`).
-4. **Добавить guard в review-процесс на duplicate patch** (например, проверка patch-id в PR-template/checklist).
-5. **Для горячих файлов ввести локальные контрактные тесты** на роутинг/инвалидацию (особенно `space-tree`, `page-query`, `database-page`).
+1. **Finalize a single routing adapter**: disallow manual route strings in feature components and keep only helper functions.
+2. **Extract conversion flows into a shared hook/service** (for example, `useDocumentTypeConversion`) and reuse it in page/database menus.
+3. **Simplify the action handler layer**: remove proxy wrappers without additive logic (`handleCopyLink -> handleCopyDatabaseLink`).
+4. **Add a duplicate-patch guard to the review process** (for example, patch-id validation in a PR template/checklist).
+5. **Introduce local contract tests for hot files** for routing/invalidation behavior (especially `space-tree`, `page-query`, `database-page`).
 
-## 7) Краткий итог
+## 7) Brief Summary
 
-- За последние 48 часов команда проделала заметную работу по **унификации** page/database сценариев.
-- Основные риски сейчас не в отсутствии функционала, а в **остаточной дубликации UI-логики** и **повторяемости патчей в истории**.
-- При доведении routing+conversion до единого центра и укреплении проверок на дубли веток консистентность заметно вырастет.
+- Over the last 48 hours, the team has made visible progress in **unifying** page/database scenarios.
+- The main risks at this stage are not missing functionality, but **residual UI logic duplication** and **patch repetition in history**.
+- If routing and conversion are finalized around a single center and branch-duplication checks are strengthened, consistency will improve significantly.
