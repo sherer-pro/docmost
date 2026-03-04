@@ -21,6 +21,7 @@ export enum QueueJob {
 
   PAGE_BACKLINKS = 'page-backlinks',
   ADD_PAGE_WATCHERS = 'add-page-watchers',
+  DUPLICATE_PAGE_ATTACHMENTS = 'duplicate-page-attachments',
 
   STRIPE_SEATS_SYNC = 'sync-stripe-seats',
   TRIAL_ENDED = 'trial-ended',

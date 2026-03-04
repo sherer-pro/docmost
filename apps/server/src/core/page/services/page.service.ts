@@ -40,10 +40,7 @@ import {
   jsonToNode,
   jsonToText,
 } from '../../../collaboration/collaboration.util';
-import {
-  CopyPageMapEntry,
-  ICopyPageAttachment,
-} from '../dto/duplicate-page.dto';
+import { CopyPageMapEntry } from '../dto/duplicate-page.dto';
 import { Node as PMNode } from '@tiptap/pm/model';
 import { StorageService } from '../../../integrations/storage/storage.service';
 import { InjectQueue } from '@nestjs/bullmq';
@@ -55,7 +52,10 @@ import { CollaborationGateway } from '../../../collaboration/collaboration.gatew
 import { markdownToHtml } from '@docmost/editor-ext';
 import { WatcherService } from '../../watcher/watcher.service';
 import { RecipientResolverService } from '../../notification/services/recipient-resolver.service';
-import { IPageRecipientNotificationJob } from '../../../integrations/queue/constants/queue.interface';
+import {
+  IDuplicatePageAttachmentMapping,
+  IPageRecipientNotificationJob,
+} from '../../../integrations/queue/constants/queue.interface';
 import { SidebarNodeType } from '../dto/sidebar-page.dto';
 import { DatabaseRepo } from '@docmost/db/repos/database/database.repo';
 import { DatabaseRowRepo } from '@docmost/db/repos/database/database-row.repo';
@@ -685,7 +685,7 @@ export class PageService {
       });
     });
 
-    const attachmentMap = new Map<string, ICopyPageAttachment>();
+    const attachmentMap = new Map<string, IDuplicatePageAttachmentMapping>();
 
     const insertablePages: InsertablePage[] = await Promise.all(
       pages.map(async (page) => {
@@ -795,64 +795,36 @@ export class PageService {
       workspaceId: authUser.workspaceId,
     });
 
-    //TODO: best to handle this in a queue
-    const attachmentsIds = Array.from(attachmentMap.keys());
-    if (attachmentsIds.length > 0) {
-      const attachments = await this.db
-        .selectFrom('attachments')
-        .selectAll()
-        .where('id', 'in', attachmentsIds)
-        .where('workspaceId', '=', rootPage.workspaceId)
-        .execute();
+    const attachmentMappings: IDuplicatePageAttachmentMapping[] = Array.from(
+      attachmentMap.values(),
+    );
 
-      for (const attachment of attachments) {
-        try {
-          const pageAttachment = attachmentMap.get(attachment.id);
-
-          // make sure the copied attachment belongs to the page it was copied from
-          if (attachment.pageId !== pageAttachment.oldPageId) {
-            continue;
-          }
-
-          const newAttachmentId = pageAttachment.newAttachmentId;
-
-          const newPageId = pageAttachment.newPageId;
-
-          const newPathFile = attachment.filePath.replace(
-            attachment.id,
-            newAttachmentId,
+    if (attachmentMappings.length > 0) {
+      // Queue attachment copy to avoid blocking the API response.
+      this.generalQueue
+        .add(
+          QueueJob.DUPLICATE_PAGE_ATTACHMENTS,
+          {
+            workspaceId: rootPage.workspaceId,
+            rootPageId: rootPage.id,
+            newPageId: pageMap.get(rootPage.id).newPageId,
+            spaceId,
+            attachmentMappings,
+          },
+          {
+            attempts: 5,
+            backoff: {
+              type: 'exponential',
+              delay: 5000,
+            },
+          },
+        )
+        .catch((err) => {
+          this.logger.error(
+            `Failed to queue duplicate-page-attachments job for page ${rootPage.id}`,
+            err,
           );
-
-          try {
-            await this.storageService.copy(attachment.filePath, newPathFile);
-
-            await this.db
-              .insertInto('attachments')
-              .values({
-                id: newAttachmentId,
-                type: attachment.type,
-                filePath: newPathFile,
-                fileName: attachment.fileName,
-                fileSize: attachment.fileSize,
-                mimeType: attachment.mimeType,
-                fileExt: attachment.fileExt,
-                creatorId: attachment.creatorId,
-                workspaceId: attachment.workspaceId,
-                pageId: newPageId,
-                spaceId: spaceId,
-              })
-              .execute();
-          } catch (err) {
-            this.logger.error(
-              `Duplicate page: failed to copy attachment ${attachment.id}`,
-              err,
-            );
-            // Continue with other attachments even if one fails
-          }
-        } catch (err) {
-          this.logger.error(err);
-        }
-      }
+        });
     }
 
     const newPageId = pageMap.get(rootPage.id).newPageId;

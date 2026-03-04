@@ -14,6 +14,21 @@ export interface IAddPageWatchersJob {
   workspaceId: string;
 }
 
+export interface IDuplicatePageAttachmentMapping {
+  newPageId: string;
+  oldPageId: string;
+  oldAttachmentId: string;
+  newAttachmentId: string;
+}
+
+export interface IDuplicatePageAttachmentsJob {
+  workspaceId: string;
+  rootPageId: string;
+  newPageId: string;
+  spaceId: string;
+  attachmentMappings: IDuplicatePageAttachmentMapping[];
+}
+
 export interface IStripeSeatsSyncJob {
   workspaceId: string;
 }
