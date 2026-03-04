@@ -1,17 +1,29 @@
 import { QueryClient } from "@tanstack/react-query";
 import {
+  breadcrumbsKey,
   databaseKey,
+  databasePropertiesKey,
+  databaseRowContextKey,
+  databaseRowsKey,
   databasesBySpaceKey,
   pageKey,
   QUERY_KEY_SPACE,
+  recentChangesKey,
   rootSidebarKey,
   sidebarKey,
   SidebarKeyParams,
+  trashListKey,
 } from "./query-keys";
 
 export {
   pageKey,
+  breadcrumbsKey,
+  recentChangesKey,
+  trashListKey,
   databaseKey,
+  databasePropertiesKey,
+  databaseRowsKey,
+  databaseRowContextKey,
   sidebarKey,
   rootSidebarKey,
   databasesBySpaceKey,
@@ -125,7 +137,7 @@ export function invalidateDatabaseRowContext(
 ) {
   if (includeRows && databaseId) {
     client.invalidateQueries({
-      queryKey: [QUERY_KEY_SPACE.database, databaseId, QUERY_KEY_SPACE.rows],
+      queryKey: databaseRowsKey(databaseId),
     });
   }
 
@@ -138,6 +150,58 @@ export function invalidateDatabaseRowContext(
   }
 
   client.invalidateQueries({
-    queryKey: [QUERY_KEY_SPACE.database, QUERY_KEY_SPACE.rowContext],
+    queryKey: databaseRowContextKey(),
+  });
+}
+
+export function invalidateRecentChanges(
+  { spaceId }: { spaceId?: string } = {},
+  { client }: InvalidateOptions,
+) {
+  if (spaceId) {
+    client.invalidateQueries({ queryKey: recentChangesKey(spaceId) });
+    return;
+  }
+
+  client.invalidateQueries({ queryKey: [QUERY_KEY_SPACE.recentChanges] });
+}
+
+export function invalidateTrashList(
+  { spaceId }: { spaceId?: string } = {},
+  { client }: InvalidateOptions,
+) {
+  if (spaceId) {
+    client.invalidateQueries({ queryKey: trashListKey(spaceId) });
+    return;
+  }
+
+  client.invalidateQueries({ queryKey: [QUERY_KEY_SPACE.trashList] });
+}
+
+export function invalidateBreadcrumbs(
+  { pageId }: { pageId?: string } = {},
+  { client }: InvalidateOptions,
+) {
+  if (pageId) {
+    client.invalidateQueries({ queryKey: breadcrumbsKey(pageId) });
+    return;
+  }
+
+  client.invalidateQueries({ queryKey: [QUERY_KEY_SPACE.breadcrumbs] });
+}
+
+export function invalidateDatabaseProperties(
+  { databaseId }: { databaseId?: string } = {},
+  { client }: InvalidateOptions,
+) {
+  if (databaseId) {
+    client.invalidateQueries({ queryKey: databasePropertiesKey(databaseId) });
+    return;
+  }
+
+  client.invalidateQueries({
+    predicate: (item) =>
+      item.queryKey[0] === QUERY_KEY_SPACE.database &&
+      item.queryKey[2] === QUERY_KEY_SPACE.databaseProperties,
   });
 }

@@ -23,14 +23,12 @@ import {
 } from '@/features/database/types/database.types';
 import { IDatabaseRowContext, IDatabaseRowWithCells } from '@/features/database/types/database-table.types';
 import { queryClient } from '@/main.tsx';
-
-
-function invalidateTreeAndTable(databaseId?: string) {
-  queryClient.invalidateQueries({ queryKey: ['database', databaseId, 'rows'] });
-  queryClient.invalidateQueries({ queryKey: ['database', 'row-context'] });
-  queryClient.invalidateQueries({ queryKey: ['root-sidebar-pages'] });
-  queryClient.invalidateQueries({ queryKey: ['sidebar-pages'] });
-}
+import { DATABASE_QUERY_KEYS } from '@/features/page/queries/query-keys.ts';
+import {
+  invalidateDatabaseRowContext,
+  invalidateDatabaseProperties,
+  invalidateSidebarTree,
+} from '@/features/page/queries/cache-invalidation.ts';
 
 /**
  * Loads property set (columns) for the selected database.
@@ -39,7 +37,7 @@ export function useDatabasePropertiesQuery(
   databaseId?: string,
 ): UseQueryResult<IDatabaseProperty[], Error> {
   return useQuery({
-    queryKey: ['database', databaseId, 'properties'],
+    queryKey: DATABASE_QUERY_KEYS.properties(databaseId),
     queryFn: () => getDatabaseProperties(databaseId as string),
     enabled: Boolean(databaseId),
   });
@@ -52,7 +50,7 @@ export function useDatabaseRowsQuery(
   databaseId?: string,
 ): UseQueryResult<IDatabaseRowWithCells[], Error> {
   return useQuery({
-    queryKey: ['database', databaseId, 'rows'],
+    queryKey: DATABASE_QUERY_KEYS.rows(databaseId),
     queryFn: () => getDatabaseRows(databaseId as string),
     enabled: Boolean(databaseId),
   });
@@ -64,7 +62,7 @@ export function useDatabaseRowContextQuery(
   pageId?: string,
 ): UseQueryResult<IDatabaseRowContext | null, Error> {
   return useQuery({
-    queryKey: ['database', 'row-context', pageId],
+    queryKey: DATABASE_QUERY_KEYS.rowContext(pageId),
     queryFn: () => getDatabaseRowContextByPage(pageId as string),
     enabled: Boolean(pageId),
   });
@@ -78,7 +76,8 @@ export function useCreateDatabaseRowMutation(databaseId?: string) {
     mutationFn: (payload: ICreateDatabaseRowPayload) =>
       createDatabaseRow(databaseId as string, payload),
     onSuccess: () => {
-      invalidateTreeAndTable(databaseId);
+      invalidateDatabaseRowContext({ databaseId }, { client: queryClient });
+      invalidateSidebarTree({}, { client: queryClient });
     },
   });
 }
@@ -91,9 +90,7 @@ export function useCreateDatabasePropertyMutation(databaseId?: string) {
     mutationFn: (payload: ICreateDatabasePropertyPayload) =>
       createDatabaseProperty(databaseId as string, payload),
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ['database', databaseId, 'properties'],
-      });
+      invalidateDatabaseProperties({ databaseId }, { client: queryClient });
     },
   });
 }
@@ -109,10 +106,9 @@ export function useUpdateDatabasePropertyMutation(databaseId?: string) {
       payload: IUpdateDatabasePropertyPayload;
     }) => updateDatabaseProperty(databaseId as string, propertyId, payload),
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ['database', databaseId, 'properties'],
-      });
-      invalidateTreeAndTable(databaseId);
+      invalidateDatabaseProperties({ databaseId }, { client: queryClient });
+      invalidateDatabaseRowContext({ databaseId }, { client: queryClient });
+      invalidateSidebarTree({}, { client: queryClient });
     },
   });
 }
@@ -122,10 +118,9 @@ export function useDeleteDatabasePropertyMutation(databaseId?: string) {
     mutationFn: (propertyId: string) =>
       deleteDatabaseProperty(databaseId as string, propertyId),
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ['database', databaseId, 'properties'],
-      });
-      invalidateTreeAndTable(databaseId);
+      invalidateDatabaseProperties({ databaseId }, { client: queryClient });
+      invalidateDatabaseRowContext({ databaseId }, { client: queryClient });
+      invalidateSidebarTree({}, { client: queryClient });
     },
   });
 }
@@ -143,7 +138,8 @@ export function useBatchUpdateDatabaseCellsMutation(databaseId?: string) {
       payload: IBatchUpdateDatabaseCellsPayload;
     }) => batchUpdateDatabaseCells(databaseId as string, pageId, payload),
     onSuccess: () => {
-      invalidateTreeAndTable(databaseId);
+      invalidateDatabaseRowContext({ databaseId }, { client: queryClient });
+      invalidateSidebarTree({}, { client: queryClient });
     },
   });
 }
@@ -154,7 +150,8 @@ export function useDeleteDatabaseRowMutation(databaseId?: string) {
     mutationFn: (pageId: string) =>
       deleteDatabaseRow(databaseId as string, pageId),
     onSuccess: () => {
-      invalidateTreeAndTable(databaseId);
+      invalidateDatabaseRowContext({ databaseId }, { client: queryClient });
+      invalidateSidebarTree({}, { client: queryClient });
     },
   });
 }
