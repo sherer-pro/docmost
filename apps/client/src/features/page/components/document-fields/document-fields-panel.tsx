@@ -717,8 +717,6 @@ export function DocumentFieldsPanel({
                       editingValue={editingDbValue}
                       spaceId={page.spaceId}
                       spaceSlug={page.space.slug}
-                      getSelectOption={getSelectOption}
-                      getSelectOptionLabel={getSelectOptionLabel}
                       onStartEdit={() => {
                         setEditingDbPropertyId(property.id);
                         setEditingDbValue(dbFieldValues.get(property.id));
