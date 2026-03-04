@@ -223,6 +223,24 @@ export function DocumentFieldsPanel({
     return option?.label ?? value;
   };
 
+  const getSelectOption = (
+    property: IDatabaseProperty,
+    value: string,
+  ): { label: string; color?: string } | null => {
+    const option = getSelectSettings(property).find(
+      (item) => item.value === value,
+    );
+
+    if (!option) {
+      return null;
+    }
+
+    return {
+      label: option.label,
+      color: option.color,
+    };
+  };
+
   const databaseUserIds = useMemo(() => {
     const ids: string[] = [];
 
@@ -699,6 +717,7 @@ export function DocumentFieldsPanel({
                       editingValue={editingDbValue}
                       spaceId={page.spaceId}
                       spaceSlug={page.space.slug}
+                      getSelectOption={getSelectOption}
                       getSelectOptionLabel={getSelectOptionLabel}
                       onStartEdit={() => {
                         setEditingDbPropertyId(property.id);
