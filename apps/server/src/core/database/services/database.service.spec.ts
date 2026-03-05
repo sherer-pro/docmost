@@ -31,6 +31,7 @@ describe('DatabaseService mixed tree flows', () => {
   };
   const pageRepo = {
     findById: jest.fn(),
+    updatePage: jest.fn(),
     getPageAndDescendants: jest.fn(),
     removePage: jest.fn(),
   };
@@ -124,6 +125,73 @@ describe('DatabaseService mixed tree flows', () => {
       'ws-1',
     );
     expect(pageRepo.removePage).toHaveBeenCalledWith('row-page-1', 'u-1', 'ws-1');
+  });
+
+  it('keeps linked page slug unchanged when renaming database', async () => {
+    databaseRepo.findById.mockResolvedValue({
+      id: 'db-1',
+      name: 'Old database',
+      pageId: 'db-root-page',
+      workspaceId: 'ws-1',
+    });
+    databaseRepo.updateDatabase.mockResolvedValue({
+      id: 'db-1',
+      name: 'Renamed database',
+      pageId: 'db-root-page',
+    });
+    pageRepo.findById.mockResolvedValue({
+      id: 'db-root-page',
+      slugId: 'stable-db-slug',
+      workspaceId: 'ws-1',
+    });
+
+    const result = await service.updateDatabase(
+      'db-1',
+      { name: 'Renamed database' },
+      'u-1',
+      'ws-1',
+    );
+
+    expect(databaseRepo.updateDatabase).toHaveBeenCalledWith('db-1', 'ws-1', {
+      name: 'Renamed database',
+      descriptionContent: undefined,
+      lastUpdatedById: 'u-1',
+    });
+    expect(pageRepo.updatePage).toHaveBeenCalledWith(
+      {
+        title: 'Renamed database',
+        lastUpdatedById: 'u-1',
+        workspaceId: 'ws-1',
+      },
+      'db-root-page',
+    );
+    expect(result.pageSlugId).toBe('stable-db-slug');
+  });
+
+  it('does not update linked page slug field on database rename', async () => {
+    databaseRepo.findById.mockResolvedValue({
+      id: 'db-1',
+      name: 'Old database',
+      pageId: 'db-root-page',
+      workspaceId: 'ws-1',
+    });
+    databaseRepo.updateDatabase.mockResolvedValue({
+      id: 'db-1',
+      name: 'Renamed database',
+      pageId: 'db-root-page',
+    });
+    pageRepo.findById.mockResolvedValue({
+      id: 'db-root-page',
+      slugId: 'stable-db-slug',
+      workspaceId: 'ws-1',
+    });
+
+    await service.updateDatabase('db-1', { name: 'Renamed database' }, 'u-1', 'ws-1');
+
+    expect(pageRepo.updatePage).toHaveBeenCalledWith(
+      expect.not.objectContaining({ slugId: expect.any(String) }),
+      'db-root-page',
+    );
   });
 
   it('throws when row page is not accessible in current space', async () => {
