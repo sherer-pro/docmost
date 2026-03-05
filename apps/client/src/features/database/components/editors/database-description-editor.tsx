@@ -35,9 +35,9 @@ const databaseDescriptionExtensions = mainExtensions.map((extension) => {
 
 export interface DatabaseDescriptionEditorProps {
   pageId: string;
-  value: JSONContent;
+  content: JSONContent;
   editable: boolean;
-  onValueChange?: (value: JSONContent) => void;
+  onContentChange?: (value: JSONContent) => void;
 }
 
 /**
@@ -48,9 +48,9 @@ export interface DatabaseDescriptionEditorProps {
  */
 export function DatabaseDescriptionEditor({
   pageId,
-  value,
+  content,
   editable,
-  onValueChange,
+  onContentChange,
 }: DatabaseDescriptionEditorProps) {
   const menuContainerRef = useRef<HTMLDivElement | null>(null);
   const editorRef = useRef<Editor | null>(null);
@@ -74,10 +74,10 @@ export function DatabaseDescriptionEditor({
       handleDrop: handleEditorDrop,
     },
     onUpdate({ editor }) {
-      onValueChange?.(editor.getJSON());
+      onContentChange?.(editor.getJSON());
     },
     editable,
-    content: value,
+    content,
     immediatelyRender: true,
     shouldRerenderOnTransaction: false,
     onCreate({ editor }) {
@@ -95,7 +95,7 @@ export function DatabaseDescriptionEditor({
   });
 
   useEffect(() => {
-    const serializedIncoming = serializeDatabaseDescription(value);
+    const serializedIncoming = serializeDatabaseDescription(content);
 
     if (!descriptionEditor) {
       return;
@@ -104,9 +104,9 @@ export function DatabaseDescriptionEditor({
     const serializedEditor = serializeDatabaseDescription(descriptionEditor.getJSON());
 
     if (serializedIncoming !== serializedEditor) {
-      descriptionEditor.commands.setContent(value);
+      descriptionEditor.commands.setContent(content);
     }
-  }, [descriptionEditor, value]);
+  }, [content, descriptionEditor]);
 
   useEffect(() => {
     if (!descriptionEditor) {

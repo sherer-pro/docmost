@@ -1,16 +1,26 @@
 import type { JSONContent } from '@tiptap/react';
-import { generateText } from '@tiptap/core';
-import { mainExtensions } from '@/features/editor/extensions/extensions';
-
-export interface DatabaseDescriptionPayload {
-  json: JSONContent;
-  text: string;
-}
-
 export const EMPTY_DESCRIPTION_DOC: JSONContent = {
   type: 'doc',
   content: [{ type: 'paragraph' }],
 };
+
+function tryParseJsonDescription(value: unknown): JSONContent | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(value);
+
+    if (parsed && typeof parsed === 'object') {
+      return parsed as JSONContent;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
 
 /**
  * Приводит источник описания базы к валидному doc-JSON для Tiptap.
@@ -27,7 +37,12 @@ export function toDatabaseDescriptionDoc(
     return richDescription as JSONContent;
   }
 
-  const text = plainDescription?.trim();
+  const parsedRichDescription = tryParseJsonDescription(richDescription);
+  if (parsedRichDescription) {
+    return parsedRichDescription;
+  }
+
+  const text = typeof richDescription === 'string' ? richDescription.trim() : plainDescription?.trim();
 
   if (!text) {
     return EMPTY_DESCRIPTION_DOC;
@@ -41,22 +56,6 @@ export function toDatabaseDescriptionDoc(
         content: [{ type: 'text', text }],
       },
     ],
-  };
-}
-
-/**
- * Единая точка построения payload для PATCH:
- * - `descriptionContent` (json) — каноничный источник;
- * - `description` (text) — производное поле для превью/поиска.
- */
-export function buildDatabaseDescriptionPayload(
-  json: JSONContent,
-): DatabaseDescriptionPayload {
-  const text = generateText(json, mainExtensions).trim();
-
-  return {
-    json,
-    text,
   };
 }
 
