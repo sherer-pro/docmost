@@ -18,7 +18,7 @@ import { historyAtoms } from '@/features/page-history/atoms/history-atoms.ts';
 import MovePageModal from '@/features/page/components/move-page-modal.tsx';
 import { useDeletePageModal } from '@/features/page/hooks/use-delete-page-modal.tsx';
 import { buildDatabaseUrl } from '@/features/page/page.utils.ts';
-import { usePageQuery, useRemovePageMutation } from '@/features/page/queries/page-query.ts';
+import { useRemovePageMutation } from '@/features/page/queries/page-query.ts';
 import { useConvertDatabaseToPageMutation } from '@/features/database/queries/database-query.ts';
 import { useDocumentConversionActions } from '@/features/page/hooks/use-document-conversion-actions.ts';
 import ShareModal from '@/features/share/components/share-modal.tsx';
@@ -33,6 +33,7 @@ import {
 import { buildDatabaseMarkdownFromState } from '@/features/database/utils/database-markdown';
 import { dropTreeNodeAtom } from '@/features/page/tree/atoms/tree-data-atom.ts';
 import useToggleAside from '@/hooks/use-toggle-aside.tsx';
+import { useDatabasePageContext } from '@/features/database/hooks/use-database-page-context.ts';
 
 interface DatabaseHeaderMenuProps {
   databaseId: string;
@@ -52,8 +53,10 @@ export default function DatabaseHeaderMenu({
   const clipboard = useClipboard({ timeout: 500 });
   const [user] = useAtom(userAtom);
   const [, setHistoryModalOpen] = useAtom(historyAtoms);
-  const { data: databasePage } = usePageQuery({ pageId: databasePageId });
+  const databaseContext = useDatabasePageContext();
   const { data: database } = useGetDatabaseQuery(databaseId);
+  const resolvedDatabasePageId = databasePageId ?? databaseContext.databasePageId;
+  const databasePageSlugId = databaseContext.databasePageSlugId;
   const { data: properties = [] } = useDatabasePropertiesQuery(databaseId);
   const { data: rows = [] } = useDatabaseRowsQuery(databaseId);
   const tableExportStateByDatabase = useAtomValue(databaseTableExportStateAtom);
@@ -65,11 +68,11 @@ export default function DatabaseHeaderMenu({
   const [movePageModalOpened, { open: openMovePageModal, close: closeMovePageModal }] =
     useDisclosure(false);
   const { mutateAsync: convertDatabaseToPageAsync, isPending: isConvertingDatabaseToPage } =
-    useConvertDatabaseToPageMutation(databasePage?.spaceId, databaseId);
+    useConvertDatabaseToPageMutation(database?.spaceId, databaseId);
 
   const { openConvertDatabaseToPageConfirm } = useDocumentConversionActions({
     spaceSlug,
-    pageTitle: databasePage?.title ?? database?.name,
+    pageTitle: database?.name,
     isConvertingDatabaseToPage,
     convertDatabaseToPageAsync,
   });
@@ -78,7 +81,7 @@ export default function DatabaseHeaderMenu({
     const tableExportState = tableExportStateByDatabase[databaseId] ?? defaultDatabaseTableExportState;
 
     return buildDatabaseMarkdownFromState({
-      title: (database?.name || databasePage?.title || t('database.editor.untitled')).trim(),
+      title: (database?.name || t('database.editor.untitled')).trim(),
       description: database?.description,
       properties,
       rows,
@@ -88,11 +91,11 @@ export default function DatabaseHeaderMenu({
   };
 
   const handleCopyDatabaseLink = () => {
-    if (!databasePage?.slugId) {
+    if (!databasePageSlugId) {
       return;
     }
 
-    const databasePath = buildDatabaseUrl(spaceSlug, databasePage.slugId, databasePage.title);
+    const databasePath = buildDatabaseUrl(spaceSlug, databasePageSlugId, database?.name ?? '');
 
     clipboard.copy(`${getAppUrl()}${databasePath}`);
     notifications.show({ message: t('Link copied') });
@@ -132,7 +135,7 @@ export default function DatabaseHeaderMenu({
   const handleExport = async (format: DatabaseExportFormat) => {
     if (format === DatabaseExportFormat.Markdown) {
       const markdown = getCurrentTableMarkdown();
-      const rawName = (database?.name || databasePage?.title || 'database').trim();
+      const rawName = (database?.name || 'database').trim();
       const safeName = rawName.replace(/\s+/g, '-').toLowerCase() || 'database';
 
       saveAs(new Blob([markdown], { type: 'text/markdown;charset=utf-8' }), `${safeName}.md`);
@@ -153,30 +156,29 @@ export default function DatabaseHeaderMenu({
   };
 
   const handleDeletePage = () => {
-    if (!databasePageId) {
+    if (!resolvedDatabasePageId) {
       return;
     }
 
     openDeleteModal({
       onConfirm: async () => {
-        await removePageMutationAsync(databasePageId);
-        dropTreeNode(databasePageId);
+        await removePageMutationAsync(resolvedDatabasePageId);
+        dropTreeNode(resolvedDatabasePageId);
       },
     });
   };
 
-  const hasDatabasePage = Boolean(databasePageId);
-  const canMoveDatabasePage = Boolean(databasePageId && databasePage?.slugId);
-  const fullPageWidth =
-    databasePage?.settings?.fullPageWidth ?? user.settings?.preferences?.fullPageWidth ?? false;
-  const databasePageWidthScopeId = databasePage?.id ?? databasePageId;
+  const hasDatabasePage = Boolean(resolvedDatabasePageId);
+  const canMoveDatabasePage = Boolean(resolvedDatabasePageId && databasePageSlugId);
+  const fullPageWidth = user.settings?.preferences?.fullPageWidth ?? false;
+  const databasePageWidthScopeId = resolvedDatabasePageId;
 
   return (
     <>
       {!readOnly && <PageStateSegmentedControl size="xs" />}
 
       {!readOnly && hasDatabasePage && (
-        <ShareModal pageId={databasePage?.id ?? databasePageId} readOnly={Boolean(readOnly)} />
+        <ShareModal pageId={resolvedDatabasePageId} readOnly={Boolean(readOnly)} />
       )}
 
       {hasDatabasePage && (
@@ -256,8 +258,8 @@ export default function DatabaseHeaderMenu({
 
       {canMoveDatabasePage && (
         <MovePageModal
-          pageId={databasePageId}
-          slugId={databasePage.slugId}
+          pageId={resolvedDatabasePageId}
+          slugId={databasePageSlugId}
           currentSpaceSlug={spaceSlug}
           onClose={closeMovePageModal}
           open={movePageModalOpened}

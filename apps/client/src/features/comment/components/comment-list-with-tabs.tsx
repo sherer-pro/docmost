@@ -1,5 +1,4 @@
 import React, { useState, useRef, useCallback, memo, useMemo } from "react";
-import { useParams } from "react-router-dom";
 import {
   Divider,
   Paper,
@@ -19,59 +18,31 @@ import CommentEditor from "@/features/comment/components/comment-editor";
 import CommentActions from "@/features/comment/components/comment-actions";
 import { useFocusWithin } from "@mantine/hooks";
 import { IComment } from "@/features/comment/types/comment.types.ts";
-import { usePageQuery } from "@/features/page/queries/page-query.ts";
 import { IPagination } from "@/lib/types.ts";
 import { useTranslation } from "react-i18next";
 import { useQueryEmit } from "@/features/websocket/use-query-emit";
 import { useGetSpaceBySlugQuery } from "@/features/space/queries/space-query.ts";
-import { useGetDatabaseQuery } from "@/features/database/queries/database-query.ts";
-import { resolvePageDatabaseIds } from "@/features/page/page-id-adapter.ts";
 import { useSpaceAbility } from "@/features/space/permissions/use-space-ability.ts";
 import {
   SpaceCaslAction,
   SpaceCaslSubject,
 } from "@/features/space/permissions/permissions.type.ts";
-
-/**
- * Первично нормализует slug из роута (страница или база) в route pageId.
- *
- * Важно: на этом шаге мы еще не знаем «фактический» database.pageId,
- * поэтому полученный идентификатор используется только как стартовая точка
- * для запроса страницы, после чего id верифицируется через database entity.
- */
-function resolveCommentsRoutePageId({
-  pageSlug,
-  databaseSlug,
-}: {
-  pageSlug?: string;
-  databaseSlug?: string;
-}) {
-  return resolvePageDatabaseIds({
-    routeSlug: databaseSlug ?? pageSlug,
-  }).pageId;
-}
+import { useDatabasePageContext } from "@/features/database/hooks/use-database-page-context.ts";
 
 function CommentListWithTabs() {
   const { t } = useTranslation();
-  const { pageSlug, databaseSlug } = useParams();
-  const commentsRoutePageId = resolveCommentsRoutePageId({ pageSlug, databaseSlug });
-
-  const { data: pageByRoute } = usePageQuery({ pageId: commentsRoutePageId });
-  const resolvedIds = resolvePageDatabaseIds({
-    pageId: pageByRoute?.id,
-    slugId: pageByRoute?.slugId,
-    databaseId: pageByRoute?.databaseId,
-  });
-  const { data: database } = useGetDatabaseQuery(resolvedIds.databaseId);
+  const {
+    databasePageId,
+    pageByRoute,
+  } = useDatabasePageContext();
 
   /**
-   * Единый, уже верифицированный pageId для всех comment-операций.
+   * Единый pageId для query-key, списка и всех мутаций комментариев.
    *
-   * Приоритет:
-   * 1) database.pageId — фактическая связка базы и страницы;
-   * 2) pageByRoute.id — fallback для обычных page-маршрутов.
+   * Важно: значение приходит из централизованного контекста, поэтому
+   * кнопка "Comments" в header и сам список опираются на идентичный идентификатор.
    */
-  const commentsPageId = database?.pageId ?? pageByRoute?.id ?? "";
+  const commentsPageId = databasePageId ?? "";
   const {
     data: comments,
     isLoading: isCommentsLoading,
