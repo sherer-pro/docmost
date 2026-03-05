@@ -16,7 +16,11 @@ import {
   useGetDatabaseQuery,
   useUpdateDatabaseMutation,
 } from "@/features/database/queries/database-query.ts";
-import { usePageQuery } from "@/features/page/queries/page-query";
+import {
+  updatePageDataFromPatch,
+  usePageQuery,
+  useUpdatePageMutation,
+} from "@/features/page/queries/page-query";
 import { IUpdateDatabasePayload } from "@/features/database/types/database.types.ts";
 import {
   SpaceCaslAction,
@@ -34,7 +38,6 @@ import { useSetAtom } from "jotai";
 import { useDebouncedCallback } from "@mantine/hooks";
 import classes from "./database-page.module.css";
 import {
-  buildDatabaseDescriptionPayload,
   serializeDatabaseDescription,
   toDatabaseDescriptionDoc,
 } from "@/features/database/utils/database-description";
@@ -68,11 +71,10 @@ export default function DatabasePage() {
   const { data: space } = useGetSpaceBySlugQuery(spaceSlug);
   const { mutateAsync: updateDatabaseMutationAsync } =
     useUpdateDatabaseMutation(space?.id, databaseId);
+  const { mutateAsync: updatePageMutationAsync } = useUpdatePageMutation();
   const currentUser = useAtomValue(currentUserAtom);
   const [draftName, setDraftName] = useState("");
-  const [draftDescription, setDraftDescription] = useState(
-    toDatabaseDescriptionDoc(),
-  );
+  const [draftDescription, setDraftDescription] = useState(toDatabaseDescriptionDoc());
   const [saveState, setSaveState] = useState<SaveState>("idle");
 
   const lastRequestVersionRef = useRef(0);
@@ -136,14 +138,12 @@ export default function DatabasePage() {
     }
 
     setDraftName(database.name ?? "");
-    setDraftDescription(
-      toDatabaseDescriptionDoc(
-        database.descriptionContent,
-        database.description,
-      ),
-    );
     setSaveState("idle");
   }, [database?.id]);
+
+  useEffect(() => {
+    setDraftDescription(toDatabaseDescriptionDoc(databasePage?.content));
+  }, [databasePage?.content]);
 
   /**
    * Unified autosave of database metadata (title/description).
@@ -195,12 +195,6 @@ export default function DatabasePage() {
         }
 
         setDraftName(updatedDatabase.name ?? draftName);
-        setDraftDescription(
-          toDatabaseDescriptionDoc(
-            updatedDatabase.descriptionContent,
-            updatedDatabase.description,
-          ),
-        );
         setSaveState("saved");
       } catch {
         if (requestVersion !== lastRequestVersionRef.current) {
@@ -240,21 +234,25 @@ export default function DatabasePage() {
 
   const saveDescription = useCallback(
     async (nextDescriptionJson: JSONContent) => {
-      const currentSerialized = serializeDatabaseDescription(draftDescription);
+      if (!databasePageId || !databasePage?.spaceId) {
+        return;
+      }
+
+      const currentSerialized = serializeDatabaseDescription(
+        toDatabaseDescriptionDoc(databasePage.content),
+      );
       const nextSerialized = serializeDatabaseDescription(nextDescriptionJson);
 
       if (currentSerialized === nextSerialized) {
         return;
       }
 
-      const payload = buildDatabaseDescriptionPayload(nextDescriptionJson);
-
-      await commitMetaChanges({
-        description: payload.text,
-        descriptionContent: payload.json,
+      await updatePageMutationAsync({
+        pageId: databasePageId,
+        content: nextDescriptionJson,
       });
     },
-    [commitMetaChanges, draftDescription],
+    [databasePage?.content, databasePage?.spaceId, databasePageId, updatePageMutationAsync],
   );
 
   const debouncedSaveDescription = useDebouncedCallback(
@@ -273,9 +271,18 @@ export default function DatabasePage() {
   const onDescriptionChange = useCallback(
     (json: JSONContent) => {
       setDraftDescription(json);
+
+      if (databasePageId && databasePage?.spaceId) {
+        updatePageDataFromPatch({
+          id: databasePageId,
+          spaceId: databasePage.spaceId,
+          content: json,
+        });
+      }
+
       debouncedSaveDescription(json);
     },
-    [debouncedSaveDescription],
+    [databasePage?.spaceId, databasePageId, debouncedSaveDescription],
   );
 
   const databaseDisplayName = useMemo(() => {
@@ -339,9 +346,9 @@ export default function DatabasePage() {
           {databasePageId && (
             <DatabaseDescriptionEditor
               pageId={databasePageId}
-              value={draftDescription}
+              content={draftDescription}
               editable={isEditable}
-              onValueChange={onDescriptionChange}
+              onContentChange={onDescriptionChange}
             />
           )}
         </Stack>
