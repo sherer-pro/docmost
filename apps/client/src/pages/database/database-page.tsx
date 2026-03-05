@@ -5,20 +5,15 @@ import { Helmet } from "react-helmet-async";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { buildDatabaseUrl } from "@/features/page/page.utils.ts";
-import { resolvePageDatabaseIds } from "@/features/page/page-id-adapter.ts";
 import { DatabaseTableView } from "@/features/database/components/database-table-view";
 import { DatabaseDescriptionEditor } from "@/features/database/components/editors/database-description-editor.tsx";
 import { DatabaseTitleEditor } from "@/features/database/components/editors/database-title-editor.tsx";
 import DatabaseHeader from "@/features/database/components/header/database-header.tsx";
 import HistoryModal from "@/features/page-history/components/history-modal.tsx";
 import DocumentFieldsPanel from "@/features/page/components/document-fields/document-fields-panel.tsx";
-import {
-  useGetDatabaseQuery,
-  useUpdateDatabaseMutation,
-} from "@/features/database/queries/database-query.ts";
+import { useUpdateDatabaseMutation } from "@/features/database/queries/database-query.ts";
 import {
   updatePageDataFromPatch,
-  usePageQuery,
   useUpdatePageMutation,
 } from "@/features/page/queries/page-query";
 import { IUpdateDatabasePayload } from "@/features/database/types/database.types.ts";
@@ -41,33 +36,22 @@ import {
   serializeDatabaseDescription,
   toDatabaseDescriptionDoc,
 } from "@/features/database/utils/database-description";
+import { useDatabasePageContext } from "@/features/database/hooks/use-database-page-context.ts";
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 
 export default function DatabasePage() {
   const { t } = useTranslation();
-  const { databaseSlug, spaceSlug } = useParams();
+  const { spaceSlug } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
   const setAsideState = useSetAtom(asideStateAtom);
-  const routeIds = resolvePageDatabaseIds({ routeSlug: databaseSlug });
-
-  // In modern routes the database is opened by the database page slug,
-  // so we resolve the page first and read databaseId from it.
-  const { data: databasePageBySlug } = usePageQuery({
-    pageId: routeIds.pageId,
-  });
-
-  const resolvedIds = resolvePageDatabaseIds({
-    pageId: databasePageBySlug?.id,
-    slugId: databasePageBySlug?.slugId,
-    databaseId: databasePageBySlug?.databaseId,
-  });
-  const databaseId = resolvedIds.databaseId;
-
-  const { data: database } = useGetDatabaseQuery(databaseId);
-  const databasePage = databasePageBySlug;
-  const databasePageId = databasePage?.id ?? database?.pageId;
+  const {
+    databaseId,
+    databasePageId,
+    pageByRoute: databasePage,
+    database,
+  } = useDatabasePageContext();
   const { data: space } = useGetSpaceBySlugQuery(spaceSlug);
   const { mutateAsync: updateDatabaseMutationAsync } =
     useUpdateDatabaseMutation(space?.id, databaseId);
@@ -247,10 +231,12 @@ export default function DatabasePage() {
         return;
       }
 
-      await updatePageMutationAsync({
-        pageId: databasePageId,
-        content: nextDescriptionJson,
-      });
+      await updatePageMutationAsync(
+        {
+          pageId: databasePageId,
+          content: nextDescriptionJson as never,
+        } as never,
+      );
     },
     [databasePage?.content, databasePage?.spaceId, databasePageId, updatePageMutationAsync],
   );
@@ -276,7 +262,7 @@ export default function DatabasePage() {
         updatePageDataFromPatch({
           id: databasePageId,
           spaceId: databasePage.spaceId,
-          content: json,
+          content: json as never,
         });
       }
 
@@ -308,7 +294,7 @@ export default function DatabasePage() {
 
       <DatabaseHeader
         databaseId={databaseId}
-        databasePageId={databasePage?.id}
+        databasePageId={databasePageId}
         spaceSlug={spaceSlug}
         databaseName={databaseDisplayName}
         readOnly={readOnly}
