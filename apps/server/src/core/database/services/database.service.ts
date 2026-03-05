@@ -36,7 +36,6 @@ import {
 import type { DatabasePropertyType } from '@docmost/api-contract';
 import { QueueJob, QueueName } from '../../../integrations/queue/constants';
 import { IPageRecipientNotificationJob } from '../../../integrations/queue/constants/queue.interface';
-import { generateSlugId } from '../../../common/helpers';
 
 interface IDatabaseCellValueWithFallback {
   value: unknown;
@@ -526,21 +525,23 @@ export class DatabaseService {
     let pageSlugId: string | null = null;
 
     /**
-     * For database pages, keep the title/slug in pages synchronized with the database name.
-     * This guarantees the correct canonical URL immediately after the rename.
+     * Синхронизация переименования базы 1:1 повторяет обычный page rename:
+     * меняем только title и метаданные автора, не перегенерируя slug.
      */
     if (database.pageId && hasNameChanged) {
-      pageSlugId = generateSlugId();
-
       await this.pageRepo.updatePage(
         {
           title: updated.name,
-          slugId: pageSlugId,
           lastUpdatedById: actorId,
           workspaceId,
         },
         database.pageId,
       );
+
+      const linkedPage = await this.pageRepo.findById(database.pageId);
+      if (linkedPage?.workspaceId === workspaceId) {
+        pageSlugId = linkedPage.slugId;
+      }
     }
 
     return {
