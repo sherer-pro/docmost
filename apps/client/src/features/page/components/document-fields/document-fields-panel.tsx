@@ -15,7 +15,7 @@ import {
 } from "@mantine/core";
 import { IconInfoCircle } from "@tabler/icons-react";
 import { useDebouncedCallback } from "@mantine/hooks";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { CustomAvatar } from "@/components/ui/custom-avatar.tsx";
 import { updatePage } from "@/features/page/services/page-service.ts";
@@ -44,7 +44,8 @@ import {
 import { DatabasePropertyType } from "@docmost/api-contract";
 import { buildPageUrl } from "@/features/page/page.utils.ts";
 import { Link } from "react-router-dom";
-import { useGetRootSidebarPagesQuery } from "@/features/page/queries/page-query.ts";
+import { PAGE_QUERY_KEYS } from "@/features/page/queries/query-keys.ts";
+import { getAllSidebarPages } from "@/features/page/services/page-service.ts";
 
 interface DocumentFieldsPanelProps {
   page: IPage;
@@ -139,9 +140,14 @@ export function DocumentFieldsPanel({
   const { data: databaseProperties } = useDatabasePropertiesQuery(
     rowContext?.database?.id,
   );
-  const pageQuery = useGetRootSidebarPagesQuery({
-    spaceId: page.spaceId,
-    includeNodeTypes: ["page", "database"],
+  const allPagesQuery = useQuery({
+    queryKey: [...PAGE_QUERY_KEYS.rootSidebar(page.spaceId, ["page", "database"]), "all-pages"],
+    queryFn: () =>
+      getAllSidebarPages({
+        spaceId: page.spaceId,
+        includeNodeTypes: ["page", "database"],
+      }),
+    enabled: !!page.spaceId,
   });
 
   const rowCellMap = useMemo(() => {
@@ -275,33 +281,38 @@ export function DocumentFieldsPanel({
     databaseUserIds,
   );
 
+  const allPageNodes = useMemo(
+    () => allPagesQuery.data?.pages.flatMap((queryPage) => queryPage.items) ?? [],
+    [allPagesQuery.data?.pages],
+  );
+
   const pageOptions = useMemo(
     () =>
-      (pageQuery.data?.pages ?? [])
-        .flatMap((pageGroup) => pageGroup.items)
-        .map((node) => ({
-          value: node.id,
-          label: node.title || t("untitled"),
-          slugId: node.slugId,
-          title: node.title || t("untitled"),
-        })),
-    [pageQuery.data?.pages, t],
+      allPageNodes.map((node) => ({
+        value: node.id,
+        label: node.title || t("untitled"),
+      })),
+    [allPageNodes, t],
   );
 
   const pageReferenceMetaById = useMemo(
     () =>
       new Map(
-        pageOptions.map((option) => [
-          option.value,
-          {
-            label: option.label,
-            url: option.slugId
-              ? buildPageUrl(page.space.slug, option.slugId, option.title)
-              : null,
-          },
-        ]),
+        allPageNodes.map((node) => {
+          const pageTitle = node.title || t("untitled");
+
+          return [
+            node.id,
+            {
+              label: pageTitle,
+              url: node.slugId
+                ? buildPageUrl(page.space.slug, node.slugId, pageTitle)
+                : null,
+            },
+          ];
+        }),
       ),
-    [page.space.slug, pageOptions],
+    [allPageNodes, page.space.slug, t],
   );
 
   const [editingDbPropertyId, setEditingDbPropertyId] = useState<string | null>(

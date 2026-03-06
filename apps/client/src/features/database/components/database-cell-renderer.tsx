@@ -3,6 +3,7 @@ import { DatabasePropertyType } from '@docmost/api-contract';
 import { useTranslation } from 'react-i18next';
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   getSpaceMemberSearchProps,
   normalizeSpaceMemberValue,
@@ -10,7 +11,6 @@ import {
   renderSpaceMemberValue,
   useSpaceMemberSelectOptions,
 } from '@/features/page/components/document-fields/space-member-select-utils.tsx';
-import { useGetRootSidebarPagesQuery } from '@/features/page/queries/page-query.ts';
 import { IDatabaseProperty } from '@/features/database/types/database.types.ts';
 import { CustomAvatar } from '@/components/ui/custom-avatar.tsx';
 import { buildPageUrl } from '@/features/page/page.utils.ts';
@@ -19,6 +19,8 @@ import {
   normalizeDatabasePageReferenceValue,
   normalizeDatabaseSelectValue,
 } from '@/features/database/utils/database-cell-value.ts';
+import { getAllSidebarPages } from '@/features/page/services/page-service.ts';
+import { PAGE_QUERY_KEYS } from '@/features/page/queries/query-keys.ts';
 
 
 interface DatabaseCellRendererProps {
@@ -68,20 +70,28 @@ export function DatabaseCellRenderer({
   } =
     useSpaceMemberSelectOptions(spaceId, selectedUserId ? [selectedUserId] : []);
 
-  const pageQuery = useGetRootSidebarPagesQuery({
-    spaceId,
-    includeNodeTypes: ['page', 'database'],
+  const allPagesQuery = useQuery({
+    queryKey: [...PAGE_QUERY_KEYS.rootSidebar(spaceId, ['page', 'database']), 'all-pages'],
+    queryFn: () =>
+      getAllSidebarPages({
+        spaceId,
+        includeNodeTypes: ['page', 'database'],
+      }),
+    enabled: !!spaceId,
   });
+
+  const allPageNodes = useMemo(
+    () => allPagesQuery.data?.pages.flatMap((queryPage) => queryPage.items) ?? [],
+    [allPagesQuery.data?.pages],
+  );
 
   const pageOptions = useMemo(
     () =>
-      (pageQuery.data?.pages ?? [])
-        .flatMap((page) => page.items)
-        .map((node) => ({
+      allPageNodes.map((node) => ({
           value: node.id,
           label: node.title || t('untitled'),
         })),
-    [pageQuery.data?.pages, t],
+    [allPageNodes, t],
   );
 
   /**
@@ -91,14 +101,12 @@ export function DatabaseCellRenderer({
   const pageReferenceUrlById = useMemo(
     () =>
       new Map(
-        (pageQuery.data?.pages ?? [])
-          .flatMap((page) => page.items)
-          .map((node) => [
+        allPageNodes.map((node) => [
             node.id,
             node.slugId ? buildPageUrl(spaceSlug, node.slugId, node.title || t('untitled')) : null,
           ]),
       ),
-    [pageQuery.data?.pages, spaceSlug, t],
+    [allPageNodes, spaceSlug, t],
   );
 
   const renderViewValue = () => {
@@ -199,7 +207,6 @@ export function DatabaseCellRenderer({
         );
       }
 
-      // Fallback: if the page is not found (or there is no slugId), show the ID without the link.
       return targetPage?.label || refId;
     }
 
@@ -316,7 +323,7 @@ export function DatabaseCellRenderer({
             onChange(normalizedValue);
             onSave(normalizedValue);
           }}
-          nothingFoundMessage={pageQuery.isLoading ? t('Loading...') : t('No pages found')}
+          nothingFoundMessage={allPagesQuery.isLoading ? t('Loading...') : t('No pages found')}
           onBlur={() => onSave()}
         />
       );
