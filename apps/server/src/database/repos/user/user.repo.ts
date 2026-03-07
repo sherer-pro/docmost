@@ -443,7 +443,7 @@ export class UserRepo {
       .set({
         settings: sql`COALESCE(settings, '{}'::jsonb)
                 || jsonb_build_object('preferences', COALESCE(settings->'preferences', '{}'::jsonb) 
-                || jsonb_build_object(${prefKey}::text, ${prefValue}))`,
+                || jsonb_build_object(${prefKey}::text, ${JSON.stringify(prefValue)}::jsonb))`,
         updatedAt: new Date(),
       })
       .where('id', '=', userId)
