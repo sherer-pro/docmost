@@ -1,27 +1,52 @@
-# React + TypeScript + Vite
+# Docmost Client (`apps/client`)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React + Vite frontend application for Docmost.
 
-Currently, two official plugins are available:
+## Prerequisites
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- Node.js 22.x
+- pnpm 10.4.0
 
-## Expanding the ESLint configuration
+Install dependencies from the repository root:
 
-If you are developing a production application, we recommend updating the configuration to enable type aware lint rules:
-
-- Configure the top-level `parserOptions` property like this:
-
-```js
-   parserOptions: {
-    ecmaVersion: 'latest',
-    sourceType: 'module',
-    project: ['./tsconfig.json', './tsconfig.node.json'],
-    tsconfigRootDir: __dirname,
-   },
+```bash
+pnpm install --frozen-lockfile
 ```
 
-- Replace `plugin:@typescript-eslint/recommended` to `plugin:@typescript-eslint/recommended-type-checked` or `plugin:@typescript-eslint/strict-type-checked`
-- Optionally add `plugin:@typescript-eslint/stylistic-type-checked`
-- Install [eslint-plugin-react](https://github.com/jsx-eslint/eslint-plugin-react) and add `plugin:react/recommended` & `plugin:react/jsx-runtime` to the `extends` list
+## Common commands
+
+Run from repository root:
+
+```bash
+# Start frontend dev server
+pnpm --filter ./apps/client dev
+
+# Type-check and production build
+pnpm --filter ./apps/client build
+
+# Run unit tests (Vitest)
+pnpm --filter ./apps/client test
+
+# Lint
+pnpm --filter ./apps/client lint
+
+# Format
+pnpm --filter ./apps/client format
+```
+
+## Runtime env consumed by the client
+
+The client reads these values via `vite loadEnv`:
+
+- `APP_URL`
+- `COLLAB_URL`
+- `FILE_UPLOAD_SIZE_LIMIT`
+- `FILE_IMPORT_SIZE_LIMIT`
+- `DRAWIO_URL`
+- `CLOUD`
+- `SUBDOMAIN_HOST`
+- `BILLING_TRIAL_DAYS`
+- `POSTHOG_HOST`
+- `POSTHOG_KEY`
+
+See `../../.env.example` (or repo root `.env.example`) for a complete reference.

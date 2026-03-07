@@ -52,7 +52,6 @@
 - CSRF protection (service/guard, cookie handling, axios v1 header compatibility).
 - Switched some requests to `GET` (e.g., `users/me`, `collab-token`) to reduce CSRF risk.
 - Hardened WebSocket security (payload validation, relay isolation, tests).
-- Server-side Mermaid sanitization.
 - Rate limiting for auth endpoints.
 
 ## Dev/Docs
@@ -149,6 +148,7 @@ For frontend changes:
 
 ```bash
 pnpm --filter ./apps/client lint
+pnpm --filter ./apps/client test
 ```
 
 For comment-language validation (required):
