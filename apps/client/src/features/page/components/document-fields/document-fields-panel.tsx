@@ -37,10 +37,17 @@ import {
 import { updatePageData } from "@/features/page/queries/page-query";
 import { DatabaseCellRenderer } from "@/features/database/components/database-cell-renderer.tsx";
 import { useDatabasePropertiesQuery } from "@/features/database/queries/database-table-query";
+import { IDatabaseProperty } from "@/features/database/types/database.types.ts";
 import {
-  IDatabaseProperty,
-  IDatabaseSelectOption,
-} from "@/features/database/types/database.types.ts";
+  buildDatabaseCellPayloadValue,
+  extractCurrentDatabaseCellValue,
+  getDatabaseSelectOption,
+  normalizeDatabaseCheckboxValue,
+  normalizeDatabasePageReferenceValue,
+  normalizeDatabaseSelectValue,
+  normalizeDatabaseStringValue,
+  normalizeDatabaseUserId,
+} from "@/features/database/utils/database-cell-value.ts";
 import { DatabasePropertyType } from "@docmost/api-contract";
 import { buildPageUrl } from "@/features/page/page.utils.ts";
 import { Link } from "react-router-dom";
@@ -204,49 +211,6 @@ export function DocumentFieldsPanel({
     rowContext?.properties,
   ]);
 
-  const getSelectSettings = (
-    property: IDatabaseProperty,
-  ): IDatabaseSelectOption[] => {
-    if (
-      !property.settings ||
-      typeof property.settings !== "object" ||
-      !("options" in property.settings)
-    ) {
-      return [];
-    }
-
-    const options = property.settings.options;
-    return Array.isArray(options) ? options : [];
-  };
-
-  const getSelectOptionLabel = (
-    property: IDatabaseProperty,
-    value: string,
-  ): string => {
-    const option = getSelectSettings(property).find(
-      (item) => item.value === value,
-    );
-    return option?.label ?? value;
-  };
-
-  const getSelectOption = (
-    property: IDatabaseProperty,
-    value: string,
-  ): { label: string; color?: string } | null => {
-    const option = getSelectSettings(property).find(
-      (item) => item.value === value,
-    );
-
-    if (!option) {
-      return null;
-    }
-
-    return {
-      label: option.label,
-      color: option.color,
-    };
-  };
-
   const databaseUserIds = useMemo(() => {
     const ids: string[] = [];
 
@@ -257,7 +221,10 @@ export function DocumentFieldsPanel({
 
       const propertyValue = dbFieldValues.get(property.id);
       if (typeof propertyValue === "string") {
-        ids.push(propertyValue);
+        const normalizedUserId = normalizeDatabaseStringValue(propertyValue).trim();
+        if (normalizedUserId) {
+          ids.push(normalizedUserId);
+        }
         return;
       }
 
@@ -268,7 +235,10 @@ export function DocumentFieldsPanel({
       ) {
         const maybeId = (propertyValue as { id?: unknown }).id;
         if (typeof maybeId === "string") {
-          ids.push(maybeId);
+          const normalizedUserId = normalizeDatabaseStringValue(maybeId).trim();
+          if (normalizedUserId) {
+            ids.push(normalizedUserId);
+          }
         }
       }
     });
@@ -284,15 +254,6 @@ export function DocumentFieldsPanel({
   const allPageNodes = useMemo(
     () => allPagesQuery.data?.pages.flatMap((queryPage) => queryPage.items) ?? [],
     [allPagesQuery.data?.pages],
-  );
-
-  const pageOptions = useMemo(
-    () =>
-      allPageNodes.map((node) => ({
-        value: node.id,
-        label: node.title || t("untitled"),
-      })),
-    [allPageNodes, t],
   );
 
   const pageReferenceMetaById = useMemo(
@@ -324,45 +285,24 @@ export function DocumentFieldsPanel({
     property: IDatabaseProperty,
     value: unknown,
   ): unknown => {
-    if (property.type === "checkbox") {
-      return Boolean(value);
-    }
-
-    if (property.type === "user") {
-      if (value && typeof value === "object" && "id" in value) {
-        const userId = (value as { id?: unknown }).id;
-        return typeof userId === "string" && userId.trim()
-          ? { id: userId }
-          : null;
-      }
-
-      if (typeof value === "string" && value.trim()) {
-        return { id: value.trim() };
-      }
-
-      return null;
-    }
-
     if (property.type === "page_reference") {
-      if (typeof value === "string" && value.trim()) {
-        return value.trim();
-      }
-
-      return null;
+      const pageId = normalizeDatabasePageReferenceValue(value).trim();
+      return pageId || null;
     }
 
-    if (typeof value === "string") {
-      return value;
+    if (property.type === "select") {
+      const selectValue = normalizeDatabaseSelectValue(value);
+      return selectValue || null;
     }
 
-    return value ?? "";
+    return buildDatabaseCellPayloadValue(property, value);
   };
 
   const renderReadOnlyDbValue = (property: IDatabaseProperty) => {
     const value = dbFieldValues.get(property.id);
 
     if (property.type === "page_reference") {
-      const refId = typeof value === "string" ? value : "";
+      const refId = normalizeDatabasePageReferenceValue(value);
       if (!refId) {
         return (
           <Text size="sm" c="dimmed" my={8}>
@@ -388,31 +328,26 @@ export function DocumentFieldsPanel({
     }
 
     if (property.type === "select") {
-      const selected = getSelectSettings(property).find(
-        (option) => option.value === (typeof value === "string" ? value : ""),
-      );
+      const selectValue = normalizeDatabaseSelectValue(value);
+      if (!selectValue) {
+        return (
+          <Text size="sm" c="dimmed" my={8}>
+            {t("no data")}
+          </Text>
+        );
+      }
 
-      return selected ? (
-        <Badge color={selected.color || "gray"} variant="light" my={8}>
-          {selected.label}
+      const selectedOption = getDatabaseSelectOption(property, selectValue);
+
+      return (
+        <Badge color={selectedOption?.color || "gray"} variant="light" my={8}>
+          {selectedOption?.label || selectValue}
         </Badge>
-      ) : (
-        <Text size="sm" c="dimmed" my={8}>
-          {t("no data")}
-        </Text>
       );
     }
 
     if (property.type === "user") {
-      const userId =
-        typeof value === "string"
-          ? value
-          : value &&
-              typeof value === "object" &&
-              "id" in value &&
-              typeof (value as { id?: unknown }).id === "string"
-            ? (value as { id: string }).id
-            : "";
+      const userId = normalizeDatabaseUserId(value) ?? "";
 
       if (!userId) {
         return (
@@ -437,13 +372,20 @@ export function DocumentFieldsPanel({
     }
 
     if (property.type === "checkbox") {
-      return <Checkbox checked={Boolean(value)} disabled readOnly my={8} />;
+      return <Checkbox checked={normalizeDatabaseCheckboxValue(value)} disabled readOnly my={8} />;
     }
 
-    if (typeof value === "string" && value) {
+    const textValue = normalizeDatabaseStringValue(value);
+
+    if (textValue) {
       return (
-        <Text size="sm" my={8}>
-          {value}
+        <Text
+          size="sm"
+          my={8}
+          ff={property.type === "code" ? "monospace" : undefined}
+          style={{ whiteSpace: "pre-wrap" }}
+        >
+          {textValue}
         </Text>
       );
     }
@@ -730,7 +672,11 @@ export function DocumentFieldsPanel({
                       spaceSlug={page.space.slug}
                       onStartEdit={() => {
                         setEditingDbPropertyId(property.id);
-                        setEditingDbValue(dbFieldValues.get(property.id));
+                        setEditingDbValue(
+                          extractCurrentDatabaseCellValue(
+                            dbFieldValues.get(property.id),
+                          ),
+                        );
                       }}
                       onChange={setEditingDbValue}
                       onSave={(nextValue) => {
@@ -789,3 +735,4 @@ export function DocumentFieldsPanel({
 }
 
 export default DocumentFieldsPanel;
+

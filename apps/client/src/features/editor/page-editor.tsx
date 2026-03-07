@@ -235,8 +235,16 @@ export default function PageEditor({
     }
   }, [isIdle, documentState, providersReady, resetIdle]);
 
-  // Attach here, to make sure the connection gets properly established
-  providersRef.current?.remote.attach();
+  useEffect(() => {
+    if (!providersReady || !providersRef.current) return;
+
+    const remote = providersRef.current.remote;
+    remote.attach();
+
+    return () => {
+      remote.detach?.();
+    };
+  }, [providersReady, pageId]);
 
   const extensions = useMemo(() => {
     if (!providersReady || !providersRef.current || !currentUser?.user) {
@@ -401,3 +409,4 @@ export default function PageEditor({
     </div>
   );
 }
+

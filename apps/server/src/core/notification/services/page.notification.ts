@@ -202,7 +202,7 @@ export class PageNotificationService {
       case 'database-user-assigned':
         return {
           notificationType: NotificationType.PAGE_USER_MENTION,
-          title: `${actorName} mentioned you on ${pageTitle}`,
+          title: `${actorName} вас отметил на странице`,
           createEmail: ({ actorName, pageTitle, pageUrl }) =>
             PageMentionEmail({ actorName, pageTitle, pageUrl }),
         };
@@ -314,3 +314,4 @@ export class PageNotificationService {
     return { actor, pageTitle: getPageTitle(page.title), basePageUrl };
   }
 }
+

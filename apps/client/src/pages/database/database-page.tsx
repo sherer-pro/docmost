@@ -12,10 +12,7 @@ import DatabaseHeader from "@/features/database/components/header/database-heade
 import HistoryModal from "@/features/page-history/components/history-modal.tsx";
 import DocumentFieldsPanel from "@/features/page/components/document-fields/document-fields-panel.tsx";
 import { useUpdateDatabaseMutation } from "@/features/database/queries/database-query.ts";
-import {
-  updatePageDataFromPatch,
-  useUpdatePageMutation,
-} from "@/features/page/queries/page-query";
+import { useUpdatePageMutation } from "@/features/page/queries/page-query";
 import { IUpdateDatabasePayload } from "@/features/database/types/database.types.ts";
 import {
   SpaceCaslAction,
@@ -59,6 +56,9 @@ export default function DatabasePage() {
   const currentUser = useAtomValue(currentUserAtom);
   const [draftName, setDraftName] = useState("");
   const [draftDescription, setDraftDescription] = useState(toDatabaseDescriptionDoc());
+  const draftDescriptionSerializedRef = useRef(
+    serializeDatabaseDescription(toDatabaseDescriptionDoc()),
+  );
   const [saveState, setSaveState] = useState<SaveState>("idle");
 
   const lastRequestVersionRef = useRef(0);
@@ -126,7 +126,15 @@ export default function DatabasePage() {
   }, [database?.id]);
 
   useEffect(() => {
-    setDraftDescription(toDatabaseDescriptionDoc(databasePage?.content));
+    const nextDescription = toDatabaseDescriptionDoc(databasePage?.content);
+    const nextSerialized = serializeDatabaseDescription(nextDescription);
+
+    if (nextSerialized === draftDescriptionSerializedRef.current) {
+      return;
+    }
+
+    draftDescriptionSerializedRef.current = nextSerialized;
+    setDraftDescription(nextDescription);
   }, [databasePage?.content]);
 
   /**
@@ -231,12 +239,12 @@ export default function DatabasePage() {
         return;
       }
 
-      await updatePageMutationAsync(
-        {
-          pageId: databasePageId,
-          content: nextDescriptionJson as never,
-        } as never,
-      );
+      await updatePageMutationAsync({
+        pageId: databasePageId,
+        content: nextDescriptionJson,
+        operation: "replace",
+        format: "json",
+      });
     },
     [databasePage?.content, databasePage?.spaceId, databasePageId, updatePageMutationAsync],
   );
@@ -256,19 +264,17 @@ export default function DatabasePage() {
 
   const onDescriptionChange = useCallback(
     (json: JSONContent) => {
-      setDraftDescription(json);
+      const nextSerialized = serializeDatabaseDescription(json);
 
-      if (databasePageId && databasePage?.spaceId) {
-        updatePageDataFromPatch({
-          id: databasePageId,
-          spaceId: databasePage.spaceId,
-          content: json as never,
-        });
+      if (nextSerialized === draftDescriptionSerializedRef.current) {
+        return;
       }
 
+      draftDescriptionSerializedRef.current = nextSerialized;
+      setDraftDescription(json);
       debouncedSaveDescription(json);
     },
-    [databasePage?.spaceId, databasePageId, debouncedSaveDescription],
+    [debouncedSaveDescription],
   );
 
   const databaseDisplayName = useMemo(() => {
@@ -351,3 +357,6 @@ export default function DatabasePage() {
     </>
   );
 }
+
+
+

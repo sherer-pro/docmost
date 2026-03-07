@@ -11,6 +11,90 @@ interface DatabaseCellDisplayValueParams {
   pageTitleById?: Record<string, string>;
 }
 
+const SERIALIZED_STRING_NORMALIZE_DEPTH = 6;
+const BOOLEAN_TRUE_TOKENS = new Set(['true', '1', 'yes', 'on', 'да']);
+const BOOLEAN_FALSE_TOKENS = new Set(['false', '0', 'no', 'off', 'нет', '']);
+
+/**
+ * Unwraps malformed values that were JSON-stringified one or more times.
+ *
+ * Example: "\"\\\"hello\\nworld\\\"\"" -> "hello\nworld"
+ */
+function normalizeSerializedDatabaseString(value: string): string {
+  let normalizedValue = value;
+
+  for (
+    let normalizeIteration = 0;
+    normalizeIteration < SERIALIZED_STRING_NORMALIZE_DEPTH;
+    normalizeIteration += 1
+  ) {
+    const trimmedValue = normalizedValue.trim();
+    if (!trimmedValue.startsWith('"') || !trimmedValue.endsWith('"')) {
+      break;
+    }
+
+    try {
+      const parsedValue = JSON.parse(normalizedValue);
+      if (typeof parsedValue !== 'string') {
+        break;
+      }
+
+      normalizedValue = parsedValue;
+    } catch {
+      break;
+    }
+  }
+
+  return normalizedValue;
+}
+
+function normalizeDatabaseBooleanToken(value: string): boolean | null {
+  const normalizedToken = normalizeSerializedDatabaseString(value).trim().toLowerCase();
+
+  if (BOOLEAN_TRUE_TOKENS.has(normalizedToken)) {
+    return true;
+  }
+
+  if (BOOLEAN_FALSE_TOKENS.has(normalizedToken)) {
+    return false;
+  }
+
+  return null;
+}
+
+function extractDatabaseUserId(value: unknown): string | null {
+  if (typeof value === 'string') {
+    const normalizedValue = normalizeSerializedDatabaseString(value).trim();
+
+    if (!normalizedValue) {
+      return null;
+    }
+
+    try {
+      const parsedValue = JSON.parse(normalizedValue);
+      const parsedUserId = extractDatabaseUserId(parsedValue);
+
+      if (parsedUserId) {
+        return parsedUserId;
+      }
+    } catch {
+      // Keep the normalized string below.
+    }
+
+    return normalizedValue;
+  }
+
+  if (value && typeof value === 'object' && 'id' in value) {
+    const candidateId = (value as { id?: unknown }).id;
+    return typeof candidateId === 'string'
+      ? normalizeSerializedDatabaseString(candidateId).trim() || null
+      : null;
+  }
+
+  return null;
+}
+
+
 /**
  * Возвращает актуальное значение ячейки из fallback-контейнера,
  * который используется после смены типа свойства.
@@ -29,36 +113,61 @@ export function extractCurrentDatabaseCellValue(value: unknown): unknown {
 }
 
 /**
+ * Нормализует строковые значения ячейки, включая cleanup legacy-экранирования.
+ */
+export function normalizeDatabaseStringValue(value: unknown): string {
+  const currentValue = extractCurrentDatabaseCellValue(value);
+
+  if (typeof currentValue !== 'string') {
+    return '';
+  }
+
+  return normalizeSerializedDatabaseString(currentValue);
+}
+
+/**
  * Нормализует значение пользователя до `id`.
  * Поддерживаются контрактные формы: `string | { id: string } | null`.
  */
 export function normalizeDatabaseUserId(value: unknown): string | null {
+  return extractDatabaseUserId(extractCurrentDatabaseCellValue(value));
+}
+
+/**
+ * Normalizes checkbox values to a strict boolean.
+ * Supports legacy string payloads (`"true"`, `"false"`) and serialized forms.
+ */
+export function normalizeDatabaseCheckboxValue(value: unknown): boolean {
   const currentValue = extractCurrentDatabaseCellValue(value);
 
+  if (typeof currentValue === 'boolean') {
+    return currentValue;
+  }
+
   if (typeof currentValue === 'string') {
-    const trimmedValue = currentValue.trim();
-    return trimmedValue || null;
-  }
+    const normalizedToken = normalizeDatabaseBooleanToken(currentValue);
 
-  if (currentValue && typeof currentValue === 'object' && 'id' in currentValue) {
-    const candidateId = (currentValue as { id?: unknown }).id;
-
-    if (typeof candidateId === 'string') {
-      const trimmedId = candidateId.trim();
-      return trimmedId || null;
+    if (normalizedToken !== null) {
+      return normalizedToken;
     }
+
+    return Boolean(normalizeSerializedDatabaseString(currentValue).trim());
   }
 
-  return null;
+  if (currentValue === null || typeof currentValue === 'undefined') {
+    return false;
+  }
+
+  return Boolean(currentValue);
 }
+
 
 /**
  * Нормализует select-значение до строкового `value`.
  * Поддерживает как прямую строку, так и fallback-объект после смены типа.
  */
 export function normalizeDatabaseSelectValue(value: unknown): string {
-  const currentValue = extractCurrentDatabaseCellValue(value);
-  return typeof currentValue === 'string' ? currentValue : '';
+  return normalizeDatabaseStringValue(value);
 }
 
 /**
@@ -66,8 +175,7 @@ export function normalizeDatabaseSelectValue(value: unknown): string {
  * Поддерживает как прямую строку, так и fallback-объект после смены типа.
  */
 export function normalizeDatabasePageReferenceValue(value: unknown): string {
-  const currentValue = extractCurrentDatabaseCellValue(value);
-  return typeof currentValue === 'string' ? currentValue : '';
+  return normalizeDatabaseStringValue(value);
 }
 
 /**
@@ -132,7 +240,7 @@ export function getDatabaseCellDisplayValue({
 
   if (!property) {
     if (typeof currentValue === 'string') {
-      return currentValue;
+      return normalizeSerializedDatabaseString(currentValue);
     }
 
     if (currentValue === null || typeof currentValue === 'undefined') {
@@ -168,11 +276,11 @@ export function getDatabaseCellDisplayValue({
   }
 
   if (property.type === 'checkbox') {
-    return String(Boolean(currentValue));
+    return String(normalizeDatabaseCheckboxValue(currentValue));
   }
 
   if (typeof currentValue === 'string') {
-    return currentValue;
+    return normalizeSerializedDatabaseString(currentValue);
   }
 
   if (currentValue === null || typeof currentValue === 'undefined') {
@@ -189,7 +297,7 @@ export function buildDatabaseCellPayloadValue(property: IDatabaseProperty, value
   const currentValue = extractCurrentDatabaseCellValue(value);
 
   if (property.type === 'checkbox') {
-    return Boolean(currentValue);
+    return normalizeDatabaseCheckboxValue(currentValue);
   }
 
   if (property.type === 'user') {
@@ -208,8 +316,9 @@ export function buildDatabaseCellPayloadValue(property: IDatabaseProperty, value
   }
 
   if (typeof currentValue === 'string') {
-    return currentValue;
+    return normalizeSerializedDatabaseString(currentValue);
   }
 
   return currentValue ?? '';
 }
+
