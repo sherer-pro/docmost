@@ -16,6 +16,9 @@ import { validate as isValidUUID } from 'uuid';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EventName } from '../../../common/events/event.contants';
 
+const SPACE_SHARING_SETTINGS_KEYS = ['disabled'] as const;
+type SpaceSharingSettingsKey = (typeof SPACE_SHARING_SETTINGS_KEYS)[number];
+
 @Injectable()
 export class SpaceRepo {
   constructor(
@@ -104,15 +107,19 @@ export class SpaceRepo {
   async updateSharingSettings(
     spaceId: string,
     workspaceId: string,
-    prefKey: string,
+    prefKey: SpaceSharingSettingsKey,
     prefValue: string | boolean,
   ) {
+    if (!SPACE_SHARING_SETTINGS_KEYS.includes(prefKey)) {
+      throw new Error(`Unsupported space sharing setting key: ${prefKey}`);
+    }
+
     return this.db
       .updateTable('spaces')
       .set({
         settings: sql`COALESCE(settings, '{}'::jsonb)
           || jsonb_build_object('sharing', COALESCE(settings->'sharing', '{}'::jsonb)
-          || jsonb_build_object('${sql.raw(prefKey)}', ${sql.lit(prefValue)}))`,
+          || jsonb_build_object(${prefKey}, ${prefValue}))`,
         updatedAt: new Date(),
       })
       .where('id', '=', spaceId)

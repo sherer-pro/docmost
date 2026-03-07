@@ -525,8 +525,8 @@ export class DatabaseService {
     let pageSlugId: string | null = null;
 
     /**
-     * Синхронизация переименования базы 1:1 повторяет обычный page rename:
-     * меняем только title и метаданные автора, не перегенерируя slug.
+     * Keep database-page rename behavior aligned with regular page rename:
+     * only update the page title and actor metadata, without regenerating slug.
      */
     if (database.pageId && hasNameChanged) {
       await this.pageRepo.updatePage(
