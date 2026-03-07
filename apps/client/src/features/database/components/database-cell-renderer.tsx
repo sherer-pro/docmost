@@ -6,7 +6,6 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   getSpaceMemberSearchProps,
-  normalizeSpaceMemberValue,
   renderSpaceMemberOption,
   renderSpaceMemberValue,
   useSpaceMemberSelectOptions,
@@ -16,12 +15,14 @@ import { CustomAvatar } from '@/components/ui/custom-avatar.tsx';
 import { buildPageUrl } from '@/features/page/page.utils.ts';
 import {
   getDatabaseSelectOption,
+  normalizeDatabaseCheckboxValue,
   normalizeDatabasePageReferenceValue,
   normalizeDatabaseSelectValue,
+  normalizeDatabaseStringValue,
+  normalizeDatabaseUserId,
 } from '@/features/database/utils/database-cell-value.ts';
 import { getAllSidebarPages } from '@/features/page/services/page-service.ts';
 import { PAGE_QUERY_KEYS } from '@/features/page/queries/query-keys.ts';
-
 
 interface DatabaseCellRendererProps {
   property: IDatabaseProperty;
@@ -56,10 +57,11 @@ export function DatabaseCellRenderer({
   onSave,
 }: DatabaseCellRendererProps) {
   const { t } = useTranslation();
+  const editorValue = isEditing ? editingValue : value;
 
   const selectedUserId = useMemo(() => {
-    return normalizeSpaceMemberValue(isEditing ? editingValue : value);
-  }, [editingValue, isEditing, value]);
+    return normalizeDatabaseUserId(editorValue);
+  }, [editorValue]);
 
   const {
     options: memberOptions,
@@ -67,8 +69,16 @@ export function DatabaseCellRenderer({
     setSearchValue,
     isLoading: isMembersLoading,
     knownUsersById,
-  } =
-    useSpaceMemberSelectOptions(spaceId, selectedUserId ? [selectedUserId] : []);
+  } = useSpaceMemberSelectOptions(spaceId, selectedUserId ? [selectedUserId] : []);
+
+  const selectedMember = useMemo(
+    () =>
+      selectedUserId
+        ? knownUsersById[selectedUserId] ??
+          memberOptions.find((option) => option.value === selectedUserId)
+        : null,
+    [knownUsersById, memberOptions, selectedUserId],
+  );
 
   const allPagesQuery = useQuery({
     queryKey: [...PAGE_QUERY_KEYS.rootSidebar(spaceId, ['page', 'database']), 'all-pages'],
@@ -88,9 +98,9 @@ export function DatabaseCellRenderer({
   const pageOptions = useMemo(
     () =>
       allPageNodes.map((node) => ({
-          value: node.id,
-          label: node.title || t('untitled'),
-        })),
+        value: node.id,
+        label: node.title || t('untitled'),
+      })),
     [allPageNodes, t],
   );
 
@@ -102,16 +112,31 @@ export function DatabaseCellRenderer({
     () =>
       new Map(
         allPageNodes.map((node) => [
-            node.id,
-            node.slugId ? buildPageUrl(spaceSlug, node.slugId, node.title || t('untitled')) : null,
-          ]),
+          node.id,
+          node.slugId
+            ? buildPageUrl(spaceSlug, node.slugId, node.title || t('untitled'))
+            : null,
+        ]),
       ),
     [allPageNodes, spaceSlug, t],
   );
 
+  const isDropdownPropertyType = (type: DatabasePropertyType) => {
+    return type === 'select' || type === 'user' || type === 'page_reference';
+  };
+
+  const shouldRenderDropdownEditor = isEditable && isDropdownPropertyType(property.type);
+  const shouldRenderEditor = isEditable && (isEditing || shouldRenderDropdownEditor);
+
+  const handleBlurSave = () => {
+    if (isEditing) {
+      onSave();
+    }
+  };
+
   const renderViewValue = () => {
     if (property.type === 'checkbox') {
-      const checked = Boolean(value);
+      const checked = normalizeDatabaseCheckboxValue(value);
 
       if (!isEditable) {
         return <Checkbox checked={checked} disabled readOnly />;
@@ -139,7 +164,8 @@ export function DatabaseCellRenderer({
     }
 
     if (property.type === 'code') {
-      const codeValue = typeof value === 'string' ? value : '';
+      const codeValue = normalizeDatabaseStringValue(value);
+
       return codeValue ? (
         <Text ff="monospace" style={{ whiteSpace: 'pre-wrap' }}>
           {codeValue}
@@ -170,9 +196,6 @@ export function DatabaseCellRenderer({
         return <Text c="dimmed">{t('Empty value')}</Text>;
       }
 
-      const selectedMember = knownUsersById[selectedUserId] ??
-        memberOptions.find((option) => option.value === selectedUserId);
-
       if (selectedMember) {
         return (
           <Group gap="xs" wrap="nowrap">
@@ -185,7 +208,9 @@ export function DatabaseCellRenderer({
       return (
         <Group gap="xs" wrap="nowrap">
           <CustomAvatar avatarUrl="" size={18} name={t('Unknown')} />
-          <Text c="dimmed" lineClamp={1}>{t('Unknown')}</Text>
+          <Text c="dimmed" lineClamp={1}>
+            {t('Unknown')}
+          </Text>
         </Group>
       );
     }
@@ -199,7 +224,7 @@ export function DatabaseCellRenderer({
       const targetPage = pageOptions.find((option) => option.value === refId);
       const targetPageUrl = pageReferenceUrlById.get(refId);
 
-      if (targetPageUrl) {
+      if (targetPageUrl && !isEditable) {
         return (
           <Text component={Link} to={targetPageUrl}>
             {targetPage?.label || refId}
@@ -207,11 +232,16 @@ export function DatabaseCellRenderer({
         );
       }
 
-      return targetPage?.label || refId;
+      return <Text>{targetPage?.label || refId}</Text>;
     }
 
-    const textValue = typeof value === 'string' ? value : '';
-    return textValue || <Text c="dimmed">{t('Empty value')}</Text>;
+    const textValue = normalizeDatabaseStringValue(value);
+
+    return textValue ? (
+      <Text style={{ whiteSpace: 'pre-wrap' }}>{textValue}</Text>
+    ) : (
+      <Text c="dimmed">{t('Empty value')}</Text>
+    );
   };
 
   const renderEditorByType = (type: DatabasePropertyType) => {
@@ -222,8 +252,8 @@ export function DatabaseCellRenderer({
           onMouseDown={(event) => event.stopPropagation()}
         >
           <Checkbox
-            autoFocus
-            checked={Boolean(editingValue)}
+            autoFocus={isEditing}
+            checked={normalizeDatabaseCheckboxValue(editorValue)}
             onChange={(event) => {
               const checked = event.currentTarget.checked;
               onChange(checked);
@@ -237,12 +267,12 @@ export function DatabaseCellRenderer({
     if (type === 'multiline_text') {
       return (
         <Textarea
-          autoFocus
+          autoFocus={isEditing}
           autosize
           minRows={2}
-          value={typeof editingValue === 'string' ? editingValue : ''}
+          value={normalizeDatabaseStringValue(editorValue)}
           onChange={(event) => onChange(event.currentTarget.value)}
-          onBlur={() => onSave()}
+          onBlur={handleBlurSave}
         />
       );
     }
@@ -250,24 +280,28 @@ export function DatabaseCellRenderer({
     if (type === 'code') {
       return (
         <Textarea
-          autoFocus
+          autoFocus={isEditing}
           autosize
           minRows={3}
           ff="monospace"
-          value={typeof editingValue === 'string' ? editingValue : ''}
+          value={normalizeDatabaseStringValue(editorValue)}
           onChange={(event) => onChange(event.currentTarget.value)}
-          onBlur={() => onSave()}
+          onBlur={handleBlurSave}
         />
       );
     }
 
     if (type === 'select') {
-      const settings = property.settings && 'options' in property.settings ? property.settings.options : [];
-      const selectValue = normalizeDatabaseSelectValue(editingValue);
+      const settings =
+        property.settings && 'options' in property.settings ? property.settings.options : [];
+      const selectValue = normalizeDatabaseSelectValue(editorValue);
+      const selectOptionByValue = new Map(
+        settings.map((option) => [option.value, option]),
+      );
 
       return (
         <Select
-          autoFocus
+          autoFocus={isEditing}
           data={settings.map((option) => ({ value: option.value, label: option.label }))}
           value={selectValue || null}
           onChange={(nextValue) => {
@@ -275,8 +309,17 @@ export function DatabaseCellRenderer({
             onChange(normalizedValue);
             onSave(normalizedValue);
           }}
-          onBlur={() => onSave()}
+          onBlur={handleBlurSave}
           clearable
+          renderOption={({ option }) => {
+            const selectOption = selectOptionByValue.get(option.value);
+
+            return (
+              <Badge color={selectOption?.color || 'gray'} variant="light">
+                {option.label}
+              </Badge>
+            );
+          }}
         />
       );
     }
@@ -284,7 +327,7 @@ export function DatabaseCellRenderer({
     if (type === 'user') {
       return (
         <Select
-          autoFocus
+          autoFocus={isEditing}
           data={memberOptions}
           value={selectedUserId}
           onChange={(nextValue) => {
@@ -302,18 +345,19 @@ export function DatabaseCellRenderer({
             setSearchValue,
             isMembersLoading,
           )}
+          leftSection={renderSpaceMemberValue(selectedMember)}
           renderOption={renderSpaceMemberOption}
-          onBlur={() => onSave()}
+          onBlur={handleBlurSave}
         />
       );
     }
 
     if (type === 'page_reference') {
-      const pageReferenceValue = normalizeDatabasePageReferenceValue(editingValue);
+      const pageReferenceValue = normalizeDatabasePageReferenceValue(editorValue);
 
       return (
         <Select
-          autoFocus
+          autoFocus={isEditing}
           searchable
           clearable
           data={pageOptions}
@@ -324,17 +368,17 @@ export function DatabaseCellRenderer({
             onSave(normalizedValue);
           }}
           nothingFoundMessage={allPagesQuery.isLoading ? t('Loading...') : t('No pages found')}
-          onBlur={() => onSave()}
+          onBlur={handleBlurSave}
         />
       );
     }
 
     return (
       <TextInput
-        autoFocus
-        value={typeof editingValue === 'string' ? editingValue : ''}
+        autoFocus={isEditing}
+        value={normalizeDatabaseStringValue(editorValue)}
         onChange={(event) => onChange(event.currentTarget.value)}
-        onBlur={() => onSave()}
+        onBlur={handleBlurSave}
         onKeyDown={(event) => {
           if (event.key === 'Enter') {
             onSave();
@@ -347,13 +391,27 @@ export function DatabaseCellRenderer({
   return (
     <div
       onClick={() => {
-        if (!isEditing && isEditable && property.type !== 'checkbox') {
+        if (
+          !isEditing &&
+          isEditable &&
+          property.type !== 'checkbox' &&
+          !isDropdownPropertyType(property.type)
+        ) {
           onStartEdit();
         }
       }}
-      style={{ cursor: isEditable ? (property.type === 'checkbox' ? 'pointer' : 'text') : 'default' }}
+      style={{
+        cursor: isEditable
+          ? property.type === 'checkbox'
+            ? 'pointer'
+            : shouldRenderDropdownEditor
+              ? 'default'
+              : 'text'
+          : 'default',
+      }}
     >
-      {isEditing && isEditable ? renderEditorByType(property.type) : renderViewValue()}
+      {shouldRenderEditor ? renderEditorByType(property.type) : renderViewValue()}
     </div>
   );
 }
+

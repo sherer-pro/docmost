@@ -129,6 +129,12 @@ export interface IPageInput {
   settings?: PageSettings;
 }
 
+export type IUpdatePageInput = Partial<IPageInput> & {
+  content?: Record<string, unknown> | string;
+  operation?: 'append' | 'prepend' | 'replace';
+  format?: 'json' | 'markdown' | 'html';
+};
+
 export interface IExportPageParams {
   pageId: string;
   format: ExportFormat;
@@ -140,3 +146,4 @@ export enum ExportFormat {
   HTML = "html",
   Markdown = "markdown",
 }
+

@@ -1,17 +1,17 @@
 import {
   IsBoolean,
-  IsNumber,
+  IsInt,
   IsOptional,
-  IsPositive,
   IsString,
   Max,
   Min,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class PaginationOptions {
   @IsOptional()
-  @IsNumber()
-  @IsPositive()
+  @Type(() => Number)
+  @IsInt()
   @Min(1)
   @Max(100)
   limit = 20;

@@ -4,8 +4,10 @@ import { IDatabaseProperty } from '../types/database.types';
 import {
   buildDatabaseCellPayloadValue,
   getDatabaseCellDisplayValue,
+  normalizeDatabaseCheckboxValue,
   normalizeDatabasePageReferenceValue,
   normalizeDatabaseSelectValue,
+  normalizeDatabaseStringValue,
   normalizeDatabaseUserId,
 } from './database-cell-value';
 
@@ -32,6 +34,8 @@ describe('database-cell-value normalization', () => {
 
     assert.equal(normalizeDatabaseUserId('user-1'), 'user-1');
     assert.equal(normalizeDatabaseUserId({ id: 'user-2' }), 'user-2');
+    assert.equal(normalizeDatabaseUserId('{"id":"user-5"}'), 'user-5');
+    assert.equal(normalizeDatabaseUserId(JSON.stringify('{"id":"user-6"}')), 'user-6');
     assert.equal(normalizeDatabaseUserId(null), null);
 
     assert.deepEqual(buildDatabaseCellPayloadValue(userProperty, 'user-3'), { id: 'user-3' });
@@ -52,9 +56,14 @@ describe('database-cell-value normalization', () => {
       normalizeDatabaseSelectValue({ value: 'in_progress', rawValueBeforeTypeChange: { id: 'legacy' } }),
       'in_progress',
     );
+    assert.equal(normalizeDatabaseSelectValue('"in_progress"'), 'in_progress');
 
     assert.equal(
       getDatabaseCellDisplayValue({ property: selectProperty, value: 'in_progress' }),
+      'In progress',
+    );
+    assert.equal(
+      getDatabaseCellDisplayValue({ property: selectProperty, value: '"in_progress"' }),
       'In progress',
     );
     assert.equal(
@@ -72,6 +81,7 @@ describe('database-cell-value normalization', () => {
     };
 
     assert.equal(normalizeDatabasePageReferenceValue(fallbackValue), 'page-1');
+    assert.equal(normalizeDatabasePageReferenceValue('"page-1"'), 'page-1');
     assert.equal(
       getDatabaseCellDisplayValue({
         property: pageReferenceProperty,
@@ -85,4 +95,34 @@ describe('database-cell-value normalization', () => {
       'page-2',
     );
   });
+
+
+  it('normalizes checkbox values from booleans and legacy strings', () => {
+    const checkboxProperty = createProperty({ type: 'checkbox' });
+
+    assert.equal(normalizeDatabaseCheckboxValue(true), true);
+    assert.equal(normalizeDatabaseCheckboxValue(false), false);
+    assert.equal(normalizeDatabaseCheckboxValue('true'), true);
+    assert.equal(normalizeDatabaseCheckboxValue('false'), false);
+    assert.equal(normalizeDatabaseCheckboxValue('"false"'), false);
+    assert.equal(buildDatabaseCellPayloadValue(checkboxProperty, 'false'), false);
+    assert.equal(
+      getDatabaseCellDisplayValue({ property: checkboxProperty, value: 'false' }),
+      'false',
+    );
+  });
+
+  it('unwraps repeatedly serialized text values and preserves line breaks', () => {
+    const textProperty = createProperty({ type: 'multiline_text' });
+    const initialValue = 'xasww\nline 2';
+    const serializedTwice = JSON.stringify(JSON.stringify(initialValue));
+
+    assert.equal(normalizeDatabaseStringValue(serializedTwice), initialValue);
+    assert.equal(buildDatabaseCellPayloadValue(textProperty, serializedTwice), initialValue);
+    assert.equal(
+      getDatabaseCellDisplayValue({ property: textProperty, value: serializedTwice }),
+      initialValue,
+    );
+  });
 });
+

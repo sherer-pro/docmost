@@ -26,6 +26,7 @@ import {
   IMovePage,
   IPage,
   IPageInput,
+  IUpdatePageInput,
   SidebarNodeType,
   ISidebarNode,
   SidebarPagesParams,
@@ -201,7 +202,7 @@ export function updatePageDataFromPatch(
 }
 
 export function useUpdateTitlePageMutation() {
-  return useMutation<IPage, Error, Partial<IPageInput>>({
+  return useMutation<IPage, Error, IUpdatePageInput>({
     mutationFn: (data) => updatePage(data),
     onSuccess: () => {
       invalidateDatabaseTreeConsistency();
@@ -210,7 +211,7 @@ export function useUpdateTitlePageMutation() {
 }
 
 export function useUpdatePageMutation() {
-  return useMutation<IPage, Error, Partial<IPageInput>>({
+  return useMutation<IPage, Error, IUpdatePageInput>({
     mutationFn: (data) => updatePage(data),
     onSuccess: (data) => {
       updatePageData(data);
@@ -768,3 +769,4 @@ export function invalidateOnDeletePage(pageId: string) {
   invalidateTrashList({}, { client: queryClient });
   invalidateDatabaseTreeConsistency();
 }
+

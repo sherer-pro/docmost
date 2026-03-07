@@ -8,25 +8,19 @@ const flattenTitles = (groups: ReturnType<typeof getDatabaseDescriptionSlashItem
 };
 
 describe('DatabaseDescriptionEditor slash commands', () => {
-  it('returns only slash commands supported by lightweight description UI', () => {
+  it('matches page editor slash commands for empty query', () => {
     const query = '';
-    const databaseItems = getDatabaseDescriptionSlashItems({ query });
-    const pageItems = getSuggestionItems({ query });
-    const databaseTitles = new Set(flattenTitles(databaseItems));
-    const pageTitles = flattenTitles(pageItems);
+    const databaseTitles = flattenTitles(getDatabaseDescriptionSlashItems({ query }));
+    const pageTitles = flattenTitles(getSuggestionItems({ query }));
 
-    assert.equal(pageTitles.length > databaseTitles.size, true);
-    assert.equal(databaseTitles.has('Text'), true);
-    assert.equal(databaseTitles.has('Table'), true);
-    assert.equal(databaseTitles.has('Image'), false);
-    assert.equal(databaseTitles.has('Video'), false);
-    assert.equal(databaseTitles.has('Iframe embed'), false);
+    assert.deepEqual(databaseTitles, pageTitles);
   });
 
-  it('keeps table command for editable descriptions', () => {
-    const items = getDatabaseDescriptionSlashItems({ query: '' });
-    const titles = flattenTitles(items);
+  it('matches page editor slash commands for filtered query', () => {
+    const query = 'table';
+    const databaseTitles = flattenTitles(getDatabaseDescriptionSlashItems({ query }));
+    const pageTitles = flattenTitles(getSuggestionItems({ query }));
 
-    assert.equal(titles.includes('Table'), true);
+    assert.deepEqual(databaseTitles, pageTitles);
   });
 });

@@ -15,23 +15,14 @@ import SubpagesMenu from '@/features/editor/components/subpages/subpages-menu.ts
 import ExcalidrawMenu from '@/features/editor/components/excalidraw/excalidraw-menu.tsx';
 import DrawioMenu from '@/features/editor/components/drawio/drawio-menu.tsx';
 import SearchAndReplaceDialog from '@/features/editor/components/search-and-replace/search-and-replace-dialog.tsx';
-import SlashCommand from '@/features/editor/extensions/slash-command';
 import CommentDialog from '@/features/comment/components/comment-dialog';
-import { getDatabaseDescriptionSlashItems } from './database-description-slash-items';
 import { usePageEditorInteractions } from '@/features/editor/hooks/use-page-editor-interactions';
 import { serializeDatabaseDescription } from '@/features/database/utils/database-description';
+import { searchSpotlight } from '@/features/search/constants.ts';
+import { useAtomValue } from 'jotai';
+import { currentUserAtom } from '@/features/user/atoms/current-user-atom.ts';
 
-const databaseDescriptionExtensions = mainExtensions.map((extension) => {
-  if (extension?.name !== 'slash-command') {
-    return extension;
-  }
-
-  return SlashCommand.configure({
-    suggestion: {
-      items: getDatabaseDescriptionSlashItems,
-    },
-  });
-});
+const databaseDescriptionExtensions = mainExtensions;
 
 export interface DatabaseDescriptionEditorProps {
   pageId: string;
@@ -54,21 +45,38 @@ export function DatabaseDescriptionEditor({
 }: DatabaseDescriptionEditorProps) {
   const menuContainerRef = useRef<HTMLDivElement | null>(null);
   const editorRef = useRef<Editor | null>(null);
+  const currentUser = useAtomValue(currentUserAtom);
   const {
     showCommentPopup,
     handleKeyDown,
+    handleBeforeInput,
     handleEditorPaste,
     handleEditorDrop,
   } = usePageEditorInteractions({
     pageId,
     editorRef,
+    userId: currentUser?.user.id,
+    supportPlainTextPaste: true,
   });
 
   const descriptionEditor = useEditor({
     extensions: databaseDescriptionExtensions,
     editorProps: {
       handleDOMEvents: {
-        keydown: handleKeyDown,
+        keydown: (_view, event) => {
+          if ((event.ctrlKey || event.metaKey) && event.code === 'KeyS') {
+            event.preventDefault();
+            return true;
+          }
+
+          if ((event.ctrlKey || event.metaKey) && event.code === 'KeyK') {
+            searchSpotlight.open();
+            return true;
+          }
+
+          return handleKeyDown(_view, event);
+        },
+        beforeinput: handleBeforeInput,
       },
       handlePaste: handleEditorPaste,
       handleDrop: handleEditorDrop,
