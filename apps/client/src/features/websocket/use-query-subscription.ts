@@ -16,7 +16,9 @@ import { IComment } from "@/features/comment/types/comment.types";
 
 const mapTreeNodeToPage = (node: {
   id: string;
+  nodeType?: "page" | "database" | "databaseRow";
   slugId?: string;
+  databaseId?: string | null;
   name?: string;
   icon?: string;
   position?: string;
@@ -25,7 +27,9 @@ const mapTreeNodeToPage = (node: {
   hasChildren?: boolean;
 }) => ({
   id: node.id,
+  nodeType: node.nodeType,
   slugId: node.slugId,
+  databaseId: node.databaseId ?? null,
   title: node.name,
   icon: node.icon,
   position: node.position,

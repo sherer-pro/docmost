@@ -147,7 +147,10 @@ export function useTreeMutation<T>(spaceId: string) {
     // update the node position in tree
     tree.update({
       id: draggedNodeId,
-      changes: { position: newPosition } as any,
+      changes: {
+        position: newPosition,
+        parentPageId: args.parentId,
+      } as any,
     });
 
     const previousParent = args.dragNodes[0].parent;
@@ -182,7 +185,9 @@ export function useTreeMutation<T>(spaceId: string) {
     const oldParentId = nodeData.parentPageId ?? null;
     const pageData = {
       id: nodeData.id,
+      nodeType: nodeData.nodeType,
       slugId: nodeData.slugId,
+      databaseId: nodeData.databaseId ?? null,
       title: nodeData.name,
       icon: nodeData.icon,
       position: newPosition,
