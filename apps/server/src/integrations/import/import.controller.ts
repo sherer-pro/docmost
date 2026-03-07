@@ -28,8 +28,6 @@ import {
   SAFE_FILE_VALIDATION_ERROR_MESSAGE,
   validateFileExtensionAndSignature,
 } from '../../common/helpers/file-validation';
-import { DeprecatedRoute } from '../../common/decorators/deprecated-route.decorator';
-import { LEGACY_ALIAS_SUNSET } from '../../common/helpers/deprecated-route';
 
 @Controller('pages')
 export class ImportController {
@@ -49,25 +47,6 @@ export class ImportController {
   @HttpCode(HttpStatus.OK)
   @Post('actions/import')
   async importPageAction(
-    @Req() req: any,
-    @AuthUser() user: User,
-    @AuthWorkspace() workspace: Workspace,
-  ) {
-    return this.handleImportPage(req, user, workspace);
-  }
-
-  /**
-   * @deprecated Temporary backward-compatibility alias. Use /pages/actions/import.
-   */
-  @UseInterceptors(FileInterceptor)
-  @UseGuards(JwtAuthGuard)
-  @DeprecatedRoute({
-    sunset: LEGACY_ALIAS_SUNSET,
-    replacement: '/pages/actions/import',
-  })
-  @HttpCode(HttpStatus.OK)
-  @Post('import')
-  async importPage(
     @Req() req: any,
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
@@ -136,25 +115,6 @@ export class ImportController {
   @HttpCode(HttpStatus.OK)
   @Post('actions/import-zip')
   async importZipAction(
-    @Req() req: any,
-    @AuthUser() user: User,
-    @AuthWorkspace() workspace: Workspace,
-  ) {
-    return this.handleImportZip(req, user, workspace);
-  }
-
-  /**
-   * @deprecated Temporary backward-compatibility alias. Use /pages/actions/import-zip.
-   */
-  @UseInterceptors(FileInterceptor)
-  @UseGuards(JwtAuthGuard)
-  @DeprecatedRoute({
-    sunset: LEGACY_ALIAS_SUNSET,
-    replacement: '/pages/actions/import-zip',
-  })
-  @HttpCode(HttpStatus.OK)
-  @Post('import-zip')
-  async importZip(
     @Req() req: any,
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,

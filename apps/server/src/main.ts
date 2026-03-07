@@ -11,6 +11,7 @@ import { WsRedisIoAdapter } from './ws/adapter/ws-redis.adapter';
 import fastifyMultipart from '@fastify/multipart';
 import fastifyCookie from '@fastify/cookie';
 import { InternalLogFilter } from './common/logger/internal-log-filter';
+import { createCorsOptions } from './common/security/cors.util';
 
 /**
  * Returns the origin from a URL string when parsing succeeds.
@@ -266,7 +267,7 @@ async function bootstrap() {
     }),
   );
 
-  app.enableCors();
+  app.enableCors(createCorsOptions());
   app.useGlobalInterceptors(new TransformHttpResponseInterceptor(reflector));
   app.enableShutdownHooks();
 

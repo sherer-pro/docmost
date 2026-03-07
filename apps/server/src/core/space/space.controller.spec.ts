@@ -63,7 +63,7 @@ describe('SpaceController', () => {
     expect(paramEntry?.pipes ?? []).toHaveLength(0);
   });
 
-  it('passes slug through POST /spaces/info alias to getSpace', async () => {
+  it('passes slug through GET /spaces/:spaceId to getSpace service', async () => {
     const user = { id: 'user-1' } as any;
     const workspace = { id: 'workspace-1' } as any;
     const spaceId = 'general';
@@ -77,7 +77,7 @@ describe('SpaceController', () => {
     mockSpaceAbility.createForUser.mockResolvedValue(ability);
     mockSpaceMemberRepo.getUserSpaceRoles.mockResolvedValue([]);
 
-    await controller.getSpaceInfoAlias({ spaceId }, user, workspace);
+    await controller.getSpace(spaceId, user, workspace);
 
     expect(mockSpaceService.getSpaceInfo).toHaveBeenCalledWith(
       'general',

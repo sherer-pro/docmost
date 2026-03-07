@@ -14,9 +14,12 @@ import * as cookie from 'cookie';
 import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
 import { WsMessageDto } from './dto/ws-message.dto';
+import { createCorsOriginValidator } from '../common/security/cors.util';
+
+const wsCorsOriginValidator = createCorsOriginValidator();
 
 @WebSocketGateway({
-  cors: { origin: '*' },
+  cors: { origin: wsCorsOriginValidator, credentials: true },
   transports: ['websocket'],
 })
 export class WsGateway implements OnGatewayConnection, OnModuleDestroy {

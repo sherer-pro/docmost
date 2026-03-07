@@ -8,6 +8,7 @@ import { TransformHttpResponseInterceptor } from '../../common/interceptors/http
 import { Logger } from '@nestjs/common';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { InternalLogFilter } from '../../common/logger/internal-log-filter';
+import { createCorsOptions } from '../../common/security/cors.util';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
@@ -29,7 +30,7 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api', { exclude: ['/'] });
 
-  app.enableCors();
+  app.enableCors(createCorsOptions());
 
   const reflector = app.get(Reflector);
   app.useGlobalInterceptors(new TransformHttpResponseInterceptor(reflector));
