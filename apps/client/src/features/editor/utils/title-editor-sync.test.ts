@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import { describe, it } from 'vitest';
 import {
   shouldApplyFocusSafeTitleSync,
   shouldNavigateToCanonicalSlug,
@@ -48,3 +48,4 @@ describe('title editor sync helpers', () => {
     assert.equal(shouldNavigateAfterBlur, true);
   });
 });
+

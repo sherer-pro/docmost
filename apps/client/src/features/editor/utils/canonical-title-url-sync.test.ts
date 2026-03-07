@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import { shouldSyncCanonicalUrlNow } from "./canonical-title-url-sync";
 
 describe("canonical title url sync helper", () => {
@@ -23,3 +23,4 @@ describe("canonical title url sync helper", () => {
     assert.equal(result, true);
   });
 });
+

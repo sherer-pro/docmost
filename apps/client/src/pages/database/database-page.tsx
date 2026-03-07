@@ -139,10 +139,9 @@ export default function DatabasePage() {
          * algorithm as page title editor, so URL updates are consistent across editors.
          */
         /**
-         * URL синхронизируем только по подтверждённым сервером данным:
-         * - slugId берём строго из ответа PATCH;
-         * - если pageSlugId отсутствует, URL не меняем, чтобы не построить
-         *   потенциально устаревший canonical путь.
+         * Sync URL only from server-confirmed data:
+         * - slugId is taken strictly from PATCH response;
+         * - if pageSlugId is missing, keep current URL to avoid stale canonical path.
          */
         if (
           typeof patch.name === "string" &&

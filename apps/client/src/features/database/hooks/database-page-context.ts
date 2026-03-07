@@ -20,13 +20,11 @@ export interface DatabasePageContextValue {
 }
 
 /**
- * Нормализует контекст database/page маршрутов в единый набор идентификаторов.
+ * Normalizes database/page route context to one stable set of identifiers.
  *
- * Зачем это нужно:
- * - при rename backend может быстрее вернуть `database.pageId/pageSlugId`,
- *   чем обновится запрос page-by-slug;
- * - комментарии, header-меню и прочие действия должны использовать один и тот же
- *   pageId, чтобы query-key и UI не расходились по разным сущностям.
+ * This keeps UI actions consistent during transient route/data desync:
+ * - backend may return `database.pageId/pageSlugId` before page-by-slug refreshes;
+ * - comments, header actions, and queries must keep using the same pageId.
  */
 export function resolveDatabasePageContext(
   input: ResolveDatabasePageContextInput,

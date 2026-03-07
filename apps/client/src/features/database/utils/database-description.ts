@@ -23,11 +23,11 @@ function tryParseJsonDescription(value: unknown): JSONContent | null {
 }
 
 /**
- * Приводит источник описания базы к валидному doc-JSON для Tiptap.
+ * Normalizes database description source to valid Tiptap doc JSON.
  *
- * JSON (`descriptionContent`) считается первичным источником.
- * Plain-text (`description`) используется только как fallback
- * для старых/частично заполненных данных.
+ * JSON (`descriptionContent`) is the primary source.
+ * Plain text (`description`) is only a fallback
+ * for legacy or partially populated data.
  */
 export function toDatabaseDescriptionDoc(
   richDescription?: unknown,
