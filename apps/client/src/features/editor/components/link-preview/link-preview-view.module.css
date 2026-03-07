@@ -46,3 +46,44 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+.skeleton {
+  border-radius: 6px;
+  animation: pulse 1.2s ease-in-out infinite;
+
+  @mixin light {
+    background: linear-gradient(-90deg, var(--mantine-color-gray-3) 0%, var(--mantine-color-gray-1) 50%, var(--mantine-color-gray-3) 100%);
+    background-size: 400% 400%;
+  }
+
+  @mixin dark {
+    background: linear-gradient(-90deg, var(--mantine-color-dark-6) 0%, var(--mantine-color-dark-5) 50%, var(--mantine-color-dark-6) 100%);
+    background-size: 400% 400%;
+  }
+}
+
+.imagePlaceholder {
+  width: 128px;
+  height: 100%;
+  flex: 0 0 128px;
+  border-right: 1px solid var(--mantine-color-gray-2);
+}
+
+.titlePlaceholder {
+  width: 65%;
+  height: 14px;
+}
+
+.descriptionPlaceholder {
+  width: 95%;
+  height: 11px;
+}
+
+@keyframes pulse {
+  0% {
+    background-position: 0% 0%;
+  }
+  100% {
+    background-position: -135% 0%;
+  }
+}
