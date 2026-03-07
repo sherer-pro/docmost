@@ -75,6 +75,7 @@
 - Combined default test stage (backend + frontend smoke): `pnpm test`
 - Backend unit/integration: `pnpm --filter ./apps/server test`
 - Frontend smoke test equivalent (build-based temporary target): `pnpm --filter ./apps/client build`
+- Frontend unit tests (Vitest): `pnpm --filter ./apps/client test`
 - Backend coverage: `pnpm --filter ./apps/server test:cov`
 - Backend coverage smoke (fast regression check): `pnpm --filter ./apps/server test:cov:smoke`
 - Backend alias smoke (verify tsconfig alias resolution in Jest): `pnpm --filter ./apps/server test:alias:smoke`
@@ -166,9 +167,9 @@ Minimum:
 
 ## 6) CI/CD and local reproduction
 
-- The repository includes a GitHub Actions workflow: `.github/workflows/docker.yml`.
-- Existing CI workflow scope: **release/docker pipeline** (`Docker Build and Push`) triggered on `release.published` and `workflow_dispatch`.
-- This workflow is focused on container image build/push and does **not** replace functional validation of the codebase.
+- The repository includes GitHub Actions workflows:
+  - `.github/workflows/docker.yml` — release/docker build and push.
+  - `.github/workflows/ci.yml` — PR validation (`install`, `build`, `lint`, `test`, `check:comments:en`, `pnpm audit --prod` fail on high/critical).
 - De facto required local pipeline before PR:
   1. `pnpm install --frozen-lockfile`
   2. for quick checks on day-to-day changes: `pnpm verify:quick`.
