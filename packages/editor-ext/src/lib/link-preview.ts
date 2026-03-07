@@ -12,6 +12,8 @@ export interface LinkPreviewAttributes {
   description?: string;
   image?: string;
   siteName?: string;
+  loading?: boolean;
+  requestId?: string;
 }
 
 declare module "@tiptap/core" {
@@ -51,6 +53,12 @@ export const LinkPreview = Node.create<LinkPreviewOptions>({
         default: "",
       },
       siteName: {
+        default: "",
+      },
+      loading: {
+        default: false,
+      },
+      requestId: {
         default: "",
       },
     };
