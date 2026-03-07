@@ -27,6 +27,7 @@ import {
 import { currentUserAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { useAtomValue } from "jotai";
 import { PageEditMode } from "@/features/user/types/user.types.ts";
+import { normalizePageEditMode } from "@/features/user/utils/page-edit-mode.ts";
 import { AssigneeSpaceMemberSelect } from "@/features/page/components/document-fields/assignee-space-member-select.tsx";
 import { StakeholdersSpaceMemberMultiSelect } from "@/features/page/components/document-fields/stakeholders-space-member-multiselect.tsx";
 import { useSpaceMemberSelectOptions } from "@/features/page/components/document-fields/space-member-select-utils.tsx";
@@ -102,8 +103,9 @@ export function DocumentFieldsPanel({
   const theme = useMantineTheme();
   const currentUser = useAtomValue(currentUserAtom);
   const documentFields = page.space?.settings?.documentFields;
-  const userPageEditMode =
-    currentUser?.user?.settings?.preferences?.pageEditMode ?? PageEditMode.Edit;
+  const userPageEditMode = normalizePageEditMode(
+    currentUser?.user?.settings?.preferences?.pageEditMode,
+  );
   const isEditable = !readOnly && userPageEditMode === PageEditMode.Edit;
 
   const isDatabasePage = Boolean(page.databaseId);

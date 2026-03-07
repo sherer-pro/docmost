@@ -26,6 +26,7 @@ import { UpdateEvent } from "@/features/websocket/types";
 import localEmitter from "@/lib/local-emitter.ts";
 import { currentUserAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { PageEditMode } from "@/features/user/types/user.types.ts";
+import { normalizePageEditMode } from "@/features/user/utils/page-edit-mode.ts";
 import { searchSpotlight } from "@/features/search/constants.ts";
 import { shouldApplyFocusSafeTitleSync } from "@/features/editor/utils/title-editor-sync.ts";
 import { useDeferredCanonicalTitleUrlSync } from "@/features/editor/utils/canonical-title-url-sync.ts";
@@ -57,8 +58,9 @@ export function TitleEditor({
   const didInitFocusRef = useRef(false);
   const lastSyncedPageIdRef = useRef(pageId);
   const [currentUser] = useAtom(currentUserAtom);
-  const userPageEditMode =
-    currentUser?.user?.settings?.preferences?.pageEditMode ?? PageEditMode.Edit;
+  const userPageEditMode = normalizePageEditMode(
+    currentUser?.user?.settings?.preferences?.pageEditMode,
+  );
 
   const { onTitleFocusChange, syncCanonicalUrl } =
     useDeferredCanonicalTitleUrlSync(

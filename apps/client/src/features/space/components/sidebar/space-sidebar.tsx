@@ -45,6 +45,7 @@ import { useCreateDatabaseMutation } from "@/features/database/queries/database-
 import { notifications } from "@mantine/notifications";
 import { currentUserAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { PageEditMode } from "@/features/user/types/user.types.ts";
+import { normalizePageEditMode } from "@/features/user/utils/page-edit-mode.ts";
 import { queryClient } from "@/main.tsx";
 import { getPageById } from "@/features/page/services/page-service.ts";
 import { buildDatabaseUrl } from "@/features/page/page.utils.ts";
@@ -87,8 +88,9 @@ export function SpaceSidebar() {
       });
 
       if (
-        currentUser?.user?.settings?.preferences?.pageEditMode !==
-        PageEditMode.Edit
+        normalizePageEditMode(
+          currentUser?.user?.settings?.preferences?.pageEditMode,
+        ) !== PageEditMode.Edit
       ) {
         setCurrentUser({
           ...currentUser,
