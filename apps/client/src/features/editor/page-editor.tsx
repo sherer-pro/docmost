@@ -1,4 +1,5 @@
 import "@/features/editor/styles/index.css";
+import clsx from "clsx";
 import React, {
   useCallback,
   useEffect,
@@ -65,12 +66,18 @@ interface PageEditorProps {
   pageId: string;
   editable: boolean;
   content: any;
+  cacheSlugId?: string;
+  showBottomSpacer?: boolean;
+  editorContentClassName?: string;
 }
 
 export default function PageEditor({
   pageId,
   editable,
   content,
+  cacheSlugId,
+  showBottomSpacer = true,
+  editorContentClassName,
 }: PageEditorProps) {
   const collaborationURL = useCollaborationUrl();
   const isComponentMounted = useRef(false);
@@ -105,7 +112,7 @@ export default function PageEditor({
   const { isIdle, resetIdle } = useIdle(FIVE_MINUTES, { initialState: false });
   const documentState = useDocumentVisibility();
   const { pageSlug } = useParams();
-  const slugId = extractPageSlugId(pageSlug);
+  const resolvedCacheSlugId = cacheSlugId ?? extractPageSlugId(pageSlug);
   const userPageEditMode =
     currentUser?.user?.settings?.preferences?.pageEditMode ?? PageEditMode.Edit;
   const canScroll = useCallback(
@@ -314,10 +321,14 @@ export default function PageEditor({
   });
 
   const debouncedUpdateContent = useDebouncedCallback((newContent: any) => {
-    const pageData = queryClient.getQueryData<IPage>(["pages", slugId]);
+    if (!resolvedCacheSlugId) {
+      return;
+    }
+
+    const pageData = queryClient.getQueryData<IPage>(["pages", resolvedCacheSlugId]);
 
     if (pageData) {
-      queryClient.setQueryData(["pages", slugId], {
+      queryClient.setQueryData(["pages", resolvedCacheSlugId], {
         ...pageData,
         content: newContent,
         updatedAt: new Date(),
@@ -379,7 +390,10 @@ export default function PageEditor({
   return (
     <div className="editor-container" style={{ position: "relative" }}>
       <div ref={menuContainerRef}>
-        <EditorContent editor={editor} />
+        <EditorContent
+          editor={editor}
+          className={clsx(editorContentClassName)}
+        />
 
         {editor && (
           <SearchAndReplaceDialog editor={editor} editable={editable} />
@@ -402,10 +416,12 @@ export default function PageEditor({
         )}
         {sharedShowCommentPopup && <CommentDialog editor={editor} pageId={pageId} />}
       </div>
-      <div
-        onClick={() => editor.commands.focus("end")}
-        style={{ paddingBottom: "20vh" }}
-      ></div>
+      {showBottomSpacer && (
+        <div
+          onClick={() => editor.commands.focus("end")}
+          style={{ paddingBottom: "20vh" }}
+        ></div>
+      )}
     </div>
   );
 }

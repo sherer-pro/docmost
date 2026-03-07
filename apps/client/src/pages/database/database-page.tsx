@@ -1,5 +1,4 @@
 import { Container, Stack } from "@mantine/core";
-import { JSONContent } from "@tiptap/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { useTranslation } from "react-i18next";
@@ -12,7 +11,6 @@ import DatabaseHeader from "@/features/database/components/header/database-heade
 import HistoryModal from "@/features/page-history/components/history-modal.tsx";
 import DocumentFieldsPanel from "@/features/page/components/document-fields/document-fields-panel.tsx";
 import { useUpdateDatabaseMutation } from "@/features/database/queries/database-query.ts";
-import { useUpdatePageMutation } from "@/features/page/queries/page-query";
 import { IUpdateDatabasePayload } from "@/features/database/types/database.types.ts";
 import {
   SpaceCaslAction,
@@ -27,12 +25,7 @@ import { getAppName } from "@/lib/config.ts";
 import { useAtomValue } from "jotai";
 import { asideStateAtom } from "@/components/layouts/global/hooks/atoms/sidebar-atom.ts";
 import { useSetAtom } from "jotai";
-import { useDebouncedCallback } from "@mantine/hooks";
 import classes from "./database-page.module.css";
-import {
-  serializeDatabaseDescription,
-  toDatabaseDescriptionDoc,
-} from "@/features/database/utils/database-description";
 import { useDatabasePageContext } from "@/features/database/hooks/use-database-page-context.ts";
 
 type SaveState = "idle" | "saving" | "saved" | "error";
@@ -52,13 +45,8 @@ export default function DatabasePage() {
   const { data: space } = useGetSpaceBySlugQuery(spaceSlug);
   const { mutateAsync: updateDatabaseMutationAsync } =
     useUpdateDatabaseMutation(space?.id, databaseId);
-  const { mutateAsync: updatePageMutationAsync } = useUpdatePageMutation();
   const currentUser = useAtomValue(currentUserAtom);
   const [draftName, setDraftName] = useState("");
-  const [draftDescription, setDraftDescription] = useState(toDatabaseDescriptionDoc());
-  const draftDescriptionSerializedRef = useRef(
-    serializeDatabaseDescription(toDatabaseDescriptionDoc()),
-  );
   const [saveState, setSaveState] = useState<SaveState>("idle");
 
   const lastRequestVersionRef = useRef(0);
@@ -124,18 +112,6 @@ export default function DatabasePage() {
     setDraftName(database.name ?? "");
     setSaveState("idle");
   }, [database?.id]);
-
-  useEffect(() => {
-    const nextDescription = toDatabaseDescriptionDoc(databasePage?.content);
-    const nextSerialized = serializeDatabaseDescription(nextDescription);
-
-    if (nextSerialized === draftDescriptionSerializedRef.current) {
-      return;
-    }
-
-    draftDescriptionSerializedRef.current = nextSerialized;
-    setDraftDescription(nextDescription);
-  }, [databasePage?.content]);
 
   /**
    * Unified autosave of database metadata (title/description).
@@ -224,59 +200,6 @@ export default function DatabasePage() {
     [commitMetaChanges, database?.name],
   );
 
-  const saveDescription = useCallback(
-    async (nextDescriptionJson: JSONContent) => {
-      if (!databasePageId || !databasePage?.spaceId) {
-        return;
-      }
-
-      const currentSerialized = serializeDatabaseDescription(
-        toDatabaseDescriptionDoc(databasePage.content),
-      );
-      const nextSerialized = serializeDatabaseDescription(nextDescriptionJson);
-
-      if (currentSerialized === nextSerialized) {
-        return;
-      }
-
-      await updatePageMutationAsync({
-        pageId: databasePageId,
-        content: nextDescriptionJson,
-        operation: "replace",
-        format: "json",
-      });
-    },
-    [databasePage?.content, databasePage?.spaceId, databasePageId, updatePageMutationAsync],
-  );
-
-  const debouncedSaveDescription = useDebouncedCallback(
-    (nextDescriptionJson: JSONContent) => {
-      void saveDescription(nextDescriptionJson);
-    },
-    500,
-  );
-
-  useEffect(() => {
-    return () => {
-      debouncedSaveDescription.flush();
-    };
-  }, [debouncedSaveDescription]);
-
-  const onDescriptionChange = useCallback(
-    (json: JSONContent) => {
-      const nextSerialized = serializeDatabaseDescription(json);
-
-      if (nextSerialized === draftDescriptionSerializedRef.current) {
-        return;
-      }
-
-      draftDescriptionSerializedRef.current = nextSerialized;
-      setDraftDescription(json);
-      debouncedSaveDescription(json);
-    },
-    [debouncedSaveDescription],
-  );
-
   const databaseDisplayName = useMemo(() => {
     const normalizedDraft = draftName.trim();
     if (normalizedDraft) {
@@ -337,10 +260,11 @@ export default function DatabasePage() {
 
           {databasePageId && (
             <DatabaseDescriptionEditor
+              key={databasePageId}
               pageId={databasePageId}
-              content={draftDescription}
+              content={databasePage?.content}
               editable={isEditable}
-              onContentChange={onDescriptionChange}
+              cacheSlugId={databasePage?.slugId}
             />
           )}
         </Stack>
