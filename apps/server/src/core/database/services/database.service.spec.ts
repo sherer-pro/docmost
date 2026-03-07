@@ -37,6 +37,7 @@ describe('DatabaseService mixed tree flows', () => {
   };
   const pageService = { create: jest.fn() };
   const exportService = { exportPages: jest.fn() };
+  const userRepo = { findById: jest.fn() };
   const spaceAbility = {
     createForUser: jest.fn(async () => ({ cannot: () => false })),
   };
@@ -71,6 +72,7 @@ describe('DatabaseService mixed tree flows', () => {
     pageRepo as any,
     pageService as any,
     exportService as any,
+    userRepo as any,
     spaceAbility as any,
     notificationQueue as any,
     db as any,
@@ -82,6 +84,7 @@ describe('DatabaseService mixed tree flows', () => {
     jest.clearAllMocks();
     databasePropertyRepo.findByDatabaseId.mockResolvedValue([]);
     databaseCellRepo.findByDatabaseAndPage.mockResolvedValue([]);
+    userRepo.findById.mockResolvedValue(null);
     databaseRepo.findById.mockResolvedValue({
       id: 'db-1',
       spaceId: 'space-1',
@@ -248,7 +251,39 @@ describe('DatabaseService mixed tree flows', () => {
     await service.updateProperty('db-1', 'prop-1', { type: 'multiline_text' }, 'ws-1');
 
     expect(databaseCellRepo.updateCell).toHaveBeenCalledWith('cell-1', {
-      value: 'Yes',
+      value: {
+        value: 'Yes',
+        rawValueBeforeTypeChange: true,
+        rawTypeBeforeTypeChange: 'checkbox',
+      },
+    });
+  });
+
+  it('converts user value to member name when changing user -> multiline_text', async () => {
+    databasePropertyRepo.findById.mockResolvedValue({
+      id: 'prop-1',
+      databaseId: 'db-1',
+      type: 'user',
+    });
+    databasePropertyRepo.updateProperty.mockResolvedValue({ id: 'prop-1', type: 'multiline_text' });
+    databaseRowRepo.findByDatabaseId.mockResolvedValue([{ pageId: 'page-1' }]);
+    databaseCellRepo.findByDatabaseAndPage.mockResolvedValue([
+      { id: 'cell-1', propertyId: 'prop-1', value: { id: 'user-42' } },
+    ]);
+    userRepo.findById.mockResolvedValue({
+      id: 'user-42',
+      name: 'Jane Doe',
+      workspaceId: 'ws-1',
+    });
+
+    await service.updateProperty('db-1', 'prop-1', { type: 'multiline_text' }, 'ws-1');
+
+    expect(databaseCellRepo.updateCell).toHaveBeenCalledWith('cell-1', {
+      value: {
+        value: 'Jane Doe',
+        rawValueBeforeTypeChange: { id: 'user-42' },
+        rawTypeBeforeTypeChange: 'user',
+      },
     });
   });
 
@@ -270,6 +305,7 @@ describe('DatabaseService mixed tree flows', () => {
       value: {
         value: null,
         rawValueBeforeTypeChange: 'legacy',
+        rawTypeBeforeTypeChange: 'multiline_text',
       },
     });
   });
@@ -297,6 +333,152 @@ describe('DatabaseService mixed tree flows', () => {
 
     expect(databaseCellRepo.updateCell).toHaveBeenCalledWith('cell-1', {
       value: 'legacy',
+    });
+  });
+
+  it('restores original values for every A->B->A type pair before manual edits', async () => {
+    const propertyTypes = [
+      'checkbox',
+      'user',
+      'multiline_text',
+      'code',
+      'select',
+      'page_reference',
+    ] as const;
+
+    const sampleValueByType: Record<(typeof propertyTypes)[number], unknown> = {
+      checkbox: true,
+      user: { id: 'user-7' },
+      multiline_text: 'legacy text',
+      code: 'const x = 1;',
+      select: 'in_progress',
+      page_reference: 'page-77',
+    };
+
+    for (const fromType of propertyTypes) {
+      for (const toType of propertyTypes) {
+        if (fromType === toType) {
+          continue;
+        }
+
+        databaseCellRepo.updateCell.mockClear();
+        databasePropertyRepo.findById.mockReset();
+        databasePropertyRepo.updateProperty.mockReset();
+        databaseRowRepo.findByDatabaseId.mockReset();
+        databaseCellRepo.findByDatabaseAndPage.mockReset();
+
+        const initialValue = sampleValueByType[fromType];
+
+        databasePropertyRepo.findById
+          .mockResolvedValueOnce({
+            id: 'prop-1',
+            databaseId: 'db-1',
+            type: fromType,
+          })
+          .mockResolvedValueOnce({
+            id: 'prop-1',
+            databaseId: 'db-1',
+            type: toType,
+          });
+
+        databasePropertyRepo.updateProperty
+          .mockResolvedValueOnce({ id: 'prop-1', type: toType })
+          .mockResolvedValueOnce({ id: 'prop-1', type: fromType });
+
+        databaseRowRepo.findByDatabaseId
+          .mockResolvedValueOnce([{ pageId: 'page-1' }])
+          .mockResolvedValueOnce([{ pageId: 'page-1' }]);
+
+        databaseCellRepo.findByDatabaseAndPage.mockResolvedValueOnce([
+          { id: 'cell-1', propertyId: 'prop-1', value: initialValue },
+        ]);
+
+        await service.updateProperty('db-1', 'prop-1', { type: toType }, 'ws-1');
+
+        const firstConvertedValue = databaseCellRepo.updateCell.mock.calls[0][1].value;
+        databaseCellRepo.findByDatabaseAndPage.mockResolvedValueOnce([
+          { id: 'cell-1', propertyId: 'prop-1', value: firstConvertedValue },
+        ]);
+
+        await service.updateProperty('db-1', 'prop-1', { type: fromType }, 'ws-1');
+
+        const rollbackValue = databaseCellRepo.updateCell.mock.calls[1][1].value;
+        expect(rollbackValue).toEqual(initialValue);
+      }
+    }
+  });
+
+  it('clears rollback payload after manual edit in converted type', async () => {
+    databasePropertyRepo.findById.mockResolvedValueOnce({
+      id: 'prop-1',
+      databaseId: 'db-1',
+      type: 'multiline_text',
+    });
+    databasePropertyRepo.updateProperty.mockResolvedValueOnce({ id: 'prop-1', type: 'select' });
+    databaseRowRepo.findByDatabaseId.mockResolvedValueOnce([{ pageId: 'row-page-1' }]);
+    databaseCellRepo.findByDatabaseAndPage.mockResolvedValueOnce([
+      { id: 'cell-1', propertyId: 'prop-1', value: 'legacy' },
+    ]);
+
+    await service.updateProperty('db-1', 'prop-1', { type: 'select' }, 'ws-1');
+
+    pageRepo.findById.mockResolvedValue({
+      id: 'row-page-1',
+      workspaceId: 'ws-1',
+      spaceId: 'space-1',
+      deletedAt: null,
+    });
+    databaseRowRepo.findByDatabaseAndPage.mockResolvedValue({
+      id: 'row-1',
+      databaseId: 'db-1',
+      pageId: 'row-page-1',
+      archivedAt: null,
+    });
+    databasePropertyRepo.findByDatabaseId.mockResolvedValue([{ id: 'prop-1', type: 'select' }]);
+    databaseCellRepo.findByDatabaseAndPage.mockResolvedValue([
+      {
+        id: 'cell-1',
+        propertyId: 'prop-1',
+        value: {
+          value: null,
+          rawValueBeforeTypeChange: 'legacy',
+          rawTypeBeforeTypeChange: 'multiline_text',
+        },
+      },
+    ]);
+    databaseCellRepo.upsertCell.mockResolvedValue({
+      id: 'cell-1',
+      propertyId: 'prop-1',
+      value: 'in_progress',
+    });
+
+    await service.batchUpdateRowCells(
+      'db-1',
+      'row-page-1',
+      { cells: [{ propertyId: 'prop-1', value: 'in_progress' }] },
+      user,
+      'ws-1',
+    );
+
+    databasePropertyRepo.findById.mockResolvedValueOnce({
+      id: 'prop-1',
+      databaseId: 'db-1',
+      type: 'select',
+    });
+    databasePropertyRepo.updateProperty.mockResolvedValueOnce({ id: 'prop-1', type: 'multiline_text' });
+    databaseRowRepo.findByDatabaseId.mockResolvedValueOnce([{ pageId: 'row-page-1' }]);
+    databaseCellRepo.findByDatabaseAndPage.mockResolvedValueOnce([
+      { id: 'cell-1', propertyId: 'prop-1', value: 'in_progress' },
+    ]);
+
+    await service.updateProperty('db-1', 'prop-1', { type: 'multiline_text' }, 'ws-1');
+
+    expect(databaseCellRepo.updateCell).toHaveBeenLastCalledWith('cell-1', {
+      value: {
+        value: 'in_progress',
+        rawValueBeforeTypeChange: 'in_progress',
+        rawTypeBeforeTypeChange: 'select',
+      },
     });
   });
 

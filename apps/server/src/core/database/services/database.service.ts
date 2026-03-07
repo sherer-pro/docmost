@@ -17,6 +17,7 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { executeTx } from '@docmost/db/utils';
+import { UserRepo } from '@docmost/db/repos/user/user.repo';
 import SpaceAbilityFactory from '../../casl/abilities/space-ability.factory';
 import {
   SpaceCaslAction,
@@ -40,6 +41,7 @@ import { IPageRecipientNotificationJob } from '../../../integrations/queue/const
 interface IDatabaseCellValueWithFallback {
   value: unknown;
   rawValueBeforeTypeChange: unknown;
+  rawTypeBeforeTypeChange?: DatabasePropertyType | string | null;
 }
 
 interface IDatabaseUserCellValue {
@@ -66,6 +68,7 @@ export class DatabaseService {
     private readonly pageRepo: PageRepo,
     private readonly pageService: PageService,
     private readonly exportService: ExportService,
+    private readonly userRepo: UserRepo,
     private readonly spaceAbility: SpaceAbilityFactory,
     @InjectQueue(QueueName.NOTIFICATION_QUEUE)
     private readonly notificationQueue: Queue,
@@ -173,6 +176,46 @@ export class DatabaseService {
   }
 
   /**
+   * Returns fallback source type if it exists in the legacy conversion payload.
+   */
+  private extractFallbackSourceType(value: unknown): DatabasePropertyType | null {
+    if (!this.isCellFallbackValue(value)) {
+      return null;
+    }
+
+    const sourceType = value.rawTypeBeforeTypeChange;
+    if (typeof sourceType !== 'string') {
+      return null;
+    }
+
+    return this.normalizePropertyType(sourceType);
+  }
+
+  /**
+   * Resolves user display name for user->text conversions.
+   */
+  private async resolveUserDisplayValue(
+    value: unknown,
+    workspaceId: string,
+    cache: Map<string, string>,
+  ): Promise<string | null> {
+    const userId = this.extractUserIdFromCellValue(value);
+    if (!userId) {
+      return null;
+    }
+
+    const cachedName = cache.get(userId);
+    if (cachedName) {
+      return cachedName;
+    }
+
+    const user = await this.userRepo.findById(userId, workspaceId);
+    const displayValue = user?.name?.trim() || userId;
+    cache.set(userId, displayValue);
+    return displayValue;
+  }
+
+  /**
    * Determines whether the current type can be automatically cast to the target type.
    */
   private canConvertToType(nextType: DatabasePropertyType): boolean {
@@ -182,33 +225,60 @@ export class DatabaseService {
   /**
    * Attempts to convert a value to the target property type.
    */
-  private convertCellValueByPropertyType(
+  private async convertCellValueByPropertyType(
     value: unknown,
     fromType: DatabasePropertyType,
     toType: DatabasePropertyType,
-  ): { converted: unknown; isConvertible: boolean } {
+    workspaceId: string,
+    userDisplayCache: Map<string, string>,
+  ): Promise<{ converted: unknown; isConvertible: boolean; isRollback: boolean }> {
+    const fallbackSourceType = this.extractFallbackSourceType(value);
+    if (fallbackSourceType && fallbackSourceType === toType) {
+      return {
+        converted: (value as IDatabaseCellValueWithFallback).rawValueBeforeTypeChange,
+        isConvertible: true,
+        isRollback: true,
+      };
+    }
+
+    if (
+      this.isCellFallbackValue(value) &&
+      !fallbackSourceType &&
+      (value.value === null || typeof value.value === 'undefined')
+    ) {
+      return {
+        converted: value.rawValueBeforeTypeChange,
+        isConvertible: true,
+        isRollback: true,
+      };
+    }
+
     const normalizedValue = this.extractValueForConversion(value);
 
     if (normalizedValue === null || typeof normalizedValue === 'undefined') {
-      return { converted: null, isConvertible: true };
+      return { converted: null, isConvertible: true, isRollback: false };
     }
 
     if (!this.canConvertToType(toType)) {
-      return { converted: normalizedValue, isConvertible: false };
+      return { converted: normalizedValue, isConvertible: false, isRollback: false };
     }
 
     if (fromType === 'checkbox' && toType === 'multiline_text') {
       if (typeof normalizedValue === 'boolean') {
-        return { converted: normalizedValue ? 'Yes' : 'No', isConvertible: true };
+        return {
+          converted: normalizedValue ? 'Yes' : 'No',
+          isConvertible: true,
+          isRollback: false,
+        };
       }
 
       const booleanValue = String(normalizedValue).toLowerCase() === 'true';
-      return { converted: booleanValue ? 'Yes' : 'No', isConvertible: true };
+      return { converted: booleanValue ? 'Yes' : 'No', isConvertible: true, isRollback: false };
     }
 
     if (fromType === 'select' && toType === 'multiline_text') {
       if (typeof normalizedValue === 'string') {
-        return { converted: normalizedValue, isConvertible: true };
+        return { converted: normalizedValue, isConvertible: true, isRollback: false };
       }
 
       if (typeof normalizedValue === 'object') {
@@ -216,28 +286,40 @@ export class DatabaseService {
         const optionLabel = option.label;
         const optionValue = option.value;
         if (typeof optionLabel === 'string') {
-          return { converted: optionLabel, isConvertible: true };
+          return { converted: optionLabel, isConvertible: true, isRollback: false };
         }
 
         if (typeof optionValue === 'string') {
-          return { converted: optionValue, isConvertible: true };
+          return { converted: optionValue, isConvertible: true, isRollback: false };
         }
+      }
+    }
+
+    if (fromType === 'user' && (toType === 'multiline_text' || toType === 'code')) {
+      const userDisplayValue = await this.resolveUserDisplayValue(
+        normalizedValue,
+        workspaceId,
+        userDisplayCache,
+      );
+
+      if (userDisplayValue !== null) {
+        return { converted: userDisplayValue, isConvertible: true, isRollback: false };
       }
     }
 
     if (value === null || typeof value === 'undefined') {
-      return { converted: null, isConvertible: true };
+      return { converted: null, isConvertible: true, isRollback: false };
     }
 
     if (toType === 'multiline_text' || toType === 'code') {
       if (typeof normalizedValue === 'string') {
-        return { converted: normalizedValue, isConvertible: true };
+        return { converted: normalizedValue, isConvertible: true, isRollback: false };
       }
 
-      return { converted: JSON.stringify(normalizedValue), isConvertible: true };
+      return { converted: JSON.stringify(normalizedValue), isConvertible: true, isRollback: false };
     }
 
-    return { converted: normalizedValue, isConvertible: true };
+    return { converted: normalizedValue, isConvertible: true, isRollback: false };
   }
 
   /**
@@ -252,6 +334,7 @@ export class DatabaseService {
     spaceId: string,
   ): Promise<void> {
     const rows = await this.databaseRowRepo.findByDatabaseId(databaseId, workspaceId, spaceId);
+    const userDisplayCache = new Map<string, string>();
 
     for (const row of rows) {
       const cells = await this.databaseCellRepo.findByDatabaseAndPage(databaseId, row.pageId);
@@ -261,17 +344,20 @@ export class DatabaseService {
         continue;
       }
 
-      const { converted, isConvertible } = this.convertCellValueByPropertyType(
+      const { converted, isConvertible, isRollback } = await this.convertCellValueByPropertyType(
         targetCell.value,
         fromType,
         toType,
+        workspaceId,
+        userDisplayCache,
       );
 
-      const nextValue = isConvertible
+      const nextValue = isRollback
         ? converted
         : {
-            value: null,
+            value: isConvertible ? converted : null,
             rawValueBeforeTypeChange: this.extractCurrentCellValue(targetCell.value),
+            rawTypeBeforeTypeChange: fromType,
           };
 
       await this.databaseCellRepo.updateCell(targetCell.id, {
