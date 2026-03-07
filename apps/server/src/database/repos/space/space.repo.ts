@@ -119,7 +119,7 @@ export class SpaceRepo {
       .set({
         settings: sql`COALESCE(settings, '{}'::jsonb)
           || jsonb_build_object('sharing', COALESCE(settings->'sharing', '{}'::jsonb)
-          || jsonb_build_object(${prefKey}, ${prefValue}))`,
+          || jsonb_build_object(${prefKey}::text, ${prefValue}))`,
         updatedAt: new Date(),
       })
       .where('id', '=', spaceId)
