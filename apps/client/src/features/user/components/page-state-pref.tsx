@@ -5,6 +5,7 @@ import { updateUser } from "@/features/user/services/user-service.ts";
 import React, { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { PageEditMode } from "@/features/user/types/user.types.ts";
+import { normalizePageEditMode } from "@/features/user/utils/page-edit-mode.ts";
 import { ResponsiveSettingsRow, ResponsiveSettingsContent, ResponsiveSettingsControl } from "@/components/ui/responsive-settings-row";
 
 export default function PageStatePref() {
@@ -35,30 +36,81 @@ export function PageStateSegmentedControl({
 }: PageStateSegmentedControlProps) {
   const { t } = useTranslation();
   const [user, setUser] = useAtom(userAtom);
-  const pageEditMode =
-    user?.settings?.preferences?.pageEditMode ?? PageEditMode.Edit;
+  const pageEditMode = normalizePageEditMode(
+    user?.settings?.preferences?.pageEditMode,
+  );
   const [value, setValue] = useState(pageEditMode);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const setLocalPreference = useCallback(
+    (mode: PageEditMode) => {
+      if (!user) {
+        return;
+      }
+
+      setUser({
+        ...user,
+        settings: {
+          ...user.settings,
+          preferences: {
+            ...user.settings?.preferences,
+            pageEditMode: mode,
+          },
+        },
+      });
+    },
+    [setUser, user],
+  );
 
   const handleChange = useCallback(
-    async (value: string) => {
-      const updatedUser = await updateUser({ pageEditMode: value });
-      setValue(value);
-      setUser(updatedUser);
+    async (nextValue: string) => {
+      const nextMode = normalizePageEditMode(nextValue);
+      if (!user || nextMode === value) {
+        return;
+      }
+
+      const previousMode = value;
+      setValue(nextMode);
+      setLocalPreference(nextMode);
+      setIsSaving(true);
+
+      try {
+        const updatedUser = await updateUser({ pageEditMode: nextMode });
+        const persistedMode = normalizePageEditMode(
+          updatedUser?.settings?.preferences?.pageEditMode,
+        );
+
+        setValue(persistedMode);
+        setUser({
+          ...updatedUser,
+          settings: {
+            ...updatedUser.settings,
+            preferences: {
+              ...updatedUser.settings?.preferences,
+              pageEditMode: persistedMode,
+            },
+          },
+        });
+      } catch {
+        setValue(previousMode);
+        setLocalPreference(previousMode);
+      } finally {
+        setIsSaving(false);
+      }
     },
-    [user, setUser],
+    [setLocalPreference, setUser, user, value],
   );
 
   useEffect(() => {
-    if (pageEditMode !== value) {
-      setValue(pageEditMode);
-    }
-  }, [pageEditMode, value]);
+    setValue(pageEditMode);
+  }, [pageEditMode]);
 
   return (
     <SegmentedControl
       size={size}
       value={value}
       onChange={handleChange}
+      disabled={isSaving}
       data={[
         { label: t("Edit"), value: PageEditMode.Edit },
         { label: t("Read"), value: PageEditMode.Read },

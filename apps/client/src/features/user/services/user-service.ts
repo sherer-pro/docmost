@@ -1,5 +1,20 @@
 import api from "@/lib/api-client";
 import { ICurrentUser, IUser } from "@/features/user/types/user.types";
+import { ApiResponseEnvelope } from "@docmost/api-contract";
+
+function isEnvelope<T>(value: unknown): value is ApiResponseEnvelope<T> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "data" in value &&
+    "success" in value &&
+    "status" in value
+  );
+}
+
+function unwrapResponse<T>(value: unknown): T {
+  return isEnvelope<T>(value) ? (value.data as T) : (value as T);
+}
 
 /**
  * Fetches the current user's profile through a read-only endpoint.
@@ -9,10 +24,10 @@ import { ICurrentUser, IUser } from "@/features/user/types/user.types";
  */
 export async function getMyInfo(): Promise<ICurrentUser> {
   const req = await api.get<ICurrentUser>("/users/me");
-  return req.data as ICurrentUser;
+  return unwrapResponse<ICurrentUser>(req);
 }
 
 export async function updateUser(data: Partial<IUser>): Promise<IUser> {
   const req = await api.post<IUser>("/users/update", data);
-  return req.data as IUser;
+  return unwrapResponse<IUser>(req);
 }
