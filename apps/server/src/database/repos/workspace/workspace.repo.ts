@@ -179,7 +179,7 @@ export class WorkspaceRepo {
       .set({
         settings: sql`COALESCE(settings, '{}'::jsonb)
                 || jsonb_build_object('api', COALESCE(settings->'api', '{}'::jsonb)
-                || jsonb_build_object(${prefKey}, ${prefValue}))`,
+                || jsonb_build_object(${prefKey}::text, ${prefValue}))`,
         updatedAt: new Date(),
       })
       .where('id', '=', workspaceId)
@@ -201,7 +201,7 @@ export class WorkspaceRepo {
       .set({
         settings: sql`COALESCE(settings, '{}'::jsonb)
                 || jsonb_build_object('ai', COALESCE(settings->'ai', '{}'::jsonb)
-                || jsonb_build_object(${prefKey}, ${prefValue}))`,
+                || jsonb_build_object(${prefKey}::text, ${prefValue}))`,
         updatedAt: new Date(),
       })
       .where('id', '=', workspaceId)
@@ -223,7 +223,7 @@ export class WorkspaceRepo {
       .set({
         settings: sql`COALESCE(settings, '{}'::jsonb)
                 || jsonb_build_object('sharing', COALESCE(settings->'sharing', '{}'::jsonb)
-                || jsonb_build_object(${prefKey}, ${prefValue}))`,
+                || jsonb_build_object(${prefKey}::text, ${prefValue}))`,
         updatedAt: new Date(),
       })
       .where('id', '=', workspaceId)
