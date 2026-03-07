@@ -158,6 +158,7 @@ export function DatabaseCellRenderer({
               onChange(nextChecked);
               onSave(nextChecked);
             }}
+            my="8"
           />
         </div>
       );
