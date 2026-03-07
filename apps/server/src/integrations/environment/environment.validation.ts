@@ -14,6 +14,14 @@ import { plainToInstance } from 'class-transformer';
 import { IsISO6391 } from '../../common/validator/is-iso6391';
 
 export class EnvironmentVariables {
+  @IsOptional()
+  @IsIn(['development', 'production', 'test'])
+  NODE_ENV: string;
+
+  @IsOptional()
+  @Matches(/^\d+$/)
+  PORT: string;
+
   @IsNotEmpty()
   @IsUrl(
     {
@@ -46,12 +54,92 @@ export class EnvironmentVariables {
   APP_SECRET: string;
 
   @IsOptional()
-  @IsIn(['smtp', 'postmark'])
+  @IsIn(['log', 'smtp', 'postmark'])
   MAIL_DRIVER: string;
 
   @IsOptional()
   @IsIn(['local', 's3'])
   STORAGE_DRIVER: string;
+
+  @IsOptional()
+  @Matches(/^\d+$/)
+  DATABASE_MAX_POOL: string;
+
+  @IsOptional()
+  @IsString()
+  JWT_TOKEN_EXPIRES_IN: string;
+
+  @IsOptional()
+  @IsString()
+  FILE_UPLOAD_SIZE_LIMIT: string;
+
+  @IsOptional()
+  @IsString()
+  FILE_IMPORT_SIZE_LIMIT: string;
+
+  @IsOptional()
+  @IsString()
+  MAIL_FROM_ADDRESS: string;
+
+  @IsOptional()
+  @IsString()
+  MAIL_FROM_NAME: string;
+
+  @IsOptional()
+  @IsString()
+  SMTP_HOST: string;
+
+  @IsOptional()
+  @Matches(/^\d+$/)
+  SMTP_PORT: string;
+
+  @IsOptional()
+  @IsIn(['true', 'false'])
+  SMTP_SECURE: string;
+
+  @IsOptional()
+  @IsIn(['true', 'false'])
+  SMTP_IGNORETLS: string;
+
+  @IsOptional()
+  @IsString()
+  SMTP_USERNAME: string;
+
+  @IsOptional()
+  @IsString()
+  SMTP_PASSWORD: string;
+
+  @IsOptional()
+  @IsString()
+  POSTMARK_TOKEN: string;
+
+  @IsOptional()
+  @IsString()
+  AWS_S3_ACCESS_KEY_ID: string;
+
+  @IsOptional()
+  @IsString()
+  AWS_S3_SECRET_ACCESS_KEY: string;
+
+  @IsOptional()
+  @IsString()
+  AWS_S3_REGION: string;
+
+  @IsOptional()
+  @IsString()
+  AWS_S3_BUCKET: string;
+
+  @IsOptional()
+  @IsUrl({ protocols: ['http', 'https'], require_tld: false })
+  AWS_S3_ENDPOINT: string;
+
+  @IsOptional()
+  @IsIn(['true', 'false'])
+  AWS_S3_FORCE_PATH_STYLE: string;
+
+  @IsOptional()
+  @IsUrl({ protocols: ['http', 'https'], require_tld: false })
+  AWS_S3_URL: string;
 
   @IsOptional()
   @IsIn(['memory', 'redis'])
@@ -109,6 +197,42 @@ export class EnvironmentVariables {
 
   @IsOptional()
   CLOUD: boolean;
+
+  @IsOptional()
+  @IsIn(['true', 'false'])
+  COLLAB_DISABLE_REDIS: string;
+
+  @IsOptional()
+  @IsIn(['true', 'false'])
+  DISABLE_TELEMETRY: string;
+
+  @IsOptional()
+  @IsUrl({ protocols: ['http', 'https'], require_tld: false })
+  DRAWIO_URL: string;
+
+  @IsOptional()
+  @Matches(/^\d+$/)
+  BILLING_TRIAL_DAYS: string;
+
+  @IsOptional()
+  @IsString()
+  STRIPE_PUBLISHABLE_KEY: string;
+
+  @IsOptional()
+  @IsString()
+  STRIPE_SECRET_KEY: string;
+
+  @IsOptional()
+  @IsString()
+  STRIPE_WEBHOOK_SECRET: string;
+
+  @IsOptional()
+  @IsUrl({ protocols: ['http', 'https'], require_tld: false })
+  POSTHOG_HOST: string;
+
+  @IsOptional()
+  @IsString()
+  POSTHOG_KEY: string;
 
   @IsOptional()
   @IsUrl(

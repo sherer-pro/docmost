@@ -10,6 +10,15 @@ import {
 import { ExpressionBuilder, sql } from 'kysely';
 import { DB, Workspaces } from '@docmost/db/types/db';
 
+const WORKSPACE_API_SETTINGS_KEYS = ['restrictToAdmins'] as const;
+const WORKSPACE_AI_SETTINGS_KEYS = ['search', 'generative'] as const;
+const WORKSPACE_SHARING_SETTINGS_KEYS = ['disabled'] as const;
+
+type WorkspaceApiSettingsKey = (typeof WORKSPACE_API_SETTINGS_KEYS)[number];
+type WorkspaceAiSettingsKey = (typeof WORKSPACE_AI_SETTINGS_KEYS)[number];
+type WorkspaceSharingSettingsKey =
+  (typeof WORKSPACE_SHARING_SETTINGS_KEYS)[number];
+
 @Injectable()
 export class WorkspaceRepo {
   public baseFields: Array<keyof Workspaces> = [
@@ -145,30 +154,32 @@ export class WorkspaceRepo {
   }
 
   async getActiveUserCount(workspaceId: string): Promise<number> {
-    const users = await this.db
+    const result = await this.db
       .selectFrom('users')
-      .select(['id', 'deactivatedAt', 'deletedAt'])
+      .select((eb) => eb.fn.count('id').as('count'))
       .where('workspaceId', '=', workspaceId)
-      .execute();
+      .where('deletedAt', 'is', null)
+      .where('deactivatedAt', 'is', null)
+      .executeTakeFirst();
 
-    const activeUsers = users.filter(
-      (user) => user.deletedAt === null && user.deactivatedAt === null,
-    );
-
-    return activeUsers.length;
+    return Number(result?.count ?? 0);
   }
 
   async updateApiSettings(
     workspaceId: string,
-    prefKey: string,
+    prefKey: WorkspaceApiSettingsKey,
     prefValue: string | boolean,
   ) {
+    if (!WORKSPACE_API_SETTINGS_KEYS.includes(prefKey)) {
+      throw new Error(`Unsupported workspace API setting key: ${prefKey}`);
+    }
+
     return this.db
       .updateTable('workspaces')
       .set({
         settings: sql`COALESCE(settings, '{}'::jsonb)
                 || jsonb_build_object('api', COALESCE(settings->'api', '{}'::jsonb)
-                || jsonb_build_object('${sql.raw(prefKey)}', ${sql.lit(prefValue)}))`,
+                || jsonb_build_object(${prefKey}, ${prefValue}))`,
         updatedAt: new Date(),
       })
       .where('id', '=', workspaceId)
@@ -178,15 +189,19 @@ export class WorkspaceRepo {
 
   async updateAiSettings(
     workspaceId: string,
-    prefKey: string,
+    prefKey: WorkspaceAiSettingsKey,
     prefValue: string | boolean,
   ) {
+    if (!WORKSPACE_AI_SETTINGS_KEYS.includes(prefKey)) {
+      throw new Error(`Unsupported workspace AI setting key: ${prefKey}`);
+    }
+
     return this.db
       .updateTable('workspaces')
       .set({
         settings: sql`COALESCE(settings, '{}'::jsonb)
                 || jsonb_build_object('ai', COALESCE(settings->'ai', '{}'::jsonb)
-                || jsonb_build_object('${sql.raw(prefKey)}', ${sql.lit(prefValue)}))`,
+                || jsonb_build_object(${prefKey}, ${prefValue}))`,
         updatedAt: new Date(),
       })
       .where('id', '=', workspaceId)
@@ -196,15 +211,19 @@ export class WorkspaceRepo {
 
   async updateSharingSettings(
     workspaceId: string,
-    prefKey: string,
+    prefKey: WorkspaceSharingSettingsKey,
     prefValue: string | boolean,
   ) {
+    if (!WORKSPACE_SHARING_SETTINGS_KEYS.includes(prefKey)) {
+      throw new Error(`Unsupported workspace sharing setting key: ${prefKey}`);
+    }
+
     return this.db
       .updateTable('workspaces')
       .set({
         settings: sql`COALESCE(settings, '{}'::jsonb)
                 || jsonb_build_object('sharing', COALESCE(settings->'sharing', '{}'::jsonb)
-                || jsonb_build_object('${sql.raw(prefKey)}', ${sql.lit(prefValue)}))`,
+                || jsonb_build_object(${prefKey}, ${prefValue}))`,
         updatedAt: new Date(),
       })
       .where('id', '=', workspaceId)

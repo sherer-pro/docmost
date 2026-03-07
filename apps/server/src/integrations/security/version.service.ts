@@ -6,7 +6,7 @@ export class VersionService {
   constructor() {}
 
   async getVersion() {
-    const url = `https://api.github.com/repos/sherer-pro/docmost/releases/latest`;
+    const url = `https://api.github.com/repos/docmost/docmost/releases/latest`;
 
     let latestVersion = 0;
     try {

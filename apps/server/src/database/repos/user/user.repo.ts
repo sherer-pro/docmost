@@ -15,6 +15,16 @@ import { ExpressionBuilder, SelectQueryBuilder, sql } from 'kysely';
 import { jsonObjectFrom } from 'kysely/helpers/postgres';
 import { UserRole } from '../../../common/helpers/types/permission';
 
+const USER_PREFERENCE_KEYS = [
+  'fullPageWidth',
+  'pageEditMode',
+  'pushEnabled',
+  'pushFrequency',
+  'emailEnabled',
+] as const;
+
+type UserPreferenceKey = (typeof USER_PREFERENCE_KEYS)[number];
+
 @Injectable()
 export class UserRepo {
   constructor(@InjectKysely() private readonly db: KyselyDB) {}
@@ -421,15 +431,19 @@ export class UserRepo {
 
   async updatePreference(
     userId: string,
-    prefKey: string,
+    prefKey: UserPreferenceKey,
     prefValue: string | boolean,
   ) {
+    if (!USER_PREFERENCE_KEYS.includes(prefKey)) {
+      throw new Error(`Unsupported user preference key: ${prefKey}`);
+    }
+
     return await this.db
       .updateTable('users')
       .set({
         settings: sql`COALESCE(settings, '{}'::jsonb)
                 || jsonb_build_object('preferences', COALESCE(settings->'preferences', '{}'::jsonb) 
-                || jsonb_build_object('${sql.raw(prefKey)}', ${sql.lit(prefValue)}))`,
+                || jsonb_build_object(${prefKey}, ${prefValue}))`,
         updatedAt: new Date(),
       })
       .where('id', '=', userId)
