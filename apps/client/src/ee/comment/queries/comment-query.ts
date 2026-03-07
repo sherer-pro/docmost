@@ -75,7 +75,7 @@ export function useResolveCommentMutation() {
         resolvedAt: data.resolvedAt,
         resolvedById: data.resolvedById,
         resolvedBy: data.resolvedBy,
-      });
+      }, { workspaceId: data.workspaceId });
       queryClient.invalidateQueries({ queryKey: RQ_KEY(pageId) });
       notifications.show({ 
         message: variables.resolved 
