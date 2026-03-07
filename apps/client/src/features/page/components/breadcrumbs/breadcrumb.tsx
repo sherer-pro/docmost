@@ -15,7 +15,7 @@ import { IconCornerDownRightDouble, IconDots } from "@tabler/icons-react";
 import { Link, useParams } from "react-router-dom";
 import classes from "./breadcrumb.module.css";
 import { SpaceTreeNode } from "@/features/page/tree/types.ts";
-import { buildPageUrl } from "@/features/page/page.utils.ts";
+import { buildDatabaseUrl, buildPageUrl } from "@/features/page/page.utils.ts";
 import { usePageQuery } from "@/features/page/queries/page-query.ts";
 import { extractPageSlugId } from "@/lib";
 import { useMediaQuery } from "@mantine/hooks";
@@ -27,14 +27,26 @@ function getTitle(name: string, icon: string) {
   return name;
 }
 
+function buildNodeUrl(
+  spaceSlug: string | undefined,
+  node: SpaceTreeNode,
+) {
+  if (node.nodeType === "database") {
+    return buildDatabaseUrl(spaceSlug, node.slugId, node.name);
+  }
+
+  return buildPageUrl(spaceSlug, node.slugId, node.name);
+}
+
 export default function Breadcrumb() {
   const treeData = useAtomValue(treeDataAtom);
   const [breadcrumbNodes, setBreadcrumbNodes] = useState<
     SpaceTreeNode[] | null
   >(null);
-  const { pageSlug, spaceSlug } = useParams();
+  const { pageSlug, databaseSlug, spaceSlug } = useParams();
+  const routeSlug = pageSlug ?? databaseSlug;
   const { data: currentPage } = usePageQuery({
-    pageId: extractPageSlugId(pageSlug),
+    pageId: extractPageSlugId(routeSlug),
   });
   const isMobile = useMediaQuery("(max-width: 48em)");
 
@@ -51,7 +63,7 @@ export default function Breadcrumb() {
         <Button
           justify="start"
           component={Link}
-          to={buildPageUrl(spaceSlug, node.slugId, node.name)}
+          to={buildNodeUrl(spaceSlug, node)}
           variant="default"
           style={{ border: "none" }}
         >
@@ -68,7 +80,7 @@ export default function Breadcrumb() {
         <Button
           justify="start"
           component={Link}
-          to={buildPageUrl(spaceSlug, node.slugId, node.name)}
+          to={buildNodeUrl(spaceSlug, node)}
           variant="default"
           style={{ border: "none" }}
         >
@@ -84,7 +96,7 @@ export default function Breadcrumb() {
       <Tooltip label={node.name} key={node.id}>
         <Anchor
           component={Link}
-          to={buildPageUrl(spaceSlug, node.slugId, node.name)}
+          to={buildNodeUrl(spaceSlug, node)}
           underline="never"
           fz="sm"
           key={node.id}

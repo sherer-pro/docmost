@@ -107,7 +107,7 @@ export default function PageHeaderMenu({ readOnly }: PageHeaderMenuProps) {
 }
 
 
-function ActivePageUsers() {
+export function ActivePageUsers() {
   const activePageUsers = useAtomValue(activePageUsersAtom);
 
   if (!activePageUsers.length) return null;
@@ -374,7 +374,7 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
   );
 }
 
-function ConnectionWarning() {
+export function ConnectionWarning() {
   const { t } = useTranslation();
   const yjsConnectionStatus = useAtomValue(yjsConnectionStatusAtom);
   const [showWarning, setShowWarning] = useState(false);

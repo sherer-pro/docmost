@@ -226,7 +226,6 @@ export default function DatabasePage() {
         databaseId={databaseId}
         databasePageId={databasePageId}
         spaceSlug={spaceSlug}
-        databaseName={databaseDisplayName}
         readOnly={readOnly}
       />
 

@@ -1,5 +1,5 @@
 import { ActionIcon, Menu, Tooltip } from '@mantine/core';
-import { IconArrowRight, IconArrowsExchange, IconDots, IconMessage, IconTrash } from '@tabler/icons-react';
+import { IconArrowRight, IconArrowsExchange, IconDots, IconList, IconMessage, IconTrash } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { useDisclosure } from '@mantine/hooks';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
@@ -21,6 +21,10 @@ import { buildDatabaseUrl } from '@/features/page/page.utils.ts';
 import { useRemovePageMutation } from '@/features/page/queries/page-query.ts';
 import { useConvertDatabaseToPageMutation } from '@/features/database/queries/database-query.ts';
 import { useDocumentConversionActions } from '@/features/page/hooks/use-document-conversion-actions.ts';
+import {
+  ActivePageUsers,
+  ConnectionWarning,
+} from '@/features/page/components/header/page-header-menu.tsx';
 import ShareModal from '@/features/share/components/share-modal.tsx';
 import { PageStateSegmentedControl } from '@/features/user/components/page-state-pref.tsx';
 import { useClipboard } from '@/hooks/use-clipboard';
@@ -155,6 +159,10 @@ export default function DatabaseHeaderMenu({
     toggleAside('comments');
   };
 
+  const handleOpenTableOfContents = () => {
+    toggleAside('toc');
+  };
+
   const handleDeletePage = () => {
     if (!resolvedDatabasePageId) {
       return;
@@ -175,9 +183,13 @@ export default function DatabaseHeaderMenu({
 
   return (
     <>
+      <ConnectionWarning />
+
+      <ActivePageUsers />
+
       {!readOnly && <PageStateSegmentedControl size="xs" />}
 
-      {!readOnly && hasDatabasePage && (
+      {hasDatabasePage && (
         <ShareModal pageId={resolvedDatabasePageId} readOnly={Boolean(readOnly)} />
       )}
 
@@ -188,6 +200,12 @@ export default function DatabaseHeaderMenu({
           </ActionIcon>
         </Tooltip>
       )}
+
+      <Tooltip label={t('Table of contents')} openDelay={250} withArrow>
+        <ActionIcon variant="subtle" color="dark" onClick={handleOpenTableOfContents}>
+          <IconList size={20} stroke={2} />
+        </ActionIcon>
+      </Tooltip>
 
       <Menu
         shadow="xl"
