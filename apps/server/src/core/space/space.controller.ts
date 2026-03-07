@@ -31,7 +31,6 @@ import {
   SpaceCaslAction,
   SpaceCaslSubject,
 } from '../casl/interfaces/space-ability.type';
-import { UpdateSpaceDto } from './dto/update-space.dto';
 import { UpdateSpaceResourceDto } from './dto/update-space-resource.dto';
 import { findHighestUserSpaceRole } from '@docmost/db/repos/space/utils';
 import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
@@ -96,19 +95,6 @@ export class SpaceController {
     return { ...space, membership };
   }
 
-  /**
-   * @deprecated Temporary backward-compatibility alias. Use GET /spaces/:spaceId.
-   */
-  @HttpCode(HttpStatus.OK)
-  @Post('info')
-  async getSpaceInfoAlias(
-    @Body() spaceIdDto: SpaceIdDto,
-    @AuthUser() user: User,
-    @AuthWorkspace() workspace: Workspace,
-  ) {
-    return this.getSpace(spaceIdDto.spaceId, user, workspace);
-  }
-
   @HttpCode(HttpStatus.OK)
   @Post('/')
   createSpace(
@@ -123,19 +109,6 @@ export class SpaceController {
       throw new ForbiddenException();
     }
     return this.spaceService.createSpace(user, workspace.id, createSpaceDto);
-  }
-
-  /**
-   * @deprecated Temporary backward-compatibility alias. Use POST /spaces.
-   */
-  @HttpCode(HttpStatus.OK)
-  @Post('create')
-  createSpaceAlias(
-    @Body() createSpaceDto: CreateSpaceDto,
-    @AuthUser() user: User,
-    @AuthWorkspace() workspace: Workspace,
-  ) {
-    return this.createSpace(createSpaceDto, user, workspace);
   }
 
   @HttpCode(HttpStatus.OK)
@@ -156,24 +129,6 @@ export class SpaceController {
     );
   }
 
-  /**
-   * @deprecated Temporary backward-compatibility alias. Use PATCH /spaces/:spaceId.
-   */
-  @HttpCode(HttpStatus.OK)
-  @Post('update')
-  async updateSpaceAlias(
-    @Body() updateSpaceDto: UpdateSpaceDto,
-    @AuthUser() user: User,
-    @AuthWorkspace() workspace: Workspace,
-  ) {
-    return this.updateSpace(
-      updateSpaceDto.spaceId,
-      updateSpaceDto,
-      user,
-      workspace,
-    );
-  }
-
   @HttpCode(HttpStatus.OK)
   @Delete(':spaceId')
   async deleteSpace(
@@ -186,19 +141,6 @@ export class SpaceController {
       throw new ForbiddenException();
     }
     return this.spaceService.deleteSpace(spaceId, workspace.id);
-  }
-
-  /**
-   * @deprecated Temporary backward-compatibility alias. Use DELETE /spaces/:spaceId.
-   */
-  @HttpCode(HttpStatus.OK)
-  @Post('delete')
-  async deleteSpaceAlias(
-    @Body() spaceIdDto: SpaceIdDto,
-    @AuthUser() user: User,
-    @AuthWorkspace() workspace: Workspace,
-  ) {
-    return this.deleteSpace(spaceIdDto.spaceId, user, workspace);
   }
 
   @HttpCode(HttpStatus.OK)

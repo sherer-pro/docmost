@@ -94,15 +94,56 @@ export class AuthRateLimitGuard implements CanActivate {
     request: FastifyRequest,
     metadata: AuthRateLimitMetadata,
   ) {
-    const body = (request.body ?? {}) as Record<string, unknown>;
-    const raw = body[metadata.accountField];
-
-    if (typeof raw !== 'string' || raw.trim().length === 0) {
+    const raw = this.readAccountField(request, metadata.accountField);
+    if (raw === null) {
       throw new BadRequestException(
         `Missing account identifier field: ${metadata.accountField}`,
       );
     }
 
     return raw;
+  }
+
+  private readAccountField(
+    request: FastifyRequest,
+    accountField: string,
+  ): string | null {
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    const query = (request.query ?? {}) as Record<string, unknown>;
+    const cookies = (request.cookies ?? {}) as Record<string, unknown>;
+    const headers = request.headers;
+    const normalizedHeaderName = accountField.toLowerCase();
+
+    const candidates: unknown[] = [
+      body[accountField],
+      query[accountField],
+      cookies[accountField],
+      headers[normalizedHeaderName],
+    ];
+
+    for (const candidate of candidates) {
+      const normalized = this.normalizeAccountFieldValue(candidate);
+      if (normalized) {
+        return normalized;
+      }
+    }
+
+    return null;
+  }
+
+  private normalizeAccountFieldValue(value: unknown): string | null {
+    if (typeof value === 'string' && value.trim().length > 0) {
+      return value.trim();
+    }
+
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        if (typeof item === 'string' && item.trim().length > 0) {
+          return item.trim();
+        }
+      }
+    }
+
+    return null;
   }
 }

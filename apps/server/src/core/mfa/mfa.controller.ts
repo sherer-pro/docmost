@@ -24,6 +24,8 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 import { EnvironmentService } from '../../integrations/environment/environment.service';
 import { CsrfService } from '../../common/security/csrf.service';
 import { UserRepo } from '@docmost/db/repos/user/user.repo';
+import { AuthRateLimitGuard } from '../auth/rate-limit/auth-rate-limit.guard';
+import { AuthRateLimit } from '../auth/rate-limit/auth-rate-limit.decorator';
 
 @Controller('mfa')
 export class MfaController {
@@ -108,6 +110,8 @@ export class MfaController {
 
   @HttpCode(HttpStatus.OK)
   @Post('verify')
+  @UseGuards(AuthRateLimitGuard)
+  @AuthRateLimit({ endpoint: 'mfaVerify', accountField: 'authToken' })
   async verify(
     @Req() req: FastifyRequest,
     @Res({ passthrough: true }) res: FastifyReply,
@@ -130,6 +134,8 @@ export class MfaController {
 
   @HttpCode(HttpStatus.OK)
   @Post('validate-access')
+  @UseGuards(AuthRateLimitGuard)
+  @AuthRateLimit({ endpoint: 'mfaValidateAccess', accountField: 'authToken' })
   async validateAccess(@Req() req: FastifyRequest) {
     return this.mfaService.validateMfaAccess(req.cookies?.authToken);
   }

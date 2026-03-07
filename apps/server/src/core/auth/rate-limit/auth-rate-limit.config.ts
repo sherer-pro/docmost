@@ -26,6 +26,14 @@ export const AUTH_RATE_LIMITS = {
     ip: { limit: 15, windowMs: 10 * 60 * 1000 },
     account: { limit: 8, windowMs: 10 * 60 * 1000 },
   },
+  mfaVerify: {
+    ip: { limit: 10, windowMs: 10 * 60 * 1000 },
+    account: { limit: 5, windowMs: 10 * 60 * 1000 },
+  },
+  mfaValidateAccess: {
+    ip: { limit: 20, windowMs: 10 * 60 * 1000 },
+    account: { limit: 10, windowMs: 10 * 60 * 1000 },
+  },
 } as const;
 
 export type AuthRateLimitEndpoint = keyof typeof AUTH_RATE_LIMITS;

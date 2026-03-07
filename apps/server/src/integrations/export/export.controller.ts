@@ -22,8 +22,6 @@ import {
 } from '../../core/casl/interfaces/space-ability.type';
 import { FastifyReply } from 'fastify';
 import { sanitize } from 'sanitize-filename-ts';
-import { DeprecatedRoute } from '../../common/decorators/deprecated-route.decorator';
-import { LEGACY_ALIAS_SUNSET } from '../../common/helpers/deprecated-route';
 
 /**
  * Shared service layer for export controllers.
@@ -123,23 +121,6 @@ export class PageExportController {
     return this.delegate.exportPage(dto, user, res);
   }
 
-  /**
-   * @deprecated Temporary backward-compatibility alias. Use /pages/actions/export.
-   */
-  @UseGuards(JwtAuthGuard)
-  @DeprecatedRoute({
-    sunset: LEGACY_ALIAS_SUNSET,
-    replacement: '/pages/actions/export',
-  })
-  @HttpCode(HttpStatus.OK)
-  @Post('export')
-  async exportPage(
-    @Body() dto: ExportPageDto,
-    @AuthUser() user: User,
-    @Res() res: FastifyReply,
-  ) {
-    return this.delegate.exportPage(dto, user, res);
-  }
 }
 
 @Controller('spaces')
@@ -172,21 +153,4 @@ export class SpaceExportController {
     return this.delegate.exportSpace(dto, user, res);
   }
 
-  /**
-   * @deprecated Temporary backward-compatibility alias. Use /spaces/actions/export.
-   */
-  @UseGuards(JwtAuthGuard)
-  @DeprecatedRoute({
-    sunset: LEGACY_ALIAS_SUNSET,
-    replacement: '/spaces/actions/export',
-  })
-  @HttpCode(HttpStatus.OK)
-  @Post('export')
-  async exportSpace(
-    @Body() dto: ExportSpaceDto,
-    @AuthUser() user: User,
-    @Res() res: FastifyReply,
-  ) {
-    return this.delegate.exportSpace(dto, user, res);
-  }
 }

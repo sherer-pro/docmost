@@ -51,6 +51,51 @@ import {
   mapPageCustomFields,
   mapPageResponse,
 } from './mappers/page-response.mapper';
+import { lookup } from 'node:dns/promises';
+import { BlockList, isIP } from 'node:net';
+
+const LINK_PREVIEW_TIMEOUT_MS = 7000;
+const LINK_PREVIEW_MAX_REDIRECTS = 5;
+const LINK_PREVIEW_MAX_RESPONSE_BYTES = 1_000_000;
+const LINK_PREVIEW_BLOCKED_HOST_SUFFIXES = [
+  '.localhost',
+  '.local',
+  '.internal',
+];
+
+function buildLinkPreviewBlockList(): BlockList {
+  const blockList = new BlockList();
+
+  // Private, local, and non-routable IPv4 ranges.
+  blockList.addSubnet('0.0.0.0', 8, 'ipv4');
+  blockList.addSubnet('10.0.0.0', 8, 'ipv4');
+  blockList.addSubnet('100.64.0.0', 10, 'ipv4');
+  blockList.addSubnet('127.0.0.0', 8, 'ipv4');
+  blockList.addSubnet('169.254.0.0', 16, 'ipv4');
+  blockList.addSubnet('172.16.0.0', 12, 'ipv4');
+  blockList.addSubnet('192.0.0.0', 24, 'ipv4');
+  blockList.addSubnet('192.0.2.0', 24, 'ipv4');
+  blockList.addSubnet('192.88.99.0', 24, 'ipv4');
+  blockList.addSubnet('192.168.0.0', 16, 'ipv4');
+  blockList.addSubnet('198.18.0.0', 15, 'ipv4');
+  blockList.addSubnet('198.51.100.0', 24, 'ipv4');
+  blockList.addSubnet('203.0.113.0', 24, 'ipv4');
+  blockList.addSubnet('224.0.0.0', 4, 'ipv4');
+  blockList.addSubnet('240.0.0.0', 4, 'ipv4');
+  blockList.addAddress('255.255.255.255', 'ipv4');
+
+  // Local and reserved IPv6 ranges.
+  blockList.addAddress('::', 'ipv6');
+  blockList.addAddress('::1', 'ipv6');
+  blockList.addSubnet('fc00::', 7, 'ipv6');
+  blockList.addSubnet('fe80::', 10, 'ipv6');
+  blockList.addSubnet('ff00::', 8, 'ipv6');
+  blockList.addSubnet('2001:db8::', 32, 'ipv6');
+
+  return blockList;
+}
+
+const LINK_PREVIEW_BLOCKLIST = buildLinkPreviewBlockList();
 
 @UseGuards(JwtAuthGuard)
 @Controller('pages')
@@ -132,6 +177,181 @@ export class PageController {
     } finally {
       await connection.disconnect();
     }
+  }
+
+  private async fetchLinkPreviewHtml(
+    sourceUrl: URL,
+  ): Promise<{ finalUrl: URL; html: string }> {
+    let currentUrl = new URL(sourceUrl.toString());
+
+    for (let hop = 0; hop <= LINK_PREVIEW_MAX_REDIRECTS; hop += 1) {
+      await this.assertPublicUrl(currentUrl);
+
+      const response = await fetch(currentUrl.toString(), {
+        redirect: 'manual',
+        signal: AbortSignal.timeout(LINK_PREVIEW_TIMEOUT_MS),
+        headers: {
+          'user-agent':
+            'Mozilla/5.0 (compatible; DocmostBot/1.0; +https://docmost.com)',
+          accept: 'text/html,application/xhtml+xml',
+        },
+      }).catch(() => {
+        throw new BadRequestException('Failed to fetch URL metadata');
+      });
+
+      if (this.isRedirectResponse(response.status)) {
+        const location = response.headers.get('location');
+        if (!location) {
+          throw new BadRequestException('Failed to fetch URL metadata');
+        }
+
+        try {
+          currentUrl = new URL(location, currentUrl);
+        } catch {
+          throw new BadRequestException('Failed to fetch URL metadata');
+        }
+
+        continue;
+      }
+
+      if (!response.ok) {
+        throw new BadRequestException('Failed to fetch URL metadata');
+      }
+
+      const contentType =
+        response.headers.get('content-type')?.toLowerCase() ?? '';
+      if (
+        !contentType.includes('text/html') &&
+        !contentType.includes('application/xhtml+xml')
+      ) {
+        throw new BadRequestException('URL does not point to an HTML document');
+      }
+
+      const html = await this.readResponseTextWithLimit(
+        response,
+        LINK_PREVIEW_MAX_RESPONSE_BYTES,
+      );
+
+      return { finalUrl: currentUrl, html };
+    }
+
+    throw new BadRequestException('Too many redirects');
+  }
+
+  private async assertPublicUrl(url: URL): Promise<void> {
+    if (!['http:', 'https:'].includes(url.protocol)) {
+      throw new BadRequestException('Only HTTP and HTTPS URLs are supported');
+    }
+
+    if (this.isBlockedHostname(url.hostname)) {
+      throw new BadRequestException('Unsafe target URL');
+    }
+
+    const hostIpVersion = isIP(url.hostname);
+    if (hostIpVersion !== 0) {
+      if (this.isBlockedIpAddress(url.hostname)) {
+        throw new BadRequestException('Unsafe target URL');
+      }
+
+      return;
+    }
+
+    const resolvedAddresses = await lookup(url.hostname, {
+      all: true,
+      verbatim: true,
+    }).catch(() => {
+      throw new BadRequestException('Failed to resolve URL hostname');
+    });
+
+    if (resolvedAddresses.length === 0) {
+      throw new BadRequestException('Failed to resolve URL hostname');
+    }
+
+    if (
+      resolvedAddresses.some((entry) => this.isBlockedIpAddress(entry.address))
+    ) {
+      throw new BadRequestException('Unsafe target URL');
+    }
+  }
+
+  private isBlockedHostname(hostname: string): boolean {
+    const normalized = hostname.toLowerCase().replace(/\.$/, '');
+    return (
+      normalized === 'localhost' ||
+      LINK_PREVIEW_BLOCKED_HOST_SUFFIXES.some((suffix) =>
+        normalized.endsWith(suffix),
+      )
+    );
+  }
+
+  private isBlockedIpAddress(address: string): boolean {
+    const normalized = this.normalizeIpAddress(address);
+
+    if (normalized.toLowerCase().startsWith('::ffff:')) {
+      const mappedIpv4 = normalized.slice('::ffff:'.length);
+      if (isIP(mappedIpv4) === 4) {
+        return this.isBlockedIpAddress(mappedIpv4);
+      }
+    }
+
+    const family = isIP(normalized);
+    if (family === 0) {
+      return true;
+    }
+
+    return LINK_PREVIEW_BLOCKLIST.check(normalized, family === 4 ? 'ipv4' : 'ipv6');
+  }
+
+  private normalizeIpAddress(address: string): string {
+    return address.replace(/^\[|\]$/g, '').split('%')[0];
+  }
+
+  private isRedirectResponse(statusCode: number): boolean {
+    return [301, 302, 303, 307, 308].includes(statusCode);
+  }
+
+  private async readResponseTextWithLimit(
+    response: Response,
+    maxBytes: number,
+  ): Promise<string> {
+    const contentLength = Number(response.headers.get('content-length'));
+    if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+      throw new BadRequestException('URL metadata response is too large');
+    }
+
+    if (!response.body) {
+      const text = await response.text();
+      if (Buffer.byteLength(text, 'utf8') > maxBytes) {
+        throw new BadRequestException('URL metadata response is too large');
+      }
+
+      return text;
+    }
+
+    const chunks: Buffer[] = [];
+    let totalBytes = 0;
+    const reader = response.body.getReader();
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+
+      if (!value) {
+        continue;
+      }
+
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        await reader.cancel().catch(() => undefined);
+        throw new BadRequestException('URL metadata response is too large');
+      }
+
+      chunks.push(Buffer.from(value));
+    }
+
+    return Buffer.concat(chunks).toString('utf8');
   }
 
   private getAbsoluteUrl(baseUrl: string, value?: string): string | null {
@@ -349,58 +569,33 @@ export class PageController {
       throw new BadRequestException('Only HTTP and HTTPS URLs are supported');
     }
 
-    const response = await fetch(sourceUrl.toString(), {
-      redirect: 'follow',
-      signal: AbortSignal.timeout(7000),
-      headers: {
-        'user-agent':
-          'Mozilla/5.0 (compatible; DocmostBot/1.0; +https://docmost.com)',
-        accept: 'text/html,application/xhtml+xml',
-      },
-    }).catch(() => {
-      throw new BadRequestException('Failed to fetch URL metadata');
-    });
-
-    if (!response.ok) {
-      throw new BadRequestException('Failed to fetch URL metadata');
-    }
-
-    const contentType =
-      response.headers.get('content-type')?.toLowerCase() ?? '';
-    if (
-      !contentType.includes('text/html') &&
-      !contentType.includes('application/xhtml+xml')
-    ) {
-      throw new BadRequestException('URL does not point to an HTML document');
-    }
-
-    const html = await response.text();
+    const { finalUrl, html } = await this.fetchLinkPreviewHtml(sourceUrl);
     const $ = load(html);
-    const finalUrl = response.url || sourceUrl.toString();
+    const finalUrlString = finalUrl.toString();
     const title =
       this.getBestMetaContent($, [
         'meta[property="og:title"]',
         'meta[name="twitter:title"]',
       ]) ||
       $('title').first().text().trim() ||
-      sourceUrl.hostname;
+      finalUrl.hostname;
     const description = this.getBestMetaContent($, [
       'meta[property="og:description"]',
       'meta[name="twitter:description"]',
       'meta[name="description"]',
     ]);
     const image = this.getAbsoluteUrl(
-      finalUrl,
+      finalUrlString,
       this.getBestMetaContent($, [
         'meta[property="og:image"]',
         'meta[name="twitter:image"]',
         'meta[property="twitter:image"]',
       ]),
     );
-    const favicon = this.getBestFaviconUrl($, finalUrl);
+    const favicon = this.getBestFaviconUrl($, finalUrlString);
 
     return {
-      url: finalUrl,
+      url: finalUrlString,
       title,
       description,
       image: image || favicon || null,
@@ -408,7 +603,7 @@ export class PageController {
         this.getBestMetaContent($, [
           'meta[property="og:site_name"]',
           'meta[name="application-name"]',
-        ]) || sourceUrl.hostname,
+        ]) || finalUrl.hostname,
     };
   }
 
