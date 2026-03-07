@@ -248,7 +248,7 @@ describe('DatabaseService mixed tree flows', () => {
     await service.updateProperty('db-1', 'prop-1', { type: 'multiline_text' }, 'ws-1');
 
     expect(databaseCellRepo.updateCell).toHaveBeenCalledWith('cell-1', {
-      value: 'Да',
+      value: 'Yes',
     });
   });
 

@@ -12,8 +12,10 @@ interface DatabaseCellDisplayValueParams {
 }
 
 const SERIALIZED_STRING_NORMALIZE_DEPTH = 6;
-const BOOLEAN_TRUE_TOKENS = new Set(['true', '1', 'yes', 'on', 'да']);
-const BOOLEAN_FALSE_TOKENS = new Set(['false', '0', 'no', 'off', 'нет', '']);
+const LEGACY_RU_TRUE_TOKEN = '\u0434\u0430';
+const LEGACY_RU_FALSE_TOKEN = '\u043d\u0435\u0442';
+const BOOLEAN_TRUE_TOKENS = new Set(['true', '1', 'yes', 'on', LEGACY_RU_TRUE_TOKEN]);
+const BOOLEAN_FALSE_TOKENS = new Set(['false', '0', 'no', 'off', LEGACY_RU_FALSE_TOKEN, '']);
 
 /**
  * Unwraps malformed values that were JSON-stringified one or more times.

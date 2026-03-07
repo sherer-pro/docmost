@@ -199,11 +199,11 @@ export class DatabaseService {
 
     if (fromType === 'checkbox' && toType === 'multiline_text') {
       if (typeof normalizedValue === 'boolean') {
-        return { converted: normalizedValue ? 'Да' : 'Нет', isConvertible: true };
+        return { converted: normalizedValue ? 'Yes' : 'No', isConvertible: true };
       }
 
       const booleanValue = String(normalizedValue).toLowerCase() === 'true';
-      return { converted: booleanValue ? 'Да' : 'Нет', isConvertible: true };
+      return { converted: booleanValue ? 'Yes' : 'No', isConvertible: true };
     }
 
     if (fromType === 'select' && toType === 'multiline_text') {

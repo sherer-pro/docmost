@@ -3,7 +3,7 @@ import { describe, it } from "vitest";
 import { shouldSyncCanonicalUrlNow } from "./canonical-title-url-sync";
 
 describe("canonical title url sync helper", () => {
-  it("откладывает синхронизацию, пока пользователь редактирует title", () => {
+  it("defers sync while user is editing title", () => {
     const result = shouldSyncCanonicalUrlNow(
       "/s/workspace/p/old-page-slug",
       "/s/workspace/p/new-page-slug",
@@ -13,7 +13,7 @@ describe("canonical title url sync helper", () => {
     assert.equal(result, false);
   });
 
-  it("разрешает синхронизацию после потери фокуса", () => {
+  it("allows sync after title loses focus", () => {
     const result = shouldSyncCanonicalUrlNow(
       "/s/workspace/db/old-db-slug",
       "/s/workspace/db/new-db-slug",

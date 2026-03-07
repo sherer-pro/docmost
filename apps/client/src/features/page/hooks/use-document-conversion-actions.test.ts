@@ -3,7 +3,7 @@ import { describe, it } from 'vitest';
 import { createConvertDatabaseToPageAction } from './document-conversion-actions.shared';
 
 describe('createConvertDatabaseToPageAction', () => {
-  it('выполняет mutation и затем показывает уведомление + navigation при наличии slugId', async () => {
+  it('runs mutation and then notifies + navigates when slugId exists', async () => {
     const callOrder: string[] = [];
 
     const onConfirm = createConvertDatabaseToPageAction({
@@ -24,7 +24,7 @@ describe('createConvertDatabaseToPageAction', () => {
     assert.deepEqual(callOrder, ['mutation', 'notification', 'navigation']);
   });
 
-  it('не выполняет navigation, если conversion не вернула slugId', async () => {
+  it('does not navigate if conversion result has no slugId', async () => {
     const callOrder: string[] = [];
 
     const onConfirm = createConvertDatabaseToPageAction({

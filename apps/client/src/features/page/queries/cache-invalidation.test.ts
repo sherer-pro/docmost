@@ -100,7 +100,7 @@ describe("cache invalidation scenarios", () => {
       trashListKey("space-1", { limit: 10 }),
     );
   });
-  it("page:create инвалидирует дерево, recent-changes остаётся на стороне page-query", () => {
+  it("page:create invalidates row-context tree while recent-changes stays in page-query", () => {
     const { client, calls } = createMockClient();
 
     invalidateDatabaseRowContext({}, { client });
@@ -111,7 +111,7 @@ describe("cache invalidation scenarios", () => {
     ]);
   });
 
-  it("page:update инвалидирует row-context и rows через общий utility", () => {
+  it("page:update invalidates row-context and rows via shared utility", () => {
     const { client, calls } = createMockClient();
 
     invalidateDatabaseRowContext({}, { client });
@@ -122,7 +122,7 @@ describe("cache invalidation scenarios", () => {
     ]);
   });
 
-  it("page:delete инвалидирует row-context и rows через общий utility", () => {
+  it("page:delete invalidates row-context and rows via shared utility", () => {
     const { client, calls } = createMockClient();
 
     invalidateDatabaseRowContext({}, { client });
@@ -133,7 +133,7 @@ describe("cache invalidation scenarios", () => {
     ]);
   });
 
-  it("page:convert инвалидирует pages + sidebar + database entity + row context", () => {
+  it("page:convert invalidates pages + sidebar + database entity + row context", () => {
     const { client, calls } = createMockClient();
 
     invalidatePageEntity({ includeAllPages: true }, { client });
@@ -152,7 +152,7 @@ describe("cache invalidation scenarios", () => {
     ]);
   });
 
-  it("database:create инвалидирует список баз и дерево sidebar", () => {
+  it("database:create invalidates databases list and sidebar tree", () => {
     const { client, calls } = createMockClient();
 
     invalidateDatabaseEntity({ spaceId: "space-1" }, { client });
@@ -166,7 +166,7 @@ describe("cache invalidation scenarios", () => {
     ]);
   });
 
-  it("database:update инвалидирует entity, списки и дерево", () => {
+  it("database:update invalidates entity, lists, and tree", () => {
     const { client, calls } = createMockClient();
 
     invalidateDatabaseEntity(
@@ -184,7 +184,7 @@ describe("cache invalidation scenarios", () => {
     ]);
   });
 
-  it("database:convert инвалидирует entity, дерево, rows/context и страницу", () => {
+  it("database:convert invalidates entity, tree, rows/context, and page", () => {
     const { client, calls } = createMockClient();
 
     invalidateDatabaseEntity(
