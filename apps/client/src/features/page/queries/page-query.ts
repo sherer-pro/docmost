@@ -51,6 +51,7 @@ import {
   PAGE_QUERY_KEYS,
   breadcrumbsKey,
   recentChangesKey,
+  SidebarKeyParams,
   trashListKey,
   QUERY_KEY_SPACE,
 } from "@/features/page/queries/query-keys";
@@ -612,36 +613,60 @@ export function updateCacheOnMovePage(
   pageId: string,
   oldParentId: string | null,
   newParentId: string | null,
-  pageData: Partial<IPage>,
+  pageData: Partial<IPage> & Partial<ISidebarNode>,
 ) {
-  // Remove page from old parent's cache
-  const oldQueryKey =
-    oldParentId === null
-      ? PAGE_QUERY_KEYS.rootSidebar(spaceId)
-      : PAGE_QUERY_KEYS.sidebar({ pageId: oldParentId, spaceId });
+  type SidebarCacheItem = Partial<IPage> & Partial<ISidebarNode>;
 
-  queryClient.setQueryData<InfiniteData<IPagination<IPage>>>(
-    oldQueryKey,
-    (old) => {
-      if (!old) return old;
-      return {
-        ...old,
-        pages: old.pages.map((page) => ({
-          ...page,
-          items: page.items.filter((item) => item.id !== pageId),
-        })),
-      };
-    },
-  );
+  const getParentCacheKeys = (parentId: string | null): QueryKey[] => {
+    return queryClient
+      .getQueriesData<InfiniteData<IPagination<SidebarCacheItem>>>({
+        predicate: (query) => {
+          if (query.queryKey[0] === QUERY_KEY_SPACE.rootSidebarPages) {
+            return parentId === null && query.queryKey[1] === spaceId;
+          }
+
+          if (
+            query.queryKey[0] === QUERY_KEY_SPACE.sidebarPages &&
+            parentId !== null
+          ) {
+            const params = query.queryKey[1] as SidebarKeyParams | undefined;
+            return params?.spaceId === spaceId && params?.pageId === parentId;
+          }
+
+          return false;
+        },
+      })
+      .map(([key]) => key);
+  };
+
+  // Remove page from old parent's cache
+  const oldParentCacheKeys = getParentCacheKeys(oldParentId);
+  oldParentCacheKeys.forEach((key) => {
+    queryClient.setQueryData<InfiniteData<IPagination<SidebarCacheItem>>>(
+      key,
+      (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          pages: old.pages.map((page) => ({
+            ...page,
+            items: page.items.filter((item) => item.id !== pageId),
+          })),
+        };
+      },
+    );
+  });
 
   // Update old parent's hasChildren flag if it has no more children
-  if (oldParentId !== null) {
-    const oldParentCache = queryClient.getQueryData<
-      InfiniteData<IPagination<IPage>>
-    >(PAGE_QUERY_KEYS.sidebar({ pageId: oldParentId, spaceId }));
-
-    const remainingChildren =
-      oldParentCache?.pages.flatMap((p) => p.items).length ?? 0;
+  if (oldParentId !== null && oldParentCacheKeys.length > 0) {
+    const remainingChildren = oldParentCacheKeys.reduce((acc, key) => {
+      const cache =
+        queryClient.getQueryData<InfiniteData<IPagination<SidebarCacheItem>>>(
+          key,
+        );
+      const count = cache?.pages.flatMap((page) => page.items).length ?? 0;
+      return Math.max(acc, count);
+    }, 0);
 
     if (remainingChildren === 0) {
       // Update hasChildren in all caches where old parent appears
@@ -652,7 +677,7 @@ export function updateCacheOnMovePage(
       });
 
       allSideBarMatches.forEach(([key]) => {
-        queryClient.setQueryData<InfiniteData<IPagination<IPage>>>(
+        queryClient.setQueryData<InfiniteData<IPagination<SidebarCacheItem>>>(
           key,
           (old) => {
             if (!old) return old;
@@ -674,36 +699,34 @@ export function updateCacheOnMovePage(
   }
 
   // Add page to new parent's cache
-  const newQueryKey =
-    newParentId === null
-      ? PAGE_QUERY_KEYS.rootSidebar(spaceId)
-      : PAGE_QUERY_KEYS.sidebar({ pageId: newParentId, spaceId });
+  const newParentCacheKeys = getParentCacheKeys(newParentId);
+  newParentCacheKeys.forEach((key) => {
+    queryClient.setQueryData<InfiniteData<IPagination<SidebarCacheItem>>>(
+      key,
+      (old) => {
+        if (!old) return old;
 
-  queryClient.setQueryData<InfiniteData<IPagination<Partial<IPage>>>>(
-    newQueryKey,
-    (old) => {
-      if (!old) return old;
+        // Check if page already exists in new location
+        const exists = old.pages.some((page) =>
+          page.items.some((item) => item.id === pageId),
+        );
+        if (exists) return old;
 
-      // Check if page already exists in new location
-      const exists = old.pages.some((page) =>
-        page.items.some((item) => item.id === pageId),
-      );
-      if (exists) return old;
-
-      return {
-        ...old,
-        pages: old.pages.map((page, index) => {
-          if (index === old.pages.length - 1) {
-            return {
-              ...page,
-              items: [...page.items, pageData],
-            };
-          }
-          return page;
-        }),
-      };
-    },
-  );
+        return {
+          ...old,
+          pages: old.pages.map((page, index) => {
+            if (index === old.pages.length - 1) {
+              return {
+                ...page,
+                items: [...page.items, pageData],
+              };
+            }
+            return page;
+          }),
+        };
+      },
+    );
+  });
 
   // Update new parent's hasChildren flag
   if (newParentId !== null) {

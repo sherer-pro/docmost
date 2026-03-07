@@ -99,6 +99,7 @@ export const useTreeSocket = () => {
               id: event.payload.id,
               changes: {
                 position: event.payload.position,
+                parentPageId: event.payload.parentId,
               },
             });
 
