@@ -1,4 +1,4 @@
-import { Badge, Checkbox, Group, Select, Text, TextInput, Textarea } from '@mantine/core';
+import { alpha, Badge, Checkbox, Group, Select, Text, TextInput, Textarea, useMantineTheme } from '@mantine/core';
 import { DatabasePropertyType } from '@docmost/api-contract';
 import { useTranslation } from 'react-i18next';
 import { useMemo } from 'react';
@@ -57,6 +57,7 @@ export function DatabaseCellRenderer({
   onSave,
 }: DatabaseCellRendererProps) {
   const { t } = useTranslation();
+  const theme = useMantineTheme();
   const editorValue = isEditing ? editingValue : value;
 
   const selectedUserId = useMemo(() => {
@@ -299,6 +300,18 @@ export function DatabaseCellRenderer({
       const selectOptionByValue = new Map(
         settings.map((option) => [option.value, option]),
       );
+      const selectedOption = selectOptionByValue.get(selectValue);
+      const selectedColorScale = selectedOption?.color
+        ? theme.colors[selectedOption.color] ?? theme.colors.gray
+        : null;
+      const selectInputStyles = selectedColorScale
+        ? {
+            input: {
+              backgroundColor: alpha(selectedColorScale[1], 0.35),
+              borderColor: selectedColorScale[4],
+            },
+          }
+        : undefined;
 
       return (
         <Select
@@ -312,6 +325,7 @@ export function DatabaseCellRenderer({
           }}
           onBlur={handleBlurSave}
           clearable
+          styles={selectInputStyles}
           renderOption={({ option }) => {
             const selectOption = selectOptionByValue.get(option.value);
 
@@ -415,4 +429,3 @@ export function DatabaseCellRenderer({
     </div>
   );
 }
-

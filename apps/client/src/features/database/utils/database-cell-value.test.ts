@@ -53,7 +53,11 @@ describe('database-cell-value normalization', () => {
 
     assert.equal(normalizeDatabaseSelectValue('in_progress'), 'in_progress');
     assert.equal(
-      normalizeDatabaseSelectValue({ value: 'in_progress', rawValueBeforeTypeChange: { id: 'legacy' } }),
+      normalizeDatabaseSelectValue({
+        value: 'in_progress',
+        rawValueBeforeTypeChange: { id: 'legacy' },
+        rawTypeBeforeTypeChange: 'user',
+      }),
       'in_progress',
     );
     assert.equal(normalizeDatabaseSelectValue('"in_progress"'), 'in_progress');
@@ -78,6 +82,7 @@ describe('database-cell-value normalization', () => {
     const fallbackValue = {
       value: 'page-1',
       rawValueBeforeTypeChange: { value: 'legacy' },
+      rawTypeBeforeTypeChange: 'multiline_text',
     };
 
     assert.equal(normalizeDatabasePageReferenceValue(fallbackValue), 'page-1');

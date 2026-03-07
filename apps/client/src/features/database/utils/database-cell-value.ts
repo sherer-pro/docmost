@@ -3,6 +3,7 @@ import { IDatabaseProperty, IDatabaseSelectOption, IDatabaseSelectPropertySettin
 interface LegacyCellValueContainer {
   value: unknown;
   rawValueBeforeTypeChange: unknown;
+  rawTypeBeforeTypeChange?: string | null;
 }
 
 interface DatabaseCellDisplayValueParams {

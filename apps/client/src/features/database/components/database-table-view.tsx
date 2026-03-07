@@ -12,6 +12,7 @@ import {
   Text,
   TextInput,
 } from '@mantine/core';
+import { useMediaQuery } from '@mantine/hooks';
 import {
   IconDotsVertical,
   IconEye,
@@ -82,6 +83,12 @@ import {
   getDatabaseCellDisplayValue,
   getDatabaseSelectSettings,
 } from '@/features/database/utils/database-cell-value.ts';
+import {
+  isDatabaseFilterControlsVisible,
+  isSameCellPayloadValue,
+  resolveDatabasePropertyRename,
+  shouldDeleteCellPayload,
+} from '@/features/database/components/database-table-view.helpers.ts';
 
 interface DatabaseTableViewProps {
   databaseId: string;
@@ -158,8 +165,11 @@ export function DatabaseTableView({
   const [filters, setFilters] = useState<IDatabaseFilterCondition[]>([DEFAULT_FILTER]);
   const [sortState, setSortState] = useState<IDatabaseSortState | null>(null);
   const [settingsProperty, setSettingsProperty] = useState<IDatabaseProperty | null>(null);
+  const [editingPropertyId, setEditingPropertyId] = useState<string | null>(null);
+  const [editingPropertyName, setEditingPropertyName] = useState('');
   const [selectPropertyDraft, setSelectPropertyDraft] =
     useState<SelectPropertyCreationDraft | null>(null);
+  const isMobileViewport = useMediaQuery('(max-width: 767px)');
   const setTableExportState = useSetAtom(databaseTableExportStateAtom);
   const treeData = useAtomValue(treeDataAtom);
   const setTreeData = useSetAtom(treeDataAtom);
@@ -386,14 +396,23 @@ export function DatabaseTableView({
 
     const sourceValue = typeof nextValue === 'undefined' ? editingValue : nextValue;
     const normalizedValue = buildDatabaseCellPayloadValue(property, sourceValue);
-    const shouldDelete =
-      property.type !== 'checkbox' &&
-      (normalizedValue === null ||
-        normalizedValue === '' ||
-        (typeof normalizedValue === 'object' &&
-          normalizedValue !== null &&
-          'id' in normalizedValue &&
-          !(normalizedValue as { id?: string }).id));
+    const shouldDelete = shouldDeleteCellPayload(property.type, normalizedValue);
+    const currentNormalizedValue = buildDatabaseCellPayloadValue(
+      property,
+      getRawCellValue(row, property.id),
+    );
+    const currentShouldDelete = shouldDeleteCellPayload(property.type, currentNormalizedValue);
+    const nextPersistedValue = shouldDelete ? null : normalizedValue;
+    const currentPersistedValue = currentShouldDelete ? null : currentNormalizedValue;
+
+    if (
+      shouldDelete === currentShouldDelete &&
+      isSameCellPayloadValue(nextPersistedValue, currentPersistedValue)
+    ) {
+      setEditingCellKey(null);
+      setEditingValue('');
+      return;
+    }
 
     await updateCellsMutation.mutateAsync({
       pageId: row.pageId,
@@ -410,6 +429,41 @@ export function DatabaseTableView({
 
     setEditingCellKey(null);
     setEditingValue('');
+  };
+
+  const startPropertyRename = (property: IDatabaseProperty) => {
+    if (!isEditable) {
+      return;
+    }
+
+    setEditingPropertyId(property.id);
+    setEditingPropertyName(property.name);
+  };
+
+  const stopPropertyRename = () => {
+    setEditingPropertyId(null);
+    setEditingPropertyName('');
+  };
+
+  const savePropertyRename = async (property: IDatabaseProperty) => {
+    if (editingPropertyId !== property.id) {
+      return;
+    }
+
+    const nextName = resolveDatabasePropertyRename(property.name, editingPropertyName);
+    if (!nextName) {
+      stopPropertyRename();
+      return;
+    }
+
+    await updatePropertyMutation.mutateAsync({
+      propertyId: property.id,
+      payload: {
+        name: nextName,
+      },
+    });
+
+    stopPropertyRename();
   };
 
 
@@ -605,88 +659,90 @@ export function DatabaseTableView({
         </Group>
       </Group>
 
-      <Stack mb="md" gap="xs">
-        {filters.map((condition, index) => (
-          <Group key={`filter-${index}`} align="end" wrap="nowrap">
-            <Select
-              placeholder={t('Field')}
-              data={properties.map((property) => ({
-                value: property.id,
-                label: property.name,
-              }))}
-              value={condition.propertyId}
-              onChange={(value) => {
-                setFilters((prev) =>
-                  prev.map((item, itemIndex) =>
-                    itemIndex === index ? { ...item, propertyId: value || '' } : item,
-                  ),
-                );
-              }}
-            />
+      {isDatabaseFilterControlsVisible(isMobileViewport) && (
+        <Stack mb="md" gap="xs">
+          {filters.map((condition, index) => (
+            <Group key={`filter-${index}`} align="end" wrap="nowrap">
+              <Select
+                placeholder={t('Field')}
+                data={properties.map((property) => ({
+                  value: property.id,
+                  label: property.name,
+                }))}
+                value={condition.propertyId}
+                onChange={(value) => {
+                  setFilters((prev) =>
+                    prev.map((item, itemIndex) =>
+                      itemIndex === index ? { ...item, propertyId: value || '' } : item,
+                    ),
+                  );
+                }}
+              />
 
-            <Select
-              w={140}
-              data={[
-                { value: 'contains', label: t('contains') },
-                { value: 'equals', label: t('equals') },
-                { value: 'not_equals', label: t('not equals') },
-              ]}
-              value={condition.operator}
-              onChange={(value) => {
-                if (!value) {
-                  return;
+              <Select
+                w={140}
+                data={[
+                  { value: 'contains', label: t('contains') },
+                  { value: 'equals', label: t('equals') },
+                  { value: 'not_equals', label: t('not equals') },
+                ]}
+                value={condition.operator}
+                onChange={(value) => {
+                  if (!value) {
+                    return;
+                  }
+
+                  setFilters((prev) =>
+                    prev.map((item, itemIndex) =>
+                      itemIndex === index
+                        ? {
+                            ...item,
+                            operator: value as IDatabaseFilterCondition['operator'],
+                          }
+                        : item,
+                    ),
+                  );
+                }}
+              />
+
+              <TextInput
+                placeholder={t('Value')}
+                value={condition.value}
+                onChange={(event) => {
+                  setFilters((prev) =>
+                    prev.map((item, itemIndex) =>
+                      itemIndex === index
+                        ? { ...item, value: event.currentTarget.value }
+                        : item,
+                    ),
+                  );
+                }}
+              />
+
+              <Button
+                variant="subtle"
+                color="red"
+                disabled={filters.length === 1}
+                onClick={() =>
+                  setFilters((prev) => prev.filter((_, itemIndex) => itemIndex !== index))
                 }
+              >
+                {t('Remove')}
+              </Button>
+            </Group>
+          ))}
 
-                setFilters((prev) =>
-                  prev.map((item, itemIndex) =>
-                    itemIndex === index
-                      ? {
-                          ...item,
-                          operator: value as IDatabaseFilterCondition['operator'],
-                        }
-                      : item,
-                  ),
-                );
-              }}
-            />
-
-            <TextInput
-              placeholder={t('Value')}
-              value={condition.value}
-              onChange={(event) => {
-                setFilters((prev) =>
-                  prev.map((item, itemIndex) =>
-                    itemIndex === index
-                      ? { ...item, value: event.currentTarget.value }
-                      : item,
-                  ),
-                );
-              }}
-            />
-
-            <Button
-              variant="subtle"
-              color="red"
-              disabled={filters.length === 1}
-              onClick={() =>
-                setFilters((prev) => prev.filter((_, itemIndex) => itemIndex !== index))
-              }
-            >
-              {t('Remove')}
-            </Button>
-          </Group>
-        ))}
-
-        <Button
-          w="fit-content"
-          variant="subtle"
-          leftSection={<IconPlus size={14} />}
-          disabled={filters.length >= 3}
-          onClick={() => setFilters((prev) => [...prev, { ...DEFAULT_FILTER }])}
-        >
-          {t('Filter')}
-        </Button>
-      </Stack>
+          <Button
+            w="fit-content"
+            variant="subtle"
+            leftSection={<IconPlus size={14} />}
+            disabled={filters.length >= 3}
+            onClick={() => setFilters((prev) => [...prev, { ...DEFAULT_FILTER }])}
+          >
+            {t('Filter')}
+          </Button>
+        </Stack>
+      )}
 
       <ScrollArea>
         <Table
@@ -702,8 +758,37 @@ export function DatabaseTableView({
               {displayedProperties.map((property) => (
                 <Table.Th key={property.id} miw={220}>
                   <Group justify="space-between" gap="xs" wrap="nowrap">
-                    <Text size="sm">{property.name}</Text>
-                    {isEditable && (
+                    {editingPropertyId === property.id ? (
+                      <TextInput
+                        autoFocus
+                        size="xs"
+                        value={editingPropertyName}
+                        onChange={(event) => setEditingPropertyName(event.currentTarget.value)}
+                        onBlur={() => void savePropertyRename(property)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault();
+                            event.currentTarget.blur();
+                          }
+
+                          if (event.key === 'Escape') {
+                            event.preventDefault();
+                            stopPropertyRename();
+                          }
+                        }}
+                        onClick={(event) => event.stopPropagation()}
+                        onMouseDown={(event) => event.stopPropagation()}
+                      />
+                    ) : (
+                      <Text
+                        size="sm"
+                        style={{ cursor: isEditable ? 'text' : 'default' }}
+                        onClick={() => startPropertyRename(property)}
+                      >
+                        {property.name}
+                      </Text>
+                    )}
+                    {isEditable && editingPropertyId !== property.id && (
                       <Menu position="bottom-end" shadow="md" withinPortal>
                         <Menu.Target>
                           <ActionIcon
