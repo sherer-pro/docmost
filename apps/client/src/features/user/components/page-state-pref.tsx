@@ -2,7 +2,7 @@ import { Text, MantineSize, SegmentedControl } from "@mantine/core";
 import { useAtom } from "jotai";
 import { userAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { updateUser } from "@/features/user/services/user-service.ts";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { PageEditMode } from "@/features/user/types/user.types.ts";
 import { normalizePageEditMode } from "@/features/user/utils/page-edit-mode.ts";
@@ -41,6 +41,7 @@ export function PageStateSegmentedControl({
   );
   const [value, setValue] = useState(pageEditMode);
   const [isSaving, setIsSaving] = useState(false);
+  const latestRequestIdRef = useRef(0);
 
   const setLocalPreference = useCallback(
     (mode: PageEditMode) => {
@@ -70,12 +71,17 @@ export function PageStateSegmentedControl({
       }
 
       const previousMode = value;
+      const requestId = latestRequestIdRef.current + 1;
+      latestRequestIdRef.current = requestId;
       setValue(nextMode);
       setLocalPreference(nextMode);
       setIsSaving(true);
 
       try {
         const updatedUser = await updateUser({ pageEditMode: nextMode });
+        if (requestId !== latestRequestIdRef.current) {
+          return;
+        }
         const persistedMode = normalizePageEditMode(
           updatedUser?.settings?.preferences?.pageEditMode,
         );
@@ -92,10 +98,15 @@ export function PageStateSegmentedControl({
           },
         });
       } catch {
+        if (requestId !== latestRequestIdRef.current) {
+          return;
+        }
         setValue(previousMode);
         setLocalPreference(previousMode);
       } finally {
-        setIsSaving(false);
+        if (requestId === latestRequestIdRef.current) {
+          setIsSaving(false);
+        }
       }
     },
     [setLocalPreference, setUser, user, value],
@@ -110,7 +121,7 @@ export function PageStateSegmentedControl({
       size={size}
       value={value}
       onChange={handleChange}
-      disabled={isSaving}
+      aria-busy={isSaving}
       data={[
         { label: t("Edit"), value: PageEditMode.Edit },
         { label: t("Read"), value: PageEditMode.Read },
