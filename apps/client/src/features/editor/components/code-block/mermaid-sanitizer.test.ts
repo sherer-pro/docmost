@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import { describe, it } from 'vitest';
 import { sanitizeMermaidSvg } from './mermaid-sanitizer';
 
 describe('sanitizeMermaidSvg', () => {
@@ -19,3 +19,4 @@ describe('sanitizeMermaidSvg', () => {
     assert.equal(sanitizeMermaidSvg(payload), payload);
   });
 });
+

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import { describe, it } from 'vitest';
 import { buildPageUrl } from './page.utils';
 
 describe('buildPageUrl', () => {
@@ -21,3 +21,4 @@ describe('buildPageUrl', () => {
     assert.equal(route, '/p/project-plan-a1b2c3');
   });
 });
+

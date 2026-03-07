@@ -96,8 +96,8 @@ function extractDatabaseUserId(value: unknown): string | null {
 
 
 /**
- * Возвращает актуальное значение ячейки из fallback-контейнера,
- * который используется после смены типа свойства.
+ * Returns current cell value from fallback container
+ * used after property type conversion.
  */
 export function extractCurrentDatabaseCellValue(value: unknown): unknown {
   if (!value || typeof value !== 'object') {
@@ -113,7 +113,7 @@ export function extractCurrentDatabaseCellValue(value: unknown): unknown {
 }
 
 /**
- * Нормализует строковые значения ячейки, включая cleanup legacy-экранирования.
+ * Normalizes string cell values, including legacy escape cleanup.
  */
 export function normalizeDatabaseStringValue(value: unknown): string {
   const currentValue = extractCurrentDatabaseCellValue(value);
@@ -126,8 +126,8 @@ export function normalizeDatabaseStringValue(value: unknown): string {
 }
 
 /**
- * Нормализует значение пользователя до `id`.
- * Поддерживаются контрактные формы: `string | { id: string } | null`.
+ * Normalizes user value to `id`.
+ * Supported shapes: `string | { id: string } | null`.
  */
 export function normalizeDatabaseUserId(value: unknown): string | null {
   return extractDatabaseUserId(extractCurrentDatabaseCellValue(value));
@@ -163,23 +163,23 @@ export function normalizeDatabaseCheckboxValue(value: unknown): boolean {
 
 
 /**
- * Нормализует select-значение до строкового `value`.
- * Поддерживает как прямую строку, так и fallback-объект после смены типа.
+ * Normalizes select value to string `value`.
+ * Supports both direct string and fallback object after type changes.
  */
 export function normalizeDatabaseSelectValue(value: unknown): string {
   return normalizeDatabaseStringValue(value);
 }
 
 /**
- * Нормализует page_reference до строкового `pageId`.
- * Поддерживает как прямую строку, так и fallback-объект после смены типа.
+ * Normalizes page_reference value to string `pageId`.
+ * Supports both direct string and fallback object after type changes.
  */
 export function normalizeDatabasePageReferenceValue(value: unknown): string {
   return normalizeDatabaseStringValue(value);
 }
 
 /**
- * Возвращает настройки select-свойства в безопасном, типизированном формате.
+ * Returns select property settings in a safe typed format.
  */
 export function getDatabaseSelectSettings(property?: IDatabaseProperty): IDatabaseSelectPropertySettings {
   if (!property?.settings || typeof property.settings !== 'object') {
@@ -211,7 +211,7 @@ export function getDatabaseSelectSettings(property?: IDatabaseProperty): IDataba
 }
 
 /**
- * Ищет select-опцию по текущему value.
+ * Finds select option by normalized current value.
  */
 export function getDatabaseSelectOption(
   property: IDatabaseProperty,
@@ -228,8 +228,8 @@ export function getDatabaseSelectOption(
 }
 
 /**
- * Возвращает отображаемое строковое значение для фильтрации/сортировки/экспорта,
- * чтобы UI и markdown использовали один и тот же display-модель.
+ * Returns display string value for filtering/sorting/export
+ * so UI and markdown paths use the same display model.
  */
 export function getDatabaseCellDisplayValue({
   property,
@@ -291,7 +291,7 @@ export function getDatabaseCellDisplayValue({
 }
 
 /**
- * Строит контрактный payload для batch update API по типу свойства.
+ * Builds contract-compatible payload for batch update API by property type.
  */
 export function buildDatabaseCellPayloadValue(property: IDatabaseProperty, value: unknown): unknown {
   const currentValue = extractCurrentDatabaseCellValue(value);

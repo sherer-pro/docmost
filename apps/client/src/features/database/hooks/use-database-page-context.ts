@@ -11,10 +11,10 @@ import { usePageQuery } from '@/features/page/queries/page-query.ts';
 type DatabasePageContextParams = Record<string, string | undefined>;
 
 /**
- * Единая точка получения id-контекста для database/page экранов.
+ * Single source of truth for page/database identifiers on database screens.
  *
- * Возвращает стабильные идентификаторы с приоритетом server-verified данных
- * (`database.pageId/pageSlugId`) и безопасными fallback-значениями из route/page.
+ * Returns stable IDs with priority for server-verified values
+ * (`database.pageId/pageSlugId`) and safe route/page fallbacks.
  */
 export function useDatabasePageContext(): DatabasePageContextValue {
   const { databaseSlug, pageSlug, spaceSlug } =
@@ -31,8 +31,8 @@ export function useDatabasePageContext(): DatabasePageContextValue {
   });
 
   /**
-   * Храним последний валидный databaseId, чтобы при кратковременном рассинхроне
-   * (например, сразу после rename slug) не терять доступ к database.pageId.
+   * Keep the last valid databaseId so brief desync periods
+   * (for example right after slug rename) do not lose page linkage.
    */
   const stableDatabaseIdRef = useRef<string | undefined>(routeIds.databaseId);
   if (pageIds.databaseId) {

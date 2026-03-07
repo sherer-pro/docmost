@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import { describe, it } from 'vitest';
 import { deleteTreeNode, dropTreeNode, insertDatabaseRowNode } from './utils';
 import { SpaceTreeNode } from '../types';
 
@@ -106,3 +106,4 @@ describe('insertDatabaseRowNode', () => {
     assert.equal(nextTree[0].children[0].id, 'row-page-id');
   });
 });
+

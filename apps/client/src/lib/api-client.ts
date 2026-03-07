@@ -13,21 +13,21 @@ const api: AxiosInstance = axios.create({
 declare module "axios" {
   interface AxiosRequestConfig {
     /**
-     * Явно отключает автоматический unwrap API-envelope (`{ data, success, status }`).
+     * Explicitly disables automatic API-envelope unwrap (`{ data, success, status }`).
      *
-     * Используется в особых сценариях (например, file export), где вызывающему коду
-     * нужны заголовки, бинарное тело и другие поля полного `AxiosResponse`.
+     * Used in specific cases (for example file export) where caller code
+     * needs headers, binary body, and other full `AxiosResponse` fields.
      */
     skipEnvelopeUnwrap?: boolean;
   }
 }
 
 /**
- * Определяет, нужно ли вернуть полный `AxiosResponse` без unwrap.
+ * Decides whether full `AxiosResponse` must be returned without unwrap.
  *
- * Правила устойчивые и не зависят от конкретного URL:
- * 1) responseType === 'blob' — для бинарных загрузок нужен полный ответ (headers + data);
- * 2) config.skipEnvelopeUnwrap === true — явный opt-out для точечных кейсов.
+ * Rules are URL-agnostic:
+ * 1) `responseType === 'blob'` for binary downloads (headers + data are required);
+ * 2) `config.skipEnvelopeUnwrap === true` as explicit opt-out.
  */
 function shouldSkipEnvelopeUnwrap(config: {
   responseType?: string;

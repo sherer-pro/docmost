@@ -1,8 +1,8 @@
 /**
- * Набор ключей локализации для конвертации database -> page.
+ * Localization keys for database -> page conversion.
  *
- * Ключи вынесены в одно место, чтобы оба меню (database и page)
- * использовали одинаковые тексты без дублирования.
+ * Kept in one place so database and page menus
+ * use the same messages without duplication.
  */
 export const DATABASE_TO_PAGE_TRANSLATION_KEYS = {
   confirmTitle: 'Convert database to page?',
@@ -20,12 +20,12 @@ interface ConvertDatabaseToPageActionParams {
 }
 
 /**
- * Создаёт action для confirm-кнопки в modal.
+ * Creates confirm-button action for the modal.
  *
- * Функция нужна для единообразной последовательности:
+ * Keeps a consistent flow:
  * 1) mutation;
- * 2) success-notification;
- * 3) navigation после успешной конвертации.
+ * 2) success notification;
+ * 3) navigation after successful conversion.
  */
 export function createConvertDatabaseToPageAction({
   convertDatabaseToPageAsync,

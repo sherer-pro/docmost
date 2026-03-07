@@ -37,10 +37,10 @@ function CommentListWithTabs() {
   } = useDatabasePageContext();
 
   /**
-   * Единый pageId для query-key, списка и всех мутаций комментариев.
+   * Single pageId used by query keys, list rendering, and all comment mutations.
    *
-   * Важно: значение приходит из централизованного контекста, поэтому
-   * кнопка "Comments" в header и сам список опираются на идентичный идентификатор.
+   * The value comes from a shared page/database context so the header comments
+   * button and the comments panel always point to the same entity.
    */
   const commentsPageId = databasePageId ?? "";
   const {

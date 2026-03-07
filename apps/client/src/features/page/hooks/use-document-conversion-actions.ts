@@ -17,7 +17,7 @@ interface OpenConvertDatabaseToPageModalParams {
 }
 
 /**
- * Открывает единый confirm modal для конвертации database -> page.
+ * Opens shared confirm modal for database -> page conversion.
  */
 export function openConvertDatabaseToPageModal({
   isPending,
@@ -48,11 +48,11 @@ interface UseDocumentConversionActionsParams {
 }
 
 /**
- * Общий hook для сценария конвертации database -> page.
+ * Shared hook for database -> page conversion flow.
  *
- * Вынесенный hook нужен для унификации поведения в двух меню:
- * - database-header-menu;
- * - page-header-menu.
+ * Used to keep behavior aligned in:
+ * - database header menu;
+ * - page header menu.
  */
 export function useDocumentConversionActions({
   spaceSlug,

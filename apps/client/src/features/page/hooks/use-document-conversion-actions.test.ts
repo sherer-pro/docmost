@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import { describe, it } from 'vitest';
 import { createConvertDatabaseToPageAction } from './document-conversion-actions.shared';
 
 describe('createConvertDatabaseToPageAction', () => {
@@ -45,3 +45,4 @@ describe('createConvertDatabaseToPageAction', () => {
     assert.deepEqual(callOrder, ['mutation', 'notification']);
   });
 });
+

@@ -6,10 +6,10 @@ export interface CanonicalTitleUrlSyncParams {
 }
 
 /**
- * Решает, можно ли сразу синхронизировать адрес с canonical URL.
+ * Decides whether canonical URL sync can happen immediately.
  *
- * Во время активного ввода в title-редакторе синхронизация откладывается,
- * чтобы не создавать лишние replace-навигации и не сбрасывать фокус.
+ * While title editor is actively focused, sync is deferred to avoid
+ * extra replace navigations and focus resets.
  */
 export function shouldSyncCanonicalUrlNow(
   currentUrl: string,
@@ -28,12 +28,12 @@ export function shouldSyncCanonicalUrlNow(
 }
 
 /**
- * Общий helper для синхронизации canonical URL при rename.
+ * Shared helper for canonical URL sync during rename.
  *
- * Алгоритм единый для page/database title editors:
- * 1) если пользователь печатает, откладываем переход;
- * 2) если фокус ушёл, применяем последний отложенный canonical URL;
- * 3) если URL уже совпадает, сбрасываем pending-состояние.
+ * Unified algorithm for page/database title editors:
+ * 1) defer navigation while user is typing;
+ * 2) apply the last deferred URL when focus is lost;
+ * 3) clear pending state when URL is already canonical.
  */
 export function useDeferredCanonicalTitleUrlSync(
   applyCanonicalUrl: (nextUrl: string) => void,

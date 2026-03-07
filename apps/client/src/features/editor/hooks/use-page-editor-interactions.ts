@@ -13,14 +13,14 @@ interface UsePageEditorInteractionsParams {
 }
 
 /**
- * Общий слой интеракций редактора, который используется и обычной страницей,
- * и редактором описания базы данных.
+ * Shared editor interaction layer used by both regular pages
+ * and the database description editor.
  *
- * Что централизуем:
- * - единая реакция на ACTIVE_COMMENT_EVENT;
- * - единое закрытие/сброс comment popup при смене pageId;
- * - одинаковые paste/drop обработчики (включая plain-text paste по Ctrl/Cmd+Shift+V);
- * - одинаковая блокировка стрелок/Enter при открытых slash/emoji меню.
+ * Centralizes:
+ * - ACTIVE_COMMENT_EVENT handling;
+ * - comment popup reset on pageId changes;
+ * - shared paste/drop handlers (including Ctrl/Cmd+Shift+V plain-text paste);
+ * - arrow/enter blocking while slash or emoji menus are open.
  */
 export function usePageEditorInteractions({
   pageId,
