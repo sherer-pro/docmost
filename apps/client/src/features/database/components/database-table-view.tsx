@@ -763,6 +763,7 @@ export function DatabaseTableView({
                         autoFocus
                         size="xs"
                         value={editingPropertyName}
+                        my={4}
                         onChange={(event) => setEditingPropertyName(event.currentTarget.value)}
                         onBlur={() => void savePropertyRename(property)}
                         onKeyDown={(event) => {
