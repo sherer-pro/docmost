@@ -50,6 +50,18 @@ interface IDatabaseCellValueWithFallback {
 
 interface IDatabaseUserCellValue {
   id: string;
+  name?: string;
+}
+
+interface IDatabasePageReferenceCellValue {
+  id: string;
+  title: string;
+  slugId: string | null;
+}
+
+interface IDatabaseHistorySelectOption {
+  value: string;
+  label: string;
 }
 
 /**
@@ -278,6 +290,238 @@ export class DatabaseService {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Retrieves page identifier from cell value.
+   * Supports string payload and object payload (`{ id }`, `{ pageId }`).
+   */
+  private extractPageIdFromCellValue(value: unknown): string | null {
+    const currentValue = this.extractCurrentCellValue(value);
+
+    if (typeof currentValue === 'string') {
+      const normalizedValue = currentValue.trim();
+      if (!normalizedValue) {
+        return null;
+      }
+
+      try {
+        const parsedValue = JSON.parse(normalizedValue);
+        const parsedPageId = this.extractPageIdFromCellValue(parsedValue);
+        if (parsedPageId) {
+          return parsedPageId;
+        }
+      } catch {
+        // Keep normalized string fallback below.
+      }
+
+      return normalizedValue;
+    }
+
+    if (!currentValue || typeof currentValue !== 'object') {
+      return null;
+    }
+
+    const candidate = currentValue as Record<string, unknown>;
+    const rawPageId =
+      typeof candidate.id === 'string'
+        ? candidate.id
+        : typeof candidate.pageId === 'string'
+          ? candidate.pageId
+          : null;
+
+    return rawPageId?.trim() || null;
+  }
+
+  /**
+   * Resolves user cell value to a display-ready history payload.
+   */
+  private async resolveHistoryUserValue(
+    value: unknown,
+    workspaceId: string,
+    cache: Map<string, string>,
+  ): Promise<IDatabaseUserCellValue | null> {
+    const userId = this.extractUserIdFromCellValue(value);
+    if (!userId) {
+      return null;
+    }
+
+    const cachedName = cache.get(userId);
+    if (cachedName) {
+      return { id: userId, name: cachedName };
+    }
+
+    const userName = (await this.resolveUserNameById(userId, workspaceId)) || userId;
+    cache.set(userId, userName);
+    return { id: userId, name: userName };
+  }
+
+  /**
+   * Resolves page_reference value to page id/title/slug payload.
+   */
+  private async resolveHistoryPageReferenceValue(
+    value: unknown,
+    workspaceId: string,
+    cache: Map<string, IDatabasePageReferenceCellValue>,
+  ): Promise<IDatabasePageReferenceCellValue | null> {
+    const pageId = this.extractPageIdFromCellValue(value);
+    if (!pageId) {
+      return null;
+    }
+
+    const cachedPageRef = cache.get(pageId);
+    if (cachedPageRef) {
+      return cachedPageRef;
+    }
+
+    const page = await this.pageRepo.findById(pageId);
+    const canUsePageMeta =
+      !!page && page.workspaceId === workspaceId && page.deletedAt === null;
+    const pageRef: IDatabasePageReferenceCellValue = {
+      id: pageId,
+      title: canUsePageMeta ? page.title?.trim() || pageId : pageId,
+      slugId: canUsePageMeta ? page.slugId ?? null : null,
+    };
+
+    cache.set(pageId, pageRef);
+    return pageRef;
+  }
+
+  private extractSelectOptionsFromSettings(
+    settings: unknown,
+  ): IDatabaseHistorySelectOption[] {
+    if (!settings || typeof settings !== 'object') {
+      return [];
+    }
+
+    const options = (settings as { options?: unknown }).options;
+    if (!Array.isArray(options)) {
+      return [];
+    }
+
+    return options
+      .filter((option): option is IDatabaseHistorySelectOption => {
+        if (!option || typeof option !== 'object') {
+          return false;
+        }
+
+        const candidate = option as IDatabaseHistorySelectOption;
+        return (
+          typeof candidate.value === 'string' && typeof candidate.label === 'string'
+        );
+      })
+      .map((option) => ({
+        value: option.value,
+        label: option.label,
+      }));
+  }
+
+  private extractSelectOptionValue(value: unknown): string | null {
+    const currentValue = this.extractCurrentCellValue(value);
+
+    if (typeof currentValue === 'string') {
+      const normalizedValue = currentValue.trim();
+      if (!normalizedValue) {
+        return null;
+      }
+
+      try {
+        const parsedValue = JSON.parse(normalizedValue);
+        const parsedOptionValue = this.extractSelectOptionValue(parsedValue);
+        if (parsedOptionValue) {
+          return parsedOptionValue;
+        }
+      } catch {
+        // Keep normalized string fallback below.
+      }
+
+      return normalizedValue;
+    }
+
+    if (!currentValue || typeof currentValue !== 'object') {
+      return null;
+    }
+
+    const candidate = currentValue as Record<string, unknown>;
+    const rawValue =
+      typeof candidate.value === 'string'
+        ? candidate.value
+        : typeof candidate.label === 'string'
+          ? candidate.label
+          : null;
+
+    return rawValue?.trim() || null;
+  }
+
+  private resolveHistorySelectValue(
+    value: unknown,
+    settings: unknown,
+  ): IDatabaseHistorySelectOption | null {
+    const optionValue = this.extractSelectOptionValue(value);
+    if (!optionValue) {
+      return null;
+    }
+
+    const options = this.extractSelectOptionsFromSettings(settings);
+    const matchedOption = options.find(
+      (option) => option.value === optionValue || option.label === optionValue,
+    );
+
+    if (matchedOption) {
+      return matchedOption;
+    }
+
+    return {
+      value: optionValue,
+      label: optionValue,
+    };
+  }
+
+  /**
+   * Normalizes history payload value for readable timeline output.
+   */
+  private async resolveHistoryCellValue(params: {
+    propertyType: DatabasePropertyType | null;
+    propertySettings: unknown;
+    value: unknown;
+    workspaceId: string;
+    userNameCache: Map<string, string>;
+    pageReferenceCache: Map<string, IDatabasePageReferenceCellValue>;
+  }): Promise<unknown> {
+    if (params.value === null || typeof params.value === 'undefined') {
+      return null;
+    }
+
+    if (params.propertyType === 'user') {
+      const userValue = await this.resolveHistoryUserValue(
+        params.value,
+        params.workspaceId,
+        params.userNameCache,
+      );
+
+      return userValue ?? this.extractCurrentCellValue(params.value);
+    }
+
+    if (params.propertyType === 'page_reference') {
+      const pageRefValue = await this.resolveHistoryPageReferenceValue(
+        params.value,
+        params.workspaceId,
+        params.pageReferenceCache,
+      );
+
+      return pageRefValue ?? this.extractCurrentCellValue(params.value);
+    }
+
+    if (params.propertyType === 'select') {
+      const selectValue = this.resolveHistorySelectValue(
+        params.value,
+        params.propertySettings,
+      );
+
+      return selectValue ?? this.extractCurrentCellValue(params.value);
+    }
+
+    return this.extractCurrentCellValue(params.value);
   }
 
   private async enrichRowsWithUserNames(
@@ -1319,6 +1563,11 @@ export class DatabaseService {
     );
 
     const cells = [];
+    const historyUserNameCache = new Map<string, string>();
+    const historyPageReferenceCache = new Map<
+      string,
+      IDatabasePageReferenceCellValue
+    >();
     const cellChanges: Array<{
       propertyId: string;
       propertyName: string;
@@ -1336,6 +1585,14 @@ export class DatabaseService {
         ? this.normalizePropertyType(property.type)
         : null;
       const previousValue = this.extractCurrentCellValue(previousCell?.value);
+      const oldHistoryValue = await this.resolveHistoryCellValue({
+        propertyType,
+        propertySettings: property?.settings,
+        value: previousCell?.value,
+        workspaceId,
+        userNameCache: historyUserNameCache,
+        pageReferenceCache: historyPageReferenceCache,
+      });
 
       if (cell.operation === 'delete') {
         const deleted = await this.databaseCellRepo.upsertCell({
@@ -1362,7 +1619,7 @@ export class DatabaseService {
           propertyName: property?.name ?? cell.propertyId,
           propertyType,
           operation: 'delete',
-          oldValue: previousValue ?? null,
+          oldValue: oldHistoryValue ?? null,
           newValue: null,
         });
         continue;
@@ -1396,13 +1653,21 @@ export class DatabaseService {
 
       previousCellsByPropertyId.set(cell.propertyId, upserted);
       cells.push(upserted);
+      const newHistoryValue = await this.resolveHistoryCellValue({
+        propertyType,
+        propertySettings: property?.settings,
+        value: upserted.value,
+        workspaceId,
+        userNameCache: historyUserNameCache,
+        pageReferenceCache: historyPageReferenceCache,
+      });
       cellChanges.push({
         propertyId: cell.propertyId,
         propertyName: property?.name ?? cell.propertyId,
         propertyType,
         operation: 'upsert',
-        oldValue: previousValue ?? null,
-        newValue: this.extractCurrentCellValue(upserted.value) ?? null,
+        oldValue: oldHistoryValue ?? null,
+        newValue: newHistoryValue ?? null,
       });
     }
 
