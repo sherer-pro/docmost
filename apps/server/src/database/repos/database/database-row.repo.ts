@@ -14,39 +14,11 @@ import { jsonArrayFrom, jsonObjectFrom } from 'kysely/helpers/postgres';
 export class DatabaseRowRepo {
   constructor(@InjectKysely() private readonly db: KyselyDB) {}
 
-  /**
-   * Creates a database row associated with a page.
-   */
-  async insertRow(
-    payload: InsertableDatabaseRow,
-    trx?: KyselyTransaction,
-  ): Promise<DatabaseRow> {
-    return dbOrTx(this.db, trx)
-      .insertInto('databaseRows')
-      .values(payload)
-      .returningAll()
-      .executeTakeFirst();
-  }
-
-  /**
-   * Finds a string by ID.
-   */
-  async findById(rowId: string): Promise<DatabaseRow> {
-    return this.db
-      .selectFrom('databaseRows')
-      .selectAll()
-      .where('id', '=', rowId)
-      .executeTakeFirst();
-  }
-
-  /**
-   * Returns all rows of a specific database.
-   */
-  async findByDatabaseId(
+  private buildRowsQuery(
     databaseId: string,
     workspaceId: string,
     spaceId: string,
-  ): Promise<any[]> {
+  ) {
     return this.db
       .selectFrom('databaseRows')
       .innerJoin('pages', 'pages.id', 'databaseRows.pageId')
@@ -121,7 +93,43 @@ export class DatabaseRowRepo {
       .where('pages.workspaceId', '=', workspaceId)
       .where('pages.spaceId', '=', spaceId)
       .where('pages.deletedAt', 'is', null)
-      .where('databaseRows.archivedAt', 'is', null)
+      .where('databaseRows.archivedAt', 'is', null);
+  }
+
+  /**
+   * Creates a database row associated with a page.
+   */
+  async insertRow(
+    payload: InsertableDatabaseRow,
+    trx?: KyselyTransaction,
+  ): Promise<DatabaseRow> {
+    return dbOrTx(this.db, trx)
+      .insertInto('databaseRows')
+      .values(payload)
+      .returningAll()
+      .executeTakeFirst();
+  }
+
+  /**
+   * Finds a string by ID.
+   */
+  async findById(rowId: string): Promise<DatabaseRow> {
+    return this.db
+      .selectFrom('databaseRows')
+      .selectAll()
+      .where('id', '=', rowId)
+      .executeTakeFirst();
+  }
+
+  /**
+   * Returns all rows of a specific database.
+   */
+  async findByDatabaseId(
+    databaseId: string,
+    workspaceId: string,
+    spaceId: string,
+  ): Promise<any[]> {
+    return this.buildRowsQuery(databaseId, workspaceId, spaceId)
       /**
        * The order of rows in the tree is determined by the page position,
        * and not the creation time of databaseRows.
@@ -131,6 +139,41 @@ export class DatabaseRowRepo {
        */
       .orderBy(sql`"pages"."position" collate "C"`, 'asc')
       .execute();
+  }
+
+  async findByDatabaseIdPaginated(
+    databaseId: string,
+    workspaceId: string,
+    spaceId: string,
+    options: {
+      limit: number;
+      cursor?: string;
+      sortField?: 'position' | 'title';
+      sortDirection?: 'asc' | 'desc';
+    },
+  ): Promise<any[]> {
+    const sortField = options.sortField ?? 'position';
+    const sortDirection = options.sortDirection ?? 'asc';
+
+    let query = this.buildRowsQuery(databaseId, workspaceId, spaceId);
+
+    if (options.cursor && sortField === 'position') {
+      query = query.where(
+        'pages.position',
+        sortDirection === 'asc' ? '>' : '<',
+        options.cursor,
+      );
+    }
+
+    if (sortField === 'title') {
+      query = query
+        .orderBy(sql`"pages"."title" collate "C"`, sortDirection)
+        .orderBy(sql`"pages"."position" collate "C"`, 'asc');
+    } else {
+      query = query.orderBy(sql`"pages"."position" collate "C"`, sortDirection);
+    }
+
+    return query.limit(options.limit + 1).execute();
   }
 
 

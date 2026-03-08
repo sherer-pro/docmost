@@ -26,12 +26,14 @@ import {
 } from '../../casl/interfaces/space-ability.type';
 import {
   BatchUpdateDatabaseCellsDto,
+  BatchUpdateDatabaseRowsDto,
   DatabaseExportFormat,
   CreateDatabaseDto,
   CreateDatabasePropertyDto,
   CreateDatabaseRowDto,
-  UpdateDatabaseRowDto,
   CreateDatabaseViewDto,
+  ListDatabaseRowsQueryDto,
+  UpdateDatabaseRowDto,
   UpdateDatabaseDto,
   UpdateDatabasePropertyDto,
   UpdateDatabaseViewDto,
@@ -77,6 +79,12 @@ export interface IUpdatedDatabaseRowResponse {
   pageId: string;
   title: string;
   slugId: string;
+}
+
+export interface IListDatabaseRowsResponse<T> {
+  items: T[];
+  nextCursor: string | null;
+  hasMore: boolean;
 }
 
 @Injectable()
@@ -1326,18 +1334,34 @@ export class DatabaseService {
   /**
    * Returns all rows in the database.
    */
-  async listRows(databaseId: string, user: User, workspaceId: string) {
+  async listRows(
+    databaseId: string,
+    user: User,
+    workspaceId: string,
+    query?: ListDatabaseRowsQueryDto,
+  ): Promise<any[] | IListDatabaseRowsResponse<any>> {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
     await this.assertCanReadDatabasePages(user, database.spaceId);
 
-    const [rows, properties] = await Promise.all([
-      this.databaseRowRepo.findByDatabaseId(
-        databaseId,
-        workspaceId,
-        database.spaceId,
-      ),
-      this.databasePropertyRepo.findByDatabaseId(databaseId),
-    ]);
+    const properties = await this.databasePropertyRepo.findByDatabaseId(databaseId);
+
+    const rows = query?.limit
+      ? await this.databaseRowRepo.findByDatabaseIdPaginated(
+          databaseId,
+          workspaceId,
+          database.spaceId,
+          {
+            limit: query.limit,
+            cursor: query.cursor,
+            sortField: query.sortField,
+            sortDirection: query.sortDirection,
+          },
+        )
+      : await this.databaseRowRepo.findByDatabaseId(
+          databaseId,
+          workspaceId,
+          database.spaceId,
+        );
 
     const userPropertyIds = new Set(
       this.normalizeProperties(properties)
@@ -1345,7 +1369,29 @@ export class DatabaseService {
         .map((property) => property.id),
     );
 
-    return this.enrichRowsWithUserNames(rows, userPropertyIds, workspaceId);
+    const normalizedRows = await this.enrichRowsWithUserNames(
+      query?.limit ? rows.slice(0, query.limit) : rows,
+      userPropertyIds,
+      workspaceId,
+    );
+
+    if (!query?.limit) {
+      return normalizedRows;
+    }
+
+    const hasMore = rows.length > query.limit;
+    const lastRow = normalizedRows[normalizedRows.length - 1] as
+      | { pagePosition?: string; page?: { position?: string } }
+      | undefined;
+    const nextCursor = hasMore
+      ? (lastRow?.pagePosition ?? lastRow?.page?.position ?? null)
+      : null;
+
+    return {
+      items: normalizedRows,
+      nextCursor,
+      hasMore,
+    };
   }
 
   /**
@@ -1694,6 +1740,61 @@ export class DatabaseService {
     }
 
     return { row, cells };
+  }
+
+  async batchUpdateRows(
+    databaseId: string,
+    dto: BatchUpdateDatabaseRowsDto,
+    user: User,
+    workspaceId: string,
+  ): Promise<{
+    updatedRows: string[];
+    deletedRows: string[];
+    failedRows: string[];
+  }> {
+    const database = await this.getOrFailDatabase(databaseId, workspaceId);
+    await this.assertCanManageDatabasePages(user, database.spaceId);
+
+    const updatedRows: string[] = [];
+    const deletedRows: string[] = [];
+    const failedRows: string[] = [];
+
+    for (const rowOperation of dto.rows ?? []) {
+      try {
+        if (rowOperation.operation === 'delete_row') {
+          await this.deleteRow(
+            databaseId,
+            rowOperation.pageId,
+            user,
+            workspaceId,
+          );
+          deletedRows.push(rowOperation.pageId);
+          continue;
+        }
+
+        const cells = rowOperation.cells ?? [];
+        if (cells.length === 0) {
+          continue;
+        }
+
+        await this.batchUpdateRowCells(
+          databaseId,
+          rowOperation.pageId,
+          { cells },
+          user,
+          workspaceId,
+        );
+        updatedRows.push(rowOperation.pageId);
+      } catch {
+        failedRows.push(rowOperation.pageId);
+      }
+    }
+
+    return {
+      updatedRows,
+      deletedRows,
+      failedRows,
+    };
   }
 
   /**

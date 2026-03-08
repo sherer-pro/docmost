@@ -20,12 +20,14 @@ import { User, Workspace } from '@docmost/db/types/entity.types';
 import { DatabaseService } from './services/database.service';
 import {
   BatchUpdateDatabaseCellsDto,
+  BatchUpdateDatabaseRowsDto,
   CreateDatabaseDto,
   CreateDatabasePropertyDto,
   CreateDatabaseRowDto,
-  UpdateDatabaseRowDto,
   CreateDatabaseViewDto,
+  ListDatabaseRowsQueryDto,
   ListDatabasesQueryDto,
+  UpdateDatabaseRowDto,
   UpdateDatabaseDto,
   UpdateDatabasePropertyDto,
   UpdateDatabaseViewDto,
@@ -209,10 +211,29 @@ export class DatabaseController {
   @Get(':databaseId/rows')
   async listRows(
     @Param('databaseId', ParseUUIDPipe) databaseId: string,
+    @Query() query: ListDatabaseRowsQueryDto,
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
-    return this.databaseService.listRows(databaseId, user, workspace.id);
+    return this.databaseService.listRows(databaseId, user, workspace.id, query);
+  }
+
+  /**
+   * Performs batch row operations (bulk cell upserts/deletes and row deletes).
+   */
+  @Patch(':databaseId/rows/batch')
+  async batchUpdateRows(
+    @Param('databaseId', ParseUUIDPipe) databaseId: string,
+    @Body() dto: BatchUpdateDatabaseRowsDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.databaseService.batchUpdateRows(
+      databaseId,
+      dto,
+      user,
+      workspace.id,
+    );
   }
 
   /**

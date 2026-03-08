@@ -35,7 +35,9 @@ This document defines routing style for backend API endpoints in `apps/server`.
   - `DELETE /databases/:databaseId/properties/:propertyId`
 - Rows:
   - `GET /databases/:databaseId/rows`
+    - optional query params: `limit`, `cursor`, `sortField`, `sortDirection`
   - `POST /databases/:databaseId/rows`
+  - `PATCH /databases/:databaseId/rows/batch`
 - Cells batch update:
   - `PATCH /databases/:databaseId/rows/:pageId/cells`
 - Views:
