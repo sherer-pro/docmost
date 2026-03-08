@@ -7,8 +7,19 @@ import {
   InsertableDatabaseRow,
   UpdatableDatabaseRow,
 } from '@docmost/db/types/entity.types';
-import { sql } from 'kysely';
+import {
+  defaultDecodeCursor,
+  defaultEncodeCursor,
+  executeWithCursorPagination,
+} from '@docmost/db/pagination/cursor-pagination';
+import { RawBuilder, sql } from 'kysely';
 import { jsonArrayFrom, jsonObjectFrom } from 'kysely/helpers/postgres';
+
+interface IDatabaseRowsFilterCondition {
+  propertyId: string;
+  operator: 'contains' | 'equals' | 'not_equals';
+  value: string;
+}
 
 @Injectable()
 export class DatabaseRowRepo {
@@ -96,6 +107,63 @@ export class DatabaseRowRepo {
       .where('databaseRows.archivedAt', 'is', null);
   }
 
+  private buildCellComparableTextExpression(cellAlias: string): RawBuilder<string> {
+    const valueRef = sql.ref(`${cellAlias}.value`);
+
+    return sql<string>`
+      lower(
+        coalesce(
+          case
+            when jsonb_typeof(${valueRef}) = 'string'
+              then trim(both '"' from (${valueRef}::text))
+            when jsonb_typeof(${valueRef}) = 'boolean'
+              then ${valueRef}::text
+            when jsonb_typeof(${valueRef}) = 'number'
+              then ${valueRef}::text
+            when jsonb_typeof(${valueRef}) = 'object'
+              then coalesce(
+                ${valueRef} ->> 'name',
+                ${valueRef} ->> 'label',
+                ${valueRef} ->> 'value',
+                ${valueRef} ->> 'id',
+                ${valueRef}::text
+              )
+            else coalesce(${valueRef}::text, '')
+          end,
+          ''
+        )
+      )
+    `;
+  }
+
+  private buildRowCellComparableValueExpression(params: {
+    rowAlias: string;
+    propertyId: string;
+  }): RawBuilder<string> {
+    const cellQuery = this.db
+      .selectFrom('databaseCells as filterCell')
+      .select(() => this.buildCellComparableTextExpression('filterCell').as('value'))
+      .whereRef(
+        'filterCell.databaseId',
+        '=',
+        `${params.rowAlias}.databaseId` as any,
+      )
+      .whereRef(
+        'filterCell.pageId',
+        '=',
+        `${params.rowAlias}.pageId` as any,
+      )
+      .where('filterCell.propertyId', '=', params.propertyId)
+      .where('filterCell.deletedAt', 'is', null)
+      .limit(1);
+
+    return sql<string>`coalesce((${cellQuery}), '')`;
+  }
+
+  private escapeLikePattern(value: string): string {
+    return value.replace(/[\\%_]/g, '\\$&');
+  }
+
   /**
    * Creates a database row associated with a page.
    */
@@ -150,30 +218,124 @@ export class DatabaseRowRepo {
       cursor?: string;
       sortField?: 'position' | 'title';
       sortDirection?: 'asc' | 'desc';
+      sortPropertyId?: string;
+      filters?: IDatabaseRowsFilterCondition[];
     },
-  ): Promise<any[]> {
+  ): Promise<{
+    items: any[];
+    nextCursor: string | null;
+    hasMore: boolean;
+  }> {
     const sortField = options.sortField ?? 'position';
     const sortDirection = options.sortDirection ?? 'asc';
 
     let query = this.buildRowsQuery(databaseId, workspaceId, spaceId);
+    const filters = options.filters ?? [];
 
-    if (options.cursor && sortField === 'position') {
+    for (const condition of filters) {
+      if (!condition) {
+        continue;
+      }
+
+      const normalizedFilterValue = condition.value.toLowerCase();
+      const cellValueExpression = this.buildRowCellComparableValueExpression({
+        rowAlias: 'databaseRows',
+        propertyId: condition.propertyId,
+      });
+
+      if (condition.operator === 'equals') {
+        query = query.where(cellValueExpression, '=', normalizedFilterValue);
+        continue;
+      }
+
+      if (condition.operator === 'not_equals') {
+        query = query.where(cellValueExpression, '!=', normalizedFilterValue);
+        continue;
+      }
+
+      const likePattern = `%${this.escapeLikePattern(normalizedFilterValue)}%`;
       query = query.where(
-        'pages.position',
-        sortDirection === 'asc' ? '>' : '<',
-        options.cursor,
+        sql<boolean>`${cellValueExpression} like ${likePattern} escape '\\'`,
       );
     }
 
-    if (sortField === 'title') {
-      query = query
-        .orderBy(sql`"pages"."title" collate "C"`, sortDirection)
-        .orderBy(sql`"pages"."position" collate "C"`, 'asc');
-    } else {
-      query = query.orderBy(sql`"pages"."position" collate "C"`, sortDirection);
+    const pagePositionExpression =
+      sql<string>`coalesce(${sql.ref('pages.position')}, '') collate "C"`;
+    const pageIdExpression =
+      sql<string>`${sql.ref('databaseRows.pageId')}::text collate "C"`;
+
+    const isPropertySort = Boolean(options.sortPropertyId);
+    const isTitleSort = !isPropertySort && sortField === 'title';
+
+    if (isPropertySort || isTitleSort) {
+      const sortValueExpression = isPropertySort
+        ? sql<string>`(${this.buildRowCellComparableValueExpression({
+            rowAlias: 'databaseRows',
+            propertyId: options.sortPropertyId as string,
+          })}) collate "C"`
+        : sql<string>`lower(coalesce(${sql.ref('pages.title')}, '')) collate "C"`;
+
+      query = query.select(sortValueExpression.as('sortValue'));
+
+      const executeCursorPagination = executeWithCursorPagination as any;
+      const paginated = await executeCursorPagination(query as any, {
+        perPage: options.limit,
+        cursor: options.cursor,
+        fields: [
+          { expression: sortValueExpression, direction: sortDirection, key: 'sortValue' },
+          { expression: pagePositionExpression, direction: sortDirection, key: 'pagePosition' },
+          { expression: pageIdExpression, direction: sortDirection, key: 'pageId' },
+        ] as const,
+        parseCursor: (cursor) => ({
+          sortValue: cursor.sortValue,
+          pagePosition: cursor.pagePosition,
+          pageId: cursor.pageId,
+        }),
+      });
+
+      const items = paginated.items.map((item) => {
+        const { sortValue: _sortValue, ...row } = item as Record<string, unknown>;
+        return row;
+      });
+
+      return {
+        items,
+        nextCursor: paginated.meta.nextCursor,
+        hasMore: paginated.meta.hasNextPage,
+      };
     }
 
-    return query.limit(options.limit + 1).execute();
+    let normalizedCursor = options.cursor;
+    if (normalizedCursor) {
+      try {
+        defaultDecodeCursor(normalizedCursor, ['pagePosition', 'pageId'] as any);
+      } catch {
+        normalizedCursor = defaultEncodeCursor([
+          ['pagePosition', normalizedCursor],
+          ['pageId', ''],
+        ] as any);
+      }
+    }
+
+    const executeCursorPagination = executeWithCursorPagination as any;
+    const paginated = await executeCursorPagination(query as any, {
+      perPage: options.limit,
+      cursor: normalizedCursor,
+      fields: [
+        { expression: pagePositionExpression, direction: sortDirection, key: 'pagePosition' },
+        { expression: pageIdExpression, direction: sortDirection, key: 'pageId' },
+      ] as const,
+      parseCursor: (cursor) => ({
+        pagePosition: cursor.pagePosition,
+        pageId: cursor.pageId,
+      }),
+    });
+
+    return {
+      items: paginated.items as any[],
+      nextCursor: paginated.meta.nextCursor,
+      hasMore: paginated.meta.hasNextPage,
+    };
   }
 
 

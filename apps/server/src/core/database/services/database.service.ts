@@ -681,23 +681,44 @@ export class DatabaseService {
       throw new BadRequestException('Invalid rows filters');
     }
 
-    return parsedFilters
-      .filter((condition): condition is Record<string, unknown> => {
-        return Boolean(condition && typeof condition === 'object');
-      })
-      .map((condition) => ({
-        propertyId:
-          typeof condition.propertyId === 'string' ? condition.propertyId : '',
-        operator:
-          condition.operator === 'equals' ||
-          condition.operator === 'not_equals' ||
-          condition.operator === 'contains'
-            ? (condition.operator as IDatabaseRowsFilterCondition['operator'])
-            : 'contains',
-        value: typeof condition.value === 'string' ? condition.value : '',
-      }))
-      .filter((condition) => condition.propertyId && condition.value)
-      .slice(0, MAX_DATABASE_ROW_FILTERS);
+    const normalizedFilters: IDatabaseRowsFilterCondition[] = [];
+    for (const rawCondition of parsedFilters) {
+      if (!rawCondition || typeof rawCondition !== 'object') {
+        throw new BadRequestException('Invalid rows filters');
+      }
+
+      const condition = rawCondition as Record<string, unknown>;
+      if (
+        typeof condition.propertyId !== 'string' ||
+        typeof condition.operator !== 'string' ||
+        typeof condition.value !== 'string'
+      ) {
+        throw new BadRequestException('Invalid rows filters');
+      }
+
+      if (
+        condition.operator !== 'contains' &&
+        condition.operator !== 'equals' &&
+        condition.operator !== 'not_equals'
+      ) {
+        throw new BadRequestException('Invalid rows filters');
+      }
+
+      if (!condition.propertyId || !condition.value) {
+        continue;
+      }
+
+      normalizedFilters.push({
+        propertyId: condition.propertyId,
+        operator: condition.operator,
+        value: condition.value,
+      });
+      if (normalizedFilters.length >= MAX_DATABASE_ROW_FILTERS) {
+        break;
+      }
+    }
+
+    return normalizedFilters;
   }
 
   private async resolvePageTitlesById(
@@ -896,24 +917,6 @@ export class DatabaseService {
         sensitivity: 'base',
       });
     });
-  }
-
-  private paginateRowsByOffsetCursor<T>(
-    rows: T[],
-    limit: number,
-    cursor?: string,
-  ): IListDatabaseRowsResponse<T> {
-    const parsedOffset = Number.parseInt(cursor ?? '0', 10);
-    const safeOffset = Number.isFinite(parsedOffset) && parsedOffset >= 0 ? parsedOffset : 0;
-    const items = rows.slice(safeOffset, safeOffset + limit);
-    const nextOffset = safeOffset + items.length;
-    const hasMore = nextOffset < rows.length;
-
-    return {
-      items,
-      nextCursor: hasMore ? String(nextOffset) : null,
-      hasMore,
-    };
   }
 
   /**
@@ -1681,48 +1684,34 @@ export class DatabaseService {
     const rowsFilters = this.parseRowsFilters(query?.filters);
     const hasServerRowsState = rowsFilters.length > 0 || Boolean(query?.sortPropertyId);
 
-    const rows = hasServerRowsState || !query?.limit
-      ? await this.databaseRowRepo.findByDatabaseId(
-          databaseId,
-          workspaceId,
-          database.spaceId,
-        )
-      : await this.databaseRowRepo.findByDatabaseIdPaginated(
-          databaseId,
-          workspaceId,
-          database.spaceId,
-          {
-            limit: query.limit,
-            cursor: query.cursor,
-            sortField: query.sortField,
-            sortDirection: query.sortDirection,
-          },
-        );
-
     const userPropertyIds = new Set(
       normalizedProperties
         .filter((property) => property.type === 'user')
         .map((property) => property.id),
     );
 
-    const rowsToEnrich = hasServerRowsState
-      ? rows
-      : query?.limit
-        ? rows.slice(0, query.limit)
-        : rows;
-    const normalizedRows = await this.enrichRowsWithUserNames(
-      rowsToEnrich,
-      userPropertyIds,
-      workspaceId,
-    );
+    if (!query?.limit) {
+      const rows = await this.databaseRowRepo.findByDatabaseId(
+        databaseId,
+        workspaceId,
+        database.spaceId,
+      );
+      const normalizedRows = await this.enrichRowsWithUserNames(
+        rows,
+        userPropertyIds,
+        workspaceId,
+      );
 
-    if (hasServerRowsState) {
+      if (!hasServerRowsState) {
+        return normalizedRows;
+      }
+
       const pageTitleById = await this.resolvePageTitlesById(
         normalizedRows,
         propertiesById,
         workspaceId,
       );
-      const preparedRows = this.applyRowsServerState({
+      return this.applyRowsServerState({
         rows: normalizedRows,
         filters: rowsFilters,
         sortPropertyId: query?.sortPropertyId,
@@ -1730,30 +1719,32 @@ export class DatabaseService {
         propertiesById,
         pageTitleById,
       });
-
-      if (!query?.limit) {
-        return preparedRows;
-      }
-
-      return this.paginateRowsByOffsetCursor(preparedRows, query.limit, query.cursor);
     }
 
-    if (!query?.limit) {
-      return normalizedRows;
-    }
+    const paginatedRows = await this.databaseRowRepo.findByDatabaseIdPaginated(
+      databaseId,
+      workspaceId,
+      database.spaceId,
+      {
+        limit: query.limit,
+        cursor: query.cursor,
+        sortField: query.sortField,
+        sortDirection: query.sortDirection,
+        sortPropertyId: query.sortPropertyId,
+        filters: rowsFilters,
+      },
+    );
 
-    const hasMore = rows.length > query.limit;
-    const lastRow = normalizedRows[normalizedRows.length - 1] as
-      | { pagePosition?: string; page?: { position?: string } }
-      | undefined;
-    const nextCursor = hasMore
-      ? (lastRow?.pagePosition ?? lastRow?.page?.position ?? null)
-      : null;
+    const normalizedRows = await this.enrichRowsWithUserNames(
+      paginatedRows.items,
+      userPropertyIds,
+      workspaceId,
+    );
 
     return {
       items: normalizedRows,
-      nextCursor,
-      hasMore,
+      nextCursor: paginatedRows.nextCursor,
+      hasMore: paginatedRows.hasMore,
     };
   }
 

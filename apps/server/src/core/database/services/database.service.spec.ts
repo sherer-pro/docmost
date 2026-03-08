@@ -1,5 +1,5 @@
 jest.mock('lib0/decoding.js', () => ({ readVarString: jest.fn() }));
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from './database.service';
 
 describe('DatabaseService mixed tree flows', () => {
@@ -11,6 +11,7 @@ describe('DatabaseService mixed tree flows', () => {
   const databaseRowRepo = {
     findByDatabaseAndPage: jest.fn(),
     findByDatabaseId: jest.fn(),
+    findByDatabaseIdPaginated: jest.fn(),
     archiveByPageIds: jest.fn(),
     archiveByDatabaseId: jest.fn(),
     softDetachRowLink: jest.fn(),
@@ -90,6 +91,11 @@ describe('DatabaseService mixed tree flows', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     databaseRowRepo.findByDatabaseId.mockResolvedValue([]);
+    databaseRowRepo.findByDatabaseIdPaginated.mockResolvedValue({
+      items: [],
+      nextCursor: null,
+      hasMore: false,
+    });
     databasePropertyRepo.findByDatabaseId.mockResolvedValue([]);
     databaseCellRepo.findByDatabaseAndPage.mockResolvedValue([]);
     userRepo.findById.mockResolvedValue(null);
@@ -302,6 +308,73 @@ describe('DatabaseService mixed tree flows', () => {
       id: '019c8501-f413-737d-8d18-536a9f78d347',
       name: '019c8501-f413-737d-8d18-536a9f78d347',
     });
+  });
+
+  it('uses paginated repository flow for listRows when limit is provided', async () => {
+    databaseRowRepo.findByDatabaseIdPaginated.mockResolvedValue({
+      items: [{ id: 'row-1', pageId: 'row-page-1', cells: [] }],
+      nextCursor: 'cursor-next',
+      hasMore: true,
+    });
+
+    const result = await service.listRows('db-1', user, 'ws-1', {
+      limit: 25,
+      cursor: 'cursor-current',
+      sortField: 'title',
+      sortDirection: 'desc',
+      sortPropertyId: '00000000-0000-0000-0000-000000000001',
+      filters: JSON.stringify([
+        {
+          propertyId: 'prop-1',
+          operator: 'contains',
+          value: 'hello',
+        },
+      ]),
+    } as any);
+
+    expect(databaseRowRepo.findByDatabaseId).not.toHaveBeenCalled();
+    expect(databaseRowRepo.findByDatabaseIdPaginated).toHaveBeenCalledWith(
+      'db-1',
+      'ws-1',
+      'space-1',
+      expect.objectContaining({
+        limit: 25,
+        cursor: 'cursor-current',
+        sortField: 'title',
+        sortDirection: 'desc',
+        sortPropertyId: '00000000-0000-0000-0000-000000000001',
+        filters: [
+          {
+            propertyId: 'prop-1',
+            operator: 'contains',
+            value: 'hello',
+          },
+        ],
+      }),
+    );
+    expect(result).toEqual({
+      items: [{ id: 'row-1', pageId: 'row-page-1', cells: [] }],
+      nextCursor: 'cursor-next',
+      hasMore: true,
+    });
+  });
+
+  it('throws BadRequestException for invalid rows filters', async () => {
+    await expect(
+      service.listRows('db-1', user, 'ws-1', {
+        limit: 20,
+        filters: JSON.stringify([
+          {
+            propertyId: 'prop-1',
+            operator: 'invalid',
+            value: 'hello',
+          },
+        ]),
+      } as any),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(databaseRowRepo.findByDatabaseId).not.toHaveBeenCalled();
+    expect(databaseRowRepo.findByDatabaseIdPaginated).not.toHaveBeenCalled();
   });
 
   it('keeps linked page slug unchanged when renaming database', async () => {
