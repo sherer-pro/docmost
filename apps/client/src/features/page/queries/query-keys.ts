@@ -7,6 +7,7 @@ export const QUERY_KEY_SPACE = {
   databases: "databases",
   database: "database",
   databaseProperties: "properties",
+  databaseViews: "views",
   rows: "rows",
   rowContext: "row-context",
   pages: "pages",
@@ -68,8 +69,21 @@ export function databasePropertiesKey(databaseId?: string) {
   ] as const;
 }
 
-export function databaseRowsKey(databaseId?: string) {
-  return [QUERY_KEY_SPACE.database, databaseId, QUERY_KEY_SPACE.rows] as const;
+export function databaseViewsKey(databaseId?: string) {
+  return [
+    QUERY_KEY_SPACE.database,
+    databaseId,
+    QUERY_KEY_SPACE.databaseViews,
+  ] as const;
+}
+
+export function databaseRowsKey(databaseId?: string, params?: QueryParamsKey | null) {
+  return [
+    QUERY_KEY_SPACE.database,
+    databaseId,
+    QUERY_KEY_SPACE.rows,
+    params ?? null,
+  ] as const;
 }
 
 export function databaseRowContextKey(pageId?: string) {
@@ -93,6 +107,7 @@ export const DATABASE_QUERY_KEYS = {
   bySpace: databasesBySpaceKey,
   byId: databaseKey,
   properties: databasePropertiesKey,
+  views: databaseViewsKey,
   rows: databaseRowsKey,
   rowContext: databaseRowContextKey,
 };

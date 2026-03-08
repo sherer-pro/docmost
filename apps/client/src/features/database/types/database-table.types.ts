@@ -66,6 +66,22 @@ export interface IDatabaseSortState {
   direction: 'asc' | 'desc';
 }
 
+export type IDatabaseRowsSortField = 'position' | 'title';
+
+export type IDatabaseRowsSortDirection = 'asc' | 'desc';
+
+export interface IDatabaseRowsQueryParams {
+  limit?: number;
+  cursor?: string | null;
+  sortField?: IDatabaseRowsSortField;
+  sortDirection?: IDatabaseRowsSortDirection;
+}
+
+export interface IDatabaseRowsPage {
+  items: IDatabaseRowWithCells[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
 
 export interface IDatabaseRowContext {
   database: {

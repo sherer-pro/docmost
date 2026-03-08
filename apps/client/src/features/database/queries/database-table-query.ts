@@ -4,27 +4,42 @@ import {
   UseQueryResult,
 } from '@tanstack/react-query';
 import {
+  batchUpdateDatabaseRows,
   batchUpdateDatabaseCells,
+  createDatabaseView,
   createDatabaseProperty,
   createDatabaseRow,
+  deleteDatabaseView,
   updateDatabaseRow,
   deleteDatabaseProperty,
   deleteDatabaseRow,
   getDatabaseProperties,
+  getDatabaseViews,
   updateDatabaseProperty,
+  updateDatabaseView,
   getDatabaseRowContextByPage,
   getDatabaseRows,
 } from '@/features/database/services';
 import {
   IBatchUpdateDatabaseCellsPayload,
+  IBatchUpdateDatabaseRowsPayload,
+  IBatchUpdateDatabaseRowsResponse,
+  ICreateDatabaseViewPayload,
   ICreateDatabasePropertyPayload,
   ICreateDatabaseRowPayload,
   IDatabaseProperty,
+  IDatabaseView,
   IUpdateDatabaseRowPayload,
   IUpdateDatabaseRowResponse,
   IUpdateDatabasePropertyPayload,
+  IUpdateDatabaseViewPayload,
 } from '@/features/database/types/database.types';
-import { IDatabaseRowContext, IDatabaseRowWithCells } from '@/features/database/types/database-table.types';
+import {
+  IDatabaseRowContext,
+  IDatabaseRowsPage,
+  IDatabaseRowsQueryParams,
+  IDatabaseRowWithCells,
+} from '@/features/database/types/database-table.types';
 import { queryClient } from '@/main.tsx';
 import { DATABASE_QUERY_KEYS } from '@/features/page/queries/query-keys.ts';
 import {
@@ -32,6 +47,24 @@ import {
   invalidateDatabaseProperties,
   invalidateSidebarTree,
 } from '@/features/page/queries/cache-invalidation.ts';
+
+const normalizeDatabaseRowsResponse = (
+  data: IDatabaseRowWithCells[] | IDatabaseRowsPage,
+): IDatabaseRowsPage => {
+  if (Array.isArray(data)) {
+    return {
+      items: data,
+      nextCursor: null,
+      hasMore: false,
+    };
+  }
+
+  return {
+    items: data.items ?? [],
+    nextCursor: data.nextCursor ?? null,
+    hasMore: Boolean(data.hasMore),
+  };
+};
 
 /**
  * Loads property set (columns) for the selected database.
@@ -51,11 +84,66 @@ export function useDatabasePropertiesQuery(
  */
 export function useDatabaseRowsQuery(
   databaseId?: string,
-): UseQueryResult<IDatabaseRowWithCells[], Error> {
+  params?: IDatabaseRowsQueryParams,
+): UseQueryResult<IDatabaseRowsPage, Error> {
   return useQuery({
-    queryKey: DATABASE_QUERY_KEYS.rows(databaseId),
-    queryFn: () => getDatabaseRows(databaseId as string),
+    queryKey: DATABASE_QUERY_KEYS.rows(databaseId, params ?? null),
+    queryFn: async () =>
+      normalizeDatabaseRowsResponse(
+        await getDatabaseRows(databaseId as string, params),
+      ),
     enabled: Boolean(databaseId),
+  });
+}
+
+export function useDatabaseViewsQuery(
+  databaseId?: string,
+): UseQueryResult<IDatabaseView[], Error> {
+  return useQuery({
+    queryKey: DATABASE_QUERY_KEYS.views(databaseId),
+    queryFn: () => getDatabaseViews(databaseId as string),
+    enabled: Boolean(databaseId),
+  });
+}
+
+export function useCreateDatabaseViewMutation(databaseId?: string) {
+  return useMutation({
+    mutationFn: (payload: ICreateDatabaseViewPayload) =>
+      createDatabaseView(databaseId as string, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: DATABASE_QUERY_KEYS.views(databaseId),
+      });
+    },
+  });
+}
+
+export function useUpdateDatabaseViewMutation(databaseId?: string) {
+  return useMutation({
+    mutationFn: ({
+      viewId,
+      payload,
+    }: {
+      viewId: string;
+      payload: IUpdateDatabaseViewPayload;
+    }) => updateDatabaseView(databaseId as string, viewId, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: DATABASE_QUERY_KEYS.views(databaseId),
+      });
+    },
+  });
+}
+
+export function useDeleteDatabaseViewMutation(databaseId?: string) {
+  return useMutation({
+    mutationFn: (viewId: string) =>
+      deleteDatabaseView(databaseId as string, viewId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: DATABASE_QUERY_KEYS.views(databaseId),
+      });
+    },
   });
 }
 
@@ -158,6 +246,17 @@ export function useBatchUpdateDatabaseCellsMutation(databaseId?: string) {
       pageId: string;
       payload: IBatchUpdateDatabaseCellsPayload;
     }) => batchUpdateDatabaseCells(databaseId as string, pageId, payload),
+    onSuccess: () => {
+      invalidateDatabaseRowContext({ databaseId }, { client: queryClient });
+      invalidateSidebarTree({}, { client: queryClient });
+    },
+  });
+}
+
+export function useBatchUpdateDatabaseRowsMutation(databaseId?: string) {
+  return useMutation<IBatchUpdateDatabaseRowsResponse, Error, IBatchUpdateDatabaseRowsPayload>({
+    mutationFn: (payload) =>
+      batchUpdateDatabaseRows(databaseId as string, payload),
     onSuccess: () => {
       invalidateDatabaseRowContext({ databaseId }, { client: queryClient });
       invalidateSidebarTree({}, { client: queryClient });

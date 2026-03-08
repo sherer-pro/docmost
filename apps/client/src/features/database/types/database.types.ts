@@ -1,4 +1,8 @@
 import { DatabasePropertyType } from '@docmost/api-contract';
+import type {
+  IDatabaseFilterCondition,
+  IDatabaseSortState,
+} from '@/features/database/types/database-table.types';
 
 /**
  * Base database entity from the backend API.
@@ -108,11 +112,17 @@ export interface IDatabaseView {
   workspaceId: string;
   name: string;
   type: string;
-  config: unknown;
+  config: IDatabaseViewConfig | null;
   creatorId: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
+}
+
+export interface IDatabaseViewConfig {
+  visibleColumns?: Record<string, boolean>;
+  filters?: IDatabaseFilterCondition[];
+  sortState?: IDatabaseSortState | null;
 }
 
 /**
@@ -195,6 +205,22 @@ export interface IDatabaseCellBatchOperation {
  */
 export interface IBatchUpdateDatabaseCellsPayload {
   cells: IDatabaseCellBatchOperation[];
+}
+
+export interface IBatchUpdateDatabaseRowOperation {
+  pageId: string;
+  operation?: 'upsert_cells' | 'delete_row';
+  cells?: IDatabaseCellBatchOperation[];
+}
+
+export interface IBatchUpdateDatabaseRowsPayload {
+  rows: IBatchUpdateDatabaseRowOperation[];
+}
+
+export interface IBatchUpdateDatabaseRowsResponse {
+  updatedRows: string[];
+  deletedRows: string[];
+  failedRows: string[];
 }
 
 /**
