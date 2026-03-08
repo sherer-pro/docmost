@@ -34,6 +34,7 @@ function HistoryView() {
   return (
     <div>
       <HistoryEditor
+        historyItem={data}
         content={data.content}
         title={data.title}
         previousContent={!isErrorPrev ? prevData?.content : undefined}

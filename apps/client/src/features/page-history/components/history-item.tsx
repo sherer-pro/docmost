@@ -1,14 +1,10 @@
-import { Text, Group, UnstyledButton, Avatar, Tooltip } from "@mantine/core";
+import { Text, Group, UnstyledButton } from "@mantine/core";
 import { CustomAvatar } from "@/components/ui/custom-avatar.tsx";
 import { formattedDate } from "@/lib/time";
 import classes from "./css/history.module.css";
 import clsx from "clsx";
 import { IPageHistory } from "@/features/page-history/types/page.types";
 import { memo, useCallback } from "react";
-import { useTranslation } from "react-i18next";
-import { formatHistorySummary } from "@/features/page-history/utils/history-summary.ts";
-
-const MAX_VISIBLE_AVATARS = 5;
 
 interface HistoryItemProps {
   historyItem: IPageHistory;
@@ -27,7 +23,6 @@ const HistoryItem = memo(function HistoryItem({
   onHoverEnd,
   isActive,
 }: HistoryItemProps) {
-  const { t } = useTranslation();
   const handleClick = useCallback(() => {
     onSelect(historyItem.id, index);
   }, [onSelect, historyItem.id, index]);
@@ -35,10 +30,6 @@ const HistoryItem = memo(function HistoryItem({
   const handleMouseEnter = useCallback(() => {
     onHover?.(historyItem.id, index);
   }, [onHover, historyItem.id, index]);
-
-  const contributors = historyItem.contributors;
-  const hasContributors = contributors && contributors.length > 0;
-  const summary = formatHistorySummary(historyItem, t);
 
   return (
     <UnstyledButton
@@ -51,58 +42,15 @@ const HistoryItem = memo(function HistoryItem({
       <Text size="sm">{formattedDate(new Date(historyItem.createdAt))}</Text>
 
       <Group gap={6} wrap="nowrap" mt={4}>
-        {hasContributors ? (
-          <>
-            <Tooltip.Group openDelay={300} closeDelay={100}>
-              <Avatar.Group spacing={8}>
-                {contributors.slice(0, MAX_VISIBLE_AVATARS).map((contributor) => (
-                  <Tooltip key={contributor.id} label={contributor.name} withArrow>
-                    <CustomAvatar
-                      size="sm"
-                      avatarUrl={contributor.avatarUrl}
-                      name={contributor.name}
-                    />
-                  </Tooltip>
-                ))}
-                {contributors.length > MAX_VISIBLE_AVATARS && (
-                  <Tooltip
-                    withArrow
-                    label={contributors.slice(MAX_VISIBLE_AVATARS).map((c) => (
-                      <div key={c.id}>{c.name}</div>
-                    ))}
-                  >
-                    <Avatar size="sm" color="gray">
-                      +{contributors.length - MAX_VISIBLE_AVATARS}
-                    </Avatar>
-                  </Tooltip>
-                )}
-              </Avatar.Group>
-            </Tooltip.Group>
-            {contributors.length === 1 && (
-              <Text size="sm" c="dimmed" lineClamp={1}>
-                {contributors[0].name}
-              </Text>
-            )}
-          </>
-        ) : (
-          <>
-            <CustomAvatar
-              size="sm"
-              avatarUrl={historyItem.lastUpdatedBy?.avatarUrl}
-              name={historyItem.lastUpdatedBy?.name}
-            />
-            <Text size="sm" c="dimmed" lineClamp={1}>
-              {historyItem.lastUpdatedBy?.name}
-            </Text>
-          </>
-        )}
-      </Group>
-
-      {summary && (
-        <Text size="xs" c="dimmed" mt={4} lineClamp={3}>
-          {summary}
+        <CustomAvatar
+          size="sm"
+          avatarUrl={historyItem.lastUpdatedBy?.avatarUrl}
+          name={historyItem.lastUpdatedBy?.name}
+        />
+        <Text size="sm" c="dimmed" lineClamp={1}>
+          {historyItem.lastUpdatedBy?.name}
         </Text>
-      )}
+      </Group>
     </UnstyledButton>
   );
 });
