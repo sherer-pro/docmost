@@ -7,6 +7,7 @@ import {
   batchUpdateDatabaseCells,
   createDatabaseProperty,
   createDatabaseRow,
+  updateDatabaseRow,
   deleteDatabaseProperty,
   deleteDatabaseRow,
   getDatabaseProperties,
@@ -19,6 +20,8 @@ import {
   ICreateDatabasePropertyPayload,
   ICreateDatabaseRowPayload,
   IDatabaseProperty,
+  IUpdateDatabaseRowPayload,
+  IUpdateDatabaseRowResponse,
   IUpdateDatabasePropertyPayload,
 } from '@/features/database/types/database.types';
 import { IDatabaseRowContext, IDatabaseRowWithCells } from '@/features/database/types/database-table.types';
@@ -75,6 +78,24 @@ export function useCreateDatabaseRowMutation(databaseId?: string) {
   return useMutation({
     mutationFn: (payload: ICreateDatabaseRowPayload) =>
       createDatabaseRow(databaseId as string, payload),
+    onSuccess: () => {
+      invalidateDatabaseRowContext({ databaseId }, { client: queryClient });
+      invalidateSidebarTree({}, { client: queryClient });
+    },
+  });
+}
+
+/**
+ * Renames a row in the selected database.
+ */
+export function useUpdateDatabaseRowMutation(databaseId?: string) {
+  return useMutation<
+    IUpdateDatabaseRowResponse,
+    Error,
+    { pageId: string; payload: IUpdateDatabaseRowPayload }
+  >({
+    mutationFn: ({ pageId, payload }) =>
+      updateDatabaseRow(databaseId as string, pageId, payload),
     onSuccess: () => {
       invalidateDatabaseRowContext({ databaseId }, { client: queryClient });
       invalidateSidebarTree({}, { client: queryClient });
