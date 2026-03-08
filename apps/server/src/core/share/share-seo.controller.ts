@@ -90,6 +90,7 @@ export class ShareSeoController {
       const share = await this.shareService.getShareForPage(
         pageId,
         workspace.id,
+        shareId,
       );
 
       if (!share) {

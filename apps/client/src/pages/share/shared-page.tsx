@@ -17,6 +17,7 @@ export default function SharedPage() {
 
   const { data, isLoading, isError, error } = useSharePageQuery({
     pageId: extractPageSlugId(pageSlug),
+    shareId,
   });
 
   useEffect(() => {

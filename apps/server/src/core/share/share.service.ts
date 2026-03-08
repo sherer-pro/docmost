@@ -9,10 +9,8 @@ import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { nanoIdGen } from '../../common/helpers';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
-import { TokenService } from '../auth/services/token.service';
 import { jsonToNode } from '../../collaboration/collaboration.util';
 import {
-  getAttachmentIds,
   getProsemirrorContent,
   isAttachmentNode,
   removeMarkTypeFromDoc,
@@ -22,6 +20,7 @@ import { ShareRepo } from '@docmost/db/repos/share/share.repo';
 import { updateAttachmentAttr } from './share.util';
 import { Page } from '@docmost/db/types/entity.types';
 import { sql } from 'kysely';
+import { validate as isValidUUID } from 'uuid';
 
 @Injectable()
 export class ShareService {
@@ -31,7 +30,6 @@ export class ShareService {
     private readonly shareRepo: ShareRepo,
     private readonly pageRepo: PageRepo,
     @InjectKysely() private readonly db: KyselyDB,
-    private readonly tokenService: TokenService,
   ) {}
 
   async getShareTree(shareId: string, workspaceId: string) {
@@ -96,16 +94,46 @@ export class ShareService {
   }
 
   async getSharedPage(dto: ShareInfoDto, workspaceId: string) {
-    const share = await this.getShareForPage(dto.pageId, workspaceId);
+    let share = null;
+    let page = null;
 
-    if (!share) {
+    if (dto.pageId) {
+      share = await this.getShareForPage(dto.pageId, workspaceId, dto.shareId);
+      if (!share) {
+        throw new NotFoundException('Shared page not found');
+      }
+
+      page = await this.pageRepo.findBySlugId(dto.pageId, {
+        includeContent: true,
+        includeCreator: true,
+      });
+    } else if (dto.shareId) {
+      const shareById = await this.shareRepo.findById(dto.shareId);
+      if (!shareById || shareById.workspaceId !== workspaceId) {
+        throw new NotFoundException('Shared page not found');
+      }
+
+      const rootPage = await this.pageRepo.findById(shareById.pageId);
+      if (!rootPage || rootPage.deletedAt) {
+        throw new NotFoundException('Shared page not found');
+      }
+
+      share = await this.getShareForPage(
+        rootPage.slugId,
+        workspaceId,
+        dto.shareId,
+      );
+      if (!share) {
+        throw new NotFoundException('Shared page not found');
+      }
+
+      page = await this.pageRepo.findById(rootPage.id, {
+        includeContent: true,
+        includeCreator: true,
+      });
+    } else {
       throw new NotFoundException('Shared page not found');
     }
-
-    const page = await this.pageRepo.findBySlugId(dto.pageId, {
-      includeContent: true,
-      includeCreator: true,
-    });
 
     if (!page || page.deletedAt) {
       throw new NotFoundException('Shared page not found');
@@ -116,7 +144,11 @@ export class ShareService {
     return { page, share };
   }
 
-  async getShareForPage(pageId: string, workspaceId: string) {
+  async getShareForPage(
+    pageId: string,
+    workspaceId: string,
+    expectedShareId?: string,
+  ) {
     // here we try to check if a page was shared directly or if it inherits the share from its closest shared ancestor
     const share = await this.db
       .withRecursive('page_hierarchy', (cte) =>
@@ -180,6 +212,16 @@ export class ShareService {
 
     if ((share.level as number) > 0 && !share.includeSubPages) {
       return undefined;
+    }
+
+    if (expectedShareId) {
+      const shareIdMatches = isValidUUID(expectedShareId)
+        ? share.shareId === expectedShareId
+        : String(share.shareKey).toLowerCase() === expectedShareId.toLowerCase();
+
+      if (!shareIdMatches) {
+        return undefined;
+      }
     }
 
     return {
@@ -290,31 +332,13 @@ export class ShareService {
 
   async updatePublicAttachments(page: Page): Promise<any> {
     const prosemirrorJson = getProsemirrorContent(page.content);
-    const attachmentIds = getAttachmentIds(prosemirrorJson);
-    const attachmentMap = new Map<string, string>();
-
-    await Promise.all(
-      attachmentIds.map(async (attachmentId: string) => {
-        const token = await this.tokenService.generateAttachmentToken({
-          attachmentId,
-          pageId: page.id,
-          workspaceId: page.workspaceId,
-        });
-        attachmentMap.set(attachmentId, token);
-      }),
-    );
-
     const doc = jsonToNode(prosemirrorJson);
 
     doc?.descendants((node: Node) => {
       if (!isAttachmentNode(node.type.name)) return;
 
-      const attachmentId = node.attrs.attachmentId;
-      const token = attachmentMap.get(attachmentId);
-      if (!token) return;
-
-      updateAttachmentAttr(node, 'src', token);
-      updateAttachmentAttr(node, 'url', token);
+      updateAttachmentAttr(node, 'src');
+      updateAttachmentAttr(node, 'url');
     });
 
     const removeCommentMarks = removeMarkTypeFromDoc(doc, 'comment');

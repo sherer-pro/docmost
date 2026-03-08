@@ -26,7 +26,7 @@ export type JwtExchangePayload = {
 };
 
 export type JwtAttachmentPayload = {
-  attachmentId: string;
+  attachmentId?: string;
   pageId: string;
   workspaceId: string;
   type: 'attachment';
