@@ -63,12 +63,24 @@ import { DatabaseCellRepo } from '@docmost/db/repos/database/database-cell.repo'
 import { DatabasePropertyRepo } from '@docmost/db/repos/database/database-property.repo';
 import { DatabaseViewRepo } from '@docmost/db/repos/database/database-view.repo';
 import { SpaceRepo } from '@docmost/db/repos/space/space.repo';
+import { UserRepo } from '@docmost/db/repos/user/user.repo';
 import {
   getPageAssigneeId,
   getPageStakeholderIds,
   normalizePageSettings,
 } from '../utils/page-settings.utils';
 import { PageHistoryRecorderService } from './page-history-recorder.service';
+
+interface IHistoryUserRef {
+  id: string;
+  name: string;
+}
+
+type CustomFieldHistoryChange = {
+  field: 'status' | 'assigneeId' | 'stakeholderIds';
+  oldValue: unknown;
+  newValue: unknown;
+};
 
 @Injectable()
 export class PageService {
@@ -93,6 +105,7 @@ export class PageService {
     private readonly databasePropertyRepo: DatabasePropertyRepo,
     private readonly databaseViewRepo: DatabaseViewRepo,
     private readonly spaceRepo: SpaceRepo,
+    private readonly userRepo: UserRepo,
     private readonly pageHistoryRecorder: PageHistoryRecorderService,
   ) {}
 
@@ -131,14 +144,10 @@ export class PageService {
       assignee?: boolean;
       stakeholders?: boolean;
     },
-  ): Array<{ field: 'status' | 'assigneeId' | 'stakeholderIds'; oldValue: unknown; newValue: unknown }> {
+  ): CustomFieldHistoryChange[] {
     const current = normalizePageSettings(currentSettings);
     const next = normalizePageSettings(nextSettings);
-    const changes: Array<{
-      field: 'status' | 'assigneeId' | 'stakeholderIds';
-      oldValue: unknown;
-      newValue: unknown;
-    }> = [];
+    const changes: CustomFieldHistoryChange[] = [];
 
     if (documentFields.status) {
       const previousStatus =
@@ -183,6 +192,95 @@ export class PageService {
     }
 
     return changes;
+  }
+
+  private async resolveHistoryUserReferences(
+    userIds: string[],
+    workspaceId: string,
+  ): Promise<Map<string, IHistoryUserRef>> {
+    const uniqueUserIds = [...new Set(userIds.filter(Boolean))];
+    if (uniqueUserIds.length === 0) {
+      return new Map();
+    }
+
+    const users = await Promise.all(
+      uniqueUserIds.map(async (userId) => {
+        const user = await this.userRepo.findById(userId, workspaceId);
+        const name = user?.name?.trim() || userId;
+
+        return [userId, { id: userId, name }] as const;
+      }),
+    );
+
+    return new Map(users);
+  }
+
+  private toHistoryUserRef(
+    value: unknown,
+    usersById: Map<string, IHistoryUserRef>,
+  ): IHistoryUserRef | null {
+    if (typeof value !== 'string' || !value) {
+      return null;
+    }
+
+    return usersById.get(value) ?? { id: value, name: value };
+  }
+
+  private toHistoryUserRefs(
+    value: unknown,
+    usersById: Map<string, IHistoryUserRef>,
+  ): IHistoryUserRef[] {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+
+    return value
+      .filter((candidate): candidate is string => typeof candidate === 'string')
+      .map((userId) => usersById.get(userId) ?? { id: userId, name: userId });
+  }
+
+  private async enrichCustomFieldHistoryChanges(
+    changes: CustomFieldHistoryChange[],
+    workspaceId: string,
+  ): Promise<CustomFieldHistoryChange[]> {
+    const userIds = changes.flatMap((change) => {
+      if (change.field === 'assigneeId') {
+        return [change.oldValue, change.newValue].filter(
+          (value): value is string => typeof value === 'string',
+        );
+      }
+
+      if (change.field === 'stakeholderIds') {
+        return [
+          ...(Array.isArray(change.oldValue) ? change.oldValue : []),
+          ...(Array.isArray(change.newValue) ? change.newValue : []),
+        ].filter((value): value is string => typeof value === 'string');
+      }
+
+      return [];
+    });
+
+    const usersById = await this.resolveHistoryUserReferences(userIds, workspaceId);
+
+    return changes.map((change) => {
+      if (change.field === 'assigneeId') {
+        return {
+          ...change,
+          oldValue: this.toHistoryUserRef(change.oldValue, usersById),
+          newValue: this.toHistoryUserRef(change.newValue, usersById),
+        };
+      }
+
+      if (change.field === 'stakeholderIds') {
+        return {
+          ...change,
+          oldValue: this.toHistoryUserRefs(change.oldValue, usersById),
+          newValue: this.toHistoryUserRefs(change.newValue, usersById),
+        };
+      }
+
+      return change;
+    });
   }
 
   async findById(
@@ -411,14 +509,18 @@ export class PageService {
 
     if (customFieldChanges.length > 0) {
       const databaseId = await this.resolvePageDatabaseId(page.id, page.workspaceId);
+      const changesWithDisplayNames = await this.enrichCustomFieldHistoryChanges(
+        customFieldChanges,
+        page.workspaceId,
+      );
 
-      await this.pageHistoryRecorder.recordPageEvent({
+      await this.pageHistoryRecorder.enqueuePageEvent({
         pageId: page.id,
         actorId: user.id,
         changeType: 'page.custom-fields.updated',
         changeData: {
           databaseId,
-          changes: customFieldChanges,
+          changes: changesWithDisplayNames,
         },
       });
     }

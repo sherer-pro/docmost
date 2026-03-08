@@ -13,9 +13,12 @@ describe('PageService custom fields history', () => {
     })),
   };
   const pageHistoryRecorder = {
-    recordPageEvent: jest.fn(),
+    enqueuePageEvent: jest.fn(),
   };
   const spaceRepo = {
+    findById: jest.fn(),
+  };
+  const userRepo = {
     findById: jest.fn(),
   };
   const queue = {
@@ -41,6 +44,7 @@ describe('PageService custom fields history', () => {
     {} as any,
     {} as any,
     spaceRepo as any,
+    userRepo as any,
     pageHistoryRecorder as any,
   );
 
@@ -59,6 +63,10 @@ describe('PageService custom fields history', () => {
       contributorIds: ['user-1'],
       content: { type: 'doc' },
       settings: { status: 'TODO' },
+    });
+    userRepo.findById.mockResolvedValue({
+      id: 'user-2',
+      name: 'Test User',
     });
   });
 
@@ -87,7 +95,7 @@ describe('PageService custom fields history', () => {
       { id: 'user-2' } as any,
     );
 
-    expect(pageHistoryRecorder.recordPageEvent).toHaveBeenCalledWith(
+    expect(pageHistoryRecorder.enqueuePageEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         pageId: 'page-1',
         actorId: 'user-2',
@@ -121,6 +129,69 @@ describe('PageService custom fields history', () => {
       { id: 'user-2' } as any,
     );
 
-    expect(pageHistoryRecorder.recordPageEvent).not.toHaveBeenCalled();
+    expect(pageHistoryRecorder.enqueuePageEvent).not.toHaveBeenCalled();
+  });
+
+  it('stores display names for assignee and stakeholders in custom fields history', async () => {
+    spaceRepo.findById.mockResolvedValue({
+      settings: {
+        documentFields: {
+          assignee: true,
+          stakeholders: true,
+        },
+      },
+    });
+
+    userRepo.findById.mockImplementation(async (userId: string) => {
+      const users: Record<string, { id: string; name: string }> = {
+        'user-old': { id: 'user-old', name: 'Old User' },
+        'user-new': { id: 'user-new', name: 'New User' },
+        'stakeholder-1': { id: 'stakeholder-1', name: 'Stakeholder One' },
+        'stakeholder-2': { id: 'stakeholder-2', name: 'Stakeholder Two' },
+      };
+
+      return users[userId] ?? null;
+    });
+
+    await service.update(
+      {
+        id: 'page-1',
+        spaceId: 'space-1',
+        workspaceId: 'ws-1',
+        creatorId: 'user-1',
+        lastUpdatedById: 'user-1',
+        contributorIds: ['user-1'],
+        settings: {
+          assigneeId: 'user-old',
+          stakeholderIds: ['stakeholder-1'],
+        },
+      } as any,
+      {
+        toSettingsPayload: jest.fn(() => ({
+          assigneeId: 'user-new',
+          stakeholderIds: ['stakeholder-2'],
+        })),
+      } as any,
+      { id: 'user-2' } as any,
+    );
+
+    expect(pageHistoryRecorder.enqueuePageEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        changeData: expect.objectContaining({
+          changes: expect.arrayContaining([
+            expect.objectContaining({
+              field: 'assigneeId',
+              oldValue: { id: 'user-old', name: 'Old User' },
+              newValue: { id: 'user-new', name: 'New User' },
+            }),
+            expect.objectContaining({
+              field: 'stakeholderIds',
+              oldValue: [{ id: 'stakeholder-1', name: 'Stakeholder One' }],
+              newValue: [{ id: 'stakeholder-2', name: 'Stakeholder Two' }],
+            }),
+          ]),
+        }),
+      }),
+    );
   });
 });

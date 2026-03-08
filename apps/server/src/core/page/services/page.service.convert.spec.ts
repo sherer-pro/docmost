@@ -59,6 +59,7 @@ describe('PageService convertPageToDatabase reversibility', () => {
     databasePropertyRepo as any,
     databaseViewRepo as any,
     {} as any,
+    {} as any,
     pageHistoryRecorder as any,
   );
 
