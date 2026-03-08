@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Alert, Loader, Stack, Text } from "@mantine/core";
 import { IconQuote, IconAlertCircle } from "@tabler/icons-react";
 import { getQuoteContent } from "@/features/page/services/page-service";
+import { useTranslation } from "react-i18next";
 
 /**
  * Renders an embedded quote and refreshes its content periodically.
@@ -11,6 +12,7 @@ import { getQuoteContent } from "@/features/page/services/page-service";
  * receives updates from the source document almost immediately.
  */
 export default function QuoteEmbedView(props: NodeViewProps) {
+  const { t } = useTranslation();
   const { node } = props;
   const { sourcePageId, quoteId } = node.attrs;
 
@@ -32,7 +34,7 @@ export default function QuoteEmbedView(props: NodeViewProps) {
         }
       } catch (err) {
         if (!isDisposed) {
-          setError("Failed to load quote content");
+          setError(t("Failed to load quote content"));
           setIsLoading(false);
         }
       }
@@ -45,11 +47,16 @@ export default function QuoteEmbedView(props: NodeViewProps) {
       isDisposed = true;
       window.clearInterval(timer);
     };
-  }, [sourcePageId, quoteId]);
+  }, [sourcePageId, quoteId, t]);
 
   return (
     <NodeViewWrapper data-drag-handle>
-      <Alert icon={<IconQuote size={16} />} title="Linked quote" radius="md" variant="light">
+      <Alert
+        icon={<IconQuote size={16} />}
+        title={t("Linked quote")}
+        radius="md"
+        variant="light"
+      >
         <Stack gap={6}>
           <Text size="xs" c="dimmed">
             {quoteId}

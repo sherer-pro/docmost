@@ -108,6 +108,7 @@ export default function PageHeaderMenu({ readOnly }: PageHeaderMenuProps) {
 
 
 export function ActivePageUsers() {
+  const { t } = useTranslation();
   const activePageUsers = useAtomValue(activePageUsersAtom);
 
   if (!activePageUsers.length) return null;
@@ -117,7 +118,7 @@ export function ActivePageUsers() {
       gap={6}
       wrap="nowrap"
       className={classes.activeUsers}
-      aria-label="Active page users"
+      aria-label={t("Active page users")}
     >
       {activePageUsers.map((user) => (
         <Tooltip key={user.id} label={user.name} withArrow openDelay={250}>

@@ -84,12 +84,12 @@ export function SsoOIDCForm({ provider, onClose }: SsoFormProps) {
         <Stack>
           <TextInput
             label={t("Display name")}
-            placeholder="e.g Google SSO"
+            placeholder={t("e.g Google SSO")}
             data-autofocus
             {...form.getInputProps("name")}
           />
           <TextInput
-            label="Callback URL"
+            label={t("Callback URL")}
             variant="filled"
             value={callbackUrl}
             pointer
@@ -97,21 +97,21 @@ export function SsoOIDCForm({ provider, onClose }: SsoFormProps) {
             rightSection={<CopyTextButton text={callbackUrl} />}
           />
           <TextInput
-            label="Issuer URL"
-            description="Enter your OIDC issuer URL"
-            placeholder="e.g https://accounts.google.com/"
+            label={t("Issuer URL")}
+            description={t("Enter your OIDC issuer URL")}
+            placeholder={t("e.g https://accounts.google.com/")}
             {...form.getInputProps("oidcIssuer")}
           />
           <TextInput
-            label="Client ID"
-            description="Enter your OIDC ClientId"
-            placeholder="e.g 292085223830.apps.googleusercontent.com"
+            label={t("Client ID")}
+            description={t("Enter your OIDC ClientId")}
+            placeholder={t("e.g 292085223830.apps.googleusercontent.com")}
             {...form.getInputProps("oidcClientId")}
           />
           <TextInput
-            label="Client Secret"
-            description="Enter your OIDC Client Secret"
-            placeholder="e.g OCSPX-zVCkotEPGRnJA1XKUrbgjlf7PQQ-"
+            label={t("Client Secret")}
+            description={t("Enter your OIDC Client Secret")}
+            placeholder={t("e.g OCSPX-zVCkotEPGRnJA1XKUrbgjlf7PQQ-")}
             {...form.getInputProps("oidcClientSecret")}
           />
 

@@ -1,6 +1,9 @@
 import { Affix, Button } from "@mantine/core";
+import { useTranslation } from "react-i18next";
 
 export default function ShareBranding() {
+  const { t } = useTranslation();
+
   return (
     <Affix position={{ bottom: 20, right: 20 }}>
       <Button
@@ -9,7 +12,7 @@ export default function ShareBranding() {
         target="_blank"
         href="https://docmost.com?ref=public-share"
       >
-        Powered by Docmost
+        {t("Powered by Docmost")}
       </Button>
     </Affix>
   );

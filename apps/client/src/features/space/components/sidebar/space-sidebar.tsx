@@ -9,10 +9,11 @@ import {
 import {
   IconArrowDown,
   IconDots,
-  IconFileDatabase,
+  IconHexagonPlus,
   IconFileExport,
   IconHome,
   IconPlus,
+  IconSquareRoundedPlus,
   IconSearch,
   IconSettings,
   IconTrash,
@@ -244,7 +245,7 @@ export function SpaceSidebar() {
                     disabled={createDatabaseMutation.isPending}
                     aria-label={t("Create database")}
                   >
-                    <IconFileDatabase />
+                    <IconHexagonPlus />
                   </ActionIcon>
                 </Tooltip>
 
@@ -255,7 +256,7 @@ export function SpaceSidebar() {
                     onClick={handleCreatePage}
                     aria-label={t("Create page")}
                   >
-                    <IconPlus />
+                    <IconSquareRoundedPlus />
                   </ActionIcon>
                 </Tooltip>
               </Group>

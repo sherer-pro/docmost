@@ -100,7 +100,7 @@ export default function MathInlineView(props: NodeViewProps) {
             draggable={false}
             classNames={{ input: classes.textInput }}
             value={preview ?? ""}
-            placeholder={"E = mc^2"}
+            placeholder={t("E = mc^2")}
             onKeyDown={(e) => {
               if (e.key === "Escape" || (e.key === "Enter" && !e.shiftKey)) {
                 return editor.commands.focus(getPos() + node.nodeSize);

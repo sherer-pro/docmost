@@ -92,7 +92,7 @@ export function LdapLoginModal({
     <Modal
       opened={opened}
       onClose={handleClose}
-      title={`LDAP Login - ${provider.name}`}
+      title={t("LDAP Login - {{provider}}", { provider: provider.name })}
       size="md"
     >
       <form onSubmit={form.onSubmit(handleSubmit)}>
@@ -101,7 +101,7 @@ export function LdapLoginModal({
             id="ldap-username"
             type="text"
             label={t("LDAP username")}
-            placeholder="Enter your LDAP username"
+            placeholder={t("Enter your LDAP username")}
             variant="filled"
             disabled={isLoading}
             data-autofocus

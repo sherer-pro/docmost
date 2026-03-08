@@ -110,7 +110,7 @@ export default function MathBlockView(props: NodeViewProps) {
             ref={textAreaRef}
             draggable="false"
             value={preview ?? ""}
-            placeholder={"E = mc^2"}
+            placeholder={t("E = mc^2")}
             classNames={{ input: classes.textInput }}
             onBlur={(e) => {
               e.preventDefault();
