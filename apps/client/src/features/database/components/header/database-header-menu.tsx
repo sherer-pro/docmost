@@ -178,7 +178,16 @@ export default function DatabaseHeaderMenu({
 
   const hasDatabasePage = Boolean(resolvedDatabasePageId);
   const canMoveDatabasePage = Boolean(resolvedDatabasePageId && databasePageSlugId);
-  const fullPageWidth = user.settings?.preferences?.fullPageWidth ?? false;
+  /**
+   * Keep the same width resolution priority as regular page header:
+   * 1) local database-page setting;
+   * 2) user default preference;
+   * 3) safe fallback `false`.
+   */
+  const fullPageWidth =
+    databaseContext.pageByRoute?.settings?.fullPageWidth ??
+    user.settings?.preferences?.fullPageWidth ??
+    false;
   const databasePageWidthScopeId = resolvedDatabasePageId;
 
   return (
