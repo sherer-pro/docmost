@@ -27,7 +27,7 @@ export function SearchControl({ className, ...others }: SearchControlProps) {
           {t("Search")}
         </Text>
         <Text fw={700} className={classes.shortcut}>
-          Ctrl + K
+          {t("Ctrl + K")}
         </Text>
       </Group>
     </UnstyledButton>

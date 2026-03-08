@@ -307,7 +307,7 @@ function ImportFormatSelection({ spaceId, onClose }: ImportFormatSelection) {
               leftSection={<IconMarkdown size={18} />}
               {...props}
             >
-              Markdown
+              {t("Markdown")}
             </Button>
           )}
         </FileButton>
@@ -320,7 +320,7 @@ function ImportFormatSelection({ spaceId, onClose }: ImportFormatSelection) {
               leftSection={<IconFileCode size={18} />}
               {...props}
             >
-              HTML
+              {t("HTML")}
             </Button>
           )}
         </FileButton>
@@ -343,7 +343,7 @@ function ImportFormatSelection({ spaceId, onClose }: ImportFormatSelection) {
                 leftSection={<IconFileTypeDocx size={18} />}
                 {...props}
               >
-                Word (DOCX)
+                {t("Word (DOCX)")}
               </Button>
             </Tooltip>
           )}
@@ -361,7 +361,7 @@ function ImportFormatSelection({ spaceId, onClose }: ImportFormatSelection) {
               leftSection={<IconBrandNotion size={18} />}
               {...props}
             >
-              Notion
+              {t("Notion")}
             </Button>
           )}
         </FileButton>
@@ -382,7 +382,7 @@ function ImportFormatSelection({ spaceId, onClose }: ImportFormatSelection) {
                 leftSection={<ConfluenceIcon size={18} />}
                 {...props}
               >
-                Confluence
+                {t("Confluence")}
               </Button>
             </Tooltip>
           )}
@@ -392,11 +392,11 @@ function ImportFormatSelection({ spaceId, onClose }: ImportFormatSelection) {
       <Group justify="center" gap="xl" mih={150}>
         <div>
           <Text ta="center" size="lg" inline>
-            Import zip file
+            {t("Import zip file")}
           </Text>
           <Text ta="center" size="sm" c="dimmed" inline py="sm">
             {t(
-              `Upload zip file containing Markdown and HTML files. Max: {{sizeLimit}}`,
+              "Upload zip file containing Markdown and HTML files. Max: {{sizeLimit}}",
               {
                 sizeLimit: formatBytes(getFileImportSizeLimit()),
               },

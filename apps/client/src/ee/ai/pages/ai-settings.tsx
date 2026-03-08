@@ -23,7 +23,9 @@ export default function AiSettings() {
   return (
     <>
       <Helmet>
-        <title>AI - {getAppName()}</title>
+        <title>
+          {t("AI settings")} - {getAppName()}
+        </title>
       </Helmet>
       <SettingsTitle title={t("AI settings")} />
 

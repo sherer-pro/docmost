@@ -57,8 +57,8 @@ export function SsoGoogleForm({ provider, onClose }: SsoFormProps) {
       <form onSubmit={form.onSubmit(handleSubmit)}>
         <Stack>
           <TextInput
-            label="Display name"
-            placeholder="e.g Okta SSO"
+            label={t("Display name")}
+            placeholder={t("e.g Okta SSO")}
             readOnly
             {...form.getInputProps("name")}
           />
