@@ -603,6 +603,23 @@ export function invalidateOnUpdatePage(
     },
   );
 
+  const currentTreeData = jotaiStore.get(treeDataAtom);
+  if (currentTreeData.length > 0) {
+    const treeApi = new SimpleTree<SpaceTreeNode>(currentTreeData);
+
+    if (treeApi.find(id)) {
+      treeApi.update({
+        id,
+        changes: {
+          name: title,
+          icon,
+          ...(status !== undefined ? { status } : {}),
+        },
+      });
+      jotaiStore.set(treeDataAtom, treeApi.data);
+    }
+  }
+
   //update recent changes
   invalidateRecentChanges({ spaceId }, { client: queryClient });
   invalidateDatabaseTreeConsistency();

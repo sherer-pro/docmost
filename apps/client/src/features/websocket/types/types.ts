@@ -1,5 +1,6 @@
 import { SpaceTreeNode } from "@/features/page/tree/types.ts";
 import { IPage } from "@/features/page/types/page.types";
+import { ISpace } from "@/features/space/types/space.types.ts";
 
 export type InvalidateEvent = {
   operation: "invalidate";
@@ -18,7 +19,7 @@ export type UpdateEvent = {
   spaceId: string;
   entity: Array<string>;
   id: string;
-  payload: Partial<IPage>;
+  payload: Partial<IPage> | Partial<ISpace>;
 };
 
 export type DeleteEvent = {

@@ -31,6 +31,7 @@ import { queryClient } from "@/main.tsx";
 import { getRecentChanges } from "@/features/page/services/page-service.ts";
 import { useEffect } from "react";
 import { validate as isValidUuid } from "uuid";
+import { useQueryEmit } from "@/features/websocket/use-query-emit.ts";
 
 export function useGetSpacesQuery(
   params?: QueryParams,
@@ -110,6 +111,7 @@ export function useGetSpaceBySlugQuery(
 export function useUpdateSpaceMutation() {
   const queryClient = useQueryClient();
   const { t } = useTranslation();
+  const emit = useQueryEmit();
 
   return useMutation<ISpace, Error, Partial<ISpace>>({
     mutationFn: (data) => updateSpace(data),
@@ -138,6 +140,14 @@ export function useUpdateSpaceMutation() {
       });
       queryClient.invalidateQueries({
         queryKey: ["spaces"],
+      });
+
+      emit({
+        operation: "updateOne",
+        spaceId: data.id,
+        entity: ["space"],
+        id: data.id,
+        payload: data,
       });
     },
     onError: (error) => {
