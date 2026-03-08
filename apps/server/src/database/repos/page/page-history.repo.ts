@@ -22,6 +22,8 @@ export class PageHistoryRepo {
     'pageId',
     'slugId',
     'title',
+    'changeType',
+    'changeData',
     'icon',
     'coverPhoto',
     'lastUpdatedById',
