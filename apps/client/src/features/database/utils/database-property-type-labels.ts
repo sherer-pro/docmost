@@ -12,5 +12,5 @@ export const DATABASE_PROPERTY_TYPE_LABEL_KEYS: Record<DatabasePropertyType, str
   code: 'Code',
   select: 'Select',
   user: 'User',
-  page_reference: 'Page reference',
+  page_reference: 'Page',
 };
