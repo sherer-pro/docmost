@@ -165,6 +165,22 @@ export interface ICreateDatabaseRowPayload {
 }
 
 /**
+ * Database row rename payload.
+ */
+export interface IUpdateDatabaseRowPayload {
+  title: string;
+}
+
+/**
+ * Database row rename response.
+ */
+export interface IUpdateDatabaseRowResponse {
+  pageId: string;
+  title: string;
+  slugId: string;
+}
+
+/**
  * Single-cell update operation for the batch API.
  */
 export interface IDatabaseCellBatchOperation {

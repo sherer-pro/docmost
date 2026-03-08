@@ -13,6 +13,8 @@ import {
   IDatabaseView,
   IUpdateDatabasePayload,
   IExportDatabasePayload,
+  IUpdateDatabaseRowPayload,
+  IUpdateDatabaseRowResponse,
   IUpdateDatabasePropertyPayload,
   IUpdateDatabaseViewPayload,
 } from "@/features/database/types/database.types";
@@ -137,6 +139,21 @@ export async function createDatabaseRow(
   payload: ICreateDatabaseRowPayload,
 ): Promise<IDatabaseRow> {
   const req = await api.post<IDatabaseRow>(`/databases/${databaseId}/rows`, payload);
+  return req.data;
+}
+
+/**
+ * Renames a database row.
+ */
+export async function updateDatabaseRow(
+  databaseId: string,
+  pageId: string,
+  payload: IUpdateDatabaseRowPayload,
+): Promise<IUpdateDatabaseRowResponse> {
+  const req = await api.patch<IUpdateDatabaseRowResponse>(
+    `/databases/${databaseId}/rows/${pageId}`,
+    payload,
+  );
   return req.data;
 }
 
