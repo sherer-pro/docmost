@@ -276,6 +276,34 @@ describe('DatabaseService mixed tree flows', () => {
     });
   });
 
+  it('parses serialized user cell value and does not throw on invalid user lookup', async () => {
+    databasePropertyRepo.findByDatabaseId.mockResolvedValue([
+      { id: 'prop-user', type: 'user' },
+    ]);
+    databaseRowRepo.findByDatabaseId.mockResolvedValue([
+      {
+        id: 'row-1',
+        pageId: 'row-page-1',
+        cells: [
+          {
+            propertyId: 'prop-user',
+            value: '{"id":"019c8501-f413-737d-8d18-536a9f78d347"}',
+          },
+        ],
+      },
+    ]);
+    userRepo.findById.mockRejectedValue(
+      new Error('invalid input syntax for type uuid'),
+    );
+
+    const rows = await service.listRows('db-1', user, 'ws-1');
+
+    expect(rows[0].cells[0].value).toEqual({
+      id: '019c8501-f413-737d-8d18-536a9f78d347',
+      name: '019c8501-f413-737d-8d18-536a9f78d347',
+    });
+  });
+
   it('keeps linked page slug unchanged when renaming database', async () => {
     databaseRepo.findById.mockResolvedValue({
       id: 'db-1',

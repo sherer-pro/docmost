@@ -263,10 +263,21 @@ export class DatabaseService {
       return cachedName;
     }
 
-    const user = await this.userRepo.findById(userId, workspaceId);
-    const displayValue = user?.name?.trim() || userId;
+    const displayValue = (await this.resolveUserNameById(userId, workspaceId)) || userId;
     cache.set(userId, displayValue);
     return displayValue;
+  }
+
+  private async resolveUserNameById(
+    userId: string,
+    workspaceId: string,
+  ): Promise<string | null> {
+    try {
+      const user = await this.userRepo.findById(userId, workspaceId);
+      return user?.name?.trim() || null;
+    } catch {
+      return null;
+    }
   }
 
   private async enrichRowsWithUserNames(
@@ -292,10 +303,10 @@ export class DatabaseService {
     }
 
     const userDisplayEntries = await Promise.all(
-      userIds.map(async (userId) => {
-        const user = await this.userRepo.findById(userId, workspaceId);
-        return [userId, user?.name?.trim() || userId] as const;
-      }),
+      userIds.map(async (userId) => [
+        userId,
+        (await this.resolveUserNameById(userId, workspaceId)) || userId,
+      ] as const),
     );
 
     const userNameById = new Map(userDisplayEntries);
@@ -1426,8 +1437,23 @@ export class DatabaseService {
   private extractUserIdFromCellValue(value: unknown): string | null {
     const currentValue = this.extractCurrentCellValue(value);
 
-    if (typeof currentValue === 'string' && currentValue.trim()) {
-      return currentValue;
+    if (typeof currentValue === 'string') {
+      const normalizedValue = currentValue.trim();
+      if (!normalizedValue) {
+        return null;
+      }
+
+      try {
+        const parsedValue = JSON.parse(normalizedValue);
+        const parsedUserId = this.extractUserIdFromCellValue(parsedValue);
+        if (parsedUserId) {
+          return parsedUserId;
+        }
+      } catch {
+        // Keep normalized string fallback below.
+      }
+
+      return normalizedValue;
     }
 
     if (!currentValue || typeof currentValue !== 'object' || !('id' in currentValue)) {
@@ -1435,7 +1461,7 @@ export class DatabaseService {
     }
 
     const candidate = (currentValue as IDatabaseUserCellValue).id;
-    return typeof candidate === 'string' && candidate.trim() ? candidate : null;
+    return typeof candidate === 'string' && candidate.trim() ? candidate.trim() : null;
   }
 
   /**
