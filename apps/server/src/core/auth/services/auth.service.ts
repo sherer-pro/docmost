@@ -29,6 +29,7 @@ import { InjectKysely } from 'nestjs-kysely';
 import { executeTx } from '@docmost/db/utils';
 import { VerifyUserTokenDto } from '../dto/verify-user-token.dto';
 import { DomainService } from '../../../integrations/environment/domain.service';
+import { hashProtectedValue } from '../../../common/security/credential-protection.util';
 
 @Injectable()
 export class AuthService {
@@ -134,11 +135,12 @@ export class AuthService {
     }
 
     const token = nanoIdGen(16);
+    const tokenHash = hashProtectedValue(token);
 
     const resetLink = `${this.domainService.getUrl(workspace.hostname)}/password-reset?token=${token}`;
 
     await this.userTokenRepo.insertUserToken({
-      token: token,
+      token: tokenHash,
       userId: user.id,
       workspaceId: user.workspaceId,
       expiresAt: new Date(new Date().getTime() + 60 * 60 * 1000), // 1 hour
@@ -161,7 +163,7 @@ export class AuthService {
     passwordResetDto: PasswordResetDto,
     workspace: Workspace,
   ) {
-    const userToken = await this.userTokenRepo.findById(
+    const userToken = await this.findUserTokenByRawToken(
       passwordResetDto.token,
       workspace.id,
     );
@@ -226,7 +228,7 @@ export class AuthService {
     userTokenDto: VerifyUserTokenDto,
     workspaceId: string,
   ): Promise<void> {
-    const userToken: UserToken = await this.userTokenRepo.findById(
+    const userToken: UserToken = await this.findUserTokenByRawToken(
       userTokenDto.token,
       workspaceId,
     );
@@ -246,5 +248,20 @@ export class AuthService {
       workspaceId,
     );
     return { token };
+  }
+
+  private async findUserTokenByRawToken(
+    token: string,
+    workspaceId: string,
+  ): Promise<UserToken> {
+    const hashedToken = hashProtectedValue(token);
+
+    const hashed = await this.userTokenRepo.findById(hashedToken, workspaceId);
+    if (hashed) {
+      return hashed;
+    }
+
+    // Backward compatibility for tokens issued before hashing rollout.
+    return this.userTokenRepo.findById(token, workspaceId);
   }
 }
