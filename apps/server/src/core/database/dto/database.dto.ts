@@ -2,11 +2,14 @@ import { Type } from 'class-transformer';
 import {
   IsArray,
   IsIn,
+  IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   MaxLength,
+  Min,
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
@@ -98,6 +101,28 @@ export class UpdateDatabaseDto {
 export class ListDatabasesQueryDto {
   @IsUUID()
   spaceId: string;
+}
+
+export class ListDatabaseRowsQueryDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(200)
+  limit?: number;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  cursor?: string;
+
+  @IsOptional()
+  @IsIn(['position', 'title'])
+  sortField?: 'position' | 'title';
+
+  @IsOptional()
+  @IsIn(['asc', 'desc'])
+  sortDirection?: 'asc' | 'desc';
 }
 
 export class SelectPropertyOptionDto {
@@ -233,6 +258,28 @@ export class BatchUpdateDatabaseCellsDto {
   @ValidateNested({ each: true })
   @Type(() => BatchUpdateDatabaseCellValueDto)
   cells: BatchUpdateDatabaseCellValueDto[];
+}
+
+export class BatchUpdateDatabaseRowDto {
+  @IsUUID()
+  pageId: string;
+
+  @IsOptional()
+  @IsIn(['upsert_cells', 'delete_row'])
+  operation?: 'upsert_cells' | 'delete_row';
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => BatchUpdateDatabaseCellValueDto)
+  cells?: BatchUpdateDatabaseCellValueDto[];
+}
+
+export class BatchUpdateDatabaseRowsDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => BatchUpdateDatabaseRowDto)
+  rows: BatchUpdateDatabaseRowDto[];
 }
 
 /**
