@@ -41,6 +41,20 @@ describe('database-cell-value normalization', () => {
     assert.deepEqual(buildDatabaseCellPayloadValue(userProperty, 'user-3'), { id: 'user-3' });
     assert.deepEqual(buildDatabaseCellPayloadValue(userProperty, { id: 'user-4' }), { id: 'user-4' });
     assert.equal(buildDatabaseCellPayloadValue(userProperty, null), null);
+    assert.equal(
+      getDatabaseCellDisplayValue({
+        property: userProperty,
+        value: { id: 'user-4', name: 'Jane Doe' },
+      }),
+      'Jane Doe',
+    );
+    assert.equal(
+      getDatabaseCellDisplayValue({
+        property: userProperty,
+        value: { id: 'user-4' },
+      }),
+      'user-4',
+    );
   });
 
   it('normalizes select values from fallback-object and keeps label fallback for deleted options', () => {

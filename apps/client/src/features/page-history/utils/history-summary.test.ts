@@ -95,4 +95,26 @@ describe("history summary/details formatter", () => {
     expect(summary).toContain("history.event.combined");
     expect(summary).toContain('"count":1');
   });
+
+  it("formats database row renamed event with slug and title changes", () => {
+    const t = (key: string, options?: Record<string, unknown>) =>
+      `${key}${options ? ` ${JSON.stringify(options)}` : ""}`;
+
+    const details = formatHistoryEventDetails(
+      createHistoryItem({
+        changeType: "database.row.renamed",
+        changeData: {
+          row: { title: "Renamed row" },
+          changes: [
+            { field: "title", oldValue: "Old row", newValue: "Renamed row" },
+            { field: "slugId", oldValue: "old-slug", newValue: "new-slug" },
+          ],
+        },
+      }),
+      t,
+    );
+
+    expect(details[0].title).toContain("history.event.database.row.renamed");
+    expect(details[0].lines[1]).toContain("history.event.field.slug");
+  });
 });
