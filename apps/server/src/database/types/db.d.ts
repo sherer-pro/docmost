@@ -269,6 +269,8 @@ export interface GroupUsers {
 }
 
 export interface PageHistory {
+  changeData: Json | null;
+  changeType: string | null;
   content: Json | null;
   contributorIds: Generated<string[] | null>;
   coverPhoto: string | null;
