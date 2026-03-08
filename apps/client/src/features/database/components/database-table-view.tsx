@@ -34,7 +34,6 @@ import {
   IconFileDescription,
 } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { DATABASE_PROPERTY_TYPES, DatabasePropertyType } from '@docmost/api-contract';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -69,7 +68,7 @@ import {
   defaultDatabaseTableExportState,
   databaseTableExportStateAtom,
 } from '@/features/database/atoms/database-table-export-atom';
-import { getRowTitle, matchCondition } from '@/features/database/utils/database-markdown';
+import { getRowTitle } from '@/features/database/utils/database-markdown';
 import { DATABASE_PROPERTY_TYPE_LABEL_KEYS } from '@/features/database/utils/database-property-type-labels';
 import { DatabaseCellRenderer } from '@/features/database/components/database-cell-renderer.tsx';
 import { treeDataAtom } from '@/features/page/tree/atoms/tree-data-atom.ts';
@@ -84,13 +83,12 @@ import {
 } from '@/features/page/tree/utils/utils.ts';
 import { SimpleTree } from 'react-arborist';
 import { queryClient } from '@/main.tsx';
-import { getAllSidebarPages, getPageById } from '@/features/page/services/page-service.ts';
+import { getPageById } from '@/features/page/services/page-service.ts';
 import { PAGE_QUERY_KEYS } from '@/features/page/queries/query-keys.ts';
 import { fetchAllAncestorChildren } from '@/features/page/queries/page-query.ts';
 import {
   buildDatabaseCellPayloadValue,
   extractCurrentDatabaseCellValue,
-  getDatabaseCellDisplayValue,
   getDatabaseSelectSettings,
 } from '@/features/database/utils/database-cell-value.ts';
 import {
@@ -172,19 +170,6 @@ export function DatabaseTableView({
   const { t } = useTranslation();
   const { data: properties = [] } = useDatabasePropertiesQuery(databaseId);
   const [rowsCursor, setRowsCursor] = useState<string | null>(null);
-  const rowsQueryParams = useMemo<IDatabaseRowsQueryParams>(
-    () => ({
-      limit: ROWS_PAGE_SIZE,
-      cursor: rowsCursor ?? undefined,
-      sortField: 'position',
-      sortDirection: 'asc',
-    }),
-    [rowsCursor],
-  );
-  const { data: rowsPage, isFetching: isRowsFetching } = useDatabaseRowsQuery(
-    databaseId,
-    rowsQueryParams,
-  );
 
   const createPropertyMutation = useCreateDatabasePropertyMutation(databaseId);
   const createRowMutation = useCreateDatabaseRowMutation(databaseId);
@@ -209,6 +194,38 @@ export function DatabaseTableView({
   const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({});
   const [filters, setFilters] = useState<IDatabaseFilterCondition[]>([DEFAULT_FILTER]);
   const [sortState, setSortState] = useState<IDatabaseSortState | null>(null);
+  const activeServerFilters = useMemo(
+    () =>
+      filters.filter((condition) => condition.propertyId && condition.value),
+    [filters],
+  );
+  const serializedServerFilters = useMemo(
+    () =>
+      activeServerFilters.length > 0
+        ? JSON.stringify(activeServerFilters)
+        : undefined,
+    [activeServerFilters],
+  );
+  const rowsQueryParams = useMemo<IDatabaseRowsQueryParams>(
+    () => ({
+      limit: ROWS_PAGE_SIZE,
+      cursor: rowsCursor ?? undefined,
+      sortField: sortState ? undefined : 'position',
+      sortDirection: sortState?.direction ?? 'asc',
+      sortPropertyId: sortState?.propertyId ?? undefined,
+      filters: serializedServerFilters,
+    }),
+    [rowsCursor, serializedServerFilters, sortState],
+  );
+  const rowsServerStateSignature = useMemo(
+    () =>
+      `${serializedServerFilters ?? ''}|${sortState?.propertyId ?? ''}|${sortState?.direction ?? ''}`,
+    [serializedServerFilters, sortState],
+  );
+  const { data: rowsPage, isFetching: isRowsFetching } = useDatabaseRowsQuery(
+    databaseId,
+    rowsQueryParams,
+  );
   const [settingsProperty, setSettingsProperty] = useState<IDatabaseProperty | null>(null);
   const [propertyNameDrafts, setPropertyNameDrafts] = useState<Record<string, string>>({});
   const [renamingRowPageId, setRenamingRowPageId] = useState<string | null>(null);
@@ -237,15 +254,6 @@ export function DatabaseTableView({
   const treeApi = useAtomValue(treeApiAtom);
   const emit = useQueryEmit();
   const navigate = useNavigate();
-  const allPagesQuery = useQuery({
-    queryKey: [...PAGE_QUERY_KEYS.rootSidebar(spaceId, ['page', 'database']), 'all-pages'],
-    queryFn: () =>
-      getAllSidebarPages({
-        spaceId,
-        includeNodeTypes: ['page', 'database'],
-    }),
-    enabled: Boolean(spaceId),
-  });
   const tableStateStorageKey = useMemo(
     () => `${DATABASE_TABLE_STATE_STORAGE_PREFIX}:${databaseId}`,
     [databaseId],
@@ -411,6 +419,14 @@ export function DatabaseTableView({
 
     window.localStorage.setItem(tableStateStorageKey, JSON.stringify(stateToPersist));
   }, [filters, sortState, tableStateStorageKey]);
+
+  useEffect(() => {
+    if (!hasRestoredTableStateRef.current) {
+      return;
+    }
+
+    resetRowsPagination();
+  }, [resetRowsPagination, rowsServerStateSignature]);
 
   useEffect(() => {
     const viewport = tableViewportRef.current;
@@ -657,19 +673,6 @@ export function DatabaseTableView({
     }
   }, [optimisticallyDeletedRowPageIds, renamingRowPageId, rows]);
 
-  const allPageNodes = useMemo(
-    () => allPagesQuery.data?.pages.flatMap((queryPage) => queryPage.items) ?? [],
-    [allPagesQuery.data?.pages],
-  );
-
-  const pageTitleById = useMemo<Record<string, string>>(
-    () =>
-      Object.fromEntries(
-        allPageNodes.map((pageNode) => [pageNode.id, pageNode.title || t('untitled')]),
-      ),
-    [allPageNodes, t],
-  );
-
   const checkboxFilterOptions = useMemo(
     () => getCheckboxFilterOptions(t),
     [t],
@@ -741,50 +744,10 @@ export function DatabaseTableView({
     [activeProperties, visibleColumns],
   );
 
-  const filteredRows = useMemo(() => {
-    const activeFilters = filters.filter(
-      (condition) => condition.propertyId && condition.value,
-    );
-
-    return visibleRows.filter((row) => {
-      return activeFilters.every((condition) => {
-        const property = activeProperties.find((item) => item.id === condition.propertyId);
-        const rawValue = getRawCellValue(row, condition.propertyId);
-        const value = getDatabaseCellDisplayValue({
-          property,
-          value: rawValue,
-          pageTitleById,
-        });
-        return matchCondition(value, condition);
-      });
-    });
-  }, [activeProperties, filters, pageTitleById, visibleRows]);
-
-  const preparedRows = useMemo(() => {
-    if (!sortState) {
-      return filteredRows;
-    }
-
-    return [...filteredRows].sort((left, right) => {
-      const property = activeProperties.find((item) => item.id === sortState.propertyId);
-      const leftValue = getDatabaseCellDisplayValue({
-        property,
-        value: getRawCellValue(left, sortState.propertyId),
-        pageTitleById,
-      });
-      const rightValue = getDatabaseCellDisplayValue({
-        property,
-        value: getRawCellValue(right, sortState.propertyId),
-        pageTitleById,
-      });
-      const result = leftValue.localeCompare(rightValue, undefined, {
-        numeric: true,
-        sensitivity: 'base',
-      });
-
-      return sortState.direction === 'asc' ? result : -result;
-    });
-  }, [activeProperties, filteredRows, pageTitleById, sortState]);
+  const preparedRows = useMemo(
+    () => visibleRows,
+    [visibleRows],
+  );
 
   const virtualizedRows = useMemo(() => {
     if (
@@ -826,11 +789,7 @@ export function DatabaseTableView({
     };
   }, [preparedRows, tableScrollTop, tableViewportHeight]);
 
-  const activeFilterCount = useMemo(
-    () =>
-      filters.filter((condition) => condition.propertyId && condition.value).length,
-    [filters],
-  );
+  const activeFilterCount = activeServerFilters.length;
 
   const selectedRowIds = useMemo(
     () =>

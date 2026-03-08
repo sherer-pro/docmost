@@ -50,7 +50,7 @@ export interface IDatabaseRowWithCells {
 }
 
 /**
- * Single filter state in the UI (limited to 1-3 conditions).
+ * Single filter state in the UI.
  */
 export interface IDatabaseFilterCondition {
   propertyId: string;
@@ -75,6 +75,8 @@ export interface IDatabaseRowsQueryParams {
   cursor?: string | null;
   sortField?: IDatabaseRowsSortField;
   sortDirection?: IDatabaseRowsSortDirection;
+  sortPropertyId?: string;
+  filters?: string;
 }
 
 export interface IDatabaseRowsPage {
