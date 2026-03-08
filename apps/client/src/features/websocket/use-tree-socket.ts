@@ -7,6 +7,7 @@ import { SpaceTreeNode } from "@/features/page/tree/types.ts";
 import { useQueryClient } from "@tanstack/react-query";
 import { SimpleTree } from "react-arborist";
 import localEmitter from "@/lib/local-emitter.ts";
+import { IPage } from "@/features/page/types/page.types.ts";
 
 export const useTreeSocket = () => {
   const [socket] = useAtom(socketAtom);
@@ -48,21 +49,23 @@ export const useTreeSocket = () => {
       switch (event.operation) {
         case "updateOne":
           if (event.entity[0] === "pages") {
+            const pagePatch = event.payload as Partial<IPage>;
+
             if (treeApi.find(event.id)) {
-              if (event.payload?.title !== undefined) {
+              if (pagePatch.title !== undefined) {
                 treeApi.update({
                   id: event.id,
-                  changes: { name: event.payload.title },
+                  changes: { name: pagePatch.title },
                 });
               }
-              if (event.payload?.icon !== undefined) {
+              if (pagePatch.icon !== undefined) {
                 treeApi.update({
                   id: event.id,
-                  changes: { icon: event.payload.icon },
+                  changes: { icon: pagePatch.icon },
                 });
               }
 
-              const status = event.payload?.customFields?.status;
+              const status = pagePatch.customFields?.status;
               if (status !== undefined) {
                 treeApi.update({
                   id: event.id,

@@ -13,6 +13,8 @@ import {
 } from "../page/queries/page-query";
 import { RQ_KEY } from "../comment/queries/comment-query";
 import { IComment } from "@/features/comment/types/comment.types";
+import { ISpace } from "@/features/space/types/space.types.ts";
+import { IPage } from "@/features/page/types/page.types.ts";
 
 const mapTreeNodeToPage = (node: {
   id: string;
@@ -77,28 +79,58 @@ export const useQuerySubscription = () => {
           break;
         case "updateOne":
           entity = data.entity[0];
-          queryKeyId = entity === "pages" ? data.payload.slugId : data.id;
 
           if (entity === "pages") {
+            const pagePatch = data.payload as Partial<IPage>;
+            queryKeyId = pagePatch.slugId ?? data.id;
+
             const updatedPage = updatePageDataFromPatch({
               id: data.id,
               spaceId: data.spaceId,
-              ...data.payload,
+              ...pagePatch,
             });
 
             if (!updatedPage) {
               invalidateOnUpdatePage(
                 data.spaceId,
-                data.payload.parentPageId,
+                pagePatch.parentPageId,
                 data.id,
-                data.payload.title,
-                data.payload.icon,
-                data.payload.customFields?.status,
+                pagePatch.title,
+                pagePatch.icon,
+                pagePatch.customFields?.status,
               );
             }
 
             break;
           }
+
+          if (entity === "space") {
+            const spacePatch = data.payload as Partial<ISpace>;
+            const queryKeys: Array<[string, string]> = [];
+
+            if (data.id) {
+              queryKeys.push(["space", data.id]);
+            }
+
+            if (spacePatch.slug) {
+              queryKeys.push(["space", spacePatch.slug]);
+            }
+
+            queryKeys.forEach((queryKey) => {
+              queryClient.setQueryData(queryKey, (cachedSpace: ISpace) => {
+                if (!cachedSpace) {
+                  return cachedSpace;
+                }
+
+                return { ...cachedSpace, ...spacePatch };
+              });
+            });
+
+            queryClient.invalidateQueries({ queryKey: ["spaces"] });
+            break;
+          }
+
+          queryKeyId = data.id;
 
           if (queryClient.getQueryData([...data.entity, queryKeyId])) {
             queryClient.setQueryData([...data.entity, queryKeyId], {
