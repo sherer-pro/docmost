@@ -917,5 +917,7 @@
   "history.event.database.row.cells.updated.with-fields": "Cells updated: {{fields}}",
   "history.event.database.row.cells.updated": "Row cells updated",
   "history.event.conversion.page-to-database": "Converted page to database",
-  "history.event.conversion.database-to-page": "Converted database to page"
+  "history.event.conversion.database-to-page": "Converted database to page",
+  "history.event.details.title": "Event details",
+  "history.event.combined": "Combined changes ({{count}} events)"
 }

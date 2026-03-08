@@ -13,17 +13,21 @@ import {
   diffCountsAtom,
   highlightChangesAtom,
 } from "@/features/page-history/atoms/history-atoms";
+import { IPageHistory } from "@/features/page-history/types/page.types";
+import { HistoryEventDetails } from "@/features/page-history/components/history-event-details";
 
 export interface HistoryEditorProps {
   title: string;
   content: any;
   previousContent?: any;
+  historyItem?: IPageHistory;
 }
 
 export function HistoryEditor({
   title,
   content,
   previousContent,
+  historyItem,
 }: HistoryEditorProps) {
   const [highlightChanges] = useAtom(highlightChangesAtom);
   const [, setDiffCounts] = useAtom(diffCountsAtom);
@@ -192,6 +196,7 @@ export function HistoryEditor({
   return (
     <div>
       <Title order={1}>{title}</Title>
+      <HistoryEventDetails historyItem={historyItem} />
       {editor && (
         <EditorContent
           editor={editor}
