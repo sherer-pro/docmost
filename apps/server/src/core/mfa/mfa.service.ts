@@ -13,6 +13,15 @@ import { UserRepo } from '@docmost/db/repos/user/user.repo';
 import * as OTPAuth from 'otpauth';
 import * as QRCode from 'qrcode';
 import { MfaDisableDto } from './dto/mfa.dto';
+import { EnvironmentService } from '../../integrations/environment/environment.service';
+import {
+  decryptProtectedValue,
+  encryptProtectedValue,
+  hashProtectedValue,
+  isHashedProtectedValue,
+  safeStringEqual,
+  verifyHashedProtectedValue,
+} from '../../common/security/credential-protection.util';
 
 @Injectable()
 export class MfaService {
@@ -20,6 +29,7 @@ export class MfaService {
     @InjectKysely() private readonly db: KyselyDB,
     private readonly tokenService: TokenService,
     private readonly userRepo: UserRepo,
+    private readonly environmentService: EnvironmentService,
   ) {}
 
   /**
@@ -99,6 +109,11 @@ export class MfaService {
     }
 
     const backupCodes = this.generateBackupCodes();
+    const encryptedSecret = encryptProtectedValue(
+      secret,
+      this.environmentService.getAppSecret(),
+    );
+    const hashedBackupCodes = this.hashBackupCodes(backupCodes);
     const existing = await this.getUserMfa(user.id, workspaceId);
 
     if (existing) {
@@ -106,9 +121,9 @@ export class MfaService {
         .updateTable('userMfa')
         .set({
           method: 'totp',
-          secret,
+          secret: encryptedSecret,
           isEnabled: true,
-          backupCodes,
+          backupCodes: hashedBackupCodes,
           updatedAt: new Date(),
         })
         .where('userId', '=', user.id)
@@ -121,9 +136,9 @@ export class MfaService {
           userId: user.id,
           workspaceId,
           method: 'totp',
-          secret,
+          secret: encryptedSecret,
           isEnabled: true,
-          backupCodes,
+          backupCodes: hashedBackupCodes,
         })
         .execute();
     }
@@ -161,9 +176,10 @@ export class MfaService {
     }
 
     const backupCodes = this.generateBackupCodes();
+    const hashedBackupCodes = this.hashBackupCodes(backupCodes);
     await this.db
       .updateTable('userMfa')
-      .set({ backupCodes, updatedAt: new Date() })
+      .set({ backupCodes: hashedBackupCodes, updatedAt: new Date() })
       .where('userId', '=', user.id)
       .where('workspaceId', '=', workspaceId)
       .execute();
@@ -186,17 +202,22 @@ export class MfaService {
       throw new BadRequestException('MFA is not enabled for this account');
     }
 
-    let isValid = this.validateTotp(mfa.secret, code, 1);
+    const normalizedCode = code.trim();
+    const totpSecret = this.getTotpSecret(mfa.secret);
+
+    let isValid = this.validateTotp(totpSecret, normalizedCode, 1);
 
     if (!isValid) {
-      const backupCodes = mfa.backupCodes || [];
-      if (backupCodes.includes(code)) {
-        isValid = true;
-        const updatedCodes = backupCodes.filter((item) => item !== code);
+      const consumeResult = this.consumeBackupCode(
+        normalizedCode,
+        mfa.backupCodes || [],
+      );
 
+      if (consumeResult.matched) {
+        isValid = true;
         await this.db
           .updateTable('userMfa')
-          .set({ backupCodes: updatedCodes, updatedAt: new Date() })
+          .set({ backupCodes: consumeResult.remaining, updatedAt: new Date() })
           .where('userId', '=', user.id)
           .where('workspaceId', '=', payload.workspaceId)
           .execute();
@@ -288,6 +309,59 @@ export class MfaService {
    */
   private generateBackupCodes() {
     return Array.from({ length: 10 }, () => nanoIdGen(8).toUpperCase());
+  }
+
+  private hashBackupCodes(codes: string[]) {
+    return codes.map((code) => hashProtectedValue(this.normalizeBackupCode(code)));
+  }
+
+  private normalizeBackupCode(code: string): string {
+    return code.trim().toUpperCase();
+  }
+
+  private getTotpSecret(secret: string): string {
+    try {
+      return decryptProtectedValue(secret, this.environmentService.getAppSecret());
+    } catch {
+      throw new BadRequestException('MFA secret is invalid');
+    }
+  }
+
+  private backupCodeMatches(inputCode: string, storedCode: string): boolean {
+    const normalizedInput = this.normalizeBackupCode(inputCode);
+
+    if (isHashedProtectedValue(storedCode)) {
+      return verifyHashedProtectedValue(normalizedInput, storedCode);
+    }
+
+    const normalizedStored = this.normalizeBackupCode(storedCode);
+    return safeStringEqual(
+      hashProtectedValue(normalizedInput),
+      hashProtectedValue(normalizedStored),
+    );
+  }
+
+  private consumeBackupCode(inputCode: string, backupCodes: string[]) {
+    let matched = false;
+    const remaining: string[] = [];
+
+    for (const storedCode of backupCodes) {
+      const isMatch = this.backupCodeMatches(inputCode, storedCode);
+      if (!matched && isMatch) {
+        matched = true;
+        continue;
+      }
+
+      if (isHashedProtectedValue(storedCode)) {
+        remaining.push(storedCode);
+      } else {
+        remaining.push(
+          hashProtectedValue(this.normalizeBackupCode(storedCode)),
+        );
+      }
+    }
+
+    return { matched, remaining };
   }
 
   private async getUserMfa(userId: string, workspaceId: string) {
