@@ -2,6 +2,8 @@ import api from "@/lib/api-client";
 import {
   IBatchUpdateDatabaseCellsPayload,
   IBatchUpdateDatabaseCellsResponse,
+  IBatchUpdateDatabaseRowsPayload,
+  IBatchUpdateDatabaseRowsResponse,
   ICreateDatabasePayload,
   ICreateDatabasePropertyPayload,
   ICreateDatabaseRowPayload,
@@ -19,7 +21,12 @@ import {
   IUpdateDatabaseViewPayload,
 } from "@/features/database/types/database.types";
 import { saveAs } from "file-saver";
-import { IDatabaseRowContext, IDatabaseRowWithCells } from "@/features/database/types/database-table.types";
+import {
+  IDatabaseRowContext,
+  IDatabaseRowsPage,
+  IDatabaseRowsQueryParams,
+  IDatabaseRowWithCells,
+} from "@/features/database/types/database-table.types";
 
 /**
  * Creates a database in the selected space.
@@ -126,8 +133,12 @@ export async function deleteDatabaseProperty(
  */
 export async function getDatabaseRows(
   databaseId: string,
-): Promise<IDatabaseRowWithCells[]> {
-  const req = await api.get<IDatabaseRowWithCells[]>(`/databases/${databaseId}/rows`);
+  params?: IDatabaseRowsQueryParams,
+): Promise<IDatabaseRowWithCells[] | IDatabaseRowsPage> {
+  const req = await api.get<IDatabaseRowWithCells[] | IDatabaseRowsPage>(
+    `/databases/${databaseId}/rows`,
+    { params },
+  );
   return req.data;
 }
 
@@ -177,6 +188,18 @@ export async function batchUpdateDatabaseCells(
 ): Promise<IBatchUpdateDatabaseCellsResponse> {
   const req = await api.patch<IBatchUpdateDatabaseCellsResponse>(
     `/databases/${databaseId}/rows/${pageId}/cells`,
+    payload,
+  );
+
+  return req.data;
+}
+
+export async function batchUpdateDatabaseRows(
+  databaseId: string,
+  payload: IBatchUpdateDatabaseRowsPayload,
+): Promise<IBatchUpdateDatabaseRowsResponse> {
+  const req = await api.patch<IBatchUpdateDatabaseRowsResponse>(
+    `/databases/${databaseId}/rows/batch`,
     payload,
   );
 

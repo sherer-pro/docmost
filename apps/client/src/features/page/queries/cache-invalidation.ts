@@ -137,7 +137,7 @@ export function invalidateDatabaseRowContext(
 ) {
   if (includeRows && databaseId) {
     client.invalidateQueries({
-      queryKey: databaseRowsKey(databaseId),
+      queryKey: [QUERY_KEY_SPACE.database, databaseId, QUERY_KEY_SPACE.rows],
     });
   }
 

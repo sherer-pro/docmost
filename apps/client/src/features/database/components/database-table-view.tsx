@@ -1,6 +1,8 @@
 import {
   ActionIcon,
+  Checkbox,
   Button,
+  Drawer,
   Group,
   Menu,
   Paper,
@@ -31,19 +33,21 @@ import {
   type TablerIcon,
   IconFileDescription,
 } from '@tabler/icons-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { DATABASE_PROPERTY_TYPES, DatabasePropertyType } from '@docmost/api-contract';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useSetAtom } from 'jotai';
 import { useAtomValue } from 'jotai/react';
+import { notifications } from '@mantine/notifications';
+import { modals } from '@mantine/modals';
 import {
+  useBatchUpdateDatabaseRowsMutation,
   useBatchUpdateDatabaseCellsMutation,
   useCreateDatabasePropertyMutation,
   useCreateDatabaseRowMutation,
   useDeleteDatabasePropertyMutation,
-  useDeleteDatabaseRowMutation,
   useDatabasePropertiesQuery,
   useUpdateDatabaseRowMutation,
   useUpdateDatabasePropertyMutation,
@@ -51,6 +55,8 @@ import {
 } from '@/features/database/queries/database-table-query';
 import {
   IDatabaseFilterCondition,
+  IDatabaseRowsQueryParams,
+  IDatabaseRowsSortDirection,
   IDatabaseRowWithCells,
   IDatabaseSortState,
 } from '@/features/database/types/database-table.types';
@@ -79,7 +85,7 @@ import {
 import { SimpleTree } from 'react-arborist';
 import { queryClient } from '@/main.tsx';
 import { getAllSidebarPages, getPageById } from '@/features/page/services/page-service.ts';
-import { DATABASE_QUERY_KEYS, PAGE_QUERY_KEYS } from '@/features/page/queries/query-keys.ts';
+import { PAGE_QUERY_KEYS } from '@/features/page/queries/query-keys.ts';
 import { fetchAllAncestorChildren } from '@/features/page/queries/page-query.ts';
 import {
   buildDatabaseCellPayloadValue,
@@ -107,7 +113,19 @@ interface SelectPropertyCreationDraft {
   initialSettings: IDatabaseSelectPropertySettings;
 }
 
+interface IPersistedDatabaseTableState {
+  filters: IDatabaseFilterCondition[];
+  sortState: IDatabaseSortState | null;
+}
+
 const DEFAULT_FILTER: IDatabaseFilterCondition = defaultDatabaseTableExportState.filters[0];
+const ROWS_PAGE_SIZE = 100;
+const MAX_FILTERS = 10;
+const DELETE_GRACE_PERIOD_MS = 6000;
+const ROW_VIRTUALIZATION_MIN_ROWS = 100;
+const ROW_VIRTUALIZATION_ESTIMATED_HEIGHT = 48;
+const ROW_VIRTUALIZATION_OVERSCAN = 8;
+const DATABASE_TABLE_STATE_STORAGE_PREFIX = 'docmost:database-table-state';
 
 const DATABASE_PROPERTY_TYPE_ICONS: Record<DatabasePropertyType, TablerIcon> = {
   checkbox: IconSquareCheck,
@@ -143,7 +161,7 @@ const renderPropertyTypeOption: SelectProps['renderOption'] = ({ option }) => (
  * - inline editing with batch endpoint persistence;
  * - add property / add row;
  * - visibility menu;
- * - filtering (up to 3 conditions) and single-field sorting.
+ * - filtering and single-field sorting.
  */
 export function DatabaseTableView({
   databaseId,
@@ -153,20 +171,41 @@ export function DatabaseTableView({
 }: DatabaseTableViewProps) {
   const { t } = useTranslation();
   const { data: properties = [] } = useDatabasePropertiesQuery(databaseId);
-  const { data: rows = [] } = useDatabaseRowsQuery(databaseId);
+  const [rowsCursor, setRowsCursor] = useState<string | null>(null);
+  const rowsQueryParams = useMemo<IDatabaseRowsQueryParams>(
+    () => ({
+      limit: ROWS_PAGE_SIZE,
+      cursor: rowsCursor ?? undefined,
+      sortField: 'position',
+      sortDirection: 'asc',
+    }),
+    [rowsCursor],
+  );
+  const { data: rowsPage, isFetching: isRowsFetching } = useDatabaseRowsQuery(
+    databaseId,
+    rowsQueryParams,
+  );
 
   const createPropertyMutation = useCreateDatabasePropertyMutation(databaseId);
   const createRowMutation = useCreateDatabaseRowMutation(databaseId);
   const updateCellsMutation = useBatchUpdateDatabaseCellsMutation(databaseId);
+  const batchUpdateRowsMutation = useBatchUpdateDatabaseRowsMutation(databaseId);
   const deletePropertyMutation = useDeleteDatabasePropertyMutation(databaseId);
-  const deleteRowMutation = useDeleteDatabaseRowMutation(databaseId);
   const updatePropertyMutation = useUpdateDatabasePropertyMutation(databaseId);
   const updateRowMutation = useUpdateDatabaseRowMutation(databaseId);
+  const batchUpdateRowsMutationRef = useRef(batchUpdateRowsMutation);
+  const deletePropertyMutationRef = useRef(deletePropertyMutation);
 
   const [newPropertyName, setNewPropertyName] = useState('');
   const [newPropertyType, setNewPropertyType] = useState<DatabasePropertyType>('multiline_text');
   const [editingCellKey, setEditingCellKey] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState<unknown>('');
+  const [rows, setRows] = useState<IDatabaseRowWithCells[]>([]);
+  const [optimisticallyDeletedRowPageIds, setOptimisticallyDeletedRowPageIds] =
+    useState<Record<string, boolean>>({});
+  const [optimisticallyDeletedPropertyIds, setOptimisticallyDeletedPropertyIds] =
+    useState<Record<string, boolean>>({});
+  const [viewControlsOpened, setViewControlsOpened] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({});
   const [filters, setFilters] = useState<IDatabaseFilterCondition[]>([DEFAULT_FILTER]);
   const [sortState, setSortState] = useState<IDatabaseSortState | null>(null);
@@ -175,8 +214,22 @@ export function DatabaseTableView({
   const [renamingRowPageId, setRenamingRowPageId] = useState<string | null>(null);
   const [renamingRowInitialTitle, setRenamingRowInitialTitle] = useState('');
   const [renamingRowTitleDraft, setRenamingRowTitleDraft] = useState('');
+  const [selectedRowPageIds, setSelectedRowPageIds] = useState<Record<string, boolean>>({});
+  const [bulkPropertyId, setBulkPropertyId] = useState<string | null>(null);
+  const [bulkValue, setBulkValue] = useState('');
+  const [bulkCheckboxValue, setBulkCheckboxValue] = useState<'true' | 'false'>('true');
+  const [tableScrollTop, setTableScrollTop] = useState(0);
+  const [tableViewportHeight, setTableViewportHeight] = useState(0);
   const [selectPropertyDraft, setSelectPropertyDraft] =
     useState<SelectPropertyCreationDraft | null>(null);
+  const hasRestoredTableStateRef = useRef(false);
+  const tableViewportRef = useRef<HTMLDivElement | null>(null);
+  const pendingRowDeletionsRef = useRef<
+    Map<string, { timeoutId: ReturnType<typeof setTimeout>; rowIds: string[] }>
+  >(new Map());
+  const pendingPropertyDeletionsRef = useRef<
+    Map<string, ReturnType<typeof setTimeout>>
+  >(new Map());
   const isMobileViewport = useMediaQuery('(max-width: 767px)');
   const setTableExportState = useSetAtom(databaseTableExportStateAtom);
   const treeData = useAtomValue(treeDataAtom);
@@ -190,9 +243,13 @@ export function DatabaseTableView({
       getAllSidebarPages({
         spaceId,
         includeNodeTypes: ['page', 'database'],
-      }),
+    }),
     enabled: Boolean(spaceId),
   });
+  const tableStateStorageKey = useMemo(
+    () => `${DATABASE_TABLE_STATE_STORAGE_PREFIX}:${databaseId}`,
+    [databaseId],
+  );
 
   /**
    * Locates a database node in the local sidebar tree.
@@ -251,6 +308,198 @@ export function DatabaseTableView({
     }
   };
 
+  const cloneDefaultFilter = (): IDatabaseFilterCondition => ({
+    ...DEFAULT_FILTER,
+  });
+
+  const resetRowsPagination = useCallback(() => {
+    setRowsCursor(null);
+    setRows([]);
+    setTableScrollTop(0);
+    if (tableViewportRef.current) {
+      tableViewportRef.current.scrollTop = 0;
+    }
+    queryClient.invalidateQueries({
+      queryKey: ['database', databaseId, 'rows'],
+    });
+  }, [databaseId]);
+
+  useEffect(() => {
+    batchUpdateRowsMutationRef.current = batchUpdateRowsMutation;
+  }, [batchUpdateRowsMutation]);
+
+  useEffect(() => {
+    deletePropertyMutationRef.current = deletePropertyMutation;
+  }, [deletePropertyMutation]);
+
+  useEffect(() => {
+    setRowsCursor(null);
+    setRows([]);
+    setOptimisticallyDeletedRowPageIds({});
+    setOptimisticallyDeletedPropertyIds({});
+    setSelectedRowPageIds({});
+    setTableScrollTop(0);
+  }, [databaseId]);
+
+  useEffect(() => {
+    hasRestoredTableStateRef.current = false;
+    const fallbackFilters: IDatabaseFilterCondition[] = [{ ...DEFAULT_FILTER }];
+
+    if (typeof window === 'undefined') {
+      setFilters(fallbackFilters);
+      setSortState(null);
+      hasRestoredTableStateRef.current = true;
+      return;
+    }
+
+    const rawState = window.localStorage.getItem(tableStateStorageKey);
+    if (!rawState) {
+      setFilters(fallbackFilters);
+      setSortState(null);
+      hasRestoredTableStateRef.current = true;
+      return;
+    }
+
+    try {
+      const parsedState = JSON.parse(rawState) as Partial<IPersistedDatabaseTableState>;
+      const normalizedFilters = Array.isArray(parsedState.filters)
+        ? parsedState.filters
+            .filter((item): item is IDatabaseFilterCondition => Boolean(item))
+            .map((item) => ({
+              propertyId: typeof item.propertyId === 'string' ? item.propertyId : '',
+              operator:
+                item.operator === 'equals' ||
+                item.operator === 'not_equals' ||
+                item.operator === 'contains'
+                  ? item.operator
+                  : 'contains',
+              value: typeof item.value === 'string' ? item.value : '',
+            }))
+            .slice(0, MAX_FILTERS)
+        : [];
+      const normalizedSortState =
+        parsedState.sortState &&
+        typeof parsedState.sortState === 'object' &&
+        typeof parsedState.sortState.propertyId === 'string' &&
+        (parsedState.sortState.direction === 'asc' || parsedState.sortState.direction === 'desc')
+          ? {
+              propertyId: parsedState.sortState.propertyId,
+              direction: parsedState.sortState.direction,
+            }
+          : null;
+
+      setFilters(normalizedFilters.length > 0 ? normalizedFilters : fallbackFilters);
+      setSortState(normalizedSortState);
+    } catch {
+      window.localStorage.removeItem(tableStateStorageKey);
+      setFilters(fallbackFilters);
+      setSortState(null);
+    }
+
+    hasRestoredTableStateRef.current = true;
+  }, [tableStateStorageKey]);
+
+  useEffect(() => {
+    if (!hasRestoredTableStateRef.current || typeof window === 'undefined') {
+      return;
+    }
+
+    const stateToPersist: IPersistedDatabaseTableState = {
+      filters,
+      sortState,
+    };
+
+    window.localStorage.setItem(tableStateStorageKey, JSON.stringify(stateToPersist));
+  }, [filters, sortState, tableStateStorageKey]);
+
+  useEffect(() => {
+    const viewport = tableViewportRef.current;
+    if (!viewport) {
+      return;
+    }
+
+    const updateViewportHeight = () => {
+      setTableViewportHeight(viewport.clientHeight);
+    };
+
+    updateViewportHeight();
+    if (typeof ResizeObserver === 'undefined') {
+      return;
+    }
+
+    const observer = new ResizeObserver(updateViewportHeight);
+    observer.observe(viewport);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [isMobileViewport]);
+
+  useEffect(() => {
+    if (!rowsPage) {
+      return;
+    }
+
+    setRows((previousRows) => {
+      const incomingRows = rowsPage.items ?? [];
+      if (!rowsCursor) {
+        return incomingRows;
+      }
+
+      const rowsByPageId = new Map(previousRows.map((row) => [row.pageId, row]));
+      for (const incomingRow of incomingRows) {
+        rowsByPageId.set(incomingRow.pageId, incomingRow);
+      }
+
+      return [...rowsByPageId.values()];
+    });
+  }, [rowsCursor, rowsPage]);
+
+  useEffect(
+    () => () => {
+      const pendingRowDeletions = [...pendingRowDeletionsRef.current.entries()];
+      pendingRowDeletionsRef.current.clear();
+      for (const [token, pendingDeletion] of pendingRowDeletions) {
+        clearTimeout(pendingDeletion.timeoutId);
+        notifications.hide(`database-row-delete-${token}`);
+      }
+
+      const pendingRowIds = [
+        ...new Set(
+          pendingRowDeletions.flatMap(([, pendingDeletion]) => pendingDeletion.rowIds),
+        ),
+      ];
+
+      if (pendingRowIds.length > 0) {
+        void batchUpdateRowsMutationRef.current
+          .mutateAsync({
+            rows: pendingRowIds.map((pageId) => ({
+              pageId,
+              operation: 'delete_row' as const,
+            })),
+          })
+          .catch(() => undefined);
+      }
+
+      const pendingPropertyDeletions = [...pendingPropertyDeletionsRef.current.entries()];
+      pendingPropertyDeletionsRef.current.clear();
+      const pendingPropertyIds = pendingPropertyDeletions.map(([propertyId]) => propertyId);
+      for (const [propertyId, timeoutId] of pendingPropertyDeletions) {
+        clearTimeout(timeoutId);
+        notifications.hide(`database-property-delete-${propertyId}`);
+      }
+
+      if (pendingPropertyIds.length > 0) {
+        void Promise.allSettled(
+          pendingPropertyIds.map((propertyId) =>
+            deletePropertyMutationRef.current.mutateAsync(propertyId),
+          ),
+        );
+      }
+    },
+    [],
+  );
+
   const handleCreateRow = async () => {
     const createdRow = await createRowMutation.mutateAsync({});
     emitDatabaseInvalidation();
@@ -264,34 +513,6 @@ export function DatabaseTableView({
     }
 
     const createdRowTitle = createdRowPage?.title ?? '';
-    queryClient.setQueryData(
-      DATABASE_QUERY_KEYS.rows(databaseId),
-      (currentRows?: IDatabaseRowWithCells[]) => {
-        const nextRows = currentRows ?? [];
-        if (nextRows.some((rowItem) => rowItem.pageId === createdRow.pageId)) {
-          return nextRows;
-        }
-
-        return [
-          ...nextRows,
-          {
-            id: createdRow.id,
-            pageId: createdRow.pageId,
-            pageTitle: createdRowTitle,
-            page: {
-              id: createdRow.pageId,
-              title: createdRowTitle,
-              slugId: createdRow.slugId ?? createdRowPage.slugId,
-              icon: createdRowPage?.icon ?? null,
-              parentPageId: createdRowPage?.parentPageId ?? null,
-              position: createdRowPage?.position ?? '',
-              customFields: createdRowPage?.customFields,
-            },
-            cells: [],
-          },
-        ];
-      },
-    );
 
     setRenamingRowPageId(createdRow.pageId);
     setRenamingRowInitialTitle(createdRowTitle);
@@ -300,6 +521,7 @@ export function DatabaseTableView({
     const databaseNode = findDatabaseNodeInTree(treeData);
 
     if (!databaseNode) {
+      resetRowsPagination();
       return;
     }
 
@@ -371,6 +593,8 @@ export function DatabaseTableView({
     } catch (error) {
       console.error('Failed to synchronize database children after row creation', error);
     }
+
+    resetRowsPagination();
   };
 
   /**
@@ -421,13 +645,17 @@ export function DatabaseTableView({
       return;
     }
 
-    const hasRow = rows.some((row) => row.pageId === renamingRowPageId);
+    const hasRow = rows.some(
+      (row) =>
+        row.pageId === renamingRowPageId &&
+        !optimisticallyDeletedRowPageIds[row.pageId],
+    );
     if (!hasRow) {
       setRenamingRowPageId(null);
       setRenamingRowInitialTitle('');
       setRenamingRowTitleDraft('');
     }
-  }, [rows, renamingRowPageId]);
+  }, [optimisticallyDeletedRowPageIds, renamingRowPageId, rows]);
 
   const allPageNodes = useMemo(
     () => allPagesQuery.data?.pages.flatMap((queryPage) => queryPage.items) ?? [],
@@ -455,13 +683,62 @@ export function DatabaseTableView({
     return row.page?.title ?? row.pageTitle ?? '';
   };
 
+  const activeProperties = useMemo(
+    () =>
+      properties.filter((property) => !optimisticallyDeletedPropertyIds[property.id]),
+    [optimisticallyDeletedPropertyIds, properties],
+  );
+
+  const visibleRows = useMemo(
+    () => rows.filter((row) => !optimisticallyDeletedRowPageIds[row.pageId]),
+    [optimisticallyDeletedRowPageIds, rows],
+  );
+
+  useEffect(() => {
+    const activePropertyIds = new Set(activeProperties.map((property) => property.id));
+
+    setFilters((previousFilters) => {
+      const nextFilters = previousFilters.filter(
+        (condition) => !condition.propertyId || activePropertyIds.has(condition.propertyId),
+      );
+
+      if (nextFilters.length === 0) {
+        return [cloneDefaultFilter()];
+      }
+
+      return nextFilters.length === previousFilters.length
+        ? previousFilters
+        : nextFilters;
+    });
+
+    setSortState((previousSortState) => {
+      if (!previousSortState) {
+        return previousSortState;
+      }
+
+      return activePropertyIds.has(previousSortState.propertyId)
+        ? previousSortState
+        : null;
+    });
+
+    setBulkPropertyId((previousPropertyId) => {
+      if (!previousPropertyId) {
+        return previousPropertyId;
+      }
+
+      return activePropertyIds.has(previousPropertyId)
+        ? previousPropertyId
+        : null;
+    });
+  }, [activeProperties]);
+
   const displayedProperties = useMemo(
     () =>
-      properties.filter((property) => {
+      activeProperties.filter((property) => {
         const explicitValue = visibleColumns[property.id];
         return typeof explicitValue === 'boolean' ? explicitValue : true;
       }),
-    [properties, visibleColumns],
+    [activeProperties, visibleColumns],
   );
 
   const filteredRows = useMemo(() => {
@@ -469,9 +746,9 @@ export function DatabaseTableView({
       (condition) => condition.propertyId && condition.value,
     );
 
-    return rows.filter((row) => {
+    return visibleRows.filter((row) => {
       return activeFilters.every((condition) => {
-        const property = properties.find((item) => item.id === condition.propertyId);
+        const property = activeProperties.find((item) => item.id === condition.propertyId);
         const rawValue = getRawCellValue(row, condition.propertyId);
         const value = getDatabaseCellDisplayValue({
           property,
@@ -481,7 +758,7 @@ export function DatabaseTableView({
         return matchCondition(value, condition);
       });
     });
-  }, [rows, filters, properties, pageTitleById]);
+  }, [activeProperties, filters, pageTitleById, visibleRows]);
 
   const preparedRows = useMemo(() => {
     if (!sortState) {
@@ -489,7 +766,7 @@ export function DatabaseTableView({
     }
 
     return [...filteredRows].sort((left, right) => {
-      const property = properties.find((item) => item.id === sortState.propertyId);
+      const property = activeProperties.find((item) => item.id === sortState.propertyId);
       const leftValue = getDatabaseCellDisplayValue({
         property,
         value: getRawCellValue(left, sortState.propertyId),
@@ -507,7 +784,96 @@ export function DatabaseTableView({
 
       return sortState.direction === 'asc' ? result : -result;
     });
-  }, [filteredRows, properties, sortState, pageTitleById]);
+  }, [activeProperties, filteredRows, pageTitleById, sortState]);
+
+  const virtualizedRows = useMemo(() => {
+    if (
+      preparedRows.length < ROW_VIRTUALIZATION_MIN_ROWS ||
+      tableViewportHeight <= 0
+    ) {
+      return {
+        rows: preparedRows,
+        startIndex: 0,
+        topOffset: 0,
+        bottomOffset: 0,
+      };
+    }
+
+    const visibleRowCount = Math.max(
+      1,
+      Math.ceil(tableViewportHeight / ROW_VIRTUALIZATION_ESTIMATED_HEIGHT),
+    );
+    const requestedStartIndex = Math.max(
+      0,
+      Math.floor(tableScrollTop / ROW_VIRTUALIZATION_ESTIMATED_HEIGHT) -
+        ROW_VIRTUALIZATION_OVERSCAN,
+    );
+    const maxStartIndex = Math.max(0, preparedRows.length - visibleRowCount);
+    const startIndex = Math.min(requestedStartIndex, maxStartIndex);
+    const endIndex = Math.min(
+      preparedRows.length,
+      startIndex + visibleRowCount + ROW_VIRTUALIZATION_OVERSCAN * 2,
+    );
+
+    return {
+      rows: preparedRows.slice(startIndex, endIndex),
+      startIndex,
+      topOffset: startIndex * ROW_VIRTUALIZATION_ESTIMATED_HEIGHT,
+      bottomOffset: Math.max(
+        0,
+        (preparedRows.length - endIndex) * ROW_VIRTUALIZATION_ESTIMATED_HEIGHT,
+      ),
+    };
+  }, [preparedRows, tableScrollTop, tableViewportHeight]);
+
+  const activeFilterCount = useMemo(
+    () =>
+      filters.filter((condition) => condition.propertyId && condition.value).length,
+    [filters],
+  );
+
+  const selectedRowIds = useMemo(
+    () =>
+      Object.entries(selectedRowPageIds)
+        .filter(([, isSelected]) => isSelected)
+        .map(([pageId]) => pageId),
+    [selectedRowPageIds],
+  );
+
+  useEffect(() => {
+    if (Object.keys(optimisticallyDeletedRowPageIds).length === 0) {
+      return;
+    }
+
+    setSelectedRowPageIds((previousSelection) => {
+      const nextSelection = { ...previousSelection };
+      let hasChanges = false;
+
+      for (const pageId of Object.keys(nextSelection)) {
+        if (!optimisticallyDeletedRowPageIds[pageId]) {
+          continue;
+        }
+
+        hasChanges = true;
+        delete nextSelection[pageId];
+      }
+
+      return hasChanges ? nextSelection : previousSelection;
+    });
+  }, [optimisticallyDeletedRowPageIds]);
+
+  const toggleSelectAllPreparedRows = (checked: boolean) => {
+    if (!checked) {
+      setSelectedRowPageIds({});
+      return;
+    }
+
+    const nextSelection: Record<string, boolean> = {};
+    for (const row of preparedRows) {
+      nextSelection[row.pageId] = true;
+    }
+    setSelectedRowPageIds(nextSelection);
+  };
 
   const startEditing = (row: IDatabaseRowWithCells, property: IDatabaseProperty) => {
     if (!isEditable) {
@@ -569,9 +935,155 @@ export function DatabaseTableView({
       invalidateRows: true,
       invalidateRowContext: true,
     });
+    resetRowsPagination();
 
     setEditingCellKey(null);
     setEditingValue('');
+  };
+
+  const navigateEditingCell = (
+    rowIndex: number,
+    propertyIndex: number,
+    direction: 'next' | 'prev' | 'down',
+  ) => {
+    const totalRows = preparedRows.length;
+    const totalColumns = displayedProperties.length;
+    if (totalRows === 0 || totalColumns === 0) {
+      return null;
+    }
+
+    if (direction === 'down') {
+      const nextRowIndex = rowIndex + 1;
+      if (nextRowIndex >= totalRows) {
+        return null;
+      }
+
+      return {
+        rowIndex: nextRowIndex,
+        propertyIndex,
+      };
+    }
+
+    if (direction === 'next') {
+      const nextPropertyIndex = propertyIndex + 1;
+      if (nextPropertyIndex < totalColumns) {
+        return {
+          rowIndex,
+          propertyIndex: nextPropertyIndex,
+        };
+      }
+
+      const nextRowIndex = rowIndex + 1;
+      if (nextRowIndex >= totalRows) {
+        return null;
+      }
+
+      return {
+        rowIndex: nextRowIndex,
+        propertyIndex: 0,
+      };
+    }
+
+    const previousPropertyIndex = propertyIndex - 1;
+    if (previousPropertyIndex >= 0) {
+      return {
+        rowIndex,
+        propertyIndex: previousPropertyIndex,
+      };
+    }
+
+    const previousRowIndex = rowIndex - 1;
+    if (previousRowIndex < 0) {
+      return null;
+    }
+
+    return {
+      rowIndex: previousRowIndex,
+      propertyIndex: totalColumns - 1,
+    };
+  };
+
+  const parseTsvMatrix = (rawText: string): string[][] => {
+    return rawText
+      .replace(/\r\n/g, '\n')
+      .replace(/\r/g, '\n')
+      .split('\n')
+      .filter((line) => line.length > 0)
+      .map((line) => line.split('\t'));
+  };
+
+  const applyPastedMatrix = async (
+    startRowIndex: number,
+    startPropertyIndex: number,
+    matrix: string[][],
+  ) => {
+    if (!isEditable || matrix.length === 0) {
+      return;
+    }
+
+    const rowsPayloadByPageId = new Map<
+      string,
+      Array<{
+        propertyId: string;
+        value: unknown;
+        operation: 'upsert' | 'delete';
+      }>
+    >();
+
+    for (let rowOffset = 0; rowOffset < matrix.length; rowOffset += 1) {
+      const targetRow = preparedRows[startRowIndex + rowOffset];
+      if (!targetRow) {
+        break;
+      }
+
+      const values = matrix[rowOffset] ?? [];
+      for (let propertyOffset = 0; propertyOffset < values.length; propertyOffset += 1) {
+        const targetProperty = displayedProperties[startPropertyIndex + propertyOffset];
+        if (!targetProperty) {
+          break;
+        }
+
+        const rawValue = values[propertyOffset] ?? '';
+        const normalizedValue =
+          targetProperty.type === 'checkbox'
+            ? buildDatabaseCellPayloadValue(targetProperty, rawValue.trim())
+            : buildDatabaseCellPayloadValue(targetProperty, rawValue);
+        const shouldDelete = shouldDeleteCellPayload(targetProperty.type, normalizedValue);
+
+        const existingPayload = rowsPayloadByPageId.get(targetRow.pageId) ?? [];
+        existingPayload.push({
+          propertyId: targetProperty.id,
+          value: shouldDelete ? null : normalizedValue,
+          operation: shouldDelete ? 'delete' : 'upsert',
+        });
+        rowsPayloadByPageId.set(targetRow.pageId, existingPayload);
+      }
+    }
+
+    if (rowsPayloadByPageId.size === 0) {
+      return;
+    }
+
+    const rowOperations = [...rowsPayloadByPageId.entries()].map(([pageId, cells]) => ({
+      pageId,
+      operation: 'upsert_cells' as const,
+      cells,
+    }));
+
+    const chunkSize = 25;
+    for (let index = 0; index < rowOperations.length; index += chunkSize) {
+      const chunk = rowOperations.slice(index, index + chunkSize);
+      await batchUpdateRowsMutation.mutateAsync({
+        rows: chunk,
+      });
+    }
+
+    emitDatabaseInvalidation({
+      invalidateRows: true,
+      invalidateRowContext: true,
+    });
+    setSelectedRowPageIds({});
+    resetRowsPagination();
   };
 
   const updatePropertyNameDraft = (propertyId: string, value: string) => {
@@ -606,6 +1118,7 @@ export function DatabaseTableView({
       invalidateRows: true,
       invalidateRowContext: true,
     });
+    resetRowsPagination();
 
     updatePropertyNameDraft(property.id, nextName);
   };
@@ -625,43 +1138,6 @@ export function DatabaseTableView({
     setRenamingRowPageId(null);
     setRenamingRowInitialTitle('');
     setRenamingRowTitleDraft('');
-  };
-
-  const applyRowRenameToRowsCache = (rowUpdate: {
-    pageId: string;
-    title: string;
-    slugId: string;
-  }) => {
-    queryClient.setQueryData(
-      DATABASE_QUERY_KEYS.rows(databaseId),
-      (currentRows?: IDatabaseRowWithCells[]) => {
-        if (!currentRows) {
-          return currentRows;
-        }
-
-        return currentRows.map((rowItem) => {
-          if (rowItem.pageId !== rowUpdate.pageId) {
-            return rowItem;
-          }
-
-          return {
-            ...rowItem,
-            pageTitle: rowUpdate.title,
-            page: rowItem.page
-              ? {
-                  ...rowItem.page,
-                  title: rowUpdate.title,
-                  slugId: rowUpdate.slugId,
-                }
-              : {
-                  id: rowUpdate.pageId,
-                  title: rowUpdate.title,
-                  slugId: rowUpdate.slugId,
-                },
-          };
-        });
-      },
-    );
   };
 
   const applyRowRenameToTree = (rowUpdate: {
@@ -707,7 +1183,6 @@ export function DatabaseTableView({
         payload: { title: nextTitle },
       });
 
-      applyRowRenameToRowsCache(updatedRow);
       applyRowRenameToTree(updatedRow);
       emit({
         operation: 'updateOne',
@@ -724,6 +1199,7 @@ export function DatabaseTableView({
         invalidateRows: true,
         invalidateRowContext: true,
       });
+      resetRowsPagination();
 
       cancelRowRename();
     } catch {
@@ -765,67 +1241,363 @@ export function DatabaseTableView({
           invalidateRows: true,
           invalidateRowContext: true,
         });
+        resetRowsPagination();
       },
     });
     setNewPropertyName('');
     setNewPropertyType('multiline_text');
   };
 
-  /**
-   * Applies optimistic local tree updates after a successful row deletion.
-   *
-   * 1) Removes the row node via `dropTreeNode` to keep tree mutations consistent.
-   * 2) Recomputes parent database `hasChildren` and turns it off when needed.
-   * 3) Emits `deleteTreeNode` websocket event so other clients update instantly.
-   *
-   * Mutation-level invalidation is intentionally preserved as a fallback sync layer.
-   */
-  const handleDeleteRow = (row: IDatabaseRowWithCells) => {
-    deleteRowMutation.mutate(row.pageId, {
-      onSuccess: () => {
+  const removeRowsFromTree = (pageIds: string[]) => {
+    const databaseNode = findDatabaseNodeInTree(treeData);
+    if (!databaseNode) {
+      return;
+    }
+
+    const rowNodesById = new Map(
+      (databaseNode.children ?? []).map((childNode) => [childNode.id, childNode]),
+    );
+
+    setTreeData((currentTreeData) => {
+      let nextTree = currentTreeData;
+      for (const pageId of pageIds) {
+        nextTree = dropTreeNode(nextTree, pageId);
+      }
+
+      const updatedDatabaseNode = findDatabaseNodeInTree(nextTree);
+      if (!updatedDatabaseNode) {
+        return nextTree;
+      }
+
+      return setTreeNodeHasChildren(
+        nextTree,
+        updatedDatabaseNode.id,
+        (updatedDatabaseNode.children?.length ?? 0) > 0,
+      );
+    });
+
+    for (const pageId of pageIds) {
+      const rowTreeNode = rowNodesById.get(pageId);
+      if (!rowTreeNode) {
+        continue;
+      }
+
+      emit({
+        operation: 'deleteTreeNode',
+        spaceId,
+        payload: {
+          node: rowTreeNode,
+        },
+      });
+    }
+  };
+
+  const hideRowsOptimistically = (rowPageIds: string[]) => {
+    setOptimisticallyDeletedRowPageIds((previousIds) => {
+      const nextIds = { ...previousIds };
+      for (const rowPageId of rowPageIds) {
+        nextIds[rowPageId] = true;
+      }
+      return nextIds;
+    });
+  };
+
+  const restoreRowsAfterUndo = (rowPageIds: string[]) => {
+    setOptimisticallyDeletedRowPageIds((previousIds) => {
+      const nextIds = { ...previousIds };
+      for (const rowPageId of rowPageIds) {
+        delete nextIds[rowPageId];
+      }
+      return nextIds;
+    });
+  };
+
+  const hidePropertyOptimistically = (propertyId: string) => {
+    setOptimisticallyDeletedPropertyIds((previousIds) => ({
+      ...previousIds,
+      [propertyId]: true,
+    }));
+  };
+
+  const restorePropertyAfterUndo = (propertyId: string) => {
+    setOptimisticallyDeletedPropertyIds((previousIds) => {
+      const nextIds = { ...previousIds };
+      delete nextIds[propertyId];
+      return nextIds;
+    });
+  };
+
+  const executeDeleteRows = async (rowPageIds: string[]) => {
+    const uniqueRowPageIds = [...new Set(rowPageIds)];
+    if (uniqueRowPageIds.length === 0) {
+      return;
+    }
+
+    await batchUpdateRowsMutation.mutateAsync({
+      rows: uniqueRowPageIds.map((pageId) => ({
+        pageId,
+        operation: 'delete_row',
+      })),
+    });
+
+    emitDatabaseInvalidation({
+      invalidateRows: true,
+      invalidateRowContext: true,
+    });
+    removeRowsFromTree(uniqueRowPageIds);
+    setSelectedRowPageIds((previous) => {
+      const next = { ...previous };
+      for (const rowPageId of uniqueRowPageIds) {
+        delete next[rowPageId];
+      }
+      return next;
+    });
+    restoreRowsAfterUndo(uniqueRowPageIds);
+    resetRowsPagination();
+  };
+
+  const scheduleDeleteRows = (rowPageIds: string[]) => {
+    const uniqueRowPageIds = [...new Set(rowPageIds)];
+    if (uniqueRowPageIds.length === 0) {
+      return;
+    }
+
+    const token = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    hideRowsOptimistically(uniqueRowPageIds);
+    setSelectedRowPageIds((previousSelection) => {
+      const nextSelection = { ...previousSelection };
+      for (const rowPageId of uniqueRowPageIds) {
+        delete nextSelection[rowPageId];
+      }
+      return nextSelection;
+    });
+
+    const timeoutId = setTimeout(() => {
+      const pendingDeletion = pendingRowDeletionsRef.current.get(token);
+      if (!pendingDeletion) {
+        return;
+      }
+
+      pendingRowDeletionsRef.current.delete(token);
+      notifications.hide(`database-row-delete-${token}`);
+
+      void executeDeleteRows(pendingDeletion.rowIds).catch(() => {
+        restoreRowsAfterUndo(pendingDeletion.rowIds);
+        notifications.show({
+          color: 'red',
+          message: t('Failed to delete page'),
+        });
+      });
+    }, DELETE_GRACE_PERIOD_MS);
+
+    pendingRowDeletionsRef.current.set(token, {
+      timeoutId,
+      rowIds: uniqueRowPageIds,
+    });
+
+    notifications.show({
+      id: `database-row-delete-${token}`,
+      autoClose: DELETE_GRACE_PERIOD_MS + 1000,
+      message: (
+        <Group gap="xs" wrap="nowrap">
+          <Text size="sm">
+            {t('Delete row')} ({uniqueRowPageIds.length})
+          </Text>
+          <Button
+            variant="subtle"
+            size="compact-xs"
+            onClick={() => {
+              const pendingDeletion = pendingRowDeletionsRef.current.get(token);
+              if (!pendingDeletion) {
+                return;
+              }
+
+              clearTimeout(pendingDeletion.timeoutId);
+              pendingRowDeletionsRef.current.delete(token);
+              notifications.hide(`database-row-delete-${token}`);
+              restoreRowsAfterUndo(pendingDeletion.rowIds);
+            }}
+          >
+            {t('Undo')}
+          </Button>
+        </Group>
+      ),
+    });
+  };
+
+  const scheduleDeleteProperty = (property: IDatabaseProperty) => {
+    if (pendingPropertyDeletionsRef.current.has(property.id)) {
+      return;
+    }
+
+    hidePropertyOptimistically(property.id);
+
+    const timeoutId = setTimeout(() => {
+      const scheduledTimeoutId = pendingPropertyDeletionsRef.current.get(property.id);
+      if (!scheduledTimeoutId) {
+        return;
+      }
+
+      pendingPropertyDeletionsRef.current.delete(property.id);
+      notifications.hide(`database-property-delete-${property.id}`);
+
+      void deletePropertyMutation.mutateAsync(property.id).then(() => {
         emitDatabaseInvalidation({
+          invalidateProperties: true,
           invalidateRows: true,
           invalidateRowContext: true,
         });
-        const databaseNode = findDatabaseNodeInTree(treeData);
-        const rowTreeNode = databaseNode?.children.find((child) => child.id === row.pageId);
-
-        if (!databaseNode || !rowTreeNode) {
-          return;
-        }
-
-        setTreeData((currentTreeData) => {
-          const currentDatabaseNode = findDatabaseNodeInTree(currentTreeData);
-
-          if (!currentDatabaseNode) {
-            return currentTreeData;
-          }
-
-          const treeWithoutDeletedRow = dropTreeNode(currentTreeData, row.pageId);
-          const nextChildrenCount = (currentDatabaseNode.children?.length ?? 0) - 1;
-
-          return setTreeNodeHasChildren(
-            treeWithoutDeletedRow,
-            currentDatabaseNode.id,
-            nextChildrenCount > 0,
-          );
+        resetRowsPagination();
+      }).catch(() => {
+        restorePropertyAfterUndo(property.id);
+        notifications.show({
+          color: 'red',
+          message: t('Failed to update data'),
         });
+      });
+    }, DELETE_GRACE_PERIOD_MS);
 
-        emit({
-          operation: 'deleteTreeNode',
-          spaceId,
-          payload: {
-            node: rowTreeNode,
-          },
-        });
+    pendingPropertyDeletionsRef.current.set(property.id, timeoutId);
+
+    notifications.show({
+      id: `database-property-delete-${property.id}`,
+      autoClose: DELETE_GRACE_PERIOD_MS + 1000,
+      message: (
+        <Group gap="xs" wrap="nowrap">
+          <Text size="sm">{t('Delete property with name', { name: property.name })}</Text>
+          <Button
+            variant="subtle"
+            size="compact-xs"
+            onClick={() => {
+              const scheduledTimeoutId = pendingPropertyDeletionsRef.current.get(property.id);
+              if (!scheduledTimeoutId) {
+                return;
+              }
+
+              clearTimeout(scheduledTimeoutId);
+              pendingPropertyDeletionsRef.current.delete(property.id);
+              notifications.hide(`database-property-delete-${property.id}`);
+              restorePropertyAfterUndo(property.id);
+            }}
+          >
+            {t('Undo')}
+          </Button>
+        </Group>
+      ),
+    });
+  };
+
+  const confirmDeleteProperty = (property: IDatabaseProperty) => {
+    modals.openConfirmModal({
+      title: t('Delete'),
+      children: (
+        <Text size="sm">
+          {t('Delete property with name', { name: property.name })}
+        </Text>
+      ),
+      labels: {
+        confirm: t('Delete'),
+        cancel: t('Cancel'),
+      },
+      confirmProps: { color: 'red' },
+      onConfirm: () => {
+        scheduleDeleteProperty(property);
       },
     });
   };
 
+  const clearFilters = () => {
+    setFilters([cloneDefaultFilter()]);
+  };
+
+  const resetTableViewState = () => {
+    setFilters([cloneDefaultFilter()]);
+    setSortState(null);
+  };
+
+  const handleChangeSortProperty = (value: string | null) => {
+    if (!value) {
+      setSortState(null);
+      return;
+    }
+
+    setSortState((previousSortState) => ({
+      propertyId: value,
+      direction: previousSortState?.direction ?? 'asc',
+    }));
+  };
+
+  const handleSortDirectionChange = (value: string | null) => {
+    if (!value || !sortState) {
+      return;
+    }
+
+    setSortState({
+      propertyId: sortState.propertyId,
+      direction: value as IDatabaseRowsSortDirection,
+    });
+  };
+
+  const loadMoreRows = () => {
+    if (isRowsFetching || !rowsPage?.hasMore || !rowsPage.nextCursor) {
+      return;
+    }
+
+    setRowsCursor(rowsPage.nextCursor);
+  };
+
+  const applyBulkUpdate = async () => {
+    if (!bulkPropertyId || selectedRowIds.length === 0) {
+      return;
+    }
+
+    const targetProperty = activeProperties.find((property) => property.id === bulkPropertyId);
+    if (!targetProperty) {
+      return;
+    }
+
+    const sourceValue =
+      targetProperty.type === 'checkbox' ? bulkCheckboxValue : bulkValue;
+    const normalizedValue = buildDatabaseCellPayloadValue(targetProperty, sourceValue);
+    const shouldDelete = shouldDeleteCellPayload(targetProperty.type, normalizedValue);
+
+    const chunkSize = 25;
+    for (let index = 0; index < selectedRowIds.length; index += chunkSize) {
+      const rowChunk = selectedRowIds.slice(index, index + chunkSize);
+      await batchUpdateRowsMutation.mutateAsync({
+        rows: rowChunk.map((pageId) => ({
+          pageId,
+          operation: 'upsert_cells',
+          cells: [
+            {
+              propertyId: targetProperty.id,
+              value: shouldDelete ? null : normalizedValue,
+              operation: shouldDelete ? 'delete' : 'upsert',
+            },
+          ],
+        })),
+      });
+    }
+
+    emitDatabaseInvalidation({
+      invalidateRows: true,
+      invalidateRowContext: true,
+    });
+    resetRowsPagination();
+  };
+
+  const bulkDeleteSelectedRows = () => {
+    if (selectedRowIds.length === 0) {
+      return;
+    }
+
+    scheduleDeleteRows(selectedRowIds);
+  };
+
   return (
     <Paper withBorder radius="md" p="md">
-      <Group justify="space-between" mb="md" align="flex-end">
-        <Group>
+      <Group justify="space-between" mb="md" align="flex-end" wrap="wrap">
+        <Group wrap="wrap">
           <TextInput
             placeholder={t('New column')}
             value={newPropertyName}
@@ -869,36 +1641,51 @@ export function DatabaseTableView({
           </Button>
         </Group>
 
-        <Group>
+        <Group wrap="wrap">
+          {isMobileViewport && (
+            <Button
+              variant="default"
+              leftSection={<IconSettings size={14} />}
+              onClick={() => setViewControlsOpened(true)}
+            >
+              {`${t('View')} (${activeFilterCount})`}
+            </Button>
+          )}
+
+          {!isMobileViewport && (
+            <>
           <Select
             placeholder={t('Sort')}
-            data={properties.map((property) => ({
+            data={activeProperties.map((property) => ({
               value: property.id,
               label: property.name,
             }))}
             value={sortState?.propertyId || null}
-            onChange={(value) => {
-              if (!value) {
-                setSortState(null);
-                return;
-              }
-
-              setSortState({
-                propertyId: value,
-                direction: sortState?.direction === 'asc' ? 'desc' : 'asc',
-              });
-            }}
+            onChange={handleChangeSortProperty}
             clearable
+          />
+
+          <Select
+            w={130}
+            placeholder={t('Sort')}
+            value={sortState?.direction || null}
+            data={[
+              { value: 'asc', label: 'ASC' },
+              { value: 'desc', label: 'DESC' },
+            ]}
+            onChange={handleSortDirectionChange}
+            disabled={!sortState}
+            allowDeselect={false}
           />
 
           <Menu shadow="md" width={220}>
             <Menu.Target>
-              <Button variant="default" disabled={properties.length === 0}>
+              <Button variant="default" disabled={activeProperties.length === 0}>
                 {t('Columns')}
               </Button>
             </Menu.Target>
             <Menu.Dropdown>
-              {properties.map((property) => {
+              {activeProperties.map((property) => {
                 const isVisible =
                   typeof visibleColumns[property.id] === 'boolean'
                     ? visibleColumns[property.id]
@@ -924,38 +1711,264 @@ export function DatabaseTableView({
                 );
               })}
 
-              {isEditable && properties.length > 0 && <Menu.Divider />}
+              {isEditable && activeProperties.length > 0 && <Menu.Divider />}
 
               {isEditable &&
-                properties.map((property) => (
+                activeProperties.map((property) => (
                   <Menu.Item
                     key={`${property.id}-delete`}
                     color="red"
                     leftSection={<IconTrash size={14} />}
-                    onClick={() =>
-                      deletePropertyMutation.mutate(property.id, {
-                        onSuccess: () => {
-                        emitDatabaseInvalidation({
-                          invalidateProperties: true,
-                          invalidateRows: true,
-                          invalidateRowContext: true,
-                        });
-                      },
-                    })
-                  }
-                >
+                    onClick={() => confirmDeleteProperty(property)}
+                  >
                     {t('Delete property with name', { name: property.name })}
                   </Menu.Item>
                 ))}
             </Menu.Dropdown>
           </Menu>
+            </>
+          )}
         </Group>
       </Group>
+
+      {selectedRowIds.length > 0 && (
+        <Paper withBorder radius="sm" p="sm" mb="md">
+          <Group wrap="wrap">
+            <Text size="sm">
+              {t('Rows')}: {selectedRowIds.length}
+            </Text>
+            <Select
+              w={220}
+              placeholder={t('Property')}
+              data={displayedProperties.map((property) => ({
+                value: property.id,
+                label: property.name,
+              }))}
+              value={bulkPropertyId}
+              onChange={(value) => setBulkPropertyId(value)}
+            />
+            {activeProperties.find((property) => property.id === bulkPropertyId)?.type === 'checkbox' ? (
+              <Select
+                w={140}
+                value={bulkCheckboxValue}
+                data={checkboxFilterOptions}
+                onChange={(value) =>
+                  setBulkCheckboxValue((value as 'true' | 'false') || 'true')
+                }
+                allowDeselect={false}
+              />
+            ) : (
+              <TextInput
+                placeholder={t('Value')}
+                value={bulkValue}
+                onChange={(event) => setBulkValue(event.currentTarget.value)}
+              />
+            )}
+            <Button onClick={() => void applyBulkUpdate()}>
+              {t('Update')}
+            </Button>
+            <Button color="red" variant="light" onClick={bulkDeleteSelectedRows}>
+              {t('Delete')}
+            </Button>
+            <Button
+              variant="subtle"
+              onClick={() => setSelectedRowPageIds({})}
+            >
+              {t('Cancel')}
+            </Button>
+          </Group>
+        </Paper>
+      )}
+
+      <Drawer
+        opened={viewControlsOpened}
+        onClose={() => setViewControlsOpened(false)}
+        title={t('View')}
+        position="bottom"
+        size="md"
+      >
+        <Stack>
+          <Select
+            placeholder={t('Sort')}
+            data={activeProperties.map((property) => ({
+              value: property.id,
+              label: property.name,
+            }))}
+            value={sortState?.propertyId || null}
+            onChange={handleChangeSortProperty}
+            clearable
+          />
+          <Select
+            value={sortState?.direction || null}
+            data={[
+              { value: 'asc', label: 'ASC' },
+              { value: 'desc', label: 'DESC' },
+            ]}
+            onChange={handleSortDirectionChange}
+            disabled={!sortState}
+            allowDeselect={false}
+          />
+          <Menu shadow="md" width={260}>
+            <Menu.Target>
+              <Button variant="default" disabled={activeProperties.length === 0}>
+                {t('Columns')}
+              </Button>
+            </Menu.Target>
+            <Menu.Dropdown>
+              {activeProperties.map((property) => {
+                const isVisible =
+                  typeof visibleColumns[property.id] === 'boolean'
+                    ? visibleColumns[property.id]
+                    : true;
+
+                return (
+                  <Menu.Item
+                    key={`mobile-${property.id}`}
+                    leftSection={
+                      <ActionIcon variant="subtle" size="sm">
+                        {isVisible ? <IconEye size={14} /> : <IconEyeOff size={14} />}
+                      </ActionIcon>
+                    }
+                    onClick={() =>
+                      setVisibleColumns((previousColumns) => ({
+                        ...previousColumns,
+                        [property.id]: !isVisible,
+                      }))
+                    }
+                  >
+                    {property.name}
+                  </Menu.Item>
+                );
+              })}
+            </Menu.Dropdown>
+          </Menu>
+          <Stack gap="xs">
+            {filters.map((condition, index) => {
+              const selectedFilterProperty = activeProperties.find(
+                (property) => property.id === condition.propertyId,
+              );
+              const isCheckboxProperty = selectedFilterProperty?.type === 'checkbox';
+
+              return (
+                <Stack key={`drawer-filter-${index}`} gap="xs">
+                  <Select
+                    placeholder={t('Field')}
+                    data={activeProperties.map((property) => ({
+                      value: property.id,
+                      label: property.name,
+                    }))}
+                    value={condition.propertyId}
+                    onChange={(value) => {
+                      const nextProperty = activeProperties.find(
+                        (property) => property.id === value,
+                      );
+                      const shouldResetValue = nextProperty?.type === 'checkbox' &&
+                        condition.value !== 'true' &&
+                        condition.value !== 'false';
+
+                      setFilters((prev) =>
+                        prev.map((item, itemIndex) =>
+                          itemIndex === index
+                            ? {
+                                ...item,
+                                propertyId: value || '',
+                                value: shouldResetValue ? '' : item.value,
+                              }
+                            : item,
+                        ),
+                      );
+                    }}
+                  />
+                  <Select
+                    data={[
+                      { value: 'contains', label: t('contains') },
+                      { value: 'equals', label: t('equals') },
+                      { value: 'not_equals', label: t('not equals') },
+                    ]}
+                    value={condition.operator}
+                    onChange={(value) => {
+                      if (!value) {
+                        return;
+                      }
+
+                      setFilters((prev) =>
+                        prev.map((item, itemIndex) =>
+                          itemIndex === index
+                            ? {
+                                ...item,
+                                operator: value as IDatabaseFilterCondition['operator'],
+                              }
+                            : item,
+                        ),
+                      );
+                    }}
+                  />
+                  {isCheckboxProperty ? (
+                    <Select
+                      placeholder={t('Value')}
+                      data={checkboxFilterOptions}
+                      value={condition.value || null}
+                      onChange={(value) => {
+                        setFilters((prev) =>
+                          prev.map((item, itemIndex) =>
+                            itemIndex === index ? { ...item, value: value || '' } : item,
+                          ),
+                        );
+                      }}
+                      allowDeselect
+                    />
+                  ) : (
+                    <TextInput
+                      placeholder={t('Value')}
+                      value={condition.value}
+                      onChange={(event) => {
+                        setFilters((prev) =>
+                          prev.map((item, itemIndex) =>
+                            itemIndex === index
+                              ? { ...item, value: event.currentTarget.value }
+                              : item,
+                          ),
+                        );
+                      }}
+                    />
+                  )}
+                  <Button
+                    variant="subtle"
+                    color="red"
+                    disabled={filters.length === 1}
+                    onClick={() =>
+                      setFilters((prev) => prev.filter((_, itemIndex) => itemIndex !== index))
+                    }
+                  >
+                    {t('Remove')}
+                  </Button>
+                </Stack>
+              );
+            })}
+            <Group gap="xs">
+              <Button
+                variant="subtle"
+                leftSection={<IconPlus size={14} />}
+                disabled={filters.length >= MAX_FILTERS}
+                onClick={() => setFilters((prev) => [...prev, cloneDefaultFilter()])}
+              >
+                {t('Filter')}
+              </Button>
+              <Button variant="subtle" onClick={clearFilters}>
+                {t('Clear filters')}
+              </Button>
+            </Group>
+          </Stack>
+          <Button variant="subtle" onClick={resetTableViewState}>
+            {t('Reset')}
+          </Button>
+        </Stack>
+      </Drawer>
 
       {isDatabaseFilterControlsVisible(isMobileViewport) && (
         <Stack mb="md" gap="xs">
           {filters.map((condition, index) => {
-            const selectedFilterProperty = properties.find(
+            const selectedFilterProperty = activeProperties.find(
               (property) => property.id === condition.propertyId,
             );
             const isCheckboxProperty = selectedFilterProperty?.type === 'checkbox';
@@ -964,13 +1977,15 @@ export function DatabaseTableView({
               <Group key={`filter-${index}`} align="end" wrap="nowrap">
                 <Select
                   placeholder={t('Field')}
-                  data={properties.map((property) => ({
+                  data={activeProperties.map((property) => ({
                     value: property.id,
                     label: property.name,
                   }))}
                   value={condition.propertyId}
                   onChange={(value) => {
-                    const nextProperty = properties.find((property) => property.id === value);
+                    const nextProperty = activeProperties.find(
+                      (property) => property.id === value,
+                    );
                     const shouldResetValue = nextProperty?.type === 'checkbox' &&
                       condition.value !== 'true' &&
                       condition.value !== 'false';
@@ -1060,19 +2075,31 @@ export function DatabaseTableView({
             );
           })}
 
-          <Button
-            w="fit-content"
-            variant="subtle"
-            leftSection={<IconPlus size={14} />}
-            disabled={filters.length >= 3}
-            onClick={() => setFilters((prev) => [...prev, { ...DEFAULT_FILTER }])}
-          >
-            {t('Filter')}
-          </Button>
+          <Group gap="xs">
+            <Button
+              w="fit-content"
+              variant="subtle"
+              leftSection={<IconPlus size={14} />}
+              disabled={filters.length >= MAX_FILTERS}
+              onClick={() => setFilters((prev) => [...prev, cloneDefaultFilter()])}
+            >
+              {t('Filter')}
+            </Button>
+            <Button variant="subtle" onClick={clearFilters}>
+              {t('Clear filters')}
+            </Button>
+            <Button variant="subtle" onClick={resetTableViewState}>
+              {t('Reset')}
+            </Button>
+          </Group>
         </Stack>
       )}
 
-      <ScrollArea>
+      <ScrollArea
+        viewportRef={tableViewportRef}
+        mah={isMobileViewport ? 420 : 620}
+        onScrollPositionChange={(position) => setTableScrollTop(position.y)}
+      >
         <Table
             stickyHeader
             withTableBorder
@@ -1082,6 +2109,15 @@ export function DatabaseTableView({
         >
           <Table.Thead>
             <Table.Tr>
+              <Table.Th w={52}>
+                <Checkbox
+                  checked={preparedRows.length > 0 && selectedRowIds.length === preparedRows.length}
+                  indeterminate={
+                    selectedRowIds.length > 0 && selectedRowIds.length < preparedRows.length
+                  }
+                  onChange={(event) => toggleSelectAllPreparedRows(event.currentTarget.checked)}
+                />
+              </Table.Th>
               <Table.Th miw={280}>{t('Title')}</Table.Th>
               {displayedProperties.map((property) => (
                 <Table.Th key={property.id} miw={220}>
@@ -1151,6 +2187,7 @@ export function DatabaseTableView({
                                             invalidateRows: true,
                                             invalidateRowContext: true,
                                           });
+                                          resetRowsPagination();
                                         },
                                       },
                                     )
@@ -1172,17 +2209,7 @@ export function DatabaseTableView({
                           <Menu.Item
                             color="red"
                             leftSection={<IconTrash size={14} />}
-                            onClick={() =>
-                              deletePropertyMutation.mutate(property.id, {
-                                onSuccess: () => {
-                                  emitDatabaseInvalidation({
-                                    invalidateProperties: true,
-                                    invalidateRows: true,
-                                    invalidateRowContext: true,
-                                  });
-                                },
-                              })
-                            }
+                            onClick={() => confirmDeleteProperty(property)}
                           >
                             {t('Delete property with name', { name: property.name })}
                           </Menu.Item>
@@ -1195,8 +2222,30 @@ export function DatabaseTableView({
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
-            {preparedRows.map((row) => (
+            {virtualizedRows.topOffset > 0 && (
+              <Table.Tr aria-hidden>
+                <Table.Td
+                  colSpan={displayedProperties.length + 2}
+                  p={0}
+                  style={{ height: virtualizedRows.topOffset }}
+                />
+              </Table.Tr>
+            )}
+            {virtualizedRows.rows.map((row, virtualRowIndex) => {
+              const rowIndex = virtualizedRows.startIndex + virtualRowIndex;
+              return (
               <Table.Tr key={row.id}>
+                <Table.Td>
+                  <Checkbox
+                    checked={Boolean(selectedRowPageIds[row.pageId])}
+                    onChange={(event) =>
+                      setSelectedRowPageIds((previousSelection) => ({
+                        ...previousSelection,
+                        [row.pageId]: event.currentTarget.checked,
+                      }))
+                    }
+                  />
+                </Table.Td>
                 <Table.Td>
                   <Group justify="space-between" wrap="nowrap" align="flex-start">
                     <div>
@@ -1265,7 +2314,7 @@ export function DatabaseTableView({
                           <Menu.Item
                             color="red"
                             leftSection={<IconTrash size={14} />}
-                            onClick={() => handleDeleteRow(row)}
+                            onClick={() => scheduleDeleteRows([row.pageId])}
                           >
                             {t('Delete row')}
                           </Menu.Item>
@@ -1275,12 +2324,73 @@ export function DatabaseTableView({
                   </Group>
                 </Table.Td>
 
-                {displayedProperties.map((property) => {
+                {displayedProperties.map((property, propertyIndex) => {
                   const key = `${row.pageId}:${property.id}`;
                   const isEditing = editingCellKey === key;
 
                   return (
-                    <Table.Td key={property.id}>
+                    <Table.Td
+                      key={property.id}
+                      tabIndex={0}
+                      onKeyDown={(event) => {
+                        if (!isEditing) {
+                          return;
+                        }
+
+                        if (event.key === 'Escape') {
+                          event.preventDefault();
+                          setEditingCellKey(null);
+                          setEditingValue('');
+                          return;
+                        }
+
+                        const canHandleEnter =
+                          event.key === 'Enter' &&
+                          property.type !== 'multiline_text' &&
+                          property.type !== 'code';
+                        const canHandleTab = event.key === 'Tab';
+                        if (!canHandleEnter && !canHandleTab) {
+                          return;
+                        }
+
+                        event.preventDefault();
+                        void (async () => {
+                          await saveEditing(row, property);
+                          const nextCell = navigateEditingCell(
+                            rowIndex,
+                            propertyIndex,
+                            canHandleTab
+                              ? event.shiftKey ? 'prev' : 'next'
+                              : 'down',
+                          );
+                          if (!nextCell) {
+                            return;
+                          }
+
+                          const nextRow = preparedRows[nextCell.rowIndex];
+                          const nextProperty = displayedProperties[nextCell.propertyIndex];
+                          if (!nextRow || !nextProperty) {
+                            return;
+                          }
+
+                          startEditing(nextRow, nextProperty);
+                        })();
+                      }}
+                      onPaste={(event) => {
+                        if (!isEditable) {
+                          return;
+                        }
+
+                        const pastedText = event.clipboardData.getData('text');
+                        if (!pastedText.includes('\n') && !pastedText.includes('\t')) {
+                          return;
+                        }
+
+                        event.preventDefault();
+                        const matrix = parseTsvMatrix(pastedText);
+                        void applyPastedMatrix(rowIndex, propertyIndex, matrix);
+                      }}
+                    >
                       <DatabaseCellRenderer
                         property={property}
                         value={getRawCellValue(row, property.id)}
@@ -1298,10 +2408,31 @@ export function DatabaseTableView({
                 })}
 
               </Table.Tr>
-            ))}
+              );
+            })}
+            {virtualizedRows.bottomOffset > 0 && (
+              <Table.Tr aria-hidden>
+                <Table.Td
+                  colSpan={displayedProperties.length + 2}
+                  p={0}
+                  style={{ height: virtualizedRows.bottomOffset }}
+                />
+              </Table.Tr>
+            )}
           </Table.Tbody>
         </Table>
       </ScrollArea>
+      {rowsPage?.hasMore && (
+        <Group justify="center" mt="md">
+          <Button
+            variant="default"
+            onClick={loadMoreRows}
+            disabled={isRowsFetching}
+          >
+            {isRowsFetching ? t('Loading...') : t('Load more')}
+          </Button>
+        </Group>
+      )}
       <SelectPropertySettingsModal
         opened={Boolean(settingsProperty || selectPropertyDraft)}
         propertyName={settingsProperty?.name || selectPropertyDraft?.name || ''}
@@ -1320,6 +2451,12 @@ export function DatabaseTableView({
               propertyId: settingsProperty.id,
               payload: { settings },
             });
+            emitDatabaseInvalidation({
+              invalidateProperties: true,
+              invalidateRows: true,
+              invalidateRowContext: true,
+            });
+            resetRowsPagination();
             return;
           }
 
@@ -1334,6 +2471,12 @@ export function DatabaseTableView({
               options: settings.options,
             },
           });
+          emitDatabaseInvalidation({
+            invalidateProperties: true,
+            invalidateRows: true,
+            invalidateRowContext: true,
+          });
+          resetRowsPagination();
           setNewPropertyName('');
           setNewPropertyType('multiline_text');
         }}

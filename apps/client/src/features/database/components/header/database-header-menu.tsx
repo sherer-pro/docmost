@@ -62,7 +62,8 @@ export default function DatabaseHeaderMenu({
   const resolvedDatabasePageId = databasePageId ?? databaseContext.databasePageId;
   const databasePageSlugId = databaseContext.databasePageSlugId;
   const { data: properties = [] } = useDatabasePropertiesQuery(databaseId);
-  const { data: rows = [] } = useDatabaseRowsQuery(databaseId);
+  const { data: rowsPage } = useDatabaseRowsQuery(databaseId);
+  const rows = rowsPage?.items ?? [];
   const tableExportStateByDatabase = useAtomValue(databaseTableExportStateAtom);
   const { openDeleteModal } = useDeletePageModal();
   const { mutateAsync: removePageMutationAsync } = useRemovePageMutation();
