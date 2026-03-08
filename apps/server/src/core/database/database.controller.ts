@@ -158,6 +158,7 @@ export class DatabaseController {
     @Param('databaseId', ParseUUIDPipe) databaseId: string,
     @Param('propertyId', ParseUUIDPipe) propertyId: string,
     @Body() dto: UpdateDatabasePropertyDto,
+    @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
     return this.databaseService.updateProperty(
@@ -165,6 +166,7 @@ export class DatabaseController {
       propertyId,
       dto,
       workspace.id,
+      user.id,
     );
   }
 
@@ -176,9 +178,15 @@ export class DatabaseController {
   async removeProperty(
     @Param('databaseId', ParseUUIDPipe) databaseId: string,
     @Param('propertyId', ParseUUIDPipe) propertyId: string,
+    @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
-    await this.databaseService.deleteProperty(databaseId, propertyId, workspace.id);
+    await this.databaseService.deleteProperty(
+      databaseId,
+      propertyId,
+      workspace.id,
+      user.id,
+    );
   }
 
   /**

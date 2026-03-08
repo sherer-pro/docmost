@@ -29,6 +29,9 @@ describe('PageService convertPageToDatabase reversibility', () => {
   const databaseViewRepo = {
     restoreByDatabaseId: jest.fn(),
   };
+  const pageHistoryRecorder = {
+    recordPageEvent: jest.fn(),
+  };
 
   const trx = {};
   const db = {
@@ -55,6 +58,8 @@ describe('PageService convertPageToDatabase reversibility', () => {
     databaseCellRepo as any,
     databasePropertyRepo as any,
     databaseViewRepo as any,
+    {} as any,
+    pageHistoryRecorder as any,
   );
 
   beforeEach(() => {
@@ -123,5 +128,16 @@ describe('PageService convertPageToDatabase reversibility', () => {
       }),
       trx,
     );
+    expect(pageHistoryRecorder.recordPageEvent).toHaveBeenCalledWith({
+      pageId: 'page-root',
+      actorId: 'user-1',
+      changeType: 'page.converted.to-database',
+      changeData: {
+        databaseId: 'db-archived',
+        conversion: {
+          direction: 'page-to-database',
+        },
+      },
+    });
   });
 });

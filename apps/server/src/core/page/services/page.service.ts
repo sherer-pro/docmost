@@ -62,6 +62,13 @@ import { DatabaseRowRepo } from '@docmost/db/repos/database/database-row.repo';
 import { DatabaseCellRepo } from '@docmost/db/repos/database/database-cell.repo';
 import { DatabasePropertyRepo } from '@docmost/db/repos/database/database-property.repo';
 import { DatabaseViewRepo } from '@docmost/db/repos/database/database-view.repo';
+import { SpaceRepo } from '@docmost/db/repos/space/space.repo';
+import {
+  getPageAssigneeId,
+  getPageStakeholderIds,
+  normalizePageSettings,
+} from '../utils/page-settings.utils';
+import { PageHistoryRecorderService } from './page-history-recorder.service';
 
 @Injectable()
 export class PageService {
@@ -85,7 +92,98 @@ export class PageService {
     private readonly databaseCellRepo: DatabaseCellRepo,
     private readonly databasePropertyRepo: DatabasePropertyRepo,
     private readonly databaseViewRepo: DatabaseViewRepo,
+    private readonly spaceRepo: SpaceRepo,
+    private readonly pageHistoryRecorder: PageHistoryRecorderService,
   ) {}
+
+  private async resolvePageDatabaseId(
+    pageId: string,
+    workspaceId: string,
+  ): Promise<string | null> {
+    const linkedDatabase = await this.databaseRepo.findByPageId(
+      pageId,
+      workspaceId,
+    );
+    if (linkedDatabase?.id) {
+      return linkedDatabase.id;
+    }
+
+    const row = await this.databaseRowRepo.findActiveByPageId(
+      pageId,
+      workspaceId,
+    );
+    return row?.databaseId ?? null;
+  }
+
+  private areStringArraysEqual(left: string[], right: string[]): boolean {
+    if (left.length !== right.length) {
+      return false;
+    }
+
+    return left.every((value, index) => value === right[index]);
+  }
+
+  private collectCustomFieldHistoryChanges(
+    currentSettings: PageSettings | null,
+    nextSettings: PageSettings | null,
+    documentFields: {
+      status?: boolean;
+      assignee?: boolean;
+      stakeholders?: boolean;
+    },
+  ): Array<{ field: 'status' | 'assigneeId' | 'stakeholderIds'; oldValue: unknown; newValue: unknown }> {
+    const current = normalizePageSettings(currentSettings);
+    const next = normalizePageSettings(nextSettings);
+    const changes: Array<{
+      field: 'status' | 'assigneeId' | 'stakeholderIds';
+      oldValue: unknown;
+      newValue: unknown;
+    }> = [];
+
+    if (documentFields.status) {
+      const previousStatus =
+        typeof current.status === 'string' ? current.status : null;
+      const nextStatus = typeof next.status === 'string' ? next.status : null;
+
+      if (previousStatus !== nextStatus) {
+        changes.push({
+          field: 'status',
+          oldValue: previousStatus,
+          newValue: nextStatus,
+        });
+      }
+    }
+
+    if (documentFields.assignee) {
+      const previousAssigneeId = getPageAssigneeId(current);
+      const nextAssigneeId = getPageAssigneeId(next);
+
+      if (previousAssigneeId !== nextAssigneeId) {
+        changes.push({
+          field: 'assigneeId',
+          oldValue: previousAssigneeId,
+          newValue: nextAssigneeId,
+        });
+      }
+    }
+
+    if (documentFields.stakeholders) {
+      const previousStakeholderIds = getPageStakeholderIds(current);
+      const nextStakeholderIds = getPageStakeholderIds(next);
+
+      if (
+        !this.areStringArraysEqual(previousStakeholderIds, nextStakeholderIds)
+      ) {
+        changes.push({
+          field: 'stakeholderIds',
+          oldValue: previousStakeholderIds,
+          newValue: nextStakeholderIds,
+        });
+      }
+    }
+
+    return changes;
+  }
 
   async findById(
     pageId: string,
@@ -221,6 +319,29 @@ export class PageService {
 
     const currentSettings = (page.settings as PageSettings | null) ?? null;
     const nextSettings = updatePageDto.toSettingsPayload(currentSettings);
+    const resolvedNextSettings = (nextSettings ?? currentSettings) as
+      | PageSettings
+      | null;
+    const space = await this.spaceRepo.findById(page.spaceId, page.workspaceId);
+    const documentFields =
+      (space?.settings as Record<string, unknown> | null)?.[
+        'documentFields'
+      ] as
+        | {
+            status?: boolean;
+            assignee?: boolean;
+            stakeholders?: boolean;
+          }
+        | undefined;
+    const customFieldChanges = this.collectCustomFieldHistoryChanges(
+      currentSettings,
+      resolvedNextSettings,
+      {
+        status: !!documentFields?.status,
+        assignee: !!documentFields?.assignee,
+        stakeholders: !!documentFields?.stakeholders,
+      },
+    );
 
     await this.pageRepo.updatePage(
       {
@@ -286,6 +407,20 @@ export class PageService {
         updatePageDto.format,
         user,
       );
+    }
+
+    if (customFieldChanges.length > 0) {
+      const databaseId = await this.resolvePageDatabaseId(page.id, page.workspaceId);
+
+      await this.pageHistoryRecorder.recordPageEvent({
+        pageId: page.id,
+        actorId: user.id,
+        changeType: 'page.custom-fields.updated',
+        changeData: {
+          databaseId,
+          changes: customFieldChanges,
+        },
+      });
     }
 
     return await this.pageRepo.findById(page.id, {
@@ -404,6 +539,18 @@ export class PageService {
       }
 
       return restoredOrCreatedDatabase;
+    });
+
+    await this.pageHistoryRecorder.recordPageEvent({
+      pageId: page.id,
+      actorId,
+      changeType: 'page.converted.to-database',
+      changeData: {
+        databaseId: database.id,
+        conversion: {
+          direction: 'page-to-database',
+        },
+      },
     });
 
     return { databaseId: database.id, pageId: page.id };
