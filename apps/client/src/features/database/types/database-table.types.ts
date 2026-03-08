@@ -72,9 +72,20 @@ export type IDatabaseRowsSortDirection = 'asc' | 'desc';
 
 export interface IDatabaseRowsQueryParams {
   limit?: number;
+  /**
+   * Opaque keyset cursor from backend pagination.
+   *
+   * During transition, backend also accepts legacy position cursor.
+   */
   cursor?: string | null;
+  /**
+   * Built-in row sorting (position/title). Ignored when sortPropertyId is set.
+   */
   sortField?: IDatabaseRowsSortField;
   sortDirection?: IDatabaseRowsSortDirection;
+  /**
+   * Property-based sorting mode for table columns.
+   */
   sortPropertyId?: string;
   filters?: string;
 }

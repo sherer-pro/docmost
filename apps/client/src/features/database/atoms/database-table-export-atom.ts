@@ -16,6 +16,10 @@ export const defaultDatabaseTableExportState: IDatabaseTableExportState = {
     },
   ],
   sortState: null,
+  rowsQueryParams: {
+    sortField: 'position',
+    sortDirection: 'asc',
+  },
 };
 
 /**
