@@ -117,4 +117,37 @@ describe("history summary/details formatter", () => {
     expect(details[0].title).toContain("history.event.database.row.renamed");
     expect(details[0].lines[1]).toContain("history.event.field.slug");
   });
+
+  it("returns structured rows for event-details table", () => {
+    const t = (key: string, options?: Record<string, unknown>) =>
+      `${key}${options ? ` ${JSON.stringify(options)}` : ""}`;
+
+    const details = formatHistoryEventDetails(
+      createHistoryItem({
+        changeType: "database.row.cells.updated",
+        changeData: {
+          changes: [
+            {
+              propertyName: "User",
+              propertyType: "user",
+              oldValue: null,
+              newValue: { id: "u-1", name: "Pavel" },
+            },
+            {
+              propertyName: "Select",
+              propertyType: "select",
+              oldValue: '"metka-2-r311"',
+              newValue: { value: "metka-4-2ejm", label: "Label 4" },
+            },
+          ],
+        },
+      }),
+      t,
+    );
+
+    expect(details[0].rows).toHaveLength(2);
+    expect(details[0].rows[0].newValue).toBe("Pavel");
+    expect(details[0].rows[1].oldValue).toBe("metka-2-r311");
+    expect(details[0].rows[1].newValue).toBe("Label 4");
+  });
 });
