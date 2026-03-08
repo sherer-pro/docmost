@@ -121,8 +121,16 @@ export class ListDatabaseRowsQueryDto {
   sortField?: 'position' | 'title';
 
   @IsOptional()
+  @IsUUID()
+  sortPropertyId?: string;
+
+  @IsOptional()
   @IsIn(['asc', 'desc'])
   sortDirection?: 'asc' | 'desc';
+
+  @IsOptional()
+  @IsString()
+  filters?: string;
 }
 
 export class SelectPropertyOptionDto {

@@ -66,6 +66,12 @@ interface IDatabaseHistorySelectOption {
   label: string;
 }
 
+interface IDatabaseRowsFilterCondition {
+  propertyId: string;
+  operator: 'contains' | 'equals' | 'not_equals';
+  value: string;
+}
+
 /**
  * Extended response contract for updateDatabase:
  * in addition to the database itself, we return the current slug of the linked page,
@@ -86,6 +92,11 @@ export interface IListDatabaseRowsResponse<T> {
   nextCursor: string | null;
   hasMore: boolean;
 }
+
+const MAX_DATABASE_ROW_FILTERS = 10;
+const SERIALIZED_STRING_NORMALIZE_DEPTH = 6;
+const BOOLEAN_TRUE_TOKENS = new Set(['true', '1', 'yes', 'on']);
+const BOOLEAN_FALSE_TOKENS = new Set(['false', '0', 'no', 'off', '']);
 
 @Injectable()
 export class DatabaseService {
@@ -584,6 +595,325 @@ export class DatabaseService {
         };
       }),
     }));
+  }
+
+  private normalizeSerializedRowString(value: string): string {
+    let normalizedValue = value;
+
+    for (
+      let normalizeIteration = 0;
+      normalizeIteration < SERIALIZED_STRING_NORMALIZE_DEPTH;
+      normalizeIteration += 1
+    ) {
+      const trimmedValue = normalizedValue.trim();
+      if (!trimmedValue.startsWith('"') || !trimmedValue.endsWith('"')) {
+        break;
+      }
+
+      try {
+        const parsedValue = JSON.parse(normalizedValue);
+        if (typeof parsedValue !== 'string') {
+          break;
+        }
+
+        normalizedValue = parsedValue;
+      } catch {
+        break;
+      }
+    }
+
+    return normalizedValue;
+  }
+
+  private normalizeCheckboxCellValue(value: unknown): boolean {
+    const currentValue = this.extractCurrentCellValue(value);
+
+    if (typeof currentValue === 'boolean') {
+      return currentValue;
+    }
+
+    if (typeof currentValue === 'string') {
+      const normalizedToken = this.normalizeSerializedRowString(currentValue)
+        .trim()
+        .toLowerCase();
+
+      if (BOOLEAN_TRUE_TOKENS.has(normalizedToken)) {
+        return true;
+      }
+
+      if (BOOLEAN_FALSE_TOKENS.has(normalizedToken)) {
+        return false;
+      }
+
+      return Boolean(normalizedToken);
+    }
+
+    if (currentValue === null || typeof currentValue === 'undefined') {
+      return false;
+    }
+
+    return Boolean(currentValue);
+  }
+
+  private extractUserNameFromCellValue(value: unknown): string | null {
+    const currentValue = this.extractCurrentCellValue(value);
+    if (!currentValue || typeof currentValue !== 'object' || !('name' in currentValue)) {
+      return null;
+    }
+
+    const candidate = (currentValue as IDatabaseUserCellValue).name;
+    return typeof candidate === 'string' && candidate.trim() ? candidate.trim() : null;
+  }
+
+  private parseRowsFilters(rawFilters?: string): IDatabaseRowsFilterCondition[] {
+    if (!rawFilters) {
+      return [];
+    }
+
+    let parsedFilters: unknown;
+    try {
+      parsedFilters = JSON.parse(rawFilters);
+    } catch {
+      throw new BadRequestException('Invalid rows filters');
+    }
+
+    if (!Array.isArray(parsedFilters)) {
+      throw new BadRequestException('Invalid rows filters');
+    }
+
+    return parsedFilters
+      .filter((condition): condition is Record<string, unknown> => {
+        return Boolean(condition && typeof condition === 'object');
+      })
+      .map((condition) => ({
+        propertyId:
+          typeof condition.propertyId === 'string' ? condition.propertyId : '',
+        operator:
+          condition.operator === 'equals' ||
+          condition.operator === 'not_equals' ||
+          condition.operator === 'contains'
+            ? (condition.operator as IDatabaseRowsFilterCondition['operator'])
+            : 'contains',
+        value: typeof condition.value === 'string' ? condition.value : '',
+      }))
+      .filter((condition) => condition.propertyId && condition.value)
+      .slice(0, MAX_DATABASE_ROW_FILTERS);
+  }
+
+  private async resolvePageTitlesById(
+    rows: any[],
+    propertiesById: Map<string, { id: string; type: string | null }>,
+    workspaceId: string,
+  ): Promise<Map<string, string>> {
+    const pageReferencePropertyIds = new Set(
+      [...propertiesById.values()]
+        .filter((property) => this.normalizePropertyType(property.type) === 'page_reference')
+        .map((property) => property.id),
+    );
+
+    if (pageReferencePropertyIds.size === 0 || rows.length === 0) {
+      return new Map();
+    }
+
+    const pageIds = [...new Set(
+      rows.flatMap((row) =>
+        (row?.cells ?? [])
+          .filter((cell) => pageReferencePropertyIds.has(cell.propertyId))
+          .map((cell) => this.extractPageIdFromCellValue(cell.value))
+          .filter((pageId): pageId is string => Boolean(pageId)),
+      ),
+    )];
+
+    if (pageIds.length === 0) {
+      return new Map();
+    }
+
+    const pages = await this.db
+      .selectFrom('pages')
+      .select(['id', 'title'])
+      .where('workspaceId', '=', workspaceId)
+      .where('deletedAt', 'is', null)
+      .where('id', 'in', pageIds)
+      .execute();
+
+    const pageTitleById = new Map<string, string>();
+    for (const page of pages) {
+      pageTitleById.set(page.id, page.title?.trim() || page.id);
+    }
+
+    for (const pageId of pageIds) {
+      if (!pageTitleById.has(pageId)) {
+        pageTitleById.set(pageId, pageId);
+      }
+    }
+
+    return pageTitleById;
+  }
+
+  private getRowCellDisplayValue(params: {
+    row: any;
+    propertyId: string;
+    propertiesById: Map<string, { id: string; type: string | null; settings?: unknown }>;
+    pageTitleById: Map<string, string>;
+  }): string {
+    const property = params.propertiesById.get(params.propertyId);
+    const rawCellValue = params.row?.cells?.find(
+      (cell) => cell.propertyId === params.propertyId,
+    )?.value;
+    const currentValue = this.extractCurrentCellValue(rawCellValue);
+
+    if (!property) {
+      if (typeof currentValue === 'string') {
+        return this.normalizeSerializedRowString(currentValue);
+      }
+
+      if (currentValue === null || typeof currentValue === 'undefined') {
+        return '';
+      }
+
+      return JSON.stringify(currentValue);
+    }
+
+    const normalizedPropertyType = this.normalizePropertyType(property.type);
+    if (normalizedPropertyType === 'user') {
+      const userName = this.extractUserNameFromCellValue(rawCellValue);
+      if (userName) {
+        return userName;
+      }
+
+      return this.extractUserIdFromCellValue(rawCellValue) || '';
+    }
+
+    if (normalizedPropertyType === 'select') {
+      const optionValue = this.extractSelectOptionValue(rawCellValue);
+      if (!optionValue) {
+        return '';
+      }
+
+      const optionLabel =
+        this.extractSelectOptionsFromSettings(property.settings)
+          .find((option) => option.value === optionValue || option.label === optionValue)
+          ?.label ?? null;
+
+      return optionLabel || optionValue;
+    }
+
+    if (normalizedPropertyType === 'page_reference') {
+      const pageId = this.extractPageIdFromCellValue(rawCellValue);
+      if (!pageId) {
+        return '';
+      }
+
+      return params.pageTitleById.get(pageId) || pageId;
+    }
+
+    if (normalizedPropertyType === 'checkbox') {
+      return String(this.normalizeCheckboxCellValue(rawCellValue));
+    }
+
+    if (typeof currentValue === 'string') {
+      return this.normalizeSerializedRowString(currentValue);
+    }
+
+    if (currentValue === null || typeof currentValue === 'undefined') {
+      return '';
+    }
+
+    return JSON.stringify(currentValue);
+  }
+
+  private matchesRowsFilterCondition(
+    value: string,
+    condition: IDatabaseRowsFilterCondition,
+  ): boolean {
+    const normalizedValue = value.toLowerCase();
+    const normalizedFilter = condition.value.toLowerCase();
+
+    if (condition.operator === 'equals') {
+      return normalizedValue === normalizedFilter;
+    }
+
+    if (condition.operator === 'not_equals') {
+      return normalizedValue !== normalizedFilter;
+    }
+
+    return normalizedValue.includes(normalizedFilter);
+  }
+
+  private applyRowsServerState(params: {
+    rows: any[];
+    filters: IDatabaseRowsFilterCondition[];
+    sortPropertyId?: string;
+    sortDirection?: 'asc' | 'desc';
+    propertiesById: Map<string, { id: string; type: string | null; settings?: unknown }>;
+    pageTitleById: Map<string, string>;
+  }): any[] {
+    const filteredRows = params.rows.filter((row) =>
+      params.filters.every((condition) => {
+        const cellDisplayValue = this.getRowCellDisplayValue({
+          row,
+          propertyId: condition.propertyId,
+          propertiesById: params.propertiesById,
+          pageTitleById: params.pageTitleById,
+        });
+        return this.matchesRowsFilterCondition(cellDisplayValue, condition);
+      }),
+    );
+
+    if (!params.sortPropertyId) {
+      return filteredRows;
+    }
+
+    const sortDirection = params.sortDirection === 'desc' ? 'desc' : 'asc';
+
+    return [...filteredRows].sort((left, right) => {
+      const leftValue = this.getRowCellDisplayValue({
+        row: left,
+        propertyId: params.sortPropertyId,
+        propertiesById: params.propertiesById,
+        pageTitleById: params.pageTitleById,
+      });
+      const rightValue = this.getRowCellDisplayValue({
+        row: right,
+        propertyId: params.sortPropertyId,
+        propertiesById: params.propertiesById,
+        pageTitleById: params.pageTitleById,
+      });
+
+      const result = leftValue.localeCompare(rightValue, undefined, {
+        numeric: true,
+        sensitivity: 'base',
+      });
+
+      if (result !== 0) {
+        return sortDirection === 'asc' ? result : -result;
+      }
+
+      const leftPosition = String(left?.pagePosition ?? left?.page?.position ?? '');
+      const rightPosition = String(right?.pagePosition ?? right?.page?.position ?? '');
+      return leftPosition.localeCompare(rightPosition, undefined, {
+        numeric: true,
+        sensitivity: 'base',
+      });
+    });
+  }
+
+  private paginateRowsByOffsetCursor<T>(
+    rows: T[],
+    limit: number,
+    cursor?: string,
+  ): IListDatabaseRowsResponse<T> {
+    const parsedOffset = Number.parseInt(cursor ?? '0', 10);
+    const safeOffset = Number.isFinite(parsedOffset) && parsedOffset >= 0 ? parsedOffset : 0;
+    const items = rows.slice(safeOffset, safeOffset + limit);
+    const nextOffset = safeOffset + items.length;
+    const hasMore = nextOffset < rows.length;
+
+    return {
+      items,
+      nextCursor: hasMore ? String(nextOffset) : null,
+      hasMore,
+    };
   }
 
   /**
@@ -1344,9 +1674,20 @@ export class DatabaseService {
     await this.assertCanReadDatabasePages(user, database.spaceId);
 
     const properties = await this.databasePropertyRepo.findByDatabaseId(databaseId);
+    const normalizedProperties = this.normalizeProperties(properties);
+    const propertiesById = new Map(
+      normalizedProperties.map((property) => [property.id, property]),
+    );
+    const rowsFilters = this.parseRowsFilters(query?.filters);
+    const hasServerRowsState = rowsFilters.length > 0 || Boolean(query?.sortPropertyId);
 
-    const rows = query?.limit
-      ? await this.databaseRowRepo.findByDatabaseIdPaginated(
+    const rows = hasServerRowsState || !query?.limit
+      ? await this.databaseRowRepo.findByDatabaseId(
+          databaseId,
+          workspaceId,
+          database.spaceId,
+        )
+      : await this.databaseRowRepo.findByDatabaseIdPaginated(
           databaseId,
           workspaceId,
           database.spaceId,
@@ -1356,24 +1697,46 @@ export class DatabaseService {
             sortField: query.sortField,
             sortDirection: query.sortDirection,
           },
-        )
-      : await this.databaseRowRepo.findByDatabaseId(
-          databaseId,
-          workspaceId,
-          database.spaceId,
         );
 
     const userPropertyIds = new Set(
-      this.normalizeProperties(properties)
+      normalizedProperties
         .filter((property) => property.type === 'user')
         .map((property) => property.id),
     );
 
+    const rowsToEnrich = hasServerRowsState
+      ? rows
+      : query?.limit
+        ? rows.slice(0, query.limit)
+        : rows;
     const normalizedRows = await this.enrichRowsWithUserNames(
-      query?.limit ? rows.slice(0, query.limit) : rows,
+      rowsToEnrich,
       userPropertyIds,
       workspaceId,
     );
+
+    if (hasServerRowsState) {
+      const pageTitleById = await this.resolvePageTitlesById(
+        normalizedRows,
+        propertiesById,
+        workspaceId,
+      );
+      const preparedRows = this.applyRowsServerState({
+        rows: normalizedRows,
+        filters: rowsFilters,
+        sortPropertyId: query?.sortPropertyId,
+        sortDirection: query?.sortDirection,
+        propertiesById,
+        pageTitleById,
+      });
+
+      if (!query?.limit) {
+        return preparedRows;
+      }
+
+      return this.paginateRowsByOffsetCursor(preparedRows, query.limit, query.cursor);
+    }
 
     if (!query?.limit) {
       return normalizedRows;
