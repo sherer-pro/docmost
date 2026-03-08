@@ -3,6 +3,7 @@ import { KyselyTransaction } from '@docmost/db/types/kysely.types';
 export const PAGE_HISTORY_EVENT_VERSION = 1 as const;
 
 export type PageHistoryChangeType =
+  | 'page.events.combined'
   | 'page.custom-fields.updated'
   | 'page.converted.to-database'
   | 'database.converted.to-page'

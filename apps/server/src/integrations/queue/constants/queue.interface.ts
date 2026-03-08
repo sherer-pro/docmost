@@ -37,6 +37,10 @@ export interface IPageHistoryJob {
   pageId: string;
 }
 
+export interface IPageHistoryEventFlushJob {
+  pageId: string;
+}
+
 export interface INotificationCreateJob {
   userId: string;
   workspaceId: string;

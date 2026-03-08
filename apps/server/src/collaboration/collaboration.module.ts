@@ -29,7 +29,7 @@ import { WatcherModule } from '../core/watcher/watcher.module';
     CollabHistoryService,
     CollaborationHandler,
   ],
-  exports: [CollaborationGateway],
+  exports: [CollaborationGateway, CollabHistoryService],
   imports: [TokenModule, WatcherModule],
 })
 export class CollaborationModule implements OnModuleInit, OnModuleDestroy {

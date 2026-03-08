@@ -64,6 +64,7 @@ export enum QueueJob {
   DELETE_PAGE_EMBEDDINGS = 'delete-page-embeddings',
 
   PAGE_HISTORY = 'page-history',
+  PAGE_HISTORY_EVENT_FLUSH = 'page-history-event-flush',
 
   COMMENT_NOTIFICATION = 'comment-notification',
   COMMENT_RESOLVED_NOTIFICATION = 'comment-resolved-notification',
