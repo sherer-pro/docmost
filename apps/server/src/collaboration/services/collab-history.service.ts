@@ -180,6 +180,6 @@ export class CollabHistoryService {
   }
 
   private getEventFlushJobId(pageId: string): string {
-    return `${QueueJob.PAGE_HISTORY_EVENT_FLUSH}:${pageId}`;
+    return `${QueueJob.PAGE_HISTORY_EVENT_FLUSH}-${pageId}`;
   }
 }
