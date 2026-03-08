@@ -26,7 +26,7 @@ export function HistoryEventDetails({ historyItem }: HistoryEventDetailsProps) {
         {t("history.event.details.title", { keySeparator: false })}
       </Text>
       {details.map((eventDetail) => (
-        <div key={eventDetail.id} className={classes.historyEventCard}>
+        <div key={eventDetail.id}>
           <Text size="sm" fw={500} mb={eventDetail.rows.length > 0 ? 6 : 0}>
             {eventDetail.title}
           </Text>

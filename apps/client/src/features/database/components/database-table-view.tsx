@@ -1198,7 +1198,7 @@ export function DatabaseTableView({
             {preparedRows.map((row) => (
               <Table.Tr key={row.id}>
                 <Table.Td>
-                  <Group justify="space-between">
+                  <Group justify="space-between" wrap="nowrap" align="flex-start">
                     <div>
                       {renamingRowPageId === row.pageId ? (
                         <TextInput
