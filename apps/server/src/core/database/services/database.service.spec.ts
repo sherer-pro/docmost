@@ -138,6 +138,144 @@ describe('DatabaseService mixed tree flows', () => {
     expect(pageRepo.removePage).toHaveBeenCalledWith('row-page-1', 'u-1', 'ws-1');
   });
 
+  it('renames row, regenerates slug and records rename history event', async () => {
+    pageRepo.findById
+      .mockResolvedValueOnce({
+        id: 'row-page-1',
+        workspaceId: 'ws-1',
+        spaceId: 'space-1',
+        deletedAt: null,
+      })
+      .mockResolvedValueOnce({
+        id: 'row-page-1',
+        workspaceId: 'ws-1',
+        spaceId: 'space-1',
+        deletedAt: null,
+        title: 'Old row title',
+        slugId: 'old-row-slug',
+      })
+      .mockResolvedValueOnce({
+        id: 'row-page-1',
+        workspaceId: 'ws-1',
+        spaceId: 'space-1',
+        deletedAt: null,
+        title: 'Renamed row title',
+        slugId: 'new-row-slug',
+      });
+    databaseRowRepo.findByDatabaseAndPage.mockResolvedValue({
+      databaseId: 'db-1',
+      pageId: 'row-page-1',
+      archivedAt: null,
+    });
+
+    const result = await service.updateRow(
+      'db-1',
+      'row-page-1',
+      { title: 'Renamed row title' } as any,
+      user,
+      'ws-1',
+    );
+
+    expect(pageRepo.updatePage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Renamed row title',
+        lastUpdatedById: 'u-1',
+        workspaceId: 'ws-1',
+      }),
+      'row-page-1',
+    );
+    expect(pageRepo.updatePage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        slugId: expect.any(String),
+      }),
+      'row-page-1',
+    );
+    expect(result).toEqual({
+      pageId: 'row-page-1',
+      title: 'Renamed row title',
+      slugId: 'new-row-slug',
+    });
+    expect(pageHistoryRecorder.enqueuePageEvents).toHaveBeenCalledWith(
+      expect.objectContaining({
+        changeType: 'database.row.renamed',
+      }),
+    );
+  });
+
+  it('throws when renaming archived row', async () => {
+    pageRepo.findById.mockResolvedValue({
+      id: 'row-page-1',
+      workspaceId: 'ws-1',
+      spaceId: 'space-1',
+      deletedAt: null,
+    });
+    databaseRowRepo.findByDatabaseAndPage.mockResolvedValue({
+      databaseId: 'db-1',
+      pageId: 'row-page-1',
+      archivedAt: new Date(),
+    });
+
+    await expect(
+      service.updateRow(
+        'db-1',
+        'row-page-1',
+        { title: 'Renamed row title' } as any,
+        user,
+        'ws-1',
+      ),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('throws when renaming non-existing row', async () => {
+    pageRepo.findById.mockResolvedValue({
+      id: 'row-page-1',
+      workspaceId: 'ws-1',
+      spaceId: 'space-1',
+      deletedAt: null,
+    });
+    databaseRowRepo.findByDatabaseAndPage.mockResolvedValue(null);
+
+    await expect(
+      service.updateRow(
+        'db-1',
+        'row-page-1',
+        { title: 'Renamed row title' } as any,
+        user,
+        'ws-1',
+      ),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('enriches user cells in listRows with user display names', async () => {
+    databasePropertyRepo.findByDatabaseId.mockResolvedValue([
+      { id: 'prop-user', type: 'user' },
+    ]);
+    databaseRowRepo.findByDatabaseId.mockResolvedValue([
+      {
+        id: 'row-1',
+        pageId: 'row-page-1',
+        cells: [
+          {
+            propertyId: 'prop-user',
+            value: { id: 'user-42' },
+          },
+        ],
+      },
+    ]);
+    userRepo.findById.mockResolvedValue({
+      id: 'user-42',
+      name: 'Jane Doe',
+      workspaceId: 'ws-1',
+    });
+
+    const rows = await service.listRows('db-1', user, 'ws-1');
+
+    expect(rows[0].cells[0].value).toEqual({
+      id: 'user-42',
+      name: 'Jane Doe',
+    });
+  });
+
   it('keeps linked page slug unchanged when renaming database', async () => {
     databaseRepo.findById.mockResolvedValue({
       id: 'db-1',
