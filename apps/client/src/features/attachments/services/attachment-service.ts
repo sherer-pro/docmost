@@ -58,7 +58,7 @@ export async function uploadIcon(
   }
   formData.append("image", processed);
 
-  return await api.post("/attachments/upload-image", formData, {
+  return await api.post("/attachments/actions/upload-image", formData, {
     headers: {
       "Content-Type": "multipart/form-data",
     },
@@ -90,7 +90,7 @@ async function removeIcon(
     payload.spaceId = spaceId;
   }
 
-  await api.post("/attachments/remove-icon", payload);
+  await api.post("/attachments/actions/remove-icon", payload);
 }
 
 export async function removeAvatar(): Promise<void> {

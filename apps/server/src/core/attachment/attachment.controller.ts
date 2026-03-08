@@ -53,6 +53,7 @@ import { TokenService } from '../auth/services/token.service';
 import { JwtAttachmentPayload, JwtType } from '../auth/dto/jwt-payload';
 import * as path from 'path';
 import { RemoveIconDto } from './dto/attachment.dto';
+import { resolveAttachmentAccessToken } from './attachment-public-token.util';
 
 @Controller('attachments')
 export class AttachmentController {
@@ -198,10 +199,30 @@ export class AttachmentController {
     @Param('fileName') fileName?: string,
     @Query('jwt') jwtToken?: string,
   ) {
+    if (!isValidUUID(fileId)) {
+      throw new NotFoundException('File not found');
+    }
+
+    const attachment = await this.attachmentRepo.findById(fileId);
+    if (
+      !attachment ||
+      attachment.workspaceId !== workspace.id ||
+      !attachment.pageId ||
+      !attachment.spaceId
+    ) {
+      throw new NotFoundException('File not found');
+    }
+
+    const accessToken = resolveAttachmentAccessToken(
+      req,
+      attachment.pageId,
+      jwtToken,
+    );
+
     let jwtPayload: JwtAttachmentPayload = null;
     try {
       jwtPayload = await this.tokenService.verifyJwt(
-        jwtToken,
+        accessToken,
         JwtType.ATTACHMENT,
       );
     } catch (err) {
@@ -211,20 +232,9 @@ export class AttachmentController {
     }
 
     if (
-      !isValidUUID(fileId) ||
-      fileId !== jwtPayload.attachmentId ||
-      jwtPayload.workspaceId !== workspace.id
-    ) {
-      throw new NotFoundException('File not found');
-    }
-
-    const attachment = await this.attachmentRepo.findById(fileId);
-    if (
-      !attachment ||
-      attachment.workspaceId !== workspace.id ||
-      !attachment.pageId ||
-      !attachment.spaceId ||
-      jwtPayload.pageId !== attachment.pageId
+      jwtPayload.workspaceId !== workspace.id ||
+      jwtPayload.pageId !== attachment.pageId ||
+      (jwtPayload.attachmentId && jwtPayload.attachmentId !== fileId)
     ) {
       throw new NotFoundException('File not found');
     }
@@ -239,7 +249,7 @@ export class AttachmentController {
 
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
-  @Post('actions/upload-image')
+  @Post(['actions/upload-image', 'upload-image'])
   @UseInterceptors(FileInterceptor)
   async uploadAvatarOrLogo(
     @Req() req: any,
@@ -357,7 +367,7 @@ export class AttachmentController {
 
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
-  @Post('actions/remove-icon')
+  @Post(['actions/remove-icon', 'remove-icon'])
   async removeIcon(
     @Body() dto: RemoveIconDto,
     @AuthUser() user: User,

@@ -192,11 +192,15 @@ export async function uploadFile(
   formData.append("pageId", pageId);
   formData.append("file", file);
 
-  const req = await api.post<IAttachment>("/files/upload", formData, {
-    headers: {
-      "Content-Type": "multipart/form-data",
+  const req = await api.post<IAttachment>(
+    "/attachments/actions/upload-file",
+    formData,
+    {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
     },
-  });
+  );
 
   return req as unknown as IAttachment;
 }
