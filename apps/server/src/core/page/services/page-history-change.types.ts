@@ -11,6 +11,7 @@ export type PageHistoryChangeType =
   | 'database.property.updated'
   | 'database.property.deleted'
   | 'database.row.created'
+  | 'database.row.renamed'
   | 'database.row.deleted'
   | 'database.row.cells.updated';
 

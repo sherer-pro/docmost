@@ -23,6 +23,7 @@ import {
   CreateDatabaseDto,
   CreateDatabasePropertyDto,
   CreateDatabaseRowDto,
+  UpdateDatabaseRowDto,
   CreateDatabaseViewDto,
   ListDatabasesQueryDto,
   UpdateDatabaseDto,
@@ -212,6 +213,26 @@ export class DatabaseController {
     @AuthWorkspace() workspace: Workspace,
   ) {
     return this.databaseService.listRows(databaseId, user, workspace.id);
+  }
+
+  /**
+   * Renames a database row page and regenerates row slug.
+   */
+  @Patch(':databaseId/rows/:pageId')
+  async updateRow(
+    @Param('databaseId', ParseUUIDPipe) databaseId: string,
+    @Param('pageId', ParseUUIDPipe) pageId: string,
+    @Body() dto: UpdateDatabaseRowDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.databaseService.updateRow(
+      databaseId,
+      pageId,
+      dto,
+      user,
+      workspace.id,
+    );
   }
 
 

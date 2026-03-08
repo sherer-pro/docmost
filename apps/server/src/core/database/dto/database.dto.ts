@@ -190,6 +190,16 @@ export class CreateDatabaseRowDto {
   parentPageId?: string;
 }
 
+/**
+ * DTO to rename an existing database row.
+ */
+export class UpdateDatabaseRowDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(255)
+  title: string;
+}
+
 
 export class DatabaseUserCellValueDto {
   @IsUUID()

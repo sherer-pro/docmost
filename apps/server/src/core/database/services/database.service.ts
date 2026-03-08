@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -29,6 +30,7 @@ import {
   CreateDatabaseDto,
   CreateDatabasePropertyDto,
   CreateDatabaseRowDto,
+  UpdateDatabaseRowDto,
   CreateDatabaseViewDto,
   UpdateDatabaseDto,
   UpdateDatabasePropertyDto,
@@ -38,6 +40,7 @@ import type { DatabasePropertyType } from '@docmost/api-contract';
 import { QueueJob, QueueName } from '../../../integrations/queue/constants';
 import { IPageRecipientNotificationJob } from '../../../integrations/queue/constants/queue.interface';
 import { PageHistoryRecorderService } from '../../page/services/page-history-recorder.service';
+import { generateSlugId } from '../../../common/helpers';
 
 interface IDatabaseCellValueWithFallback {
   value: unknown;
@@ -56,6 +59,12 @@ interface IDatabaseUserCellValue {
  */
 export interface IUpdatedDatabaseResponse {
   pageSlugId: string | null;
+}
+
+export interface IUpdatedDatabaseRowResponse {
+  pageId: string;
+  title: string;
+  slugId: string;
 }
 
 @Injectable()
@@ -141,6 +150,7 @@ export class DatabaseService {
       | 'database.property.updated'
       | 'database.property.deleted'
       | 'database.row.created'
+      | 'database.row.renamed'
       | 'database.row.deleted'
       | 'database.row.cells.updated';
     changeData: Record<string, unknown>;
@@ -257,6 +267,60 @@ export class DatabaseService {
     const displayValue = user?.name?.trim() || userId;
     cache.set(userId, displayValue);
     return displayValue;
+  }
+
+  private async enrichRowsWithUserNames(
+    rows: any[],
+    userPropertyIds: Set<string>,
+    workspaceId: string,
+  ): Promise<any[]> {
+    if (!rows?.length || userPropertyIds.size === 0) {
+      return rows;
+    }
+
+    const userIds = [...new Set(
+      rows.flatMap((row) =>
+        (row?.cells ?? [])
+          .filter((cell) => userPropertyIds.has(cell.propertyId))
+          .map((cell) => this.extractUserIdFromCellValue(cell.value))
+          .filter((userId): userId is string => Boolean(userId)),
+      ),
+    )];
+
+    if (userIds.length === 0) {
+      return rows;
+    }
+
+    const userDisplayEntries = await Promise.all(
+      userIds.map(async (userId) => {
+        const user = await this.userRepo.findById(userId, workspaceId);
+        return [userId, user?.name?.trim() || userId] as const;
+      }),
+    );
+
+    const userNameById = new Map(userDisplayEntries);
+
+    return rows.map((row) => ({
+      ...row,
+      cells: (row?.cells ?? []).map((cell) => {
+        if (!userPropertyIds.has(cell.propertyId)) {
+          return cell;
+        }
+
+        const userId = this.extractUserIdFromCellValue(cell.value);
+        if (!userId) {
+          return cell;
+        }
+
+        return {
+          ...cell,
+          value: {
+            id: userId,
+            name: userNameById.get(userId) ?? userId,
+          },
+        };
+      }),
+    }));
   }
 
   /**
@@ -1011,11 +1075,121 @@ export class DatabaseService {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
     await this.assertCanReadDatabasePages(user, database.spaceId);
 
-    return this.databaseRowRepo.findByDatabaseId(
-      databaseId,
+    const [rows, properties] = await Promise.all([
+      this.databaseRowRepo.findByDatabaseId(
+        databaseId,
+        workspaceId,
+        database.spaceId,
+      ),
+      this.databasePropertyRepo.findByDatabaseId(databaseId),
+    ]);
+
+    const userPropertyIds = new Set(
+      this.normalizeProperties(properties)
+        .filter((property) => property.type === 'user')
+        .map((property) => property.id),
+    );
+
+    return this.enrichRowsWithUserNames(rows, userPropertyIds, workspaceId);
+  }
+
+  /**
+   * Renames a database row page and regenerates slug.
+   */
+  async updateRow(
+    databaseId: string,
+    pageId: string,
+    dto: UpdateDatabaseRowDto,
+    user: User,
+    workspaceId: string,
+  ): Promise<IUpdatedDatabaseRowResponse> {
+    const database = await this.getOrFailDatabase(databaseId, workspaceId);
+    await this.assertCanManageDatabasePages(user, database.spaceId);
+    await this.assertCanAccessTargetPage(pageId, workspaceId, database.spaceId);
+
+    const row = await this.databaseRowRepo.findByDatabaseAndPage(databaseId, pageId);
+    if (!row || row.archivedAt) {
+      throw new NotFoundException('Database row not found');
+    }
+
+    const rowPage = await this.pageRepo.findById(pageId);
+    if (!rowPage || rowPage.workspaceId !== workspaceId || rowPage.deletedAt) {
+      throw new NotFoundException('Database row page not found');
+    }
+
+    const nextTitle = dto.title.trim();
+    if (!nextTitle) {
+      throw new BadRequestException('Row title is required');
+    }
+
+    const previousTitle = rowPage.title ?? '';
+    const previousSlugId = rowPage.slugId ?? '';
+
+    if (nextTitle === previousTitle) {
+      return {
+        pageId: rowPage.id,
+        title: previousTitle,
+        slugId: previousSlugId,
+      };
+    }
+
+    const nextSlugId = generateSlugId();
+    await this.pageRepo.updatePage(
+      {
+        title: nextTitle,
+        slugId: nextSlugId,
+        lastUpdatedById: user.id,
+        workspaceId,
+      },
+      pageId,
+    );
+
+    const updatedRowPage = await this.pageRepo.findById(pageId);
+    if (!updatedRowPage || updatedRowPage.workspaceId !== workspaceId) {
+      throw new NotFoundException('Database row page not found');
+    }
+
+    const historyPageIds = await this.buildDatabaseHistoryTargetPageIds(
+      database.id,
       workspaceId,
       database.spaceId,
+      database.pageId ? [database.pageId] : [],
     );
+
+    await this.recordDatabaseHistoryEvent({
+      pageIds: historyPageIds,
+      actorId: user.id,
+      changeType: 'database.row.renamed',
+      changeData: {
+        databaseId: database.id,
+        rowContext: {
+          rowPageId: pageId,
+        },
+        row: {
+          pageId,
+          title: updatedRowPage.title ?? '',
+          slugId: updatedRowPage.slugId,
+        },
+        changes: [
+          {
+            field: 'title',
+            oldValue: previousTitle,
+            newValue: updatedRowPage.title ?? '',
+          },
+          {
+            field: 'slugId',
+            oldValue: previousSlugId,
+            newValue: updatedRowPage.slugId,
+          },
+        ],
+      },
+    });
+
+    return {
+      pageId,
+      title: updatedRowPage.title ?? '',
+      slugId: updatedRowPage.slugId ?? nextSlugId,
+    };
   }
 
 
@@ -1250,15 +1424,17 @@ export class DatabaseService {
    * Retrieves the user ID from the value of the user cell.
    */
   private extractUserIdFromCellValue(value: unknown): string | null {
-    if (typeof value === 'string' && value.trim()) {
-      return value;
+    const currentValue = this.extractCurrentCellValue(value);
+
+    if (typeof currentValue === 'string' && currentValue.trim()) {
+      return currentValue;
     }
 
-    if (!value || typeof value !== 'object' || !('id' in value)) {
+    if (!currentValue || typeof currentValue !== 'object' || !('id' in currentValue)) {
       return null;
     }
 
-    const candidate = (value as IDatabaseUserCellValue).id;
+    const candidate = (currentValue as IDatabaseUserCellValue).id;
     return typeof candidate === 'string' && candidate.trim() ? candidate : null;
   }
 
