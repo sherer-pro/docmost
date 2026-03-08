@@ -5,6 +5,8 @@ import classes from "./css/history.module.css";
 import clsx from "clsx";
 import { IPageHistory } from "@/features/page-history/types/page.types";
 import { memo, useCallback } from "react";
+import { useTranslation } from "react-i18next";
+import { formatHistorySummary } from "@/features/page-history/utils/history-summary.ts";
 
 const MAX_VISIBLE_AVATARS = 5;
 
@@ -25,6 +27,7 @@ const HistoryItem = memo(function HistoryItem({
   onHoverEnd,
   isActive,
 }: HistoryItemProps) {
+  const { t } = useTranslation();
   const handleClick = useCallback(() => {
     onSelect(historyItem.id, index);
   }, [onSelect, historyItem.id, index]);
@@ -35,6 +38,7 @@ const HistoryItem = memo(function HistoryItem({
 
   const contributors = historyItem.contributors;
   const hasContributors = contributors && contributors.length > 0;
+  const summary = formatHistorySummary(historyItem, t);
 
   return (
     <UnstyledButton
@@ -93,6 +97,12 @@ const HistoryItem = memo(function HistoryItem({
           </>
         )}
       </Group>
+
+      {summary && (
+        <Text size="xs" c="dimmed" mt={4} lineClamp={3}>
+          {summary}
+        </Text>
+      )}
     </UnstyledButton>
   );
 });

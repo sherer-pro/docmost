@@ -9,6 +9,8 @@ export interface IPageHistory {
   pageId: string;
   title: string;
   content?: any;
+  changeType?: string | null;
+  changeData?: Record<string, unknown> | null;
   slug: string;
   icon: string;
   coverPhoto: string;

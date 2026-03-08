@@ -29,6 +29,7 @@ import {
   useHistoryRestore,
 } from "@/features/page-history/hooks";
 import classes from "./css/history-mobile.module.css";
+import { formatHistorySummary } from "@/features/page-history/utils/history-summary.ts";
 
 interface Props {
   pageId: string;
@@ -68,13 +69,15 @@ export default function HistoryModalMobile({ pageId, pageTitle }: Props) {
         const names = hasContributors
           ? contributors.map((c) => c.name).join(", ")
           : item.lastUpdatedBy?.name;
+        const summary = formatHistorySummary(item, t);
         return {
           value: item.id,
           label: formattedDate(new Date(item.createdAt)),
           userName: names,
+          summary,
         };
       }),
-    [historyItems],
+    [historyItems, t],
   );
 
   useHistoryReset(pageId);
@@ -137,7 +140,10 @@ export default function HistoryModalMobile({ pageId, pageTitle }: Props) {
               <div>
                 <Text size="sm">{option.label}</Text>
                 <Text size="xs" c="dimmed">
-                  {(option as { userName?: string }).userName}
+                  {(option as { summary?: string; userName?: string }).summary}
+                </Text>
+                <Text size="xs" c="dimmed" lineClamp={1}>
+                  {(option as { summary?: string; userName?: string }).userName}
                 </Text>
               </div>
               {checked && <IconCheck size={16} />}
