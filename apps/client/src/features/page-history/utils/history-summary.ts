@@ -69,6 +69,7 @@ function formatFieldName(field: string, t: TranslateFn): string {
     name: tHistory(t, "history.event.field.name"),
     type: tHistory(t, "history.event.field.type"),
     settings: tHistory(t, "history.event.field.settings"),
+    slugId: tHistory(t, "history.event.field.slug"),
   };
 
   return mapping[field] ?? field;
@@ -200,6 +201,20 @@ function buildEventDetail(
       id,
       title: tHistory(t, "history.event.database.row.deleted", { deletedCount }),
       lines: [],
+    };
+  }
+
+  if (changeType === "database.row.renamed") {
+    const lines = asArray(changeData.changes)
+      .map((change) => formatFieldChangeLine(change, t))
+      .filter((line): line is string => Boolean(line));
+
+    return {
+      id,
+      title: tHistory(t, "history.event.database.row.renamed", {
+        rowTitle: formatRowTitle(changeData, t),
+      }),
+      lines,
     };
   }
 

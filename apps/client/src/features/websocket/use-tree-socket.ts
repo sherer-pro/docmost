@@ -30,8 +30,16 @@ export const useTreeSocket = () => {
             id: event.id,
             changes: { name: event.payload.title },
           });
-          setTreeData(treeApi.data);
         }
+
+        if (event.payload?.slugId !== undefined) {
+          treeApi.update({
+            id: event.id,
+            changes: { slugId: event.payload.slugId },
+          });
+        }
+
+        setTreeData(treeApi.data);
       }
     };
 
@@ -56,6 +64,12 @@ export const useTreeSocket = () => {
                 treeApi.update({
                   id: event.id,
                   changes: { name: pagePatch.title },
+                });
+              }
+              if (pagePatch.slugId !== undefined) {
+                treeApi.update({
+                  id: event.id,
+                  changes: { slugId: pagePatch.slugId },
                 });
               }
               if (pagePatch.icon !== undefined) {

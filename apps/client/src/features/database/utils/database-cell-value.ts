@@ -97,6 +97,34 @@ function extractDatabaseUserId(value: unknown): string | null {
   return null;
 }
 
+function extractDatabaseUserName(value: unknown): string | null {
+  if (typeof value === 'string') {
+    const normalizedValue = normalizeSerializedDatabaseString(value).trim();
+    if (!normalizedValue) {
+      return null;
+    }
+
+    try {
+      const parsedValue = JSON.parse(normalizedValue);
+      return extractDatabaseUserName(parsedValue);
+    } catch {
+      return null;
+    }
+  }
+
+  if (value && typeof value === 'object' && 'name' in value) {
+    const candidateName = (value as { name?: unknown }).name;
+    if (typeof candidateName !== 'string') {
+      return null;
+    }
+
+    const normalizedName = normalizeSerializedDatabaseString(candidateName).trim();
+    return normalizedName || null;
+  }
+
+  return null;
+}
+
 
 /**
  * Returns current cell value from fallback container
@@ -254,6 +282,11 @@ export function getDatabaseCellDisplayValue({
   }
 
   if (property.type === 'user') {
+    const displayName = extractDatabaseUserName(currentValue);
+    if (displayName) {
+      return displayName;
+    }
+
     return normalizeDatabaseUserId(currentValue) || '';
   }
 

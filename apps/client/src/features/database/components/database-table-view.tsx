@@ -31,6 +31,7 @@ import {
   IconFileDescription,
 } from '@tabler/icons-react';
 import { useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { DATABASE_PROPERTY_TYPES, DatabasePropertyType } from '@docmost/api-contract';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -43,6 +44,7 @@ import {
   useDeleteDatabasePropertyMutation,
   useDeleteDatabaseRowMutation,
   useDatabasePropertiesQuery,
+  useUpdateDatabaseRowMutation,
   useUpdateDatabasePropertyMutation,
   useDatabaseRowsQuery,
 } from '@/features/database/queries/database-table-query';
@@ -73,9 +75,10 @@ import {
   insertDatabaseRowNode,
   setTreeNodeHasChildren,
 } from '@/features/page/tree/utils/utils.ts';
+import { SimpleTree } from 'react-arborist';
 import { queryClient } from '@/main.tsx';
-import { getPageById } from '@/features/page/services/page-service.ts';
-import { PAGE_QUERY_KEYS } from '@/features/page/queries/query-keys.ts';
+import { getAllSidebarPages, getPageById } from '@/features/page/services/page-service.ts';
+import { DATABASE_QUERY_KEYS, PAGE_QUERY_KEYS } from '@/features/page/queries/query-keys.ts';
 import { fetchAllAncestorChildren } from '@/features/page/queries/page-query.ts';
 import {
   buildDatabaseCellPayloadValue,
@@ -85,6 +88,7 @@ import {
 } from '@/features/database/utils/database-cell-value.ts';
 import {
   isDatabaseFilterControlsVisible,
+  getCheckboxFilterOptions,
   isSameCellPayloadValue,
   resolveDatabasePropertyRename,
   shouldDeleteCellPayload,
@@ -156,6 +160,7 @@ export function DatabaseTableView({
   const deletePropertyMutation = useDeleteDatabasePropertyMutation(databaseId);
   const deleteRowMutation = useDeleteDatabaseRowMutation(databaseId);
   const updatePropertyMutation = useUpdateDatabasePropertyMutation(databaseId);
+  const updateRowMutation = useUpdateDatabaseRowMutation(databaseId);
 
   const [newPropertyName, setNewPropertyName] = useState('');
   const [newPropertyType, setNewPropertyType] = useState<DatabasePropertyType>('multiline_text');
@@ -165,8 +170,10 @@ export function DatabaseTableView({
   const [filters, setFilters] = useState<IDatabaseFilterCondition[]>([DEFAULT_FILTER]);
   const [sortState, setSortState] = useState<IDatabaseSortState | null>(null);
   const [settingsProperty, setSettingsProperty] = useState<IDatabaseProperty | null>(null);
-  const [editingPropertyId, setEditingPropertyId] = useState<string | null>(null);
-  const [editingPropertyName, setEditingPropertyName] = useState('');
+  const [propertyNameDrafts, setPropertyNameDrafts] = useState<Record<string, string>>({});
+  const [renamingRowPageId, setRenamingRowPageId] = useState<string | null>(null);
+  const [renamingRowInitialTitle, setRenamingRowInitialTitle] = useState('');
+  const [renamingRowTitleDraft, setRenamingRowTitleDraft] = useState('');
   const [selectPropertyDraft, setSelectPropertyDraft] =
     useState<SelectPropertyCreationDraft | null>(null);
   const isMobileViewport = useMediaQuery('(max-width: 767px)');
@@ -176,6 +183,15 @@ export function DatabaseTableView({
   const treeApi = useAtomValue(treeApiAtom);
   const emit = useQueryEmit();
   const navigate = useNavigate();
+  const allPagesQuery = useQuery({
+    queryKey: [...PAGE_QUERY_KEYS.rootSidebar(spaceId, ['page', 'database']), 'all-pages'],
+    queryFn: () =>
+      getAllSidebarPages({
+        spaceId,
+        includeNodeTypes: ['page', 'database'],
+      }),
+    enabled: Boolean(spaceId),
+  });
 
   /**
    * Locates a database node in the local sidebar tree.
@@ -237,12 +253,6 @@ export function DatabaseTableView({
   const handleCreateRow = async () => {
     const createdRow = await createRowMutation.mutateAsync({});
     emitDatabaseInvalidation();
-    const databaseNode = findDatabaseNodeInTree(treeData);
-
-    if (!databaseNode) {
-      return;
-    }
-
     const createdRowPage = await queryClient.fetchQuery({
       queryKey: PAGE_QUERY_KEYS.page(createdRow.pageId),
       queryFn: () => getPageById({ pageId: createdRow.pageId }),
@@ -252,12 +262,52 @@ export function DatabaseTableView({
       queryClient.setQueryData(PAGE_QUERY_KEYS.page(createdRowPage.slugId), createdRowPage);
     }
 
+    const createdRowTitle = createdRowPage?.title ?? '';
+    queryClient.setQueryData(
+      DATABASE_QUERY_KEYS.rows(databaseId),
+      (currentRows?: IDatabaseRowWithCells[]) => {
+        const nextRows = currentRows ?? [];
+        if (nextRows.some((rowItem) => rowItem.pageId === createdRow.pageId)) {
+          return nextRows;
+        }
+
+        return [
+          ...nextRows,
+          {
+            id: createdRow.id,
+            pageId: createdRow.pageId,
+            pageTitle: createdRowTitle,
+            page: {
+              id: createdRow.pageId,
+              title: createdRowTitle,
+              slugId: createdRow.slugId ?? createdRowPage.slugId,
+              icon: createdRowPage?.icon ?? null,
+              parentPageId: createdRowPage?.parentPageId ?? null,
+              position: createdRowPage?.position ?? '',
+              customFields: createdRowPage?.customFields,
+            },
+            cells: [],
+          },
+        ];
+      },
+    );
+
+    setRenamingRowPageId(createdRow.pageId);
+    setRenamingRowInitialTitle(createdRowTitle);
+    setRenamingRowTitleDraft(createdRowTitle);
+
+    const databaseNode = findDatabaseNodeInTree(treeData);
+
+    if (!databaseNode) {
+      return;
+    }
+
     const treeNodeData: SpaceTreeNode = {
       id: createdRow.pageId,
       nodeType: 'databaseRow',
       slugId: createdRow.slugId ?? createdRowPage.slugId,
       databaseId: createdRow.databaseId,
-      name: '',
+      name: createdRowTitle,
       position: '',
       spaceId,
       parentPageId: databaseNode.id,
@@ -354,8 +404,54 @@ export function DatabaseTableView({
     }));
   }, [databaseId, filters, setTableExportState, sortState, visibleColumns]);
 
+  useEffect(() => {
+    setPropertyNameDrafts((prev) => {
+      const next: Record<string, string> = {};
+      for (const property of properties) {
+        next[property.id] = prev[property.id] ?? property.name;
+      }
+
+      return next;
+    });
+  }, [properties]);
+
+  useEffect(() => {
+    if (!renamingRowPageId) {
+      return;
+    }
+
+    const hasRow = rows.some((row) => row.pageId === renamingRowPageId);
+    if (!hasRow) {
+      setRenamingRowPageId(null);
+      setRenamingRowInitialTitle('');
+      setRenamingRowTitleDraft('');
+    }
+  }, [rows, renamingRowPageId]);
+
+  const allPageNodes = useMemo(
+    () => allPagesQuery.data?.pages.flatMap((queryPage) => queryPage.items) ?? [],
+    [allPagesQuery.data?.pages],
+  );
+
+  const pageTitleById = useMemo<Record<string, string>>(
+    () =>
+      Object.fromEntries(
+        allPageNodes.map((pageNode) => [pageNode.id, pageNode.title || t('untitled')]),
+      ),
+    [allPageNodes, t],
+  );
+
+  const checkboxFilterOptions = useMemo(
+    () => getCheckboxFilterOptions(t),
+    [t],
+  );
+
   const getRawCellValue = (row: IDatabaseRowWithCells, propertyId: string): unknown => {
     return row.cells?.find((cell) => cell.propertyId === propertyId)?.value;
+  };
+
+  const getPersistedRowTitle = (row: IDatabaseRowWithCells): string => {
+    return row.page?.title ?? row.pageTitle ?? '';
   };
 
   const displayedProperties = useMemo(
@@ -376,11 +472,15 @@ export function DatabaseTableView({
       return activeFilters.every((condition) => {
         const property = properties.find((item) => item.id === condition.propertyId);
         const rawValue = getRawCellValue(row, condition.propertyId);
-        const value = getDatabaseCellDisplayValue({ property, value: rawValue });
+        const value = getDatabaseCellDisplayValue({
+          property,
+          value: rawValue,
+          pageTitleById,
+        });
         return matchCondition(value, condition);
       });
     });
-  }, [rows, filters, properties]);
+  }, [rows, filters, properties, pageTitleById]);
 
   const preparedRows = useMemo(() => {
     if (!sortState) {
@@ -392,10 +492,12 @@ export function DatabaseTableView({
       const leftValue = getDatabaseCellDisplayValue({
         property,
         value: getRawCellValue(left, sortState.propertyId),
+        pageTitleById,
       });
       const rightValue = getDatabaseCellDisplayValue({
         property,
         value: getRawCellValue(right, sortState.propertyId),
+        pageTitleById,
       });
       const result = leftValue.localeCompare(rightValue, undefined, {
         numeric: true,
@@ -404,7 +506,7 @@ export function DatabaseTableView({
 
       return sortState.direction === 'asc' ? result : -result;
     });
-  }, [filteredRows, properties, sortState]);
+  }, [filteredRows, properties, sortState, pageTitleById]);
 
   const startEditing = (row: IDatabaseRowWithCells, property: IDatabaseProperty) => {
     if (!isEditable) {
@@ -471,28 +573,23 @@ export function DatabaseTableView({
     setEditingValue('');
   };
 
-  const startPropertyRename = (property: IDatabaseProperty) => {
-    if (!isEditable) {
-      return;
-    }
-
-    setEditingPropertyId(property.id);
-    setEditingPropertyName(property.name);
+  const updatePropertyNameDraft = (propertyId: string, value: string) => {
+    setPropertyNameDrafts((prev) => ({
+      ...prev,
+      [propertyId]: value,
+    }));
   };
 
-  const stopPropertyRename = () => {
-    setEditingPropertyId(null);
-    setEditingPropertyName('');
+  const resetPropertyNameDraft = (property: IDatabaseProperty) => {
+    updatePropertyNameDraft(property.id, property.name);
   };
 
   const savePropertyRename = async (property: IDatabaseProperty) => {
-    if (editingPropertyId !== property.id) {
-      return;
-    }
+    const draftName = propertyNameDrafts[property.id] ?? property.name;
+    const nextName = resolveDatabasePropertyRename(property.name, draftName);
 
-    const nextName = resolveDatabasePropertyRename(property.name, editingPropertyName);
     if (!nextName) {
-      stopPropertyRename();
+      resetPropertyNameDraft(property);
       return;
     }
 
@@ -502,13 +599,135 @@ export function DatabaseTableView({
         name: nextName,
       },
     });
+
     emitDatabaseInvalidation({
       invalidateProperties: true,
       invalidateRows: true,
       invalidateRowContext: true,
     });
 
-    stopPropertyRename();
+    updatePropertyNameDraft(property.id, nextName);
+  };
+
+  const startRowRename = (row: IDatabaseRowWithCells) => {
+    if (!isEditable) {
+      return;
+    }
+
+    const currentRowTitle = getPersistedRowTitle(row);
+    setRenamingRowPageId(row.pageId);
+    setRenamingRowInitialTitle(currentRowTitle);
+    setRenamingRowTitleDraft(currentRowTitle);
+  };
+
+  const cancelRowRename = () => {
+    setRenamingRowPageId(null);
+    setRenamingRowInitialTitle('');
+    setRenamingRowTitleDraft('');
+  };
+
+  const applyRowRenameToRowsCache = (rowUpdate: {
+    pageId: string;
+    title: string;
+    slugId: string;
+  }) => {
+    queryClient.setQueryData(
+      DATABASE_QUERY_KEYS.rows(databaseId),
+      (currentRows?: IDatabaseRowWithCells[]) => {
+        if (!currentRows) {
+          return currentRows;
+        }
+
+        return currentRows.map((rowItem) => {
+          if (rowItem.pageId !== rowUpdate.pageId) {
+            return rowItem;
+          }
+
+          return {
+            ...rowItem,
+            pageTitle: rowUpdate.title,
+            page: rowItem.page
+              ? {
+                  ...rowItem.page,
+                  title: rowUpdate.title,
+                  slugId: rowUpdate.slugId,
+                }
+              : {
+                  id: rowUpdate.pageId,
+                  title: rowUpdate.title,
+                  slugId: rowUpdate.slugId,
+                },
+          };
+        });
+      },
+    );
+  };
+
+  const applyRowRenameToTree = (rowUpdate: {
+    pageId: string;
+    title: string;
+    slugId: string;
+  }) => {
+    setTreeData((currentTreeData) => {
+      const tree = new SimpleTree<SpaceTreeNode>(currentTreeData);
+
+      if (!tree.find(rowUpdate.pageId)) {
+        return currentTreeData;
+      }
+
+      tree.update({
+        id: rowUpdate.pageId,
+        changes: {
+          name: rowUpdate.title,
+          slugId: rowUpdate.slugId,
+        },
+      });
+
+      return tree.data;
+    });
+  };
+
+  const saveRowRename = async (row: IDatabaseRowWithCells) => {
+    if (!renamingRowPageId || renamingRowPageId !== row.pageId) {
+      return;
+    }
+
+    const nextTitle = renamingRowTitleDraft.trim();
+    const previousTitle = renamingRowInitialTitle.trim();
+
+    if (!nextTitle || nextTitle === previousTitle) {
+      cancelRowRename();
+      return;
+    }
+
+    try {
+      const updatedRow = await updateRowMutation.mutateAsync({
+        pageId: row.pageId,
+        payload: { title: nextTitle },
+      });
+
+      applyRowRenameToRowsCache(updatedRow);
+      applyRowRenameToTree(updatedRow);
+      emit({
+        operation: 'updateOne',
+        spaceId,
+        entity: ['pages'],
+        id: updatedRow.pageId,
+        payload: {
+          title: updatedRow.title,
+          slugId: updatedRow.slugId,
+        },
+      });
+
+      emitDatabaseInvalidation({
+        invalidateRows: true,
+        invalidateRowContext: true,
+      });
+
+      cancelRowRename();
+    } catch {
+      setRenamingRowTitleDraft(previousTitle);
+    }
   };
 
 
@@ -728,76 +947,110 @@ export function DatabaseTableView({
 
       {isDatabaseFilterControlsVisible(isMobileViewport) && (
         <Stack mb="md" gap="xs">
-          {filters.map((condition, index) => (
-            <Group key={`filter-${index}`} align="end" wrap="nowrap">
-              <Select
-                placeholder={t('Field')}
-                data={properties.map((property) => ({
-                  value: property.id,
-                  label: property.name,
-                }))}
-                value={condition.propertyId}
-                onChange={(value) => {
-                  setFilters((prev) =>
-                    prev.map((item, itemIndex) =>
-                      itemIndex === index ? { ...item, propertyId: value || '' } : item,
-                    ),
-                  );
-                }}
-              />
+          {filters.map((condition, index) => {
+            const selectedFilterProperty = properties.find(
+              (property) => property.id === condition.propertyId,
+            );
+            const isCheckboxProperty = selectedFilterProperty?.type === 'checkbox';
 
-              <Select
-                w={140}
-                data={[
-                  { value: 'contains', label: t('contains') },
-                  { value: 'equals', label: t('equals') },
-                  { value: 'not_equals', label: t('not equals') },
-                ]}
-                value={condition.operator}
-                onChange={(value) => {
-                  if (!value) {
-                    return;
+            return (
+              <Group key={`filter-${index}`} align="end" wrap="nowrap">
+                <Select
+                  placeholder={t('Field')}
+                  data={properties.map((property) => ({
+                    value: property.id,
+                    label: property.name,
+                  }))}
+                  value={condition.propertyId}
+                  onChange={(value) => {
+                    const nextProperty = properties.find((property) => property.id === value);
+                    const shouldResetValue = nextProperty?.type === 'checkbox' &&
+                      condition.value !== 'true' &&
+                      condition.value !== 'false';
+
+                    setFilters((prev) =>
+                      prev.map((item, itemIndex) =>
+                        itemIndex === index
+                          ? {
+                              ...item,
+                              propertyId: value || '',
+                              value: shouldResetValue ? '' : item.value,
+                            }
+                          : item,
+                      ),
+                    );
+                  }}
+                />
+
+                <Select
+                  w={140}
+                  data={[
+                    { value: 'contains', label: t('contains') },
+                    { value: 'equals', label: t('equals') },
+                    { value: 'not_equals', label: t('not equals') },
+                  ]}
+                  value={condition.operator}
+                  onChange={(value) => {
+                    if (!value) {
+                      return;
+                    }
+
+                    setFilters((prev) =>
+                      prev.map((item, itemIndex) =>
+                        itemIndex === index
+                          ? {
+                              ...item,
+                              operator: value as IDatabaseFilterCondition['operator'],
+                            }
+                          : item,
+                      ),
+                    );
+                  }}
+                />
+
+                {isCheckboxProperty ? (
+                  <Select
+                    placeholder={t('Value')}
+                    data={checkboxFilterOptions}
+                    value={condition.value || null}
+                    onChange={(value) => {
+                      setFilters((prev) =>
+                        prev.map((item, itemIndex) =>
+                          itemIndex === index ? { ...item, value: value || '' } : item,
+                        ),
+                      );
+                    }}
+                    allowDeselect
+                  />
+                ) : (
+                  <TextInput
+                    placeholder={t('Value')}
+                    value={condition.value}
+                    onChange={(event) => {
+                      setFilters((prev) =>
+                        prev.map((item, itemIndex) =>
+                          itemIndex === index
+                            ? { ...item, value: event.currentTarget.value }
+                            : item,
+                        ),
+                      );
+                    }}
+                  />
+                )}
+
+                <Button
+                  variant="subtle"
+                  color="red"
+                  disabled={filters.length === 1}
+                  onClick={() =>
+                    setFilters((prev) => prev.filter((_, itemIndex) => itemIndex !== index))
                   }
-
-                  setFilters((prev) =>
-                    prev.map((item, itemIndex) =>
-                      itemIndex === index
-                        ? {
-                            ...item,
-                            operator: value as IDatabaseFilterCondition['operator'],
-                          }
-                        : item,
-                    ),
-                  );
-                }}
-              />
-
-              <TextInput
-                placeholder={t('Value')}
-                value={condition.value}
-                onChange={(event) => {
-                  setFilters((prev) =>
-                    prev.map((item, itemIndex) =>
-                      itemIndex === index
-                        ? { ...item, value: event.currentTarget.value }
-                        : item,
-                    ),
-                  );
-                }}
-              />
-
-              <Button
-                variant="subtle"
-                color="red"
-                disabled={filters.length === 1}
-                onClick={() =>
-                  setFilters((prev) => prev.filter((_, itemIndex) => itemIndex !== index))
-                }
-              >
-                {t('Remove')}
-              </Button>
-            </Group>
-          ))}
+                >
+                  {t('Remove')}
+                </Button>
+              </Group>
+            );
+          })}
 
           <Button
             w="fit-content"
@@ -825,13 +1078,14 @@ export function DatabaseTableView({
               {displayedProperties.map((property) => (
                 <Table.Th key={property.id} miw={220}>
                   <Group justify="space-between" gap="xs" wrap="nowrap">
-                    {editingPropertyId === property.id ? (
+                    {isEditable ? (
                       <TextInput
-                        autoFocus
                         size="xs"
-                        value={editingPropertyName}
+                        value={propertyNameDrafts[property.id] ?? property.name}
                         my={4}
-                        onChange={(event) => setEditingPropertyName(event.currentTarget.value)}
+                        onChange={(event) =>
+                          updatePropertyNameDraft(property.id, event.currentTarget.value)
+                        }
                         onBlur={() => void savePropertyRename(property)}
                         onKeyDown={(event) => {
                           if (event.key === 'Enter') {
@@ -841,22 +1095,18 @@ export function DatabaseTableView({
 
                           if (event.key === 'Escape') {
                             event.preventDefault();
-                            stopPropertyRename();
+                            resetPropertyNameDraft(property);
                           }
                         }}
                         onClick={(event) => event.stopPropagation()}
                         onMouseDown={(event) => event.stopPropagation()}
                       />
                     ) : (
-                      <Text
-                        size="sm"
-                        style={{ cursor: isEditable ? 'text' : 'default' }}
-                        onClick={() => startPropertyRename(property)}
-                      >
+                      <Text size="sm">
                         {property.name}
                       </Text>
                     )}
-                    {isEditable && editingPropertyId !== property.id && (
+                    {isEditable && (
                       <Menu position="bottom-end" shadow="md" withinPortal>
                         <Menu.Target>
                           <ActionIcon
@@ -941,47 +1191,75 @@ export function DatabaseTableView({
             {preparedRows.map((row) => (
               <Table.Tr key={row.id}>
                 <Table.Td>
-                  <Group justify="space-between" >
-                  <div>
-                    <Text component={Link} to={`/s/${spaceSlug}/p/${row.pageId}`}>
-                      {getRowTitle(row, t('untitled'))}
-                    </Text>
+                  <Group justify="space-between">
+                    <div>
+                      {renamingRowPageId === row.pageId ? (
+                        <TextInput
+                          autoFocus
+                          size="xs"
+                          value={renamingRowTitleDraft}
+                          onChange={(event) => setRenamingRowTitleDraft(event.currentTarget.value)}
+                          onBlur={() => void saveRowRename(row)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              event.preventDefault();
+                              event.currentTarget.blur();
+                            }
 
-                  </div>
-
-                  <Menu position="bottom-end" shadow="md" withinPortal>
-                    <Menu.Target>
-                      <ActionIcon
-                        variant="subtle"
-                        aria-label={t('Row actions')}
-                      >
-                        <IconDotsVertical size={14} />
-                      </ActionIcon>
-                    </Menu.Target>
-
-                    <Menu.Dropdown>
-                      <Menu.Item
-                        leftSection={<IconMessageCircle size={14} />}
-                        onClick={() =>
-                          navigate(`/s/${spaceSlug}/p/${row.pageId}`, {
-                            state: { openCommentsAside: true },
-                          })
-                        }
-                      >
-                        {t('Row comments')}
-                      </Menu.Item>
-
-                      {isEditable && (
-                        <Menu.Item
-                          color="red"
-                          leftSection={<IconTrash size={14} />}
-                          onClick={() => handleDeleteRow(row)}
-                        >
-                          {t('Delete row')}
-                        </Menu.Item>
+                            if (event.key === 'Escape') {
+                              event.preventDefault();
+                              cancelRowRename();
+                            }
+                          }}
+                        />
+                      ) : (
+                        <Text component={Link} to={`/s/${spaceSlug}/p/${row.page?.slugId ?? row.pageId}`}>
+                          {getRowTitle(row, t('untitled'))}
+                        </Text>
                       )}
-                    </Menu.Dropdown>
-                  </Menu>
+                    </div>
+
+                    <Menu position="bottom-end" shadow="md" withinPortal>
+                      <Menu.Target>
+                        <ActionIcon
+                          variant="subtle"
+                          aria-label={t('Row actions')}
+                        >
+                          <IconDotsVertical size={14} />
+                        </ActionIcon>
+                      </Menu.Target>
+
+                      <Menu.Dropdown>
+                        {isEditable && (
+                          <Menu.Item
+                            onClick={() => startRowRename(row)}
+                          >
+                            {t('Rename row')}
+                          </Menu.Item>
+                        )}
+
+                        <Menu.Item
+                          leftSection={<IconMessageCircle size={14} />}
+                          onClick={() =>
+                            navigate(`/s/${spaceSlug}/p/${row.page?.slugId ?? row.pageId}`, {
+                              state: { openCommentsAside: true },
+                            })
+                          }
+                        >
+                          {t('Row comments')}
+                        </Menu.Item>
+
+                        {isEditable && (
+                          <Menu.Item
+                            color="red"
+                            leftSection={<IconTrash size={14} />}
+                            onClick={() => handleDeleteRow(row)}
+                          >
+                            {t('Delete row')}
+                          </Menu.Item>
+                        )}
+                      </Menu.Dropdown>
+                    </Menu>
                   </Group>
                 </Table.Td>
 

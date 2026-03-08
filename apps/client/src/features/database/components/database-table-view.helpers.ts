@@ -44,6 +44,15 @@ export const isDatabaseFilterControlsVisible = (isMobileViewport: boolean): bool
   return !isMobileViewport;
 };
 
+export const getCheckboxFilterOptions = (
+  t: (key: string) => string,
+): Array<{ value: 'true' | 'false'; label: string }> => {
+  return [
+    { value: 'true', label: t('Checked') },
+    { value: 'false', label: t('Unchecked') },
+  ];
+};
+
 export const resolveDatabasePropertyRename = (
   currentName: string,
   draftName: string,

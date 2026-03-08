@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  getCheckboxFilterOptions,
   isDatabaseFilterControlsVisible,
   isSameCellPayloadValue,
   resolveDatabasePropertyRename,
@@ -23,6 +24,14 @@ describe('database-table-view helpers', () => {
     expect(shouldDeleteCellPayload('multiline_text', null)).toBe(true);
     expect(shouldDeleteCellPayload('user', { id: '' })).toBe(true);
     expect(shouldDeleteCellPayload('checkbox', false)).toBe(false);
+  });
+
+  it('returns typed checkbox filter options', () => {
+    const t = (key: string) => key;
+    expect(getCheckboxFilterOptions(t)).toEqual([
+      { value: 'true', label: 'Checked' },
+      { value: 'false', label: 'Unchecked' },
+    ]);
   });
 
   it('compares payload values for no-op save protection', () => {
