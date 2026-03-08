@@ -7,6 +7,7 @@ import {
   HttpStatus,
   NotFoundException,
   Post,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
@@ -32,6 +33,12 @@ import { ShareRepo } from '@docmost/db/repos/share/share.repo';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import { EnvironmentService } from '../../integrations/environment/environment.service';
 import { hasLicenseOrEE } from '../../common/helpers';
+import { FastifyReply } from 'fastify';
+import { TokenService } from '../auth/services/token.service';
+import {
+  getAttachmentTokenCookieName,
+  LEGACY_ATTACHMENT_TOKEN_COOKIE,
+} from '../attachment/attachment-public-token.util';
 
 @UseGuards(JwtAuthGuard)
 @Controller('shares')
@@ -42,6 +49,7 @@ export class ShareController {
     private readonly shareRepo: ShareRepo,
     private readonly pageRepo: PageRepo,
     private readonly environmentService: EnvironmentService,
+    private readonly tokenService: TokenService,
   ) {}
 
   @HttpCode(HttpStatus.OK)
@@ -59,6 +67,7 @@ export class ShareController {
   async getSharedPageInfo(
     @Body() dto: ShareInfoDto,
     @AuthWorkspace() workspace: Workspace,
+    @Res({ passthrough: true }) res: FastifyReply,
   ) {
     if (!dto.pageId && !dto.shareId) {
       throw new BadRequestException();
@@ -73,6 +82,12 @@ export class ShareController {
     if (!sharingAllowed) {
       throw new NotFoundException('Shared page not found');
     }
+
+    await this.setAttachmentAccessCookie(
+      res,
+      shareData.page.id,
+      workspace.id,
+    );
 
     return {
       ...shareData,
@@ -223,5 +238,29 @@ export class ShareController {
         plan: workspace.plan,
       }),
     };
+  }
+
+  private async setAttachmentAccessCookie(
+    res: FastifyReply,
+    pageId: string,
+    workspaceId: string,
+  ) {
+    const token = await this.tokenService.generateAttachmentPageToken({
+      pageId,
+      workspaceId,
+    });
+
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+    const cookieOptions = {
+      httpOnly: true,
+      path: '/api',
+      secure: this.environmentService.isHttps(),
+      sameSite: 'lax' as const,
+      expires: expiresAt,
+    };
+
+    res.setCookie(getAttachmentTokenCookieName(pageId), token, cookieOptions);
+    // Keep generic cookie during migration for older handlers/clients.
+    res.setCookie(LEGACY_ATTACHMENT_TOKEN_COOKIE, token, cookieOptions);
   }
 }

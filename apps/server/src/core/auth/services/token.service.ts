@@ -78,6 +78,20 @@ export class TokenService {
     return this.jwtService.sign(payload, { expiresIn: '1h' });
   }
 
+  async generateAttachmentPageToken(opts: {
+    pageId: string;
+    workspaceId: string;
+  }): Promise<string> {
+    const { pageId, workspaceId } = opts;
+    const payload: JwtAttachmentPayload = {
+      pageId,
+      workspaceId,
+      type: JwtType.ATTACHMENT,
+    };
+
+    return this.jwtService.sign(payload, { expiresIn: '1h' });
+  }
+
   async generateMfaToken(user: User, workspaceId: string): Promise<string> {
     if (user.deactivatedAt || user.deletedAt) {
       throw new ForbiddenException();

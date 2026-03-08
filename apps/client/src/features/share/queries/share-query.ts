@@ -57,7 +57,7 @@ export function useSharePageQuery(
   const query = useQuery({
     queryKey: ["shares", shareInput],
     queryFn: () => getSharePageInfo(shareInput),
-    enabled: !!shareInput.pageId,
+    enabled: Boolean(shareInput.pageId || shareInput.shareId),
   });
 
   return query;
