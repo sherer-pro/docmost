@@ -200,8 +200,43 @@ export function DatabaseTableView({
     return null;
   };
 
+  const emitDatabaseInvalidation = ({
+    invalidateProperties = false,
+    invalidateRows = true,
+    invalidateRowContext = true,
+  }: {
+    invalidateProperties?: boolean;
+    invalidateRows?: boolean;
+    invalidateRowContext?: boolean;
+  } = {}) => {
+    if (invalidateProperties) {
+      emit({
+        operation: "invalidate",
+        spaceId,
+        entity: ["database", databaseId, "properties"],
+      });
+    }
+
+    if (invalidateRows) {
+      emit({
+        operation: "invalidate",
+        spaceId,
+        entity: ["database", databaseId, "rows"],
+      });
+    }
+
+    if (invalidateRowContext) {
+      emit({
+        operation: "invalidate",
+        spaceId,
+        entity: ["database", "row-context"],
+      });
+    }
+  };
+
   const handleCreateRow = async () => {
     const createdRow = await createRowMutation.mutateAsync({});
+    emitDatabaseInvalidation();
     const databaseNode = findDatabaseNodeInTree(treeData);
 
     if (!databaseNode) {
@@ -427,6 +462,11 @@ export function DatabaseTableView({
       },
     });
 
+    emitDatabaseInvalidation({
+      invalidateRows: true,
+      invalidateRowContext: true,
+    });
+
     setEditingCellKey(null);
     setEditingValue('');
   };
@@ -462,6 +502,11 @@ export function DatabaseTableView({
         name: nextName,
       },
     });
+    emitDatabaseInvalidation({
+      invalidateProperties: true,
+      invalidateRows: true,
+      invalidateRowContext: true,
+    });
 
     stopPropertyRename();
   };
@@ -487,6 +532,14 @@ export function DatabaseTableView({
     createPropertyMutation.mutate({
       name: trimmedName,
       type: newPropertyType,
+    }, {
+      onSuccess: () => {
+        emitDatabaseInvalidation({
+          invalidateProperties: true,
+          invalidateRows: true,
+          invalidateRowContext: true,
+        });
+      },
     });
     setNewPropertyName('');
     setNewPropertyType('multiline_text');
@@ -504,6 +557,10 @@ export function DatabaseTableView({
   const handleDeleteRow = (row: IDatabaseRowWithCells) => {
     deleteRowMutation.mutate(row.pageId, {
       onSuccess: () => {
+        emitDatabaseInvalidation({
+          invalidateRows: true,
+          invalidateRowContext: true,
+        });
         const databaseNode = findDatabaseNodeInTree(treeData);
         const rowTreeNode = databaseNode?.children.find((child) => child.id === row.pageId);
 
@@ -649,8 +706,18 @@ export function DatabaseTableView({
                     key={`${property.id}-delete`}
                     color="red"
                     leftSection={<IconTrash size={14} />}
-                    onClick={() => deletePropertyMutation.mutate(property.id)}
-                  >
+                    onClick={() =>
+                      deletePropertyMutation.mutate(property.id, {
+                        onSuccess: () => {
+                        emitDatabaseInvalidation({
+                          invalidateProperties: true,
+                          invalidateRows: true,
+                          invalidateRowContext: true,
+                        });
+                      },
+                    })
+                  }
+                >
                     {t('Delete property with name', { name: property.name })}
                   </Menu.Item>
                 ))}
@@ -815,10 +882,21 @@ export function DatabaseTableView({
                                   leftSection={renderPropertyTypeIcon(propertyType, 14)}
                                   disabled={propertyType === property.type}
                                   onClick={() =>
-                                    updatePropertyMutation.mutate({
-                                      propertyId: property.id,
-                                      payload: { type: propertyType },
-                                    })
+                                    updatePropertyMutation.mutate(
+                                      {
+                                        propertyId: property.id,
+                                        payload: { type: propertyType },
+                                      },
+                                      {
+                                        onSuccess: () => {
+                                          emitDatabaseInvalidation({
+                                            invalidateProperties: true,
+                                            invalidateRows: true,
+                                            invalidateRowContext: true,
+                                          });
+                                        },
+                                      },
+                                    )
                                   }
                                 >
                                   {propertyTypeLabels[propertyType]}
@@ -837,7 +915,17 @@ export function DatabaseTableView({
                           <Menu.Item
                             color="red"
                             leftSection={<IconTrash size={14} />}
-                            onClick={() => deletePropertyMutation.mutate(property.id)}
+                            onClick={() =>
+                              deletePropertyMutation.mutate(property.id, {
+                                onSuccess: () => {
+                                  emitDatabaseInvalidation({
+                                    invalidateProperties: true,
+                                    invalidateRows: true,
+                                    invalidateRowContext: true,
+                                  });
+                                },
+                              })
+                            }
                           >
                             {t('Delete property with name', { name: property.name })}
                           </Menu.Item>

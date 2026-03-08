@@ -54,6 +54,7 @@ import { buildPageUrl } from "@/features/page/page.utils.ts";
 import { Link } from "react-router-dom";
 import { PAGE_QUERY_KEYS } from "@/features/page/queries/query-keys.ts";
 import { getAllSidebarPages } from "@/features/page/services/page-service.ts";
+import { useQueryEmit } from "@/features/websocket/use-query-emit.ts";
 
 interface DocumentFieldsPanelProps {
   page: IPage;
@@ -101,6 +102,7 @@ export function DocumentFieldsPanel({
 }: DocumentFieldsPanelProps) {
   const { t } = useTranslation();
   const theme = useMantineTheme();
+  const emit = useQueryEmit();
   const currentUser = useAtomValue(currentUserAtom);
   const documentFields = page.space?.settings?.documentFields;
   const userPageEditMode = normalizePageEditMode(
@@ -145,6 +147,23 @@ export function DocumentFieldsPanel({
   const updateDatabaseCellsMutation = useBatchUpdateDatabaseCellsMutation(
     rowContext?.database?.id,
   );
+  const emitDatabaseInvalidation = () => {
+    const databaseId = rowContext?.database?.id;
+    if (!databaseId) {
+      return;
+    }
+
+    emit({
+      operation: "invalidate",
+      spaceId: page.spaceId,
+      entity: ["database", databaseId, "rows"],
+    });
+    emit({
+      operation: "invalidate",
+      spaceId: page.spaceId,
+      entity: ["database", "row-context"],
+    });
+  };
 
   const { data: databaseProperties } = useDatabasePropertiesQuery(
     rowContext?.database?.id,
@@ -408,6 +427,19 @@ export function DocumentFieldsPanel({
       updatePage({ pageId: page.id, customFields: nextFields }),
     onSuccess: (updatedPage) => {
       updatePageData(updatedPage);
+      emit({
+        operation: "updateOne",
+        spaceId: updatedPage.spaceId,
+        entity: ["pages"],
+        id: updatedPage.id,
+        payload: {
+          title: updatedPage.title,
+          slugId: updatedPage.slugId,
+          parentPageId: updatedPage.parentPageId,
+          icon: updatedPage.icon,
+          customFields: updatedPage.customFields,
+        },
+      });
     },
   });
 
@@ -718,6 +750,10 @@ export function DocumentFieldsPanel({
                                 operation: shouldDelete ? "delete" : "upsert",
                               },
                             ],
+                          },
+                        }, {
+                          onSuccess: () => {
+                            emitDatabaseInvalidation();
                           },
                         });
 
