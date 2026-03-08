@@ -142,15 +142,14 @@ export class DatabaseService {
       | 'database.property.deleted'
       | 'database.row.created'
       | 'database.row.deleted'
-      | 'database.row.cells.updated'
-      | 'database.converted.to-page';
+      | 'database.row.cells.updated';
     changeData: Record<string, unknown>;
   }): Promise<void> {
     if (params.pageIds.length === 0) {
       return;
     }
 
-    await this.pageHistoryRecorder.recordPageEvents({
+    await this.pageHistoryRecorder.enqueuePageEvents({
       pageIds: params.pageIds,
       actorId: params.actorId,
       changeType: params.changeType,

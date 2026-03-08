@@ -45,7 +45,7 @@ describe('DatabaseService mixed tree flows', () => {
   };
   const pageHistoryRecorder = {
     recordPageEvent: jest.fn(),
-    recordPageEvents: jest.fn(),
+    enqueuePageEvents: jest.fn(),
   };
   const notificationQueue = {
     add: jest.fn(),
@@ -704,7 +704,7 @@ describe('DatabaseService mixed tree flows', () => {
       'ws-1',
     );
 
-    expect(pageHistoryRecorder.recordPageEvents).toHaveBeenCalledWith(
+    expect(pageHistoryRecorder.enqueuePageEvents).toHaveBeenCalledWith(
       expect.objectContaining({
         changeType: 'database.property.created',
       }),
@@ -744,7 +744,7 @@ describe('DatabaseService mixed tree flows', () => {
       'ws-1',
     );
 
-    expect(pageHistoryRecorder.recordPageEvents).toHaveBeenCalledWith(
+    expect(pageHistoryRecorder.enqueuePageEvents).toHaveBeenCalledWith(
       expect.objectContaining({
         changeType: 'database.row.cells.updated',
       }),

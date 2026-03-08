@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { PageHistoryRepo } from '@docmost/db/repos/page/page-history.repo';
 import { Page } from '@docmost/db/types/entity.types';
+import { CollabHistoryService } from '../../../collaboration/services/collab-history.service';
 import {
   IRecordPageHistoryEventInput,
   IRecordPageHistoryEventsInput,
@@ -14,6 +15,7 @@ export class PageHistoryRecorderService {
   constructor(
     private readonly pageRepo: PageRepo,
     private readonly pageHistoryRepo: PageHistoryRepo,
+    private readonly collabHistory: CollabHistoryService,
   ) {}
 
   async recordPageEvent(input: IRecordPageHistoryEventInput): Promise<void> {
@@ -60,6 +62,34 @@ export class PageHistoryRecorderService {
     }
   }
 
+  async enqueuePageEvent(input: IRecordPageHistoryEventInput): Promise<void> {
+    await this.enqueuePageEvents({
+      pageIds: [input.pageId],
+      changeType: input.changeType,
+      changeData: input.changeData,
+      actorId: input.actorId,
+    });
+  }
+
+  async enqueuePageEvents(input: IRecordPageHistoryEventsInput): Promise<void> {
+    const uniquePageIds = [...new Set(input.pageIds.filter(Boolean))];
+    if (uniquePageIds.length === 0) {
+      return;
+    }
+
+    const normalizedChangeData = this.normalizeChangeData(input.changeData);
+
+    await Promise.all(
+      uniquePageIds.map((pageId) =>
+        this.collabHistory.enqueuePageHistoryEvent(pageId, {
+          changeType: input.changeType,
+          changeData: normalizedChangeData,
+          actorId: input.actorId,
+        }),
+      ),
+    );
+  }
+
   private async insertPageHistory(
     page: Page,
     input: {
@@ -79,7 +109,7 @@ export class PageHistoryRecorderService {
         icon: page.icon,
         coverPhoto: page.coverPhoto,
         lastUpdatedById: input.actorId ?? page.lastUpdatedById ?? page.creatorId,
-        contributorIds: input.contributorIds ?? page.contributorIds ?? undefined,
+        contributorIds: input.contributorIds ?? undefined,
         spaceId: page.spaceId,
         workspaceId: page.workspaceId,
         changeType: input.changeType,
