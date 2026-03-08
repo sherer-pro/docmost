@@ -77,3 +77,25 @@
   flex: 1;
   padding: rem(16px) rem(40px);
 }
+
+.historyEventCard {
+  border: rem(1px) solid
+    light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+  border-radius: var(--mantine-radius-md);
+  padding: var(--mantine-spacing-sm);
+  background: light-dark(var(--mantine-color-white), var(--mantine-color-dark-7));
+}
+
+.historyEventTable {
+  table-layout: fixed;
+}
+
+.historyEventFieldCell {
+  width: 32%;
+  font-weight: 500;
+}
+
+.historyEventValueCell {
+  width: 34%;
+  word-break: break-word;
+}
