@@ -24,7 +24,9 @@ describe('DatabaseService mixed tree flows', () => {
   const databasePropertyRepo = {
     findById: jest.fn(),
     findByDatabaseId: jest.fn(),
+    insertProperty: jest.fn(),
     updateProperty: jest.fn(),
+    softDeleteProperty: jest.fn(),
   };
   const databaseViewRepo = {
     softDeleteByDatabaseId: jest.fn(),
@@ -40,6 +42,10 @@ describe('DatabaseService mixed tree flows', () => {
   const userRepo = { findById: jest.fn() };
   const spaceAbility = {
     createForUser: jest.fn(async () => ({ cannot: () => false })),
+  };
+  const pageHistoryRecorder = {
+    recordPageEvent: jest.fn(),
+    recordPageEvents: jest.fn(),
   };
   const notificationQueue = {
     add: jest.fn(),
@@ -74,6 +80,7 @@ describe('DatabaseService mixed tree flows', () => {
     exportService as any,
     userRepo as any,
     spaceAbility as any,
+    pageHistoryRecorder as any,
     notificationQueue as any,
     db as any,
   );
@@ -82,6 +89,7 @@ describe('DatabaseService mixed tree flows', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    databaseRowRepo.findByDatabaseId.mockResolvedValue([]);
     databasePropertyRepo.findByDatabaseId.mockResolvedValue([]);
     databaseCellRepo.findByDatabaseAndPage.mockResolvedValue([]);
     userRepo.findById.mockResolvedValue(null);
@@ -234,6 +242,12 @@ describe('DatabaseService mixed tree flows', () => {
     expect(databaseCellRepo.softDeleteByDatabaseId).not.toHaveBeenCalled();
     expect(databaseViewRepo.softDeleteByDatabaseId).toHaveBeenCalledWith('db-1', 'ws-1', trx);
     expect(databaseRepo.updateDatabase).toHaveBeenCalled();
+    expect(pageHistoryRecorder.recordPageEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pageId: 'db-root-page',
+        changeType: 'database.converted.to-page',
+      }),
+    );
   });
 
   it('converts checkbox values to multiline text when property type changes', async () => {
@@ -385,9 +399,7 @@ describe('DatabaseService mixed tree flows', () => {
           .mockResolvedValueOnce({ id: 'prop-1', type: toType })
           .mockResolvedValueOnce({ id: 'prop-1', type: fromType });
 
-        databaseRowRepo.findByDatabaseId
-          .mockResolvedValueOnce([{ pageId: 'page-1' }])
-          .mockResolvedValueOnce([{ pageId: 'page-1' }]);
+        databaseRowRepo.findByDatabaseId.mockResolvedValue([{ pageId: 'page-1' }]);
 
         databaseCellRepo.findByDatabaseAndPage.mockResolvedValueOnce([
           { id: 'cell-1', propertyId: 'prop-1', value: initialValue },
@@ -673,6 +685,68 @@ describe('DatabaseService mixed tree flows', () => {
         value: null,
         attachmentId: null,
         updatedById: 'u-1',
+      }),
+    );
+  });
+
+  it('records history for property creation in database and row timelines', async () => {
+    databasePropertyRepo.findByDatabaseId.mockResolvedValue([]);
+    databasePropertyRepo.insertProperty.mockResolvedValue({
+      id: 'prop-1',
+      name: 'Status',
+      type: 'select',
+    });
+
+    await service.createProperty(
+      'db-1',
+      { name: 'Status', type: 'select' } as any,
+      'u-1',
+      'ws-1',
+    );
+
+    expect(pageHistoryRecorder.recordPageEvents).toHaveBeenCalledWith(
+      expect.objectContaining({
+        changeType: 'database.property.created',
+      }),
+    );
+  });
+
+  it('records history for batch row cell changes', async () => {
+    pageRepo.findById.mockResolvedValue({
+      id: 'row-page-1',
+      workspaceId: 'ws-1',
+      spaceId: 'space-1',
+      deletedAt: null,
+    });
+    databaseRowRepo.findByDatabaseAndPage.mockResolvedValue({
+      id: 'row-1',
+      databaseId: 'db-1',
+      pageId: 'row-page-1',
+      archivedAt: null,
+    });
+    databasePropertyRepo.findByDatabaseId.mockResolvedValue([
+      { id: 'prop-text', type: 'multiline_text', name: 'Notes' },
+    ]);
+    databaseCellRepo.findByDatabaseAndPage.mockResolvedValue([
+      { id: 'cell-1', propertyId: 'prop-text', value: 'old value' },
+    ]);
+    databaseCellRepo.upsertCell.mockResolvedValue({
+      id: 'cell-1',
+      propertyId: 'prop-text',
+      value: 'new value',
+    });
+
+    await service.batchUpdateRowCells(
+      'db-1',
+      'row-page-1',
+      { cells: [{ propertyId: 'prop-text', value: 'new value' }] },
+      user,
+      'ws-1',
+    );
+
+    expect(pageHistoryRecorder.recordPageEvents).toHaveBeenCalledWith(
+      expect.objectContaining({
+        changeType: 'database.row.cells.updated',
       }),
     );
   });

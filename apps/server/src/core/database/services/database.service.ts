@@ -37,6 +37,7 @@ import {
 import type { DatabasePropertyType } from '@docmost/api-contract';
 import { QueueJob, QueueName } from '../../../integrations/queue/constants';
 import { IPageRecipientNotificationJob } from '../../../integrations/queue/constants/queue.interface';
+import { PageHistoryRecorderService } from '../../page/services/page-history-recorder.service';
 
 interface IDatabaseCellValueWithFallback {
   value: unknown;
@@ -70,6 +71,7 @@ export class DatabaseService {
     private readonly exportService: ExportService,
     private readonly userRepo: UserRepo,
     private readonly spaceAbility: SpaceAbilityFactory,
+    private readonly pageHistoryRecorder: PageHistoryRecorderService,
     @InjectQueue(QueueName.NOTIFICATION_QUEUE)
     private readonly notificationQueue: Queue,
     @InjectKysely() private readonly db: KyselyDB,
@@ -111,6 +113,49 @@ export class DatabaseService {
     }
 
     return database;
+  }
+
+  private async buildDatabaseHistoryTargetPageIds(
+    databaseId: string,
+    workspaceId: string,
+    spaceId: string,
+    extras: string[] = [],
+  ): Promise<string[]> {
+    const rows = await this.databaseRowRepo.findByDatabaseId(
+      databaseId,
+      workspaceId,
+      spaceId,
+    );
+    const rowPageIds = (rows ?? [])
+      .map((row) => row.pageId)
+      .filter((pageId): pageId is string => Boolean(pageId));
+
+    return [...new Set([...rowPageIds, ...extras])];
+  }
+
+  private async recordDatabaseHistoryEvent(params: {
+    pageIds: string[];
+    actorId?: string | null;
+    changeType:
+      | 'database.property.created'
+      | 'database.property.updated'
+      | 'database.property.deleted'
+      | 'database.row.created'
+      | 'database.row.deleted'
+      | 'database.row.cells.updated'
+      | 'database.converted.to-page';
+    changeData: Record<string, unknown>;
+  }): Promise<void> {
+    if (params.pageIds.length === 0) {
+      return;
+    }
+
+    await this.pageHistoryRecorder.recordPageEvents({
+      pageIds: params.pageIds,
+      actorId: params.actorId,
+      changeType: params.changeType,
+      changeData: params.changeData,
+    });
   }
 
   /**
@@ -333,7 +378,8 @@ export class DatabaseService {
     workspaceId: string,
     spaceId: string,
   ): Promise<void> {
-    const rows = await this.databaseRowRepo.findByDatabaseId(databaseId, workspaceId, spaceId);
+    const rows =
+      (await this.databaseRowRepo.findByDatabaseId(databaseId, workspaceId, spaceId)) ?? [];
     const userDisplayCache = new Map<string, string>();
 
     for (const row of rows) {
@@ -677,13 +723,13 @@ export class DatabaseService {
     actorId: string,
     workspaceId: string,
   ) {
-    await this.getOrFailDatabase(databaseId, workspaceId);
+    const database = await this.getOrFailDatabase(databaseId, workspaceId);
 
     const currentProperties = await this.databasePropertyRepo.findByDatabaseId(
       databaseId,
     );
 
-    return this.databasePropertyRepo.insertProperty({
+    const property = await this.databasePropertyRepo.insertProperty({
       databaseId,
       workspaceId,
       creatorId: actorId,
@@ -692,6 +738,29 @@ export class DatabaseService {
       settings: (dto.settings as never) ?? null,
       position: currentProperties.length,
     });
+
+    const historyPageIds = await this.buildDatabaseHistoryTargetPageIds(
+      database.id,
+      workspaceId,
+      database.spaceId,
+      database.pageId ? [database.pageId] : [],
+    );
+
+    await this.recordDatabaseHistoryEvent({
+      pageIds: historyPageIds,
+      actorId,
+      changeType: 'database.property.created',
+      changeData: {
+        databaseId: database.id,
+        property: {
+          id: property.id,
+          name: property.name,
+          type: this.normalizePropertyType(property.type),
+        },
+      },
+    });
+
+    return property;
   }
 
   /**
@@ -711,6 +780,7 @@ export class DatabaseService {
     propertyId: string,
     dto: UpdateDatabasePropertyDto,
     workspaceId: string,
+    actorId?: string,
   ) {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
 
@@ -735,14 +805,74 @@ export class DatabaseService {
       );
     }
 
+    const propertyChanges: Array<{
+      field: 'name' | 'type' | 'settings';
+      oldValue: unknown;
+      newValue: unknown;
+    }> = [];
+
+    if (
+      typeof dto.name === 'string' &&
+      dto.name !== property.name
+    ) {
+      propertyChanges.push({
+        field: 'name',
+        oldValue: property.name,
+        newValue: updatedProperty.name,
+      });
+    }
+
+    if (dto.type && dto.type !== property.type) {
+      propertyChanges.push({
+        field: 'type',
+        oldValue: this.normalizePropertyType(property.type),
+        newValue: this.normalizePropertyType(updatedProperty.type),
+      });
+    }
+
+    if (typeof dto.settings !== 'undefined') {
+      propertyChanges.push({
+        field: 'settings',
+        oldValue: property.settings,
+        newValue: updatedProperty.settings,
+      });
+    }
+
+    const historyPageIds = await this.buildDatabaseHistoryTargetPageIds(
+      database.id,
+      workspaceId,
+      database.spaceId,
+      database.pageId ? [database.pageId] : [],
+    );
+
+    await this.recordDatabaseHistoryEvent({
+      pageIds: historyPageIds,
+      actorId: actorId ?? database.lastUpdatedById ?? database.creatorId,
+      changeType: 'database.property.updated',
+      changeData: {
+        databaseId: database.id,
+        property: {
+          id: updatedProperty.id,
+          name: updatedProperty.name,
+          type: this.normalizePropertyType(updatedProperty.type),
+        },
+        changes: propertyChanges,
+      },
+    });
+
     return updatedProperty;
   }
 
   /**
    * Softly deletes a database property.
    */
-  async deleteProperty(databaseId: string, propertyId: string, workspaceId: string) {
-    await this.getOrFailDatabase(databaseId, workspaceId);
+  async deleteProperty(
+    databaseId: string,
+    propertyId: string,
+    workspaceId: string,
+    actorId?: string,
+  ) {
+    const database = await this.getOrFailDatabase(databaseId, workspaceId);
 
     const property = await this.databasePropertyRepo.findById(propertyId);
     if (!property || property.databaseId !== databaseId) {
@@ -750,6 +880,27 @@ export class DatabaseService {
     }
 
     await this.databasePropertyRepo.softDeleteProperty(propertyId);
+
+    const historyPageIds = await this.buildDatabaseHistoryTargetPageIds(
+      database.id,
+      workspaceId,
+      database.spaceId,
+      database.pageId ? [database.pageId] : [],
+    );
+
+    await this.recordDatabaseHistoryEvent({
+      pageIds: historyPageIds,
+      actorId: actorId ?? database.lastUpdatedById ?? database.creatorId,
+      changeType: 'database.property.deleted',
+      changeData: {
+        databaseId: database.id,
+        property: {
+          id: property.id,
+          name: property.name,
+          type: this.normalizePropertyType(property.type),
+        },
+      },
+    });
   }
 
   /**
@@ -824,6 +975,30 @@ export class DatabaseService {
       updatedById: user.id,
     });
 
+    const historyPageIds = await this.buildDatabaseHistoryTargetPageIds(
+      database.id,
+      workspaceId,
+      database.spaceId,
+      database.pageId ? [database.pageId] : [],
+    );
+
+    await this.recordDatabaseHistoryEvent({
+      pageIds: historyPageIds,
+      actorId: user.id,
+      changeType: 'database.row.created',
+      changeData: {
+        databaseId: database.id,
+        rowContext: {
+          rowPageId: page.id,
+          parentPageId: targetParentPageId,
+        },
+        row: {
+          pageId: page.id,
+          title: page.title,
+        },
+      },
+    });
+
     return {
       ...createdRow,
       slugId: page.slugId,
@@ -866,6 +1041,12 @@ export class DatabaseService {
     });
 
     const descendantPageIds = pages.map((page) => page.id);
+    const historyPageIds = await this.buildDatabaseHistoryTargetPageIds(
+      database.id,
+      workspaceId,
+      database.spaceId,
+      [...descendantPageIds, ...(database.pageId ? [database.pageId] : [])],
+    );
 
     for (const descendantPageId of descendantPageIds) {
       await this.databaseRowRepo.softDetachRowLink(
@@ -874,6 +1055,19 @@ export class DatabaseService {
         workspaceId,
       );
     }
+
+    await this.recordDatabaseHistoryEvent({
+      pageIds: historyPageIds,
+      actorId: user.id,
+      changeType: 'database.row.deleted',
+      changeData: {
+        databaseId: database.id,
+        rowContext: {
+          rowPageId: pageId,
+          descendantPageIds,
+        },
+      },
+    });
 
     await this.pageRepo.removePage(pageId, user.id, workspaceId);
   }
@@ -941,11 +1135,23 @@ export class DatabaseService {
     );
 
     const cells = [];
+    const cellChanges: Array<{
+      propertyId: string;
+      propertyName: string;
+      propertyType: DatabasePropertyType | null;
+      operation: 'upsert' | 'delete';
+      oldValue: unknown;
+      newValue: unknown;
+    }> = [];
     for (const cell of dto.cells) {
       const property = propertyById.get(cell.propertyId);
       const previousCell = previousCellsByPropertyId.get(cell.propertyId);
       const previousUserId =
         property?.type === 'user' ? this.extractUserIdFromCellValue(previousCell?.value) : null;
+      const propertyType = property
+        ? this.normalizePropertyType(property.type)
+        : null;
+      const previousValue = this.extractCurrentCellValue(previousCell?.value);
 
       if (cell.operation === 'delete') {
         const deleted = await this.databaseCellRepo.upsertCell({
@@ -967,6 +1173,14 @@ export class DatabaseService {
         });
 
         cells.push(softDeleted);
+        cellChanges.push({
+          propertyId: cell.propertyId,
+          propertyName: property?.name ?? cell.propertyId,
+          propertyType,
+          operation: 'delete',
+          oldValue: previousValue ?? null,
+          newValue: null,
+        });
         continue;
       }
 
@@ -998,6 +1212,36 @@ export class DatabaseService {
 
       previousCellsByPropertyId.set(cell.propertyId, upserted);
       cells.push(upserted);
+      cellChanges.push({
+        propertyId: cell.propertyId,
+        propertyName: property?.name ?? cell.propertyId,
+        propertyType,
+        operation: 'upsert',
+        oldValue: previousValue ?? null,
+        newValue: this.extractCurrentCellValue(upserted.value) ?? null,
+      });
+    }
+
+    if (cellChanges.length > 0) {
+      const historyPageIds = await this.buildDatabaseHistoryTargetPageIds(
+        database.id,
+        workspaceId,
+        database.spaceId,
+        database.pageId ? [database.pageId] : [],
+      );
+
+      await this.recordDatabaseHistoryEvent({
+        pageIds: historyPageIds,
+        actorId: user.id,
+        changeType: 'database.row.cells.updated',
+        changeData: {
+          databaseId: database.id,
+          rowContext: {
+            rowPageId: pageId,
+          },
+          changes: cellChanges,
+        },
+      });
     }
 
     return { row, cells };
@@ -1154,6 +1398,20 @@ export class DatabaseService {
         trx,
       );
     });
+
+    if (database.pageId) {
+      await this.pageHistoryRecorder.recordPageEvent({
+        pageId: database.pageId,
+        actorId: user.id,
+        changeType: 'database.converted.to-page',
+        changeData: {
+          databaseId: database.id,
+          conversion: {
+            direction: 'database-to-page',
+          },
+        },
+      });
+    }
 
     if (database.pageId) {
       const page = await this.pageRepo.findById(database.pageId);
