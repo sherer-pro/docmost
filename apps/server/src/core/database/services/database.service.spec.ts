@@ -917,4 +917,144 @@ describe('DatabaseService mixed tree flows', () => {
     );
   });
 
+  it('stores readable history payload for select, user, and page reference cells', async () => {
+    pageRepo.findById.mockImplementation(async (pageId: string) => {
+      const pages: Record<string, any> = {
+        'row-page-1': {
+          id: 'row-page-1',
+          workspaceId: 'ws-1',
+          spaceId: 'space-1',
+          deletedAt: null,
+        },
+        'ref-page-1': {
+          id: 'ref-page-1',
+          workspaceId: 'ws-1',
+          spaceId: 'space-1',
+          deletedAt: null,
+          title: 'Reference page one',
+          slugId: 'ref-page-one',
+        },
+        'ref-page-2': {
+          id: 'ref-page-2',
+          workspaceId: 'ws-1',
+          spaceId: 'space-1',
+          deletedAt: null,
+          title: 'Reference page two',
+          slugId: 'ref-page-two',
+        },
+      };
+
+      return pages[pageId] ?? null;
+    });
+
+    databaseRowRepo.findByDatabaseAndPage.mockResolvedValue({
+      id: 'row-1',
+      databaseId: 'db-1',
+      pageId: 'row-page-1',
+      archivedAt: null,
+    });
+
+    databasePropertyRepo.findByDatabaseId.mockResolvedValue([
+      {
+        id: 'prop-select',
+        type: 'select',
+        name: 'Select field',
+        settings: {
+          options: [
+            { value: 'metka-2-r311', label: 'Label 2' },
+            { value: 'metka-4-2ejm', label: 'Label 4' },
+          ],
+        },
+      },
+      { id: 'prop-user', type: 'user', name: 'User field', settings: {} },
+      {
+        id: 'prop-page',
+        type: 'page_reference',
+        name: 'Page field',
+        settings: {},
+      },
+    ]);
+
+    databaseCellRepo.findByDatabaseAndPage.mockResolvedValue([
+      { id: 'cell-select', propertyId: 'prop-select', value: 'metka-2-r311' },
+      { id: 'cell-user', propertyId: 'prop-user', value: null },
+      { id: 'cell-page', propertyId: 'prop-page', value: 'ref-page-1' },
+    ]);
+
+    databaseCellRepo.upsertCell.mockImplementation(
+      async (payload: { propertyId: string }) => {
+        const valueByPropertyId: Record<string, unknown> = {
+          'prop-select': 'metka-4-2ejm',
+          'prop-user': { id: 'user-new' },
+          'prop-page': 'ref-page-2',
+        };
+
+        return {
+          id: `cell-${payload.propertyId}`,
+          propertyId: payload.propertyId,
+          value: valueByPropertyId[payload.propertyId],
+        };
+      },
+    );
+
+    userRepo.findById.mockImplementation(async (userId: string) => {
+      if (userId !== 'user-new') {
+        return null;
+      }
+
+      return {
+        id: 'user-new',
+        name: 'Pavel',
+        workspaceId: 'ws-1',
+      };
+    });
+
+    await service.batchUpdateRowCells(
+      'db-1',
+      'row-page-1',
+      {
+        cells: [
+          { propertyId: 'prop-select', value: 'metka-4-2ejm' },
+          { propertyId: 'prop-user', value: { id: 'user-new' } },
+          { propertyId: 'prop-page', value: 'ref-page-2' },
+        ],
+      },
+      user,
+      'ws-1',
+    );
+
+    expect(pageHistoryRecorder.enqueuePageEvents).toHaveBeenCalledWith(
+      expect.objectContaining({
+        changeType: 'database.row.cells.updated',
+        changeData: expect.objectContaining({
+          changes: expect.arrayContaining([
+            expect.objectContaining({
+              propertyId: 'prop-select',
+              oldValue: { value: 'metka-2-r311', label: 'Label 2' },
+              newValue: { value: 'metka-4-2ejm', label: 'Label 4' },
+            }),
+            expect.objectContaining({
+              propertyId: 'prop-user',
+              oldValue: null,
+              newValue: { id: 'user-new', name: 'Pavel' },
+            }),
+            expect.objectContaining({
+              propertyId: 'prop-page',
+              oldValue: {
+                id: 'ref-page-1',
+                title: 'Reference page one',
+                slugId: 'ref-page-one',
+              },
+              newValue: {
+                id: 'ref-page-2',
+                title: 'Reference page two',
+                slugId: 'ref-page-two',
+              },
+            }),
+          ]),
+        }),
+      }),
+    );
+  });
+
 });
