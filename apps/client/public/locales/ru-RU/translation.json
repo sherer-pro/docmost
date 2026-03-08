@@ -1025,5 +1025,10 @@
   "Word (DOCX)": "Word (DOCX)",
   "Workspace hostname": "Workspace hostname",
   "Workspace ID": "Workspace ID",
-  "Your subscription is in an incomplete state. Please refresh this page if you recently made your payment.": "Your subscription is in an incomplete state. Please refresh this page if you recently made your payment."
+  "Your subscription is in an incomplete state. Please refresh this page if you recently made your payment.": "Your subscription is in an incomplete state. Please refresh this page if you recently made your payment.",
+  "Undo": "Отменить",
+  "Load more": "Загрузить ещё",
+  "Clear filters": "Очистить фильтры",
+  "Reset": "Сбросить"
 }
+
