@@ -27,6 +27,7 @@ import {
   IconAlignJustified,
   IconCode,
   IconList,
+  IconPencil,
   type TablerIcon,
   IconFileDescription,
 } from '@tabler/icons-react';
@@ -730,6 +731,12 @@ export function DatabaseTableView({
     }
   };
 
+  const openRowRenameFromMenu = (row: IDatabaseRowWithCells) => {
+    setTimeout(() => {
+      startRowRename(row);
+    }, 0);
+  };
+
 
   const handleCreateProperty = () => {
     const trimmedName = newPropertyName.trim();
@@ -1024,6 +1031,7 @@ export function DatabaseTableView({
                   />
                 ) : (
                   <TextInput
+
                     placeholder={t('Value')}
                     value={condition.value}
                     onChange={(event) => {
@@ -1101,7 +1109,7 @@ export function DatabaseTableView({
                         onMouseDown={(event) => event.stopPropagation()}
                       />
                     ) : (
-                      <Text size="sm">
+                      <Text size="sm" fw="bold">
                         {property.name}
                       </Text>
                     )}
@@ -1217,7 +1225,12 @@ export function DatabaseTableView({
                       )}
                     </div>
 
-                    <Menu position="bottom-end" shadow="md" withinPortal>
+                    <Menu
+                      position="bottom-end"
+                      shadow="md"
+                      withinPortal
+                      returnFocus={false}
+                    >
                       <Menu.Target>
                         <ActionIcon
                           variant="subtle"
@@ -1230,7 +1243,8 @@ export function DatabaseTableView({
                       <Menu.Dropdown>
                         {isEditable && (
                           <Menu.Item
-                            onClick={() => startRowRename(row)}
+                            leftSection={<IconPencil size={14} />}
+                            onClick={() => openRowRenameFromMenu(row)}
                           >
                             {t('Rename row')}
                           </Menu.Item>
