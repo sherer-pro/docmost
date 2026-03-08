@@ -5,8 +5,10 @@ import { v4 as uuidv4 } from "uuid";
 import classes from "./code-block.module.css";
 import { useTranslation } from "react-i18next";
 import { useComputedColorScheme } from "@mantine/core";
-import DOMPurify from "dompurify";
+import createDOMPurify from "dompurify";
 import { sanitizeMermaidSvg } from "./mermaid-sanitizer";
+
+const DOMPurify = createDOMPurify(window);
 
 interface MermaidViewProps {
   props: NodeViewProps;
