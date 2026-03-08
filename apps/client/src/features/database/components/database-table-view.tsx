@@ -206,16 +206,22 @@ export function DatabaseTableView({
         : undefined,
     [activeServerFilters],
   );
-  const rowsQueryParams = useMemo<IDatabaseRowsQueryParams>(
+  const rowsExportQueryParams = useMemo<IDatabaseRowsQueryParams>(
     () => ({
-      limit: ROWS_PAGE_SIZE,
-      cursor: rowsCursor ?? undefined,
       sortField: sortState ? undefined : 'position',
       sortDirection: sortState?.direction ?? 'asc',
       sortPropertyId: sortState?.propertyId ?? undefined,
       filters: serializedServerFilters,
     }),
-    [rowsCursor, serializedServerFilters, sortState],
+    [serializedServerFilters, sortState],
+  );
+  const rowsQueryParams = useMemo<IDatabaseRowsQueryParams>(
+    () => ({
+      ...rowsExportQueryParams,
+      limit: ROWS_PAGE_SIZE,
+      cursor: rowsCursor ?? undefined,
+    }),
+    [rowsCursor, rowsExportQueryParams],
   );
   const rowsServerStateSignature = useMemo(
     () =>
@@ -641,9 +647,10 @@ export function DatabaseTableView({
         visibleColumns,
         filters,
         sortState,
+        rowsQueryParams: rowsExportQueryParams,
       },
     }));
-  }, [databaseId, filters, setTableExportState, sortState, visibleColumns]);
+  }, [databaseId, filters, rowsExportQueryParams, setTableExportState, sortState, visibleColumns]);
 
   useEffect(() => {
     setPropertyNameDrafts((prev) => {
@@ -680,6 +687,31 @@ export function DatabaseTableView({
 
   const getRawCellValue = (row: IDatabaseRowWithCells, propertyId: string): unknown => {
     return row.cells?.find((cell) => cell.propertyId === propertyId)?.value;
+  };
+
+  const hasEffectiveCellValueChange = (
+    row: IDatabaseRowWithCells,
+    property: IDatabaseProperty,
+    sourceValue: unknown,
+  ): { shouldDelete: boolean; normalizedValue: unknown } | null => {
+    const normalizedValue = buildDatabaseCellPayloadValue(property, sourceValue);
+    const shouldDelete = shouldDeleteCellPayload(property.type, normalizedValue);
+    const currentNormalizedValue = buildDatabaseCellPayloadValue(
+      property,
+      getRawCellValue(row, property.id),
+    );
+    const currentShouldDelete = shouldDeleteCellPayload(property.type, currentNormalizedValue);
+    const nextPersistedValue = shouldDelete ? null : normalizedValue;
+    const currentPersistedValue = currentShouldDelete ? null : currentNormalizedValue;
+
+    if (
+      shouldDelete === currentShouldDelete &&
+      isSameCellPayloadValue(nextPersistedValue, currentPersistedValue)
+    ) {
+      return null;
+    }
+
+    return { shouldDelete, normalizedValue };
   };
 
   const getPersistedRowTitle = (row: IDatabaseRowWithCells): string => {
@@ -858,20 +890,8 @@ export function DatabaseTableView({
     }
 
     const sourceValue = typeof nextValue === 'undefined' ? editingValue : nextValue;
-    const normalizedValue = buildDatabaseCellPayloadValue(property, sourceValue);
-    const shouldDelete = shouldDeleteCellPayload(property.type, normalizedValue);
-    const currentNormalizedValue = buildDatabaseCellPayloadValue(
-      property,
-      getRawCellValue(row, property.id),
-    );
-    const currentShouldDelete = shouldDeleteCellPayload(property.type, currentNormalizedValue);
-    const nextPersistedValue = shouldDelete ? null : normalizedValue;
-    const currentPersistedValue = currentShouldDelete ? null : currentNormalizedValue;
-
-    if (
-      shouldDelete === currentShouldDelete &&
-      isSameCellPayloadValue(nextPersistedValue, currentPersistedValue)
-    ) {
+    const nextCellChange = hasEffectiveCellValueChange(row, property, sourceValue);
+    if (!nextCellChange) {
       setEditingCellKey(null);
       setEditingValue('');
       return;
@@ -883,8 +903,8 @@ export function DatabaseTableView({
         cells: [
           {
             propertyId: property.id,
-            value: shouldDelete ? null : normalizedValue,
-            operation: shouldDelete ? 'delete' : 'upsert',
+            value: nextCellChange.shouldDelete ? null : nextCellChange.normalizedValue,
+            operation: nextCellChange.shouldDelete ? 'delete' : 'upsert',
           },
         ],
       },
@@ -1003,23 +1023,27 @@ export function DatabaseTableView({
         }
 
         const rawValue = values[propertyOffset] ?? '';
-        const normalizedValue =
-          targetProperty.type === 'checkbox'
-            ? buildDatabaseCellPayloadValue(targetProperty, rawValue.trim())
-            : buildDatabaseCellPayloadValue(targetProperty, rawValue);
-        const shouldDelete = shouldDeleteCellPayload(targetProperty.type, normalizedValue);
+        const sourceValue =
+          targetProperty.type === 'checkbox' ? rawValue.trim() : rawValue;
+        const nextChange = hasEffectiveCellValueChange(targetRow, targetProperty, sourceValue);
+        if (!nextChange) {
+          continue;
+        }
 
         const existingPayload = rowsPayloadByPageId.get(targetRow.pageId) ?? [];
         existingPayload.push({
           propertyId: targetProperty.id,
-          value: shouldDelete ? null : normalizedValue,
-          operation: shouldDelete ? 'delete' : 'upsert',
+          value: nextChange.shouldDelete ? null : nextChange.normalizedValue,
+          operation: nextChange.shouldDelete ? 'delete' : 'upsert',
         });
         rowsPayloadByPageId.set(targetRow.pageId, existingPayload);
       }
     }
 
     if (rowsPayloadByPageId.size === 0) {
+      notifications.show({
+        message: t('No changes to apply'),
+      });
       return;
     }
 
@@ -1316,7 +1340,12 @@ export function DatabaseTableView({
   };
 
   const scheduleDeleteRows = (rowPageIds: string[]) => {
-    const uniqueRowPageIds = [...new Set(rowPageIds)];
+    const pendingRowPageIds = new Set(
+      [...pendingRowDeletionsRef.current.values()].flatMap((pendingDeletion) => pendingDeletion.rowIds),
+    );
+    const uniqueRowPageIds = [...new Set(rowPageIds)].filter(
+      (rowPageId) => !pendingRowPageIds.has(rowPageId),
+    );
     if (uniqueRowPageIds.length === 0) {
       return;
     }
@@ -1381,6 +1410,39 @@ export function DatabaseTableView({
           </Button>
         </Group>
       ),
+    });
+  };
+
+  const confirmDeleteRows = (rowPageIds: string[]) => {
+    const pendingRowPageIds = new Set(
+      [...pendingRowDeletionsRef.current.values()].flatMap((pendingDeletion) => pendingDeletion.rowIds),
+    );
+    const uniqueRowPageIds = [...new Set(rowPageIds)].filter(
+      (rowPageId) => !pendingRowPageIds.has(rowPageId),
+    );
+    if (uniqueRowPageIds.length === 0) {
+      return;
+    }
+
+    const isMultipleRows = uniqueRowPageIds.length > 1;
+
+    modals.openConfirmModal({
+      title: t('Delete'),
+      children: (
+        <Text size="sm">
+          {isMultipleRows
+            ? t('Delete rows confirm with undo', { count: uniqueRowPageIds.length })
+            : t('Delete row confirm with undo')}
+        </Text>
+      ),
+      labels: {
+        confirm: t('Delete'),
+        cancel: t('Cancel'),
+      },
+      confirmProps: { color: 'red' },
+      onConfirm: () => {
+        scheduleDeleteRows(uniqueRowPageIds);
+      },
     });
   };
 
@@ -1451,7 +1513,7 @@ export function DatabaseTableView({
       title: t('Delete'),
       children: (
         <Text size="sm">
-          {t('Delete property with name', { name: property.name })}
+          {t('Delete property confirm with undo and values', { name: property.name })}
         </Text>
       ),
       labels: {
@@ -1517,21 +1579,46 @@ export function DatabaseTableView({
 
     const sourceValue =
       targetProperty.type === 'checkbox' ? bulkCheckboxValue : bulkValue;
-    const normalizedValue = buildDatabaseCellPayloadValue(targetProperty, sourceValue);
-    const shouldDelete = shouldDeleteCellPayload(targetProperty.type, normalizedValue);
+    const rowByPageId = new Map(rows.map((row) => [row.pageId, row]));
+    const rowsToUpdate: Array<{ pageId: string; shouldDelete: boolean; value: unknown }> = [];
+
+    for (const pageId of selectedRowIds) {
+      const row = rowByPageId.get(pageId);
+      if (!row) {
+        continue;
+      }
+
+      const nextChange = hasEffectiveCellValueChange(row, targetProperty, sourceValue);
+      if (!nextChange) {
+        continue;
+      }
+
+      rowsToUpdate.push({
+        pageId,
+        shouldDelete: nextChange.shouldDelete,
+        value: nextChange.normalizedValue,
+      });
+    }
+
+    if (rowsToUpdate.length === 0) {
+      notifications.show({
+        message: t('No changes to apply'),
+      });
+      return;
+    }
 
     const chunkSize = 25;
-    for (let index = 0; index < selectedRowIds.length; index += chunkSize) {
-      const rowChunk = selectedRowIds.slice(index, index + chunkSize);
+    for (let index = 0; index < rowsToUpdate.length; index += chunkSize) {
+      const rowChunk = rowsToUpdate.slice(index, index + chunkSize);
       await batchUpdateRowsMutation.mutateAsync({
-        rows: rowChunk.map((pageId) => ({
-          pageId,
+        rows: rowChunk.map((row) => ({
+          pageId: row.pageId,
           operation: 'upsert_cells',
           cells: [
             {
               propertyId: targetProperty.id,
-              value: shouldDelete ? null : normalizedValue,
-              operation: shouldDelete ? 'delete' : 'upsert',
+              value: row.shouldDelete ? null : row.value,
+              operation: row.shouldDelete ? 'delete' : 'upsert',
             },
           ],
         })),
@@ -1550,7 +1637,7 @@ export function DatabaseTableView({
       return;
     }
 
-    scheduleDeleteRows(selectedRowIds);
+    confirmDeleteRows(selectedRowIds);
   };
 
   return (
@@ -1629,8 +1716,8 @@ export function DatabaseTableView({
             placeholder={t('Sort')}
             value={sortState?.direction || null}
             data={[
-              { value: 'asc', label: 'ASC' },
-              { value: 'desc', label: 'DESC' },
+              { value: 'asc', label: t('Ascending') },
+              { value: 'desc', label: t('Descending') },
             ]}
             onChange={handleSortDirectionChange}
             disabled={!sortState}
@@ -1760,8 +1847,8 @@ export function DatabaseTableView({
           <Select
             value={sortState?.direction || null}
             data={[
-              { value: 'asc', label: 'ASC' },
-              { value: 'desc', label: 'DESC' },
+              { value: 'asc', label: t('Ascending') },
+              { value: 'desc', label: t('Descending') },
             ]}
             onChange={handleSortDirectionChange}
             disabled={!sortState}
@@ -2273,7 +2360,7 @@ export function DatabaseTableView({
                           <Menu.Item
                             color="red"
                             leftSection={<IconTrash size={14} />}
-                            onClick={() => scheduleDeleteRows([row.pageId])}
+                            onClick={() => confirmDeleteRows([row.pageId])}
                           >
                             {t('Delete row')}
                           </Menu.Item>

@@ -35,6 +35,7 @@ import {
   defaultDatabaseTableExportState,
 } from '@/features/database/atoms/database-table-export-atom';
 import { buildDatabaseMarkdownFromState } from '@/features/database/utils/database-markdown';
+import { IDatabaseRowsQueryParams } from '@/features/database/types/database-table.types.ts';
 import { dropTreeNodeAtom } from '@/features/page/tree/atoms/tree-data-atom.ts';
 import useToggleAside from '@/hooks/use-toggle-aside.tsx';
 import { useDatabasePageContext } from '@/features/database/hooks/use-database-page-context.ts';
@@ -62,9 +63,22 @@ export default function DatabaseHeaderMenu({
   const resolvedDatabasePageId = databasePageId ?? databaseContext.databasePageId;
   const databasePageSlugId = databaseContext.databasePageSlugId;
   const { data: properties = [] } = useDatabasePropertiesQuery(databaseId);
-  const { data: rowsPage } = useDatabaseRowsQuery(databaseId);
-  const rows = rowsPage?.items ?? [];
   const tableExportStateByDatabase = useAtomValue(databaseTableExportStateAtom);
+  const tableExportState = tableExportStateByDatabase[databaseId] ?? defaultDatabaseTableExportState;
+  const rowsExportQueryParams = (() => {
+    const params = tableExportState.rowsQueryParams;
+    if (!params) {
+      return undefined;
+    }
+
+    return {
+      ...params,
+      limit: undefined,
+      cursor: undefined,
+    } as IDatabaseRowsQueryParams;
+  })();
+  const { data: rowsPage } = useDatabaseRowsQuery(databaseId, rowsExportQueryParams);
+  const rows = rowsPage?.items ?? [];
   const { openDeleteModal } = useDeletePageModal();
   const { mutateAsync: removePageMutationAsync } = useRemovePageMutation();
   const dropTreeNode = useSetAtom(dropTreeNodeAtom);
@@ -83,8 +97,6 @@ export default function DatabaseHeaderMenu({
   });
 
   const getCurrentTableMarkdown = () => {
-    const tableExportState = tableExportStateByDatabase[databaseId] ?? defaultDatabaseTableExportState;
-
     return buildDatabaseMarkdownFromState({
       title: (database?.name || t('database.editor.untitled')).trim(),
       description: database?.description,
@@ -92,6 +104,7 @@ export default function DatabaseHeaderMenu({
       rows,
       state: tableExportState,
       untitledLabel: t('Untitled'),
+      skipFilterAndSort: true,
     });
   };
 

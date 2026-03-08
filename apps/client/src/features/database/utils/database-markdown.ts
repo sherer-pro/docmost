@@ -1,6 +1,7 @@
 import {
   IDatabaseFilterCondition,
   IDatabaseRowWithCells,
+  IDatabaseRowsQueryParams,
   IDatabaseSortState,
 } from '@/features/database/types/database-table.types';
 import { IDatabaseProperty } from '@/features/database/types/database.types';
@@ -10,6 +11,7 @@ export interface IDatabaseTableExportState {
   visibleColumns: Record<string, boolean>;
   filters: IDatabaseFilterCondition[];
   sortState: IDatabaseSortState | null;
+  rowsQueryParams?: IDatabaseRowsQueryParams;
 }
 
 interface ICellValueContext {
@@ -134,8 +136,18 @@ export function buildDatabaseMarkdownFromState(params: {
   state: IDatabaseTableExportState;
   untitledLabel: string;
   pageTitleById?: Record<string, string>;
+  skipFilterAndSort?: boolean;
 }): string {
-  const { title, description, properties, rows, state, untitledLabel, pageTitleById } = params;
+  const {
+    title,
+    description,
+    properties,
+    rows,
+    state,
+    untitledLabel,
+    pageTitleById,
+    skipFilterAndSort = false,
+  } = params;
 
   const propertiesById = Object.fromEntries(properties.map((property) => [property.id, property]));
   const rowPageTitleById = Object.fromEntries(
@@ -156,7 +168,9 @@ export function buildDatabaseMarkdownFromState(params: {
     return typeof explicitValue === 'boolean' ? explicitValue : true;
   });
 
-  const preparedRows = prepareDatabaseRowsForExport(rows, state, cellValueContext);
+  const preparedRows = skipFilterAndSort
+    ? rows
+    : prepareDatabaseRowsForExport(rows, state, cellValueContext);
 
   const header = ['Title', ...displayedProperties.map((property) => property.name || 'Column')];
   const separator = header.map(() => '---');
