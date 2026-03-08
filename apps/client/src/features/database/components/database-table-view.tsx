@@ -1080,7 +1080,6 @@ export function DatabaseTableView({
                   <Group justify="space-between" gap="xs" wrap="nowrap">
                     {isEditable ? (
                       <TextInput
-                        size="xs"
                         value={propertyNameDrafts[property.id] ?? property.name}
                         my={4}
                         onChange={(event) =>
@@ -1196,7 +1195,6 @@ export function DatabaseTableView({
                       {renamingRowPageId === row.pageId ? (
                         <TextInput
                           autoFocus
-                          size="xs"
                           value={renamingRowTitleDraft}
                           onChange={(event) => setRenamingRowTitleDraft(event.currentTarget.value)}
                           onBlur={() => void saveRowRename(row)}
