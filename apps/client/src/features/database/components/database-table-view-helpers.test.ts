@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   getCheckboxFilterOptions,
+  getSelectedPreparedRowIds,
   isDatabaseFilterControlsVisible,
   isSameCellPayloadValue,
   resolveDatabasePropertyRename,
@@ -38,5 +39,24 @@ describe('database-table-view helpers', () => {
     expect(isSameCellPayloadValue('x', 'x')).toBe(true);
     expect(isSameCellPayloadValue({ id: 'u-1' }, { id: 'u-1' })).toBe(true);
     expect(isSameCellPayloadValue({ id: 'u-1' }, { id: 'u-2' })).toBe(false);
+  });
+
+  it('returns selected ids only for currently prepared rows', () => {
+    const selectedRowPageIds = {
+      'page-visible-1': true,
+      'page-visible-2': true,
+      'page-hidden-1': true,
+      'page-visible-3': false,
+    };
+    const preparedRows = [
+      { pageId: 'page-visible-1' },
+      { pageId: 'page-visible-2' },
+      { pageId: 'page-visible-3' },
+    ];
+
+    expect(getSelectedPreparedRowIds(selectedRowPageIds, preparedRows)).toEqual([
+      'page-visible-1',
+      'page-visible-2',
+    ]);
   });
 });

@@ -325,7 +325,7 @@ describe('DatabaseService mixed tree flows', () => {
       sortPropertyId: '00000000-0000-0000-0000-000000000001',
       filters: JSON.stringify([
         {
-          propertyId: 'prop-1',
+          propertyId: '11111111-1111-4111-8111-111111111112',
           operator: 'contains',
           value: 'hello',
         },
@@ -345,7 +345,7 @@ describe('DatabaseService mixed tree flows', () => {
         sortPropertyId: '00000000-0000-0000-0000-000000000001',
         filters: [
           {
-            propertyId: 'prop-1',
+            propertyId: '11111111-1111-4111-8111-111111111112',
             operator: 'contains',
             value: 'hello',
           },
@@ -365,8 +365,26 @@ describe('DatabaseService mixed tree flows', () => {
         limit: 20,
         filters: JSON.stringify([
           {
-            propertyId: 'prop-1',
+            propertyId: '11111111-1111-4111-8111-111111111112',
             operator: 'invalid',
+            value: 'hello',
+          },
+        ]),
+      } as any),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(databaseRowRepo.findByDatabaseId).not.toHaveBeenCalled();
+    expect(databaseRowRepo.findByDatabaseIdPaginated).not.toHaveBeenCalled();
+  });
+
+  it('throws BadRequestException for rows filters with non-uuid propertyId', async () => {
+    await expect(
+      service.listRows('db-1', user, 'ws-1', {
+        limit: 20,
+        filters: JSON.stringify([
+          {
+            propertyId: 'not-a-uuid',
+            operator: 'contains',
             value: 'hello',
           },
         ]),

@@ -43,6 +43,7 @@ import { QueueJob, QueueName } from '../../../integrations/queue/constants';
 import { IPageRecipientNotificationJob } from '../../../integrations/queue/constants/queue.interface';
 import { PageHistoryRecorderService } from '../../page/services/page-history-recorder.service';
 import { generateSlugId } from '../../../common/helpers';
+import { validate as isValidUuid } from 'uuid';
 
 interface IDatabaseCellValueWithFallback {
   value: unknown;
@@ -706,6 +707,10 @@ export class DatabaseService {
 
       if (!condition.propertyId || !condition.value) {
         continue;
+      }
+
+      if (!isValidUuid(condition.propertyId)) {
+        throw new BadRequestException('Invalid rows filters');
       }
 
       normalizedFilters.push({
