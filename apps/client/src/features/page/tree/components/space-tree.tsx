@@ -698,7 +698,9 @@ function NodeMenu({ node, treeApi, spaceId }: NodeMenuProps) {
     { open: openCopyPageModal, close: closeCopySpaceModal },
   ] = useDisclosure(false);
   const canMoveNodeToTrash =
-    (node.data.nodeType === "page" || node.data.nodeType === "database") &&
+    (node.data.nodeType === "page" ||
+      node.data.nodeType === "database" ||
+      node.data.nodeType === "databaseRow") &&
     !(treeApi.props.disableEdit as boolean);
 
   const handleCopyLink = () => {
