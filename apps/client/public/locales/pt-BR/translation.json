@@ -1017,6 +1017,23 @@
   "Undo": "Desfazer",
   "Load more": "Carregar mais",
   "Clear filters": "Limpar filtros",
-  "Reset": "Redefinir"
+  "Reset": "Redefinir",
+  "Ascending": "Ascending",
+  "Descending": "Descending",
+  "Delete property confirm with undo and values": "Delete {{name}}? This removes the column and its values. You can undo within 6 seconds.",
+  "Delete row confirm with undo": "This row will be hidden immediately. You can undo within 6 seconds before it is permanently deleted.",
+  "Delete rows confirm with undo": "{{count}} rows will be hidden immediately. You can undo within 6 seconds before permanent deletion.",
+  "history.event.value.true": "Yes",
+  "history.event.value.false": "No",
+  "history.event.field.title": "Title",
+  "history.event.property-type.multiline_text": "Text",
+  "history.event.property-type.checkbox": "Checkbox",
+  "history.event.property-type.code": "Code",
+  "history.event.property-type.select": "Select",
+  "history.event.property-type.user": "User",
+  "history.event.property-type.page_reference": "Page reference",
+  "history.event.details.table.field": "Field",
+  "history.event.details.table.from": "From",
+  "history.event.details.table.to": "To",
+  "No changes to apply": "No changes to apply"
 }
-
