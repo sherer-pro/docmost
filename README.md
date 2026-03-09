@@ -5,6 +5,13 @@
 
 # Fork-Specific Enhancements
 
+## Databases (Notion-like)
+
+* Added databases: row/column actions, deletion, filters, and sorting.
+* Added Markdown export for the current table view (respects visible columns/filters/sorting).
+* Added conversion between databases and pages (both directions).
+* Added database change history support.
+
 ## PWA / Offline
 
 - Added full Progressive Web App support with limited offline functionality.
@@ -31,9 +38,12 @@
 
 - Added custom document fields: status, owner, stakeholders.
 - Added space-level configuration for displaying custom fields.
+- If the “Status” custom field is enabled in a space, the sidebar shows the corresponding indicator.
+- Changes to the “Status”, “Owner”, and “Stakeholder” custom fields are recorded in the page history.
 - Added display of participants viewing or editing a document.
 - Added rich link previews when inserting links.
 - Added the ability to cite a selected fragment in another document.
+- The "full width" page setting can now be applied per page.
 
 ## Notifications
 
@@ -53,6 +63,9 @@
 - Switched some requests to `GET` (e.g., `users/me`, `collab-token`) to reduce CSRF risk.
 - Hardened WebSocket security (payload validation, relay isolation, tests).
 - Rate limiting for auth endpoints.
+- Added hashing for password reset tokens (no plaintext stored in the DB). 
+- Added server-side Mermaid sanitization.
+- Tightened CSP.
 
 ## Dev/Docs
 
