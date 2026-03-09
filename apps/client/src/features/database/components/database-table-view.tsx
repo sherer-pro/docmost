@@ -329,7 +329,6 @@ export function DatabaseTableView({
 
   const resetRowsPagination = useCallback(() => {
     setRowsCursor(null);
-    setRows([]);
     setTableScrollTop(0);
     if (tableViewportRef.current) {
       tableViewportRef.current.scrollTop = 0;
