@@ -92,6 +92,7 @@ import {
   getDatabaseSelectSettings,
 } from '@/features/database/utils/database-cell-value.ts';
 import {
+  getSelectedPreparedRowIds,
   isDatabaseFilterControlsVisible,
   getCheckboxFilterOptions,
   isSameCellPayloadValue,
@@ -431,6 +432,7 @@ export function DatabaseTableView({
       return;
     }
 
+    setSelectedRowPageIds({});
     resetRowsPagination();
   }, [resetRowsPagination, rowsServerStateSignature]);
 
@@ -824,12 +826,17 @@ export function DatabaseTableView({
   const activeFilterCount = activeServerFilters.length;
 
   const selectedRowIds = useMemo(
-    () =>
-      Object.entries(selectedRowPageIds)
-        .filter(([, isSelected]) => isSelected)
-        .map(([pageId]) => pageId),
-    [selectedRowPageIds],
+    () => getSelectedPreparedRowIds(selectedRowPageIds, preparedRows),
+    [preparedRows, selectedRowPageIds],
   );
+
+  useEffect(() => {
+    if (isEditable) {
+      return;
+    }
+
+    setSelectedRowPageIds({});
+  }, [isEditable]);
 
   useEffect(() => {
     if (Object.keys(optimisticallyDeletedRowPageIds).length === 0) {
@@ -1777,55 +1784,6 @@ export function DatabaseTableView({
         </Group>
       </Group>
 
-      {selectedRowIds.length > 0 && (
-        <Paper withBorder radius="sm" p="sm" mb="md">
-          <Group wrap="wrap">
-            <Text size="sm">
-              {t('Rows')}: {selectedRowIds.length}
-            </Text>
-            <Select
-              w={220}
-              placeholder={t('Property')}
-              data={displayedProperties.map((property) => ({
-                value: property.id,
-                label: property.name,
-              }))}
-              value={bulkPropertyId}
-              onChange={(value) => setBulkPropertyId(value)}
-            />
-            {activeProperties.find((property) => property.id === bulkPropertyId)?.type === 'checkbox' ? (
-              <Select
-                w={140}
-                value={bulkCheckboxValue}
-                data={checkboxFilterOptions}
-                onChange={(value) =>
-                  setBulkCheckboxValue((value as 'true' | 'false') || 'true')
-                }
-                allowDeselect={false}
-              />
-            ) : (
-              <TextInput
-                placeholder={t('Value')}
-                value={bulkValue}
-                onChange={(event) => setBulkValue(event.currentTarget.value)}
-              />
-            )}
-            <Button onClick={() => void applyBulkUpdate()}>
-              {t('Update')}
-            </Button>
-            <Button color="red" variant="light" onClick={bulkDeleteSelectedRows}>
-              {t('Delete')}
-            </Button>
-            <Button
-              variant="subtle"
-              onClick={() => setSelectedRowPageIds({})}
-            >
-              {t('Cancel')}
-            </Button>
-          </Group>
-        </Paper>
-      )}
-
       <Drawer
         opened={viewControlsOpened}
         onClose={() => setViewControlsOpened(false)}
@@ -2141,6 +2099,57 @@ export function DatabaseTableView({
         </Stack>
       )}
 
+
+
+      {isEditable && selectedRowIds.length > 0 && (
+        <Paper withBorder radius="sm" p="sm" mb="md">
+          <Group wrap="wrap">
+            <Text size="sm">
+              {t('Rows')}: {selectedRowIds.length}
+            </Text>
+            <Select
+              w={220}
+              placeholder={t('Property')}
+              data={displayedProperties.map((property) => ({
+                value: property.id,
+                label: property.name,
+              }))}
+              value={bulkPropertyId}
+              onChange={(value) => setBulkPropertyId(value)}
+            />
+            {activeProperties.find((property) => property.id === bulkPropertyId)?.type === 'checkbox' ? (
+              <Select
+                w={140}
+                value={bulkCheckboxValue}
+                data={checkboxFilterOptions}
+                onChange={(value) =>
+                  setBulkCheckboxValue((value as 'true' | 'false') || 'true')
+                }
+                allowDeselect={false}
+              />
+            ) : (
+              <TextInput
+                placeholder={t('Value')}
+                value={bulkValue}
+                onChange={(event) => setBulkValue(event.currentTarget.value)}
+              />
+            )}
+            <Button onClick={() => void applyBulkUpdate()}>
+              {t('Update')}
+            </Button>
+            <Button color="red" variant="light" onClick={bulkDeleteSelectedRows}>
+              {t('Delete')}
+            </Button>
+            <Button
+              variant="subtle"
+              onClick={() => setSelectedRowPageIds({})}
+            >
+              {t('Cancel')}
+            </Button>
+          </Group>
+        </Paper>
+      )}
+
       <ScrollArea
         viewportRef={tableViewportRef}
         mah={isMobileViewport ? 420 : 620}
@@ -2155,15 +2164,17 @@ export function DatabaseTableView({
         >
           <Table.Thead>
             <Table.Tr>
-              <Table.Th w={52}>
-                <Checkbox
-                  checked={preparedRows.length > 0 && selectedRowIds.length === preparedRows.length}
-                  indeterminate={
-                    selectedRowIds.length > 0 && selectedRowIds.length < preparedRows.length
-                  }
-                  onChange={(event) => toggleSelectAllPreparedRows(event.currentTarget.checked)}
-                />
-              </Table.Th>
+              {isEditable && (
+                <Table.Th w={52}>
+                  <Checkbox
+                    checked={preparedRows.length > 0 && selectedRowIds.length === preparedRows.length}
+                    indeterminate={
+                      selectedRowIds.length > 0 && selectedRowIds.length < preparedRows.length
+                    }
+                    onChange={(event) => toggleSelectAllPreparedRows(event.currentTarget.checked)}
+                  />
+                </Table.Th>
+              )}
               <Table.Th miw={280}>{t('Title')}</Table.Th>
               {displayedProperties.map((property) => (
                 <Table.Th key={property.id} miw={220}>
@@ -2271,7 +2282,7 @@ export function DatabaseTableView({
             {virtualizedRows.topOffset > 0 && (
               <Table.Tr aria-hidden>
                 <Table.Td
-                  colSpan={displayedProperties.length + 2}
+                  colSpan={displayedProperties.length + (isEditable ? 2 : 1)}
                   p={0}
                   style={{ height: virtualizedRows.topOffset }}
                 />
@@ -2281,17 +2292,19 @@ export function DatabaseTableView({
               const rowIndex = virtualizedRows.startIndex + virtualRowIndex;
               return (
               <Table.Tr key={row.id}>
-                <Table.Td>
-                  <Checkbox
-                    checked={Boolean(selectedRowPageIds[row.pageId])}
-                    onChange={(event) =>
-                      setSelectedRowPageIds((previousSelection) => ({
-                        ...previousSelection,
-                        [row.pageId]: event.currentTarget.checked,
-                      }))
-                    }
-                  />
-                </Table.Td>
+                {isEditable && (
+                  <Table.Td>
+                    <Checkbox
+                      checked={Boolean(selectedRowPageIds[row.pageId])}
+                      onChange={(event) =>
+                        setSelectedRowPageIds((previousSelection) => ({
+                          ...previousSelection,
+                          [row.pageId]: event.currentTarget.checked,
+                        }))
+                      }
+                    />
+                  </Table.Td>
+                )}
                 <Table.Td>
                   <Group justify="space-between" wrap="nowrap" align="flex-start">
                     <div>
@@ -2459,7 +2472,7 @@ export function DatabaseTableView({
             {virtualizedRows.bottomOffset > 0 && (
               <Table.Tr aria-hidden>
                 <Table.Td
-                  colSpan={displayedProperties.length + 2}
+                  colSpan={displayedProperties.length + (isEditable ? 2 : 1)}
                   p={0}
                   style={{ height: virtualizedRows.bottomOffset }}
                 />

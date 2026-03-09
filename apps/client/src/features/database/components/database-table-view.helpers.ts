@@ -53,6 +53,17 @@ export const getCheckboxFilterOptions = (
   ];
 };
 
+export const getSelectedPreparedRowIds = (
+  selectedRowPageIds: Record<string, boolean>,
+  preparedRows: Array<{ pageId: string }>,
+): string[] => {
+  const preparedRowPageIds = new Set(preparedRows.map((row) => row.pageId));
+
+  return Object.entries(selectedRowPageIds)
+    .filter(([pageId, isSelected]) => isSelected && preparedRowPageIds.has(pageId))
+    .map(([pageId]) => pageId);
+};
+
 export const resolveDatabasePropertyRename = (
   currentName: string,
   draftName: string,
