@@ -1023,6 +1023,17 @@
   "Load more": "Mehr laden",
   "No changes to apply": "Keine Änderungen zum Anwenden",
   "Clear filters": "Filter löschen",
-  "Reset": "Zurücksetzen"
+  "Reset": "Zurücksetzen",
+  "history.event.value.true": "Yes",
+  "history.event.value.false": "No",
+  "history.event.field.title": "Title",
+  "history.event.property-type.multiline_text": "Text",
+  "history.event.property-type.checkbox": "Checkbox",
+  "history.event.property-type.code": "Code",
+  "history.event.property-type.select": "Select",
+  "history.event.property-type.user": "User",
+  "history.event.property-type.page_reference": "Page reference",
+  "history.event.details.table.field": "Field",
+  "history.event.details.table.from": "From",
+  "history.event.details.table.to": "To"
 }
-
