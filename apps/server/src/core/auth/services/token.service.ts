@@ -109,9 +109,10 @@ export class TokenService {
     apiKeyId: string;
     user: User;
     workspaceId: string;
+    spaceId: string;
     expiresIn?: string | number;
   }): Promise<string> {
-    const { apiKeyId, user, workspaceId, expiresIn } = opts;
+    const { apiKeyId, user, workspaceId, spaceId, expiresIn } = opts;
     if (user.deactivatedAt || user.deletedAt) {
       throw new ForbiddenException();
     }
@@ -120,6 +121,7 @@ export class TokenService {
       sub: user.id,
       apiKeyId: apiKeyId,
       workspaceId,
+      spaceId,
       type: JwtType.API_KEY,
     };
 

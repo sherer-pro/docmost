@@ -8,6 +8,7 @@ import { UserRepo } from '@docmost/db/repos/user/user.repo';
 import { FastifyRequest } from 'fastify';
 import { extractBearerTokenFromHeader } from '../../../common/helpers';
 import { ModuleRef } from '@nestjs/core';
+import { ApiKeyService } from '../../api-key/api-key.service';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
@@ -21,7 +22,17 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   ) {
     super({
       jwtFromRequest: (req: FastifyRequest) => {
-        return req.cookies?.authToken || extractBearerTokenFromHeader(req);
+        const request = req as any;
+        const bearerToken = extractBearerTokenFromHeader(req);
+        const rawUrl =
+          request?.originalUrl ?? request?.raw?.url ?? request?.url ?? '';
+        const isRagRoute = rawUrl.startsWith('/api/rag');
+
+        if (isRagRoute) {
+          return bearerToken || request.cookies?.authToken;
+        }
+
+        return request.cookies?.authToken || bearerToken;
       },
       ignoreExpiration: false,
       secretOrKey: environmentService.getAppSecret(),
@@ -39,7 +50,15 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     }
 
     if (payload.type === JwtType.API_KEY) {
-      return this.validateApiKey(req, payload as JwtApiKeyPayload);
+      if (!payload.spaceId) {
+        throw new UnauthorizedException();
+      }
+
+      if (!this.isRagRoute(req)) {
+        throw new UnauthorizedException('API key can only be used on /rag routes');
+      }
+
+      return this.validateApiKey(payload as JwtApiKeyPayload);
     }
 
     if (payload.type !== JwtType.ACCESS) {
@@ -60,29 +79,22 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     return { user, workspace };
   }
 
-  private async validateApiKey(req: any, payload: JwtApiKeyPayload) {
-    let ApiKeyModule: any;
-    let isApiKeyModuleReady = false;
+  private async validateApiKey(payload: JwtApiKeyPayload) {
+    const apiKeyService = this.moduleRef.get(ApiKeyService, {
+      strict: false,
+    });
 
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      ApiKeyModule = require('./../../../ee/api-key/api-key.service');
-      isApiKeyModuleReady = true;
-    } catch (err) {
-      this.logger.debug(
-        'API Key module requested but enterprise module not bundled in this build',
-      );
-      isApiKeyModuleReady = false;
+    if (apiKeyService) {
+      return apiKeyService.validateApiKey(payload);
     }
 
-    if (isApiKeyModuleReady) {
-      const ApiKeyService = this.moduleRef.get(ApiKeyModule.ApiKeyService, {
-        strict: false,
-      });
+    this.logger.error('ApiKeyService is not available in DI container');
+    throw new UnauthorizedException('API key auth is unavailable');
+  }
 
-      return ApiKeyService.validateApiKey(payload);
-    }
-
-    throw new UnauthorizedException('Enterprise API Key module missing');
+  private isRagRoute(req: any): boolean {
+    const rawUrl: string =
+      req?.originalUrl ?? req?.raw?.url ?? req?.url ?? '';
+    return rawUrl.startsWith('/api/rag');
   }
 }

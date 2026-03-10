@@ -41,6 +41,7 @@ export interface JwtMfaTokenPayload {
 export type JwtApiKeyPayload = {
   sub: string;
   workspaceId: string;
+  spaceId: string;
   apiKeyId: string;
   type: 'api_key';
 };

@@ -21,6 +21,8 @@ import { WatcherModule } from './watcher/watcher.module';
 import { MfaModule } from './mfa/mfa.module';
 import { PushModule } from './push/push.module';
 import { DatabaseModule } from './database/database.module';
+import { ApiKeyModule } from './api-key/api-key.module';
+import { RagModule } from './rag/rag.module';
 
 @Module({
   imports: [
@@ -40,6 +42,8 @@ import { DatabaseModule } from './database/database.module';
     MfaModule,
     PushModule,
     DatabaseModule,
+    ApiKeyModule,
+    RagModule,
   ],
 })
 export class CoreModule implements NestModule {
