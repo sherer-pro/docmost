@@ -33,6 +33,7 @@ import { DatabasePropertyRepo } from './repos/database/database-property.repo';
 import { DatabaseRowRepo } from './repos/database/database-row.repo';
 import { DatabaseCellRepo } from './repos/database/database-cell.repo';
 import { DatabaseViewRepo } from './repos/database/database-view.repo';
+import { ApiKeyRepo } from './repos/api-key/api-key.repo';
 import { PageListener } from '@docmost/db/listeners/page.listener';
 import { PostgresJSDialect } from 'kysely-postgres-js';
 import * as postgres from 'postgres';
@@ -98,6 +99,7 @@ import { normalizePostgresUrl } from '../common/helpers';
     DatabaseRowRepo,
     DatabaseCellRepo,
     DatabaseViewRepo,
+    ApiKeyRepo,
     PageListener,
   ],
   exports: [
@@ -123,6 +125,7 @@ import { normalizePostgresUrl } from '../common/helpers';
     DatabaseRowRepo,
     DatabaseCellRepo,
     DatabaseViewRepo,
+    ApiKeyRepo,
   ],
 })
 export class DatabaseModule

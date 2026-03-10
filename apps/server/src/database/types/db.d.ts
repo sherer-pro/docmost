@@ -36,7 +36,8 @@ export interface ApiKeys {
   expiresAt: Timestamp | null;
   id: Generated<string>;
   lastUsedAt: Timestamp | null;
-  name: string | null;
+  name: string;
+  spaceId: string;
   updatedAt: Generated<Timestamp>;
   creatorId: string;
   workspaceId: string;
