@@ -7,10 +7,17 @@
 
 ## Databases (Notion-like)
 
-* Added databases: row/column actions, deletion, filters, and sorting.
-* Added Markdown export for the current table view (respects visible columns/filters/sorting).
-* Added conversion between databases and pages (both directions).
-* Added database change history support.
+- Added databases: row/column actions, deletion, filters, and sorting.
+- Added Markdown export for the current table view (respects visible columns/filters/sorting).
+- Added conversion between databases and pages (both directions).
+- Added database change history support.
+
+## RAG/AI
+
+- Added core RAG API (`/api/rag/*`) authenticated exclusively via space-scoped API keys (Bearer): full/delta sync and exports for pages/databases/rows/attachments/comments.
+- Implemented API key management (CRUD, required `spaceId`, soft revoke, `expiresAt/lastUsedAt`) plus admin/owner UI; key creation now requires selecting a space, defaulting to “No expiration”.
+- Added `RAG_API.md` with a full spec and integration examples.
+
 
 ## PWA / Offline
 
