@@ -72,12 +72,7 @@ const groupedData: DataGroup[] = [
         label: "API keys",
         icon: IconKey,
         path: "/settings/account/api-keys",
-        isCloud: true,
-        isEnterprise: true,
-        // Hide this item for regular users: API key access
-        // in settings should be available only to workspace admins.
         isAdmin: true,
-        showDisabledInNonEE: true,
       },
     ],
   },
@@ -113,10 +108,7 @@ const groupedData: DataGroup[] = [
         label: "API management",
         icon: IconKey,
         path: "/settings/api-keys",
-        isCloud: true,
-        isEnterprise: true,
         isAdmin: true,
-        showDisabledInNonEE: true,
       },
       {
         label: "AI settings",
