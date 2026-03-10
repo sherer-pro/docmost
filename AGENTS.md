@@ -187,6 +187,16 @@ Minimum:
   - canonical upload routes: `POST /api/attachments/actions/upload-file`, `POST /api/attachments/actions/upload-image`, `POST /api/attachments/actions/remove-icon`.
   - canonical file routes: `GET /api/attachments/files/:fileId/:fileName`, `GET /api/attachments/files/public/:fileId/:fileName`.
   - compatibility aliases are still enabled for older clients/content: `POST /api/files/upload`, `GET /api/files/:fileId/:fileName`, `GET /api/files/public/:fileId/:fileName`, `POST /api/attachments/upload-image`, `POST /api/attachments/remove-icon`.
+- RAG API (`/api/rag/*`) is API-key-only:
+  - pass `Authorization: Bearer <token>` from workspace API keys;
+  - user JWT/cookie auth is rejected on `/api/rag/*`;
+  - API keys are rejected outside `/api/rag/*`;
+  - key scope is enforced by `spaceId` inside API key JWT payload.
+- API key management routes are active in this fork:
+  - user page: `/settings/account/api-keys`;
+  - workspace management page: `/settings/api-keys`;
+  - create key requires selecting `spaceId`;
+  - access is restricted to workspace `admin|owner`.
 - Root `start` script runs **backend prod**, but requires prebuilt `dist` (typically via `pnpm build`).
 - Backend production entrypoints are resolved from Nx/Nest build output under `apps/server/dist/apps/server/src/*` (not `apps/server/dist/main`).
 - Compose uses placeholders (`REPLACE_WITH_LONG_SECRET`, `STRONG_DB_PASSWORD`) — do not forget to replace them.
