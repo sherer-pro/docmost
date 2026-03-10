@@ -13,6 +13,7 @@ import Paginate from "@/components/common/paginate";
 import { useCursorPaginate } from "@/hooks/use-cursor-paginate";
 import { useGetApiKeysQuery } from "@/ee/api-key/queries/api-key-query.ts";
 import { IApiKey } from "@/ee/api-key";
+import useUserRole from "@/hooks/use-user-role.tsx";
 
 export default function UserApiKeys() {
   const { t } = useTranslation();
@@ -23,6 +24,11 @@ export default function UserApiKeys() {
   const [revokeModalOpened, setRevokeModalOpened] = useState(false);
   const [selectedApiKey, setSelectedApiKey] = useState<IApiKey | null>(null);
   const { data, isLoading } = useGetApiKeysQuery({ cursor });
+  const { isAdmin } = useUserRole();
+
+  if (!isAdmin) {
+    return null;
+  }
 
   const handleCreateSuccess = (response: IApiKey) => {
     setCreatedApiKey(response);

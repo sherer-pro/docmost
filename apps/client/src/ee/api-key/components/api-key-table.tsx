@@ -11,6 +11,7 @@ interface ApiKeyTableProps {
   apiKeys: IApiKey[];
   isLoading?: boolean;
   showUserColumn?: boolean;
+  showSpaceColumn?: boolean;
   onUpdate?: (apiKey: IApiKey) => void;
   onRevoke?: (apiKey: IApiKey) => void;
 }
@@ -19,6 +20,7 @@ export function ApiKeyTable({
   apiKeys,
   isLoading,
   showUserColumn = false,
+  showSpaceColumn = false,
   onUpdate,
   onRevoke,
 }: ApiKeyTableProps) {
@@ -41,6 +43,7 @@ export function ApiKeyTable({
           <Table.Tr>
             <Table.Th>{t("Name")}</Table.Th>
             {showUserColumn && <Table.Th>{t("User")}</Table.Th>}
+            {showSpaceColumn && <Table.Th>{t("Space")}</Table.Th>}
             <Table.Th>{t("Last used")}</Table.Th>
             <Table.Th>{t("Expires")}</Table.Th>
             <Table.Th>{t("Created")}</Table.Th>
@@ -58,18 +61,26 @@ export function ApiKeyTable({
                   </Text>
                 </Table.Td>
 
-                {showUserColumn && apiKey.creator && (
+                {showUserColumn && (
                   <Table.Td>
                     <Group gap="4" wrap="nowrap">
                       <CustomAvatar
                         avatarUrl={apiKey.creator?.avatarUrl}
-                        name={apiKey.creator.name}
+                        name={apiKey.creator?.name}
                         size="sm"
                       />
                       <Text fz="sm" lineClamp={1}>
-                        {apiKey.creator.name}
+                        {apiKey.creator?.name || "-"}
                       </Text>
                     </Group>
+                  </Table.Td>
+                )}
+
+                {showSpaceColumn && (
+                  <Table.Td>
+                    <Text fz="sm" lineClamp={1}>
+                      {apiKey.space?.name || "-"}
+                    </Text>
                   </Table.Td>
                 )}
 
@@ -134,7 +145,9 @@ export function ApiKeyTable({
               </Table.Tr>
             ))
           ) : (
-            <NoTableResults colSpan={showUserColumn ? 6 : 5} />
+            <NoTableResults
+              colSpan={5 + (showUserColumn ? 1 : 0) + (showSpaceColumn ? 1 : 0)}
+            />
           )}
         </Table.Tbody>
       </Table>

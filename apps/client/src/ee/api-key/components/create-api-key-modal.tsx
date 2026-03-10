@@ -7,6 +7,8 @@ import { useTranslation } from "react-i18next";
 import { useCreateApiKeyMutation } from "@/ee/api-key/queries/api-key-query";
 import { IconCalendar } from "@tabler/icons-react";
 import { IApiKey } from "@/ee/api-key";
+import { useGetSpacesQuery } from "@/features/space/queries/space-query.ts";
+import { useEffect } from "react";
 
 const DateInput = lazy(() =>
   import("@mantine/dates").then((module) => ({
@@ -22,6 +24,7 @@ interface CreateApiKeyModalProps {
 
 const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
+  spaceId: z.string().uuid("Space is required"),
   expiresAt: z.string().optional(),
 });
 type FormValues = z.infer<typeof formSchema>;
@@ -32,23 +35,54 @@ export function CreateApiKeyModal({
   onSuccess,
 }: CreateApiKeyModalProps) {
   const { t } = useTranslation();
-  const [expirationOption, setExpirationOption] = useState<string>("30");
+  const [expirationOption, setExpirationOption] = useState<string>("never");
   const createApiKeyMutation = useCreateApiKeyMutation();
+  const { data: spacesData, isLoading: isSpacesLoading } = useGetSpacesQuery({
+    limit: 200,
+  });
 
   const form = useForm<FormValues>({
     validate: zodResolver(formSchema),
     initialValues: {
       name: "",
+      spaceId: "",
       expiresAt: "",
     },
   });
+
+  useEffect(() => {
+    if (!opened) {
+      return;
+    }
+
+    if (form.values.spaceId || !spacesData?.items?.length) {
+      return;
+    }
+
+    form.setFieldValue("spaceId", spacesData.items[0].id);
+  }, [opened, spacesData?.items, form.values.spaceId]);
+
+  const spaceOptions =
+    spacesData?.items?.map((space) => ({
+      value: space.id,
+      label: space.name || space.slug,
+    })) || [];
 
   const getExpirationDate = (): string | undefined => {
     if (expirationOption === "never") {
       return undefined;
     }
     if (expirationOption === "custom") {
-      return form.values.expiresAt;
+      if (!form.values.expiresAt) {
+        return undefined;
+      }
+
+      const customDate = new Date(form.values.expiresAt);
+      if (Number.isNaN(customDate.getTime())) {
+        return undefined;
+      }
+
+      return customDate.toISOString();
     }
     const days = parseInt(expirationOption);
     const date = new Date();
@@ -68,25 +102,34 @@ export function CreateApiKeyModal({
   };
 
   const expirationOptions = [
+    { value: "never", label: t("No expiration") },
     { value: "30", label: getExpirationLabel(30) },
     { value: "60", label: getExpirationLabel(60) },
     { value: "90", label: getExpirationLabel(90) },
     { value: "365", label: getExpirationLabel(365) },
     { value: "custom", label: t("Custom") },
-    { value: "never", label: t("No expiration") },
   ];
 
   const handleSubmit = async (data: {
     name?: string;
+    spaceId?: string;
     expiresAt?: string | Date;
   }) => {
-    const groupData = {
+    const expiresAt = getExpirationDate();
+    if (expirationOption === "custom" && !expiresAt) {
+      form.setFieldError("expiresAt", t("Custom expiration date is required"));
+      return;
+    }
+
+    const requestPayload = {
       name: data.name,
-      expiresAt: getExpirationDate(),
+      spaceId: data.spaceId,
+      expiresAt,
     };
 
     try {
-      const createdKey = await createApiKeyMutation.mutateAsync(groupData);
+      const createdKey =
+        await createApiKeyMutation.mutateAsync(requestPayload);
       onSuccess(createdKey);
       form.reset();
       onClose();
@@ -97,7 +140,7 @@ export function CreateApiKeyModal({
 
   const handleClose = () => {
     form.reset();
-    setExpirationOption("30");
+    setExpirationOption("never");
     onClose();
   };
 
@@ -119,10 +162,23 @@ export function CreateApiKeyModal({
           />
 
           <Select
+            label={t("Space")}
+            placeholder={t("Select a space")}
+            data={spaceOptions}
+            value={form.values.spaceId}
+            onChange={(value) => form.setFieldValue("spaceId", value || "")}
+            searchable
+            allowDeselect={false}
+            required
+            disabled={isSpacesLoading || spaceOptions.length === 0}
+            error={form.errors.spaceId}
+          />
+
+          <Select
             label={t("Expiration")}
             data={expirationOptions}
             value={expirationOption}
-            onChange={(value) => setExpirationOption(value || "30")}
+            onChange={(value) => setExpirationOption(value || "never")}
             leftSection={<IconCalendar size={16} />}
             allowDeselect={false}
           />
@@ -142,7 +198,11 @@ export function CreateApiKeyModal({
             <Button variant="default" onClick={handleClose}>
               {t("Cancel")}
             </Button>
-            <Button type="submit" loading={createApiKeyMutation.isPending}>
+            <Button
+              type="submit"
+              loading={createApiKeyMutation.isPending}
+              disabled={spaceOptions.length === 0}
+            >
               {t("Create")}
             </Button>
           </Group>

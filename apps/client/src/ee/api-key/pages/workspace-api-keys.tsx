@@ -65,9 +65,10 @@ export default function WorkspaceApiKeys() {
       </Group>
 
       <ApiKeyTable
-        apiKeys={data?.items}
+        apiKeys={data?.items || []}
         isLoading={isLoading}
         showUserColumn
+        showSpaceColumn
         onUpdate={handleUpdate}
         onRevoke={handleRevoke}
       />
