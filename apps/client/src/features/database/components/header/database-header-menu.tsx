@@ -4,7 +4,6 @@ import { notifications } from '@mantine/notifications';
 import { useDisclosure } from '@mantine/hooks';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
-import { saveAs } from 'file-saver';
 import ExportModal from '@/components/common/export-modal';
 import { DocumentCommonActionItems } from '@/features/common/header/document-common-action-items.tsx';
 import { exportDatabase } from '@/features/database/services/database-service';
@@ -150,18 +149,15 @@ export default function DatabaseHeaderMenu({
     }
   };
 
-  const handleExport = async (format: DatabaseExportFormat) => {
-    if (format === DatabaseExportFormat.Markdown) {
-      const markdown = getCurrentTableMarkdown();
-      const rawName = (database?.name || 'database').trim();
-      const safeName = rawName.replace(/\s+/g, '-').toLowerCase() || 'database';
-
-      saveAs(new Blob([markdown], { type: 'text/markdown;charset=utf-8' }), `${safeName}.md`);
-      notifications.show({ message: t('Export successful') });
-      return;
-    }
-
-    await exportDatabase(databaseId, { format });
+  const handleExport = async (
+    format: DatabaseExportFormat,
+    options?: { includeChildren?: boolean; includeAttachments?: boolean },
+  ) => {
+    await exportDatabase(databaseId, {
+      format,
+      includeChildren: options?.includeChildren,
+      includeAttachments: options?.includeAttachments,
+    });
     notifications.show({ message: t('Export successful') });
   };
 

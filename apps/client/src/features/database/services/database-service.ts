@@ -264,7 +264,7 @@ export async function getDatabaseRowContextByPage(
 
 
 /**
- * Exports a database as markdown/pdf according to backend contract.
+ * Exports a database as markdown/html/pdf according to backend contract.
  */
 export async function exportDatabase(
   databaseId: string,

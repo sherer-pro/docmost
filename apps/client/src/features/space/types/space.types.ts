@@ -91,6 +91,6 @@ export type ISpaceMember = { role: string } & (SpaceUserInfo | SpaceGroupInfo);
 
 export interface IExportSpaceParams {
   spaceId: string;
-  format: ExportFormat;
+  format: ExportFormat.HTML | ExportFormat.Markdown;
   includeAttachments?: boolean;
 }
