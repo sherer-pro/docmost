@@ -148,6 +148,7 @@ Minimum:
 
 - Storage: `STORAGE_DRIVER`, `AWS_S3_*`
 - Mail: `MAIL_DRIVER`, `SMTP_*`, `POSTMARK_TOKEN`
+- PDF export: `PDF_CHROMIUM_EXECUTABLE_PATH`, `PDF_RENDER_TIMEOUT_MS`
 - Diagnostics: `DEBUG_MODE`, `DEBUG_DB`, `LOG_HTTP`
 - Frontend runtime defines: `COLLAB_URL`, `SUBDOMAIN_HOST`, `POSTHOG_*`, `BILLING_TRIAL_DAYS`, etc. (loaded via `vite loadEnv`).
 
@@ -201,6 +202,7 @@ Minimum:
 - Backend production entrypoints are resolved from Nx/Nest build output under `apps/server/dist/apps/server/src/*` (not `apps/server/dist/main`).
 - Compose uses placeholders (`REPLACE_WITH_LONG_SECRET`, `STRONG_DB_PASSWORD`) — do not forget to replace them.
 - `migration:codegen` reads env from `../../.env`; if the file is missing, the command fails.
+- Runtime image now includes headless `chromium` + Cyrillic-capable fonts for PDF export, and sets default `PDF_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium`.
 - There are Enterprise areas (`*/ee`): edits there may affect license-restricted code.
 - The repository includes lock/override/patched dependencies — do not remove seemingly redundant pins without verification.
 

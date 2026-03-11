@@ -335,6 +335,8 @@ export class DatabaseController {
       dto.format,
       user,
       workspace.id,
+      dto.includeChildren,
+      dto.includeAttachments,
     );
 
     res.headers({
@@ -343,7 +345,7 @@ export class DatabaseController {
         'attachment; filename="' + encodeURIComponent(exported.fileName) + '"',
     });
 
-    res.send(exported.fileBuffer ?? exported.fileStream);
+    res.send(exported.fileStream);
   }
   /**
    * Creates a database view.

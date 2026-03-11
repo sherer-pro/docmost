@@ -322,6 +322,14 @@ export class EnvironmentVariables {
   @ValidateIf((obj) => obj.AI_DRIVER && obj.AI_DRIVER === 'ollama')
   @IsUrl({ protocols: ['http', 'https'], require_tld: false })
   OLLAMA_API_URL: string;
+
+  @IsOptional()
+  @IsString()
+  PDF_CHROMIUM_EXECUTABLE_PATH: string;
+
+  @IsOptional()
+  @Matches(/^\d+$/)
+  PDF_RENDER_TIMEOUT_MS: string;
 }
 
 export function validate(config: Record<string, any>) {

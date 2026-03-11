@@ -54,6 +54,7 @@ class ExportControllerDelegate {
       dto.format,
       dto.includeAttachments,
       dto.includeChildren,
+      user.locale,
     );
 
     const fileName = sanitize(page.title || 'untitled') + '.zip';
@@ -77,6 +78,7 @@ class ExportControllerDelegate {
       dto.spaceId,
       dto.format,
       dto.includeAttachments,
+      user.locale,
     );
 
     res.headers({
