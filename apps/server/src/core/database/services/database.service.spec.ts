@@ -1,6 +1,17 @@
 jest.mock('lib0/decoding.js', () => ({ readVarString: jest.fn() }));
+jest.mock('../../../integrations/export/utils', () => {
+  const actual = jest.requireActual('../../../integrations/export/utils');
+
+  return {
+    ...actual,
+    replaceInternalLinks: jest.fn((content: unknown) => content),
+  };
+});
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from './database.service';
+import * as JSZip from 'jszip';
+import { DatabaseExportFormat } from '../dto/database.dto';
+import { ExportFormat } from '../../../integrations/export/dto/export-dto';
 
 describe('DatabaseService mixed tree flows', () => {
   const databaseRepo = {
@@ -39,7 +50,12 @@ describe('DatabaseService mixed tree flows', () => {
     removePage: jest.fn(),
   };
   const pageService = { create: jest.fn() };
-  const exportService = { exportPages: jest.fn() };
+  const exportService = {
+    exportPages: jest.fn(),
+    turnPageMentionsToLinks: jest.fn(),
+    buildPagePdfBody: jest.fn(),
+    renderPdfFromHtmlDocument: jest.fn(),
+  };
   const userRepo = { findById: jest.fn() };
   const spaceAbility = {
     createForUser: jest.fn(async () => ({ cannot: () => false })),
@@ -86,10 +102,63 @@ describe('DatabaseService mixed tree flows', () => {
     db as any,
   );
 
-  const user = { id: 'u-1' } as any;
+  const user = { id: 'u-1', locale: 'ru-RU' } as any;
+
+  const streamToBuffer = async (
+    stream: NodeJS.ReadableStream,
+  ): Promise<Buffer> => {
+    const chunks: Buffer[] = [];
+
+    return new Promise<Buffer>((resolve, reject) => {
+      stream.on('data', (chunk) => {
+        if (Buffer.isBuffer(chunk)) {
+          chunks.push(chunk);
+          return;
+        }
+
+        chunks.push(Buffer.from(chunk));
+      });
+      stream.on('end', () => resolve(Buffer.concat(chunks)));
+      stream.on('error', reject);
+    });
+  };
 
   beforeEach(() => {
     jest.clearAllMocks();
+
+    const defaultPagesZip = new JSZip();
+    defaultPagesZip.file('Root.pdf', Buffer.from('root-pdf-original'));
+    defaultPagesZip.file(
+      'docmost-metadata.json',
+      JSON.stringify({
+        pages: {
+          'Root.pdf': {
+            pageId: 'db-root-page',
+            slugId: 'root-slug',
+            parentPath: null,
+            icon: null,
+            position: 'a1',
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          },
+        },
+      }),
+    );
+    exportService.exportPages.mockResolvedValue(
+      defaultPagesZip.generateNodeStream({
+        type: 'nodebuffer',
+        streamFiles: true,
+        compression: 'DEFLATE',
+      }),
+    );
+    exportService.turnPageMentionsToLinks.mockImplementation(async (content: unknown) => content);
+    exportService.buildPagePdfBody.mockResolvedValue({
+      title: 'Root',
+      bodyHtml: '<article>Root content</article>',
+    });
+    exportService.renderPdfFromHtmlDocument.mockResolvedValue(
+      Buffer.from('%PDF-1.7 mock'),
+    );
     databaseRowRepo.findByDatabaseId.mockResolvedValue([]);
     databaseRowRepo.findByDatabaseIdPaginated.mockResolvedValue({
       items: [],
@@ -101,11 +170,22 @@ describe('DatabaseService mixed tree flows', () => {
     userRepo.findById.mockResolvedValue(null);
     databaseRepo.findById.mockResolvedValue({
       id: 'db-1',
+      name: 'Database',
       spaceId: 'space-1',
       workspaceId: 'ws-1',
       pageId: 'db-root-page',
       creatorId: 'u-1',
       lastUpdatedById: 'u-2',
+    });
+    pageRepo.findById.mockResolvedValue({
+      id: 'db-root-page',
+      title: 'Root',
+      slugId: 'root-slug',
+      content: { type: 'doc', content: [] },
+      spaceId: 'space-1',
+      workspaceId: 'ws-1',
+      parentPageId: null,
+      deletedAt: null,
     });
   });
 
@@ -142,6 +222,232 @@ describe('DatabaseService mixed tree flows', () => {
       'ws-1',
     );
     expect(pageRepo.removePage).toHaveBeenCalledWith('row-page-1', 'u-1', 'ws-1');
+  });
+
+  it('exports database pdf as zip with merged root pdf only', async () => {
+    const exported = await service.exportDatabase(
+      'db-1',
+      DatabaseExportFormat.PDF,
+      user,
+      'ws-1',
+      false,
+    );
+
+    expect(exported.contentType).toBe('application/zip');
+    expect(exported.fileName).toBe('database.zip');
+    expect(exportService.exportPages).toHaveBeenCalledWith(
+      'db-root-page',
+      ExportFormat.PDF,
+      false,
+      false,
+      'ru-RU',
+    );
+    expect(exportService.buildPagePdfBody).toHaveBeenCalledWith(
+      expect.objectContaining({
+        page: expect.objectContaining({
+          id: 'db-root-page',
+        }),
+        locale: 'ru-RU',
+      }),
+    );
+    expect(exportService.renderPdfFromHtmlDocument).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Root',
+        bodyHtml: expect.stringContaining('<table>'),
+      }),
+    );
+    expect(exported.fileStream).toBeDefined();
+
+    const zipBuffer = await streamToBuffer(exported.fileStream as NodeJS.ReadableStream);
+    const zip = await JSZip.loadAsync(zipBuffer);
+    const rootPdfEntry = zip.file('Root.pdf');
+    const tablePdfEntry = zip.file('database-table.pdf');
+
+    expect(rootPdfEntry).toBeDefined();
+    expect(tablePdfEntry).toBeNull();
+    if (!rootPdfEntry) {
+      throw new Error('Root PDF entry is missing');
+    }
+    const rootPdfBuffer = await rootPdfEntry.async('nodebuffer');
+    expect(rootPdfBuffer.toString('utf8')).toContain('%PDF-1.7 mock');
+  });
+
+  it('renders readable table values in database summary PDF html', async () => {
+    databasePropertyRepo.findByDatabaseId.mockResolvedValue([
+      {
+        id: 'prop-select',
+        name: 'Status',
+        type: 'select',
+        settings: {
+          options: [{ value: 'in_progress', label: 'In progress' }],
+        },
+      },
+      { id: 'prop-user', name: 'Assignee', type: 'user', settings: {} },
+      { id: 'prop-checkbox', name: 'Done', type: 'checkbox', settings: {} },
+    ]);
+    databaseRowRepo.findByDatabaseId.mockResolvedValue([
+      {
+        id: 'row-1',
+        pageTitle: 'Task 1',
+        cells: [
+          { propertyId: 'prop-select', value: 'in_progress' },
+          { propertyId: 'prop-user', value: { id: 'user-1' } },
+          { propertyId: 'prop-checkbox', value: true },
+        ],
+      },
+    ]);
+    userRepo.findById.mockResolvedValue({
+      id: 'user-1',
+      name: 'Alice',
+      workspaceId: 'ws-1',
+    });
+
+    await service.exportDatabase(
+      'db-1',
+      DatabaseExportFormat.PDF,
+      user,
+      'ws-1',
+      false,
+    );
+
+    const payload = exportService.renderPdfFromHtmlDocument.mock.calls[0][0];
+    expect(payload.bodyHtml).toContain('<td>In progress</td>');
+    expect(payload.bodyHtml).toContain('<td>Alice</td>');
+    expect(payload.bodyHtml).toContain('<td>true</td>');
+  });
+
+  it('keeps pages-like layout and replaces only root pdf when includeChildren=true', async () => {
+    databaseRepo.findById.mockResolvedValue({
+      id: 'db-1',
+      name: 'Main Database',
+      spaceId: 'space-1',
+      workspaceId: 'ws-1',
+      pageId: 'db-root-page',
+      creatorId: 'u-1',
+      lastUpdatedById: 'u-2',
+    });
+
+    const pagesZip = new JSZip();
+    pagesZip.file('Root.pdf', Buffer.from('root-pdf-original'));
+    pagesZip.file('rows/Row-1.pdf', Buffer.from('row-pdf'));
+    pagesZip.file(
+      'docmost-metadata.json',
+      JSON.stringify({
+        pages: {
+          'Root.pdf': {
+            pageId: 'db-root-page',
+            slugId: 'root-slug',
+            parentPath: null,
+            icon: null,
+            position: 'a1',
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          },
+          'rows/Row-1.pdf': {
+            pageId: 'row-page-1',
+            slugId: 'row-1',
+            parentPath: 'Root.pdf',
+            icon: null,
+            position: 'a2',
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          },
+        },
+      }),
+    );
+    exportService.exportPages.mockResolvedValue(
+      pagesZip.generateNodeStream({
+        type: 'nodebuffer',
+        streamFiles: true,
+        compression: 'DEFLATE',
+      }),
+    );
+
+    const exported = await service.exportDatabase(
+      'db-1',
+      DatabaseExportFormat.PDF,
+      user,
+      'ws-1',
+      true,
+    );
+
+    expect(exportService.exportPages).toHaveBeenCalledWith(
+      'db-root-page',
+      ExportFormat.PDF,
+      false,
+      true,
+      'ru-RU',
+    );
+    expect(exportService.renderPdfFromHtmlDocument).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Root',
+      }),
+    );
+
+    const zipBuffer = await streamToBuffer(exported.fileStream as NodeJS.ReadableStream);
+    const zip = await JSZip.loadAsync(zipBuffer);
+
+    const rootPdfEntry = zip.file('Root.pdf');
+    const childPdfEntry = zip.file('rows/Row-1.pdf');
+
+    expect(zip.file('main-database-table.pdf')).toBeNull();
+    expect(rootPdfEntry).toBeDefined();
+    expect(childPdfEntry).toBeDefined();
+    expect(zip.file('docmost-metadata.json')).toBeDefined();
+
+    if (!rootPdfEntry || !childPdfEntry) {
+      throw new Error('Expected root and child PDF entries in the archive');
+    }
+
+    const [rootPdfBuffer, childPdfBuffer] = await Promise.all([
+      rootPdfEntry.async('nodebuffer'),
+      childPdfEntry.async('nodebuffer'),
+    ]);
+
+    expect(rootPdfBuffer.toString('utf8')).toContain('%PDF-1.7 mock');
+    expect(childPdfBuffer.toString('utf8')).toBe('row-pdf');
+  });
+
+  it('forwards includeChildren/includeAttachments for markdown export', async () => {
+    const exported = await service.exportDatabase(
+      'db-1',
+      DatabaseExportFormat.Markdown,
+      user,
+      'ws-1',
+      true,
+      true,
+    );
+
+    expect(exportService.exportPages).toHaveBeenCalledWith(
+      'db-root-page',
+      ExportFormat.Markdown,
+      true,
+      true,
+      'ru-RU',
+    );
+    expect(exported.contentType).toBe('application/zip');
+    expect(exported.fileName).toBe('database.zip');
+  });
+
+  it('supports html database export via page export pipeline', async () => {
+    const exported = await service.exportDatabase(
+      'db-1',
+      DatabaseExportFormat.HTML,
+      user,
+      'ws-1',
+      false,
+      true,
+    );
+
+    expect(exportService.exportPages).toHaveBeenCalledWith(
+      'db-root-page',
+      ExportFormat.HTML,
+      true,
+      false,
+      'ru-RU',
+    );
+    expect(exported.contentType).toBe('application/zip');
+    expect(exported.fileName).toBe('database.zip');
   });
 
   it('renames row, regenerates slug and records rename history event', async () => {

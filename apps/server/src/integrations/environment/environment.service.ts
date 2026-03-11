@@ -299,4 +299,27 @@ export class EnvironmentService {
       'http://localhost:11434',
     );
   }
+
+  getPdfChromiumExecutablePath(): string | undefined {
+    const executablePath = this.configService.get<string>(
+      'PDF_CHROMIUM_EXECUTABLE_PATH',
+    );
+    const normalizedPath = executablePath?.trim();
+
+    return normalizedPath ? normalizedPath : undefined;
+  }
+
+  getPdfRenderTimeoutMs(): number {
+    const timeoutRaw = this.configService.get<string>(
+      'PDF_RENDER_TIMEOUT_MS',
+      '60000',
+    );
+    const timeoutValue = parseInt(timeoutRaw, 10);
+
+    if (!Number.isFinite(timeoutValue) || timeoutValue <= 0) {
+      return 60000;
+    }
+
+    return timeoutValue;
+  }
 }

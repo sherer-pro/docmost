@@ -44,6 +44,14 @@ import { IPageRecipientNotificationJob } from '../../../integrations/queue/const
 import { PageHistoryRecorderService } from '../../page/services/page-history-recorder.service';
 import { generateSlugId } from '../../../common/helpers';
 import { validate as isValidUuid } from 'uuid';
+import * as JSZip from 'jszip';
+import { ExportFormat } from '../../../integrations/export/dto/export-dto';
+import { ExportMetadata } from '../../../common/helpers/types/export-metadata.types';
+import {
+  replaceInternalLinks,
+  updateAttachmentUrlsToLocalPaths,
+} from '../../../integrations/export/utils';
+import { getProsemirrorContent } from '../../../common/helpers/prosemirror/utils';
 
 interface IDatabaseCellValueWithFallback {
   value: unknown;
@@ -204,23 +212,6 @@ export class DatabaseService {
    */
   private escapeMarkdownCell(value: string): string {
     return value.replace(/\|/g, '\\|').replace(/\n/g, ' ');
-  }
-
-  /**
-   * Converts an arbitrary cell value to a safe string.
-   */
-  private stringifyCellValue(value: unknown): string {
-    const normalizedValue = this.extractCurrentCellValue(value);
-
-    if (normalizedValue === null || typeof normalizedValue === 'undefined') {
-      return '';
-    }
-
-    if (typeof normalizedValue === 'string') {
-      return normalizedValue;
-    }
-
-    return JSON.stringify(normalizedValue);
   }
 
   /**
@@ -1080,28 +1071,32 @@ export class DatabaseService {
    * Collects a markdown representation of the current database table.
    */
   async buildDatabaseMarkdown(databaseId: string, user: User, workspaceId: string) {
-    const database = await this.getOrFailDatabase(databaseId, workspaceId);
-    await this.assertCanReadDatabasePages(user, database.spaceId);
-
-    const [properties, rows] = await Promise.all([
-      this.databasePropertyRepo.findByDatabaseId(databaseId),
-      this.databaseRowRepo.findByDatabaseId(databaseId, workspaceId, database.spaceId),
-    ]);
-
-    const title = database.name?.trim() || 'Database';
-    const header = ['Title', ...properties.map((property) => property.name || 'Column')];
+    const tableState = await this.buildDatabaseExportTableState(
+      databaseId,
+      user,
+      workspaceId,
+    );
+    const title = tableState.database.name?.trim() || 'Database';
+    const header = [
+      'Title',
+      ...tableState.properties.map((property) => property.name || 'Column'),
+    ];
     const separator = header.map(() => '---');
 
-    const tableRows = rows.map((row) => {
+    const tableRows = tableState.rows.map((row) => {
       const titleCell = row.page?.title || row.pageTitle || '';
-      const valueByPropertyId = new Map<string, string>(
-        (row.cells ?? []).map((cell) => [cell.propertyId, this.stringifyCellValue(cell.value)]),
-      );
 
       return [
         this.escapeMarkdownCell(titleCell),
-        ...properties.map((property) =>
-          this.escapeMarkdownCell(valueByPropertyId.get(property.id) ?? ''),
+        ...tableState.properties.map((property) =>
+          this.escapeMarkdownCell(
+            this.getRowCellDisplayValue({
+              row,
+              propertyId: property.id,
+              propertiesById: tableState.propertiesById,
+              pageTitleById: tableState.pageTitleById,
+            }),
+          ),
         ),
       ];
     });
@@ -1113,74 +1108,320 @@ export class DatabaseService {
     return `# ${title}\n\n${table}`;
   }
 
-  /**
-   * Generates a minimal valid PDF document with text content.
-   */
-  private createSimplePdfBuffer(content: string): Buffer {
-    const escapePdfText = (value: string) =>
-      value.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+  private async buildDatabaseExportTableState(
+    databaseId: string,
+    user: User,
+    workspaceId: string,
+  ) {
+    const database = await this.getOrFailDatabase(databaseId, workspaceId);
+    await this.assertCanReadDatabasePages(user, database.spaceId);
 
-    const textLines = content
-      .split('\n')
-      .map((line) => line.trimEnd())
-      .filter((line) => line.length > 0)
-      .slice(0, 80);
+    const [properties, rows] = await Promise.all([
+      this.databasePropertyRepo.findByDatabaseId(databaseId),
+      this.databaseRowRepo.findByDatabaseId(databaseId, workspaceId, database.spaceId),
+    ]);
 
-    const textCommands = textLines
-      .map((line, index) => `1 0 0 1 50 ${770 - index * 14} Tm (${escapePdfText(line)}) Tj`)
-      .join('\n');
+    const normalizedProperties = this.normalizeProperties(properties);
+    const userPropertyIds = new Set(
+      normalizedProperties
+        .filter((property) => property.type === 'user')
+        .map((property) => property.id),
+    );
+    const normalizedRows = await this.enrichRowsWithUserNames(
+      rows,
+      userPropertyIds,
+      workspaceId,
+    );
+    const propertiesById = new Map(
+      normalizedProperties.map((property) => [
+        property.id,
+        { id: property.id, type: property.type, settings: property.settings },
+      ]),
+    );
+    const pageTitleById = await this.resolvePageTitlesById(
+      normalizedRows,
+      propertiesById,
+      workspaceId,
+    );
 
-    const stream = `BT\n/F1 10 Tf\n${textCommands}\nET`;
-    const streamLength = Buffer.byteLength(stream, 'utf8');
+    return {
+      database,
+      properties: normalizedProperties,
+      rows: normalizedRows,
+      propertiesById,
+      pageTitleById,
+    };
+  }
 
-    const objects = [
-      '1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj',
-      '2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj',
-      '3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >> endobj',
-      `4 0 obj << /Length ${streamLength} >> stream\n${stream}\nendstream endobj`,
-      '5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj',
+  private async buildDatabaseRowsTableSectionHtml(
+    databaseId: string,
+    user: User,
+    workspaceId: string,
+  ): Promise<string> {
+    const tableState = await this.buildDatabaseExportTableState(
+      databaseId,
+      user,
+      workspaceId,
+    );
+    const headers = [
+      'Title',
+      ...tableState.properties.map((property) => property.name || 'Column'),
     ];
+    const rowsHtml =
+      tableState.rows.length > 0
+        ? tableState.rows
+            .map((row) => {
+              const titleCell = row.page?.title || row.pageTitle || '';
+              const valueCells = tableState.properties
+                .map((property) =>
+                  `<td>${this.escapeHtml(
+                    this.getRowCellDisplayValue({
+                      row,
+                      propertyId: property.id,
+                      propertiesById: tableState.propertiesById,
+                      pageTitleById: tableState.pageTitleById,
+                    }),
+                  )}</td>`,
+                )
+                .join('');
 
-    let pdf = '%PDF-1.4\n';
-    const offsets: number[] = [0];
+              return `<tr><td>${this.escapeHtml(titleCell)}</td>${valueCells}</tr>`;
+            })
+            .join('')
+        : `<tr><td colspan="${headers.length}">No rows</td></tr>`;
 
-    for (const object of objects) {
-      offsets.push(Buffer.byteLength(pdf, 'utf8'));
-      pdf += `${object}\n`;
+    const headerHtml = headers
+      .map((header) => `<th>${this.escapeHtml(header)}</th>`)
+      .join('');
+
+    return `<section class="docmost-database-summary">
+      <h2>Rows</h2>
+      <table>
+        <thead><tr>${headerHtml}</tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </section>`;
+  }
+
+  private escapeHtml(value: string): string {
+    return value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  private async streamToBuffer(stream: NodeJS.ReadableStream): Promise<Buffer> {
+    const chunks: Buffer[] = [];
+
+    return new Promise<Buffer>((resolve, reject) => {
+      stream.on('data', (chunk) => {
+        if (Buffer.isBuffer(chunk)) {
+          chunks.push(chunk);
+          return;
+        }
+
+        chunks.push(Buffer.from(chunk));
+      });
+      stream.on('end', () => resolve(Buffer.concat(chunks)));
+      stream.on('error', reject);
+    });
+  }
+
+  private async resolveExportMetadata(zip: JSZip): Promise<ExportMetadata> {
+    const metadataEntry = zip.file('docmost-metadata.json');
+    if (!metadataEntry) {
+      throw new NotFoundException('Export metadata is missing');
     }
 
-    const xrefOffset = Buffer.byteLength(pdf, 'utf8');
-    pdf += `xref\n0 ${objects.length + 1}\n`;
-    pdf += '0000000000 65535 f \n';
-    for (let i = 1; i <= objects.length; i += 1) {
-      pdf += `${offsets[i].toString().padStart(10, '0')} 00000 n \n`;
+    try {
+      const metadataRaw = await metadataEntry.async('text');
+      const metadata: unknown = JSON.parse(metadataRaw);
+
+      if (!metadata || typeof metadata !== 'object') {
+        throw new Error('Export metadata must be an object');
+      }
+
+      return metadata as ExportMetadata;
+    } catch (err) {
+      throw new BadRequestException(
+        `Export metadata is invalid: ${err instanceof Error ? err.message : 'unknown error'}`,
+      );
+    }
+  }
+
+  private decodeExportPath(path: string): string {
+    return path
+      .split('/')
+      .map((segment) => {
+        try {
+          return decodeURIComponent(segment);
+        } catch {
+          return segment;
+        }
+      })
+      .join('/');
+  }
+
+  private async resolveRootPdfPathFromMetadata(zip: JSZip): Promise<{
+    metadata: ExportMetadata;
+    metadataPath: string;
+    zipPath: string;
+  }> {
+    const metadata = await this.resolveExportMetadata(zip);
+    const rootMetadataEntry = Object.entries(metadata.pages || {}).find(
+      ([, pageMetadata]) => pageMetadata?.parentPath === null,
+    );
+
+    if (!rootMetadataEntry) {
+      throw new NotFoundException('Root page metadata is missing');
     }
 
-    pdf += `trailer << /Size ${objects.length + 1} /Root 1 0 R >>\n`;
-    pdf += `startxref\n${xrefOffset}\n%%EOF`;
+    const [metadataPath] = rootMetadataEntry;
+    const zipPathCandidates = [metadataPath, this.decodeExportPath(metadataPath)];
+    const uniqueZipPathCandidates = [...new Set(zipPathCandidates)];
 
-    return Buffer.from(pdf, 'utf8');
+    for (const zipPathCandidate of uniqueZipPathCandidates) {
+      if (zip.file(zipPathCandidate)) {
+        return {
+          metadata,
+          metadataPath,
+          zipPath: zipPathCandidate,
+        };
+      }
+    }
+
+    throw new NotFoundException('Root PDF file is missing in export archive');
+  }
+
+  private buildSlugIdToExportPathMap(metadata: ExportMetadata): Record<string, string> {
+    const slugIdToExportPath: Record<string, string> = {};
+
+    for (const [exportPath, pageMetadata] of Object.entries(metadata.pages || {})) {
+      if (!pageMetadata?.slugId) {
+        continue;
+      }
+
+      slugIdToExportPath[pageMetadata.slugId] = exportPath;
+    }
+
+    return slugIdToExportPath;
+  }
+
+  private async buildMergedRootPdfBodyHtml(params: {
+    databaseId: string;
+    databasePageId: string;
+    user: User;
+    workspaceId: string;
+    locale?: string;
+    includeAttachments: boolean;
+    rootMetadataPath: string;
+    slugIdToExportPath: Record<string, string>;
+  }): Promise<{ title: string; bodyHtml: string }> {
+    const rootPage = await this.pageRepo.findById(params.databasePageId, {
+      includeContent: true,
+    });
+
+    if (!rootPage || rootPage.deletedAt || rootPage.workspaceId !== params.workspaceId) {
+      throw new NotFoundException('Database root page not found');
+    }
+
+    const rootPageContentWithMentions = await this.exportService.turnPageMentionsToLinks(
+      getProsemirrorContent(rootPage.content),
+      rootPage.workspaceId,
+    );
+    let rootPageContentWithLocalLinks = replaceInternalLinks(
+      rootPageContentWithMentions,
+      params.slugIdToExportPath,
+      params.rootMetadataPath,
+    );
+
+    if (params.includeAttachments) {
+      const contentWithLocalAttachments =
+        updateAttachmentUrlsToLocalPaths(rootPageContentWithLocalLinks);
+      if (contentWithLocalAttachments) {
+        rootPageContentWithLocalLinks = contentWithLocalAttachments;
+      }
+    }
+
+    const rootPagePdfBody = await this.exportService.buildPagePdfBody({
+      page: {
+        ...rootPage,
+        content: rootPageContentWithLocalLinks,
+      },
+      locale: params.locale,
+    });
+    const tableSectionHtml = await this.buildDatabaseRowsTableSectionHtml(
+      params.databaseId,
+      params.user,
+      params.workspaceId,
+    );
+
+    return {
+      title: rootPagePdfBody.title,
+      bodyHtml: `${rootPagePdfBody.bodyHtml}${tableSectionHtml}`,
+    };
   }
 
   /**
-   * Exports the database to markdown or pdf.
+   * Exports the database to markdown/html/pdf.
    */
   async exportDatabase(
     databaseId: string,
     format: DatabaseExportFormat,
     user: User,
     workspaceId: string,
+    includeChildren = false,
+    includeAttachments = false,
   ) {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
     await this.assertCanReadDatabasePages(user, database.spaceId);
     const safeName = (database.name?.trim() || 'database').replace(/\s+/g, '-').toLowerCase();
 
     if (format === DatabaseExportFormat.PDF) {
-      const markdown = await this.buildDatabaseMarkdown(databaseId, user, workspaceId);
+      if (!database.pageId) {
+        throw new NotFoundException('Database root page not found');
+      }
+
+      const pagesZipStream = await this.exportService.exportPages(
+        database.pageId,
+        ExportFormat.PDF,
+        includeAttachments,
+        includeChildren,
+        user.locale,
+      );
+      const pagesZipBuffer = await this.streamToBuffer(
+        pagesZipStream as NodeJS.ReadableStream,
+      );
+      const zip = await JSZip.loadAsync(pagesZipBuffer);
+      const rootPdfPath = await this.resolveRootPdfPathFromMetadata(zip);
+      const slugIdToExportPath = this.buildSlugIdToExportPathMap(rootPdfPath.metadata);
+      const mergedRootPdfBody = await this.buildMergedRootPdfBodyHtml({
+        databaseId,
+        databasePageId: database.pageId,
+        user,
+        workspaceId,
+        locale: user.locale,
+        includeAttachments,
+        rootMetadataPath: rootPdfPath.metadataPath,
+        slugIdToExportPath,
+      });
+      const mergedRootPdfBuffer = await this.exportService.renderPdfFromHtmlDocument({
+        title: mergedRootPdfBody.title,
+        bodyHtml: mergedRootPdfBody.bodyHtml,
+      });
+
+      zip.file(rootPdfPath.zipPath, mergedRootPdfBuffer);
+
       return {
-        contentType: 'application/pdf',
-        fileName: `${safeName}.pdf`,
-        fileBuffer: this.createSimplePdfBuffer(markdown),
+        contentType: 'application/zip',
+        fileName: `${safeName}.zip`,
+        fileStream: zip.generateNodeStream({
+          type: 'nodebuffer',
+          streamFiles: true,
+          compression: 'DEFLATE',
+        }),
       };
     }
 
@@ -1188,17 +1429,15 @@ export class DatabaseService {
       throw new NotFoundException('Database root page not found');
     }
 
-    /**
-     * For markdown export we use the standard Docmost mechanism for pages:
-     * - a zip archive is generated,
-     * - child pages (base rows) are included,
-     * - docmost-metadata.json is automatically added.
-     */
+    const pageExportFormat =
+      format === DatabaseExportFormat.HTML ? ExportFormat.HTML : ExportFormat.Markdown;
+
     const zipFileStream = await this.exportService.exportPages(
       database.pageId,
-      DatabaseExportFormat.Markdown,
-      false,
-      true,
+      pageExportFormat,
+      includeAttachments,
+      includeChildren,
+      user.locale,
     );
 
     return {

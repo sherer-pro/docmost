@@ -43,10 +43,20 @@ RUN pnpm build
 FROM base AS installer
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends curl bash \
+  && apt-get install -y --no-install-recommends \
+    bash \
+    chromium \
+    curl \
+    fonts-dejavu-core \
+    fonts-liberation \
+    fonts-noto-cjk \
+    fonts-noto-color-emoji \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+
+ENV PDF_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
+ENV PDF_RENDER_TIMEOUT_MS=60000
 
 # Copy apps
 COPY --from=builder /app/apps/server/dist /app/apps/server/dist

@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  IsBoolean,
   IsArray,
   IsIn,
   IsInt,
@@ -27,6 +28,7 @@ const DATABASE_PROPERTY_TYPES: DatabasePropertyType[] = [
 
 export enum DatabaseExportFormat {
   Markdown = 'markdown',
+  HTML = 'html',
   PDF = 'pdf',
 }
 
@@ -339,6 +341,14 @@ export class DatabaseRowPageIdDto {
  */
 export class ExportDatabaseDto {
   @IsString()
-  @IsIn(['markdown', 'pdf'])
+  @IsIn(['markdown', 'html', 'pdf'])
   format: DatabaseExportFormat;
+
+  @IsOptional()
+  @IsBoolean()
+  includeChildren?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  includeAttachments?: boolean;
 }
