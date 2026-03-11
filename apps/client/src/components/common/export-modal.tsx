@@ -7,13 +7,22 @@ import { exportSpace } from '@/features/space/services/space-service';
 import { useTranslation } from 'react-i18next';
 import { exportDatabase as exportDatabaseFile } from '@/features/database/services/database-service';
 import { DatabaseExportFormat } from '@/features/database/types/database.types';
+import {
+  getExportFormatValues,
+  isSpaceExportFormat,
+  shouldShowAttachments,
+  shouldShowIncludeChildren,
+} from '@/components/common/export-modal.utils';
 
 interface ExportModalProps {
   id: string;
   type: 'space' | 'page' | 'database';
   open: boolean;
   onClose: () => void;
-  onExportDatabase?: (format: DatabaseExportFormat) => Promise<void>;
+  onExportDatabase?: (
+    format: DatabaseExportFormat,
+    options?: { includeChildren?: boolean; includeAttachments?: boolean },
+  ) => Promise<void>;
 }
 
 export default function ExportModal({
@@ -29,19 +38,18 @@ export default function ExportModal({
   const [isExporting, setIsExporting] = useState<boolean>(false);
   const { t } = useTranslation();
 
-  const showIncludeChildren = type === 'page';
-  const showAttachments = type === 'page' || type === 'space';
+  const showIncludeChildren = shouldShowIncludeChildren(type, format);
+  const showAttachments = shouldShowAttachments(type);
 
-  const formatOptions =
-    type === 'database'
-      ? [
-          { value: 'markdown', label: t('export.format.markdown') },
-          { value: 'pdf', label: t('Print PDF') },
-        ]
-      : [
-          { value: 'markdown', label: t('export.format.markdown') },
-          { value: 'html', label: t('export.format.html') },
-        ];
+  const formatOptions = getExportFormatValues(type).map((value) => ({
+    value,
+    label:
+      value === ExportFormat.Markdown
+        ? t('export.format.markdown')
+        : value === ExportFormat.HTML
+          ? t('export.format.html')
+          : t('Print PDF'),
+  }));
 
   const modalTitle =
     type === 'database' ? `${t('Export')} ${t('Database')}` : t(`Export ${type}`);
@@ -59,19 +67,28 @@ export default function ExportModal({
       }
 
       if (type === 'space') {
+        if (!isSpaceExportFormat(format)) {
+          throw new Error('Unsupported space export format');
+        }
+
         await exportSpace({
           spaceId: id,
-          format: format as ExportFormat,
+          format,
           includeAttachments,
         });
       }
 
       if (type === 'database') {
         if (onExportDatabase) {
-          await onExportDatabase(format as DatabaseExportFormat);
+          await onExportDatabase(format as DatabaseExportFormat, {
+            includeChildren,
+            includeAttachments,
+          });
         } else {
           await exportDatabaseFile(id, {
             format: format as DatabaseExportFormat,
+            includeChildren,
+            includeAttachments,
           });
         }
       }
@@ -144,17 +161,19 @@ export default function ExportModal({
                 />
               </Group>
 
-              <Group justify="space-between" wrap="nowrap" mt="md">
-                <div>
-                  <Text size="md">{t('Include attachments')}</Text>
-                </div>
-                <Switch
-                  onChange={(event) =>
-                    setIncludeAttachments(event.currentTarget.checked)
-                  }
-                  checked={includeAttachments}
-                />
-              </Group>
+              {showAttachments && (
+                <Group justify="space-between" wrap="nowrap" mt="md">
+                  <div>
+                    <Text size="md">{t('Include attachments')}</Text>
+                  </div>
+                  <Switch
+                    onChange={(event) =>
+                      setIncludeAttachments(event.currentTarget.checked)
+                    }
+                    checked={includeAttachments}
+                  />
+                </Group>
+              )}
             </>
           )}
 

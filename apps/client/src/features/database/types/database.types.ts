@@ -252,11 +252,14 @@ export interface IBatchUpdateDatabaseCellsResponse {
 
 export enum DatabaseExportFormat {
   Markdown = 'markdown',
+  HTML = 'html',
   PDF = 'pdf',
 }
 
 export interface IExportDatabasePayload {
   format: DatabaseExportFormat;
+  includeChildren?: boolean;
+  includeAttachments?: boolean;
 }
 
 export interface IDatabaseMarkdownResponse {
