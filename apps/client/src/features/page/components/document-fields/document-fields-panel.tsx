@@ -55,6 +55,7 @@ import { Link } from "react-router-dom";
 import { PAGE_QUERY_KEYS } from "@/features/page/queries/query-keys.ts";
 import { getAllSidebarPages } from "@/features/page/services/page-service.ts";
 import { useQueryEmit } from "@/features/websocket/use-query-emit.ts";
+import classes from "./document-fields-panel.module.css";
 
 interface DocumentFieldsPanelProps {
   page: IPage;
@@ -109,8 +110,6 @@ export function DocumentFieldsPanel({
     currentUser?.user?.settings?.preferences?.pageEditMode,
   );
   const isEditable = !readOnly && userPageEditMode === PageEditMode.Edit;
-
-  const isDatabasePage = Boolean(page.databaseId);
 
   /**
    * In view mode, document fields must be rendered as read-only
@@ -532,20 +531,21 @@ export function DocumentFieldsPanel({
   }
 
   return (
-    <Group mx={isDatabasePage ? 0 : { base: 0, sm: "md" }}>
-      <Paper
-        withBorder
-        radius="md"
-        my="md"
-        mx={isDatabasePage ? 0 : { base: 0, sm: "xl" }}
-      >
-        <Table
-          withColumnBorders
-          verticalSpacing="xs"
-          horizontalSpacing="sm"
-          layout="fixed"
+    <div className={classes.fullWidthContainer}>
+      <Group mx={0}>
+        <Paper
+          withBorder
+          radius="md"
+          my="md"
+          mx={0}
         >
-          <Table.Tbody>
+          <Table
+            withColumnBorders
+            verticalSpacing="xs"
+            horizontalSpacing="sm"
+            layout="fixed"
+          >
+            <Table.Tbody>
             {enabledFields.status && (
               <Table.Tr>
                 <Table.Td w="38%" visibleFrom="sm">
@@ -765,10 +765,11 @@ export function DocumentFieldsPanel({
                 </Table.Td>
               </Table.Tr>
             ))}
-          </Table.Tbody>
-        </Table>
-      </Paper>
-    </Group>
+            </Table.Tbody>
+          </Table>
+        </Paper>
+      </Group>
+    </div>
   );
 }
 
