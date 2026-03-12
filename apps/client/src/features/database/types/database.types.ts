@@ -130,7 +130,7 @@ export interface IDatabaseViewConfig {
  */
 export interface ICreateDatabasePayload {
   spaceId: string;
-  name: string;
+  name?: string;
   description?: string;
   descriptionContent?: unknown;
   icon?: string;

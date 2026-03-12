@@ -85,7 +85,6 @@ export function SpaceSidebar() {
     try {
       const createdDatabase = await createDatabaseMutation.mutateAsync({
         spaceId: space.id,
-        name: t("Untitled database"),
       });
 
       if (
