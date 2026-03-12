@@ -155,6 +155,7 @@ describe('DatabaseService mixed tree flows', () => {
     exportService.buildPagePdfBody.mockResolvedValue({
       title: 'Root',
       bodyHtml: '<article>Root content</article>',
+      attachmentToken: 'attachment-page-token',
     });
     exportService.renderPdfFromHtmlDocument.mockResolvedValue(
       Buffer.from('%PDF-1.7 mock'),
