@@ -1,5 +1,9 @@
 .titleEditorContainer {
   width: 100%;
+  max-width: 900px;
+  margin-inline: auto;
+  padding-inline: 48px;
+  box-sizing: border-box;
 }
 
 .titleEditorContainer :global(.ProseMirror) {
@@ -28,6 +32,7 @@
 }
 
 @media (max-width: 48em) {
+  .titleEditorContainer,
   .databaseDescriptionEditorContainer {
     padding-inline: 16px;
   }
