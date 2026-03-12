@@ -77,7 +77,10 @@ function CommentListItem({
   async function handleDeleteComment() {
     try {
       await deleteCommentMutation.mutateAsync(comment.id);
-      editor?.commands.unsetComment(comment.id);
+
+      if (comment.type !== "page") {
+        editor?.commands.unsetComment(comment.id);
+      }
 
       emit({
         operation: "invalidateComment",
@@ -100,7 +103,7 @@ function CommentListItem({
         resolved: !isResolved,
       });
 
-      if (editor) {
+      if (editor && comment.type !== "page") {
         editor.commands.setCommentResolved(comment.id, !isResolved);
       }
 

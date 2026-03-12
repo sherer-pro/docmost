@@ -19,6 +19,20 @@
   width: 100%;
 }
 
+.databaseDescriptionEditorContainer {
+  width: 100%;
+  max-width: 900px;
+  margin-inline: auto;
+  padding-inline: 48px;
+  box-sizing: border-box;
+}
+
+@media (max-width: 48em) {
+  .databaseDescriptionEditorContainer {
+    padding-inline: 16px;
+  }
+}
+
 .databaseDescriptionEditor :global(.ProseMirror) {
   padding: 0;
   margin: 0;

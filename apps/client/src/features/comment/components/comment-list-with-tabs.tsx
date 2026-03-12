@@ -28,6 +28,7 @@ import {
   SpaceCaslSubject,
 } from "@/features/space/permissions/permissions.type.ts";
 import { useDatabasePageContext } from "@/features/database/hooks/use-database-page-context.ts";
+import { isInlineOrLegacyComment } from "@/features/comment/utils/comment-type-filter";
 
 function CommentListWithTabs() {
   const { t } = useTranslation();
@@ -79,7 +80,8 @@ function CommentListWithTabs() {
     }
 
     const parentComments = comments.items.filter(
-      (comment: IComment) => comment.parentCommentId === null
+      (comment: IComment) =>
+        comment.parentCommentId === null && isInlineOrLegacyComment(comment)
     );
 
     const active = parentComments.filter(
@@ -104,6 +106,7 @@ function CommentListWithTabs() {
           pageId: commentsPageId,
           parentCommentId: commentId,
           content: JSON.stringify(content),
+          type: "inline" as const,
         };
 
         await createCommentMutation.mutateAsync(commentData);
@@ -264,7 +267,9 @@ const ChildComments = ({
   const getChildComments = useCallback(
     (parentId: string) =>
       comments.items.filter(
-        (comment: IComment) => comment.parentCommentId === parentId
+        (comment: IComment) =>
+          comment.parentCommentId === parentId &&
+          isInlineOrLegacyComment(comment)
       ),
     [comments.items]
   );

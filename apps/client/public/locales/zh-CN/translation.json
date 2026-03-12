@@ -1035,5 +1035,8 @@
   "history.event.details.table.field": "Field",
   "history.event.details.table.from": "From",
   "history.event.details.table.to": "To",
-  "No changes to apply": "No changes to apply"
+  "No changes to apply": "No changes to apply",
+  "Custom expiration date is required": "必须指定自定义过期日期",
+  "Select a space": "选择空间",
+  "Rows": "行数"
 }

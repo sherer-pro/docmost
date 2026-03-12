@@ -18,6 +18,7 @@ export interface FullEditorProps {
   spaceSlug: string;
   editable: boolean;
   metaPanel?: ReactNode;
+  footer?: ReactNode;
   pageFullPageWidth?: boolean;
 }
 
@@ -29,6 +30,7 @@ export function FullEditor({
   spaceSlug,
   editable,
   metaPanel,
+  footer,
   pageFullPageWidth,
 }: FullEditorProps) {
   const [user] = useAtom(userAtom);
@@ -58,7 +60,9 @@ export function FullEditor({
         pageId={pageId}
         editable={editable}
         content={content}
+        showBottomSpacer={!footer}
       />
+      {footer}
     </Container>
   );
 }

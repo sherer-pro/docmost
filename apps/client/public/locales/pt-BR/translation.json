@@ -1035,5 +1035,8 @@
   "history.event.details.table.field": "Field",
   "history.event.details.table.from": "From",
   "history.event.details.table.to": "To",
-  "No changes to apply": "No changes to apply"
+  "No changes to apply": "No changes to apply",
+  "Custom expiration date is required": "Uma data de expiração personalizada é obrigatória",
+  "Select a space": "Selecione um espaço",
+  "Rows": "Linhas"
 }

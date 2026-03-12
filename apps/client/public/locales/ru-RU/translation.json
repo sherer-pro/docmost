@@ -1035,5 +1035,8 @@
   "No changes to apply": "Нет изменений для применения",
   "Load more": "Загрузить ещё",
   "Clear filters": "Очистить фильтры",
-  "Reset": "Сбросить"
+  "Reset": "Сбросить",
+  "Custom expiration date is required": "Требуется пользовательская дата срока действия",
+  "Select a space": "Выберите пространство",
+  "Rows": "Строки"
 }
