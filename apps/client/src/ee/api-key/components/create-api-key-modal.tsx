@@ -38,7 +38,7 @@ export function CreateApiKeyModal({
   const [expirationOption, setExpirationOption] = useState<string>("never");
   const createApiKeyMutation = useCreateApiKeyMutation();
   const { data: spacesData, isLoading: isSpacesLoading } = useGetSpacesQuery({
-    limit: 200,
+    limit: 100,
   });
 
   const form = useForm<FormValues>({

@@ -1035,5 +1035,8 @@
   "history.event.details.table.field": "Field",
   "history.event.details.table.from": "From",
   "history.event.details.table.to": "To",
-  "No changes to apply": "No changes to apply"
+  "No changes to apply": "No changes to apply",
+  "Custom expiration date is required": "Een aangepaste vervaldatum is vereist",
+  "Select a space": "Selecteer een ruimte",
+  "Rows": "Rijen"
 }

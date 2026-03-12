@@ -1,4 +1,11 @@
-import { IsJSON, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsIn, IsJSON, IsOptional, IsString, IsUUID } from 'class-validator';
+
+export const CommentType = {
+  INLINE: 'inline',
+  PAGE: 'page',
+} as const;
+
+export type CommentType = (typeof CommentType)[keyof typeof CommentType];
 
 export class CreateCommentDto {
   @IsString()
@@ -14,4 +21,8 @@ export class CreateCommentDto {
   @IsOptional()
   @IsUUID()
   parentCommentId: string;
+
+  @IsOptional()
+  @IsIn([CommentType.INLINE, CommentType.PAGE])
+  type?: CommentType;
 }

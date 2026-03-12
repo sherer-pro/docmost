@@ -56,6 +56,7 @@ function CommentDialog({ editor, pageId }: CommentDialogProps) {
         pageId: pageId,
         content: JSON.stringify(comment),
         selection: selectedText,
+        type: "inline" as const,
       };
 
       const createdComment =

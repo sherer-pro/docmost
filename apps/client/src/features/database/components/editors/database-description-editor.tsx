@@ -21,13 +21,15 @@ export function DatabaseDescriptionEditor({
   cacheSlugId,
 }: DatabaseDescriptionEditorProps) {
   return (
-    <PageEditor
-      pageId={pageId}
-      content={content}
-      editable={editable}
-      cacheSlugId={cacheSlugId}
-      showBottomSpacer={false}
-      editorContentClassName={classes.databaseDescriptionEditor}
-    />
+    <div className={classes.databaseDescriptionEditorContainer}>
+      <PageEditor
+        pageId={pageId}
+        content={content}
+        editable={editable}
+        cacheSlugId={cacheSlugId}
+        showBottomSpacer={false}
+        editorContentClassName={classes.databaseDescriptionEditor}
+      />
+    </div>
   );
 }

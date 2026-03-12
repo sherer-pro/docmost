@@ -22,6 +22,7 @@ import { ErrorBoundary } from "react-error-boundary";
 import DocumentFieldsPanel from "@/features/page/components/document-fields/document-fields-panel.tsx";
 import { useAtom } from "jotai";
 import { asideStateAtom } from "@/components/layouts/global/hooks/atoms/sidebar-atom.ts";
+import PageCommentSection from "@/features/comment/components/page-comment-section";
 
 const MemoizedFullEditor = React.memo(FullEditor);
 const MemoizedPageHeader = React.memo(PageHeader);
@@ -139,6 +140,7 @@ function PageContent({ pageSlug }: { pageSlug: string | undefined }) {
               )}
             />
           }
+          footer={<PageCommentSection pageId={page.id} />}
           pageId={page.id}
           title={page.title}
           content={page.content}

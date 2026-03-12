@@ -28,6 +28,7 @@ import { asideStateAtom } from "@/components/layouts/global/hooks/atoms/sidebar-
 import { useSetAtom } from "jotai";
 import classes from "./database-page.module.css";
 import { useDatabasePageContext } from "@/features/database/hooks/use-database-page-context.ts";
+import PageCommentSection from "@/features/comment/components/page-comment-section";
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 
@@ -277,6 +278,8 @@ export default function DatabasePage() {
             isEditable={isEditable}
           />
         )}
+
+        {databasePageId && <PageCommentSection pageId={databasePageId} />}
       </Container>
     </>
   );

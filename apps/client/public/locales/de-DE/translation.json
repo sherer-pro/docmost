@@ -1035,5 +1035,8 @@
   "history.event.property-type.page_reference": "Page reference",
   "history.event.details.table.field": "Field",
   "history.event.details.table.from": "From",
-  "history.event.details.table.to": "To"
+  "history.event.details.table.to": "To",
+  "Custom expiration date is required": "Ein benutzerdefiniertes Ablaufdatum ist erforderlich",
+  "Select a space": "Bereich auswählen",
+  "Rows": "Zeilen"
 }

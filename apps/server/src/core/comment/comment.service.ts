@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { CreateCommentDto } from './dto/create-comment.dto';
+import { CommentType, CreateCommentDto } from './dto/create-comment.dto';
 import { UpdateCommentDto } from './dto/update-comment.dto';
 import { ResolveCommentDto } from './dto/resolve-comment.dto';
 import { CommentRepo } from '@docmost/db/repos/comment/comment.repo';
@@ -53,6 +53,7 @@ export class CommentService {
   ) {
     const { userId, page, workspaceId } = opts;
     const commentContent = JSON.parse(createCommentDto.content);
+    let commentType: CommentType = createCommentDto.type ?? CommentType.INLINE;
 
     if (createCommentDto.parentCommentId) {
       const parentComment = await this.commentRepo.findById(
@@ -66,13 +67,19 @@ export class CommentService {
       if (parentComment.parentCommentId !== null) {
         throw new BadRequestException('You cannot reply to a reply');
       }
+
+      // Replies always inherit root discussion type.
+      commentType =
+        parentComment.type === CommentType.PAGE
+          ? CommentType.PAGE
+          : CommentType.INLINE;
     }
 
     const comment = await this.commentRepo.insertComment({
       pageId: page.id,
       content: commentContent,
       selection: createCommentDto?.selection?.substring(0, 250),
-      type: 'inline',
+      type: commentType,
       parentCommentId: createCommentDto?.parentCommentId,
       creatorId: userId,
       workspaceId: workspaceId,

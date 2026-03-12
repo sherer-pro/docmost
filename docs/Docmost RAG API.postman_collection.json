@@ -1,0 +1,755 @@
+{
+	"info": {
+		"_postman_id": "37163490-6653-4c21-8984-d48b99762f6e",
+		"name": "Docmost RAG API",
+		"description": "Postman collection for testing Docmost RAG API and space-scoped API keys. See docs/RAG_API.md for full API contract.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "1347003"
+	},
+	"item": [
+		{
+			"name": "01 - API Keys Management (owner/admin session required)",
+			"item": [
+				{
+					"name": "List API Keys (own)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"limit\": 20,\n  \"query\": \"\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api-keys",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api-keys"
+							]
+						},
+						"description": "List current user's API keys."
+					},
+					"response": []
+				},
+				{
+					"name": "List API Keys (workspace/adminView)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const payload = pm.response.json();",
+									"const items = payload?.data?.items || [];",
+									"if (items.length > 0) {",
+									"  const first = items[0];",
+									"  if (first.id) pm.collectionVariables.set('createdApiKeyId', first.id);",
+									"  if (first.spaceId) pm.collectionVariables.set('spaceId', first.spaceId);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"limit\": 20,\n  \"adminView\": true,\n  \"query\": \"\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api-keys",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api-keys"
+							]
+						},
+						"description": "List all workspace API keys. Useful to auto-fill createdApiKeyId and spaceId."
+					},
+					"response": []
+				},
+				{
+					"name": "Create API Key (No expiration)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const payload = pm.response.json();",
+									"const data = payload?.data || payload;",
+									"if (data?.id) pm.collectionVariables.set('createdApiKeyId', data.id);",
+									"if (data?.token) {",
+									"  pm.collectionVariables.set('createdApiKeyToken', data.token);",
+									"  pm.collectionVariables.set('ragApiKey', data.token);",
+									"}",
+									"if (data?.spaceId) pm.collectionVariables.set('spaceId', data.spaceId);"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"{{apiKeyName}}\",\n  \"spaceId\": \"{{spaceId}}\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api-keys/create",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api-keys",
+								"create"
+							]
+						},
+						"description": "Creates a space-scoped API key and stores token into collection variable ragApiKey."
+					},
+					"response": []
+				},
+				{
+					"name": "Update API Key Name",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"apiKeyId\": \"{{createdApiKeyId}}\",\n  \"name\": \"{{apiKeyName}} (renamed)\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api-keys/update",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api-keys",
+								"update"
+							]
+						},
+						"description": "Rename an existing API key."
+					},
+					"response": []
+				},
+				{
+					"name": "Revoke API Key",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"apiKeyId\": \"{{createdApiKeyId}}\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api-keys/revoke",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api-keys",
+								"revoke"
+							]
+						},
+						"description": "Soft-delete (revoke) API key."
+					},
+					"response": []
+				}
+			],
+			"description": "These endpoints use regular authenticated session/JWT and return envelope response { data, success, status }."
+		},
+		{
+			"name": "02 - RAG API (Bearer API key required)",
+			"item": [
+				{
+					"name": "GET /rag/pages",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const res = pm.response.json();",
+									"const items = Array.isArray(res?.items) ? res.items : [];",
+									"const firstDoc = items.find((x) => x?.id);",
+									"if (firstDoc) {",
+									"  pm.collectionVariables.set('pageIdOrSlug', firstDoc.slugId || firstDoc.id);",
+									"}",
+									"const firstDb = items.find((x) => x?.type === 'database');",
+									"if (firstDb) {",
+									"  pm.collectionVariables.set('databaseIdOrPageSlug', firstDb.databaseId || firstDb.id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{ragApiKey}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/rag/pages?includeContent={{includeContent}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"rag",
+								"pages"
+							],
+							"query": [
+								{
+									"key": "includeContent",
+									"value": "{{includeContent}}"
+								}
+							]
+						},
+						"description": "Full list of active page|database in the scoped space."
+					},
+					"response": []
+				},
+				{
+					"name": "GET /rag/updates",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const res = pm.response.json();",
+									"if (typeof res?.maxUpdatedAtMs === 'number') {",
+									"  pm.collectionVariables.set('updatedSince', String(res.maxUpdatedAtMs));",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{ragApiKey}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/rag/updates?updatedSince={{updatedSince}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"rag",
+								"updates"
+							],
+							"query": [
+								{
+									"key": "updatedSince",
+									"value": "{{updatedSince}}"
+								}
+							]
+						},
+						"description": "Incremental updates; maxUpdatedAtMs is auto-saved into updatedSince."
+					},
+					"response": []
+				},
+				{
+					"name": "GET /rag/deleted",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const res = pm.response.json();",
+									"if (typeof res?.maxDeletedAtMs === 'number') {",
+									"  pm.collectionVariables.set('deletedSince', String(res.maxDeletedAtMs));",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{ragApiKey}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/rag/deleted?deletedSince={{deletedSince}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"rag",
+								"deleted"
+							],
+							"query": [
+								{
+									"key": "deletedSince",
+									"value": "{{deletedSince}}"
+								}
+							]
+						},
+						"description": "Incremental deletions; maxDeletedAtMs is auto-saved into deletedSince."
+					},
+					"response": []
+				},
+				{
+					"name": "GET /rag/pages/:pageIdOrSlug",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{ragApiKey}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/rag/pages/{{pageIdOrSlug}}?includeContent={{includeContent}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"rag",
+								"pages",
+								"{{pageIdOrSlug}}"
+							],
+							"query": [
+								{
+									"key": "includeContent",
+									"value": "{{includeContent}}"
+								}
+							]
+						},
+						"description": "Detailed page info (supports UUID or slugId)."
+					},
+					"response": []
+				},
+				{
+					"name": "GET /rag/databases/:databaseIdOrPageSlug",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{ragApiKey}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/rag/databases/{{databaseIdOrPageSlug}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"rag",
+								"databases",
+								"{{databaseIdOrPageSlug}}"
+							]
+						},
+						"description": "Structured database payload with descriptionMarkdown and knowledgeMarkdown."
+					},
+					"response": []
+				},
+				{
+					"name": "GET /rag/databases/:databaseIdOrPageSlug/rows (all)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{ragApiKey}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/rag/databases/{{databaseIdOrPageSlug}}/rows",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"rag",
+								"databases",
+								"{{databaseIdOrPageSlug}}",
+								"rows"
+							]
+						},
+						"description": "Returns all active rows in the database."
+					},
+					"response": []
+				},
+				{
+					"name": "GET /rag/databases/:databaseIdOrPageSlug/rows (filtered by pageIds)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{ragApiKey}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/rag/databases/{{databaseIdOrPageSlug}}/rows?pageIds={{pageIds}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"rag",
+								"databases",
+								"{{databaseIdOrPageSlug}}",
+								"rows"
+							],
+							"query": [
+								{
+									"key": "pageIds",
+									"value": "{{pageIds}}"
+								}
+							]
+						},
+						"description": "Filter rows by CSV pageIds variable (for example: id1,id2)."
+					},
+					"response": []
+				},
+				{
+					"name": "GET /rag/pages/:pageIdOrSlug/attachments",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const res = pm.response.json();",
+									"const items = Array.isArray(res?.items) ? res.items : [];",
+									"if (items.length > 0) {",
+									"  const file = items[0];",
+									"  if (file.fileId || file.id) pm.collectionVariables.set('fileId', file.fileId || file.id);",
+									"  if (file.fileName) pm.collectionVariables.set('fileName', file.fileName);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{ragApiKey}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/rag/pages/{{pageIdOrSlug}}/attachments",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"rag",
+								"pages",
+								"{{pageIdOrSlug}}",
+								"attachments"
+							]
+						},
+						"description": "Attachment metadata + downloadUrl. First attachment id/name are auto-saved."
+					},
+					"response": []
+				},
+				{
+					"name": "GET /rag/attachments/:fileId/:fileName",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{ragApiKey}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/rag/attachments/{{fileId}}/{{fileName}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"rag",
+								"attachments",
+								"{{fileId}}",
+								"{{fileName}}"
+							]
+						},
+						"description": "Downloads binary attachment stream."
+					},
+					"response": []
+				},
+				{
+					"name": "GET /rag/pages/:pageIdOrSlug/comments",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{ragApiKey}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/rag/pages/{{pageIdOrSlug}}/comments",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"rag",
+								"pages",
+								"{{pageIdOrSlug}}",
+								"comments"
+							]
+						},
+						"description": "Returns comments including resolved comments and JSON content."
+					},
+					"response": []
+				},
+				{
+					"name": "GET /rag/pages/:pageIdOrSlug/export",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{ragApiKey}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/rag/pages/{{pageIdOrSlug}}/export?format={{exportFormat}}&includeAttachments=true&includeChildren=true",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"rag",
+								"pages",
+								"{{pageIdOrSlug}}",
+								"export"
+							],
+							"query": [
+								{
+									"key": "format",
+									"value": "{{exportFormat}}"
+								},
+								{
+									"key": "includeAttachments",
+									"value": "true"
+								},
+								{
+									"key": "includeChildren",
+									"value": "true"
+								}
+							]
+						},
+						"description": "Page export wrapper. Response is ZIP stream."
+					},
+					"response": []
+				},
+				{
+					"name": "GET /rag/space/export",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{ragApiKey}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/rag/space/export?format={{exportFormat}}&includeAttachments=true",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"rag",
+								"space",
+								"export"
+							],
+							"query": [
+								{
+									"key": "format",
+									"value": "{{exportFormat}}"
+								},
+								{
+									"key": "includeAttachments",
+									"value": "true"
+								}
+							]
+						},
+						"description": "Space export wrapper. Response is ZIP stream."
+					},
+					"response": []
+				}
+			],
+			"description": "All requests in this folder require Authorization: Bearer {{ragApiKey}}."
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:3000/api",
+			"type": "string"
+		},
+		{
+			"key": "ragApiKey",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "spaceId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "apiKeyName",
+			"value": "RAG Integration Key",
+			"type": "string"
+		},
+		{
+			"key": "createdApiKeyId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "createdApiKeyToken",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "includeContent",
+			"value": "true",
+			"type": "string"
+		},
+		{
+			"key": "updatedSince",
+			"value": "0",
+			"type": "string"
+		},
+		{
+			"key": "deletedSince",
+			"value": "0",
+			"type": "string"
+		},
+		{
+			"key": "pageIdOrSlug",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "databaseIdOrPageSlug",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "pageIds",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "fileId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "fileName",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "exportFormat",
+			"value": "markdown",
+			"type": "string"
+		}
+	]
+}

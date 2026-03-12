@@ -53,14 +53,16 @@ const MentionList = forwardRef<any, MentionListProps>((props, ref) => {
   const createPageMutation = useCreatePageMutation();
   const emit = useQueryEmit();
   const isInCommentContext = props.isInCommentContext ?? false;
+  const mentionQuery = props.query.trim();
+  const shouldSearchSuggestions = mentionQuery.length > 0;
 
   const { data: suggestion, isLoading } = useSearchSuggestionsQuery({
-    query: props.query,
+    query: mentionQuery,
     includeUsers: true,
     includePages: true,
-    spaceId: space.id,
+    spaceId: space?.id,
     limit: 10,
-    preload: true,
+    preload: shouldSearchSuggestions,
   });
 
   const createPageItem = (label: string) : MentionSuggestionItem => {
@@ -75,6 +77,14 @@ const MentionList = forwardRef<any, MentionListProps>((props, ref) => {
   }
 
   useEffect(() => {
+    if (!shouldSearchSuggestions) {
+      setRenderItems([]);
+      // update editor storage
+      //@ts-ignore
+      props.editor.storage.mentionItems = [];
+      return;
+    }
+
     if (suggestion && !isLoading) {
       let items: MentionSuggestionItem[] = [];
 
@@ -105,8 +115,8 @@ const MentionList = forwardRef<any, MentionListProps>((props, ref) => {
           })),
         );
       }
-      if (!isInCommentContext && props.query) {
-        items.push(createPageItem(props.query));
+      if (!isInCommentContext && mentionQuery) {
+        items.push(createPageItem(mentionQuery));
       }
 
       setRenderItems(items);
@@ -114,7 +124,7 @@ const MentionList = forwardRef<any, MentionListProps>((props, ref) => {
       //@ts-ignore
       props.editor.storage.mentionItems = items;
     }
-  }, [suggestion, isLoading]);
+  }, [suggestion, isLoading, shouldSearchSuggestions, mentionQuery]);
 
   const selectItem = useCallback(
     (index: number) => {

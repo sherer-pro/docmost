@@ -5,9 +5,10 @@ export interface IComment {
   id: string;
   content: string;
   selection?: string;
-  type?: string;
+  type?: 'inline' | 'page' | null;
   creatorId: string;
   pageId: string;
+  spaceId?: string;
   parentCommentId?: string;
   resolvedById?: string;
   resolvedAt?: Date;
@@ -25,6 +26,7 @@ export interface ICommentData {
   parentCommentId?: string;
   content: any;
   selection?: string;
+  type?: 'inline' | 'page';
 }
 
 export interface IResolveComment {
