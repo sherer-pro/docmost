@@ -11,6 +11,9 @@
 - Added Markdown export for the current table view (respects visible columns/filters/sorting).
 - Added conversion between databases and pages (both directions).
 - Added database change history support.
+- The page and database export system has been fully redesigned: Markdown, HTML, and PDF are now supported.
+- PDF export has been significantly improved: diagrams, attachments, and system blocks are rendered more accurately.
+- Database exports now include options to include attachments and child pages.
 
 ## RAG/AI
 
@@ -32,6 +35,7 @@
 
 - Added the ability to mark comments as resolved.
 - Added the ability to hide/show resolved comments.
+- The commenting system has been improved: page-level comments were added, and filters and reply handling were fixed.
 
 ## Member Visibility Restrictions
 
