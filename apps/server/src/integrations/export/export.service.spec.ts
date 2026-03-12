@@ -63,9 +63,13 @@ describe('ExportService PDF export', () => {
   };
 
   const htmlPdfRendererService = {
-    render: jest.fn<Promise<Buffer>, [string]>(
+    render: jest.fn<Promise<Buffer>, [string, { attachmentToken?: string }?]>(
       async () => Buffer.from('%PDF-1.7 mock'),
     ),
+  };
+
+  const tokenService = {
+    generateAttachmentPageToken: jest.fn(async () => 'attachment-page-token'),
   };
 
   const service = new ExportService(
@@ -74,6 +78,7 @@ describe('ExportService PDF export', () => {
     storageService as any,
     environmentService as any,
     htmlPdfRendererService as any,
+    tokenService as any,
   );
 
   const streamToBuffer = async (
@@ -169,8 +174,83 @@ describe('ExportService PDF export', () => {
 
     expect(Buffer.isBuffer(exported)).toBe(true);
     expect(htmlPdfRendererService.render).toHaveBeenCalledTimes(1);
-    const [renderedHtml] = htmlPdfRendererService.render.mock.calls[0];
+    const [renderedHtml, renderOpts] = htmlPdfRendererService.render.mock.calls[0];
     expect(renderedHtml).toContain('<meta charset="UTF-8" />');
+    expect(renderOpts).toEqual({ attachmentToken: 'attachment-page-token' });
+  });
+
+  it('normalizes private attachment URLs to public URLs for PDF content', async () => {
+    const page = createPage({
+      id: 'page-1',
+      slugId: 'slug-1',
+      title: 'Root',
+      parentPageId: null,
+      text: 'Hello from page',
+    });
+
+    const body = await service.buildPagePdfBody({
+      page: page as any,
+      pageHtml:
+        '<p><img src="/api/files/file-1/image.png?t=10" alt="img" /></p>' +
+        '<div data-type="drawio" data-src="/api/files/file-2/diagram.drawio.svg"></div>',
+    });
+
+    expect(body.bodyHtml).toContain(
+      'http://localhost:3000/api/files/public/file-1/image.png?t=10',
+    );
+    expect(body.bodyHtml).toContain(
+      'http://localhost:3000/api/files/public/file-2/diagram.drawio.svg',
+    );
+    expect(body.bodyHtml).toContain('<img');
+    expect(body.attachmentToken).toBe('attachment-page-token');
+  });
+
+  it('inlines excalidraw diagram svg from storage for PDF content', async () => {
+    const page = createPage({
+      id: 'page-1',
+      slugId: 'slug-1',
+      title: 'Root',
+      parentPageId: null,
+      text: 'Hello from page',
+    });
+    const attachmentId = '11111111-1111-4111-8111-111111111111';
+    const previousSelectFromImplementation = db.selectFrom.getMockImplementation();
+    db.selectFrom.mockImplementation((tableName: string) => {
+      if (tableName === 'attachments') {
+        return {
+          select: () => ({
+            where: () => ({
+              where: () => ({
+                executeTakeFirst: async () => ({
+                  id: attachmentId,
+                  filePath: 'storage/diagram.excalidraw.svg',
+                  mimeType: 'image/svg+xml',
+                }),
+              }),
+            }),
+          }),
+        };
+      }
+
+      if (previousSelectFromImplementation) {
+        return previousSelectFromImplementation(tableName);
+      }
+
+      return null;
+    });
+    storageService.read.mockResolvedValueOnce(
+      Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"></svg>'),
+    );
+
+    const body = await service.buildPagePdfBody({
+      page: page as any,
+      pageHtml: `<div data-type="excalidraw" data-src="/api/files/${attachmentId}/diagram.excalidraw.svg?t=10" data-attachment-id="${attachmentId}" data-title="Excalidraw"></div>`,
+    });
+
+    expect(storageService.read).toHaveBeenCalledWith(
+      'storage/diagram.excalidraw.svg',
+    );
+    expect(body.bodyHtml).toContain('data:image/svg+xml;base64,');
   });
 
   it('localizes custom field labels and omits metadata heading', async () => {
