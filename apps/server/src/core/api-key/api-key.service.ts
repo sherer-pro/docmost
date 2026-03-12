@@ -19,6 +19,7 @@ import { JwtApiKeyPayload } from '../auth/dto/jwt-payload';
 import { UserRepo } from '@docmost/db/repos/user/user.repo';
 import { WorkspaceRepo } from '@docmost/db/repos/workspace/workspace.repo';
 import { SpaceRepo } from '@docmost/db/repos/space/space.repo';
+import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 
 @Injectable()
 export class ApiKeyService {
@@ -28,11 +29,49 @@ export class ApiKeyService {
     private readonly userRepo: UserRepo,
     private readonly workspaceRepo: WorkspaceRepo,
     private readonly spaceRepo: SpaceRepo,
+    private readonly spaceMemberRepo: SpaceMemberRepo,
   ) {}
 
-  private assertAdminOrOwner(user: User) {
-    if (![UserRole.OWNER, UserRole.ADMIN].includes(user.role as UserRole)) {
+  private isAdminOrOwner(user: User) {
+    return [UserRole.OWNER, UserRole.ADMIN].includes(user.role as UserRole);
+  }
+
+  private assertCanUseAdminView(user: User, adminView?: boolean) {
+    if (adminView && !this.isAdminOrOwner(user)) {
       throw new ForbiddenException('Only workspace admins can manage API keys');
+    }
+  }
+
+  private assertCanManageApiKey(user: User, creatorId: string) {
+    if (this.isAdminOrOwner(user)) {
+      return;
+    }
+
+    if (creatorId !== user.id) {
+      throw new ForbiddenException('You can only manage your own API keys');
+    }
+  }
+
+  private async assertCanCreateApiKeyInSpace(
+    user: User,
+    workspace: Workspace,
+    spaceId: string,
+  ) {
+    const space = await this.spaceRepo.findById(spaceId, workspace.id);
+    if (!space || space.workspaceId !== workspace.id) {
+      throw new NotFoundException('Space not found');
+    }
+
+    if (this.isAdminOrOwner(user)) {
+      return;
+    }
+
+    const userSpaceRoles = await this.spaceMemberRepo.getUserSpaceRoles(
+      user.id,
+      spaceId,
+    );
+    if (!userSpaceRoles?.length) {
+      throw new ForbiddenException('You do not have access to this space');
     }
   }
 
@@ -72,20 +111,16 @@ export class ApiKeyService {
   }
 
   async listApiKeys(user: User, workspace: Workspace, dto: ListApiKeysDto) {
-    this.assertAdminOrOwner(user);
+    this.assertCanUseAdminView(user, dto.adminView);
 
-    const creatorId = dto.adminView ? undefined : user.id;
+    const creatorId =
+      dto.adminView && this.isAdminOrOwner(user) ? undefined : user.id;
 
     return this.apiKeyRepo.listApiKeys(workspace.id, dto, { creatorId });
   }
 
   async createApiKey(user: User, workspace: Workspace, dto: CreateApiKeyDto) {
-    this.assertAdminOrOwner(user);
-
-    const space = await this.spaceRepo.findById(dto.spaceId, workspace.id);
-    if (!space || space.workspaceId !== workspace.id) {
-      throw new NotFoundException('Space not found');
-    }
+    await this.assertCanCreateApiKeyInSpace(user, workspace, dto.spaceId);
 
     const expiresAt = this.parseExpiry(dto.expiresAt);
 
@@ -117,8 +152,6 @@ export class ApiKeyService {
   }
 
   async updateApiKey(user: User, workspace: Workspace, dto: UpdateApiKeyDto) {
-    this.assertAdminOrOwner(user);
-
     const existing = await this.apiKeyRepo.findById(dto.apiKeyId);
     if (
       !existing ||
@@ -127,6 +160,8 @@ export class ApiKeyService {
     ) {
       throw new NotFoundException('API key not found');
     }
+
+    this.assertCanManageApiKey(user, existing.creatorId);
 
     await this.apiKeyRepo.updateApiKey(dto.apiKeyId, {
       name: dto.name,
@@ -139,8 +174,6 @@ export class ApiKeyService {
   }
 
   async revokeApiKey(user: User, workspace: Workspace, dto: RevokeApiKeyDto) {
-    this.assertAdminOrOwner(user);
-
     const existing = await this.apiKeyRepo.findById(dto.apiKeyId);
     if (
       !existing ||
@@ -149,6 +182,8 @@ export class ApiKeyService {
     ) {
       throw new NotFoundException('API key not found');
     }
+
+    this.assertCanManageApiKey(user, existing.creatorId);
 
     await this.apiKeyRepo.updateApiKey(dto.apiKeyId, {
       deletedAt: new Date(),
