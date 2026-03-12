@@ -610,6 +610,9 @@ importers:
       mammoth:
         specifier: ^1.11.0
         version: 1.11.0
+      mermaid:
+        specifier: ^11.12.2
+        version: 11.12.2
       mime-types:
         specifier: ^2.1.35
         version: 2.1.35

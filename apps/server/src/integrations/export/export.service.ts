@@ -46,6 +46,8 @@ import * as cheerio from 'cheerio';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { resolveClientDistPath } from '../../common/utils/client-dist-path';
+import { TokenService } from '../../core/auth/services/token.service';
+import { validate as isValidUuid } from 'uuid';
 
 const PAGE_STATUS_LABELS: Record<string, string> = {
   TODO: 'To do',
@@ -89,6 +91,7 @@ export class ExportService {
     private readonly storageService: StorageService,
     private readonly environmentService: EnvironmentService,
     private readonly htmlPdfRendererService: HtmlPdfRendererService,
+    private readonly tokenService: TokenService,
   ) {}
 
   async exportPage(
@@ -127,6 +130,7 @@ export class ExportService {
       return this.renderPdfFromHtmlDocument({
         title: pagePdfBody.title,
         bodyHtml: pagePdfBody.bodyHtml,
+        attachmentToken: pagePdfBody.attachmentToken,
       });
     }
 
@@ -138,7 +142,7 @@ export class ExportService {
     locale?: string;
     singlePage?: boolean;
     pageHtml?: string;
-  }): Promise<{ title: string; bodyHtml: string }> {
+  }): Promise<{ title: string; bodyHtml: string; attachmentToken: string }> {
     const pageTitle = getPageTitle(params.page.title);
     let pageHtml = params.pageHtml;
 
@@ -154,11 +158,20 @@ export class ExportService {
       params.page,
       params.locale,
     );
-    const bodyHtml = this.buildPagePdfBodyHtml(pageHtml, metadataRows);
+    const bodyHtml = await this.buildPagePdfBodyHtml(
+      pageHtml,
+      metadataRows,
+      params.page,
+    );
+    const attachmentToken = await this.tokenService.generateAttachmentPageToken({
+      pageId: params.page.id,
+      workspaceId: params.page.workspaceId,
+    });
 
     return {
       title: pageTitle,
       bodyHtml,
+      attachmentToken,
     };
   }
 
@@ -199,9 +212,12 @@ export class ExportService {
   async renderPdfFromHtmlDocument(params: {
     title: string;
     bodyHtml: string;
+    attachmentToken?: string;
   }): Promise<Buffer> {
     const htmlDocument = this.buildPdfHtmlDocument(params.title, params.bodyHtml);
-    return this.htmlPdfRendererService.render(htmlDocument);
+    return this.htmlPdfRendererService.render(htmlDocument, {
+      attachmentToken: params.attachmentToken,
+    });
   }
 
   private removeColgroupTags(html: string): string {
@@ -209,11 +225,13 @@ export class ExportService {
   }
 
   private buildPdfHtmlDocument(title: string, bodyHtml: string): string {
+    const appUrl = this.ensureTrailingSlash(this.environmentService.getAppUrl());
     return `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="${this.escapeHtml(appUrl)}" />
     <title>${this.escapeHtml(title)}</title>
     <style>
       @page {
@@ -372,6 +390,18 @@ export class ExportService {
         margin: 0 0 6px;
         color: #4b5563;
       }
+      .docmost-diagram-image,
+      .docmost-mermaid-figure svg {
+        max-width: 100%;
+        height: auto;
+      }
+      .docmost-mermaid-figure {
+        margin: 0.75em 0;
+        padding: 10px;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        background: #ffffff;
+      }
     </style>
   </head>
   <body>
@@ -380,10 +410,11 @@ export class ExportService {
 </html>`;
   }
 
-  private buildPagePdfBodyHtml(
+  private async buildPagePdfBodyHtml(
     pageHtml: string,
     metadataRows: Array<{ label: string; value: string }>,
-  ): string {
+    page: Pick<Page, 'workspaceId'>,
+  ): Promise<string> {
     const metadataBlock =
       metadataRows.length > 0
         ? `<section class="docmost-page-metadata">
@@ -398,7 +429,10 @@ export class ExportService {
            </section>`
         : '';
 
-    const pageContentHtml = this.applyPdfCustomBlockFallbacks(pageHtml);
+    const pageContentHtml = await this.applyPdfCustomBlockFallbacks(
+      pageHtml,
+      page,
+    );
 
     return `${metadataBlock}<article class="docmost-page-content">${pageContentHtml}</article>`;
   }
@@ -694,19 +728,27 @@ export class ExportService {
     return userNameById;
   }
 
-  private applyPdfCustomBlockFallbacks(pageHtml: string): string {
+  private async applyPdfCustomBlockFallbacks(
+    pageHtml: string,
+    page: Pick<Page, 'workspaceId'>,
+  ): Promise<string> {
     const $ = cheerio.load(`<div class="docmost-page-content-root">${pageHtml}</div>`);
     const root = $('.docmost-page-content-root');
+    this.normalizePdfResourceUrls($, root);
 
     root.find('div[data-type="linkPreview"]').each((_, node) => {
       const previewNode = $(node);
-      const url = this.readHtmlAttribute(previewNode, ['url', 'data-url']);
+      const url = this.normalizePdfUrl(
+        this.readHtmlAttribute(previewNode, ['url', 'data-url']),
+      );
       const title = this.readHtmlAttribute(previewNode, ['title', 'data-title']);
       const description = this.readHtmlAttribute(previewNode, [
         'description',
         'data-description',
       ]);
-      const image = this.readHtmlAttribute(previewNode, ['image', 'data-image']);
+      const image = this.normalizePdfUrl(
+        this.readHtmlAttribute(previewNode, ['image', 'data-image']),
+      );
       const siteName = this.readHtmlAttribute(previewNode, ['siteName', 'data-site-name']);
 
       const previewCard = $('<section></section>').addClass('docmost-link-preview-block');
@@ -786,35 +828,67 @@ export class ExportService {
       embedNode.replaceWith(embedCard);
     });
 
-    root.find('div[data-type="drawio"], div[data-type="excalidraw"]').each((_, node) => {
+    const diagramNodes = root
+      .find('div[data-type="drawio"], div[data-type="excalidraw"]')
+      .toArray();
+
+    for (const node of diagramNodes) {
       const diagramNode = $(node);
       const src = this.readHtmlAttribute(diagramNode, ['data-src', 'src']);
+      const attachmentId = this.readHtmlAttribute(diagramNode, [
+        'data-attachment-id',
+        'attachmentId',
+      ]);
       const title = this.readHtmlAttribute(diagramNode, ['data-title', 'title']);
       const typeName = this.readHtmlAttribute(diagramNode, ['data-type']);
       const normalizedTypeName =
         typeName === 'drawio' ? 'Draw.io diagram' : 'Excalidraw diagram';
+      const existingImage = diagramNode.find('img').first();
+      const normalizedSrc = await this.resolvePdfDiagramSrc({
+        src,
+        attachmentId,
+        workspaceId: page.workspaceId,
+      });
 
-      if (diagramNode.find('img').length > 0 || !src) {
-        return;
+      if (existingImage.length > 0) {
+        if (!existingImage.attr('src') && normalizedSrc) {
+          existingImage.attr('src', normalizedSrc);
+        }
+        if (!existingImage.attr('alt')) {
+          existingImage.attr('alt', title || normalizedTypeName);
+        }
+        existingImage.addClass('docmost-diagram-image');
+        continue;
       }
 
-      const fallback = $('<section></section>').addClass('docmost-diagram-fallback');
-      fallback.append(
-        $('<p></p>')
-          .addClass('docmost-fallback-title')
-          .text(title || normalizedTypeName),
-      );
-      fallback.append(
-        $('<a></a>')
-          .addClass('docmost-fallback-link')
-          .attr('href', src)
-          .attr('target', '_blank')
-          .attr('rel', 'noopener noreferrer')
-          .text(src),
-      );
+      if (!normalizedSrc) {
+        const fallback = $('<section></section>').addClass('docmost-diagram-fallback');
+        fallback.append(
+          $('<p></p>')
+            .addClass('docmost-fallback-title')
+            .text(title || normalizedTypeName),
+        );
+        diagramNode.replaceWith(fallback);
+        continue;
+      }
 
-      diagramNode.replaceWith(fallback);
-    });
+      const renderedDiagram = $('<section></section>').addClass('docmost-diagram-fallback');
+      renderedDiagram.append(
+        $('<img />')
+          .addClass('docmost-diagram-image')
+          .attr('src', normalizedSrc)
+          .attr('alt', title || normalizedTypeName),
+      );
+      if (title) {
+        renderedDiagram.append(
+          $('<p></p>')
+            .addClass('docmost-fallback-title')
+            .text(title),
+        );
+      }
+
+      diagramNode.replaceWith(renderedDiagram);
+    }
 
     root.find('div[data-type="subpages"]').each((_, node) => {
       const subpagesNode = $(node);
@@ -835,6 +909,203 @@ export class ExportService {
     });
 
     return root.html() || '';
+  }
+
+  private async resolvePdfDiagramSrc(params: {
+    src: string;
+    attachmentId?: string;
+    workspaceId: string;
+  }): Promise<string> {
+    const normalizedSrc = this.normalizePdfUrl(params.src);
+    const attachmentId =
+      this.normalizeAttachmentId(params.attachmentId) ||
+      this.extractAttachmentIdFromUrl(normalizedSrc);
+
+    if (!attachmentId) {
+      return normalizedSrc;
+    }
+
+    try {
+      const attachment = await this.db
+        .selectFrom('attachments')
+        .select(['id', 'filePath', 'mimeType'])
+        .where('id', '=', attachmentId)
+        .where('workspaceId', '=', params.workspaceId)
+        .executeTakeFirst();
+
+      if (!attachment?.filePath) {
+        return normalizedSrc;
+      }
+
+      const fileBuffer = await this.storageService.read(attachment.filePath);
+      const mimeType = attachment.mimeType?.trim() || 'image/svg+xml';
+      return `data:${mimeType};base64,${fileBuffer.toString('base64')}`;
+    } catch (err) {
+      this.logger.debug(
+        `Failed to inline diagram attachment ${attachmentId} for PDF export`,
+        err,
+      );
+      return normalizedSrc;
+    }
+  }
+
+  private normalizeAttachmentId(value?: string): string | null {
+    const candidate = value?.trim();
+    if (!candidate || !isValidUuid(candidate)) {
+      return null;
+    }
+
+    return candidate;
+  }
+
+  private extractAttachmentIdFromUrl(url?: string): string | null {
+    if (!url) {
+      return null;
+    }
+
+    try {
+      const parsed = new URL(url, this.environmentService.getAppUrl());
+      const match = parsed.pathname.match(
+        /\/(?:api\/)?(?:attachments\/files(?:\/public)?|files(?:\/public)?)\/([0-9a-fA-F-]{36})\//,
+      );
+
+      if (!match?.[1] || !isValidUuid(match[1])) {
+        return null;
+      }
+
+      return match[1];
+    } catch (err) {
+      return null;
+    }
+  }
+
+  private normalizePdfResourceUrls(
+    $: cheerio.CheerioAPI,
+    root: cheerio.Cheerio<any>,
+  ): void {
+    root.find('[src], [href], [poster], [data-src]').each((_, node) => {
+      const htmlNode = $(node);
+      this.rewriteHtmlUrlAttribute(htmlNode, 'src');
+      this.rewriteHtmlUrlAttribute(htmlNode, 'href', true);
+      this.rewriteHtmlUrlAttribute(htmlNode, 'poster');
+      this.rewriteHtmlUrlAttribute(htmlNode, 'data-src');
+    });
+  }
+
+  private rewriteHtmlUrlAttribute(
+    node: cheerio.Cheerio<any>,
+    attributeName: string,
+    onlyAttachments = false,
+  ): void {
+    const attrValue = node.attr(attributeName);
+    if (!attrValue?.trim()) {
+      return;
+    }
+
+    if (onlyAttachments && !this.isAttachmentUrlLike(attrValue)) {
+      return;
+    }
+
+    node.attr(attributeName, this.normalizePdfUrl(attrValue));
+  }
+
+  private normalizePdfUrl(url: string): string {
+    const normalizedUrl = url?.trim();
+    if (!normalizedUrl || this.shouldSkipPdfUrlNormalization(normalizedUrl)) {
+      return normalizedUrl;
+    }
+
+    let parsed: URL;
+    try {
+      parsed = new URL(normalizedUrl, this.environmentService.getAppUrl());
+    } catch (err) {
+      return normalizedUrl;
+    }
+
+    if (this.isAttachmentFilePath(parsed.pathname)) {
+      parsed.pathname = this.rewriteAttachmentPathToPublic(parsed.pathname);
+      parsed.searchParams.delete('jwt');
+    }
+
+    return parsed.toString();
+  }
+
+  private shouldSkipPdfUrlNormalization(url: string): boolean {
+    const lowerCaseUrl = url.toLowerCase();
+    return (
+      lowerCaseUrl.startsWith('data:') ||
+      lowerCaseUrl.startsWith('blob:') ||
+      lowerCaseUrl.startsWith('mailto:') ||
+      lowerCaseUrl.startsWith('tel:') ||
+      lowerCaseUrl.startsWith('javascript:') ||
+      lowerCaseUrl.startsWith('#')
+    );
+  }
+
+  private isAttachmentFilePath(pathname: string): boolean {
+    return (
+      pathname.startsWith('/api/files/') ||
+      pathname.startsWith('/files/') ||
+      pathname.startsWith('/api/attachments/files/') ||
+      pathname.startsWith('/attachments/files/')
+    );
+  }
+
+  private isAttachmentUrlLike(url: string): boolean {
+    const normalizedUrl = url?.trim();
+    if (!normalizedUrl || this.shouldSkipPdfUrlNormalization(normalizedUrl)) {
+      return false;
+    }
+
+    try {
+      const parsed = new URL(normalizedUrl, this.environmentService.getAppUrl());
+      return this.isAttachmentFilePath(parsed.pathname);
+    } catch (err) {
+      return false;
+    }
+  }
+
+  private rewriteAttachmentPathToPublic(pathname: string): string {
+    if (
+      pathname.startsWith('/api/files/public/') ||
+      pathname.startsWith('/files/public/') ||
+      pathname.startsWith('/api/attachments/files/public/') ||
+      pathname.startsWith('/attachments/files/public/')
+    ) {
+      return pathname;
+    }
+
+    if (pathname.startsWith('/api/attachments/files/')) {
+      return pathname.replace(
+        '/api/attachments/files/',
+        '/api/attachments/files/public/',
+      );
+    }
+
+    if (pathname.startsWith('/attachments/files/')) {
+      return pathname.replace(
+        '/attachments/files/',
+        '/attachments/files/public/',
+      );
+    }
+
+    if (pathname.startsWith('/api/files/')) {
+      return pathname.replace('/api/files/', '/api/files/public/');
+    }
+
+    if (pathname.startsWith('/files/')) {
+      return pathname.replace('/files/', '/files/public/');
+    }
+
+    return pathname;
+  }
+
+  private ensureTrailingSlash(url: string): string {
+    if (!url) {
+      return '/';
+    }
+
+    return url.endsWith('/') ? url : `${url}/`;
   }
 
   private readHtmlAttribute(
@@ -999,8 +1270,10 @@ export class ExportService {
 
         if (includeAttachments) {
           await this.zipAttachments(updatedJsonContent, page.spaceId, folder);
-          updatedJsonContent =
-            updateAttachmentUrlsToLocalPaths(updatedJsonContent);
+          if (format !== ExportFormat.PDF) {
+            updatedJsonContent =
+              updateAttachmentUrlsToLocalPaths(updatedJsonContent);
+          }
         }
 
         const pageTitle = getPageTitle(page.title);
