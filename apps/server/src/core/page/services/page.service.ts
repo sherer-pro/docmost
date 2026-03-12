@@ -567,7 +567,7 @@ export class PageService {
 
       const basePayload = {
         spaceId: page.spaceId,
-        name: page.title?.trim() || 'Untitled database',
+        name: page.title?.trim() ?? '',
         icon: page.icon,
         description: null,
         workspaceId: page.workspaceId,
