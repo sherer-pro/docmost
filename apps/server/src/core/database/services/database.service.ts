@@ -47,10 +47,7 @@ import { validate as isValidUuid } from 'uuid';
 import * as JSZip from 'jszip';
 import { ExportFormat } from '../../../integrations/export/dto/export-dto';
 import { ExportMetadata } from '../../../common/helpers/types/export-metadata.types';
-import {
-  replaceInternalLinks,
-  updateAttachmentUrlsToLocalPaths,
-} from '../../../integrations/export/utils';
+import { replaceInternalLinks } from '../../../integrations/export/utils';
 import { getProsemirrorContent } from '../../../common/helpers/prosemirror/utils';
 
 interface IDatabaseCellValueWithFallback {
@@ -1315,10 +1312,9 @@ export class DatabaseService {
     user: User;
     workspaceId: string;
     locale?: string;
-    includeAttachments: boolean;
     rootMetadataPath: string;
     slugIdToExportPath: Record<string, string>;
-  }): Promise<{ title: string; bodyHtml: string }> {
+  }): Promise<{ title: string; bodyHtml: string; attachmentToken: string }> {
     const rootPage = await this.pageRepo.findById(params.databasePageId, {
       includeContent: true,
     });
@@ -1331,19 +1327,11 @@ export class DatabaseService {
       getProsemirrorContent(rootPage.content),
       rootPage.workspaceId,
     );
-    let rootPageContentWithLocalLinks = replaceInternalLinks(
+    const rootPageContentWithLocalLinks = replaceInternalLinks(
       rootPageContentWithMentions,
       params.slugIdToExportPath,
       params.rootMetadataPath,
     );
-
-    if (params.includeAttachments) {
-      const contentWithLocalAttachments =
-        updateAttachmentUrlsToLocalPaths(rootPageContentWithLocalLinks);
-      if (contentWithLocalAttachments) {
-        rootPageContentWithLocalLinks = contentWithLocalAttachments;
-      }
-    }
 
     const rootPagePdfBody = await this.exportService.buildPagePdfBody({
       page: {
@@ -1361,6 +1349,7 @@ export class DatabaseService {
     return {
       title: rootPagePdfBody.title,
       bodyHtml: `${rootPagePdfBody.bodyHtml}${tableSectionHtml}`,
+      attachmentToken: rootPagePdfBody.attachmentToken,
     };
   }
 
@@ -1403,13 +1392,13 @@ export class DatabaseService {
         user,
         workspaceId,
         locale: user.locale,
-        includeAttachments,
         rootMetadataPath: rootPdfPath.metadataPath,
         slugIdToExportPath,
       });
       const mergedRootPdfBuffer = await this.exportService.renderPdfFromHtmlDocument({
         title: mergedRootPdfBody.title,
         bodyHtml: mergedRootPdfBody.bodyHtml,
+        attachmentToken: mergedRootPdfBody.attachmentToken,
       });
 
       zip.file(rootPdfPath.zipPath, mergedRootPdfBuffer);
@@ -1493,7 +1482,7 @@ export class DatabaseService {
     actorId: string,
     workspaceId: string,
   ) {
-    const normalizedName = dto.name?.trim() || 'Untitled database';
+    const normalizedName = dto.name?.trim() ?? '';
 
     /**
      * Create an “anchor” database page.

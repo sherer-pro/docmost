@@ -410,6 +410,7 @@ export class PageRepo {
       .selectFrom('pages')
       .select(this.baseFields)
       .select((eb) => this.withSpace(eb))
+      .select((eb) => this.withDatabaseId(eb))
       .where('spaceId', '=', spaceId)
       .where('deletedAt', 'is', null);
 
@@ -433,6 +434,7 @@ export class PageRepo {
       .selectFrom('pages')
       .select(this.baseFields)
       .select((eb) => this.withSpace(eb))
+      .select((eb) => this.withDatabaseId(eb))
       .where('spaceId', 'in', this.spaceMemberRepo.getUserSpaceIdsQuery(userId))
       .where('deletedAt', 'is', null);
 
@@ -501,6 +503,16 @@ export class PageRepo {
         .select(['spaces.id', 'spaces.name', 'spaces.slug', 'spaces.settings'])
         .whereRef('spaces.id', '=', 'pages.spaceId'),
     ).as('space');
+  }
+
+  withDatabaseId(eb: ExpressionBuilder<DB, 'pages'>) {
+    return eb
+      .selectFrom('databases')
+      .select('databases.id')
+      .whereRef('databases.pageId', '=', 'pages.id')
+      .where('databases.deletedAt', 'is', null)
+      .limit(1)
+      .as('databaseId');
   }
 
   withCreator(eb: ExpressionBuilder<DB, 'pages'>) {
