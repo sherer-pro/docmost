@@ -844,13 +844,21 @@ export class ExportService {
       const normalizedTypeName =
         typeName === 'drawio' ? 'Draw.io diagram' : 'Excalidraw diagram';
       const existingImage = diagramNode.find('img').first();
-      const normalizedSrc = await this.resolvePdfDiagramSrc({
+      const diagramSource = await this.resolvePdfDiagramSource({
         src,
         attachmentId,
+        diagramType: typeName,
         workspaceId: page.workspaceId,
       });
+      const normalizedSrc = diagramSource.src;
+      const inlineSvgHtml = diagramSource.inlineSvgHtml;
 
       if (existingImage.length > 0) {
+        if (inlineSvgHtml) {
+          existingImage.replaceWith(inlineSvgHtml);
+          continue;
+        }
+
         if (!existingImage.attr('src') && normalizedSrc) {
           existingImage.attr('src', normalizedSrc);
         }
@@ -861,7 +869,7 @@ export class ExportService {
         continue;
       }
 
-      if (!normalizedSrc) {
+      if (!normalizedSrc && !inlineSvgHtml) {
         const fallback = $('<section></section>').addClass('docmost-diagram-fallback');
         fallback.append(
           $('<p></p>')
@@ -873,12 +881,16 @@ export class ExportService {
       }
 
       const renderedDiagram = $('<section></section>').addClass('docmost-diagram-fallback');
-      renderedDiagram.append(
-        $('<img />')
-          .addClass('docmost-diagram-image')
-          .attr('src', normalizedSrc)
-          .attr('alt', title || normalizedTypeName),
-      );
+      if (inlineSvgHtml) {
+        renderedDiagram.append(inlineSvgHtml);
+      } else {
+        renderedDiagram.append(
+          $('<img />')
+            .addClass('docmost-diagram-image')
+            .attr('src', normalizedSrc)
+            .attr('alt', title || normalizedTypeName),
+        );
+      }
       if (title) {
         renderedDiagram.append(
           $('<p></p>')
@@ -911,18 +923,19 @@ export class ExportService {
     return root.html() || '';
   }
 
-  private async resolvePdfDiagramSrc(params: {
+  private async resolvePdfDiagramSource(params: {
     src: string;
     attachmentId?: string;
+    diagramType?: string;
     workspaceId: string;
-  }): Promise<string> {
+  }): Promise<{ src: string; inlineSvgHtml: string | null }> {
     const normalizedSrc = this.normalizePdfUrl(params.src);
     const attachmentId =
       this.normalizeAttachmentId(params.attachmentId) ||
       this.extractAttachmentIdFromUrl(normalizedSrc);
 
     if (!attachmentId) {
-      return normalizedSrc;
+      return { src: normalizedSrc, inlineSvgHtml: null };
     }
 
     try {
@@ -934,19 +947,62 @@ export class ExportService {
         .executeTakeFirst();
 
       if (!attachment?.filePath) {
-        return normalizedSrc;
+        return { src: normalizedSrc, inlineSvgHtml: null };
       }
 
       const fileBuffer = await this.storageService.read(attachment.filePath);
       const mimeType = attachment.mimeType?.trim() || 'image/svg+xml';
-      return `data:${mimeType};base64,${fileBuffer.toString('base64')}`;
+      const inlineSvgHtml =
+        params.diagramType === 'excalidraw'
+          ? this.tryBuildInlineSvgFromBuffer(fileBuffer, mimeType)
+          : null;
+
+      return {
+        src: `data:${mimeType};base64,${fileBuffer.toString('base64')}`,
+        inlineSvgHtml,
+      };
     } catch (err) {
       this.logger.debug(
         `Failed to inline diagram attachment ${attachmentId} for PDF export`,
         err,
       );
-      return normalizedSrc;
+      return { src: normalizedSrc, inlineSvgHtml: null };
     }
+  }
+
+  private tryBuildInlineSvgFromBuffer(
+    fileBuffer: Buffer,
+    mimeType: string,
+  ): string | null {
+    if (!mimeType.toLowerCase().includes('svg')) {
+      return null;
+    }
+
+    const svgContent = fileBuffer.toString('utf8');
+    if (!svgContent.includes('<svg')) {
+      return null;
+    }
+
+    const $ = cheerio.load(svgContent, { xmlMode: true });
+    const svgNode = $('svg').first();
+    if (!svgNode.length) {
+      return null;
+    }
+
+    // Drop scripts and inline event handlers before embedding into export HTML.
+    svgNode.find('script').remove();
+    svgNode.find('*').each((_, childNode) => {
+      const child = $(childNode);
+      const attributes = child.attr() || {};
+      for (const attributeName of Object.keys(attributes)) {
+        if (attributeName.toLowerCase().startsWith('on')) {
+          child.removeAttr(attributeName);
+        }
+      }
+    });
+
+    svgNode.addClass('docmost-diagram-image');
+    return $.xml(svgNode);
   }
 
   private normalizeAttachmentId(value?: string): string | null {

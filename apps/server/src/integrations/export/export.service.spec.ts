@@ -250,7 +250,8 @@ describe('ExportService PDF export', () => {
     expect(storageService.read).toHaveBeenCalledWith(
       'storage/diagram.excalidraw.svg',
     );
-    expect(body.bodyHtml).toContain('data:image/svg+xml;base64,');
+    expect(body.bodyHtml).toContain('<svg');
+    expect(body.bodyHtml).toContain('docmost-diagram-image');
   });
 
   it('localizes custom field labels and omits metadata heading', async () => {
