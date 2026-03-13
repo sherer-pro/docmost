@@ -29,6 +29,8 @@
 
 - `apps/server/src` — main backend code.
 - `apps/server/docs/api-routing-conventions.md` — API routing policy, endpoint inventory, and RPC migration plan.
+- `apps/server/docs/security-regression-runbook.md` — security pre-release checks for GHSA regression classes.
+- `apps/server/docs/release-notes/security-ghsa-remediation-2026-03.md` — security advisory mapping and remediation notes.
 - `apps/client/src` — main frontend code.
 - `apps/client/public/locales/*` — JSON translations.
 - `apps/server/src/database` — migrations and DB tooling.
@@ -50,8 +52,8 @@
 
 - Install dependencies: `pnpm install --frozen-lockfile`
 - Build the entire monorepo: `pnpm build`
-- Quick local verification (lint + backend test + frontend smoke): `pnpm verify:quick`
-- Full local verification (build → lint → tests): `pnpm verify:full`
+- Quick local verification (lint + backend test + frontend smoke + security suite): `pnpm verify:quick`
+- Full local verification (build → lint → tests + security suite): `pnpm verify:full`
 - Clean build artifacts: `pnpm clean`
 
 ### Development
@@ -73,9 +75,12 @@
 ### Tests
 
 - Combined default test stage (backend + frontend smoke): `pnpm test`
+- Security regression suite (server + client targeted tests): `pnpm test:security`
 - Backend unit/integration: `pnpm --filter ./apps/server test`
+- Backend security subset (share SEO + ZIP traversal): `pnpm --filter ./apps/server test:security`
 - Frontend smoke test equivalent (build-based temporary target): `pnpm --filter ./apps/client build`
 - Frontend unit tests (Vitest): `pnpm --filter ./apps/client test`
+- Frontend security subset (Mermaid + embed sanitize): `pnpm --filter ./apps/client test:security`
 - Backend coverage: `pnpm --filter ./apps/server test:cov`
 - Backend coverage smoke (fast regression check): `pnpm --filter ./apps/server test:cov:smoke`
 - Backend alias smoke (verify tsconfig alias resolution in Jest): `pnpm --filter ./apps/server test:alias:smoke`
@@ -170,13 +175,13 @@ Minimum:
 
 - The repository includes GitHub Actions workflows:
   - `.github/workflows/docker.yml` — release/docker build and push.
-  - `.github/workflows/ci.yml` — PR validation (`install`, `build`, `lint`, `test`, `check:comments:en`, `pnpm audit --prod` fail on high/critical).
+  - `.github/workflows/ci.yml` — PR validation (`install`, `build`, `lint`, `client test`, `server test`, `pnpm test:security`, `check:comments:en`, `pnpm audit --prod` fail on high/critical).
 - De facto required local pipeline before PR:
   1. `pnpm install --frozen-lockfile`
   2. for quick checks on day-to-day changes: `pnpm verify:quick`.
-  3. before PR / release candidates: `pnpm verify:full` (build → lint → tests).
+  3. before PR / release candidates: `pnpm verify:full` (build → lint → tests → security suite).
   4. for infrastructure changes — `docker build` and/or `docker compose up` smoke check.
-- Functional checks (`build`, `lint`, `test`) remain mandatory local pre-PR validation.
+- Functional checks (`build`, `lint`, `test`, `test:security`) remain mandatory local pre-PR validation.
 
 ---
 

@@ -39,6 +39,9 @@ jobs:
       - name: Server tests
         run: pnpm --filter ./apps/server test
 
+      - name: Security regression tests
+        run: pnpm test:security
+
       - name: Comment language check
         run: pnpm check:comments:en
 

@@ -36,6 +36,26 @@ describe('sanitizeMermaidSvg', () => {
     assert.equal(sanitized.includes('Node'), true);
   });
 
+  it('blocks javascript URLs in xlink:href attributes', () => {
+    const payload =
+      '<svg><a xlink:href="javascript:alert(1)"><text>Node</text></a></svg>';
+
+    const sanitized = sanitizeMermaidSvg(payload);
+
+    assert.equal(sanitized.includes('javascript:'), false);
+    assert.equal(sanitized.includes('xlink:href='), false);
+  });
+
+  it('strips style attributes with expression() payloads', () => {
+    const payload =
+      '<svg><g style="color:red; width: expression(alert(1))"><text>Node</text></g></svg>';
+
+    const sanitized = sanitizeMermaidSvg(payload);
+
+    assert.equal(sanitized.includes('expression('), false);
+    assert.equal(sanitized.includes('style='), false);
+  });
+
   it('keeps labels when SVG is only parseable through HTML fallback', () => {
     const payload =
       '<svg><foreignObject><div xmlns="http://www.w3.org/1999/xhtml"><span>Label<br></span></div></foreignObject></svg>';
