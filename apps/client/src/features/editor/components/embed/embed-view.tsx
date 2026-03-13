@@ -21,9 +21,9 @@ import i18n from "i18next";
 import {
   getEmbedProviderById,
   getEmbedUrlAndProvider,
-  sanitizeUrl,
 } from "@docmost/editor-ext";
 import { ResizableWrapper } from "../common/resizable-wrapper";
+import { sanitizeEmbedUrl } from "./embed-url-sanitizer";
 import classes from "./embed-view.module.css";
 
 const schema = z.object({
@@ -67,11 +67,11 @@ export default function EmbedView(props: NodeViewProps) {
     if (provider) {
       const embedProvider = getEmbedProviderById(provider);
       if (embedProvider.id === "iframe") {
-        updateAttributes({ src: sanitizeUrl(data.url) });
+        updateAttributes({ src: sanitizeEmbedUrl(data.url) });
         return;
       }
       if (embedProvider.regex.test(data.url)) {
-        updateAttributes({ src: sanitizeUrl(data.url) });
+        updateAttributes({ src: sanitizeEmbedUrl(data.url) });
       } else {
         notifications.show({
           message: t("Invalid {{provider}} embed link", {
@@ -99,7 +99,7 @@ export default function EmbedView(props: NodeViewProps) {
         >
           <iframe
             className={classes.embedIframe}
-            src={sanitizeUrl(embedUrl)}
+            src={sanitizeEmbedUrl(embedUrl)}
             allow="encrypted-media"
             sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
             allowFullScreen

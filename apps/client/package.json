@@ -6,6 +6,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "test": "vitest run",
+    "test:security": "vitest run src/features/editor/components/code-block/mermaid-sanitizer.test.ts src/features/editor/components/embed/embed-provider.compat.test.ts src/features/editor/components/embed/embed-security.test.ts",
     "lint": "eslint .",
     "preview": "vite preview",
     "format": "prettier --write \"src/**/*.tsx\" \"src/**/*.ts\""
