@@ -16,6 +16,7 @@ import { mapPageSettings } from '../page/mappers/page-response.mapper';
 import { validate as isValidUuid } from 'uuid';
 import { CommentRepo } from '@docmost/db/repos/comment/comment.repo';
 import { ExportService } from '../../integrations/export/export.service';
+import { sql } from 'kysely';
 
 interface RagAuthContext {
   user: User;
@@ -445,68 +446,6 @@ export class RagService {
     };
   }
 
-  private async getDatabaseLastChangedAt(databaseId: string, pageId: string) {
-    const [
-      databaseChange,
-      pageChange,
-      propertiesChange,
-      rowsChange,
-      cellsChange,
-      rowPagesChange,
-    ] = await Promise.all([
-      this.db
-        .selectFrom('databases')
-        .select((eb) => eb.fn.max('updatedAt').as('maxChangedAt'))
-        .where('id', '=', databaseId)
-        .executeTakeFirst(),
-      this.db
-        .selectFrom('pages')
-        .select((eb) => eb.fn.max('updatedAt').as('maxChangedAt'))
-        .where('id', '=', pageId)
-        .executeTakeFirst(),
-      this.db
-        .selectFrom('databaseProperties')
-        .select((eb) => eb.fn.max('updatedAt').as('maxChangedAt'))
-        .where('databaseId', '=', databaseId)
-        .executeTakeFirst(),
-      this.db
-        .selectFrom('databaseRows')
-        .select((eb) => eb.fn.max('updatedAt').as('maxChangedAt'))
-        .where('databaseId', '=', databaseId)
-        .executeTakeFirst(),
-      this.db
-        .selectFrom('databaseCells')
-        .select((eb) => eb.fn.max('updatedAt').as('maxChangedAt'))
-        .where('databaseId', '=', databaseId)
-        .executeTakeFirst(),
-      this.db
-        .selectFrom('databaseRows')
-        .innerJoin('pages', 'pages.id', 'databaseRows.pageId')
-        .select((eb) => eb.fn.max('pages.updatedAt').as('maxChangedAt'))
-        .where('databaseRows.databaseId', '=', databaseId)
-        .executeTakeFirst(),
-    ]);
-
-    const dateCandidates = [
-      databaseChange?.maxChangedAt,
-      pageChange?.maxChangedAt,
-      propertiesChange?.maxChangedAt,
-      rowsChange?.maxChangedAt,
-      cellsChange?.maxChangedAt,
-      rowPagesChange?.maxChangedAt,
-    ]
-      .filter(Boolean)
-      .map((value) => new Date(value as Date));
-
-    if (dateCandidates.length === 0) {
-      return null;
-    }
-
-    return new Date(
-      Math.max(...dateCandidates.map((value) => value.getTime())),
-    );
-  }
-
   async getUpdates(scope: RagAuthContext, updatedSinceMs: number) {
     const updatedSince = new Date(updatedSinceMs);
 
@@ -544,19 +483,68 @@ export class RagService {
       )
       .execute();
 
+    const propertiesChanges = this.db
+      .selectFrom('databaseProperties')
+      .select([
+        'databaseId',
+        (eb) => eb.fn.max('updatedAt').as('propertiesUpdatedAt'),
+      ])
+      .groupBy('databaseId')
+      .as('propertiesChanges');
+
+    const rowsChanges = this.db
+      .selectFrom('databaseRows')
+      .select([
+        'databaseId',
+        (eb) => eb.fn.max('updatedAt').as('rowsUpdatedAt'),
+      ])
+      .groupBy('databaseId')
+      .as('rowsChanges');
+
+    const cellsChanges = this.db
+      .selectFrom('databaseCells')
+      .select([
+        'databaseId',
+        (eb) => eb.fn.max('updatedAt').as('cellsUpdatedAt'),
+      ])
+      .groupBy('databaseId')
+      .as('cellsChanges');
+
+    const rowPagesChanges = this.db
+      .selectFrom('databaseRows')
+      .innerJoin('pages as rowPages', 'rowPages.id', 'databaseRows.pageId')
+      .select([
+        'databaseRows.databaseId as databaseId',
+        (eb) => eb.fn.max('rowPages.updatedAt').as('rowPagesUpdatedAt'),
+      ])
+      .groupBy('databaseRows.databaseId')
+      .as('rowPagesChanges');
+
     const activeDatabases = await this.db
       .selectFrom('databases')
-      .innerJoin('pages', 'pages.id', 'databases.pageId')
+      .innerJoin('pages as databasePages', 'databasePages.id', 'databases.pageId')
+      .leftJoin(propertiesChanges, 'propertiesChanges.databaseId', 'databases.id')
+      .leftJoin(rowsChanges, 'rowsChanges.databaseId', 'databases.id')
+      .leftJoin(cellsChanges, 'cellsChanges.databaseId', 'databases.id')
+      .leftJoin(rowPagesChanges, 'rowPagesChanges.databaseId', 'databases.id')
       .select([
         'databases.id as databaseId',
-        'pages.id as pageId',
-        'pages.slugId',
+        'databasePages.id as pageId',
+        'databasePages.slugId',
         'databases.name as title',
+        sql<Date>`GREATEST(
+          COALESCE(databases."updatedAt", to_timestamp(0)),
+          COALESCE("databasePages"."updatedAt", to_timestamp(0)),
+          COALESCE("propertiesChanges"."propertiesUpdatedAt", to_timestamp(0)),
+          COALESCE("rowsChanges"."rowsUpdatedAt", to_timestamp(0)),
+          COALESCE("cellsChanges"."cellsUpdatedAt", to_timestamp(0)),
+          COALESCE("rowPagesChanges"."rowPagesUpdatedAt", to_timestamp(0))
+        )`.as('lastChangedAt'),
       ])
       .where('databases.workspaceId', '=', scope.workspace.id)
       .where('databases.spaceId', '=', scope.space.id)
       .where('databases.deletedAt', 'is', null)
-      .where('pages.deletedAt', 'is', null)
+      .where('databasePages.deletedAt', 'is', null)
       .execute();
 
     const databaseUpdates: Array<{
@@ -570,10 +558,9 @@ export class RagService {
     }> = [];
 
     for (const database of activeDatabases) {
-      const lastChangedAt = await this.getDatabaseLastChangedAt(
-        database.databaseId,
-        database.pageId,
-      );
+      const lastChangedAt = database.lastChangedAt
+        ? new Date(database.lastChangedAt)
+        : null;
 
       if (!lastChangedAt || lastChangedAt < updatedSince) {
         continue;

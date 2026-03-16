@@ -23,18 +23,14 @@ import * as bytes from 'bytes';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
 import { AuthWorkspace } from '../../common/decorators/auth-workspace.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { Attachment, User, Workspace } from '@docmost/db/types/entity.types';
+import { User, Workspace } from '@docmost/db/types/entity.types';
 import { StorageService } from '../../integrations/storage/storage.service';
 import {
   getAttachmentFolderPath,
   validAttachmentTypes,
 } from './attachment.utils';
 import { getMimeType } from '../../common/helpers';
-import {
-  AttachmentType,
-  inlineFileExtensions,
-  MAX_AVATAR_SIZE,
-} from './attachment.constants';
+import { AttachmentType, MAX_AVATAR_SIZE } from './attachment.constants';
 import {
   SpaceCaslAction,
   SpaceCaslSubject,
@@ -45,15 +41,10 @@ import {
   WorkspaceCaslSubject,
 } from '../casl/interfaces/workspace-ability.type';
 import WorkspaceAbilityFactory from '../casl/abilities/workspace-ability.factory';
-import { PageRepo } from '@docmost/db/repos/page/page.repo';
-import { AttachmentRepo } from '@docmost/db/repos/attachment/attachment.repo';
 import { validate as isValidUUID } from 'uuid';
-import { EnvironmentService } from '../../integrations/environment/environment.service';
-import { TokenService } from '../auth/services/token.service';
-import { JwtAttachmentPayload, JwtType } from '../auth/dto/jwt-payload';
 import * as path from 'path';
 import { RemoveIconDto } from './dto/attachment.dto';
-import { resolveAttachmentAccessToken } from './attachment-public-token.util';
+import { AttachmentFileAccessService } from './services/attachment-file-access.service';
 
 @Controller('attachments')
 export class AttachmentController {
@@ -61,13 +52,10 @@ export class AttachmentController {
 
   constructor(
     private readonly attachmentService: AttachmentService,
+    private readonly attachmentFileAccessService: AttachmentFileAccessService,
     private readonly storageService: StorageService,
     private readonly workspaceAbility: WorkspaceAbilityFactory,
     private readonly spaceAbility: SpaceAbilityFactory,
-    private readonly pageRepo: PageRepo,
-    private readonly attachmentRepo: AttachmentRepo,
-    private readonly environmentService: EnvironmentService,
-    private readonly tokenService: TokenService,
   ) {}
 
   @UseGuards(JwtAuthGuard)
@@ -80,73 +68,7 @@ export class AttachmentController {
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
-    const maxFileSize = bytes(this.environmentService.getFileUploadSizeLimit());
-
-    let file = null;
-    try {
-      file = await req.file({
-        limits: { fileSize: maxFileSize, fields: 3, files: 1 },
-      });
-    } catch (err: any) {
-      this.logger.error(err.message);
-      if (err?.statusCode === 413) {
-        throw new BadRequestException(
-          `File too large. Exceeds the ${this.environmentService.getFileUploadSizeLimit()} limit`,
-        );
-      }
-    }
-
-    if (!file) {
-      throw new BadRequestException('Failed to upload file');
-    }
-
-    const pageId = file.fields?.pageId?.value;
-
-    if (!pageId) {
-      throw new BadRequestException('PageId is required');
-    }
-
-    const page = await this.pageRepo.findById(pageId);
-
-    if (!page) {
-      throw new NotFoundException('Page not found');
-    }
-
-    const spaceAbility = await this.spaceAbility.createForUser(
-      user,
-      page.spaceId,
-    );
-    if (spaceAbility.cannot(SpaceCaslAction.Manage, SpaceCaslSubject.Page)) {
-      throw new ForbiddenException();
-    }
-
-    const spaceId = page.spaceId;
-
-    const attachmentId = file.fields?.attachmentId?.value;
-    if (attachmentId && !isValidUUID(attachmentId)) {
-      throw new BadRequestException('Invalid attachment id');
-    }
-
-    try {
-      const fileResponse = await this.attachmentService.uploadFile({
-        filePromise: file,
-        pageId: pageId,
-        spaceId: spaceId,
-        userId: user.id,
-        workspaceId: workspace.id,
-        attachmentId: attachmentId,
-      });
-
-      return res.send(fileResponse);
-    } catch (err: any) {
-      if (err?.statusCode === 413) {
-        const errMessage = `File too large. Exceeds the ${this.environmentService.getFileUploadSizeLimit()} limit`;
-        this.logger.error(errMessage);
-        throw new BadRequestException(errMessage);
-      }
-      this.logger.error(err);
-      throw new BadRequestException('Error processing file upload.');
-    }
+    return this.attachmentFileAccessService.uploadFile(req, res, user, workspace);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -157,37 +79,15 @@ export class AttachmentController {
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
     @Param('fileId') fileId: string,
-    @Param('fileName') fileName?: string,
+    @Param('fileName') _fileName?: string,
   ) {
-    if (!isValidUUID(fileId)) {
-      throw new NotFoundException('Invalid file id');
-    }
-
-    const attachment = await this.attachmentRepo.findById(fileId);
-    if (
-      !attachment ||
-      attachment.workspaceId !== workspace.id ||
-      !attachment.pageId ||
-      !attachment.spaceId
-    ) {
-      throw new NotFoundException();
-    }
-
-    const spaceAbility = await this.spaceAbility.createForUser(
+    return this.attachmentFileAccessService.getPrivateFile(
+      req,
+      res,
       user,
-      attachment.spaceId,
+      workspace,
+      fileId,
     );
-
-    if (spaceAbility.cannot(SpaceCaslAction.Read, SpaceCaslSubject.Page)) {
-      throw new ForbiddenException();
-    }
-
-    try {
-      return await this.sendFileResponse(req, res, attachment, 'private');
-    } catch (err) {
-      this.logger.error(err);
-      throw new NotFoundException('File not found');
-    }
   }
 
   @Get('files/public/:fileId/:fileName')
@@ -196,55 +96,16 @@ export class AttachmentController {
     @Res() res: FastifyReply,
     @AuthWorkspace() workspace: Workspace,
     @Param('fileId') fileId: string,
-    @Param('fileName') fileName?: string,
+    @Param('fileName') _fileName?: string,
     @Query('jwt') jwtToken?: string,
   ) {
-    if (!isValidUUID(fileId)) {
-      throw new NotFoundException('File not found');
-    }
-
-    const attachment = await this.attachmentRepo.findById(fileId);
-    if (
-      !attachment ||
-      attachment.workspaceId !== workspace.id ||
-      !attachment.pageId ||
-      !attachment.spaceId
-    ) {
-      throw new NotFoundException('File not found');
-    }
-
-    const accessToken = resolveAttachmentAccessToken(
+    return this.attachmentFileAccessService.getPublicFile(
       req,
-      attachment.pageId,
+      res,
+      workspace,
+      fileId,
       jwtToken,
     );
-
-    let jwtPayload: JwtAttachmentPayload = null;
-    try {
-      jwtPayload = await this.tokenService.verifyJwt(
-        accessToken,
-        JwtType.ATTACHMENT,
-      );
-    } catch (err) {
-      throw new BadRequestException(
-        'Expired or invalid attachment access token',
-      );
-    }
-
-    if (
-      jwtPayload.workspaceId !== workspace.id ||
-      jwtPayload.pageId !== attachment.pageId ||
-      (jwtPayload.attachmentId && jwtPayload.attachmentId !== fileId)
-    ) {
-      throw new NotFoundException('File not found');
-    }
-
-    try {
-      return await this.sendFileResponse(req, res, attachment, 'public');
-    } catch (err) {
-      this.logger.error(err);
-      throw new NotFoundException('File not found');
-    }
   }
 
   @UseGuards(JwtAuthGuard)
@@ -414,71 +275,5 @@ export class AttachmentController {
       await this.attachmentService.removeWorkspaceIcon(workspace);
       return;
     }
-  }
-
-  private async sendFileResponse(
-    req: FastifyRequest,
-    res: FastifyReply,
-    attachment: Attachment,
-    cacheScope: 'private' | 'public',
-  ) {
-    const fileSize = Number(attachment.fileSize);
-    const rangeHeader = req.headers.range;
-
-    res.header('Accept-Ranges', 'bytes');
-
-    if (!inlineFileExtensions.includes(attachment.fileExt)) {
-      res.header(
-        'Content-Disposition',
-        `attachment; filename="${encodeURIComponent(attachment.fileName)}"`,
-      );
-    }
-
-    if (rangeHeader && fileSize) {
-      const match = rangeHeader.match(/bytes=(\d+)-(\d*)/);
-      if (match) {
-        const start = parseInt(match[1], 10);
-        const end = match[2]
-          ? Math.min(parseInt(match[2], 10), fileSize - 1)
-          : fileSize - 1;
-
-        if (start >= fileSize || start > end) {
-          res.status(416);
-          res.header('Content-Range', `bytes */${fileSize}`);
-          return res.send();
-        }
-
-        const fileStream = await this.storageService.readRangeStream(
-          attachment.filePath,
-          { start, end },
-        );
-
-        res.status(206);
-        res.headers({
-          'Content-Type': attachment.mimeType,
-          'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-          'Content-Length': end - start + 1,
-          'Cache-Control': `${cacheScope}, max-age=3600`,
-        });
-
-        return res.send(fileStream);
-      }
-    }
-
-    const fileStream = await this.storageService.readStream(
-      attachment.filePath,
-    );
-
-    res.headers({
-      'Content-Type': attachment.mimeType,
-      'Cache-Control': `${cacheScope}, max-age=3600`,
-    });
-
-    const isSvg = attachment.fileExt === '.svg';
-    if (fileSize && !isSvg) {
-      res.header('Content-Length', fileSize);
-    }
-
-    return res.send(fileStream);
   }
 }

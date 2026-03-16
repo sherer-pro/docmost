@@ -21,18 +21,16 @@ import {
   MfaVerifyDto,
 } from './dto/mfa.dto';
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { EnvironmentService } from '../../integrations/environment/environment.service';
-import { CsrfService } from '../../common/security/csrf.service';
 import { UserRepo } from '@docmost/db/repos/user/user.repo';
 import { AuthRateLimitGuard } from '../auth/rate-limit/auth-rate-limit.guard';
 import { AuthRateLimit } from '../auth/rate-limit/auth-rate-limit.decorator';
+import { AuthCookieService } from '../../common/security/auth-cookie.service';
 
 @Controller('mfa')
 export class MfaController {
   constructor(
     private readonly mfaService: MfaService,
-    private readonly environmentService: EnvironmentService,
-    private readonly csrfService: CsrfService,
+    private readonly authCookieService: AuthCookieService,
     private readonly userRepo: UserRepo,
   ) {}
 
@@ -128,7 +126,7 @@ export class MfaController {
       dto.code,
     );
 
-    this.setAuthCookie(res, authToken);
+    this.authCookieService.setAuthCookies(res, authToken);
     return { success: true };
   }
 
@@ -138,24 +136,5 @@ export class MfaController {
   @AuthRateLimit({ endpoint: 'mfaValidateAccess', accountField: 'authToken' })
   async validateAccess(@Req() req: FastifyRequest) {
     return this.mfaService.validateMfaAccess(req.cookies?.authToken);
-  }
-
-  /**
-   * Match auth controller behavior:
-   * after successful MFA verification, set a full access token in the cookie.
-   */
-  private setAuthCookie(res: FastifyReply, token: string) {
-    const csrfToken = this.csrfService.generateToken();
-    const sameSite = this.csrfService.getSameSite();
-
-    res.setCookie('authToken', token, {
-      httpOnly: true,
-      path: '/',
-      expires: this.environmentService.getCookieExpiresIn(),
-      secure: this.environmentService.isHttps(),
-      sameSite,
-    });
-
-    this.csrfService.setCsrfCookie(res, csrfToken);
   }
 }
