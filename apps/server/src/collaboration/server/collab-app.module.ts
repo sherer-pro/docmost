@@ -25,12 +25,7 @@ import { RedisConfigService } from '../../integrations/redis/redis-config.servic
       useClass: RedisConfigService,
     }),
   ],
-  controllers: [
-    AppController,
-    ...(process.env.COLLAB_SHOW_STATS?.toLowerCase() === 'true'
-      ? [CollaborationController]
-      : []),
-  ],
+  controllers: [AppController, CollaborationController],
   providers: [AppService],
 })
 export class CollabAppModule {}

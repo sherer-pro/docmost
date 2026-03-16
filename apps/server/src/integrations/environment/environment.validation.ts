@@ -22,6 +22,10 @@ export class EnvironmentVariables {
   @Matches(/^\d+$/)
   PORT: string;
 
+  @IsOptional()
+  @IsString()
+  HOST: string;
+
   @IsNotEmpty()
   @IsUrl(
     {
@@ -196,6 +200,14 @@ export class EnvironmentVariables {
   COLLAB_URL: string;
 
   @IsOptional()
+  @Matches(/^\d+$/)
+  COLLAB_PORT: string;
+
+  @IsOptional()
+  @IsIn(['true', 'false'])
+  COLLAB_SHOW_STATS: string;
+
+  @IsOptional()
   CLOUD: boolean;
 
   @IsOptional()
@@ -205,6 +217,18 @@ export class EnvironmentVariables {
   @IsOptional()
   @IsIn(['true', 'false'])
   DISABLE_TELEMETRY: string;
+
+  @IsOptional()
+  @IsIn(['true', 'false'])
+  DEBUG_MODE: string;
+
+  @IsOptional()
+  @IsIn(['true', 'false'])
+  DEBUG_DB: string;
+
+  @IsOptional()
+  @IsIn(['true', 'false'])
+  LOG_HTTP: string;
 
   @IsOptional()
   @IsUrl({ protocols: ['http', 'https'], require_tld: false })

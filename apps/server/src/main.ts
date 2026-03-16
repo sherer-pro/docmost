@@ -12,6 +12,7 @@ import fastifyMultipart from '@fastify/multipart';
 import fastifyCookie from '@fastify/cookie';
 import { InternalLogFilter } from './common/logger/internal-log-filter';
 import { createCorsOptions } from './common/security/cors.util';
+import { EnvironmentService } from './integrations/environment/environment.service';
 
 /**
  * Returns the origin from a URL string when parsing succeeds.
@@ -54,10 +55,10 @@ function buildBaseCspDirectives() {
 
   return {
     defaultSrc: ["'self'"],
-    // Intentionally relax CSP: allow embedding external iframes per product requirements.
-    frameSrc: ['*'],
+    // Allow same-origin and HTTPS embeds while blocking insecure protocols.
+    frameSrc: ["'self'", 'https:'],
     // Duplicate the rule for child contexts to keep compatibility with older browsers.
-    childSrc: ['*'],
+    childSrc: ["'self'", 'https:'],
     baseUri: ["'self'"],
     frameAncestors: ["'self'"],
     objectSrc: ["'none'"],
@@ -115,7 +116,7 @@ function buildCspHeaderValue(
 function buildRelaxedCspDirectives() {
   return {
     ...buildBaseCspDirectives(),
-    scriptSrc: ["'self'", "'unsafe-inline'"],
+    scriptSrc: ["'self'"],
   };
 }
 
@@ -126,7 +127,14 @@ function buildRelaxedCspDirectives() {
  * @returns `true` for frontend/share pages that expect inline scripts.
  */
 function shouldUseRelaxedCsp(requestUrl: string): boolean {
-  return !requestUrl.startsWith('/api');
+  if (requestUrl.startsWith('/api')) {
+    return false;
+  }
+
+  const path = requestUrl.split('?')[0];
+  const hasFileExtension = /\.[a-z0-9]+$/i.test(path);
+
+  return !hasFileExtension;
 }
 
 /**
@@ -272,6 +280,7 @@ async function bootstrap() {
   app.enableShutdownHooks();
 
   const logger = new Logger('NestApplication');
+  const environmentService = app.get(EnvironmentService);
 
   process.on('unhandledRejection', (reason, promise) => {
     logger.error(`UnhandledRejection, reason: ${reason}`, promise);
@@ -281,11 +290,11 @@ async function bootstrap() {
     logger.error('UncaughtException:', error);
   });
 
-  const port = process.env.PORT || 3000;
-  const host = process.env.HOST || '0.0.0.0';
+  const port = environmentService.getPort();
+  const host = environmentService.getHost();
   await app.listen(port, host, () => {
     logger.log(
-      `Listening on http://127.0.0.1:${port} / ${process.env.APP_URL}`,
+      `Listening on http://127.0.0.1:${port} / ${environmentService.getAppUrl()}`,
     );
   });
 }

@@ -9,6 +9,7 @@ import { Logger } from '@nestjs/common';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { InternalLogFilter } from '../../common/logger/internal-log-filter';
 import { createCorsOptions } from '../../common/security/cors.util';
+import { EnvironmentService } from '../../integrations/environment/environment.service';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
@@ -37,9 +38,10 @@ async function bootstrap() {
   app.enableShutdownHooks();
 
   const logger = new Logger('CollabServer');
+  const environmentService = app.get(EnvironmentService);
 
-  const port = process.env.COLLAB_PORT || 3001;
-  const host = process.env.HOST || '0.0.0.0';
+  const port = environmentService.getCollabPort();
+  const host = environmentService.getHost();
   await app.listen(port, host, () => {
     logger.log(`Listening on http://127.0.0.1:${port}`);
   });

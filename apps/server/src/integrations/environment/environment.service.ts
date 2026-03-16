@@ -41,6 +41,10 @@ export class EnvironmentService {
     return parseInt(this.configService.get<string>('PORT', '3000'));
   }
 
+  getHost(): string {
+    return this.configService.get<string>('HOST', '0.0.0.0');
+  }
+
   getAppSecret(): string {
     return this.configService.get<string>('APP_SECRET');
   }
@@ -218,6 +222,17 @@ export class EnvironmentService {
     return this.configService.get<string>('COLLAB_URL');
   }
 
+  getCollabPort(): number {
+    return parseInt(this.configService.get<string>('COLLAB_PORT', '3001'));
+  }
+
+  isCollabShowStatsEnabled(): boolean {
+    const showStats = this.configService
+      .get<string>('COLLAB_SHOW_STATS', 'false')
+      .toLowerCase();
+    return showStats === 'true';
+  }
+
   isCollabDisableRedis(): boolean {
     const isStandalone = this.configService
       .get<string>('COLLAB_DISABLE_REDIS', 'false')
@@ -230,6 +245,27 @@ export class EnvironmentService {
       .get<string>('DISABLE_TELEMETRY', 'false')
       .toLowerCase();
     return disable === 'true';
+  }
+
+  isDebugMode(): boolean {
+    const debugMode = this.configService
+      .get<string>('DEBUG_MODE', 'false')
+      .toLowerCase();
+    return debugMode === 'true';
+  }
+
+  isDebugDbEnabled(): boolean {
+    const debugDb = this.configService
+      .get<string>('DEBUG_DB', 'false')
+      .toLowerCase();
+    return debugDb === 'true';
+  }
+
+  isHttpLoggingEnabled(): boolean {
+    const logHttp = this.configService
+      .get<string>('LOG_HTTP', 'false')
+      .toLowerCase();
+    return logHttp === 'true';
   }
 
   getPostHogHost(): string {
