@@ -19,12 +19,18 @@ describe('DatabaseDescriptionEditor', () => {
       cacheSlugId: 'cache-1',
     });
 
-    expect(element.type).toBe(mockPageEditor);
-    expect(element.props.pageId).toBe('page-1');
-    expect(element.props.editable).toBe(true);
-    expect(element.props.cacheSlugId).toBe('cache-1');
-    expect(element.props.showBottomSpacer).toBe(false);
-    expect(element.props.editorContentClassName).toBe(
+    expect(element.type).toBe('div');
+    expect(element.props.className).toBe(
+      classes.databaseDescriptionEditorContainer,
+    );
+
+    const pageEditorElement = element.props.children;
+    expect(pageEditorElement.type).toBe(mockPageEditor);
+    expect(pageEditorElement.props.pageId).toBe('page-1');
+    expect(pageEditorElement.props.editable).toBe(true);
+    expect(pageEditorElement.props.cacheSlugId).toBe('cache-1');
+    expect(pageEditorElement.props.showBottomSpacer).toBe(false);
+    expect(pageEditorElement.props.editorContentClassName).toBe(
       classes.databaseDescriptionEditor,
     );
   });
