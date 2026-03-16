@@ -9,26 +9,26 @@ FROM base AS builder
 
 WORKDIR /app
 
-# 1) Сначала копируем только то, что влияет на зависимости (чтобы работал кэш слоёв)
+# 1) Copy only dependency-defining files first to maximize layer cache reuse.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY patches ./patches
 COPY apps/*/package.json ./apps/
 COPY packages/*/package.json ./packages/
 
-# 2) Управление режимом установки:
-#    - PNPM_OFFLINE=1 (по умолчанию): локально ставим оффлайн из кэша (не скачиваем заново)
-#    - PNPM_OFFLINE=0: для CI/прода разрешаем сеть (может скачивать)
+# 2) Installation mode:
+#    - PNPM_OFFLINE=1 (default): install from cache without network access
+#    - PNPM_OFFLINE=0: allow network access in CI/production
 ARG PNPM_OFFLINE=1
 
-# 3) Сначала "накачиваем" store (может качать только при отсутствии в кэше)
+# 3) Pre-populate pnpm store (downloads only when cache is missing).
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
     pnpm config set store-dir /pnpm/store && \
     pnpm fetch --frozen-lockfile
 
-# 4) Теперь копируем исходники
+# 4) Copy source files.
 COPY . .
 
-# 5) Установка зависимостей (оффлайн локально, онлайн в проде/CI)
+# 5) Install dependencies (offline locally, online in production/CI).
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
     pnpm config set store-dir /pnpm/store && \
     if [ "$PNPM_OFFLINE" = "1" ]; then \
@@ -37,7 +37,7 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
       pnpm install --frozen-lockfile; \
     fi
 
-# 6) Билд
+# 6) Build.
 RUN pnpm build
 
 FROM base AS installer
@@ -80,10 +80,10 @@ RUN chown -R node:node /app
 
 USER node
 
-# Режим установки для runtime-слоя (тот же переключатель)
+# Installation mode for runtime layer (same switch).
 ARG PNPM_OFFLINE=1
 
-# Runtime-зависимости (prod). Локально оффлайн из кэша, в проде/CI можно онлайн.
+# Runtime dependencies (prod). Offline from cache locally, online in production/CI.
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
     pnpm config set store-dir /pnpm/store && \
     if [ "$PNPM_OFFLINE" = "1" ]; then \

@@ -15,5 +15,5 @@ These rules apply to changes in `apps/server`, `apps/client`, `packages/editor-e
 
 - Comments must be English and ASCII-only.
 - ✅ Allowed: `// Validate CSRF token before mutating request state.`
-- ❌ Not allowed: `// Проверяем CSRF-токен перед изменением состояния.`
+- ❌ Not allowed: `// Verify token before changing state. [non-English example omitted intentionally]`
 

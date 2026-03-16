@@ -29,6 +29,7 @@
 
 - `apps/server/src` — main backend code.
 - `apps/server/docs/api-routing-conventions.md` — API routing policy, endpoint inventory, and RPC migration plan.
+- `apps/server/docs/api-route-inventory.generated.md` — generated backend route inventory (`pnpm routes:inventory`).
 - `apps/server/docs/security-regression-runbook.md` — security pre-release checks for GHSA regression classes.
 - `apps/server/docs/release-notes/security-ghsa-remediation-2026-03.md` — security advisory mapping and remediation notes.
 - `apps/client/src` — main frontend code.
@@ -53,8 +54,10 @@
 - Install dependencies: `pnpm install --frozen-lockfile`
 - Build the entire monorepo: `pnpm build`
 - Quick local verification (lint + backend test + frontend smoke + security suite): `pnpm verify:quick`
-- Full local verification (build → lint → tests + security suite): `pnpm verify:full`
+- Full local verification (build → lint → backend tests + frontend smoke + frontend unit + security suite): `pnpm verify:full`
 - Clean build artifacts: `pnpm clean`
+- Regenerate backend route inventory from controllers: `pnpm routes:inventory`
+- Check route inventory drift (regenerates and fails on diff): `pnpm routes:inventory:check`
 
 ### Development
 
@@ -70,11 +73,12 @@
 - Combined lint stage (server + client): `pnpm lint`
 - Backend format: `pnpm --filter ./apps/server format`
 - Frontend format: `pnpm --filter ./apps/client format`
-- Check comments language (server/client src + server tests + client public + editor-ext src): `pnpm check:comments:en`
+- Check comments/docs language (source comments + docs + key root docs/Dockerfile): `pnpm check:comments:en`
 
 ### Tests
 
 - Combined default test stage (backend + frontend smoke): `pnpm test`
+- Full root test stage (default + frontend unit): `pnpm test:all`
 - Security regression suite (server + client targeted tests): `pnpm test:security`
 - Backend unit/integration: `pnpm --filter ./apps/server test`
 - Backend security subset (share SEO + ZIP traversal): `pnpm --filter ./apps/server test:security`
@@ -175,7 +179,7 @@ Minimum:
 
 - The repository includes GitHub Actions workflows:
   - `.github/workflows/docker.yml` — release/docker build and push.
-  - `.github/workflows/ci.yml` — PR validation (`install`, `build`, `lint`, `client test`, `server test`, `pnpm test:security`, `check:comments:en`, `pnpm audit --prod` fail on high/critical).
+  - `.github/workflows/ci.yml` — PR validation (`install`, `build`, `routes:inventory:check`, `lint`, `client test`, `server test`, `pnpm test:security`, `check:comments:en`, `pnpm audit --prod` fail on high/critical).
 - De facto required local pipeline before PR:
   1. `pnpm install --frozen-lockfile`
   2. for quick checks on day-to-day changes: `pnpm verify:quick`.
@@ -206,6 +210,7 @@ Minimum:
 - Root `start` script runs **backend prod**, but requires prebuilt `dist` (typically via `pnpm build`).
 - Backend production entrypoints are resolved from Nx/Nest build output under `apps/server/dist/apps/server/src/*` (not `apps/server/dist/main`).
 - Compose uses placeholders (`REPLACE_WITH_LONG_SECRET`, `STRONG_DB_PASSWORD`) — do not forget to replace them.
+- Web Push compose defaults are intentionally empty; set all VAPID variables together when enabling push notifications.
 - `migration:codegen` reads env from `../../.env`; if the file is missing, the command fails.
 - Runtime image now includes headless `chromium` + Cyrillic-capable fonts for PDF export, and sets default `PDF_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium`.
 - There are Enterprise areas (`*/ee`): edits there may affect license-restricted code.
