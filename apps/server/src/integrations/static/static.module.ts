@@ -28,6 +28,7 @@ export class StaticModule implements OnModuleInit {
 
     if (fs.existsSync(clientDistPath) && fs.existsSync(indexFilePath)) {
       const indexTemplateFilePath = join(clientDistPath, 'index-template.html');
+      const windowConfigFilePath = join(clientDistPath, 'window-config.js');
       const windowVar = '<!--window-config-->';
 
       const configString = {
@@ -50,16 +51,18 @@ export class StaticModule implements OnModuleInit {
         POSTHOG_KEY: this.environmentService.getPostHogKey(),
       };
 
-      const windowScriptContent = `<script>window.CONFIG=${JSON.stringify(configString)};</script>`;
+      const windowConfigScriptContent = `window.CONFIG=${JSON.stringify(configString)};`;
+      const windowScriptTag = '<script src="/window-config.js"></script>';
 
       if (!fs.existsSync(indexTemplateFilePath)) {
         fs.copyFileSync(indexFilePath, indexTemplateFilePath);
       }
 
       const html = fs.readFileSync(indexTemplateFilePath, 'utf8');
-      const transformedHtml = html.replace(windowVar, windowScriptContent);
+      const transformedHtml = html.replace(windowVar, windowScriptTag);
 
       fs.writeFileSync(indexFilePath, transformedHtml);
+      fs.writeFileSync(windowConfigFilePath, windowConfigScriptContent);
 
       const RENDER_PATH = '*';
 
