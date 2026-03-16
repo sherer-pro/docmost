@@ -1,117 +1,87 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { JwtType } from '../auth/dto/jwt-payload';
-import { getAttachmentTokenCookieName } from './attachment-public-token.util';
 import { LegacyFilesController } from './legacy-files.controller';
 
-describe('LegacyFilesController public file access', () => {
-  const fileId = '11111111-1111-4111-8111-111111111111';
-  const workspaceId = 'workspace-1';
-  const pageId = 'page-1';
-
-  const attachmentRepo = {
-    findById: jest.fn(),
-  };
-  const tokenService = {
-    verifyJwt: jest.fn(),
+describe('LegacyFilesController', () => {
+  const attachmentFileAccessService = {
+    uploadFile: jest.fn(),
+    getPrivateFile: jest.fn(),
+    getPublicFile: jest.fn(),
   };
 
-  const controller = new LegacyFilesController(
-    {} as any,
-    {} as any,
-    {} as any,
-    attachmentRepo as any,
-    {} as any,
-    tokenService as any,
-    {} as any,
-  );
+  const controller = new LegacyFilesController(attachmentFileAccessService as any);
 
   beforeEach(() => {
     jest.clearAllMocks();
-    attachmentRepo.findById.mockResolvedValue({
-      id: fileId,
-      workspaceId,
-      pageId,
-      spaceId: 'space-1',
-    });
-    tokenService.verifyJwt.mockResolvedValue({
-      workspaceId,
-      pageId,
-      type: JwtType.ATTACHMENT,
-    });
-    (controller as any).sendFileResponse = jest.fn().mockResolvedValue('ok');
+    attachmentFileAccessService.uploadFile.mockResolvedValue('upload-result');
+    attachmentFileAccessService.getPrivateFile.mockResolvedValue('private-result');
+    attachmentFileAccessService.getPublicFile.mockResolvedValue('public-result');
   });
 
-  it('accepts page-scoped cookie token for legacy /files/public URLs', async () => {
-    const req = {
-      headers: {},
-      cookies: {
-        [getAttachmentTokenCookieName(pageId)]: 'cookie-token',
-      },
-    } as any;
+  it('delegates uploadFile to AttachmentFileAccessService', async () => {
+    const req = { file: jest.fn() } as any;
+    const res = {} as any;
+    const user = { id: 'user-1' } as any;
+    const workspace = { id: 'workspace-1' } as any;
 
-    await controller.getPublicFile(
+    const result = await controller.uploadFile(req, res, user, workspace);
+
+    expect(attachmentFileAccessService.uploadFile).toHaveBeenCalledWith(
       req,
-      {} as any,
-      { id: workspaceId } as any,
+      res,
+      user,
+      workspace,
+    );
+    expect(result).toBe('upload-result');
+  });
+
+  it('delegates getFile to AttachmentFileAccessService', async () => {
+    const req = {} as any;
+    const res = {} as any;
+    const user = { id: 'user-1' } as any;
+    const workspace = { id: 'workspace-1' } as any;
+    const fileId = '11111111-1111-4111-8111-111111111111';
+
+    const result = await controller.getFile(
+      req,
+      res,
+      user,
+      workspace,
+      fileId,
+      'file-name.txt',
+    );
+
+    expect(attachmentFileAccessService.getPrivateFile).toHaveBeenCalledWith(
+      req,
+      res,
+      user,
+      workspace,
       fileId,
     );
-
-    expect(tokenService.verifyJwt).toHaveBeenCalledWith(
-      'cookie-token',
-      JwtType.ATTACHMENT,
-    );
-    expect((controller as any).sendFileResponse).toHaveBeenCalled();
+    expect(result).toBe('private-result');
   });
 
-  it('uses legacy query jwt token when no cookie token is available', async () => {
-    const req = {
-      headers: {},
-      cookies: {},
-    } as any;
+  it('delegates getPublicFile to AttachmentFileAccessService', async () => {
+    const req = { headers: {}, cookies: {} } as any;
+    const res = {} as any;
+    const workspace = { id: 'workspace-1' } as any;
+    const fileId = '11111111-1111-4111-8111-111111111111';
+    const jwt = 'public-jwt';
 
-    await controller.getPublicFile(
+    const result = await controller.getPublicFile(
       req,
-      {} as any,
-      { id: workspaceId } as any,
+      res,
+      workspace,
       fileId,
-      'query-token',
+      'file-name.txt',
+      jwt,
     );
 
-    expect(tokenService.verifyJwt).toHaveBeenCalledWith(
-      'query-token',
-      JwtType.ATTACHMENT,
+    expect(attachmentFileAccessService.getPublicFile).toHaveBeenCalledWith(
+      req,
+      res,
+      workspace,
+      fileId,
+      jwt,
     );
-  });
-
-  it('rejects invalid/expired token', async () => {
-    tokenService.verifyJwt.mockRejectedValue(new Error('bad token'));
-
-    await expect(
-      controller.getPublicFile(
-        { headers: {}, cookies: {} } as any,
-        {} as any,
-        { id: workspaceId } as any,
-        fileId,
-      ),
-    ).rejects.toBeInstanceOf(BadRequestException);
-  });
-
-  it('rejects mismatched attachmentId for attachment-scoped legacy tokens', async () => {
-    tokenService.verifyJwt.mockResolvedValue({
-      workspaceId,
-      pageId,
-      attachmentId: '22222222-2222-4222-8222-222222222222',
-      type: JwtType.ATTACHMENT,
-    });
-
-    await expect(
-      controller.getPublicFile(
-        { headers: {}, cookies: {} } as any,
-        {} as any,
-        { id: workspaceId } as any,
-        fileId,
-        'legacy-token',
-      ),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(result).toBe('public-result');
   });
 });

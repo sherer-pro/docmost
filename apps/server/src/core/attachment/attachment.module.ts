@@ -7,10 +7,11 @@ import { UserModule } from '../user/user.module';
 import { WorkspaceModule } from '../workspace/workspace.module';
 import { AttachmentProcessor } from './processors/attachment.processor';
 import { TokenModule } from '../auth/token.module';
+import { AttachmentFileAccessService } from './services/attachment-file-access.service';
 
 @Module({
   imports: [StorageModule, UserModule, WorkspaceModule, TokenModule],
   controllers: [AttachmentController, LegacyFilesController],
-  providers: [AttachmentService, AttachmentProcessor],
+  providers: [AttachmentService, AttachmentProcessor, AttachmentFileAccessService],
 })
 export class AttachmentModule {}
