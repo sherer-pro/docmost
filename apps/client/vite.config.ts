@@ -35,6 +35,42 @@ export default defineConfig(({ mode }) => {
       APP_VERSION: JSON.stringify(process.env.npm_package_version),
     },
     plugins: [react()],
+    build: {
+      // Excalidraw and Mermaid are intentionally split into dedicated vendor chunks.
+      // Keep warning budget aligned with current plugin/runtime footprint.
+      chunkSizeWarningLimit: 5000,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (!id.includes("node_modules")) {
+              return;
+            }
+
+            if (id.includes("excalidraw")) {
+              return "vendor-excalidraw";
+            }
+
+            if (id.includes("mermaid")) {
+              return "vendor-mermaid";
+            }
+
+            if (id.includes("@tiptap") || id.includes("prosemirror")) {
+              return "vendor-editor";
+            }
+
+            if (
+              id.includes("react-dom") ||
+              id.includes("react-router") ||
+              id.includes("/react/")
+            ) {
+              return "vendor-react";
+            }
+
+            return "vendor";
+          },
+        },
+      },
+    },
     resolve: {
       alias: {
         "@": "/src",
