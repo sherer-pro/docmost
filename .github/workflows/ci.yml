@@ -30,6 +30,9 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: API route inventory drift check
+        run: pnpm routes:inventory:check
+
       - name: Lint
         run: pnpm lint
 

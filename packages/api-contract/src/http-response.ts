@@ -1,18 +1,18 @@
 /**
- * Единый контракт HTTP-ответа для endpoint-ов, проходящих через
- * TransformHttpResponseInterceptor на backend.
+ * Unified HTTP response contract for endpoints that pass through
+ * TransformHttpResponseInterceptor on the backend.
  */
 export interface ApiResponseEnvelope<T> {
-  /** Полезная нагрузка бизнес-ответа endpoint-а. */
+  /** Endpoint business payload. */
   data: T;
-  /** Индикатор успешной обработки запроса на уровне приложения. */
+  /** Application-level success indicator. */
   success: true;
-  /** HTTP-статус исходного ответа. */
+  /** Original HTTP status code. */
   status: number;
 }
 
 /**
- * В UI-коде клиентский axios interceptor обычно делает unwrap response.data,
- * поэтому этот тип отражает итоговый тип после unwrap.
+ * In the UI, the axios interceptor usually unwraps `response.data`,
+ * so this type represents the resulting value after unwrap.
  */
 export type UnwrappedApiResponse<T> = T;

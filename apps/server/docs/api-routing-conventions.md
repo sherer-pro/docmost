@@ -2,6 +2,11 @@
 
 This document defines routing style for backend API endpoints in `apps/server`.
 
+Generated inventory reference:
+
+- `apps/server/docs/api-route-inventory.generated.md`
+- regenerate with `pnpm routes:inventory`
+
 ## Core rules
 
 1. Use resource-oriented routes for CRUD:
@@ -39,8 +44,9 @@ This document defines routing style for backend API endpoints in `apps/server`.
 
 ## Current status
 
-- Legacy alias endpoints for space/import/export RPC routes were removed.
-- Only canonical action/resource routes are part of active API surface.
+- Canonical action/resource routes are primary API surface.
+- Legacy compatibility aliases are intentionally preserved where migration safety is required (for example `/files/*` and select `/attachments/*` aliases).
+- Any alias route must have a documented deprecation path and backward-compatibility tests.
 
 ## Databases API shape
 
