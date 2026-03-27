@@ -76,7 +76,7 @@ const STATUS_OPTIONS: {
   {
     value: PageCustomFieldStatus.IN_REVIEW,
     label: "In review",
-    color: "indigo",
+    color: "yellow",
   },
   { value: PageCustomFieldStatus.DONE, label: "Done", color: "green" },
   { value: PageCustomFieldStatus.REJECTED, label: "Rejected", color: "red" },

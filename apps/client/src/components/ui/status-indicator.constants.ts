@@ -7,7 +7,7 @@
 export const STATUS_COLOR_MAP: Record<string, string> = {
   TODO: "var(--mantine-color-gray-6)",
   IN_PROGRESS: "var(--mantine-color-blue-6)",
-  IN_REVIEW: "var(--mantine-color-indigo-6)",
+  IN_REVIEW: "var(--mantine-color-yellow-6)",
   DONE: "var(--mantine-color-green-6)",
   REJECTED: "var(--mantine-color-red-6)",
   ARCHIVED: "var(--mantine-color-dark-4)",
