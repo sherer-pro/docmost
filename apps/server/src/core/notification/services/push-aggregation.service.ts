@@ -139,8 +139,18 @@ export class PushAggregationService {
     const retryIds: string[] = [];
 
     for (const item of dueItems) {
-      const shouldSend = await this.hasUnreadNotificationsInWindow(item);
-      if (!shouldSend) {
+      const isPushStillEnabled =
+        await this.notificationDeliveryPolicyService.shouldSend({
+          channel: 'push',
+          userId: item.userId,
+        });
+      if (!isPushStillEnabled) {
+        cancelledIds.push(item.id);
+        continue;
+      }
+
+      const hasUnreadNotifications = await this.hasUnreadNotificationsInWindow(item);
+      if (!hasUnreadNotifications) {
         cancelledIds.push(item.id);
         continue;
       }
