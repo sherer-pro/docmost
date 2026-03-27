@@ -11,9 +11,11 @@ import {
   markNotificationsRead,
   markAllNotificationsRead,
 } from "../services/notification-service";
-
-export const NOTIFICATION_KEY = ["notifications"];
-export const UNREAD_COUNT_KEY = ["notifications", "unread-count"];
+import {
+  invalidateNotificationQueries,
+  NOTIFICATION_KEY,
+  UNREAD_COUNT_KEY,
+} from "./notification-query-keys";
 
 export function useNotificationsQuery() {
   return useInfiniteQuery({
@@ -41,8 +43,8 @@ export function useMarkReadMutation() {
   return useMutation({
     mutationFn: (notificationIds: string[]) =>
       markNotificationsRead(notificationIds),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: NOTIFICATION_KEY });
+    onSuccess: async () => {
+      await invalidateNotificationQueries(queryClient);
     },
   });
 }
@@ -52,8 +54,8 @@ export function useMarkAllReadMutation() {
 
   return useMutation({
     mutationFn: markAllNotificationsRead,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: NOTIFICATION_KEY });
+    onSuccess: async () => {
+      await invalidateNotificationQueries(queryClient);
     },
   });
 }

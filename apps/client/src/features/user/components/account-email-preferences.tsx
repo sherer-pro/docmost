@@ -18,28 +18,39 @@ export default function AccountEmailPreferences() {
   const emailEnabled =
     user.settings?.preferences?.emailEnabled ?? DEFAULT_EMAIL_ENABLED;
   const [isEmailEnabled, setIsEmailEnabled] = useState(emailEnabled);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    if (isEmailEnabled !== emailEnabled) {
-      setIsEmailEnabled(emailEnabled);
-    }
-  }, [emailEnabled, isEmailEnabled]);
+    setIsEmailEnabled(emailEnabled);
+  }, [emailEnabled]);
 
   const handleEmailEnabled = useCallback(
     async (enabled: boolean) => {
+      if (enabled === isEmailEnabled) {
+        return;
+      }
+
+      const previousEmailEnabled = isEmailEnabled;
+      setIsSaving(true);
+      setIsEmailEnabled(enabled);
+
       try {
         const updatedUser = await updateUser({ emailEnabled: enabled });
-        setIsEmailEnabled(enabled);
         setUser(updatedUser);
+        setIsEmailEnabled(
+          updatedUser.settings?.preferences?.emailEnabled ?? DEFAULT_EMAIL_ENABLED,
+        );
       } catch {
-        setIsEmailEnabled(emailEnabled);
+        setIsEmailEnabled(previousEmailEnabled);
         notifications.show({
           color: "red",
           message: t("Failed to update email notification settings. Please try again."),
         });
+      } finally {
+        setIsSaving(false);
       }
     },
-    [emailEnabled, setUser, t],
+    [isEmailEnabled, setUser, t],
   );
 
   return (
@@ -54,9 +65,11 @@ export default function AccountEmailPreferences() {
       <ResponsiveSettingsControl>
         <Switch
           checked={isEmailEnabled}
+          disabled={isSaving}
           onChange={(event) => {
             void handleEmailEnabled(event.currentTarget.checked);
           }}
+          aria-busy={isSaving}
           aria-label={t("Toggle email notifications")}
         />
       </ResponsiveSettingsControl>
