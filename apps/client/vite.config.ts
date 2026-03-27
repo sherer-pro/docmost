@@ -54,19 +54,9 @@ export default defineConfig(({ mode }) => {
               return "vendor-mermaid";
             }
 
-            if (id.includes("@tiptap") || id.includes("prosemirror")) {
-              return "vendor-editor";
-            }
-
-            if (
-              id.includes("react-dom") ||
-              id.includes("react-router") ||
-              id.includes("/react/")
-            ) {
-              return "vendor-react";
-            }
-
-            return "vendor";
+            // Leave the rest of node_modules to Rollup so it can avoid
+            // cross-chunk initialization cycles between React/editor deps.
+            return;
           },
         },
       },
