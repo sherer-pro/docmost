@@ -42,22 +42,20 @@ export default function AccountPushPreferences() {
   const [isPushEnabled, setIsPushEnabled] = useState(pushEnabled);
   const [selectedFrequency, setSelectedFrequency] =
     useState<PushFrequency>(pushFrequency);
+  const [isSavingPushEnabled, setIsSavingPushEnabled] = useState(false);
+  const [isSavingFrequency, setIsSavingFrequency] = useState(false);
 
   useEffect(() => {
     setPermission(getNotificationPermission());
   }, []);
 
   useEffect(() => {
-    if (isPushEnabled !== pushEnabled) {
-      setIsPushEnabled(pushEnabled);
-    }
-  }, [isPushEnabled, pushEnabled]);
+    setIsPushEnabled(pushEnabled);
+  }, [pushEnabled]);
 
   useEffect(() => {
-    if (selectedFrequency !== pushFrequency) {
-      setSelectedFrequency(pushFrequency);
-    }
-  }, [pushFrequency, selectedFrequency]);
+    setSelectedFrequency(pushFrequency);
+  }, [pushFrequency]);
 
   const frequencyData = useMemo(
     () =>
@@ -70,14 +68,22 @@ export default function AccountPushPreferences() {
 
   const handlePushEnabled = useCallback(
     async (enabled: boolean) => {
+      if (enabled === isPushEnabled) {
+        return;
+      }
+
+      const previousPushEnabled = isPushEnabled;
+      setIsSavingPushEnabled(true);
+      setIsPushEnabled(enabled);
+
       try {
         if (enabled) {
           if (permission === "unsupported") {
+            setIsPushEnabled(previousPushEnabled);
             notifications.show({
               color: "red",
               message: t("Push notifications are not supported in this browser."),
             });
-            setIsPushEnabled(false);
             return;
           }
 
@@ -85,7 +91,7 @@ export default function AccountPushPreferences() {
           setPermission(requestedPermission);
 
           if (requestedPermission !== "granted") {
-            setIsPushEnabled(false);
+            setIsPushEnabled(previousPushEnabled);
             notifications.show({
               color: "red",
               message: t(
@@ -98,7 +104,7 @@ export default function AccountPushPreferences() {
           try {
             await createPushSubscription();
           } catch {
-            setIsPushEnabled(false);
+            setIsPushEnabled(previousPushEnabled);
             notifications.show({
               color: "red",
               message: t("Failed to enable push notifications. Please try again."),
@@ -107,13 +113,13 @@ export default function AccountPushPreferences() {
           }
 
           const updatedUser = await updateUser({ pushEnabled: true });
-          setIsPushEnabled(true);
           setUser(updatedUser);
+          setIsPushEnabled(
+            updatedUser.settings?.preferences?.pushEnabled ?? DEFAULT_PUSH_ENABLED,
+          );
           return;
         }
 
-        // First try to remove the browser subscription, but do not block disabling
-        // the account setting if the browser operation fails.
         let removeSubscriptionFailed = false;
         try {
           await removePushSubscription();
@@ -121,11 +127,11 @@ export default function AccountPushPreferences() {
           removeSubscriptionFailed = true;
         }
 
-        // Persist the user setting on the server separately so push
-        // is disabled in the account even if the browser-side step partially fails.
         const updatedUser = await updateUser({ pushEnabled: false });
-        setIsPushEnabled(false);
         setUser(updatedUser);
+        setIsPushEnabled(
+          updatedUser.settings?.preferences?.pushEnabled ?? DEFAULT_PUSH_ENABLED,
+        );
 
         if (removeSubscriptionFailed) {
           notifications.show({
@@ -136,29 +142,49 @@ export default function AccountPushPreferences() {
           });
         }
       } catch {
-        setIsPushEnabled(pushEnabled);
+        setIsPushEnabled(previousPushEnabled);
         notifications.show({
           color: "red",
           message: t("Failed to update push notification settings. Please try again."),
         });
+      } finally {
+        setIsSavingPushEnabled(false);
       }
     },
-    [permission, pushEnabled, setUser, t],
+    [isPushEnabled, permission, setUser, t],
   );
 
   const handleFrequencyChange = useCallback(
     async (value: string | null) => {
-      if (!value) {
+      if (!value || value === selectedFrequency) {
         return;
       }
 
       const frequency = value as PushFrequency;
-      const updatedUser = await updateUser({ pushFrequency: frequency });
       setSelectedFrequency(frequency);
-      setUser(updatedUser);
+      setIsSavingFrequency(true);
+
+      try {
+        const updatedUser = await updateUser({ pushFrequency: frequency });
+        setUser(updatedUser);
+        setSelectedFrequency(
+          updatedUser.settings?.preferences?.pushFrequency ??
+            DEFAULT_PUSH_FREQUENCY,
+        );
+      } catch {
+        setSelectedFrequency(pushFrequency);
+        notifications.show({
+          color: "red",
+          message: t("Failed to update push notification settings. Please try again."),
+        });
+      } finally {
+        setIsSavingFrequency(false);
+      }
     },
-    [setUser],
+    [pushFrequency, selectedFrequency, setUser, t],
   );
+
+  const isPushPreferencesBusy = isSavingPushEnabled || isSavingFrequency;
 
   return (
     <ResponsiveSettingsRow>
@@ -172,26 +198,25 @@ export default function AccountPushPreferences() {
       <ResponsiveSettingsControl>
         <Switch
           checked={isPushEnabled}
+          disabled={isPushPreferencesBusy}
           onChange={(event) => {
             void handlePushEnabled(event.currentTarget.checked).catch(() => {
-              // The error is already handled inside handlePushEnabled, so here
-              // we suppress unhandled rejection to keep UI state stable.
+              // The handler already owns user-facing error handling.
             });
           }}
+          aria-busy={isPushPreferencesBusy}
           aria-label={t("Toggle push notifications")}
         />
 
-        {/*
-          Show frequency selection when the user has enabled push notifications
-          in profile settings. This keeps frequency controls visible and editable
-          even when browser permission is temporarily not in `granted` state.
-        */}
         {isPushEnabled && (
           <Select
             mt="sm"
             data={frequencyData}
             value={selectedFrequency}
+            disabled={isPushPreferencesBusy}
+            allowDeselect={false}
             onChange={handleFrequencyChange}
+            aria-busy={isPushPreferencesBusy}
             aria-label={t("Push notification frequency")}
           />
         )}
