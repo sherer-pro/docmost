@@ -139,6 +139,32 @@ describe('PushAggregationService', () => {
     });
   });
 
+  it('cancels delivery in delayed mode when push is disabled before sendAfter', async () => {
+    const {
+      service,
+      pushService,
+      pushNotificationJobRepo,
+      notificationRepo,
+      notificationDeliveryPolicyService,
+    } = createService({ shouldSend: false });
+
+    pushNotificationJobRepo.claimDuePending.mockResolvedValue([dueJob]);
+
+    await service.processDueJobs();
+
+    expect(notificationDeliveryPolicyService.shouldSend).toHaveBeenCalledWith({
+      channel: 'push',
+      userId: 'user-1',
+    });
+    expect(notificationRepo.countUnreadByUserPageInWindow).not.toHaveBeenCalled();
+    expect(pushService.sendToUser).not.toHaveBeenCalled();
+    expect(pushNotificationJobRepo.finalizeClaimed).toHaveBeenCalledWith({
+      sentIds: [],
+      cancelledIds: ['job-1'],
+      retryIds: [],
+    });
+  });
+
   it('does not mark a job as sent on transient delivery failure', async () => {
     const { service, pushService, pushNotificationJobRepo } = createService();
 
