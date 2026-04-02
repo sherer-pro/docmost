@@ -38,6 +38,8 @@ import { IDatabaseRowsQueryParams } from '@/features/database/types/database-tab
 import { dropTreeNodeAtom } from '@/features/page/tree/atoms/tree-data-atom.ts';
 import useToggleAside from '@/hooks/use-toggle-aside.tsx';
 import { useDatabasePageContext } from '@/features/database/hooks/use-database-page-context.ts';
+import PageAccessModal from '@/features/page/components/page-access-modal.tsx';
+import { canOpenPageAccessModal } from '@/features/page/utils/page-access-ui.ts';
 
 interface DatabaseHeaderMenuProps {
   databaseId: string;
@@ -84,6 +86,8 @@ export default function DatabaseHeaderMenu({
   const [exportOpened, { open: openExportModal, close: closeExportModal }] =
     useDisclosure(false);
   const [movePageModalOpened, { open: openMovePageModal, close: closeMovePageModal }] =
+    useDisclosure(false);
+  const [accessModalOpened, { open: openAccessModal, close: closeAccessModal }] =
     useDisclosure(false);
   const { mutateAsync: convertDatabaseToPageAsync, isPending: isConvertingDatabaseToPage } =
     useConvertDatabaseToPageMutation(database?.spaceId, databaseId);
@@ -187,6 +191,10 @@ export default function DatabaseHeaderMenu({
   };
 
   const hasDatabasePage = Boolean(resolvedDatabasePageId);
+  const canOpenAccessModal = canOpenPageAccessModal({
+    pageId: resolvedDatabasePageId,
+    canManageAccess: databaseContext.pageByRoute?.access?.capabilities?.canManageAccess,
+  });
   const canMoveDatabasePage = Boolean(resolvedDatabasePageId && databasePageSlugId);
   /**
    * Keep the same width resolution priority as regular page header:
@@ -247,6 +255,7 @@ export default function DatabaseHeaderMenu({
             onCopyAsMarkdown={handleCopyAsMarkdown}
             onOpenHistory={hasDatabasePage ? openHistoryModal : undefined}
             onOpenExport={openExportModal}
+            onOpenAccess={canOpenAccessModal ? openAccessModal : undefined}
             onPrint={handlePrint}
             databasePageId={databasePageWidthScopeId}
             fullPageWidth={fullPageWidth}
@@ -300,6 +309,14 @@ export default function DatabaseHeaderMenu({
           currentSpaceSlug={spaceSlug}
           onClose={closeMovePageModal}
           open={movePageModalOpened}
+        />
+      )}
+
+      {resolvedDatabasePageId && (
+        <PageAccessModal
+          pageId={resolvedDatabasePageId}
+          open={accessModalOpened}
+          onClose={closeAccessModal}
         />
       )}
     </>

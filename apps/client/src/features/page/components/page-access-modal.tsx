@@ -26,6 +26,7 @@ import {
   PageAccessGroupRuleEntry,
   PageAccessUserEntry,
 } from "@/features/page/types/page.types";
+import { stopPageAccessModalEvent } from "@/features/page/utils/page-access-ui";
 
 interface PageAccessModalProps {
   pageId: string;
@@ -102,35 +103,35 @@ export default function PageAccessModal({
 
   function getSourceLabel(source: string) {
     if (source === "system") {
-      return t("Page access source system");
+      return t("page.access.source.system");
     }
     if (source === "space") {
-      return t("Page access source space");
+      return t("page.access.source.space");
     }
     if (source === "page_user") {
-      return t("Page access source page user");
+      return t("page.access.source.pageUser");
     }
     if (source === "page_group") {
-      return t("Page access source page group");
+      return t("page.access.source.pageGroup");
     }
     return source;
   }
 
   function getRoleLabel(role: "reader" | "writer" | null) {
     if (role === "reader") {
-      return t("Page access role reader");
+      return t("page.access.role.reader");
     }
     if (role === "writer") {
-      return t("Page access role writer");
+      return t("page.access.role.writer");
     }
-    return t("Page access no access");
+    return t("page.access.role.none");
   }
 
   function getEffectLabel(effect: "allow" | "deny") {
     if (effect === "allow") {
-      return t("Page access effect allow");
+      return t("page.access.effect.allow");
     }
-    return t("Page access effect deny");
+    return t("page.access.effect.deny");
   }
 
   useEffect(() => {
@@ -152,13 +153,13 @@ export default function PageAccessModal({
       });
       setNewUserId("");
       await loadUsers();
-      notifications.show({ message: t("Page access updated") });
+      notifications.show({ message: t("page.access.updated") });
     } catch (err: any) {
       notifications.show({
         color: "red",
         message:
           err?.response?.data?.message ||
-          t("Failed to update page access"),
+          t("page.access.updateFailed"),
       });
     }
   }
@@ -175,13 +176,13 @@ export default function PageAccessModal({
       });
       setNewGroupId("");
       await loadGroups();
-      notifications.show({ message: t("Page access updated") });
+      notifications.show({ message: t("page.access.updated") });
     } catch (err: any) {
       notifications.show({
         color: "red",
         message:
           err?.response?.data?.message ||
-          t("Failed to update page access"),
+          t("page.access.updateFailed"),
       });
     }
   }
@@ -190,13 +191,13 @@ export default function PageAccessModal({
     try {
       await closePageUserAccess(pageId, { userId });
       await loadUsers();
-      notifications.show({ message: t("Page access updated") });
+      notifications.show({ message: t("page.access.updated") });
     } catch (err: any) {
       notifications.show({
         color: "red",
         message:
           err?.response?.data?.message ||
-          t("Failed to update page access"),
+          t("page.access.updateFailed"),
       });
     }
   }
@@ -205,225 +206,234 @@ export default function PageAccessModal({
     try {
       await closePageGroupAccess(pageId, { groupId });
       await loadGroups();
-      notifications.show({ message: t("Page access updated") });
+      notifications.show({ message: t("page.access.updated") });
     } catch (err: any) {
       notifications.show({
         color: "red",
         message:
           err?.response?.data?.message ||
-          t("Failed to update page access"),
+          t("page.access.updateFailed"),
       });
     }
   }
 
   return (
-    <Modal
+    <Modal.Root
       opened={open}
       onClose={onClose}
-      title={t("Access")}
       size="lg"
       centered
+      onClick={stopPageAccessModalEvent}
     >
-      <Stack gap="sm">
-        <TextInput
-          placeholder={t("Search")}
-          value={query}
-          onChange={(event) => setQuery(event.currentTarget.value)}
-        />
+      <Modal.Overlay />
+      <Modal.Content>
+        <Modal.Header>
+          <Modal.Title>{t("page.access.title")}</Modal.Title>
+          <Modal.CloseButton />
+        </Modal.Header>
+        <Modal.Body>
+          <Stack gap="sm">
+            <TextInput
+              placeholder={t("Search")}
+              value={query}
+              onChange={(event) => setQuery(event.currentTarget.value)}
+            />
 
-        <Tabs value={activeTab} onChange={setActiveTab}>
-          <Tabs.List>
-            <Tabs.Tab value="users">{t("Users")}</Tabs.Tab>
-            <Tabs.Tab value="groups">{t("Groups")}</Tabs.Tab>
-          </Tabs.List>
+            <Tabs value={activeTab} onChange={setActiveTab}>
+              <Tabs.List>
+                <Tabs.Tab value="users">{t("page.access.tab.users")}</Tabs.Tab>
+                <Tabs.Tab value="groups">{t("page.access.tab.groups")}</Tabs.Tab>
+              </Tabs.List>
 
-          <Tabs.Panel value="users" pt="md">
-            <Group align="end" grow>
-              <TextInput
-                label={t("Page access user id")}
-                value={newUserId}
-                onChange={(event) => setNewUserId(event.currentTarget.value)}
-              />
-              <Select
-                label={t("Role")}
-                data={[
-                  { label: t("Page access role reader"), value: "reader" },
-                  { label: t("Page access role writer"), value: "writer" },
-                ]}
-                value={newRole}
-                onChange={(value) =>
-                  setNewRole((value as "reader" | "writer") ?? "reader")
-                }
-              />
-              <Button onClick={() => void onGrantUser()}>{t("Grant")}</Button>
-            </Group>
+              <Tabs.Panel value="users" pt="md">
+                <Group align="end" grow>
+                  <TextInput
+                    label={t("page.access.field.userId")}
+                    value={newUserId}
+                    onChange={(event) => setNewUserId(event.currentTarget.value)}
+                  />
+                  <Select
+                    label={t("Role")}
+                    data={[
+                      { label: t("page.access.role.reader"), value: "reader" },
+                      { label: t("page.access.role.writer"), value: "writer" },
+                    ]}
+                    value={newRole}
+                    onChange={(value) =>
+                      setNewRole((value as "reader" | "writer") ?? "reader")
+                    }
+                  />
+                  <Button onClick={() => void onGrantUser()}>{t("Grant")}</Button>
+                </Group>
 
-            <ScrollArea h={360} mt="md">
-              <Table striped withTableBorder>
-                <Table.Thead>
-                  <Table.Tr>
-                    <Table.Th>{t("User")}</Table.Th>
-                    <Table.Th>{t("Role")}</Table.Th>
-                    <Table.Th>{t("Source")}</Table.Th>
-                    <Table.Th>{t("Action")}</Table.Th>
-                  </Table.Tr>
-                </Table.Thead>
-                <Table.Tbody>
-                  {users.length === 0 && (
-                    <Table.Tr>
-                      <Table.Td colSpan={4}>
-                        <Text c="dimmed" size="sm">
-                          {isUsersLoading ? t("Loading") : t("No data")}
-                        </Text>
-                      </Table.Td>
-                    </Table.Tr>
-                  )}
+                <ScrollArea h={360} mt="md">
+                  <Table striped withTableBorder>
+                    <Table.Thead>
+                      <Table.Tr>
+                        <Table.Th>{t("User")}</Table.Th>
+                        <Table.Th>{t("Role")}</Table.Th>
+                        <Table.Th>{t("page.access.column.source")}</Table.Th>
+                        <Table.Th>{t("Action")}</Table.Th>
+                      </Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {users.length === 0 && (
+                        <Table.Tr>
+                          <Table.Td colSpan={4}>
+                            <Text c="dimmed" size="sm">
+                              {isUsersLoading ? t("Loading") : t("No data")}
+                            </Text>
+                          </Table.Td>
+                        </Table.Tr>
+                      )}
 
-                  {users.map((user) => (
-                    <Table.Tr key={user.id}>
-                      <Table.Td>
-                        <Text size="sm">{user.name || user.email || user.id}</Text>
-                        {user.email && (
-                          <Text size="xs" c="dimmed">
-                            {user.email}
-                          </Text>
-                        )}
-                      </Table.Td>
-                      <Table.Td>
-                        <Badge variant="light">{getRoleLabel(user.access.role)}</Badge>
-                      </Table.Td>
-                      <Table.Td>
-                        <Group gap={4}>
-                          {user.access.sources.map((source) => (
-                            <Badge size="xs" key={`${user.id}-${source}`}>
-                              {getSourceLabel(source)}
-                            </Badge>
-                          ))}
-                        </Group>
-                      </Table.Td>
-                      <Table.Td>
-                        <Button
-                          size="xs"
-                          variant="light"
-                          color="red"
-                          disabled={!user.access.canClose}
-                          onClick={() => void onCloseUserAccess(user.id)}
-                        >
-                          {t("Close")}
-                        </Button>
-                      </Table.Td>
-                    </Table.Tr>
-                  ))}
-                </Table.Tbody>
-              </Table>
-            </ScrollArea>
+                      {users.map((user) => (
+                        <Table.Tr key={user.id}>
+                          <Table.Td>
+                            <Text size="sm">{user.name || user.email || user.id}</Text>
+                            {user.email && (
+                              <Text size="xs" c="dimmed">
+                                {user.email}
+                              </Text>
+                            )}
+                          </Table.Td>
+                          <Table.Td>
+                            <Badge variant="light">{getRoleLabel(user.access.role)}</Badge>
+                          </Table.Td>
+                          <Table.Td>
+                            <Group gap={4}>
+                              {user.access.sources.map((source) => (
+                                <Badge size="xs" key={`${user.id}-${source}`}>
+                                  {getSourceLabel(source)}
+                                </Badge>
+                              ))}
+                            </Group>
+                          </Table.Td>
+                          <Table.Td>
+                            <Button
+                              size="xs"
+                              variant="light"
+                              color="red"
+                              disabled={!user.access.canClose}
+                              onClick={() => void onCloseUserAccess(user.id)}
+                            >
+                              {t("Close")}
+                            </Button>
+                          </Table.Td>
+                        </Table.Tr>
+                      ))}
+                    </Table.Tbody>
+                  </Table>
+                </ScrollArea>
 
-            {usersHasNextPage && (
-              <Group justify="center" mt="sm">
-                <Button
-                  variant="subtle"
-                  size="xs"
-                  loading={isUsersLoading}
-                  onClick={() =>
-                    void loadUsers({
-                      append: true,
-                      cursor: usersNextCursor ?? undefined,
-                    })
-                  }
-                >
-                  {t("Load more")}
-                </Button>
-              </Group>
-            )}
-          </Tabs.Panel>
+                {usersHasNextPage && (
+                  <Group justify="center" mt="sm">
+                    <Button
+                      variant="subtle"
+                      size="xs"
+                      loading={isUsersLoading}
+                      onClick={() =>
+                        void loadUsers({
+                          append: true,
+                          cursor: usersNextCursor ?? undefined,
+                        })
+                      }
+                    >
+                      {t("Load more")}
+                    </Button>
+                  </Group>
+                )}
+              </Tabs.Panel>
 
-          <Tabs.Panel value="groups" pt="md">
-            <Group align="end" grow>
-              <TextInput
-                label={t("Page access group id")}
-                value={newGroupId}
-                onChange={(event) => setNewGroupId(event.currentTarget.value)}
-              />
-              <Select
-                label={t("Role")}
-                data={[
-                  { label: t("Page access role reader"), value: "reader" },
-                  { label: t("Page access role writer"), value: "writer" },
-                ]}
-                value={newRole}
-                onChange={(value) =>
-                  setNewRole((value as "reader" | "writer") ?? "reader")
-                }
-              />
-              <Button onClick={() => void onGrantGroup()}>{t("Grant")}</Button>
-            </Group>
+              <Tabs.Panel value="groups" pt="md">
+                <Group align="end" grow>
+                  <TextInput
+                    label={t("page.access.field.groupId")}
+                    value={newGroupId}
+                    onChange={(event) => setNewGroupId(event.currentTarget.value)}
+                  />
+                  <Select
+                    label={t("Role")}
+                    data={[
+                      { label: t("page.access.role.reader"), value: "reader" },
+                      { label: t("page.access.role.writer"), value: "writer" },
+                    ]}
+                    value={newRole}
+                    onChange={(value) =>
+                      setNewRole((value as "reader" | "writer") ?? "reader")
+                    }
+                  />
+                  <Button onClick={() => void onGrantGroup()}>{t("Grant")}</Button>
+                </Group>
 
-            <ScrollArea h={360} mt="md">
-              <Table striped withTableBorder>
-                <Table.Thead>
-                  <Table.Tr>
-                    <Table.Th>{t("Group")}</Table.Th>
-                    <Table.Th>{t("Effect")}</Table.Th>
-                    <Table.Th>{t("Role")}</Table.Th>
-                    <Table.Th>{t("Action")}</Table.Th>
-                  </Table.Tr>
-                </Table.Thead>
-                <Table.Tbody>
-                  {groups.length === 0 && (
-                    <Table.Tr>
-                      <Table.Td colSpan={4}>
-                        <Text c="dimmed" size="sm">
-                          {isGroupsLoading ? t("Loading") : t("No data")}
-                        </Text>
-                      </Table.Td>
-                    </Table.Tr>
-                  )}
+                <ScrollArea h={360} mt="md">
+                  <Table striped withTableBorder>
+                    <Table.Thead>
+                      <Table.Tr>
+                        <Table.Th>{t("Group")}</Table.Th>
+                        <Table.Th>{t("Effect")}</Table.Th>
+                        <Table.Th>{t("Role")}</Table.Th>
+                        <Table.Th>{t("Action")}</Table.Th>
+                      </Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {groups.length === 0 && (
+                        <Table.Tr>
+                          <Table.Td colSpan={4}>
+                            <Text c="dimmed" size="sm">
+                              {isGroupsLoading ? t("Loading") : t("No data")}
+                            </Text>
+                          </Table.Td>
+                        </Table.Tr>
+                      )}
 
-                  {groups.map((group) => (
-                    <Table.Tr key={group.id}>
-                      <Table.Td>{group.name}</Table.Td>
-                      <Table.Td>
-                        <Badge variant="light">{getEffectLabel(group.effect)}</Badge>
-                      </Table.Td>
-                      <Table.Td>
-                        <Badge variant="light">{getRoleLabel(group.role)}</Badge>
-                      </Table.Td>
-                      <Table.Td>
-                        <Button
-                          size="xs"
-                          variant="light"
-                          color="red"
-                          onClick={() => void onCloseGroupAccess(group.id)}
-                        >
-                          {t("Close")}
-                        </Button>
-                      </Table.Td>
-                    </Table.Tr>
-                  ))}
-                </Table.Tbody>
-              </Table>
-            </ScrollArea>
+                      {groups.map((group) => (
+                        <Table.Tr key={group.id}>
+                          <Table.Td>{group.name}</Table.Td>
+                          <Table.Td>
+                            <Badge variant="light">{getEffectLabel(group.effect)}</Badge>
+                          </Table.Td>
+                          <Table.Td>
+                            <Badge variant="light">{getRoleLabel(group.role)}</Badge>
+                          </Table.Td>
+                          <Table.Td>
+                            <Button
+                              size="xs"
+                              variant="light"
+                              color="red"
+                              onClick={() => void onCloseGroupAccess(group.id)}
+                            >
+                              {t("Close")}
+                            </Button>
+                          </Table.Td>
+                        </Table.Tr>
+                      ))}
+                    </Table.Tbody>
+                  </Table>
+                </ScrollArea>
 
-            {groupsHasNextPage && (
-              <Group justify="center" mt="sm">
-                <Button
-                  variant="subtle"
-                  size="xs"
-                  loading={isGroupsLoading}
-                  onClick={() =>
-                    void loadGroups({
-                      append: true,
-                      cursor: groupsNextCursor ?? undefined,
-                    })
-                  }
-                >
-                  {t("Load more")}
-                </Button>
-              </Group>
-            )}
-          </Tabs.Panel>
-        </Tabs>
-      </Stack>
-    </Modal>
+                {groupsHasNextPage && (
+                  <Group justify="center" mt="sm">
+                    <Button
+                      variant="subtle"
+                      size="xs"
+                      loading={isGroupsLoading}
+                      onClick={() =>
+                        void loadGroups({
+                          append: true,
+                          cursor: groupsNextCursor ?? undefined,
+                        })
+                      }
+                    >
+                      {t("Load more")}
+                    </Button>
+                  </Group>
+                )}
+              </Tabs.Panel>
+            </Tabs>
+          </Stack>
+        </Modal.Body>
+      </Modal.Content>
+    </Modal.Root>
   );
 }
