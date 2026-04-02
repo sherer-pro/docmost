@@ -8,17 +8,25 @@ import {
 } from "@/features/page/components/document-fields/space-member-select-utils.tsx";
 
 interface AssigneeSpaceMemberSelectProps {
+  pageId: string;
   spaceId: string;
   value: string | null;
   onChange: (value: string | null) => void;
   onBlur?: () => void;
 }
 
-export function AssigneeSpaceMemberSelect({ spaceId, value, onChange, onBlur }: AssigneeSpaceMemberSelectProps) {
+export function AssigneeSpaceMemberSelect({
+  pageId,
+  spaceId,
+  value,
+  onChange,
+  onBlur,
+}: AssigneeSpaceMemberSelectProps) {
   const { t } = useTranslation();
   const { options, searchValue, setSearchValue, isLoading, knownUsersById } = useSpaceMemberSelectOptions(
     spaceId,
     value ? [value] : [],
+    { pageId },
   );
 
   // In readOnly/controlled state, show the avatar of the currently selected member.

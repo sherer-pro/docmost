@@ -7,6 +7,7 @@ import {
 } from "@/features/page/components/document-fields/space-member-select-utils.tsx";
 
 interface StakeholdersSpaceMemberMultiSelectProps {
+  pageId: string;
   spaceId: string;
   value: string[];
   onChange: (value: string[]) => void;
@@ -14,6 +15,7 @@ interface StakeholdersSpaceMemberMultiSelectProps {
 }
 
 export function StakeholdersSpaceMemberMultiSelect({
+  pageId,
   spaceId,
   value,
   onChange,
@@ -21,7 +23,11 @@ export function StakeholdersSpaceMemberMultiSelect({
 }: StakeholdersSpaceMemberMultiSelectProps) {
   const { t } = useTranslation();
   // Options are limited to members of the current space; search is performed on the server.
-  const { options, searchValue, setSearchValue, isLoading } = useSpaceMemberSelectOptions(spaceId, value);
+  const { options, searchValue, setSearchValue, isLoading } = useSpaceMemberSelectOptions(
+    spaceId,
+    value,
+    { pageId },
+  );
 
   return (
     <MultiSelect

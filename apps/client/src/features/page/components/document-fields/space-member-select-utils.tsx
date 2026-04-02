@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { ComboboxItem } from "@mantine/core";
 import { getSpaceMemberUsers } from "@/features/space/services/space-service.ts";
+import { resolvePageAccessUsers } from "@/features/page/services/page-service.ts";
 import { CustomAvatar } from "@/components/ui/custom-avatar.tsx";
 
 export interface SpaceMemberSelectOption extends ComboboxItem {
@@ -20,6 +21,10 @@ interface SpaceMemberSearchConfig {
   placeholder: string;
   loadingMessage: string;
   nothingFoundMessage: string;
+}
+
+interface SpaceMemberSelectOptionsConfig {
+  pageId?: string;
 }
 
 type SpaceMemberSearchProps = Pick<
@@ -102,7 +107,11 @@ export function getSpaceMemberSearchProps(
   };
 }
 
-export function useSpaceMemberSelectOptions(spaceId: string, selectedIds: string[]) {
+export function useSpaceMemberSelectOptions(
+  spaceId: string,
+  selectedIds: string[],
+  config?: SpaceMemberSelectOptionsConfig,
+) {
   const [searchValue, setSearchValue] = useState("");
   const [debouncedQuery] = useDebouncedValue(searchValue, 400);
   const [knownUsersById, setKnownUsersById] = useState<Record<string, SpaceMemberSelectOption>>({});
@@ -115,6 +124,21 @@ export function useSpaceMemberSelectOptions(spaceId: string, selectedIds: string
         limit: 20,
       }),
     enabled: !!spaceId,
+  });
+
+  const unresolvedSelectedIds = useMemo(
+    () =>
+      [...new Set(selectedIds.filter((id) => !!id && !knownUsersById[id]))],
+    [knownUsersById, selectedIds],
+  );
+
+  const { data: resolvedPageUsers } = useQuery({
+    queryKey: ["pageAccessResolvedUsers", config?.pageId, unresolvedSelectedIds],
+    queryFn: () =>
+      resolvePageAccessUsers(config?.pageId ?? "", {
+        userIds: unresolvedSelectedIds,
+      }),
+    enabled: Boolean(config?.pageId && unresolvedSelectedIds.length > 0),
   });
 
   useEffect(() => {
@@ -139,6 +163,27 @@ export function useSpaceMemberSelectOptions(spaceId: string, selectedIds: string
       return next;
     });
   }, [data]);
+
+  useEffect(() => {
+    if (!resolvedPageUsers?.length) {
+      return;
+    }
+
+    setKnownUsersById((current) => {
+      const next = { ...current };
+
+      resolvedPageUsers.forEach((user) => {
+        next[user.id] = {
+          value: user.id,
+          label: user.name || user.email || user.id,
+          avatarUrl: user.avatarUrl ?? undefined,
+          email: user.email,
+        };
+      });
+
+      return next;
+    });
+  }, [resolvedPageUsers]);
 
   const options = useMemo(() => {
     const currentItems = (data?.items ?? []).map((member) => ({

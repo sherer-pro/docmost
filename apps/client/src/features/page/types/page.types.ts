@@ -155,6 +155,14 @@ export interface PageAccessGroupRuleEntry {
   updatedAt?: string;
 }
 
+export interface PageAccessResolvedUser {
+  id: string;
+  name: string;
+  email: string;
+  avatarUrl?: string | null;
+  type: 'user';
+}
+
 export interface IPageInput {
   pageId: string;
   title: string;

@@ -1,4 +1,9 @@
-import { IsIn, IsUUID } from 'class-validator';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsIn,
+  IsUUID,
+} from 'class-validator';
 import { PageRole } from '../../../common/helpers/types/permission';
 
 export class GrantPageUserAccessDto {
@@ -25,4 +30,11 @@ export class GrantPageGroupAccessDto {
 export class ClosePageGroupAccessDto {
   @IsUUID()
   groupId: string;
+}
+
+export class ResolvePageAccessUsersDto {
+  @IsArray()
+  @ArrayMaxSize(100)
+  @IsUUID(undefined, { each: true })
+  userIds: string[];
 }
