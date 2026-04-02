@@ -907,7 +907,7 @@ function NodeMenu({
                 openAccessModal();
               }}
             >
-              {t("page.access.menu")}
+              {t("page.access.menu", { keySeparator: false })}
             </Menu.Item>
           )}
 
