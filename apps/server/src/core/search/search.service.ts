@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { SearchDTO, SearchSuggestionDTO } from './dto/search.dto';
-import { SearchResponseDto } from './dto/search-response.dto';
+import { SearchBreadcrumbDto, SearchResponseDto } from './dto/search-response.dto';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { sql } from 'kysely';
@@ -10,10 +10,22 @@ import { ShareRepo } from '@docmost/db/repos/share/share.repo';
 import { UserRepo } from '@docmost/db/repos/user/user.repo';
 import { User } from '@docmost/db/types/entity.types';
 import { UserRole } from '../../common/helpers/types/permission';
-import { PageAccessService } from '../page-access/page-access.service';
+import {
+  PageAccessService,
+  SidebarAccessSnapshot,
+} from '../page-access/page-access.service';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const tsquery = require('pg-tsquery')();
+
+interface SearchAncestorRow {
+  id: string;
+  title: string | null;
+  icon: string | null;
+  slugId: string;
+  parentPageId: string | null;
+  spaceId: string;
+}
 
 @Injectable()
 export class SearchService {
@@ -25,6 +37,174 @@ export class SearchService {
     private userRepo: UserRepo,
     private readonly pageAccessService: PageAccessService,
   ) {}
+
+  private normalizeSearchHighlights(
+    searchResults: SearchResponseDto[],
+  ): SearchResponseDto[] {
+    return searchResults.map((result) => {
+      if (!result.highlight) {
+        return result;
+      }
+
+      return {
+        ...result,
+        highlight: result.highlight
+          .replace(/\r\n|\r|\n/g, ' ')
+          .replace(/\s+/g, ' '),
+      };
+    });
+  }
+
+  private async buildSpaceAccessSnapshotMap(
+    user: User,
+    searchResults: SearchResponseDto[],
+  ): Promise<Map<string, SidebarAccessSnapshot>> {
+    const spaceIds = [...new Set(
+      searchResults
+        .map((result) => result.space?.id)
+        .filter((spaceId): spaceId is string => !!spaceId),
+    )];
+
+    if (spaceIds.length === 0) {
+      return new Map();
+    }
+
+    const entries = await Promise.all(
+      spaceIds.map(async (spaceId) => {
+        const snapshot = await this.pageAccessService.getSidebarAccessSnapshot(
+          user,
+          spaceId,
+        );
+        return [spaceId, snapshot] as const;
+      }),
+    );
+
+    return new Map(entries);
+  }
+
+  private filterReadableResults(
+    searchResults: SearchResponseDto[],
+    snapshotBySpaceId: Map<string, SidebarAccessSnapshot>,
+  ): SearchResponseDto[] {
+    return searchResults.filter((result) => {
+      const spaceId = result.space?.id;
+      if (!spaceId) {
+        return false;
+      }
+
+      const snapshot = snapshotBySpaceId.get(spaceId);
+      return snapshot?.readablePageIds.has(result.id) ?? false;
+    });
+  }
+
+  private buildVisiblePageIdsMap(
+    snapshotBySpaceId: Map<string, SidebarAccessSnapshot>,
+  ): Map<string, Set<string>> {
+    return new Map(
+      [...snapshotBySpaceId.entries()].map(([spaceId, snapshot]) => [
+        spaceId,
+        snapshot.visiblePageIds,
+      ]),
+    );
+  }
+
+  private async collectAncestorRows(
+    parentPageIds: Array<string | null | undefined>,
+  ): Promise<Map<string, SearchAncestorRow>> {
+    const ancestorsById = new Map<string, SearchAncestorRow>();
+    const visitedPageIds = new Set<string>();
+    let frontier = new Set(
+      parentPageIds.filter((pageId): pageId is string => !!pageId),
+    );
+
+    while (frontier.size > 0) {
+      const idsToLoad = [...frontier].filter(
+        (pageId) => !visitedPageIds.has(pageId),
+      );
+
+      frontier = new Set();
+
+      if (idsToLoad.length === 0) {
+        continue;
+      }
+
+      idsToLoad.forEach((pageId) => visitedPageIds.add(pageId));
+
+      const rows = await this.db
+        .selectFrom('pages')
+        .select(['id', 'title', 'icon', 'slugId', 'parentPageId', 'spaceId'])
+        .where('id', 'in', idsToLoad)
+        .where('deletedAt', 'is', null)
+        .execute();
+
+      rows.forEach((row) => {
+        ancestorsById.set(row.id, row);
+
+        if (row.parentPageId && !visitedPageIds.has(row.parentPageId)) {
+          frontier.add(row.parentPageId);
+        }
+      });
+    }
+
+    return ancestorsById;
+  }
+
+  private buildBreadcrumbsForResult(
+    result: SearchResponseDto,
+    ancestorsById: Map<string, SearchAncestorRow>,
+    visiblePageIdsBySpaceId?: Map<string, Set<string>>,
+  ): SearchBreadcrumbDto[] {
+    const breadcrumbs: SearchBreadcrumbDto[] = [];
+    const visiblePageIds =
+      visiblePageIdsBySpaceId && result.space?.id
+        ? visiblePageIdsBySpaceId.get(result.space.id)
+        : undefined;
+
+    const seenPageIds = new Set<string>();
+    let cursor = result.parentPageId as string | null | undefined;
+
+    while (cursor && !seenPageIds.has(cursor)) {
+      seenPageIds.add(cursor);
+
+      const ancestor = ancestorsById.get(cursor);
+      if (!ancestor) {
+        break;
+      }
+
+      if (!visiblePageIds || visiblePageIds.has(ancestor.id)) {
+        breadcrumbs.push({
+          id: ancestor.id,
+          title: ancestor.title?.trim() ? ancestor.title : 'Untitled',
+        });
+      }
+
+      cursor = ancestor.parentPageId;
+    }
+
+    return breadcrumbs.reverse();
+  }
+
+  private async attachBreadcrumbsToResults(
+    searchResults: SearchResponseDto[],
+    visiblePageIdsBySpaceId?: Map<string, Set<string>>,
+  ): Promise<SearchResponseDto[]> {
+    if (searchResults.length === 0) {
+      return searchResults;
+    }
+
+    const ancestorsById = await this.collectAncestorRows(
+      searchResults.map((result) => result.parentPageId),
+    );
+
+    return searchResults.map((result) => ({
+      ...result,
+      breadcrumbs: this.buildBreadcrumbsForResult(
+        result,
+        ancestorsById,
+        visiblePageIdsBySpaceId,
+      ),
+    }));
+  }
 
   async searchPage(
     searchParams: SearchDTO,
@@ -58,6 +238,7 @@ export class SearchService {
           'highlight',
         ),
       ])
+      .select((eb) => this.pageRepo.withDatabaseId(eb))
       .where(
         'tsv',
         '@@',
@@ -120,18 +301,10 @@ export class SearchService {
       return { items: [] };
     }
 
-    //@ts-ignore
-    queryResults = await queryResults.execute();
-
-    //@ts-ignore
-    let searchResults = queryResults.map((result: SearchResponseDto) => {
-      if (result.highlight) {
-        result.highlight = result.highlight
-          .replace(/\r\n|\r|\n/g, ' ')
-          .replace(/\s+/g, ' ');
-      }
-      return result;
-    });
+    const rawResults = await queryResults.execute();
+    let searchResults = this.normalizeSearchHighlights(
+      rawResults as unknown as SearchResponseDto[],
+    );
 
     if (opts.userId) {
       const authUser = await this.userRepo.findById(opts.userId, opts.workspaceId);
@@ -140,29 +313,22 @@ export class SearchService {
         return { items: [] };
       }
 
-      const accessibility = await Promise.all(
-        searchResults.map(async (result) => {
-          const page = await this.pageRepo.findById(result.id);
-          if (!page || page.deletedAt) {
-            return null;
-          }
+      const snapshotBySpaceId = await this.buildSpaceAccessSnapshotMap(
+        authUser,
+        searchResults,
+      );
+      searchResults = this.filterReadableResults(searchResults, snapshotBySpaceId);
 
-          const access = await this.pageAccessService.getEffectiveAccess(
-            page,
-            authUser,
-          );
-
-          if (!access.capabilities.canRead) {
-            return null;
-          }
-
-          return result;
-        }),
+      const visiblePageIdsBySpaceId = this.buildVisiblePageIdsMap(
+        snapshotBySpaceId,
       );
 
-      searchResults = accessibility.filter(
-        (result): result is SearchResponseDto => !!result,
+      searchResults = await this.attachBreadcrumbsToResults(
+        searchResults,
+        visiblePageIdsBySpaceId,
       );
+    } else {
+      searchResults = await this.attachBreadcrumbsToResults(searchResults);
     }
 
     return { items: searchResults };
