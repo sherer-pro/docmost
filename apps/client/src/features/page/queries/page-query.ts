@@ -561,60 +561,92 @@ export function invalidateOnCreatePage(data: Partial<IPage>) {
 
 export function invalidateOnUpdatePage(
   spaceId: string,
-  parentPageId: string,
+  parentPageId: string | null | undefined,
   id: string,
-  title: string,
-  icon: string,
+  title?: string,
+  icon?: string | null,
   status?: PageCustomFieldStatus | null,
 ) {
-  let queryKey: QueryKey = null;
-  if (parentPageId === null) {
-    queryKey = PAGE_QUERY_KEYS.rootSidebar(spaceId);
-  } else {
-    queryKey = PAGE_QUERY_KEYS.sidebar({
-      pageId: parentPageId,
-      spaceId: spaceId,
-    });
-  }
-  //update all sidebar pages
-  queryClient.setQueryData<InfiniteData<IPagination<IPage>>>(
-    queryKey,
-    (old) => {
-      if (!old) return old;
-      return {
-        ...old,
-        pages: old.pages.map((page) => ({
-          ...page,
-          items: page.items.map((sidebarPage: IPage) =>
-            sidebarPage.id === id
-              ? {
-                  ...sidebarPage,
-                  title: title,
-                  icon: icon,
-                  customFields: {
-                    ...sidebarPage.customFields,
-                    ...(status !== undefined ? { status } : {}),
-                  },
-                }
-              : sidebarPage,
-          ),
-        })),
-      };
-    },
-  );
+  const targetSidebarCacheKeys = queryClient
+    .getQueriesData({
+      predicate: (query) => {
+        if (query.queryKey[0] === QUERY_KEY_SPACE.rootSidebarPages) {
+          return query.queryKey[1] === spaceId;
+        }
+
+        if (query.queryKey[0] === QUERY_KEY_SPACE.sidebarPages) {
+          const params = query.queryKey[1] as SidebarKeyParams | undefined;
+
+          if (params?.spaceId !== spaceId) {
+            return false;
+          }
+
+          if (parentPageId === undefined) {
+            return true;
+          }
+
+          return params?.pageId === parentPageId;
+        }
+
+        return false;
+      },
+    })
+    .map(([key]) => key);
+
+  targetSidebarCacheKeys.forEach((queryKey) => {
+    queryClient.setQueryData<InfiniteData<IPagination<IPage>>>(
+      queryKey,
+      (old) => {
+        if (!old) return old;
+
+        return {
+          ...old,
+          pages: old.pages.map((page) => ({
+            ...page,
+            items: page.items.map((sidebarPage: IPage) =>
+              sidebarPage.id === id
+                ? {
+                    ...sidebarPage,
+                    ...(title !== undefined ? { title } : {}),
+                    ...(icon !== undefined ? { icon } : {}),
+                    ...(status !== undefined
+                      ? {
+                          customFields: {
+                            ...sidebarPage.customFields,
+                            status,
+                          },
+                        }
+                      : {}),
+                  }
+                : sidebarPage,
+            ),
+          })),
+        };
+      },
+    );
+  });
 
   const currentTreeData = jotaiStore.get(treeDataAtom);
   if (currentTreeData.length > 0) {
     const treeApi = new SimpleTree<SpaceTreeNode>(currentTreeData);
+    const changes: Partial<SpaceTreeNode> = {};
 
-    if (treeApi.find(id)) {
+    if (title !== undefined) {
+      changes.name = title;
+    }
+
+    if (icon !== undefined) {
+      changes.icon = icon;
+    }
+
+    if (status !== undefined) {
+      changes.status = status;
+    }
+
+    if (treeApi.find(id) && Object.keys(changes).length > 0) {
       treeApi.update({
         id,
-        changes: {
-          name: title,
-          icon,
-          ...(status !== undefined ? { status } : {}),
-        },
+        changes,
       });
       jotaiStore.set(treeDataAtom, treeApi.data);
     }

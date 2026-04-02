@@ -1038,5 +1038,18 @@
   "No changes to apply": "適用する変更はありません",
   "Custom expiration date is required": "カスタム有効期限の日付は必須です",
   "Select a space": "スペースを選択",
-  "Rows": "行"
+  "Rows": "行",
+  "Page access source system": "System access",
+  "Page access source space": "Space access",
+  "Page access source page user": "Page user rule",
+  "Page access source page group": "Page group rule",
+  "Page access role reader": "Reader",
+  "Page access role writer": "Writer",
+  "Page access no access": "No access",
+  "Page access effect allow": "Allow",
+  "Page access effect deny": "Deny",
+  "Page access updated": "Access updated",
+  "Failed to update page access": "Failed to update access",
+  "Page access user id": "User ID",
+  "Page access group id": "Group ID"
 }

@@ -11,6 +11,21 @@ export interface PageSettings {
   [key: string]: unknown;
 }
 
+export interface PageAccessCapabilities {
+  canRead: boolean;
+  canWrite: boolean;
+  canCreateChild: boolean;
+  canMoveDeleteShare: boolean;
+  canManageAccess: boolean;
+}
+
+export interface PageAccessInfo {
+  role: 'reader' | 'writer' | null;
+  sources: string[];
+  capabilities: PageAccessCapabilities;
+  isSystemAccess: boolean;
+}
+
 export interface IPage {
   id: string;
   slugId: string;
@@ -35,6 +50,7 @@ export interface IPage {
   customFields?: PageCustomFields;
   settings?: PageSettings;
   databaseId?: string | null;
+  access?: PageAccessInfo;
   space: Partial<ISpace>;
 }
 
@@ -108,6 +124,7 @@ export interface ISidebarNode {
   slugId?: string | null;
   databaseId?: string | null;
   customFields?: PageCustomFields | null;
+  access?: PageAccessInfo;
 }
 
 export interface SidebarPagesParams {
@@ -115,6 +132,27 @@ export interface SidebarPagesParams {
   pageId?: string;
   cursor?: string;
   includeNodeTypes?: SidebarNodeType[];
+}
+
+export interface PageAccessUserEntry {
+  id: string;
+  name: string;
+  email: string;
+  avatarUrl?: string | null;
+  type: 'user';
+  access: PageAccessInfo & {
+    canClose: boolean;
+  };
+}
+
+export interface PageAccessGroupRuleEntry {
+  id: string;
+  name: string;
+  effect: 'allow' | 'deny';
+  role: 'reader' | 'writer' | null;
+  sourcePageId?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface IPageInput {

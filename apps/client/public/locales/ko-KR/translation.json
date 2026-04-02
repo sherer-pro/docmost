@@ -1038,5 +1038,18 @@
   "No changes to apply": "적용할 변경 사항이 없습니다.",
   "Custom expiration date is required": "사용자 지정 만료 날짜는 필수입니다",
   "Select a space": "Space 선택",
-  "Rows": "행"
+  "Rows": "행",
+  "Page access source system": "System access",
+  "Page access source space": "Space access",
+  "Page access source page user": "Page user rule",
+  "Page access source page group": "Page group rule",
+  "Page access role reader": "Reader",
+  "Page access role writer": "Writer",
+  "Page access no access": "No access",
+  "Page access effect allow": "Allow",
+  "Page access effect deny": "Deny",
+  "Page access updated": "Access updated",
+  "Failed to update page access": "Failed to update access",
+  "Page access user id": "User ID",
+  "Page access group id": "Group ID"
 }

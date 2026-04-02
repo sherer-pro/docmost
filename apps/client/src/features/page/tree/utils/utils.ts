@@ -30,6 +30,7 @@ export function buildTree(nodes: Array<ISidebarNode | IPage>): SpaceTreeNode[] {
       hasChildren: node.hasChildren,
       spaceId: node.spaceId,
       parentPageId: node.parentPageId,
+      access: isSidebarNode ? (node.access ?? undefined) : undefined,
       children: [],
     };
   });
@@ -90,7 +91,7 @@ export const updateTreeNodeName = (
 export const updateTreeNodeIcon = (
   nodes: SpaceTreeNode[],
   nodeId: string,
-  newIcon: string,
+  newIcon: string | null,
 ): SpaceTreeNode[] => {
   return nodes.map((node) => {
     if (node.id === nodeId) {
