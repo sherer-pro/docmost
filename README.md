@@ -40,6 +40,7 @@
 ## Member Visibility Restrictions
 
 - Users can only see members who share groups and spaces with them.
+- The page-level ACL has been implemented.
 
 ## MFA / 2FA
 
