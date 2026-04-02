@@ -81,6 +81,12 @@
 | POST | `/notifications/mark-all-read` | `apps/server/src/core/notification/notification.controller.ts` |
 | POST | `/notifications/mark-read` | `apps/server/src/core/notification/notification.controller.ts` |
 | POST | `/notifications/unread-count` | `apps/server/src/core/notification/notification.controller.ts` |
+| POST | `/pages/:pageId/actions/access/close-group` | `apps/server/src/core/page/page.controller.ts` |
+| POST | `/pages/:pageId/actions/access/close-user` | `apps/server/src/core/page/page.controller.ts` |
+| POST | `/pages/:pageId/actions/access/grant-group` | `apps/server/src/core/page/page.controller.ts` |
+| POST | `/pages/:pageId/actions/access/grant-user` | `apps/server/src/core/page/page.controller.ts` |
+| POST | `/pages/:pageId/actions/access/groups` | `apps/server/src/core/page/page.controller.ts` |
+| POST | `/pages/:pageId/actions/access/users` | `apps/server/src/core/page/page.controller.ts` |
 | POST | `/pages/:pageId/convert-to-database` | `apps/server/src/core/page/page.controller.ts` |
 | POST | `/pages/actions/export` | `apps/server/src/integrations/export/export.controller.ts` |
 | POST | `/pages/actions/export` | `apps/server/src/integrations/export/export.controller.ts` |

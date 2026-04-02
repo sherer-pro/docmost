@@ -8,23 +8,23 @@ import {
 } from '../../../integrations/queue/constants/queue.interface';
 import { NotificationService } from '../notification.service';
 import { NotificationType } from '../notification.constants';
-import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 import { WatcherRepo } from '@docmost/db/repos/watcher/watcher.repo';
 import { PageMentionEmail } from '@docmost/transactional/emails/page-mention-email';
 import { PageRecipientEmail } from '@docmost/transactional/emails/page-recipient-email';
 import { getPageTitle } from '../../../common/helpers';
 import { RecipientResolverService } from './recipient-resolver.service';
 import { PushAggregationService } from './push-aggregation.service';
+import { PageAccessService } from '../../page-access/page-access.service';
 
 @Injectable()
 export class PageNotificationService {
   constructor(
     @InjectKysely() private readonly db: KyselyDB,
     private readonly notificationService: NotificationService,
-    private readonly spaceMemberRepo: SpaceMemberRepo,
     private readonly watcherRepo: WatcherRepo,
     private readonly recipientResolverService: RecipientResolverService,
     private readonly pushAggregationService: PushAggregationService,
+    private readonly pageAccessService: PageAccessService,
   ) {}
 
   async processPageMention(data: IPageMentionNotificationJob, appUrl: string) {
@@ -39,11 +39,12 @@ export class PageNotificationService {
     if (newMentions.length === 0) return;
 
     const candidateUserIds = newMentions.map((m) => m.userId);
-    const usersWithAccess =
-      await this.spaceMemberRepo.getUserIdsWithSpaceAccess(
+    const usersWithAccess = new Set(
+      await this.pageAccessService.filterUsersWithPageReadAccess(
+        pageId,
         candidateUserIds,
-        spaceId,
-      );
+      ),
+    );
 
     const accessibleMentions = newMentions.filter((m) =>
       usersWithAccess.has(m.userId),
@@ -143,16 +144,16 @@ export class PageNotificationService {
         this.watcherRepo.getPageWatcherIds(pageId),
       ]);
 
-      return this.recipientResolverService.filterUsersWithSpaceAccess(
+      return this.recipientResolverService.filterUsersWithPageAccess(
         [...new Set([...roleRecipients, ...watcherIds])],
-        spaceId,
+        pageId,
         actorId,
       );
     }
 
-    return this.recipientResolverService.filterUsersWithSpaceAccess(
+    return this.recipientResolverService.filterUsersWithPageAccess(
       data.candidateUserIds ?? [],
-      spaceId,
+      pageId,
       actorId,
     );
   }

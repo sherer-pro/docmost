@@ -23,6 +23,7 @@ import { PushModule } from './push/push.module';
 import { DatabaseModule } from './database/database.module';
 import { ApiKeyModule } from './api-key/api-key.module';
 import { RagModule } from './rag/rag.module';
+import { PageAccessModule } from './page-access/page-access.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { RagModule } from './rag/rag.module';
     DatabaseModule,
     ApiKeyModule,
     RagModule,
+    PageAccessModule,
   ],
 })
 export class CoreModule implements NestModule {

@@ -161,6 +161,16 @@ export class GroupUserRepo {
     return rows.map((r) => r.userId);
   }
 
+  async getGroupIdsByUserId(userId: string): Promise<string[]> {
+    const rows = await this.db
+      .selectFrom('groupUsers')
+      .select('groupId')
+      .where('userId', '=', userId)
+      .execute();
+
+    return rows.map((row) => row.groupId);
+  }
+
   async delete(
     userId: string,
     groupId: string,

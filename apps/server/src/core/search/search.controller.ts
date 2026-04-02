@@ -18,15 +18,11 @@ import {
 import { AuthWorkspace } from '../../common/decorators/auth-workspace.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { User, Workspace } from '@docmost/db/types/entity.types';
-import SpaceAbilityFactory from '../casl/abilities/space-ability.factory';
-import {
-  SpaceCaslAction,
-  SpaceCaslSubject,
-} from '../casl/interfaces/space-ability.type';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { EnvironmentService } from '../../integrations/environment/environment.service';
 import { ModuleRef } from '@nestjs/core';
+import { PageAccessService } from '../page-access/page-access.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('search')
@@ -35,7 +31,7 @@ export class SearchController {
 
   constructor(
     private readonly searchService: SearchService,
-    private readonly spaceAbility: SpaceAbilityFactory,
+    private readonly pageAccessService: PageAccessService,
     private readonly environmentService: EnvironmentService,
     private moduleRef: ModuleRef,
   ) {}
@@ -50,12 +46,12 @@ export class SearchController {
     delete searchDto.shareId;
 
     if (searchDto.spaceId) {
-      const ability = await this.spaceAbility.createForUser(
-        user,
-        searchDto.spaceId,
-      );
-
-      if (ability.cannot(SpaceCaslAction.Read, SpaceCaslSubject.Page)) {
+      const hasReadablePages =
+        await this.pageAccessService.hasAnyReadablePageInSpace(
+          user,
+          searchDto.spaceId,
+        );
+      if (!hasReadablePages) {
         throw new ForbiddenException();
       }
     }

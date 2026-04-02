@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -11,11 +10,6 @@ import { validate as isValidUUID } from 'uuid';
 import { AttachmentRepo } from '@docmost/db/repos/attachment/attachment.repo';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { Attachment, User, Workspace } from '@docmost/db/types/entity.types';
-import SpaceAbilityFactory from '../../casl/abilities/space-ability.factory';
-import {
-  SpaceCaslAction,
-  SpaceCaslSubject,
-} from '../../casl/interfaces/space-ability.type';
 import { EnvironmentService } from '../../../integrations/environment/environment.service';
 import { StorageService } from '../../../integrations/storage/storage.service';
 import { AttachmentService } from './attachment.service';
@@ -23,6 +17,7 @@ import { TokenService } from '../../auth/services/token.service';
 import { JwtAttachmentPayload, JwtType } from '../../auth/dto/jwt-payload';
 import { inlineFileExtensions } from '../attachment.constants';
 import { resolveAttachmentAccessToken } from '../attachment-public-token.util';
+import { PageAccessService } from '../../page-access/page-access.service';
 
 @Injectable()
 export class AttachmentFileAccessService {
@@ -30,7 +25,7 @@ export class AttachmentFileAccessService {
 
   constructor(
     private readonly attachmentService: AttachmentService,
-    private readonly spaceAbility: SpaceAbilityFactory,
+    private readonly pageAccessService: PageAccessService,
     private readonly pageRepo: PageRepo,
     private readonly attachmentRepo: AttachmentRepo,
     private readonly environmentService: EnvironmentService,
@@ -74,13 +69,7 @@ export class AttachmentFileAccessService {
       throw new NotFoundException('Page not found');
     }
 
-    const spaceAbility = await this.spaceAbility.createForUser(
-      user,
-      page.spaceId,
-    );
-    if (spaceAbility.cannot(SpaceCaslAction.Manage, SpaceCaslSubject.Page)) {
-      throw new ForbiddenException();
-    }
+    await this.pageAccessService.assertCanWritePage(page, user);
 
     const attachmentId = file.fields?.attachmentId?.value;
     if (attachmentId && !isValidUUID(attachmentId)) {
@@ -131,14 +120,12 @@ export class AttachmentFileAccessService {
       throw new NotFoundException();
     }
 
-    const spaceAbility = await this.spaceAbility.createForUser(
-      user,
-      attachment.spaceId,
-    );
-
-    if (spaceAbility.cannot(SpaceCaslAction.Read, SpaceCaslSubject.Page)) {
-      throw new ForbiddenException();
+    const page = await this.pageRepo.findById(attachment.pageId);
+    if (!page || page.deletedAt) {
+      throw new NotFoundException();
     }
+
+    await this.pageAccessService.assertCanReadPage(page, user);
 
     try {
       return await this.sendFileResponse(req, res, attachment, 'private');

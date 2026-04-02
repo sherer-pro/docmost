@@ -326,6 +326,41 @@ export class SpaceMemberRepo {
           .innerJoin('spaces', 'spaces.id', 'spaceMembers.spaceId')
           .select('spaces.id')
           .where('groupUsers.userId', '=', userId),
+      )
+      .union(
+        this.db
+          .selectFrom('pageAccessRules')
+          .innerJoin('pages', 'pages.id', 'pageAccessRules.pageId')
+          .innerJoin('spaces', 'spaces.id', 'pageAccessRules.spaceId')
+          .select('spaces.id')
+          .where('pageAccessRules.principalType', '=', 'user')
+          .where('pageAccessRules.userId', '=', userId)
+          .where('pageAccessRules.effect', '=', 'allow')
+          .where('pages.deletedAt', 'is', null),
+      )
+      .union(
+        this.db
+          .selectFrom('pageAccessRules')
+          .innerJoin('groupUsers', 'groupUsers.groupId', 'pageAccessRules.groupId')
+          .innerJoin('pages', 'pages.id', 'pageAccessRules.pageId')
+          .innerJoin('spaces', 'spaces.id', 'pageAccessRules.spaceId')
+          .select('spaces.id')
+          .where('groupUsers.userId', '=', userId)
+          .where('pageAccessRules.principalType', '=', 'group')
+          .where('pageAccessRules.effect', '=', 'allow')
+          .where(({ not, exists, selectFrom }) =>
+            not(
+              exists(
+                selectFrom('pageAccessRules as userDeny')
+                  .select('userDeny.id')
+                  .whereRef('userDeny.pageId', '=', 'pageAccessRules.pageId')
+                  .where('userDeny.principalType', '=', 'user')
+                  .where('userDeny.userId', '=', userId)
+                  .where('userDeny.effect', '=', 'deny'),
+              ),
+            ),
+          )
+          .where('pages.deletedAt', 'is', null),
       );
   }
 

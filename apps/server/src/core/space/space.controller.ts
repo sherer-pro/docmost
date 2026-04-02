@@ -40,6 +40,7 @@ import {
 } from '../casl/interfaces/workspace-ability.type';
 import WorkspaceAbilityFactory from '../casl/abilities/workspace-ability.factory';
 import { CreateSpaceDto } from './dto/create-space.dto';
+import { PageAccessService } from '../page-access/page-access.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('spaces')
@@ -50,6 +51,7 @@ export class SpaceController {
     private readonly spaceMemberRepo: SpaceMemberRepo,
     private readonly spaceAbility: SpaceAbilityFactory,
     private readonly workspaceAbility: WorkspaceAbilityFactory,
+    private readonly pageAccessService: PageAccessService,
   ) {}
 
   @HttpCode(HttpStatus.OK)
@@ -74,25 +76,44 @@ export class SpaceController {
       throw new NotFoundException('Space not found');
     }
 
-    const ability = await this.spaceAbility.createForUser(user, space.id);
-    if (ability.cannot(SpaceCaslAction.Read, SpaceCaslSubject.Settings)) {
-      throw new ForbiddenException();
+    try {
+      const ability = await this.spaceAbility.createForUser(user, space.id);
+      if (ability.cannot(SpaceCaslAction.Read, SpaceCaslSubject.Settings)) {
+        throw new ForbiddenException();
+      }
+
+      const userSpaceRoles = await this.spaceMemberRepo.getUserSpaceRoles(
+        user.id,
+        space.id,
+      );
+
+      const userSpaceRole = findHighestUserSpaceRole(userSpaceRoles);
+
+      const membership = {
+        userId: user.id,
+        role: userSpaceRole,
+        permissions: ability.rules,
+        isPageOnly: false,
+      };
+
+      return { ...space, membership };
+    } catch (err) {
+      const hasReadablePages =
+        await this.pageAccessService.hasAnyReadablePageInSpace(user, space.id);
+      if (!hasReadablePages) {
+        throw err;
+      }
+
+      return {
+        ...space,
+        membership: {
+          userId: user.id,
+          role: 'reader',
+          permissions: [],
+          isPageOnly: true,
+        },
+      };
     }
-
-    const userSpaceRoles = await this.spaceMemberRepo.getUserSpaceRoles(
-      user.id,
-      space.id,
-    );
-
-    const userSpaceRole = findHighestUserSpaceRole(userSpaceRoles);
-
-    const membership = {
-      userId: user.id,
-      role: userSpaceRole,
-      permissions: ability.rules,
-    };
-
-    return { ...space, membership };
   }
 
   @HttpCode(HttpStatus.OK)

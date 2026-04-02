@@ -38,6 +38,7 @@ import { PageListener } from '@docmost/db/listeners/page.listener';
 import { PostgresJSDialect } from 'kysely-postgres-js';
 import * as postgres from 'postgres';
 import { normalizePostgresUrl } from '../common/helpers';
+import { PageAccessRuleRepo } from './repos/page/page-access-rule.repo';
 
 @Global()
 @Module({
@@ -100,6 +101,7 @@ import { normalizePostgresUrl } from '../common/helpers';
     DatabaseCellRepo,
     DatabaseViewRepo,
     ApiKeyRepo,
+    PageAccessRuleRepo,
     PageListener,
   ],
   exports: [
@@ -126,6 +128,7 @@ import { normalizePostgresUrl } from '../common/helpers';
     DatabaseCellRepo,
     DatabaseViewRepo,
     ApiKeyRepo,
+    PageAccessRuleRepo,
   ],
 })
 export class DatabaseModule

@@ -28,6 +28,7 @@ import { FileTaskIdDto } from './dto/file-task-dto';
 import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import { executeWithCursorPagination } from '@docmost/db/pagination/cursor-pagination';
+import { PageAccessService } from '../../core/page-access/page-access.service';
 
 @Controller('file-tasks')
 export class FileTaskController {
@@ -35,6 +36,7 @@ export class FileTaskController {
     private readonly spaceAbility: SpaceAbilityFactory,
     private readonly workspaceAbility: WorkspaceAbilityFactory,
     private readonly spaceMemberRepo: SpaceMemberRepo,
+    private readonly pageAccessService: PageAccessService,
     @InjectKysely() private readonly db: KyselyDB,
   ) {}
 
@@ -86,7 +88,14 @@ export class FileTaskController {
       fileTask.spaceId,
     );
     if (ability.cannot(SpaceCaslAction.Read, SpaceCaslSubject.Page)) {
-      throw new ForbiddenException();
+      const hasReadablePages =
+        await this.pageAccessService.hasAnyReadablePageInSpace(
+          user,
+          fileTask.spaceId,
+        );
+      if (!hasReadablePages) {
+        throw new ForbiddenException();
+      }
     }
 
     return fileTask;

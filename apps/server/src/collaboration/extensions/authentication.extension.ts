@@ -8,11 +8,9 @@ import {
 import { TokenService } from '../../core/auth/services/token.service';
 import { UserRepo } from '@docmost/db/repos/user/user.repo';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
-import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
-import { findHighestUserSpaceRole } from '@docmost/db/repos/space/utils';
-import { SpaceRole } from '../../common/helpers/types/permission';
 import { getPageId } from '../collaboration.util';
 import { JwtCollabPayload, JwtType } from '../../core/auth/dto/jwt-payload';
+import { PageAccessService } from '../../core/page-access/page-access.service';
 
 @Injectable()
 export class AuthenticationExtension implements Extension {
@@ -22,7 +20,7 @@ export class AuthenticationExtension implements Extension {
     private tokenService: TokenService,
     private userRepo: UserRepo,
     private pageRepo: PageRepo,
-    private readonly spaceMemberRepo: SpaceMemberRepo,
+    private readonly pageAccessService: PageAccessService,
   ) {}
 
   async onAuthenticate(data: onAuthenticatePayload) {
@@ -56,19 +54,14 @@ export class AuthenticationExtension implements Extension {
       throw new NotFoundException('Page not found');
     }
 
-    const userSpaceRoles = await this.spaceMemberRepo.getUserSpaceRoles(
-      user.id,
-      page.spaceId,
-    );
+    const access = await this.pageAccessService.getEffectiveAccess(page, user);
 
-    const userSpaceRole = findHighestUserSpaceRole(userSpaceRoles);
-
-    if (!userSpaceRole) {
+    if (!access.capabilities.canRead) {
       this.logger.warn(`User not authorized to access page: ${pageId}`);
       throw new UnauthorizedException();
     }
 
-    if (userSpaceRole === SpaceRole.READER) {
+    if (!access.capabilities.canWrite) {
       data.connectionConfig.readOnly = true;
       this.logger.debug(`User granted readonly access to page: ${pageId}`);
     }

@@ -70,6 +70,7 @@ import {
   normalizePageSettings,
 } from '../utils/page-settings.utils';
 import { PageHistoryRecorderService } from './page-history-recorder.service';
+import { PageAccessService } from '../../page-access/page-access.service';
 
 interface IHistoryUserRef {
   id: string;
@@ -107,6 +108,7 @@ export class PageService {
     private readonly spaceRepo: SpaceRepo,
     private readonly userRepo: UserRepo,
     private readonly pageHistoryRecorder: PageHistoryRecorderService,
+    private readonly pageAccessService: PageAccessService,
   ) {}
 
   private async resolvePageDatabaseId(
@@ -302,12 +304,11 @@ export class PageService {
     createPageDto: CreatePageDto,
   ): Promise<Page> {
     let parentPageId = undefined;
+    let parentPage: Page = null;
 
     // check if parent page exists
     if (createPageDto.parentPageId) {
-      const parentPage = await this.pageRepo.findById(
-        createPageDto.parentPageId,
-      );
+      parentPage = await this.pageRepo.findById(createPageDto.parentPageId);
 
       if (!parentPage || parentPage.spaceId !== createPageDto.spaceId) {
         throw new NotFoundException('Parent page not found');
@@ -350,6 +351,13 @@ export class PageService {
       settings: createPageDto.settings,
     });
 
+    if (parentPageId && parentPage) {
+      await this.pageAccessService.copyParentRulesToChild(
+        parentPageId,
+        page,
+        userId,
+      );
+    }
 
     this.generalQueue
       .add(QueueJob.ADD_PAGE_WATCHERS, {
@@ -888,6 +896,9 @@ export class PageService {
           pageIds,
           trx,
         );
+
+        // Page ACL rules are space-bound and must be reset when subtree moves to another space.
+        await this.pageAccessService.clearRulesByPageIds(pageIds, trx);
 
         // Update watchers and remove those without access to new space
         await this.watcherService.movePageWatchersToSpace(pageIds, spaceId, {

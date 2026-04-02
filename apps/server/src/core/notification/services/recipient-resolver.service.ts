@@ -9,12 +9,14 @@ import {
   normalizePageSettings,
 } from '../../page/utils/page-settings.utils';
 import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
+import { PageAccessService } from '../../page-access/page-access.service';
 
 @Injectable()
 export class RecipientResolverService {
   constructor(
     @InjectKysely() private readonly db: KyselyDB,
     private readonly spaceMemberRepo: SpaceMemberRepo,
+    private readonly pageAccessService: PageAccessService,
   ) {}
 
   /**
@@ -49,7 +51,7 @@ export class RecipientResolverService {
     const settings = normalizePageSettings(page.settings);
     const candidateUserIds = getPageRoleRecipientIds(settings);
 
-    return this.filterUsersWithSpaceAccess(candidateUserIds, spaceId, actorId);
+    return this.filterUsersWithPageAccess(candidateUserIds, pageId, actorId);
   }
 
   /**
@@ -102,6 +104,27 @@ export class RecipientResolverService {
     const usersWithAccess = await this.spaceMemberRepo.getUserIdsWithSpaceAccess(
       filteredIds,
       spaceId,
+    );
+
+    return filteredIds.filter((userId) => usersWithAccess.has(userId));
+  }
+
+  async filterUsersWithPageAccess(
+    candidateUserIds: string[],
+    pageId: string,
+    actorId: string,
+  ): Promise<string[]> {
+    const filteredIds = this.excludeActor(candidateUserIds, actorId);
+
+    if (filteredIds.length === 0) {
+      return [];
+    }
+
+    const usersWithAccess = new Set(
+      await this.pageAccessService.filterUsersWithPageReadAccess(
+        pageId,
+        filteredIds,
+      ),
     );
 
     return filteredIds.filter((userId) => usersWithAccess.has(userId));

@@ -12,12 +12,7 @@ import {
 } from '@nestjs/common';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
 import { User, Workspace } from '@docmost/db/types/entity.types';
-import {
-  SpaceCaslAction,
-  SpaceCaslSubject,
-} from '../casl/interfaces/space-ability.type';
 import { AuthWorkspace } from '../../common/decorators/auth-workspace.decorator';
-import SpaceAbilityFactory from '../casl/abilities/space-ability.factory';
 import { ShareService } from './share.service';
 import {
   CreateShareDto,
@@ -39,17 +34,18 @@ import {
   getAttachmentTokenCookieName,
   LEGACY_ATTACHMENT_TOKEN_COOKIE,
 } from '../attachment/attachment-public-token.util';
+import { PageAccessService } from '../page-access/page-access.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('shares')
 export class ShareController {
   constructor(
     private readonly shareService: ShareService,
-    private readonly spaceAbility: SpaceAbilityFactory,
     private readonly shareRepo: ShareRepo,
     private readonly pageRepo: PageRepo,
     private readonly environmentService: EnvironmentService,
     private readonly tokenService: TokenService,
+    private readonly pageAccessService: PageAccessService,
   ) {}
 
   @HttpCode(HttpStatus.OK)
@@ -134,10 +130,7 @@ export class ShareController {
       throw new NotFoundException('Shared page not found');
     }
 
-    const ability = await this.spaceAbility.createForUser(user, page.spaceId);
-    if (ability.cannot(SpaceCaslAction.Read, SpaceCaslSubject.Share)) {
-      throw new ForbiddenException();
-    }
+    await this.pageAccessService.assertCanMoveDeleteShare(page, user);
 
     return this.shareService.getShareForPage(page.slugId, workspace.id);
   }
@@ -155,10 +148,7 @@ export class ShareController {
       throw new NotFoundException('Page not found');
     }
 
-    const ability = await this.spaceAbility.createForUser(user, page.spaceId);
-    if (ability.cannot(SpaceCaslAction.Create, SpaceCaslSubject.Share)) {
-      throw new ForbiddenException();
-    }
+    await this.pageAccessService.assertCanMoveDeleteShare(page, user);
 
     const sharingAllowed = await this.shareService.isSharingAllowed(
       workspace.id,
@@ -185,10 +175,11 @@ export class ShareController {
       throw new NotFoundException('Share not found');
     }
 
-    const ability = await this.spaceAbility.createForUser(user, share.spaceId);
-    if (ability.cannot(SpaceCaslAction.Edit, SpaceCaslSubject.Share)) {
-      throw new ForbiddenException();
+    const page = await this.pageRepo.findById(share.pageId);
+    if (!page || page.deletedAt) {
+      throw new NotFoundException('Page not found');
     }
+    await this.pageAccessService.assertCanMoveDeleteShare(page, user);
 
     return this.shareService.updateShare(share.id, updateShareDto);
   }
@@ -202,10 +193,11 @@ export class ShareController {
       throw new NotFoundException('Share not found');
     }
 
-    const ability = await this.spaceAbility.createForUser(user, share.spaceId);
-    if (ability.cannot(SpaceCaslAction.Manage, SpaceCaslSubject.Share)) {
-      throw new ForbiddenException();
+    const page = await this.pageRepo.findById(share.pageId);
+    if (!page || page.deletedAt) {
+      throw new NotFoundException('Page not found');
     }
+    await this.pageAccessService.assertCanMoveDeleteShare(page, user);
 
     await this.shareRepo.deleteShare(share.id);
   }

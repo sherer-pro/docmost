@@ -22,6 +22,7 @@ import {
 } from '../../core/casl/interfaces/space-ability.type';
 import { FastifyReply } from 'fastify';
 import { sanitize } from 'sanitize-filename-ts';
+import { PageAccessService } from '../../core/page-access/page-access.service';
 
 /**
  * Shared service layer for export controllers.
@@ -33,6 +34,7 @@ class ExportControllerDelegate {
     private readonly exportService: ExportService,
     private readonly pageRepo: PageRepo,
     private readonly spaceAbility: SpaceAbilityFactory,
+    private readonly pageAccessService: PageAccessService,
   ) {}
 
   async exportPage(dto: ExportPageDto, user: User, res: FastifyReply) {
@@ -44,10 +46,7 @@ class ExportControllerDelegate {
       throw new NotFoundException('Page not found');
     }
 
-    const ability = await this.spaceAbility.createForUser(user, page.spaceId);
-    if (ability.cannot(SpaceCaslAction.Read, SpaceCaslSubject.Page)) {
-      throw new ForbiddenException();
-    }
+    await this.pageAccessService.assertCanReadPage(page, user);
 
     const zipFileStream = await this.exportService.exportPages(
       dto.pageId,
@@ -101,11 +100,13 @@ export class PageExportController {
     private readonly exportService: ExportService,
     private readonly pageRepo: PageRepo,
     private readonly spaceAbility: SpaceAbilityFactory,
+    private readonly pageAccessService: PageAccessService,
   ) {
     this.delegate = new ExportControllerDelegate(
       this.exportService,
       this.pageRepo,
       this.spaceAbility,
+      this.pageAccessService,
     );
   }
 
@@ -133,11 +134,13 @@ export class SpaceExportController {
     private readonly exportService: ExportService,
     private readonly pageRepo: PageRepo,
     private readonly spaceAbility: SpaceAbilityFactory,
+    private readonly pageAccessService: PageAccessService,
   ) {
     this.delegate = new ExportControllerDelegate(
       this.exportService,
       this.pageRepo,
       this.spaceAbility,
+      this.pageAccessService,
     );
   }
 

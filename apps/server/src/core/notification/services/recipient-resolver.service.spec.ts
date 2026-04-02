@@ -2,7 +2,7 @@ import { mapPageCustomFields } from '../../page/mappers/page-response.mapper';
 import { RecipientResolverService } from './recipient-resolver.service';
 
 describe('RecipientResolverService', () => {
-  const createService = (settings: unknown, usersWithAccess?: Set<string>) => {
+  const createService = (settings: unknown, usersWithAccess?: string[]) => {
     const db = {
       selectFrom: jest.fn().mockReturnValue({
         select: jest.fn().mockReturnThis(),
@@ -14,12 +14,23 @@ describe('RecipientResolverService', () => {
     const spaceMemberRepo = {
       getUserIdsWithSpaceAccess: jest
         .fn()
-        .mockResolvedValue(usersWithAccess ?? new Set<string>()),
+        .mockResolvedValue(new Set<string>()),
+    } as any;
+
+    const pageAccessService = {
+      filterUsersWithPageReadAccess: jest
+        .fn()
+        .mockResolvedValue(usersWithAccess ?? []),
     } as any;
 
     return {
-      service: new RecipientResolverService(db, spaceMemberRepo),
+      service: new RecipientResolverService(
+        db,
+        spaceMemberRepo,
+        pageAccessService,
+      ),
       spaceMemberRepo,
+      pageAccessService,
     };
   };
 
@@ -45,7 +56,7 @@ describe('RecipientResolverService', () => {
 
     const { service } = createService(
       settings,
-      new Set<string>(['user-1', 'user-2', 'user-3', 'user-4']),
+      ['user-1', 'user-2', 'user-3', 'user-4'],
     );
 
     const customFields = mapPageCustomFields({ settings });

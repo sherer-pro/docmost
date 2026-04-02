@@ -10,9 +10,6 @@ describe('ShareController', () => {
     getSharedPage: jest.fn(),
     isSharingAllowed: jest.fn(),
   };
-  const spaceAbility = {
-    createForUser: jest.fn(async () => ({ cannot: () => false })),
-  };
   const shareRepo = {};
   const pageRepo = {
     findById: jest.fn(),
@@ -24,14 +21,21 @@ describe('ShareController', () => {
   const tokenService = {
     generateAttachmentPageToken: jest.fn(),
   };
+  const pageAccessService = {
+    assertCanMoveDeleteShare: jest.fn(async () => ({
+      capabilities: {
+        canMoveDeleteShare: true,
+      },
+    })),
+  };
 
   const controller = new ShareController(
     shareService as any,
-    spaceAbility as any,
     shareRepo as any,
     pageRepo as any,
     environmentService as any,
     tokenService as any,
+    pageAccessService as any,
   );
 
   beforeEach(() => {

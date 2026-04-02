@@ -53,6 +53,14 @@ import {
 } from './mappers/page-response.mapper';
 import { lookup } from 'node:dns/promises';
 import { BlockList, isIP } from 'node:net';
+import { PageAccessService } from '../page-access/page-access.service';
+import { PageRole } from '../../common/helpers/types/permission';
+import {
+  ClosePageGroupAccessDto,
+  ClosePageUserAccessDto,
+  GrantPageGroupAccessDto,
+  GrantPageUserAccessDto,
+} from './dto/page-access.dto';
 
 const LINK_PREVIEW_TIMEOUT_MS = 7000;
 const LINK_PREVIEW_MAX_REDIRECTS = 5;
@@ -107,6 +115,7 @@ export class PageController {
     private readonly spaceAbility: SpaceAbilityFactory,
     private readonly collaborationGateway: CollaborationGateway,
     private readonly databaseRepo: DatabaseRepo,
+    private readonly pageAccessService: PageAccessService,
   ) {}
 
   /**
@@ -481,6 +490,26 @@ export class PageController {
     return bestUrl;
   }
 
+  private toAccessResponse(access: {
+    role: PageRole | null;
+    sources: string[];
+    capabilities: {
+      canRead: boolean;
+      canWrite: boolean;
+      canCreateChild: boolean;
+      canMoveDeleteShare: boolean;
+      canManageAccess: boolean;
+    };
+    isSystemAccess: boolean;
+  }) {
+    return {
+      role: access.role,
+      sources: access.sources,
+      capabilities: access.capabilities,
+      isSystemAccess: access.isSystemAccess,
+    };
+  }
+
   @HttpCode(HttpStatus.OK)
   @Post('/info')
   async getPage(@Body() dto: PageInfoDto, @AuthUser() user: User) {
@@ -496,10 +525,10 @@ export class PageController {
       throw new NotFoundException('Page not found');
     }
 
-    const ability = await this.spaceAbility.createForUser(user, page.spaceId);
-    if (ability.cannot(SpaceCaslAction.Read, SpaceCaslSubject.Page)) {
-      throw new ForbiddenException();
-    }
+    const effectiveAccess = await this.pageAccessService.assertCanReadPage(
+      page,
+      user,
+    );
 
     const linkedDatabase = await this.databaseRepo.findByPageId(
       page.id,
@@ -515,12 +544,14 @@ export class PageController {
         ...mapPageResponse(page, { includeCustomFields: true }),
         databaseId: linkedDatabase?.id ?? null,
         content: contentOutput,
+        access: this.toAccessResponse(effectiveAccess),
       };
     }
 
     return {
       ...mapPageResponse(page, { includeCustomFields: true }),
       databaseId: linkedDatabase?.id ?? null,
+      access: this.toAccessResponse(effectiveAccess),
     };
   }
 
@@ -538,10 +569,7 @@ export class PageController {
       throw new NotFoundException('Source page not found');
     }
 
-    const ability = await this.spaceAbility.createForUser(user, page.spaceId);
-    if (ability.cannot(SpaceCaslAction.Read, SpaceCaslSubject.Page)) {
-      throw new ForbiddenException();
-    }
+    await this.pageAccessService.assertCanReadPage(page, user);
 
     const liveContent = await this.getLivePageContent(page.id, user);
     const sourceContent = liveContent ?? page.content;
@@ -614,12 +642,23 @@ export class PageController {
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
-    const ability = await this.spaceAbility.createForUser(
-      user,
-      createPageDto.spaceId,
-    );
-    if (ability.cannot(SpaceCaslAction.Create, SpaceCaslSubject.Page)) {
-      throw new ForbiddenException();
+    if (createPageDto.parentPageId) {
+      const parentPage = await this.pageRepo.findById(createPageDto.parentPageId);
+      if (!parentPage || parentPage.deletedAt) {
+        throw new NotFoundException('Parent page not found');
+      }
+      if (parentPage.spaceId !== createPageDto.spaceId) {
+        throw new BadRequestException('Parent page not found');
+      }
+      await this.pageAccessService.assertCanCreateChild(parentPage, user);
+    } else {
+      const ability = await this.spaceAbility.createForUser(
+        user,
+        createPageDto.spaceId,
+      );
+      if (ability.cannot(SpaceCaslAction.Create, SpaceCaslSubject.Page)) {
+        throw new ForbiddenException();
+      }
     }
 
     const page = await this.pageService.create(
@@ -627,6 +666,7 @@ export class PageController {
       workspace.id,
       createPageDto,
     );
+    const access = await this.pageAccessService.getEffectiveAccess(page, user);
 
     if (
       createPageDto.format &&
@@ -637,10 +677,17 @@ export class PageController {
         createPageDto.format === 'markdown'
           ? jsonToMarkdown(page.content)
           : jsonToHtml(page.content);
-      return { ...mapPageResponse(page), content: contentOutput };
+      return {
+        ...mapPageResponse(page),
+        content: contentOutput,
+        access: this.toAccessResponse(access),
+      };
     }
 
-    return mapPageResponse(page);
+    return {
+      ...mapPageResponse(page),
+      access: this.toAccessResponse(access),
+    };
   }
 
   @HttpCode(HttpStatus.OK)
@@ -652,16 +699,14 @@ export class PageController {
       throw new NotFoundException('Page not found');
     }
 
-    const ability = await this.spaceAbility.createForUser(user, page.spaceId);
-    if (ability.cannot(SpaceCaslAction.Edit, SpaceCaslSubject.Page)) {
-      throw new ForbiddenException();
-    }
+    await this.pageAccessService.assertCanWritePage(page, user);
 
     const updatedPage = await this.pageService.update(
       page,
       updatePageDto,
       user,
     );
+    const access = await this.pageAccessService.getEffectiveAccess(updatedPage, user);
 
     if (
       updatePageDto.format &&
@@ -675,11 +720,13 @@ export class PageController {
       return {
         ...mapPageResponse(updatedPage, { includeCustomFields: true }),
         content: contentOutput,
+        access: this.toAccessResponse(access),
       };
     }
 
     return {
       ...mapPageResponse(updatedPage, { includeCustomFields: true }),
+      access: this.toAccessResponse(access),
     };
   }
 
@@ -696,10 +743,11 @@ export class PageController {
       throw new NotFoundException('Page not found');
     }
 
-    const ability = await this.spaceAbility.createForUser(user, page.spaceId);
+    await this.pageAccessService.assertCanMoveDeleteShare(page, user);
 
     if (deletePageDto.permanentlyDelete) {
       // Permanent deletion requires space admin permissions
+      const ability = await this.spaceAbility.createForUser(user, page.spaceId);
       if (ability.cannot(SpaceCaslAction.Manage, SpaceCaslSubject.Settings)) {
         throw new ForbiddenException(
           'Only space admins can permanently delete pages',
@@ -707,10 +755,6 @@ export class PageController {
       }
       await this.pageService.forceDelete(page.id, workspace.id);
     } else {
-      // Soft delete requires page manage permissions
-      if (ability.cannot(SpaceCaslAction.Manage, SpaceCaslSubject.Page)) {
-        throw new ForbiddenException();
-      }
       await this.pageService.removePage(page.id, user.id, workspace.id);
     }
   }
@@ -728,10 +772,7 @@ export class PageController {
       throw new NotFoundException('Page not found');
     }
 
-    const ability = await this.spaceAbility.createForUser(user, page.spaceId);
-    if (ability.cannot(SpaceCaslAction.Manage, SpaceCaslSubject.Page)) {
-      throw new ForbiddenException();
-    }
+    await this.pageAccessService.assertCanMoveDeleteShare(page, user);
 
     await this.pageRepo.restorePage(page.id, workspace.id);
 
@@ -739,7 +780,15 @@ export class PageController {
       includeHasChildren: true,
     });
 
-    return restoredPage ? mapPageResponse(restoredPage) : restoredPage;
+    if (!restoredPage) {
+      return restoredPage;
+    }
+
+    const access = await this.pageAccessService.getEffectiveAccess(restoredPage, user);
+    return {
+      ...mapPageResponse(restoredPage),
+      access: this.toAccessResponse(access),
+    };
   }
 
   @HttpCode(HttpStatus.OK)
@@ -750,22 +799,51 @@ export class PageController {
     @AuthUser() user: User,
   ) {
     if (recentPageDto.spaceId) {
-      const ability = await this.spaceAbility.createForUser(
+      const hasReadablePages =
+        await this.pageAccessService.hasAnyReadablePageInSpace(
+          user,
+          recentPageDto.spaceId,
+        );
+      if (!hasReadablePages) {
+        throw new ForbiddenException();
+      }
+
+      const result = await this.pageService.getRecentSpacePages(
+        recentPageDto.spaceId,
+        pagination,
+      );
+
+      const snapshot = await this.pageAccessService.getSidebarAccessSnapshot(
         user,
         recentPageDto.spaceId,
       );
 
-      if (ability.cannot(SpaceCaslAction.Read, SpaceCaslSubject.Page)) {
-        throw new ForbiddenException();
-      }
-
-      return this.pageService.getRecentSpacePages(
-        recentPageDto.spaceId,
-        pagination,
+      result.items = result.items.filter((page) =>
+        snapshot.readablePageIds.has(page.id),
       );
+
+      return result;
     }
 
-    return this.pageService.getRecentPages(user.id, pagination);
+    const result = await this.pageService.getRecentPages(user.id, pagination);
+    const accessRows = await Promise.all(
+      result.items.map(async (page) => {
+        const access = await this.pageAccessService.getEffectiveAccess(page, user);
+        return {
+          page,
+          access,
+        };
+      }),
+    );
+
+    result.items = accessRows
+      .filter((entry) => entry.access.capabilities.canRead)
+      .map((entry) => ({
+        ...entry.page,
+        access: this.toAccessResponse(entry.access),
+      }));
+
+    return result;
   }
 
   @HttpCode(HttpStatus.OK)
@@ -804,10 +882,7 @@ export class PageController {
       throw new NotFoundException('Page not found');
     }
 
-    const ability = await this.spaceAbility.createForUser(user, page.spaceId);
-    if (ability.cannot(SpaceCaslAction.Read, SpaceCaslSubject.Page)) {
-      throw new ForbiddenException();
-    }
+    await this.pageAccessService.assertCanReadPage(page, user);
 
     return this.pageHistoryService.findHistoryByPageId(page.id, pagination);
   }
@@ -823,13 +898,17 @@ export class PageController {
       throw new NotFoundException('Page history not found');
     }
 
-    const ability = await this.spaceAbility.createForUser(
-      user,
-      history.spaceId,
-    );
+    const page = await this.pageRepo.findById(history.pageId);
+    if (page) {
+      await this.pageAccessService.assertCanReadPage(page, user);
+      return history;
+    }
+
+    const ability = await this.spaceAbility.createForUser(user, history.spaceId);
     if (ability.cannot(SpaceCaslAction.Read, SpaceCaslSubject.Page)) {
       throw new ForbiddenException();
     }
+
     return history;
   }
 
@@ -862,8 +941,16 @@ export class PageController {
       spaceId = page.spaceId;
     }
 
-    const ability = await this.spaceAbility.createForUser(user, spaceId);
-    if (ability.cannot(SpaceCaslAction.Read, SpaceCaslSubject.Page)) {
+    const accessSnapshot = await this.pageAccessService.getSidebarAccessSnapshot(
+      user,
+      spaceId,
+    );
+
+    if (accessSnapshot.readablePageIds.size === 0) {
+      throw new ForbiddenException();
+    }
+
+    if (dto.pageId && !accessSnapshot.visiblePageIds.has(dto.pageId)) {
       throw new ForbiddenException();
     }
 
@@ -874,17 +961,160 @@ export class PageController {
       dto.includeNodeTypes,
     );
 
+    const visibleItems = sidebarPages.items.filter((node) =>
+      accessSnapshot.visiblePageIds.has(node.id),
+    );
+
     return {
       ...sidebarPages,
-      items: sidebarPages.items.map((node) => ({
+      items: visibleItems.map((node) => ({
         ...node,
+        hasChildren:
+          (accessSnapshot.visibleChildrenCountByParentId.get(node.id) ?? 0) > 0,
         customFields: ['page', 'database', 'databaseRow'].includes(
           node.nodeType,
         )
           ? mapPageCustomFields(node)
           : null,
+        access: {
+          role: accessSnapshot.writablePageIds.has(node.id)
+            ? PageRole.WRITER
+            : accessSnapshot.readablePageIds.has(node.id)
+              ? PageRole.READER
+              : null,
+          sources: [],
+          capabilities: {
+            canRead: accessSnapshot.readablePageIds.has(node.id),
+            canWrite: accessSnapshot.writablePageIds.has(node.id),
+            canCreateChild: accessSnapshot.createChildPageIds.has(node.id),
+            canMoveDeleteShare:
+              accessSnapshot.moveDeleteSharePageIds.has(node.id),
+            canManageAccess: accessSnapshot.manageAccessPageIds.has(node.id),
+          },
+          isSystemAccess: this.pageAccessService.isWorkspaceBypassUser(user),
+        },
       })),
     };
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post(':pageId/actions/access/users')
+  async listPageAccessUsers(
+    @Param('pageId', ParseUUIDPipe) pageId: string,
+    @Body() pagination: PaginationOptions,
+    @AuthUser() user: User,
+  ) {
+    this.pageAccessService.assertCanManageAccess(user);
+
+    const page = await this.pageRepo.findById(pageId);
+    if (!page || page.deletedAt) {
+      throw new NotFoundException('Page not found');
+    }
+
+    return this.pageAccessService.listEffectiveUsers(page, pagination);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post(':pageId/actions/access/groups')
+  async listPageAccessGroups(
+    @Param('pageId', ParseUUIDPipe) pageId: string,
+    @Body() pagination: PaginationOptions,
+    @AuthUser() user: User,
+  ) {
+    this.pageAccessService.assertCanManageAccess(user);
+
+    const page = await this.pageRepo.findById(pageId);
+    if (!page || page.deletedAt) {
+      throw new NotFoundException('Page not found');
+    }
+
+    return this.pageAccessService.listGroupRules(page, pagination);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post(':pageId/actions/access/grant-user')
+  async grantPageUserAccess(
+    @Param('pageId', ParseUUIDPipe) pageId: string,
+    @Body() dto: GrantPageUserAccessDto,
+    @AuthUser() user: User,
+  ) {
+    const page = await this.pageRepo.findById(pageId);
+    if (!page || page.deletedAt) {
+      throw new NotFoundException('Page not found');
+    }
+
+    await this.pageAccessService.grantUserAccessForSubtree(
+      page,
+      dto.userId,
+      dto.role,
+      user,
+    );
+
+    return { success: true };
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post(':pageId/actions/access/close-user')
+  async closePageUserAccess(
+    @Param('pageId', ParseUUIDPipe) pageId: string,
+    @Body() dto: ClosePageUserAccessDto,
+    @AuthUser() user: User,
+  ) {
+    const page = await this.pageRepo.findById(pageId);
+    if (!page || page.deletedAt) {
+      throw new NotFoundException('Page not found');
+    }
+
+    await this.pageAccessService.closeUserAccessForSubtree(
+      page,
+      dto.userId,
+      user,
+    );
+
+    return { success: true };
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post(':pageId/actions/access/grant-group')
+  async grantPageGroupAccess(
+    @Param('pageId', ParseUUIDPipe) pageId: string,
+    @Body() dto: GrantPageGroupAccessDto,
+    @AuthUser() user: User,
+  ) {
+    const page = await this.pageRepo.findById(pageId);
+    if (!page || page.deletedAt) {
+      throw new NotFoundException('Page not found');
+    }
+
+    await this.pageAccessService.grantGroupAccessForSubtree(
+      page,
+      dto.groupId,
+      dto.role,
+      user,
+    );
+
+    return { success: true };
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post(':pageId/actions/access/close-group')
+  async closePageGroupAccess(
+    @Param('pageId', ParseUUIDPipe) pageId: string,
+    @Body() dto: ClosePageGroupAccessDto,
+    @AuthUser() user: User,
+  ) {
+    const page = await this.pageRepo.findById(pageId);
+    if (!page || page.deletedAt) {
+      throw new NotFoundException('Page not found');
+    }
+
+    await this.pageAccessService.closeGroupAccessForSubtree(
+      page,
+      dto.groupId,
+      user,
+    );
+
+    return { success: true };
   }
 
   @HttpCode(HttpStatus.OK)
@@ -899,10 +1129,7 @@ export class PageController {
       throw new NotFoundException('Page not found');
     }
 
-    const ability = await this.spaceAbility.createForUser(user, page.spaceId);
-    if (ability.cannot(SpaceCaslAction.Manage, SpaceCaslSubject.Page)) {
-      throw new ForbiddenException();
-    }
+    await this.pageAccessService.assertCanMoveDeleteShare(page, user);
 
     const existingDatabase = await this.databaseRepo.findByPageId(
       page.id,
@@ -929,16 +1156,13 @@ export class PageController {
       throw new BadRequestException('Page is already in this space');
     }
 
-    const abilities = await Promise.all([
-      this.spaceAbility.createForUser(user, movedPage.spaceId),
-      this.spaceAbility.createForUser(user, dto.spaceId),
-    ]);
+    await this.pageAccessService.assertCanMoveDeleteShare(movedPage, user);
 
-    if (
-      abilities.some((ability) =>
-        ability.cannot(SpaceCaslAction.Edit, SpaceCaslSubject.Page),
-      )
-    ) {
+    const destinationAbility = await this.spaceAbility.createForUser(
+      user,
+      dto.spaceId,
+    );
+    if (destinationAbility.cannot(SpaceCaslAction.Edit, SpaceCaslSubject.Page)) {
       throw new ForbiddenException();
     }
 
@@ -955,16 +1179,10 @@ export class PageController {
 
     // If spaceId is provided, it's a copy to different space
     if (dto.spaceId) {
-      const abilities = await Promise.all([
-        this.spaceAbility.createForUser(user, copiedPage.spaceId),
-        this.spaceAbility.createForUser(user, dto.spaceId),
-      ]);
+      await this.pageAccessService.assertCanReadPage(copiedPage, user);
 
-      if (
-        abilities.some((ability) =>
-          ability.cannot(SpaceCaslAction.Edit, SpaceCaslSubject.Page),
-        )
-      ) {
+      const targetAbility = await this.spaceAbility.createForUser(user, dto.spaceId);
+      if (targetAbility.cannot(SpaceCaslAction.Edit, SpaceCaslSubject.Page)) {
         throw new ForbiddenException();
       }
 
@@ -974,16 +1192,17 @@ export class PageController {
         user,
       );
 
-      return mapPageResponse(duplicatedPage);
+      const access = await this.pageAccessService.getEffectiveAccess(
+        duplicatedPage,
+        user,
+      );
+      return {
+        ...mapPageResponse(duplicatedPage),
+        access: this.toAccessResponse(access),
+      };
     } else {
       // If no spaceId, it's a duplicate in same space
-      const ability = await this.spaceAbility.createForUser(
-        user,
-        copiedPage.spaceId,
-      );
-      if (ability.cannot(SpaceCaslAction.Edit, SpaceCaslSubject.Page)) {
-        throw new ForbiddenException();
-      }
+      await this.pageAccessService.assertCanWritePage(copiedPage, user);
 
       const duplicatedPage = await this.pageService.duplicatePage(
         copiedPage,
@@ -991,7 +1210,14 @@ export class PageController {
         user,
       );
 
-      return mapPageResponse(duplicatedPage);
+      const access = await this.pageAccessService.getEffectiveAccess(
+        duplicatedPage,
+        user,
+      );
+      return {
+        ...mapPageResponse(duplicatedPage),
+        access: this.toAccessResponse(access),
+      };
     }
   }
 
@@ -1016,15 +1242,11 @@ export class PageController {
       ) {
         throw new NotFoundException('Parent page not found');
       }
+
+      await this.pageAccessService.assertCanCreateChild(parentPage, user);
     }
 
-    const ability = await this.spaceAbility.createForUser(
-      user,
-      movedPage.spaceId,
-    );
-    if (ability.cannot(SpaceCaslAction.Edit, SpaceCaslSubject.Page)) {
-      throw new ForbiddenException();
-    }
+    await this.pageAccessService.assertCanMoveDeleteShare(movedPage, user);
 
     return this.pageService.movePage(dto, movedPage);
   }
@@ -1037,10 +1259,13 @@ export class PageController {
       throw new NotFoundException('Page not found');
     }
 
-    const ability = await this.spaceAbility.createForUser(user, page.spaceId);
-    if (ability.cannot(SpaceCaslAction.Read, SpaceCaslSubject.Page)) {
-      throw new ForbiddenException();
-    }
-    return this.pageService.getPageBreadCrumbs(page.id);
+    await this.pageAccessService.assertCanReadPage(page, user);
+    const snapshot = await this.pageAccessService.getSidebarAccessSnapshot(
+      user,
+      page.spaceId,
+    );
+
+    const breadcrumbs = await this.pageService.getPageBreadCrumbs(page.id);
+    return breadcrumbs.filter((crumb) => snapshot.visiblePageIds.has(crumb.id));
   }
 }
