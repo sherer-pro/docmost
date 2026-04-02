@@ -103,35 +103,35 @@ export default function PageAccessModal({
 
   function getSourceLabel(source: string) {
     if (source === "system") {
-      return t("page.access.source.system");
+      return t("page.access.source.system", { keySeparator: false });
     }
     if (source === "space") {
-      return t("page.access.source.space");
+      return t("page.access.source.space", { keySeparator: false });
     }
     if (source === "page_user") {
-      return t("page.access.source.pageUser");
+      return t("page.access.source.pageUser", { keySeparator: false });
     }
     if (source === "page_group") {
-      return t("page.access.source.pageGroup");
+      return t("page.access.source.pageGroup", { keySeparator: false });
     }
     return source;
   }
 
   function getRoleLabel(role: "reader" | "writer" | null) {
     if (role === "reader") {
-      return t("page.access.role.reader");
+      return t("page.access.role.reader", { keySeparator: false });
     }
     if (role === "writer") {
-      return t("page.access.role.writer");
+      return t("page.access.role.writer", { keySeparator: false });
     }
-    return t("page.access.role.none");
+    return t("page.access.role.none", { keySeparator: false });
   }
 
   function getEffectLabel(effect: "allow" | "deny") {
     if (effect === "allow") {
-      return t("page.access.effect.allow");
+      return t("page.access.effect.allow", { keySeparator: false });
     }
-    return t("page.access.effect.deny");
+    return t("page.access.effect.deny", { keySeparator: false });
   }
 
   useEffect(() => {
@@ -153,13 +153,15 @@ export default function PageAccessModal({
       });
       setNewUserId("");
       await loadUsers();
-      notifications.show({ message: t("page.access.updated") });
+      notifications.show({
+        message: t("page.access.updated", { keySeparator: false }),
+      });
     } catch (err: any) {
       notifications.show({
         color: "red",
         message:
           err?.response?.data?.message ||
-          t("page.access.updateFailed"),
+          t("page.access.updateFailed", { keySeparator: false }),
       });
     }
   }
@@ -176,13 +178,15 @@ export default function PageAccessModal({
       });
       setNewGroupId("");
       await loadGroups();
-      notifications.show({ message: t("page.access.updated") });
+      notifications.show({
+        message: t("page.access.updated", { keySeparator: false }),
+      });
     } catch (err: any) {
       notifications.show({
         color: "red",
         message:
           err?.response?.data?.message ||
-          t("page.access.updateFailed"),
+          t("page.access.updateFailed", { keySeparator: false }),
       });
     }
   }
@@ -191,13 +195,15 @@ export default function PageAccessModal({
     try {
       await closePageUserAccess(pageId, { userId });
       await loadUsers();
-      notifications.show({ message: t("page.access.updated") });
+      notifications.show({
+        message: t("page.access.updated", { keySeparator: false }),
+      });
     } catch (err: any) {
       notifications.show({
         color: "red",
         message:
           err?.response?.data?.message ||
-          t("page.access.updateFailed"),
+          t("page.access.updateFailed", { keySeparator: false }),
       });
     }
   }
@@ -206,13 +212,15 @@ export default function PageAccessModal({
     try {
       await closePageGroupAccess(pageId, { groupId });
       await loadGroups();
-      notifications.show({ message: t("page.access.updated") });
+      notifications.show({
+        message: t("page.access.updated", { keySeparator: false }),
+      });
     } catch (err: any) {
       notifications.show({
         color: "red",
         message:
           err?.response?.data?.message ||
-          t("page.access.updateFailed"),
+          t("page.access.updateFailed", { keySeparator: false }),
       });
     }
   }
@@ -228,7 +236,7 @@ export default function PageAccessModal({
       <Modal.Overlay />
       <Modal.Content>
         <Modal.Header>
-          <Modal.Title>{t("page.access.title")}</Modal.Title>
+          <Modal.Title>{t("page.access.title", { keySeparator: false })}</Modal.Title>
           <Modal.CloseButton />
         </Modal.Header>
         <Modal.Body>
@@ -241,22 +249,36 @@ export default function PageAccessModal({
 
             <Tabs value={activeTab} onChange={setActiveTab}>
               <Tabs.List>
-                <Tabs.Tab value="users">{t("page.access.tab.users")}</Tabs.Tab>
-                <Tabs.Tab value="groups">{t("page.access.tab.groups")}</Tabs.Tab>
+                <Tabs.Tab value="users">
+                  {t("page.access.tab.users", { keySeparator: false })}
+                </Tabs.Tab>
+                <Tabs.Tab value="groups">
+                  {t("page.access.tab.groups", { keySeparator: false })}
+                </Tabs.Tab>
               </Tabs.List>
 
               <Tabs.Panel value="users" pt="md">
                 <Group align="end" grow>
                   <TextInput
-                    label={t("page.access.field.userId")}
+                    label={t("page.access.field.userId", { keySeparator: false })}
                     value={newUserId}
                     onChange={(event) => setNewUserId(event.currentTarget.value)}
                   />
                   <Select
                     label={t("Role")}
                     data={[
-                      { label: t("page.access.role.reader"), value: "reader" },
-                      { label: t("page.access.role.writer"), value: "writer" },
+                      {
+                        label: t("page.access.role.reader", {
+                          keySeparator: false,
+                        }),
+                        value: "reader",
+                      },
+                      {
+                        label: t("page.access.role.writer", {
+                          keySeparator: false,
+                        }),
+                        value: "writer",
+                      },
                     ]}
                     value={newRole}
                     onChange={(value) =>
@@ -272,7 +294,11 @@ export default function PageAccessModal({
                       <Table.Tr>
                         <Table.Th>{t("User")}</Table.Th>
                         <Table.Th>{t("Role")}</Table.Th>
-                        <Table.Th>{t("page.access.column.source")}</Table.Th>
+                        <Table.Th>
+                          {t("page.access.column.source", {
+                            keySeparator: false,
+                          })}
+                        </Table.Th>
                         <Table.Th>{t("Action")}</Table.Th>
                       </Table.Tr>
                     </Table.Thead>
@@ -348,15 +374,25 @@ export default function PageAccessModal({
               <Tabs.Panel value="groups" pt="md">
                 <Group align="end" grow>
                   <TextInput
-                    label={t("page.access.field.groupId")}
+                    label={t("page.access.field.groupId", { keySeparator: false })}
                     value={newGroupId}
                     onChange={(event) => setNewGroupId(event.currentTarget.value)}
                   />
                   <Select
                     label={t("Role")}
                     data={[
-                      { label: t("page.access.role.reader"), value: "reader" },
-                      { label: t("page.access.role.writer"), value: "writer" },
+                      {
+                        label: t("page.access.role.reader", {
+                          keySeparator: false,
+                        }),
+                        value: "reader",
+                      },
+                      {
+                        label: t("page.access.role.writer", {
+                          keySeparator: false,
+                        }),
+                        value: "writer",
+                      },
                     ]}
                     value={newRole}
                     onChange={(value) =>

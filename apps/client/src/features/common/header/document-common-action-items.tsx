@@ -62,7 +62,7 @@ export function DocumentCommonActionItems({
 
       {onOpenAccess && (
         <Menu.Item leftSection={<IconUsersGroup size={16} />} onClick={onOpenAccess}>
-          {accessLabel ?? t('page.access.menu')}
+          {accessLabel ?? t('page.access.menu', { keySeparator: false })}
         </Menu.Item>
       )}
 
