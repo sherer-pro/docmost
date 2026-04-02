@@ -11,6 +11,7 @@ import {
   SpaceCaslAction,
   SpaceCaslSubject,
 } from '../casl/interfaces/space-ability.type';
+import { PageAccessService } from '../page-access/page-access.service';
 
 describe('SpaceController', () => {
   let controller: SpaceController;
@@ -22,6 +23,9 @@ describe('SpaceController', () => {
   };
   const mockSpaceMemberRepo = {
     getUserSpaceRoles: jest.fn(),
+  };
+  const mockPageAccessService = {
+    hasAnyReadablePageInSpace: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -35,6 +39,7 @@ describe('SpaceController', () => {
         { provide: SpaceMemberRepo, useValue: mockSpaceMemberRepo },
         { provide: SpaceAbilityFactory, useValue: mockSpaceAbility },
         { provide: WorkspaceAbilityFactory, useValue: {} },
+        { provide: PageAccessService, useValue: mockPageAccessService },
       ],
     }).overrideGuard(JwtAuthGuard)
       .useValue({ canActivate: jest.fn(() => true) });

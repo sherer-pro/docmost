@@ -48,23 +48,47 @@ const createSocketMock = (
 
 describe('WsGateway.handleMessage', () => {
   let gateway: WsGatewayType;
+  const pageRepo = {
+    findById: jest.fn(),
+  };
+  const pageAccessService = {
+    getEffectiveAccess: jest.fn(async () => ({
+      capabilities: { canRead: true },
+    })),
+    getSpaceIdsWithPageRuleAccess: jest.fn(async () => []),
+  };
 
   beforeAll(async () => {
     ({ WsGateway: WsGatewayClass } = await import('./ws.gateway'));
   });
 
   beforeEach(() => {
-    gateway = new WsGatewayClass({} as any, {} as any);
+    gateway = new WsGatewayClass(
+      {} as any,
+      {} as any,
+      {} as any,
+      pageRepo as any,
+      pageAccessService as any,
+    );
+    (gateway as any).server = {
+      sockets: {
+        adapter: {
+          rooms: new Map(),
+        },
+        sockets: new Map(),
+      },
+    };
+    jest.clearAllMocks();
   });
 
-  it('relays a message only to an authorized space room', () => {
+  it('relays a message only to an authorized space room', async () => {
     const socket = createSocketMock(['space-space-a']);
 
-    gateway.handleMessage(socket as any, {
+    await gateway.handleMessage(socket as any, {
       operation: 'updateOne',
       targetRoom: 'space-space-a',
       spaceId: 'space-a',
-      data: { pageId: 'p-1' },
+      data: { title: 'update' },
     });
 
     expect(socket.broadcast.to).toHaveBeenCalledWith('space-space-a');
@@ -74,10 +98,10 @@ describe('WsGateway.handleMessage', () => {
     );
   });
 
-  it('blocks cross-space relay to an unauthorized room', () => {
+  it('blocks cross-space relay to an unauthorized room', async () => {
     const socket = createSocketMock(['space-space-a']);
 
-    gateway.handleMessage(socket as any, {
+    await gateway.handleMessage(socket as any, {
       operation: 'updateOne',
       targetRoom: 'space-space-b',
       spaceId: 'space-b',
@@ -87,10 +111,10 @@ describe('WsGateway.handleMessage', () => {
     expect(socket.broadcast.to).not.toHaveBeenCalled();
   });
 
-  it('blocks relay when the socket is not joined to the target room', () => {
+  it('blocks relay when the socket is not joined to the target room', async () => {
     const socket = createSocketMock(['workspace-workspace-a'], []);
 
-    gateway.handleMessage(socket as any, {
+    await gateway.handleMessage(socket as any, {
       operation: 'workspace-event',
       targetRoom: 'workspace-workspace-a',
       workspaceId: 'workspace-a',
@@ -100,10 +124,10 @@ describe('WsGateway.handleMessage', () => {
     expect(socket.broadcast.to).not.toHaveBeenCalled();
   });
 
-  it('rejects payload without required workspaceId for a workspace room', () => {
+  it('rejects payload without required workspaceId for a workspace room', async () => {
     const socket = createSocketMock(['workspace-workspace-a']);
 
-    gateway.handleMessage(socket as any, {
+    await gateway.handleMessage(socket as any, {
       operation: 'workspace-event',
       targetRoom: 'workspace-workspace-a',
       data: { title: 'new title' },
@@ -112,10 +136,10 @@ describe('WsGateway.handleMessage', () => {
     expect(socket.broadcast.to).not.toHaveBeenCalled();
   });
 
-  it('rejects payload with mismatched room and spaceId', () => {
+  it('rejects payload with mismatched room and spaceId', async () => {
     const socket = createSocketMock(['space-space-a']);
 
-    gateway.handleMessage(socket as any, {
+    await gateway.handleMessage(socket as any, {
       operation: 'updateOne',
       targetRoom: 'space-space-a',
       spaceId: 'space-b',

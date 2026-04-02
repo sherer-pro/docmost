@@ -4,6 +4,7 @@ import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { ShareRepo } from '@docmost/db/repos/share/share.repo';
 import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 import { UserRepo } from '@docmost/db/repos/user/user.repo';
+import { PageAccessService } from '../page-access/page-access.service';
 
 describe('SearchService', () => {
   let service: SearchService;
@@ -17,6 +18,7 @@ describe('SearchService', () => {
         { provide: ShareRepo, useValue: {} },
         { provide: SpaceMemberRepo, useValue: {} },
         { provide: UserRepo, useValue: {} },
+        { provide: PageAccessService, useValue: {} },
       ],
     }).compile();
 

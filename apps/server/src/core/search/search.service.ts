@@ -10,6 +10,7 @@ import { ShareRepo } from '@docmost/db/repos/share/share.repo';
 import { UserRepo } from '@docmost/db/repos/user/user.repo';
 import { User } from '@docmost/db/types/entity.types';
 import { UserRole } from '../../common/helpers/types/permission';
+import { PageAccessService } from '../page-access/page-access.service';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const tsquery = require('pg-tsquery')();
@@ -22,6 +23,7 @@ export class SearchService {
     private shareRepo: ShareRepo,
     private spaceMemberRepo: SpaceMemberRepo,
     private userRepo: UserRepo,
+    private readonly pageAccessService: PageAccessService,
   ) {}
 
   async searchPage(
@@ -122,7 +124,7 @@ export class SearchService {
     queryResults = await queryResults.execute();
 
     //@ts-ignore
-    const searchResults = queryResults.map((result: SearchResponseDto) => {
+    let searchResults = queryResults.map((result: SearchResponseDto) => {
       if (result.highlight) {
         result.highlight = result.highlight
           .replace(/\r\n|\r|\n/g, ' ')
@@ -130,6 +132,38 @@ export class SearchService {
       }
       return result;
     });
+
+    if (opts.userId) {
+      const authUser = await this.userRepo.findById(opts.userId, opts.workspaceId);
+
+      if (!authUser) {
+        return { items: [] };
+      }
+
+      const accessibility = await Promise.all(
+        searchResults.map(async (result) => {
+          const page = await this.pageRepo.findById(result.id);
+          if (!page || page.deletedAt) {
+            return null;
+          }
+
+          const access = await this.pageAccessService.getEffectiveAccess(
+            page,
+            authUser,
+          );
+
+          if (!access.capabilities.canRead) {
+            return null;
+          }
+
+          return result;
+        }),
+      );
+
+      searchResults = accessibility.filter(
+        (result): result is SearchResponseDto => !!result,
+      );
+    }
 
     return { items: searchResults };
   }
@@ -200,19 +234,24 @@ export class SearchService {
         .where('workspaceId', '=', workspaceId)
         .limit(limit);
 
-      // only search spaces the user has access to
-      const userSpaceIds = await this.spaceMemberRepo.getUserSpaceIds(authUser.id);
-
       if (suggestion?.spaceId) {
-        if (userSpaceIds.includes(suggestion.spaceId)) {
-          pageSearch = pageSearch.where('spaceId', '=', suggestion.spaceId);
-          pages = await pageSearch.execute();
-        }
-      } else if (userSpaceIds?.length > 0) {
-        // we need this check or the query will throw an error if the userSpaceIds array is empty
-        pageSearch = pageSearch.where('spaceId', 'in', userSpaceIds);
-        pages = await pageSearch.execute();
+        pageSearch = pageSearch.where('spaceId', '=', suggestion.spaceId);
       }
+
+      const candidatePages = await pageSearch.execute();
+      const accessRows = await Promise.all(
+        candidatePages.map(async (page) => {
+          const access = await this.pageAccessService.getEffectiveAccess(
+            page as any,
+            authUser,
+          );
+          return access.capabilities.canRead ? page : null;
+        }),
+      );
+
+      pages = accessRows.filter(
+        (page): page is (typeof candidatePages)[number] => !!page,
+      );
     }
 
     return { users, groups, pages };

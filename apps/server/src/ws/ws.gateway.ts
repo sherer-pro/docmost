@@ -15,6 +15,10 @@ import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
 import { WsMessageDto } from './dto/ws-message.dto';
 import { createCorsOriginValidator } from '../common/security/cors.util';
+import { PageAccessService } from '../core/page-access/page-access.service';
+import { UserRepo } from '@docmost/db/repos/user/user.repo';
+import { PageRepo } from '@docmost/db/repos/page/page.repo';
+import { User } from '@docmost/db/types/entity.types';
 
 const wsCorsOriginValidator = createCorsOriginValidator();
 
@@ -30,6 +34,9 @@ export class WsGateway implements OnGatewayConnection, OnModuleDestroy {
   constructor(
     private tokenService: TokenService,
     private spaceMemberRepo: SpaceMemberRepo,
+    private readonly userRepo: UserRepo,
+    private readonly pageRepo: PageRepo,
+    private readonly pageAccessService: PageAccessService,
   ) {}
 
   /**
@@ -48,8 +55,16 @@ export class WsGateway implements OnGatewayConnection, OnModuleDestroy {
 
       const userId = token.sub;
       const workspaceId = token.workspaceId;
+      const user = await this.userRepo.findById(userId, workspaceId);
+      if (!user) {
+        throw new Error('Unauthorized');
+      }
 
-      const userSpaceIds = await this.spaceMemberRepo.getUserSpaceIds(userId);
+      const [memberSpaceIds, pageRuleSpaceIds] = await Promise.all([
+        this.spaceMemberRepo.getUserSpaceIds(userId),
+        this.pageAccessService.getSpaceIdsWithPageRuleAccess(userId, workspaceId),
+      ]);
+      const userSpaceIds = [...new Set([...memberSpaceIds, ...pageRuleSpaceIds])];
 
       const userRoom = `user-${userId}`;
       const workspaceRoom = `workspace-${workspaceId}`;
@@ -62,6 +77,7 @@ export class WsGateway implements OnGatewayConnection, OnModuleDestroy {
        * tampering with payload values.
        */
       client.data.authorizedRooms = authorizedRooms;
+      client.data.user = user;
 
       client.join([...authorizedRooms]);
     } catch (err) {
@@ -77,7 +93,7 @@ export class WsGateway implements OnGatewayConnection, OnModuleDestroy {
    * and real Socket.IO room membership before rebroadcasting.
    */
   @SubscribeMessage('message')
-  handleMessage(client: Socket, data: any): void {
+  async handleMessage(client: Socket, data: any): Promise<void> {
     const payload = plainToInstance(WsMessageDto, data);
     const validationErrors = validateSync(payload, {
       whitelist: true,
@@ -120,6 +136,50 @@ export class WsGateway implements OnGatewayConnection, OnModuleDestroy {
         `Client ${client.id} is not in room ${payload.targetRoom}; relay rejected`,
       );
       return;
+    }
+
+    if (payload.targetRoom.startsWith('space-')) {
+      const pageId = this.extractPageId(payload.data);
+
+      if (pageId) {
+        const page = await this.pageRepo.findById(pageId);
+        if (!page || page.deletedAt) {
+          return;
+        }
+
+        const room = this.server.sockets.adapter.rooms.get(payload.targetRoom);
+        if (!room || room.size === 0) {
+          return;
+        }
+
+        for (const socketId of room) {
+          if (socketId === client.id) {
+            continue;
+          }
+
+          const socket = this.server.sockets.sockets.get(socketId);
+          if (!socket) {
+            continue;
+          }
+
+          const socketUser = socket.data.user as User | undefined;
+          if (!socketUser) {
+            continue;
+          }
+
+          const access = await this.pageAccessService.getEffectiveAccess(
+            page,
+            socketUser,
+          );
+          if (!access.capabilities.canRead) {
+            continue;
+          }
+
+          socket.emit('message', payload);
+        }
+
+        return;
+      }
     }
 
     client.broadcast.to(payload.targetRoom).emit('message', payload);
@@ -168,5 +228,42 @@ export class WsGateway implements OnGatewayConnection, OnModuleDestroy {
     }
 
     return true;
+  }
+
+  private extractPageId(data: unknown): string | null {
+    if (!data || typeof data !== 'object') {
+      return null;
+    }
+
+    const payload = data as Record<string, unknown>;
+
+    if (typeof payload.pageId === 'string' && payload.pageId.length > 0) {
+      return payload.pageId;
+    }
+
+    if (typeof payload.id === 'string' && payload.id.length > 0) {
+      return payload.id;
+    }
+
+    const nestedPayload = payload.payload as Record<string, unknown> | undefined;
+    if (nestedPayload) {
+      if (
+        typeof nestedPayload.pageId === 'string' &&
+        nestedPayload.pageId.length > 0
+      ) {
+        return nestedPayload.pageId;
+      }
+
+      if (typeof nestedPayload.id === 'string' && nestedPayload.id.length > 0) {
+        return nestedPayload.id;
+      }
+
+      const node = nestedPayload.node as Record<string, unknown> | undefined;
+      if (node && typeof node.id === 'string' && node.id.length > 0) {
+        return node.id;
+      }
+    }
+
+    return null;
   }
 }

@@ -5,6 +5,7 @@ import SpaceAbilityFactory from '../casl/abilities/space-ability.factory';
 import { EnvironmentService } from '../../integrations/environment/environment.service';
 import { ModuleRef } from '@nestjs/core';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { PageAccessService } from '../page-access/page-access.service';
 
 describe('SearchController', () => {
   let controller: SearchController;
@@ -14,6 +15,7 @@ describe('SearchController', () => {
       controllers: [SearchController],
       providers: [
         { provide: SearchService, useValue: {} },
+        { provide: PageAccessService, useValue: {} },
         { provide: SpaceAbilityFactory, useValue: {} },
         { provide: EnvironmentService, useValue: {} },
         { provide: ModuleRef, useValue: {} },

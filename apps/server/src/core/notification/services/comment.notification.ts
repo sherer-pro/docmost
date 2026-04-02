@@ -7,13 +7,13 @@ import {
 } from '../../../integrations/queue/constants/queue.interface';
 import { NotificationService } from '../notification.service';
 import { NotificationType } from '../notification.constants';
-import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 import { WatcherRepo } from '@docmost/db/repos/watcher/watcher.repo';
 import { CommentMentionEmail } from '@docmost/transactional/emails/comment-mention-email';
 import { CommentCreateEmail } from '@docmost/transactional/emails/comment-created-email';
 import { CommentResolvedEmail } from '@docmost/transactional/emails/comment-resolved-email';
 import { getPageTitle } from '../../../common/helpers';
 import { PushAggregationService } from './push-aggregation.service';
+import { PageAccessService } from '../../page-access/page-access.service';
 
 @Injectable()
 export class CommentNotificationService {
@@ -22,9 +22,9 @@ export class CommentNotificationService {
   constructor(
     @InjectKysely() private readonly db: KyselyDB,
     private readonly notificationService: NotificationService,
-    private readonly spaceMemberRepo: SpaceMemberRepo,
     private readonly watcherRepo: WatcherRepo,
     private readonly pushAggregationService: PushAggregationService,
+    private readonly pageAccessService: PageAccessService,
   ) {}
 
   async processComment(data: ICommentNotificationJob, appUrl: string) {
@@ -61,11 +61,12 @@ export class CommentNotificationService {
     const allCandidateIds = [
       ...new Set([...mentionedUserIds, ...recipientIds]),
     ];
-    const usersWithAccess =
-      await this.spaceMemberRepo.getUserIdsWithSpaceAccess(
+    const usersWithAccess = new Set(
+      await this.pageAccessService.filterUsersWithPageReadAccess(
+        pageId,
         allCandidateIds,
-        spaceId,
-      );
+      ),
+    );
 
     for (const userId of mentionedUserIds) {
       if (!usersWithAccess.has(userId)) continue;
@@ -160,14 +161,14 @@ export class CommentNotificationService {
 
     const { actor, pageTitle, pageUrl } = context;
 
-    const roles = await this.spaceMemberRepo.getUserSpaceRoles(
-      commentCreatorId,
-      spaceId,
+    const hasAccess = await this.pageAccessService.filterUsersWithPageReadAccess(
+      pageId,
+      [commentCreatorId],
     );
 
-    if (!roles) {
+    if (hasAccess.length === 0) {
       this.logger.debug(
-        `Skipping resolved notification for user ${commentCreatorId}: no access to space ${spaceId}`,
+        `Skipping resolved notification for user ${commentCreatorId}: no access to page ${pageId}`,
       );
       return;
     }

@@ -30,6 +30,7 @@ import {
   PushSubscriptions,
   PushNotificationJobs,
   JsonValue,
+  PageAccessRules,
 } from './db';
 import { PageEmbeddings } from '@docmost/db/types/embeddings.types';
 
@@ -107,6 +108,11 @@ export type UpdatablePage = Updateable<Omit<Pages, 'id'>>;
 export type PageHistory = Selectable<History>;
 export type InsertablePageHistory = Insertable<History>;
 export type UpdatablePageHistory = Updateable<Omit<History, 'id'>>;
+
+// PageAccessRule
+export type PageAccessRule = Selectable<PageAccessRules>;
+export type InsertablePageAccessRule = Insertable<PageAccessRules>;
+export type UpdatablePageAccessRule = Updateable<Omit<PageAccessRules, 'id'>>;
 
 // Comment
 export type Comment = Selectable<Comments>;

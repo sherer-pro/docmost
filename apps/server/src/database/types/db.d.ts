@@ -289,6 +289,23 @@ export interface PageHistory {
   workspaceId: string;
 }
 
+export interface PageAccessRules {
+  addedById: string | null;
+  createdAt: Generated<Timestamp>;
+  effect: string;
+  groupId: string | null;
+  id: Generated<string>;
+  pageId: string;
+  principalType: string;
+  role: string | null;
+  sourcePageId: string | null;
+  spaceId: string;
+  updatedAt: Generated<Timestamp>;
+  updatedById: string | null;
+  userId: string | null;
+  workspaceId: string;
+}
+
 export interface Pages {
   content: Json | null;
   contributorIds: Generated<string[] | null>;
@@ -512,6 +529,7 @@ export interface DB {
   groups: Groups;
   groupUsers: GroupUsers;
   notifications: Notifications;
+  pageAccessRules: PageAccessRules;
   pageHistory: PageHistory;
   pages: Pages;
   pushNotificationJobs: PushNotificationJobs;

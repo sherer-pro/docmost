@@ -58,6 +58,7 @@ describe('PageService getSidebarPages database node mapping', () => {
     {} as any,
     {} as any,
     {} as any,
+    {} as any,
   );
 
   beforeEach(() => {

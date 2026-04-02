@@ -5,6 +5,7 @@ export const PAGE_HISTORY_EVENT_VERSION = 1 as const;
 export type PageHistoryChangeType =
   | 'page.events.combined'
   | 'page.custom-fields.updated'
+  | 'page.access.updated'
   | 'page.converted.to-database'
   | 'database.converted.to-page'
   | 'database.property.created'

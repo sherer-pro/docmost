@@ -22,6 +22,79 @@ describe('PageController guardrails and mixed-id contract', () => {
   const databaseRepo = {
     findByPageId: jest.fn(),
   };
+  const pageAccessService = {
+    assertCanReadPage: jest.fn(async () => ({
+      role: 'writer',
+      sources: ['space'],
+      capabilities: {
+        canRead: true,
+        canWrite: true,
+        canCreateChild: true,
+        canMoveDeleteShare: true,
+        canManageAccess: false,
+      },
+      isSystemAccess: false,
+    })),
+    assertCanWritePage: jest.fn(async () => ({
+      role: 'writer',
+      sources: ['space'],
+      capabilities: {
+        canRead: true,
+        canWrite: true,
+        canCreateChild: true,
+        canMoveDeleteShare: true,
+        canManageAccess: false,
+      },
+      isSystemAccess: false,
+    })),
+    assertCanMoveDeleteShare: jest.fn(async () => ({
+      role: 'writer',
+      sources: ['space'],
+      capabilities: {
+        canRead: true,
+        canWrite: true,
+        canCreateChild: true,
+        canMoveDeleteShare: true,
+        canManageAccess: false,
+      },
+      isSystemAccess: false,
+    })),
+    assertCanCreateChild: jest.fn(async () => ({
+      role: 'writer',
+      sources: ['space'],
+      capabilities: {
+        canRead: true,
+        canWrite: true,
+        canCreateChild: true,
+        canMoveDeleteShare: true,
+        canManageAccess: false,
+      },
+      isSystemAccess: false,
+    })),
+    getEffectiveAccess: jest.fn(async () => ({
+      role: 'writer',
+      sources: ['space'],
+      capabilities: {
+        canRead: true,
+        canWrite: true,
+        canCreateChild: true,
+        canMoveDeleteShare: true,
+        canManageAccess: false,
+      },
+      isSystemAccess: false,
+    })),
+    getSidebarAccessSnapshot: jest.fn(async () => ({
+      visiblePageIds: new Set(['uuid-page', 'p1', 'parent']),
+      readablePageIds: new Set(['uuid-page', 'p1', 'parent']),
+      writablePageIds: new Set(['uuid-page', 'p1', 'parent']),
+      createChildPageIds: new Set(['uuid-page', 'p1', 'parent']),
+      moveDeleteSharePageIds: new Set(['uuid-page', 'p1', 'parent']),
+      manageAccessPageIds: new Set(),
+      visibleChildrenCountByParentId: new Map<string, number>(),
+    })),
+    hasAnyReadablePageInSpace: jest.fn(async () => true),
+    isWorkspaceBypassUser: jest.fn(() => false),
+  };
 
   const controller = new PageController(
     pageService as any,
@@ -30,6 +103,7 @@ describe('PageController guardrails and mixed-id contract', () => {
     spaceAbility as any,
     collaborationGateway as any,
     databaseRepo as any,
+    pageAccessService as any,
   );
 
   beforeEach(() => {
