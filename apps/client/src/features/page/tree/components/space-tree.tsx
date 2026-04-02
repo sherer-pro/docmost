@@ -30,6 +30,7 @@ import {
   IconLink,
   IconPlus,
   IconTrash,
+  IconUsersGroup,
 } from "@tabler/icons-react";
 import {
   appendNodeChildrenAtom,
@@ -81,6 +82,7 @@ import { useCreateDatabaseRowMutation } from "@/features/database/queries/databa
 import { useUpdateDatabaseMutation } from "@/features/database/queries/database-query.ts";
 import { PAGE_QUERY_KEYS } from "@/features/page/queries/query-keys.ts";
 import { invalidateSidebarTree } from "@/features/page/queries/cache-invalidation.ts";
+import PageAccessModal from "../../components/page-access-modal.tsx";
 
 interface SpaceTreeProps {
   spaceId: string;
@@ -338,7 +340,7 @@ function Node({
     node.data.spaceId,
     node.data.databaseId ?? node.id,
   );
-  const [treeData, setTreeData] = useAtom(treeDataAtom);
+  const [, setTreeData] = useAtom(treeDataAtom);
   const [, appendChildren] = useAtom(appendNodeChildrenAtom);
   const emit = useQueryEmit();
   const { spaceSlug } = useParams();
@@ -346,6 +348,14 @@ function Node({
   const timerRef = useRef(null);
   const [mobileSidebarOpened] = useAtom(mobileSidebarAtom);
   const toggleMobileSidebar = useToggleSidebar(mobileSidebarAtom);
+  const nodeCapabilities = node.data.access?.capabilities;
+  const canWriteNode =
+    nodeCapabilities?.canWrite ?? !(tree.props.disableEdit as boolean);
+  const canCreateChildNode =
+    nodeCapabilities?.canCreateChild ?? !(tree.props.disableEdit as boolean);
+  const canMoveDeleteShareNode =
+    nodeCapabilities?.canMoveDeleteShare ?? !(tree.props.disableEdit as boolean);
+  const canManageAccessNode = nodeCapabilities?.canManageAccess ?? false;
 
   const prefetchPage = () => {
     timerRef.current = setTimeout(async () => {
@@ -395,9 +405,8 @@ function Node({
     }
   }
 
-  const handleUpdateNodeIcon = (nodeId: string, newIcon: string) => {
-    const updatedTree = updateTreeNodeIcon(treeData, nodeId, newIcon);
-    setTreeData(updatedTree);
+  const handleUpdateNodeIcon = (nodeId: string, newIcon: string | null) => {
+    setTreeData((currentTree) => updateTreeNodeIcon(currentTree, nodeId, newIcon));
   };
 
   const handleEmojiIconClick = (e: any) => {
@@ -542,7 +551,7 @@ function Node({
                 <IconFileDescription size="18" />
               )
             }
-            readOnly={tree.props.disableEdit as boolean}
+            readOnly={!canWriteNode}
             removeEmojiAction={handleRemoveEmoji}
           />
         </div>
@@ -557,9 +566,15 @@ function Node({
         )}
 
         <div className={classes.actions}>
-          <NodeMenu node={node} treeApi={tree} spaceId={node.data.spaceId} />
+          <NodeMenu
+            node={node}
+            treeApi={tree}
+            spaceId={node.data.spaceId}
+            canMoveDeleteShare={canMoveDeleteShareNode}
+            canManageAccess={canManageAccessNode}
+          />
 
-          {!tree.props.disableEdit &&
+          {canCreateChildNode &&
             (node.data.nodeType === "page" ||
               node.data.nodeType === "database") && (
               <CreateNode
@@ -677,9 +692,17 @@ interface NodeMenuProps {
   node: NodeApi<SpaceTreeNode>;
   treeApi: TreeApi<SpaceTreeNode>;
   spaceId: string;
+  canMoveDeleteShare: boolean;
+  canManageAccess: boolean;
 }
 
-function NodeMenu({ node, treeApi, spaceId }: NodeMenuProps) {
+function NodeMenu({
+  node,
+  treeApi,
+  spaceId,
+  canMoveDeleteShare,
+  canManageAccess,
+}: NodeMenuProps) {
   const { t } = useTranslation();
   const clipboard = useClipboard({ timeout: 500 });
   const { spaceSlug } = useParams();
@@ -697,11 +720,15 @@ function NodeMenu({ node, treeApi, spaceId }: NodeMenuProps) {
     copyPageModalOpened,
     { open: openCopyPageModal, close: closeCopySpaceModal },
   ] = useDisclosure(false);
+  const [
+    accessModalOpened,
+    { open: openAccessModal, close: closeAccessModal },
+  ] = useDisclosure(false);
   const canMoveNodeToTrash =
     (node.data.nodeType === "page" ||
       node.data.nodeType === "database" ||
       node.data.nodeType === "databaseRow") &&
-    !(treeApi.props.disableEdit as boolean);
+    canMoveDeleteShare;
 
   const handleCopyLink = () => {
     const resolvedDatabaseIds = resolvePageDatabaseIds({
@@ -832,7 +859,7 @@ function NodeMenu({ node, treeApi, spaceId }: NodeMenuProps) {
           </Menu.Item>
 
           {node.data.nodeType === "page" &&
-            !(treeApi.props.disableEdit as boolean) && (
+            canMoveDeleteShare && (
               <>
                 <Menu.Item
                   leftSection={<IconCopy size={16} />}
@@ -869,6 +896,19 @@ function NodeMenu({ node, treeApi, spaceId }: NodeMenuProps) {
               </>
             )}
 
+          {node.data.nodeType === "page" && canManageAccess && (
+            <Menu.Item
+              leftSection={<IconUsersGroup size={16} />}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                openAccessModal();
+              }}
+            >
+              {t("Access")}
+            </Menu.Item>
+          )}
+
           {canMoveNodeToTrash && (
             <>
               {node.data.nodeType === "page" && <Menu.Divider />}
@@ -903,6 +943,12 @@ function NodeMenu({ node, treeApi, spaceId }: NodeMenuProps) {
             currentSpaceSlug={spaceSlug}
             onClose={closeCopySpaceModal}
             open={copyPageModalOpened}
+          />
+
+          <PageAccessModal
+            pageId={node.id}
+            open={accessModalOpened}
+            onClose={closeAccessModal}
           />
 
           <ExportModal

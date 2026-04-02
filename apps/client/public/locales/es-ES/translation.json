@@ -1038,5 +1038,18 @@
   "No changes to apply": "No se aplican cambios",
   "Custom expiration date is required": "Se requiere una fecha de expiración personalizada",
   "Select a space": "Seleccionar un espacio",
-  "Rows": "Filas"
+  "Rows": "Filas",
+  "Page access source system": "System access",
+  "Page access source space": "Space access",
+  "Page access source page user": "Page user rule",
+  "Page access source page group": "Page group rule",
+  "Page access role reader": "Reader",
+  "Page access role writer": "Writer",
+  "Page access no access": "No access",
+  "Page access effect allow": "Allow",
+  "Page access effect deny": "Deny",
+  "Page access updated": "Access updated",
+  "Failed to update page access": "Failed to update access",
+  "Page access user id": "User ID",
+  "Page access group id": "Group ID"
 }

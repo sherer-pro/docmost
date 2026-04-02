@@ -9,6 +9,8 @@ import {
   IUpdatePageInput,
   ISidebarNode,
   SidebarPagesParams,
+  PageAccessUserEntry,
+  PageAccessGroupRuleEntry,
 } from "@/features/page/types/page.types";
 import { QueryParams } from "@/lib/types";
 import { IPagination } from "@/lib/types.ts";
@@ -252,5 +254,55 @@ export async function convertPageToDatabase(
     `/pages/${pageId}/convert-to-database`,
   );
   return req.data;
+}
+
+export async function getPageAccessUsers(
+  pageId: string,
+  params?: QueryParams,
+): Promise<IPagination<PageAccessUserEntry>> {
+  const req = await api.post(
+    `/pages/${pageId}/actions/access/users`,
+    params ?? {},
+  );
+  return req.data;
+}
+
+export async function getPageAccessGroups(
+  pageId: string,
+  params?: QueryParams,
+): Promise<IPagination<PageAccessGroupRuleEntry>> {
+  const req = await api.post(
+    `/pages/${pageId}/actions/access/groups`,
+    params ?? {},
+  );
+  return req.data;
+}
+
+export async function grantPageUserAccess(
+  pageId: string,
+  payload: { userId: string; role: "reader" | "writer" },
+): Promise<void> {
+  await api.post(`/pages/${pageId}/actions/access/grant-user`, payload);
+}
+
+export async function closePageUserAccess(
+  pageId: string,
+  payload: { userId: string },
+): Promise<void> {
+  await api.post(`/pages/${pageId}/actions/access/close-user`, payload);
+}
+
+export async function grantPageGroupAccess(
+  pageId: string,
+  payload: { groupId: string; role: "reader" | "writer" },
+): Promise<void> {
+  await api.post(`/pages/${pageId}/actions/access/grant-group`, payload);
+}
+
+export async function closePageGroupAccess(
+  pageId: string,
+  payload: { groupId: string },
+): Promise<void> {
+  await api.post(`/pages/${pageId}/actions/access/close-group`, payload);
 }
 

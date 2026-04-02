@@ -1,4 +1,5 @@
 import { PageCustomFieldStatus } from "@/features/page/types/page.types.ts";
+import { PageAccessInfo } from "@/features/page/types/page.types.ts";
 
 /**
  * Tree node type discriminator.
@@ -31,5 +32,6 @@ export type SpaceTreeNode = {
   spaceId: string;
   parentPageId: string | null;
   hasChildren: boolean;
+  access?: PageAccessInfo;
   children: SpaceTreeNode[];
 };
