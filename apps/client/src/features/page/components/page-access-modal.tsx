@@ -300,7 +300,7 @@ export default function PageAccessModal({
               <Tabs.Panel value="users" pt="md">
                 <Group align="end" grow>
                   <Select
-                    label={t("User")}
+                    label={t("page.access.label.user", { keySeparator: false })}
                     placeholder={t("Search for users")}
                     value={newUserId}
                     onChange={setNewUserId}
@@ -318,7 +318,7 @@ export default function PageAccessModal({
                     }
                   />
                   <Select
-                    label={t("Role")}
+                    label={t("page.access.label.role", { keySeparator: false })}
                     data={[
                       {
                         label: t("page.access.role.reader", {
@@ -339,7 +339,7 @@ export default function PageAccessModal({
                     }
                   />
                   <Button disabled={!newUserId} onClick={() => void onGrantUser()}>
-                    {t("Grant")}
+                    {t("page.access.action.grant", { keySeparator: false })}
                   </Button>
                 </Group>
 
@@ -347,14 +347,22 @@ export default function PageAccessModal({
                   <Table striped withTableBorder>
                     <Table.Thead>
                       <Table.Tr>
-                        <Table.Th>{t("User")}</Table.Th>
-                        <Table.Th>{t("Role")}</Table.Th>
+                        <Table.Th>
+                          {t("page.access.column.user", { keySeparator: false })}
+                        </Table.Th>
+                        <Table.Th>
+                          {t("page.access.column.role", { keySeparator: false })}
+                        </Table.Th>
                         <Table.Th>
                           {t("page.access.column.source", {
                             keySeparator: false,
                           })}
                         </Table.Th>
-                        <Table.Th>{t("Action")}</Table.Th>
+                        <Table.Th>
+                          {t("page.access.column.action", {
+                            keySeparator: false,
+                          })}
+                        </Table.Th>
                       </Table.Tr>
                     </Table.Thead>
                     <Table.Tbody>
@@ -362,7 +370,13 @@ export default function PageAccessModal({
                         <Table.Tr>
                           <Table.Td colSpan={4}>
                             <Text c="dimmed" size="sm">
-                              {isUsersLoading ? t("Loading") : t("No data")}
+                              {isUsersLoading
+                                ? t("page.access.state.loading", {
+                                    keySeparator: false,
+                                  })
+                                : t("page.access.state.empty", {
+                                    keySeparator: false,
+                                  })}
                             </Text>
                           </Table.Td>
                         </Table.Tr>
@@ -398,7 +412,9 @@ export default function PageAccessModal({
                               disabled={!user.access.canClose}
                               onClick={() => void onCloseUserAccess(user.id)}
                             >
-                              {t("Close")}
+                              {t("page.access.action.close", {
+                                keySeparator: false,
+                              })}
                             </Button>
                           </Table.Td>
                         </Table.Tr>
@@ -429,7 +445,7 @@ export default function PageAccessModal({
               <Tabs.Panel value="groups" pt="md">
                 <Group align="end" grow>
                   <Select
-                    label={t("Group")}
+                    label={t("page.access.label.group", { keySeparator: false })}
                     placeholder={t("Search for groups")}
                     value={newGroupId}
                     onChange={setNewGroupId}
@@ -447,7 +463,7 @@ export default function PageAccessModal({
                     }
                   />
                   <Select
-                    label={t("Role")}
+                    label={t("page.access.label.role", { keySeparator: false })}
                     data={[
                       {
                         label: t("page.access.role.reader", {
@@ -468,7 +484,7 @@ export default function PageAccessModal({
                     }
                   />
                   <Button disabled={!newGroupId} onClick={() => void onGrantGroup()}>
-                    {t("Grant")}
+                    {t("page.access.action.grant", { keySeparator: false })}
                   </Button>
                 </Group>
 
@@ -476,10 +492,20 @@ export default function PageAccessModal({
                   <Table striped withTableBorder>
                     <Table.Thead>
                       <Table.Tr>
-                        <Table.Th>{t("Group")}</Table.Th>
-                        <Table.Th>{t("Effect")}</Table.Th>
-                        <Table.Th>{t("Role")}</Table.Th>
-                        <Table.Th>{t("Action")}</Table.Th>
+                        <Table.Th>
+                          {t("page.access.column.group", { keySeparator: false })}
+                        </Table.Th>
+                        <Table.Th>
+                          {t("page.access.column.effect", { keySeparator: false })}
+                        </Table.Th>
+                        <Table.Th>
+                          {t("page.access.column.role", { keySeparator: false })}
+                        </Table.Th>
+                        <Table.Th>
+                          {t("page.access.column.action", {
+                            keySeparator: false,
+                          })}
+                        </Table.Th>
                       </Table.Tr>
                     </Table.Thead>
                     <Table.Tbody>
@@ -487,7 +513,13 @@ export default function PageAccessModal({
                         <Table.Tr>
                           <Table.Td colSpan={4}>
                             <Text c="dimmed" size="sm">
-                              {isGroupsLoading ? t("Loading") : t("No data")}
+                              {isGroupsLoading
+                                ? t("page.access.state.loading", {
+                                    keySeparator: false,
+                                  })
+                                : t("page.access.state.empty", {
+                                    keySeparator: false,
+                                  })}
                             </Text>
                           </Table.Td>
                         </Table.Tr>
@@ -509,7 +541,9 @@ export default function PageAccessModal({
                               color="red"
                               onClick={() => void onCloseGroupAccess(group.id)}
                             >
-                              {t("Close")}
+                              {t("page.access.action.close", {
+                                keySeparator: false,
+                              })}
                             </Button>
                           </Table.Td>
                         </Table.Tr>
