@@ -141,6 +141,7 @@ export function DocumentFieldsPanel({
   const { knownUsersById } = useSpaceMemberSelectOptions(
     page.spaceId,
     selectedMemberIds,
+    { pageId: page.id },
   );
   const { data: rowContext } = useDatabaseRowContextQuery(page.id);
   const updateDatabaseCellsMutation = useBatchUpdateDatabaseCellsMutation(
@@ -269,6 +270,7 @@ export function DocumentFieldsPanel({
   const { knownUsersById: knownDbUsersById } = useSpaceMemberSelectOptions(
     page.spaceId,
     databaseUserIds,
+    { pageId: page.id },
   );
 
   const allPageNodes = useMemo(
@@ -628,6 +630,7 @@ export function DocumentFieldsPanel({
                     )
                   ) : (
                     <AssigneeSpaceMemberSelect
+                      pageId={page.id}
                       spaceId={page.spaceId}
                       value={fields.assigneeId}
                       onChange={(value) =>
@@ -673,6 +676,7 @@ export function DocumentFieldsPanel({
                     )
                   ) : (
                     <StakeholdersSpaceMemberMultiSelect
+                      pageId={page.id}
                       spaceId={page.spaceId}
                       value={fields.stakeholderIds}
                       onChange={(value) =>

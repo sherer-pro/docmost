@@ -60,6 +60,7 @@ import {
   ClosePageUserAccessDto,
   GrantPageGroupAccessDto,
   GrantPageUserAccessDto,
+  ResolvePageAccessUsersDto,
 } from './dto/page-access.dto';
 
 const LINK_PREVIEW_TIMEOUT_MS = 7000;
@@ -1012,6 +1013,22 @@ export class PageController {
     }
 
     return this.pageAccessService.listEffectiveUsers(page, pagination);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post(':pageId/actions/access/resolve-users')
+  async resolvePageAccessUsers(
+    @Param('pageId', ParseUUIDPipe) pageId: string,
+    @Body() dto: ResolvePageAccessUsersDto,
+    @AuthUser() user: User,
+  ) {
+    const page = await this.pageRepo.findById(pageId);
+    if (!page || page.deletedAt) {
+      throw new NotFoundException('Page not found');
+    }
+
+    await this.pageAccessService.assertCanReadPage(page, user);
+    return this.pageAccessService.resolveReadableUsers(page, dto.userIds ?? []);
   }
 
   @HttpCode(HttpStatus.OK)

@@ -1058,6 +1058,51 @@ export class PageAccessService {
     return paginatedUsers;
   }
 
+  async resolveReadableUsers(
+    page: Page,
+    candidateUserIds: string[],
+  ): Promise<
+    Array<{
+      id: string;
+      name: string;
+      email: string;
+      avatarUrl: string | null;
+      type: 'user';
+    }>
+  > {
+    const uniqueCandidateIds = [...new Set(candidateUserIds.filter(Boolean))];
+    if (uniqueCandidateIds.length === 0) {
+      return [];
+    }
+
+    const readableUserIds = await this.filterUsersWithPageReadAccess(
+      page.id,
+      uniqueCandidateIds,
+    );
+
+    if (readableUserIds.length === 0) {
+      return [];
+    }
+
+    const users = await this.db
+      .selectFrom('users')
+      .select(['id', 'name', 'email', 'avatarUrl'])
+      .where('workspaceId', '=', page.workspaceId)
+      .where('id', 'in', readableUserIds)
+      .where('deletedAt', 'is', null)
+      .execute();
+
+    const usersById = new Map(users.map((user) => [user.id, user]));
+
+    return uniqueCandidateIds
+      .map((userId) => usersById.get(userId))
+      .filter((user): user is NonNullable<typeof user> => !!user)
+      .map((user) => ({
+        ...user,
+        type: 'user' as const,
+      }));
+  }
+
   async listGroupRules(page: Page, pagination: PaginationOptions) {
     let query = this.db
       .selectFrom('pageAccessRules')
