@@ -3,17 +3,24 @@ import { IGroup } from "@/features/group/types/group.types.ts";
 import { ISpace } from "@/features/space/types/space.types.ts";
 import { IPage } from "@/features/page/types/page.types.ts";
 
+export interface IPageSearchBreadcrumb {
+  id: string;
+  title: string;
+}
+
 export interface IPageSearch {
   id: string;
   title: string;
   icon: string;
   parentPageId: string;
+  databaseId?: string | null;
   slugId: string;
   creatorId: string;
   createdAt: Date;
   updatedAt: Date;
   rank: string;
   highlight: string;
+  breadcrumbs?: IPageSearchBreadcrumb[];
   space: Partial<ISpace>;
 }
 

@@ -11,7 +11,7 @@ import {
 import { Spotlight } from "@mantine/spotlight";
 import { Link } from "react-router-dom";
 import { IconFile, IconDownload } from "@tabler/icons-react";
-import { buildPageUrl } from "@/features/page/page.utils";
+import { buildDatabaseUrl, buildPageUrl } from "@/features/page/page.utils";
 import { getPageIcon } from "@/lib";
 import {
   IAttachmentSearch,
@@ -93,15 +93,29 @@ export function SearchResultItem({
     );
   } else {
     const pageResult = result as IPageSearch;
+    const spaceSlug = pageResult.space.slug;
+    const pageUrl =
+      pageResult.databaseId != null && spaceSlug
+        ? buildDatabaseUrl(
+            spaceSlug,
+            pageResult.slugId,
+            pageResult.title,
+          )
+        : buildPageUrl(
+            spaceSlug as unknown as string,
+            pageResult.slugId,
+            pageResult.title,
+          );
+    const breadcrumbsText =
+      pageResult.breadcrumbs && pageResult.breadcrumbs.length > 0
+        ? pageResult.breadcrumbs.map((crumb) => crumb.title).join(" / ")
+        : null;
+
     return (
       <Spotlight.Action
         component={Link}
         //@ts-ignore
-        to={buildPageUrl(
-          pageResult.space.slug,
-          pageResult.slugId,
-          pageResult.title,
-        )}
+        to={pageUrl}
         style={{ userSelect: "none" }}
       >
         <Group wrap="nowrap" w="100%">
@@ -114,6 +128,20 @@ export function SearchResultItem({
               <Badge variant="light" size="xs" color="gray">
                 {pageResult.space.name}
               </Badge>
+            )}
+
+            {breadcrumbsText && (
+              <Text
+                size="xs"
+                opacity={0.6}
+                style={{
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                {breadcrumbsText}
+              </Text>
             )}
 
             {pageResult?.highlight && (
