@@ -3,6 +3,7 @@ import {
   Badge,
   Button,
   Group,
+  Loader,
   Modal,
   ScrollArea,
   Select,
@@ -12,6 +13,7 @@ import {
   Text,
   TextInput,
 } from "@mantine/core";
+import { useDebouncedValue } from "@mantine/hooks";
 import { useTranslation } from "react-i18next";
 import { notifications } from "@mantine/notifications";
 import {
@@ -27,6 +29,7 @@ import {
   PageAccessUserEntry,
 } from "@/features/page/types/page.types";
 import { stopPageAccessModalEvent } from "@/features/page/utils/page-access-ui";
+import { useSearchSuggestionsQuery } from "@/features/search/queries/search-query.ts";
 
 interface PageAccessModalProps {
   pageId: string;
@@ -51,9 +54,44 @@ export default function PageAccessModal({
   const [groupsNextCursor, setGroupsNextCursor] = useState<string | null>(null);
   const [groupsHasNextPage, setGroupsHasNextPage] = useState(false);
 
-  const [newUserId, setNewUserId] = useState("");
-  const [newGroupId, setNewGroupId] = useState("");
+  const [newUserId, setNewUserId] = useState<string | null>(null);
+  const [newGroupId, setNewGroupId] = useState<string | null>(null);
+  const [newUserSearchValue, setNewUserSearchValue] = useState("");
+  const [newGroupSearchValue, setNewGroupSearchValue] = useState("");
   const [newRole, setNewRole] = useState<"reader" | "writer">("reader");
+  const [debouncedUserSearch] = useDebouncedValue(newUserSearchValue, 300);
+  const [debouncedGroupSearch] = useDebouncedValue(newGroupSearchValue, 300);
+
+  const { data: userSuggestions, isLoading: isUserSuggestionsLoading } =
+    useSearchSuggestionsQuery({
+      query: debouncedUserSearch,
+      includeUsers: true,
+      includeGroups: true,
+    });
+  const { data: groupSuggestions, isLoading: isGroupSuggestionsLoading } =
+    useSearchSuggestionsQuery({
+      query: debouncedGroupSearch,
+      includeUsers: true,
+      includeGroups: true,
+    });
+
+  const userSelectOptions = (userSuggestions?.users ?? []).map((user: any) => {
+    const primaryLabel = user?.name || user?.email || user?.id;
+    const secondaryLabel =
+      user?.email && user?.email !== primaryLabel ? ` • ${user.email}` : "";
+
+    return {
+      value: user.id,
+      label: `${primaryLabel}${secondaryLabel}`,
+    };
+  });
+
+  const groupSelectOptions = (groupSuggestions?.groups ?? []).map(
+    (group: any) => ({
+      value: group.id,
+      label: group.name,
+    }),
+  );
 
   async function loadUsers(params?: { append?: boolean; cursor?: string }) {
     setIsUsersLoading(true);
@@ -142,16 +180,17 @@ export default function PageAccessModal({
   }, [open, activeTab, query]);
 
   async function onGrantUser() {
-    if (!newUserId.trim()) {
+    if (!newUserId?.trim()) {
       return;
     }
 
     try {
       await grantPageUserAccess(pageId, {
-        userId: newUserId.trim(),
+        userId: newUserId,
         role: newRole,
       });
-      setNewUserId("");
+      setNewUserId(null);
+      setNewUserSearchValue("");
       await loadUsers();
       notifications.show({
         message: t("page.access.updated", { keySeparator: false }),
@@ -167,16 +206,17 @@ export default function PageAccessModal({
   }
 
   async function onGrantGroup() {
-    if (!newGroupId.trim()) {
+    if (!newGroupId?.trim()) {
       return;
     }
 
     try {
       await grantPageGroupAccess(pageId, {
-        groupId: newGroupId.trim(),
+        groupId: newGroupId,
         role: newRole,
       });
-      setNewGroupId("");
+      setNewGroupId(null);
+      setNewGroupSearchValue("");
       await loadGroups();
       notifications.show({
         message: t("page.access.updated", { keySeparator: false }),
@@ -259,10 +299,23 @@ export default function PageAccessModal({
 
               <Tabs.Panel value="users" pt="md">
                 <Group align="end" grow>
-                  <TextInput
-                    label={t("page.access.field.userId", { keySeparator: false })}
+                  <Select
+                    label={t("User")}
+                    placeholder={t("Search for users")}
                     value={newUserId}
-                    onChange={(event) => setNewUserId(event.currentTarget.value)}
+                    onChange={setNewUserId}
+                    data={userSelectOptions}
+                    searchable
+                    searchValue={newUserSearchValue}
+                    onSearchChange={setNewUserSearchValue}
+                    rightSection={
+                      isUserSuggestionsLoading ? <Loader size="xs" /> : null
+                    }
+                    nothingFoundMessage={
+                      newUserSearchValue
+                        ? t("No user found")
+                        : t("Start typing to search...")
+                    }
                   />
                   <Select
                     label={t("Role")}
@@ -285,7 +338,9 @@ export default function PageAccessModal({
                       setNewRole((value as "reader" | "writer") ?? "reader")
                     }
                   />
-                  <Button onClick={() => void onGrantUser()}>{t("Grant")}</Button>
+                  <Button disabled={!newUserId} onClick={() => void onGrantUser()}>
+                    {t("Grant")}
+                  </Button>
                 </Group>
 
                 <ScrollArea h={360} mt="md">
@@ -373,10 +428,23 @@ export default function PageAccessModal({
 
               <Tabs.Panel value="groups" pt="md">
                 <Group align="end" grow>
-                  <TextInput
-                    label={t("page.access.field.groupId", { keySeparator: false })}
+                  <Select
+                    label={t("Group")}
+                    placeholder={t("Search for groups")}
                     value={newGroupId}
-                    onChange={(event) => setNewGroupId(event.currentTarget.value)}
+                    onChange={setNewGroupId}
+                    data={groupSelectOptions}
+                    searchable
+                    searchValue={newGroupSearchValue}
+                    onSearchChange={setNewGroupSearchValue}
+                    rightSection={
+                      isGroupSuggestionsLoading ? <Loader size="xs" /> : null
+                    }
+                    nothingFoundMessage={
+                      newGroupSearchValue
+                        ? t("No group found")
+                        : t("Start typing to search...")
+                    }
                   />
                   <Select
                     label={t("Role")}
@@ -399,7 +467,9 @@ export default function PageAccessModal({
                       setNewRole((value as "reader" | "writer") ?? "reader")
                     }
                   />
-                  <Button onClick={() => void onGrantGroup()}>{t("Grant")}</Button>
+                  <Button disabled={!newGroupId} onClick={() => void onGrantGroup()}>
+                    {t("Grant")}
+                  </Button>
                 </Group>
 
                 <ScrollArea h={360} mt="md">
