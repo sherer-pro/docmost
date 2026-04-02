@@ -1069,5 +1069,17 @@
   "page.access.updated": "Access updated",
   "page.access.updateFailed": "Failed to update access",
   "page.access.field.userId": "User ID",
-  "page.access.field.groupId": "Group ID"
+  "page.access.field.groupId": "Group ID",
+  "page.access.label.user": "User",
+  "page.access.label.group": "Group",
+  "page.access.label.role": "Role",
+  "page.access.column.user": "User",
+  "page.access.column.group": "Group",
+  "page.access.column.role": "Role",
+  "page.access.column.effect": "Effect",
+  "page.access.column.action": "Action",
+  "page.access.action.grant": "Grant",
+  "page.access.action.close": "Close",
+  "page.access.state.loading": "Loading",
+  "page.access.state.empty": "No data"
 }

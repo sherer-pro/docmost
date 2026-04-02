@@ -1069,5 +1069,17 @@
   "page.access.updated": "Доступ обновлён",
   "page.access.updateFailed": "Не удалось обновить доступ",
   "page.access.field.userId": "ID пользователя",
-  "page.access.field.groupId": "ID группы"
+  "page.access.field.groupId": "ID группы",
+  "page.access.label.user": "Пользователь",
+  "page.access.label.group": "Группа",
+  "page.access.label.role": "Роль",
+  "page.access.column.user": "Пользователь",
+  "page.access.column.group": "Группа",
+  "page.access.column.role": "Роль",
+  "page.access.column.effect": "Эффект",
+  "page.access.column.action": "Действие",
+  "page.access.action.grant": "Выдать",
+  "page.access.action.close": "Закрыть",
+  "page.access.state.loading": "Загрузка",
+  "page.access.state.empty": "Нет данных"
 }
