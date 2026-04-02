@@ -6,6 +6,7 @@ import {
   IconLink,
   IconMarkdown,
   IconPrinter,
+  IconUsersGroup,
 } from '@tabler/icons-react';
 import { useTranslation } from 'react-i18next';
 import { PageWidthToggle } from '@/features/user/components/page-width-pref.tsx';
@@ -16,6 +17,8 @@ interface DocumentCommonActionItemsProps {
   onCopyAsMarkdown?: () => void;
   onOpenHistory?: () => void;
   onOpenExport?: () => void;
+  onOpenAccess?: () => void;
+  accessLabel?: string;
   onPrint?: () => void;
   disableExport?: boolean;
   pageId?: string;
@@ -33,6 +36,8 @@ export function DocumentCommonActionItems({
   onCopyAsMarkdown,
   onOpenHistory,
   onOpenExport,
+  onOpenAccess,
+  accessLabel,
   onPrint,
   disableExport,
   pageId,
@@ -54,6 +59,14 @@ export function DocumentCommonActionItems({
       )}
 
       <Menu.Divider />
+
+      {onOpenAccess && (
+        <Menu.Item leftSection={<IconUsersGroup size={16} />} onClick={onOpenAccess}>
+          {accessLabel ?? t('page.access.menu')}
+        </Menu.Item>
+      )}
+
+      {onOpenAccess && <Menu.Divider />}
 
       <Menu.Item leftSection={<IconArrowsHorizontal size={16} />}>
         <Group wrap="nowrap">

@@ -44,6 +44,8 @@ import MovePageModal from "@/features/page/components/move-page-modal.tsx";
 import { useTimeAgo } from "@/hooks/use-time-ago.tsx";
 import ShareModal from "@/features/share/components/share-modal.tsx";
 import { DocumentCommonActionItems } from "@/features/common/header/document-common-action-items.tsx";
+import PageAccessModal from "@/features/page/components/page-access-modal.tsx";
+import { canOpenPageAccessModal } from "@/features/page/utils/page-access-ui.ts";
 
 interface PageHeaderMenuProps {
   readOnly?: boolean;
@@ -153,8 +155,16 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
     movePageModalOpened,
     { open: openMovePageModal, close: closeMoveSpaceModal },
   ] = useDisclosure(false);
+  const [
+    accessModalOpened,
+    { open: openAccessModal, close: closeAccessModal },
+  ] = useDisclosure(false);
   const [pageEditor] = useAtom(pageEditorAtom);
   const [user] = useAtom(userAtom);
+  const canOpenAccessModal = canOpenPageAccessModal({
+    pageId: page?.id,
+    canManageAccess: page?.access?.capabilities?.canManageAccess,
+  });
 
   /**
    * Explicit priority for calculating page width:
@@ -265,6 +275,7 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
             onCopyAsMarkdown={handleCopyAsMarkdown}
             onOpenHistory={openHistoryModal}
             onOpenExport={openExportModal}
+            onOpenAccess={canOpenAccessModal ? openAccessModal : undefined}
             onPrint={handlePrint}
             pageId={page?.id}
             fullPageWidth={fullPageWidth}
@@ -371,6 +382,14 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
         onClose={closeMoveSpaceModal}
         open={movePageModalOpened}
       />
+
+      {page?.id && (
+        <PageAccessModal
+          pageId={page.id}
+          open={accessModalOpened}
+          onClose={closeAccessModal}
+        />
+      )}
     </>
   );
 }

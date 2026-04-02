@@ -83,6 +83,7 @@ import { useUpdateDatabaseMutation } from "@/features/database/queries/database-
 import { PAGE_QUERY_KEYS } from "@/features/page/queries/query-keys.ts";
 import { invalidateSidebarTree } from "@/features/page/queries/cache-invalidation.ts";
 import PageAccessModal from "../../components/page-access-modal.tsx";
+import { supportsPageAccessEntity } from "@/features/page/utils/page-access-ui.ts";
 
 interface SpaceTreeProps {
   spaceId: string;
@@ -724,6 +725,7 @@ function NodeMenu({
     accessModalOpened,
     { open: openAccessModal, close: closeAccessModal },
   ] = useDisclosure(false);
+  const supportsAccessControl = supportsPageAccessEntity(node.data.nodeType);
   const canMoveNodeToTrash =
     (node.data.nodeType === "page" ||
       node.data.nodeType === "database" ||
@@ -896,7 +898,7 @@ function NodeMenu({
               </>
             )}
 
-          {node.data.nodeType === "page" && canManageAccess && (
+          {supportsAccessControl && canManageAccess && (
             <Menu.Item
               leftSection={<IconUsersGroup size={16} />}
               onClick={(e) => {
@@ -905,7 +907,7 @@ function NodeMenu({
                 openAccessModal();
               }}
             >
-              {t("Access")}
+              {t("page.access.menu")}
             </Menu.Item>
           )}
 
@@ -944,13 +946,6 @@ function NodeMenu({
             onClose={closeCopySpaceModal}
             open={copyPageModalOpened}
           />
-
-          <PageAccessModal
-            pageId={node.id}
-            open={accessModalOpened}
-            onClose={closeAccessModal}
-          />
-
           <ExportModal
             type="page"
             id={node.id}
@@ -958,6 +953,14 @@ function NodeMenu({
             onClose={closeExportModal}
           />
         </>
+      )}
+
+      {supportsAccessControl && (
+        <PageAccessModal
+          pageId={node.id}
+          open={accessModalOpened}
+          onClose={closeAccessModal}
+        />
       )}
     </>
   );
