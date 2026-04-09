@@ -29,6 +29,7 @@ import { useSetAtom } from "jotai";
 import classes from "./database-page.module.css";
 import { useDatabasePageContext } from "@/features/database/hooks/use-database-page-context.ts";
 import PageCommentSection from "@/features/comment/components/page-comment-section";
+import { resolvePageFullWidth } from "@/features/user/utils/page-width.ts";
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 
@@ -67,14 +68,14 @@ export default function DatabasePage() {
 
   /**
    * Width mode precedence for a database page mirrors a regular page:
-   * 1) database-page local setting;
+   * 1) user page-level override;
    * 2) user default preference;
    * 3) safe fallback to `false`.
    */
-  const resolvedFullWidth =
-    databasePage?.settings?.fullPageWidth ??
-    currentUser?.user?.settings?.preferences?.fullPageWidth ??
-    false;
+  const resolvedFullWidth = resolvePageFullWidth({
+    pageId: databasePageId,
+    preferences: currentUser?.user?.settings?.preferences,
+  });
 
   const isEditable = !readOnly && userPageEditMode === PageEditMode.Edit;
 

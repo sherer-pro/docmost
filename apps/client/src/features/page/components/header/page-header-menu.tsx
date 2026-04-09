@@ -46,6 +46,7 @@ import ShareModal from "@/features/share/components/share-modal.tsx";
 import { DocumentCommonActionItems } from "@/features/common/header/document-common-action-items.tsx";
 import PageAccessModal from "@/features/page/components/page-access-modal.tsx";
 import { canOpenPageAccessModal } from "@/features/page/utils/page-access-ui.ts";
+import { resolvePageFullWidth } from "@/features/user/utils/page-width.ts";
 
 interface PageHeaderMenuProps {
   readOnly?: boolean;
@@ -168,11 +169,14 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
 
   /**
    * Explicit priority for calculating page width:
-   * 1) local document setup;
-   * 2) global user setting;
+   * 1) user page-level override;
+   * 2) user global default;
    * 3) safe fallback `false`.
    */
-  const fullPageWidth = page?.settings?.fullPageWidth ?? user.settings?.preferences?.fullPageWidth ?? false;
+  const fullPageWidth = resolvePageFullWidth({
+    pageId: page?.id,
+    preferences: user?.settings?.preferences,
+  });
   const pageUpdatedAt = useTimeAgo(page?.updatedAt);
   const navigate = useNavigate();
   const { mutateAsync: convertPageToDatabaseAsync, isPending: isConvertingPageToDatabase } =

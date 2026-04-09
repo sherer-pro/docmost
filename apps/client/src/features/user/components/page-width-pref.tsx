@@ -1,5 +1,4 @@
 import { userAtom } from "@/features/user/atoms/current-user-atom.ts";
-import { useUpdatePageMutation } from "@/features/page/queries/page-query.ts";
 import { updateUser } from "@/features/user/services/user-service.ts";
 import { MantineSize, Switch, Text } from "@mantine/core";
 import { useAtom } from "jotai/index";
@@ -37,7 +36,7 @@ interface PageWidthToggleProps {
 /**
  * The page width switch supports two independent scenarios:
  * - `scope="user"` - global user setting (default);
- * - `scope="page"` - local setting of a specific document.
+ * - `scope="page"` - user-specific override for a specific document.
  */
 export function PageWidthToggle({
   size,
@@ -48,10 +47,9 @@ export function PageWidthToggle({
 }: PageWidthToggleProps) {
   const { t } = useTranslation();
   const [user, setUser] = useAtom(userAtom);
-  const { mutateAsync: updatePage } = useUpdatePageMutation();
   const [localChecked, setLocalChecked] = useState(
     checked ??
-    user.settings?.preferences?.fullPageWidth,
+    user?.settings?.preferences?.fullPageWidth,
   );
 
   const resolvedChecked = checked ?? localChecked;
@@ -60,7 +58,7 @@ export function PageWidthToggle({
     const value = event.currentTarget.checked;
 
     /**
-     * In page mode, we save the setting directly in the document settings.
+     * In page mode, we save personal overrides in user preferences.
      * If the pageId is not available (for example, the document has not yet been initialized),
      * we safely skip the operation without crashing the UI.
      */
@@ -69,14 +67,18 @@ export function PageWidthToggle({
         return;
       }
 
-      await updatePage({
-        pageId,
-        settings: {
-          fullPageWidth: value,
+      const currentOverrides =
+        user?.settings?.preferences?.fullPageWidthByPageId ?? {};
+
+      const updatedUser = await updateUser({
+        fullPageWidthByPageId: {
+          ...currentOverrides,
+          [pageId]: value,
         },
       });
 
       setLocalChecked(value);
+      setUser(updatedUser);
       return;
     }
 

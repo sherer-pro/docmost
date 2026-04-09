@@ -3,8 +3,9 @@ import { ISpace } from "@/features/space/types/space.types.ts";
 /**
  * Page settings stored in `pages.settings`.
  *
- * `fullPageWidth` is used for local page width mode,
- * the remaining keys are reserved for expandable document fields.
+ * `fullPageWidth` is kept only for legacy compatibility and should not be
+ * used as a source of truth in client layout logic.
+ * The remaining keys are reserved for expandable document fields.
  */
 export interface PageSettings {
   fullPageWidth?: boolean;
