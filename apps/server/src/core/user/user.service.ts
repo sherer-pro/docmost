@@ -40,47 +40,60 @@ export class UserService {
       typeof updateUserDto.pageEditMode !== 'undefined' ||
       typeof updateUserDto.pushEnabled !== 'undefined' ||
       typeof updateUserDto.pushFrequency !== 'undefined' ||
+      typeof updateUserDto.emailFrequency !== 'undefined' ||
       typeof updateUserDto.emailEnabled !== 'undefined';
 
-    let preferenceUser = null;
-
     if (typeof updateUserDto.fullPageWidth !== 'undefined') {
-      preferenceUser = await this.userRepo.updatePreference(
+      await this.userRepo.updatePreference(
         userId,
+        workspace.id,
         'fullPageWidth',
         updateUserDto.fullPageWidth,
       );
     }
 
     if (typeof updateUserDto.pageEditMode !== 'undefined') {
-      preferenceUser = await this.userRepo.updatePreference(
+      await this.userRepo.updatePreference(
         userId,
+        workspace.id,
         'pageEditMode',
         updateUserDto.pageEditMode.toLowerCase(),
       );
     }
 
     if (typeof updateUserDto.pushEnabled !== 'undefined') {
-      preferenceUser = await this.userRepo.updatePreference(
+      await this.userRepo.updatePreference(
         userId,
+        workspace.id,
         'pushEnabled',
         updateUserDto.pushEnabled,
       );
     }
 
     if (typeof updateUserDto.pushFrequency !== 'undefined') {
-      preferenceUser = await this.userRepo.updatePreference(
+      await this.userRepo.updatePreference(
         userId,
+        workspace.id,
         'pushFrequency',
         updateUserDto.pushFrequency,
       );
     }
 
     if (typeof updateUserDto.emailEnabled !== 'undefined') {
-      preferenceUser = await this.userRepo.updatePreference(
+      await this.userRepo.updatePreference(
         userId,
+        workspace.id,
         'emailEnabled',
         updateUserDto.emailEnabled,
+      );
+    }
+
+    if (typeof updateUserDto.emailFrequency !== 'undefined') {
+      await this.userRepo.updatePreference(
+        userId,
+        workspace.id,
+        'emailFrequency',
+        updateUserDto.emailFrequency,
       );
     }
 
@@ -91,7 +104,13 @@ export class UserService {
       updateUserDto.locale != null;
 
     if (hasPreferenceUpdates && !hasProfileUpdates) {
-      return preferenceUser;
+      const updatedUser = await this.userRepo.findById(userId, workspace.id);
+
+      if (!updatedUser) {
+        throw new NotFoundException('User not found');
+      }
+
+      return updatedUser;
     }
 
     if (updateUserDto.name) {
@@ -136,6 +155,13 @@ export class UserService {
     delete updateUserDto.confirmPassword;
 
     await this.userRepo.updateUser(updateUserDto, userId, workspace.id);
-    return user;
+
+    const updatedUser = await this.userRepo.findById(userId, workspace.id);
+
+    if (!updatedUser) {
+      throw new NotFoundException('User not found');
+    }
+
+    return updatedUser;
   }
 }

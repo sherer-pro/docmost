@@ -11,6 +11,7 @@ describe('UserController', () => {
 
   const userServiceMock = {
     update: jest.fn(),
+    findById: jest.fn(),
   };
 
   const workspaceRepoMock = {
@@ -69,9 +70,11 @@ describe('UserController', () => {
     workspaceRepoMock.getActiveUserCount.mockResolvedValue(10);
     userRepoMock.getWorkspaceVisibleUsersCount.mockResolvedValue(2);
     userRepoMock.hasNonDefaultGroupMembership.mockResolvedValue(true);
+    userServiceMock.findById.mockResolvedValue(authUser);
 
     const result = await controller.getUserInfo(authUser, workspace);
 
+    expect(userServiceMock.findById).toHaveBeenCalledWith(authUser.id, workspace.id);
     expect(userRepoMock.getWorkspaceVisibleUsersCount).toHaveBeenCalledWith(
       workspace.id,
       authUser,
@@ -93,9 +96,11 @@ describe('UserController', () => {
 
     workspaceRepoMock.getActiveUserCount.mockResolvedValue(10);
     userRepoMock.getWorkspaceVisibleUsersCount.mockResolvedValue(2);
+    userServiceMock.findById.mockResolvedValue(authUser);
 
     const result = await controller.getUserInfo(authUser, workspace);
 
+    expect(userServiceMock.findById).toHaveBeenCalledWith(authUser.id, workspace.id);
     expect(workspaceRepoMock.getActiveUserCount).toHaveBeenCalledWith(
       workspace.id,
     );

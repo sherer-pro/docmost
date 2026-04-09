@@ -21,6 +21,7 @@ const USER_PREFERENCE_KEYS = [
   'pushEnabled',
   'pushFrequency',
   'emailEnabled',
+  'emailFrequency',
 ] as const;
 
 type UserPreferenceKey = (typeof USER_PREFERENCE_KEYS)[number];
@@ -431,6 +432,7 @@ export class UserRepo {
 
   async updatePreference(
     userId: string,
+    workspaceId: string,
     prefKey: UserPreferenceKey,
     prefValue: string | boolean,
   ) {
@@ -447,6 +449,7 @@ export class UserRepo {
         updatedAt: new Date(),
       })
       .where('id', '=', userId)
+      .where('workspaceId', '=', workspaceId)
       .returning(this.baseFields)
       .executeTakeFirst();
   }

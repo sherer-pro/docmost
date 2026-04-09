@@ -23,7 +23,12 @@ function unwrapResponse<T>(value: unknown): T {
  * and works correctly even before the CSRF cookie is initialized.
  */
 export async function getMyInfo(): Promise<ICurrentUser> {
-  const req = await api.get<ICurrentUser>("/users/me");
+  const req = await api.get<ICurrentUser>("/users/me", {
+    headers: {
+      "Cache-Control": "no-cache",
+      Pragma: "no-cache",
+    },
+  });
   return unwrapResponse<ICurrentUser>(req);
 }
 

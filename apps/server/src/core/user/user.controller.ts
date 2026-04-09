@@ -2,6 +2,8 @@ import {
   Body,
   Controller,
   Get,
+  Header,
+  NotFoundException,
   HttpCode,
   HttpStatus,
   Post,
@@ -35,12 +37,20 @@ export class UserController {
    * while keeping POST for backward compatibility with older clients.
    */
   @HttpCode(HttpStatus.OK)
+  @Header('Cache-Control', 'no-store, max-age=0')
+  @Header('Pragma', 'no-cache')
   @Get('me')
   @Post('me')
   async getUserInfo(
     @AuthUser() authUser: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
+    const user = await this.userService.findById(authUser.id, workspace.id);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
     /**
      * For MEMBER users, return only the number of users they are allowed to see
      * (shared non-default groups/spaces).
@@ -49,8 +59,8 @@ export class UserController {
      * there is no shared context with other users.
      */
     const memberCount =
-      authUser.role === UserRole.MEMBER
-        ? await this.userRepo.getWorkspaceVisibleUsersCount(workspace.id, authUser)
+      user.role === UserRole.MEMBER
+        ? await this.userRepo.getWorkspaceVisibleUsersCount(workspace.id, user)
         : await this.workspaceRepo.getActiveUserCount(workspace.id);
 
     const { licenseKey, ...rest } = workspace;
@@ -70,13 +80,13 @@ export class UserController {
      *   or at least one non-default space.
      */
     const canAccessMembersDirectory =
-      authUser.role === UserRole.OWNER ||
-      authUser.role === UserRole.ADMIN ||
-      (await this.userRepo.hasNonDefaultGroupMembership(authUser.id, workspace.id));
+      user.role === UserRole.OWNER ||
+      user.role === UserRole.ADMIN ||
+      (await this.userRepo.hasNonDefaultGroupMembership(user.id, workspace.id));
 
     return {
       user: {
-        ...authUser,
+        ...user,
         canAccessMembersDirectory,
       },
       workspace: workspaceInfo,
