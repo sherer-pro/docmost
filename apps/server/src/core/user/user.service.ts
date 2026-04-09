@@ -14,6 +14,26 @@ import { validateSsoEnforcement } from '../auth/auth.util';
 export class UserService {
   constructor(private userRepo: UserRepo) {}
 
+  private normalizeFullPageWidthByPageId(
+    value: unknown,
+  ): Record<string, boolean> {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return {};
+    }
+
+    return Object.entries(value).reduce<Record<string, boolean>>(
+      (acc, [pageId, isFullWidth]) => {
+        if (!pageId || typeof isFullWidth !== 'boolean') {
+          return acc;
+        }
+
+        acc[pageId] = isFullWidth;
+        return acc;
+      },
+      {},
+    );
+  }
+
   async findById(userId: string, workspaceId: string) {
     return this.userRepo.findById(userId, workspaceId);
   }
@@ -37,6 +57,7 @@ export class UserService {
     // preference update
     const hasPreferenceUpdates =
       typeof updateUserDto.fullPageWidth !== 'undefined' ||
+      typeof updateUserDto.fullPageWidthByPageId !== 'undefined' ||
       typeof updateUserDto.pageEditMode !== 'undefined' ||
       typeof updateUserDto.pushEnabled !== 'undefined' ||
       typeof updateUserDto.pushFrequency !== 'undefined' ||
@@ -49,6 +70,17 @@ export class UserService {
         workspace.id,
         'fullPageWidth',
         updateUserDto.fullPageWidth,
+      );
+    }
+
+    if (typeof updateUserDto.fullPageWidthByPageId !== 'undefined') {
+      await this.userRepo.updatePreference(
+        userId,
+        workspace.id,
+        'fullPageWidthByPageId',
+        this.normalizeFullPageWidthByPageId(
+          updateUserDto.fullPageWidthByPageId,
+        ),
       );
     }
 
@@ -153,6 +185,7 @@ export class UserService {
     }
 
     delete updateUserDto.confirmPassword;
+    delete updateUserDto.fullPageWidthByPageId;
 
     await this.userRepo.updateUser(updateUserDto, userId, workspace.id);
 

@@ -17,6 +17,7 @@ import { UserRole } from '../../../common/helpers/types/permission';
 
 const USER_PREFERENCE_KEYS = [
   'fullPageWidth',
+  'fullPageWidthByPageId',
   'pageEditMode',
   'pushEnabled',
   'pushFrequency',
@@ -434,7 +435,7 @@ export class UserRepo {
     userId: string,
     workspaceId: string,
     prefKey: UserPreferenceKey,
-    prefValue: string | boolean,
+    prefValue: string | boolean | Record<string, boolean>,
   ) {
     if (!USER_PREFERENCE_KEYS.includes(prefKey)) {
       throw new Error(`Unsupported user preference key: ${prefKey}`);
