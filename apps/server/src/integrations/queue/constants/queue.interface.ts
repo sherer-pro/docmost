@@ -99,3 +99,7 @@ export interface IPageRecipientNotificationJob {
 export interface IPushAggregationProcessJob {
   limit?: number;
 }
+
+export interface IEmailAggregationProcessJob {
+  limit?: number;
+}

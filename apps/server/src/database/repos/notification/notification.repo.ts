@@ -69,6 +69,60 @@ export class NotificationRepo {
   }
 
   /**
+   * Returns users that currently have unread and unsent notifications.
+   * The list is ordered by earliest pending event to preserve fair processing.
+   */
+  async findPendingEmailDigestUsers(
+    limit = 200,
+  ): Promise<Array<{ userId: string; workspaceId: string; firstPendingAt: Date | string }>> {
+    return this.db
+      .selectFrom('notifications')
+      .select('userId')
+      .select('workspaceId')
+      .select((eb) => eb.fn.min('createdAt').as('firstPendingAt'))
+      .where('readAt', 'is', null)
+      .where('emailedAt', 'is', null)
+      .groupBy(['userId', 'workspaceId'])
+      .orderBy('firstPendingAt', 'asc')
+      .limit(limit)
+      .execute() as Promise<
+      Array<{ userId: string; workspaceId: string; firstPendingAt: Date | string }>
+    >;
+  }
+
+  /**
+   * Returns unread notifications that have not been emailed yet up to the provided time boundary.
+   */
+  async findUnreadUnemailedForUserBefore(params: {
+    userId: string;
+    windowEnd: Date;
+  }): Promise<Notification[]> {
+    return this.db
+      .selectFrom('notifications')
+      .selectAll('notifications')
+      .select((eb) => this.withActor(eb))
+      .select((eb) => this.withPage(eb))
+      .select((eb) => this.withSpace(eb))
+      .where('userId', '=', params.userId)
+      .where('readAt', 'is', null)
+      .where('emailedAt', 'is', null)
+      .where('createdAt', '<', params.windowEnd)
+      .where((eb) =>
+        eb.or([
+          eb('spaceId', 'is', null),
+          eb(
+            'spaceId',
+            'in',
+            this.spaceMemberRepo.getUserSpaceIdsQuery(params.userId),
+          ),
+        ]),
+      )
+      .orderBy('createdAt', 'asc')
+      .orderBy('id', 'asc')
+      .execute();
+  }
+
+  /**
    * Returns the number of unread notifications for a user
    * within a specific document and time window.
    */
@@ -173,6 +227,19 @@ export class NotificationRepo {
       .updateTable('notifications')
       .set({ emailedAt: new Date() })
       .where('id', '=', notificationId)
+      .where('emailedAt', 'is', null)
+      .execute();
+  }
+
+  async markMultipleAsEmailed(notificationIds: string[]): Promise<void> {
+    if (notificationIds.length === 0) {
+      return;
+    }
+
+    await this.db
+      .updateTable('notifications')
+      .set({ emailedAt: new Date() })
+      .where('id', 'in', notificationIds)
       .where('emailedAt', 'is', null)
       .execute();
   }

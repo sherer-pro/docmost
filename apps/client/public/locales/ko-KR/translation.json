@@ -749,6 +749,7 @@
   "Enable email notifications": "이메일 알림 활성화",
   "Receive account activity updates by email.": "이메일로 계정 활동 업데이트를 받으세요.",
   "Toggle email notifications": "이메일 알림 전환",
+  "Email notification frequency": "Email notification frequency",
   "Failed to update email notification settings. Please try again.": "이메일 알림 설정을 업데이트하지 못했습니다. 다시 시도해 주세요.",
   "AI is only available in the Docmost enterprise edition. Contact sales@docmost.com.": "AI는 Docmost Enterprise 에디션에서만 사용할 수 있습니다. sales@docmost.com에 문의하세요.",
   "AI search failed. Please try again.": "AI 검색에 실패했습니다. 다시 시도해 주세요.",

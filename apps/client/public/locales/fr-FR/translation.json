@@ -749,6 +749,7 @@
   "Enable email notifications": "Activer les notifications par e-mail",
   "Receive account activity updates by email.": "Recevez des mises à jour sur l'activité du compte par e-mail.",
   "Toggle email notifications": "Basculer les notifications par e-mail",
+  "Email notification frequency": "Email notification frequency",
   "Failed to update email notification settings. Please try again.": "Échec de la mise à jour des paramètres de notification par e-mail. Veuillez réessayer.",
   "AI is only available in the Docmost enterprise edition. Contact sales@docmost.com.": "AI est uniquement disponible dans l'édition entreprise Docmost. Contactez sales@docmost.com.",
   "AI search failed. Please try again.": "La recherche AI ​​a échoué. Veuillez réessayer.",

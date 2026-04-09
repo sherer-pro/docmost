@@ -749,6 +749,7 @@
   "Enable email notifications": "Abilita notifiche email",
   "Receive account activity updates by email.": "Ricevi aggiornamenti sull'attività dell'account via email.",
   "Toggle email notifications": "Attiva/disattiva notifiche email",
+  "Email notification frequency": "Email notification frequency",
   "Failed to update email notification settings. Please try again.": "Impossibile aggiornare le impostazioni di notifica email. Per favore riprova.",
   "AI is only available in the Docmost enterprise edition. Contact sales@docmost.com.": "AI è disponibile solo nell'edizione aziendale di Docmost. Contatta sales@docmost.com.",
   "AI search failed. Please try again.": "Ricerca AI non riuscita. Per favore riprova.",
