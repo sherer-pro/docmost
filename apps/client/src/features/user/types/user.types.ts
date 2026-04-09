@@ -22,6 +22,7 @@ export interface IUser {
   pageEditMode: string; // used for update
   pushEnabled: boolean; // used for update
   emailEnabled: boolean; // used for update
+  emailFrequency: EmailFrequency; // used for update
   pushFrequency: PushFrequency; // used for update
   hasGeneratedPassword?: boolean;
   canAccessMembersDirectory?: boolean;
@@ -38,11 +39,14 @@ export interface IUserSettings {
     pageEditMode: string;
     pushEnabled: boolean;
     emailEnabled: boolean;
+    emailFrequency: EmailFrequency;
     pushFrequency: PushFrequency;
   };
 }
 
-export type PushFrequency = "immediate" | "1h" | "3h" | "6h" | "24h";
+export type NotificationFrequency = "immediate" | "1h" | "3h" | "6h" | "24h";
+export type PushFrequency = NotificationFrequency;
+export type EmailFrequency = NotificationFrequency;
 
 export enum PageEditMode {
   Read = "read",

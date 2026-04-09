@@ -23,6 +23,14 @@ export class EmailProcessor extends WorkerHost implements OnModuleDestroy {
       throw err;
     }
 
+    if (job.data.notificationIds?.length) {
+      try {
+        await this.notificationRepo.markMultipleAsEmailed(job.data.notificationIds);
+      } catch (err) {
+        this.logger.warn('Failed to mark notification batch as emailed');
+      }
+    }
+
     if (job.data.notificationId) {
       try {
         await this.notificationRepo.markAsEmailed(job.data.notificationId);

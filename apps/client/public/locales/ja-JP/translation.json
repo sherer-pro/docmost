@@ -749,6 +749,7 @@
   "Enable email notifications": "電子メール通知を有効にする",
   "Receive account activity updates by email.": "アカウントアクティビティの最新情報を電子メールで受け取ります。",
   "Toggle email notifications": "電子メール通知の切り替え",
+  "Email notification frequency": "Email notification frequency",
   "Failed to update email notification settings. Please try again.": "メール通知設定の更新に失敗しました。もう一度試してください。",
   "AI is only available in the Docmost enterprise edition. Contact sales@docmost.com.": "AI は Docmost エンタープライズ エディションでのみ利用可能です。 sales@docmost.com にご連絡ください。",
   "AI search failed. Please try again.": "AI検索に失敗しました。もう一度試してください。",

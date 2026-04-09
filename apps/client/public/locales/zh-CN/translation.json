@@ -749,6 +749,7 @@
   "Enable email notifications": "启用电子邮件通知",
   "Receive account activity updates by email.": "通过电子邮件接收帐户活动更新。",
   "Toggle email notifications": "切换电子邮件通知",
+  "Email notification frequency": "Email notification frequency",
   "Failed to update email notification settings. Please try again.": "无法更新电子邮件通知设置。请再试一次。",
   "AI is only available in the Docmost enterprise edition. Contact sales@docmost.com.": "AI仅在Docmost企业版中可用。联系 sales@docmost.com。",
   "AI search failed. Please try again.": "AI搜索失败。请再试一次。",

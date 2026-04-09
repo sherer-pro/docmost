@@ -7,6 +7,7 @@ import { QueueJob, QueueName } from '../../integrations/queue/constants';
 import {
   ICommentNotificationJob,
   ICommentResolvedNotificationJob,
+  IEmailAggregationProcessJob,
   IPageMentionNotificationJob,
   IPageRecipientNotificationJob,
   IPushAggregationProcessJob,
@@ -15,6 +16,7 @@ import { CommentNotificationService } from './services/comment.notification';
 import { PageNotificationService } from './services/page.notification';
 import { DomainService } from '../../integrations/environment/domain.service';
 import { PushAggregationService } from './services/push-aggregation.service';
+import { EmailAggregationService } from './services/email-aggregation.service';
 
 @Processor(QueueName.NOTIFICATION_QUEUE)
 export class NotificationProcessor
@@ -27,6 +29,7 @@ export class NotificationProcessor
     private readonly commentNotificationService: CommentNotificationService,
     private readonly pageNotificationService: PageNotificationService,
     private readonly pushAggregationService: PushAggregationService,
+    private readonly emailAggregationService: EmailAggregationService,
     private readonly domainService: DomainService,
     @InjectKysely() private readonly db: KyselyDB,
   ) {
@@ -39,7 +42,8 @@ export class NotificationProcessor
       | ICommentResolvedNotificationJob
       | IPageMentionNotificationJob
       | IPageRecipientNotificationJob
-      | IPushAggregationProcessJob,
+      | IPushAggregationProcessJob
+      | IEmailAggregationProcessJob,
       void
     >,
   ): Promise<void> {
@@ -47,6 +51,13 @@ export class NotificationProcessor
       if (job.name === QueueJob.PUSH_AGGREGATION_PROCESS) {
         await this.pushAggregationService.processDueJobs(
           (job.data as IPushAggregationProcessJob).limit,
+        );
+        return;
+      }
+
+      if (job.name === QueueJob.EMAIL_AGGREGATION_PROCESS) {
+        await this.emailAggregationService.processDueDigests(
+          (job.data as IEmailAggregationProcessJob).limit,
         );
         return;
       }

@@ -8,6 +8,8 @@ import { WsGateway } from '../../ws/ws.gateway';
 import { MailService } from '../../integrations/mail/mail.service';
 import { NotificationDeliveryPolicyService } from './services/notification-delivery-policy.service';
 
+const DEFAULT_EMAIL_FREQUENCY = 'immediate';
+
 @Injectable()
 export class NotificationService {
   private readonly logger = new Logger(NotificationService.name);
@@ -73,12 +75,22 @@ export class NotificationService {
 
       const user = await this.db
         .selectFrom('users')
-        .select(['email'])
+        .select(['email', 'settings'])
         .where('id', '=', userId)
         .where('deletedAt', 'is', null)
         .executeTakeFirst();
 
       if (!user?.email) return;
+
+      const settings = (user.settings ?? {}) as {
+        preferences?: { emailFrequency?: string };
+      };
+      const emailFrequency =
+        settings.preferences?.emailFrequency ?? DEFAULT_EMAIL_FREQUENCY;
+
+      if (emailFrequency !== DEFAULT_EMAIL_FREQUENCY) {
+        return;
+      }
 
       await this.mailService.sendToQueue({
         to: user.email,

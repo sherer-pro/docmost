@@ -749,6 +749,7 @@
   "Enable email notifications": "Увімкнути сповіщення електронною поштою",
   "Receive account activity updates by email.": "Отримувати оновлення активності облікового запису електронною поштою.",
   "Toggle email notifications": "Перемкнути сповіщення електронною поштою",
+  "Email notification frequency": "Email notification frequency",
   "Failed to update email notification settings. Please try again.": "Не вдалося оновити налаштування сповіщень електронною поштою. Спробуйте ще раз.",
   "AI is only available in the Docmost enterprise edition. Contact sales@docmost.com.": "AI доступний лише у корпоративній версії Docmost. Зв'яжіться з sales@docmost.com.",
   "AI search failed. Please try again.": "Помилка пошуку AI. Спробуйте ще раз.",
