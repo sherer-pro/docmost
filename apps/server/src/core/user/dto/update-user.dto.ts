@@ -2,7 +2,7 @@ import { OmitType, PartialType } from '@nestjs/mapped-types';
 import {
   IsBoolean,
   IsIn,
-  IsNotEmpty,
+  IsObject,
   IsOptional,
   IsString,
   MaxLength,
@@ -20,6 +20,10 @@ export class UpdateUserDto extends PartialType(
   @IsOptional()
   @IsBoolean()
   fullPageWidth: boolean;
+
+  @IsOptional()
+  @IsObject()
+  fullPageWidthByPageId: Record<string, boolean>;
 
   @IsOptional()
   @IsString()

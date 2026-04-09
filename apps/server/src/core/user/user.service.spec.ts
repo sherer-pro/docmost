@@ -84,4 +84,43 @@ describe('UserService', () => {
     expect(userRepo.updateUser).not.toHaveBeenCalled();
     expect(result).toEqual(updatedPreferenceUser);
   });
+
+  it('updates page-level full width map through user preferences', async () => {
+    const { service, userRepo } = createService();
+
+    const workspace = { id: 'ws-1' } as any;
+    const user = {
+      id: 'user-1',
+      email: 'john@example.com',
+      password: 'hash',
+    } as any;
+    const fullPageWidthByPageId = {
+      'page-1': true,
+      'page-2': false,
+    };
+    const updatedPreferenceUser = {
+      ...user,
+      settings: { preferences: { fullPageWidthByPageId } },
+    };
+
+    userRepo.findById
+      .mockResolvedValueOnce(user)
+      .mockResolvedValueOnce(updatedPreferenceUser);
+    userRepo.updatePreference.mockResolvedValue(updatedPreferenceUser);
+
+    const result = await service.update(
+      { fullPageWidthByPageId } as any,
+      'user-1',
+      workspace,
+    );
+
+    expect(userRepo.updatePreference).toHaveBeenCalledWith(
+      'user-1',
+      'ws-1',
+      'fullPageWidthByPageId',
+      fullPageWidthByPageId,
+    );
+    expect(userRepo.updateUser).not.toHaveBeenCalled();
+    expect(result).toEqual(updatedPreferenceUser);
+  });
 });
