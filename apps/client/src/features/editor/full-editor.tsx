@@ -6,6 +6,7 @@ import { Container } from "@mantine/core";
 import { ReactNode } from "react";
 import { useAtom } from "jotai";
 import { userAtom } from "@/features/user/atoms/current-user-atom.ts";
+import { resolvePageFullWidth } from "@/features/user/utils/page-width.ts";
 
 const MemoizedTitleEditor = React.memo(TitleEditor);
 const MemoizedPageEditor = React.memo(PageEditor);
@@ -19,7 +20,6 @@ export interface FullEditorProps {
   editable: boolean;
   metaPanel?: ReactNode;
   footer?: ReactNode;
-  pageFullPageWidth?: boolean;
 }
 
 export function FullEditor({
@@ -31,16 +31,19 @@ export function FullEditor({
   editable,
   metaPanel,
   footer,
-  pageFullPageWidth,
 }: FullEditorProps) {
   const [user] = useAtom(userAtom);
 
   /**
-   * Explicit editor width priority: page setup first,
-   * then a user default, and only then a hard fallback.
+   * Explicit editor width priority:
+   * 1) user page-level override;
+   * 2) user global default;
+   * 3) safe fallback `false`.
    */
-  const fullPageWidth =
-    pageFullPageWidth ?? user.settings?.preferences?.fullPageWidth ?? false;
+  const fullPageWidth = resolvePageFullWidth({
+    pageId,
+    preferences: user?.settings?.preferences,
+  });
 
   return (
     <Container

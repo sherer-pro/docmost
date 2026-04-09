@@ -150,7 +150,6 @@ function PageContent({ pageSlug }: { pageSlug: string | undefined }) {
             SpaceCaslAction.Manage,
             SpaceCaslSubject.Page,
           )}
-          pageFullPageWidth={page.settings?.fullPageWidth}
         />
         <MemoizedHistoryModal pageId={page.id} />
       </div>

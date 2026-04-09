@@ -40,6 +40,7 @@ import useToggleAside from '@/hooks/use-toggle-aside.tsx';
 import { useDatabasePageContext } from '@/features/database/hooks/use-database-page-context.ts';
 import PageAccessModal from '@/features/page/components/page-access-modal.tsx';
 import { canOpenPageAccessModal } from '@/features/page/utils/page-access-ui.ts';
+import { resolvePageFullWidth } from '@/features/user/utils/page-width.ts';
 
 interface DatabaseHeaderMenuProps {
   databaseId: string;
@@ -196,17 +197,18 @@ export default function DatabaseHeaderMenu({
     canManageAccess: databaseContext.pageByRoute?.access?.capabilities?.canManageAccess,
   });
   const canMoveDatabasePage = Boolean(resolvedDatabasePageId && databasePageSlugId);
+  const databasePageWidthScopeId = resolvedDatabasePageId;
+
   /**
    * Keep the same width resolution priority as regular page header:
-   * 1) local database-page setting;
-   * 2) user default preference;
+   * 1) user page-level override;
+   * 2) user global default preference;
    * 3) safe fallback `false`.
    */
-  const fullPageWidth =
-    databaseContext.pageByRoute?.settings?.fullPageWidth ??
-    user.settings?.preferences?.fullPageWidth ??
-    false;
-  const databasePageWidthScopeId = resolvedDatabasePageId;
+  const fullPageWidth = resolvePageFullWidth({
+    pageId: databasePageWidthScopeId,
+    preferences: user?.settings?.preferences,
+  });
 
   return (
     <>
