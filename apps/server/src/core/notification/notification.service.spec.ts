@@ -88,6 +88,27 @@ describe('NotificationService', () => {
     expect(mailService.sendToQueue).not.toHaveBeenCalled();
   });
 
+  it('does not queue immediate email when delayed frequency is quoted', async () => {
+    const { service, mailService } = createService({
+      userRecord: {
+        email: 'john@example.com',
+        settings: { preferences: { emailFrequency: '"1h"' } },
+      },
+    });
+
+    await service.queueEmail(
+      'user-1',
+      'n-1',
+      'page-1',
+      'actor-1',
+      'space-1',
+      'Subject',
+      {},
+    );
+
+    expect(mailService.sendToQueue).not.toHaveBeenCalled();
+  });
+
   it('skips email queueing when delivery policy blocks sending', async () => {
     const { service, mailService, db } = createService({ shouldSend: false });
 

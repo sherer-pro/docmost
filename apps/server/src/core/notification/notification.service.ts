@@ -7,6 +7,7 @@ import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import { WsGateway } from '../../ws/ws.gateway';
 import { MailService } from '../../integrations/mail/mail.service';
 import { NotificationDeliveryPolicyService } from './services/notification-delivery-policy.service';
+import { normalizeUserSettings } from '../user/utils/user-preferences.util';
 
 const DEFAULT_EMAIL_FREQUENCY = 'immediate';
 
@@ -82,11 +83,8 @@ export class NotificationService {
 
       if (!user?.email) return;
 
-      const settings = (user.settings ?? {}) as {
-        preferences?: { emailFrequency?: string };
-      };
-      const emailFrequency =
-        settings.preferences?.emailFrequency ?? DEFAULT_EMAIL_FREQUENCY;
+      const settings = normalizeUserSettings(user.settings);
+      const emailFrequency = settings.preferences.emailFrequency;
 
       if (emailFrequency !== DEFAULT_EMAIL_FREQUENCY) {
         return;

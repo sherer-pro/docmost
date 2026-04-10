@@ -12,6 +12,7 @@ import {
   NotificationDigestEmail,
   NotificationDigestItem,
 } from '@docmost/transactional/emails/notification-digest-email';
+import { normalizeUserSettings } from '../../user/utils/user-preferences.util';
 
 interface UserEmailPreferences {
   email: string | null;
@@ -155,15 +156,12 @@ export class EmailAggregationService {
       return null;
     }
 
-    const settings = (user.settings ?? {}) as {
-      preferences?: { emailEnabled?: boolean; emailFrequency?: string };
-    };
+    const settings = normalizeUserSettings(user.settings);
 
     return {
       email: user.email,
-      emailEnabled: settings.preferences?.emailEnabled ?? true,
-      emailFrequency:
-        settings.preferences?.emailFrequency ?? DEFAULT_EMAIL_FREQUENCY,
+      emailEnabled: settings.preferences.emailEnabled,
+      emailFrequency: settings.preferences.emailFrequency,
     };
   }
 

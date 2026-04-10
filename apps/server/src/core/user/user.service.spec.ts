@@ -39,6 +39,7 @@ describe('UserService', () => {
       'user-1',
       workspace,
     );
+    const normalizedResult = result as any;
 
     expect(userRepo.updatePreference).toHaveBeenCalledWith(
       'user-1',
@@ -47,7 +48,7 @@ describe('UserService', () => {
       '3h',
     );
     expect(userRepo.updateUser).not.toHaveBeenCalled();
-    expect(result).toEqual(updatedPreferenceUser);
+    expect(normalizedResult.settings.preferences.emailFrequency).toBe('3h');
   });
 
   it('updates push frequency through user preferences', async () => {
@@ -74,6 +75,7 @@ describe('UserService', () => {
       'user-1',
       workspace,
     );
+    const normalizedResult = result as any;
 
     expect(userRepo.updatePreference).toHaveBeenCalledWith(
       'user-1',
@@ -82,7 +84,7 @@ describe('UserService', () => {
       '6h',
     );
     expect(userRepo.updateUser).not.toHaveBeenCalled();
-    expect(result).toEqual(updatedPreferenceUser);
+    expect(normalizedResult.settings.preferences.pushFrequency).toBe('6h');
   });
 
   it('updates page-level full width map through user preferences', async () => {
@@ -113,6 +115,7 @@ describe('UserService', () => {
       'user-1',
       workspace,
     );
+    const normalizedResult = result as any;
 
     expect(userRepo.updatePreference).toHaveBeenCalledWith(
       'user-1',
@@ -121,7 +124,9 @@ describe('UserService', () => {
       fullPageWidthByPageId,
     );
     expect(userRepo.updateUser).not.toHaveBeenCalled();
-    expect(result).toEqual(updatedPreferenceUser);
+    expect(normalizedResult.settings.preferences.fullPageWidthByPageId).toEqual(
+      fullPageWidthByPageId,
+    );
   });
 
   it('normalizes malformed page-width map and keeps only boolean entries', async () => {
@@ -161,6 +166,7 @@ describe('UserService', () => {
       'user-1',
       workspace,
     );
+    const normalizedResult = result as any;
 
     expect(userRepo.updatePreference).toHaveBeenCalledWith(
       'user-1',
@@ -168,6 +174,75 @@ describe('UserService', () => {
       'fullPageWidthByPageId',
       { 'page-1': true },
     );
-    expect(result).toEqual(updatedPreferenceUser);
+    expect(normalizedResult.settings.preferences.fullPageWidthByPageId).toEqual({
+      'page-1': true,
+    });
+  });
+
+  it('normalizes quoted notification frequency payload before persisting', async () => {
+    const { service, userRepo } = createService();
+
+    const workspace = { id: 'ws-1' } as any;
+    const user = {
+      id: 'user-1',
+      email: 'john@example.com',
+      password: 'hash',
+      settings: {
+        preferences: {
+          pushFrequency: 'immediate',
+        },
+      },
+    } as any;
+    const updatedPreferenceUser = {
+      ...user,
+      settings: { preferences: { pushFrequency: '24h' } },
+    };
+
+    userRepo.findById
+      .mockResolvedValueOnce(user)
+      .mockResolvedValueOnce(updatedPreferenceUser);
+    userRepo.updatePreference.mockResolvedValue(updatedPreferenceUser);
+
+    const result = await service.update(
+      { pushFrequency: '"24h"' } as any,
+      'user-1',
+      workspace,
+    );
+    const normalizedResult = result as any;
+
+    expect(userRepo.updatePreference).toHaveBeenCalledWith(
+      'user-1',
+      'ws-1',
+      'pushFrequency',
+      '24h',
+    );
+    expect(normalizedResult.settings.preferences.pushFrequency).toBe('24h');
+  });
+
+  it('returns normalized preferences from findById', async () => {
+    const { service, userRepo } = createService();
+    const rawUser = {
+      id: 'user-1',
+      settings: {
+        preferences: {
+          pushEnabled: 'true',
+          emailEnabled: '"false"',
+          pushFrequency: '"24h"',
+          emailFrequency: '"1h"',
+          pageEditMode: '"read"',
+        },
+      },
+    } as any;
+
+    userRepo.findById.mockResolvedValue(rawUser);
+
+    const result = await service.findById('user-1', 'ws-1');
+    const normalizedResult = result as any;
+
+    expect(normalizedResult.settings.preferences.pushEnabled).toBe(true);
+    expect(normalizedResult.settings.preferences.emailEnabled).toBe(false);
+    expect(normalizedResult.settings.preferences.pushFrequency).toBe('24h');
+    expect(normalizedResult.settings.preferences.emailFrequency).toBe('1h');
+    expect(normalizedResult.settings.preferences.pageEditMode).toBe('read');
   });
 });
