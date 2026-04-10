@@ -123,4 +123,51 @@ describe('UserService', () => {
     expect(userRepo.updateUser).not.toHaveBeenCalled();
     expect(result).toEqual(updatedPreferenceUser);
   });
+
+  it('normalizes malformed page-width map and keeps only boolean entries', async () => {
+    const { service, userRepo } = createService();
+
+    const workspace = { id: 'ws-1' } as any;
+    const user = {
+      id: 'user-1',
+      email: 'john@example.com',
+      password: 'hash',
+    } as any;
+    const malformedMap = {
+      '0': '{',
+      '1': '"',
+      '2': 'x',
+      '3': '"',
+      '4': ':',
+      '5': 't',
+      '6': 'r',
+      '7': 'u',
+      '8': 'e',
+      '9': '}',
+      'page-1': true,
+    };
+    const updatedPreferenceUser = {
+      ...user,
+      settings: { preferences: { fullPageWidthByPageId: { 'page-1': true } } },
+    };
+
+    userRepo.findById
+      .mockResolvedValueOnce(user)
+      .mockResolvedValueOnce(updatedPreferenceUser);
+    userRepo.updatePreference.mockResolvedValue(updatedPreferenceUser);
+
+    const result = await service.update(
+      { fullPageWidthByPageId: malformedMap } as any,
+      'user-1',
+      workspace,
+    );
+
+    expect(userRepo.updatePreference).toHaveBeenCalledWith(
+      'user-1',
+      'ws-1',
+      'fullPageWidthByPageId',
+      { 'page-1': true },
+    );
+    expect(result).toEqual(updatedPreferenceUser);
+  });
 });
