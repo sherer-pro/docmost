@@ -533,12 +533,12 @@ export class RagService {
         'databasePages.slugId',
         'databases.name as title',
         sql<Date>`GREATEST(
-          COALESCE(databases."updatedAt", to_timestamp(0)),
-          COALESCE("databasePages"."updatedAt", to_timestamp(0)),
-          COALESCE("propertiesChanges"."propertiesUpdatedAt", to_timestamp(0)),
-          COALESCE("rowsChanges"."rowsUpdatedAt", to_timestamp(0)),
-          COALESCE("cellsChanges"."cellsUpdatedAt", to_timestamp(0)),
-          COALESCE("rowPagesChanges"."rowPagesUpdatedAt", to_timestamp(0))
+          COALESCE(${this.db.dynamic.ref('databases.updatedAt')}, to_timestamp(0)),
+          COALESCE(${this.db.dynamic.ref('databasePages.updatedAt')}, to_timestamp(0)),
+          COALESCE(${this.db.dynamic.ref('propertiesChanges.propertiesUpdatedAt')}, to_timestamp(0)),
+          COALESCE(${this.db.dynamic.ref('rowsChanges.rowsUpdatedAt')}, to_timestamp(0)),
+          COALESCE(${this.db.dynamic.ref('cellsChanges.cellsUpdatedAt')}, to_timestamp(0)),
+          COALESCE(${this.db.dynamic.ref('rowPagesChanges.rowPagesUpdatedAt')}, to_timestamp(0))
         )`.as('lastChangedAt'),
       ])
       .where('databases.workspaceId', '=', scope.workspace.id)
