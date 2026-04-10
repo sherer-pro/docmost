@@ -10,6 +10,10 @@ import {
 } from "@/features/user/constants/email-preferences.ts";
 import { updateUser } from "@/features/user/services/user-service.ts";
 import { EmailFrequency } from "@/features/user/types/user.types.ts";
+import {
+  normalizeEmailFrequency,
+  normalizePreferenceBoolean,
+} from "@/features/user/utils/notification-preferences.ts";
 import { Select, Switch, Text } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useAtom } from "jotai";
@@ -27,10 +31,14 @@ const EMAIL_FREQUENCY_OPTIONS: { value: EmailFrequency; labelKey: string }[] = [
 export default function AccountEmailPreferences() {
   const { t } = useTranslation();
   const [user, setUser] = useAtom(userAtom);
-  const emailEnabled =
-    user.settings?.preferences?.emailEnabled ?? DEFAULT_EMAIL_ENABLED;
-  const emailFrequency =
-    user.settings?.preferences?.emailFrequency ?? DEFAULT_EMAIL_FREQUENCY;
+  const emailEnabled = normalizePreferenceBoolean(
+    user.settings?.preferences?.emailEnabled,
+    DEFAULT_EMAIL_ENABLED,
+  );
+  const emailFrequency = normalizeEmailFrequency(
+    user.settings?.preferences?.emailFrequency,
+    DEFAULT_EMAIL_FREQUENCY,
+  );
   const [isEmailEnabled, setIsEmailEnabled] = useState(emailEnabled);
   const [selectedFrequency, setSelectedFrequency] =
     useState<EmailFrequency>(emailFrequency);
@@ -68,7 +76,10 @@ export default function AccountEmailPreferences() {
         const updatedUser = await updateUser({ emailEnabled: enabled });
         setUser(updatedUser);
         setIsEmailEnabled(
-          updatedUser.settings?.preferences?.emailEnabled ?? DEFAULT_EMAIL_ENABLED,
+          normalizePreferenceBoolean(
+            updatedUser.settings?.preferences?.emailEnabled,
+            DEFAULT_EMAIL_ENABLED,
+          ),
         );
       } catch {
         setIsEmailEnabled(previousEmailEnabled);
@@ -97,8 +108,10 @@ export default function AccountEmailPreferences() {
         const updatedUser = await updateUser({ emailFrequency: frequency });
         setUser(updatedUser);
         setSelectedFrequency(
-          updatedUser.settings?.preferences?.emailFrequency ??
+          normalizeEmailFrequency(
+            updatedUser.settings?.preferences?.emailFrequency,
             DEFAULT_EMAIL_FREQUENCY,
+          ),
         );
       } catch {
         setSelectedFrequency(emailFrequency);
