@@ -122,6 +122,22 @@ describe('PushAggregationService', () => {
     expect(pushService.sendToUser).not.toHaveBeenCalled();
   });
 
+  it('aggregates push when frequency is quoted but valid', async () => {
+    const { service, pushService, pushNotificationJobRepo } = createService({
+      userSettings: {
+        preferences: {
+          pushEnabled: true,
+          pushFrequency: '"3h"',
+        },
+      },
+    });
+
+    await service.dispatchOrAggregate(baseNotification, basePayload);
+
+    expect(pushService.sendToUser).not.toHaveBeenCalled();
+    expect(pushNotificationJobRepo.upsertPending).toHaveBeenCalledTimes(1);
+  });
+
   it('cancels delivery in delayed mode if all events are read before sendAfter', async () => {
     const { service, pushService, pushNotificationJobRepo, notificationRepo } =
       createService({ unreadCountInWindow: 0 });

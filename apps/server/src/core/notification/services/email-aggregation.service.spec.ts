@@ -153,4 +153,47 @@ describe('EmailAggregationService', () => {
     expect(notificationRepo.findUnreadUnemailedForUserBefore).not.toHaveBeenCalled();
     expect(mailService.sendToQueue).not.toHaveBeenCalled();
   });
+
+  it('sends digest when frequency is quoted but valid', async () => {
+    jest.setSystemTime(new Date('2026-02-01T12:00:00.000Z'));
+    const { service, notificationRepo, mailService } = createService({
+      userRecord: {
+        email: 'john@example.com',
+        settings: {
+          preferences: {
+            emailEnabled: true,
+            emailFrequency: '"1h"',
+          },
+        },
+      },
+    });
+
+    await service.processDueDigests();
+
+    expect(notificationRepo.findUnreadUnemailedForUserBefore).toHaveBeenCalledWith({
+      userId: 'user-1',
+      windowEnd: new Date('2026-02-01T11:00:00.000Z'),
+    });
+    expect(mailService.sendToQueue).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not send digest when email is disabled as a string', async () => {
+    jest.setSystemTime(new Date('2026-02-01T12:00:00.000Z'));
+    const { service, notificationRepo, mailService } = createService({
+      userRecord: {
+        email: 'john@example.com',
+        settings: {
+          preferences: {
+            emailEnabled: '"false"',
+            emailFrequency: '"1h"',
+          },
+        },
+      },
+    });
+
+    await service.processDueDigests();
+
+    expect(notificationRepo.findUnreadUnemailedForUserBefore).not.toHaveBeenCalled();
+    expect(mailService.sendToQueue).not.toHaveBeenCalled();
+  });
 });

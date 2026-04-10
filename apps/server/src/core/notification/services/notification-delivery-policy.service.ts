@@ -3,6 +3,7 @@ import { InjectKysely } from 'nestjs-kysely';
 import { NotificationRepo } from '@docmost/db/repos/notification/notification.repo';
 import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
+import { normalizeUserSettings } from '../../user/utils/user-preferences.util';
 
 export type NotificationDeliveryChannel = 'push' | 'email';
 
@@ -84,13 +85,11 @@ export class NotificationDeliveryPolicyService {
       .where('id', '=', userId)
       .executeTakeFirst();
 
-    const settings = (user?.settings ?? {}) as {
-      preferences?: { pushEnabled?: boolean; emailEnabled?: boolean };
-    };
+    const settings = normalizeUserSettings(user?.settings);
 
     return {
-      pushEnabled: settings.preferences?.pushEnabled ?? false,
-      emailEnabled: settings.preferences?.emailEnabled ?? true,
+      pushEnabled: settings.preferences.pushEnabled,
+      emailEnabled: settings.preferences.emailEnabled,
     };
   }
 }

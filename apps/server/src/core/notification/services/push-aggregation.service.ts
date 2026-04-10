@@ -12,6 +12,7 @@ import { PushSendResult, PushService } from '../../push/push.service';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { NotificationDeliveryPolicyService } from './notification-delivery-policy.service';
+import { normalizeUserSettings } from '../../user/utils/user-preferences.util';
 
 interface PushDispatchPayload {
   title: string;
@@ -253,12 +254,10 @@ export class PushAggregationService {
       .where('id', '=', userId)
       .executeTakeFirst();
 
-    const settings = (user?.settings ?? {}) as {
-      preferences?: { pushFrequency?: string };
-    };
+    const settings = normalizeUserSettings(user?.settings);
 
     return {
-      pushFrequency: settings.preferences?.pushFrequency ?? DEFAULT_PUSH_FREQUENCY,
+      pushFrequency: settings.preferences.pushFrequency ?? DEFAULT_PUSH_FREQUENCY,
     };
   }
 

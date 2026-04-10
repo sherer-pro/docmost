@@ -9,10 +9,25 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { comparePasswordHash } from '../../common/helpers/utils';
 import { Workspace } from '@docmost/db/types/entity.types';
 import { validateSsoEnforcement } from '../auth/auth.util';
+import {
+  normalizeNotificationFrequency,
+  normalizePageEditModePreference,
+  normalizePreferenceBoolean,
+  normalizeUserSettings,
+} from './utils/user-preferences.util';
 
 @Injectable()
 export class UserService {
   constructor(private userRepo: UserRepo) {}
+
+  private normalizeUserPreferencePayload<T extends { settings?: unknown }>(
+    user: T,
+  ): T {
+    return {
+      ...user,
+      settings: normalizeUserSettings(user?.settings),
+    };
+  }
 
   private normalizeFullPageWidthByPageId(
     value: unknown,
@@ -45,7 +60,12 @@ export class UserService {
   }
 
   async findById(userId: string, workspaceId: string) {
-    return this.userRepo.findById(userId, workspaceId);
+    const user = await this.userRepo.findById(userId, workspaceId);
+    if (!user) {
+      return user;
+    }
+
+    return this.normalizeUserPreferencePayload(user);
   }
 
   async update(
@@ -63,6 +83,8 @@ export class UserService {
     if (!user) {
       throw new NotFoundException('User not found');
     }
+
+    const currentPreferences = normalizeUserSettings(user.settings).preferences;
 
     // preference update
     const hasPreferenceUpdates =
@@ -99,7 +121,7 @@ export class UserService {
         userId,
         workspace.id,
         'pageEditMode',
-        updateUserDto.pageEditMode.toLowerCase(),
+        normalizePageEditModePreference(updateUserDto.pageEditMode),
       );
     }
 
@@ -108,7 +130,10 @@ export class UserService {
         userId,
         workspace.id,
         'pushEnabled',
-        updateUserDto.pushEnabled,
+        normalizePreferenceBoolean(
+          updateUserDto.pushEnabled,
+          currentPreferences.pushEnabled,
+        ),
       );
     }
 
@@ -117,7 +142,10 @@ export class UserService {
         userId,
         workspace.id,
         'pushFrequency',
-        updateUserDto.pushFrequency,
+        normalizeNotificationFrequency(
+          updateUserDto.pushFrequency,
+          currentPreferences.pushFrequency,
+        ),
       );
     }
 
@@ -126,7 +154,10 @@ export class UserService {
         userId,
         workspace.id,
         'emailEnabled',
-        updateUserDto.emailEnabled,
+        normalizePreferenceBoolean(
+          updateUserDto.emailEnabled,
+          currentPreferences.emailEnabled,
+        ),
       );
     }
 
@@ -135,7 +166,10 @@ export class UserService {
         userId,
         workspace.id,
         'emailFrequency',
-        updateUserDto.emailFrequency,
+        normalizeNotificationFrequency(
+          updateUserDto.emailFrequency,
+          currentPreferences.emailFrequency,
+        ),
       );
     }
 
@@ -152,7 +186,7 @@ export class UserService {
         throw new NotFoundException('User not found');
       }
 
-      return updatedUser;
+      return this.normalizeUserPreferencePayload(updatedUser);
     }
 
     if (updateUserDto.name) {
@@ -205,6 +239,6 @@ export class UserService {
       throw new NotFoundException('User not found');
     }
 
-    return updatedUser;
+    return this.normalizeUserPreferencePayload(updatedUser);
   }
 }

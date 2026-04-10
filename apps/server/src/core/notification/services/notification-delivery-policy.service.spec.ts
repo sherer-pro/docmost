@@ -72,6 +72,30 @@ describe('NotificationDeliveryPolicyService', () => {
     expect(notificationRepo.isUnreadForUser).not.toHaveBeenCalled();
   });
 
+  it('treats string boolean preferences as disabled values', async () => {
+    const { service, notificationRepo } = createService({
+      userSettings: { preferences: { pushEnabled: '"false"', emailEnabled: 'false' } },
+    });
+
+    const shouldSendPush = await service.shouldSend({
+      channel: 'push',
+      userId: 'user-1',
+      notificationId: 'n-1',
+      pageId: 'page-1',
+    });
+
+    const shouldSendEmail = await service.shouldSend({
+      channel: 'email',
+      userId: 'user-1',
+      notificationId: 'n-2',
+      pageId: 'page-1',
+    });
+
+    expect(shouldSendPush).toBe(false);
+    expect(shouldSendEmail).toBe(false);
+    expect(notificationRepo.isUnreadForUser).not.toHaveBeenCalled();
+  });
+
   it('returns false when notification is already read for immediate delivery', async () => {
     const { service, notificationRepo } = createService({ isUnread: false });
 
