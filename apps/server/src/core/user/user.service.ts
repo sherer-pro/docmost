@@ -17,11 +17,21 @@ export class UserService {
   private normalizeFullPageWidthByPageId(
     value: unknown,
   ): Record<string, boolean> {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    let parsedValue = value;
+
+    if (typeof parsedValue === 'string') {
+      try {
+        parsedValue = JSON.parse(parsedValue);
+      } catch {
+        return {};
+      }
+    }
+
+    if (!parsedValue || typeof parsedValue !== 'object' || Array.isArray(parsedValue)) {
       return {};
     }
 
-    return Object.entries(value).reduce<Record<string, boolean>>(
+    return Object.entries(parsedValue).reduce<Record<string, boolean>>(
       (acc, [pageId, isFullWidth]) => {
         if (!pageId || typeof isFullWidth !== 'boolean') {
           return acc;

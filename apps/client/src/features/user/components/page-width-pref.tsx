@@ -1,5 +1,6 @@
 import { userAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { updateUser } from "@/features/user/services/user-service.ts";
+import { normalizeFullPageWidthByPageId } from "@/features/user/utils/page-width.ts";
 import { MantineSize, Switch, Text } from "@mantine/core";
 import { useAtom } from "jotai/index";
 import React, { useState } from "react";
@@ -68,7 +69,9 @@ export function PageWidthToggle({
       }
 
       const currentOverrides =
-        user?.settings?.preferences?.fullPageWidthByPageId ?? {};
+        normalizeFullPageWidthByPageId(
+          user?.settings?.preferences?.fullPageWidthByPageId,
+        );
 
       const updatedUser = await updateUser({
         fullPageWidthByPageId: {
