@@ -16,6 +16,10 @@ import {
   DEFAULT_PUSH_ENABLED,
   DEFAULT_PUSH_FREQUENCY,
 } from "@/features/user/constants/push-preferences.ts";
+import {
+  normalizePreferenceBoolean,
+  normalizePushFrequency,
+} from "@/features/user/utils/notification-preferences.ts";
 import { Select, Switch, Text } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useAtom } from "jotai";
@@ -36,9 +40,14 @@ export default function AccountPushPreferences() {
   const [permission, setPermission] = useState<
     NotificationPermission | "unsupported"
   >(getNotificationPermission());
-  const pushEnabled = user.settings?.preferences?.pushEnabled ?? DEFAULT_PUSH_ENABLED;
-  const pushFrequency =
-    user.settings?.preferences?.pushFrequency ?? DEFAULT_PUSH_FREQUENCY;
+  const pushEnabled = normalizePreferenceBoolean(
+    user.settings?.preferences?.pushEnabled,
+    DEFAULT_PUSH_ENABLED,
+  );
+  const pushFrequency = normalizePushFrequency(
+    user.settings?.preferences?.pushFrequency,
+    DEFAULT_PUSH_FREQUENCY,
+  );
   const [isPushEnabled, setIsPushEnabled] = useState(pushEnabled);
   const [selectedFrequency, setSelectedFrequency] =
     useState<PushFrequency>(pushFrequency);
@@ -115,7 +124,10 @@ export default function AccountPushPreferences() {
           const updatedUser = await updateUser({ pushEnabled: true });
           setUser(updatedUser);
           setIsPushEnabled(
-            updatedUser.settings?.preferences?.pushEnabled ?? DEFAULT_PUSH_ENABLED,
+            normalizePreferenceBoolean(
+              updatedUser.settings?.preferences?.pushEnabled,
+              DEFAULT_PUSH_ENABLED,
+            ),
           );
           return;
         }
@@ -130,7 +142,10 @@ export default function AccountPushPreferences() {
         const updatedUser = await updateUser({ pushEnabled: false });
         setUser(updatedUser);
         setIsPushEnabled(
-          updatedUser.settings?.preferences?.pushEnabled ?? DEFAULT_PUSH_ENABLED,
+          normalizePreferenceBoolean(
+            updatedUser.settings?.preferences?.pushEnabled,
+            DEFAULT_PUSH_ENABLED,
+          ),
         );
 
         if (removeSubscriptionFailed) {
@@ -168,8 +183,10 @@ export default function AccountPushPreferences() {
         const updatedUser = await updateUser({ pushFrequency: frequency });
         setUser(updatedUser);
         setSelectedFrequency(
-          updatedUser.settings?.preferences?.pushFrequency ??
+          normalizePushFrequency(
+            updatedUser.settings?.preferences?.pushFrequency,
             DEFAULT_PUSH_FREQUENCY,
+          ),
         );
       } catch {
         setSelectedFrequency(pushFrequency);
