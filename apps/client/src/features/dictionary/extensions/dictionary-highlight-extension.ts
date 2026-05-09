@@ -1,5 +1,5 @@
 import { Extension } from "@tiptap/core";
-import { Plugin, PluginKey } from "@tiptap/pm/state";
+import { Plugin, PluginKey, Transaction } from "@tiptap/pm/state";
 import { Node as PMNode } from "@tiptap/pm/model";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { IDictionaryTerm } from "@/features/dictionary/types/dictionary.types";
@@ -10,10 +10,19 @@ interface DictionaryHighlightOptions {
   enabled: boolean;
 }
 
+interface DictionaryHighlightPluginState {
+  decorations: DecorationSet;
+  terms: IDictionaryTerm[];
+  enabled: boolean;
+}
+
 interface TextNodesWithPosition {
   text: string;
   pos: number;
 }
+
+export const dictionaryHighlightPluginKey =
+  new PluginKey<DictionaryHighlightPluginState>("dictionaryHighlight");
 
 function collectTextNodes(doc: PMNode): TextNodesWithPosition[] {
   const textNodesWithPosition: TextNodesWithPosition[] = [];
@@ -52,34 +61,48 @@ export const DictionaryHighlightExtension =
     },
 
     addProseMirrorPlugins() {
-      const { terms, enabled } = this.options;
-
       return [
-        new Plugin({
-          key: new PluginKey("dictionaryHighlight"),
+        new Plugin<DictionaryHighlightPluginState>({
+          key: dictionaryHighlightPluginKey,
           state: {
             init: (_, state) => {
-              if (!enabled || terms.length === 0) {
-                return DecorationSet.empty;
-              }
+              const { enabled, terms } = this.options;
 
-              return buildDecorations(state.doc, terms);
+              return buildPluginState(state.doc, terms, enabled);
             },
-            apply(transaction, oldState) {
+            apply(transaction, oldPluginState, _oldState, newState) {
+              const meta = getDictionaryHighlightMeta(transaction);
+              const enabled = meta?.enabled ?? oldPluginState.enabled;
+              const terms = meta?.terms ?? oldPluginState.terms;
+
               if (!enabled || terms.length === 0) {
-                return DecorationSet.empty;
+                return {
+                  decorations: DecorationSet.empty,
+                  terms,
+                  enabled,
+                };
               }
 
-              if (!transaction.docChanged) {
-                return oldState.map(transaction.mapping, transaction.doc);
+              if (transaction.docChanged || meta) {
+                return buildPluginState(newState.doc, terms, enabled);
               }
 
-              return buildDecorations(transaction.doc, terms);
+              return {
+                decorations: oldPluginState.decorations.map(
+                  transaction.mapping,
+                  transaction.doc,
+                ),
+                terms,
+                enabled,
+              };
             },
           },
           props: {
             decorations(state) {
-              return this.getState(state);
+              return (
+                dictionaryHighlightPluginKey.getState(state)?.decorations ??
+                DecorationSet.empty
+              );
             },
           },
         }),
@@ -87,13 +110,43 @@ export const DictionaryHighlightExtension =
     },
   });
 
+function getDictionaryHighlightMeta(
+  transaction: Transaction,
+): DictionaryHighlightOptions | null {
+  return (
+    transaction.getMeta(dictionaryHighlightPluginKey) ??
+    transaction.getMeta("dictionaryHighlight") ??
+    null
+  );
+}
+
+function buildPluginState(
+  doc: PMNode,
+  terms: IDictionaryTerm[],
+  enabled: boolean,
+): DictionaryHighlightPluginState {
+  return {
+    decorations:
+      enabled && terms.length > 0 ? buildDecorations(doc, terms) : DecorationSet.empty,
+    terms,
+    enabled,
+  };
+}
+
 function buildDecorations(doc: PMNode, terms: IDictionaryTerm[]): DecorationSet {
   const decorations: Decoration[] = [];
 
   collectTextNodes(doc).forEach((textNode) => {
     findDictionaryMatches(textNode.text, terms).forEach((match) => {
+      const from = textNode.pos + match.from;
+      const to = textNode.pos + match.to;
+
+      if (from >= to || from < 0 || to > doc.content.size) {
+        return;
+      }
+
       decorations.push(
-        Decoration.inline(textNode.pos + match.from, textNode.pos + match.to, {
+        Decoration.inline(from, to, {
           class: "dictionary-highlight",
           "data-dictionary-term-id": match.term.id,
           tabindex: "0",

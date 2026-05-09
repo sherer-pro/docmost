@@ -63,7 +63,10 @@ import { useEditorScroll } from "./hooks/use-editor-scroll";
 import { EditorAiMenu } from "@/ee/ai/components/editor/ai-menu/ai-menu";
 import { usePageEditorInteractions } from "@/features/editor/hooks/use-page-editor-interactions";
 import { DictionaryHighlightLayer } from "@/features/dictionary/components/dictionary-highlight-layer";
-import { DictionaryHighlightExtension } from "@/features/dictionary/extensions/dictionary-highlight-extension";
+import {
+  DictionaryHighlightExtension,
+  dictionaryHighlightPluginKey,
+} from "@/features/dictionary/extensions/dictionary-highlight-extension";
 import { useDictionaryTermsQuery } from "@/features/dictionary/queries/dictionary-query";
 
 interface PageEditorProps {
@@ -135,6 +138,10 @@ export default function PageEditor({
     [isComponentMounted],
   );
   const { handleScrollTo } = useEditorScroll({ canScroll });
+  const staticExtensions = useMemo(
+    () => [...mainExtensions, DictionaryHighlightExtension],
+    [],
+  );
   // Providers only created once per pageId
   const providersRef = useRef<{
     local: IndexeddbPersistence;
@@ -268,24 +275,6 @@ export default function PageEditor({
     };
   }, [providersReady, pageId]);
 
-  const dictionaryExtension = useMemo(() => {
-    if (!dictionaryEnabled || dictionaryTerms.length === 0) {
-      return [];
-    }
-
-    return [
-      DictionaryHighlightExtension.configure({
-        terms: dictionaryTerms,
-        enabled: true,
-      }),
-    ];
-  }, [dictionaryEnabled, dictionaryTerms]);
-
-  const staticExtensions = useMemo(
-    () => [...mainExtensions, ...dictionaryExtension],
-    [dictionaryExtension],
-  );
-
   const extensions = useMemo(() => {
     if (!providersReady || !providersRef.current || !currentUser?.user) {
       return staticExtensions;
@@ -345,6 +334,19 @@ export default function PageEditor({
     },
     [pageId, editable, extensions],
   );
+
+  useEffect(() => {
+    if (!editor) {
+      return;
+    }
+
+    editor.view.dispatch(
+      editor.state.tr.setMeta(dictionaryHighlightPluginKey, {
+        enabled: dictionaryEnabled,
+        terms: dictionaryTerms,
+      }),
+    );
+  }, [dictionaryEnabled, dictionaryTerms, editor]);
 
   const editorIsEditable = useEditorState({
     editor,
