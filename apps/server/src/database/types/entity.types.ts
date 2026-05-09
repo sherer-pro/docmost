@@ -7,6 +7,8 @@ import {
   DatabaseRows,
   DatabaseCells,
   DatabaseViews,
+  DictionaryTermAliases,
+  DictionaryTerms,
   Groups,
   Notifications,
   Pages,
@@ -44,10 +46,18 @@ export interface SpaceDocumentFieldsSettings {
 }
 
 /**
+ * Dictionary feature switch at the space level.
+ */
+export interface SpaceDictionarySettings {
+  enabled?: boolean;
+}
+
+/**
  * Space settings container.
  */
 export interface SpaceSettings {
   documentFields?: SpaceDocumentFieldsSettings;
+  dictionary?: SpaceDictionarySettings;
 }
 
 /**
@@ -145,6 +155,19 @@ export type UpdatableDatabaseCell = Updateable<Omit<DatabaseCells, 'id'>>;
 export type DatabaseView = Selectable<DatabaseViews>;
 export type InsertableDatabaseView = Insertable<DatabaseViews>;
 export type UpdatableDatabaseView = Updateable<Omit<DatabaseViews, 'id'>>;
+
+// DictionaryTerm
+export type DictionaryTerm = Selectable<DictionaryTerms>;
+export type InsertableDictionaryTerm = Insertable<DictionaryTerms>;
+export type UpdatableDictionaryTerm = Updateable<Omit<DictionaryTerms, 'id'>>;
+
+// DictionaryTermAlias
+export type DictionaryTermAlias = Selectable<DictionaryTermAliases>;
+export type InsertableDictionaryTermAlias =
+  Insertable<DictionaryTermAliases>;
+export type UpdatableDictionaryTermAlias = Updateable<
+  Omit<DictionaryTermAliases, 'id'>
+>;
 
 // Attachment
 export type Attachment = Selectable<Attachments>;

@@ -73,3 +73,13 @@ Generated inventory reference:
   - `POST /databases/:databaseId/views`
   - `PATCH /databases/:databaseId/views/:viewId`
   - `DELETE /databases/:databaseId/views/:viewId`
+
+## Dictionary API shape
+
+- Terms:
+  - `GET /dictionary-terms?spaceId=:spaceId`
+  - `POST /dictionary-terms`
+  - `PATCH /dictionary-terms/:termId`
+  - `DELETE /dictionary-terms/:termId`
+- Space feature flag:
+  - `PATCH /spaces/:spaceId` with `dictionaryEnabled: boolean`

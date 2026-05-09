@@ -145,6 +145,14 @@ export class SpaceService {
       );
     }
 
+    if (typeof updateSpaceDto.dictionaryEnabled !== 'undefined') {
+      await this.spaceRepo.updateDictionarySettings(
+        updateSpaceDto.spaceId,
+        workspaceId,
+        { enabled: updateSpaceDto.dictionaryEnabled },
+      );
+    }
+
     return await this.spaceRepo.updateSpace(
       {
         name: updateSpaceDto.name,

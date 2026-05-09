@@ -32,10 +32,14 @@ export class UpdateSpaceDto extends PartialType(CreateSpaceDto) {
 
   @IsOptional()
   @IsBoolean()
-  disablePublicSharing: boolean;
+  disablePublicSharing?: boolean;
 
   @IsOptional()
   @ValidateNested()
   @Type(() => UpdateSpaceDocumentFieldsDto)
   documentFields?: UpdateSpaceDocumentFieldsDto;
+
+  @IsOptional()
+  @IsBoolean()
+  dictionaryEnabled?: boolean;
 }

@@ -5,6 +5,7 @@ import { dbOrTx } from '@docmost/db/utils';
 import {
   InsertableSpace,
   Space,
+  SpaceDictionarySettings,
   SpaceDocumentFieldsSettings,
   UpdatableSpace,
 } from '@docmost/db/types/entity.types';
@@ -139,6 +140,26 @@ export class SpaceRepo {
         settings: sql`COALESCE(settings, '{}'::jsonb)
           || jsonb_build_object('documentFields', COALESCE(settings->'documentFields', '{}'::jsonb)
           || ${sql.lit(JSON.stringify(documentFields))}::jsonb)`,
+        updatedAt: new Date(),
+      })
+      .where('id', '=', spaceId)
+      .where('workspaceId', '=', workspaceId)
+      .returningAll();
+
+    return query.executeTakeFirst();
+  }
+
+  async updateDictionarySettings(
+    spaceId: string,
+    workspaceId: string,
+    dictionary: SpaceDictionarySettings,
+  ) {
+    const query = this.db
+      .updateTable('spaces')
+      .set({
+        settings: sql`COALESCE(settings, '{}'::jsonb)
+          || jsonb_build_object('dictionary', COALESCE(settings->'dictionary', '{}'::jsonb)
+          || ${sql.lit(JSON.stringify(dictionary))}::jsonb)`,
         updatedAt: new Date(),
       })
       .where('id', '=', spaceId)
