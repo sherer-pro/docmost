@@ -62,6 +62,9 @@ import { searchSpotlight } from "@/features/search/constants.ts";
 import { useEditorScroll } from "./hooks/use-editor-scroll";
 import { EditorAiMenu } from "@/ee/ai/components/editor/ai-menu/ai-menu";
 import { usePageEditorInteractions } from "@/features/editor/hooks/use-page-editor-interactions";
+import { DictionaryHighlightLayer } from "@/features/dictionary/components/dictionary-highlight-layer";
+import { DictionaryHighlightExtension } from "@/features/dictionary/extensions/dictionary-highlight-extension";
+import { useDictionaryTermsQuery } from "@/features/dictionary/queries/dictionary-query";
 
 interface PageEditorProps {
   pageId: string;
@@ -70,6 +73,9 @@ interface PageEditorProps {
   cacheSlugId?: string;
   showBottomSpacer?: boolean;
   editorContentClassName?: string;
+  spaceId?: string;
+  dictionaryEnabled?: boolean;
+  canManageDictionary?: boolean;
 }
 
 export default function PageEditor({
@@ -79,6 +85,9 @@ export default function PageEditor({
   cacheSlugId,
   showBottomSpacer = true,
   editorContentClassName,
+  spaceId,
+  dictionaryEnabled = false,
+  canManageDictionary = false,
 }: PageEditorProps) {
   const collaborationURL = useCollaborationUrl();
   const isComponentMounted = useRef(false);
@@ -116,6 +125,10 @@ export default function PageEditor({
   const resolvedCacheSlugId = cacheSlugId ?? extractPageSlugId(pageSlug);
   const userPageEditMode = normalizePageEditMode(
     currentUser?.user?.settings?.preferences?.pageEditMode,
+  );
+  const { data: dictionaryTerms = [] } = useDictionaryTermsQuery(
+    spaceId,
+    Boolean(spaceId && dictionaryEnabled),
   );
   const canScroll = useCallback(
     () => Boolean(isComponentMounted.current && editorRef.current),
@@ -255,18 +268,36 @@ export default function PageEditor({
     };
   }, [providersReady, pageId]);
 
+  const dictionaryExtension = useMemo(() => {
+    if (!dictionaryEnabled || dictionaryTerms.length === 0) {
+      return [];
+    }
+
+    return [
+      DictionaryHighlightExtension.configure({
+        terms: dictionaryTerms,
+        enabled: true,
+      }),
+    ];
+  }, [dictionaryEnabled, dictionaryTerms]);
+
+  const staticExtensions = useMemo(
+    () => [...mainExtensions, ...dictionaryExtension],
+    [dictionaryExtension],
+  );
+
   const extensions = useMemo(() => {
     if (!providersReady || !providersRef.current || !currentUser?.user) {
-      return mainExtensions;
+      return staticExtensions;
     }
 
     const remoteProvider = providersRef.current.remote;
 
     return [
-      ...mainExtensions,
+      ...staticExtensions,
       ...collabExtensions(remoteProvider, currentUser?.user),
     ];
-  }, [providersReady, currentUser?.user]);
+  }, [providersReady, currentUser?.user, staticExtensions]);
 
   const editor = useEditor(
     {
@@ -383,7 +414,7 @@ export default function PageEditor({
       <EditorProvider
         editable={false}
         immediatelyRender={true}
-        extensions={mainExtensions}
+        extensions={staticExtensions}
         content={content}
       />
     );
@@ -392,10 +423,12 @@ export default function PageEditor({
   return (
     <div className="editor-container" style={{ position: "relative" }}>
       <div ref={menuContainerRef}>
-        <EditorContent
-          editor={editor}
-          className={clsx(editorContentClassName)}
-        />
+        <DictionaryHighlightLayer terms={dictionaryTerms}>
+          <EditorContent
+            editor={editor}
+            className={clsx(editorContentClassName)}
+          />
+        </DictionaryHighlightLayer>
 
         {editor && (
           <SearchAndReplaceDialog editor={editor} editable={editable} />
@@ -404,7 +437,12 @@ export default function PageEditor({
         {editor && editorIsEditable && (
           <div>
             <EditorAiMenu editor={editor} />
-            <EditorBubbleMenu editor={editor} />
+            <EditorBubbleMenu
+              editor={editor}
+              spaceId={spaceId}
+              dictionaryEnabled={dictionaryEnabled}
+              canManageDictionary={canManageDictionary}
+            />
             <TableMenu editor={editor} />
             <TableCellMenu editor={editor} appendTo={menuContainerRef} />
             <ImageMenu editor={editor} />

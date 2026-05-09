@@ -267,6 +267,8 @@ export default function DatabasePage() {
               content={databasePage?.content}
               editable={isEditable}
               cacheSlugId={databasePage?.slugId}
+              spaceId={space?.id}
+              dictionaryEnabled={space?.settings?.dictionary?.enabled === true}
             />
           )}
         </Stack>
@@ -277,6 +279,8 @@ export default function DatabasePage() {
             spaceId={database.spaceId}
             spaceSlug={spaceSlug}
             isEditable={isEditable}
+            dictionaryEnabled={space?.settings?.dictionary?.enabled === true}
+            canManageDictionary={!readOnly}
           />
         )}
 

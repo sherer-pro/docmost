@@ -34,6 +34,7 @@ import SpacesPage from "@/pages/spaces/spaces.tsx";
 import { MfaChallengePage } from "@/ee/mfa/pages/mfa-challenge-page";
 import { MfaSetupRequiredPage } from "@/ee/mfa/pages/mfa-setup-required-page";
 import SpaceTrash from "@/pages/space/space-trash.tsx";
+import SpaceDictionary from "@/pages/space/space-dictionary.tsx";
 import DatabasePage from "@/pages/database/database-page.tsx";
 import DatabaseLegacyRedirect from "@/pages/database/database-legacy-redirect.tsx";
 import UserApiKeys from "@/ee/api-key/pages/user-api-keys";
@@ -82,6 +83,10 @@ export default function App() {
           <Route path={"/home"} element={<Home />} />
           <Route path={"/spaces"} element={<SpacesPage />} />
           <Route path={"/s/:spaceSlug"} element={<SpaceHome />} />
+          <Route
+            path={"/s/:spaceSlug/dictionary"}
+            element={<SpaceDictionary />}
+          />
           <Route path={"/s/:spaceSlug/trash"} element={<SpaceTrash />} />
           <Route
             path={"/s/:spaceSlug/db/:databaseSlug"}

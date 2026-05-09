@@ -146,6 +146,8 @@ function PageContent({ pageSlug }: { pageSlug: string | undefined }) {
           content={page.content}
           slugId={page.slugId}
           spaceSlug={page?.space?.slug}
+          spaceId={space.id}
+          dictionaryEnabled={space.settings?.dictionary?.enabled === true}
           editable={spaceAbility.can(
             SpaceCaslAction.Manage,
             SpaceCaslSubject.Page,

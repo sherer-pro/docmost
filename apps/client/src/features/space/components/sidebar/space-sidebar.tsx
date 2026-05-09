@@ -8,6 +8,7 @@ import {
 } from "@mantine/core";
 import {
   IconArrowDown,
+  IconBook2,
   IconDots,
   IconHexagonPlus,
   IconFileExport,
@@ -196,6 +197,29 @@ export function SpaceSidebar() {
                 <span>{t("Space settings")}</span>
               </div>
             </UnstyledButton>
+
+            {space.settings?.dictionary?.enabled === true && (
+              <UnstyledButton
+                component={Link}
+                to={`/s/${spaceSlug}/dictionary`}
+                className={clsx(
+                  classes.menu,
+                  location.pathname.toLowerCase() ===
+                    `/s/${spaceSlug}/dictionary`.toLowerCase()
+                    ? classes.activeButton
+                    : "",
+                )}
+              >
+                <div className={classes.menuItemInner}>
+                  <IconBook2
+                    size={18}
+                    className={classes.menuItemIcon}
+                    stroke={2}
+                  />
+                  <span>{t("Dictionary")}</span>
+                </div>
+              </UnstyledButton>
+            )}
 
             {spaceAbility.can(
               SpaceCaslAction.Manage,

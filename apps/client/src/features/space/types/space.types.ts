@@ -15,9 +15,14 @@ export interface ISpaceDocumentFieldsSettings {
   stakeholders?: boolean;
 }
 
+export interface ISpaceDictionarySettings {
+  enabled?: boolean;
+}
+
 export interface ISpaceSettings {
   sharing?: ISpaceSharingSettings;
   documentFields?: ISpaceDocumentFieldsSettings;
+  dictionary?: ISpaceDictionarySettings;
 }
 
 export interface ISpace {
@@ -37,6 +42,7 @@ export interface ISpace {
   documentFields?: ISpaceDocumentFieldsSettings;
   // for updates
   disablePublicSharing?: boolean;
+  dictionaryEnabled?: boolean;
 }
 
 interface IMembership {

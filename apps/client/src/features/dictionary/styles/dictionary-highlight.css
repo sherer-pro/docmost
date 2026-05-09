@@ -1,0 +1,15 @@
+.dictionary-highlight {
+  border: 1px dashed light-dark(
+    var(--mantine-color-gray-5),
+    var(--mantine-color-dark-2)
+  );
+  border-radius: 3px;
+  cursor: help;
+  padding: 0 1px;
+  text-decoration: none;
+}
+
+.dictionary-highlight:focus {
+  outline: 2px solid var(--mantine-color-blue-4);
+  outline-offset: 1px;
+}

@@ -98,6 +98,17 @@ export default function SpaceDetails({ spaceId, readOnly }: SpaceDetailsProps) {
     });
   };
 
+  const handleDictionaryEnabledChange = (checked: boolean) => {
+    if (!space || readOnly) {
+      return;
+    }
+
+    updateSpace({
+      spaceId,
+      dictionaryEnabled: checked,
+    });
+  };
+
   return (
     <>
       {space && (
@@ -131,6 +142,27 @@ export default function SpaceDetails({ spaceId, readOnly }: SpaceDetailsProps) {
               <SpacePublicSharingToggle space={space} />
             </>
           )}
+
+          <Divider my="lg" />
+
+          <ResponsiveSettingsRow>
+            <ResponsiveSettingsContent>
+              <Text size="md">{t("Dictionary")}</Text>
+              <Text size="sm" c="dimmed">
+                {t("Highlight dictionary terms in pages and databases.")}
+              </Text>
+            </ResponsiveSettingsContent>
+            <ResponsiveSettingsControl>
+              <Checkbox
+                label={t("Enable dictionary")}
+                checked={!!space.settings?.dictionary?.enabled}
+                onChange={(event) =>
+                  handleDictionaryEnabledChange(event.currentTarget.checked)
+                }
+                disabled={readOnly || isUpdatingSpace}
+              />
+            </ResponsiveSettingsControl>
+          </ResponsiveSettingsRow>
 
           <Divider my="lg" />
 

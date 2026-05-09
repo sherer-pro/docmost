@@ -6,6 +6,8 @@ export interface DatabaseDescriptionEditorProps {
   content: unknown;
   editable: boolean;
   cacheSlugId?: string;
+  spaceId?: string;
+  dictionaryEnabled?: boolean;
 }
 
 /**
@@ -19,6 +21,8 @@ export function DatabaseDescriptionEditor({
   content,
   editable,
   cacheSlugId,
+  spaceId,
+  dictionaryEnabled = false,
 }: DatabaseDescriptionEditorProps) {
   return (
     <div className={classes.databaseDescriptionEditorContainer}>
@@ -29,6 +33,9 @@ export function DatabaseDescriptionEditor({
         cacheSlugId={cacheSlugId}
         showBottomSpacer={false}
         editorContentClassName={classes.databaseDescriptionEditor}
+        spaceId={spaceId}
+        dictionaryEnabled={dictionaryEnabled}
+        canManageDictionary={editable}
       />
     </div>
   );

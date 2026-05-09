@@ -17,6 +17,8 @@ export interface FullEditorProps {
   title: string;
   content: string;
   spaceSlug: string;
+  spaceId?: string;
+  dictionaryEnabled?: boolean;
   editable: boolean;
   metaPanel?: ReactNode;
   footer?: ReactNode;
@@ -28,6 +30,8 @@ export function FullEditor({
   slugId,
   content,
   spaceSlug,
+  spaceId,
+  dictionaryEnabled = false,
   editable,
   metaPanel,
   footer,
@@ -64,6 +68,9 @@ export function FullEditor({
         editable={editable}
         content={content}
         showBottomSpacer={!footer}
+        spaceId={spaceId}
+        dictionaryEnabled={dictionaryEnabled}
+        canManageDictionary={editable}
       />
       {footer}
     </Container>
