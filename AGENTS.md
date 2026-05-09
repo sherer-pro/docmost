@@ -28,11 +28,13 @@
 ### Where things are located
 
 - `apps/server/src` — main backend code.
+- `apps/server/src/core/dictionary` — space-scoped dictionary API and services.
 - `apps/server/docs/api-routing-conventions.md` — API routing policy, endpoint inventory, and RPC migration plan.
 - `apps/server/docs/api-route-inventory.generated.md` — generated backend route inventory (`pnpm routes:inventory`).
 - `apps/server/docs/security-regression-runbook.md` — security pre-release checks for GHSA regression classes.
 - `apps/server/docs/release-notes/security-ghsa-remediation-2026-03.md` — security advisory mapping and remediation notes.
 - `apps/client/src` — main frontend code.
+- `apps/client/src/features/dictionary` — dictionary page, term editor, matching/highlighting UI.
 - `apps/client/public/locales/*` — JSON translations.
 - `apps/server/src/database` — migrations and DB tooling.
 - `patches/` — pnpm patch files (for example, for `react-arborist`).
