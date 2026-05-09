@@ -11,6 +11,7 @@ import {
   IconMessage,
   IconSparkles,
   IconQuote,
+  IconBook2,
 } from "@tabler/icons-react";
 import clsx from "clsx";
 import classes from "./bubble-menu.module.css";
@@ -29,6 +30,7 @@ import { LinkSelector } from "@/features/editor/components/bubble-menu/link-sele
 import { useTranslation } from "react-i18next";
 import { showAiMenuAtom } from "@/features/editor/atoms/editor-atoms";
 import { workspaceAtom } from "@/features/user/atoms/current-user-atom";
+import { DictionaryTermModal } from "@/features/dictionary/components/dictionary-term-modal";
 
 export interface BubbleMenuItem {
   name: string;
@@ -39,6 +41,9 @@ export interface BubbleMenuItem {
 
 type EditorBubbleMenuProps = Omit<BubbleMenuProps, "children" | "editor"> & {
   editor: Editor | null;
+  spaceId?: string;
+  dictionaryEnabled?: boolean;
+  canManageDictionary?: boolean;
 };
 
 export const EditorBubbleMenu: FC<EditorBubbleMenuProps> = (props) => {
@@ -48,6 +53,8 @@ export const EditorBubbleMenu: FC<EditorBubbleMenuProps> = (props) => {
   const workspace = useAtomValue(workspaceAtom);
   const isGenerativeAiEnabled = workspace?.settings?.ai?.generative === true;
   const [, setDraftCommentId] = useAtom(draftCommentIdAtom);
+  const [dictionaryModalOpened, setDictionaryModalOpened] = useState(false);
+  const [dictionaryInitialTerm, setDictionaryInitialTerm] = useState("");
   const showCommentPopupRef = useRef(showCommentPopup);
   const showAiMenuRef = useRef(showAiMenu);
 
@@ -141,6 +148,24 @@ export const EditorBubbleMenu: FC<EditorBubbleMenuProps> = (props) => {
     icon: IconQuote,
   };
 
+  const openDictionaryModal = () => {
+    const selection = props.editor?.state.selection;
+    if (!props.editor || !selection) {
+      return;
+    }
+
+    const selectedText = props.editor.state.doc
+      .textBetween(selection.from, selection.to, " ")
+      .trim();
+
+    if (!selectedText) {
+      return;
+    }
+
+    setDictionaryInitialTerm(selectedText);
+    setDictionaryModalOpened(true);
+  };
+
   const bubbleMenuProps: EditorBubbleMenuProps = {
     ...props,
     shouldShow: ({ state, editor }) => {
@@ -181,11 +206,12 @@ export const EditorBubbleMenu: FC<EditorBubbleMenuProps> = (props) => {
   if (showAiMenu) return;
 
   return (
-    <BubbleMenu
-      {...bubbleMenuProps}
-      style={{ zIndex: 200, position: "relative" }}
-    >
-      <div className={classes.bubbleMenu}>
+    <>
+      <BubbleMenu
+        {...bubbleMenuProps}
+        style={{ zIndex: 200, position: "relative" }}
+      >
+        <div className={classes.bubbleMenu}>
         {isGenerativeAiEnabled && (
           <>
             <Button
@@ -278,6 +304,23 @@ export const EditorBubbleMenu: FC<EditorBubbleMenuProps> = (props) => {
           </ActionIcon>
         </Tooltip>
 
+        {props.spaceId &&
+          props.dictionaryEnabled &&
+          props.canManageDictionary && (
+            <Tooltip label={t("Add to dictionary")} withArrow withinPortal={false}>
+              <ActionIcon
+                variant="default"
+                size="lg"
+                radius="6px"
+                aria-label={t("Add to dictionary")}
+                style={{ border: "none" }}
+                onClick={openDictionaryModal}
+              >
+                <IconBook2 size={16} stroke={2} />
+              </ActionIcon>
+            </Tooltip>
+          )}
+
         <Tooltip label={t(commentItem.name)} withArrow withinPortal={false}>
           <ActionIcon
             variant="default"
@@ -290,7 +333,17 @@ export const EditorBubbleMenu: FC<EditorBubbleMenuProps> = (props) => {
             <IconMessage size={16} stroke={2} />
           </ActionIcon>
         </Tooltip>
-      </div>
-    </BubbleMenu>
+        </div>
+      </BubbleMenu>
+
+      {props.spaceId && (
+        <DictionaryTermModal
+          opened={dictionaryModalOpened}
+          onClose={() => setDictionaryModalOpened(false)}
+          spaceId={props.spaceId}
+          initialTerm={dictionaryInitialTerm}
+        />
+      )}
+    </>
   );
 };

@@ -71,6 +71,7 @@ import {
 import { getRowTitle } from '@/features/database/utils/database-markdown';
 import { DATABASE_PROPERTY_TYPE_LABEL_KEYS } from '@/features/database/utils/database-property-type-labels';
 import { DatabaseCellRenderer } from '@/features/database/components/database-cell-renderer.tsx';
+import { useDictionaryTermsQuery } from '@/features/dictionary/queries/dictionary-query';
 import { treeDataAtom } from '@/features/page/tree/atoms/tree-data-atom.ts';
 import { SpaceTreeNode } from '@/features/page/tree/types.ts';
 import { treeApiAtom } from '@/features/page/tree/atoms/tree-api-atom.ts';
@@ -105,6 +106,8 @@ interface DatabaseTableViewProps {
   spaceId: string;
   spaceSlug: string;
   isEditable?: boolean;
+  dictionaryEnabled?: boolean;
+  canManageDictionary?: boolean;
 }
 
 interface SelectPropertyCreationDraft {
@@ -167,9 +170,15 @@ export function DatabaseTableView({
   spaceId,
   spaceSlug,
   isEditable = true,
+  dictionaryEnabled = false,
+  canManageDictionary = false,
 }: DatabaseTableViewProps) {
   const { t } = useTranslation();
   const { data: properties = [] } = useDatabasePropertiesQuery(databaseId);
+  const { data: dictionaryTerms = [] } = useDictionaryTermsQuery(
+    spaceId,
+    dictionaryEnabled,
+  );
   const [rowsCursor, setRowsCursor] = useState<string | null>(null);
 
   const createPropertyMutation = useCreateDatabasePropertyMutation(databaseId);
@@ -2457,6 +2466,9 @@ export function DatabaseTableView({
                         editingValue={editingValue}
                         spaceId={spaceId}
                         spaceSlug={spaceSlug}
+                        dictionaryTerms={dictionaryTerms}
+                        dictionaryEnabled={dictionaryEnabled}
+                        canManageDictionary={canManageDictionary}
                         onStartEdit={() => startEditing(row, property)}
                         onChange={setEditingValue}
                         onSave={(nextValue) => saveEditing(row, property, nextValue)}

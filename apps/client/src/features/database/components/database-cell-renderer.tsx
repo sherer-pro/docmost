@@ -1,4 +1,4 @@
-import { alpha, Badge, Checkbox, Group, Select, Text, TextInput, Textarea, useMantineTheme } from '@mantine/core';
+import { alpha, Badge, Checkbox, Group, Select, Text, TextInput, useMantineTheme } from '@mantine/core';
 import { DatabasePropertyType } from '@docmost/api-contract';
 import { useTranslation } from 'react-i18next';
 import { useMemo } from 'react';
@@ -23,6 +23,9 @@ import {
 } from '@/features/database/utils/database-cell-value.ts';
 import { getAllSidebarPages } from '@/features/page/services/page-service.ts';
 import { PAGE_QUERY_KEYS } from '@/features/page/queries/query-keys.ts';
+import { DictionaryTextHighlighter } from '@/features/dictionary/components/dictionary-text-highlighter';
+import { DictionaryTextarea } from '@/features/dictionary/components/dictionary-textarea';
+import { IDictionaryTerm } from '@/features/dictionary/types/dictionary.types';
 
 interface DatabaseCellRendererProps {
   property: IDatabaseProperty;
@@ -32,6 +35,9 @@ interface DatabaseCellRendererProps {
   editingValue: unknown;
   spaceId: string;
   spaceSlug: string;
+  dictionaryTerms?: IDictionaryTerm[];
+  dictionaryEnabled?: boolean;
+  canManageDictionary?: boolean;
   onStartEdit: () => void;
   onChange: (value: unknown) => void;
   onSave: (value?: unknown) => void;
@@ -52,6 +58,9 @@ export function DatabaseCellRenderer({
   editingValue,
   spaceId,
   spaceSlug,
+  dictionaryTerms = [],
+  dictionaryEnabled = false,
+  canManageDictionary = false,
   onStartEdit,
   onChange,
   onSave,
@@ -169,8 +178,14 @@ export function DatabaseCellRenderer({
       const codeValue = normalizeDatabaseStringValue(value);
 
       return codeValue ? (
-        <Text ff="monospace" style={{ whiteSpace: 'pre-wrap' }}>
-          {codeValue}
+        <Text component="div" ff="monospace" style={{ whiteSpace: 'pre-wrap' }}>
+          <DictionaryTextHighlighter
+            text={codeValue}
+            terms={dictionaryEnabled ? dictionaryTerms : []}
+            spaceId={spaceId}
+            canCreate={canManageDictionary}
+            enableSelectionCreate
+          />
         </Text>
       ) : (
         <Text c="dimmed">{t('Empty value')}</Text>
@@ -240,7 +255,15 @@ export function DatabaseCellRenderer({
     const textValue = normalizeDatabaseStringValue(value);
 
     return textValue ? (
-      <Text style={{ whiteSpace: 'pre-wrap' }}>{textValue}</Text>
+      <Text component="div" style={{ whiteSpace: 'pre-wrap' }}>
+        <DictionaryTextHighlighter
+          text={textValue}
+          terms={dictionaryEnabled ? dictionaryTerms : []}
+          spaceId={spaceId}
+          canCreate={canManageDictionary}
+          enableSelectionCreate
+        />
+      </Text>
     ) : (
       <Text c="dimmed">{t('Empty value')}</Text>
     );
@@ -268,10 +291,12 @@ export function DatabaseCellRenderer({
 
     if (type === 'multiline_text') {
       return (
-        <Textarea
+        <DictionaryTextarea
           autoFocus={isEditing}
           autosize
           minRows={2}
+          spaceId={spaceId}
+          canCreate={dictionaryEnabled && canManageDictionary}
           value={normalizeDatabaseStringValue(editorValue)}
           onChange={(event) => onChange(event.currentTarget.value)}
           onBlur={handleBlurSave}
@@ -281,11 +306,13 @@ export function DatabaseCellRenderer({
 
     if (type === 'code') {
       return (
-        <Textarea
+        <DictionaryTextarea
           autoFocus={isEditing}
           autosize
           minRows={3}
           ff="monospace"
+          spaceId={spaceId}
+          canCreate={dictionaryEnabled && canManageDictionary}
           value={normalizeDatabaseStringValue(editorValue)}
           onChange={(event) => onChange(event.currentTarget.value)}
           onBlur={handleBlurSave}
