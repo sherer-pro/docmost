@@ -231,6 +231,29 @@ export interface DatabaseViews {
   workspaceId: string;
 }
 
+export interface DictionaryTerms {
+  createdAt: Generated<Timestamp>;
+  creatorId: string | null;
+  definitionMarkdown: string;
+  deletedAt: Timestamp | null;
+  id: Generated<string>;
+  spaceId: string;
+  term: string;
+  updatedAt: Generated<Timestamp>;
+  workspaceId: string;
+}
+
+export interface DictionaryTermAliases {
+  alias: string;
+  createdAt: Generated<Timestamp>;
+  id: Generated<string>;
+  isPrimary: Generated<boolean>;
+  normalizedAlias: string;
+  spaceId: string;
+  termId: string;
+  workspaceId: string;
+}
+
 export interface FileTasks {
   createdAt: Generated<Timestamp>;
   creatorId: string | null;
@@ -525,6 +548,8 @@ export interface DB {
   databaseRows: DatabaseRows;
   databaseCells: DatabaseCells;
   databaseViews: DatabaseViews;
+  dictionaryTerms: DictionaryTerms;
+  dictionaryTermAliases: DictionaryTermAliases;
   fileTasks: FileTasks;
   groups: Groups;
   groupUsers: GroupUsers;

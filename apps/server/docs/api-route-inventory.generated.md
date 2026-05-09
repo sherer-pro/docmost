@@ -55,6 +55,10 @@
 | DELETE | `/databases/:databaseId/views/:viewId` | `apps/server/src/core/database/database.controller.ts` |
 | PATCH | `/databases/:databaseId/views/:viewId` | `apps/server/src/core/database/database.controller.ts` |
 | GET | `/databases/rows/:pageId/context` | `apps/server/src/core/database/database.controller.ts` |
+| GET | `/dictionary-terms` | `apps/server/src/core/dictionary/dictionary.controller.ts` |
+| POST | `/dictionary-terms` | `apps/server/src/core/dictionary/dictionary.controller.ts` |
+| DELETE | `/dictionary-terms/:termId` | `apps/server/src/core/dictionary/dictionary.controller.ts` |
+| PATCH | `/dictionary-terms/:termId` | `apps/server/src/core/dictionary/dictionary.controller.ts` |
 | POST | `/file-tasks` | `apps/server/src/integrations/import/file-task.controller.ts` |
 | POST | `/file-tasks/info` | `apps/server/src/integrations/import/file-task.controller.ts` |
 | GET | `/files/:fileId/:fileName` | `apps/server/src/core/attachment/legacy-files.controller.ts` |

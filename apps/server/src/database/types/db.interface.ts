@@ -11,6 +11,8 @@ import {
   DatabaseRows,
   DatabaseCells,
   DatabaseViews,
+  DictionaryTermAliases,
+  DictionaryTerms,
   FileTasks,
   Groups,
   GroupUsers,
@@ -44,6 +46,8 @@ export interface DbInterface {
   databaseRows: DatabaseRows;
   databaseCells: DatabaseCells;
   databaseViews: DatabaseViews;
+  dictionaryTerms: DictionaryTerms;
+  dictionaryTermAliases: DictionaryTermAliases;
   fileTasks: FileTasks;
   groups: Groups;
   groupUsers: GroupUsers;

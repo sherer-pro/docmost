@@ -24,6 +24,7 @@ import { DatabaseModule } from './database/database.module';
 import { ApiKeyModule } from './api-key/api-key.module';
 import { RagModule } from './rag/rag.module';
 import { PageAccessModule } from './page-access/page-access.module';
+import { DictionaryModule } from './dictionary/dictionary.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { PageAccessModule } from './page-access/page-access.module';
     ApiKeyModule,
     RagModule,
     PageAccessModule,
+    DictionaryModule,
   ],
 })
 export class CoreModule implements NestModule {

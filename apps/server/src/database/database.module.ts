@@ -34,6 +34,7 @@ import { DatabaseRowRepo } from './repos/database/database-row.repo';
 import { DatabaseCellRepo } from './repos/database/database-cell.repo';
 import { DatabaseViewRepo } from './repos/database/database-view.repo';
 import { ApiKeyRepo } from './repos/api-key/api-key.repo';
+import { DictionaryTermRepo } from './repos/dictionary/dictionary-term.repo';
 import { PageListener } from '@docmost/db/listeners/page.listener';
 import { PostgresJSDialect } from 'kysely-postgres-js';
 import * as postgres from 'postgres';
@@ -101,6 +102,7 @@ import { PageAccessRuleRepo } from './repos/page/page-access-rule.repo';
     DatabaseCellRepo,
     DatabaseViewRepo,
     ApiKeyRepo,
+    DictionaryTermRepo,
     PageAccessRuleRepo,
     PageListener,
   ],
@@ -128,6 +130,7 @@ import { PageAccessRuleRepo } from './repos/page/page-access-rule.repo';
     DatabaseCellRepo,
     DatabaseViewRepo,
     ApiKeyRepo,
+    DictionaryTermRepo,
     PageAccessRuleRepo,
   ],
 })
