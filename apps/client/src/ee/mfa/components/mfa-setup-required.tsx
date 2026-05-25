@@ -2,7 +2,7 @@ import React from "react";
 import { Container, Paper, Title, Text, Alert, Stack } from "@mantine/core";
 import { IconAlertCircle } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
-import { MfaSetupModal } from "@/ee/mfa";
+import { MfaSetupModal } from "@/ee/mfa/components/mfa-setup-modal";
 import APP_ROUTE from "@/lib/app-route.ts";
 import { useNavigate } from "react-router-dom";
 

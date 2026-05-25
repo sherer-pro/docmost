@@ -14,7 +14,7 @@ import { useMutation } from "@tanstack/react-query";
 import { notifications } from "@mantine/notifications";
 import { useTranslation } from "react-i18next";
 import { z } from "zod";
-import { disableMfa } from "@/ee/mfa";
+import { disableMfa } from "@/ee/mfa/services/mfa-service";
 import useCurrentUser from "@/features/user/hooks/use-current-user";
 
 interface MfaDisableModalProps {

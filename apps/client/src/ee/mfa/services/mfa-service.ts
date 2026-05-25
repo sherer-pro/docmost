@@ -1,5 +1,5 @@
 import api from "@/lib/api-client";
-import {
+import type {
   MfaBackupCodesResponse,
   MfaDisableRequest,
   MfaEnableRequest,
@@ -8,7 +8,7 @@ import {
   MfaSetupResponse,
   MfaStatusResponse,
   MfaAccessValidationResponse,
-} from "@/ee/mfa";
+} from "@/ee/mfa/types/mfa.types";
 
 export async function getMfaStatus(): Promise<MfaStatusResponse> {
   const req = await api.post("/mfa/status");

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import APP_ROUTE from "@/lib/app-route";
-import { validateMfaAccess } from "@/ee/mfa";
+import { validateMfaAccess } from "@/ee/mfa/services/mfa-service";
 
 export function useMfaPageProtection() {
   const navigate = useNavigate();
