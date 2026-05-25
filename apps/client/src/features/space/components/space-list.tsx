@@ -1,4 +1,4 @@
-import { Group, Table, Text } from "@mantine/core";
+import { Badge, Group, Table, Text } from "@mantine/core";
 import React, { useState } from "react";
 import { useCursorPaginate } from "@/hooks/use-cursor-paginate";
 import { useGetSpacesQuery } from "@/features/space/queries/space-query.ts";
@@ -14,7 +14,10 @@ import { AutoTooltipText } from "@/components/ui/auto-tooltip-text.tsx";
 export default function SpaceList() {
   const { t } = useTranslation();
   const { cursor, goNext, goPrev } = useCursorPaginate();
-  const { data, isLoading } = useGetSpacesQuery({ cursor });
+  const { data, isLoading } = useGetSpacesQuery({
+    cursor,
+    includeArchived: true,
+  });
   const [opened, { open, close }] = useDisclosure(false);
   const [selectedSpaceId, setSelectedSpaceId] = useState<string>(null);
 
@@ -51,9 +54,21 @@ export default function SpaceList() {
                       name={space.name}
                     />
                     <div style={{ minWidth: 0, overflow: "hidden" }}>
-                      <AutoTooltipText fz="sm" fw={500} lineClamp={1}>
-                        {space.name}
-                      </AutoTooltipText>
+                      <Group gap="xs" wrap="nowrap">
+                        <AutoTooltipText
+                          fz="sm"
+                          fw={500}
+                          lineClamp={1}
+                          style={{ minWidth: 0, flex: 1 }}
+                        >
+                          {space.name}
+                        </AutoTooltipText>
+                        {space.archivedAt && (
+                          <Badge size="xs" variant="light" color="gray">
+                            {t("Archived")}
+                          </Badge>
+                        )}
+                      </Group>
                       <Text fz="xs" c="dimmed" lineClamp={2}>
                         {space.description}
                       </Text>

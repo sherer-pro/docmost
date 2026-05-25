@@ -47,6 +47,16 @@ export async function updateSpace(data: Partial<ISpace>): Promise<ISpace> {
   return req.data;
 }
 
+export async function archiveSpace(spaceId: string): Promise<ISpace> {
+  const req = await api.post<ISpace>(`/spaces/${spaceId}/actions/archive`);
+  return req.data;
+}
+
+export async function unarchiveSpace(spaceId: string): Promise<ISpace> {
+  const req = await api.post<ISpace>(`/spaces/${spaceId}/actions/unarchive`);
+  return req.data;
+}
+
 export async function deleteSpace(spaceId: string): Promise<void> {
   await api.delete<void>(`/spaces/${spaceId}`);
 }

@@ -1,4 +1,5 @@
 import {
+  QueryClient,
   keepPreviousData,
   useMutation,
   useQuery,
@@ -20,8 +21,10 @@ import {
   getSpaceMembers,
   getSpaces,
   removeSpaceMember,
+  archiveSpace,
   createSpace,
   updateSpace,
+  unarchiveSpace,
   deleteSpace,
 } from "@/features/space/services/space-service.ts";
 import { notifications } from "@mantine/notifications";
@@ -32,6 +35,30 @@ import { getRecentChanges } from "@/features/page/services/page-service.ts";
 import { useEffect } from "react";
 import { validate as isValidUuid } from "uuid";
 import { useQueryEmit } from "@/features/websocket/use-query-emit.ts";
+
+function syncArchivedSpaceQueries(queryClient: QueryClient, space: ISpace) {
+  queryClient.setQueryData(["space", space.id], (cachedSpace: ISpace) =>
+    cachedSpace ? { ...cachedSpace, ...space } : space,
+  );
+  queryClient.invalidateQueries({ queryKey: ["space", space.id] });
+
+  if (space.slug) {
+    queryClient.setQueryData(["space", space.slug], (cachedSpace: ISpace) =>
+      cachedSpace ? { ...cachedSpace, ...space } : space,
+    );
+    queryClient.invalidateQueries({ queryKey: ["space", space.slug] });
+  }
+
+  queryClient.invalidateQueries({
+    predicate: (item) =>
+      [
+        "spaces",
+        "recent-changes",
+        "page-search",
+        "search-suggestion",
+      ].includes(item.queryKey[0] as string),
+  });
+}
 
 export function useGetSpacesQuery(
   params?: QueryParams,
@@ -141,6 +168,58 @@ export function useUpdateSpaceMutation() {
       queryClient.invalidateQueries({
         queryKey: ["spaces"],
       });
+
+      emit({
+        operation: "updateOne",
+        spaceId: data.id,
+        entity: ["space"],
+        id: data.id,
+        payload: data,
+      });
+    },
+    onError: (error) => {
+      const errorMessage = error["response"]?.data?.message;
+      notifications.show({ message: errorMessage, color: "red" });
+    },
+  });
+}
+
+export function useArchiveSpaceMutation() {
+  const queryClient = useQueryClient();
+  const { t } = useTranslation();
+  const emit = useQueryEmit();
+
+  return useMutation<ISpace, Error, string>({
+    mutationFn: (spaceId) => archiveSpace(spaceId),
+    onSuccess: (data) => {
+      notifications.show({ message: t("Space archived successfully") });
+      syncArchivedSpaceQueries(queryClient, data);
+
+      emit({
+        operation: "updateOne",
+        spaceId: data.id,
+        entity: ["space"],
+        id: data.id,
+        payload: data,
+      });
+    },
+    onError: (error) => {
+      const errorMessage = error["response"]?.data?.message;
+      notifications.show({ message: errorMessage, color: "red" });
+    },
+  });
+}
+
+export function useUnarchiveSpaceMutation() {
+  const queryClient = useQueryClient();
+  const { t } = useTranslation();
+  const emit = useQueryEmit();
+
+  return useMutation<ISpace, Error, string>({
+    mutationFn: (spaceId) => unarchiveSpace(spaceId),
+    onSuccess: (data) => {
+      notifications.show({ message: t("Space unarchived successfully") });
+      syncArchivedSpaceQueries(queryClient, data);
 
       emit({
         operation: "updateOne",

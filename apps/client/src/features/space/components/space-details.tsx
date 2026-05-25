@@ -1,11 +1,14 @@
 import React, { useState } from "react";
 import {
   useSpaceQuery,
+  useArchiveSpaceMutation,
+  useUnarchiveSpaceMutation,
   useUpdateSpaceMutation,
 } from "@/features/space/queries/space-query.ts";
 import { EditSpaceForm } from "@/features/space/components/edit-space-form.tsx";
 import {
   ActionIcon,
+  Alert,
   Button,
   Checkbox,
   Divider,
@@ -23,6 +26,7 @@ import {
   removeSpaceIcon,
 } from "@/features/attachments/services/attachment-service.ts";
 import { useTranslation } from "react-i18next";
+import { modals } from "@mantine/modals";
 import { AvatarIconType } from "@/features/attachments/types/attachment.types.ts";
 import { queryClient } from "@/main.tsx";
 import {
@@ -32,7 +36,11 @@ import {
 } from "@/components/ui/responsive-settings-row.tsx";
 import SpacePublicSharingToggle from "@/ee/security/components/space-public-sharing-toggle.tsx";
 import useEnterpriseAccess from "@/ee/hooks/use-enterprise-access.tsx";
-import { IconInfoCircle } from "@tabler/icons-react";
+import {
+  IconArchive,
+  IconArchiveOff,
+  IconInfoCircle,
+} from "@tabler/icons-react";
 import { ISpaceDocumentFieldsSettings } from "@/features/space/types/space.types.ts";
 
 interface SpaceDetailsProps {
@@ -44,11 +52,16 @@ export default function SpaceDetails({ spaceId, readOnly }: SpaceDetailsProps) {
   const { data: space, isLoading, refetch } = useSpaceQuery(spaceId);
   const { mutate: updateSpace, isPending: isUpdatingSpace } =
     useUpdateSpaceMutation();
+  const { mutateAsync: archiveSpace, isPending: isArchivingSpace } =
+    useArchiveSpaceMutation();
+  const { mutateAsync: unarchiveSpace, isPending: isUnarchivingSpace } =
+    useUnarchiveSpaceMutation();
   const hasEnterpriseAccess = useEnterpriseAccess();
   const showSharingToggle = !readOnly && hasEnterpriseAccess;
   const [exportOpened, { open: openExportModal, close: closeExportModal }] =
     useDisclosure(false);
   const [isIconUploading, setIsIconUploading] = useState(false);
+  const isArchived = !!space?.archivedAt;
 
   const handleIconUpload = async (file: File) => {
     setIsIconUploading(true);
@@ -109,6 +122,32 @@ export default function SpaceDetails({ spaceId, readOnly }: SpaceDetailsProps) {
     });
   };
 
+  const handleArchiveToggle = () => {
+    if (!space || readOnly) {
+      return;
+    }
+
+    modals.openConfirmModal({
+      title: isArchived ? t("Unarchive space") : t("Archive space"),
+      children: (
+        <Text size="sm">
+          {isArchived
+            ? t("Unarchive space confirmation", { spaceName: space.name })
+            : t("Archive space confirmation", { spaceName: space.name })}
+        </Text>
+      ),
+      labels: {
+        confirm: isArchived ? t("Unarchive") : t("Archive"),
+        cancel: t("Cancel"),
+      },
+      confirmProps: {
+        color: isArchived ? "blue" : "orange",
+      },
+      onConfirm: () =>
+        isArchived ? unarchiveSpace(space.id) : archiveSpace(space.id),
+    });
+  };
+
   return (
     <>
       {space && (
@@ -116,6 +155,12 @@ export default function SpaceDetails({ spaceId, readOnly }: SpaceDetailsProps) {
           <Text my="md" fw={600}>
             {t("Details")}
           </Text>
+
+          {isArchived && (
+            <Alert color="yellow" variant="light" my="md">
+              {t("This space is archived and content is read-only.")}
+            </Alert>
+          )}
 
           <div style={{ marginBottom: "20px" }}>
             <Text size="sm" fw={500} mb="xs">
@@ -264,6 +309,40 @@ export default function SpaceDetails({ spaceId, readOnly }: SpaceDetailsProps) {
 
           {!readOnly && (
             <>
+              <Divider my="lg" />
+
+              <ResponsiveSettingsRow>
+                <ResponsiveSettingsContent>
+                  <Text size="md">
+                    {isArchived ? t("Unarchive space") : t("Archive space")}
+                  </Text>
+                  <Text size="sm" c="dimmed">
+                    {isArchived
+                      ? t("Unarchive this space and restore editing.")
+                      : t(
+                          "Archive this space and make its content read-only.",
+                        )}
+                  </Text>
+                </ResponsiveSettingsContent>
+                <ResponsiveSettingsControl>
+                  <Button
+                    color={isArchived ? "blue" : "orange"}
+                    variant={isArchived ? "filled" : "light"}
+                    leftSection={
+                      isArchived ? (
+                        <IconArchiveOff size={16} />
+                      ) : (
+                        <IconArchive size={16} />
+                      )
+                    }
+                    loading={isArchivingSpace || isUnarchivingSpace}
+                    onClick={handleArchiveToggle}
+                  >
+                    {isArchived ? t("Unarchive") : t("Archive")}
+                  </Button>
+                </ResponsiveSettingsControl>
+              </ResponsiveSettingsRow>
+
               <Divider my="lg" />
 
               <ResponsiveSettingsRow>
