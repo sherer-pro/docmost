@@ -35,7 +35,7 @@ import { useForm } from "@mantine/form";
 import { useMutation } from "@tanstack/react-query";
 import { notifications } from "@mantine/notifications";
 import { useTranslation } from "react-i18next";
-import { setupMfa, enableMfa } from "@/ee/mfa";
+import { enableMfa, setupMfa } from "@/ee/mfa/services/mfa-service";
 import { zodResolver } from "mantine-form-zod-resolver";
 import { z } from "zod";
 

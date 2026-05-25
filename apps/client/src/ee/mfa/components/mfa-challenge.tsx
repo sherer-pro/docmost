@@ -17,7 +17,7 @@ import { IconDeviceMobile, IconLock } from "@tabler/icons-react";
 import { useNavigate } from "react-router-dom";
 import { notifications } from "@mantine/notifications";
 import classes from "./mfa-challenge.module.css";
-import { verifyMfa } from "@/ee/mfa";
+import { verifyMfa } from "@/ee/mfa/services/mfa-service";
 import APP_ROUTE from "@/lib/app-route";
 import { useTranslation } from "react-i18next";
 import * as z from "zod";
