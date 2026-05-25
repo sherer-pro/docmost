@@ -10,7 +10,10 @@ import {
   UpdatableSpace,
 } from '@docmost/db/types/entity.types';
 import { ExpressionBuilder, sql } from 'kysely';
-import { PaginationOptions } from '../../pagination/pagination-options';
+import {
+  PaginationOptions,
+  shouldIncludeArchived,
+} from '../../pagination/pagination-options';
 import { executeWithCursorPagination } from '@docmost/db/pagination/cursor-pagination';
 import { DB } from '@docmost/db/types/db';
 import { validate as isValidUUID } from 'uuid';
@@ -105,6 +108,32 @@ export class SpaceRepo {
       .executeTakeFirst();
   }
 
+  async archiveSpace(spaceId: string, workspaceId: string): Promise<Space> {
+    return this.db
+      .updateTable('spaces')
+      .set({
+        archivedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where('id', '=', spaceId)
+      .where('workspaceId', '=', workspaceId)
+      .returningAll()
+      .executeTakeFirst();
+  }
+
+  async unarchiveSpace(spaceId: string, workspaceId: string): Promise<Space> {
+    return this.db
+      .updateTable('spaces')
+      .set({
+        archivedAt: null,
+        updatedAt: new Date(),
+      })
+      .where('id', '=', spaceId)
+      .where('workspaceId', '=', workspaceId)
+      .returningAll()
+      .executeTakeFirst();
+  }
+
   async updateSharingSettings(
     spaceId: string,
     workspaceId: string,
@@ -191,6 +220,10 @@ export class SpaceRepo {
       .selectAll('spaces')
       .select((eb) => [this.withMemberCount(eb)])
       .where('workspaceId', '=', workspaceId);
+
+    if (!shouldIncludeArchived(pagination)) {
+      query = query.where('archivedAt', 'is', null);
+    }
 
     if (pagination.query) {
       query = query.where((eb) =>

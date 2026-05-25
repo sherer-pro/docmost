@@ -151,6 +151,38 @@ export class SpaceController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @Post(':spaceId/actions/archive')
+  async archiveSpace(
+    @Param('spaceId', ParseUUIDPipe) spaceId: string,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const ability = await this.spaceAbility.createForUser(user, spaceId);
+    if (ability.cannot(SpaceCaslAction.Manage, SpaceCaslSubject.Settings)) {
+      throw new ForbiddenException();
+    }
+
+    await this.spaceService.archiveSpace(spaceId, workspace.id);
+    return this.getSpace(spaceId, user, workspace);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post(':spaceId/actions/unarchive')
+  async unarchiveSpace(
+    @Param('spaceId', ParseUUIDPipe) spaceId: string,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const ability = await this.spaceAbility.createForUser(user, spaceId);
+    if (ability.cannot(SpaceCaslAction.Manage, SpaceCaslSubject.Settings)) {
+      throw new ForbiddenException();
+    }
+
+    await this.spaceService.unarchiveSpace(spaceId, workspace.id);
+    return this.getSpace(spaceId, user, workspace);
+  }
+
+  @HttpCode(HttpStatus.OK)
   @Delete(':spaceId')
   async deleteSpace(
     @Param('spaceId', ParseUUIDPipe) spaceId: string,

@@ -17,6 +17,8 @@ describe('SpaceController', () => {
   let controller: SpaceController;
   const mockSpaceService = {
     getSpaceInfo: jest.fn(),
+    archiveSpace: jest.fn(),
+    unarchiveSpace: jest.fn(),
   };
   const mockSpaceAbility = {
     createForUser: jest.fn(),
@@ -92,6 +94,70 @@ describe('SpaceController', () => {
     expect(ability.cannot).toHaveBeenCalledWith(
       SpaceCaslAction.Read,
       SpaceCaslSubject.Settings,
+    );
+  });
+
+  it('archives a space when user can manage settings', async () => {
+    const user = { id: 'user-1' } as any;
+    const workspace = { id: 'workspace-1' } as any;
+    const ability = {
+      cannot: jest.fn().mockReturnValue(false),
+      rules: [],
+    };
+    mockSpaceAbility.createForUser.mockResolvedValue(ability);
+    mockSpaceService.archiveSpace.mockResolvedValue({ id: 'space-1' });
+    mockSpaceService.getSpaceInfo.mockResolvedValue({ id: 'space-1' });
+    mockSpaceMemberRepo.getUserSpaceRoles.mockResolvedValue([]);
+
+    await controller.archiveSpace('space-1', user, workspace);
+
+    expect(mockSpaceAbility.createForUser).toHaveBeenCalledWith(
+      user,
+      'space-1',
+    );
+    expect(ability.cannot).toHaveBeenCalledWith(
+      SpaceCaslAction.Manage,
+      SpaceCaslSubject.Settings,
+    );
+    expect(mockSpaceService.archiveSpace).toHaveBeenCalledWith(
+      'space-1',
+      'workspace-1',
+    );
+    expect(mockSpaceService.getSpaceInfo).toHaveBeenCalledWith(
+      'space-1',
+      'workspace-1',
+    );
+  });
+
+  it('unarchives a space when user can manage settings', async () => {
+    const user = { id: 'user-1' } as any;
+    const workspace = { id: 'workspace-1' } as any;
+    const ability = {
+      cannot: jest.fn().mockReturnValue(false),
+      rules: [],
+    };
+    mockSpaceAbility.createForUser.mockResolvedValue(ability);
+    mockSpaceService.unarchiveSpace.mockResolvedValue({ id: 'space-1' });
+    mockSpaceService.getSpaceInfo.mockResolvedValue({ id: 'space-1' });
+    mockSpaceMemberRepo.getUserSpaceRoles.mockResolvedValue([]);
+
+    await controller.unarchiveSpace('space-1', user, workspace);
+
+    expect(mockSpaceAbility.createForUser).toHaveBeenCalledWith(
+      user,
+      'space-1',
+    );
+    expect(ability.cannot).toHaveBeenCalledWith(
+      SpaceCaslAction.Manage,
+      SpaceCaslSubject.Settings,
+    );
+    expect(mockSpaceService.unarchiveSpace).toHaveBeenCalledWith(
+      'space-1',
+      'workspace-1',
+    );
+    expect(mockSpaceService.getSpaceInfo).toHaveBeenCalledWith(
+      'space-1',
+      'workspace-1',
     );
   });
 });

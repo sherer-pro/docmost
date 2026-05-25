@@ -402,6 +402,16 @@ export class SearchService {
 
       if (suggestion?.spaceId) {
         pageSearch = pageSearch.where('spaceId', '=', suggestion.spaceId);
+      } else {
+        pageSearch = pageSearch.where((eb) =>
+          eb.exists(
+            eb
+              .selectFrom('spaces')
+              .select('spaces.id')
+              .whereRef('spaces.id', '=', 'pages.spaceId')
+              .where('spaces.archivedAt', 'is', null),
+          ),
+        );
       }
 
       const candidatePages = await pageSearch.execute();

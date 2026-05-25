@@ -8,7 +8,10 @@ import {
   SpaceMember,
   UpdatableSpaceMember,
 } from '@docmost/db/types/entity.types';
-import { PaginationOptions } from '../../pagination/pagination-options';
+import {
+  PaginationOptions,
+  shouldIncludeArchived,
+} from '../../pagination/pagination-options';
 import { MemberInfo, UserSpaceRole } from './types';
 import { executeWithCursorPagination } from '@docmost/db/pagination/cursor-pagination';
 import { GroupRepo } from '@docmost/db/repos/group/group.repo';
@@ -313,19 +316,28 @@ export class SpaceMemberRepo {
     return rows.map((r) => r.spaceId);
   }
 
-  getUserSpaceIdsQuery(userId: string) {
+  getUserSpaceIdsQuery(
+    userId: string,
+    opts?: { includeArchived?: boolean },
+  ) {
+    const includeArchived = opts?.includeArchived === true;
+
     return this.db
       .selectFrom('spaceMembers')
       .innerJoin('spaces', 'spaces.id', 'spaceMembers.spaceId')
       .select('spaces.id')
       .where('userId', '=', userId)
+      .$if(!includeArchived, (qb) => qb.where('spaces.archivedAt', 'is', null))
       .union(
         this.db
           .selectFrom('spaceMembers')
           .innerJoin('groupUsers', 'groupUsers.groupId', 'spaceMembers.groupId')
           .innerJoin('spaces', 'spaces.id', 'spaceMembers.spaceId')
           .select('spaces.id')
-          .where('groupUsers.userId', '=', userId),
+          .where('groupUsers.userId', '=', userId)
+          .$if(!includeArchived, (qb) =>
+            qb.where('spaces.archivedAt', 'is', null),
+          ),
       )
       .union(
         this.db
@@ -336,7 +348,10 @@ export class SpaceMemberRepo {
           .where('pageAccessRules.principalType', '=', 'user')
           .where('pageAccessRules.userId', '=', userId)
           .where('pageAccessRules.effect', '=', 'allow')
-          .where('pages.deletedAt', 'is', null),
+          .where('pages.deletedAt', 'is', null)
+          .$if(!includeArchived, (qb) =>
+            qb.where('spaces.archivedAt', 'is', null),
+          ),
       )
       .union(
         this.db
@@ -360,7 +375,10 @@ export class SpaceMemberRepo {
               ),
             ),
           )
-          .where('pages.deletedAt', 'is', null),
+          .where('pages.deletedAt', 'is', null)
+          .$if(!includeArchived, (qb) =>
+            qb.where('spaces.archivedAt', 'is', null),
+          ),
       );
   }
 
@@ -370,11 +388,12 @@ export class SpaceMemberRepo {
   }
 
   async getUserSpaces(userId: string, pagination: PaginationOptions) {
+    const includeArchived = shouldIncludeArchived(pagination);
     let query = this.db
       .selectFrom('spaces')
       .selectAll()
       .select((eb) => [this.spaceRepo.withMemberCount(eb)])
-      .where('id', 'in', this.getUserSpaceIdsQuery(userId));
+      .where('id', 'in', this.getUserSpaceIdsQuery(userId, { includeArchived }));
 
     if (pagination.query) {
       query = query.where((eb) =>
