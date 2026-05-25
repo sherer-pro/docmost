@@ -2,7 +2,7 @@
 
 import { Editor } from "@tiptap/core";
 import { StarterKit } from "@tiptap/starter-kit";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { IDictionaryTerm } from "@/features/dictionary/types/dictionary.types";
 import {
   DictionaryHighlightExtension,
@@ -73,6 +73,42 @@ describe("DictionaryHighlightExtension", () => {
       ).toHaveLength(0);
     } finally {
       editor.destroy();
+    }
+  });
+
+  it("maps decorations during typing and rebuilds them after debounce", () => {
+    vi.useFakeTimers();
+    const editor = createEditor();
+
+    try {
+      editor.view.dispatch(
+        editor.state.tr.setMeta(dictionaryHighlightPluginKey, {
+          enabled: true,
+          terms: [term],
+        }),
+      );
+
+      expect(
+        dictionaryHighlightPluginKey.getState(editor.state)?.decorations.find(),
+      ).toHaveLength(2);
+
+      editor.commands.insertContentAt(
+        editor.state.doc.content.size - 1,
+        " Alpha",
+      );
+
+      expect(
+        dictionaryHighlightPluginKey.getState(editor.state)?.decorations.find(),
+      ).toHaveLength(2);
+
+      vi.advanceTimersByTime(250);
+
+      expect(
+        dictionaryHighlightPluginKey.getState(editor.state)?.decorations.find(),
+      ).toHaveLength(3);
+    } finally {
+      editor.destroy();
+      vi.useRealTimers();
     }
   });
 });

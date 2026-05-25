@@ -66,6 +66,7 @@ export default function SpaceDictionary() {
   const deleteMutation = useDeleteDictionaryTermMutation(space?.id);
   const [modalOpened, setModalOpened] = useState(false);
   const [editingTerm, setEditingTerm] = useState<IDictionaryTerm | null>(null);
+  const [openedTermIds, setOpenedTermIds] = useState<Record<string, boolean>>({});
 
   const groupedTerms = useMemo<DictionaryGroup[]>(() => {
     const collator = new Intl.Collator(i18n.language, {
@@ -105,6 +106,25 @@ export default function SpaceDictionary() {
       labels: { confirm: t("Delete"), cancel: t("Cancel") },
       confirmProps: { color: "red" },
       onConfirm: () => deleteMutation.mutate(term.id),
+    });
+  };
+
+  const setGroupOpenedTerm = (
+    groupTerms: IDictionaryTerm[],
+    termId: string | null,
+  ) => {
+    setOpenedTermIds((currentTermIds) => {
+      const nextTermIds = { ...currentTermIds };
+
+      groupTerms.forEach((term) => {
+        delete nextTermIds[term.id];
+      });
+
+      if (termId) {
+        nextTermIds[termId] = true;
+      }
+
+      return nextTermIds;
     });
   };
 
@@ -151,7 +171,14 @@ export default function SpaceDictionary() {
             {groupedTerms.map((group) => (
               <div key={group.letter}>
                 <div className={classes.letter}>{group.letter}</div>
-                <Accordion variant="separated">
+                <Accordion
+                  variant="separated"
+                  value={
+                    group.terms.find((term) => openedTermIds[term.id])?.id ??
+                    null
+                  }
+                  onChange={(termId) => setGroupOpenedTerm(group.terms, termId)}
+                >
                   {group.terms.map((term) => (
                     <Accordion.Item key={term.id} value={term.id}>
                       <Accordion.Control>
@@ -195,7 +222,9 @@ export default function SpaceDictionary() {
                         </Group>
                       </Accordion.Control>
                       <Accordion.Panel>
-                        <DictionaryMarkdown markdown={term.definitionMarkdown} />
+                        {openedTermIds[term.id] && (
+                          <DictionaryMarkdown markdown={term.definitionMarkdown} />
+                        )}
                       </Accordion.Panel>
                     </Accordion.Item>
                   ))}
