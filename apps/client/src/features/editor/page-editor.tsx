@@ -68,6 +68,7 @@ import {
   dictionaryHighlightPluginKey,
 } from "@/features/dictionary/extensions/dictionary-highlight-extension";
 import { useDictionaryTermsQuery } from "@/features/dictionary/queries/dictionary-query";
+import { createDictionaryMatcherIndex } from "@/features/dictionary/utils/dictionary-matcher";
 
 interface PageEditorProps {
   pageId: string;
@@ -132,6 +133,10 @@ export default function PageEditor({
   const { data: dictionaryTerms = [] } = useDictionaryTermsQuery(
     spaceId,
     Boolean(spaceId && dictionaryEnabled),
+  );
+  const dictionaryMatcherIndex = useMemo(
+    () => createDictionaryMatcherIndex(dictionaryEnabled ? dictionaryTerms : []),
+    [dictionaryEnabled, dictionaryTerms],
   );
   const canScroll = useCallback(
     () => Boolean(isComponentMounted.current && editorRef.current),
@@ -344,9 +349,10 @@ export default function PageEditor({
       editor.state.tr.setMeta(dictionaryHighlightPluginKey, {
         enabled: dictionaryEnabled,
         terms: dictionaryTerms,
+        matcherIndex: dictionaryMatcherIndex,
       }),
     );
-  }, [dictionaryEnabled, dictionaryTerms, editor]);
+  }, [dictionaryEnabled, dictionaryMatcherIndex, dictionaryTerms, editor]);
 
   const editorIsEditable = useEditorState({
     editor,

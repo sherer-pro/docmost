@@ -3,23 +3,35 @@ import { Plugin, PluginKey, Transaction } from "@tiptap/pm/state";
 import { Node as PMNode } from "@tiptap/pm/model";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { IDictionaryTerm } from "@/features/dictionary/types/dictionary.types";
-import { findDictionaryMatches } from "@/features/dictionary/utils/dictionary-matcher";
+import {
+  createDictionaryMatcherIndex,
+  DictionaryMatcherIndex,
+  findDictionaryMatches,
+} from "@/features/dictionary/utils/dictionary-matcher";
 
 interface DictionaryHighlightOptions {
   terms: IDictionaryTerm[];
+  matcherIndex?: DictionaryMatcherIndex;
   enabled: boolean;
 }
 
 interface DictionaryHighlightPluginState {
   decorations: DecorationSet;
   terms: IDictionaryTerm[];
+  matcherIndex: DictionaryMatcherIndex;
   enabled: boolean;
+}
+
+interface DictionaryHighlightPluginMeta extends DictionaryHighlightOptions {
+  rebuild?: boolean;
 }
 
 interface TextNodesWithPosition {
   text: string;
   pos: number;
 }
+
+const DICTIONARY_HIGHLIGHT_REBUILD_DELAY_MS = 250;
 
 export const dictionaryHighlightPluginKey =
   new PluginKey<DictionaryHighlightPluginState>("dictionaryHighlight");
@@ -68,23 +80,49 @@ export const DictionaryHighlightExtension =
             init: (_, state) => {
               const { enabled, terms } = this.options;
 
-              return buildPluginState(state.doc, terms, enabled);
+              return buildPluginState(state.doc, {
+                enabled,
+                terms,
+                matcherIndex: this.options.matcherIndex,
+              });
             },
             apply(transaction, oldPluginState, _oldState, newState) {
               const meta = getDictionaryHighlightMeta(transaction);
               const enabled = meta?.enabled ?? oldPluginState.enabled;
               const terms = meta?.terms ?? oldPluginState.terms;
+              const matcherIndex =
+                meta?.matcherIndex ??
+                (meta?.terms
+                  ? createDictionaryMatcherIndex(meta.terms)
+                  : oldPluginState.matcherIndex);
 
-              if (!enabled || terms.length === 0) {
+              if (!enabled || matcherIndex.patterns.length === 0) {
                 return {
                   decorations: DecorationSet.empty,
                   terms,
+                  matcherIndex,
                   enabled,
                 };
               }
 
-              if (transaction.docChanged || meta) {
-                return buildPluginState(newState.doc, terms, enabled);
+              if (meta || meta?.rebuild) {
+                return buildPluginState(newState.doc, {
+                  enabled,
+                  terms,
+                  matcherIndex,
+                });
+              }
+
+              if (transaction.docChanged) {
+                return {
+                  decorations: oldPluginState.decorations.map(
+                    transaction.mapping,
+                    transaction.doc,
+                  ),
+                  terms,
+                  matcherIndex,
+                  enabled,
+                };
               }
 
               return {
@@ -93,6 +131,7 @@ export const DictionaryHighlightExtension =
                   transaction.doc,
                 ),
                 terms,
+                matcherIndex,
                 enabled,
               };
             },
@@ -105,6 +144,58 @@ export const DictionaryHighlightExtension =
               );
             },
           },
+          view(view) {
+            let rebuildTimeout: ReturnType<typeof setTimeout> | null = null;
+
+            const clearRebuildTimeout = () => {
+              if (rebuildTimeout) {
+                clearTimeout(rebuildTimeout);
+                rebuildTimeout = null;
+              }
+            };
+
+            const scheduleRebuild = () => {
+              clearRebuildTimeout();
+              rebuildTimeout = setTimeout(() => {
+                rebuildTimeout = null;
+                const pluginState = dictionaryHighlightPluginKey.getState(
+                  view.state,
+                );
+
+                if (!pluginState?.enabled) {
+                  return;
+                }
+
+                view.dispatch(
+                  view.state.tr.setMeta(dictionaryHighlightPluginKey, {
+                    enabled: pluginState.enabled,
+                    terms: pluginState.terms,
+                    matcherIndex: pluginState.matcherIndex,
+                    rebuild: true,
+                  } satisfies DictionaryHighlightPluginMeta),
+                );
+              }, DICTIONARY_HIGHLIGHT_REBUILD_DELAY_MS);
+            };
+
+            return {
+              update(nextView, previousState) {
+                const pluginState = dictionaryHighlightPluginKey.getState(
+                  nextView.state,
+                );
+
+                if (
+                  previousState.doc !== nextView.state.doc &&
+                  pluginState?.enabled &&
+                  pluginState.matcherIndex.patterns.length > 0
+                ) {
+                  scheduleRebuild();
+                }
+              },
+              destroy() {
+                clearRebuildTimeout();
+              },
+            };
+          },
         }),
       ];
     },
@@ -112,7 +203,7 @@ export const DictionaryHighlightExtension =
 
 function getDictionaryHighlightMeta(
   transaction: Transaction,
-): DictionaryHighlightOptions | null {
+): DictionaryHighlightPluginMeta | null {
   return (
     transaction.getMeta(dictionaryHighlightPluginKey) ??
     transaction.getMeta("dictionaryHighlight") ??
@@ -122,22 +213,30 @@ function getDictionaryHighlightMeta(
 
 function buildPluginState(
   doc: PMNode,
-  terms: IDictionaryTerm[],
-  enabled: boolean,
+  options: DictionaryHighlightOptions,
 ): DictionaryHighlightPluginState {
+  const matcherIndex =
+    options.matcherIndex ?? createDictionaryMatcherIndex(options.terms);
+
   return {
     decorations:
-      enabled && terms.length > 0 ? buildDecorations(doc, terms) : DecorationSet.empty,
-    terms,
-    enabled,
+      options.enabled && matcherIndex.patterns.length > 0
+        ? buildDecorations(doc, matcherIndex)
+        : DecorationSet.empty,
+    terms: options.terms,
+    matcherIndex,
+    enabled: options.enabled,
   };
 }
 
-function buildDecorations(doc: PMNode, terms: IDictionaryTerm[]): DecorationSet {
+function buildDecorations(
+  doc: PMNode,
+  matcherIndex: DictionaryMatcherIndex,
+): DecorationSet {
   const decorations: Decoration[] = [];
 
   collectTextNodes(doc).forEach((textNode) => {
-    findDictionaryMatches(textNode.text, terms).forEach((match) => {
+    findDictionaryMatches(textNode.text, matcherIndex).forEach((match) => {
       const from = textNode.pos + match.from;
       const to = textNode.pos + match.to;
 

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { findDictionaryMatches } from "./dictionary-matcher";
+import {
+  createDictionaryMatcherIndex,
+  findDictionaryMatches,
+} from "./dictionary-matcher";
 import { IDictionaryTerm } from "@/features/dictionary/types/dictionary.types";
 
 function term(
@@ -21,9 +24,10 @@ function term(
 
 describe("dictionary matcher", () => {
   it("matches terms and forms as whole words without case sensitivity", () => {
-    const matches = findDictionaryMatches("Адыгея и адыгеи.", [
+    const index = createDictionaryMatcherIndex([
       term("term-1", "Адыгея", ["Адыгеи"]),
     ]);
+    const matches = findDictionaryMatches("Адыгея и адыгеи.", index);
 
     expect(matches.map((match) => match.matchedText)).toEqual([
       "Адыгея",
@@ -32,29 +36,78 @@ describe("dictionary matcher", () => {
   });
 
   it("matches multi-word phrases across whitespace", () => {
-    const matches = findDictionaryMatches("Machine   learning works.", [
+    const index = createDictionaryMatcherIndex([
       term("term-1", "machine learning"),
     ]);
+    const matches = findDictionaryMatches("Machine \n\t learning works.", index);
 
     expect(matches).toHaveLength(1);
-    expect(matches[0].matchedText).toBe("Machine   learning");
+    expect(matches[0].matchedText).toBe("Machine \n\t learning");
   });
 
   it("does not match aliases inside larger words", () => {
-    const matches = findDictionaryMatches("cat scatter catalog", [
+    const index = createDictionaryMatcherIndex([
       term("term-1", "cat"),
     ]);
+    const matches = findDictionaryMatches("cat scatter catalog", index);
 
     expect(matches.map((match) => match.matchedText)).toEqual(["cat"]);
   });
 
   it("keeps the longest overlapping match", () => {
-    const matches = findDictionaryMatches("New York office", [
+    const index = createDictionaryMatcherIndex([
       term("term-1", "New"),
       term("term-2", "New York"),
     ]);
+    const matches = findDictionaryMatches("New York office", index);
 
     expect(matches).toHaveLength(1);
     expect(matches[0].term.id).toBe("term-2");
+  });
+
+  it("keeps the first matching term when duplicate aliases exist", () => {
+    const index = createDictionaryMatcherIndex([
+      term("term-1", "duplicate"),
+      term("term-2", "duplicate"),
+    ]);
+    const matches = findDictionaryMatches("duplicate", index);
+
+    expect(matches).toHaveLength(1);
+    expect(matches[0].term.id).toBe("term-1");
+  });
+
+  it("escapes aliases before building the combined regex", () => {
+    const index = createDictionaryMatcherIndex([
+      term("term-1", "C++"),
+      term("term-2", "price (net)"),
+    ]);
+    const matches = findDictionaryMatches("C++ and price (net), not C++17.", index);
+
+    expect(matches.map((match) => match.alias)).toEqual(["C++", "price (net)"]);
+  });
+
+  it("matches across multiple large index chunks", () => {
+    const terms = Array.from({ length: 650 }, (_, index) =>
+      term(`term-${index}`, `Term ${index}`, [`Term ${index} alias`]),
+    );
+    const matcherIndex = createDictionaryMatcherIndex(terms);
+    const matches = findDictionaryMatches(
+      "Term 12 alias and Term 640 alias are present.",
+      matcherIndex,
+    );
+
+    expect(matches.map((match) => match.alias)).toEqual([
+      "Term 12 alias",
+      "Term 640 alias",
+    ]);
+  });
+
+  it("keeps the legacy terms argument for low-frequency callers", () => {
+    const matches = findDictionaryMatches("Alpha beta", [
+      term("term-1", "alpha"),
+    ]);
+
+    expect(matches).toHaveLength(1);
+    expect(matches[0].alias).toBe("alpha");
   });
 });
