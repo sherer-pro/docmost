@@ -168,16 +168,6 @@ export function DocumentFieldsPanel({
   const { data: databaseProperties } = useDatabasePropertiesQuery(
     rowContext?.database?.id,
   );
-  const allPagesQuery = useQuery({
-    queryKey: [...PAGE_QUERY_KEYS.rootSidebar(page.spaceId, ["page", "database"]), "all-pages"],
-    queryFn: () =>
-      getAllSidebarPages({
-        spaceId: page.spaceId,
-        includeNodeTypes: ["page", "database"],
-      }),
-    enabled: !!page.spaceId,
-  });
-
   const rowCellMap = useMemo(() => {
     const map = new Map<string, unknown>();
     rowContext?.cells?.forEach((cell) => {
@@ -232,6 +222,23 @@ export function DocumentFieldsPanel({
     rowContext?.properties,
   ]);
 
+  const hasDbPageReferenceField = useMemo(
+    () => dbProperties.some((property) => property.type === "page_reference"),
+    [dbProperties],
+  );
+  const allPagesQuery = useQuery({
+    queryKey: [
+      ...PAGE_QUERY_KEYS.rootSidebar(page.spaceId, ["page", "database"]),
+      "all-pages",
+    ],
+    queryFn: () =>
+      getAllSidebarPages({
+        spaceId: page.spaceId,
+        includeNodeTypes: ["page", "database"],
+      }),
+    enabled: Boolean(page.spaceId && hasDbPageReferenceField),
+  });
+
   const databaseUserIds = useMemo(() => {
     const ids: string[] = [];
 
@@ -277,8 +284,15 @@ export function DocumentFieldsPanel({
     () => allPagesQuery.data?.pages.flatMap((queryPage) => queryPage.items) ?? [],
     [allPagesQuery.data?.pages],
   );
-
-  const pageReferenceMetaById = useMemo(
+  const pageReferenceOptions = useMemo(
+    () =>
+      allPageNodes.map((node) => ({
+        value: node.id,
+        label: node.title || t("untitled"),
+      })),
+    [allPageNodes, t],
+  );
+  const pageReferenceUrlById = useMemo(
     () =>
       new Map(
         allPageNodes.map((node) => {
@@ -286,16 +300,27 @@ export function DocumentFieldsPanel({
 
           return [
             node.id,
-            {
-              label: pageTitle,
-              url: node.slugId
-                ? buildPageUrl(page.space.slug, node.slugId, pageTitle)
-                : null,
-            },
+            node.slugId
+              ? buildPageUrl(page.space.slug, node.slugId, pageTitle)
+              : null,
           ];
         }),
       ),
     [allPageNodes, page.space.slug, t],
+  );
+
+  const pageReferenceMetaById = useMemo(
+    () =>
+      new Map(
+        pageReferenceOptions.map((option) => [
+          option.value,
+          {
+            label: option.label,
+            url: pageReferenceUrlById.get(option.value) ?? null,
+          },
+        ]),
+      ),
+    [pageReferenceOptions, pageReferenceUrlById],
   );
 
   const [editingDbPropertyId, setEditingDbPropertyId] = useState<string | null>(
@@ -707,7 +732,9 @@ export function DocumentFieldsPanel({
                       isEditing={editingDbPropertyId === property.id}
                       editingValue={editingDbValue}
                       spaceId={page.spaceId}
-                      spaceSlug={page.space.slug}
+                      pageOptions={pageReferenceOptions}
+                      pageReferenceUrlById={pageReferenceUrlById}
+                      isPageOptionsLoading={allPagesQuery.isLoading}
                       onStartEdit={() => {
                         setEditingDbPropertyId(property.id);
                         setEditingDbValue(

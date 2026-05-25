@@ -3,7 +3,6 @@ import { DatabasePropertyType } from '@docmost/api-contract';
 import { useTranslation } from 'react-i18next';
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
 import {
   getSpaceMemberSearchProps,
   renderSpaceMemberOption,
@@ -12,7 +11,6 @@ import {
 } from '@/features/page/components/document-fields/space-member-select-utils.tsx';
 import { IDatabaseProperty } from '@/features/database/types/database.types.ts';
 import { CustomAvatar } from '@/components/ui/custom-avatar.tsx';
-import { buildPageUrl } from '@/features/page/page.utils.ts';
 import {
   getDatabaseSelectOption,
   normalizeDatabaseCheckboxValue,
@@ -21,11 +19,15 @@ import {
   normalizeDatabaseStringValue,
   normalizeDatabaseUserId,
 } from '@/features/database/utils/database-cell-value.ts';
-import { getAllSidebarPages } from '@/features/page/services/page-service.ts';
-import { PAGE_QUERY_KEYS } from '@/features/page/queries/query-keys.ts';
 import { DictionaryTextHighlighter } from '@/features/dictionary/components/dictionary-text-highlighter';
 import { DictionaryTextarea } from '@/features/dictionary/components/dictionary-textarea';
 import { IDictionaryTerm } from '@/features/dictionary/types/dictionary.types';
+import { DictionaryMatcherIndex } from '@/features/dictionary/utils/dictionary-matcher';
+
+interface DatabasePageReferenceOption {
+  value: string;
+  label: string;
+}
 
 interface DatabaseCellRendererProps {
   property: IDatabaseProperty;
@@ -34,13 +36,136 @@ interface DatabaseCellRendererProps {
   isEditing: boolean;
   editingValue: unknown;
   spaceId: string;
-  spaceSlug: string;
   dictionaryTerms?: IDictionaryTerm[];
+  dictionaryMatcherIndex?: DictionaryMatcherIndex;
   dictionaryEnabled?: boolean;
   canManageDictionary?: boolean;
+  pageOptions?: DatabasePageReferenceOption[];
+  pageReferenceUrlById?: Map<string, string | null>;
+  isPageOptionsLoading?: boolean;
   onStartEdit: () => void;
   onChange: (value: unknown) => void;
   onSave: (value?: unknown) => void;
+}
+
+function DatabaseUserViewValue({
+  value,
+  spaceId,
+}: {
+  value: unknown;
+  spaceId: string;
+}) {
+  const { t } = useTranslation();
+  const selectedUserId = useMemo(() => normalizeDatabaseUserId(value), [value]);
+
+  if (!selectedUserId) {
+    return <Text c="dimmed">{t('Empty value')}</Text>;
+  }
+
+  return (
+    <ResolvedDatabaseUserViewValue
+      selectedUserId={selectedUserId}
+      spaceId={spaceId}
+    />
+  );
+}
+
+function ResolvedDatabaseUserViewValue({
+  selectedUserId,
+  spaceId,
+}: {
+  selectedUserId: string;
+  spaceId: string;
+}) {
+  const { t } = useTranslation();
+  const { options: memberOptions, knownUsersById } = useSpaceMemberSelectOptions(
+    spaceId,
+    [selectedUserId],
+  );
+  const selectedMember = useMemo(
+    () =>
+      knownUsersById[selectedUserId] ??
+      memberOptions.find((option) => option.value === selectedUserId),
+    [knownUsersById, memberOptions, selectedUserId],
+  );
+
+  if (selectedMember) {
+    return (
+      <Group gap="xs" wrap="nowrap">
+        {renderSpaceMemberValue(selectedMember)}
+        <Text lineClamp={1}>{selectedMember.label}</Text>
+      </Group>
+    );
+  }
+
+  return (
+    <Group gap="xs" wrap="nowrap">
+      <CustomAvatar avatarUrl="" size={18} name={t('Unknown')} />
+      <Text c="dimmed" lineClamp={1}>
+        {t('Unknown')}
+      </Text>
+    </Group>
+  );
+}
+
+function DatabaseUserEditor({
+  value,
+  spaceId,
+  autoFocus,
+  onChange,
+  onSave,
+  onBlur,
+}: {
+  value: unknown;
+  spaceId: string;
+  autoFocus: boolean;
+  onChange: (value: unknown) => void;
+  onSave: (value?: unknown) => void;
+  onBlur: () => void;
+}) {
+  const { t } = useTranslation();
+  const selectedUserId = useMemo(() => normalizeDatabaseUserId(value), [value]);
+  const {
+    options: memberOptions,
+    searchValue,
+    setSearchValue,
+    isLoading: isMembersLoading,
+    knownUsersById,
+  } = useSpaceMemberSelectOptions(spaceId, selectedUserId ? [selectedUserId] : []);
+  const selectedMember = useMemo(
+    () =>
+      selectedUserId
+        ? knownUsersById[selectedUserId] ??
+          memberOptions.find((option) => option.value === selectedUserId)
+        : null,
+    [knownUsersById, memberOptions, selectedUserId],
+  );
+
+  return (
+    <Select
+      autoFocus={autoFocus}
+      data={memberOptions}
+      value={selectedUserId}
+      onChange={(nextValue) => {
+        const normalizedValue = nextValue ? { id: nextValue } : null;
+        onChange(normalizedValue);
+        onSave(normalizedValue);
+      }}
+      {...getSpaceMemberSearchProps(
+        {
+          placeholder: t('Select member'),
+          loadingMessage: t('Loading...'),
+          nothingFoundMessage: t('No members found'),
+        },
+        searchValue,
+        setSearchValue,
+        isMembersLoading,
+      )}
+      leftSection={renderSpaceMemberValue(selectedMember)}
+      renderOption={renderSpaceMemberOption}
+      onBlur={onBlur}
+    />
+  );
 }
 
 /**
@@ -57,10 +182,13 @@ export function DatabaseCellRenderer({
   isEditing,
   editingValue,
   spaceId,
-  spaceSlug,
   dictionaryTerms = [],
+  dictionaryMatcherIndex,
   dictionaryEnabled = false,
   canManageDictionary = false,
+  pageOptions = [],
+  pageReferenceUrlById,
+  isPageOptionsLoading = false,
   onStartEdit,
   onChange,
   onSave,
@@ -68,68 +196,10 @@ export function DatabaseCellRenderer({
   const { t } = useTranslation();
   const theme = useMantineTheme();
   const editorValue = isEditing ? editingValue : value;
-
-  const selectedUserId = useMemo(() => {
-    return normalizeDatabaseUserId(editorValue);
-  }, [editorValue]);
-
-  const {
-    options: memberOptions,
-    searchValue,
-    setSearchValue,
-    isLoading: isMembersLoading,
-    knownUsersById,
-  } = useSpaceMemberSelectOptions(spaceId, selectedUserId ? [selectedUserId] : []);
-
-  const selectedMember = useMemo(
-    () =>
-      selectedUserId
-        ? knownUsersById[selectedUserId] ??
-          memberOptions.find((option) => option.value === selectedUserId)
-        : null,
-    [knownUsersById, memberOptions, selectedUserId],
-  );
-
-  const allPagesQuery = useQuery({
-    queryKey: [...PAGE_QUERY_KEYS.rootSidebar(spaceId, ['page', 'database']), 'all-pages'],
-    queryFn: () =>
-      getAllSidebarPages({
-        spaceId,
-        includeNodeTypes: ['page', 'database'],
-      }),
-    enabled: !!spaceId,
-  });
-
-  const allPageNodes = useMemo(
-    () => allPagesQuery.data?.pages.flatMap((queryPage) => queryPage.items) ?? [],
-    [allPagesQuery.data?.pages],
-  );
-
-  const pageOptions = useMemo(
-    () =>
-      allPageNodes.map((node) => ({
-        value: node.id,
-        label: node.title || t('untitled'),
-      })),
-    [allPageNodes, t],
-  );
-
-  /**
-   * Returns the page URL for page_reference only if the node has a slugId.
-   * If slugId is missing, the link is not built - this protects against incorrect navigation.
-   */
-  const pageReferenceUrlById = useMemo(
-    () =>
-      new Map(
-        allPageNodes.map((node) => [
-          node.id,
-          node.slugId
-            ? buildPageUrl(spaceSlug, node.slugId, node.title || t('untitled'))
-            : null,
-        ]),
-      ),
-    [allPageNodes, spaceSlug, t],
-  );
+  const activeDictionaryTerms = dictionaryEnabled ? dictionaryTerms : [];
+  const activeDictionaryMatcherIndex = dictionaryEnabled
+    ? dictionaryMatcherIndex
+    : undefined;
 
   const isDropdownPropertyType = (type: DatabasePropertyType) => {
     return type === 'select' || type === 'user' || type === 'page_reference';
@@ -181,10 +251,9 @@ export function DatabaseCellRenderer({
         <Text component="div" ff="monospace" style={{ whiteSpace: 'pre-wrap' }}>
           <DictionaryTextHighlighter
             text={codeValue}
-            terms={dictionaryEnabled ? dictionaryTerms : []}
-            spaceId={spaceId}
-            canCreate={canManageDictionary}
-            enableSelectionCreate
+            terms={activeDictionaryTerms}
+            matcherIndex={activeDictionaryMatcherIndex}
+            withLayer={false}
           />
         </Text>
       ) : (
@@ -209,27 +278,7 @@ export function DatabaseCellRenderer({
     }
 
     if (property.type === 'user') {
-      if (!selectedUserId) {
-        return <Text c="dimmed">{t('Empty value')}</Text>;
-      }
-
-      if (selectedMember) {
-        return (
-          <Group gap="xs" wrap="nowrap">
-            {renderSpaceMemberValue(selectedMember)}
-            <Text lineClamp={1}>{selectedMember.label}</Text>
-          </Group>
-        );
-      }
-
-      return (
-        <Group gap="xs" wrap="nowrap">
-          <CustomAvatar avatarUrl="" size={18} name={t('Unknown')} />
-          <Text c="dimmed" lineClamp={1}>
-            {t('Unknown')}
-          </Text>
-        </Group>
-      );
+      return <DatabaseUserViewValue value={value} spaceId={spaceId} />;
     }
 
     if (property.type === 'page_reference') {
@@ -239,7 +288,7 @@ export function DatabaseCellRenderer({
       }
 
       const targetPage = pageOptions.find((option) => option.value === refId);
-      const targetPageUrl = pageReferenceUrlById.get(refId);
+      const targetPageUrl = pageReferenceUrlById?.get(refId);
 
       if (targetPageUrl && !isEditable) {
         return (
@@ -258,10 +307,9 @@ export function DatabaseCellRenderer({
       <Text component="div" style={{ whiteSpace: 'pre-wrap' }}>
         <DictionaryTextHighlighter
           text={textValue}
-          terms={dictionaryEnabled ? dictionaryTerms : []}
-          spaceId={spaceId}
-          canCreate={canManageDictionary}
-          enableSelectionCreate
+          terms={activeDictionaryTerms}
+          matcherIndex={activeDictionaryMatcherIndex}
+          withLayer={false}
         />
       </Text>
     ) : (
@@ -368,27 +416,12 @@ export function DatabaseCellRenderer({
 
     if (type === 'user') {
       return (
-        <Select
+        <DatabaseUserEditor
+          value={editorValue}
+          spaceId={spaceId}
           autoFocus={isEditing}
-          data={memberOptions}
-          value={selectedUserId}
-          onChange={(nextValue) => {
-            const normalizedValue = nextValue ? { id: nextValue } : null;
-            onChange(normalizedValue);
-            onSave(normalizedValue);
-          }}
-          {...getSpaceMemberSearchProps(
-            {
-              placeholder: t('Select member'),
-              loadingMessage: t('Loading...'),
-              nothingFoundMessage: t('No members found'),
-            },
-            searchValue,
-            setSearchValue,
-            isMembersLoading,
-          )}
-          leftSection={renderSpaceMemberValue(selectedMember)}
-          renderOption={renderSpaceMemberOption}
+          onChange={onChange}
+          onSave={onSave}
           onBlur={handleBlurSave}
         />
       );
@@ -409,7 +442,7 @@ export function DatabaseCellRenderer({
             onChange(normalizedValue);
             onSave(normalizedValue);
           }}
-          nothingFoundMessage={allPagesQuery.isLoading ? t('Loading...') : t('No pages found')}
+          nothingFoundMessage={isPageOptionsLoading ? t('Loading...') : t('No pages found')}
           onBlur={handleBlurSave}
         />
       );
