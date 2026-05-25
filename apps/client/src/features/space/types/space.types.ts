@@ -35,6 +35,7 @@ export interface ISpace {
   creatorId: string;
   createdAt: Date;
   updatedAt: Date;
+  archivedAt?: Date | string | null;
   memberCount?: number;
   spaceId?: string;
   membership?: IMembership;
