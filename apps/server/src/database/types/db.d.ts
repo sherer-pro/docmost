@@ -395,6 +395,7 @@ export interface SpaceMembers {
 }
 
 export interface Spaces {
+  archivedAt: Timestamp | null;
   createdAt: Generated<Timestamp>;
   creatorId: string | null;
   defaultRole: Generated<string>;

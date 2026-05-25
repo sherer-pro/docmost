@@ -69,7 +69,11 @@ class ExportControllerDelegate {
 
   async exportSpace(dto: ExportSpaceDto, user: User, res: FastifyReply) {
     const ability = await this.spaceAbility.createForUser(user, dto.spaceId);
-    if (ability.cannot(SpaceCaslAction.Manage, SpaceCaslSubject.Page)) {
+    const canExport =
+      ability.can(SpaceCaslAction.Manage, SpaceCaslSubject.Page) ||
+      ability.can(SpaceCaslAction.Manage, SpaceCaslSubject.Settings);
+
+    if (!canExport) {
       throw new ForbiddenException();
     }
 

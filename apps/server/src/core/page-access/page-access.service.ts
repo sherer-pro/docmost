@@ -89,22 +89,25 @@ export class PageAccessService {
   private resolveCapabilities(
     decision: AccessDecision,
     spaceRole: SpaceRole | null,
+    isSpaceArchived = false,
   ): PageAccessCapabilities {
     if (decision.decisionSource === 'system') {
       return {
         canRead: true,
-        canWrite: true,
-        canCreateChild: true,
-        canMoveDeleteShare: true,
-        canManageAccess: true,
+        canWrite: !isSpaceArchived,
+        canCreateChild: !isSpaceArchived,
+        canMoveDeleteShare: !isSpaceArchived,
+        canManageAccess: !isSpaceArchived,
       };
     }
 
     const canRead = !!decision.role && !decision.denied;
-    const canWrite = canRead && decision.role === PageRole.WRITER;
+    const canWrite =
+      !isSpaceArchived && canRead && decision.role === PageRole.WRITER;
     const canCreateChild = canWrite;
 
     const canMoveDeleteShare =
+      !isSpaceArchived &&
       canRead &&
       decision.decisionSource === 'space' &&
       (spaceRole === SpaceRole.ADMIN || spaceRole === SpaceRole.WRITER);
@@ -197,6 +200,30 @@ export class PageAccessService {
     return (findHighestUserSpaceRole(roles) as SpaceRole | undefined) ?? null;
   }
 
+  private async getSpaceArchivedAt(
+    spaceId: string,
+    trx?: KyselyTransaction,
+  ): Promise<Date | null> {
+    const db = trx ?? this.db;
+    const space = await db
+      .selectFrom('spaces')
+      .select('archivedAt')
+      .where('id', '=', spaceId)
+      .executeTakeFirst();
+
+    return (space?.archivedAt as Date | null | undefined) ?? null;
+  }
+
+  private async assertSpaceIsActive(
+    spaceId: string,
+    trx?: KyselyTransaction,
+  ): Promise<void> {
+    const archivedAt = await this.getSpaceArchivedAt(spaceId, trx);
+    if (archivedAt) {
+      throw new ForbiddenException();
+    }
+  }
+
   private async getPageRulesForUser(
     pageId: string,
     userId: string,
@@ -217,17 +244,25 @@ export class PageAccessService {
   async getEffectiveAccess(
     page: Page,
     user: User,
-    opts?: { trx?: KyselyTransaction; groupIds?: string[]; spaceRole?: SpaceRole | null },
+    opts?: {
+      trx?: KyselyTransaction;
+      groupIds?: string[];
+      spaceRole?: SpaceRole | null;
+      spaceArchivedAt?: Date | null;
+    },
   ): Promise<EffectivePageAccess> {
     const isSystemBypass = this.isWorkspaceBypassUser(user);
 
-    const [groupIds, spaceRole] = await Promise.all([
+    const [groupIds, spaceRole, spaceArchivedAt] = await Promise.all([
       opts?.groupIds
         ? Promise.resolve(opts.groupIds)
         : this.groupUserRepo.getGroupIdsByUserId(user.id),
       typeof opts?.spaceRole === 'undefined'
         ? this.getHighestSpaceRole(user.id, page.spaceId)
         : Promise.resolve(opts.spaceRole),
+      typeof opts?.spaceArchivedAt === 'undefined'
+        ? this.getSpaceArchivedAt(page.spaceId, opts?.trx)
+        : Promise.resolve(opts.spaceArchivedAt),
     ]);
 
     const { userRule, groupRules } = await this.getPageRulesForUser(
@@ -266,7 +301,11 @@ export class PageAccessService {
       role: decision.role,
       denied: decision.denied,
       sources,
-      capabilities: this.resolveCapabilities(decision, spaceRole),
+      capabilities: this.resolveCapabilities(
+        decision,
+        spaceRole,
+        !!spaceArchivedAt,
+      ),
       spaceRole,
       isSystemAccess: decision.decisionSource === 'system',
     };
@@ -380,6 +419,7 @@ export class PageAccessService {
     trx?: KyselyTransaction,
   ): Promise<void> {
     this.assertCanManageAccess(actor);
+    await this.assertSpaceIsActive(page.spaceId, trx);
 
     const targetUser = await this.ensureWorkspaceUser(page.workspaceId, targetUserId);
     if (!targetUser) {
@@ -424,6 +464,7 @@ export class PageAccessService {
     trx?: KyselyTransaction,
   ): Promise<void> {
     this.assertCanManageAccess(actor);
+    await this.assertSpaceIsActive(page.spaceId, trx);
 
     const targetUser = await this.ensureWorkspaceUser(page.workspaceId, targetUserId);
     if (!targetUser) {
@@ -478,6 +519,7 @@ export class PageAccessService {
     trx?: KyselyTransaction,
   ): Promise<void> {
     this.assertCanManageAccess(actor);
+    await this.assertSpaceIsActive(page.spaceId, trx);
 
     const targetGroup = await this.ensureWorkspaceGroup(
       page.workspaceId,
@@ -525,6 +567,7 @@ export class PageAccessService {
     trx?: KyselyTransaction,
   ): Promise<void> {
     this.assertCanManageAccess(actor);
+    await this.assertSpaceIsActive(page.spaceId, trx);
 
     const targetGroup = await this.ensureWorkspaceGroup(
       page.workspaceId,
@@ -630,14 +673,18 @@ export class PageAccessService {
       };
     }
 
+    const isSpaceArchived = !!(await this.getSpaceArchivedAt(spaceId));
+
     if (this.isWorkspaceBypassUser(user)) {
       for (const page of pages) {
         visiblePageIds.add(page.id);
         readablePageIds.add(page.id);
-        writablePageIds.add(page.id);
-        createChildPageIds.add(page.id);
-        moveDeleteSharePageIds.add(page.id);
-        manageAccessPageIds.add(page.id);
+        if (!isSpaceArchived) {
+          writablePageIds.add(page.id);
+          createChildPageIds.add(page.id);
+          moveDeleteSharePageIds.add(page.id);
+          manageAccessPageIds.add(page.id);
+        }
       }
     } else {
       const [groupIds, spaceRole] = await Promise.all([
@@ -683,7 +730,11 @@ export class PageAccessService {
           groupRules: groupRulesByPageId.get(page.id) ?? [],
           spaceRole,
         });
-        const capabilities = this.resolveCapabilities(decision, spaceRole);
+        const capabilities = this.resolveCapabilities(
+          decision,
+          spaceRole,
+          isSpaceArchived,
+        );
 
         if (capabilities.canRead) {
           readablePageIds.add(page.id);

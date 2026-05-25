@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PageAccessService } from './page-access.service';
 import {
   PageAccessEffect,
@@ -54,6 +54,8 @@ describe('PageAccessService', () => {
       spaceMemberRepo as any,
       pageHistoryRecorder as any,
     );
+
+    jest.spyOn(service as any, 'getSpaceArchivedAt').mockResolvedValue(null);
   });
 
   it('grants full bypass capabilities to workspace owner/admin', async () => {
@@ -163,6 +165,50 @@ describe('PageAccessService', () => {
     expect(access.capabilities.canManageAccess).toBe(false);
   });
 
+  it('keeps archived spaces readable but read-only for workspace bypass users', async () => {
+    (service as any).getSpaceArchivedAt.mockResolvedValueOnce(new Date());
+    groupUserRepo.getGroupIdsByUserId.mockResolvedValue([]);
+    spaceMemberRepo.getUserSpaceRoles.mockResolvedValue([]);
+    pageAccessRuleRepo.findUserRule.mockResolvedValue(undefined);
+    pageAccessRuleRepo.findGroupRules.mockResolvedValue([]);
+
+    const access = await service.getEffectiveAccess(page, {
+      id: 'owner-1',
+      role: UserRole.OWNER,
+    } as any);
+
+    expect(access.capabilities).toEqual({
+      canRead: true,
+      canWrite: false,
+      canCreateChild: false,
+      canMoveDeleteShare: false,
+      canManageAccess: false,
+    });
+  });
+
+  it('keeps archived spaces readable but read-only for space writers', async () => {
+    (service as any).getSpaceArchivedAt.mockResolvedValueOnce(new Date());
+    groupUserRepo.getGroupIdsByUserId.mockResolvedValue([]);
+    spaceMemberRepo.getUserSpaceRoles.mockResolvedValue([
+      { userId: 'user-1', role: SpaceRole.WRITER },
+    ]);
+    pageAccessRuleRepo.findUserRule.mockResolvedValue(undefined);
+    pageAccessRuleRepo.findGroupRules.mockResolvedValue([]);
+
+    const access = await service.getEffectiveAccess(page, {
+      id: 'user-1',
+      role: UserRole.MEMBER,
+    } as any);
+
+    expect(access.capabilities).toEqual({
+      canRead: true,
+      canWrite: false,
+      canCreateChild: false,
+      canMoveDeleteShare: false,
+      canManageAccess: false,
+    });
+  });
+
   it('cascades grant user access to all descendants and records history', async () => {
     const actor = { id: 'admin-1', role: UserRole.ADMIN } as any;
     const ensureWorkspaceUserSpy = jest
@@ -202,6 +248,20 @@ describe('PageAccessService', () => {
         changeType: 'page.access.updated',
       }),
     );
+  });
+
+  it('rejects page access changes in archived spaces', async () => {
+    const actor = { id: 'admin-1', role: UserRole.ADMIN } as any;
+    (service as any).getSpaceArchivedAt.mockResolvedValueOnce(new Date());
+
+    await expect(
+      service.grantUserAccessForSubtree(
+        page,
+        'user-1',
+        PageRole.READER,
+        actor,
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it('writes user deny on close and rejects close for workspace owner/admin', async () => {

@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getQueueToken } from '@nestjs/bullmq';
+import { NotFoundException } from '@nestjs/common';
 import { SpaceService } from './space.service';
 import { SpaceRepo } from '@docmost/db/repos/space/space.repo';
 import { SpaceMemberService } from './space-member.service';
@@ -14,6 +15,8 @@ describe('SpaceService', () => {
     slugExists: jest.Mock;
     updateDictionarySettings: jest.Mock;
     updateSpace: jest.Mock;
+    archiveSpace: jest.Mock;
+    unarchiveSpace: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -21,6 +24,8 @@ describe('SpaceService', () => {
       slugExists: jest.fn(),
       updateDictionarySettings: jest.fn(),
       updateSpace: jest.fn(),
+      archiveSpace: jest.fn(),
+      unarchiveSpace: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -67,5 +72,44 @@ describe('SpaceService', () => {
       'space-1',
       'workspace-1',
     );
+  });
+
+  it('archives a space', async () => {
+    const archivedAt = new Date();
+    spaceRepo.archiveSpace.mockResolvedValue({
+      id: 'space-1',
+      archivedAt,
+    });
+
+    const space = await service.archiveSpace('space-1', 'workspace-1');
+
+    expect(space.archivedAt).toBe(archivedAt);
+    expect(spaceRepo.archiveSpace).toHaveBeenCalledWith(
+      'space-1',
+      'workspace-1',
+    );
+  });
+
+  it('unarchives a space', async () => {
+    spaceRepo.unarchiveSpace.mockResolvedValue({
+      id: 'space-1',
+      archivedAt: null,
+    });
+
+    const space = await service.unarchiveSpace('space-1', 'workspace-1');
+
+    expect(space.archivedAt).toBeNull();
+    expect(spaceRepo.unarchiveSpace).toHaveBeenCalledWith(
+      'space-1',
+      'workspace-1',
+    );
+  });
+
+  it('throws when archived space does not exist', async () => {
+    spaceRepo.archiveSpace.mockResolvedValue(undefined);
+
+    await expect(
+      service.archiveSpace('space-1', 'workspace-1'),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 });

@@ -31,4 +31,16 @@ export class PaginationOptions {
   @IsOptional()
   @IsBoolean()
   adminView: boolean;
+
+  @IsOptional()
+  includeArchived?: boolean | string;
+}
+
+export function shouldIncludeArchived(
+  pagination?: Pick<PaginationOptions, 'includeArchived'>,
+): boolean {
+  return (
+    pagination?.includeArchived === true ||
+    pagination?.includeArchived === 'true'
+  );
 }

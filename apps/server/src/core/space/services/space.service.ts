@@ -175,6 +175,24 @@ export class SpaceService {
     return space;
   }
 
+  async archiveSpace(spaceId: string, workspaceId: string): Promise<Space> {
+    const space = await this.spaceRepo.archiveSpace(spaceId, workspaceId);
+    if (!space) {
+      throw new NotFoundException('Space not found');
+    }
+
+    return space;
+  }
+
+  async unarchiveSpace(spaceId: string, workspaceId: string): Promise<Space> {
+    const space = await this.spaceRepo.unarchiveSpace(spaceId, workspaceId);
+    if (!space) {
+      throw new NotFoundException('Space not found');
+    }
+
+    return space;
+  }
+
   async getWorkspaceSpaces(
     workspaceId: string,
     pagination: PaginationOptions,

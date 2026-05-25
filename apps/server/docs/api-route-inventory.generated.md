@@ -147,6 +147,8 @@
 | DELETE | `/spaces/:spaceId` | `apps/server/src/core/space/space.controller.ts` |
 | GET | `/spaces/:spaceId` | `apps/server/src/core/space/space.controller.ts` |
 | PATCH | `/spaces/:spaceId` | `apps/server/src/core/space/space.controller.ts` |
+| POST | `/spaces/:spaceId/actions/archive` | `apps/server/src/core/space/space.controller.ts` |
+| POST | `/spaces/:spaceId/actions/unarchive` | `apps/server/src/core/space/space.controller.ts` |
 | POST | `/spaces/member-users` | `apps/server/src/core/space/space.controller.ts` |
 | POST | `/spaces/members` | `apps/server/src/core/space/space.controller.ts` |
 | POST | `/spaces/members/add` | `apps/server/src/core/space/space.controller.ts` |
