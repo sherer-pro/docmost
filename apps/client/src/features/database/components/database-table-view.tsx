@@ -39,6 +39,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useSetAtom } from 'jotai';
 import { useAtomValue } from 'jotai/react';
+import { useQuery } from '@tanstack/react-query';
 import { notifications } from '@mantine/notifications';
 import { modals } from '@mantine/modals';
 import {
@@ -72,6 +73,8 @@ import { getRowTitle } from '@/features/database/utils/database-markdown';
 import { DATABASE_PROPERTY_TYPE_LABEL_KEYS } from '@/features/database/utils/database-property-type-labels';
 import { DatabaseCellRenderer } from '@/features/database/components/database-cell-renderer.tsx';
 import { useDictionaryTermsQuery } from '@/features/dictionary/queries/dictionary-query';
+import { DictionaryHighlightLayer } from '@/features/dictionary/components/dictionary-highlight-layer';
+import { createDictionaryMatcherIndex } from '@/features/dictionary/utils/dictionary-matcher';
 import { treeDataAtom } from '@/features/page/tree/atoms/tree-data-atom.ts';
 import { SpaceTreeNode } from '@/features/page/tree/types.ts';
 import { treeApiAtom } from '@/features/page/tree/atoms/tree-api-atom.ts';
@@ -84,8 +87,10 @@ import {
 } from '@/features/page/tree/utils/utils.ts';
 import { SimpleTree } from 'react-arborist';
 import { queryClient } from '@/main.tsx';
-import { getPageById } from '@/features/page/services/page-service.ts';
+import { getAllSidebarPages, getPageById } from '@/features/page/services/page-service.ts';
 import { PAGE_QUERY_KEYS } from '@/features/page/queries/query-keys.ts';
+import { ISidebarNode } from '@/features/page/types/page.types.ts';
+import { buildPageUrl } from '@/features/page/page.utils.ts';
 import { fetchAllAncestorChildren } from '@/features/page/queries/page-query.ts';
 import {
   buildDatabaseCellPayloadValue,
@@ -178,6 +183,14 @@ export function DatabaseTableView({
   const { data: dictionaryTerms = [] } = useDictionaryTermsQuery(
     spaceId,
     dictionaryEnabled,
+  );
+  const activeDictionaryTerms = useMemo(
+    () => (dictionaryEnabled ? dictionaryTerms : []),
+    [dictionaryEnabled, dictionaryTerms],
+  );
+  const dictionaryMatcherIndex = useMemo(
+    () => createDictionaryMatcherIndex(activeDictionaryTerms),
+    [activeDictionaryTerms],
   );
   const [rowsCursor, setRowsCursor] = useState<string | null>(null);
 
@@ -784,6 +797,43 @@ export function DatabaseTableView({
         return typeof explicitValue === 'boolean' ? explicitValue : true;
       }),
     [activeProperties, visibleColumns],
+  );
+  const hasPageReferenceColumn = useMemo(
+    () => displayedProperties.some((property) => property.type === 'page_reference'),
+    [displayedProperties],
+  );
+  const allPagesQuery = useQuery({
+    queryKey: [...PAGE_QUERY_KEYS.rootSidebar(spaceId, ['page', 'database']), 'all-pages'],
+    queryFn: () =>
+      getAllSidebarPages({
+        spaceId,
+        includeNodeTypes: ['page', 'database'],
+      }),
+    enabled: Boolean(spaceId && hasPageReferenceColumn),
+  });
+  const allPageNodes = useMemo<ISidebarNode[]>(
+    () => allPagesQuery.data?.pages.flatMap((queryPage) => queryPage.items) ?? [],
+    [allPagesQuery.data?.pages],
+  );
+  const pageReferenceOptions = useMemo(
+    () =>
+      allPageNodes.map((node) => ({
+        value: node.id,
+        label: node.title || t('untitled'),
+      })),
+    [allPageNodes, t],
+  );
+  const pageReferenceUrlById = useMemo(
+    () =>
+      new Map(
+        allPageNodes.map((node) => [
+          node.id,
+          node.slugId
+            ? buildPageUrl(spaceSlug, node.slugId, node.title || t('untitled'))
+            : null,
+        ]),
+      ),
+    [allPageNodes, spaceSlug, t],
   );
 
   const preparedRows = useMemo(
@@ -2158,18 +2208,24 @@ export function DatabaseTableView({
         </Paper>
       )}
 
-      <ScrollArea
-        viewportRef={tableViewportRef}
-        mah={isMobileViewport ? 420 : 620}
-        onScrollPositionChange={(position) => setTableScrollTop(position.y)}
+      <DictionaryHighlightLayer
+        terms={activeDictionaryTerms}
+        spaceId={spaceId}
+        canCreate={dictionaryEnabled && canManageDictionary}
+        enableSelectionCreate
       >
-        <Table
+        <ScrollArea
+          viewportRef={tableViewportRef}
+          mah={isMobileViewport ? 420 : 620}
+          onScrollPositionChange={(position) => setTableScrollTop(position.y)}
+        >
+          <Table
             stickyHeader
             withTableBorder
             withColumnBorders
             miw={900}
             layout="auto"
-        >
+          >
           <Table.Thead>
             <Table.Tr>
               {isEditable && (
@@ -2465,10 +2521,13 @@ export function DatabaseTableView({
                         isEditing={isEditing}
                         editingValue={editingValue}
                         spaceId={spaceId}
-                        spaceSlug={spaceSlug}
-                        dictionaryTerms={dictionaryTerms}
+                        dictionaryTerms={activeDictionaryTerms}
+                        dictionaryMatcherIndex={dictionaryMatcherIndex}
                         dictionaryEnabled={dictionaryEnabled}
                         canManageDictionary={canManageDictionary}
+                        pageOptions={pageReferenceOptions}
+                        pageReferenceUrlById={pageReferenceUrlById}
+                        isPageOptionsLoading={allPagesQuery.isLoading}
                         onStartEdit={() => startEditing(row, property)}
                         onChange={setEditingValue}
                         onSave={(nextValue) => saveEditing(row, property, nextValue)}
@@ -2490,8 +2549,9 @@ export function DatabaseTableView({
               </Table.Tr>
             )}
           </Table.Tbody>
-        </Table>
-      </ScrollArea>
+          </Table>
+        </ScrollArea>
+      </DictionaryHighlightLayer>
       {rowsPage?.hasMore && (
         <Group justify="center" mt="md">
           <Button
