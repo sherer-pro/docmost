@@ -59,6 +59,10 @@
 | POST | `/dictionary-terms` | `apps/server/src/core/dictionary/dictionary.controller.ts` |
 | DELETE | `/dictionary-terms/:termId` | `apps/server/src/core/dictionary/dictionary.controller.ts` |
 | PATCH | `/dictionary-terms/:termId` | `apps/server/src/core/dictionary/dictionary.controller.ts` |
+| POST | `/favorites` | `apps/server/src/core/favorite/favorite.controller.ts` |
+| POST | `/favorites/add` | `apps/server/src/core/favorite/favorite.controller.ts` |
+| POST | `/favorites/ids` | `apps/server/src/core/favorite/favorite.controller.ts` |
+| POST | `/favorites/remove` | `apps/server/src/core/favorite/favorite.controller.ts` |
 | POST | `/file-tasks` | `apps/server/src/integrations/import/file-task.controller.ts` |
 | POST | `/file-tasks/info` | `apps/server/src/integrations/import/file-task.controller.ts` |
 | GET | `/files/:fileId/:fileName` | `apps/server/src/core/attachment/legacy-files.controller.ts` |
@@ -74,6 +78,8 @@
 | POST | `/groups/update` | `apps/server/src/core/group/group.controller.ts` |
 | GET | `/health` | `apps/server/src/integrations/health/health.controller.ts` |
 | GET | `/health/live` | `apps/server/src/integrations/health/health.controller.ts` |
+| POST | `/labels` | `apps/server/src/core/label/label.controller.ts` |
+| POST | `/labels/pages` | `apps/server/src/core/label/label.controller.ts` |
 | POST | `/mfa/disable` | `apps/server/src/core/mfa/mfa.controller.ts` |
 | POST | `/mfa/enable` | `apps/server/src/core/mfa/mfa.controller.ts` |
 | POST | `/mfa/generate-backup-codes` | `apps/server/src/core/mfa/mfa.controller.ts` |
@@ -97,6 +103,8 @@
 | POST | `/pages/actions/export` | `apps/server/src/integrations/export/export.controller.ts` |
 | POST | `/pages/actions/import` | `apps/server/src/integrations/import/import.controller.ts` |
 | POST | `/pages/actions/import-zip` | `apps/server/src/integrations/import/import.controller.ts` |
+| POST | `/pages/backlinks` | `apps/server/src/core/page/page.controller.ts` |
+| POST | `/pages/backlinks-count` | `apps/server/src/core/page/page.controller.ts` |
 | POST | `/pages/breadcrumbs` | `apps/server/src/core/page/page.controller.ts` |
 | POST | `/pages/create` | `apps/server/src/core/page/page.controller.ts` |
 | POST | `/pages/delete` | `apps/server/src/core/page/page.controller.ts` |
@@ -104,13 +112,18 @@
 | POST | `/pages/history` | `apps/server/src/core/page/page.controller.ts` |
 | POST | `/pages/history/info` | `apps/server/src/core/page/page.controller.ts` |
 | POST | `/pages/info` | `apps/server/src/core/page/page.controller.ts` |
+| POST | `/pages/labels` | `apps/server/src/core/page/page.controller.ts` |
+| POST | `/pages/labels/add` | `apps/server/src/core/page/page.controller.ts` |
+| POST | `/pages/labels/remove` | `apps/server/src/core/page/page.controller.ts` |
 | POST | `/pages/link-preview` | `apps/server/src/core/page/page.controller.ts` |
 | POST | `/pages/move` | `apps/server/src/core/page/page.controller.ts` |
 | POST | `/pages/move-to-space` | `apps/server/src/core/page/page.controller.ts` |
-| POST | `/pages/quote-content` | `apps/server/src/core/page/page.controller.ts` |
 | POST | `/pages/recent` | `apps/server/src/core/page/page.controller.ts` |
 | POST | `/pages/restore` | `apps/server/src/core/page/page.controller.ts` |
 | POST | `/pages/sidebar-pages` | `apps/server/src/core/page/page.controller.ts` |
+| POST | `/pages/transclusion/lookup` | `apps/server/src/core/page/transclusion/transclusion.controller.ts` |
+| POST | `/pages/transclusion/references` | `apps/server/src/core/page/transclusion/transclusion.controller.ts` |
+| POST | `/pages/transclusion/unsync-reference` | `apps/server/src/core/page/transclusion/transclusion.controller.ts` |
 | POST | `/pages/trash` | `apps/server/src/core/page/page.controller.ts` |
 | POST | `/pages/update` | `apps/server/src/core/page/page.controller.ts` |
 | DELETE | `/push/subscriptions` | `apps/server/src/core/push/push.controller.ts` |
@@ -132,6 +145,9 @@
 | POST | `/search` | `apps/server/src/core/search/search.controller.ts` |
 | POST | `/search/share-search` | `apps/server/src/core/search/search.controller.ts` |
 | POST | `/search/suggest` | `apps/server/src/core/search/search.controller.ts` |
+| POST | `/sessions` | `apps/server/src/core/session/session.controller.ts` |
+| POST | `/sessions/revoke` | `apps/server/src/core/session/session.controller.ts` |
+| POST | `/sessions/revoke-all` | `apps/server/src/core/session/session.controller.ts` |
 | GET | `/share/:shareId/p/:pageSlug` | `apps/server/src/core/share/share-seo.controller.ts` |
 | GET | `/share/p/:pageSlug` | `apps/server/src/core/share/share-seo.controller.ts` |
 | POST | `/shares` | `apps/server/src/core/share/share.controller.ts` |
@@ -140,6 +156,7 @@
 | POST | `/shares/for-page` | `apps/server/src/core/share/share.controller.ts` |
 | POST | `/shares/info` | `apps/server/src/core/share/share.controller.ts` |
 | POST | `/shares/page-info` | `apps/server/src/core/share/share.controller.ts` |
+| POST | `/shares/transclusion/lookup` | `apps/server/src/core/share/share.controller.ts` |
 | POST | `/shares/tree` | `apps/server/src/core/share/share.controller.ts` |
 | POST | `/shares/update` | `apps/server/src/core/share/share.controller.ts` |
 | GET | `/spaces` | `apps/server/src/core/space/space.controller.ts` |

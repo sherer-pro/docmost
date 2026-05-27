@@ -208,19 +208,64 @@ export async function uploadFile(
   return req as unknown as IAttachment;
 }
 
-export interface QuoteContentInput {
-  sourcePageId: string;
-  quoteId: string;
+export interface IPageLabel {
+  id: string;
+  name: string;
+  type: "page";
+  createdAt: string;
+  updatedAt: string;
+  workspaceId: string;
 }
 
-export interface QuoteContentResult {
-  text: string;
+export async function getPageLabels(
+  pageId: string,
+): Promise<IPagination<IPageLabel>> {
+  const req = await api.post<IPagination<IPageLabel>>("/pages/labels", {
+    pageId,
+    limit: 100,
+  });
+  return req.data;
 }
 
-export async function getQuoteContent(
-  data: QuoteContentInput,
-): Promise<QuoteContentResult> {
-  const req = await api.post<QuoteContentResult>("/pages/quote-content", data);
+export async function addPageLabels(data: {
+  pageId: string;
+  names: string[];
+}): Promise<IPageLabel[]> {
+  const req = await api.post<IPageLabel[]>("/pages/labels/add", data);
+  return req.data;
+}
+
+export async function removePageLabel(data: {
+  pageId: string;
+  labelId: string;
+}): Promise<void> {
+  await api.post<void>("/pages/labels/remove", data);
+}
+
+export type BacklinkDirection = "incoming" | "outgoing";
+
+export interface IBacklinksCount {
+  incoming: number;
+  outgoing: number;
+}
+
+export async function getBacklinksCount(
+  pageId: string,
+): Promise<IBacklinksCount> {
+  const req = await api.post<IBacklinksCount>("/pages/backlinks-count", {
+    pageId,
+  });
+  return req.data;
+}
+
+export async function getBacklinks(data: {
+  pageId: string;
+  direction: BacklinkDirection;
+}): Promise<IPagination<Partial<IPage>>> {
+  const req = await api.post<IPagination<Partial<IPage>>>("/pages/backlinks", {
+    ...data,
+    limit: 20,
+  });
   return req.data;
 }
 

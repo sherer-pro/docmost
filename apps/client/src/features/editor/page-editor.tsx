@@ -42,6 +42,8 @@ import TableMenu from "@/features/editor/components/table/table-menu.tsx";
 import ImageMenu from "@/features/editor/components/image/image-menu.tsx";
 import CalloutMenu from "@/features/editor/components/callout/callout-menu.tsx";
 import VideoMenu from "@/features/editor/components/video/video-menu.tsx";
+import AudioMenu from "@/features/editor/components/audio/audio-menu.tsx";
+import PdfMenu from "@/features/editor/components/pdf/pdf-menu.tsx";
 import SubpagesMenu from "@/features/editor/components/subpages/subpages-menu.tsx";
 import LinkMenu from "@/features/editor/components/link/link-menu.tsx";
 import ExcalidrawMenu from "./components/excalidraw/excalidraw-menu";
@@ -69,6 +71,7 @@ import {
 } from "@/features/dictionary/extensions/dictionary-highlight-extension";
 import { useDictionaryTermsQuery } from "@/features/dictionary/queries/dictionary-query";
 import { createDictionaryMatcherIndex } from "@/features/dictionary/utils/dictionary-matcher";
+import { TransclusionLookupProvider } from "@/features/editor/components/transclusion/transclusion-lookup-context";
 
 interface PageEditorProps {
   pageId: string;
@@ -419,58 +422,64 @@ export default function PageEditor({
 
   if (showStatic) {
     return (
-      <EditorProvider
-        editable={false}
-        immediatelyRender={true}
-        extensions={staticExtensions}
-        content={content}
-      />
+      <TransclusionLookupProvider>
+        <EditorProvider
+          editable={false}
+          immediatelyRender={true}
+          extensions={staticExtensions}
+          content={content}
+        />
+      </TransclusionLookupProvider>
     );
   }
 
   return (
-    <div className="editor-container" style={{ position: "relative" }}>
-      <div ref={menuContainerRef}>
-        <DictionaryHighlightLayer terms={dictionaryTerms}>
-          <EditorContent
-            editor={editor}
-            className={clsx(editorContentClassName)}
-          />
-        </DictionaryHighlightLayer>
-
-        {editor && (
-          <SearchAndReplaceDialog editor={editor} editable={editable} />
-        )}
-
-        {editor && editorIsEditable && (
-          <div>
-            <EditorAiMenu editor={editor} />
-            <EditorBubbleMenu
+    <TransclusionLookupProvider>
+      <div className="editor-container" style={{ position: "relative" }}>
+        <div ref={menuContainerRef}>
+          <DictionaryHighlightLayer terms={dictionaryTerms}>
+            <EditorContent
               editor={editor}
-              spaceId={spaceId}
-              dictionaryEnabled={dictionaryEnabled}
-              canManageDictionary={canManageDictionary}
+              className={clsx(editorContentClassName)}
             />
-            <TableMenu editor={editor} />
-            <TableCellMenu editor={editor} appendTo={menuContainerRef} />
-            <ImageMenu editor={editor} />
-            <VideoMenu editor={editor} />
-            <CalloutMenu editor={editor} />
-            <SubpagesMenu editor={editor} />
-            <ExcalidrawMenu editor={editor} />
-            <DrawioMenu editor={editor} />
-            <LinkMenu editor={editor} appendTo={menuContainerRef} />
-          </div>
+          </DictionaryHighlightLayer>
+
+          {editor && (
+            <SearchAndReplaceDialog editor={editor} editable={editable} />
+          )}
+
+          {editor && editorIsEditable && (
+            <div>
+              <EditorAiMenu editor={editor} />
+              <EditorBubbleMenu
+                editor={editor}
+                spaceId={spaceId}
+                dictionaryEnabled={dictionaryEnabled}
+                canManageDictionary={canManageDictionary}
+              />
+              <TableMenu editor={editor} />
+              <TableCellMenu editor={editor} appendTo={menuContainerRef} />
+              <ImageMenu editor={editor} />
+              <VideoMenu editor={editor} />
+              <AudioMenu editor={editor} />
+              <PdfMenu editor={editor} />
+              <CalloutMenu editor={editor} />
+              <SubpagesMenu editor={editor} />
+              <ExcalidrawMenu editor={editor} />
+              <DrawioMenu editor={editor} />
+              <LinkMenu editor={editor} appendTo={menuContainerRef} />
+            </div>
+          )}
+          {sharedShowCommentPopup && <CommentDialog editor={editor} pageId={pageId} />}
+        </div>
+        {showBottomSpacer && (
+          <div
+            onClick={() => editor.commands.focus("end")}
+            style={{ paddingBottom: "20vh" }}
+          ></div>
         )}
-        {sharedShowCommentPopup && <CommentDialog editor={editor} pageId={pageId} />}
       </div>
-      {showBottomSpacer && (
-        <div
-          onClick={() => editor.commands.focus("end")}
-          style={{ paddingBottom: "20vh" }}
-        ></div>
-      )}
-    </div>
+    </TransclusionLookupProvider>
   );
 }
 

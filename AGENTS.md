@@ -29,14 +29,22 @@
 
 - `apps/server/src` — main backend code.
 - `apps/server/src/core/dictionary` — space-scoped dictionary API and services.
+- `apps/server/src/core/session` — user session API and active session revocation.
+- `apps/server/src/core/favorite` — page/space favorites API.
+- `apps/server/src/core/label` — labels and page-label assignment API.
+- `apps/server/src/core/page/transclusion` — synced blocks backend, lookup, references, and unsync logic.
 - `apps/server/docs/api-routing-conventions.md` — API routing policy, endpoint inventory, and RPC migration plan.
 - `apps/server/docs/api-route-inventory.generated.md` — generated backend route inventory (`pnpm routes:inventory`).
 - `apps/server/docs/security-regression-runbook.md` — security pre-release checks for GHSA regression classes.
 - `apps/server/docs/release-notes/security-ghsa-remediation-2026-03.md` — security advisory mapping and remediation notes.
 - `apps/client/src` — main frontend code.
 - `apps/client/src/features/dictionary` — dictionary page, term editor, matching/highlighting UI.
+- `apps/client/src/features/session` — account active sessions UI.
+- `apps/client/src/features/favorite` — favorite star/actions and favorite lists.
+- `apps/client/src/features/transclusion` and `apps/client/src/features/editor/components/transclusion` — synced block lookup UI and editor node views.
 - `apps/client/public/locales/*` — JSON translations.
 - `apps/server/src/database` — migrations and DB tooling.
+- `packages/editor-ext/src/lib/{audio,pdf,transclusion}` — editor nodes for audio, embedded PDFs, and synced blocks.
 - `patches/` — pnpm patch files (for example, for `react-arborist`).
 - `packages/ee`, `apps/*/src/ee` — Enterprise code (separate license).
 
@@ -209,6 +217,18 @@ Minimum:
   - workspace management page: `/settings/api-keys`;
   - create key requires selecting `spaceId`;
   - access is restricted to workspace `admin|owner`.
+- User session management routes are active:
+  - account page: `/settings/account` -> Active sessions;
+  - API routes: `POST /api/sessions`, `POST /api/sessions/revoke`, `POST /api/sessions/revoke-all`;
+  - new access tokens include `sessionId`, while old tokens without it are temporarily accepted by auth strategy.
+- Favorites and labels routes are active:
+  - favorites: `POST /api/favorites`, `/api/favorites/add`, `/api/favorites/remove`, `/api/favorites/ids`;
+  - page labels: `POST /api/pages/labels`, `/api/pages/labels/add`, `/api/pages/labels/remove`;
+  - label search/list pages: `POST /api/labels`, `/api/labels/pages`.
+- Synced blocks replace the older Linked quote implementation:
+  - editor node types: `transclusionSource` and `transclusionReference`;
+  - API routes: `POST /api/pages/transclusion/lookup`, `/references`, `/unsync-reference`, and public `POST /api/shares/transclusion/lookup`;
+  - legacy `quoteSource` marks and `quoteEmbed` nodes are cleaned by migration and are no longer registered in the editor schema.
 - Root `start` script runs **backend prod**, but requires prebuilt `dist` (typically via `pnpm build`).
 - Backend production entrypoints are resolved from Nx/Nest build output under `apps/server/dist/apps/server/src/*` (not `apps/server/dist/main`).
 - Compose uses placeholders (`REPLACE_WITH_LONG_SECRET`, `STRONG_DB_PASSWORD`) — do not forget to replace them.

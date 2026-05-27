@@ -44,6 +44,25 @@ export class AttachmentRepo {
       .executeTakeFirst();
   }
 
+  async findByIds(
+    attachmentIds: string[],
+    opts?: {
+      trx?: KyselyTransaction;
+    },
+  ): Promise<Attachment[]> {
+    if (attachmentIds.length === 0) {
+      return [];
+    }
+
+    const db = dbOrTx(this.db, opts?.trx);
+
+    return db
+      .selectFrom('attachments')
+      .select(this.baseFields)
+      .where('id', 'in', attachmentIds)
+      .execute();
+  }
+
   async insertAttachment(
     insertableAttachment: InsertableAttachment,
     trx?: KyselyTransaction,

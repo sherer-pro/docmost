@@ -13,10 +13,15 @@ import {
   DatabaseViews,
   DictionaryTermAliases,
   DictionaryTerms,
+  Favorites,
   FileTasks,
   Groups,
   GroupUsers,
+  Labels,
   Notifications,
+  PageLabels,
+  PageTransclusions,
+  PageTransclusionReferences,
   PageAccessRules,
   PushNotificationJobs,
   PageHistory,
@@ -26,6 +31,7 @@ import {
   SpaceMembers,
   Spaces,
   UserMfa,
+  UserSessions,
   Users,
   UserTokens,
   Watchers,
@@ -48,11 +54,16 @@ export interface DbInterface {
   databaseViews: DatabaseViews;
   dictionaryTerms: DictionaryTerms;
   dictionaryTermAliases: DictionaryTermAliases;
+  favorites: Favorites;
   fileTasks: FileTasks;
   groups: Groups;
   groupUsers: GroupUsers;
+  labels: Labels;
   notifications: Notifications;
   pageAccessRules: PageAccessRules;
+  pageLabels: PageLabels;
+  pageTransclusions: PageTransclusions;
+  pageTransclusionReferences: PageTransclusionReferences;
   pushNotificationJobs: PushNotificationJobs;
   pageEmbeddings: PageEmbeddings;
   pageHistory: PageHistory;
@@ -62,6 +73,7 @@ export interface DbInterface {
   spaceMembers: SpaceMembers;
   spaces: Spaces;
   userMfa: UserMfa;
+  userSessions: UserSessions;
   users: Users;
   userTokens: UserTokens;
   watchers: Watchers;

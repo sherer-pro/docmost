@@ -21,6 +21,7 @@ import { updateAttachmentAttr } from './share.util';
 import { Page } from '@docmost/db/types/entity.types';
 import { sql } from 'kysely';
 import { validate as isValidUUID } from 'uuid';
+import { TransclusionService } from '../page/transclusion/transclusion.service';
 
 @Injectable()
 export class ShareService {
@@ -30,6 +31,7 @@ export class ShareService {
     private readonly shareRepo: ShareRepo,
     private readonly pageRepo: PageRepo,
     @InjectKysely() private readonly db: KyselyDB,
+    private readonly transclusionService?: TransclusionService,
   ) {}
 
   async getShareTree(shareId: string, workspaceId: string) {
@@ -303,6 +305,53 @@ export class ShareService {
     }
 
     return ancestor;
+  }
+
+  async lookupTransclusionForShare(
+    shareId: string,
+    references: Array<{ sourcePageId: string; transclusionId: string }>,
+    workspaceId: string,
+  ) {
+    const share = await this.shareRepo.findById(shareId);
+    if (!share || share.workspaceId !== workspaceId) {
+      throw new NotFoundException('Share not found');
+    }
+
+    const sharingAllowed = await this.isSharingAllowed(workspaceId, share.spaceId);
+    if (!sharingAllowed) {
+      throw new NotFoundException('Share not found');
+    }
+
+    if (!this.transclusionService) {
+      throw new NotFoundException('Sync block lookup is not available');
+    }
+
+    const candidatePageIds = [
+      ...new Set(references.map((reference) => reference.sourcePageId)),
+    ];
+    const accessiblePageIds = new Set<string>();
+
+    for (const pageId of candidatePageIds) {
+      const page = await this.pageRepo.findById(pageId);
+      if (!page || page.deletedAt || page.workspaceId !== workspaceId) {
+        continue;
+      }
+
+      const inheritedShare = await this.getShareForPage(
+        page.slugId,
+        workspaceId,
+        shareId,
+      );
+      if (inheritedShare) {
+        accessiblePageIds.add(page.id);
+      }
+    }
+
+    return this.transclusionService.lookupWithAccessSet(
+      references,
+      accessiblePageIds,
+      workspaceId,
+    );
   }
 
   async isSharingAllowed(

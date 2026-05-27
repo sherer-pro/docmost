@@ -3,10 +3,10 @@ import { WorkspaceService } from './services/workspace.service';
 import { WorkspaceController } from './controllers/workspace.controller';
 import { SpaceModule } from '../space/space.module';
 import { WorkspaceInvitationService } from './services/workspace-invitation.service';
-import { TokenModule } from '../auth/token.module';
+import { SessionModule } from '../session/session.module';
 
 @Module({
-  imports: [SpaceModule, TokenModule],
+  imports: [SpaceModule, SessionModule],
   controllers: [WorkspaceController],
   providers: [WorkspaceService, WorkspaceInvitationService],
   exports: [WorkspaceService],

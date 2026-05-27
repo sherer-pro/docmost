@@ -24,6 +24,8 @@ import {
   CustomTable,
   TiptapImage,
   TiptapVideo,
+  TiptapAudio,
+  TiptapPdf,
   TrailingNode,
   Attachment,
   Drawio,
@@ -33,8 +35,8 @@ import {
   Subpages,
   Highlight,
   UniqueID,
-  QuoteSourceMark,
-  QuoteEmbed,
+  TransclusionSource,
+  TransclusionReference,
   addUniqueIdsToDoc,
   htmlToMarkdown,
 } from '@docmost/editor-ext';
@@ -57,7 +59,7 @@ export const tiptapExtensions = [
   }),
   Heading,
   UniqueID.configure({
-    types: ['heading', 'paragraph'],
+    types: ['heading', 'paragraph', 'transclusionSource'],
   }),
   Comment,
   TextAlign.configure({ types: ['heading', 'paragraph'] }),
@@ -85,6 +87,8 @@ export const tiptapExtensions = [
   Youtube,
   TiptapImage,
   TiptapVideo,
+  TiptapAudio,
+  TiptapPdf,
   Callout,
   Attachment,
   CustomCodeBlock,
@@ -93,8 +97,8 @@ export const tiptapExtensions = [
   Embed,
   Mention,
   Subpages,
-  QuoteSourceMark,
-  QuoteEmbed,
+  TransclusionSource,
+  TransclusionReference,
 ] as any;
 
 export function jsonToHtml(tiptapJson: any) {

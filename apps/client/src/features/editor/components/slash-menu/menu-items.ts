@@ -12,16 +12,18 @@ import {
   IconListNumbers,
   IconMath,
   IconMathFunction,
+  IconMusic,
   IconMovie,
   IconPaperclip,
   IconPhoto,
+  IconFileTypePdf,
   IconTable,
   IconTypography,
   IconMenu4,
   IconCalendar,
   IconAppWindow,
   IconSitemap,
-  IconQuote,
+  IconRepeat,
 } from "@tabler/icons-react";
 import {
   CommandProps,
@@ -29,7 +31,9 @@ import {
 } from "@/features/editor/components/slash-menu/types";
 import { uploadImageAction } from "@/features/editor/components/image/upload-image-action.tsx";
 import { uploadVideoAction } from "@/features/editor/components/video/upload-video-action.tsx";
+import { uploadAudioAction } from "@/features/editor/components/audio/upload-audio-action.tsx";
 import { uploadAttachmentAction } from "@/features/editor/components/attachment/upload-attachment-action.tsx";
+import { uploadPdfAction } from "@/features/editor/components/pdf/upload-pdf-action.tsx";
 import { createLinkPreviewAction } from "@/features/editor/components/link-preview/link-preview-action";
 import IconExcalidraw from "@/components/icons/icon-excalidraw";
 import IconMermaid from "@/components/icons/icon-mermaid";
@@ -141,35 +145,12 @@ const CommandGroups: SlashMenuGroupedItemsType = {
         editor.chain().focus().deleteRange(range).toggleBlockquote().run(),
     },
     {
-      title: "Linked quote",
-      description: "Insert a synchronized quote by identifier.",
-      searchTerms: ["quote", "citation", "id", "source"],
-      icon: IconQuote,
-      command: ({ editor, range }: CommandProps) => {
-        const quoteIdInput = window.prompt("Paste quote identifier");
-        if (!quoteIdInput) {
-          return;
-        }
-
-        const normalizedQuoteId = quoteIdInput.trim();
-        const separatorIndex = normalizedQuoteId.indexOf(":");
-
-        if (separatorIndex <= 0 || separatorIndex === normalizedQuoteId.length - 1) {
-          return;
-        }
-
-        const sourcePageId = normalizedQuoteId.slice(0, separatorIndex).trim();
-        if (!sourcePageId) {
-          return;
-        }
-
-        editor
-          .chain()
-          .focus()
-          .deleteRange(range)
-          .setQuoteEmbed({ sourcePageId, quoteId: normalizedQuoteId })
-          .run();
-      },
+      title: "Synced block",
+      description: "Create a block that can be reused on other pages.",
+      searchTerms: ["sync", "synced", "block", "reuse", "transclusion"],
+      icon: IconRepeat,
+      command: ({ editor, range }: CommandProps) =>
+        editor.chain().focus().deleteRange(range).insertTransclusionSource().run(),
     },
     {
       title: "Code",
@@ -245,6 +226,78 @@ const CommandGroups: SlashMenuGroupedItemsType = {
               const pos = editor.view.state.selection.from;
 
               uploadVideoAction(file, editor, pos, pageId);
+            }
+          }
+
+          input.remove();
+        };
+        input.click();
+      },
+    },
+    {
+      title: "Audio",
+      description: "Upload any audio from your device.",
+      searchTerms: [
+        "audio",
+        "music",
+        "sound",
+        "mp3",
+        "media",
+        "file",
+        "attachment",
+      ],
+      icon: IconMusic,
+      command: ({ editor, range }) => {
+        editor.chain().focus().deleteRange(range).run();
+
+        // @ts-ignore
+        const pageId = editor.storage?.pageId;
+        if (!pageId) return;
+
+        const input = document.createElement("input");
+        input.type = "file";
+        input.accept = "audio/*";
+        input.multiple = true;
+        input.style.display = "none";
+        document.body.appendChild(input);
+        input.onchange = async () => {
+          if (input.files?.length) {
+            for (const file of input.files) {
+              const pos = editor.view.state.selection.from;
+
+              uploadAudioAction(file, editor, pos, pageId);
+            }
+          }
+
+          input.remove();
+        };
+        input.click();
+      },
+    },
+    {
+      title: "Embed PDF",
+      description: "Upload and embed a PDF file.",
+      searchTerms: ["pdf", "document", "embed"],
+      icon: IconFileTypePdf,
+      command: ({ editor, range }) => {
+        editor.chain().focus().deleteRange(range).run();
+
+        // @ts-ignore
+        const pageId = editor.storage?.pageId;
+        if (!pageId) return;
+
+        const input = document.createElement("input");
+        input.type = "file";
+        input.accept = "application/pdf";
+        input.multiple = true;
+        input.style.display = "none";
+        document.body.appendChild(input);
+        input.onchange = async () => {
+          if (input.files?.length) {
+            for (const file of input.files) {
+              const pos = editor.view.state.selection.from;
+
+              uploadPdfAction(file, editor, pos, pageId);
             }
           }
 

@@ -7,6 +7,7 @@ export interface VideoOptions {
 }
 export interface VideoAttributes {
   src?: string;
+  alt?: string;
   align?: string;
   attachmentId?: string;
   size?: number;
@@ -54,6 +55,13 @@ export const TiptapVideo = Node.create<VideoOptions>({
         parseHTML: (element) => element.getAttribute("src"),
         renderHTML: (attributes) => ({
           src: attributes.src,
+        }),
+      },
+      alt: {
+        default: undefined,
+        parseHTML: (element) => element.getAttribute("aria-label"),
+        renderHTML: (attributes: VideoAttributes) => ({
+          "aria-label": attributes.alt,
         }),
       },
       attachmentId: {

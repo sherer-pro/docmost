@@ -5,6 +5,7 @@ import {
   IconArrowsExchange,
   IconDatabase,
   IconDots,
+  IconInfoCircle,
   IconList,
   IconMessage,
   IconTrash,
@@ -47,6 +48,8 @@ import { DocumentCommonActionItems } from "@/features/common/header/document-com
 import PageAccessModal from "@/features/page/components/page-access-modal.tsx";
 import { canOpenPageAccessModal } from "@/features/page/utils/page-access-ui.ts";
 import { resolvePageFullWidth } from "@/features/user/utils/page-width.ts";
+import FavoriteButton from "@/features/favorite/components/favorite-button";
+import PageDetailsModal from "@/features/page/components/page-details-modal";
 
 interface PageHeaderMenuProps {
   readOnly?: boolean;
@@ -82,7 +85,11 @@ export default function PageHeaderMenu({ readOnly }: PageHeaderMenuProps) {
 
       {!readOnly && <PageStateSegmentedControl size="xs" />}
 
+      <PageFavoriteAction readOnly={readOnly} />
+
       <ShareModal readOnly={readOnly} />
+
+      <PageDetailsAction readOnly={readOnly} />
 
       <Tooltip label={t("Comments")} openDelay={250} withArrow>
         <ActionIcon
@@ -105,6 +112,50 @@ export default function PageHeaderMenu({ readOnly }: PageHeaderMenuProps) {
       </Tooltip>
 
       <PageActionMenu readOnly={readOnly} />
+    </>
+  );
+}
+
+function PageFavoriteAction({ readOnly }: PageHeaderMenuProps) {
+  const { pageSlug } = useParams();
+  const { data: page } = usePageQuery({
+    pageId: extractPageSlugId(pageSlug),
+  });
+
+  if (readOnly || !page?.id) {
+    return null;
+  }
+
+  return <FavoriteButton type="page" id={page.id} spaceId={page.spaceId} />;
+}
+
+function PageDetailsAction({ readOnly }: PageHeaderMenuProps) {
+  const { t } = useTranslation();
+  const { pageSlug } = useParams();
+  const { data: page } = usePageQuery({
+    pageId: extractPageSlugId(pageSlug),
+  });
+  const [opened, { open, close }] = useDisclosure(false);
+
+  if (!page?.id) {
+    return null;
+  }
+
+  return (
+    <>
+      <Tooltip label={t("Page details")} openDelay={250} withArrow>
+        <ActionIcon variant="subtle" color="dark" onClick={open}>
+          <IconInfoCircle size={20} stroke={2} />
+        </ActionIcon>
+      </Tooltip>
+
+      <PageDetailsModal
+        pageId={page.id}
+        page={page}
+        open={opened}
+        onClose={close}
+        readOnly={readOnly}
+      />
     </>
   );
 }

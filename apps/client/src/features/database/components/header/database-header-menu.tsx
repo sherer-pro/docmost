@@ -1,5 +1,5 @@
 import { ActionIcon, Menu, Tooltip } from '@mantine/core';
-import { IconArrowRight, IconArrowsExchange, IconDots, IconList, IconMessage, IconTrash } from '@tabler/icons-react';
+import { IconArrowRight, IconArrowsExchange, IconDots, IconInfoCircle, IconList, IconMessage, IconTrash } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { useDisclosure } from '@mantine/hooks';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
@@ -41,6 +41,7 @@ import { useDatabasePageContext } from '@/features/database/hooks/use-database-p
 import PageAccessModal from '@/features/page/components/page-access-modal.tsx';
 import { canOpenPageAccessModal } from '@/features/page/utils/page-access-ui.ts';
 import { resolvePageFullWidth } from '@/features/user/utils/page-width.ts';
+import PageDetailsModal from '@/features/page/components/page-details-modal';
 
 interface DatabaseHeaderMenuProps {
   databaseId: string;
@@ -89,6 +90,8 @@ export default function DatabaseHeaderMenu({
   const [movePageModalOpened, { open: openMovePageModal, close: closeMovePageModal }] =
     useDisclosure(false);
   const [accessModalOpened, { open: openAccessModal, close: closeAccessModal }] =
+    useDisclosure(false);
+  const [detailsModalOpened, { open: openDetailsModal, close: closeDetailsModal }] =
     useDisclosure(false);
   const { mutateAsync: convertDatabaseToPageAsync, isPending: isConvertingDatabaseToPage } =
     useConvertDatabaseToPageMutation(database?.spaceId, databaseId);
@@ -223,6 +226,14 @@ export default function DatabaseHeaderMenu({
       )}
 
       {hasDatabasePage && (
+        <Tooltip label={t('Page details')} openDelay={250} withArrow>
+          <ActionIcon variant="subtle" color="dark" onClick={openDetailsModal}>
+            <IconInfoCircle size={20} stroke={2} />
+          </ActionIcon>
+        </Tooltip>
+      )}
+
+      {hasDatabasePage && (
         <Tooltip label={t('Comments')} openDelay={250} withArrow>
           <ActionIcon variant="subtle" color="dark" onClick={handleOpenCommentsAside}>
             <IconMessage size={20} stroke={2} />
@@ -319,6 +330,16 @@ export default function DatabaseHeaderMenu({
           pageId={resolvedDatabasePageId}
           open={accessModalOpened}
           onClose={closeAccessModal}
+        />
+      )}
+
+      {resolvedDatabasePageId && (
+        <PageDetailsModal
+          pageId={resolvedDatabasePageId}
+          page={databaseContext.pageByRoute}
+          open={detailsModalOpened}
+          onClose={closeDetailsModal}
+          readOnly={readOnly}
         />
       )}
     </>

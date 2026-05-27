@@ -7,9 +7,16 @@ import { SignupService } from './services/signup.service';
 import { TokenModule } from './token.module';
 import { AuthRateLimitModule } from './rate-limit/auth-rate-limit.module';
 import { MfaModule } from '../mfa/mfa.module';
+import { SessionModule } from '../session/session.module';
 
 @Module({
-  imports: [TokenModule, WorkspaceModule, MfaModule, AuthRateLimitModule],
+  imports: [
+    TokenModule,
+    WorkspaceModule,
+    MfaModule,
+    AuthRateLimitModule,
+    SessionModule,
+  ],
   controllers: [AuthController],
   providers: [AuthService, SignupService, JwtStrategy],
   exports: [SignupService],

@@ -9,8 +9,13 @@ import {
   DatabaseViews,
   DictionaryTermAliases,
   DictionaryTerms,
+  Favorites,
   Groups,
+  Labels,
   Notifications,
+  PageLabels,
+  PageTransclusions,
+  PageTransclusionReferences,
   Pages,
   Spaces,
   Users,
@@ -27,6 +32,7 @@ import {
   Shares,
   FileTasks,
   UserMfa as _UserMFA,
+  UserSessions,
   ApiKeys,
   Watchers,
   PushSubscriptions,
@@ -169,6 +175,37 @@ export type UpdatableDictionaryTermAlias = Updateable<
   Omit<DictionaryTermAliases, 'id'>
 >;
 
+// Favorite
+export type Favorite = Selectable<Favorites>;
+export type InsertableFavorite = Insertable<Favorites>;
+export type UpdatableFavorite = Updateable<Omit<Favorites, 'id'>>;
+
+// Label
+export type Label = Selectable<Labels>;
+export type InsertableLabel = Insertable<Labels>;
+export type UpdatableLabel = Updateable<Omit<Labels, 'id'>>;
+
+// PageLabel
+export type PageLabel = Selectable<PageLabels>;
+export type InsertablePageLabel = Insertable<PageLabels>;
+export type UpdatablePageLabel = Updateable<Omit<PageLabels, 'id'>>;
+
+// PageTransclusion
+export type PageTransclusion = Selectable<PageTransclusions>;
+export type InsertablePageTransclusion = Insertable<PageTransclusions>;
+export type UpdatablePageTransclusion = Updateable<
+  Omit<PageTransclusions, 'id'>
+>;
+
+// PageTransclusionReference
+export type PageTransclusionReference =
+  Selectable<PageTransclusionReferences>;
+export type InsertablePageTransclusionReference =
+  Insertable<PageTransclusionReferences>;
+export type UpdatablePageTransclusionReference = Updateable<
+  Omit<PageTransclusionReferences, 'id'>
+>;
+
 // Attachment
 export type Attachment = Selectable<Attachments>;
 export type InsertableAttachment = Insertable<Attachments>;
@@ -178,6 +215,11 @@ export type UpdatableAttachment = Updateable<Omit<Attachments, 'id'>>;
 export type UserToken = Selectable<UserTokens>;
 export type InsertableUserToken = Insertable<UserTokens>;
 export type UpdatableUserToken = Updateable<Omit<UserTokens, 'id'>>;
+
+// User Session
+export type UserSession = Selectable<UserSessions>;
+export type InsertableUserSession = Insertable<UserSessions>;
+export type UpdatableUserSession = Updateable<Omit<UserSessions, 'id'>>;
 
 // Backlink
 export type Backlink = Selectable<Backlinks>;

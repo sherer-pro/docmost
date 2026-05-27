@@ -95,7 +95,12 @@ describe('WorkspaceController', () => {
     });
 
     await expect(
-      controller.acceptInvite({ invitationToken: 'invite' } as any, workspace, res),
+      controller.acceptInvite(
+        { invitationToken: 'invite' } as any,
+        workspace,
+        {} as any,
+        res,
+      ),
     ).resolves.toEqual({ requiresLogin: false });
 
     expect(authCookieService.setAuthCookies).toHaveBeenCalledWith(res, 'token');

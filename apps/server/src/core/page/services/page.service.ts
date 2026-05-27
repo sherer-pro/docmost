@@ -71,6 +71,7 @@ import {
 } from '../utils/page-settings.utils';
 import { PageHistoryRecorderService } from './page-history-recorder.service';
 import { PageAccessService } from '../../page-access/page-access.service';
+import { TransclusionService } from '../transclusion/transclusion.service';
 
 interface IHistoryUserRef {
   id: string;
@@ -109,6 +110,7 @@ export class PageService {
     private readonly userRepo: UserRepo,
     private readonly pageHistoryRecorder: PageHistoryRecorderService,
     private readonly pageAccessService: PageAccessService,
+    private readonly transclusionService?: TransclusionService,
   ) {}
 
   private async resolvePageDatabaseId(
@@ -1011,6 +1013,15 @@ export class PageService {
               node.attrs.slugId = mappedPage.newSlugId;
             }
           }
+
+          if (node.type.name === 'transclusionReference') {
+            const sourcePageId = node.attrs.sourcePageId;
+            if (sourcePageId && pageMap.has(sourcePageId)) {
+              const mappedPage = pageMap.get(sourcePageId);
+              //@ts-ignore
+              node.attrs.sourcePageId = mappedPage.newPageId;
+            }
+          }
         });
 
         const prosemirrorJson = prosemirrorDoc.toJSON();
@@ -1048,6 +1059,18 @@ export class PageService {
     );
 
     await this.db.insertInto('pages').values(insertablePages).execute();
+
+    const transclusionPages = insertablePages.map((page) => ({
+      id: page.id,
+      workspaceId: page.workspaceId,
+      content: page.content,
+    }));
+    if (this.transclusionService) {
+      await this.transclusionService.insertTransclusionsForPages(
+        transclusionPages,
+      );
+      await this.transclusionService.insertReferencesForPages(transclusionPages);
+    }
 
     const insertedPageIds = insertablePages.map((page) => page.id);
     this.eventEmitter.emit(EventName.PAGE_CREATED, {

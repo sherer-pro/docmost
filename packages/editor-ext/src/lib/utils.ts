@@ -357,6 +357,12 @@ export function isTextSelected(editor: Editor) {
   return true;
 }
 
+export function isEditorReady(
+  editor: Editor | null | undefined,
+): editor is Editor {
+  return !!editor && editor.isInitialized;
+}
+
 export function setAttributes(
   editor: Editor,
   getPos: (() => number) | boolean,
@@ -380,6 +386,12 @@ export function sanitizeUrl(url: string | undefined): string {
 
   // Return empty string instead of "about:blank"
   return sanitized === "about:blank" ? "" : sanitized;
+}
+
+export function isInternalFileUrl(url: string | undefined): boolean {
+  if (!url) return false;
+  const normalized = url.trim();
+  return normalized.startsWith("/api/files/") || normalized.startsWith("/files/");
 }
 
 const alphabet = "abcdefghijklmnopqrstuvwxyz";

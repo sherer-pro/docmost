@@ -9,6 +9,8 @@ import { DomainService } from '../../../integrations/environment/domain.service'
 import { UserTokenType } from '../auth.constants';
 import { hashProtectedValue } from '../../../common/security/credential-protection.util';
 import { BadRequestException } from '@nestjs/common';
+import { SessionService } from '../../session/session.service';
+import { UserSessionRepo } from '@docmost/db/repos/session/user-session.repo';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -24,8 +26,10 @@ describe('AuthService', () => {
         AuthService,
         { provide: SignupService, useValue: {} },
         { provide: TokenService, useValue: {} },
+        { provide: SessionService, useValue: {} },
         { provide: UserRepo, useValue: {} },
         { provide: UserTokenRepo, useValue: userTokenRepo },
+        { provide: UserSessionRepo, useValue: {} },
         { provide: MailService, useValue: {} },
         { provide: DomainService, useValue: {} },
         { provide: 'KyselyModuleConnectionToken', useValue: {} },
