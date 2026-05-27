@@ -2,6 +2,7 @@ import { EditorProvider } from "@tiptap/react";
 import { useMemo } from "react";
 import { mainExtensions } from "@/features/editor/extensions/extensions";
 import { UniqueID } from "@docmost/editor-ext";
+import classes from "./transclusion.module.css";
 
 type Props = {
   content: unknown;
@@ -31,6 +32,7 @@ export default function TransclusionContent({ content }: Props) {
 
   return (
     <div
+      className={classes.transclusionContent}
       onMouseDown={stop}
       onClick={stop}
       onDragStart={stop}
