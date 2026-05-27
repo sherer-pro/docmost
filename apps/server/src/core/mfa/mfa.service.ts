@@ -14,6 +14,8 @@ import * as OTPAuth from 'otpauth';
 import * as QRCode from 'qrcode';
 import { MfaDisableDto } from './dto/mfa.dto';
 import { EnvironmentService } from '../../integrations/environment/environment.service';
+import { FastifyRequest } from 'fastify';
+import { SessionService } from '../session/session.service';
 import {
   decryptProtectedValue,
   encryptProtectedValue,
@@ -28,6 +30,7 @@ export class MfaService {
   constructor(
     @InjectKysely() private readonly db: KyselyDB,
     private readonly tokenService: TokenService,
+    private readonly sessionService: SessionService,
     private readonly userRepo: UserRepo,
     private readonly environmentService: EnvironmentService,
   ) {}
@@ -35,7 +38,11 @@ export class MfaService {
   /**
    * Verifies login/password and determines whether an MFA challenge is required.
    */
-  async checkMfaRequirements(loginDto: LoginDto, workspace: Workspace) {
+  async checkMfaRequirements(
+    loginDto: LoginDto,
+    workspace: Workspace,
+    request?: FastifyRequest,
+  ) {
     const user = await this.userRepo.findByEmail(loginDto.email, workspace.id, {
       includePassword: true,
       includeUserMfa: true,
@@ -60,7 +67,10 @@ export class MfaService {
 
     if (!hasEnabledMfa && !requiresMfaSetup) {
       await this.userRepo.updateLastLogin(user.id, workspace.id);
-      const authToken = await this.tokenService.generateAccessToken(user);
+      const authToken = await this.sessionService.createSessionAndToken(
+        user,
+        request,
+      );
       return {
         userHasMfa: false,
         requiresMfaSetup: false,
@@ -187,7 +197,11 @@ export class MfaService {
     return { backupCodes };
   }
 
-  async verifyAndIssueAccessToken(token: string, code: string) {
+  async verifyAndIssueAccessToken(
+    token: string,
+    code: string,
+    request?: FastifyRequest,
+  ) {
     const payload = await this.tokenService.verifyJwt(token, 'mfa_token');
     const user = await this.userRepo.findById(payload.sub, payload.workspaceId, {
       includeUserMfa: true,
@@ -229,10 +243,13 @@ export class MfaService {
     }
 
     await this.userRepo.updateLastLogin(user.id, payload.workspaceId);
-    const authToken = await this.tokenService.generateAccessToken({
-      ...user,
-      workspaceId: payload.workspaceId,
-    });
+    const authToken = await this.sessionService.createSessionAndToken(
+      {
+        ...user,
+        workspaceId: payload.workspaceId,
+      },
+      request,
+    );
 
     return { authToken };
   }

@@ -23,8 +23,12 @@ export const Mention = {} as any;
 export const Subpages = {} as any;
 export const Highlight = {} as any;
 export const UniqueID = { configure: () => ({}) } as any;
-export const QuoteSourceMark = {} as any;
-export const QuoteEmbed = {} as any;
+export const TiptapAudio = {} as any;
+export const TiptapPdf = {} as any;
+export const TableReadonlySort = {} as any;
+export const TableView = {} as any;
+export const TransclusionSource = {} as any;
+export const TransclusionReference = {} as any;
 
 export function addUniqueIdsToDoc(doc: any) { return doc; }
 export function htmlToMarkdown(input: string) { return input; }

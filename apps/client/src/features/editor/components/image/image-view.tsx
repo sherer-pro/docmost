@@ -15,7 +15,7 @@ export default function ImageView(props: NodeViewProps) {
   const { t } = useTranslation();
   const { editor, node, selected } = props;
   const [isLightboxOpened, setIsLightboxOpened] = useState(false);
-  const { src, width, align, title, aspectRatio, placeholder } = node.attrs;
+  const { src, width, align, title, alt, aspectRatio, placeholder } = node.attrs;
 
   /**
    * Compute the alignment CSS class once per `align` attribute change
@@ -65,7 +65,7 @@ export default function ImageView(props: NodeViewProps) {
               radius="md"
               fit="contain"
               src={imageUrl}
-              alt={title}
+              alt={alt || title}
               onClick={() => setIsLightboxOpened(true)}
             />
 
@@ -80,7 +80,7 @@ export default function ImageView(props: NodeViewProps) {
                 radius="md"
                 fit="contain"
                 src={imageUrl}
-                alt={title}
+                alt={alt || title}
                 mah="80vh"
                 maw="90vw"
               />

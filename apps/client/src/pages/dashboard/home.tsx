@@ -4,6 +4,7 @@ import SpaceGrid from "@/features/space/components/space-grid.tsx";
 import { getAppName } from "@/lib/config.ts";
 import { Helmet } from "react-helmet-async";
 import { useTranslation } from "react-i18next";
+import FavoriteList from "@/features/favorite/components/favorite-list";
 
 export default function Home() {
   const { t } = useTranslation();
@@ -16,6 +17,10 @@ export default function Home() {
         </title>
       </Helmet>
       <Container size={"800"} pt="xl">
+        <FavoriteList />
+
+        <Space h="xl" />
+
         <SpaceGrid />
 
         <Space h="xl" />

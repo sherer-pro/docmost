@@ -7,6 +7,7 @@ import {
 import { LoginDto } from '../dto/login.dto';
 import { CreateUserDto } from '../dto/create-user.dto';
 import { TokenService } from './token.service';
+import { SessionService } from '../../session/session.service';
 import { SignupService } from './signup.service';
 import { CreateAdminUserDto } from '../dto/create-admin-user.dto';
 import { UserRepo } from '@docmost/db/repos/user/user.repo';
@@ -30,14 +31,17 @@ import { executeTx } from '@docmost/db/utils';
 import { VerifyUserTokenDto } from '../dto/verify-user-token.dto';
 import { DomainService } from '../../../integrations/environment/domain.service';
 import { hashProtectedValue } from '../../../common/security/credential-protection.util';
+import { UserSessionRepo } from '@docmost/db/repos/session/user-session.repo';
 
 @Injectable()
 export class AuthService {
   constructor(
     private signupService: SignupService,
     private tokenService: TokenService,
+    private sessionService: SessionService,
     private userRepo: UserRepo,
     private userTokenRepo: UserTokenRepo,
+    private userSessionRepo: UserSessionRepo,
     private mailService: MailService,
     private domainService: DomainService,
     @InjectKysely() private readonly db: KyselyDB,
@@ -65,19 +69,19 @@ export class AuthService {
     user.lastLoginAt = new Date();
     await this.userRepo.updateLastLogin(user.id, workspaceId);
 
-    return this.tokenService.generateAccessToken(user);
+    return this.sessionService.createSessionAndToken(user);
   }
 
   async register(createUserDto: CreateUserDto, workspaceId: string) {
     const user = await this.signupService.signup(createUserDto, workspaceId);
-    return this.tokenService.generateAccessToken(user);
+    return this.sessionService.createSessionAndToken(user);
   }
 
   async setup(createAdminUserDto: CreateAdminUserDto) {
     const { workspace, user } =
       await this.signupService.initialSetup(createAdminUserDto);
 
-    const authToken = await this.tokenService.generateAccessToken(user);
+    const authToken = await this.sessionService.createSessionAndToken(user);
     return { workspace, authToken };
   }
 
@@ -85,6 +89,7 @@ export class AuthService {
     dto: ChangePasswordDto,
     userId: string,
     workspaceId: string,
+    currentSessionId?: string,
   ): Promise<void> {
     const user = await this.userRepo.findById(userId, workspaceId, {
       includePassword: true,
@@ -112,6 +117,16 @@ export class AuthService {
       userId,
       workspaceId,
     );
+
+    if (currentSessionId) {
+      await this.userSessionRepo.deleteAllExceptCurrent(
+        currentSessionId,
+        userId,
+        workspaceId,
+      );
+    } else {
+      await this.userSessionRepo.deleteByUserId(userId, workspaceId);
+    }
 
     const emailTemplate = ChangePasswordEmail({ username: user.name });
     await this.mailService.sendToQueue({
@@ -203,6 +218,8 @@ export class AuthService {
         .execute();
     });
 
+    await this.userSessionRepo.deleteByUserId(user.id, workspace.id);
+
     const emailTemplate = ChangePasswordEmail({ username: user.name });
     await this.mailService.sendToQueue({
       to: user.email,
@@ -220,7 +237,7 @@ export class AuthService {
       };
     }
 
-    const authToken = await this.tokenService.generateAccessToken(user);
+    const authToken = await this.sessionService.createSessionAndToken(user);
     return { authToken };
   }
 

@@ -30,7 +30,7 @@ import {
   WorkspaceCaslAction,
   WorkspaceCaslSubject,
 } from '../../casl/interfaces/workspace-ability.type';
-import { FastifyReply } from 'fastify';
+import { FastifyReply, FastifyRequest } from 'fastify';
 import { EnvironmentService } from '../../../integrations/environment/environment.service';
 import { CheckHostnameDto } from '../dto/check-hostname.dto';
 import { RemoveWorkspaceUserDto } from '../dto/remove-workspace-user.dto';
@@ -278,11 +278,13 @@ export class WorkspaceController {
   async acceptInvite(
     @Body() acceptInviteDto: AcceptInviteDto,
     @AuthWorkspace() workspace: Workspace,
+    @Req() req: FastifyRequest,
     @Res({ passthrough: true }) res: FastifyReply,
   ) {
     const result = await this.workspaceInvitationService.acceptInvitation(
       acceptInviteDto,
       workspace,
+      req,
     );
 
     if (result.requiresLogin) {

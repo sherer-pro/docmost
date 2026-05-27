@@ -25,6 +25,10 @@ import { ApiKeyModule } from './api-key/api-key.module';
 import { RagModule } from './rag/rag.module';
 import { PageAccessModule } from './page-access/page-access.module';
 import { DictionaryModule } from './dictionary/dictionary.module';
+import { SessionModule } from './session/session.module';
+import { FavoriteModule } from './favorite/favorite.module';
+import { LabelModule } from './label/label.module';
+import { TransclusionModule } from './page/transclusion/transclusion.module';
 
 @Module({
   imports: [
@@ -48,6 +52,10 @@ import { DictionaryModule } from './dictionary/dictionary.module';
     RagModule,
     PageAccessModule,
     DictionaryModule,
+    SessionModule,
+    FavoriteModule,
+    LabelModule,
+    TransclusionModule,
   ],
 })
 export class CoreModule implements NestModule {

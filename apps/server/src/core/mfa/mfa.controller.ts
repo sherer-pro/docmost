@@ -124,6 +124,7 @@ export class MfaController {
     const { authToken } = await this.mfaService.verifyAndIssueAccessToken(
       mfaToken,
       dto.code,
+      req,
     );
 
     this.authCookieService.setAuthCookies(res, authToken);

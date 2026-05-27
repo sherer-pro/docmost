@@ -20,7 +20,7 @@ import { MailService } from '../../../integrations/mail/mail.service';
 import InvitationEmail from '@docmost/transactional/emails/invitation-email';
 import { GroupUserRepo } from '@docmost/db/repos/group/group-user.repo';
 import InvitationAcceptedEmail from '@docmost/transactional/emails/invitation-accepted-email';
-import { TokenService } from '../../auth/services/token.service';
+import { SessionService } from '../../session/session.service';
 import { nanoIdGen } from '../../../common/helpers';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import { executeWithCursorPagination } from '@docmost/db/pagination/cursor-pagination';
@@ -33,6 +33,7 @@ import {
   validateAllowedEmail,
   validateSsoEnforcement,
 } from '../../auth/auth.util';
+import { FastifyRequest } from 'fastify';
 
 @Injectable()
 export class WorkspaceInvitationService {
@@ -42,7 +43,7 @@ export class WorkspaceInvitationService {
     private groupUserRepo: GroupUserRepo,
     private mailService: MailService,
     private domainService: DomainService,
-    private tokenService: TokenService,
+    private sessionService: SessionService,
     @InjectKysely() private readonly db: KyselyDB,
     @InjectQueue(QueueName.BILLING_QUEUE) private billingQueue: Queue,
     private readonly environmentService: EnvironmentService,
@@ -186,6 +187,7 @@ export class WorkspaceInvitationService {
   async acceptInvitation(
     dto: AcceptInviteDto,
     workspace: Workspace,
+    request?: FastifyRequest,
   ): Promise<{
     authToken?: string;
     requiresLogin?: boolean;
@@ -308,7 +310,10 @@ export class WorkspaceInvitationService {
       };
     }
 
-    const authToken = await this.tokenService.generateAccessToken(newUser);
+    const authToken = await this.sessionService.createSessionAndToken(
+      newUser,
+      request,
+    );
     return { authToken };
   }
 

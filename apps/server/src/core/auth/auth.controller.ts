@@ -5,6 +5,7 @@ import {
   HttpCode,
   HttpStatus,
   Post,
+  Req,
   Res,
   UseGuards,
 } from '@nestjs/common';
@@ -21,12 +22,14 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { PasswordResetDto } from './dto/password-reset.dto';
 import { VerifyUserTokenDto } from './dto/verify-user-token.dto';
 import { FastifyReply } from 'fastify';
+import { FastifyRequest } from 'fastify';
 import { validateSsoEnforcement } from './auth.util';
 import { CsrfExempt } from '../../common/decorators/csrf-exempt.decorator';
 import { AuthRateLimitGuard } from './rate-limit/auth-rate-limit.guard';
 import { AuthRateLimit } from './rate-limit/auth-rate-limit.decorator';
 import { MfaService } from '../mfa/mfa.service';
 import { AuthCookieService } from '../../common/security/auth-cookie.service';
+import { SessionService } from '../session/session.service';
 
 @Controller('auth')
 export class AuthController {
@@ -34,6 +37,7 @@ export class AuthController {
     private authService: AuthService,
     private authCookieService: AuthCookieService,
     private mfaService: MfaService,
+    private sessionService: SessionService,
   ) {}
 
   @HttpCode(HttpStatus.OK)
@@ -43,6 +47,7 @@ export class AuthController {
   @AuthRateLimit({ endpoint: 'login', accountField: 'email' })
   async login(
     @AuthWorkspace() workspace: Workspace,
+    @Req() req: FastifyRequest,
     @Res({ passthrough: true }) res: FastifyReply,
     @Body() loginInput: LoginDto,
   ) {
@@ -51,6 +56,7 @@ export class AuthController {
     const mfaResult = await this.mfaService.checkMfaRequirements(
       loginInput,
       workspace,
+      req,
     );
 
     if (mfaResult.userHasMfa || mfaResult.requiresMfaSetup) {
@@ -87,8 +93,15 @@ export class AuthController {
     @Body() dto: ChangePasswordDto,
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
+    @Req() req: FastifyRequest,
   ) {
-    return this.authService.changePassword(dto, user.id, workspace.id);
+    const currentSessionId = (req.raw as any).sessionId;
+    return this.authService.changePassword(
+      dto,
+      user.id,
+      workspace.id,
+      currentSessionId,
+    );
   }
 
   @HttpCode(HttpStatus.OK)
@@ -166,7 +179,20 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @Post('logout')
   @CsrfExempt()
-  async logout(@Res({ passthrough: true }) res: FastifyReply) {
+  async logout(
+    @AuthUser() user: User,
+    @Req() req: FastifyRequest,
+    @Res({ passthrough: true }) res: FastifyReply,
+  ) {
+    const sessionId = (req.raw as any).sessionId;
+    if (sessionId) {
+      await this.sessionService.revokeSession(
+        sessionId,
+        user.id,
+        user.workspaceId,
+      );
+    }
+
     this.authCookieService.clearAuthCookies(res);
   }
 }

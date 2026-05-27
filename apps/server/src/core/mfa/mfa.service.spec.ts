@@ -13,6 +13,7 @@ describe('MfaService security helpers', () => {
       {} as any,
       {} as any,
       {} as any,
+      {} as any,
       { getAppSecret: () => appSecret } as any,
     );
 

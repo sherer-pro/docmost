@@ -34,6 +34,7 @@ import {
   HISTORY_FAST_THRESHOLD,
   HISTORY_INTERVAL,
 } from '../constants';
+import { TransclusionService } from '../../core/page/transclusion/transclusion.service';
 
 @Injectable()
 export class PersistenceExtension implements Extension {
@@ -48,6 +49,7 @@ export class PersistenceExtension implements Extension {
     @InjectQueue(QueueName.HISTORY_QUEUE) private historyQueue: Queue,
     @InjectQueue(QueueName.NOTIFICATION_QUEUE) private notificationQueue: Queue,
     private readonly collabHistory: CollabHistoryService,
+    private readonly transclusionService: TransclusionService,
   ) {}
 
   async onLoadDocument(data: onLoadDocumentPayload) {
@@ -155,6 +157,13 @@ export class PersistenceExtension implements Extension {
           trx,
         );
 
+        await this.syncTransclusionState(
+          pageId,
+          page.workspaceId,
+          tiptapJson,
+          trx,
+        );
+
         this.logger.debug(`Page updated: ${pageId} - SlugId: ${page.slugId}`);
       });
     } catch (err) {
@@ -237,6 +246,26 @@ export class PersistenceExtension implements Extension {
       QueueJob.PAGE_HISTORY,
       { pageId: page.id } as IPageHistoryJob,
       { jobId: page.id, delay },
+    );
+  }
+
+  private async syncTransclusionState(
+    pageId: string,
+    workspaceId: string,
+    tiptapJson: unknown,
+    trx: Parameters<TransclusionService['syncPageTransclusions']>[3],
+  ): Promise<void> {
+    await this.transclusionService.syncPageTransclusions(
+      pageId,
+      workspaceId,
+      tiptapJson,
+      trx,
+    );
+    await this.transclusionService.syncPageReferences(
+      pageId,
+      workspaceId,
+      tiptapJson,
+      trx,
     );
   }
 }

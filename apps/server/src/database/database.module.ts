@@ -40,6 +40,11 @@ import { PostgresJSDialect } from 'kysely-postgres-js';
 import * as postgres from 'postgres';
 import { normalizePostgresUrl } from '../common/helpers';
 import { PageAccessRuleRepo } from './repos/page/page-access-rule.repo';
+import { UserSessionRepo } from './repos/session/user-session.repo';
+import { FavoriteRepo } from './repos/favorite/favorite.repo';
+import { LabelRepo } from './repos/label/label.repo';
+import { PageTransclusionsRepo } from './repos/page-transclusions/page-transclusions.repo';
+import { PageTransclusionReferencesRepo } from './repos/page-transclusions/page-transclusion-references.repo';
 
 @Global()
 @Module({
@@ -104,6 +109,11 @@ import { PageAccessRuleRepo } from './repos/page/page-access-rule.repo';
     ApiKeyRepo,
     DictionaryTermRepo,
     PageAccessRuleRepo,
+    UserSessionRepo,
+    FavoriteRepo,
+    LabelRepo,
+    PageTransclusionsRepo,
+    PageTransclusionReferencesRepo,
     PageListener,
   ],
   exports: [
@@ -132,6 +142,11 @@ import { PageAccessRuleRepo } from './repos/page/page-access-rule.repo';
     ApiKeyRepo,
     DictionaryTermRepo,
     PageAccessRuleRepo,
+    UserSessionRepo,
+    FavoriteRepo,
+    LabelRepo,
+    PageTransclusionsRepo,
+    PageTransclusionReferencesRepo,
   ],
 })
 export class DatabaseModule

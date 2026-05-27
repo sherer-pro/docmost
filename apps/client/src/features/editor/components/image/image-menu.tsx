@@ -14,6 +14,7 @@ import {
 } from "@tabler/icons-react";
 import { NodeWidthResize } from "@/features/editor/components/common/node-width-resize.tsx";
 import { useTranslation } from "react-i18next";
+import { useAltTextControl } from "@/features/editor/components/common/use-alt-text-control.tsx";
 
 export function ImageMenu({ editor }: EditorMenuProps) {
   const { t } = useTranslation();
@@ -33,6 +34,7 @@ export function ImageMenu({ editor }: EditorMenuProps) {
         isAlignCenter: ctx.editor.isActive("image", { align: "center" }),
         isAlignRight: ctx.editor.isActive("image", { align: "right" }),
         width: imageAttrs?.width ? parseInt(imageAttrs.width) : null,
+        alt: imageAttrs?.alt || "",
       };
     },
   });
@@ -105,6 +107,16 @@ export function ImageMenu({ editor }: EditorMenuProps) {
     [editor],
   );
 
+  const {
+    button: altTextButton,
+    panel: altTextPanel,
+    isEditing: isEditingAlt,
+  } = useAltTextControl({
+    editor,
+    nodeName: "image",
+    currentAlt: editorState?.alt || "",
+  });
+
   return (
     <BaseBubbleMenu
       editor={editor}
@@ -118,43 +130,51 @@ export function ImageMenu({ editor }: EditorMenuProps) {
       }}
       shouldShow={shouldShow}
     >
-      <ActionIcon.Group className="actionIconGroup">
-        <Tooltip position="top" label={t("Align left")}>
-          <ActionIcon
-            onClick={alignImageLeft}
-            size="lg"
-            aria-label={t("Align left")}
-            variant={editorState?.isAlignLeft ? "light" : "default"}
-          >
-            <IconLayoutAlignLeft size={18} />
-          </ActionIcon>
-        </Tooltip>
+      {isEditingAlt ? (
+        altTextPanel
+      ) : (
+        <>
+          <ActionIcon.Group className="actionIconGroup">
+            <Tooltip position="top" label={t("Align left")}>
+              <ActionIcon
+                onClick={alignImageLeft}
+                size="lg"
+                aria-label={t("Align left")}
+                variant={editorState?.isAlignLeft ? "light" : "default"}
+              >
+                <IconLayoutAlignLeft size={18} />
+              </ActionIcon>
+            </Tooltip>
 
-        <Tooltip position="top" label={t("Align center")}>
-          <ActionIcon
-            onClick={alignImageCenter}
-            size="lg"
-            aria-label={t("Align center")}
-            variant={editorState?.isAlignCenter ? "light" : "default"}
-          >
-            <IconLayoutAlignCenter size={18} />
-          </ActionIcon>
-        </Tooltip>
+            <Tooltip position="top" label={t("Align center")}>
+              <ActionIcon
+                onClick={alignImageCenter}
+                size="lg"
+                aria-label={t("Align center")}
+                variant={editorState?.isAlignCenter ? "light" : "default"}
+              >
+                <IconLayoutAlignCenter size={18} />
+              </ActionIcon>
+            </Tooltip>
 
-        <Tooltip position="top" label={t("Align right")}>
-          <ActionIcon
-            onClick={alignImageRight}
-            size="lg"
-            aria-label={t("Align right")}
-            variant={editorState?.isAlignRight ? "light" : "default"}
-          >
-            <IconLayoutAlignRight size={18} />
-          </ActionIcon>
-        </Tooltip>
-      </ActionIcon.Group>
+            <Tooltip position="top" label={t("Align right")}>
+              <ActionIcon
+                onClick={alignImageRight}
+                size="lg"
+                aria-label={t("Align right")}
+                variant={editorState?.isAlignRight ? "light" : "default"}
+              >
+                <IconLayoutAlignRight size={18} />
+              </ActionIcon>
+            </Tooltip>
 
-      {editorState?.width && (
-        <NodeWidthResize onChange={onWidthChange} value={editorState.width} />
+            {altTextButton}
+          </ActionIcon.Group>
+
+          {editorState?.width && (
+            <NodeWidthResize onChange={onWidthChange} value={editorState.width} />
+          )}
+        </>
       )}
     </BaseBubbleMenu>
   );

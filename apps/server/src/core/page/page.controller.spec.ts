@@ -18,10 +18,11 @@ describe('PageController guardrails and mixed-id contract', () => {
   const spaceAbility = {
     createForUser: jest.fn(async () => ({ cannot: () => false })),
   };
-  const collaborationGateway = {};
   const databaseRepo = {
     findByPageId: jest.fn(),
   };
+  const labelService = {};
+  const backlinkService = {};
   const pageAccessService = {
     assertCanReadPage: jest.fn(async () => ({
       role: 'writer',
@@ -101,9 +102,10 @@ describe('PageController guardrails and mixed-id contract', () => {
     pageRepo as any,
     pageHistoryService as any,
     spaceAbility as any,
-    collaborationGateway as any,
     databaseRepo as any,
     pageAccessService as any,
+    labelService as any,
+    backlinkService as any,
   );
 
   beforeEach(() => {

@@ -9,17 +9,20 @@ import { Placeholder } from "@tiptap/extension-placeholder";
 import { useAtom } from "jotai";
 import { readOnlyEditorAtom } from "@/features/editor/atoms/editor-atoms.ts";
 import { useEditorScroll } from "./hooks/use-editor-scroll";
+import { TransclusionLookupProvider } from "@/features/editor/components/transclusion/transclusion-lookup-context";
 
 interface PageEditorProps {
   title: string;
   content: any;
   pageId?: string;
+  shareId?: string;
 }
 
 export default function ReadonlyPageEditor({
   title,
   content,
   pageId,
+  shareId,
 }: PageEditorProps) {
   const [, setReadOnlyEditor] = useAtom(readOnlyEditorAtom);
   const isComponentMounted = useRef(false);
@@ -46,7 +49,7 @@ export default function ReadonlyPageEditor({
     return [
       ...filteredExtensions,
       UniqueID.configure({
-        types: ["heading", "paragraph"],
+        types: ["heading", "paragraph", "transclusionSource"],
         updateDocument: false,
       }),
     ];
@@ -65,7 +68,7 @@ export default function ReadonlyPageEditor({
   ];
 
   return (
-    <>
+    <TransclusionLookupProvider shareId={shareId}>
       <EditorProvider
         editable={false}
         immediatelyRender={true}
@@ -93,6 +96,6 @@ export default function ReadonlyPageEditor({
         }}
       ></EditorProvider>
       <div style={{ paddingBottom: "20vh" }}></div>
-    </>
+    </TransclusionLookupProvider>
   );
 }

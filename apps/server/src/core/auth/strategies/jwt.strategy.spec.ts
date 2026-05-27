@@ -10,6 +10,8 @@ describe('JwtStrategy', () => {
   let strategy: JwtStrategy;
   let workspaceRepo: jest.Mocked<WorkspaceRepo>;
   let userRepo: jest.Mocked<UserRepo>;
+  let userSessionRepo: { findActiveById: jest.Mock };
+  let sessionActivityService: { trackActivity: jest.Mock };
   let moduleRef: jest.Mocked<ModuleRef>;
   let apiKeyService: { validateApiKey: jest.Mock };
 
@@ -21,6 +23,14 @@ describe('JwtStrategy', () => {
     userRepo = {
       findById: jest.fn(),
     } as any;
+
+    userSessionRepo = {
+      findActiveById: jest.fn(),
+    };
+
+    sessionActivityService = {
+      trackActivity: jest.fn(),
+    };
 
     apiKeyService = {
       validateApiKey: jest.fn(),
@@ -37,6 +47,8 @@ describe('JwtStrategy', () => {
     strategy = new JwtStrategy(
       userRepo,
       workspaceRepo,
+      userSessionRepo as any,
+      sessionActivityService as any,
       environmentService,
       moduleRef,
     );
@@ -134,6 +146,69 @@ describe('JwtStrategy', () => {
         workspace: expect.objectContaining({ id: 'workspace-1' }),
         user: expect.objectContaining({ id: 'user-1' }),
       }),
+    );
+  });
+
+  it('rejects revoked or expired sessions on access token payloads', async () => {
+    workspaceRepo.findById.mockResolvedValue({
+      id: 'workspace-1',
+    } as any);
+    userRepo.findById.mockResolvedValue({
+      id: 'user-1',
+      deactivatedAt: null,
+      deletedAt: null,
+    } as any);
+    userSessionRepo.findActiveById.mockResolvedValue(undefined);
+
+    await expect(
+      strategy.validate(
+        {
+          originalUrl: '/api/pages',
+          raw: { workspaceId: 'workspace-1' },
+        },
+        {
+          sub: 'user-1',
+          email: 'user@example.com',
+          workspaceId: 'workspace-1',
+          sessionId: 'session-1',
+          type: JwtType.ACCESS,
+        },
+      ),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('tracks valid session activity and stores the current session id', async () => {
+    workspaceRepo.findById.mockResolvedValue({
+      id: 'workspace-1',
+    } as any);
+    userRepo.findById.mockResolvedValue({
+      id: 'user-1',
+      deactivatedAt: null,
+      deletedAt: null,
+    } as any);
+    userSessionRepo.findActiveById.mockResolvedValue({
+      id: 'session-1',
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+    });
+    const request = {
+      originalUrl: '/api/pages',
+      raw: { workspaceId: 'workspace-1' },
+    };
+
+    await strategy.validate(request, {
+      sub: 'user-1',
+      email: 'user@example.com',
+      workspaceId: 'workspace-1',
+      sessionId: 'session-1',
+      type: JwtType.ACCESS,
+    });
+
+    expect((request.raw as any).sessionId).toBe('session-1');
+    expect(sessionActivityService.trackActivity).toHaveBeenCalledWith(
+      'session-1',
+      'user-1',
+      'workspace-1',
     );
   });
 });

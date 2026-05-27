@@ -38,14 +38,15 @@ import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { RecentPageDto } from './dto/recent-page.dto';
 import { DuplicatePageDto } from './dto/duplicate-page.dto';
 import { DeletedPageDto } from './dto/deleted-page.dto';
-import { QuoteContentDto } from './dto/quote-content.dto';
 import { LinkPreviewDto } from './dto/link-preview.dto';
+import { AddLabelsDto, RemoveLabelDto } from '../label/dto/label.dto';
+import { LabelService } from '../label/label.service';
+import { BacklinkService } from './services/backlink.service';
+import { BacklinksListDto } from './dto/backlink.dto';
 import {
   jsonToHtml,
   jsonToMarkdown,
 } from '../../collaboration/collaboration.util';
-import { CollaborationGateway } from '../../collaboration/collaboration.gateway';
-import { TiptapTransformer } from '@hocuspocus/transformer';
 import { DatabaseRepo } from '@docmost/db/repos/database/database.repo';
 import {
   mapPageCustomFields,
@@ -114,80 +115,11 @@ export class PageController {
     private readonly pageRepo: PageRepo,
     private readonly pageHistoryService: PageHistoryService,
     private readonly spaceAbility: SpaceAbilityFactory,
-    private readonly collaborationGateway: CollaborationGateway,
     private readonly databaseRepo: DatabaseRepo,
     private readonly pageAccessService: PageAccessService,
+    private readonly labelService: LabelService,
+    private readonly backlinkService: BacklinkService,
   ) {}
-
-  /**
-   * Extracts text from all text nodes marked with the given quote identifier.
-   *
-   * Returns merged plain text that is then displayed
-   * in the target document as a synchronized embedded quote.
-   */
-  private extractQuoteTextFromContent(content: any, quoteId: string): string {
-    const chunks: string[] = [];
-
-    const walk = (node: any) => {
-      if (!node || typeof node !== 'object') {
-        return;
-      }
-
-      if (node.type === 'text' && typeof node.text === 'string') {
-        const hasQuoteMark = Array.isArray(node.marks)
-          ? node.marks.some(
-              (mark) =>
-                mark?.type === 'quoteSource' &&
-                mark?.attrs?.quoteId === quoteId,
-            )
-          : false;
-
-        if (hasQuoteMark) {
-          chunks.push(node.text);
-        }
-      }
-
-      if (Array.isArray(node.content)) {
-        node.content.forEach(walk);
-      }
-    };
-
-    walk(content);
-
-    return chunks.join(' ').replace(/\s+/g, ' ').trim();
-  }
-
-  /**
-   * Reads the freshest source page content directly from the active Yjs document.
-   *
-   * This bypasses DB persistence debounce and allows linked quotes to react to
-   * source edits almost immediately while users are collaboratively editing.
-   */
-  private async getLivePageContent(
-    pageId: string,
-    user: User,
-  ): Promise<any | null> {
-    const documentName = `page.${pageId}`;
-
-    const connection = await this.collaborationGateway.openDirectConnection(
-      documentName,
-      { user },
-    );
-
-    try {
-      let content: any = null;
-
-      await connection.transact((doc) => {
-        content = TiptapTransformer.fromYdoc(doc, 'default');
-      });
-
-      return content;
-    } catch {
-      return null;
-    } finally {
-      await connection.disconnect();
-    }
-  }
 
   private async fetchLinkPreviewHtml(
     sourceUrl: URL,
@@ -557,30 +489,99 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.OK)
-  @Post('/quote-content')
-  async getQuoteContent(
-    @Body() dto: QuoteContentDto,
+  @Post('labels')
+  async getPageLabels(
+    @Body() dto: PageIdDto,
+    @Body() pagination: PaginationOptions,
     @AuthUser() user: User,
-  ): Promise<{ text: string }> {
-    const page = await this.pageRepo.findById(dto.sourcePageId, {
-      includeContent: true,
-    });
-
+  ) {
+    const page = await this.pageRepo.findById(dto.pageId);
     if (!page) {
-      throw new NotFoundException('Source page not found');
+      throw new NotFoundException('Page not found');
     }
 
     await this.pageAccessService.assertCanReadPage(page, user);
 
-    const liveContent = await this.getLivePageContent(page.id, user);
-    const sourceContent = liveContent ?? page.content;
-    const text = this.extractQuoteTextFromContent(sourceContent, dto.quoteId);
+    return this.labelService.getPageLabels(page.id, pagination);
+  }
 
-    if (!text) {
-      throw new NotFoundException('Quote content not found');
+  @HttpCode(HttpStatus.OK)
+  @Post('labels/add')
+  async addPageLabels(
+    @Body() dto: AddLabelsDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const page = await this.pageRepo.findById(dto.pageId);
+    if (!page || page.deletedAt) {
+      throw new NotFoundException('Page not found');
     }
 
-    return { text };
+    await this.pageAccessService.assertCanWritePage(page, user);
+
+    return this.labelService.addLabelsToPage(
+      page.id,
+      dto.names,
+      workspace.id,
+    );
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('labels/remove')
+  async removePageLabel(
+    @Body() dto: RemoveLabelDto,
+    @AuthUser() user: User,
+  ): Promise<void> {
+    const page = await this.pageRepo.findById(dto.pageId);
+    if (!page || page.deletedAt) {
+      throw new NotFoundException('Page not found');
+    }
+
+    await this.pageAccessService.assertCanWritePage(page, user);
+
+    await this.labelService.removeLabelFromPage(
+      page.id,
+      dto.labelId,
+      page.workspaceId,
+    );
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('backlinks-count')
+  async getBacklinksCount(
+    @Body() dto: PageIdDto,
+    @AuthUser() user: User,
+  ): Promise<{ incoming: number; outgoing: number }> {
+    const page = await this.pageRepo.findById(dto.pageId);
+    if (!page) {
+      throw new NotFoundException('Page not found');
+    }
+
+    await this.pageAccessService.assertCanReadPage(page, user);
+
+    return this.backlinkService.countByPageId(page.id, user);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('backlinks')
+  async getBacklinks(
+    @Body() dto: BacklinksListDto,
+    @Body() pagination: PaginationOptions,
+    @AuthUser() user: User,
+  ) {
+    const page = await this.pageRepo.findById(dto.pageId);
+    if (!page) {
+      throw new NotFoundException('Page not found');
+    }
+
+    await this.pageAccessService.assertCanReadPage(page, user);
+
+    return this.backlinkService.findByPageId(
+      page.id,
+      dto.direction,
+      user,
+      pagination,
+    );
   }
 
   @HttpCode(HttpStatus.OK)

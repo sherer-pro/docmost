@@ -8,6 +8,9 @@ import { StorageModule } from '../../integrations/storage/storage.module';
 import { CollaborationModule } from '../../collaboration/collaboration.module';
 import { WatcherModule } from '../watcher/watcher.module';
 import { NotificationModule } from '../notification/notification.module';
+import { LabelModule } from '../label/label.module';
+import { BacklinkService } from './services/backlink.service';
+import { TransclusionModule } from './transclusion/transclusion.module';
 
 @Module({
   controllers: [PageController],
@@ -16,8 +19,16 @@ import { NotificationModule } from '../notification/notification.module';
     PageHistoryService,
     PageHistoryRecorderService,
     TrashCleanupService,
+    BacklinkService,
   ],
   exports: [PageService, PageHistoryService, PageHistoryRecorderService],
-  imports: [StorageModule, CollaborationModule, WatcherModule, NotificationModule],
+  imports: [
+    StorageModule,
+    CollaborationModule,
+    WatcherModule,
+    NotificationModule,
+    LabelModule,
+    TransclusionModule,
+  ],
 })
 export class PageModule {}

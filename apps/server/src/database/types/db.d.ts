@@ -160,6 +160,16 @@ export interface Comments {
   workspaceId: string;
 }
 
+export interface Favorites {
+  createdAt: Generated<Timestamp>;
+  id: Generated<string>;
+  pageId: string | null;
+  spaceId: string | null;
+  type: string;
+  userId: string;
+  workspaceId: string;
+}
+
 
 export interface Databases {
   createdAt: Generated<Timestamp>;
@@ -254,6 +264,15 @@ export interface DictionaryTermAliases {
   workspaceId: string;
 }
 
+export interface Labels {
+  createdAt: Generated<Timestamp>;
+  id: Generated<string>;
+  name: string;
+  type: Generated<string>;
+  updatedAt: Generated<Timestamp>;
+  workspaceId: string;
+}
+
 export interface FileTasks {
   createdAt: Generated<Timestamp>;
   creatorId: string | null;
@@ -326,6 +345,32 @@ export interface PageAccessRules {
   updatedAt: Generated<Timestamp>;
   updatedById: string | null;
   userId: string | null;
+  workspaceId: string;
+}
+
+export interface PageLabels {
+  createdAt: Generated<Timestamp>;
+  id: Generated<string>;
+  labelId: string;
+  pageId: string;
+}
+
+export interface PageTransclusions {
+  content: Json;
+  createdAt: Generated<Timestamp>;
+  id: Generated<string>;
+  pageId: string;
+  transclusionId: string;
+  updatedAt: Generated<Timestamp>;
+  workspaceId: string;
+}
+
+export interface PageTransclusionReferences {
+  createdAt: Generated<Timestamp>;
+  id: Generated<string>;
+  referencePageId: string;
+  sourcePageId: string;
+  transclusionId: string;
   workspaceId: string;
 }
 
@@ -456,6 +501,21 @@ export interface UserTokens {
   workspaceId: string | null;
 }
 
+export interface UserSessions {
+  createdAt: Generated<Timestamp>;
+  deviceName: string | null;
+  expiresAt: Timestamp;
+  geoLocation: string | null;
+  id: Generated<string>;
+  ipAddress: string | null;
+  lastActiveAt: Generated<Timestamp>;
+  metadata: Json | null;
+  revokedAt: Timestamp | null;
+  userAgent: string | null;
+  userId: string;
+  workspaceId: string;
+}
+
 export interface WorkspaceInvitations {
   createdAt: Generated<Timestamp>;
   email: string | null;
@@ -551,11 +611,16 @@ export interface DB {
   databaseViews: DatabaseViews;
   dictionaryTerms: DictionaryTerms;
   dictionaryTermAliases: DictionaryTermAliases;
+  favorites: Favorites;
   fileTasks: FileTasks;
   groups: Groups;
   groupUsers: GroupUsers;
+  labels: Labels;
   notifications: Notifications;
   pageAccessRules: PageAccessRules;
+  pageLabels: PageLabels;
+  pageTransclusions: PageTransclusions;
+  pageTransclusionReferences: PageTransclusionReferences;
   pageHistory: PageHistory;
   pages: Pages;
   pushNotificationJobs: PushNotificationJobs;
@@ -564,6 +629,7 @@ export interface DB {
   spaceMembers: SpaceMembers;
   spaces: Spaces;
   userMfa: UserMfa;
+  userSessions: UserSessions;
   users: Users;
   userTokens: UserTokens;
   watchers: Watchers;

@@ -35,6 +35,7 @@ import {
   LEGACY_ATTACHMENT_TOKEN_COOKIE,
 } from '../attachment/attachment-public-token.util';
 import { PageAccessService } from '../page-access/page-access.service';
+import { ShareTransclusionLookupDto } from './dto/share-transclusion-lookup.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller('shares')
@@ -200,6 +201,20 @@ export class ShareController {
     await this.pageAccessService.assertCanMoveDeleteShare(page, user);
 
     await this.shareRepo.deleteShare(share.id);
+  }
+
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  @Post('/transclusion/lookup')
+  async lookupTransclusion(
+    @Body() dto: ShareTransclusionLookupDto,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.shareService.lookupTransclusionForShare(
+      dto.shareId,
+      dto.references,
+      workspace.id,
+    );
   }
 
   @Public()

@@ -28,10 +28,12 @@ import {
   TiptapImage,
   Callout,
   TiptapVideo,
+  TiptapAudio,
   LinkExtension,
   LinkPreview,
   Selection,
   Attachment,
+  TiptapPdf,
   CustomCodeBlock,
   Drawio,
   Excalidraw,
@@ -39,13 +41,15 @@ import {
   SearchAndReplace,
   Mention,
   TableDndExtension,
+  TableReadonlySort,
+  TableView,
   Subpages,
   Heading,
   Highlight,
   UniqueID,
   SharedStorage,
-  QuoteSourceMark,
-  QuoteEmbed,
+  TransclusionSource,
+  TransclusionReference,
 } from "@docmost/editor-ext";
 import {
   randomElement,
@@ -57,14 +61,17 @@ import MathBlockView from "@/features/editor/components/math/math-block.tsx";
 import ImageView from "@/features/editor/components/image/image-view.tsx";
 import CalloutView from "@/features/editor/components/callout/callout-view.tsx";
 import VideoView from "@/features/editor/components/video/video-view.tsx";
+import AudioView from "@/features/editor/components/audio/audio-view.tsx";
 import AttachmentView from "@/features/editor/components/attachment/attachment-view.tsx";
 import CodeBlockView from "@/features/editor/components/code-block/code-block-view.tsx";
 import DrawioView from "../components/drawio/drawio-view";
 import ExcalidrawView from "@/features/editor/components/excalidraw/excalidraw-view.tsx";
 import EmbedView from "@/features/editor/components/embed/embed-view.tsx";
 import LinkPreviewView from "@/features/editor/components/link-preview/link-preview-view.tsx";
+import PdfView from "@/features/editor/components/pdf/pdf-view.tsx";
 import SubpagesView from "@/features/editor/components/subpages/subpages-view.tsx";
-import QuoteEmbedView from "@/features/editor/components/quote-embed/quote-embed-view.tsx";
+import TransclusionView from "@/features/editor/components/transclusion/transclusion-view.tsx";
+import TransclusionReferenceView from "@/features/editor/components/transclusion/transclusion-reference-view.tsx";
 import { common, createLowlight } from "lowlight";
 import plaintext from "highlight.js/lib/languages/plaintext";
 import powershell from "highlight.js/lib/languages/powershell";
@@ -116,7 +123,7 @@ export const mainExtensions = [
   SharedStorage,
   Heading,
   UniqueID.configure({
-    types: ["heading", "paragraph"],
+    types: ["heading", "paragraph", "transclusionSource"],
     filterTransaction: (transaction) => !isChangeOrigin(transaction),
   }),
   Placeholder.configure({
@@ -183,11 +190,14 @@ export const mainExtensions = [
     resizable: true,
     lastColumnResizable: true,
     allowTableNodeSelection: true,
+    cellMinWidth: 49,
+    View: TableView,
   }),
   TableRow,
   TableCell,
   TableHeader,
   TableDndExtension,
+  TableReadonlySort,
   MathInline.configure({
     view: MathInlineView,
   }),
@@ -209,6 +219,9 @@ export const mainExtensions = [
   TiptapVideo.configure({
     view: VideoView,
   }),
+  TiptapAudio.configure({
+    view: AudioView,
+  }),
   Callout.configure({
     view: CalloutView,
   }),
@@ -223,6 +236,9 @@ export const mainExtensions = [
   Selection,
   Attachment.configure({
     view: AttachmentView,
+  }),
+  TiptapPdf.configure({
+    view: PdfView,
   }),
   Drawio.configure({
     view: DrawioView,
@@ -239,9 +255,11 @@ export const mainExtensions = [
   Subpages.configure({
     view: SubpagesView,
   }),
-  QuoteSourceMark,
-  QuoteEmbed.configure({
-    view: QuoteEmbedView,
+  TransclusionSource.configure({
+    view: TransclusionView,
+  }),
+  TransclusionReference.configure({
+    view: TransclusionReferenceView,
   }),
   MarkdownClipboard.configure({
     transformPastedText: true,

@@ -18,6 +18,7 @@ import { LoggerExtension } from './extensions/logger.extension';
 import { CollaborationHandler } from './collaboration.handler';
 import { CollabHistoryService } from './services/collab-history.service';
 import { WatcherModule } from '../core/watcher/watcher.module';
+import { TransclusionModule } from '../core/page/transclusion/transclusion.module';
 
 @Module({
   providers: [
@@ -30,7 +31,7 @@ import { WatcherModule } from '../core/watcher/watcher.module';
     CollaborationHandler,
   ],
   exports: [CollaborationGateway, CollabHistoryService],
-  imports: [TokenModule, WatcherModule],
+  imports: [TokenModule, WatcherModule, TransclusionModule],
 })
 export class CollaborationModule implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(CollaborationModule.name);

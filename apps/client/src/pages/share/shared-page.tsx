@@ -54,6 +54,7 @@ export default function SharedPage() {
           title={data.page.title}
           content={data.page.content}
           pageId={data.page.id}
+          shareId={shareId ?? data.share.key ?? data.share.id}
         />
       </Container>
 
