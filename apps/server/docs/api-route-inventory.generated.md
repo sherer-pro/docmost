@@ -100,7 +100,6 @@
 | POST | `/pages/:pageId/actions/access/users` | `apps/server/src/core/page/page.controller.ts` |
 | POST | `/pages/:pageId/convert-to-database` | `apps/server/src/core/page/page.controller.ts` |
 | POST | `/pages/actions/export` | `apps/server/src/integrations/export/export.controller.ts` |
-| POST | `/pages/actions/export` | `apps/server/src/integrations/export/export.controller.ts` |
 | POST | `/pages/actions/import` | `apps/server/src/integrations/import/import.controller.ts` |
 | POST | `/pages/actions/import-zip` | `apps/server/src/integrations/import/import.controller.ts` |
 | POST | `/pages/backlinks` | `apps/server/src/core/page/page.controller.ts` |
@@ -143,6 +142,7 @@
 | GET | `/rag/updates` | `apps/server/src/core/rag/rag.controller.ts` |
 | GET | `/robots.txt` | `apps/server/src/integrations/security/robots.txt.controller.ts` |
 | POST | `/search` | `apps/server/src/core/search/search.controller.ts` |
+| POST | `/search/attachments` | `apps/server/src/core/search/search.controller.ts` |
 | POST | `/search/share-search` | `apps/server/src/core/search/search.controller.ts` |
 | POST | `/search/suggest` | `apps/server/src/core/search/search.controller.ts` |
 | POST | `/sessions` | `apps/server/src/core/session/session.controller.ts` |
@@ -166,6 +166,7 @@
 | PATCH | `/spaces/:spaceId` | `apps/server/src/core/space/space.controller.ts` |
 | POST | `/spaces/:spaceId/actions/archive` | `apps/server/src/core/space/space.controller.ts` |
 | POST | `/spaces/:spaceId/actions/unarchive` | `apps/server/src/core/space/space.controller.ts` |
+| POST | `/spaces/actions/export` | `apps/server/src/integrations/export/export.controller.ts` |
 | POST | `/spaces/member-users` | `apps/server/src/core/space/space.controller.ts` |
 | POST | `/spaces/members` | `apps/server/src/core/space/space.controller.ts` |
 | POST | `/spaces/members/add` | `apps/server/src/core/space/space.controller.ts` |

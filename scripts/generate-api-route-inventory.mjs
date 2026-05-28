@@ -73,27 +73,37 @@ function joinRoute(basePath, methodPath) {
 
 function extractRoutes(filePath) {
   const content = readFileSync(filePath, 'utf8');
-  const controllerMatch = content.match(/@Controller\(([\s\S]*?)\)\s*export class/s);
-  if (!controllerMatch) {
+  const controllerRegex = /@Controller\(([\s\S]*?)\)\s*export class\s+\w+/g;
+  const controllerMatches = [...content.matchAll(controllerRegex)];
+  if (controllerMatches.length === 0) {
     return [];
   }
 
-  const basePaths = parseDecoratorPaths(controllerMatch[1]);
   const routeDecoratorRegex = /@(Get|Post|Put|Patch|Delete|Options|Head)\(([\s\S]*?)\)/g;
   const routes = [];
-  let match;
 
-  while ((match = routeDecoratorRegex.exec(content)) !== null) {
-    const method = match[1].toUpperCase();
-    const decoratorPaths = parseDecoratorPaths(match[2]);
+  for (let index = 0; index < controllerMatches.length; index += 1) {
+    const controllerMatch = controllerMatches[index];
+    const nextControllerMatch = controllerMatches[index + 1];
+    const controllerBodyStart = controllerMatch.index + controllerMatch[0].length;
+    const controllerBodyEnd = nextControllerMatch?.index ?? content.length;
+    const controllerBody = content.slice(controllerBodyStart, controllerBodyEnd);
+    const basePaths = parseDecoratorPaths(controllerMatch[1]);
+    let match;
 
-    for (const basePath of basePaths) {
-      for (const methodPath of decoratorPaths) {
-        routes.push({
-          method,
-          path: joinRoute(basePath, methodPath),
-          file: relative('.', filePath).replace(/\\/g, '/'),
-        });
+    routeDecoratorRegex.lastIndex = 0;
+    while ((match = routeDecoratorRegex.exec(controllerBody)) !== null) {
+      const method = match[1].toUpperCase();
+      const decoratorPaths = parseDecoratorPaths(match[2]);
+
+      for (const basePath of basePaths) {
+        for (const methodPath of decoratorPaths) {
+          routes.push({
+            method,
+            path: joinRoute(basePath, methodPath),
+            file: relative('.', filePath).replace(/\\/g, '/'),
+          });
+        }
       }
     }
   }

@@ -33,6 +33,7 @@
 - `apps/server/src/core/favorite` — page/space favorites API.
 - `apps/server/src/core/label` — labels and page-label assignment API.
 - `apps/server/src/core/page/transclusion` — synced blocks backend, lookup, references, and unsync logic.
+- `ARCHITECTURE.md` — high-level repository architecture and verification map.
 - `apps/server/docs/api-routing-conventions.md` — API routing policy, endpoint inventory, and RPC migration plan.
 - `apps/server/docs/api-route-inventory.generated.md` — generated backend route inventory (`pnpm routes:inventory`).
 - `apps/server/docs/security-regression-runbook.md` — security pre-release checks for GHSA regression classes.
@@ -63,9 +64,10 @@
 
 - Install dependencies: `pnpm install --frozen-lockfile`
 - Build the entire monorepo: `pnpm build`
-- Quick local verification (lint + backend test + frontend smoke + security suite): `pnpm verify:quick`
-- Full local verification (build → lint → backend tests + frontend smoke + frontend unit + security suite): `pnpm verify:full`
+- Quick local verification (env contract + lint + backend test + frontend smoke + security suite): `pnpm verify:quick`
+- Full local verification (env contract + build → lint → backend tests + frontend smoke + frontend unit + security suite): `pnpm verify:full`
 - Clean build artifacts: `pnpm clean`
+- Check `.env.example`, local `.env`, server validation, and frontend runtime env drift: `pnpm check:env`
 - Regenerate backend route inventory from controllers: `pnpm routes:inventory`
 - Check route inventory drift (regenerates and fails on diff): `pnpm routes:inventory:check`
 
@@ -189,13 +191,13 @@ Minimum:
 
 - The repository includes GitHub Actions workflows:
   - `.github/workflows/docker.yml` — release/docker build and push.
-  - `.github/workflows/ci.yml` — PR validation (`install`, `build`, `routes:inventory:check`, `lint`, `client test`, `server test`, `pnpm test:security`, `check:comments:en`, `pnpm audit --prod` fail on high/critical).
+  - `.github/workflows/ci.yml` — PR validation (`install`, `build`, `routes:inventory:check`, `check:env`, `lint`, `client test`, `server test`, `pnpm test:security`, `check:comments:en`, `pnpm audit --prod` fail on high/critical).
 - De facto required local pipeline before PR:
   1. `pnpm install --frozen-lockfile`
   2. for quick checks on day-to-day changes: `pnpm verify:quick`.
   3. before PR / release candidates: `pnpm verify:full` (build → lint → tests → security suite).
   4. for infrastructure changes — `docker build` and/or `docker compose up` smoke check.
-- Functional checks (`build`, `lint`, `test`, `test:security`) remain mandatory local pre-PR validation.
+- Functional checks (`check:env`, `build`, `lint`, `test`, `test:security`) remain mandatory local pre-PR validation.
 
 ---
 
