@@ -72,11 +72,12 @@ export class AttachmentService {
 
     let isUpdate = false;
     let attachmentId = null;
+    let existingAttachment: Attachment | null = null;
 
     // passing attachmentId to allow for updating diagrams
     // instead of creating new files for each save
     if (opts?.attachmentId) {
-      const existingAttachment = await this.attachmentRepo.findById(
+      existingAttachment = await this.attachmentRepo.findById(
         opts.attachmentId,
       );
       if (!existingAttachment) {
@@ -117,7 +118,11 @@ export class AttachmentService {
       if (isUpdate) {
         attachment = await this.attachmentRepo.updateAttachment(
           {
+            filePath,
+            fileName: preparedFile.fileName,
             fileSize: preparedFile.fileSize,
+            mimeType: preparedFile.mimeType,
+            fileExt: preparedFile.fileExtension,
             updatedAt: new Date(),
           },
           attachmentId,
@@ -134,9 +139,30 @@ export class AttachmentService {
           pageId,
         });
       }
+    } catch (err) {
+      this.logger.error('Failed to persist uploaded attachment metadata', err);
 
-      // Only index PDFs and DOCX files
-      if (['.pdf', '.docx'].includes(attachment.fileExt.toLowerCase())) {
+      if (
+        !isUpdate ||
+        !existingAttachment?.filePath ||
+        existingAttachment.filePath !== filePath
+      ) {
+        await this.deleteRedundantFile(filePath);
+      }
+
+      throw new BadRequestException('Failed to upload file');
+    }
+
+    if (
+      isUpdate &&
+      existingAttachment?.filePath &&
+      existingAttachment.filePath !== filePath
+    ) {
+      await this.deleteRedundantFile(existingAttachment.filePath);
+    }
+
+    if (['.pdf', '.docx'].includes(attachment.fileExt.toLowerCase())) {
+      try {
         await this.attachmentQueue.add(
           QueueJob.ATTACHMENT_INDEX_CONTENT,
           {
@@ -150,10 +176,9 @@ export class AttachmentService {
             },
           },
         );
+      } catch (err) {
+        this.logger.error('Failed to queue attachment indexing', err);
       }
-    } catch (err) {
-      // delete uploaded file on error
-      this.logger.error(err);
     }
 
     return attachment;

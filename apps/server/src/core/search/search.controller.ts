@@ -70,6 +70,32 @@ export class SearchController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @Post('attachments')
+  async attachmentSearch(
+    @Body() searchDto: SearchDTO,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    delete searchDto.shareId;
+
+    if (searchDto.spaceId) {
+      const hasReadablePages =
+        await this.pageAccessService.hasAnyReadablePageInSpace(
+          user,
+          searchDto.spaceId,
+        );
+      if (!hasReadablePages) {
+        throw new ForbiddenException();
+      }
+    }
+
+    return this.searchService.searchAttachments(searchDto, {
+      userId: user.id,
+      workspaceId: workspace.id,
+    });
+  }
+
+  @HttpCode(HttpStatus.OK)
   @Post('suggest')
   async searchSuggestions(
     @Body() dto: SearchSuggestionDTO,
