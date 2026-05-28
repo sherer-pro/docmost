@@ -4,6 +4,7 @@ import { useClickOutside } from "@mantine/hooks";
 import { useAtom } from "jotai";
 import {
   activeCommentIdAtom,
+  draftCommentRangeAtom,
   draftCommentIdAtom,
   showCommentPopupAtom,
 } from "@/features/comment/atoms/comment-atom";
@@ -27,7 +28,10 @@ function CommentDialog({ editor, pageId }: CommentDialogProps) {
   const [comment, setComment] = useState("");
   const [, setShowCommentPopup] = useAtom(showCommentPopupAtom);
   const [, setActiveCommentId] = useAtom(activeCommentIdAtom);
-  const [draftCommentId, setDraftCommentId] = useAtom(draftCommentIdAtom);
+  const [, setDraftCommentId] = useAtom(draftCommentIdAtom);
+  const [draftCommentRange, setDraftCommentRange] = useAtom(
+    draftCommentRangeAtom,
+  );
   const [currentUser] = useAtom(currentUserAtom);
   const [, setAsideState] = useAtom(asideStateAtom);
   const useClickOutsideRef = useClickOutside(() => {
@@ -41,11 +45,12 @@ function CommentDialog({ editor, pageId }: CommentDialogProps) {
 
   const handleDialogClose = () => {
     setShowCommentPopup(false);
-    editor.chain().focus().unsetCommentDecoration().run();
+    editor?.commands.unsetCommentDecoration();
+    setDraftCommentRange(null);
   };
 
   const getSelectedText = () => {
-    const { from, to } = editor.state.selection;
+    const { from, to } = draftCommentRange ?? editor.state.selection;
     return editor.state.doc.textBetween(from, to);
   };
 
@@ -61,15 +66,16 @@ function CommentDialog({ editor, pageId }: CommentDialogProps) {
 
       const createdComment =
         await createCommentMutation.mutateAsync(commentData);
+      const range = draftCommentRange ?? editor.state.selection;
+
       editor
         .chain()
+        .setTextSelection({ from: range.from, to: range.to })
         .setComment(createdComment.id)
         .unsetCommentDecoration()
+        .setTextSelection({ from: range.from, to: range.from })
         .run();
       setActiveCommentId(createdComment.id);
-
-      //unselect text to close bubble menu
-      editor.commands.setTextSelection({ from: editor.view.state.selection.from, to: editor.view.state.selection.from });
 
       setAsideState({ tab: "comments", isAsideOpen: true });
       setTimeout(() => {
@@ -77,18 +83,20 @@ function CommentDialog({ editor, pageId }: CommentDialogProps) {
         const commentElement = document.querySelector(selector);
         commentElement?.scrollIntoView({ behavior: "smooth", block: "center" });
 
-        editor.view.dispatch(
-          editor.state.tr.scrollIntoView()
-        );
+        editor.view.dispatch(editor.state.tr.scrollIntoView());
       }, 400);
 
-      emit({
-        operation: "invalidateComment",
-        pageId: pageId,
-      }, { workspaceId: createdComment.workspaceId });
+      emit(
+        {
+          operation: "invalidateComment",
+          pageId: pageId,
+        },
+        { workspaceId: createdComment.workspaceId },
+      );
     } finally {
       setShowCommentPopup(false);
       setDraftCommentId("");
+      setDraftCommentRange(null);
     }
   };
 

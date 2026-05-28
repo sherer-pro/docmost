@@ -36,7 +36,10 @@ import {
   yjsConnectionStatusAtom,
 } from "@/features/editor/atoms/editor-atoms";
 import CommentDialog from "@/features/comment/components/comment-dialog";
-import { EditorBubbleMenu } from "@/features/editor/components/bubble-menu/bubble-menu";
+import {
+  EditorBubbleMenu,
+  ReadOnlyCommentBubbleMenu,
+} from "@/features/editor/components/bubble-menu/bubble-menu";
 import TableCellMenu from "@/features/editor/components/table/table-cell-menu.tsx";
 import TableMenu from "@/features/editor/components/table/table-menu.tsx";
 import ImageMenu from "@/features/editor/components/image/image-menu.tsx";
@@ -83,6 +86,7 @@ interface PageEditorProps {
   spaceId?: string;
   dictionaryEnabled?: boolean;
   canManageDictionary?: boolean;
+  canCreateInlineComments?: boolean;
 }
 
 export default function PageEditor({
@@ -95,6 +99,7 @@ export default function PageEditor({
   spaceId,
   dictionaryEnabled = false,
   canManageDictionary = false,
+  canCreateInlineComments = editable,
 }: PageEditorProps) {
   const collaborationURL = useCollaborationUrl();
   const isComponentMounted = useRef(false);
@@ -470,7 +475,12 @@ export default function PageEditor({
               <LinkMenu editor={editor} appendTo={menuContainerRef} />
             </div>
           )}
-          {sharedShowCommentPopup && <CommentDialog editor={editor} pageId={pageId} />}
+          {editor && !editorIsEditable && canCreateInlineComments && (
+            <ReadOnlyCommentBubbleMenu editor={editor} />
+          )}
+          {sharedShowCommentPopup && (
+            <CommentDialog editor={editor} pageId={pageId} />
+          )}
         </div>
         {showBottomSpacer && (
           <div
@@ -482,4 +492,3 @@ export default function PageEditor({
     </TransclusionLookupProvider>
   );
 }
-

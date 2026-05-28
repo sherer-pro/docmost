@@ -71,6 +71,7 @@ export function FullEditor({
         spaceId={spaceId}
         dictionaryEnabled={dictionaryEnabled}
         canManageDictionary={editable}
+        canCreateInlineComments={editable}
       />
       {footer}
     </Container>

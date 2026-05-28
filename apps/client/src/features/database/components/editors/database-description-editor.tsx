@@ -8,6 +8,7 @@ export interface DatabaseDescriptionEditorProps {
   cacheSlugId?: string;
   spaceId?: string;
   dictionaryEnabled?: boolean;
+  canCreateInlineComments?: boolean;
 }
 
 /**
@@ -23,6 +24,7 @@ export function DatabaseDescriptionEditor({
   cacheSlugId,
   spaceId,
   dictionaryEnabled = false,
+  canCreateInlineComments = editable,
 }: DatabaseDescriptionEditorProps) {
   return (
     <div className={classes.databaseDescriptionEditorContainer}>
@@ -36,6 +38,7 @@ export function DatabaseDescriptionEditor({
         spaceId={spaceId}
         dictionaryEnabled={dictionaryEnabled}
         canManageDictionary={editable}
+        canCreateInlineComments={canCreateInlineComments}
       />
     </div>
   );

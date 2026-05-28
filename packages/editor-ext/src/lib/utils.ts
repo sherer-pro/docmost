@@ -339,6 +339,10 @@ export const isRowGripSelected = ({
 };
 
 export function isTextSelected(editor: Editor) {
+  return editor.isEditable && isTextRangeSelected(editor);
+}
+
+export function isTextRangeSelected(editor: Editor) {
   const {
     state: {
       doc,
@@ -350,7 +354,7 @@ export function isTextSelected(editor: Editor) {
   const isEmptyTextBlock =
     !doc.textBetween(from, to).length && isTextSelection(selection);
 
-  if (empty || isEmptyTextBlock || !editor.isEditable) {
+  if (empty || isEmptyTextBlock || !isTextSelection(selection)) {
     return false;
   }
 
