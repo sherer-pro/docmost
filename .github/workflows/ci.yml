@@ -33,6 +33,9 @@ jobs:
       - name: API route inventory drift check
         run: pnpm routes:inventory:check
 
+      - name: Environment contract check
+        run: pnpm check:env
+
       - name: Lint
         run: pnpm lint
 
