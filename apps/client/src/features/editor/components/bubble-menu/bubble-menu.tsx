@@ -19,12 +19,17 @@ import { ColorSelector } from "./color-selector";
 import { NodeSelector } from "./node-selector";
 import { TextAlignmentSelector } from "./text-alignment-selector";
 import {
+  draftCommentRangeAtom,
   draftCommentIdAtom,
   showCommentPopupAtom,
 } from "@/features/comment/atoms/comment-atom";
 import { useAtom, useAtomValue } from "jotai";
 import { v7 as uuid7 } from "uuid";
-import { isCellSelection, isTextSelected } from "@docmost/editor-ext";
+import {
+  isCellSelection,
+  isTextRangeSelected,
+  isTextSelected,
+} from "@docmost/editor-ext";
 import { LinkSelector } from "@/features/editor/components/bubble-menu/link-selector.tsx";
 import { useTranslation } from "react-i18next";
 import { showAiMenuAtom } from "@/features/editor/atoms/editor-atoms";
@@ -52,6 +57,7 @@ export const EditorBubbleMenu: FC<EditorBubbleMenuProps> = (props) => {
   const workspace = useAtomValue(workspaceAtom);
   const isGenerativeAiEnabled = workspace?.settings?.ai?.generative === true;
   const [, setDraftCommentId] = useAtom(draftCommentIdAtom);
+  const [, setDraftCommentRange] = useAtom(draftCommentRangeAtom);
   const [dictionaryModalOpened, setDictionaryModalOpened] = useState(false);
   const [dictionaryInitialTerm, setDictionaryInitialTerm] = useState("");
   const showCommentPopupRef = useRef(showCommentPopup);
@@ -120,10 +126,16 @@ export const EditorBubbleMenu: FC<EditorBubbleMenuProps> = (props) => {
     name: "Comment",
     isActive: () => editorState?.isComment,
     command: () => {
-      const commentId = uuid7();
+      if (!props.editor) {
+        return;
+      }
 
-      props.editor.chain().focus().setCommentDecoration().run();
+      const commentId = uuid7();
+      const { from, to } = props.editor.state.selection;
+
+      props.editor.commands.setCommentDecoration();
       setDraftCommentId(commentId);
+      setDraftCommentRange({ from, to });
       setShowCommentPopup(true);
     },
     icon: IconMessage,
@@ -313,5 +325,73 @@ export const EditorBubbleMenu: FC<EditorBubbleMenuProps> = (props) => {
         />
       )}
     </>
+  );
+};
+
+export const ReadOnlyCommentBubbleMenu: FC<EditorBubbleMenuProps> = (props) => {
+  const { t } = useTranslation();
+  const [showCommentPopup, setShowCommentPopup] = useAtom(showCommentPopupAtom);
+  const [, setDraftCommentId] = useAtom(draftCommentIdAtom);
+  const [, setDraftCommentRange] = useAtom(draftCommentRangeAtom);
+  const showCommentPopupRef = useRef(showCommentPopup);
+
+  useEffect(() => {
+    showCommentPopupRef.current = showCommentPopup;
+  }, [showCommentPopup]);
+
+  const startComment = () => {
+    if (!props.editor) {
+      return;
+    }
+
+    const commentId = uuid7();
+    const { from, to } = props.editor.state.selection;
+
+    props.editor.commands.setCommentDecoration();
+    setDraftCommentId(commentId);
+    setDraftCommentRange({ from, to });
+    setShowCommentPopup(true);
+  };
+
+  return (
+    <BubbleMenu
+      {...props}
+      shouldShow={({ state, editor }) => {
+        const { selection } = state;
+
+        if (
+          editor.isEditable ||
+          editor.isActive("image") ||
+          selection.empty ||
+          isNodeSelection(selection) ||
+          isCellSelection(selection) ||
+          showCommentPopupRef.current
+        ) {
+          return false;
+        }
+
+        return isTextRangeSelected(editor);
+      }}
+      options={{
+        placement: "top",
+        offset: 8,
+      }}
+      style={{ zIndex: 200, position: "relative" }}
+    >
+      <div className={classes.bubbleMenu}>
+        <Tooltip label={t("Comment")} withArrow withinPortal={false}>
+          <ActionIcon
+            variant="default"
+            size="lg"
+            radius="6px"
+            aria-label={t("Comment")}
+            style={{ border: "none" }}
+            onClick={startComment}
+          >
+            <IconMessage size={16} stroke={2} />
+          </ActionIcon>
+        </Tooltip>
+      </div>
+    </BubbleMenu>
   );
 };

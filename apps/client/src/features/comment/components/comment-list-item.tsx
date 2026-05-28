@@ -17,6 +17,7 @@ import { IComment } from "@/features/comment/types/comment.types";
 import { CustomAvatar } from "@/components/ui/custom-avatar.tsx";
 import { currentUserAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { useQueryEmit } from "@/features/websocket/use-query-emit";
+import { scrollCommentMarkIntoView } from "@/features/comment/utils/comment-dom";
 
 interface CommentListItemProps {
   comment: IComment;
@@ -117,11 +118,8 @@ function CommentListItem({
   }
 
   function handleCommentClick(comment: IComment) {
-    const el = document.querySelector(
-      `.comment-mark[data-comment-id="${comment.id}"]`,
-    );
+    const el = scrollCommentMarkIntoView(comment.id);
     if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
       el.classList.add("comment-highlight");
       setTimeout(() => {
         el.classList.remove("comment-highlight");

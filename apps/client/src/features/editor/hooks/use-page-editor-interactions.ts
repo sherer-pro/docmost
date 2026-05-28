@@ -1,5 +1,5 @@
 import { asideStateAtom } from '@/components/layouts/global/hooks/atoms/sidebar-atom';
-import { activeCommentIdAtom, showCommentPopupAtom } from '@/features/comment/atoms/comment-atom';
+import { activeCommentIdAtom, draftCommentRangeAtom, showCommentPopupAtom } from '@/features/comment/atoms/comment-atom';
 import { handleFileDrop, handlePaste } from '@/features/editor/components/common/editor-paste-handler';
 import { useAtom } from 'jotai';
 import { useCallback, useEffect, useRef, type MutableRefObject } from 'react';
@@ -31,6 +31,7 @@ export function usePageEditorInteractions({
   const plainTextPasteRequestedRef = useRef(false);
   const [, setAsideState] = useAtom(asideStateAtom);
   const [, setActiveCommentId] = useAtom(activeCommentIdAtom);
+  const [, setDraftCommentRange] = useAtom(draftCommentRangeAtom);
   const [showCommentPopup, setShowCommentPopup] = useAtom(showCommentPopupAtom);
 
   const handleActiveCommentEvent = useCallback((event: CustomEvent<{ commentId: string; resolved?: boolean }>) => {
@@ -66,8 +67,9 @@ export function usePageEditorInteractions({
 
   useEffect(() => {
     setActiveCommentId(null);
+    setDraftCommentRange(null);
     setShowCommentPopup(false);
-  }, [pageId, setActiveCommentId, setShowCommentPopup]);
+  }, [pageId, setActiveCommentId, setDraftCommentRange, setShowCommentPopup]);
 
   const handleKeyDown = useCallback((_view: unknown, event: KeyboardEvent) => {
     if (

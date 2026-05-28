@@ -20,6 +20,7 @@ const TAB_CHAR = "\u00A0\u00A0";
  */
 export const CustomCodeBlock = CodeBlock.extend<CodeBlockLowlightOptions>({
   selectable: true,
+  marks: "comment",
 
   addOptions() {
     return {

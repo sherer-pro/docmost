@@ -269,6 +269,7 @@ export default function DatabasePage() {
               cacheSlugId={databasePage?.slugId}
               spaceId={space?.id}
               dictionaryEnabled={space?.settings?.dictionary?.enabled === true}
+              canCreateInlineComments={!readOnly}
             />
           )}
         </Stack>
@@ -289,6 +290,5 @@ export default function DatabasePage() {
     </>
   );
 }
-
 
 
