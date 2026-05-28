@@ -19,3 +19,25 @@ export class SearchResponseDto {
   breadcrumbs?: SearchBreadcrumbDto[];
   space: Partial<Space>;
 }
+
+export class AttachmentSearchResponseDto {
+  id: string;
+  fileName: string;
+  pageId: string;
+  creatorId: string;
+  rank: number;
+  highlight: string;
+  createdAt: Date;
+  updatedAt: Date;
+  space: {
+    id: string;
+    name: string;
+    slug: string;
+    icon: string | null;
+  };
+  page: {
+    id: string;
+    title: string | null;
+    slugId: string;
+  };
+}

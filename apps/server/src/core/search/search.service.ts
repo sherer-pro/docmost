@@ -1,9 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { SearchDTO, SearchSuggestionDTO } from './dto/search.dto';
-import { SearchBreadcrumbDto, SearchResponseDto } from './dto/search-response.dto';
+import {
+  AttachmentSearchResponseDto,
+  SearchBreadcrumbDto,
+  SearchResponseDto,
+} from './dto/search-response.dto';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { sql } from 'kysely';
+import { jsonObjectFrom } from 'kysely/helpers/postgres';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 import { ShareRepo } from '@docmost/db/repos/share/share.repo';
@@ -38,9 +43,9 @@ export class SearchService {
     private readonly pageAccessService: PageAccessService,
   ) {}
 
-  private normalizeSearchHighlights(
-    searchResults: SearchResponseDto[],
-  ): SearchResponseDto[] {
+  private normalizeSearchHighlights<T extends { highlight?: string | null }>(
+    searchResults: T[],
+  ): T[] {
     return searchResults.map((result) => {
       if (!result.highlight) {
         return result;
@@ -57,7 +62,7 @@ export class SearchService {
 
   private async buildSpaceAccessSnapshotMap(
     user: User,
-    searchResults: SearchResponseDto[],
+    searchResults: Array<{ space?: { id?: string | null } | null }>,
   ): Promise<Map<string, SidebarAccessSnapshot>> {
     const spaceIds = [...new Set(
       searchResults
@@ -94,6 +99,22 @@ export class SearchService {
 
       const snapshot = snapshotBySpaceId.get(spaceId);
       return snapshot?.readablePageIds.has(result.id) ?? false;
+    });
+  }
+
+  private filterReadableAttachmentResults(
+    searchResults: AttachmentSearchResponseDto[],
+    snapshotBySpaceId: Map<string, SidebarAccessSnapshot>,
+  ): AttachmentSearchResponseDto[] {
+    return searchResults.filter((result) => {
+      const spaceId = result.space?.id;
+      const pageId = result.page?.id ?? result.pageId;
+      if (!spaceId || !pageId) {
+        return false;
+      }
+
+      const snapshot = snapshotBySpaceId.get(spaceId);
+      return snapshot?.readablePageIds.has(pageId) ?? false;
     });
   }
 
@@ -330,6 +351,109 @@ export class SearchService {
     } else {
       searchResults = await this.attachBreadcrumbsToResults(searchResults);
     }
+
+    return { items: searchResults };
+  }
+
+  async searchAttachments(
+    searchParams: SearchDTO,
+    opts: {
+      userId: string;
+      workspaceId: string;
+    },
+  ): Promise<{ items: AttachmentSearchResponseDto[] }> {
+    const { query } = searchParams;
+
+    if (query.length < 1) {
+      return { items: [] };
+    }
+
+    const searchQuery = tsquery(query.trim() + '*');
+    let queryResults = this.db
+      .selectFrom('attachments')
+      .innerJoin('pages', 'pages.id', 'attachments.pageId')
+      .innerJoin('spaces', 'spaces.id', 'attachments.spaceId')
+      .select([
+        'attachments.id as id',
+        'attachments.fileName as fileName',
+        'attachments.pageId as pageId',
+        'attachments.creatorId as creatorId',
+        'attachments.createdAt as createdAt',
+        'attachments.updatedAt as updatedAt',
+        sql<number>`ts_rank(attachments.tsv, to_tsquery('english', f_unaccent(${searchQuery})))`.as(
+          'rank',
+        ),
+        sql<string>`ts_headline('english', attachments.text_content, to_tsquery('english', f_unaccent(${searchQuery})),'MinWords=9, MaxWords=10, MaxFragments=3')`.as(
+          'highlight',
+        ),
+      ])
+      .select((eb) => [
+        jsonObjectFrom(
+          eb
+            .selectFrom('spaces')
+            .select([
+              'spaces.id',
+              'spaces.name',
+              'spaces.slug',
+              'spaces.logo as icon',
+            ])
+            .whereRef('spaces.id', '=', 'attachments.spaceId'),
+        ).as('space'),
+        jsonObjectFrom(
+          eb
+            .selectFrom('pages')
+            .select(['pages.id', 'pages.title', 'pages.slugId'])
+            .whereRef('pages.id', '=', 'attachments.pageId'),
+        ).as('page'),
+      ])
+      .where(
+        'attachments.tsv',
+        '@@',
+        sql<string>`to_tsquery('english', f_unaccent(${searchQuery}))`,
+      )
+      .where('attachments.deletedAt', 'is', null)
+      .where('attachments.workspaceId', '=', opts.workspaceId)
+      .where('attachments.pageId', 'is not', null)
+      .where('attachments.spaceId', 'is not', null)
+      .where('pages.deletedAt', 'is', null)
+      .where('spaces.archivedAt', 'is', null)
+      .where('spaces.deletedAt', 'is', null)
+      .orderBy('rank', 'desc')
+      .limit(searchParams.limit || 25)
+      .offset(searchParams.offset || 0);
+
+    if (searchParams.spaceId) {
+      queryResults = queryResults.where(
+        'attachments.spaceId',
+        '=',
+        searchParams.spaceId,
+      );
+    } else {
+      queryResults = queryResults.where(
+        'attachments.spaceId',
+        'in',
+        this.spaceMemberRepo.getUserSpaceIdsQuery(opts.userId),
+      );
+    }
+
+    const rawResults = await queryResults.execute();
+    let searchResults = this.normalizeSearchHighlights(
+      rawResults as unknown as AttachmentSearchResponseDto[],
+    );
+    const authUser = await this.userRepo.findById(opts.userId, opts.workspaceId);
+
+    if (!authUser) {
+      return { items: [] };
+    }
+
+    const snapshotBySpaceId = await this.buildSpaceAccessSnapshotMap(
+      authUser,
+      searchResults,
+    );
+    searchResults = this.filterReadableAttachmentResults(
+      searchResults,
+      snapshotBySpaceId,
+    );
 
     return { items: searchResults };
   }

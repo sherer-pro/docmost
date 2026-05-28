@@ -229,6 +229,7 @@ describe('AttachmentService uploadFile attachment overwrite validation', () => {
       workspaceId: 'workspace-id',
       pageId: 'page-id',
       fileExt: '.drawio',
+      filePath: 'workspace-id/files/attachment-id/old.drawio',
     });
 
     await expect(
@@ -242,6 +243,67 @@ describe('AttachmentService uploadFile attachment overwrite validation', () => {
       }),
     ).resolves.toMatchObject({ id: 'attachment-id', fileExt: '.drawio' });
 
-    expect(attachmentRepo.updateAttachment).toHaveBeenCalledTimes(1);
+    expect(attachmentRepo.updateAttachment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: 'workspace-id/files/attachment-id/diagram.drawio',
+        fileName: 'diagram.drawio',
+        mimeType: 'application/xml',
+        fileExt: '.drawio',
+      }),
+      'attachment-id',
+    );
+    expect(storageService.delete).toHaveBeenCalledWith(
+      'workspace-id/files/attachment-id/old.drawio',
+    );
+  });
+
+  it('deletes the uploaded file and rejects when metadata insert fails', async () => {
+    attachmentRepo.insertAttachment.mockRejectedValue(new Error('db failed'));
+
+    await expect(
+      service.uploadFile({
+        filePromise: Promise.resolve({} as any),
+        pageId: 'page-id',
+        userId: 'user-id',
+        spaceId: 'space-id',
+        workspaceId: 'workspace-id',
+      }),
+    ).rejects.toThrow(BadRequestException);
+
+    expect(storageService.delete).toHaveBeenCalledWith(
+      expect.stringMatching(/^workspace-id\/files\/[^/]+\/diagram\.drawio$/),
+    );
+    expect(attachmentRepo.deleteAttachmentByFilePath).toHaveBeenCalledWith(
+      expect.stringMatching(/^workspace-id\/files\/[^/]+\/diagram\.drawio$/),
+    );
+  });
+
+  it('keeps a persisted upload when indexing queueing fails', async () => {
+    const persistedAttachment = {
+      id: 'attachment-id',
+      fileExt: '.pdf',
+      filePath: 'workspace-id/files/attachment-id/report.pdf',
+    };
+
+    jest.spyOn(attachmentUtils, 'prepareFile').mockResolvedValueOnce({
+      ...basePreparedFile,
+      fileName: 'report.pdf',
+      fileExtension: '.pdf',
+      mimeType: 'application/pdf',
+    } as any);
+    attachmentRepo.insertAttachment.mockResolvedValue(persistedAttachment);
+    attachmentQueue.add.mockRejectedValue(new Error('queue unavailable'));
+
+    await expect(
+      service.uploadFile({
+        filePromise: Promise.resolve({} as any),
+        pageId: 'page-id',
+        userId: 'user-id',
+        spaceId: 'space-id',
+        workspaceId: 'workspace-id',
+      }),
+    ).resolves.toBe(persistedAttachment);
+
+    expect(storageService.delete).not.toHaveBeenCalled();
   });
 });

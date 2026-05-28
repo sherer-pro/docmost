@@ -52,7 +52,10 @@ import {
   mapPageCustomFields,
   mapPageResponse,
 } from './mappers/page-response.mapper';
-import { lookup } from 'node:dns/promises';
+import { lookup as dnsLookup } from 'node:dns/promises';
+import type { IncomingHttpHeaders, IncomingMessage } from 'node:http';
+import { request as httpRequest } from 'node:http';
+import { request as httpsRequest } from 'node:https';
 import { BlockList, isIP } from 'node:net';
 import { PageAccessService } from '../page-access/page-access.service';
 import { PageRole } from '../../common/helpers/types/permission';
@@ -72,6 +75,17 @@ const LINK_PREVIEW_BLOCKED_HOST_SUFFIXES = [
   '.local',
   '.internal',
 ];
+
+type LinkPreviewAddress = {
+  address: string;
+  family: 4 | 6;
+};
+
+type LinkPreviewResponse = {
+  statusCode: number;
+  headers: IncomingHttpHeaders;
+  body: IncomingMessage;
+};
 
 function buildLinkPreviewBlockList(): BlockList {
   const blockList = new BlockList();
@@ -127,22 +141,18 @@ export class PageController {
     let currentUrl = new URL(sourceUrl.toString());
 
     for (let hop = 0; hop <= LINK_PREVIEW_MAX_REDIRECTS; hop += 1) {
-      await this.assertPublicUrl(currentUrl);
+      const targetAddress = await this.resolvePublicUrlAddress(currentUrl);
 
-      const response = await fetch(currentUrl.toString(), {
-        redirect: 'manual',
-        signal: AbortSignal.timeout(LINK_PREVIEW_TIMEOUT_MS),
-        headers: {
-          'user-agent':
-            'Mozilla/5.0 (compatible; DocmostBot/1.0; +https://docmost.com)',
-          accept: 'text/html,application/xhtml+xml',
-        },
-      }).catch(() => {
+      const response = await this.requestLinkPreview(
+        currentUrl,
+        targetAddress,
+      ).catch(() => {
         throw new BadRequestException('Failed to fetch URL metadata');
       });
 
-      if (this.isRedirectResponse(response.status)) {
-        const location = response.headers.get('location');
+      if (this.isRedirectResponse(response.statusCode)) {
+        response.body.resume();
+        const location = this.getHeaderValue(response.headers, 'location');
         if (!location) {
           throw new BadRequestException('Failed to fetch URL metadata');
         }
@@ -156,21 +166,24 @@ export class PageController {
         continue;
       }
 
-      if (!response.ok) {
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        response.body.resume();
         throw new BadRequestException('Failed to fetch URL metadata');
       }
 
       const contentType =
-        response.headers.get('content-type')?.toLowerCase() ?? '';
+        this.getHeaderValue(response.headers, 'content-type')?.toLowerCase() ??
+        '';
       if (
         !contentType.includes('text/html') &&
         !contentType.includes('application/xhtml+xml')
       ) {
+        response.body.resume();
         throw new BadRequestException('URL does not point to an HTML document');
       }
 
-      const html = await this.readResponseTextWithLimit(
-        response,
+      const html = await this.readIncomingMessageWithLimit(
+        response.body,
         LINK_PREVIEW_MAX_RESPONSE_BYTES,
       );
 
@@ -180,7 +193,7 @@ export class PageController {
     throw new BadRequestException('Too many redirects');
   }
 
-  private async assertPublicUrl(url: URL): Promise<void> {
+  private async resolvePublicUrlAddress(url: URL): Promise<LinkPreviewAddress> {
     if (!['http:', 'https:'].includes(url.protocol)) {
       throw new BadRequestException('Only HTTP and HTTPS URLs are supported');
     }
@@ -195,10 +208,13 @@ export class PageController {
         throw new BadRequestException('Unsafe target URL');
       }
 
-      return;
+      return {
+        address: this.normalizeIpAddress(url.hostname),
+        family: hostIpVersion as 4 | 6,
+      };
     }
 
-    const resolvedAddresses = await lookup(url.hostname, {
+    const resolvedAddresses = await dnsLookup(url.hostname, {
       all: true,
       verbatim: true,
     }).catch(() => {
@@ -214,6 +230,67 @@ export class PageController {
     ) {
       throw new BadRequestException('Unsafe target URL');
     }
+
+    const targetAddress = resolvedAddresses.find(
+      (entry) => entry.family === 4 || entry.family === 6,
+    );
+
+    if (!targetAddress) {
+      throw new BadRequestException('Failed to resolve URL hostname');
+    }
+
+    return {
+      address: targetAddress.address,
+      family: targetAddress.family as 4 | 6,
+    };
+  }
+
+  private requestLinkPreview(
+    url: URL,
+    targetAddress: LinkPreviewAddress,
+  ): Promise<LinkPreviewResponse> {
+    return new Promise((resolve, reject) => {
+      const request = url.protocol === 'https:' ? httpsRequest : httpRequest;
+      const req = request(
+        url,
+        {
+          headers: {
+            'user-agent':
+              'Mozilla/5.0 (compatible; DocmostBot/1.0; +https://docmost.com)',
+            accept: 'text/html,application/xhtml+xml',
+          },
+          lookup: (_hostname, _options, callback) => {
+            callback(null, targetAddress.address, targetAddress.family);
+          },
+          timeout: LINK_PREVIEW_TIMEOUT_MS,
+        },
+        (body) => {
+          resolve({
+            statusCode: body.statusCode ?? 0,
+            headers: body.headers,
+            body,
+          });
+        },
+      );
+
+      req.on('timeout', () => {
+        req.destroy(new Error('Link preview request timed out'));
+      });
+      req.on('error', reject);
+      req.end();
+    });
+  }
+
+  private getHeaderValue(
+    headers: IncomingHttpHeaders,
+    name: string,
+  ): string | null {
+    const value = headers[name.toLowerCase()];
+    if (Array.isArray(value)) {
+      return value[0] ?? null;
+    }
+
+    return value ?? null;
   }
 
   private isBlockedHostname(hostname: string): boolean {
@@ -252,45 +329,33 @@ export class PageController {
     return [301, 302, 303, 307, 308].includes(statusCode);
   }
 
-  private async readResponseTextWithLimit(
-    response: Response,
+  private async readIncomingMessageWithLimit(
+    response: IncomingMessage,
     maxBytes: number,
   ): Promise<string> {
-    const contentLength = Number(response.headers.get('content-length'));
+    const contentLength = Number(
+      this.getHeaderValue(response.headers, 'content-length'),
+    );
     if (Number.isFinite(contentLength) && contentLength > maxBytes) {
       throw new BadRequestException('URL metadata response is too large');
     }
 
-    if (!response.body) {
-      const text = await response.text();
-      if (Buffer.byteLength(text, 'utf8') > maxBytes) {
-        throw new BadRequestException('URL metadata response is too large');
-      }
-
-      return text;
-    }
-
     const chunks: Buffer[] = [];
     let totalBytes = 0;
-    const reader = response.body.getReader();
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) {
-        break;
-      }
-
-      if (!value) {
+    for await (const chunk of response) {
+      if (!chunk) {
         continue;
       }
 
-      totalBytes += value.byteLength;
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      totalBytes += buffer.byteLength;
       if (totalBytes > maxBytes) {
-        await reader.cancel().catch(() => undefined);
+        response.destroy();
         throw new BadRequestException('URL metadata response is too large');
       }
 
-      chunks.push(Buffer.from(value));
+      chunks.push(buffer);
     }
 
     return Buffer.concat(chunks).toString('utf8');

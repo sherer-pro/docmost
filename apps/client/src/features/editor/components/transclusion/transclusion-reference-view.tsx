@@ -11,7 +11,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ErrorBoundary } from "react-error-boundary";
-import { useTransclusionLookup } from "./transclusion-lookup-context";
+import { useTransclusionLookup } from "./use-transclusion-lookup";
 import TransclusionContent from "./transclusion-content";
 import NoAccessPlaceholder from "./no-access-placeholder";
 import NotFoundPlaceholder from "./not-found-placeholder";

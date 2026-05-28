@@ -1,39 +1,20 @@
 import React, {
-  createContext,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useRef,
-  useState,
 } from "react";
 import {
   lookupTransclusion,
   lookupTransclusionForShare,
 } from "@/features/transclusion/services/transclusion-api";
 import type { TransclusionLookup } from "@/features/transclusion/types/transclusion.types";
-
-type LookupKey = string; // `${sourcePageId}::${transclusionId}`
-
-type Subscriber = {
-  key: LookupKey;
-  sourcePageId: string;
-  transclusionId: string;
-  setResult: (r: TransclusionLookup) => void;
-};
-
-type ContextValue = {
-  /** Register a subscriber. Returns an unsubscribe function. */
-  subscribe: (s: Subscriber) => () => void;
-  /**
-   * Force a re-fetch of `key` and resolve when the response arrives (or the
-   * request fails). Bypasses the cache and any in-flight de-dup so the user
-   * always sees a fresh server read.
-   */
-  refresh: (key: LookupKey) => Promise<void>;
-};
-
-const TransclusionLookupContext = createContext<ContextValue | null>(null);
+import {
+  TransclusionLookupContext,
+  type ContextValue,
+  type LookupKey,
+  type Subscriber,
+} from "./transclusion-lookup-context-value";
 
 export function TransclusionLookupProvider({
   children,
@@ -180,34 +161,4 @@ export function TransclusionLookupProvider({
       {children}
     </TransclusionLookupContext.Provider>
   );
-}
-
-export function useTransclusionLookup(
-  sourcePageId: string | null | undefined,
-  transclusionId: string | null | undefined,
-): {
-  result: TransclusionLookup | null;
-  refresh: () => Promise<void>;
-} {
-  const ctx = useContext(TransclusionLookupContext);
-  const [result, setResult] = useState<TransclusionLookup | null>(null);
-
-  useEffect(() => {
-    if (!ctx || !sourcePageId || !transclusionId) return;
-    const key = `${sourcePageId}::${transclusionId}`;
-    const unsubscribe = ctx.subscribe({
-      key,
-      sourcePageId,
-      transclusionId,
-      setResult,
-    });
-    return unsubscribe;
-  }, [ctx, sourcePageId, transclusionId]);
-
-  const refresh = useCallback(async () => {
-    if (!ctx || !sourcePageId || !transclusionId) return;
-    await ctx.refresh(`${sourcePageId}::${transclusionId}`);
-  }, [ctx, sourcePageId, transclusionId]);
-
-  return { result, refresh };
 }
