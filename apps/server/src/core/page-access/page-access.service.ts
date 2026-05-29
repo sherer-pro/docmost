@@ -70,8 +70,41 @@ export class PageAccessService {
     private readonly pageHistoryRecorder: PageHistoryRecorderService,
   ) {}
 
-  isWorkspaceBypassUser(user: User): boolean {
+  isWorkspaceBypassUser(user: User, workspaceId?: string): boolean {
+    if (workspaceId && user.workspaceId !== workspaceId) {
+      return false;
+    }
+
     return user.role === UserRole.OWNER || user.role === UserRole.ADMIN;
+  }
+
+  private noAccess(spaceRole: SpaceRole | null = null): EffectivePageAccess {
+    return {
+      role: null,
+      denied: false,
+      sources: [],
+      capabilities: {
+        canRead: false,
+        canWrite: false,
+        canCreateChild: false,
+        canMoveDeleteShare: false,
+        canManageAccess: false,
+      },
+      spaceRole,
+      isSystemAccess: false,
+    };
+  }
+
+  private emptySidebarAccessSnapshot(): SidebarAccessSnapshot {
+    return {
+      visiblePageIds: new Set<string>(),
+      readablePageIds: new Set<string>(),
+      writablePageIds: new Set<string>(),
+      createChildPageIds: new Set<string>(),
+      moveDeleteSharePageIds: new Set<string>(),
+      manageAccessPageIds: new Set<string>(),
+      visibleChildrenCountByParentId: new Map<string, number>(),
+    };
   }
 
   private toPageRoleFromSpaceRole(spaceRole: SpaceRole | null): PageRole | null {
@@ -251,7 +284,11 @@ export class PageAccessService {
       spaceArchivedAt?: Date | null;
     },
   ): Promise<EffectivePageAccess> {
-    const isSystemBypass = this.isWorkspaceBypassUser(user);
+    if (page.workspaceId !== user.workspaceId) {
+      return this.noAccess();
+    }
+
+    const isSystemBypass = this.isWorkspaceBypassUser(user, page.workspaceId);
 
     const [groupIds, spaceRole, spaceArchivedAt] = await Promise.all([
       opts?.groupIds
@@ -364,8 +401,8 @@ export class PageAccessService {
     return access;
   }
 
-  assertCanManageAccess(user: User): void {
-    if (!this.isWorkspaceBypassUser(user)) {
+  assertCanManageAccess(user: User, workspaceId?: string): void {
+    if (!this.isWorkspaceBypassUser(user, workspaceId)) {
       throw new ForbiddenException();
     }
   }
@@ -418,7 +455,7 @@ export class PageAccessService {
     actor: User,
     trx?: KyselyTransaction,
   ): Promise<void> {
-    this.assertCanManageAccess(actor);
+    this.assertCanManageAccess(actor, page.workspaceId);
     await this.assertSpaceIsActive(page.spaceId, trx);
 
     const targetUser = await this.ensureWorkspaceUser(page.workspaceId, targetUserId);
@@ -463,7 +500,7 @@ export class PageAccessService {
     actor: User,
     trx?: KyselyTransaction,
   ): Promise<void> {
-    this.assertCanManageAccess(actor);
+    this.assertCanManageAccess(actor, page.workspaceId);
     await this.assertSpaceIsActive(page.spaceId, trx);
 
     const targetUser = await this.ensureWorkspaceUser(page.workspaceId, targetUserId);
@@ -518,7 +555,7 @@ export class PageAccessService {
     actor: User,
     trx?: KyselyTransaction,
   ): Promise<void> {
-    this.assertCanManageAccess(actor);
+    this.assertCanManageAccess(actor, page.workspaceId);
     await this.assertSpaceIsActive(page.spaceId, trx);
 
     const targetGroup = await this.ensureWorkspaceGroup(
@@ -566,7 +603,7 @@ export class PageAccessService {
     actor: User,
     trx?: KyselyTransaction,
   ): Promise<void> {
-    this.assertCanManageAccess(actor);
+    this.assertCanManageAccess(actor, page.workspaceId);
     await this.assertSpaceIsActive(page.spaceId, trx);
 
     const targetGroup = await this.ensureWorkspaceGroup(
@@ -645,10 +682,15 @@ export class PageAccessService {
     user: User,
     spaceId: string,
   ): Promise<SidebarAccessSnapshot> {
+    if (!user.workspaceId) {
+      return this.emptySidebarAccessSnapshot();
+    }
+
     const pages = await this.db
       .selectFrom('pages')
       .select(['id', 'parentPageId'])
       .where('spaceId', '=', spaceId)
+      .where('workspaceId', '=', user.workspaceId)
       .where('deletedAt', 'is', null)
       .execute();
 
@@ -662,15 +704,7 @@ export class PageAccessService {
     const visibleChildrenCountByParentId = new Map<string, number>();
 
     if (pageIds.length === 0) {
-      return {
-        visiblePageIds,
-        readablePageIds,
-        writablePageIds,
-        createChildPageIds,
-        moveDeleteSharePageIds,
-        manageAccessPageIds,
-        visibleChildrenCountByParentId,
-      };
+      return this.emptySidebarAccessSnapshot();
     }
 
     const isSpaceArchived = !!(await this.getSpaceArchivedAt(spaceId));
@@ -899,7 +933,7 @@ export class PageAccessService {
     const uniqueCandidateIds = [...new Set(candidateUserIds)];
     const users = await this.db
       .selectFrom('users')
-      .select(['id', 'role'])
+      .select(['id', 'role', 'workspaceId'])
       .where('id', 'in', uniqueCandidateIds)
       .where('workspaceId', '=', page.workspaceId)
       .where('deletedAt', 'is', null)
@@ -1086,7 +1120,10 @@ export class PageAccessService {
     paginatedUsers.items = (
       await Promise.all(
         paginatedUsers.items.map(async (user) => {
-          const effective = await this.getEffectiveAccess(page, user as User);
+          const effective = await this.getEffectiveAccess(page, {
+            ...user,
+            workspaceId: page.workspaceId,
+          } as User);
           if (!effective.capabilities.canRead) {
             return null;
           }

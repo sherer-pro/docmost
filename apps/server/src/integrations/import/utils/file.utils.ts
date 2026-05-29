@@ -19,10 +19,75 @@ export enum FileTaskStatus {
   Failed = 'failed',
 }
 
+export interface ExtractZipOptions {
+  maxEntries?: number;
+  maxEntryUncompressedBytes?: number;
+  maxTotalUncompressedBytes?: number;
+  maxPathDepth?: number;
+}
+
+interface ExtractZipLimits {
+  maxEntries: number;
+  maxEntryUncompressedBytes: number;
+  maxTotalUncompressedBytes: number;
+  maxPathDepth: number;
+}
+
+interface ExtractZipState {
+  entryCount: number;
+  totalUncompressedBytes: number;
+}
+
+const DEFAULT_EXTRACT_ZIP_LIMITS: ExtractZipLimits = {
+  maxEntries: 10_000,
+  maxEntryUncompressedBytes: 250 * 1024 * 1024,
+  maxTotalUncompressedBytes: 512 * 1024 * 1024,
+  maxPathDepth: 64,
+};
+
 function logZipSecurityEvent(reason: string, entryName: string): void {
   console.warn(
     `[security][zip-entry-rejected] reason=${reason} entry=${entryName}`,
   );
+}
+
+function resolveExtractZipLimits(
+  options?: ExtractZipOptions,
+): ExtractZipLimits {
+  return {
+    ...DEFAULT_EXTRACT_ZIP_LIMITS,
+    ...options,
+  };
+}
+
+function ensureZipEntryWithinLimits(
+  safeName: string,
+  uncompressedSize: number,
+  limits: ExtractZipLimits,
+  state: ExtractZipState,
+): void {
+  state.entryCount += 1;
+
+  if (state.entryCount > limits.maxEntries) {
+    throw new Error(`ZIP entry count exceeds ${limits.maxEntries}`);
+  }
+
+  if (safeName.split('/').filter(Boolean).length > limits.maxPathDepth) {
+    throw new Error(`ZIP path depth exceeds ${limits.maxPathDepth}`);
+  }
+
+  if (uncompressedSize > limits.maxEntryUncompressedBytes) {
+    throw new Error(
+      `ZIP entry size exceeds ${limits.maxEntryUncompressedBytes} bytes`,
+    );
+  }
+
+  state.totalUncompressedBytes += uncompressedSize;
+  if (state.totalUncompressedBytes > limits.maxTotalUncompressedBytes) {
+    throw new Error(
+      `ZIP total uncompressed size exceeds ${limits.maxTotalUncompressedBytes} bytes`,
+    );
+  }
 }
 
 export function getFileTaskFolderPath(
@@ -43,8 +108,12 @@ export function getFileTaskFolderPath(
 export async function extractZip(
   source: string,
   target: string,
+  options?: ExtractZipOptions,
 ): Promise<void> {
-  return extractZipInternal(source, target, true);
+  return extractZipInternal(source, target, true, resolveExtractZipLimits(options), {
+    entryCount: 0,
+    totalUncompressedBytes: 0,
+  });
 }
 
 /**
@@ -57,6 +126,8 @@ function extractZipInternal(
   source: string,
   target: string,
   allowNested: boolean,
+  limits: ExtractZipLimits,
+  state: ExtractZipState,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     yauzl.open(
@@ -64,6 +135,13 @@ function extractZipInternal(
       { lazyEntries: true, decodeStrings: false, autoClose: true },
       (err, zipfile) => {
         if (err) return reject(err);
+
+        if (zipfile.entryCount > limits.maxEntries) {
+          zipfile.close();
+          return reject(
+            new Error(`ZIP entry count exceeds ${limits.maxEntries}`),
+          );
+        }
 
         // Handle one level of nested ZIP if allowed
         if (allowNested && zipfile.entryCount === 1) {
@@ -81,23 +159,41 @@ function extractZipInternal(
 
               zipfile.openReadStream(entry, (openErr, rs) => {
                 if (openErr) return reject(openErr);
+                try {
+                  ensureZipEntryWithinLimits(
+                    name,
+                    entry.uncompressedSize,
+                    limits,
+                    state,
+                  );
+                } catch (limitErr) {
+                  zipfile.close();
+                  return reject(limitErr);
+                }
+
                 const ws = fs.createWriteStream(nestedPath);
                 rs.on('error', reject);
                 ws.on('error', reject);
                 ws.on('finish', () => {
                   zipfile.close();
-                  extractZipInternal(nestedPath, target, false)
+                  extractZipInternal(nestedPath, target, false, limits, state)
                     .then(() => {
                       fs.unlinkSync(nestedPath);
                       resolve();
                     })
-                    .catch(reject);
+                    .catch((extractErr) => {
+                      fs.rmSync(nestedPath, { force: true });
+                      reject(extractErr);
+                    });
                 });
                 rs.pipe(ws);
               });
             } else {
               zipfile.close();
-              extractZipInternal(source, target, false).then(resolve, reject);
+              extractZipInternal(source, target, false, limits, state).then(
+                resolve,
+                reject,
+              );
             }
           });
           zipfile.once('error', reject);
@@ -122,6 +218,20 @@ function extractZipInternal(
 
           if (safe.startsWith('__MACOSX/')) {
             zipfile.readEntry();
+            return;
+          }
+
+          try {
+            ensureZipEntryWithinLimits(
+              safe,
+              entry.uncompressedSize,
+              limits,
+              state,
+            );
+          } catch (limitErr) {
+            logZipSecurityEvent('quota-exceeded', safe);
+            zipfile.close();
+            reject(limitErr);
             return;
           }
 

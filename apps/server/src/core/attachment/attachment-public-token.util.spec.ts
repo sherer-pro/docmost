@@ -2,6 +2,7 @@ import {
   getAttachmentTokenCookieName,
   LEGACY_ATTACHMENT_TOKEN_COOKIE,
   resolveAttachmentAccessToken,
+  resolveAttachmentAccessTokenDetails,
 } from './attachment-public-token.util';
 
 describe('attachment-public-token.util', () => {
@@ -77,6 +78,20 @@ describe('attachment-public-token.util', () => {
 
     expect(resolveAttachmentAccessToken(req, pageId, 'query-token')).toBe(
       'query-token',
+    );
+  });
+
+  it('returns token source metadata for deprecation handling', () => {
+    const req = {
+      headers: {},
+      cookies: {},
+    } as any;
+
+    expect(resolveAttachmentAccessTokenDetails(req, pageId, 'query-token')).toEqual(
+      {
+        token: 'query-token',
+        source: 'query',
+      },
     );
   });
 });

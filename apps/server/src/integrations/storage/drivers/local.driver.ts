@@ -3,7 +3,7 @@ import {
   LocalStorageConfig,
   StorageOption,
 } from '../interfaces';
-import { join, dirname } from 'path';
+import { dirname, isAbsolute, relative, resolve, sep } from 'path';
 import * as fs from 'fs-extra';
 import { Readable } from 'stream';
 import { createReadStream, createWriteStream } from 'node:fs';
@@ -11,13 +11,34 @@ import { pipeline } from 'node:stream/promises';
 
 export class LocalDriver implements StorageDriver {
   private readonly config: LocalStorageConfig;
+  private readonly storageRootPath: string;
 
   constructor(config: LocalStorageConfig) {
     this.config = config;
+    this.storageRootPath = resolve(config.storagePath);
   }
 
   private _fullPath(filePath: string): string {
-    return join(this.config.storagePath, filePath);
+    if (!filePath) {
+      throw new Error('Local storage file path is required');
+    }
+
+    if (isAbsolute(filePath)) {
+      throw new Error('Local storage file path must be relative');
+    }
+
+    const resolvedPath = resolve(this.storageRootPath, filePath);
+    const pathFromRoot = relative(this.storageRootPath, resolvedPath);
+
+    if (
+      pathFromRoot === '..' ||
+      pathFromRoot.startsWith(`..${sep}`) ||
+      isAbsolute(pathFromRoot)
+    ) {
+      throw new Error('Local storage file path escapes storage root');
+    }
+
+    return resolvedPath;
   }
 
   async upload(filePath: string, file: Buffer | Readable): Promise<void> {

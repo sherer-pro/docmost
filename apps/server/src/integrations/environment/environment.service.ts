@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import ms, { StringValue } from 'ms';
+import {
+  parseTrustedProxies,
+  TrustedProxyConfig,
+} from '../../common/security/trusted-proxy.util';
 
 @Injectable()
 export class EnvironmentService {
@@ -43,6 +47,16 @@ export class EnvironmentService {
 
   getHost(): string {
     return this.configService.get<string>('HOST', '0.0.0.0');
+  }
+
+  getTrustedProxies(): TrustedProxyConfig {
+    return parseTrustedProxies(
+      this.configService.get<string>('TRUSTED_PROXIES', ''),
+    );
+  }
+
+  getEmbedAllowedOrigins(): string {
+    return this.configService.get<string>('EMBED_ALLOWED_ORIGINS', '');
   }
 
   getAppSecret(): string {

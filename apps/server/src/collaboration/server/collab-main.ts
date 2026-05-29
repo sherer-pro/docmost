@@ -10,11 +10,14 @@ import { Logger as PinoLogger } from 'nestjs-pino';
 import { InternalLogFilter } from '../../common/logger/internal-log-filter';
 import { createCorsOptions } from '../../common/security/cors.util';
 import { EnvironmentService } from '../../integrations/environment/environment.service';
+import { getTrustedProxiesFromEnv } from '../../common/security/trusted-proxy.util';
+import { envPath } from '../../common/helpers';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
     CollabAppModule,
     new FastifyAdapter({
+      trustProxy: getTrustedProxiesFromEnv(envPath),
       routerOptions: {
         maxParamLength: 1000,
         ignoreTrailingSlash: true,

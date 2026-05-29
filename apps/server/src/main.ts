@@ -13,6 +13,9 @@ import fastifyCookie from '@fastify/cookie';
 import { InternalLogFilter } from './common/logger/internal-log-filter';
 import { createCorsOptions } from './common/security/cors.util';
 import { EnvironmentService } from './integrations/environment/environment.service';
+import { getTrustedProxiesFromEnv } from './common/security/trusted-proxy.util';
+import { envPath } from './common/helpers';
+import { getEmbedFrameSources } from '@docmost/editor-ext';
 
 /**
  * Returns the origin from a URL string when parsing succeeds.
@@ -43,6 +46,13 @@ function safeGetOrigin(value?: string): string | null {
 function buildBaseCspDirectives() {
   const appOrigin = safeGetOrigin(process.env.APP_URL);
   const collabOrigin = safeGetOrigin(process.env.COLLAB_URL);
+  const frameSources = [
+    "'self'",
+    ...getEmbedFrameSources(
+      process.env.EMBED_ALLOWED_ORIGINS,
+      process.env.DRAWIO_URL,
+    ),
+  ];
 
   const connectSrc = [
     "'self'",
@@ -55,10 +65,10 @@ function buildBaseCspDirectives() {
 
   return {
     defaultSrc: ["'self'"],
-    // Allow same-origin and HTTPS embeds while blocking insecure protocols.
-    frameSrc: ["'self'", 'https:'],
+    // Keep iframe embeds limited to known providers and configured origins.
+    frameSrc: frameSources,
     // Duplicate the rule for child contexts to keep compatibility with older browsers.
-    childSrc: ["'self'", 'https:'],
+    childSrc: frameSources,
     baseUri: ["'self'"],
     frameAncestors: ["'self'"],
     objectSrc: ["'none'"],
@@ -193,7 +203,7 @@ async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
     new FastifyAdapter({
-      trustProxy: true,
+      trustProxy: getTrustedProxiesFromEnv(envPath),
       routerOptions: {
         maxParamLength: 1000,
         ignoreTrailingSlash: true,
@@ -235,11 +245,7 @@ async function bootstrap() {
       this.send('');
     })
     .addHook('preHandler', function (req, reply, done) {
-      const forwardedProtoHeader = req.headers['x-forwarded-proto'];
-      const isForwardedHttps = Array.isArray(forwardedProtoHeader)
-        ? forwardedProtoHeader.some((value) => value.includes('https'))
-        : forwardedProtoHeader?.includes('https');
-      const isHttps = req.protocol === 'https' || Boolean(isForwardedHttps);
+      const isHttps = req.protocol === 'https';
 
       applySecurityHeaders(req.originalUrl, isHttps, reply);
 

@@ -131,7 +131,7 @@ export function getEmbedUrlAndProvider(url: string): IEmbedResult {
     if (match) {
       return {
         embedUrl: provider.getEmbedUrl(match, url),
-        provider: provider.name.toLowerCase(),
+        provider: provider.id,
       };
     }
   }

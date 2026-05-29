@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   IsBoolean,
   IsArray,
   IsIn,
@@ -13,6 +14,9 @@ import {
   Min,
   ValidateIf,
   ValidateNested,
+  registerDecorator,
+  ValidationArguments,
+  ValidationOptions,
 } from 'class-validator';
 import type { DatabasePropertyType } from '@docmost/api-contract';
 import { JsonValue } from '../../../database/types/db';
@@ -25,6 +29,109 @@ const DATABASE_PROPERTY_TYPES: DatabasePropertyType[] = [
   'user',
   'page_reference',
 ];
+
+const MAX_SELECT_PROPERTY_OPTIONS = 100;
+const MAX_DATABASE_BATCH_CELLS = 200;
+const MAX_DATABASE_BATCH_ROWS = 200;
+const MAX_DATABASE_CELL_VALUE_BYTES = 20_000;
+const MAX_DATABASE_VIEW_CONFIG_BYTES = 50_000;
+const MAX_DATABASE_VIEW_CONFIG_DEPTH = 12;
+
+function getJsonStringifiedLength(value: unknown): number {
+  try {
+    return Buffer.byteLength(JSON.stringify(value), 'utf8');
+  } catch {
+    return Number.POSITIVE_INFINITY;
+  }
+}
+
+function exceedsJsonDepth(value: unknown, maxDepth: number): boolean {
+  const stack: Array<{ value: unknown; depth: number }> = [{ value, depth: 0 }];
+
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (!current) {
+      continue;
+    }
+
+    if (current.depth > maxDepth) {
+      return true;
+    }
+
+    if (current.value === null || typeof current.value !== 'object') {
+      continue;
+    }
+
+    const nextDepth = current.depth + 1;
+    if (nextDepth > maxDepth) {
+      return true;
+    }
+
+    const children = Array.isArray(current.value)
+      ? current.value
+      : Object.values(current.value as Record<string, unknown>);
+
+    for (const child of children) {
+      stack.push({ value: child, depth: nextDepth });
+    }
+  }
+
+  return false;
+}
+
+function MaxJsonStringifiedLength(
+  maxBytes: number,
+  validationOptions?: ValidationOptions,
+) {
+  return function (object: object, propertyName: string) {
+    registerDecorator({
+      name: 'maxJsonStringifiedLength',
+      target: object.constructor,
+      propertyName,
+      constraints: [maxBytes],
+      options: validationOptions,
+      validator: {
+        validate(value: unknown) {
+          if (typeof value === 'undefined') {
+            return true;
+          }
+
+          return getJsonStringifiedLength(value) <= maxBytes;
+        },
+        defaultMessage(args: ValidationArguments) {
+          return `${args.property} JSON payload must not exceed ${args.constraints[0]} bytes`;
+        },
+      },
+    });
+  };
+}
+
+function MaxJsonDepth(
+  maxDepth: number,
+  validationOptions?: ValidationOptions,
+) {
+  return function (object: object, propertyName: string) {
+    registerDecorator({
+      name: 'maxJsonDepth',
+      target: object.constructor,
+      propertyName,
+      constraints: [maxDepth],
+      options: validationOptions,
+      validator: {
+        validate(value: unknown) {
+          if (typeof value === 'undefined') {
+            return true;
+          }
+
+          return !exceedsJsonDepth(value, maxDepth);
+        },
+        defaultMessage(args: ValidationArguments) {
+          return `${args.property} JSON depth must not exceed ${args.constraints[0]}`;
+        },
+      },
+    });
+  };
+}
 
 export enum DatabaseExportFormat {
   Markdown = 'markdown',
@@ -154,6 +261,7 @@ export class SelectPropertyOptionDto {
 
 export class SelectPropertySettingsDto {
   @IsArray()
+  @ArrayMaxSize(MAX_SELECT_PROPERTY_OPTIONS)
   @ValidateNested({ each: true })
   @Type(() => SelectPropertyOptionDto)
   options: SelectPropertyOptionDto[];
@@ -249,6 +357,7 @@ export class BatchUpdateDatabaseCellValueDto {
   propertyId: string;
 
   @IsOptional()
+  @MaxJsonStringifiedLength(MAX_DATABASE_CELL_VALUE_BYTES)
   value?: string | boolean | DatabaseUserCellValueDto | null;
 
   @IsOptional()
@@ -265,6 +374,7 @@ export class BatchUpdateDatabaseCellValueDto {
  */
 export class BatchUpdateDatabaseCellsDto {
   @IsArray()
+  @ArrayMaxSize(MAX_DATABASE_BATCH_CELLS)
   @ValidateNested({ each: true })
   @Type(() => BatchUpdateDatabaseCellValueDto)
   cells: BatchUpdateDatabaseCellValueDto[];
@@ -280,6 +390,7 @@ export class BatchUpdateDatabaseRowDto {
 
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(MAX_DATABASE_BATCH_CELLS)
   @ValidateNested({ each: true })
   @Type(() => BatchUpdateDatabaseCellValueDto)
   cells?: BatchUpdateDatabaseCellValueDto[];
@@ -287,6 +398,7 @@ export class BatchUpdateDatabaseRowDto {
 
 export class BatchUpdateDatabaseRowsDto {
   @IsArray()
+  @ArrayMaxSize(MAX_DATABASE_BATCH_ROWS)
   @ValidateNested({ each: true })
   @Type(() => BatchUpdateDatabaseRowDto)
   rows: BatchUpdateDatabaseRowDto[];
@@ -307,6 +419,8 @@ export class CreateDatabaseViewDto {
   type: string;
 
   @IsOptional()
+  @MaxJsonStringifiedLength(MAX_DATABASE_VIEW_CONFIG_BYTES)
+  @MaxJsonDepth(MAX_DATABASE_VIEW_CONFIG_DEPTH)
   config?: unknown;
 }
 
@@ -327,6 +441,8 @@ export class UpdateDatabaseViewDto {
   type?: string;
 
   @IsOptional()
+  @MaxJsonStringifiedLength(MAX_DATABASE_VIEW_CONFIG_BYTES)
+  @MaxJsonDepth(MAX_DATABASE_VIEW_CONFIG_DEPTH)
   config?: unknown;
 }
 

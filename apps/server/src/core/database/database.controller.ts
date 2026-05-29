@@ -51,7 +51,7 @@ export class DatabaseController {
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
-    return this.databaseService.createDatabase(dto, user.id, workspace.id);
+    return this.databaseService.createDatabase(dto, user, workspace.id);
   }
 
   /**
@@ -60,9 +60,10 @@ export class DatabaseController {
   @Get()
   async list(
     @Query() query: ListDatabasesQueryDto,
+    @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
-    return this.databaseService.listBySpace(query.spaceId, workspace.id);
+    return this.databaseService.listBySpace(query.spaceId, user, workspace.id);
   }
 
   /**
@@ -71,9 +72,10 @@ export class DatabaseController {
   @Get(':databaseId')
   async getOne(
     @Param('databaseId', ParseUUIDPipe) databaseId: string,
+    @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
-    return this.databaseService.getDatabase(databaseId, workspace.id);
+    return this.databaseService.getDatabase(databaseId, user, workspace.id);
   }
 
   /**
@@ -89,7 +91,7 @@ export class DatabaseController {
     return this.databaseService.updateDatabase(
       databaseId,
       dto,
-      user.id,
+      user,
       workspace.id,
     );
   }
@@ -101,9 +103,10 @@ export class DatabaseController {
   @Delete(':databaseId')
   async remove(
     @Param('databaseId', ParseUUIDPipe) databaseId: string,
+    @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
-    await this.databaseService.deleteDatabase(databaseId, workspace.id);
+    await this.databaseService.deleteDatabase(databaseId, user, workspace.id);
   }
 
 
@@ -137,7 +140,7 @@ export class DatabaseController {
     return this.databaseService.createProperty(
       databaseId,
       dto,
-      user.id,
+      user,
       workspace.id,
     );
   }
@@ -148,9 +151,10 @@ export class DatabaseController {
   @Get(':databaseId/properties')
   async listProperties(
     @Param('databaseId', ParseUUIDPipe) databaseId: string,
+    @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
-    return this.databaseService.listProperties(databaseId, workspace.id);
+    return this.databaseService.listProperties(databaseId, user, workspace.id);
   }
 
   /**
@@ -168,8 +172,8 @@ export class DatabaseController {
       databaseId,
       propertyId,
       dto,
+      user,
       workspace.id,
-      user.id,
     );
   }
 
@@ -187,8 +191,8 @@ export class DatabaseController {
     await this.databaseService.deleteProperty(
       databaseId,
       propertyId,
+      user,
       workspace.id,
-      user.id,
     );
   }
 
@@ -357,7 +361,7 @@ export class DatabaseController {
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
-    return this.databaseService.createView(databaseId, dto, user.id, workspace.id);
+    return this.databaseService.createView(databaseId, dto, user, workspace.id);
   }
 
   /**
@@ -366,9 +370,10 @@ export class DatabaseController {
   @Get(':databaseId/views')
   async listViews(
     @Param('databaseId', ParseUUIDPipe) databaseId: string,
+    @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
-    return this.databaseService.listViews(databaseId, workspace.id);
+    return this.databaseService.listViews(databaseId, user, workspace.id);
   }
 
   /**
@@ -379,9 +384,16 @@ export class DatabaseController {
     @Param('databaseId', ParseUUIDPipe) databaseId: string,
     @Param('viewId', ParseUUIDPipe) viewId: string,
     @Body() dto: UpdateDatabaseViewDto,
+    @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
-    return this.databaseService.updateView(databaseId, viewId, dto, workspace.id);
+    return this.databaseService.updateView(
+      databaseId,
+      viewId,
+      dto,
+      user,
+      workspace.id,
+    );
   }
 
   /**
@@ -392,8 +404,9 @@ export class DatabaseController {
   async removeView(
     @Param('databaseId', ParseUUIDPipe) databaseId: string,
     @Param('viewId', ParseUUIDPipe) viewId: string,
+    @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
-    await this.databaseService.deleteView(databaseId, viewId, workspace.id);
+    await this.databaseService.deleteView(databaseId, viewId, user, workspace.id);
   }
 }

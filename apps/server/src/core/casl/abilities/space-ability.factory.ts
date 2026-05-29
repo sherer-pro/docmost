@@ -28,10 +28,15 @@ export default class SpaceAbilityFactory {
       this.spaceMemberRepo.getUserSpaceRoles(user.id, spaceId),
       this.db
         .selectFrom('spaces')
-        .select('archivedAt')
+        .select(['archivedAt', 'workspaceId'])
         .where('id', '=', spaceId)
+        .where('workspaceId', '=', user.workspaceId)
         .executeTakeFirst(),
     ]);
+
+    if (!space) {
+      throw new NotFoundException('Space permissions not found');
+    }
 
     const userSpaceRole = findHighestUserSpaceRole(userSpaceRoles);
     const isArchived = !!space?.archivedAt;

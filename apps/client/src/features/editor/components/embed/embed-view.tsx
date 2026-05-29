@@ -23,7 +23,11 @@ import {
   getEmbedUrlAndProvider,
 } from "@docmost/editor-ext";
 import { ResizableWrapper } from "../common/resizable-wrapper";
-import { sanitizeEmbedUrl } from "./embed-url-sanitizer";
+import {
+  sanitizeEmbedUrl,
+  sanitizeEmbedUrlForProvider,
+} from "./embed-url-sanitizer";
+import { getEmbedIframeSandbox } from "./embed-sandbox";
 import classes from "./embed-view.module.css";
 
 const schema = z.object({
@@ -38,12 +42,18 @@ export default function EmbedView(props: NodeViewProps) {
   const { node, selected, updateAttributes, editor } = props;
   const { src, provider, height: nodeHeight } = node.attrs;
 
-  const embedUrl = useMemo(() => {
+  const embed = useMemo(() => {
     if (src) {
-      return getEmbedUrlAndProvider(src).embedUrl;
+      return getEmbedUrlAndProvider(src);
     }
     return null;
   }, [src]);
+  const embedUrl = embed?.embedUrl ?? null;
+  const embedProviderId = embed?.provider ?? provider;
+  const safeEmbedUrl = useMemo(
+    () => sanitizeEmbedUrlForProvider(embedUrl, embedProviderId),
+    [embedProviderId, embedUrl],
+  );
 
   const embedForm = useForm<{ url: string }>({
     initialValues: {
@@ -66,12 +76,28 @@ export default function EmbedView(props: NodeViewProps) {
 
     if (provider) {
       const embedProvider = getEmbedProviderById(provider);
+      const sanitizedUrl =
+        embedProvider.id === "iframe"
+          ? sanitizeEmbedUrlForProvider(data.url, embedProvider.id)
+          : sanitizeEmbedUrl(data.url);
+
+      if (!sanitizedUrl) {
+        notifications.show({
+          message: t("Invalid {{provider}} embed link", {
+            provider: embedProvider.name,
+          }),
+          position: "top-right",
+          color: "red",
+        });
+        return;
+      }
+
       if (embedProvider.id === "iframe") {
-        updateAttributes({ src: sanitizeEmbedUrl(data.url) });
+        updateAttributes({ src: sanitizedUrl });
         return;
       }
       if (embedProvider.regex.test(data.url)) {
-        updateAttributes({ src: sanitizeEmbedUrl(data.url) });
+        updateAttributes({ src: sanitizedUrl });
       } else {
         notifications.show({
           message: t("Invalid {{provider}} embed link", {
@@ -86,7 +112,7 @@ export default function EmbedView(props: NodeViewProps) {
 
   return (
     <NodeViewWrapper data-drag-handle>
-      {embedUrl ? (
+      {safeEmbedUrl ? (
         <ResizableWrapper
           initialHeight={nodeHeight || 480}
           minHeight={200}
@@ -99,9 +125,9 @@ export default function EmbedView(props: NodeViewProps) {
         >
           <iframe
             className={classes.embedIframe}
-            src={sanitizeEmbedUrl(embedUrl)}
+            src={safeEmbedUrl}
             allow="encrypted-media"
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+            sandbox={getEmbedIframeSandbox(embedProviderId)}
             allowFullScreen
             frameBorder="0"
           />

@@ -26,6 +26,14 @@ export class EnvironmentVariables {
   @IsString()
   HOST: string;
 
+  @IsOptional()
+  @IsString()
+  TRUSTED_PROXIES: string;
+
+  @IsOptional()
+  @IsString()
+  EMBED_ALLOWED_ORIGINS: string;
+
   @IsNotEmpty()
   @IsUrl(
     {

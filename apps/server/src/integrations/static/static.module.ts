@@ -6,6 +6,21 @@ import fastifyStatic from '@fastify/static';
 import { EnvironmentService } from '../environment/environment.service';
 import { resolveClientDistPath } from '../../common/utils/client-dist-path';
 
+export const WINDOW_CONFIG_PLACEHOLDER = '<!--window-config-->';
+export const WINDOW_CONFIG_SCRIPT_TAG = '<script src="/window-config.js"></script>';
+
+export function injectWindowConfigScript(html: string): string {
+  if (html.includes(WINDOW_CONFIG_PLACEHOLDER)) {
+    return html.replace(WINDOW_CONFIG_PLACEHOLDER, WINDOW_CONFIG_SCRIPT_TAG);
+  }
+
+  if (html.includes(WINDOW_CONFIG_SCRIPT_TAG)) {
+    return html;
+  }
+
+  return html.replace('</body>', `${WINDOW_CONFIG_SCRIPT_TAG}\n  </body>`);
+}
+
 @Module({})
 export class StaticModule implements OnModuleInit {
   constructor(
@@ -27,10 +42,6 @@ export class StaticModule implements OnModuleInit {
     const indexFilePath = join(clientDistPath, 'index.html');
 
     if (fs.existsSync(clientDistPath) && fs.existsSync(indexFilePath)) {
-      const indexTemplateFilePath = join(clientDistPath, 'index-template.html');
-      const windowConfigFilePath = join(clientDistPath, 'window-config.js');
-      const windowVar = '<!--window-config-->';
-
       const configString = {
         ENV: this.environmentService.getNodeEnv(),
         APP_URL: this.environmentService.getAppUrl(),
@@ -39,6 +50,8 @@ export class StaticModule implements OnModuleInit {
           this.environmentService.getFileUploadSizeLimit(),
         FILE_IMPORT_SIZE_LIMIT:
           this.environmentService.getFileImportSizeLimit(),
+        EMBED_ALLOWED_ORIGINS:
+          this.environmentService.getEmbedAllowedOrigins(),
         DRAWIO_URL: this.environmentService.getDrawioUrl(),
         SUBDOMAIN_HOST: this.environmentService.isCloud()
           ? this.environmentService.getSubdomainHost()
@@ -52,28 +65,24 @@ export class StaticModule implements OnModuleInit {
       };
 
       const windowConfigScriptContent = `window.CONFIG=${JSON.stringify(configString)};`;
-      const windowScriptTag = '<script src="/window-config.js"></script>';
-
-      if (!fs.existsSync(indexTemplateFilePath)) {
-        fs.copyFileSync(indexFilePath, indexTemplateFilePath);
-      }
-
-      const html = fs.readFileSync(indexTemplateFilePath, 'utf8');
-      const transformedHtml = html.replace(windowVar, windowScriptTag);
-
-      fs.writeFileSync(indexFilePath, transformedHtml);
-      fs.writeFileSync(windowConfigFilePath, windowConfigScriptContent);
+      const html = fs.readFileSync(indexFilePath, 'utf8');
+      const transformedHtml = injectWindowConfigScript(html);
 
       const RENDER_PATH = '*';
+
+      app.get('/window-config.js', (_req: any, res: any) => {
+        res
+          .type('application/javascript; charset=utf-8')
+          .send(windowConfigScriptContent);
+      });
 
       await app.register(fastifyStatic, {
         root: clientDistPath,
         wildcard: false,
       });
 
-      app.get(RENDER_PATH, (req: any, res: any) => {
-        const stream = fs.createReadStream(indexFilePath);
-        res.type('text/html').send(stream);
+      app.get(RENDER_PATH, (_req: any, res: any) => {
+        res.type('text/html; charset=utf-8').send(transformedHtml);
       });
 
       return;

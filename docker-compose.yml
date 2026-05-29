@@ -11,6 +11,8 @@ services:
     environment:
       APP_URL: "${APP_URL:-http://localhost:3000}"
       APP_SECRET: "${APP_SECRET:-REPLACE_WITH_LONG_SECRET}"
+      TRUSTED_PROXIES: "${TRUSTED_PROXIES:-}"
+      EMBED_ALLOWED_ORIGINS: "${EMBED_ALLOWED_ORIGINS:-}"
       DATABASE_URL: "${DATABASE_URL:-postgresql://docmost:${POSTGRES_PASSWORD:-STRONG_DB_PASSWORD}@db:5432/docmost}"
       REDIS_URL: "${REDIS_URL:-redis://redis:6379}"
       WEB_PUSH_VAPID_PUBLIC_KEY: "${WEB_PUSH_VAPID_PUBLIC_KEY:-}"

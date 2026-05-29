@@ -1071,13 +1071,12 @@ export class PageController {
     @Body() pagination: PaginationOptions,
     @AuthUser() user: User,
   ) {
-    this.pageAccessService.assertCanManageAccess(user);
-
     const page = await this.pageRepo.findById(pageId);
     if (!page || page.deletedAt) {
       throw new NotFoundException('Page not found');
     }
 
+    this.pageAccessService.assertCanManageAccess(user, page.workspaceId);
     return this.pageAccessService.listEffectiveUsers(page, pagination);
   }
 
@@ -1104,13 +1103,12 @@ export class PageController {
     @Body() pagination: PaginationOptions,
     @AuthUser() user: User,
   ) {
-    this.pageAccessService.assertCanManageAccess(user);
-
     const page = await this.pageRepo.findById(pageId);
     if (!page || page.deletedAt) {
       throw new NotFoundException('Page not found');
     }
 
+    this.pageAccessService.assertCanManageAccess(user, page.workspaceId);
     return this.pageAccessService.listGroupRules(page, pagination);
   }
 

@@ -104,4 +104,30 @@ describe('extractZip', () => {
       fs.readFileSync(path.join(targetDir, 'nested', 'safe.txt'), 'utf8'),
     ).toBe('safe');
   });
+
+  it('rejects archives with too many entries', async () => {
+    await writeZip(archivePath, {
+      'one.md': 'one',
+      'two.md': 'two',
+      'three.md': 'three',
+    });
+
+    await expect(
+      extractZip(archivePath, targetDir, { maxEntries: 2 }),
+    ).rejects.toThrow(/entry count/);
+  });
+
+  it('rejects archives exceeding the total uncompressed size quota', async () => {
+    await writeZip(archivePath, {
+      'large.md': '0123456789',
+    });
+
+    await expect(
+      extractZip(archivePath, targetDir, {
+        maxTotalUncompressedBytes: 5,
+      }),
+    ).rejects.toThrow(/total uncompressed size/);
+
+    expect(fs.existsSync(path.join(targetDir, 'large.md'))).toBe(false);
+  });
 });
