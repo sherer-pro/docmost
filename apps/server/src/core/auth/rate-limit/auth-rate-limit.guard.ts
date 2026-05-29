@@ -14,6 +14,7 @@ import {
 } from './auth-rate-limit.decorator';
 import { AUTH_RATE_LIMITS } from './auth-rate-limit.config';
 import { AuthRateLimitService } from './auth-rate-limit.service';
+import { getClientIpFromFastifyRequest } from '../../../common/security/trusted-proxy.util';
 
 /**
  * Guard applies dual rate limiting:
@@ -87,7 +88,7 @@ export class AuthRateLimitGuard implements CanActivate {
   }
 
   private getClientIp(request: FastifyRequest) {
-    return request.ip || request.ips?.[0] || 'unknown-ip';
+    return getClientIpFromFastifyRequest(request) || 'unknown-ip';
   }
 
   private getAccountIdentifier(

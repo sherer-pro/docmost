@@ -5,6 +5,7 @@ import { UserSessionRepo } from '@docmost/db/repos/session/user-session.repo';
 import { EnvironmentService } from '../../integrations/environment/environment.service';
 import { User } from '@docmost/db/types/entity.types';
 import { FastifyRequest } from 'fastify';
+import { getClientIpFromFastifyRequest } from '../../common/security/trusted-proxy.util';
 
 const MAX_SESSIONS_PER_USER = 25;
 const RETENTION_DAYS = 7;
@@ -99,19 +100,7 @@ export class SessionService {
   }
 
   private getIpAddress(request?: FastifyRequest): string | null {
-    const forwardedFor = request?.headers?.['x-forwarded-for'];
-    const forwardedValue = Array.isArray(forwardedFor)
-      ? forwardedFor[0]
-      : forwardedFor;
-    const forwardedIp = forwardedValue?.split(',')[0]?.trim();
-
-    return (
-      forwardedIp ||
-      request?.ip ||
-      request?.socket?.remoteAddress ||
-      request?.raw?.socket?.remoteAddress ||
-      null
-    );
+    return getClientIpFromFastifyRequest(request);
   }
 
   private parseDeviceName(userAgent: string | null): string | null {

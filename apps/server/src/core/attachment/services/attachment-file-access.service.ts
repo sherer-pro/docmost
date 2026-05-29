@@ -16,7 +16,7 @@ import { AttachmentService } from './attachment.service';
 import { TokenService } from '../../auth/services/token.service';
 import { JwtAttachmentPayload, JwtType } from '../../auth/dto/jwt-payload';
 import { inlineFileExtensions } from '../attachment.constants';
-import { resolveAttachmentAccessToken } from '../attachment-public-token.util';
+import { resolveAttachmentAccessTokenDetails } from '../attachment-public-token.util';
 import { PageAccessService } from '../../page-access/page-access.service';
 
 @Injectable()
@@ -156,11 +156,12 @@ export class AttachmentFileAccessService {
       throw new NotFoundException('File not found');
     }
 
-    const accessToken = resolveAttachmentAccessToken(
+    const accessTokenDetails = resolveAttachmentAccessTokenDetails(
       req,
       attachment.pageId,
       jwtToken,
     );
+    const accessToken = accessTokenDetails.token;
 
     let jwtPayload: JwtAttachmentPayload = null;
     try {
@@ -182,12 +183,24 @@ export class AttachmentFileAccessService {
       throw new NotFoundException('File not found');
     }
 
+    if (accessTokenDetails.source === 'query') {
+      this.addLegacyQueryTokenDeprecationHeaders(res);
+    }
+
     try {
       return await this.sendFileResponse(req, res, attachment, 'public');
     } catch (err) {
       this.logger.error(err);
       throw new NotFoundException('File not found');
     }
+  }
+
+  private addLegacyQueryTokenDeprecationHeaders(res: FastifyReply) {
+    res.header('Deprecation', 'true');
+    res.header(
+      'Warning',
+      '299 Docmost "Attachment jwt query tokens are deprecated; use attachment cookies or x-attachment-token."',
+    );
   }
 
   private async sendFileResponse(

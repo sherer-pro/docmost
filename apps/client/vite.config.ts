@@ -9,6 +9,7 @@ export default defineConfig(({ mode }) => {
     APP_URL,
     FILE_UPLOAD_SIZE_LIMIT,
     FILE_IMPORT_SIZE_LIMIT,
+    EMBED_ALLOWED_ORIGINS,
     DRAWIO_URL,
     CLOUD,
     SUBDOMAIN_HOST,
@@ -24,6 +25,7 @@ export default defineConfig(({ mode }) => {
         APP_URL,
         FILE_UPLOAD_SIZE_LIMIT,
         FILE_IMPORT_SIZE_LIMIT,
+        EMBED_ALLOWED_ORIGINS,
         DRAWIO_URL,
         CLOUD,
         SUBDOMAIN_HOST,
@@ -36,8 +38,8 @@ export default defineConfig(({ mode }) => {
     },
     plugins: [react()],
     build: {
-      // Excalidraw and Mermaid are intentionally split into dedicated vendor chunks.
-      // Keep warning budget aligned with current plugin/runtime footprint.
+      // Keep diagram runtimes together: Mermaid and Excalidraw import shared
+      // helpers, and splitting them creates circular manual chunks.
       chunkSizeWarningLimit: 5000,
       rollupOptions: {
         output: {
@@ -46,12 +48,8 @@ export default defineConfig(({ mode }) => {
               return;
             }
 
-            if (id.includes("excalidraw")) {
-              return "vendor-excalidraw";
-            }
-
-            if (id.includes("mermaid")) {
-              return "vendor-mermaid";
+            if (id.includes("excalidraw") || id.includes("mermaid")) {
+              return "vendor-diagrams";
             }
 
             // Leave the rest of node_modules to Rollup so it can avoid
@@ -64,6 +62,14 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         "@": "/src",
+        "@docmost/api-contract": path.resolve(
+          envPath,
+          "packages/api-contract/src/index.ts",
+        ),
+        "@docmost/editor-ext": path.resolve(
+          envPath,
+          "packages/editor-ext/src/index.ts",
+        ),
       },
     },
     server: {

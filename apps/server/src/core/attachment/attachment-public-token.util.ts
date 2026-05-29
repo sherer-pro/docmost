@@ -3,6 +3,18 @@ import { FastifyRequest } from 'fastify';
 export const ATTACHMENT_TOKEN_COOKIE_PREFIX = 'attachmentToken_';
 export const LEGACY_ATTACHMENT_TOKEN_COOKIE = 'attachmentToken';
 
+export type AttachmentAccessTokenSource =
+  | 'x-attachment-token'
+  | 'authorization'
+  | 'page-cookie'
+  | 'legacy-cookie'
+  | 'query';
+
+export interface AttachmentAccessTokenResolution {
+  token?: string;
+  source?: AttachmentAccessTokenSource;
+}
+
 export function getAttachmentTokenCookieName(pageId: string): string {
   return `${ATTACHMENT_TOKEN_COOKIE_PREFIX}${pageId}`;
 }
@@ -16,35 +28,46 @@ export function getAttachmentTokenCookieName(pageId: string): string {
  * 5) legacy `jwt` query param (last to avoid stale persisted URLs
  *    overriding newer cookie/header tokens).
  */
-export function resolveAttachmentAccessToken(
+export function resolveAttachmentAccessTokenDetails(
   req: FastifyRequest,
   pageId: string,
   jwtToken?: string,
-): string | undefined {
+): AttachmentAccessTokenResolution {
   const headerToken = req.headers['x-attachment-token'];
   if (typeof headerToken === 'string' && headerToken.trim()) {
-    return headerToken.trim();
+    return { token: headerToken.trim(), source: 'x-attachment-token' };
   }
 
   const authorization = req.headers.authorization;
   if (authorization?.startsWith('Bearer ')) {
     const bearerToken = authorization.slice('Bearer '.length).trim();
     if (bearerToken) {
-      return bearerToken;
+      return { token: bearerToken, source: 'authorization' };
     }
   }
 
   const cookies = ((req as any).cookies || {}) as Record<string, string>;
-  const cookieToken =
-    cookies[getAttachmentTokenCookieName(pageId)] ||
-    cookies[LEGACY_ATTACHMENT_TOKEN_COOKIE];
-  if (cookieToken) {
-    return cookieToken;
+  const pageCookieToken = cookies[getAttachmentTokenCookieName(pageId)];
+  if (pageCookieToken) {
+    return { token: pageCookieToken, source: 'page-cookie' };
+  }
+
+  const legacyCookieToken = cookies[LEGACY_ATTACHMENT_TOKEN_COOKIE];
+  if (legacyCookieToken) {
+    return { token: legacyCookieToken, source: 'legacy-cookie' };
   }
 
   if (jwtToken?.trim()) {
-    return jwtToken.trim();
+    return { token: jwtToken.trim(), source: 'query' };
   }
 
-  return undefined;
+  return {};
+}
+
+export function resolveAttachmentAccessToken(
+  req: FastifyRequest,
+  pageId: string,
+  jwtToken?: string,
+): string | undefined {
+  return resolveAttachmentAccessTokenDetails(req, pageId, jwtToken).token;
 }

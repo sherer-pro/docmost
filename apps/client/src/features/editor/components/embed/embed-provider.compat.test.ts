@@ -12,4 +12,10 @@ describe('embed provider compatibility', () => {
       provider: 'iframe',
     });
   });
+
+  it('returns stable provider ids for known embeds', () => {
+    const result = getEmbedUrlAndProvider('https://youtu.be/dQw4w9WgXcQ');
+
+    expect(result.provider).toBe('youtube');
+  });
 });

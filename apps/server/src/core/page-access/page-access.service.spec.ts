@@ -70,6 +70,7 @@ describe('PageAccessService', () => {
     const access = await service.getEffectiveAccess(page, {
       id: 'owner-1',
       role: UserRole.OWNER,
+      workspaceId: 'workspace-1',
     } as any);
 
     expect(access.role).toBe(PageRole.WRITER);
@@ -103,6 +104,7 @@ describe('PageAccessService', () => {
     const access = await service.getEffectiveAccess(page, {
       id: 'user-1',
       role: UserRole.MEMBER,
+      workspaceId: 'workspace-1',
     } as any);
 
     expect(access.role).toBe(PageRole.WRITER);
@@ -135,6 +137,7 @@ describe('PageAccessService', () => {
     const access = await service.getEffectiveAccess(page, {
       id: 'user-1',
       role: UserRole.MEMBER,
+      workspaceId: 'workspace-1',
     } as any);
 
     expect(access.denied).toBe(true);
@@ -154,6 +157,7 @@ describe('PageAccessService', () => {
     const access = await service.getEffectiveAccess(page, {
       id: 'user-1',
       role: UserRole.MEMBER,
+      workspaceId: 'workspace-1',
     } as any);
 
     expect(access.role).toBe(PageRole.WRITER);
@@ -175,6 +179,7 @@ describe('PageAccessService', () => {
     const access = await service.getEffectiveAccess(page, {
       id: 'owner-1',
       role: UserRole.OWNER,
+      workspaceId: 'workspace-1',
     } as any);
 
     expect(access.capabilities).toEqual({
@@ -184,6 +189,21 @@ describe('PageAccessService', () => {
       canMoveDeleteShare: false,
       canManageAccess: false,
     });
+  });
+
+  it('denies workspace bypass when page belongs to another workspace', async () => {
+    const access = await service.getEffectiveAccess(page, {
+      id: 'owner-2',
+      role: UserRole.OWNER,
+      workspaceId: 'workspace-2',
+    } as any);
+
+    expect(access.isSystemAccess).toBe(false);
+    expect(access.capabilities.canRead).toBe(false);
+    expect(access.capabilities.canWrite).toBe(false);
+    expect(groupUserRepo.getGroupIdsByUserId).not.toHaveBeenCalled();
+    expect(spaceMemberRepo.getUserSpaceRoles).not.toHaveBeenCalled();
+    expect(pageAccessRuleRepo.findUserRule).not.toHaveBeenCalled();
   });
 
   it('keeps archived spaces readable but read-only for space writers', async () => {
@@ -198,6 +218,7 @@ describe('PageAccessService', () => {
     const access = await service.getEffectiveAccess(page, {
       id: 'user-1',
       role: UserRole.MEMBER,
+      workspaceId: 'workspace-1',
     } as any);
 
     expect(access.capabilities).toEqual({
@@ -210,7 +231,11 @@ describe('PageAccessService', () => {
   });
 
   it('cascades grant user access to all descendants and records history', async () => {
-    const actor = { id: 'admin-1', role: UserRole.ADMIN } as any;
+    const actor = {
+      id: 'admin-1',
+      role: UserRole.ADMIN,
+      workspaceId: 'workspace-1',
+    } as any;
     const ensureWorkspaceUserSpy = jest
       .spyOn(service as any, 'ensureWorkspaceUser')
       .mockResolvedValue({ id: 'user-1', role: UserRole.MEMBER });
@@ -251,7 +276,11 @@ describe('PageAccessService', () => {
   });
 
   it('rejects page access changes in archived spaces', async () => {
-    const actor = { id: 'admin-1', role: UserRole.ADMIN } as any;
+    const actor = {
+      id: 'admin-1',
+      role: UserRole.ADMIN,
+      workspaceId: 'workspace-1',
+    } as any;
     (service as any).getSpaceArchivedAt.mockResolvedValueOnce(new Date());
 
     await expect(
@@ -265,7 +294,11 @@ describe('PageAccessService', () => {
   });
 
   it('writes user deny on close and rejects close for workspace owner/admin', async () => {
-    const actor = { id: 'admin-1', role: UserRole.ADMIN } as any;
+    const actor = {
+      id: 'admin-1',
+      role: UserRole.ADMIN,
+      workspaceId: 'workspace-1',
+    } as any;
     jest
       .spyOn(service as any, 'getSubtreePageIds')
       .mockResolvedValue(['page-1', 'page-2']);

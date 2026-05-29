@@ -79,6 +79,10 @@ export function getFileImportSizeLimit() {
   return bytes(limit);
 }
 
+export function getEmbedAllowedOrigins() {
+  return getConfigValue("EMBED_ALLOWED_ORIGINS", "");
+}
+
 export function getDrawioUrl() {
   return getConfigValue("DRAWIO_URL", "https://embed.diagrams.net");
 }

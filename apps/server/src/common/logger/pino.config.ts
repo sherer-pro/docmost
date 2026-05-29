@@ -1,5 +1,6 @@
 import { Params } from 'nestjs-pino';
 import { stdTimeFunctions } from 'pino';
+import { getClientIpFromRawRequest } from '../security/trusted-proxy.util';
 
 const CONTEXTS_TO_IGNORE = [
   'InstanceLoader',
@@ -51,16 +52,10 @@ export function createPinoConfig(): Params {
       },
       serializers: {
         req: (req) => {
-          const forwardedFor = req.headers?.['x-forwarded-for'];
-          const ip =
-            req.headers?.['cf-connecting-ip'] ||
-            (typeof forwardedFor === 'string' ? forwardedFor.split(',')[0]?.trim() : undefined) ||
-            req.remoteAddress;
-
           return {
             method: req.method,
             url: req.url,
-            ip,
+            ip: getClientIpFromRawRequest(req),
             userAgent: req.headers?.['user-agent'],
           };
         },

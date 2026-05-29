@@ -7,7 +7,11 @@ jest.mock('../../../integrations/export/utils', () => {
     replaceInternalLinks: jest.fn((content: unknown) => content),
   };
 });
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { DatabaseService } from './database.service';
 import * as JSZip from 'jszip';
 import { DatabaseExportFormat } from '../dto/database.dto';
@@ -15,6 +19,7 @@ import { ExportFormat } from '../../../integrations/export/dto/export-dto';
 
 describe('DatabaseService mixed tree flows', () => {
   const databaseRepo = {
+    insertDatabase: jest.fn(),
     findById: jest.fn(),
     softDeleteDatabase: jest.fn(),
     updateDatabase: jest.fn(),
@@ -41,6 +46,11 @@ describe('DatabaseService mixed tree flows', () => {
     softDeleteProperty: jest.fn(),
   };
   const databaseViewRepo = {
+    findById: jest.fn(),
+    findByDatabaseId: jest.fn(),
+    insertView: jest.fn(),
+    updateView: jest.fn(),
+    softDeleteView: jest.fn(),
     softDeleteByDatabaseId: jest.fn(),
   };
   const pageRepo = {
@@ -102,7 +112,7 @@ describe('DatabaseService mixed tree flows', () => {
     db as any,
   );
 
-  const user = { id: 'u-1', locale: 'ru-RU' } as any;
+  const user = { id: 'u-1', locale: 'ru-RU', workspaceId: 'ws-1' } as any;
 
   const streamToBuffer = async (
     stream: NodeJS.ReadableStream,
@@ -188,6 +198,50 @@ describe('DatabaseService mixed tree flows', () => {
       parentPageId: null,
       deletedAt: null,
     });
+  });
+
+  it('checks manage permission before creating the database page', async () => {
+    spaceAbility.createForUser.mockResolvedValueOnce({
+      cannot: jest.fn(() => true),
+    } as any);
+
+    await expect(
+      service.createDatabase(
+        { name: 'Blocked database', spaceId: 'space-1' } as any,
+        user,
+        'ws-1',
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(pageService.create).not.toHaveBeenCalled();
+    expect(databaseRepo.insertDatabase).not.toHaveBeenCalled();
+  });
+
+  it('checks read permission before returning database metadata', async () => {
+    spaceAbility.createForUser.mockResolvedValueOnce({
+      cannot: jest.fn(() => true),
+    } as any);
+
+    await expect(service.getDatabase('db-1', user, 'ws-1')).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+  });
+
+  it('checks manage permission before mutating database properties', async () => {
+    spaceAbility.createForUser.mockResolvedValueOnce({
+      cannot: jest.fn(() => true),
+    } as any);
+
+    await expect(
+      service.createProperty(
+        'db-1',
+        { name: 'Status', type: 'select' } as any,
+        user,
+        'ws-1',
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(databasePropertyRepo.insertProperty).not.toHaveBeenCalled();
   });
 
   it('soft-detaches descendants row links and removes descendants pages on row delete', async () => {
@@ -723,7 +777,7 @@ describe('DatabaseService mixed tree flows', () => {
     const result = await service.updateDatabase(
       'db-1',
       { name: 'Renamed database' },
-      'u-1',
+      user,
       'ws-1',
     );
 
@@ -761,7 +815,7 @@ describe('DatabaseService mixed tree flows', () => {
       workspaceId: 'ws-1',
     });
 
-    await service.updateDatabase('db-1', { name: 'Renamed database' }, 'u-1', 'ws-1');
+    await service.updateDatabase('db-1', { name: 'Renamed database' }, user, 'ws-1');
 
     expect(pageRepo.updatePage).toHaveBeenCalledWith(
       expect.not.objectContaining({ slugId: expect.any(String) }),
@@ -784,7 +838,7 @@ describe('DatabaseService mixed tree flows', () => {
       { id: 'regular-page-under-db' },
     ]);
 
-    await service.deleteDatabase('db-1', 'ws-1');
+    await service.deleteDatabase('db-1', user, 'ws-1');
 
     expect(databaseCellRepo.softDeleteByDatabaseId).toHaveBeenCalledWith('db-1', 'ws-1');
     expect(databaseViewRepo.softDeleteByDatabaseId).toHaveBeenCalledWith('db-1', 'ws-1');
@@ -826,7 +880,13 @@ describe('DatabaseService mixed tree flows', () => {
       { id: 'cell-1', propertyId: 'prop-1', value: true },
     ]);
 
-    await service.updateProperty('db-1', 'prop-1', { type: 'multiline_text' }, 'ws-1');
+    await service.updateProperty(
+      'db-1',
+      'prop-1',
+      { type: 'multiline_text' },
+      user,
+      'ws-1',
+    );
 
     expect(databaseCellRepo.updateCell).toHaveBeenCalledWith('cell-1', {
       value: {
@@ -854,7 +914,13 @@ describe('DatabaseService mixed tree flows', () => {
       workspaceId: 'ws-1',
     });
 
-    await service.updateProperty('db-1', 'prop-1', { type: 'multiline_text' }, 'ws-1');
+    await service.updateProperty(
+      'db-1',
+      'prop-1',
+      { type: 'multiline_text' },
+      user,
+      'ws-1',
+    );
 
     expect(databaseCellRepo.updateCell).toHaveBeenCalledWith('cell-1', {
       value: {
@@ -877,7 +943,13 @@ describe('DatabaseService mixed tree flows', () => {
       { id: 'cell-1', propertyId: 'prop-1', value: 'legacy' },
     ]);
 
-    await service.updateProperty('db-1', 'prop-1', { type: 'select' }, 'ws-1');
+    await service.updateProperty(
+      'db-1',
+      'prop-1',
+      { type: 'select' },
+      user,
+      'ws-1',
+    );
 
     expect(databaseCellRepo.updateCell).toHaveBeenCalledWith('cell-1', {
       value: {
@@ -907,7 +979,13 @@ describe('DatabaseService mixed tree flows', () => {
       },
     ]);
 
-    await service.updateProperty('db-1', 'prop-1', { type: 'multiline_text' }, 'ws-1');
+    await service.updateProperty(
+      'db-1',
+      'prop-1',
+      { type: 'multiline_text' },
+      user,
+      'ws-1',
+    );
 
     expect(databaseCellRepo.updateCell).toHaveBeenCalledWith('cell-1', {
       value: 'legacy',
@@ -969,14 +1047,26 @@ describe('DatabaseService mixed tree flows', () => {
           { id: 'cell-1', propertyId: 'prop-1', value: initialValue },
         ]);
 
-        await service.updateProperty('db-1', 'prop-1', { type: toType }, 'ws-1');
+        await service.updateProperty(
+          'db-1',
+          'prop-1',
+          { type: toType },
+          user,
+          'ws-1',
+        );
 
         const firstConvertedValue = databaseCellRepo.updateCell.mock.calls[0][1].value;
         databaseCellRepo.findByDatabaseAndPage.mockResolvedValueOnce([
           { id: 'cell-1', propertyId: 'prop-1', value: firstConvertedValue },
         ]);
 
-        await service.updateProperty('db-1', 'prop-1', { type: fromType }, 'ws-1');
+        await service.updateProperty(
+          'db-1',
+          'prop-1',
+          { type: fromType },
+          user,
+          'ws-1',
+        );
 
         const rollbackValue = databaseCellRepo.updateCell.mock.calls[1][1].value;
         expect(rollbackValue).toEqual(initialValue);
@@ -996,7 +1086,13 @@ describe('DatabaseService mixed tree flows', () => {
       { id: 'cell-1', propertyId: 'prop-1', value: 'legacy' },
     ]);
 
-    await service.updateProperty('db-1', 'prop-1', { type: 'select' }, 'ws-1');
+    await service.updateProperty(
+      'db-1',
+      'prop-1',
+      { type: 'select' },
+      user,
+      'ws-1',
+    );
 
     pageRepo.findById.mockResolvedValue({
       id: 'row-page-1',
@@ -1047,7 +1143,13 @@ describe('DatabaseService mixed tree flows', () => {
       { id: 'cell-1', propertyId: 'prop-1', value: 'in_progress' },
     ]);
 
-    await service.updateProperty('db-1', 'prop-1', { type: 'multiline_text' }, 'ws-1');
+    await service.updateProperty(
+      'db-1',
+      'prop-1',
+      { type: 'multiline_text' },
+      user,
+      'ws-1',
+    );
 
     expect(databaseCellRepo.updateCell).toHaveBeenLastCalledWith('cell-1', {
       value: {
@@ -1264,7 +1366,7 @@ describe('DatabaseService mixed tree flows', () => {
     await service.createProperty(
       'db-1',
       { name: 'Status', type: 'select' } as any,
-      'u-1',
+      user,
       'ws-1',
     );
 

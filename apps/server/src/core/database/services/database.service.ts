@@ -1479,10 +1479,11 @@ export class DatabaseService {
    */
   async createDatabase(
     dto: CreateDatabaseDto,
-    actorId: string,
+    actor: User,
     workspaceId: string,
   ) {
     const normalizedName = dto.name?.trim() ?? '';
+    await this.assertCanManageDatabasePages(actor, dto.spaceId);
 
     /**
      * Create an “anchor” database page.
@@ -1490,7 +1491,7 @@ export class DatabaseService {
      * This page stores the canonical position and parent in a single tree,
      * therefore sidebar and DnD work according to the same rules as for regular pages.
      */
-    const databasePage = await this.pageService.create(actorId, workspaceId, {
+    const databasePage = await this.pageService.create(actor.id, workspaceId, {
       title: normalizedName,
       icon: dto.icon,
       parentPageId: dto.parentPageId ?? null,
@@ -1504,8 +1505,8 @@ export class DatabaseService {
       descriptionContent: dto.descriptionContent as never,
       icon: dto.icon,
       workspaceId,
-      creatorId: actorId,
-      lastUpdatedById: actorId,
+      creatorId: actor.id,
+      lastUpdatedById: actor.id,
       pageId: databasePage.id,
     });
   }
@@ -1513,14 +1514,19 @@ export class DatabaseService {
   /**
    * Returns one database by ID.
    */
-  async getDatabase(databaseId: string, workspaceId: string) {
-    return this.getOrFailDatabase(databaseId, workspaceId);
+  async getDatabase(databaseId: string, user: User, workspaceId: string) {
+    const database = await this.getOrFailDatabase(databaseId, workspaceId);
+    await this.assertCanReadDatabasePages(user, database.spaceId);
+
+    return database;
   }
 
   /**
    * Returns a list of databases in the space.
    */
-  async listBySpace(spaceId: string, workspaceId: string) {
+  async listBySpace(spaceId: string, user: User, workspaceId: string) {
+    await this.assertCanReadDatabasePages(user, spaceId);
+
     return this.databaseRepo.findBySpaceId(spaceId, workspaceId);
   }
 
@@ -1530,16 +1536,17 @@ export class DatabaseService {
   async updateDatabase(
     databaseId: string,
     dto: UpdateDatabaseDto,
-    actorId: string,
+    actor: User,
     workspaceId: string,
   ): Promise<Awaited<ReturnType<DatabaseRepo['updateDatabase']>> & IUpdatedDatabaseResponse> {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
+    await this.assertCanManageDatabasePages(actor, database.spaceId);
     const hasNameChanged = typeof dto.name === 'string' && dto.name !== database.name;
 
     const updated = await this.databaseRepo.updateDatabase(databaseId, workspaceId, {
       ...dto,
       descriptionContent: dto.descriptionContent as never,
-      lastUpdatedById: actorId,
+      lastUpdatedById: actor.id,
     });
 
     if (!updated) {
@@ -1556,7 +1563,7 @@ export class DatabaseService {
       await this.pageRepo.updatePage(
         {
           title: updated.name,
-          lastUpdatedById: actorId,
+          lastUpdatedById: actor.id,
           workspaceId,
         },
         database.pageId,
@@ -1577,8 +1584,9 @@ export class DatabaseService {
   /**
    * Performs a soft delete of the database.
    */
-  async deleteDatabase(databaseId: string, workspaceId: string) {
+  async deleteDatabase(databaseId: string, user: User, workspaceId: string) {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
+    await this.assertCanManageDatabasePages(user, database.spaceId);
 
     await this.databaseCellRepo.softDeleteByDatabaseId(databaseId, workspaceId);
     await this.databaseViewRepo.softDeleteByDatabaseId(databaseId, workspaceId);
@@ -1612,10 +1620,11 @@ export class DatabaseService {
   async createProperty(
     databaseId: string,
     dto: CreateDatabasePropertyDto,
-    actorId: string,
+    actor: User,
     workspaceId: string,
   ) {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
+    await this.assertCanManageDatabasePages(actor, database.spaceId);
 
     const currentProperties = await this.databasePropertyRepo.findByDatabaseId(
       databaseId,
@@ -1624,7 +1633,7 @@ export class DatabaseService {
     const property = await this.databasePropertyRepo.insertProperty({
       databaseId,
       workspaceId,
-      creatorId: actorId,
+      creatorId: actor.id,
       name: dto.name,
       type: dto.type,
       settings: (dto.settings as never) ?? null,
@@ -1640,7 +1649,7 @@ export class DatabaseService {
 
     await this.recordDatabaseHistoryEvent({
       pageIds: historyPageIds,
-      actorId,
+      actorId: actor.id,
       changeType: 'database.property.created',
       changeData: {
         databaseId: database.id,
@@ -1658,8 +1667,10 @@ export class DatabaseService {
   /**
    * Returns a list of database properties.
    */
-  async listProperties(databaseId: string, workspaceId: string) {
-    await this.getOrFailDatabase(databaseId, workspaceId);
+  async listProperties(databaseId: string, user: User, workspaceId: string) {
+    const database = await this.getOrFailDatabase(databaseId, workspaceId);
+    await this.assertCanReadDatabasePages(user, database.spaceId);
+
     const properties = await this.databasePropertyRepo.findByDatabaseId(databaseId);
     return this.normalizeProperties(properties);
   }
@@ -1671,10 +1682,11 @@ export class DatabaseService {
     databaseId: string,
     propertyId: string,
     dto: UpdateDatabasePropertyDto,
+    actor: User,
     workspaceId: string,
-    actorId?: string,
   ) {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
+    await this.assertCanManageDatabasePages(actor, database.spaceId);
 
     const property = await this.databasePropertyRepo.findById(propertyId);
     if (!property || property.databaseId !== databaseId) {
@@ -1739,7 +1751,7 @@ export class DatabaseService {
 
     await this.recordDatabaseHistoryEvent({
       pageIds: historyPageIds,
-      actorId: actorId ?? database.lastUpdatedById ?? database.creatorId,
+      actorId: actor.id,
       changeType: 'database.property.updated',
       changeData: {
         databaseId: database.id,
@@ -1761,10 +1773,11 @@ export class DatabaseService {
   async deleteProperty(
     databaseId: string,
     propertyId: string,
+    actor: User,
     workspaceId: string,
-    actorId?: string,
   ) {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
+    await this.assertCanManageDatabasePages(actor, database.spaceId);
 
     const property = await this.databasePropertyRepo.findById(propertyId);
     if (!property || property.databaseId !== databaseId) {
@@ -1782,7 +1795,7 @@ export class DatabaseService {
 
     await this.recordDatabaseHistoryEvent({
       pageIds: historyPageIds,
-      actorId: actorId ?? database.lastUpdatedById ?? database.creatorId,
+      actorId: actor.id,
       changeType: 'database.property.deleted',
       changeData: {
         databaseId: database.id,
@@ -2454,15 +2467,16 @@ export class DatabaseService {
   async createView(
     databaseId: string,
     dto: CreateDatabaseViewDto,
-    actorId: string,
+    actor: User,
     workspaceId: string,
   ) {
-    await this.getOrFailDatabase(databaseId, workspaceId);
+    const database = await this.getOrFailDatabase(databaseId, workspaceId);
+    await this.assertCanManageDatabasePages(actor, database.spaceId);
 
     return this.databaseViewRepo.insertView({
       databaseId,
       workspaceId,
-      creatorId: actorId,
+      creatorId: actor.id,
       name: dto.name,
       type: dto.type,
       config: (dto.config as never) ?? null,
@@ -2472,8 +2486,10 @@ export class DatabaseService {
   /**
    * Returns a list of database views.
    */
-  async listViews(databaseId: string, workspaceId: string) {
-    await this.getOrFailDatabase(databaseId, workspaceId);
+  async listViews(databaseId: string, user: User, workspaceId: string) {
+    const database = await this.getOrFailDatabase(databaseId, workspaceId);
+    await this.assertCanReadDatabasePages(user, database.spaceId);
+
     return this.databaseViewRepo.findByDatabaseId(databaseId);
   }
 
@@ -2484,9 +2500,11 @@ export class DatabaseService {
     databaseId: string,
     viewId: string,
     dto: UpdateDatabaseViewDto,
+    user: User,
     workspaceId: string,
   ) {
-    await this.getOrFailDatabase(databaseId, workspaceId);
+    const database = await this.getOrFailDatabase(databaseId, workspaceId);
+    await this.assertCanManageDatabasePages(user, database.spaceId);
 
     const view = await this.databaseViewRepo.findById(viewId);
     if (!view || view.databaseId !== databaseId) {
@@ -2502,8 +2520,14 @@ export class DatabaseService {
   /**
    * Gently deletes a database view.
    */
-  async deleteView(databaseId: string, viewId: string, workspaceId: string) {
-    await this.getOrFailDatabase(databaseId, workspaceId);
+  async deleteView(
+    databaseId: string,
+    viewId: string,
+    user: User,
+    workspaceId: string,
+  ) {
+    const database = await this.getOrFailDatabase(databaseId, workspaceId);
+    await this.assertCanManageDatabasePages(user, database.spaceId);
 
     const view = await this.databaseViewRepo.findById(viewId);
     if (!view || view.databaseId !== databaseId) {
