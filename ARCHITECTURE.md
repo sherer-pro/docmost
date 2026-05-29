@@ -7,6 +7,7 @@ Docmost is a pnpm workspace orchestrated by Nx. The main runtime surfaces are:
 - `apps/server` - NestJS API, background jobs, websocket gateway, migrations, and storage/search integrations.
 - `apps/client` - Vite and React frontend.
 - `packages/editor-ext` - shared Tiptap/ProseMirror editor extensions consumed by the client and server-side rendering paths.
+- `packages/api-contract` - shared API-facing TypeScript contracts used by backend and frontend code.
 
 The production container uses Node.js 22 and runs the built backend through the root `pnpm start` script. The root `pnpm build` task builds all workspace projects.
 
@@ -16,11 +17,13 @@ The backend is organized around Nest modules under `apps/server/src/core`. HTTP 
 
 Security-sensitive cross-cutting behavior is centralized:
 
-- JWT authentication is enforced by `JwtAuthGuard`.
-- Mutating routes are protected by the global CSRF guard, except explicit auth/setup exemptions.
+- JWT authentication is enforced by controllers and gateways that opt into `JwtAuthGuard`; routes marked `@Public()` intentionally bypass it.
+- Mutating non-public routes are protected by the global CSRF guard. Routes marked `@Public()` and routes marked with the explicit CSRF exemption decorator bypass CSRF validation.
 - Page and space visibility is resolved through `PageAccessService`.
 - RAG routes use API-key auth and reject regular user JWT/cookie auth.
 - Link preview metadata fetching validates public destinations and pins the resolved IP for the outbound request.
+- `X-Forwarded-*` request headers are trusted only when `TRUSTED_PROXIES` explicitly configures the reverse proxy IP/CIDR ranges. Rate limiting, session IP capture, request logging, and HTTPS/HSTS detection use the Fastify-resolved client request metadata.
+- Embed iframes are restricted by a shared provider frame-source policy used by both client validation and server CSP. Generic iframe origins must be explicitly configured through `EMBED_ALLOWED_ORIGINS`.
 
 The database schema is managed through Kysely migrations in `apps/server/src/database/migrations`. Generated Kysely types live under `apps/server/src/database/types`.
 
@@ -28,7 +31,10 @@ The database schema is managed through Kysely migrations in `apps/server/src/dat
 
 The frontend is feature-oriented under `apps/client/src/features`. API calls are kept in feature service modules and use the shared API client. Search, editor, transclusion, database, session, favorite, and dictionary functionality are grouped by feature instead of by technical layer.
 
-Runtime environment values for the frontend are loaded in `apps/client/vite.config.ts` from the repository root `.env*` files and injected into `process.env` at build time.
+Frontend configuration has two layers:
+
+- Build-time values are loaded in `apps/client/vite.config.ts` from the repository root `.env*` files and injected into `process.env`.
+- Deployment/runtime values are served by the backend from `/window-config.js` and injected into `window.CONFIG` without mutating the built client files on disk.
 
 ## Collaboration And Editor
 
@@ -44,7 +50,11 @@ Generated backend route inventory is maintained by `pnpm routes:inventory` and c
 
 ## Environment Contract
 
-`.env.example` is the canonical checked-in environment contract. Local `.env` may contain deployment-specific values, but it must keep the same key set. The server validation class in `apps/server/src/integrations/environment/environment.validation.ts` and the frontend runtime keys in `apps/client/vite.config.ts` are checked against `.env.example` by `pnpm check:env`.
+`.env.example` is the canonical checked-in environment contract. Local `.env` may contain deployment-specific values, but it must keep the same key set. The server validation class in `apps/server/src/integrations/environment/environment.validation.ts`, frontend build-time keys in `apps/client/vite.config.ts`, and backend-served frontend runtime keys in `apps/server/src/integrations/static/static.module.ts` are checked against `.env.example` by `pnpm check:env`.
+
+Reverse proxy deployments must set `TRUSTED_PROXIES` to the controlled proxy addresses or CIDRs, for example `loopback,linklocal,uniquelocal` or `10.0.0.0/8,172.16.0.0/12`. Leaving it empty disables forwarded-header trust.
+
+Generic iframe deployments must set `EMBED_ALLOWED_ORIGINS` to exact trusted `http(s)` origins when arbitrary iframe embeds are required. Built-in providers remain allowlisted by the shared embed frame-source policy.
 
 ## Verification
 

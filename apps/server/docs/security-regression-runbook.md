@@ -20,8 +20,10 @@ pnpm verify:quick
 
 - Share SEO title/meta escaping (`GHSA-h7fp-4f37-29wq`)
 - Mermaid SVG sanitization (`GHSA-r4hj-mc62-jmwj`)
-- ZIP extraction traversal resistance (`GHSA-54pm-hqxm-54wg`)
-- Embed URL scheme sanitization (`GHSA-qvxv-4pj5-64xq`)
+- ZIP extraction traversal resistance and extraction quotas (`GHSA-54pm-hqxm-54wg`)
+- Embed URL scheme sanitization, same-origin relative URL rejection, shared frame-source allowlisting, and generic iframe sandbox hardening (`GHSA-qvxv-4pj5-64xq`)
+- Forwarded-header spoofing resistance for rate limiting, session IP capture, request logging, and HTTPS/HSTS detection.
+- Legacy public attachment `?jwt=` query tokens are lower priority than header/cookie tokens and emit deprecation headers when used.
 
 ## Manual staging smoke (required before production rollout)
 
@@ -33,11 +35,23 @@ pnpm verify:quick
    - insert a Mermaid block with SVG/script/event-handler payload.
    - confirm no script execution and diagram still renders safe labels.
 3. Embed:
-   - try `javascript:`, `vbscript:`, `data:text/html` URLs in embed block.
-   - confirm iframe is not rendered.
+   - try `javascript:`, `vbscript:`, `data:text/html`, and relative `/api/...` URLs in embed block.
+   - confirm iframe is not rendered for rejected URLs.
+   - confirm generic iframe embeds do not include `allow-same-origin` in their sandbox.
+   - try an arbitrary generic HTTPS iframe while `EMBED_ALLOWED_ORIGINS` is empty and confirm it is rejected.
+   - set `EMBED_ALLOWED_ORIGINS` to that exact origin and confirm the same generic iframe is accepted.
 4. ZIP import:
    - import archive with `../`, `..\\`, and absolute-path entries.
    - confirm files are not written outside extraction target.
+   - import archives that exceed entry count or uncompressed-size quotas.
+   - confirm extraction fails instead of partially accepting oversized archives.
+5. Reverse proxy:
+   - with `TRUSTED_PROXIES` empty, send `X-Forwarded-For` and `X-Forwarded-Proto` directly to the app.
+   - confirm auth rate limits and session IP capture use the socket remote address, and HSTS is not enabled only because of spoofed `X-Forwarded-Proto`.
+   - set `TRUSTED_PROXIES` to the staging proxy CIDR and confirm client IP/HSTS are resolved correctly through that proxy.
+6. Public attachments:
+   - open a public attachment URL with only legacy `?jwt=<token>` and confirm the response includes `Deprecation: true` and a `Warning` header.
+   - repeat with `x-attachment-token` or attachment cookies and confirm no deprecation header is emitted.
 
 ## Alerting and triage
 

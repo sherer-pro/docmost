@@ -9,6 +9,7 @@
   - `apps/server` — NestJS backend.
   - `apps/client` — Vite + React frontend.
   - `packages/editor-ext` — shared TypeScript package with editor extensions.
+  - `packages/api-contract` — shared API-facing TypeScript contracts.
 - Root package manager is pinned: `pnpm@10.4.0`.
 - `node:22-slim` is used for the production image.
 
@@ -46,6 +47,7 @@
 - `apps/client/public/locales/*` — JSON translations.
 - `apps/server/src/database` — migrations and DB tooling.
 - `packages/editor-ext/src/lib/{audio,pdf,transclusion}` — editor nodes for audio, embedded PDFs, and synced blocks.
+- `packages/api-contract/src` — shared API-facing TypeScript contracts used by server/client code.
 - `patches/` — pnpm patch files (for example, for `react-arborist`).
 - `packages/ee`, `apps/*/src/ee` — Enterprise code (separate license).
 
@@ -93,10 +95,10 @@
 - Full root test stage (default + frontend unit): `pnpm test:all`
 - Security regression suite (server + client targeted tests): `pnpm test:security`
 - Backend unit/integration: `pnpm --filter ./apps/server test`
-- Backend security subset (share SEO + ZIP traversal): `pnpm --filter ./apps/server test:security`
+- Backend security subset (share SEO + ZIP traversal/quotas + attachment token fallback): `pnpm --filter ./apps/server test:security`
 - Frontend smoke test equivalent (build-based temporary target): `pnpm --filter ./apps/client build`
 - Frontend unit tests (Vitest): `pnpm --filter ./apps/client test`
-- Frontend security subset (Mermaid + embed sanitize): `pnpm --filter ./apps/client test:security`
+- Frontend security subset (Mermaid + embed sanitize/sandbox): `pnpm --filter ./apps/client test:security`
 - Backend coverage: `pnpm --filter ./apps/server test:cov`
 - Backend coverage smoke (fast regression check): `pnpm --filter ./apps/server test:cov:smoke`
 - Backend alias smoke (verify tsconfig alias resolution in Jest): `pnpm --filter ./apps/server test:alias:smoke`
@@ -171,7 +173,9 @@ Minimum:
 - Mail: `MAIL_DRIVER`, `SMTP_*`, `POSTMARK_TOKEN`
 - PDF export: `PDF_CHROMIUM_EXECUTABLE_PATH`, `PDF_RENDER_TIMEOUT_MS`
 - Diagnostics: `DEBUG_MODE`, `DEBUG_DB`, `LOG_HTTP`
-- Frontend runtime defines: `COLLAB_URL`, `SUBDOMAIN_HOST`, `POSTHOG_*`, `BILLING_TRIAL_DAYS`, etc. (loaded via `vite loadEnv`).
+- Reverse proxy attribution: `TRUSTED_PROXIES` is a comma-separated list of trusted proxy IPs/CIDRs or proxy-addr keywords (`loopback`, `linklocal`, `uniquelocal`). Leave it empty unless Docmost is behind a controlled proxy; `X-Forwarded-*` headers are ignored when it is empty.
+- Embed iframe allowlist: `EMBED_ALLOWED_ORIGINS` is a comma-separated list of exact trusted `http(s)` origins for generic iframe embeds. Built-in providers are allowlisted separately; keep this empty unless the origin is trusted.
+- Frontend build-time defines are loaded via `vite loadEnv`; deployment/runtime defines such as `COLLAB_URL`, `SUBDOMAIN_HOST`, `POSTHOG_*`, `BILLING_TRIAL_DAYS`, `FILE_IMPORT_SIZE_LIMIT`, `EMBED_ALLOWED_ORIGINS`, and `DRAWIO_URL` are served by the backend from `/window-config.js` without mutating built client files.
 
 ---
 
@@ -203,12 +207,14 @@ Minimum:
 
 ## 7) Mismatches and pitfalls
 
-- All mutating API methods (POST/PUT/PATCH/DELETE) are protected by global CSRF validation (double-submit cookie): `csrfToken` cookie must match the `x-csrf-token` header.
-- CSRF exceptions by design: `POST /api/auth/login`, `POST /api/auth/logout`, `POST /api/auth/forgot-password`, `POST /api/auth/password-reset`, `POST /api/auth/verify-token`, `POST /api/auth/setup`.
+- All mutating non-public API methods (POST/PUT/PATCH/DELETE) are protected by global CSRF validation (double-submit cookie): `csrfToken` cookie must match the `x-csrf-token` header.
+- CSRF exceptions by design: routes marked `@Public()` and routes explicitly marked with the CSRF exemption decorator. Auth/setup examples include `POST /api/auth/login`, `POST /api/auth/logout`, `POST /api/auth/forgot-password`, `POST /api/auth/password-reset`, `POST /api/auth/verify-token`, `POST /api/auth/setup`.
 - Attachment/file API notes:
   - canonical upload routes: `POST /api/attachments/actions/upload-file`, `POST /api/attachments/actions/upload-image`, `POST /api/attachments/actions/remove-icon`.
   - canonical file routes: `GET /api/attachments/files/:fileId/:fileName`, `GET /api/attachments/files/public/:fileId/:fileName`.
   - compatibility aliases are still enabled for older clients/content: `POST /api/files/upload`, `GET /api/files/:fileId/:fileName`, `GET /api/files/public/:fileId/:fileName`, `POST /api/attachments/upload-image`, `POST /api/attachments/remove-icon`.
+  - public attachment `?jwt=` query tokens remain accepted only as a legacy fallback after header/cookie tokens; responses using the query token include deprecation headers.
+- Generic iframe embeds are blocked unless their exact origin is listed in `EMBED_ALLOWED_ORIGINS`; built-in providers use the shared frame-source allowlist and server CSP.
 - RAG API (`/api/rag/*`) is API-key-only:
   - pass `Authorization: Bearer <token>` from workspace API keys;
   - user JWT/cookie auth is rejected on `/api/rag/*`;

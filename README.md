@@ -19,7 +19,7 @@
 
 - Added core RAG API (`/api/rag/*`) authenticated exclusively via space-scoped API keys (Bearer): full/delta sync and exports for pages/databases/rows/attachments/comments.
 - Implemented API key management (CRUD, required `spaceId`, soft revoke, `expiresAt/lastUsedAt`) plus admin/owner UI; key creation now requires selecting a space, defaulting to “No expiration”.
-- Added `RAG_API.md` with a full spec and integration examples.
+- Added `docs/RAG_API.md` with a full spec and integration examples.
 
 
 ## PWA / Offline
@@ -77,7 +77,7 @@
 - Rate limiting for auth endpoints.
 - Added hashing for password reset tokens (no plaintext stored in the DB). 
 - Added server-side Mermaid sanitization.
-- Tightened CSP.
+- Tightened CSP and iframe embed allowlisting.
 
 ## Dev/Docs
 
