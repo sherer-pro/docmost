@@ -353,6 +353,13 @@ export class PageService {
       settings: createPageDto.settings,
     });
 
+    await this.userRepo.updatePageEditModeByPageId(
+      userId,
+      workspaceId,
+      page.id,
+      'edit',
+    );
+
     if (parentPageId && parentPage) {
       await this.pageAccessService.copyParentRulesToChild(
         parentPageId,

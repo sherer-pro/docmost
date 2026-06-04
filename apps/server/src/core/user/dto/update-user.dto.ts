@@ -26,9 +26,8 @@ export class UpdateUserDto extends PartialType(
   fullPageWidthByPageId: Record<string, boolean>;
 
   @IsOptional()
-  @IsString()
-  @IsIn(['read', 'edit'])
-  pageEditMode: string;
+  @IsObject()
+  pageEditModeByPageId: Record<string, 'read' | 'edit'>;
 
   @IsOptional()
   @IsBoolean()

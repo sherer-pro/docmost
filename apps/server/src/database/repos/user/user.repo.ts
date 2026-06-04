@@ -18,7 +18,7 @@ import { UserRole } from '../../../common/helpers/types/permission';
 const USER_PREFERENCE_KEYS = [
   'fullPageWidth',
   'fullPageWidthByPageId',
-  'pageEditMode',
+  'pageEditModeByPageId',
   'pushEnabled',
   'pushFrequency',
   'emailEnabled',
@@ -26,6 +26,12 @@ const USER_PREFERENCE_KEYS = [
 ] as const;
 
 type UserPreferenceKey = (typeof USER_PREFERENCE_KEYS)[number];
+type UserPageEditModePreference = 'read' | 'edit';
+type UserPreferenceValue =
+  | string
+  | boolean
+  | Record<string, boolean>
+  | Record<string, UserPageEditModePreference>;
 
 @Injectable()
 export class UserRepo {
@@ -435,7 +441,7 @@ export class UserRepo {
     userId: string,
     workspaceId: string,
     prefKey: UserPreferenceKey,
-    prefValue: string | boolean | Record<string, boolean>,
+    prefValue: UserPreferenceValue,
   ) {
     if (!USER_PREFERENCE_KEYS.includes(prefKey)) {
       throw new Error(`Unsupported user preference key: ${prefKey}`);
@@ -447,6 +453,39 @@ export class UserRepo {
         settings: sql`COALESCE(settings, '{}'::jsonb)
                 || jsonb_build_object('preferences', COALESCE(settings->'preferences', '{}'::jsonb) 
                 || jsonb_build_object(${prefKey}::text, ${JSON.stringify(prefValue)}::jsonb))`,
+        updatedAt: new Date(),
+      })
+      .where('id', '=', userId)
+      .where('workspaceId', '=', workspaceId)
+      .returning(this.baseFields)
+      .executeTakeFirst();
+  }
+
+  async updatePageEditModeByPageId(
+    userId: string,
+    workspaceId: string,
+    pageId: string,
+    mode: UserPageEditModePreference,
+  ) {
+    return await this.db
+      .updateTable('users')
+      .set({
+        settings: sql`jsonb_set(
+          COALESCE(settings, '{}'::jsonb),
+          '{preferences}',
+          COALESCE(settings->'preferences', '{}'::jsonb)
+            || jsonb_build_object(
+              'pageEditModeByPageId',
+              (
+                CASE
+                  WHEN jsonb_typeof(settings #> '{preferences,pageEditModeByPageId}') = 'object'
+                    THEN settings #> '{preferences,pageEditModeByPageId}'
+                  ELSE '{}'::jsonb
+                END
+              ) || jsonb_build_object(${pageId}::text, ${JSON.stringify(mode)}::jsonb)
+            ),
+          true
+        )`,
         updatedAt: new Date(),
       })
       .where('id', '=', userId)

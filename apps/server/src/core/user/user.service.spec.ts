@@ -1,5 +1,8 @@
 import { UserService } from './user.service';
 
+const PAGE_ID = '00000000-0000-4000-8000-000000000001';
+const OTHER_PAGE_ID = '00000000-0000-4000-8000-000000000002';
+
 describe('UserService', () => {
   const createService = () => {
     const userRepo = {
@@ -179,6 +182,56 @@ describe('UserService', () => {
     });
   });
 
+  it('updates page-level edit mode map through user preferences', async () => {
+    const { service, userRepo } = createService();
+
+    const workspace = { id: 'ws-1' } as any;
+    const user = {
+      id: 'user-1',
+      email: 'john@example.com',
+      password: 'hash',
+    } as any;
+    const pageEditModeByPageId = {
+      [PAGE_ID]: 'edit',
+      [OTHER_PAGE_ID]: '"read"',
+      '00000000-0000-4000-8000-000000000003': 'invalid',
+      'not-a-page-id': 'edit',
+    };
+    const normalizedPageEditModeByPageId = {
+      [PAGE_ID]: 'edit',
+      [OTHER_PAGE_ID]: 'read',
+    };
+    const updatedPreferenceUser = {
+      ...user,
+      settings: {
+        preferences: { pageEditModeByPageId: normalizedPageEditModeByPageId },
+      },
+    };
+
+    userRepo.findById
+      .mockResolvedValueOnce(user)
+      .mockResolvedValueOnce(updatedPreferenceUser);
+    userRepo.updatePreference.mockResolvedValue(updatedPreferenceUser);
+
+    const result = await service.update(
+      { pageEditModeByPageId } as any,
+      'user-1',
+      workspace,
+    );
+    const normalizedResult = result as any;
+
+    expect(userRepo.updatePreference).toHaveBeenCalledWith(
+      'user-1',
+      'ws-1',
+      'pageEditModeByPageId',
+      normalizedPageEditModeByPageId,
+    );
+    expect(userRepo.updateUser).not.toHaveBeenCalled();
+    expect(normalizedResult.settings.preferences.pageEditModeByPageId).toEqual(
+      normalizedPageEditModeByPageId,
+    );
+  });
+
   it('normalizes quoted notification frequency payload before persisting', async () => {
     const { service, userRepo } = createService();
 
@@ -229,7 +282,12 @@ describe('UserService', () => {
           emailEnabled: '"false"',
           pushFrequency: '"24h"',
           emailFrequency: '"1h"',
-          pageEditMode: '"read"',
+          pageEditModeByPageId: {
+            [PAGE_ID]: '"read"',
+            [OTHER_PAGE_ID]: '"edit"',
+            '00000000-0000-4000-8000-000000000003': 'invalid',
+            'not-a-page-id': 'edit',
+          },
         },
       },
     } as any;
@@ -243,6 +301,9 @@ describe('UserService', () => {
     expect(normalizedResult.settings.preferences.emailEnabled).toBe(false);
     expect(normalizedResult.settings.preferences.pushFrequency).toBe('24h');
     expect(normalizedResult.settings.preferences.emailFrequency).toBe('1h');
-    expect(normalizedResult.settings.preferences.pageEditMode).toBe('read');
+    expect(normalizedResult.settings.preferences.pageEditModeByPageId).toEqual({
+      [PAGE_ID]: 'read',
+      [OTHER_PAGE_ID]: 'edit',
+    });
   });
 });

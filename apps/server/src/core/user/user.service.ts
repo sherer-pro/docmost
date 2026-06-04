@@ -11,7 +11,7 @@ import { Workspace } from '@docmost/db/types/entity.types';
 import { validateSsoEnforcement } from '../auth/auth.util';
 import {
   normalizeNotificationFrequency,
-  normalizePageEditModePreference,
+  normalizePageEditModeByPageId,
   normalizePreferenceBoolean,
   normalizeUserSettings,
 } from './utils/user-preferences.util';
@@ -85,12 +85,13 @@ export class UserService {
     }
 
     const currentPreferences = normalizeUserSettings(user.settings).preferences;
+    delete (updateUserDto as UpdateUserDto & { pageEditMode?: unknown }).pageEditMode;
 
     // preference update
     const hasPreferenceUpdates =
       typeof updateUserDto.fullPageWidth !== 'undefined' ||
       typeof updateUserDto.fullPageWidthByPageId !== 'undefined' ||
-      typeof updateUserDto.pageEditMode !== 'undefined' ||
+      typeof updateUserDto.pageEditModeByPageId !== 'undefined' ||
       typeof updateUserDto.pushEnabled !== 'undefined' ||
       typeof updateUserDto.pushFrequency !== 'undefined' ||
       typeof updateUserDto.emailFrequency !== 'undefined' ||
@@ -116,12 +117,12 @@ export class UserService {
       );
     }
 
-    if (typeof updateUserDto.pageEditMode !== 'undefined') {
+    if (typeof updateUserDto.pageEditModeByPageId !== 'undefined') {
       await this.userRepo.updatePreference(
         userId,
         workspace.id,
-        'pageEditMode',
-        normalizePageEditModePreference(updateUserDto.pageEditMode),
+        'pageEditModeByPageId',
+        normalizePageEditModeByPageId(updateUserDto.pageEditModeByPageId),
       );
     }
 
@@ -230,6 +231,7 @@ export class UserService {
 
     delete updateUserDto.confirmPassword;
     delete updateUserDto.fullPageWidthByPageId;
+    delete updateUserDto.pageEditModeByPageId;
 
     await this.userRepo.updateUser(updateUserDto, userId, workspace.id);
 

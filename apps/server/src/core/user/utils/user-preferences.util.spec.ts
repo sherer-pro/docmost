@@ -1,9 +1,13 @@
 import {
+  normalizePageEditModeByPageId,
   normalizeNotificationFrequency,
   normalizePageEditModePreference,
   normalizePreferenceBoolean,
   normalizeUserSettings,
 } from './user-preferences.util';
+
+const PAGE_ID = '00000000-0000-4000-8000-000000000001';
+const OTHER_PAGE_ID = '00000000-0000-4000-8000-000000000002';
 
 describe('user-preferences.util', () => {
   it('normalizes boolean preferences from string payloads', () => {
@@ -21,7 +25,22 @@ describe('user-preferences.util', () => {
   it('normalizes page edit mode from quoted values', () => {
     expect(normalizePageEditModePreference('"read"')).toBe('read');
     expect(normalizePageEditModePreference('"EDIT"')).toBe('edit');
-    expect(normalizePageEditModePreference('invalid')).toBe('edit');
+    expect(normalizePageEditModePreference('invalid')).toBeNull();
+  });
+
+  it('normalizes page edit mode map and drops invalid values', () => {
+    expect(
+      normalizePageEditModeByPageId({
+        [PAGE_ID]: '"read"',
+        [OTHER_PAGE_ID]: 'EDIT',
+        '00000000-0000-4000-8000-000000000003': 'invalid',
+        'not-a-page-id': 'edit',
+        '': 'edit',
+      }),
+    ).toEqual({
+      [PAGE_ID]: 'read',
+      [OTHER_PAGE_ID]: 'edit',
+    });
   });
 
   it('normalizes settings payload and preserves unrelated preference keys', () => {
@@ -31,7 +50,11 @@ describe('user-preferences.util', () => {
         emailEnabled: '"false"',
         pushFrequency: '"24h"',
         emailFrequency: '"1h"',
-        pageEditMode: '"read"',
+        pageEditModeByPageId: {
+          [PAGE_ID]: '"read"',
+          [OTHER_PAGE_ID]: '"edit"',
+          '00000000-0000-4000-8000-000000000003': 'invalid',
+        },
         rememberPageScrollPosition: true,
       },
     });
@@ -40,7 +63,10 @@ describe('user-preferences.util', () => {
     expect(normalized.preferences.emailEnabled).toBe(false);
     expect(normalized.preferences.pushFrequency).toBe('24h');
     expect(normalized.preferences.emailFrequency).toBe('1h');
-    expect(normalized.preferences.pageEditMode).toBe('read');
+    expect(normalized.preferences.pageEditModeByPageId).toEqual({
+      [PAGE_ID]: 'read',
+      [OTHER_PAGE_ID]: 'edit',
+    });
     expect(normalized.preferences.rememberPageScrollPosition).toBe(true);
   });
 });
