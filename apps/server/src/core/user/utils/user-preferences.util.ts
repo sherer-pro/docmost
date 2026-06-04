@@ -1,3 +1,5 @@
+import { validate as isValidUuid } from 'uuid';
+
 export type NotificationFrequency = 'immediate' | '1h' | '3h' | '6h' | '24h';
 export type PageEditModePreference = 'read' | 'edit';
 
@@ -15,7 +17,7 @@ interface UserPreferencesRecord {
   emailEnabled?: unknown;
   pushFrequency?: unknown;
   emailFrequency?: unknown;
-  pageEditMode?: unknown;
+  pageEditModeByPageId?: unknown;
 }
 
 interface UserSettingsRecord {
@@ -97,9 +99,48 @@ export function normalizeNotificationFrequency(
 
 export function normalizePageEditModePreference(
   value: unknown,
-): PageEditModePreference {
+): PageEditModePreference | null {
   const normalizedString = normalizePreferenceString(value)?.toLowerCase();
-  return normalizedString === 'read' ? 'read' : 'edit';
+  if (normalizedString === 'read' || normalizedString === 'edit') {
+    return normalizedString;
+  }
+
+  return null;
+}
+
+export function normalizePageEditModeByPageId(
+  value: unknown,
+): Record<string, PageEditModePreference> {
+  let parsedValue = value;
+
+  if (typeof parsedValue === 'string') {
+    try {
+      parsedValue = JSON.parse(parsedValue);
+    } catch {
+      return {};
+    }
+  }
+
+  if (
+    !parsedValue ||
+    typeof parsedValue !== 'object' ||
+    Array.isArray(parsedValue)
+  ) {
+    return {};
+  }
+
+  return Object.entries(parsedValue).reduce<Record<string, PageEditModePreference>>(
+    (acc, [pageId, mode]) => {
+      const normalizedMode = normalizePageEditModePreference(mode);
+      if (!isValidUuid(pageId) || !normalizedMode) {
+        return acc;
+      }
+
+      acc[pageId] = normalizedMode;
+      return acc;
+    },
+    {},
+  );
 }
 
 export function normalizeUserSettings(
@@ -110,7 +151,7 @@ export function normalizeUserSettings(
     emailEnabled: boolean;
     pushFrequency: NotificationFrequency;
     emailFrequency: NotificationFrequency;
-    pageEditMode: PageEditModePreference;
+    pageEditModeByPageId: Record<string, PageEditModePreference>;
   };
 } {
   const safeSettings: UserSettingsRecord = isRecord(settings)
@@ -134,7 +175,9 @@ export function normalizeUserSettings(
         safePreferences.emailFrequency,
         'immediate',
       ),
-      pageEditMode: normalizePageEditModePreference(safePreferences.pageEditMode),
+      pageEditModeByPageId: normalizePageEditModeByPageId(
+        safePreferences.pageEditModeByPageId,
+      ),
     },
   };
 }
