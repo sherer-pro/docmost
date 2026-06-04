@@ -404,8 +404,6 @@
   "Character count: {{characterCount}}": "文字数: {{characterCount}}",
   "New update": "新規更新",
   "{{latestVersion}} is available": "{{latestVersion}} が利用可能です",
-  "Default page edit mode": "デフォルトのページ編集モード",
-  "Choose your preferred page edit mode. Avoid accidental edits.": "お好みのページ編集モードを選択してください（誤編集を防止します）",
   "Reading": "読み取り",
   "Delete member": "メンバーを削除する",
   "Member deleted successfully": "メンバーを削除しました",

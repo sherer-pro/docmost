@@ -105,6 +105,9 @@ import {
   resolveDatabasePropertyRename,
   shouldDeleteCellPayload,
 } from '@/features/database/components/database-table-view.helpers.ts';
+import { userAtom } from '@/features/user/atoms/current-user-atom.ts';
+import { PageEditMode } from '@/features/user/types/user.types.ts';
+import { buildPageEditModeByPageId } from '@/features/user/utils/page-edit-mode.ts';
 
 interface DatabaseTableViewProps {
   databaseId: string;
@@ -281,6 +284,8 @@ export function DatabaseTableView({
   const treeData = useAtomValue(treeDataAtom);
   const setTreeData = useSetAtom(treeDataAtom);
   const treeApi = useAtomValue(treeApiAtom);
+  const user = useAtomValue(userAtom);
+  const setUser = useSetAtom(userAtom);
   const emit = useQueryEmit();
   const navigate = useNavigate();
   const tableStateStorageKey = useMemo(
@@ -548,6 +553,23 @@ export function DatabaseTableView({
   const handleCreateRow = async () => {
     const createdRow = await createRowMutation.mutateAsync({});
     emitDatabaseInvalidation();
+    if (user) {
+      setUser({
+        ...user,
+        settings: {
+          ...user.settings,
+          preferences: {
+            ...user.settings?.preferences,
+            pageEditModeByPageId: buildPageEditModeByPageId(
+              user.settings?.preferences?.pageEditModeByPageId,
+              createdRow.pageId,
+              PageEditMode.Edit,
+            ),
+          },
+        },
+      });
+    }
+
     const createdRowPage = await queryClient.fetchQuery({
       queryKey: PAGE_QUERY_KEYS.page(createdRow.pageId),
       queryFn: () => getPageById({ pageId: createdRow.pageId }),

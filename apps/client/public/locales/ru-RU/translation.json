@@ -404,8 +404,6 @@
   "Character count: {{characterCount}}": "Количество символов: {{characterCount}}",
   "New update": "Новое обновление",
   "{{latestVersion}} is available": "Доступна новая версия {{latestVersion}}",
-  "Default page edit mode": "Режим редактирования страницы по умолчанию",
-  "Choose your preferred page edit mode. Avoid accidental edits.": "Выберите предпочитаемый режим редактирования страницы. Избегайте случайных изменений.",
   "Reading": "Чтение",
   "Delete member": "Удалить участника",
   "Member deleted successfully": "Участник успешно удален",

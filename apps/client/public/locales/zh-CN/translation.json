@@ -404,8 +404,6 @@
   "Character count: {{characterCount}}": "字符数：{{characterCount}}",
   "New update": "新更新",
   "{{latestVersion}} is available": "{{latestVersion}} 已经可以使用",
-  "Default page edit mode": "默认页面编辑模式",
-  "Choose your preferred page edit mode. Avoid accidental edits.": "选择您偏好的页面编辑模式。避免意外编辑。",
   "Reading": "阅读",
   "Delete member": "删除成员",
   "Member deleted successfully": "成员删除成功",

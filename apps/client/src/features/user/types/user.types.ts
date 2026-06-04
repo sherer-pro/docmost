@@ -20,7 +20,7 @@ export interface IUser {
   deletedAt: Date;
   fullPageWidth: boolean; // used for update
   fullPageWidthByPageId?: Record<string, boolean>; // used for update
-  pageEditMode: string; // used for update
+  pageEditModeByPageId?: Record<string, PageEditMode>; // used for update
   pushEnabled: boolean; // used for update
   emailEnabled: boolean; // used for update
   emailFrequency: EmailFrequency; // used for update
@@ -38,7 +38,7 @@ export interface IUserSettings {
   preferences: {
     fullPageWidth: boolean;
     fullPageWidthByPageId?: Record<string, boolean>;
-    pageEditMode: string;
+    pageEditModeByPageId?: Record<string, PageEditMode>;
     pushEnabled: boolean;
     emailEnabled: boolean;
     emailFrequency: EmailFrequency;

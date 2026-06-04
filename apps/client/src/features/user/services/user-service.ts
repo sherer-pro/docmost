@@ -9,7 +9,7 @@ import {
   DEFAULT_PUSH_ENABLED,
   DEFAULT_PUSH_FREQUENCY,
 } from "@/features/user/constants/push-preferences.ts";
-import { normalizePageEditMode } from "@/features/user/utils/page-edit-mode.ts";
+import { normalizePageEditModeByPageId } from "@/features/user/utils/page-edit-mode.ts";
 import {
   normalizeEmailFrequency,
   normalizePreferenceBoolean,
@@ -39,8 +39,13 @@ function normalizeUserPreferences(user: IUser): IUser {
   const normalizedFullPageWidthByPageId = normalizeFullPageWidthByPageId(
     safePreferences.fullPageWidthByPageId,
   );
+  const normalizedPageEditModeByPageId = normalizePageEditModeByPageId(
+    safePreferences.pageEditModeByPageId,
+  );
   const hasPageWidthOverrides =
     Object.keys(normalizedFullPageWidthByPageId).length > 0;
+  const hasPageEditModeOverrides =
+    Object.keys(normalizedPageEditModeByPageId).length > 0;
 
   return {
     ...user,
@@ -54,6 +59,9 @@ function normalizeUserPreferences(user: IUser): IUser {
         ),
         ...(hasPageWidthOverrides
           ? { fullPageWidthByPageId: normalizedFullPageWidthByPageId }
+          : {}),
+        ...(hasPageEditModeOverrides
+          ? { pageEditModeByPageId: normalizedPageEditModeByPageId }
           : {}),
         pushEnabled: normalizePreferenceBoolean(
           safePreferences.pushEnabled,
@@ -71,7 +79,6 @@ function normalizeUserPreferences(user: IUser): IUser {
           safePreferences.emailFrequency,
           DEFAULT_EMAIL_FREQUENCY,
         ),
-        pageEditMode: normalizePageEditMode(safePreferences.pageEditMode),
       },
     },
   };

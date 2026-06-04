@@ -1,50 +1,40 @@
-import { Text, MantineSize, SegmentedControl } from "@mantine/core";
+import { MantineSize, SegmentedControl } from "@mantine/core";
 import { useAtom } from "jotai";
 import { userAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { updateUser } from "@/features/user/services/user-service.ts";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { PageEditMode } from "@/features/user/types/user.types.ts";
-import { normalizePageEditMode } from "@/features/user/utils/page-edit-mode.ts";
-import { ResponsiveSettingsRow, ResponsiveSettingsContent, ResponsiveSettingsControl } from "@/components/ui/responsive-settings-row";
-
-export default function PageStatePref() {
-  const { t } = useTranslation();
-
-  return (
-    <ResponsiveSettingsRow>
-      <ResponsiveSettingsContent>
-        <Text size="md">{t("Default page edit mode")}</Text>
-        <Text size="sm" c="dimmed">
-          {t("Choose your preferred page edit mode. Avoid accidental edits.")}
-        </Text>
-      </ResponsiveSettingsContent>
-
-      <ResponsiveSettingsControl>
-        <PageStateSegmentedControl />
-      </ResponsiveSettingsControl>
-    </ResponsiveSettingsRow>
-  );
-}
+import {
+  buildPageEditModeByPageId,
+  normalizePageEditMode,
+  normalizePageEditModeByPageId,
+  resolvePageEditMode,
+} from "@/features/user/utils/page-edit-mode.ts";
 
 interface PageStateSegmentedControlProps {
   size?: MantineSize;
+  pageId?: string | null;
+  disabled?: boolean;
 }
 
 export function PageStateSegmentedControl({
   size,
+  pageId,
+  disabled = false,
 }: PageStateSegmentedControlProps) {
   const { t } = useTranslation();
   const [user, setUser] = useAtom(userAtom);
-  const pageEditMode = normalizePageEditMode(
-    user?.settings?.preferences?.pageEditMode,
-  );
+  const pageEditMode = resolvePageEditMode({
+    pageId,
+    preferences: user?.settings?.preferences,
+  });
   const [value, setValue] = useState(pageEditMode);
   const [isSaving, setIsSaving] = useState(false);
   const latestRequestIdRef = useRef(0);
 
-  const setLocalPreference = useCallback(
-    (mode: PageEditMode) => {
+  const setLocalPageEditModeByPageId = useCallback(
+    (pageEditModeByPageId: Record<string, PageEditMode>) => {
       if (!user) {
         return;
       }
@@ -55,7 +45,7 @@ export function PageStateSegmentedControl({
           ...user.settings,
           preferences: {
             ...user.settings?.preferences,
-            pageEditMode: mode,
+            pageEditModeByPageId,
           },
         },
       });
@@ -66,50 +56,53 @@ export function PageStateSegmentedControl({
   const handleChange = useCallback(
     async (nextValue: string) => {
       const nextMode = normalizePageEditMode(nextValue);
-      if (!user || nextMode === value) {
+      if (!user || !pageId || nextMode === value) {
         return;
       }
 
       const previousMode = value;
+      const previousPageEditModeByPageId = normalizePageEditModeByPageId(
+        user.settings?.preferences?.pageEditModeByPageId,
+      );
+      const nextPageEditModeByPageId = buildPageEditModeByPageId(
+        previousPageEditModeByPageId,
+        pageId,
+        nextMode,
+      );
       const requestId = latestRequestIdRef.current + 1;
       latestRequestIdRef.current = requestId;
       setValue(nextMode);
-      setLocalPreference(nextMode);
+      setLocalPageEditModeByPageId(nextPageEditModeByPageId);
       setIsSaving(true);
 
       try {
-        const updatedUser = await updateUser({ pageEditMode: nextMode });
+        const updatedUser = await updateUser({
+          pageEditModeByPageId: nextPageEditModeByPageId,
+        });
         if (requestId !== latestRequestIdRef.current) {
           return;
         }
-        const persistedMode = normalizePageEditMode(
-          updatedUser?.settings?.preferences?.pageEditMode,
-        );
+
+        const persistedMode = resolvePageEditMode({
+          pageId,
+          preferences: updatedUser?.settings?.preferences,
+        });
 
         setValue(persistedMode);
-        setUser({
-          ...updatedUser,
-          settings: {
-            ...updatedUser.settings,
-            preferences: {
-              ...updatedUser.settings?.preferences,
-              pageEditMode: persistedMode,
-            },
-          },
-        });
+        setUser(updatedUser);
       } catch {
         if (requestId !== latestRequestIdRef.current) {
           return;
         }
         setValue(previousMode);
-        setLocalPreference(previousMode);
+        setLocalPageEditModeByPageId(previousPageEditModeByPageId);
       } finally {
         if (requestId === latestRequestIdRef.current) {
           setIsSaving(false);
         }
       }
     },
-    [setLocalPreference, setUser, user, value],
+    [pageId, setLocalPageEditModeByPageId, setUser, user, value],
   );
 
   useEffect(() => {
@@ -122,6 +115,7 @@ export function PageStateSegmentedControl({
       value={value}
       onChange={handleChange}
       aria-busy={isSaving}
+      disabled={disabled || !pageId || isSaving}
       data={[
         { label: t("Edit"), value: PageEditMode.Edit },
         { label: t("Read"), value: PageEditMode.Read },

@@ -26,7 +26,7 @@ import { UpdateEvent } from "@/features/websocket/types";
 import localEmitter from "@/lib/local-emitter.ts";
 import { currentUserAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { PageEditMode } from "@/features/user/types/user.types.ts";
-import { normalizePageEditMode } from "@/features/user/utils/page-edit-mode.ts";
+import { resolvePageEditMode } from "@/features/user/utils/page-edit-mode.ts";
 import { searchSpotlight } from "@/features/search/constants.ts";
 import { shouldApplyFocusSafeTitleSync } from "@/features/editor/utils/title-editor-sync.ts";
 import { useDeferredCanonicalTitleUrlSync } from "@/features/editor/utils/canonical-title-url-sync.ts";
@@ -58,9 +58,11 @@ export function TitleEditor({
   const didInitFocusRef = useRef(false);
   const lastSyncedPageIdRef = useRef(pageId);
   const [currentUser] = useAtom(currentUserAtom);
-  const userPageEditMode = normalizePageEditMode(
-    currentUser?.user?.settings?.preferences?.pageEditMode,
-  );
+  const userPageEditMode = resolvePageEditMode({
+    pageId,
+    preferences: currentUser?.user?.settings?.preferences,
+  });
+  const isTitleEditable = editable && userPageEditMode === PageEditMode.Edit;
 
   const { onTitleFocusChange, syncCanonicalUrl } =
     useDeferredCanonicalTitleUrlSync(
@@ -100,7 +102,7 @@ export function TitleEditor({
     onUpdate({ editor }) {
       debounceUpdate();
     },
-    editable: editable,
+    editable: isTitleEditable,
     content: title,
     immediatelyRender: true,
     shouldRerenderOnTransaction: false,
@@ -239,15 +241,10 @@ export function TitleEditor({
   }, [pageId]);
 
   useEffect(() => {
-    // honor user default page edit mode preference
-    if (userPageEditMode && titleEditor && editable) {
-      if (userPageEditMode === PageEditMode.Edit) {
-        titleEditor.setEditable(true);
-      } else if (userPageEditMode === PageEditMode.Read) {
-        titleEditor.setEditable(false);
-      }
+    if (titleEditor) {
+      titleEditor.setEditable(isTitleEditable);
     }
-  }, [userPageEditMode, titleEditor, editable]);
+  }, [isTitleEditable, titleEditor]);
 
   const openSearchDialog = () => {
     const event = new CustomEvent("openFindDialogFromEditor", {});
