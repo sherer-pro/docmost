@@ -1,10 +1,44 @@
 .tableWrapper {
   margin-top: 1rem;
   margin-bottom: 1rem;
+  width: 100%;
+  max-width: 100%;
   overflow-x: auto;
+
   & table {
     overflow-x: hidden;
-    min-width: 700px !important;
+  }
+}
+
+.tableWrapper[data-table-width-mode="wide"] {
+  width: min(125%, calc(100vw - 2rem));
+  max-width: calc(100vw - 2rem);
+  margin-left: 50%;
+  transform: translateX(-50%);
+}
+
+.tableWrapper[data-table-width-mode="full"] {
+  width: calc(100vw - 2rem);
+  max-width: calc(100vw - 2rem);
+  margin-left: 50%;
+  transform: translateX(-50%);
+}
+
+[data-page-full-width="true"] .tableWrapper[data-table-width-mode="wide"],
+[data-page-full-width="true"] .tableWrapper[data-table-width-mode="full"] {
+  width: 100%;
+  max-width: 100%;
+  margin-left: 0;
+  transform: none;
+}
+
+@media (max-width: 48em) {
+  .tableWrapper[data-table-width-mode="wide"],
+  .tableWrapper[data-table-width-mode="full"] {
+    width: 100%;
+    max-width: 100%;
+    margin-left: 0;
+    transform: none;
   }
 }
 
@@ -23,14 +57,16 @@
   table {
     border-collapse: collapse;
     margin: 0;
-    table-layout: fixed;
+    table-layout: auto;
     width: 100%;
 
     td,
     th {
       border: 1px solid #ced4da;
       box-sizing: border-box;
-      min-width: 1em;
+      min-width: 3rem;
+      max-width: 24rem;
+      overflow-wrap: anywhere;
       padding: 3px 5px;
       position: relative;
       vertical-align: top;

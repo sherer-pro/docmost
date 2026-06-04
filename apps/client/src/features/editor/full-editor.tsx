@@ -54,6 +54,7 @@ export function FullEditor({
       fluid={fullPageWidth}
       size={!fullPageWidth && 900}
       className={classes.editor}
+      data-page-full-width={fullPageWidth ? "true" : "false"}
     >
       <MemoizedTitleEditor
         pageId={pageId}
