@@ -20,6 +20,7 @@ import {
 import { BubbleMenu } from "@tiptap/react/menus";
 import { isCellSelection } from "@docmost/editor-ext";
 import { useTranslation } from "react-i18next";
+import { TableWidthModeSelector } from "./table-width-mode";
 
 export const TableMenu = React.memo(
   ({ editor }: EditorMenuProps): JSX.Element => {
@@ -206,6 +207,8 @@ export const TableMenu = React.memo(
               <IconTableColumn size={18} />
             </ActionIcon>
           </Tooltip>
+
+          <TableWidthModeSelector editor={editor} />
 
           <Tooltip position="top" label={t("Delete table")}>
             <ActionIcon

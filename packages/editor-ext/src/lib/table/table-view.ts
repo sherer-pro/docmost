@@ -1,6 +1,10 @@
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import type { NodeView, ViewMutationRecord } from '@tiptap/pm/view';
 import { getColStyleDeclaration } from './utils/col-style';
+import {
+  getTableWidthModeClass,
+  normalizeTableWidthMode,
+} from './utils/width-mode';
 
 export function updateColumns(
   node: ProseMirrorNode,
@@ -100,8 +104,12 @@ export class TableView implements NodeView {
     this.node = node;
     this.cellMinWidth = cellMinWidth;
     this.dom = document.createElement('div');
-    this.dom.className = 'tableWrapper';
+    this.updateWidthMode();
     this.table = this.dom.appendChild(document.createElement('table'));
+    this.table.setAttribute(
+      'data-table-width-mode',
+      normalizeTableWidthMode(node.attrs.widthMode),
+    );
 
     if (node.attrs.style) {
       this.table.style.cssText = node.attrs.style;
@@ -116,9 +124,21 @@ export class TableView implements NodeView {
     if (node.type !== this.node.type) return false;
 
     this.node = node;
+    this.updateWidthMode();
+    this.table.setAttribute(
+      'data-table-width-mode',
+      normalizeTableWidthMode(node.attrs.widthMode),
+    );
     updateColumns(node, this.colgroup, this.table, this.cellMinWidth);
 
     return true;
+  }
+
+  updateWidthMode() {
+    const widthMode = normalizeTableWidthMode(this.node.attrs.widthMode);
+
+    this.dom.className = `tableWrapper ${getTableWidthModeClass(widthMode)}`;
+    this.dom.setAttribute('data-table-width-mode', widthMode);
   }
 
   ignoreMutation(mutation: ViewMutationRecord) {
@@ -132,6 +152,16 @@ export class TableView implements NodeView {
         mutation.type === 'childList' ||
         mutation.type === 'characterData'
       ) {
+        return true;
+      }
+    }
+
+    if (mutation.target instanceof Element) {
+      const chevronTarget = mutation.target.closest(
+        '.tableReadonlySortChevron',
+      );
+
+      if (chevronTarget) {
         return true;
       }
     }

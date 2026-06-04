@@ -3,6 +3,10 @@ import { Editor } from "@tiptap/core";
 import { DOMOutputSpec } from "@tiptap/pm/model";
 import { TextSelection } from "@tiptap/pm/state";
 import { cellAround } from "@tiptap/pm/tables";
+import {
+  getTableWidthModeClass,
+  normalizeTableWidthMode,
+} from "./utils/width-mode";
 
 const LIST_TYPES = ["bulletList", "orderedList", "taskList"];
 
@@ -34,6 +38,31 @@ function handleListOutdent(editor: Editor): boolean {
 }
 
 export const CustomTable = Table.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      widthMode: {
+        default: "normal",
+        parseHTML: (element) => {
+          const wrapperMode = element
+            .closest(".tableWrapper")
+            ?.getAttribute("data-table-width-mode");
+
+          return normalizeTableWidthMode(
+            element.getAttribute("data-table-width-mode") ||
+              element.getAttribute("data-width-mode") ||
+              wrapperMode,
+          );
+        },
+        renderHTML: (attributes) => ({
+          "data-table-width-mode": normalizeTableWidthMode(
+            attributes.widthMode,
+          ),
+        }),
+      },
+    };
+  },
+
   addKeyboardShortcuts() {
     return {
       ...this.parent?.(),
@@ -97,9 +126,13 @@ export const CustomTable = Table.extend({
   renderHTML({ node, HTMLAttributes }) {
     // https://github.com/ueberdosis/tiptap/issues/4872#issuecomment-2717554498
     const originalRender = this.parent?.({ node, HTMLAttributes });
+    const widthMode = normalizeTableWidthMode(node.attrs.widthMode);
     const wrapper: DOMOutputSpec = [
       "div",
-      { class: "tableWrapper" },
+      {
+        class: `tableWrapper ${getTableWidthModeClass(widthMode)}`,
+        "data-table-width-mode": widthMode,
+      },
       originalRender,
     ];
     return wrapper;

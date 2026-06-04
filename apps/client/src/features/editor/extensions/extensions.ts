@@ -41,6 +41,7 @@ import {
   SearchAndReplace,
   Mention,
   TableDndExtension,
+  TablePaste,
   TableReadonlySort,
   TableView,
   Subpages,
@@ -197,6 +198,7 @@ export const mainExtensions = [
   TableCell,
   TableHeader,
   TableDndExtension,
+  TablePaste,
   TableReadonlySort,
   MathInline.configure({
     view: MathInlineView,
