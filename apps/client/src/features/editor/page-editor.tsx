@@ -61,7 +61,7 @@ import { useParams } from "react-router-dom";
 import { extractPageSlugId } from "@/lib";
 import { FIVE_MINUTES } from "@/lib/constants.ts";
 import { PageEditMode } from "@/features/user/types/user.types.ts";
-import { normalizePageEditMode } from "@/features/user/utils/page-edit-mode.ts";
+import { resolvePageEditMode } from "@/features/user/utils/page-edit-mode.ts";
 import { jwtDecode } from "jwt-decode";
 import { searchSpotlight } from "@/features/search/constants.ts";
 import { useEditorScroll } from "./hooks/use-editor-scroll";
@@ -135,9 +135,10 @@ export default function PageEditor({
   const documentState = useDocumentVisibility();
   const { pageSlug } = useParams();
   const resolvedCacheSlugId = cacheSlugId ?? extractPageSlugId(pageSlug);
-  const userPageEditMode = normalizePageEditMode(
-    currentUser?.user?.settings?.preferences?.pageEditMode,
-  );
+  const userPageEditMode = resolvePageEditMode({
+    pageId,
+    preferences: currentUser?.user?.settings?.preferences,
+  });
   const { data: dictionaryTerms = [] } = useDictionaryTermsQuery(
     spaceId,
     Boolean(spaceId && dictionaryEnabled),
@@ -304,7 +305,7 @@ export default function PageEditor({
   const editor = useEditor(
     {
       extensions,
-      editable,
+      editable: editable && userPageEditMode === PageEditMode.Edit,
       immediatelyRender: true,
       shouldRerenderOnTransaction: false,
       editorProps: {
@@ -397,17 +398,8 @@ export default function PageEditor({
     return () => clearTimeout(timeout);
   }, [yjsConnectionStatus, isSynced]);
   useEffect(() => {
-    // Only honor user default page edit mode preference and permissions
     if (editor) {
-      if (userPageEditMode && editable) {
-        if (userPageEditMode === PageEditMode.Edit) {
-          editor.setEditable(true);
-        } else if (userPageEditMode === PageEditMode.Read) {
-          editor.setEditable(false);
-        }
-      } else {
-        editor.setEditable(false);
-      }
+      editor.setEditable(editable && userPageEditMode === PageEditMode.Edit);
     }
   }, [userPageEditMode, editor, editable]);
 

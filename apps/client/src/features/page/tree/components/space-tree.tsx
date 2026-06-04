@@ -84,6 +84,9 @@ import { PAGE_QUERY_KEYS } from "@/features/page/queries/query-keys.ts";
 import { invalidateSidebarTree } from "@/features/page/queries/cache-invalidation.ts";
 import PageAccessModal from "../../components/page-access-modal.tsx";
 import { supportsPageAccessEntity } from "@/features/page/utils/page-access-ui.ts";
+import { userAtom } from "@/features/user/atoms/current-user-atom.ts";
+import { PageEditMode } from "@/features/user/types/user.types.ts";
+import { buildPageEditModeByPageId } from "@/features/user/utils/page-edit-mode.ts";
 
 interface SpaceTreeProps {
   spaceId: string;
@@ -598,6 +601,7 @@ interface CreateNodeProps {
 
 function CreateNode({ node, treeApi, onExpandTree }: CreateNodeProps) {
   const [treeData, setTreeData] = useAtom(treeDataAtom);
+  const [user, setUser] = useAtom(userAtom);
   const emit = useQueryEmit();
   const createDatabaseRowMutation = useCreateDatabaseRowMutation(
     node.data.databaseId ?? node.data.id,
@@ -611,6 +615,23 @@ function CreateNode({ node, treeApi, onExpandTree }: CreateNodeProps) {
     const createdRow = await createDatabaseRowMutation.mutateAsync({
       parentPageId: node.id,
     });
+    if (user) {
+      setUser({
+        ...user,
+        settings: {
+          ...user.settings,
+          preferences: {
+            ...user.settings?.preferences,
+            pageEditModeByPageId: buildPageEditModeByPageId(
+              user.settings?.preferences?.pageEditModeByPageId,
+              createdRow.pageId,
+              PageEditMode.Edit,
+            ),
+          },
+        },
+      });
+    }
+
     const createdRowPage = await getPageById({ pageId: createdRow.pageId });
 
     const treeNodeData: SpaceTreeNode = {

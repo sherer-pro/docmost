@@ -20,7 +20,7 @@ import { useSpaceAbility } from "@/features/space/permissions/use-space-ability.
 import { useGetSpaceBySlugQuery } from "@/features/space/queries/space-query.ts";
 import { currentUserAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { PageEditMode } from "@/features/user/types/user.types.ts";
-import { normalizePageEditMode } from "@/features/user/utils/page-edit-mode.ts";
+import { resolvePageEditMode } from "@/features/user/utils/page-edit-mode.ts";
 import { useDeferredCanonicalTitleUrlSync } from "@/features/editor/utils/canonical-title-url-sync.ts";
 import { getAppName } from "@/lib/config.ts";
 import { useAtomValue } from "jotai";
@@ -62,9 +62,10 @@ export default function DatabasePage() {
     SpaceCaslSubject.Page,
   );
 
-  const userPageEditMode = normalizePageEditMode(
-    currentUser?.user?.settings?.preferences?.pageEditMode,
-  );
+  const userPageEditMode = resolvePageEditMode({
+    pageId: databasePageId,
+    preferences: currentUser?.user?.settings?.preferences,
+  });
 
   /**
    * Width mode precedence for a database page mirrors a regular page:
@@ -290,5 +291,4 @@ export default function DatabasePage() {
     </>
   );
 }
-
 

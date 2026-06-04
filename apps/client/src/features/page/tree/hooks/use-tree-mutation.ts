@@ -24,6 +24,9 @@ import { buildPageUrl } from "@/features/page/page.utils.ts";
 import { dropTreeNode } from "@/features/page/tree/utils";
 import { getSpaceUrl } from "@/lib/config.ts";
 import { useQueryEmit } from "@/features/websocket/use-query-emit.ts";
+import { userAtom } from "@/features/user/atoms/current-user-atom.ts";
+import { PageEditMode } from "@/features/user/types/user.types.ts";
+import { buildPageEditModeByPageId } from "@/features/user/utils/page-edit-mode.ts";
 
 export function useTreeMutation<T>(spaceId: string) {
   const [data, setData] = useAtom(treeDataAtom);
@@ -36,6 +39,7 @@ export function useTreeMutation<T>(spaceId: string) {
   const { spaceSlug } = useParams();
   const { pageSlug } = useParams();
   const emit = useQueryEmit();
+  const [user, setUser] = useAtom(userAtom);
 
   const onCreate: CreateHandler<T> = async ({ parentId, index, type }) => {
     const payload: { spaceId: string; parentPageId?: string } = {
@@ -73,6 +77,23 @@ export function useTreeMutation<T>(spaceId: string) {
 
     tree.create({ parentId, index, data });
     setData(tree.data);
+
+    if (user) {
+      setUser({
+        ...user,
+        settings: {
+          ...user.settings,
+          preferences: {
+            ...user.settings?.preferences,
+            pageEditModeByPageId: buildPageEditModeByPageId(
+              user.settings?.preferences?.pageEditModeByPageId,
+              createdPage.id,
+              PageEditMode.Edit,
+            ),
+          },
+        },
+      });
+    }
 
     setTimeout(() => {
       emit({

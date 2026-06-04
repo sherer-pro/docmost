@@ -404,8 +404,6 @@
   "Character count: {{characterCount}}": "Кількість символів: {{characterCount}}",
   "New update": "Нове оновлення",
   "{{latestVersion}} is available": "Доступна нова версія {{latestVersion}}",
-  "Default page edit mode": "Режим редагування сторінки за замовчуванням",
-  "Choose your preferred page edit mode. Avoid accidental edits.": "Виберіть бажаний режим редагування сторінки. Уникайте випадкових редагувань.",
   "Reading": "Читання",
   "Delete member": "Видалити учасника",
   "Member deleted successfully": "Учасника успішно видалено",

@@ -404,8 +404,6 @@
   "Character count: {{characterCount}}": "Contagem de caracteres: {{characterCount}}",
   "New update": "Nova atualização",
   "{{latestVersion}} is available": "{{latestVersion}} está disponível",
-  "Default page edit mode": "Modo de edição de página padrão",
-  "Choose your preferred page edit mode. Avoid accidental edits.": "Escolha o modo de edição de página preferido. Evite edições acidentais.",
   "Reading": "Leitura",
   "Delete member": "Excluir membro",
   "Member deleted successfully": "Membro removido com sucesso",

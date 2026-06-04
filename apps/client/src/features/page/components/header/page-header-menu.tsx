@@ -57,6 +57,10 @@ interface PageHeaderMenuProps {
 export default function PageHeaderMenu({ readOnly }: PageHeaderMenuProps) {
   const { t } = useTranslation();
   const toggleAside = useToggleAside();
+  const { pageSlug } = useParams();
+  const { data: page } = usePageQuery({
+    pageId: extractPageSlugId(pageSlug),
+  });
 
   useHotkeys([
     [
@@ -83,7 +87,7 @@ export default function PageHeaderMenu({ readOnly }: PageHeaderMenuProps) {
 
       <ActivePageUsers />
 
-      {!readOnly && <PageStateSegmentedControl size="xs" />}
+      {!readOnly && <PageStateSegmentedControl size="xs" pageId={page?.id} />}
 
       <PageFavoriteAction readOnly={readOnly} />
 

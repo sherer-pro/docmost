@@ -45,12 +45,12 @@ import { useToggleSidebar } from "@/components/layouts/global/hooks/hooks/use-to
 import { searchSpotlight } from "@/features/search/constants";
 import { useCreateDatabaseMutation } from "@/features/database/queries/database-query.ts";
 import { notifications } from "@mantine/notifications";
-import { currentUserAtom } from "@/features/user/atoms/current-user-atom.ts";
-import { PageEditMode } from "@/features/user/types/user.types.ts";
-import { normalizePageEditMode } from "@/features/user/utils/page-edit-mode.ts";
 import { queryClient } from "@/main.tsx";
 import { getPageById } from "@/features/page/services/page-service.ts";
 import { buildDatabaseUrl } from "@/features/page/page.utils.ts";
+import { userAtom } from "@/features/user/atoms/current-user-atom.ts";
+import { PageEditMode } from "@/features/user/types/user.types.ts";
+import { buildPageEditModeByPageId } from "@/features/user/utils/page-edit-mode.ts";
 
 export function SpaceSidebar() {
   const { t } = useTranslation();
@@ -59,7 +59,7 @@ export function SpaceSidebar() {
   const [opened, { open: openSettings, close: closeSettings }] =
     useDisclosure(false);
   const [mobileSidebarOpened] = useAtom(mobileSidebarAtom);
-  const [currentUser, setCurrentUser] = useAtom(currentUserAtom);
+  const [user, setUser] = useAtom(userAtom);
   const toggleMobileSidebar = useToggleSidebar(mobileSidebarAtom);
   const navigate = useNavigate();
 
@@ -88,26 +88,6 @@ export function SpaceSidebar() {
         spaceId: space.id,
       });
 
-      if (
-        normalizePageEditMode(
-          currentUser?.user?.settings?.preferences?.pageEditMode,
-        ) !== PageEditMode.Edit
-      ) {
-        setCurrentUser({
-          ...currentUser,
-          user: {
-            ...currentUser.user,
-            settings: {
-              ...currentUser.user.settings,
-              preferences: {
-                ...currentUser.user.settings.preferences,
-                pageEditMode: PageEditMode.Edit,
-              },
-            },
-          },
-        });
-      }
-
       await queryClient.invalidateQueries({
         queryKey: ["root-sidebar-pages", space.id],
       });
@@ -121,6 +101,23 @@ export function SpaceSidebar() {
           color: "red",
         });
         return;
+      }
+
+      if (user) {
+        setUser({
+          ...user,
+          settings: {
+            ...user.settings,
+            preferences: {
+              ...user.settings?.preferences,
+              pageEditModeByPageId: buildPageEditModeByPageId(
+                user.settings?.preferences?.pageEditModeByPageId,
+                createdDatabase.pageId,
+                PageEditMode.Edit,
+              ),
+            },
+          },
+        });
       }
 
       const databasePage = await getPageById({ pageId: createdDatabase.pageId });

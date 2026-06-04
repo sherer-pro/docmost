@@ -219,7 +219,12 @@ export default function DatabaseHeaderMenu({
 
       <ActivePageUsers />
 
-      {!readOnly && <PageStateSegmentedControl size="xs" />}
+      {!readOnly && (
+        <PageStateSegmentedControl
+          size="xs"
+          pageId={resolvedDatabasePageId}
+        />
+      )}
 
       {hasDatabasePage && (
         <ShareModal pageId={resolvedDatabasePageId} readOnly={Boolean(readOnly)} />

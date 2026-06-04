@@ -404,8 +404,6 @@
   "Character count: {{characterCount}}": "문자 수: {{characterCount}}",
   "New update": "새로운 업데이트",
   "{{latestVersion}} is available": "{{latestVersion}}이 사용 가능합니다",
-  "Default page edit mode": "기본 페이지 편집 모드",
-  "Choose your preferred page edit mode. Avoid accidental edits.": "선호하는 페이지 편집 모드를 선택하세요. 실수로 인한 편집을 방지하세요.",
   "Reading": "읽기",
   "Delete member": "회원 삭제",
   "Member deleted successfully": "멤버가 성공적으로 제거되었습니다",
