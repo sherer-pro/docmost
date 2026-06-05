@@ -24,7 +24,6 @@ import {
 import { isDeepStrictEqual } from 'node:util';
 import {
   IPageBacklinkJob,
-  IPageHistoryJob,
   IPageMentionNotificationJob,
 } from '../../integrations/queue/constants/queue.interface';
 import { Page } from '@docmost/db/types/entity.types';
@@ -33,6 +32,7 @@ import {
   HISTORY_FAST_INTERVAL,
   HISTORY_FAST_THRESHOLD,
   HISTORY_INTERVAL,
+  HISTORY_MAX_INTERVAL,
 } from '../constants';
 import { TransclusionService } from '../../core/page/transclusion/transclusion.service';
 
@@ -46,7 +46,6 @@ export class PersistenceExtension implements Extension {
     @InjectKysely() private readonly db: KyselyDB,
     @InjectQueue(QueueName.GENERAL_QUEUE) private generalQueue: Queue,
     @InjectQueue(QueueName.AI_QUEUE) private aiQueue: Queue,
-    @InjectQueue(QueueName.HISTORY_QUEUE) private historyQueue: Queue,
     @InjectQueue(QueueName.NOTIFICATION_QUEUE) private notificationQueue: Queue,
     private readonly collabHistory: CollabHistoryService,
     private readonly transclusionService: TransclusionService,
@@ -242,10 +241,10 @@ export class PersistenceExtension implements Extension {
         ? HISTORY_FAST_INTERVAL
         : HISTORY_INTERVAL;
 
-    await this.historyQueue.add(
-      QueueJob.PAGE_HISTORY,
-      { pageId: page.id } as IPageHistoryJob,
-      { jobId: page.id, delay },
+    await this.collabHistory.enqueuePageContentHistory(
+      page.id,
+      delay,
+      HISTORY_MAX_INTERVAL,
     );
   }
 
