@@ -4,6 +4,7 @@ import {
   Modal,
   Stack,
   TagsInput,
+  Text,
   TextInput,
   Textarea,
 } from "@mantine/core";
@@ -16,6 +17,8 @@ import {
   useUpdateDictionaryTermMutation,
 } from "@/features/dictionary/queries/dictionary-query";
 import { IDictionaryTerm } from "@/features/dictionary/types/dictionary.types";
+import { DictionaryMarkdown } from "./dictionary-markdown";
+import classes from "./dictionary.module.css";
 
 interface DictionaryTermModalProps {
   opened: boolean;
@@ -94,13 +97,18 @@ export function DictionaryTermModal({
         <Stack>
           <TextInput
             label={t("Term")}
+            description={t(
+              "Use the main spelling that should appear in the dictionary.",
+            )}
+            placeholder={t("Enter a term")}
             withAsterisk
             {...form.getInputProps("term")}
           />
 
           <TagsInput
             label={t("Word forms")}
-            placeholder={t("Add word form")}
+            description={t("Add aliases, abbreviations, or inflected forms.")}
+            placeholder={t("Type a form and press Enter")}
             clearable
             {...form.getInputProps("forms")}
           />
@@ -108,6 +116,7 @@ export function DictionaryTermModal({
           <Textarea
             label={t("Definition")}
             description={t("Markdown is supported")}
+            placeholder={t("Write the definition in Markdown")}
             withAsterisk
             autosize
             minRows={5}
@@ -115,8 +124,21 @@ export function DictionaryTermModal({
             {...form.getInputProps("definitionMarkdown")}
           />
 
+          <div className={classes.definitionPreview}>
+            <Text size="sm" fw={500} mb="xs">
+              {t("Preview")}
+            </Text>
+            {form.values.definitionMarkdown.trim() ? (
+              <DictionaryMarkdown markdown={form.values.definitionMarkdown} />
+            ) : (
+              <Text size="sm" c="dimmed">
+                {t("Definition preview will appear here.")}
+              </Text>
+            )}
+          </div>
+
           <Group justify="flex-end">
-            <Button variant="default" onClick={onClose}>
+            <Button type="button" variant="default" onClick={onClose}>
               {t("Cancel")}
             </Button>
             <Button
