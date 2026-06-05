@@ -13,6 +13,7 @@ import { isDeepStrictEqual } from 'node:util';
 import {
   CollabHistoryService,
   IBufferedPageHistoryEvent,
+  IHistoryDirtyState,
 } from '../services/collab-history.service';
 import { WatcherService } from '../../core/watcher/watcher.service';
 import { PAGE_HISTORY_EVENT_VERSION } from '../../core/page/services/page-history-change.types';
@@ -47,6 +48,12 @@ export class HistoryProcessor extends WorkerHost implements OnModuleDestroy {
 
   private async processPageContentHistory(data: IPageHistoryJob): Promise<void> {
     const { pageId } = data;
+    const dirtyState = await this.collabHistory.getContentDirtyState(pageId);
+
+    if (dirtyState && dirtyState.delayMs > 0) {
+      await this.collabHistory.scheduleContentHistoryFlush(pageId);
+      return;
+    }
 
     const page = await this.pageRepo.findById(pageId, {
       includeContent: true,
@@ -55,6 +62,7 @@ export class HistoryProcessor extends WorkerHost implements OnModuleDestroy {
     if (!page) {
       this.logger.warn(`Page ${pageId} not found, skipping history`);
       await this.collabHistory.clearContributors(pageId);
+      await this.clearProcessedContentDirtyState(pageId, dirtyState);
       return;
     }
 
@@ -63,6 +71,9 @@ export class HistoryProcessor extends WorkerHost implements OnModuleDestroy {
     });
 
     if (lastHistory && isDeepStrictEqual(lastHistory.content, page.content)) {
+      if (await this.clearProcessedContentDirtyState(pageId, dirtyState)) {
+        await this.collabHistory.clearContributors(pageId);
+      }
       return;
     }
 
@@ -96,6 +107,7 @@ export class HistoryProcessor extends WorkerHost implements OnModuleDestroy {
         } as IPageRecipientNotificationJob);
       }
 
+      await this.clearProcessedContentDirtyState(pageId, dirtyState);
       this.logger.debug(`History created for page: ${pageId}`);
     } catch (err) {
       await this.collabHistory.addContributors(pageId, contributorIds);
@@ -107,9 +119,17 @@ export class HistoryProcessor extends WorkerHost implements OnModuleDestroy {
     data: IPageHistoryEventFlushJob,
   ): Promise<void> {
     const { pageId } = data;
+    const dirtyState = await this.collabHistory.getEventDirtyState(pageId);
+
+    if (dirtyState && dirtyState.delayMs > 0) {
+      await this.collabHistory.scheduleEventFlush(pageId);
+      return;
+    }
+
     const bufferedEvents = await this.collabHistory.takeBufferedEventsForProcessing(pageId);
 
     if (bufferedEvents.length === 0) {
+      await this.clearProcessedEventDirtyState(pageId, dirtyState);
       return;
     }
 
@@ -120,8 +140,12 @@ export class HistoryProcessor extends WorkerHost implements OnModuleDestroy {
     if (!page) {
       this.logger.warn(`Page ${pageId} not found, skipping event history flush`);
       await this.collabHistory.clearBufferedProcessingEvents(pageId);
+      const clearedDirty = await this.clearProcessedEventDirtyState(
+        pageId,
+        dirtyState,
+      );
 
-      if (await this.collabHistory.hasBufferedEvents(pageId)) {
+      if (clearedDirty && (await this.collabHistory.hasBufferedEvents(pageId))) {
         await this.collabHistory.scheduleEventFlush(pageId);
       }
 
@@ -150,8 +174,12 @@ export class HistoryProcessor extends WorkerHost implements OnModuleDestroy {
       });
 
       await this.collabHistory.clearBufferedProcessingEvents(pageId);
+      const clearedDirty = await this.clearProcessedEventDirtyState(
+        pageId,
+        dirtyState,
+      );
 
-      if (await this.collabHistory.hasBufferedEvents(pageId)) {
+      if (clearedDirty && (await this.collabHistory.hasBufferedEvents(pageId))) {
         await this.collabHistory.scheduleEventFlush(pageId);
       }
 
@@ -162,6 +190,46 @@ export class HistoryProcessor extends WorkerHost implements OnModuleDestroy {
       await this.collabHistory.requeueBufferedProcessingEvents(pageId);
       throw err;
     }
+  }
+
+  private async clearProcessedContentDirtyState(
+    pageId: string,
+    dirtyState: IHistoryDirtyState | null,
+  ): Promise<boolean> {
+    if (!dirtyState) {
+      return true;
+    }
+
+    const cleared = await this.collabHistory.clearContentDirtyState(
+      pageId,
+      dirtyState.lastDirtyAt,
+    );
+
+    if (!cleared) {
+      await this.collabHistory.scheduleContentHistoryFlush(pageId);
+    }
+
+    return cleared;
+  }
+
+  private async clearProcessedEventDirtyState(
+    pageId: string,
+    dirtyState: IHistoryDirtyState | null,
+  ): Promise<boolean> {
+    if (!dirtyState) {
+      return true;
+    }
+
+    const cleared = await this.collabHistory.clearEventDirtyState(
+      pageId,
+      dirtyState.lastDirtyAt,
+    );
+
+    if (!cleared) {
+      await this.collabHistory.scheduleEventFlush(pageId);
+    }
+
+    return cleared;
   }
 
   private buildCombinedChangeData(

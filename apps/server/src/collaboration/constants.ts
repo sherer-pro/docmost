@@ -1,5 +1,6 @@
 export const HISTORY_INTERVAL = 5 * 60 * 1000;
 export const HISTORY_FAST_INTERVAL = 60 * 1000;
 export const HISTORY_FAST_THRESHOLD = 5 * 60 * 1000;
+export const HISTORY_MAX_INTERVAL = 30 * 60 * 1000;
 export const HISTORY_EVENT_AGGREGATION_WINDOW = 5 * 60 * 1000;
 export const HISTORY_EVENT_BUFFER_TTL = 30 * 60 * 1000;
