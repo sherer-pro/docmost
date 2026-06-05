@@ -30,7 +30,9 @@ export default function DrawioView(props: NodeViewProps) {
   const drawioRef = useRef<DrawIoEmbedRef>(null);
   const [initialXML, setInitialXML] = useState<string>("");
   const [opened, { open, close }] = useDisclosure(false);
+  const [isPreviewOpened, setIsPreviewOpened] = useState(false);
   const computedColorScheme = useComputedColorScheme();
+  const imageUrl = src ? getFileUrl(src) : null;
 
   const handleOpen = async () => {
     if (!editor.isEditable) {
@@ -128,17 +130,44 @@ export default function DrawioView(props: NodeViewProps) {
       {src ? (
         <div style={{ position: "relative" }}>
           <Image
-            onClick={(e) => e.detail === 2 && handleOpen()}
+            onClick={(e) => {
+              if (!editor.isEditable) {
+                setIsPreviewOpened(true);
+                return;
+              }
+
+              if (e.detail === 2) {
+                handleOpen();
+              }
+            }}
             radius="md"
             fit="contain"
             w={width}
-            src={getFileUrl(src)}
+            src={imageUrl ?? undefined}
             alt={title}
             className={clsx(
               selected ? "ProseMirror-selectednode" : "",
               "alignCenter",
             )}
+            style={{ cursor: !editor.isEditable ? "zoom-in" : undefined }}
           />
+
+          <Modal
+            opened={isPreviewOpened}
+            onClose={() => setIsPreviewOpened(false)}
+            centered
+            size="auto"
+            title={title || t("Image preview")}
+          >
+            <Image
+              radius="md"
+              fit="contain"
+              src={imageUrl ?? undefined}
+              alt={title}
+              mah="80vh"
+              maw="90vw"
+            />
+          </Modal>
 
           {selected && editor.isEditable && (
             <ActionIcon
