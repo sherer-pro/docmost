@@ -4,6 +4,71 @@
   justify-content: space-between;
   gap: var(--mantine-spacing-md);
   margin-bottom: var(--mantine-spacing-lg);
+  flex-wrap: wrap;
+}
+
+.dictionaryControls {
+  padding-bottom: var(--mantine-spacing-md);
+  border-bottom: 1px solid
+    light-dark(var(--mantine-color-gray-2), var(--mantine-color-dark-5));
+  margin-bottom: var(--mantine-spacing-sm);
+}
+
+.filterRow {
+  width: 100%;
+}
+
+.searchInput {
+  flex: 1;
+  min-width: 240px;
+}
+
+.filterAction {
+  flex-shrink: 0;
+}
+
+.letterNav {
+  min-width: max-content;
+  padding-bottom: 2px;
+}
+
+.letterButton {
+  min-width: 32px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid
+    light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+  border-radius: var(--mantine-radius-sm);
+  background: light-dark(
+    var(--mantine-color-white),
+    var(--mantine-color-dark-6)
+  );
+  color: var(--mantine-color-dimmed);
+  font: inherit;
+  font-size: var(--mantine-font-size-sm);
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.letterButton:hover {
+  background: light-dark(
+    var(--mantine-color-gray-0),
+    var(--mantine-color-dark-5)
+  );
+  color: light-dark(var(--mantine-color-gray-9), var(--mantine-color-gray-0));
+}
+
+.letterButton[data-active="true"] {
+  border-color: var(--mantine-primary-color-filled);
+  background: var(--mantine-primary-color-light);
+  color: var(--mantine-primary-color-filled);
+}
+
+.resultsSummary {
+  color: var(--mantine-color-dimmed);
+  font-size: var(--mantine-font-size-sm);
 }
 
 .letter {
@@ -19,6 +84,15 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
+}
+
+.termTitle {
+  overflow-wrap: anywhere;
+}
+
+.formsList,
+.panelForms {
   min-width: 0;
 }
 
@@ -57,7 +131,8 @@
   max-height: 260px;
   overflow: auto;
   padding: var(--mantine-spacing-sm);
-  border: 1px solid light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+  border: 1px solid
+    light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
   border-radius: var(--mantine-radius-sm);
   background: var(--mantine-color-body);
   box-shadow: var(--mantine-shadow-md);
@@ -66,4 +141,32 @@
 .selectionPopover {
   position: fixed;
   z-index: 10001;
+}
+
+.definitionPreview {
+  min-height: 84px;
+  padding: var(--mantine-spacing-sm);
+  border: 1px solid
+    light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+  border-radius: var(--mantine-radius-sm);
+  background: light-dark(
+    var(--mantine-color-gray-0),
+    var(--mantine-color-dark-6)
+  );
+}
+
+@media (max-width: 48em) {
+  .pageHeader {
+    align-items: flex-start;
+  }
+
+  .filterRow {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .searchInput,
+  .filterAction {
+    width: 100%;
+  }
 }

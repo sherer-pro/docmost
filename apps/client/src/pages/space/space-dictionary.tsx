@@ -1,22 +1,29 @@
 import {
   Accordion,
   ActionIcon,
+  Badge,
   Button,
   Container,
   Group,
   Loader,
   Menu,
+  ScrollArea,
   Stack,
   Text,
+  TextInput,
   Title,
 } from "@mantine/core";
 import { modals } from "@mantine/modals";
 import {
   IconBook2,
+  IconChevronDown,
+  IconChevronUp,
   IconDotsVertical,
   IconPencil,
   IconPlus,
+  IconSearch,
   IconTrash,
+  IconX,
 } from "@tabler/icons-react";
 import { Helmet } from "react-helmet-async";
 import { useMemo, useState } from "react";
@@ -44,9 +51,49 @@ interface DictionaryGroup {
   terms: IDictionaryTerm[];
 }
 
+const MAX_VISIBLE_FORMS = 4;
+
 function getDictionaryLetter(term: string, locale: string): string {
   const firstCharacter = term.trim().charAt(0);
   return firstCharacter ? firstCharacter.toLocaleUpperCase(locale) : "#";
+}
+
+function groupDictionaryTerms(
+  terms: IDictionaryTerm[],
+  locale: string,
+): DictionaryGroup[] {
+  const collator = new Intl.Collator(locale, {
+    sensitivity: "base",
+    numeric: true,
+  });
+  const sortedTerms = [...terms].sort((left, right) =>
+    collator.compare(left.term, right.term),
+  );
+  const groups = new Map<string, IDictionaryTerm[]>();
+
+  sortedTerms.forEach((term) => {
+    const letter = getDictionaryLetter(term.term, locale);
+    groups.set(letter, [...(groups.get(letter) ?? []), term]);
+  });
+
+  return Array.from(groups.entries()).map(([letter, groupTerms]) => ({
+    letter,
+    terms: groupTerms,
+  }));
+}
+
+function termMatchesSearch(
+  term: IDictionaryTerm,
+  query: string,
+  locale: string,
+): boolean {
+  if (!query) {
+    return true;
+  }
+
+  return [term.term, ...term.forms, term.definitionMarkdown].some((value) =>
+    value.toLocaleLowerCase(locale).includes(query),
+  );
 }
 
 export default function SpaceDictionary() {
@@ -66,28 +113,52 @@ export default function SpaceDictionary() {
   const deleteMutation = useDeleteDictionaryTermMutation(space?.id);
   const [modalOpened, setModalOpened] = useState(false);
   const [editingTerm, setEditingTerm] = useState<IDictionaryTerm | null>(null);
-  const [openedTermIds, setOpenedTermIds] = useState<Record<string, boolean>>({});
+  const [openedTermIds, setOpenedTermIds] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeLetter, setActiveLetter] = useState<string | null>(null);
 
-  const groupedTerms = useMemo<DictionaryGroup[]>(() => {
-    const collator = new Intl.Collator(i18n.language, {
-      sensitivity: "base",
-      numeric: true,
-    });
-    const sortedTerms = [...terms].sort((left, right) =>
-      collator.compare(left.term, right.term),
-    );
-    const groups = new Map<string, IDictionaryTerm[]>();
+  const allGroups = useMemo(
+    () => groupDictionaryTerms(terms, i18n.language),
+    [i18n.language, terms],
+  );
+  const availableLetters = useMemo(
+    () => allGroups.map((group) => group.letter),
+    [allGroups],
+  );
+  const normalizedSearchQuery = searchQuery
+    .trim()
+    .toLocaleLowerCase(i18n.language);
 
-    sortedTerms.forEach((term) => {
-      const letter = getDictionaryLetter(term.term, i18n.language);
-      groups.set(letter, [...(groups.get(letter) ?? []), term]);
-    });
+  const filteredTerms = useMemo(
+    () =>
+      terms.filter((term) => {
+        const matchesLetter =
+          !activeLetter ||
+          getDictionaryLetter(term.term, i18n.language) === activeLetter;
 
-    return Array.from(groups.entries()).map(([letter, groupTerms]) => ({
-      letter,
-      terms: groupTerms,
-    }));
-  }, [i18n.language, terms]);
+        return (
+          matchesLetter &&
+          termMatchesSearch(term, normalizedSearchQuery, i18n.language)
+        );
+      }),
+    [activeLetter, i18n.language, normalizedSearchQuery, terms],
+  );
+  const groupedTerms = useMemo<DictionaryGroup[]>(
+    () => groupDictionaryTerms(filteredTerms, i18n.language),
+    [filteredTerms, i18n.language],
+  );
+  const totalWordForms = useMemo(
+    () => terms.reduce((total, term) => total + term.forms.length, 0),
+    [terms],
+  );
+  const visibleTermIds = useMemo(
+    () => filteredTerms.map((term) => term.id),
+    [filteredTerms],
+  );
+  const allVisibleTermsOpened =
+    visibleTermIds.length > 0 &&
+    visibleTermIds.every((termId) => openedTermIds.includes(termId));
+  const hasActiveFilters = Boolean(normalizedSearchQuery || activeLetter);
 
   const openCreateModal = () => {
     setEditingTerm(null);
@@ -109,23 +180,38 @@ export default function SpaceDictionary() {
     });
   };
 
-  const setGroupOpenedTerm = (
+  const setGroupOpenedTerms = (
     groupTerms: IDictionaryTerm[],
-    termId: string | null,
+    termIds: string[],
   ) => {
-    setOpenedTermIds((currentTermIds) => {
-      const nextTermIds = { ...currentTermIds };
+    const groupTermIds = groupTerms.map((term) => term.id);
 
-      groupTerms.forEach((term) => {
-        delete nextTermIds[term.id];
-      });
+    setOpenedTermIds((currentTermIds) =>
+      Array.from(
+        new Set([
+          ...currentTermIds.filter((termId) => !groupTermIds.includes(termId)),
+          ...termIds,
+        ]),
+      ),
+    );
+  };
 
-      if (termId) {
-        nextTermIds[termId] = true;
-      }
+  const toggleVisibleTerms = () => {
+    if (allVisibleTermsOpened) {
+      setOpenedTermIds((currentTermIds) =>
+        currentTermIds.filter((termId) => !visibleTermIds.includes(termId)),
+      );
+      return;
+    }
 
-      return nextTermIds;
-    });
+    setOpenedTermIds((currentTermIds) =>
+      Array.from(new Set([...currentTermIds, ...visibleTermIds])),
+    );
+  };
+
+  const clearFilters = () => {
+    setSearchQuery("");
+    setActiveLetter(null);
   };
 
   if (!space) {
@@ -142,9 +228,27 @@ export default function SpaceDictionary() {
 
       <Container size="800" pt="xl">
         <div className={classes.pageHeader}>
-          <Title order={2}>{t("Dictionary")}</Title>
+          <div>
+            <Title order={2}>{t("Dictionary")}</Title>
+            {dictionaryEnabled && !isLoading && (
+              <Group gap="md" mt={4}>
+                <Text size="sm" c="dimmed">
+                  {terms.length} {t("Terms")}
+                </Text>
+                <Text size="sm" c="dimmed">
+                  {totalWordForms} {t("Word forms")}
+                </Text>
+                <Text size="sm" c="dimmed">
+                  {availableLetters.length} {t("Letters")}
+                </Text>
+              </Group>
+            )}
+          </div>
           {canManageDictionary && dictionaryEnabled && (
-            <Button leftSection={<IconPlus size={16} />} onClick={openCreateModal}>
+            <Button
+              leftSection={<IconPlus size={16} />}
+              onClick={openCreateModal}
+            >
               {t("Add term")}
             </Button>
           )}
@@ -160,77 +264,238 @@ export default function SpaceDictionary() {
           <Group justify="center" py="xl">
             <Loader size="sm" />
           </Group>
-        ) : groupedTerms.length === 0 ? (
+        ) : terms.length === 0 ? (
           <EmptyState
             icon={IconBook2}
             title={t("No dictionary terms yet")}
-            description={t("Add the first term to start building this space dictionary.")}
+            description={t(
+              "Add the first term to start building this space dictionary.",
+            )}
+            action={
+              canManageDictionary ? (
+                <Button
+                  leftSection={<IconPlus size={16} />}
+                  onClick={openCreateModal}
+                >
+                  {t("Add term")}
+                </Button>
+              ) : undefined
+            }
           />
         ) : (
           <Stack gap="xs">
-            {groupedTerms.map((group) => (
-              <div key={group.letter}>
-                <div className={classes.letter}>{group.letter}</div>
-                <Accordion
-                  variant="separated"
-                  value={
-                    group.terms.find((term) => openedTermIds[term.id])?.id ??
-                    null
+            <Stack className={classes.dictionaryControls} gap="sm">
+              <Group align="center" className={classes.filterRow} gap="sm">
+                <TextInput
+                  className={classes.searchInput}
+                  placeholder={t("Search terms, forms, definitions")}
+                  leftSection={<IconSearch size={16} />}
+                  rightSection={
+                    searchQuery ? (
+                      <ActionIcon
+                        variant="subtle"
+                        size="sm"
+                        aria-label={t("Clear search")}
+                        onClick={() => setSearchQuery("")}
+                      >
+                        <IconX size={14} />
+                      </ActionIcon>
+                    ) : null
                   }
-                  onChange={(termId) => setGroupOpenedTerm(group.terms, termId)}
+                  rightSectionPointerEvents={searchQuery ? "all" : "none"}
+                  value={searchQuery}
+                  onChange={(event) =>
+                    setSearchQuery(event.currentTarget.value)
+                  }
+                />
+                <Button
+                  className={classes.filterAction}
+                  variant="default"
+                  leftSection={
+                    allVisibleTermsOpened ? (
+                      <IconChevronUp size={16} />
+                    ) : (
+                      <IconChevronDown size={16} />
+                    )
+                  }
+                  disabled={visibleTermIds.length === 0}
+                  onClick={toggleVisibleTerms}
                 >
-                  {group.terms.map((term) => (
-                    <Accordion.Item key={term.id} value={term.id}>
-                      <Accordion.Control>
-                        <Group justify="space-between" wrap="nowrap">
-                          <div className={classes.termHeader}>
-                            <Text fw={600}>{term.term}</Text>
-                            {term.forms.length > 0 && (
-                              <Text className={classes.forms}>
-                                {term.forms.join(", ")}
-                              </Text>
-                            )}
-                          </div>
-                          {canManageDictionary && (
-                            <Menu withinPortal position="bottom-end">
-                              <Menu.Target>
-                                <ActionIcon
-                                  variant="subtle"
-                                  aria-label={t("Dictionary term actions")}
-                                  onClick={(event) => event.stopPropagation()}
-                                >
-                                  <IconDotsVertical size={16} />
-                                </ActionIcon>
-                              </Menu.Target>
-                              <Menu.Dropdown>
-                                <Menu.Item
-                                  leftSection={<IconPencil size={16} />}
-                                  onClick={() => openEditModal(term)}
-                                >
-                                  {t("Edit")}
-                                </Menu.Item>
-                                <Menu.Item
-                                  color="red"
-                                  leftSection={<IconTrash size={16} />}
-                                  onClick={() => confirmDelete(term)}
-                                >
-                                  {t("Delete")}
-                                </Menu.Item>
-                              </Menu.Dropdown>
-                            </Menu>
-                          )}
-                        </Group>
-                      </Accordion.Control>
-                      <Accordion.Panel>
-                        {openedTermIds[term.id] && (
-                          <DictionaryMarkdown markdown={term.definitionMarkdown} />
-                        )}
-                      </Accordion.Panel>
-                    </Accordion.Item>
+                  {allVisibleTermsOpened ? t("Collapse all") : t("Expand all")}
+                </Button>
+              </Group>
+
+              <ScrollArea type="hover" offsetScrollbars>
+                <Group className={classes.letterNav} gap={6} wrap="nowrap">
+                  <button
+                    type="button"
+                    className={classes.letterButton}
+                    data-active={!activeLetter || undefined}
+                    onClick={() => setActiveLetter(null)}
+                  >
+                    {t("All terms")}
+                  </button>
+                  {availableLetters.map((letter) => (
+                    <button
+                      key={letter}
+                      type="button"
+                      className={classes.letterButton}
+                      data-active={activeLetter === letter || undefined}
+                      onClick={() => setActiveLetter(letter)}
+                    >
+                      {letter}
+                    </button>
                   ))}
-                </Accordion>
-              </div>
-            ))}
+                </Group>
+              </ScrollArea>
+
+              <Group justify="space-between" gap="xs">
+                <Text className={classes.resultsSummary}>
+                  {t("Showing {{shown}} of {{total}} terms", {
+                    shown: filteredTerms.length,
+                    total: terms.length,
+                  })}
+                </Text>
+                {hasActiveFilters && (
+                  <Button variant="subtle" size="xs" onClick={clearFilters}>
+                    {t("Clear filters")}
+                  </Button>
+                )}
+              </Group>
+            </Stack>
+
+            {groupedTerms.length === 0 ? (
+              <EmptyState
+                icon={IconSearch}
+                title={t("No matching dictionary terms")}
+                description={t("Try a different search or letter filter.")}
+                action={
+                  <Button variant="default" size="sm" onClick={clearFilters}>
+                    {t("Clear filters")}
+                  </Button>
+                }
+              />
+            ) : (
+              groupedTerms.map((group) => (
+                <div key={group.letter}>
+                  <div className={classes.letter}>{group.letter}</div>
+                  <Accordion
+                    multiple
+                    variant="separated"
+                    value={group.terms
+                      .filter((term) => openedTermIds.includes(term.id))
+                      .map((term) => term.id)}
+                    onChange={(termIds) =>
+                      setGroupOpenedTerms(group.terms, termIds)
+                    }
+                  >
+                    {group.terms.map((term) => {
+                      const visibleForms = term.forms.slice(
+                        0,
+                        MAX_VISIBLE_FORMS,
+                      );
+                      const remainingFormsCount =
+                        term.forms.length - visibleForms.length;
+
+                      return (
+                        <Accordion.Item key={term.id} value={term.id}>
+                          <Accordion.Control>
+                            <Group justify="space-between" wrap="nowrap">
+                              <div className={classes.termHeader}>
+                                <Text className={classes.termTitle} fw={600}>
+                                  {term.term}
+                                </Text>
+                                {term.forms.length > 0 && (
+                                  <Group gap={4} className={classes.formsList}>
+                                    {visibleForms.map((form) => (
+                                      <Badge
+                                        key={form}
+                                        variant="default"
+                                        color="gray"
+                                        size="sm"
+                                        tt="none"
+                                      >
+                                        {form}
+                                      </Badge>
+                                    ))}
+                                    {remainingFormsCount > 0 && (
+                                      <Badge
+                                        variant="light"
+                                        color="gray"
+                                        size="sm"
+                                        tt="none"
+                                      >
+                                        {t("+{{count}} more", {
+                                          count: remainingFormsCount,
+                                        })}
+                                      </Badge>
+                                    )}
+                                  </Group>
+                                )}
+                              </div>
+                              {canManageDictionary && (
+                                <Menu withinPortal position="bottom-end">
+                                  <Menu.Target>
+                                    <ActionIcon
+                                      variant="subtle"
+                                      aria-label={t("Dictionary term actions")}
+                                      onClick={(event) =>
+                                        event.stopPropagation()
+                                      }
+                                    >
+                                      <IconDotsVertical size={16} />
+                                    </ActionIcon>
+                                  </Menu.Target>
+                                  <Menu.Dropdown>
+                                    <Menu.Item
+                                      leftSection={<IconPencil size={16} />}
+                                      onClick={() => openEditModal(term)}
+                                    >
+                                      {t("Edit")}
+                                    </Menu.Item>
+                                    <Menu.Item
+                                      color="red"
+                                      leftSection={<IconTrash size={16} />}
+                                      onClick={() => confirmDelete(term)}
+                                    >
+                                      {t("Delete")}
+                                    </Menu.Item>
+                                  </Menu.Dropdown>
+                                </Menu>
+                              )}
+                            </Group>
+                          </Accordion.Control>
+                          <Accordion.Panel>
+                            {openedTermIds.includes(term.id) && (
+                              <Stack gap="sm">
+                                {term.forms.length > MAX_VISIBLE_FORMS && (
+                                  <Group gap={4} className={classes.panelForms}>
+                                    {term.forms.map((form) => (
+                                      <Badge
+                                        key={form}
+                                        variant="default"
+                                        color="gray"
+                                        size="sm"
+                                        tt="none"
+                                      >
+                                        {form}
+                                      </Badge>
+                                    ))}
+                                  </Group>
+                                )}
+                                <DictionaryMarkdown
+                                  markdown={term.definitionMarkdown}
+                                />
+                              </Stack>
+                            )}
+                          </Accordion.Panel>
+                        </Accordion.Item>
+                      );
+                    })}
+                  </Accordion>
+                </div>
+              ))
+            )}
           </Stack>
         )}
       </Container>
