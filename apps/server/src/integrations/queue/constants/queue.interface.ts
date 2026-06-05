@@ -82,7 +82,6 @@ export interface IPageMentionNotificationJob {
 
 export type PageRecipientNotificationReason =
   | 'document-changed'
-  | 'comment-added'
   | 'page-assigned'
   | 'page-stakeholder-added'
   | 'database-user-assigned';
