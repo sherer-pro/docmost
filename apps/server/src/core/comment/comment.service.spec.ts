@@ -99,6 +99,43 @@ describe('CommentService', () => {
     );
   });
 
+  it('queues only comment notification for root comments', async () => {
+    const { service, commentRepo, notificationQueue } = createService();
+    commentRepo.insertComment.mockResolvedValue({
+      id: 'comment-root',
+      workspaceId: 'workspace-1',
+    });
+
+    await service.create(
+      {
+        userId: 'user-1',
+        workspaceId: 'workspace-1',
+        page: {
+          id: 'page-1',
+          spaceId: 'space-1',
+        } as any,
+      },
+      {
+        pageId: 'page-1',
+        content: createContent(),
+      } as any,
+    );
+
+    expect(notificationQueue.add).toHaveBeenCalledTimes(1);
+    expect(notificationQueue.add).toHaveBeenCalledWith(
+      QueueJob.COMMENT_NOTIFICATION,
+      expect.objectContaining({
+        commentId: 'comment-root',
+        pageId: 'page-1',
+        notifyWatchers: true,
+      }),
+    );
+    expect(notificationQueue.add).not.toHaveBeenCalledWith(
+      QueueJob.PAGE_RECIPIENT_NOTIFICATION,
+      expect.anything(),
+    );
+  });
+
   it('inherits parent type for replies and ignores dto.type', async () => {
     const { service, commentRepo } = createService();
     commentRepo.findById.mockResolvedValue({

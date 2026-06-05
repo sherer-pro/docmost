@@ -14,6 +14,7 @@ import { CommentResolvedEmail } from '@docmost/transactional/emails/comment-reso
 import { getPageTitle } from '../../../common/helpers';
 import { PushAggregationService } from './push-aggregation.service';
 import { PageAccessService } from '../../page-access/page-access.service';
+import { RecipientResolverService } from './recipient-resolver.service';
 
 @Injectable()
 export class CommentNotificationService {
@@ -25,6 +26,7 @@ export class CommentNotificationService {
     private readonly watcherRepo: WatcherRepo,
     private readonly pushAggregationService: PushAggregationService,
     private readonly pageAccessService: PageAccessService,
+    private readonly recipientResolverService: RecipientResolverService,
   ) {}
 
   async processComment(data: ICommentNotificationJob, appUrl: string) {
@@ -55,7 +57,7 @@ export class CommentNotificationService {
     const recipientIds = parentCommentId
       ? await this.getThreadParticipantIds(parentCommentId)
       : notifyWatchers
-        ? await this.watcherRepo.getPageWatcherIds(pageId)
+        ? await this.getRootCommentRecipientIds(pageId, spaceId, actorId)
         : [];
 
     const allCandidateIds = [
@@ -220,6 +222,23 @@ export class CommentNotificationService {
       .execute();
 
     return [...new Set(participants.map((p) => p.creatorId))];
+  }
+
+  private async getRootCommentRecipientIds(
+    pageId: string,
+    spaceId: string,
+    actorId: string,
+  ): Promise<string[]> {
+    const [watcherIds, roleRecipientIds] = await Promise.all([
+      this.watcherRepo.getPageWatcherIds(pageId),
+      this.recipientResolverService.resolvePageRoleRecipients(
+        pageId,
+        spaceId,
+        actorId,
+      ),
+    ]);
+
+    return [...new Set([...watcherIds, ...roleRecipientIds])];
   }
 
   private async getCommentContext(

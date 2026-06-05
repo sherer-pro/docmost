@@ -134,7 +134,7 @@ export class PageNotificationService {
   ): Promise<string[]> {
     const { actorId, pageId, spaceId, reason } = data;
 
-    if (reason === 'document-changed' || reason === 'comment-added') {
+    if (reason === 'document-changed') {
       const [roleRecipients, watcherIds] = await Promise.all([
         this.recipientResolverService.resolvePageRoleRecipients(
           pageId,
@@ -206,18 +206,6 @@ export class PageNotificationService {
           title: `${actorName} mentioned you in ${pageTitle}`,
           createEmail: ({ actorName, pageTitle, pageUrl }) =>
             PageMentionEmail({ actorName, pageTitle, pageUrl }),
-        };
-      case 'comment-added':
-        return {
-          notificationType: NotificationType.PAGE_UPDATED_FOR_ASSIGNEE_OR_STAKEHOLDER,
-          title: `${actorName} added a comment on ${pageTitle}`,
-          createEmail: ({ actorName, pageTitle, pageUrl }) =>
-            PageRecipientEmail({
-              actorName,
-              pageTitle,
-              pageUrl,
-              actionText: 'added a comment on',
-            }),
         };
       default:
         return {
