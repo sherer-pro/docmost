@@ -29,6 +29,13 @@ import {
 } from "@/features/space/permissions/permissions.type.ts";
 import { useDatabasePageContext } from "@/features/database/hooks/use-database-page-context.ts";
 import { isInlineOrLegacyComment } from "@/features/comment/utils/comment-type-filter";
+import {
+  countCommentThreadReplies,
+  isCommentInThread,
+  shouldCollapseCommentThread,
+} from "@/features/comment/utils/comment-collapse";
+import { useAtomValue } from "jotai";
+import { activeCommentIdAtom } from "@/features/comment/atoms/comment-atom";
 
 function CommentListWithTabs() {
   const { t } = useTranslation();
@@ -52,6 +59,10 @@ function CommentListWithTabs() {
   const createCommentMutation = useCreateCommentMutation();
   const [isLoading, setIsLoading] = useState(false);
   const [showResolved, setShowResolved] = useState(false);
+  const [expandedThreadIds, setExpandedThreadIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const activeCommentId = useAtomValue(activeCommentIdAtom);
   const emit = useQueryEmit();
   const { data: space } = useGetSpaceBySlugQuery(pageByRoute?.space?.slug);
 
@@ -124,6 +135,14 @@ function CommentListWithTabs() {
     [commentsPageId, createCommentMutation, emit, pageByRoute?.spaceId, pageByRoute?.workspaceId]
   );
 
+  const handleExpandThread = useCallback((commentId: string) => {
+    setExpandedThreadIds((currentThreadIds) => {
+      const nextThreadIds = new Set(currentThreadIds);
+      nextThreadIds.add(commentId);
+      return nextThreadIds;
+    });
+  }, []);
+
   /**
    * Renders a root comment card with its children and reply form.
    *
@@ -131,47 +150,88 @@ function CommentListWithTabs() {
    * Resolve/Re-open actions to users without page edit permission.
    */
   const renderComments = useCallback(
-    (comment: IComment) => (
-      <Paper
-        shadow="sm"
-        radius="md"
-        p="sm"
-        mb="sm"
-        withBorder
-        key={comment.id}
-        data-comment-id={comment.id}
-      >
-        <div>
-          <CommentListItem
-            comment={comment}
-            pageId={commentsPageId}
-            canComment={canComment}
-            canResolve={canResolveComments}
-            userSpaceRole={space?.membership?.role}
-          />
-          <MemoizedChildComments
-            comments={comments}
-            parentId={comment.id}
-            pageId={commentsPageId}
-            canComment={canComment}
-            canResolve={canResolveComments}
-            userSpaceRole={space?.membership?.role}
-          />
-        </div>
+    (comment: IComment) => {
+      const commentItems = comments?.items ?? [];
+      const replyCount = countCommentThreadReplies(commentItems, comment.id);
+      const isActiveThread = isCommentInThread(
+        commentItems,
+        comment.id,
+        activeCommentId,
+      );
+      const isThreadCollapsed =
+        shouldCollapseCommentThread(replyCount) &&
+        !expandedThreadIds.has(comment.id) &&
+        !isActiveThread;
 
-        {!comment.resolvedAt && canComment && (
-          <>
-            <Divider my={4} />
-            <CommentEditorWithActions
-              commentId={comment.id}
-              onSave={handleAddReply}
-              isLoading={isLoading}
+      return (
+        <Paper
+          shadow="sm"
+          radius="md"
+          p="sm"
+          mb="sm"
+          withBorder
+          key={comment.id}
+          data-comment-id={comment.id}
+        >
+          <div>
+            <CommentListItem
+              comment={comment}
+              pageId={commentsPageId}
+              canComment={canComment}
+              canResolve={canResolveComments}
+              userSpaceRole={space?.membership?.role}
             />
-          </>
-        )}
-      </Paper>
-    ),
-    [canComment, canResolveComments, comments, commentsPageId, handleAddReply, isLoading, space?.membership?.role]
+
+            {!isThreadCollapsed && (
+              <MemoizedChildComments
+                comments={comments}
+                parentId={comment.id}
+                pageId={commentsPageId}
+                canComment={canComment}
+                canResolve={canResolveComments}
+                userSpaceRole={space?.membership?.role}
+              />
+            )}
+          </div>
+
+          {isThreadCollapsed && (
+            <Button
+              variant="subtle"
+              color="gray"
+              size="compact-sm"
+              px={0}
+              onClick={() => handleExpandThread(comment.id)}
+            >
+              {t("More")}
+            </Button>
+          )}
+
+          {!comment.resolvedAt && canComment && !isThreadCollapsed && (
+            <>
+              <Divider my={4} />
+              <CommentEditorWithActions
+                commentId={comment.id}
+                onSave={handleAddReply}
+                isLoading={isLoading}
+              />
+            </>
+          )}
+        </Paper>
+      );
+    },
+    [
+      activeCommentId,
+      canComment,
+      canResolveComments,
+      comments,
+      commentsPageId,
+      expandedThreadIds,
+      handleAddReply,
+      handleExpandThread,
+      isLoading,
+      space?.membership?.role,
+      t,
+    ],
   );
 
   if (isCommentsLoading) {

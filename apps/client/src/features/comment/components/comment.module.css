@@ -20,6 +20,15 @@
     box-sizing: border-box;
 }
 
+.commentBodyCollapsed {
+    max-height: calc(1.55em * var(--comment-body-collapse-lines));
+    overflow: hidden;
+}
+
+.commentMoreButton {
+    padding-inline: 0;
+}
+
 .commentEditor {
 
     .focused {
