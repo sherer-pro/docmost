@@ -30,6 +30,8 @@
   "Choose your preferred page width.": "Выберите предпочитаемую ширину страницы.",
   "Confirm": "Подтвердить",
   "Copy as Markdown": "Копировать как Markdown",
+  "Copy Markdown with comments": "Копировать Markdown с комментариями",
+  "Failed to copy Markdown with comments": "Не удалось скопировать Markdown с комментариями",
   "Copy link": "Копировать ссылку",
   "Create": "Создать",
   "Create group": "Создать группу",
