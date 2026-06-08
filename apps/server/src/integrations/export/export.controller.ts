@@ -10,7 +10,11 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ExportService } from './export.service';
-import { ExportPageDto, ExportSpaceDto } from './dto/export-dto';
+import {
+  CopyMarkdownWithCommentsDto,
+  ExportPageDto,
+  ExportSpaceDto,
+} from './dto/export-dto';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
 import { User } from '@docmost/db/types/entity.types';
 import SpaceAbilityFactory from '../../core/casl/abilities/space-ability.factory';
@@ -23,6 +27,7 @@ import {
 import { FastifyReply } from 'fastify';
 import { sanitize } from 'sanitize-filename-ts';
 import { PageAccessService } from '../../core/page-access/page-access.service';
+import { CopyMarkdownWithCommentsService } from './copy-markdown-with-comments.service';
 
 /**
  * Shared service layer for export controllers.
@@ -105,6 +110,7 @@ export class PageExportController {
     private readonly pageRepo: PageRepo,
     private readonly spaceAbility: SpaceAbilityFactory,
     private readonly pageAccessService: PageAccessService,
+    private readonly copyMarkdownWithCommentsService: CopyMarkdownWithCommentsService,
   ) {
     this.delegate = new ExportControllerDelegate(
       this.exportService,
@@ -128,6 +134,31 @@ export class PageExportController {
     return this.delegate.exportPage(dto, user, res);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @Post('actions/copy-markdown-with-comments')
+  async copyMarkdownWithCommentsAction(
+    @Body() dto: CopyMarkdownWithCommentsDto,
+    @AuthUser() user: User,
+  ) {
+    const page = await this.pageRepo.findById(dto.pageId, {
+      includeContent: true,
+    });
+
+    if (!page || page.deletedAt) {
+      throw new NotFoundException('Page not found');
+    }
+
+    await this.pageAccessService.assertCanReadPage(page, user);
+    this.pageAccessService.assertCanManageAccess(user, page.workspaceId);
+
+    const markdown = await this.copyMarkdownWithCommentsService.build(
+      page,
+      user.locale,
+    );
+
+    return { markdown };
+  }
 }
 
 @Controller('spaces')

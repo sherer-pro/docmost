@@ -13,6 +13,17 @@ import { ExpressionBuilder } from 'kysely';
 import { DB } from '@docmost/db/types/db';
 import { jsonObjectFrom } from 'kysely/helpers/postgres';
 
+export type CommentActor = {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+};
+
+export type CommentWithActors = Comment & {
+  creator: CommentActor | null;
+  resolvedBy: CommentActor | null;
+};
+
 @Injectable()
 export class CommentRepo {
   constructor(@InjectKysely() private readonly db: KyselyDB) {}
@@ -46,6 +57,21 @@ export class CommentRepo {
       fields: [{ expression: 'id', direction: 'asc' }],
       parseCursor: (cursor) => ({ id: cursor.id }),
     });
+  }
+
+  async findAllPageCommentsWithActors(
+    pageId: string,
+  ): Promise<CommentWithActors[]> {
+    return this.db
+      .selectFrom('comments')
+      .selectAll('comments')
+      .select((eb) => this.withCreator(eb))
+      .select((eb) => this.withResolvedBy(eb))
+      .where('pageId', '=', pageId)
+      .where('deletedAt', 'is', null)
+      .orderBy('createdAt', 'asc')
+      .orderBy('id', 'asc')
+      .execute() as Promise<CommentWithActors[]>;
   }
 
   async updateComment(
