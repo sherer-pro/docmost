@@ -99,6 +99,7 @@
 | POST | `/pages/:pageId/actions/access/resolve-users` | `apps/server/src/core/page/page.controller.ts` |
 | POST | `/pages/:pageId/actions/access/users` | `apps/server/src/core/page/page.controller.ts` |
 | POST | `/pages/:pageId/convert-to-database` | `apps/server/src/core/page/page.controller.ts` |
+| POST | `/pages/actions/copy-markdown-with-comments` | `apps/server/src/integrations/export/export.controller.ts` |
 | POST | `/pages/actions/export` | `apps/server/src/integrations/export/export.controller.ts` |
 | POST | `/pages/actions/import` | `apps/server/src/integrations/import/import.controller.ts` |
 | POST | `/pages/actions/import-zip` | `apps/server/src/integrations/import/import.controller.ts` |

@@ -30,6 +30,12 @@ export class ExportPageDto {
   includeAttachments?: boolean;
 }
 
+export class CopyMarkdownWithCommentsDto {
+  @IsString()
+  @IsNotEmpty()
+  pageId: string;
+}
+
 export class ExportSpaceDto {
   @IsString()
   @IsNotEmpty()
