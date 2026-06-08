@@ -53,14 +53,23 @@ import PageDetailsModal from "@/features/page/components/page-details-modal";
 
 interface PageHeaderMenuProps {
   readOnly?: boolean;
+  canMoveDeleteShare?: boolean;
 }
-export default function PageHeaderMenu({ readOnly }: PageHeaderMenuProps) {
+export default function PageHeaderMenu({
+  readOnly,
+  canMoveDeleteShare,
+}: PageHeaderMenuProps) {
   const { t } = useTranslation();
   const toggleAside = useToggleAside();
   const { pageSlug } = useParams();
   const { data: page } = usePageQuery({
     pageId: extractPageSlugId(pageSlug),
   });
+  const pageCapabilities = page?.access?.capabilities;
+  const canWritePage = pageCapabilities?.canWrite ?? !readOnly;
+  const canMoveDeleteSharePage =
+    pageCapabilities?.canMoveDeleteShare ?? canMoveDeleteShare ?? !readOnly;
+  const isReadOnly = !canWritePage;
 
   useHotkeys([
     [
@@ -87,13 +96,13 @@ export default function PageHeaderMenu({ readOnly }: PageHeaderMenuProps) {
 
       <ActivePageUsers />
 
-      {!readOnly && <PageStateSegmentedControl size="xs" pageId={page?.id} />}
+      {!isReadOnly && <PageStateSegmentedControl size="xs" pageId={page?.id} />}
 
-      <PageFavoriteAction readOnly={readOnly} />
+      <PageFavoriteAction readOnly={isReadOnly} />
 
-      <ShareModal readOnly={readOnly} />
+      <ShareModal readOnly={!canMoveDeleteSharePage} />
 
-      <PageDetailsAction readOnly={readOnly} />
+      <PageDetailsAction readOnly={isReadOnly} />
 
       <Tooltip label={t("Comments")} openDelay={250} withArrow>
         <ActionIcon
@@ -115,7 +124,10 @@ export default function PageHeaderMenu({ readOnly }: PageHeaderMenuProps) {
         </ActionIcon>
       </Tooltip>
 
-      <PageActionMenu readOnly={readOnly} />
+      <PageActionMenu
+        readOnly={isReadOnly}
+        canMoveDeleteShare={canMoveDeleteSharePage}
+      />
     </>
   );
 }
@@ -194,8 +206,9 @@ export function ActivePageUsers() {
 
 interface PageActionMenuProps {
   readOnly?: boolean;
+  canMoveDeleteShare?: boolean;
 }
-function PageActionMenu({ readOnly }: PageActionMenuProps) {
+function PageActionMenu({ readOnly, canMoveDeleteShare }: PageActionMenuProps) {
   const { t } = useTranslation();
   const [, setHistoryModalOpen] = useAtom(historyAtoms);
   const clipboard = useClipboard({ timeout: 500 });
@@ -221,6 +234,10 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
     pageId: page?.id,
     canManageAccess: page?.access?.capabilities?.canManageAccess,
   });
+  const canMoveDeleteSharePage =
+    page?.access?.capabilities?.canMoveDeleteShare ??
+    canMoveDeleteShare ??
+    !readOnly;
 
   /**
    * Explicit priority for calculating page width:
@@ -340,7 +357,7 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
             fullPageWidth={fullPageWidth}
           />
 
-          {!readOnly && (
+          {canMoveDeleteSharePage && (
             <>
               <Menu.Divider />
               <Menu.Item
@@ -364,7 +381,7 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
             </>
           )}
 
-          {!readOnly && page?.databaseId && (
+          {canMoveDeleteSharePage && page?.databaseId && (
             <>
               <Menu.Divider />
               <Menu.Item
@@ -377,7 +394,7 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
             </>
           )}
 
-          {!readOnly && (
+          {canMoveDeleteSharePage && (
             <>
               <Menu.Divider />
               <Menu.Item
