@@ -5,12 +5,6 @@ import HistoryModal from "@/features/page-history/components/history-modal";
 import { Helmet } from "react-helmet-async";
 import PageHeader from "@/features/page/components/header/page-header.tsx";
 import { extractPageSlugId } from "@/lib";
-import { useGetSpaceBySlugQuery } from "@/features/space/queries/space-query.ts";
-import { useSpaceAbility } from "@/features/space/permissions/use-space-ability.ts";
-import {
-  SpaceCaslAction,
-  SpaceCaslSubject,
-} from "@/features/space/permissions/permissions.type.ts";
 import { useTranslation } from "react-i18next";
 import React from "react";
 import { useEffect } from "react";
@@ -30,7 +24,7 @@ const MemoizedHistoryModal = React.memo(HistoryModal);
 
 export default function Page() {
   const { t } = useTranslation();
-  const { pageSlug } = useParams();
+  const { pageSlug, spaceSlug } = useParams();
 
   return (
     <ErrorBoundary
@@ -47,12 +41,18 @@ export default function Page() {
         />
       )}
     >
-      <PageContent pageSlug={pageSlug} />
+      <PageContent pageSlug={pageSlug} routeSpaceSlug={spaceSlug} />
     </ErrorBoundary>
   );
 }
 
-function PageContent({ pageSlug }: { pageSlug: string | undefined }) {
+function PageContent({
+  pageSlug,
+  routeSpaceSlug,
+}: {
+  pageSlug: string | undefined;
+  routeSpaceSlug: string | undefined;
+}) {
   const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
@@ -64,10 +64,11 @@ function PageContent({ pageSlug }: { pageSlug: string | undefined }) {
     isError,
     error,
   } = usePageQuery({ pageId: extractPageSlugId(pageSlug) });
-  const { data: space } = useGetSpaceBySlugQuery(page?.space?.slug);
-
-  const spaceRules = space?.membership?.permissions;
-  const spaceAbility = useSpaceAbility(spaceRules);
+  const pageCapabilities = page?.access?.capabilities;
+  const canWritePage = pageCapabilities?.canWrite === true;
+  const canMoveDeleteSharePage =
+    pageCapabilities?.canMoveDeleteShare === true;
+  const resolvedSpaceSlug = page?.space?.slug ?? routeSpaceSlug;
 
   useEffect(() => {
     const shouldOpenCommentsAside = Boolean(
@@ -111,10 +112,6 @@ function PageContent({ pageSlug }: { pageSlug: string | undefined }) {
     );
   }
 
-  if (!space) {
-    return <></>;
-  }
-
   return (
     page && (
       <div>
@@ -123,10 +120,8 @@ function PageContent({ pageSlug }: { pageSlug: string | undefined }) {
         </Helmet>
 
         <MemoizedPageHeader
-          readOnly={spaceAbility.cannot(
-            SpaceCaslAction.Manage,
-            SpaceCaslSubject.Page,
-          )}
+          readOnly={!canWritePage}
+          canMoveDeleteShare={canMoveDeleteSharePage}
         />
 
         <MemoizedFullEditor
@@ -134,10 +129,7 @@ function PageContent({ pageSlug }: { pageSlug: string | undefined }) {
           metaPanel={
             <DocumentFieldsPanel
               page={page}
-              readOnly={spaceAbility.cannot(
-                SpaceCaslAction.Manage,
-                SpaceCaslSubject.Page,
-              )}
+              readOnly={!canWritePage}
             />
           }
           footer={<PageCommentSection pageId={page.id} />}
@@ -145,13 +137,10 @@ function PageContent({ pageSlug }: { pageSlug: string | undefined }) {
           title={page.title}
           content={page.content}
           slugId={page.slugId}
-          spaceSlug={page?.space?.slug}
-          spaceId={space.id}
-          dictionaryEnabled={space.settings?.dictionary?.enabled === true}
-          editable={spaceAbility.can(
-            SpaceCaslAction.Manage,
-            SpaceCaslSubject.Page,
-          )}
+          spaceSlug={resolvedSpaceSlug}
+          spaceId={page.spaceId}
+          dictionaryEnabled={page.space?.settings?.dictionary?.enabled === true}
+          editable={canWritePage}
         />
         <MemoizedHistoryModal pageId={page.id} />
       </div>
