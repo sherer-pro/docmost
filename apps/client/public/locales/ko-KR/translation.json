@@ -30,6 +30,8 @@
   "Choose your preferred page width.": "선호하는 페이지 너비를 선택하세요.",
   "Confirm": "확인",
   "Copy as Markdown": "Markdown으로 복사",
+  "Copy Markdown with comments": "Copy Markdown with comments",
+  "Failed to copy Markdown with comments": "Failed to copy Markdown with comments",
   "Copy link": "링크 복사",
   "Create": "생성",
   "Create group": "팀 생성",

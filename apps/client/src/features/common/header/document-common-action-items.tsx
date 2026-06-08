@@ -5,6 +5,7 @@ import {
   IconHistory,
   IconLink,
   IconMarkdown,
+  IconMessage,
   IconPrinter,
   IconUsersGroup,
 } from '@tabler/icons-react';
@@ -15,6 +16,7 @@ interface DocumentCommonActionItemsProps {
   onCopyLink: () => void;
   copyLinkLabel?: string;
   onCopyAsMarkdown?: () => void;
+  onCopyMarkdownWithComments?: () => void;
   onOpenHistory?: () => void;
   onOpenExport?: () => void;
   onOpenAccess?: () => void;
@@ -34,6 +36,7 @@ export function DocumentCommonActionItems({
   onCopyLink,
   copyLinkLabel,
   onCopyAsMarkdown,
+  onCopyMarkdownWithComments,
   onOpenHistory,
   onOpenExport,
   onOpenAccess,
@@ -55,6 +58,15 @@ export function DocumentCommonActionItems({
       {onCopyAsMarkdown && (
         <Menu.Item leftSection={<IconMarkdown size={16} />} onClick={onCopyAsMarkdown}>
           {t('Copy as Markdown')}
+        </Menu.Item>
+      )}
+
+      {onCopyMarkdownWithComments && (
+        <Menu.Item
+          leftSection={<IconMessage size={16} />}
+          onClick={onCopyMarkdownWithComments}
+        >
+          {t('Copy Markdown with comments')}
         </Menu.Item>
       )}
 

@@ -24,7 +24,10 @@ import { useConvertPageToDatabaseMutation, usePageQuery } from "@/features/page/
 import { useConvertDatabaseToPageMutation } from "@/features/database/queries/database-query.ts";
 import { useDocumentConversionActions } from "@/features/page/hooks/use-document-conversion-actions.ts";
 import { buildDatabaseUrl, buildPageUrl } from "@/features/page/page.utils.ts";
-import { getPageById } from "@/features/page/services/page-service.ts";
+import {
+  copyPageMarkdownWithComments,
+  getPageById,
+} from "@/features/page/services/page-service.ts";
 import { notifications } from "@mantine/notifications";
 import { modals } from "@mantine/modals";
 import { getAppUrl } from "@/lib/config.ts";
@@ -230,6 +233,7 @@ function PageActionMenu({ readOnly, canMoveDeleteShare }: PageActionMenuProps) {
   ] = useDisclosure(false);
   const [pageEditor] = useAtom(pageEditorAtom);
   const [user] = useAtom(userAtom);
+  const isWorkspaceAdmin = user?.role === "owner" || user?.role === "admin";
   const canOpenAccessModal = canOpenPageAccessModal({
     pageId: page?.id,
     canManageAccess: page?.access?.capabilities?.canManageAccess,
@@ -278,6 +282,21 @@ function PageActionMenu({ readOnly, canMoveDeleteShare }: PageActionMenuProps) {
     const title = page?.title ? `# ${page.title}\n\n` : "";
     clipboard.copy(`${title}${markdown}`);
     notifications.show({ message: t("Copied") });
+  };
+
+  const handleCopyMarkdownWithComments = async () => {
+    if (!page?.id) return;
+
+    try {
+      const markdown = await copyPageMarkdownWithComments(page.id);
+      clipboard.copy(markdown);
+      notifications.show({ message: t("Copied") });
+    } catch {
+      notifications.show({
+        message: t("Failed to copy Markdown with comments"),
+        color: "red",
+      });
+    }
   };
 
   const handlePrint = () => {
@@ -349,6 +368,9 @@ function PageActionMenu({ readOnly, canMoveDeleteShare }: PageActionMenuProps) {
           <DocumentCommonActionItems
             onCopyLink={handleCopyLink}
             onCopyAsMarkdown={handleCopyAsMarkdown}
+            onCopyMarkdownWithComments={
+              isWorkspaceAdmin ? handleCopyMarkdownWithComments : undefined
+            }
             onOpenHistory={openHistoryModal}
             onOpenExport={openExportModal}
             onOpenAccess={canOpenAccessModal ? openAccessModal : undefined}

@@ -150,6 +150,17 @@ export async function exportPage(data: IExportPageParams): Promise<void> {
   downloadBlobFromAxiosResponse(req);
 }
 
+export async function copyPageMarkdownWithComments(
+  pageId: string,
+): Promise<string> {
+  const req = await api.post<{ markdown: string }>(
+    '/pages/actions/copy-markdown-with-comments',
+    { pageId },
+  );
+
+  return req.data.markdown;
+}
+
 export async function importPage(file: File, spaceId: string) {
   const formData = new FormData();
   formData.append("spaceId", spaceId);

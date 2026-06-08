@@ -30,6 +30,8 @@
   "Choose your preferred page width.": "お好みのページ幅を選択してください",
   "Confirm": "確認",
   "Copy as Markdown": "Markdownとしてコピー",
+  "Copy Markdown with comments": "Copy Markdown with comments",
+  "Failed to copy Markdown with comments": "Failed to copy Markdown with comments",
   "Copy link": "リンクをコピー",
   "Create": "新規作成",
   "Create group": "グループを作成",

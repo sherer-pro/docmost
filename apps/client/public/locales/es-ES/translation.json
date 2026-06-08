@@ -30,6 +30,8 @@
   "Choose your preferred page width.": "Elige el ancho de página que prefieras.",
   "Confirm": "Confirmar",
   "Copy as Markdown": "Copiar como Markdown",
+  "Copy Markdown with comments": "Copy Markdown with comments",
+  "Failed to copy Markdown with comments": "Failed to copy Markdown with comments",
   "Copy link": "Copiar enlace",
   "Create": "Crear",
   "Create group": "Crear grupo",
