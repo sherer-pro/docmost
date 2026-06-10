@@ -283,6 +283,15 @@ function getDomFirstColumnValues(editor: Editor): string[] {
     .map((row) => row.querySelector("td")?.textContent?.trim() ?? "");
 }
 
+function clickFirstSortControl(editor: Editor): void {
+  const control = editor.view.dom.querySelector<HTMLElement>(
+    ".tableReadonlySortChevron",
+  );
+
+  expect(control).not.toBeNull();
+  control?.click();
+}
+
 function setSelectionInsideFirstParagraph(editor: Editor): void {
   let textSelectionPos: number | null = null;
 
@@ -351,6 +360,16 @@ describe("table sorting", () => {
       expect(sortedTable?.child(1).child(1).textContent).toBe("2");
       expect(sortedTable?.child(2).child(1).textContent).toBe("10");
       expect(sortedTable?.child(3).child(1).textContent).toBe("");
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("defaults existing tables without width mode to normal", () => {
+    const editor = createEditor(tableContent);
+
+    try {
+      expect(getTableNode(editor).attrs.widthMode).toBe("normal");
     } finally {
       editor.destroy();
     }
@@ -447,15 +466,33 @@ describe("table sorting", () => {
     }
   });
 
-  it("does not add sort controls in editable mode", () => {
+  it("sorts the document in editable mode", () => {
     const editor = createEditor(tableContent, true);
 
     try {
-      expect(
-        editor.view.dom.querySelector<HTMLElement>(".tableReadonlySortChevron"),
-      ).toBeNull();
+      clickFirstSortControl(editor);
+
+      expect(getFirstColumnValues(editor)).toEqual(["Alpha", "Beta", ""]);
+      expect(getDomFirstColumnValues(editor)).toEqual(["Alpha", "Beta", ""]);
+
+      clickFirstSortControl(editor);
+
       expect(getFirstColumnValues(editor)).toEqual(["Beta", "Alpha", ""]);
     } finally {
+      editor.destroy();
+    }
+  });
+
+  it("does not resolve table DOM positions during ordinary editable updates", () => {
+    const editor = createEditor(tableContent, true);
+    const posAtDOMSpy = vi.spyOn(editor.view, "posAtDOM");
+
+    try {
+      editor.view.dispatch(editor.state.tr.setMeta("test", true));
+
+      expect(posAtDOMSpy).not.toHaveBeenCalled();
+    } finally {
+      posAtDOMSpy.mockRestore();
       editor.destroy();
     }
   });
@@ -495,13 +532,16 @@ describe("table paste handling", () => {
 
     try {
       const table = createTableNodeFromRows(editor.schema, [
-        ["Name", "Score"],
-        ["Alpha", "2"],
+        ["Name", "Detailed description"],
+        ["A", "A much longer value than the first column"],
       ]);
 
       expect(table.attrs.widthMode).toBe("normal");
       expect(table.child(0).firstChild?.type.name).toBe("tableHeader");
       expect(table.child(1).firstChild?.type.name).toBe("tableCell");
+      expect(table.child(0).child(1).attrs.colwidth[0]).toBeGreaterThan(
+        table.child(0).child(0).attrs.colwidth[0],
+      );
     } finally {
       editor.destroy();
     }
@@ -556,5 +596,18 @@ describe("table paste handling", () => {
     expect(html).toContain('data-table-width-mode="normal"');
     expect(html).toContain('colwidth="120"');
     expect(html).toContain('colwidth="240"');
+  });
+
+  it("adds content-aware widths to pasted HTML tables without explicit widths", () => {
+    const html = normalizePastedTableHTML(
+      '<table><tr><th>ID</th><th>Detailed description</th></tr><tr><td>1</td><td>A much longer value than the first column</td></tr></table>',
+    );
+    const widths = Array.from(html.matchAll(/colwidth="(\d+)"/g)).map(
+      (match) => Number(match[1]),
+    );
+
+    expect(html).toContain('data-table-width-mode="normal"');
+    expect(widths.length).toBeGreaterThanOrEqual(4);
+    expect(widths[1]).toBeGreaterThan(widths[0]);
   });
 });

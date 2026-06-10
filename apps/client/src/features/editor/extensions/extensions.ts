@@ -199,7 +199,19 @@ export const mainExtensions = [
   TableHeader,
   TableDndExtension,
   TablePaste,
-  TableReadonlySort,
+  TableReadonlySort.configure({
+    getLabel: (key) => {
+      if (key === "sortDescending") {
+        return i18n.t("Sort descending");
+      }
+
+      if (key === "clearSort") {
+        return i18n.t("Clear sort");
+      }
+
+      return i18n.t("Sort ascending");
+    },
+  }),
   MathInline.configure({
     view: MathInlineView,
   }),
