@@ -108,7 +108,8 @@ export function DictionaryTermModal({
           <TagsInput
             label={t("Word forms")}
             description={t("Add aliases, abbreviations, or inflected forms.")}
-            placeholder={t("Type a form and press Enter")}
+            placeholder={t("Separate forms with commas, semicolons, or Enter")}
+            splitChars={[",", ";", "\n"]}
             clearable
             {...form.getInputProps("forms")}
           />

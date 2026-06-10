@@ -1140,7 +1140,7 @@
   "Use the main spelling that should appear in the dictionary.": "Укажите основное написание, которое будет отображаться в словаре.",
   "Enter a term": "Введите термин",
   "Add aliases, abbreviations, or inflected forms.": "Добавьте синонимы, сокращения или изменённые формы слова.",
-  "Type a form and press Enter": "Введите форму и нажмите Enter",
+  "Separate forms with commas, semicolons, or Enter": "Разделяйте формы запятыми, точкой с запятой или Enter",
   "Write the definition in Markdown": "Напишите определение в Markdown",
   "Definition preview will appear here.": "Здесь появится предпросмотр определения.",
   "Active sessions": "Активные сеансы",

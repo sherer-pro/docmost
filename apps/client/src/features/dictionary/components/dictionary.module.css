@@ -96,6 +96,18 @@
   min-width: 0;
 }
 
+.formBadge {
+  --badge-bg: light-dark(
+    var(--mantine-color-gray-1),
+    var(--mantine-color-dark-5)
+  );
+  --badge-bd: none;
+  --badge-color: var(--mantine-color-dimmed);
+
+  border: 0;
+  font-weight: 500;
+}
+
 .forms {
   color: var(--mantine-color-dimmed);
   font-size: var(--mantine-font-size-sm);
