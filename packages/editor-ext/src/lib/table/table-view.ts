@@ -14,6 +14,8 @@ export function updateColumns(
   overrideCol?: number,
   overrideValue?: number,
 ) {
+  const widthMode = normalizeTableWidthMode(node.attrs.widthMode);
+  const columnWidths: Array<number | undefined> = [];
   let totalWidth = 0;
   let fixedWidth = true;
   let nextDOM = colgroup.firstChild;
@@ -28,43 +30,42 @@ export function updateColumns(
           overrideCol === col
             ? overrideValue
             : ((colwidth && colwidth[j]) as number | undefined);
-        const cssWidth = hasWidth ? `${hasWidth}px` : '';
+        const normalizedWidth = hasWidth
+          ? Math.max(hasWidth, cellMinWidth)
+          : undefined;
 
-        totalWidth += hasWidth || cellMinWidth;
+        columnWidths.push(normalizedWidth);
+        totalWidth += normalizedWidth || cellMinWidth;
 
-        if (!hasWidth) {
+        if (!normalizedWidth) {
           fixedWidth = false;
-        }
-
-        if (!nextDOM) {
-          const colElement = document.createElement('col');
-
-          const [propertyKey, propertyValue] = getColStyleDeclaration(
-            cellMinWidth,
-            hasWidth,
-          );
-
-          colElement.style.setProperty(propertyKey, propertyValue);
-
-          colgroup.appendChild(colElement);
-        } else {
-          if ((nextDOM as HTMLTableColElement).style.width !== cssWidth) {
-            const [propertyKey, propertyValue] = getColStyleDeclaration(
-              cellMinWidth,
-              hasWidth,
-            );
-
-            (nextDOM as HTMLTableColElement).style.setProperty(
-              propertyKey,
-              propertyValue,
-            );
-          }
-
-          nextDOM = nextDOM.nextSibling;
         }
       }
     }
   }
+
+  columnWidths.forEach((columnWidth) => {
+    const [propertyKey, propertyValue] =
+      widthMode === 'normal' && columnWidth
+        ? ['width', `${(columnWidth / totalWidth) * 100}%`]
+        : getColStyleDeclaration(cellMinWidth, columnWidth);
+
+    if (!nextDOM) {
+      const colElement = document.createElement('col');
+
+      applyColumnStyle(colElement, propertyKey, propertyValue);
+
+      colgroup.appendChild(colElement);
+    } else {
+      applyColumnStyle(
+        nextDOM as HTMLTableColElement,
+        propertyKey,
+        propertyValue,
+      );
+
+      nextDOM = nextDOM.nextSibling;
+    }
+  });
 
   while (nextDOM) {
     const after = nextDOM.nextSibling;
@@ -78,12 +79,34 @@ export function updateColumns(
     typeof node.attrs.style === 'string' &&
     /\bwidth\s*:/i.test(node.attrs.style);
 
+  if (widthMode === 'normal') {
+    table.style.width = '100%';
+    table.style.minWidth = '';
+    return;
+  }
+
   if (fixedWidth && !hasUserWidth) {
     table.style.width = `${totalWidth}px`;
     table.style.minWidth = '';
   } else {
     table.style.width = '';
     table.style.minWidth = `${totalWidth}px`;
+  }
+}
+
+function applyColumnStyle(
+  colElement: HTMLTableColElement,
+  propertyKey: string,
+  propertyValue: string,
+): void {
+  if (propertyKey === 'width') {
+    colElement.style.removeProperty('min-width');
+  } else {
+    colElement.style.removeProperty('width');
+  }
+
+  if (colElement.style.getPropertyValue(propertyKey) !== propertyValue) {
+    colElement.style.setProperty(propertyKey, propertyValue);
   }
 }
 
