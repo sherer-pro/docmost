@@ -83,17 +83,87 @@ describe('CopyMarkdownWithCommentsService', () => {
     expect(markdown).toContain('## Comments');
     expect(markdown).toContain('### Thread 1: Inline (Open)');
     expect(markdown).toContain('- Type: Inline');
+    expect(markdown).toContain('- Location: Inline anchor not found');
     expect(markdown).toContain('- Author: Alice');
     expect(markdown).toContain('Selection:\n\n> Selected paragraph');
     expect(markdown).toContain('Inline root body');
     expect(markdown).toContain('#### Reply 1.1');
     expect(markdown).toContain('Reply body');
     expect(markdown).toContain('### Thread 2: Page (Resolved)');
+    expect(markdown).toContain('- Location: Page-level');
     expect(markdown).toContain('- Resolved by: Eve');
     expect(markdown).toContain('Page-level body');
   });
 
-  it('keeps malformed comment content from breaking markdown generation', async () => {
+  it('adds section, markdown line, and surrounding context for inline roots', async () => {
+    exportService.exportPage.mockResolvedValue([
+      '# Page title',
+      '',
+      '## Alpha',
+      '',
+      'Repeated target in alpha.',
+      '',
+      '## Beta',
+      '',
+      '### Nested',
+      '',
+      'Repeated target in beta.',
+    ].join('\n'));
+    commentRepo.findAllPageCommentsWithActors.mockResolvedValue([
+      createComment({
+        id: 'alpha-comment',
+        selection: 'target',
+        content: { text: 'Alpha body' },
+      }),
+      createComment({
+        id: 'beta-comment',
+        selection: 'target',
+        content: { text: 'Beta body' },
+      }),
+      createComment({
+        id: 'beta-reply',
+        parentCommentId: 'beta-comment',
+        content: { text: 'Beta reply' },
+      }),
+    ]);
+
+    const markdown = await service.build(
+      {
+        ...page,
+        content: {
+          type: 'doc',
+          content: [
+            headingNode(2, 'Alpha'),
+            paragraphNode([
+              textNode('Repeated '),
+              textNode('target', 'alpha-comment'),
+              textNode(' in alpha.'),
+            ]),
+            headingNode(2, 'Beta'),
+            headingNode(3, 'Nested'),
+            paragraphNode([
+              textNode('Repeated '),
+              textNode('target', 'beta-comment'),
+              textNode(' in beta.'),
+            ]),
+          ],
+        },
+      } as any,
+    );
+
+    expect(markdown).toContain('### Thread 1: Inline (Open)');
+    expect(markdown).toContain('- Section: Alpha');
+    expect(markdown).toContain('- Markdown line: 5');
+    expect(markdown).toContain('- Context: Repeated target in alpha.');
+    expect(markdown).toContain('### Thread 2: Inline (Open)');
+    expect(markdown).toContain('- Section: Beta > Nested');
+    expect(markdown).toContain('- Markdown line: 11');
+    expect(markdown).toContain('- Context: Repeated target in beta.');
+    expect(markdown).toContain('#### Reply 2.1');
+    expect(markdown).not.toContain('#### Reply 2.1\n\n- Type: Inline\n- Status: Open\n- Section:');
+  });
+
+  it('keeps malformed page and comment content from breaking markdown generation', async () => {
     commentRepo.findAllPageCommentsWithActors.mockResolvedValue([
       createComment({
         id: 'broken-comment',
@@ -101,9 +171,10 @@ describe('CopyMarkdownWithCommentsService', () => {
       }),
     ]);
 
-    const markdown = await service.build(page as any);
+    const markdown = await service.build({ ...page, content: 'broken' } as any);
 
     expect(markdown).toContain('### Thread 1: Inline (Open)');
+    expect(markdown).toContain('- Location: Inline anchor not found');
     expect(markdown).toContain('_No content_');
   });
 });
@@ -129,5 +200,37 @@ function createComment(overrides: Record<string, unknown> = {}) {
     lastEditedById: null,
     resolvedById: null,
     ...overrides,
+  };
+}
+
+function headingNode(level: number, text: string) {
+  return {
+    type: 'heading',
+    attrs: { level },
+    content: [textNode(text)],
+  };
+}
+
+function paragraphNode(content: unknown[]) {
+  return {
+    type: 'paragraph',
+    content,
+  };
+}
+
+function textNode(text: string, commentId?: string) {
+  return {
+    type: 'text',
+    text,
+    ...(commentId
+      ? {
+          marks: [
+            {
+              type: 'comment',
+              attrs: { commentId },
+            },
+          ],
+        }
+      : {}),
   };
 }
