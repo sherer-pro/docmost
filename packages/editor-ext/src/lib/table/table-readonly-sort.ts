@@ -1,12 +1,8 @@
-import { Editor, Extension } from '@tiptap/core';
+import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import {
   compareTableCellText,
-  findTable,
   getNextTableSortState,
-  isSortableTableColumn,
-  isSortableTableNode,
-  sortTableNode,
   type TableSortDirection,
   type TableSortState,
 } from './utils';
@@ -158,62 +154,8 @@ function ensureChevron(th: HTMLTableCellElement): HTMLSpanElement {
   return chevron;
 }
 
-function getTableNodeFromDOM(
-  editor: Editor,
-  table: HTMLTableElement,
-): ReturnType<typeof findTable> {
-  const firstCell = table.querySelector('th,td');
-
-  if (!firstCell) {
-    return undefined;
-  }
-
-  try {
-    return findTable(
-      editor.state.doc.resolve(editor.view.posAtDOM(firstCell, 0)),
-    );
-  } catch {
-    return undefined;
-  }
-}
-
-function canShowSortControls(
-  editor: Editor | null,
-  table: HTMLTableElement,
-): boolean {
-  if (!editor || !editor.isEditable) {
-    return isSortableTableDOM(table);
-  }
-
-  const tableNode = getTableNodeFromDOM(editor, table);
-
-  return Boolean(tableNode && isSortableTableNode(tableNode.node));
-}
-
-function isSortableHeaderCell(
-  editor: Editor | null,
-  table: HTMLTableElement,
-  colIndex: number,
-  cell: HTMLTableCellElement,
-): boolean {
-  if (cell.colSpan !== 1 || (cell.rowSpan ?? 1) !== 1) {
-    return false;
-  }
-
-  if (!editor || !editor.isEditable) {
-    return true;
-  }
-
-  const tableNode = getTableNodeFromDOM(editor, table);
-
-  return Boolean(tableNode && isSortableTableColumn(tableNode.node, colIndex));
-}
-
-function updateChevrons(
-  editor: Editor | null,
-  table: HTMLTableElement,
-): void {
-  if (!canShowSortControls(editor, table)) {
+function updateChevrons(table: HTMLTableElement): void {
+  if (!isSortableTableDOM(table)) {
     removeTableChevrons(table);
     return;
   }
@@ -232,9 +174,7 @@ function updateChevrons(
       continue;
     }
 
-    if (
-      !isSortableHeaderCell(editor, table, col, cell as HTMLTableCellElement)
-    ) {
+    if (cell.colSpan !== 1 || (cell.rowSpan ?? 1) !== 1) {
       cell.querySelector<HTMLSpanElement>(`.${CHEVRON_CLASS}`)?.remove();
       col += cell.colSpan ?? 1;
       continue;
@@ -258,10 +198,10 @@ function updateChevrons(
   }
 }
 
-function addChevronsToAllTables(editor: Editor, editorRoot: HTMLElement): void {
+function addChevronsToAllTables(editorRoot: HTMLElement): void {
   const tables = editorRoot.querySelectorAll<HTMLTableElement>('table');
 
-  tables.forEach((table) => updateChevrons(editor, table));
+  tables.forEach((table) => updateChevrons(table));
 }
 
 function removeAllChevrons(editorRoot: HTMLElement): void {
@@ -305,49 +245,7 @@ function applyReadonlySort(table: HTMLTableElement, colIndex: number): void {
     tbody.append(headerRow, ...sorted);
   }
 
-  updateChevrons(null, table);
-}
-
-function applyEditableSort(
-  editor: Editor,
-  table: HTMLTableElement,
-  th: HTMLTableCellElement,
-  colIndex: number,
-): void {
-  const tableNode = findTable(
-    editor.state.doc.resolve(editor.view.posAtDOM(th, 0)),
-  );
-
-  if (!tableNode || !isSortableTableColumn(tableNode.node, colIndex)) {
-    return;
-  }
-
-  const current = sortStates.get(table) ?? null;
-  const next = getNextTableSortState(current, colIndex);
-
-  if (next === null) {
-    sortStates.delete(table);
-    updateChevrons(editor, table);
-    return;
-  }
-
-  const sortedTable = sortTableNode(tableNode.node, next.col, next.direction);
-
-  if (!sortedTable) {
-    return;
-  }
-
-  sortStates.set(table, next);
-  editor.view.dispatch(
-    editor.state.tr
-      .replaceWith(
-        tableNode.pos,
-        tableNode.pos + tableNode.node.nodeSize,
-        sortedTable,
-      )
-      .scrollIntoView(),
-  );
-  updateChevrons(editor, table);
+  updateChevrons(table);
 }
 
 export const TableReadonlySort = Extension.create({
@@ -358,6 +256,8 @@ export const TableReadonlySort = Extension.create({
     let editorRoot: HTMLElement | null = null;
 
     const onClick = (event: MouseEvent) => {
+      if (editor.isEditable) return;
+
       if (!(event.target instanceof Element)) return;
 
       const chevron = event.target.closest(`.${CHEVRON_CLASS}`);
@@ -372,11 +272,7 @@ export const TableReadonlySort = Extension.create({
       const colIndex = getColumnIndex(th);
       if (colIndex < 0) return;
 
-      if (editor.isEditable) {
-        applyEditableSort(editor, table, th, colIndex);
-      } else {
-        applyReadonlySort(table, colIndex);
-      }
+      applyReadonlySort(table, colIndex);
     };
 
     return [
@@ -386,11 +282,19 @@ export const TableReadonlySort = Extension.create({
         view(editorView) {
           editorRoot = editorView.dom as HTMLElement;
           editorRoot.addEventListener('click', onClick);
-          addChevronsToAllTables(editor, editorRoot);
+
+          if (!editor.isEditable) {
+            addChevronsToAllTables(editorRoot);
+          }
 
           return {
             update(view) {
-              addChevronsToAllTables(editor, view.dom as HTMLElement);
+              const root = view.dom as HTMLElement;
+              if (editor.isEditable) {
+                removeAllChevrons(root);
+              } else {
+                addChevronsToAllTables(root);
+              }
             },
             destroy() {
               if (editorRoot) {
