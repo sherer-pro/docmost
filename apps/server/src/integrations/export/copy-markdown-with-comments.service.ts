@@ -8,6 +8,35 @@ import { jsonToMarkdown } from '../../collaboration/collaboration.util';
 import { ExportFormat } from './dto/export-dto';
 import { ExportService } from './export.service';
 
+type ProseMirrorJsonNode = {
+  type?: string;
+  text?: string;
+  attrs?: Record<string, unknown>;
+  marks?: Array<{
+    type?: string;
+    attrs?: Record<string, unknown>;
+  }>;
+  content?: ProseMirrorJsonNode[];
+};
+
+type HeadingContext = {
+  level: number;
+  text: string;
+};
+
+type CommentLocationContext = {
+  section: string;
+  markdownLine: number;
+  contextText: string;
+  markedText: string;
+};
+
+type CommentContextState = {
+  contexts: Map<string, CommentLocationContext>;
+  headingStack: HeadingContext[];
+  nextMarkdownLine: number;
+};
+
 @Injectable()
 export class CopyMarkdownWithCommentsService {
   constructor(
@@ -36,17 +65,25 @@ export class CopyMarkdownWithCommentsService {
       return pageMarkdown;
     }
 
+    const commentContexts = this.buildCommentLocationContexts(
+      page,
+      pageMarkdown,
+    );
+
     return [
       pageMarkdown,
       '---',
       '## Comments',
-      this.buildCommentsMarkdown(comments),
+      this.buildCommentsMarkdown(comments, commentContexts),
     ]
       .filter(Boolean)
       .join('\n\n');
   }
 
-  private buildCommentsMarkdown(comments: CommentWithActors[]): string {
+  private buildCommentsMarkdown(
+    comments: CommentWithActors[],
+    commentContexts: Map<string, CommentLocationContext>,
+  ): string {
     const commentIds = new Set(comments.map((comment) => comment.id));
     const childCommentsByParentId = new Map<string, CommentWithActors[]>();
 
@@ -66,7 +103,12 @@ export class CopyMarkdownWithCommentsService {
           !comment.parentCommentId || !commentIds.has(comment.parentCommentId),
       )
       .map((comment, index) =>
-        this.buildThreadMarkdown(comment, index + 1, childCommentsByParentId),
+        this.buildThreadMarkdown(
+          comment,
+          index + 1,
+          childCommentsByParentId,
+          commentContexts,
+        ),
       )
       .join('\n\n');
   }
@@ -75,12 +117,14 @@ export class CopyMarkdownWithCommentsService {
     comment: CommentWithActors,
     index: number,
     childCommentsByParentId: Map<string, CommentWithActors[]>,
+    commentContexts: Map<string, CommentLocationContext>,
   ): string {
     const commentType = this.getCommentTypeLabel(comment);
     const status = this.getCommentStatusLabel(comment);
     const rootMarkdown = this.buildCommentEntryMarkdown(
       comment,
       `### Thread ${index}: ${commentType} (${status})`,
+      commentContexts.get(comment.id),
     );
     const replies = this.buildReplyMarkdown(
       comment.id,
@@ -121,10 +165,12 @@ export class CopyMarkdownWithCommentsService {
   private buildCommentEntryMarkdown(
     comment: CommentWithActors,
     heading: string,
+    context?: CommentLocationContext,
   ): string {
     const metadata = [
       this.buildMetadataLine('Type', this.getCommentTypeLabel(comment)),
       this.buildMetadataLine('Status', this.getCommentStatusLabel(comment)),
+      ...this.buildLocationMetadata(comment, context),
       this.buildMetadataLine('Author', this.getActorName(comment)),
       this.buildMetadataLine('Created', this.toIsoDate(comment.createdAt)),
       comment.resolvedAt
@@ -145,6 +191,334 @@ export class CopyMarkdownWithCommentsService {
     ]
       .filter(Boolean)
       .join('\n\n');
+  }
+
+  private buildLocationMetadata(
+    comment: CommentWithActors,
+    context?: CommentLocationContext,
+  ): string[] {
+    if (comment.parentCommentId) {
+      return [];
+    }
+
+    if (comment.type === 'page') {
+      return [this.buildMetadataLine('Location', 'Page-level')];
+    }
+
+    if (!context) {
+      return [this.buildMetadataLine('Location', 'Inline anchor not found')];
+    }
+
+    const metadata = [
+      this.buildMetadataLine('Section', context.section),
+      this.buildMetadataLine('Markdown line', String(context.markdownLine)),
+    ];
+
+    if (context.contextText) {
+      metadata.push(this.buildMetadataLine('Context', context.contextText));
+    }
+
+    if (
+      context.markedText &&
+      this.normalizeMetadataValue(context.markedText) !==
+        this.normalizeMetadataValue(comment.selection ?? '')
+    ) {
+      metadata.push(this.buildMetadataLine('Marked text', context.markedText));
+    }
+
+    return metadata;
+  }
+
+  private buildCommentLocationContexts(
+    page: Page,
+    pageMarkdown: string,
+  ): Map<string, CommentLocationContext> {
+    const doc = this.toProseMirrorJsonNode(page.content);
+    const state: CommentContextState = {
+      contexts: new Map<string, CommentLocationContext>(),
+      headingStack: [],
+      nextMarkdownLine: this.getFirstContentMarkdownLine(page, pageMarkdown),
+    };
+
+    if (!Array.isArray(doc.content)) {
+      return state.contexts;
+    }
+
+    for (const child of doc.content) {
+      this.visitMarkdownBlock(child, state);
+    }
+
+    return state.contexts;
+  }
+
+  private toProseMirrorJsonNode(content: unknown): ProseMirrorJsonNode {
+    if (!content || typeof content !== 'object') {
+      return { type: 'doc', content: [] };
+    }
+
+    const candidate = content as ProseMirrorJsonNode;
+    return {
+      ...candidate,
+      content: Array.isArray(candidate.content) ? candidate.content : [],
+    };
+  }
+
+  private getFirstContentMarkdownLine(page: Page, pageMarkdown: string): number {
+    const title = page.title?.trim();
+    const firstLine = pageMarkdown.split(/\r?\n/, 1)[0]?.trim() ?? '';
+
+    if (title && firstLine.startsWith('#')) {
+      return 3;
+    }
+
+    return 1;
+  }
+
+  private visitMarkdownBlock(
+    node: ProseMirrorJsonNode,
+    state: CommentContextState,
+  ): void {
+    const type = node.type;
+
+    if (type === 'heading') {
+      this.visitHeadingBlock(node, state);
+      return;
+    }
+
+    if (this.isSimpleTextBlock(type)) {
+      this.captureCommentContextsFromBlock(node, state.nextMarkdownLine, state);
+      state.nextMarkdownLine += this.estimateMarkdownLineSpan(node) + 1;
+      return;
+    }
+
+    if (this.isListBlock(type)) {
+      this.visitListBlock(node, state);
+      state.nextMarkdownLine += 1;
+      return;
+    }
+
+    if (type === 'table') {
+      this.visitTableBlock(node, state);
+      state.nextMarkdownLine += 1;
+      return;
+    }
+
+    if (Array.isArray(node.content) && node.content.length > 0) {
+      for (const child of node.content) {
+        this.visitMarkdownBlock(child, state);
+      }
+      return;
+    }
+
+    if (this.extractNodeText(node)) {
+      this.captureCommentContextsFromBlock(node, state.nextMarkdownLine, state);
+      state.nextMarkdownLine += this.estimateMarkdownLineSpan(node) + 1;
+    }
+  }
+
+  private visitHeadingBlock(
+    node: ProseMirrorJsonNode,
+    state: CommentContextState,
+  ): void {
+    const headingText = this.normalizeContextText(this.extractNodeText(node));
+    const level = this.normalizeHeadingLevel(node.attrs?.level);
+
+    this.updateHeadingStack(state.headingStack, level, headingText);
+    this.captureCommentContextsFromBlock(node, state.nextMarkdownLine, state);
+    state.nextMarkdownLine += this.estimateMarkdownLineSpan(node) + 1;
+  }
+
+  private visitListBlock(
+    node: ProseMirrorJsonNode,
+    state: CommentContextState,
+  ): void {
+    if (!Array.isArray(node.content)) {
+      return;
+    }
+
+    for (const child of node.content) {
+      this.visitListItemBlock(child, state);
+    }
+  }
+
+  private visitListItemBlock(
+    node: ProseMirrorJsonNode,
+    state: CommentContextState,
+  ): void {
+    if (!Array.isArray(node.content) || node.content.length === 0) {
+      this.captureCommentContextsFromBlock(node, state.nextMarkdownLine, state);
+      state.nextMarkdownLine += 1;
+      return;
+    }
+
+    for (const child of node.content) {
+      this.visitMarkdownBlock(child, state);
+    }
+  }
+
+  private visitTableBlock(
+    node: ProseMirrorJsonNode,
+    state: CommentContextState,
+  ): void {
+    const rows = node.content?.filter((child) => child.type === 'tableRow') ?? [];
+
+    for (const row of rows) {
+      this.captureCommentContextsFromBlock(row, state.nextMarkdownLine, state);
+      state.nextMarkdownLine += 1;
+    }
+
+    if (rows.length > 0) {
+      state.nextMarkdownLine += 1;
+    }
+  }
+
+  private captureCommentContextsFromBlock(
+    node: ProseMirrorJsonNode,
+    markdownLine: number,
+    state: CommentContextState,
+  ): void {
+    const blockText = this.truncateMetadataText(
+      this.normalizeContextText(this.extractNodeText(node)),
+    );
+    const markedTextByCommentId = new Map<string, string[]>();
+
+    this.collectMarkedTextByCommentId(node, markedTextByCommentId);
+
+    for (const [commentId, markedTextParts] of markedTextByCommentId) {
+      const markedText = this.truncateMetadataText(
+        this.normalizeContextText(markedTextParts.join('')),
+      );
+      const existing = state.contexts.get(commentId);
+
+      if (existing) {
+        existing.markedText = this.truncateMetadataText(
+          this.normalizeContextText(`${existing.markedText} ${markedText}`),
+        );
+        continue;
+      }
+
+      state.contexts.set(commentId, {
+        section: this.getCurrentSection(state.headingStack),
+        markdownLine,
+        contextText: blockText,
+        markedText,
+      });
+    }
+  }
+
+  private collectMarkedTextByCommentId(
+    node: ProseMirrorJsonNode,
+    markedTextByCommentId: Map<string, string[]>,
+  ): void {
+    if (node.type === 'text' && node.text && Array.isArray(node.marks)) {
+      for (const mark of node.marks) {
+        const commentId =
+          mark.type === 'comment' && typeof mark.attrs?.commentId === 'string'
+            ? mark.attrs.commentId.trim()
+            : '';
+
+        if (!commentId) {
+          continue;
+        }
+
+        const markedText = markedTextByCommentId.get(commentId) ?? [];
+        markedText.push(node.text);
+        markedTextByCommentId.set(commentId, markedText);
+      }
+    }
+
+    if (!Array.isArray(node.content)) {
+      return;
+    }
+
+    for (const child of node.content) {
+      this.collectMarkedTextByCommentId(child, markedTextByCommentId);
+    }
+  }
+
+  private extractNodeText(node: ProseMirrorJsonNode): string {
+    if (node.type === 'text') {
+      return node.text ?? '';
+    }
+
+    if (!Array.isArray(node.content)) {
+      return '';
+    }
+
+    return node.content.map((child) => this.extractNodeText(child)).join('');
+  }
+
+  private isSimpleTextBlock(type?: string): boolean {
+    return [
+      'paragraph',
+      'heading',
+      'codeBlock',
+      'mathBlock',
+      'blockquote',
+      'callout',
+      'detailsSummary',
+    ].includes(type ?? '');
+  }
+
+  private isListBlock(type?: string): boolean {
+    return ['bulletList', 'orderedList', 'taskList'].includes(type ?? '');
+  }
+
+  private estimateMarkdownLineSpan(node: ProseMirrorJsonNode): number {
+    const textLineCount = Math.max(
+      1,
+      this.extractNodeText(node).split(/\r?\n/).length,
+    );
+
+    if (node.type === 'codeBlock') {
+      return textLineCount + 2;
+    }
+
+    return textLineCount;
+  }
+
+  private updateHeadingStack(
+    headingStack: HeadingContext[],
+    level: number,
+    text: string,
+  ): void {
+    while (
+      headingStack.length > 0 &&
+      headingStack[headingStack.length - 1].level >= level
+    ) {
+      headingStack.pop();
+    }
+
+    if (text) {
+      headingStack.push({ level, text });
+    }
+  }
+
+  private normalizeHeadingLevel(level: unknown): number {
+    if (typeof level !== 'number' || !Number.isFinite(level)) {
+      return 1;
+    }
+
+    return Math.max(1, Math.min(6, Math.trunc(level)));
+  }
+
+  private getCurrentSection(headingStack: HeadingContext[]): string {
+    const section = headingStack.map((heading) => heading.text).join(' > ');
+    return section || 'Document root';
+  }
+
+  private normalizeContextText(value: string): string {
+    return value.replace(/\s+/g, ' ').trim();
+  }
+
+  private truncateMetadataText(value: string): string {
+    const normalizedValue = this.normalizeContextText(value);
+
+    if (normalizedValue.length <= 280) {
+      return normalizedValue;
+    }
+
+    return `${normalizedValue.slice(0, 277).trimEnd()}...`;
   }
 
   private buildMetadataLine(label: string, value: string): string {
