@@ -1,12 +1,8 @@
 // @vitest-environment jsdom
 
 import { Editor } from "@tiptap/core";
-import {
-  TableCell,
-  TableHeader,
-  TableRow,
-} from "@tiptap/extension-table";
-import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
+import { TableCell, TableHeader, TableRow } from "@tiptap/extension-table";
+import { Slice, type Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { StarterKit } from "@tiptap/starter-kit";
 import {
   CustomTable,
@@ -18,7 +14,7 @@ import {
   parseTsvTable,
   sortTableNode,
 } from "@docmost/editor-ext";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 const tableContent = {
   type: "doc",
@@ -31,11 +27,21 @@ const tableContent = {
           content: [
             {
               type: "tableHeader",
-              content: [{ type: "paragraph", content: [{ type: "text", text: "Name" }] }],
+              content: [
+                {
+                  type: "paragraph",
+                  content: [{ type: "text", text: "Name" }],
+                },
+              ],
             },
             {
               type: "tableHeader",
-              content: [{ type: "paragraph", content: [{ type: "text", text: "Score" }] }],
+              content: [
+                {
+                  type: "paragraph",
+                  content: [{ type: "text", text: "Score" }],
+                },
+              ],
             },
           ],
         },
@@ -44,11 +50,18 @@ const tableContent = {
           content: [
             {
               type: "tableCell",
-              content: [{ type: "paragraph", content: [{ type: "text", text: "Beta" }] }],
+              content: [
+                {
+                  type: "paragraph",
+                  content: [{ type: "text", text: "Beta" }],
+                },
+              ],
             },
             {
               type: "tableCell",
-              content: [{ type: "paragraph", content: [{ type: "text", text: "10" }] }],
+              content: [
+                { type: "paragraph", content: [{ type: "text", text: "10" }] },
+              ],
             },
           ],
         },
@@ -57,11 +70,18 @@ const tableContent = {
           content: [
             {
               type: "tableCell",
-              content: [{ type: "paragraph", content: [{ type: "text", text: "Alpha" }] }],
+              content: [
+                {
+                  type: "paragraph",
+                  content: [{ type: "text", text: "Alpha" }],
+                },
+              ],
             },
             {
               type: "tableCell",
-              content: [{ type: "paragraph", content: [{ type: "text", text: "2" }] }],
+              content: [
+                { type: "paragraph", content: [{ type: "text", text: "2" }] },
+              ],
             },
           ],
         },
@@ -75,6 +95,126 @@ const tableContent = {
             {
               type: "tableCell",
               content: [{ type: "paragraph" }],
+            },
+          ],
+        },
+      ],
+    },
+  ],
+};
+
+const emptyDefaultTableContent = {
+  type: "doc",
+  content: [
+    {
+      type: "table",
+      content: [
+        {
+          type: "tableRow",
+          content: [
+            {
+              type: "tableHeader",
+              content: [{ type: "paragraph" }],
+            },
+            {
+              type: "tableHeader",
+              content: [{ type: "paragraph" }],
+            },
+          ],
+        },
+        {
+          type: "tableRow",
+          content: [
+            {
+              type: "tableCell",
+              content: [{ type: "paragraph" }],
+            },
+            {
+              type: "tableCell",
+              content: [{ type: "paragraph" }],
+            },
+          ],
+        },
+      ],
+    },
+  ],
+};
+
+const malformedLeadingRowsTableContent = {
+  type: "doc",
+  content: [
+    {
+      type: "table",
+      content: [
+        {
+          type: "tableRow",
+          content: [
+            {
+              type: "tableHeader",
+              content: [{ type: "paragraph" }],
+            },
+            {
+              type: "tableHeader",
+              content: [{ type: "paragraph" }],
+            },
+          ],
+        },
+        {
+          type: "tableRow",
+          content: [
+            {
+              type: "tableCell",
+              content: [{ type: "paragraph" }],
+            },
+            {
+              type: "tableCell",
+              content: [{ type: "paragraph" }],
+            },
+          ],
+        },
+        {
+          type: "tableRow",
+          content: [
+            {
+              type: "tableCell",
+              content: [
+                {
+                  type: "paragraph",
+                  content: [{ type: "text", text: "Name" }],
+                },
+              ],
+            },
+            {
+              type: "tableCell",
+              content: [
+                {
+                  type: "paragraph",
+                  content: [{ type: "text", text: "Score" }],
+                },
+              ],
+            },
+          ],
+        },
+        {
+          type: "tableRow",
+          content: [
+            {
+              type: "tableCell",
+              content: [
+                {
+                  type: "paragraph",
+                  content: [{ type: "text", text: "Alpha" }],
+                },
+              ],
+            },
+            {
+              type: "tableCell",
+              content: [
+                {
+                  type: "paragraph",
+                  content: [{ type: "text", text: "2" }],
+                },
+              ],
             },
           ],
         },
@@ -143,6 +283,49 @@ function getDomFirstColumnValues(editor: Editor): string[] {
     .map((row) => row.querySelector("td")?.textContent?.trim() ?? "");
 }
 
+function setSelectionInsideFirstParagraph(editor: Editor): void {
+  let textSelectionPos: number | null = null;
+
+  editor.state.doc.descendants((node, pos) => {
+    if (node.type.name === "paragraph") {
+      textSelectionPos = pos + 1;
+      return false;
+    }
+
+    return true;
+  });
+
+  if (textSelectionPos === null) {
+    throw new Error("Expected test document to contain a paragraph");
+  }
+
+  editor.commands.setTextSelection(textSelectionPos);
+}
+
+function pastePlainText(editor: Editor, text: string): boolean {
+  const preventDefault = vi.fn();
+  const event = {
+    clipboardData: {
+      getData: (type: string) => (type === "text/plain" ? text : ""),
+    },
+    preventDefault,
+  } as unknown as ClipboardEvent;
+  let handled = false;
+
+  editor.view.someProp("handlePaste", (handler) => {
+    handled = handler(editor.view, event, Slice.empty) === true;
+    return handled;
+  });
+
+  expect(preventDefault).toHaveBeenCalled();
+  return handled;
+}
+
+async function flushEditorMicrotasks(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
 describe("table sorting", () => {
   it("sorts table nodes by content and keeps empty values at the bottom", () => {
     const editor = createEditor(tableContent);
@@ -185,7 +368,12 @@ describe("table sorting", () => {
               content: [
                 {
                   type: "tableCell",
-                  content: [{ type: "paragraph", content: [{ type: "text", text: "Name" }] }],
+                  content: [
+                    {
+                      type: "paragraph",
+                      content: [{ type: "text", text: "Name" }],
+                    },
+                  ],
                 },
               ],
             },
@@ -214,11 +402,21 @@ describe("table sorting", () => {
               content: [
                 {
                   type: "tableHeader",
-                  content: [{ type: "paragraph", content: [{ type: "text", text: "Name" }] }],
+                  content: [
+                    {
+                      type: "paragraph",
+                      content: [{ type: "text", text: "Name" }],
+                    },
+                  ],
                 },
                 {
                   type: "tableHeader",
-                  content: [{ type: "paragraph", content: [{ type: "text", text: "Score" }] }],
+                  content: [
+                    {
+                      type: "paragraph",
+                      content: [{ type: "text", text: "Score" }],
+                    },
+                  ],
                 },
               ],
             },
@@ -228,7 +426,12 @@ describe("table sorting", () => {
                 {
                   type: "tableCell",
                   attrs: { colspan: 2, rowspan: 1, colwidth: null },
-                  content: [{ type: "paragraph", content: [{ type: "text", text: "Merged" }] }],
+                  content: [
+                    {
+                      type: "paragraph",
+                      content: [{ type: "text", text: "Merged" }],
+                    },
+                  ],
                 },
               ],
             },
@@ -244,15 +447,14 @@ describe("table sorting", () => {
     }
   });
 
-  it("changes the document order in editable mode", () => {
+  it("does not add sort controls in editable mode", () => {
     const editor = createEditor(tableContent, true);
 
     try {
-      editor.view.dom
-        .querySelector<HTMLElement>(".tableReadonlySortChevron")
-        ?.click();
-
-      expect(getFirstColumnValues(editor)).toEqual(["Alpha", "Beta", ""]);
+      expect(
+        editor.view.dom.querySelector<HTMLElement>(".tableReadonlySortChevron"),
+      ).toBeNull();
+      expect(getFirstColumnValues(editor)).toEqual(["Beta", "Alpha", ""]);
     } finally {
       editor.destroy();
     }
@@ -300,6 +502,47 @@ describe("table paste handling", () => {
       expect(table.attrs.widthMode).toBe("normal");
       expect(table.child(0).firstChild?.type.name).toBe("tableHeader");
       expect(table.child(1).firstChild?.type.name).toBe("tableCell");
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("replaces an empty default table when pasting TSV rows inside it", () => {
+    const editor = createEditor(emptyDefaultTableContent);
+
+    try {
+      setSelectionInsideFirstParagraph(editor);
+
+      expect(pastePlainText(editor, "Name\tScore\nAlpha\t2")).toBe(true);
+
+      const table = editor.getJSON().content?.[0] as any;
+      expect(table.content).toHaveLength(2);
+      expect(table.content[0].content[0].content[0].content[0].text).toBe(
+        "Name",
+      );
+      expect(table.content[1].content[0].content[0].content[0].text).toBe(
+        "Alpha",
+      );
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("normalizes malformed leading empty rows on load", async () => {
+    const editor = createEditor(malformedLeadingRowsTableContent);
+
+    try {
+      await flushEditorMicrotasks();
+
+      const table = editor.getJSON().content?.[0] as any;
+      expect(table.content).toHaveLength(2);
+      expect(table.content[0].content[0].type).toBe("tableHeader");
+      expect(table.content[0].content[0].content[0].content[0].text).toBe(
+        "Name",
+      );
+      expect(table.content[1].content[0].content[0].content[0].text).toBe(
+        "Alpha",
+      );
     } finally {
       editor.destroy();
     }
