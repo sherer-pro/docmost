@@ -13,6 +13,7 @@ import {
   normalizePastedTableHTML,
   parseTsvTable,
   sortTableNode,
+  updateColumns,
 } from "@docmost/editor-ext";
 import { describe, expect, it, vi } from "vitest";
 
@@ -266,30 +267,10 @@ function getTableNode(editor: Editor) {
   return table;
 }
 
-function getFirstColumnValues(editor: Editor): string[] {
-  const table = editor.getJSON().content?.[0] as any;
-  const rows = table?.content?.slice(1) ?? [];
-
-  return rows.map((row) => {
-    const paragraph = row.content?.[0]?.content?.[0];
-
-    return paragraph?.content?.[0]?.text ?? "";
-  });
-}
-
 function getDomFirstColumnValues(editor: Editor): string[] {
   return Array.from(editor.view.dom.querySelectorAll("tr"))
     .slice(1)
     .map((row) => row.querySelector("td")?.textContent?.trim() ?? "");
-}
-
-function clickFirstSortControl(editor: Editor): void {
-  const control = editor.view.dom.querySelector<HTMLElement>(
-    ".tableReadonlySortChevron",
-  );
-
-  expect(control).not.toBeNull();
-  control?.click();
 }
 
 function setSelectionInsideFirstParagraph(editor: Editor): void {
@@ -334,6 +315,85 @@ async function flushEditorMicrotasks(): Promise<void> {
   await Promise.resolve();
   await Promise.resolve();
 }
+
+describe("table widths", () => {
+  function createTableNodeWithColumnWidths(
+    editor: Editor,
+    widths: Array<number | null>,
+    widthMode = "normal",
+  ): ProseMirrorNode {
+    const { schema } = editor;
+    const headerCells = widths.map((width, index) =>
+      schema.nodes.tableHeader.createChecked(
+        width ? { colwidth: [width] } : null,
+        [
+          schema.nodes.paragraph.createChecked(null, [
+            schema.text(`Header ${index + 1}`),
+          ]),
+        ],
+      ),
+    );
+    const bodyCells = widths.map((width, index) =>
+      schema.nodes.tableCell.createChecked(
+        width ? { colwidth: [width] } : null,
+        [
+          schema.nodes.paragraph.createChecked(null, [
+            schema.text(`Cell ${index + 1}`),
+          ]),
+        ],
+      ),
+    );
+
+    return schema.nodes.table.createChecked({ widthMode }, [
+      schema.nodes.tableRow.createChecked(null, headerCells),
+      schema.nodes.tableRow.createChecked(null, bodyCells),
+    ]);
+  }
+
+  it("keeps normal table width constrained to the content area", () => {
+    const editor = createEditor("<p></p>");
+
+    try {
+      const node = createTableNodeWithColumnWidths(editor, [900, 300]);
+      const colgroup = document.createElement("colgroup");
+      const table = document.createElement("table");
+
+      updateColumns(node, colgroup, table, 49);
+
+      const columns = colgroup.querySelectorAll("col");
+      expect(table.style.width).toBe("100%");
+      expect(table.style.minWidth).toBe("");
+      expect(columns[0].style.minWidth).toBe("");
+      expect(columns[1].style.minWidth).toBe("");
+      expect(parseFloat(columns[0].style.width)).toBeCloseTo(75);
+      expect(parseFloat(columns[1].style.width)).toBeCloseTo(25);
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("does not add fixed equal column widths for normal tables without hints", () => {
+    const editor = createEditor("<p></p>");
+
+    try {
+      const node = createTableNodeWithColumnWidths(editor, [null, null]);
+      const colgroup = document.createElement("colgroup");
+      const table = document.createElement("table");
+
+      updateColumns(node, colgroup, table, 49);
+
+      const columns = colgroup.querySelectorAll("col");
+      expect(table.style.width).toBe("100%");
+      expect(table.style.minWidth).toBe("");
+      expect(columns[0].style.width).toBe("");
+      expect(columns[1].style.width).toBe("");
+      expect(columns[0].style.minWidth).toBe("49px");
+      expect(columns[1].style.minWidth).toBe("49px");
+    } finally {
+      editor.destroy();
+    }
+  });
+});
 
 describe("table sorting", () => {
   it("sorts table nodes by content and keeps empty values at the bottom", () => {
@@ -466,18 +526,15 @@ describe("table sorting", () => {
     }
   });
 
-  it("sorts the document in editable mode", () => {
+  it("does not add sort controls in editable mode", () => {
     const editor = createEditor(tableContent, true);
+    const initialJson = editor.getJSON();
 
     try {
-      clickFirstSortControl(editor);
-
-      expect(getFirstColumnValues(editor)).toEqual(["Alpha", "Beta", ""]);
-      expect(getDomFirstColumnValues(editor)).toEqual(["Alpha", "Beta", ""]);
-
-      clickFirstSortControl(editor);
-
-      expect(getFirstColumnValues(editor)).toEqual(["Beta", "Alpha", ""]);
+      expect(
+        editor.view.dom.querySelector<HTMLElement>(".tableReadonlySortChevron"),
+      ).toBeNull();
+      expect(editor.getJSON()).toEqual(initialJson);
     } finally {
       editor.destroy();
     }
