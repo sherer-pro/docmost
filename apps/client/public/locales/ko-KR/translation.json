@@ -1140,7 +1140,7 @@
   "Use the main spelling that should appear in the dictionary.": "Use the main spelling that should appear in the dictionary.",
   "Enter a term": "Enter a term",
   "Add aliases, abbreviations, or inflected forms.": "Add aliases, abbreviations, or inflected forms.",
-  "Type a form and press Enter": "Type a form and press Enter",
+  "Separate forms with commas, semicolons, or Enter": "쉼표, 세미콜론 또는 Enter로 형태를 구분하세요",
   "Write the definition in Markdown": "Write the definition in Markdown",
   "Definition preview will appear here.": "Definition preview will appear here.",
   "Active sessions": "Active sessions",

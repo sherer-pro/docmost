@@ -147,10 +147,6 @@ export default function SpaceDictionary() {
     () => groupDictionaryTerms(filteredTerms, i18n.language),
     [filteredTerms, i18n.language],
   );
-  const totalWordForms = useMemo(
-    () => terms.reduce((total, term) => total + term.forms.length, 0),
-    [terms],
-  );
   const visibleTermIds = useMemo(
     () => filteredTerms.map((term) => term.id),
     [filteredTerms],
@@ -234,9 +230,6 @@ export default function SpaceDictionary() {
               <Group gap="md" mt={4}>
                 <Text size="sm" c="dimmed">
                   {terms.length} {t("Terms")}
-                </Text>
-                <Text size="sm" c="dimmed">
-                  {totalWordForms} {t("Word forms")}
                 </Text>
                 <Text size="sm" c="dimmed">
                   {availableLetters.length} {t("Letters")}
@@ -394,8 +387,8 @@ export default function SpaceDictionary() {
                         0,
                         MAX_VISIBLE_FORMS,
                       );
-                      const remainingFormsCount =
-                        term.forms.length - visibleForms.length;
+                      const hiddenForms = term.forms.slice(MAX_VISIBLE_FORMS);
+                      const remainingFormsCount = hiddenForms.length;
 
                       return (
                         <Accordion.Item key={term.id} value={term.id}>
@@ -414,6 +407,7 @@ export default function SpaceDictionary() {
                                         color="gray"
                                         size="sm"
                                         tt="none"
+                                        className={classes.formBadge}
                                       >
                                         {form}
                                       </Badge>
@@ -424,6 +418,7 @@ export default function SpaceDictionary() {
                                         color="gray"
                                         size="sm"
                                         tt="none"
+                                        className={classes.formBadge}
                                       >
                                         {t("+{{count}} more", {
                                           count: remainingFormsCount,
@@ -468,15 +463,16 @@ export default function SpaceDictionary() {
                           <Accordion.Panel>
                             {openedTermIds.includes(term.id) && (
                               <Stack gap="sm">
-                                {term.forms.length > MAX_VISIBLE_FORMS && (
+                                {hiddenForms.length > 0 && (
                                   <Group gap={4} className={classes.panelForms}>
-                                    {term.forms.map((form) => (
+                                    {hiddenForms.map((form) => (
                                       <Badge
                                         key={form}
                                         variant="default"
                                         color="gray"
                                         size="sm"
                                         tt="none"
+                                        className={classes.formBadge}
                                       >
                                         {form}
                                       </Badge>
