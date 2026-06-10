@@ -38,26 +38,7 @@ export default defineConfig(({ mode }) => {
     },
     plugins: [react()],
     build: {
-      // Keep diagram runtimes together: Mermaid and Excalidraw import shared
-      // helpers, and splitting them creates circular manual chunks.
       chunkSizeWarningLimit: 5000,
-      rollupOptions: {
-        output: {
-          manualChunks(id) {
-            if (!id.includes("node_modules")) {
-              return;
-            }
-
-            if (id.includes("excalidraw") || id.includes("mermaid")) {
-              return "vendor-diagrams";
-            }
-
-            // Leave the rest of node_modules to Rollup so it can avoid
-            // cross-chunk initialization cycles between React/editor deps.
-            return;
-          },
-        },
-      },
     },
     resolve: {
       alias: {
