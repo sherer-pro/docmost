@@ -1,4 +1,9 @@
 .tableWrapper {
+  --table-available-width: calc(
+    100vw - var(--app-shell-navbar-offset, 0rem) -
+      var(--app-shell-aside-offset, 0rem) - var(--mantine-spacing-md) -
+      var(--mantine-spacing-md)
+  );
   margin-top: 1rem;
   margin-bottom: 1rem;
   width: 100%;
@@ -11,15 +16,15 @@
 }
 
 .tableWrapper[data-table-width-mode="wide"] {
-  width: min(125%, calc(100vw - 2rem));
-  max-width: calc(100vw - 2rem);
+  width: 125%;
+  max-width: min(125%, var(--table-available-width));
   margin-left: 50%;
   transform: translateX(-50%);
 }
 
 .tableWrapper[data-table-width-mode="full"] {
-  width: calc(100vw - 2rem);
-  max-width: calc(100vw - 2rem);
+  width: var(--table-available-width);
+  max-width: var(--table-available-width);
   margin-left: 50%;
   transform: translateX(-50%);
 }
@@ -32,8 +37,16 @@
   transform: none;
 }
 
-@media (max-width: 48em) {
-  .tableWrapper[data-table-width-mode="wide"],
+@media (max-width: 72em) {
+  .tableWrapper[data-table-width-mode="wide"] {
+    width: 100%;
+    max-width: 100%;
+    margin-left: 0;
+    transform: none;
+  }
+}
+
+@media (max-width: 60em) {
   .tableWrapper[data-table-width-mode="full"] {
     width: 100%;
     max-width: 100%;

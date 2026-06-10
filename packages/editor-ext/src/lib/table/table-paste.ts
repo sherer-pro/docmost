@@ -16,6 +16,12 @@ import { findTable } from './utils';
 
 const tablePasteKey = new PluginKey('tablePaste');
 
+const MIN_CONTENT_COLUMN_WIDTH = 72;
+const MAX_CONTENT_COLUMN_WIDTH = 320;
+const CONTENT_COLUMN_PADDING = 32;
+const AVERAGE_CHARACTER_WIDTH = 7;
+const LONG_WORD_CHARACTER_WIDTH = 8;
+
 export function parseTsvTable(text: string): string[][] | null {
   if (!text.includes('\t')) {
     return null;
@@ -47,18 +53,24 @@ export function createTableNodeFromRows(
   schema: Schema,
   rows: string[][],
 ): ProseMirrorNode {
+  const columnWidths = getContentAwareWidthsFromRows(rows);
+
   const tableRows = rows.map((row, rowIndex) => {
     const cellType =
       rowIndex === 0 ? schema.nodes.tableHeader : schema.nodes.tableCell;
 
-    const cells = row.map((cellText) =>
-      cellType.createChecked(null, [
+    const cells = row.map((cellText, columnIndex) => {
+      const attrs = columnWidths
+        ? { colwidth: [columnWidths[columnIndex]] }
+        : null;
+
+      return cellType.createChecked(attrs, [
         schema.nodes.paragraph.createChecked(
           null,
           cellText ? [schema.text(cellText)] : undefined,
         ),
-      ]),
-    );
+      ]);
+    });
 
     return schema.nodes.tableRow.createChecked(null, cells);
   });
@@ -381,10 +393,18 @@ export function normalizePastedTableHTML(html: string): string {
       changed = true;
     }
 
-    const colWidths = getTableColumnWidths(table);
+    const colWidths = getExplicitTableColumnWidths(table);
 
-    if (colWidths.length > 0) {
+    if (hasAnyColumnWidth(colWidths)) {
       applyColumnWidths(table, colWidths);
+      changed = true;
+      return;
+    }
+
+    const contentWidths = getContentAwareWidthsFromDOMTable(table);
+
+    if (contentWidths) {
+      applyColumnWidths(table, contentWidths);
       changed = true;
     }
   });
@@ -554,7 +574,9 @@ function parseDelimitedRows(text: string, delimiter: string): string[][] {
   return rows;
 }
 
-function getTableColumnWidths(table: HTMLTableElement): Array<number | null> {
+function getExplicitTableColumnWidths(
+  table: HTMLTableElement,
+): Array<number | null> {
   const colgroupWidths = Array.from(
     table.querySelectorAll<HTMLTableColElement>('colgroup > col'),
   ).map((col) => getElementWidth(col));
@@ -588,6 +610,93 @@ function getTableColumnWidths(table: HTMLTableElement): Array<number | null> {
   });
 
   return widths;
+}
+
+function hasAnyColumnWidth(widths: Array<number | null>): boolean {
+  return widths.some((width) => width !== null);
+}
+
+function getContentAwareWidthsFromDOMTable(
+  table: HTMLTableElement,
+): number[] | null {
+  const rows = Array.from(table.querySelectorAll<HTMLTableRowElement>('tr'));
+
+  if (rows.length < 2) {
+    return null;
+  }
+
+  const textRows: string[][] = [];
+  let columnCount: number | null = null;
+
+  for (const row of rows) {
+    const cells = Array.from(row.cells);
+
+    if (
+      cells.length === 0 ||
+      cells.some(
+        (cell) => (cell.colSpan ?? 1) !== 1 || (cell.rowSpan ?? 1) !== 1,
+      )
+    ) {
+      return null;
+    }
+
+    if (columnCount === null) {
+      columnCount = cells.length;
+    } else if (cells.length !== columnCount) {
+      return null;
+    }
+
+    textRows.push(cells.map((cell) => cell.textContent ?? ''));
+  }
+
+  return getContentAwareWidthsFromRows(textRows);
+}
+
+function getContentAwareWidthsFromRows(rows: string[][]): number[] | null {
+  if (rows.length < 2 || rows[0].length < 2) {
+    return null;
+  }
+
+  const columnCount = rows[0].length;
+
+  if (
+    rows.some((row) => row.length !== columnCount) ||
+    rows.every((row) => row.every((cell) => cell.trim() === ''))
+  ) {
+    return null;
+  }
+
+  return Array.from({ length: columnCount }, (_value, columnIndex) => {
+    const columnTexts = rows.map((row) => row[columnIndex] ?? '');
+
+    return estimateColumnWidth(columnTexts);
+  });
+}
+
+function estimateColumnWidth(texts: string[]): number {
+  const estimated = texts.reduce((maxWidth, text) => {
+    const normalized = text.replace(/\s+/g, ' ').trim();
+
+    if (!normalized) {
+      return maxWidth;
+    }
+
+    const longestWordLength = normalized
+      .split(' ')
+      .reduce((maxLength, word) => Math.max(maxLength, word.length), 0);
+    const textWidth =
+      Math.min(normalized.length, 36) * AVERAGE_CHARACTER_WIDTH +
+      CONTENT_COLUMN_PADDING;
+    const wordWidth =
+      longestWordLength * LONG_WORD_CHARACTER_WIDTH + CONTENT_COLUMN_PADDING;
+
+    return Math.max(maxWidth, textWidth, wordWidth);
+  }, MIN_CONTENT_COLUMN_WIDTH);
+
+  return Math.min(
+    MAX_CONTENT_COLUMN_WIDTH,
+    Math.max(MIN_CONTENT_COLUMN_WIDTH, Math.round(estimated)),
+  );
 }
 
 function applyColumnWidths(

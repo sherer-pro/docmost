@@ -1,8 +1,12 @@
 import { Extension } from '@tiptap/core';
+import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
+import type { EditorView } from '@tiptap/pm/view';
 import {
   compareTableCellText,
+  findTable,
   getNextTableSortState,
+  sortTableNode,
   type TableSortDirection,
   type TableSortState,
 } from './utils';
@@ -14,10 +18,29 @@ const tableReadonlySortKey = new PluginKey('tableReadonlySort');
 const sortStates = new WeakMap<HTMLTableElement, TableSortState>();
 const originalOrders = new WeakMap<HTMLTableElement, HTMLTableRowElement[]>();
 
+type TableSortLabelKey = 'sortAscending' | 'sortDescending' | 'clearSort';
+
+interface TableReadonlySortOptions {
+  getLabel?: (key: TableSortLabelKey) => string;
+}
+
+const DEFAULT_LABELS: Record<TableSortLabelKey, string> = {
+  sortAscending: 'Sort ascending',
+  sortDescending: 'Sort descending',
+  clearSort: 'Clear sort',
+};
+
 const CHEVRON_SVG =
   '<svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true">' +
   '<path d="M2.5 4.5 L6 8 L9.5 4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />' +
   '</svg>';
+
+function getSortLabel(
+  options: TableReadonlySortOptions,
+  key: TableSortLabelKey,
+): string {
+  return options.getLabel?.(key) ?? DEFAULT_LABELS[key];
+}
 
 function getColumnIndex(th: HTMLTableCellElement): number {
   const row = th.parentElement as HTMLTableRowElement;
@@ -130,7 +153,10 @@ function isSortableTableDOM(table: HTMLTableElement): boolean {
   }
 
   return Array.from(firstRow.cells).every(
-    (cell) => cell.tagName === 'TH' && (cell.rowSpan ?? 1) === 1,
+    (cell) =>
+      cell.tagName === 'TH' &&
+      cell.colSpan === 1 &&
+      (cell.rowSpan ?? 1) === 1,
   );
 }
 
@@ -147,6 +173,7 @@ function ensureChevron(th: HTMLTableCellElement): HTMLSpanElement {
     chevron = document.createElement('span');
     chevron.className = CHEVRON_CLASS;
     chevron.setAttribute('aria-hidden', 'true');
+    chevron.setAttribute('contenteditable', 'false');
     chevron.innerHTML = CHEVRON_SVG;
     th.appendChild(chevron);
   }
@@ -154,7 +181,28 @@ function ensureChevron(th: HTMLTableCellElement): HTMLSpanElement {
   return chevron;
 }
 
-function updateChevrons(table: HTMLTableElement): void {
+function setAttributeIfChanged(
+  element: HTMLElement,
+  name: string,
+  value: string,
+): void {
+  if (element.getAttribute(name) !== value) {
+    element.setAttribute(name, value);
+  }
+}
+
+function removeAttributeIfPresent(element: HTMLElement, name: string): void {
+  if (element.hasAttribute(name)) {
+    element.removeAttribute(name);
+  }
+}
+
+function updateChevrons(
+  table: HTMLTableElement,
+  getLabel: (key: TableSortLabelKey) => string,
+  isEditable: boolean,
+  getState: (table: HTMLTableElement) => TableSortState | null,
+): void {
   if (!isSortableTableDOM(table)) {
     removeTableChevrons(table);
     return;
@@ -163,7 +211,7 @@ function updateChevrons(table: HTMLTableElement): void {
   const firstRow = table.querySelector('tr');
   if (!firstRow) return;
 
-  const state = sortStates.get(table) ?? null;
+  const state = getState(table);
   let col = 0;
 
   for (let i = 0; i < firstRow.cells.length; i += 1) {
@@ -184,24 +232,36 @@ function updateChevrons(table: HTMLTableElement): void {
     let label: string;
 
     if (state && state.col === col) {
-      chevron.setAttribute('data-sort', state.direction);
-      label = state.direction === 'asc' ? 'Sort descending' : 'Clear sort';
+      setAttributeIfChanged(chevron, 'data-sort', state.direction);
+      label =
+        state.direction === 'asc'
+          ? getLabel('sortDescending')
+          : getLabel(isEditable ? 'sortAscending' : 'clearSort');
     } else {
-      chevron.removeAttribute('data-sort');
-      label = 'Sort ascending';
+      removeAttributeIfPresent(chevron, 'data-sort');
+      label = getLabel('sortAscending');
     }
 
-    chevron.setAttribute('data-tooltip', label);
-    chevron.setAttribute('aria-label', label);
-    chevron.title = label;
+    setAttributeIfChanged(chevron, 'data-tooltip', label);
+    setAttributeIfChanged(chevron, 'aria-label', label);
+    if (chevron.title !== label) {
+      chevron.title = label;
+    }
     col += cell.colSpan ?? 1;
   }
 }
 
-function addChevronsToAllTables(editorRoot: HTMLElement): void {
+function addChevronsToAllTables(
+  editorRoot: HTMLElement,
+  getLabel: (key: TableSortLabelKey) => string,
+  isEditable: boolean,
+  getState: (table: HTMLTableElement) => TableSortState | null,
+): void {
   const tables = editorRoot.querySelectorAll<HTMLTableElement>('table');
 
-  tables.forEach((table) => updateChevrons(table));
+  tables.forEach((table) =>
+    updateChevrons(table, getLabel, isEditable, getState),
+  );
 }
 
 function removeAllChevrons(editorRoot: HTMLElement): void {
@@ -210,7 +270,11 @@ function removeAllChevrons(editorRoot: HTMLElement): void {
     .forEach((el) => el.remove());
 }
 
-function applyReadonlySort(table: HTMLTableElement, colIndex: number): void {
+function applyReadonlySort(
+  table: HTMLTableElement,
+  colIndex: number,
+  getLabel: (key: TableSortLabelKey) => string,
+): void {
   if (!isSortableTableDOM(table)) {
     return;
   }
@@ -245,19 +309,113 @@ function applyReadonlySort(table: HTMLTableElement, colIndex: number): void {
     tbody.append(headerRow, ...sorted);
   }
 
-  updateChevrons(table);
+  updateChevrons(table, getLabel, false, (sortedTable) => {
+    return sortStates.get(sortedTable) ?? null;
+  });
 }
 
-export const TableReadonlySort = Extension.create({
+function getNextEditableTableSortState(
+  current: TableSortState | null,
+  col: number,
+): TableSortState {
+  if (!current || current.col !== col || current.direction === 'desc') {
+    return { col, direction: 'asc' };
+  }
+
+  return { col, direction: 'desc' };
+}
+
+function getTableInfoFromDOM(
+  view: EditorView,
+  table: HTMLTableElement,
+): { node: ProseMirrorNode; pos: number } | null {
+  const candidates = [
+    table.querySelector('th,td'),
+    table.querySelector('tr'),
+    table.querySelector('tbody'),
+    table,
+  ].filter((node): node is Element => node !== null);
+
+  for (const candidate of candidates) {
+    for (const offset of [0, 1]) {
+      try {
+        const pos = view.posAtDOM(candidate, offset);
+        const tableInfo = findTable(view.state.doc.resolve(pos));
+
+        if (!tableInfo) {
+          continue;
+        }
+
+        const tableDOM = view.nodeDOM(tableInfo.pos);
+
+        if (tableDOM instanceof HTMLElement && tableDOM.contains(table)) {
+          return {
+            node: tableInfo.node,
+            pos: tableInfo.pos,
+          };
+        }
+      } catch {
+        // Ignore DOM positions that ProseMirror cannot map.
+      }
+    }
+  }
+
+  return null;
+}
+
+function applyEditableSort(
+  view: EditorView,
+  table: HTMLTableElement,
+  colIndex: number,
+  editableSortStates: Map<number, TableSortState>,
+): void {
+  const tableInfo = getTableInfoFromDOM(view, table);
+
+  if (!tableInfo) {
+    return;
+  }
+
+  const current =
+    editableSortStates.get(tableInfo.pos) ?? sortStates.get(table) ?? null;
+  const next = getNextEditableTableSortState(current, colIndex);
+  const sortedTable = sortTableNode(tableInfo.node, next.col, next.direction);
+
+  if (!sortedTable) {
+    return;
+  }
+
+  editableSortStates.set(tableInfo.pos, next);
+  sortStates.set(table, next);
+
+  view.dispatch(
+    view.state.tr
+      .replaceWith(
+        tableInfo.pos,
+        tableInfo.pos + tableInfo.node.nodeSize,
+        sortedTable,
+      )
+      .scrollIntoView(),
+  );
+}
+
+export const TableReadonlySort = Extension.create<TableReadonlySortOptions>({
   name: 'tableReadonlySort',
+
+  addOptions() {
+    return {
+      getLabel: undefined,
+    };
+  },
 
   addProseMirrorPlugins() {
     const editor = this.editor;
+    const getLabel = (key: TableSortLabelKey) =>
+      getSortLabel(this.options, key);
+    const editableSortStates = new Map<number, TableSortState>();
     let editorRoot: HTMLElement | null = null;
+    let lastEditable = editor.isEditable;
 
     const onClick = (event: MouseEvent) => {
-      if (editor.isEditable) return;
-
       if (!(event.target instanceof Element)) return;
 
       const chevron = event.target.closest(`.${CHEVRON_CLASS}`);
@@ -272,7 +430,14 @@ export const TableReadonlySort = Extension.create({
       const colIndex = getColumnIndex(th);
       if (colIndex < 0) return;
 
-      applyReadonlySort(table, colIndex);
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (editor.isEditable) {
+        applyEditableSort(editor.view, table, colIndex, editableSortStates);
+      } else {
+        applyReadonlySort(table, colIndex, getLabel);
+      }
     };
 
     return [
@@ -282,19 +447,29 @@ export const TableReadonlySort = Extension.create({
         view(editorView) {
           editorRoot = editorView.dom as HTMLElement;
           editorRoot.addEventListener('click', onClick);
-
-          if (!editor.isEditable) {
-            addChevronsToAllTables(editorRoot);
-          }
+          addChevronsToAllTables(
+            editorRoot,
+            getLabel,
+            editor.isEditable,
+            (table) => sortStates.get(table) ?? null,
+          );
 
           return {
-            update(view) {
+            update(view, prevState) {
               const root = view.dom as HTMLElement;
-              if (editor.isEditable) {
-                removeAllChevrons(root);
-              } else {
-                addChevronsToAllTables(root);
+              const editableChanged = lastEditable !== editor.isEditable;
+
+              if (!editableChanged && view.state.doc === prevState.doc) {
+                return;
               }
+
+              lastEditable = editor.isEditable;
+              addChevronsToAllTables(
+                root,
+                getLabel,
+                editor.isEditable,
+                (table) => sortStates.get(table) ?? null,
+              );
             },
             destroy() {
               if (editorRoot) {
