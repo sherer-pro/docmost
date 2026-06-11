@@ -188,10 +188,8 @@ export const mainExtensions = [
     },
   }),
   CustomTable.configure({
-    resizable: true,
-    lastColumnResizable: true,
     allowTableNodeSelection: true,
-    cellMinWidth: 49,
+    resizable: false,
     View: TableView,
   }),
   TableRow,

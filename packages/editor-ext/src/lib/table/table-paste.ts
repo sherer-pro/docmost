@@ -16,12 +16,6 @@ import { findTable } from './utils';
 
 const tablePasteKey = new PluginKey('tablePaste');
 
-const MIN_CONTENT_COLUMN_WIDTH = 72;
-const MAX_CONTENT_COLUMN_WIDTH = 320;
-const CONTENT_COLUMN_PADDING = 32;
-const AVERAGE_CHARACTER_WIDTH = 7;
-const LONG_WORD_CHARACTER_WIDTH = 8;
-
 export function parseTsvTable(text: string): string[][] | null {
   if (!text.includes('\t')) {
     return null;
@@ -53,24 +47,18 @@ export function createTableNodeFromRows(
   schema: Schema,
   rows: string[][],
 ): ProseMirrorNode {
-  const columnWidths = getContentAwareWidthsFromRows(rows);
-
   const tableRows = rows.map((row, rowIndex) => {
     const cellType =
       rowIndex === 0 ? schema.nodes.tableHeader : schema.nodes.tableCell;
 
-    const cells = row.map((cellText, columnIndex) => {
-      const attrs = columnWidths
-        ? { colwidth: [columnWidths[columnIndex]] }
-        : null;
-
-      return cellType.createChecked(attrs, [
+    const cells = row.map((cellText) =>
+      cellType.createChecked(null, [
         schema.nodes.paragraph.createChecked(
           null,
           cellText ? [schema.text(cellText)] : undefined,
         ),
-      ]);
-    });
+      ]),
+    );
 
     return schema.nodes.tableRow.createChecked(null, cells);
   });
@@ -393,20 +381,7 @@ export function normalizePastedTableHTML(html: string): string {
       changed = true;
     }
 
-    const colWidths = getExplicitTableColumnWidths(table);
-
-    if (hasAnyColumnWidth(colWidths)) {
-      applyColumnWidths(table, colWidths);
-      changed = true;
-      return;
-    }
-
-    const contentWidths = getContentAwareWidthsFromDOMTable(table);
-
-    if (contentWidths) {
-      applyColumnWidths(table, contentWidths);
-      changed = true;
-    }
+    changed = removeTableWidthHints(table) || changed;
   });
 
   return changed ? doc.body.innerHTML : html;
@@ -574,191 +549,54 @@ function parseDelimitedRows(text: string, delimiter: string): string[][] {
   return rows;
 }
 
-function getExplicitTableColumnWidths(
-  table: HTMLTableElement,
-): Array<number | null> {
-  const colgroupWidths = Array.from(
-    table.querySelectorAll<HTMLTableColElement>('colgroup > col'),
-  ).map((col) => getElementWidth(col));
+function removeTableWidthHints(table: HTMLTableElement): boolean {
+  let changed = false;
 
-  if (colgroupWidths.some((width) => width !== null)) {
-    return colgroupWidths;
+  if (table.hasAttribute('width')) {
+    table.removeAttribute('width');
+    changed = true;
   }
 
-  const firstRow = table.querySelector('tr');
-
-  if (!firstRow) {
-    return [];
-  }
-
-  const widths: Array<number | null> = [];
-  let col = 0;
-
-  Array.from(firstRow.cells).forEach((cell) => {
-    const colspan = cell.colSpan ?? 1;
-    const colwidth = getCellColwidth(cell, colspan);
-
-    if (colwidth) {
-      colwidth.forEach((width, index) => {
-        widths[col + index] = width;
-      });
-    } else if (colspan === 1) {
-      widths[col] = getElementWidth(cell);
+  ['width', 'min-width', 'max-width'].forEach((property) => {
+    if (table.style.getPropertyValue(property)) {
+      table.style.removeProperty(property);
+      changed = true;
     }
-
-    col += colspan;
   });
 
-  return widths;
-}
-
-function hasAnyColumnWidth(widths: Array<number | null>): boolean {
-  return widths.some((width) => width !== null);
-}
-
-function getContentAwareWidthsFromDOMTable(
-  table: HTMLTableElement,
-): number[] | null {
-  const rows = Array.from(table.querySelectorAll<HTMLTableRowElement>('tr'));
-
-  if (rows.length < 2) {
-    return null;
+  if (table.getAttribute('style') === '') {
+    table.removeAttribute('style');
+    changed = true;
   }
 
-  const textRows: string[][] = [];
-  let columnCount: number | null = null;
-
-  for (const row of rows) {
-    const cells = Array.from(row.cells);
-
-    if (
-      cells.length === 0 ||
-      cells.some(
-        (cell) => (cell.colSpan ?? 1) !== 1 || (cell.rowSpan ?? 1) !== 1,
-      )
-    ) {
-      return null;
-    }
-
-    if (columnCount === null) {
-      columnCount = cells.length;
-    } else if (cells.length !== columnCount) {
-      return null;
-    }
-
-    textRows.push(cells.map((cell) => cell.textContent ?? ''));
-  }
-
-  return getContentAwareWidthsFromRows(textRows);
-}
-
-function getContentAwareWidthsFromRows(rows: string[][]): number[] | null {
-  if (rows.length < 2 || rows[0].length < 2) {
-    return null;
-  }
-
-  const columnCount = rows[0].length;
-
-  if (
-    rows.some((row) => row.length !== columnCount) ||
-    rows.every((row) => row.every((cell) => cell.trim() === ''))
-  ) {
-    return null;
-  }
-
-  return Array.from({ length: columnCount }, (_value, columnIndex) => {
-    const columnTexts = rows.map((row) => row[columnIndex] ?? '');
-
-    return estimateColumnWidth(columnTexts);
+  table.querySelectorAll('colgroup').forEach((colgroup) => {
+    colgroup.remove();
+    changed = true;
   });
-}
 
-function estimateColumnWidth(texts: string[]): number {
-  const estimated = texts.reduce((maxWidth, text) => {
-    const normalized = text.replace(/\s+/g, ' ').trim();
-
-    if (!normalized) {
-      return maxWidth;
+  table.querySelectorAll<HTMLElement>('col, th, td').forEach((element) => {
+    if (element.hasAttribute('colwidth')) {
+      element.removeAttribute('colwidth');
+      changed = true;
     }
 
-    const longestWordLength = normalized
-      .split(' ')
-      .reduce((maxLength, word) => Math.max(maxLength, word.length), 0);
-    const textWidth =
-      Math.min(normalized.length, 36) * AVERAGE_CHARACTER_WIDTH +
-      CONTENT_COLUMN_PADDING;
-    const wordWidth =
-      longestWordLength * LONG_WORD_CHARACTER_WIDTH + CONTENT_COLUMN_PADDING;
+    if (element.hasAttribute('width')) {
+      element.removeAttribute('width');
+      changed = true;
+    }
 
-    return Math.max(maxWidth, textWidth, wordWidth);
-  }, MIN_CONTENT_COLUMN_WIDTH);
-
-  return Math.min(
-    MAX_CONTENT_COLUMN_WIDTH,
-    Math.max(MIN_CONTENT_COLUMN_WIDTH, Math.round(estimated)),
-  );
-}
-
-function applyColumnWidths(
-  table: HTMLTableElement,
-  widths: Array<number | null>,
-): void {
-  table.querySelectorAll<HTMLTableRowElement>('tr').forEach((row) => {
-    let col = 0;
-
-    Array.from(row.cells).forEach((cell) => {
-      const colspan = cell.colSpan ?? 1;
-      const cellWidths = widths.slice(col, col + colspan);
-
-      if (
-        cellWidths.length === colspan &&
-        cellWidths.every((width) => width !== null)
-      ) {
-        cell.setAttribute('colwidth', cellWidths.join(','));
+    ['width', 'min-width', 'max-width'].forEach((property) => {
+      if (element.style.getPropertyValue(property)) {
+        element.style.removeProperty(property);
+        changed = true;
       }
-
-      col += colspan;
     });
+
+    if (element.getAttribute('style') === '') {
+      element.removeAttribute('style');
+      changed = true;
+    }
   });
-}
 
-function getCellColwidth(
-  cell: HTMLTableCellElement,
-  colspan: number,
-): number[] | null {
-  const rawValue = cell.getAttribute('colwidth');
-
-  if (!rawValue) {
-    return null;
-  }
-
-  const widths = rawValue
-    .split(',')
-    .map((value) => parsePixelWidth(value))
-    .filter((value): value is number => value !== null);
-
-  return widths.length === colspan ? widths : null;
-}
-
-function getElementWidth(element: HTMLElement): number | null {
-  return (
-    parsePixelWidth(element.getAttribute('width')) ||
-    parsePixelWidth(element.style.width)
-  );
-}
-
-function parsePixelWidth(value: string | null): number | null {
-  if (!value) {
-    return null;
-  }
-
-  const match = value.trim().match(/^(\d+(?:\.\d+)?)(?:px)?$/i);
-
-  if (!match) {
-    return null;
-  }
-
-  const width = Math.round(Number(match[1]));
-
-  return Number.isFinite(width) && width > 0 ? width : null;
+  return changed;
 }
