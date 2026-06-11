@@ -1,7 +1,6 @@
 import {
   Accordion,
   ActionIcon,
-  Badge,
   Button,
   Container,
   Group,
@@ -383,12 +382,13 @@ export default function SpaceDictionary() {
                     }
                   >
                     {group.terms.map((term) => {
-                      const visibleForms = term.forms.slice(
-                        0,
-                        MAX_VISIBLE_FORMS,
-                      );
-                      const hiddenForms = term.forms.slice(MAX_VISIBLE_FORMS);
-                      const remainingFormsCount = hiddenForms.length;
+                      const isTermOpened = openedTermIds.includes(term.id);
+                      const visibleForms = isTermOpened
+                        ? term.forms
+                        : term.forms.slice(0, MAX_VISIBLE_FORMS);
+                      const remainingFormsCount = isTermOpened
+                        ? 0
+                        : term.forms.length - visibleForms.length;
 
                       return (
                         <Accordion.Item key={term.id} value={term.id}>
@@ -400,30 +400,27 @@ export default function SpaceDictionary() {
                                 </Text>
                                 {term.forms.length > 0 && (
                                   <Group gap={4} className={classes.formsList}>
-                                    {visibleForms.map((form) => (
-                                      <Badge
-                                        key={form}
-                                        variant="default"
-                                        color="gray"
-                                        size="sm"
-                                        tt="none"
-                                        className={classes.formBadge}
+                                    {visibleForms.map((form, index) => (
+                                      <Text
+                                        key={`${form}-${index}`}
+                                        component="span"
+                                        className={classes.formText}
                                       >
                                         {form}
-                                      </Badge>
+                                        {index < visibleForms.length - 1
+                                          ? ","
+                                          : ""}
+                                      </Text>
                                     ))}
                                     {remainingFormsCount > 0 && (
-                                      <Badge
-                                        variant="light"
-                                        color="gray"
-                                        size="sm"
-                                        tt="none"
-                                        className={classes.formBadge}
+                                      <Text
+                                        component="span"
+                                        className={classes.moreFormsText}
                                       >
                                         {t("+{{count}} more", {
                                           count: remainingFormsCount,
                                         })}
-                                      </Badge>
+                                      </Text>
                                     )}
                                   </Group>
                                 )}
@@ -461,24 +458,8 @@ export default function SpaceDictionary() {
                             </Group>
                           </Accordion.Control>
                           <Accordion.Panel>
-                            {openedTermIds.includes(term.id) && (
+                            {isTermOpened && (
                               <Stack gap="sm">
-                                {hiddenForms.length > 0 && (
-                                  <Group gap={4} className={classes.panelForms}>
-                                    {hiddenForms.map((form) => (
-                                      <Badge
-                                        key={form}
-                                        variant="default"
-                                        color="gray"
-                                        size="sm"
-                                        tt="none"
-                                        className={classes.formBadge}
-                                      >
-                                        {form}
-                                      </Badge>
-                                    ))}
-                                  </Group>
-                                )}
                                 <DictionaryMarkdown
                                   markdown={term.definitionMarkdown}
                                 />
