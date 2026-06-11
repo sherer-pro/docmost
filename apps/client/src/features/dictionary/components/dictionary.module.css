@@ -91,21 +91,21 @@
   overflow-wrap: anywhere;
 }
 
-.formsList,
-.panelForms {
+.formsList {
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
-.formBadge {
-  --badge-bg: light-dark(
-    var(--mantine-color-gray-1),
-    var(--mantine-color-dark-5)
-  );
-  --badge-bd: none;
-  --badge-color: var(--mantine-color-dimmed);
+.formText,
+.moreFormsText {
+  color: var(--mantine-color-dimmed);
+  font-size: var(--mantine-font-size-xs);
+  line-height: 1.35;
+}
 
-  border: 0;
+.moreFormsText {
   font-weight: 500;
+  white-space: nowrap;
 }
 
 .forms {
