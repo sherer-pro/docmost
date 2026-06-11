@@ -106,17 +106,6 @@
       text-align: left;
     }
 
-    .column-resize-handle {
-      background-color: var(--mantine-color-blue-5);
-      bottom: -1px;
-      position: absolute;
-      right: -1px;
-      pointer-events: none;
-      top: 0;
-      width: 2px;
-      z-index: 3;
-    }
-
     .selectedCell:after {
       background: rgba(200, 200, 255, 0.4);
       content: "";
