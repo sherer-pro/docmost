@@ -6,7 +6,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "test": "vitest run",
-    "test:security": "vitest run src/features/editor/components/code-block/mermaid-sanitizer.test.ts src/features/editor/components/embed/embed-provider.compat.test.ts src/features/editor/components/embed/embed-security.test.ts",
+    "test:security": "vitest run src/features/editor/components/code-block/mermaid-sanitizer.test.ts src/features/editor/components/embed/embed-provider.compat.test.ts src/features/editor/components/embed/embed-security.test.ts src/features/editor/extensions/link-extension.test.ts",
     "lint": "eslint .",
     "preview": "vite preview",
     "format": "prettier --write \"src/**/*.tsx\" \"src/**/*.ts\""
@@ -54,7 +54,7 @@
     "react-error-boundary": "^4.1.2",
     "react-helmet-async": "^2.0.5",
     "react-i18next": "^15.0.1",
-    "react-router-dom": "^7.12.0",
+    "react-router-dom": "^7.15.0",
     "semver": "^7.7.3",
     "socket.io-client": "^4.8.3",
     "tiptap-extension-global-drag-handle": "^0.1.18",
