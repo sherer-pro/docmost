@@ -29,7 +29,7 @@ export class ShareSeoController {
   private buildSafeMetaTitle(title?: string | null): string {
     const rawTitle = title ?? 'untitled';
     const trimmedTitle =
-      rawTitle.length > 80 ? `${rawTitle.slice(0, 77)}…` : rawTitle;
+      rawTitle.length > 80 ? `${rawTitle.slice(0, 77)}...` : rawTitle;
 
     return htmlEscape(trimmedTitle);
   }
@@ -94,6 +94,14 @@ export class ShareSeoController {
       );
 
       if (!share) {
+        return this.sendIndex(indexFilePath, res);
+      }
+
+      const sharingAllowed = await this.shareService.isSharingAllowed(
+        workspace.id,
+        share.spaceId,
+      );
+      if (!sharingAllowed) {
         return this.sendIndex(indexFilePath, res);
       }
 
