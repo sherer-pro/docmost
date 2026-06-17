@@ -19,9 +19,12 @@ pnpm verify:quick
 ## Covered regression classes
 
 - Share SEO title/meta escaping (`GHSA-h7fp-4f37-29wq`)
-- Mermaid SVG sanitization (`GHSA-r4hj-mc62-jmwj`)
+- Share SEO metadata suppression when workspace/space sharing is disabled.
+- Mermaid SVG sanitization and editor link URL sanitization (`GHSA-r4hj-mc62-jmwj`)
 - ZIP extraction traversal resistance and extraction quotas (`GHSA-54pm-hqxm-54wg`)
 - Embed URL scheme sanitization, same-origin relative URL rejection, shared frame-source allowlisting, and generic iframe sandbox hardening (`GHSA-qvxv-4pj5-64xq`)
+- PDF export SSRF resistance through Chromium resource request allowlisting.
+- Attachment MIME confusion resistance for inline-capable file extensions.
 - Forwarded-header spoofing resistance for rate limiting, session IP capture, request logging, and HTTPS/HSTS detection.
 - Legacy public attachment `?jwt=` query tokens are lower priority than header/cookie tokens and emit deprecation headers when used.
 
@@ -31,9 +34,11 @@ pnpm verify:quick
    - create a page with a title containing HTML/script payload.
    - open public share URL and inspect page source.
    - confirm payload is escaped in `<title>` and OpenGraph/Twitter meta tags.
+   - disable sharing at workspace or space level and confirm the share shell no longer includes page-specific title/meta tags.
 2. Mermaid:
    - insert a Mermaid block with SVG/script/event-handler payload.
    - confirm no script execution and diagram still renders safe labels.
+   - include `data:image/svg+xml`, `blob:`, protocol-relative URLs, and CSS `url(...)` payloads and confirm they are stripped.
 3. Embed:
    - try `javascript:`, `vbscript:`, `data:text/html`, and relative `/api/...` URLs in embed block.
    - confirm iframe is not rendered for rejected URLs.
@@ -52,6 +57,10 @@ pnpm verify:quick
 6. Public attachments:
    - open a public attachment URL with only legacy `?jwt=<token>` and confirm the response includes `Deprecation: true` and a `Warning` header.
    - repeat with `x-attachment-token` or attachment cookies and confirm no deprecation header is emitted.
+   - upload or seed an inline-capable extension with a mismatched MIME type and confirm it is served as a download with `application/octet-stream`.
+7. PDF export:
+   - export a page containing external image URLs, private-network URLs, and public attachment images.
+   - confirm only `data:` resources and same-origin public attachment URLs are fetched by Chromium.
 
 ## Alerting and triage
 

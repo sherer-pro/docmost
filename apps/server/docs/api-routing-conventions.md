@@ -48,6 +48,18 @@ Generated inventory reference:
 - Legacy compatibility aliases are intentionally preserved where migration safety is required (for example `/files/*` and select `/attachments/*` aliases).
 - Any alias route must have a documented deprecation path and backward-compatibility tests.
 
+## Read-like POST migration plan
+
+Several existing read-only endpoints still use `POST` for historical body-shaped queries (`/info`, `/recent`, `/ids`, `/pages`, `/lookup`, and similar routes). Do not add new read-only `POST` endpoints unless the request body is too complex for query parameters or the route intentionally requires CSRF semantics.
+
+Migration rules:
+
+- Add a canonical `GET` route for read-only operations when parameters can be represented as path/query values.
+- Keep the old `POST` route as a compatibility alias until older clients are no longer supported.
+- Add route inventory updates and tests that prove the `GET` and compatibility `POST` routes return equivalent results.
+- Document every retained read-like `POST` alias with a deprecation/removal condition.
+- Leave command-like routes (`/actions/*`, create/update/delete, imports, exports, revoke, unsync) as mutating methods.
+
 ## Databases API shape
 
 - Database CRUD:

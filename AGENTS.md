@@ -65,6 +65,7 @@
 ### Installation and baseline checks
 
 - Install dependencies: `pnpm install --frozen-lockfile`
+- If the local `pnpm` shim is missing, run `corepack enable` once or use `corepack pnpm ...`; root Nx/composite scripts expect `pnpm` to be on `PATH`.
 - Build the entire monorepo: `pnpm build`
 - Quick local verification (env contract + lint + backend test + frontend smoke + security suite): `pnpm verify:quick`
 - Full local verification (env contract + build → lint → backend tests + frontend smoke + frontend unit + security suite): `pnpm verify:full`
@@ -95,10 +96,10 @@
 - Full root test stage (default + frontend unit): `pnpm test:all`
 - Security regression suite (server + client targeted tests): `pnpm test:security`
 - Backend unit/integration: `pnpm --filter ./apps/server test`
-- Backend security subset (share SEO + ZIP traversal/quotas + attachment token fallback): `pnpm --filter ./apps/server test:security`
+- Backend security subset (share SEO + ZIP traversal/quotas + attachment token/MIME handling + PDF resource allowlist): `pnpm --filter ./apps/server test:security`
 - Frontend smoke test equivalent (build-based temporary target): `pnpm --filter ./apps/client build`
 - Frontend unit tests (Vitest): `pnpm --filter ./apps/client test`
-- Frontend security subset (Mermaid + embed sanitize/sandbox): `pnpm --filter ./apps/client test:security`
+- Frontend security subset (Mermaid + link/embed sanitize/sandbox): `pnpm --filter ./apps/client test:security`
 - Backend coverage: `pnpm --filter ./apps/server test:cov`
 - Backend coverage smoke (fast regression check): `pnpm --filter ./apps/server test:cov:smoke`
 - Backend alias smoke (verify tsconfig alias resolution in Jest): `pnpm --filter ./apps/server test:alias:smoke`
@@ -214,6 +215,9 @@ Minimum:
   - canonical file routes: `GET /api/attachments/files/:fileId/:fileName`, `GET /api/attachments/files/public/:fileId/:fileName`.
   - compatibility aliases are still enabled for older clients/content: `POST /api/files/upload`, `GET /api/files/:fileId/:fileName`, `GET /api/files/public/:fileId/:fileName`, `POST /api/attachments/upload-image`, `POST /api/attachments/remove-icon`.
   - public attachment `?jwt=` query tokens remain accepted only as a legacy fallback after header/cookie tokens; responses using the query token include deprecation headers.
+  - inline responses are allowed only for trusted extension/MIME pairs; spoofed inline extensions such as `.mp4` with HTML content are served as downloads with a safe content type.
+- PDF export runs Chromium with a resource allowlist: only `data:`, `about:blank`, and same-origin public attachment URLs are fetched; external URLs in page content are blocked.
+- File import fails the task if referenced attachment uploads fail after retries, preventing committed pages with broken attachment references.
 - Generic iframe embeds are blocked unless their exact origin is listed in `EMBED_ALLOWED_ORIGINS`; built-in providers use the shared frame-source allowlist and server CSP.
 - RAG API (`/api/rag/*`) is API-key-only:
   - pass `Authorization: Bearer <token>` from workspace API keys;
@@ -237,6 +241,7 @@ Minimum:
   - editor node types: `transclusionSource` and `transclusionReference`;
   - API routes: `POST /api/pages/transclusion/lookup`, `/references`, `/unsync-reference`, and public `POST /api/shares/transclusion/lookup`;
   - legacy `quoteSource` marks and `quoteEmbed` nodes are cleaned by migration and are no longer registered in the editor schema.
+- WebSocket relay accepts only `broadcast` envelopes targeting authorized `workspace-*`, `space-*`, or `user-*` rooms; nested realtime event operations are allowlisted server-side.
 - Root `start` script runs **backend prod**, but requires prebuilt `dist` (typically via `pnpm build`).
 - Backend production entrypoints are resolved from Nx/Nest build output under `apps/server/dist/apps/server/src/*` (not `apps/server/dist/main`).
 - Compose uses placeholders (`REPLACE_WITH_LONG_SECRET`, `STRONG_DB_PASSWORD`) — do not forget to replace them.
