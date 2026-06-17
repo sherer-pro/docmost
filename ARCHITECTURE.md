@@ -22,8 +22,11 @@ Security-sensitive cross-cutting behavior is centralized:
 - Page and space visibility is resolved through `PageAccessService`.
 - RAG routes use API-key auth and reject regular user JWT/cookie auth.
 - Link preview metadata fetching validates public destinations and pins the resolved IP for the outbound request.
+- Attachment uploads validate trusted signatures for inline-capable formats; attachment responses only render inline when stored MIME and extension match the safe inline allowlist.
+- PDF export uses Chromium request interception and only allows `data:`, `about:blank`, and same-origin public attachment URLs. Mermaid diagrams are rendered in strict mode and sanitized before insertion into the PDF DOM.
 - `X-Forwarded-*` request headers are trusted only when `TRUSTED_PROXIES` explicitly configures the reverse proxy IP/CIDR ranges. Rate limiting, session IP capture, request logging, and HTTPS/HSTS detection use the Fastify-resolved client request metadata.
 - Embed iframes are restricted by a shared provider frame-source policy used by both client validation and server CSP. Generic iframe origins must be explicitly configured through `EMBED_ALLOWED_ORIGINS`.
+- File import treats attachment upload failure as task failure so imported pages are not committed with broken attachment references.
 
 The database schema is managed through Kysely migrations in `apps/server/src/database/migrations`. Generated Kysely types live under `apps/server/src/database/types`.
 
@@ -38,7 +41,7 @@ Frontend configuration has two layers:
 
 ## Collaboration And Editor
 
-Realtime collaboration is handled by the backend collaboration entrypoints and websocket infrastructure. Editor node definitions and serializers live partly in `packages/editor-ext` so the client and server can share document behavior.
+Realtime collaboration is handled by the backend collaboration entrypoints and websocket infrastructure. General WebSocket relay accepts only `broadcast` envelopes to authorized rooms and allowlisted nested realtime event operations. Editor node definitions and serializers live partly in `packages/editor-ext` so the client and server can share document behavior.
 
 Synced blocks use `transclusionSource` and `transclusionReference` nodes. Server-side lookup and unsync logic is under `apps/server/src/core/page/transclusion`, while client lookup UI and node views are under `apps/client/src/features/editor/components/transclusion` and `apps/client/src/features/transclusion`.
 
@@ -63,5 +66,7 @@ Baseline local verification:
 1. `pnpm install --frozen-lockfile`
 2. `pnpm verify:quick`
 3. `pnpm verify:full` before release or broad architectural changes
+
+If `pnpm` is not on `PATH`, enable the Corepack shim first (`corepack enable`) or run direct package checks with `corepack pnpm ...`; root Nx/composite scripts expect the `pnpm` command to exist.
 
 Security regression coverage is available through `pnpm test:security`, and production dependency audit is run in CI with `pnpm audit --prod --audit-level high`.
