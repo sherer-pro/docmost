@@ -27,7 +27,7 @@
     "test:watch": "jest --config jest.config.cjs --watch",
     "test:cov": "jest --config jest.config.cjs --coverage",
     "test:cov:smoke": "jest --config jest.config.cjs --coverage --runInBand --testPathPatterns=coverage-smoke.spec.ts",
-    "test:security": "jest --config jest.config.cjs --runInBand --testPathPatterns=\"share-seo.controller.spec.ts|file.utils.spec.ts|attachment-public-token.util.spec.ts|attachment-file-access.service.spec.ts\"",
+    "test:security": "jest --config jest.config.cjs --runInBand --testPathPatterns=\"share-seo.controller.spec.ts|file.utils.spec.ts|file-validation.spec.ts|attachment-public-token.util.spec.ts|attachment-file-access.service.spec.ts|attachment.service.spec.ts|html-pdf-renderer.service.spec.ts\"",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --config jest.config.cjs --runInBand",
     "test:e2e": "jest --config test/jest-e2e.json",
     "test:alias:smoke": "jest --config test/jest-alias-smoke.json --runInBand"

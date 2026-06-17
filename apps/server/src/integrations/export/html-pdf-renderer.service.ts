@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { existsSync } from 'node:fs';
-import puppeteer, { Browser } from 'puppeteer-core';
+import puppeteer, { Browser, HTTPRequest, Page } from 'puppeteer-core';
 import { EnvironmentService } from '../environment/environment.service';
 
 const FALLBACK_CHROMIUM_PATHS = [
@@ -14,6 +14,46 @@ const FALLBACK_CHROMIUM_PATHS = [
 
 interface RenderPdfOptions {
   attachmentToken?: string;
+}
+
+const allowedPdfAttachmentPathPrefixes = [
+  '/api/attachments/files/public/',
+  '/api/files/public/',
+];
+
+const allowedPdfDataUrlPattern =
+  /^data:image\/(?:png|jpe?g|gif|webp);base64,[a-z0-9+/=\s]*$/i;
+
+export function isAllowedPdfResourceUrl(rawUrl: string, appUrl: string): boolean {
+  const normalizedUrl = rawUrl?.trim();
+  if (!normalizedUrl) {
+    return false;
+  }
+
+  if (normalizedUrl === 'about:blank') {
+    return true;
+  }
+
+  if (normalizedUrl.toLowerCase().startsWith('data:')) {
+    return allowedPdfDataUrlPattern.test(normalizedUrl);
+  }
+
+  let parsedUrl: URL;
+  let parsedAppUrl: URL;
+  try {
+    parsedUrl = new URL(normalizedUrl);
+    parsedAppUrl = new URL(appUrl);
+  } catch {
+    return false;
+  }
+
+  if (parsedUrl.origin !== parsedAppUrl.origin) {
+    return false;
+  }
+
+  return allowedPdfAttachmentPathPrefixes.some((prefix) =>
+    parsedUrl.pathname.startsWith(prefix),
+  );
 }
 
 @Injectable()
@@ -31,6 +71,7 @@ export class HtmlPdfRendererService {
       page = await browser.newPage();
       page.setDefaultNavigationTimeout(timeout);
       page.setDefaultTimeout(timeout);
+      await this.configureRequestInterception(page);
       const attachmentToken = opts.attachmentToken?.trim();
       if (attachmentToken) {
         await page.setExtraHTTPHeaders({
@@ -95,9 +136,82 @@ export class HtmlPdfRendererService {
 
         mermaid.initialize({
           startOnLoad: false,
-          securityLevel: 'loose',
+          securityLevel: 'strict',
           theme: 'default',
         });
+
+        const isSafeSvgUrl = (value: string): boolean => {
+          const normalizedValue = value.trim();
+          if (!normalizedValue) {
+            return true;
+          }
+
+          const lowerValue = normalizedValue.toLowerCase();
+          if (
+            lowerValue.startsWith('#') ||
+            (lowerValue.startsWith('/') && !lowerValue.startsWith('//')) ||
+            lowerValue.startsWith('./') ||
+            lowerValue.startsWith('../')
+          ) {
+            return true;
+          }
+
+          try {
+            const parsedUrl = new URL(normalizedValue, window.location.href);
+            return ['http:', 'https:'].includes(parsedUrl.protocol);
+          } catch {
+            return false;
+          }
+        };
+
+        const parseSafeSvg = (svg: string): SVGElement | null => {
+          const parser = new DOMParser();
+          const svgDoc = parser.parseFromString(svg, 'image/svg+xml');
+          const parserError = svgDoc.querySelector('parsererror');
+          const svgRoot = svgDoc.documentElement;
+          if (parserError || svgRoot?.tagName.toLowerCase() !== 'svg') {
+            return null;
+          }
+
+          const forbiddenTags = new Set(['script', 'iframe', 'object', 'embed']);
+          const uriAttrs = new Set(['href', 'xlink:href', 'src']);
+          const elements = [svgRoot, ...Array.from(svgRoot.querySelectorAll('*'))];
+
+          for (const element of elements) {
+            const tagName = element.tagName.toLowerCase();
+            if (forbiddenTags.has(tagName)) {
+              element.remove();
+              continue;
+            }
+
+            for (const attribute of Array.from(element.attributes)) {
+              const attrName = attribute.name.toLowerCase();
+              const attrValue = attribute.value;
+
+              if (attrName.startsWith('on')) {
+                element.removeAttribute(attribute.name);
+                continue;
+              }
+
+              if (attrName === 'style') {
+                const hasUnsafeCss =
+                  /expression\s*\(/i.test(attrValue) ||
+                  /url\s*\(/i.test(attrValue) ||
+                  /javascript\s*:/i.test(attrValue);
+                if (hasUnsafeCss) {
+                  element.removeAttribute(attribute.name);
+                }
+                continue;
+              }
+
+              if (uriAttrs.has(attrName) && !isSafeSvgUrl(attrValue)) {
+                element.removeAttribute(attribute.name);
+              }
+            }
+          }
+
+          return document.importNode(svgRoot, true) as unknown as SVGElement;
+        };
 
         const codeNodes = Array.from(
           document.querySelectorAll(
@@ -120,9 +234,14 @@ export class HtmlPdfRendererService {
           try {
             const renderId = `docmost-mermaid-${renderedCount++}`;
             const renderResult = await mermaid.render(renderId, source);
+            const svgRoot = parseSafeSvg(renderResult.svg);
+            if (!svgRoot) {
+              continue;
+            }
+
             const figure = document.createElement('figure');
             figure.className = 'docmost-mermaid-figure';
-            figure.innerHTML = renderResult.svg;
+            figure.replaceChildren(svgRoot);
             preNode.replaceWith(figure);
           } catch (err) {
             // Keep the original Mermaid source block if rendering fails.
@@ -144,6 +263,23 @@ export class HtmlPdfRendererService {
       );
       return null;
     }
+  }
+
+  private async configureRequestInterception(page: Page): Promise<void> {
+    const appUrl = this.environmentService.getAppUrl();
+    await page.setRequestInterception(true);
+    page.on('request', (request: HTTPRequest) => {
+      const action = isAllowedPdfResourceUrl(request.url(), appUrl)
+        ? request.continue()
+        : request.abort();
+
+      action.catch((err) => {
+        this.logger.warn(
+          `Failed to handle PDF resource request ${request.url()}`,
+          err,
+        );
+      });
+    });
   }
 
   private async launchBrowser(): Promise<Browser> {

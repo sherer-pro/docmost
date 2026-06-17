@@ -526,6 +526,9 @@ export class ImportAttachmentService {
           `Failed to upload ${uploadStats.failed} files:`,
           uploadStats.failedFiles,
         );
+        throw new Error(
+          `Attachment import failed for ${uploadStats.failed} file(s): ${uploadStats.failedFiles.join(', ')}`,
+        );
       }
     }
 

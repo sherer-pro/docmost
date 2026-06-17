@@ -37,9 +37,10 @@ describe('AttachmentFileAccessService', () => {
     return reply;
   }
 
-  function createService() {
+  function createService(attachmentOverride: Partial<typeof attachment> = {}) {
+    const resolvedAttachment = { ...attachment, ...attachmentOverride };
     const attachmentRepo = {
-      findById: jest.fn().mockResolvedValue(attachment),
+      findById: jest.fn().mockResolvedValue(resolvedAttachment),
     };
     const tokenService = {
       verifyJwt: jest.fn().mockResolvedValue({
@@ -98,5 +99,41 @@ describe('AttachmentFileAccessService', () => {
       'Warning',
       expect.stringContaining('Attachment jwt query tokens are deprecated'),
     );
+  });
+
+  it('keeps trusted inline image responses inline', async () => {
+    const { service } = createService({
+      fileExt: '.png',
+      fileName: 'image.png',
+      mimeType: 'image/png',
+    });
+    const req = { headers: {}, cookies: {} } as any;
+    const res = createReply();
+
+    await service.getPublicFile(req, res, workspace, fileId, 'query-token');
+
+    expect(res.header).not.toHaveBeenCalledWith(
+      'Content-Disposition',
+      expect.any(String),
+    );
+    expect(res.headerValues['Content-Type']).toBe('image/png');
+  });
+
+  it('serves spoofed inline extensions as downloads with safe content type', async () => {
+    const { service } = createService({
+      fileExt: '.mp4',
+      fileName: 'clip.mp4',
+      mimeType: 'text/html',
+    });
+    const req = { headers: {}, cookies: {} } as any;
+    const res = createReply();
+
+    await service.getPublicFile(req, res, workspace, fileId, 'query-token');
+
+    expect(res.header).toHaveBeenCalledWith(
+      'Content-Disposition',
+      'attachment; filename="clip.mp4"',
+    );
+    expect(res.headerValues['Content-Type']).toBe('application/octet-stream');
   });
 });

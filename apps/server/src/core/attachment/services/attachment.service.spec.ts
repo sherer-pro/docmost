@@ -87,6 +87,29 @@ describe('AttachmentService spoof validation', () => {
 
     expect(storageService.upload).not.toHaveBeenCalled();
   });
+
+  it('uploadFile rejects mp4 extension with html payload', async () => {
+    const htmlBuffer = Buffer.from('<!doctype html><script>alert(1)</script>');
+
+    const filePromise = Promise.resolve({
+      filename: 'clip.mp4',
+      mimetype: 'text/html',
+      file: Readable.from(htmlBuffer),
+      fields: {},
+    });
+
+    await expect(
+      service.uploadFile({
+        filePromise: filePromise as any,
+        pageId: 'page-id',
+        userId: 'user-id',
+        spaceId: 'space-id',
+        workspaceId: 'workspace-id',
+      }),
+    ).rejects.toThrow(BadRequestException);
+
+    expect(storageService.upload).not.toHaveBeenCalled();
+  });
 });
 
 describe('AttachmentService uploadFile attachment overwrite validation', () => {

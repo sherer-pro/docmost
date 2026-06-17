@@ -30,6 +30,7 @@ import { Queue } from 'bullmq';
 import { createByteCountingStream } from '../../../common/helpers/utils';
 import {
   readMagicBytesFromStream,
+  resolveTrustedMimeType,
   SAFE_FILE_VALIDATION_ERROR_MESSAGE,
   validateFileExtensionAndSignature,
 } from '../../../common/helpers/file-validation';
@@ -68,6 +69,11 @@ export class AttachmentService {
       fileName: preparedFile.fileName,
       fileBuffer: fileSignatureBuffer,
       safeErrorMessage: SAFE_FILE_VALIDATION_ERROR_MESSAGE,
+    });
+    preparedFile.mimeType = resolveTrustedMimeType({
+      fileExtension: preparedFile.fileExtension,
+      fileBuffer: fileSignatureBuffer,
+      fallbackMimeType: preparedFile.mimeType,
     });
 
     let isUpdate = false;
@@ -202,6 +208,11 @@ export class AttachmentService {
       fileBuffer: preparedFile.buffer,
       allowedExtensions: validImageExtensions,
       safeErrorMessage: SAFE_FILE_VALIDATION_ERROR_MESSAGE,
+    });
+    preparedFile.mimeType = resolveTrustedMimeType({
+      fileExtension: preparedFile.fileExtension,
+      fileBuffer: preparedFile.buffer,
+      fallbackMimeType: preparedFile.mimeType,
     });
 
     preparedFile.fileName = uuid4() + preparedFile.fileExtension;

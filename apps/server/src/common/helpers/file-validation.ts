@@ -14,6 +14,8 @@ const SIGNATURE_RULES: Record<string, string[]> = {
   '.jpeg': ['jpg'],
   '.png': ['png'],
   '.pdf': ['pdf'],
+  '.mp4': ['mp4'],
+  '.mov': ['mov'],
 };
 
 /**
@@ -63,6 +65,22 @@ export async function validateFileExtensionAndSignature(opts: {
   }
 }
 
+export function resolveTrustedMimeType(opts: {
+  fileExtension: string;
+  fileBuffer: Buffer;
+  fallbackMimeType?: string;
+}): string {
+  const { fileExtension, fileBuffer, fallbackMimeType } = opts;
+  const expectedSignatures = SIGNATURE_RULES[fileExtension.toLowerCase()];
+  const detected = detectFileTypeFromBuffer(fileBuffer);
+
+  if (expectedSignatures && detected && expectedSignatures.includes(detected.ext)) {
+    return detected.mime;
+  }
+
+  return fallbackMimeType || 'application/octet-stream';
+}
+
 /**
  * Reads magic bytes from a Node.js readable stream without losing data.
  * The consumed chunk is pushed back via `unshift` for downstream readers.
@@ -101,7 +119,7 @@ export async function readMagicBytesFromStream(
   });
 }
 
-function detectFileTypeFromBuffer(
+export function detectFileTypeFromBuffer(
   fileBuffer: Buffer,
 ): { ext: string; mime: string } | undefined {
   if (fileBuffer.length >= 4) {
@@ -127,6 +145,15 @@ function detectFileTypeFromBuffer(
   }
 
   if (fileBuffer.length >= 8) {
+    if (fileBuffer.toString('ascii', 4, 8) === 'ftyp') {
+      const majorBrand = fileBuffer.toString('ascii', 8, 12);
+      if (majorBrand === 'qt  ') {
+        return { ext: 'mov', mime: 'video/quicktime' };
+      }
+
+      return { ext: 'mp4', mime: 'video/mp4' };
+    }
+
     // PNG signature
     if (
       fileBuffer[0] === 0x89 &&

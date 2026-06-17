@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { FastifyReply, FastifyRequest } from 'fastify';
 import * as bytes from 'bytes';
+import { lookup as lookupMimeType } from 'mime-types';
 import { validate as isValidUUID } from 'uuid';
 import { AttachmentRepo } from '@docmost/db/repos/attachment/attachment.repo';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
@@ -18,6 +19,27 @@ import { JwtAttachmentPayload, JwtType } from '../../auth/dto/jwt-payload';
 import { inlineFileExtensions } from '../attachment.constants';
 import { resolveAttachmentAccessTokenDetails } from '../attachment-public-token.util';
 import { PageAccessService } from '../../page-access/page-access.service';
+
+const fallbackDownloadMimeType = 'application/octet-stream';
+
+const trustedInlineMimeTypesByExtension: Record<string, string[]> = {
+  '.jpg': ['image/jpeg'],
+  '.jpeg': ['image/jpeg'],
+  '.png': ['image/png'],
+  '.pdf': ['application/pdf'],
+  '.mp4': ['video/mp4'],
+  '.mov': ['video/quicktime'],
+};
+
+const dangerousDownloadMimeTypes = new Set([
+  'application/javascript',
+  'application/xhtml+xml',
+  'application/xml',
+  'image/svg+xml',
+  'text/html',
+  'text/javascript',
+  'text/xml',
+]);
 
 @Injectable()
 export class AttachmentFileAccessService {
@@ -211,10 +233,12 @@ export class AttachmentFileAccessService {
   ) {
     const fileSize = Number(attachment.fileSize);
     const rangeHeader = req.headers.range;
+    const shouldInline = this.shouldServeInline(attachment);
+    const contentType = this.getResponseContentType(attachment, shouldInline);
 
     res.header('Accept-Ranges', 'bytes');
 
-    if (!inlineFileExtensions.includes(attachment.fileExt)) {
+    if (!shouldInline) {
       res.header(
         'Content-Disposition',
         `attachment; filename="${encodeURIComponent(attachment.fileName)}"`,
@@ -242,7 +266,7 @@ export class AttachmentFileAccessService {
 
         res.status(206);
         res.headers({
-          'Content-Type': attachment.mimeType,
+          'Content-Type': contentType,
           'Content-Range': `bytes ${start}-${end}/${fileSize}`,
           'Content-Length': end - start + 1,
           'Cache-Control': `${cacheScope}, max-age=3600`,
@@ -255,7 +279,7 @@ export class AttachmentFileAccessService {
     const fileStream = await this.storageService.readStream(attachment.filePath);
 
     res.headers({
-      'Content-Type': attachment.mimeType,
+      'Content-Type': contentType,
       'Cache-Control': `${cacheScope}, max-age=3600`,
     });
 
@@ -265,5 +289,50 @@ export class AttachmentFileAccessService {
     }
 
     return res.send(fileStream);
+  }
+
+  private shouldServeInline(attachment: Attachment): boolean {
+    const fileExtension = attachment.fileExt?.toLowerCase() ?? '';
+    const mimeType = this.getBaseMimeType(attachment.mimeType);
+    const trustedMimeTypes = trustedInlineMimeTypesByExtension[fileExtension];
+
+    return (
+      inlineFileExtensions.includes(fileExtension) &&
+      Boolean(mimeType) &&
+      trustedMimeTypes?.includes(mimeType)
+    );
+  }
+
+  private getResponseContentType(
+    attachment: Attachment,
+    shouldInline: boolean,
+  ): string {
+    const fileExtension = attachment.fileExt?.toLowerCase() ?? '';
+    const storedMimeType = this.getBaseMimeType(attachment.mimeType);
+
+    if (shouldInline) {
+      return storedMimeType;
+    }
+
+    const trustedInlineMimeTypes = trustedInlineMimeTypesByExtension[fileExtension];
+    if (trustedInlineMimeTypes && !trustedInlineMimeTypes.includes(storedMimeType)) {
+      return fallbackDownloadMimeType;
+    }
+
+    const extensionMimeType = this.getBaseMimeType(
+      lookupMimeType(attachment.fileName) || undefined,
+    );
+    const candidateMimeType =
+      extensionMimeType || storedMimeType || fallbackDownloadMimeType;
+
+    if (dangerousDownloadMimeTypes.has(candidateMimeType)) {
+      return fallbackDownloadMimeType;
+    }
+
+    return candidateMimeType;
+  }
+
+  private getBaseMimeType(mimeType?: string | null): string {
+    return mimeType?.split(';')[0]?.trim().toLowerCase() || '';
   }
 }

@@ -9,6 +9,7 @@ jest.mock('../../common/utils/client-dist-path', () => ({
 describe('ShareSeoController', () => {
   const shareService = {
     getShareForPage: jest.fn(),
+    isSharingAllowed: jest.fn(),
   };
   const workspaceRepo = {
     findFirst: jest.fn(),
@@ -30,6 +31,7 @@ describe('ShareSeoController', () => {
 
     environmentService.isSelfHosted.mockReturnValue(true);
     workspaceRepo.findFirst.mockResolvedValue({ id: 'workspace-1' });
+    shareService.isSharingAllowed.mockResolvedValue(true);
   });
 
   it('escapes malicious titles before injecting title and meta tags', async () => {
@@ -52,6 +54,7 @@ describe('ShareSeoController', () => {
     jest.spyOn(fs, 'readFileSync').mockReturnValue(indexHtml);
 
     shareService.getShareForPage.mockResolvedValue({
+      spaceId: 'space-1',
       searchIndexing: false,
       sharedPage: {
         title: '"><script>alert(1)</script>',
@@ -84,5 +87,40 @@ describe('ShareSeoController', () => {
     );
     expect(renderedHtml).toContain('name="robots" content="noindex"');
     expect(renderedHtml).not.toContain('<script>alert(1)</script>');
+  });
+
+  it('does not inject share metadata when sharing is disabled', async () => {
+    const resolveClientDistPathMock =
+      resolveClientDistPath as jest.MockedFunction<typeof resolveClientDistPath>;
+    resolveClientDistPathMock.mockReturnValue('D:/tmp/client-dist');
+
+    jest.spyOn(fs, 'existsSync').mockReturnValue(true);
+    jest.spyOn(fs, 'createReadStream').mockReturnValue('index-stream' as any);
+
+    shareService.getShareForPage.mockResolvedValue({
+      spaceId: 'space-1',
+      searchIndexing: true,
+      sharedPage: {
+        title: 'Hidden title',
+      },
+    });
+    shareService.isSharingAllowed.mockResolvedValue(false);
+
+    const res = {
+      type: jest.fn().mockReturnThis(),
+      send: jest.fn(),
+    };
+
+    await controller.getShare(
+      res as any,
+      { raw: { headers: {} } } as any,
+      'share-1',
+      'some-page-slug-id',
+    );
+
+    expect(res.send).toHaveBeenCalledWith('index-stream');
+    expect(fs.createReadStream).toHaveBeenCalledWith(
+      expect.stringMatching(/index\.html$/),
+    );
   });
 });
