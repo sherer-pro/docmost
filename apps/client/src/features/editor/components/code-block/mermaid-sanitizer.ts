@@ -17,6 +17,20 @@ function parseSvgRoot(svg: string): Element | null {
   return htmlDoc.querySelector('svg');
 }
 
+function compactUrlForProtocolCheck(value: string): string {
+  let compactValue = '';
+
+  for (const char of value) {
+    const code = char.charCodeAt(0);
+    if (code <= 0x1f || code === 0x7f || char.trim() === '') {
+      continue;
+    }
+    compactValue += char;
+  }
+
+  return compactValue;
+}
+
 function isSafeUrl(value: string): boolean {
   const normalizedValue = value.trim();
   if (!normalizedValue) {
@@ -24,22 +38,27 @@ function isSafeUrl(value: string): boolean {
   }
 
   const lowerValue = normalizedValue.toLowerCase();
+  const compactLowerValue = compactUrlForProtocolCheck(lowerValue);
   if (
     lowerValue.startsWith('#') ||
-    lowerValue.startsWith('/') ||
+    (lowerValue.startsWith('/') && !lowerValue.startsWith('//')) ||
     lowerValue.startsWith('./') ||
     lowerValue.startsWith('../')
   ) {
     return true;
   }
 
-  if (lowerValue.startsWith('data:image/')) {
+  if (/^data:image\/(png|jpe?g|gif|webp);base64,/.test(compactLowerValue)) {
     return true;
+  }
+
+  if (compactLowerValue.startsWith('//')) {
+    return false;
   }
 
   try {
     const parsedUrl = new URL(normalizedValue, 'https://docmost.local');
-    return ['http:', 'https:', 'blob:'].includes(parsedUrl.protocol);
+    return ['http:', 'https:'].includes(parsedUrl.protocol);
   } catch {
     return false;
   }
@@ -82,7 +101,9 @@ export function sanitizeMermaidSvg(svg: string): string {
 
       if (attrName === 'style') {
         const hasUnsafeCss =
-          /expression\s*\(/i.test(attrValue) || /javascript\s*:/i.test(attrValue);
+          /expression\s*\(/i.test(attrValue) ||
+          /url\s*\(/i.test(attrValue) ||
+          /javascript\s*:/i.test(attrValue);
         if (hasUnsafeCss) {
           element.removeAttribute(attribute.name);
         }

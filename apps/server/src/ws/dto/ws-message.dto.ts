@@ -1,10 +1,25 @@
 import {
+  Equals,
   IsNotEmpty,
-  IsOptional,
+  IsObject,
   Matches,
   IsString,
   ValidateIf,
 } from 'class-validator';
+
+export const WS_ENVELOPE_OPERATION = 'broadcast';
+
+export const WS_RELAY_EVENT_OPERATIONS = [
+  'invalidate',
+  'invalidateComment',
+  'updateOne',
+  'deleteOne',
+  'addTreeNode',
+  'moveTreeNode',
+  'deleteTreeNode',
+  'refetchRootTreeNodeEvent',
+  'resolveComment',
+] as const;
 
 /**
  * DTO for incoming `message` WebSocket events.
@@ -20,8 +35,8 @@ export class WsMessageDto {
    * Operation name the client wants to broadcast inside an authorized room.
    */
   @IsString()
-  @IsNotEmpty()
-  operation: string;
+  @Equals(WS_ENVELOPE_OPERATION)
+  operation: typeof WS_ENVELOPE_OPERATION;
 
   /**
    * Explicit target room.
@@ -52,9 +67,8 @@ export class WsMessageDto {
   workspaceId?: string;
 
   /**
-   * Free-form event payload.
-   * Kept optional because the structure depends on `operation`.
+   * Event payload. Its operation is checked in WsGateway before rebroadcast.
    */
-  @IsOptional()
-  data?: unknown;
+  @IsObject()
+  data: Record<string, unknown>;
 }

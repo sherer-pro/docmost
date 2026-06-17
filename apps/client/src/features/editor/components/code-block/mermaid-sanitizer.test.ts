@@ -56,6 +56,50 @@ describe('sanitizeMermaidSvg', () => {
     assert.equal(sanitized.includes('style='), false);
   });
 
+  it('strips style attributes with url() payloads', () => {
+    const payload =
+      '<svg><g style="fill: url(javascript:alert(1))"><text>Node</text></g></svg>';
+
+    const sanitized = sanitizeMermaidSvg(payload);
+
+    assert.equal(sanitized.includes('url('), false);
+    assert.equal(sanitized.includes('style='), false);
+    assert.equal(sanitized.includes('Node'), true);
+  });
+
+  it('blocks svg data URLs and blob URLs in link attributes', () => {
+    const payload =
+      '<svg>' +
+      '<a href="data:image/svg+xml;base64,PHN2ZyBvbmxvYWQ9YWxlcnQoMSk+"><text>SVG data</text></a>' +
+      '<image href="blob:https://docmost.local/unsafe"></image>' +
+      '</svg>';
+
+    const sanitized = sanitizeMermaidSvg(payload);
+
+    assert.equal(sanitized.includes('data:image/svg+xml'), false);
+    assert.equal(sanitized.includes('blob:'), false);
+    assert.equal(sanitized.includes('SVG data'), true);
+  });
+
+  it('allows bitmap data URLs', () => {
+    const payload =
+      '<svg><image href="data:image/png;base64,iVBORw0KGgo="></image></svg>';
+
+    const sanitized = sanitizeMermaidSvg(payload);
+
+    assert.equal(sanitized.includes('data:image/png'), true);
+  });
+
+  it('blocks protocol-relative URLs', () => {
+    const payload =
+      '<svg><a href="//evil.example/phish"><text>Node</text></a></svg>';
+
+    const sanitized = sanitizeMermaidSvg(payload);
+
+    assert.equal(sanitized.includes('//evil.example'), false);
+    assert.equal(sanitized.includes('Node'), true);
+  });
+
   it('keeps labels when SVG is only parseable through HTML fallback', () => {
     const payload =
       '<svg><foreignObject><div xmlns="http://www.w3.org/1999/xhtml"><span>Label<br></span></div></foreignObject></svg>';
