@@ -85,10 +85,10 @@ describe('WsGateway.handleMessage', () => {
     const socket = createSocketMock(['space-space-a']);
 
     await gateway.handleMessage(socket as any, {
-      operation: 'updateOne',
+      operation: 'broadcast',
       targetRoom: 'space-space-a',
       spaceId: 'space-a',
-      data: { title: 'update' },
+      data: { operation: 'updateOne', title: 'update' },
     });
 
     expect(socket.broadcast.to).toHaveBeenCalledWith('space-space-a');
@@ -102,10 +102,10 @@ describe('WsGateway.handleMessage', () => {
     const socket = createSocketMock(['space-space-a']);
 
     await gateway.handleMessage(socket as any, {
-      operation: 'updateOne',
+      operation: 'broadcast',
       targetRoom: 'space-space-b',
       spaceId: 'space-b',
-      data: { pageId: 'p-2' },
+      data: { operation: 'updateOne', pageId: 'p-2' },
     });
 
     expect(socket.broadcast.to).not.toHaveBeenCalled();
@@ -115,10 +115,10 @@ describe('WsGateway.handleMessage', () => {
     const socket = createSocketMock(['workspace-workspace-a'], []);
 
     await gateway.handleMessage(socket as any, {
-      operation: 'workspace-event',
+      operation: 'broadcast',
       targetRoom: 'workspace-workspace-a',
       workspaceId: 'workspace-a',
-      data: { title: 'new title' },
+      data: { operation: 'invalidate', title: 'new title' },
     });
 
     expect(socket.broadcast.to).not.toHaveBeenCalled();
@@ -128,9 +128,9 @@ describe('WsGateway.handleMessage', () => {
     const socket = createSocketMock(['workspace-workspace-a']);
 
     await gateway.handleMessage(socket as any, {
-      operation: 'workspace-event',
+      operation: 'broadcast',
       targetRoom: 'workspace-workspace-a',
-      data: { title: 'new title' },
+      data: { operation: 'invalidate', title: 'new title' },
     });
 
     expect(socket.broadcast.to).not.toHaveBeenCalled();
@@ -140,10 +140,36 @@ describe('WsGateway.handleMessage', () => {
     const socket = createSocketMock(['space-space-a']);
 
     await gateway.handleMessage(socket as any, {
-      operation: 'updateOne',
+      operation: 'broadcast',
       targetRoom: 'space-space-a',
       spaceId: 'space-b',
-      data: { pageId: 'p-2' },
+      data: { operation: 'updateOne', pageId: 'p-2' },
+    });
+
+    expect(socket.broadcast.to).not.toHaveBeenCalled();
+  });
+
+  it('rejects unsupported envelope operations', async () => {
+    const socket = createSocketMock(['space-space-a']);
+
+    await gateway.handleMessage(socket as any, {
+      operation: 'updateOne',
+      targetRoom: 'space-space-a',
+      spaceId: 'space-a',
+      data: { operation: 'updateOne', pageId: 'p-2' },
+    });
+
+    expect(socket.broadcast.to).not.toHaveBeenCalled();
+  });
+
+  it('rejects unsupported nested event operations', async () => {
+    const socket = createSocketMock(['space-space-a']);
+
+    await gateway.handleMessage(socket as any, {
+      operation: 'broadcast',
+      targetRoom: 'space-space-a',
+      spaceId: 'space-a',
+      data: { operation: 'exfiltrate', pageId: 'p-2' },
     });
 
     expect(socket.broadcast.to).not.toHaveBeenCalled();

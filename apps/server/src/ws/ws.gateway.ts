@@ -13,7 +13,7 @@ import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 import * as cookie from 'cookie';
 import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
-import { WsMessageDto } from './dto/ws-message.dto';
+import { WS_RELAY_EVENT_OPERATIONS, WsMessageDto } from './dto/ws-message.dto';
 import { createCorsOriginValidator } from '../common/security/cors.util';
 import { PageAccessService } from '../core/page-access/page-access.service';
 import { UserRepo } from '@docmost/db/repos/user/user.repo';
@@ -112,6 +112,13 @@ export class WsGateway implements OnGatewayConnection, OnModuleDestroy {
     if (!this.isPayloadConsistent(payload)) {
       this.logger.warn(
         `Invalid targetRoom/spaceId/workspaceId combination from client ${client.id}`,
+      );
+      return;
+    }
+
+    if (!this.isRelayDataOperationAllowed(payload.data)) {
+      this.logger.warn(
+        `Invalid WS relay operation from client ${client.id}: ${String(payload.data?.operation)}`,
       );
       return;
     }
@@ -265,5 +272,12 @@ export class WsGateway implements OnGatewayConnection, OnModuleDestroy {
     }
 
     return null;
+  }
+
+  private isRelayDataOperationAllowed(data: Record<string, unknown>): boolean {
+    return (
+      typeof data.operation === 'string' &&
+      (WS_RELAY_EVENT_OPERATIONS as readonly string[]).includes(data.operation)
+    );
   }
 }

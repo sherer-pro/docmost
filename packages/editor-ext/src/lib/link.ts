@@ -2,6 +2,20 @@ import { mergeAttributes } from "@tiptap/core";
 import TiptapLink from "@tiptap/extension-link";
 import { Plugin } from "@tiptap/pm/state";
 import { EditorView } from "@tiptap/pm/view";
+import { sanitizeUrl } from "./utils";
+
+export function sanitizeLinkHref(href: unknown): string {
+  if (typeof href !== "string") {
+    return "";
+  }
+
+  const sanitizedHref = sanitizeUrl(href).trim();
+  if (!sanitizedHref || sanitizedHref.startsWith("//")) {
+    return "";
+  }
+
+  return sanitizedHref;
+}
 
 export const LinkExtension = TiptapLink.extend({
   inclusive: false,
@@ -9,41 +23,31 @@ export const LinkExtension = TiptapLink.extend({
   parseHTML() {
     return [
       {
-        tag: 'a[href]:not([data-type="button"]):not([href *= "javascript:" i])',
+        tag: 'a[href]:not([data-type="button"])',
         getAttrs: (element) => {
-          if (
-            element
-              .getAttribute("href")
-              ?.toLowerCase()
-              .startsWith("javascript:")
-          ) {
+          const href = sanitizeLinkHref(element.getAttribute("href"));
+          if (!href) {
             return false;
           }
 
-          return null;
+          return { href };
         },
       },
     ];
   },
 
   renderHTML({ HTMLAttributes }) {
-    if (HTMLAttributes.href?.toLowerCase().startsWith("javascript:")) {
-      return [
-        "a",
-        mergeAttributes(
-          this.options.HTMLAttributes,
-          { ...HTMLAttributes, href: "" },
-          { class: "link" },
-        ),
-        0,
-      ];
-    }
+    const href = sanitizeLinkHref(HTMLAttributes.href);
 
     return [
       "a",
-      mergeAttributes(this.options.HTMLAttributes, HTMLAttributes, {
-        class: "link",
-      }),
+      mergeAttributes(
+        this.options.HTMLAttributes,
+        { ...HTMLAttributes, href },
+        {
+          class: "link",
+        },
+      ),
       0,
     ];
   },
