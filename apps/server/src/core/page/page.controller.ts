@@ -893,22 +893,24 @@ export class PageController {
     }
 
     const result = await this.pageService.getRecentPages(user.id, pagination);
-    const accessRows = await Promise.all(
-      result.items.map(async (page) => {
-        const access = await this.pageAccessService.getEffectiveAccess(page, user);
-        return {
-          page,
-          access,
-        };
-      }),
+    const accessByPageId = await this.pageAccessService.getEffectiveAccessForPages(
+      result.items,
+      user,
     );
 
-    result.items = accessRows
-      .filter((entry) => entry.access.capabilities.canRead)
-      .map((entry) => ({
-        ...entry.page,
-        access: this.toAccessResponse(entry.access),
-      }));
+    result.items = result.items.flatMap((page) => {
+      const access = accessByPageId.get(page.id);
+      if (!access?.capabilities.canRead) {
+        return [];
+      }
+
+      return [
+        {
+          ...page,
+          access: this.toAccessResponse(access),
+        },
+      ];
+    });
 
     return result;
   }

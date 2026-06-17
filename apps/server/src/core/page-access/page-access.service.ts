@@ -274,6 +274,44 @@ export class PageAccessService {
     };
   }
 
+  private buildEffectiveAccess(
+    decision: AccessDecision,
+    userRule: PageAccessRule | null,
+    spaceRole: SpaceRole | null,
+    spaceArchivedAt: Date | null,
+  ): EffectivePageAccess {
+    const sources = [...decision.sources];
+    if (
+      sources.length === 1 &&
+      sources[0] !== 'space' &&
+      spaceRole &&
+      decision.decisionSource !== 'system'
+    ) {
+      sources.push('space');
+    }
+
+    if (
+      decision.decisionSource === 'page_group' &&
+      userRule?.effect === PageAccessEffect.DENY &&
+      !sources.includes('page_user')
+    ) {
+      sources.push('page_user');
+    }
+
+    return {
+      role: decision.role,
+      denied: decision.denied,
+      sources,
+      capabilities: this.resolveCapabilities(
+        decision,
+        spaceRole,
+        !!spaceArchivedAt,
+      ),
+      spaceRole,
+      isSystemAccess: decision.decisionSource === 'system',
+    };
+  }
+
   async getEffectiveAccess(
     page: Page,
     user: User,
@@ -316,36 +354,128 @@ export class PageAccessService {
       spaceRole,
     });
 
-    const sources = [...decision.sources];
-    if (
-      sources.length === 1 &&
-      sources[0] !== 'space' &&
-      spaceRole &&
-      decision.decisionSource !== 'system'
-    ) {
-      sources.push('space');
-    }
-
-    if (
-      decision.decisionSource === 'page_group' &&
-      userRule?.effect === PageAccessEffect.DENY &&
-      !sources.includes('page_user')
-    ) {
-      sources.push('page_user');
-    }
-
-    return {
-      role: decision.role,
-      denied: decision.denied,
-      sources,
-      capabilities: this.resolveCapabilities(
-        decision,
-        spaceRole,
-        !!spaceArchivedAt,
-      ),
+    return this.buildEffectiveAccess(
+      decision,
+      userRule,
       spaceRole,
-      isSystemAccess: decision.decisionSource === 'system',
-    };
+      spaceArchivedAt,
+    );
+  }
+
+  async getEffectiveAccessForPages(
+    pages: Page[],
+    user: User,
+  ): Promise<Map<string, EffectivePageAccess>> {
+    const accessByPageId = new Map<string, EffectivePageAccess>();
+    for (const page of pages) {
+      accessByPageId.set(page.id, this.noAccess());
+    }
+
+    const workspacePages = pages.filter(
+      (page) => page.workspaceId === user.workspaceId,
+    );
+    if (workspacePages.length === 0) {
+      return accessByPageId;
+    }
+
+    const pageIds = [...new Set(workspacePages.map((page) => page.id))];
+    const spaceIds = [...new Set(workspacePages.map((page) => page.spaceId))];
+    const isSystemBypass = this.isWorkspaceBypassUser(user, user.workspaceId);
+
+    const isSystemBypassBySpaceId = new Map<string, boolean>();
+    const spaceRoleBySpaceId = new Map<string, SpaceRole | null>();
+    const archivedAtBySpaceId = new Map<string, Date | null>();
+
+    await Promise.all(
+      spaceIds.map(async (spaceId) => {
+        const [spaceRole, spaceArchivedAt] = await Promise.all([
+          isSystemBypass
+            ? Promise.resolve(null)
+            : this.getHighestSpaceRole(user.id, spaceId),
+          this.getSpaceArchivedAt(spaceId),
+        ]);
+        spaceRoleBySpaceId.set(spaceId, spaceRole);
+        archivedAtBySpaceId.set(spaceId, spaceArchivedAt);
+        isSystemBypassBySpaceId.set(spaceId, isSystemBypass);
+      }),
+    );
+
+    if (isSystemBypass) {
+      for (const page of workspacePages) {
+        const decision = this.evaluateDecision({
+          isSystemBypass: true,
+          userRule: null,
+          groupRules: [],
+          spaceRole: null,
+        });
+        accessByPageId.set(
+          page.id,
+          this.buildEffectiveAccess(
+            decision,
+            null,
+            null,
+            archivedAtBySpaceId.get(page.spaceId) ?? null,
+          ),
+        );
+      }
+
+      return accessByPageId;
+    }
+
+    const groupIds = await this.groupUserRepo.getGroupIdsByUserId(user.id);
+    const [userRules, groupRules] = await Promise.all([
+      this.db
+        .selectFrom('pageAccessRules')
+        .selectAll()
+        .where('pageId', 'in', pageIds)
+        .where('principalType', '=', PageAccessPrincipalType.USER)
+        .where('userId', '=', user.id)
+        .execute(),
+      groupIds.length > 0
+        ? this.db
+            .selectFrom('pageAccessRules')
+            .selectAll()
+            .where('pageId', 'in', pageIds)
+            .where('principalType', '=', PageAccessPrincipalType.GROUP)
+            .where('groupId', 'in', groupIds)
+            .execute()
+        : Promise.resolve([]),
+    ]);
+
+    const userRuleByPageId = new Map<string, PageAccessRule>();
+    for (const rule of userRules) {
+      userRuleByPageId.set(rule.pageId, rule as PageAccessRule);
+    }
+
+    const groupRulesByPageId = new Map<string, PageAccessRule[]>();
+    for (const rule of groupRules) {
+      const existing = groupRulesByPageId.get(rule.pageId) ?? [];
+      existing.push(rule as PageAccessRule);
+      groupRulesByPageId.set(rule.pageId, existing);
+    }
+
+    for (const page of workspacePages) {
+      const userRule = userRuleByPageId.get(page.id) ?? null;
+      const spaceRole = spaceRoleBySpaceId.get(page.spaceId) ?? null;
+      const decision = this.evaluateDecision({
+        isSystemBypass: isSystemBypassBySpaceId.get(page.spaceId) ?? false,
+        userRule,
+        groupRules: groupRulesByPageId.get(page.id) ?? [],
+        spaceRole,
+      });
+
+      accessByPageId.set(
+        page.id,
+        this.buildEffectiveAccess(
+          decision,
+          userRule,
+          spaceRole,
+          archivedAtBySpaceId.get(page.spaceId) ?? null,
+        ),
+      );
+    }
+
+    return accessByPageId;
   }
 
   async getEffectiveAccessByPageId(
@@ -917,6 +1047,127 @@ export class PageAccessService {
     return highestByUser;
   }
 
+  private async getEffectiveAccessForUsers(
+    page: Page,
+    users: Array<Pick<User, 'id' | 'role' | 'workspaceId'>>,
+  ): Promise<Map<string, EffectivePageAccess>> {
+    const accessByUserId = new Map<string, EffectivePageAccess>();
+    const workspaceUsers = users.filter(
+      (user) => user.workspaceId === page.workspaceId,
+    );
+    if (workspaceUsers.length === 0) {
+      return accessByUserId;
+    }
+
+    const userIds = workspaceUsers.map((user) => user.id);
+    const groupRows = await this.db
+      .selectFrom('groupUsers')
+      .select(['userId', 'groupId'])
+      .where('userId', 'in', userIds)
+      .execute();
+
+    const groupIdsByUserId = new Map<string, string[]>();
+    for (const row of groupRows) {
+      const existing = groupIdsByUserId.get(row.userId) ?? [];
+      existing.push(row.groupId);
+      groupIdsByUserId.set(row.userId, existing);
+    }
+
+    const allGroupIds = [...new Set(groupRows.map((row) => row.groupId))];
+    const [
+      pageUserRules,
+      pageGroupRules,
+      spaceRoleByUserId,
+      spaceArchivedAt,
+    ] = await Promise.all([
+      this.db
+        .selectFrom('pageAccessRules')
+        .selectAll()
+        .where('pageId', '=', page.id)
+        .where('principalType', '=', PageAccessPrincipalType.USER)
+        .where('userId', 'in', userIds)
+        .execute(),
+      allGroupIds.length > 0
+        ? this.db
+            .selectFrom('pageAccessRules')
+            .selectAll()
+            .where('pageId', '=', page.id)
+            .where('principalType', '=', PageAccessPrincipalType.GROUP)
+            .where('groupId', 'in', allGroupIds)
+            .execute()
+        : Promise.resolve([]),
+      this.getUserSpaceRoleMap(page.spaceId, userIds),
+      this.getSpaceArchivedAt(page.spaceId),
+    ]);
+
+    const userRuleByUserId = new Map<string, PageAccessRule>();
+    for (const rule of pageUserRules) {
+      if (!rule.userId) {
+        continue;
+      }
+      userRuleByUserId.set(rule.userId, rule as PageAccessRule);
+    }
+
+    const groupRulesByGroupId = new Map<string, PageAccessRule[]>();
+    for (const rule of pageGroupRules) {
+      if (!rule.groupId) {
+        continue;
+      }
+      const existing = groupRulesByGroupId.get(rule.groupId) ?? [];
+      existing.push(rule as PageAccessRule);
+      groupRulesByGroupId.set(rule.groupId, existing);
+    }
+
+    for (const user of workspaceUsers) {
+      const isSystemBypass = this.isWorkspaceBypassUser(user as User, page.workspaceId);
+
+      const userRule = userRuleByUserId.get(user.id) ?? null;
+      const groupRules = (groupIdsByUserId.get(user.id) ?? []).flatMap(
+        (groupId) => groupRulesByGroupId.get(groupId) ?? [],
+      );
+      const spaceRole = spaceRoleByUserId.get(user.id) ?? null;
+
+      const decision = this.evaluateDecision({
+        isSystemBypass,
+        userRule,
+        groupRules,
+        spaceRole,
+      });
+      const sources = [...decision.sources];
+      if (
+        sources.length === 1 &&
+        sources[0] !== 'space' &&
+        spaceRole &&
+        decision.decisionSource !== 'system'
+      ) {
+        sources.push('space');
+      }
+
+      if (
+        decision.decisionSource === 'page_group' &&
+        userRule?.effect === PageAccessEffect.DENY &&
+        !sources.includes('page_user')
+      ) {
+        sources.push('page_user');
+      }
+
+      accessByUserId.set(user.id, {
+        role: decision.role,
+        denied: decision.denied,
+        sources,
+        capabilities: this.resolveCapabilities(
+          decision,
+          spaceRole,
+          !!spaceArchivedAt,
+        ),
+        spaceRole,
+        isSystemAccess: decision.decisionSource === 'system',
+      });
+    }
+
+    return accessByUserId;
+  }
+
   async filterUsersWithPageReadAccess(
     pageId: string,
     candidateUserIds: string[],
@@ -939,85 +1190,14 @@ export class PageAccessService {
       .where('deletedAt', 'is', null)
       .execute();
 
-    const groupRows = await this.db
-      .selectFrom('groupUsers')
-      .select(['userId', 'groupId'])
-      .where('userId', 'in', users.map((u) => u.id))
-      .execute();
+    const accessByUserId = await this.getEffectiveAccessForUsers(
+      page,
+      users as Array<Pick<User, 'id' | 'role' | 'workspaceId'>>,
+    );
 
-    const groupIdsByUserId = new Map<string, string[]>();
-    for (const row of groupRows) {
-      const existing = groupIdsByUserId.get(row.userId) ?? [];
-      existing.push(row.groupId);
-      groupIdsByUserId.set(row.userId, existing);
-    }
-
-    const allGroupIds = [...new Set(groupRows.map((row) => row.groupId))];
-    const [pageUserRules, pageGroupRules, spaceRoleByUserId] = await Promise.all([
-      this.db
-        .selectFrom('pageAccessRules')
-        .selectAll()
-        .where('pageId', '=', page.id)
-        .where('principalType', '=', PageAccessPrincipalType.USER)
-        .where('userId', 'in', users.map((u) => u.id))
-        .execute(),
-      allGroupIds.length > 0
-        ? this.db
-            .selectFrom('pageAccessRules')
-            .selectAll()
-            .where('pageId', '=', page.id)
-            .where('principalType', '=', PageAccessPrincipalType.GROUP)
-            .where('groupId', 'in', allGroupIds)
-            .execute()
-        : Promise.resolve([]),
-      this.getUserSpaceRoleMap(
-        page.spaceId,
-        users.map((u) => u.id),
-      ),
-    ]);
-
-    const userRuleByUserId = new Map<string, PageAccessRule>();
-    for (const rule of pageUserRules) {
-      if (!rule.userId) {
-        continue;
-      }
-      userRuleByUserId.set(rule.userId, rule as PageAccessRule);
-    }
-
-    const groupRulesByGroupId = new Map<string, PageAccessRule>();
-    for (const rule of pageGroupRules) {
-      if (!rule.groupId) {
-        continue;
-      }
-      groupRulesByGroupId.set(rule.groupId, rule as PageAccessRule);
-    }
-
-    const readableIds: string[] = [];
-
-    for (const user of users) {
-      const isSystemBypass =
-        user.role === UserRole.OWNER || user.role === UserRole.ADMIN;
-
-      const userRule = userRuleByUserId.get(user.id) ?? null;
-      const groupRules = (groupIdsByUserId.get(user.id) ?? [])
-        .map((groupId) => groupRulesByGroupId.get(groupId))
-        .filter((rule): rule is PageAccessRule => !!rule);
-      const spaceRole = spaceRoleByUserId.get(user.id) ?? null;
-
-      const decision = this.evaluateDecision({
-        isSystemBypass,
-        userRule,
-        groupRules,
-        spaceRole,
-      });
-      const capabilities = this.resolveCapabilities(decision, spaceRole);
-
-      if (capabilities.canRead) {
-        readableIds.push(user.id);
-      }
-    }
-
-    return readableIds;
+    return users
+      .filter((user) => accessByUserId.get(user.id)?.capabilities.canRead)
+      .map((user) => user.id);
   }
 
   async listEffectiveUsers(
@@ -1112,36 +1292,34 @@ export class PageAccessService {
       parseCursor: (cursor) => ({ id: cursor.id }),
     });
 
-    const userIds = paginatedUsers.items.map((user) => user.id);
-    const readableUserIds = new Set(
-      await this.filterUsersWithPageReadAccess(page.id, userIds),
+    const accessByUserId = await this.getEffectiveAccessForUsers(
+      page,
+      paginatedUsers.items.map((user) => ({
+        ...user,
+        workspaceId: page.workspaceId,
+      })) as Array<Pick<User, 'id' | 'role' | 'workspaceId'>>,
     );
 
-    paginatedUsers.items = (
-      await Promise.all(
-        paginatedUsers.items.map(async (user) => {
-          const effective = await this.getEffectiveAccess(page, {
-            ...user,
-            workspaceId: page.workspaceId,
-          } as User);
-          if (!effective.capabilities.canRead) {
-            return null;
-          }
+    paginatedUsers.items = paginatedUsers.items
+      .map((user) => {
+        const effective = accessByUserId.get(user.id);
+        if (!effective?.capabilities.canRead) {
+          return null;
+        }
 
-          return {
-            ...user,
-            type: 'user',
-            access: {
-              role: effective.role,
-              sources: effective.sources,
-              capabilities: effective.capabilities,
-              isSystemAccess: effective.isSystemAccess,
-              canClose: !effective.isSystemAccess && readableUserIds.has(user.id),
-            },
-          };
-        }),
-      )
-    ).filter((user): user is NonNullable<typeof user> => !!user);
+        return {
+          ...user,
+          type: 'user',
+          access: {
+            role: effective.role,
+            sources: effective.sources,
+            capabilities: effective.capabilities,
+            isSystemAccess: effective.isSystemAccess,
+            canClose: !effective.isSystemAccess,
+          },
+        };
+      })
+      .filter((user): user is NonNullable<typeof user> => !!user);
 
     return paginatedUsers;
   }
