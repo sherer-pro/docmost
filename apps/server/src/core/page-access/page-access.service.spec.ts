@@ -43,6 +43,18 @@ describe('PageAccessService', () => {
     workspaceId: 'workspace-1',
   } as any;
 
+  function createSelectQueryMock(rows: any[]) {
+    const query = {
+      selectAll: jest.fn(() => query),
+      select: jest.fn(() => query),
+      where: jest.fn(() => query),
+      execute: jest.fn().mockResolvedValue(rows),
+      executeTakeFirst: jest.fn().mockResolvedValue(rows[0]),
+    };
+
+    return query;
+  }
+
   beforeEach(() => {
     jest.clearAllMocks();
 
@@ -204,6 +216,70 @@ describe('PageAccessService', () => {
     expect(groupUserRepo.getGroupIdsByUserId).not.toHaveBeenCalled();
     expect(spaceMemberRepo.getUserSpaceRoles).not.toHaveBeenCalled();
     expect(pageAccessRuleRepo.findUserRule).not.toHaveBeenCalled();
+  });
+
+  it('batches effective access checks for multiple pages', async () => {
+    const userRuleQuery = createSelectQueryMock([
+      {
+        pageId: 'page-1',
+        principalType: PageAccessPrincipalType.USER,
+        userId: 'user-1',
+        effect: PageAccessEffect.ALLOW,
+        role: PageRole.WRITER,
+      },
+    ]);
+    const groupRuleQuery = createSelectQueryMock([
+      {
+        pageId: 'page-2',
+        principalType: PageAccessPrincipalType.GROUP,
+        groupId: 'group-1',
+        effect: PageAccessEffect.ALLOW,
+        role: PageRole.READER,
+      },
+    ]);
+    const db = {
+      selectFrom: jest
+        .fn()
+        .mockReturnValueOnce(userRuleQuery)
+        .mockReturnValueOnce(groupRuleQuery),
+    };
+    const batchService = new PageAccessService(
+      db as any,
+      pageRepo as any,
+      pageAccessRuleRepo as any,
+      groupUserRepo as any,
+      spaceMemberRepo as any,
+      pageHistoryRecorder as any,
+    );
+    jest.spyOn(batchService as any, 'getSpaceArchivedAt').mockResolvedValue(null);
+    groupUserRepo.getGroupIdsByUserId.mockResolvedValue(['group-1']);
+    spaceMemberRepo.getUserSpaceRoles.mockResolvedValue([
+      { userId: 'user-1', role: SpaceRole.READER },
+    ]);
+
+    const accessByPageId = await batchService.getEffectiveAccessForPages(
+      [
+        page,
+        {
+          id: 'page-2',
+          spaceId: 'space-1',
+          workspaceId: 'workspace-1',
+        },
+      ] as any[],
+      {
+        id: 'user-1',
+        role: UserRole.MEMBER,
+        workspaceId: 'workspace-1',
+      } as any,
+    );
+
+    expect(accessByPageId.get('page-1')?.role).toBe(PageRole.WRITER);
+    expect(accessByPageId.get('page-2')?.role).toBe(PageRole.READER);
+    expect(accessByPageId.get('page-2')?.capabilities.canRead).toBe(true);
+    expect(db.selectFrom).toHaveBeenCalledTimes(2);
+    expect(spaceMemberRepo.getUserSpaceRoles).toHaveBeenCalledTimes(1);
+    expect(pageAccessRuleRepo.findUserRule).not.toHaveBeenCalled();
+    expect(pageAccessRuleRepo.findGroupRules).not.toHaveBeenCalled();
   });
 
   it('keeps archived spaces readable but read-only for space writers', async () => {
