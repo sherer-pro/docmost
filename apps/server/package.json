@@ -39,6 +39,7 @@
     "@aws-sdk/client-s3": "3.982.0",
     "@aws-sdk/lib-storage": "3.982.0",
     "@aws-sdk/s3-request-presigner": "3.982.0",
+    "@docmost/api-contract": "workspace:*",
     "@fastify/cookie": "^11.0.2",
     "@fastify/multipart": "^9.4.0",
     "@fastify/proxy-addr": "5.0.0",

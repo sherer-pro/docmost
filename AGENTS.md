@@ -11,6 +11,8 @@
   - `packages/editor-ext` — shared TypeScript package with editor extensions.
   - `packages/api-contract` — shared API-facing TypeScript contracts.
 - Root package manager is pinned: `pnpm@10.4.0`.
+- Workspace-level pnpm settings (`overrides`, `patchedDependencies`) live in `pnpm-workspace.yaml`, not in the root `package.json`.
+- Root composite scripts call `corepack pnpm` internally, so `corepack pnpm verify:full` works even when a global `pnpm` shim is not on `PATH`.
 - `node:22-slim` is used for the production image.
 
 ---
@@ -47,7 +49,7 @@
 - `apps/client/public/locales/*` — JSON translations.
 - `apps/server/src/database` — migrations and DB tooling.
 - `packages/editor-ext/src/lib/{audio,pdf,transclusion}` — editor nodes for audio, embedded PDFs, and synced blocks.
-- `packages/api-contract/src` — shared API-facing TypeScript contracts used by server/client code.
+- `packages/api-contract/src` — shared API-facing TypeScript contracts used by server/client code; it builds to `packages/api-contract/dist` for runtime server consumption.
 - `patches/` — pnpm patch files (for example, for `react-arborist`).
 - `packages/ee`, `apps/*/src/ee` — Enterprise code (separate license).
 
@@ -65,14 +67,14 @@
 ### Installation and baseline checks
 
 - Install dependencies: `pnpm install --frozen-lockfile`
-- If the local `pnpm` shim is missing, run `corepack enable` once or use `corepack pnpm ...`; root Nx/composite scripts expect `pnpm` to be on `PATH`.
+- If the local `pnpm` shim is missing, use `corepack pnpm ...`; root composite scripts and explicit Nx build targets are Corepack-safe.
 - Build the entire monorepo: `pnpm build`
 - Quick local verification (env contract + lint + backend test + frontend smoke + security suite): `pnpm verify:quick`
 - Full local verification (env contract + build → lint → backend tests + frontend smoke + frontend unit + security suite): `pnpm verify:full`
 - Clean build artifacts: `pnpm clean`
 - Check `.env.example`, local `.env`, server validation, and frontend runtime env drift: `pnpm check:env`
 - Regenerate backend route inventory from controllers: `pnpm routes:inventory`
-- Check route inventory drift (regenerates and fails on diff): `pnpm routes:inventory:check`
+- Check route inventory drift without rewriting the generated file: `pnpm routes:inventory:check`
 
 ### Development
 
@@ -187,8 +189,8 @@ Minimum:
 - Dependency updates: via `pnpm up` (targeted by package or workspace).
 - Security/audit:
   - baseline: `pnpm audit`
-  - additionally account for `pnpm.overrides` in root `package.json` (used to pin vulnerable/conflicting package versions).
-- Dependency patches: keep and maintain them in `patches/` and in `pnpm.patchedDependencies`.
+  - additionally account for `overrides` in `pnpm-workspace.yaml` (used to pin vulnerable/conflicting package versions).
+- Dependency patches: keep and maintain them in `patches/` and in `patchedDependencies` inside `pnpm-workspace.yaml`.
 
 ---
 
@@ -244,6 +246,7 @@ Minimum:
 - WebSocket relay accepts only `broadcast` envelopes targeting authorized `workspace-*`, `space-*`, or `user-*` rooms; nested realtime event operations are allowlisted server-side.
 - Root `start` script runs **backend prod**, but requires prebuilt `dist` (typically via `pnpm build`).
 - Backend production entrypoints are resolved from Nx/Nest build output under `apps/server/dist/apps/server/src/*` (not `apps/server/dist/main`).
+- The production image copies runtime workspace package builds for `packages/editor-ext` and `packages/api-contract`; keep their package manifests and `dist` outputs in sync with server imports.
 - Compose uses placeholders (`REPLACE_WITH_LONG_SECRET`, `STRONG_DB_PASSWORD`) — do not forget to replace them.
 - Web Push compose defaults are intentionally empty; set all VAPID variables together when enabling push notifications.
 - `migration:codegen` reads env from `../../.env`; if the file is missing, the command fails.
