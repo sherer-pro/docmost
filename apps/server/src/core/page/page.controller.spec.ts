@@ -96,6 +96,9 @@ describe('PageController guardrails and mixed-id contract', () => {
     hasAnyReadablePageInSpace: jest.fn(async () => true),
     isWorkspaceBypassUser: jest.fn(() => false),
   };
+  const linkPreviewService = {
+    getPreview: jest.fn(),
+  };
 
   const controller = new PageController(
     pageService as any,
@@ -106,6 +109,7 @@ describe('PageController guardrails and mixed-id contract', () => {
     pageAccessService as any,
     labelService as any,
     backlinkService as any,
+    linkPreviewService as any,
   );
 
   beforeEach(() => {
@@ -133,7 +137,6 @@ describe('PageController guardrails and mixed-id contract', () => {
     await expect(
       controller.getSidebarPages(
         { pageId: 'p1', spaceId: 'space-b' } as any,
-        {} as any,
         { id: 'u1' } as any,
       ),
     ).rejects.toBeInstanceOf(BadRequestException);

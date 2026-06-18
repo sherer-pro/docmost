@@ -13,7 +13,11 @@ import { CommentService } from './comment.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { UpdateCommentDto } from './dto/update-comment.dto';
 import { ResolveCommentDto } from './dto/resolve-comment.dto';
-import { PageIdDto, CommentIdDto } from './dto/comments.input';
+import {
+  PageCommentsQueryDto,
+  PageIdDto,
+  CommentIdDto,
+} from './dto/comments.input';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
 import { AuthWorkspace } from '../../common/decorators/auth-workspace.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -60,9 +64,7 @@ export class CommentController {
   @HttpCode(HttpStatus.OK)
   @Post('/')
   async findPageComments(
-    @Body() input: PageIdDto,
-    @Body()
-    pagination: PaginationOptions,
+    @Body() input: PageCommentsQueryDto,
     @AuthUser() user: User,
   ) {
     const page = await this.pageRepo.findById(input.pageId);
@@ -71,7 +73,7 @@ export class CommentController {
     }
 
     await this.pageAccessService.assertCanReadPage(page, user);
-    return this.commentService.findByPageId(page.id, pagination);
+    return this.commentService.findByPageId(page.id, input);
   }
 
   @HttpCode(HttpStatus.OK)

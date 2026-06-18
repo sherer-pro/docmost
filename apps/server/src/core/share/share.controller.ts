@@ -3,10 +3,12 @@ import {
   Body,
   Controller,
   ForbiddenException,
+  Get,
   HttpCode,
   HttpStatus,
   NotFoundException,
   Post,
+  Query,
   Res,
   UseGuards,
 } from '@nestjs/common';
@@ -50,12 +52,32 @@ export class ShareController {
   ) {}
 
   @HttpCode(HttpStatus.OK)
+  @Get('/')
+  async getSharesViaQuery(
+    @AuthUser() user: User,
+    @Query() pagination: PaginationOptions,
+  ) {
+    return this.getShares(user, pagination);
+  }
+
+  @HttpCode(HttpStatus.OK)
   @Post('/')
   async getShares(
     @AuthUser() user: User,
     @Body() pagination: PaginationOptions,
   ) {
     return this.shareRepo.getShares(user.id, pagination);
+  }
+
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  @Get('/page-info')
+  async getSharedPageInfoViaQuery(
+    @Query() dto: ShareInfoDto,
+    @AuthWorkspace() workspace: Workspace,
+    @Res({ passthrough: true }) res: FastifyReply,
+  ) {
+    return this.getSharedPageInfo(dto, workspace, res);
   }
 
   @Public()
@@ -98,6 +120,13 @@ export class ShareController {
 
   @Public()
   @HttpCode(HttpStatus.OK)
+  @Get('/info')
+  async getShareViaQuery(@Query() dto: ShareIdDto) {
+    return this.getShare(dto);
+  }
+
+  @Public()
+  @HttpCode(HttpStatus.OK)
   @Post('/info')
   async getShare(@Body() dto: ShareIdDto) {
     const share = await this.shareRepo.findById(dto.shareId, {
@@ -117,6 +146,16 @@ export class ShareController {
     }
 
     return share;
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Get('/for-page')
+  async getShareForPageViaQuery(
+    @Query() dto: SharePageIdDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.getShareForPage(dto, user, workspace);
   }
 
   @HttpCode(HttpStatus.OK)
@@ -215,6 +254,16 @@ export class ShareController {
       dto.references,
       workspace.id,
     );
+  }
+
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  @Get('/tree')
+  async getSharePageTreeViaQuery(
+    @Query() dto: ShareIdDto,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.getSharePageTree(dto, workspace);
   }
 
   @Public()

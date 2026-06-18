@@ -14,6 +14,7 @@ import { Transform } from 'class-transformer';
 import { LabelType } from '@docmost/db/repos/label/label.repo';
 import { PageIdDto } from '../../page/dto/page.dto';
 import { normalizeLabelName } from '../utils';
+import { PaginationOptions } from '../../../database/pagination/pagination-options';
 
 const SUPPORTED_LABEL_TYPES: LabelType[] = [LabelType.PAGE];
 
@@ -62,4 +63,28 @@ export class ListLabelsDto {
   @IsString()
   @IsIn(SUPPORTED_LABEL_TYPES)
   type: LabelType;
+}
+
+export class ListLabelsRequestDto extends PaginationOptions {
+  @IsString()
+  @IsIn(SUPPORTED_LABEL_TYPES)
+  type: LabelType;
+}
+
+export class FindPagesByLabelRequestDto extends PaginationOptions {
+  @IsOptional()
+  @IsUUID()
+  labelId?: string;
+
+  @IsOptional()
+  @IsString()
+  @Transform(({ value }) =>
+    typeof value === 'string' ? normalizeLabelName(value) : value,
+  )
+  @MaxLength(100)
+  name?: string;
+
+  @IsOptional()
+  @IsUUID()
+  spaceId?: string;
 }

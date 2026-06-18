@@ -3,10 +3,12 @@ import {
   Body,
   Controller,
   ForbiddenException,
+  Get,
   HttpCode,
   HttpStatus,
   NotFoundException,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
@@ -21,7 +23,10 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PageAccessService } from '../page-access/page-access.service';
 import { AddFavoriteDto, RemoveFavoriteDto } from './dto/favorite.dto';
 import { FavoriteIdsDto } from './dto/favorite-ids.dto';
-import { ListFavoritesDto } from './dto/list-favorites.dto';
+import {
+  ListFavoritesDto,
+  ListFavoritesQueryDto,
+} from './dto/list-favorites.dto';
 import { FavoriteService } from './favorite.service';
 
 @UseGuards(JwtAuthGuard)
@@ -68,6 +73,16 @@ export class FavoriteController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @Get('ids')
+  async getFavoriteIdsViaQuery(
+    @Query() dto: FavoriteIdsDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.getFavoriteIds(dto, user, workspace);
+  }
+
+  @HttpCode(HttpStatus.OK)
   @Post('ids')
   async getFavoriteIds(
     @Body() dto: FavoriteIdsDto,
@@ -83,15 +98,23 @@ export class FavoriteController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @Get()
+  async getUserFavoritesViaQuery(
+    @Query() query: ListFavoritesQueryDto,
+    @AuthUser() user: User,
+  ) {
+    return this.getUserFavorites(query, user);
+  }
+
+  @HttpCode(HttpStatus.OK)
   @Post()
   async getUserFavorites(
-    @Body() dto: ListFavoritesDto,
-    @Body() pagination: PaginationOptions,
+    @Body() dto: ListFavoritesQueryDto,
     @AuthUser() user: User,
   ) {
     return this.favoriteService.getUserFavorites(
       user,
-      pagination,
+      dto,
       dto.type as FavoriteType | undefined,
       dto.spaceId,
     );

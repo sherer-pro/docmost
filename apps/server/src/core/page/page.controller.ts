@@ -3,24 +3,27 @@ import {
   Body,
   Controller,
   ForbiddenException,
+  Get,
   HttpCode,
   HttpStatus,
   NotFoundException,
   Param,
   Post,
   ParseUUIDPipe,
+  Query,
   UseGuards,
 } from '@nestjs/common';
-import { load } from 'cheerio';
 import { PageService } from './services/page.service';
 import { CreatePageDto } from './dto/create-page.dto';
 import { UpdatePageDto } from './dto/update-page.dto';
 import { MovePageDto, MovePageToSpaceDto } from './dto/move-page.dto';
 import {
   DeletePageDto,
+  PageHistoryQueryDto,
   PageHistoryIdDto,
   PageIdDto,
   PageInfoDto,
+  PageLabelsQueryDto,
 } from './dto/page.dto';
 import { PageHistoryService } from './services/page-history.service';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
@@ -28,21 +31,21 @@ import { AuthWorkspace } from '../../common/decorators/auth-workspace.decorator'
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import { User, Workspace } from '@docmost/db/types/entity.types';
-import { SidebarPageDto } from './dto/sidebar-page.dto';
+import { SidebarPageDto, SidebarPagesQueryDto } from './dto/sidebar-page.dto';
 import {
   SpaceCaslAction,
   SpaceCaslSubject,
 } from '../casl/interfaces/space-ability.type';
 import SpaceAbilityFactory from '../casl/abilities/space-ability.factory';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
-import { RecentPageDto } from './dto/recent-page.dto';
+import { RecentPageDto, RecentPagesQueryDto } from './dto/recent-page.dto';
 import { DuplicatePageDto } from './dto/duplicate-page.dto';
-import { DeletedPageDto } from './dto/deleted-page.dto';
+import { DeletedPageDto, DeletedPagesQueryDto } from './dto/deleted-page.dto';
 import { LinkPreviewDto } from './dto/link-preview.dto';
 import { AddLabelsDto, RemoveLabelDto } from '../label/dto/label.dto';
 import { LabelService } from '../label/label.service';
 import { BacklinkService } from './services/backlink.service';
-import { BacklinksListDto } from './dto/backlink.dto';
+import { BacklinksListDto, BacklinksListQueryDto } from './dto/backlink.dto';
 import {
   jsonToHtml,
   jsonToMarkdown,
@@ -52,11 +55,6 @@ import {
   mapPageCustomFields,
   mapPageResponse,
 } from './mappers/page-response.mapper';
-import { lookup as dnsLookup } from 'node:dns/promises';
-import type { IncomingHttpHeaders, IncomingMessage } from 'node:http';
-import { request as httpRequest } from 'node:http';
-import { request as httpsRequest } from 'node:https';
-import { BlockList, isIP } from 'node:net';
 import { PageAccessService } from '../page-access/page-access.service';
 import { PageRole } from '../../common/helpers/types/permission';
 import {
@@ -66,60 +64,7 @@ import {
   GrantPageUserAccessDto,
   ResolvePageAccessUsersDto,
 } from './dto/page-access.dto';
-
-const LINK_PREVIEW_TIMEOUT_MS = 7000;
-const LINK_PREVIEW_MAX_REDIRECTS = 5;
-const LINK_PREVIEW_MAX_RESPONSE_BYTES = 1_000_000;
-const LINK_PREVIEW_BLOCKED_HOST_SUFFIXES = [
-  '.localhost',
-  '.local',
-  '.internal',
-];
-
-type LinkPreviewAddress = {
-  address: string;
-  family: 4 | 6;
-};
-
-type LinkPreviewResponse = {
-  statusCode: number;
-  headers: IncomingHttpHeaders;
-  body: IncomingMessage;
-};
-
-function buildLinkPreviewBlockList(): BlockList {
-  const blockList = new BlockList();
-
-  // Private, local, and non-routable IPv4 ranges.
-  blockList.addSubnet('0.0.0.0', 8, 'ipv4');
-  blockList.addSubnet('10.0.0.0', 8, 'ipv4');
-  blockList.addSubnet('100.64.0.0', 10, 'ipv4');
-  blockList.addSubnet('127.0.0.0', 8, 'ipv4');
-  blockList.addSubnet('169.254.0.0', 16, 'ipv4');
-  blockList.addSubnet('172.16.0.0', 12, 'ipv4');
-  blockList.addSubnet('192.0.0.0', 24, 'ipv4');
-  blockList.addSubnet('192.0.2.0', 24, 'ipv4');
-  blockList.addSubnet('192.88.99.0', 24, 'ipv4');
-  blockList.addSubnet('192.168.0.0', 16, 'ipv4');
-  blockList.addSubnet('198.18.0.0', 15, 'ipv4');
-  blockList.addSubnet('198.51.100.0', 24, 'ipv4');
-  blockList.addSubnet('203.0.113.0', 24, 'ipv4');
-  blockList.addSubnet('224.0.0.0', 4, 'ipv4');
-  blockList.addSubnet('240.0.0.0', 4, 'ipv4');
-  blockList.addAddress('255.255.255.255', 'ipv4');
-
-  // Local and reserved IPv6 ranges.
-  blockList.addAddress('::', 'ipv6');
-  blockList.addAddress('::1', 'ipv6');
-  blockList.addSubnet('fc00::', 7, 'ipv6');
-  blockList.addSubnet('fe80::', 10, 'ipv6');
-  blockList.addSubnet('ff00::', 8, 'ipv6');
-  blockList.addSubnet('2001:db8::', 32, 'ipv6');
-
-  return blockList;
-}
-
-const LINK_PREVIEW_BLOCKLIST = buildLinkPreviewBlockList();
+import { LinkPreviewService } from './services/link-preview.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('pages')
@@ -133,360 +78,8 @@ export class PageController {
     private readonly pageAccessService: PageAccessService,
     private readonly labelService: LabelService,
     private readonly backlinkService: BacklinkService,
+    private readonly linkPreviewService: LinkPreviewService,
   ) {}
-
-  private async fetchLinkPreviewHtml(
-    sourceUrl: URL,
-  ): Promise<{ finalUrl: URL; html: string }> {
-    let currentUrl = new URL(sourceUrl.toString());
-
-    for (let hop = 0; hop <= LINK_PREVIEW_MAX_REDIRECTS; hop += 1) {
-      const targetAddress = await this.resolvePublicUrlAddress(currentUrl);
-
-      const response = await this.requestLinkPreview(
-        currentUrl,
-        targetAddress,
-      ).catch(() => {
-        throw new BadRequestException('Failed to fetch URL metadata');
-      });
-
-      if (this.isRedirectResponse(response.statusCode)) {
-        response.body.resume();
-        const location = this.getHeaderValue(response.headers, 'location');
-        if (!location) {
-          throw new BadRequestException('Failed to fetch URL metadata');
-        }
-
-        try {
-          currentUrl = new URL(location, currentUrl);
-        } catch {
-          throw new BadRequestException('Failed to fetch URL metadata');
-        }
-
-        continue;
-      }
-
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        response.body.resume();
-        throw new BadRequestException('Failed to fetch URL metadata');
-      }
-
-      const contentType =
-        this.getHeaderValue(response.headers, 'content-type')?.toLowerCase() ??
-        '';
-      if (
-        !contentType.includes('text/html') &&
-        !contentType.includes('application/xhtml+xml')
-      ) {
-        response.body.resume();
-        throw new BadRequestException('URL does not point to an HTML document');
-      }
-
-      const html = await this.readIncomingMessageWithLimit(
-        response.body,
-        LINK_PREVIEW_MAX_RESPONSE_BYTES,
-      );
-
-      return { finalUrl: currentUrl, html };
-    }
-
-    throw new BadRequestException('Too many redirects');
-  }
-
-  private async resolvePublicUrlAddress(url: URL): Promise<LinkPreviewAddress> {
-    if (!['http:', 'https:'].includes(url.protocol)) {
-      throw new BadRequestException('Only HTTP and HTTPS URLs are supported');
-    }
-
-    if (this.isBlockedHostname(url.hostname)) {
-      throw new BadRequestException('Unsafe target URL');
-    }
-
-    const hostIpVersion = isIP(url.hostname);
-    if (hostIpVersion !== 0) {
-      if (this.isBlockedIpAddress(url.hostname)) {
-        throw new BadRequestException('Unsafe target URL');
-      }
-
-      return {
-        address: this.normalizeIpAddress(url.hostname),
-        family: hostIpVersion as 4 | 6,
-      };
-    }
-
-    const resolvedAddresses = await dnsLookup(url.hostname, {
-      all: true,
-      verbatim: true,
-    }).catch(() => {
-      throw new BadRequestException('Failed to resolve URL hostname');
-    });
-
-    if (resolvedAddresses.length === 0) {
-      throw new BadRequestException('Failed to resolve URL hostname');
-    }
-
-    if (
-      resolvedAddresses.some((entry) => this.isBlockedIpAddress(entry.address))
-    ) {
-      throw new BadRequestException('Unsafe target URL');
-    }
-
-    const targetAddress = resolvedAddresses.find(
-      (entry) => entry.family === 4 || entry.family === 6,
-    );
-
-    if (!targetAddress) {
-      throw new BadRequestException('Failed to resolve URL hostname');
-    }
-
-    return {
-      address: targetAddress.address,
-      family: targetAddress.family as 4 | 6,
-    };
-  }
-
-  private requestLinkPreview(
-    url: URL,
-    targetAddress: LinkPreviewAddress,
-  ): Promise<LinkPreviewResponse> {
-    return new Promise((resolve, reject) => {
-      const request = url.protocol === 'https:' ? httpsRequest : httpRequest;
-      const req = request(
-        url,
-        {
-          headers: {
-            'user-agent':
-              'Mozilla/5.0 (compatible; DocmostBot/1.0; +https://docmost.com)',
-            accept: 'text/html,application/xhtml+xml',
-          },
-          lookup: (_hostname, _options, callback) => {
-            callback(null, targetAddress.address, targetAddress.family);
-          },
-          timeout: LINK_PREVIEW_TIMEOUT_MS,
-        },
-        (body) => {
-          resolve({
-            statusCode: body.statusCode ?? 0,
-            headers: body.headers,
-            body,
-          });
-        },
-      );
-
-      req.on('timeout', () => {
-        req.destroy(new Error('Link preview request timed out'));
-      });
-      req.on('error', reject);
-      req.end();
-    });
-  }
-
-  private getHeaderValue(
-    headers: IncomingHttpHeaders,
-    name: string,
-  ): string | null {
-    const value = headers[name.toLowerCase()];
-    if (Array.isArray(value)) {
-      return value[0] ?? null;
-    }
-
-    return value ?? null;
-  }
-
-  private isBlockedHostname(hostname: string): boolean {
-    const normalized = hostname.toLowerCase().replace(/\.$/, '');
-    return (
-      normalized === 'localhost' ||
-      LINK_PREVIEW_BLOCKED_HOST_SUFFIXES.some((suffix) =>
-        normalized.endsWith(suffix),
-      )
-    );
-  }
-
-  private isBlockedIpAddress(address: string): boolean {
-    const normalized = this.normalizeIpAddress(address);
-
-    if (normalized.toLowerCase().startsWith('::ffff:')) {
-      const mappedIpv4 = normalized.slice('::ffff:'.length);
-      if (isIP(mappedIpv4) === 4) {
-        return this.isBlockedIpAddress(mappedIpv4);
-      }
-    }
-
-    const family = isIP(normalized);
-    if (family === 0) {
-      return true;
-    }
-
-    return LINK_PREVIEW_BLOCKLIST.check(normalized, family === 4 ? 'ipv4' : 'ipv6');
-  }
-
-  private normalizeIpAddress(address: string): string {
-    return address.replace(/^\[|\]$/g, '').split('%')[0];
-  }
-
-  private isRedirectResponse(statusCode: number): boolean {
-    return [301, 302, 303, 307, 308].includes(statusCode);
-  }
-
-  private async readIncomingMessageWithLimit(
-    response: IncomingMessage,
-    maxBytes: number,
-  ): Promise<string> {
-    const contentLength = Number(
-      this.getHeaderValue(response.headers, 'content-length'),
-    );
-    if (Number.isFinite(contentLength) && contentLength > maxBytes) {
-      throw new BadRequestException('URL metadata response is too large');
-    }
-
-    const chunks: Buffer[] = [];
-    let totalBytes = 0;
-
-    for await (const chunk of response) {
-      if (!chunk) {
-        continue;
-      }
-
-      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-      totalBytes += buffer.byteLength;
-      if (totalBytes > maxBytes) {
-        response.destroy();
-        throw new BadRequestException('URL metadata response is too large');
-      }
-
-      chunks.push(buffer);
-    }
-
-    return Buffer.concat(chunks).toString('utf8');
-  }
-
-  private getAbsoluteUrl(baseUrl: string, value?: string): string | null {
-    if (!value) {
-      return null;
-    }
-
-    try {
-      return new URL(value, baseUrl).toString();
-    } catch {
-      return null;
-    }
-  }
-
-  private getBestMetaContent(
-    $: ReturnType<typeof load>,
-    selectors: string[],
-  ): string {
-    for (const selector of selectors) {
-      const value = $(selector).attr('content')?.trim();
-      if (value) {
-        return value;
-      }
-    }
-
-    return '';
-  }
-
-  private getIconArea(sizeValue?: string): number {
-    if (!sizeValue) {
-      return 0;
-    }
-
-    const normalized = sizeValue.toLowerCase();
-    if (normalized.includes('any')) {
-      return Number.MAX_SAFE_INTEGER;
-    }
-
-    return normalized
-      .split(/\s+/)
-      .map((item) => item.trim())
-      .reduce((maxArea, item) => {
-        const match = item.match(/^(\d+)x(\d+)$/);
-        if (!match) {
-          return maxArea;
-        }
-
-        const width = Number(match[1]);
-        const height = Number(match[2]);
-
-        if (!Number.isFinite(width) || !Number.isFinite(height)) {
-          return maxArea;
-        }
-
-        return Math.max(maxArea, width * height);
-      }, 0);
-  }
-
-  private getIconRelPriority(relValue?: string): number {
-    if (!relValue) {
-      return 0;
-    }
-
-    const relTokens = relValue
-      .toLowerCase()
-      .split(/\s+/)
-      .map((token) => token.trim())
-      .filter(Boolean);
-
-    if (
-      relTokens.includes('apple-touch-icon') ||
-      relTokens.includes('apple-touch-icon-precomposed')
-    ) {
-      return 3;
-    }
-
-    if (relTokens.includes('icon') && relTokens.includes('shortcut')) {
-      return 2;
-    }
-
-    if (relTokens.includes('icon')) {
-      return 1;
-    }
-
-    if (relTokens.includes('mask-icon')) {
-      return 1;
-    }
-
-    return 0;
-  }
-
-  private getBestFaviconUrl(
-    $: ReturnType<typeof load>,
-    pageUrl: string,
-  ): string {
-    let bestUrl = '';
-    let bestArea = -1;
-    let bestPriority = -1;
-
-    $('link[rel]').each((_, element) => {
-      const rel = $(element).attr('rel')?.trim();
-      const priority = this.getIconRelPriority(rel);
-
-      if (priority === 0) {
-        return;
-      }
-
-      const href = $(element).attr('href')?.trim();
-      const absoluteHref = this.getAbsoluteUrl(pageUrl, href);
-      if (!absoluteHref) {
-        return;
-      }
-
-      const area = this.getIconArea($(element).attr('sizes')?.trim());
-      const shouldReplace =
-        area > bestArea || (area === bestArea && priority > bestPriority);
-
-      if (!shouldReplace) {
-        return;
-      }
-
-      bestArea = area;
-      bestPriority = priority;
-      bestUrl = absoluteHref;
-    });
-
-    return bestUrl;
-  }
 
   private toAccessResponse(access: {
     role: PageRole | null;
@@ -506,6 +99,12 @@ export class PageController {
       capabilities: access.capabilities,
       isSystemAccess: access.isSystemAccess,
     };
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Get('/info')
+  async getPageViaQuery(@Query() dto: PageInfoDto, @AuthUser() user: User) {
+    return this.getPage(dto, user);
   }
 
   @HttpCode(HttpStatus.OK)
@@ -556,8 +155,7 @@ export class PageController {
   @HttpCode(HttpStatus.OK)
   @Post('labels')
   async getPageLabels(
-    @Body() dto: PageIdDto,
-    @Body() pagination: PaginationOptions,
+    @Body() dto: PageLabelsQueryDto,
     @AuthUser() user: User,
   ) {
     const page = await this.pageRepo.findById(dto.pageId);
@@ -567,7 +165,7 @@ export class PageController {
 
     await this.pageAccessService.assertCanReadPage(page, user);
 
-    return this.labelService.getPageLabels(page.id, pagination);
+    return this.labelService.getPageLabels(page.id, dto);
   }
 
   @HttpCode(HttpStatus.OK)
@@ -612,6 +210,15 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @Get('backlinks-count')
+  async getBacklinksCountViaQuery(
+    @Query() dto: PageIdDto,
+    @AuthUser() user: User,
+  ): Promise<{ incoming: number; outgoing: number }> {
+    return this.getBacklinksCount(dto, user);
+  }
+
+  @HttpCode(HttpStatus.OK)
   @Post('backlinks-count')
   async getBacklinksCount(
     @Body() dto: PageIdDto,
@@ -628,10 +235,18 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @Get('backlinks')
+  async getBacklinksViaQuery(
+    @Query() query: BacklinksListQueryDto,
+    @AuthUser() user: User,
+  ) {
+    return this.getBacklinks(query, user);
+  }
+
+  @HttpCode(HttpStatus.OK)
   @Post('backlinks')
   async getBacklinks(
-    @Body() dto: BacklinksListDto,
-    @Body() pagination: PaginationOptions,
+    @Body() dto: BacklinksListQueryDto,
     @AuthUser() user: User,
   ) {
     const page = await this.pageRepo.findById(dto.pageId);
@@ -645,61 +260,14 @@ export class PageController {
       page.id,
       dto.direction,
       user,
-      pagination,
+      dto,
     );
   }
 
   @HttpCode(HttpStatus.OK)
   @Post('/link-preview')
   async getLinkPreview(@Body() dto: LinkPreviewDto) {
-    let sourceUrl: URL;
-
-    try {
-      sourceUrl = new URL(dto.url);
-    } catch {
-      throw new BadRequestException('Invalid URL');
-    }
-
-    if (!['http:', 'https:'].includes(sourceUrl.protocol)) {
-      throw new BadRequestException('Only HTTP and HTTPS URLs are supported');
-    }
-
-    const { finalUrl, html } = await this.fetchLinkPreviewHtml(sourceUrl);
-    const $ = load(html);
-    const finalUrlString = finalUrl.toString();
-    const title =
-      this.getBestMetaContent($, [
-        'meta[property="og:title"]',
-        'meta[name="twitter:title"]',
-      ]) ||
-      $('title').first().text().trim() ||
-      finalUrl.hostname;
-    const description = this.getBestMetaContent($, [
-      'meta[property="og:description"]',
-      'meta[name="twitter:description"]',
-      'meta[name="description"]',
-    ]);
-    const image = this.getAbsoluteUrl(
-      finalUrlString,
-      this.getBestMetaContent($, [
-        'meta[property="og:image"]',
-        'meta[name="twitter:image"]',
-        'meta[property="twitter:image"]',
-      ]),
-    );
-    const favicon = this.getBestFaviconUrl($, finalUrlString);
-
-    return {
-      url: finalUrlString,
-      title,
-      description,
-      image: image || favicon || null,
-      siteName:
-        this.getBestMetaContent($, [
-          'meta[property="og:site_name"]',
-          'meta[name="application-name"]',
-        ]) || finalUrl.hostname,
-    };
+    return this.linkPreviewService.getPreview(dto.url);
   }
 
   @HttpCode(HttpStatus.OK)
@@ -859,10 +427,18 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @Get('recent')
+  async getRecentPagesViaQuery(
+    @Query() query: RecentPagesQueryDto,
+    @AuthUser() user: User,
+  ) {
+    return this.getRecentPages(query, user);
+  }
+
+  @HttpCode(HttpStatus.OK)
   @Post('recent')
   async getRecentPages(
-    @Body() recentPageDto: RecentPageDto,
-    @Body() pagination: PaginationOptions,
+    @Body() recentPageDto: RecentPagesQueryDto,
     @AuthUser() user: User,
   ) {
     if (recentPageDto.spaceId) {
@@ -877,7 +453,7 @@ export class PageController {
 
       const result = await this.pageService.getRecentSpacePages(
         recentPageDto.spaceId,
-        pagination,
+        recentPageDto,
       );
 
       const snapshot = await this.pageAccessService.getSidebarAccessSnapshot(
@@ -892,7 +468,7 @@ export class PageController {
       return result;
     }
 
-    const result = await this.pageService.getRecentPages(user.id, pagination);
+    const result = await this.pageService.getRecentPages(user.id, recentPageDto);
     const accessByPageId = await this.pageAccessService.getEffectiveAccessForPages(
       result.items,
       user,
@@ -916,10 +492,18 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @Get('trash')
+  async getDeletedPagesViaQuery(
+    @Query() query: DeletedPagesQueryDto,
+    @AuthUser() user: User,
+  ) {
+    return this.getDeletedPages(query, user);
+  }
+
+  @HttpCode(HttpStatus.OK)
   @Post('trash')
   async getDeletedPages(
-    @Body() deletedPageDto: DeletedPageDto,
-    @Body() pagination: PaginationOptions,
+    @Body() deletedPageDto: DeletedPagesQueryDto,
     @AuthUser() user: User,
   ) {
     if (deletedPageDto.spaceId) {
@@ -934,16 +518,24 @@ export class PageController {
 
       return this.pageService.getDeletedSpacePages(
         deletedPageDto.spaceId,
-        pagination,
+        deletedPageDto,
       );
     }
   }
 
   @HttpCode(HttpStatus.OK)
+  @Get('/history')
+  async getPageHistoryViaQuery(
+    @Query() query: PageHistoryQueryDto,
+    @AuthUser() user: User,
+  ) {
+    return this.getPageHistory(query, user);
+  }
+
+  @HttpCode(HttpStatus.OK)
   @Post('/history')
   async getPageHistory(
-    @Body() dto: PageIdDto,
-    @Body() pagination: PaginationOptions,
+    @Body() dto: PageHistoryQueryDto,
     @AuthUser() user: User,
   ) {
     const page = await this.pageRepo.findById(dto.pageId);
@@ -953,7 +545,16 @@ export class PageController {
 
     await this.pageAccessService.assertCanReadPage(page, user);
 
-    return this.pageHistoryService.findHistoryByPageId(page.id, pagination);
+    return this.pageHistoryService.findHistoryByPageId(page.id, dto);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Get('/history/info')
+  async getPageHistoryInfoViaQuery(
+    @Query() dto: PageHistoryIdDto,
+    @AuthUser() user: User,
+  ) {
+    return this.getPageHistoryInfo(dto, user);
   }
 
   @HttpCode(HttpStatus.OK)
@@ -982,10 +583,18 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @Get('/sidebar-pages')
+  async getSidebarPagesViaQuery(
+    @Query() query: SidebarPagesQueryDto,
+    @AuthUser() user: User,
+  ) {
+    return this.getSidebarPages(query, user);
+  }
+
+  @HttpCode(HttpStatus.OK)
   @Post('/sidebar-pages')
   async getSidebarPages(
-    @Body() dto: SidebarPageDto,
-    @Body() pagination: PaginationOptions,
+    @Body() dto: SidebarPagesQueryDto,
     @AuthUser() user: User,
   ) {
     if (!dto.spaceId && !dto.pageId) {
@@ -1025,7 +634,7 @@ export class PageController {
 
     const sidebarPages = await this.pageService.getSidebarPages(
       spaceId,
-      pagination,
+      dto,
       dto.pageId,
       dto.includeNodeTypes,
     );
@@ -1332,6 +941,15 @@ export class PageController {
     await this.pageAccessService.assertCanMoveDeleteShare(movedPage, user);
 
     return this.pageService.movePage(dto, movedPage);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Get('/breadcrumbs')
+  async getPageBreadcrumbsViaQuery(
+    @Query() dto: PageIdDto,
+    @AuthUser() user: User,
+  ) {
+    return this.getPageBreadcrumbs(dto, user);
   }
 
   @HttpCode(HttpStatus.OK)

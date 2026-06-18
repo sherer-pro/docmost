@@ -58,11 +58,17 @@ export async function uploadIcon(
   }
   formData.append("image", processed);
 
-  return await api.post("/attachments/actions/upload-image", formData, {
+  const response = await api.post<IAttachment>(
+    "/attachments/actions/upload-image",
+    formData,
+    {
     headers: {
       "Content-Type": "multipart/form-data",
     },
-  });
+    },
+  );
+
+  return response.data;
 }
 
 export async function uploadUserAvatar(file: File): Promise<IAttachment> {

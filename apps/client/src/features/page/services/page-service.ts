@@ -51,7 +51,7 @@ export async function createPage(data: Partial<IPage>): Promise<IPage> {
 export async function getPageById(
   pageInput: Partial<IPageInput>,
 ): Promise<IPage> {
-  const req = await api.post<IPage>("/pages/info", pageInput);
+  const req = await api.get<IPage>("/pages/info", { params: pageInput });
   return req.data;
 }
 
@@ -71,7 +71,9 @@ export async function getDeletedPages(
   spaceId: string,
   params?: QueryParams,
 ): Promise<IPagination<IPage>> {
-  const req = await api.post("/pages/trash", { spaceId, ...params });
+  const req = await api.get("/pages/trash", {
+    params: { spaceId, ...params },
+  });
   return req.data;
 }
 
@@ -126,14 +128,14 @@ export async function getAllSidebarPages(
 export async function getPageBreadcrumbs(
   pageId: string,
 ): Promise<Partial<IPage[]>> {
-  const req = await api.post("/pages/breadcrumbs", { pageId });
+  const req = await api.get("/pages/breadcrumbs", { params: { pageId } });
   return req.data;
 }
 
 export async function getRecentChanges(
   spaceId?: string,
 ): Promise<IPagination<IPage>> {
-  const req = await api.post("/pages/recent", { spaceId });
+  const req = await api.get("/pages/recent", { params: { spaceId } });
   return req.data;
 }
 
@@ -142,7 +144,7 @@ export async function exportPage(data: IExportPageParams): Promise<void> {
    * Export returns a binary file with `content-disposition` header,
    * so we explicitly request a blob response and keep full AxiosResponse.
    */
-  const req = await api.post('/pages/actions/export', data, {
+  const req = await api.post<Blob>('/pages/actions/export', data, {
     responseType: "blob",
     skipEnvelopeUnwrap: true,
   });
@@ -216,7 +218,7 @@ export async function uploadFile(
     },
   );
 
-  return req as unknown as IAttachment;
+  return req.data;
 }
 
 export interface IPageLabel {
@@ -263,8 +265,8 @@ export interface IBacklinksCount {
 export async function getBacklinksCount(
   pageId: string,
 ): Promise<IBacklinksCount> {
-  const req = await api.post<IBacklinksCount>("/pages/backlinks-count", {
-    pageId,
+  const req = await api.get<IBacklinksCount>("/pages/backlinks-count", {
+    params: { pageId },
   });
   return req.data;
 }
@@ -273,9 +275,8 @@ export async function getBacklinks(data: {
   pageId: string;
   direction: BacklinkDirection;
 }): Promise<IPagination<Partial<IPage>>> {
-  const req = await api.post<IPagination<Partial<IPage>>>("/pages/backlinks", {
-    ...data,
-    limit: 20,
+  const req = await api.get<IPagination<Partial<IPage>>>("/pages/backlinks", {
+    params: { ...data, limit: 20 },
   });
   return req.data;
 }

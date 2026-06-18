@@ -5,14 +5,9 @@ type SessionListResponse = {
   sessions: ISession[];
 };
 
-function unwrapSessionList(value: unknown): SessionListResponse {
-  const response = value as { data?: SessionListResponse } & SessionListResponse;
-  return response.data ?? response;
-}
-
 export async function getSessions(): Promise<ISession[]> {
-  const req = await api.post<SessionListResponse>("/sessions");
-  return unwrapSessionList(req).sessions;
+  const req = await api.get<SessionListResponse>("/sessions");
+  return req.data.sessions;
 }
 
 export async function revokeSession(data: {

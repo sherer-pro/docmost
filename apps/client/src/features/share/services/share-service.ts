@@ -16,7 +16,7 @@ import { IPagination, QueryParams } from "@/lib/types.ts";
 export async function getShares(
   params?: QueryParams,
 ): Promise<IPagination<ISharedItem>> {
-  const req = await api.post("/shares", params);
+  const req = await api.get("/shares", { params });
   return req.data;
 }
 
@@ -26,7 +26,9 @@ export async function createShare(data: ICreateShare): Promise<any> {
 }
 
 export async function getShareInfo(shareId: string): Promise<IShare> {
-  const req = await api.post<IShare>("/shares/info", { shareId });
+  const req = await api.get<IShare>("/shares/info", {
+    params: { shareId },
+  });
   return req.data;
 }
 
@@ -36,14 +38,18 @@ export async function updateShare(data: IUpdateShare): Promise<any> {
 }
 
 export async function getShareForPage(pageId: string): Promise<IShareForPage> {
-  const req = await api.post<any>("/shares/for-page", { pageId });
+  const req = await api.get<any>("/shares/for-page", {
+    params: { pageId },
+  });
   return req.data;
 }
 
 export async function getSharePageInfo(
   shareInput: Partial<IShareInfoInput>,
 ): Promise<ISharedPage> {
-  const req = await api.post<ISharedPage>("/shares/page-info", shareInput);
+  const req = await api.get<ISharedPage>("/shares/page-info", {
+    params: shareInput,
+  });
   return req.data;
 }
 
@@ -54,6 +60,8 @@ export async function deleteShare(shareId: string): Promise<void> {
 export async function getSharedPageTree(
   shareId: string,
 ): Promise<ISharedPageTree> {
-  const req = await api.post<ISharedPageTree>("/shares/tree", { shareId });
+  const req = await api.get<ISharedPageTree>("/shares/tree", {
+    params: { shareId },
+  });
   return req.data;
 }

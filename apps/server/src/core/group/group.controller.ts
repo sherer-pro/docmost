@@ -2,6 +2,8 @@ import {
   Controller,
   Post,
   Body,
+  Get,
+  Query,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -12,7 +14,7 @@ import { CreateGroupDto } from './dto/create-group.dto';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
 import { AuthWorkspace } from '../../common/decorators/auth-workspace.decorator';
 import { GroupUserService } from './services/group-user.service';
-import { GroupIdDto } from './dto/group-id.dto';
+import { GroupIdDto, GroupMembersQueryDto } from './dto/group-id.dto';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import { AddGroupUserDto } from './dto/add-group-user.dto';
 import { RemoveGroupUserDto } from './dto/remove-group-user.dto';
@@ -35,6 +37,16 @@ export class GroupController {
   ) {}
 
   @HttpCode(HttpStatus.OK)
+  @Get('/')
+  getWorkspaceGroupsViaQuery(
+    @Query() pagination: PaginationOptions,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.getWorkspaceGroups(pagination, user, workspace);
+  }
+
+  @HttpCode(HttpStatus.OK)
   @Post('/')
   getWorkspaceGroups(
     @Body() pagination: PaginationOptions,
@@ -47,6 +59,16 @@ export class GroupController {
     }
 
     return this.groupService.getWorkspaceGroups(workspace.id, pagination, user);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Get('/info')
+  getGroupViaQuery(
+    @Query() groupIdDto: GroupIdDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.getGroup(groupIdDto, user, workspace);
   }
 
   @HttpCode(HttpStatus.OK)
@@ -97,10 +119,19 @@ export class GroupController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @Get('members')
+  getGroupMembersViaQuery(
+    @Query() query: GroupMembersQueryDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.getGroupMembers(query, user, workspace);
+  }
+
+  @HttpCode(HttpStatus.OK)
   @Post('members')
   getGroupMembers(
-    @Body() groupIdDto: GroupIdDto,
-    @Body() pagination: PaginationOptions,
+    @Body() groupIdDto: GroupMembersQueryDto,
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
@@ -112,7 +143,7 @@ export class GroupController {
     return this.groupUserService.getGroupUsers(
       groupIdDto.groupId,
       workspace.id,
-      pagination,
+      groupIdDto,
       user,
     );
   }

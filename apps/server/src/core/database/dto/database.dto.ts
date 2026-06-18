@@ -18,17 +18,11 @@ import {
   ValidationArguments,
   ValidationOptions,
 } from 'class-validator';
-import type { DatabasePropertyType } from '@docmost/api-contract';
+import {
+  DATABASE_PROPERTY_TYPES,
+  type DatabasePropertyType,
+} from '@docmost/api-contract';
 import { JsonValue } from '../../../database/types/db';
-
-const DATABASE_PROPERTY_TYPES: DatabasePropertyType[] = [
-  'multiline_text',
-  'checkbox',
-  'code',
-  'select',
-  'user',
-  'page_reference',
-];
 
 const MAX_SELECT_PROPERTY_OPTIONS = 100;
 const MAX_DATABASE_BATCH_CELLS = 200;

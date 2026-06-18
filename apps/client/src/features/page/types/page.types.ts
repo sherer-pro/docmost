@@ -1,4 +1,8 @@
 import { ISpace } from "@/features/space/types/space.types.ts";
+import {
+  PAGE_CUSTOM_FIELD_STATUS,
+  type PageCustomFieldStatus as ApiPageCustomFieldStatus,
+} from "@docmost/api-contract";
 
 /**
  * Page settings stored in `pages.settings`.
@@ -55,14 +59,8 @@ export interface IPage {
   space: Partial<ISpace>;
 }
 
-export enum PageCustomFieldStatus {
-  TODO = 'TODO',
-  IN_PROGRESS = 'IN_PROGRESS',
-  IN_REVIEW = 'IN_REVIEW',
-  DONE = 'DONE',
-  REJECTED = 'REJECTED',
-  ARCHIVED = 'ARCHIVED',
-}
+export const PageCustomFieldStatus = PAGE_CUSTOM_FIELD_STATUS;
+export type PageCustomFieldStatus = ApiPageCustomFieldStatus;
 
 export interface PageCustomFields {
   status?: PageCustomFieldStatus | null;

@@ -3,10 +3,12 @@ import {
   Body,
   Controller,
   ForbiddenException,
+  Get,
   HttpCode,
   HttpStatus,
   Logger,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { SearchService } from './search.service';
@@ -93,6 +95,16 @@ export class SearchController {
       userId: user.id,
       workspaceId: workspace.id,
     });
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Get('suggest')
+  async searchSuggestionsViaQuery(
+    @Query() dto: SearchSuggestionDTO,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.searchSuggestions(dto, user, workspace);
   }
 
   @HttpCode(HttpStatus.OK)

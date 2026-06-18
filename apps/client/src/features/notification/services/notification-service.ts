@@ -6,17 +6,14 @@ export async function getNotifications(params: {
   limit?: number;
   cursor?: string;
 }): Promise<IPagination<INotification>> {
-  const req = await api.post<IPagination<INotification>>(
-    "/notifications",
+  const req = await api.get<IPagination<INotification>>("/notifications", {
     params,
-  );
+  });
   return req.data;
 }
 
 export async function getUnreadCount(): Promise<{ count: number }> {
-  const req = await api.post<{ count: number }>(
-    "/notifications/unread-count",
-  );
+  const req = await api.get<{ count: number }>("/notifications/unread-count");
   return req.data;
 }
 

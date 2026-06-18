@@ -13,12 +13,12 @@ import { IPagination, QueryParams } from "@/lib/types.ts";
 import { ISetupWorkspace } from "@/features/auth/types/auth.types.ts";
 
 export async function getWorkspace(): Promise<IWorkspace> {
-  const req = await api.post<IWorkspace>("/workspace/info");
+  const req = await api.get<IWorkspace>("/workspace/info");
   return req.data;
 }
 
 export async function getWorkspacePublicData(): Promise<IPublicWorkspace> {
-  const req = await api.post<IPublicWorkspace>("/workspace/public");
+  const req = await api.get<IPublicWorkspace>("/workspace/public");
   return req.data;
 }
 
@@ -32,14 +32,14 @@ export async function getCheckHostname(
 export async function getWorkspaceMembers(
   params?: QueryParams,
 ): Promise<IPagination<IUser>> {
-  const req = await api.post("/workspace/members", params);
+  const req = await api.get("/workspace/members", { params });
   return req.data;
 }
 
 export async function getWorkspaceVisibleMembersCount(): Promise<{
   count: number;
 }> {
-  const req = await api.post<{ count: number }>("/workspace/members/count");
+  const req = await api.get<{ count: number }>("/workspace/members/count");
   return req.data;
 }
 
@@ -74,7 +74,7 @@ export async function changeMemberRole(data: {
 export async function getPendingInvitations(
   params?: QueryParams,
 ): Promise<IPagination<IInvitation>> {
-  const req = await api.post("/workspace/invites", params);
+  const req = await api.get("/workspace/invites", { params });
   return req.data;
 }
 
@@ -112,7 +112,7 @@ export async function revokeInvitation(data: {
 export async function getInvitationById(data: {
   invitationId: string;
 }): Promise<IInvitation> {
-  const req = await api.post("/workspace/invites/info", data);
+  const req = await api.get("/workspace/invites/info", { params: data });
   return req.data;
 }
 

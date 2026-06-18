@@ -1,14 +1,86 @@
 import axios, {
+  AxiosRequestConfig,
   AxiosHeaders,
   AxiosInstance,
+  AxiosResponse,
 } from "axios";
 import APP_ROUTE from "@/lib/app-route.ts";
 import { isCloud } from "@/lib/config.ts";
+import type { ApiResponseEnvelope } from "@docmost/api-contract";
 
-const api: AxiosInstance = axios.create({
+type ApiRequestConfig<D = unknown> = AxiosRequestConfig<D> & {
+  skipEnvelopeUnwrap?: false;
+};
+
+type RawApiRequestConfig<D = unknown> = AxiosRequestConfig<D> &
+  ({ skipEnvelopeUnwrap: true } | { responseType: "blob" });
+
+type ApiClient = Omit<
+  AxiosInstance,
+  "delete" | "get" | "head" | "options" | "patch" | "post" | "put" | "request"
+> & {
+  request<T = any, D = any>(
+    config: RawApiRequestConfig<D>,
+  ): Promise<AxiosResponse<T, D>>;
+  request<T = any, D = any>(
+    config: ApiRequestConfig<D>,
+  ): Promise<ApiResponseEnvelope<T>>;
+  get<T = any, D = any>(
+    url: string,
+    config: RawApiRequestConfig<D>,
+  ): Promise<AxiosResponse<T, D>>;
+  get<T = any, D = any>(
+    url: string,
+    config?: ApiRequestConfig<D>,
+  ): Promise<ApiResponseEnvelope<T>>;
+  delete<T = any, D = any>(
+    url: string,
+    config?: ApiRequestConfig<D>,
+  ): Promise<ApiResponseEnvelope<T>>;
+  head<T = any, D = any>(
+    url: string,
+    config?: ApiRequestConfig<D>,
+  ): Promise<ApiResponseEnvelope<T>>;
+  options<T = any, D = any>(
+    url: string,
+    config?: ApiRequestConfig<D>,
+  ): Promise<ApiResponseEnvelope<T>>;
+  post<T = any, D = any>(
+    url: string,
+    data: D | undefined,
+    config: RawApiRequestConfig<D>,
+  ): Promise<AxiosResponse<T, D>>;
+  post<T = any, D = any>(
+    url: string,
+    data?: D,
+    config?: ApiRequestConfig<D>,
+  ): Promise<ApiResponseEnvelope<T>>;
+  put<T = any, D = any>(
+    url: string,
+    data: D | undefined,
+    config: RawApiRequestConfig<D>,
+  ): Promise<AxiosResponse<T, D>>;
+  put<T = any, D = any>(
+    url: string,
+    data?: D,
+    config?: ApiRequestConfig<D>,
+  ): Promise<ApiResponseEnvelope<T>>;
+  patch<T = any, D = any>(
+    url: string,
+    data: D | undefined,
+    config: RawApiRequestConfig<D>,
+  ): Promise<AxiosResponse<T, D>>;
+  patch<T = any, D = any>(
+    url: string,
+    data?: D,
+    config?: ApiRequestConfig<D>,
+  ): Promise<ApiResponseEnvelope<T>>;
+};
+
+const api = axios.create({
   baseURL: "/api",
   withCredentials: true,
-});
+}) as ApiClient;
 
 declare module "axios" {
   interface AxiosRequestConfig {

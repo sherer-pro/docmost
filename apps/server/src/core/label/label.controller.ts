@@ -21,7 +21,10 @@ import {
   SpaceCaslSubject,
 } from '../casl/interfaces/space-ability.type';
 import { LabelService } from './label.service';
-import { FindPagesByLabelDto, ListLabelsDto } from './dto/label.dto';
+import {
+  FindPagesByLabelRequestDto,
+  ListLabelsRequestDto,
+} from './dto/label.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller('labels')
@@ -35,8 +38,7 @@ export class LabelController {
   @HttpCode(HttpStatus.OK)
   @Post('/')
   async getLabels(
-    @Body() dto: ListLabelsDto,
-    @Body() pagination: PaginationOptions,
+    @Body() dto: ListLabelsRequestDto,
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
@@ -44,15 +46,14 @@ export class LabelController {
       workspace.id,
       user.id,
       dto.type,
-      pagination,
+      dto,
     );
   }
 
   @HttpCode(HttpStatus.OK)
   @Post('pages')
   async findPagesByLabel(
-    @Body() dto: FindPagesByLabelDto,
-    @Body() pagination: PaginationOptions,
+    @Body() dto: FindPagesByLabelRequestDto,
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
@@ -72,7 +73,7 @@ export class LabelController {
         LabelType.PAGE,
       );
       if (!label) {
-        return this.emptyResult(pagination.limit);
+        return this.emptyResult(dto.limit);
       }
       labelId = label.id;
     } else {
@@ -84,8 +85,8 @@ export class LabelController {
 
     return this.labelService.findPagesByLabel(labelId, user, {
       spaceId: dto.spaceId,
-      query: pagination.query,
-      pagination,
+      query: dto.query,
+      pagination: dto,
     });
   }
 

@@ -65,7 +65,9 @@ export async function getSpaceMembers(
   spaceId: string,
   params?: QueryParams,
 ): Promise<IPagination<ISpaceMember>> {
-  const req = await api.post<any>("/spaces/members", { spaceId, ...params });
+  const req = await api.get<any>("/spaces/members", {
+    params: { spaceId, ...params },
+  });
   return req.data;
 }
 
@@ -90,7 +92,7 @@ export async function exportSpace(data: IExportSpaceParams): Promise<void> {
    * Export returns a binary file with `content-disposition` header,
    * so we explicitly request a blob response and keep full AxiosResponse.
    */
-  const req = await api.post('/spaces/actions/export', data, {
+  const req = await api.post<Blob>('/spaces/actions/export', data, {
     responseType: 'blob',
     skipEnvelopeUnwrap: true,
   });
@@ -102,6 +104,8 @@ export async function getSpaceMemberUsers(
   spaceId: string,
   params?: QueryParams,
 ): Promise<{ items: SpaceUserInfo[]; limit: number }> {
-  const req = await api.post("/spaces/member-users", { spaceId, ...params });
+  const req = await api.get("/spaces/member-users", {
+    params: { spaceId, ...params },
+  });
   return req.data;
 }

@@ -17,7 +17,7 @@ export async function searchPage(
 export async function searchSuggestions(
   params: SearchSuggestionParams,
 ): Promise<ISuggestionResult> {
-  const req = await api.post<ISuggestionResult>("/search/suggest", params);
+  const req = await api.get<ISuggestionResult>("/search/suggest", { params });
   return req.data;
 }
 
