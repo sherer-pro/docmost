@@ -136,4 +136,43 @@ describe('AttachmentFileAccessService', () => {
     );
     expect(res.headerValues['Content-Type']).toBe('application/octet-stream');
   });
+
+  it.each(['diagram.excalidraw.svg', 'diagram.drawio.svg'])(
+    'serves editor diagram SVG %s with an image content type for previews',
+    async (fileName) => {
+      const { service } = createService({
+        fileExt: '.svg',
+        fileName,
+        mimeType: 'image/svg+xml',
+      });
+      const req = { headers: {}, cookies: {} } as any;
+      const res = createReply();
+
+      await service.getPublicFile(req, res, workspace, fileId, 'query-token');
+
+      expect(res.header).toHaveBeenCalledWith(
+        'Content-Disposition',
+        `attachment; filename="${fileName}"`,
+      );
+      expect(res.headerValues['Content-Type']).toBe('image/svg+xml');
+    },
+  );
+
+  it('serves arbitrary SVG uploads as downloads with a safe content type', async () => {
+    const { service } = createService({
+      fileExt: '.svg',
+      fileName: 'uploaded.svg',
+      mimeType: 'image/svg+xml',
+    });
+    const req = { headers: {}, cookies: {} } as any;
+    const res = createReply();
+
+    await service.getPublicFile(req, res, workspace, fileId, 'query-token');
+
+    expect(res.header).toHaveBeenCalledWith(
+      'Content-Disposition',
+      'attachment; filename="uploaded.svg"',
+    );
+    expect(res.headerValues['Content-Type']).toBe('application/octet-stream');
+  });
 });

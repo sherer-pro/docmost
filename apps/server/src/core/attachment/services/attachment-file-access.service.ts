@@ -41,6 +41,9 @@ const dangerousDownloadMimeTypes = new Set([
   'text/xml',
 ]);
 
+const renderableDiagramSvgFileNamePattern =
+  /^diagram\.(drawio|excalidraw)\.svg$/i;
+
 @Injectable()
 export class AttachmentFileAccessService {
   private readonly logger = new Logger(AttachmentFileAccessService.name);
@@ -276,7 +279,9 @@ export class AttachmentFileAccessService {
       }
     }
 
-    const fileStream = await this.storageService.readStream(attachment.filePath);
+    const fileStream = await this.storageService.readStream(
+      attachment.filePath,
+    );
 
     res.headers({
       'Content-Type': contentType,
@@ -314,8 +319,12 @@ export class AttachmentFileAccessService {
       return storedMimeType;
     }
 
-    const trustedInlineMimeTypes = trustedInlineMimeTypesByExtension[fileExtension];
-    if (trustedInlineMimeTypes && !trustedInlineMimeTypes.includes(storedMimeType)) {
+    const trustedInlineMimeTypes =
+      trustedInlineMimeTypesByExtension[fileExtension];
+    if (
+      trustedInlineMimeTypes &&
+      !trustedInlineMimeTypes.includes(storedMimeType)
+    ) {
       return fallbackDownloadMimeType;
     }
 
@@ -325,11 +334,28 @@ export class AttachmentFileAccessService {
     const candidateMimeType =
       extensionMimeType || storedMimeType || fallbackDownloadMimeType;
 
+    if (this.isRenderableDiagramSvg(attachment, candidateMimeType)) {
+      return 'image/svg+xml';
+    }
+
     if (dangerousDownloadMimeTypes.has(candidateMimeType)) {
       return fallbackDownloadMimeType;
     }
 
     return candidateMimeType;
+  }
+
+  private isRenderableDiagramSvg(
+    attachment: Attachment,
+    candidateMimeType: string,
+  ): boolean {
+    const fileExtension = attachment.fileExt?.toLowerCase() ?? '';
+
+    return (
+      fileExtension === '.svg' &&
+      candidateMimeType === 'image/svg+xml' &&
+      renderableDiagramSvgFileNamePattern.test(attachment.fileName ?? '')
+    );
   }
 
   private getBaseMimeType(mimeType?: string | null): string {
