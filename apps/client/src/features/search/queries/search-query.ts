@@ -1,6 +1,7 @@
 import { useQuery, UseQueryResult } from "@tanstack/react-query";
 import {
   searchAttachments,
+  searchLabels,
   searchPage,
   searchShare,
   searchSuggestions,
@@ -8,8 +9,10 @@ import {
 import {
   IAttachmentSearch,
   IPageSearch,
+  IPageSearchLabel,
   IPageSearchParams,
   ISuggestionResult,
+  SearchLabelParams,
   SearchSuggestionParams,
 } from '@/features/search/types/search.types';
 
@@ -19,7 +22,28 @@ export function usePageSearchQuery(
   return useQuery({
     queryKey: ["page-search", params],
     queryFn: () => searchPage(params),
-    enabled: !!params.query,
+    enabled: !!params.query || !!params.labelId,
+  });
+}
+
+export function getSearchLabelsQueryKey(params: SearchLabelParams) {
+  return [
+    "search-labels",
+    {
+      query: params.query ?? "",
+      limit: params.limit ?? 25,
+    },
+  ] as const;
+}
+
+export function useSearchLabelsQuery(
+  params: SearchLabelParams,
+  enabled = true,
+): UseQueryResult<IPageSearchLabel[], Error> {
+  return useQuery({
+    queryKey: getSearchLabelsQueryKey(params),
+    queryFn: () => searchLabels(params),
+    enabled,
   });
 }
 

@@ -125,4 +125,41 @@ describe("SearchResultItem", () => {
       ),
     ).toBe(false);
   });
+
+  it("renders matching page label chips", () => {
+    const result = {
+      id: "page-1",
+      title: "Labeled Page",
+      icon: "рџ“„",
+      parentPageId: null,
+      databaseId: null,
+      slugId: "slug-4",
+      creatorId: "user-1",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      rank: "1.0",
+      highlight: "",
+      labels: [{ id: "label-1", name: "urgent", type: "page" as const }],
+      space: {
+        id: "space-1",
+        name: "Engineering",
+        slug: "engineering",
+      },
+    };
+
+    const element = SearchResultItem({
+      result,
+      isAttachmentResult: false,
+      showSpace: false,
+    });
+
+    const detailsChildren = getDetailsChildren(element);
+    const badgeGroup = detailsChildren.find((child: any) =>
+      React.Children.toArray(child.props?.children).some(
+        (badge: any) => badge.props?.children === "urgent",
+      ),
+    );
+
+    expect(badgeGroup).toBeTruthy();
+  });
 });

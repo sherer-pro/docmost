@@ -5,7 +5,6 @@ import {
   Text,
   TextInput,
   Divider,
-  Badge,
   ScrollArea,
   Avatar,
   Group,
@@ -18,18 +17,25 @@ import {
   IconFileDescription,
   IconSearch,
   IconCheck,
+  IconTag,
 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { useDebouncedValue } from "@mantine/hooks";
 import { useGetSpacesQuery } from "@/features/space/queries/space-query";
-import { useLicense } from "@/ee/hooks/use-license";
 import classes from "./search-spotlight-filters.module.css";
-import { isCloud } from "@/lib/config.ts";
 import { useAtom } from "jotai";
 import { workspaceAtom } from "@/features/user/atoms/current-user-atom.ts";
+import { getSearchContentTypeOptions } from "./search-content-type-options";
+import { useSearchLabelsQuery } from "../queries/search-query";
+import { IPageSearchLabel } from "../types/search.types";
+import {
+  getSearchFilterPayload,
+  SearchFilterPayload,
+  SelectedSearchLabel,
+} from "./search-filter-state";
 
 interface SearchSpotlightFiltersProps {
-  onFiltersChange?: (filters: any) => void;
+  onFiltersChange?: (filters: SearchFilterPayload) => void;
   onAskClick?: () => void;
   spaceId?: string;
   isAiMode?: boolean;
@@ -42,19 +48,30 @@ export function SearchSpotlightFilters({
   isAiMode = false,
 }: SearchSpotlightFiltersProps) {
   const { t } = useTranslation();
-  const { hasLicenseKey } = useLicense();
   const [selectedSpaceId, setSelectedSpaceId] = useState<string | null>(
     spaceId || null,
   );
   const [spaceSearchQuery, setSpaceSearchQuery] = useState("");
   const [debouncedSpaceQuery] = useDebouncedValue(spaceSearchQuery, 300);
   const [contentType, setContentType] = useState<string | null>("page");
+  const [selectedLabel, setSelectedLabel] =
+    useState<SelectedSearchLabel | null>(null);
+  const [labelSearchQuery, setLabelSearchQuery] = useState("");
+  const [debouncedLabelQuery] = useDebouncedValue(labelSearchQuery, 300);
   const [workspace] = useAtom(workspaceAtom);
+  const isLabelFilterDisabled = isAiMode || contentType === "attachment";
 
   const { data: spacesData } = useGetSpacesQuery({
     limit: 100,
     query: debouncedSpaceQuery,
   });
+  const { data: labels = [] } = useSearchLabelsQuery(
+    {
+      limit: 25,
+      query: debouncedLabelQuery,
+    },
+    !isLabelFilterDisabled,
+  );
 
   const selectedSpaceData = useMemo(() => {
     if (!spacesData?.items || !selectedSpaceId) return null;
@@ -73,38 +90,66 @@ export function SearchSpotlightFilters({
     });
   }, [spacesData?.items, selectedSpaceId]);
 
-  useEffect(() => {
-    if (onFiltersChange) {
-      onFiltersChange({
-        spaceId: selectedSpaceId,
-        contentType,
-      });
+  const availableLabels = useMemo<IPageSearchLabel[]>(() => {
+    if (
+      !selectedLabel ||
+      labels.some((label) => label.id === selectedLabel.id)
+    ) {
+      return labels;
     }
+
+    return [{ ...selectedLabel, type: "page" }, ...labels];
+  }, [labels, selectedLabel]);
+
+  const emitFilters = (
+    nextSpaceId: string | null,
+    nextContentType: string | null,
+    nextLabel: SelectedSearchLabel | null,
+  ) => {
+    onFiltersChange?.(
+      getSearchFilterPayload({
+        spaceId: nextSpaceId,
+        contentType: nextContentType,
+        label: nextLabel,
+        isAiMode,
+      }),
+    );
+  };
+
+  useEffect(() => {
+    emitFilters(selectedSpaceId, contentType, selectedLabel);
   }, []);
 
-  const contentTypeOptions = [
-    { value: "page", label: t("Pages") },
-    {
-      value: "attachment",
-      label: t("Attachments"),
-      disabled: !isCloud() && !hasLicenseKey,
-    },
-  ];
+  useEffect(() => {
+    if (!isLabelFilterDisabled || !selectedLabel) {
+      return;
+    }
+
+    setSelectedLabel(null);
+    onFiltersChange?.({
+      spaceId: selectedSpaceId,
+      contentType,
+      labelId: null,
+    });
+  }, [
+    contentType,
+    isLabelFilterDisabled,
+    onFiltersChange,
+    selectedLabel,
+    selectedSpaceId,
+  ]);
+
+  const contentTypeOptions = getSearchContentTypeOptions(t);
 
   const handleSpaceSelect = (spaceId: string | null) => {
     setSelectedSpaceId(spaceId);
-
-    if (onFiltersChange) {
-      onFiltersChange({
-        spaceId: spaceId,
-        contentType,
-      });
-    }
+    emitFilters(spaceId, contentType, selectedLabel);
   };
 
   const handleFilterChange = (filterType: string, value: any) => {
     let newSelectedSpaceId = selectedSpaceId;
     let newContentType = contentType;
+    let newSelectedLabel = selectedLabel;
 
     switch (filterType) {
       case "spaceId":
@@ -114,15 +159,19 @@ export function SearchSpotlightFilters({
       case "contentType":
         newContentType = value;
         setContentType(value);
+        if (value === "attachment") {
+          newSelectedLabel = null;
+          setSelectedLabel(null);
+        }
         break;
     }
 
-    if (onFiltersChange) {
-      onFiltersChange({
-        spaceId: newSelectedSpaceId,
-        contentType: newContentType,
-      });
-    }
+    emitFilters(newSelectedSpaceId, newContentType, newSelectedLabel);
+  };
+
+  const handleLabelSelect = (label: SelectedSearchLabel | null) => {
+    setSelectedLabel(label);
+    emitFilters(selectedSpaceId, contentType, label);
   };
 
   return (
@@ -235,6 +284,79 @@ export function SearchSpotlightFilters({
 
       <Menu
         shadow="md"
+        width={250}
+        position="bottom-start"
+        zIndex={getDefaultZIndex("max")}
+      >
+        <Menu.Target>
+          <Button
+            variant="subtle"
+            color="gray"
+            size="sm"
+            rightSection={<IconChevronDown size={14} />}
+            leftSection={<IconTag size={16} />}
+            className={classes.filterButton}
+            fw={500}
+            disabled={isLabelFilterDisabled}
+          >
+            {selectedLabel
+              ? `${t("Label")}: ${selectedLabel.name}`
+              : t("Label")}
+          </Button>
+        </Menu.Target>
+        <Menu.Dropdown>
+          <TextInput
+            placeholder={t("Search...")}
+            data-autofocus
+            autoFocus
+            leftSection={<IconSearch size={16} />}
+            value={labelSearchQuery}
+            onChange={(e) => setLabelSearchQuery(e.target.value)}
+            size="sm"
+            variant="filled"
+            radius="sm"
+            styles={{ input: { marginBottom: 8 } }}
+          />
+
+          <ScrollArea.Autosize mah={280}>
+            {selectedLabel && (
+              <>
+                <Menu.Item onClick={() => handleLabelSelect(null)}>
+                  <Text size="sm" fw={500}>
+                    {t("No labels")}
+                  </Text>
+                </Menu.Item>
+                <Divider my="xs" />
+              </>
+            )}
+
+            {availableLabels.length === 0 ? (
+              <Text size="sm" c="dimmed" px="sm" py="xs">
+                {t("No labels")}
+              </Text>
+            ) : (
+              availableLabels.map((label) => (
+                <Menu.Item
+                  key={label.id}
+                  onClick={() =>
+                    handleLabelSelect({ id: label.id, name: label.name })
+                  }
+                >
+                  <Group flex="1" gap="xs">
+                    <Text size="sm" fw={500} style={{ flex: 1 }} truncate>
+                      {label.name}
+                    </Text>
+                    {selectedLabel?.id === label.id && <IconCheck size={20} />}
+                  </Group>
+                </Menu.Item>
+              ))
+            )}
+          </ScrollArea.Autosize>
+        </Menu.Dropdown>
+      </Menu>
+
+      <Menu
+        shadow="md"
         width={220}
         position="bottom-start"
         zIndex={getDefaultZIndex("max")}
@@ -259,29 +381,20 @@ export function SearchSpotlightFilters({
             <Menu.Item
               key={option.value}
               onClick={() =>
-                !option.disabled &&
+                !(isAiMode && option.value === "attachment") &&
                 contentType !== option.value &&
                 handleFilterChange("contentType", option.value)
               }
-              disabled={
-                option.disabled || (isAiMode && option.value === "attachment")
-              }
+              disabled={isAiMode && option.value === "attachment"}
             >
               <Group flex="1" gap="xs">
                 <div>
                   <Text size="sm">{option.label}</Text>
-                  {option.disabled && (
-                    <Badge size="xs" mt={4}>
-                      {t("Enterprise")}
-                    </Badge>
+                  {isAiMode && option.value === "attachment" && (
+                    <Text size="xs" mt={4}>
+                      {t("AI Answers not available for attachments")}
+                    </Text>
                   )}
-                  {!option.disabled &&
-                    isAiMode &&
-                    option.value === "attachment" && (
-                      <Text size="xs" mt={4}>
-                        {t("AI Answers not available for attachments")}
-                      </Text>
-                    )}
                 </div>
                 {contentType === option.value && <IconCheck size={20} />}
               </Group>

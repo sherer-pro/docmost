@@ -110,6 +110,8 @@ export function SearchResultItem({
       pageResult.breadcrumbs && pageResult.breadcrumbs.length > 0
         ? pageResult.breadcrumbs.map((crumb) => crumb.title).join(" / ")
         : null;
+    const labels = pageResult.labels ?? [];
+    const hasBadges = Boolean(showSpace && pageResult.space) || labels.length > 0;
 
     return (
       <Spotlight.Action
@@ -124,10 +126,19 @@ export function SearchResultItem({
           <div style={{ flex: 1 }}>
             <Text>{pageResult.title}</Text>
 
-            {showSpace && pageResult.space && (
-              <Badge variant="light" size="xs" color="gray">
-                {pageResult.space.name}
-              </Badge>
+            {hasBadges && (
+              <Group gap={4} mt={2}>
+                {showSpace && pageResult.space && (
+                  <Badge variant="light" size="xs" color="gray">
+                    {pageResult.space.name}
+                  </Badge>
+                )}
+                {labels.map((label) => (
+                  <Badge key={label.id} variant="light" size="xs" color="blue">
+                    {label.name}
+                  </Badge>
+                ))}
+              </Group>
             )}
 
             {breadcrumbsText && (

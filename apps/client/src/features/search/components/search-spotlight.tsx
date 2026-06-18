@@ -12,20 +12,23 @@ import { useAiSearch } from "../../../ee/ai/hooks/use-ai-search.ts";
 import { SearchResultItem } from "./search-result-item.tsx";
 import { AiSearchResult } from "../../../ee/ai/components/ai-search-result.tsx";
 import { useLicense } from "@/ee/hooks/use-license.tsx";
-import { isCloud } from "@/lib/config.ts";
 
 interface SearchSpotlightProps {
   spaceId?: string;
 }
+
+interface SearchFilters {
+  spaceId?: string | null;
+  contentType?: string;
+  labelId?: string | null;
+}
+
 export function SearchSpotlight({ spaceId }: SearchSpotlightProps) {
   const { t } = useTranslation();
   const { hasLicenseKey } = useLicense();
   const [query, setQuery] = useState("");
   const [debouncedSearchQuery] = useDebouncedValue(query, 300);
-  const [filters, setFilters] = useState<{
-    spaceId?: string | null;
-    contentType?: string;
-  }>({
+  const [filters, setFilters] = useState<SearchFilters>({
     contentType: "page",
   });
   const [isAiMode, setIsAiMode] = useState(false);
@@ -42,8 +45,16 @@ export function SearchSpotlight({ spaceId }: SearchSpotlightProps) {
       params.spaceId = filters.spaceId;
     }
 
+    if (
+      filters.labelId &&
+      filters.contentType !== "attachment" &&
+      !isAiMode
+    ) {
+      params.labelId = filters.labelId;
+    }
+
     return params;
-  }, [debouncedSearchQuery, filters]);
+  }, [debouncedSearchQuery, filters, isAiMode]);
 
   const { data: searchResults, isLoading } = useUnifiedSearch(
     searchParams,
@@ -83,8 +94,10 @@ export function SearchSpotlight({ spaceId }: SearchSpotlightProps) {
   }, [aiSearchError, t]);
 
   // Determine result type for rendering
-  const isAttachmentSearch =
-    filters.contentType === "attachment" && (hasLicenseKey || isCloud());
+  const isAttachmentSearch = filters.contentType === "attachment";
+  const hasLabelSearch =
+    Boolean(filters.labelId) && filters.contentType !== "attachment" && !isAiMode;
+  const hasSearchInput = query.trim().length > 0 || hasLabelSearch;
 
   const resultItems = (searchResults || []).map((result) => (
     <SearchResultItem
@@ -95,7 +108,7 @@ export function SearchSpotlight({ spaceId }: SearchSpotlightProps) {
     />
   ));
 
-  const handleFiltersChange = (newFilters: any) => {
+  const handleFiltersChange = (newFilters: SearchFilters) => {
     setFilters(newFilters);
   };
 
@@ -180,11 +193,11 @@ export function SearchSpotlight({ spaceId }: SearchSpotlightProps) {
             </>
           ) : (
             <>
-              {query.length === 0 && resultItems.length === 0 && (
+              {!hasSearchInput && resultItems.length === 0 && (
                 <Spotlight.Empty>{t("Start typing to search...")}</Spotlight.Empty>
               )}
 
-              {query.length > 0 && !isLoading && resultItems.length === 0 && (
+              {hasSearchInput && !isLoading && resultItems.length === 0 && (
                 <Spotlight.Empty>{t("No results found...")}</Spotlight.Empty>
               )}
 

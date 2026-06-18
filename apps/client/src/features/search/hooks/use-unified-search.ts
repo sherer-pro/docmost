@@ -8,8 +8,6 @@ import {
   IPageSearch,
   IPageSearchParams,
 } from "@/features/search/types/search.types";
-import { useLicense } from "@/ee/hooks/use-license";
-import { isCloud } from "@/lib/config";
 
 export type UnifiedSearchResult = IPageSearch | IAttachmentSearch;
 
@@ -17,21 +15,46 @@ export interface UseUnifiedSearchParams extends IPageSearchParams {
   contentType?: string;
 }
 
+export function getUnifiedSearchType(contentType?: string) {
+  return contentType === "attachment" ? "attachment" : "page";
+}
+
+export function isUnifiedSearchEnabled(
+  params: UseUnifiedSearchParams,
+  enabled = true,
+) {
+  const searchType = getUnifiedSearchType(params.contentType);
+  const hasTextQuery = params.query.trim().length > 0;
+  const hasLabelFilter = searchType === "page" && Boolean(params.labelId);
+
+  return enabled && (hasTextQuery || hasLabelFilter);
+}
+
+export function getUnifiedSearchBackendParams(
+  params: UseUnifiedSearchParams,
+  searchType = getUnifiedSearchType(params.contentType),
+): IPageSearchParams {
+  const { contentType, ...backendParams } = params;
+
+  if (searchType === "attachment") {
+    const { labelId, ...attachmentParams } = backendParams;
+    return attachmentParams;
+  }
+
+  return backendParams;
+}
+
 export function useUnifiedSearch(
   params: UseUnifiedSearchParams,
   enabled: boolean = true,
 ): UseQueryResult<UnifiedSearchResult[], Error> {
-  const { hasLicenseKey } = useLicense();
-
-  const isAttachmentSearch =
-    params.contentType === "attachment" && (isCloud() || hasLicenseKey);
-  const searchType = isAttachmentSearch ? "attachment" : "page";
+  const searchType = getUnifiedSearchType(params.contentType);
+  const isAttachmentSearch = searchType === "attachment";
 
   return useQuery({
     queryKey: ["unified-search", searchType, params],
     queryFn: async () => {
-      // Remove contentType from backend params since it's only used for frontend routing
-      const { contentType, ...backendParams } = params;
+      const backendParams = getUnifiedSearchBackendParams(params, searchType);
 
       if (isAttachmentSearch) {
         return await searchAttachments(backendParams);
@@ -39,6 +62,6 @@ export function useUnifiedSearch(
         return await searchPage(backendParams);
       }
     },
-    enabled: !!params.query && enabled,
+    enabled: isUnifiedSearchEnabled(params, enabled),
   });
 }
