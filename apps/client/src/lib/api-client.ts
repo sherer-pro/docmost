@@ -108,6 +108,22 @@ function shouldSkipEnvelopeUnwrap(config: {
   return config.responseType === "blob" || Boolean(config.skipEnvelopeUnwrap);
 }
 
+export function isApiResponseEnvelope<T>(
+  value: unknown,
+): value is ApiResponseEnvelope<T> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "data" in value &&
+    "success" in value &&
+    "status" in value
+  );
+}
+
+export function unwrapApiResponse<T>(value: unknown): T {
+  return isApiResponseEnvelope<T>(value) ? (value.data as T) : (value as T);
+}
+
 /**
  * Reads a cookie value by its name.
  *

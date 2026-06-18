@@ -1,4 +1,4 @@
-import api from "@/lib/api-client";
+import api, { unwrapApiResponse } from "@/lib/api-client";
 import {
   ICopyPageToSpace,
   IExportPageParams,
@@ -218,7 +218,7 @@ export async function uploadFile(
     },
   );
 
-  return req.data;
+  return unwrapApiResponse<IAttachment>(req);
 }
 
 export interface IPageLabel {
@@ -374,4 +374,3 @@ export async function closePageGroupAccess(
 ): Promise<void> {
   await api.post(`/pages/${pageId}/actions/access/close-group`, payload);
 }
-

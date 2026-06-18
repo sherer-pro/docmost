@@ -1,4 +1,4 @@
-import api from "@/lib/api-client";
+import api, { unwrapApiResponse } from "@/lib/api-client";
 import loadImage from "blueimp-load-image";
 import {
   AvatarIconType,
@@ -62,13 +62,13 @@ export async function uploadIcon(
     "/attachments/actions/upload-image",
     formData,
     {
-    headers: {
-      "Content-Type": "multipart/form-data",
-    },
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
     },
   );
 
-  return response.data;
+  return unwrapApiResponse<IAttachment>(response);
 }
 
 export async function uploadUserAvatar(file: File): Promise<IAttachment> {
