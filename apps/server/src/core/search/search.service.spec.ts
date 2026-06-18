@@ -28,4 +28,68 @@ describe('SearchService', () => {
   it('should be defined', () => {
     expect(service).toBeDefined();
   });
+
+  it('keeps readable page suggestions after access filtering', async () => {
+    const sourcePage = {
+      id: 'page-1',
+      slugId: 'page-1',
+      title: 'Test Page EN',
+      icon: null,
+      spaceId: 'space-1',
+      workspaceId: 'workspace-1',
+    };
+    let selectedColumns: string[] = [];
+    const pageSearchQuery = {
+      select: jest.fn((columns: string[]) => {
+        selectedColumns = columns;
+        return pageSearchQuery;
+      }),
+      where: jest.fn(() => pageSearchQuery),
+      limit: jest.fn(() => pageSearchQuery),
+      execute: jest.fn(async () => [
+        Object.fromEntries(
+          selectedColumns.map((column) => [column, sourcePage[column]]),
+        ),
+      ]),
+    };
+    const db = {
+      selectFrom: jest.fn(() => pageSearchQuery),
+    };
+    const pageAccessService = {
+      getEffectiveAccess: jest.fn(async (page, user) => ({
+        capabilities: {
+          canRead: page.workspaceId === user.workspaceId,
+        },
+      })),
+    };
+
+    const service = new SearchService(
+      db as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      pageAccessService as any,
+    );
+
+    const result = await service.searchSuggestions(
+      {
+        query: 'Tes',
+        includePages: true,
+        spaceId: 'space-1',
+        limit: 10,
+      },
+      {
+        id: 'user-1',
+        workspaceId: 'workspace-1',
+      } as any,
+      'workspace-1',
+    );
+
+    expect(result.pages).toEqual([sourcePage]);
+    expect(pageAccessService.getEffectiveAccess).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: 'workspace-1' }),
+      expect.objectContaining({ workspaceId: 'workspace-1' }),
+    );
+  });
 });

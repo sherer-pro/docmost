@@ -23,12 +23,26 @@ export function usePageSearchQuery(
   });
 }
 
+export function getSearchSuggestionQueryKey(params: SearchSuggestionParams) {
+  return [
+    "search-suggestion",
+    {
+      query: params.query,
+      includeUsers: Boolean(params.includeUsers),
+      includeGroups: Boolean(params.includeGroups),
+      includePages: Boolean(params.includePages),
+      spaceId: params.spaceId ?? null,
+      limit: params.limit ?? 10,
+    },
+  ] as const;
+}
+
 export function useSearchSuggestionsQuery(
   params: SearchSuggestionParams & { preload?: boolean },
 ): UseQueryResult<ISuggestionResult, Error> {
   const { preload, ...queryParams } = params;
   return useQuery({
-    queryKey: ["search-suggestion", params.query],
+    queryKey: getSearchSuggestionQueryKey(queryParams),
     staleTime: 60 * 1000, // 1min
     queryFn: () => searchSuggestions(queryParams),
     enabled: preload || !!params.query,
