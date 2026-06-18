@@ -21,7 +21,7 @@ import {
 import { generateJitteredKeyBetween } from "fractional-indexing-jittered";
 import { SpaceTreeNode } from "@/features/page/tree/types.ts";
 import { buildPageUrl } from "@/features/page/page.utils.ts";
-import { dropTreeNode } from "@/features/page/tree/utils";
+import { dropTreeNode, mapPageToTreeNode } from "@/features/page/tree/utils";
 import { getSpaceUrl } from "@/lib/config.ts";
 import { useQueryEmit } from "@/features/websocket/use-query-emit.ts";
 import { userAtom } from "@/features/user/atoms/current-user-atom.ts";
@@ -56,15 +56,7 @@ export function useTreeMutation<T>(spaceId: string) {
       throw new Error("Failed to create page");
     }
 
-    const data = {
-      id: createdPage.id,
-      slugId: createdPage.slugId,
-      name: "",
-      position: createdPage.position,
-      spaceId: createdPage.spaceId,
-      parentPageId: createdPage.parentPageId,
-      children: [],
-    } as any;
+    const data = mapPageToTreeNode(createdPage);
 
     let lastIndex: number;
     if (parentId === null) {
@@ -110,7 +102,7 @@ export function useTreeMutation<T>(spaceId: string) {
     const pageUrl = buildPageUrl(
       spaceSlug,
       createdPage.slugId,
-      createdPage.title
+      createdPage.title,
     );
     navigate(pageUrl);
     return data;
@@ -183,7 +175,7 @@ export function useTreeMutation<T>(spaceId: string) {
       // check if the previous still has children
       // if no children left, change 'hasChildren' to false, to make the page toggle arrows work properly
       const childrenCount = previousParent.children.filter(
-        (child) => child.id !== draggedNodeId
+        (child) => child.id !== draggedNodeId,
       ).length;
       if (childrenCount === 0) {
         tree.update({
@@ -227,7 +219,13 @@ export function useTreeMutation<T>(spaceId: string) {
     try {
       await movePageMutation.mutateAsync(payload);
 
-      updateCacheOnMovePage(spaceId, draggedNodeId, oldParentId, args.parentId, pageData);
+      updateCacheOnMovePage(
+        spaceId,
+        draggedNodeId,
+        oldParentId,
+        args.parentId,
+        pageData,
+      );
 
       setTimeout(() => {
         emit({
@@ -261,7 +259,7 @@ export function useTreeMutation<T>(spaceId: string) {
 
   const isPageInNode = (
     node: { data: SpaceTreeNode; children?: any[] },
-    pageSlug: string
+    pageSlug: string,
   ): boolean => {
     if (node.data.slugId === pageSlug) {
       return true;

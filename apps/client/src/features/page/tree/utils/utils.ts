@@ -1,6 +1,29 @@
-import { IPage, ISidebarNode } from "@/features/page/types/page.types.ts";
+import type { IDatabase } from "@/features/database/types/database.types.ts";
+import type {
+  IPage,
+  ISidebarNode,
+  PageCustomFieldStatus,
+} from "@/features/page/types/page.types.ts";
 import { SpaceTreeNode } from "@/features/page/tree/types.ts";
 import { SimpleTree } from "react-arborist";
+
+type TreePageSource = Pick<
+  IPage,
+  | "id"
+  | "title"
+  | "icon"
+  | "position"
+  | "hasChildren"
+  | "spaceId"
+  | "parentPageId"
+> &
+  Partial<Pick<IPage, "slugId" | "customFields" | "access" | "databaseId">>;
+
+type TreeDatabaseSource = Pick<
+  IDatabase,
+  "id" | "spaceId" | "name" | "icon" | "pageId"
+> &
+  Partial<Pick<IDatabase, "status">>;
 
 export function sortPositionKeys(keys: any[]) {
   return keys.sort((a, b) => {
@@ -10,29 +33,68 @@ export function sortPositionKeys(keys: any[]) {
   });
 }
 
+export function mapPageToTreeNode(
+  page: TreePageSource,
+  overrides: Partial<SpaceTreeNode> = {},
+): SpaceTreeNode {
+  return {
+    id: page.id,
+    nodeType: "page",
+    slugId: page.slugId ?? null,
+    databaseId: page.databaseId ?? null,
+    name: page.title ?? "",
+    icon: page.icon ?? null,
+    status: page.customFields?.status ?? null,
+    position: page.position ?? "",
+    hasChildren: Boolean(page.hasChildren),
+    spaceId: page.spaceId,
+    parentPageId: page.parentPageId ?? null,
+    access: page.access,
+    ...overrides,
+    children: overrides.children ?? [],
+  };
+}
+
+export function mapDatabaseToTreeNode(
+  database: TreeDatabaseSource,
+  page: TreePageSource,
+  overrides: Partial<SpaceTreeNode> = {},
+): SpaceTreeNode {
+  return {
+    id: page.id,
+    nodeType: "database",
+    slugId: page.slugId ?? null,
+    databaseId: database.id,
+    name: database.name ?? page.title ?? "",
+    icon: database.icon ?? page.icon ?? null,
+    status:
+      (database.status as PageCustomFieldStatus | null | undefined) ??
+      page.customFields?.status ??
+      null,
+    position: page.position ?? "",
+    hasChildren: Boolean(page.hasChildren),
+    spaceId: database.spaceId ?? page.spaceId,
+    parentPageId: page.parentPageId ?? null,
+    access: page.access,
+    ...overrides,
+    children: overrides.children ?? [],
+  };
+}
+
 export function buildTree(nodes: Array<ISidebarNode | IPage>): SpaceTreeNode[] {
   const pageMap: Record<string, SpaceTreeNode> = {};
 
   const tree: SpaceTreeNode[] = [];
 
   nodes.forEach((node) => {
-    const isSidebarNode = 'nodeType' in node;
+    const isSidebarNode = "nodeType" in node;
 
-    pageMap[node.id] = {
-      id: node.id,
-      nodeType: isSidebarNode ? node.nodeType : 'page',
+    pageMap[node.id] = mapPageToTreeNode(node, {
+      nodeType: isSidebarNode ? node.nodeType : "page",
       slugId: isSidebarNode ? (node.slugId ?? null) : node.slugId,
       databaseId: isSidebarNode ? (node.databaseId ?? null) : null,
-      name: node.title,
-      icon: node.icon,
-      status: node.customFields?.status,
-      position: node.position,
-      hasChildren: node.hasChildren,
-      spaceId: node.spaceId,
-      parentPageId: node.parentPageId,
       access: isSidebarNode ? (node.access ?? undefined) : undefined,
-      children: [],
-    };
+    });
   });
 
   nodes.forEach((node) => {
@@ -252,10 +314,15 @@ export function insertDatabaseRowNode(
   rowNode: SpaceTreeNode,
   index?: number,
 ): { tree: SpaceTreeNode[]; index: number } {
-  const treeWithParentChildren = setTreeNodeHasChildren(treeItems, parentId, true);
+  const treeWithParentChildren = setTreeNodeHasChildren(
+    treeItems,
+    parentId,
+    true,
+  );
   const nextTree = new SimpleTree(treeWithParentChildren);
   const parentNode = nextTree.find(parentId);
-  const insertionIndex = typeof index === 'number' ? index : (parentNode?.children?.length ?? 0);
+  const insertionIndex =
+    typeof index === "number" ? index : (parentNode?.children?.length ?? 0);
 
   nextTree.create({
     parentId,
@@ -266,6 +333,54 @@ export function insertDatabaseRowNode(
   return {
     tree: nextTree.data,
     index: insertionIndex,
+  };
+}
+
+export function insertOrUpdateTreeNode(
+  treeItems: SpaceTreeNode[],
+  node: SpaceTreeNode,
+  index?: number,
+): { tree: SpaceTreeNode[]; index: number; inserted: boolean } {
+  const parentId = node.parentPageId ?? null;
+  const treeWithParentChildren = parentId
+    ? setTreeNodeHasChildren(treeItems, parentId, true)
+    : treeItems;
+  const nextTree = new SimpleTree<SpaceTreeNode>(treeWithParentChildren);
+  const existingNode = nextTree.find(node.id);
+
+  if (existingNode) {
+    const { children: _children, ...changes } = node;
+
+    nextTree.update({
+      id: node.id,
+      changes,
+    });
+
+    return {
+      tree: nextTree.data,
+      index: existingNode.childIndex,
+      inserted: false,
+    };
+  }
+
+  const parentNode = parentId ? nextTree.find(parentId) : null;
+  const insertionIndex =
+    typeof index === "number"
+      ? index
+      : parentId
+        ? (parentNode?.children?.length ?? 0)
+        : nextTree.data.length;
+
+  nextTree.create({
+    parentId,
+    index: insertionIndex,
+    data: node,
+  });
+
+  return {
+    tree: nextTree.data,
+    index: insertionIndex,
+    inserted: true,
   };
 }
 
