@@ -55,9 +55,17 @@ export function useGetDatabaseQuery(
 export function useCreateDatabaseMutation(spaceId?: string) {
   return useMutation({
     mutationFn: (payload: ICreateDatabasePayload) => createDatabase(payload),
-    onSuccess: () => {
-      invalidateDatabaseEntity({ spaceId }, { client: queryClient });
-      invalidateSidebarTree({ spaceId }, { client: queryClient });
+    onSuccess: (database) => {
+      const resolvedSpaceId = database.spaceId ?? spaceId;
+
+      invalidateDatabaseEntity(
+        { spaceId: resolvedSpaceId },
+        { client: queryClient },
+      );
+      invalidateSidebarTree(
+        { spaceId: resolvedSpaceId },
+        { client: queryClient },
+      );
     },
   });
 }

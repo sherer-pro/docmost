@@ -122,6 +122,8 @@ function invalidateDatabaseTreeConsistency() {
   invalidateDatabaseRowContext({}, { client: queryClient });
 }
 
+type SidebarCacheItem = Partial<IPage> & Partial<ISidebarNode>;
+
 export function useCreatePageMutation() {
   const { t } = useTranslation();
   return useMutation<IPage, Error, Partial<IPageInput>>({
@@ -267,6 +269,7 @@ export function useConvertPageToDatabaseMutation() {
   return useMutation({
     mutationFn: (pageId: string) => convertPageToDatabase(pageId),
     onSuccess: (data) => {
+      syncTreeNodeAfterDatabaseConversion(data);
       /**
        * It is important to invalidate ALL `pages` caches, not just the key by UUID.
        *
@@ -288,6 +291,62 @@ export function useConvertPageToDatabaseMutation() {
       );
     },
   });
+}
+
+function syncTreeNodeAfterDatabaseConversion(data: {
+  databaseId: string;
+  pageId: string;
+}) {
+  const currentTreeData = jotaiStore.get(treeDataAtom);
+  if (currentTreeData.length === 0) {
+    return;
+  }
+
+  const treeApi = new SimpleTree<SpaceTreeNode>(currentTreeData);
+  const treeNode = treeApi.find(data.pageId);
+  if (!treeNode) {
+    return;
+  }
+
+  const pageById = queryClient.getQueryData<IPage>(
+    PAGE_QUERY_KEYS.page(data.pageId),
+  );
+  const pageBySlug = treeNode.data.slugId
+    ? queryClient.getQueryData<IPage>(
+        PAGE_QUERY_KEYS.page(treeNode.data.slugId),
+      )
+    : undefined;
+  const cachedPage = pageById ?? pageBySlug;
+
+  if (cachedPage) {
+    const updatedPage = {
+      ...cachedPage,
+      databaseId: data.databaseId,
+    };
+
+    queryClient.setQueryData(PAGE_QUERY_KEYS.page(updatedPage.id), updatedPage);
+    queryClient.setQueryData(
+      PAGE_QUERY_KEYS.page(updatedPage.slugId),
+      updatedPage,
+    );
+  }
+
+  treeApi.update({
+    id: data.pageId,
+    changes: {
+      nodeType: "database",
+      databaseId: data.databaseId,
+      slugId: cachedPage?.slugId ?? treeNode.data.slugId ?? null,
+      name: cachedPage?.title ?? treeNode.data.name,
+      icon: cachedPage?.icon ?? treeNode.data.icon ?? null,
+      status: cachedPage?.customFields?.status ?? treeNode.data.status ?? null,
+      position: cachedPage?.position ?? treeNode.data.position,
+      parentPageId: cachedPage?.parentPageId ?? treeNode.data.parentPageId,
+      hasChildren: treeNode.data.hasChildren,
+    },
+  });
+
+  jotaiStore.set(treeDataAtom, treeApi.data);
 }
 
 export function useMovePageMutation() {
@@ -462,101 +521,133 @@ export function useDeletedPagesQuery(
   });
 }
 
-export function invalidateOnCreatePage(data: Partial<IPage>) {
-  const newPage: Partial<IPage> = {
-    creatorId: data.creatorId,
-    hasChildren: data.hasChildren,
-    icon: data.icon,
-    id: data.id,
-    parentPageId: data.parentPageId,
-    position: data.position,
-    slugId: data.slugId,
-    spaceId: data.spaceId,
-    title: data.title,
-  };
-
-  let queryKey: QueryKey = null;
-  if (data.parentPageId === null) {
-    queryKey = PAGE_QUERY_KEYS.rootSidebar(data.spaceId);
-  } else {
-    queryKey = PAGE_QUERY_KEYS.sidebar({
-      pageId: data.parentPageId,
-      spaceId: data.spaceId,
-    });
+export function invalidateOnCreatePage(
+  data: Partial<IPage> & Partial<ISidebarNode>,
+) {
+  if (!data.id || !data.spaceId) {
+    return;
   }
 
-  //update all sidebar pages
-  queryClient.setQueryData<InfiniteData<IPagination<Partial<IPage>>>>(
-    queryKey,
-    (old) => {
-      if (!old) return old;
-      return {
-        ...old,
-        pages: old.pages.map((page, index) => {
-          if (index === old.pages.length - 1) {
-            return {
-              ...page,
-              items: [...page.items, newPage],
-            };
-          }
-          return page;
-        }),
-      };
-    },
+  const parentPageId = data.parentPageId ?? null;
+  const newPage: SidebarCacheItem = {
+    creatorId: data.creatorId,
+    customFields: data.customFields,
+    databaseId: data.databaseId ?? null,
+    hasChildren: Boolean(data.hasChildren),
+    icon: data.icon ?? null,
+    id: data.id,
+    nodeType: data.nodeType ?? "page",
+    parentPageId,
+    position: data.position ?? "",
+    slugId: data.slugId ?? null,
+    spaceId: data.spaceId,
+    title: data.title ?? "",
+  };
+
+  const targetSidebarCacheKeys = getParentSidebarCacheKeys(
+    data.spaceId,
+    parentPageId,
   );
 
+  targetSidebarCacheKeys.forEach((queryKey) => {
+    queryClient.setQueryData<InfiniteData<IPagination<SidebarCacheItem>>>(
+      queryKey,
+      (old) => {
+        if (!old) return old;
+
+        const exists = old.pages.some((page) =>
+          page.items.some((sidebarPage) => sidebarPage.id === data.id),
+        );
+        if (exists) return old;
+
+        return {
+          ...old,
+          pages: old.pages.map((page, index) => {
+            if (index === old.pages.length - 1) {
+              return {
+                ...page,
+                items: [...page.items, newPage],
+              };
+            }
+            return page;
+          }),
+        };
+      },
+    );
+  });
+
   //update sidebar haschildren
-  if (data.parentPageId !== null) {
-    //update sub sidebar pages haschildern
-    const subSideBarMatches = queryClient.getQueriesData({
-      queryKey: [QUERY_KEY_SPACE.sidebarPages],
-      exact: false,
-    });
+  if (parentPageId !== null) {
+    const allSidebarCacheKeys = getSpaceSidebarCacheKeys(data.spaceId);
 
-    subSideBarMatches.forEach(([key, d]) => {
-      queryClient.setQueryData<InfiniteData<IPagination<IPage>>>(key, (old) => {
-        if (!old) return old;
-        return {
-          ...old,
-          pages: old.pages.map((page) => ({
-            ...page,
-            items: page.items.map((sidebarPage: IPage) =>
-              sidebarPage.id === data.parentPageId
-                ? { ...sidebarPage, hasChildren: true }
-                : sidebarPage,
-            ),
-          })),
-        };
-      });
-    });
-
-    //update root sidebar pages haschildern
-    const rootSideBarMatches = queryClient.getQueriesData({
-      queryKey: PAGE_QUERY_KEYS.rootSidebar(data.spaceId),
-      exact: false,
-    });
-
-    rootSideBarMatches.forEach(([key, d]) => {
-      queryClient.setQueryData<InfiniteData<IPagination<IPage>>>(key, (old) => {
-        if (!old) return old;
-        return {
-          ...old,
-          pages: old.pages.map((page) => ({
-            ...page,
-            items: page.items.map((sidebarPage: IPage) =>
-              sidebarPage.id === data.parentPageId
-                ? { ...sidebarPage, hasChildren: true }
-                : sidebarPage,
-            ),
-          })),
-        };
-      });
+    allSidebarCacheKeys.forEach((queryKey) => {
+      queryClient.setQueryData<InfiniteData<IPagination<SidebarCacheItem>>>(
+        queryKey,
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            pages: old.pages.map((page) => ({
+              ...page,
+              items: page.items.map((sidebarPage: IPage) =>
+                sidebarPage.id === parentPageId
+                  ? { ...sidebarPage, hasChildren: true }
+                  : sidebarPage,
+              ),
+            })),
+          };
+        },
+      );
     });
   }
 
   //update recent changes
   invalidateRecentChanges({ spaceId: data.spaceId }, { client: queryClient });
   invalidateDatabaseTreeConsistency();
+}
+
+function getParentSidebarCacheKeys(
+  spaceId: string,
+  parentPageId: string | null,
+): QueryKey[] {
+  return queryClient
+    .getQueriesData<InfiniteData<IPagination<SidebarCacheItem>>>({
+      predicate: (query) => {
+        if (query.queryKey[0] === QUERY_KEY_SPACE.rootSidebarPages) {
+          return parentPageId === null && query.queryKey[1] === spaceId;
+        }
+
+        if (
+          query.queryKey[0] === QUERY_KEY_SPACE.sidebarPages &&
+          parentPageId !== null
+        ) {
+          const params = query.queryKey[1] as SidebarKeyParams | undefined;
+          return params?.spaceId === spaceId && params?.pageId === parentPageId;
+        }
+
+        return false;
+      },
+    })
+    .map(([key]) => key);
+}
+
+function getSpaceSidebarCacheKeys(spaceId: string): QueryKey[] {
+  return queryClient
+    .getQueriesData<InfiniteData<IPagination<SidebarCacheItem>>>({
+      predicate: (query) => {
+        if (query.queryKey[0] === QUERY_KEY_SPACE.rootSidebarPages) {
+          return query.queryKey[1] === spaceId;
+        }
+
+        if (query.queryKey[0] === QUERY_KEY_SPACE.sidebarPages) {
+          const params = query.queryKey[1] as SidebarKeyParams | undefined;
+          return params?.spaceId === spaceId;
+        }
+
+        return false;
+      },
+    })
+    .map(([key]) => key);
 }
 
 export function invalidateOnUpdatePage(
@@ -841,4 +932,3 @@ export function invalidateOnDeletePage(pageId: string) {
   invalidateTrashList({}, { client: queryClient });
   invalidateDatabaseTreeConsistency();
 }
-

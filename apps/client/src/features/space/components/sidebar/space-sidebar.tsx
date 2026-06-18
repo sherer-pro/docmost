@@ -51,6 +51,13 @@ import { buildDatabaseUrl } from "@/features/page/page.utils.ts";
 import { userAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { PageEditMode } from "@/features/user/types/user.types.ts";
 import { buildPageEditModeByPageId } from "@/features/user/utils/page-edit-mode.ts";
+import { treeDataAtom } from "@/features/page/tree/atoms/tree-data-atom.ts";
+import {
+  insertOrUpdateTreeNode,
+  mapDatabaseToTreeNode,
+} from "@/features/page/tree/utils";
+import { useQueryEmit } from "@/features/websocket/use-query-emit.ts";
+import { PAGE_QUERY_KEYS } from "@/features/page/queries/query-keys.ts";
 
 export function SpaceSidebar() {
   const { t } = useTranslation();
@@ -60,6 +67,8 @@ export function SpaceSidebar() {
     useDisclosure(false);
   const [mobileSidebarOpened] = useAtom(mobileSidebarAtom);
   const [user, setUser] = useAtom(userAtom);
+  const [treeData, setTreeData] = useAtom(treeDataAtom);
+  const emit = useQueryEmit();
   const toggleMobileSidebar = useToggleSidebar(mobileSidebarAtom);
   const navigate = useNavigate();
 
@@ -86,10 +95,6 @@ export function SpaceSidebar() {
     try {
       const createdDatabase = await createDatabaseMutation.mutateAsync({
         spaceId: space.id,
-      });
-
-      await queryClient.invalidateQueries({
-        queryKey: ["root-sidebar-pages", space.id],
       });
 
       notifications.show({ message: t("Database created") });
@@ -120,8 +125,47 @@ export function SpaceSidebar() {
         });
       }
 
-      const databasePage = await getPageById({ pageId: createdDatabase.pageId });
-      navigate(buildDatabaseUrl(spaceSlug, databasePage.slugId, databasePage.title));
+      const databasePage = await getPageById({
+        pageId: createdDatabase.pageId,
+      });
+      queryClient.setQueryData(
+        PAGE_QUERY_KEYS.page(databasePage.id),
+        databasePage,
+      );
+      queryClient.setQueryData(
+        PAGE_QUERY_KEYS.page(databasePage.slugId),
+        databasePage,
+      );
+
+      const treeNodeData = mapDatabaseToTreeNode(createdDatabase, databasePage);
+      const {
+        tree: nextTreeData,
+        index: insertionIndex,
+        inserted,
+      } = insertOrUpdateTreeNode(treeData, treeNodeData);
+      setTreeData(nextTreeData);
+
+      if (treeNodeData.parentPageId) {
+        tree?.open(treeNodeData.parentPageId);
+      }
+
+      if (inserted) {
+        setTimeout(() => {
+          emit({
+            operation: "addTreeNode",
+            spaceId: treeNodeData.spaceId,
+            payload: {
+              parentId: treeNodeData.parentPageId,
+              index: insertionIndex,
+              node: treeNodeData,
+            },
+          });
+        }, 50);
+      }
+
+      navigate(
+        buildDatabaseUrl(spaceSlug, databasePage.slugId, databasePage.title),
+      );
     } catch {
       notifications.show({
         message: t("Failed to create database"),
@@ -257,7 +301,11 @@ export function SpaceSidebar() {
               <Group gap="xs">
                 <SpaceMenu spaceId={space.id} onSpaceSettings={openSettings} />
 
-                <Tooltip label={t("Create database")} withArrow position="right">
+                <Tooltip
+                  label={t("Create database")}
+                  withArrow
+                  position="right"
+                >
                   <ActionIcon
                     variant="default"
                     size={18}
