@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { load } from 'cheerio';
 import { lookup as dnsLookup } from 'node:dns/promises';
+import type { LookupAddress } from 'node:dns';
 import type { IncomingHttpHeaders, IncomingMessage } from 'node:http';
 import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
@@ -25,6 +26,17 @@ type LinkPreviewResponse = {
   headers: IncomingHttpHeaders;
   body: IncomingMessage;
 };
+
+type LinkPreviewFetchResult = {
+  finalUrl: URL;
+  html: string | null;
+};
+
+type LinkPreviewLookupCallback = (
+  err: NodeJS.ErrnoException | null,
+  address: string | LookupAddress[],
+  family?: number,
+) => void;
 
 export type LinkPreviewResult = {
   url: string;
@@ -84,6 +96,10 @@ export class LinkPreviewService {
     }
 
     const { finalUrl, html } = await this.fetchHtml(sourceUrl);
+    if (html === null) {
+      return this.buildFallbackPreview(finalUrl);
+    }
+
     const $ = load(html);
     const finalUrlString = finalUrl.toString();
     const title =
@@ -121,32 +137,41 @@ export class LinkPreviewService {
     };
   }
 
-  private async fetchHtml(
-    sourceUrl: URL,
-  ): Promise<{ finalUrl: URL; html: string }> {
+  private buildFallbackPreview(url: URL): LinkPreviewResult {
+    return {
+      url: url.toString(),
+      title: url.hostname,
+      description: '',
+      image: null,
+      siteName: url.hostname,
+    };
+  }
+
+  private async fetchHtml(sourceUrl: URL): Promise<LinkPreviewFetchResult> {
     let currentUrl = new URL(sourceUrl.toString());
 
     for (let hop = 0; hop <= LINK_PREVIEW_MAX_REDIRECTS; hop += 1) {
-      const targetAddress = await this.resolvePublicUrlAddress(currentUrl);
+      const targetAddresses = await this.resolvePublicUrlAddresses(currentUrl);
 
-      const response = await this.requestLinkPreview(
+      const response = await this.requestLinkPreviewFromAnyAddress(
         currentUrl,
-        targetAddress,
-      ).catch(() => {
-        throw new BadRequestException('Failed to fetch URL metadata');
-      });
+        targetAddresses,
+      );
+      if (!response) {
+        return { finalUrl: currentUrl, html: null };
+      }
 
       if (this.isRedirectResponse(response.statusCode)) {
         response.body.resume();
         const location = this.getHeaderValue(response.headers, 'location');
         if (!location) {
-          throw new BadRequestException('Failed to fetch URL metadata');
+          return { finalUrl: currentUrl, html: null };
         }
 
         try {
           currentUrl = new URL(location, currentUrl);
         } catch {
-          throw new BadRequestException('Failed to fetch URL metadata');
+          return { finalUrl: currentUrl, html: null };
         }
 
         continue;
@@ -154,13 +179,14 @@ export class LinkPreviewService {
 
       if (response.statusCode < 200 || response.statusCode >= 300) {
         response.body.resume();
-        throw new BadRequestException('Failed to fetch URL metadata');
+        return { finalUrl: currentUrl, html: null };
       }
 
       const contentType =
         this.getHeaderValue(response.headers, 'content-type')?.toLowerCase() ??
         '';
       if (
+        contentType &&
         !contentType.includes('text/html') &&
         !contentType.includes('application/xhtml+xml')
       ) {
@@ -176,10 +202,12 @@ export class LinkPreviewService {
       return { finalUrl: currentUrl, html };
     }
 
-    throw new BadRequestException('Too many redirects');
+    return { finalUrl: currentUrl, html: null };
   }
 
-  private async resolvePublicUrlAddress(url: URL): Promise<LinkPreviewAddress> {
+  private async resolvePublicUrlAddresses(
+    url: URL,
+  ): Promise<LinkPreviewAddress[]> {
     if (!['http:', 'https:'].includes(url.protocol)) {
       throw new BadRequestException('Only HTTP and HTTPS URLs are supported');
     }
@@ -194,10 +222,12 @@ export class LinkPreviewService {
         throw new BadRequestException('Unsafe target URL');
       }
 
-      return {
-        address: this.normalizeIpAddress(url.hostname),
-        family: hostIpVersion as 4 | 6,
-      };
+      return [
+        {
+          address: this.normalizeIpAddress(url.hostname),
+          family: hostIpVersion as 4 | 6,
+        },
+      ];
     }
 
     const resolvedAddresses = await dnsLookup(url.hostname, {
@@ -217,18 +247,35 @@ export class LinkPreviewService {
       throw new BadRequestException('Unsafe target URL');
     }
 
-    const targetAddress = resolvedAddresses.find(
-      (entry) => entry.family === 4 || entry.family === 6,
-    );
+    const targetAddresses = resolvedAddresses
+      .filter((entry) => entry.family === 4 || entry.family === 6)
+      .map((entry) => ({
+        address: entry.address,
+        family: entry.family as 4 | 6,
+      }));
 
-    if (!targetAddress) {
+    if (targetAddresses.length === 0) {
       throw new BadRequestException('Failed to resolve URL hostname');
     }
 
-    return {
-      address: targetAddress.address,
-      family: targetAddress.family as 4 | 6,
-    };
+    return targetAddresses;
+  }
+
+  private async requestLinkPreviewFromAnyAddress(
+    url: URL,
+    targetAddresses: LinkPreviewAddress[],
+  ): Promise<LinkPreviewResponse | null> {
+    for (const targetAddress of targetAddresses) {
+      const response = await this.requestLinkPreview(
+        url,
+        targetAddress,
+      ).catch(() => null);
+      if (response) {
+        return response;
+      }
+    }
+
+    return null;
   }
 
   private requestLinkPreview(
@@ -245,9 +292,7 @@ export class LinkPreviewService {
               'Mozilla/5.0 (compatible; DocmostBot/1.0; +https://docmost.com)',
             accept: 'text/html,application/xhtml+xml',
           },
-          lookup: (_hostname, _options, callback) => {
-            callback(null, targetAddress.address, targetAddress.family);
-          },
+          lookup: this.createPinnedAddressLookup(targetAddress),
           timeout: LINK_PREVIEW_TIMEOUT_MS,
         },
         (body) => {
@@ -265,6 +310,21 @@ export class LinkPreviewService {
       req.on('error', reject);
       req.end();
     });
+  }
+
+  private createPinnedAddressLookup(targetAddress: LinkPreviewAddress) {
+    return (
+      _hostname: string,
+      options: { all?: boolean },
+      callback: LinkPreviewLookupCallback,
+    ) => {
+      if (options.all) {
+        callback(null, [targetAddress]);
+        return;
+      }
+
+      callback(null, targetAddress.address, targetAddress.family);
+    };
   }
 
   private getHeaderValue(
