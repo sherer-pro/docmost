@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Post,
@@ -20,6 +21,16 @@ import { SessionService } from './session.service';
 @Controller('sessions')
 export class SessionController {
   constructor(private readonly sessionService: SessionService) {}
+
+  @HttpCode(HttpStatus.OK)
+  @Get()
+  async listSessionsViaGet(
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.listSessions(user, workspace, req);
+  }
 
   @HttpCode(HttpStatus.OK)
   @Post()

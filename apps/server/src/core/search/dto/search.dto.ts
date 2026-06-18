@@ -9,6 +9,18 @@ import {
   IsString,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { Transform } from 'class-transformer';
+
+function parseOptionalBoolean(value: unknown): unknown {
+  if (value === 'true') {
+    return true;
+  }
+  if (value === 'false') {
+    return false;
+  }
+
+  return value;
+}
 
 export class SearchDTO {
   @IsNotEmpty()
@@ -60,14 +72,17 @@ export class SearchSuggestionDTO {
   query: string;
 
   @IsOptional()
+  @Transform(({ value }) => parseOptionalBoolean(value))
   @IsBoolean()
   includeUsers?: boolean;
 
   @IsOptional()
+  @Transform(({ value }) => parseOptionalBoolean(value))
   @IsBoolean()
   includeGroups?: boolean;
 
   @IsOptional()
+  @Transform(({ value }) => parseOptionalBoolean(value))
   @IsBoolean()
   includePages?: boolean;
 

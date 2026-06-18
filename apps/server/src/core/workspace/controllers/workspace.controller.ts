@@ -2,9 +2,11 @@ import {
   Body,
   Controller,
   ForbiddenException,
+  Get,
   HttpCode,
   HttpStatus,
   Post,
+  Query,
   Req,
   Res,
   UseGuards,
@@ -50,9 +52,22 @@ export class WorkspaceController {
 
   @Public()
   @HttpCode(HttpStatus.OK)
+  @Get('/public')
+  async getWorkspacePublicInfoViaGet(@Req() req: any) {
+    return this.getWorkspacePublicInfo(req);
+  }
+
+  @Public()
+  @HttpCode(HttpStatus.OK)
   @Post('/public')
   async getWorkspacePublicInfo(@Req() req: any) {
     return this.workspaceService.getWorkspacePublicData(req.raw.workspaceId);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Get('/info')
+  async getWorkspaceViaGet(@AuthWorkspace() workspace: Workspace) {
+    return this.getWorkspace(workspace);
   }
 
   @HttpCode(HttpStatus.OK)
@@ -94,6 +109,17 @@ export class WorkspaceController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @Get('members')
+  async getWorkspaceMembersViaQuery(
+    @Query()
+    pagination: PaginationOptions,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.getWorkspaceMembers(pagination, user, workspace);
+  }
+
+  @HttpCode(HttpStatus.OK)
   @Post('members')
   async getWorkspaceMembers(
     @Body()
@@ -107,6 +133,15 @@ export class WorkspaceController {
     }
 
     return this.workspaceService.getWorkspaceUsers(user, workspace.id, pagination);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Get('members/count')
+  async getWorkspaceVisibleMembersCountViaGet(
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.getWorkspaceVisibleMembersCount(user, workspace);
   }
 
   @HttpCode(HttpStatus.OK)
@@ -178,6 +213,17 @@ export class WorkspaceController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @Get('invites')
+  async getInvitationsViaQuery(
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+    @Query()
+    pagination: PaginationOptions,
+  ) {
+    return this.getInvitations(user, workspace, pagination);
+  }
+
+  @HttpCode(HttpStatus.OK)
   @Post('invites')
   async getInvitations(
     @AuthUser() user: User,
@@ -196,6 +242,16 @@ export class WorkspaceController {
       workspace.id,
       pagination,
     );
+  }
+
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  @Get('invites/info')
+  async getInvitationByIdViaQuery(
+    @Query() dto: InvitationIdDto,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.getInvitationById(dto, workspace);
   }
 
   @Public()

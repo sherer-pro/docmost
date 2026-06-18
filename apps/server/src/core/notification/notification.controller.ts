@@ -1,9 +1,11 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { NotificationService } from './notification.service';
@@ -19,12 +21,27 @@ export class NotificationController {
   constructor(private readonly notificationService: NotificationService) {}
 
   @HttpCode(HttpStatus.OK)
+  @Get('/')
+  async getNotificationsViaQuery(
+    @Query() pagination: PaginationOptions,
+    @AuthUser() user: User,
+  ) {
+    return this.getNotifications(pagination, user);
+  }
+
+  @HttpCode(HttpStatus.OK)
   @Post('/')
   async getNotifications(
     @Body() pagination: PaginationOptions,
     @AuthUser() user: User,
   ) {
     return this.notificationService.findByUserId(user.id, pagination);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Get('unread-count')
+  async getUnreadCountViaGet(@AuthUser() user: User) {
+    return this.getUnreadCount(user);
   }
 
   @HttpCode(HttpStatus.OK)

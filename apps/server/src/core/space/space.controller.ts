@@ -19,7 +19,7 @@ import { SpaceService } from './services/space.service';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
 import { AuthWorkspace } from '../../common/decorators/auth-workspace.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { SpaceIdDto } from './dto/space-id.dto';
+import { SpaceIdDto, SpaceMembersQueryDto } from './dto/space-id.dto';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import { SpaceMemberService } from './services/space-member.service';
 import { User, Workspace } from '@docmost/db/types/entity.types';
@@ -197,10 +197,19 @@ export class SpaceController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @Get('member-users')
+  async getSpaceMemberUsersViaQuery(
+    @Query() query: SpaceMembersQueryDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.getSpaceMemberUsers(query, user, workspace);
+  }
+
+  @HttpCode(HttpStatus.OK)
   @Post('member-users')
   async getSpaceMemberUsers(
-    @Body() spaceIdDto: SpaceIdDto,
-    @Body() pagination: PaginationOptions,
+    @Body() spaceIdDto: SpaceMembersQueryDto,
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
@@ -216,16 +225,24 @@ export class SpaceController {
     return this.spaceMemberService.getSpaceUserMembers(
       spaceIdDto.spaceId,
       workspace.id,
-      pagination,
+      spaceIdDto,
     );
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Get('members')
+  async getSpaceMembersViaQuery(
+    @Query() query: SpaceMembersQueryDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.getSpaceMembers(query, user, workspace);
   }
 
   @HttpCode(HttpStatus.OK)
   @Post('members')
   async getSpaceMembers(
-    @Body() spaceIdDto: SpaceIdDto,
-    @Body()
-    pagination: PaginationOptions,
+    @Body() spaceIdDto: SpaceMembersQueryDto,
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
@@ -241,7 +258,7 @@ export class SpaceController {
     return this.spaceMemberService.getSpaceMembers(
       spaceIdDto.spaceId,
       workspace.id,
-      pagination,
+      spaceIdDto,
     );
   }
 

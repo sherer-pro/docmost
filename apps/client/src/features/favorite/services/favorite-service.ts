@@ -7,24 +7,23 @@ type FavoriteIdsResponse = {
   meta: IPagination<string>["meta"];
 };
 
-function unwrap<T>(value: unknown): T {
-  const response = value as { data?: T } & T;
-  return response.data ?? response;
-}
-
 export async function getFavorites(
   params?: QueryParams & { type?: FavoriteType; spaceId?: string },
 ): Promise<IPagination<IFavorite>> {
-  const req = await api.post<IPagination<IFavorite>>("/favorites", params);
-  return unwrap<IPagination<IFavorite>>(req);
+  const req = await api.get<IPagination<IFavorite>>("/favorites", {
+    params,
+  });
+  return req.data;
 }
 
 export async function getFavoriteIds(data: {
   type: FavoriteType;
   spaceId?: string;
 }): Promise<FavoriteIdsResponse> {
-  const req = await api.post<FavoriteIdsResponse>("/favorites/ids", data);
-  return unwrap<FavoriteIdsResponse>(req);
+  const req = await api.get<FavoriteIdsResponse>("/favorites/ids", {
+    params: data,
+  });
+  return req.data;
 }
 
 export async function addFavorite(data: {

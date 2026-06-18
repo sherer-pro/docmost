@@ -11,6 +11,7 @@ import { NotificationModule } from '../notification/notification.module';
 import { LabelModule } from '../label/label.module';
 import { BacklinkService } from './services/backlink.service';
 import { TransclusionModule } from './transclusion/transclusion.module';
+import { LinkPreviewService } from './services/link-preview.service';
 
 @Module({
   controllers: [PageController],
@@ -20,6 +21,7 @@ import { TransclusionModule } from './transclusion/transclusion.module';
     PageHistoryRecorderService,
     TrashCleanupService,
     BacklinkService,
+    LinkPreviewService,
   ],
   exports: [PageService, PageHistoryService, PageHistoryRecorderService],
   imports: [

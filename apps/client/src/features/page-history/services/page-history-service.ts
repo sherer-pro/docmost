@@ -6,9 +6,8 @@ export async function getPageHistoryList(
   pageId: string,
   cursor?: string,
 ): Promise<IPagination<IPageHistory>> {
-  const req = await api.post("/pages/history", {
-    pageId,
-    cursor,
+  const req = await api.get("/pages/history", {
+    params: { pageId, cursor },
   });
   return req.data;
 }
@@ -16,8 +15,8 @@ export async function getPageHistoryList(
 export async function getPageHistoryById(
   historyId: string,
 ): Promise<IPageHistory> {
-  const req = await api.post<IPageHistory>("/pages/history/info", {
-    historyId,
+  const req = await api.get<IPageHistory>("/pages/history/info", {
+    params: { historyId },
   });
   return req.data;
 }

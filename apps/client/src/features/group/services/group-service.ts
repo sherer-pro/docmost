@@ -6,12 +6,14 @@ import { IUser } from "@/features/user/types/user.types.ts";
 export async function getGroups(
   params?: QueryParams,
 ): Promise<IPagination<IGroup>> {
-  const req = await api.post("/groups", params);
+  const req = await api.get("/groups", { params });
   return req.data;
 }
 
 export async function getGroupById(groupId: string): Promise<IGroup> {
-  const req = await api.post<IGroup>("/groups/info", { groupId });
+  const req = await api.get<IGroup>("/groups/info", {
+    params: { groupId },
+  });
   return req.data as IGroup;
 }
 
@@ -33,7 +35,9 @@ export async function getGroupMembers(
   groupId: string,
   params?: QueryParams,
 ): Promise<IPagination<IUser>> {
-  const req = await api.post("/groups/members", { groupId, ...params });
+  const req = await api.get("/groups/members", {
+    params: { groupId, ...params },
+  });
   return req.data;
 }
 

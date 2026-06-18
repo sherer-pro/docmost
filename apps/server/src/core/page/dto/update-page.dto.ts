@@ -12,22 +12,19 @@ import {
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 import { PageSettings } from '@docmost/db/types/entity.types';
+import {
+  PAGE_CUSTOM_FIELD_STATUS_VALUES as SHARED_PAGE_CUSTOM_FIELD_STATUS_VALUES,
+  type PageCustomFieldStatus,
+} from '@docmost/api-contract';
 
 export type ContentOperation = 'append' | 'prepend' | 'replace';
-
-export const PAGE_CUSTOM_FIELD_STATUS_VALUES = [
-  'TODO',
-  'IN_PROGRESS',
-  'IN_REVIEW',
-  'DONE',
-  'REJECTED',
-  'ARCHIVED',
-] as const;
+export const PAGE_CUSTOM_FIELD_STATUS_VALUES =
+  SHARED_PAGE_CUSTOM_FIELD_STATUS_VALUES;
 
 export class UpdatePageCustomFieldsDto {
   @IsOptional()
   @IsIn(PAGE_CUSTOM_FIELD_STATUS_VALUES)
-  status?: (typeof PAGE_CUSTOM_FIELD_STATUS_VALUES)[number] | null;
+  status?: PageCustomFieldStatus | null;
 
   @IsOptional()
   @ValidateIf((_, value) => value !== null)
