@@ -58,7 +58,10 @@ export class SearchController {
       }
     }
 
-    if (this.environmentService.getSearchDriver() === 'typesense') {
+    if (
+      this.environmentService.getSearchDriver() === 'typesense' &&
+      !searchDto.labelId
+    ) {
       return this.searchTypesense(searchDto, {
         userId: user.id,
         workspaceId: workspace.id,
@@ -79,6 +82,11 @@ export class SearchController {
     @AuthWorkspace() workspace: Workspace,
   ) {
     delete searchDto.shareId;
+    delete searchDto.labelId;
+
+    if (!searchDto.query?.trim()) {
+      throw new BadRequestException('query is required');
+    }
 
     if (searchDto.spaceId) {
       const hasReadablePages =
@@ -125,8 +133,12 @@ export class SearchController {
     @AuthWorkspace() workspace: Workspace,
   ) {
     delete searchDto.spaceId;
+    delete searchDto.labelId;
     if (!searchDto.shareId) {
       throw new BadRequestException('shareId is required');
+    }
+    if (!searchDto.query?.trim()) {
+      throw new BadRequestException('query is required');
     }
 
     if (this.environmentService.getSearchDriver() === 'typesense') {

@@ -8,11 +8,12 @@ import {
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { sql } from 'kysely';
-import { jsonObjectFrom } from 'kysely/helpers/postgres';
+import { jsonArrayFrom, jsonObjectFrom } from 'kysely/helpers/postgres';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 import { ShareRepo } from '@docmost/db/repos/share/share.repo';
 import { UserRepo } from '@docmost/db/repos/user/user.repo';
+import { LabelType } from '@docmost/db/repos/label/label.repo';
 import { User } from '@docmost/db/types/entity.types';
 import { UserRole } from '../../common/helpers/types/permission';
 import {
@@ -234,12 +235,21 @@ export class SearchService {
       workspaceId: string;
     },
   ): Promise<{ items: SearchResponseDto[] }> {
-    const { query } = searchParams;
+    const { labelId } = searchParams;
+    const query = searchParams.query?.trim() ?? '';
+    const hasTextQuery = query.length > 0;
 
-    if (query.length < 1) {
+    if (!hasTextQuery && !labelId) {
       return { items: [] };
     }
-    const searchQuery = tsquery(query.trim() + '*');
+
+    const searchQuery = hasTextQuery ? tsquery(query + '*') : undefined;
+    const rankExpression = hasTextQuery
+      ? sql<number>`ts_rank(tsv, to_tsquery('english', f_unaccent(${searchQuery})))`
+      : sql<number>`0`;
+    const highlightExpression = hasTextQuery
+      ? sql<string>`ts_headline('english', text_content, to_tsquery('english', f_unaccent(${searchQuery})),'MinWords=9, MaxWords=10, MaxFragments=3')`
+      : sql<string>`${''}`;
 
     let queryResults = this.db
       .selectFrom('pages')
@@ -252,26 +262,69 @@ export class SearchService {
         'creatorId',
         'createdAt',
         'updatedAt',
-        sql<number>`ts_rank(tsv, to_tsquery('english', f_unaccent(${searchQuery})))`.as(
-          'rank',
-        ),
-        sql<string>`ts_headline('english', text_content, to_tsquery('english', f_unaccent(${searchQuery})),'MinWords=9, MaxWords=10, MaxFragments=3')`.as(
-          'highlight',
-        ),
+        rankExpression.as('rank'),
+        highlightExpression.as('highlight'),
       ])
       .select((eb) => this.pageRepo.withDatabaseId(eb))
-      .where(
-        'tsv',
-        '@@',
-        sql<string>`to_tsquery('english', f_unaccent(${searchQuery}))`,
-      )
       .$if(Boolean(searchParams.creatorId), (qb) =>
         qb.where('creatorId', '=', searchParams.creatorId),
       )
-      .where('deletedAt', 'is', null)
-      .orderBy('rank', 'desc')
-      .limit(searchParams.limit || 25)
-      .offset(searchParams.offset || 0);
+      .where('deletedAt', 'is', null);
+
+    if (hasTextQuery) {
+      queryResults = queryResults.where(
+        'tsv',
+        '@@',
+        sql<string>`to_tsquery('english', f_unaccent(${searchQuery}))`,
+      );
+    }
+
+    if (labelId) {
+      queryResults = queryResults
+        .select((eb) =>
+          jsonArrayFrom(
+            eb
+              .selectFrom('labels')
+              .innerJoin(
+                'pageLabels as matchingPageLabels',
+                'matchingPageLabels.labelId',
+                'labels.id',
+              )
+              .select(['labels.id', 'labels.name', 'labels.type'])
+              .whereRef('matchingPageLabels.pageId', '=', 'pages.id')
+              .where('labels.id', '=', labelId)
+              .where('labels.workspaceId', '=', opts.workspaceId)
+              .where('labels.type', '=', LabelType.PAGE),
+          ).as('labels'),
+        )
+        .where((eb) =>
+          eb.exists(
+            eb
+              .selectFrom('pageLabels as labelFilter')
+              .innerJoin(
+                'labels as labelFilterLabels',
+                'labelFilterLabels.id',
+                'labelFilter.labelId',
+              )
+              .select('labelFilter.id')
+              .whereRef('labelFilter.pageId', '=', 'pages.id')
+              .where('labelFilter.labelId', '=', labelId)
+              .where('labelFilterLabels.workspaceId', '=', opts.workspaceId)
+              .where('labelFilterLabels.type', '=', LabelType.PAGE),
+          ),
+        )
+        .where((eb) =>
+          eb.not(
+            eb.exists(
+              eb
+                .selectFrom('databaseRows')
+                .select('databaseRows.id')
+                .whereRef('databaseRows.pageId', '=', 'pages.id')
+                .where('databaseRows.archivedAt', 'is', null),
+            ),
+          ),
+        );
+    }
 
     if (!searchParams.shareId) {
       queryResults = queryResults.select((eb) => this.pageRepo.withSpace(eb));
@@ -322,6 +375,18 @@ export class SearchService {
       return { items: [] };
     }
 
+    if (hasTextQuery) {
+      queryResults = queryResults.orderBy('rank', 'desc');
+    } else {
+      queryResults = queryResults
+        .orderBy('updatedAt', 'desc')
+        .orderBy('id', 'desc');
+    }
+
+    queryResults = queryResults
+      .limit(searchParams.limit || 25)
+      .offset(searchParams.offset || 0);
+
     const rawResults = await queryResults.execute();
     let searchResults = this.normalizeSearchHighlights(
       rawResults as unknown as SearchResponseDto[],
@@ -362,13 +427,13 @@ export class SearchService {
       workspaceId: string;
     },
   ): Promise<{ items: AttachmentSearchResponseDto[] }> {
-    const { query } = searchParams;
+    const query = searchParams.query ?? '';
+    const searchTokens = query.trim().split(/\s+/).filter(Boolean);
 
-    if (query.length < 1) {
+    if (searchTokens.length < 1) {
       return { items: [] };
     }
 
-    const searchQuery = tsquery(query.trim() + '*');
     let queryResults = this.db
       .selectFrom('attachments')
       .innerJoin('pages', 'pages.id', 'attachments.pageId')
@@ -380,12 +445,8 @@ export class SearchService {
         'attachments.creatorId as creatorId',
         'attachments.createdAt as createdAt',
         'attachments.updatedAt as updatedAt',
-        sql<number>`ts_rank(attachments.tsv, to_tsquery('english', f_unaccent(${searchQuery})))`.as(
-          'rank',
-        ),
-        sql<string>`ts_headline('english', attachments.text_content, to_tsquery('english', f_unaccent(${searchQuery})),'MinWords=9, MaxWords=10, MaxFragments=3')`.as(
-          'highlight',
-        ),
+        sql<number>`1`.as('rank'),
+        sql<string>`${''}`.as('highlight'),
       ])
       .select((eb) => [
         jsonObjectFrom(
@@ -406,11 +467,6 @@ export class SearchService {
             .whereRef('pages.id', '=', 'attachments.pageId'),
         ).as('page'),
       ])
-      .where(
-        'attachments.tsv',
-        '@@',
-        sql<string>`to_tsquery('english', f_unaccent(${searchQuery}))`,
-      )
       .where('attachments.deletedAt', 'is', null)
       .where('attachments.workspaceId', '=', opts.workspaceId)
       .where('attachments.pageId', 'is not', null)
@@ -418,9 +474,19 @@ export class SearchService {
       .where('pages.deletedAt', 'is', null)
       .where('spaces.archivedAt', 'is', null)
       .where('spaces.deletedAt', 'is', null)
-      .orderBy('rank', 'desc')
+      .orderBy('attachments.fileName', 'asc')
       .limit(searchParams.limit || 25)
       .offset(searchParams.offset || 0);
+
+    for (const token of searchTokens) {
+      queryResults = queryResults.where((eb) =>
+        eb(
+          sql`LOWER(f_unaccent(attachments.file_name))`,
+          'like',
+          sql`LOWER(f_unaccent(${`%${token}%`}))`,
+        ),
+      );
+    }
 
     if (searchParams.spaceId) {
       queryResults = queryResults.where(

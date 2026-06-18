@@ -8,6 +8,12 @@ export interface IPageSearchBreadcrumb {
   title: string;
 }
 
+export interface IPageSearchLabel {
+  id: string;
+  name: string;
+  type: "page";
+}
+
 export interface IPageSearch {
   id: string;
   title: string;
@@ -21,6 +27,7 @@ export interface IPageSearch {
   rank: string;
   highlight: string;
   breadcrumbs?: IPageSearchBreadcrumb[];
+  labels?: IPageSearchLabel[];
   space: Partial<ISpace>;
 }
 
@@ -43,6 +50,12 @@ export interface IPageSearchParams {
   query: string;
   spaceId?: string;
   shareId?: string;
+  labelId?: string;
+}
+
+export interface SearchLabelParams {
+  query?: string;
+  limit?: number;
 }
 
 export interface IAttachmentSearch {

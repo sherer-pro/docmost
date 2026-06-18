@@ -5,6 +5,12 @@ export class SearchBreadcrumbDto {
   title: string;
 }
 
+export class SearchLabelDto {
+  id: string;
+  name: string;
+  type: string;
+}
+
 export class SearchResponseDto {
   id: string;
   title: string;
@@ -17,6 +23,7 @@ export class SearchResponseDto {
   createdAt: Date;
   updatedAt: Date;
   breadcrumbs?: SearchBreadcrumbDto[];
+  labels?: SearchLabelDto[];
   space: Partial<Space>;
 }
 

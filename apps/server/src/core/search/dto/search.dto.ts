@@ -7,6 +7,8 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  IsUUID,
+  ValidateIf,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { Transform } from 'class-transformer';
@@ -23,10 +25,15 @@ function parseOptionalBoolean(value: unknown): unknown {
 }
 
 export class SearchDTO {
+  @ValidateIf((dto: SearchDTO) =>
+    typeof dto.query === 'string'
+      ? dto.query.trim().length > 0 || !dto.labelId
+      : !dto.labelId,
+  )
   @IsNotEmpty()
   @IsString()
   @MaxLength(512)
-  query: string;
+  query?: string;
 
   @IsOptional()
   @IsString()
@@ -39,6 +46,10 @@ export class SearchDTO {
   @IsOptional()
   @IsString()
   creatorId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  labelId?: string;
 
   @IsOptional()
   @Type(() => Number)
