@@ -358,7 +358,8 @@ function Node({
   const canCreateChildNode =
     nodeCapabilities?.canCreateChild ?? !(tree.props.disableEdit as boolean);
   const canMoveDeleteShareNode =
-    nodeCapabilities?.canMoveDeleteShare ?? !(tree.props.disableEdit as boolean);
+    nodeCapabilities?.canMoveDeleteShare ??
+    !(tree.props.disableEdit as boolean);
   const canManageAccessNode = nodeCapabilities?.canManageAccess ?? false;
 
   const prefetchPage = () => {
@@ -410,7 +411,9 @@ function Node({
   }
 
   const handleUpdateNodeIcon = (nodeId: string, newIcon: string | null) => {
-    setTreeData((currentTree) => updateTreeNodeIcon(currentTree, nodeId, newIcon));
+    setTreeData((currentTree) =>
+      updateTreeNodeIcon(currentTree, nodeId, newIcon),
+    );
   };
 
   const handleEmojiIconClick = (e: any) => {
@@ -418,56 +421,69 @@ function Node({
     e.stopPropagation();
   };
 
-  const handleEmojiSelect = (emoji: { native: string }) => {
-    handleUpdateNodeIcon(node.id, emoji.native);
-
-    if (node.data.nodeType === "database") {
-      updateDatabaseMutation.mutateAsync({ icon: emoji.native });
-      return;
-    }
-
-    if (node.data.nodeType !== "page") {
-      return;
-    }
-
-    updatePageMutation
-      .mutateAsync({ pageId: node.id, icon: emoji.native })
-      .then((data) => {
-        setTimeout(() => {
-          emit({
-            operation: "updateOne",
-            spaceId: node.data.spaceId,
-            entity: ["pages"],
-            id: node.id,
-            payload: { icon: emoji.native, parentPageId: data.parentPageId },
-          });
-        }, 50);
-      });
-  };
-
-  const handleRemoveEmoji = () => {
-    handleUpdateNodeIcon(node.id, null);
-
-    if (node.data.nodeType === "database") {
-      updateDatabaseMutation.mutateAsync({ icon: null });
-      return;
-    }
-
-    if (node.data.nodeType !== "page") {
-      return;
-    }
-
-    updatePageMutation.mutateAsync({ pageId: node.id, icon: null });
-
+  const emitIconUpdate = (
+    icon: string | null,
+    parentPageId?: string | null,
+  ) => {
     setTimeout(() => {
       emit({
         operation: "updateOne",
         spaceId: node.data.spaceId,
         entity: ["pages"],
         id: node.id,
-        payload: { icon: null },
+        payload: {
+          icon,
+          parentPageId: parentPageId ?? node.data.parentPageId ?? null,
+        },
       });
     }, 50);
+  };
+
+  const persistNodeIcon = async (icon: string | null) => {
+    if (node.data.nodeType === "database") {
+      await updateDatabaseMutation.mutateAsync({ icon });
+      emitIconUpdate(icon, node.data.parentPageId);
+      return;
+    }
+
+    if (node.data.nodeType !== "page" && node.data.nodeType !== "databaseRow") {
+      return;
+    }
+
+    const updatedPage = await updatePageMutation.mutateAsync({
+      pageId: node.id,
+      icon,
+    });
+    emitIconUpdate(icon, updatedPage.parentPageId);
+  };
+
+  const handleEmojiSelect = (emoji: { native: string }) => {
+    const previousIcon = node.data.icon ?? null;
+    const nextIcon = emoji.native;
+
+    handleUpdateNodeIcon(node.id, nextIcon);
+
+    persistNodeIcon(nextIcon).catch(() => {
+      handleUpdateNodeIcon(node.id, previousIcon);
+      notifications.show({
+        message: "An error occurred",
+        color: "red",
+      });
+    });
+  };
+
+  const handleRemoveEmoji = () => {
+    const previousIcon = node.data.icon ?? null;
+
+    handleUpdateNodeIcon(node.id, null);
+
+    persistNodeIcon(null).catch(() => {
+      handleUpdateNodeIcon(node.id, previousIcon);
+      notifications.show({
+        message: "An error occurred",
+        color: "red",
+      });
+    });
   };
 
   if (
@@ -881,43 +897,42 @@ function NodeMenu({
             {t("Export page")}
           </Menu.Item>
 
-          {node.data.nodeType === "page" &&
-            canMoveDeleteShare && (
-              <>
-                <Menu.Item
-                  leftSection={<IconCopy size={16} />}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handleDuplicatePage();
-                  }}
-                >
-                  {t("Duplicate")}
-                </Menu.Item>
+          {node.data.nodeType === "page" && canMoveDeleteShare && (
+            <>
+              <Menu.Item
+                leftSection={<IconCopy size={16} />}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleDuplicatePage();
+                }}
+              >
+                {t("Duplicate")}
+              </Menu.Item>
 
-                <Menu.Item
-                  leftSection={<IconArrowRight size={16} />}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    openMovePageModal();
-                  }}
-                >
-                  {t("Move")}
-                </Menu.Item>
+              <Menu.Item
+                leftSection={<IconArrowRight size={16} />}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  openMovePageModal();
+                }}
+              >
+                {t("Move")}
+              </Menu.Item>
 
-                <Menu.Item
-                  leftSection={<IconCopy size={16} />}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    openCopyPageModal();
-                  }}
-                >
-                  {t("Copy to space")}
-                </Menu.Item>
-              </>
-            )}
+              <Menu.Item
+                leftSection={<IconCopy size={16} />}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  openCopyPageModal();
+                }}
+              >
+                {t("Copy to space")}
+              </Menu.Item>
+            </>
+          )}
 
           {supportsAccessControl && canManageAccess && (
             <Menu.Item
