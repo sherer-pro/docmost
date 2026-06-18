@@ -1,7 +1,7 @@
 import type { FastifyRequest } from 'fastify';
 import { existsSync, readFileSync } from 'node:fs';
 import type { IncomingMessage } from 'node:http';
-import proxyaddr = require('@fastify/proxy-addr');
+import proxyaddr from '@fastify/proxy-addr';
 
 export type TrustedProxyConfig = false | true | string[];
 

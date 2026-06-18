@@ -255,7 +255,6 @@ export class HtmlPdfRendererService {
 
   private resolveMermaidScriptPath(): string | null {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
       return require.resolve('mermaid/dist/mermaid.min.js');
     } catch (err) {
       this.logger.warn(

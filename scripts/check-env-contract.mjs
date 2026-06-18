@@ -5,6 +5,11 @@ const LOCAL_ENV_PATH = '.env';
 const ENV_VALIDATION_PATH =
   'apps/server/src/integrations/environment/environment.validation.ts';
 const VITE_CONFIG_PATH = 'apps/client/vite.config.ts';
+const COMPOSE_ONLY_ENV_KEYS = new Set([
+  'POSTGRES_DB',
+  'POSTGRES_PASSWORD',
+  'POSTGRES_USER',
+]);
 
 function parseEnvKeys(filePath) {
   const content = readFileSync(filePath, 'utf8');
@@ -75,7 +80,10 @@ const serverValidationKeys = extractServerValidationKeys();
 const viteEnvKeys = extractViteEnvKeys();
 
 const missingFromExample = sortedDiff(serverValidationKeys, exampleKeys);
-const extraInExample = sortedDiff(exampleKeys, serverValidationKeys);
+const extraInExample = sortedDiff(
+  exampleKeys,
+  new Set([...serverValidationKeys, ...COMPOSE_ONLY_ENV_KEYS]),
+);
 const viteMissingFromExample = sortedDiff(viteEnvKeys, exampleKeys);
 const issues = [
   missingFromExample,

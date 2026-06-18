@@ -1,8 +1,17 @@
-import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { join, relative } from 'node:path';
 
 const SERVER_SRC_DIR = 'apps/server/src';
 const OUTPUT_PATH = 'apps/server/docs/api-route-inventory.generated.md';
+const args = new Set(process.argv.slice(2));
+const shouldCheck = args.has('--check');
+const shouldPrint = args.has('--stdout');
 
 function collectControllerFiles(dir) {
   const entries = readdirSync(dir);
@@ -134,7 +143,31 @@ const lines = [
   ...routes.map((route) => `| ${route.method} | \`${route.path}\` | \`${route.file}\` |`),
   '',
 ];
+const output = `${lines.join('\n')}`;
 
-writeFileSync(OUTPUT_PATH, `${lines.join('\n')}`);
+if (shouldCheck) {
+  if (!existsSync(OUTPUT_PATH)) {
+    console.error(`Missing generated route inventory: ${OUTPUT_PATH}`);
+    process.exit(1);
+  }
+
+  const current = readFileSync(OUTPUT_PATH, 'utf8');
+  if (current !== output) {
+    console.error(
+      `Route inventory is out of date. Run: node scripts/generate-api-route-inventory.mjs`,
+    );
+    process.exit(1);
+  }
+
+  console.log(`Route inventory is up to date (${routes.length} routes).`);
+  process.exit(0);
+}
+
+if (shouldPrint) {
+  process.stdout.write(output);
+  process.exit(0);
+}
+
+writeFileSync(OUTPUT_PATH, output);
 
 console.log(`Generated ${routes.length} routes -> ${OUTPUT_PATH}`);

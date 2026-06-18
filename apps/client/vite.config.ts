@@ -38,7 +38,7 @@ export default defineConfig(({ mode }) => {
     },
     plugins: [react()],
     build: {
-      chunkSizeWarningLimit: 5000,
+      chunkSizeWarningLimit: 1500,
     },
     resolve: {
       alias: {

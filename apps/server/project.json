@@ -1,0 +1,55 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "server",
+  "projectType": "application",
+  "sourceRoot": "apps/server/src",
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["^build"],
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "cwd": "apps/server",
+        "command": "nest build"
+      }
+    },
+    "start:dev": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/server",
+        "command": "cross-env NODE_ENV=development nest start --watch"
+      }
+    },
+    "start:prod": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["build"],
+      "options": {
+        "cwd": "apps/server",
+        "command": "cross-env NODE_ENV=production node dist/apps/server/src/main"
+      }
+    },
+    "collab:prod": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["build"],
+      "options": {
+        "cwd": "apps/server",
+        "command": "cross-env NODE_ENV=production node dist/apps/server/src/collaboration/server/collab-main"
+      }
+    },
+    "collab:dev": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["build"],
+      "options": {
+        "cwd": "apps/server",
+        "command": "cross-env NODE_ENV=development node dist/apps/server/src/collaboration/server/collab-main"
+      }
+    },
+    "email:dev": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/server",
+        "command": "email dev -p 5019 -d ./src/integrations/transactional/emails"
+      }
+    }
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "@docmost/editor-ext",
+  "projectType": "library",
+  "sourceRoot": "packages/editor-ext/src",
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "cwd": "packages/editor-ext",
+        "command": "tsc --build"
+      }
+    },
+    "dev": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/editor-ext",
+        "command": "tsc --watch"
+      }
+    }
+  }
+}
