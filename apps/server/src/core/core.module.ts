@@ -20,7 +20,7 @@ import { NotificationModule } from './notification/notification.module';
 import { WatcherModule } from './watcher/watcher.module';
 import { MfaModule } from './mfa/mfa.module';
 import { PushModule } from './push/push.module';
-import { DatabaseModule } from './database/database.module';
+import { DatabaseFeatureModule } from './database/database.module';
 import { ApiKeyModule } from './api-key/api-key.module';
 import { RagModule } from './rag/rag.module';
 import { PageAccessModule } from './page-access/page-access.module';
@@ -47,7 +47,7 @@ import { TransclusionModule } from './page/transclusion/transclusion.module';
     WatcherModule,
     MfaModule,
     PushModule,
-    DatabaseModule,
+    DatabaseFeatureModule,
     ApiKeyModule,
     RagModule,
     PageAccessModule,

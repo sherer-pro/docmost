@@ -21,23 +21,19 @@ import {
 } from '../../core/casl/interfaces/workspace-ability.type';
 import WorkspaceAbilityFactory from '../../core/casl/abilities/workspace-ability.factory';
 import { AuthWorkspace } from '../../common/decorators/auth-workspace.decorator';
-import { InjectKysely } from 'nestjs-kysely';
-import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
 import { FileTaskIdDto } from './dto/file-task-dto';
-import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
-import { executeWithCursorPagination } from '@docmost/db/pagination/cursor-pagination';
 import { PageAccessService } from '../../core/page-access/page-access.service';
+import { FileTaskQueryService } from './services/file-task-query.service';
 
 @Controller('file-tasks')
 export class FileTaskController {
   constructor(
     private readonly spaceAbility: SpaceAbilityFactory,
     private readonly workspaceAbility: WorkspaceAbilityFactory,
-    private readonly spaceMemberRepo: SpaceMemberRepo,
     private readonly pageAccessService: PageAccessService,
-    @InjectKysely() private readonly db: KyselyDB,
+    private readonly fileTaskQueryService: FileTaskQueryService,
   ) {}
 
   @UseGuards(JwtAuthGuard)
@@ -55,29 +51,14 @@ export class FileTaskController {
       throw new ForbiddenException();
     }
 
-    const query = this.db
-      .selectFrom('fileTasks')
-      .selectAll()
-      .where('spaceId', 'in', this.spaceMemberRepo.getUserSpaceIdsQuery(user.id));
-
-    return executeWithCursorPagination(query, {
-      perPage: pagination.limit,
-      cursor: pagination.cursor,
-      beforeCursor: pagination.beforeCursor,
-      fields: [{ expression: 'id', direction: 'desc' }],
-      parseCursor: (cursor) => ({ id: cursor.id }),
-    });
+    return this.fileTaskQueryService.findForUser(user.id, pagination);
   }
 
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   @Post('info')
   async getFileTask(@Body() dto: FileTaskIdDto, @AuthUser() user: User) {
-    const fileTask = await this.db
-      .selectFrom('fileTasks')
-      .selectAll()
-      .where('id', '=', dto.fileTaskId)
-      .executeTakeFirst();
+    const fileTask = await this.fileTaskQueryService.findById(dto.fileTaskId);
 
     if (!fileTask || !fileTask.spaceId) {
       throw new NotFoundException('File task not found');

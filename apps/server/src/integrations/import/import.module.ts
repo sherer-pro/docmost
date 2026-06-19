@@ -7,6 +7,7 @@ import { FileTaskProcessor } from './processors/file-task.processor';
 import { ImportAttachmentService } from './services/import-attachment.service';
 import { FileTaskController } from './file-task.controller';
 import { PageModule } from '../../core/page/page.module';
+import { FileTaskQueryService } from './services/file-task-query.service';
 
 @Module({
   providers: [
@@ -14,6 +15,7 @@ import { PageModule } from '../../core/page/page.module';
     FileImportTaskService,
     FileTaskProcessor,
     ImportAttachmentService,
+    FileTaskQueryService,
   ],
   exports: [ImportService, ImportAttachmentService],
   controllers: [ImportController, FileTaskController],

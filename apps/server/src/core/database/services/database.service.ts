@@ -49,6 +49,7 @@ import { ExportFormat } from '../../../integrations/export/dto/export-dto';
 import { ExportMetadata } from '../../../common/helpers/types/export-metadata.types';
 import { replaceInternalLinks } from '../../../integrations/export/utils';
 import { getProsemirrorContent } from '../../../common/helpers/prosemirror/utils';
+import { streamToBuffer } from '../../../integrations/storage/storage.utils';
 
 interface IDatabaseCellValueWithFallback {
   value: unknown;
@@ -1209,23 +1210,6 @@ export class DatabaseService {
       .replace(/'/g, '&#39;');
   }
 
-  private async streamToBuffer(stream: NodeJS.ReadableStream): Promise<Buffer> {
-    const chunks: Buffer[] = [];
-
-    return new Promise<Buffer>((resolve, reject) => {
-      stream.on('data', (chunk) => {
-        if (Buffer.isBuffer(chunk)) {
-          chunks.push(chunk);
-          return;
-        }
-
-        chunks.push(Buffer.from(chunk));
-      });
-      stream.on('end', () => resolve(Buffer.concat(chunks)));
-      stream.on('error', reject);
-    });
-  }
-
   private async resolveExportMetadata(zip: JSZip): Promise<ExportMetadata> {
     const metadataEntry = zip.file('docmost-metadata.json');
     if (!metadataEntry) {
@@ -1380,7 +1364,7 @@ export class DatabaseService {
         includeChildren,
         user.locale,
       );
-      const pagesZipBuffer = await this.streamToBuffer(
+      const pagesZipBuffer = await streamToBuffer(
         pagesZipStream as NodeJS.ReadableStream,
       );
       const zip = await JSZip.loadAsync(pagesZipBuffer);
