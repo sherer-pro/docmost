@@ -1,9 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as path from 'path';
 import { promises as fs } from 'fs';
-import { Migrator, FileMigrationProvider } from 'kysely';
+import { Migrator, FileMigrationProvider, sql } from 'kysely';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
+
+const MIGRATION_LOCK_NAMESPACE = 27517;
+const MIGRATION_LOCK_ID = 20260619;
 
 @Injectable()
 export class MigrationService {
@@ -12,8 +15,30 @@ export class MigrationService {
   constructor(@InjectKysely() private readonly db: KyselyDB) {}
 
   async migrateToLatest(): Promise<void> {
+    const hasMigrationError = await this.db.connection().execute(async (db) => {
+      await sql`SELECT pg_advisory_lock(${MIGRATION_LOCK_NAMESPACE}, ${MIGRATION_LOCK_ID})`.execute(
+        db,
+      );
+      this.logger.log('Acquired database migration advisory lock');
+
+      try {
+        return await this.runMigrations(db as KyselyDB);
+      } finally {
+        await sql`SELECT pg_advisory_unlock(${MIGRATION_LOCK_NAMESPACE}, ${MIGRATION_LOCK_ID})`.execute(
+          db,
+        );
+        this.logger.log('Released database migration advisory lock');
+      }
+    });
+
+    if (hasMigrationError) {
+      process.exit(1);
+    }
+  }
+
+  private async runMigrations(db: KyselyDB): Promise<boolean> {
     const migrator = new Migrator({
-      db: this.db,
+      db,
       provider: new FileMigrationProvider({
         fs,
         path,
@@ -41,7 +66,9 @@ export class MigrationService {
     if (error) {
       this.logger.error('Failed to run database migration. Exiting program.');
       this.logger.error(error);
-      process.exit(1);
+      return true;
     }
+
+    return false;
   }
 }

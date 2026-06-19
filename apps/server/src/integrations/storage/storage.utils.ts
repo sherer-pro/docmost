@@ -1,9 +1,9 @@
-import { Readable } from 'stream';
-
-export function streamToBuffer(readableStream: Readable): Promise<Buffer> {
+export function streamToBuffer(readableStream: NodeJS.ReadableStream): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    const chunks: Uint8Array[] = [];
-    readableStream.on('data', (chunk) => chunks.push(chunk));
+    const chunks: Buffer[] = [];
+    readableStream.on('data', (chunk) => {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    });
     readableStream.on('end', () => resolve(Buffer.concat(chunks)));
     readableStream.on('error', reject);
   });

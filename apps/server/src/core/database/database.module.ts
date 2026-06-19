@@ -10,4 +10,4 @@ import { ExportModule } from '../../integrations/export/export.module';
   providers: [DatabaseService],
   exports: [DatabaseService],
 })
-export class DatabaseModule {}
+export class DatabaseFeatureModule {}
