@@ -33,6 +33,9 @@ interface SearchAncestorRow {
   spaceId: string;
 }
 
+const DEFAULT_SEARCH_LIMIT = 25;
+const MAX_SEARCH_FETCH_BATCH = 100;
+
 @Injectable()
 export class SearchService {
   constructor(
@@ -64,15 +67,33 @@ export class SearchService {
   private async buildSpaceAccessSnapshotMap(
     user: User,
     searchResults: Array<{ space?: { id?: string | null } | null }>,
+    snapshotBySpaceId = new Map<string, SidebarAccessSnapshot>(),
   ): Promise<Map<string, SidebarAccessSnapshot>> {
-    const spaceIds = [...new Set(
+    return this.buildSpaceAccessSnapshotMapForSpaceIds(
+      user,
       searchResults
         .map((result) => result.space?.id)
         .filter((spaceId): spaceId is string => !!spaceId),
-    )];
+      snapshotBySpaceId,
+    );
+  }
+
+  private async buildSpaceAccessSnapshotMapForSpaceIds(
+    user: User,
+    spaceIdsToLoad: Array<string | null | undefined>,
+    snapshotBySpaceId = new Map<string, SidebarAccessSnapshot>(),
+  ): Promise<Map<string, SidebarAccessSnapshot>> {
+    const spaceIds = [
+      ...new Set(
+        spaceIdsToLoad.filter(
+          (spaceId): spaceId is string =>
+            !!spaceId && !snapshotBySpaceId.has(spaceId),
+        ),
+      ),
+    ];
 
     if (spaceIds.length === 0) {
-      return new Map();
+      return snapshotBySpaceId;
     }
 
     const entries = await Promise.all(
@@ -85,7 +106,15 @@ export class SearchService {
       }),
     );
 
-    return new Map(entries);
+    entries.forEach(([spaceId, snapshot]) => {
+      snapshotBySpaceId.set(spaceId, snapshot);
+    });
+
+    return snapshotBySpaceId;
+  }
+
+  private getSearchFetchBatchSize(limit: number): number {
+    return Math.min(MAX_SEARCH_FETCH_BATCH, Math.max(limit * 3, limit));
   }
 
   private filterReadableResults(
@@ -383,15 +412,6 @@ export class SearchService {
         .orderBy('id', 'desc');
     }
 
-    queryResults = queryResults
-      .limit(searchParams.limit || 25)
-      .offset(searchParams.offset || 0);
-
-    const rawResults = await queryResults.execute();
-    let searchResults = this.normalizeSearchHighlights(
-      rawResults as unknown as SearchResponseDto[],
-    );
-
     if (opts.userId) {
       const authUser = await this.userRepo.findById(opts.userId, opts.workspaceId);
 
@@ -399,25 +419,82 @@ export class SearchService {
         return { items: [] };
       }
 
-      const snapshotBySpaceId = await this.buildSpaceAccessSnapshotMap(
-        authUser,
-        searchResults,
-      );
-      searchResults = this.filterReadableResults(searchResults, snapshotBySpaceId);
+      const limit = searchParams.limit || DEFAULT_SEARCH_LIMIT;
+      const offset = searchParams.offset || 0;
+      const fetchBatchSize = this.getSearchFetchBatchSize(limit);
+      const snapshotBySpaceId = new Map<string, SidebarAccessSnapshot>();
+      const searchResults: SearchResponseDto[] = [];
+      let rawOffset = 0;
+      let readableRowsToSkip = offset;
+
+      while (searchResults.length < limit) {
+        const rawBatch = await queryResults
+          .limit(fetchBatchSize)
+          .offset(rawOffset)
+          .execute();
+
+        if (rawBatch.length === 0) {
+          break;
+        }
+
+        const normalizedBatch = this.normalizeSearchHighlights(
+          rawBatch as unknown as SearchResponseDto[],
+        );
+
+        await this.buildSpaceAccessSnapshotMap(
+          authUser,
+          normalizedBatch,
+          snapshotBySpaceId,
+        );
+
+        const readableBatch = this.filterReadableResults(
+          normalizedBatch,
+          snapshotBySpaceId,
+        );
+
+        for (const result of readableBatch) {
+          if (readableRowsToSkip > 0) {
+            readableRowsToSkip -= 1;
+            continue;
+          }
+
+          searchResults.push(result);
+
+          if (searchResults.length >= limit) {
+            break;
+          }
+        }
+
+        if (rawBatch.length < fetchBatchSize) {
+          break;
+        }
+
+        rawOffset += rawBatch.length;
+      }
 
       const visiblePageIdsBySpaceId = this.buildVisiblePageIdsMap(
         snapshotBySpaceId,
       );
 
-      searchResults = await this.attachBreadcrumbsToResults(
+      const searchResultsWithBreadcrumbs = await this.attachBreadcrumbsToResults(
         searchResults,
         visiblePageIdsBySpaceId,
       );
-    } else {
-      searchResults = await this.attachBreadcrumbsToResults(searchResults);
-    }
 
-    return { items: searchResults };
+      return { items: searchResultsWithBreadcrumbs };
+    } else {
+      const rawResults = await queryResults
+        .limit(searchParams.limit || DEFAULT_SEARCH_LIMIT)
+        .offset(searchParams.offset || 0)
+        .execute();
+      const searchResults = this.normalizeSearchHighlights(
+        rawResults as unknown as SearchResponseDto[],
+      );
+      const searchResultsWithBreadcrumbs =
+        await this.attachBreadcrumbsToResults(searchResults);
+
+      return { items: searchResultsWithBreadcrumbs };
+    }
   }
 
   async searchAttachments(
@@ -474,9 +551,7 @@ export class SearchService {
       .where('pages.deletedAt', 'is', null)
       .where('spaces.archivedAt', 'is', null)
       .where('spaces.deletedAt', 'is', null)
-      .orderBy('attachments.fileName', 'asc')
-      .limit(searchParams.limit || 25)
-      .offset(searchParams.offset || 0);
+      .orderBy('attachments.fileName', 'asc');
 
     for (const token of searchTokens) {
       queryResults = queryResults.where((eb) =>
@@ -502,24 +577,64 @@ export class SearchService {
       );
     }
 
-    const rawResults = await queryResults.execute();
-    let searchResults = this.normalizeSearchHighlights(
-      rawResults as unknown as AttachmentSearchResponseDto[],
-    );
     const authUser = await this.userRepo.findById(opts.userId, opts.workspaceId);
 
     if (!authUser) {
       return { items: [] };
     }
 
-    const snapshotBySpaceId = await this.buildSpaceAccessSnapshotMap(
-      authUser,
-      searchResults,
-    );
-    searchResults = this.filterReadableAttachmentResults(
-      searchResults,
-      snapshotBySpaceId,
-    );
+    const limit = searchParams.limit || DEFAULT_SEARCH_LIMIT;
+    const offset = searchParams.offset || 0;
+    const fetchBatchSize = this.getSearchFetchBatchSize(limit);
+    const snapshotBySpaceId = new Map<string, SidebarAccessSnapshot>();
+    const searchResults: AttachmentSearchResponseDto[] = [];
+    let rawOffset = 0;
+    let readableRowsToSkip = offset;
+
+    while (searchResults.length < limit) {
+      const rawBatch = await queryResults
+        .limit(fetchBatchSize)
+        .offset(rawOffset)
+        .execute();
+
+      if (rawBatch.length === 0) {
+        break;
+      }
+
+      const normalizedBatch = this.normalizeSearchHighlights(
+        rawBatch as unknown as AttachmentSearchResponseDto[],
+      );
+
+      await this.buildSpaceAccessSnapshotMap(
+        authUser,
+        normalizedBatch,
+        snapshotBySpaceId,
+      );
+
+      const readableBatch = this.filterReadableAttachmentResults(
+        normalizedBatch,
+        snapshotBySpaceId,
+      );
+
+      for (const result of readableBatch) {
+        if (readableRowsToSkip > 0) {
+          readableRowsToSkip -= 1;
+          continue;
+        }
+
+        searchResults.push(result);
+
+        if (searchResults.length >= limit) {
+          break;
+        }
+      }
+
+      if (rawBatch.length < fetchBatchSize) {
+        break;
+      }
+
+      rawOffset += rawBatch.length;
+    }
 
     return { items: searchResults };
   }
@@ -531,7 +646,7 @@ export class SearchService {
   ) {
     let users = [];
     let groups = [];
-    let pages = [];
+    const pages = [];
 
     const limit = suggestion?.limit || 10;
     const query = suggestion.query.toLowerCase().trim();
@@ -588,7 +703,8 @@ export class SearchService {
         )
         .where('deletedAt', 'is', null)
         .where('workspaceId', '=', workspaceId)
-        .limit(limit);
+        .orderBy('title', 'asc')
+        .orderBy('id', 'asc');
 
       if (suggestion?.spaceId) {
         pageSearch = pageSearch.where('spaceId', '=', suggestion.spaceId);
@@ -604,20 +720,45 @@ export class SearchService {
         );
       }
 
-      const candidatePages = await pageSearch.execute();
-      const accessRows = await Promise.all(
-        candidatePages.map(async (page) => {
-          const access = await this.pageAccessService.getEffectiveAccess(
-            page as any,
-            authUser,
-          );
-          return access.capabilities.canRead ? page : null;
-        }),
-      );
+      const fetchBatchSize = this.getSearchFetchBatchSize(limit);
+      const snapshotBySpaceId = new Map<string, SidebarAccessSnapshot>();
+      let rawOffset = 0;
 
-      pages = accessRows.filter(
-        (page): page is (typeof candidatePages)[number] => !!page,
-      );
+      while (pages.length < limit) {
+        const candidatePages = await pageSearch
+          .limit(fetchBatchSize)
+          .offset(rawOffset)
+          .execute();
+
+        if (candidatePages.length === 0) {
+          break;
+        }
+
+        await this.buildSpaceAccessSnapshotMapForSpaceIds(
+          authUser,
+          candidatePages.map((page) => page.spaceId),
+          snapshotBySpaceId,
+        );
+
+        for (const page of candidatePages) {
+          const snapshot = snapshotBySpaceId.get(page.spaceId);
+          if (!snapshot?.readablePageIds.has(page.id)) {
+            continue;
+          }
+
+          pages.push(page);
+
+          if (pages.length >= limit) {
+            break;
+          }
+        }
+
+        if (candidatePages.length < fetchBatchSize) {
+          break;
+        }
+
+        rawOffset += candidatePages.length;
+      }
     }
 
     return { users, groups, pages };
