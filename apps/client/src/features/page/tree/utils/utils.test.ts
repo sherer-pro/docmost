@@ -7,6 +7,7 @@ import {
   insertOrUpdateTreeNode,
   mapDatabaseToTreeNode,
   mapPageToTreeNode,
+  updateDatabaseTreeNodeMeta,
 } from "./utils";
 import { SpaceTreeNode } from "../types";
 
@@ -212,5 +213,73 @@ describe("insertOrUpdateTreeNode", () => {
     assert.equal(nextTree[0].children.length, 1);
     assert.equal(nextTree[0].children[0].nodeType, "database");
     assert.equal(nextTree[0].children[0].databaseId, "database-id");
+  });
+});
+
+describe("updateDatabaseTreeNodeMeta", () => {
+  it("updates a nested database node by linked page id", () => {
+    const rowNode = createNode("row-page-id", [], "database-page-id");
+    rowNode.nodeType = "databaseRow";
+    rowNode.databaseId = "database-id";
+
+    const databaseNode: SpaceTreeNode = {
+      id: "database-page-id",
+      nodeType: "database",
+      slugId: "old-database-slug",
+      databaseId: "database-id",
+      name: "Old database",
+      icon: null,
+      status: null,
+      position: "a1",
+      hasChildren: true,
+      spaceId: "space-1",
+      parentPageId: "parent",
+      children: [rowNode],
+    };
+    const parent = createNode("parent", [databaseNode]);
+
+    const nextTree = updateDatabaseTreeNodeMeta([parent], {
+      id: "database-id",
+      pageId: "database-page-id",
+      pageSlugId: "new-database-slug",
+      name: "New database",
+      icon: "D",
+    });
+
+    const nextDatabaseNode = nextTree[0].children[0];
+    assert.equal(nextDatabaseNode.name, "New database");
+    assert.equal(nextDatabaseNode.icon, "D");
+    assert.equal(nextDatabaseNode.slugId, "new-database-slug");
+    assert.deepEqual(
+      nextDatabaseNode.children.map((node) => node.id),
+      ["row-page-id"],
+    );
+  });
+
+  it("keeps the current slug when the database update response has no page slug", () => {
+    const databaseNode: SpaceTreeNode = {
+      id: "database-page-id",
+      nodeType: "database",
+      slugId: "current-slug",
+      databaseId: "database-id",
+      name: "Old database",
+      icon: null,
+      status: null,
+      position: "a1",
+      hasChildren: false,
+      spaceId: "space-1",
+      parentPageId: null,
+      children: [],
+    };
+
+    const nextTree = updateDatabaseTreeNodeMeta([databaseNode], {
+      id: "database-id",
+      pageId: "database-page-id",
+      pageSlugId: null,
+      name: "New database",
+    });
+
+    assert.equal(nextTree[0].name, "New database");
+    assert.equal(nextTree[0].slugId, "current-slug");
   });
 });

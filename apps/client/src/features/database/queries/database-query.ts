@@ -19,6 +19,31 @@ import {
   invalidatePageEntity,
   invalidateSidebarTree,
 } from "@/features/page/queries/cache-invalidation";
+import { getDefaultStore } from "jotai";
+import { treeDataAtom } from "@/features/page/tree/atoms/tree-data-atom";
+import { updateDatabaseTreeNodeMeta } from "@/features/page/tree/utils";
+
+const jotaiStore = getDefaultStore();
+
+function syncDatabaseTreeNode(updatedDatabase: IDatabase) {
+  const currentTreeData = jotaiStore.get(treeDataAtom);
+
+  if (currentTreeData.length === 0) {
+    return;
+  }
+
+  const nextTreeData = updateDatabaseTreeNodeMeta(currentTreeData, {
+    id: updatedDatabase.id,
+    pageId: updatedDatabase.pageId,
+    pageSlugId: updatedDatabase.pageSlugId,
+    name: updatedDatabase.name,
+    icon: updatedDatabase.icon,
+  });
+
+  if (nextTreeData !== currentTreeData) {
+    jotaiStore.set(treeDataAtom, nextTreeData);
+  }
+}
 
 /**
  * Returns the list of databases for the selected space.
@@ -85,6 +110,8 @@ export function useUpdateDatabaseMutation(
     mutationFn: (payload: IUpdateDatabasePayload) =>
       updateDatabase(databaseId as string, payload),
     onSuccess: (updatedDatabase) => {
+      syncDatabaseTreeNode(updatedDatabase);
+
       if (databaseId) {
         queryClient.setQueryData<IDatabase>(
           DATABASE_QUERY_KEYS.byId(databaseId),
