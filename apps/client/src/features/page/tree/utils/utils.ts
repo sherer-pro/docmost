@@ -169,6 +169,56 @@ export const updateTreeNodeIcon = (
   });
 };
 
+export const updateDatabaseTreeNodeMeta = (
+  nodes: SpaceTreeNode[],
+  database: {
+    id?: string | null;
+    pageId?: string | null;
+    pageSlugId?: string | null;
+    name?: string;
+    icon?: string | null;
+    status?: PageCustomFieldStatus | null;
+  },
+): SpaceTreeNode[] => {
+  let didUpdate = false;
+
+  const nextNodes = nodes.map((node) => {
+    const nextChildren =
+      node.children.length > 0
+        ? updateDatabaseTreeNodeMeta(node.children, database)
+        : node.children;
+    const didUpdateChildren = nextChildren !== node.children;
+    const isTargetDatabase =
+      node.nodeType === "database" &&
+      ((database.pageId && node.id === database.pageId) ||
+        (database.id && node.databaseId === database.id));
+
+    if (!isTargetDatabase) {
+      if (didUpdateChildren) {
+        didUpdate = true;
+        return { ...node, children: nextChildren };
+      }
+
+      return node;
+    }
+
+    didUpdate = true;
+
+    return {
+      ...node,
+      ...(database.name !== undefined ? { name: database.name } : {}),
+      ...(database.icon !== undefined ? { icon: database.icon } : {}),
+      ...(typeof database.pageSlugId === "string"
+        ? { slugId: database.pageSlugId }
+        : {}),
+      ...(database.status !== undefined ? { status: database.status } : {}),
+      children: didUpdateChildren ? nextChildren : node.children,
+    };
+  });
+
+  return didUpdate ? nextNodes : nodes;
+};
+
 /**
  * Removes a node and its subtree from local tree state by delegating to
  * `SimpleTree.drop`, so tree structure and parent metadata remain consistent.
