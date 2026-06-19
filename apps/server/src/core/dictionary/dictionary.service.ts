@@ -9,15 +9,25 @@ import { KyselyDB, KyselyTransaction } from '@docmost/db/types/kysely.types';
 import { executeTx } from '@docmost/db/utils';
 import {
   CreateDictionaryTermDto,
+  DictionaryImportTermDto,
   UpdateDictionaryTermDto,
 } from './dto/dictionary-term.dto';
-import { DictionaryTermResponse } from './dictionary-term.types';
+import {
+  DictionaryExportResponse,
+  DictionaryImportResult,
+  DictionaryTermResponse,
+} from './dictionary-term.types';
 import { User } from '@docmost/db/types/entity.types';
 
 interface PreparedAlias {
   alias: string;
   normalizedAlias: string;
   isPrimary: boolean;
+}
+
+interface PreparedImportTerm {
+  source: DictionaryImportTermDto;
+  aliases: PreparedAlias[];
 }
 
 @Injectable()
@@ -37,6 +47,179 @@ export class DictionaryService {
     );
 
     return terms.map((term) => this.toResponse(term));
+  }
+
+  async exportTerms(
+    spaceId: string,
+    workspaceId: string,
+  ): Promise<DictionaryExportResponse> {
+    await this.ensureSpaceBelongsToWorkspace(spaceId, workspaceId);
+
+    const terms = await this.listTerms(spaceId, workspaceId);
+
+    return {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      terms: terms.map((term) => ({
+        term: term.term,
+        forms: term.forms,
+        definitionMarkdown: term.definitionMarkdown,
+      })),
+    };
+  }
+
+  async importTerms(
+    spaceId: string,
+    terms: DictionaryImportTermDto[],
+    user: User,
+    workspaceId: string,
+  ): Promise<DictionaryImportResult> {
+    await this.ensureSpaceBelongsToWorkspace(spaceId, workspaceId);
+
+    const preparedTerms = terms.map((term) => ({
+      source: term,
+      aliases: this.prepareAliases(term.term, term.forms ?? [], {
+        rejectDuplicates: true,
+      }),
+    }));
+
+    const importedAliasesByNormalized = new Map<
+      string,
+      { importTerm: PreparedImportTerm; alias: PreparedAlias }
+    >();
+
+    for (const importTerm of preparedTerms) {
+      for (const alias of importTerm.aliases) {
+        if (importedAliasesByNormalized.has(alias.normalizedAlias)) {
+          throw new BadRequestException(
+            'Duplicate dictionary term or form in import file',
+          );
+        }
+
+        importedAliasesByNormalized.set(alias.normalizedAlias, {
+          importTerm,
+          alias,
+        });
+      }
+    }
+
+    const importedNormalizedAliases = Array.from(
+      importedAliasesByNormalized.keys(),
+    );
+    const existingAliases =
+      await this.dictionaryTermRepo.findAliasesByNormalized(
+        spaceId,
+        workspaceId,
+        importedNormalizedAliases,
+      );
+    const existingPrimaryTermsByNormalized = new Map<string, string>();
+
+    for (const alias of existingAliases) {
+      if (alias.isPrimary) {
+        existingPrimaryTermsByNormalized.set(
+          alias.normalizedAlias,
+          alias.termId,
+        );
+      }
+    }
+
+    for (const alias of existingAliases) {
+      const importedAlias = importedAliasesByNormalized.get(
+        alias.normalizedAlias,
+      );
+
+      if (!importedAlias) {
+        continue;
+      }
+
+      const importedPrimaryAlias =
+        importedAlias.importTerm.aliases[0].normalizedAlias;
+      const matchedTermId = existingPrimaryTermsByNormalized.get(
+        importedPrimaryAlias,
+      );
+
+      if (alias.termId !== matchedTermId) {
+        throw new BadRequestException(
+          'Dictionary term or form already exists in this space',
+        );
+      }
+    }
+
+    try {
+      return await executeTx(this.db, async (trx) => {
+        let created = 0;
+        let updated = 0;
+
+        for (const importTerm of preparedTerms) {
+          const primaryAlias = importTerm.aliases[0];
+          const existingTermId = existingPrimaryTermsByNormalized.get(
+            primaryAlias.normalizedAlias,
+          );
+
+          if (existingTermId) {
+            const updatedTerm = await this.dictionaryTermRepo.updateTerm(
+              existingTermId,
+              workspaceId,
+              {
+                term: primaryAlias.alias,
+                definitionMarkdown:
+                  importTerm.source.definitionMarkdown.trim(),
+              },
+              trx,
+            );
+
+            if (!updatedTerm) {
+              throw new NotFoundException('Dictionary term not found');
+            }
+
+            await this.dictionaryTermRepo.deleteAliasesByTermId(
+              existingTermId,
+              workspaceId,
+              trx,
+            );
+            await this.insertAliases(
+              existingTermId,
+              spaceId,
+              workspaceId,
+              importTerm.aliases,
+              trx,
+            );
+            updated += 1;
+            continue;
+          }
+
+          const term = await this.dictionaryTermRepo.insertTerm(
+            {
+              spaceId,
+              workspaceId,
+              creatorId: user.id,
+              term: primaryAlias.alias,
+              definitionMarkdown:
+                importTerm.source.definitionMarkdown.trim(),
+            },
+            trx,
+          );
+
+          await this.insertAliases(
+            term.id,
+            spaceId,
+            workspaceId,
+            importTerm.aliases,
+            trx,
+          );
+          created += 1;
+        }
+
+        return {
+          created,
+          updated,
+          total: preparedTerms.length,
+        };
+      });
+    } catch (err) {
+      this.rethrowDuplicateAliasError(err);
+      throw err;
+    }
   }
 
   async createTerm(
@@ -163,7 +346,11 @@ export class DictionaryService {
     });
   }
 
-  private prepareAliases(term: string, forms: string[]): PreparedAlias[] {
+  private prepareAliases(
+    term: string,
+    forms: string[],
+    opts?: { rejectDuplicates?: boolean },
+  ): PreparedAlias[] {
     const primaryAlias = this.normalizeVisibleAlias(term);
     if (!primaryAlias) {
       throw new BadRequestException('Dictionary term is required');
@@ -180,6 +367,12 @@ export class DictionaryService {
 
       const normalizedAlias = this.normalizeLookupAlias(visibleAlias);
       if (seen.has(normalizedAlias)) {
+        if (opts?.rejectDuplicates) {
+          throw new BadRequestException(
+            'Duplicate dictionary term or form in import file',
+          );
+        }
+
         return;
       }
 
@@ -240,6 +433,22 @@ export class DictionaryService {
 
   private normalizeLookupAlias(value: string): string {
     return this.normalizeVisibleAlias(value).toLocaleLowerCase();
+  }
+
+  private async ensureSpaceBelongsToWorkspace(
+    spaceId: string,
+    workspaceId: string,
+  ): Promise<void> {
+    const space = await this.db
+      .selectFrom('spaces')
+      .select('id')
+      .where('id', '=', spaceId)
+      .where('workspaceId', '=', workspaceId)
+      .executeTakeFirst();
+
+    if (!space) {
+      throw new NotFoundException('Space not found');
+    }
   }
 
   private toResponse(term: {

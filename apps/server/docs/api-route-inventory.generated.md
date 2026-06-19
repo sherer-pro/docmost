@@ -64,6 +64,8 @@
 | POST | `/dictionary-terms` | `apps/server/src/core/dictionary/dictionary.controller.ts` |
 | DELETE | `/dictionary-terms/:termId` | `apps/server/src/core/dictionary/dictionary.controller.ts` |
 | PATCH | `/dictionary-terms/:termId` | `apps/server/src/core/dictionary/dictionary.controller.ts` |
+| POST | `/dictionary-terms/actions/export` | `apps/server/src/core/dictionary/dictionary.controller.ts` |
+| POST | `/dictionary-terms/actions/import` | `apps/server/src/core/dictionary/dictionary.controller.ts` |
 | GET | `/favorites` | `apps/server/src/core/favorite/favorite.controller.ts` |
 | POST | `/favorites` | `apps/server/src/core/favorite/favorite.controller.ts` |
 | POST | `/favorites/add` | `apps/server/src/core/favorite/favorite.controller.ts` |
@@ -236,6 +238,7 @@
 | POST | `/workspace/members/count` | `apps/server/src/core/workspace/controllers/workspace.controller.ts` |
 | POST | `/workspace/members/deactivate` | `apps/server/src/core/workspace/controllers/workspace.controller.ts` |
 | POST | `/workspace/members/delete` | `apps/server/src/core/workspace/controllers/workspace.controller.ts` |
+| GET | `/workspace/members/presence` | `apps/server/src/core/workspace/controllers/workspace.controller.ts` |
 | GET | `/workspace/public` | `apps/server/src/core/workspace/controllers/workspace.controller.ts` |
 | POST | `/workspace/public` | `apps/server/src/core/workspace/controllers/workspace.controller.ts` |
 | POST | `/workspace/update` | `apps/server/src/core/workspace/controllers/workspace.controller.ts` |

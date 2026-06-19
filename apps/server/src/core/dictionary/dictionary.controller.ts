@@ -11,12 +11,14 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
 import { AuthWorkspace } from '../../common/decorators/auth-workspace.decorator';
 import { User, Workspace } from '@docmost/db/types/entity.types';
+import { UserRole } from '../../common/helpers/types/permission';
 import SpaceAbilityFactory from '../casl/abilities/space-ability.factory';
 import {
   SpaceCaslAction,
@@ -25,9 +27,12 @@ import {
 import { DictionaryService } from './dictionary.service';
 import {
   CreateDictionaryTermDto,
+  ExportDictionaryTermsDto,
+  ImportDictionaryTermsDto,
   ListDictionaryTermsQueryDto,
   UpdateDictionaryTermDto,
 } from './dto/dictionary-term.dto';
+import { FastifyReply } from 'fastify';
 
 @UseGuards(JwtAuthGuard)
 @Controller('dictionary-terms')
@@ -53,6 +58,48 @@ export class DictionaryController {
     }
 
     return this.dictionaryService.listTerms(query.spaceId, workspace.id);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('actions/export')
+  async exportTerms(
+    @Body() dto: ExportDictionaryTermsDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+    @Res() res: FastifyReply,
+  ) {
+    this.assertCanImportExportDictionary(user);
+
+    const exported = await this.dictionaryService.exportTerms(
+      dto.spaceId,
+      workspace.id,
+    );
+    const fileName = `dictionary-${dto.spaceId}.json`;
+
+    res.headers({
+      'Content-Type': 'application/json; charset=utf-8',
+      'Content-Disposition':
+        'attachment; filename="' + encodeURIComponent(fileName) + '"',
+    });
+
+    res.send(JSON.stringify(exported, null, 2));
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('actions/import')
+  async importTermsAction(
+    @Body() dto: ImportDictionaryTermsDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    this.assertCanImportExportDictionary(user);
+
+    return this.dictionaryService.importTerms(
+      dto.spaceId,
+      dto.terms,
+      user,
+      workspace.id,
+    );
   }
 
   @HttpCode(HttpStatus.OK)
@@ -115,5 +162,13 @@ export class DictionaryController {
     }
 
     await this.dictionaryService.deleteTerm(termId, workspace.id);
+  }
+
+  private assertCanImportExportDictionary(user: User) {
+    if (![UserRole.ADMIN, UserRole.OWNER].includes(user.role as UserRole)) {
+      throw new ForbiddenException(
+        'Only workspace admins can import or export dictionary terms',
+      );
+    }
   }
 }
