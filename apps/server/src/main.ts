@@ -16,6 +16,7 @@ import { EnvironmentService } from './integrations/environment/environment.servi
 import { getTrustedProxiesFromEnv } from './common/security/trusted-proxy.util';
 import { envPath } from './common/helpers';
 import { getEmbedFrameSources } from '@docmost/editor-ext';
+import { API_PREFIX_EXCLUDES } from './common/config/api-prefix-excludes';
 
 /**
  * Returns the origin from a URL string when parsing succeeds.
@@ -223,7 +224,7 @@ async function bootstrap() {
   app.useLogger(app.get(PinoLogger));
 
   app.setGlobalPrefix('api', {
-    exclude: ['robots.txt', 'share/:shareId/p/:pageSlug'],
+    exclude: API_PREFIX_EXCLUDES,
   });
 
   const reflector = app.get(Reflector);

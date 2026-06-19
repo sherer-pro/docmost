@@ -1,7 +1,9 @@
 import {
   Controller,
   Post,
+  Get,
   Body,
+  Query,
   HttpCode,
   HttpStatus,
   UseGuards,
@@ -26,6 +28,9 @@ import { User, Workspace } from '@docmost/db/types/entity.types';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { CommentRepo } from '@docmost/db/repos/comment/comment.repo';
 import { PageAccessService } from '../page-access/page-access.service';
+import { DeprecatedRoute } from '../../common/decorators/deprecated-route.decorator';
+
+const LEGACY_API_SUNSET = 'Fri, 01 Jan 2027 00:00:00 GMT';
 
 @UseGuards(JwtAuthGuard)
 @Controller('comments')
@@ -38,6 +43,20 @@ export class CommentController {
   ) {}
 
   @HttpCode(HttpStatus.OK)
+  @Post('actions/create')
+  async createViaAction(
+    @Body() createCommentDto: CreateCommentDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.create(createCommentDto, user, workspace);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'POST /api/comments/actions/create',
+  })
   @Post('create')
   async create(
     @Body() createCommentDto: CreateCommentDto,
@@ -62,6 +81,19 @@ export class CommentController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @Get('/')
+  async findPageCommentsViaQuery(
+    @Query() input: PageCommentsQueryDto,
+    @AuthUser() user: User,
+  ) {
+    return this.findPageComments(input, user);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'GET /api/comments',
+  })
   @Post('/')
   async findPageComments(
     @Body() input: PageCommentsQueryDto,
@@ -77,6 +109,16 @@ export class CommentController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @Get('info')
+  async findOneViaQuery(@Query() input: CommentIdDto, @AuthUser() user: User) {
+    return this.findOne(input, user);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'GET /api/comments/info',
+  })
   @Post('info')
   async findOne(@Body() input: CommentIdDto, @AuthUser() user: User) {
     const comment = await this.commentRepo.findById(input.commentId);
@@ -94,6 +136,16 @@ export class CommentController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @Post('actions/update')
+  async updateViaAction(@Body() dto: UpdateCommentDto, @AuthUser() user: User) {
+    return this.update(dto, user);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'POST /api/comments/actions/update',
+  })
   @Post('update')
   async update(@Body() dto: UpdateCommentDto, @AuthUser() user: User) {
     const comment = await this.commentRepo.findById(dto.commentId);
@@ -141,6 +193,16 @@ export class CommentController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @Post('actions/delete')
+  async deleteViaAction(@Body() input: CommentIdDto, @AuthUser() user: User) {
+    return this.delete(input, user);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'POST /api/comments/actions/delete',
+  })
   @Post('delete')
   async delete(@Body() input: CommentIdDto, @AuthUser() user: User) {
     const comment = await this.commentRepo.findById(input.commentId);

@@ -18,17 +18,17 @@ export async function getGroupById(groupId: string): Promise<IGroup> {
 }
 
 export async function createGroup(data: Partial<IGroup>): Promise<IGroup> {
-  const req = await api.post<IGroup>("/groups/create", data);
+  const req = await api.post<IGroup>("/groups/actions/create", data);
   return req.data;
 }
 
 export async function updateGroup(data: Partial<IGroup>): Promise<IGroup> {
-  const req = await api.post<IGroup>("/groups/update", data);
+  const req = await api.post<IGroup>("/groups/actions/update", data);
   return req.data;
 }
 
 export async function deleteGroup(data: { groupId: string }): Promise<void> {
-  await api.post("/groups/delete", data);
+  await api.post("/groups/actions/delete", data);
 }
 
 export async function getGroupMembers(
