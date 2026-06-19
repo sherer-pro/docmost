@@ -88,7 +88,7 @@ import {
 import { SimpleTree } from 'react-arborist';
 import { queryClient } from '@/main.tsx';
 import { getAllSidebarPages, getPageById } from '@/features/page/services/page-service.ts';
-import { PAGE_QUERY_KEYS } from '@/features/page/queries/query-keys.ts';
+import { DATABASE_QUERY_KEYS, PAGE_QUERY_KEYS } from '@/features/page/queries/query-keys.ts';
 import { ISidebarNode } from '@/features/page/types/page.types.ts';
 import { buildPageUrl } from '@/features/page/page.utils.ts';
 import { fetchAllAncestorChildren } from '@/features/page/queries/page-query.ts';
@@ -337,7 +337,7 @@ export function DatabaseTableView({
       emit({
         operation: "invalidate",
         spaceId,
-        entity: ["database", databaseId, "rows"],
+        entity: [...DATABASE_QUERY_KEYS.rowsBase(databaseId)],
       });
     }
 
@@ -361,7 +361,7 @@ export function DatabaseTableView({
       tableViewportRef.current.scrollTop = 0;
     }
     queryClient.invalidateQueries({
-      queryKey: ['database', databaseId, 'rows'],
+      queryKey: DATABASE_QUERY_KEYS.rowsBase(databaseId),
     });
   }, [databaseId]);
 

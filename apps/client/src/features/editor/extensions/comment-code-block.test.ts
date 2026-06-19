@@ -15,7 +15,7 @@ import {
   CustomCodeBlock,
   isTextRangeSelected,
   isTextSelected,
-} from "../../../../../../packages/editor-ext/src";
+} from "@docmost/editor-ext";
 import { describe, expect, it } from "vitest";
 
 const TestCodeBlock = CustomCodeBlock.extend({
