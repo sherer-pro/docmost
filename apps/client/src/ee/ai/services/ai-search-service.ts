@@ -1,4 +1,4 @@
-import api from "@/lib/api-client.ts";
+import api, { withCsrfHeader } from "@/lib/api-client.ts";
 import { IPageSearchParams } from "@/features/search/types/search.types.ts";
 
 export interface IAiSearchResponse {
@@ -21,9 +21,9 @@ export async function aiAnswers(
 ): Promise<IAiSearchResponse> {
   const response = await fetch("/api/ai/answers", {
     method: "POST",
-    headers: {
+    headers: withCsrfHeader({
       "Content-Type": "application/json",
-    },
+    }),
     credentials: "include",
     body: JSON.stringify(params),
   });

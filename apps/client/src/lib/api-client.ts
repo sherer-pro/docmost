@@ -139,6 +139,17 @@ function getCookieValue(name: string): string | null {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
+export function withCsrfHeader(headers: HeadersInit = {}): Headers {
+  const nextHeaders = new Headers(headers);
+  const csrfToken = getCookieValue("csrfToken");
+
+  if (csrfToken) {
+    nextHeaders.set("x-csrf-token", csrfToken);
+  }
+
+  return nextHeaders;
+}
+
 api.interceptors.request.use((config) => {
   const method = config.method?.toUpperCase() ?? "GET";
   const isMutatingRequest = !["GET", "HEAD", "OPTIONS"].includes(method);
