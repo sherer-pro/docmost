@@ -6,12 +6,12 @@ import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import ExportModal from '@/components/common/export-modal';
 import { DocumentCommonActionItems } from '@/features/common/header/document-common-action-items.tsx';
-import { exportDatabase } from '@/features/database/services/database-service';
-import { DatabaseExportFormat } from '@/features/database/types/database.types';
 import {
-  useDatabasePropertiesQuery,
-  useDatabaseRowsQuery,
-} from '@/features/database/queries/database-table-query.ts';
+  exportDatabase,
+  getDatabaseRows,
+} from '@/features/database/services/database-service';
+import { DatabaseExportFormat } from '@/features/database/types/database.types';
+import { useDatabasePropertiesQuery } from '@/features/database/queries/database-table-query.ts';
 import { useGetDatabaseQuery } from '@/features/database/queries/database-query.ts';
 import { historyAtoms } from '@/features/page-history/atoms/history-atoms.ts';
 import MovePageModal from '@/features/page/components/move-page-modal.tsx';
@@ -34,7 +34,11 @@ import {
   defaultDatabaseTableExportState,
 } from '@/features/database/atoms/database-table-export-atom';
 import { buildDatabaseMarkdownFromState } from '@/features/database/utils/database-markdown';
-import { IDatabaseRowsQueryParams } from '@/features/database/types/database-table.types.ts';
+import {
+  IDatabaseRowsPage,
+  IDatabaseRowsQueryParams,
+  IDatabaseRowWithCells,
+} from '@/features/database/types/database-table.types.ts';
 import { dropTreeNodeAtom } from '@/features/page/tree/atoms/tree-data-atom.ts';
 import useToggleAside from '@/hooks/use-toggle-aside.tsx';
 import { useDatabasePageContext } from '@/features/database/hooks/use-database-page-context.ts';
@@ -48,6 +52,26 @@ interface DatabaseHeaderMenuProps {
   databasePageId?: string;
   spaceSlug: string;
   readOnly?: boolean;
+}
+
+const MARKDOWN_COPY_ROWS_PAGE_SIZE = 200;
+
+function normalizeRowsResponse(
+  data: IDatabaseRowWithCells[] | IDatabaseRowsPage,
+): IDatabaseRowsPage {
+  if (Array.isArray(data)) {
+    return {
+      items: data,
+      nextCursor: null,
+      hasMore: false,
+    };
+  }
+
+  return {
+    items: data.items ?? [],
+    nextCursor: data.nextCursor ?? null,
+    hasMore: Boolean(data.hasMore),
+  };
 }
 
 export default function DatabaseHeaderMenu({
@@ -80,8 +104,6 @@ export default function DatabaseHeaderMenu({
       cursor: undefined,
     } as IDatabaseRowsQueryParams;
   })();
-  const { data: rowsPage } = useDatabaseRowsQuery(databaseId, rowsExportQueryParams);
-  const rows = rowsPage?.items ?? [];
   const { openDeleteModal } = useDeletePageModal();
   const { mutateAsync: removePageMutationAsync } = useRemovePageMutation();
   const dropTreeNode = useSetAtom(dropTreeNodeAtom);
@@ -103,7 +125,34 @@ export default function DatabaseHeaderMenu({
     convertDatabaseToPageAsync,
   });
 
-  const getCurrentTableMarkdown = () => {
+  const getRowsForMarkdownCopy = async (): Promise<IDatabaseRowWithCells[]> => {
+    const rows: IDatabaseRowWithCells[] = [];
+    let cursor: string | null | undefined;
+
+    while (true) {
+      const rowsPage = normalizeRowsResponse(
+        await getDatabaseRows(databaseId, {
+          ...(rowsExportQueryParams ?? {}),
+          limit: MARKDOWN_COPY_ROWS_PAGE_SIZE,
+          cursor: cursor ?? undefined,
+        }),
+      );
+
+      rows.push(...rowsPage.items);
+
+      if (!rowsPage.hasMore || !rowsPage.nextCursor) {
+        break;
+      }
+
+      cursor = rowsPage.nextCursor;
+    }
+
+    return rows;
+  };
+
+  const getCurrentTableMarkdown = async () => {
+    const rows = await getRowsForMarkdownCopy();
+
     return buildDatabaseMarkdownFromState({
       title: (database?.name || t('database.editor.untitled')).trim(),
       description: database?.description,
@@ -132,7 +181,7 @@ export default function DatabaseHeaderMenu({
 
   const handleCopyAsMarkdown = async () => {
     try {
-      clipboard.copy(getCurrentTableMarkdown());
+      clipboard.copy(await getCurrentTableMarkdown());
       notifications.show({ message: t('Copied') });
     } catch {
       notifications.show({
