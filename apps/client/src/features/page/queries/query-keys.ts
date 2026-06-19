@@ -86,6 +86,10 @@ export function databaseRowsKey(databaseId?: string, params?: QueryParamsKey | n
   ] as const;
 }
 
+export function databaseRowsBaseKey(databaseId?: string) {
+  return [QUERY_KEY_SPACE.database, databaseId, QUERY_KEY_SPACE.rows] as const;
+}
+
 export function databaseRowContextKey(pageId?: string) {
   if (pageId) {
     return [QUERY_KEY_SPACE.database, QUERY_KEY_SPACE.rowContext, pageId] as const;
@@ -108,6 +112,7 @@ export const DATABASE_QUERY_KEYS = {
   byId: databaseKey,
   properties: databasePropertiesKey,
   views: databaseViewsKey,
+  rowsBase: databaseRowsBaseKey,
   rows: databaseRowsKey,
   rowContext: databaseRowContextKey,
 };
