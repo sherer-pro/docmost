@@ -26,9 +26,14 @@
 | POST | `/auth/setup` | `apps/server/src/core/auth/auth.controller.ts` |
 | POST | `/auth/verify-token` | `apps/server/src/core/auth/auth.controller.ts` |
 | GET | `/collab/stats` | `apps/server/src/collaboration/server/collaboration.controller.ts` |
+| GET | `/comments` | `apps/server/src/core/comment/comment.controller.ts` |
 | POST | `/comments` | `apps/server/src/core/comment/comment.controller.ts` |
+| POST | `/comments/actions/create` | `apps/server/src/core/comment/comment.controller.ts` |
+| POST | `/comments/actions/delete` | `apps/server/src/core/comment/comment.controller.ts` |
+| POST | `/comments/actions/update` | `apps/server/src/core/comment/comment.controller.ts` |
 | POST | `/comments/create` | `apps/server/src/core/comment/comment.controller.ts` |
 | POST | `/comments/delete` | `apps/server/src/core/comment/comment.controller.ts` |
+| GET | `/comments/info` | `apps/server/src/core/comment/comment.controller.ts` |
 | POST | `/comments/info` | `apps/server/src/core/comment/comment.controller.ts` |
 | POST | `/comments/resolve` | `apps/server/src/core/comment/comment.controller.ts` |
 | POST | `/comments/update` | `apps/server/src/core/comment/comment.controller.ts` |
@@ -72,6 +77,9 @@
 | POST | `/files/upload` | `apps/server/src/core/attachment/legacy-files.controller.ts` |
 | GET | `/groups` | `apps/server/src/core/group/group.controller.ts` |
 | POST | `/groups` | `apps/server/src/core/group/group.controller.ts` |
+| POST | `/groups/actions/create` | `apps/server/src/core/group/group.controller.ts` |
+| POST | `/groups/actions/delete` | `apps/server/src/core/group/group.controller.ts` |
+| POST | `/groups/actions/update` | `apps/server/src/core/group/group.controller.ts` |
 | POST | `/groups/create` | `apps/server/src/core/group/group.controller.ts` |
 | POST | `/groups/delete` | `apps/server/src/core/group/group.controller.ts` |
 | GET | `/groups/info` | `apps/server/src/core/group/group.controller.ts` |
@@ -98,6 +106,7 @@
 | POST | `/notifications/mark-read` | `apps/server/src/core/notification/notification.controller.ts` |
 | GET | `/notifications/unread-count` | `apps/server/src/core/notification/notification.controller.ts` |
 | POST | `/notifications/unread-count` | `apps/server/src/core/notification/notification.controller.ts` |
+| POST | `/pages` | `apps/server/src/core/page/page.controller.ts` |
 | POST | `/pages/:pageId/actions/access/close-group` | `apps/server/src/core/page/page.controller.ts` |
 | POST | `/pages/:pageId/actions/access/close-user` | `apps/server/src/core/page/page.controller.ts` |
 | POST | `/pages/:pageId/actions/access/grant-group` | `apps/server/src/core/page/page.controller.ts` |
@@ -107,9 +116,11 @@
 | POST | `/pages/:pageId/actions/access/users` | `apps/server/src/core/page/page.controller.ts` |
 | POST | `/pages/:pageId/convert-to-database` | `apps/server/src/core/page/page.controller.ts` |
 | POST | `/pages/actions/copy-markdown-with-comments` | `apps/server/src/integrations/export/export.controller.ts` |
+| POST | `/pages/actions/delete` | `apps/server/src/core/page/page.controller.ts` |
 | POST | `/pages/actions/export` | `apps/server/src/integrations/export/export.controller.ts` |
 | POST | `/pages/actions/import` | `apps/server/src/integrations/import/import.controller.ts` |
 | POST | `/pages/actions/import-zip` | `apps/server/src/integrations/import/import.controller.ts` |
+| POST | `/pages/actions/update` | `apps/server/src/core/page/page.controller.ts` |
 | GET | `/pages/backlinks` | `apps/server/src/core/page/page.controller.ts` |
 | POST | `/pages/backlinks` | `apps/server/src/core/page/page.controller.ts` |
 | GET | `/pages/backlinks-count` | `apps/server/src/core/page/page.controller.ts` |
@@ -171,6 +182,9 @@
 | GET | `/share/p/:pageSlug` | `apps/server/src/core/share/share-seo.controller.ts` |
 | GET | `/shares` | `apps/server/src/core/share/share.controller.ts` |
 | POST | `/shares` | `apps/server/src/core/share/share.controller.ts` |
+| POST | `/shares/actions/create` | `apps/server/src/core/share/share.controller.ts` |
+| POST | `/shares/actions/delete` | `apps/server/src/core/share/share.controller.ts` |
+| POST | `/shares/actions/update` | `apps/server/src/core/share/share.controller.ts` |
 | POST | `/shares/create` | `apps/server/src/core/share/share.controller.ts` |
 | POST | `/shares/delete` | `apps/server/src/core/share/share.controller.ts` |
 | GET | `/shares/for-page` | `apps/server/src/core/share/share.controller.ts` |

@@ -89,6 +89,57 @@ describe('ShareSeoController', () => {
     expect(renderedHtml).not.toContain('<script>alert(1)</script>');
   });
 
+  it('injects metadata for public share URLs without a share id', async () => {
+    const indexHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Docmost</title>
+          <!--meta-tags-->
+        </head>
+        <body></body>
+      </html>
+    `.trim();
+
+    const resolveClientDistPathMock =
+      resolveClientDistPath as jest.MockedFunction<typeof resolveClientDistPath>;
+    resolveClientDistPathMock.mockReturnValue('D:/tmp/client-dist');
+
+    jest.spyOn(fs, 'existsSync').mockReturnValue(true);
+    jest.spyOn(fs, 'readFileSync').mockReturnValue(indexHtml);
+
+    shareService.getShareForPage.mockResolvedValue({
+      spaceId: 'space-1',
+      searchIndexing: true,
+      sharedPage: {
+        title: 'Public page',
+      },
+    });
+
+    const res = {
+      type: jest.fn().mockReturnThis(),
+      send: jest.fn(),
+    };
+
+    await controller.getShare(
+      res as any,
+      { raw: { headers: {} } } as any,
+      undefined,
+      'public-page-page-1',
+    );
+
+    expect(shareService.getShareForPage).toHaveBeenCalledWith(
+      '1',
+      'workspace-1',
+      undefined,
+    );
+    expect(res.type).toHaveBeenCalledWith('text/html');
+    expect(res.send.mock.calls[0][0]).toContain('<title>Public page</title>');
+    expect(res.send.mock.calls[0][0]).toContain(
+      'property="og:title" content="Public page"',
+    );
+  });
+
   it('does not inject share metadata when sharing is disabled', async () => {
     const resolveClientDistPathMock =
       resolveClientDistPath as jest.MockedFunction<typeof resolveClientDistPath>;

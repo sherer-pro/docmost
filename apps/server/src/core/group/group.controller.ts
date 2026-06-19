@@ -26,6 +26,9 @@ import {
   WorkspaceCaslAction,
   WorkspaceCaslSubject,
 } from '../casl/interfaces/workspace-ability.type';
+import { DeprecatedRoute } from '../../common/decorators/deprecated-route.decorator';
+
+const LEGACY_API_SUNSET = 'Fri, 01 Jan 2027 00:00:00 GMT';
 
 @UseGuards(JwtAuthGuard)
 @Controller('groups')
@@ -47,6 +50,10 @@ export class GroupController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'GET /api/groups',
+  })
   @Post('/')
   getWorkspaceGroups(
     @Body() pagination: PaginationOptions,
@@ -72,6 +79,10 @@ export class GroupController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'GET /api/groups/info',
+  })
   @Post('/info')
   getGroup(
     @Body() groupIdDto: GroupIdDto,
@@ -86,6 +97,20 @@ export class GroupController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @Post('actions/create')
+  createGroupViaAction(
+    @Body() createGroupDto: CreateGroupDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.createGroup(createGroupDto, user, workspace);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'POST /api/groups/actions/create',
+  })
   @Post('create')
   createGroup(
     @Body() createGroupDto: CreateGroupDto,
@@ -102,6 +127,20 @@ export class GroupController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @Post('actions/update')
+  updateGroupViaAction(
+    @Body() updateGroupDto: UpdateGroupDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.updateGroup(updateGroupDto, user, workspace);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'POST /api/groups/actions/update',
+  })
   @Post('update')
   updateGroup(
     @Body() updateGroupDto: UpdateGroupDto,
@@ -129,6 +168,10 @@ export class GroupController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'GET /api/groups/members',
+  })
   @Post('members')
   getGroupMembers(
     @Body() groupIdDto: GroupMembersQueryDto,
@@ -191,6 +234,20 @@ export class GroupController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @Post('actions/delete')
+  deleteGroupViaAction(
+    @Body() groupIdDto: GroupIdDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.deleteGroup(groupIdDto, user, workspace);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'POST /api/groups/actions/delete',
+  })
   @Post('delete')
   deleteGroup(
     @Body() groupIdDto: GroupIdDto,

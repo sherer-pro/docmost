@@ -44,7 +44,7 @@ function normalizePage<T extends IPage>(page: T): T {
 }
 
 export async function createPage(data: Partial<IPage>): Promise<IPage> {
-  const req = await api.post<IPage>("/pages/create", data);
+  const req = await api.post<IPage>("/pages", data);
   return req.data;
 }
 
@@ -56,7 +56,7 @@ export async function getPageById(
 }
 
 export async function updatePage(data: IUpdatePageInput): Promise<IPage> {
-  const req = await api.post<IPage>("/pages/update", data);
+  const req = await api.post<IPage>("/pages/actions/update", data);
   return req.data;
 }
 
@@ -64,7 +64,7 @@ export async function deletePage(
   pageId: string,
   permanentlyDelete = false,
 ): Promise<void> {
-  await api.post("/pages/delete", { pageId, permanentlyDelete });
+  await api.post("/pages/actions/delete", { pageId, permanentlyDelete });
 }
 
 export async function getDeletedPages(

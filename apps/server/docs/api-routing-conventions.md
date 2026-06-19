@@ -47,6 +47,8 @@ Generated inventory reference:
 - Canonical action/resource routes are primary API surface.
 - Legacy compatibility aliases are intentionally preserved where migration safety is required (for example `/files/*` and select `/attachments/*` aliases).
 - Any alias route must have a documented deprecation path and backward-compatibility tests.
+- Retained legacy aliases should use `@DeprecatedRoute(...)` so responses include `Deprecation` and `Sunset` headers and server logs point to the canonical replacement.
+- First-pass canonical command routes are active for pages, shares, groups, and comments under resource roots or `/actions/*`; old `/create`, `/update`, and `/delete` routes remain compatibility aliases.
 
 ## Read-like POST migration plan
 
@@ -56,6 +58,7 @@ Migration rules:
 
 - Add a canonical `GET` route for read-only operations when parameters can be represented as path/query values.
 - Keep the old `POST` route as a compatibility alias until older clients are no longer supported.
+- Mark compatibility `POST` aliases with `@DeprecatedRoute(...)` and a concrete replacement route.
 - Add route inventory updates and tests that prove the `GET` and compatibility `POST` routes return equivalent results.
 - Document every retained read-like `POST` alias with a deprecation/removal condition.
 - Leave command-like routes (`/actions/*`, create/update/delete, imports, exports, revoke, unsync) as mutating methods.

@@ -65,6 +65,9 @@ import {
   ResolvePageAccessUsersDto,
 } from './dto/page-access.dto';
 import { LinkPreviewService } from './services/link-preview.service';
+import { DeprecatedRoute } from '../../common/decorators/deprecated-route.decorator';
+
+const LEGACY_API_SUNSET = 'Fri, 01 Jan 2027 00:00:00 GMT';
 
 @UseGuards(JwtAuthGuard)
 @Controller('pages')
@@ -108,6 +111,10 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'GET /api/pages/info',
+  })
   @Post('/info')
   async getPage(@Body() dto: PageInfoDto, @AuthUser() user: User) {
     const page = await this.pageRepo.findById(dto.pageId, {
@@ -219,6 +226,10 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'GET /api/pages/backlinks-count',
+  })
   @Post('backlinks-count')
   async getBacklinksCount(
     @Body() dto: PageIdDto,
@@ -244,6 +255,10 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'GET /api/pages/backlinks',
+  })
   @Post('backlinks')
   async getBacklinks(
     @Body() dto: BacklinksListQueryDto,
@@ -271,6 +286,20 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @Post('/')
+  async createViaResource(
+    @Body() createPageDto: CreatePageDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.create(createPageDto, user, workspace);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'POST /api/pages',
+  })
   @Post('create')
   async create(
     @Body() createPageDto: CreatePageDto,
@@ -326,6 +355,19 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @Post('actions/update')
+  async updateViaAction(
+    @Body() updatePageDto: UpdatePageDto,
+    @AuthUser() user: User,
+  ) {
+    return this.update(updatePageDto, user);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'POST /api/pages/actions/update',
+  })
   @Post('update')
   async update(@Body() updatePageDto: UpdatePageDto, @AuthUser() user: User) {
     const page = await this.pageRepo.findById(updatePageDto.pageId);
@@ -366,6 +408,20 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @Post('actions/delete')
+  async deleteViaAction(
+    @Body() deletePageDto: DeletePageDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.delete(deletePageDto, user, workspace);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'POST /api/pages/actions/delete',
+  })
   @Post('delete')
   async delete(
     @Body() deletePageDto: DeletePageDto,
@@ -436,6 +492,10 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'GET /api/pages/recent',
+  })
   @Post('recent')
   async getRecentPages(
     @Body() recentPageDto: RecentPagesQueryDto,
@@ -501,6 +561,10 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'GET /api/pages/trash',
+  })
   @Post('trash')
   async getDeletedPages(
     @Body() deletedPageDto: DeletedPagesQueryDto,
@@ -533,6 +597,10 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'GET /api/pages/history',
+  })
   @Post('/history')
   async getPageHistory(
     @Body() dto: PageHistoryQueryDto,
@@ -558,6 +626,10 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'GET /api/pages/history/info',
+  })
   @Post('/history/info')
   async getPageHistoryInfo(
     @Body() dto: PageHistoryIdDto,
@@ -592,6 +664,10 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'GET /api/pages/sidebar-pages',
+  })
   @Post('/sidebar-pages')
   async getSidebarPages(
     @Body() dto: SidebarPagesQueryDto,
@@ -953,6 +1029,10 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'GET /api/pages/breadcrumbs',
+  })
   @Post('/breadcrumbs')
   async getPageBreadcrumbs(@Body() dto: PageIdDto, @AuthUser() user: User) {
     const page = await this.pageRepo.findById(dto.pageId);

@@ -21,7 +21,7 @@ export async function getShares(
 }
 
 export async function createShare(data: ICreateShare): Promise<any> {
-  const req = await api.post<any>("/shares/create", data);
+  const req = await api.post<any>("/shares/actions/create", data);
   return req.data;
 }
 
@@ -33,7 +33,7 @@ export async function getShareInfo(shareId: string): Promise<IShare> {
 }
 
 export async function updateShare(data: IUpdateShare): Promise<any> {
-  const req = await api.post<any>("/shares/update", data);
+  const req = await api.post<any>("/shares/actions/update", data);
   return req.data;
 }
 
@@ -54,7 +54,7 @@ export async function getSharePageInfo(
 }
 
 export async function deleteShare(shareId: string): Promise<void> {
-  await api.post("/shares/delete", { shareId });
+  await api.post("/shares/actions/delete", { shareId });
 }
 
 export async function getSharedPageTree(

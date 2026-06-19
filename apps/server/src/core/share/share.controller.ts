@@ -38,6 +38,9 @@ import {
 } from '../attachment/attachment-public-token.util';
 import { PageAccessService } from '../page-access/page-access.service';
 import { ShareTransclusionLookupDto } from './dto/share-transclusion-lookup.dto';
+import { DeprecatedRoute } from '../../common/decorators/deprecated-route.decorator';
+
+const LEGACY_API_SUNSET = 'Fri, 01 Jan 2027 00:00:00 GMT';
 
 @UseGuards(JwtAuthGuard)
 @Controller('shares')
@@ -61,6 +64,10 @@ export class ShareController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'GET /api/shares',
+  })
   @Post('/')
   async getShares(
     @AuthUser() user: User,
@@ -82,6 +89,10 @@ export class ShareController {
 
   @Public()
   @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'GET /api/shares/page-info',
+  })
   @Post('/page-info')
   async getSharedPageInfo(
     @Body() dto: ShareInfoDto,
@@ -127,6 +138,10 @@ export class ShareController {
 
   @Public()
   @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'GET /api/shares/info',
+  })
   @Post('/info')
   async getShare(@Body() dto: ShareIdDto) {
     const share = await this.shareRepo.findById(dto.shareId, {
@@ -159,6 +174,10 @@ export class ShareController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'GET /api/shares/for-page',
+  })
   @Post('/for-page')
   async getShareForPage(
     @Body() dto: SharePageIdDto,
@@ -176,6 +195,20 @@ export class ShareController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @Post('actions/create')
+  async createViaAction(
+    @Body() createShareDto: CreateShareDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.create(createShareDto, user, workspace);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'POST /api/shares/actions/create',
+  })
   @Post('create')
   async create(
     @Body() createShareDto: CreateShareDto,
@@ -207,6 +240,19 @@ export class ShareController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @Post('actions/update')
+  async updateViaAction(
+    @Body() updateShareDto: UpdateShareDto,
+    @AuthUser() user: User,
+  ) {
+    return this.update(updateShareDto, user);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'POST /api/shares/actions/update',
+  })
   @Post('update')
   async update(@Body() updateShareDto: UpdateShareDto, @AuthUser() user: User) {
     const share = await this.shareRepo.findById(updateShareDto.shareId);
@@ -225,6 +271,19 @@ export class ShareController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @Post('actions/delete')
+  async deleteViaAction(
+    @Body() shareIdDto: ShareIdDto,
+    @AuthUser() user: User,
+  ) {
+    return this.delete(shareIdDto, user);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'POST /api/shares/actions/delete',
+  })
   @Post('delete')
   async delete(@Body() shareIdDto: ShareIdDto, @AuthUser() user: User) {
     const share = await this.shareRepo.findById(shareIdDto.shareId);
@@ -268,6 +327,10 @@ export class ShareController {
 
   @Public()
   @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'GET /api/shares/tree',
+  })
   @Post('/tree')
   async getSharePageTree(
     @Body() dto: ShareIdDto,
