@@ -38,6 +38,7 @@ import { CheckHostnameDto } from '../dto/check-hostname.dto';
 import { RemoveWorkspaceUserDto } from '../dto/remove-workspace-user.dto';
 import { DeactivateWorkspaceUserDto } from '../dto/deactivate-workspace-user.dto';
 import { AuthCookieService } from '../../../common/security/auth-cookie.service';
+import { PresenceService } from '../../presence/presence.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('workspace')
@@ -48,6 +49,7 @@ export class WorkspaceController {
     private readonly workspaceAbility: WorkspaceAbilityFactory,
     private readonly environmentService: EnvironmentService,
     private authCookieService: AuthCookieService,
+    private readonly presenceService: PresenceService,
   ) {}
 
   @Public()
@@ -156,6 +158,36 @@ export class WorkspaceController {
     }
 
     return this.workspaceService.getWorkspaceVisibleUsersCount(user, workspace.id);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Get('members/presence')
+  async getWorkspaceMembersPresence(
+    @Query('userIds') userIds: string,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const ability = this.workspaceAbility.createForUser(user, workspace);
+    if (
+      ability.cannot(WorkspaceCaslAction.Manage, WorkspaceCaslSubject.Member)
+    ) {
+      throw new ForbiddenException();
+    }
+
+    const parsedUserIds = (userIds ?? '')
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean)
+      .slice(0, 100);
+    const visibleUserIds = await this.workspaceService.filterExistingWorkspaceUserIds(
+      workspace.id,
+      parsedUserIds,
+    );
+
+    return this.presenceService.getWorkspaceMembersPresence(
+      workspace.id,
+      visibleUserIds,
+    );
   }
 
   @HttpCode(HttpStatus.OK)

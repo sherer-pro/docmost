@@ -18,6 +18,7 @@ describe('WorkspaceController', () => {
   const createController = (canManageMembers = true) => {
     const workspaceService = {
       deactivateUser: jest.fn(),
+      filterExistingWorkspaceUserIds: jest.fn(),
       update: jest.fn(),
     };
 
@@ -28,6 +29,10 @@ describe('WorkspaceController', () => {
     const authCookieService = {
       setAuthCookies: jest.fn(),
       clearAuthCookies: jest.fn(),
+    };
+
+    const presenceService = {
+      getWorkspaceMembersPresence: jest.fn(),
     };
 
     const workspaceAbility = {
@@ -42,6 +47,7 @@ describe('WorkspaceController', () => {
       workspaceAbility as any,
       { isCloud: jest.fn().mockReturnValue(false) } as any,
       authCookieService as any,
+      presenceService as any,
     );
 
     return {
@@ -49,6 +55,7 @@ describe('WorkspaceController', () => {
       workspaceService,
       workspaceInvitationService,
       authCookieService,
+      presenceService,
     };
   };
 
@@ -81,6 +88,49 @@ describe('WorkspaceController', () => {
       authUser,
       'member-id',
       workspace.id,
+    );
+  });
+
+  it('should forbid member presence without member-management permissions', async () => {
+    const { controller } = createController(false);
+
+    await expect(
+      controller.getWorkspaceMembersPresence('member-id', authUser, workspace),
+    ).rejects.toThrow(ForbiddenException);
+  });
+
+  it('should return grouped member presence for requested users', async () => {
+    const { controller, presenceService, workspaceService } =
+      createController(true);
+    const response = {
+      users: {
+        'member-id': {
+          isOnline: true,
+          lastSeenAt: '2026-06-19T10:00:00.000Z',
+          sessions: [],
+        },
+      },
+    };
+    workspaceService.filterExistingWorkspaceUserIds.mockResolvedValue([
+      'member-id',
+    ]);
+    presenceService.getWorkspaceMembersPresence.mockResolvedValue(response);
+
+    await expect(
+      controller.getWorkspaceMembersPresence(
+        'member-id, second-member-id, member-id',
+        authUser,
+        workspace,
+      ),
+    ).resolves.toEqual(response);
+
+    expect(workspaceService.filterExistingWorkspaceUserIds).toHaveBeenCalledWith(
+      workspace.id,
+      ['member-id', 'second-member-id', 'member-id'],
+    );
+    expect(presenceService.getWorkspaceMembersPresence).toHaveBeenCalledWith(
+      workspace.id,
+      ['member-id'],
     );
   });
 

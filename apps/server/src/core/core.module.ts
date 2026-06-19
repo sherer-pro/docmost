@@ -29,6 +29,7 @@ import { SessionModule } from './session/session.module';
 import { FavoriteModule } from './favorite/favorite.module';
 import { LabelModule } from './label/label.module';
 import { TransclusionModule } from './page/transclusion/transclusion.module';
+import { PresenceModule } from './presence/presence.module';
 
 @Module({
   imports: [
@@ -56,6 +57,7 @@ import { TransclusionModule } from './page/transclusion/transclusion.module';
     FavoriteModule,
     LabelModule,
     TransclusionModule,
+    PresenceModule,
   ],
 })
 export class CoreModule implements NestModule {

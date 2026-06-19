@@ -16,7 +16,12 @@ type BroadcastToMock = {
 
 type SocketMock = {
   id: string;
-  data: { authorizedRooms?: Set<string> };
+  data: {
+    authorizedRooms?: Set<string>;
+    user?: Record<string, unknown>;
+    sessionId?: string | null;
+    deviceName?: string | null;
+  };
   rooms: Set<string>;
   broadcast: {
     to: jest.Mock<BroadcastToMock, [string]>;
@@ -57,6 +62,13 @@ describe('WsGateway.handleMessage', () => {
     })),
     getSpaceIdsWithPageRuleAccess: jest.fn(async () => []),
   };
+  const userSessionRepo = {
+    findActiveById: jest.fn(),
+  };
+  const presenceService = {
+    updateConnection: jest.fn(),
+    removeConnection: jest.fn(),
+  };
 
   beforeAll(async () => {
     ({ WsGateway: WsGatewayClass } = await import('./ws.gateway'));
@@ -69,6 +81,8 @@ describe('WsGateway.handleMessage', () => {
       {} as any,
       pageRepo as any,
       pageAccessService as any,
+      userSessionRepo as any,
+      presenceService as any,
     );
     (gateway as any).server = {
       sockets: {
@@ -173,5 +187,54 @@ describe('WsGateway.handleMessage', () => {
     });
 
     expect(socket.broadcast.to).not.toHaveBeenCalled();
+  });
+
+  it('stores a valid presence update for the authenticated socket user', async () => {
+    const socket = createSocketMock(['workspace-workspace-a']);
+    socket.data.user = { id: 'user-1', workspaceId: 'workspace-a' };
+    socket.data.sessionId = 'session-1';
+    socket.data.deviceName = 'Chrome on Windows';
+
+    await gateway.handlePresenceUpdate(socket as any, {
+      type: 'page',
+      pageId: 'page-1',
+      path: '/s/docs/p/page-1',
+      tabId: 'tab-1',
+    });
+
+    expect(presenceService.updateConnection).toHaveBeenCalledWith(
+      {
+        socketId: socket.id,
+        user: socket.data.user,
+        sessionId: 'session-1',
+        deviceName: 'Chrome on Windows',
+      },
+      expect.objectContaining({
+        type: 'page',
+        pageId: 'page-1',
+        path: '/s/docs/p/page-1',
+        tabId: 'tab-1',
+      }),
+    );
+  });
+
+  it('rejects invalid presence payloads', async () => {
+    const socket = createSocketMock(['workspace-workspace-a']);
+    socket.data.user = { id: 'user-1', workspaceId: 'workspace-a' };
+
+    await gateway.handlePresenceUpdate(socket as any, {
+      type: 'invalid',
+      pageId: 'page-1',
+    });
+
+    expect(presenceService.updateConnection).not.toHaveBeenCalled();
+  });
+
+  it('removes presence on socket disconnect', async () => {
+    const socket = createSocketMock(['workspace-workspace-a']);
+
+    await gateway.handleDisconnect(socket as any);
+
+    expect(presenceService.removeConnection).toHaveBeenCalledWith(socket.id);
   });
 });

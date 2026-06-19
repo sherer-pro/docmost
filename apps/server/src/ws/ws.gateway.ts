@@ -1,6 +1,7 @@
 import {
   MessageBody,
   OnGatewayConnection,
+  OnGatewayDisconnect,
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
@@ -19,6 +20,9 @@ import { PageAccessService } from '../core/page-access/page-access.service';
 import { UserRepo } from '@docmost/db/repos/user/user.repo';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { User } from '@docmost/db/types/entity.types';
+import { UserSessionRepo } from '@docmost/db/repos/session/user-session.repo';
+import { PresenceService } from '../core/presence/presence.service';
+import { PresenceUpdateDto } from '../core/presence/dto/presence-update.dto';
 
 const wsCorsOriginValidator = createCorsOriginValidator();
 
@@ -26,7 +30,9 @@ const wsCorsOriginValidator = createCorsOriginValidator();
   cors: { origin: wsCorsOriginValidator, credentials: true },
   transports: ['websocket'],
 })
-export class WsGateway implements OnGatewayConnection, OnModuleDestroy {
+export class WsGateway
+  implements OnGatewayConnection, OnGatewayDisconnect, OnModuleDestroy
+{
   private readonly logger = new Logger(WsGateway.name);
 
   @WebSocketServer()
@@ -37,6 +43,8 @@ export class WsGateway implements OnGatewayConnection, OnModuleDestroy {
     private readonly userRepo: UserRepo,
     private readonly pageRepo: PageRepo,
     private readonly pageAccessService: PageAccessService,
+    private readonly userSessionRepo: UserSessionRepo,
+    private readonly presenceService: PresenceService,
   ) {}
 
   /**
@@ -60,6 +68,19 @@ export class WsGateway implements OnGatewayConnection, OnModuleDestroy {
         throw new Error('Unauthorized');
       }
 
+      let deviceName: string | null = null;
+      if (token.sessionId) {
+        const session = await this.userSessionRepo.findActiveById(token.sessionId);
+        if (
+          !session ||
+          session.userId !== userId ||
+          session.workspaceId !== workspaceId
+        ) {
+          throw new Error('Unauthorized');
+        }
+        deviceName = session.deviceName;
+      }
+
       const [memberSpaceIds, pageRuleSpaceIds] = await Promise.all([
         this.spaceMemberRepo.getUserSpaceIds(userId),
         this.pageAccessService.getSpaceIdsWithPageRuleAccess(userId, workspaceId),
@@ -78,12 +99,18 @@ export class WsGateway implements OnGatewayConnection, OnModuleDestroy {
        */
       client.data.authorizedRooms = authorizedRooms;
       client.data.user = user;
+      client.data.sessionId = token.sessionId ?? null;
+      client.data.deviceName = deviceName;
 
       client.join([...authorizedRooms]);
     } catch (err) {
       client.emit('Unauthorized');
       client.disconnect();
     }
+  }
+
+  async handleDisconnect(client: Socket): Promise<void> {
+    await this.presenceService.removeConnection(client.id);
   }
 
   /**
@@ -201,6 +228,42 @@ export class WsGateway implements OnGatewayConnection, OnModuleDestroy {
   @SubscribeMessage('leave-room')
   handleLeaveRoom(client: Socket, @MessageBody() roomName: string): void {
     client.leave(roomName);
+  }
+
+  @SubscribeMessage('presence:update')
+  async handlePresenceUpdate(client: Socket, data: unknown): Promise<void> {
+    const payload = plainToInstance(PresenceUpdateDto, data);
+    const validationErrors = validateSync(payload, {
+      whitelist: true,
+      forbidNonWhitelisted: true,
+    });
+
+    if (validationErrors.length > 0) {
+      this.logger.warn(
+        `Invalid presence payload from client ${client.id}: ${JSON.stringify(validationErrors)}`,
+      );
+      return;
+    }
+
+    const user = client.data.user as User | undefined;
+    if (!user) {
+      return;
+    }
+
+    await this.presenceService.updateConnection(
+      {
+        socketId: client.id,
+        user,
+        sessionId: client.data.sessionId ?? null,
+        deviceName: client.data.deviceName ?? null,
+      },
+      payload,
+    );
+  }
+
+  @SubscribeMessage('presence:clear')
+  async handlePresenceClear(client: Socket): Promise<void> {
+    await this.presenceService.removeConnection(client.id);
   }
 
   onModuleDestroy() {
