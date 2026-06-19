@@ -45,6 +45,9 @@ import { validate as isValidUUID } from 'uuid';
 import * as path from 'path';
 import { RemoveIconDto } from './dto/attachment.dto';
 import { AttachmentFileAccessService } from './services/attachment-file-access.service';
+import { DeprecatedRoute } from '../../common/decorators/deprecated-route.decorator';
+
+const ATTACHMENT_LEGACY_ALIAS_SUNSET = 'Fri, 01 Jan 2027 00:00:00 GMT';
 
 @Controller('attachments')
 export class AttachmentController {
@@ -68,7 +71,12 @@ export class AttachmentController {
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
-    return this.attachmentFileAccessService.uploadFile(req, res, user, workspace);
+    return this.attachmentFileAccessService.uploadFile(
+      req,
+      res,
+      user,
+      workspace,
+    );
   }
 
   @UseGuards(JwtAuthGuard)
@@ -110,7 +118,7 @@ export class AttachmentController {
 
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
-  @Post(['actions/upload-image', 'upload-image'])
+  @Post('actions/upload-image')
   @UseInterceptors(FileInterceptor)
   async uploadAvatarOrLogo(
     @Req() req: any,
@@ -192,6 +200,23 @@ export class AttachmentController {
     }
   }
 
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: ATTACHMENT_LEGACY_ALIAS_SUNSET,
+    replacement: 'POST /api/attachments/actions/upload-image',
+  })
+  @Post('upload-image')
+  @UseInterceptors(FileInterceptor)
+  async uploadAvatarOrLogoLegacy(
+    @Req() req: any,
+    @Res() res: FastifyReply,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.uploadAvatarOrLogo(req, res, user, workspace);
+  }
+
   @Get('img/:attachmentType/:fileName')
   async getLogoOrAvatar(
     @Res() res: FastifyReply,
@@ -228,7 +253,7 @@ export class AttachmentController {
 
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
-  @Post(['actions/remove-icon', 'remove-icon'])
+  @Post('actions/remove-icon')
   async removeIcon(
     @Body() dto: RemoveIconDto,
     @AuthUser() user: User,
@@ -275,5 +300,20 @@ export class AttachmentController {
       await this.attachmentService.removeWorkspaceIcon(workspace);
       return;
     }
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: ATTACHMENT_LEGACY_ALIAS_SUNSET,
+    replacement: 'POST /api/attachments/actions/remove-icon',
+  })
+  @Post('remove-icon')
+  async removeIconLegacy(
+    @Body() dto: RemoveIconDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.removeIcon(dto, user, workspace);
   }
 }

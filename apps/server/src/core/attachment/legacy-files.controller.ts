@@ -18,6 +18,9 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { User, Workspace } from '@docmost/db/types/entity.types';
 import { FileInterceptor } from '../../common/interceptors/file.interceptor';
 import { AttachmentFileAccessService } from './services/attachment-file-access.service';
+import { DeprecatedRoute } from '../../common/decorators/deprecated-route.decorator';
+
+const ATTACHMENT_LEGACY_ALIAS_SUNSET = 'Fri, 01 Jan 2027 00:00:00 GMT';
 
 /**
  * Legacy attachment routes kept for backward compatibility with persisted links
@@ -33,6 +36,10 @@ export class LegacyFilesController {
 
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: ATTACHMENT_LEGACY_ALIAS_SUNSET,
+    replacement: 'POST /api/attachments/actions/upload-file',
+  })
   @Post('upload')
   @UseInterceptors(FileInterceptor)
   async uploadFile(
@@ -41,10 +48,19 @@ export class LegacyFilesController {
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
-    return this.attachmentFileAccessService.uploadFile(req, res, user, workspace);
+    return this.attachmentFileAccessService.uploadFile(
+      req,
+      res,
+      user,
+      workspace,
+    );
   }
 
   @UseGuards(JwtAuthGuard)
+  @DeprecatedRoute({
+    sunset: ATTACHMENT_LEGACY_ALIAS_SUNSET,
+    replacement: 'GET /api/attachments/files/:fileId/:fileName',
+  })
   @Get(':fileId/:fileName')
   async getFile(
     @Req() req: FastifyRequest,
@@ -63,6 +79,10 @@ export class LegacyFilesController {
     );
   }
 
+  @DeprecatedRoute({
+    sunset: ATTACHMENT_LEGACY_ALIAS_SUNSET,
+    replacement: 'GET /api/attachments/files/public/:fileId/:fileName',
+  })
   @Get('public/:fileId/:fileName')
   async getPublicFile(
     @Req() req: FastifyRequest,
