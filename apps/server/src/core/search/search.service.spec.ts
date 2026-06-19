@@ -67,6 +67,8 @@ function createAttachmentQueryBuilder(rows: unknown[]) {
     selectFromCalls: [],
     notCalls: [],
   };
+  let currentLimit: number | undefined;
+  let currentOffset = 0;
 
   const builder: any = {};
   Object.assign(builder, {
@@ -91,9 +93,20 @@ function createAttachmentQueryBuilder(rows: unknown[]) {
       state.orderByCalls.push(args);
       return builder;
     }),
-    limit: jest.fn().mockReturnThis(),
-    offset: jest.fn().mockReturnThis(),
-    execute: jest.fn(async () => rows),
+    limit: jest.fn((limit: number) => {
+      currentLimit = limit;
+      return builder;
+    }),
+    offset: jest.fn((offset: number) => {
+      currentOffset = offset;
+      return builder;
+    }),
+    execute: jest.fn(async () =>
+      rows.slice(
+        currentOffset,
+        currentLimit ? currentOffset + currentLimit : undefined,
+      ),
+    ),
   });
 
   return { builder, state };
@@ -287,6 +300,30 @@ describe('SearchService', () => {
     expect(result.items).toEqual([{ ...readableRow, breadcrumbs: [] }]);
   });
 
+  it('backfills readable page search results beyond unreadable limited rows', async () => {
+    const hiddenRow = createSearchRow({
+      id: 'page-hidden',
+      slugId: 'page-hidden',
+      title: 'Hidden Roadmap',
+    });
+    const readableRow = createSearchRow({
+      id: 'page-readable',
+      slugId: 'page-readable',
+      title: 'Readable Roadmap',
+    });
+    const { service } = createPageSearchService(
+      [hiddenRow, readableRow],
+      new Set(['page-readable']),
+    );
+
+    const result = await service.searchPage(
+      { labelId: 'label-1', limit: 1 } as any,
+      { userId: 'user-1', workspaceId: 'workspace-1' },
+    );
+
+    expect(result.items).toEqual([{ ...readableRow, breadcrumbs: [] }]);
+  });
+
   it('searches attachments by filename tokens without requiring attachment tsv data', async () => {
     const row = {
       id: 'attachment-1',
@@ -383,7 +420,58 @@ describe('SearchService', () => {
     expect(result.items).toEqual([readableRow]);
   });
 
+  it('backfills readable attachment results beyond unreadable limited rows', async () => {
+    const hiddenRow = {
+      id: 'attachment-hidden',
+      fileName: 'Hidden.pdf',
+      pageId: 'page-2',
+      creatorId: 'user-1',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      rank: 1,
+      highlight: '',
+      space: {
+        id: 'space-1',
+        name: 'Engineering',
+        slug: 'engineering',
+        icon: null,
+      },
+      page: {
+        id: 'page-2',
+        title: 'Hidden',
+        slugId: 'hidden',
+      },
+    };
+    const readableRow = {
+      ...hiddenRow,
+      id: 'attachment-readable',
+      fileName: 'Readable.pdf',
+      pageId: 'page-1',
+      page: {
+        id: 'page-1',
+        title: 'Readable',
+        slugId: 'readable',
+      },
+    };
+    const { service } = createAttachmentSearchService([hiddenRow, readableRow]);
+
+    const result = await service.searchAttachments(
+      { query: 'pdf', limit: 1 } as any,
+      { userId: 'user-1', workspaceId: 'workspace-1' },
+    );
+
+    expect(result.items).toEqual([readableRow]);
+  });
+
   it('keeps readable page suggestions after access filtering', async () => {
+    const hiddenPage = {
+      id: 'page-hidden',
+      slugId: 'page-hidden',
+      title: 'Hidden Page EN',
+      icon: null,
+      spaceId: 'space-1',
+      workspaceId: 'workspace-1',
+    };
     const sourcePage = {
       id: 'page-1',
       slugId: 'page-1',
@@ -393,27 +481,44 @@ describe('SearchService', () => {
       workspaceId: 'workspace-1',
     };
     let selectedColumns: string[] = [];
+    let currentLimit: number | undefined;
+    let currentOffset = 0;
+    const sourceRows = [hiddenPage, sourcePage];
     const pageSearchQuery = {
       select: jest.fn((columns: string[]) => {
         selectedColumns = columns;
         return pageSearchQuery;
       }),
       where: jest.fn(() => pageSearchQuery),
-      limit: jest.fn(() => pageSearchQuery),
-      execute: jest.fn(async () => [
-        Object.fromEntries(
-          selectedColumns.map((column) => [column, sourcePage[column]]),
-        ),
-      ]),
+      orderBy: jest.fn(() => pageSearchQuery),
+      limit: jest.fn((limit: number) => {
+        currentLimit = limit;
+        return pageSearchQuery;
+      }),
+      offset: jest.fn((offset: number) => {
+        currentOffset = offset;
+        return pageSearchQuery;
+      }),
+      execute: jest.fn(async () =>
+        sourceRows
+          .slice(
+            currentOffset,
+            currentLimit ? currentOffset + currentLimit : undefined,
+          )
+          .map((row) =>
+            Object.fromEntries(
+              selectedColumns.map((column) => [column, row[column]]),
+            ),
+          ),
+      ),
     };
     const db = {
       selectFrom: jest.fn(() => pageSearchQuery),
     };
     const pageAccessService = {
-      getEffectiveAccess: jest.fn(async (page, user) => ({
-        capabilities: {
-          canRead: page.workspaceId === user.workspaceId,
-        },
+      getSidebarAccessSnapshot: jest.fn(async () => ({
+        readablePageIds: new Set(['page-1']),
+        visiblePageIds: new Set(['page-1']),
       })),
     };
 
@@ -441,9 +546,9 @@ describe('SearchService', () => {
     );
 
     expect(result.pages).toEqual([sourcePage]);
-    expect(pageAccessService.getEffectiveAccess).toHaveBeenCalledWith(
+    expect(pageAccessService.getSidebarAccessSnapshot).toHaveBeenCalledWith(
       expect.objectContaining({ workspaceId: 'workspace-1' }),
-      expect.objectContaining({ workspaceId: 'workspace-1' }),
+      'space-1',
     );
   });
 });
