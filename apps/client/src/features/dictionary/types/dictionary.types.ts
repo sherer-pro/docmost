@@ -21,3 +21,26 @@ export interface IUpdateDictionaryTermPayload {
   forms?: string[];
   definitionMarkdown?: string;
 }
+
+export interface IDictionaryPortableTerm {
+  term: string;
+  forms?: string[];
+  definitionMarkdown: string;
+}
+
+export interface IDictionaryExportPayload {
+  version: 1;
+  exportedAt: string;
+  terms: IDictionaryPortableTerm[];
+}
+
+export interface IImportDictionaryTermsPayload {
+  spaceId: string;
+  terms: IDictionaryPortableTerm[];
+}
+
+export interface IImportDictionaryTermsResult {
+  created: number;
+  updated: number;
+  total: number;
+}

@@ -2,8 +2,12 @@ import api from "@/lib/api-client";
 import {
   ICreateDictionaryTermPayload,
   IDictionaryTerm,
+  IDictionaryPortableTerm,
+  IImportDictionaryTermsPayload,
+  IImportDictionaryTermsResult,
   IUpdateDictionaryTermPayload,
 } from "@/features/dictionary/types/dictionary.types";
+import { downloadBlobFromAxiosResponse } from "@/lib/download";
 
 export async function getDictionaryTerms(
   spaceId: string,
@@ -36,4 +40,78 @@ export async function updateDictionaryTerm(
 
 export async function deleteDictionaryTerm(termId: string): Promise<void> {
   await api.delete(`/dictionary-terms/${termId}`);
+}
+
+export async function exportDictionaryTerms(spaceId: string): Promise<void> {
+  const req = await api.post<Blob>(
+    "/dictionary-terms/actions/export",
+    { spaceId },
+    {
+      responseType: "blob",
+      skipEnvelopeUnwrap: true,
+    },
+  );
+
+  downloadBlobFromAxiosResponse(req, "dictionary.json");
+}
+
+export async function importDictionaryTerms(
+  payload: IImportDictionaryTermsPayload,
+): Promise<IImportDictionaryTermsResult> {
+  const req = await api.post<IImportDictionaryTermsResult>(
+    "/dictionary-terms/actions/import",
+    payload,
+  );
+
+  return req.data;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+export function parseDictionaryImportJson(
+  jsonText: string,
+): IDictionaryPortableTerm[] {
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(jsonText);
+  } catch {
+    throw new Error("Invalid dictionary JSON file");
+  }
+
+  const rawTerms = Array.isArray(parsed)
+    ? parsed
+    : isRecord(parsed) && Array.isArray(parsed.terms)
+      ? parsed.terms
+      : null;
+
+  if (!rawTerms) {
+    throw new Error("Invalid dictionary JSON file");
+  }
+
+  return rawTerms.map((rawTerm) => {
+    if (
+      !isRecord(rawTerm) ||
+      typeof rawTerm.term !== "string" ||
+      typeof rawTerm.definitionMarkdown !== "string"
+    ) {
+      throw new Error("Invalid dictionary JSON file");
+    }
+
+    if (
+      typeof rawTerm.forms !== "undefined" &&
+      (!Array.isArray(rawTerm.forms) ||
+        rawTerm.forms.some((form) => typeof form !== "string"))
+    ) {
+      throw new Error("Invalid dictionary JSON file");
+    }
+
+    return {
+      term: rawTerm.term,
+      forms: Array.isArray(rawTerm.forms) ? rawTerm.forms : [],
+      definitionMarkdown: rawTerm.definitionMarkdown,
+    };
+  });
 }
