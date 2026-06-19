@@ -28,9 +28,11 @@ export const prefetchSpaces = () => {
 };
 
 export const prefetchGroups = () => {
+  const params: QueryParams = { limit: 10 };
+
   queryClient.prefetchQuery({
-    queryKey: ["groups", {}],
-    queryFn: () => getGroups({}),
+    queryKey: ["groups", params],
+    queryFn: () => getGroups(params),
   });
 };
 

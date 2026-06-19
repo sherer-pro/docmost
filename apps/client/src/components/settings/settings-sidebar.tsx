@@ -140,7 +140,7 @@ export default function SettingsSidebar() {
   const [mobileSidebarOpened] = useAtom(mobileSidebarAtom);
   const toggleMobileSidebar = useToggleSidebar(mobileSidebarAtom);
   const { data: groups } = useQuery({
-    queryKey: ["groups", {}],
+    queryKey: ["groups", { limit: 1 }],
     queryFn: () => getGroups({ limit: 1 }),
   });
 
