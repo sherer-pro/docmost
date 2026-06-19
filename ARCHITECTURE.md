@@ -13,7 +13,7 @@ The production container uses Node.js 22 and runs the built backend through the 
 
 ## Backend
 
-The backend is organized around Nest modules under `apps/server/src/core`. HTTP controllers expose `/api/*` routes, while domain services own business rules and database writes. Kysely repositories under `apps/server/src/database/repos` encapsulate repeated database access patterns.
+The backend is organized around Nest modules under `apps/server/src/core`. Most HTTP controllers are served under the global `/api` prefix; explicit static/share exclusions remain outside that prefix. Domain services own business rules and database writes. Kysely repositories under `apps/server/src/database/repos` encapsulate repeated database access patterns.
 
 Security-sensitive cross-cutting behavior is centralized:
 
@@ -47,13 +47,13 @@ Synced blocks use `transclusionSource` and `transclusionReference` nodes. Server
 
 ## Search
 
-Page search supports the database full-text implementation and an enterprise Typesense implementation. Attachment search uses the database full-text index on `attachments.tsv` and applies the same page access filtering through `PageAccessService`.
+Page search supports the database full-text implementation and an enterprise Typesense implementation. Attachment search uses a trigram index on normalized `attachments.file_name` values and applies the same page access filtering through `PageAccessService`.
 
 Generated backend route inventory is maintained by `pnpm routes:inventory` and checked by CI through `pnpm routes:inventory:check`.
 
 ## Environment Contract
 
-`.env.example` is the canonical checked-in environment contract. Local `.env` may contain deployment-specific values, but it must keep the same key set. The server validation class in `apps/server/src/integrations/environment/environment.validation.ts`, frontend build-time keys in `apps/client/vite.config.ts`, and backend-served frontend runtime keys in `apps/server/src/integrations/static/static.module.ts` are checked against `.env.example` by `pnpm check:env`.
+`.env.example` is the canonical checked-in environment contract for host development, and `.env.compose.example` mirrors the same keys with Docker Compose service host defaults. Local `.env` may contain deployment-specific values, but it must keep the same key set as `.env.example`. The server validation class in `apps/server/src/integrations/environment/environment.validation.ts`, frontend build-time keys in `apps/client/vite.config.ts`, backend-served frontend runtime keys in `apps/server/src/integrations/static/static.module.ts`, optional `.env.compose.example`, and local `.env` key parity are checked by `pnpm check:env`.
 
 Reverse proxy deployments must set `TRUSTED_PROXIES` to the controlled proxy addresses or CIDRs, for example `loopback,linklocal,uniquelocal` or `10.0.0.0/8,172.16.0.0/12`. Leaving it empty disables forwarded-header trust.
 
@@ -67,6 +67,6 @@ Baseline local verification:
 2. `pnpm verify:quick`
 3. `pnpm verify:full` before release or broad architectural changes
 
-If `pnpm` is not on `PATH`, enable the Corepack shim first (`corepack enable`) or run direct package checks with `corepack pnpm ...`; root Nx/composite scripts expect the `pnpm` command to exist.
+Root composite scripts call `corepack pnpm` internally. If the local `pnpm` shim is missing, run root/package checks with `corepack pnpm ...`; enable Corepack first only when a direct `pnpm` command is required.
 
 Security regression coverage is available through `pnpm test:security`, and production dependency audit is run in CI with `pnpm audit --prod --audit-level high`.

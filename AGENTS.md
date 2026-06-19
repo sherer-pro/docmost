@@ -72,7 +72,7 @@
 - Quick local verification (env contract + lint + backend test + frontend smoke + security suite): `pnpm verify:quick`
 - Full local verification (env contract + build → lint → backend tests + frontend smoke + frontend unit + security suite): `pnpm verify:full`
 - Clean build artifacts: `pnpm clean`
-- Check `.env.example`, local `.env`, server validation, and frontend runtime env drift: `pnpm check:env`
+- Check `.env.example`, `.env.compose.example`, local `.env`, server validation, and frontend runtime env drift: `pnpm check:env`
 - Regenerate backend route inventory from controllers: `pnpm routes:inventory`
 - Check route inventory drift without rewriting the generated file: `pnpm routes:inventory:check`
 
@@ -121,6 +121,8 @@
 
 ### Containers
 
+- Host development env: copy `.env.example` to `.env`, replace secrets, and point `DATABASE_URL`/`REDIS_URL` at local host services.
+- Docker Compose env: copy `.env.compose.example` to `.env`, replace `REPLACE_WITH_LONG_SECRET` and `STRONG_DB_PASSWORD`, then run `docker compose up -d`.
 - Local container startup (prebuilt image): `docker compose up -d`
 - Build the current code into an image: `docker build -t docmost:local .`
 
@@ -162,6 +164,8 @@
 
 ### Required env for local backend startup
 
+Use `.env.example` for host development and `.env.compose.example` when Docker Compose owns the `db` and `redis` services.
+
 Minimum:
 
 - `APP_URL` (usually `http://localhost:3000`)
@@ -178,7 +182,7 @@ Minimum:
 - Diagnostics: `DEBUG_MODE`, `DEBUG_DB`, `LOG_HTTP`
 - Reverse proxy attribution: `TRUSTED_PROXIES` is a comma-separated list of trusted proxy IPs/CIDRs or proxy-addr keywords (`loopback`, `linklocal`, `uniquelocal`). Leave it empty unless Docmost is behind a controlled proxy; `X-Forwarded-*` headers are ignored when it is empty.
 - Embed iframe allowlist: `EMBED_ALLOWED_ORIGINS` is a comma-separated list of exact trusted `http(s)` origins for generic iframe embeds. Built-in providers are allowlisted separately; keep this empty unless the origin is trusted.
-- Frontend build-time defines are loaded via `vite loadEnv`; deployment/runtime defines such as `COLLAB_URL`, `SUBDOMAIN_HOST`, `POSTHOG_*`, `BILLING_TRIAL_DAYS`, `FILE_IMPORT_SIZE_LIMIT`, `EMBED_ALLOWED_ORIGINS`, and `DRAWIO_URL` are served by the backend from `/window-config.js` without mutating built client files.
+- Frontend build-time defines are loaded via `vite loadEnv`; deployment/runtime defines such as `APP_URL`, `COLLAB_URL`, `SUBDOMAIN_HOST`, `POSTHOG_*`, `BILLING_TRIAL_DAYS`, `FILE_UPLOAD_SIZE_LIMIT`, `FILE_IMPORT_SIZE_LIMIT`, `EMBED_ALLOWED_ORIGINS`, and `DRAWIO_URL` are served by the backend from `/window-config.js` without mutating built client files. Keep this contract in sync with `pnpm check:env`.
 
 ---
 
@@ -232,8 +236,8 @@ Minimum:
   - create key requires selecting `spaceId`;
   - access is restricted to workspace `admin|owner`.
 - User session management routes are active:
-  - account page: `/settings/account` -> Active sessions;
-  - API routes: `POST /api/sessions`, `POST /api/sessions/revoke`, `POST /api/sessions/revoke-all`;
+  - account page: `/settings/account/profile` -> Active sessions;
+  - API routes: `GET /api/sessions`, `POST /api/sessions/revoke`, `POST /api/sessions/revoke-all`;
   - new access tokens include `sessionId`, while old tokens without it are temporarily accepted by auth strategy.
 - Favorites and labels routes are active:
   - favorites: `POST /api/favorites`, `/api/favorites/add`, `/api/favorites/remove`, `/api/favorites/ids`;
@@ -247,7 +251,7 @@ Minimum:
 - Root `start` script runs **backend prod**, but requires prebuilt `dist` (typically via `pnpm build`).
 - Backend production entrypoints are resolved from Nx/Nest build output under `apps/server/dist/apps/server/src/*` (not `apps/server/dist/main`).
 - The production image copies runtime workspace package builds for `packages/editor-ext` and `packages/api-contract`; keep their package manifests and `dist` outputs in sync with server imports.
-- Compose uses placeholders (`REPLACE_WITH_LONG_SECRET`, `STRONG_DB_PASSWORD`) — do not forget to replace them.
+- Compose uses placeholders (`REPLACE_WITH_LONG_SECRET`, `STRONG_DB_PASSWORD`) in `.env.compose.example` and Docker defaults; do not forget to replace them.
 - Web Push compose defaults are intentionally empty; set all VAPID variables together when enabling push notifications.
 - `migration:codegen` reads env from `../../.env`; if the file is missing, the command fails.
 - Runtime image now includes headless `chromium` + Cyrillic-capable fonts for PDF export, and sets default `PDF_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium`.
