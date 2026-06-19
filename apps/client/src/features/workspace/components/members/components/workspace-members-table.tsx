@@ -1,10 +1,11 @@
-import { Group, Table, Text, Badge } from "@mantine/core";
+import { Box, Group, Table, Text, Badge } from "@mantine/core";
 import {
   useChangeMemberRoleMutation,
   useWorkspaceMembersQuery,
+  useWorkspaceMembersPresenceQuery,
 } from "@/features/workspace/queries/workspace-query.ts";
 import { CustomAvatar } from "@/components/ui/custom-avatar.tsx";
-import React from "react";
+import React, { useMemo, useState } from "react";
 import RoleSelectMenu from "@/components/ui/role-select-menu.tsx";
 import {
   getUserRoleLabel,
@@ -18,6 +19,20 @@ import { SearchInput } from "@/components/common/search-input.tsx";
 import NoTableResults from "@/components/common/no-table-results.tsx";
 import { usePaginateAndSearch } from "@/hooks/use-paginate-and-search.tsx";
 import MemberActionMenu from "@/features/workspace/components/members/components/members-action-menu.tsx";
+import {
+  MemberPresenceCell,
+  MemberPresenceDetails,
+} from "@/features/workspace/components/members/components/workspace-member-presence.tsx";
+
+const ADMIN_TABLE_MIN_WIDTH = 720;
+const MEMBER_TABLE_MIN_WIDTH = 560;
+
+const columnWidths = {
+  status: 96,
+  presence: 158,
+  role: 144,
+  actions: 44,
+};
 
 export default function WorkspaceMembersTable() {
   const { t } = useTranslation();
@@ -29,10 +44,22 @@ export default function WorkspaceMembersTable() {
   });
   const changeMemberRoleMutation = useChangeMemberRoleMutation();
   const { isAdmin, isOwner } = useUserRole();
+  const [expandedPresenceUserId, setExpandedPresenceUserId] = useState<
+    string | null
+  >(null);
+  const userIds = useMemo(
+    () => data?.items?.map((user) => user.id) ?? [],
+    [data?.items],
+  );
+  const { data: presenceData } = useWorkspaceMembersPresenceQuery(
+    userIds,
+    isAdmin,
+  );
 
   const assignableUserRoles = isOwner
     ? userRoleData
     : userRoleData.filter((role) => role.value !== UserRole.OWNER);
+  const colSpan = isAdmin ? 5 : 4;
 
   const handleRoleChange = async (
     userId: string,
@@ -54,63 +81,113 @@ export default function WorkspaceMembersTable() {
   return (
     <>
       <SearchInput onSearch={handleSearch} />
-      <Table.ScrollContainer minWidth={600}>
-        <Table highlightOnHover verticalSpacing="sm">
+      <Table.ScrollContainer
+        minWidth={isAdmin ? ADMIN_TABLE_MIN_WIDTH : MEMBER_TABLE_MIN_WIDTH}
+      >
+        <Table
+          highlightOnHover
+          verticalSpacing="sm"
+          style={{ tableLayout: "fixed" }}
+        >
           <Table.Thead>
             <Table.Tr>
               <Table.Th>{t("User")}</Table.Th>
-              <Table.Th>{t("Status")}</Table.Th>
-              <Table.Th>{t("Role")}</Table.Th>
+              <Table.Th w={columnWidths.status}>{t("Status")}</Table.Th>
+              {isAdmin && (
+                <Table.Th w={columnWidths.presence}>{t("Presence")}</Table.Th>
+              )}
+              <Table.Th w={columnWidths.role}>{t("Role")}</Table.Th>
+              <Table.Th w={columnWidths.actions} />
             </Table.Tr>
           </Table.Thead>
 
           <Table.Tbody>
             {data?.items.length > 0 ? (
-              data?.items.map((user, index) => (
-                <Table.Tr key={index}>
-                  <Table.Td>
-                    <Group gap="sm" wrap="nowrap">
-                      <CustomAvatar
-                        avatarUrl={user.avatarUrl}
-                        name={user.name}
-                      />
-                      <div>
-                        <Text fz="sm" fw={500} lineClamp={1}>
-                          {user.name}
-                        </Text>
-                        <Text fz="xs" c="dimmed">
-                          {user.email}
-                        </Text>
-                      </div>
-                    </Group>
-                  </Table.Td>
-                  <Table.Td>
-                    <Badge variant="light" color={user.deactivatedAt ? "orange" : undefined}>
-                      {user.deactivatedAt ? t("Deactivated") : t("Active")}
-                    </Badge>
-                  </Table.Td>
-                  <Table.Td>
-                    <RoleSelectMenu
-                      roles={assignableUserRoles}
-                      roleName={getUserRoleLabel(user.role)}
-                      onChange={(newRole) =>
-                        handleRoleChange(user.id, user.role, newRole)
-                      }
-                      disabled={!isAdmin}
-                    />
-                  </Table.Td>
-                  <Table.Td>
-                    {isAdmin && (
-                      <MemberActionMenu
-                        userId={user.id}
-                        isDeactivated={Boolean(user.deactivatedAt)}
-                      />
+              data?.items.map((user) => {
+                const presence = presenceData?.users?.[user.id];
+                const isPresenceExpanded =
+                  expandedPresenceUserId === user.id &&
+                  Boolean(presence?.isOnline && presence.sessions.length > 0);
+
+                return (
+                  <React.Fragment key={user.id}>
+                    <Table.Tr>
+                      <Table.Td>
+                        <Group gap="sm" wrap="nowrap">
+                          <CustomAvatar
+                            avatarUrl={user.avatarUrl}
+                            name={user.name}
+                          />
+                          <Box style={{ minWidth: 0 }}>
+                            <Text fz="sm" fw={500} truncate="end">
+                              {user.name}
+                            </Text>
+                            <Text fz="xs" c="dimmed" truncate="end">
+                              {user.email}
+                            </Text>
+                          </Box>
+                        </Group>
+                      </Table.Td>
+                      <Table.Td w={columnWidths.status}>
+                        <Badge
+                          variant="light"
+                          color={user.deactivatedAt ? "orange" : undefined}
+                        >
+                          {user.deactivatedAt ? t("Deactivated") : t("Active")}
+                        </Badge>
+                      </Table.Td>
+                      {isAdmin && (
+                        <Table.Td w={columnWidths.presence}>
+                          <MemberPresenceCell
+                            expanded={isPresenceExpanded}
+                            presence={presence}
+                            onToggle={() =>
+                              setExpandedPresenceUserId((current) =>
+                                current === user.id ? null : user.id,
+                              )
+                            }
+                          />
+                        </Table.Td>
+                      )}
+                      <Table.Td w={columnWidths.role}>
+                        <RoleSelectMenu
+                          roles={assignableUserRoles}
+                          roleName={getUserRoleLabel(user.role)}
+                          onChange={(newRole) =>
+                            handleRoleChange(user.id, user.role, newRole)
+                          }
+                          disabled={!isAdmin}
+                        />
+                      </Table.Td>
+                      <Table.Td w={columnWidths.actions}>
+                        {isAdmin && (
+                          <MemberActionMenu
+                            userId={user.id}
+                            isDeactivated={Boolean(user.deactivatedAt)}
+                          />
+                        )}
+                      </Table.Td>
+                    </Table.Tr>
+                    {isPresenceExpanded && (
+                      <Table.Tr>
+                        <Table.Td colSpan={colSpan}>
+                          <Box
+                            bg="var(--mantine-color-gray-0)"
+                            p="sm"
+                            style={{ borderRadius: 6 }}
+                          >
+                            <MemberPresenceDetails
+                              sessions={presence?.sessions ?? []}
+                            />
+                          </Box>
+                        </Table.Td>
+                      </Table.Tr>
                     )}
-                  </Table.Td>
-                </Table.Tr>
-              ))
+                  </React.Fragment>
+                );
+              })
             ) : (
-              <NoTableResults colSpan={3} />
+              <NoTableResults colSpan={colSpan} />
             )}
           </Table.Tbody>
         </Table>

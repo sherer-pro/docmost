@@ -19,6 +19,7 @@ import {
   getAppVersion,
   deleteWorkspaceMember,
   deactivateWorkspaceMember,
+  getWorkspaceMembersPresence,
 } from "@/features/workspace/services/workspace-service";
 import { IPagination, QueryParams } from "@/lib/types.ts";
 import { notifications } from "@mantine/notifications";
@@ -28,9 +29,11 @@ import {
   IPublicWorkspace,
   IVersion,
   IWorkspace,
+  WorkspaceMembersPresenceResponse,
 } from "@/features/workspace/types/workspace.types.ts";
 import { IUser } from "@/features/user/types/user.types.ts";
 import { useTranslation } from "react-i18next";
+import { shouldFetchWorkspaceMemberPresence } from "@/features/workspace/components/members/components/workspace-member-presence-utils";
 
 export function useWorkspaceQuery(): UseQueryResult<IWorkspace, Error> {
   return useQuery({
@@ -66,6 +69,20 @@ export function useWorkspaceVisibleMembersCountQuery(): UseQueryResult<
   return useQuery({
     queryKey: ["workspaceMembers", "count"],
     queryFn: () => getWorkspaceVisibleMembersCount(),
+  });
+}
+
+export function useWorkspaceMembersPresenceQuery(
+  userIds: string[],
+  isAdmin: boolean,
+): UseQueryResult<WorkspaceMembersPresenceResponse, Error> {
+  return useQuery({
+    queryKey: ["workspaceMembers", "presence", userIds],
+    queryFn: () => getWorkspaceMembersPresence(userIds),
+    enabled: shouldFetchWorkspaceMemberPresence(isAdmin, userIds),
+    refetchInterval: 15 * 1000,
+    placeholderData: keepPreviousData,
+    staleTime: 5 * 1000,
   });
 }
 

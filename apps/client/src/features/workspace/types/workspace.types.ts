@@ -83,3 +83,32 @@ export interface IVersion {
   latestVersion: string;
   releaseUrl: string;
 }
+
+export type MemberPresenceLocation = {
+  type: "page" | "space" | "workspace";
+  title: string;
+  path: string | null;
+  pageId?: string;
+  spaceId?: string;
+  spaceName?: string | null;
+  spaceSlug?: string | null;
+};
+
+export type MemberPresenceSession = {
+  sessionKey: string;
+  sessionId: string | null;
+  isLegacy: boolean;
+  deviceName: string | null;
+  lastSeenAt: string;
+  locations: MemberPresenceLocation[];
+};
+
+export type MemberPresence = {
+  isOnline: boolean;
+  lastSeenAt: string | null;
+  sessions: MemberPresenceSession[];
+};
+
+export type WorkspaceMembersPresenceResponse = {
+  users: Record<string, MemberPresence>;
+};

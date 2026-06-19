@@ -8,6 +8,7 @@ import {
   IPublicWorkspace,
   IInvitationLink,
   IVersion,
+  WorkspaceMembersPresenceResponse,
 } from "../types/workspace.types";
 import { IPagination, QueryParams } from "@/lib/types.ts";
 import { ISetupWorkspace } from "@/features/auth/types/auth.types.ts";
@@ -40,6 +41,20 @@ export async function getWorkspaceVisibleMembersCount(): Promise<{
   count: number;
 }> {
   const req = await api.get<{ count: number }>("/workspace/members/count");
+  return req.data;
+}
+
+export async function getWorkspaceMembersPresence(
+  userIds: string[],
+): Promise<WorkspaceMembersPresenceResponse> {
+  if (userIds.length === 0) {
+    return { users: {} };
+  }
+
+  const req = await api.get<WorkspaceMembersPresenceResponse>(
+    "/workspace/members/presence",
+    { params: { userIds: userIds.join(",") } },
+  );
   return req.data;
 }
 
