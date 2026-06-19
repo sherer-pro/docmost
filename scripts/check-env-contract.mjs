@@ -1,15 +1,18 @@
 import { existsSync, readFileSync } from 'node:fs';
 
 const EXAMPLE_ENV_PATH = '.env.example';
+const COMPOSE_ENV_PATH = '.env.compose.example';
 const LOCAL_ENV_PATH = '.env';
 const ENV_VALIDATION_PATH =
   'apps/server/src/integrations/environment/environment.validation.ts';
 const VITE_CONFIG_PATH = 'apps/client/vite.config.ts';
+const STATIC_MODULE_PATH = 'apps/server/src/integrations/static/static.module.ts';
 const COMPOSE_ONLY_ENV_KEYS = new Set([
   'POSTGRES_DB',
   'POSTGRES_PASSWORD',
   'POSTGRES_USER',
 ]);
+const SYNTHETIC_WINDOW_CONFIG_KEYS = new Set(['ENV']);
 
 function parseEnvKeys(filePath) {
   const content = readFileSync(filePath, 'utf8');
@@ -55,6 +58,20 @@ function extractViteEnvKeys() {
   );
 }
 
+function extractWindowConfigKeys() {
+  const content = readFileSync(STATIC_MODULE_PATH, 'utf8');
+  const match = content.match(/const\s+configString\s*=\s*{([\s\S]*?)\n\s*};/);
+  if (!match) {
+    return new Set();
+  }
+
+  return new Set(
+    [...match[1].matchAll(/^\s*([A-Z][A-Z0-9_]+):/gm)]
+      .map((match) => match[1])
+      .filter((key) => !SYNTHETIC_WINDOW_CONFIG_KEYS.has(key)),
+  );
+}
+
 function sortedDiff(left, right) {
   return [...left].filter((value) => !right.has(value)).sort();
 }
@@ -78,6 +95,7 @@ if (!existsSync(EXAMPLE_ENV_PATH)) {
 const exampleKeys = parseEnvKeys(EXAMPLE_ENV_PATH);
 const serverValidationKeys = extractServerValidationKeys();
 const viteEnvKeys = extractViteEnvKeys();
+const windowConfigKeys = extractWindowConfigKeys();
 
 const missingFromExample = sortedDiff(serverValidationKeys, exampleKeys);
 const extraInExample = sortedDiff(
@@ -85,15 +103,31 @@ const extraInExample = sortedDiff(
   new Set([...serverValidationKeys, ...COMPOSE_ONLY_ENV_KEYS]),
 );
 const viteMissingFromExample = sortedDiff(viteEnvKeys, exampleKeys);
+const windowConfigMissingFromExample = sortedDiff(windowConfigKeys, exampleKeys);
 const issues = [
   missingFromExample,
   extraInExample,
   viteMissingFromExample,
+  windowConfigMissingFromExample,
 ];
 
 reportDiff('Server-validated keys missing from .env.example', missingFromExample);
 reportDiff('Keys in .env.example missing from server validation', extraInExample);
 reportDiff('Vite runtime keys missing from .env.example', viteMissingFromExample);
+reportDiff(
+  'Backend-served runtime keys missing from .env.example',
+  windowConfigMissingFromExample,
+);
+
+if (existsSync(COMPOSE_ENV_PATH)) {
+  const composeKeys = parseEnvKeys(COMPOSE_ENV_PATH);
+  const composeMissing = sortedDiff(exampleKeys, composeKeys);
+  const composeExtra = sortedDiff(composeKeys, exampleKeys);
+
+  issues.push(composeMissing, composeExtra);
+  reportDiff('Keys from .env.example missing from .env.compose.example', composeMissing);
+  reportDiff('Keys in .env.compose.example missing from .env.example', composeExtra);
+}
 
 if (existsSync(LOCAL_ENV_PATH)) {
   const localKeys = parseEnvKeys(LOCAL_ENV_PATH);
