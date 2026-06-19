@@ -5,14 +5,19 @@ import { queryClient } from "@/main.tsx";
 import {
   createDictionaryTerm,
   deleteDictionaryTerm,
+  exportDictionaryTerms,
   getDictionaryTerms,
+  importDictionaryTerms,
   updateDictionaryTerm,
 } from "@/features/dictionary/services/dictionary-service";
 import {
   ICreateDictionaryTermPayload,
   IDictionaryTerm,
+  IImportDictionaryTermsPayload,
+  IImportDictionaryTermsResult,
   IUpdateDictionaryTermPayload,
 } from "@/features/dictionary/types/dictionary.types";
+import { getDictionaryImportSuccessMessage } from "@/features/dictionary/utils/dictionary-import-notification";
 import { useQueryEmit } from "@/features/websocket/use-query-emit";
 
 export const DICTIONARY_QUERY_KEYS = {
@@ -111,6 +116,59 @@ export function useDeleteDictionaryTermMutation(spaceId?: string) {
       notifications.show({
         message:
           error["response"]?.data?.message || t("Failed to delete term"),
+        color: "red",
+      });
+    },
+  });
+}
+
+export function useExportDictionaryTermsMutation() {
+  const { t } = useTranslation();
+
+  return useMutation<void, Error, string>({
+    mutationFn: exportDictionaryTerms,
+    onSuccess: () => {
+      notifications.show({ message: t("Dictionary terms exported") });
+    },
+    onError: (error) => {
+      notifications.show({
+        message:
+          error["response"]?.data?.message ||
+          t("Failed to export dictionary terms"),
+        color: "red",
+      });
+    },
+  });
+}
+
+export function useImportDictionaryTermsMutation() {
+  const { t } = useTranslation();
+  const emit = useQueryEmit();
+
+  return useMutation<
+    IImportDictionaryTermsResult,
+    Error,
+    IImportDictionaryTermsPayload
+  >({
+    mutationFn: importDictionaryTerms,
+    onSuccess: (result, payload) => {
+      queryClient.invalidateQueries({
+        queryKey: DICTIONARY_QUERY_KEYS.terms(payload.spaceId),
+      });
+      emit({
+        operation: "invalidate",
+        spaceId: payload.spaceId,
+        entity: DICTIONARY_QUERY_KEYS.terms(payload.spaceId),
+      });
+      notifications.show({
+        message: getDictionaryImportSuccessMessage(t, result),
+      });
+    },
+    onError: (error) => {
+      notifications.show({
+        message:
+          error["response"]?.data?.message ||
+          t("Failed to import dictionary terms"),
         color: "red",
       });
     },

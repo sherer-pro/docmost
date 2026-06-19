@@ -3,6 +3,7 @@ import {
   ActionIcon,
   Button,
   Container,
+  FileButton,
   Group,
   Loader,
   Menu,
@@ -13,11 +14,14 @@ import {
   Title,
 } from "@mantine/core";
 import { modals } from "@mantine/modals";
+import { notifications } from "@mantine/notifications";
 import {
   IconBook2,
   IconChevronDown,
   IconChevronUp,
   IconDotsVertical,
+  IconFileExport,
+  IconFileImport,
   IconPencil,
   IconPlus,
   IconSearch,
@@ -25,7 +29,7 @@ import {
   IconX,
 } from "@tabler/icons-react";
 import { Helmet } from "react-helmet-async";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useParams } from "react-router-dom";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -35,14 +39,19 @@ import classes from "@/features/dictionary/components/dictionary.module.css";
 import {
   useDeleteDictionaryTermMutation,
   useDictionaryTermsQuery,
+  useExportDictionaryTermsMutation,
+  useImportDictionaryTermsMutation,
 } from "@/features/dictionary/queries/dictionary-query";
+import { parseDictionaryImportJson } from "@/features/dictionary/services/dictionary-service";
 import { IDictionaryTerm } from "@/features/dictionary/types/dictionary.types";
+import { openDictionaryImportConfirmModal } from "@/features/dictionary/utils/dictionary-import-confirmation";
 import {
   SpaceCaslAction,
   SpaceCaslSubject,
 } from "@/features/space/permissions/permissions.type";
 import { useSpaceAbility } from "@/features/space/permissions/use-space-ability";
 import { useGetSpaceBySlugQuery } from "@/features/space/queries/space-query";
+import useUserRole from "@/hooks/use-user-role";
 import { getAppName } from "@/lib/config";
 
 interface DictionaryGroup {
@@ -100,6 +109,7 @@ export default function SpaceDictionary() {
   const { spaceSlug } = useParams();
   const { data: space } = useGetSpaceBySlugQuery(spaceSlug);
   const spaceAbility = useSpaceAbility(space?.membership?.permissions);
+  const { isAdmin } = useUserRole();
   const canManageDictionary = spaceAbility.can(
     SpaceCaslAction.Manage,
     SpaceCaslSubject.Page,
@@ -110,6 +120,9 @@ export default function SpaceDictionary() {
     Boolean(space?.id && dictionaryEnabled),
   );
   const deleteMutation = useDeleteDictionaryTermMutation(space?.id);
+  const exportMutation = useExportDictionaryTermsMutation();
+  const importMutation = useImportDictionaryTermsMutation();
+  const importJsonResetRef = useRef<() => void>(null);
   const [modalOpened, setModalOpened] = useState(false);
   const [editingTerm, setEditingTerm] = useState<IDictionaryTerm | null>(null);
   const [openedTermIds, setOpenedTermIds] = useState<string[]>([]);
@@ -175,6 +188,51 @@ export default function SpaceDictionary() {
     });
   };
 
+  const handleExportJson = () => {
+    if (!space?.id) {
+      return;
+    }
+
+    exportMutation.mutate(space.id);
+  };
+
+  const handleImportJson = async (file: File | null) => {
+    if (!file || !space?.id) {
+      return;
+    }
+
+    let importedTerms: ReturnType<typeof parseDictionaryImportJson>;
+
+    try {
+      importedTerms = parseDictionaryImportJson(await file.text());
+    } catch {
+      notifications.show({
+        message: t("Invalid dictionary JSON file"),
+        color: "red",
+      });
+      importJsonResetRef.current?.();
+      return;
+    }
+
+    importJsonResetRef.current?.();
+
+    openDictionaryImportConfirmModal({
+      fileName: file.name,
+      termCount: importedTerms.length,
+      t,
+      onConfirm: async () => {
+        try {
+          await importMutation.mutateAsync({
+            spaceId: space.id,
+            terms: importedTerms,
+          });
+        } catch {
+          // The mutation hook already shows the server validation error.
+        }
+      },
+    });
+  };
+
   const setGroupOpenedTerms = (
     groupTerms: IDictionaryTerm[],
     termIds: string[],
@@ -236,13 +294,45 @@ export default function SpaceDictionary() {
               </Group>
             )}
           </div>
-          {canManageDictionary && dictionaryEnabled && (
-            <Button
-              leftSection={<IconPlus size={16} />}
-              onClick={openCreateModal}
-            >
-              {t("Add term")}
-            </Button>
+          {(isAdmin || canManageDictionary) && dictionaryEnabled && (
+            <Group gap="xs" wrap="wrap">
+              {isAdmin && (
+                <>
+                  <FileButton
+                    accept="application/json,.json"
+                    onChange={handleImportJson}
+                    resetRef={importJsonResetRef}
+                  >
+                    {(props) => (
+                      <Button
+                        variant="default"
+                        leftSection={<IconFileImport size={16} />}
+                        loading={importMutation.isPending}
+                        {...props}
+                      >
+                        {t("Import JSON")}
+                      </Button>
+                    )}
+                  </FileButton>
+                  <Button
+                    variant="default"
+                    leftSection={<IconFileExport size={16} />}
+                    loading={exportMutation.isPending}
+                    onClick={handleExportJson}
+                  >
+                    {t("Export JSON")}
+                  </Button>
+                </>
+              )}
+              {canManageDictionary && (
+                <Button
+                  leftSection={<IconPlus size={16} />}
+                  onClick={openCreateModal}
+                >
+                  {t("Add term")}
+                </Button>
+              )}
+            </Group>
           )}
         </div>
 
