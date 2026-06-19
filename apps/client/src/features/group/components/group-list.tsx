@@ -11,10 +11,15 @@ import { queryClient } from "@/main.tsx";
 import { getGroupMembers } from "@/features/group/services/group-service.ts";
 import { AutoTooltipText } from "@/components/ui/auto-tooltip-text.tsx";
 
+const GROUPS_PAGE_SIZE = 10;
+
 export default function GroupList() {
   const { t } = useTranslation();
   const { cursor, goNext, goPrev } = useCursorPaginate();
-  const { data, isLoading } = useGetGroupsQuery({ cursor });
+  const { data, isLoading } = useGetGroupsQuery({
+    limit: GROUPS_PAGE_SIZE,
+    ...(cursor ? { cursor } : {}),
+  });
 
   const prefetchGroupMembers = (groupId: string) => {
     queryClient.prefetchQuery({
