@@ -27,7 +27,7 @@ describe("SearchResultItem", () => {
       creatorId: "user-1",
       createdAt: new Date(),
       updatedAt: new Date(),
-      rank: "1.0",
+      rank: 1,
       highlight: "",
       breadcrumbs: [
         { id: "root", title: "Root" },
@@ -69,7 +69,7 @@ describe("SearchResultItem", () => {
       creatorId: "user-1",
       createdAt: new Date(),
       updatedAt: new Date(),
-      rank: "1.0",
+      rank: 1,
       highlight: "",
       breadcrumbs: [],
       space: {
@@ -101,7 +101,7 @@ describe("SearchResultItem", () => {
       creatorId: "user-1",
       createdAt: new Date(),
       updatedAt: new Date(),
-      rank: "1.0",
+      rank: 1,
       highlight: "",
       space: {
         id: "space-1",
@@ -137,7 +137,7 @@ describe("SearchResultItem", () => {
       creatorId: "user-1",
       createdAt: new Date(),
       updatedAt: new Date(),
-      rank: "1.0",
+      rank: 1,
       highlight: "",
       labels: [{ id: "label-1", name: "urgent", type: "page" as const }],
       space: {

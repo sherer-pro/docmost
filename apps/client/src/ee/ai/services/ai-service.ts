@@ -1,4 +1,4 @@
-import api from "@/lib/api-client.ts";
+import api, { withCsrfHeader } from "@/lib/api-client.ts";
 import {
   AiGenerateDto,
   AiContentResponse,
@@ -23,9 +23,9 @@ export async function generateAiContentStream(
   try {
     const response = await fetch("/api/ai/generate/stream", {
       method: "POST",
-      headers: {
+      headers: withCsrfHeader({
         "Content-Type": "application/json",
-      },
+      }),
       body: JSON.stringify(data),
       signal: abortController.signal,
       credentials: "include", // This ensures cookies are sent, matching axios withCredentials

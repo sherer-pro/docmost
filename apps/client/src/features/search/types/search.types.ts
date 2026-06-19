@@ -24,7 +24,7 @@ export interface IPageSearch {
   creatorId: string;
   createdAt: Date;
   updatedAt: Date;
-  rank: string;
+  rank: number;
   highlight: string;
   breadcrumbs?: IPageSearchBreadcrumb[];
   labels?: IPageSearchLabel[];
@@ -65,7 +65,7 @@ export interface IAttachmentSearch {
   creatorId: string;
   createdAt: Date;
   updatedAt: Date;
-  rank: string;
+  rank: number;
   highlight: string;
   space: {
     id: string;

@@ -155,7 +155,7 @@ export function SearchSpotlight({ spaceId }: SearchSpotlightProps) {
               disabled={!query.trim()}
               loading={isAiLoading}
             >
-              Ask
+              {t("Ask AI")}
             </Button>
           )}
         </Group>
