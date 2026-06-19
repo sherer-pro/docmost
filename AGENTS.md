@@ -33,6 +33,7 @@
 - `apps/server/src` — main backend code.
 - `apps/server/src/core/dictionary` — space-scoped dictionary API and services.
 - `apps/server/src/core/session` — user session API and active session revocation.
+- `apps/server/src/core/presence` — Redis-backed live member presence for active sessions and current page/space locations.
 - `apps/server/src/core/favorite` — page/space favorites API.
 - `apps/server/src/core/label` — labels and page-label assignment API.
 - `apps/server/src/core/page/transclusion` — synced blocks backend, lookup, references, and unsync logic.
@@ -44,6 +45,7 @@
 - `apps/client/src` — main frontend code.
 - `apps/client/src/features/dictionary` — dictionary page, term editor, matching/highlighting UI.
 - `apps/client/src/features/session` — account active sessions UI.
+- `apps/client/src/features/presence` — authenticated Socket.IO presence heartbeat/reporting hooks.
 - `apps/client/src/features/favorite` — favorite star/actions and favorite lists.
 - `apps/client/src/features/transclusion` and `apps/client/src/features/editor/components/transclusion` — synced block lookup UI and editor node views.
 - `apps/client/public/locales/*` — JSON translations.
@@ -239,6 +241,11 @@ Minimum:
   - account page: `/settings/account/profile` -> Active sessions;
   - API routes: `GET /api/sessions`, `POST /api/sessions/revoke`, `POST /api/sessions/revoke-all`;
   - new access tokens include `sessionId`, while old tokens without it are temporarily accepted by auth strategy.
+- Live member presence is active for workspace admins/owners:
+  - members page: `/settings/members` -> Presence column;
+  - API route: `GET /api/workspace/members/presence?userIds=...`;
+  - Socket.IO events: `presence:update` and `presence:clear`;
+  - state is ephemeral in Redis and grouped by `sessionId`.
 - Favorites and labels routes are active:
   - favorites: `POST /api/favorites`, `/api/favorites/add`, `/api/favorites/remove`, `/api/favorites/ids`;
   - page labels: `POST /api/pages/labels`, `/api/pages/labels/add`, `/api/pages/labels/remove`;
