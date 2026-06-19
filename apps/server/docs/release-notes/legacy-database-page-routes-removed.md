@@ -1,4 +1,4 @@
-# Release note: legacy database/page routes removed
+# Release note: legacy database/page route fallback
 
 ## Change
 
@@ -17,13 +17,12 @@ Database node URL generation is centralized in `buildDatabaseNodeUrl` (`apps/cli
 2. Temporary fallback by `databaseId`: `/s/:spaceSlug/databases/:databaseId`.
 3. If route data is missing, fallback to `/s/:spaceSlug`.
 
-Fallback lifetime is explicitly declared in `DATABASE_ROUTE_FALLBACK_CONFIG`:
+The temporary fallback is currently implemented by `DatabaseLegacyRedirect`:
 
-- `enabled: true`
-- `removeBy: '2026-03-31'`
-- `ticket: 'DOC-2471'`
+- Route registration: `apps/client/src/App.tsx`
+- Redirect handler: `apps/client/src/pages/database/database-legacy-redirect.tsx`
 
-After `DOC-2471` is resolved, the fallback must be removed completely.
+There is no active `DATABASE_ROUTE_FALLBACK_CONFIG` switch in the current code. The previous `removeBy: '2026-03-31'` marker has elapsed as of 2026-06-19, so removing `DatabaseLegacyRedirect` is an overdue follow-up after verifying that database tree nodes always have `slugId`.
 
 ## Verification: no legacy URLs in active templates/exports
 

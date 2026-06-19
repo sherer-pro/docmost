@@ -42,6 +42,7 @@ The client reads these values via `vite loadEnv`:
 - `COLLAB_URL`
 - `FILE_UPLOAD_SIZE_LIMIT`
 - `FILE_IMPORT_SIZE_LIMIT`
+- `EMBED_ALLOWED_ORIGINS`
 - `DRAWIO_URL`
 - `CLOUD`
 - `SUBDOMAIN_HOST`
@@ -49,4 +50,6 @@ The client reads these values via `vite loadEnv`:
 - `POSTHOG_HOST`
 - `POSTHOG_KEY`
 
-See `../../.env.example` (or repo root `.env.example`) for a complete reference.
+In development these values come from repository root `.env*` files. In production/static serving, the backend serves the deployment/runtime subset from `/window-config.js` without mutating built client files.
+
+See `../../.env.example` (or repo root `.env.example`) for the host-development reference, and keep runtime key changes covered by `pnpm check:env`.
