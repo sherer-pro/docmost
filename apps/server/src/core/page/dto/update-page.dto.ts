@@ -14,10 +14,12 @@ import { Transform, Type } from 'class-transformer';
 import { PageSettings } from '@docmost/db/types/entity.types';
 import {
   PAGE_CUSTOM_FIELD_STATUS_VALUES as SHARED_PAGE_CUSTOM_FIELD_STATUS_VALUES,
+  PAGE_CONTENT_OPERATIONS,
   type PageCustomFieldStatus,
+  type PageContentOperation,
 } from '@docmost/api-contract';
 
-export type ContentOperation = 'append' | 'prepend' | 'replace';
+export type ContentOperation = PageContentOperation;
 export const PAGE_CUSTOM_FIELD_STATUS_VALUES =
   SHARED_PAGE_CUSTOM_FIELD_STATUS_VALUES;
 
@@ -47,7 +49,7 @@ export class UpdatePageDto extends PartialType(CreatePageDto) {
 
   @ValidateIf((o) => o.content !== undefined)
   @Transform(({ value }) => value?.toLowerCase())
-  @IsIn(['append', 'prepend', 'replace'])
+  @IsIn(PAGE_CONTENT_OPERATIONS)
   operation?: ContentOperation;
 
   @ValidateIf((o) => o.content !== undefined)
@@ -60,12 +62,15 @@ export class UpdatePageDto extends PartialType(CreatePageDto) {
   @Type(() => UpdatePageCustomFieldsDto)
   customFields?: UpdatePageCustomFieldsDto;
 
-  toSettingsPayload(currentSettings: PageSettings | null): PageSettings | undefined {
+  toSettingsPayload(
+    currentSettings: PageSettings | null,
+  ): PageSettings | undefined {
     if (!this.customFields) {
       return this.settings;
     }
 
-    const settingsFromDto = this.settings && typeof this.settings === 'object' ? this.settings : {};
+    const settingsFromDto =
+      this.settings && typeof this.settings === 'object' ? this.settings : {};
     return {
       ...(currentSettings ?? {}),
       ...settingsFromDto,

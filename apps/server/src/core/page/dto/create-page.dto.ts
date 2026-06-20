@@ -8,8 +8,12 @@ import {
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { PageSettings } from '@docmost/db/types/entity.types';
+import {
+  PAGE_CONTENT_FORMATS,
+  type PageContentFormat,
+} from '@docmost/api-contract';
 
-export type ContentFormat = 'json' | 'markdown' | 'html';
+export type ContentFormat = PageContentFormat;
 
 export class CreatePageDto {
   @IsOptional()
@@ -32,7 +36,7 @@ export class CreatePageDto {
 
   @ValidateIf((o) => o.content !== undefined)
   @Transform(({ value }) => value?.toLowerCase() ?? 'json')
-  @IsIn(['json', 'markdown', 'html'])
+  @IsIn(PAGE_CONTENT_FORMATS)
   format?: ContentFormat;
 
   /**

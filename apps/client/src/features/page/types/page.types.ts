@@ -2,6 +2,10 @@ import { ISpace } from "@/features/space/types/space.types.ts";
 import {
   PAGE_CUSTOM_FIELD_STATUS,
   type PageCustomFieldStatus as ApiPageCustomFieldStatus,
+  type PageAccessCapabilities as ApiPageAccessCapabilities,
+  type PageAccessInfo as ApiPageAccessInfo,
+  type PageContentFormat,
+  type PageContentOperation,
 } from "@docmost/api-contract";
 
 /**
@@ -16,20 +20,9 @@ export interface PageSettings {
   [key: string]: unknown;
 }
 
-export interface PageAccessCapabilities {
-  canRead: boolean;
-  canWrite: boolean;
-  canCreateChild: boolean;
-  canMoveDeleteShare: boolean;
-  canManageAccess: boolean;
-}
+export type PageAccessCapabilities = ApiPageAccessCapabilities;
 
-export interface PageAccessInfo {
-  role: 'reader' | 'writer' | null;
-  sources: string[];
-  capabilities: PageAccessCapabilities;
-  isSystemAccess: boolean;
-}
+export type PageAccessInfo = ApiPageAccessInfo;
 
 export interface IPage {
   id: string;
@@ -103,8 +96,7 @@ export interface ICopyPageToSpace {
   spaceId?: string;
 }
 
-
-export type SidebarNodeType = 'page' | 'database' | 'databaseRow';
+export type SidebarNodeType = "page" | "database" | "databaseRow";
 
 /**
  * Unified node contract for sidebar tree.
@@ -138,7 +130,7 @@ export interface PageAccessUserEntry {
   name: string;
   email: string;
   avatarUrl?: string | null;
-  type: 'user';
+  type: "user";
   access: PageAccessInfo & {
     canClose: boolean;
   };
@@ -147,8 +139,8 @@ export interface PageAccessUserEntry {
 export interface PageAccessGroupRuleEntry {
   id: string;
   name: string;
-  effect: 'allow' | 'deny';
-  role: 'reader' | 'writer' | null;
+  effect: "allow" | "deny";
+  role: "reader" | "writer" | null;
   sourcePageId?: string | null;
   createdAt?: string;
   updatedAt?: string;
@@ -159,7 +151,7 @@ export interface PageAccessResolvedUser {
   name: string;
   email: string;
   avatarUrl?: string | null;
-  type: 'user';
+  type: "user";
 }
 
 export interface IPageInput {
@@ -176,8 +168,8 @@ export interface IPageInput {
 
 export type IUpdatePageInput = Partial<IPageInput> & {
   content?: Record<string, unknown> | string;
-  operation?: 'append' | 'prepend' | 'replace';
-  format?: 'json' | 'markdown' | 'html';
+  operation?: PageContentOperation;
+  format?: PageContentFormat;
 };
 
 export interface IExportPageParams {
@@ -192,4 +184,3 @@ export enum ExportFormat {
   Markdown = "markdown",
   PDF = "pdf",
 }
-
