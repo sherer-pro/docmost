@@ -16,9 +16,9 @@ import {
 import { QueryParams } from "@/lib/types";
 import { IPagination } from "@/lib/types.ts";
 import { InfiniteData } from "@tanstack/react-query";
-import { IFileTask } from '@/features/file-task/types/file-task.types.ts';
-import { IAttachment } from '@/features/attachments/types/attachment.types.ts';
-import { downloadBlobFromAxiosResponse } from '@/lib/download';
+import { IFileTask } from "@/features/file-task/types/file-task.types.ts";
+import { IAttachment } from "@/features/attachments/types/attachment.types.ts";
+import { downloadBlobFromAxiosResponse } from "@/lib/download";
 
 /**
  * Makes the page's `settings` look client-side compatible.
@@ -28,18 +28,49 @@ import { downloadBlobFromAxiosResponse } from '@/lib/download';
  * `settings === undefined` so that fallback on user preference works.
  */
 function normalizePage<T extends IPage>(page: T): T {
-  if (!page || typeof page !== 'object') {
+  if (!page || typeof page !== "object") {
     return page;
   }
 
   const rawSettings = (page as { settings?: unknown }).settings;
-  if (rawSettings && typeof rawSettings === 'object') {
+  if (rawSettings && typeof rawSettings === "object") {
     return page;
   }
 
   return {
     ...page,
     settings: undefined,
+  };
+}
+
+function serializeSidebarPagesParams(params: SidebarPagesParams): string {
+  const searchParams = new URLSearchParams();
+
+  if (params.spaceId) {
+    searchParams.append("spaceId", params.spaceId);
+  }
+
+  if (params.pageId) {
+    searchParams.append("pageId", params.pageId);
+  }
+
+  if (params.cursor) {
+    searchParams.append("cursor", params.cursor);
+  }
+
+  for (const nodeType of params.includeNodeTypes ?? []) {
+    searchParams.append("includeNodeTypes", nodeType);
+  }
+
+  return searchParams.toString();
+}
+
+function getSidebarPagesRequestConfig(params: SidebarPagesParams) {
+  return {
+    params,
+    paramsSerializer: {
+      serialize: serializeSidebarPagesParams,
+    },
   };
 }
 
@@ -98,7 +129,10 @@ export async function duplicatePage(data: ICopyPageToSpace): Promise<IPage> {
 export async function getSidebarPages(
   params: SidebarPagesParams,
 ): Promise<IPagination<ISidebarNode>> {
-  const req = await api.post("/pages/sidebar-pages", params);
+  const req = await api.get(
+    "/pages/sidebar-pages",
+    getSidebarPagesRequestConfig(params),
+  );
   return req.data;
 }
 
@@ -110,7 +144,10 @@ export async function getAllSidebarPages(
   const pageParams: (string | undefined)[] = [];
 
   do {
-    const req = await api.post("/pages/sidebar-pages", { ...params, cursor });
+    const req = await api.get(
+      "/pages/sidebar-pages",
+      getSidebarPagesRequestConfig({ ...params, cursor }),
+    );
 
     const data: IPagination<ISidebarNode> = req.data;
     pages.push(data);
@@ -144,7 +181,7 @@ export async function exportPage(data: IExportPageParams): Promise<void> {
    * Export returns a binary file with `content-disposition` header,
    * so we explicitly request a blob response and keep full AxiosResponse.
    */
-  const req = await api.post<Blob>('/pages/actions/export', data, {
+  const req = await api.post<Blob>("/pages/actions/export", data, {
     responseType: "blob",
     skipEnvelopeUnwrap: true,
   });
@@ -156,7 +193,7 @@ export async function copyPageMarkdownWithComments(
   pageId: string,
 ): Promise<string> {
   const req = await api.post<{ markdown: string }>(
-    '/pages/actions/copy-markdown-with-comments',
+    "/pages/actions/copy-markdown-with-comments",
     { pageId },
   );
 
@@ -168,7 +205,7 @@ export async function importPage(file: File, spaceId: string) {
   formData.append("spaceId", spaceId);
   formData.append("file", file);
 
-  const req = await api.post<IPage>('/pages/actions/import', formData, {
+  const req = await api.post<IPage>("/pages/actions/import", formData, {
     headers: {
       "Content-Type": "multipart/form-data",
     },
@@ -187,7 +224,7 @@ export async function importZip(
   formData.append("source", source);
   formData.append("file", file);
 
-  const req = await api.post<any>('/pages/actions/import-zip', formData, {
+  const req = await api.post<any>("/pages/actions/import-zip", formData, {
     headers: {
       "Content-Type": "multipart/form-data",
     },
