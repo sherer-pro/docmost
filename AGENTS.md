@@ -31,13 +31,23 @@
 ### Where things are located
 
 - `apps/server/src` — main backend code.
+- `apps/server/src/app.module.ts` — backend module wiring, global CSRF guard, static/client serving, Redis, queue, import/export, security, telemetry, and optional EE loading.
+- `apps/server/src/core/api-key` — workspace API key management used by RAG integrations.
+- `apps/server/src/core/database` — Notion-like database API, rows/properties/views, conversion, markdown/export support.
 - `apps/server/src/core/dictionary` — space-scoped dictionary API and services.
-- `apps/server/src/core/session` — user session API and active session revocation.
-- `apps/server/src/core/presence` — Redis-backed live member presence for active sessions and current page/space locations.
 - `apps/server/src/core/favorite` — page/space favorites API.
 - `apps/server/src/core/label` — labels and page-label assignment API.
+- `apps/server/src/core/mfa` — TOTP MFA API and login challenge support.
+- `apps/server/src/core/notification` and `apps/server/src/core/push` — in-app, email, and Web Push notification flows.
+- `apps/server/src/core/page-access` — page ACL and effective access resolution.
 - `apps/server/src/core/page/transclusion` — synced blocks backend, lookup, references, and unsync logic.
+- `apps/server/src/core/presence` — Redis-backed live member presence for active sessions and current page/space locations.
+- `apps/server/src/core/rag` — API-key-only RAG export and sync API.
+- `apps/server/src/core/session` — user session API and active session revocation.
+- `apps/server/src/collaboration` and `apps/server/src/ws` — collaboration server, Yjs helpers, Socket.IO relay, and presence events.
+- `apps/server/src/integrations/{import,export,static,security,telemetry}` — import/export jobs, static frontend serving, security/version/robots helpers, and telemetry.
 - `ARCHITECTURE.md` — high-level repository architecture and verification map.
+- `docs/documentation-audit-2026-06-20.md` — latest local documentation audit report.
 - `apps/server/docs/api-routing-conventions.md` — API routing policy, endpoint inventory, and RPC migration plan.
 - `apps/server/docs/api-route-inventory.generated.md` — generated backend route inventory (`pnpm routes:inventory`).
 - `apps/server/docs/security-regression-runbook.md` — security pre-release checks for GHSA regression classes.
@@ -49,6 +59,7 @@
 - `apps/client/src/features/favorite` — favorite star/actions and favorite lists.
 - `apps/client/src/features/transclusion` and `apps/client/src/features/editor/components/transclusion` — synced block lookup UI and editor node views.
 - `apps/client/public/locales/*` — JSON translations.
+- `apps/client/public/{manifest.json,sw.js,offline.html}` — PWA manifest, Service Worker, and static offline page; these user-facing strings are outside the i18next locale JSON pipeline.
 - `apps/server/src/database` — migrations and DB tooling.
 - `packages/editor-ext/src/lib/{audio,pdf,transclusion}` — editor nodes for audio, embedded PDFs, and synced blocks.
 - `packages/api-contract/src` — shared API-facing TypeScript contracts used by server/client code; it builds to `packages/api-contract/dist` for runtime server consumption.
@@ -71,6 +82,7 @@
 - Install dependencies: `pnpm install --frozen-lockfile`
 - If the local `pnpm` shim is missing, use `corepack pnpm ...`; root composite scripts and explicit Nx build targets are Corepack-safe.
 - Build the entire monorepo: `pnpm build`
+- Targeted root builds: `pnpm server:build`, `pnpm client:build`, `pnpm editor-ext:build`
 - Quick local verification (env contract + lint + backend test + frontend smoke + security suite): `pnpm verify:quick`
 - Full local verification (env contract + build → lint → backend tests + frontend smoke + frontend unit + security suite): `pnpm verify:full`
 - Clean build artifacts: `pnpm clean`
@@ -185,8 +197,11 @@ Minimum:
 
 - Storage: `STORAGE_DRIVER`, `AWS_S3_*`
 - Mail: `MAIL_DRIVER`, `SMTP_*`, `POSTMARK_TOKEN`
+- Web Push: `WEB_PUSH_VAPID_PUBLIC_KEY`, `WEB_PUSH_VAPID_PRIVATE_KEY`, `WEB_PUSH_SUBJECT`
 - PDF export: `PDF_CHROMIUM_EXECUTABLE_PATH`, `PDF_RENDER_TIMEOUT_MS`
 - Diagnostics: `DEBUG_MODE`, `DEBUG_DB`, `LOG_HTTP`
+- Search: `SEARCH_DRIVER`, `TYPESENSE_URL`, `TYPESENSE_API_KEY`, `TYPESENSE_LOCALE`
+- AI/RAG support: `AI_DRIVER`, `AI_EMBEDDING_MODEL`, `AI_COMPLETION_MODEL`, `AI_EMBEDDING_DIMENSION`, `OPENAI_API_KEY`, `OPENAI_API_URL`, `GEMINI_API_KEY`, `OLLAMA_API_URL`
 - Reverse proxy attribution: `TRUSTED_PROXIES` is a comma-separated list of trusted proxy IPs/CIDRs or proxy-addr keywords (`loopback`, `linklocal`, `uniquelocal`). Leave it empty unless Docmost is behind a controlled proxy; `X-Forwarded-*` headers are ignored when it is empty.
 - Embed iframe allowlist: `EMBED_ALLOWED_ORIGINS` is a comma-separated list of exact trusted `http(s)` origins for generic iframe embeds. Built-in providers are allowlisted separately; keep this empty unless the origin is trusted.
 - Frontend build-time defines are loaded via `vite loadEnv`; deployment/runtime defines such as `APP_URL`, `COLLAB_URL`, `SUBDOMAIN_HOST`, `POSTHOG_*`, `BILLING_TRIAL_DAYS`, `FILE_UPLOAD_SIZE_LIMIT`, `FILE_IMPORT_SIZE_LIMIT`, `EMBED_ALLOWED_ORIGINS`, and `DRAWIO_URL` are served by the backend from `/window-config.js` without mutating built client files. Keep this contract in sync with `pnpm check:env`.
@@ -261,6 +276,8 @@ Minimum:
   - API routes: `POST /api/pages/transclusion/lookup`, `/references`, `/unsync-reference`, and public `POST /api/shares/transclusion/lookup`;
   - legacy `quoteSource` marks and `quoteEmbed` nodes are cleaned by migration and are no longer registered in the editor schema.
 - WebSocket relay accepts only `broadcast` envelopes targeting authorized `workspace-*`, `space-*`, or `user-*` rooms; nested realtime event operations are allowlisted server-side.
+- Document custom fields are named `status`, `assignee`, and `stakeholders` at the space settings layer, and `status`, `assigneeId`, and `stakeholderIds` on page/database row payloads. Do not document this feature as an `owner` field unless the code is renamed first.
+- PWA static files can contain user-facing strings outside i18next. Review `apps/client/public/offline.html`, `manifest.json`, and `sw.js` when changing offline or notification text.
 - Root `start` script runs **backend prod**, but requires prebuilt `dist` (typically via `pnpm build`).
 - Backend production entrypoints are resolved from Nx/Nest build output under `apps/server/dist/apps/server/src/*` (not `apps/server/dist/main`).
 - The production image copies runtime workspace package builds for `packages/editor-ext` and `packages/api-contract`; keep their package manifests and `dist` outputs in sync with server imports.
@@ -290,7 +307,8 @@ Minimum:
 - When adding new user-facing strings:
   1. update `en-US/translation.json`;
   2. add keys in other locales as well (at minimum stub/copy if translation is handled externally);
-  3. verify keys are used via `react-i18next` (`useTranslation`).
+  3. verify keys are used via `react-i18next` (`useTranslation`);
+  4. separately review static PWA strings in `apps/client/public/{manifest.json,sw.js,offline.html}`, because they are not loaded through i18next.
 
 ---
 

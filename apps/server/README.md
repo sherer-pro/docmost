@@ -75,3 +75,16 @@ pnpm --filter ./apps/server migration:codegen
 ## Routing policy
 
 See `docs/api-routing-conventions.md` for current API routing conventions and endpoint grouping.
+
+The generated route inventory lives at `docs/api-route-inventory.generated.md`.
+Regenerate it from repository root with:
+
+```bash
+pnpm routes:inventory
+```
+
+Check for drift without rewriting it with:
+
+```bash
+pnpm routes:inventory:check
+```

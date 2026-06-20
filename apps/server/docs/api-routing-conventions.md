@@ -6,6 +6,10 @@ Generated inventory reference:
 
 - `apps/server/docs/api-route-inventory.generated.md`
 - regenerate with `pnpm routes:inventory`
+- verify drift with `pnpm routes:inventory:check`
+
+Paths in this document are shown without the global `/api` prefix unless the
+prefix is explicitly needed for clarity.
 
 Deprecation tracking:
 
@@ -23,7 +27,10 @@ Deprecation tracking:
    - `/pages/actions/import`
    - `/pages/actions/import-zip`
    - `/pages/actions/export`
+   - `/pages/actions/copy-markdown-with-comments`
    - `/spaces/actions/export`
+   - `/dictionary-terms/actions/import`
+   - `/dictionary-terms/actions/export`
 3. Keep read-only computational/service endpoints under explicit domain namespaces:
    - `/search`, `/health`, `/version`, `/collab`
 
@@ -78,6 +85,7 @@ Migration rules:
   - `GET /databases/:databaseId`
   - `PATCH /databases/:databaseId`
   - `DELETE /databases/:databaseId`
+  - `POST /databases/:databaseId/convert-to-page`
 - Properties:
   - `GET /databases/:databaseId/properties`
   - `POST /databases/:databaseId/properties`
@@ -88,8 +96,14 @@ Migration rules:
     - optional query params: `limit`, `cursor`, `sortField`, `sortDirection`, `sortPropertyId`, `filters`
   - `POST /databases/:databaseId/rows`
   - `PATCH /databases/:databaseId/rows/batch`
+  - `PATCH /databases/:databaseId/rows/:pageId`
+  - `DELETE /databases/:databaseId/rows/:pageId`
+  - `GET /databases/rows/:pageId/context`
 - Cells batch update:
   - `PATCH /databases/:databaseId/rows/:pageId/cells`
+- Table markdown and export:
+  - `GET /databases/:databaseId/markdown`
+  - `POST /databases/:databaseId/export`
 - Views:
   - `GET /databases/:databaseId/views`
   - `POST /databases/:databaseId/views`
@@ -103,5 +117,18 @@ Migration rules:
   - `POST /dictionary-terms`
   - `PATCH /dictionary-terms/:termId`
   - `DELETE /dictionary-terms/:termId`
+- Import/export:
+  - `POST /dictionary-terms/actions/import`
+  - `POST /dictionary-terms/actions/export`
 - Space feature flag:
   - `PATCH /spaces/:spaceId` with `dictionaryEnabled: boolean`
+
+## Page Conversion And Export Commands
+
+- Page/database conversion:
+  - `POST /pages/:pageId/convert-to-database`
+  - `POST /databases/:databaseId/convert-to-page`
+- Page/space export and copy helpers:
+  - `POST /pages/actions/export`
+  - `POST /pages/actions/copy-markdown-with-comments`
+  - `POST /spaces/actions/export`
