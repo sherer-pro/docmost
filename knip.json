@@ -1,0 +1,36 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "workspaces": {
+    ".": {
+      "entry": ["scripts/*.mjs", "package.json"],
+      "project": ["*.cjs", "*.json", "scripts/*.mjs"]
+    },
+    "apps/server": {
+      "entry": [
+        "src/main.ts",
+        "src/app.module.ts",
+        "src/collaboration/server/main.ts",
+        "src/**/*.spec.ts"
+      ],
+      "project": ["src/**/*.ts"]
+    },
+    "apps/client": {
+      "entry": ["src/main.tsx", "src/**/*.test.ts", "src/**/*.test.tsx"],
+      "project": ["src/**/*.ts", "src/**/*.tsx"]
+    },
+    "packages/api-contract": {
+      "entry": ["src/index.ts"],
+      "project": ["src/**/*.ts"]
+    },
+    "packages/editor-ext": {
+      "entry": ["src/index.ts", "src/**/*.test.ts"],
+      "project": ["src/**/*.ts", "src/**/*.tsx"]
+    }
+  },
+  "ignore": [
+    "**/dist/**",
+    "**/coverage/**",
+    "**/.nx/**",
+    "apps/server/docs/api-route-inventory.generated.md"
+  ]
+}

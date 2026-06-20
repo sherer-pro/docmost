@@ -11,6 +11,7 @@
     "test:server": "corepack pnpm --filter ./apps/server test",
     "test:client:smoke": "corepack pnpm --filter ./apps/client build",
     "test:client": "corepack pnpm --filter ./apps/client test",
+    "test:editor-ext": "corepack pnpm --filter ./apps/client exec vitest run --config ../../packages/editor-ext/vitest.config.ts",
     "test:security": "corepack pnpm --filter ./apps/server test:security && corepack pnpm --filter ./apps/client test:security",
     "test": "corepack pnpm run test:server && corepack pnpm run test:client:smoke",
     "test:all": "corepack pnpm run test && corepack pnpm run test:client",
@@ -32,7 +33,11 @@
     "dev": "corepack pnpm concurrently -n \"frontend,backend\" -c \"cyan,green\" \"corepack pnpm run client:dev\" \"corepack pnpm run server:dev\"",
     "clean": "node scripts/clean.mjs",
     "check:comments:en": "node scripts/check-english-comments.mjs",
-    "check:env": "node scripts/check-env-contract.mjs"
+    "check:env": "node scripts/check-env-contract.mjs",
+    "audit:deps": "node scripts/run-nonblocking-audit.mjs deps",
+    "audit:dead-code": "node scripts/run-nonblocking-audit.mjs dead-code",
+    "audit:duplicates": "node scripts/run-nonblocking-audit.mjs duplicates",
+    "audit:architecture": "node scripts/run-nonblocking-audit.mjs architecture"
   },
   "dependencies": {
     "@braintree/sanitize-url": "^7.1.0",
@@ -100,6 +105,9 @@
     "@types/turndown": "^5.0.6",
     "@types/uuid": "^10.0.0",
     "concurrently": "^9.1.2",
+    "dependency-cruiser": "^17.4.3",
+    "jscpd": "^5.0.11",
+    "knip": "^6.17.1",
     "nx": "22.5.0",
     "tsx": "^4.19.3"
   },

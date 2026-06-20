@@ -1,0 +1,22 @@
+{
+  "path": [
+    "apps/server/src",
+    "apps/client/src",
+    "packages/api-contract/src",
+    "packages/editor-ext/src"
+  ],
+  "ignore": [
+    "**/*.spec.ts",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/dist/**",
+    "**/coverage/**",
+    "**/.nx/**",
+    "apps/server/docs/api-route-inventory.generated.md"
+  ],
+  "minLines": 25,
+  "minTokens": 120,
+  "mode": "mild",
+  "reporters": ["console"],
+  "threshold": 0
+}
