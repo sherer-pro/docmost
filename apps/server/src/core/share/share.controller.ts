@@ -39,8 +39,7 @@ import {
 import { PageAccessService } from '../page-access/page-access.service';
 import { ShareTransclusionLookupDto } from './dto/share-transclusion-lookup.dto';
 import { DeprecatedRoute } from '../../common/decorators/deprecated-route.decorator';
-
-const LEGACY_API_SUNSET = 'Fri, 01 Jan 2027 00:00:00 GMT';
+import { LEGACY_API_SUNSET } from '../../common/config/api-deprecation.constants';
 
 @UseGuards(JwtAuthGuard)
 @Controller('shares')
@@ -113,11 +112,7 @@ export class ShareController {
       throw new NotFoundException('Shared page not found');
     }
 
-    await this.setAttachmentAccessCookie(
-      res,
-      shareData.page.id,
-      workspace.id,
-    );
+    await this.setAttachmentAccessCookie(res, shareData.page.id, workspace.id);
 
     return {
       ...shareData,

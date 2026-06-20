@@ -39,6 +39,8 @@ import { RemoveWorkspaceUserDto } from '../dto/remove-workspace-user.dto';
 import { DeactivateWorkspaceUserDto } from '../dto/deactivate-workspace-user.dto';
 import { AuthCookieService } from '../../../common/security/auth-cookie.service';
 import { PresenceService } from '../../presence/presence.service';
+import { DeprecatedRoute } from '../../../common/decorators/deprecated-route.decorator';
+import { LEGACY_API_SUNSET } from '../../../common/config/api-deprecation.constants';
 
 @UseGuards(JwtAuthGuard)
 @Controller('workspace')
@@ -61,6 +63,10 @@ export class WorkspaceController {
 
   @Public()
   @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'GET /api/workspace/public',
+  })
   @Post('/public')
   async getWorkspacePublicInfo(@Req() req: any) {
     return this.workspaceService.getWorkspacePublicData(req.raw.workspaceId);
@@ -73,6 +79,10 @@ export class WorkspaceController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'GET /api/workspace/info',
+  })
   @Post('/info')
   async getWorkspace(@AuthWorkspace() workspace: Workspace) {
     return this.workspaceService.getWorkspaceInfo(workspace.id);
@@ -122,6 +132,10 @@ export class WorkspaceController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'GET /api/workspace/members',
+  })
   @Post('members')
   async getWorkspaceMembers(
     @Body()
@@ -134,7 +148,11 @@ export class WorkspaceController {
       throw new ForbiddenException();
     }
 
-    return this.workspaceService.getWorkspaceUsers(user, workspace.id, pagination);
+    return this.workspaceService.getWorkspaceUsers(
+      user,
+      workspace.id,
+      pagination,
+    );
   }
 
   @HttpCode(HttpStatus.OK)
@@ -147,6 +165,10 @@ export class WorkspaceController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'GET /api/workspace/members/count',
+  })
   @Post('members/count')
   async getWorkspaceVisibleMembersCount(
     @AuthUser() user: User,
@@ -157,7 +179,10 @@ export class WorkspaceController {
       throw new ForbiddenException();
     }
 
-    return this.workspaceService.getWorkspaceVisibleUsersCount(user, workspace.id);
+    return this.workspaceService.getWorkspaceVisibleUsersCount(
+      user,
+      workspace.id,
+    );
   }
 
   @HttpCode(HttpStatus.OK)
@@ -179,10 +204,11 @@ export class WorkspaceController {
       .map((id) => id.trim())
       .filter(Boolean)
       .slice(0, 100);
-    const visibleUserIds = await this.workspaceService.filterExistingWorkspaceUserIds(
-      workspace.id,
-      parsedUserIds,
-    );
+    const visibleUserIds =
+      await this.workspaceService.filterExistingWorkspaceUserIds(
+        workspace.id,
+        parsedUserIds,
+      );
 
     return this.presenceService.getWorkspaceMembersPresence(
       workspace.id,
@@ -256,6 +282,10 @@ export class WorkspaceController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'GET /api/workspace/invites',
+  })
   @Post('invites')
   async getInvitations(
     @AuthUser() user: User,
@@ -288,6 +318,10 @@ export class WorkspaceController {
 
   @Public()
   @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'GET /api/workspace/invites/info',
+  })
   @Post('invites/info')
   async getInvitationById(
     @Body() dto: InvitationIdDto,

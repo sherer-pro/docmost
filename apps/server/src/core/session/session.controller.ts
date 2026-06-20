@@ -16,6 +16,8 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { User, Workspace } from '@docmost/db/types/entity.types';
 import { RevokeSessionDto } from './dto/revoke-session.dto';
 import { SessionService } from './session.service';
+import { DeprecatedRoute } from '../../common/decorators/deprecated-route.decorator';
+import { LEGACY_API_SUNSET } from '../../common/config/api-deprecation.constants';
 
 @UseGuards(JwtAuthGuard)
 @Controller('sessions')
@@ -33,6 +35,10 @@ export class SessionController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'GET /api/sessions',
+  })
   @Post()
   async listSessions(
     @AuthUser() user: User,

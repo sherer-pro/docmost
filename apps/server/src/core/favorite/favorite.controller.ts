@@ -28,6 +28,8 @@ import {
   ListFavoritesQueryDto,
 } from './dto/list-favorites.dto';
 import { FavoriteService } from './favorite.service';
+import { DeprecatedRoute } from '../../common/decorators/deprecated-route.decorator';
+import { LEGACY_API_SUNSET } from '../../common/config/api-deprecation.constants';
 
 @UseGuards(JwtAuthGuard)
 @Controller('favorites')
@@ -83,6 +85,10 @@ export class FavoriteController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'GET /api/favorites/ids',
+  })
   @Post('ids')
   async getFavoriteIds(
     @Body() dto: FavoriteIdsDto,
@@ -107,6 +113,10 @@ export class FavoriteController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'GET /api/favorites',
+  })
   @Post()
   async getUserFavorites(
     @Body() dto: ListFavoritesQueryDto,

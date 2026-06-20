@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
@@ -22,6 +23,7 @@ import { findHighestUserSpaceRole } from '@docmost/db/repos/space/utils';
 import { PageHistoryRecorderService } from '../page/services/page-history-recorder.service';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import { executeWithCursorPagination } from '@docmost/db/pagination/cursor-pagination';
+import { EnvironmentService } from '../../integrations/environment/environment.service';
 
 export type PageAccessSource = 'system' | 'space' | 'page_user' | 'page_group';
 
@@ -59,8 +61,15 @@ interface AccessDecision {
   decisionSource: 'system' | 'space' | 'page_user' | 'page_group' | 'none';
 }
 
+type PageAccessDecisionRule = Pick<
+  PageAccessRule,
+  'pageId' | 'effect' | 'role'
+>;
+
 @Injectable()
 export class PageAccessService {
+  private readonly logger = new Logger(PageAccessService.name);
+
   constructor(
     @InjectKysely() private readonly db: KyselyDB,
     private readonly pageRepo: PageRepo,
@@ -68,6 +77,7 @@ export class PageAccessService {
     private readonly groupUserRepo: GroupUserRepo,
     private readonly spaceMemberRepo: SpaceMemberRepo,
     private readonly pageHistoryRecorder: PageHistoryRecorderService,
+    private readonly environmentService: EnvironmentService,
   ) {}
 
   isWorkspaceBypassUser(user: User, workspaceId?: string): boolean {
@@ -107,7 +117,27 @@ export class PageAccessService {
     };
   }
 
-  private toPageRoleFromSpaceRole(spaceRole: SpaceRole | null): PageRole | null {
+  private logSidebarAccessSnapshotMetrics(input: {
+    userId: string;
+    spaceId: string;
+    pageCount: number;
+    userRuleCount: number;
+    groupRuleCount: number;
+    snapshot: SidebarAccessSnapshot;
+    durationMs: number;
+  }): void {
+    if (!this.environmentService.isDebugMode()) {
+      return;
+    }
+
+    this.logger.debug(
+      `Page access snapshot computed. userId=${input.userId}, spaceId=${input.spaceId}, pageCount=${input.pageCount}, userRuleCount=${input.userRuleCount}, groupRuleCount=${input.groupRuleCount}, visibleCount=${input.snapshot.visiblePageIds.size}, readableCount=${input.snapshot.readablePageIds.size}, durationMs=${input.durationMs}`,
+    );
+  }
+
+  private toPageRoleFromSpaceRole(
+    spaceRole: SpaceRole | null,
+  ): PageRole | null {
     if (!spaceRole) {
       return null;
     }
@@ -156,8 +186,8 @@ export class PageAccessService {
 
   private evaluateDecision(input: {
     isSystemBypass: boolean;
-    userRule: PageAccessRule | null;
-    groupRules: PageAccessRule[];
+    userRule: PageAccessDecisionRule | null;
+    groupRules: PageAccessDecisionRule[];
     spaceRole: SpaceRole | null;
   }): AccessDecision {
     const { isSystemBypass, userRule, groupRules, spaceRole } = input;
@@ -197,7 +227,8 @@ export class PageAccessService {
 
       const hasWriter = groupRules.some(
         (rule) =>
-          rule.effect === PageAccessEffect.ALLOW && rule.role === PageRole.WRITER,
+          rule.effect === PageAccessEffect.ALLOW &&
+          rule.role === PageRole.WRITER,
       );
 
       return {
@@ -262,7 +293,10 @@ export class PageAccessService {
     userId: string,
     groupIds: string[],
     trx?: KyselyTransaction,
-  ): Promise<{ userRule: PageAccessRule | null; groupRules: PageAccessRule[] }> {
+  ): Promise<{
+    userRule: PageAccessRule | null;
+    groupRules: PageAccessRule[];
+  }> {
     const [userRule, groupRules] = await Promise.all([
       this.pageAccessRuleRepo.findUserRule(pageId, userId, trx),
       this.pageAccessRuleRepo.findGroupRules(pageId, groupIds, trx),
@@ -488,12 +522,17 @@ export class PageAccessService {
       throw new NotFoundException('Page not found');
     }
 
-    const access = await this.getEffectiveAccess(page, user, { trx: opts?.trx });
+    const access = await this.getEffectiveAccess(page, user, {
+      trx: opts?.trx,
+    });
 
     return { page, access };
   }
 
-  async assertCanReadPage(page: Page, user: User): Promise<EffectivePageAccess> {
+  async assertCanReadPage(
+    page: Page,
+    user: User,
+  ): Promise<EffectivePageAccess> {
     const access = await this.getEffectiveAccess(page, user);
     if (!access.capabilities.canRead) {
       throw new ForbiddenException();
@@ -501,7 +540,10 @@ export class PageAccessService {
     return access;
   }
 
-  async assertCanWritePage(page: Page, user: User): Promise<EffectivePageAccess> {
+  async assertCanWritePage(
+    page: Page,
+    user: User,
+  ): Promise<EffectivePageAccess> {
     const access = await this.getEffectiveAccess(page, user);
     if (!access.capabilities.canWrite) {
       throw new ForbiddenException();
@@ -588,7 +630,10 @@ export class PageAccessService {
     this.assertCanManageAccess(actor, page.workspaceId);
     await this.assertSpaceIsActive(page.spaceId, trx);
 
-    const targetUser = await this.ensureWorkspaceUser(page.workspaceId, targetUserId);
+    const targetUser = await this.ensureWorkspaceUser(
+      page.workspaceId,
+      targetUserId,
+    );
     if (!targetUser) {
       throw new NotFoundException('User not found');
     }
@@ -633,7 +678,10 @@ export class PageAccessService {
     this.assertCanManageAccess(actor, page.workspaceId);
     await this.assertSpaceIsActive(page.spaceId, trx);
 
-    const targetUser = await this.ensureWorkspaceUser(page.workspaceId, targetUserId);
+    const targetUser = await this.ensureWorkspaceUser(
+      page.workspaceId,
+      targetUserId,
+    );
     if (!targetUser) {
       throw new NotFoundException('User not found');
     }
@@ -812,8 +860,20 @@ export class PageAccessService {
     user: User,
     spaceId: string,
   ): Promise<SidebarAccessSnapshot> {
+    const startedAt = Date.now();
+
     if (!user.workspaceId) {
-      return this.emptySidebarAccessSnapshot();
+      const snapshot = this.emptySidebarAccessSnapshot();
+      this.logSidebarAccessSnapshotMetrics({
+        userId: user.id,
+        spaceId,
+        pageCount: 0,
+        userRuleCount: 0,
+        groupRuleCount: 0,
+        snapshot,
+        durationMs: Date.now() - startedAt,
+      });
+      return snapshot;
     }
 
     const pages = await this.db
@@ -834,10 +894,22 @@ export class PageAccessService {
     const visibleChildrenCountByParentId = new Map<string, number>();
 
     if (pageIds.length === 0) {
-      return this.emptySidebarAccessSnapshot();
+      const snapshot = this.emptySidebarAccessSnapshot();
+      this.logSidebarAccessSnapshotMetrics({
+        userId: user.id,
+        spaceId,
+        pageCount: 0,
+        userRuleCount: 0,
+        groupRuleCount: 0,
+        snapshot,
+        durationMs: Date.now() - startedAt,
+      });
+      return snapshot;
     }
 
     const isSpaceArchived = !!(await this.getSpaceArchivedAt(spaceId));
+    let userRuleCount = 0;
+    let groupRuleCount = 0;
 
     if (this.isWorkspaceBypassUser(user)) {
       for (const page of pages) {
@@ -858,7 +930,7 @@ export class PageAccessService {
 
       const userRules = await this.db
         .selectFrom('pageAccessRules')
-        .selectAll()
+        .select(['pageId', 'effect', 'role'])
         .where('pageId', 'in', pageIds)
         .where('principalType', '=', PageAccessPrincipalType.USER)
         .where('userId', '=', user.id)
@@ -868,22 +940,25 @@ export class PageAccessService {
         groupIds.length > 0
           ? await this.db
               .selectFrom('pageAccessRules')
-              .selectAll()
+              .select(['pageId', 'effect', 'role'])
               .where('pageId', 'in', pageIds)
               .where('principalType', '=', PageAccessPrincipalType.GROUP)
               .where('groupId', 'in', groupIds)
               .execute()
           : [];
 
-      const userRuleByPageId = new Map<string, PageAccessRule>();
+      userRuleCount = userRules.length;
+      groupRuleCount = groupRules.length;
+
+      const userRuleByPageId = new Map<string, PageAccessDecisionRule>();
       for (const rule of userRules) {
-        userRuleByPageId.set(rule.pageId, rule as PageAccessRule);
+        userRuleByPageId.set(rule.pageId, rule);
       }
 
-      const groupRulesByPageId = new Map<string, PageAccessRule[]>();
+      const groupRulesByPageId = new Map<string, PageAccessDecisionRule[]>();
       for (const rule of groupRules) {
         const existing = groupRulesByPageId.get(rule.pageId) ?? [];
-        existing.push(rule as PageAccessRule);
+        existing.push(rule);
         groupRulesByPageId.set(rule.pageId, existing);
       }
 
@@ -944,12 +1019,13 @@ export class PageAccessService {
           continue;
         }
 
-        const existing = visibleChildrenCountByParentId.get(page.parentPageId) ?? 0;
+        const existing =
+          visibleChildrenCountByParentId.get(page.parentPageId) ?? 0;
         visibleChildrenCountByParentId.set(page.parentPageId, existing + 1);
       }
     }
 
-    return {
+    const snapshot = {
       visiblePageIds,
       readablePageIds,
       writablePageIds,
@@ -958,9 +1034,24 @@ export class PageAccessService {
       manageAccessPageIds,
       visibleChildrenCountByParentId,
     };
+
+    this.logSidebarAccessSnapshotMetrics({
+      userId: user.id,
+      spaceId,
+      pageCount: pageIds.length,
+      userRuleCount,
+      groupRuleCount,
+      snapshot,
+      durationMs: Date.now() - startedAt,
+    });
+
+    return snapshot;
   }
 
-  async hasAnyReadablePageInSpace(user: User, spaceId: string): Promise<boolean> {
+  async hasAnyReadablePageInSpace(
+    user: User,
+    spaceId: string,
+  ): Promise<boolean> {
     const snapshot = await this.getSidebarAccessSnapshot(user, spaceId);
     return snapshot.readablePageIds.size > 0;
   }
@@ -1074,31 +1165,27 @@ export class PageAccessService {
     }
 
     const allGroupIds = [...new Set(groupRows.map((row) => row.groupId))];
-    const [
-      pageUserRules,
-      pageGroupRules,
-      spaceRoleByUserId,
-      spaceArchivedAt,
-    ] = await Promise.all([
-      this.db
-        .selectFrom('pageAccessRules')
-        .selectAll()
-        .where('pageId', '=', page.id)
-        .where('principalType', '=', PageAccessPrincipalType.USER)
-        .where('userId', 'in', userIds)
-        .execute(),
-      allGroupIds.length > 0
-        ? this.db
-            .selectFrom('pageAccessRules')
-            .selectAll()
-            .where('pageId', '=', page.id)
-            .where('principalType', '=', PageAccessPrincipalType.GROUP)
-            .where('groupId', 'in', allGroupIds)
-            .execute()
-        : Promise.resolve([]),
-      this.getUserSpaceRoleMap(page.spaceId, userIds),
-      this.getSpaceArchivedAt(page.spaceId),
-    ]);
+    const [pageUserRules, pageGroupRules, spaceRoleByUserId, spaceArchivedAt] =
+      await Promise.all([
+        this.db
+          .selectFrom('pageAccessRules')
+          .selectAll()
+          .where('pageId', '=', page.id)
+          .where('principalType', '=', PageAccessPrincipalType.USER)
+          .where('userId', 'in', userIds)
+          .execute(),
+        allGroupIds.length > 0
+          ? this.db
+              .selectFrom('pageAccessRules')
+              .selectAll()
+              .where('pageId', '=', page.id)
+              .where('principalType', '=', PageAccessPrincipalType.GROUP)
+              .where('groupId', 'in', allGroupIds)
+              .execute()
+          : Promise.resolve([]),
+        this.getUserSpaceRoleMap(page.spaceId, userIds),
+        this.getSpaceArchivedAt(page.spaceId),
+      ]);
 
     const userRuleByUserId = new Map<string, PageAccessRule>();
     for (const rule of pageUserRules) {
@@ -1119,7 +1206,10 @@ export class PageAccessService {
     }
 
     for (const user of workspaceUsers) {
-      const isSystemBypass = this.isWorkspaceBypassUser(user as User, page.workspaceId);
+      const isSystemBypass = this.isWorkspaceBypassUser(
+        user as User,
+        page.workspaceId,
+      );
 
       const userRule = userRuleByUserId.get(user.id) ?? null;
       const groupRules = (groupIdsByUserId.get(user.id) ?? []).flatMap(
@@ -1232,7 +1322,11 @@ export class PageAccessService {
         .union(
           this.db
             .selectFrom('spaceMembers')
-            .innerJoin('groupUsers', 'groupUsers.groupId', 'spaceMembers.groupId')
+            .innerJoin(
+              'groupUsers',
+              'groupUsers.groupId',
+              'spaceMembers.groupId',
+            )
             .select('groupUsers.userId as userId')
             .where('spaceMembers.spaceId', '=', page.spaceId),
         )
@@ -1383,7 +1477,11 @@ export class PageAccessService {
         'pageAccessRules.updatedAt as updatedAt',
       ])
       .where('pageAccessRules.pageId', '=', page.id)
-      .where('pageAccessRules.principalType', '=', PageAccessPrincipalType.GROUP);
+      .where(
+        'pageAccessRules.principalType',
+        '=',
+        PageAccessPrincipalType.GROUP,
+      );
 
     if (pagination.query) {
       query = query.where('groups.name', 'ilike', `%${pagination.query}%`);

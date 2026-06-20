@@ -66,8 +66,7 @@ import {
 } from './dto/page-access.dto';
 import { LinkPreviewService } from './services/link-preview.service';
 import { DeprecatedRoute } from '../../common/decorators/deprecated-route.decorator';
-
-const LEGACY_API_SUNSET = 'Fri, 01 Jan 2027 00:00:00 GMT';
+import { LEGACY_API_SUNSET } from '../../common/config/api-deprecation.constants';
 
 @UseGuards(JwtAuthGuard)
 @Controller('pages')
@@ -161,10 +160,7 @@ export class PageController {
 
   @HttpCode(HttpStatus.OK)
   @Post('labels')
-  async getPageLabels(
-    @Body() dto: PageLabelsQueryDto,
-    @AuthUser() user: User,
-  ) {
+  async getPageLabels(@Body() dto: PageLabelsQueryDto, @AuthUser() user: User) {
     const page = await this.pageRepo.findById(dto.pageId);
     if (!page) {
       throw new NotFoundException('Page not found');
@@ -189,11 +185,7 @@ export class PageController {
 
     await this.pageAccessService.assertCanWritePage(page, user);
 
-    return this.labelService.addLabelsToPage(
-      page.id,
-      dto.names,
-      workspace.id,
-    );
+    return this.labelService.addLabelsToPage(page.id, dto.names, workspace.id);
   }
 
   @HttpCode(HttpStatus.OK)
@@ -271,12 +263,7 @@ export class PageController {
 
     await this.pageAccessService.assertCanReadPage(page, user);
 
-    return this.backlinkService.findByPageId(
-      page.id,
-      dto.direction,
-      user,
-      dto,
-    );
+    return this.backlinkService.findByPageId(page.id, dto.direction, user, dto);
   }
 
   @HttpCode(HttpStatus.OK)
@@ -307,7 +294,9 @@ export class PageController {
     @AuthWorkspace() workspace: Workspace,
   ) {
     if (createPageDto.parentPageId) {
-      const parentPage = await this.pageRepo.findById(createPageDto.parentPageId);
+      const parentPage = await this.pageRepo.findById(
+        createPageDto.parentPageId,
+      );
       if (!parentPage || parentPage.deletedAt) {
         throw new NotFoundException('Parent page not found');
       }
@@ -383,7 +372,10 @@ export class PageController {
       updatePageDto,
       user,
     );
-    const access = await this.pageAccessService.getEffectiveAccess(updatedPage, user);
+    const access = await this.pageAccessService.getEffectiveAccess(
+      updatedPage,
+      user,
+    );
 
     if (
       updatePageDto.format &&
@@ -475,7 +467,10 @@ export class PageController {
       return restoredPage;
     }
 
-    const access = await this.pageAccessService.getEffectiveAccess(restoredPage, user);
+    const access = await this.pageAccessService.getEffectiveAccess(
+      restoredPage,
+      user,
+    );
     return {
       ...mapPageResponse(restoredPage),
       access: this.toAccessResponse(access),
@@ -528,11 +523,15 @@ export class PageController {
       return result;
     }
 
-    const result = await this.pageService.getRecentPages(user.id, recentPageDto);
-    const accessByPageId = await this.pageAccessService.getEffectiveAccessForPages(
-      result.items,
-      user,
+    const result = await this.pageService.getRecentPages(
+      user.id,
+      recentPageDto,
     );
+    const accessByPageId =
+      await this.pageAccessService.getEffectiveAccessForPages(
+        result.items,
+        user,
+      );
 
     result.items = result.items.flatMap((page) => {
       const access = accessByPageId.get(page.id);
@@ -646,7 +645,10 @@ export class PageController {
       return history;
     }
 
-    const ability = await this.spaceAbility.createForUser(user, history.spaceId);
+    const ability = await this.spaceAbility.createForUser(
+      user,
+      history.spaceId,
+    );
     if (ability.cannot(SpaceCaslAction.Read, SpaceCaslSubject.Page)) {
       throw new ForbiddenException();
     }
@@ -695,10 +697,8 @@ export class PageController {
       spaceId = page.spaceId;
     }
 
-    const accessSnapshot = await this.pageAccessService.getSidebarAccessSnapshot(
-      user,
-      spaceId,
-    );
+    const accessSnapshot =
+      await this.pageAccessService.getSidebarAccessSnapshot(user, spaceId);
 
     if (accessSnapshot.readablePageIds.size === 0) {
       throw new ForbiddenException();
@@ -741,8 +741,9 @@ export class PageController {
             canRead: accessSnapshot.readablePageIds.has(node.id),
             canWrite: accessSnapshot.writablePageIds.has(node.id),
             canCreateChild: accessSnapshot.createChildPageIds.has(node.id),
-            canMoveDeleteShare:
-              accessSnapshot.moveDeleteSharePageIds.has(node.id),
+            canMoveDeleteShare: accessSnapshot.moveDeleteSharePageIds.has(
+              node.id,
+            ),
             canManageAccess: accessSnapshot.manageAccessPageIds.has(node.id),
           },
           isSystemAccess: this.pageAccessService.isWorkspaceBypassUser(user),
@@ -930,7 +931,9 @@ export class PageController {
       user,
       dto.spaceId,
     );
-    if (destinationAbility.cannot(SpaceCaslAction.Edit, SpaceCaslSubject.Page)) {
+    if (
+      destinationAbility.cannot(SpaceCaslAction.Edit, SpaceCaslSubject.Page)
+    ) {
       throw new ForbiddenException();
     }
 
@@ -949,7 +952,10 @@ export class PageController {
     if (dto.spaceId) {
       await this.pageAccessService.assertCanReadPage(copiedPage, user);
 
-      const targetAbility = await this.spaceAbility.createForUser(user, dto.spaceId);
+      const targetAbility = await this.spaceAbility.createForUser(
+        user,
+        dto.spaceId,
+      );
       if (targetAbility.cannot(SpaceCaslAction.Edit, SpaceCaslSubject.Page)) {
         throw new ForbiddenException();
       }

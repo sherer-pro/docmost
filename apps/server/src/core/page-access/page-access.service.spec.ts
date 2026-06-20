@@ -37,6 +37,10 @@ describe('PageAccessService', () => {
     recordPageEvent: jest.fn(),
   };
 
+  const environmentService = {
+    isDebugMode: jest.fn(() => false),
+  };
+
   const page = {
     id: 'page-1',
     spaceId: 'space-1',
@@ -65,6 +69,7 @@ describe('PageAccessService', () => {
       groupUserRepo as any,
       spaceMemberRepo as any,
       pageHistoryRecorder as any,
+      environmentService as any,
     );
 
     jest.spyOn(service as any, 'getSpaceArchivedAt').mockResolvedValue(null);
@@ -250,8 +255,11 @@ describe('PageAccessService', () => {
       groupUserRepo as any,
       spaceMemberRepo as any,
       pageHistoryRecorder as any,
+      environmentService as any,
     );
-    jest.spyOn(batchService as any, 'getSpaceArchivedAt').mockResolvedValue(null);
+    jest
+      .spyOn(batchService as any, 'getSpaceArchivedAt')
+      .mockResolvedValue(null);
     groupUserRepo.getGroupIdsByUserId.mockResolvedValue(['group-1']);
     spaceMemberRepo.getUserSpaceRoles.mockResolvedValue([
       { userId: 'user-1', role: SpaceRole.READER },
@@ -360,12 +368,7 @@ describe('PageAccessService', () => {
     (service as any).getSpaceArchivedAt.mockResolvedValueOnce(new Date());
 
     await expect(
-      service.grantUserAccessForSubtree(
-        page,
-        'user-1',
-        PageRole.READER,
-        actor,
-      ),
+      service.grantUserAccessForSubtree(page, 'user-1', PageRole.READER, actor),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 

@@ -14,6 +14,8 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import { User } from '@docmost/db/types/entity.types';
 import { MarkNotificationsReadDto } from './dto/notification.dto';
+import { DeprecatedRoute } from '../../common/decorators/deprecated-route.decorator';
+import { LEGACY_API_SUNSET } from '../../common/config/api-deprecation.constants';
 
 @UseGuards(JwtAuthGuard)
 @Controller('notifications')
@@ -30,6 +32,10 @@ export class NotificationController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'GET /api/notifications',
+  })
   @Post('/')
   async getNotifications(
     @Body() pagination: PaginationOptions,
@@ -45,6 +51,10 @@ export class NotificationController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'GET /api/notifications/unread-count',
+  })
   @Post('unread-count')
   async getUnreadCount(@AuthUser() user: User) {
     const count = await this.notificationService.getUnreadCount(user.id);
