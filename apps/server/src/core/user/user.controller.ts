@@ -18,6 +18,8 @@ import { User, Workspace } from '@docmost/db/types/entity.types';
 import { WorkspaceRepo } from '@docmost/db/repos/workspace/workspace.repo';
 import { UserRepo } from '@docmost/db/repos/user/user.repo';
 import { UserRole } from '../../common/helpers/types/permission';
+import { DeprecatedRoute } from '../../common/decorators/deprecated-route.decorator';
+import { LEGACY_API_SUNSET } from '../../common/config/api-deprecation.constants';
 
 @UseGuards(JwtAuthGuard)
 @Controller('users')
@@ -40,6 +42,20 @@ export class UserController {
   @Header('Cache-Control', 'no-store, max-age=0')
   @Header('Pragma', 'no-cache')
   @Get('me')
+  async getUserInfoViaGet(
+    @AuthUser() authUser: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.getUserInfo(authUser, workspace);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Header('Cache-Control', 'no-store, max-age=0')
+  @Header('Pragma', 'no-cache')
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'GET /api/users/me',
+  })
   @Post('me')
   async getUserInfo(
     @AuthUser() authUser: User,

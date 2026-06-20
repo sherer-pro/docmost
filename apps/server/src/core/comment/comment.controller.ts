@@ -29,8 +29,7 @@ import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { CommentRepo } from '@docmost/db/repos/comment/comment.repo';
 import { PageAccessService } from '../page-access/page-access.service';
 import { DeprecatedRoute } from '../../common/decorators/deprecated-route.decorator';
-
-const LEGACY_API_SUNSET = 'Fri, 01 Jan 2027 00:00:00 GMT';
+import { LEGACY_API_SUNSET } from '../../common/config/api-deprecation.constants';
 
 @UseGuards(JwtAuthGuard)
 @Controller('comments')
@@ -163,7 +162,6 @@ export class CommentController {
     return this.commentService.update(comment, dto, user);
   }
 
-
   /**
    * Updates comment status (resolve/re-open).
    *
@@ -242,7 +240,10 @@ export class CommentController {
       return;
     }
 
-    const access = await this.pageAccessService.assertCanMoveDeleteShare(page, user);
+    const access = await this.pageAccessService.assertCanMoveDeleteShare(
+      page,
+      user,
+    );
     if (!access.capabilities.canMoveDeleteShare) {
       throw new ForbiddenException(
         'You can only delete your own comments or must be a space admin',

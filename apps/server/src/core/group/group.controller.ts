@@ -27,8 +27,7 @@ import {
   WorkspaceCaslSubject,
 } from '../casl/interfaces/workspace-ability.type';
 import { DeprecatedRoute } from '../../common/decorators/deprecated-route.decorator';
-
-const LEGACY_API_SUNSET = 'Fri, 01 Jan 2027 00:00:00 GMT';
+import { LEGACY_API_SUNSET } from '../../common/config/api-deprecation.constants';
 
 @UseGuards(JwtAuthGuard)
 @Controller('groups')
@@ -93,7 +92,11 @@ export class GroupController {
     if (ability.cannot(WorkspaceCaslAction.Read, WorkspaceCaslSubject.Group)) {
       throw new ForbiddenException();
     }
-    return this.groupService.getGroupInfo(groupIdDto.groupId, workspace.id, user);
+    return this.groupService.getGroupInfo(
+      groupIdDto.groupId,
+      workspace.id,
+      user,
+    );
   }
 
   @HttpCode(HttpStatus.OK)

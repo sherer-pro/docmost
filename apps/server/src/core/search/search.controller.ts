@@ -25,6 +25,8 @@ import { Public } from '../../common/decorators/public.decorator';
 import { EnvironmentService } from '../../integrations/environment/environment.service';
 import { ModuleRef } from '@nestjs/core';
 import { PageAccessService } from '../page-access/page-access.service';
+import { DeprecatedRoute } from '../../common/decorators/deprecated-route.decorator';
+import { LEGACY_API_SUNSET } from '../../common/config/api-deprecation.constants';
 
 @UseGuards(JwtAuthGuard)
 @Controller('search')
@@ -116,6 +118,10 @@ export class SearchController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'GET /api/search/suggest',
+  })
   @Post('suggest')
   async searchSuggestions(
     @Body() dto: SearchSuggestionDTO,

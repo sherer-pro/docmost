@@ -30,6 +30,8 @@ import { AuthRateLimit } from './rate-limit/auth-rate-limit.decorator';
 import { MfaService } from '../mfa/mfa.service';
 import { AuthCookieService } from '../../common/security/auth-cookie.service';
 import { SessionService } from '../session/session.service';
+import { DeprecatedRoute } from '../../common/decorators/deprecated-route.decorator';
+import { LEGACY_API_SUNSET } from '../../common/config/api-deprecation.constants';
 
 @Controller('auth')
 export class AuthController {
@@ -167,6 +169,19 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   @Get('collab-token')
+  async collabTokenViaGet(
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.collabToken(user, workspace);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'GET /api/auth/collab-token',
+  })
   @Post('collab-token')
   async collabToken(
     @AuthUser() user: User,

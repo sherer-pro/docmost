@@ -41,6 +41,8 @@ import {
 import WorkspaceAbilityFactory from '../casl/abilities/workspace-ability.factory';
 import { CreateSpaceDto } from './dto/create-space.dto';
 import { PageAccessService } from '../page-access/page-access.service';
+import { DeprecatedRoute } from '../../common/decorators/deprecated-route.decorator';
+import { LEGACY_API_SUNSET } from '../../common/config/api-deprecation.constants';
 
 @UseGuards(JwtAuthGuard)
 @Controller('spaces')
@@ -207,6 +209,10 @@ export class SpaceController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'GET /api/spaces/member-users',
+  })
   @Post('member-users')
   async getSpaceMemberUsers(
     @Body() spaceIdDto: SpaceMembersQueryDto,
@@ -240,6 +246,10 @@ export class SpaceController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @DeprecatedRoute({
+    sunset: LEGACY_API_SUNSET,
+    replacement: 'GET /api/spaces/members',
+  })
   @Post('members')
   async getSpaceMembers(
     @Body() spaceIdDto: SpaceMembersQueryDto,

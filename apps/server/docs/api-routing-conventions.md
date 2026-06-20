@@ -7,6 +7,13 @@ Generated inventory reference:
 - `apps/server/docs/api-route-inventory.generated.md`
 - regenerate with `pnpm routes:inventory`
 
+Deprecation tracking:
+
+- `apps/server/docs/api-route-deprecation-matrix.md`
+- every retained compatibility alias should have a canonical replacement,
+  removal condition, and matching `@DeprecatedRoute(...)` metadata unless the
+  matrix explicitly lists it as a non-deprecated dual-method route.
+
 ## Core rules
 
 1. Use resource-oriented routes for CRUD:

@@ -109,12 +109,25 @@ export class GeneralQueueProcessor
 
     const attachments = await this.db
       .selectFrom('attachments')
-      .selectAll()
+      .select([
+        'id',
+        'type',
+        'filePath',
+        'fileName',
+        'fileSize',
+        'mimeType',
+        'fileExt',
+        'creatorId',
+        'workspaceId',
+        'pageId',
+      ])
       .where('id', 'in', attachmentIds)
       .where('workspaceId', '=', data.workspaceId)
       .execute();
 
-    const limit = pLimit(GeneralQueueProcessor.DUPLICATE_ATTACHMENTS_CONCURRENCY);
+    const limit = pLimit(
+      GeneralQueueProcessor.DUPLICATE_ATTACHMENTS_CONCURRENCY,
+    );
 
     let successCount = 0;
     let errorCount = 0;
