@@ -1,10 +1,14 @@
-import api, { withCsrfHeader } from "@/lib/api-client.ts";
+import api from "@/lib/api-client.ts";
 import {
   AiGenerateDto,
   AiContentResponse,
   AiStreamChunk,
   AiStreamError,
 } from "@/ee/ai/types/ai.types.ts";
+import {
+  fetchJsonSse,
+  readServerSentEventStream,
+} from "@/ee/ai/services/sse-stream.ts";
 
 export async function generateAiContent(
   data: AiGenerateDto,
@@ -21,71 +25,35 @@ export async function generateAiContentStream(
 ): Promise<AbortController> {
   const abortController = new AbortController();
   try {
-    const response = await fetch("/api/ai/generate/stream", {
-      method: "POST",
-      headers: withCsrfHeader({
-        "Content-Type": "application/json",
-      }),
-      body: JSON.stringify(data),
-      signal: abortController.signal,
-      credentials: "include", // This ensures cookies are sent, matching axios withCredentials
-    });
+    const response = await fetchJsonSse(
+      "/api/ai/generate/stream",
+      data,
+      abortController.signal,
+    );
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const reader = response.body?.getReader();
-    const decoder = new TextDecoder();
-
-    if (!reader) {
-      throw new Error("Response body is not readable");
-    }
-
-    const processStream = async () => {
-      let buffer = "";
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-
-          buffer = lines.pop() || "";
-
-          for (const line of lines) {
-            if (line.startsWith("data: ")) {
-              const data = line.slice(6);
-              if (data === "[DONE]") {
-                onComplete?.();
-                return;
-              }
-              try {
-                const parsed = JSON.parse(data);
-                if (parsed.error) {
-                  onError?.(parsed);
-                } else {
-                  onChunk(parsed);
-                }
-              } catch (e) {
-                // Skip invalid JSON
-              }
-            }
-          }
+    void readServerSentEventStream<AiStreamChunk | AiStreamError>(response, {
+      onMessage: (parsed) => {
+        if ("error" in parsed) {
+          onError?.(parsed);
+          return;
         }
-      } catch (error) {
-        if (error.name !== "AbortError") {
-          onError?.({ error: error.message });
-        }
-      } finally {
-        reader.releaseLock();
+
+        onChunk(parsed);
+      },
+      onComplete,
+    }).catch((error: unknown) => {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return;
       }
-    };
 
-    processStream();
+      onError?.({
+        error: error instanceof Error ? error.message : "Unknown stream error",
+      });
+    });
   } catch (error) {
-    onError?.({ error: error.message });
+    onError?.({
+      error: error instanceof Error ? error.message : "Unknown stream error",
+    });
   }
 
   return abortController;

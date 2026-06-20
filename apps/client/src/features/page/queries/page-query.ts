@@ -36,14 +36,17 @@ import { notifications } from "@mantine/notifications";
 import { IPagination, QueryParams } from "@/lib/types.ts";
 import { queryClient } from "@/main.tsx";
 import { buildTree } from "@/features/page/tree/utils";
+import {
+  applyAddTreeNode,
+  applyDeleteTreeNode,
+  applyMoveTreeNode,
+  applyUpdateOneTreeNode,
+} from "@/features/page/tree/utils/tree-event-reducer";
 import { useEffect } from "react";
 import { validate as isValidUuid } from "uuid";
 import { useTranslation } from "react-i18next";
 import { getDefaultStore, useAtom } from "jotai";
-import {
-  dropTreeNodeAtom,
-  treeDataAtom,
-} from "@/features/page/tree/atoms/tree-data-atom";
+import { treeDataAtom } from "@/features/page/tree/atoms/tree-data-atom";
 import { SimpleTree } from "react-arborist";
 import { SpaceTreeNode } from "@/features/page/tree/types";
 import { useQueryEmit } from "@/features/websocket/use-query-emit";
@@ -331,22 +334,23 @@ function syncTreeNodeAfterDatabaseConversion(data: {
     );
   }
 
-  treeApi.update({
-    id: data.pageId,
-    changes: {
+  jotaiStore.set(
+    treeDataAtom,
+    applyUpdateOneTreeNode(currentTreeData, data.pageId, {
       nodeType: "database",
       databaseId: data.databaseId,
       slugId: cachedPage?.slugId ?? treeNode.data.slugId ?? null,
-      name: cachedPage?.title ?? treeNode.data.name,
+      title: cachedPage?.title ?? treeNode.data.name,
       icon: cachedPage?.icon ?? treeNode.data.icon ?? null,
-      status: cachedPage?.customFields?.status ?? treeNode.data.status ?? null,
+      customFields: {
+        status:
+          cachedPage?.customFields?.status ?? treeNode.data.status ?? null,
+      },
       position: cachedPage?.position ?? treeNode.data.position,
       parentPageId: cachedPage?.parentPageId ?? treeNode.data.parentPageId,
       hasChildren: treeNode.data.hasChildren,
-    },
-  });
-
-  jotaiStore.set(treeDataAtom, treeApi.data);
+    }),
+  );
 }
 
 export function useMovePageMutation() {
@@ -544,6 +548,11 @@ export function invalidateOnCreatePage(
     title: data.title ?? "",
   };
 
+  const currentTreeData = jotaiStore.get(treeDataAtom);
+  if (currentTreeData.length > 0) {
+    jotaiStore.set(treeDataAtom, applyAddTreeNode(currentTreeData, newPage));
+  }
+
   const targetSidebarCacheKeys = getParentSidebarCacheKeys(
     data.spaceId,
     parentPageId,
@@ -719,28 +728,14 @@ export function invalidateOnUpdatePage(
 
   const currentTreeData = jotaiStore.get(treeDataAtom);
   if (currentTreeData.length > 0) {
-    const treeApi = new SimpleTree<SpaceTreeNode>(currentTreeData);
-    const changes: Partial<SpaceTreeNode> = {};
-
-    if (title !== undefined) {
-      changes.name = title;
-    }
-
-    if (icon !== undefined) {
-      changes.icon = icon;
-    }
-
-    if (status !== undefined) {
-      changes.status = status;
-    }
-
-    if (treeApi.find(id) && Object.keys(changes).length > 0) {
-      treeApi.update({
-        id,
-        changes,
-      });
-      jotaiStore.set(treeDataAtom, treeApi.data);
-    }
+    jotaiStore.set(
+      treeDataAtom,
+      applyUpdateOneTreeNode(currentTreeData, id, {
+        ...(title !== undefined ? { title } : {}),
+        ...(icon !== undefined ? { icon } : {}),
+        ...(status !== undefined ? { customFields: { status } } : {}),
+      }),
+    );
   }
 
   //update recent changes
@@ -892,6 +887,19 @@ export function updateCacheOnMovePage(
     });
   }
 
+  const currentTreeData = jotaiStore.get(treeDataAtom);
+  if (currentTreeData.length > 0) {
+    jotaiStore.set(
+      treeDataAtom,
+      applyMoveTreeNode(currentTreeData, {
+        id: pageId,
+        oldParentId,
+        parentId: newParentId,
+        node: pageData,
+      }),
+    );
+  }
+
   invalidateDatabaseTreeConsistency();
 }
 
@@ -902,7 +910,10 @@ export function invalidateOnDeletePage(pageId: string) {
    * This ensures cascading deletion of child nodes (including `databaseRow`)
    * and removes visual “ghosts” until the next server-refetch arrives.
    */
-  jotaiStore.set(dropTreeNodeAtom, pageId);
+  const currentTreeData = jotaiStore.get(treeDataAtom);
+  if (currentTreeData.length > 0) {
+    jotaiStore.set(treeDataAtom, applyDeleteTreeNode(currentTreeData, pageId));
+  }
 
   //update all sidebar pages
   const allSideBarMatches = queryClient.getQueriesData({

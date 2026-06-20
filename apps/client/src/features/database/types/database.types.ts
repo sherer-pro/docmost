@@ -1,8 +1,30 @@
-import { DatabasePropertyType } from '@docmost/api-contract';
+import {
+  DatabaseExportFormat,
+  type BatchUpdateDatabaseCellsPayload,
+  type BatchUpdateDatabaseRowOperation,
+  type BatchUpdateDatabaseRowsPayload,
+  type BatchUpdateDatabaseRowsResponse,
+  type CreateDatabasePayload,
+  type CreateDatabasePropertyPayload,
+  type CreateDatabaseRowPayload,
+  type CreateDatabaseViewPayload,
+  type DatabaseCellBatchOperation,
+  type DatabaseMarkdownResponse,
+  type DatabasePropertySettings,
+  type DatabasePropertyType,
+  type DatabaseSelectOption,
+  type DatabaseSelectPropertySettings,
+  type ExportDatabasePayload,
+  type UpdateDatabasePayload,
+  type UpdateDatabasePropertyPayload,
+  type UpdateDatabaseRowPayload,
+  type UpdateDatabaseRowResponse,
+  type UpdateDatabaseViewPayload,
+} from "@docmost/api-contract";
 import type {
   IDatabaseFilterCondition,
   IDatabaseSortState,
-} from '@/features/database/types/database-table.types';
+} from "@/features/database/types/database-table.types";
 
 /**
  * Base database entity from the backend API.
@@ -54,17 +76,11 @@ export interface IDatabaseProperty {
   deletedAt: string | null;
 }
 
-export interface IDatabaseSelectOption {
-  label: string;
-  value: string;
-  color?: string;
-}
+export type IDatabaseSelectOption = DatabaseSelectOption;
 
-export interface IDatabaseSelectPropertySettings {
-  options: IDatabaseSelectOption[];
-}
+export type IDatabaseSelectPropertySettings = DatabaseSelectPropertySettings;
 
-export type IDatabasePropertySettings = IDatabaseSelectPropertySettings | Record<string, never>;
+export type IDatabasePropertySettings = DatabasePropertySettings;
 
 /**
  * Database row entity.
@@ -128,118 +144,63 @@ export interface IDatabaseViewConfig {
 /**
  * Database creation payload.
  */
-export interface ICreateDatabasePayload {
-  spaceId: string;
-  name?: string;
-  description?: string;
-  descriptionContent?: unknown;
-  icon?: string;
-  parentPageId?: string;
-}
+export type ICreateDatabasePayload = CreateDatabasePayload;
 
 /**
  * Database update payload.
  */
-export interface IUpdateDatabasePayload {
-  name?: string;
-  description?: string;
-  descriptionContent?: unknown;
-  icon?: string;
-}
+export type IUpdateDatabasePayload = UpdateDatabasePayload;
 
 /**
  * Database property creation payload.
  */
-export interface ICreateDatabasePropertyPayload {
-  name: string;
-  type: DatabasePropertyType;
-  settings?: IDatabasePropertySettings;
-}
+export type ICreateDatabasePropertyPayload = CreateDatabasePropertyPayload;
 
 /**
  * Database property update payload.
  */
-export interface IUpdateDatabasePropertyPayload {
-  name?: string;
-  type?: DatabasePropertyType;
-  settings?: IDatabasePropertySettings;
-}
+export type IUpdateDatabasePropertyPayload = UpdateDatabasePropertyPayload;
 
 /**
  * Database row creation payload.
  */
-export interface ICreateDatabaseRowPayload {
-  title?: string;
-  icon?: string;
-  parentPageId?: string;
-}
+export type ICreateDatabaseRowPayload = CreateDatabaseRowPayload;
 
 /**
  * Database row rename payload.
  */
-export interface IUpdateDatabaseRowPayload {
-  title: string;
-}
+export type IUpdateDatabaseRowPayload = UpdateDatabaseRowPayload;
 
 /**
  * Database row rename response.
  */
-export interface IUpdateDatabaseRowResponse {
-  pageId: string;
-  title: string;
-  slugId: string;
-}
+export type IUpdateDatabaseRowResponse = UpdateDatabaseRowResponse;
 
 /**
  * Single-cell update operation for the batch API.
  */
-export interface IDatabaseCellBatchOperation {
-  propertyId: string;
-  value?: unknown;
-  attachmentId?: string;
-  operation?: "upsert" | "delete";
-}
+export type IDatabaseCellBatchOperation = DatabaseCellBatchOperation;
 
 /**
  * Row cell batch update payload.
  */
-export interface IBatchUpdateDatabaseCellsPayload {
-  cells: IDatabaseCellBatchOperation[];
-}
+export type IBatchUpdateDatabaseCellsPayload = BatchUpdateDatabaseCellsPayload;
 
-export interface IBatchUpdateDatabaseRowOperation {
-  pageId: string;
-  operation?: 'upsert_cells' | 'delete_row';
-  cells?: IDatabaseCellBatchOperation[];
-}
+export type IBatchUpdateDatabaseRowOperation = BatchUpdateDatabaseRowOperation;
 
-export interface IBatchUpdateDatabaseRowsPayload {
-  rows: IBatchUpdateDatabaseRowOperation[];
-}
+export type IBatchUpdateDatabaseRowsPayload = BatchUpdateDatabaseRowsPayload;
 
-export interface IBatchUpdateDatabaseRowsResponse {
-  updatedRows: string[];
-  deletedRows: string[];
-  failedRows: string[];
-}
+export type IBatchUpdateDatabaseRowsResponse = BatchUpdateDatabaseRowsResponse;
 
 /**
  * Database view creation payload.
  */
-export interface ICreateDatabaseViewPayload {
-  name: string;
-  type: string;
-  config?: unknown;
-}
+export type ICreateDatabaseViewPayload = CreateDatabaseViewPayload;
 
 /**
  * Database view update payload.
  */
-export interface IUpdateDatabaseViewPayload {
-  name?: string;
-  type?: string;
-  config?: unknown;
-}
+export type IUpdateDatabaseViewPayload = UpdateDatabaseViewPayload;
 
 /**
  * Batch cell update response.
@@ -249,19 +210,8 @@ export interface IBatchUpdateDatabaseCellsResponse {
   cells: IDatabaseCell[];
 }
 
+export { DatabaseExportFormat };
 
-export enum DatabaseExportFormat {
-  Markdown = 'markdown',
-  HTML = 'html',
-  PDF = 'pdf',
-}
+export type IExportDatabasePayload = ExportDatabasePayload;
 
-export interface IExportDatabasePayload {
-  format: DatabaseExportFormat;
-  includeChildren?: boolean;
-  includeAttachments?: boolean;
-}
-
-export interface IDatabaseMarkdownResponse {
-  markdown: string;
-}
+export type IDatabaseMarkdownResponse = DatabaseMarkdownResponse;

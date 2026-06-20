@@ -20,9 +20,12 @@ import {
 } from 'class-validator';
 import {
   DATABASE_PROPERTY_TYPES,
+  DatabaseExportFormat,
   type DatabasePropertyType,
 } from '@docmost/api-contract';
 import { JsonValue } from '../../../database/types/db';
+
+export { DatabaseExportFormat } from '@docmost/api-contract';
 
 const MAX_SELECT_PROPERTY_OPTIONS = 100;
 const MAX_DATABASE_BATCH_CELLS = 200;
@@ -100,10 +103,7 @@ function MaxJsonStringifiedLength(
   };
 }
 
-function MaxJsonDepth(
-  maxDepth: number,
-  validationOptions?: ValidationOptions,
-) {
+function MaxJsonDepth(maxDepth: number, validationOptions?: ValidationOptions) {
   return function (object: object, propertyName: string) {
     registerDecorator({
       name: 'maxJsonDepth',
@@ -125,12 +125,6 @@ function MaxJsonDepth(
       },
     });
   };
-}
-
-export enum DatabaseExportFormat {
-  Markdown = 'markdown',
-  HTML = 'html',
-  PDF = 'pdf',
 }
 
 /**
@@ -337,7 +331,6 @@ export class UpdateDatabaseRowDto {
   title: string;
 }
 
-
 export class DatabaseUserCellValueDto {
   @IsUUID()
   id: string;
@@ -439,7 +432,6 @@ export class UpdateDatabaseViewDto {
   @MaxJsonDepth(MAX_DATABASE_VIEW_CONFIG_DEPTH)
   config?: unknown;
 }
-
 
 export class DatabaseRowPageIdDto {
   @IsUUID()
