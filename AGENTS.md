@@ -77,6 +77,10 @@
 - Check `.env.example`, `.env.compose.example`, local `.env`, server validation, and frontend runtime env drift: `pnpm check:env`
 - Regenerate backend route inventory from controllers: `pnpm routes:inventory`
 - Check route inventory drift without rewriting the generated file: `pnpm routes:inventory:check`
+- Run dependency boundary audit (non-blocking report): `pnpm audit:deps`
+- Run dead-code audit (non-blocking report): `pnpm audit:dead-code`
+- Run duplicate-code audit (non-blocking report): `pnpm audit:duplicates`
+- Run all architecture audit reports (non-blocking): `pnpm audit:architecture`
 
 ### Development
 
@@ -103,6 +107,7 @@
 - Backend security subset (share SEO + ZIP traversal/quotas + attachment token/MIME handling + PDF resource allowlist): `pnpm --filter ./apps/server test:security`
 - Frontend smoke test equivalent (build-based temporary target): `pnpm --filter ./apps/client build`
 - Frontend unit tests (Vitest): `pnpm --filter ./apps/client test`
+- Editor extension package-local tests (run through client Vitest): `pnpm test:editor-ext`
 - Frontend security subset (Mermaid + link/embed sanitize/sandbox): `pnpm --filter ./apps/client test:security`
 - Backend coverage: `pnpm --filter ./apps/server test:cov`
 - Backend coverage smoke (fast regression check): `pnpm --filter ./apps/server test:cov:smoke`
@@ -196,6 +201,7 @@ Minimum:
 - Security/audit:
   - baseline: `pnpm audit`
   - additionally account for `overrides` in `pnpm-workspace.yaml` (used to pin vulnerable/conflicting package versions).
+  - architecture reports: `pnpm audit:deps`, `pnpm audit:dead-code`, `pnpm audit:duplicates`, `pnpm audit:architecture` use `dependency-cruiser`, `knip`, and `jscpd`; they are non-blocking local audit commands.
 - Dependency patches: keep and maintain them in `patches/` and in `patchedDependencies` inside `pnpm-workspace.yaml`.
 
 ---
