@@ -8,12 +8,17 @@ Docmost is a pnpm workspace orchestrated by Nx. The main runtime surfaces are:
 - `apps/client` - Vite and React frontend.
 - `packages/editor-ext` - shared Tiptap/ProseMirror editor extensions consumed by the client and server-side rendering paths.
 - `packages/api-contract` - shared API-facing TypeScript contracts used by backend and frontend code.
+- `packages/ee` plus `apps/*/src/ee` - Enterprise Edition code loaded conditionally by app-level EE modules.
 
 The production container uses Node.js 22 and runs the built backend through the root `pnpm start` script. The root `pnpm build` task builds all workspace projects.
 
 ## Backend
 
-The backend is organized around Nest modules under `apps/server/src/core`. Most HTTP controllers are served under the global `/api` prefix; explicit static/share exclusions remain outside that prefix. Domain services own business rules and database writes. Kysely repositories under `apps/server/src/database/repos` encapsulate repeated database access patterns.
+The backend is organized around Nest modules under `apps/server/src/core`. Most HTTP controllers are served under the global `/api` prefix; explicit `robots.txt` and share SEO exclusions remain outside that prefix. Domain services own business rules and database writes. Kysely repositories under `apps/server/src/database/repos` encapsulate repeated database access patterns.
+
+At the application level, `apps/server/src/app.module.ts` wires the core domain module, collaboration and general WebSocket modules, queue, static frontend serving, health, import/export, storage, mail, security headers/version/robots support, telemetry, Redis, database access, and optional Enterprise modules.
+
+`CoreModule` currently groups auth, workspace, page, attachment, comment, search, space, group, share, notification/watcher, MFA, push, database, API key, RAG, page access, dictionary, session, favorite, label, synced block transclusion, and presence functionality.
 
 Security-sensitive cross-cutting behavior is centralized:
 
@@ -30,24 +35,28 @@ Security-sensitive cross-cutting behavior is centralized:
 
 The database schema is managed through Kysely migrations in `apps/server/src/database/migrations`. Generated Kysely types live under `apps/server/src/database/types`.
 
+Import/export controllers live under integration modules but expose canonical page/space routes such as `/api/pages/actions/export`, `/api/pages/actions/import`, and `/api/spaces/actions/export`. Backend route inventory is generated from controllers and should be treated as the route source of truth for documentation.
+
 ## Frontend
 
-The frontend is feature-oriented under `apps/client/src/features`. API calls are kept in feature service modules and use the shared API client. Search, editor, transclusion, database, session, favorite, and dictionary functionality are grouped by feature instead of by technical layer.
+The frontend is feature-oriented under `apps/client/src/features`. API calls are kept in feature service modules and use the shared API client. Attachments, auth, comments, database, dictionary, editor, favorite, file tasks, notifications, page/page-history, presence, search, session, share, space, transclusion, user, websocket, and workspace functionality are grouped by feature instead of by technical layer.
 
 Frontend configuration has two layers:
 
 - Build-time values are loaded in `apps/client/vite.config.ts` from the repository root `.env*` files and injected into `process.env`.
 - Deployment/runtime values are served by the backend from `/window-config.js` and injected into `window.CONFIG` without mutating the built client files on disk.
 
+PWA support is static-file based: `apps/client/public/manifest.json`, `apps/client/public/sw.js`, and `apps/client/public/offline.html` are served as public assets. Locale JSON files live under `apps/client/public/locales/*/translation.json`; user-facing static files outside that tree must be reviewed manually when UI text changes.
+
 ## Collaboration And Editor
 
-Realtime collaboration is handled by the backend collaboration entrypoints and websocket infrastructure. General WebSocket relay accepts only `broadcast` envelopes to authorized rooms and allowlisted nested realtime event operations. Editor node definitions and serializers live partly in `packages/editor-ext` so the client and server can share document behavior.
+Realtime collaboration is handled by the backend collaboration entrypoints and websocket infrastructure. General WebSocket relay accepts only `broadcast` envelopes to authorized `workspace-*`, `space-*`, or `user-*` rooms and allowlisted nested realtime event operations. Authenticated presence events use `presence:update` and `presence:clear`, with Redis-backed state grouped by session where available. Editor node definitions and serializers live partly in `packages/editor-ext` so the client and server can share document behavior.
 
 Synced blocks use `transclusionSource` and `transclusionReference` nodes. Server-side lookup and unsync logic is under `apps/server/src/core/page/transclusion`, while client lookup UI and node views are under `apps/client/src/features/editor/components/transclusion` and `apps/client/src/features/transclusion`.
 
 ## Search
 
-Page search supports the database full-text implementation and an enterprise Typesense implementation. Attachment search uses a trigram index on normalized `attachments.file_name` values and applies the same page access filtering through `PageAccessService`.
+Page search supports the database full-text implementation and the Typesense driver selected by `SEARCH_DRIVER`. Attachment search uses a trigram index on normalized `attachments.file_name` values and applies the same page access filtering through `PageAccessService`.
 
 Generated backend route inventory is maintained by `pnpm routes:inventory` and checked by CI through `pnpm routes:inventory:check`.
 

@@ -48,10 +48,10 @@
 
 ## Documents & Settings
 
-- Added custom document fields: status, owner, stakeholders.
+- Added custom document fields: status, assignee, stakeholders.
 - Added space-level configuration for displaying custom fields.
 - If the “Status” custom field is enabled in a space, the sidebar shows the corresponding indicator.
-- Changes to the “Status”, “Owner”, and “Stakeholder” custom fields are recorded in the page history.
+- Changes to the “Status”, “Assignee”, and “Stakeholder” custom fields are recorded in the page history.
 - Added display of participants viewing or editing a document.
 - Added rich link previews when inserting links.
 - Added the ability to cite a selected fragment in another document.
@@ -83,6 +83,7 @@
 
 - Created `AGENTS.md` to simplify AI-assisted work (runbook/rules/environment variables).
 - Updated test/package infrastructure (Jest aliasing, package overrides/patches).
+- Added generated API route inventory, environment-contract checks, architecture audits, and a local documentation audit report in `docs/documentation-audit-2026-06-20.md`.
 
 ---
 
@@ -158,7 +159,16 @@ Run these commands before opening a PR:
 
 ```bash
 pnpm install --frozen-lockfile
-pnpm build
+pnpm verify:quick
+```
+
+Before release candidates or broad architecture changes, run:
+
+```bash
+pnpm verify:full
+pnpm routes:inventory:check
+pnpm check:env
+pnpm check:comments:en
 ```
 
 For backend changes:
