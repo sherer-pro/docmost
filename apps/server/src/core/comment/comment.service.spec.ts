@@ -1,4 +1,6 @@
+import { ConflictException } from '@nestjs/common';
 import { QueueJob } from '../../integrations/queue/constants';
+import { COMMENT_LIMIT } from './comment.constants';
 import { CommentService } from './comment.service';
 import { CommentType } from './dto/create-comment.dto';
 
@@ -12,12 +14,25 @@ describe('CommentService', () => {
   const createService = () => {
     const commentRepo = {
       findById: jest.fn(),
+      countPageComments: jest.fn().mockResolvedValue(0),
       insertComment: jest.fn(),
       updateComment: jest.fn(),
     } as any;
 
     const pageRepo = {
-      findById: jest.fn(),
+      findById: jest.fn().mockImplementation((pageId: string) =>
+        Promise.resolve({
+          id: pageId,
+          spaceId: 'space-1',
+        }),
+      ),
+    } as any;
+
+    const trx = { trx: true } as any;
+    const db = {
+      transaction: jest.fn(() => ({
+        execute: jest.fn((callback) => callback(trx)),
+      })),
     } as any;
 
     const generalQueue = {
@@ -31,11 +46,20 @@ describe('CommentService', () => {
     const service = new CommentService(
       commentRepo,
       pageRepo,
+      db,
       generalQueue,
       notificationQueue,
     );
 
-    return { service, commentRepo, generalQueue, notificationQueue };
+    return {
+      service,
+      commentRepo,
+      pageRepo,
+      db,
+      trx,
+      generalQueue,
+      notificationQueue,
+    };
   };
 
   it('creates root page-level comment when type=page is provided', async () => {
@@ -67,6 +91,7 @@ describe('CommentService', () => {
         type: CommentType.PAGE,
         parentCommentId: undefined,
       }),
+      expect.anything(),
     );
   });
 
@@ -96,7 +121,71 @@ describe('CommentService', () => {
       expect.objectContaining({
         type: CommentType.INLINE,
       }),
+      expect.anything(),
     );
+  });
+
+  it('allows creating the 500th page comment and serializes the count with a page lock', async () => {
+    const { service, commentRepo, pageRepo, trx } = createService();
+    commentRepo.countPageComments.mockResolvedValue(COMMENT_LIMIT - 1);
+    commentRepo.insertComment.mockResolvedValue({
+      id: 'comment-500',
+      workspaceId: 'workspace-1',
+    });
+
+    await service.create(
+      {
+        userId: 'user-1',
+        workspaceId: 'workspace-1',
+        page: {
+          id: 'page-1',
+          spaceId: 'space-1',
+        } as any,
+      },
+      {
+        pageId: 'page-1',
+        content: createContent(),
+      } as any,
+    );
+
+    expect(pageRepo.findById).toHaveBeenCalledWith('page-1', {
+      withLock: true,
+      trx,
+    });
+    expect(commentRepo.countPageComments).toHaveBeenCalledWith('page-1', trx);
+    expect(commentRepo.insertComment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pageId: 'page-1',
+      }),
+      trx,
+    );
+  });
+
+  it('blocks creating comments after the page reaches the comment limit', async () => {
+    const { service, commentRepo, generalQueue, notificationQueue } =
+      createService();
+    commentRepo.countPageComments.mockResolvedValue(COMMENT_LIMIT);
+
+    await expect(
+      service.create(
+        {
+          userId: 'user-1',
+          workspaceId: 'workspace-1',
+          page: {
+            id: 'page-1',
+            spaceId: 'space-1',
+          } as any,
+        },
+        {
+          pageId: 'page-1',
+          content: createContent(),
+        } as any,
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(commentRepo.insertComment).not.toHaveBeenCalled();
+    expect(generalQueue.add).not.toHaveBeenCalled();
+    expect(notificationQueue.add).not.toHaveBeenCalled();
   });
 
   it('queues only comment notification for root comments', async () => {
@@ -171,6 +260,7 @@ describe('CommentService', () => {
         parentCommentId: 'parent-1',
         type: CommentType.PAGE,
       }),
+      expect.anything(),
     );
   });
 
@@ -208,6 +298,7 @@ describe('CommentService', () => {
       expect.objectContaining({
         type: CommentType.INLINE,
       }),
+      expect.anything(),
     );
   });
 

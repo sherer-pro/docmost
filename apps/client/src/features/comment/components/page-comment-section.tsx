@@ -36,6 +36,7 @@ import {
 } from "@/features/comment/utils/comment-collapse";
 import { useAtomValue } from "jotai";
 import { activeCommentIdAtom } from "@/features/comment/atoms/comment-atom";
+import { COMMENT_LIMIT } from "@/features/comment/comment.constants";
 
 interface PageCommentSectionProps {
   pageId: string;
@@ -51,7 +52,7 @@ function PageCommentSection({ pageId }: PageCommentSectionProps) {
     data: comments,
     isLoading: isCommentsLoading,
     isError,
-  } = useCommentsQuery({ pageId, limit: 100 });
+  } = useCommentsQuery({ pageId, limit: COMMENT_LIMIT });
 
   const createCommentMutation = useCreateCommentMutation();
   const [isReplyLoading, setIsReplyLoading] = useState(false);

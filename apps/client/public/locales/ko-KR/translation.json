@@ -227,6 +227,7 @@
   "Are you sure you want to delete this comment?": "이 댓글을 삭제하시겠습니까?",
   "Comment created successfully": "댓글 생성 완료",
   "Error creating comment": "댓글 생성 오류",
+  "This page has reached the limit of {{limit}} comments.": "이 페이지는 댓글 {{limit}}개 제한에 도달했습니다.",
   "Comment updated successfully": "댓글 업데이트 완료",
   "Failed to update comment": "댓글 업데이트 실패",
   "Comment deleted successfully": "댓글 삭제 완료",

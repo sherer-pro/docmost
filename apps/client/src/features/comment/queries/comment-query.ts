@@ -17,8 +17,31 @@ import {
 import { notifications } from "@mantine/notifications";
 import { IPagination } from "@/lib/types.ts";
 import { useTranslation } from "react-i18next";
+import { COMMENT_LIMIT } from "@/features/comment/comment.constants";
 
 export const RQ_KEY = (pageId: string) => ["comments", pageId];
+
+type TranslationFn = (
+  key: string,
+  options?: {
+    limit: number;
+  },
+) => string;
+
+export function getCreateCommentErrorMessage(
+  error: Error,
+  t: TranslationFn,
+) {
+  const isCommentLimitReached = error["response"]?.status === 409;
+
+  if (isCommentLimitReached) {
+    return t("This page has reached the limit of {{limit}} comments.", {
+      limit: COMMENT_LIMIT,
+    });
+  }
+
+  return t("Error creating comment");
+}
 
 export function useCommentsQuery(
   params: ICommentParams,
@@ -49,7 +72,7 @@ export function useCreateCommentMutation() {
     },
     onError: (error) => {
       notifications.show({
-        message: t("Error creating comment"),
+        message: getCreateCommentErrorMessage(error, t),
         color: "red",
       });
     },
