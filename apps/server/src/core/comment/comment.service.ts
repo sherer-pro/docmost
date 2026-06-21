@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   Logger,
@@ -12,7 +13,6 @@ import { UpdateCommentDto } from './dto/update-comment.dto';
 import { ResolveCommentDto } from './dto/resolve-comment.dto';
 import { CommentRepo } from '@docmost/db/repos/comment/comment.repo';
 import { Comment, Page, User } from '@docmost/db/types/entity.types';
-import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { CursorPaginationResult } from '@docmost/db/pagination/cursor-pagination';
 import { QueueJob, QueueName } from '../../integrations/queue/constants';
@@ -21,6 +21,14 @@ import {
   ICommentNotificationJob,
   ICommentResolvedNotificationJob,
 } from '../../integrations/queue/constants/queue.interface';
+import { InjectKysely } from 'nestjs-kysely';
+import { KyselyDB } from '@docmost/db/types/kysely.types';
+import { executeTx } from '@docmost/db/utils';
+import {
+  COMMENT_LIMIT,
+  COMMENT_LIMIT_REACHED_MESSAGE,
+} from './comment.constants';
+import { CommentPaginationOptions } from './dto/comments.input';
 
 @Injectable()
 export class CommentService {
@@ -29,6 +37,7 @@ export class CommentService {
   constructor(
     private commentRepo: CommentRepo,
     private pageRepo: PageRepo,
+    @InjectKysely() private readonly db: KyselyDB,
     @InjectQueue(QueueName.GENERAL_QUEUE)
     private generalQueue: Queue,
     @InjectQueue(QueueName.NOTIFICATION_QUEUE)
@@ -74,15 +83,37 @@ export class CommentService {
           : CommentType.INLINE;
     }
 
-    const comment = await this.commentRepo.insertComment({
-      pageId: page.id,
-      content: commentContent,
-      selection: createCommentDto?.selection?.substring(0, 250),
-      type: commentType,
-      parentCommentId: createCommentDto?.parentCommentId,
-      creatorId: userId,
-      workspaceId: workspaceId,
-      spaceId: page.spaceId,
+    const comment = await executeTx(this.db, async (trx) => {
+      const lockedPage = await this.pageRepo.findById(page.id, {
+        withLock: true,
+        trx,
+      });
+
+      if (!lockedPage || lockedPage.deletedAt) {
+        throw new NotFoundException('Page not found');
+      }
+
+      const commentCount = await this.commentRepo.countPageComments(
+        page.id,
+        trx,
+      );
+      if (commentCount >= COMMENT_LIMIT) {
+        throw new ConflictException(COMMENT_LIMIT_REACHED_MESSAGE);
+      }
+
+      return this.commentRepo.insertComment(
+        {
+          pageId: page.id,
+          content: commentContent,
+          selection: createCommentDto?.selection?.substring(0, 250),
+          type: commentType,
+          parentCommentId: createCommentDto?.parentCommentId,
+          creatorId: userId,
+          workspaceId: workspaceId,
+          spaceId: page.spaceId,
+        },
+        trx,
+      );
     });
 
     this.generalQueue
@@ -115,7 +146,7 @@ export class CommentService {
 
   async findByPageId(
     pageId: string,
-    pagination: PaginationOptions,
+    pagination: CommentPaginationOptions,
   ): Promise<CursorPaginationResult<Comment>> {
     const page = await this.pageRepo.findById(pageId);
 

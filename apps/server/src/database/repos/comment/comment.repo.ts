@@ -7,11 +7,16 @@ import {
   InsertableComment,
   UpdatableComment,
 } from '@docmost/db/types/entity.types';
-import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import { executeWithCursorPagination } from '@docmost/db/pagination/cursor-pagination';
 import { ExpressionBuilder } from 'kysely';
 import { DB } from '@docmost/db/types/db';
 import { jsonObjectFrom } from 'kysely/helpers/postgres';
+
+type CommentPaginationOptions = {
+  limit: number;
+  cursor?: string;
+  beforeCursor?: string;
+};
 
 export type CommentActor = {
   id: string;
@@ -42,13 +47,17 @@ export class CommentRepo {
       .executeTakeFirst();
   }
 
-  async findPageComments(pageId: string, pagination: PaginationOptions) {
+  async findPageComments(
+    pageId: string,
+    pagination: CommentPaginationOptions,
+  ) {
     const query = this.db
       .selectFrom('comments')
       .selectAll('comments')
       .select((eb) => this.withCreator(eb))
       .select((eb) => this.withResolvedBy(eb))
-      .where('pageId', '=', pageId);
+      .where('pageId', '=', pageId)
+      .where('deletedAt', 'is', null);
 
     return executeWithCursorPagination(query, {
       perPage: pagination.limit,
@@ -97,6 +106,20 @@ export class CommentRepo {
       .values(insertableComment)
       .returningAll()
       .executeTakeFirst();
+  }
+
+  async countPageComments(
+    pageId: string,
+    trx?: KyselyTransaction,
+  ): Promise<number> {
+    const result = await dbOrTx(this.db, trx)
+      .selectFrom('comments')
+      .select((eb) => eb.fn.count('id').as('count'))
+      .where('pageId', '=', pageId)
+      .where('deletedAt', 'is', null)
+      .executeTakeFirst();
+
+    return Number(result?.count ?? 0);
   }
 
   withCreator(eb: ExpressionBuilder<DB, 'comments'>) {

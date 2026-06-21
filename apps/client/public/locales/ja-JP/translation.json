@@ -227,6 +227,7 @@
   "Are you sure you want to delete this comment?": "このコメントを削除してもよろしいですか?",
   "Comment created successfully": "コメントを作成しました",
   "Error creating comment": "コメントの作成に失敗しました",
+  "This page has reached the limit of {{limit}} comments.": "このページは{{limit}}件のコメント上限に達しました。",
   "Comment updated successfully": "コメントを更新しました",
   "Failed to update comment": "コメントの更新に失敗しました",
   "Comment deleted successfully": "コメントを削除しました",

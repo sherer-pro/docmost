@@ -227,6 +227,7 @@
   "Are you sure you want to delete this comment?": "Ви впевнені, що хочете видалити цей коментар?",
   "Comment created successfully": "Коментар успішно створено",
   "Error creating comment": "Помилка при створенні коментаря",
+  "This page has reached the limit of {{limit}} comments.": "Досягнуто ліміт у {{limit}} коментарів для цієї сторінки.",
   "Comment updated successfully": "Коментар успішно оновлено",
   "Failed to update comment": "Не вдалося оновити коментар",
   "Comment deleted successfully": "Коментар успішно видалено",

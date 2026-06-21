@@ -36,6 +36,7 @@ import {
 } from "@/features/comment/utils/comment-collapse";
 import { useAtomValue } from "jotai";
 import { activeCommentIdAtom } from "@/features/comment/atoms/comment-atom";
+import { COMMENT_LIMIT } from "@/features/comment/comment.constants";
 
 function CommentListWithTabs() {
   const { t } = useTranslation();
@@ -55,7 +56,7 @@ function CommentListWithTabs() {
     data: comments,
     isLoading: isCommentsLoading,
     isError,
-  } = useCommentsQuery({ pageId: commentsPageId, limit: 100 });
+  } = useCommentsQuery({ pageId: commentsPageId, limit: COMMENT_LIMIT });
   const createCommentMutation = useCreateCommentMutation();
   const [isLoading, setIsLoading] = useState(false);
   const [showResolved, setShowResolved] = useState(false);

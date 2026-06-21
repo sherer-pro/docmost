@@ -227,6 +227,7 @@
   "Are you sure you want to delete this comment?": "¿Está seguro de que desea eliminar este comentario?",
   "Comment created successfully": "Comentario creado con éxito",
   "Error creating comment": "Error al crear comentario",
+  "This page has reached the limit of {{limit}} comments.": "Esta página ha alcanzado el límite de {{limit}} comentarios.",
   "Comment updated successfully": "Comentario actualizado con éxito",
   "Failed to update comment": "No se pudo actualizar el comentario",
   "Comment deleted successfully": "Comentario eliminado con éxito",
