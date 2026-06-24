@@ -14,7 +14,9 @@ export async function registerServiceWorker(): Promise<void> {
     try {
       const registration = await navigator.serviceWorker.register("/sw.js", {
         scope: "/",
+        updateViaCache: "none",
       });
+      await registration.update();
 
       /**
        * When a new SW version is found, attach an install-state listener.
