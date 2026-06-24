@@ -182,21 +182,25 @@ export default function PageEditor({
       ].join(":"),
     [activeDictionaryTerms, dictionaryEnabled, pageId],
   );
-  const syncDictionaryHighlights = useCallback(() => {
-    if (!editorRef.current) {
-      return;
-    }
+  const syncDictionaryHighlights = useCallback(
+    (targetEditor?: Editor | null) => {
+      const currentEditor = targetEditor ?? editorRef.current;
 
-    const currentEditor = editorRef.current;
-    currentEditor.view.dispatch(
-      currentEditor.state.tr.setMeta(dictionaryHighlightPluginKey, {
-        enabled: dictionaryEnabled,
-        terms: activeDictionaryTerms,
-        matcherIndex: dictionaryMatcherIndex,
-        rebuild: true,
-      }),
-    );
-  }, [activeDictionaryTerms, dictionaryEnabled, dictionaryMatcherIndex]);
+      if (!currentEditor) {
+        return;
+      }
+
+      currentEditor.view.dispatch(
+        currentEditor.state.tr.setMeta(dictionaryHighlightPluginKey, {
+          enabled: dictionaryEnabled,
+          terms: activeDictionaryTerms,
+          matcherIndex: dictionaryMatcherIndex,
+          rebuild: true,
+        }),
+      );
+    },
+    [activeDictionaryTerms, dictionaryEnabled, dictionaryMatcherIndex],
+  );
   // Providers only created once per pageId
   const providersRef = useRef<{
     local: IndexeddbPersistence;
@@ -395,7 +399,7 @@ export default function PageEditor({
       return;
     }
 
-    syncDictionaryHighlights();
+    syncDictionaryHighlights(editor);
   }, [editor, syncDictionaryHighlights]);
 
   const editorIsEditable = useEditorState({
@@ -457,9 +461,14 @@ export default function PageEditor({
       return;
     }
 
-    syncDictionaryHighlights();
-    const animationFrameId = window.requestAnimationFrame(syncDictionaryHighlights);
-    const timeoutId = window.setTimeout(syncDictionaryHighlights, 250);
+    syncDictionaryHighlights(editor);
+    const animationFrameId = window.requestAnimationFrame(() =>
+      syncDictionaryHighlights(editor),
+    );
+    const timeoutId = window.setTimeout(
+      () => syncDictionaryHighlights(editor),
+      250,
+    );
 
     return () => {
       window.cancelAnimationFrame(animationFrameId);

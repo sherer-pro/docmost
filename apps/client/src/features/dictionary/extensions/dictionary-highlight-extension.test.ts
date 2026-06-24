@@ -72,6 +72,73 @@ describe("DictionaryHighlightExtension", () => {
     }
   });
 
+  it("rebuilds decorations immediately when content hydrates after the dictionary", () => {
+    const editor = new Editor({
+      extensions: [StarterKit, DictionaryHighlightExtension],
+      content: "",
+    });
+
+    try {
+      editor.view.dispatch(
+        editor.state.tr.setMeta(dictionaryHighlightPluginKey, {
+          enabled: true,
+          terms: [term],
+        }),
+      );
+
+      expect(
+        dictionaryHighlightPluginKey.getState(editor.state)?.decorations.find(),
+      ).toHaveLength(0);
+
+      editor.commands.setContent("<p>Alpha and Alpha Beta.</p>");
+
+      expect(
+        dictionaryHighlightPluginKey.getState(editor.state)?.decorations.find(),
+      ).toHaveLength(2);
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("keeps rebuilds debounced for non-empty content without existing decorations", () => {
+    vi.useFakeTimers();
+    const editor = new Editor({
+      extensions: [StarterKit, DictionaryHighlightExtension],
+      content: "<p>No match.</p>",
+    });
+
+    try {
+      editor.view.dispatch(
+        editor.state.tr.setMeta(dictionaryHighlightPluginKey, {
+          enabled: true,
+          terms: [term],
+        }),
+      );
+
+      expect(
+        dictionaryHighlightPluginKey.getState(editor.state)?.decorations.find(),
+      ).toHaveLength(0);
+
+      editor.commands.insertContentAt(
+        editor.state.doc.content.size - 1,
+        " Alpha",
+      );
+
+      expect(
+        dictionaryHighlightPluginKey.getState(editor.state)?.decorations.find(),
+      ).toHaveLength(0);
+
+      vi.advanceTimersByTime(250);
+
+      expect(
+        dictionaryHighlightPluginKey.getState(editor.state)?.decorations.find(),
+      ).toHaveLength(1);
+    } finally {
+      editor.destroy();
+      vi.useRealTimers();
+    }
+  });
+
   it("clears decorations when dictionary highlighting is disabled", () => {
     const editor = createEditor();
 
