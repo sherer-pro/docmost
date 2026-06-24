@@ -1,4 +1,4 @@
-const CACHE_VERSION = "docmost-pwa-v1";
+const CACHE_VERSION = "docmost-pwa-v2";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 

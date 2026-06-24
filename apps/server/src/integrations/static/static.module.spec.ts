@@ -1,5 +1,8 @@
 import {
+  getClientStaticCacheControl,
+  IMMUTABLE_ASSET_CACHE_CONTROL,
   injectWindowConfigScript,
+  SERVICE_WORKER_CACHE_CONTROL,
   WINDOW_CONFIG_SCRIPT_TAG,
 } from './static.module';
 
@@ -24,5 +27,28 @@ describe('injectWindowConfigScript', () => {
     expect(injectWindowConfigScript(html)).toBe(
       `<body><div id="root"></div>${WINDOW_CONFIG_SCRIPT_TAG}\n  </body>`,
     );
+  });
+});
+
+describe('getClientStaticCacheControl', () => {
+  it('prevents stale service worker and manifest responses', () => {
+    expect(getClientStaticCacheControl('/app/apps/client/dist/sw.js')).toBe(
+      SERVICE_WORKER_CACHE_CONTROL,
+    );
+    expect(
+      getClientStaticCacheControl('/app/apps/client/dist/manifest.json'),
+    ).toBe(SERVICE_WORKER_CACHE_CONTROL);
+  });
+
+  it('allows long-lived caching for hashed build assets', () => {
+    expect(
+      getClientStaticCacheControl('/app/apps/client/dist/assets/page-abc123.js'),
+    ).toBe(IMMUTABLE_ASSET_CACHE_CONTROL);
+  });
+
+  it('leaves other static files on the default cache policy', () => {
+    expect(
+      getClientStaticCacheControl('/app/apps/client/dist/icons/favicon-32x32.png'),
+    ).toBeNull();
   });
 });

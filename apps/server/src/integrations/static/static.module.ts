@@ -1,6 +1,6 @@
 import { Module, OnModuleInit } from '@nestjs/common';
 import { HttpAdapterHost } from '@nestjs/core';
-import { join } from 'path';
+import { basename, join, normalize, sep } from 'path';
 import * as fs from 'node:fs';
 import fastifyStatic from '@fastify/static';
 import { EnvironmentService } from '../environment/environment.service';
@@ -8,6 +8,11 @@ import { resolveClientDistPath } from '../../common/utils/client-dist-path';
 
 export const WINDOW_CONFIG_PLACEHOLDER = '<!--window-config-->';
 export const WINDOW_CONFIG_SCRIPT_TAG = '<script src="/window-config.js"></script>';
+export const HTML_CACHE_CONTROL = 'no-store, max-age=0';
+export const SERVICE_WORKER_CACHE_CONTROL =
+  'no-cache, no-store, max-age=0, must-revalidate';
+export const IMMUTABLE_ASSET_CACHE_CONTROL =
+  'public, max-age=31536000, immutable';
 
 export function injectWindowConfigScript(html: string): string {
   if (html.includes(WINDOW_CONFIG_PLACEHOLDER)) {
@@ -19,6 +24,20 @@ export function injectWindowConfigScript(html: string): string {
   }
 
   return html.replace('</body>', `${WINDOW_CONFIG_SCRIPT_TAG}\n  </body>`);
+}
+
+export function getClientStaticCacheControl(filePath: string): string | null {
+  const fileName = basename(filePath);
+
+  if (fileName === 'sw.js' || fileName === 'manifest.json') {
+    return SERVICE_WORKER_CACHE_CONTROL;
+  }
+
+  if (normalize(filePath).split(sep).includes('assets')) {
+    return IMMUTABLE_ASSET_CACHE_CONTROL;
+  }
+
+  return null;
 }
 
 @Module({})
@@ -72,6 +91,7 @@ export class StaticModule implements OnModuleInit {
 
       app.get('/window-config.js', (_req: any, res: any) => {
         res
+          .header('Cache-Control', HTML_CACHE_CONTROL)
           .type('application/javascript; charset=utf-8')
           .send(windowConfigScriptContent);
       });
@@ -79,10 +99,20 @@ export class StaticModule implements OnModuleInit {
       await app.register(fastifyStatic, {
         root: clientDistPath,
         wildcard: false,
+        setHeaders(res: any, pathName: string) {
+          const cacheControl = getClientStaticCacheControl(pathName);
+
+          if (cacheControl) {
+            res.setHeader('Cache-Control', cacheControl);
+          }
+        },
       });
 
       app.get(RENDER_PATH, (_req: any, res: any) => {
-        res.type('text/html; charset=utf-8').send(transformedHtml);
+        res
+          .header('Cache-Control', HTML_CACHE_CONTROL)
+          .type('text/html; charset=utf-8')
+          .send(transformedHtml);
       });
 
       return;
