@@ -28,6 +28,27 @@ function createEditor() {
 }
 
 describe("DictionaryHighlightExtension", () => {
+  it("builds initial decorations from configured terms", () => {
+    const editor = new Editor({
+      extensions: [
+        StarterKit,
+        DictionaryHighlightExtension.configure({
+          enabled: true,
+          terms: [term],
+        }),
+      ],
+      content: "<p>Alpha and Alpha Beta.</p>",
+    });
+
+    try {
+      expect(
+        dictionaryHighlightPluginKey.getState(editor.state)?.decorations.find(),
+      ).toHaveLength(2);
+    } finally {
+      editor.destroy();
+    }
+  });
+
   it("updates decorations through plugin metadata without rebuilding extensions", () => {
     const editor = createEditor();
 

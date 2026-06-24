@@ -143,19 +143,60 @@ export default function PageEditor({
     spaceId,
     Boolean(spaceId && dictionaryEnabled),
   );
-  const dictionaryMatcherIndex = useMemo(
-    () => createDictionaryMatcherIndex(dictionaryEnabled ? dictionaryTerms : []),
+  const activeDictionaryTerms = useMemo(
+    () => (dictionaryEnabled ? dictionaryTerms : []),
     [dictionaryEnabled, dictionaryTerms],
+  );
+  const dictionaryMatcherIndex = useMemo(
+    () => createDictionaryMatcherIndex(activeDictionaryTerms),
+    [activeDictionaryTerms],
   );
   const canScroll = useCallback(
     () => Boolean(isComponentMounted.current && editorRef.current),
     [isComponentMounted],
   );
   const { handleScrollTo } = useEditorScroll({ canScroll });
-  const staticExtensions = useMemo(
+  const editorExtensions = useMemo(
     () => [...mainExtensions, DictionaryHighlightExtension],
     [],
   );
+  const staticContentExtensions = useMemo(
+    () => [
+      ...mainExtensions,
+      DictionaryHighlightExtension.configure({
+        enabled: dictionaryEnabled,
+        terms: activeDictionaryTerms,
+        matcherIndex: dictionaryMatcherIndex,
+      }),
+    ],
+    [activeDictionaryTerms, dictionaryEnabled, dictionaryMatcherIndex],
+  );
+  const staticContentKey = useMemo(
+    () =>
+      [
+        pageId,
+        dictionaryEnabled ? "dictionary-on" : "dictionary-off",
+        activeDictionaryTerms
+          .map((term) => `${term.id}:${term.updatedAt}`)
+          .join("|"),
+      ].join(":"),
+    [activeDictionaryTerms, dictionaryEnabled, pageId],
+  );
+  const syncDictionaryHighlights = useCallback(() => {
+    if (!editorRef.current) {
+      return;
+    }
+
+    const currentEditor = editorRef.current;
+    currentEditor.view.dispatch(
+      currentEditor.state.tr.setMeta(dictionaryHighlightPluginKey, {
+        enabled: dictionaryEnabled,
+        terms: activeDictionaryTerms,
+        matcherIndex: dictionaryMatcherIndex,
+        rebuild: true,
+      }),
+    );
+  }, [activeDictionaryTerms, dictionaryEnabled, dictionaryMatcherIndex]);
   // Providers only created once per pageId
   const providersRef = useRef<{
     local: IndexeddbPersistence;
@@ -291,16 +332,16 @@ export default function PageEditor({
 
   const extensions = useMemo(() => {
     if (!providersReady || !providersRef.current || !currentUser?.user) {
-      return staticExtensions;
+      return editorExtensions;
     }
 
     const remoteProvider = providersRef.current.remote;
 
     return [
-      ...staticExtensions,
+      ...editorExtensions,
       ...collabExtensions(remoteProvider, currentUser?.user),
     ];
-  }, [providersReady, currentUser?.user, staticExtensions]);
+  }, [providersReady, currentUser?.user, editorExtensions]);
 
   const editor = useEditor(
     {
@@ -354,14 +395,8 @@ export default function PageEditor({
       return;
     }
 
-    editor.view.dispatch(
-      editor.state.tr.setMeta(dictionaryHighlightPluginKey, {
-        enabled: dictionaryEnabled,
-        terms: dictionaryTerms,
-        matcherIndex: dictionaryMatcherIndex,
-      }),
-    );
-  }, [dictionaryEnabled, dictionaryMatcherIndex, dictionaryTerms, editor]);
+    syncDictionaryHighlights();
+  }, [editor, syncDictionaryHighlights]);
 
   const editorIsEditable = useEditorState({
     editor,
@@ -417,15 +452,33 @@ export default function PageEditor({
     }
   }, [yjsConnectionStatus, isSynced]);
 
+  useEffect(() => {
+    if (showStatic || !isSynced) {
+      return;
+    }
+
+    syncDictionaryHighlights();
+    const animationFrameId = window.requestAnimationFrame(syncDictionaryHighlights);
+    const timeoutId = window.setTimeout(syncDictionaryHighlights, 250);
+
+    return () => {
+      window.cancelAnimationFrame(animationFrameId);
+      window.clearTimeout(timeoutId);
+    };
+  }, [isSynced, showStatic, syncDictionaryHighlights]);
+
   if (showStatic) {
     return (
       <TransclusionLookupProvider>
-        <EditorProvider
-          editable={false}
-          immediatelyRender={true}
-          extensions={staticExtensions}
-          content={content}
-        />
+        <DictionaryHighlightLayer terms={activeDictionaryTerms}>
+          <EditorProvider
+            key={staticContentKey}
+            editable={false}
+            immediatelyRender={true}
+            extensions={staticContentExtensions}
+            content={content}
+          />
+        </DictionaryHighlightLayer>
       </TransclusionLookupProvider>
     );
   }
@@ -434,7 +487,7 @@ export default function PageEditor({
     <TransclusionLookupProvider>
       <div className="editor-container" style={{ position: "relative" }}>
         <div ref={menuContainerRef}>
-          <DictionaryHighlightLayer terms={dictionaryTerms}>
+          <DictionaryHighlightLayer terms={activeDictionaryTerms}>
             <EditorContent
               editor={editor}
               className={clsx(editorContentClassName)}
