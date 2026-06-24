@@ -144,6 +144,7 @@
 - Docker Compose env: copy `.env.compose.example` to `.env`, replace `REPLACE_WITH_LONG_SECRET` and `STRONG_DB_PASSWORD`, then run `docker compose up -d`.
 - Local container startup (prebuilt image): `docker compose up -d`
 - Build the current code into an image: `docker build -t docmost:local .`
+- The production image starts the built backend directly with `node apps/server/dist/apps/server/src/main`; it should not invoke `pnpm start` or Corepack at runtime.
 
 > `DATABASE_URL`, `REDIS_URL`, and `APP_SECRET` are required for migrations, backend startup, and part of the integration functionality (see `.env.example`).
 
@@ -279,6 +280,7 @@ Minimum:
 - Document custom fields are named `status`, `assignee`, and `stakeholders` at the space settings layer, and `status`, `assigneeId`, and `stakeholderIds` on page/database row payloads. Do not document this feature as an `owner` field unless the code is renamed first.
 - PWA static files can contain user-facing strings outside i18next. Review `apps/client/public/offline.html`, `manifest.json`, and `sw.js` when changing offline or notification text.
 - Root `start` script runs **backend prod**, but requires prebuilt `dist` (typically via `pnpm build`).
+- Docker production startup bypasses the root `start` script and Corepack by running the compiled backend entrypoint directly.
 - Backend production entrypoints are resolved from Nx/Nest build output under `apps/server/dist/apps/server/src/*` (not `apps/server/dist/main`).
 - The production image copies runtime workspace package builds for `packages/editor-ext` and `packages/api-contract`; keep their package manifests and `dist` outputs in sync with server imports.
 - Compose uses placeholders (`REPLACE_WITH_LONG_SECRET`, `STRONG_DB_PASSWORD`) in `.env.compose.example` and Docker defaults; do not forget to replace them.

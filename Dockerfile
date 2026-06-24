@@ -57,6 +57,7 @@ WORKDIR /app
 
 ENV PDF_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 ENV PDF_RENDER_TIMEOUT_MS=60000
+ENV NODE_ENV=production
 
 # Copy apps
 COPY --from=builder /app/apps/server/dist /app/apps/server/dist
@@ -100,4 +101,4 @@ VOLUME ["/app/data/storage"]
 
 EXPOSE 3000
 
-CMD ["pnpm", "start"]
+CMD ["node", "apps/server/dist/apps/server/src/main"]
