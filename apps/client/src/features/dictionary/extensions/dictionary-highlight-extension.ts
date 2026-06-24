@@ -17,6 +17,7 @@ interface DictionaryHighlightOptions {
 
 interface DictionaryHighlightPluginState {
   decorations: DecorationSet;
+  hasDecorations: boolean;
   terms: IDictionaryTerm[];
   matcherIndex: DictionaryMatcherIndex;
   enabled: boolean;
@@ -29,6 +30,11 @@ interface DictionaryHighlightPluginMeta extends DictionaryHighlightOptions {
 interface TextNodesWithPosition {
   text: string;
   pos: number;
+}
+
+interface DictionaryDecorationResult {
+  decorations: DecorationSet;
+  hasDecorations: boolean;
 }
 
 const DICTIONARY_HIGHLIGHT_REBUILD_DELAY_MS = 250;
@@ -86,7 +92,7 @@ export const DictionaryHighlightExtension =
                 matcherIndex: this.options.matcherIndex,
               });
             },
-            apply(transaction, oldPluginState, _oldState, newState) {
+            apply(transaction, oldPluginState, oldState, newState) {
               const meta = getDictionaryHighlightMeta(transaction);
               const enabled = meta?.enabled ?? oldPluginState.enabled;
               const terms = meta?.terms ?? oldPluginState.terms;
@@ -99,6 +105,7 @@ export const DictionaryHighlightExtension =
               if (!enabled || matcherIndex.patterns.length === 0) {
                 return {
                   decorations: DecorationSet.empty,
+                  hasDecorations: false,
                   terms,
                   matcherIndex,
                   enabled,
@@ -114,11 +121,23 @@ export const DictionaryHighlightExtension =
               }
 
               if (transaction.docChanged) {
+                if (
+                  !oldPluginState.hasDecorations &&
+                  oldState.doc.textContent.length === 0
+                ) {
+                  return buildPluginState(newState.doc, {
+                    enabled,
+                    terms,
+                    matcherIndex,
+                  });
+                }
+
                 return {
                   decorations: oldPluginState.decorations.map(
                     transaction.mapping,
                     transaction.doc,
                   ),
+                  hasDecorations: oldPluginState.hasDecorations,
                   terms,
                   matcherIndex,
                   enabled,
@@ -130,6 +149,7 @@ export const DictionaryHighlightExtension =
                   transaction.mapping,
                   transaction.doc,
                 ),
+                hasDecorations: oldPluginState.hasDecorations,
                 terms,
                 matcherIndex,
                 enabled,
@@ -218,11 +238,21 @@ function buildPluginState(
   const matcherIndex =
     options.matcherIndex ?? createDictionaryMatcherIndex(options.terms);
 
+  if (!options.enabled || matcherIndex.patterns.length === 0) {
+    return {
+      decorations: DecorationSet.empty,
+      hasDecorations: false,
+      terms: options.terms,
+      matcherIndex,
+      enabled: options.enabled,
+    };
+  }
+
+  const decorationResult = buildDecorations(doc, matcherIndex);
+
   return {
-    decorations:
-      options.enabled && matcherIndex.patterns.length > 0
-        ? buildDecorations(doc, matcherIndex)
-        : DecorationSet.empty,
+    decorations: decorationResult.decorations,
+    hasDecorations: decorationResult.hasDecorations,
     terms: options.terms,
     matcherIndex,
     enabled: options.enabled,
@@ -232,7 +262,7 @@ function buildPluginState(
 function buildDecorations(
   doc: PMNode,
   matcherIndex: DictionaryMatcherIndex,
-): DecorationSet {
+): DictionaryDecorationResult {
   const decorations: Decoration[] = [];
 
   collectTextNodes(doc).forEach((textNode) => {
@@ -254,5 +284,8 @@ function buildDecorations(
     });
   });
 
-  return DecorationSet.create(doc, decorations);
+  return {
+    decorations: DecorationSet.create(doc, decorations),
+    hasDecorations: decorations.length > 0,
+  };
 }
