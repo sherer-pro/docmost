@@ -31,7 +31,7 @@ import { buildPageEditModeByPageId } from "@/features/user/utils/page-edit-mode.
 export function useTreeMutation<T>(spaceId: string) {
   const [data, setData] = useAtom(treeDataAtom);
   const tree = useMemo(() => new SimpleTree<SpaceTreeNode>(data), [data]);
-  const createPageMutation = useCreatePageMutation();
+  const createPageMutation = useCreatePageMutation({ syncTree: false });
   const updatePageMutation = useUpdatePageMutation();
   const removePageMutation = useRemovePageMutation();
   const movePageMutation = useMovePageMutation();
