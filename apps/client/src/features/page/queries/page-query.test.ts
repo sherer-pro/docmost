@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
+import { getDefaultStore } from "jotai";
 import { beforeEach, describe, it, vi } from "vitest";
 import { invalidateOnCreatePage } from "./page-query";
+import { treeDataAtom } from "@/features/page/tree/atoms/tree-data-atom";
+import type { SpaceTreeNode } from "@/features/page/tree/types";
 
 type QueryEntry = {
   key: readonly unknown[];
@@ -72,10 +75,30 @@ vi.mock("@/main.tsx", () => ({
   queryClient: mocks.queryClient,
 }));
 
+const jotaiStore = getDefaultStore();
+
+function createTreeNode(id: string): SpaceTreeNode {
+  return {
+    id,
+    nodeType: "page",
+    slugId: id,
+    databaseId: null,
+    name: id,
+    icon: null,
+    status: null,
+    position: id,
+    hasChildren: false,
+    spaceId: "space-1",
+    parentPageId: null,
+    children: [],
+  };
+}
+
 describe("invalidateOnCreatePage", () => {
   beforeEach(() => {
     mocks.entries.length = 0;
     mocks.invalidateCalls.length = 0;
+    jotaiStore.set(treeDataAtom, []);
   });
 
   it("updates the active root sidebar key that includes page and database node types", () => {
@@ -122,5 +145,67 @@ describe("invalidateOnCreatePage", () => {
         title: "Fresh page",
       },
     ]);
+  });
+
+  it("syncs the local tree by default for external create events", () => {
+    const parent = createTreeNode("parent");
+    jotaiStore.set(treeDataAtom, [parent]);
+
+    invalidateOnCreatePage({
+      id: "child",
+      title: "Child",
+      slugId: "child",
+      icon: null,
+      position: "a0",
+      hasChildren: false,
+      parentPageId: "parent",
+      spaceId: "space-1",
+    });
+
+    const treeData = jotaiStore.get(treeDataAtom);
+    assert.equal(treeData[0].hasChildren, true);
+    assert.equal(treeData[0].children.length, 1);
+    assert.equal(treeData[0].children[0].id, "child");
+  });
+
+  it("can skip local tree sync when the caller inserts the node itself", () => {
+    const parent = createTreeNode("parent");
+    const sidebarKey = [
+      "sidebar-pages",
+      { spaceId: "space-1", pageId: "parent" },
+    ];
+    jotaiStore.set(treeDataAtom, [parent]);
+    mocks.entries.push({
+      key: sidebarKey,
+      data: {
+        pageParams: [undefined],
+        pages: [
+          {
+            items: [],
+            meta: {},
+          },
+        ],
+      },
+    });
+
+    invalidateOnCreatePage(
+      {
+        id: "child",
+        title: "Child",
+        slugId: "child",
+        icon: null,
+        position: "a0",
+        hasChildren: false,
+        parentPageId: "parent",
+        spaceId: "space-1",
+      },
+      { syncTree: false },
+    );
+
+    const treeData = jotaiStore.get(treeDataAtom);
+    assert.equal(treeData[0].hasChildren, false);
+    assert.equal(treeData[0].children.length, 0);
+    assert.equal(mocks.entries[0].data.pages[0].items.length, 1);
+    assert.equal(mocks.entries[0].data.pages[0].items[0].id, "child");
   });
 });

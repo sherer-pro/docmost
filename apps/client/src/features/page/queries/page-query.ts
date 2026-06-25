@@ -127,12 +127,22 @@ function invalidateDatabaseTreeConsistency() {
 
 type SidebarCacheItem = Partial<IPage> & Partial<ISidebarNode>;
 
-export function useCreatePageMutation() {
+type UseCreatePageMutationOptions = {
+  syncTree?: boolean;
+};
+
+type InvalidateOnCreatePageOptions = {
+  syncTree?: boolean;
+};
+
+export function useCreatePageMutation({
+  syncTree = true,
+}: UseCreatePageMutationOptions = {}) {
   const { t } = useTranslation();
   return useMutation<IPage, Error, Partial<IPageInput>>({
     mutationFn: (data) => createPage(data),
     onSuccess: (data) => {
-      invalidateOnCreatePage(data);
+      invalidateOnCreatePage(data, { syncTree });
     },
     onError: (error) => {
       notifications.show({ message: t("Failed to create page"), color: "red" });
@@ -527,6 +537,7 @@ export function useDeletedPagesQuery(
 
 export function invalidateOnCreatePage(
   data: Partial<IPage> & Partial<ISidebarNode>,
+  { syncTree = true }: InvalidateOnCreatePageOptions = {},
 ) {
   if (!data.id || !data.spaceId) {
     return;
@@ -548,9 +559,11 @@ export function invalidateOnCreatePage(
     title: data.title ?? "",
   };
 
-  const currentTreeData = jotaiStore.get(treeDataAtom);
-  if (currentTreeData.length > 0) {
-    jotaiStore.set(treeDataAtom, applyAddTreeNode(currentTreeData, newPage));
+  if (syncTree) {
+    const currentTreeData = jotaiStore.get(treeDataAtom);
+    if (currentTreeData.length > 0) {
+      jotaiStore.set(treeDataAtom, applyAddTreeNode(currentTreeData, newPage));
+    }
   }
 
   const targetSidebarCacheKeys = getParentSidebarCacheKeys(

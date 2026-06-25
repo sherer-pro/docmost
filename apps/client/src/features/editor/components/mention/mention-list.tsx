@@ -50,7 +50,7 @@ const MentionList = forwardRef<any, MentionListProps>((props, ref) => {
   const { t } = useTranslation();
   const [data, setData] = useAtom(treeDataAtom);
   const tree = useMemo(() => new SimpleTree<SpaceTreeNode>(data), [data]);
-  const createPageMutation = useCreatePageMutation();
+  const createPageMutation = useCreatePageMutation({ syncTree: false });
   const emit = useQueryEmit();
   const isInCommentContext = props.isInCommentContext ?? false;
   const mentionQuery = props.query.trim();
