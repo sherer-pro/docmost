@@ -5,11 +5,11 @@ import {
   Title,
   Table,
   Group,
-  ActionIcon,
   Text,
   Alert,
   Stack,
   Menu,
+  ThemeIcon,
 } from "@mantine/core";
 import {
   IconInfoCircle,
@@ -31,6 +31,14 @@ import TrashPageContentModal from "@/features/page/trash/components/trash-page-c
 import { UserInfo } from "@/components/common/user-info.tsx";
 import Paginate from "@/components/common/paginate.tsx";
 import { useCursorPaginate } from "@/hooks/use-cursor-paginate";
+import { AccessibleActionIcon } from "@/components/ui/accessible-action-icon.tsx";
+import { EmptyState } from "@/components/ui/empty-state.tsx";
+import tableClasses from "@/components/ui/responsive-table.module.css";
+import {
+  getResponsiveActionCellProps,
+  getResponsiveMetaCellProps,
+  getResponsivePrimaryCellProps,
+} from "@/components/ui/responsive-table";
 
 export default function Trash() {
   const { t } = useTranslation();
@@ -38,7 +46,8 @@ export default function Trash() {
   const { cursor, goNext, goPrev } = useCursorPaginate();
   const { data: space } = useGetSpaceBySlugQuery(spaceSlug);
   const { data: deletedPages, isLoading } = useDeletedPagesQuery(space?.id, {
-    cursor, limit: 50
+    cursor,
+    limit: 50,
   });
   const restorePageMutation = useRestorePageMutation();
   const deletePageMutation = useDeletePageMutation();
@@ -100,7 +109,7 @@ export default function Trash() {
   };
 
   return (
-    <Container size="lg" py="lg">
+    <Container size="800" pt="xl">
       <Stack gap="md">
         <Group justify="space-between" mb="md">
           <Title order={2}>{t("Trash")}</Title>
@@ -115,8 +124,15 @@ export default function Trash() {
         {isLoading || !deletedPages ? (
           <></>
         ) : hasPages ? (
-          <Table.ScrollContainer minWidth={500}>
-            <Table highlightOnHover verticalSpacing="sm">
+          <Table.ScrollContainer
+            minWidth={500}
+            className={tableClasses.responsiveScroll}
+          >
+            <Table
+              highlightOnHover
+              verticalSpacing="sm"
+              className={tableClasses.responsiveTable}
+            >
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>{t("Page")}</Table.Th>
@@ -132,20 +148,20 @@ export default function Trash() {
               <Table.Tbody>
                 {deletedPages.items.map((page) => (
                   <Table.Tr key={page.id}>
-                    <Table.Td>
+                    <Table.Td {...getResponsivePrimaryCellProps(t("Page"))}>
                       <Group
                         wrap="nowrap"
                         style={{ cursor: "pointer" }}
                         onClick={() => handlePageClick(page)}
                       >
                         {page.icon || (
-                          <ActionIcon
+                          <ThemeIcon
                             variant="transparent"
                             color="gray"
                             size={18}
                           >
                             <IconFileDescription size={18} />
-                          </ActionIcon>
+                          </ThemeIcon>
                         )}
                         <div>
                           <Text fw={500} size="sm" lineClamp={1}>
@@ -154,10 +170,10 @@ export default function Trash() {
                         </div>
                       </Group>
                     </Table.Td>
-                    <Table.Td>
+                    <Table.Td {...getResponsiveMetaCellProps(t("Deleted by"))}>
                       <UserInfo user={page.deletedBy} size="sm" />
                     </Table.Td>
-                    <Table.Td>
+                    <Table.Td {...getResponsiveMetaCellProps(t("Deleted at"))}>
                       <Text
                         c="dimmed"
                         style={{ whiteSpace: "nowrap" }}
@@ -167,12 +183,16 @@ export default function Trash() {
                         {formattedDate(page.deletedAt)}
                       </Text>
                     </Table.Td>
-                    <Table.Td>
+                    <Table.Td {...getResponsiveActionCellProps()}>
                       <Menu>
                         <Menu.Target>
-                          <ActionIcon variant="subtle" color="gray">
+                          <AccessibleActionIcon
+                            label={t("More options")}
+                            variant="subtle"
+                            color="gray"
+                          >
                             <IconDots size={20} stroke={1.5} />
-                          </ActionIcon>
+                          </AccessibleActionIcon>
                         </Menu.Target>
                         <Menu.Dropdown>
                           <Menu.Item
@@ -199,9 +219,7 @@ export default function Trash() {
             </Table>
           </Table.ScrollContainer>
         ) : (
-          <Text ta="center" py="xl" c="dimmed">
-            {t("No pages in trash")}
-          </Text>
+          <EmptyState icon={IconTrash} title={t("No pages in trash")} />
         )}
 
         {deletedPages && deletedPages.items.length > 0 && (

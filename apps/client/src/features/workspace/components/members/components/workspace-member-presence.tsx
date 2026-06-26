@@ -56,7 +56,7 @@ export function MemberPresenceCell({
       variant="subtle"
       color="green"
       px={4}
-      style={{ maxWidth: "100%" }}
+      style={{ maxWidth: "100%", minHeight: 32 }}
     >
       <Group gap={6} wrap="nowrap">
         <IconCircle size={8} fill="currentColor" />

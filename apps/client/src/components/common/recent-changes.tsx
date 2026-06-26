@@ -4,7 +4,7 @@ import {
   UnstyledButton,
   Badge,
   Table,
-  ActionIcon,
+  ThemeIcon,
 } from "@mantine/core";
 import { Link } from "react-router-dom";
 import PageListSkeleton from "@/components/ui/page-list-skeleton.tsx";
@@ -20,6 +20,11 @@ import { EmptyState } from "@/components/ui/empty-state.tsx";
 import { getSpaceUrl } from "@/lib/config.ts";
 import { useTranslation } from "react-i18next";
 import { getInitialsColor } from "@/lib/get-initials-color.ts";
+import tableClasses from "@/components/ui/responsive-table.module.css";
+import {
+  getResponsiveMetaCellProps,
+  getResponsivePrimaryCellProps,
+} from "@/components/ui/responsive-table";
 
 interface Props {
   spaceId?: string;
@@ -47,25 +52,39 @@ export default function RecentChanges({ spaceId }: Props) {
   }
 
   return pages && pages.items.length > 0 ? (
-    <Table.ScrollContainer minWidth={500}>
-      <Table highlightOnHover verticalSpacing="sm">
+    <Table.ScrollContainer
+      minWidth={500}
+      className={tableClasses.responsiveScroll}
+    >
+      <Table
+        highlightOnHover
+        verticalSpacing="sm"
+        className={tableClasses.responsiveTable}
+      >
+        <Table.Thead>
+          <Table.Tr>
+            <Table.Th>{t("Page")}</Table.Th>
+            {!spaceId && <Table.Th>{t("Space")}</Table.Th>}
+            <Table.Th>{t("Date")}</Table.Th>
+          </Table.Tr>
+        </Table.Thead>
         <Table.Tbody>
           {pages.items.map((page) => (
             <Table.Tr key={page.id}>
-              <Table.Td>
+              <Table.Td {...getResponsivePrimaryCellProps(t("Page"))}>
                 <UnstyledButton
                   component={Link}
                   to={buildPageUrl(page?.space.slug, page.slugId, page.title)}
                 >
                   <Group wrap="nowrap">
                     {page.icon || (
-                      <ActionIcon variant="transparent" color="gray" size={18}>
+                      <ThemeIcon variant="transparent" color="gray" size={18}>
                         {isDatabaseNode(page) ? (
                           <IconFileDatabase size={18} />
                         ) : (
                           <IconFileDescription size={18} />
                         )}
-                      </ActionIcon>
+                      </ThemeIcon>
                     )}
 
                     <Text fw={500} size="md" lineClamp={1}>
@@ -75,7 +94,7 @@ export default function RecentChanges({ spaceId }: Props) {
                 </UnstyledButton>
               </Table.Td>
               {!spaceId && (
-                <Table.Td>
+                <Table.Td {...getResponsiveMetaCellProps(t("Space"))}>
                   <Badge
                     color={getInitialsColor(page?.space.name)}
                     variant="light"
@@ -87,7 +106,7 @@ export default function RecentChanges({ spaceId }: Props) {
                   </Badge>
                 </Table.Td>
               )}
-              <Table.Td>
+              <Table.Td {...getResponsiveMetaCellProps(t("Date"))}>
                 <Text
                   c="dimmed"
                   style={{ whiteSpace: "nowrap" }}

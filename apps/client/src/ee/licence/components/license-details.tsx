@@ -5,6 +5,7 @@ import { isLicenseExpired } from "@/ee/licence/license.utils.ts";
 import { useAtom } from "jotai";
 import { useTranslation } from "react-i18next";
 import { workspaceAtom } from "@/features/user/atoms/current-user-atom.ts";
+import tableClasses from "@/components/ui/responsive-table.module.css";
 
 export default function LicenseDetails() {
   const { t } = useTranslation();
@@ -19,12 +20,17 @@ export default function LicenseDetails() {
   }
 
   return (
-    <Table.ScrollContainer minWidth={500} py="md">
+    <Table.ScrollContainer
+      minWidth={500}
+      py="md"
+      className={tableClasses.responsiveScroll}
+    >
       <Table
         variant="vertical"
         verticalSpacing="sm"
         layout="fixed"
         withTableBorder
+        className={tableClasses.responsiveTable}
       >
         <Table.Caption>
           {t("license.details.caption")}

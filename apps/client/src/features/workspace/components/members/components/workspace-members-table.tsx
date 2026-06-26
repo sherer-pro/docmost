@@ -23,6 +23,13 @@ import {
   MemberPresenceCell,
   MemberPresenceDetails,
 } from "@/features/workspace/components/members/components/workspace-member-presence.tsx";
+import tableClasses from "@/components/ui/responsive-table.module.css";
+import {
+  getResponsiveActionCellProps,
+  getResponsiveDetailsCellProps,
+  getResponsiveMetaCellProps,
+  getResponsivePrimaryCellProps,
+} from "@/components/ui/responsive-table";
 
 const ADMIN_TABLE_MIN_WIDTH = 720;
 const MEMBER_TABLE_MIN_WIDTH = 560;
@@ -36,7 +43,8 @@ const columnWidths = {
 
 export default function WorkspaceMembersTable() {
   const { t } = useTranslation();
-  const { search, cursor, goNext, goPrev, handleSearch } = usePaginateAndSearch();
+  const { search, cursor, goNext, goPrev, handleSearch } =
+    usePaginateAndSearch();
   const { data, isLoading } = useWorkspaceMembersQuery({
     cursor,
     limit: 100,
@@ -83,11 +91,13 @@ export default function WorkspaceMembersTable() {
       <SearchInput onSearch={handleSearch} />
       <Table.ScrollContainer
         minWidth={isAdmin ? ADMIN_TABLE_MIN_WIDTH : MEMBER_TABLE_MIN_WIDTH}
+        className={tableClasses.responsiveScroll}
       >
         <Table
           highlightOnHover
           verticalSpacing="sm"
           style={{ tableLayout: "fixed" }}
+          className={tableClasses.responsiveTable}
         >
           <Table.Thead>
             <Table.Tr>
@@ -112,7 +122,7 @@ export default function WorkspaceMembersTable() {
                 return (
                   <React.Fragment key={user.id}>
                     <Table.Tr>
-                      <Table.Td>
+                      <Table.Td {...getResponsivePrimaryCellProps(t("User"))}>
                         <Group gap="sm" wrap="nowrap">
                           <CustomAvatar
                             avatarUrl={user.avatarUrl}
@@ -128,7 +138,10 @@ export default function WorkspaceMembersTable() {
                           </Box>
                         </Group>
                       </Table.Td>
-                      <Table.Td w={columnWidths.status}>
+                      <Table.Td
+                        {...getResponsiveMetaCellProps(t("Status"))}
+                        w={columnWidths.status}
+                      >
                         <Badge
                           variant="light"
                           color={user.deactivatedAt ? "orange" : undefined}
@@ -137,7 +150,10 @@ export default function WorkspaceMembersTable() {
                         </Badge>
                       </Table.Td>
                       {isAdmin && (
-                        <Table.Td w={columnWidths.presence}>
+                        <Table.Td
+                          {...getResponsiveMetaCellProps(t("Presence"))}
+                          w={columnWidths.presence}
+                        >
                           <MemberPresenceCell
                             expanded={isPresenceExpanded}
                             presence={presence}
@@ -149,7 +165,10 @@ export default function WorkspaceMembersTable() {
                           />
                         </Table.Td>
                       )}
-                      <Table.Td w={columnWidths.role}>
+                      <Table.Td
+                        {...getResponsiveMetaCellProps(t("Role"))}
+                        w={columnWidths.role}
+                      >
                         <RoleSelectMenu
                           roles={assignableUserRoles}
                           roleName={getUserRoleLabel(user.role)}
@@ -159,7 +178,10 @@ export default function WorkspaceMembersTable() {
                           disabled={!isAdmin}
                         />
                       </Table.Td>
-                      <Table.Td w={columnWidths.actions}>
+                      <Table.Td
+                        {...getResponsiveActionCellProps()}
+                        w={columnWidths.actions}
+                      >
                         {isAdmin && (
                           <MemberActionMenu
                             userId={user.id}
@@ -169,8 +191,11 @@ export default function WorkspaceMembersTable() {
                       </Table.Td>
                     </Table.Tr>
                     {isPresenceExpanded && (
-                      <Table.Tr>
-                        <Table.Td colSpan={colSpan}>
+                      <Table.Tr data-card-row="details">
+                        <Table.Td
+                          colSpan={colSpan}
+                          {...getResponsiveDetailsCellProps()}
+                        >
                           <Box
                             bg="var(--mantine-color-gray-0)"
                             p="sm"

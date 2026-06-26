@@ -6,6 +6,14 @@
   box-sizing: border-box;
 }
 
+.mobileFieldLabel {
+  margin-bottom: rem(4px);
+  color: var(--mantine-color-dimmed);
+  font-size: var(--mantine-font-size-xs);
+  font-weight: 600;
+  line-height: 1.35;
+}
+
 @media (max-width: 48em) {
   .fullWidthContainer {
     padding-inline: 16px;

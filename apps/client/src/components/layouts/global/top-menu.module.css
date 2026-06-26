@@ -1,0 +1,31 @@
+.target {
+  display: flex;
+  align-items: center;
+  max-width: min(rem(220px), 42vw);
+  min-height: rem(32px);
+  padding-inline: rem(4px);
+  border-radius: var(--mantine-radius-sm);
+}
+
+.targetGroup {
+  min-width: 0;
+}
+
+.workspaceName {
+  max-width: min(rem(150px), 28vw);
+  min-width: 0;
+}
+
+.chevron {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 48em) {
+  .target {
+    max-width: min(rem(156px), 42vw);
+  }
+
+  .workspaceName {
+    max-width: rem(96px);
+  }
+}

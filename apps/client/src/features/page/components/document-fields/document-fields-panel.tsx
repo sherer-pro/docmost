@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   alpha,
-  ActionIcon,
   Badge,
   Checkbox,
   Group,
@@ -56,6 +55,7 @@ import { PAGE_QUERY_KEYS } from "@/features/page/queries/query-keys.ts";
 import { getAllSidebarPages } from "@/features/page/services/page-service.ts";
 import { useQueryEmit } from "@/features/websocket/use-query-emit.ts";
 import classes from "./document-fields-panel.module.css";
+import { AccessibleActionIcon } from "@/components/ui/accessible-action-icon.tsx";
 
 interface DocumentFieldsPanelProps {
   page: IPage;
@@ -250,7 +250,8 @@ export function DocumentFieldsPanel({
 
       const propertyValue = dbFieldValues.get(property.id);
       if (typeof propertyValue === "string") {
-        const normalizedUserId = normalizeDatabaseStringValue(propertyValue).trim();
+        const normalizedUserId =
+          normalizeDatabaseStringValue(propertyValue).trim();
         if (normalizedUserId) {
           ids.push(normalizedUserId);
         }
@@ -282,7 +283,8 @@ export function DocumentFieldsPanel({
   );
 
   const allPageNodes = useMemo(
-    () => allPagesQuery.data?.pages.flatMap((queryPage) => queryPage.items) ?? [],
+    () =>
+      allPagesQuery.data?.pages.flatMap((queryPage) => queryPage.items) ?? [],
     [allPagesQuery.data?.pages],
   );
   const pageReferenceOptions = useMemo(
@@ -420,7 +422,14 @@ export function DocumentFieldsPanel({
     }
 
     if (property.type === "checkbox") {
-      return <Checkbox checked={normalizeDatabaseCheckboxValue(value)} disabled readOnly my={8} />;
+      return (
+        <Checkbox
+          checked={normalizeDatabaseCheckboxValue(value)}
+          disabled
+          readOnly
+          my={8}
+        />
+      );
     }
 
     const textValue = normalizeDatabaseStringValue(value);
@@ -542,11 +551,22 @@ export function DocumentFieldsPanel({
         {t(label)}
       </Text>
       <Tooltip multiline w={300} label={t(tooltip)}>
-        <ActionIcon variant="subtle" size="sm" aria-label={t(ariaLabel)}>
+        <AccessibleActionIcon
+          label={t(ariaLabel)}
+          tooltip={false}
+          variant="subtle"
+          size={32}
+        >
           <IconInfoCircle size={14} />
-        </ActionIcon>
+        </AccessibleActionIcon>
       </Tooltip>
     </Group>
+  );
+
+  const renderMobileFieldLabel = (label: string, translate = true) => (
+    <Text hiddenFrom="sm" className={classes.mobileFieldLabel}>
+      {translate ? t(label) : label}
+    </Text>
   );
 
   if (
@@ -561,12 +581,7 @@ export function DocumentFieldsPanel({
   return (
     <div className={classes.fullWidthContainer}>
       <Group mx={0}>
-        <Paper
-          withBorder
-          radius="md"
-          my="md"
-          mx={0}
-        >
+        <Paper withBorder radius="md" my="md" mx={0}>
           <Table
             withColumnBorders
             verticalSpacing="xs"
@@ -574,229 +589,243 @@ export function DocumentFieldsPanel({
             layout="fixed"
           >
             <Table.Tbody>
-            {enabledFields.status && (
-              <Table.Tr>
-                <Table.Td w="38%" visibleFrom="sm">
-                  {renderFieldLabel(
-                    "Status",
-                    "Shows the current lifecycle stage of the document. Use this field to make progress transparent for everyone in the space.",
-                    "Status info",
-                  )}
-                </Table.Td>
-                <Table.Td>
-                  {isFieldsReadOnly ? (
-                    selectedStatus ? (
-                      <Badge
-                        color={selectedStatus.color}
-                        variant="light"
-                        my={8}
-                      >
-                        {t(selectedStatus.label)}
-                      </Badge>
-                    ) : (
-                      <Text size="sm" c="dimmed" my={8}>
-                        {t("no data")}
-                      </Text>
-                    )
-                  ) : (
-                    <Select
-                      data={STATUS_OPTIONS.map((item) => ({
-                        value: item.value,
-                        label: t(item.label),
-                      }))}
-                      value={fields.status}
-                      onChange={(value) =>
-                        handleFieldChange({
-                          ...fields,
-                          status: (value as PageCustomFieldStatus) || null,
-                        })
-                      }
-                      placeholder={t("Select status")}
-                      clearable
-                      renderOption={renderStatusOption}
-                      styles={statusInputStyles}
-                    />
-                  )}
-                </Table.Td>
-              </Table.Tr>
-            )}
-
-            {enabledFields.assignee && (
-              <Table.Tr>
-                <Table.Td visibleFrom="sm">
-                  {renderFieldLabel(
-                    "Assignee",
-                    "The assignee is the space member responsible for keeping this document up to date and driving work to completion.",
-                    "Assignee info",
-                  )}
-                </Table.Td>
-                <Table.Td>
-                  {isFieldsReadOnly ? (
-                    fields.assigneeId ? (
-                      <Group gap="xs" wrap="nowrap" my={7.5}>
-                        <CustomAvatar
-                          avatarUrl={
-                            knownUsersById[fields.assigneeId]?.avatarUrl
-                          }
-                          size={18}
-                          name={
-                            knownUsersById[fields.assigneeId]?.label ??
-                            fields.assigneeId
-                          }
-                        />
-                        <Text size="sm">
-                          {knownUsersById[fields.assigneeId]?.label ??
-                            fields.assigneeId}
+              {enabledFields.status && (
+                <Table.Tr>
+                  <Table.Td w="38%" visibleFrom="sm">
+                    {renderFieldLabel(
+                      "Status",
+                      "Shows the current lifecycle stage of the document. Use this field to make progress transparent for everyone in the space.",
+                      "Status info",
+                    )}
+                  </Table.Td>
+                  <Table.Td>
+                    {renderMobileFieldLabel("Status")}
+                    {isFieldsReadOnly ? (
+                      selectedStatus ? (
+                        <Badge
+                          color={selectedStatus.color}
+                          variant="light"
+                          my={8}
+                        >
+                          {t(selectedStatus.label)}
+                        </Badge>
+                      ) : (
+                        <Text size="sm" c="dimmed" my={8}>
+                          {t("no data")}
                         </Text>
-                      </Group>
+                      )
                     ) : (
-                      <Text size="sm" c="dimmed" my={7.5}>
-                        {t("no data")}
-                      </Text>
-                    )
-                  ) : (
-                    <AssigneeSpaceMemberSelect
-                      pageId={page.id}
-                      spaceId={page.spaceId}
-                      value={fields.assigneeId}
-                      onChange={(value) =>
-                        handleFieldChange({ ...fields, assigneeId: value })
-                      }
-                      onBlur={() => debouncedSave.flush()}
-                    />
-                  )}
-                </Table.Td>
-              </Table.Tr>
-            )}
+                      <Select
+                        data={STATUS_OPTIONS.map((item) => ({
+                          value: item.value,
+                          label: t(item.label),
+                        }))}
+                        value={fields.status}
+                        onChange={(value) =>
+                          handleFieldChange({
+                            ...fields,
+                            status: (value as PageCustomFieldStatus) || null,
+                          })
+                        }
+                        placeholder={t("Select status")}
+                        clearable
+                        renderOption={renderStatusOption}
+                        styles={statusInputStyles}
+                      />
+                    )}
+                  </Table.Td>
+                </Table.Tr>
+              )}
 
-            {enabledFields.stakeholders && (
-              <Table.Tr>
-                <Table.Td visibleFrom="sm">
-                  {renderFieldLabel(
-                    "Stakeholders",
-                    "Stakeholders are space members who are affected by this document, contribute context, or should be notified about important changes.",
-                    "Stakeholders info",
-                  )}
-                </Table.Td>
-                <Table.Td>
-                  {isFieldsReadOnly ? (
-                    fields.stakeholderIds.length ? (
-                      <Group gap="xs" my={8} flex="wrap">
-                        {fields.stakeholderIds.map((id) => (
-                          <Group key={id} gap="xs" wrap="nowrap">
-                            <CustomAvatar
-                              avatarUrl={knownUsersById[id]?.avatarUrl}
-                              size={18}
-                              name={knownUsersById[id]?.label ?? id}
-                            />
-                            <Text size="sm">
-                              {knownUsersById[id]?.label ?? id}
-                            </Text>
-                          </Group>
-                        ))}
-                      </Group>
+              {enabledFields.assignee && (
+                <Table.Tr>
+                  <Table.Td visibleFrom="sm">
+                    {renderFieldLabel(
+                      "Assignee",
+                      "The assignee is the space member responsible for keeping this document up to date and driving work to completion.",
+                      "Assignee info",
+                    )}
+                  </Table.Td>
+                  <Table.Td>
+                    {renderMobileFieldLabel("Assignee")}
+                    {isFieldsReadOnly ? (
+                      fields.assigneeId ? (
+                        <Group gap="xs" wrap="nowrap" my={7.5}>
+                          <CustomAvatar
+                            avatarUrl={
+                              knownUsersById[fields.assigneeId]?.avatarUrl
+                            }
+                            size={18}
+                            name={
+                              knownUsersById[fields.assigneeId]?.label ??
+                              fields.assigneeId
+                            }
+                          />
+                          <Text size="sm">
+                            {knownUsersById[fields.assigneeId]?.label ??
+                              fields.assigneeId}
+                          </Text>
+                        </Group>
+                      ) : (
+                        <Text size="sm" c="dimmed" my={7.5}>
+                          {t("no data")}
+                        </Text>
+                      )
                     ) : (
-                      <Text size="sm" c="dimmed" my={8}>
-                        {t("no data")}
-                      </Text>
-                    )
-                  ) : (
-                    <StakeholdersSpaceMemberMultiSelect
-                      pageId={page.id}
-                      spaceId={page.spaceId}
-                      value={fields.stakeholderIds}
-                      onChange={(value) =>
-                        handleFieldChange({ ...fields, stakeholderIds: value })
-                      }
-                      onBlur={() => debouncedSave.flush()}
-                    />
-                  )}
-                </Table.Td>
-              </Table.Tr>
-            )}
+                      <AssigneeSpaceMemberSelect
+                        pageId={page.id}
+                        spaceId={page.spaceId}
+                        value={fields.assigneeId}
+                        onChange={(value) =>
+                          handleFieldChange({ ...fields, assigneeId: value })
+                        }
+                        onBlur={() => debouncedSave.flush()}
+                      />
+                    )}
+                  </Table.Td>
+                </Table.Tr>
+              )}
 
-            {dbProperties.map((property) => (
-              <Table.Tr key={`db-field-${property.id}`}>
-                <Table.Td visibleFrom="sm">
-                  <Text size="sm" fw={600}>
-                    {property.name}
-                  </Text>
-                </Table.Td>
-                <Table.Td>
-                  {isFieldsReadOnly ? (
-                    renderReadOnlyDbValue(property)
-                  ) : (
-                    <DatabaseCellRenderer
-                      property={property}
-                      value={dbFieldValues.get(property.id)}
-                      isEditable={isEditable}
-                      isEditing={editingDbPropertyId === property.id}
-                      editingValue={editingDbValue}
-                      spaceId={page.spaceId}
-                      pageOptions={pageReferenceOptions}
-                      pageReferenceUrlById={pageReferenceUrlById}
-                      isPageOptionsLoading={allPagesQuery.isLoading}
-                      onStartEdit={() => {
-                        setEditingDbPropertyId(property.id);
-                        setEditingDbValue(
-                          extractCurrentDatabaseCellValue(
-                            dbFieldValues.get(property.id),
-                          ),
-                        );
-                      }}
-                      onChange={setEditingDbValue}
-                      onSave={(nextValue) => {
-                        const sourceValue =
-                          typeof nextValue === "undefined"
-                            ? editingDbValue
-                            : nextValue;
-                        const normalizedValue = buildCellPayloadValue(
-                          property,
-                          sourceValue,
-                        );
-                        const shouldDelete =
-                          property.type !== "checkbox" &&
-                          (normalizedValue === null ||
-                            normalizedValue === "" ||
-                            (typeof normalizedValue === "object" &&
-                              normalizedValue !== null &&
-                              "id" in normalizedValue &&
-                              !(normalizedValue as { id?: string }).id));
+              {enabledFields.stakeholders && (
+                <Table.Tr>
+                  <Table.Td visibleFrom="sm">
+                    {renderFieldLabel(
+                      "Stakeholders",
+                      "Stakeholders are space members who are affected by this document, contribute context, or should be notified about important changes.",
+                      "Stakeholders info",
+                    )}
+                  </Table.Td>
+                  <Table.Td>
+                    {renderMobileFieldLabel("Stakeholders")}
+                    {isFieldsReadOnly ? (
+                      fields.stakeholderIds.length ? (
+                        <Group gap="xs" my={8} flex="wrap">
+                          {fields.stakeholderIds.map((id) => (
+                            <Group key={id} gap="xs" wrap="nowrap">
+                              <CustomAvatar
+                                avatarUrl={knownUsersById[id]?.avatarUrl}
+                                size={18}
+                                name={knownUsersById[id]?.label ?? id}
+                              />
+                              <Text size="sm">
+                                {knownUsersById[id]?.label ?? id}
+                              </Text>
+                            </Group>
+                          ))}
+                        </Group>
+                      ) : (
+                        <Text size="sm" c="dimmed" my={8}>
+                          {t("no data")}
+                        </Text>
+                      )
+                    ) : (
+                      <StakeholdersSpaceMemberMultiSelect
+                        pageId={page.id}
+                        spaceId={page.spaceId}
+                        value={fields.stakeholderIds}
+                        onChange={(value) =>
+                          handleFieldChange({
+                            ...fields,
+                            stakeholderIds: value,
+                          })
+                        }
+                        onBlur={() => debouncedSave.flush()}
+                      />
+                    )}
+                  </Table.Td>
+                </Table.Tr>
+              )}
 
-                        setDbFieldValues((prev) => {
-                          const map = new Map(prev);
-                          map.set(
-                            property.id,
-                            shouldDelete ? null : normalizedValue,
+              {dbProperties.map((property) => (
+                <Table.Tr key={`db-field-${property.id}`}>
+                  <Table.Td visibleFrom="sm">
+                    <Text size="sm" fw={600}>
+                      {property.name}
+                    </Text>
+                  </Table.Td>
+                  <Table.Td>
+                    {renderMobileFieldLabel(property.name, false)}
+                    {isFieldsReadOnly ? (
+                      renderReadOnlyDbValue(property)
+                    ) : (
+                      <DatabaseCellRenderer
+                        property={property}
+                        value={dbFieldValues.get(property.id)}
+                        isEditable={isEditable}
+                        isEditing={editingDbPropertyId === property.id}
+                        editingValue={editingDbValue}
+                        spaceId={page.spaceId}
+                        pageOptions={pageReferenceOptions}
+                        pageReferenceUrlById={pageReferenceUrlById}
+                        isPageOptionsLoading={allPagesQuery.isLoading}
+                        onStartEdit={() => {
+                          setEditingDbPropertyId(property.id);
+                          setEditingDbValue(
+                            extractCurrentDatabaseCellValue(
+                              dbFieldValues.get(property.id),
+                            ),
                           );
-                          return map;
-                        });
+                        }}
+                        onChange={setEditingDbValue}
+                        onSave={(nextValue) => {
+                          const sourceValue =
+                            typeof nextValue === "undefined"
+                              ? editingDbValue
+                              : nextValue;
+                          const normalizedValue = buildCellPayloadValue(
+                            property,
+                            sourceValue,
+                          );
+                          const shouldDelete =
+                            property.type !== "checkbox" &&
+                            (normalizedValue === null ||
+                              normalizedValue === "" ||
+                              (typeof normalizedValue === "object" &&
+                                normalizedValue !== null &&
+                                "id" in normalizedValue &&
+                                !(normalizedValue as { id?: string }).id));
 
-                        updateDatabaseCellsMutation.mutate({
-                          pageId: page.id,
-                          payload: {
-                            cells: [
-                              {
-                                propertyId: property.id,
-                                value: shouldDelete ? null : normalizedValue,
-                                operation: shouldDelete ? "delete" : "upsert",
+                          setDbFieldValues((prev) => {
+                            const map = new Map(prev);
+                            map.set(
+                              property.id,
+                              shouldDelete ? null : normalizedValue,
+                            );
+                            return map;
+                          });
+
+                          updateDatabaseCellsMutation.mutate(
+                            {
+                              pageId: page.id,
+                              payload: {
+                                cells: [
+                                  {
+                                    propertyId: property.id,
+                                    value: shouldDelete
+                                      ? null
+                                      : normalizedValue,
+                                    operation: shouldDelete
+                                      ? "delete"
+                                      : "upsert",
+                                  },
+                                ],
                               },
-                            ],
-                          },
-                        }, {
-                          onSuccess: () => {
-                            emitDatabaseInvalidation();
-                          },
-                        });
+                            },
+                            {
+                              onSuccess: () => {
+                                emitDatabaseInvalidation();
+                              },
+                            },
+                          );
 
-                        setEditingDbPropertyId(null);
-                        setEditingDbValue("");
-                      }}
-                    />
-                  )}
-                </Table.Td>
-              </Table.Tr>
-            ))}
+                          setEditingDbPropertyId(null);
+                          setEditingDbValue("");
+                        }}
+                      />
+                    )}
+                  </Table.Td>
+                </Table.Tr>
+              ))}
             </Table.Tbody>
           </Table>
         </Paper>
@@ -806,4 +835,3 @@ export function DocumentFieldsPanel({
 }
 
 export default DocumentFieldsPanel;
-

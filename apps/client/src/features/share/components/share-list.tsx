@@ -12,6 +12,13 @@ import { buildSharedPageUrl } from "@/features/page/page.utils.ts";
 import { getPageIcon } from "@/lib";
 import { CustomAvatar } from "@/components/ui/custom-avatar.tsx";
 import classes from "./share.module.css";
+import tableClasses from "@/components/ui/responsive-table.module.css";
+import NoTableResults from "@/components/common/no-table-results.tsx";
+import {
+  getResponsiveActionCellProps,
+  getResponsiveMetaCellProps,
+  getResponsivePrimaryCellProps,
+} from "@/components/ui/responsive-table";
 
 export default function ShareList() {
   const { t } = useTranslation();
@@ -20,8 +27,11 @@ export default function ShareList() {
 
   return (
     <>
-      <Table.ScrollContainer minWidth={500}>
-        <Table verticalSpacing="xs">
+      <Table.ScrollContainer
+        minWidth={500}
+        className={tableClasses.responsiveScroll}
+      >
+        <Table verticalSpacing="xs" className={tableClasses.responsiveTable}>
           <Table.Thead>
             <Table.Tr>
               <Table.Th>{t("Page")}</Table.Th>
@@ -31,56 +41,60 @@ export default function ShareList() {
           </Table.Thead>
 
           <Table.Tbody>
-            {data?.items.map((share: ISharedItem, index: number) => (
-              <Table.Tr key={index}>
-                <Table.Td>
-                  <Anchor
-                    size="sm"
-                    underline="never"
-                    style={{
-                      cursor: "pointer",
-                      color: "var(--mantine-color-text)",
-                    }}
-                    component={Link}
-                    target="_blank"
-                    to={buildSharedPageUrl({
-                      shareId: share.key,
-                      pageTitle: share.page.title,
-                      pageSlugId: share.page.slugId,
-                    })}
-                  >
-                    <Group gap="4" wrap="nowrap">
-                      {getPageIcon(share.page.icon)}
-                      <div className={classes.shareLinkText}>
-                        <Text fz="sm" fw={500} lineClamp={1}>
-                          {share.page.title || t("untitled")}
-                        </Text>
-                      </div>
-                    </Group>
-                  </Anchor>
-                </Table.Td>
-                <Table.Td>
-                  <Group gap="4" wrap="nowrap">
-                    <CustomAvatar
-                      avatarUrl={share.creator?.avatarUrl}
-                      name={share.creator.name}
+            {data?.items.length > 0 ? (
+              data?.items.map((share: ISharedItem, index: number) => (
+                <Table.Tr key={index}>
+                  <Table.Td {...getResponsivePrimaryCellProps(t("Page"))}>
+                    <Anchor
                       size="sm"
-                    />
-                    <Text fz="sm" lineClamp={1}>
-                      {share.creator.name}
+                      underline="never"
+                      style={{
+                        cursor: "pointer",
+                        color: "var(--mantine-color-text)",
+                      }}
+                      component={Link}
+                      target="_blank"
+                      to={buildSharedPageUrl({
+                        shareId: share.key,
+                        pageTitle: share.page.title,
+                        pageSlugId: share.page.slugId,
+                      })}
+                    >
+                      <Group gap="4" wrap="nowrap">
+                        {getPageIcon(share.page.icon)}
+                        <div className={classes.shareLinkText}>
+                          <Text fz="sm" fw={500} lineClamp={1}>
+                            {share.page.title || t("untitled")}
+                          </Text>
+                        </div>
+                      </Group>
+                    </Anchor>
+                  </Table.Td>
+                  <Table.Td {...getResponsiveMetaCellProps(t("Shared by"))}>
+                    <Group gap="4" wrap="nowrap">
+                      <CustomAvatar
+                        avatarUrl={share.creator?.avatarUrl}
+                        name={share.creator.name}
+                        size="sm"
+                      />
+                      <Text fz="sm" lineClamp={1}>
+                        {share.creator.name}
+                      </Text>
+                    </Group>
+                  </Table.Td>
+                  <Table.Td {...getResponsiveMetaCellProps(t("Shared at"))}>
+                    <Text fz="sm" style={{ whiteSpace: "nowrap" }}>
+                      {format(new Date(share.createdAt), "MMM dd, yyyy")}
                     </Text>
-                  </Group>
-                </Table.Td>
-                <Table.Td>
-                  <Text fz="sm" style={{ whiteSpace: "nowrap" }}>
-                    {format(new Date(share.createdAt), "MMM dd, yyyy")}
-                  </Text>
-                </Table.Td>
-                <Table.Td>
-                  <ShareActionMenu share={share} />
-                </Table.Td>
-              </Table.Tr>
-            ))}
+                  </Table.Td>
+                  <Table.Td {...getResponsiveActionCellProps()}>
+                    <ShareActionMenu share={share} />
+                  </Table.Td>
+                </Table.Tr>
+              ))
+            ) : (
+              <NoTableResults colSpan={4} />
+            )}
           </Table.Tbody>
         </Table>
       </Table.ScrollContainer>

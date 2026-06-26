@@ -1,22 +1,29 @@
-import {Container} from "@mantine/core";
+import { Container, Title } from "@mantine/core";
 import SpaceHomeTabs from "@/features/space/components/space-home-tabs.tsx";
-import {useParams} from "react-router-dom";
-import {useGetSpaceBySlugQuery} from "@/features/space/queries/space-query.ts";
-import {getAppName} from "@/lib/config.ts";
-import {Helmet} from "react-helmet-async";
+import { useParams } from "react-router-dom";
+import { useGetSpaceBySlugQuery } from "@/features/space/queries/space-query.ts";
+import { getAppName } from "@/lib/config.ts";
+import { Helmet } from "react-helmet-async";
+import { useTranslation } from "react-i18next";
 
 export default function SpaceHome() {
-    const {spaceSlug} = useParams();
-    const {data: space} = useGetSpaceBySlugQuery(spaceSlug);
+  const { t } = useTranslation();
+  const { spaceSlug } = useParams();
+  const { data: space } = useGetSpaceBySlugQuery(spaceSlug);
 
-    return (
-        <>
-            <Helmet>
-                <title>{space?.name || 'Overview'} - {getAppName()}</title>
-            </Helmet>
-            <Container size={"800"} pt="xl">
-                {space && <SpaceHomeTabs/>}
-            </Container>
-        </>
-    );
+  return (
+    <>
+      <Helmet>
+        <title>
+          {space?.name || t("Overview")} - {getAppName()}
+        </title>
+      </Helmet>
+      <Container size={"800"} pt="xl">
+        <Title order={2} mb="lg">
+          {space?.name || t("Overview")}
+        </Title>
+        {space && <SpaceHomeTabs />}
+      </Container>
+    </>
+  );
 }

@@ -1,13 +1,4 @@
-import {
-  Table,
-  Text,
-  Group,
-  ActionIcon,
-  Box,
-  Space,
-  Menu,
-  Anchor,
-} from "@mantine/core";
+import { Table, Text, Group, Box, Space, Menu, Anchor } from "@mantine/core";
 import { IconDots, IconSettings } from "@tabler/icons-react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -24,6 +15,13 @@ import classes from "./all-spaces-list.module.css";
 import { CustomAvatar } from "@/components/ui/custom-avatar.tsx";
 import { AvatarIconType } from "@/features/attachments/types/attachment.types.ts";
 import { AutoTooltipText } from "@/components/ui/auto-tooltip-text.tsx";
+import { AccessibleActionIcon } from "@/components/ui/accessible-action-icon.tsx";
+import tableClasses from "@/components/ui/responsive-table.module.css";
+import {
+  getResponsiveActionCellProps,
+  getResponsiveMetaCellProps,
+  getResponsivePrimaryCellProps,
+} from "@/components/ui/responsive-table";
 
 interface AllSpacesListProps {
   spaces: any[];
@@ -58,8 +56,15 @@ export default function AllSpacesList({
 
       <Space h="md" />
 
-      <Table.ScrollContainer minWidth={500}>
-        <Table highlightOnHover verticalSpacing="sm">
+      <Table.ScrollContainer
+        minWidth={500}
+        className={tableClasses.responsiveScroll}
+      >
+        <Table
+          highlightOnHover
+          verticalSpacing="sm"
+          className={tableClasses.responsiveTable}
+        >
           <Table.Thead>
             <Table.Tr>
               <Table.Th>{t("Space")}</Table.Th>
@@ -72,7 +77,7 @@ export default function AllSpacesList({
             {spaces.length > 0 ? (
               spaces.map((space) => (
                 <Table.Tr key={space.id}>
-                  <Table.Td>
+                  <Table.Td {...getResponsivePrimaryCellProps(t("Space"))}>
                     <Anchor
                       size="sm"
                       underline="never"
@@ -97,7 +102,13 @@ export default function AllSpacesList({
                           variant="filled"
                           size="md"
                         />
-                        <div style={{ minWidth: 0, overflow: "hidden", maxWidth: 350 }}>
+                        <div
+                          style={{
+                            minWidth: 0,
+                            overflow: "hidden",
+                            maxWidth: 350,
+                          }}
+                        >
                           <AutoTooltipText fz="sm" fw={500} lineClamp={1}>
                             {space.name}
                           </AutoTooltipText>
@@ -110,18 +121,22 @@ export default function AllSpacesList({
                       </Group>
                     </Anchor>
                   </Table.Td>
-                  <Table.Td>
+                  <Table.Td {...getResponsiveMetaCellProps(t("Members"))}>
                     <Text size="sm" style={{ whiteSpace: "nowrap" }}>
                       {formatMemberCount(space.memberCount, t)}
                     </Text>
                   </Table.Td>
-                  <Table.Td>
+                  <Table.Td {...getResponsiveActionCellProps()}>
                     <Group gap="xs" justify="flex-end">
                       <Menu position="bottom-end">
                         <Menu.Target>
-                          <ActionIcon variant="subtle" color="gray">
+                          <AccessibleActionIcon
+                            label={t("More options")}
+                            variant="subtle"
+                            color="gray"
+                          >
                             <IconDots size={16} />
-                          </ActionIcon>
+                          </AccessibleActionIcon>
                         </Menu.Target>
                         <Menu.Dropdown>
                           <Menu.Item

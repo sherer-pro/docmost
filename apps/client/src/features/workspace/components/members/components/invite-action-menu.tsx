@@ -1,4 +1,4 @@
-import { Menu, ActionIcon, Text } from "@mantine/core";
+import { Menu, Text } from "@mantine/core";
 import React from "react";
 import { IconCopy, IconDots, IconSend, IconTrash } from "@tabler/icons-react";
 import { modals } from "@mantine/modals";
@@ -12,6 +12,7 @@ import { useClipboard } from "@/hooks/use-clipboard";
 import { getInviteLink } from "@/features/workspace/services/workspace-service.ts";
 import useUserRole from "@/hooks/use-user-role.tsx";
 import { isCloud } from "@/lib/config.ts";
+import { AccessibleActionIcon } from "@/components/ui/accessible-action-icon.tsx";
 
 interface Props {
   invitationId: string;
@@ -71,9 +72,13 @@ export default function InviteActionMenu({ invitationId }: Props) {
         arrowPosition="center"
       >
         <Menu.Target>
-          <ActionIcon variant="subtle" c="gray">
+          <AccessibleActionIcon
+            label={t("More options")}
+            variant="subtle"
+            c="gray"
+          >
             <IconDots size={20} stroke={2} />
-          </ActionIcon>
+          </AccessibleActionIcon>
         </Menu.Target>
 
         <Menu.Dropdown>

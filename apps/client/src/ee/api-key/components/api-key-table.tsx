@@ -1,4 +1,4 @@
-import { ActionIcon, Group, Menu, Table, Text } from "@mantine/core";
+import { Group, Menu, Table, Text } from "@mantine/core";
 import { IconDots, IconEdit, IconTrash } from "@tabler/icons-react";
 import { format } from "date-fns";
 import { useTranslation } from "react-i18next";
@@ -6,6 +6,13 @@ import { IApiKey } from "@/ee/api-key";
 import { CustomAvatar } from "@/components/ui/custom-avatar.tsx";
 import React from "react";
 import NoTableResults from "@/components/common/no-table-results";
+import { AccessibleActionIcon } from "@/components/ui/accessible-action-icon.tsx";
+import tableClasses from "@/components/ui/responsive-table.module.css";
+import {
+  getResponsiveActionCellProps,
+  getResponsiveMetaCellProps,
+  getResponsivePrimaryCellProps,
+} from "@/components/ui/responsive-table";
 
 interface ApiKeyTableProps {
   apiKeys: IApiKey[];
@@ -37,8 +44,15 @@ export function ApiKeyTable({
   };
 
   return (
-    <Table.ScrollContainer minWidth={500}>
-      <Table highlightOnHover verticalSpacing="sm">
+    <Table.ScrollContainer
+      minWidth={500}
+      className={tableClasses.responsiveScroll}
+    >
+      <Table
+        highlightOnHover
+        verticalSpacing="sm"
+        className={tableClasses.responsiveTable}
+      >
         <Table.Thead>
           <Table.Tr>
             <Table.Th>{t("Name")}</Table.Th>
@@ -55,14 +69,14 @@ export function ApiKeyTable({
           {apiKeys && apiKeys.length > 0 ? (
             apiKeys.map((apiKey: IApiKey, index: number) => (
               <Table.Tr key={index}>
-                <Table.Td>
+                <Table.Td {...getResponsivePrimaryCellProps(t("Name"))}>
                   <Text fz="sm" fw={500}>
                     {apiKey.name}
                   </Text>
                 </Table.Td>
 
                 {showUserColumn && (
-                  <Table.Td>
+                  <Table.Td {...getResponsiveMetaCellProps(t("User"))}>
                     <Group gap="4" wrap="nowrap">
                       <CustomAvatar
                         avatarUrl={apiKey.creator?.avatarUrl}
@@ -77,20 +91,20 @@ export function ApiKeyTable({
                 )}
 
                 {showSpaceColumn && (
-                  <Table.Td>
+                  <Table.Td {...getResponsiveMetaCellProps(t("Space"))}>
                     <Text fz="sm" lineClamp={1}>
                       {apiKey.space?.name || "-"}
                     </Text>
                   </Table.Td>
                 )}
 
-                <Table.Td>
+                <Table.Td {...getResponsiveMetaCellProps(t("Last used"))}>
                   <Text fz="sm" style={{ whiteSpace: "nowrap" }}>
                     {formatDate(apiKey.lastUsedAt)}
                   </Text>
                 </Table.Td>
 
-                <Table.Td>
+                <Table.Td {...getResponsiveMetaCellProps(t("Expires"))}>
                   {apiKey.expiresAt ? (
                     isExpired(apiKey.expiresAt) ? (
                       <Text fz="sm" style={{ whiteSpace: "nowrap" }}>
@@ -108,18 +122,22 @@ export function ApiKeyTable({
                   )}
                 </Table.Td>
 
-                <Table.Td>
+                <Table.Td {...getResponsiveMetaCellProps(t("Created"))}>
                   <Text fz="sm" style={{ whiteSpace: "nowrap" }}>
                     {formatDate(apiKey.createdAt)}
                   </Text>
                 </Table.Td>
 
-                <Table.Td>
+                <Table.Td {...getResponsiveActionCellProps()}>
                   <Menu position="bottom-end" withinPortal>
                     <Menu.Target>
-                      <ActionIcon variant="subtle" color="gray">
+                      <AccessibleActionIcon
+                        label={t("More options")}
+                        variant="subtle"
+                        color="gray"
+                      >
                         <IconDots size={16} />
-                      </ActionIcon>
+                      </AccessibleActionIcon>
                     </Menu.Target>
                     <Menu.Dropdown>
                       {onUpdate && (
@@ -146,6 +164,7 @@ export function ApiKeyTable({
             ))
           ) : (
             <NoTableResults
+              text={t("No API keys found")}
               colSpan={5 + (showUserColumn ? 1 : 0) + (showSpaceColumn ? 1 : 0)}
             />
           )}

@@ -33,7 +33,7 @@ import {
   type TablerIcon,
   IconFileDescription,
 } from '@tabler/icons-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DATABASE_PROPERTY_TYPES, DatabasePropertyType } from '@docmost/api-contract';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -108,6 +108,7 @@ import {
 import { userAtom } from '@/features/user/atoms/current-user-atom.ts';
 import { PageEditMode } from '@/features/user/types/user.types.ts';
 import { buildPageEditModeByPageId } from '@/features/user/utils/page-edit-mode.ts';
+import classes from './database-table-view.module.css';
 
 interface DatabaseTableViewProps {
   databaseId: string;
@@ -1828,9 +1829,7 @@ export function DatabaseTableView({
                   <Menu.Item
                     key={property.id}
                     leftSection={
-                      <ActionIcon variant="subtle" size="sm">
-                        {isVisible ? <IconEye size={14} /> : <IconEyeOff size={14} />}
-                      </ActionIcon>
+                      isVisible ? <IconEye size={14} /> : <IconEyeOff size={14} />
                     }
                     onClick={() =>
                       setVisibleColumns((prev) => ({
@@ -1909,9 +1908,7 @@ export function DatabaseTableView({
                   <Menu.Item
                     key={`mobile-${property.id}`}
                     leftSection={
-                      <ActionIcon variant="subtle" size="sm">
-                        {isVisible ? <IconEye size={14} /> : <IconEyeOff size={14} />}
-                      </ActionIcon>
+                      isVisible ? <IconEye size={14} /> : <IconEyeOff size={14} />
                     }
                     onClick={() =>
                       setVisibleColumns((previousColumns) => ({
@@ -2058,7 +2055,11 @@ export function DatabaseTableView({
             const isCheckboxProperty = selectedFilterProperty?.type === 'checkbox';
 
             return (
-              <Group key={`filter-${index}`} align="end" wrap="nowrap">
+              <Group
+                key={`filter-${index}`}
+                align="end"
+                wrap={isMobileViewport ? 'wrap' : 'nowrap'}
+              >
                 <Select
                   placeholder={t('Field')}
                   data={activeProperties.map((property) => ({
@@ -2236,22 +2237,34 @@ export function DatabaseTableView({
         canCreate={dictionaryEnabled && canManageDictionary}
         enableSelectionCreate
       >
+        {isMobileViewport && (
+          <Text className={classes.scrollHint}>
+            {t('Scroll horizontally to see all columns')}
+          </Text>
+        )}
         <ScrollArea
           viewportRef={tableViewportRef}
-          mah={isMobileViewport ? 420 : 620}
+          mah={isMobileViewport ? 520 : 620}
           onScrollPositionChange={(position) => setTableScrollTop(position.y)}
+          className={classes.databaseScroll}
         >
           <Table
             stickyHeader
             withTableBorder
             withColumnBorders
-            miw={900}
+            miw={isMobileViewport ? 760 : 900}
             layout="auto"
+            className={classes.databaseTable}
+            style={
+              {
+                '--database-title-column-left': isEditable ? '52px' : '0px',
+              } as CSSProperties
+            }
           >
           <Table.Thead>
             <Table.Tr>
               {isEditable && (
-                <Table.Th w={52}>
+                <Table.Th w={52} className={classes.selectColumn}>
                   <Checkbox
                     checked={preparedRows.length > 0 && selectedRowIds.length === preparedRows.length}
                     indeterminate={
@@ -2261,7 +2274,12 @@ export function DatabaseTableView({
                   />
                 </Table.Th>
               )}
-              <Table.Th miw={280}>{t('Title')}</Table.Th>
+              <Table.Th
+                miw={isMobileViewport ? 220 : 280}
+                className={classes.titleColumn}
+              >
+                {t('Title')}
+              </Table.Th>
               {displayedProperties.map((property) => (
                 <Table.Th key={property.id} miw={220}>
                   <Group justify="space-between" gap="xs" wrap="nowrap">
@@ -2379,7 +2397,7 @@ export function DatabaseTableView({
               return (
               <Table.Tr key={row.id}>
                 {isEditable && (
-                  <Table.Td>
+                  <Table.Td className={classes.selectColumn}>
                     <Checkbox
                       checked={Boolean(selectedRowPageIds[row.pageId])}
                       onChange={(event) =>
@@ -2391,7 +2409,7 @@ export function DatabaseTableView({
                     />
                   </Table.Td>
                 )}
-                <Table.Td>
+                <Table.Td className={classes.titleColumn}>
                   <Group justify="space-between" wrap="nowrap" align="flex-start">
                     <div>
                       {renamingRowPageId === row.pageId ? (
@@ -2477,6 +2495,7 @@ export function DatabaseTableView({
                     <Table.Td
                       key={property.id}
                       tabIndex={0}
+                      className={classes.editableCell}
                       onKeyDown={(event) => {
                         if (!isEditing) {
                           return;

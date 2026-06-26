@@ -139,11 +139,12 @@ export default function ShareModal({ pageId: pageIdProp, readOnly = false }: Sha
           style={{ width: "100%" }}
         />
         <ActionIcon
+          aria-label={t("Open public link")}
           component="a"
           variant="default"
           target="_blank"
           href={publicLink}
-          size="sm"
+          size={32}
         >
           <IconExternalLink size={16} />
         </ActionIcon>
@@ -156,7 +157,7 @@ export default function ShareModal({ pageId: pageIdProp, readOnly = false }: Sha
     <Popover width={350} position="bottom" withArrow shadow="md">
       <Popover.Target>
         <Button
-          size="compact-sm"
+          size="sm"
           leftSection={
             <Indicator
               color="green"

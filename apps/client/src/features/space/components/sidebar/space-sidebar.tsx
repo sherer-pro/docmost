@@ -59,6 +59,9 @@ import {
 import { useQueryEmit } from "@/features/websocket/use-query-emit.ts";
 import { PAGE_QUERY_KEYS } from "@/features/page/queries/query-keys.ts";
 
+const PAGE_TREE_ACTION_SIZE = 24;
+const PAGE_TREE_ACTION_ICON_SIZE = 16;
+
 export function SpaceSidebar() {
   const { t } = useTranslation();
   const [tree] = useAtom(treeApiAtom);
@@ -308,23 +311,23 @@ export function SpaceSidebar() {
                 >
                   <ActionIcon
                     variant="default"
-                    size={18}
+                    size={PAGE_TREE_ACTION_SIZE}
                     onClick={handleCreateDatabase}
                     disabled={createDatabaseMutation.isPending}
                     aria-label={t("Create database")}
                   >
-                    <IconHexagonPlus />
+                    <IconHexagonPlus size={PAGE_TREE_ACTION_ICON_SIZE} />
                   </ActionIcon>
                 </Tooltip>
 
                 <Tooltip label={t("Create page")} withArrow position="right">
                   <ActionIcon
                     variant="default"
-                    size={18}
+                    size={PAGE_TREE_ACTION_SIZE}
                     onClick={handleCreatePage}
                     aria-label={t("Create page")}
                   >
-                    <IconSquareRoundedPlus />
+                    <IconSquareRoundedPlus size={PAGE_TREE_ACTION_ICON_SIZE} />
                   </ActionIcon>
                 </Tooltip>
               </Group>
@@ -375,10 +378,10 @@ function SpaceMenu({ spaceId, onSpaceSettings }: SpaceMenuProps) {
           >
             <ActionIcon
               variant="default"
-              size={18}
+              size={PAGE_TREE_ACTION_SIZE}
               aria-label={t("Space menu")}
             >
-              <IconDots />
+              <IconDots size={PAGE_TREE_ACTION_ICON_SIZE} />
             </ActionIcon>
           </Tooltip>
         </Menu.Target>

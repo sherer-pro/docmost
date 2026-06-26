@@ -1,0 +1,53 @@
+.scrollHint {
+  display: none;
+  margin-bottom: rem(6px);
+  color: var(--mantine-color-dimmed);
+  font-size: var(--mantine-font-size-xs);
+  font-weight: 600;
+}
+
+.databaseScroll {
+  width: 100%;
+}
+
+.databaseTable {
+  --database-title-column-left: 0px;
+}
+
+.selectColumn,
+.titleColumn {
+  background: var(--mantine-color-body);
+}
+
+@media (max-width: 48em) {
+  .scrollHint {
+    display: block;
+  }
+
+  .databaseScroll {
+    border: rem(1px) solid
+      light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+    border-radius: var(--mantine-radius-sm);
+  }
+
+  .databaseTable {
+    min-width: rem(760px) !important;
+  }
+
+  .selectColumn {
+    position: sticky;
+    left: 0;
+    z-index: 4;
+  }
+
+  .titleColumn {
+    position: sticky;
+    left: var(--database-title-column-left);
+    z-index: 3;
+    box-shadow: rem(8px) 0 rem(10px) rem(-10px) rgba(0, 0, 0, 0.24);
+  }
+
+  .editableCell {
+    min-width: rem(180px);
+  }
+}
