@@ -59,10 +59,12 @@ export const mantineCssResolver: CSSVariablesResolver = (theme) => ({
     "--input-error-size": theme.fontSizes.sm,
   },
   light: {
+    "--mantine-color-dimmed": "#5f6873",
     "--mantine-color-dark-light-color": "#4e5359",
     "--mantine-color-dark-light-hover": "var(--mantine-color-gray-light-hover)",
   },
   dark: {
+    "--mantine-color-dimmed": "var(--mantine-color-gray-4)",
     "--mantine-color-dark-light-color": "var(--mantine-color-gray-4)",
     "--mantine-color-dark-light-hover": "var(--mantine-color-default-hover)",
   },

@@ -1200,5 +1200,13 @@
   "Synced to": "Synced to",
   "THIS PAGE": "THIS PAGE",
   "ORIGINAL": "ORIGINAL",
-  "sourceReadOnlyHint": "This section is read-only here. Edit it on the <link>original source page</link>."
+  "sourceReadOnlyHint": "This section is read-only here. Edit it on the <link>original source page</link>.",
+  "Scroll horizontally to see all columns": "Scroll horizontally to see all columns",
+  "Group actions": "Group actions",
+  "Create row": "Create row",
+  "Collapse": "Collapse",
+  "Expand": "Expand",
+  "Change icon": "Change icon",
+  "Breadcrumbs": "Breadcrumbs",
+  "Open public link": "Open public link"
 }

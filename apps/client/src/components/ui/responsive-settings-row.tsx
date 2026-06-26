@@ -1,47 +1,33 @@
 import { Box } from "@mantine/core";
 import React from "react";
+import classes from "./responsive-settings-row.module.css";
 
 interface ResponsiveSettingsRowProps {
   children: React.ReactNode;
 }
 
-export function ResponsiveSettingsRow({ children }: ResponsiveSettingsRowProps) {
-  return (
-    <Box
-      style={{
-        display: "flex",
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-        gap: "1rem",
-        flexWrap: "wrap",
-      }}
-    >
-      {children}
-    </Box>
-  );
+export function ResponsiveSettingsRow({
+  children,
+}: ResponsiveSettingsRowProps) {
+  return <Box className={classes.row}>{children}</Box>;
 }
 
 interface ResponsiveSettingsContentProps {
   children: React.ReactNode;
 }
 
-export function ResponsiveSettingsContent({ children }: ResponsiveSettingsContentProps) {
-  return (
-    <Box style={{ flex: "1 1 300px", minWidth: 0 }}>
-      {children}
-    </Box>
-  );
+export function ResponsiveSettingsContent({
+  children,
+}: ResponsiveSettingsContentProps) {
+  return <Box className={classes.content}>{children}</Box>;
 }
 
 interface ResponsiveSettingsControlProps {
   children: React.ReactNode;
 }
 
-export function ResponsiveSettingsControl({ children }: ResponsiveSettingsControlProps) {
-  return (
-    <Box style={{ flex: "0 0 auto" }}>
-      {children}
-    </Box>
-  );
+export function ResponsiveSettingsControl({
+  children,
+}: ResponsiveSettingsControlProps) {
+  return <Box className={classes.control}>{children}</Box>;
 }

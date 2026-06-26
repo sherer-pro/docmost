@@ -1,0 +1,35 @@
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mantine-spacing-md);
+  flex-wrap: wrap;
+  padding-block: rem(2px);
+}
+
+.content {
+  flex: 1 1 rem(300px);
+  min-width: 0;
+}
+
+.control {
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  min-width: min(rem(220px), 100%);
+}
+
+@media (max-width: 48em) {
+  .row {
+    align-items: stretch;
+  }
+
+  .content,
+  .control {
+    flex-basis: 100%;
+  }
+
+  .control {
+    justify-content: flex-start;
+  }
+}

@@ -158,6 +158,13 @@
 - The frontend has places with double quotes (ESLint config/code); there is no globally enforced quote style in the shared root config — **do not perform mass style-only quote rewrites unless explicitly requested**.
 - Indentation in the codebase uses spaces (typically 2).
 
+### Frontend UI conventions
+
+- Non-editor icon-only controls should use `AccessibleActionIcon` from `apps/client/src/components/ui/accessible-action-icon.tsx` or provide an equivalent accessible name and at least a 32px hit target. Dense editor toolbars may stay compact, but each control still needs an accessible label.
+- Simple product/admin data tables should opt into the shared responsive-card pattern in `apps/client/src/components/ui/responsive-table.module.css` and add `data-label` values for mobile cells. Keep database grids as scrollable grids with explicit horizontal-scroll affordance instead of converting them to cards.
+- Use `EmptyState` or `NoTableResults` for empty/loading/no-data surfaces instead of bare centered text when the state is user-facing.
+- When adding reusable UI text, update every `apps/client/public/locales/*/translation.json` file and keep static PWA strings in `apps/client/public/{manifest.json,sw.js,offline.html}` in mind if touched.
+
 ### ESLint practices
 
 - In both backend and frontend, several strict TS rules are intentionally relaxed (`no-explicit-any`, `no-unused-vars`, `ban-ts-comment` are disabled).
