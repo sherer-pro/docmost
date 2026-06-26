@@ -8,14 +8,25 @@ type EmptyStateProps = {
   title: string;
   description?: string;
   action?: ReactNode;
+  compact?: boolean;
 };
 
-export function EmptyState({ icon: Icon, title, description, action }: EmptyStateProps) {
+export function EmptyState({
+  icon: Icon,
+  title,
+  description,
+  action,
+  compact,
+}: EmptyStateProps) {
   return (
-    <div className={classes.root}>
+    <div className={`${classes.root} ${compact ? classes.compact : ""}`}>
       <Stack align="center" gap="xs">
-        <Icon size={40} stroke={1.5} color="var(--mantine-color-dimmed)" />
-        <Text size="lg" fw={500}>
+        <Icon
+          size={compact ? 32 : 40}
+          stroke={1.5}
+          color="var(--mantine-color-dimmed)"
+        />
+        <Text size={compact ? "sm" : "lg"} fw={500}>
           {title}
         </Text>
         {description && (

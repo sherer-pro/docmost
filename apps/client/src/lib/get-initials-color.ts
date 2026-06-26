@@ -10,23 +10,18 @@ function hashCode(input: string) {
   return hash;
 }
 
-const defaultColors: MantineColor[] = [
+export const defaultInitialsColors: MantineColor[] = [
   "blue",
-  "cyan",
   "grape",
-  "green",
   "indigo",
-  "lime",
-  "orange",
   "pink",
   "red",
-  "teal",
   "violet",
 ];
 
 export function getInitialsColor(
   name: string,
-  colors: MantineColor[] = defaultColors,
+  colors: MantineColor[] = defaultInitialsColors,
 ) {
   const hash = hashCode(name);
   const index = Math.abs(hash) % colors.length;

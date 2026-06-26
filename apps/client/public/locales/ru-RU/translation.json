@@ -1200,5 +1200,13 @@
   "Synced to": "Синхронизировано с",
   "THIS PAGE": "ЭТА СТРАНИЦА",
   "ORIGINAL": "ОРИГИНАЛ",
-  "sourceReadOnlyHint": "Этот раздел доступен здесь только для чтения. Редактируйте его на <link>исходной странице</link>."
+  "sourceReadOnlyHint": "Этот раздел доступен здесь только для чтения. Редактируйте его на <link>исходной странице</link>.",
+  "Scroll horizontally to see all columns": "Scroll horizontally to see all columns",
+  "Group actions": "Group actions",
+  "Create row": "Create row",
+  "Collapse": "Collapse",
+  "Expand": "Expand",
+  "Change icon": "Change icon",
+  "Breadcrumbs": "Breadcrumbs",
+  "Open public link": "Open public link"
 }
