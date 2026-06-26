@@ -16,7 +16,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import classes from "@/features/page/tree/styles/tree.module.css";
-import { ActionIcon, Box, Menu, rem, Text } from "@mantine/core";
+import { Box, Menu, rem, Text } from "@mantine/core";
 import {
   IconArrowRight,
   IconChevronDown,
@@ -78,6 +78,7 @@ import { useSpaceQuery } from "@/features/space/queries/space-query.ts";
 import CopyPageModal from "../../components/copy-page-modal.tsx";
 import { duplicatePage } from "../../services/page-service.ts";
 import { StatusIndicator } from "@/components/ui/status-indicator.tsx";
+import { AccessibleActionIcon } from "@/components/ui/accessible-action-icon.tsx";
 import { useCreateDatabaseRowMutation } from "@/features/database/queries/database-table-query.ts";
 import { useUpdateDatabaseMutation } from "@/features/database/queries/database-query.ts";
 import { PAGE_QUERY_KEYS } from "@/features/page/queries/query-keys.ts";
@@ -94,6 +95,8 @@ interface SpaceTreeProps {
 }
 
 const openTreeNodesAtom = atom<OpenMap>({});
+const TREE_ACTION_SIZE = 24;
+const TREE_ACTION_ICON_SIZE = 16;
 
 /**
  * Compares two tree expansion states.
@@ -616,6 +619,7 @@ interface CreateNodeProps {
 }
 
 function CreateNode({ node, treeApi, onExpandTree }: CreateNodeProps) {
+  const { t } = useTranslation();
   const [treeData, setTreeData] = useAtom(treeDataAtom);
   const [user, setUser] = useAtom(userAtom);
   const emit = useQueryEmit();
@@ -712,7 +716,15 @@ function CreateNode({ node, treeApi, onExpandTree }: CreateNodeProps) {
   }
 
   return (
-    <ActionIcon
+    <AccessibleActionIcon
+      aria-label={
+        node.data.nodeType === "database" ? t("Create row") : t("Create page")
+      }
+      label={
+        node.data.nodeType === "database" ? t("Create row") : t("Create page")
+      }
+      minTargetSize={TREE_ACTION_SIZE}
+      size={TREE_ACTION_SIZE}
       variant="transparent"
       c="gray"
       onClick={(e) => {
@@ -721,8 +733,14 @@ function CreateNode({ node, treeApi, onExpandTree }: CreateNodeProps) {
         void handleCreate();
       }}
     >
-      <IconPlus style={{ width: rem(20), height: rem(20) }} stroke={2} />
-    </ActionIcon>
+      <IconPlus
+        style={{
+          width: rem(TREE_ACTION_ICON_SIZE),
+          height: rem(TREE_ACTION_ICON_SIZE),
+        }}
+        stroke={2}
+      />
+    </AccessibleActionIcon>
   );
 }
 
@@ -859,7 +877,11 @@ function NodeMenu({
     <>
       <Menu shadow="md" width={200}>
         <Menu.Target>
-          <ActionIcon
+          <AccessibleActionIcon
+            aria-label={t("Page actions")}
+            label={t("Page actions")}
+            minTargetSize={TREE_ACTION_SIZE}
+            size={TREE_ACTION_SIZE}
             variant="transparent"
             c="gray"
             onClick={(e) => {
@@ -868,10 +890,13 @@ function NodeMenu({
             }}
           >
             <IconDotsVertical
-              style={{ width: rem(20), height: rem(20) }}
+              style={{
+                width: rem(TREE_ACTION_ICON_SIZE),
+                height: rem(TREE_ACTION_ICON_SIZE),
+              }}
               stroke={2}
             />
-          </ActionIcon>
+          </AccessibleActionIcon>
         </Menu.Target>
 
         <Menu.Dropdown>
@@ -1008,6 +1033,7 @@ interface PageArrowProps {
 }
 
 function PageArrow({ node, onExpandTree }: PageArrowProps) {
+  const { t } = useTranslation();
   const hasExpandableChildren =
     (node.children?.length ?? 0) > 0 || !!node.data.hasChildren;
 
@@ -1023,8 +1049,23 @@ function PageArrow({ node, onExpandTree }: PageArrowProps) {
   }, [node.isOpen, onExpandTree]);
 
   return (
-    <ActionIcon
+    <AccessibleActionIcon
+      aria-label={
+        hasExpandableChildren
+          ? node.isOpen
+            ? t("Collapse")
+            : t("Expand")
+          : t("Page")
+      }
+      label={
+        hasExpandableChildren
+          ? node.isOpen
+            ? t("Collapse")
+            : t("Expand")
+          : t("Page")
+      }
       size={20}
+      minTargetSize={20}
       variant="subtle"
       c="gray"
       onClick={(e) => {
@@ -1037,14 +1078,14 @@ function PageArrow({ node, onExpandTree }: PageArrowProps) {
       {node.isInternal ? (
         node.children && (node.children.length > 0 || node.data.hasChildren) ? (
           node.isOpen ? (
-            <IconChevronDown stroke={2} size={18} />
+            <IconChevronDown stroke={2} size={16} />
           ) : (
-            <IconChevronRight stroke={2} size={18} />
+            <IconChevronRight stroke={2} size={16} />
           )
         ) : (
           <IconPointFilled size={8} />
         )
       ) : null}
-    </ActionIcon>
+    </AccessibleActionIcon>
   );
 }

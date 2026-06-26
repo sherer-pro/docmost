@@ -3,13 +3,14 @@ import {
   useGroupQuery,
 } from "@/features/group/queries/group-query";
 import { useNavigate, useParams } from "react-router-dom";
-import { Menu, ActionIcon, Text } from "@mantine/core";
+import { Menu, Text } from "@mantine/core";
 import React from "react";
 import { IconDots, IconTrash } from "@tabler/icons-react";
 import { useDisclosure } from "@mantine/hooks";
 import EditGroupModal from "@/features/group/components/edit-group-modal.tsx";
 import { modals } from "@mantine/modals";
 import { useTranslation } from "react-i18next";
+import { AccessibleActionIcon } from "@/components/ui/accessible-action-icon.tsx";
 
 export default function GroupActionMenu() {
   const { t } = useTranslation();
@@ -53,9 +54,9 @@ export default function GroupActionMenu() {
             arrowPosition="center"
           >
             <Menu.Target>
-              <ActionIcon variant="light">
+              <AccessibleActionIcon label={t("Group actions")} variant="light">
                 <IconDots size={20} stroke={2} />
-              </ActionIcon>
+              </AccessibleActionIcon>
             </Menu.Target>
 
             <Menu.Dropdown>

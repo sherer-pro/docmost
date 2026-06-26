@@ -1,11 +1,4 @@
-import {
-  Group,
-  Table,
-  Text,
-  Menu,
-  ActionIcon,
-  ScrollArea,
-} from "@mantine/core";
+import { Group, Table, Text, Menu } from "@mantine/core";
 import React from "react";
 import { IconDots } from "@tabler/icons-react";
 import { modals } from "@mantine/modals";
@@ -28,6 +21,14 @@ import Paginate from "@/components/common/paginate.tsx";
 import { SearchInput } from "@/components/common/search-input.tsx";
 import { usePaginateAndSearch } from "@/hooks/use-paginate-and-search.tsx";
 import { AutoTooltipText } from "@/components/ui/auto-tooltip-text.tsx";
+import { AccessibleActionIcon } from "@/components/ui/accessible-action-icon.tsx";
+import tableClasses from "@/components/ui/responsive-table.module.css";
+import NoTableResults from "@/components/common/no-table-results.tsx";
+import {
+  getResponsiveActionCellProps,
+  getResponsiveMetaCellProps,
+  getResponsivePrimaryCellProps,
+} from "@/components/ui/responsive-table";
 
 type MemberType = "user" | "group";
 
@@ -41,7 +42,8 @@ export default function SpaceMembersList({
   readOnly,
 }: SpaceMembersProps) {
   const { t } = useTranslation();
-  const { search, cursor, goNext, goPrev, handleSearch } = usePaginateAndSearch();
+  const { search, cursor, goNext, goPrev, handleSearch } =
+    usePaginateAndSearch();
   const { data, isLoading } = useSpaceMembersQuery(spaceId, {
     cursor,
     limit: 100,
@@ -114,21 +116,28 @@ export default function SpaceMembersList({
   return (
     <>
       <SearchInput onSearch={handleSearch} />
-      <ScrollArea h={450}>
-        <Table.ScrollContainer minWidth={500}>
-          <Table highlightOnHover verticalSpacing={8}>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>{t("Member")}</Table.Th>
-                <Table.Th>{t("Role")}</Table.Th>
-                <Table.Th></Table.Th>
-              </Table.Tr>
-            </Table.Thead>
+      <Table.ScrollContainer
+        minWidth={500}
+        className={tableClasses.responsiveScroll}
+      >
+        <Table
+          highlightOnHover
+          verticalSpacing={8}
+          className={tableClasses.responsiveTable}
+        >
+          <Table.Thead>
+            <Table.Tr>
+              <Table.Th>{t("Member")}</Table.Th>
+              <Table.Th>{t("Role")}</Table.Th>
+              <Table.Th></Table.Th>
+            </Table.Tr>
+          </Table.Thead>
 
-            <Table.Tbody>
-              {data?.items.map((member, index) => (
+          <Table.Tbody>
+            {data?.items.length > 0 ? (
+              data?.items.map((member, index) => (
                 <Table.Tr key={index}>
-                  <Table.Td>
+                  <Table.Td {...getResponsivePrimaryCellProps(t("Member"))}>
                     <Group gap="sm" wrap="nowrap">
                       {member.type === "user" && (
                         <CustomAvatar
@@ -139,7 +148,13 @@ export default function SpaceMembersList({
 
                       {member.type === "group" && <IconGroupCircle />}
 
-                      <div style={{ minWidth: 0, overflow: "hidden", maxWidth: 260 }}>
+                      <div
+                        style={{
+                          minWidth: 0,
+                          overflow: "hidden",
+                          maxWidth: 260,
+                        }}
+                      >
                         <AutoTooltipText fz="sm" fw={500}>
                           {member?.name}
                         </AutoTooltipText>
@@ -153,7 +168,7 @@ export default function SpaceMembersList({
                     </Group>
                   </Table.Td>
 
-                  <Table.Td>
+                  <Table.Td {...getResponsiveMetaCellProps(t("Role"))}>
                     <RoleSelectMenu
                       roles={spaceRoleData}
                       roleName={getSpaceRoleLabel(member.role)}
@@ -169,7 +184,7 @@ export default function SpaceMembersList({
                     />
                   </Table.Td>
 
-                  <Table.Td>
+                  <Table.Td {...getResponsiveActionCellProps()}>
                     {!readOnly && (
                       <Menu
                         shadow="xl"
@@ -180,9 +195,13 @@ export default function SpaceMembersList({
                         arrowPosition="center"
                       >
                         <Menu.Target>
-                          <ActionIcon variant="subtle" c="gray">
+                          <AccessibleActionIcon
+                            label={t("More options")}
+                            variant="subtle"
+                            c="gray"
+                          >
                             <IconDots size={20} stroke={2} />
-                          </ActionIcon>
+                          </AccessibleActionIcon>
                         </Menu.Target>
 
                         <Menu.Dropdown>
@@ -198,11 +217,13 @@ export default function SpaceMembersList({
                     )}
                   </Table.Td>
                 </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
-        </Table.ScrollContainer>
-      </ScrollArea>
+              ))
+            ) : (
+              <NoTableResults colSpan={3} />
+            )}
+          </Table.Tbody>
+        </Table>
+      </Table.ScrollContainer>
 
       {data?.items.length > 0 && (
         <Paginate

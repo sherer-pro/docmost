@@ -1,16 +1,22 @@
 import { Group, Table, ThemeIcon } from "@mantine/core";
 import { IconCheck } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
+import tableClasses from "@/components/ui/responsive-table.module.css";
 
 export default function OssDetails() {
   const { t } = useTranslation();
   return (
-    <Table.ScrollContainer minWidth={500} py="md">
+    <Table.ScrollContainer
+      minWidth={500}
+      py="md"
+      className={tableClasses.responsiveScroll}
+    >
       <Table
         variant="vertical"
         verticalSpacing="sm"
         layout="fixed"
         withTableBorder
+        className={tableClasses.responsiveTable}
       >
         <Table.Caption>
           {t("license.oss.caption")}

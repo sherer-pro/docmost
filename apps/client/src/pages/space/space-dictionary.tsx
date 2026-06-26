@@ -1,6 +1,5 @@
 import {
   Accordion,
-  ActionIcon,
   Button,
   Container,
   FileButton,
@@ -53,6 +52,7 @@ import { useSpaceAbility } from "@/features/space/permissions/use-space-ability"
 import { useGetSpaceBySlugQuery } from "@/features/space/queries/space-query";
 import useUserRole from "@/hooks/use-user-role";
 import { getAppName } from "@/lib/config";
+import { AccessibleActionIcon } from "@/components/ui/accessible-action-icon.tsx";
 
 interface DictionaryGroup {
   letter: string;
@@ -374,14 +374,13 @@ export default function SpaceDictionary() {
                   leftSection={<IconSearch size={16} />}
                   rightSection={
                     searchQuery ? (
-                      <ActionIcon
+                      <AccessibleActionIcon
                         variant="subtle"
-                        size="sm"
-                        aria-label={t("Clear search")}
+                        label={t("Clear search")}
                         onClick={() => setSearchQuery("")}
                       >
                         <IconX size={14} />
-                      </ActionIcon>
+                      </AccessibleActionIcon>
                     ) : null
                   }
                   rightSectionPointerEvents={searchQuery ? "all" : "none"}
@@ -518,15 +517,15 @@ export default function SpaceDictionary() {
                               {canManageDictionary && (
                                 <Menu withinPortal position="bottom-end">
                                   <Menu.Target>
-                                    <ActionIcon
+                                    <AccessibleActionIcon
                                       variant="subtle"
-                                      aria-label={t("Dictionary term actions")}
+                                      label={t("Dictionary term actions")}
                                       onClick={(event) =>
                                         event.stopPropagation()
                                       }
                                     >
                                       <IconDotsVertical size={16} />
-                                    </ActionIcon>
+                                    </AccessibleActionIcon>
                                   </Menu.Target>
                                   <Menu.Dropdown>
                                     <Menu.Item

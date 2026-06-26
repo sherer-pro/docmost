@@ -1,4 +1,4 @@
-import { ActionIcon, Group, Menu, Text, Tooltip } from "@mantine/core";
+import { Group, Menu, Text, Tooltip } from "@mantine/core";
 import classes from "./page-header-menu.module.css";
 import {
   IconArrowRight,
@@ -20,7 +20,10 @@ import { historyAtoms } from "@/features/page-history/atoms/history-atoms.ts";
 import { useDisclosure, useHotkeys } from "@mantine/hooks";
 import { useClipboard } from "@/hooks/use-clipboard";
 import { useNavigate, useParams } from "react-router-dom";
-import { useConvertPageToDatabaseMutation, usePageQuery } from "@/features/page/queries/page-query.ts";
+import {
+  useConvertPageToDatabaseMutation,
+  usePageQuery,
+} from "@/features/page/queries/page-query.ts";
 import { useConvertDatabaseToPageMutation } from "@/features/database/queries/database-query.ts";
 import { useDocumentConversionActions } from "@/features/page/hooks/use-document-conversion-actions.ts";
 import { buildDatabaseUrl, buildPageUrl } from "@/features/page/page.utils.ts";
@@ -53,6 +56,7 @@ import { canOpenPageAccessModal } from "@/features/page/utils/page-access-ui.ts"
 import { resolvePageFullWidth } from "@/features/user/utils/page-width.ts";
 import FavoriteButton from "@/features/favorite/components/favorite-button";
 import PageDetailsModal from "@/features/page/components/page-details-modal";
+import { AccessibleActionIcon } from "@/components/ui/accessible-action-icon.tsx";
 
 interface PageHeaderMenuProps {
   readOnly?: boolean;
@@ -92,7 +96,6 @@ export default function PageHeaderMenu({
     ],
   ]);
 
-
   return (
     <>
       <ConnectionWarning />
@@ -108,23 +111,27 @@ export default function PageHeaderMenu({
       <PageDetailsAction readOnly={isReadOnly} />
 
       <Tooltip label={t("Comments")} openDelay={250} withArrow>
-        <ActionIcon
+        <AccessibleActionIcon
+          label={t("Comments")}
+          tooltip={false}
           variant="subtle"
           color="dark"
           onClick={() => toggleAside("comments")}
         >
           <IconMessage size={20} stroke={2} />
-        </ActionIcon>
+        </AccessibleActionIcon>
       </Tooltip>
 
       <Tooltip label={t("Table of contents")} openDelay={250} withArrow>
-        <ActionIcon
+        <AccessibleActionIcon
+          label={t("Table of contents")}
+          tooltip={false}
           variant="subtle"
           color="dark"
           onClick={() => toggleAside("toc")}
         >
           <IconList size={20} stroke={2} />
-        </ActionIcon>
+        </AccessibleActionIcon>
       </Tooltip>
 
       <PageActionMenu
@@ -163,9 +170,15 @@ function PageDetailsAction({ readOnly }: PageHeaderMenuProps) {
   return (
     <>
       <Tooltip label={t("Page details")} openDelay={250} withArrow>
-        <ActionIcon variant="subtle" color="dark" onClick={open}>
+        <AccessibleActionIcon
+          label={t("Page details")}
+          tooltip={false}
+          variant="subtle"
+          color="dark"
+          onClick={open}
+        >
           <IconInfoCircle size={20} stroke={2} />
-        </ActionIcon>
+        </AccessibleActionIcon>
       </Tooltip>
 
       <PageDetailsModal
@@ -178,7 +191,6 @@ function PageDetailsAction({ readOnly }: PageHeaderMenuProps) {
     </>
   );
 }
-
 
 export function ActivePageUsers() {
   const { t } = useTranslation();
@@ -255,10 +267,17 @@ function PageActionMenu({ readOnly, canMoveDeleteShare }: PageActionMenuProps) {
   });
   const pageUpdatedAt = useTimeAgo(page?.updatedAt);
   const navigate = useNavigate();
-  const { mutateAsync: convertPageToDatabaseAsync, isPending: isConvertingPageToDatabase } =
-    useConvertPageToDatabaseMutation();
-  const { mutateAsync: convertDatabaseToPageAsync, isPending: isConvertingDatabaseToPage } =
-    useConvertDatabaseToPageMutation(page?.spaceId, page?.databaseId ?? undefined);
+  const {
+    mutateAsync: convertPageToDatabaseAsync,
+    isPending: isConvertingPageToDatabase,
+  } = useConvertPageToDatabaseMutation();
+  const {
+    mutateAsync: convertDatabaseToPageAsync,
+    isPending: isConvertingDatabaseToPage,
+  } = useConvertDatabaseToPageMutation(
+    page?.spaceId,
+    page?.databaseId ?? undefined,
+  );
 
   const { openConvertDatabaseToPageConfirm } = useDocumentConversionActions({
     spaceSlug,
@@ -327,23 +346,34 @@ function PageActionMenu({ readOnly, canMoveDeleteShare }: PageActionMenuProps) {
     }
 
     modals.openConfirmModal({
-      title: t('Convert page to database?'),
+      title: t("Convert page to database?"),
       centered: true,
       children: (
         <Text size="sm">
           {t(
-            'The current page will become a database root. Existing child pages will be attached as database rows and keep their nested structure.',
+            "The current page will become a database root. Existing child pages will be attached as database rows and keep their nested structure.",
           )}
         </Text>
       ),
-      labels: { confirm: t('Convert to database'), cancel: t('Cancel') },
-      confirmProps: { loading: isConvertingPageToDatabase, leftSection: <IconDatabase size={14} /> },
+      labels: { confirm: t("Convert to database"), cancel: t("Cancel") },
+      confirmProps: {
+        loading: isConvertingPageToDatabase,
+        leftSection: <IconDatabase size={14} />,
+      },
       onConfirm: async () => {
         const result = await convertPageToDatabaseAsync(page.id);
-        notifications.show({ message: t('Page converted to database') });
+        notifications.show({ message: t("Page converted to database") });
 
-        const convertedDatabasePage = await getPageById({ pageId: result.pageId });
-        navigate(buildDatabaseUrl(spaceSlug, convertedDatabasePage.slugId, convertedDatabasePage.title));
+        const convertedDatabasePage = await getPageById({
+          pageId: result.pageId,
+        });
+        navigate(
+          buildDatabaseUrl(
+            spaceSlug,
+            convertedDatabasePage.slugId,
+            convertedDatabasePage.title,
+          ),
+        );
       },
     });
   };
@@ -359,9 +389,13 @@ function PageActionMenu({ readOnly, canMoveDeleteShare }: PageActionMenuProps) {
         arrowPosition="center"
       >
         <Menu.Target>
-          <ActionIcon variant="subtle" color="dark">
+          <AccessibleActionIcon
+            label={t("Open menu")}
+            variant="subtle"
+            color="dark"
+          >
             <IconDots size={20} />
-          </ActionIcon>
+          </AccessibleActionIcon>
         </Menu.Target>
 
         <Menu.Dropdown>
@@ -390,14 +424,14 @@ function PageActionMenu({ readOnly, canMoveDeleteShare }: PageActionMenuProps) {
               </Menu.Item>
               {!page?.databaseId && (
                 <>
-                <Menu.Divider />
-                <Menu.Item
-                  leftSection={<IconArrowsExchange size={16} />}
-                  onClick={handleConvertToDatabase}
-                  disabled={isConvertingPageToDatabase}
-                >
-                  {t('Convert to database')}
-                </Menu.Item>
+                  <Menu.Divider />
+                  <Menu.Item
+                    leftSection={<IconArrowsExchange size={16} />}
+                    onClick={handleConvertToDatabase}
+                    disabled={isConvertingPageToDatabase}
+                  >
+                    {t("Convert to database")}
+                  </Menu.Item>
                 </>
               )}
             </>
@@ -411,7 +445,7 @@ function PageActionMenu({ readOnly, canMoveDeleteShare }: PageActionMenuProps) {
                 onClick={handleConvertToPage}
                 disabled={isConvertingDatabaseToPage}
               >
-                {t('Convert to page')}
+                {t("Convert to page")}
               </Menu.Item>
             </>
           )}
@@ -533,9 +567,15 @@ export function ConnectionWarning() {
       openDelay={250}
       withArrow
     >
-      <ActionIcon variant="default" c="red" style={{ border: "none" }}>
+      <AccessibleActionIcon
+        label={t("Real-time editor connection lost. Retrying...")}
+        tooltip={false}
+        variant="default"
+        c="red"
+        style={{ border: "none" }}
+      >
         <IconWifiOff size={20} stroke={2} />
-      </ActionIcon>
+      </AccessibleActionIcon>
     </Tooltip>
   );
 }

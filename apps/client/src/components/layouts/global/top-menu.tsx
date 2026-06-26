@@ -26,6 +26,7 @@ import useAuth from "@/features/auth/hooks/use-auth.ts";
 import { CustomAvatar } from "@/components/ui/custom-avatar.tsx";
 import { useTranslation } from "react-i18next";
 import { AvatarIconType } from "@/features/attachments/types/attachment.types.ts";
+import classes from "./top-menu.module.css";
 
 export default function TopMenu() {
   const { t } = useTranslation();
@@ -43,8 +44,8 @@ export default function TopMenu() {
   return (
     <Menu width={250} position="bottom-end" withArrow shadow={"lg"}>
       <Menu.Target>
-        <UnstyledButton>
-          <Group gap={7} wrap={"nowrap"}>
+        <UnstyledButton aria-label={t("Workspace")} className={classes.target}>
+          <Group gap={7} wrap={"nowrap"} className={classes.targetGroup}>
             <CustomAvatar
               avatarUrl={workspace?.logo}
               name={workspace?.name}
@@ -52,10 +53,17 @@ export default function TopMenu() {
               size="sm"
               type={AvatarIconType.WORKSPACE_ICON}
             />
-            <Text fw={500} size="sm" lh={1} mr={3} lineClamp={1}>
+            <Text
+              fw={500}
+              size="sm"
+              lh={1}
+              mr={3}
+              lineClamp={1}
+              className={classes.workspaceName}
+            >
               {workspace?.name}
             </Text>
-            <IconChevronDown size={16} />
+            <IconChevronDown size={16} className={classes.chevron} />
           </Group>
         </UnstyledButton>
       </Menu.Target>

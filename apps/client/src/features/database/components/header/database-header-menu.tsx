@@ -1,4 +1,4 @@
-import { ActionIcon, Menu, Tooltip } from '@mantine/core';
+import { Menu, Tooltip } from '@mantine/core';
 import { IconArrowRight, IconArrowsExchange, IconDots, IconInfoCircle, IconList, IconMessage, IconTrash } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { useDisclosure } from '@mantine/hooks';
@@ -45,6 +45,7 @@ import { useDatabasePageContext } from '@/features/database/hooks/use-database-p
 import PageAccessModal from '@/features/page/components/page-access-modal.tsx';
 import { canOpenPageAccessModal } from '@/features/page/utils/page-access-ui.ts';
 import { resolvePageFullWidth } from '@/features/user/utils/page-width.ts';
+import { AccessibleActionIcon } from '@/components/ui/accessible-action-icon.tsx';
 import PageDetailsModal from '@/features/page/components/page-details-modal';
 
 interface DatabaseHeaderMenuProps {
@@ -281,24 +282,42 @@ export default function DatabaseHeaderMenu({
 
       {hasDatabasePage && (
         <Tooltip label={t('Page details')} openDelay={250} withArrow>
-          <ActionIcon variant="subtle" color="dark" onClick={openDetailsModal}>
+          <AccessibleActionIcon
+            label={t('Page details')}
+            tooltip={false}
+            variant="subtle"
+            color="dark"
+            onClick={openDetailsModal}
+          >
             <IconInfoCircle size={20} stroke={2} />
-          </ActionIcon>
+          </AccessibleActionIcon>
         </Tooltip>
       )}
 
       {hasDatabasePage && (
         <Tooltip label={t('Comments')} openDelay={250} withArrow>
-          <ActionIcon variant="subtle" color="dark" onClick={handleOpenCommentsAside}>
+          <AccessibleActionIcon
+            label={t('Comments')}
+            tooltip={false}
+            variant="subtle"
+            color="dark"
+            onClick={handleOpenCommentsAside}
+          >
             <IconMessage size={20} stroke={2} />
-          </ActionIcon>
+          </AccessibleActionIcon>
         </Tooltip>
       )}
 
       <Tooltip label={t('Table of contents')} openDelay={250} withArrow>
-        <ActionIcon variant="subtle" color="dark" onClick={handleOpenTableOfContents}>
+        <AccessibleActionIcon
+          label={t('Table of contents')}
+          tooltip={false}
+          variant="subtle"
+          color="dark"
+          onClick={handleOpenTableOfContents}
+        >
           <IconList size={20} stroke={2} />
-        </ActionIcon>
+        </AccessibleActionIcon>
       </Tooltip>
 
       <Menu
@@ -310,9 +329,13 @@ export default function DatabaseHeaderMenu({
         arrowPosition="center"
       >
         <Menu.Target>
-          <ActionIcon variant="subtle" color="dark" aria-label={t('Open menu')}>
+          <AccessibleActionIcon
+            label={t('Open menu')}
+            variant="subtle"
+            color="dark"
+          >
             <IconDots size={20} />
-          </ActionIcon>
+          </AccessibleActionIcon>
         </Menu.Target>
 
         <Menu.Dropdown>

@@ -1,6 +1,11 @@
-import { Menu, ActionIcon, Text } from "@mantine/core";
+import { Menu, Text } from "@mantine/core";
 import React from "react";
-import { IconDots, IconTrash, IconUserCheck, IconUserOff } from "@tabler/icons-react";
+import {
+  IconDots,
+  IconTrash,
+  IconUserCheck,
+  IconUserOff,
+} from "@tabler/icons-react";
 import { modals } from "@mantine/modals";
 import {
   useDeactivateWorkspaceMemberMutation,
@@ -8,15 +13,20 @@ import {
 } from "@/features/workspace/queries/workspace-query.ts";
 import { useTranslation } from "react-i18next";
 import useUserRole from "@/hooks/use-user-role.tsx";
+import { AccessibleActionIcon } from "@/components/ui/accessible-action-icon.tsx";
 
 interface Props {
   userId: string;
   isDeactivated?: boolean;
 }
-export default function MemberActionMenu({ userId, isDeactivated = false }: Props) {
+export default function MemberActionMenu({
+  userId,
+  isDeactivated = false,
+}: Props) {
   const { t } = useTranslation();
   const deleteWorkspaceMemberMutation = useDeleteWorkspaceMemberMutation();
-  const deactivateWorkspaceMemberMutation = useDeactivateWorkspaceMemberMutation();
+  const deactivateWorkspaceMemberMutation =
+    useDeactivateWorkspaceMemberMutation();
   const { isAdmin } = useUserRole();
 
   const onRevoke = async () => {
@@ -78,9 +88,13 @@ export default function MemberActionMenu({ userId, isDeactivated = false }: Prop
         arrowPosition="center"
       >
         <Menu.Target>
-          <ActionIcon variant="subtle" c="gray">
+          <AccessibleActionIcon
+            label={t("More options")}
+            variant="subtle"
+            c="gray"
+          >
             <IconDots size={20} stroke={2} />
-          </ActionIcon>
+          </AccessibleActionIcon>
         </Menu.Target>
 
         <Menu.Dropdown>
@@ -88,7 +102,11 @@ export default function MemberActionMenu({ userId, isDeactivated = false }: Prop
             c={isDeactivated ? "green" : "orange"}
             onClick={openToggleStatusModal}
             leftSection={
-              isDeactivated ? <IconUserCheck size={16} /> : <IconUserOff size={16} />
+              isDeactivated ? (
+                <IconUserCheck size={16} />
+              ) : (
+                <IconUserOff size={16} />
+              )
             }
             disabled={!isAdmin}
           >

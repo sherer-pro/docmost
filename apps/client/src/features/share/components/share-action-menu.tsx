@@ -1,4 +1,4 @@
-import { Menu, ActionIcon, Text } from "@mantine/core";
+import { Menu, Text } from "@mantine/core";
 import React from "react";
 import {
   IconCopy,
@@ -17,6 +17,7 @@ import { useClipboard } from "@/hooks/use-clipboard";
 import { notifications } from "@mantine/notifications";
 import { useNavigate } from "react-router-dom";
 import { useDeleteShareMutation } from "@/features/share/queries/share-query.ts";
+import { AccessibleActionIcon } from "@/components/ui/accessible-action-icon.tsx";
 
 interface Props {
   share: ISharedItem;
@@ -75,9 +76,13 @@ export default function ShareActionMenu({ share }: Props) {
         arrowPosition="center"
       >
         <Menu.Target>
-          <ActionIcon variant="subtle" c="gray">
+          <AccessibleActionIcon
+            label={t("More options")}
+            variant="subtle"
+            c="gray"
+          >
             <IconDots size={20} stroke={2} />
-          </ActionIcon>
+          </AccessibleActionIcon>
         </Menu.Target>
 
         <Menu.Dropdown>

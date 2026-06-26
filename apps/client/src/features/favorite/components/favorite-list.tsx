@@ -1,14 +1,19 @@
 import { Anchor, Group, Stack, Text } from "@mantine/core";
-import { IconFileText, IconFolder } from "@tabler/icons-react";
+import { IconFileText, IconFolder, IconStar } from "@tabler/icons-react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useFavoritesQuery } from "@/features/favorite/queries/favorite-query";
-import { FavoriteType, IFavorite } from "@/features/favorite/types/favorite.types";
+import {
+  FavoriteType,
+  IFavorite,
+} from "@/features/favorite/types/favorite.types";
 import { buildPageUrl } from "@/features/page/page.utils";
+import { EmptyState } from "@/components/ui/empty-state.tsx";
 
 interface FavoriteListProps {
   type?: FavoriteType;
   spaceId?: string;
+  hideEmpty?: boolean;
 }
 
 function favoriteHref(favorite: IFavorite): string {
@@ -35,7 +40,11 @@ function favoriteTitle(favorite: IFavorite): string {
   return favorite.page?.title || "Untitled";
 }
 
-export default function FavoriteList({ type, spaceId }: FavoriteListProps) {
+export default function FavoriteList({
+  type,
+  spaceId,
+  hideEmpty,
+}: FavoriteListProps) {
   const { t } = useTranslation();
   const { data, isLoading } = useFavoritesQuery({ type, spaceId });
   const favorites = data?.items ?? [];
@@ -45,11 +54,11 @@ export default function FavoriteList({ type, spaceId }: FavoriteListProps) {
   }
 
   if (favorites.length === 0) {
-    return (
-      <Text size="sm" c="dimmed">
-        {t("No favorites yet")}
-      </Text>
-    );
+    if (hideEmpty) {
+      return null;
+    }
+
+    return <EmptyState compact icon={IconStar} title={t("No favorites yet")} />;
   }
 
   return (

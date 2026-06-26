@@ -1,13 +1,11 @@
 import { useState } from "react";
 import {
-  ActionIcon,
   Group,
   Indicator,
   Menu,
   Popover,
   ScrollArea,
   Text,
-  Tooltip,
 } from "@mantine/core";
 import {
   IconBell,
@@ -23,6 +21,7 @@ import {
   useMarkAllReadMutation,
   useUnreadCountQuery,
 } from "../queries/notification-query";
+import { AccessibleActionIcon } from "@/components/ui/accessible-action-icon.tsx";
 
 export function NotificationPopover() {
   const { t } = useTranslation();
@@ -47,23 +46,21 @@ export function NotificationPopover() {
       withArrow
     >
       <Popover.Target>
-        <Tooltip label={t("Notifications")} withArrow>
-          <ActionIcon
-            variant="subtle"
-            color="dark"
-            size="sm"
-            onClick={() => setOpened((o) => !o)}
+        <AccessibleActionIcon
+          label={t("Notifications")}
+          variant="subtle"
+          color="dark"
+          onClick={() => setOpened((o) => !o)}
+        >
+          <Indicator
+            offset={5}
+            color="red"
+            withBorder
+            disabled={unreadCount === 0}
           >
-            <Indicator
-              offset={5}
-              color="red"
-              withBorder
-              disabled={unreadCount === 0}
-            >
-              <IconBell size={20} />
-            </Indicator>
-          </ActionIcon>
-        </Tooltip>
+            <IconBell size={20} />
+          </Indicator>
+        </AccessibleActionIcon>
       </Popover.Target>
 
       <Popover.Dropdown
@@ -77,11 +74,13 @@ export function NotificationPopover() {
           <Group gap={4}>
             <Menu position="bottom-end" withArrow withinPortal={false}>
               <Menu.Target>
-                <Tooltip label={t("Filter")} withArrow>
-                  <ActionIcon variant="subtle" color="dark" size="sm">
-                    <IconFilter size={16} />
-                  </ActionIcon>
-                </Tooltip>
+                <AccessibleActionIcon
+                  label={t("Filter")}
+                  variant="subtle"
+                  color="dark"
+                >
+                  <IconFilter size={16} />
+                </AccessibleActionIcon>
               </Menu.Target>
               <Menu.Dropdown>
                 <Menu.Label>{t("Filter")}</Menu.Label>
@@ -106,11 +105,13 @@ export function NotificationPopover() {
 
             <Menu position="bottom-end" withArrow withinPortal={false}>
               <Menu.Target>
-                <Tooltip label={t("More options")} withArrow>
-                  <ActionIcon variant="subtle" color="dark" size="sm">
-                    <IconDots size={16} />
-                  </ActionIcon>
-                </Tooltip>
+                <AccessibleActionIcon
+                  label={t("More options")}
+                  variant="subtle"
+                  color="dark"
+                >
+                  <IconDots size={16} />
+                </AccessibleActionIcon>
               </Menu.Target>
               <Menu.Dropdown>
                 <Menu.Item

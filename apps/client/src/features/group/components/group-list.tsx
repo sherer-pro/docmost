@@ -10,6 +10,12 @@ import Paginate from "@/components/common/paginate.tsx";
 import { queryClient } from "@/main.tsx";
 import { getGroupMembers } from "@/features/group/services/group-service.ts";
 import { AutoTooltipText } from "@/components/ui/auto-tooltip-text.tsx";
+import tableClasses from "@/components/ui/responsive-table.module.css";
+import NoTableResults from "@/components/common/no-table-results.tsx";
+import {
+  getResponsiveMetaCellProps,
+  getResponsivePrimaryCellProps,
+} from "@/components/ui/responsive-table";
 
 const GROUPS_PAGE_SIZE = 10;
 
@@ -30,8 +36,16 @@ export default function GroupList() {
 
   return (
     <>
-      <Table.ScrollContainer minWidth={500}>
-        <Table highlightOnHover verticalSpacing="sm" layout="fixed">
+      <Table.ScrollContainer
+        minWidth={500}
+        className={tableClasses.responsiveScroll}
+      >
+        <Table
+          highlightOnHover
+          verticalSpacing="sm"
+          layout="fixed"
+          className={tableClasses.responsiveTable}
+        >
           <Table.Thead>
             <Table.Tr>
               <Table.Th>{t("Group")}</Table.Th>
@@ -40,49 +54,56 @@ export default function GroupList() {
           </Table.Thead>
 
           <Table.Tbody>
-            {data?.items.map((group: IGroup, index: number) => (
-              <Table.Tr key={index}>
-                <Table.Td onMouseEnter={() => prefetchGroupMembers(group.id)}>
-                  <Anchor
-                    size="sm"
-                    underline="never"
-                    style={{
-                      cursor: "pointer",
-                      color: "var(--mantine-color-text)",
-                    }}
-                    component={Link}
-                    to={`/settings/groups/${group.id}`}
+            {data?.items.length > 0 ? (
+              data?.items.map((group: IGroup, index: number) => (
+                <Table.Tr key={index}>
+                  <Table.Td
+                    {...getResponsivePrimaryCellProps(t("Group"))}
+                    onMouseEnter={() => prefetchGroupMembers(group.id)}
                   >
-                    <Group gap="sm" wrap="nowrap">
-                      <IconGroupCircle />
-                      <div style={{ minWidth: 0, overflow: "hidden" }}>
-                        <AutoTooltipText fz="sm" fw={500} lineClamp={1}>
-                          {group.name}
-                        </AutoTooltipText>
-                        <Text fz="xs" c="dimmed" lineClamp={2}>
-                          {group.description}
-                        </Text>
-                      </div>
-                    </Group>
-                  </Anchor>
-                </Table.Td>
-                <Table.Td>
-                  <Anchor
-                    size="sm"
-                    underline="never"
-                    style={{
-                      cursor: "pointer",
-                      color: "var(--mantine-color-text)",
-                      whiteSpace: "nowrap",
-                    }}
-                    component={Link}
-                    to={`/settings/groups/${group.id}`}
-                  >
-                    {formatMemberCount(group.memberCount, t)}
-                  </Anchor>
-                </Table.Td>
-              </Table.Tr>
-            ))}
+                    <Anchor
+                      size="sm"
+                      underline="never"
+                      style={{
+                        cursor: "pointer",
+                        color: "var(--mantine-color-text)",
+                      }}
+                      component={Link}
+                      to={`/settings/groups/${group.id}`}
+                    >
+                      <Group gap="sm" wrap="nowrap">
+                        <IconGroupCircle />
+                        <div style={{ minWidth: 0, overflow: "hidden" }}>
+                          <AutoTooltipText fz="sm" fw={500} lineClamp={1}>
+                            {group.name}
+                          </AutoTooltipText>
+                          <Text fz="xs" c="dimmed" lineClamp={2}>
+                            {group.description}
+                          </Text>
+                        </div>
+                      </Group>
+                    </Anchor>
+                  </Table.Td>
+                  <Table.Td {...getResponsiveMetaCellProps(t("Members"))}>
+                    <Anchor
+                      size="sm"
+                      underline="never"
+                      style={{
+                        cursor: "pointer",
+                        color: "var(--mantine-color-text)",
+                        whiteSpace: "nowrap",
+                      }}
+                      component={Link}
+                      to={`/settings/groups/${group.id}`}
+                    >
+                      {formatMemberCount(group.memberCount, t)}
+                    </Anchor>
+                  </Table.Td>
+                </Table.Tr>
+              ))
+            ) : (
+              <NoTableResults colSpan={2} />
+            )}
           </Table.Tbody>
         </Table>
       </Table.ScrollContainer>

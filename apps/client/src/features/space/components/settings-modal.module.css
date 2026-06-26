@@ -1,0 +1,74 @@
+.inner {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  max-height: min(rem(720px), calc(100dvh - rem(48px)));
+  overflow: hidden;
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  padding-top: 0;
+}
+
+.layout {
+  display: flex;
+  flex-direction: column;
+  height: min(rem(640px), calc(100dvh - rem(132px)));
+  min-height: rem(360px);
+}
+
+.tabs {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.tabsList {
+  flex: 0 0 auto;
+}
+
+.panel {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.panelScroll {
+  height: 100%;
+}
+
+.generalContent {
+  padding-bottom: var(--mantine-spacing-xl);
+}
+
+.membersToolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin: var(--mantine-spacing-md) 0;
+}
+
+@media (max-width: 48em) {
+  .content {
+    max-height: calc(100dvh - rem(48px));
+  }
+
+  .layout {
+    height: calc(100dvh - rem(136px));
+    min-height: rem(320px);
+  }
+
+  .membersToolbar {
+    justify-content: stretch;
+  }
+
+  .membersToolbar > * {
+    width: 100%;
+  }
+}

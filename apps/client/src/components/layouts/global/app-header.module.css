@@ -1,23 +1,70 @@
 .header {
-    height: 100%;
-    margin-bottom: rem(120px);
-    background-color: var(--mantine-color-body);
-    border-bottom: rem(1px) solid light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
-    padding-left: var(--mantine-spacing-md);
-    padding-right: var(--mantine-spacing-md);
+  height: 100%;
+  margin-bottom: rem(120px);
+  background-color: var(--mantine-color-body);
+  border-bottom: rem(1px) solid
+    light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+  padding-left: var(--mantine-spacing-md);
+  padding-right: var(--mantine-spacing-md);
+}
+
+.root {
+  height: 100%;
+  padding-inline: var(--mantine-spacing-md);
+}
+
+.left,
+.right,
+.search {
+  min-width: 0;
+}
+
+.left {
+  flex: 0 0 auto;
+}
+
+.search {
+  flex: 1 1 auto;
+  justify-content: center;
+}
+
+.right {
+  flex: 0 1 auto;
+}
+
+.brand {
+  flex: 0 0 auto;
 }
 
 .link {
-    display: block;
-    line-height: 1;
-    padding: rem(8px) rem(12px);
-    border-radius: var(--mantine-radius-sm);
-    text-decoration: none;
-    color: light-dark(var(--mantine-color-gray-7), var(--mantine-color-dark-0));
-    font-size: var(--mantine-font-size-sm);
-    font-weight: 500;
+  display: block;
+  line-height: 1;
+  padding: rem(8px) rem(12px);
+  border-radius: var(--mantine-radius-sm);
+  text-decoration: none;
+  color: light-dark(var(--mantine-color-gray-7), var(--mantine-color-dark-0));
+  font-size: var(--mantine-font-size-sm);
+  font-weight: 500;
 
-    @mixin hover {
-        background-color: light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-6));
-    }
+  @mixin hover {
+    background-color: light-dark(
+      var(--mantine-color-gray-0),
+      var(--mantine-color-dark-6)
+    );
+  }
+}
+
+@media (max-width: 48em) {
+  .root {
+    gap: rem(6px);
+    padding-inline: rem(8px);
+  }
+
+  .left {
+    gap: rem(6px);
+  }
+
+  .right {
+    gap: rem(4px);
+  }
 }

@@ -18,10 +18,7 @@ import {
   SearchControl,
   SearchMobileControl,
 } from "@/features/search/components/search-control.tsx";
-import {
-  searchSpotlight,
-  shareSearchSpotlight,
-} from "@/features/search/constants.ts";
+import { searchSpotlight } from "@/features/search/constants.ts";
 import { NotificationPopover } from "@/features/notification/components/notification-popover.tsx";
 
 export function AppHeader() {
@@ -39,8 +36,8 @@ export function AppHeader() {
 
   return (
     <>
-      <Group h="100%" px="md" justify="space-between" wrap={"nowrap"}>
-        <Group wrap="nowrap">
+      <Group justify="space-between" wrap={"nowrap"} className={classes.root}>
+        <Group wrap="nowrap" className={classes.left}>
           {!hideSidebar && (
             <>
               <Tooltip label={t("Sidebar toggle")}>
@@ -71,22 +68,22 @@ export function AppHeader() {
             style={{ cursor: "pointer", userSelect: "none" }}
             component={Link}
             to="/home"
+            className={classes.brand}
           >
             Docmost
           </Text>
-
         </Group>
 
-        <div>
-          <Group visibleFrom="sm">
+        <Group className={classes.search}>
+          <Group visibleFrom="sm" className={classes.search}>
             <SearchControl onClick={searchSpotlight.open} />
           </Group>
           <Group hiddenFrom="sm">
             <SearchMobileControl onSearch={searchSpotlight.open} />
           </Group>
-        </div>
+        </Group>
 
-        <Group px={"xl"} wrap="nowrap">
+        <Group wrap="nowrap" className={classes.right}>
           <NotificationPopover />
           {isCloud() && isTrial && trialDaysLeft !== 0 && (
             <Badge
