@@ -10,7 +10,6 @@
 
 .root {
   height: 100%;
-  padding-inline: var(--mantine-spacing-md);
 }
 
 .left,
@@ -57,7 +56,6 @@
 @media (max-width: 48em) {
   .root {
     gap: rem(6px);
-    padding-inline: rem(8px);
   }
 
   .left {
