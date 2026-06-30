@@ -6,12 +6,14 @@ import { useTranslation } from "react-i18next";
 
 export interface SearchInputProps {
   placeholder?: string;
+  ariaLabel?: string;
   debounceDelay?: number;
   onSearch: (value: string) => void;
 }
 
 export function SearchInput({
   placeholder,
+  ariaLabel,
   debounceDelay = 500,
   onSearch,
 }: SearchInputProps) {
@@ -27,6 +29,7 @@ export function SearchInput({
     <Group mb="sm">
       <TextInput
         size="sm"
+        aria-label={ariaLabel || placeholder || t("Search")}
         placeholder={placeholder || t("Search...")}
         leftSection={<IconSearch size={16} />}
         value={value}

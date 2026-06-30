@@ -1731,49 +1731,49 @@ export function DatabaseTableView({
   return (
     <Paper withBorder radius="md" p="md">
       <Group justify="space-between" mb="md" align="flex-end" wrap="wrap">
-        <Group wrap="wrap">
-          <TextInput
-            placeholder={t('New column')}
-            value={newPropertyName}
-            onChange={(event) => setNewPropertyName(event.currentTarget.value)}
-            disabled={!isEditable}
-          />
-          <Select
-            w={180}
-            value={newPropertyType}
-            data={DATABASE_PROPERTY_TYPES.map((propertyType) => ({
-              value: propertyType,
-              label: propertyTypeLabels[propertyType],
-            }))}
-            onChange={(value) => {
-              if (!value) {
-                return;
-              }
+        {isEditable && (
+          <Group wrap="wrap">
+            <TextInput
+              aria-label={t('New column name')}
+              placeholder={t('New column')}
+              value={newPropertyName}
+              onChange={(event) => setNewPropertyName(event.currentTarget.value)}
+            />
+            <Select
+              aria-label={t('Property type')}
+              w={180}
+              value={newPropertyType}
+              data={DATABASE_PROPERTY_TYPES.map((propertyType) => ({
+                value: propertyType,
+                label: propertyTypeLabels[propertyType],
+              }))}
+              onChange={(value) => {
+                if (!value) {
+                  return;
+                }
 
-              setNewPropertyType(value as DatabasePropertyType);
-            }}
-            disabled={!isEditable}
-            allowDeselect={false}
-            renderOption={renderPropertyTypeOption}
-            leftSection={renderPropertyTypeIcon(newPropertyType, 16)}
-          />
-          <Button
-            leftSection={<IconPlus size={14} />}
-            disabled={!isEditable}
-            onClick={handleCreateProperty}
-          >
-            {t('Property')}
-          </Button>
+                setNewPropertyType(value as DatabasePropertyType);
+              }}
+              allowDeselect={false}
+              renderOption={renderPropertyTypeOption}
+              leftSection={renderPropertyTypeIcon(newPropertyType, 16)}
+            />
+            <Button
+              leftSection={<IconPlus size={14} />}
+              onClick={handleCreateProperty}
+            >
+              {t('Property')}
+            </Button>
 
-          <Button
-            variant="light"
-            leftSection={<IconPlus size={14} />}
-            disabled={!isEditable}
-            onClick={() => void handleCreateRow()}
-          >
-            {t('Row')}
-          </Button>
-        </Group>
+            <Button
+              variant="light"
+              leftSection={<IconPlus size={14} />}
+              onClick={() => void handleCreateRow()}
+            >
+              {t('Row')}
+            </Button>
+          </Group>
+        )}
 
         <Group wrap="wrap">
           {isMobileViewport && (
@@ -1789,6 +1789,7 @@ export function DatabaseTableView({
           {!isMobileViewport && (
             <>
           <Select
+            aria-label={t('Sort property')}
             placeholder={t('Sort')}
             data={activeProperties.map((property) => ({
               value: property.id,
@@ -1800,6 +1801,7 @@ export function DatabaseTableView({
           />
 
           <Select
+            aria-label={t('Sort direction')}
             w={130}
             placeholder={t('Sort')}
             value={sortState?.direction || null}
@@ -1867,11 +1869,13 @@ export function DatabaseTableView({
         opened={viewControlsOpened}
         onClose={() => setViewControlsOpened(false)}
         title={t('View')}
+        closeButtonProps={{ 'aria-label': t('Close') }}
         position="bottom"
         size="md"
       >
         <Stack>
           <Select
+            aria-label={t('Sort property')}
             placeholder={t('Sort')}
             data={activeProperties.map((property) => ({
               value: property.id,
@@ -1882,6 +1886,7 @@ export function DatabaseTableView({
             clearable
           />
           <Select
+            aria-label={t('Sort direction')}
             value={sortState?.direction || null}
             data={[
               { value: 'asc', label: t('Ascending') },
@@ -1933,6 +1938,7 @@ export function DatabaseTableView({
               return (
                 <Stack key={`drawer-filter-${index}`} gap="xs">
                   <Select
+                    aria-label={t('Filter field')}
                     placeholder={t('Field')}
                     data={activeProperties.map((property) => ({
                       value: property.id,
@@ -1961,6 +1967,7 @@ export function DatabaseTableView({
                     }}
                   />
                   <Select
+                    aria-label={t('Filter operator')}
                     data={[
                       { value: 'contains', label: t('contains') },
                       { value: 'equals', label: t('equals') },
@@ -1986,6 +1993,7 @@ export function DatabaseTableView({
                   />
                   {isCheckboxProperty ? (
                     <Select
+                      aria-label={t('Filter value')}
                       placeholder={t('Value')}
                       data={checkboxFilterOptions}
                       value={condition.value || null}
@@ -2000,6 +2008,7 @@ export function DatabaseTableView({
                     />
                   ) : (
                     <TextInput
+                      aria-label={t('Filter value')}
                       placeholder={t('Value')}
                       value={condition.value}
                       onChange={(event) => {
@@ -2061,6 +2070,7 @@ export function DatabaseTableView({
                 wrap={isMobileViewport ? 'wrap' : 'nowrap'}
               >
                 <Select
+                  aria-label={t('Filter field')}
                   placeholder={t('Field')}
                   data={activeProperties.map((property) => ({
                     value: property.id,
@@ -2090,6 +2100,7 @@ export function DatabaseTableView({
                 />
 
                 <Select
+                  aria-label={t('Filter operator')}
                   w={140}
                   data={[
                     { value: 'contains', label: t('contains') },
@@ -2117,6 +2128,7 @@ export function DatabaseTableView({
 
                 {isCheckboxProperty ? (
                   <Select
+                    aria-label={t('Filter value')}
                     placeholder={t('Value')}
                     data={checkboxFilterOptions}
                     value={condition.value || null}
@@ -2131,6 +2143,7 @@ export function DatabaseTableView({
                   />
                 ) : (
                   <TextInput
+                    aria-label={t('Filter value')}
 
                     placeholder={t('Value')}
                     value={condition.value}
@@ -2189,6 +2202,7 @@ export function DatabaseTableView({
               {t('Rows')}: {selectedRowIds.length}
             </Text>
             <Select
+              aria-label={t('Bulk update property')}
               w={220}
               placeholder={t('Property')}
               data={displayedProperties.map((property) => ({
@@ -2200,6 +2214,7 @@ export function DatabaseTableView({
             />
             {activeProperties.find((property) => property.id === bulkPropertyId)?.type === 'checkbox' ? (
               <Select
+                aria-label={t('Bulk checkbox value')}
                 w={140}
                 value={bulkCheckboxValue}
                 data={checkboxFilterOptions}
@@ -2210,6 +2225,7 @@ export function DatabaseTableView({
               />
             ) : (
               <TextInput
+                aria-label={t('Bulk update value')}
                 placeholder={t('Value')}
                 value={bulkValue}
                 onChange={(event) => setBulkValue(event.currentTarget.value)}
@@ -2266,6 +2282,7 @@ export function DatabaseTableView({
               {isEditable && (
                 <Table.Th w={52} className={classes.selectColumn}>
                   <Checkbox
+                    aria-label={t('Select all rows')}
                     checked={preparedRows.length > 0 && selectedRowIds.length === preparedRows.length}
                     indeterminate={
                       selectedRowIds.length > 0 && selectedRowIds.length < preparedRows.length
@@ -2285,6 +2302,7 @@ export function DatabaseTableView({
                   <Group justify="space-between" gap="xs" wrap="nowrap">
                     {isEditable ? (
                       <TextInput
+                        aria-label={t('Property name')}
                         value={propertyNameDrafts[property.id] ?? property.name}
                         my={4}
                         onChange={(event) =>
@@ -2399,6 +2417,7 @@ export function DatabaseTableView({
                 {isEditable && (
                   <Table.Td className={classes.selectColumn}>
                     <Checkbox
+                      aria-label={t('Select row')}
                       checked={Boolean(selectedRowPageIds[row.pageId])}
                       onChange={(event) =>
                         setSelectedRowPageIds((previousSelection) => ({
@@ -2414,6 +2433,7 @@ export function DatabaseTableView({
                     <div>
                       {renamingRowPageId === row.pageId ? (
                         <TextInput
+                          aria-label={t('Row title')}
                           autoFocus
                           value={renamingRowTitleDraft}
                           onChange={(event) => setRenamingRowTitleDraft(event.currentTarget.value)}
@@ -2495,6 +2515,7 @@ export function DatabaseTableView({
                     <Table.Td
                       key={property.id}
                       tabIndex={0}
+                      aria-label={`${property.name}: ${getRowTitle(row, t('untitled'))}`}
                       className={classes.editableCell}
                       onKeyDown={(event) => {
                         if (!isEditing) {
@@ -2569,6 +2590,7 @@ export function DatabaseTableView({
                         pageOptions={pageReferenceOptions}
                         pageReferenceUrlById={pageReferenceUrlById}
                         isPageOptionsLoading={allPagesQuery.isLoading}
+                        cellLabel={`${property.name}: ${getRowTitle(row, t('untitled'))}`}
                         onStartEdit={() => startEditing(row, property)}
                         onChange={setEditingValue}
                         onSave={(nextValue) => saveEditing(row, property, nextValue)}

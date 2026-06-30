@@ -43,6 +43,7 @@ interface DatabaseCellRendererProps {
   pageOptions?: DatabasePageReferenceOption[];
   pageReferenceUrlById?: Map<string, string | null>;
   isPageOptionsLoading?: boolean;
+  cellLabel?: string;
   onStartEdit: () => void;
   onChange: (value: unknown) => void;
   onSave: (value?: unknown) => void;
@@ -189,6 +190,7 @@ export function DatabaseCellRenderer({
   pageOptions = [],
   pageReferenceUrlById,
   isPageOptionsLoading = false,
+  cellLabel,
   onStartEdit,
   onChange,
   onSave,
@@ -217,9 +219,19 @@ export function DatabaseCellRenderer({
   const renderViewValue = () => {
     if (property.type === 'checkbox') {
       const checked = normalizeDatabaseCheckboxValue(value);
+      const checkboxLabel = cellLabel
+        ? `${cellLabel}: ${checked ? t('Checked') : t('Unchecked')}`
+        : undefined;
 
       if (!isEditable) {
-        return <Checkbox checked={checked} disabled readOnly />;
+        return (
+          <Checkbox
+            aria-label={checkboxLabel}
+            checked={checked}
+            disabled
+            readOnly
+          />
+        );
       }
 
       return (
@@ -232,6 +244,7 @@ export function DatabaseCellRenderer({
             without switching to a separate edit state.
           */}
           <Checkbox
+            aria-label={checkboxLabel}
             checked={checked}
             onChange={(event) => {
               const nextChecked = event.currentTarget.checked;
@@ -319,14 +332,20 @@ export function DatabaseCellRenderer({
 
   const renderEditorByType = (type: DatabasePropertyType) => {
     if (type === 'checkbox') {
+      const checked = normalizeDatabaseCheckboxValue(editorValue);
+      const checkboxLabel = cellLabel
+        ? `${cellLabel}: ${checked ? t('Checked') : t('Unchecked')}`
+        : undefined;
+
       return (
         <div
           onClick={(event) => event.stopPropagation()}
           onMouseDown={(event) => event.stopPropagation()}
         >
           <Checkbox
+            aria-label={checkboxLabel}
             autoFocus={isEditing}
-            checked={normalizeDatabaseCheckboxValue(editorValue)}
+            checked={checked}
             onChange={(event) => {
               const checked = event.currentTarget.checked;
               onChange(checked);
@@ -391,6 +410,7 @@ export function DatabaseCellRenderer({
       return (
         <Select
           autoFocus={isEditing}
+          aria-label={cellLabel ?? property.name}
           data={settings.map((option) => ({ value: option.value, label: option.label }))}
           value={selectValue || null}
           onChange={(nextValue) => {
@@ -433,6 +453,7 @@ export function DatabaseCellRenderer({
       return (
         <Select
           autoFocus={isEditing}
+          aria-label={cellLabel ?? property.name}
           searchable
           clearable
           data={pageOptions}
@@ -451,6 +472,7 @@ export function DatabaseCellRenderer({
     return (
       <TextInput
         autoFocus={isEditing}
+        aria-label={cellLabel ?? property.name}
         value={normalizeDatabaseStringValue(editorValue)}
         onChange={(event) => onChange(event.currentTarget.value)}
         onBlur={handleBlurSave}

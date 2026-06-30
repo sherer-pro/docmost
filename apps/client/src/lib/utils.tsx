@@ -1,5 +1,5 @@
 import { validate as isValidUUID } from "uuid";
-import { ActionIcon } from "@mantine/core";
+import { ThemeIcon } from "@mantine/core";
 import { IconFileDescription } from "@tabler/icons-react";
 import { ReactNode } from "react";
 import { TFunction } from "i18next";
@@ -87,9 +87,9 @@ export function capitalizeFirstChar(string: string) {
 export function getPageIcon(icon: string, size = 18): string | ReactNode {
   return (
     icon || (
-      <ActionIcon variant="transparent" color="gray" size={size}>
+      <ThemeIcon variant="transparent" color="gray" size={size}>
         <IconFileDescription size={size} />
-      </ActionIcon>
+      </ThemeIcon>
     )
   );
 }

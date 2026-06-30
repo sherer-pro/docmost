@@ -21,7 +21,14 @@ export default function DatabaseHeader({
       <Group justify="space-between" h="100%" px="md" wrap="nowrap" className={classes.group}>
         <Breadcrumb />
 
-        <Group justify="flex-end" h="100%" px="md" wrap="nowrap" gap="var(--mantine-spacing-xs)">
+        <Group
+          justify="flex-end"
+          h="100%"
+          px="md"
+          wrap="nowrap"
+          gap="var(--mantine-spacing-xs)"
+          className={classes.actions}
+        >
           <DatabaseHeaderMenu
             databaseId={databaseId}
             databasePageId={databasePageId}

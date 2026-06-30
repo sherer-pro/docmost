@@ -277,7 +277,11 @@ export default function DatabaseHeaderMenu({
       )}
 
       {hasDatabasePage && (
-        <ShareModal pageId={resolvedDatabasePageId} readOnly={Boolean(readOnly)} />
+        <ShareModal
+          pageId={resolvedDatabasePageId}
+          readOnly={Boolean(readOnly)}
+          compactOnMobile
+        />
       )}
 
       {hasDatabasePage && (

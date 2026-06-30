@@ -42,6 +42,7 @@ export default function EnableGenerativeAi() {
         defaultChecked={checked}
         onChange={handleChange}
         disabled={!hasAccess}
+        aria-label={t("Generative AI (Ask AI)")}
       />
     </Group>
   );

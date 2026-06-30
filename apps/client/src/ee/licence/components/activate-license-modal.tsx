@@ -27,6 +27,7 @@ export default function ActivateLicense() {
         opened={opened}
         onClose={close}
         title={t("Enterprise license")}
+        closeButtonProps={{ "aria-label": t("Close") }}
         centered
       >
         <ActivateLicenseForm onClose={close} />

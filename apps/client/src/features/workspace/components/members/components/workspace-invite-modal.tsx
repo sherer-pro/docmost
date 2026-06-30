@@ -16,6 +16,7 @@ export default function WorkspaceInviteModal() {
         opened={opened}
         onClose={close}
         title={t("Invite new members")}
+        closeButtonProps={{ "aria-label": t("Close") }}
         centered
       >
         <Divider size="xs" mb="xs" />

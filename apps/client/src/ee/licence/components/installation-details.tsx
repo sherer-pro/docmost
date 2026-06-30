@@ -38,6 +38,7 @@ export default function InstallationDetails() {
                 {t("Workspace ID")}
               </Text>
               <TextInput
+                aria-label={t("Workspace ID")}
                 style={{ fontWeight: 700 }}
                 variant="unstyled"
                 readOnly

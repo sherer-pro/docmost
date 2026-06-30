@@ -222,7 +222,7 @@ export default function AccountPushPreferences() {
             });
           }}
           aria-busy={isPushPreferencesBusy}
-          aria-label={t("Toggle push notifications")}
+          aria-label={t("Enable push notifications")}
         />
 
         {isPushEnabled && (

@@ -29,6 +29,7 @@ import useTrial from "@/ee/hooks/use-trial.tsx";
 import { useAtom } from "jotai";
 import { workspaceAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { useSpaceQuery } from "@/features/space/queries/space-query.ts";
+import { useMediaQuery } from "@mantine/hooks";
 
 interface ShareModalProps {
   /**
@@ -39,11 +40,18 @@ interface ShareModalProps {
    */
   pageId?: string;
   readOnly?: boolean;
+  compactOnMobile?: boolean;
 }
-export default function ShareModal({ pageId: pageIdProp, readOnly = false }: ShareModalProps) {
+export default function ShareModal({
+  pageId: pageIdProp,
+  readOnly = false,
+  compactOnMobile = false,
+}: ShareModalProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { pageSlug } = useParams();
+  const isMobile = useMediaQuery("(max-width: 48em)");
+  const compactTarget = compactOnMobile && isMobile;
   const pageSlugId = extractPageSlugId(pageSlug);
   const pageQueryId = pageIdProp ?? pageSlugId;
   const { data: page } = usePageQuery({ pageId: pageQueryId });
@@ -133,6 +141,7 @@ export default function ShareModal({ pageId: pageIdProp, readOnly = false }: Sha
       <Group my="sm" gap={4} wrap="nowrap">
         <TextInput
           variant="filled"
+          aria-label={t("Public link")}
           value={publicLink}
           readOnly
           rightSection={<CopyTextButton text={publicLink} />}
@@ -150,15 +159,19 @@ export default function ShareModal({ pageId: pageIdProp, readOnly = false }: Sha
         </ActionIcon>
       </Group>
     ),
-    [publicLink],
+    [publicLink, t],
   );
 
   return (
     <Popover width={350} position="bottom" withArrow shadow="md">
       <Popover.Target>
-        <Button
-          size="sm"
-          leftSection={
+        {compactTarget ? (
+          <ActionIcon
+            aria-label={t("Share")}
+            variant="subtle"
+            color="dark"
+            size={32}
+          >
             <Indicator
               color="green"
               offset={5}
@@ -167,12 +180,26 @@ export default function ShareModal({ pageId: pageIdProp, readOnly = false }: Sha
             >
               <IconWorld size={20} stroke={1.5} />
             </Indicator>
-          }
-          color="dark"
-          variant="subtle"
-        >
-          {t("Share")}
-        </Button>
+          </ActionIcon>
+        ) : (
+          <Button
+            size="sm"
+            leftSection={
+              <Indicator
+                color="green"
+                offset={5}
+                disabled={!isPagePublic}
+                withBorder
+              >
+                <IconWorld size={20} stroke={1.5} />
+              </Indicator>
+            }
+            color="dark"
+            variant="subtle"
+          >
+            {t("Share")}
+          </Button>
+        )}
       </Popover.Target>
       <Popover.Dropdown style={{ userSelect: "none" }}>
         {isCloud() && isTrial ? (
@@ -253,6 +280,7 @@ export default function ShareModal({ pageId: pageIdProp, readOnly = false }: Sha
                 </Text>
               </div>
               <Switch
+                aria-label={t("Share page to web")}
                 onChange={handleChange}
                 defaultChecked={isPagePublic}
                 disabled={readOnly}
@@ -272,6 +300,7 @@ export default function ShareModal({ pageId: pageIdProp, readOnly = false }: Sha
                   </div>
 
                   <Switch
+                    aria-label={t("Include sub-pages")}
                     onChange={handleSubPagesChange}
                     checked={share.includeSubPages}
                     size="xs"
@@ -286,6 +315,7 @@ export default function ShareModal({ pageId: pageIdProp, readOnly = false }: Sha
                     </Text>
                   </div>
                   <Switch
+                    aria-label={t("Search engine indexing")}
                     onChange={handleIndexSearchChange}
                     checked={share.searchIndexing}
                     size="xs"

@@ -63,7 +63,7 @@ export default function PageImportModal({
         <Modal.Content style={{ overflow: "hidden" }}>
           <Modal.Header py={0}>
             <Modal.Title fw={500}>{t("Import pages")}</Modal.Title>
-            <Modal.CloseButton />
+            <Modal.CloseButton aria-label={t("Close")} />
           </Modal.Header>
           <Modal.Body>
             <ImportFormatSelection spaceId={spaceId} onClose={onClose} />

@@ -51,7 +51,12 @@ export default function AddSpaceMembersModal({
   return (
     <>
       <Button onClick={open}>{t("Add space members")}</Button>
-      <Modal opened={opened} onClose={close} title={t("Add space members")}>
+      <Modal
+        opened={opened}
+        onClose={close}
+        title={t("Add space members")}
+        closeButtonProps={{ "aria-label": t("Close") }}
+      >
         <Divider size="xs" mb="xs" />
 
         <Stack>

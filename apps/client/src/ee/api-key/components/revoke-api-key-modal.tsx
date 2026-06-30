@@ -32,6 +32,7 @@ export function RevokeApiKeyModal({
       onClose={onClose}
       title={t("Revoke API key")}
       size="md"
+      closeButtonProps={{ "aria-label": t("Close") }}
     >
       <Stack gap="md">
         <Text>

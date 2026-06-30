@@ -15,7 +15,12 @@ export default function EditGroupModal({
 
   return (
     <>
-      <Modal opened={opened} onClose={onClose} title={t("Edit group")}>
+      <Modal
+        opened={opened}
+        onClose={onClose}
+        title={t("Edit group")}
+        closeButtonProps={{ "aria-label": t("Close") }}
+      >
         <Divider size="xs" mb="xs" />
         <EditGroupForm onClose={onClose} />
       </Modal>
