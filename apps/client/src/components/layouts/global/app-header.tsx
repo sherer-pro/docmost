@@ -43,6 +43,8 @@ export function AppHeader() {
               <Tooltip label={t("Sidebar toggle")}>
                 <SidebarToggle
                   aria-label={t("Sidebar toggle")}
+                  aria-controls="docmost-primary-sidebar"
+                  aria-expanded={mobileOpened}
                   opened={mobileOpened}
                   onClick={toggleMobile}
                   hiddenFrom="sm"
@@ -53,6 +55,8 @@ export function AppHeader() {
               <Tooltip label={t("Sidebar toggle")}>
                 <SidebarToggle
                   aria-label={t("Sidebar toggle")}
+                  aria-controls="docmost-primary-sidebar"
+                  aria-expanded={desktopOpened}
                   opened={desktopOpened}
                   onClick={toggleDesktop}
                   visibleFrom="sm"

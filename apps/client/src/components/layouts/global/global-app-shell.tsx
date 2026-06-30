@@ -1,4 +1,5 @@
-import { AppShell, Container } from "@mantine/core";
+import { AppShell } from "@mantine/core";
+import { useMediaQuery } from "@mantine/hooks";
 import React, { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import SettingsSidebar from "@/components/settings/settings-sidebar.tsx";
@@ -14,7 +15,8 @@ import { AppHeader } from "@/components/layouts/global/app-header.tsx";
 import Aside from "@/components/layouts/global/aside.tsx";
 import classes from "./app-shell.module.css";
 import { useTrialEndAction } from "@/ee/hooks/use-trial-end-action.tsx";
-import { useToggleSidebar } from "@/components/layouts/global/hooks/hooks/use-toggle-sidebar.ts";
+import { PageFrame } from "@/components/ui/page-frame.tsx";
+import { getShellVisibilityState } from "@/components/layouts/global/global-app-shell.utils.ts";
 
 export default function GlobalAppShell({
   children,
@@ -23,12 +25,13 @@ export default function GlobalAppShell({
 }) {
   useTrialEndAction();
   const [mobileOpened] = useAtom(mobileSidebarAtom);
-  const toggleMobile = useToggleSidebar(mobileSidebarAtom);
   const [desktopOpened] = useAtom(desktopSidebarAtom);
   const [{ isAsideOpen }] = useAtom(asideStateAtom);
   const [sidebarWidth, setSidebarWidth] = useAtom(sidebarWidthAtom);
   const [isResizing, setIsResizing] = useState(false);
-  const sidebarRef = useRef(null);
+  const sidebarRef = useRef<HTMLElement | null>(null);
+  const asideRef = useRef<HTMLElement | null>(null);
+  const isMobileViewport = useMediaQuery("(max-width: 48em)");
 
   const startResizing = React.useCallback((mouseDownEvent) => {
     mouseDownEvent.preventDefault();
@@ -42,6 +45,10 @@ export default function GlobalAppShell({
   const resize = React.useCallback(
     (mouseMoveEvent) => {
       if (isResizing) {
+        if (!sidebarRef.current) {
+          return;
+        }
+
         const newWidth =
           mouseMoveEvent.clientX -
           sidebarRef.current.getBoundingClientRect().left;
@@ -78,6 +85,38 @@ export default function GlobalAppShell({
   const isDatabaseRoute = location.pathname.includes("/db/");
   const shouldShowAside = isPageRoute || isDatabaseRoute;
   const hideSidebar = isHomeRoute || isSpacesRoute;
+  const { isNavbarHidden, isAsideHidden } = getShellVisibilityState({
+    isMobileViewport: Boolean(isMobileViewport),
+    mobileOpened,
+    desktopOpened,
+    hideSidebar,
+    shouldShowAside,
+    isAsideOpen,
+  });
+
+  useEffect(() => {
+    if (!sidebarRef.current) {
+      return;
+    }
+
+    if (isNavbarHidden) {
+      sidebarRef.current.setAttribute("inert", "");
+    } else {
+      sidebarRef.current.removeAttribute("inert");
+    }
+  }, [isNavbarHidden]);
+
+  useEffect(() => {
+    if (!asideRef.current) {
+      return;
+    }
+
+    if (isAsideHidden) {
+      asideRef.current.setAttribute("inert", "");
+    } else {
+      asideRef.current.removeAttribute("inert");
+    }
+  }, [isAsideHidden]);
 
   return (
     <AppShell
@@ -106,9 +145,11 @@ export default function GlobalAppShell({
       </AppShell.Header>
       {!hideSidebar && (
         <AppShell.Navbar
+          id="docmost-primary-sidebar"
           className={classes.navbar}
           withBorder={false}
           ref={sidebarRef}
+          aria-hidden={isNavbarHidden || undefined}
         >
           <div className={classes.resizeHandle} onMouseDown={startResizing} />
           {isSpaceRoute && <SpaceSidebar />}
@@ -117,14 +158,21 @@ export default function GlobalAppShell({
       )}
       <AppShell.Main>
         {isSettingsRoute ? (
-          <Container size={850}>{children}</Container>
+          <PageFrame size="settings">{children}</PageFrame>
         ) : (
           children
         )}
       </AppShell.Main>
 
       {shouldShowAside && (
-        <AppShell.Aside className={classes.aside} p="md" withBorder={false}>
+        <AppShell.Aside
+          id="docmost-context-aside"
+          className={classes.aside}
+          p="md"
+          withBorder={false}
+          ref={asideRef}
+          aria-hidden={isAsideHidden || undefined}
+        >
           <Aside />
         </AppShell.Aside>
       )}
