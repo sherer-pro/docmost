@@ -44,52 +44,59 @@ export function SearchResultItem({
     };
 
     return (
-      <Spotlight.Action
-        component={Link}
-        //@ts-ignore
-        to={buildPageUrl(
-          attachmentResult.space.slug,
-          attachmentResult.page.slugId,
-          attachmentResult.page.title,
-        )}
-        style={{ userSelect: "none" }}
-      >
-        <Group wrap="nowrap" w="100%">
-          <Center>
-            <IconFile size={16} />
-          </Center>
+      <Group wrap="nowrap" w="100%" gap={4} style={{ userSelect: "none" }}>
+        <Spotlight.Action
+          component={Link}
+          //@ts-ignore
+          to={buildPageUrl(
+            attachmentResult.space.slug,
+            attachmentResult.page.slugId,
+            attachmentResult.page.title,
+          )}
+          style={{ flex: 1, minWidth: 0 }}
+        >
+          <Group wrap="nowrap" w="100%">
+            <Center aria-hidden>
+              <IconFile size={16} />
+            </Center>
 
-          <div style={{ flex: 1 }}>
-            <Text>{attachmentResult.fileName}</Text>
-            <Text size="xs" opacity={0.6}>
-              {attachmentResult.space.name} • {attachmentResult.page.title}
-            </Text>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <Text>{attachmentResult.fileName}</Text>
+              <Text size="xs" opacity={0.6}>
+                {attachmentResult.space.name} • {attachmentResult.page.title}
+              </Text>
 
-            {attachmentResult?.highlight && (
-              <Text
-                opacity={0.6}
-                size="xs"
-                dangerouslySetInnerHTML={{
-                  __html: DOMPurify.sanitize(attachmentResult.highlight, {
-                    ALLOWED_TAGS: ["mark", "em", "strong", "b"],
-                    ALLOWED_ATTR: [],
-                  }),
-                }}
-              />
-            )}
-          </div>
+              {attachmentResult?.highlight && (
+                <Text
+                  opacity={0.6}
+                  size="xs"
+                  dangerouslySetInnerHTML={{
+                    __html: DOMPurify.sanitize(attachmentResult.highlight, {
+                      ALLOWED_TAGS: ["mark", "em", "strong", "b"],
+                      ALLOWED_ATTR: [],
+                    }),
+                  }}
+                />
+              )}
+            </div>
+          </Group>
+        </Spotlight.Action>
 
-          <Tooltip
-            label={t("Download attachment")}
-            zIndex={getDefaultZIndex("max")}
-            withArrow
+        <Tooltip
+          label={t("Download attachment")}
+          zIndex={getDefaultZIndex("max")}
+          withArrow
+        >
+          <ActionIcon
+            variant="subtle"
+            color="gray"
+            aria-label={t("Download attachment")}
+            onClick={handleDownload}
           >
-            <ActionIcon variant="subtle" color="gray" onClick={handleDownload}>
-              <IconDownload size={18} />
-            </ActionIcon>
-          </Tooltip>
-        </Group>
-      </Spotlight.Action>
+            <IconDownload size={18} />
+          </ActionIcon>
+        </Tooltip>
+      </Group>
     );
   } else {
     const pageResult = result as IPageSearch;
@@ -121,7 +128,7 @@ export function SearchResultItem({
         style={{ userSelect: "none" }}
       >
         <Group wrap="nowrap" w="100%">
-          <Center>{getPageIcon(pageResult?.icon)}</Center>
+          <Center aria-hidden>{getPageIcon(pageResult?.icon)}</Center>
 
           <div style={{ flex: 1 }}>
             <Text>{pageResult.title}</Text>

@@ -169,7 +169,13 @@ export function SelectPropertySettingsModal({
   };
 
   return (
-    <Modal opened={opened} onClose={onClose} title={t('Select options for property', { name: propertyName })} size="lg">
+    <Modal
+      opened={opened}
+      onClose={onClose}
+      title={t('Select options for property', { name: propertyName })}
+      size="lg"
+      closeButtonProps={{ 'aria-label': t('Close') }}
+    >
       <Stack>
         {options.map((option, index) => (
           <Group key={`option-${index}`} align="end" wrap="nowrap">
@@ -204,6 +210,7 @@ export function SelectPropertySettingsModal({
             <ActionIcon
               color="red"
               variant="light"
+              aria-label={t('Remove option')}
               mb={2}
               onClick={() => setOptions((prev) => prev.filter((_, optionIndex) => optionIndex !== index))}
               disabled={options.length === 1}

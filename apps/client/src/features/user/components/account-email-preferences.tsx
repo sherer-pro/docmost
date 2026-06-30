@@ -145,7 +145,7 @@ export default function AccountEmailPreferences() {
             void handleEmailEnabled(event.currentTarget.checked);
           }}
           aria-busy={isEmailPreferencesBusy}
-          aria-label={t("Toggle email notifications")}
+          aria-label={t("Enable email notifications")}
         />
 
         {isEmailEnabled && (

@@ -29,7 +29,7 @@
 
 .letterNav {
   min-width: 0;
-  width: max-content;
+  width: 100%;
   max-width: 100%;
   padding-bottom: 2px;
 }
@@ -182,11 +182,6 @@
   .searchInput,
   .filterAction {
     width: 100%;
-  }
-
-  .letterNav {
-    width: 100%;
-    flex-wrap: wrap !important;
   }
 
   .resultsSummary {

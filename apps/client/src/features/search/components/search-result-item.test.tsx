@@ -144,6 +144,7 @@ describe("SearchResultItem", () => {
         id: "space-1",
         name: "Engineering",
         slug: "engineering",
+        icon: "",
       },
     };
 
@@ -161,5 +162,43 @@ describe("SearchResultItem", () => {
     );
 
     expect(badgeGroup).toBeTruthy();
+  });
+
+  it("renders attachment download outside the linked result action", () => {
+    const result = {
+      id: "attachment-1",
+      pageId: "page-1",
+      creatorId: "user-1",
+      fileName: "brief.pdf",
+      highlight: "",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      rank: 1,
+      space: {
+        id: "space-1",
+        name: "Engineering",
+        slug: "engineering",
+        icon: "",
+      },
+      page: {
+        id: "page-1",
+        title: "Regular Page",
+        slugId: "slug-2",
+      },
+    };
+
+    const element = SearchResultItem({
+      result,
+      isAttachmentResult: true,
+    });
+    const children = React.Children.toArray(element.props.children) as any[];
+    const linkedAction = children[0];
+    const downloadTooltip = children[1];
+    const downloadButton = downloadTooltip.props.children;
+
+    expect(linkedAction.props.to).toBe(
+      buildPageUrl("engineering", "slug-2", "Regular Page"),
+    );
+    expect(downloadButton.props["aria-label"]).toBe("Download attachment");
   });
 });

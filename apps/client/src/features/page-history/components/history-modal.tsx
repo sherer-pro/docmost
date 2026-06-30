@@ -31,7 +31,7 @@ export default function HistoryModal({ pageId, pageTitle }: Props) {
                 {t("Page history")}
               </Text>
             </Modal.Title>
-            <Modal.CloseButton />
+            <Modal.CloseButton aria-label={t("Close")} />
           </Modal.Header>
           <Modal.Body
             p={0}
@@ -58,7 +58,7 @@ export default function HistoryModal({ pageId, pageTitle }: Props) {
               {t("Page history")}
             </Text>
           </Modal.Title>
-          <Modal.CloseButton />
+          <Modal.CloseButton aria-label={t("Close")} />
         </Modal.Header>
         <Modal.Body>
           <HistoryModalBody pageId={pageId} />

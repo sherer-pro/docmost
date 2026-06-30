@@ -106,7 +106,7 @@ export default function PageHeaderMenu({
 
       <PageFavoriteAction readOnly={isReadOnly} />
 
-      <ShareModal readOnly={!canMoveDeleteSharePage} />
+      <ShareModal readOnly={!canMoveDeleteSharePage} compactOnMobile />
 
       <PageDetailsAction readOnly={isReadOnly} />
 

@@ -252,35 +252,7 @@ export default function SettingsSidebar() {
               break;
           }
 
-          const isDisabled = isItemDisabled(item);
-          const linkElement = (
-            <Link
-              onMouseEnter={!isDisabled ? prefetchHandler : undefined}
-              className={classes.link}
-              data-active={active.startsWith(item.path) || undefined}
-              data-disabled={isDisabled || undefined}
-              key={item.label}
-              to={isDisabled ? "#" : item.path}
-              onClick={(e) => {
-                if (isDisabled) {
-                  e.preventDefault();
-                  return;
-                }
-                if (mobileSidebarOpened) {
-                  toggleMobileSidebar();
-                }
-              }}
-              style={{
-                opacity: isDisabled ? 0.5 : 1,
-                cursor: isDisabled ? "not-allowed" : "pointer",
-              }}
-            >
-              <item.icon className={classes.linkIcon} stroke={2} />
-              <span>{t(item.label)}</span>
-            </Link>
-          );
-
-          if (isDisabled) {
+          if (isItemDisabled(item)) {
             return (
               <Tooltip
                 key={item.label}
@@ -288,12 +260,36 @@ export default function SettingsSidebar() {
                 position="right"
                 withArrow
               >
-                {linkElement}
+                <div
+                  className={classes.link}
+                  data-disabled
+                  aria-disabled="true"
+                  role="link"
+                >
+                  <item.icon className={classes.linkIcon} stroke={2} />
+                  <span>{t(item.label)}</span>
+                </div>
               </Tooltip>
             );
           }
 
-          return linkElement;
+          return (
+            <Link
+              onMouseEnter={prefetchHandler}
+              className={classes.link}
+              data-active={active.startsWith(item.path) || undefined}
+              key={item.label}
+              to={item.path}
+              onClick={() => {
+                if (mobileSidebarOpened) {
+                  toggleMobileSidebar();
+                }
+              }}
+            >
+              <item.icon className={classes.linkIcon} stroke={2} />
+              <span>{t(item.label)}</span>
+            </Link>
+          );
         })}
       </div>
     );

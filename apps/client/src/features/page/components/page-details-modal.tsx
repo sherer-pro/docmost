@@ -70,7 +70,13 @@ export default function PageDetailsModal({
   };
 
   return (
-    <Modal opened={open} onClose={onClose} title={t("Page details")} size="lg">
+    <Modal
+      opened={open}
+      onClose={onClose}
+      title={t("Page details")}
+      size="lg"
+      closeButtonProps={{ "aria-label": t("Close") }}
+    >
       <Stack gap="lg">
         {page && (
           <>

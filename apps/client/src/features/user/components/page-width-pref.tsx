@@ -97,7 +97,7 @@ export function PageWidthToggle({
       labelPosition="left"
       checked={Boolean(resolvedChecked)}
       onChange={handleChange}
-      aria-label={t("Toggle full page width")}
+      aria-label={label ?? t("Full page width")}
     />
   );
 }

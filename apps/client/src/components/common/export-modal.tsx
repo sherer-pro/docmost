@@ -131,7 +131,7 @@ export default function ExportModal({
       <Modal.Content style={{ overflow: 'hidden' }}>
         <Modal.Header py={0}>
           <Modal.Title fw={500}>{modalTitle}</Modal.Title>
-          <Modal.CloseButton />
+          <Modal.CloseButton aria-label={t('Close')} />
         </Modal.Header>
         <Modal.Body>
           <Group justify="space-between" wrap="nowrap">

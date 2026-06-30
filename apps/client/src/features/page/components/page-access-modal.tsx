@@ -277,7 +277,7 @@ export default function PageAccessModal({
       <Modal.Content>
         <Modal.Header>
           <Modal.Title>{t("page.access.title", { keySeparator: false })}</Modal.Title>
-          <Modal.CloseButton />
+          <Modal.CloseButton aria-label={t("Close")} />
         </Modal.Header>
         <Modal.Body>
           <Stack gap="sm">

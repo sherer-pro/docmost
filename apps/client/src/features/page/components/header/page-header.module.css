@@ -25,3 +25,9 @@
     padding-inline: 0 !important;
   }
 }
+
+.actions {
+  @media (max-width: 48em) {
+    padding-inline: 0 !important;
+  }
+}

@@ -125,6 +125,7 @@ export function SearchSpotlight({ spaceId }: SearchSpotlightProps) {
   return (
     <>
       <Spotlight.Root
+        aria-label={t("Search")}
         size="xl"
         maxHeight={600}
         store={searchSpotlightStore}

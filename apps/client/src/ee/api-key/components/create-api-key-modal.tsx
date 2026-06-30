@@ -150,6 +150,7 @@ export function CreateApiKeyModal({
       onClose={handleClose}
       title={t("Create API Key")}
       size="md"
+      closeButtonProps={{ "aria-label": t("Close") }}
     >
       <form onSubmit={form.onSubmit((values) => handleSubmit(values))}>
         <Stack gap="md">
