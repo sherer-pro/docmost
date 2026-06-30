@@ -1,0 +1,40 @@
+.ProseMirror .page-break {
+  align-items: center;
+  border-top: 1px dashed var(--mantine-color-gray-4);
+  color: var(--mantine-color-gray-6);
+  display: flex;
+  font-size: var(--mantine-font-size-xs);
+  gap: var(--mantine-spacing-sm);
+  justify-content: center;
+  line-height: 1;
+  margin: 2rem 0;
+  page-break-after: always;
+  position: relative;
+}
+
+.ProseMirror .page-break::after {
+  background: var(--mantine-color-body);
+  content: "Page break";
+  padding: 0 var(--mantine-spacing-xs);
+  position: absolute;
+  top: 0;
+  transform: translateY(-50%);
+}
+
+.ProseMirror .page-break.ProseMirror-selectednode {
+  outline: 2px solid var(--mantine-primary-color-filled);
+  outline-offset: 4px;
+}
+
+@media print {
+  .ProseMirror .page-break {
+    break-after: page;
+    display: block;
+    height: 0;
+    margin: 0;
+  }
+
+  .ProseMirror .page-break::after {
+    content: none;
+  }
+}

@@ -49,6 +49,8 @@ import {
   Highlight,
   UniqueID,
   SharedStorage,
+  Indent,
+  PageBreak,
   TransclusionSource,
   TransclusionReference,
 } from "@docmost/editor-ext";
@@ -143,6 +145,7 @@ export const mainExtensions = [
     showOnlyWhenEditable: true,
   }),
   TextAlign.configure({ types: ["heading", "paragraph"] }),
+  Indent.configure({ types: ["heading", "paragraph"] }),
   TaskList,
   TaskItem.configure({
     nested: true,
@@ -219,6 +222,7 @@ export const mainExtensions = [
   Details,
   DetailsSummary,
   DetailsContent,
+  PageBreak,
   Youtube.configure({
     addPasteHandler: false,
     controls: true,
