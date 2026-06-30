@@ -17,6 +17,7 @@ import { UserRole } from '../../../common/helpers/types/permission';
 
 const USER_PREFERENCE_KEYS = [
   'fullPageWidth',
+  'fixedToolbar',
   'fullPageWidthByPageId',
   'pageEditModeByPageId',
   'pushEnabled',

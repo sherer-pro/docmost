@@ -57,6 +57,10 @@ function normalizeUserPreferences(user: IUser): IUser {
           safePreferences.fullPageWidth,
           false,
         ),
+        fixedToolbar: normalizePreferenceBoolean(
+          safePreferences.fixedToolbar,
+          false,
+        ),
         ...(hasPageWidthOverrides
           ? { fullPageWidthByPageId: normalizedFullPageWidthByPageId }
           : {}),

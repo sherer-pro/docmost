@@ -19,6 +19,7 @@ export interface IUser {
   deactivatedAt: Date;
   deletedAt: Date;
   fullPageWidth: boolean; // used for update
+  fixedToolbar: boolean; // used for update
   fullPageWidthByPageId?: Record<string, boolean>; // used for update
   pageEditModeByPageId?: Record<string, PageEditMode>; // used for update
   pushEnabled: boolean; // used for update
@@ -37,6 +38,7 @@ export interface ICurrentUser {
 export interface IUserSettings {
   preferences: {
     fullPageWidth: boolean;
+    fixedToolbar: boolean;
     fullPageWidthByPageId?: Record<string, boolean>;
     pageEditModeByPageId?: Record<string, PageEditMode>;
     pushEnabled: boolean;

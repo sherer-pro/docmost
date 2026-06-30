@@ -90,6 +90,7 @@ export class UserService {
     // preference update
     const hasPreferenceUpdates =
       typeof updateUserDto.fullPageWidth !== 'undefined' ||
+      typeof updateUserDto.fixedToolbar !== 'undefined' ||
       typeof updateUserDto.fullPageWidthByPageId !== 'undefined' ||
       typeof updateUserDto.pageEditModeByPageId !== 'undefined' ||
       typeof updateUserDto.pushEnabled !== 'undefined' ||
@@ -103,6 +104,18 @@ export class UserService {
         workspace.id,
         'fullPageWidth',
         updateUserDto.fullPageWidth,
+      );
+    }
+
+    if (typeof updateUserDto.fixedToolbar !== 'undefined') {
+      await this.userRepo.updatePreference(
+        userId,
+        workspace.id,
+        'fixedToolbar',
+        normalizePreferenceBoolean(
+          updateUserDto.fixedToolbar,
+          currentPreferences.fixedToolbar,
+        ),
       );
     }
 
@@ -230,6 +243,7 @@ export class UserService {
     }
 
     delete updateUserDto.confirmPassword;
+    delete updateUserDto.fixedToolbar;
     delete updateUserDto.fullPageWidthByPageId;
     delete updateUserDto.pageEditModeByPageId;
 

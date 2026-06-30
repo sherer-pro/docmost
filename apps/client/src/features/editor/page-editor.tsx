@@ -75,6 +75,7 @@ import {
 import { useDictionaryTermsQuery } from "@/features/dictionary/queries/dictionary-query";
 import { createDictionaryMatcherIndex } from "@/features/dictionary/utils/dictionary-matcher";
 import { TransclusionLookupProvider } from "@/features/editor/components/transclusion/transclusion-lookup-context";
+import { FixedToolbar } from "@/features/editor/components/fixed-toolbar/fixed-toolbar";
 
 interface PageEditorProps {
   pageId: string;
@@ -139,6 +140,9 @@ export default function PageEditor({
     pageId,
     preferences: currentUser?.user?.settings?.preferences,
   });
+  const fixedToolbarEnabled = Boolean(
+    currentUser?.user?.settings?.preferences?.fixedToolbar,
+  );
   const { data: dictionaryTerms = [] } = useDictionaryTermsQuery(
     spaceId,
     Boolean(spaceId && dictionaryEnabled),
@@ -496,6 +500,16 @@ export default function PageEditor({
     <TransclusionLookupProvider>
       <div className="editor-container" style={{ position: "relative" }}>
         <div ref={menuContainerRef}>
+          {editor && editorIsEditable && fixedToolbarEnabled && (
+            <FixedToolbar
+              editor={editor}
+              spaceId={spaceId}
+              dictionaryEnabled={dictionaryEnabled}
+              canManageDictionary={canManageDictionary}
+              canCreateInlineComments={canCreateInlineComments}
+            />
+          )}
+
           <DictionaryHighlightLayer terms={activeDictionaryTerms}>
             <EditorContent
               editor={editor}
@@ -510,12 +524,15 @@ export default function PageEditor({
           {editor && editorIsEditable && (
             <div>
               <EditorAiMenu editor={editor} />
-              <EditorBubbleMenu
-                editor={editor}
-                spaceId={spaceId}
-                dictionaryEnabled={dictionaryEnabled}
-                canManageDictionary={canManageDictionary}
-              />
+              {!fixedToolbarEnabled && (
+                <EditorBubbleMenu
+                  editor={editor}
+                  spaceId={spaceId}
+                  dictionaryEnabled={dictionaryEnabled}
+                  canManageDictionary={canManageDictionary}
+                  canCreateInlineComments={canCreateInlineComments}
+                />
+              )}
               <TableMenu editor={editor} />
               <TableCellMenu editor={editor} appendTo={menuContainerRef} />
               <ImageMenu editor={editor} />

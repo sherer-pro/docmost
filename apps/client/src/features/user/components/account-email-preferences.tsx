@@ -150,7 +150,6 @@ export default function AccountEmailPreferences() {
 
         {isEmailEnabled && (
           <Select
-            mt="sm"
             data={frequencyData}
             value={selectedFrequency}
             disabled={isEmailPreferencesBusy}
