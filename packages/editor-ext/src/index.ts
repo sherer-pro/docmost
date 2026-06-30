@@ -30,3 +30,5 @@ export * from "./lib/unique-id";
 export * from "./lib/shared-storage";
 export * from "./lib/recreate-transform";
 export * from "./lib/pdf";
+export * from "./lib/indent";
+export * from "./lib/page-break";

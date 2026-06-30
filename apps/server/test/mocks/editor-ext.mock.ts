@@ -23,6 +23,8 @@ export const Mention = {} as any;
 export const Subpages = {} as any;
 export const Highlight = {} as any;
 export const UniqueID = { configure: () => ({}) } as any;
+export const Indent = { configure: () => ({}) } as any;
+export const PageBreak = {} as any;
 export const TiptapAudio = {} as any;
 export const TiptapPdf = {} as any;
 export const TableReadonlySort = {} as any;
