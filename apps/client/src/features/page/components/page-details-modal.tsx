@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   ActionIcon,
   Anchor,
@@ -7,10 +7,11 @@ import {
   Divider,
   Group,
   Modal,
+  SimpleGrid,
   Stack,
   Tabs,
   Text,
-  TextInput,
+  TagsInput,
 } from "@mantine/core";
 import { IconPlus, IconX } from "@tabler/icons-react";
 import { Link } from "react-router-dom";
@@ -28,6 +29,7 @@ import { IPage } from "@/features/page/types/page.types";
 import { formattedDate } from "@/lib/time";
 import { Trans } from "react-i18next";
 import { useTimeAgo } from "@/hooks/use-time-ago";
+import { useSearchLabelsQuery } from "@/features/search/queries/search-query";
 
 interface PageDetailsModalProps {
   pageId: string;
@@ -41,6 +43,69 @@ function normalizeLabelInput(value: string): string {
   return value.trim().replace(/\s+/g, "-").toLowerCase();
 }
 
+const LABEL_COLORS = [
+  "blue",
+  "green",
+  "violet",
+  "red",
+  "yellow",
+  "orange",
+  "pink",
+  "gray",
+  "cyan",
+  "teal",
+] as const;
+
+function getLabelColor(labelName: string): string {
+  let hash = 0;
+  const input = labelName.trim().toLowerCase();
+
+  for (let index = 0; index < input.length; index += 1) {
+    hash = (hash * 31 + input.charCodeAt(index)) >>> 0;
+  }
+
+  return LABEL_COLORS[hash % LABEL_COLORS.length];
+}
+
+function extractTextFromDoc(value: unknown): string {
+  if (!value) {
+    return "";
+  }
+
+  if (typeof value === "string") {
+    try {
+      return extractTextFromDoc(JSON.parse(value));
+    } catch {
+      return value;
+    }
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(extractTextFromDoc).filter(Boolean).join(" ");
+  }
+
+  if (typeof value !== "object") {
+    return "";
+  }
+
+  const record = value as Record<string, unknown>;
+  if (typeof record.text === "string") {
+    return record.text;
+  }
+
+  return extractTextFromDoc(record.content);
+}
+
+function getPageTextStats(content: unknown) {
+  const text = extractTextFromDoc(content).replace(/\s+/g, " ").trim();
+  const words = text ? text.split(/\s+/u).length : 0;
+
+  return {
+    characters: text.length,
+    words,
+  };
+}
+
 export default function PageDetailsModal({
   pageId,
   page,
@@ -51,23 +116,14 @@ export default function PageDetailsModal({
   const { t } = useTranslation();
   const { data: labels } = usePageLabelsQuery(pageId, open);
   const { data: counts } = useBacklinksCountQuery(pageId, open);
-  const addLabels = useAddPageLabelsMutation(pageId);
   const removeLabel = useRemovePageLabelMutation(pageId);
-  const [labelInput, setLabelInput] = useState("");
   const pageUpdatedAt = useTimeAgo(page?.updatedAt ?? new Date());
   const creatorName = page?.creator?.name || t("Unknown");
   const lastUpdatedByName = page?.lastUpdatedBy?.name || t("Unknown");
-
-  const submitLabel = () => {
-    const nextLabel = normalizeLabelInput(labelInput);
-    if (!nextLabel) {
-      return;
-    }
-
-    addLabels.mutate([nextLabel], {
-      onSuccess: () => setLabelInput(""),
-    });
-  };
+  const pageStats = useMemo(
+    () => getPageTextStats((page as { content?: unknown } | undefined)?.content),
+    [page],
+  );
 
   return (
     <Modal
@@ -108,28 +164,35 @@ export default function PageDetailsModal({
           </>
         )}
 
+        <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="sm">
+          <Stat label={t("Words")} value={pageStats.words} />
+          <Stat label={t("Characters")} value={pageStats.characters} />
+          <Stat label={t("Backlinks")} value={counts?.incoming ?? 0} />
+          <Stat label={t("Outgoing")} value={counts?.outgoing ?? 0} />
+        </SimpleGrid>
+
         <Stack gap="xs">
           <Text fw={500}>{t("Labels")}</Text>
           <Group gap="xs">
             {(labels?.items ?? []).map((label) => (
-              <Badge
-                key={label.id}
-                variant="light"
-                rightSection={
-                  readOnly ? null : (
-                    <ActionIcon
-                      size="xs"
-                      variant="transparent"
-                      aria-label={t("Remove label")}
-                      onClick={() => removeLabel.mutate(label.id)}
-                    >
-                      <IconX size={12} />
-                    </ActionIcon>
-                  )
-                }
-              >
-                {label.name}
-              </Badge>
+              <Group key={label.id} gap={2}>
+                <Badge
+                  color={getLabelColor(label.name)}
+                  variant="light"
+                >
+                  {label.name}
+                </Badge>
+                {!readOnly && (
+                  <ActionIcon
+                    size="xs"
+                    variant="subtle"
+                    aria-label={t("Remove label")}
+                    onClick={() => removeLabel.mutate(label.id)}
+                  >
+                    <IconX size={12} />
+                  </ActionIcon>
+                )}
+              </Group>
             ))}
             {labels?.items?.length === 0 && (
               <Text size="sm" c="dimmed">
@@ -138,28 +201,10 @@ export default function PageDetailsModal({
             )}
           </Group>
           {!readOnly && (
-            <Group gap="xs" align="flex-end">
-              <TextInput
-                size="xs"
-                value={labelInput}
-                onChange={(event) => setLabelInput(event.currentTarget.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    submitLabel();
-                  }
-                }}
-                placeholder={t("Add label")}
-              />
-              <Button
-                size="xs"
-                leftSection={<IconPlus size={14} />}
-                loading={addLabels.isPending}
-                onClick={submitLabel}
-              >
-                {t("Add")}
-              </Button>
-            </Group>
+            <LabelPicker
+              pageId={pageId}
+              existingLabelNames={(labels?.items ?? []).map((label) => label.name)}
+            />
           )}
         </Stack>
 
@@ -181,6 +226,87 @@ export default function PageDetailsModal({
         </Tabs>
       </Stack>
     </Modal>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: number }) {
+  return (
+    <Stack gap={2}>
+      <Text size="xs" c="dimmed">
+        {label}
+      </Text>
+      <Text fw={600}>{value.toLocaleString()}</Text>
+    </Stack>
+  );
+}
+
+function LabelPicker({
+  pageId,
+  existingLabelNames,
+}: {
+  pageId: string;
+  existingLabelNames: string[];
+}) {
+  const { t } = useTranslation();
+  const [pendingLabels, setPendingLabels] = useState<string[]>([]);
+  const [search, setSearch] = useState("");
+  const addLabels = useAddPageLabelsMutation(pageId);
+  const { data: suggestedLabels = [] } = useSearchLabelsQuery(
+    { query: search, limit: 20 },
+    true,
+  );
+  const existing = new Set(existingLabelNames.map(normalizeLabelInput));
+  const labelOptions = suggestedLabels
+    .map((label) => label.name)
+    .filter((label) => !existing.has(normalizeLabelInput(label)));
+
+  const submitLabels = () => {
+    const names = [
+      ...pendingLabels,
+      search,
+    ]
+      .map(normalizeLabelInput)
+      .filter((label, index, labels) => {
+        return (
+          label &&
+          !existing.has(label) &&
+          labels.indexOf(label) === index
+        );
+      });
+
+    if (names.length === 0) {
+      return;
+    }
+
+    addLabels.mutate(names, {
+      onSuccess: () => {
+        setPendingLabels([]);
+        setSearch("");
+      },
+    });
+  };
+
+  return (
+    <Group gap="xs" align="flex-end">
+      <TagsInput
+        size="xs"
+        value={pendingLabels}
+        data={labelOptions}
+        searchValue={search}
+        onSearchChange={setSearch}
+        onChange={setPendingLabels}
+        placeholder={t("Add label")}
+        aria-label={t("Add label")}
+      />
+      <Button
+        size="xs"
+        leftSection={<IconPlus size={14} />}
+        loading={addLabels.isPending}
+        onClick={submitLabels}
+      >
+        {t("Add")}
+      </Button>
+    </Group>
   );
 }
 
