@@ -1,8 +1,6 @@
 import { useParams } from "react-router-dom";
 import { useGetSpaceBySlugQuery } from "@/features/space/queries/space-query";
 import {
-  Container,
-  Title,
   Table,
   Group,
   Text,
@@ -39,6 +37,7 @@ import {
   getResponsiveMetaCellProps,
   getResponsivePrimaryCellProps,
 } from "@/components/ui/responsive-table";
+import { PageFrame, SectionHeader } from "@/components/ui/page-frame.tsx";
 
 export default function Trash() {
   const { t } = useTranslation();
@@ -109,11 +108,9 @@ export default function Trash() {
   };
 
   return (
-    <Container size="800" pt="xl">
+    <PageFrame size="document">
       <Stack gap="md">
-        <Group justify="space-between" mb="md">
-          <Title order={2}>{t("Trash")}</Title>
-        </Group>
+        <SectionHeader title={t("Trash")} />
 
         <Alert icon={<IconInfoCircle size={16} />} variant="light" color="red">
           <Text size="sm">
@@ -240,6 +237,6 @@ export default function Trash() {
           pageContent={selectedPage.content}
         />
       )}
-    </Container>
+    </PageFrame>
   );
 }
