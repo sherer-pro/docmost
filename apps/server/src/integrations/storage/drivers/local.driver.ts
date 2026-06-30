@@ -6,7 +6,11 @@ import {
 import { dirname, isAbsolute, relative, resolve, sep } from 'path';
 import * as fs from 'fs-extra';
 import { Readable } from 'stream';
-import { createReadStream, createWriteStream } from 'node:fs';
+import {
+  constants as fsConstants,
+  createReadStream,
+  createWriteStream,
+} from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 
 export class LocalDriver implements StorageDriver {
@@ -55,7 +59,11 @@ export class LocalDriver implements StorageDriver {
     }
   }
 
-  async uploadStream(filePath: string, file: Readable, options?: { recreateClient?: boolean }): Promise<void> {
+  async uploadStream(
+    filePath: string,
+    file: Readable,
+    options?: { recreateClient?: boolean },
+  ): Promise<void> {
     try {
       const fullPath = this._fullPath(filePath);
       await fs.mkdir(dirname(fullPath), { recursive: true });
@@ -88,7 +96,10 @@ export class LocalDriver implements StorageDriver {
 
   async readStream(filePath: string): Promise<Readable> {
     try {
-      return createReadStream(this._fullPath(filePath));
+      const fullPath = this._fullPath(filePath);
+      await this.assertReadableFile(fullPath);
+
+      return createReadStream(fullPath);
     } catch (err) {
       throw new Error(`Failed to read file: ${(err as Error).message}`);
     }
@@ -99,7 +110,10 @@ export class LocalDriver implements StorageDriver {
     range: { start: number; end: number },
   ): Promise<Readable> {
     try {
-      return createReadStream(this._fullPath(filePath), {
+      const fullPath = this._fullPath(filePath);
+      await this.assertReadableFile(fullPath);
+
+      return createReadStream(fullPath, {
         start: range.start,
         end: range.end,
       });
@@ -144,5 +158,14 @@ export class LocalDriver implements StorageDriver {
 
   getConfig(): Record<string, any> {
     return this.config;
+  }
+
+  private async assertReadableFile(fullPath: string): Promise<void> {
+    const stat = await fs.stat(fullPath);
+    if (!stat.isFile()) {
+      throw new Error('Local storage path is not a file');
+    }
+
+    await fs.access(fullPath, fsConstants.R_OK);
   }
 }

@@ -3,6 +3,7 @@ import {
   ActionIcon,
   Card,
   Image,
+  LoadingOverlay,
   Modal,
   Text,
   useComputedColorScheme,
@@ -22,6 +23,11 @@ import { decodeBase64ToSvgString, svgStringToFile } from "@/lib/utils";
 import clsx from "clsx";
 import { IconEdit } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
+import { notifications } from "@mantine/notifications";
+import {
+  getDiagramAttachmentSrc,
+  getDiagramSaveErrorMessage,
+} from "@/features/editor/components/diagram/diagram-attachment";
 
 export default function DrawioView(props: NodeViewProps) {
   const { t } = useTranslation();
@@ -31,6 +37,7 @@ export default function DrawioView(props: NodeViewProps) {
   const [initialXML, setInitialXML] = useState<string>("");
   const [opened, { open, close }] = useDisclosure(false);
   const [isPreviewOpened, setIsPreviewOpened] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const computedColorScheme = useComputedColorScheme();
   const imageUrl = src ? getFileUrl(src) : null;
 
@@ -63,37 +70,53 @@ export default function DrawioView(props: NodeViewProps) {
   };
 
   const handleSave = async (data: EventSave) => {
-    const svgString = decodeBase64ToSvgString(data.xml);
-
-    const fileName = "diagram.drawio.svg";
-    const drawioSVGFile = await svgStringToFile(svgString, fileName);
-
-    //@ts-ignore
-    const pageId = editor.storage?.pageId;
-
-    let attachment: IAttachment = null;
-
-    if (attachmentId) {
-      attachment = await uploadFile(drawioSVGFile, pageId, attachmentId);
-    } else {
-      attachment = await uploadFile(drawioSVGFile, pageId);
+    if (isSaving) {
+      return;
     }
 
-    updateAttributes({
-      src: `/api/files/${attachment.id}/${attachment.fileName}?t=${new Date(attachment.updatedAt).getTime()}`,
-      title: attachment.fileName,
-      size: attachment.fileSize,
-      attachmentId: attachment.id,
-    });
+    setIsSaving(true);
+    try {
+      const svgString = decodeBase64ToSvgString(data.xml);
 
-    close();
+      const fileName = "diagram.drawio.svg";
+      const drawioSVGFile = await svgStringToFile(svgString, fileName);
+
+      //@ts-ignore
+      const pageId = editor.storage?.pageId;
+
+      let attachment: IAttachment = null;
+
+      if (attachmentId) {
+        attachment = await uploadFile(drawioSVGFile, pageId, attachmentId);
+      } else {
+        attachment = await uploadFile(drawioSVGFile, pageId);
+      }
+
+      updateAttributes({
+        src: getDiagramAttachmentSrc(attachment),
+        title: attachment.fileName,
+        size: attachment.fileSize,
+        attachmentId: attachment.id,
+      });
+
+      close();
+    } catch (err) {
+      console.error(err);
+      notifications.show({
+        color: "red",
+        message: getDiagramSaveErrorMessage(err, t),
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
     <NodeViewWrapper data-drag-handle>
-      <Modal.Root opened={opened} onClose={close} fullScreen>
+      <Modal.Root opened={opened} onClose={isSaving ? () => null : close} fullScreen>
         <Modal.Overlay />
         <Modal.Content style={{ overflow: "hidden" }}>
+          <LoadingOverlay visible={isSaving} zIndex={1000} />
           <Modal.Body>
             <div style={{ height: "100vh" }}>
               <DrawIoEmbed
@@ -112,11 +135,11 @@ export default function DrawioView(props: NodeViewProps) {
                   if (data.parentEvent !== "save") {
                     return;
                   }
-                  handleSave(data);
+                  void handleSave(data);
                 }}
                 onClose={(data: EventExit) => {
                   // If the exit is triggered by another event, then do nothing
-                  if (data.parentEvent) {
+                  if (data.parentEvent || isSaving) {
                     return;
                   }
                   close();

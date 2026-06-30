@@ -239,15 +239,6 @@ export class AttachmentFileAccessService {
     const shouldInline = this.shouldServeInline(attachment);
     const contentType = this.getResponseContentType(attachment, shouldInline);
 
-    res.header('Accept-Ranges', 'bytes');
-
-    if (!shouldInline) {
-      res.header(
-        'Content-Disposition',
-        `attachment; filename="${encodeURIComponent(attachment.fileName)}"`,
-      );
-    }
-
     if (rangeHeader && fileSize) {
       const match = rangeHeader.match(/bytes=(\d+)-(\d*)/);
       if (match) {
@@ -259,6 +250,7 @@ export class AttachmentFileAccessService {
         if (start >= fileSize || start > end) {
           res.status(416);
           res.header('Content-Range', `bytes */${fileSize}`);
+          res.header('Accept-Ranges', 'bytes');
           return res.send();
         }
 
@@ -268,6 +260,7 @@ export class AttachmentFileAccessService {
         );
 
         res.status(206);
+        this.setFileResponseHeaders(res, attachment, shouldInline);
         res.headers({
           'Content-Type': contentType,
           'Content-Range': `bytes ${start}-${end}/${fileSize}`,
@@ -283,6 +276,7 @@ export class AttachmentFileAccessService {
       attachment.filePath,
     );
 
+    this.setFileResponseHeaders(res, attachment, shouldInline);
     res.headers({
       'Content-Type': contentType,
       'Cache-Control': `${cacheScope}, max-age=3600`,
@@ -294,6 +288,21 @@ export class AttachmentFileAccessService {
     }
 
     return res.send(fileStream);
+  }
+
+  private setFileResponseHeaders(
+    res: FastifyReply,
+    attachment: Attachment,
+    shouldInline: boolean,
+  ) {
+    res.header('Accept-Ranges', 'bytes');
+
+    if (!shouldInline) {
+      res.header(
+        'Content-Disposition',
+        `attachment; filename="${encodeURIComponent(attachment.fileName)}"`,
+      );
+    }
   }
 
   private shouldServeInline(attachment: Attachment): boolean {

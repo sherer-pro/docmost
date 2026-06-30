@@ -27,6 +27,18 @@ describe('LocalDriver', () => {
     ).resolves.toBe(true);
   });
 
+  it('rejects missing read streams before creating a stream', async () => {
+    await expect(driver.readStream('missing/file.txt')).rejects.toThrow(
+      /Failed to read file/,
+    );
+  });
+
+  it('rejects missing range read streams before creating a stream', async () => {
+    await expect(
+      driver.readRangeStream('missing/file.txt', { start: 0, end: 1 }),
+    ).rejects.toThrow(/Failed to read file/);
+  });
+
   it('rejects traversal paths that escape the storage root', async () => {
     const escapedName = `escaped-${Date.now()}.txt`;
 
