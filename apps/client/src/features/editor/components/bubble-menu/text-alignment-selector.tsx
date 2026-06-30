@@ -16,6 +16,7 @@ interface TextAlignmentProps {
   editor: Editor | null;
   isOpen: boolean;
   setIsOpen: Dispatch<SetStateAction<boolean>>;
+  tooltipWithinPortal?: boolean;
 }
 
 export interface BubbleMenuItem {
@@ -29,6 +30,7 @@ export const TextAlignmentSelector: FC<TextAlignmentProps> = ({
   editor,
   isOpen,
   setIsOpen,
+  tooltipWithinPortal = false,
 }) => {
   const { t } = useTranslation();
 
@@ -84,7 +86,12 @@ export const TextAlignmentSelector: FC<TextAlignmentProps> = ({
   return (
     <Popover opened={isOpen} withArrow>
       <Popover.Target>
-        <Tooltip label={t("Text align")} withArrow withinPortal={false} disabled={isOpen}>
+        <Tooltip
+          label={t("Text align")}
+          withArrow
+          withinPortal={tooltipWithinPortal}
+          disabled={isOpen}
+        >
           <Button
             variant="default"
             style={{ border: "none", height: "34px" }}

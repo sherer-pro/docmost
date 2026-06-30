@@ -227,7 +227,6 @@ export default function AccountPushPreferences() {
 
         {isPushEnabled && (
           <Select
-            mt="sm"
             data={frequencyData}
             value={selectedFrequency}
             disabled={isPushPreferencesBusy}

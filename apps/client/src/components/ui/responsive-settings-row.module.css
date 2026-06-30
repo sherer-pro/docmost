@@ -14,8 +14,11 @@
 
 .control {
   display: flex;
+  align-items: center;
   flex: 0 0 auto;
+  gap: var(--mantine-spacing-sm);
   justify-content: flex-end;
+  flex-wrap: wrap;
   min-width: min(rem(220px), 100%);
 }
 

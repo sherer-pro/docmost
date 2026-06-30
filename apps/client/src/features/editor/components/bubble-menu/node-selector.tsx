@@ -24,6 +24,7 @@ interface NodeSelectorProps {
   editor: Editor | null;
   isOpen: boolean;
   setIsOpen: Dispatch<SetStateAction<boolean>>;
+  tooltipWithinPortal?: boolean;
 }
 
 export interface BubbleMenuItem {
@@ -37,6 +38,7 @@ export const NodeSelector: FC<NodeSelectorProps> = ({
   editor,
   isOpen,
   setIsOpen,
+  tooltipWithinPortal = false,
 }) => {
   const { t } = useTranslation();
 
@@ -149,7 +151,12 @@ export const NodeSelector: FC<NodeSelectorProps> = ({
   return (
     <Popover opened={isOpen} withArrow>
       <Popover.Target>
-        <Tooltip label={t("Turn into")} withArrow withinPortal={false} disabled={isOpen}>
+        <Tooltip
+          label={t("Turn into")}
+          withArrow
+          withinPortal={tooltipWithinPortal}
+          disabled={isOpen}
+        >
           <Button
             className={classes.buttonRoot}
             variant="default"

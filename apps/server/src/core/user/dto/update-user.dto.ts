@@ -22,6 +22,10 @@ export class UpdateUserDto extends PartialType(
   fullPageWidth: boolean;
 
   @IsOptional()
+  @IsBoolean()
+  fixedToolbar: boolean;
+
+  @IsOptional()
   @IsObject()
   fullPageWidthByPageId: Record<string, boolean>;
 

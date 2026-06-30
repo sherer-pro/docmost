@@ -17,6 +17,7 @@ interface UserPreferencesRecord {
   emailEnabled?: unknown;
   pushFrequency?: unknown;
   emailFrequency?: unknown;
+  fixedToolbar?: unknown;
   pageEditModeByPageId?: unknown;
 }
 
@@ -151,6 +152,7 @@ export function normalizeUserSettings(
     emailEnabled: boolean;
     pushFrequency: NotificationFrequency;
     emailFrequency: NotificationFrequency;
+    fixedToolbar: boolean;
     pageEditModeByPageId: Record<string, PageEditModePreference>;
   };
 } {
@@ -167,6 +169,10 @@ export function normalizeUserSettings(
       ...safePreferences,
       pushEnabled: normalizePreferenceBoolean(safePreferences.pushEnabled, false),
       emailEnabled: normalizePreferenceBoolean(safePreferences.emailEnabled, true),
+      fixedToolbar: normalizePreferenceBoolean(
+        safePreferences.fixedToolbar,
+        false,
+      ),
       pushFrequency: normalizeNotificationFrequency(
         safePreferences.pushFrequency,
         'immediate',
