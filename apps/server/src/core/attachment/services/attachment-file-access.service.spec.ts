@@ -51,6 +51,7 @@ describe('AttachmentFileAccessService', () => {
     };
     const storageService = {
       readStream: jest.fn().mockResolvedValue(Readable.from(['ok'])),
+      readRangeStream: jest.fn().mockResolvedValue(Readable.from(['ok'])),
     };
 
     const service = new AttachmentFileAccessService(
@@ -174,5 +175,31 @@ describe('AttachmentFileAccessService', () => {
       'attachment; filename="uploaded.svg"',
     );
     expect(res.headerValues['Content-Type']).toBe('application/octet-stream');
+  });
+
+  it('returns file not found without file response headers when storage read fails', async () => {
+    const { service, storageService } = createService({
+      fileExt: '.svg',
+      fileName: 'diagram.drawio.svg',
+      mimeType: 'image/svg+xml',
+    });
+    storageService.readStream.mockRejectedValueOnce(
+      new Error('Failed to read file: ENOENT'),
+    );
+    const req = {
+      headers: { 'x-attachment-token': 'header-token' },
+      cookies: {},
+    } as any;
+    const res = createReply();
+
+    await expect(
+      service.getPublicFile(req, res, workspace, fileId, 'query-token'),
+    ).rejects.toThrow('File not found');
+
+    expect(res.header).not.toHaveBeenCalledWith(
+      'Content-Disposition',
+      expect.any(String),
+    );
+    expect(res.headerValues['Content-Type']).toBeUndefined();
   });
 });

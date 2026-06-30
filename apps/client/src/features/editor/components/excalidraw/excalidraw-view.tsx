@@ -20,6 +20,11 @@ import ReactClearModal from "react-clear-modal";
 import clsx from "clsx";
 import { IconEdit } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
+import { notifications } from "@mantine/notifications";
+import {
+  getDiagramAttachmentSrc,
+  getDiagramSaveErrorMessage,
+} from "@/features/editor/components/diagram/diagram-attachment";
 
 const ExcalidrawEditor = lazy(
   () =>
@@ -38,6 +43,7 @@ export default function ExcalidrawView(props: NodeViewProps) {
   const [excalidrawData, setExcalidrawData] = useState<any>(null);
   const [opened, { open, close }] = useDisclosure(false);
   const [isPreviewOpened, setIsPreviewOpened] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const computedColorScheme = useComputedColorScheme();
   const imageUrl = src ? getFileUrl(src) : null;
   const handleExcalidrawApiChange = useCallback(
@@ -71,50 +77,61 @@ export default function ExcalidrawView(props: NodeViewProps) {
   };
 
   const handleSave = async () => {
-    if (!excalidrawAPI) {
+    if (!excalidrawAPI || isSaving) {
       return;
     }
 
-    const { exportToSvg } = await import("@excalidraw/excalidraw");
+    setIsSaving(true);
+    try {
+      const { exportToSvg } = await import("@excalidraw/excalidraw");
 
-    const svg = await exportToSvg({
-      elements: excalidrawAPI?.getSceneElements(),
-      appState: {
-        exportEmbedScene: true,
-        exportWithDarkMode: false,
-      },
-      files: excalidrawAPI?.getFiles(),
-    });
+      const svg = await exportToSvg({
+        elements: excalidrawAPI?.getSceneElements(),
+        appState: {
+          exportEmbedScene: true,
+          exportWithDarkMode: false,
+        },
+        files: excalidrawAPI?.getFiles(),
+      });
 
-    const serializer = new XMLSerializer();
-    let svgString = serializer.serializeToString(svg);
+      const serializer = new XMLSerializer();
+      let svgString = serializer.serializeToString(svg);
 
-    svgString = svgString.replace(
-      /https:\/\/unpkg\.com\/@excalidraw\/excalidraw@undefined/g,
-      "https://unpkg.com/@excalidraw/excalidraw@latest",
-    );
+      svgString = svgString.replace(
+        /https:\/\/unpkg\.com\/@excalidraw\/excalidraw@undefined/g,
+        "https://unpkg.com/@excalidraw/excalidraw@latest",
+      );
 
-    const fileName = "diagram.excalidraw.svg";
-    const excalidrawSvgFile = await svgStringToFile(svgString, fileName);
+      const fileName = "diagram.excalidraw.svg";
+      const excalidrawSvgFile = await svgStringToFile(svgString, fileName);
 
-    // @ts-ignore
-    const pageId = editor.storage?.pageId;
+      // @ts-ignore
+      const pageId = editor.storage?.pageId;
 
-    let attachment: IAttachment = null;
-    if (attachmentId) {
-      attachment = await uploadFile(excalidrawSvgFile, pageId, attachmentId);
-    } else {
-      attachment = await uploadFile(excalidrawSvgFile, pageId);
+      let attachment: IAttachment = null;
+      if (attachmentId) {
+        attachment = await uploadFile(excalidrawSvgFile, pageId, attachmentId);
+      } else {
+        attachment = await uploadFile(excalidrawSvgFile, pageId);
+      }
+
+      updateAttributes({
+        src: getDiagramAttachmentSrc(attachment),
+        title: attachment.fileName,
+        size: attachment.fileSize,
+        attachmentId: attachment.id,
+      });
+
+      close();
+    } catch (err) {
+      console.error(err);
+      notifications.show({
+        color: "red",
+        message: getDiagramSaveErrorMessage(err, t),
+      });
+    } finally {
+      setIsSaving(false);
     }
-
-    updateAttributes({
-      src: `/api/files/${attachment.id}/${attachment.fileName}?t=${new Date(attachment.updatedAt).getTime()}`,
-      title: attachment.fileName,
-      size: attachment.fileSize,
-      attachmentId: attachment.id,
-    });
-
-    close();
   };
 
   return (
@@ -127,7 +144,7 @@ export default function ExcalidrawView(props: NodeViewProps) {
             zIndex: 200,
           }}
           isOpen={opened}
-          onRequestClose={close}
+          onRequestClose={isSaving ? () => null : close}
           disableCloseOnBgClick={true}
           contentProps={{
             style: {
@@ -142,10 +159,15 @@ export default function ExcalidrawView(props: NodeViewProps) {
             bg="var(--mantine-color-body)"
             p="xs"
           >
-            <Button onClick={handleSave} size={"compact-sm"}>
+            <Button onClick={handleSave} loading={isSaving} size={"compact-sm"}>
               {t("Save & Exit")}
             </Button>
-            <Button onClick={close} color="red" size={"compact-sm"}>
+            <Button
+              onClick={close}
+              color="red"
+              disabled={isSaving}
+              size={"compact-sm"}
+            >
               {t("Exit")}
             </Button>
           </Group>
