@@ -1,0 +1,46 @@
+.frame {
+  width: 100%;
+  padding-top: var(--mantine-spacing-xl);
+  padding-bottom: var(--mantine-spacing-xl);
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--mantine-spacing-md);
+  margin-bottom: var(--mantine-spacing-lg);
+}
+
+.sectionHeaderMain {
+  min-width: 0;
+}
+
+.sectionTitle {
+  overflow-wrap: anywhere;
+}
+
+.sectionDescription {
+  margin-top: rem(4px);
+  color: var(--mantine-color-dimmed);
+}
+
+.sectionActions {
+  flex-shrink: 0;
+}
+
+@media (max-width: 48em) {
+  .frame {
+    padding-top: var(--mantine-spacing-lg);
+    padding-bottom: var(--mantine-spacing-lg);
+  }
+
+  .sectionHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .sectionActions {
+    width: 100%;
+  }
+}

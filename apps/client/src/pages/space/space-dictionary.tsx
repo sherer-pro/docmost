@@ -1,7 +1,6 @@
 import {
   Accordion,
   Button,
-  Container,
   FileButton,
   Group,
   Loader,
@@ -10,7 +9,6 @@ import {
   Stack,
   Text,
   TextInput,
-  Title,
 } from "@mantine/core";
 import { modals } from "@mantine/modals";
 import { notifications } from "@mantine/notifications";
@@ -53,6 +51,7 @@ import { useGetSpaceBySlugQuery } from "@/features/space/queries/space-query";
 import useUserRole from "@/hooks/use-user-role";
 import { getAppName } from "@/lib/config";
 import { AccessibleActionIcon } from "@/components/ui/accessible-action-icon.tsx";
+import { PageFrame, SectionHeader } from "@/components/ui/page-frame";
 
 interface DictionaryGroup {
   letter: string;
@@ -279,22 +278,23 @@ export default function SpaceDictionary() {
         </title>
       </Helmet>
 
-      <Container size="800" pt="xl">
-        <div className={classes.pageHeader}>
-          <div>
-            <Title order={2}>{t("Dictionary")}</Title>
-            {dictionaryEnabled && !isLoading && (
-              <Group gap="md" mt={4}>
-                <Text size="sm" c="dimmed">
+      <PageFrame size="document">
+        <SectionHeader
+          title={t("Dictionary")}
+          description={
+            dictionaryEnabled && !isLoading ? (
+              <Group gap="md">
+                <span>
                   {terms.length} {t("Terms")}
-                </Text>
-                <Text size="sm" c="dimmed">
+                </span>
+                <span>
                   {availableLetters.length} {t("Letters")}
-                </Text>
+                </span>
               </Group>
-            )}
-          </div>
-          {(isAdmin || canManageDictionary) && dictionaryEnabled && (
+            ) : undefined
+          }
+          actions={
+            (isAdmin || canManageDictionary) && dictionaryEnabled ? (
             <Group gap="xs" wrap="wrap">
               {isAdmin && (
                 <>
@@ -333,8 +333,9 @@ export default function SpaceDictionary() {
                 </Button>
               )}
             </Group>
-          )}
-        </div>
+            ) : undefined
+          }
+        />
 
         {!dictionaryEnabled ? (
           <EmptyState
@@ -370,6 +371,7 @@ export default function SpaceDictionary() {
               <Group align="center" className={classes.filterRow} gap="sm">
                 <TextInput
                   className={classes.searchInput}
+                  aria-label={t("Search terms, forms, definitions")}
                   placeholder={t("Search terms, forms, definitions")}
                   leftSection={<IconSearch size={16} />}
                   rightSection={
@@ -407,7 +409,7 @@ export default function SpaceDictionary() {
               </Group>
 
               <ScrollArea type="hover" offsetScrollbars>
-                <Group className={classes.letterNav} gap={6} wrap="nowrap">
+                <Group className={classes.letterNav} gap={6} wrap="wrap">
                   <button
                     type="button"
                     className={classes.letterButton}
@@ -564,7 +566,7 @@ export default function SpaceDictionary() {
             )}
           </Stack>
         )}
-      </Container>
+      </PageFrame>
 
       <DictionaryTermModal
         opened={modalOpened}

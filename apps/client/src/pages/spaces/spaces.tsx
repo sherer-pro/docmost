@@ -1,4 +1,4 @@
-import { Container, Title, Text, Group, Box } from "@mantine/core";
+import { Box } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 import { Helmet } from "react-helmet-async";
 import { getAppName } from "@/lib/config";
@@ -7,6 +7,7 @@ import CreateSpaceModal from "@/features/space/components/create-space-modal";
 import { AllSpacesList } from "@/features/space/components/spaces-page";
 import { usePaginateAndSearch } from "@/hooks/use-paginate-and-search";
 import useUserRole from "@/hooks/use-user-role";
+import { PageFrame, SectionHeader } from "@/components/ui/page-frame";
 
 export default function Spaces() {
   const { t } = useTranslation();
@@ -27,17 +28,13 @@ export default function Spaces() {
         </title>
       </Helmet>
 
-      <Container size={"800"} pt="xl">
-        <Group justify="space-between" mb="xl">
-          <Title order={3}>{t("Spaces")}</Title>
-          {isAdmin && <CreateSpaceModal />}
-        </Group>
-
+      <PageFrame size="document">
+        <SectionHeader
+          title={t("Spaces")}
+          description={t("Spaces you belong to")}
+          actions={isAdmin ? <CreateSpaceModal /> : undefined}
+        />
         <Box>
-          <Text size="sm" c="dimmed" mb="md">
-            {t("Spaces you belong to")}
-          </Text>
-
           <AllSpacesList
             spaces={data?.items || []}
             onSearch={handleSearch}
@@ -47,7 +44,7 @@ export default function Spaces() {
             onPrev={goPrev}
           />
         </Box>
-      </Container>
+      </PageFrame>
     </>
   );
 }
