@@ -56,7 +56,7 @@ function PageContent({
   const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
-  const [, setAsideState] = useAtom(asideStateAtom);
+  const [asideState, setAsideState] = useAtom(asideStateAtom);
 
   const {
     data: page,
@@ -69,6 +69,8 @@ function PageContent({
   const canMoveDeleteSharePage =
     pageCapabilities?.canMoveDeleteShare === true;
   const resolvedSpaceSlug = page?.space?.slug ?? routeSpaceSlug;
+  const isCommentsAsideOpen =
+    asideState.tab === "comments" && asideState.isAsideOpen;
 
   useEffect(() => {
     const shouldOpenCommentsAside = Boolean(
@@ -132,7 +134,11 @@ function PageContent({
               readOnly={!canWritePage}
             />
           }
-          footer={<PageCommentSection pageId={page.id} />}
+          footer={
+            isCommentsAsideOpen ? undefined : (
+              <PageCommentSection pageId={page.id} />
+            )
+          }
           pageId={page.id}
           title={page.title}
           content={page.content}

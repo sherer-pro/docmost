@@ -39,6 +39,7 @@ export default function DatabasePage() {
   const location = useLocation();
   const navigate = useNavigate();
   const setAsideState = useSetAtom(asideStateAtom);
+  const asideState = useAtomValue(asideStateAtom);
   const {
     databaseId,
     databasePageId,
@@ -79,6 +80,8 @@ export default function DatabasePage() {
   });
 
   const isEditable = !readOnly && userPageEditMode === PageEditMode.Edit;
+  const isCommentsAsideOpen =
+    asideState.tab === "comments" && asideState.isAsideOpen;
 
   useEffect(() => {
     const shouldOpenCommentsAside = Boolean(
@@ -286,7 +289,9 @@ export default function DatabasePage() {
           />
         )}
 
-        {databasePageId && <PageCommentSection pageId={databasePageId} />}
+        {databasePageId && !isCommentsAsideOpen && (
+          <PageCommentSection pageId={databasePageId} />
+        )}
       </Container>
     </>
   );

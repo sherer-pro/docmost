@@ -1,4 +1,4 @@
-import { Box, ScrollArea, Text } from "@mantine/core";
+import { Box, CloseButton, Group, ScrollArea, Text } from "@mantine/core";
 import CommentListWithTabs from "@/features/comment/components/comment-list-with-tabs.tsx";
 import { useAtom } from "jotai";
 import { asideStateAtom } from "@/components/layouts/global/hooks/atoms/sidebar-atom.ts";
@@ -9,7 +9,7 @@ import { useAtomValue } from "jotai";
 import { pageEditorAtom } from "@/features/editor/atoms/editor-atoms.ts";
 
 export default function Aside() {
-  const [{ tab }] = useAtom(asideStateAtom);
+  const [{ tab }, setAsideState] = useAtom(asideStateAtom);
   const { t } = useTranslation();
   const pageEditor = useAtomValue(pageEditorAtom);
 
@@ -34,9 +34,13 @@ export default function Aside() {
     <Box p="md">
       {component && (
         <>
-          <Text mb="md" fw={500}>
-            {t(title)}
-          </Text>
+          <Group justify="space-between" mb="md" wrap="nowrap">
+            <Text fw={500}>{t(title)}</Text>
+            <CloseButton
+              aria-label={t("Close panel")}
+              onClick={() => setAsideState({ tab, isAsideOpen: false })}
+            />
+          </Group>
 
           {tab === "comments" ? (
             component
