@@ -1239,8 +1239,8 @@
   "Tag": "Tag",
   "Tag TBD": "Tag TBD",
   "Tag TODO": "Tag TODO",
-  "Tag TBD description": "To Be Decided. Means that the item is pending definition, will be decided later, or needs clarification.",
-  "Tag TODO description": "To Do. Marks an action item or a place that needs follow-up.",
+  "Tag TBD description": "To Be Decided. Marks a place where a decision is still pending, details need clarification, or missing information must be added.",
+  "Tag TODO description": "To Do. Marks an action item or a place in the text that needs follow-up work.",
   "Mark text that needs clarification.": "Mark text that needs clarification.",
   "Mark text that needs follow-up.": "Mark text that needs follow-up.",
   "Not selected": "Not selected"

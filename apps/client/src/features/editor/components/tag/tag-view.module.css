@@ -17,6 +17,25 @@
   display: inline;
 }
 
+.descriptionPopover {
+  position: fixed;
+  z-index: 10000;
+  max-width: min(360px, calc(100vw - 24px));
+  max-height: 260px;
+  overflow: auto;
+  padding: var(--mantine-spacing-sm);
+  border: 1px solid
+    light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+  border-radius: var(--mantine-radius-sm);
+  background: var(--mantine-color-body);
+  box-shadow: var(--mantine-shadow-md);
+  color: light-dark(var(--mantine-color-gray-9), var(--mantine-color-gray-0));
+  font-size: var(--mantine-font-size-md);
+  font-weight: 400;
+  line-height: 1.55;
+  white-space: normal;
+}
+
 .todo {
   color: light-dark(var(--mantine-color-blue-8), var(--mantine-color-blue-2));
   background: light-dark(var(--mantine-color-blue-0), rgba(34, 139, 230, 0.14));
