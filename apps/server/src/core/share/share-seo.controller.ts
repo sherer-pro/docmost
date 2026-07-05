@@ -8,6 +8,7 @@ import { EnvironmentService } from '../../integrations/environment/environment.s
 import { Workspace } from '@docmost/db/types/entity.types';
 import { htmlEscape } from '../../common/helpers/html-escaper';
 import { resolveClientDistPath } from '../../common/utils/client-dist-path';
+import { getWorkspaceHostnameFromCloudHost } from '../../common/security/host.util';
 
 @Controller('share')
 export class ShareSeoController {
@@ -71,9 +72,13 @@ export class ShareSeoController {
     if (this.environmentService.isSelfHosted()) {
       workspace = await this.workspaceRepo.findFirst();
     } else {
-      const header = req.raw.headers.host;
-      const subdomain = header.split('.')[0];
-      workspace = await this.workspaceRepo.findByHostname(subdomain);
+      const subdomain = getWorkspaceHostnameFromCloudHost(
+        req.raw.headers.host,
+        this.environmentService.getSubdomainHost(),
+      );
+      workspace = subdomain
+        ? await this.workspaceRepo.findByHostname(subdomain)
+        : null;
     }
 
     const clientDistPath = resolveClientDistPath(__dirname);

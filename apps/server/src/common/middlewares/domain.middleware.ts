@@ -1,7 +1,8 @@
-import { Injectable, NestMiddleware, NotFoundException } from '@nestjs/common';
+import { Injectable, NestMiddleware } from '@nestjs/common';
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { EnvironmentService } from '../../integrations/environment/environment.service';
 import { WorkspaceRepo } from '@docmost/db/repos/workspace/workspace.repo';
+import { getWorkspaceHostnameFromCloudHost } from '../security/host.util';
 
 @Injectable()
 export class DomainMiddleware implements NestMiddleware {
@@ -26,8 +27,15 @@ export class DomainMiddleware implements NestMiddleware {
       (req as any).workspaceId = workspace.id;
       (req as any).workspace = workspace;
     } else if (this.environmentService.isCloud()) {
-      const header = req.headers.host;
-      const subdomain = header.split('.')[0];
+      const subdomain = getWorkspaceHostnameFromCloudHost(
+        req.headers.host,
+        this.environmentService.getSubdomainHost(),
+      );
+
+      if (!subdomain) {
+        (req as any).workspaceId = null;
+        return next();
+      }
 
       const workspace = await this.workspaceRepo.findByHostname(subdomain);
 
