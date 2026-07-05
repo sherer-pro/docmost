@@ -1,5 +1,6 @@
 import * as _TurndownService from '@joplin/turndown';
 import * as TurndownPluginGfm from '@joplin/turndown-plugin-gfm';
+import { getTagLabel, getValidTagValue } from '../../tag';
 import { getBasename } from './basename';
 
 // CJS/ESM interop: .default exists in Vite, not in NestJS
@@ -18,6 +19,7 @@ export function htmlToMarkdown(html: string): string {
     TurndownPluginGfm.strikethrough,
     TurndownPluginGfm.highlightedCodeBlock,
     taskList,
+    tag,
     callout,
     preserveDetail,
     listParagraph,
@@ -51,6 +53,23 @@ function callout(turndownService: _TurndownService) {
     replacement: function (content: string, node: HTMLInputElement) {
       const calloutType = node.getAttribute('data-callout-type');
       return `\n\n:::${calloutType}\n${content.trim()}\n:::\n\n`;
+    },
+  });
+}
+
+function tag(turndownService: _TurndownService) {
+  turndownService.addRule('tag', {
+    filter: function (node: HTMLInputElement) {
+      return (
+        node.nodeName === 'SPAN' && node.getAttribute('data-type') === 'tag'
+      );
+    },
+    replacement: function (_content: string, node: HTMLInputElement) {
+      const value = getValidTagValue(
+        node.getAttribute('data-tag-value') || node.textContent,
+      );
+
+      return `::tag[${getTagLabel(value)}]`;
     },
   });
 }

@@ -64,7 +64,8 @@ export class SearchController {
 
     if (
       this.environmentService.getSearchDriver() === 'typesense' &&
-      !searchDto.labelId
+      !searchDto.labelId &&
+      !searchDto.tag
     ) {
       return this.searchTypesense(searchDto, {
         userId: user.id,
@@ -87,6 +88,7 @@ export class SearchController {
   ) {
     delete searchDto.shareId;
     delete searchDto.labelId;
+    delete searchDto.tag;
 
     if (!searchDto.query?.trim()) {
       throw new BadRequestException('query is required');
@@ -144,6 +146,7 @@ export class SearchController {
   ) {
     delete searchDto.spaceId;
     delete searchDto.labelId;
+    delete searchDto.tag;
     if (!searchDto.shareId) {
       throw new BadRequestException('shareId is required');
     }

@@ -58,11 +58,12 @@
 - `apps/client/src/features/presence` — authenticated Socket.IO presence heartbeat/reporting hooks.
 - `apps/client/src/features/favorite` — favorite star/actions and favorite lists.
 - `apps/client/src/features/transclusion` and `apps/client/src/features/editor/components/transclusion` — synced block lookup UI and editor node views.
+- `apps/client/src/features/editor/components/tag` — inline TBD/TODO tag node view.
 - `apps/client/src/features/editor/components/fixed-toolbar` — persistent editor toolbar shown when the user preference is enabled.
 - `apps/client/public/locales/*` — JSON translations.
 - `apps/client/public/{manifest.json,sw.js,offline.html}` — PWA manifest, Service Worker, and static offline page; these user-facing strings are outside the i18next locale JSON pipeline.
 - `apps/server/src/database` — migrations and DB tooling.
-- `packages/editor-ext/src/lib/{audio,pdf,transclusion,indent,page-break}` — editor nodes/extensions for audio, embedded PDFs, synced blocks, paragraph/heading indentation, and print page breaks.
+- `packages/editor-ext/src/lib/{audio,pdf,transclusion,indent,page-break,tag}` — editor nodes/extensions for audio, embedded PDFs, synced blocks, paragraph/heading indentation, print page breaks, and inline TBD/TODO tags.
 - `packages/api-contract/src` — shared API-facing TypeScript contracts used by server/client code; it builds to `packages/api-contract/dist` for runtime server consumption.
 - `patches/` — pnpm patch files (for example, for `react-arborist`).
 - `packages/ee`, `apps/*/src/ee` — Enterprise code (separate license).
@@ -282,6 +283,7 @@ Minimum:
   - favorites: `POST /api/favorites`, `/api/favorites/add`, `/api/favorites/remove`, `/api/favorites/ids`;
   - page labels: `POST /api/pages/labels`, `/api/pages/labels/add`, `/api/pages/labels/remove`;
   - label search/list pages: `POST /api/labels`, `/api/labels/pages`.
+  - page labels are space-scoped: label names are unique per space, list/search calls should pass `spaceId`, and labels from one space must not be shown as suggestions in another.
 - Synced blocks replace the older Linked quote implementation:
   - editor node types: `transclusionSource` and `transclusionReference`;
   - API routes: `POST /api/pages/transclusion/lookup`, `/references`, `/unsync-reference`, and public `POST /api/shares/transclusion/lookup`;

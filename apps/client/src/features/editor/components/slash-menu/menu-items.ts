@@ -25,6 +25,7 @@ import {
   IconSitemap,
   IconRepeat,
   IconPageBreak,
+  IconTag,
 } from "@tabler/icons-react";
 import {
   CommandProps,
@@ -385,6 +386,32 @@ const CommandGroups: SlashMenuGroupedItemsType = {
       icon: IconInfoCircle,
       command: ({ editor, range }: CommandProps) =>
         editor.chain().focus().deleteRange(range).toggleCallout().run(),
+    },
+    {
+      title: "Tag TBD",
+      description: "Mark text that needs clarification.",
+      searchTerms: ["tag", "tbd", "clarify", "needs clarification"],
+      icon: IconTag,
+      command: ({ editor, range }: CommandProps) =>
+        editor
+          .chain()
+          .focus()
+          .deleteRange(range)
+          .setTag({ value: "tbd" })
+          .run(),
+    },
+    {
+      title: "Tag TODO",
+      description: "Mark text that needs follow-up.",
+      searchTerms: ["tag", "todo", "follow up", "follow-up"],
+      icon: IconTag,
+      command: ({ editor, range }: CommandProps) =>
+        editor
+          .chain()
+          .focus()
+          .deleteRange(range)
+          .setTag({ value: "todo" })
+          .run(),
     },
     {
       title: "Math inline",

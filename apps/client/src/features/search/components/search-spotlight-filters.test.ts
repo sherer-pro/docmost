@@ -24,12 +24,30 @@ describe("getSearchFilterPayload", () => {
         spaceId: "space-1",
         contentType: "page",
         label: { id: "label-1", name: "urgent" },
+        tag: null,
         isAiMode: false,
       }),
     ).toEqual({
       spaceId: "space-1",
       contentType: "page",
       labelId: "label-1",
+      tag: null,
+    });
+  });
+
+  it("keeps a selected tag for page search", () => {
+    expect(
+      getSearchFilterPayload({
+        spaceId: null,
+        contentType: "page",
+        label: null,
+        tag: "tbd",
+        isAiMode: false,
+      }),
+    ).toMatchObject({
+      contentType: "page",
+      labelId: null,
+      tag: "tbd",
     });
   });
 
@@ -39,11 +57,13 @@ describe("getSearchFilterPayload", () => {
         spaceId: null,
         contentType: "attachment",
         label: { id: "label-1", name: "urgent" },
+        tag: "todo",
         isAiMode: false,
       }),
     ).toMatchObject({
       contentType: "attachment",
       labelId: null,
+      tag: null,
     });
   });
 
@@ -53,11 +73,13 @@ describe("getSearchFilterPayload", () => {
         spaceId: null,
         contentType: "page",
         label: { id: "label-1", name: "urgent" },
+        tag: "todo",
         isAiMode: true,
       }),
     ).toMatchObject({
       contentType: "page",
       labelId: null,
+      tag: null,
     });
   });
 });

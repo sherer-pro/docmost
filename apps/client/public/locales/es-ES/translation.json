@@ -1235,5 +1235,11 @@
   "Public link": "Public link",
   "Share page to web": "Share page to web",
   "Enter valid email addresses": "Enter valid email addresses",
-  "Remove option": "Remove option"
+  "Remove option": "Remove option",
+  "Tag": "Tag",
+  "Tag TBD": "Tag TBD",
+  "Tag TODO": "Tag TODO",
+  "Mark text that needs clarification.": "Mark text that needs clarification.",
+  "Mark text that needs follow-up.": "Mark text that needs follow-up.",
+  "Not selected": "Not selected"
 }

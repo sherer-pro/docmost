@@ -268,6 +268,7 @@ export interface Labels {
   createdAt: Generated<Timestamp>;
   id: Generated<string>;
   name: string;
+  spaceId: string;
   type: Generated<string>;
   updatedAt: Generated<Timestamp>;
   workspaceId: string;

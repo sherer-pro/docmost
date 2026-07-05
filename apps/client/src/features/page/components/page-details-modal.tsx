@@ -203,6 +203,7 @@ export default function PageDetailsModal({
           {!readOnly && (
             <LabelPicker
               pageId={pageId}
+              spaceId={page?.spaceId}
               existingLabelNames={(labels?.items ?? []).map((label) => label.name)}
             />
           )}
@@ -242,9 +243,11 @@ function Stat({ label, value }: { label: string; value: number }) {
 
 function LabelPicker({
   pageId,
+  spaceId,
   existingLabelNames,
 }: {
   pageId: string;
+  spaceId?: string;
   existingLabelNames: string[];
 }) {
   const { t } = useTranslation();
@@ -252,8 +255,8 @@ function LabelPicker({
   const [search, setSearch] = useState("");
   const addLabels = useAddPageLabelsMutation(pageId);
   const { data: suggestedLabels = [] } = useSearchLabelsQuery(
-    { query: search, limit: 20 },
-    true,
+    { query: search, limit: 20, spaceId },
+    Boolean(spaceId),
   );
   const existing = new Set(existingLabelNames.map(normalizeLabelInput));
   const labelOptions = suggestedLabels

@@ -19,6 +19,7 @@ export class LabelService {
     pageId: string,
     names: string[],
     workspaceId: string,
+    spaceId: string,
   ): Promise<Label[]> {
     const attached: Label[] = [];
     await executeTx(this.db, async (trx) => {
@@ -26,6 +27,7 @@ export class LabelService {
         const label = await this.labelRepo.findOrCreate(
           name.trim(),
           workspaceId,
+          spaceId,
           LabelType.PAGE,
           trx,
         );
@@ -40,10 +42,15 @@ export class LabelService {
     pageId: string,
     labelId: string,
     workspaceId: string,
+    spaceId: string,
   ): Promise<void> {
     await executeTx(this.db, async (trx) => {
       const label = await this.labelRepo.findById(labelId, trx);
-      if (!label || label.workspaceId !== workspaceId) {
+      if (
+        !label ||
+        label.workspaceId !== workspaceId ||
+        label.spaceId !== spaceId
+      ) {
         throw new NotFoundException('Label not found');
       }
 
@@ -51,16 +58,18 @@ export class LabelService {
         pageId,
         labelId,
         workspaceId,
+        spaceId,
         trx,
       );
 
       const count = await this.labelRepo.getLabelPageCount(
         labelId,
         workspaceId,
+        spaceId,
         trx,
       );
       if (count === 0) {
-        await this.labelRepo.deleteLabel(labelId, workspaceId, trx);
+        await this.labelRepo.deleteLabel(labelId, workspaceId, spaceId, trx);
       }
     });
   }
@@ -72,10 +81,17 @@ export class LabelService {
   async getLabels(
     workspaceId: string,
     userId: string,
+    spaceId: string,
     type: LabelType,
     pagination: PaginationOptions,
   ) {
-    return this.labelRepo.findLabels(workspaceId, userId, type, pagination);
+    return this.labelRepo.findLabels(
+      workspaceId,
+      userId,
+      spaceId,
+      type,
+      pagination,
+    );
   }
 
   async findPagesByLabel(
@@ -90,7 +106,10 @@ export class LabelService {
     const result = await this.labelRepo.findPagesByLabelId(
       labelId,
       user.id,
-      opts,
+      {
+        ...opts,
+        workspaceId: user.workspaceId,
+      },
     );
     if (result.items.length === 0) {
       return result;

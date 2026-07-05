@@ -185,7 +185,12 @@ export class PageController {
 
     await this.pageAccessService.assertCanWritePage(page, user);
 
-    return this.labelService.addLabelsToPage(page.id, dto.names, workspace.id);
+    return this.labelService.addLabelsToPage(
+      page.id,
+      dto.names,
+      workspace.id,
+      page.spaceId,
+    );
   }
 
   @HttpCode(HttpStatus.OK)
@@ -205,6 +210,7 @@ export class PageController {
       page.id,
       dto.labelId,
       page.workspaceId,
+      page.spaceId,
     );
   }
 

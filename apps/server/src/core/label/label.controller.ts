@@ -42,9 +42,16 @@ export class LabelController {
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
+    if (!dto.spaceId) {
+      return this.emptyResult(dto.limit);
+    }
+
+    await this.assertCanReadSpace(user, dto.spaceId);
+
     return this.labelService.getLabels(
       workspace.id,
       user.id,
+      dto.spaceId,
       dto.type,
       dto,
     );
@@ -57,19 +64,25 @@ export class LabelController {
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
-    if (dto.spaceId) {
-      await this.assertCanReadSpace(user, dto.spaceId);
+    let labelId = dto.labelId;
+    let spaceId = dto.spaceId;
+
+    if (spaceId) {
+      await this.assertCanReadSpace(user, spaceId);
     }
 
-    let labelId = dto.labelId;
     if (!labelId) {
       if (!dto.name) {
         throw new BadRequestException('labelId or name is required');
       }
+      if (!spaceId) {
+        throw new BadRequestException('spaceId is required for label name');
+      }
 
-      const label = await this.labelRepo.findByNameAndWorkspace(
+      const label = await this.labelRepo.findByNameAndSpace(
         dto.name,
         workspace.id,
+        spaceId,
         LabelType.PAGE,
       );
       if (!label) {
@@ -78,13 +91,19 @@ export class LabelController {
       labelId = label.id;
     } else {
       const label = await this.labelRepo.findById(labelId);
-      if (!label || label.workspaceId !== workspace.id) {
+      if (
+        !label ||
+        label.workspaceId !== workspace.id ||
+        (spaceId && label.spaceId !== spaceId)
+      ) {
         throw new NotFoundException('Label not found');
       }
+      spaceId = label.spaceId;
+      await this.assertCanReadSpace(user, spaceId);
     }
 
     return this.labelService.findPagesByLabel(labelId, user, {
-      spaceId: dto.spaceId,
+      spaceId,
       query: dto.query,
       pagination: dto,
     });

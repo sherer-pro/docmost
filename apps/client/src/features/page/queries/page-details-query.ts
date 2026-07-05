@@ -33,6 +33,7 @@ export function useAddPageLabelsMutation(pageId?: string) {
       queryClient.invalidateQueries({
         queryKey: PAGE_DETAILS_QUERY_KEYS.labels(pageId),
       });
+      queryClient.invalidateQueries({ queryKey: ["search-labels"] });
     },
   });
 }
@@ -47,6 +48,7 @@ export function useRemovePageLabelMutation(pageId?: string) {
       queryClient.invalidateQueries({
         queryKey: PAGE_DETAILS_QUERY_KEYS.labels(pageId),
       });
+      queryClient.invalidateQueries({ queryKey: ["search-labels"] });
     },
   });
 }

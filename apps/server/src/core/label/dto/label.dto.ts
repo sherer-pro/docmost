@@ -63,12 +63,20 @@ export class ListLabelsDto {
   @IsString()
   @IsIn(SUPPORTED_LABEL_TYPES)
   type: LabelType;
+
+  @IsOptional()
+  @IsUUID()
+  spaceId?: string;
 }
 
 export class ListLabelsRequestDto extends PaginationOptions {
   @IsString()
   @IsIn(SUPPORTED_LABEL_TYPES)
   type: LabelType;
+
+  @IsOptional()
+  @IsUUID()
+  spaceId?: string;
 }
 
 export class FindPagesByLabelRequestDto extends PaginationOptions {

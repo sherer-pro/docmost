@@ -264,11 +264,11 @@ export class SearchService {
       workspaceId: string;
     },
   ): Promise<{ items: SearchResponseDto[] }> {
-    const { labelId } = searchParams;
+    const { labelId, tag } = searchParams;
     const query = searchParams.query?.trim() ?? '';
     const hasTextQuery = query.length > 0;
 
-    if (!hasTextQuery && !labelId) {
+    if (!hasTextQuery && !labelId && !tag) {
       return { items: [] };
     }
 
@@ -319,10 +319,16 @@ export class SearchService {
                 'matchingPageLabels.labelId',
                 'labels.id',
               )
-              .select(['labels.id', 'labels.name', 'labels.type'])
+              .select([
+                'labels.id',
+                'labels.name',
+                'labels.spaceId',
+                'labels.type',
+              ])
               .whereRef('matchingPageLabels.pageId', '=', 'pages.id')
               .where('labels.id', '=', labelId)
               .where('labels.workspaceId', '=', opts.workspaceId)
+              .whereRef('labels.spaceId', '=', 'pages.spaceId')
               .where('labels.type', '=', LabelType.PAGE),
           ).as('labels'),
         )
@@ -339,6 +345,7 @@ export class SearchService {
               .whereRef('labelFilter.pageId', '=', 'pages.id')
               .where('labelFilter.labelId', '=', labelId)
               .where('labelFilterLabels.workspaceId', '=', opts.workspaceId)
+              .whereRef('labelFilterLabels.spaceId', '=', 'pages.spaceId')
               .where('labelFilterLabels.type', '=', LabelType.PAGE),
           ),
         )
@@ -353,6 +360,12 @@ export class SearchService {
             ),
           ),
         );
+    }
+
+    if (tag) {
+      queryResults = queryResults.where(
+        sql<boolean>`jsonb_path_exists(${sql.ref('pages.content')}, '$.** ? (@.type == "tag" && @.attrs.value == $tag)', jsonb_build_object('tag', ${tag}))`,
+      );
     }
 
     if (!searchParams.shareId) {
@@ -413,7 +426,10 @@ export class SearchService {
     }
 
     if (opts.userId) {
-      const authUser = await this.userRepo.findById(opts.userId, opts.workspaceId);
+      const authUser = await this.userRepo.findById(
+        opts.userId,
+        opts.workspaceId,
+      );
 
       if (!authUser) {
         return { items: [] };
@@ -472,14 +488,14 @@ export class SearchService {
         rawOffset += rawBatch.length;
       }
 
-      const visiblePageIdsBySpaceId = this.buildVisiblePageIdsMap(
-        snapshotBySpaceId,
-      );
+      const visiblePageIdsBySpaceId =
+        this.buildVisiblePageIdsMap(snapshotBySpaceId);
 
-      const searchResultsWithBreadcrumbs = await this.attachBreadcrumbsToResults(
-        searchResults,
-        visiblePageIdsBySpaceId,
-      );
+      const searchResultsWithBreadcrumbs =
+        await this.attachBreadcrumbsToResults(
+          searchResults,
+          visiblePageIdsBySpaceId,
+        );
 
       return { items: searchResultsWithBreadcrumbs };
     } else {
@@ -577,7 +593,10 @@ export class SearchService {
       );
     }
 
-    const authUser = await this.userRepo.findById(opts.userId, opts.workspaceId);
+    const authUser = await this.userRepo.findById(
+      opts.userId,
+      opts.workspaceId,
+    );
 
     if (!authUser) {
       return { items: [] };

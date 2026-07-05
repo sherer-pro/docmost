@@ -11,6 +11,7 @@ export interface IPageSearchBreadcrumb {
 export interface IPageSearchLabel {
   id: string;
   name: string;
+  spaceId: string;
   type: "page";
 }
 
@@ -51,10 +52,12 @@ export interface IPageSearchParams {
   spaceId?: string;
   shareId?: string;
   labelId?: string;
+  tag?: "tbd" | "todo";
 }
 
 export interface SearchLabelParams {
   query?: string;
+  spaceId?: string;
   limit?: number;
 }
 

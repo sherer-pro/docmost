@@ -45,6 +45,7 @@ export async function searchLabels(
     type: "page",
     limit: params.limit ?? 25,
     query: params.query,
+    spaceId: params.spaceId,
   });
   return req.data.items;
 }

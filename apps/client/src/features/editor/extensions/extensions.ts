@@ -51,6 +51,7 @@ import {
   SharedStorage,
   Indent,
   PageBreak,
+  Tag,
   TransclusionSource,
   TransclusionReference,
 } from "@docmost/editor-ext";
@@ -73,6 +74,7 @@ import EmbedView from "@/features/editor/components/embed/embed-view.tsx";
 import LinkPreviewView from "@/features/editor/components/link-preview/link-preview-view.tsx";
 import PdfView from "@/features/editor/components/pdf/pdf-view.tsx";
 import SubpagesView from "@/features/editor/components/subpages/subpages-view.tsx";
+import TagView from "@/features/editor/components/tag/tag-view.tsx";
 import TransclusionView from "@/features/editor/components/transclusion/transclusion-view.tsx";
 import TransclusionReferenceView from "@/features/editor/components/transclusion/transclusion-reference-view.tsx";
 import { common, createLowlight } from "lowlight";
@@ -223,6 +225,9 @@ export const mainExtensions = [
   DetailsSummary,
   DetailsContent,
   PageBreak,
+  Tag.configure({
+    view: TagView,
+  }),
   Youtube.configure({
     addPasteHandler: false,
     controls: true,
