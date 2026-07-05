@@ -13,6 +13,10 @@
   user-select: none;
 }
 
+.label {
+  display: inline;
+}
+
 .todo {
   color: light-dark(var(--mantine-color-blue-8), var(--mantine-color-blue-2));
   background: light-dark(var(--mantine-color-blue-0), rgba(34, 139, 230, 0.14));

@@ -1239,6 +1239,8 @@
   "Tag": "Тег",
   "Tag TBD": "Tag TBD",
   "Tag TODO": "Tag TODO",
+  "Tag TBD description": "To Be Decided. Означает «подлежит определению», «будет решено» или «уточняется».",
+  "Tag TODO description": "To Do. Означает задачу, действие к выполнению или место, к которому нужно вернуться.",
   "Mark text that needs clarification.": "Пометить текст, который требует уточнения.",
   "Mark text that needs follow-up.": "Пометить текст, который требует дальнейшего действия.",
   "Not selected": "Не выбрано"
