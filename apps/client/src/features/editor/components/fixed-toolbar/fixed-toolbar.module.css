@@ -57,6 +57,13 @@
   width: 1px;
 }
 
+.rightActions {
+  align-items: center;
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+}
+
 .active {
   color: light-dark(var(--mantine-color-blue-8), var(--mantine-color-gray-5));
 }
