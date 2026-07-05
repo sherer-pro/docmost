@@ -1236,12 +1236,12 @@
   "Share page to web": "Share page to web",
   "Enter valid email addresses": "Enter valid email addresses",
   "Remove option": "Remove option",
-  "Tag": "Tag",
-  "Tag TBD": "Tag TBD",
-  "Tag TODO": "Tag TODO",
-  "Tag TBD description": "To Be Decided. Marks a place where a decision is still pending, details need clarification, or missing information must be added.",
-  "Tag TODO description": "To Do. Marks an action item or a place in the text that needs follow-up work.",
-  "Mark text that needs clarification.": "Mark text that needs clarification.",
-  "Mark text that needs follow-up.": "Mark text that needs follow-up.",
-  "Not selected": "Not selected"
+  "Tag": "Etiqueta",
+  "Tag TBD": "Etiqueta TBD",
+  "Tag TODO": "Etiqueta TODO",
+  "Tag TBD description": "To Be Decided. Marca un punto donde todavía falta tomar una decisión, aclarar detalles o añadir información pendiente.",
+  "Tag TODO description": "To Do. Marca una tarea o un punto del texto que requiere trabajo de seguimiento.",
+  "Mark text that needs clarification.": "Marcar texto que necesita aclaración.",
+  "Mark text that needs follow-up.": "Marcar texto que necesita seguimiento.",
+  "Not selected": "Sin seleccionar"
 }

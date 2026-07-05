@@ -1236,12 +1236,12 @@
   "Share page to web": "Share page to web",
   "Enter valid email addresses": "Enter valid email addresses",
   "Remove option": "Remove option",
-  "Tag": "Tag",
-  "Tag TBD": "Tag TBD",
-  "Tag TODO": "Tag TODO",
-  "Tag TBD description": "To Be Decided. Marks a place where a decision is still pending, details need clarification, or missing information must be added.",
-  "Tag TODO description": "To Do. Marks an action item or a place in the text that needs follow-up work.",
-  "Mark text that needs clarification.": "Mark text that needs clarification.",
-  "Mark text that needs follow-up.": "Mark text that needs follow-up.",
-  "Not selected": "Not selected"
+  "Tag": "태그",
+  "Tag TBD": "TBD 태그",
+  "Tag TODO": "TODO 태그",
+  "Tag TBD description": "To Be Decided. 아직 결정이 필요하거나 세부 내용을 확인해야 하거나 누락된 정보를 추가해야 하는 위치를 표시합니다.",
+  "Tag TODO description": "To Do. 작업 항목이나 나중에 다시 확인해야 하는 텍스트 위치를 표시합니다.",
+  "Mark text that needs clarification.": "확인이 필요한 텍스트를 표시합니다.",
+  "Mark text that needs follow-up.": "후속 작업이 필요한 텍스트를 표시합니다.",
+  "Not selected": "선택 안 함"
 }

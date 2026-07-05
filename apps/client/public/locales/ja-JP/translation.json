@@ -1236,12 +1236,12 @@
   "Share page to web": "Share page to web",
   "Enter valid email addresses": "Enter valid email addresses",
   "Remove option": "Remove option",
-  "Tag": "Tag",
-  "Tag TBD": "Tag TBD",
-  "Tag TODO": "Tag TODO",
-  "Tag TBD description": "To Be Decided. Marks a place where a decision is still pending, details need clarification, or missing information must be added.",
-  "Tag TODO description": "To Do. Marks an action item or a place in the text that needs follow-up work.",
-  "Mark text that needs clarification.": "Mark text that needs clarification.",
-  "Mark text that needs follow-up.": "Mark text that needs follow-up.",
-  "Not selected": "Not selected"
+  "Tag": "タグ",
+  "Tag TBD": "TBD タグ",
+  "Tag TODO": "TODO タグ",
+  "Tag TBD description": "To Be Decided. まだ決定が必要な箇所、詳細の確認が必要な箇所、不足情報を追加する必要がある箇所を示します。",
+  "Tag TODO description": "To Do. 対応が必要な作業項目や、あとで戻って処理する必要がある本文中の箇所を示します。",
+  "Mark text that needs clarification.": "確認が必要なテキストをマークします。",
+  "Mark text that needs follow-up.": "フォローアップが必要なテキストをマークします。",
+  "Not selected": "未選択"
 }
