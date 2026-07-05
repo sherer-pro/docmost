@@ -126,6 +126,7 @@ export async function revokeInvitation(data: {
 
 export async function getInvitationById(data: {
   invitationId: string;
+  token: string;
 }): Promise<IInvitation> {
   const req = await api.get("/workspace/invites/info", { params: data });
   return req.data;

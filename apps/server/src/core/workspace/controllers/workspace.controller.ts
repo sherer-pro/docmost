@@ -21,6 +21,7 @@ import { WorkspaceInvitationService } from '../services/workspace-invitation.ser
 import { Public } from '../../../common/decorators/public.decorator';
 import {
   AcceptInviteDto,
+  InvitationInfoDto,
   InvitationIdDto,
   InviteUserDto,
   RevokeInviteDto,
@@ -41,6 +42,8 @@ import { AuthCookieService } from '../../../common/security/auth-cookie.service'
 import { PresenceService } from '../../presence/presence.service';
 import { DeprecatedRoute } from '../../../common/decorators/deprecated-route.decorator';
 import { LEGACY_API_SUNSET } from '../../../common/config/api-deprecation.constants';
+import { AuthRateLimitGuard } from '../../auth/rate-limit/auth-rate-limit.guard';
+import { AuthRateLimit } from '../../auth/rate-limit/auth-rate-limit.decorator';
 
 @UseGuards(JwtAuthGuard)
 @Controller('workspace')
@@ -309,8 +312,10 @@ export class WorkspaceController {
   @Public()
   @HttpCode(HttpStatus.OK)
   @Get('invites/info')
+  @UseGuards(AuthRateLimitGuard)
+  @AuthRateLimit({ endpoint: 'invitationInfo', accountField: 'invitationId' })
   async getInvitationByIdViaQuery(
-    @Query() dto: InvitationIdDto,
+    @Query() dto: InvitationInfoDto,
     @AuthWorkspace() workspace: Workspace,
   ) {
     return this.getInvitationById(dto, workspace);
@@ -323,13 +328,16 @@ export class WorkspaceController {
     replacement: 'GET /api/workspace/invites/info',
   })
   @Post('invites/info')
+  @UseGuards(AuthRateLimitGuard)
+  @AuthRateLimit({ endpoint: 'invitationInfo', accountField: 'invitationId' })
   async getInvitationById(
-    @Body() dto: InvitationIdDto,
+    @Body() dto: InvitationInfoDto,
     @AuthWorkspace() workspace: Workspace,
   ) {
     return this.workspaceInvitationService.getInvitationById(
       dto.invitationId,
       workspace,
+      dto.token,
     );
   }
 
@@ -397,6 +405,8 @@ export class WorkspaceController {
   @Public()
   @HttpCode(HttpStatus.OK)
   @Post('invites/accept')
+  @UseGuards(AuthRateLimitGuard)
+  @AuthRateLimit({ endpoint: 'invitationAccept', accountField: 'invitationId' })
   async acceptInvite(
     @Body() acceptInviteDto: AcceptInviteDto,
     @AuthWorkspace() workspace: Workspace,
@@ -425,6 +435,11 @@ export class WorkspaceController {
   @Public()
   @HttpCode(HttpStatus.OK)
   @Post('/check-hostname')
+  @UseGuards(AuthRateLimitGuard)
+  @AuthRateLimit({
+    endpoint: 'workspaceCheckHostname',
+    accountField: 'hostname',
+  })
   async checkHostname(@Body() checkHostnameDto: CheckHostnameDto) {
     return this.workspaceService.checkHostname(checkHostnameDto.hostname);
   }

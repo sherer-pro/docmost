@@ -519,11 +519,13 @@ export interface UserSessions {
 export interface WorkspaceInvitations {
   createdAt: Generated<Timestamp>;
   email: string | null;
+  expiresAt: Timestamp | null;
   groupIds: string[] | null;
   id: Generated<string>;
   invitedById: string | null;
   role: string;
-  token: string;
+  token: string | null;
+  tokenHash: string | null;
   updatedAt: Generated<Timestamp>;
   workspaceId: string;
 }

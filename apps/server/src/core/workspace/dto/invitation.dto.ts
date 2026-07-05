@@ -40,7 +40,13 @@ export class InvitationIdDto {
   invitationId: string;
 }
 
-export class AcceptInviteDto extends InvitationIdDto {
+export class InvitationInfoDto extends InvitationIdDto {
+  @IsNotEmpty()
+  @IsString()
+  token: string;
+}
+
+export class AcceptInviteDto extends InvitationInfoDto {
   @MinLength(2)
   @MaxLength(60)
   @IsString()
@@ -49,10 +55,6 @@ export class AcceptInviteDto extends InvitationIdDto {
   @MinLength(8)
   @IsString()
   password: string;
-
-  @IsNotEmpty()
-  @IsString()
-  token: string;
 }
 
 export class RevokeInviteDto extends InvitationIdDto {}
