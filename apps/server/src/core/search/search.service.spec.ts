@@ -158,7 +158,10 @@ function createPageSearchService(
     getUserSpaceIdsQuery: jest.fn(() => ['space-1']),
   };
   const userRepo = {
-    findById: jest.fn(async () => ({ id: 'user-1', workspaceId: 'workspace-1' })),
+    findById: jest.fn(async () => ({
+      id: 'user-1',
+      workspaceId: 'workspace-1',
+    })),
   };
   const pageAccessService = {
     getSidebarAccessSnapshot: jest.fn(async () => ({
@@ -200,7 +203,9 @@ function createSearchRow(overrides: Record<string, unknown> = {}) {
     rank: 0,
     highlight: '',
     databaseId: null,
-    labels: [{ id: 'label-1', name: 'urgent', type: 'page' }],
+    labels: [
+      { id: 'label-1', name: 'urgent', spaceId: 'space-1', type: 'page' },
+    ],
     space: {
       id: 'space-1',
       name: 'Engineering',
@@ -253,6 +258,30 @@ describe('SearchService', () => {
     );
   });
 
+  it('returns readable pages for tag-only search without full-text filtering', async () => {
+    const row = createSearchRow();
+    const { service, state } = createPageSearchService([row]);
+
+    const result = await service.searchPage({ query: '', tag: 'tbd' } as any, {
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+    });
+
+    expect(result.items).toEqual([{ ...row, breadcrumbs: [] }]);
+    expect(state.whereCalls.some(([column]) => column === 'tsv')).toBe(false);
+    expect(
+      state.whereCalls.some(
+        ([condition]) => typeof condition === 'object' && condition !== null,
+      ),
+    ).toBe(true);
+    expect(state.orderByCalls).toEqual(
+      expect.arrayContaining([
+        ['updatedAt', 'desc'],
+        ['id', 'desc'],
+      ]),
+    );
+  });
+
   it('requires both full-text and label matching when query and label are provided', async () => {
     const row = createSearchRow({ rank: 1, highlight: '<mark>Roadmap</mark>' });
     const { service, state } = createPageSearchService([row]);
@@ -271,10 +300,10 @@ describe('SearchService', () => {
   it('adds an active database row exclusion when label filtering pages', async () => {
     const { service, state } = createPageSearchService([createSearchRow()]);
 
-    await service.searchPage(
-      { labelId: 'label-1' } as any,
-      { userId: 'user-1', workspaceId: 'workspace-1' },
-    );
+    await service.searchPage({ labelId: 'label-1' } as any, {
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+    });
 
     expect(state.selectFromCalls).toContain('databaseRows');
     expect(state.notCalls).toHaveLength(1);
@@ -292,10 +321,10 @@ describe('SearchService', () => {
       new Set(['page-1']),
     );
 
-    const result = await service.searchPage(
-      { labelId: 'label-1' } as any,
-      { userId: 'user-1', workspaceId: 'workspace-1' },
-    );
+    const result = await service.searchPage({ labelId: 'label-1' } as any, {
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+    });
 
     expect(result.items).toEqual([{ ...readableRow, breadcrumbs: [] }]);
   });
@@ -365,10 +394,10 @@ describe('SearchService', () => {
   it('returns no attachment results for a blank query', async () => {
     const { service, db } = createAttachmentSearchService([]);
 
-    const result = await service.searchAttachments(
-      { query: '   ' } as any,
-      { userId: 'user-1', workspaceId: 'workspace-1' },
-    );
+    const result = await service.searchAttachments({ query: '   ' } as any, {
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+    });
 
     expect(result.items).toEqual([]);
     expect(db.selectFrom).not.toHaveBeenCalled();
@@ -412,10 +441,10 @@ describe('SearchService', () => {
       unreadableRow,
     ]);
 
-    const result = await service.searchAttachments(
-      { query: 'pdf' } as any,
-      { userId: 'user-1', workspaceId: 'workspace-1' },
-    );
+    const result = await service.searchAttachments({ query: 'pdf' } as any, {
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+    });
 
     expect(result.items).toEqual([readableRow]);
   });

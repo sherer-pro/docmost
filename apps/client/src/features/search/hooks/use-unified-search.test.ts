@@ -25,6 +25,16 @@ describe("getUnifiedSearchType", () => {
     ).toBe(true);
   });
 
+  it("enables page search when a tag is selected without a text query", () => {
+    expect(
+      isUnifiedSearchEnabled({
+        query: "",
+        contentType: "page",
+        tag: "tbd",
+      }),
+    ).toBe(true);
+  });
+
   it("keeps attachment search disabled without a text query even when labelId exists", () => {
     expect(
       isUnifiedSearchEnabled({
@@ -35,12 +45,13 @@ describe("getUnifiedSearchType", () => {
     ).toBe(false);
   });
 
-  it("does not send labelId to attachment search", () => {
+  it("does not send page-only filters to attachment search", () => {
     expect(
       getUnifiedSearchBackendParams({
         query: "report",
         contentType: "attachment",
         labelId: "label-1",
+        tag: "todo",
         spaceId: "space-1",
       }),
     ).toEqual({

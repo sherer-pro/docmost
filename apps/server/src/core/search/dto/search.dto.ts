@@ -1,4 +1,5 @@
 import {
+  IsIn,
   Max,
   MaxLength,
   Min,
@@ -27,8 +28,8 @@ function parseOptionalBoolean(value: unknown): unknown {
 export class SearchDTO {
   @ValidateIf((dto: SearchDTO) =>
     typeof dto.query === 'string'
-      ? dto.query.trim().length > 0 || !dto.labelId
-      : !dto.labelId,
+      ? dto.query.trim().length > 0 || (!dto.labelId && !dto.tag)
+      : !dto.labelId && !dto.tag,
   )
   @IsNotEmpty()
   @IsString()
@@ -50,6 +51,10 @@ export class SearchDTO {
   @IsOptional()
   @IsUUID()
   labelId?: string;
+
+  @IsOptional()
+  @IsIn(['tbd', 'todo'])
+  tag?: 'tbd' | 'todo';
 
   @IsOptional()
   @Type(() => Number)

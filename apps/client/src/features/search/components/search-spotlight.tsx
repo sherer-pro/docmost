@@ -21,6 +21,7 @@ interface SearchFilters {
   spaceId?: string | null;
   contentType?: string;
   labelId?: string | null;
+  tag?: "tbd" | "todo" | null;
 }
 
 export function SearchSpotlight({ spaceId }: SearchSpotlightProps) {
@@ -51,6 +52,10 @@ export function SearchSpotlight({ spaceId }: SearchSpotlightProps) {
       !isAiMode
     ) {
       params.labelId = filters.labelId;
+    }
+
+    if (filters.tag && filters.contentType !== "attachment" && !isAiMode) {
+      params.tag = filters.tag;
     }
 
     return params;
@@ -97,7 +102,10 @@ export function SearchSpotlight({ spaceId }: SearchSpotlightProps) {
   const isAttachmentSearch = filters.contentType === "attachment";
   const hasLabelSearch =
     Boolean(filters.labelId) && filters.contentType !== "attachment" && !isAiMode;
-  const hasSearchInput = query.trim().length > 0 || hasLabelSearch;
+  const hasTagSearch =
+    Boolean(filters.tag) && filters.contentType !== "attachment" && !isAiMode;
+  const hasSearchInput =
+    query.trim().length > 0 || hasLabelSearch || hasTagSearch;
 
   const resultItems = (searchResults || []).map((result) => (
     <SearchResultItem

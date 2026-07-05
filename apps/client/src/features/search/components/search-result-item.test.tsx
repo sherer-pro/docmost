@@ -139,7 +139,9 @@ describe("SearchResultItem", () => {
       updatedAt: new Date(),
       rank: 1,
       highlight: "",
-      labels: [{ id: "label-1", name: "urgent", type: "page" as const }],
+      labels: [
+        { id: "label-1", name: "urgent", spaceId: "space-1", type: "page" as const },
+      ],
       space: {
         id: "space-1",
         name: "Engineering",

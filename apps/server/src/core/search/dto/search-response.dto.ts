@@ -8,6 +8,7 @@ export class SearchBreadcrumbDto {
 export class SearchLabelDto {
   id: string;
   name: string;
+  spaceId: string;
   type: string;
 }
 

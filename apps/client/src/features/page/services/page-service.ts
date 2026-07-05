@@ -265,6 +265,7 @@ export interface IPageLabel {
   createdAt: string;
   updatedAt: string;
   workspaceId: string;
+  spaceId: string;
 }
 
 export async function getPageLabels(

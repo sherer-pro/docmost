@@ -56,10 +56,12 @@ export function SearchSpotlightFilters({
   const [contentType, setContentType] = useState<string | null>("page");
   const [selectedLabel, setSelectedLabel] =
     useState<SelectedSearchLabel | null>(null);
+  const [selectedTag, setSelectedTag] = useState<"tbd" | "todo" | null>(null);
   const [labelSearchQuery, setLabelSearchQuery] = useState("");
   const [debouncedLabelQuery] = useDebouncedValue(labelSearchQuery, 300);
   const [workspace] = useAtom(workspaceAtom);
-  const isLabelFilterDisabled = isAiMode || contentType === "attachment";
+  const arePageFiltersDisabled = isAiMode || contentType === "attachment";
+  const isLabelFilterDisabled = arePageFiltersDisabled || !selectedSpaceId;
 
   const { data: spacesData } = useGetSpacesQuery({
     limit: 100,
@@ -69,6 +71,7 @@ export function SearchSpotlightFilters({
     {
       limit: 25,
       query: debouncedLabelQuery,
+      spaceId: selectedSpaceId ?? undefined,
     },
     !isLabelFilterDisabled,
   );
@@ -98,44 +101,55 @@ export function SearchSpotlightFilters({
       return labels;
     }
 
-    return [{ ...selectedLabel, type: "page" }, ...labels];
-  }, [labels, selectedLabel]);
+    if (!selectedSpaceId) {
+      return labels;
+    }
+
+    return [
+      { ...selectedLabel, type: "page", spaceId: selectedSpaceId },
+      ...labels,
+    ];
+  }, [labels, selectedLabel, selectedSpaceId]);
 
   const emitFilters = (
     nextSpaceId: string | null,
     nextContentType: string | null,
     nextLabel: SelectedSearchLabel | null,
+    nextTag: "tbd" | "todo" | null,
   ) => {
     onFiltersChange?.(
       getSearchFilterPayload({
         spaceId: nextSpaceId,
         contentType: nextContentType,
         label: nextLabel,
+        tag: nextTag,
         isAiMode,
       }),
     );
   };
 
   useEffect(() => {
-    emitFilters(selectedSpaceId, contentType, selectedLabel);
+    emitFilters(selectedSpaceId, contentType, selectedLabel, selectedTag);
   }, []);
 
   useEffect(() => {
-    if (!isLabelFilterDisabled || !selectedLabel) {
+    const nextLabel =
+      isLabelFilterDisabled && selectedLabel ? null : selectedLabel;
+    const nextTag = arePageFiltersDisabled && selectedTag ? null : selectedTag;
+
+    if (nextLabel === selectedLabel && nextTag === selectedTag) {
       return;
     }
 
-    setSelectedLabel(null);
-    onFiltersChange?.({
-      spaceId: selectedSpaceId,
-      contentType,
-      labelId: null,
-    });
+    setSelectedLabel(nextLabel);
+    setSelectedTag(nextTag);
+    emitFilters(selectedSpaceId, contentType, nextLabel, nextTag);
   }, [
+    arePageFiltersDisabled,
     contentType,
     isLabelFilterDisabled,
-    onFiltersChange,
     selectedLabel,
+    selectedTag,
     selectedSpaceId,
   ]);
 
@@ -143,35 +157,51 @@ export function SearchSpotlightFilters({
 
   const handleSpaceSelect = (spaceId: string | null) => {
     setSelectedSpaceId(spaceId);
-    emitFilters(spaceId, contentType, selectedLabel);
+    setSelectedLabel(null);
+    emitFilters(spaceId, contentType, null, selectedTag);
   };
 
   const handleFilterChange = (filterType: string, value: any) => {
     let newSelectedSpaceId = selectedSpaceId;
     let newContentType = contentType;
     let newSelectedLabel = selectedLabel;
+    let newSelectedTag = selectedTag;
 
     switch (filterType) {
       case "spaceId":
         newSelectedSpaceId = value;
+        newSelectedLabel = null;
         setSelectedSpaceId(value);
+        setSelectedLabel(null);
         break;
       case "contentType":
         newContentType = value;
         setContentType(value);
         if (value === "attachment") {
           newSelectedLabel = null;
+          newSelectedTag = null;
           setSelectedLabel(null);
+          setSelectedTag(null);
         }
         break;
     }
 
-    emitFilters(newSelectedSpaceId, newContentType, newSelectedLabel);
+    emitFilters(
+      newSelectedSpaceId,
+      newContentType,
+      newSelectedLabel,
+      newSelectedTag,
+    );
   };
 
   const handleLabelSelect = (label: SelectedSearchLabel | null) => {
     setSelectedLabel(label);
-    emitFilters(selectedSpaceId, contentType, label);
+    emitFilters(selectedSpaceId, contentType, label, selectedTag);
+  };
+
+  const handleTagSelect = (tag: "tbd" | "todo" | null) => {
+    setSelectedTag(tag);
+    emitFilters(selectedSpaceId, contentType, selectedLabel, tag);
   };
 
   return (
@@ -352,6 +382,51 @@ export function SearchSpotlightFilters({
               ))
             )}
           </ScrollArea.Autosize>
+        </Menu.Dropdown>
+      </Menu>
+
+      <Menu
+        shadow="md"
+        width={190}
+        position="bottom-start"
+        zIndex={getDefaultZIndex("max")}
+      >
+        <Menu.Target>
+          <Button
+            variant="subtle"
+            color="gray"
+            size="sm"
+            rightSection={<IconChevronDown size={14} />}
+            leftSection={<IconTag size={16} />}
+            className={classes.filterButton}
+            fw={500}
+            disabled={arePageFiltersDisabled}
+          >
+            {selectedTag
+              ? `${t("Tag")}: ${selectedTag.toUpperCase()}`
+              : `${t("Tag")}: ${t("Not selected")}`}
+          </Button>
+        </Menu.Target>
+        <Menu.Dropdown>
+          <Menu.Item onClick={() => handleTagSelect(null)}>
+            <Group flex="1" gap="xs">
+              <Text size="sm" style={{ flex: 1 }}>
+                {t("Not selected")}
+              </Text>
+              {!selectedTag && <IconCheck size={20} />}
+            </Group>
+          </Menu.Item>
+          <Divider my="xs" />
+          {(["tbd", "todo"] as const).map((tag) => (
+            <Menu.Item key={tag} onClick={() => handleTagSelect(tag)}>
+              <Group flex="1" gap="xs">
+                <Text size="sm" fw={500} style={{ flex: 1 }}>
+                  {tag.toUpperCase()}
+                </Text>
+                {selectedTag === tag && <IconCheck size={20} />}
+              </Group>
+            </Menu.Item>
+          ))}
         </Menu.Dropdown>
       </Menu>
 

@@ -22,7 +22,7 @@ export function usePageSearchQuery(
   return useQuery({
     queryKey: ["page-search", params],
     queryFn: () => searchPage(params),
-    enabled: !!params.query || !!params.labelId,
+    enabled: !!params.query || !!params.labelId || !!params.tag,
   });
 }
 
@@ -31,6 +31,7 @@ export function getSearchLabelsQueryKey(params: SearchLabelParams) {
     "search-labels",
     {
       query: params.query ?? "",
+      spaceId: params.spaceId ?? null,
       limit: params.limit ?? 25,
     },
   ] as const;
