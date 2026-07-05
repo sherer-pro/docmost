@@ -10,7 +10,7 @@ Docmost is a pnpm workspace orchestrated by Nx. The main runtime surfaces are:
 - `packages/api-contract` - shared API-facing TypeScript contracts used by backend and frontend code.
 - `packages/ee` plus `apps/*/src/ee` - Enterprise Edition code loaded conditionally by app-level EE modules.
 
-The production container uses Node.js 22 and runs the built backend through the root `pnpm start` script. The root `pnpm build` task builds all workspace projects.
+The production container uses Node.js 22 and runs the built backend entrypoint directly with `node apps/server/dist/apps/server/src/main`. The root `pnpm build` task builds all workspace projects.
 
 ## Backend
 
@@ -23,7 +23,7 @@ At the application level, `apps/server/src/app.module.ts` wires the core domain 
 Security-sensitive cross-cutting behavior is centralized:
 
 - JWT authentication is enforced by controllers and gateways that opt into `JwtAuthGuard`; routes marked `@Public()` intentionally bypass it.
-- Mutating non-public routes are protected by the global CSRF guard. Routes marked `@Public()` and routes marked with the explicit CSRF exemption decorator bypass CSRF validation.
+- Mutating non-public routes are protected by the global CSRF guard, which validates a trusted origin/referer and the double-submit CSRF cookie/header pair. Routes marked `@Public()` and routes marked with the explicit CSRF exemption decorator bypass CSRF validation.
 - Page and space visibility is resolved through `PageAccessService`.
 - RAG routes use API-key auth and reject regular user JWT/cookie auth.
 - Link preview metadata fetching validates public destinations and pins the resolved IP for the outbound request.
@@ -67,6 +67,8 @@ Generated backend route inventory is maintained by `pnpm routes:inventory` and c
 Reverse proxy deployments must set `TRUSTED_PROXIES` to the controlled proxy addresses or CIDRs, for example `loopback,linklocal,uniquelocal` or `10.0.0.0/8,172.16.0.0/12`. Leaving it empty disables forwarded-header trust.
 
 Generic iframe deployments must set `EMBED_ALLOWED_ORIGINS` to exact trusted `http(s)` origins when arbitrary iframe embeds are required. Built-in providers remain allowlisted by the shared embed frame-source policy.
+
+Production startup validation requires `APP_URL` to be valid, rejects trust-all proxy configuration, and requires `AUTH_RATE_LIMIT_STORAGE=redis`.
 
 ## Verification
 
