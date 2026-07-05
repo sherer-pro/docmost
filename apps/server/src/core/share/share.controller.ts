@@ -40,6 +40,8 @@ import { PageAccessService } from '../page-access/page-access.service';
 import { ShareTransclusionLookupDto } from './dto/share-transclusion-lookup.dto';
 import { DeprecatedRoute } from '../../common/decorators/deprecated-route.decorator';
 import { LEGACY_API_SUNSET } from '../../common/config/api-deprecation.constants';
+import { AuthRateLimitGuard } from '../auth/rate-limit/auth-rate-limit.guard';
+import { AuthRateLimit } from '../auth/rate-limit/auth-rate-limit.decorator';
 
 @UseGuards(JwtAuthGuard)
 @Controller('shares')
@@ -127,6 +129,8 @@ export class ShareController {
   @Public()
   @HttpCode(HttpStatus.OK)
   @Get('/info')
+  @UseGuards(AuthRateLimitGuard)
+  @AuthRateLimit({ endpoint: 'shareRead', accountField: 'shareId' })
   async getShareViaQuery(@Query() dto: ShareIdDto) {
     return this.getShare(dto);
   }
@@ -138,6 +142,8 @@ export class ShareController {
     replacement: 'GET /api/shares/info',
   })
   @Post('/info')
+  @UseGuards(AuthRateLimitGuard)
+  @AuthRateLimit({ endpoint: 'shareRead', accountField: 'shareId' })
   async getShare(@Body() dto: ShareIdDto) {
     const share = await this.shareRepo.findById(dto.shareId, {
       includeSharedPage: true,
@@ -299,6 +305,11 @@ export class ShareController {
   @Public()
   @HttpCode(HttpStatus.OK)
   @Post('/transclusion/lookup')
+  @UseGuards(AuthRateLimitGuard)
+  @AuthRateLimit({
+    endpoint: 'shareTransclusionLookup',
+    accountField: 'shareId',
+  })
   async lookupTransclusion(
     @Body() dto: ShareTransclusionLookupDto,
     @AuthWorkspace() workspace: Workspace,
@@ -313,6 +324,8 @@ export class ShareController {
   @Public()
   @HttpCode(HttpStatus.OK)
   @Get('/tree')
+  @UseGuards(AuthRateLimitGuard)
+  @AuthRateLimit({ endpoint: 'shareRead', accountField: 'shareId' })
   async getSharePageTreeViaQuery(
     @Query() dto: ShareIdDto,
     @AuthWorkspace() workspace: Workspace,
@@ -327,6 +340,8 @@ export class ShareController {
     replacement: 'GET /api/shares/tree',
   })
   @Post('/tree')
+  @UseGuards(AuthRateLimitGuard)
+  @AuthRateLimit({ endpoint: 'shareRead', accountField: 'shareId' })
   async getSharePageTree(
     @Body() dto: ShareIdDto,
     @AuthWorkspace() workspace: Workspace,

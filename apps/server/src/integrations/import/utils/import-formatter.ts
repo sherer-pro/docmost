@@ -73,21 +73,29 @@ export function defaultHtmlFormatter($: CheerioAPI, $root: Cheerio<any>) {
   $root.find('a[href]').each((_, el) => {
     const $el = $(el);
     const url = $el.attr('href')!;
-    const { provider } = getEmbedUrlAndProvider(url);
+    const { embedUrl, provider } = getEmbedUrlAndProvider(url);
     if (provider === 'iframe') return;
 
-    const embed = `<div data-type=\"embed\" data-src=\"${url}\" data-provider=\"${provider}\" data-align=\"center\" data-width=\"640\" data-height=\"480\"></div>`;
-    $el.replaceWith(embed);
+    $el.replaceWith(createEmbedNode($, embedUrl, provider));
   });
 
   $root.find('iframe[src]').each((_, el) => {
     const $el = $(el);
     const url = $el.attr('src')!;
-    const { provider } = getEmbedUrlAndProvider(url);
+    const { embedUrl, provider } = getEmbedUrlAndProvider(url);
 
-    const embed = `<div data-type=\"embed\" data-src=\"${url}\" data-provider=\"${provider}\" data-align=\"center\" data-width=\"640\" data-height=\"480\"></div>`;
-    $el.replaceWith(embed);
+    $el.replaceWith(createEmbedNode($, embedUrl, provider));
   });
+}
+
+function createEmbedNode($: CheerioAPI, url: string, provider: string) {
+  return $('<div>')
+    .attr('data-type', 'embed')
+    .attr('data-src', url)
+    .attr('data-provider', provider)
+    .attr('data-align', 'center')
+    .attr('data-width', '640')
+    .attr('data-height', '480');
 }
 
 export function notionFormatter($: CheerioAPI, $root: Cheerio<any>) {
@@ -100,7 +108,7 @@ export function notionFormatter($: CheerioAPI, $root: Cheerio<any>) {
     if (!$(el).text().trim()) $(el).remove();
   });
 
-  // block math → mathBlock
+  // block math -> mathBlock
   $root.find('figure.equation').each((_: any, fig: any) => {
     const $fig = $(fig);
     const tex = $fig
@@ -114,7 +122,7 @@ export function notionFormatter($: CheerioAPI, $root: Cheerio<any>) {
     $fig.replaceWith($math);
   });
 
-  // inline math → mathInline
+  // inline math -> mathInline
   $root.find('span.notion-text-equation-token').each((_, tok) => {
     const $tok = $(tok);
     const $prev = $tok.prev('style');

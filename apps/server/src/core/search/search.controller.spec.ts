@@ -6,6 +6,7 @@ import { EnvironmentService } from '../../integrations/environment/environment.s
 import { ModuleRef } from '@nestjs/core';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PageAccessService } from '../page-access/page-access.service';
+import { AuthRateLimitGuard } from '../auth/rate-limit/auth-rate-limit.guard';
 
 describe('SearchController', () => {
   let controller: SearchController;
@@ -20,7 +21,10 @@ describe('SearchController', () => {
         { provide: EnvironmentService, useValue: {} },
         { provide: ModuleRef, useValue: {} },
       ],
-    }).overrideGuard(JwtAuthGuard)
+    })
+      .overrideGuard(JwtAuthGuard)
+      .useValue({ canActivate: jest.fn(() => true) })
+      .overrideGuard(AuthRateLimitGuard)
       .useValue({ canActivate: jest.fn(() => true) });
 
     const module: TestingModule = await moduleBuilder.compile();

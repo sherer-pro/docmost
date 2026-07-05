@@ -111,6 +111,7 @@ export class AuthRateLimitGuard implements CanActivate {
   ): string | null {
     const body = (request.body ?? {}) as Record<string, unknown>;
     const query = (request.query ?? {}) as Record<string, unknown>;
+    const params = (request.params ?? {}) as Record<string, unknown>;
     const cookies = (request.cookies ?? {}) as Record<string, unknown>;
     const headers = request.headers;
     const normalizedHeaderName = accountField.toLowerCase();
@@ -118,6 +119,7 @@ export class AuthRateLimitGuard implements CanActivate {
     const candidates: unknown[] = [
       body[accountField],
       query[accountField],
+      params[accountField],
       cookies[accountField],
       headers[normalizedHeaderName],
     ];

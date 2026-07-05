@@ -4,6 +4,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { AcceptInviteDto, InviteUserDto } from '../dto/invitation.dto';
 import { UserRepo } from '@docmost/db/repos/user/user.repo';
 import { InjectKysely } from 'nestjs-kysely';
@@ -34,6 +35,8 @@ import {
   validateSsoEnforcement,
 } from '../../auth/auth.util';
 import { FastifyRequest } from 'fastify';
+
+const INVITATION_TOKEN_TTL_MS = 14 * 24 * 60 * 60 * 1000;
 
 @Injectable()
 export class WorkspaceInvitationService {
@@ -74,10 +77,14 @@ export class WorkspaceInvitationService {
     });
   }
 
-  async getInvitationById(invitationId: string, workspace: Workspace) {
+  async getInvitationById(
+    invitationId: string,
+    workspace: Workspace,
+    token: string,
+  ) {
     const invitation = await this.db
       .selectFrom('workspaceInvitations')
-      .select(['id', 'email', 'createdAt'])
+      .select(['id', 'email', 'createdAt', 'expiresAt', 'token', 'tokenHash'])
       .where('id', '=', invitationId)
       .where('workspaceId', '=', workspace.id)
       .executeTakeFirst();
@@ -86,13 +93,20 @@ export class WorkspaceInvitationService {
       throw new NotFoundException('Invitation not found');
     }
 
-    return { ...invitation, enforceSso: workspace.enforceSso };
+    await this.verifyInvitationToken(invitation, token);
+
+    return {
+      id: invitation.id,
+      email: invitation.email,
+      createdAt: invitation.createdAt,
+      enforceSso: workspace.enforceSso,
+    };
   }
 
   async getInvitationTokenById(invitationId: string, workspaceId: string) {
     const invitation = await this.db
       .selectFrom('workspaceInvitations')
-      .select(['token'])
+      .select(['id'])
       .where('id', '=', invitationId)
       .where('workspaceId', '=', workspaceId)
       .executeTakeFirst();
@@ -101,7 +115,9 @@ export class WorkspaceInvitationService {
       throw new NotFoundException('Invitation not found');
     }
 
-    return invitation;
+    return {
+      token: await this.rotateInvitationToken(invitationId, workspaceId),
+    };
   }
 
   async createInvitation(
@@ -143,25 +159,44 @@ export class WorkspaceInvitationService {
             .execute();
         }
 
-        const invitesToInsert = inviteEmails.map((email) => ({
-          email: email,
-          role: role,
-          token: nanoIdGen(16),
-          workspaceId: workspace.id,
-          invitedById: authUser.id,
-          groupIds: validGroups?.map((group: Partial<Group>) => group.id),
-        }));
+        const inviteDrafts = inviteEmails.map((email) => {
+          const token = this.generateInvitationToken();
+          return {
+            email,
+            token,
+            values: {
+              email: email,
+              role: role,
+              token: null,
+              tokenHash: this.hashInvitationToken(token),
+              expiresAt: this.getInvitationExpiry(),
+              workspaceId: workspace.id,
+              invitedById: authUser.id,
+              groupIds: validGroups?.map((group: Partial<Group>) => group.id),
+            },
+          };
+        });
 
-        if (invitesToInsert.length < 1) {
+        if (inviteDrafts.length < 1) {
           return;
         }
 
         invites = await trx
           .insertInto('workspaceInvitations')
-          .values(invitesToInsert)
+          .values(inviteDrafts.map((draft) => draft.values))
           .onConflict((oc) => oc.columns(['email', 'workspaceId']).doNothing())
           .returningAll()
           .execute();
+
+        const tokenByEmail = new Map(
+          inviteDrafts.map((draft) => [draft.email, draft.token]),
+        );
+        invites = invites.map((invitation) => ({
+          ...invitation,
+          token: invitation.email
+            ? tokenByEmail.get(invitation.email) ?? null
+            : null,
+        }));
       });
     } catch (err) {
       this.logger.error(`createInvitation - ${err}`);
@@ -173,6 +208,10 @@ export class WorkspaceInvitationService {
     // do not send code to do nothing users
     if (invites) {
       invites.forEach((invitation: WorkspaceInvitation) => {
+        if (!invitation.email || !invitation.token) {
+          return;
+        }
+
         this.sendInvitationMail(
           invitation.id,
           invitation.email,
@@ -204,9 +243,7 @@ export class WorkspaceInvitationService {
       throw new BadRequestException('Invitation not found');
     }
 
-    if (dto.token !== invitation.token) {
-      throw new BadRequestException('Invalid invitation token');
-    }
+    await this.verifyInvitationToken(invitation, dto.token);
 
     validateSsoEnforcement(workspace);
     validateAllowedEmail(invitation.email, workspace);
@@ -332,15 +369,28 @@ export class WorkspaceInvitationService {
       throw new BadRequestException('Invitation not found');
     }
 
+    if (!invitation.email) {
+      throw new BadRequestException('Invitation is missing an email address');
+    }
+
+    const inviteToken = await this.rotateInvitationToken(
+      invitation.id,
+      workspace.id,
+    );
+
     const invitedByUser = await this.userRepo.findById(
       invitation.invitedById,
       workspace.id,
     );
 
+    if (!invitedByUser) {
+      throw new BadRequestException('Invitation inviter not found');
+    }
+
     await this.sendInvitationMail(
       invitation.id,
       invitation.email,
-      invitation.token,
+      inviteToken,
       invitedByUser.name,
       workspace.hostname,
     );
@@ -376,6 +426,95 @@ export class WorkspaceInvitationService {
   }): Promise<string> {
     const { invitationId, inviteToken, hostname } = opts;
     return `${this.domainService.getUrl(hostname)}/invites/${invitationId}?token=${inviteToken}`;
+  }
+
+  private generateInvitationToken(): string {
+    return nanoIdGen(32);
+  }
+
+  private getInvitationExpiry(): Date {
+    return new Date(Date.now() + INVITATION_TOKEN_TTL_MS);
+  }
+
+  private hashInvitationToken(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
+  }
+
+  private tokenMatches(actual: string, expected: string): boolean {
+    const actualBuffer = Buffer.from(actual);
+    const expectedBuffer = Buffer.from(expected);
+
+    return (
+      actualBuffer.length === expectedBuffer.length &&
+      timingSafeEqual(actualBuffer, expectedBuffer)
+    );
+  }
+
+  private async verifyInvitationToken(
+    invitation: Pick<
+      WorkspaceInvitation,
+      'id' | 'expiresAt' | 'token' | 'tokenHash'
+    >,
+    rawToken: string,
+  ): Promise<void> {
+    const token = rawToken?.trim();
+    if (!token) {
+      throw new BadRequestException('Invalid invitation token');
+    }
+
+    if (invitation.expiresAt && invitation.expiresAt <= new Date()) {
+      throw new BadRequestException('Invitation expired');
+    }
+
+    const tokenHash = this.hashInvitationToken(token);
+    if (
+      invitation.tokenHash &&
+      this.tokenMatches(tokenHash, invitation.tokenHash)
+    ) {
+      return;
+    }
+
+    if (invitation.token && this.tokenMatches(token, invitation.token)) {
+      await this.migrateLegacyInvitationToken(invitation.id, token);
+      return;
+    }
+
+    throw new BadRequestException('Invalid invitation token');
+  }
+
+  private async migrateLegacyInvitationToken(invitationId: string, token: string) {
+    await this.db
+      .updateTable('workspaceInvitations')
+      .set({
+        token: null,
+        tokenHash: this.hashInvitationToken(token),
+        expiresAt: this.getInvitationExpiry(),
+        updatedAt: new Date(),
+      })
+      .where('id', '=', invitationId)
+      .where('tokenHash', 'is', null)
+      .execute();
+  }
+
+  private async rotateInvitationToken(
+    invitationId: string,
+    workspaceId: string,
+  ): Promise<string> {
+    const token = this.generateInvitationToken();
+
+    await this.db
+      .updateTable('workspaceInvitations')
+      .set({
+        token: null,
+        tokenHash: this.hashInvitationToken(token),
+        expiresAt: this.getInvitationExpiry(),
+        updatedAt: new Date(),
+      })
+      .where('id', '=', invitationId)
+      .where('workspaceId', '=', workspaceId)
+      .execute();
+
+    return token;
   }
 
   async sendInvitationMail(

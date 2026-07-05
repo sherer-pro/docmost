@@ -27,6 +27,8 @@ import { ModuleRef } from '@nestjs/core';
 import { PageAccessService } from '../page-access/page-access.service';
 import { DeprecatedRoute } from '../../common/decorators/deprecated-route.decorator';
 import { LEGACY_API_SUNSET } from '../../common/config/api-deprecation.constants';
+import { AuthRateLimitGuard } from '../auth/rate-limit/auth-rate-limit.guard';
+import { AuthRateLimit } from '../auth/rate-limit/auth-rate-limit.decorator';
 
 @UseGuards(JwtAuthGuard)
 @Controller('search')
@@ -134,6 +136,8 @@ export class SearchController {
   @Public()
   @HttpCode(HttpStatus.OK)
   @Post('share-search')
+  @UseGuards(AuthRateLimitGuard)
+  @AuthRateLimit({ endpoint: 'shareSearch', accountField: 'shareId' })
   async searchShare(
     @Body() searchDto: SearchShareDTO,
     @AuthWorkspace() workspace: Workspace,

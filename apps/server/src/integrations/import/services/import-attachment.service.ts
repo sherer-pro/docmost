@@ -19,6 +19,11 @@ import pLimit from 'p-limit';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { QueueJob, QueueName } from '../../queue/constants';
+import {
+  SAFE_FILE_VALIDATION_ERROR_MESSAGE,
+  resolveTrustedMimeType,
+  validateFileExtensionAndSignature,
+} from '../../../common/helpers/file-validation';
 
 interface AttachmentInfo {
   href: string;
@@ -806,6 +811,19 @@ export class ImportAttachmentService {
 
     for (let attempt = 1; attempt <= this.MAX_RETRIES; attempt++) {
       try {
+        const fileBuffer = await fs.readFile(abs);
+        await validateFileExtensionAndSignature({
+          fileName: fileNameWithExt,
+          fileBuffer,
+          safeErrorMessage: SAFE_FILE_VALIDATION_ERROR_MESSAGE,
+        });
+
+        const trustedMimeType = resolveTrustedMimeType({
+          fileExtension: ext,
+          fileBuffer,
+          fallbackMimeType: getMimeType(fileNameWithExt),
+        });
+
         const fileStream = createReadStream(abs);
         await this.storageService.uploadStream(storageFilePath, fileStream, {
           recreateClient: true,
@@ -820,7 +838,7 @@ export class ImportAttachmentService {
             filePath: storageFilePath,
             fileName: fileNameWithExt,
             fileSize: stat.size,
-            mimeType: getMimeType(fileNameWithExt),
+            mimeType: trustedMimeType,
             type: 'file',
             fileExt: ext,
             creatorId: fileTask.creatorId,

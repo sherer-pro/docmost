@@ -32,9 +32,11 @@ export function InviteSignUpForm() {
   const { t } = useTranslation();
   const params = useParams();
   const [searchParams] = useSearchParams();
+  const invitationToken = searchParams.get("token") ?? "";
 
   const { data: invitation, isError } = useGetInvitationQuery(
     params?.invitationId,
+    invitationToken,
   );
   const { invitationSignup, isLoading } = useAuth();
   useRedirectIfAuthenticated();
@@ -48,8 +50,6 @@ export function InviteSignUpForm() {
   });
 
   async function onSubmit(data: IRegister) {
-    const invitationToken = searchParams.get("token");
-
     await invitationSignup({
       invitationId: invitation.id,
       name: data.name,
@@ -58,7 +58,7 @@ export function InviteSignUpForm() {
     });
   }
 
-  if (isError) {
+  if (!invitationToken || isError) {
     return <div>{t("invalid invitation link")}</div>;
   }
 

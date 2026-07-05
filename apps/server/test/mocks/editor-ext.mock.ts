@@ -35,4 +35,6 @@ export const TransclusionReference = {} as any;
 export function addUniqueIdsToDoc(doc: any) { return doc; }
 export function htmlToMarkdown(input: string) { return input; }
 export function markdownToHtml(input: string) { return input; }
-export function getEmbedUrlAndProvider(url: string) { return { url, provider: null }; }
+export function getEmbedUrlAndProvider(url: string) {
+  return { embedUrl: url, provider: 'iframe' };
+}

@@ -17,6 +17,7 @@ describe('ShareSeoController', () => {
   };
   const environmentService = {
     isSelfHosted: jest.fn(),
+    getSubdomainHost: jest.fn(),
   };
 
   const controller = new ShareSeoController(
@@ -30,6 +31,7 @@ describe('ShareSeoController', () => {
     jest.restoreAllMocks();
 
     environmentService.isSelfHosted.mockReturnValue(true);
+    environmentService.getSubdomainHost.mockReturnValue('docmost.test');
     workspaceRepo.findFirst.mockResolvedValue({ id: 'workspace-1' });
     shareService.isSharingAllowed.mockResolvedValue(true);
   });
@@ -173,5 +175,81 @@ describe('ShareSeoController', () => {
     expect(fs.createReadStream).toHaveBeenCalledWith(
       expect.stringMatching(/index\.html$/),
     );
+  });
+
+  it('resolves cloud workspace only from the configured subdomain host', async () => {
+    const indexHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Docmost</title>
+          <!--meta-tags-->
+        </head>
+        <body></body>
+      </html>
+    `.trim();
+
+    const resolveClientDistPathMock =
+      resolveClientDistPath as jest.MockedFunction<typeof resolveClientDistPath>;
+    resolveClientDistPathMock.mockReturnValue('D:/tmp/client-dist');
+
+    environmentService.isSelfHosted.mockReturnValue(false);
+    workspaceRepo.findByHostname.mockResolvedValue({ id: 'workspace-2' });
+    shareService.getShareForPage.mockResolvedValue({
+      spaceId: 'space-1',
+      searchIndexing: true,
+      sharedPage: {
+        title: 'Cloud page',
+      },
+    });
+
+    jest.spyOn(fs, 'existsSync').mockReturnValue(true);
+    jest.spyOn(fs, 'readFileSync').mockReturnValue(indexHtml);
+
+    const res = {
+      type: jest.fn().mockReturnThis(),
+      send: jest.fn(),
+    };
+
+    await controller.getShare(
+      res as any,
+      { raw: { headers: { host: 'team.docmost.test:3000' } } } as any,
+      'share-1',
+      'cloud-page-page-1',
+    );
+
+    expect(workspaceRepo.findByHostname).toHaveBeenCalledWith('team');
+    expect(shareService.getShareForPage).toHaveBeenCalledWith(
+      '1',
+      'workspace-2',
+      'share-1',
+    );
+    expect(res.send.mock.calls[0][0]).toContain('<title>Cloud page</title>');
+  });
+
+  it('does not resolve cloud workspace from an untrusted host suffix', async () => {
+    const resolveClientDistPathMock =
+      resolveClientDistPath as jest.MockedFunction<typeof resolveClientDistPath>;
+    resolveClientDistPathMock.mockReturnValue('D:/tmp/client-dist');
+
+    environmentService.isSelfHosted.mockReturnValue(false);
+    jest.spyOn(fs, 'existsSync').mockReturnValue(true);
+    jest.spyOn(fs, 'createReadStream').mockReturnValue('index-stream' as any);
+
+    const res = {
+      type: jest.fn().mockReturnThis(),
+      send: jest.fn(),
+    };
+
+    await controller.getShare(
+      res as any,
+      { raw: { headers: { host: 'team.attacker.test' } } } as any,
+      'share-1',
+      'cloud-page-page-1',
+    );
+
+    expect(workspaceRepo.findByHostname).not.toHaveBeenCalled();
+    expect(shareService.getShareForPage).not.toHaveBeenCalled();
+    expect(res.send).toHaveBeenCalledWith('index-stream');
   });
 });

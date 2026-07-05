@@ -193,7 +193,6 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   @Post('logout')
-  @CsrfExempt()
   async logout(
     @AuthUser() user: User,
     @Req() req: FastifyRequest,

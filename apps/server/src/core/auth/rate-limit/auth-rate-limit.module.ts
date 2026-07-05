@@ -1,8 +1,9 @@
-import { Module } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
 import { AuthRateLimitService } from './auth-rate-limit.service';
 import { AuthRateLimitGuard } from './auth-rate-limit.guard';
 import { AuthRateLimitTelemetry } from './auth-rate-limit.telemetry';
 
+@Global()
 @Module({
   providers: [AuthRateLimitService, AuthRateLimitGuard, AuthRateLimitTelemetry],
   exports: [AuthRateLimitService, AuthRateLimitGuard, AuthRateLimitTelemetry],

@@ -12,6 +12,7 @@ import {
 } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
 import { IsISO6391 } from '../../common/validator/is-iso6391';
+import { parseTrustedProxies } from '../../common/security/trusted-proxy.util';
 
 export class EnvironmentVariables {
   @IsOptional()
@@ -216,7 +217,8 @@ export class EnvironmentVariables {
   COLLAB_SHOW_STATS: string;
 
   @IsOptional()
-  CLOUD: boolean;
+  @IsIn(['true', 'false'])
+  CLOUD: string;
 
   @IsOptional()
   @IsIn(['true', 'false'])
@@ -368,14 +370,19 @@ export function validate(config: Record<string, any>) {
   const validatedConfig = plainToInstance(EnvironmentVariables, config);
 
   const errors = validateSync(validatedConfig);
+  const runtimeContractErrors = getRuntimeContractErrors(config);
 
-  if (errors.length > 0) {
+  if (errors.length > 0 || runtimeContractErrors.length > 0) {
     console.error(
       'The Environment variables has failed the following validations:',
     );
 
     errors.map((error) => {
       console.error(JSON.stringify(error.constraints));
+    });
+
+    runtimeContractErrors.forEach((error) => {
+      console.error(JSON.stringify({ runtimeContract: error }));
     });
 
     console.error(
@@ -385,4 +392,44 @@ export function validate(config: Record<string, any>) {
   }
 
   return validatedConfig;
+}
+
+function getRuntimeContractErrors(config: Record<string, any>): string[] {
+  const errors: string[] = [];
+  const nodeEnv = String(config.NODE_ENV || 'development').toLowerCase();
+  const isProduction = nodeEnv === 'production';
+  const isCloud = String(config.CLOUD || 'false').toLowerCase() === 'true';
+
+  if (!isProduction) {
+    return errors;
+  }
+
+  const appUrl = String(config.APP_URL || '').trim();
+  if (!appUrl) {
+    errors.push('APP_URL is required when NODE_ENV=production');
+  } else {
+    try {
+      const parsedAppUrl = new URL(appUrl);
+      if (isCloud && parsedAppUrl.protocol !== 'https:') {
+        errors.push('APP_URL must use https when CLOUD=true');
+      }
+    } catch {
+      errors.push('APP_URL must be a valid URL when NODE_ENV=production');
+    }
+  }
+
+  if (parseTrustedProxies(config.TRUSTED_PROXIES) === true) {
+    errors.push(
+      'TRUSTED_PROXIES cannot trust all proxies in production; configure exact proxy IPs/CIDRs',
+    );
+  }
+
+  const rateLimitStorage = String(
+    config.AUTH_RATE_LIMIT_STORAGE || 'memory',
+  ).toLowerCase();
+  if (rateLimitStorage !== 'redis') {
+    errors.push('AUTH_RATE_LIMIT_STORAGE must be redis in production');
+  }
+
+  return errors;
 }
