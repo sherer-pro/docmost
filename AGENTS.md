@@ -11,7 +11,7 @@
   - `packages/editor-ext` — shared TypeScript package with editor extensions.
   - `packages/api-contract` — shared API-facing TypeScript contracts.
 - Root package manager is pinned: `pnpm@10.4.0`.
-- Workspace-level pnpm settings (`overrides`, `patchedDependencies`) live in `pnpm-workspace.yaml`, not in the root `package.json`.
+- Workspace-level pnpm settings (`overrides`, `patchedDependencies`) live in `pnpm-workspace.yaml`; the root `package.json` also contains a small `pnpm.overrides` block for security pins that must affect lockfile resolution.
 - Root composite scripts call `corepack pnpm` internally, so `corepack pnpm verify:full` works even when a global `pnpm` shim is not on `PATH`.
 - `node:22-slim` is used for the production image.
 
@@ -117,7 +117,7 @@
 - Full root test stage (default + frontend unit): `pnpm test:all`
 - Security regression suite (server + client targeted tests): `pnpm test:security`
 - Backend unit/integration: `pnpm --filter ./apps/server test`
-- Backend security subset (share SEO + ZIP traversal/quotas + attachment token/MIME handling + PDF resource allowlist): `pnpm --filter ./apps/server test:security`
+- Backend security subset (share SEO, cloud host parsing, CSRF origin checks, ZIP traversal/quotas, attachment token/MIME handling, import embed formatting, and PDF resource allowlist): `pnpm --filter ./apps/server test:security`
 - Frontend smoke test equivalent (build-based temporary target): `pnpm --filter ./apps/client build`
 - Frontend unit tests (Vitest): `pnpm --filter ./apps/client test`
 - Editor extension package-local tests (run through client Vitest): `pnpm test:editor-ext`
@@ -142,7 +142,7 @@
 ### Containers
 
 - Host development env: copy `.env.example` to `.env`, replace secrets, and point `DATABASE_URL`/`REDIS_URL` at local host services.
-- Docker Compose env: copy `.env.compose.example` to `.env`, replace `REPLACE_WITH_LONG_SECRET` and `STRONG_DB_PASSWORD`, then run `docker compose up -d`.
+- Docker Compose env: copy `.env.compose.example` to `.env`, replace `REPLACE_WITH_LONG_SECRET` and `STRONG_DB_PASSWORD`, keep `AUTH_RATE_LIMIT_STORAGE=redis`, then run `docker compose up -d`.
 - Local container startup (prebuilt image): `docker compose up -d`
 - Build the current code into an image: `docker build -t docmost:local .`
 - The production image starts the built backend directly with `node apps/server/dist/apps/server/src/main`; it should not invoke `pnpm start` or Corepack at runtime.
@@ -213,6 +213,7 @@ Minimum:
 - Search: `SEARCH_DRIVER`, `TYPESENSE_URL`, `TYPESENSE_API_KEY`, `TYPESENSE_LOCALE`
 - AI/RAG support: `AI_DRIVER`, `AI_EMBEDDING_MODEL`, `AI_COMPLETION_MODEL`, `AI_EMBEDDING_DIMENSION`, `OPENAI_API_KEY`, `OPENAI_API_URL`, `GEMINI_API_KEY`, `OLLAMA_API_URL`
 - Reverse proxy attribution: `TRUSTED_PROXIES` is a comma-separated list of trusted proxy IPs/CIDRs or proxy-addr keywords (`loopback`, `linklocal`, `uniquelocal`). Leave it empty unless Docmost is behind a controlled proxy; `X-Forwarded-*` headers are ignored when it is empty.
+- Auth throttling storage: `AUTH_RATE_LIMIT_STORAGE` may be `memory` for local development, but production validation requires `redis`.
 - Embed iframe allowlist: `EMBED_ALLOWED_ORIGINS` is a comma-separated list of exact trusted `http(s)` origins for generic iframe embeds. Built-in providers are allowlisted separately; keep this empty unless the origin is trusted.
 - Frontend build-time defines are loaded via `vite loadEnv`; deployment/runtime defines such as `APP_URL`, `COLLAB_URL`, `SUBDOMAIN_HOST`, `POSTHOG_*`, `BILLING_TRIAL_DAYS`, `FILE_UPLOAD_SIZE_LIMIT`, `FILE_IMPORT_SIZE_LIMIT`, `EMBED_ALLOWED_ORIGINS`, and `DRAWIO_URL` are served by the backend from `/window-config.js` without mutating built client files. Keep this contract in sync with `pnpm check:env`.
 
@@ -225,7 +226,7 @@ Minimum:
 - Dependency updates: via `pnpm up` (targeted by package or workspace).
 - Security/audit:
   - baseline: `pnpm audit`
-  - additionally account for `overrides` in `pnpm-workspace.yaml` (used to pin vulnerable/conflicting package versions).
+  - additionally account for `overrides` in `pnpm-workspace.yaml` and root `package.json` `pnpm.overrides` (used to pin vulnerable/conflicting package versions).
   - architecture reports: `pnpm audit:deps`, `pnpm audit:dead-code`, `pnpm audit:duplicates`, `pnpm audit:architecture` use `dependency-cruiser`, `knip`, and `jscpd`; they are non-blocking local audit commands.
 - Dependency patches: keep and maintain them in `patches/` and in `patchedDependencies` inside `pnpm-workspace.yaml`.
 
@@ -247,8 +248,8 @@ Minimum:
 
 ## 7) Mismatches and pitfalls
 
-- All mutating non-public API methods (POST/PUT/PATCH/DELETE) are protected by global CSRF validation (double-submit cookie): `csrfToken` cookie must match the `x-csrf-token` header.
-- CSRF exceptions by design: routes marked `@Public()` and routes explicitly marked with the CSRF exemption decorator. Auth/setup examples include `POST /api/auth/login`, `POST /api/auth/logout`, `POST /api/auth/forgot-password`, `POST /api/auth/password-reset`, `POST /api/auth/verify-token`, `POST /api/auth/setup`.
+- All mutating non-public API methods (POST/PUT/PATCH/DELETE) are protected by global CSRF validation: the request origin/referer must be trusted and the `csrfToken` cookie must match the `x-csrf-token` header.
+- CSRF exceptions by design: routes marked `@Public()` and routes explicitly marked with the CSRF exemption decorator. Auth/setup examples include `POST /api/auth/login`, `POST /api/auth/forgot-password`, `POST /api/auth/password-reset`, `POST /api/auth/verify-token`, `POST /api/auth/setup`.
 - Attachment/file API notes:
   - canonical upload routes: `POST /api/attachments/actions/upload-file`, `POST /api/attachments/actions/upload-image`, `POST /api/attachments/actions/remove-icon`.
   - canonical file routes: `GET /api/attachments/files/:fileId/:fileName`, `GET /api/attachments/files/public/:fileId/:fileName`.

@@ -25,7 +25,13 @@ pnpm verify:quick
 - Embed URL scheme sanitization, same-origin relative URL rejection, shared frame-source allowlisting, and generic iframe sandbox hardening (`GHSA-qvxv-4pj5-64xq`)
 - PDF export SSRF resistance through Chromium resource request allowlisting.
 - Attachment MIME confusion resistance for inline-capable file extensions.
+- Imported attachment MIME/signature validation before storage persistence.
+- Import embed node formatting through structured DOM attributes instead of raw HTML string interpolation.
 - Forwarded-header spoofing resistance for rate limiting, session IP capture, request logging, and HTTPS/HSTS detection.
+- Cloud host parsing rejects untrusted domains and nested/malformed workspace host labels.
+- CSRF origin/referer validation for authenticated mutating routes, including logout.
+- Public invitation/share/search/hostname endpoints are covered by auth rate-limit buckets.
+- Workspace invitation links require token validation; stored invitation tokens are hashed and expire.
 - Legacy public attachment `?jwt=` query tokens are lower priority than header/cookie tokens and emit deprecation headers when used.
 
 ## Manual staging smoke (required before production rollout)
