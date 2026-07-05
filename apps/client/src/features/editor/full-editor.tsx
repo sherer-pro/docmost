@@ -1,4 +1,5 @@
 import classes from "@/features/editor/styles/editor.module.css";
+import clsx from "clsx";
 import React from "react";
 import { TitleEditor } from "@/features/editor/title-editor";
 import PageEditor from "@/features/editor/page-editor";
@@ -6,6 +7,8 @@ import { Container } from "@mantine/core";
 import { ReactNode } from "react";
 import { useAtom } from "jotai";
 import { userAtom } from "@/features/user/atoms/current-user-atom.ts";
+import { PageEditMode } from "@/features/user/types/user.types.ts";
+import { resolvePageEditMode } from "@/features/user/utils/page-edit-mode.ts";
 import { resolvePageFullWidth } from "@/features/user/utils/page-width.ts";
 
 const MemoizedTitleEditor = React.memo(TitleEditor);
@@ -48,12 +51,24 @@ export function FullEditor({
     pageId,
     preferences: user?.settings?.preferences,
   });
+  const userPageEditMode = resolvePageEditMode({
+    pageId,
+    preferences: user?.settings?.preferences,
+  });
+  const fixedToolbarEnabled = Boolean(
+    editable &&
+      userPageEditMode === PageEditMode.Edit &&
+      user?.settings?.preferences?.fixedToolbar,
+  );
 
   return (
     <Container
       fluid={fullPageWidth}
       size={!fullPageWidth && 900}
-      className={classes.editor}
+      className={clsx(
+        classes.editor,
+        fixedToolbarEnabled && classes.editorWithFixedToolbar,
+      )}
       data-page-full-width={fullPageWidth ? "true" : "false"}
     >
       <MemoizedTitleEditor

@@ -165,6 +165,8 @@ export function FixedToolbar({
   const showDictionaryAction = Boolean(
     spaceId && dictionaryEnabled && canManageDictionary,
   );
+  const showCommentAction = canCreateInlineComments;
+  const showRightActions = showDictionaryAction || showCommentAction;
 
   return (
     <>
@@ -251,39 +253,6 @@ export function FixedToolbar({
             }}
           />
 
-          {showDictionaryAction && (
-            <Tooltip label={t("Add to dictionary")} withArrow>
-              <ActionIcon
-                variant="default"
-                size="lg"
-                radius="0"
-                aria-label={t("Add to dictionary")}
-                disabled={!editorState?.selectedText}
-                style={{ border: "none" }}
-                onClick={openDictionaryModal}
-              >
-                <IconBook2 size={16} stroke={2} />
-              </ActionIcon>
-            </Tooltip>
-          )}
-
-          {canCreateInlineComments && (
-            <Tooltip label={t("Comment")} withArrow>
-              <ActionIcon
-                variant="default"
-                size="lg"
-                radius="0"
-                aria-label={t("Comment")}
-                disabled={!editorState?.hasTextSelection}
-                className={clsx(editorState?.isComment && classes.active)}
-                style={{ border: "none" }}
-                onClick={startComment}
-              >
-                <IconMessage size={16} stroke={2} />
-              </ActionIcon>
-            </Tooltip>
-          )}
-
           <div className={classes.divider} />
 
           <ActionIcon.Group>
@@ -296,6 +265,46 @@ export function FixedToolbar({
               />
             ))}
           </ActionIcon.Group>
+
+          {showRightActions && (
+            <div className={classes.rightActions}>
+              <div className={classes.divider} />
+              <ActionIcon.Group>
+                {showDictionaryAction && (
+                  <Tooltip label={t("Add to dictionary")} withArrow>
+                    <ActionIcon
+                      variant="default"
+                      size="lg"
+                      radius="0"
+                      aria-label={t("Add to dictionary")}
+                      disabled={!editorState?.selectedText}
+                      style={{ border: "none" }}
+                      onClick={openDictionaryModal}
+                    >
+                      <IconBook2 size={16} stroke={2} />
+                    </ActionIcon>
+                  </Tooltip>
+                )}
+
+                {showCommentAction && (
+                  <Tooltip label={t("Comment")} withArrow>
+                    <ActionIcon
+                      variant="default"
+                      size="lg"
+                      radius="0"
+                      aria-label={t("Comment")}
+                      disabled={!editorState?.hasTextSelection}
+                      className={clsx(editorState?.isComment && classes.active)}
+                      style={{ border: "none" }}
+                      onClick={startComment}
+                    >
+                      <IconMessage size={16} stroke={2} />
+                    </ActionIcon>
+                  </Tooltip>
+                )}
+              </ActionIcon.Group>
+            </div>
+          )}
         </div>
       </div>
 

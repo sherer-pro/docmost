@@ -9,3 +9,11 @@
     }
 }
 
+.editorWithFixedToolbar {
+    margin-top: calc(48px + 56px);
+
+    @media print {
+        margin-top: 0;
+    }
+}
+
