@@ -56,7 +56,7 @@ export default function TagView(props: NodeViewProps) {
             className={classes.descriptionPopover}
             style={{ top: popover.top, left: Math.max(12, popover.left) }}
           >
-            {description}
+            <div className={classes.descriptionText}>{description}</div>
           </div>,
           document.body,
         )}
