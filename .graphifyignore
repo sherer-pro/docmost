@@ -1,0 +1,725 @@
+# ---------------------------------------------------------------------
+# Graphify ignore
+# Цель: не пускать в knowledge graph зависимости, кеши, сборки,
+# локальные настройки, секреты, дампы, артефакты агентов и собственные
+# outputs Graphify.
+#
+# Важно:
+# - AGENTS.md НЕ игнорируем.
+# - README.md / docs / architecture / ADR / markdown НЕ игнорируем.
+# - src / app / packages / migrations / schemas / infra НЕ игнорируем.
+# ---------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------
+# VCS / repo internals
+# ---------------------------------------------------------------------
+
+.git/
+.git-rewrite/
+.git-crypt/
+.git-lfs/
+.svn/
+.hg/
+CVS/
+
+
+# ---------------------------------------------------------------------
+# Graphify outputs
+# Не даём Graphify сканировать собственный graphify-out при следующих
+# запусках, иначе граф может загрязняться предыдущими отчётами.
+# ---------------------------------------------------------------------
+
+graphify-out/
+.graphify/
+.graphify-cache/
+
+
+# ---------------------------------------------------------------------
+# AI agents / coding assistants service folders
+# ---------------------------------------------------------------------
+
+.agents/
+.codex/
+.claude/
+.cursor/
+.windsurf/
+.continue/
+.aider/
+.aider*
+.openhands/
+.devin/
+.gemini/
+.copilot/
+.github/copilot-instructions.local.md
+CONTRIBUTING.md
+
+# Agent worktrees / temporary agent branches
+.claude/worktrees/
+.codex/worktrees/
+.agents/worktrees/
+.worktrees/
+
+
+# ---------------------------------------------------------------------
+# Generic caches / temporary files
+# ---------------------------------------------------------------------
+
+.cache/
+.tmp/
+tmp/
+temp/
+.tmp/
+.cache-loader/
+.cache-store/
+.local-cache/
+.cache-tmp/
+var/tmp/
+var/cache/
+var/log/
+logs/
+log/
+runtime/
+run/
+
+*.tmp
+*.temp
+*.bak
+*.backup
+*.old
+*.orig
+*.rej
+*.swp
+*.swo
+*~
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+.AppleDouble
+.LSOverride
+
+
+# ---------------------------------------------------------------------
+# Logs
+# ---------------------------------------------------------------------
+
+*.log
+*.log.*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+debug.log
+error.log
+access.log
+
+
+# ---------------------------------------------------------------------
+# Secrets / local environment / credentials
+# ---------------------------------------------------------------------
+
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+
+*.pem
+*.key
+*.p8
+*.p12
+*.pfx
+*.crt
+*.cer
+*.csr
+*.der
+*.keystore
+*.jks
+*.asc
+*.gpg
+*.kdbx
+
+id_rsa
+id_rsa.*
+id_dsa
+id_dsa.*
+id_ecdsa
+id_ecdsa.*
+id_ed25519
+id_ed25519.*
+
+secrets/
+.secret/
+.secrets/
+credentials/
+private/
+certs/private/
+keys/
+tokens/
+
+*secret*.json
+*secrets*.json
+*credential*.json
+*credentials*.json
+*token*.json
+*tokens*.json
+service-account*.json
+firebase-adminsdk*.json
+
+
+# ---------------------------------------------------------------------
+# Archives / packages / dumps
+# ---------------------------------------------------------------------
+
+*.zip
+*.7z
+*.rar
+*.tar
+*.tar.gz
+*.tgz
+*.tar.bz2
+*.tbz2
+*.tar.xz
+*.txz
+*.gz
+*.bz2
+*.xz
+*.lz
+*.lzma
+
+*.dump
+*.backup
+*.bak
+*.sql
+*.sql.gz
+*.psql
+*.dmp
+*.db
+*.db3
+*.sqlite
+*.sqlite3
+*.mdb
+*.accdb
+
+
+# ---------------------------------------------------------------------
+# Large media
+# Удали этот блок, если проект сам является медиа-/документационным
+# репозиторием и видео/аудио/изображения нужны Graphify.
+# ---------------------------------------------------------------------
+
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.webm
+*.wmv
+*.flv
+*.m4v
+
+*.mp3
+*.wav
+*.flac
+*.aac
+*.ogg
+*.m4a
+*.wma
+
+*.psd
+*.ai
+*.sketch
+*.fig
+*.xd
+*.indd
+*.afdesign
+*.afphoto
+
+
+# ---------------------------------------------------------------------
+# Binary / compiled artifacts
+# ---------------------------------------------------------------------
+
+*.exe
+*.dll
+*.so
+*.dylib
+*.lib
+*.a
+*.o
+*.obj
+*.class
+*.jar
+*.war
+*.ear
+*.pyc
+*.pyo
+*.pyd
+*.wasm
+
+*.min.js
+*.min.css
+*.map
+
+
+# ---------------------------------------------------------------------
+# Node.js / JavaScript / TypeScript
+# ---------------------------------------------------------------------
+
+node_modules/
+bower_components/
+jspm_packages/
+
+.npm/
+.pnpm-store/
+.yarn/
+.yarn/cache/
+.yarn/unplugged/
+.yarn/build-state.yml
+.yarn/install-state.gz
+
+.next/
+.nuxt/
+.svelte-kit/
+.astro/
+.angular/
+.angular/cache/
+.vuepress/dist/
+.docusaurus/
+.turbo/
+.vercel/
+.netlify/
+.output/
+.out/
+
+dist/
+build/
+public/build/
+public/hot
+coverage/
+.nyc_output/
+storybook-static/
+
+.eslintcache
+.stylelintcache
+.parcel-cache/
+.rpt2_cache/
+.rollup.cache/
+vite.svg
+
+package-lock.json
+npm-shrinkwrap.json
+pnpm-lock.yaml
+yarn.lock
+bun.lock
+bun.lockb
+
+
+# ---------------------------------------------------------------------
+# Python
+# ---------------------------------------------------------------------
+
+__pycache__/
+*.py[cod]
+*$py.class
+
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+.python-version
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.pytype/
+.hypothesis/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+
+pip-wheel-metadata/
+pip-log.txt
+pip-delete-this-directory.txt
+
+build/
+dist/
+.eggs/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+Pipfile.lock
+poetry.lock
+uv.lock
+
+
+# ---------------------------------------------------------------------
+# PHP / Composer / WordPress / Laravel / Symfony
+# ---------------------------------------------------------------------
+
+vendor/
+
+composer.lock
+
+# WordPress generated/user content
+wp-content/uploads/
+wp-content/cache/
+wp-content/upgrade/
+wp-content/backup*/
+wp-content/backups/
+wp-content/ai1wm-backups/
+wp-content/wflogs/
+wp-content/debug.log
+
+# WordPress local configs
+wp-config-local.php
+wp-config.*.php
+
+# Laravel / Symfony generated
+bootstrap/cache/
+storage/framework/cache/
+storage/framework/sessions/
+storage/framework/testing/
+storage/framework/views/
+storage/logs/
+storage/app/public/
+var/cache/
+var/log/
+var/sessions/
+var/storage/
+.phpunit.result.cache
+.php-cs-fixer.cache
+
+
+# ---------------------------------------------------------------------
+# Java / Kotlin / Gradle / Maven
+# ---------------------------------------------------------------------
+
+.gradle/
+gradle-app.setting
+!gradle-wrapper.jar
+
+target/
+build/
+out/
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+*.class
+*.jar
+*.war
+*.ear
+
+
+# ---------------------------------------------------------------------
+# .NET / C#
+# ВНИМАНИЕ: если у проекта есть исходные CLI-скрипты в bin/,
+# убери bin/ из этого блока.
+# ---------------------------------------------------------------------
+
+bin/
+obj/
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+TestResult*/
+TestResults/
+packages/
+
+
+# ---------------------------------------------------------------------
+# Go
+# ---------------------------------------------------------------------
+
+*.test
+*.out
+go.sum
+
+# Если проект хранит vendored deps — vendor/ уже исключён выше.
+
+
+# ---------------------------------------------------------------------
+# Rust
+# ---------------------------------------------------------------------
+
+target/
+Cargo.lock
+
+
+# ---------------------------------------------------------------------
+# Ruby
+# ---------------------------------------------------------------------
+
+.bundle/
+vendor/bundle/
+.ruby-version
+.ruby-gemset
+Gemfile.lock
+.byebug_history
+.rspec_status
+coverage/
+
+
+# ---------------------------------------------------------------------
+# Swift / iOS / macOS
+# ---------------------------------------------------------------------
+
+.build/
+DerivedData/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcuserstate
+.swiftpm/
+Packages/
+Package.resolved
+Pods/
+Carthage/Build/
+
+
+# ---------------------------------------------------------------------
+# Android
+# ---------------------------------------------------------------------
+
+.gradle/
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.ap_
+*.dex
+
+
+# ---------------------------------------------------------------------
+# Flutter / Dart
+# ---------------------------------------------------------------------
+
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+
+
+# ---------------------------------------------------------------------
+# C / C++ / CMake
+# ---------------------------------------------------------------------
+
+CMakeFiles/
+CMakeCache.txt
+cmake-build-*/
+compile_commands.json
+Makefile
+*.make
+*.cmake.tmp
+*.ninja
+.ninja_deps
+.ninja_log
+
+
+# ---------------------------------------------------------------------
+# Docker / local volumes
+# ---------------------------------------------------------------------
+
+.docker/
+docker-data/
+docker-volumes/
+volumes/
+data/postgres/
+data/mysql/
+data/mariadb/
+data/redis/
+data/minio/
+data/elasticsearch/
+data/opensearch/
+data/mongo/
+data/clickhouse/
+
+
+# ---------------------------------------------------------------------
+# Databases / local service state
+# ---------------------------------------------------------------------
+
+postgres-data/
+mysql-data/
+mariadb-data/
+redis-data/
+mongo-data/
+minio-data/
+elasticsearch-data/
+opensearch-data/
+clickhouse-data/
+
+
+# ---------------------------------------------------------------------
+# Terraform / IaC generated
+# Не игнорируем *.tf, *.tfvars.example, docker-compose.yml, k8s yaml.
+# ---------------------------------------------------------------------
+
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate
+terraform.tfstate.*
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Обычно tfvars могут содержать секреты.
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+
+
+# ---------------------------------------------------------------------
+# Kubernetes / Helm generated or local secret values
+# ---------------------------------------------------------------------
+
+charts/*/charts/
+charts/*/tmpcharts/
+*.tgz
+values.local.yaml
+values.secret.yaml
+values.secrets.yaml
+secrets.yaml
+
+
+# ---------------------------------------------------------------------
+# IDE / editor metadata
+# ---------------------------------------------------------------------
+
+.idea/
+.vscode/
+.history/
+.project
+.classpath
+.settings/
+.factorypath
+
+*.code-workspace
+
+
+# ---------------------------------------------------------------------
+# Testing artifacts / reports / snapshots
+# ---------------------------------------------------------------------
+
+coverage/
+.nyc_output/
+junit.xml
+junit-*.xml
+test-results/
+playwright-report/
+playwright/.cache/
+cypress/videos/
+cypress/screenshots/
+screenshots/
+__screenshots__/
+__snapshots__/
+*.snap
+
+
+# ---------------------------------------------------------------------
+# Documentation generated sites
+# Не игнорируем docs/ как источник. Игнорируем только сгенерированные сайты.
+# ---------------------------------------------------------------------
+
+docs/.vitepress/cache/
+docs/.vitepress/dist/
+docs/_build/
+docs/_site/
+docs/.docusaurus/
+site/
+_site/
+book/
+mkdocs-material/
+
+
+# ---------------------------------------------------------------------
+# Jupyter / data science
+# Удали data/raw и data/processed, если репозиторий аналитический
+# и данные нужны для понимания проекта.
+# ---------------------------------------------------------------------
+
+.ipynb_checkpoints/
+.mlflow/
+mlruns/
+wandb/
+.lightning/
+tensorboard/
+runs/
+
+data/raw/
+data/processed/
+data/cache/
+datasets/
+models/
+checkpoints/
+*.ckpt
+*.pt
+*.pth
+*.onnx
+*.h5
+*.hdf5
+*.pkl
+*.pickle
+*.joblib
+
+
+# ---------------------------------------------------------------------
+# Game engines / heavy generated folders
+# ---------------------------------------------------------------------
+
+# Unity
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+
+# Unreal
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+
+
+# ---------------------------------------------------------------------
+# OS package managers / misc generated
+# ---------------------------------------------------------------------
+
+.snapshots/
+.Trash-*/
+recycle/
+Recycle.Bin/
+$RECYCLE.BIN/
+
+# ---------------------------------------------------------------------
+# Images
+# ---------------------------------------------------------------------
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.svg
+*.ico
+*.bmp
+*.tiff
+*.avif
