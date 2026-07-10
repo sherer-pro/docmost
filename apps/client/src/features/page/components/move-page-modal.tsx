@@ -7,12 +7,14 @@ import { ISpace } from "@/features/space/types/space.types.ts";
 import { queryClient } from "@/main.tsx";
 import { SpaceSelect } from "@/features/space/components/sidebar/space-select.tsx";
 import { useNavigate } from "react-router-dom";
-import { buildPageUrl } from "@/features/page/page.utils.ts";
+import { buildDatabaseUrl, buildPageUrl } from "@/features/page/page.utils.ts";
 
 interface MovePageModalProps {
   pageId: string;
   slugId: string;
   currentSpaceSlug: string;
+  nodeType?: "page" | "database";
+  title?: string;
   open: boolean;
   onClose: () => void;
 }
@@ -21,6 +23,8 @@ export default function MovePageModal({
   pageId,
   slugId,
   currentSpaceSlug,
+  nodeType = "page",
+  title,
   open,
   onClose,
 }: MovePageModalProps) {
@@ -40,7 +44,10 @@ export default function MovePageModal({
           ),
       });
 
-      const pageUrl = buildPageUrl(targetSpace.slug, slugId, undefined);
+      const pageUrl =
+        nodeType === "database"
+          ? buildDatabaseUrl(targetSpace.slug, slugId, title)
+          : buildPageUrl(targetSpace.slug, slugId, title);
       navigate(pageUrl);
       notifications.show({
         message: t("Page moved successfully"),
