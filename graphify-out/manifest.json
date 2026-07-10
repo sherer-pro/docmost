@@ -1105,9 +1105,9 @@
     "semantic_hash": "e641d31bab135905d76e9582a525f044"
   },
   "apps/client/src/features/database/components/header/database-header-menu.tsx": {
-    "mtime": 1782811935.64822,
-    "ast_hash": "89880f5878d94e8e03da6f21ec75bc07",
-    "semantic_hash": "89880f5878d94e8e03da6f21ec75bc07"
+    "mtime": 1783684722.3117194,
+    "ast_hash": "0cffa2c3ebe76552ed007127cef4537a",
+    "semantic_hash": ""
   },
   "apps/client/src/features/database/components/header/database-header.tsx": {
     "mtime": 1782811915.546093,
@@ -2115,9 +2115,9 @@
     "semantic_hash": "eaa45b7573568eb889926ceaded32e0f"
   },
   "apps/client/src/features/page/components/copy-page-modal.tsx": {
-    "mtime": 1782810596.6247401,
-    "ast_hash": "0539569d4f28b926647b0accd8d2ac52",
-    "semantic_hash": "0539569d4f28b926647b0accd8d2ac52"
+    "mtime": 1783684870.7539341,
+    "ast_hash": "c7cb59eea39f25adb4d7c7d826c7ef96",
+    "semantic_hash": ""
   },
   "apps/client/src/features/page/components/document-fields/assignee-space-member-select.tsx": {
     "mtime": 1781298898.4679263,
@@ -2150,9 +2150,9 @@
     "semantic_hash": "326e2b4e46bd49ae8623d547b6f3f4fd"
   },
   "apps/client/src/features/page/components/move-page-modal.tsx": {
-    "mtime": 1782810596.6247401,
-    "ast_hash": "69b9ea02ebe01db854f0fb2992b2d99b",
-    "semantic_hash": "69b9ea02ebe01db854f0fb2992b2d99b"
+    "mtime": 1783684696.5335226,
+    "ast_hash": "62a5a1c8c5b289fbb3b47de24d6a5965",
+    "semantic_hash": ""
   },
   "apps/client/src/features/page/components/page-access-modal.tsx": {
     "mtime": 1782810615.8713927,
@@ -2275,9 +2275,9 @@
     "semantic_hash": "461a98cfb19073966c62561b5963adbf"
   },
   "apps/client/src/features/page/tree/components/space-tree.tsx": {
-    "mtime": 1782484589.8196988,
-    "ast_hash": "3bfc3c89a0e2f051e764e506b24b5d63",
-    "semantic_hash": "3bfc3c89a0e2f051e764e506b24b5d63"
+    "mtime": 1783684820.4911616,
+    "ast_hash": "fac2ad189007d1b35015e6b1ff770085",
+    "semantic_hash": ""
   },
   "apps/client/src/features/page/tree/hooks/use-tree-mutation.ts": {
     "mtime": 1782293868.3524153,
@@ -4345,9 +4345,9 @@
     "semantic_hash": "03aaf931cced887f3d1e3240f8fcc606"
   },
   "apps/server/src/core/page/page.controller.ts": {
-    "mtime": 1783274008.922478,
-    "ast_hash": "90451ff8f6f3347df8776e9077be6878",
-    "semantic_hash": "90451ff8f6f3347df8776e9077be6878"
+    "mtime": 1783684684.7409887,
+    "ast_hash": "27ff9f8b1a27686442879694a454da20",
+    "semantic_hash": ""
   },
   "apps/server/src/core/page/page.module.ts": {
     "mtime": 1781697442.540836,
@@ -4415,9 +4415,9 @@
     "semantic_hash": "40d52db79aa1a2db3a0d90d012f19a9d"
   },
   "apps/server/src/core/page/services/page.service.ts": {
-    "mtime": 1781298898.5178144,
-    "ast_hash": "bd2fd4357c7ed28452558f40d6059be9",
-    "semantic_hash": "bd2fd4357c7ed28452558f40d6059be9"
+    "mtime": 1783684804.3271873,
+    "ast_hash": "29f41734868b439a1e31fb21671f1663",
+    "semantic_hash": ""
   },
   "apps/server/src/core/page/services/trash-cleanup.service.ts": {
     "mtime": 1781298898.5178144,
@@ -6058,5 +6058,110 @@
     "mtime": 1781954520.238392,
     "ast_hash": "dbda25b71a638aa5a6b3e0ab887d79a4",
     "semantic_hash": "dbda25b71a638aa5a6b3e0ab887d79a4"
+  },
+  ".github/workflows/ci.yml": {
+    "mtime": 1781298898.4053948,
+    "ast_hash": "1f67521975ff2d7ae0e64e7217f15552",
+    "semantic_hash": ""
+  },
+  ".github/workflows/docker.yml": {
+    "mtime": 1781298898.4053948,
+    "ast_hash": "218792ac02a2c79f6708eef1d8236cef",
+    "semantic_hash": ""
+  },
+  "AGENTS.md": {
+    "mtime": 1783348039.472648,
+    "ast_hash": "3d0558932a9148c271f4bf8283d5236f",
+    "semantic_hash": ""
+  },
+  "ARCHITECTURE.md": {
+    "mtime": 1783257618.9374874,
+    "ast_hash": "395d7f15dfda6772ffd2e8733f529b5d",
+    "semantic_hash": ""
+  },
+  "README.md": {
+    "mtime": 1781958027.2903895,
+    "ast_hash": "f03ae5b68bbf251102a0b9bb50e6c47a",
+    "semantic_hash": ""
+  },
+  "apps/client/README.md": {
+    "mtime": 1781958027.3709643,
+    "ast_hash": "0717e049a21313cc24dcfacd356eb9bc",
+    "semantic_hash": ""
+  },
+  "apps/client/index.html": {
+    "mtime": 1781298898.4053948,
+    "ast_hash": "37846d5c2e1571e8b49c7e54a2a2e010",
+    "semantic_hash": ""
+  },
+  "apps/client/public/offline.html": {
+    "mtime": 1781298898.4210258,
+    "ast_hash": "be125c222b5ac8cd910b17f58db3ec25",
+    "semantic_hash": ""
+  },
+  "apps/server/README.md": {
+    "mtime": 1781958027.5440633,
+    "ast_hash": "1dc07005d273b7b1137c492074be0ce7",
+    "semantic_hash": ""
+  },
+  "apps/server/docs/api-route-deprecation-matrix.md": {
+    "mtime": 1781954235.9425292,
+    "ast_hash": "1a84d891708cf6445c359e309115917f",
+    "semantic_hash": ""
+  },
+  "apps/server/docs/api-route-inventory.generated.md": {
+    "mtime": 1781880940.608896,
+    "ast_hash": "af0de699b2de63af10d9e89da25ec8b2",
+    "semantic_hash": ""
+  },
+  "apps/server/docs/api-routing-conventions.md": {
+    "mtime": 1781958026.433395,
+    "ast_hash": "27ef00847b1476f94e7d3b730bfdec3c",
+    "semantic_hash": ""
+  },
+  "apps/server/docs/release-notes/legacy-database-page-routes-removed.md": {
+    "mtime": 1781861836.4309852,
+    "ast_hash": "92da2918c5a215001b2978124d5b95e0",
+    "semantic_hash": ""
+  },
+  "apps/server/docs/release-notes/security-ghsa-remediation-2026-03.md": {
+    "mtime": 1781298898.4994874,
+    "ast_hash": "de631496843b3584ba76a9997a1b4002",
+    "semantic_hash": ""
+  },
+  "apps/server/docs/security-regression-runbook.md": {
+    "mtime": 1783257618.9380152,
+    "ast_hash": "88493cbf2ea03d021bd7f32083986865",
+    "semantic_hash": ""
+  },
+  "crowdin.yml": {
+    "mtime": 1781298898.5564604,
+    "ast_hash": "c268cf00bf347bb6fead805dd6ea2af8",
+    "semantic_hash": ""
+  },
+  "docker-compose.yml": {
+    "mtime": 1783255852.3356802,
+    "ast_hash": "b8a58e3231beadc990e9b50b9c7c5ea4",
+    "semantic_hash": ""
+  },
+  "docs/RAG_API.md": {
+    "mtime": 1781298898.5564604,
+    "ast_hash": "4f1247b07fec4658db1cfcd119b10713",
+    "semantic_hash": ""
+  },
+  "docs/documentation-audit-2026-06-20.md": {
+    "mtime": 1781958340.9365346,
+    "ast_hash": "71fb06b64a1c9def4f6cd343f04e7b07",
+    "semantic_hash": ""
+  },
+  "docs/ee-parity-audit-2026-03.md": {
+    "mtime": 1781298898.5564604,
+    "ast_hash": "2102e1a231fb6d7d8e73fbf139531642",
+    "semantic_hash": ""
+  },
+  "pnpm-workspace.yaml": {
+    "mtime": 1783254550.3048236,
+    "ast_hash": "2045476e623a0e793b9fc161764f1067",
+    "semantic_hash": ""
   }
 }
