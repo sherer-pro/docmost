@@ -20,7 +20,7 @@ import {
 } from '@docmost/db/pagination/cursor-pagination';
 import { InjectKysely } from 'nestjs-kysely';
 import { sql } from 'kysely';
-import { KyselyDB } from '@docmost/db/types/kysely.types';
+import { KyselyDB, KyselyTransaction } from '@docmost/db/types/kysely.types';
 import { generateJitteredKeyBetween } from 'fractional-indexing-jittered';
 import { MovePageDto } from '../dto/move-page.dto';
 import { generateSlugId } from '../../../common/helpers';
@@ -84,6 +84,8 @@ type CustomFieldHistoryChange = {
   newValue: unknown;
 };
 
+type CopiedPageByOriginalId = Map<string, InsertablePage>;
+
 @Injectable()
 export class PageService {
   private readonly logger = new Logger(PageService.name);
@@ -130,6 +132,213 @@ export class PageService {
       workspaceId,
     );
     return row?.databaseId ?? null;
+  }
+
+  private remapJsonObjectIds(
+    value: unknown,
+    idMap: Map<string, string>,
+  ): unknown {
+    if (Array.isArray(value)) {
+      return value.map((item) => this.remapJsonObjectIds(item, idMap));
+    }
+
+    if (!value || typeof value !== 'object') {
+      return value;
+    }
+
+    const remapped: Record<string, unknown> = {};
+    for (const [key, rawChildValue] of Object.entries(value)) {
+      const childValue =
+        (key === 'propertyId' || key === 'sortPropertyId') &&
+        typeof rawChildValue === 'string'
+          ? (idMap.get(rawChildValue) ?? rawChildValue)
+          : this.remapJsonObjectIds(rawChildValue, idMap);
+
+      remapped[idMap.get(key) ?? key] = childValue;
+    }
+
+    return remapped;
+  }
+
+  private remapDatabaseCellValue(
+    value: unknown,
+    propertyType: string | undefined,
+    pageMap: Map<string, CopyPageMapEntry>,
+  ): unknown {
+    if (propertyType !== 'page_reference' || typeof value !== 'string') {
+      return value;
+    }
+
+    return pageMap.get(value)?.newPageId ?? value;
+  }
+
+  private async duplicateLinkedDatabases(params: {
+    pageMap: Map<string, CopyPageMapEntry>;
+    copiedPageByOriginalId: CopiedPageByOriginalId;
+    spaceId: string;
+    authUser: User;
+    trx: KyselyTransaction;
+  }) {
+    const originalPageIds = Array.from(params.pageMap.keys());
+    if (originalPageIds.length === 0) {
+      return;
+    }
+
+    const databases = await params.trx
+      .selectFrom('databases')
+      .selectAll()
+      .where('pageId', 'in', originalPageIds)
+      .where('deletedAt', 'is', null)
+      .execute();
+
+    for (const database of databases) {
+      if (!database.pageId) {
+        continue;
+      }
+
+      const copiedDatabasePage = params.pageMap.get(database.pageId);
+      const copiedPage = params.copiedPageByOriginalId.get(database.pageId);
+      if (!copiedDatabasePage || !copiedPage) {
+        continue;
+      }
+
+      const newDatabaseId = uuid7();
+      await params.trx
+        .insertInto('databases')
+        .values({
+          id: newDatabaseId,
+          spaceId: params.spaceId,
+          name: copiedPage.title ?? database.name,
+          description: database.description,
+          descriptionContent: database.descriptionContent as never,
+          icon: database.icon,
+          workspaceId: database.workspaceId,
+          creatorId: params.authUser.id,
+          lastUpdatedById: params.authUser.id,
+          pageId: copiedDatabasePage.newPageId,
+        })
+        .execute();
+
+      const properties = await params.trx
+        .selectFrom('databaseProperties')
+        .selectAll()
+        .where('databaseId', '=', database.id)
+        .where('deletedAt', 'is', null)
+        .orderBy('position', 'asc')
+        .execute();
+
+      const propertyIdMap = new Map<string, string>();
+      for (const property of properties) {
+        propertyIdMap.set(property.id, uuid7());
+      }
+
+      if (properties.length > 0) {
+        await params.trx
+          .insertInto('databaseProperties')
+          .values(
+            properties.map((property) => ({
+              id: propertyIdMap.get(property.id)!,
+              databaseId: newDatabaseId,
+              workspaceId: property.workspaceId,
+              name: property.name,
+              type: property.type,
+              settings: property.settings as never,
+              position: property.position,
+              creatorId: params.authUser.id,
+            })),
+          )
+          .execute();
+      }
+
+      const rows = await params.trx
+        .selectFrom('databaseRows')
+        .selectAll()
+        .where('databaseId', '=', database.id)
+        .where('archivedAt', 'is', null)
+        .execute();
+
+      const copiedRows = rows.filter((row) => params.pageMap.has(row.pageId));
+      if (copiedRows.length > 0) {
+        await params.trx
+          .insertInto('databaseRows')
+          .values(
+            copiedRows.map((row) => ({
+              id: uuid7(),
+              databaseId: newDatabaseId,
+              workspaceId: row.workspaceId,
+              pageId: params.pageMap.get(row.pageId)!.newPageId,
+              createdById: params.authUser.id,
+              updatedById: params.authUser.id,
+            })),
+          )
+          .execute();
+      }
+
+      const propertyTypeById = new Map(
+        properties.map((property) => [property.id, property.type]),
+      );
+      const cells = await params.trx
+        .selectFrom('databaseCells')
+        .selectAll()
+        .where('databaseId', '=', database.id)
+        .where('deletedAt', 'is', null)
+        .execute();
+      const copiedCells = cells.filter(
+        (cell) =>
+          params.pageMap.has(cell.pageId) && propertyIdMap.has(cell.propertyId),
+      );
+
+      if (copiedCells.length > 0) {
+        await params.trx
+          .insertInto('databaseCells')
+          .values(
+            copiedCells.map((cell) => ({
+              id: uuid7(),
+              databaseId: newDatabaseId,
+              workspaceId: cell.workspaceId,
+              pageId: params.pageMap.get(cell.pageId)!.newPageId,
+              propertyId: propertyIdMap.get(cell.propertyId)!,
+              value: this.remapDatabaseCellValue(
+                cell.value,
+                propertyTypeById.get(cell.propertyId),
+                params.pageMap,
+              ) as never,
+              attachmentId: cell.attachmentId,
+              createdById: params.authUser.id,
+              updatedById: params.authUser.id,
+            })),
+          )
+          .execute();
+      }
+
+      const views = await params.trx
+        .selectFrom('databaseViews')
+        .selectAll()
+        .where('databaseId', '=', database.id)
+        .where('deletedAt', 'is', null)
+        .orderBy('createdAt', 'asc')
+        .execute();
+
+      if (views.length > 0) {
+        await params.trx
+          .insertInto('databaseViews')
+          .values(
+            views.map((view) => ({
+              id: uuid7(),
+              databaseId: newDatabaseId,
+              workspaceId: view.workspaceId,
+              name: view.name,
+              type: view.type,
+              config: this.remapJsonObjectIds(
+                view.config,
+                propertyIdMap,
+              ) as never,
+              creatorId: params.authUser.id,
+            })),
+          )
+          .execute();
+      }
+    }
   }
 
   private areStringArraysEqual(left: string[], right: string[]): boolean {
@@ -885,6 +1094,14 @@ export class PageService {
       }
 
       if (pageIds.length > 0) {
+        await trx
+          .updateTable('databases')
+          .set({ spaceId, updatedAt: new Date() })
+          .where('pageId', 'in', pageIds)
+          .where('workspaceId', '=', rootPage.workspaceId)
+          .where('deletedAt', 'is', null)
+          .execute();
+
         // update spaceId in shares
         await trx
           .updateTable('shares')
@@ -1065,7 +1282,20 @@ export class PageService {
       }),
     );
 
-    await this.db.insertInto('pages').values(insertablePages).execute();
+    const copiedPageByOriginalId: CopiedPageByOriginalId = new Map(
+      pages.map((page, index) => [page.id, insertablePages[index]]),
+    );
+
+    await executeTx(this.db, async (trx) => {
+      await trx.insertInto('pages').values(insertablePages).execute();
+      await this.duplicateLinkedDatabases({
+        pageMap,
+        copiedPageByOriginalId,
+        spaceId,
+        authUser,
+        trx,
+      });
+    });
 
     const transclusionPages = insertablePages.map((page) => ({
       id: page.id,

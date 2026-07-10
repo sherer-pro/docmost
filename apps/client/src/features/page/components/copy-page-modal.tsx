@@ -7,11 +7,12 @@ import { ISpace } from "@/features/space/types/space.types.ts";
 import { queryClient } from "@/main.tsx";
 import { SpaceSelect } from "@/features/space/components/sidebar/space-select.tsx";
 import { useNavigate } from "react-router-dom";
-import { buildPageUrl } from "@/features/page/page.utils.ts";
+import { buildDatabaseUrl, buildPageUrl } from "@/features/page/page.utils.ts";
 
 interface CopyPageModalProps {
   pageId: string;
   currentSpaceSlug: string;
+  nodeType?: "page" | "database";
   open: boolean;
   onClose: () => void;
 }
@@ -19,6 +20,7 @@ interface CopyPageModalProps {
 export default function CopyPageModal({
   pageId,
   currentSpaceSlug,
+  nodeType = "page",
   open,
   onClose,
 }: CopyPageModalProps) {
@@ -41,11 +43,18 @@ export default function CopyPageModal({
           ),
       });
 
-      const pageUrl = buildPageUrl(
-        copiedPage.space.slug,
-        copiedPage.slugId,
-        copiedPage.title,
-      );
+      const pageUrl =
+        nodeType === "database" && copiedPage.databaseId
+          ? buildDatabaseUrl(
+              copiedPage.space.slug,
+              copiedPage.slugId,
+              copiedPage.title,
+            )
+          : buildPageUrl(
+              copiedPage.space.slug,
+              copiedPage.slugId,
+              copiedPage.title,
+            );
       navigate(pageUrl);
       notifications.show({
         message: t("Page copied successfully"),

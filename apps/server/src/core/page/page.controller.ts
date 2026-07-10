@@ -976,8 +976,13 @@ export class PageController {
         duplicatedPage,
         user,
       );
+      const linkedDatabase = await this.databaseRepo.findByPageId(
+        duplicatedPage.id,
+        duplicatedPage.workspaceId,
+      );
       return {
         ...mapPageResponse(duplicatedPage),
+        databaseId: linkedDatabase?.id ?? null,
         access: this.toAccessResponse(access),
       };
     } else {
@@ -994,8 +999,13 @@ export class PageController {
         duplicatedPage,
         user,
       );
+      const linkedDatabase = await this.databaseRepo.findByPageId(
+        duplicatedPage.id,
+        duplicatedPage.workspaceId,
+      );
       return {
         ...mapPageResponse(duplicatedPage),
+        databaseId: linkedDatabase?.id ?? null,
         access: this.toAccessResponse(access),
       };
     }

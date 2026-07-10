@@ -401,6 +401,8 @@ export default function DatabaseHeaderMenu({
           pageId={resolvedDatabasePageId}
           slugId={databasePageSlugId}
           currentSpaceSlug={spaceSlug}
+          nodeType="database"
+          title={database?.name}
           onClose={closeMovePageModal}
           open={movePageModalOpened}
         />

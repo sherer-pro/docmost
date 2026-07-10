@@ -781,11 +781,17 @@ function NodeMenu({
     { open: openAccessModal, close: closeAccessModal },
   ] = useDisclosure(false);
   const supportsAccessControl = supportsPageAccessEntity(node.data.nodeType);
+  const isDatabaseNode = node.data.nodeType === "database";
+  const isPageNode = node.data.nodeType === "page";
+  const isDatabaseRowNode = node.data.nodeType === "databaseRow";
+  const isExportableNode = isPageNode || isDatabaseNode || isDatabaseRowNode;
+  const isPageOrDatabaseNode = isPageNode || isDatabaseNode;
+  const exportType = isDatabaseNode ? "database" : "page";
+  const exportId = isDatabaseNode ? node.data.databaseId : node.id;
+  const canExportNode = isExportableNode && Boolean(exportId);
+  const canDuplicateMoveCopyNode = isPageOrDatabaseNode && canMoveDeleteShare;
   const canMoveNodeToTrash =
-    (node.data.nodeType === "page" ||
-      node.data.nodeType === "database" ||
-      node.data.nodeType === "databaseRow") &&
-    canMoveDeleteShare;
+    isExportableNode && canMoveDeleteShare;
 
   const handleCopyLink = () => {
     const resolvedDatabaseIds = resolvePageDatabaseIds({
@@ -823,13 +829,15 @@ function NodeMenu({
       const currentIndex =
         siblings?.findIndex((sibling) => sibling.id === node.id) || 0;
       const newIndex = currentIndex + 1;
+      const duplicatedNodeType =
+        isDatabaseNode && duplicatedPage.databaseId ? "database" : "page";
 
       // Add the duplicated page to the tree
       const treeNodeData: SpaceTreeNode = {
         id: duplicatedPage.id,
-        nodeType: "page",
+        nodeType: duplicatedNodeType,
         slugId: duplicatedPage.slugId,
-        databaseId: null,
+        databaseId: duplicatedPage.databaseId ?? null,
         name: duplicatedPage.title,
         position: duplicatedPage.position,
         spaceId: duplicatedPage.spaceId,
@@ -913,6 +921,7 @@ function NodeMenu({
 
           <Menu.Item
             leftSection={<IconFileExport size={16} />}
+            disabled={!canExportNode}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -922,7 +931,7 @@ function NodeMenu({
             {t("Export page")}
           </Menu.Item>
 
-          {node.data.nodeType === "page" && canMoveDeleteShare && (
+          {canDuplicateMoveCopyNode && (
             <>
               <Menu.Item
                 leftSection={<IconCopy size={16} />}
@@ -974,7 +983,7 @@ function NodeMenu({
 
           {canMoveNodeToTrash && (
             <>
-              {node.data.nodeType === "page" && <Menu.Divider />}
+              <Menu.Divider />
               <Menu.Item
                 c="red"
                 leftSection={<IconTrash size={16} />}
@@ -991,12 +1000,14 @@ function NodeMenu({
         </Menu.Dropdown>
       </Menu>
 
-      {node.data.nodeType === "page" && (
+      {isPageOrDatabaseNode && (
         <>
           <MovePageModal
             pageId={node.id}
             slugId={node.data.slugId ?? ""}
             currentSpaceSlug={spaceSlug}
+            nodeType={isDatabaseNode ? "database" : "page"}
+            title={node.data.name}
             onClose={closeMoveSpaceModal}
             open={movePageModalOpened}
           />
@@ -1004,12 +1015,18 @@ function NodeMenu({
           <CopyPageModal
             pageId={node.id}
             currentSpaceSlug={spaceSlug}
+            nodeType={isDatabaseNode ? "database" : "page"}
             onClose={closeCopySpaceModal}
             open={copyPageModalOpened}
           />
+        </>
+      )}
+
+      {canExportNode && (
+        <>
           <ExportModal
-            type="page"
-            id={node.id}
+            type={exportType}
+            id={exportId as string}
             open={exportOpened}
             onClose={closeExportModal}
           />
