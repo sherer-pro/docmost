@@ -19,7 +19,10 @@ import {
   Center,
 } from "@mantine/core";
 import { useTranslation } from "react-i18next";
-import { useHistoryRestore } from "@/features/page-history/hooks";
+import {
+  useHistoryDelete,
+  useHistoryRestore,
+} from "@/features/page-history/hooks";
 
 const PREFETCH_DELAY_MS = 150;
 
@@ -51,6 +54,7 @@ function HistoryList({ pageId }: Props) {
   const prefetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { canRestore, confirmRestore } = useHistoryRestore();
+  const { canDelete, confirmDelete } = useHistoryDelete(pageId);
 
   const clearPrefetchTimeout = useCallback(() => {
     if (prefetchTimeoutRef.current) {
@@ -138,6 +142,8 @@ function HistoryList({ pageId }: Props) {
             onHover={handleHover}
             onHoverEnd={clearPrefetchTimeout}
             isActive={historyItem.id === activeHistoryId}
+            canDelete={canDelete}
+            onDelete={confirmDelete}
           />
         ))}
         {hasNextPage && <div ref={loadMoreRef} style={{ height: 1 }} />}

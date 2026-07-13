@@ -1,8 +1,16 @@
 .history {
   display: block;
+  flex: 1;
   width: 100%;
   padding: var(--mantine-spacing-md);
+  text-align: left;
   color: light-dark(var(--mantine-color-black), var(--mantine-color-dark-0));
+}
+
+.historyRow {
+  display: flex;
+  align-items: center;
+  padding-right: var(--mantine-spacing-xs);
 
   @mixin hover {
     background-color: light-dark(

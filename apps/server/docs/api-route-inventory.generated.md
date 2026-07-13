@@ -134,6 +134,7 @@
 | POST | `/pages/duplicate` | `apps/server/src/core/page/page.controller.ts` |
 | GET | `/pages/history` | `apps/server/src/core/page/page.controller.ts` |
 | POST | `/pages/history` | `apps/server/src/core/page/page.controller.ts` |
+| DELETE | `/pages/history/:historyId` | `apps/server/src/core/page/page.controller.ts` |
 | GET | `/pages/history/info` | `apps/server/src/core/page/page.controller.ts` |
 | POST | `/pages/history/info` | `apps/server/src/core/page/page.controller.ts` |
 | GET | `/pages/info` | `apps/server/src/core/page/page.controller.ts` |

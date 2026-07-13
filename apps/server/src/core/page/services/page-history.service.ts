@@ -437,6 +437,16 @@ export class PageHistoryService {
     return this.enrichHistoryEntry(history);
   }
 
+  async findMetadataById(
+    historyId: string,
+  ): Promise<Pick<PageHistory, 'id' | 'workspaceId'> | undefined> {
+    return this.pageHistoryRepo.findMetadataById(historyId);
+  }
+
+  async deleteById(historyId: string): Promise<void> {
+    await this.pageHistoryRepo.deleteById(historyId);
+  }
+
   async findHistoryByPageId(
     pageId: string,
     paginationOptions: PaginationOptions,
