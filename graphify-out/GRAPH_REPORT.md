@@ -1,16 +1,16 @@
-# Graph Report - docmost  (2026-07-10)
+# Graph Report - docmost  (2026-07-13)
 
 ## Corpus Check
-- 1226 files · ~448,605 words
+- 1229 files · ~449,836 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 7660 nodes · 21403 edges · 377 communities (303 shown, 74 thin omitted)
-- Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS · INFERRED: 84 edges (avg confidence: 0.7)
+- 7661 nodes · 22134 edges · 357 communities (297 shown, 60 thin omitted)
+- Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS · INFERRED: 85 edges (avg confidence: 0.7)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `6862f6dc`
+- Built from commit: `1d2d5ad9`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -177,6 +177,7 @@
 - [[_COMMUNITY_User Controller|User Controller]]
 - [[_COMMUNITY_API Route Generator|API Route Generator]]
 - [[_COMMUNITY_Logging Service|Logging Service]]
+- [[_COMMUNITY_Editor Interaction Handlers|Editor Interaction Handlers]]
 - [[_COMMUNITY_Link Editor UI|Link Editor UI]]
 - [[_COMMUNITY_Page Event Listener|Page Event Listener]]
 - [[_COMMUNITY_Database Title Editor|Database Title Editor]]
@@ -263,7 +264,6 @@
 - [[_COMMUNITY_API Route Deprecation Matrix|API Route Deprecation Matrix]]
 - [[_COMMUNITY_Release note legacy databasepage route fallback|Release note: legacy database/page route fallback]]
 - [[_COMMUNITY_FileTaskIdDto|FileTaskIdDto]]
-- [[_COMMUNITY_generateHTML.ts|generateHTML.ts]]
 - [[_COMMUNITY_updateAttachmentAttr|updateAttachmentAttr]]
 - [[_COMMUNITY_ws.gateway.spec.ts|ws.gateway.spec.ts]]
 - [[_COMMUNITY_account-theme.tsx|account-theme.tsx]]
@@ -300,217 +300,199 @@
 - [[_COMMUNITY_DuplicatePageDto|DuplicatePageDto]]
 - [[_COMMUNITY_CreateSpaceDto|CreateSpaceDto]]
 - [[_COMMUNITY_PageExportController|PageExportController]]
-- [[_COMMUNITY_LinkPreviewDto|LinkPreviewDto]]
-- [[_COMMUNITY_TestPostgresDialect|TestPostgresDialect]]
-- [[_COMMUNITY_status-indicator.tsx|status-indicator.tsx]]
-- [[_COMMUNITY_deleted-page.dto.ts|deleted-page.dto.ts]]
-- [[_COMMUNITY_recent-page.dto.ts|recent-page.dto.ts]]
-- [[_COMMUNITY_20260526T124000-clean-legacy-quote-content.ts|20260526T124000-clean-legacy-quote-content.ts]]
 - [[_COMMUNITY_alias-smoke.spec.ts|alias-smoke.spec.ts]]
-- [[_COMMUNITY_Body|Body]]
-- [[_COMMUNITY_Controller|Controller]]
-- [[_COMMUNITY_DeprecatedRoute|DeprecatedRoute]]
-- [[_COMMUNITY_Get|Get]]
-- [[_COMMUNITY_HttpCode|HttpCode]]
-- [[_COMMUNITY_Param|Param]]
-- [[_COMMUNITY_Post|Post]]
-- [[_COMMUNITY_Query|Query]]
-- [[_COMMUNITY_UseGuards|UseGuards]]
-- [[_COMMUNITY_Injectable|Injectable]]
-- [[_COMMUNITY_InjectKysely|InjectKysely]]
-- [[_COMMUNITY_InjectQueue|InjectQueue]]
 
 ## God Nodes (most connected - your core abstractions)
-1. `KyselyDB` - 420 edges
-2. `User` - 329 edges
-3. `KyselyTransaction` - 212 edges
-4. `Workspace` - 209 edges
-5. `AuthUser` - 188 edges
-6. `AuthWorkspace` - 167 edges
+1. `KyselyDB` - 428 edges
+2. `User` - 375 edges
+3. `AuthUser` - 229 edges
+4. `Workspace` - 216 edges
+5. `KyselyTransaction` - 214 edges
+6. `AuthWorkspace` - 174 edges
 7. `EnvironmentService` - 163 edges
 8. `dbOrTx()` - 155 edges
-9. `PaginationOptions` - 118 edges
-10. `PageAccessService` - 88 edges
+9. `PaginationOptions` - 126 edges
+10. `PageAccessService` - 92 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `writeZip()` --references--> `jszip`  [EXTRACTED]
   apps/server/src/integrations/import/utils/file.utils.spec.ts → package.json
 - `PageEditor()` --references--> `@hocuspocus/provider`  [EXTRACTED]
   apps/client/src/features/editor/page-editor.tsx → package.json
-- `UserInfoProps` --references--> `IUser`  [EXTRACTED]
-  apps/client/src/components/common/user-info.tsx → apps/client/src/features/user/types/user.types.ts
 - `CloudLogin()` --calls--> `getAppName()`  [EXTRACTED]
   apps/client/src/ee/pages/cloud-login.tsx → apps/client/src/lib/config.ts
 - `CreateWorkspace()` --calls--> `getAppName()`  [EXTRACTED]
   apps/client/src/ee/pages/create-workspace.tsx → apps/client/src/lib/config.ts
+- `ICellValueContext` --references--> `IDatabaseProperty`  [EXTRACTED]
+  apps/client/src/features/database/utils/database-markdown.ts → apps/client/src/features/database/types/database.types.ts
 
 ## Import Cycles
 - 3-file cycle: `apps/client/src/features/editor/components/transclusion/transclusion-content.tsx -> apps/client/src/features/editor/extensions/extensions.ts -> apps/client/src/features/editor/components/transclusion/transclusion-reference-view.tsx -> apps/client/src/features/editor/components/transclusion/transclusion-content.tsx`
-- 3-file cycle: `apps/client/src/ee/api-key/components/create-api-key-modal.tsx -> apps/client/src/ee/api-key/queries/api-key-query.ts -> apps/client/src/ee/api-key/index.ts -> apps/client/src/ee/api-key/components/create-api-key-modal.tsx`
-- 3-file cycle: `apps/client/src/ee/api-key/components/update-api-key-modal.tsx -> apps/client/src/ee/api-key/queries/api-key-query.ts -> apps/client/src/ee/api-key/index.ts -> apps/client/src/ee/api-key/components/update-api-key-modal.tsx`
 - 3-file cycle: `apps/client/src/ee/api-key/components/revoke-api-key-modal.tsx -> apps/client/src/ee/api-key/queries/api-key-query.ts -> apps/client/src/ee/api-key/index.ts -> apps/client/src/ee/api-key/components/revoke-api-key-modal.tsx`
+- 3-file cycle: `apps/client/src/ee/api-key/components/update-api-key-modal.tsx -> apps/client/src/ee/api-key/queries/api-key-query.ts -> apps/client/src/ee/api-key/index.ts -> apps/client/src/ee/api-key/components/update-api-key-modal.tsx`
+- 3-file cycle: `apps/client/src/ee/api-key/components/create-api-key-modal.tsx -> apps/client/src/ee/api-key/queries/api-key-query.ts -> apps/client/src/ee/api-key/index.ts -> apps/client/src/ee/api-key/components/create-api-key-modal.tsx`
 
 ## Hyperedges (group relationships)
 - **Core Module Functionalities** — apps_server_src_core_module, apps_server_src_database_repos, apps_server_src_database_migrations [EXTRACTED 0.90]
 - **Frontend Feature Modules** — apps_client_src_features, apps_client_vite_config, apps_client [EXTRACTED 0.85]
 
-## Communities (377 total, 74 thin omitted)
+## Communities (357 total, 60 thin omitted)
 
 ### Community 0 - "Database Transaction Logic"
 Cohesion: 0.03
-Nodes (70): InjectKysely, InjectQueue, RagDocumentFieldsConfig, InjectKysely, defaultDecodeCursor(), defaultEncodeCursor(), DatabasePropertyRepo, Injectable (+62 more)
+Nodes (66): InjectKysely, InjectQueue, RagDocumentFieldsConfig, InjectKysely, defaultDecodeCursor(), defaultEncodeCursor(), DatabasePropertyRepo, Injectable (+58 more)
 
 ### Community 1 - "API Key Management"
-Cohesion: 0.02
-Nodes (56): InjectKysely, InjectQueue, InjectKysely, InjectKysely, InjectQueue, LabelService, Injectable, InjectKysely (+48 more)
+Cohesion: 0.03
+Nodes (40): getPageTitle(), InjectKysely, Inject, InjectKysely, InjectKysely, NotificationType, NotificationService, Injectable (+32 more)
 
 ### Community 2 - "Label Management Service"
 Cohesion: 0.04
-Nodes (78): getPageTitle(), DefaultGroup, IsNotEmpty, IsUUID, UpdateGroupDto, GroupService, TODO: use queue instead, Inject (+70 more)
+Nodes (69): EventName, ListApiKeysDto, CommentPaginationOptions, ListFavoritesDto, ListFavoritesQueryDto, IsIn, IsOptional, IsString (+61 more)
 
 ### Community 3 - "Database Table View"
-Cohesion: 0.07
-Nodes (50): useCreateDatabaseViewMutation(), useDatabasePropertiesQuery(), useDatabaseRowContextQuery(), useDatabaseViewsQuery(), useDeleteDatabaseRowMutation(), useDeleteDatabaseViewMutation(), useUpdateDatabaseViewMutation(), batchUpdateDatabaseCells() (+42 more)
+Cohesion: 0.05
+Nodes (75): databaseTableExportStateAtom, defaultDatabaseTableExportState, IPersistedDatabaseTableState, DatabaseHeaderMenuProps, normalizeRowsResponse(), useCreateDatabaseViewMutation(), useDatabasePropertiesQuery(), useDatabaseRowContextQuery() (+67 more)
 
 ### Community 4 - "Comment Service Logic"
-Cohesion: 0.07
-Nodes (21): NotificationModule, Module, NotificationDeliveryPolicyService, Injectable, PushAggregationBootstrapService, Injectable, PushAggregationService, PushDispatchPayload (+13 more)
+Cohesion: 0.09
+Nodes (16): NotificationDeliveryPolicyService, Injectable, PushAggregationBootstrapService, Injectable, PushAggregationService, PushDispatchPayload, Injectable, InjectKysely (+8 more)
 
 ### Community 5 - "Database Page Context"
-Cohesion: 0.05
-Nodes (60): resolveDatabasePageContext(), DatabasePageContextParams, useDatabasePageContext(), useGetDatabaseQuery(), getDatabase(), MentionView(), TransclusionReferenceBody(), useTransclusionLookup() (+52 more)
+Cohesion: 0.04
+Nodes (86): AppHeader(), mobileSidebarAtom, useToggleSidebar(), ThemeToggle(), handleInternalLink(), InternalLinkOptions, LinkFn, MentionView() (+78 more)
 
 ### Community 6 - "UI Status Indicators"
-Cohesion: 0.08
-Nodes (39): DatabasePageContextValue, ResolveDatabasePageContextInput, IDatabase, MentionList, MentionListProps, MentionSuggestionItem, SubpagesView(), DocumentFieldsPanelProps (+31 more)
+Cohesion: 0.27
+Nodes (6): Layout(), PosthogUser(), MentionList, MentionListProps, MentionSuggestionItem, currentUserAtom
 
 ### Community 7 - "User Authentication DTOs"
 Cohesion: 0.02
-Nodes (69): extractBearerTokenFromHeader(), hashPassword(), ListApiKeysDto, RevokeApiKeyDto, UserTokenType, JwtApiKeyPayload, JwtAttachmentPayload, JwtCollabPayload (+61 more)
+Nodes (64): nanoIdGen, extractBearerTokenFromHeader(), hashPassword(), UserTokenType, validateAllowedEmail(), CreateAdminUserDto, IsNotEmpty, IsOptional (+56 more)
 
 ### Community 8 - "Group Management Service"
-Cohesion: 0.09
-Nodes (17): CreateGroupDto, ArrayMaxSize, IsArray, IsOptional, IsString, IsUUID, MaxLength, MinLength (+9 more)
+Cohesion: 0.07
+Nodes (19): InjectKysely, IsNotEmpty, IsUUID, UpdateGroupDto, GroupService, Inject, Injectable, InjectKysely (+11 more)
 
 ### Community 9 - "Page Layout Components"
 Cohesion: 0.07
-Nodes (35): SettingsTitle(), PAGE_FRAME_SIZES, PageFrame(), PageFrameProps, PageFrameSize, SectionHeader(), SectionHeaderProps, Billing() (+27 more)
+Nodes (37): SettingsTitle(), Error404(), PAGE_FRAME_SIZES, PageFrame(), PageFrameProps, PageFrameSize, SectionHeader(), SectionHeaderProps (+29 more)
 
 ### Community 10 - "Page and Backlink DTOs"
-Cohesion: 0.10
-Nodes (17): PageAccessEffect, PageAccessPrincipalType, PageRole, SpaceVisibility, UserRole, AccessDecision, EffectivePageAccess, ClosePageGroupAccessDto (+9 more)
+Cohesion: 0.06
+Nodes (42): DeletedPageDto, DeletedPagesQueryDto, IsNotEmpty, IsString, DuplicatePageDto, ICopyPageAttachment, IsNotEmpty, IsOptional (+34 more)
 
 ### Community 11 - "Database Mutation Hooks"
 Cohesion: 0.11
-Nodes (35): jotaiStore, syncDatabaseTreeNode(), useConvertDatabaseToPageMutation(), useCreateDatabaseMutation(), useGetDatabasesBySpaceQuery(), useUpdateDatabaseMutation(), convertDatabaseToPage(), createDatabase() (+27 more)
+Nodes (39): jotaiStore, syncDatabaseTreeNode(), useConvertDatabaseToPageMutation(), useCreateDatabaseMutation(), useGetDatabasesBySpaceQuery(), useUpdateDatabaseMutation(), useDeleteDatabasePropertyMutation(), useDeleteDatabaseRowMutation() (+31 more)
 
 ### Community 12 - "Page Access Control"
-Cohesion: 0.14
-Nodes (7): SpaceRole, InjectKysely, PageAccessService, Injectable, BacklinkService, Injectable, Page
+Cohesion: 0.07
+Nodes (19): PageAccessEffect, PageAccessPrincipalType, PageRole, SpaceRole, SpaceVisibility, UserRole, AccessDecision, EffectivePageAccess (+11 more)
 
 ### Community 13 - "Auth and Attachment Modules"
-Cohesion: 0.05
-Nodes (53): ApiKeyModule, Module, AttachmentModule, Module, AuthModule, Module, AuthRateLimitModule, Global (+45 more)
+Cohesion: 0.04
+Nodes (67): ApiKeyModule, Module, AttachmentModule, Module, AuthModule, Module, AuthRateLimitModule, Global (+59 more)
 
 ### Community 14 - "Cloud Workspace Management"
-Cohesion: 0.05
-Nodes (68): AppVersion(), useJoinedWorkspacesQuery(), getJoinedWorkspaces(), CloudLoginForm(), createFormSchema(), JoinedWorkspaces(), ChangeHostnameForm(), ChangeHostnameFormProps (+60 more)
+Cohesion: 0.07
+Nodes (52): AppVersion(), InviteActionMenu(), Props, MemberActionMenu(), Props, getLocationColor(), getLocationIcon(), getLocationKey() (+44 more)
 
 ### Community 15 - "Environment and Middleware"
-Cohesion: 0.04
-Nodes (7): Get, EnvironmentService, Injectable, getClientStaticCacheControl(), injectWindowConfigScript(), StaticModule, Module
+Cohesion: 0.03
+Nodes (10): SetupGuard, Injectable, Get, EnvironmentService, Injectable, getClientStaticCacheControl(), injectWindowConfigScript(), StaticModule (+2 more)
 
 ### Community 16 - "API Route Security"
-Cohesion: 0.12
-Nodes (18): Public(), AttachmentAccessTokenResolution, AttachmentAccessTokenSource, getAttachmentTokenCookieName(), resolveAttachmentAccessToken(), resolveAttachmentAccessTokenDetails(), AUTH_RATE_LIMITS, AuthRateLimitEndpoint (+10 more)
+Cohesion: 0.09
+Nodes (35): DatabaseCellRendererProps, DictionaryHighlightLayer(), DictionaryHighlightLayerProps, PopoverState, SelectionState, DictionaryTextHighlighter(), DictionaryTextHighlighterProps, buildDecorations() (+27 more)
 
 ### Community 17 - "External AI Dependencies"
 Cohesion: 0.02
 Nodes (83): dependencies, ai, @ai-sdk/google, ai-sdk-ollama, @ai-sdk/openai, @ai-sdk/openai-compatible, @aws-sdk/client-s3, @aws-sdk/lib-storage (+75 more)
 
 ### Community 18 - "Pagination and Search UI"
-Cohesion: 0.07
-Nodes (54): NoTableResultsProps, PagePaginationProps, isDatabaseNode(), Props, RecentChangeNode, RecentChanges(), SearchInput(), SearchInputProps (+46 more)
+Cohesion: 0.06
+Nodes (66): AvatarUploaderProps, NoTableResultsProps, PagePaginationProps, isDatabaseNode(), Props, RecentChangeNode, RecentChanges(), SearchInput() (+58 more)
 
 ### Community 19 - "Attachment Sharing Logic"
-Cohesion: 0.08
-Nodes (39): removeMarkTypeFromDoc(), hasLicenseOrEE(), CreateShareDto, ShareIdDto, ShareInfoDto, SharePageIdDto, SpaceIdDto, IsBoolean (+31 more)
+Cohesion: 0.13
+Nodes (24): hasLicenseOrEE(), CreateShareDto, ShareIdDto, ShareInfoDto, SharePageIdDto, SpaceIdDto, IsBoolean, IsNotEmpty (+16 more)
 
 ### Community 20 - "History Processing Service"
-Cohesion: 0.11
-Nodes (22): HistoryQueueJobData, HistoryDirtyKind, HistoryQueueJobData, IHistoryDirtyState, EventName, MentionNode, PageEvent, SpaceEvent (+14 more)
+Cohesion: 0.14
+Nodes (13): HistoryQueueJobData, HistoryDirtyKind, HistoryQueueJobData, IHistoryDirtyState, CommentType, PageEvent, SpaceEvent, WorkspaceEvent (+5 more)
 
 ### Community 21 - "Presence Service Logic"
 Cohesion: 0.05
-Nodes (31): PresenceUpdateDto, IsIn, IsOptional, IsString, MaxLength, PresenceService, FakeRedis, Injectable (+23 more)
+Nodes (32): PresenceUpdateDto, IsIn, IsOptional, IsString, MaxLength, PresenceService, FakeRedis, Injectable (+24 more)
 
 ### Community 22 - "Account Security Settings"
-Cohesion: 0.08
-Nodes (47): ResponsiveSettingsContent(), ResponsiveSettingsContentProps, ResponsiveSettingsControl(), ResponsiveSettingsControlProps, ResponsiveSettingsRow(), ResponsiveSettingsRowProps, DocumentCommonActionItems(), DocumentCommonActionItemsProps (+39 more)
+Cohesion: 0.19
+Nodes (18): AccountEmailPreferences(), EMAIL_FREQUENCY_OPTIONS, getMyInfo(), isEnvelope(), normalizeCurrentUserResponse(), normalizeUserPreferences(), unwrapResponse(), EmailFrequency (+10 more)
 
 ### Community 23 - "Dictionary Term Repository"
-Cohesion: 0.04
-Nodes (37): InjectKysely, Injectable, WatcherService, CommentActor, CommentPaginationOptions, DatabaseCellRepo, Injectable, DictionaryTermRepo (+29 more)
+Cohesion: 0.03
+Nodes (56): InjectKysely, normalizeLabelName(), InjectKysely, InjectQueue, ReferencingPageInfo, TransclusionService, Injectable, TransclusionNodeSnapshot (+48 more)
 
 ### Community 24 - "History Editor Components"
-Cohesion: 0.16
-Nodes (22): activeHistoryIdAtom, activeHistoryPrevIdAtom, DiffCounts, diffCountsAtom, highlightChangesAtom, historyAtoms, HistoryList(), Props (+14 more)
+Cohesion: 0.07
+Nodes (56): activeHistoryIdAtom, activeHistoryPrevIdAtom, DiffCounts, diffCountsAtom, highlightChangesAtom, historyAtoms, HistoryEditor(), HistoryEditorProps (+48 more)
 
 ### Community 25 - "Comment UI Components"
-Cohesion: 0.10
-Nodes (28): activeCommentIdAtom, CommentActionsProps, CommentDialog(), CommentDialogProps, CommentEditor, CommentEditorProps, ChildComments(), ChildCommentsProps (+20 more)
+Cohesion: 0.09
+Nodes (41): CommentEditor, ChildComments(), ChildCommentsProps, CommentListWithTabs(), MemoizedChildComments, ChildComments(), ChildCommentsProps, MemoizedChildComments (+33 more)
 
 ### Community 26 - "Authentication UI Modals"
 Cohesion: 0.07
 Nodes (50): CopyProps, CopyTextButton(), GoogleIcon(), Props, OpenIdIcon(), Props, createFormSchema(), LdapLoginModal() (+42 more)
 
 ### Community 27 - "UI Sidebar and Theme"
-Cohesion: 0.08
-Nodes (23): ThemeToggle(), EmojiPickerInterface, Picker, SidebarToggle, SidebarToggleProps, SearchControl(), SearchControlProps, SearchMobileControl() (+15 more)
+Cohesion: 0.28
+Nodes (6): SidebarToggle, SidebarToggleProps, SearchControl(), SearchControlProps, SearchMobileControl(), SearchMobileControlProps
 
 ### Community 28 - "Space Ability Factory"
-Cohesion: 0.12
-Nodes (24): JwtAuthGuard, Injectable, FileInterceptor, Injectable, buildSpaceAdminAbility(), buildSpaceReaderAbility(), buildSpaceWriterAbility(), SpaceAbilityFactory (+16 more)
+Cohesion: 0.13
+Nodes (22): DeprecatedRoute(), Public(), JwtAuthGuard, Injectable, FileInterceptor, Injectable, buildSpaceAdminAbility(), buildSpaceReaderAbility() (+14 more)
 
 ### Community 29 - "Page Controller Logic"
-Cohesion: 0.22
-Nodes (10): PageController, AuthUser, AuthWorkspace, Body, Controller, DeprecatedRoute, HttpCode, Param (+2 more)
+Cohesion: 0.14
+Nodes (16): jsonToHtml(), jsonToMarkdown(), AuthUser, PageHistoryIdDto, mapPageResponse(), PageController, Body, Controller (+8 more)
 
 ### Community 30 - "User and API Keys"
-Cohesion: 0.20
-Nodes (14): AuthUser, DatabaseController, Body, Controller, Delete, Get, HttpCode, Param (+6 more)
+Cohesion: 0.17
+Nodes (13): DatabaseController, Body, Controller, Delete, Get, HttpCode, Param, Patch (+5 more)
 
 ### Community 31 - "AI Search Components"
-Cohesion: 0.21
-Nodes (17): SearchResultItemProps, getSearchLabelsQueryKey(), getSearchSuggestionQueryKey(), useAttachmentSearchQuery(), useSearchLabelsQuery(), useSearchSuggestionsQuery(), searchAttachments(), searchLabels() (+9 more)
+Cohesion: 0.19
+Nodes (18): PageAccessModal(), SearchResultItemProps, getSearchLabelsQueryKey(), getSearchSuggestionQueryKey(), useSearchSuggestionsQuery(), useShareSearchQuery(), searchLabels(), searchShare() (+10 more)
 
 ### Community 32 - "Global App Shell"
-Cohesion: 0.06
-Nodes (50): AppHeader(), GlobalAppShell(), getShellVisibilityState(), AsideStateType, desktopAsideAtom, desktopSidebarAtom, mobileSidebarAtom, sidebarWidthAtom (+42 more)
+Cohesion: 0.08
+Nodes (39): prefetchApiKeyManagement(), prefetchApiKeys(), prefetchBilling(), prefetchGroups(), prefetchShares(), prefetchSpaces(), prefetchSsoProviders(), prefetchWorkspaceMembers() (+31 more)
 
 ### Community 33 - "Workspace and Group Controller"
-Cohesion: 0.21
-Nodes (14): AuthWorkspace, AuthRateLimit, Body, Controller, DeprecatedRoute, Get, HttpCode, Post (+6 more)
+Cohesion: 0.12
+Nodes (26): AuthWorkspace, buildWorkspaceAdminAbility(), buildWorkspaceMemberAbility(), buildWorkspaceOwnerAbility(), GroupController, Body, Controller, DeprecatedRoute (+18 more)
 
 ### Community 34 - "Group Management UI"
-Cohesion: 0.08
-Nodes (32): AddGroupMemberModal(), CreateGroupForm(), formSchema, FormValues, CreateGroupModal(), EditGroupForm(), EditGroupFormProps, formSchema (+24 more)
+Cohesion: 0.07
+Nodes (38): UserInfo(), UserInfoProps, IconGroupCircle(), AddGroupMemberModal(), CreateGroupForm(), formSchema, FormValues, CreateGroupModal() (+30 more)
 
 ### Community 35 - "User Onboarding Flows"
 Cohesion: 0.07
-Nodes (47): TopMenu(), SsoLogin(), CreateWorkspace(), createFormSchema(), ForgotPasswordForm(), formSchema, FormValues, InviteSignUpForm() (+39 more)
+Nodes (46): TopMenu(), CreateWorkspace(), createFormSchema(), ForgotPasswordForm(), formSchema, FormValues, InviteSignUpForm(), createFormSchema() (+38 more)
 
 ### Community 36 - "Export Modal Components"
 Cohesion: 0.05
-Nodes (53): ExportFormatSelectionProps, ExportModal(), ExportModalProps, ExportTargetType, getExportFormatValues(), isSpaceExportFormat(), shouldShowAttachments(), shouldShowIncludeChildren() (+45 more)
+Nodes (66): ConfluenceIcon(), Props, getFileTaskById(), PageAccessModalProps, BacklinkList(), extractTextFromDoc(), getLabelColor(), getPageTextStats() (+58 more)
 
 ### Community 37 - "Auth and RAG Decorators"
-Cohesion: 0.11
+Cohesion: 0.12
 Nodes (34): AuthSpace, ApiKeyAuthGuard, Injectable, RAG_EXPORT_FORMATS, RagDatabaseIdentifierParamsDto, RagDatabaseRowsQueryDto, RagDeletedQueryDto, RagExportFormat (+26 more)
 
 ### Community 38 - "Space Management UI"
-Cohesion: 0.09
-Nodes (46): SpacePublicSharingToggle(), SpacePublicSharingToggleProps, DeleteSpaceModal(), DeleteSpaceModalProps, EditSpaceForm(), EditSpaceFormProps, formSchema, FormValues (+38 more)
+Cohesion: 0.07
+Nodes (53): SpacePublicSharingToggle(), SpacePublicSharingToggleProps, AddSpaceMemberModalProps, AddSpaceMembersModal(), CreateSpaceForm(), formSchema, FormValues, DeleteSpaceModal() (+45 more)
 
 ### Community 39 - "Email Notification Service"
 Cohesion: 0.07
@@ -521,184 +503,184 @@ Cohesion: 0.04
 Nodes (57): dependencies, @braintree/sanitize-url, bytes, @casl/ability, cross-env, date-fns, diff, @docmost/editor-ext (+49 more)
 
 ### Community 41 - "History Processing Logic"
-Cohesion: 0.08
-Nodes (8): HistoryProcessor, InjectQueue, OnWorkerEvent, Processor, CollabHistoryService, IBufferedPageHistoryEvent, Injectable, InjectQueue
+Cohesion: 0.09
+Nodes (7): HistoryProcessor, OnWorkerEvent, Processor, CollabHistoryService, IBufferedPageHistoryEvent, Injectable, InjectQueue
 
 ### Community 42 - "Collaboration WebSocket Adapter"
-Cohesion: 0.04
-Nodes (27): CollabWsAdapter, CollaborationGateway, Injectable, CollabEventHandlers, CollaborationHandler, Injectable, CollaborationModule, Module (+19 more)
+Cohesion: 0.05
+Nodes (20): CollabWsAdapter, CollaborationGateway, Injectable, CollabEventHandlers, CollaborationHandler, Injectable, CollaborationModule, Module (+12 more)
 
 ### Community 43 - "Collaboration Proxy Socket"
-Cohesion: 0.07
+Cohesion: 0.08
 Nodes (25): CollabProxySocket, DocumentName, RedisSyncExtension, ServerId, SocketId, BaseWebSocket, Configuration, CustomEventName (+17 more)
 
 ### Community 44 - "Database Cell Rendering"
-Cohesion: 0.12
-Nodes (41): DatabaseCellRenderer(), DatabasePageReferenceOption, DatabaseUserEditor(), DatabaseUserViewValue(), ResolvedDatabaseUserViewValue(), IDatabaseProperty, BOOLEAN_FALSE_TOKENS, BOOLEAN_TRUE_TOKENS (+33 more)
+Cohesion: 0.11
+Nodes (43): DatabaseCellRenderer(), DatabasePageReferenceOption, DatabaseUserEditor(), DatabaseUserViewValue(), ResolvedDatabaseUserViewValue(), IDatabaseProperty, BOOLEAN_FALSE_TOKENS, BOOLEAN_TRUE_TOKENS (+35 more)
 
 ### Community 45 - "Attachment Controller Logic"
-Cohesion: 0.25
-Nodes (13): AttachmentController, Body, Controller, DeprecatedRoute, Get, HttpCode, Param, Post (+5 more)
+Cohesion: 0.12
+Nodes (23): AttachmentController, Body, Controller, DeprecatedRoute, Get, HttpCode, Param, Post (+15 more)
 
 ### Community 46 - "Comment Markdown Service"
 Cohesion: 0.14
 Nodes (3): CommentWithActors, CopyMarkdownWithCommentsService, Injectable
 
 ### Community 47 - "Dictionary UI Components"
-Cohesion: 0.05
-Nodes (70): DatabaseCellRendererProps, DictionaryHighlightLayer(), DictionaryHighlightLayerProps, PopoverState, SelectionState, DictionaryMarkdown(), DictionaryMarkdownProps, DictionaryTermModal() (+62 more)
+Cohesion: 0.10
+Nodes (38): DictionaryMarkdown(), DictionaryMarkdownProps, DictionaryTermModal(), DictionaryTermModalProps, formSchema, FormValues, DICTIONARY_QUERY_KEYS, useCreateDictionaryTermMutation() (+30 more)
 
 ### Community 48 - "Dictionary Controller Logic"
-Cohesion: 0.12
-Nodes (18): AddSpaceMembersDto, ArrayMaxSize, IsArray, IsEnum, IsUUID, SpaceController, Body, Controller (+10 more)
+Cohesion: 0.18
+Nodes (14): SpaceMembersQueryDto, SpaceController, Body, Controller, Delete, DeprecatedRoute, Get, HttpCode (+6 more)
 
 ### Community 49 - "Settings Query Hooks"
-Cohesion: 0.15
-Nodes (16): ActivateLicenseForm(), ActivateLicenseFormProps, formSchema, FormValues, LicenseDetails(), RemoveLicense(), hasExpiredGracePeriod(), isLicenseExpired() (+8 more)
+Cohesion: 0.14
+Nodes (17): prefetchLicense(), ActivateLicenseForm(), ActivateLicenseFormProps, formSchema, FormValues, LicenseDetails(), RemoveLicense(), hasExpiredGracePeriod() (+9 more)
 
 ### Community 50 - "Export Metadata Service"
-Cohesion: 0.08
-Nodes (21): getPageId(), htmlToJson(), jsonToNode(), stripUnknownNodes(), tiptapExtensions, PersistenceExtension, Injectable, applyMarkToYFragment() (+13 more)
+Cohesion: 0.17
+Nodes (9): htmlToJson(), stripUnknownNodes(), tiptapExtensions, applyMarkToYFragment(), setYjsMark(), YjsSelection, generateHTML(), generateJSON() (+1 more)
 
 ### Community 51 - "Transclusion Service Logic"
-Cohesion: 0.06
-Nodes (24): InjectKysely, InjectQueue, dangerousDownloadMimeTypes, trustedInlineMimeTypesByExtension, ReferencingPageInfo, TransclusionService, Injectable, TransclusionLookup (+16 more)
+Cohesion: 0.08
+Nodes (8): InjectKysely, InjectQueue, InjectKysely, InjectQueue, StorageDriver, StorageService, Inject, Injectable
 
 ### Community 52 - "Frontend UI Dependencies"
 Cohesion: 0.04
 Nodes (48): dependencies, alfaaz, axios, blueimp-load-image, @casl/react, clsx, @docmost/api-contract, @docmost/editor-ext (+40 more)
 
 ### Community 53 - "App Controller Logic"
-Cohesion: 0.07
-Nodes (29): AppController, Controller, Get, enterpriseModules, AppService, Injectable, LoggerModule, Module (+21 more)
+Cohesion: 0.06
+Nodes (35): AppController, Controller, Get, AppModule, enterpriseModules, Module, AppService, Injectable (+27 more)
 
 ### Community 54 - "Search and Query Builder"
-Cohesion: 0.10
-Nodes (12): CanonicalPageDatabaseIdentifierContract, getPageIdentifierColumn(), PageIdentifier, resolveCanonicalPageDatabaseIdentifiers(), resolveCanonicalPageId(), splitPageIdentifiers(), SplitPageIdentifiersResult, PageRepo (+4 more)
+Cohesion: 0.04
+Nodes (34): jsonToText(), InjectKysely, InjectQueue, generateSlugId, createYdocFromJson(), removeMarkTypeFromDoc(), CopyPageMapEntry, SidebarNodeType (+26 more)
 
 ### Community 55 - "Database Schema Types"
 Cohesion: 0.04
 Nodes (46): ApiKeys, Attachments, AuthAccounts, AuthProviders, Backlinks, Billing, Comments, DatabaseCells (+38 more)
 
 ### Community 56 - "Attachment View Components"
-Cohesion: 0.28
-Nodes (10): IAttachment, getDiagramAttachmentSrc(), getDiagramSaveErrorMessage(), Translate, DrawioView(), ExcalidrawEditor, ExcalidrawView(), decodeBase64() (+2 more)
+Cohesion: 0.26
+Nodes (11): IAttachment, getDiagramAttachmentSrc(), getDiagramSaveErrorMessage(), Translate, DrawioView(), ExcalidrawEditor, ExcalidrawView(), castToBoolean() (+3 more)
 
 ### Community 57 - "Editor Menu Components"
-Cohesion: 0.07
-Nodes (32): useCollabToken(), ImageWidthProps, NodeWidthResize, sanitizeAlt(), useAltTextControl(), UseAltTextControlArgs, ImageMenu(), ShouldShowProps (+24 more)
+Cohesion: 0.08
+Nodes (26): activePageUsersAtom, yjsConnectionStatusAtom, ImageWidthProps, NodeWidthResize, sanitizeAlt(), useAltTextControl(), UseAltTextControlArgs, ImageMenu() (+18 more)
 
 ### Community 58 - "App and Account Settings"
 Cohesion: 0.05
 Nodes (40): AccountPreferences, AccountSettings, AiSettings, App(), Billing, CloudLogin, CreateWorkspace, DatabaseLegacyRedirect (+32 more)
 
 ### Community 59 - "Comment UI Components"
-Cohesion: 0.09
-Nodes (32): ResolveComment(), ResolveCommentProps, useResolveCommentMutation(), CommentListItem(), CommentListItemProps, CommentMenuProps, getCreateCommentErrorMessage(), RQ_KEY() (+24 more)
+Cohesion: 0.11
+Nodes (27): ResolveComment(), ResolveCommentProps, useResolveCommentMutation(), CommentListItem(), CommentListItemProps, CommentMenuProps, getCreateCommentErrorMessage(), RQ_KEY() (+19 more)
 
 ### Community 60 - "Credential Protection Logic"
-Cohesion: 0.19
-Nodes (4): MfaDisableDto, IsOptional, MfaService, Injectable
+Cohesion: 0.08
+Nodes (31): comparePasswordHash(), decryptProtectedValue(), deriveSymmetricKey(), encryptProtectedValue(), hashProtectedValue(), isHashedProtectedValue(), safeStringEqual(), verifyHashedProtectedValue() (+23 more)
 
 ### Community 62 - "Editor AI Menu"
-Cohesion: 0.32
-Nodes (11): useAiStream(), StreamCallbacks, useAiGenerateMutation(), useAiGenerateStreamMutation(), generateAiContent(), generateAiContentStream(), AiConfigResponse, AiContentResponse (+3 more)
+Cohesion: 0.19
+Nodes (16): useAiStream(), StreamCallbacks, useAiGenerateMutation(), useAiGenerateStreamMutation(), generateAiContent(), generateAiContentStream(), fetchJsonSse(), readServerSentEventStream() (+8 more)
 
 ### Community 63 - "Editor Interaction Atoms"
-Cohesion: 0.07
-Nodes (38): asideStateAtom, draftCommentIdAtom, DraftCommentRange, draftCommentRangeAtom, showCommentPopupAtom, activePageUsersAtom, IActivePageUser, pageEditorAtom (+30 more)
+Cohesion: 0.12
+Nodes (23): showAiMenuAtom, EditorBubbleMenu(), EditorBubbleMenuProps, ReadOnlyCommentBubbleMenu(), BubbleColorMenuItem, ColorSelector(), ColorSelectorProps, HIGHLIGHT_COLORS (+15 more)
 
 ### Community 64 - "Database Controller Logic"
 Cohesion: 0.12
 Nodes (46): BatchUpdateDatabaseCellsDto, BatchUpdateDatabaseCellValueDto, BatchUpdateDatabaseRowDto, BatchUpdateDatabaseRowsDto, CreateDatabaseDto, CreateDatabasePropertyDto, CreateDatabaseRowDto, CreateDatabaseViewDto (+38 more)
 
 ### Community 65 - "Search DTO Types"
-Cohesion: 0.10
-Nodes (24): SidebarAccessSnapshot, SearchDTO, SearchShareDTO, SearchSuggestionDTO, IsBoolean, IsIn, IsNotEmpty, IsOptional (+16 more)
+Cohesion: 0.19
+Nodes (8): SidebarAccessSnapshot, AttachmentSearchResponseDto, SearchBreadcrumbDto, SearchLabelDto, SearchResponseDto, SearchService, Injectable, tsquery
 
 ### Community 66 - "Push Subscription DTOs"
-Cohesion: 0.17
-Nodes (14): CreatePushSubscriptionDto, DeletePushSubscriptionByEndpointDto, DeletePushSubscriptionParamsDto, PushSubscriptionKeysDto, getErrors(), IsNotEmpty, IsObject, IsOptional (+6 more)
+Cohesion: 0.10
+Nodes (21): GlobalAppShell(), getShellVisibilityState(), asideStateAtom, AsideStateType, desktopAsideAtom, desktopSidebarAtom, sidebarWidthAtom, activeCommentIdAtom (+13 more)
 
 ### Community 67 - "Page Editor Components"
-Cohesion: 0.06
-Nodes (43): DatabaseDescriptionEditor(), DatabaseDescriptionEditorProps, { mockPageEditor }, DatabaseTitleEditor(), DatabaseTitleEditorProps, DatabaseHeader(), DatabaseHeaderProps, Command (+35 more)
+Cohesion: 0.09
+Nodes (23): CommentEditorProps, DatabaseTitleEditor(), DatabaseTitleEditorProps, IActivePageUser, pageEditorAtom, titleEditorAtom, getWhitespaceCount(), mentionRenderItems() (+15 more)
 
 ### Community 68 - "MFA Setup Components"
-Cohesion: 0.09
-Nodes (36): MfaBackupCodeInput(), MfaBackupCodeInputProps, MfaBackupCodesModal(), MfaBackupCodesModalProps, createFormSchema(), MfaChallenge(), MfaDisableModal(), MfaDisableModalProps (+28 more)
+Cohesion: 0.14
+Nodes (21): MfaBackupCodesModal(), MfaBackupCodesModalProps, MfaDisableModal(), MfaDisableModalProps, MfaSettings(), disableMfa(), getMfaStatus(), regenerateBackupCodes() (+13 more)
 
 ### Community 69 - "Dictionary Highlight Logic"
-Cohesion: 0.10
-Nodes (44): invalidateRecentChanges(), invalidateTrashList(), DEFAULT_SIDEBAR_NODE_TYPES, getParentSidebarCacheKeys(), getSpaceSidebarCacheKeys(), invalidateDatabaseTreeConsistency(), invalidateOnCreatePage(), InvalidateOnCreatePageOptions (+36 more)
+Cohesion: 0.07
+Nodes (63): invalidateRecentChanges(), DEFAULT_SIDEBAR_NODE_TYPES, getParentSidebarCacheKeys(), getSpaceSidebarCacheKeys(), invalidateDatabaseTreeConsistency(), invalidateOnCreatePage(), InvalidateOnCreatePageOptions, invalidateOnDeletePage() (+55 more)
 
 ### Community 70 - "CSRF Security Middleware"
-Cohesion: 0.10
+Cohesion: 0.09
 Nodes (9): CsrfExempt(), CsrfGuard, Injectable, AuthCookieService, Injectable, CsrfService, Injectable, CsrfTestModule (+1 more)
 
 ### Community 71 - "Dictionary Service Logic"
-Cohesion: 0.10
-Nodes (25): DictionaryModule, Module, DictionaryService, PreparedAlias, PreparedImportTerm, Injectable, DictionaryExportResponse, DictionaryImportResult (+17 more)
+Cohesion: 0.11
+Nodes (23): DictionaryService, PreparedAlias, PreparedImportTerm, Injectable, DictionaryExportResponse, DictionaryImportResult, DictionaryPortableTerm, DictionaryTermResponse (+15 more)
 
 ### Community 72 - "Recent Changes UI"
-Cohesion: 0.17
-Nodes (21): BacklinkList(), extractTextFromDoc(), getLabelColor(), getPageTextStats(), LABEL_COLORS, LabelPicker(), normalizeLabelInput(), PageDetailsModal() (+13 more)
+Cohesion: 0.08
+Nodes (21): inlineFileExtensions, dangerousDownloadMimeTypes, trustedInlineMimeTypesByExtension, JwtApiKeyPayload, JwtAttachmentPayload, JwtCollabPayload, JwtExchangePayload, JwtMfaTokenPayload (+13 more)
 
 ### Community 74 - "Base UI Components"
-Cohesion: 0.11
-Nodes (27): button, container, content, footer, h1, link, logo, main (+19 more)
+Cohesion: 0.12
+Nodes (26): button, container, content, footer, h1, link, logo, main (+18 more)
 
 ### Community 75 - "API Key UI Modals"
 Cohesion: 0.14
-Nodes (27): ApiKeyCreatedModal(), ApiKeyCreatedModalProps, ApiKeyTableProps, CreateApiKeyModal(), CreateApiKeyModalProps, DateInput, formSchema, FormValues (+19 more)
+Nodes (24): ApiKeyCreatedModal(), ApiKeyCreatedModalProps, ApiKeyTableProps, CreateApiKeyModal(), CreateApiKeyModalProps, DateInput, formSchema, FormValues (+16 more)
 
 ### Community 76 - "Collaboration Persistence Logic"
-Cohesion: 0.07
-Nodes (7): CopiedPageByOriginalId, CustomFieldHistoryChange, IHistoryUserRef, PageService, Injectable, InjectKysely, InjectQueue
+Cohesion: 0.17
+Nodes (16): useJoinedWorkspacesQuery(), getJoinedWorkspaces(), CloudLoginForm(), createFormSchema(), JoinedWorkspaces(), ChangeHostnameForm(), ChangeHostnameFormProps, formSchema (+8 more)
 
 ### Community 77 - "User Auth Utilities"
-Cohesion: 0.15
-Nodes (18): comparePasswordHash(), validateAllowedEmail(), validateSsoEnforcement(), Injectable, UserService, isRecord(), normalizeNotificationFrequency(), normalizePageEditModeByPageId() (+10 more)
+Cohesion: 0.11
+Nodes (24): validateSsoEnforcement(), IsBoolean, IsIn, IsObject, IsOptional, IsString, MaxLength, MinLength (+16 more)
 
 ### Community 78 - "Editor Extension Mocks"
-Cohesion: 0.04
-Nodes (36): createEditor(), emptyDefaultTableContent, malformedLeadingRowsTableContent, tableContent, Attachment, Callout, Comment, CustomCodeBlock (+28 more)
+Cohesion: 0.06
+Nodes (31): Attachment, Callout, Comment, CustomCodeBlock, Details, DetailsContent, DetailsSummary, Drawio (+23 more)
 
 ### Community 79 - "App Module Configuration"
-Cohesion: 0.10
-Nodes (23): AppModule, Module, CollabAppModule, Module, bootstrap(), API_PREFIX_EXCLUDES, SkipTransform(), ResponseContractSmokeModule (+15 more)
+Cohesion: 0.07
+Nodes (27): CollabAppModule, Module, bootstrap(), API_PREFIX_EXCLUDES, SkipTransform(), envPath, normalizePostgresUrl(), ResponseContractSmokeModule (+19 more)
 
 ### Community 80 - "Notification Processing Logic"
-Cohesion: 0.13
-Nodes (29): Props, ShareActionMenu(), ShareForPageQueryInput, useCreateShareMutation(), useDeleteShareMutation(), useGetShareByIdQuery(), useGetSharesQuery(), useShareForPageQuery() (+21 more)
+Cohesion: 0.10
+Nodes (10): extractUserMentionIdsFromJson(), CommentService, Injectable, InjectKysely, InjectQueue, CommentRepo, Injectable, InjectKysely (+2 more)
 
 ### Community 81 - "Project Scripts"
 Cohesion: 0.06
 Nodes (35): scripts, audit:architecture, audit:dead-code, audit:deps, audit:duplicates, build, check:comments:en, check:env (+27 more)
 
 ### Community 82 - "Space Repository"
-Cohesion: 0.13
-Nodes (29): HistoryEditor(), HistoryEditorProps, HistoryEventDetails(), HistoryEventDetailsProps, HistoryItem, HistoryItemProps, IPageHistory, IPageHistoryUser (+21 more)
+Cohesion: 0.17
+Nodes (15): MfaBackupCodeInput(), MfaBackupCodeInputProps, createFormSchema(), MfaChallenge(), createSetupSchema(), MfaSetupModal(), MfaSetupModalProps, SetupData (+7 more)
 
 ### Community 83 - "Error Placeholder Components"
-Cohesion: 0.12
-Nodes (20): readOnlyEditorAtom, Props, TransclusionContent(), TransclusionLookupProvider(), ContextValue, LookupKey, Subscriber, TransclusionLookupContext (+12 more)
+Cohesion: 0.11
+Nodes (18): TransclusionLookupProvider(), ContextValue, LookupKey, Subscriber, TransclusionLookupContext, TransclusionReferenceBody(), useTransclusionLookup(), Props (+10 more)
 
 ### Community 84 - "Notification UI Components"
-Cohesion: 0.13
-Nodes (25): NotificationItem(), NotificationItemProps, NotificationList(), NotificationListProps, NotificationPopover(), useNotificationSocket(), formatRelativeTime(), getTimeGroup() (+17 more)
+Cohesion: 0.10
+Nodes (33): useCollabToken(), NotificationItem(), NotificationItemProps, NotificationList(), NotificationListProps, NotificationPopover(), useNotificationSocket(), formatRelativeTime() (+25 more)
 
 ### Community 85 - "Development Dependencies"
 Cohesion: 0.06
 Nodes (32): devDependencies, eslint, eslint-config-prettier, @eslint/js, globals, jest, kysely-codegen, @nestjs/cli (+24 more)
 
 ### Community 86 - "Domain and Host Utilities"
-Cohesion: 0.07
-Nodes (23): cape(), esca, htmlEscape(), htmlUnescape(), pe(), unes, DomainMiddleware, TODO: unify (+15 more)
+Cohesion: 0.09
+Nodes (20): cape(), esca, htmlEscape(), htmlUnescape(), pe(), unes, TODO: unify, getWorkspaceHostnameFromCloudHost() (+12 more)
 
 ### Community 87 - "Auth Rate Limiting"
-Cohesion: 0.07
-Nodes (14): AuthRateLimitExceededEvent, AuthRateLimitOperationMetrics, AuthRateLimitService, BucketState, RedisClientLike, FakeRedisClient, StorageMode, TelemetryCounter (+6 more)
+Cohesion: 0.13
+Nodes (4): AuthRateLimitService, RedisClientLike, Injectable, Optional
 
 ### Community 88 - "External App Icons"
 Cohesion: 0.09
@@ -709,48 +691,48 @@ Cohesion: 0.09
 Nodes (30): dependsOn, executor, options, outputs, dependsOn, executor, options, dependsOn (+22 more)
 
 ### Community 90 - "Page History Service"
-Cohesion: 0.10
-Nodes (22): ContentFormat, CreatePageDto, IsIn, IsObject, IsOptional, IsString, IsUUID, Transform (+14 more)
+Cohesion: 0.08
+Nodes (30): ContentFormat, CreatePageDto, IsIn, IsObject, IsOptional, IsString, IsUUID, Transform (+22 more)
 
 ### Community 91 - "Link Preview Service"
 Cohesion: 0.11
 Nodes (9): LINK_PREVIEW_BLOCKED_HOST_SUFFIXES, LINK_PREVIEW_BLOCKLIST, LinkPreviewAddress, LinkPreviewFetchResult, LinkPreviewLookupCallback, LinkPreviewResponse, LinkPreviewResult, LinkPreviewService (+1 more)
 
 ### Community 92 - "Account Settings UI"
-Cohesion: 0.09
-Nodes (18): CopyButton(), CopyButtonProps, Layout(), PosthogUser(), MermaidView, buildPresencePayload(), getTabId(), PresencePayload (+10 more)
+Cohesion: 0.15
+Nodes (14): ResponsiveSettingsContent(), ResponsiveSettingsContentProps, ResponsiveSettingsControl(), ResponsiveSettingsControlProps, ResponsiveSettingsRow(), ResponsiveSettingsRowProps, LanguageSwitcher(), FixedToolbarPref() (+6 more)
 
 ### Community 93 - "Logging Configuration"
 Cohesion: 0.10
 Nodes (24): CONTEXTS_TO_IGNORE, createPinoConfig(), getClientIpFromFastifyRequest(), getClientIpFromRawRequest(), getTrustedProxiesFromEnv(), parseTrustedProxies(), readEnvFileValue(), stripEnvQuotes() (+16 more)
 
 ### Community 94 - "Favorite Management Service"
-Cohesion: 0.12
-Nodes (15): CreateAdminUserDto, IsNotEmpty, IsOptional, IsString, MaxLength, MinLength, Transform, CreateUserDto (+7 more)
+Cohesion: 0.11
+Nodes (10): AuthRateLimitExceededEvent, AuthRateLimitOperationMetrics, BucketState, FakeRedisClient, StorageMode, TelemetryCounter, AuthRateLimitAlertHook, AuthRateLimitTelemetry (+2 more)
 
 ### Community 95 - "Notification Module Logic"
-Cohesion: 0.28
-Nodes (9): GroupController, Body, Controller, DeprecatedRoute, Get, HttpCode, Post, Query (+1 more)
+Cohesion: 0.19
+Nodes (18): AddLabelsDto, FindPagesByLabelDto, FindPagesByLabelRequestDto, ListLabelsDto, ListLabelsRequestDto, RemoveLabelDto, SUPPORTED_LABEL_TYPES, ArrayMaxSize (+10 more)
 
 ### Community 96 - "Page and Database RAG"
-Cohesion: 0.21
-Nodes (3): mapPageSettings(), RagService, Injectable
+Cohesion: 0.15
+Nodes (4): mapPageSettings(), RagService, Injectable, TestPostgresDialect
 
 ### Community 97 - "TypeScript Configuration"
 Cohesion: 0.07
 Nodes (27): compilerOptions, allowSyntheticDefaultImports, baseUrl, declaration, emitDecoratorMetadata, experimentalDecorators, forceConsistentCasingInFileNames, incremental (+19 more)
 
 ### Community 98 - "UI Component Views"
-Cohesion: 0.11
-Nodes (14): CalloutView(), getCalloutColor(), getCalloutIcon(), MathBlockView(), MathInlineView(), getWhitespaceCount(), mentionRenderItems(), PopoverPosition (+6 more)
+Cohesion: 0.13
+Nodes (12): CalloutView(), getCalloutColor(), getCalloutIcon(), MathBlockView(), MathInlineView(), PopoverPosition, TagView(), CollabExtensions (+4 more)
 
 ### Community 99 - "Notification Delivery Policy"
-Cohesion: 0.12
-Nodes (15): RoleButton, RoleButtonProps, RoleMenuProps, AddSpaceMemberModalProps, AddSpaceMembersModal(), MultiMemberSelect(), iconProps, SpaceMemberRole() (+7 more)
+Cohesion: 0.11
+Nodes (14): RoleButton, RoleButtonProps, RoleMenuProps, iconProps, SpaceMemberRole(), SpaceMemberRoleProps, getSpaceRoleLabel(), spaceRoleData (+6 more)
 
 ### Community 100 - "Search Controller"
-Cohesion: 0.14
-Nodes (15): SearchController, AuthRateLimit, Body, Controller, DeprecatedRoute, Get, HttpCode, Post (+7 more)
+Cohesion: 0.19
+Nodes (11): SearchController, AuthRateLimit, Body, Controller, DeprecatedRoute, Get, HttpCode, Post (+3 more)
 
 ### Community 101 - "Development Scripts"
 Cohesion: 0.08
@@ -769,76 +751,84 @@ Cohesion: 0.13
 Nodes (19): compactUrlForProtocolCheck(), FORBIDDEN_TAGS, isSafeUrl(), parseSvgRoot(), sanitizeMermaidSvg(), URI_ATTRS, DOMPurify, getCacheKey() (+11 more)
 
 ### Community 105 - "Notification Controller"
-Cohesion: 0.14
-Nodes (11): NotificationController, Body, Controller, DeprecatedRoute, Get, HttpCode, Post, Query (+3 more)
+Cohesion: 0.18
+Nodes (9): NotificationController, Body, Controller, DeprecatedRoute, Get, HttpCode, Post, Query (+1 more)
 
 ### Community 106 - "Recipient Resolution"
-Cohesion: 0.38
-Nodes (9): PAGE_CUSTOM_FIELD_STATUS_VALUES, mapPageCustomFields(), mapPageResponse(), getPageAssigneeId(), getPageRoleRecipientIds(), getPageStakeholderIds(), isNonEmptyString(), normalizePageSettings() (+1 more)
+Cohesion: 0.19
+Nodes (16): SearchDTO, SearchShareDTO, SearchSuggestionDTO, IsBoolean, IsIn, IsNotEmpty, IsOptional, IsString (+8 more)
 
 ### Community 107 - "Authentication Controller"
-Cohesion: 0.23
+Cohesion: 0.28
 Nodes (12): AuthController, AuthRateLimit, Body, Controller, CsrfExempt, DeprecatedRoute, Get, HttpCode (+4 more)
 
 ### Community 108 - "Health Check Service"
-Cohesion: 0.15
+Cohesion: 0.13
 Nodes (10): HealthController, Controller, Get, SkipTransform, PostgresHealthIndicator, Injectable, InjectKysely, RedisHealthIndicator (+2 more)
 
 ### Community 109 - "Comment Controller"
-Cohesion: 0.07
-Nodes (37): extractUserMentionIdsFromJson(), CommentController, Body, Controller, DeprecatedRoute, Get, HttpCode, Post (+29 more)
+Cohesion: 0.25
+Nodes (11): CommentController, Body, Controller, DeprecatedRoute, Get, HttpCode, Post, Query (+3 more)
 
 ### Community 110 - "Markdown Comment Service"
-Cohesion: 0.13
-Nodes (17): jsonToHtml(), jsonToMarkdown(), CommentContextState, CommentLocationContext, HeadingContext, ProseMirrorJsonNode, headingNode(), textNode() (+9 more)
+Cohesion: 0.21
+Nodes (7): CommentContextState, CommentLocationContext, HeadingContext, ProseMirrorJsonNode, headingNode(), textNode(), ExportFormat
 
 ### Community 111 - "Localization Testing"
-Cohesion: 0.29
-Nodes (5): __dirname, __filename, FlatTranslations, loadLocale(), localesDir
+Cohesion: 0.12
+Nodes (16): EMPTY_DESCRIPTION_DOC, serializeDatabaseDescription(), toDatabaseDescriptionDoc(), tryParseJsonDescription(), __dirname, __filename, FlatTranslations, loadLocale() (+8 more)
 
 ### Community 112 - "Favorites Management"
-Cohesion: 0.22
-Nodes (17): FavoriteButton(), FavoriteButtonProps, favoriteHref(), FavoriteList(), FavoriteListProps, favoriteTitle(), FAVORITE_QUERY_KEYS, useFavoriteIdsQuery() (+9 more)
+Cohesion: 0.19
+Nodes (18): FavoriteButton(), FavoriteButtonProps, favoriteHref(), FavoriteList(), FavoriteListProps, favoriteTitle(), FAVORITE_QUERY_KEYS, useFavoriteIdsQuery() (+10 more)
 
 ### Community 113 - "Database Description Logic"
-Cohesion: 0.18
-Nodes (18): getJsonStringifiedLength(), cleanMalformedLeadingTableRows(), convertRowCellsToHeaders(), getTableRowColumnCount(), hasMeaningfulContent(), isEmptyTableRow(), isHeaderOnlyRow(), isJsonNode() (+10 more)
+Cohesion: 0.21
+Nodes (16): cleanMalformedLeadingTableRows(), convertRowCellsToHeaders(), getTableRowColumnCount(), hasMeaningfulContent(), isEmptyTableRow(), isHeaderOnlyRow(), isJsonNode(), isRegularCellOnlyRow() (+8 more)
 
 ### Community 114 - "Editor State Atoms"
-Cohesion: 0.12
-Nodes (20): AiSearchToggle(), AiSearchToggleProps, EnableGenerativeAi(), AiSettings(), useEnterpriseAccess(), useLicense(), usePlan(), formSchema (+12 more)
+Cohesion: 0.11
+Nodes (21): AiSearchToggle(), AiSearchToggleProps, EnableGenerativeAi(), AiSettings(), useEnterpriseAccess(), useLicense(), usePlan(), formSchema (+13 more)
 
 ### Community 115 - "TypeScript Configuration"
 Cohesion: 0.10
 Nodes (20): compilerOptions, allowImportingTsExtensions, allowSyntheticDefaultImports, isolatedModules, jsx, lib, module, moduleResolution (+12 more)
 
 ### Community 116 - "Attachment Import Service"
-Cohesion: 0.10
-Nodes (12): AvatarUploader(), CreateSsoProvider(), getMimeType(), InternalLogFilter, FileTask, InjectKysely, ImportAttachmentService, Injectable (+4 more)
+Cohesion: 0.21
+Nodes (7): AvatarUploader(), getMimeType(), FileTask, ImportAttachmentService, Injectable, resolveRelativeAttachmentPath(), logger
 
 ### Community 117 - "Space Member DTOs"
-Cohesion: 0.11
-Nodes (14): RemoveSpaceMemberDto, IsNotEmpty, IsOptional, IsUUID, SpaceIdDto, SpaceMembersQueryDto, IsNotEmpty, IsString (+6 more)
+Cohesion: 0.12
+Nodes (17): AddSpaceMembersDto, ArrayMaxSize, IsArray, IsEnum, IsUUID, RemoveSpaceMemberDto, IsNotEmpty, IsOptional (+9 more)
 
 ### Community 119 - "Label DTOs"
-Cohesion: 0.08
-Nodes (39): AddLabelsDto, FindPagesByLabelDto, FindPagesByLabelRequestDto, ListLabelsDto, ListLabelsRequestDto, RemoveLabelDto, SUPPORTED_LABEL_TYPES, ArrayMaxSize (+31 more)
+Cohesion: 0.15
+Nodes (19): BacklinkDirection, BacklinksListDto, BacklinksListQueryDto, IsIn, IsNotEmpty, IsString, DeletePageDto, PageHistoryQueryDto (+11 more)
+
+### Community 120 - "Local Storage Module"
+Cohesion: 0.24
+Nodes (7): ImportService, Injectable, buildAttachmentCandidates(), collectMarkdownAndHtmlFiles(), encodeFilePath(), readDocmostMetadata(), stripNotionID()
 
 ### Community 121 - "Space Update DTOs"
-Cohesion: 0.25
-Nodes (9): IsBoolean, IsNotEmpty, IsOptional, IsString, IsUUID, Type, ValidateNested, UpdateSpaceDocumentFieldsDto (+1 more)
+Cohesion: 0.12
+Nodes (17): CreateSpaceDto, IsAlphanumeric, IsOptional, IsString, MaxLength, MinLength, Transform, IsBoolean (+9 more)
 
 ### Community 122 - "Nx Project Configuration"
 Cohesion: 0.14
 Nodes (17): executor, options, outputs, executor, options, name, command, cwd (+9 more)
 
 ### Community 123 - "File Validation Service"
-Cohesion: 0.11
-Nodes (23): detectFileTypeFromBuffer(), readMagicBytesFromStream(), resolveTrustedMimeType(), SIGNATURE_RULES, validateFileExtensionAndSignature(), AttachmentType, inlineFileExtensions, validImageExtensions (+15 more)
+Cohesion: 0.13
+Nodes (18): detectFileTypeFromBuffer(), readMagicBytesFromStream(), resolveTrustedMimeType(), SIGNATURE_RULES, validateFileExtensionAndSignature(), createByteCountingStream(), sanitizeFileName(), AttachmentType (+10 more)
 
 ### Community 124 - "Attachment Utilities"
-Cohesion: 0.12
-Nodes (16): NotificationProcessor, InjectKysely, OnWorkerEvent, Processor, CommentNotificationService, Injectable, PageNotificationService, Injectable (+8 more)
+Cohesion: 0.11
+Nodes (19): NotificationProcessor, InjectKysely, OnWorkerEvent, Processor, CommentNotificationService, Injectable, PageNotificationService, Injectable (+11 more)
+
+### Community 125 - "Page History Service"
+Cohesion: 0.20
+Nodes (3): PageHistoryService, Injectable, PageHistory
 
 ### Community 126 - "Environment Variable Validation"
 Cohesion: 0.12
@@ -861,40 +851,40 @@ Cohesion: 0.11
 Nodes (22): AddFavoriteDto, RemoveFavoriteDto, IsIn, IsNotEmpty, IsOptional, IsString, IsUUID, FavoriteIdsDto (+14 more)
 
 ### Community 132 - "MFA Controller"
-Cohesion: 0.27
-Nodes (9): MfaController, AuthRateLimit, Body, Controller, HttpCode, Post, Req, Res (+1 more)
+Cohesion: 0.18
+Nodes (10): readOnlyEditorAtom, Props, TransclusionContent(), mainExtensions, useEditorScroll(), waitForState(), PageEditorProps, ReadonlyPageEditor() (+2 more)
 
 ### Community 133 - "Invitation DTOs"
-Cohesion: 0.06
-Nodes (36): CheckHostnameDto, Matches, MaxLength, MinLength, Transform, DeactivateWorkspaceUserDto, IsNotEmpty, IsUUID (+28 more)
+Cohesion: 0.33
+Nodes (5): CheckHostnameDto, Matches, MaxLength, MinLength, Transform
 
 ### Community 134 - "Workspace Invitation Service"
-Cohesion: 0.22
-Nodes (4): Injectable, WorkspaceInvitationService, WorkspaceInvitation, InvitationEmail()
+Cohesion: 0.10
+Nodes (19): AcceptInviteDto, InvitationIdDto, InvitationInfoDto, InviteUserDto, RevokeInviteDto, ArrayMaxSize, ArrayMinSize, IsArray (+11 more)
 
 ### Community 135 - "PDF Rendering Service"
 Cohesion: 0.18
 Nodes (6): allowedPdfAttachmentPathPrefixes, FALLBACK_CHROMIUM_PATHS, HtmlPdfRendererService, isAllowedPdfResourceUrl(), RenderPdfOptions, Injectable
 
 ### Community 136 - "S3 Storage Driver"
-Cohesion: 0.14
-Nodes (29): DATABASE_PROPERTY_TYPE_ICONS, DatabaseTableView(), DatabaseTableViewProps, getPropertyTypeIcon(), getCheckboxFilterOptions(), getSelectedPreparedRowIds(), hasEmptyUserReference(), isDatabaseFilterControlsVisible() (+21 more)
+Cohesion: 0.10
+Nodes (35): DATABASE_PROPERTY_TYPE_ICONS, DatabaseTableView(), DatabaseTableViewProps, getPropertyTypeIcon(), getCheckboxFilterOptions(), getSelectedPreparedRowIds(), hasEmptyUserReference(), isDatabaseFilterControlsVisible() (+27 more)
 
 ### Community 137 - "Storage Driver Interface"
-Cohesion: 0.04
-Nodes (19): LOCAL_STORAGE_PATH, resolveAppRoot(), resolveLocalStoragePath(), InjectKysely, InjectQueue, S3Driver, StorageDriver, S3StorageConfig (+11 more)
+Cohesion: 0.08
+Nodes (12): LOCAL_STORAGE_PATH, resolveAppRoot(), resolveLocalStoragePath(), S3Driver, S3StorageConfig, StorageConfig, StorageOption, StorageOptions (+4 more)
 
 ### Community 138 - "API Key Controller"
-Cohesion: 0.14
-Nodes (9): ApiKeyController, Body, Controller, HttpCode, Post, UseGuards, ApiKeyService, Injectable (+1 more)
+Cohesion: 0.07
+Nodes (28): ApiKeyController, Body, Controller, HttpCode, Post, UseGuards, ApiKeyService, Injectable (+20 more)
 
 ### Community 139 - "File Task Processor"
-Cohesion: 0.14
-Nodes (7): FileTaskProcessor, TODO: export task, OnWorkerEvent, Processor, FileImportTaskService, Injectable, FileTaskStatus
+Cohesion: 0.15
+Nodes (6): FileTaskProcessor, OnWorkerEvent, Processor, FileImportTaskService, Injectable, FileTaskStatus
 
 ### Community 140 - "Import Formatter"
-Cohesion: 0.18
-Nodes (12): ResponseContractSmokeController, Controller, Get, SkipTransform, InsertableBacklink, createEmbedNode(), defaultHtmlFormatter(), formatImportHtml() (+4 more)
+Cohesion: 0.20
+Nodes (11): ResponseContractSmokeController, Controller, Get, SkipTransform, createEmbedNode(), defaultHtmlFormatter(), formatImportHtml(), isUnicodeCharacter() (+3 more)
 
 ### Community 141 - "Group User DTOs"
 Cohesion: 0.21
@@ -909,44 +899,44 @@ Cohesion: 0.14
 Nodes (13): background_color, categories, description, display, display_override, icons, id, name (+5 more)
 
 ### Community 144 - "Slash Command UI"
-Cohesion: 0.10
-Nodes (19): IconDrawio(), Props, IconExcalidraw(), Props, IconMermaid(), Props, uploadAudioAction, uploadPdfAction (+11 more)
+Cohesion: 0.18
+Nodes (10): CommandList(), getSuggestionItems(), renderItems(), CommandListProps, CommandProps, SlashMenuGroupedItemsType, SlashMenuItemType, Command (+2 more)
 
 ### Community 145 - "Database Migration Service"
 Cohesion: 0.18
 Nodes (7): DatabaseModule, Global, InjectKysely, Module, MigrationService, Injectable, InjectKysely
 
 ### Community 146 - "Database Migration Scripts"
-Cohesion: 0.29
-Nodes (14): cleanMalformedLeadingTableRows(), convertRowCellsToHeaders(), getTableRowColumnCount(), hasMeaningfulContent(), isEmptyTableRow(), isHeaderOnlyRow(), isJsonNode(), isRegularCellOnlyRow() (+6 more)
+Cohesion: 0.34
+Nodes (12): cleanMalformedLeadingTableRows(), convertRowCellsToHeaders(), getTableRowColumnCount(), hasMeaningfulContent(), isEmptyTableRow(), isHeaderOnlyRow(), isJsonNode(), isRegularCellOnlyRow() (+4 more)
 
 ### Community 147 - "Zip Extraction Utilities"
-Cohesion: 0.08
-Nodes (31): jsonToText(), generateSlugId, getProsemirrorContent(), createByteCountingStream(), sanitizeFileName(), InsertablePage, FileTaskIdDto, ImportPageNode (+23 more)
+Cohesion: 0.17
+Nodes (14): cleanUrlString(), DEFAULT_EXTRACT_ZIP_LIMITS, ensureZipEntryWithinLimits(), extractZip(), extractZipInternal(), ExtractZipLimits, ExtractZipOptions, ExtractZipState (+6 more)
 
 ### Community 148 - "Dependency Management"
 Cohesion: 0.14
 Nodes (13): ignore, $schema, devDependencies, concurrently, dependency-cruiser, jscpd, knip, nx (+5 more)
 
 ### Community 149 - "Diagram Icon Components"
-Cohesion: 0.20
-Nodes (15): uploadAttachmentAction, handleFileDrop(), handlePaste(), HandlePasteOptions, isHttpUrl(), uploadImageAction, createMentionAction, handleInternalLink() (+7 more)
+Cohesion: 0.13
+Nodes (21): IconDrawio(), Props, IconExcalidraw(), Props, IconMermaid(), Props, uploadAttachmentAction, uploadAudioAction (+13 more)
 
 ### Community 150 - "Emoji Selection UI"
 Cohesion: 0.29
 Nodes (10): getEmojiItems(), searchEmoji(), EmojiList(), renderEmojiItems(), CommandProps, EmojiMartFrequentlyType, EmojiMenuItemType, getFrequentlyUsedEmoji() (+2 more)
 
 ### Community 151 - "Session Management"
-Cohesion: 0.06
-Nodes (48): AvatarUploaderProps, CustomAvatarProps, compressAndResizeIcon(), removeAvatar(), removeIcon(), removeSpaceIcon(), removeWorkspaceIcon(), uploadIcon() (+40 more)
+Cohesion: 0.13
+Nodes (20): compressAndResizeIcon(), removeAvatar(), removeIcon(), removeSpaceIcon(), removeWorkspaceIcon(), uploadIcon(), uploadSpaceIcon(), uploadUserAvatar() (+12 more)
 
 ### Community 152 - "Comment Pagination DTOs"
 Cohesion: 0.11
-Nodes (13): InjectKysely, IRecordPageHistoryEventInput, IRecordPageHistoryEventsInput, PAGE_HISTORY_EVENT_VERSION, PageHistoryChangeData, PageHistoryChangeType, PageHistoryRecorderService, Injectable (+5 more)
+Nodes (12): InjectQueue, IRecordPageHistoryEventInput, IRecordPageHistoryEventsInput, PAGE_HISTORY_EVENT_VERSION, PageHistoryChangeData, PageHistoryChangeType, PageHistoryRecorderService, Injectable (+4 more)
 
 ### Community 153 - "Transclusion Controller"
-Cohesion: 0.33
-Nodes (6): TransclusionController, Body, Controller, HttpCode, Post, UseGuards
+Cohesion: 0.22
+Nodes (9): useGetDatabaseQuery(), getDatabase(), useLegacyCanonicalRedirect(), UseLegacyCanonicalRedirectParams, useLegacyRouteAudit(), LegacyRouteRemoved(), LegacyRouteRemovedProps, DatabaseLegacyRedirect() (+1 more)
 
 ### Community 154 - "Session Controller"
 Cohesion: 0.27
@@ -965,11 +955,11 @@ Cohesion: 0.17
 Nodes (11): name, private, scripts, build, dev, format, lint, preview (+3 more)
 
 ### Community 158 - "Table Editor Tests"
-Cohesion: 0.14
-Nodes (22): databaseTableExportStateAtom, defaultDatabaseTableExportState, IPersistedDatabaseTableState, IDatabaseCellValue, IDatabaseFilterCondition, IDatabaseRowCustomFields, IDatabaseRowPage, IDatabaseRowsQueryParams (+14 more)
+Cohesion: 0.18
+Nodes (11): useCollaborationURL(), getCollaborationUrl(), getConfigValue(), getPostHogHost(), getPostHogKey(), isPostHogEnabled(), registerServiceWorker(), blue (+3 more)
 
 ### Community 159 - "User Controller"
-Cohesion: 0.22
+Cohesion: 0.24
 Nodes (9): Body, Controller, DeprecatedRoute, Get, HttpCode, Post, UseGuards, UserController (+1 more)
 
 ### Community 160 - "API Route Generator"
@@ -978,51 +968,55 @@ Nodes (10): args, controllerFiles, extractRoutes(), joinRoute(), lines, normaliz
 
 ### Community 161 - "Logging Service"
 Cohesion: 0.13
-Nodes (7): FavoriteService, Injectable, FavoriteRepo, FavoriteType, Injectable, InjectKysely, Favorite
+Nodes (8): FavoriteService, Injectable, FavoriteRepo, FavoriteType, Injectable, InjectKysely, Favorite, InsertableFavorite
+
+### Community 162 - "Editor Interaction Handlers"
+Cohesion: 0.17
+Nodes (5): createEditor(), emptyDefaultTableContent, malformedLeadingRowsTableContent, tableContent, CustomTable
 
 ### Community 163 - "Link Editor UI"
-Cohesion: 0.31
-Nodes (5): LinkEditorPanel(), LinkPreviewPanel(), LinkPreviewPanelProps, LinkEditorPanelProps, useLinkEditorState()
+Cohesion: 0.67
+Nodes (3): LinkEditorPanel(), LinkEditorPanelProps, useLinkEditorState()
 
 ### Community 164 - "Page Event Listener"
 Cohesion: 0.33
 Nodes (4): PageListener, Injectable, InjectQueue, OnEvent
 
 ### Community 165 - "Database Title Editor"
-Cohesion: 0.09
-Nodes (13): DatabaseHeaderMenu(), DatabaseHeaderMenuProps, normalizeRowsResponse(), CopyPageModalProps, MovePageModalProps, CreateNodeProps, isOpenStateEqual(), NodeMenuProps (+5 more)
+Cohesion: 0.04
+Nodes (60): CopyButton(), CopyButtonProps, EmojiPickerInterface, Picker, STATUS_COLOR_MAP, StatusIndicator(), StatusIndicatorProps, DocumentCommonActionItems() (+52 more)
 
 ### Community 166 - "Excalidraw Editor"
 Cohesion: 0.22
 Nodes (5): ExcalidrawEditorProps, LibraryItems, LibraryPersistedData, LibraryPersistenceAdapter, localStorageLibraryAdapter
 
 ### Community 167 - "Deprecation Interceptor"
-Cohesion: 0.12
-Nodes (13): DeprecatedRoute(), DeprecatedRouteInterceptor, DeprecatedRouteOptions, expectDeprecatedRoute(), expectDeprecatedRoute(), MarkNotificationsReadDto, NotificationIdDto, IsArray (+5 more)
+Cohesion: 0.22
+Nodes (6): DeprecatedRouteInterceptor, DeprecatedRouteOptions, expectDeprecatedRoute(), LegacyFilesController, expectDeprecatedRoute(), Controller
 
 ### Community 168 - "Label Controller"
 Cohesion: 0.36
 Nodes (6): LabelController, Body, Controller, HttpCode, Post, UseGuards
 
 ### Community 169 - "Lookup DTOs"
-Cohesion: 0.12
-Nodes (15): LookupDto, LookupReferenceDto, ArrayMaxSize, IsArray, IsString, IsUUID, MaxLength, Type (+7 more)
+Cohesion: 0.10
+Nodes (18): LookupDto, LookupReferenceDto, ArrayMaxSize, IsArray, IsString, IsUUID, MaxLength, Type (+10 more)
 
 ### Community 171 - "File Upload Actions"
-Cohesion: 0.14
-Nodes (16): AiSearchResult(), AiSearchResultProps, useAiSearch(), UseAiSearchResult, aiAnswers(), AiAnswersStreamChunk, IAiSearchResponse, IAiSearchSource (+8 more)
+Cohesion: 0.22
+Nodes (11): AiSearchResult(), AiSearchResultProps, useAiSearch(), UseAiSearchResult, aiAnswers(), AiAnswersStreamChunk, IAiSearchResponse, IAiSearchSource (+3 more)
 
 ### Community 172 - "Link Preview Actions"
 Cohesion: 0.42
 Nodes (8): createLinkPreviewAction(), createLinkPreviewRequestId(), findLinkPreviewNode(), isHttpUrl(), LinkPreviewNodeMatch, replaceLinkPreviewWithUrl(), updateLinkPreviewNode(), getLinkPreview()
 
 ### Community 173 - "Group DTOs"
-Cohesion: 0.50
-Nodes (5): Body, HttpCode, Post, Res, UseGuards
+Cohesion: 0.18
+Nodes (14): CopyMarkdownWithCommentsDto, ExportPageDto, ExportSpaceDto, IsBoolean, IsIn, IsNotEmpty, IsOptional, IsString (+6 more)
 
 ### Community 174 - "Database Migration Scripts"
-Cohesion: 0.53
-Nodes (4): EMPTY_DESCRIPTION_DOC, serializeDatabaseDescription(), toDatabaseDescriptionDoc(), tryParseJsonDescription()
+Cohesion: 0.35
+Nodes (10): AccountPushPreferences(), PUSH_FREQUENCY_OPTIONS, createPushSubscription(), ensureServiceWorkerRegistration(), getNotificationPermission(), isSubscriptionBoundToCurrentVapidKey(), PushSubscriptionCreateResponse, removePushSubscription() (+2 more)
 
 ### Community 175 - "Workspace Dependencies"
 Cohesion: 0.22
@@ -1037,11 +1031,11 @@ Cohesion: 0.25
 Nodes (7): compilerOptions, allowSyntheticDefaultImports, composite, module, moduleResolution, skipLibCheck, include
 
 ### Community 178 - "Attachment Processor"
-Cohesion: 0.11
-Nodes (13): PushController, Body, Controller, Delete, HttpCode, Param, Post, UseGuards (+5 more)
+Cohesion: 0.08
+Nodes (25): CreatePushSubscriptionDto, DeletePushSubscriptionByEndpointDto, DeletePushSubscriptionParamsDto, PushSubscriptionKeysDto, getErrors(), IsNotEmpty, IsObject, IsOptional (+17 more)
 
 ### Community 179 - "Auth Rate Limiting"
-Cohesion: 0.17
+Cohesion: 0.16
 Nodes (12): DictionaryController, Body, Controller, Delete, Get, HttpCode, Param, Patch (+4 more)
 
 ### Community 180 - "Favorite DTOs"
@@ -1061,32 +1055,32 @@ Cohesion: 0.29
 Nodes (6): author, description, license, name, private, version
 
 ### Community 184 - "Redis Mock Client"
-Cohesion: 0.26
-Nodes (11): SpaceSettingsModal(), SpaceSettingsModalProps, SpaceSidebar(), SpaceHomeTabs(), SpaceAbility, SpaceCaslAction, SpaceCaslSubject, useSpaceAbility() (+3 more)
+Cohesion: 0.14
+Nodes (9): ResolveCommentDto, IsBoolean, IsUUID, IsJSON, IsUUID, UpdateCommentDto, RemoveWorkspaceUserDto, IsNotEmpty (+1 more)
 
 ### Community 185 - "Favorite IDs DTOs"
-Cohesion: 0.18
-Nodes (4): EmailAggregationBootstrapService, Injectable, EmailAggregationService, Injectable
+Cohesion: 0.13
+Nodes (8): EmailAggregationBootstrapService, Injectable, EmailAggregationService, NotificationWithContext, Injectable, UserEmailPreferences, Notification, NotificationDigestItem
 
 ### Community 186 - "List Favorites DTOs"
-Cohesion: 0.48
-Nodes (6): ListFavoritesDto, ListFavoritesQueryDto, IsIn, IsOptional, IsString, IsUUID
+Cohesion: 0.24
+Nodes (8): PageCommentsQueryDto, PageIdDto, IsInt, IsOptional, IsString, Max, Min, Type
 
 ### Community 187 - "Duplicate Page DTOs"
-Cohesion: 0.40
-Nodes (8): nanoIdGen, decryptProtectedValue(), deriveSymmetricKey(), encryptProtectedValue(), hashProtectedValue(), isHashedProtectedValue(), safeStringEqual(), verifyHashedProtectedValue()
+Cohesion: 0.29
+Nodes (11): ExportFormatSelectionProps, ExportModal(), ExportModalProps, ExportTargetType, getExportFormatValues(), isSpaceExportFormat(), shouldShowAttachments(), shouldShowIncludeChildren() (+3 more)
 
 ### Community 188 - "Space Event Listener"
-Cohesion: 0.33
-Nodes (4): SpaceListener, Injectable, InjectQueue, OnEvent
+Cohesion: 0.15
+Nodes (8): SpaceListener, Injectable, InjectQueue, OnEvent, Injectable, InjectQueue, OnEvent, WorkspaceListener
 
 ### Community 189 - "Workspace Event Listener"
-Cohesion: 0.33
-Nodes (4): Injectable, InjectQueue, OnEvent, WorkspaceListener
+Cohesion: 0.20
+Nodes (10): ShareTransclusionLookupDto, ShareTransclusionReferenceDto, ArrayMaxSize, IsArray, IsNotEmpty, IsString, IsUUID, MaxLength (+2 more)
 
 ### Community 190 - "General Queue Processor"
-Cohesion: 0.28
-Nodes (4): GeneralQueueProcessor, InjectKysely, OnWorkerEvent, Processor
+Cohesion: 0.22
+Nodes (9): CreateGroupDto, ArrayMaxSize, IsArray, IsOptional, IsString, IsUUID, MaxLength, MinLength (+1 more)
 
 ### Community 191 - "Documentation and API"
 Cohesion: 0.09
@@ -1105,32 +1099,28 @@ Cohesion: 0.33
 Nodes (5): collection, compilerOptions, deleteOutDir, $schema, sourceRoot
 
 ### Community 196 - "Comment DTOs"
-Cohesion: 0.13
-Nodes (12): AddTreeNodeEvent, DeleteEvent, DeleteTreeNodeEvent, InvalidateCommentsEvent, InvalidateEvent, MoveTreeNodeEvent, RefetchRootTreeNodeEvent, ResolveCommentEvent (+4 more)
+Cohesion: 0.12
+Nodes (14): AddTreeNodeEvent, DeleteEvent, DeleteTreeNodeEvent, InvalidateCommentsEvent, InvalidateEvent, MoveTreeNodeEvent, RefetchRootTreeNodeEvent, ResolveCommentEvent (+6 more)
 
 ### Community 197 - "Notification DTOs"
-Cohesion: 0.14
-Nodes (12): FullEditor(), FullEditorProps, MemoizedPageEditor, MemoizedTitleEditor, PageHeader(), Props, PageWidthPreferences, resolvePageFullWidth() (+4 more)
+Cohesion: 0.17
+Nodes (19): FullEditor(), FullEditorProps, MemoizedPageEditor, MemoizedTitleEditor, userAtom, PageStateSegmentedControl(), PageStateSegmentedControlProps, createCurrentUser() (+11 more)
 
 ### Community 198 - "Hostname DTOs"
-Cohesion: 0.21
-Nodes (6): ApiKeyRepo, Injectable, InjectKysely, ApiKey, InsertableApiKey, UpdatableApiKey
+Cohesion: 0.03
+Nodes (59): generateRandomSuffixNumbers(), InjectKysely, InjectQueue, SpaceMemberService, Injectable, SpaceService, Injectable, InjectKysely (+51 more)
 
 ### Community 199 - "Emoji Command UI"
-Cohesion: 0.36
-Nodes (7): getSearchContentTypeOptions(), getSearchFilterPayload(), SearchFilterPayload, SearchFilterPayloadInput, SelectedSearchLabel, SearchSpotlightFilters(), SearchSpotlightFiltersProps
+Cohesion: 0.33
+Nodes (8): getSearchContentTypeOptions(), getSearchFilterPayload(), SearchFilterPayload, SearchFilterPayloadInput, SelectedSearchLabel, SearchSpotlightFilters(), SearchSpotlightFiltersProps, useSearchLabelsQuery()
 
 ### Community 200 - "Table Width Settings"
-Cohesion: 0.26
-Nodes (4): LegacyFilesController, Controller, AttachmentFileAccessService, Injectable
-
-### Community 203 - "File Download Utilities"
-Cohesion: 0.24
-Nodes (10): DeprecatedRoute, Get, HttpCode, Param, Post, Query, Req, Res (+2 more)
+Cohesion: 0.19
+Nodes (7): AttachmentAccessTokenResolution, AttachmentAccessTokenSource, getAttachmentTokenCookieName(), resolveAttachmentAccessToken(), resolveAttachmentAccessTokenDetails(), AttachmentFileAccessService, Injectable
 
 ### Community 204 - "LoginDto"
-Cohesion: 0.25
-Nodes (4): LoginDto, IsEmail, IsNotEmpty, IsString
+Cohesion: 0.53
+Nodes (4): DatabasePageContextValue, resolveDatabasePageContext(), ResolveDatabasePageContextInput, IDatabase
 
 ### Community 205 - "Path Aliases"
 Cohesion: 0.40
@@ -1141,12 +1131,12 @@ Cohesion: 0.33
 Nodes (5): Affected and fixed versions, Operational notes, Recommended remediation, Security Remediation Release Notes (2026-03), Security verification in this release
 
 ### Community 207 - "Password Change DTO"
-Cohesion: 0.14
-Nodes (12): ChangePasswordDto, IsNotEmpty, IsString, MinLength, ForgotPasswordDto, IsEmail, IsNotEmpty, PasswordResetDto (+4 more)
+Cohesion: 0.10
+Nodes (18): ChangePasswordDto, IsNotEmpty, IsString, MinLength, ForgotPasswordDto, IsEmail, IsNotEmpty, PasswordResetDto (+10 more)
 
 ### Community 209 - "Workspace Update DTO"
-Cohesion: 0.19
-Nodes (7): PUSH_NOTIFICATION_JOB_STATUS, PushNotificationJobRepo, PushNotificationJobStatus, Injectable, InjectKysely, InsertablePushNotificationJob, PushNotificationJob
+Cohesion: 0.33
+Nodes (4): DomainMiddleware, Injectable, CoreModule, Module
 
 ### Community 210 - "User Role DTO"
 Cohesion: 0.22
@@ -1177,32 +1167,32 @@ Cohesion: 0.07
 Nodes (29): 0) Quick repository profile, 10) Rule for keeping this file up to date, 1) Code navigation, 2) Reusable commands (runbook), 3) Style conventions (as observed), 4) Constraints and environment variables, 5) Dependencies and package managers, 6) CI/CD and local reproduction (+21 more)
 
 ### Community 305 - ".exportDatabase"
-Cohesion: 0.12
-Nodes (18): ExportMetadata, ExportPageMetadata, DEFAULT_PAGE_CUSTOM_FIELD_LABELS, PAGE_CUSTOM_FIELD_LABEL_KEYS, PAGE_STATUS_LABELS, PageCustomFieldLabelKey, PageCustomFieldLabels, buildTree() (+10 more)
+Cohesion: 0.11
+Nodes (27): jsonToNode(), extractMentions(), extractPageMentions(), extractUserMentions(), getAttachmentIds(), getProsemirrorContent(), isAttachmentNode(), MentionNode (+19 more)
 
 ### Community 306 - "FakeRedis"
-Cohesion: 0.26
-Nodes (9): ConfluenceIcon(), Props, getFileTaskById(), ImportFormatSelection, PageImportModalProps, importPage(), importZip(), buildTree() (+1 more)
+Cohesion: 0.33
+Nodes (6): RemoveIconDto, IsEnum, IsIn, IsNotEmpty, IsOptional, IsUUID
 
 ### Community 307 - "UpdateUserDto"
-Cohesion: 0.25
-Nodes (8): IsBoolean, IsIn, IsObject, IsOptional, IsString, MaxLength, MinLength, UpdateUserDto
+Cohesion: 0.33
+Nodes (6): CreateCommentDto, IsIn, IsJSON, IsOptional, IsString, IsUUID
 
 ### Community 308 - "mfa.dto.ts"
-Cohesion: 0.24
-Nodes (11): SelectPropertyCreationDraft, buildAutoOptionValue(), COLOR_OPTIONS, createEmptyOption(), createShortSuffix, resolveOptionValue(), SelectOptionDraft, SelectPropertySettingsModal() (+3 more)
+Cohesion: 0.40
+Nodes (5): MarkNotificationsReadDto, NotificationIdDto, IsArray, IsOptional, IsUUID
 
 ### Community 309 - "CreateWorkspaceDto"
-Cohesion: 0.25
-Nodes (7): CreateWorkspaceDto, IsAlphanumeric, IsOptional, IsString, MaxLength, MinLength, Transform
+Cohesion: 0.50
+Nodes (3): DatabaseDescriptionEditor(), DatabaseDescriptionEditorProps, { mockPageEditor }
 
 ### Community 310 - "Docmost Client (`apps/client`)"
 Cohesion: 0.33
 Nodes (5): Common commands, Docmost Client (`apps/client`), Prerequisites, PWA and localization notes, Runtime env consumed by the client
 
 ### Community 311 - "utils.ts"
-Cohesion: 0.40
-Nodes (4): MemberInfo, SpaceGroupInfo, SpaceUserInfo, UserSpaceRole
+Cohesion: 0.50
+Nodes (4): TableWidthModeSelector(), TableWidthModeSelectorProps, WIDTH_MODE_ITEMS, WidthModeItem
 
 ### Community 312 - "Documentation Audit 2026-06-20"
 Cohesion: 0.33
@@ -1213,8 +1203,12 @@ Cohesion: 0.33
 Nodes (5): Checks performed, Divergence assessment, EE Parity Audit Notes (2026-03), Findings, Scope
 
 ### Community 314 - "database-description-editor.tsx"
-Cohesion: 0.35
-Nodes (9): getUnifiedSearchBackendParams(), getUnifiedSearchType(), isUnifiedSearchEnabled(), UnifiedSearchResult, useUnifiedSearch(), UseUnifiedSearchParams, usePageSearchQuery(), searchPage() (+1 more)
+Cohesion: 0.30
+Nodes (10): getUnifiedSearchBackendParams(), getUnifiedSearchType(), isUnifiedSearchEnabled(), UnifiedSearchResult, useUnifiedSearch(), UseUnifiedSearchParams, useAttachmentSearchQuery(), usePageSearchQuery() (+2 more)
+
+### Community 315 - "create-space-form.tsx"
+Cohesion: 0.40
+Nodes (4): AccountNameForm(), formSchema, FormValues, userAtom
 
 ### Community 316 - "API Route Deprecation Matrix"
 Cohesion: 0.40
@@ -1225,76 +1219,48 @@ Cohesion: 0.40
 Nodes (4): Change, Current client behavior (fixed priority), Release note: legacy database/page route fallback, Verification: no legacy URLs in active templates/exports
 
 ### Community 318 - "FileTaskIdDto"
-Cohesion: 0.27
-Nodes (4): InjectKysely, InjectKysely, RecipientResolverService, Injectable
-
-### Community 319 - "generateHTML.ts"
-Cohesion: 0.25
-Nodes (8): MovePageDto, MovePageToSpaceDto, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength, MinLength
+Cohesion: 0.60
+Nodes (4): downloadBlobFromAxiosResponse(), getFileNameFromContentDisposition(), safeDecodeURIComponent(), RFC-5987
 
 ### Community 320 - "updateAttachmentAttr"
-Cohesion: 0.33
-Nodes (8): SidebarNodeType, sidebarNodeTypes, SidebarPageDto, SidebarPagesQueryDto, IsArray, IsIn, IsOptional, IsUUID
+Cohesion: 0.40
+Nodes (4): IsNotEmpty, IsString, IsUUID, UpdateWorkspaceUserRoleDto
 
 ### Community 321 - "ws.gateway.spec.ts"
-Cohesion: 0.36
-Nodes (8): CreateApiKeyDto, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength, UpdateApiKeyDto, IsDateString
+Cohesion: 0.40
+Nodes (4): FileTaskIdDto, ImportPageNode, IsNotEmpty, IsUUID
 
 ### Community 322 - "account-theme.tsx"
 Cohesion: 0.32
 Nodes (3): AttachmentProcessor, OnWorkerEvent, Processor
 
 ### Community 353 - "watcher.module.ts"
-Cohesion: 0.33
-Nodes (5): CaslModule, Global, Module, Module, WatcherModule
-
-### Community 354 - "DuplicatePageDto"
-Cohesion: 0.29
-Nodes (6): CopyPageMapEntry, DuplicatePageDto, ICopyPageAttachment, IsNotEmpty, IsOptional, IsString
+Cohesion: 0.50
+Nodes (3): RevokeSessionDto, IsNotEmpty, IsUUID
 
 ### Community 355 - "CreateSpaceDto"
-Cohesion: 0.29
-Nodes (7): CreateSpaceDto, IsAlphanumeric, IsOptional, IsString, MaxLength, MinLength, Transform
-
-### Community 356 - "PageExportController"
-Cohesion: 0.29
-Nodes (3): PageExportController, SpaceExportController, Controller
-
-### Community 357 - "LinkPreviewDto"
-Cohesion: 0.33
-Nodes (5): LinkPreviewDto, IsNotEmpty, IsString, IsUrl, MaxLength
-
-### Community 360 - "deleted-page.dto.ts"
-Cohesion: 0.60
-Nodes (4): DeletedPageDto, DeletedPagesQueryDto, IsNotEmpty, IsString
-
-### Community 361 - "recent-page.dto.ts"
-Cohesion: 0.60
-Nodes (4): RecentPageDto, RecentPagesQueryDto, IsOptional, IsString
-
-### Community 362 - "20260526T124000-clean-legacy-quote-content.ts"
 Cohesion: 0.50
-Nodes (3): cleanLegacyQuoteNode(), JsonNode, up()
+Nodes (3): DeactivateWorkspaceUserDto, IsNotEmpty, IsUUID
 
 ## Knowledge Gaps
-- **1349 isolated node(s):** `DatabaseHeaderMenuProps`, `CopyPageModalProps`, `MovePageModalProps`, `SpaceTreeProps`, `openTreeNodesAtom` (+1344 more)
+- **1346 isolated node(s):** `name`, `private`, `version`, `dev`, `build` (+1341 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **74 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **60 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `Json` connect `Database Description Logic` to `API Key Management`, `Version Controller`, `Comment Service Logic`, `Database Page Context`, `User Authentication DTOs`, `S3 Storage Driver`, `Database Mutation Hooks`, `Environment and Middleware`, `Database Migration Scripts`, `Zip Extraction Utilities`, `Presence Service Logic`, `Emoji Selection UI`, `Account Security Settings`, `Dictionary Term Repository`, `Comment UI Components`, `Table Editor Tests`, `Deprecation Interceptor`, `Email Notification Service`, `History Processing Logic`, `File Upload Actions`, `Database Cell Rendering`, `Database Migration Scripts`, `Dictionary UI Components`, `.exportDatabase`, `Export Metadata Service`, `Auth Rate Limiting`, `Database Schema Types`, `Database Export Logic`, `Page Editor Components`, `Recent Changes UI`, `Export Service Logic`, `User Auth Utilities`, `Space Repository`, `Domain and Host Utilities`, `Logging Configuration`, `Page and Database RAG`, `20260526T124000-clean-legacy-quote-content.ts`, `Health Check Service`, `Comment Controller`, `Localization Testing`, `Page History Service`?**
-  _High betweenness centrality (0.194) - this node is a cross-community bridge._
-- **Why does `KyselyDB` connect `API Key Management` to `Database Transaction Logic`, `Label Management Service`, `Comment Service Logic`, `Workspace Invitation Service`, `User Authentication DTOs`, `Group Management Service`, `Storage Driver Interface`, `Page and Backlink DTOs`, `File Task Processor`, `Page Access Control`, `Database Migration Service`, `Attachment Sharing Logic`, `History Processing Service`, `Zip Extraction Utilities`, `Dictionary Term Repository`, `Comment Pagination DTOs`, `Space Ability Factory`, `User Controller`, `Logging Service`, `Editor Interaction Handlers`, `Auth and RAG Decorators`, `Email Notification Service`, `Dictionary Controller Logic`, `.exportDatabase`, `Attachment Processor`, `Transclusion Service Logic`, `Core Application Modules`, `Search and Query Builder`, `App Controller Logic`, `Favorite IDs DTOs`, `Duplicate Page DTOs`, `Credential Protection Logic`, `Database Export Logic`, `FileTaskIdDto`, `General Queue Processor`, `Database Controller Logic`, `Search DTO Types`, `Hostname DTOs`, `Dictionary Service Logic`, `Export Service Logic`, `LoginDto`, `Workspace Update DTO`, `Domain and Host Utilities`, `Page and Database RAG`, `Recipient Resolution`, `Authentication Controller`, `Health Check Service`, `Comment Controller`, `Database Description Logic`, `Attachment Import Service`, `Space Member DTOs`, `Local Storage Module`, `File Validation Service`, `Attachment Utilities`?**
-  _High betweenness centrality (0.188) - this node is a cross-community bridge._
-- **Why does `User` connect `API Key Controller` to `Database Transaction Logic`, `Label Management Service`, `Favorites Controller`, `MFA Controller`, `Invitation DTOs`, `Workspace Invitation Service`, `User Authentication DTOs`, `Group Management Service`, `Page Access Control`, `API Route Security`, `Attachment Sharing Logic`, `Presence Service Logic`, `Dictionary Term Repository`, `Transclusion Controller`, `Session Controller`, `Document Import Service`, `Space Ability Factory`, `User and API Keys`, `User Controller`, `Workspace and Group Controller`, `Editor Interaction Handlers`, `Auth and RAG Decorators`, `Deprecation Interceptor`, `Label Controller`, `Lookup DTOs`, `Collaboration WebSocket Adapter`, `Attachment Controller Logic`, `Group DTOs`, `Dictionary Controller Logic`, `.exportDatabase`, `Attachment Processor`, `Transclusion Service Logic`, `Auth Rate Limiting`, `Duplicate Page DTOs`, `Credential Protection Logic`, `Database Export Logic`, `Database Controller Logic`, `Search DTO Types`, `Dictionary Service Logic`, `File Download Utilities`, `LoginDto`, `Password Change DTO`, `Notification Module Logic`, `Search Controller`, `Notification Controller`, `Authentication Controller`, `Comment Controller`, `Local Storage Module`, `File Validation Service`?**
-  _High betweenness centrality (0.064) - this node is a cross-community bridge._
-- **What connects `DatabaseHeaderMenuProps`, `CopyPageModalProps`, `MovePageModalProps` to the rest of the system?**
-  _1354 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Why does `Json` connect `Localization Testing` to `Version Controller`, `Database Table View`, `Comment Service Logic`, `User Authentication DTOs`, `S3 Storage Driver`, `Database Mutation Hooks`, `Environment and Middleware`, `Presence Service Logic`, `Emoji Selection UI`, `Dictionary Term Repository`, `History Editor Components`, `Transclusion Controller`, `Comment UI Components`, `Export Modal Components`, `Deprecation Interceptor`, `Email Notification Service`, `History Processing Logic`, `Database Cell Rendering`, `Dictionary UI Components`, `.exportDatabase`, `Auth Rate Limiting`, `Search and Query Builder`, `Database Schema Types`, `Database Export Logic`, `Editor AI Menu`, `Push Subscription DTOs`, `Notification DTOs`, `CSRF Security Middleware`, `Hostname DTOs`, `Export Service Logic`, `File Download Utilities`, `User Auth Utilities`, `Notification Processing Logic`, `Account Settings UI`, `Logging Configuration`, `Page and Database RAG`, `Health Check Service`, `Database Description Logic`, `Local Storage Module`, `Page History Service`?**
+  _High betweenness centrality (0.216) - this node is a cross-community bridge._
+- **Why does `KyselyDB` connect `API Key Management` to `Database Transaction Logic`, `Label Management Service`, `Comment Service Logic`, `Workspace Invitation Service`, `User Authentication DTOs`, `Group Management Service`, `File Task Processor`, `Page Access Control`, `Environment and Middleware`, `Database Migration Service`, `Attachment Sharing Logic`, `History Processing Service`, `Zip Extraction Utilities`, `Dictionary Term Repository`, `Comment Pagination DTOs`, `Space Ability Factory`, `Page Controller Logic`, `Logging Service`, `Email Notification Service`, `Dictionary Controller Logic`, `.exportDatabase`, `Attachment Processor`, `Transclusion Service Logic`, `Core Application Modules`, `Search and Query Builder`, `Favorite IDs DTOs`, `Credential Protection Logic`, `Database Export Logic`, `Database Controller Logic`, `Search DTO Types`, `Hostname DTOs`, `Dictionary Service Logic`, `Recent Changes UI`, `Export Service Logic`, `Notification Processing Logic`, `Domain and Host Utilities`, `Page History Service`, `Page and Database RAG`, `Health Check Service`, `Comment Controller`, `Attachment Import Service`, `Local Storage Module`, `File Validation Service`, `Attachment Utilities`, `Page History Service`?**
+  _High betweenness centrality (0.186) - this node is a cross-community bridge._
+- **Why does `User` connect `API Key Controller` to `Database Transaction Logic`, `Label Management Service`, `Favorites Controller`, `Workspace Invitation Service`, `User Authentication DTOs`, `Group Management Service`, `Page and Backlink DTOs`, `Page Access Control`, `Attachment Sharing Logic`, `Presence Service Logic`, `Dictionary Term Repository`, `Session Controller`, `Document Import Service`, `Space Ability Factory`, `Page Controller Logic`, `User and API Keys`, `User Controller`, `Workspace and Group Controller`, `Auth and RAG Decorators`, `Label Controller`, `Lookup DTOs`, `Collaboration WebSocket Adapter`, `Attachment Controller Logic`, `Group DTOs`, `Dictionary Controller Logic`, `.exportDatabase`, `Attachment Processor`, `Auth Rate Limiting`, `Search and Query Builder`, `Credential Protection Logic`, `Database Export Logic`, `Database Controller Logic`, `Search DTO Types`, `Hostname DTOs`, `Dictionary Service Logic`, `Recent Changes UI`, `File Download Utilities`, `Password Change DTO`, `Notification Processing Logic`, `Page History Service`, `Logging Configuration`, `Search Controller`, `Notification Controller`, `Authentication Controller`, `Comment Controller`, `File Validation Service`?**
+  _High betweenness centrality (0.089) - this node is a cross-community bridge._
+- **What connects `name`, `private`, `version` to the rest of the system?**
+  _1351 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Database Transaction Logic` be split into smaller, more focused modules?**
-  _Cohesion score 0.02653673163418291 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.029506948410432134 - nodes in this community are weakly interconnected._
 - **Should `API Key Management` be split into smaller, more focused modules?**
-  _Cohesion score 0.021814786520668875 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.029809035863996275 - nodes in this community are weakly interconnected._
 - **Should `Label Management Service` be split into smaller, more focused modules?**
-  _Cohesion score 0.03863557257222416 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.03854525666606203 - nodes in this community are weakly interconnected._
