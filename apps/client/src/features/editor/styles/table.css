@@ -16,8 +16,8 @@
 }
 
 .tableWrapper[data-table-width-mode="wide"] {
-  width: 125%;
-  max-width: min(125%, var(--table-available-width));
+  width: 140%;
+  max-width: min(140%, var(--table-available-width));
   margin-left: 50%;
   transform: translateX(-50%);
 }
