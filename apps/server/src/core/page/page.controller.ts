@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   ForbiddenException,
   Get,
   HttpCode,
@@ -660,6 +661,24 @@ export class PageController {
     }
 
     return history;
+  }
+
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Delete('/history/:historyId')
+  async deletePageHistory(
+    @Param() dto: PageHistoryIdDto,
+    @AuthUser() user: User,
+  ): Promise<void> {
+    const history = await this.pageHistoryService.findMetadataById(
+      dto.historyId,
+    );
+    if (!history) {
+      throw new NotFoundException('Page history not found');
+    }
+
+    this.pageAccessService.assertCanManageAccess(user, history.workspaceId);
+
+    await this.pageHistoryService.deleteById(history.id);
   }
 
   @HttpCode(HttpStatus.OK)

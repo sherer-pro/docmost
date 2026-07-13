@@ -4,7 +4,9 @@ describe('PageHistoryService', () => {
   const createService = () => {
     const pageHistoryRepo = {
       findById: jest.fn(),
+      findMetadataById: jest.fn(),
       findPageHistoryByPageId: jest.fn(),
+      deleteById: jest.fn(),
     };
     const userRepo = {
       findById: jest.fn(),
@@ -53,6 +55,25 @@ describe('PageHistoryService', () => {
       'page-1',
       pagination,
     );
+  });
+
+  it('loads history metadata without content for authorization checks', async () => {
+    const { service, pageHistoryRepo } = createService();
+    const history = { id: 'history-1', workspaceId: 'workspace-1' };
+
+    pageHistoryRepo.findMetadataById.mockResolvedValue(history);
+
+    await expect(service.findMetadataById('history-1')).resolves.toEqual(
+      history,
+    );
+    expect(pageHistoryRepo.findMetadataById).toHaveBeenCalledWith('history-1');
+  });
+
+  it('deletes a history entry by id', async () => {
+    const { service, pageHistoryRepo } = createService();
+
+    await expect(service.deleteById('history-1')).resolves.toBeUndefined();
+    expect(pageHistoryRepo.deleteById).toHaveBeenCalledWith('history-1');
   });
 
   it('enriches readable values for legacy row cell changes on read', async () => {

@@ -64,6 +64,23 @@ export class PageHistoryRepo {
       .executeTakeFirst();
   }
 
+  async findMetadataById(
+    pageHistoryId: string,
+  ): Promise<Pick<PageHistory, 'id' | 'workspaceId'> | undefined> {
+    return this.db
+      .selectFrom('pageHistory')
+      .select(['id', 'workspaceId'])
+      .where('id', '=', pageHistoryId)
+      .executeTakeFirst();
+  }
+
+  async deleteById(pageHistoryId: string): Promise<void> {
+    await this.db
+      .deleteFrom('pageHistory')
+      .where('id', '=', pageHistoryId)
+      .execute();
+  }
+
   async saveHistory(
     page: Page,
     opts?: { contributorIds?: string[]; trx?: KyselyTransaction },

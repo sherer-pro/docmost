@@ -1,5 +1,9 @@
 jest.mock('lib0/decoding.js', () => ({ readVarString: jest.fn() }));
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PageController } from './page.controller';
 
 describe('PageController guardrails and mixed-id contract', () => {
@@ -14,7 +18,10 @@ describe('PageController guardrails and mixed-id contract', () => {
     findById: jest.fn(),
     restorePage: jest.fn(),
   };
-  const pageHistoryService = {};
+  const pageHistoryService = {
+    findMetadataById: jest.fn(),
+    deleteById: jest.fn(),
+  };
   const spaceAbility = {
     createForUser: jest.fn(async () => ({ cannot: () => false })),
   };
@@ -72,6 +79,7 @@ describe('PageController guardrails and mixed-id contract', () => {
       },
       isSystemAccess: false,
     })),
+    assertCanManageAccess: jest.fn(),
     getEffectiveAccess: jest.fn(async () => ({
       role: 'writer',
       sources: ['space'],
@@ -116,6 +124,20 @@ describe('PageController guardrails and mixed-id contract', () => {
     jest.clearAllMocks();
     pageService.getSidebarPages.mockResolvedValue({ items: [] });
     pageService.update.mockResolvedValue({ id: 'uuid-page', settings: null });
+    pageHistoryService.findMetadataById.mockResolvedValue({
+      id: 'history-1',
+      workspaceId: 'workspace-1',
+    });
+    pageAccessService.assertCanManageAccess.mockImplementation(
+      (user: { role?: string; workspaceId?: string }, workspaceId: string) => {
+        if (
+          (user.role !== 'owner' && user.role !== 'admin') ||
+          user.workspaceId !== workspaceId
+        ) {
+          throw new ForbiddenException();
+        }
+      },
+    );
     pageRepo.findById.mockResolvedValue({
       id: 'uuid-page',
       slugId: 'docs-home',
@@ -274,5 +296,61 @@ describe('PageController guardrails and mixed-id contract', () => {
     expect(pageRepo.findById).toHaveBeenLastCalledWith('uuid-page', {
       includeHasChildren: true,
     });
+  });
+
+  it('deletes a history entry after workspace admin authorization', async () => {
+    await expect(
+      controller.deletePageHistory(
+        { historyId: 'history-1' } as any,
+        { id: 'admin-1', workspaceId: 'workspace-1', role: 'admin' } as any,
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(pageAccessService.assertCanManageAccess).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'admin-1', role: 'admin' }),
+      'workspace-1',
+    );
+    expect(pageHistoryService.deleteById).toHaveBeenCalledWith('history-1');
+  });
+
+  it('returns not found without attempting authorization for missing history', async () => {
+    pageHistoryService.findMetadataById.mockResolvedValueOnce(undefined);
+
+    await expect(
+      controller.deletePageHistory(
+        { historyId: 'missing-history' } as any,
+        { id: 'admin-1', workspaceId: 'workspace-1', role: 'admin' } as any,
+      ),
+    ).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(pageAccessService.assertCanManageAccess).not.toHaveBeenCalled();
+    expect(pageHistoryService.deleteById).not.toHaveBeenCalled();
+  });
+
+  it('does not delete history for a workspace member', async () => {
+    await expect(
+      controller.deletePageHistory(
+        { historyId: 'history-1' } as any,
+        { id: 'member-1', workspaceId: 'workspace-1', role: 'member' } as any,
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(pageHistoryService.deleteById).not.toHaveBeenCalled();
+  });
+
+  it('does not delete history from another workspace', async () => {
+    pageHistoryService.findMetadataById.mockResolvedValueOnce({
+      id: 'history-2',
+      workspaceId: 'workspace-2',
+    });
+
+    await expect(
+      controller.deletePageHistory(
+        { historyId: 'history-2' } as any,
+        { id: 'admin-1', workspaceId: 'workspace-1', role: 'admin' } as any,
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(pageHistoryService.deleteById).not.toHaveBeenCalled();
   });
 });

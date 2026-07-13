@@ -1,6 +1,8 @@
 import {
   InfiniteData,
+  useMutation,
   useInfiniteQuery,
+  UseMutationResult,
   UseInfiniteQueryResult,
   useQuery,
   UseQueryResult,
@@ -8,6 +10,7 @@ import {
 import {
   getPageHistoryById,
   getPageHistoryList,
+  deletePageHistory,
 } from "@/features/page-history/services/page-history-service";
 import { IPageHistory } from "@/features/page-history/types/page.types";
 import { IPagination } from "@/lib/types.ts";
@@ -20,6 +23,18 @@ export function prefetchPageHistory(historyId: string) {
     queryKey: ["page-history", historyId],
     queryFn: () => getPageHistoryById(historyId),
     staleTime: HISTORY_STALE_TIME,
+  });
+}
+
+export async function invalidateDeletedPageHistory(
+  pageId: string,
+  historyId: string,
+): Promise<void> {
+  queryClient.removeQueries({
+    queryKey: ["page-history", historyId],
+  });
+  await queryClient.invalidateQueries({
+    queryKey: ["page-history-list", pageId],
   });
 }
 
@@ -44,5 +59,16 @@ export function usePageHistoryQuery(
     queryFn: () => getPageHistoryById(historyId),
     enabled: !!historyId,
     staleTime: HISTORY_STALE_TIME,
+  });
+}
+
+export function useDeletePageHistoryMutation(
+  pageId: string,
+): UseMutationResult<void, Error, string> {
+  return useMutation({
+    mutationFn: deletePageHistory,
+    onSuccess: async (_, historyId) => {
+      await invalidateDeletedPageHistory(pageId, historyId);
+    },
   });
 }

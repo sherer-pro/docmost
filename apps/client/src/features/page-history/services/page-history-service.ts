@@ -20,3 +20,7 @@ export async function getPageHistoryById(
   });
   return req.data;
 }
+
+export async function deletePageHistory(historyId: string): Promise<void> {
+  await api.delete(`/pages/history/${historyId}`);
+}

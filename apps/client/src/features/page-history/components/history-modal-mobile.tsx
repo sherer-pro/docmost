@@ -25,6 +25,7 @@ import { usePageHistoryListQuery } from "@/features/page-history/queries/page-hi
 import { formattedDate } from "@/lib/time";
 import {
   useDiffNavigation,
+  useHistoryDelete,
   useHistoryReset,
   useHistoryRestore,
 } from "@/features/page-history/hooks";
@@ -74,6 +75,7 @@ export default function HistoryModalMobile({ pageId, pageTitle }: Props) {
 
   useHistoryReset(pageId);
   const { canRestore, confirmRestore } = useHistoryRestore();
+  const { canDelete, confirmDelete } = useHistoryDelete(pageId);
   const { currentChangeIndex, handlePrevChange, handleNextChange } =
     useDiffNavigation(scrollViewportRef);
 
@@ -156,12 +158,28 @@ export default function HistoryModalMobile({ pageId, pageTitle }: Props) {
         </Box>
       </ScrollArea>
 
-      {canRestore && (
+      {(canRestore || canDelete) && (
         <Group className={classes.actionButtons} justify="flex-end" gap="sm">
-          <Button variant="default" onClick={() => setHistoryModalOpen(false)}>
-            {t("Cancel")}
-          </Button>
-          <Button onClick={confirmRestore}>{t("Restore")}</Button>
+          {canRestore && (
+            <>
+              <Button
+                variant="default"
+                onClick={() => setHistoryModalOpen(false)}
+              >
+                {t("Cancel")}
+              </Button>
+              <Button onClick={confirmRestore}>{t("Restore")}</Button>
+            </>
+          )}
+          {canDelete && activeHistoryId && (
+            <Button
+              color="red"
+              variant="light"
+              onClick={() => confirmDelete(activeHistoryId)}
+            >
+              {t("Delete version")}
+            </Button>
+          )}
         </Group>
       )}
 
