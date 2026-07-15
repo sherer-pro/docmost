@@ -356,7 +356,7 @@ export class ExportService {
         width: 100%;
         border-collapse: collapse;
         border: 1px solid #d1d5db;
-        table-layout: fixed;
+        table-layout: auto;
       }
       th,
       td {
@@ -364,7 +364,8 @@ export class ExportService {
         padding: 8px;
         text-align: left;
         vertical-align: top;
-        word-break: break-word;
+        overflow-wrap: break-word;
+        word-break: normal;
       }
       th {
         background: #f9fafb;

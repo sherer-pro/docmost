@@ -205,6 +205,10 @@ describe('ExportService PDF export', () => {
     const [renderedHtml, renderOpts] =
       htmlPdfRendererService.render.mock.calls[0];
     expect(renderedHtml).toContain('<meta charset="UTF-8" />');
+    expect(renderedHtml).toContain('table-layout: auto;');
+    expect(renderedHtml).toContain('overflow-wrap: break-word;');
+    expect(renderedHtml).toContain('word-break: normal;');
+    expect(renderedHtml).not.toContain('table-layout: fixed;');
     expect(renderOpts).toEqual({ attachmentToken: 'attachment-page-token' });
   });
 

@@ -24,14 +24,14 @@
   .tableWrapper table {
     width: 100% !important;
     min-width: 0 !important;
-    table-layout: fixed;
+    table-layout: auto;
   }
 
   .tableWrapper td,
   .tableWrapper th {
     min-width: 0;
     max-width: none;
-    overflow-wrap: anywhere;
-    word-break: break-word;
+    overflow-wrap: break-word;
+    word-break: normal;
   }
 }
