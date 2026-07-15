@@ -995,13 +995,13 @@ export class PageController {
         duplicatedPage,
         user,
       );
-      const linkedDatabase = await this.databaseRepo.findByPageId(
+      const databaseId = await this.pageService.resolvePageDatabaseId(
         duplicatedPage.id,
         duplicatedPage.workspaceId,
       );
       return {
         ...mapPageResponse(duplicatedPage, { includeCustomFields: true }),
-        databaseId: linkedDatabase?.id ?? null,
+        databaseId,
         access: this.toAccessResponse(access),
       };
     } else {
@@ -1018,13 +1018,13 @@ export class PageController {
         duplicatedPage,
         user,
       );
-      const linkedDatabase = await this.databaseRepo.findByPageId(
+      const databaseId = await this.pageService.resolvePageDatabaseId(
         duplicatedPage.id,
         duplicatedPage.workspaceId,
       );
       return {
         ...mapPageResponse(duplicatedPage, { includeCustomFields: true }),
-        databaseId: linkedDatabase?.id ?? null,
+        databaseId,
         access: this.toAccessResponse(access),
       };
     }

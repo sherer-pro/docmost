@@ -13,7 +13,7 @@ interface MovePageModalProps {
   pageId: string;
   slugId: string;
   currentSpaceSlug: string;
-  nodeType?: "page" | "database";
+  nodeType?: "page" | "database" | "databaseRow";
   title?: string;
   open: boolean;
   onClose: () => void;

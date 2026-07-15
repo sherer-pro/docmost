@@ -12,6 +12,7 @@ describe('PageController guardrails and mixed-id contract', () => {
     movePage: jest.fn(),
     update: jest.fn(),
     duplicatePage: jest.fn(),
+    resolvePageDatabaseId: jest.fn(),
     forceDelete: jest.fn(),
     removePage: jest.fn(),
   };
@@ -274,7 +275,7 @@ describe('PageController guardrails and mixed-id contract', () => {
         stakeholderIds: ['user-3', 'user-4'],
       },
     });
-    databaseRepo.findByPageId.mockResolvedValue(null);
+    pageService.resolvePageDatabaseId.mockResolvedValue('database-1');
 
     const result = await controller.duplicatePage(
       dto as any,
@@ -286,6 +287,7 @@ describe('PageController guardrails and mixed-id contract', () => {
       assigneeId: 'user-2',
       stakeholderIds: ['user-3', 'user-4'],
     });
+    expect(result.databaseId).toBe('database-1');
   });
 
   it('uses resolved UUID for permanent delete even when slug is provided', async () => {

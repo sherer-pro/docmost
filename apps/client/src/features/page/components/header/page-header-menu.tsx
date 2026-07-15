@@ -1,7 +1,6 @@
 import { Group, Menu, Text, Tooltip } from "@mantine/core";
 import classes from "./page-header-menu.module.css";
 import {
-  IconArrowRight,
   IconArrowsExchange,
   IconDatabase,
   IconDots,
@@ -29,6 +28,7 @@ import { useDocumentConversionActions } from "@/features/page/hooks/use-document
 import { buildDatabaseUrl, buildPageUrl } from "@/features/page/page.utils.ts";
 import {
   copyPageMarkdownWithComments,
+  duplicatePage,
   getPageById,
 } from "@/features/page/services/page-service.ts";
 import { notifications } from "@mantine/notifications";
@@ -59,6 +59,10 @@ import { AccessibleActionIcon } from "@/components/ui/accessible-action-icon.tsx
 import { useSpaceQuery } from "@/features/space/queries/space-query";
 import { resolveHeadingNumberingEnabled } from "@/features/page/utils/heading-numbering";
 import { getEditorMarkdown } from "@/features/editor/utils/editor-markdown";
+import CopyPageModal from "@/features/page/components/copy-page-modal.tsx";
+import { PageOperationMenuItems } from "@/features/page/components/page-operation-menu-items.tsx";
+import { invalidateSidebarTree } from "@/features/page/queries/cache-invalidation.ts";
+import { queryClient } from "@/main.tsx";
 
 interface PageHeaderMenuProps {
   readOnly?: boolean;
@@ -242,6 +246,10 @@ function PageActionMenu({ readOnly, canMoveDeleteShare }: PageActionMenuProps) {
     { open: openMovePageModal, close: closeMoveSpaceModal },
   ] = useDisclosure(false);
   const [
+    copyPageModalOpened,
+    { open: openCopyPageModal, close: closeCopySpaceModal },
+  ] = useDisclosure(false);
+  const [
     accessModalOpened,
     { open: openAccessModal, close: closeAccessModal },
   ] = useDisclosure(false);
@@ -341,6 +349,33 @@ function PageActionMenu({ readOnly, canMoveDeleteShare }: PageActionMenuProps) {
     openDeleteModal({ onConfirm: () => tree?.delete(page.id) });
   };
 
+  const handleDuplicatePage = async () => {
+    if (!page?.id) {
+      return;
+    }
+
+    try {
+      const duplicatedPage = await duplicatePage({ pageId: page.id });
+      invalidateSidebarTree(
+        { spaceId: duplicatedPage.spaceId },
+        { client: queryClient },
+      );
+      navigate(
+        buildPageUrl(
+          duplicatedPage.space?.slug ?? spaceSlug,
+          duplicatedPage.slugId,
+          duplicatedPage.title,
+        ),
+      );
+      notifications.show({ message: t("Page duplicated successfully") });
+    } catch (err) {
+      notifications.show({
+        message: err.response?.data.message || "An error occurred",
+        color: "red",
+      });
+    }
+  };
+
   const handleConvertToPage = () => {
     if (!page?.databaseId) {
       return;
@@ -438,12 +473,11 @@ function PageActionMenu({ readOnly, canMoveDeleteShare }: PageActionMenuProps) {
           {canMoveDeleteSharePage && (
             <>
               <Menu.Divider />
-              <Menu.Item
-                leftSection={<IconArrowRight size={16} />}
-                onClick={openMovePageModal}
-              >
-                {t("Move")}
-              </Menu.Item>
+              <PageOperationMenuItems
+                onDuplicate={() => void handleDuplicatePage()}
+                onMove={openMovePageModal}
+                onCopyToSpace={openCopyPageModal}
+              />
               {!page?.databaseId && (
                 <>
                   <Menu.Divider />
@@ -535,6 +569,13 @@ function PageActionMenu({ readOnly, canMoveDeleteShare }: PageActionMenuProps) {
         currentSpaceSlug={spaceSlug}
         onClose={closeMoveSpaceModal}
         open={movePageModalOpened}
+      />
+
+      <CopyPageModal
+        pageId={page.id}
+        currentSpaceSlug={spaceSlug}
+        onClose={closeCopySpaceModal}
+        open={copyPageModalOpened}
       />
 
       {page?.id && (

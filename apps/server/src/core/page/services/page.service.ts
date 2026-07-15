@@ -115,7 +115,7 @@ export class PageService {
     private readonly transclusionService?: TransclusionService,
   ) {}
 
-  private async resolvePageDatabaseId(
+  async resolvePageDatabaseId(
     pageId: string,
     workspaceId: string,
   ): Promise<string | null> {
@@ -340,6 +340,121 @@ export class PageService {
           )
           .execute();
       }
+    }
+  }
+
+  private async duplicateRowsInExistingDatabases(params: {
+    pageMap: Map<string, CopyPageMapEntry>;
+    authUser: User;
+    trx: KyselyTransaction;
+  }) {
+    const originalPageIds = Array.from(params.pageMap.keys());
+    if (originalPageIds.length === 0) {
+      return;
+    }
+
+    const [rows, copiedDatabases] = await Promise.all([
+      params.trx
+        .selectFrom('databaseRows')
+        .selectAll()
+        .where('pageId', 'in', originalPageIds)
+        .where('archivedAt', 'is', null)
+        .execute(),
+      params.trx
+        .selectFrom('databases')
+        .selectAll()
+        .where('pageId', 'in', originalPageIds)
+        .where('deletedAt', 'is', null)
+        .execute(),
+    ]);
+
+    const copiedDatabaseIds = new Set(
+      copiedDatabases.map((database) => database.id),
+    );
+    const rowsToCopy = rows.filter(
+      (row) =>
+        !copiedDatabaseIds.has(row.databaseId) &&
+        params.pageMap.has(row.pageId),
+    );
+
+    if (rowsToCopy.length === 0) {
+      return;
+    }
+
+    await params.trx
+      .insertInto('databaseRows')
+      .values(
+        rowsToCopy.map((row) => ({
+          id: uuid7(),
+          databaseId: row.databaseId,
+          workspaceId: row.workspaceId,
+          pageId: params.pageMap.get(row.pageId)!.newPageId,
+          createdById: params.authUser.id,
+          updatedById: params.authUser.id,
+        })),
+      )
+      .execute();
+
+    const rowsByDatabaseId = new Map<string, typeof rowsToCopy>();
+    for (const row of rowsToCopy) {
+      const databaseRows = rowsByDatabaseId.get(row.databaseId) ?? [];
+      databaseRows.push(row);
+      rowsByDatabaseId.set(row.databaseId, databaseRows);
+    }
+
+    for (const [databaseId, databaseRows] of rowsByDatabaseId) {
+      const [properties, cells] = await Promise.all([
+        params.trx
+          .selectFrom('databaseProperties')
+          .selectAll()
+          .where('databaseId', '=', databaseId)
+          .where('deletedAt', 'is', null)
+          .execute(),
+        params.trx
+          .selectFrom('databaseCells')
+          .selectAll()
+          .where('databaseId', '=', databaseId)
+          .where(
+            'pageId',
+            'in',
+            databaseRows.map((row) => row.pageId),
+          )
+          .where('deletedAt', 'is', null)
+          .execute(),
+      ]);
+
+      const propertyTypeById = new Map(
+        properties.map((property) => [property.id, property.type]),
+      );
+      const activePropertyIds = new Set(propertyTypeById.keys());
+      const cellsToCopy = cells.filter((cell) =>
+        activePropertyIds.has(cell.propertyId),
+      );
+
+      if (cellsToCopy.length === 0) {
+        continue;
+      }
+
+      await params.trx
+        .insertInto('databaseCells')
+        .values(
+          cellsToCopy.map((cell) => ({
+            id: uuid7(),
+            databaseId: cell.databaseId,
+            workspaceId: cell.workspaceId,
+            pageId: params.pageMap.get(cell.pageId)!.newPageId,
+            propertyId: cell.propertyId,
+            value: this.remapDatabaseCellValue(
+              cell.value,
+              propertyTypeById.get(cell.propertyId),
+              params.pageMap,
+            ) as never,
+            attachmentId: cell.attachmentId,
+            createdById: params.authUser.id,
+            updatedById: params.authUser.id,
+          })),
+        )
+        .execute();
     }
   }
 
@@ -1074,6 +1189,11 @@ export class PageService {
   }
 
   async movePageToSpace(rootPage: Page, spaceId: string) {
+    const rootDatabaseRow = await this.databaseRowRepo.findActiveByPageId(
+      rootPage.id,
+      rootPage.workspaceId,
+    );
+
     await executeTx(this.db, async (trx) => {
       // Update root page
       const nextPosition = await this.nextPagePosition(spaceId);
@@ -1096,6 +1216,15 @@ export class PageService {
       }
 
       if (pageIds.length > 0) {
+        if (rootDatabaseRow) {
+          await this.databaseRowRepo.archiveByPageIds(
+            rootDatabaseRow.databaseId,
+            rootPage.workspaceId,
+            pageIds,
+            trx,
+          );
+        }
+
         await trx
           .updateTable('databases')
           .set({ spaceId, updatedAt: new Date() })
@@ -1298,6 +1427,13 @@ export class PageService {
         authUser,
         trx,
       });
+      if (isDuplicateInSameSpace) {
+        await this.duplicateRowsInExistingDatabases({
+          pageMap,
+          authUser,
+          trx,
+        });
+      }
     });
 
     const transclusionPages = insertablePages.map((page) => ({

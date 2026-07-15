@@ -87,7 +87,11 @@ import {
 } from '@/features/page/tree/utils/utils.ts';
 import { SimpleTree } from 'react-arborist';
 import { queryClient } from '@/main.tsx';
-import { getAllSidebarPages, getPageById } from '@/features/page/services/page-service.ts';
+import {
+  duplicatePage,
+  getAllSidebarPages,
+  getPageById,
+} from '@/features/page/services/page-service.ts';
 import { DATABASE_QUERY_KEYS, PAGE_QUERY_KEYS } from '@/features/page/queries/query-keys.ts';
 import { ISidebarNode } from '@/features/page/types/page.types.ts';
 import { buildPageUrl } from '@/features/page/page.utils.ts';
@@ -109,6 +113,10 @@ import { userAtom } from '@/features/user/atoms/current-user-atom.ts';
 import { PageEditMode } from '@/features/user/types/user.types.ts';
 import { buildPageEditModeByPageId } from '@/features/user/utils/page-edit-mode.ts';
 import classes from './database-table-view.module.css';
+import MovePageModal from '@/features/page/components/move-page-modal.tsx';
+import CopyPageModal from '@/features/page/components/copy-page-modal.tsx';
+import { PageOperationMenuItems } from '@/features/page/components/page-operation-menu-items.tsx';
+import { invalidateSidebarTree } from '@/features/page/queries/cache-invalidation.ts';
 
 interface DatabaseTableViewProps {
   databaseId: string;
@@ -264,6 +272,8 @@ export function DatabaseTableView({
   const [renamingRowPageId, setRenamingRowPageId] = useState<string | null>(null);
   const [renamingRowInitialTitle, setRenamingRowInitialTitle] = useState('');
   const [renamingRowTitleDraft, setRenamingRowTitleDraft] = useState('');
+  const [movingRow, setMovingRow] = useState<IDatabaseRowWithCells | null>(null);
+  const [copyingRow, setCopyingRow] = useState<IDatabaseRowWithCells | null>(null);
   const [selectedRowPageIds, setSelectedRowPageIds] = useState<Record<string, boolean>>({});
   const [bulkPropertyId, setBulkPropertyId] = useState<string | null>(null);
   const [bulkValue, setBulkValue] = useState('');
@@ -1284,6 +1294,23 @@ export function DatabaseTableView({
     }, 0);
   };
 
+  const handleDuplicateRow = async (row: IDatabaseRowWithCells) => {
+    try {
+      await duplicatePage({ pageId: row.pageId });
+      invalidateSidebarTree({ spaceId }, { client: queryClient });
+      emitDatabaseInvalidation({
+        invalidateRows: true,
+        invalidateRowContext: true,
+      });
+      resetRowsPagination();
+      notifications.show({ message: t('Page duplicated successfully') });
+    } catch (err) {
+      notifications.show({
+        message: err.response?.data.message || 'An error occurred',
+        color: 'red',
+      });
+    }
+  };
 
   const handleCreateProperty = () => {
     const trimmedName = newPropertyName.trim();
@@ -2482,6 +2509,14 @@ export function DatabaseTableView({
                           </Menu.Item>
                         )}
 
+                        {isEditable && (
+                          <PageOperationMenuItems
+                            onDuplicate={() => void handleDuplicateRow(row)}
+                            onMove={() => setMovingRow(row)}
+                            onCopyToSpace={() => setCopyingRow(row)}
+                          />
+                        )}
+
                         <Menu.Item
                           leftSection={<IconMessageCircle size={14} />}
                           onClick={() =>
@@ -2674,6 +2709,33 @@ export function DatabaseTableView({
           setNewPropertyType('multiline_text');
         }}
       />
+      {movingRow && (
+        <MovePageModal
+          pageId={movingRow.pageId}
+          slugId={movingRow.page?.slugId ?? movingRow.pageId}
+          currentSpaceSlug={spaceSlug}
+          nodeType="databaseRow"
+          title={getRowTitle(movingRow, t('untitled'))}
+          open
+          onClose={() => {
+            setMovingRow(null);
+            emitDatabaseInvalidation({
+              invalidateRows: true,
+              invalidateRowContext: true,
+            });
+            resetRowsPagination();
+          }}
+        />
+      )}
+      {copyingRow && (
+        <CopyPageModal
+          pageId={copyingRow.pageId}
+          currentSpaceSlug={spaceSlug}
+          nodeType="databaseRow"
+          open
+          onClose={() => setCopyingRow(null)}
+        />
+      )}
     </Paper>
   );
 }

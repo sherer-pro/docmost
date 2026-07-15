@@ -1,5 +1,5 @@
 import { Menu, Tooltip } from '@mantine/core';
-import { IconArrowRight, IconArrowsExchange, IconDots, IconInfoCircle, IconList, IconMessage, IconTrash } from '@tabler/icons-react';
+import { IconArrowsExchange, IconDots, IconInfoCircle, IconList, IconMessage, IconTrash } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { useDisclosure } from '@mantine/hooks';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
@@ -51,6 +51,12 @@ import { pageEditorAtom } from '@/features/editor/atoms/editor-atoms';
 import { useGetSpaceBySlugQuery } from '@/features/space/queries/space-query';
 import { resolveHeadingNumberingEnabled } from '@/features/page/utils/heading-numbering';
 import { getEditorMarkdown } from '@/features/editor/utils/editor-markdown';
+import CopyPageModal from '@/features/page/components/copy-page-modal.tsx';
+import { PageOperationMenuItems } from '@/features/page/components/page-operation-menu-items.tsx';
+import { duplicatePage } from '@/features/page/services/page-service.ts';
+import { invalidateSidebarTree } from '@/features/page/queries/cache-invalidation.ts';
+import { queryClient } from '@/main.tsx';
+import { useNavigate } from 'react-router-dom';
 
 interface DatabaseHeaderMenuProps {
   databaseId: string;
@@ -86,6 +92,7 @@ export default function DatabaseHeaderMenu({
   readOnly,
 }: DatabaseHeaderMenuProps) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const toggleAside = useToggleAside();
   const clipboard = useClipboard({ timeout: 500 });
   const [user] = useAtom(userAtom);
@@ -117,6 +124,8 @@ export default function DatabaseHeaderMenu({
   const [exportOpened, { open: openExportModal, close: closeExportModal }] =
     useDisclosure(false);
   const [movePageModalOpened, { open: openMovePageModal, close: closeMovePageModal }] =
+    useDisclosure(false);
+  const [copyPageModalOpened, { open: openCopyPageModal, close: closeCopyPageModal }] =
     useDisclosure(false);
   const [accessModalOpened, { open: openAccessModal, close: closeAccessModal }] =
     useDisclosure(false);
@@ -259,6 +268,33 @@ export default function DatabaseHeaderMenu({
     });
   };
 
+  const handleDuplicateDatabase = async () => {
+    if (!resolvedDatabasePageId) {
+      return;
+    }
+
+    try {
+      const duplicatedPage = await duplicatePage({ pageId: resolvedDatabasePageId });
+      invalidateSidebarTree(
+        { spaceId: duplicatedPage.spaceId },
+        { client: queryClient },
+      );
+      navigate(
+        buildDatabaseUrl(
+          duplicatedPage.space?.slug ?? spaceSlug,
+          duplicatedPage.slugId,
+          duplicatedPage.title,
+        ),
+      );
+      notifications.show({ message: t('Page duplicated successfully') });
+    } catch (err) {
+      notifications.show({
+        message: err.response?.data.message || 'An error occurred',
+        color: 'red',
+      });
+    }
+  };
+
   const hasDatabasePage = Boolean(resolvedDatabasePageId);
   const canOpenAccessModal = canOpenPageAccessModal({
     pageId: resolvedDatabasePageId,
@@ -385,9 +421,11 @@ export default function DatabaseHeaderMenu({
           {!readOnly && canMoveDatabasePage && (
             <>
               <Menu.Divider />
-              <Menu.Item leftSection={<IconArrowRight size={16} />} onClick={openMovePageModal}>
-                {t('Move')}
-              </Menu.Item>
+              <PageOperationMenuItems
+                onDuplicate={() => void handleDuplicateDatabase()}
+                onMove={openMovePageModal}
+                onCopyToSpace={openCopyPageModal}
+              />
             </>
           )}
 
@@ -424,15 +462,24 @@ export default function DatabaseHeaderMenu({
       />
 
       {canMoveDatabasePage && (
-        <MovePageModal
-          pageId={resolvedDatabasePageId}
-          slugId={databasePageSlugId}
-          currentSpaceSlug={spaceSlug}
-          nodeType="database"
-          title={database?.name}
-          onClose={closeMovePageModal}
-          open={movePageModalOpened}
-        />
+        <>
+          <MovePageModal
+            pageId={resolvedDatabasePageId}
+            slugId={databasePageSlugId}
+            currentSpaceSlug={spaceSlug}
+            nodeType="database"
+            title={database?.name}
+            onClose={closeMovePageModal}
+            open={movePageModalOpened}
+          />
+          <CopyPageModal
+            pageId={resolvedDatabasePageId}
+            currentSpaceSlug={spaceSlug}
+            nodeType="database"
+            onClose={closeCopyPageModal}
+            open={copyPageModalOpened}
+          />
+        </>
       )}
 
       {resolvedDatabasePageId && (
