@@ -39,7 +39,6 @@ import { treeApiAtom } from "@/features/page/tree/atoms/tree-api-atom.ts";
 import { useDeletePageModal } from "@/features/page/hooks/use-delete-page-modal.tsx";
 import { Trans, useTranslation } from "react-i18next";
 import ExportModal from "@/components/common/export-modal";
-import { htmlToMarkdown } from "@docmost/editor-ext";
 import {
   activePageUsersAtom,
   pageEditorAtom,
@@ -57,6 +56,9 @@ import { resolvePageFullWidth } from "@/features/user/utils/page-width.ts";
 import FavoriteButton from "@/features/favorite/components/favorite-button";
 import PageDetailsModal from "@/features/page/components/page-details-modal";
 import { AccessibleActionIcon } from "@/components/ui/accessible-action-icon.tsx";
+import { useSpaceQuery } from "@/features/space/queries/space-query";
+import { resolveHeadingNumberingEnabled } from "@/features/page/utils/heading-numbering";
+import { getEditorMarkdown } from "@/features/editor/utils/editor-markdown";
 
 interface PageHeaderMenuProps {
   readOnly?: boolean;
@@ -254,6 +256,8 @@ function PageActionMenu({ readOnly, canMoveDeleteShare }: PageActionMenuProps) {
     page?.access?.capabilities?.canMoveDeleteShare ??
     canMoveDeleteShare ??
     !readOnly;
+  const canWritePage = page?.access?.capabilities?.canWrite ?? !readOnly;
+  const { data: currentSpace } = useSpaceQuery(page?.spaceId ?? "");
 
   /**
    * Explicit priority for calculating page width:
@@ -296,8 +300,13 @@ function PageActionMenu({ readOnly, canMoveDeleteShare }: PageActionMenuProps) {
 
   const handleCopyAsMarkdown = () => {
     if (!pageEditor) return;
-    const html = pageEditor.getHTML();
-    const markdown = htmlToMarkdown(html);
+    const markdown = getEditorMarkdown(
+      pageEditor,
+      resolveHeadingNumberingEnabled({
+        pageSettings: page?.settings,
+        spaceSettings: currentSpace?.settings ?? page?.space?.settings,
+      }),
+    );
     const title = page?.title ? `# ${page.title}\n\n` : "";
     clipboard.copy(`${title}${markdown}`);
     notifications.show({ message: t("Copied") });
@@ -411,6 +420,19 @@ function PageActionMenu({ readOnly, canMoveDeleteShare }: PageActionMenuProps) {
             onPrint={handlePrint}
             pageId={page?.id}
             fullPageWidth={fullPageWidth}
+            headingNumbering={
+              page?.id && page.spaceId
+                ? {
+                    pageId: page.id,
+                    spaceId: page.spaceId,
+                    pageSettings: page.settings,
+                    spaceSettings:
+                      currentSpace?.settings ?? page.space?.settings,
+                    editor: pageEditor,
+                    canWrite: canWritePage,
+                  }
+                : undefined
+            }
           />
 
           {canMoveDeleteSharePage && (

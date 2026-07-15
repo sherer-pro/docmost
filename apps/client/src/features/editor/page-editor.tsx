@@ -88,6 +88,7 @@ interface PageEditorProps {
   dictionaryEnabled?: boolean;
   canManageDictionary?: boolean;
   canCreateInlineComments?: boolean;
+  headingNumberingEnabled?: boolean;
 }
 
 export default function PageEditor({
@@ -101,6 +102,7 @@ export default function PageEditor({
   dictionaryEnabled = false,
   canManageDictionary = false,
   canCreateInlineComments = editable,
+  headingNumberingEnabled = false,
 }: PageEditorProps) {
   const collaborationURL = useCollaborationUrl();
   const isComponentMounted = useRef(false);
@@ -183,8 +185,11 @@ export default function PageEditor({
         activeDictionaryTerms
           .map((term) => `${term.id}:${term.updatedAt}`)
           .join("|"),
+        headingNumberingEnabled
+          ? "heading-numbering-on"
+          : "heading-numbering-off",
       ].join(":"),
-    [activeDictionaryTerms, dictionaryEnabled, pageId],
+    [activeDictionaryTerms, dictionaryEnabled, headingNumberingEnabled, pageId],
   );
   const syncDictionaryHighlights = useCallback(
     (targetEditor?: Editor | null) => {
@@ -265,7 +270,10 @@ export default function PageEditor({
        */
       const syncActivePageUsers = () => {
         const states = Array.from(remote.awareness.getStates().values());
-        const uniqueUsers = new Map<string, { id: string; name: string; avatarUrl: string }>();
+        const uniqueUsers = new Map<
+          string,
+          { id: string; name: string; avatarUrl: string }
+        >();
 
         states.forEach((state) => {
           const awarenessUser = state?.user as
@@ -406,6 +414,10 @@ export default function PageEditor({
     syncDictionaryHighlights(editor);
   }, [editor, syncDictionaryHighlights]);
 
+  useEffect(() => {
+    editor?.commands.setHeadingNumberingEnabled(headingNumberingEnabled);
+  }, [editor, headingNumberingEnabled]);
+
   const editorIsEditable = useEditorState({
     editor,
     selector: (ctx) => {
@@ -418,7 +430,10 @@ export default function PageEditor({
       return;
     }
 
-    const pageData = queryClient.getQueryData<IPage>(["pages", resolvedCacheSlugId]);
+    const pageData = queryClient.getQueryData<IPage>([
+      "pages",
+      resolvedCacheSlugId,
+    ]);
 
     if (pageData) {
       queryClient.setQueryData(["pages", resolvedCacheSlugId], {
@@ -490,6 +505,11 @@ export default function PageEditor({
             immediatelyRender={true}
             extensions={staticContentExtensions}
             content={content}
+            onCreate={({ editor: staticEditor }) => {
+              staticEditor.commands.setHeadingNumberingEnabled(
+                headingNumberingEnabled,
+              );
+            }}
           />
         </DictionaryHighlightLayer>
       </TransclusionLookupProvider>

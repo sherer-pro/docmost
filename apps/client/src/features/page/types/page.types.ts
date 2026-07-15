@@ -17,6 +17,9 @@ import {
  */
 export interface PageSettings {
   fullPageWidth?: boolean;
+  headingNumbering?: {
+    enabled?: boolean | null;
+  };
   [key: string]: unknown;
 }
 
@@ -170,6 +173,7 @@ export type IUpdatePageInput = Partial<IPageInput> & {
   content?: Record<string, unknown> | string;
   operation?: PageContentOperation;
   format?: PageContentFormat;
+  headingNumberingEnabled?: boolean | null;
 };
 
 export interface IExportPageParams {

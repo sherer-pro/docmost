@@ -1246,5 +1246,17 @@
   "Tag TODO description": "To Do. Marca una tarea o un punto del texto que requiere trabajo de seguimiento.",
   "Mark text that needs clarification.": "Marcar texto que necesita aclaración.",
   "Mark text that needs follow-up.": "Marcar texto que necesita seguimiento.",
-  "Not selected": "Sin seleccionar"
+  "Not selected": "Sin seleccionar",
+  "Heading numbering": "Numeración de encabezados",
+  "Automatically number H1-H3 headings in this space.": "Numerar automáticamente los encabezados H1-H3 de este espacio.",
+  "Number headings": "Numerar encabezados",
+  "Use space setting": "Usar configuración del espacio",
+  "Enabled": "Activado",
+  "Disabled": "Desactivado",
+  "No manual heading numbering found": "No se encontró numeración manual de encabezados",
+  "Remove manual heading numbering?": "¿Eliminar la numeración manual de encabezados?",
+  "Remove numbering from {{count}} headings?": "¿Eliminar la numeración de {{count}} encabezados?",
+  "Remove numbering": "Eliminar numeración",
+  "Manual heading numbering removed": "Numeración manual de encabezados eliminada",
+  "Remove manual heading numbering": "Eliminar numeración manual de encabezados"
 }

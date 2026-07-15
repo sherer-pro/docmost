@@ -1246,5 +1246,17 @@
   "Tag TODO description": "To Do. 対応が必要な作業項目や、あとで戻って処理する必要がある本文中の箇所を示します。",
   "Mark text that needs clarification.": "確認が必要なテキストをマークします。",
   "Mark text that needs follow-up.": "フォローアップが必要なテキストをマークします。",
-  "Not selected": "未選択"
+  "Not selected": "未選択",
+  "Heading numbering": "見出し番号",
+  "Automatically number H1-H3 headings in this space.": "このスペースのH1-H3見出しに自動で番号を付けます。",
+  "Number headings": "見出しに番号を付ける",
+  "Use space setting": "スペース設定を使用",
+  "Enabled": "有効",
+  "Disabled": "無効",
+  "No manual heading numbering found": "手動の見出し番号は見つかりませんでした",
+  "Remove manual heading numbering?": "手動の見出し番号を削除しますか？",
+  "Remove numbering from {{count}} headings?": "{{count}}個の見出しから番号を削除しますか？",
+  "Remove numbering": "番号を削除",
+  "Manual heading numbering removed": "手動の見出し番号を削除しました",
+  "Remove manual heading numbering": "手動の見出し番号を削除"
 }

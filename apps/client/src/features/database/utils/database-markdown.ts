@@ -131,6 +131,7 @@ export function prepareDatabaseRowsForExport(
 export function buildDatabaseMarkdownFromState(params: {
   title: string;
   description?: string | null;
+  descriptionMarkdown?: string | null;
   properties: IDatabaseProperty[];
   rows: IDatabaseRowWithCells[];
   state: IDatabaseTableExportState;
@@ -141,6 +142,7 @@ export function buildDatabaseMarkdownFromState(params: {
   const {
     title,
     description,
+    descriptionMarkdown,
     properties,
     rows,
     state,
@@ -186,7 +188,7 @@ export function buildDatabaseMarkdownFromState(params: {
     .map((line) => `| ${line.join(' | ')} |`)
     .join('\n');
 
-  const normalizedDescription = description?.trim();
+  const normalizedDescription = (descriptionMarkdown ?? description)?.trim();
   const descriptionBlock = normalizedDescription ? `${normalizedDescription}\n\n` : '';
 
   return `# ${title}\n\n${descriptionBlock}${table}`;

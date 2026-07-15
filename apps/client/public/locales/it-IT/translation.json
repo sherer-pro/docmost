@@ -1246,5 +1246,17 @@
   "Tag TODO description": "To Do. Contrassegna un'attività o un punto del testo che richiede un intervento successivo.",
   "Mark text that needs clarification.": "Contrassegna il testo che richiede chiarimenti.",
   "Mark text that needs follow-up.": "Contrassegna il testo che richiede un seguito.",
-  "Not selected": "Non selezionato"
+  "Not selected": "Non selezionato",
+  "Heading numbering": "Numerazione dei titoli",
+  "Automatically number H1-H3 headings in this space.": "Numera automaticamente i titoli H1-H3 in questo spazio.",
+  "Number headings": "Numera i titoli",
+  "Use space setting": "Usa impostazione dello spazio",
+  "Enabled": "Attivato",
+  "Disabled": "Disattivato",
+  "No manual heading numbering found": "Nessuna numerazione manuale dei titoli trovata",
+  "Remove manual heading numbering?": "Rimuovere la numerazione manuale dei titoli?",
+  "Remove numbering from {{count}} headings?": "Rimuovere la numerazione da {{count}} titoli?",
+  "Remove numbering": "Rimuovi numerazione",
+  "Manual heading numbering removed": "Numerazione manuale dei titoli rimossa",
+  "Remove manual heading numbering": "Rimuovi numerazione manuale dei titoli"
 }

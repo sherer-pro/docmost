@@ -47,6 +47,10 @@ import { canOpenPageAccessModal } from '@/features/page/utils/page-access-ui.ts'
 import { resolvePageFullWidth } from '@/features/user/utils/page-width.ts';
 import { AccessibleActionIcon } from '@/components/ui/accessible-action-icon.tsx';
 import PageDetailsModal from '@/features/page/components/page-details-modal';
+import { pageEditorAtom } from '@/features/editor/atoms/editor-atoms';
+import { useGetSpaceBySlugQuery } from '@/features/space/queries/space-query';
+import { resolveHeadingNumberingEnabled } from '@/features/page/utils/heading-numbering';
+import { getEditorMarkdown } from '@/features/editor/utils/editor-markdown';
 
 interface DatabaseHeaderMenuProps {
   databaseId: string;
@@ -87,11 +91,13 @@ export default function DatabaseHeaderMenu({
   const [user] = useAtom(userAtom);
   const [, setHistoryModalOpen] = useAtom(historyAtoms);
   const databaseContext = useDatabasePageContext();
+  const { data: space } = useGetSpaceBySlugQuery(spaceSlug);
   const { data: database } = useGetDatabaseQuery(databaseId);
   const resolvedDatabasePageId = databasePageId ?? databaseContext.databasePageId;
   const databasePageSlugId = databaseContext.databasePageSlugId;
   const { data: properties = [] } = useDatabasePropertiesQuery(databaseId);
   const tableExportStateByDatabase = useAtomValue(databaseTableExportStateAtom);
+  const pageEditor = useAtomValue(pageEditorAtom);
   const tableExportState = tableExportStateByDatabase[databaseId] ?? defaultDatabaseTableExportState;
   const rowsExportQueryParams = (() => {
     const params = tableExportState.rowsQueryParams;
@@ -157,6 +163,15 @@ export default function DatabaseHeaderMenu({
     return buildDatabaseMarkdownFromState({
       title: (database?.name || t('database.editor.untitled')).trim(),
       description: database?.description,
+      descriptionMarkdown: pageEditor
+        ? getEditorMarkdown(
+            pageEditor,
+            resolveHeadingNumberingEnabled({
+              pageSettings: databaseContext.pageByRoute?.settings,
+              spaceSettings: space?.settings ?? databaseContext.pageByRoute?.space?.settings,
+            }),
+          )
+        : undefined,
       properties,
       rows,
       state: tableExportState,
@@ -353,6 +368,18 @@ export default function DatabaseHeaderMenu({
             onPrint={handlePrint}
             databasePageId={databasePageWidthScopeId}
             fullPageWidth={fullPageWidth}
+            headingNumbering={
+              resolvedDatabasePageId && databaseContext.pageByRoute?.spaceId
+                ? {
+                    pageId: resolvedDatabasePageId,
+                    spaceId: databaseContext.pageByRoute.spaceId,
+                    pageSettings: databaseContext.pageByRoute.settings,
+                    spaceSettings: space?.settings ?? databaseContext.pageByRoute.space?.settings,
+                    editor: pageEditor,
+                    canWrite: !readOnly,
+                  }
+                : undefined
+            }
           />
 
           {!readOnly && canMoveDatabasePage && (

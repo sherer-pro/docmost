@@ -5,6 +5,10 @@ import classes from "./table-of-contents.module.css";
 import clsx from "clsx";
 import { Box, Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";
+import {
+  calculateHeadingNumbers,
+  isHeadingNumberingEnabled,
+} from "@docmost/editor-ext";
 
 type TableOfContentsProps = {
   editor: ReturnType<typeof useEditor>;
@@ -18,27 +22,29 @@ export type HeadingLink = {
   position: number;
 };
 
-const recalculateLinks = (nodePos: NodePos[]) => {
+const recalculateLinks = (nodePos: NodePos[], numberingEnabled: boolean) => {
   const nodes: HTMLElement[] = [];
-
-  const links: HeadingLink[] = Array.from(nodePos).reduce<HeadingLink[]>(
-    (acc, item) => {
-      const label = item.node.textContent;
-      const level = Number(item.node.attrs.level);
-      if (label.length && level <= 3) {
-        acc.push({
-          label,
-          level,
-          element: item.element,
-          //@ts-ignore
-          position: item.resolvedPos.pos,
-        });
-        nodes.push(item.element);
-      }
-      return acc;
-    },
-    [],
+  const numberedHeadings = calculateHeadingNumbers(
+    Array.from(nodePos).map((item) => ({
+      level: Number(item.node.attrs.level),
+      text: item.node.textContent,
+      value: item,
+    })),
   );
+  const links = numberedHeadings.map<HeadingLink>((heading) => {
+    const item = heading.value;
+    nodes.push(item.element);
+
+    return {
+      label: numberingEnabled
+        ? `${heading.number} ${heading.text}`
+        : heading.text,
+      level: heading.level,
+      element: item.element,
+      //@ts-ignore
+      position: item.resolvedPos.pos,
+    };
+  });
   return { links, nodes };
 };
 
@@ -73,17 +79,26 @@ export const TableOfContents: FC<TableOfContentsProps> = (props) => {
   };
 
   const handleUpdate = () => {
-    const result = recalculateLinks(props.editor?.$nodes("heading"));
+    if (!props.editor) {
+      setLinks([]);
+      setHeadingDOMNodes([]);
+      return;
+    }
+
+    const result = recalculateLinks(
+      props.editor.$nodes("heading"),
+      isHeadingNumberingEnabled(props.editor.state),
+    );
 
     setLinks(result.links);
     setHeadingDOMNodes(result.nodes);
   };
 
   useEffect(() => {
-    props.editor?.on("update", handleUpdate);
+    props.editor?.on("transaction", handleUpdate);
 
     return () => {
-      props.editor?.off("update", handleUpdate);
+      props.editor?.off("transaction", handleUpdate);
     };
   }, [props.editor]);
 
