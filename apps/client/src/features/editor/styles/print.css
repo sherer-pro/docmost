@@ -18,10 +18,12 @@
   }
 
   .tableWrapper {
+    display: block;
     overflow: hidden !important;
   }
 
   .tableWrapper table {
+    flex: none;
     width: 100% !important;
     min-width: 0 !important;
     table-layout: auto;
