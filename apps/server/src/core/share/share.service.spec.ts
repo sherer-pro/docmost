@@ -59,6 +59,8 @@ describe('ShareService getSharedPage', () => {
         id: 'page-1',
         slugId: 'root-slug',
         content: { type: 'doc', content: [] },
+        settings: { headingNumbering: { enabled: null } },
+        space: { settings: { headingNumbering: { enabled: true } } },
         deletedAt: null,
       });
 
@@ -88,9 +90,12 @@ describe('ShareService getSharedPage', () => {
     expect(pageRepo.findById).toHaveBeenNthCalledWith(2, 'page-1', {
       includeContent: true,
       includeCreator: true,
+      includeSpace: true,
     });
     expect(result.share.id).toBe('share-1');
     expect(result.page.content).toEqual({ type: 'doc', content: [] });
+    expect(result.page).not.toHaveProperty('space');
+    expect(result.headingNumberingEnabled).toBe(true);
   });
 
   it('rejects shareId-only lookup when share belongs to another workspace', async () => {

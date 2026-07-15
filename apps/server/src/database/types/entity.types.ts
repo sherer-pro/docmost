@@ -58,12 +58,21 @@ export interface SpaceDictionarySettings {
   enabled?: boolean;
 }
 
+export type HeadingNumberingSettings = {
+  enabled?: boolean;
+} & Record<string, JsonValue>;
+
+export type PageHeadingNumberingSettings = {
+  enabled?: boolean | null;
+} & Record<string, JsonValue>;
+
 /**
  * Space settings container.
  */
 export interface SpaceSettings {
   documentFields?: SpaceDocumentFieldsSettings;
   dictionary?: SpaceDictionarySettings;
+  headingNumbering?: HeadingNumberingSettings;
 }
 
 /**
@@ -73,6 +82,7 @@ export interface PageSettings {
   status?: string | null;
   assigneeId?: string | null;
   stakeholderIds?: string[] | null;
+  headingNumbering?: PageHeadingNumberingSettings;
   [key: string]: JsonValue | undefined;
 }
 

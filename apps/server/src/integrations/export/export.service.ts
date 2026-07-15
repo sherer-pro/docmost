@@ -48,6 +48,8 @@ import { join } from 'node:path';
 import { resolveClientDistPath } from '../../common/utils/client-dist-path';
 import { TokenService } from '../../core/auth/services/token.service';
 import { validate as isValidUuid } from 'uuid';
+import { addHeadingNumbersToJson } from '@docmost/editor-ext';
+import { resolveHeadingNumberingEnabled } from '../../core/page/utils/heading-numbering-settings.utils';
 
 const PAGE_STATUS_LABELS: Record<string, string> = {
   TODO: 'To do',
@@ -58,7 +60,11 @@ const PAGE_STATUS_LABELS: Record<string, string> = {
   ARCHIVED: 'Archived',
 };
 
-const PAGE_CUSTOM_FIELD_LABEL_KEYS = ['Status', 'Assignee', 'Stakeholders'] as const;
+const PAGE_CUSTOM_FIELD_LABEL_KEYS = [
+  'Status',
+  'Assignee',
+  'Stakeholders',
+] as const;
 type PageCustomFieldLabelKey = (typeof PAGE_CUSTOM_FIELD_LABEL_KEYS)[number];
 type PageCustomFieldLabels = Record<PageCustomFieldLabelKey, string>;
 
@@ -99,10 +105,12 @@ export class ExportService {
     page: Page,
     singlePage?: boolean,
     locale?: string,
+    spaceHeadingNumberingEnabled?: boolean,
   ) {
     const { title: pageTitle, pageHtml } = await this.buildPageExportHtml(
       page,
       singlePage,
+      spaceHeadingNumberingEnabled,
     );
 
     if (format === ExportFormat.HTML) {
@@ -163,10 +171,12 @@ export class ExportService {
       metadataRows,
       params.page,
     );
-    const attachmentToken = await this.tokenService.generateAttachmentPageToken({
-      pageId: params.page.id,
-      workspaceId: params.page.workspaceId,
-    });
+    const attachmentToken = await this.tokenService.generateAttachmentPageToken(
+      {
+        pageId: params.page.id,
+        workspaceId: params.page.workspaceId,
+      },
+    );
 
     return {
       title: pageTitle,
@@ -178,6 +188,7 @@ export class ExportService {
   private async buildPageExportHtml(
     page: Page,
     singlePage?: boolean,
+    spaceHeadingNumberingEnabled?: boolean,
   ): Promise<{ title: string; pageHtml: string }> {
     const titleNode = {
       type: 'heading',
@@ -197,6 +208,25 @@ export class ExportService {
       prosemirrorJson = getProsemirrorContent(page.content);
     }
 
+    const pageOverride = (
+      page.settings as { headingNumbering?: { enabled?: unknown } } | null
+    )?.headingNumbering?.enabled;
+    const spaceDefault =
+      typeof pageOverride === 'boolean'
+        ? false
+        : typeof spaceHeadingNumberingEnabled === 'boolean'
+          ? spaceHeadingNumberingEnabled
+          : await this.getSpaceHeadingNumberingDefault(page.spaceId);
+    const headingNumberingEnabled =
+      typeof pageOverride === 'boolean'
+        ? pageOverride
+        : resolveHeadingNumberingEnabled(page.settings, {
+            headingNumbering: { enabled: spaceDefault },
+          });
+    if (headingNumberingEnabled) {
+      prosemirrorJson = addHeadingNumbersToJson(prosemirrorJson);
+    }
+
     if (page.title) {
       prosemirrorJson.content.unshift(titleNode);
     }
@@ -209,12 +239,27 @@ export class ExportService {
     };
   }
 
+  private async getSpaceHeadingNumberingDefault(
+    spaceId: string,
+  ): Promise<boolean> {
+    const space = await this.db
+      .selectFrom('spaces')
+      .select('settings')
+      .where('id', '=', spaceId)
+      .executeTakeFirst();
+
+    return resolveHeadingNumberingEnabled(undefined, space?.settings);
+  }
+
   async renderPdfFromHtmlDocument(params: {
     title: string;
     bodyHtml: string;
     attachmentToken?: string;
   }): Promise<Buffer> {
-    const htmlDocument = this.buildPdfHtmlDocument(params.title, params.bodyHtml);
+    const htmlDocument = this.buildPdfHtmlDocument(
+      params.title,
+      params.bodyHtml,
+    );
     return this.htmlPdfRendererService.render(htmlDocument, {
       attachmentToken: params.attachmentToken,
     });
@@ -225,7 +270,9 @@ export class ExportService {
   }
 
   private buildPdfHtmlDocument(title: string, bodyHtml: string): string {
-    const appUrl = this.ensureTrailingSlash(this.environmentService.getAppUrl());
+    const appUrl = this.ensureTrailingSlash(
+      this.environmentService.getAppUrl(),
+    );
     return `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -445,8 +492,13 @@ export class ExportService {
     const statusLabel = this.resolvePageStatusLabel(settings.status);
     const assigneeId = getPageAssigneeId(settings);
     const stakeholderIds = getPageStakeholderIds(settings);
-    const userIds = [...new Set([...(assigneeId ? [assigneeId] : []), ...stakeholderIds])];
-    const userNameById = await this.resolveUserNameMap(userIds, page.workspaceId);
+    const userIds = [
+      ...new Set([...(assigneeId ? [assigneeId] : []), ...stakeholderIds]),
+    ];
+    const userNameById = await this.resolveUserNameMap(
+      userIds,
+      page.workspaceId,
+    );
     const metadataLabels = this.resolvePageCustomFieldLabels(locale);
     const rows: Array<{ label: string; value: string }> = [];
 
@@ -491,7 +543,9 @@ export class ExportService {
       PAGE_CUSTOM_FIELD_LABEL_KEYS,
     );
 
-    for (const localeCandidate of this.buildLocaleFallbackChain(normalizedLocale)) {
+    for (const localeCandidate of this.buildLocaleFallbackChain(
+      normalizedLocale,
+    )) {
       const translations = this.readLocaleTranslations(localeCandidate);
       if (!translations) {
         continue;
@@ -502,7 +556,10 @@ export class ExportService {
           continue;
         }
 
-        const translatedLabel = this.readTranslationString(translations, labelKey);
+        const translatedLabel = this.readTranslationString(
+          translations,
+          labelKey,
+        );
         if (!translatedLabel) {
           continue;
         }
@@ -580,8 +637,8 @@ export class ExportService {
       }
     }
 
-    this.availableClientLocalesCache = [...discoveredLocales].sort((left, right) =>
-      left.localeCompare(right, 'en'),
+    this.availableClientLocalesCache = [...discoveredLocales].sort(
+      (left, right) => left.localeCompare(right, 'en'),
     );
 
     return this.availableClientLocalesCache;
@@ -605,7 +662,9 @@ export class ExportService {
     return [...localeRoots].filter((localeRoot) => existsSync(localeRoot));
   }
 
-  private readLocaleTranslations(locale: string): Record<string, unknown> | null {
+  private readLocaleTranslations(
+    locale: string,
+  ): Record<string, unknown> | null {
     if (this.localeTranslationsCache.has(locale)) {
       return this.localeTranslationsCache.get(locale) ?? null;
     }
@@ -696,7 +755,9 @@ export class ExportService {
     return normalizedStatus
       .split(/[_-]+/)
       .filter(Boolean)
-      .map((token) => token.charAt(0).toUpperCase() + token.slice(1).toLowerCase())
+      .map(
+        (token) => token.charAt(0).toUpperCase() + token.slice(1).toLowerCase(),
+      )
       .join(' ');
   }
 
@@ -732,7 +793,9 @@ export class ExportService {
     pageHtml: string,
     page: Pick<Page, 'workspaceId'>,
   ): Promise<string> {
-    const $ = cheerio.load(`<div class="docmost-page-content-root">${pageHtml}</div>`);
+    const $ = cheerio.load(
+      `<div class="docmost-page-content-root">${pageHtml}</div>`,
+    );
     const root = $('.docmost-page-content-root');
     this.normalizePdfResourceUrls($, root);
 
@@ -741,7 +804,10 @@ export class ExportService {
       const url = this.normalizePdfUrl(
         this.readHtmlAttribute(previewNode, ['url', 'data-url']),
       );
-      const title = this.readHtmlAttribute(previewNode, ['title', 'data-title']);
+      const title = this.readHtmlAttribute(previewNode, [
+        'title',
+        'data-title',
+      ]);
       const description = this.readHtmlAttribute(previewNode, [
         'description',
         'data-description',
@@ -749,9 +815,14 @@ export class ExportService {
       const image = this.normalizePdfUrl(
         this.readHtmlAttribute(previewNode, ['image', 'data-image']),
       );
-      const siteName = this.readHtmlAttribute(previewNode, ['siteName', 'data-site-name']);
+      const siteName = this.readHtmlAttribute(previewNode, [
+        'siteName',
+        'data-site-name',
+      ]);
 
-      const previewCard = $('<section></section>').addClass('docmost-link-preview-block');
+      const previewCard = $('<section></section>').addClass(
+        'docmost-link-preview-block',
+      );
 
       if (image) {
         previewCard.append(
@@ -839,7 +910,10 @@ export class ExportService {
         'data-attachment-id',
         'attachmentId',
       ]);
-      const title = this.readHtmlAttribute(diagramNode, ['data-title', 'title']);
+      const title = this.readHtmlAttribute(diagramNode, [
+        'data-title',
+        'title',
+      ]);
       const typeName = this.readHtmlAttribute(diagramNode, ['data-type']);
       const normalizedTypeName =
         typeName === 'drawio' ? 'Draw.io diagram' : 'Excalidraw diagram';
@@ -870,7 +944,9 @@ export class ExportService {
       }
 
       if (!normalizedSrc && !inlineSvgHtml) {
-        const fallback = $('<section></section>').addClass('docmost-diagram-fallback');
+        const fallback = $('<section></section>').addClass(
+          'docmost-diagram-fallback',
+        );
         fallback.append(
           $('<p></p>')
             .addClass('docmost-fallback-title')
@@ -880,7 +956,9 @@ export class ExportService {
         continue;
       }
 
-      const renderedDiagram = $('<section></section>').addClass('docmost-diagram-fallback');
+      const renderedDiagram = $('<section></section>').addClass(
+        'docmost-diagram-fallback',
+      );
       if (inlineSvgHtml) {
         renderedDiagram.append(inlineSvgHtml);
       } else {
@@ -893,9 +971,7 @@ export class ExportService {
       }
       if (title) {
         renderedDiagram.append(
-          $('<p></p>')
-            .addClass('docmost-fallback-title')
-            .text(title),
+          $('<p></p>').addClass('docmost-fallback-title').text(title),
         );
       }
 
@@ -904,12 +980,12 @@ export class ExportService {
 
     root.find('div[data-type="subpages"]').each((_, node) => {
       const subpagesNode = $(node);
-      const fallback = $('<section></section>').addClass('docmost-subpages-fallback');
+      const fallback = $('<section></section>').addClass(
+        'docmost-subpages-fallback',
+      );
 
       fallback.append(
-        $('<p></p>')
-          .addClass('docmost-fallback-title')
-          .text('Subpages block'),
+        $('<p></p>').addClass('docmost-fallback-title').text('Subpages block'),
       );
       fallback.append(
         $('<p></p>')
@@ -1114,7 +1190,10 @@ export class ExportService {
     }
 
     try {
-      const parsed = new URL(normalizedUrl, this.environmentService.getAppUrl());
+      const parsed = new URL(
+        normalizedUrl,
+        this.environmentService.getAppUrl(),
+      );
       return this.isAttachmentFilePath(parsed.pathname);
     } catch (err) {
       return false;
@@ -1206,7 +1285,7 @@ export class ExportService {
       const page = await this.pageRepo.findById(pageId, {
         includeContent: true,
       });
-      if (page){
+      if (page) {
         pages = [page];
       }
     }
@@ -1215,6 +1294,9 @@ export class ExportService {
       throw new BadRequestException('No pages to export');
     }
 
+    const spaceHeadingNumberingEnabled =
+      await this.getSpaceHeadingNumberingDefault(pages[0].spaceId);
+
     const parentPageIndex = pages.findIndex((obj) => obj.id === pageId);
     // set to null to make export of pages with parentId work
     pages[parentPageIndex].parentPageId = null;
@@ -1222,7 +1304,14 @@ export class ExportService {
     const tree = buildTree(pages as Page[]);
 
     const zip = new JSZip();
-    await this.zipPages(tree, format, zip, includeAttachments, locale);
+    await this.zipPages(
+      tree,
+      format,
+      zip,
+      includeAttachments,
+      locale,
+      spaceHeadingNumberingEnabled,
+    );
 
     const zipFile = zip.generateNodeStream({
       type: 'nodebuffer',
@@ -1263,6 +1352,7 @@ export class ExportService {
         'pages.workspaceId',
         'pages.createdAt',
         'pages.updatedAt',
+        'pages.settings',
       ])
       .where('spaceId', '=', spaceId)
       .where('deletedAt', 'is', null)
@@ -1272,7 +1362,14 @@ export class ExportService {
 
     const zip = new JSZip();
 
-    await this.zipPages(tree, format, zip, includeAttachments, locale);
+    await this.zipPages(
+      tree,
+      format,
+      zip,
+      includeAttachments,
+      locale,
+      resolveHeadingNumberingEnabled(undefined, space.settings),
+    );
 
     const zipFile = zip.generateNodeStream({
       type: 'nodebuffer',
@@ -1293,6 +1390,7 @@ export class ExportService {
     zip: JSZip,
     includeAttachments: boolean,
     locale?: string,
+    spaceHeadingNumberingEnabled?: boolean,
   ): Promise<void> {
     const slugIdToPath: Record<string, string> = {};
     const pageIdToFilePath: Record<string, string> = {};
@@ -1333,10 +1431,16 @@ export class ExportService {
         }
 
         const pageTitle = getPageTitle(page.title);
-        const pageExportContent = await this.exportPage(format, {
-          ...page,
-          content: updatedJsonContent,
-        }, false, locale);
+        const pageExportContent = await this.exportPage(
+          format,
+          {
+            ...page,
+            content: updatedJsonContent,
+          },
+          false,
+          locale,
+          spaceHeadingNumberingEnabled,
+        );
 
         folder.file(
           `${pageTitle}${getExportExtension(format)}`,

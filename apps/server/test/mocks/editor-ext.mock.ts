@@ -34,6 +34,28 @@ export const TransclusionSource = {} as any;
 export const TransclusionReference = {} as any;
 
 export function addUniqueIdsToDoc(doc: any) { return doc; }
+export function addHeadingNumbersToJson(doc: any) {
+  const cloned = JSON.parse(JSON.stringify(doc));
+  let section = 0;
+  let child = 0;
+
+  for (const node of cloned.content ?? []) {
+    if (node.type !== 'heading') continue;
+    if (node.attrs?.level === 2) {
+      section += 1;
+      child = 0;
+      node.content?.unshift({ type: 'text', text: `${section}. ` });
+    } else if (node.attrs?.level === 3) {
+      child += 1;
+      node.content?.unshift({
+        type: 'text',
+        text: `${section || 1}.${child}. `,
+      });
+    }
+  }
+
+  return cloned;
+}
 export function htmlToMarkdown(input: string) { return input; }
 export function markdownToHtml(input: string) { return input; }
 export function getEmbedUrlAndProvider(url: string) {

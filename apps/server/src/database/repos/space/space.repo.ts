@@ -4,6 +4,7 @@ import { KyselyDB, KyselyTransaction } from '@docmost/db/types/kysely.types';
 import { dbOrTx } from '@docmost/db/utils';
 import {
   InsertableSpace,
+  HeadingNumberingSettings,
   Space,
   SpaceDictionarySettings,
   SpaceDocumentFieldsSettings,
@@ -196,6 +197,25 @@ export class SpaceRepo {
       .returningAll();
 
     return query.executeTakeFirst();
+  }
+
+  async updateHeadingNumberingSettings(
+    spaceId: string,
+    workspaceId: string,
+    headingNumbering: HeadingNumberingSettings,
+  ) {
+    return this.db
+      .updateTable('spaces')
+      .set({
+        settings: sql`COALESCE(settings, '{}'::jsonb)
+          || jsonb_build_object('headingNumbering', COALESCE(settings->'headingNumbering', '{}'::jsonb)
+          || ${sql.lit(JSON.stringify(headingNumbering))}::jsonb)`,
+        updatedAt: new Date(),
+      })
+      .where('id', '=', spaceId)
+      .where('workspaceId', '=', workspaceId)
+      .returningAll()
+      .executeTakeFirst();
   }
 
   async insertSpace(

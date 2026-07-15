@@ -14,6 +14,7 @@ describe('SpaceService', () => {
   let spaceRepo: {
     slugExists: jest.Mock;
     updateDictionarySettings: jest.Mock;
+    updateHeadingNumberingSettings: jest.Mock;
     updateSpace: jest.Mock;
     archiveSpace: jest.Mock;
     unarchiveSpace: jest.Mock;
@@ -23,6 +24,7 @@ describe('SpaceService', () => {
     spaceRepo = {
       slugExists: jest.fn(),
       updateDictionarySettings: jest.fn(),
+      updateHeadingNumberingSettings: jest.fn(),
       updateSpace: jest.fn(),
       archiveSpace: jest.fn(),
       unarchiveSpace: jest.fn(),
@@ -71,6 +73,27 @@ describe('SpaceService', () => {
       { name: undefined, description: undefined, slug: undefined },
       'space-1',
       'workspace-1',
+    );
+  });
+
+  it('updates heading numbering without replacing other space settings', async () => {
+    spaceRepo.updateSpace.mockResolvedValue({
+      id: 'space-1',
+      settings: {
+        dictionary: { enabled: true },
+        headingNumbering: { enabled: true },
+      },
+    });
+
+    await service.updateSpace(
+      { spaceId: 'space-1', headingNumberingEnabled: true },
+      'workspace-1',
+    );
+
+    expect(spaceRepo.updateHeadingNumberingSettings).toHaveBeenCalledWith(
+      'space-1',
+      'workspace-1',
+      { enabled: true },
     );
   });
 
