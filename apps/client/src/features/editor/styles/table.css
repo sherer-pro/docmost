@@ -6,6 +6,7 @@
   );
   margin-top: 1rem;
   margin-bottom: 1rem;
+  display: flex;
   width: 100%;
   max-width: 100%;
   overflow-x: auto;
@@ -71,8 +72,9 @@
     border-collapse: collapse;
     margin: 0;
     table-layout: auto;
-    width: 100%;
-    min-width: max-content;
+    flex: 1 0 max-content;
+    width: max-content;
+    min-width: 100%;
 
     td,
     th {
@@ -80,10 +82,19 @@
       box-sizing: border-box;
       min-width: 3rem;
       max-width: 24rem;
-      overflow-wrap: anywhere;
+      overflow-wrap: break-word;
+      word-break: normal;
       padding: 3px 5px;
       position: relative;
       vertical-align: top;
+
+      p,
+      li,
+      blockquote,
+      a {
+        overflow-wrap: break-word;
+        word-break: normal;
+      }
 
       &:first-of-type:not(a) {
         margin-top: 0;
