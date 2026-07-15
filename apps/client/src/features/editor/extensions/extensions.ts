@@ -53,9 +53,11 @@ import {
   Indent,
   PageBreak,
   Tag,
+  builtInTagDefinitions,
   TransclusionSource,
   TransclusionReference,
 } from "@docmost/editor-ext";
+import type { TagDefinition } from "@docmost/editor-ext";
 import {
   randomElement,
   userColors,
@@ -307,6 +309,19 @@ export const mainExtensions = [
     },
   }).configure(),
 ] as any;
+
+export interface MainExtensionsOptions {
+  tagDefinitions?: readonly TagDefinition[];
+}
+
+export const createMainExtensions = ({
+  tagDefinitions = builtInTagDefinitions,
+}: MainExtensionsOptions = {}) =>
+  mainExtensions.map((extension: any) =>
+    extension.name === "tag"
+      ? Tag.configure({ view: TagView, tagDefinitions })
+      : extension,
+  );
 
 type CollabExtensions = (provider: HocuspocusProvider, user: IUser) => any[];
 

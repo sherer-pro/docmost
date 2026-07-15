@@ -25,11 +25,14 @@ import {
 } from "@tiptap/react";
 import {
   collabExtensions,
-  mainExtensions,
+  createMainExtensions,
 } from "@/features/editor/extensions/extensions";
 import { useAtom } from "jotai";
 import useCollaborationUrl from "@/features/editor/hooks/use-collaboration-url";
-import { currentUserAtom } from "@/features/user/atoms/current-user-atom";
+import {
+  currentUserAtom,
+  workspaceAtom,
+} from "@/features/user/atoms/current-user-atom";
 import {
   activePageUsersAtom,
   pageEditorAtom,
@@ -76,6 +79,7 @@ import { useDictionaryTermsQuery } from "@/features/dictionary/queries/dictionar
 import { createDictionaryMatcherIndex } from "@/features/dictionary/utils/dictionary-matcher";
 import { TransclusionLookupProvider } from "@/features/editor/components/transclusion/transclusion-lookup-context";
 import { FixedToolbar } from "@/features/editor/components/fixed-toolbar/fixed-toolbar";
+import { getEnabledTagDefinitions } from "@/features/editor/components/tag/tag-settings";
 
 interface PageEditorProps {
   pageId: string;
@@ -113,6 +117,7 @@ export default function PageEditor({
   }, []);
 
   const [currentUser] = useAtom(currentUserAtom);
+  const [workspace] = useAtom(workspaceAtom);
   const [, setEditor] = useAtom(pageEditorAtom);
   const [, setActivePageUsers] = useAtom(activePageUsersAtom);
   const [isLocalSynced, setIsLocalSynced] = useState(false);
@@ -162,20 +167,33 @@ export default function PageEditor({
     [isComponentMounted],
   );
   const { handleScrollTo } = useEditorScroll({ canScroll });
+  const tagDefinitions = useMemo(
+    () => getEnabledTagDefinitions(workspace?.settings?.tags),
+    [workspace?.settings?.tags],
+  );
+  const mainEditorExtensions = useMemo(
+    () => createMainExtensions({ tagDefinitions }),
+    [tagDefinitions],
+  );
   const editorExtensions = useMemo(
-    () => [...mainExtensions, DictionaryHighlightExtension],
-    [],
+    () => [...mainEditorExtensions, DictionaryHighlightExtension],
+    [mainEditorExtensions],
   );
   const staticContentExtensions = useMemo(
     () => [
-      ...mainExtensions,
+      ...mainEditorExtensions,
       DictionaryHighlightExtension.configure({
         enabled: dictionaryEnabled,
         terms: activeDictionaryTerms,
         matcherIndex: dictionaryMatcherIndex,
       }),
     ],
-    [activeDictionaryTerms, dictionaryEnabled, dictionaryMatcherIndex],
+    [
+      activeDictionaryTerms,
+      dictionaryEnabled,
+      dictionaryMatcherIndex,
+      mainEditorExtensions,
+    ],
   );
   const staticContentKey = useMemo(
     () =>
@@ -188,8 +206,15 @@ export default function PageEditor({
         headingNumberingEnabled
           ? "heading-numbering-on"
           : "heading-numbering-off",
+        tagDefinitions.map((tag) => tag.value).join("|"),
       ].join(":"),
-    [activeDictionaryTerms, dictionaryEnabled, headingNumberingEnabled, pageId],
+    [
+      activeDictionaryTerms,
+      dictionaryEnabled,
+      headingNumberingEnabled,
+      pageId,
+      tagDefinitions,
+    ],
   );
   const syncDictionaryHighlights = useCallback(
     (targetEditor?: Editor | null) => {

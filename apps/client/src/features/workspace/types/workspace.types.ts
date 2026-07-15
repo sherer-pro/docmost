@@ -30,6 +30,7 @@ export interface IWorkspace {
 export interface IWorkspaceSettings {
   ai?: IWorkspaceAiSettings;
   sharing?: IWorkspaceSharingSettings;
+  tags?: IWorkspaceTagSettings;
 }
 
 export interface IWorkspaceAiSettings {
@@ -39,6 +40,10 @@ export interface IWorkspaceAiSettings {
 
 export interface IWorkspaceSharingSettings {
   disabled?: boolean;
+}
+
+export interface IWorkspaceTagSettings {
+  disabled?: string[];
 }
 
 export interface ICreateInvite {

@@ -18,8 +18,11 @@ export type SlashMenuItemType = {
   description: string;
   icon: any;
   separator?: true;
-  searchTerms: string[];
+  searchTerms: readonly string[];
   command: (props: CommandProps) => void;
+  children?:
+    | SlashMenuItemType[]
+    | ((editor: ReturnType<typeof useEditor>) => SlashMenuItemType[]);
   disable?: (editor: ReturnType<typeof useEditor>) => boolean;
 };
 

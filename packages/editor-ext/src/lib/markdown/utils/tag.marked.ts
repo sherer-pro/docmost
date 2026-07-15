@@ -1,5 +1,6 @@
 import { Token } from 'marked';
-import { getTagLabel, getValidTagValue, TagValue } from '../../tag';
+import { getTagLabel, getValidTagValue } from '../../tag';
+import type { TagValue } from '../../tag';
 
 interface TagToken {
   type: 'tag';
@@ -7,8 +8,9 @@ interface TagToken {
   value: TagValue;
 }
 
-const tagRegex = /^::tag\[(TBD|TODO)\]/i;
-const tagStartRegex = /::tag\[(?:TBD|TODO)\]/i;
+const tagValuePattern = '[A-Za-z][A-Za-z0-9_-]{0,31}';
+const tagRegex = new RegExp(`^::tag\\[(${tagValuePattern})\\]`, 'i');
+const tagStartRegex = new RegExp(`::tag\\[${tagValuePattern}\\]`, 'i');
 
 export const tagExtension = {
   name: 'tag',

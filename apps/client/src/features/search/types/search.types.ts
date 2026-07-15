@@ -2,6 +2,7 @@ import { IUser } from "@/features/user/types/user.types.ts";
 import { IGroup } from "@/features/group/types/group.types.ts";
 import { ISpace } from "@/features/space/types/space.types.ts";
 import { IPage } from "@/features/page/types/page.types.ts";
+import type { TagValue } from "@docmost/editor-ext";
 
 export interface IPageSearchBreadcrumb {
   id: string;
@@ -52,7 +53,7 @@ export interface IPageSearchParams {
   spaceId?: string;
   shareId?: string;
   labelId?: string;
-  tag?: "tbd" | "todo";
+  tag?: TagValue;
 }
 
 export interface SearchLabelParams {

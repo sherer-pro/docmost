@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { SlashMenuGroupedItemsType } from "@/features/editor/components/slash-menu/types";
+import {
+  SlashMenuGroupedItemsType,
+  SlashMenuItemType,
+} from "@/features/editor/components/slash-menu/types";
 import {
   ActionIcon,
   Group,
@@ -25,28 +28,49 @@ const CommandList = ({
 }) => {
   const { t } = useTranslation();
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [activeParent, setActiveParent] = useState<SlashMenuItemType | null>(
+    null,
+  );
   const viewportRef = useRef<HTMLDivElement>(null);
+  const resolveChildren = useCallback(
+    (item: SlashMenuItemType) => {
+      if (!item.children) {
+        return [];
+      }
+
+      return typeof item.children === "function"
+        ? item.children(editor)
+        : item.children;
+    },
+    [editor],
+  );
+
+  const visibleGroups = useMemo<SlashMenuGroupedItemsType>(() => {
+    if (!activeParent) {
+      return items;
+    }
+
+    return {
+      [activeParent.title]: resolveChildren(activeParent),
+    };
+  }, [activeParent, items, resolveChildren]);
 
   /**
-   * Let's transform an object with groups into a “flat” list,
-   * to provide a consistent experience with keyboard navigation
-   * and executing commands on the index.
+   * Transform grouped items into a flat list for consistent keyboard
+   * navigation and command execution by index.
    */
   const flatItems = useMemo(() => {
-    return Object.values(items).flat();
-  }, [items]);
+    return Object.values(visibleGroups).flat();
+  }, [visibleGroups]);
 
   /**
-   * We build a map “group + local index” -> “global index in flatItems”.
-   *
-   * This is important for the correct operation of clicks: previously a local index
-   * inside the category was directly passed to flatItems and because of this
-   * in categories after the first, the wrong element was selected or was not selected at all.
+   * Map each group-local index to its global index in flatItems so click and
+   * keyboard selection stay aligned across groups.
    */
   const groupedItemsWithGlobalIndex = useMemo(() => {
     let globalIndex = 0;
 
-    return Object.entries(items).map(([category, categoryItems]) => {
+    return Object.entries(visibleGroups).map(([category, categoryItems]) => {
       const categoryItemsWithIndex = categoryItems.map((item) => {
         const normalizedItem = {
           item,
@@ -62,22 +86,36 @@ const CommandList = ({
         categoryItems: categoryItemsWithIndex,
       };
     });
-  }, [items]);
+  }, [visibleGroups]);
 
   const selectItem = useCallback(
     (index: number) => {
       const item = flatItems[index];
       if (item) {
+        const children = resolveChildren(item);
+        if (children.length > 0) {
+          setActiveParent(item);
+          setSelectedIndex(0);
+          return;
+        }
+
         command(item);
       }
     },
-    [command, flatItems],
+    [command, flatItems, resolveChildren],
   );
 
   useEffect(() => {
     const navigationKeys = ["ArrowUp", "ArrowDown", "Enter"];
     const onKeyDown = (e: KeyboardEvent) => {
-      if (navigationKeys.includes(e.key)) {
+      if (e.key === "ArrowLeft" && activeParent) {
+        e.preventDefault();
+        setActiveParent(null);
+        setSelectedIndex(0);
+        return true;
+      }
+
+      if (navigationKeys.includes(e.key) && flatItems.length > 0) {
         e.preventDefault();
 
         if (e.key === "ArrowUp") {
@@ -103,11 +141,15 @@ const CommandList = ({
     return () => {
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [flatItems, selectedIndex, setSelectedIndex, selectItem]);
+  }, [activeParent, flatItems, selectedIndex, setSelectedIndex, selectItem]);
 
   useEffect(() => {
     setSelectedIndex(0);
   }, [flatItems]);
+
+  useEffect(() => {
+    setActiveParent(null);
+  }, [items]);
 
   useEffect(() => {
     viewportRef.current
@@ -133,10 +175,7 @@ const CommandList = ({
                 })}
               >
                 <Group>
-                  <ActionIcon
-                    variant="default"
-                    component="div"
-                  >
+                  <ActionIcon variant="default" component="div">
                     <item.icon size={18} />
                   </ActionIcon>
 

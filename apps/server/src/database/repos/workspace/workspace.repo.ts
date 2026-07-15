@@ -13,11 +13,13 @@ import { DB, Workspaces } from '@docmost/db/types/db';
 const WORKSPACE_API_SETTINGS_KEYS = ['restrictToAdmins'] as const;
 const WORKSPACE_AI_SETTINGS_KEYS = ['search', 'generative'] as const;
 const WORKSPACE_SHARING_SETTINGS_KEYS = ['disabled'] as const;
+const WORKSPACE_TAG_SETTINGS_KEYS = ['disabled'] as const;
 
 type WorkspaceApiSettingsKey = (typeof WORKSPACE_API_SETTINGS_KEYS)[number];
 type WorkspaceAiSettingsKey = (typeof WORKSPACE_AI_SETTINGS_KEYS)[number];
 type WorkspaceSharingSettingsKey =
   (typeof WORKSPACE_SHARING_SETTINGS_KEYS)[number];
+type WorkspaceTagSettingsKey = (typeof WORKSPACE_TAG_SETTINGS_KEYS)[number];
 
 @Injectable()
 export class WorkspaceRepo {
@@ -223,6 +225,28 @@ export class WorkspaceRepo {
       .set({
         settings: sql`COALESCE(settings, '{}'::jsonb)
                 || jsonb_build_object('sharing', COALESCE(settings->'sharing', '{}'::jsonb)
+                || jsonb_build_object(${prefKey}::text, ${JSON.stringify(prefValue)}::jsonb))`,
+        updatedAt: new Date(),
+      })
+      .where('id', '=', workspaceId)
+      .returning(this.baseFields)
+      .executeTakeFirst();
+  }
+
+  async updateTagSettings(
+    workspaceId: string,
+    prefKey: WorkspaceTagSettingsKey,
+    prefValue: string[],
+  ) {
+    if (!WORKSPACE_TAG_SETTINGS_KEYS.includes(prefKey)) {
+      throw new Error(`Unsupported workspace tag setting key: ${prefKey}`);
+    }
+
+    return this.db
+      .updateTable('workspaces')
+      .set({
+        settings: sql`COALESCE(settings, '{}'::jsonb)
+                || jsonb_build_object('tags', COALESCE(settings->'tags', '{}'::jsonb)
                 || jsonb_build_object(${prefKey}::text, ${JSON.stringify(prefValue)}::jsonb))`,
         updatedAt: new Date(),
       })

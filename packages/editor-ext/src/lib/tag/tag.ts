@@ -1,10 +1,12 @@
 import { mergeAttributes, Node, nodeInputRule } from '@tiptap/core';
 import { ReactNodeViewRenderer } from '@tiptap/react';
-import { getTagLabel, getValidTagValue, TagValue } from './utils';
+import { builtInTagDefinitions, getTagLabel, getValidTagValue } from './utils';
+import type { TagDefinition, TagValue } from './utils';
 
 export interface TagOptions {
   HTMLAttributes: Record<string, any>;
   view: any;
+  tagDefinitions: readonly TagDefinition[];
 }
 
 export interface TagAttributes {
@@ -19,7 +21,18 @@ declare module '@tiptap/core' {
   }
 }
 
-export const tagInputRegex = /(?:^|\s)(::tag\[(TBD|TODO)\])$/i;
+function escapeRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+const builtInTagPattern = builtInTagDefinitions
+  .map((tag) => escapeRegex(tag.label))
+  .join('|');
+
+export const tagInputRegex = new RegExp(
+  `(?:^|\\s)(::tag\\[(${builtInTagPattern})\\])$`,
+  'i',
+);
 
 export const Tag = Node.create<TagOptions>({
   name: 'tag',
@@ -32,6 +45,13 @@ export const Tag = Node.create<TagOptions>({
     return {
       HTMLAttributes: {},
       view: null,
+      tagDefinitions: builtInTagDefinitions,
+    };
+  },
+
+  addStorage() {
+    return {
+      tagDefinitions: this.options.tagDefinitions,
     };
   },
 
