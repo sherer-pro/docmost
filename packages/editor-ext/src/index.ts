@@ -26,6 +26,7 @@ export * from "./lib/subpages";
 export * from "./lib/transclusion";
 export * from "./lib/highlight";
 export * from "./lib/heading/heading";
+export * from "./lib/heading/heading-numbering";
 export * from "./lib/unique-id";
 export * from "./lib/shared-storage";
 export * from "./lib/recreate-transform";
