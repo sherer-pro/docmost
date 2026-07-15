@@ -104,6 +104,47 @@ export function buildTree(nodes: Array<ISidebarNode | IPage>): SpaceTreeNode[] {
   return sortPositionKeys(tree);
 }
 
+export function resolveActiveTreeSlug({
+  pageSlug,
+  databaseSlug,
+}: {
+  pageSlug?: string;
+  databaseSlug?: string;
+}): string | undefined {
+  return pageSlug ?? databaseSlug;
+}
+
+/**
+ * Enriches the breadcrumb path with sidebar node discriminators while keeping
+ * the breadcrumb parent chain intact.
+ */
+export function mergeTreeNodeMetadata(
+  breadcrumbNodes: SpaceTreeNode[],
+  sidebarNodes: SpaceTreeNode[],
+): SpaceTreeNode[] {
+  const nodesById = new Map(
+    breadcrumbNodes.map((node) => [node.id, node] as const),
+  );
+
+  sidebarNodes.forEach((sidebarNode) => {
+    const breadcrumbNode = nodesById.get(sidebarNode.id);
+
+    nodesById.set(
+      sidebarNode.id,
+      breadcrumbNode
+        ? {
+            ...breadcrumbNode,
+            ...sidebarNode,
+            parentPageId: breadcrumbNode.parentPageId,
+            children: breadcrumbNode.children,
+          }
+        : sidebarNode,
+    );
+  });
+
+  return Array.from(nodesById.values());
+}
+
 export function findBreadcrumbPath(
   tree: SpaceTreeNode[],
   pageId: string,
