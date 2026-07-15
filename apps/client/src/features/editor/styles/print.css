@@ -20,4 +20,18 @@
   .tableWrapper {
     overflow: hidden !important;
   }
+
+  .tableWrapper table {
+    width: 100% !important;
+    min-width: 0 !important;
+    table-layout: fixed;
+  }
+
+  .tableWrapper td,
+  .tableWrapper th {
+    min-width: 0;
+    max-width: none;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
 }
