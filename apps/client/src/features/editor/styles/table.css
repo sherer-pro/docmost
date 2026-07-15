@@ -6,14 +6,9 @@
   );
   margin-top: 1rem;
   margin-bottom: 1rem;
-  display: flex;
   width: 100%;
   max-width: 100%;
-  overflow-x: auto;
-
-  & table {
-    overflow-x: hidden;
-  }
+  overflow-x: visible;
 }
 
 .tableWrapper[data-table-width-mode="wide"] {
@@ -38,24 +33,6 @@
   transform: none;
 }
 
-@media (max-width: 72em) {
-  .tableWrapper[data-table-width-mode="wide"] {
-    width: 100%;
-    max-width: 100%;
-    margin-left: 0;
-    transform: none;
-  }
-}
-
-@media (max-width: 60em) {
-  .tableWrapper[data-table-width-mode="full"] {
-    width: 100%;
-    max-width: 100%;
-    margin-left: 0;
-    transform: none;
-  }
-}
-
 .table-dnd-preview {
   padding: 0;
   background-color: rgba(255, 255, 255, 0.3);
@@ -72,8 +49,7 @@
     border-collapse: collapse;
     margin: 0;
     table-layout: auto;
-    flex: 1 0 max-content;
-    width: max-content;
+    width: 100%;
     min-width: 100%;
 
     td,
@@ -82,7 +58,7 @@
       box-sizing: border-box;
       min-width: 3rem;
       hyphens: none;
-      overflow-wrap: normal;
+      overflow-wrap: break-word;
       word-break: normal;
       padding: 3px 5px;
       position: relative;
@@ -93,7 +69,7 @@
       blockquote,
       a {
         hyphens: none;
-        overflow-wrap: normal;
+        overflow-wrap: break-word;
         word-break: normal;
       }
 
@@ -129,6 +105,40 @@
       pointer-events: none;
       position: absolute;
       z-index: 2;
+    }
+  }
+}
+
+@media (max-width: 50em) {
+  .tableWrapper,
+  .tableWrapper[data-table-width-mode="wide"],
+  .tableWrapper[data-table-width-mode="full"] {
+    width: 100%;
+    max-width: 100%;
+    margin-left: 0;
+    transform: none;
+  }
+
+  .tableWrapper {
+    display: flex;
+    overflow-x: auto;
+  }
+
+  .ProseMirror table {
+    flex: 1 0 min-content;
+    width: 100%;
+    min-width: 100%;
+
+    td,
+    th {
+      overflow-wrap: normal;
+
+      p,
+      li,
+      blockquote,
+      a {
+        overflow-wrap: normal;
+      }
     }
   }
 }
