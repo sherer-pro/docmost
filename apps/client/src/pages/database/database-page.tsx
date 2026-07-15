@@ -81,6 +81,9 @@ export default function DatabasePage() {
   });
 
   const isEditable = !readOnly && userPageEditMode === PageEditMode.Edit;
+  const fixedToolbarEnabled = Boolean(
+    isEditable && currentUser?.user?.settings?.preferences?.fixedToolbar,
+  );
   const headingNumberingEnabled = resolveHeadingNumberingEnabled({
     pageSettings: databasePage?.settings,
     spaceSettings: space?.settings,
@@ -251,7 +254,7 @@ export default function DatabasePage() {
         fluid={resolvedFullWidth}
         size={!resolvedFullWidth ? "xl" : undefined}
         py="xl"
-        pt={60}
+        pt={fixedToolbarEnabled ? 116 : 60}
       >
         <Stack gap="xs" mb="md">
           <div className={classes.titleEditorContainer}>
