@@ -1,5 +1,16 @@
 jest.mock('../../collaboration/collaboration.util', () => ({
-  jsonToHtml: () => '<p>mock-content</p>',
+  jsonToHtml: (input: any) =>
+    (input.content ?? [])
+      .map((node: any) => {
+        const text = (node.content ?? [])
+          .map((child: any) => child.text ?? '')
+          .join('');
+        if (node.type === 'heading') {
+          return `<h${node.attrs?.level}>${text}</h${node.attrs?.level}>`;
+        }
+        return `<p>${text || 'mock-content'}</p>`;
+      })
+      .join(''),
   jsonToNode: (input: any) => ({
     descendants: (callback: (node: any, pos?: number) => void) => {
       const visit = (node: any) => {
@@ -45,6 +56,8 @@ import { ExportFormat } from './dto/export-dto';
 import * as JSZip from 'jszip';
 
 describe('ExportService PDF export', () => {
+  let spaceSettings: Record<string, unknown> = {};
+
   const pageRepo = {
     findById: jest.fn(),
     getPageAndDescendants: jest.fn(),
@@ -132,6 +145,16 @@ describe('ExportService PDF export', () => {
 
   const mockUserLookup = (users: Array<{ id: string; name: string }>) => {
     db.selectFrom.mockImplementation((tableName: string) => {
+      if (tableName === 'spaces') {
+        return {
+          select: () => ({
+            where: () => ({
+              executeTakeFirst: async () => ({ settings: spaceSettings }),
+            }),
+          }),
+        };
+      }
+
       if (tableName !== 'users') {
         return {
           select: () => ({
@@ -158,6 +181,7 @@ describe('ExportService PDF export', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    spaceSettings = {};
     mockUserLookup([]);
   });
 
@@ -170,13 +194,55 @@ describe('ExportService PDF export', () => {
       text: 'Hello from page',
     });
 
-    const exported = await service.exportPage(ExportFormat.PDF, page as any, true);
+    const exported = await service.exportPage(
+      ExportFormat.PDF,
+      page as any,
+      true,
+    );
 
     expect(Buffer.isBuffer(exported)).toBe(true);
     expect(htmlPdfRendererService.render).toHaveBeenCalledTimes(1);
-    const [renderedHtml, renderOpts] = htmlPdfRendererService.render.mock.calls[0];
+    const [renderedHtml, renderOpts] =
+      htmlPdfRendererService.render.mock.calls[0];
     expect(renderedHtml).toContain('<meta charset="UTF-8" />');
     expect(renderOpts).toEqual({ attachmentToken: 'attachment-page-token' });
+  });
+
+  it('numbers body headings without numbering the page title', async () => {
+    const page = createPage({
+      id: 'page-1',
+      slugId: 'slug-1',
+      title: 'Root',
+      parentPageId: null,
+      text: 'unused',
+      settings: { headingNumbering: { enabled: true } },
+    });
+    (page as any).content = {
+      type: 'doc',
+      content: [
+        {
+          type: 'heading',
+          attrs: { level: 2 },
+          content: [{ type: 'text', text: 'Section' }],
+        },
+        {
+          type: 'heading',
+          attrs: { level: 3 },
+          content: [{ type: 'text', text: 'Child' }],
+        },
+      ],
+    };
+
+    const exported = await service.exportPage(
+      ExportFormat.HTML,
+      page as any,
+      true,
+    );
+
+    expect(exported).toContain('<h1>Root</h1>');
+    expect(exported).not.toContain('<h1>1. Root</h1>');
+    expect(exported).toContain('<h2>1. Section</h2>');
+    expect(exported).toContain('<h3>1.1. Child</h3>');
   });
 
   it('normalizes private attachment URLs to public URLs for PDF content', async () => {
@@ -214,7 +280,8 @@ describe('ExportService PDF export', () => {
       text: 'Hello from page',
     });
     const attachmentId = '11111111-1111-4111-8111-111111111111';
-    const previousSelectFromImplementation = db.selectFrom.getMockImplementation();
+    const previousSelectFromImplementation =
+      db.selectFrom.getMockImplementation();
     db.selectFrom.mockImplementation((tableName: string) => {
       if (tableName === 'attachments') {
         return {
@@ -340,5 +407,56 @@ describe('ExportService PDF export', () => {
     expect(zip.file('Root.pdf')).toBeDefined();
     expect(zip.file('Root/Child.pdf')).toBeDefined();
     expect(zip.file('docmost-metadata.json')).toBeDefined();
+  });
+
+  it('applies page overrides independently in one ZIP export', async () => {
+    spaceSettings = { headingNumbering: { enabled: true } };
+    const root = createPage({
+      id: 'root-page',
+      slugId: 'root-slug',
+      title: 'Root',
+      parentPageId: null,
+      text: 'unused',
+    });
+    const child = createPage({
+      id: 'child-page',
+      slugId: 'child-slug',
+      title: 'Child',
+      parentPageId: 'root-page',
+      text: 'unused',
+      settings: { headingNumbering: { enabled: false } },
+    });
+    for (const page of [root, child]) {
+      (page as any).content = {
+        type: 'doc',
+        content: [
+          {
+            type: 'heading',
+            attrs: { level: 2 },
+            content: [{ type: 'text', text: 'Section' }],
+          },
+        ],
+      };
+    }
+    pageRepo.getPageAndDescendants.mockResolvedValue([root, child]);
+
+    const zipStream = await service.exportPages(
+      'root-page',
+      ExportFormat.HTML,
+      false,
+      true,
+    );
+    const zip = await JSZip.loadAsync(
+      await streamToBuffer(zipStream as NodeJS.ReadableStream),
+    );
+    const rootHtml = await zip.file('Root.html')?.async('string');
+    const childHtml = await zip.file('Root/Child.html')?.async('string');
+
+    expect(rootHtml).toContain('<h2>1. Section</h2>');
+    expect(childHtml).toContain('<h2>Section</h2>');
+    expect(childHtml).not.toContain('<h2>1. Section</h2>');
+    expect(
+      db.selectFrom.mock.calls.filter(([tableName]) => tableName === 'spaces'),
+    ).toHaveLength(1);
   });
 });

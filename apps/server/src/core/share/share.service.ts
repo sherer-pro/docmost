@@ -22,6 +22,7 @@ import { Page } from '@docmost/db/types/entity.types';
 import { sql } from 'kysely';
 import { validate as isValidUUID } from 'uuid';
 import { TransclusionService } from '../page/transclusion/transclusion.service';
+import { resolveHeadingNumberingEnabled } from '../page/utils/heading-numbering-settings.utils';
 
 @Injectable()
 export class ShareService {
@@ -108,6 +109,7 @@ export class ShareService {
       page = await this.pageRepo.findBySlugId(dto.pageId, {
         includeContent: true,
         includeCreator: true,
+        includeSpace: true,
       });
     } else if (dto.shareId) {
       const shareById = await this.shareRepo.findById(dto.shareId);
@@ -132,6 +134,7 @@ export class ShareService {
       page = await this.pageRepo.findById(rootPage.id, {
         includeContent: true,
         includeCreator: true,
+        includeSpace: true,
       });
     } else {
       throw new NotFoundException('Shared page not found');
@@ -141,9 +144,17 @@ export class ShareService {
       throw new NotFoundException('Shared page not found');
     }
 
-    page.content = await this.updatePublicAttachments(page);
+    const pageWithSpace = page as Page & {
+      space?: { settings?: unknown };
+    };
+    const headingNumberingEnabled = resolveHeadingNumberingEnabled(
+      page.settings,
+      pageWithSpace.space?.settings,
+    );
+    const { space: _space, ...publicPage } = pageWithSpace;
+    publicPage.content = await this.updatePublicAttachments(publicPage as Page);
 
-    return { page, share };
+    return { page: publicPage, share, headingNumberingEnabled };
   }
 
   async getShareForPage(

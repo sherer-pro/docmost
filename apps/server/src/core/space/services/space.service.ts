@@ -153,6 +153,14 @@ export class SpaceService {
       );
     }
 
+    if (typeof updateSpaceDto.headingNumberingEnabled !== 'undefined') {
+      await this.spaceRepo.updateHeadingNumberingSettings(
+        updateSpaceDto.spaceId,
+        workspaceId,
+        { enabled: updateSpaceDto.headingNumberingEnabled },
+      );
+    }
+
     return await this.spaceRepo.updateSpace(
       {
         name: updateSpaceDto.name,

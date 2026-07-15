@@ -42,4 +42,8 @@ export class UpdateSpaceDto extends PartialType(CreateSpaceDto) {
   @IsOptional()
   @IsBoolean()
   dictionaryEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  headingNumberingEnabled?: boolean;
 }
