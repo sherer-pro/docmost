@@ -1246,5 +1246,17 @@
   "Tag TODO description": "To Do. Позначає завдання або місце в тексті, до якого потрібно повернутися і виконати подальшу роботу.",
   "Mark text that needs clarification.": "Позначити текст, який потребує уточнення.",
   "Mark text that needs follow-up.": "Позначити текст, який потребує подальших дій.",
-  "Not selected": "Не вибрано"
+  "Not selected": "Не вибрано",
+  "Heading numbering": "Нумерація заголовків",
+  "Automatically number H1-H3 headings in this space.": "Автоматично нумерувати заголовки H1-H3 у цьому просторі.",
+  "Number headings": "Нумерувати заголовки",
+  "Use space setting": "Налаштування простору",
+  "Enabled": "Увімкнено",
+  "Disabled": "Вимкнено",
+  "No manual heading numbering found": "Ручну нумерацію заголовків не знайдено",
+  "Remove manual heading numbering?": "Видалити ручну нумерацію заголовків?",
+  "Remove numbering from {{count}} headings?": "Видалити нумерацію з {{count}} заголовків?",
+  "Remove numbering": "Видалити нумерацію",
+  "Manual heading numbering removed": "Ручну нумерацію заголовків видалено",
+  "Remove manual heading numbering": "Видалити ручну нумерацію"
 }

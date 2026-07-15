@@ -122,6 +122,17 @@ export default function SpaceDetails({ spaceId, readOnly }: SpaceDetailsProps) {
     });
   };
 
+  const handleHeadingNumberingEnabledChange = (checked: boolean) => {
+    if (!space || readOnly) {
+      return;
+    }
+
+    updateSpace({
+      spaceId,
+      headingNumberingEnabled: checked,
+    });
+  };
+
   const handleArchiveToggle = () => {
     if (!space || readOnly) {
       return;
@@ -203,6 +214,29 @@ export default function SpaceDetails({ spaceId, readOnly }: SpaceDetailsProps) {
                 checked={!!space.settings?.dictionary?.enabled}
                 onChange={(event) =>
                   handleDictionaryEnabledChange(event.currentTarget.checked)
+                }
+                disabled={readOnly || isUpdatingSpace}
+              />
+            </ResponsiveSettingsControl>
+          </ResponsiveSettingsRow>
+
+          <Divider my="lg" />
+
+          <ResponsiveSettingsRow>
+            <ResponsiveSettingsContent>
+              <Text size="md">{t("Heading numbering")}</Text>
+              <Text size="sm" c="dimmed">
+                {t("Automatically number H1-H3 headings in this space.")}
+              </Text>
+            </ResponsiveSettingsContent>
+            <ResponsiveSettingsControl>
+              <Checkbox
+                label={t("Number headings")}
+                checked={!!space.settings?.headingNumbering?.enabled}
+                onChange={(event) =>
+                  handleHeadingNumberingEnabledChange(
+                    event.currentTarget.checked,
+                  )
                 }
                 disabled={readOnly || isUpdatingSpace}
               />

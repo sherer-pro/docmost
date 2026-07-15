@@ -1246,5 +1246,17 @@
   "Tag TODO description": "To Do. Marks an action item or a place in the text that needs follow-up work.",
   "Mark text that needs clarification.": "Mark text that needs clarification.",
   "Mark text that needs follow-up.": "Mark text that needs follow-up.",
-  "Not selected": "Not selected"
+  "Not selected": "Not selected",
+  "Heading numbering": "Heading numbering",
+  "Automatically number H1-H3 headings in this space.": "Automatically number H1-H3 headings in this space.",
+  "Number headings": "Number headings",
+  "Use space setting": "Use space setting",
+  "Enabled": "Enabled",
+  "Disabled": "Disabled",
+  "No manual heading numbering found": "No manual heading numbering found",
+  "Remove manual heading numbering?": "Remove manual heading numbering?",
+  "Remove numbering from {{count}} headings?": "Remove numbering from {{count}} headings?",
+  "Remove numbering": "Remove numbering",
+  "Manual heading numbering removed": "Manual heading numbering removed",
+  "Remove manual heading numbering": "Remove manual heading numbering"
 }

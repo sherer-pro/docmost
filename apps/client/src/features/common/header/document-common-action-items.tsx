@@ -11,6 +11,10 @@ import {
 } from '@tabler/icons-react';
 import { useTranslation } from 'react-i18next';
 import { PageWidthToggle } from '@/features/user/components/page-width-pref.tsx';
+import { HeadingNumberingMenuItems } from '@/features/common/header/heading-numbering-menu-items';
+import { Editor } from '@tiptap/core';
+import { PageSettings } from '@/features/page/types/page.types';
+import { ISpaceSettings } from '@/features/space/types/space.types';
 
 interface DocumentCommonActionItemsProps {
   onCopyLink: () => void;
@@ -26,6 +30,14 @@ interface DocumentCommonActionItemsProps {
   pageId?: string;
   databasePageId?: string;
   fullPageWidth: boolean;
+  headingNumbering?: {
+    pageId: string;
+    spaceId: string;
+    pageSettings?: PageSettings;
+    spaceSettings?: ISpaceSettings;
+    editor: Editor | null;
+    canWrite: boolean;
+  };
 }
 
 /**
@@ -46,6 +58,7 @@ export function DocumentCommonActionItems({
   pageId,
   databasePageId,
   fullPageWidth,
+  headingNumbering,
 }: DocumentCommonActionItemsProps) {
   const { t } = useTranslation();
 
@@ -90,6 +103,10 @@ export function DocumentCommonActionItems({
           />
         </Group>
       </Menu.Item>
+
+      {headingNumbering && (
+        <HeadingNumberingMenuItems {...headingNumbering} />
+      )}
 
       {onOpenHistory && (
         <Menu.Item leftSection={<IconHistory size={16} />} onClick={onOpenHistory}>

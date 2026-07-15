@@ -30,6 +30,7 @@ import classes from "./database-page.module.css";
 import { useDatabasePageContext } from "@/features/database/hooks/use-database-page-context.ts";
 import PageCommentSection from "@/features/comment/components/page-comment-section";
 import { resolvePageFullWidth } from "@/features/user/utils/page-width.ts";
+import { resolveHeadingNumberingEnabled } from "@/features/page/utils/heading-numbering";
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 
@@ -80,6 +81,10 @@ export default function DatabasePage() {
   });
 
   const isEditable = !readOnly && userPageEditMode === PageEditMode.Edit;
+  const headingNumberingEnabled = resolveHeadingNumberingEnabled({
+    pageSettings: databasePage?.settings,
+    spaceSettings: space?.settings,
+  });
   const isCommentsAsideOpen =
     asideState.tab === "comments" && asideState.isAsideOpen;
 
@@ -274,6 +279,7 @@ export default function DatabasePage() {
               spaceId={space?.id}
               dictionaryEnabled={space?.settings?.dictionary?.enabled === true}
               canCreateInlineComments={!readOnly}
+              headingNumberingEnabled={headingNumberingEnabled}
             />
           )}
         </Stack>
@@ -296,4 +302,3 @@ export default function DatabasePage() {
     </>
   );
 }
-

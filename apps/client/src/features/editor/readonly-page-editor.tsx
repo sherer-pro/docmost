@@ -16,6 +16,7 @@ interface PageEditorProps {
   content: any;
   pageId?: string;
   shareId?: string;
+  headingNumberingEnabled?: boolean;
 }
 
 export default function ReadonlyPageEditor({
@@ -23,6 +24,7 @@ export default function ReadonlyPageEditor({
   content,
   pageId,
   shareId,
+  headingNumberingEnabled = false,
 }: PageEditorProps) {
   const [, setReadOnlyEditor] = useAtom(readOnlyEditorAtom);
   const isComponentMounted = useRef(false);
@@ -83,6 +85,7 @@ export default function ReadonlyPageEditor({
         content={content}
         onCreate={({ editor }) => {
           if (editor) {
+            editor.commands.setHeadingNumberingEnabled(headingNumberingEnabled);
             if (pageId) {
               // @ts-ignore
               editor.storage.pageId = pageId;

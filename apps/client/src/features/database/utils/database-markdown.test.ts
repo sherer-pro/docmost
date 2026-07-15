@@ -102,4 +102,24 @@ describe('database markdown export helpers', () => {
     assert.ok(secondRowIndex >= 0);
     assert.ok(firstRowIndex < secondRowIndex);
   });
+
+  it('places numbered rich-text body before the database table', () => {
+    const markdown = buildDatabaseMarkdownFromState({
+      title: 'Database',
+      description: 'Legacy description',
+      descriptionMarkdown: '## 1\\. Section',
+      properties,
+      rows: [],
+      state: {
+        visibleColumns: {},
+        filters: [],
+        sortState: null,
+      },
+      untitledLabel: 'Untitled',
+    });
+
+    assert.ok(markdown.includes('## 1\\. Section'));
+    assert.ok(markdown.indexOf('## 1\\. Section') < markdown.indexOf('| Title |'));
+    assert.ok(!markdown.includes('Legacy description'));
+  });
 });

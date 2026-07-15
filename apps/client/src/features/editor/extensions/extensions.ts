@@ -46,6 +46,7 @@ import {
   TableView,
   Subpages,
   Heading,
+  HeadingNumbering,
   Highlight,
   UniqueID,
   SharedStorage,
@@ -127,6 +128,7 @@ export const mainExtensions = [
   }),
   SharedStorage,
   Heading,
+  HeadingNumbering,
   UniqueID.configure({
     types: ["heading", "paragraph", "transclusionSource"],
     filterTransaction: (transaction) => !isChangeOrigin(transaction),

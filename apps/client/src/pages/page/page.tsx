@@ -17,6 +17,8 @@ import DocumentFieldsPanel from "@/features/page/components/document-fields/docu
 import { useAtom } from "jotai";
 import { asideStateAtom } from "@/components/layouts/global/hooks/atoms/sidebar-atom.ts";
 import PageCommentSection from "@/features/comment/components/page-comment-section";
+import { useSpaceQuery } from "@/features/space/queries/space-query";
+import { resolveHeadingNumberingEnabled } from "@/features/page/utils/heading-numbering";
 
 const MemoizedFullEditor = React.memo(FullEditor);
 const MemoizedPageHeader = React.memo(PageHeader);
@@ -64,11 +66,17 @@ function PageContent({
     isError,
     error,
   } = usePageQuery({ pageId: extractPageSlugId(pageSlug) });
+  const { data: currentSpace } = useSpaceQuery(page?.spaceId ?? "");
   const pageCapabilities = page?.access?.capabilities;
   const canWritePage = pageCapabilities?.canWrite === true;
   const canMoveDeleteSharePage =
     pageCapabilities?.canMoveDeleteShare === true;
   const resolvedSpaceSlug = page?.space?.slug ?? routeSpaceSlug;
+  const resolvedSpaceSettings = currentSpace?.settings ?? page?.space?.settings;
+  const headingNumberingEnabled = resolveHeadingNumberingEnabled({
+    pageSettings: page?.settings,
+    spaceSettings: resolvedSpaceSettings,
+  });
   const isCommentsAsideOpen =
     asideState.tab === "comments" && asideState.isAsideOpen;
 
@@ -145,7 +153,10 @@ function PageContent({
           slugId={page.slugId}
           spaceSlug={resolvedSpaceSlug}
           spaceId={page.spaceId}
-          dictionaryEnabled={page.space?.settings?.dictionary?.enabled === true}
+          dictionaryEnabled={
+            resolvedSpaceSettings?.dictionary?.enabled === true
+          }
+          headingNumberingEnabled={headingNumberingEnabled}
           editable={canWritePage}
         />
         <MemoizedHistoryModal pageId={page.id} />

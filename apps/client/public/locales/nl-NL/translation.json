@@ -1246,5 +1246,17 @@
   "Tag TODO description": "To Do. Markeert een actiepunt of een plek in de tekst die nog opvolging nodig heeft.",
   "Mark text that needs clarification.": "Markeer tekst die verduidelijking nodig heeft.",
   "Mark text that needs follow-up.": "Markeer tekst die opvolging nodig heeft.",
-  "Not selected": "Niet geselecteerd"
+  "Not selected": "Niet geselecteerd",
+  "Heading numbering": "Kopnummering",
+  "Automatically number H1-H3 headings in this space.": "Nummer H1-H3-koppen in deze ruimte automatisch.",
+  "Number headings": "Koppen nummeren",
+  "Use space setting": "Ruimte-instelling gebruiken",
+  "Enabled": "Ingeschakeld",
+  "Disabled": "Uitgeschakeld",
+  "No manual heading numbering found": "Geen handmatige kopnummering gevonden",
+  "Remove manual heading numbering?": "Handmatige kopnummering verwijderen?",
+  "Remove numbering from {{count}} headings?": "Nummering uit {{count}} koppen verwijderen?",
+  "Remove numbering": "Nummering verwijderen",
+  "Manual heading numbering removed": "Handmatige kopnummering verwijderd",
+  "Remove manual heading numbering": "Handmatige kopnummering verwijderen"
 }

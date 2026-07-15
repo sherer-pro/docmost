@@ -22,6 +22,7 @@ export interface FullEditorProps {
   spaceSlug: string;
   spaceId?: string;
   dictionaryEnabled?: boolean;
+  headingNumberingEnabled?: boolean;
   editable: boolean;
   metaPanel?: ReactNode;
   footer?: ReactNode;
@@ -35,6 +36,7 @@ export function FullEditor({
   spaceSlug,
   spaceId,
   dictionaryEnabled = false,
+  headingNumberingEnabled = false,
   editable,
   metaPanel,
   footer,
@@ -86,6 +88,7 @@ export function FullEditor({
         showBottomSpacer={!footer}
         spaceId={spaceId}
         dictionaryEnabled={dictionaryEnabled}
+        headingNumberingEnabled={headingNumberingEnabled}
         canManageDictionary={editable}
         canCreateInlineComments={editable}
       />

@@ -19,10 +19,15 @@ export interface ISpaceDictionarySettings {
   enabled?: boolean;
 }
 
+export interface IHeadingNumberingSettings {
+  enabled?: boolean;
+}
+
 export interface ISpaceSettings {
   sharing?: ISpaceSharingSettings;
   documentFields?: ISpaceDocumentFieldsSettings;
   dictionary?: ISpaceDictionarySettings;
+  headingNumbering?: IHeadingNumberingSettings;
 }
 
 export interface ISpace {
@@ -44,6 +49,7 @@ export interface ISpace {
   // for updates
   disablePublicSharing?: boolean;
   dictionaryEnabled?: boolean;
+  headingNumberingEnabled?: boolean;
 }
 
 interface IMembership {

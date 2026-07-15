@@ -1246,5 +1246,17 @@
   "Tag TODO description": "To Do. 标记待办事项，或正文中需要后续处理的位置。",
   "Mark text that needs clarification.": "标记需要澄清的文本。",
   "Mark text that needs follow-up.": "标记需要后续处理的文本。",
-  "Not selected": "未选择"
+  "Not selected": "未选择",
+  "Heading numbering": "标题编号",
+  "Automatically number H1-H3 headings in this space.": "自动为此空间中的 H1-H3 标题编号。",
+  "Number headings": "为标题编号",
+  "Use space setting": "使用空间设置",
+  "Enabled": "已启用",
+  "Disabled": "已禁用",
+  "No manual heading numbering found": "未找到手动标题编号",
+  "Remove manual heading numbering?": "移除手动标题编号？",
+  "Remove numbering from {{count}} headings?": "从 {{count}} 个标题中移除编号？",
+  "Remove numbering": "移除编号",
+  "Manual heading numbering removed": "已移除手动标题编号",
+  "Remove manual heading numbering": "移除手动标题编号"
 }

@@ -69,6 +69,12 @@
     margin-bottom: 10px;
   }
 
+  .heading-number {
+    display: inline-block;
+    margin-right: 0.35em;
+    user-select: none;
+  }
+
   code {
     background-color: light-dark(
       var(--mantine-color-gray-0),
