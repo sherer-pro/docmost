@@ -5,7 +5,7 @@ import {
   TreeApi,
   SimpleTree,
 } from "react-arborist";
-import { atom, useAtom } from "jotai";
+import { useAtom } from "jotai";
 import { treeApiAtom } from "@/features/page/tree/atoms/tree-api-atom.ts";
 import {
   fetchAllAncestorChildren,
@@ -42,7 +42,9 @@ import {
   buildTree,
   buildTreeWithChildren,
   insertDatabaseRowNode,
+  mergeTreeNodeMetadata,
   mergeRootTrees,
+  resolveActiveTreeSlug,
   updateTreeNodeIcon,
 } from "@/features/page/tree/utils/utils.ts";
 import { SpaceTreeNode } from "@/features/page/tree/types.ts";
@@ -53,7 +55,6 @@ import {
 } from "@/features/page/services/page-service.ts";
 import { IPage, SidebarPagesParams } from "@/features/page/types/page.types.ts";
 import { queryClient } from "@/main.tsx";
-import { OpenMap } from "react-arborist/dist/main/state/open-slice";
 import { useDisclosure, useElementSize, useMergedRef } from "@mantine/hooks";
 import { useClipboard } from "@/hooks/use-clipboard";
 import { dfs } from "react-arborist/dist/module/utils";
@@ -87,35 +88,25 @@ import { userAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { PageEditMode } from "@/features/user/types/user.types.ts";
 import { buildPageEditModeByPageId } from "@/features/user/utils/page-edit-mode.ts";
 import { PageOperationMenuItems } from "../../components/page-operation-menu-items.tsx";
+import {
+  getOpenTreeNodesForSpace,
+  isOpenStateEqual,
+  openTreeNodesBySpaceAtom,
+  updateOpenTreeNodesForSpace,
+} from "@/features/page/tree/atoms/open-tree-nodes-atom.ts";
 
 interface SpaceTreeProps {
   spaceId: string;
   readOnly: boolean;
 }
 
-const openTreeNodesAtom = atom<OpenMap>({});
 const TREE_ACTION_SIZE = 24;
 const TREE_ACTION_ICON_SIZE = 16;
 
-/**
- * Compares two tree expansion states.
- * We need an easy shallow-check to avoid triggering an unnecessary setState
- * and do not launch cascade redraws with the same set of open nodes.
- */
-function isOpenStateEqual(prev: OpenMap, next: OpenMap) {
-  const prevKeys = Object.keys(prev);
-  const nextKeys = Object.keys(next);
-
-  if (prevKeys.length !== nextKeys.length) {
-    return false;
-  }
-
-  return prevKeys.every((key) => prev[key] === next[key]);
-}
-
 export default function SpaceTree({ spaceId, readOnly }: SpaceTreeProps) {
   const { t } = useTranslation();
-  const { pageSlug } = useParams();
+  const { pageSlug, databaseSlug } = useParams();
+  const activeTreeSlug = resolveActiveTreeSlug({ pageSlug, databaseSlug });
   const { data, setData, controllers } =
     useTreeMutation<SpaceTreeNode>(spaceId);
   const {
@@ -128,7 +119,13 @@ export default function SpaceTree({ spaceId, readOnly }: SpaceTreeProps) {
   });
   const [, setTreeApi] = useAtom<TreeApi<SpaceTreeNode>>(treeApiAtom);
   const treeApiRef = useRef<TreeApi<SpaceTreeNode>>();
-  const [openTreeNodes, setOpenTreeNodes] = useAtom<OpenMap>(openTreeNodesAtom);
+  const [openTreeNodesBySpace, setOpenTreeNodesBySpace] = useAtom(
+    openTreeNodesBySpaceAtom,
+  );
+  const openTreeNodes = useMemo(
+    () => getOpenTreeNodesForSpace(openTreeNodesBySpace, spaceId),
+    [openTreeNodesBySpace, spaceId],
+  );
   const rootElement = useRef<HTMLDivElement>();
   const [isRootReady, setIsRootReady] = useState(false);
   const { ref: sizeRef, width, height } = useElementSize();
@@ -142,7 +139,7 @@ export default function SpaceTree({ spaceId, readOnly }: SpaceTreeProps) {
   const spaceIdRef = useRef(spaceId);
   spaceIdRef.current = spaceId;
   const { data: currentPage } = usePageQuery({
-    pageId: extractPageSlugId(pageSlug),
+    pageId: extractPageSlugId(activeTreeSlug),
   });
   const { data: space } = useSpaceQuery(spaceId);
   const isStatusFieldEnabled = !!space?.settings?.documentFields?.status;
@@ -166,7 +163,6 @@ export default function SpaceTree({ spaceId, readOnly }: SpaceTreeProps) {
         // fresh space; full reset
         if (prev.length === 0 || prev[0]?.spaceId !== spaceId) {
           setIsDataLoaded(true);
-          setOpenTreeNodes({});
           return treeData;
         }
 
@@ -178,89 +174,89 @@ export default function SpaceTree({ spaceId, readOnly }: SpaceTreeProps) {
   }, [pagesData, hasNextPage, spaceId]);
 
   useEffect(() => {
-    const effectSpaceId = spaceId;
-
-    const fetchData = async () => {
-      if (isDataLoaded && currentPage && pageSlug) {
-        // check if pageId node is present in the tree
-        const node = dfs(treeApiRef.current?.root, currentPage.id);
-        if (node) {
-          // if node is found, no need to traverse its ancestors
-          return;
-        }
-
-        // if not found, fetch and build its ancestors and their children
-        if (!currentPage.id) return;
-        const ancestors = await getPageBreadcrumbs(currentPage.id);
-
-        if (spaceIdRef.current !== effectSpaceId) return;
-
-        if (ancestors && ancestors?.length > 1) {
-          let flatTreeItems = [...buildTree(ancestors)];
-
-          const fetchAndUpdateChildren = async (ancestor: IPage) => {
-            // we don't want to fetch the children of the opened page
-            if (ancestor.id === currentPage.id) {
-              return;
-            }
-            const children = await fetchAllAncestorChildren({
-              pageId: ancestor.id,
-              spaceId: ancestor.spaceId,
-              includeNodeTypes: ["page", "database", "databaseRow"],
-            });
-
-            flatTreeItems = [
-              ...flatTreeItems,
-              ...children.filter(
-                (child) => !flatTreeItems.some((item) => item.id === child.id),
-              ),
-            ];
-          };
-
-          const fetchPromises = ancestors.map((ancestor) =>
-            fetchAndUpdateChildren(ancestor),
-          );
-
-          // Wait for all fetch operations to complete
-          Promise.all(fetchPromises).then(() => {
-            if (spaceIdRef.current !== effectSpaceId) return;
-
-            // build tree with children
-            const ancestorsTree = buildTreeWithChildren(flatTreeItems);
-            // child of root page we're attaching the built ancestors to
-            const rootChild = ancestorsTree[0];
-
-            // attach built ancestors to tree using functional updater
-            // to avoid stale closure overwriting the current tree data
-            setData((currentData) =>
-              appendNodeChildren(currentData, rootChild.id, rootChild.children),
-            );
-
-            setTimeout(() => {
-              // focus on node and open all parents
-              treeApiRef.current?.select(currentPage.id);
-            }, 100);
-          });
-        }
-      }
-    };
-
-    fetchData();
-  }, [isDataLoaded, currentPage?.id, pageSlug, spaceId]);
-
-  useEffect(() => {
-    if (!pageSlug) {
+    if (!activeTreeSlug) {
       treeApiRef.current?.deselectAll();
       return;
     }
 
-    if (currentPage?.id) {
-      setTimeout(() => {
-        // focus on node and open all parents
-        treeApiRef.current?.select(currentPage.id, { align: "auto" });
-      }, 200);
+    if (!isDataLoaded || !currentPage?.id) {
+      return;
     }
-  }, [currentPage?.id, pageSlug]);
+
+    let isCancelled = false;
+    let selectTimer: number | undefined;
+
+    const selectActiveNode = () => {
+      selectTimer = window.setTimeout(() => {
+        if (!isCancelled) {
+          treeApiRef.current?.select(currentPage.id, { align: "auto" });
+        }
+      }, 100);
+    };
+
+    const restoreActiveNode = async () => {
+      const existingNode = dfs(treeApiRef.current?.root, currentPage.id);
+      if (existingNode) {
+        selectActiveNode();
+        return;
+      }
+
+      const ancestors = await getPageBreadcrumbs(currentPage.id);
+      if (
+        isCancelled ||
+        spaceIdRef.current !== spaceId ||
+        !ancestors ||
+        ancestors.length <= 1
+      ) {
+        return;
+      }
+
+      let flatTreeItems = buildTree(ancestors);
+      const ancestorChildren = await Promise.all(
+        ancestors
+          .filter((ancestor: IPage) => ancestor.id !== currentPage.id)
+          .map((ancestor: IPage) =>
+            fetchAllAncestorChildren({
+              pageId: ancestor.id,
+              spaceId: ancestor.spaceId,
+              includeNodeTypes: ["page", "database", "databaseRow"],
+            }),
+          ),
+      );
+
+      if (isCancelled || spaceIdRef.current !== spaceId) {
+        return;
+      }
+
+      ancestorChildren.forEach((children) => {
+        flatTreeItems = mergeTreeNodeMetadata(flatTreeItems, children);
+      });
+
+      const ancestorsTree = buildTreeWithChildren(flatTreeItems);
+      const rootChild = ancestorsTree[0];
+      if (!rootChild) {
+        return;
+      }
+
+      setData((currentData) =>
+        appendNodeChildren(currentData, rootChild.id, rootChild.children),
+      );
+      selectActiveNode();
+    };
+
+    restoreActiveNode().catch((error) => {
+      if (!isCancelled) {
+        console.error("Failed to restore the active sidebar tree node:", error);
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+      if (selectTimer !== undefined) {
+        window.clearTimeout(selectTimer);
+      }
+    };
+  }, [activeTreeSlug, currentPage?.id, isDataLoaded, setData, spaceId]);
 
   // Clean up tree API on unmount
   useEffect(() => {
@@ -284,6 +280,7 @@ export default function SpaceTree({ spaceId, readOnly }: SpaceTreeProps) {
       )}
       {isRootReady && rootElement.current && (
         <Tree
+          key={spaceId}
           data={filteredData}
           disableDrag={readOnly}
           disableDrop={readOnly}
@@ -308,14 +305,22 @@ export default function SpaceTree({ spaceId, readOnly }: SpaceTreeProps) {
           onToggle={() => {
             const nextOpenState = treeApiRef.current?.openState ?? {};
 
-            setOpenTreeNodes((prevOpenState) => {
+            setOpenTreeNodesBySpace((previousValue) => {
+              const previousOpenState = getOpenTreeNodesForSpace(
+                previousValue,
+                spaceId,
+              );
               // We update atom only if the state has actually changed,
               // otherwise we get “self-sustaining” updates for large branches.
-              if (isOpenStateEqual(prevOpenState, nextOpenState)) {
-                return prevOpenState;
+              if (isOpenStateEqual(previousOpenState, nextOpenState)) {
+                return previousValue;
               }
 
-              return nextOpenState;
+              return updateOpenTreeNodesForSpace(
+                previousValue,
+                spaceId,
+                nextOpenState,
+              );
             });
           }}
           initialOpenState={openTreeNodes}

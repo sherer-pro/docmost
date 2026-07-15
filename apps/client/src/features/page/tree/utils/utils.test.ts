@@ -1,12 +1,15 @@
 import assert from "node:assert/strict";
 import { describe, it } from "vitest";
 import {
+  buildTreeWithChildren,
   deleteTreeNode,
   dropTreeNode,
   insertDatabaseRowNode,
   insertOrUpdateTreeNode,
   mapDatabaseToTreeNode,
   mapPageToTreeNode,
+  mergeTreeNodeMetadata,
+  resolveActiveTreeSlug,
   updateDatabaseTreeNodeMeta,
 } from "./utils";
 import { SpaceTreeNode } from "../types";
@@ -136,6 +139,57 @@ describe("tree node mappers", () => {
     assert.equal(node.name, "Database title");
     assert.equal(node.icon, "D");
     assert.equal(node.parentPageId, "parent-id");
+  });
+});
+
+describe("active tree route", () => {
+  it("resolves page and database route slugs through one contract", () => {
+    assert.equal(resolveActiveTreeSlug({ pageSlug: "page-slug" }), "page-slug");
+    assert.equal(
+      resolveActiveTreeSlug({ databaseSlug: "database-slug" }),
+      "database-slug",
+    );
+    assert.equal(resolveActiveTreeSlug({}), undefined);
+  });
+});
+
+describe("mergeTreeNodeMetadata", () => {
+  it("keeps breadcrumb topology and applies database node discriminators", () => {
+    const root = createNode("root");
+    const databaseBreadcrumb = createNode("database-page", [], "root");
+    const rowBreadcrumb = createNode("row-page", [], "database-page");
+
+    const databaseNode: SpaceTreeNode = {
+      ...databaseBreadcrumb,
+      nodeType: "database",
+      slugId: "database-slug",
+      databaseId: "database-id",
+      name: "Database",
+      icon: "D",
+    };
+    const rowNode: SpaceTreeNode = {
+      ...rowBreadcrumb,
+      nodeType: "databaseRow",
+      slugId: "row-slug",
+      databaseId: "database-id",
+      name: "Row",
+    };
+
+    const mergedNodes = mergeTreeNodeMetadata(
+      [root, databaseBreadcrumb, rowBreadcrumb],
+      [databaseNode, rowNode],
+    );
+    const restoredTree = buildTreeWithChildren(mergedNodes);
+    const restoredDatabase = restoredTree[0].children[0];
+    const restoredRow = restoredDatabase.children[0];
+
+    assert.equal(restoredDatabase.nodeType, "database");
+    assert.equal(restoredDatabase.databaseId, "database-id");
+    assert.equal(restoredDatabase.slugId, "database-slug");
+    assert.equal(restoredDatabase.parentPageId, "root");
+    assert.equal(restoredRow.nodeType, "databaseRow");
+    assert.equal(restoredRow.databaseId, "database-id");
+    assert.equal(restoredRow.parentPageId, "database-page");
   });
 });
 
