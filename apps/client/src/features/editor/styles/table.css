@@ -82,7 +82,8 @@
       box-sizing: border-box;
       min-width: 3rem;
       max-width: 24rem;
-      overflow-wrap: break-word;
+      hyphens: none;
+      overflow-wrap: normal;
       word-break: normal;
       padding: 3px 5px;
       position: relative;
@@ -92,7 +93,8 @@
       li,
       blockquote,
       a {
-        overflow-wrap: break-word;
+        hyphens: none;
+        overflow-wrap: normal;
         word-break: normal;
       }
 
