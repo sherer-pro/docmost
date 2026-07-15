@@ -1000,7 +1000,7 @@ export class PageController {
         duplicatedPage.workspaceId,
       );
       return {
-        ...mapPageResponse(duplicatedPage),
+        ...mapPageResponse(duplicatedPage, { includeCustomFields: true }),
         databaseId: linkedDatabase?.id ?? null,
         access: this.toAccessResponse(access),
       };
@@ -1023,7 +1023,7 @@ export class PageController {
         duplicatedPage.workspaceId,
       );
       return {
-        ...mapPageResponse(duplicatedPage),
+        ...mapPageResponse(duplicatedPage, { includeCustomFields: true }),
         databaseId: linkedDatabase?.id ?? null,
         access: this.toAccessResponse(access),
       };

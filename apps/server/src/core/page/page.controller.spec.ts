@@ -11,6 +11,7 @@ describe('PageController guardrails and mixed-id contract', () => {
     getSidebarPages: jest.fn(),
     movePage: jest.fn(),
     update: jest.fn(),
+    duplicatePage: jest.fn(),
     forceDelete: jest.fn(),
     removePage: jest.fn(),
   };
@@ -252,6 +253,38 @@ describe('PageController guardrails and mixed-id contract', () => {
       status: null,
       assigneeId: null,
       stakeholderIds: [],
+    });
+  });
+
+  it.each([
+    { label: 'duplicate', dto: { pageId: 'uuid-page' } },
+    {
+      label: 'copy to space',
+      dto: { pageId: 'uuid-page', spaceId: 'space-b' },
+    },
+  ])('includes custom fields in $label response', async ({ dto }) => {
+    pageService.duplicatePage.mockResolvedValue({
+      id: 'duplicated-page',
+      slugId: 'duplicated-page-slug',
+      spaceId: dto.spaceId ?? 'space-a',
+      workspaceId: 'workspace-1',
+      settings: {
+        status: 'IN_REVIEW',
+        assigneeId: 'user-2',
+        stakeholderIds: ['user-3', 'user-4'],
+      },
+    });
+    databaseRepo.findByPageId.mockResolvedValue(null);
+
+    const result = await controller.duplicatePage(
+      dto as any,
+      { id: 'user-1', workspaceId: 'workspace-1' } as any,
+    );
+
+    expect(result.customFields).toEqual({
+      status: 'IN_REVIEW',
+      assigneeId: 'user-2',
+      stakeholderIds: ['user-3', 'user-4'],
     });
   });
 

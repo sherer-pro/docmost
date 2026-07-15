@@ -258,6 +258,7 @@ export class PageService {
         .execute();
 
       const copiedRows = rows.filter((row) => params.pageMap.has(row.pageId));
+      const copiedRowPageIds = new Set(copiedRows.map((row) => row.pageId));
       if (copiedRows.length > 0) {
         await params.trx
           .insertInto('databaseRows')
@@ -285,7 +286,8 @@ export class PageService {
         .execute();
       const copiedCells = cells.filter(
         (cell) =>
-          params.pageMap.has(cell.pageId) && propertyIdMap.has(cell.propertyId),
+          copiedRowPageIds.has(cell.pageId) &&
+          propertyIdMap.has(cell.propertyId),
       );
 
       if (copiedCells.length > 0) {
@@ -1262,6 +1264,7 @@ export class PageService {
           slugId: pageFromMap.newSlugId,
           title: title,
           icon: page.icon,
+          settings: page.settings,
           content: prosemirrorJson,
           textContent: jsonToText(prosemirrorJson),
           ydoc: createYdocFromJson(prosemirrorJson),
