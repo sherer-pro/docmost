@@ -12,7 +12,7 @@ import { buildDatabaseUrl, buildPageUrl } from "@/features/page/page.utils.ts";
 interface CopyPageModalProps {
   pageId: string;
   currentSpaceSlug: string;
-  nodeType?: "page" | "database";
+  nodeType?: "page" | "database" | "databaseRow";
   open: boolean;
   onClose: () => void;
 }

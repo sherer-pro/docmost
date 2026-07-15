@@ -18,11 +18,9 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import classes from "@/features/page/tree/styles/tree.module.css";
 import { Box, Menu, rem, Text } from "@mantine/core";
 import {
-  IconArrowRight,
   IconChevronDown,
   IconChevronRight,
   IconPointFilled,
-  IconCopy,
   IconFileDatabase,
   IconDotsVertical,
   IconFileDescription,
@@ -88,6 +86,7 @@ import { supportsPageAccessEntity } from "@/features/page/utils/page-access-ui.t
 import { userAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { PageEditMode } from "@/features/user/types/user.types.ts";
 import { buildPageEditModeByPageId } from "@/features/user/utils/page-edit-mode.ts";
+import { PageOperationMenuItems } from "../../components/page-operation-menu-items.tsx";
 
 interface SpaceTreeProps {
   spaceId: string;
@@ -785,13 +784,11 @@ function NodeMenu({
   const isPageNode = node.data.nodeType === "page";
   const isDatabaseRowNode = node.data.nodeType === "databaseRow";
   const isExportableNode = isPageNode || isDatabaseNode || isDatabaseRowNode;
-  const isPageOrDatabaseNode = isPageNode || isDatabaseNode;
   const exportType = isDatabaseNode ? "database" : "page";
   const exportId = isDatabaseNode ? node.data.databaseId : node.id;
   const canExportNode = isExportableNode && Boolean(exportId);
-  const canDuplicateMoveCopyNode = isPageOrDatabaseNode && canMoveDeleteShare;
-  const canMoveNodeToTrash =
-    isExportableNode && canMoveDeleteShare;
+  const canDuplicateMoveCopyNode = isExportableNode && canMoveDeleteShare;
+  const canMoveNodeToTrash = isExportableNode && canMoveDeleteShare;
 
   const handleCopyLink = () => {
     const resolvedDatabaseIds = resolvePageDatabaseIds({
@@ -830,7 +827,11 @@ function NodeMenu({
         siblings?.findIndex((sibling) => sibling.id === node.id) || 0;
       const newIndex = currentIndex + 1;
       const duplicatedNodeType =
-        isDatabaseNode && duplicatedPage.databaseId ? "database" : "page";
+        isDatabaseNode && duplicatedPage.databaseId
+          ? "database"
+          : isDatabaseRowNode && duplicatedPage.databaseId
+            ? "databaseRow"
+            : "page";
 
       // Add the duplicated page to the tree
       const treeNodeData: SpaceTreeNode = {
@@ -933,38 +934,11 @@ function NodeMenu({
 
           {canDuplicateMoveCopyNode && (
             <>
-              <Menu.Item
-                leftSection={<IconCopy size={16} />}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  handleDuplicatePage();
-                }}
-              >
-                {t("Duplicate")}
-              </Menu.Item>
-
-              <Menu.Item
-                leftSection={<IconArrowRight size={16} />}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  openMovePageModal();
-                }}
-              >
-                {t("Move")}
-              </Menu.Item>
-
-              <Menu.Item
-                leftSection={<IconCopy size={16} />}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  openCopyPageModal();
-                }}
-              >
-                {t("Copy to space")}
-              </Menu.Item>
+              <PageOperationMenuItems
+                onDuplicate={() => void handleDuplicatePage()}
+                onMove={openMovePageModal}
+                onCopyToSpace={openCopyPageModal}
+              />
             </>
           )}
 
@@ -1000,13 +974,13 @@ function NodeMenu({
         </Menu.Dropdown>
       </Menu>
 
-      {isPageOrDatabaseNode && (
+      {isExportableNode && (
         <>
           <MovePageModal
             pageId={node.id}
             slugId={node.data.slugId ?? ""}
             currentSpaceSlug={spaceSlug}
-            nodeType={isDatabaseNode ? "database" : "page"}
+            nodeType={node.data.nodeType}
             title={node.data.name}
             onClose={closeMoveSpaceModal}
             open={movePageModalOpened}
@@ -1015,7 +989,7 @@ function NodeMenu({
           <CopyPageModal
             pageId={node.id}
             currentSpaceSlug={spaceSlug}
-            nodeType={isDatabaseNode ? "database" : "page"}
+            nodeType={node.data.nodeType}
             onClose={closeCopySpaceModal}
             open={copyPageModalOpened}
           />

@@ -37,6 +37,7 @@ type TableName =
 function createService(params?: {
   pageRepo?: Record<string, jest.Mock>;
   db?: unknown;
+  databaseRowRepo?: Record<string, jest.Mock>;
   generalQueue?: { add: jest.Mock };
   eventEmitter?: { emit: jest.Mock };
 }) {
@@ -54,7 +55,7 @@ function createService(params?: {
     {} as any,
     {} as any,
     {} as any,
-    {} as any,
+    (params?.databaseRowRepo ?? {}) as any,
     {} as any,
     {} as any,
     {} as any,
@@ -185,6 +186,9 @@ describe('PageService duplicatePage properties', () => {
       const service = createService({ pageRepo });
       jest
         .spyOn(service as any, 'duplicateLinkedDatabases')
+        .mockResolvedValue(undefined);
+      jest
+        .spyOn(service as any, 'duplicateRowsInExistingDatabases')
         .mockResolvedValue(undefined);
       jest.spyOn(service, 'nextPagePosition').mockResolvedValue('z0');
       (executeTx as jest.Mock).mockImplementation(async (_db, handler) =>
@@ -443,5 +447,110 @@ describe('PageService duplicatePage properties', () => {
       sortPropertyId: propertyByName.get('Priority')!.id,
       visible: { [propertyByName.get('Parent')!.id]: true },
     });
+  });
+
+  it('duplicates a database row in place with active cells and remapped references', async () => {
+    const { trx, inserted } = createMemoryTransaction({
+      databases: [
+        {
+          id: 'database-1',
+          pageId: 'database-page',
+          deletedAt: null,
+        },
+      ],
+      databaseRows: [
+        {
+          id: 'row-1',
+          databaseId: 'database-1',
+          workspaceId: 'workspace-1',
+          pageId: 'row-page',
+          archivedAt: null,
+        },
+        {
+          id: 'row-archived',
+          databaseId: 'database-1',
+          workspaceId: 'workspace-1',
+          pageId: 'archived-row-page',
+          archivedAt: new Date(),
+        },
+      ],
+      databaseProperties: [
+        {
+          id: 'property-reference',
+          databaseId: 'database-1',
+          type: 'page_reference',
+          deletedAt: null,
+        },
+        {
+          id: 'property-deleted',
+          databaseId: 'database-1',
+          type: 'multiline_text',
+          deletedAt: new Date(),
+        },
+      ],
+      databaseCells: [
+        {
+          id: 'cell-reference',
+          databaseId: 'database-1',
+          workspaceId: 'workspace-1',
+          pageId: 'row-page',
+          propertyId: 'property-reference',
+          value: 'child-page',
+          attachmentId: null,
+          deletedAt: null,
+        },
+        {
+          id: 'cell-deleted-property',
+          databaseId: 'database-1',
+          workspaceId: 'workspace-1',
+          pageId: 'row-page',
+          propertyId: 'property-deleted',
+          value: 'ignored',
+          attachmentId: null,
+          deletedAt: null,
+        },
+      ],
+    });
+    const service = createService();
+    const pageMap = new Map([
+      [
+        'row-page',
+        {
+          newPageId: 'row-page-copy',
+          newSlugId: 'row-copy',
+          oldSlugId: 'row',
+        },
+      ],
+      [
+        'child-page',
+        {
+          newPageId: 'child-page-copy',
+          newSlugId: 'child-copy',
+          oldSlugId: 'child',
+        },
+      ],
+    ]);
+
+    await (service as any).duplicateRowsInExistingDatabases({
+      pageMap,
+      authUser: { id: 'user-1' },
+      trx,
+    });
+
+    expect(inserted.databaseRows).toEqual([
+      expect.objectContaining({
+        databaseId: 'database-1',
+        pageId: 'row-page-copy',
+        createdById: 'user-1',
+      }),
+    ]);
+    expect(inserted.databaseCells).toEqual([
+      expect.objectContaining({
+        databaseId: 'database-1',
+        pageId: 'row-page-copy',
+        propertyId: 'property-reference',
+        value: 'child-page-copy',
+      }),
+    ]);
   });
 });
