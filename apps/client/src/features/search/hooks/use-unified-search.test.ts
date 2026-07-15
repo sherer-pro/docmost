@@ -30,7 +30,7 @@ describe("getUnifiedSearchType", () => {
       isUnifiedSearchEnabled({
         query: "",
         contentType: "page",
-        tag: "tbd",
+        tag: "done",
       }),
     ).toBe(true);
   });
@@ -51,7 +51,7 @@ describe("getUnifiedSearchType", () => {
         query: "report",
         contentType: "attachment",
         labelId: "label-1",
-        tag: "todo",
+        tag: "done",
         spaceId: "space-1",
       }),
     ).toEqual({

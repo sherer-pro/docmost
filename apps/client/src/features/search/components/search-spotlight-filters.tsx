@@ -33,6 +33,8 @@ import {
   SearchFilterPayload,
   SelectedSearchLabel,
 } from "./search-filter-state";
+import { builtInTagDefinitions, getTagLabel } from "@docmost/editor-ext";
+import type { TagValue } from "@docmost/editor-ext";
 
 interface SearchSpotlightFiltersProps {
   onFiltersChange?: (filters: SearchFilterPayload) => void;
@@ -56,7 +58,7 @@ export function SearchSpotlightFilters({
   const [contentType, setContentType] = useState<string | null>("page");
   const [selectedLabel, setSelectedLabel] =
     useState<SelectedSearchLabel | null>(null);
-  const [selectedTag, setSelectedTag] = useState<"tbd" | "todo" | null>(null);
+  const [selectedTag, setSelectedTag] = useState<TagValue | null>(null);
   const [labelSearchQuery, setLabelSearchQuery] = useState("");
   const [debouncedLabelQuery] = useDebouncedValue(labelSearchQuery, 300);
   const [workspace] = useAtom(workspaceAtom);
@@ -115,7 +117,7 @@ export function SearchSpotlightFilters({
     nextSpaceId: string | null,
     nextContentType: string | null,
     nextLabel: SelectedSearchLabel | null,
-    nextTag: "tbd" | "todo" | null,
+    nextTag: TagValue | null,
   ) => {
     onFiltersChange?.(
       getSearchFilterPayload({
@@ -199,7 +201,7 @@ export function SearchSpotlightFilters({
     emitFilters(selectedSpaceId, contentType, label, selectedTag);
   };
 
-  const handleTagSelect = (tag: "tbd" | "todo" | null) => {
+  const handleTagSelect = (tag: TagValue | null) => {
     setSelectedTag(tag);
     emitFilters(selectedSpaceId, contentType, selectedLabel, tag);
   };
@@ -403,7 +405,7 @@ export function SearchSpotlightFilters({
             disabled={arePageFiltersDisabled}
           >
             {selectedTag
-              ? `${t("Tag")}: ${selectedTag.toUpperCase()}`
+              ? `${t("Tag")}: ${getTagLabel(selectedTag)}`
               : `${t("Tag")}: ${t("Not selected")}`}
           </Button>
         </Menu.Target>
@@ -417,13 +419,16 @@ export function SearchSpotlightFilters({
             </Group>
           </Menu.Item>
           <Divider my="xs" />
-          {(["tbd", "todo"] as const).map((tag) => (
-            <Menu.Item key={tag} onClick={() => handleTagSelect(tag)}>
+          {builtInTagDefinitions.map((tag) => (
+            <Menu.Item
+              key={tag.value}
+              onClick={() => handleTagSelect(tag.value)}
+            >
               <Group flex="1" gap="xs">
                 <Text size="sm" fw={500} style={{ flex: 1 }}>
-                  {tag.toUpperCase()}
+                  {tag.label}
                 </Text>
-                {selectedTag === tag && <IconCheck size={20} />}
+                {selectedTag === tag.value && <IconCheck size={20} />}
               </Group>
             </Menu.Item>
           ))}

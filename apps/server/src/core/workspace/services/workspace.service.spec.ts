@@ -1,6 +1,9 @@
 import { BadRequestException } from '@nestjs/common';
+import { plainToInstance } from 'class-transformer';
+import { validateSync } from 'class-validator';
 import { UserRole } from '../../../common/helpers/types/permission';
 import { EventName } from '../../../common/events/event.contants';
+import { UpdateWorkspaceDto } from '../dto/update-workspace.dto';
 
 jest.mock('../../space/services/space.service', () => ({
   SpaceService: class SpaceService {},
@@ -13,6 +16,11 @@ describe('WorkspaceService', () => {
   const actor = { id: 'actor-id', role: UserRole.ADMIN } as any;
 
   const createService = () => {
+    const workspaceRepo = {
+      findById: jest.fn(),
+      updateTagSettings: jest.fn(),
+      updateWorkspace: jest.fn(),
+    };
     const userRepo = {
       findById: jest.fn(),
       activeRoleCountByWorkspaceId: jest.fn(),
@@ -24,7 +32,7 @@ describe('WorkspaceService', () => {
     };
 
     const service = new WorkspaceService(
-      {} as any,
+      workspaceRepo as any,
       {} as any,
       {} as any,
       {} as any,
@@ -42,7 +50,7 @@ describe('WorkspaceService', () => {
       eventEmitter as any,
     );
 
-    return { service, userRepo, eventEmitter };
+    return { service, workspaceRepo, userRepo, eventEmitter };
   };
 
   it('should prevent self-deactivation', async () => {
@@ -57,7 +65,9 @@ describe('WorkspaceService', () => {
 
     await expect(
       service.deactivateUser(actor, actor.id, workspaceId),
-    ).rejects.toThrow(new BadRequestException('You cannot deactivate yourself'));
+    ).rejects.toThrow(
+      new BadRequestException('You cannot deactivate yourself'),
+    );
   });
 
   it('should prevent an ADMIN from deactivating an OWNER', async () => {
@@ -150,5 +160,55 @@ describe('WorkspaceService', () => {
       workspaceId,
     );
     expect(eventEmitter.emit).not.toHaveBeenCalled();
+  });
+
+  it('should persist workspace tag settings', async () => {
+    const { service, workspaceRepo } = createService();
+
+    workspaceRepo.updateTagSettings.mockResolvedValue({});
+    workspaceRepo.updateWorkspace.mockResolvedValue({});
+    workspaceRepo.findById.mockResolvedValue({
+      id: workspaceId,
+      licenseKey: null,
+      settings: {
+        tags: {
+          disabled: ['done'],
+        },
+      },
+    });
+
+    await expect(
+      service.update(workspaceId, {
+        tagSettings: {
+          disabled: ['done'],
+        },
+      } as any),
+    ).resolves.toMatchObject({
+      id: workspaceId,
+      hasLicenseKey: false,
+    });
+
+    expect(workspaceRepo.updateTagSettings).toHaveBeenCalledWith(
+      workspaceId,
+      'disabled',
+      ['done'],
+    );
+    expect(workspaceRepo.updateWorkspace).toHaveBeenCalledWith({}, workspaceId);
+  });
+
+  it('should validate workspace tag settings against built-in tags', () => {
+    const validDto = plainToInstance(UpdateWorkspaceDto, {
+      tagSettings: {
+        disabled: ['done'],
+      },
+    });
+    const invalidDto = plainToInstance(UpdateWorkspaceDto, {
+      tagSettings: {
+        disabled: ['missing'],
+      },
+    });
+
+    expect(validateSync(validDto)).toHaveLength(0);
+    expect(validateSync(invalidDto).length).toBeGreaterThan(0);
   });
 });

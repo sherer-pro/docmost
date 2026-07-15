@@ -26,6 +26,7 @@ export const UniqueID = { configure: () => ({}) } as any;
 export const Indent = { configure: () => ({}) } as any;
 export const PageBreak = {} as any;
 export const Tag = {} as any;
+export const builtInTagValues = ['tbd', 'todo', 'done'];
 export const TiptapAudio = {} as any;
 export const TiptapPdf = {} as any;
 export const TableReadonlySort = {} as any;

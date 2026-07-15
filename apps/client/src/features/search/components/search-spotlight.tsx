@@ -12,6 +12,7 @@ import { useAiSearch } from "../../../ee/ai/hooks/use-ai-search.ts";
 import { SearchResultItem } from "./search-result-item.tsx";
 import { AiSearchResult } from "../../../ee/ai/components/ai-search-result.tsx";
 import { useLicense } from "@/ee/hooks/use-license.tsx";
+import type { TagValue } from "@docmost/editor-ext";
 
 interface SearchSpotlightProps {
   spaceId?: string;
@@ -21,7 +22,7 @@ interface SearchFilters {
   spaceId?: string | null;
   contentType?: string;
   labelId?: string | null;
-  tag?: "tbd" | "todo" | null;
+  tag?: TagValue | null;
 }
 
 export function SearchSpotlight({ spaceId }: SearchSpotlightProps) {

@@ -30,7 +30,9 @@ import {
 import {
   CommandProps,
   SlashMenuGroupedItemsType,
+  SlashMenuItemType,
 } from "@/features/editor/components/slash-menu/types";
+import { builtInTagDefinitions, type TagDefinition } from "@docmost/editor-ext";
 import { uploadImageAction } from "@/features/editor/components/image/upload-image-action.tsx";
 import { uploadVideoAction } from "@/features/editor/components/video/upload-video-action.tsx";
 import { uploadAudioAction } from "@/features/editor/components/audio/upload-audio-action.tsx";
@@ -52,6 +54,33 @@ import {
   VimeoIcon,
   YoutubeIcon,
 } from "@/components/icons";
+
+function getEditorTagDefinitions(editor: CommandProps["editor"]) {
+  const storage = editor?.storage as
+    | { tag?: { tagDefinitions?: readonly TagDefinition[] } }
+    | undefined;
+  const tagDefinitions = storage?.tag?.tagDefinitions;
+
+  return Array.isArray(tagDefinitions)
+    ? (tagDefinitions as readonly TagDefinition[])
+    : builtInTagDefinitions;
+}
+
+function createTagMenuItem(tag: TagDefinition): SlashMenuItemType {
+  return {
+    title: tag.titleKey,
+    description: tag.menuDescriptionKey,
+    searchTerms: tag.searchTerms,
+    icon: IconTag,
+    command: ({ editor, range }: CommandProps) =>
+      editor
+        .chain()
+        .focus()
+        .deleteRange(range)
+        .setTag({ value: tag.value })
+        .run(),
+  };
+}
 
 const CommandGroups: SlashMenuGroupedItemsType = {
   basic: [
@@ -152,7 +181,12 @@ const CommandGroups: SlashMenuGroupedItemsType = {
       searchTerms: ["sync", "synced", "block", "reuse", "transclusion"],
       icon: IconRepeat,
       command: ({ editor, range }: CommandProps) =>
-        editor.chain().focus().deleteRange(range).insertTransclusionSource().run(),
+        editor
+          .chain()
+          .focus()
+          .deleteRange(range)
+          .insertTransclusionSource()
+          .run(),
     },
     {
       title: "Code",
@@ -388,30 +422,16 @@ const CommandGroups: SlashMenuGroupedItemsType = {
         editor.chain().focus().deleteRange(range).toggleCallout().run(),
     },
     {
-      title: "Tag TBD",
-      description: "Mark text that needs clarification.",
-      searchTerms: ["tag", "tbd", "clarify", "needs clarification"],
+      title: "Tag",
+      description: "Insert inline status tag.",
+      searchTerms: [
+        "tag",
+        ...builtInTagDefinitions.flatMap((tag) => tag.searchTerms),
+      ],
       icon: IconTag,
-      command: ({ editor, range }: CommandProps) =>
-        editor
-          .chain()
-          .focus()
-          .deleteRange(range)
-          .setTag({ value: "tbd" })
-          .run(),
-    },
-    {
-      title: "Tag TODO",
-      description: "Mark text that needs follow-up.",
-      searchTerms: ["tag", "todo", "follow up", "follow-up"],
-      icon: IconTag,
-      command: ({ editor, range }: CommandProps) =>
-        editor
-          .chain()
-          .focus()
-          .deleteRange(range)
-          .setTag({ value: "todo" })
-          .run(),
+      command: () => undefined,
+      children: (editor) =>
+        getEditorTagDefinitions(editor).map(createTagMenuItem),
     },
     {
       title: "Math inline",
@@ -498,11 +518,13 @@ const CommandGroups: SlashMenuGroupedItemsType = {
 
         editor.chain().focus().deleteRange(range).run();
 
-        void createLinkPreviewAction(editor, linkInput.trim()).then((inserted) => {
-          if (!inserted) {
-            editor.chain().focus().insertContent(linkInput.trim()).run();
-          }
-        });
+        void createLinkPreviewAction(editor, linkInput.trim()).then(
+          (inserted) => {
+            if (!inserted) {
+              editor.chain().focus().insertContent(linkInput.trim()).run();
+            }
+          },
+        );
       },
     },
     {
@@ -528,7 +550,14 @@ const CommandGroups: SlashMenuGroupedItemsType = {
     {
       title: "Subpages (Child pages)",
       description: "List all subpages of the current page",
-      searchTerms: ["subpages", "child", "children", "nested", "hierarchy", "toc"],
+      searchTerms: [
+        "subpages",
+        "child",
+        "children",
+        "nested",
+        "hierarchy",
+        "toc",
+      ],
       icon: IconSitemap,
       command: ({ editor, range }: CommandProps) => {
         editor.chain().focus().deleteRange(range).insertSubpages().run();

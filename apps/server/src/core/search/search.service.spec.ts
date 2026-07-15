@@ -262,7 +262,7 @@ describe('SearchService', () => {
     const row = createSearchRow();
     const { service, state } = createPageSearchService([row]);
 
-    const result = await service.searchPage({ query: '', tag: 'tbd' } as any, {
+    const result = await service.searchPage({ query: '', tag: 'done' } as any, {
       userId: 'user-1',
       workspaceId: 'workspace-1',
     });

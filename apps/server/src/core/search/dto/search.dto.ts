@@ -1,5 +1,4 @@
 import {
-  IsIn,
   Max,
   MaxLength,
   Min,
@@ -9,10 +8,10 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   ValidateIf,
 } from 'class-validator';
-import { Type } from 'class-transformer';
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 
 function parseOptionalBoolean(value: unknown): unknown {
   if (value === 'true') {
@@ -53,8 +52,12 @@ export class SearchDTO {
   labelId?: string;
 
   @IsOptional()
-  @IsIn(['tbd', 'todo'])
-  tag?: 'tbd' | 'todo';
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.trim().toLowerCase() : value,
+  )
+  @IsString()
+  @Matches(/^[a-z][a-z0-9_-]{0,31}$/)
+  tag?: string;
 
   @IsOptional()
   @Type(() => Number)

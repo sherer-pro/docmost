@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { builtInTagDefinitions } from "@docmost/editor-ext";
 import { getSearchContentTypeOptions } from "./search-content-type-options";
 import { getSearchFilterPayload } from "./search-filter-state";
 
@@ -18,6 +19,14 @@ describe("getSearchContentTypeOptions", () => {
 });
 
 describe("getSearchFilterPayload", () => {
+  it("exposes every built-in tag to search", () => {
+    expect(builtInTagDefinitions.map((tag) => tag.label)).toEqual([
+      "TBD",
+      "TODO",
+      "DONE",
+    ]);
+  });
+
   it("keeps a single selected label for page search", () => {
     expect(
       getSearchFilterPayload({
@@ -41,13 +50,13 @@ describe("getSearchFilterPayload", () => {
         spaceId: null,
         contentType: "page",
         label: null,
-        tag: "tbd",
+        tag: "done",
         isAiMode: false,
       }),
     ).toMatchObject({
       contentType: "page",
       labelId: null,
-      tag: "tbd",
+      tag: "done",
     });
   });
 

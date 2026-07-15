@@ -3,7 +3,12 @@ import cx from "clsx";
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { getTagLabel, getValidTagValue } from "@docmost/editor-ext";
+import {
+  getBuiltInTagDefinition,
+  getTagColor,
+  getTagLabel,
+  getValidTagValue,
+} from "@docmost/editor-ext";
 import classes from "./tag-view.module.css";
 
 interface PopoverPosition {
@@ -16,8 +21,11 @@ export default function TagView(props: NodeViewProps) {
   const targetRef = useRef<HTMLSpanElement | null>(null);
   const [popover, setPopover] = useState<PopoverPosition | null>(null);
   const value = getValidTagValue(props.node.attrs.value);
-  const description =
-    value === "tbd" ? t("Tag TBD description") : t("Tag TODO description");
+  const definition = getBuiltInTagDefinition(value);
+  const color = getTagColor(value);
+  const description = definition
+    ? t(definition.descriptionKey)
+    : t("Unknown tag description");
 
   const showDescription = () => {
     const target = targetRef.current;
@@ -37,7 +45,7 @@ export default function TagView(props: NodeViewProps) {
   return (
     <NodeViewWrapper
       as="span"
-      className={cx(classes.tag, classes[value], {
+      className={cx(classes.tag, classes[color], {
         [classes.selected]: props.selected,
       })}
       data-tag-value={value}
