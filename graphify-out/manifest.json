@@ -2275,8 +2275,8 @@
     "semantic_hash": "461a98cfb19073966c62561b5963adbf"
   },
   "apps/client/src/features/page/tree/components/space-tree.tsx": {
-    "mtime": 1784147852.6325912,
-    "ast_hash": "8cf61ef0fb841bbf67b63238e13b105a",
+    "mtime": 1784151631.3123221,
+    "ast_hash": "ecc61668d6b3e953ada39a9d9312e296",
     "semantic_hash": ""
   },
   "apps/client/src/features/page/tree/hooks/use-tree-mutation.ts": {
@@ -2305,14 +2305,14 @@
     "semantic_hash": "4dd727d662cbe4637eb6cdff0dc86c2f"
   },
   "apps/client/src/features/page/tree/utils/utils.test.ts": {
-    "mtime": 1781878366.0913472,
-    "ast_hash": "eeeffad8790b1ef3b0f6b42bc2e78fc1",
-    "semantic_hash": "eeeffad8790b1ef3b0f6b42bc2e78fc1"
+    "mtime": 1784151617.579604,
+    "ast_hash": "7491caff1a6abb01c4769cecd72fad03",
+    "semantic_hash": ""
   },
   "apps/client/src/features/page/tree/utils/utils.ts": {
-    "mtime": 1781878330.945761,
-    "ast_hash": "aade901290e3e7d1e7ddd5c87d52042a",
-    "semantic_hash": "aade901290e3e7d1e7ddd5c87d52042a"
+    "mtime": 1784151198.9614666,
+    "ast_hash": "91524ab9d711cb47b25fd06db5372fad",
+    "semantic_hash": ""
   },
   "apps/client/src/features/page/types/page.types.ts": {
     "mtime": 1784114066.7458222,
@@ -6252,6 +6252,16 @@
   "apps/client/src/features/page/components/page-operation-menu-items.tsx": {
     "mtime": 1784147844.3385606,
     "ast_hash": "53c3426eb9fb7e3fb976b110c8cf06c8",
+    "semantic_hash": ""
+  },
+  "apps/client/src/features/page/tree/atoms/open-tree-nodes-atom.test.ts": {
+    "mtime": 1784151617.5916138,
+    "ast_hash": "0b86eb1526e5ce5143460c9ae28df659",
+    "semantic_hash": ""
+  },
+  "apps/client/src/features/page/tree/atoms/open-tree-nodes-atom.ts": {
+    "mtime": 1784151617.586109,
+    "ast_hash": "5ed086f83b5c8323f2c7039d1ee6f4c2",
     "semantic_hash": ""
   }
 }
