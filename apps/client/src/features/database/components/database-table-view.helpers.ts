@@ -1,4 +1,5 @@
 import { DatabasePropertyType } from '@docmost/api-contract';
+import type { IDatabaseRowWithCells } from '@/features/database/types/database-table.types';
 
 const hasEmptyUserReference = (value: unknown): boolean => {
   return (
@@ -42,6 +43,47 @@ export const isSameCellPayloadValue = (left: unknown, right: unknown): boolean =
 
 export const isDatabaseFilterControlsVisible = (isMobileViewport: boolean): boolean => {
   return !isMobileViewport;
+};
+
+export const shouldShowDatabaseFilterRemove = (filterCount: number): boolean => {
+  return filterCount > 1;
+};
+
+export const mergePinnedDatabaseRow = (
+  rows: IDatabaseRowWithCells[],
+  pinnedRow: IDatabaseRowWithCells | null,
+): IDatabaseRowWithCells[] => {
+  if (!pinnedRow) {
+    return rows;
+  }
+
+  return [pinnedRow, ...rows.filter((row) => row.pageId !== pinnedRow.pageId)];
+};
+
+export const reorderDatabaseProperties = <T extends { id: string; position: number }>(
+  properties: T[],
+  movedPropertyId: string,
+  targetPropertyId: string,
+): T[] => {
+  const currentIndex = properties.findIndex((property) => property.id === movedPropertyId);
+  const targetIndex = properties.findIndex((property) => property.id === targetPropertyId);
+
+  if (currentIndex < 0 || targetIndex < 0 || currentIndex === targetIndex) {
+    return properties;
+  }
+
+  const reorderedProperties = [...properties];
+  const movedProperty = reorderedProperties[currentIndex];
+  if (!movedProperty) {
+    return properties;
+  }
+
+  reorderedProperties.splice(currentIndex, 1);
+  reorderedProperties.splice(targetIndex, 0, movedProperty);
+
+  return reorderedProperties.map((property, position) =>
+    property.position === position ? property : { ...property, position },
+  );
 };
 
 export const getCheckboxFilterOptions = (

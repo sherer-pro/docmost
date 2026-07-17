@@ -244,6 +244,88 @@ describe('DatabaseService mixed tree flows', () => {
     expect(databasePropertyRepo.insertProperty).not.toHaveBeenCalled();
   });
 
+  it('reorders database properties with contiguous positions', async () => {
+    const properties = [
+      {
+        id: 'prop-a',
+        databaseId: 'db-1',
+        name: 'A',
+        type: 'multiline_text',
+        position: 0,
+      },
+      {
+        id: 'prop-b',
+        databaseId: 'db-1',
+        name: 'B',
+        type: 'multiline_text',
+        position: 1,
+      },
+      {
+        id: 'prop-c',
+        databaseId: 'db-1',
+        name: 'C',
+        type: 'multiline_text',
+        position: 2,
+      },
+    ];
+
+    databasePropertyRepo.findById.mockResolvedValue(properties[2]);
+    databasePropertyRepo.findByDatabaseId.mockResolvedValue(properties);
+    databasePropertyRepo.updateProperty
+      .mockResolvedValueOnce({ ...properties[2], position: 0 })
+      .mockResolvedValueOnce({ ...properties[0], position: 1 })
+      .mockResolvedValueOnce({ ...properties[1], position: 2 });
+
+    const result = await service.updateProperty(
+      'db-1',
+      'prop-c',
+      { position: 0 } as any,
+      user,
+      'ws-1',
+    );
+
+    expect(result).toMatchObject({ id: 'prop-c', position: 0 });
+    expect(
+      databasePropertyRepo.updateProperty.mock.calls.map(
+        ([propertyId, payload, transaction]) => ({
+          propertyId,
+          payload,
+          transaction,
+        }),
+      ),
+    ).toEqual([
+      {
+        propertyId: 'prop-c',
+        payload: { position: 0 },
+        transaction: trx,
+      },
+      {
+        propertyId: 'prop-a',
+        payload: { position: 1 },
+        transaction: trx,
+      },
+      {
+        propertyId: 'prop-b',
+        payload: { position: 2 },
+        transaction: trx,
+      },
+    ]);
+    expect(pageHistoryRecorder.enqueuePageEvents).toHaveBeenCalledWith(
+      expect.objectContaining({
+        changeType: 'database.property.updated',
+        changeData: expect.objectContaining({
+          changes: [
+            {
+              field: 'position',
+              oldValue: 2,
+              newValue: 0,
+            },
+          ],
+        }),
+      }),
+    );
+  });
+
   it('soft-detaches descendants row links and removes descendants pages on row delete', async () => {
     pageRepo.findById.mockResolvedValue({
       id: 'row-page-1',

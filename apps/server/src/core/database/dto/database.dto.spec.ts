@@ -6,6 +6,7 @@ import {
   BatchUpdateDatabaseRowsDto,
   CreateDatabasePropertyDto,
   CreateDatabaseViewDto,
+  UpdateDatabasePropertyDto,
 } from './database.dto';
 
 const uuid = '00000000-0000-4000-8000-000000000001';
@@ -18,6 +19,22 @@ async function validatePayload<T extends object>(
 }
 
 describe('database DTO limits', () => {
+  it('accepts only non-negative integer property positions', async () => {
+    await expect(
+      validatePayload(UpdateDatabasePropertyDto, { position: 2 }),
+    ).resolves.toHaveLength(0);
+
+    const negativeErrors = await validatePayload(UpdateDatabasePropertyDto, {
+      position: -1,
+    });
+    const decimalErrors = await validatePayload(UpdateDatabasePropertyDto, {
+      position: 1.5,
+    });
+
+    expect(JSON.stringify(negativeErrors)).toContain('min');
+    expect(JSON.stringify(decimalErrors)).toContain('isInt');
+  });
+
   it('rejects select settings with too many options', async () => {
     const errors = await validatePayload(CreateDatabasePropertyDto, {
       name: 'Status',
