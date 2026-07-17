@@ -1,11 +1,15 @@
 import { NodeViewProps, NodeViewWrapper } from "@tiptap/react";
-import { Stack, Text, Anchor, ActionIcon } from "@mantine/core";
-import { IconFileDescription } from "@tabler/icons-react";
+import { Anchor, Badge, Group, Skeleton, Text, ThemeIcon } from "@mantine/core";
+import {
+  IconAlertCircle,
+  IconChevronRight,
+  IconFileDescription,
+  IconSitemap,
+} from "@tabler/icons-react";
 import { useGetSidebarPagesQuery } from "@/features/page/queries/page-query";
 import { useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
 import classes from "./subpages.module.css";
-import styles from "../mention/mention.module.css";
 import {
   buildPageUrl,
   buildSharedPageUrl,
@@ -51,74 +55,109 @@ export default function SubpagesView(props: NodeViewProps) {
     return sortPositionKeys(allPages);
   }, [data, shareId, sharedSubpages]);
 
-  if (isLoading && !shareId) {
-    return null;
-  }
-
-  if (error && !shareId) {
-    return (
-      <NodeViewWrapper data-drag-handle>
-        <Text c="dimmed" size="md" py="md">
-          {t("Failed to load subpages")}
-        </Text>
-      </NodeViewWrapper>
-    );
-  }
-
-  if (subpages.length === 0) {
-    return (
-      <NodeViewWrapper data-drag-handle>
-        <div className={classes.container}>
-          <Text c="dimmed" size="md" py="md">
-            {t("No subpages")}
-          </Text>
-        </div>
-      </NodeViewWrapper>
-    );
-  }
+  const isSubpagesLoading = isLoading && !shareId;
+  const hasSubpagesError = Boolean(error && !shareId);
 
   return (
-    <NodeViewWrapper data-drag-handle>
-      <div className={classes.container}>
-        <Stack gap={5}>
-          {subpages.map((page) => (
-            <Anchor
-              key={page.id}
-              component={Link}
-              fw={500}
-              to={
-                shareId
-                  ? buildSharedPageUrl({
-                      shareId,
-                      pageSlugId: page.slugId,
-                      pageTitle: page.title,
-                    })
-                  : buildPageUrl(spaceSlug, page.slugId, page.title)
-              }
-              underline="never"
-              className={styles.pageMentionLink}
-              draggable={false}
+    <NodeViewWrapper data-drag-handle className={classes.nodeView}>
+      <div
+        className={classes.container}
+        role="navigation"
+        aria-label={t("Subpages")}
+        aria-busy={isSubpagesLoading}
+        data-state={
+          isSubpagesLoading
+            ? "loading"
+            : hasSubpagesError
+              ? "error"
+              : subpages.length === 0
+                ? "empty"
+                : "ready"
+        }
+      >
+        <div className={classes.header}>
+          <Group gap="xs" wrap="nowrap">
+            <ThemeIcon
+              className={classes.headerIcon}
+              variant="light"
+              size="md"
+              radius="md"
             >
-              {page?.icon ? (
-                <span style={{ marginRight: "4px" }}>{page.icon}</span>
-              ) : (
-                <ActionIcon
-                  variant="transparent"
-                  color="gray"
-                  component="span"
-                  size={18}
-                  style={{ verticalAlign: "text-bottom" }}
-                >
-                  <IconFileDescription size={18} />
-                </ActionIcon>
-              )}
+              <IconSitemap size={17} aria-hidden />
+            </ThemeIcon>
+            <Text className={classes.heading} role="heading" aria-level={3}>
+              {t("Subpages")}
+            </Text>
+          </Group>
 
-              <span className={styles.pageMentionText}>
-                {page?.title || t("untitled")}
-              </span>
-            </Anchor>
-          ))}
-        </Stack>
+          {isSubpagesLoading ? (
+            <Skeleton width={28} height={20} radius="xl" />
+          ) : (
+            <Badge
+              className={classes.count}
+              variant="light"
+              size="sm"
+              aria-label={`${t("Subpages")}: ${subpages.length}`}
+            >
+              {subpages.length}
+            </Badge>
+          )}
+        </div>
+
+        {isSubpagesLoading ? (
+          <div className={classes.loadingList} aria-hidden>
+            {[0, 1, 2].map((item) => (
+              <div className={classes.loadingRow} key={item}>
+                <Skeleton circle height={28} />
+                <Skeleton height={12} radius="xl" width={`${72 - item * 9}%`} />
+              </div>
+            ))}
+          </div>
+        ) : hasSubpagesError ? (
+          <div className={`${classes.state} ${classes.errorState}`} role="status">
+            <IconAlertCircle size={20} aria-hidden />
+            <Text size="sm">{t("Failed to load subpages")}</Text>
+          </div>
+        ) : subpages.length === 0 ? (
+          <div className={classes.state}>
+            <IconFileDescription size={20} aria-hidden />
+            <Text size="sm">{t("No subpages")}</Text>
+          </div>
+        ) : (
+          <ul className={classes.list}>
+            {subpages.map((page) => (
+              <li className={classes.item} key={page.id}>
+                <Anchor
+                  component={Link}
+                  to={
+                    shareId
+                      ? buildSharedPageUrl({
+                          shareId,
+                          pageSlugId: page.slugId,
+                          pageTitle: page.title,
+                        })
+                      : buildPageUrl(spaceSlug, page.slugId, page.title)
+                  }
+                  underline="never"
+                  className={classes.pageLink}
+                  draggable={false}
+                >
+                  <span className={classes.pageIcon} aria-hidden>
+                    {page.icon || <IconFileDescription size={17} />}
+                  </span>
+                  <span className={classes.pageTitle}>
+                    {page.title || t("untitled")}
+                  </span>
+                  <IconChevronRight
+                    className={classes.chevron}
+                    size={17}
+                    aria-hidden
+                  />
+                </Anchor>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </NodeViewWrapper>
   );
