@@ -10,9 +10,9 @@
     "semantic_hash": "15c8491910d318f099a71ce39d3da47a"
   },
   "apps/client/package.json": {
-    "mtime": 1783288491.6813016,
-    "ast_hash": "26727967139f28520d56d5466e0f08d2",
-    "semantic_hash": "26727967139f28520d56d5466e0f08d2"
+    "mtime": 1784152204.5370965,
+    "ast_hash": "fbcbae8362f30b6e99144e6c0f6d99af",
+    "semantic_hash": ""
   },
   "apps/client/postcss.config.js": {
     "mtime": 1781298898.4053948,
@@ -1075,18 +1075,18 @@
     "semantic_hash": "8349c895d98459720831ff5a53e3e7a4"
   },
   "apps/client/src/features/database/components/database-table-view-helpers.test.ts": {
-    "mtime": 1781298898.436975,
-    "ast_hash": "d85e8a2aa8a5b4c0e72a8998115202a6",
-    "semantic_hash": "d85e8a2aa8a5b4c0e72a8998115202a6"
+    "mtime": 1784296839.2474773,
+    "ast_hash": "216e409c5ca51b5594db9534567fed75",
+    "semantic_hash": ""
   },
   "apps/client/src/features/database/components/database-table-view.helpers.ts": {
-    "mtime": 1781298898.436975,
-    "ast_hash": "8b0e486b826bf57fc1ad3430240148ce",
-    "semantic_hash": "8b0e486b826bf57fc1ad3430240148ce"
+    "mtime": 1784297290.8744254,
+    "ast_hash": "f50649688ec1c47c4a54f8b801404346",
+    "semantic_hash": ""
   },
   "apps/client/src/features/database/components/database-table-view.tsx": {
-    "mtime": 1784148709.0403976,
-    "ast_hash": "adec58bec9fbee802a4151b3549709a4",
+    "mtime": 1784297407.030136,
+    "ast_hash": "8ab47d60eccc6b695981bd617d7c5f2b",
     "semantic_hash": ""
   },
   "apps/client/src/features/database/components/editors/database-description-editor.test.tsx": {
@@ -1160,9 +1160,9 @@
     "semantic_hash": "3bc6c0a0bdb274c58686f26a88751751"
   },
   "apps/client/src/features/database/types/database-table.types.ts": {
-    "mtime": 1781298898.436975,
-    "ast_hash": "8cce2da573ffde97a00e7914935172c6",
-    "semantic_hash": "8cce2da573ffde97a00e7914935172c6"
+    "mtime": 1784297290.8734252,
+    "ast_hash": "c96c09fc1c7f8b7121d2440f8ab27a3e",
+    "semantic_hash": ""
   },
   "apps/client/src/features/database/types/database.types.ts": {
     "mtime": 1781954567.2387867,
@@ -1645,9 +1645,9 @@
     "semantic_hash": "d1343d64404a9babe4dacb8507d877f7"
   },
   "apps/client/src/features/editor/components/subpages/subpages-view.tsx": {
-    "mtime": 1781298898.4563322,
-    "ast_hash": "2f626b654001f98fe1fc15c03a833000",
-    "semantic_hash": "2f626b654001f98fe1fc15c03a833000"
+    "mtime": 1784291660.3831828,
+    "ast_hash": "36ea7b99b7b4852f5ca621ac3b6ca5d3",
+    "semantic_hash": ""
   },
   "apps/client/src/features/editor/components/table-of-contents/table-of-contents.tsx": {
     "mtime": 1784114917.2668123,
@@ -2125,9 +2125,9 @@
     "semantic_hash": "e315ed80d11dc239c7748dd19d21bdcb"
   },
   "apps/client/src/features/page/components/document-fields/document-fields-panel.tsx": {
-    "mtime": 1782397409.292161,
-    "ast_hash": "90867df49388b81afd0f5385bf4043e1",
-    "semantic_hash": "90867df49388b81afd0f5385bf4043e1"
+    "mtime": 1784297551.8561254,
+    "ast_hash": "7d7319ff25f51565b8190acb104946a2",
+    "semantic_hash": ""
   },
   "apps/client/src/features/page/components/document-fields/space-member-select-utils.tsx": {
     "mtime": 1781298898.4679263,
@@ -2275,8 +2275,8 @@
     "semantic_hash": "461a98cfb19073966c62561b5963adbf"
   },
   "apps/client/src/features/page/tree/components/space-tree.tsx": {
-    "mtime": 1784151631.3123221,
-    "ast_hash": "ecc61668d6b3e953ada39a9d9312e296",
+    "mtime": 1784291583.8685338,
+    "ast_hash": "265080951878ccf43bf32c9206d7ac6e",
     "semantic_hash": ""
   },
   "apps/client/src/features/page/tree/hooks/use-tree-mutation.ts": {
@@ -3205,9 +3205,9 @@
     "semantic_hash": "fa439650fa28a1a7aa8c2b6d81c8cc20"
   },
   "apps/server/package.json": {
-    "mtime": 1783288491.645404,
-    "ast_hash": "4d9a731eedbea4ff466e88fe61417f3a",
-    "semantic_hash": "4d9a731eedbea4ff466e88fe61417f3a"
+    "mtime": 1784152204.5667784,
+    "ast_hash": "4a6493b414096fac82366c0acdc85cd6",
+    "semantic_hash": ""
   },
   "apps/server/project.json": {
     "mtime": 1781714818.2307086,
@@ -3960,24 +3960,24 @@
     "semantic_hash": "d5893d436a6297acf5365141dc4be5e3"
   },
   "apps/server/src/core/database/dto/database.dto.spec.ts": {
-    "mtime": 1781298898.5151796,
-    "ast_hash": "55a7b029f81bde9895422dd3e9717b2c",
-    "semantic_hash": "55a7b029f81bde9895422dd3e9717b2c"
+    "mtime": 1784296310.8948827,
+    "ast_hash": "0218a351d3b244543ca38c8bd8ba1a9a",
+    "semantic_hash": ""
   },
   "apps/server/src/core/database/dto/database.dto.ts": {
-    "mtime": 1781954220.2758505,
-    "ast_hash": "d219718823078281b1ce472c9066264c",
-    "semantic_hash": "d219718823078281b1ce472c9066264c"
+    "mtime": 1784296092.739834,
+    "ast_hash": "e13a24028ea6a3c00f8225aa9e4379f1",
+    "semantic_hash": ""
   },
   "apps/server/src/core/database/services/database.service.spec.ts": {
-    "mtime": 1781298898.5151796,
-    "ast_hash": "15fc7a52492f9a71c964bbb2f9e52db6",
-    "semantic_hash": "15fc7a52492f9a71c964bbb2f9e52db6"
+    "mtime": 1784296941.1011093,
+    "ast_hash": "26979591cf5498172495b08d561a1c25",
+    "semantic_hash": ""
   },
   "apps/server/src/core/database/services/database.service.ts": {
-    "mtime": 1781851741.4624712,
-    "ast_hash": "b9bd4e2a05f1874f4bca8525ef0601b9",
-    "semantic_hash": "b9bd4e2a05f1874f4bca8525ef0601b9"
+    "mtime": 1784296941.099607,
+    "ast_hash": "39c5cb3ff4fe47f83fa2fe2554f07a9c",
+    "semantic_hash": ""
   },
   "apps/server/src/core/dictionary/dictionary-term.types.ts": {
     "mtime": 1781880500.2156923,
@@ -5295,9 +5295,9 @@
     "semantic_hash": "03c72e1cba6450d98eb7c9cb143e3235"
   },
   "apps/server/src/database/repos/database/database-property.repo.ts": {
-    "mtime": 1781298898.534432,
-    "ast_hash": "a80f1dcf37ad9cb0394e9c3c6b6c2592",
-    "semantic_hash": "a80f1dcf37ad9cb0394e9c3c6b6c2592"
+    "mtime": 1784297467.901134,
+    "ast_hash": "a4db4bf000e50e26b3d0861401a358fe",
+    "semantic_hash": ""
   },
   "apps/server/src/database/repos/database/database-row.repo.ts": {
     "mtime": 1781298898.534432,
@@ -6030,9 +6030,9 @@
     "semantic_hash": "15770c2c733df857645c216c3d54c0cf"
   },
   "package.json": {
-    "mtime": 1783288491.6632695,
-    "ast_hash": "4eb0a9883442270cfaa9168929324b3a",
-    "semantic_hash": "4eb0a9883442270cfaa9168929324b3a"
+    "mtime": 1784152204.4992146,
+    "ast_hash": "24102d6e431c374d54c0e9ba5cadde2a",
+    "semantic_hash": ""
   },
   "scripts/check-english-comments.mjs": {
     "mtime": 1781298898.5678556,
@@ -6262,6 +6262,21 @@
   "apps/client/src/features/page/tree/atoms/open-tree-nodes-atom.ts": {
     "mtime": 1784151617.586109,
     "ast_hash": "5ed086f83b5c8323f2c7039d1ee6f4c2",
+    "semantic_hash": ""
+  },
+  "apps/client/src/features/database/utils/database-property-order.test.ts": {
+    "mtime": 1784297357.208613,
+    "ast_hash": "ed73e8a6de03ab5dd48a77022f5cbc2c",
+    "semantic_hash": ""
+  },
+  "apps/client/src/features/database/utils/database-property-order.ts": {
+    "mtime": 1784296646.4372592,
+    "ast_hash": "495ea85c58cdad17f5b41251ba4aa320",
+    "semantic_hash": ""
+  },
+  "graphify-out/memory/query_20260717_141344_\u0441\u0442\u043e\u043b\u0431\u0446\u044b_\u0432_\u0431\u0430\u0437\u0430\u0445_\u0434\u0430\u043d\u043d\u044b\u0445_\u0434\u043e\u043b\u0436\u043d\u043e_\u0431\u044b\u0442\u044c_\u043c\u043e\u0436\u043d\u043e_\u043f\u0435\u0440\u0435\u043c\u0435\u0449\u0430\u0442.md": {
+    "mtime": 1784297624.6939266,
+    "ast_hash": "2c299d7356826929ae02704fa74aac02",
     "semantic_hash": ""
   }
 }
