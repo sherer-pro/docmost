@@ -27,11 +27,14 @@ import {
   IconTrash,
   IconUser,
   IconAlignJustified,
+  IconArrowLeft,
+  IconArrowRight,
   IconCode,
   IconList,
   IconPencil,
   type TablerIcon,
   IconFileDescription,
+  IconGripVertical,
 } from '@tabler/icons-react';
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DATABASE_PROPERTY_TYPES, DatabasePropertyType } from '@docmost/api-contract';
@@ -106,7 +109,10 @@ import {
   isDatabaseFilterControlsVisible,
   getCheckboxFilterOptions,
   isSameCellPayloadValue,
+  mergePinnedDatabaseRow,
+  reorderDatabaseProperties,
   resolveDatabasePropertyRename,
+  shouldShowDatabaseFilterRemove,
   shouldDeleteCellPayload,
 } from '@/features/database/components/database-table-view.helpers.ts';
 import { userAtom } from '@/features/user/atoms/current-user-atom.ts';
@@ -272,6 +278,10 @@ export function DatabaseTableView({
   const [renamingRowPageId, setRenamingRowPageId] = useState<string | null>(null);
   const [renamingRowInitialTitle, setRenamingRowInitialTitle] = useState('');
   const [renamingRowTitleDraft, setRenamingRowTitleDraft] = useState('');
+  const [pinnedCreatedRow, setPinnedCreatedRow] =
+    useState<IDatabaseRowWithCells | null>(null);
+  const [draggedPropertyId, setDraggedPropertyId] = useState<string | null>(null);
+  const [dragOverPropertyId, setDragOverPropertyId] = useState<string | null>(null);
   const [movingRow, setMovingRow] = useState<IDatabaseRowWithCells | null>(null);
   const [copyingRow, setCopyingRow] = useState<IDatabaseRowWithCells | null>(null);
   const [selectedRowPageIds, setSelectedRowPageIds] = useState<Record<string, boolean>>({});
@@ -390,6 +400,12 @@ export function DatabaseTableView({
     setOptimisticallyDeletedRowPageIds({});
     setOptimisticallyDeletedPropertyIds({});
     setSelectedRowPageIds({});
+    setPinnedCreatedRow(null);
+    setRenamingRowPageId(null);
+    setRenamingRowInitialTitle('');
+    setRenamingRowTitleDraft('');
+    setDraggedPropertyId(null);
+    setDragOverPropertyId(null);
     setTableScrollTop(0);
   }, [databaseId]);
 
@@ -562,6 +578,10 @@ export function DatabaseTableView({
   );
 
   const handleCreateRow = async () => {
+    if (createRowMutation.isPending || pinnedCreatedRow) {
+      return;
+    }
+
     const createdRow = await createRowMutation.mutateAsync({});
     emitDatabaseInvalidation();
     if (user) {
@@ -591,10 +611,30 @@ export function DatabaseTableView({
     }
 
     const createdRowTitle = createdRowPage?.title ?? '';
+    const optimisticRow: IDatabaseRowWithCells = {
+      id: createdRow.id,
+      pageId: createdRow.pageId,
+      pageTitle: createdRowTitle,
+      page: {
+        id: createdRowPage.id,
+        slugId: createdRow.slugId ?? createdRowPage.slugId,
+        title: createdRowTitle,
+        icon: createdRowPage.icon,
+        parentPageId: createdRowPage.parentPageId,
+        position: createdRowPage.position,
+        customFields: createdRowPage.customFields,
+      },
+      cells: [],
+    };
 
+    setPinnedCreatedRow(optimisticRow);
     setRenamingRowPageId(createdRow.pageId);
     setRenamingRowInitialTitle(createdRowTitle);
     setRenamingRowTitleDraft(createdRowTitle);
+    setTableScrollTop(0);
+    if (tableViewportRef.current) {
+      tableViewportRef.current.scrollTop = 0;
+    }
 
     const databaseNode = findDatabaseNodeInTree(treeData);
 
@@ -724,17 +764,24 @@ export function DatabaseTableView({
       return;
     }
 
-    const hasRow = rows.some(
-      (row) =>
-        row.pageId === renamingRowPageId &&
-        !optimisticallyDeletedRowPageIds[row.pageId],
-    );
+    const hasRow =
+      pinnedCreatedRow?.pageId === renamingRowPageId ||
+      rows.some(
+        (row) =>
+          row.pageId === renamingRowPageId &&
+          !optimisticallyDeletedRowPageIds[row.pageId],
+      );
     if (!hasRow) {
       setRenamingRowPageId(null);
       setRenamingRowInitialTitle('');
       setRenamingRowTitleDraft('');
     }
-  }, [optimisticallyDeletedRowPageIds, renamingRowPageId, rows]);
+  }, [
+    optimisticallyDeletedRowPageIds,
+    pinnedCreatedRow?.pageId,
+    renamingRowPageId,
+    rows,
+  ]);
 
   const checkboxFilterOptions = useMemo(
     () => getCheckboxFilterOptions(t),
@@ -781,8 +828,12 @@ export function DatabaseTableView({
   );
 
   const visibleRows = useMemo(
-    () => rows.filter((row) => !optimisticallyDeletedRowPageIds[row.pageId]),
-    [optimisticallyDeletedRowPageIds, rows],
+    () =>
+      mergePinnedDatabaseRow(
+        rows.filter((row) => !optimisticallyDeletedRowPageIds[row.pageId]),
+        pinnedCreatedRow,
+      ),
+    [optimisticallyDeletedRowPageIds, pinnedCreatedRow, rows],
   );
 
   useEffect(() => {
@@ -831,6 +882,74 @@ export function DatabaseTableView({
       }),
     [activeProperties, visibleColumns],
   );
+
+  const moveProperty = async (
+    movedPropertyId: string,
+    targetPropertyId: string,
+  ) => {
+    if (!isEditable || updatePropertyMutation.isPending) {
+      return;
+    }
+
+    const previousProperties = properties;
+    const reorderedProperties = reorderDatabaseProperties(
+      previousProperties,
+      movedPropertyId,
+      targetPropertyId,
+    );
+    if (reorderedProperties === previousProperties) {
+      return;
+    }
+
+    const movedProperty = reorderedProperties.find(
+      (property) => property.id === movedPropertyId,
+    );
+    if (!movedProperty) {
+      return;
+    }
+
+    queryClient.setQueryData(
+      DATABASE_QUERY_KEYS.properties(databaseId),
+      reorderedProperties,
+    );
+
+    try {
+      await updatePropertyMutation.mutateAsync({
+        propertyId: movedPropertyId,
+        payload: { position: movedProperty.position },
+      });
+      emitDatabaseInvalidation({
+        invalidateProperties: true,
+        invalidateRows: false,
+        invalidateRowContext: true,
+      });
+    } catch {
+      queryClient.setQueryData(
+        DATABASE_QUERY_KEYS.properties(databaseId),
+        previousProperties,
+      );
+      notifications.show({
+        color: 'red',
+        message: t('Failed to update data'),
+      });
+    }
+  };
+
+  const movePropertyByVisibleOffset = (
+    propertyId: string,
+    offset: -1 | 1,
+  ) => {
+    const currentIndex = displayedProperties.findIndex(
+      (property) => property.id === propertyId,
+    );
+    const targetProperty = displayedProperties[currentIndex + offset];
+    if (!targetProperty) {
+      return;
+    }
+
+    void moveProperty(propertyId, targetProperty.id);
+  };
+
   const hasPageReferenceColumn = useMemo(
     () => displayedProperties.some((property) => property.type === 'page_reference'),
     [displayedProperties],
@@ -1215,10 +1334,24 @@ export function DatabaseTableView({
     setRenamingRowTitleDraft(currentRowTitle);
   };
 
-  const cancelRowRename = () => {
+  const cancelRowRename = ({
+    refreshPinnedRow = true,
+  }: {
+    refreshPinnedRow?: boolean;
+  } = {}) => {
+    const shouldReleasePinnedRow =
+      pinnedCreatedRow?.pageId === renamingRowPageId;
+
     setRenamingRowPageId(null);
     setRenamingRowInitialTitle('');
     setRenamingRowTitleDraft('');
+
+    if (shouldReleasePinnedRow) {
+      setPinnedCreatedRow(null);
+      if (refreshPinnedRow) {
+        resetRowsPagination();
+      }
+    }
   };
 
   const applyRowRenameToTree = (rowUpdate: {
@@ -1282,7 +1415,7 @@ export function DatabaseTableView({
       });
       resetRowsPagination();
 
-      cancelRowRename();
+      cancelRowRename({ refreshPinnedRow: false });
     } catch {
       setRenamingRowTitleDraft(previousTitle);
     }
@@ -1796,6 +1929,10 @@ export function DatabaseTableView({
               variant="light"
               leftSection={<IconPlus size={14} />}
               onClick={() => void handleCreateRow()}
+              loading={createRowMutation.isPending}
+              disabled={
+                createRowMutation.isPending || Boolean(pinnedCreatedRow)
+              }
             >
               {t('Row')}
             </Button>
@@ -2049,16 +2186,19 @@ export function DatabaseTableView({
                       }}
                     />
                   )}
-                  <Button
-                    variant="subtle"
-                    color="red"
-                    disabled={filters.length === 1}
-                    onClick={() =>
-                      setFilters((prev) => prev.filter((_, itemIndex) => itemIndex !== index))
-                    }
-                  >
-                    {t('Remove')}
-                  </Button>
+                  {shouldShowDatabaseFilterRemove(filters.length) && (
+                    <Button
+                      variant="subtle"
+                      color="red"
+                      onClick={() =>
+                        setFilters((prev) =>
+                          prev.filter((_, itemIndex) => itemIndex !== index),
+                        )
+                      }
+                    >
+                      {t('Remove')}
+                    </Button>
+                  )}
                 </Stack>
               );
             })}
@@ -2186,16 +2326,19 @@ export function DatabaseTableView({
                   />
                 )}
 
-                <Button
-                  variant="subtle"
-                  color="red"
-                  disabled={filters.length === 1}
-                  onClick={() =>
-                    setFilters((prev) => prev.filter((_, itemIndex) => itemIndex !== index))
-                  }
-                >
-                  {t('Remove')}
-                </Button>
+                {shouldShowDatabaseFilterRemove(filters.length) && (
+                  <Button
+                    variant="subtle"
+                    color="red"
+                    onClick={() =>
+                      setFilters((prev) =>
+                        prev.filter((_, itemIndex) => itemIndex !== index),
+                      )
+                    }
+                  >
+                    {t('Remove')}
+                  </Button>
+                )}
               </Group>
             );
           })}
@@ -2324,32 +2467,113 @@ export function DatabaseTableView({
               >
                 {t('Title')}
               </Table.Th>
-              {displayedProperties.map((property) => (
-                <Table.Th key={property.id} miw={220}>
+              {displayedProperties.map((property, propertyIndex) => (
+                <Table.Th
+                  key={property.id}
+                  miw={220}
+                  className={classes.propertyHeader}
+                  data-dragging={draggedPropertyId === property.id}
+                  data-drop-target={
+                    Boolean(draggedPropertyId) &&
+                    dragOverPropertyId === property.id &&
+                    draggedPropertyId !== property.id
+                  }
+                  onDragOver={(event) => {
+                    if (
+                      !isEditable ||
+                      !draggedPropertyId ||
+                      draggedPropertyId === property.id
+                    ) {
+                      return;
+                    }
+
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = 'move';
+                    setDragOverPropertyId(property.id);
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    const movedPropertyId =
+                      draggedPropertyId ||
+                      event.dataTransfer.getData(
+                        'application/x-docmost-database-property',
+                      );
+
+                    setDraggedPropertyId(null);
+                    setDragOverPropertyId(null);
+
+                    if (movedPropertyId && movedPropertyId !== property.id) {
+                      void moveProperty(movedPropertyId, property.id);
+                    }
+                  }}
+                >
                   <Group justify="space-between" gap="xs" wrap="nowrap">
                     {isEditable ? (
-                      <TextInput
-                        aria-label={t('Property name')}
-                        value={propertyNameDrafts[property.id] ?? property.name}
-                        my={4}
-                        onChange={(event) =>
-                          updatePropertyNameDraft(property.id, event.currentTarget.value)
-                        }
-                        onBlur={() => void savePropertyRename(property)}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter') {
-                            event.preventDefault();
-                            event.currentTarget.blur();
-                          }
+                      <>
+                        <ActionIcon
+                          className={classes.propertyDragHandle}
+                          variant="subtle"
+                          size="sm"
+                          aria-label={t('Move')}
+                          draggable
+                          disabled={updatePropertyMutation.isPending}
+                          onDragStart={(event) => {
+                            event.dataTransfer.effectAllowed = 'move';
+                            event.dataTransfer.setData(
+                              'application/x-docmost-database-property',
+                              property.id,
+                            );
+                            setDraggedPropertyId(property.id);
+                            setDragOverPropertyId(null);
+                          }}
+                          onDragEnd={() => {
+                            setDraggedPropertyId(null);
+                            setDragOverPropertyId(null);
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === 'ArrowLeft') {
+                              event.preventDefault();
+                              movePropertyByVisibleOffset(property.id, -1);
+                            }
 
-                          if (event.key === 'Escape') {
-                            event.preventDefault();
-                            resetPropertyNameDraft(property);
-                          }
-                        }}
-                        onClick={(event) => event.stopPropagation()}
-                        onMouseDown={(event) => event.stopPropagation()}
-                      />
+                            if (event.key === 'ArrowRight') {
+                              event.preventDefault();
+                              movePropertyByVisibleOffset(property.id, 1);
+                            }
+                          }}
+                        >
+                          <IconGripVertical size={14} />
+                        </ActionIcon>
+                        <div className={classes.propertyName}>
+                          <TextInput
+                            aria-label={t('Property name')}
+                            value={
+                              propertyNameDrafts[property.id] ?? property.name
+                            }
+                            my={4}
+                            onChange={(event) =>
+                              updatePropertyNameDraft(
+                                property.id,
+                                event.currentTarget.value,
+                              )
+                            }
+                            onBlur={() => void savePropertyRename(property)}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter') {
+                                event.preventDefault();
+                                event.currentTarget.blur();
+                              }
+
+                              if (event.key === 'Escape') {
+                                event.preventDefault();
+                                resetPropertyNameDraft(property);
+                              }
+                            }}
+                            onClick={(event) => event.stopPropagation()}
+                            onMouseDown={(event) => event.stopPropagation()}
+                          />
+                        </div>
+                      </>
                     ) : (
                       <Text size="sm" fw="bold">
                         {property.name}
@@ -2368,9 +2592,39 @@ export function DatabaseTableView({
                         </Menu.Target>
 
                         <Menu.Dropdown>
+                          <Menu.Item
+                            leftSection={<IconArrowLeft size={14} />}
+                            disabled={
+                              propertyIndex === 0 ||
+                              updatePropertyMutation.isPending
+                            }
+                            onClick={() =>
+                              movePropertyByVisibleOffset(property.id, -1)
+                            }
+                          >
+                            {`${t('Move')} ←`}
+                          </Menu.Item>
+                          <Menu.Item
+                            leftSection={<IconArrowRight size={14} />}
+                            disabled={
+                              propertyIndex ===
+                                displayedProperties.length - 1 ||
+                              updatePropertyMutation.isPending
+                            }
+                            onClick={() =>
+                              movePropertyByVisibleOffset(property.id, 1)
+                            }
+                          >
+                            {`${t('Move')} →`}
+                          </Menu.Item>
+                          <Menu.Divider />
                           <Menu.Sub>
                             <Menu.Sub.Target>
-                              <Menu.Sub.Item leftSection={<IconSwitchHorizontal size={14} />}>
+                              <Menu.Sub.Item
+                                leftSection={
+                                  <IconSwitchHorizontal size={14} />
+                                }
+                              >
                                 {t('Type')}
                               </Menu.Sub.Item>
                             </Menu.Sub.Target>
@@ -2378,7 +2632,10 @@ export function DatabaseTableView({
                               {DATABASE_PROPERTY_TYPES.map((propertyType) => (
                                 <Menu.Item
                                   key={`${property.id}-${propertyType}`}
-                                  leftSection={renderPropertyTypeIcon(propertyType, 14)}
+                                  leftSection={renderPropertyTypeIcon(
+                                    propertyType,
+                                    14,
+                                  )}
                                   disabled={propertyType === property.type}
                                   onClick={() =>
                                     updatePropertyMutation.mutate(
@@ -2417,7 +2674,9 @@ export function DatabaseTableView({
                             leftSection={<IconTrash size={14} />}
                             onClick={() => confirmDeleteProperty(property)}
                           >
-                            {t('Delete property with name', { name: property.name })}
+                            {t('Delete property with name', {
+                              name: property.name,
+                            })}
                           </Menu.Item>
                         </Menu.Dropdown>
                       </Menu>

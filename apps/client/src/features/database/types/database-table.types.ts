@@ -109,6 +109,7 @@ export interface IDatabaseRowContext {
     id: string;
     name: string;
     type: string;
+    position?: number;
   }>;
   cells: IDatabaseCellValue[];
 }

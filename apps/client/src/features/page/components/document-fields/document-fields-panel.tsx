@@ -38,6 +38,7 @@ import { updatePageData } from "@/features/page/queries/page-query";
 import { DatabaseCellRenderer } from "@/features/database/components/database-cell-renderer.tsx";
 import { useDatabasePropertiesQuery } from "@/features/database/queries/database-table-query";
 import { IDatabaseProperty } from "@/features/database/types/database.types.ts";
+import { sortDatabasePropertiesByPosition } from "@/features/database/utils/database-property-order.ts";
 import {
   buildDatabaseCellPayloadValue,
   extractCurrentDatabaseCellValue,
@@ -196,7 +197,7 @@ export function DocumentFieldsPanel({
       (databaseProperties ?? []).map((property) => [property.id, property]),
     );
 
-    return propertiesFromContext.map((contextProperty) => {
+    const mergedProperties = propertiesFromContext.map((contextProperty, contextIndex) => {
       const knownProperty = propertyById.get(contextProperty.id);
       if (knownProperty) {
         return knownProperty;
@@ -208,7 +209,7 @@ export function DocumentFieldsPanel({
         workspaceId: page.workspaceId,
         name: contextProperty.name,
         type: contextProperty.type as DatabasePropertyType,
-        position: 0,
+        position: contextProperty.position ?? contextIndex,
         settings: {},
         creatorId: null,
         createdAt: "",
@@ -216,6 +217,8 @@ export function DocumentFieldsPanel({
         deletedAt: null,
       };
     });
+
+    return sortDatabasePropertiesByPosition(mergedProperties);
   }, [
     databaseProperties,
     page.workspaceId,

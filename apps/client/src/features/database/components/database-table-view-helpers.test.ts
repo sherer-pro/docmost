@@ -4,7 +4,10 @@ import {
   getSelectedPreparedRowIds,
   isDatabaseFilterControlsVisible,
   isSameCellPayloadValue,
+  mergePinnedDatabaseRow,
+  reorderDatabaseProperties,
   resolveDatabasePropertyRename,
+  shouldShowDatabaseFilterRemove,
   shouldDeleteCellPayload,
 } from './database-table-view.helpers';
 
@@ -12,6 +15,44 @@ describe('database-table-view helpers', () => {
   it('hides filter controls on mobile while keeping state applicability intact', () => {
     expect(isDatabaseFilterControlsVisible(true)).toBe(false);
     expect(isDatabaseFilterControlsVisible(false)).toBe(true);
+  });
+
+  it('shows filter removal only when another condition can remain', () => {
+    expect(shouldShowDatabaseFilterRemove(0)).toBe(false);
+    expect(shouldShowDatabaseFilterRemove(1)).toBe(false);
+    expect(shouldShowDatabaseFilterRemove(2)).toBe(true);
+  });
+
+  it('pins a newly created row first without duplicating canonical data', () => {
+    const rows = [
+      { id: 'row-1', pageId: 'page-1' },
+      { id: 'row-2', pageId: 'page-2' },
+    ];
+    const pinnedRow = {
+      id: 'row-2',
+      pageId: 'page-2',
+      pageTitle: 'New row',
+    };
+
+    expect(mergePinnedDatabaseRow(rows, pinnedRow)).toEqual([pinnedRow, rows[0]]);
+    expect(mergePinnedDatabaseRow(rows, null)).toBe(rows);
+  });
+
+  it('reorders database properties and normalizes their positions', () => {
+    const properties = [
+      { id: 'property-a', position: 0 },
+      { id: 'property-b', position: 1 },
+      { id: 'property-c', position: 2 },
+    ];
+
+    expect(reorderDatabaseProperties(properties, 'property-c', 'property-a')).toEqual([
+      { id: 'property-c', position: 0 },
+      { id: 'property-a', position: 1 },
+      { id: 'property-b', position: 2 },
+    ]);
+    expect(reorderDatabaseProperties(properties, 'property-a', 'missing-property')).toBe(
+      properties,
+    );
   });
 
   it('normalizes inline property rename payload', () => {

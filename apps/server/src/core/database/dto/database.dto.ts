@@ -295,6 +295,11 @@ export class UpdateDatabasePropertyDto {
   type?: DatabasePropertyType;
 
   @IsOptional()
+  @IsInt()
+  @Min(0)
+  position?: number;
+
+  @IsOptional()
   @ValidateIf((_, value) => typeof value !== 'undefined')
   @ValidateNested()
   @Type(() => SelectPropertySettingsDto)

@@ -45,6 +45,7 @@ export interface CreateDatabasePropertyPayload {
 export interface UpdateDatabasePropertyPayload {
   name?: string;
   type?: DatabasePropertyType;
+  position?: number;
   settings?: DatabasePropertySettings;
 }
 

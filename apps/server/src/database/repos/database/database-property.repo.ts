@@ -36,6 +36,7 @@ export class DatabasePropertyRepo {
       .where('databaseId', '=', databaseId)
       .where('deletedAt', 'is', null)
       .orderBy('position', 'asc')
+      .orderBy('createdAt', 'asc')
       .execute();
   }
 

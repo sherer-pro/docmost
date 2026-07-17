@@ -19,6 +19,40 @@
   background: var(--mantine-color-body);
 }
 
+.propertyHeader {
+  transition:
+    background-color 120ms ease,
+    box-shadow 120ms ease,
+    opacity 120ms ease;
+}
+
+.propertyHeader[data-dragging="true"] {
+  opacity: 0.55;
+}
+
+.propertyHeader[data-drop-target="true"] {
+  background: light-dark(var(--mantine-color-blue-0), rgba(34, 139, 230, 0.16));
+  box-shadow: inset rem(3px) 0 var(--mantine-color-blue-6);
+}
+
+.propertyDragHandle {
+  flex: 0 0 auto;
+  cursor: grab;
+}
+
+.propertyDragHandle:active {
+  cursor: grabbing;
+}
+
+.propertyName {
+  min-width: 0;
+  flex: 1;
+}
+
+.propertyName :global(.mantine-TextInput-root) {
+  width: 100%;
+}
+
 @media (max-width: 48em) {
   .scrollHint {
     display: block;

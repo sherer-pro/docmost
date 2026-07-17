@@ -1677,10 +1677,60 @@ export class DatabaseService {
       throw new NotFoundException('Database property not found');
     }
 
-    const updatedProperty = await this.databasePropertyRepo.updateProperty(propertyId, {
-      ...dto,
-      settings: dto.settings as never,
-    });
+    const propertyPayload = {
+      ...(typeof dto.name === 'string' ? { name: dto.name } : {}),
+      ...(dto.type ? { type: dto.type } : {}),
+      ...(typeof dto.settings !== 'undefined'
+        ? { settings: dto.settings as never }
+        : {}),
+    };
+    let updatedProperty = property;
+
+    if (typeof dto.position === 'number') {
+      const currentProperties =
+        await this.databasePropertyRepo.findByDatabaseId(databaseId);
+      const currentIndex = currentProperties.findIndex(
+        (currentProperty) => currentProperty.id === propertyId,
+      );
+
+      if (currentIndex < 0) {
+        throw new NotFoundException('Database property not found');
+      }
+
+      if (dto.position >= currentProperties.length) {
+        throw new BadRequestException('Database property position is out of range');
+      }
+
+      const reorderedProperties = [...currentProperties];
+      const movedProperty = reorderedProperties[currentIndex];
+      if (!movedProperty) {
+        throw new NotFoundException('Database property not found');
+      }
+
+      reorderedProperties.splice(currentIndex, 1);
+      reorderedProperties.splice(dto.position, 0, movedProperty);
+
+      await executeTx(this.db, async (trx) => {
+        for (const [position, currentProperty] of reorderedProperties.entries()) {
+          const nextProperty = await this.databasePropertyRepo.updateProperty(
+            currentProperty.id,
+            currentProperty.id === propertyId
+              ? { ...propertyPayload, position }
+              : { position },
+            trx,
+          );
+
+          if (currentProperty.id === propertyId) {
+            updatedProperty = nextProperty;
+          }
+        }
+      });
+    } else {
+      updatedProperty = await this.databasePropertyRepo.updateProperty(
+        propertyId,
+        propertyPayload,
+      );
+    }
 
     if (dto.type && dto.type !== property.type) {
       await this.convertPropertyCellValues(
@@ -1694,7 +1744,7 @@ export class DatabaseService {
     }
 
     const propertyChanges: Array<{
-      field: 'name' | 'type' | 'settings';
+      field: 'name' | 'type' | 'position' | 'settings';
       oldValue: unknown;
       newValue: unknown;
     }> = [];
@@ -1715,6 +1765,17 @@ export class DatabaseService {
         field: 'type',
         oldValue: this.normalizePropertyType(property.type),
         newValue: this.normalizePropertyType(updatedProperty.type),
+      });
+    }
+
+    if (
+      typeof dto.position === 'number' &&
+      dto.position !== property.position
+    ) {
+      propertyChanges.push({
+        field: 'position',
+        oldValue: property.position,
+        newValue: updatedProperty.position,
       });
     }
 
