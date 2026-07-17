@@ -624,6 +624,8 @@ interface CreateNodeProps {
 
 function CreateNode({ node, treeApi, onExpandTree }: CreateNodeProps) {
   const { t } = useTranslation();
+  const { spaceSlug } = useParams();
+  const navigate = useNavigate();
   const [treeData, setTreeData] = useAtom(treeDataAtom);
   const [user, setUser] = useAtom(userAtom);
   const emit = useQueryEmit();
@@ -657,6 +659,16 @@ function CreateNode({ node, treeApi, onExpandTree }: CreateNodeProps) {
     }
 
     const createdRowPage = await getPageById({ pageId: createdRow.pageId });
+    queryClient.setQueryData(
+      PAGE_QUERY_KEYS.page(createdRow.pageId),
+      createdRowPage,
+    );
+    if (createdRowPage.slugId) {
+      queryClient.setQueryData(
+        PAGE_QUERY_KEYS.page(createdRowPage.slugId),
+        createdRowPage,
+      );
+    }
 
     const treeNodeData: SpaceTreeNode = {
       id: createdRow.pageId,
@@ -699,6 +711,13 @@ function CreateNode({ node, treeApi, onExpandTree }: CreateNodeProps) {
     }
 
     onExpandTree?.();
+
+    const createdRowSlugId = createdRow.slugId ?? createdRowPage.slugId;
+    if (spaceSlug && createdRowSlugId) {
+      navigate(
+        buildPageUrl(spaceSlug, createdRowSlugId, createdRowPage.title),
+      );
+    }
   }
 
   async function handleCreate() {
