@@ -41,6 +41,7 @@ import {
   PageAccessRules,
 } from './db';
 import { PageEmbeddings } from '@docmost/db/types/embeddings.types';
+import type { PageAiParticipation } from '@docmost/api-contract';
 
 /**
  * Document field settings at the space level.
@@ -49,6 +50,8 @@ export interface SpaceDocumentFieldsSettings {
   status?: boolean;
   assignee?: boolean;
   stakeholders?: boolean;
+  aiParticipation?: boolean;
+  readingTime?: boolean;
 }
 
 /**
@@ -60,10 +63,6 @@ export interface SpaceDictionarySettings {
 
 export type HeadingNumberingSettings = {
   enabled?: boolean;
-} & Record<string, JsonValue>;
-
-export type PageHeadingNumberingSettings = {
-  enabled?: boolean | null;
 } & Record<string, JsonValue>;
 
 /**
@@ -82,7 +81,7 @@ export interface PageSettings {
   status?: string | null;
   assigneeId?: string | null;
   stakeholderIds?: string[] | null;
-  headingNumbering?: PageHeadingNumberingSettings;
+  aiParticipation?: PageAiParticipation;
   [key: string]: JsonValue | undefined;
 }
 

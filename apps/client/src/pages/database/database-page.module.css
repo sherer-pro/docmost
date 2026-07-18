@@ -6,6 +6,14 @@
   box-sizing: border-box;
 }
 
+.readingTimeContainer {
+  width: 100%;
+  max-width: 900px;
+  margin-inline: auto;
+  padding-inline: 48px;
+  box-sizing: border-box;
+}
+
 .titleEditorContainer :global(.ProseMirror) {
   padding: 0;
   margin: 0;
@@ -33,6 +41,7 @@
 
 @media (max-width: 48em) {
   .titleEditorContainer,
+  .readingTimeContainer,
   .databaseDescriptionEditorContainer {
     padding-inline: 16px;
   }

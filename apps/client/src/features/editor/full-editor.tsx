@@ -5,11 +5,13 @@ import { TitleEditor } from "@/features/editor/title-editor";
 import PageEditor from "@/features/editor/page-editor";
 import { Container } from "@mantine/core";
 import { ReactNode } from "react";
-import { useAtom } from "jotai";
+import { useAtom, useAtomValue } from "jotai";
 import { userAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { PageEditMode } from "@/features/user/types/user.types.ts";
 import { resolvePageEditMode } from "@/features/user/utils/page-edit-mode.ts";
 import { resolvePageFullWidth } from "@/features/user/utils/page-width.ts";
+import { pageEditorAtom } from "@/features/editor/atoms/editor-atoms.ts";
+import { PageReadingTime } from "@/features/page/components/reading-time/page-reading-time.tsx";
 
 const MemoizedTitleEditor = React.memo(TitleEditor);
 const MemoizedPageEditor = React.memo(PageEditor);
@@ -23,6 +25,8 @@ export interface FullEditorProps {
   spaceId?: string;
   dictionaryEnabled?: boolean;
   headingNumberingEnabled?: boolean;
+  spaceHeadingNumberingEnabled?: boolean;
+  readingTimeEnabled?: boolean;
   editable: boolean;
   metaPanel?: ReactNode;
   footer?: ReactNode;
@@ -37,11 +41,14 @@ export function FullEditor({
   spaceId,
   dictionaryEnabled = false,
   headingNumberingEnabled = false,
+  spaceHeadingNumberingEnabled = false,
+  readingTimeEnabled = false,
   editable,
   metaPanel,
   footer,
 }: FullEditorProps) {
   const [user] = useAtom(userAtom);
+  const pageEditor = useAtomValue(pageEditorAtom);
 
   /**
    * Explicit editor width priority:
@@ -80,6 +87,12 @@ export function FullEditor({
         spaceSlug={spaceSlug}
         editable={editable}
       />
+      <PageReadingTime
+        editor={pageEditor}
+        enabled={readingTimeEnabled}
+        pageId={pageId}
+        className={classes.readingTime}
+      />
       {metaPanel}
       <MemoizedPageEditor
         pageId={pageId}
@@ -89,6 +102,7 @@ export function FullEditor({
         spaceId={spaceId}
         dictionaryEnabled={dictionaryEnabled}
         headingNumberingEnabled={headingNumberingEnabled}
+        spaceHeadingNumberingEnabled={spaceHeadingNumberingEnabled}
         canManageDictionary={editable}
         canCreateInlineComments={editable}
       />

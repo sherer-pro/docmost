@@ -22,6 +22,14 @@ export class UpdateSpaceDocumentFieldsDto {
   @IsOptional()
   @IsBoolean()
   stakeholders?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  aiParticipation?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  readingTime?: boolean;
 }
 
 export class UpdateSpaceDto extends PartialType(CreateSpaceDto) {

@@ -19,6 +19,7 @@ import { asideStateAtom } from "@/components/layouts/global/hooks/atoms/sidebar-
 import PageCommentSection from "@/features/comment/components/page-comment-section";
 import { useSpaceQuery } from "@/features/space/queries/space-query";
 import { resolveHeadingNumberingEnabled } from "@/features/page/utils/heading-numbering";
+import { userAtom } from "@/features/user/atoms/current-user-atom.ts";
 
 const MemoizedFullEditor = React.memo(FullEditor);
 const MemoizedPageHeader = React.memo(PageHeader);
@@ -59,6 +60,7 @@ function PageContent({
   const location = useLocation();
   const navigate = useNavigate();
   const [asideState, setAsideState] = useAtom(asideStateAtom);
+  const [user] = useAtom(userAtom);
 
   const {
     data: page,
@@ -74,7 +76,8 @@ function PageContent({
   const resolvedSpaceSlug = page?.space?.slug ?? routeSpaceSlug;
   const resolvedSpaceSettings = currentSpace?.settings ?? page?.space?.settings;
   const headingNumberingEnabled = resolveHeadingNumberingEnabled({
-    pageSettings: page?.settings,
+    pageId: page?.id,
+    preferences: user?.settings?.preferences,
     spaceSettings: resolvedSpaceSettings,
   });
   const isCommentsAsideOpen =
@@ -157,6 +160,12 @@ function PageContent({
             resolvedSpaceSettings?.dictionary?.enabled === true
           }
           headingNumberingEnabled={headingNumberingEnabled}
+          spaceHeadingNumberingEnabled={
+            resolvedSpaceSettings?.headingNumbering?.enabled === true
+          }
+          readingTimeEnabled={
+            resolvedSpaceSettings?.documentFields?.readingTime === true
+          }
           editable={canWritePage}
         />
         <MemoizedHistoryModal pageId={page.id} />

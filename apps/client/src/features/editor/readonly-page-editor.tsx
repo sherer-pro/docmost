@@ -10,6 +10,8 @@ import { useAtom } from "jotai";
 import { readOnlyEditorAtom } from "@/features/editor/atoms/editor-atoms.ts";
 import { useEditorScroll } from "./hooks/use-editor-scroll";
 import { TransclusionLookupProvider } from "@/features/editor/components/transclusion/transclusion-lookup-context";
+import { PageReadingTime } from "@/features/page/components/reading-time/page-reading-time.tsx";
+import editorClasses from "@/features/editor/styles/editor.module.css";
 
 interface PageEditorProps {
   title: string;
@@ -17,6 +19,7 @@ interface PageEditorProps {
   pageId?: string;
   shareId?: string;
   headingNumberingEnabled?: boolean;
+  readingTimeEnabled?: boolean;
 }
 
 export default function ReadonlyPageEditor({
@@ -25,8 +28,9 @@ export default function ReadonlyPageEditor({
   pageId,
   shareId,
   headingNumberingEnabled = false,
+  readingTimeEnabled = false,
 }: PageEditorProps) {
-  const [, setReadOnlyEditor] = useAtom(readOnlyEditorAtom);
+  const [readOnlyEditor, setReadOnlyEditor] = useAtom(readOnlyEditorAtom);
   const isComponentMounted = useRef(false);
   const editorCreated = useRef(false);
 
@@ -77,6 +81,13 @@ export default function ReadonlyPageEditor({
         extensions={titleExtensions}
         content={title}
       ></EditorProvider>
+
+      <PageReadingTime
+        editor={readOnlyEditor}
+        enabled={readingTimeEnabled}
+        pageId={pageId}
+        className={editorClasses.readingTime}
+      />
 
       <EditorProvider
         editable={false}

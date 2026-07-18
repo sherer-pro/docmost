@@ -38,6 +38,7 @@ export interface ISharedItem extends IShare {
 export interface ISharedPage extends IShare {
   page: IPage;
   headingNumberingEnabled: boolean;
+  readingTimeEnabled: boolean;
   share: IShare & {
     level: number;
     sharedPage: { id: string; slugId: string; title: string; icon: string };

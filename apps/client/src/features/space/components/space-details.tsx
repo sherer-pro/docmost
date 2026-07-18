@@ -42,6 +42,10 @@ import {
   IconInfoCircle,
 } from "@tabler/icons-react";
 import { ISpaceDocumentFieldsSettings } from "@/features/space/types/space.types.ts";
+import { AccessibleActionIcon } from "@/components/ui/accessible-action-icon.tsx";
+import { useAtomValue } from "jotai";
+import { userAtom } from "@/features/user/atoms/current-user-atom.ts";
+import { hasFullSpaceAccess } from "@/features/space/permissions/export-access.ts";
 
 interface SpaceDetailsProps {
   spaceId: string;
@@ -49,6 +53,7 @@ interface SpaceDetailsProps {
 }
 export default function SpaceDetails({ spaceId, readOnly }: SpaceDetailsProps) {
   const { t } = useTranslation();
+  const user = useAtomValue(userAtom);
   const { data: space, isLoading, refetch } = useSpaceQuery(spaceId);
   const { mutate: updateSpace, isPending: isUpdatingSpace } =
     useUpdateSpaceMutation();
@@ -62,6 +67,10 @@ export default function SpaceDetails({ spaceId, readOnly }: SpaceDetailsProps) {
     useDisclosure(false);
   const [isIconUploading, setIsIconUploading] = useState(false);
   const isArchived = !!space?.archivedAt;
+  const canExportSpace = hasFullSpaceAccess({
+    workspaceRole: user?.role,
+    spaceRole: space?.membership?.role,
+  });
 
   const handleIconUpload = async (file: File) => {
     setIsIconUploading(true);
@@ -282,6 +291,30 @@ export default function SpaceDetails({ spaceId, readOnly }: SpaceDetailsProps) {
 
                 <Group gap="xs" wrap="nowrap">
                   <Checkbox
+                    label={t("Reading time")}
+                    checked={!!space.settings?.documentFields?.readingTime}
+                    onChange={(event) =>
+                      handleDocumentFieldChange(
+                        "readingTime",
+                        event.currentTarget.checked,
+                      )
+                    }
+                    disabled={readOnly || isUpdatingSpace}
+                  />
+                  <AccessibleActionIcon
+                    variant="subtle"
+                    label={t("Reading time info")}
+                    tooltip={t(
+                      "Estimates reading time from the document text and shows it below the title.",
+                    )}
+                    tooltipProps={{ multiline: true, w: 320 }}
+                  >
+                    <IconInfoCircle size={16} />
+                  </AccessibleActionIcon>
+                </Group>
+
+                <Group gap="xs" wrap="nowrap">
+                  <Checkbox
                     label={t("Assignee")}
                     checked={!!space.settings?.documentFields?.assignee}
                     onChange={(event) =>
@@ -303,6 +336,35 @@ export default function SpaceDetails({ spaceId, readOnly }: SpaceDetailsProps) {
                       variant="subtle"
                       size="sm"
                       aria-label={t("Assignee info")}
+                    >
+                      <IconInfoCircle size={16} />
+                    </ActionIcon>
+                  </Tooltip>
+                </Group>
+
+                <Group gap="xs" wrap="nowrap">
+                  <Checkbox
+                    label={t("AI participation")}
+                    checked={!!space.settings?.documentFields?.aiParticipation}
+                    onChange={(event) =>
+                      handleDocumentFieldChange(
+                        "aiParticipation",
+                        event.currentTarget.checked,
+                      )
+                    }
+                    disabled={readOnly || isUpdatingSpace}
+                  />
+                  <Tooltip
+                    multiline
+                    w={320}
+                    label={t(
+                      "Adds an AI participation field to every document in this space. Use it to disclose how much AI contributed to each document.",
+                    )}
+                  >
+                    <ActionIcon
+                      variant="subtle"
+                      size="sm"
+                      aria-label={t("AI participation info")}
                     >
                       <IconInfoCircle size={16} />
                     </ActionIcon>
@@ -376,7 +438,11 @@ export default function SpaceDetails({ spaceId, readOnly }: SpaceDetailsProps) {
                   </Button>
                 </ResponsiveSettingsControl>
               </ResponsiveSettingsRow>
+            </>
+          )}
 
+          {canExportSpace && (
+            <>
               <Divider my="lg" />
 
               <ResponsiveSettingsRow>
@@ -390,7 +456,11 @@ export default function SpaceDetails({ spaceId, readOnly }: SpaceDetailsProps) {
                   <Button onClick={openExportModal}>{t("Export")}</Button>
                 </ResponsiveSettingsControl>
               </ResponsiveSettingsRow>
+            </>
+          )}
 
+          {!readOnly && (
+            <>
               <Divider my="lg" />
 
               <ResponsiveSettingsRow>
@@ -404,14 +474,16 @@ export default function SpaceDetails({ spaceId, readOnly }: SpaceDetailsProps) {
                   <DeleteSpaceModal space={space} />
                 </ResponsiveSettingsControl>
               </ResponsiveSettingsRow>
-
-              <ExportModal
-                type="space"
-                id={space.id}
-                open={exportOpened}
-                onClose={closeExportModal}
-              />
             </>
+          )}
+
+          {canExportSpace && (
+            <ExportModal
+              type="space"
+              id={space.id}
+              open={exportOpened}
+              onClose={closeExportModal}
+            />
           )}
         </div>
       )}
