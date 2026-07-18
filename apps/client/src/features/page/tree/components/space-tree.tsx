@@ -5,7 +5,7 @@ import {
   TreeApi,
   SimpleTree,
 } from "react-arborist";
-import { useAtom } from "jotai";
+import { useAtom, useSetAtom } from "jotai";
 import { treeApiAtom } from "@/features/page/tree/atoms/tree-api-atom.ts";
 import {
   fetchAllAncestorChildren,
@@ -13,7 +13,16 @@ import {
   usePageQuery,
   useUpdatePageMutation,
 } from "@/features/page/queries/page-query.ts";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  forwardRef,
+  type ForwardedRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import classes from "@/features/page/tree/styles/tree.module.css";
 import { Box, Menu, rem, Text } from "@mantine/core";
@@ -45,8 +54,15 @@ import {
   mergeTreeNodeMetadata,
   mergeRootTrees,
   resolveActiveTreeSlug,
+  setTreeNodeHasChildren,
   updateTreeNodeIcon,
 } from "@/features/page/tree/utils/utils.ts";
+import {
+  areAllTreeNodesExpanded,
+  getExpandableTreeNodeIds,
+  loadTreeRecursively,
+  updateTreeNodesOpenState,
+} from "@/features/page/tree/utils/bulk-tree.ts";
 import { SpaceTreeNode } from "@/features/page/tree/types.ts";
 import {
   getPageBreadcrumbs,
@@ -98,12 +114,33 @@ import {
 interface SpaceTreeProps {
   spaceId: string;
   readOnly: boolean;
+  onBulkStateChange?: (state: SpaceTreeBulkState) => void;
+}
+
+export interface SpaceTreeHandle {
+  toggleAll: () => void;
+}
+
+export interface SpaceTreeBulkState {
+  ready: boolean;
+  busy: boolean;
+  canToggle: boolean;
+  allExpanded: boolean;
+}
+
+interface PendingBulkOpen {
+  operationId: number;
+  nodeIds: string[];
+  hasFailures: boolean;
 }
 
 const TREE_ACTION_SIZE = 24;
 const TREE_ACTION_ICON_SIZE = 16;
 
-export default function SpaceTree({ spaceId, readOnly }: SpaceTreeProps) {
+function SpaceTreeComponent(
+  { spaceId, readOnly, onBulkStateChange }: SpaceTreeProps,
+  ref: ForwardedRef<SpaceTreeHandle>,
+) {
   const { t } = useTranslation();
   const { pageSlug, databaseSlug } = useParams();
   const activeTreeSlug = resolveActiveTreeSlug({ pageSlug, databaseSlug });
@@ -117,8 +154,14 @@ export default function SpaceTree({ spaceId, readOnly }: SpaceTreeProps) {
   } = useGetRootSidebarPagesQuery({
     spaceId,
   });
-  const [, setTreeApi] = useAtom<TreeApi<SpaceTreeNode>>(treeApiAtom);
-  const treeApiRef = useRef<TreeApi<SpaceTreeNode>>();
+  const setTreeApi = useSetAtom(treeApiAtom);
+  const treeApiRef = useRef<TreeApi<SpaceTreeNode> | null>(null);
+  const bulkOperationIdRef = useRef(0);
+  const isBulkToggleRef = useRef(false);
+  const [isTreeReady, setIsTreeReady] = useState(false);
+  const [isBulkBusy, setIsBulkBusy] = useState(false);
+  const [pendingBulkOpen, setPendingBulkOpen] =
+    useState<PendingBulkOpen | null>(null);
   const [openTreeNodesBySpace, setOpenTreeNodesBySpace] = useAtom(
     openTreeNodesBySpaceAtom,
   );
@@ -146,6 +189,10 @@ export default function SpaceTree({ spaceId, readOnly }: SpaceTreeProps) {
 
   useEffect(() => {
     setIsDataLoaded(false);
+    bulkOperationIdRef.current += 1;
+    isBulkToggleRef.current = false;
+    setIsBulkBusy(false);
+    setPendingBulkOpen(null);
   }, [spaceId]);
 
   useEffect(() => {
@@ -261,7 +308,7 @@ export default function SpaceTree({ spaceId, readOnly }: SpaceTreeProps) {
   // Clean up tree API on unmount
   useEffect(() => {
     return () => {
-      // @ts-ignore
+      bulkOperationIdRef.current += 1;
       setTreeApi(null);
     };
   }, [setTreeApi]);
@@ -270,6 +317,210 @@ export default function SpaceTree({ spaceId, readOnly }: SpaceTreeProps) {
     () => data.filter((node) => node?.spaceId === spaceId),
     [data, spaceId],
   );
+
+  const expandableNodeIds = useMemo(
+    () => getExpandableTreeNodeIds(filteredData),
+    [filteredData],
+  );
+  const allExpanded = useMemo(
+    () => areAllTreeNodesExpanded(expandableNodeIds, openTreeNodes),
+    [expandableNodeIds, openTreeNodes],
+  );
+  const canToggle = isDataLoaded && isTreeReady && expandableNodeIds.length > 0;
+
+  const handleTreeRef = useCallback(
+    (treeApi: TreeApi<SpaceTreeNode> | null) => {
+      treeApiRef.current = treeApi;
+      setIsTreeReady(!!treeApi);
+      setTreeApi(treeApi);
+    },
+    [setTreeApi],
+  );
+
+  const applyBulkOpenState = useCallback(
+    (nodeIds: string[], isOpen: boolean) => {
+      const treeApi = treeApiRef.current;
+      if (!treeApi) {
+        return;
+      }
+
+      const availableNodeIds = nodeIds.filter((nodeId) =>
+        dfs(treeApi.root, nodeId),
+      );
+      isBulkToggleRef.current = true;
+
+      try {
+        for (const nodeId of availableNodeIds) {
+          if (isOpen) {
+            treeApi.open(nodeId);
+          } else {
+            treeApi.close(nodeId);
+          }
+        }
+
+        setOpenTreeNodesBySpace((previousValue) => {
+          const previousOpenState = getOpenTreeNodesForSpace(
+            previousValue,
+            spaceId,
+          );
+          const nextOpenState = updateTreeNodesOpenState(
+            previousOpenState,
+            availableNodeIds,
+            isOpen,
+          );
+
+          if (isOpenStateEqual(previousOpenState, nextOpenState)) {
+            return previousValue;
+          }
+
+          return updateOpenTreeNodesForSpace(
+            previousValue,
+            spaceId,
+            nextOpenState,
+          );
+        });
+      } finally {
+        isBulkToggleRef.current = false;
+      }
+    },
+    [setOpenTreeNodesBySpace, spaceId],
+  );
+
+  const collapseAll = useCallback(() => {
+    bulkOperationIdRef.current += 1;
+    setPendingBulkOpen(null);
+    setIsBulkBusy(false);
+    applyBulkOpenState(expandableNodeIds, false);
+  }, [applyBulkOpenState, expandableNodeIds]);
+
+  const expandAll = useCallback(async () => {
+    if (!canToggle || isBulkBusy) {
+      return;
+    }
+
+    const operationId = bulkOperationIdRef.current + 1;
+    bulkOperationIdRef.current = operationId;
+    setIsBulkBusy(true);
+
+    const isCancelled = () =>
+      bulkOperationIdRef.current !== operationId ||
+      spaceIdRef.current !== spaceId;
+
+    const result = await loadTreeRecursively(
+      filteredData,
+      (node) =>
+        fetchAllAncestorChildren({
+          pageId: node.id,
+          spaceId: node.spaceId,
+          includeNodeTypes: ["page", "database", "databaseRow"],
+        }),
+      {
+        isCancelled,
+        onChildrenLoaded: (parentId, children) => {
+          if (isCancelled()) {
+            return;
+          }
+
+          setData((currentTree) => {
+            const treeWithChildren = appendNodeChildren(
+              currentTree,
+              parentId,
+              children,
+            );
+
+            return children.length === 0
+              ? setTreeNodeHasChildren(treeWithChildren, parentId, false)
+              : treeWithChildren;
+          });
+        },
+      },
+    );
+
+    if (result.cancelled || isCancelled()) {
+      return;
+    }
+
+    if (result.expandableNodeIds.length === 0) {
+      if (result.failedNodeIds.length > 0) {
+        notifications.show({
+          message: t("Failed to load subpages"),
+          color: "red",
+        });
+      }
+
+      setIsBulkBusy(false);
+      return;
+    }
+
+    setPendingBulkOpen({
+      operationId,
+      nodeIds: result.expandableNodeIds,
+      hasFailures: result.failedNodeIds.length > 0,
+    });
+  }, [canToggle, filteredData, isBulkBusy, setData, spaceId, t]);
+
+  useEffect(() => {
+    if (!pendingBulkOpen) {
+      return;
+    }
+
+    const animationFrame = window.requestAnimationFrame(() => {
+      if (
+        bulkOperationIdRef.current !== pendingBulkOpen.operationId ||
+        spaceIdRef.current !== spaceId
+      ) {
+        return;
+      }
+
+      applyBulkOpenState(pendingBulkOpen.nodeIds, true);
+
+      if (pendingBulkOpen.hasFailures) {
+        notifications.show({
+          message: t("Failed to load subpages"),
+          color: "red",
+        });
+      }
+
+      setPendingBulkOpen(null);
+      setIsBulkBusy(false);
+    });
+
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [applyBulkOpenState, data, pendingBulkOpen, spaceId, t]);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      toggleAll: () => {
+        if (!canToggle || isBulkBusy) {
+          return;
+        }
+
+        if (allExpanded) {
+          collapseAll();
+        } else {
+          void expandAll();
+        }
+      },
+    }),
+    [allExpanded, canToggle, collapseAll, expandAll, isBulkBusy],
+  );
+
+  useEffect(() => {
+    onBulkStateChange?.({
+      ready: isDataLoaded && isTreeReady,
+      busy: isBulkBusy,
+      canToggle,
+      allExpanded,
+    });
+  }, [
+    allExpanded,
+    canToggle,
+    isBulkBusy,
+    isDataLoaded,
+    isTreeReady,
+    onBulkStateChange,
+  ]);
 
   return (
     <div ref={mergedRef} className={classes.treeContainer}>
@@ -288,13 +539,7 @@ export default function SpaceTree({ spaceId, readOnly }: SpaceTreeProps) {
           {...controllers}
           width={width}
           height={rootElement.current.clientHeight}
-          ref={(ref) => {
-            treeApiRef.current = ref;
-            if (ref) {
-              //@ts-ignore
-              setTreeApi(ref);
-            }
-          }}
+          ref={handleTreeRef}
           openByDefault={false}
           disableMultiSelection={true}
           className={classes.tree}
@@ -303,6 +548,10 @@ export default function SpaceTree({ spaceId, readOnly }: SpaceTreeProps) {
           overscanCount={10}
           dndRootElement={rootElement.current}
           onToggle={() => {
+            if (isBulkToggleRef.current) {
+              return;
+            }
+
             const nextOpenState = treeApiRef.current?.openState ?? {};
 
             setOpenTreeNodesBySpace((previousValue) => {
@@ -333,6 +582,12 @@ export default function SpaceTree({ spaceId, readOnly }: SpaceTreeProps) {
     </div>
   );
 }
+
+const SpaceTree = forwardRef(SpaceTreeComponent);
+
+SpaceTree.displayName = "SpaceTree";
+
+export default SpaceTree;
 
 interface NodeProps extends NodeRendererProps<SpaceTreeNode> {
   isStatusFieldEnabled: boolean;

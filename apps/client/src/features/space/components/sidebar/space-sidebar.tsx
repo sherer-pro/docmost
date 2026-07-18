@@ -9,6 +9,8 @@ import {
 import {
   IconArrowDown,
   IconBook2,
+  IconChevronsDown,
+  IconChevronsUp,
   IconDots,
   IconHexagonPlus,
   IconFileExport,
@@ -20,7 +22,7 @@ import {
   IconTrash,
 } from "@tabler/icons-react";
 import classes from "./space-sidebar.module.css";
-import React from "react";
+import React, { useRef, useState } from "react";
 import { useAtom } from "jotai";
 import { treeApiAtom } from "@/features/page/tree/atoms/tree-api-atom.ts";
 import { Link, useLocation, useParams } from "react-router-dom";
@@ -30,7 +32,10 @@ import { useDisclosure } from "@mantine/hooks";
 import SpaceSettingsModal from "@/features/space/components/settings-modal.tsx";
 import { useGetSpaceBySlugQuery } from "@/features/space/queries/space-query.ts";
 import { getSpaceUrl } from "@/lib/config.ts";
-import SpaceTree from "@/features/page/tree/components/space-tree.tsx";
+import SpaceTree, {
+  type SpaceTreeBulkState,
+  type SpaceTreeHandle,
+} from "@/features/page/tree/components/space-tree.tsx";
 import { useSpaceAbility } from "@/features/space/permissions/use-space-ability.ts";
 import {
   SpaceCaslAction,
@@ -58,13 +63,26 @@ import {
 } from "@/features/page/tree/utils";
 import { useQueryEmit } from "@/features/websocket/use-query-emit.ts";
 import { PAGE_QUERY_KEYS } from "@/features/page/queries/query-keys.ts";
+import { AccessibleActionIcon } from "@/components/ui/accessible-action-icon.tsx";
 
 const PAGE_TREE_ACTION_SIZE = 24;
 const PAGE_TREE_ACTION_ICON_SIZE = 16;
+const PAGE_TREE_BULK_ACTION_SIZE = 32;
+
+const INITIAL_TREE_BULK_STATE: SpaceTreeBulkState = {
+  ready: false,
+  busy: false,
+  canToggle: false,
+  allExpanded: false,
+};
 
 export function SpaceSidebar() {
   const { t } = useTranslation();
   const [tree] = useAtom(treeApiAtom);
+  const spaceTreeRef = useRef<SpaceTreeHandle>(null);
+  const [treeBulkState, setTreeBulkState] = useState<SpaceTreeBulkState>(
+    INITIAL_TREE_BULK_STATE,
+  );
   const location = useLocation();
   const [opened, { open: openSettings, close: closeSettings }] =
     useDisclosure(false);
@@ -297,46 +315,78 @@ export function SpaceSidebar() {
               {t("Pages")}
             </Text>
 
-            {spaceAbility.can(
-              SpaceCaslAction.Manage,
-              SpaceCaslSubject.Page,
-            ) && (
-              <Group gap="xs">
-                <SpaceMenu spaceId={space.id} onSpaceSettings={openSettings} />
+            <Group gap="xs">
+              <AccessibleActionIcon
+                variant="default"
+                size={PAGE_TREE_BULK_ACTION_SIZE}
+                minTargetSize={PAGE_TREE_BULK_ACTION_SIZE}
+                label={
+                  treeBulkState.busy
+                    ? t("Loading...")
+                    : treeBulkState.allExpanded
+                      ? t("Collapse all")
+                      : t("Expand all")
+                }
+                tooltipProps={{ withArrow: true, position: "right" }}
+                loading={treeBulkState.busy}
+                disabled={!treeBulkState.ready || !treeBulkState.canToggle}
+                onClick={() => spaceTreeRef.current?.toggleAll()}
+              >
+                {treeBulkState.allExpanded ? (
+                  <IconChevronsUp size={PAGE_TREE_ACTION_ICON_SIZE} />
+                ) : (
+                  <IconChevronsDown size={PAGE_TREE_ACTION_ICON_SIZE} />
+                )}
+              </AccessibleActionIcon>
 
-                <Tooltip
-                  label={t("Create database")}
-                  withArrow
-                  position="right"
-                >
-                  <ActionIcon
-                    variant="default"
-                    size={PAGE_TREE_ACTION_SIZE}
-                    onClick={handleCreateDatabase}
-                    disabled={createDatabaseMutation.isPending}
-                    aria-label={t("Create database")}
-                  >
-                    <IconHexagonPlus size={PAGE_TREE_ACTION_ICON_SIZE} />
-                  </ActionIcon>
-                </Tooltip>
+              {spaceAbility.can(
+                SpaceCaslAction.Manage,
+                SpaceCaslSubject.Page,
+              ) && (
+                <>
+                  <SpaceMenu
+                    spaceId={space.id}
+                    onSpaceSettings={openSettings}
+                  />
 
-                <Tooltip label={t("Create page")} withArrow position="right">
-                  <ActionIcon
-                    variant="default"
-                    size={PAGE_TREE_ACTION_SIZE}
-                    onClick={handleCreatePage}
-                    aria-label={t("Create page")}
+                  <Tooltip
+                    label={t("Create database")}
+                    withArrow
+                    position="right"
                   >
-                    <IconSquareRoundedPlus size={PAGE_TREE_ACTION_ICON_SIZE} />
-                  </ActionIcon>
-                </Tooltip>
-              </Group>
-            )}
+                    <ActionIcon
+                      variant="default"
+                      size={PAGE_TREE_ACTION_SIZE}
+                      onClick={handleCreateDatabase}
+                      disabled={createDatabaseMutation.isPending}
+                      aria-label={t("Create database")}
+                    >
+                      <IconHexagonPlus size={PAGE_TREE_ACTION_ICON_SIZE} />
+                    </ActionIcon>
+                  </Tooltip>
+
+                  <Tooltip label={t("Create page")} withArrow position="right">
+                    <ActionIcon
+                      variant="default"
+                      size={PAGE_TREE_ACTION_SIZE}
+                      onClick={handleCreatePage}
+                      aria-label={t("Create page")}
+                    >
+                      <IconSquareRoundedPlus
+                        size={PAGE_TREE_ACTION_ICON_SIZE}
+                      />
+                    </ActionIcon>
+                  </Tooltip>
+                </>
+              )}
+            </Group>
           </Group>
 
           <div className={classes.pages}>
             <SpaceTree
+              ref={spaceTreeRef}
               spaceId={space.id}
+              onBulkStateChange={setTreeBulkState}
               readOnly={spaceAbility.cannot(
                 SpaceCaslAction.Manage,
                 SpaceCaslSubject.Page,
