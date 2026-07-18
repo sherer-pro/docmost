@@ -94,6 +94,16 @@
   margin-bottom: rem(5px);
 }
 
+.pagesHeaderAction {
+  overflow: visible;
+
+  &::after {
+    content: "";
+    position: absolute;
+    inset: rem(-4px);
+  }
+}
+
 .activeButton {
   background-color: light-dark(
     var(--mantine-color-gray-3),

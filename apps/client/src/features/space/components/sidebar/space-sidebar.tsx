@@ -67,7 +67,6 @@ import { AccessibleActionIcon } from "@/components/ui/accessible-action-icon.tsx
 
 const PAGE_TREE_ACTION_SIZE = 24;
 const PAGE_TREE_ACTION_ICON_SIZE = 16;
-const PAGE_TREE_BULK_ACTION_SIZE = 32;
 
 const INITIAL_TREE_BULK_STATE: SpaceTreeBulkState = {
   ready: false,
@@ -317,9 +316,10 @@ export function SpaceSidebar() {
 
             <Group gap="xs">
               <AccessibleActionIcon
+                className={classes.pagesHeaderAction}
                 variant="default"
-                size={PAGE_TREE_BULK_ACTION_SIZE}
-                minTargetSize={PAGE_TREE_BULK_ACTION_SIZE}
+                size={PAGE_TREE_ACTION_SIZE}
+                minTargetSize={PAGE_TREE_ACTION_SIZE}
                 label={
                   treeBulkState.busy
                     ? t("Loading...")
