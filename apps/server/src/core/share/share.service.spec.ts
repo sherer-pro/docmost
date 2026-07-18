@@ -59,8 +59,13 @@ describe('ShareService getSharedPage', () => {
         id: 'page-1',
         slugId: 'root-slug',
         content: { type: 'doc', content: [] },
-        settings: { headingNumbering: { enabled: null } },
-        space: { settings: { headingNumbering: { enabled: true } } },
+        settings: { headingNumbering: { enabled: false } },
+        space: {
+          settings: {
+            headingNumbering: { enabled: true },
+            documentFields: { readingTime: true },
+          },
+        },
         deletedAt: null,
       });
 
@@ -96,6 +101,41 @@ describe('ShareService getSharedPage', () => {
     expect(result.page.content).toEqual({ type: 'doc', content: [] });
     expect(result.page).not.toHaveProperty('space');
     expect(result.headingNumberingEnabled).toBe(true);
+    expect(result.readingTimeEnabled).toBe(true);
+  });
+
+  it('disables public reading time when the space setting is absent', async () => {
+    shareRepo.findById.mockResolvedValue({
+      id: 'share-1',
+      key: 'share-key',
+      pageId: 'page-1',
+      workspaceId: 'workspace-1',
+    });
+    pageRepo.findById
+      .mockResolvedValueOnce({
+        id: 'page-1',
+        slugId: 'root-slug',
+        deletedAt: null,
+      })
+      .mockResolvedValueOnce({
+        id: 'page-1',
+        slugId: 'root-slug',
+        content: { type: 'doc', content: [] },
+        settings: {},
+        space: { settings: {} },
+        deletedAt: null,
+      });
+    jest.spyOn(service, 'getShareForPage').mockResolvedValue({
+      id: 'share-1',
+      key: 'share-key',
+    } as any);
+
+    const result = await service.getSharedPage(
+      { shareId: 'share-key' } as any,
+      'workspace-1',
+    );
+
+    expect(result.readingTimeEnabled).toBe(false);
   });
 
   it('rejects shareId-only lookup when share belongs to another workspace', async () => {

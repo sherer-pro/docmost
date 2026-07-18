@@ -17,3 +17,18 @@
     }
 }
 
+.readingTime {
+    background-color: light-dark(
+        var(--mantine-color-white),
+        var(--mantine-color-dark-7)
+    );
+    padding: 0 3rem 0.75rem;
+
+    @media (max-width: 48em) {
+        padding-inline: 1rem;
+    }
+
+    @media print {
+        padding: 0 0 0.75rem;
+    }
+}

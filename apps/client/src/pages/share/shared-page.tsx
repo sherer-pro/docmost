@@ -56,6 +56,7 @@ export default function SharedPage() {
           pageId={data.page.id}
           shareId={shareId ?? data.share.key ?? data.share.id}
           headingNumberingEnabled={data.headingNumberingEnabled}
+          readingTimeEnabled={data.readingTimeEnabled}
         />
       </Container>
 

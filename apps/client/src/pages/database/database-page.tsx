@@ -31,6 +31,8 @@ import { useDatabasePageContext } from "@/features/database/hooks/use-database-p
 import PageCommentSection from "@/features/comment/components/page-comment-section";
 import { resolvePageFullWidth } from "@/features/user/utils/page-width.ts";
 import { resolveHeadingNumberingEnabled } from "@/features/page/utils/heading-numbering";
+import { pageEditorAtom } from "@/features/editor/atoms/editor-atoms.ts";
+import { PageReadingTime } from "@/features/page/components/reading-time/page-reading-time.tsx";
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 
@@ -51,6 +53,7 @@ export default function DatabasePage() {
   const { mutateAsync: updateDatabaseMutationAsync } =
     useUpdateDatabaseMutation(space?.id, databaseId);
   const currentUser = useAtomValue(currentUserAtom);
+  const pageEditor = useAtomValue(pageEditorAtom);
   const [draftName, setDraftName] = useState("");
   const [saveState, setSaveState] = useState<SaveState>("idle");
 
@@ -85,7 +88,8 @@ export default function DatabasePage() {
     isEditable && currentUser?.user?.settings?.preferences?.fixedToolbar,
   );
   const headingNumberingEnabled = resolveHeadingNumberingEnabled({
-    pageSettings: databasePage?.settings,
+    pageId: databasePageId,
+    preferences: currentUser?.user?.settings?.preferences,
     spaceSettings: space?.settings,
   });
   const isCommentsAsideOpen =
@@ -268,6 +272,15 @@ export default function DatabasePage() {
             />
           </div>
 
+          {databasePageId && (
+            <PageReadingTime
+              editor={pageEditor}
+              enabled={space?.settings?.documentFields?.readingTime === true}
+              pageId={databasePageId}
+              className={classes.readingTimeContainer}
+            />
+          )}
+
           {databasePage && (
             <DocumentFieldsPanel page={databasePage} readOnly={readOnly} />
           )}
@@ -283,6 +296,9 @@ export default function DatabasePage() {
               dictionaryEnabled={space?.settings?.dictionary?.enabled === true}
               canCreateInlineComments={!readOnly}
               headingNumberingEnabled={headingNumberingEnabled}
+              spaceHeadingNumberingEnabled={
+                space?.settings?.headingNumbering?.enabled === true
+              }
             />
           )}
         </Stack>

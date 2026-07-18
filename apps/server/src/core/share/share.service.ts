@@ -18,7 +18,7 @@ import {
 import { Node } from '@tiptap/pm/model';
 import { ShareRepo } from '@docmost/db/repos/share/share.repo';
 import { updateAttachmentAttr } from './share.util';
-import { Page } from '@docmost/db/types/entity.types';
+import { Page, SpaceSettings } from '@docmost/db/types/entity.types';
 import { sql } from 'kysely';
 import { validate as isValidUUID } from 'uuid';
 import { TransclusionService } from '../page/transclusion/transclusion.service';
@@ -148,13 +148,22 @@ export class ShareService {
       space?: { settings?: unknown };
     };
     const headingNumberingEnabled = resolveHeadingNumberingEnabled(
-      page.settings,
       pageWithSpace.space?.settings,
     );
+    const spaceSettings = pageWithSpace.space?.settings as
+      | SpaceSettings
+      | undefined;
+    const readingTimeEnabled =
+      spaceSettings?.documentFields?.readingTime === true;
     const { space: _space, ...publicPage } = pageWithSpace;
     publicPage.content = await this.updatePublicAttachments(publicPage as Page);
 
-    return { page: publicPage, share, headingNumberingEnabled };
+    return {
+      page: publicPage,
+      share,
+      headingNumberingEnabled,
+      readingTimeEnabled,
+    };
   }
 
   async getShareForPage(
