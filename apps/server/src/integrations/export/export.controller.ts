@@ -1,7 +1,6 @@
 import {
   Body,
   Controller,
-  ForbiddenException,
   HttpCode,
   HttpStatus,
   NotFoundException,
@@ -20,10 +19,6 @@ import { User } from '@docmost/db/types/entity.types';
 import SpaceAbilityFactory from '../../core/casl/abilities/space-ability.factory';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
-import {
-  SpaceCaslAction,
-  SpaceCaslSubject,
-} from '../../core/casl/interfaces/space-ability.type';
 import { FastifyReply } from 'fastify';
 import { sanitize } from 'sanitize-filename-ts';
 import { PageAccessService } from '../../core/page-access/page-access.service';
@@ -53,6 +48,10 @@ class ExportControllerDelegate {
 
     await this.pageAccessService.assertCanReadPage(page, user);
 
+    if (page.parentPageId == null) {
+      await this.spaceAbility.assertHasFullSpaceAccess(user, page.spaceId);
+    }
+
     const zipFileStream = await this.exportService.exportPages(
       dto.pageId,
       dto.format,
@@ -73,14 +72,7 @@ class ExportControllerDelegate {
   }
 
   async exportSpace(dto: ExportSpaceDto, user: User, res: FastifyReply) {
-    const ability = await this.spaceAbility.createForUser(user, dto.spaceId);
-    const canExport =
-      ability.can(SpaceCaslAction.Manage, SpaceCaslSubject.Page) ||
-      ability.can(SpaceCaslAction.Manage, SpaceCaslSubject.Settings);
-
-    if (!canExport) {
-      throw new ForbiddenException();
-    }
+    await this.spaceAbility.assertHasFullSpaceAccess(user, dto.spaceId);
 
     const exportFile = await this.exportService.exportSpace(
       dto.spaceId,

@@ -63,6 +63,7 @@ import CopyPageModal from "@/features/page/components/copy-page-modal.tsx";
 import { PageOperationMenuItems } from "@/features/page/components/page-operation-menu-items.tsx";
 import { invalidateSidebarTree } from "@/features/page/queries/cache-invalidation.ts";
 import { queryClient } from "@/main.tsx";
+import { canExportDocument } from "@/features/space/permissions/export-access.ts";
 
 interface PageHeaderMenuProps {
   readOnly?: boolean;
@@ -266,6 +267,11 @@ function PageActionMenu({ readOnly, canMoveDeleteShare }: PageActionMenuProps) {
     !readOnly;
   const canWritePage = page?.access?.capabilities?.canWrite ?? !readOnly;
   const { data: currentSpace } = useSpaceQuery(page?.spaceId ?? "");
+  const canExportPage = canExportDocument({
+    parentPageId: page?.parentPageId,
+    workspaceRole: user?.role,
+    spaceRole: currentSpace?.membership?.role,
+  });
 
   /**
    * Explicit priority for calculating page width:
@@ -450,7 +456,7 @@ function PageActionMenu({ readOnly, canMoveDeleteShare }: PageActionMenuProps) {
               isWorkspaceAdmin ? handleCopyMarkdownWithComments : undefined
             }
             onOpenHistory={openHistoryModal}
-            onOpenExport={openExportModal}
+            onOpenExport={canExportPage ? openExportModal : undefined}
             onOpenAccess={canOpenAccessModal ? openAccessModal : undefined}
             onPrint={handlePrint}
             pageId={page?.id}

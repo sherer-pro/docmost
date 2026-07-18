@@ -110,6 +110,10 @@ import {
   openTreeNodesBySpaceAtom,
   updateOpenTreeNodesForSpace,
 } from "@/features/page/tree/atoms/open-tree-nodes-atom.ts";
+import {
+  canExportDocument,
+  hasFullSpaceAccess,
+} from "@/features/space/permissions/export-access.ts";
 
 interface SpaceTreeProps {
   spaceId: string;
@@ -185,6 +189,11 @@ function SpaceTreeComponent(
     pageId: extractPageSlugId(activeTreeSlug),
   });
   const { data: space } = useSpaceQuery(spaceId);
+  const [user] = useAtom(userAtom);
+  const fullSpaceAccess = hasFullSpaceAccess({
+    workspaceRole: user?.role,
+    spaceRole: space?.membership?.role,
+  });
   const isStatusFieldEnabled = !!space?.settings?.documentFields?.status;
 
   useEffect(() => {
@@ -575,7 +584,11 @@ function SpaceTreeComponent(
           initialOpenState={openTreeNodes}
         >
           {(props) => (
-            <Node {...props} isStatusFieldEnabled={isStatusFieldEnabled} />
+            <Node
+              {...props}
+              isStatusFieldEnabled={isStatusFieldEnabled}
+              fullSpaceAccess={fullSpaceAccess}
+            />
           )}
         </Tree>
       )}
@@ -591,6 +604,7 @@ export default SpaceTree;
 
 interface NodeProps extends NodeRendererProps<SpaceTreeNode> {
   isStatusFieldEnabled: boolean;
+  fullSpaceAccess: boolean;
 }
 
 function Node({
@@ -599,6 +613,7 @@ function Node({
   dragHandle,
   tree,
   isStatusFieldEnabled,
+  fullSpaceAccess,
 }: NodeProps) {
   const { t } = useTranslation();
   const updatePageMutation = useUpdatePageMutation();
@@ -854,6 +869,7 @@ function Node({
             spaceId={node.data.spaceId}
             canMoveDeleteShare={canMoveDeleteShareNode}
             canManageAccess={canManageAccessNode}
+            fullSpaceAccess={fullSpaceAccess}
           />
 
           {canCreateChildNode &&
@@ -1028,6 +1044,7 @@ interface NodeMenuProps {
   spaceId: string;
   canMoveDeleteShare: boolean;
   canManageAccess: boolean;
+  fullSpaceAccess: boolean;
 }
 
 function NodeMenu({
@@ -1036,6 +1053,7 @@ function NodeMenu({
   spaceId,
   canMoveDeleteShare,
   canManageAccess,
+  fullSpaceAccess,
 }: NodeMenuProps) {
   const { t } = useTranslation();
   const clipboard = useClipboard({ timeout: 500 });
@@ -1065,7 +1083,13 @@ function NodeMenu({
   const isExportableNode = isPageNode || isDatabaseNode || isDatabaseRowNode;
   const exportType = isDatabaseNode ? "database" : "page";
   const exportId = isDatabaseNode ? node.data.databaseId : node.id;
-  const canExportNode = isExportableNode && Boolean(exportId);
+  const canExportNode =
+    isExportableNode &&
+    Boolean(exportId) &&
+    canExportDocument({
+      parentPageId: node.data.parentPageId,
+      fullSpaceAccess,
+    });
   const canDuplicateMoveCopyNode = isExportableNode && canMoveDeleteShare;
   const canMoveNodeToTrash = isExportableNode && canMoveDeleteShare;
 

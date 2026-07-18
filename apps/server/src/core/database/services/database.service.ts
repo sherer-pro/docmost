@@ -50,6 +50,7 @@ import { ExportMetadata } from '../../../common/helpers/types/export-metadata.ty
 import { replaceInternalLinks } from '../../../integrations/export/utils';
 import { getProsemirrorContent } from '../../../common/helpers/prosemirror/utils';
 import { streamToBuffer } from '../../../integrations/storage/storage.utils';
+import { UserRole } from '../../../common/helpers/types/permission';
 
 interface IDatabaseCellValueWithFallback {
   value: unknown;
@@ -1349,14 +1350,28 @@ export class DatabaseService {
     includeAttachments = false,
   ) {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
-    await this.assertCanReadDatabasePages(user, database.spaceId);
+    if (!database.pageId) {
+      throw new NotFoundException('Database root page not found');
+    }
+
+    const databasePage = await this.pageRepo.findById(database.pageId);
+    if (!databasePage || databasePage.deletedAt) {
+      throw new NotFoundException('Database root page not found');
+    }
+
+    const hasWorkspaceAdminAccess =
+      user.role === UserRole.OWNER || user.role === UserRole.ADMIN;
+    if (!hasWorkspaceAdminAccess) {
+      await this.assertCanReadDatabasePages(user, database.spaceId);
+    }
+
+    if (databasePage.parentPageId == null) {
+      await this.spaceAbility.assertHasFullSpaceAccess(user, database.spaceId);
+    }
+
     const safeName = (database.name?.trim() || 'database').replace(/\s+/g, '-').toLowerCase();
 
     if (format === DatabaseExportFormat.PDF) {
-      if (!database.pageId) {
-        throw new NotFoundException('Database root page not found');
-      }
-
       const pagesZipStream = await this.exportService.exportPages(
         database.pageId,
         ExportFormat.PDF,
@@ -1396,10 +1411,6 @@ export class DatabaseService {
           compression: 'DEFLATE',
         }),
       };
-    }
-
-    if (!database.pageId) {
-      throw new NotFoundException('Database root page not found');
     }
 
     const pageExportFormat =
