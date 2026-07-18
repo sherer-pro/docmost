@@ -64,6 +64,7 @@ import {
 import { useQueryEmit } from "@/features/websocket/use-query-emit.ts";
 import { PAGE_QUERY_KEYS } from "@/features/page/queries/query-keys.ts";
 import { AccessibleActionIcon } from "@/components/ui/accessible-action-icon.tsx";
+import { hasFullSpaceAccess } from "@/features/space/permissions/export-access.ts";
 
 const PAGE_TREE_ACTION_SIZE = 24;
 const PAGE_TREE_ACTION_ICON_SIZE = 16;
@@ -97,6 +98,14 @@ export function SpaceSidebar() {
 
   const spaceRules = space?.membership?.permissions;
   const spaceAbility = useSpaceAbility(spaceRules);
+  const canManageSpacePages = spaceAbility.can(
+    SpaceCaslAction.Manage,
+    SpaceCaslSubject.Page,
+  );
+  const canExportSpace = hasFullSpaceAccess({
+    workspaceRole: user?.role,
+    spaceRole: space?.membership?.role,
+  });
   const createDatabaseMutation = useCreateDatabaseMutation(space?.id);
 
   if (!space) {
@@ -282,10 +291,7 @@ export function SpaceSidebar() {
               </UnstyledButton>
             )}
 
-            {spaceAbility.can(
-              SpaceCaslAction.Manage,
-              SpaceCaslSubject.Page,
-            ) && (
+            {canManageSpacePages && (
               <UnstyledButton
                 className={classes.menu}
                 onClick={() => {
@@ -339,16 +345,17 @@ export function SpaceSidebar() {
                 )}
               </AccessibleActionIcon>
 
-              {spaceAbility.can(
-                SpaceCaslAction.Manage,
-                SpaceCaslSubject.Page,
-              ) && (
-                <>
-                  <SpaceMenu
-                    spaceId={space.id}
-                    onSpaceSettings={openSettings}
-                  />
+              {(canManageSpacePages || canExportSpace) && (
+                <SpaceMenu
+                  spaceId={space.id}
+                  onSpaceSettings={openSettings}
+                  canManagePages={canManageSpacePages}
+                  canExportSpace={canExportSpace}
+                />
+              )}
 
+              {canManageSpacePages && (
+                <>
                   <Tooltip
                     label={t("Create database")}
                     withArrow
@@ -387,10 +394,7 @@ export function SpaceSidebar() {
               ref={spaceTreeRef}
               spaceId={space.id}
               onBulkStateChange={setTreeBulkState}
-              readOnly={spaceAbility.cannot(
-                SpaceCaslAction.Manage,
-                SpaceCaslSubject.Page,
-              )}
+              readOnly={!canManageSpacePages}
             />
           </div>
         </div>
@@ -408,8 +412,15 @@ export function SpaceSidebar() {
 interface SpaceMenuProps {
   spaceId: string;
   onSpaceSettings: () => void;
+  canManagePages: boolean;
+  canExportSpace: boolean;
 }
-function SpaceMenu({ spaceId, onSpaceSettings }: SpaceMenuProps) {
+function SpaceMenu({
+  spaceId,
+  onSpaceSettings,
+  canManagePages,
+  canExportSpace,
+}: SpaceMenuProps) {
   const { t } = useTranslation();
   const { spaceSlug } = useParams();
   const [importOpened, { open: openImportModal, close: closeImportModal }] =
@@ -422,7 +433,7 @@ function SpaceMenu({ spaceId, onSpaceSettings }: SpaceMenuProps) {
       <Menu width={200} shadow="md" withArrow>
         <Menu.Target>
           <Tooltip
-            label={t("Import pages & space settings")}
+            label={t("Space menu")}
             withArrow
             position="top"
           >
@@ -437,51 +448,63 @@ function SpaceMenu({ spaceId, onSpaceSettings }: SpaceMenuProps) {
         </Menu.Target>
 
         <Menu.Dropdown>
-          <Menu.Item
-            onClick={openImportModal}
-            leftSection={<IconArrowDown size={16} />}
-          >
-            {t("Import pages")}
-          </Menu.Item>
+          {canManagePages && (
+            <Menu.Item
+              onClick={openImportModal}
+              leftSection={<IconArrowDown size={16} />}
+            >
+              {t("Import pages")}
+            </Menu.Item>
+          )}
 
-          <Menu.Item
-            onClick={openExportModal}
-            leftSection={<IconFileExport size={16} />}
-          >
-            {t("Export space")}
-          </Menu.Item>
+          {canExportSpace && (
+            <Menu.Item
+              onClick={openExportModal}
+              leftSection={<IconFileExport size={16} />}
+            >
+              {t("Export space")}
+            </Menu.Item>
+          )}
 
-          <Menu.Divider />
+          {canManagePages && (
+            <>
+              <Menu.Divider />
 
-          <Menu.Item
-            onClick={onSpaceSettings}
-            leftSection={<IconSettings size={16} />}
-          >
-            {t("Space settings")}
-          </Menu.Item>
+              <Menu.Item
+                onClick={onSpaceSettings}
+                leftSection={<IconSettings size={16} />}
+              >
+                {t("Space settings")}
+              </Menu.Item>
 
-          <Menu.Item
-            component={Link}
-            to={`/s/${spaceSlug}/trash`}
-            leftSection={<IconTrash size={16} />}
-          >
-            {t("Trash")}
-          </Menu.Item>
+              <Menu.Item
+                component={Link}
+                to={`/s/${spaceSlug}/trash`}
+                leftSection={<IconTrash size={16} />}
+              >
+                {t("Trash")}
+              </Menu.Item>
+            </>
+          )}
         </Menu.Dropdown>
       </Menu>
 
-      <PageImportModal
-        spaceId={spaceId}
-        open={importOpened}
-        onClose={closeImportModal}
-      />
+      {canManagePages && (
+        <PageImportModal
+          spaceId={spaceId}
+          open={importOpened}
+          onClose={closeImportModal}
+        />
+      )}
 
-      <ExportModal
-        type="space"
-        id={spaceId}
-        open={exportOpened}
-        onClose={closeExportModal}
-      />
+      {canExportSpace && (
+        <ExportModal
+          type="space"
+          id={spaceId}
+          open={exportOpened}
+          onClose={closeExportModal}
+        />
+      )}
     </>
   );
 }

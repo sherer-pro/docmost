@@ -1,10 +1,17 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   AbilityBuilder,
   createMongoAbility,
   MongoAbility,
 } from '@casl/ability';
-import { SpaceRole } from '../../../common/helpers/types/permission';
+import {
+  SpaceRole,
+  UserRole,
+} from '../../../common/helpers/types/permission';
 import { User } from '@docmost/db/types/entity.types';
 import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 import {
@@ -50,6 +57,33 @@ export default class SpaceAbilityFactory {
         return buildSpaceReaderAbility();
       default:
         throw new NotFoundException('Space permissions not found');
+    }
+  }
+
+  async assertHasFullSpaceAccess(user: User, spaceId: string): Promise<void> {
+    const space = await this.db
+      .selectFrom('spaces')
+      .select('id')
+      .where('id', '=', spaceId)
+      .where('workspaceId', '=', user.workspaceId)
+      .executeTakeFirst();
+
+    if (!space) {
+      throw new NotFoundException('Space permissions not found');
+    }
+
+    if (user.role === UserRole.OWNER || user.role === UserRole.ADMIN) {
+      return;
+    }
+
+    const userSpaceRoles = await this.spaceMemberRepo.getUserSpaceRoles(
+      user.id,
+      spaceId,
+    );
+    const userSpaceRole = findHighestUserSpaceRole(userSpaceRoles);
+
+    if (userSpaceRole !== SpaceRole.ADMIN) {
+      throw new ForbiddenException();
     }
   }
 }

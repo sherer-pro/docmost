@@ -69,6 +69,7 @@ describe('DatabaseService mixed tree flows', () => {
   const userRepo = { findById: jest.fn() };
   const spaceAbility = {
     createForUser: jest.fn(async () => ({ cannot: () => false })),
+    assertHasFullSpaceAccess: jest.fn(async () => undefined),
   };
   const pageHistoryRecorder = {
     recordPageEvent: jest.fn(),
@@ -179,6 +180,7 @@ describe('DatabaseService mixed tree flows', () => {
     databasePropertyRepo.findByDatabaseId.mockResolvedValue([]);
     databaseCellRepo.findByDatabaseAndPage.mockResolvedValue([]);
     userRepo.findById.mockResolvedValue(null);
+    spaceAbility.assertHasFullSpaceAccess.mockResolvedValue(undefined);
     databaseRepo.findById.mockResolvedValue({
       id: 'db-1',
       name: 'Database',
@@ -407,6 +409,86 @@ describe('DatabaseService mixed tree flows', () => {
     }
     const rootPdfBuffer = await rootPdfEntry.async('nodebuffer');
     expect(rootPdfBuffer.toString('utf8')).toContain('%PDF-1.7 mock');
+  });
+
+  it.each([
+    DatabaseExportFormat.Markdown,
+    DatabaseExportFormat.HTML,
+    DatabaseExportFormat.PDF,
+  ])('rejects top-level %s export without full space access', async (format) => {
+    spaceAbility.assertHasFullSpaceAccess.mockRejectedValueOnce(
+      new ForbiddenException(),
+    );
+
+    await expect(
+      service.exportDatabase('db-1', format, user, 'ws-1'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(exportService.exportPages).not.toHaveBeenCalled();
+  });
+
+  it('keeps readable nested database export unchanged', async () => {
+    pageRepo.findById.mockResolvedValue({
+      id: 'db-root-page',
+      title: 'Nested database',
+      slugId: 'nested-database',
+      content: { type: 'doc', content: [] },
+      spaceId: 'space-1',
+      workspaceId: 'ws-1',
+      parentPageId: 'parent-page',
+      deletedAt: null,
+    });
+
+    await service.exportDatabase(
+      'db-1',
+      DatabaseExportFormat.Markdown,
+      user,
+      'ws-1',
+    );
+
+    expect(spaceAbility.assertHasFullSpaceAccess).not.toHaveBeenCalled();
+    expect(exportService.exportPages).toHaveBeenCalledWith(
+      'db-root-page',
+      ExportFormat.Markdown,
+      false,
+      false,
+      'ru-RU',
+    );
+  });
+
+  it.each(['owner', 'admin'])(
+    'allows workspace %s to export without a space membership',
+    async (role) => {
+      await service.exportDatabase(
+        'db-1',
+        DatabaseExportFormat.Markdown,
+        { ...user, role } as any,
+        'ws-1',
+      );
+
+      expect(spaceAbility.createForUser).not.toHaveBeenCalled();
+      expect(spaceAbility.assertHasFullSpaceAccess).toHaveBeenCalledWith(
+        expect.objectContaining({ role }),
+        'space-1',
+      );
+      expect(exportService.exportPages).toHaveBeenCalled();
+    },
+  );
+
+  it('rejects export when the canonical database page is missing', async () => {
+    pageRepo.findById.mockResolvedValue(null);
+
+    await expect(
+      service.exportDatabase(
+        'db-1',
+        DatabaseExportFormat.Markdown,
+        user,
+        'ws-1',
+      ),
+    ).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(spaceAbility.assertHasFullSpaceAccess).not.toHaveBeenCalled();
+    expect(exportService.exportPages).not.toHaveBeenCalled();
   });
 
   it('renders readable table values in database summary PDF html', async () => {

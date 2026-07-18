@@ -57,6 +57,7 @@ import { duplicatePage } from '@/features/page/services/page-service.ts';
 import { invalidateSidebarTree } from '@/features/page/queries/cache-invalidation.ts';
 import { queryClient } from '@/main.tsx';
 import { useNavigate } from 'react-router-dom';
+import { canExportDocument } from '@/features/space/permissions/export-access.ts';
 
 interface DatabaseHeaderMenuProps {
   databaseId: string;
@@ -313,6 +314,11 @@ export default function DatabaseHeaderMenu({
     pageId: databasePageWidthScopeId,
     preferences: user?.settings?.preferences,
   });
+  const canExportCurrentDatabase = canExportDocument({
+    parentPageId: databaseContext.pageByRoute?.parentPageId,
+    workspaceRole: user?.role,
+    spaceRole: space?.membership?.role,
+  });
 
   return (
     <>
@@ -399,9 +405,9 @@ export default function DatabaseHeaderMenu({
             copyLinkLabel={t('Copy database link')}
             onCopyAsMarkdown={handleCopyAsMarkdown}
             onOpenHistory={hasDatabasePage ? openHistoryModal : undefined}
-            onOpenExport={openExportModal}
+            onOpenExport={canExportCurrentDatabase ? openExportModal : undefined}
             onOpenAccess={canOpenAccessModal ? openAccessModal : undefined}
-            onPrint={handlePrint}
+            onPrint={canExportCurrentDatabase ? handlePrint : undefined}
             databasePageId={databasePageWidthScopeId}
             fullPageWidth={fullPageWidth}
             headingNumbering={
