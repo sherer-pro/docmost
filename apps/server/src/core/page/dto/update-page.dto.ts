@@ -3,7 +3,6 @@ import { CreatePageDto, ContentFormat } from './create-page.dto';
 import {
   ArrayUnique,
   IsArray,
-  IsBoolean,
   IsIn,
   IsOptional,
   IsString,
@@ -70,47 +69,28 @@ export class UpdatePageDto extends PartialType(CreatePageDto) {
   @Type(() => UpdatePageCustomFieldsDto)
   customFields?: UpdatePageCustomFieldsDto;
 
-  @IsOptional()
-  @ValidateIf((_, value) => value !== null)
-  @IsBoolean()
-  headingNumberingEnabled?: boolean | null;
-
   toSettingsPayload(
     currentSettings: PageSettings | null,
   ): PageSettings | undefined {
-    const hasHeadingNumberingOverride =
-      typeof this.headingNumberingEnabled !== 'undefined';
-
-    if (!this.customFields && !hasHeadingNumberingOverride) {
+    if (!this.customFields && !this.settings) {
       return this.settings;
     }
 
     const settingsFromDto =
       this.settings && typeof this.settings === 'object' ? this.settings : {};
-    const currentHeadingNumbering =
-      currentSettings?.headingNumbering &&
-      typeof currentSettings.headingNumbering === 'object'
-        ? currentSettings.headingNumbering
-        : {};
-    const dtoHeadingNumbering =
-      settingsFromDto.headingNumbering &&
-      typeof settingsFromDto.headingNumbering === 'object'
-        ? settingsFromDto.headingNumbering
-        : {};
+    const {
+      headingNumbering: _currentHeadingNumbering,
+      ...safeCurrentSettings
+    } = currentSettings ?? ({} as PageSettings);
+    const {
+      headingNumbering: _dtoHeadingNumbering,
+      ...safeSettingsFromDto
+    } = settingsFromDto as PageSettings;
 
     return {
-      ...(currentSettings ?? {}),
-      ...settingsFromDto,
+      ...safeCurrentSettings,
+      ...safeSettingsFromDto,
       ...(this.customFields ?? {}),
-      ...(hasHeadingNumberingOverride
-        ? {
-            headingNumbering: {
-              ...currentHeadingNumbering,
-              ...dtoHeadingNumbering,
-              enabled: this.headingNumberingEnabled,
-            },
-          }
-        : {}),
     };
   }
 }
