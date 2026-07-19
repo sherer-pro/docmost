@@ -63,6 +63,7 @@ import {
   loadTreeRecursively,
   updateTreeNodesOpenState,
 } from "@/features/page/tree/utils/bulk-tree.ts";
+import { shouldPublishTreeApi } from "@/features/page/tree/utils/tree-api-ref.ts";
 import { SpaceTreeNode } from "@/features/page/tree/types.ts";
 import {
   getPageBreadcrumbs,
@@ -339,8 +340,12 @@ function SpaceTreeComponent(
 
   const handleTreeRef = useCallback(
     (treeApi: TreeApi<SpaceTreeNode> | null) => {
+      if (!shouldPublishTreeApi(treeApiRef.current, treeApi)) {
+        return;
+      }
+
       treeApiRef.current = treeApi;
-      setIsTreeReady(!!treeApi);
+      setIsTreeReady(true);
       setTreeApi(treeApi);
     },
     [setTreeApi],
