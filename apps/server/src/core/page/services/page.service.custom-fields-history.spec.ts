@@ -133,6 +133,48 @@ describe('PageService custom fields history', () => {
     expect(pageHistoryRecorder.enqueuePageEvent).not.toHaveBeenCalled();
   });
 
+  it('records normalized AI role changes when the field is enabled', async () => {
+    spaceRepo.findById.mockResolvedValue({
+      settings: {
+        documentFields: {
+          aiRole: true,
+        },
+      },
+    });
+
+    await service.update(
+      {
+        id: 'page-1',
+        spaceId: 'space-1',
+        workspaceId: 'ws-1',
+        creatorId: 'user-1',
+        lastUpdatedById: 'user-1',
+        contributorIds: ['user-1'],
+        settings: {},
+      } as any,
+      {
+        toSettingsPayload: jest.fn(() => ({
+          aiRole: 'COAUTHOR_PLUS',
+        })),
+      } as any,
+      { id: 'user-2' } as any,
+    );
+
+    expect(pageHistoryRecorder.enqueuePageEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        changeData: expect.objectContaining({
+          changes: [
+            {
+              field: 'aiRole',
+              oldValue: 'NONE',
+              newValue: 'COAUTHOR_PLUS',
+            },
+          ],
+        }),
+      }),
+    );
+  });
+
   it('stores display names for assignee and stakeholders in custom fields history', async () => {
     spaceRepo.findById.mockResolvedValue({
       settings: {

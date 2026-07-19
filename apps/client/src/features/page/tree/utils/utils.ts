@@ -2,6 +2,7 @@ import type { IDatabase } from "@/features/database/types/database.types.ts";
 import type {
   IPage,
   ISidebarNode,
+  PageCustomFields,
   PageCustomFieldStatus,
 } from "@/features/page/types/page.types.ts";
 import { SpaceTreeNode } from "@/features/page/tree/types.ts";
@@ -17,7 +18,9 @@ type TreePageSource = Pick<
   | "spaceId"
   | "parentPageId"
 > &
-  Partial<Pick<IPage, "slugId" | "customFields" | "access" | "databaseId">>;
+  Partial<Pick<IPage, "slugId" | "access" | "databaseId">> & {
+    customFields?: Partial<PageCustomFields> | null;
+  };
 
 type TreeDatabaseSource = Pick<
   IDatabase,

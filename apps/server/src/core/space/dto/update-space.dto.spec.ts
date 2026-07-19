@@ -28,10 +28,10 @@ describe('UpdateSpaceDto heading numbering', () => {
   });
 });
 
-describe('UpdateSpaceDto AI participation field', () => {
-  it.each([true, false])('accepts %p', async (aiParticipation) => {
+describe('UpdateSpaceDto AI role field', () => {
+  it.each([true, false])('accepts %p', async (aiRole) => {
     const documentFields = Object.assign(new UpdateSpaceDocumentFieldsDto(), {
-      aiParticipation,
+      aiRole,
     });
     const dto = Object.assign(new UpdateSpaceDto(), {
       spaceId: '11111111-1111-4111-8111-111111111111',
@@ -43,7 +43,7 @@ describe('UpdateSpaceDto AI participation field', () => {
 
   it('rejects a non-boolean value', async () => {
     const documentFields = Object.assign(new UpdateSpaceDocumentFieldsDto(), {
-      aiParticipation: 'yes',
+      aiRole: 'yes',
     });
     const dto = Object.assign(new UpdateSpaceDto(), {
       spaceId: '11111111-1111-4111-8111-111111111111',

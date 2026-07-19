@@ -41,7 +41,7 @@ import {
   PageAccessRules,
 } from './db';
 import { PageEmbeddings } from '@docmost/db/types/embeddings.types';
-import type { PageAiParticipation } from '@docmost/api-contract';
+import type { PageAiRole } from '@docmost/api-contract';
 
 /**
  * Document field settings at the space level.
@@ -50,7 +50,7 @@ export interface SpaceDocumentFieldsSettings {
   status?: boolean;
   assignee?: boolean;
   stakeholders?: boolean;
-  aiParticipation?: boolean;
+  aiRole?: boolean;
   readingTime?: boolean;
 }
 
@@ -81,7 +81,7 @@ export interface PageSettings {
   status?: string | null;
   assigneeId?: string | null;
   stakeholderIds?: string[] | null;
-  aiParticipation?: PageAiParticipation;
+  aiRole?: PageAiRole;
   [key: string]: JsonValue | undefined;
 }
 

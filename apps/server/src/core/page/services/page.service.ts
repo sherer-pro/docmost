@@ -65,6 +65,7 @@ import { DatabaseViewRepo } from '@docmost/db/repos/database/database-view.repo'
 import { SpaceRepo } from '@docmost/db/repos/space/space.repo';
 import { UserRepo } from '@docmost/db/repos/user/user.repo';
 import {
+  getPageAiRole,
   getPageAssigneeId,
   getPageStakeholderIds,
   normalizePageSettings,
@@ -79,7 +80,7 @@ interface IHistoryUserRef {
 }
 
 type CustomFieldHistoryChange = {
-  field: 'status' | 'assigneeId' | 'stakeholderIds';
+  field: 'status' | 'assigneeId' | 'stakeholderIds' | 'aiRole';
   oldValue: unknown;
   newValue: unknown;
 };
@@ -473,6 +474,7 @@ export class PageService {
       status?: boolean;
       assignee?: boolean;
       stakeholders?: boolean;
+      aiRole?: boolean;
     },
   ): CustomFieldHistoryChange[] {
     const current = normalizePageSettings(currentSettings);
@@ -517,6 +519,19 @@ export class PageService {
           field: 'stakeholderIds',
           oldValue: previousStakeholderIds,
           newValue: nextStakeholderIds,
+        });
+      }
+    }
+
+    if (documentFields.aiRole) {
+      const previousAiRole = getPageAiRole(current);
+      const nextAiRole = getPageAiRole(next);
+
+      if (previousAiRole !== nextAiRole) {
+        changes.push({
+          field: 'aiRole',
+          oldValue: previousAiRole,
+          newValue: nextAiRole,
         });
       }
     }
@@ -772,6 +787,7 @@ export class PageService {
             status?: boolean;
             assignee?: boolean;
             stakeholders?: boolean;
+            aiRole?: boolean;
           }
         | undefined;
     const customFieldChanges = this.collectCustomFieldHistoryChanges(
@@ -781,6 +797,7 @@ export class PageService {
         status: !!documentFields?.status,
         assignee: !!documentFields?.assignee,
         stakeholders: !!documentFields?.stakeholders,
+        aiRole: !!documentFields?.aiRole,
       },
     );
 

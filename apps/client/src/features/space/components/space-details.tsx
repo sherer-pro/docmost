@@ -344,11 +344,11 @@ export default function SpaceDetails({ spaceId, readOnly }: SpaceDetailsProps) {
 
                 <Group gap="xs" wrap="nowrap">
                   <Checkbox
-                    label={t("AI participation")}
-                    checked={!!space.settings?.documentFields?.aiParticipation}
+                    label={t("AI role")}
+                    checked={!!space.settings?.documentFields?.aiRole}
                     onChange={(event) =>
                       handleDocumentFieldChange(
-                        "aiParticipation",
+                        "aiRole",
                         event.currentTarget.checked,
                       )
                     }
@@ -358,13 +358,13 @@ export default function SpaceDetails({ spaceId, readOnly }: SpaceDetailsProps) {
                     multiline
                     w={320}
                     label={t(
-                      "Adds an AI participation field to every document in this space. Use it to disclose how much AI contributed to each document.",
+                      "Adds an AI role field to every document in this space. Use it to disclose the role AI played in each document.",
                     )}
                   >
                     <ActionIcon
                       variant="subtle"
                       size="sm"
-                      aria-label={t("AI participation info")}
+                      aria-label={t("AI role info")}
                     >
                       <IconInfoCircle size={16} />
                     </ActionIcon>

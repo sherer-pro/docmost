@@ -3,6 +3,7 @@ import {
   UpdatePageCustomFieldsDto,
 } from '../dto/update-page.dto';
 import {
+  getPageAiRole,
   getPageAssigneeId,
   getPageStakeholderIds,
   normalizePageSettings,
@@ -45,6 +46,7 @@ export function mapPageCustomFields(page: {
     status,
     assigneeId,
     stakeholderIds: getPageStakeholderIds(settings),
+    aiRole: getPageAiRole(settings),
   };
 }
 

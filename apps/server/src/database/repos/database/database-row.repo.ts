@@ -70,6 +70,16 @@ export class DatabaseRowRepo {
                   WHEN COALESCE((s.settings -> 'documentFields' ->> 'stakeholders')::boolean, false)
                     THEN COALESCE(p.settings -> 'stakeholderIds', '[]'::jsonb)
                   ELSE '[]'::jsonb
+                END,
+                'aiRole', CASE
+                  WHEN p.settings ->> 'aiRole' IN (
+                    'NONE',
+                    'EDITOR',
+                    'COAUTHOR',
+                    'COAUTHOR_PLUS',
+                    'AUTHOR'
+                  ) THEN p.settings -> 'aiRole'
+                  ELSE '"NONE"'::jsonb
                 END
               )`.as('customFields'),
             )

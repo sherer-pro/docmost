@@ -230,6 +230,7 @@ describe('PageController guardrails and mixed-id contract', () => {
       status: null,
       assigneeId: null,
       stakeholderIds: [],
+      aiRole: 'NONE',
     });
   });
 
@@ -254,6 +255,7 @@ describe('PageController guardrails and mixed-id contract', () => {
       status: null,
       assigneeId: null,
       stakeholderIds: [],
+      aiRole: 'NONE',
     });
   });
 
@@ -273,6 +275,7 @@ describe('PageController guardrails and mixed-id contract', () => {
         status: 'IN_REVIEW',
         assigneeId: 'user-2',
         stakeholderIds: ['user-3', 'user-4'],
+        aiRole: 'COAUTHOR_PLUS',
       },
     });
     pageService.resolvePageDatabaseId.mockResolvedValue('database-1');
@@ -286,6 +289,7 @@ describe('PageController guardrails and mixed-id contract', () => {
       status: 'IN_REVIEW',
       assigneeId: 'user-2',
       stakeholderIds: ['user-3', 'user-4'],
+      aiRole: 'COAUTHOR_PLUS',
     });
     expect(result.databaseId).toBe('database-1');
   });

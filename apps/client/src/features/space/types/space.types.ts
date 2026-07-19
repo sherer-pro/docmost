@@ -13,7 +13,7 @@ export interface ISpaceDocumentFieldsSettings {
   status?: boolean;
   assignee?: boolean;
   stakeholders?: boolean;
-  aiParticipation?: boolean;
+  aiRole?: boolean;
   readingTime?: boolean;
 }
 

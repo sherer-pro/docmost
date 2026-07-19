@@ -40,7 +40,8 @@ export class CreatePageDto {
   format?: ContentFormat;
 
   /**
-   * Flexible document metadata (status, assigneeId, stakeholderIds, and future fields).
+   * Flexible document metadata (status, assigneeId, stakeholderIds,
+   * aiRole, and future fields).
    */
   @IsOptional()
   @IsObject()

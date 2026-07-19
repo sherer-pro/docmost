@@ -14,8 +14,10 @@ import {
 import { Transform, Type } from 'class-transformer';
 import { PageSettings } from '@docmost/db/types/entity.types';
 import {
+  PAGE_AI_ROLE_VALUES as SHARED_PAGE_AI_ROLE_VALUES,
   PAGE_CUSTOM_FIELD_STATUS_VALUES as SHARED_PAGE_CUSTOM_FIELD_STATUS_VALUES,
   PAGE_CONTENT_OPERATIONS,
+  type PageAiRole,
   type PageCustomFieldStatus,
   type PageContentOperation,
 } from '@docmost/api-contract';
@@ -23,6 +25,7 @@ import {
 export type ContentOperation = PageContentOperation;
 export const PAGE_CUSTOM_FIELD_STATUS_VALUES =
   SHARED_PAGE_CUSTOM_FIELD_STATUS_VALUES;
+export const PAGE_AI_ROLE_VALUES = SHARED_PAGE_AI_ROLE_VALUES;
 
 export class UpdatePageCustomFieldsDto {
   @IsOptional()
@@ -39,6 +42,10 @@ export class UpdatePageCustomFieldsDto {
   @ArrayUnique()
   @IsUUID('all', { each: true })
   stakeholderIds?: string[];
+
+  @ValidateIf((_, value) => value !== undefined)
+  @IsIn(PAGE_AI_ROLE_VALUES)
+  aiRole?: PageAiRole;
 }
 
 export class UpdatePageDto extends PartialType(CreatePageDto) {

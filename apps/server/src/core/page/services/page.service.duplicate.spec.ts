@@ -136,12 +136,13 @@ describe('PageService duplicatePage properties', () => {
         status: 'IN_PROGRESS',
         assigneeId: 'user-2',
         stakeholderIds: ['user-3'],
-        headingNumbering: { enabled: true },
+        aiRole: 'COAUTHOR',
       };
       const childSettings = {
         status: 'DONE',
         assigneeId: 'user-4',
         stakeholderIds: ['user-5', 'user-6'],
+        aiRole: 'AUTHOR',
       };
       const pages = [
         {

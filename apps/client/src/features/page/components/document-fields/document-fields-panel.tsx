@@ -20,6 +20,7 @@ import { CustomAvatar } from "@/components/ui/custom-avatar.tsx";
 import { updatePage } from "@/features/page/services/page-service.ts";
 import {
   IPage,
+  PageAiRole,
   PageCustomFields,
   PageCustomFieldStatus,
 } from "@/features/page/types/page.types.ts";
@@ -57,6 +58,10 @@ import { getAllSidebarPages } from "@/features/page/services/page-service.ts";
 import { useQueryEmit } from "@/features/websocket/use-query-emit.ts";
 import classes from "./document-fields-panel.module.css";
 import { AccessibleActionIcon } from "@/components/ui/accessible-action-icon.tsx";
+import {
+  AI_ROLE_OPTIONS,
+  DEFAULT_AI_ROLE,
+} from "@/features/page/components/document-fields/ai-role-options.ts";
 
 interface DocumentFieldsPanelProps {
   page: IPage;
@@ -95,6 +100,7 @@ function normalizeCustomFields(
     status: customFields?.status ?? null,
     assigneeId: customFields?.assigneeId ?? null,
     stakeholderIds: customFields?.stakeholderIds ?? [],
+    aiRole: customFields?.aiRole ?? DEFAULT_AI_ROLE,
   };
 }
 
@@ -124,6 +130,7 @@ export function DocumentFieldsPanel({
       status: !!documentFields?.status,
       assignee: !!documentFields?.assignee,
       stakeholders: !!documentFields?.stakeholders,
+      aiRole: !!documentFields?.aiRole,
     }),
     [documentFields],
   );
@@ -506,6 +513,9 @@ export function DocumentFieldsPanel({
   const selectedStatus = STATUS_OPTIONS.find(
     (item) => item.value === fields.status,
   );
+  const selectedAiRole = AI_ROLE_OPTIONS.find(
+    (item) => item.value === fields.aiRole,
+  );
 
   /**
    * Computes status field styles based on the selected badge color,
@@ -526,6 +536,21 @@ export function DocumentFieldsPanel({
     };
   }, [selectedStatus, theme.colors]);
 
+  const aiRoleInputStyles = useMemo(() => {
+    if (!selectedAiRole) {
+      return undefined;
+    }
+
+    const colorScale = theme.colors[selectedAiRole.palette];
+
+    return {
+      input: {
+        backgroundColor: alpha(colorScale[1], 0.35),
+        borderColor: colorScale[4],
+      },
+    };
+  }, [selectedAiRole, theme.colors]);
+
   const renderStatusOption: SelectProps["renderOption"] = ({ option }) => {
     const selected = STATUS_OPTIONS.find((item) => item.value === option.value);
 
@@ -537,6 +562,34 @@ export function DocumentFieldsPanel({
       <Badge color={selected.color} variant="light">
         {t(option.label)}
       </Badge>
+    );
+  };
+
+  const renderAiRoleOption: SelectProps["renderOption"] = ({
+    option,
+  }) => {
+    const selected = AI_ROLE_OPTIONS.find(
+      (item) => item.value === option.value,
+    );
+
+    if (!selected) {
+      return <Text size="sm">{option.label}</Text>;
+    }
+
+    return (
+      <Tooltip
+        label={t(selected.tooltip)}
+        multiline
+        w={300}
+        withArrow
+        events={{ hover: true, focus: true, touch: true }}
+      >
+        <span tabIndex={0} aria-label={t(selected.label)}>
+          <Badge color={selected.color} variant="light">
+            {t(selected.label)}
+          </Badge>
+        </span>
+      </Tooltip>
     );
   };
 
@@ -576,6 +629,7 @@ export function DocumentFieldsPanel({
     !enabledFields.status &&
     !enabledFields.assignee &&
     !enabledFields.stakeholders &&
+    !enabledFields.aiRole &&
     !dbProperties.length
   ) {
     return null;
@@ -634,6 +688,63 @@ export function DocumentFieldsPanel({
                         clearable
                         renderOption={renderStatusOption}
                         styles={statusInputStyles}
+                      />
+                    )}
+                  </Table.Td>
+                </Table.Tr>
+              )}
+
+              {enabledFields.aiRole && (
+                <Table.Tr>
+                  <Table.Td visibleFrom="sm">
+                    {renderFieldLabel(
+                      "AI role",
+                      "Shows the role AI played in creating or editing this document.",
+                      "AI role info",
+                    )}
+                  </Table.Td>
+                  <Table.Td>
+                    {renderMobileFieldLabel("AI role")}
+                    {isFieldsReadOnly ? (
+                      selectedAiRole ? (
+                        <Tooltip
+                          label={t(selectedAiRole.tooltip)}
+                          multiline
+                          w={300}
+                          withArrow
+                          events={{ hover: true, focus: true, touch: true }}
+                        >
+                          <Badge
+                            color={selectedAiRole.color}
+                            variant="light"
+                            my={8}
+                            tabIndex={0}
+                          >
+                            {t(selectedAiRole.label)}
+                          </Badge>
+                        </Tooltip>
+                      ) : null
+                    ) : (
+                      <Select
+                        data={AI_ROLE_OPTIONS.map((item) => ({
+                          value: item.value,
+                          label: t(item.label),
+                        }))}
+                        value={fields.aiRole}
+                        onChange={(value) => {
+                          if (!value) {
+                            return;
+                          }
+
+                          handleFieldChange({
+                            ...fields,
+                            aiRole: value as PageAiRole,
+                          });
+                        }}
+                        placeholder={t("Select AI role")}
+                        allowDeselect={false}
+                        renderOption={renderAiRoleOption}
+                        styles={aiRoleInputStyles}
                       />
                     )}
                   </Table.Td>

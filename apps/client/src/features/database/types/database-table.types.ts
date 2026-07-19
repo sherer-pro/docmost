@@ -1,7 +1,10 @@
+import type { PageAiRole } from "@docmost/api-contract";
+
 export interface IDatabaseRowCustomFields {
   status?: string | null;
   assigneeId?: string | null;
   stakeholderIds?: string[];
+  aiRole: PageAiRole;
 }
 
 /**

@@ -1,4 +1,9 @@
 import { PageSettings } from '@docmost/db/types/entity.types';
+import {
+  DEFAULT_PAGE_AI_ROLE,
+  PAGE_AI_ROLE_VALUES,
+  type PageAiRole,
+} from '@docmost/api-contract';
 
 /**
  * Safely normalizes an arbitrary `settings` payload to a plain page settings object.
@@ -44,6 +49,20 @@ export function getPageStakeholderIds(settings: unknown): string[] {
   }
 
   return [...new Set(normalizedSettings.stakeholderIds.filter(isNonEmptyString))];
+}
+
+/**
+ * Returns the persisted AI role value or the default for legacy or
+ * malformed page settings.
+ */
+export function getPageAiRole(settings: unknown): PageAiRole {
+  const normalizedSettings = normalizePageSettings(settings);
+  const value = normalizedSettings.aiRole;
+
+  return typeof value === 'string' &&
+    (PAGE_AI_ROLE_VALUES as readonly string[]).includes(value)
+    ? (value as PageAiRole)
+    : DEFAULT_PAGE_AI_ROLE;
 }
 
 /**

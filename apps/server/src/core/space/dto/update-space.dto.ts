@@ -25,7 +25,7 @@ export class UpdateSpaceDocumentFieldsDto {
 
   @IsOptional()
   @IsBoolean()
-  aiParticipation?: boolean;
+  aiRole?: boolean;
 
   @IsOptional()
   @IsBoolean()
