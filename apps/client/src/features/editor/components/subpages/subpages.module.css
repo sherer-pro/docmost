@@ -7,30 +7,8 @@
   box-sizing: border-box;
   width: 100%;
   margin: var(--mantine-spacing-md) 0;
-  padding: var(--mantine-spacing-sm);
   overflow: hidden;
-  border: 1px solid
-    light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
-  border-left: 3px solid
-    light-dark(var(--mantine-color-blue-5), var(--mantine-color-blue-7));
-  border-radius: var(--mantine-radius-md);
-  background: light-dark(
-    linear-gradient(135deg, var(--mantine-color-white), var(--mantine-color-gray-0)),
-    linear-gradient(135deg, var(--mantine-color-dark-6), var(--mantine-color-dark-7))
-  );
-  box-shadow: var(--mantine-shadow-xs);
   user-select: none;
-  transition:
-    border-color 150ms ease,
-    box-shadow 150ms ease;
-}
-
-.container:focus-within {
-  border-color: light-dark(
-    var(--mantine-color-blue-4),
-    var(--mantine-color-blue-6)
-  );
-  box-shadow: var(--mantine-shadow-sm);
 }
 
 .header {
@@ -38,7 +16,9 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--mantine-spacing-sm);
-  padding: 2px 4px var(--mantine-spacing-sm);
+  padding: var(--mantine-spacing-sm);
+  border-bottom: 1px solid
+    light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
 }
 
 .headerIcon {
@@ -59,7 +39,7 @@
 
 .list {
   display: grid;
-  gap: 4px;
+  gap: 0;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -69,28 +49,31 @@
   min-width: 0;
 }
 
+.item + .item {
+  border-top: 1px solid
+    light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+}
+
 .pageLink {
   display: flex;
   align-items: center;
-  gap: var(--mantine-spacing-sm);
+  gap: var(--mantine-spacing-xs);
   min-width: 0;
-  padding: 7px 9px;
+  min-height: 42px;
+  padding: var(--mantine-spacing-xs) var(--mantine-spacing-sm);
   color: var(--mantine-color-text);
   border: 0 !important;
-  border-radius: var(--mantine-radius-sm);
   transition:
     color 140ms ease,
-    background-color 140ms ease,
-    transform 140ms ease;
+    background-color 140ms ease;
 }
 
 .pageLink:hover {
-  color: light-dark(var(--mantine-color-blue-8), var(--mantine-color-blue-2));
+  color: var(--mantine-color-text);
   background: light-dark(
-    var(--mantine-color-blue-0),
-    color-mix(in srgb, var(--mantine-color-blue-9), transparent 74%)
+    var(--mantine-color-gray-1),
+    var(--mantine-color-dark-5)
   );
-  transform: translateX(2px);
 }
 
 .pageLink:focus-visible {
@@ -100,24 +83,12 @@
 
 .pageIcon {
   display: inline-flex;
-  flex: 0 0 28px;
+  flex: none;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  overflow: hidden;
   color: light-dark(var(--mantine-color-gray-7), var(--mantine-color-dark-1));
+  font-size: var(--mantine-font-size-md);
   line-height: 1;
-  background: light-dark(
-    var(--mantine-color-gray-1),
-    var(--mantine-color-dark-5)
-  );
-  border-radius: var(--mantine-radius-sm);
-  transition: transform 140ms ease;
-}
-
-.pageLink:hover .pageIcon {
-  transform: scale(1.05);
 }
 
 .pageTitle {
@@ -141,7 +112,7 @@
 .pageLink:hover .chevron,
 .pageLink:focus-visible .chevron {
   opacity: 1;
-  transform: translateX(3px);
+  transform: translateX(2px);
 }
 
 .state {
@@ -151,11 +122,6 @@
   min-height: 48px;
   padding: var(--mantine-spacing-sm);
   color: var(--mantine-color-dimmed);
-  background: light-dark(
-    color-mix(in srgb, var(--mantine-color-gray-1), transparent 30%),
-    color-mix(in srgb, var(--mantine-color-dark-5), transparent 30%)
-  );
-  border-radius: var(--mantine-radius-sm);
 }
 
 .errorState {
@@ -168,7 +134,7 @@
 
 .loadingList {
   display: grid;
-  gap: 6px;
+  gap: 0;
 }
 
 .loadingRow {
@@ -176,7 +142,12 @@
   align-items: center;
   gap: var(--mantine-spacing-sm);
   min-height: 42px;
-  padding: 6px 9px;
+  padding: var(--mantine-spacing-xs) var(--mantine-spacing-sm);
+}
+
+.loadingRow + .loadingRow {
+  border-top: 1px solid
+    light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
 }
 
 :global(.react-renderer.node-subpages.ProseMirror-selectednode) .container {
@@ -187,23 +158,13 @@
 @media (prefers-reduced-motion: reduce) {
   .container,
   .pageLink,
-  .pageIcon,
   .chevron {
     transition: none;
   }
 
   .pageLink:hover,
-  .pageLink:hover .pageIcon,
   .pageLink:hover .chevron,
   .pageLink:focus-visible .chevron {
     transform: none;
-  }
-}
-
-@media print {
-  .container {
-    border-color: var(--mantine-color-gray-4);
-    background: transparent;
-    box-shadow: none;
   }
 }
