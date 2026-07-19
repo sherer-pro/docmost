@@ -1,5 +1,9 @@
 import { Node, mergeAttributes } from "@tiptap/core";
 import { ReactNodeViewRenderer } from "@tiptap/react";
+import {
+  normalizeBlockWidthMode,
+  type BlockWidthMode,
+} from "./block-width";
 
 export interface DrawioOptions {
   HTMLAttributes: Record<string, any>;
@@ -12,6 +16,7 @@ export interface DrawioAttributes {
   width?: string;
   align?: string;
   attachmentId?: string;
+  widthMode?: BlockWidthMode;
 }
 
 declare module "@tiptap/core" {
@@ -59,6 +64,19 @@ export const Drawio = Node.create<DrawioOptions>({
         parseHTML: (element) => element.getAttribute("data-width"),
         renderHTML: (attributes: DrawioAttributes) => ({
           "data-width": attributes.width,
+        }),
+      },
+      widthMode: {
+        default: "normal",
+        parseHTML: (element) =>
+          normalizeBlockWidthMode(
+            element.getAttribute("data-block-width-mode") ||
+              element.getAttribute("data-width-mode"),
+          ),
+        renderHTML: (attributes: DrawioAttributes) => ({
+          "data-block-width-mode": normalizeBlockWidthMode(
+            attributes.widthMode,
+          ),
         }),
       },
       size: {

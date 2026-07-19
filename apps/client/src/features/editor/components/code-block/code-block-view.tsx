@@ -7,6 +7,11 @@ import classes from "./code-block.module.css";
 import React from "react";
 import { Suspense } from "react";
 import { useTranslation } from "react-i18next";
+import {
+  normalizeBlockWidthMode,
+  type BlockWidthMode,
+} from "@docmost/editor-ext";
+import { BlockWidthModeSelector } from "@/features/editor/components/common/block-width-mode";
 
 const MermaidView = React.lazy(
   () => import("@/features/editor/components/code-block/mermaid-view.tsx"),
@@ -16,6 +21,7 @@ export default function CodeBlockView(props: NodeViewProps) {
   const { t } = useTranslation();
   const { node, updateAttributes, extension, editor, getPos } = props;
   const { language } = node.attrs;
+  const widthMode = normalizeBlockWidthMode(node.attrs.widthMode);
   const [languageValue, setLanguageValue] = useState<string | null>(
     language || null,
   );
@@ -45,8 +51,21 @@ export default function CodeBlockView(props: NodeViewProps) {
     });
   }
 
+  function changeWidthMode(nextWidthMode: BlockWidthMode) {
+    updateAttributes({
+      widthMode: nextWidthMode,
+    });
+  }
+
   return (
-    <NodeViewWrapper className="codeBlock">
+    <NodeViewWrapper
+      className={`codeBlock ${
+        language === "mermaid" ? "blockWidthWrapper" : ""
+      }`}
+      data-block-width-mode={
+        language === "mermaid" ? widthMode : undefined
+      }
+    >
       <Group
         justify="flex-end"
         contentEditable={false}
@@ -63,6 +82,14 @@ export default function CodeBlockView(props: NodeViewProps) {
           classNames={{ input: classes.selectInput }}
           disabled={!editor.isEditable}
         />
+
+        {language === "mermaid" && editor.isEditable && (
+          <BlockWidthModeSelector
+            value={widthMode}
+            onChange={changeWidthMode}
+            label={t("Diagram width")}
+          />
+        )}
 
         <CopyButton value={node?.textContent} timeout={2000}>
           {({ copied, copy }) => (

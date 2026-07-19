@@ -360,6 +360,7 @@ describe("table widths", () => {
       expect(view.dom.querySelector("colgroup")).toBeNull();
       expect(view.table.style.width).toBe("100%");
       expect(view.table.style.minWidth).toBe("");
+      expect(view.dom.getAttribute("data-block-width-mode")).toBe("normal");
       expect(view.dom.getAttribute("data-table-width-mode")).toBe("normal");
     } finally {
       editor.destroy();
@@ -379,12 +380,14 @@ describe("table widths", () => {
       );
 
       expect(view.dom.getAttribute("data-table-width-mode")).toBe("full");
+      expect(view.dom.getAttribute("data-block-width-mode")).toBe("full");
       expect(view.table.getAttribute("data-table-width-mode")).toBe("full");
       expect(view.table.style.width).toBe("100%");
       expect(view.dom.querySelector("colgroup")).toBeNull();
 
       expect(view.update(nextNode)).toBe(true);
       expect(view.dom.getAttribute("data-table-width-mode")).toBe("wide");
+      expect(view.dom.getAttribute("data-block-width-mode")).toBe("wide");
       expect(view.table.getAttribute("data-table-width-mode")).toBe("wide");
       expect(view.table.style.width).toBe("100%");
       expect(view.dom.querySelector("colgroup")).toBeNull();

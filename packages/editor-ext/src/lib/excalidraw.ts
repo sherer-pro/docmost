@@ -1,5 +1,9 @@
 import { Node, mergeAttributes } from "@tiptap/core";
 import { ReactNodeViewRenderer } from "@tiptap/react";
+import {
+  normalizeBlockWidthMode,
+  type BlockWidthMode,
+} from "./block-width";
 
 export interface ExcalidrawOptions {
   HTMLAttributes: Record<string, any>;
@@ -12,6 +16,7 @@ export interface ExcalidrawAttributes {
   width?: string;
   align?: string;
   attachmentId?: string;
+  widthMode?: BlockWidthMode;
 }
 
 declare module "@tiptap/core" {
@@ -58,6 +63,19 @@ export const Excalidraw = Node.create<ExcalidrawOptions>({
         parseHTML: (element) => element.getAttribute("data-width"),
         renderHTML: (attributes: ExcalidrawAttributes) => ({
           "data-width": attributes.width,
+        }),
+      },
+      widthMode: {
+        default: "normal",
+        parseHTML: (element) =>
+          normalizeBlockWidthMode(
+            element.getAttribute("data-block-width-mode") ||
+              element.getAttribute("data-width-mode"),
+          ),
+        renderHTML: (attributes: ExcalidrawAttributes) => ({
+          "data-block-width-mode": normalizeBlockWidthMode(
+            attributes.widthMode,
+          ),
         }),
       },
       size: {

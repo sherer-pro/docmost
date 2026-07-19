@@ -7,8 +7,15 @@ import {
   ShouldShowProps,
 } from "@/features/editor/components/table/types/types.ts";
 import { NodeWidthResize } from "@/features/editor/components/common/node-width-resize.tsx";
+import { BlockWidthModeSelector } from "@/features/editor/components/common/block-width-mode";
+import {
+  normalizeBlockWidthMode,
+  type BlockWidthMode,
+} from "@docmost/editor-ext";
+import { useTranslation } from "react-i18next";
 
 export function ExcalidrawMenu({ editor }: EditorMenuProps) {
+  const { t } = useTranslation();
   const shouldShow = useCallback(
     ({ state }: ShouldShowProps) => {
       if (!state) {
@@ -33,6 +40,7 @@ export function ExcalidrawMenu({ editor }: EditorMenuProps) {
       return {
         isExcalidraw: ctx.editor.isActive("excalidraw"),
         width: excalidrawAttr?.width ? parseInt(excalidrawAttr.width) : null,
+        widthMode: normalizeBlockWidthMode(excalidrawAttr?.widthMode),
       };
     },
   });
@@ -66,6 +74,17 @@ export function ExcalidrawMenu({ editor }: EditorMenuProps) {
     [editor],
   );
 
+  const onWidthModeChange = useCallback(
+    (widthMode: BlockWidthMode) => {
+      editor
+        .chain()
+        .focus(undefined, { scrollIntoView: false })
+        .updateAttributes("excalidraw", { widthMode })
+        .run();
+    },
+    [editor],
+  );
+
   return (
     <BaseBubbleMenu
       editor={editor}
@@ -86,6 +105,13 @@ export function ExcalidrawMenu({ editor }: EditorMenuProps) {
           alignItems: "center",
         }}
       >
+        {editorState && (
+          <BlockWidthModeSelector
+            value={editorState.widthMode}
+            onChange={onWidthModeChange}
+            label={t("Diagram width")}
+          />
+        )}
         {editorState?.width && (
           <NodeWidthResize onChange={onWidthChange} value={editorState.width} />
         )}

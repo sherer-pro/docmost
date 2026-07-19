@@ -4,9 +4,10 @@ import mermaid from "mermaid";
 import { v4 as uuidv4 } from "uuid";
 import classes from "./code-block.module.css";
 import { useTranslation } from "react-i18next";
-import { Modal, useComputedColorScheme } from "@mantine/core";
+import { useComputedColorScheme } from "@mantine/core";
 import createDOMPurify from "dompurify";
 import { sanitizeMermaidSvg } from "./mermaid-sanitizer";
+import { ImagePreviewModal } from "@/features/editor/components/common/image-preview-modal";
 
 const DOMPurify = createDOMPurify(window);
 
@@ -159,18 +160,15 @@ export default function MermaidView({ props }: MermaidViewProps) {
         dangerouslySetInnerHTML={{ __html: preview }}
       ></div>
 
-      <Modal
+      <ImagePreviewModal
         opened={isLightboxOpened}
         onClose={() => setIsLightboxOpened(false)}
-        centered
-        size="auto"
         title={t("Mermaid diagram")}
       >
         <div
-          className={classes.mermaidLightbox}
           dangerouslySetInnerHTML={{ __html: preview }}
         />
-      </Modal>
+      </ImagePreviewModal>
     </>
   );
 }

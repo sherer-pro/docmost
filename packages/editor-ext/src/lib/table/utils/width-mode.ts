@@ -1,11 +1,15 @@
-export const TABLE_WIDTH_MODES = ['normal', 'wide', 'full'] as const;
+import {
+  BLOCK_WIDTH_MODES,
+  normalizeBlockWidthMode,
+  type BlockWidthMode,
+} from '../../block-width';
 
-export type TableWidthMode = (typeof TABLE_WIDTH_MODES)[number];
+export const TABLE_WIDTH_MODES = BLOCK_WIDTH_MODES;
+
+export type TableWidthMode = BlockWidthMode;
 
 export function normalizeTableWidthMode(value: unknown): TableWidthMode {
-  return TABLE_WIDTH_MODES.includes(value as TableWidthMode)
-    ? (value as TableWidthMode)
-    : 'normal';
+  return normalizeBlockWidthMode(value);
 }
 
 export function getTableWidthModeClass(value: unknown): string {
