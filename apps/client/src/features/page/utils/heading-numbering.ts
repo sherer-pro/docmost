@@ -1,28 +1,32 @@
-import { PageSettings } from "@/features/page/types/page.types";
 import { ISpaceSettings } from "@/features/space/types/space.types";
+import { normalizeHeadingNumberingByPageId } from "@/features/user/utils/heading-numbering";
 
-export type HeadingNumberingOverride = "inherit" | "enabled" | "disabled";
-
-export function getHeadingNumberingOverride(
-  pageSettings?: PageSettings,
-): HeadingNumberingOverride {
-  const value = pageSettings?.headingNumbering?.enabled;
-  if (value === true) return "enabled";
-  if (value === false) return "disabled";
-  return "inherit";
+interface HeadingNumberingPreferences {
+  headingNumberingByPageId?: unknown;
 }
 
 export function resolveHeadingNumberingEnabled({
-  pageSettings,
+  pageId,
+  preferences,
   spaceSettings,
 }: {
-  pageSettings?: PageSettings;
+  pageId?: string | null;
+  preferences?: HeadingNumberingPreferences | null;
   spaceSettings?: ISpaceSettings;
 }): boolean {
-  const override = pageSettings?.headingNumbering?.enabled;
-  if (typeof override === "boolean") {
-    return override;
+  const overrides = normalizeHeadingNumberingByPageId(
+    preferences?.headingNumberingByPageId,
+  );
+
+  if (pageId && Object.prototype.hasOwnProperty.call(overrides, pageId)) {
+    return overrides[pageId];
   }
 
+  return spaceSettings?.headingNumbering?.enabled === true;
+}
+
+export function resolveSpaceHeadingNumberingEnabled(
+  spaceSettings?: ISpaceSettings,
+): boolean {
   return spaceSettings?.headingNumbering?.enabled === true;
 }

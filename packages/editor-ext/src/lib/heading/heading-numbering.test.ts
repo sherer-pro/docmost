@@ -2,12 +2,15 @@
 
 import { Editor } from '@tiptap/core';
 import { StarterKit } from '@tiptap/starter-kit';
+import { Fragment, Slice } from '@tiptap/pm/model';
 import { describe, expect, it } from 'vitest';
 import {
   addHeadingNumbersToJson,
   calculateHeadingNumbers,
   findManualHeadingNumbering,
   HeadingNumbering,
+  isHeadingNumberingPasteCleanupEnabled,
+  stripManualHeadingNumberingFromPastedSlice,
 } from './heading-numbering';
 
 const descriptor = (level: number, text: string) => ({
@@ -162,6 +165,98 @@ describe('heading numbering', () => {
     ]);
     expect(transactionCount).toBe(1);
 
+    editor.destroy();
+  });
+
+  it('strips manual numbering only from pasted H1-H3 nodes', () => {
+    const editor = new Editor({
+      extensions: [StarterKit, HeadingNumbering],
+      content: '<p>Existing content</p>',
+    });
+    const pastedDoc = editor.schema.nodeFromJSON({
+      type: 'doc',
+      content: [
+        {
+          type: 'heading',
+          attrs: { level: 1 },
+          content: [
+            { type: 'text', marks: [{ type: 'bold' }], text: '1.' },
+            { type: 'text', text: ' Heading' },
+          ],
+        },
+        {
+          type: 'heading',
+          attrs: { level: 3 },
+          content: [{ type: 'text', text: '1.2.3 Child' }],
+        },
+        {
+          type: 'heading',
+          attrs: { level: 4 },
+          content: [{ type: 'text', text: '4. Keep H4' }],
+        },
+        {
+          type: 'paragraph',
+          content: [{ type: 'text', text: '2. Keep paragraph' }],
+        },
+        {
+          type: 'heading',
+          attrs: { level: 2 },
+          content: [{ type: 'text', text: '2024Roadmap' }],
+        },
+      ],
+    });
+    const slice = new Slice(pastedDoc.content, 0, 0);
+
+    const cleaned = stripManualHeadingNumberingFromPastedSlice(slice);
+
+    expect(
+      cleaned.content.content.map((node) => node.textContent),
+    ).toEqual([
+      'Heading',
+      'Child',
+      '4. Keep H4',
+      '2. Keep paragraph',
+      '2024Roadmap',
+    ]);
+    expect(editor.getText()).toBe('Existing content');
+    editor.destroy();
+  });
+
+  it('strips plain text only when pasted at the start of H1-H3', () => {
+    const editor = new Editor({
+      extensions: [StarterKit, HeadingNumbering],
+      content: '<h2>Existing</h2>',
+    });
+    const paragraph = editor.schema.nodeFromJSON({
+      type: 'paragraph',
+      content: [{ type: 'text', text: '1.2. Pasted' }],
+    });
+    const slice = new Slice(Fragment.from(paragraph), 1, 1);
+
+    editor.commands.setTextSelection(1);
+    expect(
+      stripManualHeadingNumberingFromPastedSlice(slice, editor.state).content
+        .firstChild?.textContent,
+    ).toBe('Pasted');
+
+    editor.commands.setTextSelection(3);
+    expect(
+      stripManualHeadingNumberingFromPastedSlice(slice, editor.state).content
+        .firstChild?.textContent,
+    ).toBe('1.2. Pasted');
+    editor.destroy();
+  });
+
+  it('toggles paste cleanup independently from displayed numbering', () => {
+    const editor = new Editor({
+      extensions: [StarterKit, HeadingNumbering],
+      content: '<h1>Heading</h1>',
+    });
+
+    expect(isHeadingNumberingPasteCleanupEnabled(editor.state)).toBe(false);
+    editor.commands.setHeadingNumberingPasteCleanupEnabled(true);
+    expect(isHeadingNumberingPasteCleanupEnabled(editor.state)).toBe(true);
+    expect(editor.view.dom.querySelectorAll('.heading-number')).toHaveLength(0);
     editor.destroy();
   });
 });

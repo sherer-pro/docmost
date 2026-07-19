@@ -11,13 +11,7 @@ function normalizeSettings(settings: unknown): SettingsContainer {
 }
 
 export function resolveHeadingNumberingEnabled(
-  pageSettings: unknown,
   spaceSettings: unknown,
 ): boolean {
-  const pageValue = normalizeSettings(pageSettings).headingNumbering?.enabled;
-  if (typeof pageValue === 'boolean') {
-    return pageValue;
-  }
-
   return normalizeSettings(spaceSettings).headingNumbering?.enabled === true;
 }

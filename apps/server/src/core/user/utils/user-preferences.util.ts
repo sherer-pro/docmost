@@ -18,6 +18,7 @@ interface UserPreferencesRecord {
   pushFrequency?: unknown;
   emailFrequency?: unknown;
   fixedToolbar?: unknown;
+  headingNumberingByPageId?: unknown;
   pageEditModeByPageId?: unknown;
 }
 
@@ -144,6 +145,36 @@ export function normalizePageEditModeByPageId(
   );
 }
 
+export function normalizeBooleanPreferenceByPageId(
+  value: unknown,
+): Record<string, boolean> {
+  let parsedValue = value;
+
+  if (typeof parsedValue === 'string') {
+    try {
+      parsedValue = JSON.parse(parsedValue);
+    } catch {
+      return {};
+    }
+  }
+
+  if (!isRecord(parsedValue)) {
+    return {};
+  }
+
+  return Object.entries(parsedValue).reduce<Record<string, boolean>>(
+    (acc, [pageId, enabled]) => {
+      if (!pageId || typeof enabled !== 'boolean') {
+        return acc;
+      }
+
+      acc[pageId] = enabled;
+      return acc;
+    },
+    {},
+  );
+}
+
 export function normalizeUserSettings(
   settings: unknown,
 ): UserSettingsRecord & {
@@ -153,6 +184,7 @@ export function normalizeUserSettings(
     pushFrequency: NotificationFrequency;
     emailFrequency: NotificationFrequency;
     fixedToolbar: boolean;
+    headingNumberingByPageId: Record<string, boolean>;
     pageEditModeByPageId: Record<string, PageEditModePreference>;
   };
 } {
@@ -172,6 +204,9 @@ export function normalizeUserSettings(
       fixedToolbar: normalizePreferenceBoolean(
         safePreferences.fixedToolbar,
         false,
+      ),
+      headingNumberingByPageId: normalizeBooleanPreferenceByPageId(
+        safePreferences.headingNumberingByPageId,
       ),
       pushFrequency: normalizeNotificationFrequency(
         safePreferences.pushFrequency,

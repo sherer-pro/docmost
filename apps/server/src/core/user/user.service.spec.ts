@@ -132,6 +132,60 @@ describe('UserService', () => {
     );
   });
 
+  it('updates and normalizes personal heading numbering overrides', async () => {
+    const { service, userRepo } = createService();
+    const workspace = { id: 'ws-1' } as any;
+    const user = {
+      id: 'user-1',
+      email: 'john@example.com',
+      password: 'hash',
+      settings: { preferences: { rememberPageScrollPosition: true } },
+    } as any;
+    const headingNumberingByPageId = {
+      [PAGE_ID]: false,
+      [OTHER_PAGE_ID]: true,
+      invalid: 'false',
+    } as any;
+    const normalizedOverrides = {
+      [PAGE_ID]: false,
+      [OTHER_PAGE_ID]: true,
+    };
+    const updatedUser = {
+      ...user,
+      settings: {
+        preferences: {
+          rememberPageScrollPosition: true,
+          headingNumberingByPageId: normalizedOverrides,
+        },
+      },
+    };
+
+    userRepo.findById
+      .mockResolvedValueOnce(user)
+      .mockResolvedValueOnce(updatedUser);
+    userRepo.updatePreference.mockResolvedValue(updatedUser);
+
+    const result = await service.update(
+      { headingNumberingByPageId } as any,
+      'user-1',
+      workspace,
+    );
+
+    expect(userRepo.updatePreference).toHaveBeenCalledWith(
+      'user-1',
+      'ws-1',
+      'headingNumberingByPageId',
+      normalizedOverrides,
+    );
+    expect(userRepo.updateUser).not.toHaveBeenCalled();
+    expect(
+      (result as any).settings.preferences.headingNumberingByPageId,
+    ).toEqual(normalizedOverrides);
+    expect(
+      (result as any).settings.preferences.rememberPageScrollPosition,
+    ).toBe(true);
+  });
+
   it('normalizes malformed page-width map and keeps only boolean entries', async () => {
     const { service, userRepo } = createService();
 

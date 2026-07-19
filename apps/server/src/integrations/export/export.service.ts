@@ -37,6 +37,7 @@ import {
 import { htmlToMarkdown } from '@docmost/editor-ext';
 import { getAppVersion } from '../../common/helpers/get-app-version';
 import {
+  getPageAiRole,
   getPageAssigneeId,
   getPageStakeholderIds,
   normalizePageSettings,
@@ -50,6 +51,10 @@ import { TokenService } from '../../core/auth/services/token.service';
 import { validate as isValidUuid } from 'uuid';
 import { addHeadingNumbersToJson } from '@docmost/editor-ext';
 import { resolveHeadingNumberingEnabled } from '../../core/page/utils/heading-numbering-settings.utils';
+import {
+  PAGE_AI_ROLE,
+  type PageAiRole,
+} from '@docmost/api-contract';
 
 const PAGE_STATUS_LABELS: Record<string, string> = {
   TODO: 'To do',
@@ -60,10 +65,34 @@ const PAGE_STATUS_LABELS: Record<string, string> = {
   ARCHIVED: 'Archived',
 };
 
+const PAGE_AI_ROLE_LABELS: Record<
+  PageAiRole,
+  { key: string; fallback: string }
+> = {
+  [PAGE_AI_ROLE.NONE]: { key: 'None', fallback: 'None' },
+  [PAGE_AI_ROLE.EDITOR]: {
+    key: 'Editor',
+    fallback: 'Editor',
+  },
+  [PAGE_AI_ROLE.COAUTHOR]: {
+    key: 'Coauthor',
+    fallback: 'Coauthor',
+  },
+  [PAGE_AI_ROLE.COAUTHOR_PLUS]: {
+    key: 'Coauthor+',
+    fallback: 'Coauthor+',
+  },
+  [PAGE_AI_ROLE.AUTHOR]: {
+    key: 'Author',
+    fallback: 'Author',
+  },
+};
+
 const PAGE_CUSTOM_FIELD_LABEL_KEYS = [
   'Status',
   'Assignee',
   'Stakeholders',
+  'AI role',
 ] as const;
 type PageCustomFieldLabelKey = (typeof PAGE_CUSTOM_FIELD_LABEL_KEYS)[number];
 type PageCustomFieldLabels = Record<PageCustomFieldLabelKey, string>;
@@ -72,6 +101,7 @@ const DEFAULT_PAGE_CUSTOM_FIELD_LABELS: PageCustomFieldLabels = {
   Status: 'Status',
   Assignee: 'Assignee',
   Stakeholders: 'Stakeholders',
+  'AI role': 'AI role',
 };
 
 const DEFAULT_EXPORT_LOCALE = 'en-US';
@@ -106,6 +136,7 @@ export class ExportService {
     singlePage?: boolean,
     locale?: string,
     spaceHeadingNumberingEnabled?: boolean,
+    spaceAiRoleEnabled?: boolean,
   ) {
     const { title: pageTitle, pageHtml } = await this.buildPageExportHtml(
       page,
@@ -133,6 +164,7 @@ export class ExportService {
         locale,
         singlePage,
         pageHtml,
+        spaceAiRoleEnabled,
       });
 
       return this.renderPdfFromHtmlDocument({
@@ -150,6 +182,7 @@ export class ExportService {
     locale?: string;
     singlePage?: boolean;
     pageHtml?: string;
+    spaceAiRoleEnabled?: boolean;
   }): Promise<{ title: string; bodyHtml: string; attachmentToken: string }> {
     const pageTitle = getPageTitle(params.page.title);
     let pageHtml = params.pageHtml;
@@ -165,6 +198,7 @@ export class ExportService {
     const metadataRows = await this.resolvePageMetadataRows(
       params.page,
       params.locale,
+      params.spaceAiRoleEnabled,
     );
     const bodyHtml = await this.buildPagePdfBodyHtml(
       pageHtml,
@@ -208,21 +242,10 @@ export class ExportService {
       prosemirrorJson = getProsemirrorContent(page.content);
     }
 
-    const pageOverride = (
-      page.settings as { headingNumbering?: { enabled?: unknown } } | null
-    )?.headingNumbering?.enabled;
-    const spaceDefault =
-      typeof pageOverride === 'boolean'
-        ? false
-        : typeof spaceHeadingNumberingEnabled === 'boolean'
-          ? spaceHeadingNumberingEnabled
-          : await this.getSpaceHeadingNumberingDefault(page.spaceId);
     const headingNumberingEnabled =
-      typeof pageOverride === 'boolean'
-        ? pageOverride
-        : resolveHeadingNumberingEnabled(page.settings, {
-            headingNumbering: { enabled: spaceDefault },
-          });
+      typeof spaceHeadingNumberingEnabled === 'boolean'
+        ? spaceHeadingNumberingEnabled
+        : await this.getSpaceHeadingNumberingDefault(page.spaceId);
     if (headingNumberingEnabled) {
       prosemirrorJson = addHeadingNumbersToJson(prosemirrorJson);
     }
@@ -242,13 +265,43 @@ export class ExportService {
   private async getSpaceHeadingNumberingDefault(
     spaceId: string,
   ): Promise<boolean> {
+    const settings = await this.getSpaceSettings(spaceId);
+
+    return resolveHeadingNumberingEnabled(settings);
+  }
+
+  private async getSpaceSettings(spaceId: string): Promise<unknown> {
     const space = await this.db
       .selectFrom('spaces')
       .select('settings')
       .where('id', '=', spaceId)
       .executeTakeFirst();
 
-    return resolveHeadingNumberingEnabled(undefined, space?.settings);
+    return space?.settings;
+  }
+
+  private resolveSpaceAiRoleEnabled(settings: unknown): boolean {
+    if (!settings || typeof settings !== 'object') {
+      return false;
+    }
+
+    const documentFields = (settings as Record<string, unknown>)[
+      'documentFields'
+    ];
+
+    return Boolean(
+      documentFields &&
+        typeof documentFields === 'object' &&
+        (documentFields as Record<string, unknown>)['aiRole'],
+    );
+  }
+
+  private async getSpaceAiRoleEnabled(
+    spaceId: string,
+  ): Promise<boolean> {
+    return this.resolveSpaceAiRoleEnabled(
+      await this.getSpaceSettings(spaceId),
+    );
   }
 
   async renderPdfFromHtmlDocument(params: {
@@ -488,6 +541,7 @@ export class ExportService {
   private async resolvePageMetadataRows(
     page: Page,
     locale?: string,
+    spaceAiRoleEnabled?: boolean,
   ): Promise<Array<{ label: string; value: string }>> {
     const settings = normalizePageSettings(page.settings);
     const statusLabel = this.resolvePageStatusLabel(settings.status);
@@ -502,6 +556,8 @@ export class ExportService {
     );
     const metadataLabels = this.resolvePageCustomFieldLabels(locale);
     const rows: Array<{ label: string; value: string }> = [];
+    const aiRoleEnabled =
+      spaceAiRoleEnabled ?? (await this.getSpaceAiRoleEnabled(page.spaceId));
 
     if (statusLabel) {
       rows.push({ label: metadataLabels.Status, value: statusLabel });
@@ -524,7 +580,37 @@ export class ExportService {
       });
     }
 
+    if (aiRoleEnabled) {
+      rows.push({
+        label: metadataLabels['AI role'],
+        value: this.resolvePageAiRoleLabel(
+          getPageAiRole(settings),
+          locale,
+        ),
+      });
+    }
+
     return rows;
+  }
+
+  private resolvePageAiRoleLabel(
+    value: PageAiRole,
+    locale?: string,
+  ): string {
+    const label = PAGE_AI_ROLE_LABELS[value];
+
+    for (const localeCandidate of this.buildLocaleFallbackChain(locale)) {
+      const translations = this.readLocaleTranslations(localeCandidate);
+      const translatedLabel = translations
+        ? this.readTranslationString(translations, label.key)
+        : null;
+
+      if (translatedLabel) {
+        return translatedLabel;
+      }
+    }
+
+    return label.fallback;
   }
 
   private resolvePageCustomFieldLabels(locale?: string): PageCustomFieldLabels {
@@ -1295,8 +1381,11 @@ export class ExportService {
       throw new BadRequestException('No pages to export');
     }
 
-    const spaceHeadingNumberingEnabled =
-      await this.getSpaceHeadingNumberingDefault(pages[0].spaceId);
+    const spaceSettings = await this.getSpaceSettings(pages[0].spaceId);
+    const spaceHeadingNumberingEnabled = resolveHeadingNumberingEnabled(
+      spaceSettings,
+    );
+    const spaceAiRoleEnabled = this.resolveSpaceAiRoleEnabled(spaceSettings);
 
     const parentPageIndex = pages.findIndex((obj) => obj.id === pageId);
     // set to null to make export of pages with parentId work
@@ -1312,6 +1401,7 @@ export class ExportService {
       includeAttachments,
       locale,
       spaceHeadingNumberingEnabled,
+      spaceAiRoleEnabled,
     );
 
     const zipFile = zip.generateNodeStream({
@@ -1369,7 +1459,8 @@ export class ExportService {
       zip,
       includeAttachments,
       locale,
-      resolveHeadingNumberingEnabled(undefined, space.settings),
+      resolveHeadingNumberingEnabled(space.settings),
+      this.resolveSpaceAiRoleEnabled(space.settings),
     );
 
     const zipFile = zip.generateNodeStream({
@@ -1392,6 +1483,7 @@ export class ExportService {
     includeAttachments: boolean,
     locale?: string,
     spaceHeadingNumberingEnabled?: boolean,
+    spaceAiRoleEnabled?: boolean,
   ): Promise<void> {
     const slugIdToPath: Record<string, string> = {};
     const pageIdToFilePath: Record<string, string> = {};
@@ -1441,6 +1533,7 @@ export class ExportService {
           false,
           locale,
           spaceHeadingNumberingEnabled,
+          spaceAiRoleEnabled,
         );
 
         folder.file(

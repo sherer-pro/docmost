@@ -1284,7 +1284,7 @@
   "Tags": "Tags",
   "Choose which built-in tags are available in the editor slash menu.": "Choose which built-in tags are available in the editor slash menu.",
   "Not selected": "Not selected",
-  "Heading numbering": "Heading numbering",
+  "Heading numbering": "# headings",
   "Automatically number H1-H3 headings in this space.": "Automatically number H1-H3 headings in this space.",
   "Number headings": "Number headings",
   "Use space setting": "Use space setting",

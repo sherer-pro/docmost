@@ -2,33 +2,15 @@ import { resolveHeadingNumberingEnabled } from './heading-numbering-settings.uti
 
 describe('resolveHeadingNumberingEnabled', () => {
   it('defaults to disabled', () => {
-    expect(resolveHeadingNumberingEnabled(undefined, undefined)).toBe(false);
+    expect(resolveHeadingNumberingEnabled(undefined)).toBe(false);
   });
 
-  it('inherits the space setting for missing and null overrides', () => {
-    const spaceSettings = { headingNumbering: { enabled: true } };
-
-    expect(resolveHeadingNumberingEnabled({}, spaceSettings)).toBe(true);
+  it('uses only the space setting', () => {
     expect(
-      resolveHeadingNumberingEnabled(
-        { headingNumbering: { enabled: null } },
-        spaceSettings,
-      ),
+      resolveHeadingNumberingEnabled({ headingNumbering: { enabled: true } }),
     ).toBe(true);
-  });
-
-  it('prefers explicit page overrides', () => {
     expect(
-      resolveHeadingNumberingEnabled(
-        { headingNumbering: { enabled: false } },
-        { headingNumbering: { enabled: true } },
-      ),
+      resolveHeadingNumberingEnabled({ headingNumbering: { enabled: false } }),
     ).toBe(false);
-    expect(
-      resolveHeadingNumberingEnabled(
-        { headingNumbering: { enabled: true } },
-        { headingNumbering: { enabled: false } },
-      ),
-    ).toBe(true);
   });
 });

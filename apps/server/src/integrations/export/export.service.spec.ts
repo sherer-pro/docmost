@@ -219,7 +219,7 @@ describe('ExportService PDF export', () => {
       title: 'Root',
       parentPageId: null,
       text: 'unused',
-      settings: { headingNumbering: { enabled: true } },
+      settings: { headingNumbering: { enabled: false } },
     });
     (page as any).content = {
       type: 'doc',
@@ -240,6 +240,8 @@ describe('ExportService PDF export', () => {
     const exported = await service.exportPage(
       ExportFormat.HTML,
       page as any,
+      true,
+      undefined,
       true,
     );
 
@@ -380,6 +382,46 @@ describe('ExportService PDF export', () => {
     expect(renderedHtml).not.toContain('Document fields');
   });
 
+  it('localizes AI role metadata when the space field is enabled', async () => {
+    spaceSettings = { documentFields: { aiRole: true } };
+    mockUserLookup([]);
+    const page = createPage({
+      id: 'page-1',
+      slugId: 'slug-1',
+      title: 'Root',
+      parentPageId: null,
+      text: 'Hello from page',
+      settings: { aiRole: 'COAUTHOR_PLUS' },
+    });
+
+    await service.exportPage(ExportFormat.PDF, page as any, true, 'ru-RU');
+
+    const [renderedHtml] = htmlPdfRendererService.render.mock.calls[0];
+    expect(renderedHtml).toContain(
+      '\u0420\u043e\u043b\u044c AI',
+    );
+    expect(renderedHtml).toContain(
+      '\u0421\u043e\u0430\u0432\u0442\u043e\u0440+',
+    );
+  });
+
+  it('omits AI role metadata when the space field is disabled', async () => {
+    const page = createPage({
+      id: 'page-1',
+      slugId: 'slug-1',
+      title: 'Root',
+      parentPageId: null,
+      text: 'Hello from page',
+      settings: { aiRole: 'AUTHOR' },
+    });
+
+    await service.exportPage(ExportFormat.PDF, page as any, true, 'en-US');
+
+    const [renderedHtml] = htmlPdfRendererService.render.mock.calls[0];
+    expect(renderedHtml).not.toContain('AI role');
+    expect(renderedHtml).not.toContain('Author');
+  });
+
   it('exports pages PDF as ZIP keeping tree hierarchy', async () => {
     pageRepo.getPageAndDescendants.mockResolvedValue([
       createPage({
@@ -413,7 +455,7 @@ describe('ExportService PDF export', () => {
     expect(zip.file('docmost-metadata.json')).toBeDefined();
   });
 
-  it('applies page overrides independently in one ZIP export', async () => {
+  it('ignores legacy page overrides in one ZIP export', async () => {
     spaceSettings = { headingNumbering: { enabled: true } };
     const root = createPage({
       id: 'root-page',
@@ -457,8 +499,7 @@ describe('ExportService PDF export', () => {
     const childHtml = await zip.file('Root/Child.html')?.async('string');
 
     expect(rootHtml).toContain('<h2>1. Section</h2>');
-    expect(childHtml).toContain('<h2>Section</h2>');
-    expect(childHtml).not.toContain('<h2>1. Section</h2>');
+    expect(childHtml).toContain('<h2>1. Section</h2>');
     expect(
       db.selectFrom.mock.calls.filter(([tableName]) => tableName === 'spaces'),
     ).toHaveLength(1);

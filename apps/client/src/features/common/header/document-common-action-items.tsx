@@ -1,4 +1,4 @@
-import { Group, Menu } from '@mantine/core';
+import { Group, Menu, Text } from '@mantine/core';
 import {
   IconArrowsHorizontal,
   IconFileExport,
@@ -13,8 +13,6 @@ import { useTranslation } from 'react-i18next';
 import { PageWidthToggle } from '@/features/user/components/page-width-pref.tsx';
 import { HeadingNumberingMenuItems } from '@/features/common/header/heading-numbering-menu-items';
 import { Editor } from '@tiptap/core';
-import { PageSettings } from '@/features/page/types/page.types';
-import { ISpaceSettings } from '@/features/space/types/space.types';
 
 interface DocumentCommonActionItemsProps {
   onCopyLink: () => void;
@@ -32,9 +30,7 @@ interface DocumentCommonActionItemsProps {
   fullPageWidth: boolean;
   headingNumbering?: {
     pageId: string;
-    spaceId: string;
-    pageSettings?: PageSettings;
-    spaceSettings?: ISpaceSettings;
+    checked: boolean;
     editor: Editor | null;
     canWrite: boolean;
   };
@@ -94,9 +90,9 @@ export function DocumentCommonActionItems({
       {onOpenAccess && <Menu.Divider />}
 
       <Menu.Item leftSection={<IconArrowsHorizontal size={16} />}>
-        <Group wrap="nowrap">
+        <Group wrap="nowrap" justify="space-between" w="100%">
+          <Text>{t('Full width')}</Text>
           <PageWidthToggle
-            label={t('Full width')}
             scope="page"
             pageId={pageId ?? databasePageId}
             checked={fullPageWidth}

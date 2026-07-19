@@ -10,6 +10,7 @@ import { comparePasswordHash } from '../../common/helpers/utils';
 import { Workspace } from '@docmost/db/types/entity.types';
 import { validateSsoEnforcement } from '../auth/auth.util';
 import {
+  normalizeBooleanPreferenceByPageId,
   normalizeNotificationFrequency,
   normalizePageEditModeByPageId,
   normalizePreferenceBoolean,
@@ -92,6 +93,7 @@ export class UserService {
       typeof updateUserDto.fullPageWidth !== 'undefined' ||
       typeof updateUserDto.fixedToolbar !== 'undefined' ||
       typeof updateUserDto.fullPageWidthByPageId !== 'undefined' ||
+      typeof updateUserDto.headingNumberingByPageId !== 'undefined' ||
       typeof updateUserDto.pageEditModeByPageId !== 'undefined' ||
       typeof updateUserDto.pushEnabled !== 'undefined' ||
       typeof updateUserDto.pushFrequency !== 'undefined' ||
@@ -126,6 +128,17 @@ export class UserService {
         'fullPageWidthByPageId',
         this.normalizeFullPageWidthByPageId(
           updateUserDto.fullPageWidthByPageId,
+        ),
+      );
+    }
+
+    if (typeof updateUserDto.headingNumberingByPageId !== 'undefined') {
+      await this.userRepo.updatePreference(
+        userId,
+        workspace.id,
+        'headingNumberingByPageId',
+        normalizeBooleanPreferenceByPageId(
+          updateUserDto.headingNumberingByPageId,
         ),
       );
     }
@@ -245,6 +258,7 @@ export class UserService {
     delete updateUserDto.confirmPassword;
     delete updateUserDto.fixedToolbar;
     delete updateUserDto.fullPageWidthByPageId;
+    delete updateUserDto.headingNumberingByPageId;
     delete updateUserDto.pageEditModeByPageId;
 
     await this.userRepo.updateUser(updateUserDto, userId, workspace.id);

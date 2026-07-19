@@ -16,6 +16,7 @@ import {
   normalizePushFrequency,
 } from "@/features/user/utils/notification-preferences.ts";
 import { normalizeFullPageWidthByPageId } from "@/features/user/utils/page-width.ts";
+import { normalizeHeadingNumberingByPageId } from "@/features/user/utils/heading-numbering";
 
 function isEnvelope<T>(value: unknown): value is ApiResponseEnvelope<T> {
   return (
@@ -42,6 +43,10 @@ function normalizeUserPreferences(user: IUser): IUser {
   const normalizedPageEditModeByPageId = normalizePageEditModeByPageId(
     safePreferences.pageEditModeByPageId,
   );
+  const normalizedHeadingNumberingByPageId =
+    normalizeHeadingNumberingByPageId(
+      safePreferences.headingNumberingByPageId,
+    );
   const hasPageWidthOverrides =
     Object.keys(normalizedFullPageWidthByPageId).length > 0;
   const hasPageEditModeOverrides =
@@ -67,6 +72,7 @@ function normalizeUserPreferences(user: IUser): IUser {
         ...(hasPageEditModeOverrides
           ? { pageEditModeByPageId: normalizedPageEditModeByPageId }
           : {}),
+        headingNumberingByPageId: normalizedHeadingNumberingByPageId,
         pushEnabled: normalizePreferenceBoolean(
           safePreferences.pushEnabled,
           DEFAULT_PUSH_ENABLED,

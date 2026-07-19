@@ -1,6 +1,9 @@
 import { ISpace } from "@/features/space/types/space.types.ts";
 import {
+  DEFAULT_PAGE_AI_ROLE,
+  PAGE_AI_ROLE,
   PAGE_CUSTOM_FIELD_STATUS,
+  type PageAiRole as ApiPageAiRole,
   type PageCustomFieldStatus as ApiPageCustomFieldStatus,
   type PageAccessCapabilities as ApiPageAccessCapabilities,
   type PageAccessInfo as ApiPageAccessInfo,
@@ -17,9 +20,6 @@ import {
  */
 export interface PageSettings {
   fullPageWidth?: boolean;
-  headingNumbering?: {
-    enabled?: boolean | null;
-  };
   [key: string]: unknown;
 }
 
@@ -57,11 +57,15 @@ export interface IPage {
 
 export const PageCustomFieldStatus = PAGE_CUSTOM_FIELD_STATUS;
 export type PageCustomFieldStatus = ApiPageCustomFieldStatus;
+export const PageAiRole = PAGE_AI_ROLE;
+export type PageAiRole = ApiPageAiRole;
+export const DefaultPageAiRole = DEFAULT_PAGE_AI_ROLE;
 
 export interface PageCustomFields {
   status?: PageCustomFieldStatus | null;
   assigneeId?: string | null;
   stakeholderIds?: string[];
+  aiRole: PageAiRole;
 }
 
 interface ICreator {
@@ -173,7 +177,6 @@ export type IUpdatePageInput = Partial<IPageInput> & {
   content?: Record<string, unknown> | string;
   operation?: PageContentOperation;
   format?: PageContentFormat;
-  headingNumberingEnabled?: boolean | null;
 };
 
 export interface IExportPageParams {
