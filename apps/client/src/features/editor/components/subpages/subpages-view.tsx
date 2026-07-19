@@ -1,5 +1,13 @@
 import { NodeViewProps, NodeViewWrapper } from "@tiptap/react";
-import { Anchor, Badge, Group, Skeleton, Text, ThemeIcon } from "@mantine/core";
+import {
+  Anchor,
+  Badge,
+  Group,
+  Paper,
+  Skeleton,
+  Text,
+  ThemeIcon,
+} from "@mantine/core";
 import {
   IconAlertCircle,
   IconChevronRight,
@@ -60,7 +68,9 @@ export default function SubpagesView(props: NodeViewProps) {
 
   return (
     <NodeViewWrapper data-drag-handle className={classes.nodeView}>
-      <div
+      <Paper
+        withBorder
+        radius="md"
         className={classes.container}
         role="navigation"
         aria-label={t("Subpages")}
@@ -158,7 +168,7 @@ export default function SubpagesView(props: NodeViewProps) {
             ))}
           </ul>
         )}
-      </div>
+      </Paper>
     </NodeViewWrapper>
   );
 }
