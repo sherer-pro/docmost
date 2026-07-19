@@ -1,22 +1,40 @@
 .readingTime {
   --reading-time-color-progress: 0%;
+  --reading-time-neutral: light-dark(#495057, #ced4da);
 
   color: light-dark(#087f5b, #8ce99a);
-  color: light-dark(
-    color-mix(
-      in oklch,
-      #087f5b calc(100% - var(--reading-time-color-progress)),
-      #93151b var(--reading-time-color-progress)
+  color: color-mix(
+    in oklab,
+    light-dark(
+      color-mix(
+        in oklch,
+        #087f5b calc(100% - var(--reading-time-color-progress)),
+        #93151b var(--reading-time-color-progress)
+      ),
+      color-mix(
+        in oklch,
+        #8ce99a calc(100% - var(--reading-time-color-progress)),
+        #e3807f var(--reading-time-color-progress)
+      )
     ),
-    color-mix(
-      in oklch,
-      #8ce99a calc(100% - var(--reading-time-color-progress)),
-      #e3807f var(--reading-time-color-progress)
-    )
+    var(--reading-time-neutral) 28%
   );
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  gap: 0.3rem;
   font-size: var(--mantine-font-size-sm);
-  font-weight: 500;
+  font-weight: 400;
   line-height: var(--mantine-line-height-sm);
+  user-select: none;
+
+  .icon {
+    width: 0.875rem;
+    height: 0.875rem;
+    flex: 0 0 auto;
+    opacity: 0.72;
+    transform: translateY(1px);
+  }
 
   @media (forced-colors: active) {
     color: CanvasText;

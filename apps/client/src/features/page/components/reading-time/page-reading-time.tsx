@@ -1,6 +1,7 @@
 import { VisuallyHidden } from "@mantine/core";
 import type { Editor } from "@tiptap/core";
 import { useEditorState } from "@tiptap/react";
+import { IconBook } from "@tabler/icons-react";
 import clsx from "clsx";
 import type { CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
@@ -54,7 +55,13 @@ export function PageReadingTime({
   return (
     <div className={clsx(classes.readingTime, className)} style={style}>
       <VisuallyHidden>{t("Estimated reading time")}: </VisuallyHidden>
-      {label}
+      <IconBook
+        aria-hidden="true"
+        className={classes.icon}
+        focusable="false"
+        stroke={1.75}
+      />
+      <span>{label}</span>
     </div>
   );
 }
