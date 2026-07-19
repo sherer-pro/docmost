@@ -7,8 +7,15 @@ import {
   ShouldShowProps,
 } from "@/features/editor/components/table/types/types.ts";
 import { NodeWidthResize } from "@/features/editor/components/common/node-width-resize.tsx";
+import { BlockWidthModeSelector } from "@/features/editor/components/common/block-width-mode";
+import {
+  normalizeBlockWidthMode,
+  type BlockWidthMode,
+} from "@docmost/editor-ext";
+import { useTranslation } from "react-i18next";
 
 export function DrawioMenu({ editor }: EditorMenuProps) {
+  const { t } = useTranslation();
   const shouldShow = useCallback(
     ({ state }: ShouldShowProps) => {
       if (!state) {
@@ -31,6 +38,7 @@ export function DrawioMenu({ editor }: EditorMenuProps) {
       return {
         isDrawio: ctx.editor.isActive("drawio"),
         width: drawioAttr?.width ? parseInt(drawioAttr.width) : null,
+        widthMode: normalizeBlockWidthMode(drawioAttr?.widthMode),
       };
     },
   });
@@ -64,6 +72,17 @@ export function DrawioMenu({ editor }: EditorMenuProps) {
     [editor],
   );
 
+  const onWidthModeChange = useCallback(
+    (widthMode: BlockWidthMode) => {
+      editor
+        .chain()
+        .focus(undefined, { scrollIntoView: false })
+        .updateAttributes("drawio", { widthMode })
+        .run();
+    },
+    [editor],
+  );
+
   return (
     <BaseBubbleMenu
       editor={editor}
@@ -84,6 +103,13 @@ export function DrawioMenu({ editor }: EditorMenuProps) {
           alignItems: "center",
         }}
       >
+        {editorState && (
+          <BlockWidthModeSelector
+            value={editorState.widthMode}
+            onChange={onWidthModeChange}
+            label={t("Diagram width")}
+          />
+        )}
         {editorState?.width && (
           <NodeWidthResize onChange={onWidthChange} value={editorState.width} />
         )}

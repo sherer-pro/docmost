@@ -15,25 +15,16 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    width: 100%;
+}
+
+.mermaid svg {
+    width: 100%;
+    height: auto;
 }
 
 .mermaidInteractive {
     cursor: zoom-in;
-}
-
-.mermaidLightbox {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    max-width: 90vw;
-    max-height: 80vh;
-    overflow: auto;
-}
-
-.mermaidLightbox svg {
-    max-width: 90vw;
-    max-height: 80vh;
-    height: auto;
 }
 
 .menuGroup {

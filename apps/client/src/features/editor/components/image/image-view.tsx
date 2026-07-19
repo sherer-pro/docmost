@@ -1,10 +1,11 @@
 import { NodeViewProps, NodeViewWrapper } from "@tiptap/react";
-import { Group, Image, Loader, Modal, Text } from "@mantine/core";
+import { Group, Image, Loader, Text } from "@mantine/core";
 import { useMemo, useState } from "react";
 import { getFileUrl } from "@/lib/config.ts";
 import clsx from "clsx";
 import classes from "./image-view.module.css";
 import { useTranslation } from "react-i18next";
+import { ImagePreviewModal } from "@/features/editor/components/common/image-preview-modal";
 
 /**
  * Renders an image inside the editor and opens it in a modal on click.
@@ -69,11 +70,9 @@ export default function ImageView(props: NodeViewProps) {
               onClick={() => setIsLightboxOpened(true)}
             />
 
-            <Modal
+            <ImagePreviewModal
               opened={isLightboxOpened}
               onClose={() => setIsLightboxOpened(false)}
-              centered
-              size="auto"
               title={title || t("Image preview")}
             >
               <Image
@@ -81,10 +80,8 @@ export default function ImageView(props: NodeViewProps) {
                 fit="contain"
                 src={imageUrl}
                 alt={alt || title}
-                mah="80vh"
-                maw="90vw"
               />
-            </Modal>
+            </ImagePreviewModal>
           </>
         )}
         {!src && previewSrc && (

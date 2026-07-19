@@ -28,11 +28,14 @@ import {
   getDiagramAttachmentSrc,
   getDiagramSaveErrorMessage,
 } from "@/features/editor/components/diagram/diagram-attachment";
+import { ImagePreviewModal } from "@/features/editor/components/common/image-preview-modal";
+import { normalizeBlockWidthMode } from "@docmost/editor-ext";
 
 export default function DrawioView(props: NodeViewProps) {
   const { t } = useTranslation();
   const { node, updateAttributes, editor, selected } = props;
   const { src, title, width, attachmentId } = node.attrs;
+  const widthMode = normalizeBlockWidthMode(node.attrs.widthMode);
   const drawioRef = useRef<DrawIoEmbedRef>(null);
   const [initialXML, setInitialXML] = useState<string>("");
   const [opened, { open, close }] = useDisclosure(false);
@@ -112,7 +115,11 @@ export default function DrawioView(props: NodeViewProps) {
   };
 
   return (
-    <NodeViewWrapper data-drag-handle>
+    <NodeViewWrapper
+      data-drag-handle
+      className="blockWidthWrapper"
+      data-block-width-mode={widthMode}
+    >
       <Modal.Root opened={opened} onClose={isSaving ? () => null : close} fullScreen>
         <Modal.Overlay />
         <Modal.Content style={{ overflow: "hidden" }}>
@@ -175,11 +182,9 @@ export default function DrawioView(props: NodeViewProps) {
             style={{ cursor: !editor.isEditable ? "zoom-in" : undefined }}
           />
 
-          <Modal
+          <ImagePreviewModal
             opened={isPreviewOpened}
             onClose={() => setIsPreviewOpened(false)}
-            centered
-            size="auto"
             title={title || t("Image preview")}
           >
             <Image
@@ -187,10 +192,8 @@ export default function DrawioView(props: NodeViewProps) {
               fit="contain"
               src={imageUrl ?? undefined}
               alt={title}
-              mah="80vh"
-              maw="90vw"
             />
-          </Modal>
+          </ImagePreviewModal>
 
           {selected && editor.isEditable && (
             <ActionIcon

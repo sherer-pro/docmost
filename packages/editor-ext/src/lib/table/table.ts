@@ -50,6 +50,7 @@ export const CustomTable = Table.extend({
 
           return normalizeTableWidthMode(
             element.getAttribute("data-table-width-mode") ||
+              element.getAttribute("data-block-width-mode") ||
               element.getAttribute("data-width-mode") ||
               wrapperMode,
           );
@@ -130,7 +131,8 @@ export const CustomTable = Table.extend({
     const wrapper: DOMOutputSpec = [
       "div",
       {
-        class: `tableWrapper ${getTableWidthModeClass(widthMode)}`,
+        class: `tableWrapper blockWidthWrapper ${getTableWidthModeClass(widthMode)}`,
+        "data-block-width-mode": widthMode,
         "data-table-width-mode": widthMode,
       },
       originalRender,

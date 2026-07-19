@@ -5,7 +5,6 @@ import {
   Card,
   Group,
   Image,
-  Modal,
   Text,
   useComputedColorScheme,
 } from "@mantine/core";
@@ -25,6 +24,8 @@ import {
   getDiagramAttachmentSrc,
   getDiagramSaveErrorMessage,
 } from "@/features/editor/components/diagram/diagram-attachment";
+import { ImagePreviewModal } from "@/features/editor/components/common/image-preview-modal";
+import { normalizeBlockWidthMode } from "@docmost/editor-ext";
 
 const ExcalidrawEditor = lazy(
   () =>
@@ -37,6 +38,7 @@ export default function ExcalidrawView(props: NodeViewProps) {
   const { t } = useTranslation();
   const { node, updateAttributes, editor, selected } = props;
   const { src, title, width, attachmentId } = node.attrs;
+  const widthMode = normalizeBlockWidthMode(node.attrs.widthMode);
 
   const [excalidrawAPI, setExcalidrawAPI] =
     useState<ExcalidrawImperativeAPI>(null);
@@ -135,7 +137,11 @@ export default function ExcalidrawView(props: NodeViewProps) {
   };
 
   return (
-    <NodeViewWrapper data-drag-handle>
+    <NodeViewWrapper
+      data-drag-handle
+      className="blockWidthWrapper"
+      data-block-width-mode={widthMode}
+    >
       {opened && (
         <ReactClearModal
           style={{
@@ -208,11 +214,9 @@ export default function ExcalidrawView(props: NodeViewProps) {
             style={{ cursor: !editor.isEditable ? "zoom-in" : undefined }}
           />
 
-          <Modal
+          <ImagePreviewModal
             opened={isPreviewOpened}
             onClose={() => setIsPreviewOpened(false)}
-            centered
-            size="auto"
             title={title || t("Image preview")}
           >
             <Image
@@ -220,10 +224,8 @@ export default function ExcalidrawView(props: NodeViewProps) {
               fit="contain"
               src={imageUrl ?? undefined}
               alt={title}
-              mah="80vh"
-              maw="90vw"
             />
-          </Modal>
+          </ImagePreviewModal>
 
           {selected && editor.isEditable && (
             <ActionIcon

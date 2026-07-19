@@ -1,36 +1,7 @@
 .tableWrapper {
-  --table-available-width: calc(
-    100vw - var(--app-shell-navbar-offset, 0rem) -
-      var(--app-shell-aside-offset, 0rem) - var(--mantine-spacing-md) -
-      var(--mantine-spacing-md)
-  );
   margin-top: 1rem;
   margin-bottom: 1rem;
-  width: 100%;
-  max-width: 100%;
   overflow-x: visible;
-}
-
-.tableWrapper[data-table-width-mode="wide"] {
-  width: 140%;
-  max-width: min(140%, var(--table-available-width));
-  margin-left: 50%;
-  transform: translateX(-50%);
-}
-
-.tableWrapper[data-table-width-mode="full"] {
-  width: var(--table-available-width);
-  max-width: var(--table-available-width);
-  margin-left: 50%;
-  transform: translateX(-50%);
-}
-
-[data-page-full-width="true"] .tableWrapper[data-table-width-mode="wide"],
-[data-page-full-width="true"] .tableWrapper[data-table-width-mode="full"] {
-  width: 100%;
-  max-width: 100%;
-  margin-left: 0;
-  transform: none;
 }
 
 .table-dnd-preview {

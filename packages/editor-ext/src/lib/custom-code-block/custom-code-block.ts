@@ -3,6 +3,7 @@ import CodeBlock from "@tiptap/extension-code-block";
 
 import { LowlightPlugin } from "./lowlight-plugin.js";
 import { ReactNodeViewRenderer } from "@tiptap/react";
+import { normalizeBlockWidthMode } from "../block-width";
 
 export interface CodeBlockLowlightOptions extends CodeBlockOptions {
   /**
@@ -32,6 +33,25 @@ export const CustomCodeBlock = CodeBlock.extend<CodeBlockLowlightOptions>({
       defaultLanguage: null,
       HTMLAttributes: {},
       view: null,
+    };
+  },
+
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      widthMode: {
+        default: "normal",
+        parseHTML: (element) =>
+          normalizeBlockWidthMode(
+            element.getAttribute("data-block-width-mode") ||
+              element.getAttribute("data-width-mode"),
+          ),
+        renderHTML: (attributes) => ({
+          "data-block-width-mode": normalizeBlockWidthMode(
+            attributes.widthMode,
+          ),
+        }),
+      },
     };
   },
 

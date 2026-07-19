@@ -52,7 +52,8 @@ export class TableView implements NodeView {
   updateWidthMode() {
     const widthMode = normalizeTableWidthMode(this.node.attrs.widthMode);
 
-    this.dom.className = `tableWrapper ${getTableWidthModeClass(widthMode)}`;
+    this.dom.className = `tableWrapper blockWidthWrapper ${getTableWidthModeClass(widthMode)}`;
+    this.dom.setAttribute('data-block-width-mode', widthMode);
     this.dom.setAttribute('data-table-width-mode', widthMode);
     this.table.setAttribute('data-table-width-mode', widthMode);
   }
