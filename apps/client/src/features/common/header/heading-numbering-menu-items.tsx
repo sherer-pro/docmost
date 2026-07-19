@@ -1,73 +1,74 @@
-import { Menu, Text } from "@mantine/core";
+import { Group, Menu, Switch, Text } from "@mantine/core";
 import { modals } from "@mantine/modals";
 import { notifications } from "@mantine/notifications";
-import { IconCheck, IconEraser, IconListNumbers } from "@tabler/icons-react";
+import { IconEraser, IconListNumbers } from "@tabler/icons-react";
 import { Editor } from "@tiptap/core";
 import { findManualHeadingNumbering } from "@docmost/editor-ext";
 import { useTranslation } from "react-i18next";
-import { PageSettings } from "@/features/page/types/page.types";
-import { ISpaceSettings } from "@/features/space/types/space.types";
-import { useUpdatePageMutation } from "@/features/page/queries/page-query";
-import {
-  getHeadingNumberingOverride,
-  HeadingNumberingOverride,
-} from "@/features/page/utils/heading-numbering";
-import { useQueryEmit } from "@/features/websocket/use-query-emit";
+import { useAtom } from "jotai";
+import { useEditorState } from "@tiptap/react";
+import { userAtom } from "@/features/user/atoms/current-user-atom";
+import { updateUser } from "@/features/user/services/user-service";
+import { normalizeHeadingNumberingByPageId } from "@/features/user/utils/heading-numbering";
+import { useState, type ChangeEvent } from "react";
 
 interface HeadingNumberingMenuItemsProps {
   pageId: string;
-  spaceId: string;
-  pageSettings?: PageSettings;
-  spaceSettings?: ISpaceSettings;
+  checked: boolean;
   editor: Editor | null;
   canWrite: boolean;
 }
 
-const overrideValues: Array<{
-  value: HeadingNumberingOverride;
-  label: "Use space setting" | "Enabled" | "Disabled";
-}> = [
-  { value: "inherit", label: "Use space setting" },
-  { value: "enabled", label: "Enabled" },
-  { value: "disabled", label: "Disabled" },
-];
-
 export function HeadingNumberingMenuItems({
   pageId,
-  spaceId,
-  pageSettings,
-  spaceSettings,
+  checked,
   editor,
   canWrite,
 }: HeadingNumberingMenuItemsProps) {
   const { t } = useTranslation();
-  const { mutateAsync: updatePage, isPending } = useUpdatePageMutation();
-  const emit = useQueryEmit();
-  const currentOverride = getHeadingNumberingOverride(pageSettings);
+  const [user, setUser] = useAtom(userAtom);
+  const [isPending, setIsPending] = useState(false);
+  const hasManualNumbering = useEditorState({
+    editor,
+    selector: ({ editor: currentEditor }) => {
+      const editorPageId = (
+        currentEditor?.storage as { pageId?: string } | undefined
+      )?.pageId;
+      if (!currentEditor || editorPageId !== pageId) {
+        return false;
+      }
 
-  if (!canWrite) {
-    return null;
-  }
+      return findManualHeadingNumbering(currentEditor.state.doc).length > 0;
+    },
+  });
 
-  const handleOverrideChange = async (value: HeadingNumberingOverride) => {
-    if (value === currentOverride || isPending) {
+  const handleToggle = async (event: ChangeEvent<HTMLInputElement>) => {
+    if (isPending) {
       return;
     }
 
-    const headingNumberingEnabled =
-      value === "inherit" ? null : value === "enabled";
-    const updatedPage = await updatePage({
-      pageId,
-      headingNumberingEnabled,
-    });
+    const enabled = event.currentTarget.checked;
+    const currentOverrides = normalizeHeadingNumberingByPageId(
+      user?.settings?.preferences?.headingNumberingByPageId,
+    );
 
-    emit({
-      operation: "updateOne",
-      entity: ["pages"],
-      id: pageId,
-      spaceId,
-      payload: { settings: updatedPage.settings },
-    });
+    setIsPending(true);
+    try {
+      const updatedUser = await updateUser({
+        headingNumberingByPageId: {
+          ...currentOverrides,
+          [pageId]: enabled,
+        },
+      });
+      setUser(updatedUser);
+    } catch {
+      notifications.show({
+        message: t("Failed to update data"),
+        color: "red",
+      });
+    } finally {
+      setIsPending(false);
+    }
   };
 
   const handleRemoveManualNumbering = () => {
@@ -109,43 +110,26 @@ export function HeadingNumberingMenuItems({
 
   return (
     <>
-      <Menu.Sub>
-        <Menu.Sub.Target>
-          <Menu.Sub.Item leftSection={<IconListNumbers size={16} />}>
-            {t("Heading numbering")}
-          </Menu.Sub.Item>
-        </Menu.Sub.Target>
-        <Menu.Sub.Dropdown>
-          {overrideValues.map((option) => (
-            <Menu.Item
-              key={option.value}
-              onClick={() => handleOverrideChange(option.value)}
-              disabled={isPending}
-              rightSection={
-                currentOverride === option.value ? (
-                  <IconCheck size={16} />
-                ) : null
-              }
-            >
-              {option.value === "inherit"
-                ? `${t(option.label)} (${t(
-                    spaceSettings?.headingNumbering?.enabled
-                      ? "Enabled"
-                      : "Disabled",
-                  )})`
-                : t(option.label)}
-            </Menu.Item>
-          ))}
-        </Menu.Sub.Dropdown>
-      </Menu.Sub>
-
-      <Menu.Item
-        leftSection={<IconEraser size={16} />}
-        onClick={handleRemoveManualNumbering}
-        disabled={!editor}
-      >
-        {t("Remove manual heading numbering")}
+      <Menu.Item leftSection={<IconListNumbers size={16} />}>
+        <Group wrap="nowrap" justify="space-between" w="100%">
+          <Text>{t("Heading numbering")}</Text>
+          <Switch
+            checked={checked}
+            disabled={isPending}
+            onChange={handleToggle}
+            aria-label={t("Heading numbering")}
+          />
+        </Group>
       </Menu.Item>
+
+      {canWrite && hasManualNumbering && (
+        <Menu.Item
+          leftSection={<IconEraser size={16} />}
+          onClick={handleRemoveManualNumbering}
+        >
+          {t("Remove manual heading numbering")}
+        </Menu.Item>
+      )}
     </>
   );
 }

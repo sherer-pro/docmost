@@ -1,44 +1,51 @@
 import { describe, expect, it } from "vitest";
-import {
-  getHeadingNumberingOverride,
-  resolveHeadingNumberingEnabled,
-} from "./heading-numbering";
+import { resolveHeadingNumberingEnabled } from "./heading-numbering";
+import { normalizeHeadingNumberingByPageId } from "@/features/user/utils/heading-numbering";
 
 describe("heading numbering settings", () => {
   it("defaults to disabled and inherits the space setting", () => {
     expect(resolveHeadingNumberingEnabled({})).toBe(false);
     expect(
       resolveHeadingNumberingEnabled({
-        pageSettings: { headingNumbering: { enabled: null } },
+        pageId: "page-1",
         spaceSettings: { headingNumbering: { enabled: true } },
       }),
     ).toBe(true);
   });
 
-  it("uses explicit page overrides", () => {
+  it("uses personal page overrides in both directions", () => {
     expect(
       resolveHeadingNumberingEnabled({
-        pageSettings: { headingNumbering: { enabled: false } },
+        pageId: "page-1",
+        preferences: { headingNumberingByPageId: { "page-1": false } },
         spaceSettings: { headingNumbering: { enabled: true } },
       }),
     ).toBe(false);
     expect(
       resolveHeadingNumberingEnabled({
-        pageSettings: { headingNumbering: { enabled: true } },
+        pageId: "page-1",
+        preferences: { headingNumberingByPageId: { "page-1": true } },
+        spaceSettings: { headingNumbering: { enabled: false } },
       }),
     ).toBe(true);
   });
 
-  it("maps storage values to the tri-state control", () => {
-    expect(getHeadingNumberingOverride()).toBe("inherit");
+  it("keeps overrides independent between pages", () => {
     expect(
-      getHeadingNumberingOverride({ headingNumbering: { enabled: null } }),
-    ).toBe("inherit");
+      resolveHeadingNumberingEnabled({
+        pageId: "page-2",
+        preferences: { headingNumberingByPageId: { "page-1": false } },
+        spaceSettings: { headingNumbering: { enabled: true } },
+      }),
+    ).toBe(true);
+  });
+
+  it("normalizes serialized and malformed preference maps", () => {
     expect(
-      getHeadingNumberingOverride({ headingNumbering: { enabled: true } }),
-    ).toBe("enabled");
-    expect(
-      getHeadingNumberingOverride({ headingNumbering: { enabled: false } }),
-    ).toBe("disabled");
+      normalizeHeadingNumberingByPageId(
+        JSON.stringify({ "page-1": true, "page-2": "false" }),
+      ),
+    ).toEqual({ "page-1": true });
+    expect(normalizeHeadingNumberingByPageId("{broken-json")).toEqual({});
   });
 });

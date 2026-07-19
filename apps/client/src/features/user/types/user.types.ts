@@ -21,6 +21,7 @@ export interface IUser {
   fullPageWidth: boolean; // used for update
   fixedToolbar: boolean; // used for update
   fullPageWidthByPageId?: Record<string, boolean>; // used for update
+  headingNumberingByPageId?: Record<string, boolean>; // used for update
   pageEditModeByPageId?: Record<string, PageEditMode>; // used for update
   pushEnabled: boolean; // used for update
   emailEnabled: boolean; // used for update
@@ -40,6 +41,7 @@ export interface IUserSettings {
     fullPageWidth: boolean;
     fixedToolbar: boolean;
     fullPageWidthByPageId?: Record<string, boolean>;
+    headingNumberingByPageId?: Record<string, boolean>;
     pageEditModeByPageId?: Record<string, PageEditMode>;
     pushEnabled: boolean;
     emailEnabled: boolean;

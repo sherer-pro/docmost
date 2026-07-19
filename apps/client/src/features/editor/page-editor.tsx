@@ -93,6 +93,7 @@ interface PageEditorProps {
   canManageDictionary?: boolean;
   canCreateInlineComments?: boolean;
   headingNumberingEnabled?: boolean;
+  spaceHeadingNumberingEnabled?: boolean;
 }
 
 export default function PageEditor({
@@ -107,6 +108,7 @@ export default function PageEditor({
   canManageDictionary = false,
   canCreateInlineComments = editable,
   headingNumberingEnabled = false,
+  spaceHeadingNumberingEnabled = false,
 }: PageEditorProps) {
   const collaborationURL = useCollaborationUrl();
   const isComponentMounted = useRef(false);
@@ -442,6 +444,12 @@ export default function PageEditor({
   useEffect(() => {
     editor?.commands.setHeadingNumberingEnabled(headingNumberingEnabled);
   }, [editor, headingNumberingEnabled]);
+
+  useEffect(() => {
+    editor?.commands.setHeadingNumberingPasteCleanupEnabled(
+      spaceHeadingNumberingEnabled,
+    );
+  }, [editor, spaceHeadingNumberingEnabled]);
 
   const editorIsEditable = useEditorState({
     editor,

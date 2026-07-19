@@ -3,7 +3,11 @@ import { Extension } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { DOMParser } from "@tiptap/pm/model";
 import { find } from "linkifyjs";
-import { markdownToHtml } from "@docmost/editor-ext";
+import {
+  isHeadingNumberingPasteCleanupEnabled,
+  markdownToHtml,
+  stripManualHeadingNumberingFromPastedSlice,
+} from "@docmost/editor-ext";
 
 export const MarkdownClipboard = Extension.create({
   name: "markdownClipboard",
@@ -42,11 +46,18 @@ export const MarkdownClipboard = Extension.create({
 
             const html = markdownToHtml(text);
 
-            const contentNodes = DOMParser.fromSchema(
+            let contentNodes = DOMParser.fromSchema(
               this.editor.schema,
             ).parseSlice(elementFromString(html), {
               preserveWhitespace: true,
             });
+
+            if (isHeadingNumberingPasteCleanupEnabled(view.state)) {
+              contentNodes = stripManualHeadingNumberingFromPastedSlice(
+                contentNodes,
+                view.state,
+              );
+            }
 
             tr.replaceRange(from, to, contentNodes);
             tr.setMeta('paste', true)

@@ -31,6 +31,10 @@ export class UpdateUserDto extends PartialType(
 
   @IsOptional()
   @IsObject()
+  headingNumberingByPageId: Record<string, boolean>;
+
+  @IsOptional()
+  @IsObject()
   pageEditModeByPageId: Record<string, 'read' | 'edit'>;
 
   @IsOptional()

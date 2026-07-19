@@ -49,7 +49,10 @@ import { AccessibleActionIcon } from '@/components/ui/accessible-action-icon.tsx
 import PageDetailsModal from '@/features/page/components/page-details-modal';
 import { pageEditorAtom } from '@/features/editor/atoms/editor-atoms';
 import { useGetSpaceBySlugQuery } from '@/features/space/queries/space-query';
-import { resolveHeadingNumberingEnabled } from '@/features/page/utils/heading-numbering';
+import {
+  resolveHeadingNumberingEnabled,
+  resolveSpaceHeadingNumberingEnabled,
+} from '@/features/page/utils/heading-numbering';
 import { getEditorMarkdown } from '@/features/editor/utils/editor-markdown';
 import CopyPageModal from '@/features/page/components/copy-page-modal.tsx';
 import { PageOperationMenuItems } from '@/features/page/components/page-operation-menu-items.tsx';
@@ -176,10 +179,9 @@ export default function DatabaseHeaderMenu({
       descriptionMarkdown: pageEditor
         ? getEditorMarkdown(
             pageEditor,
-            resolveHeadingNumberingEnabled({
-              pageSettings: databaseContext.pageByRoute?.settings,
-              spaceSettings: space?.settings ?? databaseContext.pageByRoute?.space?.settings,
-            }),
+            resolveSpaceHeadingNumberingEnabled(
+              space?.settings ?? databaseContext.pageByRoute?.space?.settings,
+            ),
           )
         : undefined,
       properties,
@@ -314,6 +316,12 @@ export default function DatabaseHeaderMenu({
     pageId: databasePageWidthScopeId,
     preferences: user?.settings?.preferences,
   });
+  const headingNumberingEnabled = resolveHeadingNumberingEnabled({
+    pageId: databasePageWidthScopeId,
+    preferences: user?.settings?.preferences,
+    spaceSettings:
+      space?.settings ?? databaseContext.pageByRoute?.space?.settings,
+  });
   const canExportCurrentDatabase = canExportDocument({
     parentPageId: databaseContext.pageByRoute?.parentPageId,
     workspaceRole: user?.role,
@@ -414,9 +422,7 @@ export default function DatabaseHeaderMenu({
               resolvedDatabasePageId && databaseContext.pageByRoute?.spaceId
                 ? {
                     pageId: resolvedDatabasePageId,
-                    spaceId: databaseContext.pageByRoute.spaceId,
-                    pageSettings: databaseContext.pageByRoute.settings,
-                    spaceSettings: space?.settings ?? databaseContext.pageByRoute.space?.settings,
+                    checked: headingNumberingEnabled,
                     editor: pageEditor,
                     canWrite: !readOnly,
                   }

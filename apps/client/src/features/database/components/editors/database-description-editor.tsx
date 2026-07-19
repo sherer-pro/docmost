@@ -10,6 +10,7 @@ export interface DatabaseDescriptionEditorProps {
   dictionaryEnabled?: boolean;
   canCreateInlineComments?: boolean;
   headingNumberingEnabled?: boolean;
+  spaceHeadingNumberingEnabled?: boolean;
 }
 
 /**
@@ -27,6 +28,7 @@ export function DatabaseDescriptionEditor({
   dictionaryEnabled = false,
   canCreateInlineComments = editable,
   headingNumberingEnabled = false,
+  spaceHeadingNumberingEnabled = false,
 }: DatabaseDescriptionEditorProps) {
   return (
     <div className={classes.databaseDescriptionEditorContainer}>
@@ -42,6 +44,7 @@ export function DatabaseDescriptionEditor({
         canManageDictionary={editable}
         canCreateInlineComments={canCreateInlineComments}
         headingNumberingEnabled={headingNumberingEnabled}
+        spaceHeadingNumberingEnabled={spaceHeadingNumberingEnabled}
       />
     </div>
   );

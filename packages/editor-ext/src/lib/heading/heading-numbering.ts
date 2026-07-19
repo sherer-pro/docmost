@@ -1,5 +1,9 @@
 import { Extension, JSONContent } from '@tiptap/core';
-import { Node as ProseMirrorNode } from '@tiptap/pm/model';
+import {
+  Fragment,
+  Node as ProseMirrorNode,
+  Slice,
+} from '@tiptap/pm/model';
 import { EditorState, Plugin, PluginKey } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 
@@ -24,12 +28,16 @@ export interface ManualHeadingNumberingMatch {
 
 export interface HeadingNumberingOptions {
   enabled: boolean;
+  stripManualNumberingOnPaste: boolean;
 }
 
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
     headingNumbering: {
       setHeadingNumberingEnabled: (enabled: boolean) => ReturnType;
+      setHeadingNumberingPasteCleanupEnabled: (
+        enabled: boolean,
+      ) => ReturnType;
       removeManualHeadingNumbering: () => ReturnType;
     };
   }
@@ -37,6 +45,10 @@ declare module '@tiptap/core' {
 
 export const headingNumberingPluginKey = new PluginKey<boolean>(
   'headingNumbering',
+);
+
+export const headingNumberingPasteCleanupPluginKey = new PluginKey<boolean>(
+  'headingNumberingPasteCleanup',
 );
 
 const isSupportedHeadingLevel = (level: unknown): level is 1 | 2 | 3 =>
@@ -168,6 +180,110 @@ export function addHeadingNumbersToJson(content: JSONContent): JSONContent {
 const MANUAL_HEADING_NUMBERING_PATTERN =
   /^(?:\d+(?:\.\d+){1,2}(?!\.\d)\.?\s*|\d+(?:\.(?!\d)\s*|\s+))/;
 
+function removeLeadingTextCharacters(
+  fragment: Fragment,
+  count: number,
+): { fragment: Fragment; remaining: number } {
+  let remaining = count;
+  const nodes: ProseMirrorNode[] = [];
+
+  fragment.forEach((node) => {
+    if (remaining === 0) {
+      nodes.push(node);
+      return;
+    }
+
+    if (node.isText) {
+      const textLength = node.text?.length ?? 0;
+      const removeCount = Math.min(textLength, remaining);
+      remaining -= removeCount;
+
+      if (removeCount < textLength) {
+        nodes.push(node.cut(removeCount));
+      }
+      return;
+    }
+
+    if (node.content.size > 0) {
+      const cleaned = removeLeadingTextCharacters(node.content, remaining);
+      remaining = cleaned.remaining;
+      nodes.push(node.copy(cleaned.fragment));
+      return;
+    }
+
+    nodes.push(node);
+  });
+
+  return {
+    fragment: Fragment.fromArray(nodes),
+    remaining,
+  };
+}
+
+function stripManualPrefixFromNode(node: ProseMirrorNode): ProseMirrorNode {
+  const match = node.textContent.match(MANUAL_HEADING_NUMBERING_PATTERN);
+  if (!match?.[0]) {
+    return node;
+  }
+
+  const cleaned = removeLeadingTextCharacters(node.content, match[0].length);
+  return cleaned.remaining === 0 ? node.copy(cleaned.fragment) : node;
+}
+
+function mapPastedFragment(fragment: Fragment): Fragment {
+  const nodes: ProseMirrorNode[] = [];
+
+  fragment.forEach((node) => {
+    const mappedContent =
+      node.content.size > 0 ? mapPastedFragment(node.content) : node.content;
+    const mappedNode =
+      mappedContent === node.content ? node : node.copy(mappedContent);
+
+    nodes.push(
+      mappedNode.type.name === 'heading' &&
+        isSupportedHeadingLevel(Number(mappedNode.attrs.level))
+        ? stripManualPrefixFromNode(mappedNode)
+        : mappedNode,
+    );
+  });
+
+  return Fragment.fromArray(nodes);
+}
+
+function isPasteAtSupportedHeadingStart(state: EditorState): boolean {
+  const { $from } = state.selection;
+
+  return (
+    $from.parent.type.name === 'heading' &&
+    isSupportedHeadingLevel(Number($from.parent.attrs.level)) &&
+    $from.parentOffset === 0
+  );
+}
+
+export function stripManualHeadingNumberingFromPastedSlice(
+  slice: Slice,
+  state?: EditorState,
+): Slice {
+  let content = mapPastedFragment(slice.content);
+
+  if (state && isPasteAtSupportedHeadingStart(state)) {
+    const match = content
+      .textBetween(0, content.size, '', '')
+      .match(MANUAL_HEADING_NUMBERING_PATTERN);
+
+    if (match?.[0]) {
+      const cleaned = removeLeadingTextCharacters(content, match[0].length);
+      if (cleaned.remaining === 0) {
+        content = cleaned.fragment;
+      }
+    }
+  }
+
+  return content.eq(slice.content)
+    ? slice
+    : new Slice(content, slice.openStart, slice.openEnd);
+}
+
 export function findManualHeadingNumbering(
   doc: ProseMirrorNode,
 ): ManualHeadingNumberingMatch[] {
@@ -200,12 +316,19 @@ export function isHeadingNumberingEnabled(state: EditorState): boolean {
   return headingNumberingPluginKey.getState(state) === true;
 }
 
+export function isHeadingNumberingPasteCleanupEnabled(
+  state: EditorState,
+): boolean {
+  return headingNumberingPasteCleanupPluginKey.getState(state) === true;
+}
+
 export const HeadingNumbering = Extension.create<HeadingNumberingOptions>({
   name: 'headingNumbering',
 
   addOptions() {
     return {
       enabled: false,
+      stripManualNumberingOnPaste: false,
     };
   },
 
@@ -215,6 +338,14 @@ export const HeadingNumbering = Extension.create<HeadingNumberingOptions>({
         (enabled) =>
         ({ tr, dispatch }) => {
           dispatch?.(tr.setMeta(headingNumberingPluginKey, enabled));
+          return true;
+        },
+      setHeadingNumberingPasteCleanupEnabled:
+        (enabled) =>
+        ({ tr, dispatch }) => {
+          dispatch?.(
+            tr.setMeta(headingNumberingPasteCleanupPluginKey, enabled),
+          );
           return true;
         },
       removeManualHeadingNumbering:
@@ -240,6 +371,8 @@ export const HeadingNumbering = Extension.create<HeadingNumberingOptions>({
 
   addProseMirrorPlugins() {
     const initiallyEnabled = this.options.enabled;
+    const initiallyCleanupPastedHeadings =
+      this.options.stripManualNumberingOnPaste;
 
     return [
       new Plugin<boolean>({
@@ -276,6 +409,30 @@ export const HeadingNumbering = Extension.create<HeadingNumberingOptions>({
             );
 
             return DecorationSet.create(state.doc, decorations);
+          },
+        },
+      }),
+      new Plugin<boolean>({
+        key: headingNumberingPasteCleanupPluginKey,
+        state: {
+          init: () => initiallyCleanupPastedHeadings,
+          apply: (transaction, enabled) => {
+            const nextEnabled = transaction.getMeta(
+              headingNumberingPasteCleanupPluginKey,
+            );
+            return typeof nextEnabled === 'boolean' ? nextEnabled : enabled;
+          },
+        },
+        props: {
+          transformPasted(slice, view) {
+            if (!headingNumberingPasteCleanupPluginKey.getState(view.state)) {
+              return slice;
+            }
+
+            return stripManualHeadingNumberingFromPastedSlice(
+              slice,
+              view.state,
+            );
           },
         },
       }),

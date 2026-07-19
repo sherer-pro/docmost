@@ -1,4 +1,5 @@
 import {
+  normalizeBooleanPreferenceByPageId,
   normalizePageEditModeByPageId,
   normalizeNotificationFrequency,
   normalizePageEditModePreference,
@@ -43,6 +44,25 @@ describe('user-preferences.util', () => {
     });
   });
 
+  it('normalizes boolean page preference maps', () => {
+    expect(
+      normalizeBooleanPreferenceByPageId({
+        [PAGE_ID]: true,
+        [OTHER_PAGE_ID]: false,
+        invalid: 'true',
+        '': true,
+      }),
+    ).toEqual({
+      [PAGE_ID]: true,
+      [OTHER_PAGE_ID]: false,
+    });
+    expect(
+      normalizeBooleanPreferenceByPageId(
+        JSON.stringify({ [PAGE_ID]: false }),
+      ),
+    ).toEqual({ [PAGE_ID]: false });
+  });
+
   it('normalizes settings payload and preserves unrelated preference keys', () => {
     const normalized = normalizeUserSettings({
       preferences: {
@@ -55,6 +75,10 @@ describe('user-preferences.util', () => {
           [OTHER_PAGE_ID]: '"edit"',
           '00000000-0000-4000-8000-000000000003': 'invalid',
         },
+        headingNumberingByPageId: {
+          [PAGE_ID]: false,
+          invalid: 'false',
+        },
         rememberPageScrollPosition: true,
       },
     });
@@ -66,6 +90,9 @@ describe('user-preferences.util', () => {
     expect(normalized.preferences.pageEditModeByPageId).toEqual({
       [PAGE_ID]: 'read',
       [OTHER_PAGE_ID]: 'edit',
+    });
+    expect(normalized.preferences.headingNumberingByPageId).toEqual({
+      [PAGE_ID]: false,
     });
     expect(normalized.preferences.rememberPageScrollPosition).toBe(true);
   });

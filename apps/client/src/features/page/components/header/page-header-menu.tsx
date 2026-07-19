@@ -57,7 +57,10 @@ import FavoriteButton from "@/features/favorite/components/favorite-button";
 import PageDetailsModal from "@/features/page/components/page-details-modal";
 import { AccessibleActionIcon } from "@/components/ui/accessible-action-icon.tsx";
 import { useSpaceQuery } from "@/features/space/queries/space-query";
-import { resolveHeadingNumberingEnabled } from "@/features/page/utils/heading-numbering";
+import {
+  resolveHeadingNumberingEnabled,
+  resolveSpaceHeadingNumberingEnabled,
+} from "@/features/page/utils/heading-numbering";
 import { getEditorMarkdown } from "@/features/editor/utils/editor-markdown";
 import CopyPageModal from "@/features/page/components/copy-page-modal.tsx";
 import { PageOperationMenuItems } from "@/features/page/components/page-operation-menu-items.tsx";
@@ -283,6 +286,15 @@ function PageActionMenu({ readOnly, canMoveDeleteShare }: PageActionMenuProps) {
     pageId: page?.id,
     preferences: user?.settings?.preferences,
   });
+  const resolvedSpaceSettings =
+    currentSpace?.settings ?? page?.space?.settings;
+  const spaceHeadingNumberingEnabled =
+    resolveSpaceHeadingNumberingEnabled(resolvedSpaceSettings);
+  const headingNumberingEnabled = resolveHeadingNumberingEnabled({
+    pageId: page?.id,
+    preferences: user?.settings?.preferences,
+    spaceSettings: resolvedSpaceSettings,
+  });
   const pageUpdatedAt = useTimeAgo(page?.updatedAt);
   const navigate = useNavigate();
   const {
@@ -316,10 +328,7 @@ function PageActionMenu({ readOnly, canMoveDeleteShare }: PageActionMenuProps) {
     if (!pageEditor) return;
     const markdown = getEditorMarkdown(
       pageEditor,
-      resolveHeadingNumberingEnabled({
-        pageSettings: page?.settings,
-        spaceSettings: currentSpace?.settings ?? page?.space?.settings,
-      }),
+      spaceHeadingNumberingEnabled,
     );
     const title = page?.title ? `# ${page.title}\n\n` : "";
     clipboard.copy(`${title}${markdown}`);
@@ -342,8 +351,38 @@ function PageActionMenu({ readOnly, canMoveDeleteShare }: PageActionMenuProps) {
   };
 
   const handlePrint = () => {
-    setTimeout(() => {
+    if (!pageEditor) {
       window.print();
+      return;
+    }
+
+    pageEditor.commands.setHeadingNumberingEnabled(
+      spaceHeadingNumberingEnabled,
+    );
+
+    setTimeout(() => {
+      let restored = false;
+      const restorePersonalNumbering = () => {
+        if (restored) {
+          return;
+        }
+
+        restored = true;
+        window.removeEventListener("afterprint", restorePersonalNumbering);
+        pageEditor.commands.setHeadingNumberingEnabled(
+          headingNumberingEnabled,
+        );
+      };
+
+      window.addEventListener("afterprint", restorePersonalNumbering, {
+        once: true,
+      });
+
+      try {
+        window.print();
+      } finally {
+        window.setTimeout(restorePersonalNumbering, 0);
+      }
     }, 250);
   };
 
@@ -465,10 +504,7 @@ function PageActionMenu({ readOnly, canMoveDeleteShare }: PageActionMenuProps) {
               page?.id && page.spaceId
                 ? {
                     pageId: page.id,
-                    spaceId: page.spaceId,
-                    pageSettings: page.settings,
-                    spaceSettings:
-                      currentSpace?.settings ?? page.space?.settings,
+                    checked: headingNumberingEnabled,
                     editor: pageEditor,
                     canWrite: canWritePage,
                   }

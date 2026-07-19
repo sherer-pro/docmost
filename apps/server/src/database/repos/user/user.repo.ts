@@ -19,6 +19,7 @@ const USER_PREFERENCE_KEYS = [
   'fullPageWidth',
   'fixedToolbar',
   'fullPageWidthByPageId',
+  'headingNumberingByPageId',
   'pageEditModeByPageId',
   'pushEnabled',
   'pushFrequency',
