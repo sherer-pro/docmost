@@ -290,7 +290,7 @@ Minimum:
   - API routes: `POST /api/pages/transclusion/lookup`, `/references`, `/unsync-reference`, and public `POST /api/shares/transclusion/lookup`;
   - legacy `quoteSource` marks and `quoteEmbed` nodes are cleaned by migration and are no longer registered in the editor schema.
 - WebSocket relay accepts only `broadcast` envelopes targeting authorized `workspace-*`, `space-*`, or `user-*` rooms; nested realtime event operations are allowlisted server-side.
-- Document custom fields are named `status`, `assignee`, `stakeholders`, `aiParticipation`, and `readingTime` at the space settings layer, and `status`, `assigneeId`, `stakeholderIds`, and `aiParticipation` on page/database row payloads. `readingTime` is derived from editor word count and is not persisted in page payloads. Do not document this feature as an `owner` field unless the code is renamed first.
+- Document custom fields are named `status`, `assignee`, `stakeholders`, `aiRole`, and `readingTime` at the space settings layer, and `status`, `assigneeId`, `stakeholderIds`, and `aiRole` on page/database row payloads. `readingTime` is derived from editor word count and is not persisted in page payloads. Do not document this feature as an `owner` field unless the code is renamed first.
 - PWA static files can contain user-facing strings outside i18next. Review `apps/client/public/offline.html`, `manifest.json`, and `sw.js` when changing offline or notification text.
 - Root `start` script runs **backend prod**, but requires prebuilt `dist` (typically via `pnpm build`).
 - Docker production startup bypasses the root `start` script and Corepack by running the compiled backend entrypoint directly.

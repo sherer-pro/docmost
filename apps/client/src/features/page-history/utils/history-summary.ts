@@ -1,4 +1,5 @@
 import { IPageHistory } from "@/features/page-history/types/page.types";
+import { PAGE_AI_ROLE } from "@docmost/api-contract";
 
 type TranslateFn = (
   key: string,
@@ -49,6 +50,14 @@ const DATABASE_PROPERTY_TYPE_LABEL_KEYS: Record<string, string> = {
   user: "history.event.property-type.user",
   page_reference: "history.event.property-type.page_reference",
   text: "history.event.property-type.multiline_text",
+};
+
+const AI_ROLE_LABEL_KEYS: Record<string, string> = {
+  [PAGE_AI_ROLE.NONE]: "None",
+  [PAGE_AI_ROLE.EDITOR]: "Editor",
+  [PAGE_AI_ROLE.COAUTHOR]: "Coauthor",
+  [PAGE_AI_ROLE.COAUTHOR_PLUS]: "Coauthor+",
+  [PAGE_AI_ROLE.AUTHOR]: "Author",
 };
 
 interface IFormatValueContext {
@@ -173,6 +182,11 @@ function formatValue(
       return formatDatabasePropertyType(value, t);
     }
 
+    if (context.field === "aiRole") {
+      const labelKey = AI_ROLE_LABEL_KEYS[value];
+      return labelKey ? t(labelKey) : value;
+    }
+
     return value;
   }
 
@@ -230,6 +244,7 @@ function formatFieldName(field: string, t: TranslateFn): string {
     status: tHistory(t, "history.event.field.status"),
     assigneeId: tHistory(t, "history.event.field.assignee"),
     stakeholderIds: tHistory(t, "history.event.field.stakeholders"),
+    aiRole: tHistory(t, "history.event.field.aiRole"),
     name: tHistory(t, "history.event.field.name"),
     title: tHistory(t, "history.event.field.title"),
     type: tHistory(t, "history.event.field.type"),

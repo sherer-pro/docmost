@@ -1,6 +1,7 @@
 import type {
   IPage,
   ISidebarNode,
+  PageCustomFields,
   PageCustomFieldStatus,
 } from "@/features/page/types/page.types.ts";
 import type {
@@ -15,12 +16,13 @@ import {
 } from "@/features/page/tree/utils/utils.ts";
 import { SimpleTree } from "react-arborist";
 
-type TreeEventNodeInput = Partial<IPage> &
-  Partial<ISidebarNode> & {
+type TreeEventNodeInput = Omit<Partial<IPage>, "customFields"> &
+  Omit<Partial<ISidebarNode>, "customFields"> & {
     id?: string;
     nodeType?: SpaceTreeNodeType;
     title?: string;
     name?: string;
+    customFields?: Partial<PageCustomFields> | null;
   };
 
 function getTreeNode(treeItems: SpaceTreeNode[], id: string) {

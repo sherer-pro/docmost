@@ -17,6 +17,7 @@ import { validate as isValidUuid } from 'uuid';
 import { CommentRepo } from '@docmost/db/repos/comment/comment.repo';
 import { ExportService } from '../../integrations/export/export.service';
 import { sql } from 'kysely';
+import { getPageAiRole } from '../page/utils/page-settings.utils';
 
 interface RagAuthContext {
   user: User;
@@ -28,6 +29,7 @@ interface RagDocumentFieldsConfig {
   status: boolean;
   assignee: boolean;
   stakeholders: boolean;
+  aiRole: boolean;
 }
 
 @Injectable()
@@ -50,6 +52,7 @@ export class RagService {
       status: Boolean(documentFields.status),
       assignee: Boolean(documentFields.assignee),
       stakeholders: Boolean(documentFields.stakeholders),
+      aiRole: Boolean(documentFields.aiRole),
     };
   }
 
@@ -78,6 +81,10 @@ export class RagService {
             .filter((entry: unknown) => typeof entry === 'string')
             .filter(Boolean)
         : [];
+    }
+
+    if (docFields.aiRole) {
+      customFields.aiRole = getPageAiRole(normalized);
     }
 
     return Object.keys(customFields).length > 0 ? customFields : undefined;

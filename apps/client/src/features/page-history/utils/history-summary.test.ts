@@ -78,6 +78,42 @@ describe("history summary/details formatter", () => {
     expect(details[1].title).toContain("history.event.database.row.created");
   });
 
+  it("localizes AI role field names and values", () => {
+    const t = vi.fn((key: string) => {
+      const translations: Record<string, string> = {
+        "history.event.field.aiRole": "Роль AI",
+        None: "Нет",
+        "Coauthor+": "Соавтор+",
+      };
+
+      return translations[key] ?? key;
+    });
+
+    const details = formatHistoryEventDetails(
+      createHistoryItem({
+        changeType: "page.custom-fields.updated",
+        changeData: {
+          changes: [
+            {
+              field: "aiRole",
+              oldValue: "NONE",
+              newValue: "COAUTHOR_PLUS",
+            },
+          ],
+        },
+      }),
+      t,
+    );
+
+    expect(details[0].rows[0]).toEqual(
+      expect.objectContaining({
+        field: "Роль AI",
+        oldValue: "Нет",
+        newValue: "Соавтор+",
+      }),
+    );
+  });
+
   it("returns combined summary with number of merged events", () => {
     const t = (key: string, options?: Record<string, unknown>) =>
       `${key}${options ? ` ${JSON.stringify(options)}` : ""}`;
