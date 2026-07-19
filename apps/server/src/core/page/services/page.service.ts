@@ -69,6 +69,7 @@ import {
   getPageAssigneeId,
   getPageStakeholderIds,
   normalizePageSettings,
+  stripLegacyHeadingNumberingSetting,
 } from '../utils/page-settings.utils';
 import { PageHistoryRecorderService } from './page-history-recorder.service';
 import { PageAccessService } from '../../page-access/page-access.service';
@@ -691,7 +692,7 @@ export class PageService {
       content,
       textContent,
       ydoc,
-      settings: createPageDto.settings,
+      settings: stripLegacyHeadingNumberingSetting(createPageDto.settings),
     });
 
     await this.userRepo.updatePageEditModeByPageId(

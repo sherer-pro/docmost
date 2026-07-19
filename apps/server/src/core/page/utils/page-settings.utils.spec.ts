@@ -4,6 +4,7 @@ import {
   getPageRoleRecipientIds,
   getPageStakeholderIds,
   normalizePageSettings,
+  stripLegacyHeadingNumberingSetting,
 } from './page-settings.utils';
 import { PAGE_AI_ROLE } from '@docmost/api-contract';
 
@@ -11,6 +12,16 @@ describe('page-settings.utils', () => {
   it('normalizes invalid settings to an empty object', () => {
     expect(normalizePageSettings(null)).toEqual({});
     expect(normalizePageSettings('invalid')).toEqual({});
+  });
+
+  it('removes only the legacy shared heading numbering setting', () => {
+    expect(
+      stripLegacyHeadingNumberingSetting({
+        status: 'TODO',
+        headingNumbering: { enabled: false },
+        customSetting: true,
+      }),
+    ).toEqual({ status: 'TODO', customSetting: true });
   });
 
   it('extracts assignee and filters stakeholder ids deterministically', () => {

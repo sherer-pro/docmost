@@ -19,6 +19,19 @@ export function normalizePageSettings(settings: unknown): PageSettings {
   return settings as PageSettings;
 }
 
+export function stripLegacyHeadingNumberingSetting(
+  settings: unknown,
+): PageSettings | undefined {
+  if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
+    return undefined;
+  }
+
+  const { headingNumbering: _headingNumbering, ...safeSettings } = settings as
+    Record<string, unknown>;
+
+  return safeSettings as PageSettings;
+}
+
 /**
  * Extracts `assigneeId` from page settings.
  *
