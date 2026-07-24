@@ -6,6 +6,7 @@ import {
   InsertableSpace,
   HeadingNumberingSettings,
   Space,
+  SpaceCustomLinksSettings,
   SpaceDictionarySettings,
   SpaceDocumentFieldsSettings,
   UpdatableSpace,
@@ -210,6 +211,24 @@ export class SpaceRepo {
         settings: sql`COALESCE(settings, '{}'::jsonb)
           || jsonb_build_object('headingNumbering', COALESCE(settings->'headingNumbering', '{}'::jsonb)
           || ${sql.lit(JSON.stringify(headingNumbering))}::jsonb)`,
+        updatedAt: new Date(),
+      })
+      .where('id', '=', spaceId)
+      .where('workspaceId', '=', workspaceId)
+      .returningAll()
+      .executeTakeFirst();
+  }
+
+  async updateCustomLinksSettings(
+    spaceId: string,
+    workspaceId: string,
+    customLinks: SpaceCustomLinksSettings,
+  ) {
+    return this.db
+      .updateTable('spaces')
+      .set({
+        settings: sql`COALESCE(settings, '{}'::jsonb)
+          || jsonb_build_object('customLinks', ${sql.lit(JSON.stringify(customLinks))}::jsonb)`,
         updatedAt: new Date(),
       })
       .where('id', '=', spaceId)

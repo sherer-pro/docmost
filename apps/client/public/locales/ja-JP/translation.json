@@ -1295,5 +1295,16 @@
   "Remove numbering from {{count}} headings?": "{{count}}個の見出しから番号を削除しますか？",
   "Remove numbering": "番号を削除",
   "Manual heading numbering removed": "手動の見出し番号を削除しました",
-  "Remove manual heading numbering": "手動の見出し番号を削除"
+  "Remove manual heading numbering": "手動の見出し番号を削除",
+  "Custom links": "Custom links",
+  "Add custom links to the top of the space sidebar. They open in a new browser tab.": "Add custom links to the top of the space sidebar. They open in a new browser tab.",
+  "No custom links yet.": "No custom links yet.",
+  "Delete link": "Delete link",
+  "Link name": "Link name",
+  "Link name is required.": "Link name is required.",
+  "Enter a valid http(s) URL.": "Enter a valid http(s) URL.",
+  "URL": "URL",
+  "Select icon": "Select icon",
+  "Search icons": "Search icons",
+  "Delete the link {{name}}?": "Delete the link {{name}}?"
 }

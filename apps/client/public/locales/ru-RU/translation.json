@@ -1295,5 +1295,16 @@
   "Remove numbering from {{count}} headings?": "Удалить нумерацию у {{count}} заголовков?",
   "Remove numbering": "Удалить нумерацию",
   "Manual heading numbering removed": "Ручная нумерация заголовков удалена",
-  "Remove manual heading numbering": "Удалить ручную нумерацию"
+  "Remove manual heading numbering": "Удалить ручную нумерацию",
+  "Custom links": "Произвольные ссылки",
+  "Add custom links to the top of the space sidebar. They open in a new browser tab.": "Добавьте произвольные ссылки в верхнюю часть боковой панели пространства. Они открываются в новой вкладке браузера.",
+  "No custom links yet.": "Пока нет произвольных ссылок.",
+  "Delete link": "Удалить ссылку",
+  "Link name": "Название ссылки",
+  "Link name is required.": "Укажите название ссылки.",
+  "Enter a valid http(s) URL.": "Введите корректный http(s) URL.",
+  "URL": "URL",
+  "Select icon": "Выбрать иконку",
+  "Search icons": "Поиск иконок",
+  "Delete the link {{name}}?": "Удалить ссылку {{name}}?"
 }

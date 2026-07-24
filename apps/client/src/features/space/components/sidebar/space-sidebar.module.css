@@ -111,3 +111,42 @@
   );
   color: light-dark(var(--mantine-color-gray-7), var(--mantine-color-dark-0));
 }
+
+.customLinkRow {
+  position: relative;
+}
+
+.customLinkDelete {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: rem(4px);
+  /* Center vertically without a transform: Mantine's ActionIcon applies its
+     own transform on :active, which would otherwise override translateY and
+     make the button jump on press. */
+  margin-block: auto;
+  opacity: 0;
+  transition: opacity 100ms ease;
+}
+
+.customLinkRow:hover .customLinkDelete,
+.customLinkRow:focus-within .customLinkDelete {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .customLinkDelete {
+    opacity: 1;
+  }
+}
+
+.customLinkAdd {
+  color: light-dark(var(--mantine-color-gray-6), var(--mantine-color-dark-2));
+}
+
+.externalLinkIcon {
+  flex-shrink: 0;
+  margin-left: rem(2px);
+  color: light-dark(var(--mantine-color-gray-5), var(--mantine-color-dark-3));
+  opacity: 0.55;
+}
