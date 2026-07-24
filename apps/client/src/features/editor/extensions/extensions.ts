@@ -97,7 +97,6 @@ import MentionView from "@/features/editor/components/mention/mention-view.tsx";
 import i18n from "@/i18n.ts";
 import { MarkdownClipboard } from "@/features/editor/extensions/markdown-clipboard.ts";
 import EmojiCommand from "./emoji-command";
-import { countWords } from "alfaaz";
 import { InlineCodeNoWrap } from "./inline-code-no-wrap";
 
 const lowlight = createLowlight(common);
@@ -292,7 +291,11 @@ export const mainExtensions = [
     transformPastedText: true,
   }),
   CharacterCount.configure({
-    wordCounter: (text) => countWords(text),
+    // Count words by splitting on whitespace. This mirrors TipTap's default
+    // counter and avoids inflated counts from punctuation-heavy content such
+    // as URLs, numbers with separators, and abbreviations.
+    wordCounter: (text) =>
+      text.split(/\s+/).filter((word) => word.length > 0).length,
   }),
   SearchAndReplace.extend({
     addKeyboardShortcuts() {
