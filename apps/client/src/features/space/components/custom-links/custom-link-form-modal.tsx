@@ -42,6 +42,7 @@ export default function CustomLinkFormModal({
   const { t } = useTranslation();
   const [label, setLabel] = useState("");
   const [url, setUrl] = useState("");
+  const [urlTouched, setUrlTouched] = useState(false);
   const [icon, setIcon] = useState(DEFAULT_CUSTOM_LINK_ICON);
   const [error, setError] = useState<string | null>(null);
   const [iconPickerOpened, setIconPickerOpened] = useState(false);
@@ -51,6 +52,7 @@ export default function CustomLinkFormModal({
     if (opened) {
       setLabel("");
       setUrl("");
+      setUrlTouched(false);
       setIcon(DEFAULT_CUSTOM_LINK_ICON);
       setError(null);
       setIconPickerOpened(false);
@@ -58,23 +60,30 @@ export default function CustomLinkFormModal({
     }
   }, [opened]);
 
+  const trimmedUrl = url.trim();
+  const urlError =
+    urlTouched && trimmedUrl && !isSafeCustomLinkUrl(trimmedUrl)
+      ? t("Enter a valid http(s) URL.")
+      : null;
+
   const filteredIconNames = CUSTOM_LINK_ICON_NAMES.filter((name) =>
     name.includes(iconQuery.trim().toLowerCase()),
   );
 
   const handleSubmit = () => {
     const trimmedLabel = label.trim();
-    const trimmedUrl = url.trim();
 
     if (!trimmedLabel) {
       setError(t("Link name is required."));
       return;
     }
     if (!isSafeCustomLinkUrl(trimmedUrl)) {
-      setError(t("Enter a valid http(s) URL."));
+      setUrlTouched(true);
+      setError(null);
       return;
     }
 
+    setError(null);
     onSubmit({ label: trimmedLabel, url: trimmedUrl, icon });
   };
 
@@ -95,6 +104,8 @@ export default function CustomLinkFormModal({
           placeholder="https://example.com"
           value={url}
           onChange={(event) => setUrl(event.currentTarget.value)}
+          onBlur={() => setUrlTouched(true)}
+          error={urlError}
           maxLength={2048}
         />
 
@@ -165,7 +176,11 @@ export default function CustomLinkFormModal({
           <Button variant="default" onClick={onClose}>
             {t("Cancel")}
           </Button>
-          <Button onClick={handleSubmit} loading={isPending}>
+          <Button
+            onClick={handleSubmit}
+            loading={isPending}
+            disabled={!!urlError}
+          >
             {t("Save")}
           </Button>
         </Group>
