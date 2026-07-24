@@ -50,3 +50,4 @@ graphify-out/*
 !graphify-out/.graphify_analysis.json
 !graphify-out/manifest.json
 !graphify-out/.graphify_labels.json
+.claude/settings.local.json
