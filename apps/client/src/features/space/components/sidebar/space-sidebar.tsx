@@ -18,7 +18,6 @@ import {
   IconHome,
   IconPlus,
   IconSquareRoundedPlus,
-  IconSearch,
   IconSettings,
   IconTrash,
 } from "@tabler/icons-react";
@@ -50,7 +49,6 @@ import PageImportModal from "@/features/page/components/page-import-modal.tsx";
 import { useTranslation } from "react-i18next";
 import { SwitchSpace } from "./switch-space";
 import ExportModal from "@/components/common/export-modal";
-import { searchSpotlight } from "@/features/search/constants";
 import { useCreateDatabaseMutation } from "@/features/database/queries/database-query.ts";
 import { notifications } from "@mantine/notifications";
 import { queryClient } from "@/main.tsx";
@@ -299,20 +297,6 @@ export function SpaceSidebar() {
                   stroke={2}
                 />
                 <span>{t("Overview")}</span>
-              </div>
-            </UnstyledButton>
-
-            <UnstyledButton
-              className={classes.menu}
-              onClick={searchSpotlight.open}
-            >
-              <div className={classes.menuItemInner}>
-                <IconSearch
-                  size={18}
-                  className={classes.menuItemIcon}
-                  stroke={2}
-                />
-                <span>{t("Search")}</span>
               </div>
             </UnstyledButton>
 
