@@ -8,12 +8,14 @@ export enum FileTaskType {
 }
 
 export enum FileImportSource {
+  Docmost = 'docmost',
   Generic = 'generic',
   Notion = 'notion',
   Confluence = 'confluence',
 }
 
 export enum FileTaskStatus {
+  Pending = 'pending',
   Processing = 'processing',
   Success = 'success',
   Failed = 'failed',
@@ -26,7 +28,7 @@ export interface ExtractZipOptions {
   maxPathDepth?: number;
 }
 
-interface ExtractZipLimits {
+export interface ExtractZipLimits {
   maxEntries: number;
   maxEntryUncompressedBytes: number;
   maxTotalUncompressedBytes: number;
@@ -38,7 +40,7 @@ interface ExtractZipState {
   totalUncompressedBytes: number;
 }
 
-const DEFAULT_EXTRACT_ZIP_LIMITS: ExtractZipLimits = {
+export const DEFAULT_EXTRACT_ZIP_LIMITS: ExtractZipLimits = {
   maxEntries: 10_000,
   maxEntryUncompressedBytes: 250 * 1024 * 1024,
   maxTotalUncompressedBytes: 512 * 1024 * 1024,
@@ -110,10 +112,16 @@ export async function extractZip(
   target: string,
   options?: ExtractZipOptions,
 ): Promise<void> {
-  return extractZipInternal(source, target, true, resolveExtractZipLimits(options), {
-    entryCount: 0,
-    totalUncompressedBytes: 0,
-  });
+  return extractZipInternal(
+    source,
+    target,
+    true,
+    resolveExtractZipLimits(options),
+    {
+      entryCount: 0,
+      totalUncompressedBytes: 0,
+    },
+  );
 }
 
 /**

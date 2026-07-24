@@ -17,3 +17,12 @@ export async function getFileTasks(
   return req.data;
 }
 
+export async function getRecentDocmostImportReports(
+  spaceId: string,
+): Promise<IFileTask[]> {
+  const req = await api.post<IFileTask[]>("/file-tasks/import-reports", {
+    spaceId,
+    limit: 5,
+  });
+  return req.data;
+}

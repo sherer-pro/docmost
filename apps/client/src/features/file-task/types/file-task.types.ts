@@ -1,3 +1,9 @@
+import type {
+  DocmostImportOptions,
+  ImportPreview,
+  ImportReport,
+} from "@docmost/api-contract";
+
 export interface IFileTask {
   id: string;
   type: "import" | "export";
@@ -14,4 +20,9 @@ export interface IFileTask {
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
+  options?: DocmostImportOptions | null;
+  result?: {
+    preview?: ImportPreview;
+    report?: ImportReport;
+  } | null;
 }

@@ -1,22 +1,30 @@
-import { Modal, Button, Group, Text, Select, Switch, Divider } from '@mantine/core';
-import { exportPage } from '@/features/page/services/page-service.ts';
-import { useState } from 'react';
-import { ExportFormat } from '@/features/page/types/page.types.ts';
-import { notifications } from '@mantine/notifications';
-import { exportSpace } from '@/features/space/services/space-service';
-import { useTranslation } from 'react-i18next';
-import { exportDatabase as exportDatabaseFile } from '@/features/database/services/database-service';
-import { DatabaseExportFormat } from '@/features/database/types/database.types';
+import {
+  Modal,
+  Button,
+  Group,
+  Text,
+  Select,
+  Switch,
+  Divider,
+} from "@mantine/core";
+import { exportPage } from "@/features/page/services/page-service.ts";
+import { useState } from "react";
+import { ExportFormat } from "@/features/page/types/page.types.ts";
+import { notifications } from "@mantine/notifications";
+import { exportSpace } from "@/features/space/services/space-service";
+import { useTranslation } from "react-i18next";
+import { exportDatabase as exportDatabaseFile } from "@/features/database/services/database-service";
+import { DatabaseExportFormat } from "@/features/database/types/database.types";
 import {
   getExportFormatValues,
   isSpaceExportFormat,
   shouldShowAttachments,
   shouldShowIncludeChildren,
-} from '@/components/common/export-modal.utils';
+} from "@/components/common/export-modal.utils";
 
 interface ExportModalProps {
   id: string;
-  type: 'space' | 'page' | 'database';
+  type: "space" | "page" | "database";
   open: boolean;
   onClose: () => void;
   onExportDatabase?: (
@@ -32,77 +40,87 @@ export default function ExportModal({
   onClose,
   onExportDatabase,
 }: ExportModalProps) {
-  const [format, setFormat] = useState<string>(ExportFormat.Markdown);
+  const [format, setFormat] = useState<string>(ExportFormat.Docmost);
   const [includeChildren, setIncludeChildren] = useState<boolean>(false);
   const [includeAttachments, setIncludeAttachments] = useState<boolean>(false);
   const [isExporting, setIsExporting] = useState<boolean>(false);
   const { t } = useTranslation();
 
   const showIncludeChildren = shouldShowIncludeChildren(type, format);
-  const showAttachments = shouldShowAttachments(type);
+  const showAttachments = shouldShowAttachments(type, format);
 
   const formatOptions = getExportFormatValues(type).map((value) => ({
     value,
     label:
-      value === ExportFormat.Markdown
-        ? t('export.format.markdown')
-        : value === ExportFormat.HTML
-          ? t('export.format.html')
-          : t('Print PDF'),
+      value === ExportFormat.Docmost
+        ? t("export.format.docmost")
+        : value === ExportFormat.Markdown
+          ? t("export.format.markdown")
+          : value === ExportFormat.HTML
+            ? t("export.format.html")
+            : t("Print PDF"),
   }));
 
   const modalTitle =
-    type === 'database' ? `${t('Export')} ${t('Database')}` : t(`Export ${type}`);
+    type === "database"
+      ? `${t("Export")} ${t("Database")}`
+      : t(`Export ${type}`);
 
   const handleExport = async () => {
     setIsExporting(true);
     try {
-      if (type === 'page') {
+      if (type === "page") {
         await exportPage({
           pageId: id,
           format: format as ExportFormat,
           includeChildren,
-          includeAttachments,
+          includeAttachments:
+            format === ExportFormat.Docmost ? true : includeAttachments,
         });
       }
 
-      if (type === 'space') {
+      if (type === "space") {
         if (!isSpaceExportFormat(format)) {
-          throw new Error('Unsupported space export format');
+          throw new Error("Unsupported space export format");
         }
 
         await exportSpace({
           spaceId: id,
           format,
-          includeAttachments,
+          includeAttachments:
+            format === ExportFormat.Docmost ? true : includeAttachments,
         });
       }
 
-      if (type === 'database') {
+      if (type === "database") {
         if (onExportDatabase) {
           await onExportDatabase(format as DatabaseExportFormat, {
-            includeChildren,
-            includeAttachments,
+            includeChildren:
+              format === ExportFormat.Docmost ? true : includeChildren,
+            includeAttachments:
+              format === ExportFormat.Docmost ? true : includeAttachments,
           });
         } else {
           await exportDatabaseFile(id, {
             format: format as DatabaseExportFormat,
-            includeChildren,
-            includeAttachments,
+            includeChildren:
+              format === ExportFormat.Docmost ? true : includeChildren,
+            includeAttachments:
+              format === ExportFormat.Docmost ? true : includeAttachments,
           });
         }
       }
 
       notifications.show({
-        message: t('Export successful'),
+        message: t("Export successful"),
       });
       onClose();
     } catch (err: any) {
       notifications.show({
-        message: `Export failed: ${err?.response?.data?.message ?? ''}`,
-        color: 'red',
+        message: `Export failed: ${err?.response?.data?.message ?? ""}`,
+        color: "red",
       });
-      console.error('export error', err);
+      console.error("export error", err);
     } finally {
       setIsExporting(false);
     }
@@ -128,15 +146,15 @@ export default function ExportModal({
       onClick={(e) => e.stopPropagation()}
     >
       <Modal.Overlay />
-      <Modal.Content style={{ overflow: 'hidden' }}>
+      <Modal.Content style={{ overflow: "hidden" }}>
         <Modal.Header py={0}>
           <Modal.Title fw={500}>{modalTitle}</Modal.Title>
-          <Modal.CloseButton aria-label={t('Close')} />
+          <Modal.CloseButton aria-label={t("Close")} />
         </Modal.Header>
         <Modal.Body>
           <Group justify="space-between" wrap="nowrap">
             <div>
-              <Text size="md">{t('Format')}</Text>
+              <Text size="md">{t("Format")}</Text>
             </div>
             <ExportFormatSelection
               format={format}
@@ -151,7 +169,7 @@ export default function ExportModal({
 
               <Group justify="space-between" wrap="nowrap">
                 <div>
-                  <Text size="md">{t('Include subpages')}</Text>
+                  <Text size="md">{t("Include subpages")}</Text>
                 </div>
                 <Switch
                   onChange={(event) =>
@@ -164,7 +182,7 @@ export default function ExportModal({
               {showAttachments && (
                 <Group justify="space-between" wrap="nowrap" mt="md">
                   <div>
-                    <Text size="md">{t('Include attachments')}</Text>
+                    <Text size="md">{t("Include attachments")}</Text>
                   </div>
                   <Switch
                     onChange={(event) =>
@@ -183,7 +201,7 @@ export default function ExportModal({
 
               <Group justify="space-between" wrap="nowrap">
                 <div>
-                  <Text size="md">{t('Include attachments')}</Text>
+                  <Text size="md">{t("Include attachments")}</Text>
                 </div>
                 <Switch
                   onChange={(event) =>
@@ -197,10 +215,10 @@ export default function ExportModal({
 
           <Group justify="center" mt="md">
             <Button onClick={onClose} variant="default">
-              {t('Cancel')}
+              {t("Cancel")}
             </Button>
             <Button onClick={handleExport} loading={isExporting}>
-              {t('Export')}
+              {t("Export")}
             </Button>
           </Group>
         </Modal.Body>
@@ -228,10 +246,10 @@ function ExportFormatSelection({
       value={format}
       onChange={onChange}
       styles={{ wrapper: { maxWidth: 120 } }}
-      comboboxProps={{ width: '120' }}
+      comboboxProps={{ width: "120" }}
       allowDeselect={false}
       withCheckIcon={false}
-      aria-label={t('Select export format')}
+      aria-label={t("Select export format")}
     />
   );
 }

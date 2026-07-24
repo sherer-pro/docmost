@@ -284,6 +284,8 @@ export interface FileTasks {
   filePath: string;
   fileSize: Int8 | null;
   id: Generated<string>;
+  options: Json | null;
+  result: Json | null;
   source: string | null;
   spaceId: string | null;
   status: string | null;

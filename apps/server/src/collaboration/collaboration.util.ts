@@ -16,6 +16,7 @@ import {
   DetailsContent,
   DetailsSummary,
   LinkExtension,
+  LinkPreview,
   MathBlock,
   MathInline,
   TableHeader,
@@ -72,6 +73,7 @@ export const tiptapExtensions = [
     nested: true,
   }),
   LinkExtension,
+  LinkPreview,
   Superscript,
   SubScript,
   Highlight,
@@ -126,17 +128,23 @@ export function jsonToText(tiptapJson: JSONContent) {
   return generateText(tiptapJson, tiptapExtensions);
 }
 
+export function strictJsonToNode(tiptapJson: JSONContent) {
+  const schema = getSchema(tiptapExtensions);
+  return Node.fromJSON(schema, tiptapJson);
+}
+
 export function jsonToNode(tiptapJson: JSONContent) {
   const schema = getSchema(tiptapExtensions);
+  const clonedJson = structuredClone(tiptapJson);
   try {
-    return Node.fromJSON(schema, tiptapJson);
+    return Node.fromJSON(schema, clonedJson);
   } catch (error) {
     if (
       error instanceof RangeError &&
       error.message.includes('Unknown node type')
     ) {
       Logger.warn('Stripping unknown node types from document:', error.message);
-      const cleanedJson = stripUnknownNodes(tiptapJson, schema);
+      const cleanedJson = stripUnknownNodes(clonedJson, schema);
       return Node.fromJSON(schema, cleanedJson);
     }
     throw error;

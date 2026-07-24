@@ -6,6 +6,7 @@ export type ExportPageMetadata = {
   parentPath: string | null;
   createdAt: string;
   updatedAt: string;
+  headingNumbersMaterialized?: boolean;
 };
 
 export type ExportMetadata = {

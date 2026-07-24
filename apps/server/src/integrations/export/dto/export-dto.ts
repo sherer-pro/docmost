@@ -7,6 +7,7 @@ import {
 } from 'class-validator';
 
 export enum ExportFormat {
+  Docmost = 'docmost',
   HTML = 'html',
   Markdown = 'markdown',
   PDF = 'pdf',
@@ -18,7 +19,7 @@ export class ExportPageDto {
   pageId: string;
 
   @IsString()
-  @IsIn(['html', 'markdown', 'pdf'])
+  @IsIn(['docmost', 'html', 'markdown', 'pdf'])
   format: ExportFormat;
 
   @IsOptional()
@@ -42,7 +43,7 @@ export class ExportSpaceDto {
   spaceId: string;
 
   @IsString()
-  @IsIn(['html', 'markdown'])
+  @IsIn(['docmost', 'html', 'markdown'])
   format: ExportFormat;
 
   @IsOptional()

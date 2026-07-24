@@ -17,6 +17,10 @@ import { QueryParams } from "@/lib/types";
 import { IPagination } from "@/lib/types.ts";
 import { InfiniteData } from "@tanstack/react-query";
 import { IFileTask } from "@/features/file-task/types/file-task.types.ts";
+import type {
+  DocmostImportOptions,
+  ImportPreview,
+} from "@docmost/api-contract";
 import { IAttachment } from "@/features/attachments/types/attachment.types.ts";
 import { downloadBlobFromAxiosResponse } from "@/lib/download";
 
@@ -231,6 +235,40 @@ export async function importZip(
   });
 
   return req.data;
+}
+
+export async function previewDocmostZip(
+  file: File,
+  spaceId: string,
+): Promise<ImportPreview> {
+  const formData = new FormData();
+  formData.append("spaceId", spaceId);
+  formData.append("source", "docmost");
+  formData.append("file", file);
+
+  const req = await api.post<ImportPreview>(
+    "/pages/actions/import-zip/preview",
+    formData,
+    {
+      headers: { "Content-Type": "multipart/form-data" },
+    },
+  );
+  return req.data;
+}
+
+export async function confirmDocmostImport(
+  fileTaskId: string,
+  options: DocmostImportOptions,
+): Promise<IFileTask> {
+  const req = await api.post<IFileTask>("/pages/actions/import-zip/confirm", {
+    fileTaskId,
+    ...options,
+  });
+  return req.data;
+}
+
+export async function cancelDocmostImport(fileTaskId: string): Promise<void> {
+  await api.post("/pages/actions/import-zip/cancel", { fileTaskId });
 }
 
 export async function uploadFile(
