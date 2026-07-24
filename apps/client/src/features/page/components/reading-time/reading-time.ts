@@ -1,4 +1,4 @@
-export const READING_WORDS_PER_MINUTE = 200;
+export const READING_WORDS_PER_MINUTE = 238;
 export const MAX_READING_TIME_MINUTES = 30;
 export const GREEN_READING_TIME_MINUTES = 12;
 

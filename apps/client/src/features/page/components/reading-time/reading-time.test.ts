@@ -8,13 +8,13 @@ describe("estimateReadingTime", () => {
   it.each([
     [0, "less-than-minute", 0, 1],
     [1, "less-than-minute", 0, 1],
-    [199, "less-than-minute", 0, 1],
-    [200, "minutes", 1, 1],
-    [201, "minutes", 2, 2],
-    [1000, "minutes", 5, 5],
-    [4200, "minutes", 21, 21],
-    [6000, "minutes", 30, 30],
-    [6001, "over-limit", 31, 30],
+    [237, "less-than-minute", 0, 1],
+    [238, "minutes", 1, 1],
+    [239, "minutes", 2, 2],
+    [1190, "minutes", 5, 5],
+    [4998, "minutes", 21, 21],
+    [7140, "minutes", 30, 30],
+    [7141, "over-limit", 31, 30],
   ] as const)("maps %i words to %s", (wordCount, kind, minutes, colorStep) => {
     expect(estimateReadingTime(wordCount)).toMatchObject({
       kind,
