@@ -11,6 +11,7 @@ import {
   HeadingNumbering,
   isHeadingNumberingPasteCleanupEnabled,
   stripManualHeadingNumberingFromPastedSlice,
+  stripGeneratedHeadingNumbersFromJson,
 } from './heading-numbering';
 
 const descriptor = (level: number, text: string) => ({
@@ -76,6 +77,63 @@ describe('heading numbering', () => {
     expect(numbered.content?.[0].content?.[0].text).toBe('1. ');
     expect(numbered.content?.[1].content?.[0].text).toBe('1.1. ');
     expect(content.content[0].content[0].text).toBe('Heading');
+  });
+
+  it('removes only a complete generated heading sequence', () => {
+    const original = {
+      type: 'doc',
+      content: [
+        {
+          type: 'heading',
+          attrs: { level: 2 },
+          content: [{ type: 'text', text: 'First' }],
+        },
+        {
+          type: 'heading',
+          attrs: { level: 3 },
+          content: [{ type: 'text', text: 'Child' }],
+        },
+      ],
+    };
+    const numbered = addHeadingNumbersToJson(original);
+    const cleaned = stripGeneratedHeadingNumbersFromJson(numbered);
+
+    expect(cleaned.stripped).toBe(true);
+    expect(cleaned.content).toEqual(original);
+    expect(
+      stripGeneratedHeadingNumbersFromJson({
+        type: 'doc',
+        content: [
+          {
+            type: 'heading',
+            attrs: { level: 1 },
+            content: [{ type: 'text', text: '1. Manual heading' }],
+          },
+        ],
+      }).stripped,
+    ).toBe(false);
+  });
+
+  it('keeps mixed or inconsistent manual numbering unchanged', () => {
+    const content = {
+      type: 'doc',
+      content: [
+        {
+          type: 'heading',
+          attrs: { level: 1 },
+          content: [{ type: 'text', text: '1. First' }],
+        },
+        {
+          type: 'heading',
+          attrs: { level: 2 },
+          content: [{ type: 'text', text: '2. Manual child' }],
+        },
+      ],
+    };
+
+    const cleaned = stripGeneratedHeadingNumbersFromJson(content);
+    expect(cleaned.stripped).toBe(false);
+    expect(cleaned.content).toBe(content);
   });
 
   it('renders non-editable decorations and toggles them dynamically', () => {
@@ -209,9 +267,7 @@ describe('heading numbering', () => {
 
     const cleaned = stripManualHeadingNumberingFromPastedSlice(slice);
 
-    expect(
-      cleaned.content.content.map((node) => node.textContent),
-    ).toEqual([
+    expect(cleaned.content.content.map((node) => node.textContent)).toEqual([
       'Heading',
       'Child',
       '4. Keep H4',

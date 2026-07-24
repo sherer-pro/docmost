@@ -46,6 +46,7 @@ import { generateSlugId } from '../../../common/helpers';
 import { validate as isValidUuid } from 'uuid';
 import * as JSZip from 'jszip';
 import { ExportFormat } from '../../../integrations/export/dto/export-dto';
+import { normalizeUserSettings } from '../../user/utils/user-preferences.util';
 import { ExportMetadata } from '../../../common/helpers/types/export-metadata.types';
 import { replaceInternalLinks } from '../../../integrations/export/utils';
 import { getProsemirrorContent } from '../../../common/helpers/prosemirror/utils';
@@ -1371,13 +1372,22 @@ export class DatabaseService {
 
     const safeName = (database.name?.trim() || 'database').replace(/\s+/g, '-').toLowerCase();
 
+    if (format === DatabaseExportFormat.Docmost) {
+      const archive = await this.exportService.exportDatabaseArchive(databaseId);
+      return {
+        contentType: 'application/zip',
+        fileName: archive.fileName,
+        fileStream: archive.fileStream,
+      };
+    }
+
     if (format === DatabaseExportFormat.PDF) {
-      const pagesZipStream = await this.exportService.exportPages(
+      const pagesZipStream = await this.exportPagesForUser(
         database.pageId,
         ExportFormat.PDF,
         includeAttachments,
         includeChildren,
-        user.locale,
+        user,
       );
       const pagesZipBuffer = await streamToBuffer(
         pagesZipStream as NodeJS.ReadableStream,
@@ -1416,12 +1426,12 @@ export class DatabaseService {
     const pageExportFormat =
       format === DatabaseExportFormat.HTML ? ExportFormat.HTML : ExportFormat.Markdown;
 
-    const zipFileStream = await this.exportService.exportPages(
+    const zipFileStream = await this.exportPagesForUser(
       database.pageId,
       pageExportFormat,
       includeAttachments,
       includeChildren,
-      user.locale,
+      user,
     );
 
     return {
@@ -1439,6 +1449,34 @@ export class DatabaseService {
     if (ability.cannot(SpaceCaslAction.Read, SpaceCaslSubject.Page)) {
       throw new ForbiddenException();
     }
+  }
+
+  private exportPagesForUser(
+    pageId: string,
+    format: ExportFormat,
+    includeAttachments: boolean,
+    includeChildren: boolean,
+    user: User,
+  ) {
+    const headingNumberingByPageId = normalizeUserSettings(user.settings)
+      .preferences.headingNumberingByPageId;
+    if (Object.keys(headingNumberingByPageId).length === 0) {
+      return this.exportService.exportPages(
+        pageId,
+        format,
+        includeAttachments,
+        includeChildren,
+        user.locale,
+      );
+    }
+    return this.exportService.exportPages(
+      pageId,
+      format,
+      includeAttachments,
+      includeChildren,
+      user.locale,
+      headingNumberingByPageId,
+    );
   }
 
   /**

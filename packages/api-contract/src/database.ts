@@ -1,6 +1,7 @@
 import type { DatabasePropertyType } from "./database-property-type";
 
 export enum DatabaseExportFormat {
+  Docmost = "docmost",
   Markdown = "markdown",
   HTML = "html",
   PDF = "pdf",

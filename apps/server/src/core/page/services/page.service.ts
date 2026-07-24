@@ -74,6 +74,10 @@ import {
 import { PageHistoryRecorderService } from './page-history-recorder.service';
 import { PageAccessService } from '../../page-access/page-access.service';
 import { TransclusionService } from '../transclusion/transclusion.service';
+import {
+  remapDatabasePageReference,
+  remapDatabaseViewConfig,
+} from '../../database/utils/database-copy.utils';
 
 interface IHistoryUserRef {
   id: string;
@@ -136,44 +140,6 @@ export class PageService {
     return row?.databaseId ?? null;
   }
 
-  private remapJsonObjectIds(
-    value: unknown,
-    idMap: Map<string, string>,
-  ): unknown {
-    if (Array.isArray(value)) {
-      return value.map((item) => this.remapJsonObjectIds(item, idMap));
-    }
-
-    if (!value || typeof value !== 'object') {
-      return value;
-    }
-
-    const remapped: Record<string, unknown> = {};
-    for (const [key, rawChildValue] of Object.entries(value)) {
-      const childValue =
-        (key === 'propertyId' || key === 'sortPropertyId') &&
-        typeof rawChildValue === 'string'
-          ? (idMap.get(rawChildValue) ?? rawChildValue)
-          : this.remapJsonObjectIds(rawChildValue, idMap);
-
-      remapped[idMap.get(key) ?? key] = childValue;
-    }
-
-    return remapped;
-  }
-
-  private remapDatabaseCellValue(
-    value: unknown,
-    propertyType: string | undefined,
-    pageMap: Map<string, CopyPageMapEntry>,
-  ): unknown {
-    if (propertyType !== 'page_reference' || typeof value !== 'string') {
-      return value;
-    }
-
-    return pageMap.get(value)?.newPageId ?? value;
-  }
-
   private async duplicateLinkedDatabases(params: {
     pageMap: Map<string, CopyPageMapEntry>;
     copiedPageByOriginalId: CopiedPageByOriginalId;
@@ -185,6 +151,12 @@ export class PageService {
     if (originalPageIds.length === 0) {
       return;
     }
+    const duplicatedPageIdMap = new Map(
+      Array.from(params.pageMap, ([pageId, entry]) => [
+        pageId,
+        entry.newPageId,
+      ]),
+    );
 
     const databases = await params.trx
       .selectFrom('databases')
@@ -302,10 +274,10 @@ export class PageService {
               workspaceId: cell.workspaceId,
               pageId: params.pageMap.get(cell.pageId)!.newPageId,
               propertyId: propertyIdMap.get(cell.propertyId)!,
-              value: this.remapDatabaseCellValue(
+              value: remapDatabasePageReference(
                 cell.value,
                 propertyTypeById.get(cell.propertyId),
-                params.pageMap,
+                duplicatedPageIdMap,
               ) as never,
               attachmentId: cell.attachmentId,
               createdById: params.authUser.id,
@@ -333,7 +305,7 @@ export class PageService {
               workspaceId: view.workspaceId,
               name: view.name,
               type: view.type,
-              config: this.remapJsonObjectIds(
+              config: remapDatabaseViewConfig(
                 view.config,
                 propertyIdMap,
               ) as never,
@@ -354,6 +326,12 @@ export class PageService {
     if (originalPageIds.length === 0) {
       return;
     }
+    const duplicatedPageIdMap = new Map(
+      Array.from(params.pageMap, ([pageId, entry]) => [
+        pageId,
+        entry.newPageId,
+      ]),
+    );
 
     const [rows, copiedDatabases] = await Promise.all([
       params.trx
@@ -446,10 +424,10 @@ export class PageService {
             workspaceId: cell.workspaceId,
             pageId: params.pageMap.get(cell.pageId)!.newPageId,
             propertyId: cell.propertyId,
-            value: this.remapDatabaseCellValue(
+            value: remapDatabasePageReference(
               cell.value,
               propertyTypeById.get(cell.propertyId),
-              params.pageMap,
+              duplicatedPageIdMap,
             ) as never,
             attachmentId: cell.attachmentId,
             createdById: params.authUser.id,

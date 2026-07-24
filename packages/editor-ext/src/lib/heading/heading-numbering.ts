@@ -1,9 +1,5 @@
 import { Extension, JSONContent } from '@tiptap/core';
-import {
-  Fragment,
-  Node as ProseMirrorNode,
-  Slice,
-} from '@tiptap/pm/model';
+import { Fragment, Node as ProseMirrorNode, Slice } from '@tiptap/pm/model';
 import { EditorState, Plugin, PluginKey } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 
@@ -35,9 +31,7 @@ declare module '@tiptap/core' {
   interface Commands<ReturnType> {
     headingNumbering: {
       setHeadingNumberingEnabled: (enabled: boolean) => ReturnType;
-      setHeadingNumberingPasteCleanupEnabled: (
-        enabled: boolean,
-      ) => ReturnType;
+      setHeadingNumberingPasteCleanupEnabled: (enabled: boolean) => ReturnType;
       removeManualHeadingNumbering: () => ReturnType;
     };
   }
@@ -171,6 +165,94 @@ export function addHeadingNumbersToJson(content: JSONContent): JSONContent {
   };
 
   return cloneNode(content);
+}
+
+/**
+ * Removes numbering produced by {@link addHeadingNumbersToJson} only when the
+ * complete heading sequence matches the expected hierarchy. This avoids
+ * treating an isolated manual heading such as "1. Introduction" as generated
+ * numbering in legacy archives.
+ */
+export function stripGeneratedHeadingNumbersFromJson(
+  content: JSONContent,
+  options?: { allowSingleHeading?: boolean },
+): { content: JSONContent; stripped: boolean } {
+  const headings: HeadingNumberingDescriptor<JSONContent>[] = [];
+  const collectHeadings = (node: JSONContent) => {
+    if (node.type === 'heading') {
+      headings.push({
+        level: Number(node.attrs?.level),
+        text: getJsonTextContent(node),
+        value: node,
+      });
+    }
+    node.content?.forEach(collectHeadings);
+  };
+  collectHeadings(content);
+
+  const numbered = calculateHeadingNumbers(headings);
+  if (
+    numbered.length === 0 ||
+    (!options?.allowSingleHeading && numbered.length < 2)
+  ) {
+    return { content, stripped: false };
+  }
+
+  const prefixLengths = new Map<JSONContent, number>();
+  for (const heading of numbered) {
+    const match = heading.text.match(
+      new RegExp(`^${heading.number.replace(/\./g, '\\.')}\\s+`),
+    );
+    if (!match) return { content, stripped: false };
+    prefixLengths.set(heading.value, match[0].length);
+  }
+
+  const stripLeadingJsonText = (
+    nodes: JSONContent[],
+    count: number,
+  ): { nodes: JSONContent[]; remaining: number } => {
+    let remaining = count;
+    const result: JSONContent[] = [];
+    for (const node of nodes) {
+      if (remaining === 0) {
+        result.push(node);
+        continue;
+      }
+      if (typeof node.text === 'string') {
+        const removeCount = Math.min(node.text.length, remaining);
+        remaining -= removeCount;
+        const text = node.text.slice(removeCount);
+        if (text) result.push({ ...node, text });
+        continue;
+      }
+      if (node.content?.length) {
+        const nested = stripLeadingJsonText(node.content, remaining);
+        remaining = nested.remaining;
+        result.push({ ...node, content: nested.nodes });
+        continue;
+      }
+      result.push(node);
+    }
+    return { nodes: result, remaining };
+  };
+
+  const cloneNode = (node: JSONContent): JSONContent => {
+    const clonedContent = node.content?.map(cloneNode);
+    const prefixLength = prefixLengths.get(node);
+    if (!prefixLength || !clonedContent) {
+      return {
+        ...node,
+        ...(clonedContent ? { content: clonedContent } : {}),
+      };
+    }
+    const stripped = stripLeadingJsonText(clonedContent, prefixLength);
+    return {
+      ...node,
+      content: stripped.remaining === 0 ? stripped.nodes : clonedContent,
+    };
+  };
+
+  return { content: cloneNode(content), stripped: true };
 }
 
 /*

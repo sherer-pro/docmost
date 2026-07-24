@@ -22,7 +22,10 @@ import {
 import WorkspaceAbilityFactory from '../../core/casl/abilities/workspace-ability.factory';
 import { AuthWorkspace } from '../../common/decorators/auth-workspace.decorator';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
-import { FileTaskIdDto } from './dto/file-task-dto';
+import {
+  FileTaskIdDto,
+  RecentDocmostImportReportsDto,
+} from './dto/file-task-dto';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import { PageAccessService } from '../../core/page-access/page-access.service';
 import { FileTaskQueryService } from './services/file-task-query.service';
@@ -80,5 +83,31 @@ export class FileTaskController {
     }
 
     return fileTask;
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @Post('import-reports')
+  async getRecentImportReports(
+    @Body() dto: RecentDocmostImportReportsDto,
+    @AuthUser() user: User,
+  ) {
+    const ability = await this.spaceAbility.createForUser(user, dto.spaceId);
+    if (ability.cannot(SpaceCaslAction.Read, SpaceCaslSubject.Page)) {
+      const hasReadablePages =
+        await this.pageAccessService.hasAnyReadablePageInSpace(
+          user,
+          dto.spaceId,
+        );
+      if (!hasReadablePages) {
+        throw new ForbiddenException();
+      }
+    }
+
+    return this.fileTaskQueryService.findRecentDocmostImports(
+      user.id,
+      dto.spaceId,
+      dto.limit,
+    );
   }
 }

@@ -61,6 +61,7 @@ describe('DatabaseService mixed tree flows', () => {
   };
   const pageService = { create: jest.fn() };
   const exportService = {
+    exportDatabaseArchive: jest.fn(),
     exportPages: jest.fn(),
     turnPageMentionsToLinks: jest.fn(),
     buildPagePdfBody: jest.fn(),
@@ -162,6 +163,13 @@ describe('DatabaseService mixed tree flows', () => {
         compression: 'DEFLATE',
       }),
     );
+    exportService.exportDatabaseArchive.mockResolvedValue({
+      fileName: 'database-docmost-archive.zip',
+      fileStream: defaultPagesZip.generateNodeStream({
+        type: 'nodebuffer',
+        streamFiles: true,
+      }),
+    });
     exportService.turnPageMentionsToLinks.mockImplementation(async (content: unknown) => content);
     exportService.buildPagePdfBody.mockResolvedValue({
       title: 'Root',
@@ -285,7 +293,6 @@ describe('DatabaseService mixed tree flows', () => {
       user,
       'ws-1',
     );
-
     expect(result).toMatchObject({ id: 'prop-c', position: 0 });
     expect(
       databasePropertyRepo.updateProperty.mock.calls.map(
@@ -412,6 +419,7 @@ describe('DatabaseService mixed tree flows', () => {
   });
 
   it.each([
+    DatabaseExportFormat.Docmost,
     DatabaseExportFormat.Markdown,
     DatabaseExportFormat.HTML,
     DatabaseExportFormat.PDF,
@@ -425,6 +433,19 @@ describe('DatabaseService mixed tree flows', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
 
     expect(exportService.exportPages).not.toHaveBeenCalled();
+  });
+
+  it('uses the lossless archive pipeline for Docmost export', async () => {
+    const exported = await service.exportDatabase(
+      'db-1',
+      DatabaseExportFormat.Docmost,
+      user,
+      'ws-1',
+    );
+
+    expect(exportService.exportDatabaseArchive).toHaveBeenCalledWith('db-1');
+    expect(exportService.exportPages).not.toHaveBeenCalled();
+    expect(exported.fileName).toBe('database-docmost-archive.zip');
   });
 
   it('keeps readable nested database export unchanged', async () => {

@@ -448,7 +448,7 @@ export class DatabaseRowPageIdDto {
  */
 export class ExportDatabaseDto {
   @IsString()
-  @IsIn(['markdown', 'html', 'pdf'])
+  @IsIn(['docmost', 'markdown', 'html', 'pdf'])
   format: DatabaseExportFormat;
 
   @IsOptional()

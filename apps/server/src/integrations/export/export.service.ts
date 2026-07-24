@@ -31,6 +31,7 @@ import { EditorState } from '@tiptap/pm/state';
 import slugify = require('@sindresorhus/slugify');
 import { EnvironmentService } from '../environment/environment.service';
 import {
+  extractUserMentionIdsFromJson,
   getAttachmentIds,
   getProsemirrorContent,
 } from '../../common/helpers/prosemirror/utils';
@@ -52,9 +53,28 @@ import { validate as isValidUuid } from 'uuid';
 import { addHeadingNumbersToJson } from '@docmost/editor-ext';
 import { resolveHeadingNumberingEnabled } from '../../core/page/utils/heading-numbering-settings.utils';
 import {
+  DOCMOST_ARCHIVE_SCHEMA_VERSION,
+  type DocmostArchiveAttachment,
+  type DocmostArchiveDataV2,
+  type DocmostArchiveDatabase,
+  type DocmostArchiveDatabaseCell,
+  type DocmostArchiveDatabaseProperty,
+  type DocmostArchiveDatabaseRow,
+  type DocmostArchiveDatabaseView,
+  type DocmostArchiveDictionaryTerm,
+  type DocmostArchiveLabel,
+  type DocmostArchiveManifestV2,
+  type DocmostArchivePage,
+  type DocmostArchiveScope,
+  type DocmostArchiveTransclusionSnapshot,
+  type DocmostArchiveUserReference,
+  type DocmostPortableSpaceSettings,
   PAGE_AI_ROLE,
   type PageAiRole,
 } from '@docmost/api-contract';
+import { sanitize } from 'sanitize-filename-ts';
+import { collectReferencesFromPmJson } from '../../core/page/transclusion/utils/transclusion-prosemirror.util';
+import { createHash } from 'node:crypto';
 
 const PAGE_STATUS_LABELS: Record<string, string> = {
   TODO: 'To do',
@@ -296,12 +316,8 @@ export class ExportService {
     );
   }
 
-  private async getSpaceAiRoleEnabled(
-    spaceId: string,
-  ): Promise<boolean> {
-    return this.resolveSpaceAiRoleEnabled(
-      await this.getSpaceSettings(spaceId),
-    );
+  private async getSpaceAiRoleEnabled(spaceId: string): Promise<boolean> {
+    return this.resolveSpaceAiRoleEnabled(await this.getSpaceSettings(spaceId));
   }
 
   async renderPdfFromHtmlDocument(params: {
@@ -583,20 +599,14 @@ export class ExportService {
     if (aiRoleEnabled) {
       rows.push({
         label: metadataLabels['AI role'],
-        value: this.resolvePageAiRoleLabel(
-          getPageAiRole(settings),
-          locale,
-        ),
+        value: this.resolvePageAiRoleLabel(getPageAiRole(settings), locale),
       });
     }
 
     return rows;
   }
 
-  private resolvePageAiRoleLabel(
-    value: PageAiRole,
-    locale?: string,
-  ): string {
+  private resolvePageAiRoleLabel(value: PageAiRole, locale?: string): string {
     const label = PAGE_AI_ROLE_LABELS[value];
 
     for (const localeCandidate of this.buildLocaleFallbackChain(locale)) {
@@ -1359,6 +1369,7 @@ export class ExportService {
     includeAttachments: boolean,
     includeChildren: boolean,
     locale?: string,
+    headingNumberingByPageId?: Record<string, boolean>,
   ) {
     let pages: Page[];
 
@@ -1381,10 +1392,26 @@ export class ExportService {
       throw new BadRequestException('No pages to export');
     }
 
+    if (format === ExportFormat.Docmost) {
+      const rootPage = pages.find((page) => page.id === pageId) ?? pages[0];
+      const zip = await this.createDocmostArchive({
+        scope: 'page',
+        displayName: getPageTitle(rootPage.title),
+        spaceId: rootPage.spaceId,
+        pages,
+        rootPageId: pageId,
+      });
+
+      return zip.generateNodeStream({
+        type: 'nodebuffer',
+        streamFiles: true,
+        compression: 'DEFLATE',
+      });
+    }
+
     const spaceSettings = await this.getSpaceSettings(pages[0].spaceId);
-    const spaceHeadingNumberingEnabled = resolveHeadingNumberingEnabled(
-      spaceSettings,
-    );
+    const spaceHeadingNumberingEnabled =
+      resolveHeadingNumberingEnabled(spaceSettings);
     const spaceAiRoleEnabled = this.resolveSpaceAiRoleEnabled(spaceSettings);
 
     const parentPageIndex = pages.findIndex((obj) => obj.id === pageId);
@@ -1402,6 +1429,7 @@ export class ExportService {
       locale,
       spaceHeadingNumberingEnabled,
       spaceAiRoleEnabled,
+      headingNumberingByPageId,
     );
 
     const zipFile = zip.generateNodeStream({
@@ -1418,6 +1446,7 @@ export class ExportService {
     format: string,
     includeAttachments: boolean,
     locale?: string,
+    headingNumberingByPageId?: Record<string, boolean>,
   ) {
     const space = await this.db
       .selectFrom('spaces')
@@ -1449,6 +1478,23 @@ export class ExportService {
       .where('deletedAt', 'is', null)
       .execute();
 
+    if (format === ExportFormat.Docmost) {
+      const zip = await this.createDocmostArchive({
+        scope: 'space',
+        displayName: space.name || 'space',
+        spaceId,
+        pages: pages as Page[],
+      });
+      return {
+        fileStream: zip.generateNodeStream({
+          type: 'nodebuffer',
+          streamFiles: true,
+          compression: 'DEFLATE',
+        }),
+        fileName: `${space.name}-docmost-archive.zip`,
+      };
+    }
+
     const tree = buildTree(pages as Page[]);
 
     const zip = new JSZip();
@@ -1461,6 +1507,7 @@ export class ExportService {
       locale,
       resolveHeadingNumberingEnabled(space.settings),
       this.resolveSpaceAiRoleEnabled(space.settings),
+      headingNumberingByPageId,
     );
 
     const zipFile = zip.generateNodeStream({
@@ -1476,6 +1523,519 @@ export class ExportService {
     };
   }
 
+  async exportDatabaseArchive(databaseId: string): Promise<{
+    fileStream: NodeJS.ReadableStream;
+    fileName: string;
+  }> {
+    const database = await this.db
+      .selectFrom('databases')
+      .selectAll()
+      .where('id', '=', databaseId)
+      .where('deletedAt', 'is', null)
+      .executeTakeFirst();
+
+    if (!database || !database.pageId) {
+      throw new NotFoundException('Database not found');
+    }
+
+    const pages = await this.pageRepo.getPageAndDescendants(database.pageId, {
+      includeContent: true,
+    });
+    const zip = await this.createDocmostArchive({
+      scope: 'database',
+      displayName: database.name,
+      spaceId: database.spaceId,
+      pages: pages as Page[],
+      databaseId,
+      rootPageId: database.pageId,
+    });
+
+    return {
+      fileStream: zip.generateNodeStream({
+        type: 'nodebuffer',
+        streamFiles: true,
+        compression: 'DEFLATE',
+      }),
+      fileName: `${database.name}-docmost-archive.zip`,
+    };
+  }
+
+  private async createDocmostArchive(params: {
+    scope: DocmostArchiveScope;
+    displayName: string;
+    spaceId: string;
+    pages: Page[];
+    rootPageId?: string;
+    databaseId?: string;
+  }): Promise<JSZip> {
+    const space = await this.db
+      .selectFrom('spaces')
+      .selectAll()
+      .where('id', '=', params.spaceId)
+      .executeTakeFirst();
+    if (!space) {
+      throw new NotFoundException('Space not found');
+    }
+
+    const initialPageIds = params.pages.map((page) => page.id);
+    let databaseQuery = this.db
+      .selectFrom('databases')
+      .selectAll()
+      .where('deletedAt', 'is', null);
+
+    if (params.databaseId) {
+      databaseQuery = databaseQuery.where('id', '=', params.databaseId);
+    } else if (params.scope === 'space') {
+      databaseQuery = databaseQuery.where('spaceId', '=', params.spaceId);
+    } else if (initialPageIds.length > 0) {
+      databaseQuery = databaseQuery.where('pageId', 'in', initialPageIds);
+    } else {
+      databaseQuery = databaseQuery.where(
+        'id',
+        '=',
+        '00000000-0000-0000-0000-000000000000',
+      );
+    }
+
+    const databaseRowsSource = await databaseQuery.execute();
+    const databaseIds = databaseRowsSource.map((database) => database.id);
+    const rowRecords =
+      databaseIds.length > 0
+        ? await this.db
+            .selectFrom('databaseRows')
+            .selectAll()
+            .where('databaseId', 'in', databaseIds)
+            .execute()
+        : [];
+
+    const pageMap = new Map(params.pages.map((page) => [page.id, page]));
+    const missingRowPageIds = rowRecords
+      .map((row) => row.pageId)
+      .filter((pageId) => !pageMap.has(pageId));
+    if (missingRowPageIds.length > 0) {
+      const missingPages = await this.db
+        .selectFrom('pages')
+        .selectAll()
+        .where('id', 'in', missingRowPageIds)
+        .where('deletedAt', 'is', null)
+        .execute();
+      for (const page of missingPages) {
+        pageMap.set(page.id, page as Page);
+      }
+    }
+    const exportedRowRecords = rowRecords.filter((row) =>
+      pageMap.has(row.pageId),
+    );
+    const exportedRowPageIds = new Set(
+      exportedRowRecords.map((row) => row.pageId),
+    );
+
+    const pages = Array.from(pageMap.values());
+    const pageIds = pages.map((page) => page.id);
+    const pageIdSet = new Set(pageIds);
+    const archivePages: DocmostArchivePage[] = pages.map((page) => ({
+      id: page.id,
+      slugId: page.slugId,
+      title: page.title ?? null,
+      icon: page.icon ?? null,
+      position: page.position ?? null,
+      parentPageId:
+        page.id === params.rootPageId ||
+        !page.parentPageId ||
+        !pageIdSet.has(page.parentPageId)
+          ? null
+          : page.parentPageId,
+      content: getProsemirrorContent(page.content),
+      settings: normalizePageSettings(page.settings),
+    }));
+    const externalReferenceKeys = new Set<string>();
+    const externalSourcePageIds = new Set<string>();
+    for (const page of archivePages) {
+      for (const reference of collectReferencesFromPmJson(page.content)) {
+        if (pageIdSet.has(reference.sourcePageId)) continue;
+        externalReferenceKeys.add(
+          `${reference.sourcePageId}::${reference.transclusionId}`,
+        );
+        externalSourcePageIds.add(reference.sourcePageId);
+      }
+    }
+    const externalTransclusionRows =
+      externalSourcePageIds.size > 0
+        ? await this.db
+            .selectFrom('pageTransclusions')
+            .select(['pageId', 'transclusionId', 'content'])
+            .where('pageId', 'in', Array.from(externalSourcePageIds))
+            .execute()
+        : [];
+    const transclusionSnapshots: DocmostArchiveTransclusionSnapshot[] =
+      externalTransclusionRows
+        .filter((row) =>
+          externalReferenceKeys.has(`${row.pageId}::${row.transclusionId}`),
+        )
+        .map((row) => ({
+          sourcePageId: row.pageId,
+          transclusionId: row.transclusionId,
+          content: row.content,
+        }));
+
+    const [propertyRows, cellRows, viewRows] =
+      databaseIds.length > 0
+        ? await Promise.all([
+            this.db
+              .selectFrom('databaseProperties')
+              .selectAll()
+              .where('databaseId', 'in', databaseIds)
+              .where('deletedAt', 'is', null)
+              .execute(),
+            this.db
+              .selectFrom('databaseCells')
+              .selectAll()
+              .where('databaseId', 'in', databaseIds)
+              .where('deletedAt', 'is', null)
+              .execute(),
+            this.db
+              .selectFrom('databaseViews')
+              .selectAll()
+              .where('databaseId', 'in', databaseIds)
+              .where('deletedAt', 'is', null)
+              .execute(),
+          ])
+        : [[], [], []];
+
+    const archiveDatabases: DocmostArchiveDatabase[] = databaseRowsSource.map(
+      (database) => ({
+        id: database.id,
+        pageId:
+          database.pageId && pageIdSet.has(database.pageId)
+            ? database.pageId
+            : null,
+        name: database.name,
+        description: database.description,
+        descriptionContent: database.descriptionContent,
+        icon: database.icon,
+      }),
+    );
+    const archiveProperties: DocmostArchiveDatabaseProperty[] =
+      propertyRows.map((property) => ({
+        id: property.id,
+        databaseId: property.databaseId,
+        name: property.name,
+        type: property.type,
+        position: property.position,
+        settings: property.settings,
+      }));
+    const exportedPropertyIds = new Set(
+      archiveProperties.map((property) => property.id),
+    );
+    const archiveRows: DocmostArchiveDatabaseRow[] = exportedRowRecords.map(
+      (row) => ({
+        id: row.id,
+        databaseId: row.databaseId,
+        pageId: row.pageId,
+        archived: Boolean(row.archivedAt),
+      }),
+    );
+    const archiveCells: DocmostArchiveDatabaseCell[] = cellRows
+      .filter(
+        (cell) =>
+          exportedRowPageIds.has(cell.pageId) &&
+          exportedPropertyIds.has(cell.propertyId),
+      )
+      .map((cell) => ({
+        id: cell.id,
+        databaseId: cell.databaseId,
+        pageId: cell.pageId,
+        propertyId: cell.propertyId,
+        attachmentId: cell.attachmentId,
+        value: cell.value,
+      }));
+    const archiveViews: DocmostArchiveDatabaseView[] = viewRows.map((view) => ({
+      id: view.id,
+      databaseId: view.databaseId,
+      name: view.name,
+      type: view.type,
+      config: view.config,
+    }));
+
+    const labelRows =
+      pageIds.length > 0
+        ? await this.db
+            .selectFrom('pageLabels')
+            .innerJoin('labels', 'labels.id', 'pageLabels.labelId')
+            .select([
+              'labels.id as id',
+              'labels.name as name',
+              'pageLabels.pageId as pageId',
+            ])
+            .where('labels.spaceId', '=', params.spaceId)
+            .where('pageLabels.pageId', 'in', pageIds)
+            .execute()
+        : [];
+    const labelsById = new Map<string, DocmostArchiveLabel>();
+    for (const row of labelRows) {
+      const label = labelsById.get(row.id) ?? {
+        id: row.id,
+        name: row.name,
+        pageIds: [],
+      };
+      label.pageIds.push(row.pageId);
+      labelsById.set(row.id, label);
+    }
+
+    const dictionary: DocmostArchiveDictionaryTerm[] = [];
+    if (params.scope === 'space') {
+      const terms = await this.db
+        .selectFrom('dictionaryTerms')
+        .selectAll()
+        .where('spaceId', '=', params.spaceId)
+        .where('deletedAt', 'is', null)
+        .execute();
+      const termIds = terms.map((term) => term.id);
+      const aliases =
+        termIds.length > 0
+          ? await this.db
+              .selectFrom('dictionaryTermAliases')
+              .selectAll()
+              .where('termId', 'in', termIds)
+              .execute()
+          : [];
+      const aliasesByTermId = new Map<string, string[]>();
+      for (const alias of aliases) {
+        if (alias.isPrimary) continue;
+        const forms = aliasesByTermId.get(alias.termId) ?? [];
+        forms.push(alias.alias);
+        aliasesByTermId.set(alias.termId, forms);
+      }
+      dictionary.push(
+        ...terms.map((term) => ({
+          term: term.term,
+          forms: aliasesByTermId.get(term.id) ?? [],
+          definitionMarkdown: term.definitionMarkdown,
+        })),
+      );
+    }
+
+    const attachmentIds = new Set<string>();
+    for (const page of archivePages) {
+      for (const attachmentId of getAttachmentIds(page.content)) {
+        attachmentIds.add(attachmentId);
+      }
+    }
+    for (const database of archiveDatabases) {
+      if (
+        database.descriptionContent &&
+        typeof database.descriptionContent === 'object'
+      ) {
+        for (const attachmentId of getAttachmentIds(
+          database.descriptionContent,
+        )) {
+          attachmentIds.add(attachmentId);
+        }
+      }
+    }
+    for (const snapshot of transclusionSnapshots) {
+      for (const attachmentId of getAttachmentIds(snapshot.content)) {
+        attachmentIds.add(attachmentId);
+      }
+    }
+    for (const cell of archiveCells) {
+      if (cell.attachmentId) attachmentIds.add(cell.attachmentId);
+    }
+    const attachmentRows =
+      attachmentIds.size > 0
+        ? await this.db
+            .selectFrom('attachments')
+            .selectAll()
+            .where('id', 'in', Array.from(attachmentIds))
+            .where('spaceId', '=', params.spaceId)
+            .where('deletedAt', 'is', null)
+            .execute()
+        : [];
+    if (attachmentRows.length !== attachmentIds.size) {
+      const found = new Set(attachmentRows.map((attachment) => attachment.id));
+      const missing = Array.from(attachmentIds).filter((id) => !found.has(id));
+      throw new BadRequestException(
+        `Cannot create lossless archive: missing attachments ${missing.join(', ')}`,
+      );
+    }
+
+    const attachmentBuffers = new Map<string, Buffer>();
+    await Promise.all(
+      attachmentRows.map(async (attachment) => {
+        attachmentBuffers.set(
+          attachment.id,
+          await this.storageService.read(attachment.filePath),
+        );
+      }),
+    );
+    const archiveAttachments: DocmostArchiveAttachment[] = attachmentRows.map(
+      (attachment) => {
+        const safeFileName =
+          sanitize(attachment.fileName) ||
+          `${attachment.id}${attachment.fileExt || ''}`;
+        const fileBuffer = attachmentBuffers.get(attachment.id)!;
+        return {
+          id: attachment.id,
+          pageId: attachment.pageId,
+          fileName: attachment.fileName,
+          fileSize: attachment.fileSize,
+          fileExt: attachment.fileExt,
+          mimeType: attachment.mimeType,
+          type: attachment.type,
+          archivePath: `files/${attachment.id}/${safeFileName}`,
+          sha256: createHash('sha256').update(fileBuffer).digest('hex'),
+        };
+      },
+    );
+
+    const referencedIds = new Set<string>();
+    for (const page of archivePages) {
+      this.collectUuidStrings(page.settings, referencedIds);
+      this.collectUuidStrings(page.content, referencedIds);
+      for (const userId of extractUserMentionIdsFromJson(page.content)) {
+        referencedIds.add(userId);
+      }
+    }
+    for (const database of archiveDatabases) {
+      this.collectUuidStrings(database.descriptionContent, referencedIds);
+    }
+    for (const snapshot of transclusionSnapshots) {
+      this.collectUuidStrings(snapshot.content, referencedIds);
+      for (const userId of extractUserMentionIdsFromJson(snapshot.content)) {
+        referencedIds.add(userId);
+      }
+    }
+    for (const cell of archiveCells) {
+      this.collectUuidStrings(cell.value, referencedIds);
+    }
+    const userRows =
+      referencedIds.size > 0
+        ? await this.db
+            .selectFrom('users')
+            .select(['id', 'email', 'name'])
+            .where('workspaceId', '=', space.workspaceId)
+            .where('id', 'in', Array.from(referencedIds))
+            .execute()
+        : [];
+    const users: DocmostArchiveUserReference[] = userRows.map((user) => ({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+    }));
+
+    const zip = new JSZip();
+    const fallbackPages = pages.map((page) => ({
+      ...page,
+      parentPageId:
+        page.id === params.rootPageId ||
+        !page.parentPageId ||
+        !pageIdSet.has(page.parentPageId)
+          ? null
+          : page.parentPageId,
+    })) as Page[];
+    await this.zipPages(
+      buildTree(fallbackPages),
+      ExportFormat.Markdown,
+      zip,
+      false,
+      DEFAULT_EXPORT_LOCALE,
+      resolveHeadingNumberingEnabled(space.settings),
+      this.resolveSpaceAiRoleEnabled(space.settings),
+    );
+
+    const legacyMetadataFile = zip.file('docmost-metadata.json');
+    const legacyMetadata = legacyMetadataFile
+      ? (JSON.parse(await legacyMetadataFile.async('string')) as ExportMetadata)
+      : ({ pages: {} } as ExportMetadata);
+
+    const portableSpaceSettings = this.getPortableSpaceSettings(space.settings);
+    const data: DocmostArchiveDataV2 = {
+      schemaVersion: DOCMOST_ARCHIVE_SCHEMA_VERSION,
+      scope: params.scope,
+      sourceSpace: {
+        id: space.id,
+        name: space.name,
+        settings: portableSpaceSettings,
+      },
+      pages: archivePages,
+      attachments: archiveAttachments,
+      users,
+      transclusionSnapshots,
+      databases: archiveDatabases,
+      databaseProperties: archiveProperties,
+      databaseRows: archiveRows,
+      databaseCells: archiveCells,
+      databaseViews: archiveViews,
+      labels: Array.from(labelsById.values()),
+      dictionary,
+    };
+    const manifest: DocmostArchiveManifestV2 = {
+      source: 'docmost',
+      schemaVersion: DOCMOST_ARCHIVE_SCHEMA_VERSION,
+      version: this.appVersion,
+      exportedAt: new Date().toISOString(),
+      scope: params.scope,
+      displayName: params.displayName,
+      dataFile: 'docmost-data.json',
+      pages: legacyMetadata.pages,
+    };
+
+    zip.file('docmost-data.json', JSON.stringify(data, null, 2));
+    zip.file('docmost-metadata.json', JSON.stringify(manifest, null, 2));
+    await Promise.all(
+      archiveAttachments.map(async (descriptor) => {
+        const fileBuffer = attachmentBuffers.get(descriptor.id)!;
+        zip.file(descriptor.archivePath, fileBuffer);
+      }),
+    );
+
+    return zip;
+  }
+
+  private getPortableSpaceSettings(
+    settings: unknown,
+  ): DocmostPortableSpaceSettings {
+    if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
+      return {};
+    }
+    const source = settings as Record<string, unknown>;
+    const portable: DocmostPortableSpaceSettings = {};
+    if (source.documentFields && typeof source.documentFields === 'object') {
+      portable.documentFields = source.documentFields as Record<
+        string,
+        boolean
+      >;
+    }
+    if (source.dictionary && typeof source.dictionary === 'object') {
+      portable.dictionary = source.dictionary as { enabled?: boolean };
+    }
+    if (
+      source.headingNumbering &&
+      typeof source.headingNumbering === 'object'
+    ) {
+      portable.headingNumbering = source.headingNumbering as {
+        enabled?: boolean;
+      };
+    }
+    return portable;
+  }
+
+  private collectUuidStrings(value: unknown, output: Set<string>): void {
+    if (typeof value === 'string') {
+      if (isValidUuid(value)) output.add(value);
+      return;
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) this.collectUuidStrings(item, output);
+      return;
+    }
+    if (value && typeof value === 'object') {
+      for (const item of Object.values(value)) {
+        this.collectUuidStrings(item, output);
+      }
+    }
+  }
+
   async zipPages(
     tree: PageExportTree,
     format: string,
@@ -1484,6 +2044,7 @@ export class ExportService {
     locale?: string,
     spaceHeadingNumberingEnabled?: boolean,
     spaceAiRoleEnabled?: boolean,
+    headingNumberingByPageId?: Record<string, boolean>,
   ): Promise<void> {
     const slugIdToPath: Record<string, string> = {};
     const pageIdToFilePath: Record<string, string> = {};
@@ -1524,6 +2085,14 @@ export class ExportService {
         }
 
         const pageTitle = getPageTitle(page.title);
+        const pageHeadingNumberingEnabled =
+          headingNumberingByPageId &&
+          Object.prototype.hasOwnProperty.call(
+            headingNumberingByPageId,
+            page.id,
+          )
+            ? headingNumberingByPageId[page.id]
+            : spaceHeadingNumberingEnabled;
         const pageExportContent = await this.exportPage(
           format,
           {
@@ -1532,7 +2101,7 @@ export class ExportService {
           },
           false,
           locale,
-          spaceHeadingNumberingEnabled,
+          pageHeadingNumberingEnabled,
           spaceAiRoleEnabled,
         );
 
@@ -1552,6 +2121,8 @@ export class ExportService {
           parentPath,
           createdAt: page.createdAt?.toISOString() ?? new Date().toISOString(),
           updatedAt: page.updatedAt?.toISOString() ?? new Date().toISOString(),
+          headingNumbersMaterialized:
+            pageHeadingNumberingEnabled === true && format !== ExportFormat.PDF,
         };
 
         if (childPages.length > 0) {

@@ -13,6 +13,7 @@ describe('export modal utils', () => {
     const formatValues = getExportFormatValues('page');
 
     expect(formatValues).toEqual([
+      ExportFormat.Docmost,
       ExportFormat.Markdown,
       ExportFormat.HTML,
       ExportFormat.PDF,
@@ -23,6 +24,7 @@ describe('export modal utils', () => {
     const formatValues = getExportFormatValues('database');
 
     expect(formatValues).toEqual([
+      DatabaseExportFormat.Docmost,
       DatabaseExportFormat.Markdown,
       DatabaseExportFormat.HTML,
       DatabaseExportFormat.PDF,
@@ -36,17 +38,24 @@ describe('export modal utils', () => {
     expect(shouldShowIncludeChildren('database', DatabaseExportFormat.PDF)).toBe(
       true,
     );
+    expect(
+      shouldShowIncludeChildren('database', DatabaseExportFormat.Docmost),
+    ).toBe(false);
   });
 
   it('marks attachments visibility for page/space/database', () => {
     expect(shouldShowAttachments('page')).toBe(true);
     expect(shouldShowAttachments('space')).toBe(true);
     expect(shouldShowAttachments('database')).toBe(true);
+    expect(
+      shouldShowAttachments('database', DatabaseExportFormat.Docmost),
+    ).toBe(false);
   });
 
   it('accepts only HTML and Markdown for space export', () => {
     expect(isSpaceExportFormat(ExportFormat.HTML)).toBe(true);
     expect(isSpaceExportFormat(ExportFormat.Markdown)).toBe(true);
+    expect(isSpaceExportFormat(ExportFormat.Docmost)).toBe(true);
     expect(isSpaceExportFormat(ExportFormat.PDF)).toBe(false);
   });
 });

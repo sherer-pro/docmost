@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  Body,
   Controller,
   ForbiddenException,
   HttpCode,
@@ -28,6 +29,12 @@ import {
   SAFE_FILE_VALIDATION_ERROR_MESSAGE,
   validateFileExtensionAndSignature,
 } from '../../common/helpers/file-validation';
+import { ConfirmDocmostImportDto, FileTaskIdDto } from './dto/file-task-dto';
+import WorkspaceAbilityFactory from '../../core/casl/abilities/workspace-ability.factory';
+import {
+  WorkspaceCaslAction,
+  WorkspaceCaslSubject,
+} from '../../core/casl/interfaces/workspace-ability.type';
 
 @Controller('pages')
 export class ImportController {
@@ -36,6 +43,7 @@ export class ImportController {
   constructor(
     private readonly importService: ImportService,
     private readonly spaceAbility: SpaceAbilityFactory,
+    private readonly workspaceAbility: WorkspaceAbilityFactory,
     private readonly environmentService: EnvironmentService,
   ) {}
 
@@ -54,11 +62,7 @@ export class ImportController {
     return this.handleImportPage(req, user, workspace);
   }
 
-  private async handleImportPage(
-    req: any,
-    user: User,
-    workspace: Workspace,
-  ) {
+  private async handleImportPage(req: any, user: User, workspace: Workspace) {
     const validFileExtensions = ['.md', '.html', '.docx'];
 
     const maxFileSize = bytes('10mb');
@@ -122,7 +126,91 @@ export class ImportController {
     return this.handleImportZip(req, user, workspace);
   }
 
-  private async handleImportZip(req: any, user: User, workspace: Workspace) {
+  @UseInterceptors(FileInterceptor)
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @Post('actions/import-zip/preview')
+  async previewImportZipAction(
+    @Req() req: any,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.handleImportZip(req, user, workspace, true);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @Post('actions/import-zip/confirm')
+  async confirmImportZipAction(
+    @Body() dto: ConfirmDocmostImportDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const spaceId = await this.importService.getPendingDocmostImportSpaceId(
+      dto.fileTaskId,
+      user.id,
+      workspace.id,
+    );
+    const spaceAbility = await this.spaceAbility.createForUser(user, spaceId);
+    const workspaceAbility = this.workspaceAbility.createForUser(
+      user,
+      workspace,
+    );
+    const canManageSpaceSettings = spaceAbility.can(
+      SpaceCaslAction.Manage,
+      SpaceCaslSubject.Settings,
+    );
+    const canImportDictionary = workspaceAbility.can(
+      WorkspaceCaslAction.Manage,
+      WorkspaceCaslSubject.Settings,
+    );
+    if (
+      (dto.applyDocumentFields || dto.applyHeadingNumbering) &&
+      !canManageSpaceSettings
+    ) {
+      throw new ForbiddenException(
+        'You cannot apply imported settings to the target space',
+      );
+    }
+    if (dto.applyDictionary && !canImportDictionary) {
+      throw new ForbiddenException(
+        'Only workspace administrators can import dictionary terms',
+      );
+    }
+    return this.importService.confirmDocmostImport(
+      dto.fileTaskId,
+      {
+        applyDocumentFields: dto.applyDocumentFields,
+        applyDictionary: dto.applyDictionary,
+        applyHeadingNumbering: dto.applyHeadingNumbering,
+        cleanupLegacyHeadingNumbers: dto.cleanupLegacyHeadingNumbers ?? true,
+      },
+      user.id,
+      workspace.id,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Post('actions/import-zip/cancel')
+  async cancelImportZipAction(
+    @Body() dto: FileTaskIdDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    await this.importService.cancelDocmostImport(
+      dto.fileTaskId,
+      user.id,
+      workspace.id,
+    );
+  }
+
+  private async handleImportZip(
+    req: any,
+    user: User,
+    workspace: Workspace,
+    preview = false,
+  ) {
     const validFileExtensions = ['.zip'];
 
     const maxFileSize = bytes(this.environmentService.getFileImportSizeLimit());
@@ -161,10 +249,20 @@ export class ImportController {
     const spaceId = file.fields?.spaceId?.value;
     const source = file.fields?.source?.value;
 
-    const validZipSources = ['generic', 'notion', 'confluence'];
+    const validZipSources = ['docmost', 'generic', 'notion', 'confluence'];
     if (!validZipSources.includes(source)) {
       throw new BadRequestException(
-        'Invalid import source. Import source must either be generic, notion or confluence.',
+        'Invalid import source. Import source must be docmost, generic, notion or confluence.',
+      );
+    }
+    if (preview && source !== 'docmost') {
+      throw new BadRequestException(
+        'Preview is only available for Docmost archives',
+      );
+    }
+    if (!preview && source === 'docmost') {
+      throw new BadRequestException(
+        'Docmost archives must be previewed before import',
       );
     }
 
@@ -175,6 +273,31 @@ export class ImportController {
     const ability = await this.spaceAbility.createForUser(user, spaceId);
     if (ability.cannot(SpaceCaslAction.Edit, SpaceCaslSubject.Page)) {
       throw new ForbiddenException();
+    }
+
+    if (preview) {
+      const workspaceAbility = this.workspaceAbility.createForUser(
+        user,
+        workspace,
+      );
+      const canManageSpaceSettings = ability.can(
+        SpaceCaslAction.Manage,
+        SpaceCaslSubject.Settings,
+      );
+      return this.importService.previewDocmostZip(
+        file,
+        user.id,
+        spaceId,
+        workspace.id,
+        {
+          documentFields: canManageSpaceSettings,
+          headingNumbering: canManageSpaceSettings,
+          dictionary: workspaceAbility.can(
+            WorkspaceCaslAction.Manage,
+            WorkspaceCaslSubject.Settings,
+          ),
+        },
+      );
     }
 
     return this.importService.importZip(

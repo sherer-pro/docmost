@@ -73,6 +73,7 @@
 | POST | `/favorites/ids` | `apps/server/src/core/favorite/favorite.controller.ts` |
 | POST | `/favorites/remove` | `apps/server/src/core/favorite/favorite.controller.ts` |
 | POST | `/file-tasks` | `apps/server/src/integrations/import/file-task.controller.ts` |
+| POST | `/file-tasks/import-reports` | `apps/server/src/integrations/import/file-task.controller.ts` |
 | POST | `/file-tasks/info` | `apps/server/src/integrations/import/file-task.controller.ts` |
 | GET | `/files/:fileId/:fileName` | `apps/server/src/core/attachment/legacy-files.controller.ts` |
 | GET | `/files/public/:fileId/:fileName` | `apps/server/src/core/attachment/legacy-files.controller.ts` |
@@ -122,6 +123,9 @@
 | POST | `/pages/actions/export` | `apps/server/src/integrations/export/export.controller.ts` |
 | POST | `/pages/actions/import` | `apps/server/src/integrations/import/import.controller.ts` |
 | POST | `/pages/actions/import-zip` | `apps/server/src/integrations/import/import.controller.ts` |
+| POST | `/pages/actions/import-zip/cancel` | `apps/server/src/integrations/import/import.controller.ts` |
+| POST | `/pages/actions/import-zip/confirm` | `apps/server/src/integrations/import/import.controller.ts` |
+| POST | `/pages/actions/import-zip/preview` | `apps/server/src/integrations/import/import.controller.ts` |
 | POST | `/pages/actions/update` | `apps/server/src/core/page/page.controller.ts` |
 | GET | `/pages/backlinks` | `apps/server/src/core/page/page.controller.ts` |
 | POST | `/pages/backlinks` | `apps/server/src/core/page/page.controller.ts` |

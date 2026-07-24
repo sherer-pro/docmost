@@ -18,7 +18,10 @@ import { generateSlugId } from '../../../common/helpers';
 import { v7 } from 'uuid';
 import { generateJitteredKeyBetween } from 'fractional-indexing-jittered';
 import { FileTask, InsertablePage } from '@docmost/db/types/entity.types';
-import { markdownToHtml } from '@docmost/editor-ext';
+import {
+  markdownToHtml,
+  stripGeneratedHeadingNumbersFromJson,
+} from '@docmost/editor-ext';
 import { getProsemirrorContent } from '../../../common/helpers/prosemirror/utils';
 import { formatImportHtml } from '../utils/import-formatter';
 import {
@@ -36,6 +39,9 @@ import { PageService } from '../../../core/page/services/page.service';
 import { ImportPageNode } from '../dto/file-task-dto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EventName } from '../../../common/events/event.contants';
+import { DocmostArchiveImportService } from './docmost-archive-import.service';
+import type { ImportReport } from '@docmost/api-contract';
+import type { ExportMetadata } from '../../../common/helpers/types/export-metadata.types';
 
 @Injectable()
 export class FileImportTaskService {
@@ -50,6 +56,7 @@ export class FileImportTaskService {
     private readonly importAttachmentService: ImportAttachmentService,
     private moduleRef: ModuleRef,
     private eventEmitter: EventEmitter2,
+    private readonly docmostArchiveImportService: DocmostArchiveImportService,
   ) {}
 
   async processZIpImport(fileTaskId: string): Promise<void> {
@@ -98,11 +105,17 @@ export class FileImportTaskService {
     }
 
     try {
-      if (
+      let importReport: ImportReport | undefined;
+      if (fileTask.source === FileImportSource.Docmost) {
+        importReport = await this.docmostArchiveImportService.process({
+          extractDir: tmpExtractDir,
+          fileTask,
+        });
+      } else if (
         fileTask.source === FileImportSource.Generic ||
         fileTask.source === FileImportSource.Notion
       ) {
-        await this.processGenericImport({
+        importReport = await this.processGenericImport({
           extractDir: tmpExtractDir,
           fileTask,
         });
@@ -129,8 +142,13 @@ export class FileImportTaskService {
           fileTask,
         });
       }
+      await this.updateTaskStatus(
+        fileTaskId,
+        FileTaskStatus.Success,
+        null,
+        importReport,
+      );
       try {
-        await this.updateTaskStatus(fileTaskId, FileTaskStatus.Success, null);
         await cleanupTmpFile();
         await cleanupTmpDir();
         // delete stored file on success
@@ -152,7 +170,7 @@ export class FileImportTaskService {
   async processGenericImport(opts: {
     extractDir: string;
     fileTask: FileTask;
-  }): Promise<void> {
+  }): Promise<ImportReport | undefined> {
     const { extractDir, fileTask } = opts;
     const allFiles = await collectMarkdownAndHtmlFiles(extractDir);
     const attachmentCandidates = await buildAttachmentCandidates(extractDir);
@@ -402,6 +420,7 @@ export class FileImportTaskService {
     // Process pages level by level sequentially to respect foreign key constraints
     const allBacklinks: any[] = [];
     const validPageIds = new Set<string>();
+    const ambiguousNumberingPages: string[] = [];
     let totalPagesProcessed = 0;
 
     // Sort levels to process in order
@@ -457,8 +476,35 @@ export class FileImportTaskService {
               await this.importService.processHTML(html),
             );
 
-            const { title, prosemirrorJson } =
+            const { title, prosemirrorJson: extractedJson } =
               this.importService.extractTitleAndRemoveHeading(pmState);
+            const importMetadata =
+              docmostMetadata?.pages[encodeFilePath(page.filePath)];
+            const cleanupNumbering =
+              Boolean(importMetadata?.headingNumbersMaterialized) ||
+              Boolean(
+                docmostMetadata &&
+                  !(
+                    docmostMetadata as ExportMetadata & {
+                      schemaVersion?: number;
+                    }
+                  ).schemaVersion,
+              );
+            const cleanedHeadingResult = cleanupNumbering
+              ? stripGeneratedHeadingNumbersFromJson(extractedJson, {
+                  allowSingleHeading: Boolean(
+                    importMetadata?.headingNumbersMaterialized,
+                  ),
+                })
+              : { content: extractedJson, stripped: false };
+            const prosemirrorJson = cleanedHeadingResult.content;
+            if (
+              cleanupNumbering &&
+              !cleanedHeadingResult.stripped &&
+              this.hasNumberedHeadingCandidate(extractedJson)
+            ) {
+              ambiguousNumberingPages.push(title || page.name);
+            }
 
             const insertablePage: InsertablePage = {
               id: page.id,
@@ -526,6 +572,56 @@ export class FileImportTaskService {
       this.logger.error('Failed to import files:', error);
       throw new Error(`File import failed: ${error?.['message']}`);
     }
+
+    if (!docmostMetadata) {
+      return undefined;
+    }
+    const warnings =
+      ambiguousNumberingPages.length > 0
+        ? [
+            `Heading numbering was left unchanged on ${ambiguousNumberingPages.length} page(s) because it could not be safely identified as Docmost-generated.`,
+          ]
+        : [];
+    return {
+      created: {
+        pages: totalPagesProcessed,
+        databases: 0,
+        rows: 0,
+        attachments: 0,
+        labels: 0,
+        dictionaryTerms: 0,
+      },
+      updated: { dictionaryTerms: 0 },
+      skipped: {
+        dictionaryTerms: 0,
+        userReferences: 0,
+        pageReferences: 0,
+      },
+      warnings,
+    };
+  }
+
+  private hasNumberedHeadingCandidate(content: unknown): boolean {
+    const getText = (node: any): string => {
+      if (!node || typeof node !== 'object') return '';
+      if (typeof node.text === 'string') return node.text;
+      return Array.isArray(node.content)
+        ? node.content.map(getText).join('')
+        : '';
+    };
+    const visit = (node: any): boolean => {
+      if (!node || typeof node !== 'object') return false;
+      if (
+        node.type === 'heading' &&
+        Number(node.attrs?.level) >= 1 &&
+        Number(node.attrs?.level) <= 3 &&
+        /^\d+(?:\.\d+){0,2}\.?\s+/.test(getText(node))
+      ) {
+        return true;
+      }
+      return Array.isArray(node.content) && node.content.some(visit);
+    };
+    return visit(content);
   }
 
   async getFileTask(fileTaskId: string) {
@@ -540,15 +636,30 @@ export class FileImportTaskService {
     fileTaskId: string,
     status: FileTaskStatus,
     errorMessage?: string,
+    report?: ImportReport,
   ) {
-    try {
-      await this.db
-        .updateTable('fileTasks')
-        .set({ status: status, errorMessage, updatedAt: new Date() })
-        .where('id', '=', fileTaskId)
-        .execute();
-    } catch (err) {
-      this.logger.error(err);
-    }
+    const fileTask = report
+      ? await this.db
+          .selectFrom('fileTasks')
+          .select('result')
+          .where('id', '=', fileTaskId)
+          .executeTakeFirst()
+      : null;
+    const previousResult =
+      fileTask?.result &&
+      typeof fileTask.result === 'object' &&
+      !Array.isArray(fileTask.result)
+        ? fileTask.result
+        : {};
+    await this.db
+      .updateTable('fileTasks')
+      .set({
+        status: status,
+        errorMessage,
+        updatedAt: new Date(),
+        ...(report ? { result: { ...previousResult, report } as any } : {}),
+      })
+      .where('id', '=', fileTaskId)
+      .execute();
   }
 }

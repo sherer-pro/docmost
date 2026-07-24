@@ -23,6 +23,7 @@ import { FastifyReply } from 'fastify';
 import { sanitize } from 'sanitize-filename-ts';
 import { PageAccessService } from '../../core/page-access/page-access.service';
 import { CopyMarkdownWithCommentsService } from './copy-markdown-with-comments.service';
+import { normalizeUserSettings } from '../../core/user/utils/user-preferences.util';
 
 /**
  * Shared service layer for export controllers.
@@ -58,6 +59,8 @@ class ExportControllerDelegate {
       dto.includeAttachments,
       dto.includeChildren,
       user.locale,
+      normalizeUserSettings(user.settings).preferences
+        .headingNumberingByPageId,
     );
 
     const fileName = sanitize(page.title || 'untitled') + '.zip';
@@ -79,6 +82,8 @@ class ExportControllerDelegate {
       dto.format,
       dto.includeAttachments,
       user.locale,
+      normalizeUserSettings(user.settings).preferences
+        .headingNumberingByPageId,
     );
 
     res.headers({
