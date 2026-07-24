@@ -25,11 +25,23 @@ export interface IHeadingNumberingSettings {
   enabled?: boolean;
 }
 
+export interface ISpaceCustomLink {
+  id: string;
+  label: string;
+  url: string;
+  icon: string;
+}
+
+export interface ISpaceCustomLinksSettings {
+  links?: ISpaceCustomLink[];
+}
+
 export interface ISpaceSettings {
   sharing?: ISpaceSharingSettings;
   documentFields?: ISpaceDocumentFieldsSettings;
   dictionary?: ISpaceDictionarySettings;
   headingNumbering?: IHeadingNumberingSettings;
+  customLinks?: ISpaceCustomLinksSettings;
 }
 
 export interface ISpace {
@@ -52,6 +64,7 @@ export interface ISpace {
   disablePublicSharing?: boolean;
   dictionaryEnabled?: boolean;
   headingNumberingEnabled?: boolean;
+  customLinks?: ISpaceCustomLinksSettings;
 }
 
 interface IMembership {
@@ -106,6 +119,9 @@ export type ISpaceMember = { role: string } & (SpaceUserInfo | SpaceGroupInfo);
 
 export interface IExportSpaceParams {
   spaceId: string;
-  format: ExportFormat.HTML | ExportFormat.Markdown;
+  format:
+    | ExportFormat.Docmost
+    | ExportFormat.HTML
+    | ExportFormat.Markdown;
   includeAttachments?: boolean;
 }

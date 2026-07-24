@@ -66,12 +66,30 @@ export type HeadingNumberingSettings = {
 } & Record<string, JsonValue>;
 
 /**
+ * A single admin-managed custom link shown in the space sidebar.
+ */
+export interface SpaceCustomLink {
+  id: string;
+  label: string;
+  url: string;
+  icon: string;
+}
+
+/**
+ * Admin-managed custom links at the space level.
+ */
+export interface SpaceCustomLinksSettings {
+  links?: SpaceCustomLink[];
+}
+
+/**
  * Space settings container.
  */
 export interface SpaceSettings {
   documentFields?: SpaceDocumentFieldsSettings;
   dictionary?: SpaceDictionarySettings;
   headingNumbering?: HeadingNumberingSettings;
+  customLinks?: SpaceCustomLinksSettings;
 }
 
 /**

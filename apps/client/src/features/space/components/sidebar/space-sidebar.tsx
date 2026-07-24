@@ -12,6 +12,7 @@ import {
   IconChevronsDown,
   IconChevronsUp,
   IconDots,
+  IconExternalLink,
   IconHexagonPlus,
   IconFileExport,
   IconHome,
@@ -29,8 +30,12 @@ import { Link, useLocation, useParams } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import { useDisclosure } from "@mantine/hooks";
+import { modals } from "@mantine/modals";
 import SpaceSettingsModal from "@/features/space/components/settings-modal.tsx";
-import { useGetSpaceBySlugQuery } from "@/features/space/queries/space-query.ts";
+import {
+  useGetSpaceBySlugQuery,
+  useUpdateSpaceMutation,
+} from "@/features/space/queries/space-query.ts";
 import { getSpaceUrl } from "@/lib/config.ts";
 import SpaceTree, {
   type SpaceTreeBulkState,
@@ -45,8 +50,6 @@ import PageImportModal from "@/features/page/components/page-import-modal.tsx";
 import { useTranslation } from "react-i18next";
 import { SwitchSpace } from "./switch-space";
 import ExportModal from "@/components/common/export-modal";
-import { mobileSidebarAtom } from "@/components/layouts/global/hooks/atoms/sidebar-atom.ts";
-import { useToggleSidebar } from "@/components/layouts/global/hooks/hooks/use-toggle-sidebar.ts";
 import { searchSpotlight } from "@/features/search/constants";
 import { useCreateDatabaseMutation } from "@/features/database/queries/database-query.ts";
 import { notifications } from "@mantine/notifications";
@@ -65,6 +68,12 @@ import { useQueryEmit } from "@/features/websocket/use-query-emit.ts";
 import { PAGE_QUERY_KEYS } from "@/features/page/queries/query-keys.ts";
 import { AccessibleActionIcon } from "@/components/ui/accessible-action-icon.tsx";
 import { hasFullSpaceAccess } from "@/features/space/permissions/export-access.ts";
+import { getCustomLinkIcon } from "@/features/space/components/custom-links/custom-link-icons.ts";
+import { isSafeCustomLinkUrl } from "@/features/space/components/custom-links/custom-link-utils.ts";
+import CustomLinkFormModal, {
+  type CustomLinkFormValue,
+} from "@/features/space/components/custom-links/custom-link-form-modal.tsx";
+import type { ISpaceCustomLink } from "@/features/space/types/space.types.ts";
 
 const PAGE_TREE_ACTION_SIZE = 24;
 const PAGE_TREE_ACTION_ICON_SIZE = 16;
@@ -86,12 +95,16 @@ export function SpaceSidebar() {
   const location = useLocation();
   const [opened, { open: openSettings, close: closeSettings }] =
     useDisclosure(false);
-  const [mobileSidebarOpened] = useAtom(mobileSidebarAtom);
+  const [
+    customLinkModalOpened,
+    { open: openCustomLinkModal, close: closeCustomLinkModal },
+  ] = useDisclosure(false);
   const [user, setUser] = useAtom(userAtom);
   const [treeData, setTreeData] = useAtom(treeDataAtom);
   const emit = useQueryEmit();
-  const toggleMobileSidebar = useToggleSidebar(mobileSidebarAtom);
   const navigate = useNavigate();
+  const { mutate: updateSpace, isPending: isUpdatingCustomLinks } =
+    useUpdateSpaceMutation();
 
   const { spaceSlug } = useParams();
   const { data: space } = useGetSpaceBySlugQuery(spaceSlug);
@@ -102,6 +115,10 @@ export function SpaceSidebar() {
     SpaceCaslAction.Manage,
     SpaceCaslSubject.Page,
   );
+  const canManageSpaceSettings = spaceAbility.can(
+    SpaceCaslAction.Manage,
+    SpaceCaslSubject.Settings,
+  );
   const canExportSpace = hasFullSpaceAccess({
     workspaceRole: user?.role,
     spaceRole: space?.membership?.role,
@@ -110,6 +127,48 @@ export function SpaceSidebar() {
 
   if (!space) {
     return <></>;
+  }
+
+  const customLinks = space.settings?.customLinks?.links ?? [];
+
+  function persistCustomLinks(nextLinks: ISpaceCustomLink[]) {
+    updateSpace(
+      { spaceId: space.id, customLinks: { links: nextLinks } },
+      {
+        onSuccess: (updatedSpace) => {
+          // Keep the slug-keyed sidebar cache in sync with the server response.
+          queryClient.setQueryData(
+            ["space", spaceSlug],
+            (cached: typeof updatedSpace) =>
+              cached ? { ...cached, ...updatedSpace } : updatedSpace,
+          );
+        },
+      },
+    );
+  }
+
+  function handleAddCustomLink(value: CustomLinkFormValue) {
+    const id =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    persistCustomLinks([...customLinks, { id, ...value }]);
+    closeCustomLinkModal();
+  }
+
+  function handleDeleteCustomLink(link: ISpaceCustomLink) {
+    modals.openConfirmModal({
+      title: t("Delete link"),
+      children: (
+        <Text size="sm">
+          {t("Delete the link {{name}}?", { name: link.label })}
+        </Text>
+      ),
+      labels: { confirm: t("Delete"), cancel: t("Cancel") },
+      confirmProps: { color: "red" },
+      onConfirm: () =>
+        persistCustomLinks(customLinks.filter((item) => item.id !== link.id)),
+    });
   }
 
   function handleCreatePage() {
@@ -257,17 +316,6 @@ export function SpaceSidebar() {
               </div>
             </UnstyledButton>
 
-            <UnstyledButton className={classes.menu} onClick={openSettings}>
-              <div className={classes.menuItemInner}>
-                <IconSettings
-                  size={18}
-                  className={classes.menuItemIcon}
-                  stroke={2}
-                />
-                <span>{t("Space settings")}</span>
-              </div>
-            </UnstyledButton>
-
             {space.settings?.dictionary?.enabled === true && (
               <UnstyledButton
                 component={Link}
@@ -291,15 +339,59 @@ export function SpaceSidebar() {
               </UnstyledButton>
             )}
 
-            {canManageSpacePages && (
+            {customLinks
+              .filter((link) => isSafeCustomLinkUrl(link.url))
+              .map((link) => {
+                const LinkIcon = getCustomLinkIcon(link.icon);
+                return (
+                  <div key={link.id} className={classes.customLinkRow}>
+                    <UnstyledButton
+                      component="a"
+                      href={link.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={classes.menu}
+                    >
+                      <div className={classes.menuItemInner}>
+                        <LinkIcon
+                          size={18}
+                          className={classes.menuItemIcon}
+                          stroke={2}
+                        />
+                        <span className={classes.menuItemLabel}>
+                          {link.label}
+                        </span>
+                        <IconExternalLink
+                          className={classes.externalLinkIcon}
+                          size={14}
+                          stroke={2}
+                          aria-hidden="true"
+                        />
+                      </div>
+                    </UnstyledButton>
+
+                    {canManageSpaceSettings && (
+                      <AccessibleActionIcon
+                        className={classes.customLinkDelete}
+                        variant="subtle"
+                        color="red"
+                        size={22}
+                        label={t("Delete link")}
+                        tooltipProps={{ withArrow: true, position: "right" }}
+                        disabled={isUpdatingCustomLinks}
+                        onClick={() => handleDeleteCustomLink(link)}
+                      >
+                        <IconTrash size={16} />
+                      </AccessibleActionIcon>
+                    )}
+                  </div>
+                );
+              })}
+
+            {canManageSpaceSettings && (
               <UnstyledButton
-                className={classes.menu}
-                onClick={() => {
-                  handleCreatePage();
-                  if (mobileSidebarOpened) {
-                    toggleMobileSidebar();
-                  }
-                }}
+                className={clsx(classes.menu, classes.customLinkAdd)}
+                onClick={openCustomLinkModal}
               >
                 <div className={classes.menuItemInner}>
                   <IconPlus
@@ -307,7 +399,7 @@ export function SpaceSidebar() {
                     className={classes.menuItemIcon}
                     stroke={2}
                   />
-                  <span>{t("New page")}</span>
+                  <span>{t("Add link")}</span>
                 </div>
               </UnstyledButton>
             )}
@@ -404,6 +496,13 @@ export function SpaceSidebar() {
         opened={opened}
         onClose={closeSettings}
         spaceId={space?.slug}
+      />
+
+      <CustomLinkFormModal
+        opened={customLinkModalOpened}
+        onClose={closeCustomLinkModal}
+        onSubmit={handleAddCustomLink}
+        isPending={isUpdatingCustomLinks}
       />
     </>
   );

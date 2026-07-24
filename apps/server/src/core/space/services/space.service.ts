@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { CreateSpaceDto } from '../dto/create-space.dto';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import { SpaceRepo } from '@docmost/db/repos/space/space.repo';
@@ -158,6 +159,21 @@ export class SpaceService {
         updateSpaceDto.spaceId,
         workspaceId,
         { enabled: updateSpaceDto.headingNumberingEnabled },
+      );
+    }
+
+    if (updateSpaceDto.customLinks) {
+      const links = (updateSpaceDto.customLinks.links ?? []).map((link) => ({
+        id: link.id || randomUUID(),
+        label: link.label.trim(),
+        url: link.url.trim(),
+        icon: link.icon,
+      }));
+
+      await this.spaceRepo.updateCustomLinksSettings(
+        updateSpaceDto.spaceId,
+        workspaceId,
+        { links },
       );
     }
 
