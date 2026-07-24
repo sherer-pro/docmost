@@ -24,6 +24,12 @@
 .idea
 .vscode
 
+# Claude Code local tooling (settings + git worktrees).
+# Worktrees contain full repo copies; without this, nested apps/* and
+# packages/* get copied into the image and Nx fails the project graph with
+# MultipleProjectsWithSameNameError.
+.claude
+
 # OS
 .DS_Store
 Thumbs.db
