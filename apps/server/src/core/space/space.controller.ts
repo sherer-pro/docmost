@@ -89,7 +89,7 @@ export class SpaceController {
         space.id,
       );
 
-      const userSpaceRole = findHighestUserSpaceRole(userSpaceRoles);
+      const userSpaceRole = findHighestUserSpaceRole(userSpaceRoles) ?? null;
 
       const membership = {
         userId: user.id,

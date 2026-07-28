@@ -45,19 +45,21 @@ export default class SpaceAbilityFactory {
       throw new NotFoundException('Space permissions not found');
     }
 
-    const userSpaceRole = findHighestUserSpaceRole(userSpaceRoles);
+    const resolvedSpaceRole = findHighestUserSpaceRole(userSpaceRoles);
+    const userSpaceRole = Object.values(SpaceRole).includes(
+      resolvedSpaceRole as SpaceRole,
+    )
+      ? (resolvedSpaceRole as SpaceRole)
+      : undefined;
     const isArchived = !!space?.archivedAt;
+    const isWorkspaceAdmin =
+      user.role === UserRole.OWNER || user.role === UserRole.ADMIN;
 
-    switch (userSpaceRole) {
-      case SpaceRole.ADMIN:
-        return buildSpaceAdminAbility(isArchived);
-      case SpaceRole.WRITER:
-        return buildSpaceWriterAbility(isArchived);
-      case SpaceRole.READER:
-        return buildSpaceReaderAbility();
-      default:
-        throw new NotFoundException('Space permissions not found');
+    if (!userSpaceRole && !isWorkspaceAdmin) {
+      throw new NotFoundException('Space permissions not found');
     }
+
+    return buildSpaceAbility(userSpaceRole, isArchived, isWorkspaceAdmin);
   }
 
   async assertHasFullSpaceAccess(user: User, spaceId: string): Promise<void> {
@@ -88,43 +90,48 @@ export default class SpaceAbilityFactory {
   }
 }
 
-function buildSpaceAdminAbility(isArchived = false) {
+function buildSpaceAbility(
+  userSpaceRole: SpaceRole | undefined,
+  isArchived = false,
+  isWorkspaceAdmin = false,
+) {
   const { can, build } = new AbilityBuilder<MongoAbility<ISpaceAbility>>(
     createMongoAbility,
   );
-  can(SpaceCaslAction.Manage, SpaceCaslSubject.Settings);
-  can(SpaceCaslAction.Manage, SpaceCaslSubject.Member);
-  can(SpaceCaslAction.Read, SpaceCaslSubject.Page);
-  can(SpaceCaslAction.Read, SpaceCaslSubject.Share);
-  if (!isArchived) {
-    can(SpaceCaslAction.Manage, SpaceCaslSubject.Page);
-    can(SpaceCaslAction.Manage, SpaceCaslSubject.Share);
-  }
-  return build();
-}
 
-function buildSpaceWriterAbility(isArchived = false) {
-  const { can, build } = new AbilityBuilder<MongoAbility<ISpaceAbility>>(
-    createMongoAbility,
-  );
-  can(SpaceCaslAction.Read, SpaceCaslSubject.Settings);
-  can(SpaceCaslAction.Read, SpaceCaslSubject.Member);
-  can(SpaceCaslAction.Read, SpaceCaslSubject.Page);
-  can(SpaceCaslAction.Read, SpaceCaslSubject.Share);
-  if (!isArchived) {
-    can(SpaceCaslAction.Manage, SpaceCaslSubject.Page);
-    can(SpaceCaslAction.Manage, SpaceCaslSubject.Share);
+  if (isWorkspaceAdmin) {
+    can(SpaceCaslAction.Manage, SpaceCaslSubject.Settings);
+    can(SpaceCaslAction.Manage, SpaceCaslSubject.Member);
   }
-  return build();
-}
 
-function buildSpaceReaderAbility() {
-  const { can, build } = new AbilityBuilder<MongoAbility<ISpaceAbility>>(
-    createMongoAbility,
-  );
-  can(SpaceCaslAction.Read, SpaceCaslSubject.Settings);
-  can(SpaceCaslAction.Read, SpaceCaslSubject.Member);
-  can(SpaceCaslAction.Read, SpaceCaslSubject.Page);
-  can(SpaceCaslAction.Read, SpaceCaslSubject.Share);
+  switch (userSpaceRole) {
+    case SpaceRole.ADMIN:
+      can(SpaceCaslAction.Manage, SpaceCaslSubject.Settings);
+      can(SpaceCaslAction.Manage, SpaceCaslSubject.Member);
+      can(SpaceCaslAction.Read, SpaceCaslSubject.Page);
+      can(SpaceCaslAction.Read, SpaceCaslSubject.Share);
+      if (!isArchived) {
+        can(SpaceCaslAction.Manage, SpaceCaslSubject.Page);
+        can(SpaceCaslAction.Manage, SpaceCaslSubject.Share);
+      }
+      break;
+    case SpaceRole.WRITER:
+      can(SpaceCaslAction.Read, SpaceCaslSubject.Settings);
+      can(SpaceCaslAction.Read, SpaceCaslSubject.Member);
+      can(SpaceCaslAction.Read, SpaceCaslSubject.Page);
+      can(SpaceCaslAction.Read, SpaceCaslSubject.Share);
+      if (!isArchived) {
+        can(SpaceCaslAction.Manage, SpaceCaslSubject.Page);
+        can(SpaceCaslAction.Manage, SpaceCaslSubject.Share);
+      }
+      break;
+    case SpaceRole.READER:
+      can(SpaceCaslAction.Read, SpaceCaslSubject.Settings);
+      can(SpaceCaslAction.Read, SpaceCaslSubject.Member);
+      can(SpaceCaslAction.Read, SpaceCaslSubject.Page);
+      can(SpaceCaslAction.Read, SpaceCaslSubject.Share);
+      break;
+  }
+
   return build();
 }

@@ -16,9 +16,14 @@ import {
   getResponsiveMetaCellProps,
   getResponsivePrimaryCellProps,
 } from "@/components/ui/responsive-table";
+import { useNavigate } from "react-router-dom";
+import { getSpaceUrl } from "@/lib/config";
+import useUserRole from "@/hooks/use-user-role";
 
 export default function SpaceList() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { isAdmin } = useUserRole();
   const { cursor, goNext, goPrev } = useCursorPaginate();
   const { data, isLoading } = useGetSpacesQuery({
     cursor,
@@ -27,9 +32,14 @@ export default function SpaceList() {
   const [opened, { open, close }] = useDisclosure(false);
   const [selectedSpaceId, setSelectedSpaceId] = useState<string>(null);
 
-  const handleClick = (spaceId: string) => {
-    setSelectedSpaceId(spaceId);
-    open();
+  const handleClick = (space: { id: string; slug: string }) => {
+    if (isAdmin) {
+      setSelectedSpaceId(space.id);
+      open();
+      return;
+    }
+
+    navigate(getSpaceUrl(space.slug));
   };
 
   return (
@@ -57,7 +67,7 @@ export default function SpaceList() {
                 <Table.Tr
                   key={index}
                   style={{ cursor: "pointer" }}
-                  onClick={() => handleClick(space.id)}
+                  onClick={() => handleClick(space)}
                 >
                   <Table.Td {...getResponsivePrimaryCellProps(t("Space"))}>
                     <Group gap="sm" wrap="nowrap">

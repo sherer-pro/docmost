@@ -69,7 +69,7 @@ export interface ISpace {
 
 interface IMembership {
   userId: string;
-  role: SpaceRole;
+  role: SpaceRole | null;
   permissions?: Permissions;
 }
 

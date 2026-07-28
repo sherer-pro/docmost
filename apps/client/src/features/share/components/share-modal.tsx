@@ -30,6 +30,7 @@ import { useAtom } from "jotai";
 import { workspaceAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { useSpaceQuery } from "@/features/space/queries/space-query.ts";
 import { useMediaQuery } from "@mantine/hooks";
+import useUserRole from "@/hooks/use-user-role.tsx";
 
 interface ShareModalProps {
   /**
@@ -66,6 +67,7 @@ export default function ShareModal({
   });
   const { spaceSlug } = useParams();
   const { isTrial } = useTrial();
+  const { isAdmin } = useUserRole();
   const [workspace] = useAtom(workspaceAtom);
   const { data: space } = useSpaceQuery(spaceSlug);
   const workspaceDisabled = workspace?.settings?.sharing?.disabled === true;
@@ -215,13 +217,15 @@ export default function ShareModal({
                 "Page sharing is available on paid plans. Upgrade to share your pages publicly.",
               )}
             </Text>
-            <Button
-              size="xs"
-              onClick={() => navigate("/settings/billing")}
-              fullWidth
-            >
-              {t("Upgrade Plan")}
-            </Button>
+            {isAdmin && (
+              <Button
+                size="xs"
+                onClick={() => navigate("/settings/billing")}
+                fullWidth
+              >
+                {t("Upgrade Plan")}
+              </Button>
+            )}
           </>
         ) : sharingDisabled ? (
           <>

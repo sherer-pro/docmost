@@ -22,6 +22,7 @@ import {
   getResponsiveMetaCellProps,
   getResponsivePrimaryCellProps,
 } from "@/components/ui/responsive-table";
+import useUserRole from "@/hooks/use-user-role";
 
 interface AllSpacesListProps {
   spaces: any[];
@@ -41,6 +42,7 @@ export default function AllSpacesList({
   onPrev,
 }: AllSpacesListProps) {
   const { t } = useTranslation();
+  const { isAdmin } = useUserRole();
   const [settingsOpened, { open: openSettings, close: closeSettings }] =
     useDisclosure(false);
   const [selectedSpaceId, setSelectedSpaceId] = useState<string | null>(null);
@@ -127,27 +129,29 @@ export default function AllSpacesList({
                     </Text>
                   </Table.Td>
                   <Table.Td {...getResponsiveActionCellProps()}>
-                    <Group gap="xs" justify="flex-end">
-                      <Menu position="bottom-end">
-                        <Menu.Target>
-                          <AccessibleActionIcon
-                            label={t("More options")}
-                            variant="subtle"
-                            color="gray"
-                          >
-                            <IconDots size={16} />
-                          </AccessibleActionIcon>
-                        </Menu.Target>
-                        <Menu.Dropdown>
-                          <Menu.Item
-                            leftSection={<IconSettings size={16} />}
-                            onClick={() => handleOpenSettings(space.id)}
-                          >
-                            {t("Space settings")}
-                          </Menu.Item>
-                        </Menu.Dropdown>
-                      </Menu>
-                    </Group>
+                    {isAdmin && (
+                      <Group gap="xs" justify="flex-end">
+                        <Menu position="bottom-end">
+                          <Menu.Target>
+                            <AccessibleActionIcon
+                              label={t("More options")}
+                              variant="subtle"
+                              color="gray"
+                            >
+                              <IconDots size={16} />
+                            </AccessibleActionIcon>
+                          </Menu.Target>
+                          <Menu.Dropdown>
+                            <Menu.Item
+                              leftSection={<IconSettings size={16} />}
+                              onClick={() => handleOpenSettings(space.id)}
+                            >
+                              {t("Space settings")}
+                            </Menu.Item>
+                          </Menu.Dropdown>
+                        </Menu>
+                      </Group>
+                    )}
                   </Table.Td>
                 </Table.Tr>
               ))

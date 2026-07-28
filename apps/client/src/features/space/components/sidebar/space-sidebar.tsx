@@ -113,14 +113,11 @@ export function SpaceSidebar() {
     SpaceCaslAction.Manage,
     SpaceCaslSubject.Page,
   );
-  const canManageSpaceSettings = spaceAbility.can(
-    SpaceCaslAction.Manage,
-    SpaceCaslSubject.Settings,
-  );
-  const canExportSpace = hasFullSpaceAccess({
+  const canManageSpaceSettings = hasFullSpaceAccess({
     workspaceRole: user?.role,
     spaceRole: space?.membership?.role,
   });
+  const canExportSpace = canManageSpaceSettings;
   const createDatabaseMutation = useCreateDatabaseMutation(space?.id);
 
   if (!space) {
@@ -421,11 +418,14 @@ export function SpaceSidebar() {
                 )}
               </AccessibleActionIcon>
 
-              {(canManageSpacePages || canExportSpace) && (
+              {(canManageSpacePages ||
+                canManageSpaceSettings ||
+                canExportSpace) && (
                 <SpaceMenu
                   spaceId={space.id}
                   onSpaceSettings={openSettings}
                   canManagePages={canManageSpacePages}
+                  canManageSpaceSettings={canManageSpaceSettings}
                   canExportSpace={canExportSpace}
                 />
               )}
@@ -496,12 +496,14 @@ interface SpaceMenuProps {
   spaceId: string;
   onSpaceSettings: () => void;
   canManagePages: boolean;
+  canManageSpaceSettings: boolean;
   canExportSpace: boolean;
 }
 function SpaceMenu({
   spaceId,
   onSpaceSettings,
   canManagePages,
+  canManageSpaceSettings,
   canExportSpace,
 }: SpaceMenuProps) {
   const { t } = useTranslation();
@@ -549,25 +551,25 @@ function SpaceMenu({
             </Menu.Item>
           )}
 
+          {(canManageSpaceSettings || canManagePages) && <Menu.Divider />}
+
+          {canManageSpaceSettings && (
+            <Menu.Item
+              onClick={onSpaceSettings}
+              leftSection={<IconSettings size={16} />}
+            >
+              {t("Space settings")}
+            </Menu.Item>
+          )}
+
           {canManagePages && (
-            <>
-              <Menu.Divider />
-
-              <Menu.Item
-                onClick={onSpaceSettings}
-                leftSection={<IconSettings size={16} />}
-              >
-                {t("Space settings")}
-              </Menu.Item>
-
-              <Menu.Item
-                component={Link}
-                to={`/s/${spaceSlug}/trash`}
-                leftSection={<IconTrash size={16} />}
-              >
-                {t("Trash")}
-              </Menu.Item>
-            </>
+            <Menu.Item
+              component={Link}
+              to={`/s/${spaceSlug}/trash`}
+              leftSection={<IconTrash size={16} />}
+            >
+              {t("Trash")}
+            </Menu.Item>
           )}
         </Menu.Dropdown>
       </Menu>
