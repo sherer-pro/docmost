@@ -6,7 +6,8 @@ import {
 } from '@nestjs/common';
 import { jsonToHtml, jsonToNode } from '../../collaboration/collaboration.util';
 import { ExportFormat } from './dto/export-dto';
-import { Page } from '@docmost/db/types/entity.types';
+import { Page, User } from '@docmost/db/types/entity.types';
+import { PageAccessService } from '../../core/page-access/page-access.service';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 import * as JSZip from 'jszip';
@@ -148,6 +149,7 @@ export class ExportService {
     private readonly environmentService: EnvironmentService,
     private readonly htmlPdfRendererService: HtmlPdfRendererService,
     private readonly tokenService: TokenService,
+    private readonly pageAccessService: PageAccessService,
   ) {}
 
   async exportPage(
@@ -1363,6 +1365,55 @@ export class ExportService {
       .replace(/'/g, '&#39;');
   }
 
+  /**
+   * Keeps only the pages the user may read, walking down from the export root.
+   *
+   * A denied page prunes its whole subtree: that keeps the archive structurally
+   * consistent (no page referencing a parent that was dropped) and avoids
+   * leaking titles of restricted branches.
+   */
+  private async filterReadablePages(
+    pages: Page[],
+    rootPageId: string,
+    user: User,
+  ): Promise<Page[]> {
+    const accessByPageId =
+      await this.pageAccessService.getEffectiveAccessForPages(pages, user);
+
+    const childrenByParentId = new Map<string, Page[]>();
+    for (const page of pages) {
+      if (!page.parentPageId) {
+        continue;
+      }
+      const siblings = childrenByParentId.get(page.parentPageId) ?? [];
+      siblings.push(page);
+      childrenByParentId.set(page.parentPageId, siblings);
+    }
+
+    const rootPage = pages.find((page) => page.id === rootPageId) ?? pages[0];
+    const readablePages: Page[] = [];
+    const queue: Page[] = rootPage ? [rootPage] : [];
+
+    while (queue.length > 0) {
+      const page = queue.shift();
+
+      if (!accessByPageId.get(page.id)?.capabilities.canRead) {
+        continue;
+      }
+
+      readablePages.push(page);
+      queue.push(...(childrenByParentId.get(page.id) ?? []));
+    }
+
+    return readablePages;
+  }
+
+  /**
+   * @param authorizedUser When provided, every descendant page is filtered
+   *   through the page access rules for this user. Callers that authorize only
+   *   the root page must pass it, otherwise a subtree the user is denied would
+   *   still be serialized into the archive.
+   */
   async exportPages(
     pageId: string,
     format: string,
@@ -1370,6 +1421,7 @@ export class ExportService {
     includeChildren: boolean,
     locale?: string,
     headingNumberingByPageId?: Record<string, boolean>,
+    authorizedUser?: User,
   ) {
     let pages: Page[];
 
@@ -1378,6 +1430,10 @@ export class ExportService {
       pages = await this.pageRepo.getPageAndDescendants(pageId, {
         includeContent: true,
       });
+
+      if (authorizedUser) {
+        pages = await this.filterReadablePages(pages, pageId, authorizedUser);
+      }
     } else {
       // Only fetch the single page when includeChildren is false
       const page = await this.pageRepo.findById(pageId, {

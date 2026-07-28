@@ -16,6 +16,8 @@ describe('ApiKeyService', () => {
   let tokenService: jest.Mocked<TokenService>;
   let spaceRepo: jest.Mocked<SpaceRepo>;
   let spaceMemberRepo: jest.Mocked<SpaceMemberRepo>;
+  let userRepo: jest.Mocked<UserRepo>;
+  let workspaceRepo: jest.Mocked<WorkspaceRepo>;
 
   const workspace = { id: 'workspace-1' } as any;
   const ownerUser = {
@@ -80,9 +82,76 @@ describe('ApiKeyService', () => {
     tokenService = module.get(TokenService);
     spaceRepo = module.get(SpaceRepo);
     spaceMemberRepo = module.get(SpaceMemberRepo);
+    userRepo = module.get(UserRepo);
+    workspaceRepo = module.get(WorkspaceRepo);
   });
 
-  it('creates space-scoped API key with non-expiring JWT by default', async () => {
+  /** Sets up a valid key row plus resolvable workspace/user/space. */
+  function stubValidKey(creator: any) {
+    apiKeyRepo.findById.mockResolvedValue({
+      id: 'key-1',
+      creatorId: creator.id,
+      workspaceId: workspace.id,
+      spaceId: 'space-1',
+      deletedAt: null,
+      expiresAt: null,
+    } as any);
+    apiKeyRepo.updateApiKey.mockResolvedValue({} as any);
+    workspaceRepo.findById.mockResolvedValue(workspace);
+    userRepo.findById.mockResolvedValue(creator);
+    spaceRepo.findById.mockResolvedValue({
+      id: 'space-1',
+      workspaceId: workspace.id,
+    } as any);
+  }
+
+  const validPayload = (creator: any) =>
+    ({
+      sub: creator.id,
+      apiKeyId: 'key-1',
+      workspaceId: workspace.id,
+      spaceId: 'space-1',
+      type: JwtType.API_KEY,
+    }) as any;
+
+  it('rejects a key whose creator lost access to the scoped space', async () => {
+    stubValidKey(memberUser);
+    // Membership was revoked after the key was created.
+    spaceMemberRepo.getUserSpaceRoles.mockResolvedValue([]);
+
+    await expect(
+      service.validateApiKey(validPayload(memberUser)),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+
+    expect(spaceMemberRepo.getUserSpaceRoles).toHaveBeenCalledWith(
+      memberUser.id,
+      'space-1',
+    );
+  });
+
+  it('accepts a key while its creator still belongs to the scoped space', async () => {
+    stubValidKey(memberUser);
+    spaceMemberRepo.getUserSpaceRoles.mockResolvedValue([
+      { userId: memberUser.id, role: 'reader' } as any,
+    ]);
+
+    const result = await service.validateApiKey(validPayload(memberUser));
+
+    expect(result).toEqual(
+      expect.objectContaining({ authType: 'api_key' }),
+    );
+  });
+
+  it('does not require space membership for workspace admins and owners', async () => {
+    stubValidKey(ownerUser);
+
+    const result = await service.validateApiKey(validPayload(ownerUser));
+
+    expect(result).toEqual(expect.objectContaining({ authType: 'api_key' }));
+    expect(spaceMemberRepo.getUserSpaceRoles).not.toHaveBeenCalled();
+  });
+
+  it('creates space-scoped API key with a bounded default JWT lifetime', async () => {
     spaceRepo.findById.mockResolvedValue({
       id: 'space-1',
       workspaceId: workspace.id,
@@ -117,7 +186,8 @@ describe('ApiKeyService', () => {
         apiKeyId: 'key-1',
         workspaceId: workspace.id,
         spaceId: 'space-1',
-        expiresIn: '100y',
+        // Bounded on purpose: an unbounded token stays replayable forever.
+        expiresIn: '365d',
       }),
     );
   });

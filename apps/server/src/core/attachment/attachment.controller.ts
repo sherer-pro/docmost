@@ -30,7 +30,11 @@ import {
   validAttachmentTypes,
 } from './attachment.utils';
 import { getMimeType } from '../../common/helpers';
-import { AttachmentType, MAX_AVATAR_SIZE } from './attachment.constants';
+import {
+  AttachmentType,
+  MAX_AVATAR_SIZE,
+  validImageExtensions,
+} from './attachment.constants';
 import {
   SpaceCaslAction,
   SpaceCaslSubject,
@@ -231,12 +235,22 @@ export class AttachmentController {
       throw new BadRequestException('Invalid image attachment type');
     }
 
-    const filenameWithoutExt = path.basename(fileName, path.extname(fileName));
+    // The route parameter may still contain encoded path separators, so the
+    // storage path is rebuilt from validated parts only and never from the raw
+    // parameter. Anything else would allow reads outside the workspace folder.
+    const fileExtension = path.extname(fileName ?? '').toLowerCase();
+    const filenameWithoutExt = path.basename(fileName ?? '', fileExtension);
+
     if (!isValidUUID(filenameWithoutExt)) {
       throw new BadRequestException('Invalid file id');
     }
 
-    const filePath = `${getAttachmentFolderPath(attachmentType, workspace.id)}/${fileName}`;
+    if (!validImageExtensions.includes(fileExtension)) {
+      throw new BadRequestException('Invalid image file extension');
+    }
+
+    const safeFileName = `${filenameWithoutExt}${fileExtension}`;
+    const filePath = `${getAttachmentFolderPath(attachmentType, workspace.id)}/${safeFileName}`;
 
     try {
       const fileStream = await this.storageService.readStream(filePath);

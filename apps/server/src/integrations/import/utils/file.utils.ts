@@ -47,9 +47,18 @@ export const DEFAULT_EXTRACT_ZIP_LIMITS: ExtractZipLimits = {
   maxPathDepth: 64,
 };
 
+/**
+ * Entry names come from the archive, so they must never reach a log line
+ * verbatim: newlines and control characters would let an attacker forge
+ * additional log records.
+ */
+function sanitizeForLog(value: string): string {
+  return JSON.stringify(String(value ?? '').slice(0, 256));
+}
+
 function logZipSecurityEvent(reason: string, entryName: string): void {
   console.warn(
-    `[security][zip-entry-rejected] reason=${reason} entry=${entryName}`,
+    `[security][zip-entry-rejected] reason=${reason} entry=${sanitizeForLog(entryName)}`,
   );
 }
 
@@ -90,6 +99,102 @@ function ensureZipEntryWithinLimits(
       `ZIP total uncompressed size exceeds ${limits.maxTotalUncompressedBytes} bytes`,
     );
   }
+}
+
+export class ZipBudgetExceededError extends Error {}
+
+export interface ZipReadBudget {
+  maxEntryBytes: number;
+  maxTotalBytes: number;
+  totalBytesRead: number;
+}
+
+interface ZipReadableEntry {
+  name: string;
+  nodeStream(type?: 'nodebuffer'): NodeJS.ReadableStream;
+}
+
+export function createZipReadBudget(
+  options?: ExtractZipOptions,
+): ZipReadBudget {
+  const limits = resolveExtractZipLimits(options);
+
+  return {
+    maxEntryBytes: limits.maxEntryUncompressedBytes,
+    maxTotalBytes: limits.maxTotalUncompressedBytes,
+    totalBytesRead: 0,
+  };
+}
+
+/**
+ * Reads a single ZIP entry into memory under a hard decompressed byte budget.
+ *
+ * The uncompressed sizes recorded in a ZIP central directory are supplied by
+ * whoever built the archive, so they can only ever serve as an early rejection
+ * hint. This helper counts the bytes that actually leave the decompressor and
+ * aborts the stream as soon as the per-entry or cumulative budget is exceeded,
+ * which is what prevents a small archive from inflating until the process runs
+ * out of memory.
+ */
+export function readZipEntryWithBudget(
+  entry: ZipReadableEntry,
+  budget: ZipReadBudget,
+): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const stream = entry.nodeStream('nodebuffer');
+    const chunks: Buffer[] = [];
+    let entryBytes = 0;
+    let settled = false;
+
+    const settle = (finish: () => void) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      (stream as unknown as { destroy?: () => void }).destroy?.();
+      finish();
+    };
+
+    stream.on('data', (chunk: Buffer | string) => {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      entryBytes += buffer.length;
+
+      if (entryBytes > budget.maxEntryBytes) {
+        logZipSecurityEvent('entry-budget-exceeded', entry.name);
+        settle(() =>
+          reject(
+            new ZipBudgetExceededError(
+              `ZIP entry exceeds the uncompressed size limit: ${entry.name}`,
+            ),
+          ),
+        );
+        return;
+      }
+
+      if (budget.totalBytesRead + entryBytes > budget.maxTotalBytes) {
+        logZipSecurityEvent('total-budget-exceeded', entry.name);
+        settle(() =>
+          reject(
+            new ZipBudgetExceededError(
+              'ZIP total uncompressed size exceeds the limit',
+            ),
+          ),
+        );
+        return;
+      }
+
+      chunks.push(buffer);
+    });
+
+    stream.on('error', (err) => settle(() => reject(err)));
+
+    stream.on('end', () =>
+      settle(() => {
+        budget.totalBytesRead += entryBytes;
+        resolve(Buffer.concat(chunks));
+      }),
+    );
+  });
 }
 
 export function getFileTaskFolderPath(

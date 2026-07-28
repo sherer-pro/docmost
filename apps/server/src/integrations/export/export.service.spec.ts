@@ -85,6 +85,14 @@ describe('ExportService PDF export', () => {
     generateAttachmentPageToken: jest.fn(async () => 'attachment-page-token'),
   };
 
+  const pageAccessService = {
+    getEffectiveAccessForPages: jest.fn(async (pages: Array<{ id: string }>) => {
+      return new Map(
+        pages.map((page) => [page.id, { capabilities: { canRead: true } }]),
+      );
+    }),
+  };
+
   const service = new ExportService(
     pageRepo as any,
     db as any,
@@ -92,6 +100,7 @@ describe('ExportService PDF export', () => {
     environmentService as any,
     htmlPdfRendererService as any,
     tokenService as any,
+    pageAccessService as any,
   );
 
   const streamToBuffer = async (
@@ -453,6 +462,96 @@ describe('ExportService PDF export', () => {
     expect(zip.file('Root.pdf')).toBeDefined();
     expect(zip.file('Root/Child.pdf')).toBeDefined();
     expect(zip.file('docmost-metadata.json')).toBeDefined();
+  });
+
+  it('excludes descendants the authorized user may not read', async () => {
+    const root = createPage({
+      id: 'root-page',
+      slugId: 'root-slug',
+      title: 'Root',
+      parentPageId: null,
+      text: 'Root content',
+    });
+    const denied = createPage({
+      id: 'denied-page',
+      slugId: 'denied-slug',
+      title: 'Denied',
+      parentPageId: 'root-page',
+      text: 'Secret content',
+    });
+    // A page below a denied branch must not resurface in the archive.
+    const deniedChild = createPage({
+      id: 'denied-child-page',
+      slugId: 'denied-child-slug',
+      title: 'DeniedChild',
+      parentPageId: 'denied-page',
+      text: 'Secret child content',
+    });
+    pageRepo.getPageAndDescendants.mockResolvedValue([
+      root,
+      denied,
+      deniedChild,
+    ]);
+
+    pageAccessService.getEffectiveAccessForPages.mockResolvedValueOnce(
+      new Map<string, any>([
+        ['root-page', { capabilities: { canRead: true } }],
+        ['denied-page', { capabilities: { canRead: false } }],
+        ['denied-child-page', { capabilities: { canRead: true } }],
+      ]),
+    );
+
+    const zipStream = await service.exportPages(
+      'root-page',
+      ExportFormat.HTML,
+      false,
+      true,
+      undefined,
+      undefined,
+      { id: 'user-1', workspaceId: 'workspace-1' } as any,
+    );
+
+    const zipBuffer = await streamToBuffer(zipStream as NodeJS.ReadableStream);
+    const zip = await JSZip.loadAsync(zipBuffer);
+
+    expect(zip.file('Root.html')).toBeDefined();
+    expect(zip.file('Root/Denied.html')).toBeNull();
+    expect(zip.file('Root/Denied/DeniedChild.html')).toBeNull();
+  });
+
+  it('keeps the whole subtree when no authorized user is supplied', async () => {
+    pageRepo.getPageAndDescendants.mockResolvedValue([
+      createPage({
+        id: 'root-page',
+        slugId: 'root-slug',
+        title: 'Root',
+        parentPageId: null,
+        text: 'Root content',
+      }),
+      createPage({
+        id: 'child-page',
+        slugId: 'child-slug',
+        title: 'Child',
+        parentPageId: 'root-page',
+        text: 'Child content',
+      }),
+    ]);
+
+    const zipStream = await service.exportPages(
+      'root-page',
+      ExportFormat.HTML,
+      false,
+      true,
+    );
+
+    const zipBuffer = await streamToBuffer(zipStream as NodeJS.ReadableStream);
+    const zip = await JSZip.loadAsync(zipBuffer);
+
+    expect(zip.file('Root.html')).toBeDefined();
+    expect(zip.file('Root/Child.html')).toBeDefined();
+    expect(
+      pageAccessService.getEffectiveAccessForPages,
+    ).not.toHaveBeenCalled();
   });
 
   it('ignores legacy page overrides in one ZIP export', async () => {

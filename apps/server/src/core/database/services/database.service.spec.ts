@@ -72,6 +72,19 @@ describe('DatabaseService mixed tree flows', () => {
     createForUser: jest.fn(async () => ({ cannot: () => false })),
     assertHasFullSpaceAccess: jest.fn(async () => undefined),
   };
+  // Default fixture grants full page access; the access-filtering behaviour is
+  // asserted separately in database.service.page-access.spec.ts.
+  const allowAllPageIds = { has: () => true } as unknown as Set<string>;
+  const pageAccessService = {
+    assertCanReadPage: jest.fn(async () => undefined),
+    assertCanWritePage: jest.fn(async () => undefined),
+    assertCanCreateChild: jest.fn(async () => undefined),
+    getSidebarAccessSnapshot: jest.fn(async () => ({
+      readablePageIds: allowAllPageIds,
+      visiblePageIds: allowAllPageIds,
+      writablePageIds: allowAllPageIds,
+    })),
+  };
   const pageHistoryRecorder = {
     recordPageEvent: jest.fn(),
     enqueuePageEvents: jest.fn(),
@@ -109,6 +122,7 @@ describe('DatabaseService mixed tree flows', () => {
     exportService as any,
     userRepo as any,
     spaceAbility as any,
+    pageAccessService as any,
     pageHistoryRecorder as any,
     notificationQueue as any,
     db as any,
@@ -387,6 +401,9 @@ describe('DatabaseService mixed tree flows', () => {
       false,
       false,
       'ru-RU',
+      undefined,
+      // Descendant pages must be filtered by page access rules.
+      user,
     );
     expect(exportService.buildPagePdfBody).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -474,6 +491,9 @@ describe('DatabaseService mixed tree flows', () => {
       false,
       false,
       'ru-RU',
+      undefined,
+      // Descendant pages must be filtered by page access rules.
+      user,
     );
   });
 
@@ -617,6 +637,9 @@ describe('DatabaseService mixed tree flows', () => {
       false,
       true,
       'ru-RU',
+      undefined,
+      // Descendant pages must be filtered by page access rules.
+      user,
     );
     expect(exportService.renderPdfFromHtmlDocument).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -664,6 +687,9 @@ describe('DatabaseService mixed tree flows', () => {
       true,
       true,
       'ru-RU',
+      undefined,
+      // Descendant pages must be filtered by page access rules.
+      user,
     );
     expect(exported.contentType).toBe('application/zip');
     expect(exported.fileName).toBe('database.zip');
@@ -685,6 +711,9 @@ describe('DatabaseService mixed tree flows', () => {
       true,
       false,
       'ru-RU',
+      undefined,
+      // Descendant pages must be filtered by page access rules.
+      user,
     );
     expect(exported.contentType).toBe('application/zip');
     expect(exported.fileName).toBe('database.zip');

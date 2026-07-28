@@ -68,18 +68,21 @@ export class WsGateway
         throw new Error('Unauthorized');
       }
 
-      let deviceName: string | null = null;
-      if (token.sessionId) {
-        const session = await this.userSessionRepo.findActiveById(token.sessionId);
-        if (
-          !session ||
-          session.userId !== userId ||
-          session.workspaceId !== workspaceId
-        ) {
-          throw new Error('Unauthorized');
-        }
-        deviceName = session.deviceName;
+      // A token without `sessionId` bypasses every revocation control, so it is
+      // not accepted here either.
+      if (!token.sessionId) {
+        throw new Error('Unauthorized');
       }
+
+      const session = await this.userSessionRepo.findActiveById(token.sessionId);
+      if (
+        !session ||
+        session.userId !== userId ||
+        session.workspaceId !== workspaceId
+      ) {
+        throw new Error('Unauthorized');
+      }
+      const deviceName: string | null = session.deviceName;
 
       const [memberSpaceIds, pageRuleSpaceIds] = await Promise.all([
         this.spaceMemberRepo.getUserSpaceIds(userId),

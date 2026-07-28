@@ -15,6 +15,7 @@ import { jsonArrayFrom, jsonObjectFrom } from 'kysely/helpers/postgres';
 import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EventName } from '../../../common/events/event.contants';
+import { MAX_PAGE_TREE_DEPTH } from '../../../common/config/page-tree.constants';
 import {
   getPageIdentifierColumn,
   PageIdentifier,
@@ -294,17 +295,18 @@ export class PageRepo {
       .withRecursive('page_descendants', (db) =>
         db
           .selectFrom('pages')
-          .select(['id'])
+          .select(['id', sql<number>`0`.as('level')])
           .where('id', '=', pageId)
           .unionAll((exp) =>
             exp
               .selectFrom('pages as p')
-              .select(['p.id'])
-              .innerJoin('page_descendants as pd', 'pd.id', 'p.parentPageId'),
+              .select(['p.id', sql<number>`pd.level + 1`.as('level')])
+              .innerJoin('page_descendants as pd', 'pd.id', 'p.parentPageId')
+              .where(sql`pd.level`, '<', sql.lit(MAX_PAGE_TREE_DEPTH)),
           ),
       )
       .selectFrom('page_descendants')
-      .selectAll()
+      .select(['id'])
       .execute();
 
     const pageIds = descendants.map((d) => d.id);
@@ -369,17 +371,18 @@ export class PageRepo {
       .withRecursive('page_descendants', (db) =>
         db
           .selectFrom('pages')
-          .select(['id'])
+          .select(['id', sql<number>`0`.as('level')])
           .where('id', '=', pageId)
           .unionAll((exp) =>
             exp
               .selectFrom('pages as p')
-              .select(['p.id'])
-              .innerJoin('page_descendants as pd', 'pd.id', 'p.parentPageId'),
+              .select(['p.id', sql<number>`pd.level + 1`.as('level')])
+              .innerJoin('page_descendants as pd', 'pd.id', 'p.parentPageId')
+              .where(sql`pd.level`, '<', sql.lit(MAX_PAGE_TREE_DEPTH)),
           ),
       )
       .selectFrom('page_descendants')
-      .selectAll()
+      .select(['id'])
       .execute();
 
     const pageIds = pages.map((p) => p.id);
@@ -569,6 +572,47 @@ export class PageRepo {
       .as('hasChildren');
   }
 
+  /**
+   * Checks whether `ancestorPageId` is `pageId` itself or one of its ancestors.
+   *
+   * Used to reject moves that would place a page under its own descendant,
+   * which would create a cycle in `pages.parent_page_id`. The traversal is
+   * depth-bounded so it terminates even if a cycle already exists.
+   */
+  async hasSelfOrAncestor(
+    pageId: string,
+    ancestorPageId: string,
+    trx?: KyselyTransaction,
+  ): Promise<boolean> {
+    const db = dbOrTx(this.db, trx);
+
+    const match = await db
+      .withRecursive('page_ancestors', (qb) =>
+        qb
+          .selectFrom('pages')
+          .select(['id', 'parentPageId', sql<number>`0`.as('level')])
+          .where('id', '=', pageId)
+          .unionAll((exp) =>
+            exp
+              .selectFrom('pages as p')
+              .select([
+                'p.id',
+                'p.parentPageId',
+                sql<number>`pa.level + 1`.as('level'),
+              ])
+              .innerJoin('page_ancestors as pa', 'pa.parentPageId', 'p.id')
+              .where(sql`pa.level`, '<', sql.lit(MAX_PAGE_TREE_DEPTH)),
+          ),
+      )
+      .selectFrom('page_ancestors')
+      .select('id')
+      .where('id', '=', ancestorPageId)
+      .limit(1)
+      .executeTakeFirst();
+
+    return Boolean(match);
+  }
+
   async getPageAndDescendants(
     parentPageId: string,
     opts: { includeContent: boolean },
@@ -589,6 +633,7 @@ export class PageRepo {
             'settings',
             'createdAt',
             'updatedAt',
+            sql<number>`0`.as('level'),
           ])
           .$if(opts?.includeContent, (qb) => qb.select('content'))
           .where('id', '=', parentPageId)
@@ -608,14 +653,30 @@ export class PageRepo {
                 'p.settings',
                 'p.createdAt',
                 'p.updatedAt',
+                sql<number>`ph.level + 1`.as('level'),
               ])
               .$if(opts?.includeContent, (qb) => qb.select('p.content'))
               .innerJoin('page_hierarchy as ph', 'p.parentPageId', 'ph.id')
-              .where('p.deletedAt', 'is', null),
+              .where('p.deletedAt', 'is', null)
+              .where(sql`ph.level`, '<', sql.lit(MAX_PAGE_TREE_DEPTH)),
           ),
       )
       .selectFrom('page_hierarchy')
-      .selectAll()
+      // `level` only bounds the traversal; it must not leak into page payloads.
+      .select([
+        'id',
+        'slugId',
+        'title',
+        'icon',
+        'position',
+        'parentPageId',
+        'spaceId',
+        'workspaceId',
+        'settings',
+        'createdAt',
+        'updatedAt',
+      ])
+      .$if(opts?.includeContent, (qb) => qb.select('content'))
       .execute();
   }
 }

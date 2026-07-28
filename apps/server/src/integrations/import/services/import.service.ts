@@ -27,11 +27,15 @@ import { TiptapTransformer } from '@hocuspocus/transformer';
 import * as Y from 'yjs';
 import { markdownToHtml } from '@docmost/editor-ext';
 import {
+  createZipReadBudget,
   DEFAULT_EXTRACT_ZIP_LIMITS,
   FileImportSource,
   FileTaskStatus,
   FileTaskType,
   getFileTaskFolderPath,
+  readZipEntryWithBudget,
+  ZipBudgetExceededError,
+  type ZipReadBudget,
 } from '../utils/file.utils';
 import { v7 as uuid7 } from 'uuid';
 import { StorageService } from '../../storage/storage.service';
@@ -500,18 +504,41 @@ export class ImportService {
       .execute();
   }
 
+  /**
+   * Decompresses one archive entry under a shared byte budget and maps a budget
+   * violation onto a client error instead of letting it surface as a 500.
+   */
+  private async readArchiveEntry(
+    entry: JSZip.JSZipObject,
+    budget: ZipReadBudget,
+  ): Promise<Buffer> {
+    try {
+      return await readZipEntryWithBudget(entry, budget);
+    } catch (error) {
+      if (error instanceof ZipBudgetExceededError) {
+        throw new BadRequestException(error.message);
+      }
+      throw error;
+    }
+  }
+
   private async inspectDocmostArchive(
     fileBuffer: Buffer,
   ): Promise<Omit<ImportPreview, 'fileTaskId'>> {
     let zip: JSZip;
     try {
       zip = await JSZip.loadAsync(fileBuffer, {
-        checkCRC32: false,
+        checkCRC32: true,
         createFolders: false,
       });
     } catch {
       throw new BadRequestException('Invalid or corrupted ZIP archive');
     }
+
+    // Every entry read below is metered against this budget. The declared sizes
+    // checked further down are only an early rejection hint, because they are
+    // written by whoever produced the archive.
+    const readBudget = createZipReadBudget();
     const entries = Object.values(zip.files);
     if (entries.length > DEFAULT_EXTRACT_ZIP_LIMITS.maxEntries) {
       throw new BadRequestException(
@@ -538,6 +565,8 @@ export class ImportService {
       ) {
         throw new BadRequestException('ZIP entry path is too deep');
       }
+      // Advisory only: this value is attacker-controlled. Real enforcement
+      // happens in `readArchiveEntry` while the entry is decompressed.
       const uncompressedBytes = Number(
         (entry as any)?._data?.uncompressedSize ?? 0,
       );
@@ -566,9 +595,12 @@ export class ImportService {
     let manifest: DocmostArchiveManifestV2;
     try {
       manifest = JSON.parse(
-        await metadataFile.async('string'),
+        (await this.readArchiveEntry(metadataFile, readBudget)).toString('utf8'),
       ) as DocmostArchiveManifestV2;
-    } catch {
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
       throw new BadRequestException('Invalid Docmost archive metadata JSON');
     }
     if (manifest.source !== 'docmost' || !manifest.schemaVersion) {
@@ -597,8 +629,13 @@ export class ImportService {
     }
     let data: DocmostArchiveDataV2;
     try {
-      data = JSON.parse(await dataFile.async('string')) as DocmostArchiveDataV2;
-    } catch {
+      data = JSON.parse(
+        (await this.readArchiveEntry(dataFile, readBudget)).toString('utf8'),
+      ) as DocmostArchiveDataV2;
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
       throw new BadRequestException('Invalid Docmost archive data JSON');
     }
     if (
@@ -664,7 +701,10 @@ export class ImportService {
           `Archive attachment is missing: ${attachment.fileName}`,
         );
       }
-      const attachmentBuffer = await attachmentFile.async('nodebuffer');
+      const attachmentBuffer = await this.readArchiveEntry(
+        attachmentFile,
+        readBudget,
+      );
       const declaredSize = Number(attachment.fileSize);
       if (
         Number.isFinite(declaredSize) &&

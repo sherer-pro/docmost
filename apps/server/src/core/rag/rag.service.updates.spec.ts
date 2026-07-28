@@ -50,6 +50,14 @@ describe('RagService getUpdates SQL generation', () => {
     {} as any,
     {} as any,
     {} as any,
+    // Page access rules are not the subject of this SQL-shape test.
+    {
+      getSidebarAccessSnapshot: async () => ({
+        readablePageIds: { has: () => true } as unknown as Set<string>,
+        visiblePageIds: { has: () => true } as unknown as Set<string>,
+        writablePageIds: { has: () => true } as unknown as Set<string>,
+      }),
+    } as any,
   );
 
   const scope = {

@@ -8,6 +8,7 @@ import {
 import { TokenService } from '../../core/auth/services/token.service';
 import { UserRepo } from '@docmost/db/repos/user/user.repo';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
+import { UserSessionRepo } from '@docmost/db/repos/session/user-session.repo';
 import { getPageId } from '../collaboration.util';
 import { JwtCollabPayload, JwtType } from '../../core/auth/dto/jwt-payload';
 import { PageAccessService } from '../../core/page-access/page-access.service';
@@ -21,6 +22,7 @@ export class AuthenticationExtension implements Extension {
     private userRepo: UserRepo,
     private pageRepo: PageRepo,
     private readonly pageAccessService: PageAccessService,
+    private readonly userSessionRepo: UserSessionRepo,
   ) {}
 
   async onAuthenticate(data: onAuthenticatePayload) {
@@ -37,6 +39,25 @@ export class AuthenticationExtension implements Extension {
 
     const userId = jwtPayload.sub;
     const workspaceId = jwtPayload.workspaceId;
+
+    // Without a session check, a collab token would keep granting read and write
+    // access over the websocket after logout, "revoke all sessions", or a
+    // password reset — precisely the actions used to recover from a compromise.
+    if (!jwtPayload.sessionId) {
+      throw new UnauthorizedException('Collab token is not bound to a session');
+    }
+
+    const session = await this.userSessionRepo.findActiveById(
+      jwtPayload.sessionId,
+    );
+
+    if (
+      !session ||
+      session.userId !== userId ||
+      session.workspaceId !== workspaceId
+    ) {
+      throw new UnauthorizedException('Collab token session is no longer active');
+    }
 
     const user = await this.userRepo.findById(userId, workspaceId);
 

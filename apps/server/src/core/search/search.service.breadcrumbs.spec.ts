@@ -9,6 +9,7 @@ describe('SearchService breadcrumbs', () => {
     {} as any,
     {} as any,
     {} as any,
+    {} as any,
   );
 
   const buildBreadcrumbsForResult = (service as any).buildBreadcrumbsForResult.bind(

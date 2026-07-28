@@ -172,8 +172,9 @@ export class AuthController {
   async collabTokenViaGet(
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
+    @Req() req?: FastifyRequest,
   ) {
-    return this.collabToken(user, workspace);
+    return this.collabToken(user, workspace, req);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -186,8 +187,13 @@ export class AuthController {
   async collabToken(
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
+    @Req() req?: FastifyRequest,
   ) {
-    return this.authService.getCollabToken(user, workspace.id);
+    // Bind the collab token to the issuing session so revoking that session
+    // also cuts off collaboration access.
+    const sessionId = (req?.raw as any)?.sessionId;
+
+    return this.authService.getCollabToken(user, workspace.id, sessionId);
   }
 
   @UseGuards(JwtAuthGuard)

@@ -127,19 +127,24 @@ describe('JwtStrategy', () => {
       deactivatedAt: null,
       deletedAt: null,
     } as any);
+    userSessionRepo.findActiveById.mockResolvedValue({
+      id: 'session-1',
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+    });
 
-    const result = await strategy.validate(
-      {
-        originalUrl: '/api/pages',
-        raw: { workspaceId: 'workspace-1' },
-      },
-      {
-        sub: 'user-1',
-        email: 'user@example.com',
-        workspaceId: 'workspace-1',
-        type: JwtType.ACCESS,
-      },
-    );
+    const req = {
+      originalUrl: '/api/pages',
+      raw: { workspaceId: 'workspace-1' },
+    };
+
+    const result = await strategy.validate(req, {
+      sub: 'user-1',
+      email: 'user@example.com',
+      workspaceId: 'workspace-1',
+      sessionId: 'session-1',
+      type: JwtType.ACCESS,
+    });
 
     expect(result).toEqual(
       expect.objectContaining({
@@ -147,6 +152,64 @@ describe('JwtStrategy', () => {
         user: expect.objectContaining({ id: 'user-1' }),
       }),
     );
+    expect(userSessionRepo.findActiveById).toHaveBeenCalledWith('session-1');
+    expect(req.raw).toEqual(
+      expect.objectContaining({ sessionId: 'session-1' }),
+    );
+  });
+
+  it('rejects an access token that carries no session id', async () => {
+    workspaceRepo.findById.mockResolvedValue({ id: 'workspace-1' } as any);
+    userRepo.findById.mockResolvedValue({
+      id: 'user-1',
+      deactivatedAt: null,
+      deletedAt: null,
+    } as any);
+
+    // A sessionless token cannot be revoked by logout, session revocation, or a
+    // password reset, so it must not authenticate at all.
+    await expect(
+      strategy.validate(
+        {
+          originalUrl: '/api/pages',
+          raw: { workspaceId: 'workspace-1' },
+        },
+        {
+          sub: 'user-1',
+          email: 'user@example.com',
+          workspaceId: 'workspace-1',
+          type: JwtType.ACCESS,
+        },
+      ),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+
+    expect(userSessionRepo.findActiveById).not.toHaveBeenCalled();
+  });
+
+  it('rejects an access token whose session was revoked', async () => {
+    workspaceRepo.findById.mockResolvedValue({ id: 'workspace-1' } as any);
+    userRepo.findById.mockResolvedValue({
+      id: 'user-1',
+      deactivatedAt: null,
+      deletedAt: null,
+    } as any);
+    userSessionRepo.findActiveById.mockResolvedValue(undefined);
+
+    await expect(
+      strategy.validate(
+        {
+          originalUrl: '/api/pages',
+          raw: { workspaceId: 'workspace-1' },
+        },
+        {
+          sub: 'user-1',
+          email: 'user@example.com',
+          workspaceId: 'workspace-1',
+          sessionId: 'session-1',
+          type: JwtType.ACCESS,
+        },
+      ),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
   it('rejects revoked or expired sessions on access token payloads', async () => {

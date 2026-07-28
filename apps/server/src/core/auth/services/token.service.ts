@@ -16,6 +16,20 @@ import {
 } from '../dto/jwt-payload';
 import { User } from '@docmost/db/types/entity.types';
 
+/**
+ * Shorter than the previous 24h so a leaked collab token has a bounded replay
+ * window. Revocation is handled by the `sessionId` binding, not by this value.
+ *
+ * Keep the client-side `useCollabToken` staleTime below this, otherwise the
+ * editor connects with a cached expired token and has to recover through a
+ * failed authentication round trip.
+ */
+const COLLAB_TOKEN_EXPIRES_IN = '4h';
+
+/** Must match the `signOptions` configured in `TokenModule`. */
+export const JWT_ISSUER = 'Docmost';
+export const JWT_ALGORITHM = 'HS256' as const;
+
 @Injectable()
 export class TokenService {
   constructor(
@@ -23,9 +37,18 @@ export class TokenService {
     private environmentService: EnvironmentService,
   ) {}
 
-  async generateAccessToken(user: User, sessionId?: string): Promise<string> {
+  /**
+   * `sessionId` is mandatory: it is the only handle that makes a token
+   * revocable. A token without it would stay valid for its full lifetime
+   * regardless of logout, session revocation, or a password reset.
+   */
+  async generateAccessToken(user: User, sessionId: string): Promise<string> {
     if (user.deactivatedAt || user.deletedAt) {
       throw new ForbiddenException();
+    }
+
+    if (!sessionId) {
+      throw new UnauthorizedException('A session is required to issue a token');
     }
 
     const payload: JwtPayload = {
@@ -38,7 +61,16 @@ export class TokenService {
     return this.jwtService.sign(payload);
   }
 
-  async generateCollabToken(user: User, workspaceId: string): Promise<string> {
+  /**
+   * Collab tokens carry the issuing `sessionId` so the collaboration server can
+   * reject them once that session is revoked. They are also short-lived: the
+   * client re-fetches a token whenever it reconnects.
+   */
+  async generateCollabToken(
+    user: User,
+    workspaceId: string,
+    sessionId?: string,
+  ): Promise<string> {
     if (user.deactivatedAt || user.deletedAt) {
       throw new ForbiddenException();
     }
@@ -46,10 +78,11 @@ export class TokenService {
     const payload: JwtCollabPayload = {
       sub: user.id,
       workspaceId,
+      sessionId,
       type: JwtType.COLLAB,
     };
-    const expiresIn = '24h';
-    return this.jwtService.sign(payload, { expiresIn });
+
+    return this.jwtService.sign(payload, { expiresIn: COLLAB_TOKEN_EXPIRES_IN });
   }
 
   async generateExchangeToken(
@@ -132,6 +165,10 @@ export class TokenService {
   async verifyJwt(token: string, tokenType: string) {
     const payload = await this.jwtService.verifyAsync(token, {
       secret: this.environmentService.getAppSecret(),
+      // Pin the accepted algorithm and issuer explicitly rather than relying on
+      // the library's implicit handling of a string secret.
+      algorithms: [JWT_ALGORITHM],
+      issuer: JWT_ISSUER,
     });
 
     if (payload.type !== tokenType) {

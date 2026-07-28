@@ -259,10 +259,11 @@ export class AuthService {
     }
   }
 
-  async getCollabToken(user: User, workspaceId: string) {
+  async getCollabToken(user: User, workspaceId: string, sessionId?: string) {
     const token = await this.tokenService.generateCollabToken(
       user,
       workspaceId,
+      sessionId,
     );
     return { token };
   }

@@ -20,6 +20,7 @@ import {
 } from '@docmost/db/pagination/cursor-pagination';
 import { InjectKysely } from 'nestjs-kysely';
 import { sql } from 'kysely';
+import { MAX_PAGE_TREE_DEPTH } from '../../../common/config/page-tree.constants';
 import { KyselyDB, KyselyTransaction } from '@docmost/db/types/kysely.types';
 import { generateJitteredKeyBetween } from 'fractional-indexing-jittered';
 import { MovePageDto } from '../dto/move-page.dto';
@@ -1513,6 +1514,21 @@ export class PageService {
         if (!parentPage || parentPage.spaceId !== movedPage.spaceId) {
           throw new NotFoundException('Parent page not found');
         }
+
+        // Moving a page under itself or under one of its own descendants would
+        // create a cycle in the page tree, which makes every recursive
+        // hierarchy query walk it until the depth cap is reached.
+        const wouldCreateCycle = await this.pageRepo.hasSelfOrAncestor(
+          parentPage.id,
+          movedPage.id,
+        );
+
+        if (wouldCreateCycle) {
+          throw new BadRequestException(
+            'Page cannot be moved under itself or one of its sub pages',
+          );
+        }
+
         parentPageId = parentPage.id;
       }
     }
@@ -1540,6 +1556,7 @@ export class PageService {
             'parentPageId',
             'spaceId',
             'deletedAt',
+            sql<number>`0`.as('level'),
           ])
           .select((eb) => this.pageRepo.withHasChildren(eb))
           .where('id', '=', childPageId)
@@ -1556,6 +1573,7 @@ export class PageService {
                 'p.parentPageId',
                 'p.spaceId',
                 'p.deletedAt',
+                sql<number>`pa.level + 1`.as('level'),
               ])
               .select(
                 exp
@@ -1576,11 +1594,23 @@ export class PageService {
               )
               //.select((eb) => this.withHasChildren(eb))
               .innerJoin('page_ancestors as pa', 'pa.parentPageId', 'p.id')
-              .where('p.deletedAt', 'is', null),
+              .where('p.deletedAt', 'is', null)
+              .where(sql`pa.level`, '<', sql.lit(MAX_PAGE_TREE_DEPTH)),
           ),
       )
       .selectFrom('page_ancestors')
-      .selectAll()
+      // `level` only bounds the traversal; it must not leak into breadcrumbs.
+      .select([
+        'id',
+        'slugId',
+        'title',
+        'icon',
+        'position',
+        'parentPageId',
+        'spaceId',
+        'deletedAt',
+        'hasChildren',
+      ])
       .execute();
 
     return ancestors.reverse();
@@ -1613,17 +1643,18 @@ export class PageService {
       .withRecursive('page_descendants', (db) =>
         db
           .selectFrom('pages')
-          .select(['id'])
+          .select(['id', sql<number>`0`.as('level')])
           .where('id', '=', pageId)
           .unionAll((exp) =>
             exp
               .selectFrom('pages as p')
-              .select(['p.id'])
-              .innerJoin('page_descendants as pd', 'pd.id', 'p.parentPageId'),
+              .select(['p.id', sql<number>`pd.level + 1`.as('level')])
+              .innerJoin('page_descendants as pd', 'pd.id', 'p.parentPageId')
+              .where(sql`pd.level`, '<', sql.lit(MAX_PAGE_TREE_DEPTH)),
           ),
       )
       .selectFrom('page_descendants')
-      .selectAll()
+      .select(['id'])
       .execute();
 
     const pageIds = descendants.map((d) => d.id);

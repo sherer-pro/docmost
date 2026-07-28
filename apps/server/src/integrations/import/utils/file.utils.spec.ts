@@ -3,7 +3,12 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { promises as fsp } from 'node:fs';
 import * as JSZip from 'jszip';
-import { extractZip } from './file.utils';
+import {
+  createZipReadBudget,
+  extractZip,
+  readZipEntryWithBudget,
+  ZipBudgetExceededError,
+} from './file.utils';
 
 async function writeZip(
   outputPath: string,
@@ -129,5 +134,68 @@ describe('extractZip', () => {
     ).rejects.toThrow(/total uncompressed size/);
 
     expect(fs.existsSync(path.join(targetDir, 'large.md'))).toBe(false);
+  });
+});
+
+describe('readZipEntryWithBudget', () => {
+  async function loadEntry(content: Buffer | string, entryName = 'data.json') {
+    const zip = new JSZip();
+    zip.file(entryName, content);
+    const buffer = await zip.generateAsync({ type: 'nodebuffer' });
+    const loaded = await JSZip.loadAsync(buffer);
+
+    return loaded.file(entryName)!;
+  }
+
+  it('returns the decompressed entry content when it fits the budget', async () => {
+    const entry = await loadEntry('{"schemaVersion":2}');
+    const budget = createZipReadBudget();
+
+    const result = await readZipEntryWithBudget(entry, budget);
+
+    expect(result.toString('utf8')).toBe('{"schemaVersion":2}');
+    expect(budget.totalBytesRead).toBe(19);
+  });
+
+  it('aborts a highly compressible entry that inflates past the per-entry budget', async () => {
+    // 8 MiB of zeroes compresses to a few KiB: exactly the shape of a zip bomb.
+    const entry = await loadEntry(Buffer.alloc(8 * 1024 * 1024, 0));
+    const budget = createZipReadBudget({
+      maxEntryUncompressedBytes: 64 * 1024,
+    });
+
+    await expect(readZipEntryWithBudget(entry, budget)).rejects.toBeInstanceOf(
+      ZipBudgetExceededError,
+    );
+  });
+
+  it('enforces the cumulative budget across several entries', async () => {
+    const budget = createZipReadBudget({
+      maxEntryUncompressedBytes: 1024 * 1024,
+      maxTotalUncompressedBytes: 96 * 1024,
+    });
+
+    const first = await loadEntry(Buffer.alloc(64 * 1024, 0), 'first.bin');
+    await readZipEntryWithBudget(first, budget);
+    expect(budget.totalBytesRead).toBe(64 * 1024);
+
+    const second = await loadEntry(Buffer.alloc(64 * 1024, 0), 'second.bin');
+    await expect(readZipEntryWithBudget(second, budget)).rejects.toThrow(
+      /total uncompressed size/,
+    );
+  });
+
+  it('does not trust the declared uncompressed size recorded in the archive', async () => {
+    const entry = await loadEntry(Buffer.alloc(4 * 1024 * 1024, 0));
+    // Spoof the central-directory size the way a crafted archive would.
+    (entry as any)._data.uncompressedSize = 1;
+
+    const budget = createZipReadBudget({
+      maxEntryUncompressedBytes: 32 * 1024,
+    });
+
+    await expect(readZipEntryWithBudget(entry, budget)).rejects.toBeInstanceOf(
+      ZipBudgetExceededError,
+    );
   });
 });
