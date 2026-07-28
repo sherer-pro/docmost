@@ -11,7 +11,7 @@
   - `packages/editor-ext` — shared TypeScript package with editor extensions.
   - `packages/api-contract` — shared API-facing TypeScript contracts.
 - Root package manager is pinned: `pnpm@10.4.0`.
-- Workspace-level pnpm settings (`overrides`, `patchedDependencies`) live in `pnpm-workspace.yaml`; the root `package.json` also contains a small `pnpm.overrides` block for security pins that must affect lockfile resolution.
+- **Only the root `package.json` `pnpm.overrides` block actually affects resolution.** The `overrides` and `patchedDependencies` blocks in `pnpm-workspace.yaml` are inert: pnpm reads those keys from that file only from v10.6 onward, and `packageManager` pins pnpm 10.4.0. `pnpm-lock.yaml` therefore records just the 7 root overrides, and the `react-arborist` patch is not applied. See the warning comment in `pnpm-workspace.yaml` for how to activate them (requires a lockfile regeneration with network access and a full re-verification).
 - Root composite scripts call `corepack pnpm` internally, so `corepack pnpm verify:full` works even when a global `pnpm` shim is not on `PATH`.
 - `node:22-slim` is used for the production image.
 
@@ -120,7 +120,7 @@
 - Full root test stage (default + frontend unit): `pnpm test:all`
 - Security regression suite (server + client targeted tests): `pnpm test:security`
 - Backend unit/integration: `pnpm --filter ./apps/server test`
-- Backend security subset (share SEO, cloud host parsing, CSRF origin checks, ZIP traversal/quotas, attachment token/MIME handling, import embed formatting, and PDF resource allowlist): `pnpm --filter ./apps/server test:security`
+- Backend security subset (share SEO, cloud host parsing, CSRF origin checks, ZIP traversal/quotas/decompression budget, attachment token/MIME handling, attachment image path resolution, import embed formatting, PDF resource allowlist, page ACL resolution, space abilities, API key scoping, JWT session binding, collab token session binding, WebSocket room authorization, credential protection, trusted proxies, database-module page access, and page move cycle guard): `pnpm --filter ./apps/server test:security`
 - Frontend smoke test equivalent (build-based temporary target): `pnpm --filter ./apps/client build`
 - Frontend unit tests (Vitest): `pnpm --filter ./apps/client test`
 - Editor extension package-local tests (run through client Vitest): `pnpm test:editor-ext`
@@ -259,6 +259,11 @@ Minimum:
   - compatibility aliases are still enabled for older clients/content: `POST /api/files/upload`, `GET /api/files/:fileId/:fileName`, `GET /api/files/public/:fileId/:fileName`, `POST /api/attachments/upload-image`, `POST /api/attachments/remove-icon`.
   - public attachment `?jwt=` query tokens remain accepted only as a legacy fallback after header/cookie tokens; responses using the query token include deprecation headers.
   - inline responses are allowed only for trusted extension/MIME pairs; spoofed inline extensions such as `.mp4` with HTML content are served as downloads with a safe content type.
+  - `GET /api/attachments/img/:attachmentType/:fileName` stays unauthenticated (workspace logos and avatars are needed on the login and public share pages), but the storage path is rebuilt from the validated UUID plus an allowlisted image extension. The raw route parameter is never concatenated into the path, so encoded separators (`%2F`) cannot reach another workspace's folder.
+- Page/space export authorizes the root page in the controller, then filters the descendant subtree through `PageAccessService.getEffectiveAccessForPages` inside `ExportService.exportPages`. A denied page prunes its whole subtree. Callers that authorize only the root (page export, database export, RAG export) must pass the `authorizedUser` argument.
+- The Notion-like database API gates on space abilities **and** page access rules: row pages are filtered by the space readable-page snapshot on list endpoints, and `assertCanAccessTargetPage` asserts read/write/create-child on the target page.
+- `POST /api/pages/move` rejects a move under the page itself or under one of its own sub pages (`PageRepo.hasSelfOrAncestor`). Every recursive page-hierarchy CTE carries a `level` column bounded by `MAX_PAGE_TREE_DEPTH` (`apps/server/src/common/config/page-tree.constants.ts`), so a malformed tree cannot spin a query forever.
+- Docmost archive import never trusts the uncompressed sizes recorded in the ZIP central directory: entries are decompressed through `readZipEntryWithBudget`, which aborts as soon as the per-entry or cumulative byte budget is exceeded, and CRC32 checking is enabled.
 - PDF export runs Chromium with a resource allowlist: only `data:`, `about:blank`, and same-origin public attachment URLs are fetched; external URLs in page content are blocked.
 - File import fails the task if referenced attachment uploads fail after retries, preventing committed pages with broken attachment references.
 - Generic iframe embeds are blocked unless their exact origin is listed in `EMBED_ALLOWED_ORIGINS`; built-in providers use the shared frame-source allowlist and server CSP.
@@ -266,16 +271,20 @@ Minimum:
   - pass `Authorization: Bearer <token>` from workspace API keys;
   - user JWT/cookie auth is rejected on `/api/rag/*`;
   - API keys are rejected outside `/api/rag/*`;
-  - key scope is enforced by `spaceId` inside API key JWT payload.
+  - key scope is enforced by `spaceId` inside API key JWT payload;
+  - page-level access rules are enforced as well: single-page reads go through `PageAccessService`, and `GET /api/rag/pages` / `GET /api/rag/updates` are filtered by the key creator's readable pages, so a key never exposes more than its creator can read. `GET /api/rag/deleted` intentionally still returns tombstones for deleted pages, because the access snapshot only covers live pages.
 - API key management routes are active in this fork:
   - user page: `/settings/account/api-keys`;
   - workspace management page: `/settings/api-keys`;
   - create key requires selecting `spaceId`;
-  - access is restricted to workspace `admin|owner`.
+  - access is restricted to workspace `admin|owner`;
+  - space membership is re-checked on **every** key use, so removing the creator from the scoped space invalidates their keys (workspace `admin|owner` are exempt);
+  - keys created without an explicit expiry get a bounded 365d JWT instead of a non-expiring one; `api_keys.expires_at` remains the authority.
 - User session management routes are active:
   - account page: `/settings/account/profile` -> Active sessions;
   - API routes: `GET /api/sessions`, `POST /api/sessions/revoke`, `POST /api/sessions/revoke-all`;
-  - new access tokens include `sessionId`, while old tokens without it are temporarily accepted by auth strategy.
+  - access tokens **must** carry `sessionId`: the JWT strategy and the Socket.IO gateway reject a token without it, because such a token cannot be revoked by logout, session revocation, or a password reset. Tokens issued before this became mandatory are no longer accepted and require a new sign-in.
+  - collab tokens (`GET /api/auth/collab-token`) are also bound to the issuing `sessionId` and are validated against an active session by the collaboration server, so revoking a session also cuts off Yjs access. Their lifetime is 4h; keep the client `useCollabToken` staleTime below that value.
 - Live member presence is active for workspace admins/owners:
   - members page: `/settings/members` -> Presence column;
   - API route: `GET /api/workspace/members/presence?userIds=...`;

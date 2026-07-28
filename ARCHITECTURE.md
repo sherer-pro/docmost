@@ -22,10 +22,11 @@ At the application level, `apps/server/src/app.module.ts` wires the core domain 
 
 Security-sensitive cross-cutting behavior is centralized:
 
-- JWT authentication is enforced by controllers and gateways that opt into `JwtAuthGuard`; routes marked `@Public()` intentionally bypass it.
+- JWT authentication is enforced by controllers and gateways that opt into `JwtAuthGuard`; routes marked `@Public()` intentionally bypass it. Access tokens must carry a `sessionId` claim, which is validated against a live `user_sessions` row on every request; this is what makes logout, session revocation, and password reset effective. Collab tokens carry the same claim and are validated by the collaboration server.
 - Mutating non-public routes are protected by the global CSRF guard, which validates a trusted origin/referer and the double-submit CSRF cookie/header pair. Routes marked `@Public()` and routes marked with the explicit CSRF exemption decorator bypass CSRF validation.
-- Page and space visibility is resolved through `PageAccessService`.
-- RAG routes use API-key auth and reject regular user JWT/cookie auth.
+- Page and space visibility is resolved through `PageAccessService`. Space-level CASL abilities are not a substitute for it: any surface that expands a single authorized page into a subtree or a list (export, the Notion-like database API, RAG, search) must filter through `PageAccessService` as well, either per page or via the batched `getEffectiveAccessForPages` / `getSidebarAccessSnapshot` helpers.
+- Recursive page-hierarchy queries are depth-bounded by `MAX_PAGE_TREE_DEPTH`, and `PageService.movePage` rejects moves that would place a page under its own descendant, so `pages.parent_page_id` cannot be turned into a cycle that stalls those queries.
+- RAG routes use API-key auth and reject regular user JWT/cookie auth. API keys re-check the creator's space membership on every use and resolve page reads through `PageAccessService`, so a key never grants more than its creator currently has.
 - Link preview metadata fetching validates public destinations and pins the resolved IP for the outbound request.
 - Attachment uploads validate trusted signatures for inline-capable formats; attachment responses only render inline when stored MIME and extension match the safe inline allowlist.
 - PDF export uses Chromium request interception and only allows `data:`, `about:blank`, and same-origin public attachment URLs. Mermaid diagrams are rendered in strict mode and sanitized before insertion into the PDF DOM.

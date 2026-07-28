@@ -2,6 +2,21 @@ packages:
   - 'apps/*'
   - 'packages/*'
 
+# WARNING: the `patchedDependencies` and `overrides` blocks below are currently
+# INERT. pnpm only reads these keys from pnpm-workspace.yaml from v10.6 onward,
+# and this repo pins pnpm 10.4.0 via `packageManager` in the root package.json.
+# Proof: `pnpm-lock.yaml` records only the 7 overrides declared in the root
+# package.json `pnpm.overrides` block, and the react-arborist patch is not
+# applied in the installed package.
+#
+# To activate them, either bump `packageManager` to pnpm >= 10.6 (and the
+# Dockerfile alongside it) or move both blocks into the root package.json under
+# the `pnpm` key, resolving the nodemailer conflict (9.0.1 here vs 9.0.3 there).
+# Either way the lockfile must then be regenerated with network access:
+#   corepack pnpm install --no-frozen-lockfile
+# Afterwards verify that pnpm-lock.yaml contains all overrides plus a
+# `patchedDependencies` section, and re-run `corepack pnpm verify:full`, since
+# applying ~70 previously-inert pins can shift many resolved versions.
 patchedDependencies:
   react-arborist@3.4.0: patches/react-arborist@3.4.0.patch
 

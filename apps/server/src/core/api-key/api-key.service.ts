@@ -21,6 +21,13 @@ import { WorkspaceRepo } from '@docmost/db/repos/workspace/workspace.repo';
 import { SpaceRepo } from '@docmost/db/repos/space/space.repo';
 import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 
+/**
+ * Ceiling for API key JWTs created without an explicit expiry date. The key row
+ * remains the authority on revocation; this only stops a leaked token from being
+ * replayable indefinitely.
+ */
+const API_KEY_DEFAULT_TOKEN_EXPIRES_IN = '365d';
+
 @Injectable()
 export class ApiKeyService {
   constructor(
@@ -94,9 +101,10 @@ export class ApiKeyService {
 
   private getTokenExpiresIn(expiresAt: Date | null): number | string {
     if (!expiresAt) {
-      // Keep API keys effectively non-expiring on JWT layer.
-      // Hard expiry is enforced by api_keys.expires_at in validateApiKey().
-      return '100y';
+      // Bound the JWT even when no explicit expiry was requested, so a leaked
+      // token is not usable forever. Hard expiry is still enforced by
+      // api_keys.expires_at in validateApiKey().
+      return API_KEY_DEFAULT_TOKEN_EXPIRES_IN;
     }
 
     const secondsToExpire = Math.floor(
@@ -217,6 +225,20 @@ export class ApiKeyService {
 
     if (!workspace || !space || !user || user.deletedAt || user.deactivatedAt) {
       throw new UnauthorizedException('API key is invalid');
+    }
+
+    // Membership is verified at creation time, but it can be revoked afterwards.
+    // Re-checking here is what makes removing a user from a space (or demoting
+    // them) actually invalidate the keys they created for it.
+    if (!this.isAdminOrOwner(user)) {
+      const userSpaceRoles = await this.spaceMemberRepo.getUserSpaceRoles(
+        user.id,
+        apiKey.spaceId,
+      );
+
+      if (!userSpaceRoles?.length) {
+        throw new UnauthorizedException('API key is invalid');
+      }
     }
 
     await this.apiKeyRepo.updateApiKey(apiKey.id, {

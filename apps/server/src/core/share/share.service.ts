@@ -20,6 +20,7 @@ import { ShareRepo } from '@docmost/db/repos/share/share.repo';
 import { updateAttachmentAttr } from './share.util';
 import { Page, SpaceSettings } from '@docmost/db/types/entity.types';
 import { sql } from 'kysely';
+import { MAX_PAGE_TREE_DEPTH } from '../../common/config/page-tree.constants';
 import { validate as isValidUUID } from 'uuid';
 import { TransclusionService } from '../page/transclusion/transclusion.service';
 import { resolveHeadingNumberingEnabled } from '../page/utils/heading-numbering-settings.utils';
@@ -290,6 +291,7 @@ export class ShareService {
                   .else(false)
                   .end()
                   .as('found'),
+              sql<number>`0`.as('level'),
             ])
             .where('slugId', '=', childPageSlugId)
             .unionAll((exp) =>
@@ -309,10 +311,12 @@ export class ShareService {
                       .else(false)
                       .end()
                       .as('found'),
+                  sql<number>`pa.level + 1`.as('level'),
                 ])
                 .innerJoin('page_ancestors as pa', 'pa.parentPageId', 'p.id')
                 // Continue recursing only when the target ancestor hasn't been found on that branch.
-                .where('pa.found', '=', false),
+                .where('pa.found', '=', false)
+                .where(sql`pa.level`, '<', sql.lit(MAX_PAGE_TREE_DEPTH)),
             ),
         )
         .selectFrom('page_ancestors')

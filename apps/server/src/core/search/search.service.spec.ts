@@ -5,6 +5,7 @@ import { ShareRepo } from '@docmost/db/repos/share/share.repo';
 import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 import { UserRepo } from '@docmost/db/repos/user/user.repo';
 import { PageAccessService } from '../page-access/page-access.service';
+import { ShareService } from '../share/share.service';
 
 jest.mock('kysely/helpers/postgres', () => ({
   jsonArrayFrom: jest.fn(() => ({
@@ -137,6 +138,7 @@ function createAttachmentSearchService(rows: unknown[]) {
     spaceMemberRepo as any,
     userRepo as any,
     pageAccessService as any,
+    shareService as any,
   );
 
   return { service, state, db, spaceMemberRepo, userRepo, pageAccessService };
@@ -177,6 +179,7 @@ function createPageSearchService(
     spaceMemberRepo as any,
     userRepo as any,
     pageAccessService as any,
+    shareService as any,
   );
 
   return {
@@ -215,6 +218,10 @@ function createSearchRow(overrides: Record<string, unknown> = {}) {
   };
 }
 
+const shareService = {
+  isSharingAllowed: jest.fn(async () => true),
+};
+
 describe('SearchService', () => {
   let service: SearchService;
 
@@ -228,6 +235,7 @@ describe('SearchService', () => {
         { provide: SpaceMemberRepo, useValue: {} },
         { provide: UserRepo, useValue: {} },
         { provide: PageAccessService, useValue: {} },
+        { provide: ShareService, useValue: {} },
       ],
     }).compile();
 
@@ -558,6 +566,7 @@ describe('SearchService', () => {
       {} as any,
       {} as any,
       pageAccessService as any,
+      shareService as any,
     );
 
     const result = await service.searchSuggestions(
@@ -579,5 +588,67 @@ describe('SearchService', () => {
       expect.objectContaining({ workspaceId: 'workspace-1' }),
       'space-1',
     );
+  });
+});
+
+describe('SearchService share search', () => {
+  function createShareSearchService(sharingAllowed: boolean) {
+    const { builder } = createAttachmentQueryBuilder([]);
+    const db = { selectFrom: jest.fn(() => builder) };
+    const pageRepo = {
+      withDatabaseId: jest.fn(() => ({ alias: 'databaseId' })),
+      withSpace: jest.fn(() => ({ alias: 'space' })),
+      getPageAndDescendants: jest.fn(async () => [{ id: 'shared-page' }]),
+    };
+    const shareRepo = {
+      findById: jest.fn(async () => ({
+        id: 'share-1',
+        pageId: 'shared-page',
+        spaceId: 'space-1',
+        workspaceId: 'workspace-1',
+        includeSubPages: true,
+      })),
+    };
+    const isSharingAllowed = jest.fn(async () => sharingAllowed);
+
+    const service = new SearchService(
+      db as any,
+      pageRepo as any,
+      shareRepo as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      { isSharingAllowed } as any,
+    );
+
+    return { service, pageRepo, shareRepo, isSharingAllowed };
+  }
+
+  it('returns nothing when public sharing is disabled for the space', async () => {
+    const { service, pageRepo, isSharingAllowed } =
+      createShareSearchService(false);
+
+    const result = await service.searchPage({ query: 'secret', shareId: 'share-1' } as any, {
+      workspaceId: 'workspace-1',
+    });
+
+    expect(result).toEqual({ items: [] });
+    expect(isSharingAllowed).toHaveBeenCalledWith('workspace-1', 'space-1');
+    // The share subtree must not even be resolved once sharing is off.
+    expect(pageRepo.getPageAndDescendants).not.toHaveBeenCalled();
+  });
+
+  it('resolves the share subtree when public sharing is enabled', async () => {
+    const { service, pageRepo, isSharingAllowed } =
+      createShareSearchService(true);
+
+    await service.searchPage({ query: 'secret', shareId: 'share-1' } as any, {
+      workspaceId: 'workspace-1',
+    });
+
+    expect(isSharingAllowed).toHaveBeenCalledWith('workspace-1', 'space-1');
+    expect(pageRepo.getPageAndDescendants).toHaveBeenCalledWith('shared-page', {
+      includeContent: false,
+    });
   });
 });

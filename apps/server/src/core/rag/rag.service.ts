@@ -18,6 +18,7 @@ import { CommentRepo } from '@docmost/db/repos/comment/comment.repo';
 import { ExportService } from '../../integrations/export/export.service';
 import { sql } from 'kysely';
 import { getPageAiRole } from '../page/utils/page-settings.utils';
+import { PageAccessService } from '../page-access/page-access.service';
 
 interface RagAuthContext {
   user: User;
@@ -43,7 +44,36 @@ export class RagService {
     private readonly attachmentRepo: AttachmentRepo,
     private readonly commentRepo: CommentRepo,
     private readonly exportService: ExportService,
+    private readonly pageAccessService: PageAccessService,
   ) {}
+
+  /**
+   * Page-level access rules are a second authorization layer on top of space
+   * membership. The RAG API is scoped to a space, so without consulting them an
+   * API key would read pages its own creator is denied — turning the key into a
+   * privilege-escalation primitive.
+   */
+  private async getReadablePageIds(scope: RagAuthContext): Promise<Set<string>> {
+    const snapshot = await this.pageAccessService.getSidebarAccessSnapshot(
+      scope.user,
+      scope.space.id,
+    );
+
+    return snapshot.readablePageIds;
+  }
+
+  private async filterReadablePageRows<T extends { id: string }>(
+    rows: T[],
+    scope: RagAuthContext,
+  ): Promise<T[]> {
+    if (rows.length === 0) {
+      return rows;
+    }
+
+    const readablePageIds = await this.getReadablePageIds(scope);
+
+    return rows.filter((row) => readablePageIds.has(row.id));
+  }
 
   private getDocumentFieldsConfig(space: Space): RagDocumentFieldsConfig {
     const documentFields = (space?.settings as any)?.documentFields ?? {};
@@ -122,6 +152,16 @@ export class RagService {
 
     if (!opts?.allowDeleted && page.deletedAt) {
       throw new NotFoundException('Page not found');
+    }
+
+    // An API key never grants more than the user who created it can read.
+    const access = await this.pageAccessService.getEffectiveAccess(
+      page,
+      scope.user,
+    );
+
+    if (!access.capabilities.canRead) {
+      throw new ForbiddenException('Page is outside API key scope');
     }
 
     return page;
@@ -292,7 +332,7 @@ export class RagService {
   async listPages(scope: RagAuthContext, includeContent = false) {
     const documentFields = this.getDocumentFieldsConfig(scope.space);
 
-    const [regularPages, databaseNodes] = await Promise.all([
+    const [allRegularPages, allDatabaseNodes] = await Promise.all([
       this.db
         .selectFrom('pages')
         .select([
@@ -355,6 +395,16 @@ export class RagService {
         .where('pages.deletedAt', 'is', null)
         .execute(),
     ]);
+
+    // Space scoping alone is not enough: drop anything the key creator is denied
+    // by a page access rule.
+    const readablePageIds = await this.getReadablePageIds(scope);
+    const regularPages = allRegularPages.filter((page) =>
+      readablePageIds.has(page.id),
+    );
+    const databaseNodes = allDatabaseNodes.filter((node) =>
+      readablePageIds.has(node.id),
+    );
 
     const items = [
       ...regularPages.map((page) => ({
@@ -455,6 +505,7 @@ export class RagService {
 
   async getUpdates(scope: RagAuthContext, updatedSinceMs: number) {
     const updatedSince = new Date(updatedSinceMs);
+    const readablePageIds = await this.getReadablePageIds(scope);
 
     const pageUpdates = await this.db
       .selectFrom('pages')
@@ -594,12 +645,16 @@ export class RagService {
         updatedAtMs: new Date(page.updatedAt).getTime(),
       })),
       ...databaseUpdates,
-    ].sort((a, b) => {
-      if (a.updatedAtMs !== b.updatedAtMs) {
-        return a.updatedAtMs - b.updatedAtMs;
-      }
-      return a.id.localeCompare(b.id);
-    });
+    ]
+      // `id` is the page id in both branches, so page access rules apply to the
+      // whole change feed.
+      .filter((item) => readablePageIds.has(item.id))
+      .sort((a, b) => {
+        if (a.updatedAtMs !== b.updatedAtMs) {
+          return a.updatedAtMs - b.updatedAtMs;
+        }
+        return a.id.localeCompare(b.id);
+      });
 
     const maxUpdatedAtMs =
       items.length > 0
@@ -904,6 +959,10 @@ export class RagService {
       opts.format,
       opts.includeAttachments,
       opts.includeChildren,
+      undefined,
+      undefined,
+      // An API key never grants more than its creator can read.
+      scope.user,
     );
 
     return {

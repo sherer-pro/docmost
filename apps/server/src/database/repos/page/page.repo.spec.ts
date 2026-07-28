@@ -178,7 +178,9 @@ describe('PageRepo identifier contract', () => {
 
       return {
         selectFrom: jest.fn(() => ({
-          selectAll: jest.fn(() => ({
+          // The recursive CTE now carries a bounding `level` column, so the
+          // outer query selects explicit columns instead of `selectAll()`.
+          select: jest.fn(() => ({
             execute: jest.fn().mockResolvedValue([{ id: 'resolved-page-id' }]),
           })),
         })),
@@ -235,7 +237,9 @@ describe('PageRepo identifier contract', () => {
 
       return {
         selectFrom: jest.fn(() => ({
-          selectAll: jest.fn(() => ({
+          // The recursive CTE now carries a bounding `level` column, so the
+          // outer query selects explicit columns instead of `selectAll()`.
+          select: jest.fn(() => ({
             execute: jest.fn().mockResolvedValue([{ id: 'resolved-page-id' }]),
           })),
         })),

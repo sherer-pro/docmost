@@ -61,6 +61,9 @@ class ExportControllerDelegate {
       user.locale,
       normalizeUserSettings(user.settings).preferences
         .headingNumberingByPageId,
+      // Only the root page is authorized above; the service filters descendants
+      // through the page access rules.
+      user,
     );
 
     const fileName = sanitize(page.title || 'untitled') + '.zip';

@@ -17,6 +17,11 @@ export type JwtPayload = {
 export type JwtCollabPayload = {
   sub: string;
   workspaceId: string;
+  /**
+   * Optional only for tokens minted before session binding was introduced.
+   * The collaboration server rejects a token without it.
+   */
+  sessionId?: string;
   type: 'collab';
 };
 

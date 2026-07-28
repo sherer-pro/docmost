@@ -18,9 +18,10 @@ export function useCollabToken(): UseQueryResult<ICollabToken, Error> {
   return useQuery({
     queryKey: ["collab-token"],
     queryFn: () => getCollabToken(),
-    staleTime: 20 * 60 * 60 * 1000, //20hrs
-    //refetchInterval: 12 * 60 * 60 * 1000, // 12hrs
-    //refetchIntervalInBackground: true,
+    // Must stay below the server-side collab token lifetime (4h in
+    // TokenService.COLLAB_TOKEN_EXPIRES_IN), otherwise the editor opens with an
+    // expired cached token and only recovers after a failed authentication.
+    staleTime: 3 * 60 * 60 * 1000, // 3hrs
     refetchOnMount: true,
     //@ts-ignore
     retry: (failureCount, error) => {

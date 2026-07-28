@@ -11,6 +11,7 @@ import { extractBearerTokenFromHeader } from '../../../common/helpers';
 import { ModuleRef } from '@nestjs/core';
 import { ApiKeyService } from '../../api-key/api-key.service';
 import { SessionActivityService } from '../../session/session-activity.service';
+import { JWT_ALGORITHM, JWT_ISSUER } from '../services/token.service';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
@@ -40,6 +41,8 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       },
       ignoreExpiration: false,
       secretOrKey: environmentService.getAppSecret(),
+      algorithms: [JWT_ALGORITHM],
+      issuer: JWT_ISSUER,
       passReqToCallback: true,
     });
   }
@@ -80,25 +83,31 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       throw new UnauthorizedException();
     }
 
-    if ((payload as JwtPayload).sessionId) {
-      const sessionId = (payload as JwtPayload).sessionId;
-      const session = await this.userSessionRepo.findActiveById(sessionId);
+    // A token without `sessionId` cannot be revoked: logout, session revocation
+    // and password reset all operate on `user_sessions` rows. Such tokens are
+    // rejected outright rather than silently skipping the revocation check.
+    const sessionId = (payload as JwtPayload).sessionId;
 
-      if (
-        !session ||
-        session.userId !== payload.sub ||
-        session.workspaceId !== payload.workspaceId
-      ) {
-        throw new UnauthorizedException();
-      }
-
-      req.raw.sessionId = sessionId;
-      this.sessionActivityService.trackActivity(
-        sessionId,
-        payload.sub,
-        payload.workspaceId,
-      );
+    if (!sessionId) {
+      throw new UnauthorizedException();
     }
+
+    const session = await this.userSessionRepo.findActiveById(sessionId);
+
+    if (
+      !session ||
+      session.userId !== payload.sub ||
+      session.workspaceId !== payload.workspaceId
+    ) {
+      throw new UnauthorizedException();
+    }
+
+    req.raw.sessionId = sessionId;
+    this.sessionActivityService.trackActivity(
+      sessionId,
+      payload.sub,
+      payload.workspaceId,
+    );
 
     return { user, workspace };
   }

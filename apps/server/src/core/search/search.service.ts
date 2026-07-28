@@ -20,6 +20,7 @@ import {
   PageAccessService,
   SidebarAccessSnapshot,
 } from '../page-access/page-access.service';
+import { ShareService } from '../share/share.service';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const tsquery = require('pg-tsquery')();
@@ -45,6 +46,7 @@ export class SearchService {
     private spaceMemberRepo: SpaceMemberRepo,
     private userRepo: UserRepo,
     private readonly pageAccessService: PageAccessService,
+    private readonly shareService: ShareService,
   ) {}
 
   private normalizeSearchHighlights<T extends { highlight?: string | null }>(
@@ -389,6 +391,16 @@ export class SearchService {
       const shareId = searchParams.shareId;
       const share = await this.shareRepo.findById(shareId);
       if (!share || share.workspaceId !== opts.workspaceId) {
+        return { items: [] };
+      }
+
+      // Every other public share surface gates on this; without it, disabling
+      // public sharing still leaves titles and content snippets searchable.
+      const sharingAllowed = await this.shareService.isSharingAllowed(
+        share.workspaceId,
+        share.spaceId,
+      );
+      if (!sharingAllowed) {
         return { items: [] };
       }
 

@@ -20,6 +20,7 @@ import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { executeTx } from '@docmost/db/utils';
 import { UserRepo } from '@docmost/db/repos/user/user.repo';
 import SpaceAbilityFactory from '../../casl/abilities/space-ability.factory';
+import { PageAccessService } from '../../page-access/page-access.service';
 import {
   SpaceCaslAction,
   SpaceCaslSubject,
@@ -120,6 +121,7 @@ export class DatabaseService {
     private readonly exportService: ExportService,
     private readonly userRepo: UserRepo,
     private readonly spaceAbility: SpaceAbilityFactory,
+    private readonly pageAccessService: PageAccessService,
     private readonly pageHistoryRecorder: PageHistoryRecorderService,
     @InjectQueue(QueueName.NOTIFICATION_QUEUE)
     private readonly notificationQueue: Queue,
@@ -1460,22 +1462,19 @@ export class DatabaseService {
   ) {
     const headingNumberingByPageId = normalizeUserSettings(user.settings)
       .preferences.headingNumberingByPageId;
-    if (Object.keys(headingNumberingByPageId).length === 0) {
-      return this.exportService.exportPages(
-        pageId,
-        format,
-        includeAttachments,
-        includeChildren,
-        user.locale,
-      );
-    }
+
     return this.exportService.exportPages(
       pageId,
       format,
       includeAttachments,
       includeChildren,
       user.locale,
-      headingNumberingByPageId,
+      Object.keys(headingNumberingByPageId).length === 0
+        ? undefined
+        : headingNumberingByPageId,
+      // Descendant pages must be filtered by the page access rules, which are
+      // not covered by the space-level ability checks in this service.
+      user,
     );
   }
 
@@ -1491,11 +1490,18 @@ export class DatabaseService {
 
   /**
    * Validates the target page of a row within the workspace/space and excludes removed pages.
+   *
+   * The space-level ability checks in this service do not see page access rules,
+   * so the effective page permissions are asserted here as well. Otherwise a
+   * space member denied on a specific row page could still read or mutate it
+   * through the database API.
    */
   private async assertCanAccessTargetPage(
     pageId: string,
     workspaceId: string,
     spaceId: string,
+    user: User,
+    mode: 'read' | 'write' | 'createChild' = 'write',
   ) {
     const page = await this.pageRepo.findById(pageId);
     if (!page || page.workspaceId !== workspaceId || page.spaceId !== spaceId) {
@@ -1505,6 +1511,18 @@ export class DatabaseService {
     if (page.deletedAt) {
       throw new NotFoundException('Page not found');
     }
+
+    if (mode === 'read') {
+      await this.pageAccessService.assertCanReadPage(page, user);
+      return;
+    }
+
+    if (mode === 'createChild') {
+      await this.pageAccessService.assertCanCreateChild(page, user);
+      return;
+    }
+
+    await this.pageAccessService.assertCanWritePage(page, user);
   }
 
   /**
@@ -1933,6 +1951,8 @@ export class DatabaseService {
         targetParentPageId,
         workspaceId,
         database.spaceId,
+        user,
+        'createChild',
       );
     }
 
@@ -2005,6 +2025,32 @@ export class DatabaseService {
   }
 
   /**
+   * Drops rows whose page the user may not read.
+   *
+   * Row identity is the page, so a page access rule that denies a row page must
+   * also hide the row and its cells. One space-wide snapshot is used instead of
+   * a per-row permission lookup.
+   */
+  private async filterRowsByPageAccess<T extends { pageId?: string | null }>(
+    rows: T[],
+    user: User,
+    spaceId: string,
+  ): Promise<T[]> {
+    if (rows.length === 0) {
+      return rows;
+    }
+
+    const snapshot = await this.pageAccessService.getSidebarAccessSnapshot(
+      user,
+      spaceId,
+    );
+
+    return rows.filter(
+      (row) => !row.pageId || snapshot.readablePageIds.has(row.pageId),
+    );
+  }
+
+  /**
    * Returns all rows in the database.
    */
   async listRows(
@@ -2031,9 +2077,13 @@ export class DatabaseService {
     );
 
     if (!query?.limit) {
-      const rows = await this.databaseRowRepo.findByDatabaseId(
-        databaseId,
-        workspaceId,
+      const rows = await this.filterRowsByPageAccess(
+        await this.databaseRowRepo.findByDatabaseId(
+          databaseId,
+          workspaceId,
+          database.spaceId,
+        ),
+        user,
         database.spaceId,
       );
       const normalizedRows = await this.enrichRowsWithUserNames(
@@ -2076,7 +2126,11 @@ export class DatabaseService {
     );
 
     const normalizedRows = await this.enrichRowsWithUserNames(
-      paginatedRows.items,
+      await this.filterRowsByPageAccess(
+        paginatedRows.items,
+        user,
+        database.spaceId,
+      ),
       userPropertyIds,
       workspaceId,
     );
@@ -2100,7 +2154,12 @@ export class DatabaseService {
   ): Promise<IUpdatedDatabaseRowResponse> {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
     await this.assertCanManageDatabasePages(user, database.spaceId);
-    await this.assertCanAccessTargetPage(pageId, workspaceId, database.spaceId);
+    await this.assertCanAccessTargetPage(
+      pageId,
+      workspaceId,
+      database.spaceId,
+      user,
+    );
 
     const row = await this.databaseRowRepo.findByDatabaseAndPage(databaseId, pageId);
     if (!row || row.archivedAt) {
@@ -2197,7 +2256,12 @@ export class DatabaseService {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
     await this.assertCanManageDatabasePages(user, database.spaceId);
 
-    await this.assertCanAccessTargetPage(pageId, workspaceId, database.spaceId);
+    await this.assertCanAccessTargetPage(
+      pageId,
+      workspaceId,
+      database.spaceId,
+      user,
+    );
 
     const row = await this.databaseRowRepo.findByDatabaseAndPage(databaseId, pageId);
     if (!row || row.archivedAt) {
@@ -2271,7 +2335,12 @@ export class DatabaseService {
   ) {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
     await this.assertCanManageDatabasePages(user, database.spaceId);
-    await this.assertCanAccessTargetPage(pageId, workspaceId, database.spaceId);
+    await this.assertCanAccessTargetPage(
+      pageId,
+      workspaceId,
+      database.spaceId,
+      user,
+    );
 
     const existingRow = await this.databaseRowRepo.findByDatabaseAndPage(
       databaseId,
