@@ -11,6 +11,9 @@ import {
 } from "@/features/space/permissions/permissions.type.ts";
 import { useTranslation } from "react-i18next";
 import classes from "./settings-modal.module.css";
+import { useAtomValue } from "jotai";
+import { userAtom } from "@/features/user/atoms/current-user-atom.ts";
+import { hasFullSpaceAccess } from "@/features/space/permissions/export-access.ts";
 
 interface SpaceSettingsModalProps {
   spaceId: string;
@@ -25,9 +28,18 @@ export default function SpaceSettingsModal({
 }: SpaceSettingsModalProps) {
   const { t } = useTranslation();
   const { data: space, isLoading } = useSpaceQuery(spaceId);
+  const user = useAtomValue(userAtom);
 
   const spaceRules = space?.membership?.permissions;
   const spaceAbility = useSpaceAbility(spaceRules);
+  const canManageSpaceSettings = hasFullSpaceAccess({
+    workspaceRole: user?.role,
+    spaceRole: space?.membership?.role,
+  });
+
+  if (!opened || isLoading || !space || !canManageSpaceSettings) {
+    return null;
+  }
 
   return (
     <Portal>

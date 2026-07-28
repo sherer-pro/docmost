@@ -6,6 +6,7 @@ import { isCloud } from "@/lib/config.ts";
 import { useTranslation } from "react-i18next";
 import { useRedirectToCloudSelect } from "@/ee/hooks/use-redirect-to-cloud-select.tsx";
 import { useTrackOrigin } from "@/hooks/use-track-origin";
+import WorkspaceAdminRoute from "@/components/settings/workspace-admin-route.tsx";
 
 const SetupWorkspace = lazy(() => import("@/pages/auth/setup-workspace.tsx"));
 const LoginPage = lazy(() => import("@/pages/auth/login"));
@@ -143,17 +144,19 @@ export default function App() {
               element={<AccountPreferences />}
             />
             <Route path={"account/api-keys"} element={<UserApiKeys />} />
-            <Route path={"workspace"} element={<WorkspaceSettings />} />
             <Route path={"members"} element={<WorkspaceMembers />} />
-            <Route path={"api-keys"} element={<WorkspaceApiKeys />} />
             <Route path={"groups"} element={<Groups />} />
             <Route path={"groups/:groupId"} element={<GroupInfo />} />
             <Route path={"spaces"} element={<Spaces />} />
             <Route path={"sharing"} element={<Shares />} />
-            <Route path={"security"} element={<Security />} />
-            <Route path={"ai"} element={<AiSettings />} />
-            {!isCloud() && <Route path={"license"} element={<License />} />}
-            {isCloud() && <Route path={"billing"} element={<Billing />} />}
+            <Route element={<WorkspaceAdminRoute />}>
+              <Route path={"workspace"} element={<WorkspaceSettings />} />
+              <Route path={"api-keys"} element={<WorkspaceApiKeys />} />
+              <Route path={"security"} element={<Security />} />
+              <Route path={"ai"} element={<AiSettings />} />
+              {!isCloud() && <Route path={"license"} element={<License />} />}
+              {isCloud() && <Route path={"billing"} element={<Billing />} />}
+            </Route>
           </Route>
         </Route>
 

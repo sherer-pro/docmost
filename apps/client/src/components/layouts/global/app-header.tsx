@@ -20,9 +20,11 @@ import {
 } from "@/features/search/components/search-control.tsx";
 import { searchSpotlight } from "@/features/search/constants.ts";
 import { NotificationPopover } from "@/features/notification/components/notification-popover.tsx";
+import useUserRole from "@/hooks/use-user-role.tsx";
 
 export function AppHeader() {
   const { t } = useTranslation();
+  const { isAdmin } = useUserRole();
   const [mobileOpened] = useAtom(mobileSidebarAtom);
   const toggleMobile = useToggleSidebar(mobileSidebarAtom);
 
@@ -90,17 +92,27 @@ export function AppHeader() {
         <Group wrap="nowrap" className={classes.right}>
           <NotificationPopover />
           {isCloud() && isTrial && trialDaysLeft !== 0 && (
-            <Badge
-              variant="light"
-              style={{ cursor: "pointer" }}
-              component={Link}
-              to={APP_ROUTE.SETTINGS.WORKSPACE.BILLING}
-              visibleFrom="xs"
-            >
-              {trialDaysLeft === 1
-                ? t("header.trial.oneDayLeft")
-                : t("header.trial.daysLeft", { count: trialDaysLeft })}
-            </Badge>
+            <>
+              {isAdmin ? (
+                <Badge
+                  variant="light"
+                  style={{ cursor: "pointer" }}
+                  component={Link}
+                  to={APP_ROUTE.SETTINGS.WORKSPACE.BILLING}
+                  visibleFrom="xs"
+                >
+                  {trialDaysLeft === 1
+                    ? t("header.trial.oneDayLeft")
+                    : t("header.trial.daysLeft", { count: trialDaysLeft })}
+                </Badge>
+              ) : (
+                <Badge variant="light" visibleFrom="xs">
+                  {trialDaysLeft === 1
+                    ? t("header.trial.oneDayLeft")
+                    : t("header.trial.daysLeft", { count: trialDaysLeft })}
+                </Badge>
+              )}
+            </>
           )}
           <TopMenu />
         </Group>

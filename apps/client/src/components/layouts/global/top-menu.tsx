@@ -27,11 +27,13 @@ import { CustomAvatar } from "@/components/ui/custom-avatar.tsx";
 import { useTranslation } from "react-i18next";
 import { AvatarIconType } from "@/features/attachments/types/attachment.types.ts";
 import classes from "./top-menu.module.css";
+import useUserRole from "@/hooks/use-user-role.tsx";
 
 export default function TopMenu() {
   const { t } = useTranslation();
   const [currentUser] = useAtom(currentUserAtom);
   const { logout } = useAuth();
+  const { isAdmin } = useUserRole();
   const { colorScheme, setColorScheme } = useMantineColorScheme();
 
   const user = currentUser?.user;
@@ -70,13 +72,15 @@ export default function TopMenu() {
       <Menu.Dropdown>
         <Menu.Label>{t("Workspace")}</Menu.Label>
 
-        <Menu.Item
-          component={Link}
-          to={APP_ROUTE.SETTINGS.WORKSPACE.GENERAL}
-          leftSection={<IconSettings size={16} />}
-        >
-          {t("Workspace settings")}
-        </Menu.Item>
+        {isAdmin && (
+          <Menu.Item
+            component={Link}
+            to={APP_ROUTE.SETTINGS.WORKSPACE.GENERAL}
+            leftSection={<IconSettings size={16} />}
+          >
+            {t("Workspace settings")}
+          </Menu.Item>
+        )}
 
         {user.canAccessMembersDirectory !== false && (
           <Menu.Item

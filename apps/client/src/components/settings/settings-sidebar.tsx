@@ -41,6 +41,7 @@ import { mobileSidebarAtom } from "@/components/layouts/global/hooks/atoms/sideb
 import { useToggleSidebar } from "@/components/layouts/global/hooks/hooks/use-toggle-sidebar.ts";
 import { useSettingsNavigation } from "@/hooks/use-settings-navigation";
 import { getGroups } from "@/features/group/services/group-service.ts";
+import { canAccessSettingsPath } from "@/components/settings/workspace-settings-access.ts";
 
 interface DataItem {
   label: string;
@@ -78,7 +79,12 @@ const groupedData: DataGroup[] = [
   {
     heading: "Workspace",
     items: [
-      { label: "General", icon: IconSettings, path: "/settings/workspace" },
+      {
+        label: "General",
+        icon: IconSettings,
+        path: "/settings/workspace",
+        isAdmin: true,
+      },
       {
         label: "Members",
         icon: IconUsers,
@@ -155,6 +161,10 @@ export default function SettingsSidebar() {
    * who cannot access the members directory (no non-default groups).
    */
   const canShowItem = (item: DataItem) => {
+    if (!canAccessSettingsPath(item.path, isAdmin)) {
+      return false;
+    }
+
     if (
       item.path === "/settings/members" &&
       currentUser?.user?.canAccessMembersDirectory === false

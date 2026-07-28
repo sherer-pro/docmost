@@ -84,7 +84,7 @@ describe('SpaceController', () => {
     mockSpaceAbility.createForUser.mockResolvedValue(ability);
     mockSpaceMemberRepo.getUserSpaceRoles.mockResolvedValue([]);
 
-    await controller.getSpace(spaceId, user, workspace);
+    const result = await controller.getSpace(spaceId, user, workspace);
 
     expect(mockSpaceService.getSpaceInfo).toHaveBeenCalledWith(
       'general',
@@ -95,6 +95,7 @@ describe('SpaceController', () => {
       SpaceCaslAction.Read,
       SpaceCaslSubject.Settings,
     );
+    expect(result.membership.role).toBeNull();
   });
 
   it('archives a space when user can manage settings', async () => {
