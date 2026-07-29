@@ -25,9 +25,7 @@ import { CreateAiEditorActionDto } from '../dto/ai.dto';
 import { AiConfigService } from './ai-config.service';
 import { AiConversationService } from './ai-conversation.service';
 import { AiAuxRunEventService } from './ai-aux-run-event.service';
-
-const AI_USER_CONCURRENCY = 2;
-const AI_SPACE_CONCURRENCY = 8;
+import { AI_CONCURRENCY_LIMITS } from '../ai.constants';
 
 @Injectable()
 export class AiAuxRunService {
@@ -487,8 +485,8 @@ export class AiAuxRunService {
       );
     }
     if (
-      userMain + userAux >= AI_USER_CONCURRENCY ||
-      spaceMain + spaceAux >= AI_SPACE_CONCURRENCY
+      userMain + userAux >= AI_CONCURRENCY_LIMITS.perUser ||
+      spaceMain + spaceAux >= AI_CONCURRENCY_LIMITS.perSpace
     ) {
       throw new ConflictException({
         code: 'ai_conversation_busy',
@@ -567,7 +565,7 @@ export class AiAuxRunService {
     spaceId: string,
     userId: string,
   ): Promise<void> {
-    for (const key of [`ai-space:${spaceId}`, `ai-user:${spaceId}:${userId}`]) {
+    for (const key of [`ai-space:${spaceId}`, `ai-user:${userId}`]) {
       await sql`select pg_advisory_xact_lock(hashtextextended(${key}, 0))`.execute(
         trx,
       );

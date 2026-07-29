@@ -5,6 +5,12 @@ import {
 
 export const AI_DEFAULTS = AI_SPACE_CONFIG_DEFAULTS;
 
+export const AI_CONCURRENCY_LIMITS = {
+  perUser: 5,
+  perSpace: 8,
+  perConversation: 1,
+} as const;
+
 export const AI_CHAT_LIMITS = {
   maxDocumentSnapshotChars: 1000000,
   maxSelectionChars: 200000,

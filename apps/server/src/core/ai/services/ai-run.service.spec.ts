@@ -1,14 +1,14 @@
 import { AiRunService } from './ai-run.service';
 
-describe('AiRunService queue delivery', () => {
-  function createService(queue: any) {
+describe('AiRunService', () => {
+  function createService(queue: any, db?: any) {
     const query: any = {
       set: jest.fn(() => query),
       where: jest.fn(() => query),
       execute: jest.fn(async () => undefined),
     };
     return new AiRunService(
-      { updateTable: jest.fn(() => query) } as any,
+      db ?? ({ updateTable: jest.fn(() => query) } as any),
       queue,
       {} as any,
       {} as any,
@@ -46,5 +46,78 @@ describe('AiRunService queue delivery', () => {
     await expect(
       service.enqueue({ id: 'run-id', status: 'queued' } as any),
     ).resolves.toBe(false);
+  });
+
+  it('admits a fifth active AI run for the user', async () => {
+    const results = [
+      { count: 0 },
+      { count: 0 },
+      { tokens: 0 },
+      { tokens: 0 },
+      { count: 0 },
+      { count: 4 },
+      { count: 0 },
+      { count: 4 },
+      { count: 0 },
+    ];
+    const query: any = {
+      select: jest.fn(() => query),
+      where: jest.fn(() => query),
+      executeTakeFirstOrThrow: jest.fn(async () => results.shift()),
+    };
+    const db = { selectFrom: jest.fn(() => query) };
+    const service = createService({} as any, db);
+
+    await expect(
+      (service as any).assertQuotaAndConcurrency(
+        db,
+        'user-id',
+        'workspace-id',
+        'space-id',
+        'conversation-id',
+        100,
+        10000,
+        100,
+      ),
+    ).resolves.toBeUndefined();
+  });
+
+  it('rejects a sixth active AI run for the user', async () => {
+    const results = [
+      { count: 0 },
+      { count: 0 },
+      { tokens: 0 },
+      { tokens: 0 },
+      { count: 0 },
+      { count: 5 },
+      { count: 0 },
+      { count: 5 },
+      { count: 0 },
+    ];
+    const query: any = {
+      select: jest.fn(() => query),
+      where: jest.fn(() => query),
+      executeTakeFirstOrThrow: jest.fn(async () => results.shift()),
+    };
+    const db = { selectFrom: jest.fn(() => query) };
+    const service = createService({} as any, db);
+
+    await expect(
+      (service as any).assertQuotaAndConcurrency(
+        db,
+        'user-id',
+        'workspace-id',
+        'space-id',
+        'conversation-id',
+        100,
+        10000,
+        100,
+      ),
+    ).rejects.toMatchObject({
+      status: 409,
+      response: {
+        code: 'ai_conversation_busy',
+      },
+    });
   });
 });

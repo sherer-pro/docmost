@@ -34,9 +34,7 @@ import { AiConversationService } from './ai-conversation.service';
 import { PageAccessService } from '../../page-access/page-access.service';
 import { AiRunEventService } from './ai-run-event.service';
 import { AiContextService } from './ai-context.service';
-
-const AI_USER_CONCURRENCY = 2;
-const AI_SPACE_CONCURRENCY = 8;
+import { AI_CONCURRENCY_LIMITS } from '../ai.constants';
 
 @Injectable()
 export class AiRunService {
@@ -801,9 +799,11 @@ export class AiRunService {
       );
     }
     if (
-      Number(conversationActive) >= 1 ||
-      Number(userActive) + Number(userAuxActive) >= AI_USER_CONCURRENCY ||
-      Number(spaceActive) + Number(spaceAuxActive) >= AI_SPACE_CONCURRENCY
+      Number(conversationActive) >= AI_CONCURRENCY_LIMITS.perConversation ||
+      Number(userActive) + Number(userAuxActive) >=
+        AI_CONCURRENCY_LIMITS.perUser ||
+      Number(spaceActive) + Number(spaceAuxActive) >=
+        AI_CONCURRENCY_LIMITS.perSpace
     ) {
       throw this.busyError();
     }
@@ -851,7 +851,7 @@ export class AiRunService {
   ): Promise<void> {
     for (const key of [
       `ai-space:${spaceId}`,
-      `ai-user:${spaceId}:${userId}`,
+      `ai-user:${userId}`,
       `ai-conversation:${conversationId}`,
     ]) {
       await sql`select pg_advisory_xact_lock(hashtextextended(${key}, 0))`.execute(
