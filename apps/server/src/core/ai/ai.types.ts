@@ -26,9 +26,12 @@ export type AiProviderUsage = {
 };
 
 export type AiRetrievalConfig = {
-  adapter: 'none' | 'http-json-v1';
+  adapter: 'none' | 'http-json-v1' | 'open-webui-knowledge-v1';
   url: string | null;
   apiKey: string | null;
+  openWebUiBaseUrl?: string | null;
+  openWebUiApiKey?: string | null;
+  openWebUiKnowledgeId?: string | null;
   timeoutMs: number;
   maxResults: number;
 };

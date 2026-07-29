@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "vitest";
+import { AI_ERROR_CODES } from "@docmost/api-contract";
 import type {
   AiConversation,
   AiMessage,
@@ -38,6 +39,13 @@ describe("AI error presentation", () => {
       getAiErrorTranslationKey("unexpected_code"),
       "ai.errorReason.unknown",
     );
+    for (const code of AI_ERROR_CODES) {
+      assert.notEqual(
+        getAiErrorTranslationKey(code),
+        "ai.errorReason.unknown",
+        `missing translation mapping for ${code}`,
+      );
+    }
   });
 
   it("prioritizes a specific unavailable status over conversation load errors", () => {

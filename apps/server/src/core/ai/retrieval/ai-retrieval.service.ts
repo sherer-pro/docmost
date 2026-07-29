@@ -5,11 +5,13 @@ import { User } from '@docmost/db/types/entity.types';
 import { PageAccessService } from '../../page-access/page-access.service';
 import {
   AiRetrievalConfig,
+  AiRetrievalHit,
   AiRetrievalRequest,
   AiSafeRetrievalSource,
 } from '../ai.types';
 import { HttpJsonAiRetrievalAdapter } from './http-json-ai-retrieval.adapter';
 import { NoopAiRetrievalAdapter } from './noop-ai-retrieval.adapter';
+import { OpenWebUiKnowledgeRetrievalAdapter } from './open-webui-knowledge-retrieval.adapter';
 import { AiOperationalMetricsService } from '../services/ai-operational-metrics.service';
 
 export type AiRetrievalOutcome = {
@@ -28,6 +30,7 @@ export class AiRetrievalService {
     private readonly httpAdapter: HttpJsonAiRetrievalAdapter,
     private readonly noopAdapter: NoopAiRetrievalAdapter,
     private readonly metrics: AiOperationalMetricsService,
+    private readonly openWebUiAdapter?: OpenWebUiKnowledgeRetrievalAdapter,
   ) {}
 
   async test(config: AiRetrievalConfig, request: AiRetrievalRequest) {
@@ -50,6 +53,7 @@ export class AiRetrievalService {
     }
 
     try {
+      const retrievalStartedAt = Date.now();
       const snapshot = await this.pageAccessService.getSidebarAccessSnapshot(
         params.user,
         params.request.spaceId,
@@ -70,6 +74,11 @@ export class AiRetrievalService {
         params.request.spaceId,
         params.config.maxResults,
       );
+      this.metrics.observeRetrievalQuery(
+        Date.now() - retrievalStartedAt,
+        hits.length,
+        sources.length,
+      );
       return this.outcome({
         status: sources.length > 0 ? 'used' : 'empty',
         sources,
@@ -87,13 +96,18 @@ export class AiRetrievalService {
   }
 
   private getAdapter(config: AiRetrievalConfig) {
-    return config.adapter === this.httpAdapter.kind
-      ? this.httpAdapter
-      : this.noopAdapter;
+    switch (config.adapter) {
+      case this.httpAdapter.kind:
+        return this.httpAdapter;
+      case this.openWebUiAdapter?.kind:
+        return this.openWebUiAdapter;
+      default:
+        return this.noopAdapter;
+    }
   }
 
   private async resolveSafeSources(
-    hits: Awaited<ReturnType<HttpJsonAiRetrievalAdapter['retrieve']>>,
+    hits: AiRetrievalHit[],
     allowedPageIds: Set<string>,
     workspaceId: string,
     spaceId: string,
@@ -246,6 +260,15 @@ export class AiRetrievalService {
   }
 
   private toErrorCode(error: unknown): string {
+    const responseCode = String((error as any)?.response?.code ?? '');
+    if (
+      [
+        'retrieval_invalid_response',
+        'retrieval_collection_unavailable',
+      ].includes(responseCode)
+    ) {
+      return responseCode;
+    }
     const status = Number((error as any)?.status);
     if (status === 504) {
       return 'retrieval_timeout';

@@ -16,6 +16,8 @@ import { AiEditorActionController } from './controllers/ai-editor-action.control
 import { AiRetrievalService } from './retrieval/ai-retrieval.service';
 import { HttpJsonAiRetrievalAdapter } from './retrieval/http-json-ai-retrieval.adapter';
 import { NoopAiRetrievalAdapter } from './retrieval/noop-ai-retrieval.adapter';
+import { OpenWebUiKnowledgeRetrievalAdapter } from './retrieval/open-webui-knowledge-retrieval.adapter';
+import { AiRetrievalHttpClient } from './retrieval/ai-retrieval-http-client.service';
 import { AiConfigService } from './services/ai-config.service';
 import { AiConversationService } from './services/ai-conversation.service';
 import { AiContextService } from './services/ai-context.service';
@@ -58,6 +60,7 @@ import { AiAuxRunEventService } from './services/ai-aux-run-event.service';
     AiQueueReconcilerService,
     AiRetrievalUrlPolicyService,
     AiRetrievalService,
+    AiRetrievalHttpClient,
     AiRunExecutionService,
     AiRunEventService,
     AiRunService,
@@ -65,6 +68,7 @@ import { AiAuxRunEventService } from './services/ai-aux-run-event.service';
     AiAuxRunExecutionService,
     AiAuxRunEventService,
     HttpJsonAiRetrievalAdapter,
+    OpenWebUiKnowledgeRetrievalAdapter,
     NoopAiRetrievalAdapter,
     OpenAiCompatibleProviderService,
   ],

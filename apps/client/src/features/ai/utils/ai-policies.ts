@@ -29,6 +29,9 @@ const AI_ERROR_TRANSLATION_KEYS: Record<string, string> = {
   retrieval_timeout: "ai.errorReason.retrievalTimeout",
   retrieval_unavailable: "ai.errorReason.retrievalUnavailable",
   retrieval_url_rejected: "ai.errorReason.retrievalConfiguration",
+  retrieval_invalid_response: "ai.errorReason.retrievalInvalidResponse",
+  retrieval_collection_unavailable:
+    "ai.errorReason.retrievalCollectionUnavailable",
   ai_file_processing_failed: "ai.errorReason.fileProcessingFailed",
   ai_file_upload_failed: "ai.errorReason.fileUploadFailed",
   ai_context_revision_conflict: "ai.errorReason.contextRevisionConflict",

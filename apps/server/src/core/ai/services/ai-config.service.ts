@@ -13,6 +13,7 @@ import {
 import {
   AiAvailability,
   AiQuickCommand,
+  AiRetrievalAdapter,
   AiSpaceConfig,
 } from '@docmost/api-contract';
 import { EnvironmentService } from '../../../integrations/environment/environment.service';
@@ -158,7 +159,7 @@ export class AiConfigService {
       canUse,
       canManage,
       retrievalAvailable: Boolean(
-        retrieval?.adapter === 'http-json-v1' && retrieval.url,
+        retrieval && this.isRetrievalConfigured(retrieval),
       ),
       quickCommands: this.publicQuickCommands(config?.quickCommands),
       ...(usage ? { usage } : {}),
@@ -193,6 +194,14 @@ export class AiConfigService {
         'retrieval.apiKey and retrieval.clearApiKey cannot be used together',
       );
     }
+    if (
+      dto.retrieval?.openWebUi?.apiKey &&
+      dto.retrieval.openWebUi.clearApiKey
+    ) {
+      throw new BadRequestException(
+        'retrieval.openWebUi.apiKey and clearApiKey cannot be used together',
+      );
+    }
 
     const saved = await this.db.transaction().execute(async (trx) => {
       await sql`
@@ -216,7 +225,7 @@ export class AiConfigService {
       const normalizedBaseUrl = await this.normalizeUrl(baseUrl);
       const retrievalAdapter =
         dto.retrieval?.adapter ??
-        (existing?.retrievalAdapter as 'none' | 'http-json-v1') ??
+        (existing?.retrievalAdapter as AiRetrievalAdapter) ??
         'none';
       const retrievalUrl =
         dto.retrieval?.url === null
@@ -227,9 +236,46 @@ export class AiConfigService {
           'retrieval.url is required for http-json-v1',
         );
       }
-      const normalizedRetrievalUrl = retrievalUrl
-        ? (await this.retrievalUrlPolicy.assertAllowed(retrievalUrl)).toString()
-        : null;
+      const normalizedRetrievalUrl =
+        retrievalUrl &&
+        (retrievalAdapter === 'http-json-v1' ||
+          dto.retrieval?.url !== undefined)
+          ? (
+              await this.retrievalUrlPolicy.assertAllowed(retrievalUrl)
+            ).toString()
+          : retrievalUrl;
+      const openWebUiBaseUrl =
+        dto.retrieval?.openWebUi?.baseUrl === null
+          ? null
+          : dto.retrieval?.openWebUi?.baseUrl?.trim() ||
+            existing?.retrievalOpenWebuiBaseUrl ||
+            null;
+      const openWebUiKnowledgeId =
+        dto.retrieval?.openWebUi?.knowledgeId === null
+          ? null
+          : dto.retrieval?.openWebUi?.knowledgeId?.trim() ||
+            existing?.retrievalOpenWebuiKnowledgeId ||
+            null;
+      if (
+        retrievalAdapter === 'open-webui-knowledge-v1' &&
+        (!openWebUiBaseUrl || !openWebUiKnowledgeId)
+      ) {
+        throw new BadRequestException(
+          'retrieval.openWebUi baseUrl and knowledgeId are required',
+        );
+      }
+      const normalizedOpenWebUiBaseUrl =
+        openWebUiBaseUrl &&
+        (retrievalAdapter === 'open-webui-knowledge-v1' ||
+          dto.retrieval?.openWebUi?.baseUrl !== undefined)
+          ? (
+              await this.retrievalUrlPolicy.assertBaseAllowed(
+                openWebUiBaseUrl,
+              )
+            )
+              .toString()
+              .replace(/\/+$/, '')
+          : openWebUiBaseUrl;
       const values = {
         workspaceId: workspace.id,
         spaceId,
@@ -248,6 +294,13 @@ export class AiConfigService {
           existing: existing?.retrievalApiKeyEncrypted,
           next: dto.retrieval?.apiKey,
           clear: dto.retrieval?.clearApiKey,
+        }),
+        retrievalOpenWebuiBaseUrl: normalizedOpenWebUiBaseUrl,
+        retrievalOpenWebuiKnowledgeId: openWebUiKnowledgeId,
+        retrievalOpenWebuiApiKeyEncrypted: this.updateEncryptedSecret({
+          existing: existing?.retrievalOpenWebuiApiKeyEncrypted,
+          next: dto.retrieval?.openWebUi?.apiKey,
+          clear: dto.retrieval?.openWebUi?.clearApiKey,
         }),
         retrievalTimeoutMs:
           dto.retrieval?.timeoutMs ??
@@ -446,9 +499,14 @@ export class AiConfigService {
 
   toRetrievalConfig(config: AiSpaceConfigEntity): AiRetrievalConfig {
     return {
-      adapter: config.retrievalAdapter as 'none' | 'http-json-v1',
+      adapter: config.retrievalAdapter as AiRetrievalAdapter,
       url: config.retrievalUrl,
       apiKey: this.decryptSecret(config.retrievalApiKeyEncrypted),
+      openWebUiBaseUrl: config.retrievalOpenWebuiBaseUrl,
+      openWebUiKnowledgeId: config.retrievalOpenWebuiKnowledgeId,
+      openWebUiApiKey: this.decryptSecret(
+        config.retrievalOpenWebuiApiKeyEncrypted,
+      ),
       timeoutMs: config.retrievalTimeoutMs,
       maxResults: config.retrievalMaxResults,
     };
@@ -490,7 +548,7 @@ export class AiConfigService {
   ): Promise<AiRetrievalConfig> {
     const adapter =
       dto.retrieval?.adapter ??
-      (existing?.retrievalAdapter as 'none' | 'http-json-v1') ??
+      (existing?.retrievalAdapter as AiRetrievalAdapter) ??
       'none';
     const rawUrl =
       dto.retrieval?.url === null
@@ -499,15 +557,55 @@ export class AiConfigService {
     if (adapter === 'http-json-v1' && !rawUrl) {
       throw new BadRequestException('retrieval.url is required');
     }
+    const rawOpenWebUiBaseUrl =
+      dto.retrieval?.openWebUi?.baseUrl === null
+        ? null
+        : dto.retrieval?.openWebUi?.baseUrl?.trim() ||
+          existing?.retrievalOpenWebuiBaseUrl ||
+          null;
+    const openWebUiKnowledgeId =
+      dto.retrieval?.openWebUi?.knowledgeId === null
+        ? null
+        : dto.retrieval?.openWebUi?.knowledgeId?.trim() ||
+          existing?.retrievalOpenWebuiKnowledgeId ||
+          null;
+    if (
+      adapter === 'open-webui-knowledge-v1' &&
+      (!rawOpenWebUiBaseUrl || !openWebUiKnowledgeId)
+    ) {
+      throw new BadRequestException(
+        'retrieval.openWebUi baseUrl and knowledgeId are required',
+      );
+    }
     return {
       adapter,
-      url: rawUrl
-        ? (await this.retrievalUrlPolicy.assertAllowed(rawUrl)).toString()
-        : null,
+      url:
+        rawUrl &&
+        (adapter === 'http-json-v1' ||
+          dto.retrieval?.url !== undefined)
+          ? (await this.retrievalUrlPolicy.assertAllowed(rawUrl)).toString()
+          : rawUrl,
       apiKey: dto.retrieval?.clearApiKey
         ? null
         : dto.retrieval?.apiKey ||
           this.decryptSecret(existing?.retrievalApiKeyEncrypted),
+      openWebUiBaseUrl:
+        rawOpenWebUiBaseUrl &&
+        (adapter === 'open-webui-knowledge-v1' ||
+          dto.retrieval?.openWebUi?.baseUrl !== undefined)
+          ? (
+              await this.retrievalUrlPolicy.assertBaseAllowed(
+                rawOpenWebUiBaseUrl,
+              )
+            )
+              .toString()
+              .replace(/\/+$/, '')
+          : rawOpenWebUiBaseUrl,
+      openWebUiKnowledgeId,
+      openWebUiApiKey: dto.retrieval?.openWebUi?.clearApiKey
+        ? null
+        : dto.retrieval?.openWebUi?.apiKey ||
+          this.decryptSecret(existing?.retrievalOpenWebuiApiKeyEncrypted),
       timeoutMs:
         dto.retrieval?.timeoutMs ??
         existing?.retrievalTimeoutMs ??
@@ -551,6 +649,20 @@ export class AiConfigService {
   private finiteNumber(value: unknown, fallback: number): number {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : fallback;
+  }
+
+  private isRetrievalConfigured(config: AiRetrievalConfig): boolean {
+    if (config.adapter === 'http-json-v1') {
+      return Boolean(config.url);
+    }
+    if (config.adapter === 'open-webui-knowledge-v1') {
+      return Boolean(
+        config.openWebUiBaseUrl &&
+          config.openWebUiKnowledgeId &&
+          config.openWebUiApiKey,
+      );
+    }
+    return false;
   }
 
   private assertGenerationLimits(
@@ -650,11 +762,18 @@ export class AiConfigService {
       chatModel: config.chatModel,
       apiKeyConfigured: Boolean(config.apiKeyEncrypted),
       retrieval: {
-        adapter: config.retrievalAdapter as 'none' | 'http-json-v1',
+        adapter: config.retrievalAdapter as AiRetrievalAdapter,
         url: config.retrievalUrl,
         apiKeyConfigured: Boolean(config.retrievalApiKeyEncrypted),
         timeoutMs: config.retrievalTimeoutMs,
         maxResults: config.retrievalMaxResults,
+        openWebUi: {
+          baseUrl: config.retrievalOpenWebuiBaseUrl,
+          knowledgeId: config.retrievalOpenWebuiKnowledgeId,
+          apiKeyConfigured: Boolean(
+            config.retrievalOpenWebuiApiKeyEncrypted,
+          ),
+        },
       },
       systemInstructions: config.systemInstructions,
       temperature: config.temperature,

@@ -256,6 +256,9 @@ export interface AiSpaceConfigs {
   retrievalAdapter: Generated<string>;
   retrievalApiKeyEncrypted: string | null;
   retrievalMaxResults: Generated<number>;
+  retrievalOpenWebuiApiKeyEncrypted: string | null;
+  retrievalOpenWebuiBaseUrl: string | null;
+  retrievalOpenWebuiKnowledgeId: string | null;
   retrievalTimeoutMs: Generated<number>;
   retrievalUrl: string | null;
   requestTimeoutMs: Generated<number>;

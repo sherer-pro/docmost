@@ -23,6 +23,9 @@ export class AiOperationalMetricsService {
   };
   private readonly terminalStatuses = new Map<string, number>();
   private readonly retrievalOutcomes = new Map<string, number>();
+  private readonly retrievalLatency = durationMetric();
+  private retrievalCandidateCount = 0;
+  private retrievalValidCandidateCount = 0;
   private readonly fileLifecycle = new Map<string, number>();
   private attemptCount = 0;
   private attemptTotal = 0;
@@ -73,6 +76,19 @@ export class AiOperationalMetricsService {
     this.increment(this.retrievalOutcomes, outcome);
   }
 
+  observeRetrievalQuery(
+    durationMs: number,
+    candidateCount: number,
+    validCandidateCount: number,
+  ): void {
+    this.observeDuration(this.retrievalLatency, durationMs);
+    this.retrievalCandidateCount += Math.max(0, candidateCount);
+    this.retrievalValidCandidateCount += Math.max(
+      0,
+      validCandidateCount,
+    );
+  }
+
   observeFileLifecycle(state: string): void {
     this.increment(this.fileLifecycle, state);
   }
@@ -93,6 +109,16 @@ export class AiOperationalMetricsService {
       },
       reconciledJobs: this.reconciledJobs,
       retrievalOutcomes: Object.fromEntries(this.retrievalOutcomes),
+      retrievalQuery: {
+        latency: structuredClone(this.retrievalLatency),
+        candidateCount: this.retrievalCandidateCount,
+        validCandidateCount: this.retrievalValidCandidateCount,
+        invalidCandidateCount: Math.max(
+          0,
+          this.retrievalCandidateCount -
+            this.retrievalValidCandidateCount,
+        ),
+      },
       fileLifecycle: Object.fromEntries(this.fileLifecycle),
     };
   }

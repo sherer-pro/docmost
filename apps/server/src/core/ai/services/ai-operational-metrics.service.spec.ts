@@ -16,6 +16,7 @@ describe('AiOperationalMetricsService', () => {
     metrics.observeDelta(run, 1_275);
     metrics.observeStatus(run, 'cancelled', 1_500);
     metrics.observeRetrieval('empty');
+    metrics.observeRetrievalQuery(12, 5, 3);
     metrics.observeReconciledJob();
     metrics.observeFileLifecycle('storage_deleted');
 
@@ -30,6 +31,12 @@ describe('AiOperationalMetricsService', () => {
       attempts: { count: 1, average: 2, max: 2 },
       reconciledJobs: 1,
       retrievalOutcomes: { empty: 1 },
+      retrievalQuery: {
+        latency: { count: 1, totalMs: 12, maxMs: 12 },
+        candidateCount: 5,
+        validCandidateCount: 3,
+        invalidCandidateCount: 2,
+      },
       fileLifecycle: { storage_deleted: 1 },
     });
   });

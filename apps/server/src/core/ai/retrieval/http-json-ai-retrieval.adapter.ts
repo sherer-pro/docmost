@@ -1,8 +1,6 @@
 import {
   BadGatewayException,
-  GatewayTimeoutException,
   Injectable,
-  PayloadTooLargeException,
 } from '@nestjs/common';
 import { validate as isUuid } from 'uuid';
 import { AI_RETRIEVAL_DEFAULTS } from '../ai.constants';
@@ -11,14 +9,14 @@ import {
   AiRetrievalHit,
   AiRetrievalRequest,
 } from '../ai.types';
-import { AiRetrievalUrlPolicyService } from '../services/ai-retrieval-url-policy.service';
 import { AiRetrievalAdapter } from './ai-retrieval.adapter';
+import { AiRetrievalHttpClient } from './ai-retrieval-http-client.service';
 
 @Injectable()
 export class HttpJsonAiRetrievalAdapter implements AiRetrievalAdapter {
   readonly kind = 'http-json-v1' as const;
 
-  constructor(private readonly urlPolicy: AiRetrievalUrlPolicyService) {}
+  constructor(private readonly http: AiRetrievalHttpClient) {}
 
   isConfigured(config: AiRetrievalConfig): boolean {
     return Boolean(
@@ -50,43 +48,19 @@ export class HttpJsonAiRetrievalAdapter implements AiRetrievalAdapter {
     request: AiRetrievalRequest,
     signal?: AbortSignal,
   ): Promise<AiRetrievalHit[]> {
-    const body = JSON.stringify(request);
-    if (
-      Buffer.byteLength(body, 'utf8') >
-      AI_RETRIEVAL_DEFAULTS.maxRequestChars
-    ) {
-      throw new PayloadTooLargeException(
-        'Retrieval request exceeds the allowed size',
-      );
+    if (!this.isConfigured(config) || !config.url) {
+      throw new BadGatewayException('Retrieval provider is not configured');
     }
-    const outbound = await this.request(
-      config,
-      {
-        method: 'POST',
-        body,
-      },
+    const payload = await this.http.requestJson<unknown>({
+      url: config.url,
+      apiKey: config.apiKey,
+      timeoutMs: config.timeoutMs,
+      method: 'POST',
+      body: JSON.stringify(request),
+      maxRequestBytes: AI_RETRIEVAL_DEFAULTS.maxRequestChars,
+      maxResponseBytes: AI_RETRIEVAL_DEFAULTS.maxResponseChars,
       signal,
-    );
-    let raw: string;
-    try {
-      raw = await this.readBoundedBody(outbound.response);
-    } catch (error) {
-      if ((error as Error)?.name === 'AbortError') {
-        throw new GatewayTimeoutException(
-          'Retrieval provider request timed out',
-        );
-      }
-      throw error;
-    } finally {
-      outbound.cleanup();
-    }
-
-    let payload: unknown;
-    try {
-      payload = JSON.parse(raw);
-    } catch {
-      throw new BadGatewayException('Retrieval provider returned invalid JSON');
-    }
+    });
 
     const hits = (payload as { items?: unknown })?.items;
     if (!Array.isArray(hits)) {
@@ -146,102 +120,4 @@ export class HttpJsonAiRetrievalAdapter implements AiRetrievalAdapter {
     };
   }
 
-  private async request(
-    config: AiRetrievalConfig,
-    init: RequestInit,
-    parentSignal?: AbortSignal,
-  ): Promise<{ response: Response; cleanup: () => void }> {
-    if (!this.isConfigured(config) || !config.url) {
-      throw new BadGatewayException('Retrieval provider is not configured');
-    }
-
-    const controller = new AbortController();
-    let rejectDeadline: ((reason?: unknown) => void) | undefined;
-    const deadline = new Promise<never>((_, reject) => {
-      rejectDeadline = reject;
-    });
-    const onParentAbort = () => {
-      controller.abort();
-      rejectDeadline?.(new DOMException('Aborted', 'AbortError'));
-    };
-    parentSignal?.addEventListener('abort', onParentAbort, { once: true });
-    const timeout = setTimeout(() => {
-      controller.abort();
-      rejectDeadline?.(
-        new GatewayTimeoutException('Retrieval provider request timed out'),
-      );
-    }, config.timeoutMs);
-
-    try {
-      const target = await Promise.race([
-        this.urlPolicy.assertAllowed(config.url),
-        deadline,
-      ]);
-      const response = await fetch(target, {
-        ...init,
-        redirect: 'manual',
-        signal: controller.signal,
-        headers: {
-          accept: 'application/json',
-          'content-type': 'application/json',
-          ...(config.apiKey
-            ? { authorization: `Bearer ${config.apiKey}` }
-            : {}),
-          ...(init.headers ?? {}),
-        },
-      });
-      if (response.status >= 300 && response.status < 400) {
-        throw new BadGatewayException(
-          'Retrieval provider redirects are not permitted',
-        );
-      }
-      if (!response.ok) {
-        throw new BadGatewayException(
-          `Retrieval provider request failed (${response.status})`,
-        );
-      }
-      return {
-        response,
-        cleanup: () => {
-          clearTimeout(timeout);
-          parentSignal?.removeEventListener('abort', onParentAbort);
-        },
-      };
-    } catch (error) {
-      clearTimeout(timeout);
-      parentSignal?.removeEventListener('abort', onParentAbort);
-      if ((error as Error)?.name === 'AbortError') {
-        throw new GatewayTimeoutException(
-          'Retrieval provider request timed out',
-        );
-      }
-      throw error;
-    }
-  }
-
-  private async readBoundedBody(response: Response): Promise<string> {
-    if (!response.body) {
-      return '';
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let result = '';
-    let bytes = 0;
-    while (true) {
-      const chunk = await reader.read();
-      if (chunk.done) {
-        break;
-      }
-      bytes += chunk.value.byteLength;
-      if (bytes > AI_RETRIEVAL_DEFAULTS.maxResponseChars) {
-        await reader.cancel();
-        throw new BadGatewayException(
-          'Retrieval provider response exceeds the allowed size',
-        );
-      }
-      result += decoder.decode(chunk.value, { stream: true });
-    }
-    return result + decoder.decode();
-  }
 }

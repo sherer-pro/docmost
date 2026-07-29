@@ -12,6 +12,7 @@ import {
   IsString,
   IsUUID,
   Length,
+  Matches,
   Max,
   MaxLength,
   Min,
@@ -51,10 +52,32 @@ export class AiQuickCommandDto {
   position?: number;
 }
 
+export class UpdateAiOpenWebUiRetrievalConfigDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(2048)
+  baseUrl?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  @Matches(/^[A-Za-z0-9_-]+$/)
+  knowledgeId?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(8192)
+  apiKey?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  clearApiKey?: boolean;
+}
+
 export class UpdateAiRetrievalConfigDto {
   @IsOptional()
   @IsIn(AI_RETRIEVAL_ADAPTERS)
-  adapter?: 'none' | 'http-json-v1';
+  adapter?: 'none' | 'http-json-v1' | 'open-webui-knowledge-v1';
 
   @IsOptional()
   @IsString()
@@ -81,6 +104,12 @@ export class UpdateAiRetrievalConfigDto {
   @Min(1)
   @Max(20)
   maxResults?: number;
+
+  @IsOptional()
+  @IsObject()
+  @ValidateNested()
+  @Type(() => UpdateAiOpenWebUiRetrievalConfigDto)
+  openWebUi?: UpdateAiOpenWebUiRetrievalConfigDto;
 }
 
 export class UpdateAiSpaceConfigDto {

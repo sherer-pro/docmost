@@ -48,6 +48,10 @@ describe('AiConfigService secret handling', () => {
       retrievalAdapter: 'http-json-v1',
       retrievalUrl: 'https://retrieval.example/query',
       retrievalApiKeyEncrypted: 'encrypted-retrieval-secret',
+      retrievalOpenWebuiBaseUrl: 'https://open-webui.example',
+      retrievalOpenWebuiApiKeyEncrypted:
+        'encrypted-open-webui-retrieval-secret',
+      retrievalOpenWebuiKnowledgeId: 'knowledge-1',
       retrievalTimeoutMs: 8000,
       retrievalMaxResults: 8,
       systemInstructions: null,
@@ -66,11 +70,19 @@ describe('AiConfigService secret handling', () => {
 
     expect(publicConfig.apiKeyConfigured).toBe(true);
     expect(publicConfig.retrieval.apiKeyConfigured).toBe(true);
+    expect(publicConfig.retrieval.openWebUi).toEqual({
+      baseUrl: 'https://open-webui.example',
+      knowledgeId: 'knowledge-1',
+      apiKeyConfigured: true,
+    });
     expect(JSON.stringify(publicConfig)).not.toContain(
       'encrypted-provider-secret',
     );
     expect(JSON.stringify(publicConfig)).not.toContain(
       'encrypted-retrieval-secret',
+    );
+    expect(JSON.stringify(publicConfig)).not.toContain(
+      'encrypted-open-webui-retrieval-secret',
     );
   });
 
@@ -81,12 +93,16 @@ describe('AiConfigService secret handling', () => {
     };
     service.retrievalUrlPolicy = {
       assertAllowed: jest.fn(async (value: string) => new URL(value)),
+      assertBaseAllowed: jest.fn(async (value: string) => new URL(value)),
     };
     const providerSecret = service.updateEncryptedSecret({
       next: 'provider-secret',
     });
     const retrievalSecret = service.updateEncryptedSecret({
       next: 'retrieval-secret',
+    });
+    const openWebUiSecret = service.updateEncryptedSecret({
+      next: 'open-webui-secret',
     });
     const existing = {
       baseUrl: 'https://provider.example/v1',
@@ -95,6 +111,9 @@ describe('AiConfigService secret handling', () => {
       retrievalAdapter: 'http-json-v1',
       retrievalUrl: 'https://retrieval.example/query',
       retrievalApiKeyEncrypted: retrievalSecret,
+      retrievalOpenWebuiBaseUrl: 'https://open-webui.example',
+      retrievalOpenWebuiApiKeyEncrypted: openWebUiSecret,
+      retrievalOpenWebuiKnowledgeId: 'knowledge-1',
       retrievalTimeoutMs: 8000,
       retrievalMaxResults: 8,
     };
@@ -107,6 +126,54 @@ describe('AiConfigService secret handling', () => {
         retrieval: { clearApiKey: true },
       }),
     ).resolves.toMatchObject({ apiKey: null });
+    await expect(
+      service.mergeRetrievalConfig(existing, {
+        retrieval: {
+          adapter: 'open-webui-knowledge-v1',
+          openWebUi: { clearApiKey: true },
+        },
+      }),
+    ).resolves.toMatchObject({
+      adapter: 'open-webui-knowledge-v1',
+      apiKey: 'retrieval-secret',
+      openWebUiApiKey: null,
+    });
+  });
+
+  it('keeps inactive adapter settings without revalidating their URLs', async () => {
+    const service = createService() as any;
+    service.retrievalUrlPolicy = {
+      assertAllowed: jest.fn(async (value: string) => new URL(value)),
+      assertBaseAllowed: jest.fn(async (value: string) => new URL(value)),
+    };
+    const existing = {
+      retrievalAdapter: 'http-json-v1',
+      retrievalUrl: 'https://legacy-retrieval.example/query',
+      retrievalApiKeyEncrypted: service.updateEncryptedSecret({
+        next: 'legacy-key',
+      }),
+      retrievalOpenWebuiBaseUrl: 'https://open-webui.example',
+      retrievalOpenWebuiApiKeyEncrypted: service.updateEncryptedSecret({
+        next: 'open-webui-key',
+      }),
+      retrievalOpenWebuiKnowledgeId: 'knowledge-1',
+      retrievalTimeoutMs: 8000,
+      retrievalMaxResults: 8,
+    };
+
+    await expect(
+      service.mergeRetrievalConfig(existing, {
+        retrieval: { adapter: 'open-webui-knowledge-v1' },
+      }),
+    ).resolves.toMatchObject({
+      adapter: 'open-webui-knowledge-v1',
+      url: 'https://legacy-retrieval.example/query',
+      apiKey: 'legacy-key',
+      openWebUiBaseUrl: 'https://open-webui.example',
+      openWebUiKnowledgeId: 'knowledge-1',
+      openWebUiApiKey: 'open-webui-key',
+    });
+    expect(service.retrievalUrlPolicy.assertAllowed).not.toHaveBeenCalled();
   });
 });
 
