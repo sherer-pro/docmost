@@ -48,16 +48,16 @@ describe('AiRunService', () => {
     ).resolves.toBe(false);
   });
 
-  it('admits a fifth active AI run for the user', async () => {
+  it('admits a sixth active AI run for the user', async () => {
     const results = [
       { count: 0 },
       { count: 0 },
       { tokens: 0 },
       { tokens: 0 },
       { count: 0 },
-      { count: 4 },
+      { count: 5 },
       { count: 0 },
-      { count: 4 },
+      { count: 5 },
       { count: 0 },
     ];
     const query: any = {
@@ -82,16 +82,16 @@ describe('AiRunService', () => {
     ).resolves.toBeUndefined();
   });
 
-  it('rejects a sixth active AI run for the user', async () => {
+  it('rejects a seventh active AI run for the user', async () => {
     const results = [
       { count: 0 },
       { count: 0 },
       { tokens: 0 },
       { tokens: 0 },
       { count: 0 },
-      { count: 5 },
+      { count: 6 },
       { count: 0 },
-      { count: 5 },
+      { count: 6 },
       { count: 0 },
     ];
     const query: any = {
