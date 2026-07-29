@@ -82,7 +82,10 @@ describe('AiRetrievalService', () => {
       {} as any,
       {} as any,
       {} as any,
-      { observeRetrieval: jest.fn() } as any,
+      {
+        observeRetrieval: jest.fn(),
+        observeRetrievalQuery: jest.fn(),
+      } as any,
     );
 
     const sources = await (service as any).resolveSafeSources(
@@ -172,7 +175,10 @@ describe('AiRetrievalService', () => {
       } as any,
       httpAdapter as any,
       { kind: 'none' } as any,
-      { observeRetrieval: jest.fn() } as any,
+      {
+        observeRetrieval: jest.fn(),
+        observeRetrievalQuery: jest.fn(),
+      } as any,
     );
 
     await expect(

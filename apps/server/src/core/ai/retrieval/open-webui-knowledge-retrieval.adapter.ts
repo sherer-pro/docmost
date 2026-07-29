@@ -1,0 +1,267 @@
+import { BadGatewayException, Injectable } from '@nestjs/common';
+import { validate as isUuid } from 'uuid';
+import { AI_RETRIEVAL_DEFAULTS } from '../ai.constants';
+import {
+  AiRetrievalConfig,
+  AiRetrievalHit,
+  AiRetrievalRequest,
+} from '../ai.types';
+import { AiRetrievalAdapter } from './ai-retrieval.adapter';
+import {
+  AiRetrievalHttpClient,
+  AiRetrievalHttpError,
+} from './ai-retrieval-http-client.service';
+
+type OpenWebUiQueryResponse = {
+  documents?: unknown;
+  metadatas?: unknown;
+  distances?: unknown;
+};
+
+@Injectable()
+export class OpenWebUiKnowledgeRetrievalAdapter
+  implements AiRetrievalAdapter
+{
+  readonly kind = 'open-webui-knowledge-v1' as const;
+
+  constructor(private readonly http: AiRetrievalHttpClient) {}
+
+  isConfigured(config: AiRetrievalConfig): boolean {
+    return Boolean(
+      config.adapter === this.kind &&
+        config.openWebUiBaseUrl?.trim() &&
+        config.openWebUiApiKey?.trim() &&
+        config.openWebUiKnowledgeId?.trim(),
+    );
+  }
+
+  async test(
+    config: AiRetrievalConfig,
+    request: AiRetrievalRequest,
+    signal?: AbortSignal,
+  ) {
+    this.assertConfigured(config);
+    const startedAt = Date.now();
+    let remoteVersion: string | undefined;
+    try {
+      const version = await this.http.requestJson<{ version?: unknown }>({
+        url: this.endpoint(config, 'api/version'),
+        apiKey: config.openWebUiApiKey,
+        timeoutMs: config.timeoutMs,
+        maxRequestBytes: 0,
+        maxResponseBytes: 16 * 1024,
+        signal,
+      });
+      if (typeof version.version === 'string') {
+        remoteVersion = version.version.slice(0, 64);
+      }
+    } catch {
+      // The query capability is authoritative; version discovery is optional.
+    }
+
+    try {
+      await this.http.requestJson<unknown>({
+        url: this.endpoint(
+          config,
+          `api/v1/knowledge/${encodeURIComponent(
+            config.openWebUiKnowledgeId!,
+          )}`,
+        ),
+        apiKey: config.openWebUiApiKey,
+        timeoutMs: config.timeoutMs,
+        maxRequestBytes: 0,
+        maxResponseBytes: 1024 * 1024,
+        signal,
+      });
+    } catch (error) {
+      if (
+        error instanceof AiRetrievalHttpError &&
+        [401, 403, 404].includes(error.remoteStatus)
+      ) {
+        throw new BadGatewayException({
+          code: 'retrieval_collection_unavailable',
+          message: 'Open WebUI knowledge collection is unavailable',
+        });
+      }
+      throw error;
+    }
+
+    const result = await this.fetchCandidates(config, request, signal);
+    return {
+      ok: true as const,
+      latencyMs: Date.now() - startedAt,
+      adapter: this.kind,
+      ...(remoteVersion ? { remoteVersion } : {}),
+      candidateCount: result.candidateCount,
+      validCandidateCount: result.hits.length,
+      state: result.hits.length > 0 ? ('ready' as const) : ('empty' as const),
+    };
+  }
+
+  async retrieve(
+    config: AiRetrievalConfig,
+    request: AiRetrievalRequest,
+    signal?: AbortSignal,
+  ): Promise<AiRetrievalHit[]> {
+    return (await this.fetchCandidates(config, request, signal)).hits;
+  }
+
+  private async fetchCandidates(
+    config: AiRetrievalConfig,
+    request: AiRetrievalRequest,
+    signal?: AbortSignal,
+  ): Promise<{ hits: AiRetrievalHit[]; candidateCount: number }> {
+    this.assertConfigured(config);
+    const payload = await this.http.requestJson<OpenWebUiQueryResponse>({
+      url: this.endpoint(config, 'api/v1/retrieval/query/collection'),
+      apiKey: config.openWebUiApiKey,
+      timeoutMs: config.timeoutMs,
+      method: 'POST',
+      body: JSON.stringify({
+        collection_names: [config.openWebUiKnowledgeId],
+        query: request.query,
+        k: AI_RETRIEVAL_DEFAULTS.candidateLimit,
+      }),
+      maxRequestBytes: AI_RETRIEVAL_DEFAULTS.maxRequestChars,
+      maxResponseBytes: AI_RETRIEVAL_DEFAULTS.maxResponseChars,
+      signal,
+    });
+
+    const documents = this.firstArray(payload.documents);
+    const metadatas = this.firstArray(payload.metadatas);
+    const distances = this.firstArray(payload.distances);
+    const candidateCount = Math.min(
+      documents.length,
+      AI_RETRIEVAL_DEFAULTS.candidateLimit,
+    );
+    if (candidateCount === 0) {
+      return { hits: [], candidateCount: 0 };
+    }
+
+    const hits: AiRetrievalHit[] = [];
+    for (let index = 0; index < candidateCount; index += 1) {
+      const parsed = this.parseCandidate(
+        documents[index],
+        metadatas[index],
+        distances[index],
+        request,
+      );
+      if (parsed) hits.push(parsed);
+    }
+    if (hits.length === 0) {
+      throw new BadGatewayException({
+        code: 'retrieval_invalid_response',
+        message: 'Open WebUI returned no compatible Docmost metadata',
+      });
+    }
+
+    const deduplicated = new Map<string, AiRetrievalHit>();
+    for (const hit of hits) {
+      const key = `${hit.sourceType}:${hit.sourceId}:${hit.pageId}`;
+      const previous = deduplicated.get(key);
+      if (
+        !previous ||
+        Number(hit.score ?? Number.NEGATIVE_INFINITY) >
+          Number(previous.score ?? Number.NEGATIVE_INFINITY)
+      ) {
+        deduplicated.set(key, hit);
+      }
+    }
+    return { hits: [...deduplicated.values()], candidateCount };
+  }
+
+  private parseCandidate(
+    document: unknown,
+    metadataValue: unknown,
+    distance: unknown,
+    request: AiRetrievalRequest,
+  ): AiRetrievalHit | null {
+    if (
+      typeof document !== 'string' ||
+      document.length === 0 ||
+      Buffer.byteLength(document, 'utf8') >
+        AI_RETRIEVAL_DEFAULTS.maxHitChars ||
+      !metadataValue ||
+      typeof metadataValue !== 'object'
+    ) {
+      return null;
+    }
+    const metadata = metadataValue as Record<string, unknown>;
+    const nestedData =
+      metadata.data && typeof metadata.data === 'object'
+        ? (metadata.data as Record<string, unknown>)
+        : undefined;
+    const docmostValue = nestedData?.docmost ?? metadata.docmost;
+    if (!docmostValue || typeof docmostValue !== 'object') {
+      return null;
+    }
+    const docmost = docmostValue as Record<string, unknown>;
+    if (
+      docmost.schemaVersion !== 1 ||
+      docmost.workspaceId !== request.workspaceId ||
+      docmost.spaceId !== request.spaceId ||
+      !['page', 'database_row', 'attachment'].includes(
+        String(docmost.sourceType),
+      ) ||
+      typeof docmost.sourceId !== 'string' ||
+      typeof docmost.pageId !== 'string' ||
+      !isUuid(docmost.sourceId) ||
+      !isUuid(docmost.pageId)
+    ) {
+      return null;
+    }
+    return {
+      sourceType: docmost.sourceType as AiRetrievalHit['sourceType'],
+      sourceId: docmost.sourceId,
+      pageId: docmost.pageId,
+      text: document,
+      ...(Number.isFinite(distance)
+        ? { score: this.distanceToScore(Number(distance)) }
+        : {}),
+    };
+  }
+
+  private distanceToScore(distance: number): number {
+    return 1 / (1 + Math.max(0, distance));
+  }
+
+  private firstArray(value: unknown): unknown[] {
+    return Array.isArray(value) && Array.isArray(value[0]) ? value[0] : [];
+  }
+
+  private endpoint(config: AiRetrievalConfig, path: string): string {
+    this.assertConfigured(config);
+    let base: URL;
+    try {
+      base = new URL(config.openWebUiBaseUrl!);
+    } catch {
+      throw new BadGatewayException({
+        code: 'retrieval_url_rejected',
+        message: 'Open WebUI Base URL is invalid',
+      });
+    }
+    if (
+      base.username ||
+      base.password ||
+      base.hash ||
+      base.search ||
+      base.pathname !== '/' ||
+      !['http:', 'https:'].includes(base.protocol)
+    ) {
+      throw new BadGatewayException({
+        code: 'retrieval_url_rejected',
+        message: 'Open WebUI Base URL is invalid',
+      });
+    }
+    const normalized = base.toString().replace(/\/+$/, '') + '/';
+    return new URL(path.replace(/^\/+/, ''), normalized).toString();
+  }
+
+  private assertConfigured(config: AiRetrievalConfig): void {
+    if (!this.isConfigured(config)) {
+      throw new BadGatewayException(
+        'Open WebUI retrieval is not configured',
+      );
+    }
+  }
+}

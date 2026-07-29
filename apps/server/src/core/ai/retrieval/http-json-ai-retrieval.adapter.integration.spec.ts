@@ -3,6 +3,7 @@ import { once } from 'node:events';
 import { createServer, Server } from 'node:http';
 import { AddressInfo } from 'node:net';
 import { HttpJsonAiRetrievalAdapter } from './http-json-ai-retrieval.adapter';
+import { AiRetrievalHttpClient } from './ai-retrieval-http-client.service';
 
 describe('HttpJsonAiRetrievalAdapter integration', () => {
   const pageId = '0198f2f5-a5a3-7000-8000-000000000004';
@@ -44,9 +45,11 @@ describe('HttpJsonAiRetrievalAdapter integration', () => {
   });
 
   beforeEach(() => {
-    adapter = new HttpJsonAiRetrievalAdapter({
-      assertAllowed: jest.fn(async (value: string) => new URL(value)),
-    } as any);
+    adapter = new HttpJsonAiRetrievalAdapter(
+      new AiRetrievalHttpClient({
+        assertAllowed: jest.fn(async (value: string) => new URL(value)),
+      } as any),
+    );
   });
 
   afterAll(async () => {

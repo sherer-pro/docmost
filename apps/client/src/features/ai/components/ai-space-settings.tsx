@@ -6,6 +6,7 @@ import {
   NumberInput,
   PasswordInput,
   Paper,
+  Select,
   SimpleGrid,
   Stack,
   Switch,
@@ -49,6 +50,7 @@ import {
 import {
   AiModelTestResult,
   AiQuickCommand,
+  AiRetrievalAdapter,
   AiRetrievalTestResult,
   AiSpaceConfigUpdate,
 } from "@/features/ai/types/ai.types.ts";
@@ -72,8 +74,12 @@ type AiSettingsForm = {
   retentionDays: number;
   visionEnabled: boolean;
   retrievalEnabled: boolean;
+  retrievalAdapter: Exclude<AiRetrievalAdapter, "none">;
   retrievalUrl: string;
   retrievalApiKey: string;
+  openWebUiBaseUrl: string;
+  openWebUiKnowledgeId: string;
+  openWebUiApiKey: string;
   retrievalTimeoutMs: number;
   retrievalMaxResults: number;
   quickCommands: AiQuickCommand[];
@@ -94,8 +100,12 @@ const DEFAULT_FORM: AiSettingsForm = {
   retentionDays: AI_SPACE_CONFIG_DEFAULTS.retentionDays,
   visionEnabled: false,
   retrievalEnabled: false,
+  retrievalAdapter: "http-json-v1",
   retrievalUrl: "",
   retrievalApiKey: "",
+  openWebUiBaseUrl: "",
+  openWebUiKnowledgeId: "",
+  openWebUiApiKey: "",
   retrievalTimeoutMs: AI_RETRIEVAL_CONFIG_DEFAULTS.timeoutMs,
   retrievalMaxResults: AI_RETRIEVAL_CONFIG_DEFAULTS.maxResults,
   quickCommands: [],
@@ -116,6 +126,7 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
   >(null);
   const [clearApiKey, setClearApiKey] = useState(false);
   const [clearRetrievalApiKey, setClearRetrievalApiKey] = useState(false);
+  const [clearOpenWebUiApiKey, setClearOpenWebUiApiKey] = useState(false);
   const form = useForm<AiSettingsForm>({
     initialValues: DEFAULT_FORM,
     validate: {
@@ -124,8 +135,30 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
       chatModel: (value) =>
         value.trim() ? null : t("ai.settings.modelRequired"),
       retrievalUrl: (value, values) =>
-        values.retrievalEnabled && !/^https?:\/\/.+/i.test(value)
+        values.retrievalEnabled &&
+        values.retrievalAdapter === "http-json-v1" &&
+        !/^https?:\/\/.+/i.test(value)
           ? t("ai.settings.invalidUrl")
+          : null,
+      openWebUiBaseUrl: (value, values) =>
+        values.retrievalEnabled &&
+        values.retrievalAdapter === "open-webui-knowledge-v1" &&
+        !isHttpOrigin(value)
+          ? t("ai.settings.openWebUiBaseUrlInvalid")
+          : null,
+      openWebUiKnowledgeId: (value, values) =>
+        values.retrievalEnabled &&
+        values.retrievalAdapter === "open-webui-knowledge-v1" &&
+        !value.trim()
+          ? t("ai.settings.openWebUiKnowledgeIdRequired")
+          : null,
+      openWebUiApiKey: (value, values) =>
+        values.retrievalEnabled &&
+        values.retrievalAdapter === "open-webui-knowledge-v1" &&
+        !value.trim() &&
+        (!configQuery.data?.retrieval.openWebUi.apiKeyConfigured ||
+          clearOpenWebUiApiKey)
+          ? t("ai.settings.openWebUiApiKeyRequired")
           : null,
     },
   });
@@ -151,8 +184,18 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
       retentionDays: config.retentionDays,
       visionEnabled: config.visionEnabled,
       retrievalEnabled: config.retrieval.adapter !== "none",
+      retrievalAdapter:
+        config.retrieval.adapter === "open-webui-knowledge-v1" ||
+        (config.retrieval.adapter === "none" &&
+          !config.retrieval.url &&
+          Boolean(config.retrieval.openWebUi.baseUrl))
+          ? "open-webui-knowledge-v1"
+          : "http-json-v1",
       retrievalUrl: config.retrieval.url ?? "",
       retrievalApiKey: "",
+      openWebUiBaseUrl: config.retrieval.openWebUi.baseUrl ?? "",
+      openWebUiKnowledgeId: config.retrieval.openWebUi.knowledgeId ?? "",
+      openWebUiApiKey: "",
       retrievalTimeoutMs: config.retrieval.timeoutMs,
       retrievalMaxResults: config.retrieval.maxResults,
       quickCommands: config.quickCommands ?? [],
@@ -160,6 +203,7 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
     form.resetDirty();
     setClearApiKey(false);
     setClearRetrievalApiKey(false);
+    setClearOpenWebUiApiKey(false);
   }, [configQuery.data]);
 
   const toPayload = (values: AiSettingsForm): AiSpaceConfigUpdate => ({
@@ -179,12 +223,34 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
     retentionDays: values.retentionDays,
     visionEnabled: values.visionEnabled,
     retrieval: {
-      adapter: values.retrievalEnabled ? "http-json-v1" : "none",
-      url: values.retrievalEnabled ? values.retrievalUrl.trim() : null,
-      ...(values.retrievalApiKey.trim()
-        ? { apiKey: values.retrievalApiKey.trim() }
-        : {}),
-      ...(clearRetrievalApiKey ? { clearApiKey: true } : {}),
+      adapter: values.retrievalEnabled ? values.retrievalAdapter : "none",
+      ...(values.retrievalEnabled &&
+      values.retrievalAdapter === "http-json-v1"
+        ? {
+            url: values.retrievalUrl.trim() || null,
+            ...(values.retrievalApiKey.trim()
+              ? { apiKey: values.retrievalApiKey.trim() }
+              : {}),
+            ...(clearRetrievalApiKey ? { clearApiKey: true } : {}),
+          }
+        : clearRetrievalApiKey
+          ? { clearApiKey: true }
+          : {}),
+      ...(values.retrievalEnabled &&
+      values.retrievalAdapter === "open-webui-knowledge-v1"
+        ? {
+            openWebUi: {
+              baseUrl: values.openWebUiBaseUrl.trim() || null,
+              knowledgeId: values.openWebUiKnowledgeId.trim() || null,
+              ...(values.openWebUiApiKey.trim()
+                ? { apiKey: values.openWebUiApiKey.trim() }
+                : {}),
+              ...(clearOpenWebUiApiKey ? { clearApiKey: true } : {}),
+            },
+          }
+        : clearOpenWebUiApiKey
+          ? { openWebUi: { clearApiKey: true } }
+          : {}),
       timeoutMs: values.retrievalTimeoutMs,
       maxResults: values.retrievalMaxResults,
     },
@@ -194,12 +260,16 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
     })),
   });
 
-  const confirmClearKey = (target: "model" | "retrieval") => {
+  const confirmClearKey = (
+    target: "model" | "retrieval" | "openWebUi",
+  ) => {
     modals.openConfirmModal({
       title:
         target === "model"
           ? t("ai.settings.clearApiKey")
-          : t("ai.settings.clearRetrievalApiKey"),
+          : target === "openWebUi"
+            ? t("ai.settings.clearOpenWebUiApiKey")
+            : t("ai.settings.clearRetrievalApiKey"),
       children: <Text size="sm">{t("ai.settings.clearApiKeyConfirm")}</Text>,
       labels: {
         confirm: t("ai.delete"),
@@ -210,9 +280,12 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
         if (target === "model") {
           setClearApiKey(true);
           form.setFieldValue("apiKey", "");
-        } else {
+        } else if (target === "retrieval") {
           setClearRetrievalApiKey(true);
           form.setFieldValue("retrievalApiKey", "");
+        } else {
+          setClearOpenWebUiApiKey(true);
+          form.setFieldValue("openWebUiApiKey", "");
         }
       },
     });
@@ -222,8 +295,11 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
     try {
       await updateConfig.mutateAsync(toPayload(values));
       form.setFieldValue("apiKey", "");
+      form.setFieldValue("retrievalApiKey", "");
+      form.setFieldValue("openWebUiApiKey", "");
       setClearApiKey(false);
       setClearRetrievalApiKey(false);
+      setClearOpenWebUiApiKey(false);
       form.resetDirty();
       notifications.show({ message: t("ai.settings.saved") });
     } catch (error) {
@@ -642,42 +718,117 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
             />
             {form.values.retrievalEnabled && (
               <Stack gap="md" className={classes.retrievalFields}>
-                <TextInput
-                  label={t("ai.settings.retrievalUrl")}
-                  description={t("ai.settings.retrievalUrlDescription")}
-                  placeholder="https://rag.example.com/query"
-                  required
-                  {...form.getInputProps("retrievalUrl")}
+                <Select
+                  label={t("ai.settings.retrievalAdapter")}
+                  description={t("ai.settings.retrievalAdapterDescription")}
+                  data={[
+                    {
+                      value: "http-json-v1",
+                      label: t("ai.settings.retrievalAdapterHttpJson"),
+                    },
+                    {
+                      value: "open-webui-knowledge-v1",
+                      label: t("ai.settings.retrievalAdapterOpenWebUi"),
+                    },
+                  ]}
+                  allowDeselect={false}
+                  {...form.getInputProps("retrievalAdapter")}
                 />
-                <PasswordInput
-                  label={t("ai.settings.retrievalApiKey")}
-                  description={
-                    configQuery.data?.retrieval.apiKeyConfigured &&
-                    !clearRetrievalApiKey
-                      ? t("ai.settings.apiKeyConfigured")
-                      : t("ai.settings.apiKeyOptional")
-                  }
-                  disabled={clearRetrievalApiKey}
-                  {...form.getInputProps("retrievalApiKey")}
-                />
-                {configQuery.data?.retrieval.apiKeyConfigured && (
-                  <Button
-                    type="button"
-                    variant={clearRetrievalApiKey ? "filled" : "subtle"}
-                    color={clearRetrievalApiKey ? "red" : "gray"}
-                    size="xs"
-                    leftSection={<IconKeyOff size={15} />}
-                    className={classes.keyAction}
-                    onClick={() =>
-                      clearRetrievalApiKey
-                        ? setClearRetrievalApiKey(false)
-                        : confirmClearKey("retrieval")
-                    }
-                  >
-                    {clearRetrievalApiKey
-                      ? t("ai.settings.keepApiKey")
-                      : t("ai.settings.clearRetrievalApiKey")}
-                  </Button>
+                {form.values.retrievalAdapter === "http-json-v1" ? (
+                  <>
+                    <TextInput
+                      label={t("ai.settings.retrievalUrl")}
+                      description={t("ai.settings.retrievalUrlDescription")}
+                      placeholder="https://rag.example.com/query"
+                      required
+                      {...form.getInputProps("retrievalUrl")}
+                    />
+                    <PasswordInput
+                      label={t("ai.settings.retrievalApiKey")}
+                      description={
+                        configQuery.data?.retrieval.apiKeyConfigured &&
+                        !clearRetrievalApiKey
+                          ? t("ai.settings.apiKeyConfigured")
+                          : t("ai.settings.apiKeyOptional")
+                      }
+                      disabled={clearRetrievalApiKey}
+                      {...form.getInputProps("retrievalApiKey")}
+                    />
+                    {configQuery.data?.retrieval.apiKeyConfigured && (
+                      <Button
+                        type="button"
+                        variant={
+                          clearRetrievalApiKey ? "filled" : "subtle"
+                        }
+                        color={clearRetrievalApiKey ? "red" : "gray"}
+                        size="xs"
+                        leftSection={<IconKeyOff size={15} />}
+                        className={classes.keyAction}
+                        onClick={() =>
+                          clearRetrievalApiKey
+                            ? setClearRetrievalApiKey(false)
+                            : confirmClearKey("retrieval")
+                        }
+                      >
+                        {clearRetrievalApiKey
+                          ? t("ai.settings.keepApiKey")
+                          : t("ai.settings.clearRetrievalApiKey")}
+                      </Button>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <TextInput
+                      label={t("ai.settings.openWebUiBaseUrl")}
+                      description={t(
+                        "ai.settings.openWebUiBaseUrlDescription",
+                      )}
+                      placeholder="https://open-webui.example.com"
+                      required
+                      {...form.getInputProps("openWebUiBaseUrl")}
+                    />
+                    <TextInput
+                      label={t("ai.settings.openWebUiKnowledgeId")}
+                      description={t(
+                        "ai.settings.openWebUiKnowledgeIdDescription",
+                      )}
+                      required
+                      {...form.getInputProps("openWebUiKnowledgeId")}
+                    />
+                    <PasswordInput
+                      label={t("ai.settings.openWebUiApiKey")}
+                      description={
+                        configQuery.data?.retrieval.openWebUi
+                          .apiKeyConfigured && !clearOpenWebUiApiKey
+                          ? t("ai.settings.apiKeyConfigured")
+                          : t("ai.settings.openWebUiApiKeyRequired")
+                      }
+                      disabled={clearOpenWebUiApiKey}
+                      {...form.getInputProps("openWebUiApiKey")}
+                    />
+                    {configQuery.data?.retrieval.openWebUi
+                      .apiKeyConfigured && (
+                      <Button
+                        type="button"
+                        variant={
+                          clearOpenWebUiApiKey ? "filled" : "subtle"
+                        }
+                        color={clearOpenWebUiApiKey ? "red" : "gray"}
+                        size="xs"
+                        leftSection={<IconKeyOff size={15} />}
+                        className={classes.keyAction}
+                        onClick={() =>
+                          clearOpenWebUiApiKey
+                            ? setClearOpenWebUiApiKey(false)
+                            : confirmClearKey("openWebUi")
+                        }
+                      >
+                        {clearOpenWebUiApiKey
+                          ? t("ai.settings.keepApiKey")
+                          : t("ai.settings.clearOpenWebUiApiKey")}
+                      </Button>
+                    )}
+                  </>
                 )}
                 <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
                   <NumberInput
@@ -715,7 +866,16 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
                     {"errorMessage" in retrievalTestResult
                       ? retrievalTestResult.errorMessage
                       : retrievalTestResult.ok
-                        ? t("ai.settings.retrievalTestSucceeded")
+                        ? t(
+                            retrievalTestResult.state === "empty"
+                              ? "ai.settings.retrievalTestEmpty"
+                              : "ai.settings.retrievalTestSucceeded",
+                            {
+                              version:
+                                retrievalTestResult.remoteVersion ??
+                                t("ai.settings.unknownVersion"),
+                            },
+                          )
                         : t("ai.settings.retrievalTestFailed")}
                   </Alert>
                 )}
@@ -790,6 +950,22 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
       </Stack>
     </form>
   );
+}
+
+function isHttpOrigin(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      ["http:", "https:"].includes(url.protocol) &&
+      !url.username &&
+      !url.password &&
+      !url.search &&
+      !url.hash &&
+      url.pathname === "/"
+    );
+  } catch {
+    return false;
+  }
 }
 
 function SettingsSection({

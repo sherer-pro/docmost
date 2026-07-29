@@ -18,7 +18,11 @@ export const AI_RETRIEVAL_CONFIG_DEFAULTS = {
   maxResults: 8,
 } as const;
 
-export const AI_RETRIEVAL_ADAPTERS = ["none", "http-json-v1"] as const;
+export const AI_RETRIEVAL_ADAPTERS = [
+  "none",
+  "http-json-v1",
+  "open-webui-knowledge-v1",
+] as const;
 export type AiRetrievalAdapter = (typeof AI_RETRIEVAL_ADAPTERS)[number];
 
 export const AI_RETRIEVAL_OUTCOMES = [
@@ -122,6 +126,8 @@ export const AI_ERROR_CODES = [
   "retrieval_timeout",
   "retrieval_unavailable",
   "retrieval_url_rejected",
+  "retrieval_invalid_response",
+  "retrieval_collection_unavailable",
   "ai_file_processing_failed",
   "ai_file_upload_failed",
   "ai_context_revision_conflict",
@@ -157,6 +163,11 @@ export interface AiRetrievalConfig {
   apiKeyConfigured: boolean;
   timeoutMs: number;
   maxResults: number;
+  openWebUi: {
+    baseUrl: string | null;
+    knowledgeId: string | null;
+    apiKeyConfigured: boolean;
+  };
 }
 
 export interface AiRetrievalConfigUpdate {
@@ -166,6 +177,12 @@ export interface AiRetrievalConfigUpdate {
   clearApiKey?: boolean;
   timeoutMs?: number;
   maxResults?: number;
+  openWebUi?: {
+    baseUrl?: string | null;
+    knowledgeId?: string | null;
+    apiKey?: string;
+    clearApiKey?: boolean;
+  };
 }
 
 export interface AiSpaceConfig {
@@ -483,6 +500,11 @@ export interface AiRetrievalTestResult {
   skipped?: boolean;
   itemCount?: number;
   latencyMs: number;
+  adapter?: AiRetrievalAdapter;
+  remoteVersion?: string;
+  candidateCount?: number;
+  validCandidateCount?: number;
+  state?: "ready" | "empty";
 }
 
 export interface AiPageAttachment {

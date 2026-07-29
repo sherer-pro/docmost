@@ -4,6 +4,7 @@ import {
   PayloadTooLargeException,
 } from '@nestjs/common';
 import { HttpJsonAiRetrievalAdapter } from './http-json-ai-retrieval.adapter';
+import { AiRetrievalHttpClient } from './ai-retrieval-http-client.service';
 
 describe('HttpJsonAiRetrievalAdapter', () => {
   const config = {
@@ -30,9 +31,11 @@ describe('HttpJsonAiRetrievalAdapter', () => {
 
   beforeEach(() => {
     originalFetch = global.fetch;
-    adapter = new HttpJsonAiRetrievalAdapter({
-      assertAllowed: jest.fn(async (value: string) => new URL(value)),
-    } as any);
+    adapter = new HttpJsonAiRetrievalAdapter(
+      new AiRetrievalHttpClient({
+        assertAllowed: jest.fn(async (value: string) => new URL(value)),
+      } as any),
+    );
   });
 
   afterEach(() => {
@@ -137,9 +140,11 @@ describe('HttpJsonAiRetrievalAdapter', () => {
   });
 
   it('includes URL policy resolution in the retrieval timeout', async () => {
-    adapter = new HttpJsonAiRetrievalAdapter({
-      assertAllowed: jest.fn(() => new Promise<URL>(() => undefined)),
-    } as any);
+    adapter = new HttpJsonAiRetrievalAdapter(
+      new AiRetrievalHttpClient({
+        assertAllowed: jest.fn(() => new Promise<URL>(() => undefined)),
+      } as any),
+    );
 
     await expect(
       adapter.retrieve({ ...config, timeoutMs: 20 }, request),
