@@ -1,6 +1,25 @@
 import { AiAuxRunService } from './ai-aux-run.service';
 
-describe('AiAuxRunService queue delivery', () => {
+describe('AiAuxRunService', () => {
+  function createAdmissionService(results: Array<Record<string, number>>) {
+    const query: any = {
+      select: jest.fn(() => query),
+      where: jest.fn(() => query),
+      executeTakeFirstOrThrow: jest.fn(async () => results.shift()),
+    };
+    const db = { selectFrom: jest.fn(() => query) };
+    return {
+      db,
+      service: new AiAuxRunService(
+        db as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+      ),
+    };
+  }
+
   it('uses a BullMQ-safe deterministic job id and a runId-only payload', async () => {
     const add = jest.fn().mockResolvedValue(undefined);
     const updateQuery: any = {};
@@ -52,5 +71,60 @@ describe('AiAuxRunService queue delivery', () => {
       service.enqueue({ id: 'run-id', status: 'queued' } as any),
     ).resolves.toBe(true);
     expect(add).not.toHaveBeenCalled();
+  });
+
+  it('admits a fifth active AI run for an editor action', async () => {
+    const { db, service } = createAdmissionService([
+      { count: 0 },
+      { count: 0 },
+      { tokens: 0 },
+      { tokens: 0 },
+      { count: 4 },
+      { count: 0 },
+      { count: 4 },
+      { count: 0 },
+    ]);
+
+    await expect(
+      (service as any).assertAdmission(
+        db,
+        'user-id',
+        'workspace-id',
+        'space-id',
+        100,
+        10000,
+        100,
+      ),
+    ).resolves.toBeUndefined();
+  });
+
+  it('rejects a sixth active AI run for an editor action', async () => {
+    const { db, service } = createAdmissionService([
+      { count: 0 },
+      { count: 0 },
+      { tokens: 0 },
+      { tokens: 0 },
+      { count: 5 },
+      { count: 0 },
+      { count: 5 },
+      { count: 0 },
+    ]);
+
+    await expect(
+      (service as any).assertAdmission(
+        db,
+        'user-id',
+        'workspace-id',
+        'space-id',
+        100,
+        10000,
+        100,
+      ),
+    ).rejects.toMatchObject({
+      status: 409,
+      response: {
+        code: 'ai_conversation_busy',
+      },
+    });
   });
 });
