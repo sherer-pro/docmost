@@ -9,7 +9,8 @@ This document describes the current RAG API contract implemented in `docmost` co
 - All RAG endpoints are read-only (`GET`)
 - RAG endpoints return raw JSON (not wrapped into `{ data, success, status }`)
 - Export endpoints return ZIP streams (`application/zip`)
-- RAG endpoints currently do not support pagination
+- Delta feeds support optional cursor pagination while preserving the legacy
+  unpaginated response when `limit` and `cursor` are omitted
 
 ## 2. Authentication and scope
 
@@ -110,6 +111,18 @@ Rules:
   - `assigneeId: string | null`
   - `stakeholderIds: string[]` (empty array allowed)
 
+### 4.5 Delta pagination
+
+`/rag/updates`, `/rag/deleted`, `/rag/attachments/updates`, and
+`/rag/attachments/deleted` accept:
+
+- `limit` (optional, `1..1000`);
+- `cursor` (optional opaque string returned as `nextCursor`).
+
+Responses retain `items` and `maxUpdatedAtMs|maxDeletedAtMs` and add `hasMore`
+and `nextCursor`. The cursor binds the feed kind, timestamp, and ID tie-breaker;
+an invalid or cross-feed cursor returns `400`. Consumers should not parse it.
+
 ## 5. RAG endpoints
 
 ### 5.1 `GET /api/rag/pages`
@@ -159,7 +172,29 @@ Sort order:
 - `deletedAt ASC`
 - tie-breaker: `id ASC`
 
-### 5.4 `GET /api/rag/pages/:pageIdOrSlug`
+### 5.4 `GET /api/rag/attachments/updates`
+
+Live attachment delta scoped to the API key's space and the creator's current
+read access to the owning page.
+
+Query:
+
+- `updatedSince` (required): Unix timestamp in milliseconds (`>= 0`)
+- optional `limit` and `cursor` as described above
+
+Items include `fileId`, file metadata, owning `pageId`, `updatedAtMs`, and an
+API-key-authenticated `downloadUrl`.
+
+### 5.5 `GET /api/rag/attachments/deleted`
+
+Attachment tombstones for the scoped space.
+
+Query:
+
+- `deletedSince` (required): Unix timestamp in milliseconds (`>= 0`)
+- optional `limit` and `cursor`
+
+### 5.6 `GET /api/rag/pages/:pageIdOrSlug`
 
 Page/document detail.
 
@@ -171,7 +206,7 @@ Query:
 
 - `includeContent` (optional, default `true`)
 
-### 5.5 `GET /api/rag/databases/:databaseIdOrPageSlug`
+### 5.7 `GET /api/rag/databases/:databaseIdOrPageSlug`
 
 Full structured database export.
 
@@ -183,7 +218,7 @@ Params:
 
 Includes metadata, properties, rows/cells, and composed `knowledgeMarkdown`.
 
-### 5.6 `GET /api/rag/databases/:databaseIdOrPageSlug/rows`
+### 5.8 `GET /api/rag/databases/:databaseIdOrPageSlug/rows`
 
 Rows export (raw cells + row markdown).
 
@@ -194,11 +229,11 @@ Query:
   - repeated format: `?pageIds=id1&pageIds=id2`
   - omitted -> all rows
 
-### 5.7 `GET /api/rag/pages/:pageIdOrSlug/attachments`
+### 5.9 `GET /api/rag/pages/:pageIdOrSlug/attachments`
 
 Attachment metadata list for the page, including ready-to-use `downloadUrl`.
 
-### 5.8 `GET /api/rag/attachments/:fileId/:fileName`
+### 5.10 `GET /api/rag/attachments/:fileId/:fileName`
 
 Attachment binary stream.
 
@@ -209,11 +244,13 @@ Response headers:
 - `Content-Length` (when known)
 - `Cache-Control: private, max-age=3600`
 
-### 5.9 `GET /api/rag/pages/:pageIdOrSlug/comments`
+The owning page and its ACL are checked again immediately before download.
+
+### 5.11 `GET /api/rag/pages/:pageIdOrSlug/comments`
 
 Page comments (including resolved).
 
-### 5.10 `GET /api/rag/pages/:pageIdOrSlug/export`
+### 5.12 `GET /api/rag/pages/:pageIdOrSlug/export`
 
 Page export ZIP (optionally with children/attachments).
 
@@ -223,7 +260,7 @@ Query:
 - `includeAttachments`: boolean (default `true`)
 - `includeChildren`: boolean (default `true`)
 
-### 5.11 `GET /api/rag/space/export`
+### 5.13 `GET /api/rag/space/export`
 
 Space export ZIP for the API key scope.
 
@@ -284,11 +321,11 @@ Body:
 The `/api/rag/*` endpoints are the synchronization/export side of an external
 RAG integration. They do not provide query-time semantic search.
 
-Built-in AI chat can optionally call a separately configured `http-json-v1`
-retrieval adapter. An external service may populate its index through this RAG
-API and expose the configured query endpoint to Docmost. The API key used by the
-external indexer and the credential Docmost uses to query that endpoint are
-independent secrets.
+Built-in AI chat can call either the existing `http-json-v1` adapter or the
+`open-webui-knowledge-v1` adapter. An external service may populate its index
+through this RAG API and expose its query endpoint to Docmost. The API key used
+by the external indexer and the credential Docmost uses to query that endpoint
+are independent secrets.
 
 Query results never grant access by themselves. The AI backend resolves returned
 Docmost source IDs and re-checks the requesting user's current page access before
@@ -308,6 +345,26 @@ The chat's external retrieval source types remain `page`, `database_row`, and
 conversation-context source, but that internal `database` type does not extend
 the external `http-json-v1` query contract.
 
+### 7.0.1 Open WebUI writer
+
+`apps/rag-sync` implements the optional Open WebUI 0.9.6 writer. One Knowledge
+Base maps to one Docmost space. The application:
+
+- reads only this API and never connects to the Docmost database;
+- uses a separate Redis namespace/database for inclusive checkpoints,
+  source-to-file mappings, and distributed space locks;
+- uploads a new Open WebUI file and waits for processing before replacing the
+  mapping and deleting the previous file;
+- reconstructs lost Redis mappings from `meta.data.docmost`, removes duplicate
+  superseded files, and ignores foreign workspace/space metadata;
+- supports page, database-row, PDF, DOCX, TXT, MD, JPEG, PNG, and WebP sources;
+- logs only IDs, states, counters, lag, and durations.
+
+Configuration is loaded through `RAG_SYNC_CONFIG_PATH`. Docmost and Open WebUI
+writer keys are paths to mounted secret files, never literal values in the JSON.
+Use `rag-sync.config.example.json` as the schema reference. A Knowledge Base must
+be created in advance; the worker never creates or deletes it.
+
 ### 7.1 Initial sync
 
 1. Create API key scoped to the target `spaceId`.
@@ -321,18 +378,23 @@ the external `http-json-v1` query contract.
 5. Initialize checkpoints:
    - `updatedSince = 0`
    - `deletedSince = 0`
+   - attachment `updatedSince = 0`
+   - attachment `deletedSince = 0`
 
 ### 7.2 Incremental sync loop
 
-1. `GET /api/rag/updates?updatedSince=<lastUpdatedCheckpoint>`
+1. `GET /api/rag/updates?updatedSince=<lastUpdatedCheckpoint>&limit=500`
 2. Upsert updated documents:
    - `type=page` -> `GET /api/rag/pages/:id?includeContent=true`
    - `type=database` -> `GET /api/rag/databases/:databaseIdOrPageSlug`
-3. `GET /api/rag/deleted?deletedSince=<lastDeletedCheckpoint>`
-4. Delete/deactivate tombstoned records in the index
-5. Update checkpoints:
+3. Follow `nextCursor` while `hasMore=true`
+4. Process `/api/rag/attachments/updates` using its own checkpoint
+5. Process `/api/rag/deleted` and `/api/rag/attachments/deleted`
+6. Delete/deactivate tombstoned records in the index
+7. Update each checkpoint only after its complete feed page succeeds:
    - `lastUpdatedCheckpoint = maxUpdatedAtMs`
    - `lastDeletedCheckpoint = maxDeletedAtMs`
+   - attachment update/delete checkpoints advance independently
 
 ### 7.3 Idempotency requirement
 

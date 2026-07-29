@@ -6,6 +6,7 @@ Docmost is a pnpm workspace orchestrated by Nx. The main runtime surfaces are:
 
 - `apps/server` - NestJS API, background jobs, websocket gateway, migrations, and storage/search integrations.
 - `apps/client` - Vite and React frontend.
+- `apps/rag-sync` - optional standalone Docmost-to-Open-WebUI index synchronizer.
 - `packages/editor-ext` - shared Tiptap/ProseMirror editor extensions consumed by the client and server-side rendering paths.
 - `packages/api-contract` - shared API-facing TypeScript contracts used by backend and frontend code.
 - `packages/ee` plus `apps/*/src/ee` - Enterprise Edition code loaded conditionally by app-level EE modules.
@@ -33,6 +34,7 @@ Security-sensitive cross-cutting behavior is centralized:
 - `X-Forwarded-*` request headers are trusted only when `TRUSTED_PROXIES` explicitly configures the reverse proxy IP/CIDR ranges. Rate limiting, session IP capture, request logging, and HTTPS/HSTS detection use the Fastify-resolved client request metadata.
 - Embed iframes are restricted by a shared provider frame-source policy used by both client validation and server CSP. Generic iframe origins must be explicitly configured through `EMBED_ALLOWED_ORIGINS`.
 - Per-space AI provider and external retrieval endpoints are restricted through independent `AI_PROVIDER_ALLOWED_ORIGINS` and `AI_RETRIEVAL_ALLOWED_ORIGINS` policies. Credentials are encrypted at rest, redacted from API responses, and resolved by workers instead of being copied into queue payloads. External retrieval candidates are mapped back to Docmost sources and filtered through current page access before entering a prompt or citation.
+- Query-time retrieval selects one of `none`, the unchanged `http-json-v1` contract, or `open-webui-knowledge-v1`. Both HTTP adapters share bounded transport and SSRF enforcement. The Open WebUI adapter accepts only versioned Docmost metadata and still performs the same local database and page-ACL validation.
 - File import treats attachment upload failure as task failure so imported pages are not committed with broken attachment references.
 
 The database schema is managed through Kysely migrations in `apps/server/src/database/migrations`. Generated Kysely types live under `apps/server/src/database/types`. AI chat persists configuration, conversations, runs, files, and citation snapshots without requiring a local vector index.
@@ -77,6 +79,14 @@ Persistent core AI chat uses immutable `ai_runs` attempts. Retry/Regenerate crea
 AI conversation context is a versioned aggregate: the current document flag, explicit page/database/row descriptors, private chat files, and page attachments are persisted per conversation. Each provider attempt owns immutable resolved context snapshots and page dependencies so retries remain deterministic and access loss hides derived output. `ai_aux_runs` applies the same deterministic queue/CAS model to automatic four-word conversation titles and selection-only editor transforms without adding those results to chat history.
 
 AI chat file uploads use idempotent upload batches, deterministic storage keys, extraction compare-and-set, database-first tombstones, and retriable storage cleanup. Legacy `AI_QUEUE`, PageEmbeddings/indexing, EE AI search, and `/api/ai/answers` stay separate. The removed EE editor Ask AI flow and `settings.ai.generative` toggle are not part of the core AI architecture.
+
+The optional `apps/rag-sync` process is not part of the backend runtime. It
+consumes API-key-authenticated `/api/rag/*` cursor feeds and writes one
+pre-created Open WebUI Knowledge Base per space. It owns separate Redis
+checkpoints, mappings, and distributed locks, reads credentials from mounted
+secret files, and has no Docmost database or BullMQ access. `Dockerfile.rag-sync`
+and `docker-compose.rag-sync.yml` deploy it explicitly; the main Compose stack
+remains unchanged.
 
 Production startup validation requires `APP_URL` to be valid, rejects trust-all proxy configuration, and requires `AUTH_RATE_LIMIT_STORAGE=redis`.
 
