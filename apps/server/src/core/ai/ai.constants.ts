@@ -6,8 +6,8 @@ import {
 export const AI_DEFAULTS = AI_SPACE_CONFIG_DEFAULTS;
 
 export const AI_CONCURRENCY_LIMITS = {
-  perUser: 5,
-  perSpace: 8,
+  perUser: 6,
+  perSpace: 30,
   perConversation: 1,
 } as const;
 

@@ -1,4 +1,5 @@
 import { AiAuxRunService } from './ai-aux-run.service';
+import { AI_CONCURRENCY_LIMITS } from '../ai.constants';
 
 describe('AiAuxRunService', () => {
   function createAdmissionService(results: Array<Record<string, number>>) {
@@ -73,15 +74,16 @@ describe('AiAuxRunService', () => {
     expect(add).not.toHaveBeenCalled();
   });
 
-  it('admits a fifth active AI run for an editor action', async () => {
+  it('admits a run at the configured per-user concurrency limit', async () => {
+    const activeBeforeInsert = AI_CONCURRENCY_LIMITS.perUser - 1;
     const { db, service } = createAdmissionService([
       { count: 0 },
       { count: 0 },
       { tokens: 0 },
       { tokens: 0 },
-      { count: 4 },
+      { count: activeBeforeInsert },
       { count: 0 },
-      { count: 4 },
+      { count: activeBeforeInsert },
       { count: 0 },
     ]);
 
@@ -98,15 +100,16 @@ describe('AiAuxRunService', () => {
     ).resolves.toBeUndefined();
   });
 
-  it('rejects a sixth active AI run for an editor action', async () => {
+  it('rejects a run above the configured per-user concurrency limit', async () => {
+    const activeBeforeInsert = AI_CONCURRENCY_LIMITS.perUser;
     const { db, service } = createAdmissionService([
       { count: 0 },
       { count: 0 },
       { tokens: 0 },
       { tokens: 0 },
-      { count: 5 },
+      { count: activeBeforeInsert },
       { count: 0 },
-      { count: 5 },
+      { count: activeBeforeInsert },
       { count: 0 },
     ]);
 
