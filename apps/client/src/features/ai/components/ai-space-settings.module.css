@@ -1,0 +1,149 @@
+.form {
+  min-width: 0;
+}
+
+.pageHeader {
+  padding-top: var(--mantine-spacing-sm);
+}
+
+.enableCard {
+  background: light-dark(
+    var(--mantine-color-blue-0),
+    color-mix(in srgb, var(--mantine-color-blue-9) 18%, transparent)
+  );
+  border-color: light-dark(
+    var(--mantine-color-blue-2),
+    var(--mantine-color-blue-8)
+  );
+}
+
+.section {
+  min-width: 0;
+}
+
+.metric {
+  background: light-dark(
+    var(--mantine-color-gray-0),
+    var(--mantine-color-dark-6)
+  );
+}
+
+.keyAction,
+.secondaryAction {
+  align-self: flex-start;
+}
+
+.inlineAccordion,
+.limitsAccordion {
+  min-width: 0;
+}
+
+.accordionControl {
+  min-height: rem(62px);
+}
+
+.quickHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--mantine-spacing-md);
+}
+
+.addCommand {
+  flex: 0 0 auto;
+}
+
+.commandCard {
+  background: light-dark(
+    var(--mantine-color-gray-0),
+    var(--mantine-color-dark-6)
+  );
+}
+
+.commandTop {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(rem(250px), 0.85fr);
+  align-items: start;
+  gap: var(--mantine-spacing-md);
+}
+
+.commandToolbar {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--mantine-spacing-sm);
+  min-width: 0;
+}
+
+.commandToggle {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.commandActions {
+  display: flex;
+  align-items: center;
+  gap: rem(4px);
+  padding-top: rem(20px);
+}
+
+.retrievalFields {
+  padding-top: var(--mantine-spacing-xs);
+  border-top: 1px solid var(--mantine-color-default-border);
+}
+
+.actionBar {
+  position: sticky;
+  z-index: 3;
+  bottom: 0;
+  padding: var(--mantine-spacing-sm) 0;
+  border-top: 1px solid var(--mantine-color-default-border);
+  background: var(--mantine-color-body);
+  box-shadow: 0 rem(-12px) rem(18px) rem(-20px)
+    light-dark(rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.8));
+}
+
+@media (max-width: 48em) {
+  .pageHeader {
+    padding-top: var(--mantine-spacing-xs);
+  }
+
+  .section,
+  .enableCard {
+    padding: var(--mantine-spacing-sm);
+  }
+
+  .quickHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .addCommand {
+    align-self: flex-start;
+  }
+
+  .commandTop {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--mantine-spacing-sm);
+  }
+
+  .commandToolbar {
+    justify-content: space-between;
+  }
+
+  .commandToggle {
+    min-width: 0;
+  }
+
+  .commandActions {
+    padding-top: 0;
+  }
+
+  .actionGroup {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .actionGroup > * {
+    width: 100%;
+  }
+}

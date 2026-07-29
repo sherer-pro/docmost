@@ -32,6 +32,18 @@
 
 .tabsList {
   flex: 0 0 auto;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.tabsList::-webkit-scrollbar {
+  display: none;
+}
+
+.tabsList :global(.mantine-Tabs-tab) {
+  flex: 0 0 auto;
 }
 
 .panel {
@@ -62,6 +74,10 @@
   .layout {
     height: calc(100dvh - rem(136px));
     min-height: rem(320px);
+  }
+
+  .tabsList :global(.mantine-Tabs-tab) {
+    padding-inline: var(--mantine-spacing-xs);
   }
 
   .membersToolbar {
