@@ -159,11 +159,11 @@ export function getAiApplyPolicy(
   };
 }
 
-export function clampAiPanelWidth(value: unknown, fallback = 350): number {
+export function clampAiPanelWidth(value: unknown, fallback = 400): number {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return fallback;
   }
-  return Math.min(600, Math.max(300, value));
+  return Math.min(520, Math.max(360, value));
 }
 
 export interface AiPanelProfilePreference {

@@ -1,15 +1,18 @@
 import {
   ActionIcon,
   Alert,
+  Badge,
   Box,
   Button,
   Checkbox,
+  Drawer,
   Group,
   Loader,
   Menu,
   Modal,
   ScrollArea,
   Select,
+  Skeleton,
   Stack,
   Text,
   Textarea,
@@ -18,6 +21,7 @@ import {
 } from "@mantine/core";
 import {
   IconAlertTriangle,
+  IconArrowDown,
   IconCheck,
   IconChevronDown,
   IconDots,
@@ -32,6 +36,7 @@ import {
 } from "@tabler/icons-react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useMediaQuery, useReducedMotion } from "@mantine/hooks";
 import { useTranslation } from "react-i18next";
 import { notifications } from "@mantine/notifications";
 import { modals } from "@mantine/modals";
@@ -43,8 +48,10 @@ import {
 } from "@/features/editor/atoms/editor-atoms.ts";
 import {
   aiDocumentContextAtom,
+  aiActivityAtom,
   aiLastEditorContextAtom,
   aiStreamingRunsAtom,
+  aiUnreadRunsAtom,
 } from "@/features/ai/atoms/ai-atoms.ts";
 import {
   useAiChatFilesQuery,
@@ -101,11 +108,16 @@ import {
   type TreeExternalDropResult,
 } from "@/features/page/tree/utils";
 import { isAiChatNearBottom } from "@/features/ai/utils/ai-scroll.ts";
+import { asideStateAtom } from "@/components/layouts/global/hooks/atoms/sidebar-atom.ts";
+import { clearAiPageActivity } from "@/features/ai/utils/ai-activity.ts";
 
 export function AiPanel() {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
+  const reduceMotion = useReducedMotion();
+  const isCompactMobile = useMediaQuery("(max-width: 30em)");
   const documentContext = useAtomValue(aiDocumentContextAtom);
+  const asideState = useAtomValue(asideStateAtom);
   const tree = useAtomValue(treeDataAtom);
   const editor = useAtomValue(pageEditorAtom);
   const titleEditor = useAtomValue(titleEditorAtom);
@@ -116,6 +128,8 @@ export function AiPanel() {
   });
   const streamingRuns = useAtomValue(aiStreamingRunsAtom);
   const setStreamingRuns = useSetAtom(aiStreamingRunsAtom);
+  const setActivity = useSetAtom(aiActivityAtom);
+  const setUnreadRuns = useSetAtom(aiUnreadRunsAtom);
   const editorContexts = useAtomValue(aiLastEditorContextAtom);
   const setEditorContexts = useSetAtom(aiLastEditorContextAtom);
   const pageId = documentContext?.pageId;
@@ -148,9 +162,21 @@ export function AiPanel() {
   const [useSpaceSearch, setUseSpaceSearch] = useState(false);
   const [renameOpened, setRenameOpened] = useState(false);
   const [renameValue, setRenameValue] = useState("");
+  const [quickCommandQuery, setQuickCommandQuery] = useState("");
+  const [quickCommandsOpened, setQuickCommandsOpened] = useState(false);
+  const [historyOpened, setHistoryOpened] = useState(false);
+  const [historyQuery, setHistoryQuery] = useState("");
+  const [draftStatus, setDraftStatus] = useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
+  const [contextSaveFailed, setContextSaveFailed] = useState(false);
+  const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const draftHydratedFor = useRef<string | null>(null);
   const draftSaveChain = useRef<Promise<unknown>>(Promise.resolve());
   const contextSaveChain = useRef<Promise<AiConversationContext> | null>(null);
+  const lastContextTransformRef = useRef<
+    ((current: AiConversationContext) => AiConversationContext) | null
+  >(null);
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const followOutputRef = useRef(true);
 
@@ -180,6 +206,29 @@ export function AiPanel() {
   );
   const documentTitle =
     liveDocumentTitle || documentContext?.title?.trim() || t("ai.untitled");
+
+  useEffect(() => {
+    if (
+      !pageId ||
+      asideState.tab !== "ai" ||
+      !asideState.isAsideOpen
+    ) {
+      return;
+    }
+    setUnreadRuns((current) => {
+      if (!current[pageId]) return current;
+      const next = { ...current };
+      delete next[pageId];
+      return next;
+    });
+    setActivity((current) => clearAiPageActivity(current, pageId));
+  }, [
+    asideState.isAsideOpen,
+    asideState.tab,
+    pageId,
+    setActivity,
+    setUnreadRuns,
+  ]);
 
   useEffect(() => {
     if (!persistedActiveRun) {
@@ -218,8 +267,10 @@ export function AiPanel() {
     }
     draftHydratedFor.current = activeConversation.id;
     setDraft(activeConversation.draft ?? "");
+    setDraftStatus("idle");
     setUseSpaceSearch(Boolean(activeConversation.useSpaceSearch));
     contextSaveChain.current = null;
+    setContextSaveFailed(false);
   }, [activeConversation?.id]);
 
   useEffect(() => {
@@ -232,6 +283,7 @@ export function AiPanel() {
     }
 
     const timeout = window.setTimeout(() => {
+      setDraftStatus("saving");
       draftSaveChain.current = draftSaveChain.current
         .catch(() => undefined)
         .then(() =>
@@ -239,23 +291,30 @@ export function AiPanel() {
             conversationId: activeConversation.id,
             data: { draft },
           }),
-        );
+        )
+        .then(() => setDraftStatus("saved"))
+        .catch(() => {
+          setDraftStatus("error");
+        });
     }, 700);
     return () => window.clearTimeout(timeout);
   }, [activeConversation, draft, updateConversation]);
 
   useEffect(() => {
     followOutputRef.current = true;
+    setShowJumpToLatest(false);
   }, [activeConversationId]);
 
   useEffect(() => {
     if (!followOutputRef.current) {
+      setShowJumpToLatest(true);
       return;
     }
     const frame = window.requestAnimationFrame(() => {
       const viewport = viewportRef.current;
       if (viewport && followOutputRef.current) {
         viewport.scrollTo({ top: viewport.scrollHeight, behavior: "auto" });
+        setShowJumpToLatest(false);
       }
     });
     return () => window.cancelAnimationFrame(frame);
@@ -301,6 +360,8 @@ export function AiPanel() {
   const saveContext = async (
     transform: (current: AiConversationContext) => AiConversationContext,
   ): Promise<AiConversationContext> => {
+    lastContextTransformRef.current = transform;
+    setContextSaveFailed(false);
     const conversation = await ensureConversation();
     const previous = contextSaveChain.current;
     const operation = (previous ?? loadContext(conversation))
@@ -323,12 +384,66 @@ export function AiPanel() {
       });
     contextSaveChain.current = operation;
     try {
-      return await operation;
+      const result = await operation;
+      setContextSaveFailed(false);
+      return result;
+    } catch (error) {
+      setContextSaveFailed(true);
+      notifications.show({
+        message: resolveAiErrorMessage(
+          t,
+          i18n,
+          error?.["response"]?.data?.code,
+        ),
+        color: "red",
+      });
+      throw error;
     } finally {
       if (contextSaveChain.current === operation) {
         contextSaveChain.current = null;
       }
     }
+  };
+
+  const retryDraftSave = async () => {
+    if (!activeConversation) return;
+    setDraftStatus("saving");
+    try {
+      await updateConversation.mutateAsync({
+        conversationId: activeConversation.id,
+        data: { draft },
+      });
+      setDraftStatus("saved");
+    } catch {
+      setDraftStatus("error");
+    }
+  };
+
+  const retryContextSave = async () => {
+    const transform = lastContextTransformRef.current;
+    if (!transform) return;
+    try {
+      await saveContext(transform);
+    } catch {
+      // The inline retry remains available after a repeated failure.
+    }
+  };
+
+  const trackRunActivity = (run: { id: string; conversationId: string; status: AiStreamingRun["status"] }) => {
+    if (!pageId) return;
+    setActivity((current) => ({
+      ...current,
+      [run.id]: {
+        runId: run.id,
+        conversationId: run.conversationId,
+        pageId,
+        pageTitle: documentTitle,
+        pageHref: window.location.pathname,
+        status: run.status,
+        unread: false,
+        updatedAt: new Date().toISOString(),
+      },
+    }));
   };
 
   const submit = async (content: string) => {
@@ -371,6 +486,8 @@ export function AiPanel() {
         useSpaceSearch:
           useSpaceSearch && availabilityQuery.data?.retrievalAvailable === true,
         editorContext,
+        pageTitle: documentTitle,
+        pageHref: window.location.pathname,
       });
 
       setEditorContexts((current) => ({
@@ -564,11 +681,26 @@ export function AiPanel() {
         : current.attachmentIds.filter((id) => id !== attachmentId),
     }));
 
-  const removeChatFile = (fileId: string) => {
-    void saveContext((current) => ({
-      ...current,
-      fileIds: current.fileIds.filter((id) => id !== fileId),
-    })).finally(() => deleteFile.mutate(fileId));
+  const removeChatFile = (fileId: string, fileName: string) => {
+    modals.openConfirmModal({
+      title: t("ai.deleteFile"),
+      children: (
+        <Text size="sm">{t("ai.ux.deleteFileConfirm", { name: fileName })}</Text>
+      ),
+      labels: { confirm: t("ai.delete"), cancel: t("ai.cancel") },
+      confirmProps: { color: "red" },
+      onConfirm: async () => {
+        try {
+          await saveContext((current) => ({
+            ...current,
+            fileIds: current.fileIds.filter((id) => id !== fileId),
+          }));
+          await deleteFile.mutateAsync(fileId);
+        } catch {
+          // saveContext already exposes a recoverable error to the user.
+        }
+      },
+    });
   };
 
   const selectedSourceIdentities = useMemo(
@@ -752,6 +884,24 @@ export function AiPanel() {
     })),
     availability.quickCommands ?? [],
   );
+  const customQuickCommandIds = new Set(
+    (availability.quickCommands ?? []).map((command) => command.id),
+  );
+  const visibleQuickCommands = quickCommands.filter((command) =>
+    `${command.label} ${command.description ?? ""} ${command.prompt}`
+      .toLocaleLowerCase(i18n.language)
+      .includes(quickCommandQuery.trim().toLocaleLowerCase(i18n.language)),
+  );
+  const conversationById = new Map(
+    conversations.map((conversation) => [conversation.id, conversation]),
+  );
+  const visibleConversations = conversations.filter((conversation) =>
+    (conversation.title || t("ai.newChat"))
+      .toLocaleLowerCase(i18n.language)
+      .includes(historyQuery.trim().toLocaleLowerCase(i18n.language)),
+  );
+  const activeConversationTitle =
+    activeConversation?.title || t("ai.newChat");
 
   return (
     <Stack
@@ -764,7 +914,22 @@ export function AiPanel() {
       })}
     >
       <Group gap="xs" wrap="nowrap" className={classes.conversationBar}>
-        <Select
+        {isCompactMobile ? (
+          <Button
+            variant="default"
+            flex={1}
+            justify="space-between"
+            rightSection={<IconChevronDown size={14} />}
+            className={classes.mobileConversationButton}
+            aria-label={t("ai.chatHistory")}
+            onClick={() => setHistoryOpened(true)}
+          >
+            <Text size="sm" truncate>
+              {activeConversationTitle}
+            </Text>
+          </Button>
+        ) : (
+          <Select
           aria-label={t("ai.chatHistory")}
           data={conversations.map((conversation) => ({
             value: conversation.id,
@@ -778,7 +943,31 @@ export function AiPanel() {
           flex={1}
           size="sm"
           className={classes.conversationSelect}
-        />
+          maxDropdownHeight={360}
+          nothingFoundMessage={t("ai.ux.noChatsFound")}
+            renderOption={({ option }) => {
+              const conversation = conversationById.get(option.value);
+              return (
+                <Box className={classes.conversationOption}>
+                  <Text size="sm" truncate>
+                    {option.label}
+                  </Text>
+                  {conversation && (
+                    <Text size="xs" c="dimmed">
+                      {new Intl.DateTimeFormat(i18n.language, {
+                        dateStyle: "medium",
+                      }).format(
+                        new Date(
+                          conversation.lastOpenedAt || conversation.updatedAt,
+                        ),
+                      )}
+                    </Text>
+                  )}
+                </Box>
+              );
+            }}
+          />
+        )}
         <Tooltip label={t("ai.newChat")} withArrow>
           <ActionIcon
             variant="default"
@@ -822,138 +1011,189 @@ export function AiPanel() {
         </Menu>
       </Group>
 
-      <ScrollArea
-        viewportRef={viewportRef}
-        className={classes.messages}
-        scrollbarSize={6}
-        type="auto"
-        onScrollPositionChange={({ y }) => {
-          const viewport = viewportRef.current;
-          if (!viewport) return;
-          followOutputRef.current = isAiChatNearBottom({
-            scrollHeight: viewport.scrollHeight,
-            scrollTop: y,
-            clientHeight: viewport.clientHeight,
-          });
-        }}
-      >
-        <Stack gap="sm" p="xs">
-          {activeConversation && messagesQuery.isLoading && (
-            <Group justify="center" py="xl">
-              <Loader size="sm" />
-            </Group>
-          )}
-          {activeConversation && messagesQuery.isError && (
-            <Alert
-              icon={<IconAlertTriangle size={18} />}
-              title={t("ai.messagesLoadFailed")}
-              color="red"
-            >
-              <Button
-                variant="light"
-                color="red"
-                size="compact-sm"
-                mt="xs"
-                onClick={() => void messagesQuery.refetch()}
-              >
-                {t("ai.tryAgain")}
-              </Button>
-            </Alert>
-          )}
-          {messagesQuery.hasNextPage && (
-            <Button
-              variant="subtle"
-              size="compact-sm"
-              loading={messagesQuery.isFetchingNextPage}
-              onClick={() => void messagesQuery.fetchNextPage()}
-            >
-              {t("ai.loadOlder")}
-            </Button>
-          )}
-          {messages.length === 0 &&
-            !pendingRun &&
-            !messagesQuery.isLoading &&
-            !messagesQuery.isError && (
-              <Stack align="center" py="xl">
-                <IconMessagePlus size={36} />
-                <Text fw={500}>{t("ai.startConversation")}</Text>
-                <Text size="sm" c="dimmed" ta="center">
-                  {t("ai.startConversationDescription")}
-                </Text>
+      <Box className={classes.messagesRegion}>
+        <ScrollArea
+          viewportRef={viewportRef}
+          className={classes.messages}
+          scrollbarSize={6}
+          type="auto"
+          onScrollPositionChange={({ y }) => {
+            const viewport = viewportRef.current;
+            if (!viewport) return;
+            const isNearBottom = isAiChatNearBottom({
+              scrollHeight: viewport.scrollHeight,
+              scrollTop: y,
+              clientHeight: viewport.clientHeight,
+            });
+            followOutputRef.current = isNearBottom;
+            setShowJumpToLatest(!isNearBottom);
+          }}
+        >
+          <Stack gap="sm" p="xs">
+            {activeConversation && messagesQuery.isLoading && (
+              <Stack gap="sm" py="md" aria-label={t("ai.ux.loading")}>
+                <Skeleton height={70} radius="md" />
+                <Skeleton height={112} radius="md" />
+                <Skeleton height={54} radius="md" />
               </Stack>
             )}
+            {activeConversation && messagesQuery.isError && (
+              <Alert
+                icon={<IconAlertTriangle size={18} />}
+                title={t("ai.messagesLoadFailed")}
+                color="red"
+              >
+                <Button
+                  variant="light"
+                  color="red"
+                  size="compact-sm"
+                  mt="xs"
+                  onClick={() => void messagesQuery.refetch()}
+                >
+                  {t("ai.tryAgain")}
+                </Button>
+              </Alert>
+            )}
+            {messagesQuery.hasNextPage && (
+              <Button
+                variant="subtle"
+                size="compact-sm"
+                loading={messagesQuery.isFetchingNextPage}
+                onClick={() => void messagesQuery.fetchNextPage()}
+              >
+                {t("ai.loadOlder")}
+              </Button>
+            )}
+            {messages.length === 0 &&
+              !pendingRun &&
+              !messagesQuery.isLoading &&
+              !messagesQuery.isError && (
+                <Stack align="center" py="xl">
+                  <IconMessagePlus size={36} />
+                  <Text fw={500}>{t("ai.startConversation")}</Text>
+                  <Text size="sm" c="dimmed" ta="center">
+                    {t("ai.startConversationDescription")}
+                  </Text>
+                </Stack>
+              )}
 
-          {messages.map((message) => {
-            const run =
-              activeRuns.find((item) => item.messageId === message.id) ??
-              (pendingRun?.messageId === message.id ? pendingRun : undefined);
-            const runIsActive = Boolean(
-              run && ["queued", "running"].includes(run.status),
-            );
-            const renderedMessage = runIsActive
-              ? {
-                  ...message,
-                  content: run?.content || message.content,
-                  reasoning: run?.reasoning ?? message.reasoning ?? "",
-                  status: "streaming" as const,
-                }
-              : message;
-            const runId = run?.runId ?? message.runId;
+            {messages.map((message) => {
+              const run =
+                activeRuns.find((item) => item.messageId === message.id) ??
+                (pendingRun?.messageId === message.id ? pendingRun : undefined);
+              const runIsActive = Boolean(
+                run && ["queued", "running"].includes(run.status),
+              );
+              const renderedMessage = runIsActive
+                ? {
+                    ...message,
+                    content: run?.content || message.content,
+                    reasoning: run?.reasoning ?? message.reasoning ?? "",
+                    status: "streaming" as const,
+                  }
+                : message;
+              const runId = run?.runId ?? message.runId;
 
-            return (
-              <AiMessageCard
-                key={message.id}
-                message={renderedMessage}
-                editor={editor}
-                documentContext={documentContext}
-                editorContext={
-                  message.applyContext ??
-                  editorContexts[message.id] ??
-                  (runId ? editorContexts[runId] : undefined) ??
-                  editorContexts[message.conversationId]
-                }
-                onRetry={
-                  runId &&
-                  !pendingRun &&
-                  message.id === latestAssistantMessageId
-                    ? () =>
-                        retryRun.mutate({
-                          runId,
-                          clientRequestId: crypto.randomUUID(),
-                        })
-                    : undefined
-                }
-                onRegenerate={
-                  message.role === "assistant" &&
-                  !pendingRun &&
-                  message.id === latestAssistantMessageId
-                    ? () =>
-                        regenerateMessage.mutate({
-                          messageId: message.id,
-                          clientRequestId: crypto.randomUUID(),
-                        })
-                    : undefined
-                }
-                showRetrievalStatus={spaceSearchReady}
-              />
-            );
-          })}
+              return (
+                <AiMessageCard
+                  key={message.id}
+                  message={renderedMessage}
+                  editor={editor}
+                  documentContext={documentContext}
+                  editorContext={
+                    message.applyContext ??
+                    editorContexts[message.id] ??
+                    (runId ? editorContexts[runId] : undefined) ??
+                    editorContexts[message.conversationId]
+                  }
+                  onRetry={
+                    runId &&
+                    !pendingRun &&
+                    message.id === latestAssistantMessageId
+                      ? () =>
+                        retryRun.mutate(
+                          {
+                            runId,
+                            clientRequestId: crypto.randomUUID(),
+                          },
+                          { onSuccess: trackRunActivity },
+                        )
+                      : undefined
+                  }
+                  onRegenerate={
+                    message.role === "assistant" &&
+                    !pendingRun &&
+                    message.id === latestAssistantMessageId
+                      ? () =>
+                        regenerateMessage.mutate(
+                          {
+                            messageId: message.id,
+                            clientRequestId: crypto.randomUUID(),
+                          },
+                          { onSuccess: trackRunActivity },
+                        )
+                      : undefined
+                  }
+                  showRetrievalStatus={spaceSearchReady}
+                />
+              );
+            })}
 
-          {pendingRun &&
-            !messages.some(
-              (message) => message.id === pendingRun.messageId,
-            ) && (
+            {pendingRun &&
+              !messages.some(
+                (message) => message.id === pendingRun.messageId,
+              ) && (
               <AiStreamingPlaceholder
                 run={pendingRun}
                 generatingLabel={t("ai.generating")}
+                reasoningLabel={t("ai.ux.reasoningInProgress")}
               />
-            )}
-        </Stack>
-      </ScrollArea>
+              )}
+          </Stack>
+        </ScrollArea>
+        {showJumpToLatest && (
+          <Tooltip label={t("ai.ux.jumpToLatest")} withArrow>
+            <ActionIcon
+              className={classes.jumpToLatest}
+              size={36}
+              radius="xl"
+              variant="filled"
+              aria-label={t("ai.ux.jumpToLatest")}
+              onClick={() => {
+                const viewport = viewportRef.current;
+                if (!viewport) return;
+                followOutputRef.current = true;
+                viewport.scrollTo({
+                  top: viewport.scrollHeight,
+                  behavior: reduceMotion ? "auto" : "smooth",
+                });
+                setShowJumpToLatest(false);
+              }}
+            >
+              <IconArrowDown size={18} />
+            </ActionIcon>
+          </Tooltip>
+        )}
+      </Box>
 
       <Box className={classes.composer}>
         <Group gap={4} wrap="nowrap" className={classes.composerToolbar}>
-          <Menu position="top-start" withinPortal>
+          {isCompactMobile ? (
+            <Button
+              variant="subtle"
+              size="compact-sm"
+              leftSection={<IconSparkles size={16} />}
+              disabled={Boolean(pendingRun)}
+              className={classes.toolbarButton}
+              aria-label={t("ai.settings.quickCommands")}
+              onClick={() => setQuickCommandsOpened(true)}
+            >
+              <span className={classes.toolbarButtonLabel}>
+                {t("ai.settings.quickCommands")}
+              </span>
+            </Button>
+          ) : (
+            <Menu position="top-start" withinPortal>
             <Menu.Target>
               <Button
                 variant="subtle"
@@ -962,12 +1202,26 @@ export function AiPanel() {
                 rightSection={<IconChevronDown size={13} />}
                 disabled={Boolean(pendingRun)}
                 className={classes.toolbarButton}
+                aria-label={t("ai.settings.quickCommands")}
               >
-                {t("ai.settings.quickCommands")}
+                <span className={classes.toolbarButtonLabel}>
+                  {t("ai.settings.quickCommands")}
+                </span>
               </Button>
             </Menu.Target>
             <Menu.Dropdown className={classes.quickCommandsMenu}>
-              {quickCommands.map((command) => (
+              <TextInput
+                value={quickCommandQuery}
+                onChange={(event) =>
+                  setQuickCommandQuery(event.currentTarget.value)
+                }
+                placeholder={t("ai.ux.searchCommands")}
+                leftSection={<IconSearch size={14} />}
+                size="xs"
+                mb="xs"
+                onKeyDown={(event) => event.stopPropagation()}
+              />
+              {visibleQuickCommands.map((command) => (
                 <Tooltip
                   key={command.id}
                   label={command.description || command.prompt}
@@ -976,6 +1230,13 @@ export function AiPanel() {
                 >
                   <Menu.Item
                     leftSection={<IconSparkles size={15} />}
+                    rightSection={
+                      <Badge size="xs" variant="light" color="gray">
+                        {customQuickCommandIds.has(command.id)
+                          ? t("ai.ux.customCommand")
+                          : t("ai.ux.builtInCommand")}
+                      </Badge>
+                    }
                     onClick={() => handleQuickCommand(command.prompt)}
                     aria-description={command.description || command.prompt}
                   >
@@ -983,8 +1244,14 @@ export function AiPanel() {
                   </Menu.Item>
                 </Tooltip>
               ))}
+              {visibleQuickCommands.length === 0 && (
+                <Text size="xs" c="dimmed" ta="center" py="sm">
+                  {t("ai.ux.noCommandsFound")}
+                </Text>
+              )}
             </Menu.Dropdown>
-          </Menu>
+            </Menu>
+          )}
 
           {spaceSearchReady && (
             <Menu position="top-start" withinPortal>
@@ -998,8 +1265,11 @@ export function AiPanel() {
                   }
                   disabled={Boolean(pendingRun)}
                   className={classes.toolbarButton}
+                  aria-label={t("ai.searchSpace")}
                 >
-                  {t("ai.searchSpace")}
+                  <span className={classes.toolbarButtonLabel}>
+                    {t("ai.searchSpace")}
+                  </span>
                 </Button>
               </Menu.Target>
               <Menu.Dropdown>
@@ -1028,6 +1298,7 @@ export function AiPanel() {
             pageAttachments={pageAttachments}
             loadingFiles={filesQuery.isLoading}
             saving={updateContext.isPending}
+            saveFailed={contextSaveFailed}
             onToggleCurrentDocument={toggleCurrentDocument}
             onAddSource={addContextSource}
             onRemoveSource={removeContextSource}
@@ -1035,6 +1306,7 @@ export function AiPanel() {
             onToggleAttachment={toggleContextAttachment}
             onUpload={uploadFiles}
             onDeleteFile={removeChatFile}
+            onRetrySave={retryContextSave}
           />
         </Group>
 
@@ -1042,7 +1314,10 @@ export function AiPanel() {
           aria-label={t("ai.messagePlaceholder")}
           placeholder={t("ai.messagePlaceholder")}
           value={draft}
-          onChange={(event) => setDraft(event.currentTarget.value)}
+          onChange={(event) => {
+            setDraft(event.currentTarget.value);
+            setDraftStatus(activeConversation ? "saving" : "idle");
+          }}
           onKeyDown={handleComposerKeyDown}
           minRows={2}
           maxRows={8}
@@ -1056,9 +1331,28 @@ export function AiPanel() {
           wrap="nowrap"
           className={classes.composerFooter}
         >
-          <Text size="xs" c="dimmed" lineClamp={1}>
-            {pendingRun ? t("ai.generating") : t("ai.sendShortcut")}
-          </Text>
+          {pendingRun ? (
+            <Text size="xs" c="dimmed" lineClamp={1}>
+              {t("ai.generating")}
+            </Text>
+          ) : draftStatus === "error" ? (
+            <Button
+              variant="subtle"
+              color="red"
+              size="compact-xs"
+              onClick={() => void retryDraftSave()}
+            >
+              {t("ai.ux.draftSaveFailed")}
+            </Button>
+          ) : (
+            <Text size="xs" c="dimmed" lineClamp={1} role="status">
+              {draftStatus === "saving"
+                ? t("ai.ux.draftSaving")
+                : draftStatus === "saved"
+                  ? t("ai.ux.draftSaved")
+                  : t("ai.sendShortcut")}
+            </Text>
+          )}
 
           {pendingRun ? (
             <Button
@@ -1113,6 +1407,7 @@ export function AiPanel() {
         opened={renameOpened}
         onClose={() => setRenameOpened(false)}
         title={t("ai.renameChat")}
+        closeButtonProps={{ "aria-label": t("Close") }}
         centered
       >
         <TextInput
@@ -1142,6 +1437,118 @@ export function AiPanel() {
           </Button>
         </Group>
       </Modal>
+
+      <Drawer
+        opened={Boolean(isCompactMobile && historyOpened)}
+        onClose={() => setHistoryOpened(false)}
+        title={t("ai.chatHistory")}
+        closeButtonProps={{ "aria-label": t("Close") }}
+        position="bottom"
+        size="70dvh"
+        transitionProps={{ duration: reduceMotion ? 0 : 180 }}
+      >
+        <Stack gap="sm">
+          <TextInput
+            value={historyQuery}
+            onChange={(event) => setHistoryQuery(event.currentTarget.value)}
+            placeholder={t("ai.chatHistory")}
+            leftSection={<IconSearch size={15} />}
+          />
+          <ScrollArea.Autosize mah="calc(70dvh - 110px)">
+            <Stack gap={4}>
+              {visibleConversations.map((conversation) => (
+                <Button
+                  key={conversation.id}
+                  variant={
+                    conversation.id === activeConversationId
+                      ? "light"
+                      : "subtle"
+                  }
+                  color="gray"
+                  justify="flex-start"
+                  onClick={() => {
+                    selectConversation(conversation.id);
+                    setHistoryOpened(false);
+                  }}
+                >
+                  <Box ta="start" style={{ minWidth: 0 }}>
+                    <Text size="sm" truncate>
+                      {conversation.title || t("ai.newChat")}
+                    </Text>
+                    <Text size="xs" c="dimmed">
+                      {new Intl.DateTimeFormat(i18n.language, {
+                        dateStyle: "medium",
+                      }).format(
+                        new Date(
+                          conversation.lastOpenedAt || conversation.updatedAt,
+                        ),
+                      )}
+                    </Text>
+                  </Box>
+                </Button>
+              ))}
+              {visibleConversations.length === 0 && (
+                <Text size="sm" c="dimmed" ta="center" py="lg">
+                  {t("ai.ux.noChatsFound")}
+                </Text>
+              )}
+            </Stack>
+          </ScrollArea.Autosize>
+        </Stack>
+      </Drawer>
+
+      <Drawer
+        opened={Boolean(isCompactMobile && quickCommandsOpened)}
+        onClose={() => setQuickCommandsOpened(false)}
+        title={t("ai.settings.quickCommands")}
+        closeButtonProps={{ "aria-label": t("Close") }}
+        position="bottom"
+        size="75dvh"
+        transitionProps={{ duration: reduceMotion ? 0 : 180 }}
+      >
+        <Stack gap="sm">
+          <TextInput
+            value={quickCommandQuery}
+            onChange={(event) =>
+              setQuickCommandQuery(event.currentTarget.value)
+            }
+            placeholder={t("ai.ux.searchCommands")}
+            leftSection={<IconSearch size={15} />}
+          />
+          <ScrollArea.Autosize mah="calc(75dvh - 110px)">
+            <Stack gap={6}>
+              {visibleQuickCommands.map((command) => (
+                <Button
+                  key={command.id}
+                  variant="light"
+                  justify="space-between"
+                  leftSection={<IconSparkles size={15} />}
+                  rightSection={
+                    <Badge size="xs" variant="light" color="gray">
+                      {customQuickCommandIds.has(command.id)
+                        ? t("ai.ux.customCommand")
+                        : t("ai.ux.builtInCommand")}
+                    </Badge>
+                  }
+                  onClick={() => {
+                    handleQuickCommand(command.prompt);
+                    setQuickCommandsOpened(false);
+                  }}
+                >
+                  <Text size="sm" truncate>
+                    {command.label}
+                  </Text>
+                </Button>
+              ))}
+              {visibleQuickCommands.length === 0 && (
+                <Text size="sm" c="dimmed" ta="center" py="lg">
+                  {t("ai.ux.noCommandsFound")}
+                </Text>
+              )}
+            </Stack>
+          </ScrollArea.Autosize>
+        </Stack>
+      </Drawer>
     </Stack>
   );
 }
@@ -1149,15 +1556,19 @@ export function AiPanel() {
 function AiStreamingPlaceholder({
   run,
   generatingLabel,
+  reasoningLabel,
 }: {
   run: AiStreamingRun;
   generatingLabel: string;
+  reasoningLabel: string;
 }) {
   return (
     <Alert color="blue" icon={<Loader size="xs" />} aria-live="polite">
       <Stack gap="xs">
         {run.reasoning && <AiReasoningDisclosure reasoning={run.reasoning} />}
-        <Text size="sm">{run.content || generatingLabel}</Text>
+        <Text size="sm">
+          {run.content || (run.reasoning ? reasoningLabel : generatingLabel)}
+        </Text>
       </Stack>
     </Alert>
   );

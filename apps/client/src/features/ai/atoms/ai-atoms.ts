@@ -3,6 +3,7 @@ import type { SetStateAction } from "react";
 import {
   AiDocumentContext,
   AiEditorContext,
+  AiActivityItem,
   AiStreamingRun,
 } from "@/features/ai/types/ai.types.ts";
 
@@ -27,3 +28,5 @@ export const aiLastEditorContextAtom = atom<
 >({});
 
 export const aiUnreadRunsAtom = atom<Record<string, number>>({});
+
+export const aiActivityAtom = atom<Record<string, AiActivityItem>>({});

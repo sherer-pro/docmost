@@ -407,7 +407,7 @@ describe('ExportService PDF export', () => {
 
     const [renderedHtml] = htmlPdfRendererService.render.mock.calls[0];
     expect(renderedHtml).toContain(
-      '\u0420\u043e\u043b\u044c AI',
+      '\u0420\u043e\u043b\u044c \u0418\u0418',
     );
     expect(renderedHtml).toContain(
       '\u0421\u043e\u0430\u0432\u0442\u043e\u0440+',

@@ -6,7 +6,7 @@ import {
   SimpleTree,
 } from "react-arborist";
 import { useDragDropManager } from "react-dnd";
-import { useAtom, useSetAtom } from "jotai";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { treeApiAtom } from "@/features/page/tree/atoms/tree-api-atom.ts";
 import {
   fetchAllAncestorChildren,
@@ -26,7 +26,7 @@ import {
 } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import classes from "@/features/page/tree/styles/tree.module.css";
-import { Box, Menu, rem, Text } from "@mantine/core";
+import { Badge, Box, Loader, Menu, rem, Text, Tooltip } from "@mantine/core";
 import {
   IconChevronDown,
   IconChevronRight,
@@ -116,6 +116,11 @@ import {
   canExportDocument,
   hasFullSpaceAccess,
 } from "@/features/space/permissions/export-access.ts";
+import {
+  aiActivityAtom,
+  aiUnreadRunsAtom,
+} from "@/features/ai/atoms/ai-atoms.ts";
+import { isAiActivityActive } from "@/features/ai/utils/ai-activity.ts";
 
 interface SpaceTreeProps {
   spaceId: string;
@@ -636,6 +641,8 @@ function Node({
   const navigate = useNavigate();
   const timerRef = useRef(null);
   const [mobileSidebarOpened] = useAtom(mobileSidebarAtom);
+  const aiActivities = useAtomValue(aiActivityAtom);
+  const aiUnreadRuns = useAtomValue(aiUnreadRunsAtom);
   const toggleMobileSidebar = useToggleSidebar(mobileSidebarAtom);
   const nodeCapabilities = node.data.access?.capabilities;
   const canWriteNode =
@@ -646,6 +653,10 @@ function Node({
     nodeCapabilities?.canMoveDeleteShare ??
     !(tree.props.disableEdit as boolean);
   const canManageAccessNode = nodeCapabilities?.canManageAccess ?? false;
+  const hasActiveAiRun = Object.values(aiActivities).some(
+    (item) => item.pageId === node.data.id && isAiActivityActive(item),
+  );
+  const aiUnreadCount = aiUnreadRuns[node.data.id] ?? 0;
 
   const prefetchPage = () => {
     timerRef.current = setTimeout(async () => {
@@ -862,6 +873,28 @@ function Node({
         </div>
 
         <span className={classes.text}>{node.data.name || t("untitled")}</span>
+
+        {hasActiveAiRun && (
+          <Tooltip label={t("ai.ux.activityRunning")}>
+            <Loader
+              size={12}
+              className={classes.aiActivityIndicator}
+              aria-label={t("ai.ux.activityRunning")}
+            />
+          </Tooltip>
+        )}
+        {aiUnreadCount > 0 && (
+          <Tooltip label={t("ai.ux.activityCompleted")}>
+            <Badge
+              circle
+              size="xs"
+              className={classes.aiUnreadIndicator}
+              aria-label={t("ai.ux.activityCompleted")}
+            >
+              {Math.min(aiUnreadCount, 9)}
+            </Badge>
+          </Tooltip>
+        )}
 
         {isStatusFieldEnabled && node.data.status && (
           <StatusIndicator

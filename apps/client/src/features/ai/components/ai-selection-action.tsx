@@ -2,10 +2,11 @@ import {
   ActionIcon,
   Alert,
   Button,
+  Drawer,
   Group,
   Loader,
-  Modal,
   Paper,
+  Popover,
   ScrollArea,
   Stack,
   Text,
@@ -26,6 +27,7 @@ import { BubbleMenu } from "@tiptap/react/menus";
 import { useAtomValue } from "jotai";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useMediaQuery } from "@mantine/hooks";
 import { socketAtom } from "@/features/websocket/atoms/socket-atom.ts";
 import { DEFAULT_AI_QUICK_COMMANDS } from "@/features/ai/constants/quick-commands.ts";
 import {
@@ -69,6 +71,8 @@ export function AiSelectionActionButton({
   spaceId,
 }: AiSelectionActionButtonProps) {
   const { t, i18n } = useTranslation();
+  const isMobile = useMediaQuery("(max-width: 48em)");
+  const reduceMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
   const socket = useAtomValue(socketAtom);
   const availability = useAiSpaceStatusQuery(spaceId, pageId);
   const createAction = useCreateAiEditorActionMutation();
@@ -182,6 +186,10 @@ export function AiSelectionActionButton({
 
   const apply = (mode: ApplyMode) => {
     if (!snapshot || !run?.response) return;
+    if (mode !== "replace") {
+      void confirmApply(mode);
+      return;
+    }
     modals.openConfirmModal({
       title: t("ai.selection.applyTitle"),
       children: <Text size="sm">{t(`ai.selection.confirm.${mode}`)}</Text>,
@@ -241,32 +249,8 @@ export function AiSelectionActionButton({
     ? isEditorContextCurrent(editor, pageId, snapshot)
     : false;
 
-  return (
-    <>
-      <Tooltip label={t("ai.selection.open")} withArrow withinPortal={false}>
-        <ActionIcon
-          variant="default"
-          size="lg"
-          radius="6px"
-          aria-label={t("ai.selection.open")}
-          style={{ border: "none" }}
-          disabled={availability.data?.canUse === false}
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={open}
-        >
-          <IconSparkles size={16} stroke={2} />
-        </ActionIcon>
-      </Tooltip>
-
-      <Modal
-        opened={opened}
-        onClose={() => setOpened(false)}
-        title={t("ai.selection.title")}
-        centered
-        size="lg"
-        trapFocus
-      >
-        <Stack gap="sm">
+  const content = (
+    <Stack gap="sm">
           <Paper withBorder p="sm">
             <Text size="xs" c="dimmed" mb={4}>
               {t("ai.selection.selectedText")}
@@ -384,8 +368,72 @@ export function AiSelectionActionButton({
           {completed && !contextCurrent && (
             <Alert color="orange">{t("ai.selection.staleCopyOnly")}</Alert>
           )}
-        </Stack>
-      </Modal>
+    </Stack>
+  );
+
+  const trigger = (
+    <Tooltip label={t("ai.selection.open")} withArrow withinPortal={false}>
+      <ActionIcon
+        variant="default"
+        size="lg"
+        radius="6px"
+        aria-label={t("ai.selection.open")}
+        style={{ border: "none" }}
+        disabled={availability.data?.canUse === false}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={open}
+      >
+        <IconSparkles size={16} stroke={2} />
+      </ActionIcon>
+    </Tooltip>
+  );
+
+  return (
+    <>
+      <Popover
+        opened={!isMobile && opened}
+        onChange={setOpened}
+        position="bottom-end"
+        width={440}
+        shadow="lg"
+        withinPortal
+        trapFocus
+        transitionProps={{ duration: reduceMotion ? 0 : 160 }}
+      >
+        <Popover.Target>{trigger}</Popover.Target>
+        {!isMobile && (
+          <Popover.Dropdown>
+            <Text fw={600} size="sm" mb="sm">
+              {t("ai.selection.title")}
+            </Text>
+            {content}
+          </Popover.Dropdown>
+        )}
+      </Popover>
+      {isMobile && (
+        <Drawer
+          opened={opened}
+          onClose={() => setOpened(false)}
+          title={t("ai.selection.title")}
+          closeButtonProps={{ "aria-label": t("Close") }}
+          position="bottom"
+          size="85dvh"
+          padding="md"
+          trapFocus
+          transitionProps={{ duration: reduceMotion ? 0 : 180 }}
+          styles={{
+            content: {
+              borderStartStartRadius: "var(--mantine-radius-lg)",
+              borderStartEndRadius: "var(--mantine-radius-lg)",
+            },
+            body: {
+              paddingBottom: "calc(var(--mantine-spacing-md) + env(safe-area-inset-bottom))",
+            },
+          }}
+        >
+          {content}
+        </Drawer>
+      )}
     </>
   );
 }

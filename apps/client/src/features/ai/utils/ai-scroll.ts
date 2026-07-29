@@ -1,4 +1,4 @@
-export const AI_CHAT_BOTTOM_THRESHOLD = 32;
+export const AI_CHAT_BOTTOM_THRESHOLD = 80;
 
 export function isAiChatNearBottom(input: {
   scrollHeight: number;

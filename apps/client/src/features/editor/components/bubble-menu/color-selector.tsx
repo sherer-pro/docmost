@@ -171,6 +171,7 @@ export const ColorSelector: FC<ColorSelectorProps> = ({
             style={{
               fontWeight: 500,
               fontSize: rem(16),
+              border: "none",
             }}
           >
             A

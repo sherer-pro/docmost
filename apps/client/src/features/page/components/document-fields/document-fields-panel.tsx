@@ -7,6 +7,7 @@ import {
   Paper,
   Select,
   SelectProps,
+  Stack,
   Table,
   Text,
   Tooltip,
@@ -584,11 +585,14 @@ export function DocumentFieldsPanel({
         withArrow
         events={{ hover: true, focus: true, touch: true }}
       >
-        <span tabIndex={0} aria-label={t(selected.label)}>
+        <Stack gap={2} py={2} style={{ minWidth: 0 }}>
           <Badge color={selected.color} variant="light">
             {t(selected.label)}
           </Badge>
-        </span>
+          <Text size="xs" c="dimmed" lineClamp={2}>
+            {t(selected.tooltip)}
+          </Text>
+        </Stack>
       </Tooltip>
     );
   };

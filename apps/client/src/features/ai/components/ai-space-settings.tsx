@@ -115,6 +115,14 @@ const DEFAULT_FORM: AiSettingsForm = {
 
 export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
   const { t, i18n } = useTranslation();
+  const numberInputControlProps = {
+    incrementButtonProps: {
+      "aria-label": t("ai.ux.incrementValue"),
+    },
+    decrementButtonProps: {
+      "aria-label": t("ai.ux.decrementValue"),
+    },
+  };
   const configQuery = useAiSpaceConfigQuery(spaceId);
   const statusQuery = useAiSpaceStatusQuery(spaceId);
   const updateConfig = useUpdateAiSpaceConfigMutation(spaceId);
@@ -228,8 +236,7 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
     reasoningEnabled: values.reasoningEnabled,
     retrieval: {
       adapter: values.retrievalEnabled ? values.retrievalAdapter : "none",
-      ...(values.retrievalEnabled &&
-      values.retrievalAdapter === "http-json-v1"
+      ...(values.retrievalEnabled && values.retrievalAdapter === "http-json-v1"
         ? {
             url: values.retrievalUrl.trim() || null,
             ...(values.retrievalApiKey.trim()
@@ -264,9 +271,7 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
     })),
   });
 
-  const confirmClearKey = (
-    target: "model" | "retrieval" | "openWebUi",
-  ) => {
+  const confirmClearKey = (target: "model" | "retrieval" | "openWebUi") => {
     modals.openConfirmModal({
       title:
         target === "model"
@@ -493,6 +498,7 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
                   <Stack gap="md">
                     <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
                       <NumberInput
+                        {...numberInputControlProps}
                         label={t("ai.settings.temperature")}
                         description={t("ai.settings.temperatureDescription")}
                         min={0}
@@ -502,6 +508,7 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
                         {...form.getInputProps("temperature")}
                       />
                       <NumberInput
+                        {...numberInputControlProps}
                         label={t("ai.settings.maxOutputTokens")}
                         description={t(
                           "ai.settings.maxOutputTokensDescription",
@@ -511,6 +518,7 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
                         {...form.getInputProps("maxOutputTokens")}
                       />
                       <NumberInput
+                        {...numberInputControlProps}
                         label={t("ai.settings.contextWindow")}
                         description={t("ai.settings.contextWindowDescription")}
                         min={1024}
@@ -518,6 +526,7 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
                         {...form.getInputProps("contextWindow")}
                       />
                       <NumberInput
+                        {...numberInputControlProps}
                         label={t("ai.settings.timeout")}
                         description={t("ai.settings.timeoutDescription")}
                         min={1000}
@@ -768,9 +777,7 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
                     {configQuery.data?.retrieval.apiKeyConfigured && (
                       <Button
                         type="button"
-                        variant={
-                          clearRetrievalApiKey ? "filled" : "subtle"
-                        }
+                        variant={clearRetrievalApiKey ? "filled" : "subtle"}
                         color={clearRetrievalApiKey ? "red" : "gray"}
                         size="xs"
                         leftSection={<IconKeyOff size={15} />}
@@ -791,9 +798,7 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
                   <>
                     <TextInput
                       label={t("ai.settings.openWebUiBaseUrl")}
-                      description={t(
-                        "ai.settings.openWebUiBaseUrlDescription",
-                      )}
+                      description={t("ai.settings.openWebUiBaseUrlDescription")}
                       placeholder="https://open-webui.example.com"
                       required
                       {...form.getInputProps("openWebUiBaseUrl")}
@@ -817,13 +822,10 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
                       disabled={clearOpenWebUiApiKey}
                       {...form.getInputProps("openWebUiApiKey")}
                     />
-                    {configQuery.data?.retrieval.openWebUi
-                      .apiKeyConfigured && (
+                    {configQuery.data?.retrieval.openWebUi.apiKeyConfigured && (
                       <Button
                         type="button"
-                        variant={
-                          clearOpenWebUiApiKey ? "filled" : "subtle"
-                        }
+                        variant={clearOpenWebUiApiKey ? "filled" : "subtle"}
                         color={clearOpenWebUiApiKey ? "red" : "gray"}
                         size="xs"
                         leftSection={<IconKeyOff size={15} />}
@@ -843,6 +845,7 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
                 )}
                 <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
                   <NumberInput
+                    {...numberInputControlProps}
                     label={t("ai.settings.retrievalTimeout")}
                     description={t("ai.settings.retrievalTimeoutDescription")}
                     min={1000}
@@ -850,6 +853,7 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
                     {...form.getInputProps("retrievalTimeoutMs")}
                   />
                   <NumberInput
+                    {...numberInputControlProps}
                     label={t("ai.settings.retrievalMaxResults")}
                     description={t(
                       "ai.settings.retrievalMaxResultsDescription",
@@ -917,6 +921,7 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
             <Accordion.Panel>
               <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
                 <NumberInput
+                  {...numberInputControlProps}
                   label={t("ai.settings.userDailyLimit")}
                   description={t("ai.settings.userDailyLimitDescription")}
                   min={1}
@@ -924,6 +929,7 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
                   {...form.getInputProps("dailyRequestLimitPerUser")}
                 />
                 <NumberInput
+                  {...numberInputControlProps}
                   label={t("ai.settings.spaceTokenLimit")}
                   description={t("ai.settings.spaceTokenLimitDescription")}
                   min={1}
@@ -931,6 +937,7 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
                   {...form.getInputProps("dailyTokenLimitPerSpace")}
                 />
                 <NumberInput
+                  {...numberInputControlProps}
                   label={t("ai.settings.retentionDays")}
                   description={t("ai.settings.retentionDaysDescription")}
                   min={1}

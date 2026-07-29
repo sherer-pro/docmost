@@ -78,6 +78,17 @@ export interface AiStreamingRun {
   error?: string;
 }
 
+export interface AiActivityItem {
+  runId: string;
+  conversationId: string;
+  pageId: string;
+  pageTitle: string;
+  pageHref?: string;
+  status: AiRunStatus;
+  unread: boolean;
+  updatedAt: string;
+}
+
 export interface SendAiMessageInput {
   conversationId: string;
   content: string;
@@ -86,6 +97,8 @@ export interface SendAiMessageInput {
   useSpaceSearch: boolean;
   contextRevision: number;
   editorContext: AiEditorContext;
+  pageTitle: string;
+  pageHref: string;
 }
 
 export interface SendAiMessageResult {

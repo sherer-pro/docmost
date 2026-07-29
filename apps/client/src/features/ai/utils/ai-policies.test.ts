@@ -145,9 +145,9 @@ describe("AI apply policy", () => {
 
 describe("AI panel preferences", () => {
   it("clamps width and builds a stable profile payload", () => {
-    assert.equal(clampAiPanelWidth(250), 300);
-    assert.equal(clampAiPanelWidth(700), 600);
-    assert.equal(clampAiPanelWidth(Number.NaN), 350);
+    assert.equal(clampAiPanelWidth(250), 360);
+    assert.equal(clampAiPanelWidth(700), 520);
+    assert.equal(clampAiPanelWidth(Number.NaN), 400);
     assert.deepEqual(
       getAiPanelPreferencePayload({
         aiPanelOpen: true,
@@ -157,7 +157,7 @@ describe("AI panel preferences", () => {
       {
         aiPanelOpen: true,
         aiPanelTab: "ai",
-        aiPanelWidth: 600,
+        aiPanelWidth: 520,
       },
     );
   });

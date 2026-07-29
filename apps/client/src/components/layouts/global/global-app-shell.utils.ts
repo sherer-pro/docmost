@@ -19,3 +19,26 @@ export function getShellVisibilityState({
     isAsideHidden: shouldShowAside && !isAsideOpen,
   };
 }
+
+export type AsidePresentationMode = "docked" | "overlay" | "fullscreen";
+
+export function getAsidePresentationMode({
+  viewportWidth,
+  sidebarWidth,
+  asideWidth,
+  isSidebarVisible,
+}: {
+  viewportWidth: number;
+  sidebarWidth: number;
+  asideWidth: number;
+  isSidebarVisible: boolean;
+}): AsidePresentationMode {
+  if (viewportWidth <= 768) {
+    return "fullscreen";
+  }
+
+  const availableDocumentWidth =
+    viewportWidth - (isSidebarVisible ? sidebarWidth : 0) - asideWidth;
+
+  return availableDocumentWidth >= 720 ? "docked" : "overlay";
+}
