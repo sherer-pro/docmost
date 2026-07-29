@@ -114,6 +114,13 @@ describe('AiContextService search', () => {
             breadcrumbs: [],
           },
           {
+            id: 'page-id',
+            databaseId: null,
+            title: 'Duplicate page hit',
+            icon: '📄',
+            breadcrumbs: [],
+          },
+          {
             id: 'database-page-id',
             databaseId: 'database-id',
             title: 'Database',
