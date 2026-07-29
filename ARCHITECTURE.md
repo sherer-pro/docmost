@@ -18,7 +18,7 @@ The backend is organized around Nest modules under `apps/server/src/core`. Most 
 
 At the application level, `apps/server/src/app.module.ts` wires the core domain module, collaboration and general WebSocket modules, queue, static frontend serving, health, import/export, storage, mail, security headers/version/robots support, telemetry, Redis, database access, and optional Enterprise modules.
 
-`CoreModule` currently groups auth, workspace, page, attachment, comment, search, space, group, share, notification/watcher, MFA, push, database, API key, RAG, page access, dictionary, session, favorite, label, synced block transclusion, and presence functionality.
+`CoreModule` currently groups auth, workspace, page, attachment, comment, search, space, group, share, notification/watcher, MFA, push, database, API key, RAG, AI, page access, dictionary, session, favorite, label, synced block transclusion, and presence functionality. The core AI feature keeps per-space provider and optional external retrieval configuration separate from `spaces.settings`, persists private per-user/page conversations, and treats background runs in the database as the source of truth while Socket.IO delivers realtime progress.
 
 Security-sensitive cross-cutting behavior is centralized:
 
@@ -32,9 +32,10 @@ Security-sensitive cross-cutting behavior is centralized:
 - PDF export uses Chromium request interception and only allows `data:`, `about:blank`, and same-origin public attachment URLs. Mermaid diagrams are rendered in strict mode and sanitized before insertion into the PDF DOM.
 - `X-Forwarded-*` request headers are trusted only when `TRUSTED_PROXIES` explicitly configures the reverse proxy IP/CIDR ranges. Rate limiting, session IP capture, request logging, and HTTPS/HSTS detection use the Fastify-resolved client request metadata.
 - Embed iframes are restricted by a shared provider frame-source policy used by both client validation and server CSP. Generic iframe origins must be explicitly configured through `EMBED_ALLOWED_ORIGINS`.
+- Per-space AI provider and external retrieval endpoints are restricted through independent `AI_PROVIDER_ALLOWED_ORIGINS` and `AI_RETRIEVAL_ALLOWED_ORIGINS` policies. Credentials are encrypted at rest, redacted from API responses, and resolved by workers instead of being copied into queue payloads. External retrieval candidates are mapped back to Docmost sources and filtered through current page access before entering a prompt or citation.
 - File import treats attachment upload failure as task failure so imported pages are not committed with broken attachment references.
 
-The database schema is managed through Kysely migrations in `apps/server/src/database/migrations`. Generated Kysely types live under `apps/server/src/database/types`.
+The database schema is managed through Kysely migrations in `apps/server/src/database/migrations`. Generated Kysely types live under `apps/server/src/database/types`. AI chat persists configuration, conversations, runs, files, and citation snapshots without requiring a local vector index.
 
 Import/export controllers live under integration modules but expose canonical page/space routes such as `/api/pages/actions/export`, `/api/pages/actions/import`, and `/api/spaces/actions/export`. Backend route inventory is generated from controllers and should be treated as the route source of truth for documentation.
 
@@ -68,6 +69,12 @@ Generated backend route inventory is maintained by `pnpm routes:inventory` and c
 Reverse proxy deployments must set `TRUSTED_PROXIES` to the controlled proxy addresses or CIDRs, for example `loopback,linklocal,uniquelocal` or `10.0.0.0/8,172.16.0.0/12`. Leaving it empty disables forwarded-header trust.
 
 Generic iframe deployments must set `EMBED_ALLOWED_ORIGINS` to exact trusted `http(s)` origins when arbitrary iframe embeds are required. Built-in providers remain allowlisted by the shared embed frame-source policy.
+
+AI deployments must set `AI_PROVIDER_ALLOWED_ORIGINS` to the exact trusted model origins and `AI_RETRIEVAL_ALLOWED_ORIGINS` to the exact trusted optional retrieval origins that space administrators may configure. Both transports use the shared outbound URL/DNS policy but retain independent allowlists and stable error codes. `AI_STREAM_IDLE_TIMEOUT_MS` bounds inactivity between provider SSE chunks independently from the per-space full-request timeout; both timers start before URL resolution. Development permits loopback services such as LM Studio. Containers must use host or network URLs reachable from the Docmost container because container-local `127.0.0.1` does not address the host.
+
+Persistent core AI chat uses immutable `ai_runs` attempts. Retry/Regenerate create linked attempts and update only the assistant message projection; terminal usage, response snapshots, errors, and run-scoped citation snapshots are retained. BullMQ provides at-least-once delivery on `AI_CHAT_QUEUE`; deterministic job IDs, atomic database claims, compare-and-set terminal transitions, and monotonic transactional sequences provide effectively-once generation state. PostgreSQL admission locks serialize conversation/user/space quota decisions, and a database-readiness-gated reconciler repairs the PostgreSQL/Redis dual-write boundary without automatically repeating a provider call after a stale running worker.
+
+AI chat file uploads use idempotent upload batches, deterministic storage keys, extraction compare-and-set, database-first tombstones, and retriable storage cleanup. Legacy `AI_QUEUE`, PageEmbeddings/indexing, EE AI search, and `/api/ai/answers` stay separate. The removed EE editor Ask AI flow and `settings.ai.generative` toggle are not part of the core AI architecture.
 
 Production startup validation requires `APP_URL` to be valid, rejects trust-all proxy configuration, and requires `AUTH_RATE_LIMIT_STORAGE=redis`.
 
