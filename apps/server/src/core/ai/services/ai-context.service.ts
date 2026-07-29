@@ -172,16 +172,17 @@ export class AiContextService {
     if (!query.query?.trim()) {
       return { items: [], hasMore: false, nextCursor: null };
     }
+    const fetchLimit = Math.min(51, Math.max(query.limit + 1, query.limit * 2));
     const result = await this.searchService.searchPage(
       {
         query: query.query.trim(),
         spaceId: conversation.spaceId,
-        limit: Math.min(51, query.limit + 1),
+        limit: fetchLimit,
         offset: query.cursor,
       },
       { userId: user.id, workspaceId: workspace.id },
     );
-    const rows = result.items.slice(0, query.limit);
+    const rows = result.items;
     const rowPages = rows.length
       ? await this.db
           .selectFrom('databaseRows')
@@ -195,7 +196,7 @@ export class AiContextService {
           .execute()
       : [];
     const rowByPageId = new Map(rowPages.map((row) => [row.pageId, row.id]));
-    const items: AiContextSource[] = rows.map((row, position) => {
+    const mappedItems: AiContextSource[] = rows.map((row, position) => {
       const databaseRowId = rowByPageId.get(row.id);
       const sourceType: AiContextSourceType = row.databaseId
         ? 'database'
@@ -217,11 +218,23 @@ export class AiContextService {
         available: true,
       };
     });
-    const hasMore = result.items.length > query.limit;
+    const seen = new Set<string>();
+    const items: AiContextSource[] = [];
+    let consumedRows = 0;
+    for (const item of mappedItems) {
+      consumedRows += 1;
+      const identity = `${item.sourceType}:${item.sourceId}`;
+      if (seen.has(identity)) continue;
+      seen.add(identity);
+      items.push({ ...item, position: items.length });
+      if (items.length === query.limit) break;
+    }
+    const hasMore =
+      consumedRows < result.items.length || result.items.length === fetchLimit;
     return {
       items,
       hasMore,
-      nextCursor: hasMore ? String(query.cursor + query.limit) : null,
+      nextCursor: hasMore ? String(query.cursor + consumedRows) : null,
     };
   }
 
