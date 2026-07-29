@@ -309,7 +309,7 @@ export class AiRunService {
         const sequence = run.sequence + 1;
         const assistant = await trx
           .selectFrom('aiMessages')
-          .select('content')
+          .select(['content', 'reasoning'])
           .where('id', '=', run.assistantMessageId)
           .executeTakeFirst();
         const cancelled = await trx
@@ -321,6 +321,7 @@ export class AiRunService {
             completedAt: now,
             finishReason: 'cancelled',
             responseSnapshot: assistant?.content ?? '',
+            reasoningSnapshot: assistant?.reasoning ?? '',
             updatedAt: now,
           })
           .where('id', '=', run.id)
@@ -667,6 +668,7 @@ export class AiRunService {
           .set({
             currentRunId: run.id,
             content: '',
+            reasoning: '',
             status: 'pending',
             errorCode: null,
             errorMessage: null,
@@ -1004,6 +1006,7 @@ export class AiRunService {
       userId: message.userId,
       role: message.role as AiMessage['role'],
       content: message.content,
+      reasoning: message.reasoning,
       status: message.status as AiMessage['status'],
       clientRequestId: message.clientRequestId,
       currentRunId: message.currentRunId,

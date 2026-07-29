@@ -11,6 +11,7 @@ export type AiRunStateAction =
       type: "rest";
       run: AiRun;
       content?: string;
+      reasoning?: string;
     }
   | {
       type: "delta";
@@ -56,6 +57,7 @@ export function reduceAiRunState(
           conversationId: run.conversationId,
           messageId: run.assistantMessageId,
           content: action.content ?? current[run.id]?.content ?? "",
+          reasoning: action.reasoning ?? current[run.id]?.reasoning ?? "",
           sequence: run.sequence,
           status: run.status,
           cancelRequestedAt: run.cancelRequestedAt,
@@ -96,6 +98,9 @@ export function reduceAiRunState(
           conversationId: deltaEvent.conversationId,
           messageId: deltaEvent.messageId ?? previous?.messageId,
           content: `${previous?.content ?? ""}${deltaEvent.delta}`,
+          reasoning: `${previous?.reasoning ?? ""}${
+            deltaEvent.reasoningDelta ?? ""
+          }`,
           sequence: deltaEvent.sequence,
           status: "running",
           cancelRequestedAt: previous?.cancelRequestedAt,
@@ -113,6 +118,7 @@ export function reduceAiRunState(
         conversationId: statusEvent.conversationId,
         messageId: statusEvent.messageId ?? previous?.messageId,
         content: previous?.content ?? "",
+        reasoning: previous?.reasoning ?? "",
         sequence: statusEvent.sequence,
         status: statusEvent.status,
         cancelRequestedAt: previous?.cancelRequestedAt,

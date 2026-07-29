@@ -74,6 +74,7 @@ import {
 } from "@/features/ai/types/ai.types.ts";
 import { captureAiEditorContext } from "@/features/ai/utils/editor-context.ts";
 import { AiMessageCard } from "./ai-message-card.tsx";
+import { AiReasoningDisclosure } from "./ai-reasoning-disclosure.tsx";
 import classes from "./ai-panel.module.css";
 import { DEFAULT_AI_QUICK_COMMANDS } from "@/features/ai/constants/quick-commands.ts";
 import {
@@ -262,6 +263,7 @@ export function AiPanel() {
     activeConversationId,
     messagesQuery.data?.pages[0]?.items.at(-1)?.id,
     pendingRun?.content,
+    pendingRun?.reasoning,
   ]);
 
   const ensureConversation = async (): Promise<AiConversation> => {
@@ -892,6 +894,7 @@ export function AiPanel() {
               ? {
                   ...message,
                   content: run?.content || message.content,
+                  reasoning: run?.reasoning ?? message.reasoning ?? "",
                   status: "streaming" as const,
                 }
               : message;
@@ -1152,7 +1155,10 @@ function AiStreamingPlaceholder({
 }) {
   return (
     <Alert color="blue" icon={<Loader size="xs" />} aria-live="polite">
-      {run.content || generatingLabel}
+      <Stack gap="xs">
+        {run.reasoning && <AiReasoningDisclosure reasoning={run.reasoning} />}
+        <Text size="sm">{run.content || generatingLabel}</Text>
+      </Stack>
     </Alert>
   );
 }

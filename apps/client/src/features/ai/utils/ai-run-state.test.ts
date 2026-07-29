@@ -47,6 +47,7 @@ describe("AI run state reducer", () => {
         runId: "run",
         conversationId: "conversation",
         content: "a",
+        reasoning: "",
         sequence: 3,
         status: "running" as const,
       },
@@ -85,6 +86,7 @@ describe("AI run state reducer", () => {
         runId: "run",
         conversationId: "conversation",
         content: "",
+        reasoning: "",
         sequence: 2,
         status: "failed" as const,
       },
@@ -138,5 +140,34 @@ describe("AI run state reducer", () => {
     assert.equal(streaming.runs.run.cancelRequestedAt, cancelRequestedAt);
     assert.equal(cancelled.runs.run.cancelRequestedAt, cancelRequestedAt);
     assert.equal(cancelled.runs.run.status, "cancelled");
+  });
+
+  it("keeps reasoning separate from answer content", () => {
+    const run = {
+      id: "run",
+      conversationId: "conversation",
+      assistantMessageId: "message",
+      sequence: 0,
+      status: "queued",
+    } as AiRun;
+    const queued = reduceAiRunState(
+      {},
+      { type: "rest", run, content: "", reasoning: "stored" },
+    );
+    const streaming = reduceAiRunState(queued.runs, {
+      type: "delta",
+      event: {
+        runId: "run",
+        conversationId: "conversation",
+        messageId: "message",
+        pageId: "page",
+        sequence: 1,
+        delta: "answer",
+        reasoningDelta: " reasoning",
+      },
+    });
+
+    assert.equal(streaming.runs.run.content, "answer");
+    assert.equal(streaming.runs.run.reasoning, "stored reasoning");
   });
 });

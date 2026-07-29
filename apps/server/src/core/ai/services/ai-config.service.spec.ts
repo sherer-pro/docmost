@@ -63,12 +63,14 @@ describe('AiConfigService secret handling', () => {
       dailyTokenLimitPerSpace: 100000,
       retentionDays: 90,
       visionEnabled: false,
+      reasoningEnabled: true,
       quickCommands: null,
       createdAt: now,
       updatedAt: now,
     });
 
     expect(publicConfig.apiKeyConfigured).toBe(true);
+    expect(publicConfig.reasoningEnabled).toBe(true);
     expect(publicConfig.retrieval.apiKeyConfigured).toBe(true);
     expect(publicConfig.retrieval.openWebUi).toEqual({
       baseUrl: 'https://open-webui.example',

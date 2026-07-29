@@ -73,6 +73,7 @@ type AiSettingsForm = {
   dailyTokenLimitPerSpace: number;
   retentionDays: number;
   visionEnabled: boolean;
+  reasoningEnabled: boolean;
   retrievalEnabled: boolean;
   retrievalAdapter: Exclude<AiRetrievalAdapter, "none">;
   retrievalUrl: string;
@@ -99,6 +100,7 @@ const DEFAULT_FORM: AiSettingsForm = {
   dailyTokenLimitPerSpace: AI_SPACE_CONFIG_DEFAULTS.dailyTokenLimitPerSpace,
   retentionDays: AI_SPACE_CONFIG_DEFAULTS.retentionDays,
   visionEnabled: false,
+  reasoningEnabled: false,
   retrievalEnabled: false,
   retrievalAdapter: "http-json-v1",
   retrievalUrl: "",
@@ -183,6 +185,7 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
       dailyTokenLimitPerSpace: config.dailyTokenLimitPerSpace,
       retentionDays: config.retentionDays,
       visionEnabled: config.visionEnabled,
+      reasoningEnabled: config.reasoningEnabled ?? false,
       retrievalEnabled: config.retrieval.adapter !== "none",
       retrievalAdapter:
         config.retrieval.adapter === "open-webui-knowledge-v1" ||
@@ -222,6 +225,7 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
     dailyTokenLimitPerSpace: values.dailyTokenLimitPerSpace,
     retentionDays: values.retentionDays,
     visionEnabled: values.visionEnabled,
+    reasoningEnabled: values.reasoningEnabled,
     retrieval: {
       adapter: values.retrievalEnabled ? values.retrievalAdapter : "none",
       ...(values.retrievalEnabled &&
@@ -525,6 +529,13 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
                       label={t("ai.settings.vision")}
                       description={t("ai.settings.visionDescription")}
                       {...form.getInputProps("visionEnabled", {
+                        type: "checkbox",
+                      })}
+                    />
+                    <Switch
+                      label={t("ai.settings.reasoning")}
+                      description={t("ai.settings.reasoningDescription")}
+                      {...form.getInputProps("reasoningEnabled", {
                         type: "checkbox",
                       })}
                     />

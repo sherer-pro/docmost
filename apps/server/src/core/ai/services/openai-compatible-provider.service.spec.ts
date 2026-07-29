@@ -36,7 +36,7 @@ describe('OpenAiCompatibleProviderService', () => {
     jest.restoreAllMocks();
   });
 
-  it('streams content and ignores reasoning_content', async () => {
+  it('streams content and reasoning_content separately', async () => {
     const body = [
       'data: {"choices":[{"delta":{"reasoning_content":"hidden"}}]}\n\n',
       'data: {"choices":[{"delta":{"content":"Hello"}}]}\n\n',
@@ -51,6 +51,7 @@ describe('OpenAiCompatibleProviderService', () => {
         }),
     ) as any;
     const chunks: string[] = [];
+    const reasoningChunks: string[] = [];
 
     const usage = await service.stream(
       config,
@@ -59,11 +60,101 @@ describe('OpenAiCompatibleProviderService', () => {
         onText: (text) => {
           chunks.push(text);
         },
+        onReasoning: (text) => {
+          reasoningChunks.push(text);
+        },
       },
     );
 
     expect(chunks).toEqual(['Hello']);
+    expect(reasoningChunks).toEqual(['hidden']);
     expect(usage).toEqual({ inputTokens: 3, outputTokens: 1 });
+  });
+
+  it('supports reasoning and prefers reasoning_content when both are present', async () => {
+    const body = [
+      'data: {"choices":[{"delta":{"reasoning":"fallback"}}]}\n\n',
+      'data: {"choices":[{"delta":{"reasoning_content":"preferred","reasoning":"duplicate"}}]}\n\n',
+      'data: [DONE]\n\n',
+    ].join('');
+    global.fetch = jest.fn(async () => new Response(body)) as any;
+    const reasoningChunks: string[] = [];
+
+    await service.stream(config, [{ role: 'user', content: 'Hi' }], {
+      onText: jest.fn(),
+      onReasoning: (text) => {
+        reasoningChunks.push(text);
+      },
+    });
+
+    expect(reasoningChunks).toEqual(['fallback', 'preferred']);
+  });
+
+  it('discards reasoning when no reasoning handler is configured', async () => {
+    global.fetch = jest.fn(
+      async () =>
+        new Response(
+          'data: {"choices":[{"delta":{"reasoning_content":"hidden"}}]}\n\n' +
+            'data: [DONE]\n\n',
+        ),
+    ) as any;
+
+    await expect(
+      service.stream(config, [{ role: 'user', content: 'Hi' }], {
+        onText: jest.fn(),
+      }),
+    ).resolves.toEqual({ inputTokens: 0, outputTokens: 0 });
+  });
+
+  it('ignores structured reasoning payloads', async () => {
+    global.fetch = jest.fn(
+      async () =>
+        new Response(
+          'data: {"choices":[{"delta":{"reasoning_content":{"text":"hidden"},"reasoning":["hidden"]}}]}\n\n' +
+            'data: [DONE]\n\n',
+        ),
+    ) as any;
+    const onReasoning = jest.fn();
+
+    await service.stream(config, [{ role: 'user', content: 'Hi' }], {
+      onText: jest.fn(),
+      onReasoning,
+    });
+
+    expect(onReasoning).not.toHaveBeenCalled();
+  });
+
+  it('applies the combined stream text limit to reasoning', async () => {
+    const reasoning = 'r'.repeat(220_000);
+    const frame = `data: ${JSON.stringify({
+      choices: [{ delta: { reasoning_content: reasoning } }],
+    })}\n\n`;
+    global.fetch = jest.fn(
+      async () =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              const encoder = new TextEncoder();
+              for (let index = 0; index < 39; index += 1) {
+                controller.enqueue(encoder.encode(frame));
+              }
+              controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+              controller.close();
+            },
+          }),
+        ),
+    ) as any;
+
+    await expect(
+      service.stream(config, [{ role: 'user', content: 'Hi' }], {
+        onText: jest.fn(),
+        onReasoning: jest.fn(),
+      }),
+    ).rejects.toMatchObject({
+      status: 502,
+      aiErrorCode: 'provider_invalid_response',
+      message: 'AI provider stream exceeded the text limit',
+    });
   });
 
   it('rejects malformed SSE data', async () => {
@@ -236,10 +327,9 @@ describe('OpenAiCompatibleProviderService', () => {
     }) as any;
 
     await expect(
-      service.complete(
-        { ...config, requestTimeoutMs: 25 },
-        [{ role: 'user', content: 'Hi' }],
-      ),
+      service.complete({ ...config, requestTimeoutMs: 25 }, [
+        { role: 'user', content: 'Hi' },
+      ]),
     ).rejects.toMatchObject({
       status: 504,
       message: 'AI provider request timed out',

@@ -209,6 +209,7 @@ export function useSendAiMessageMutation() {
             type: "rest",
             run: result.run,
             content: result.assistantMessage.content,
+            reasoning: result.assistantMessage.reasoning ?? "",
           }).runs,
       );
       void queryClient.invalidateQueries({

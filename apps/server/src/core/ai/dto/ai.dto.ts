@@ -192,6 +192,10 @@ export class UpdateAiSpaceConfigDto {
   visionEnabled?: boolean;
 
   @IsOptional()
+  @IsBoolean()
+  reasoningEnabled?: boolean;
+
+  @IsOptional()
   @IsObject()
   @ValidateNested()
   @Type(() => UpdateAiRetrievalConfigDto)

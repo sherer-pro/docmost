@@ -123,6 +123,7 @@ export function getPersistedActiveRun(
         conversationId: message.conversationId,
         messageId: message.id,
         content: message.content,
+        reasoning: message.reasoning ?? "",
         sequence: message.runSequence ?? 0,
         status: message.runStatus,
       }
