@@ -30,6 +30,166 @@ export type JsonValue = JsonArray | JsonObject | JsonPrimitive;
 
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
+export interface AiChatFiles {
+  contentSha256: string | null;
+  conversationId: string;
+  createdAt: Generated<Timestamp>;
+  deletedAt: Timestamp | null;
+  error: string | null;
+  extractionStartedAt: Timestamp | null;
+  extractedText: string | null;
+  id: Generated<string>;
+  mimeType: string;
+  name: string;
+  size: Int8;
+  spaceId: string;
+  status: Generated<string>;
+  storageDeletedAt: Timestamp | null;
+  storageKey: string;
+  uploadBatchId: string | null;
+  uploadOrdinal: number | null;
+  uploadedAt: Timestamp | null;
+  updatedAt: Generated<Timestamp>;
+  userId: string;
+  workspaceId: string;
+}
+
+export interface AiConversations {
+  clientRequestId: string | null;
+  createdAt: Generated<Timestamp>;
+  deletedAt: Timestamp | null;
+  draft: string | null;
+  id: Generated<string>;
+  lastOpenedAt: Generated<Timestamp>;
+  pageId: string;
+  requestFingerprint: string | null;
+  spaceId: string;
+  title: string | null;
+  updatedAt: Generated<Timestamp>;
+  useSpaceSearch: Generated<boolean>;
+  userId: string;
+  workspaceId: string;
+}
+
+export interface AiMessages {
+  clientRequestId: string | null;
+  content: Generated<string>;
+  conversationId: string;
+  createdAt: Generated<Timestamp>;
+  currentRunId: string | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+  id: Generated<string>;
+  inputTokens: Generated<Int8>;
+  outputTokens: Generated<Int8>;
+  role: string;
+  status: Generated<string>;
+  updatedAt: Generated<Timestamp>;
+  userId: string | null;
+  workspaceId: string;
+}
+
+export interface AiMessageSources {
+  createdAt: Generated<Timestamp>;
+  excerpt: string | null;
+  id: Generated<string>;
+  messageId: string;
+  pageId: string | null;
+  position: number;
+  relevanceScore: number | null;
+  runId: string;
+  sourceId: string;
+  sourceTitle: string;
+  sourceType: string;
+  sourceUrl: string | null;
+}
+
+export interface AiRuns {
+  attemptNo: Generated<number>;
+  assistantMessageId: string;
+  attachmentIds: Generated<string[]>;
+  cancelRequestedAt: Timestamp | null;
+  clientRequestId: string;
+  completedAt: Timestamp | null;
+  conversationId: string;
+  createdAt: Generated<Timestamp>;
+  chatFileIds: Generated<string[]>;
+  documentSnapshot: string | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+  finishReason: string | null;
+  heartbeatAt: Timestamp | null;
+  id: Generated<string>;
+  inputTokens: Generated<Int8>;
+  enqueuedAt: Timestamp | null;
+  outputTokens: Generated<Int8>;
+  previousRunId: string | null;
+  reservedTokens: Generated<Int8>;
+  responseSnapshot: string | null;
+  requestFingerprint: string | null;
+  retrievalErrorCode: string | null;
+  retrievalOutcome: Generated<string>;
+  pageId: string;
+  selectionFrom: number | null;
+  selectionText: string | null;
+  selectionTo: number | null;
+  sequence: Generated<number>;
+  snapshotHash: string | null;
+  spaceId: string;
+  startedAt: Timestamp | null;
+  status: Generated<string>;
+  rootRunId: string;
+  trigger: Generated<string>;
+  updatedAt: Generated<Timestamp>;
+  useSpaceSearch: Generated<boolean>;
+  userId: string;
+  userMessageId: string;
+  workspaceId: string;
+}
+
+export interface AiFileUploadBatches {
+  conversationId: string;
+  createdAt: Generated<Timestamp>;
+  errorCode: string | null;
+  id: Generated<string>;
+  idempotencyKey: string;
+  requestFingerprint: string;
+  status: Generated<string>;
+  updatedAt: Generated<Timestamp>;
+  userId: string;
+  workspaceId: string;
+}
+
+export interface AiSpaceConfigs {
+  apiKeyEncrypted: string | null;
+  baseUrl: string;
+  chatModel: string;
+  contextWindow: Generated<number>;
+  createdAt: Generated<Timestamp>;
+  createdById: string | null;
+  dailyRequestLimitPerUser: Generated<number>;
+  dailyTokenLimitPerSpace: Generated<Int8>;
+  enabled: Generated<boolean>;
+  id: Generated<string>;
+  maxOutputTokens: Generated<number>;
+  provider: Generated<string>;
+  quickCommands: Json | null;
+  retrievalAdapter: Generated<string>;
+  retrievalApiKeyEncrypted: string | null;
+  retrievalMaxResults: Generated<number>;
+  retrievalTimeoutMs: Generated<number>;
+  retrievalUrl: string | null;
+  requestTimeoutMs: Generated<number>;
+  retentionDays: Generated<number>;
+  spaceId: string;
+  systemInstructions: string | null;
+  temperature: Generated<number>;
+  updatedAt: Generated<Timestamp>;
+  updatedById: string | null;
+  visionEnabled: Generated<boolean>;
+  workspaceId: string;
+}
+
 export interface ApiKeys {
   createdAt: Generated<Timestamp>;
   deletedAt: Timestamp | null;
@@ -602,6 +762,13 @@ export interface Watchers {
 }
 
 export interface DB {
+  aiChatFiles: AiChatFiles;
+  aiConversations: AiConversations;
+  aiFileUploadBatches: AiFileUploadBatches;
+  aiMessages: AiMessages;
+  aiMessageSources: AiMessageSources;
+  aiRuns: AiRuns;
+  aiSpaceConfigs: AiSpaceConfigs;
   apiKeys: ApiKeys;
   attachments: Attachments;
   authAccounts: AuthAccounts;

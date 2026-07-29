@@ -2,6 +2,7 @@ import { validate as isValidUuid } from 'uuid';
 
 export type NotificationFrequency = 'immediate' | '1h' | '3h' | '6h' | '24h';
 export type PageEditModePreference = 'read' | 'edit';
+export type AsideTabPreference = '' | 'comments' | 'toc' | 'ai';
 
 const NOTIFICATION_FREQUENCIES: NotificationFrequency[] = [
   'immediate',
@@ -18,6 +19,9 @@ interface UserPreferencesRecord {
   pushFrequency?: unknown;
   emailFrequency?: unknown;
   fixedToolbar?: unknown;
+  aiPanelOpen?: unknown;
+  aiPanelWidth?: unknown;
+  aiPanelTab?: unknown;
   headingNumberingByPageId?: unknown;
   pageEditModeByPageId?: unknown;
 }
@@ -77,6 +81,32 @@ export function normalizePreferenceBoolean(
   }
 
   return fallback;
+}
+
+export function normalizeAiPanelWidth(
+  value: unknown,
+  fallback = 350,
+): number {
+  const parsed =
+    typeof value === 'number'
+      ? value
+      : Number.parseInt(normalizePreferenceString(value) ?? '', 10);
+
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+
+  return Math.min(600, Math.max(300, Math.round(parsed)));
+}
+
+export function normalizeAsideTabPreference(
+  value: unknown,
+  fallback: AsideTabPreference = '',
+): AsideTabPreference {
+  const normalized = normalizePreferenceString(value) ?? '';
+  return ['', 'comments', 'toc', 'ai'].includes(normalized)
+    ? (normalized as AsideTabPreference)
+    : fallback;
 }
 
 export function normalizeNotificationFrequency(
@@ -184,6 +214,9 @@ export function normalizeUserSettings(
     pushFrequency: NotificationFrequency;
     emailFrequency: NotificationFrequency;
     fixedToolbar: boolean;
+    aiPanelOpen: boolean;
+    aiPanelWidth: number;
+    aiPanelTab: AsideTabPreference;
     headingNumberingByPageId: Record<string, boolean>;
     pageEditModeByPageId: Record<string, PageEditModePreference>;
   };
@@ -205,6 +238,12 @@ export function normalizeUserSettings(
         safePreferences.fixedToolbar,
         false,
       ),
+      aiPanelOpen: normalizePreferenceBoolean(
+        safePreferences.aiPanelOpen,
+        false,
+      ),
+      aiPanelWidth: normalizeAiPanelWidth(safePreferences.aiPanelWidth),
+      aiPanelTab: normalizeAsideTabPreference(safePreferences.aiPanelTab),
       headingNumberingByPageId: normalizeBooleanPreferenceByPageId(
         safePreferences.headingNumberingByPageId,
       ),

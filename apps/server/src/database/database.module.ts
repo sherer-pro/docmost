@@ -45,6 +45,7 @@ import { FavoriteRepo } from './repos/favorite/favorite.repo';
 import { LabelRepo } from './repos/label/label.repo';
 import { PageTransclusionsRepo } from './repos/page-transclusions/page-transclusions.repo';
 import { PageTransclusionReferencesRepo } from './repos/page-transclusions/page-transclusion-references.repo';
+import { DatabaseReadinessService } from '@docmost/db/services/database-readiness.service';
 
 @Global()
 @Module({
@@ -84,6 +85,7 @@ import { PageTransclusionReferencesRepo } from './repos/page-transclusions/page-
   ],
   providers: [
     MigrationService,
+    DatabaseReadinessService,
     WorkspaceRepo,
     UserRepo,
     GroupRepo,
@@ -147,6 +149,7 @@ import { PageTransclusionReferencesRepo } from './repos/page-transclusions/page-
     LabelRepo,
     PageTransclusionsRepo,
     PageTransclusionReferencesRepo,
+    DatabaseReadinessService,
   ],
 })
 export class DatabaseModule
@@ -158,6 +161,7 @@ export class DatabaseModule
     @InjectKysely() private readonly db: KyselyDB,
     private readonly migrationService: MigrationService,
     private readonly environmentService: EnvironmentService,
+    private readonly readinessService: DatabaseReadinessService,
   ) {}
 
   async onApplicationBootstrap() {
@@ -166,6 +170,8 @@ export class DatabaseModule
     if (this.environmentService.getNodeEnv() === 'production') {
       await this.migrationService.migrateToLatest();
     }
+
+    this.readinessService.markReady();
   }
 
   async beforeApplicationShutdown(): Promise<void> {

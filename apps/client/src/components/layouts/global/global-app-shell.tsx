@@ -1,4 +1,4 @@
-import { AppShell } from "@mantine/core";
+import { AppShell, Drawer } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
 import React, { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
@@ -6,6 +6,7 @@ import SettingsSidebar from "@/components/settings/settings-sidebar.tsx";
 import { useAtom } from "jotai";
 import {
   asideStateAtom,
+  asideWidthAtom,
   desktopSidebarAtom,
   mobileSidebarAtom,
   sidebarWidthAtom,
@@ -17,6 +18,10 @@ import classes from "./app-shell.module.css";
 import { useTrialEndAction } from "@/ee/hooks/use-trial-end-action.tsx";
 import { PageFrame } from "@/components/ui/page-frame.tsx";
 import { getShellVisibilityState } from "@/components/layouts/global/global-app-shell.utils.ts";
+import { useSetAtom } from "jotai";
+import { AiSocketBridge } from "@/features/ai/hooks/use-ai-socket.ts";
+import { AiPanelPreferencesSync } from "@/features/ai/components/ai-panel-preferences-sync.tsx";
+import { useTranslation } from "react-i18next";
 
 export default function GlobalAppShell({
   children,
@@ -24,11 +29,16 @@ export default function GlobalAppShell({
   children: React.ReactNode;
 }) {
   useTrialEndAction();
+  const { t } = useTranslation();
   const [mobileOpened] = useAtom(mobileSidebarAtom);
   const [desktopOpened] = useAtom(desktopSidebarAtom);
-  const [{ isAsideOpen }] = useAtom(asideStateAtom);
+  const [asideState] = useAtom(asideStateAtom);
+  const setAsideState = useSetAtom(asideStateAtom);
+  const { isAsideOpen } = asideState;
+  const [asideWidth, setAsideWidth] = useAtom(asideWidthAtom);
   const [sidebarWidth, setSidebarWidth] = useAtom(sidebarWidthAtom);
   const [isResizing, setIsResizing] = useState(false);
+  const [isAsideResizing, setIsAsideResizing] = useState(false);
   const sidebarRef = useRef<HTMLElement | null>(null);
   const asideRef = useRef<HTMLElement | null>(null);
   const isMobileViewport = useMediaQuery("(max-width: 48em)");
@@ -40,10 +50,21 @@ export default function GlobalAppShell({
 
   const stopResizing = React.useCallback(() => {
     setIsResizing(false);
+    setIsAsideResizing(false);
   }, []);
 
   const resize = React.useCallback(
     (mouseMoveEvent) => {
+      if (isAsideResizing) {
+        setAsideWidth(
+          Math.min(
+            600,
+            Math.max(300, window.innerWidth - mouseMoveEvent.clientX),
+          ),
+        );
+        return;
+      }
+
       if (isResizing) {
         if (!sidebarRef.current) {
           return;
@@ -63,8 +84,13 @@ export default function GlobalAppShell({
         setSidebarWidth(newWidth);
       }
     },
-    [isResizing],
+    [isAsideResizing, isResizing, setAsideWidth],
   );
+
+  const startAsideResizing = React.useCallback((mouseDownEvent) => {
+    mouseDownEvent.preventDefault();
+    setIsAsideResizing(true);
+  }, []);
 
   useEffect(() => {
     //https://codesandbox.io/p/sandbox/kz9de
@@ -132,14 +158,17 @@ export default function GlobalAppShell({
         }
       }
       aside={
-        shouldShowAside && {
-          width: 350,
+        shouldShowAside &&
+        !isMobileViewport && {
+          width: asideWidth,
           breakpoint: "sm",
           collapsed: { mobile: !isAsideOpen, desktop: !isAsideOpen },
         }
       }
       padding="md"
     >
+      <AiSocketBridge />
+      <AiPanelPreferencesSync />
       <AppShell.Header px="md" className={classes.header}>
         <AppHeader />
       </AppShell.Header>
@@ -164,17 +193,59 @@ export default function GlobalAppShell({
         )}
       </AppShell.Main>
 
-      {shouldShowAside && (
+      {shouldShowAside && !isMobileViewport && (
         <AppShell.Aside
           id="docmost-context-aside"
           className={classes.aside}
-          p="md"
+          p={0}
           withBorder={false}
           ref={asideRef}
           aria-hidden={isAsideHidden || undefined}
         >
+          <div
+            className={classes.asideResizeHandle}
+            onMouseDown={startAsideResizing}
+            role="separator"
+            aria-orientation="vertical"
+            aria-label={t("ai.resizePanel")}
+            aria-valuemin={300}
+            aria-valuemax={600}
+            aria-valuenow={asideWidth}
+            tabIndex={0}
+            onKeyDown={(event) => {
+              if (event.key === "ArrowLeft") {
+                setAsideWidth(Math.min(600, asideWidth + 10));
+              }
+              if (event.key === "ArrowRight") {
+                setAsideWidth(Math.max(300, asideWidth - 10));
+              }
+            }}
+          />
           <Aside />
         </AppShell.Aside>
+      )}
+
+      {shouldShowAside && Boolean(isMobileViewport) && (
+        <Drawer
+          opened={isAsideOpen}
+          onClose={() => setAsideState({ ...asideState, isAsideOpen: false })}
+          position="right"
+          size="100%"
+          withCloseButton={false}
+          padding={0}
+          title={null}
+          aria-label={t("ai.title")}
+          keepMounted
+          styles={{
+            body: {
+              height: "100dvh",
+              paddingTop: "env(safe-area-inset-top)",
+              paddingBottom: "env(safe-area-inset-bottom)",
+            },
+          }}
+        >
+          <Aside />
+        </Drawer>
       )}
     </AppShell>
   );

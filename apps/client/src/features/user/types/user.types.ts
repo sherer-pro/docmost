@@ -23,6 +23,9 @@ export interface IUser {
   fullPageWidthByPageId?: Record<string, boolean>; // used for update
   headingNumberingByPageId?: Record<string, boolean>; // used for update
   pageEditModeByPageId?: Record<string, PageEditMode>; // used for update
+  aiPanelOpen?: boolean; // used for update
+  aiPanelWidth?: number; // used for update
+  aiPanelTab?: AsideTabPreference; // used for update
   pushEnabled: boolean; // used for update
   emailEnabled: boolean; // used for update
   emailFrequency: EmailFrequency; // used for update
@@ -43,6 +46,9 @@ export interface IUserSettings {
     fullPageWidthByPageId?: Record<string, boolean>;
     headingNumberingByPageId?: Record<string, boolean>;
     pageEditModeByPageId?: Record<string, PageEditMode>;
+    aiPanelOpen: boolean;
+    aiPanelWidth: number;
+    aiPanelTab: AsideTabPreference;
     pushEnabled: boolean;
     emailEnabled: boolean;
     emailFrequency: EmailFrequency;
@@ -58,3 +64,5 @@ export enum PageEditMode {
   Read = "read",
   Edit = "edit",
 }
+
+export type AsideTabPreference = "" | "comments" | "toc" | "ai";

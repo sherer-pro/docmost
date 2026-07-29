@@ -14,6 +14,7 @@ import classes from "./settings-modal.module.css";
 import { useAtomValue } from "jotai";
 import { userAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { hasFullSpaceAccess } from "@/features/space/permissions/export-access.ts";
+import { AiSpaceSettings } from "@/features/ai/components/ai-space-settings.tsx";
 
 interface SpaceSettingsModalProps {
   spaceId: string;
@@ -81,6 +82,9 @@ export default function SpaceSettingsModal({
                   <Tabs.Tab fw={500} value="members">
                     {t("Members")}
                   </Tabs.Tab>
+                  <Tabs.Tab fw={500} value="ai">
+                    {t("ai.title")}
+                  </Tabs.Tab>
                 </Tabs.List>
 
                 <Tabs.Panel value="general" className={classes.panel}>
@@ -91,7 +95,7 @@ export default function SpaceSettingsModal({
                   >
                     <div className={classes.generalContent}>
                       <SpaceDetails
-                        spaceId={space?.id}
+                        spaceId={space.id}
                         readOnly={spaceAbility.cannot(
                           SpaceCaslAction.Manage,
                           SpaceCaslSubject.Settings,
@@ -112,16 +116,28 @@ export default function SpaceSettingsModal({
                         {spaceAbility.can(
                           SpaceCaslAction.Manage,
                           SpaceCaslSubject.Member,
-                        ) && <AddSpaceMembersModal spaceId={space?.id} />}
+                        ) && <AddSpaceMembersModal spaceId={space.id} />}
                       </div>
 
                       <SpaceMembersList
-                        spaceId={space?.id}
+                        spaceId={space.id}
                         readOnly={spaceAbility.cannot(
                           SpaceCaslAction.Manage,
                           SpaceCaslSubject.Member,
                         )}
                       />
+                    </div>
+                  </ScrollArea>
+                </Tabs.Panel>
+
+                <Tabs.Panel value="ai" className={classes.panel}>
+                  <ScrollArea
+                    className={classes.panelScroll}
+                    scrollbarSize={5}
+                    pr={8}
+                  >
+                    <div className={classes.generalContent}>
+                      <AiSpaceSettings spaceId={space.id} />
                     </div>
                   </ScrollArea>
                 </Tabs.Panel>

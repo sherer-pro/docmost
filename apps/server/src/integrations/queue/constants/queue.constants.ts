@@ -6,6 +6,7 @@ export enum QueueName {
   FILE_TASK_QUEUE = '{file-task-queue}',
   SEARCH_QUEUE = '{search-queue}',
   AI_QUEUE = '{ai-queue}',
+  AI_CHAT_QUEUE = '{ai-chat-queue}',
   HISTORY_QUEUE = '{history-queue}',
   NOTIFICATION_QUEUE = '{notification-queue}',
 }
@@ -62,6 +63,10 @@ export enum QueueJob {
 
   GENERATE_PAGE_EMBEDDINGS = 'generate-page-embeddings',
   DELETE_PAGE_EMBEDDINGS = 'delete-page-embeddings',
+
+  AI_CHAT_RUN = 'ai-chat-run',
+  AI_CHAT_FILE_EXTRACT = 'ai-chat-file-extract',
+  AI_CHAT_RETENTION_CLEANUP = 'ai-chat-retention-cleanup',
 
   PAGE_HISTORY = 'page-history',
   PAGE_HISTORY_EVENT_FLUSH = 'page-history-event-flush',

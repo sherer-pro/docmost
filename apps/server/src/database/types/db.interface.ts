@@ -1,4 +1,11 @@
 import {
+  AiChatFiles,
+  AiConversations,
+  AiFileUploadBatches,
+  AiMessages,
+  AiMessageSources,
+  AiRuns,
+  AiSpaceConfigs,
   ApiKeys,
   Attachments,
   AuthAccounts,
@@ -41,6 +48,13 @@ import {
 import { PageEmbeddings } from '@docmost/db/types/embeddings.types';
 
 export interface DbInterface {
+  aiChatFiles: AiChatFiles;
+  aiConversations: AiConversations;
+  aiFileUploadBatches: AiFileUploadBatches;
+  aiMessages: AiMessages;
+  aiMessageSources: AiMessageSources;
+  aiRuns: AiRuns;
+  aiSpaceConfigs: AiSpaceConfigs;
   attachments: Attachments;
   authAccounts: AuthAccounts;
   authProviders: AuthProviders;

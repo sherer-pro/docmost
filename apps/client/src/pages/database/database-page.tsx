@@ -33,6 +33,7 @@ import { resolvePageFullWidth } from "@/features/user/utils/page-width.ts";
 import { resolveHeadingNumberingEnabled } from "@/features/page/utils/heading-numbering";
 import { pageEditorAtom } from "@/features/editor/atoms/editor-atoms.ts";
 import { PageReadingTime } from "@/features/page/components/reading-time/page-reading-time.tsx";
+import { AiDocumentContextSync } from "@/features/ai/components/ai-document-context-sync.tsx";
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 
@@ -234,6 +235,15 @@ export default function DatabasePage() {
 
   return (
     <>
+      {databasePageId && (
+        <AiDocumentContextSync
+          pageId={databasePageId}
+          spaceId={database?.spaceId ?? space?.id}
+          spaceSlug={spaceSlug}
+          title={databaseDisplayName}
+          canWrite={!readOnly}
+        />
+      )}
       <Helmet>
         <title>
           {databaseDisplayName} - {getAppName()}

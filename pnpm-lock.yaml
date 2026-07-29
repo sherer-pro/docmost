@@ -264,6 +264,9 @@ importers:
       '@mantine/spotlight':
         specifier: ^8.3.14
         version: 8.3.14(@mantine/core@8.3.14(@mantine/hooks@8.3.14(react@18.3.1))(@types/react@18.3.12)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@mantine/hooks@8.3.14(react@18.3.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@noble/hashes':
+        specifier: 1.8.0
+        version: 1.8.0
       '@tabler/icons-react':
         specifier: ^3.36.1
         version: 3.36.1(react@18.3.1)

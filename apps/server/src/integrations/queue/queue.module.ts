@@ -74,6 +74,18 @@ import { GeneralQueueProcessor } from './processors/general-queue.processor';
       },
     }),
     BullModule.registerQueue({
+      name: QueueName.AI_CHAT_QUEUE,
+      defaultJobOptions: {
+        removeOnComplete: {
+          count: 200,
+        },
+        removeOnFail: {
+          count: 200,
+        },
+        attempts: 1,
+      },
+    }),
+    BullModule.registerQueue({
       name: QueueName.HISTORY_QUEUE,
       defaultJobOptions: {
         removeOnComplete: true,

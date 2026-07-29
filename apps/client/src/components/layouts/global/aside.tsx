@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import { TableOfContents } from "@/features/editor/components/table-of-contents/table-of-contents.tsx";
 import { useAtomValue } from "jotai";
 import { pageEditorAtom } from "@/features/editor/atoms/editor-atoms.ts";
+import { AiPanel } from "@/features/ai/components/ai-panel.tsx";
 
 export default function Aside() {
   const [{ tab }, setAsideState] = useAtom(asideStateAtom);
@@ -25,16 +26,28 @@ export default function Aside() {
       component = <TableOfContents editor={pageEditor} />;
       title = "Table of contents";
       break;
+    case "ai":
+      component = null;
+      title = "ai.title";
+      break;
     default:
       component = null;
       title = null;
   }
 
   return (
-    <Box p="md">
-      {component && (
+    <Box
+      p="md"
+      h="100%"
+      style={{
+        minHeight: 0,
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      {(component || tab === "ai") && (
         <>
-          <Group justify="space-between" mb="md" wrap="nowrap">
+          <Group justify="space-between" mb="sm" wrap="nowrap">
             <Text fw={500}>{t(title)}</Text>
             <CloseButton
               aria-label={t("Close panel")}
@@ -42,9 +55,20 @@ export default function Aside() {
             />
           </Group>
 
+          <Box
+            style={{
+              display: tab === "ai" ? "block" : "none",
+              flex: tab === "ai" ? "1 1 auto" : undefined,
+              minHeight: 0,
+            }}
+            aria-hidden={tab === "ai" ? undefined : true}
+          >
+            <AiPanel />
+          </Box>
+
           {tab === "comments" ? (
             component
-          ) : (
+          ) : tab === "ai" ? null : (
             <ScrollArea
               style={{ height: "85vh" }}
               scrollbarSize={5}

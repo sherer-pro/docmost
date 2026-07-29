@@ -1,5 +1,12 @@
 import { Insertable, Selectable, Updateable } from 'kysely';
 import {
+  AiChatFiles,
+  AiConversations,
+  AiFileUploadBatches,
+  AiMessages,
+  AiMessageSources,
+  AiRuns,
+  AiSpaceConfigs,
   Attachments,
   Comments,
   Databases,
@@ -102,6 +109,45 @@ export interface PageSettings {
   aiRole?: PageAiRole;
   [key: string]: JsonValue | undefined;
 }
+
+// AI space configuration
+export type AiSpaceConfig = Selectable<AiSpaceConfigs>;
+export type InsertableAiSpaceConfig = Insertable<AiSpaceConfigs>;
+export type UpdatableAiSpaceConfig = Updateable<Omit<AiSpaceConfigs, 'id'>>;
+
+// AI conversation
+export type AiConversation = Selectable<AiConversations>;
+export type InsertableAiConversation = Insertable<AiConversations>;
+export type UpdatableAiConversation = Updateable<Omit<AiConversations, 'id'>>;
+
+// AI file upload batch
+export type AiFileUploadBatch = Selectable<AiFileUploadBatches>;
+export type InsertableAiFileUploadBatch = Insertable<AiFileUploadBatches>;
+export type UpdatableAiFileUploadBatch = Updateable<
+  Omit<AiFileUploadBatches, 'id'>
+>;
+
+// AI message
+export type AiMessage = Selectable<AiMessages>;
+export type InsertableAiMessage = Insertable<AiMessages>;
+export type UpdatableAiMessage = Updateable<Omit<AiMessages, 'id'>>;
+
+// AI run
+export type AiRun = Selectable<AiRuns>;
+export type InsertableAiRun = Insertable<AiRuns>;
+export type UpdatableAiRun = Updateable<Omit<AiRuns, 'id'>>;
+
+// AI chat file
+export type AiChatFile = Selectable<AiChatFiles>;
+export type InsertableAiChatFile = Insertable<AiChatFiles>;
+export type UpdatableAiChatFile = Updateable<Omit<AiChatFiles, 'id'>>;
+
+// AI message source
+export type AiMessageSource = Selectable<AiMessageSources>;
+export type InsertableAiMessageSource = Insertable<AiMessageSources>;
+export type UpdatableAiMessageSource = Updateable<
+  Omit<AiMessageSources, 'id'>
+>;
 
 // Workspace
 export type Workspace = Selectable<Workspaces>;

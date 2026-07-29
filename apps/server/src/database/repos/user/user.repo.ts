@@ -18,6 +18,9 @@ import { UserRole } from '../../../common/helpers/types/permission';
 const USER_PREFERENCE_KEYS = [
   'fullPageWidth',
   'fixedToolbar',
+  'aiPanelOpen',
+  'aiPanelWidth',
+  'aiPanelTab',
   'fullPageWidthByPageId',
   'headingNumberingByPageId',
   'pageEditModeByPageId',
@@ -31,6 +34,7 @@ type UserPreferenceKey = (typeof USER_PREFERENCE_KEYS)[number];
 type UserPageEditModePreference = 'read' | 'edit';
 type UserPreferenceValue =
   | string
+  | number
   | boolean
   | Record<string, boolean>
   | Record<string, UserPageEditModePreference>;

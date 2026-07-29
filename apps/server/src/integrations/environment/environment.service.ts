@@ -5,6 +5,11 @@ import {
   parseTrustedProxies,
   TrustedProxyConfig,
 } from '../../common/security/trusted-proxy.util';
+import {
+  AI_STREAM_IDLE_TIMEOUT_DEFAULT_MS,
+  AI_STREAM_IDLE_TIMEOUT_MAX_MS,
+  AI_STREAM_IDLE_TIMEOUT_MIN_MS,
+} from './environment.constants';
 
 @Injectable()
 export class EnvironmentService {
@@ -59,6 +64,32 @@ export class EnvironmentService {
     return this.configService.get<string>('EMBED_ALLOWED_ORIGINS', '');
   }
 
+  getAiProviderAllowedOrigins(): string {
+    return this.configService.get<string>('AI_PROVIDER_ALLOWED_ORIGINS', '');
+  }
+
+  getAiRetrievalAllowedOrigins(): string {
+    return this.configService.get<string>('AI_RETRIEVAL_ALLOWED_ORIGINS', '');
+  }
+
+  getAiStreamIdleTimeoutMs(): number {
+    const rawTimeout = this.configService.get<string | number>(
+      'AI_STREAM_IDLE_TIMEOUT_MS',
+      AI_STREAM_IDLE_TIMEOUT_DEFAULT_MS,
+    );
+    const timeout = Number(rawTimeout);
+
+    if (
+      !Number.isInteger(timeout) ||
+      timeout < AI_STREAM_IDLE_TIMEOUT_MIN_MS ||
+      timeout > AI_STREAM_IDLE_TIMEOUT_MAX_MS
+    ) {
+      return AI_STREAM_IDLE_TIMEOUT_DEFAULT_MS;
+    }
+
+    return timeout;
+  }
+
   getAppSecret(): string {
     return this.configService.get<string>('APP_SECRET');
   }
@@ -77,7 +108,6 @@ export class EnvironmentService {
       'redis://localhost:6379',
     );
   }
-
 
   getAuthRateLimitStorage(): 'memory' | 'redis' {
     const storage = this.configService
@@ -190,7 +220,6 @@ export class EnvironmentService {
   getPostmarkToken(): string {
     return this.configService.get<string>('POSTMARK_TOKEN');
   }
-
 
   getWebPushVapidPublicKey(): string {
     return this.configService.get<string>('WEB_PUSH_VAPID_PUBLIC_KEY');

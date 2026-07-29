@@ -13,6 +13,10 @@ import {
 import { plainToInstance } from 'class-transformer';
 import { IsISO6391 } from '../../common/validator/is-iso6391';
 import { parseTrustedProxies } from '../../common/security/trusted-proxy.util';
+import {
+  AI_STREAM_IDLE_TIMEOUT_MAX_MS,
+  AI_STREAM_IDLE_TIMEOUT_MIN_MS,
+} from './environment.constants';
 
 export class EnvironmentVariables {
   @IsOptional()
@@ -34,6 +38,18 @@ export class EnvironmentVariables {
   @IsOptional()
   @IsString()
   EMBED_ALLOWED_ORIGINS: string;
+
+  @IsOptional()
+  @IsString()
+  AI_PROVIDER_ALLOWED_ORIGINS: string;
+
+  @IsOptional()
+  @IsString()
+  AI_RETRIEVAL_ALLOWED_ORIGINS: string;
+
+  @IsOptional()
+  @Matches(/^\d+$/)
+  AI_STREAM_IDLE_TIMEOUT_MS: string;
 
   @IsNotEmpty()
   @IsUrl(
@@ -399,6 +415,24 @@ function getRuntimeContractErrors(config: Record<string, any>): string[] {
   const nodeEnv = String(config.NODE_ENV || 'development').toLowerCase();
   const isProduction = nodeEnv === 'production';
   const isCloud = String(config.CLOUD || 'false').toLowerCase() === 'true';
+
+  const aiStreamIdleTimeoutRaw = config.AI_STREAM_IDLE_TIMEOUT_MS;
+  if (
+    aiStreamIdleTimeoutRaw !== undefined &&
+    aiStreamIdleTimeoutRaw !== null &&
+    aiStreamIdleTimeoutRaw !== ''
+  ) {
+    const aiStreamIdleTimeout = Number(aiStreamIdleTimeoutRaw);
+    if (
+      !Number.isInteger(aiStreamIdleTimeout) ||
+      aiStreamIdleTimeout < AI_STREAM_IDLE_TIMEOUT_MIN_MS ||
+      aiStreamIdleTimeout > AI_STREAM_IDLE_TIMEOUT_MAX_MS
+    ) {
+      errors.push(
+        `AI_STREAM_IDLE_TIMEOUT_MS must be an integer between ${AI_STREAM_IDLE_TIMEOUT_MIN_MS} and ${AI_STREAM_IDLE_TIMEOUT_MAX_MS}`,
+      );
+    }
+  }
 
   if (!isProduction) {
     return errors;

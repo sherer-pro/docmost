@@ -2,10 +2,13 @@ import { OmitType, PartialType } from '@nestjs/mapped-types';
 import {
   IsBoolean,
   IsIn,
+  IsInt,
   IsObject,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
+  Min,
   MinLength,
 } from 'class-validator';
 import { CreateUserDto } from '../../auth/dto/create-user.dto';
@@ -24,6 +27,21 @@ export class UpdateUserDto extends PartialType(
   @IsOptional()
   @IsBoolean()
   fixedToolbar: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  aiPanelOpen: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(300)
+  @Max(600)
+  aiPanelWidth: number;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['', 'comments', 'toc', 'ai'])
+  aiPanelTab: '' | 'comments' | 'toc' | 'ai';
 
   @IsOptional()
   @IsObject()

@@ -1,4 +1,6 @@
 import {
+  normalizeAiPanelWidth,
+  normalizeAsideTabPreference,
   normalizeBooleanPreferenceByPageId,
   normalizePageEditModeByPageId,
   normalizeNotificationFrequency,
@@ -44,6 +46,15 @@ describe('user-preferences.util', () => {
     });
   });
 
+  it('normalizes AI panel preferences', () => {
+    expect(normalizeAiPanelWidth('420')).toBe(420);
+    expect(normalizeAiPanelWidth(100)).toBe(300);
+    expect(normalizeAiPanelWidth(1000)).toBe(600);
+    expect(normalizeAiPanelWidth('invalid', 360)).toBe(360);
+    expect(normalizeAsideTabPreference('"ai"')).toBe('ai');
+    expect(normalizeAsideTabPreference('invalid', 'comments')).toBe('comments');
+  });
+
   it('normalizes boolean page preference maps', () => {
     expect(
       normalizeBooleanPreferenceByPageId({
@@ -70,6 +81,9 @@ describe('user-preferences.util', () => {
         emailEnabled: '"false"',
         pushFrequency: '"24h"',
         emailFrequency: '"1h"',
+        aiPanelOpen: '"true"',
+        aiPanelWidth: '420',
+        aiPanelTab: '"ai"',
         pageEditModeByPageId: {
           [PAGE_ID]: '"read"',
           [OTHER_PAGE_ID]: '"edit"',
@@ -87,6 +101,9 @@ describe('user-preferences.util', () => {
     expect(normalized.preferences.emailEnabled).toBe(false);
     expect(normalized.preferences.pushFrequency).toBe('24h');
     expect(normalized.preferences.emailFrequency).toBe('1h');
+    expect(normalized.preferences.aiPanelOpen).toBe(true);
+    expect(normalized.preferences.aiPanelWidth).toBe(420);
+    expect(normalized.preferences.aiPanelTab).toBe('ai');
     expect(normalized.preferences.pageEditModeByPageId).toEqual({
       [PAGE_ID]: 'read',
       [OTHER_PAGE_ID]: 'edit',

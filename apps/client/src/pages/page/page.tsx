@@ -20,6 +20,7 @@ import PageCommentSection from "@/features/comment/components/page-comment-secti
 import { useSpaceQuery } from "@/features/space/queries/space-query";
 import { resolveHeadingNumberingEnabled } from "@/features/page/utils/heading-numbering";
 import { userAtom } from "@/features/user/atoms/current-user-atom.ts";
+import { AiDocumentContextSync } from "@/features/ai/components/ai-document-context-sync.tsx";
 
 const MemoizedFullEditor = React.memo(FullEditor);
 const MemoizedPageHeader = React.memo(PageHeader);
@@ -128,6 +129,13 @@ function PageContent({
   return (
     page && (
       <div>
+        <AiDocumentContextSync
+          pageId={page.id}
+          spaceId={page.spaceId}
+          spaceSlug={resolvedSpaceSlug}
+          title={page.title}
+          canWrite={canWritePage}
+        />
         <Helmet>
           <title>{`${page?.icon || ""}  ${page?.title || t("untitled")}`}</title>
         </Helmet>
