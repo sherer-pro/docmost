@@ -18,10 +18,12 @@ type OpenWebUiQueryResponse = {
   distances?: unknown;
 };
 
+type OpenWebUiFileResponse = {
+  meta?: unknown;
+};
+
 @Injectable()
-export class OpenWebUiKnowledgeRetrievalAdapter
-  implements AiRetrievalAdapter
-{
+export class OpenWebUiKnowledgeRetrievalAdapter implements AiRetrievalAdapter {
   readonly kind = 'open-webui-knowledge-v1' as const;
 
   constructor(private readonly http: AiRetrievalHttpClient) {}
@@ -121,6 +123,7 @@ export class OpenWebUiKnowledgeRetrievalAdapter
         collection_names: [config.openWebUiKnowledgeId],
         query: request.query,
         k: AI_RETRIEVAL_DEFAULTS.candidateLimit,
+        hybrid: false,
       }),
       maxRequestBytes: AI_RETRIEVAL_DEFAULTS.maxRequestChars,
       maxResponseBytes: AI_RETRIEVAL_DEFAULTS.maxResponseChars,
@@ -138,11 +141,16 @@ export class OpenWebUiKnowledgeRetrievalAdapter
       return { hits: [], candidateCount: 0 };
     }
 
+    const hydratedMetadatas = await this.hydrateFileMetadata(
+      config,
+      metadatas.slice(0, candidateCount),
+      signal,
+    );
     const hits: AiRetrievalHit[] = [];
     for (let index = 0; index < candidateCount; index += 1) {
       const parsed = this.parseCandidate(
         documents[index],
-        metadatas[index],
+        hydratedMetadatas[index],
         distances[index],
         request,
       );
@@ -170,6 +178,64 @@ export class OpenWebUiKnowledgeRetrievalAdapter
     return { hits: [...deduplicated.values()], candidateCount };
   }
 
+  private async hydrateFileMetadata(
+    config: AiRetrievalConfig,
+    metadatas: unknown[],
+    signal?: AbortSignal,
+  ): Promise<unknown[]> {
+    const requests = new Map<string, Promise<unknown>>();
+    return Promise.all(
+      metadatas.map(async (metadataValue) => {
+        if (this.getDocmostMetadata(metadataValue)) return metadataValue;
+        if (!metadataValue || typeof metadataValue !== 'object') {
+          return metadataValue;
+        }
+        const fileId = (metadataValue as Record<string, unknown>).file_id;
+        if (typeof fileId !== 'string' || !isUuid(fileId)) {
+          return metadataValue;
+        }
+        let request = requests.get(fileId);
+        if (!request) {
+          request = this.fetchFileDocmostMetadata(config, fileId, signal);
+          requests.set(fileId, request);
+        }
+        const docmost = await request;
+        if (!docmost) return metadataValue;
+        return {
+          ...(metadataValue as Record<string, unknown>),
+          docmost,
+        };
+      }),
+    );
+  }
+
+  private async fetchFileDocmostMetadata(
+    config: AiRetrievalConfig,
+    fileId: string,
+    signal?: AbortSignal,
+  ): Promise<unknown> {
+    const file = await this.http.requestJson<OpenWebUiFileResponse>({
+      url: this.endpoint(config, `api/v1/files/${encodeURIComponent(fileId)}`),
+      apiKey: config.openWebUiApiKey,
+      timeoutMs: config.timeoutMs,
+      maxRequestBytes: 0,
+      maxResponseBytes: 256 * 1024,
+      signal,
+    });
+    return this.getDocmostMetadata(file.meta);
+  }
+
+  private getDocmostMetadata(metadataValue: unknown): unknown {
+    if (!metadataValue || typeof metadataValue !== 'object') return undefined;
+    const metadata = metadataValue as Record<string, unknown>;
+    const nestedData =
+      metadata.data && typeof metadata.data === 'object'
+        ? (metadata.data as Record<string, unknown>)
+        : undefined;
+    const docmost = nestedData?.docmost ?? metadata.docmost;
+    return docmost && typeof docmost === 'object' ? docmost : undefined;
+  }
+
   private parseCandidate(
     document: unknown,
     metadataValue: unknown,
@@ -179,19 +245,13 @@ export class OpenWebUiKnowledgeRetrievalAdapter
     if (
       typeof document !== 'string' ||
       document.length === 0 ||
-      Buffer.byteLength(document, 'utf8') >
-        AI_RETRIEVAL_DEFAULTS.maxHitChars ||
+      Buffer.byteLength(document, 'utf8') > AI_RETRIEVAL_DEFAULTS.maxHitChars ||
       !metadataValue ||
       typeof metadataValue !== 'object'
     ) {
       return null;
     }
-    const metadata = metadataValue as Record<string, unknown>;
-    const nestedData =
-      metadata.data && typeof metadata.data === 'object'
-        ? (metadata.data as Record<string, unknown>)
-        : undefined;
-    const docmostValue = nestedData?.docmost ?? metadata.docmost;
+    const docmostValue = this.getDocmostMetadata(metadataValue);
     if (!docmostValue || typeof docmostValue !== 'object') {
       return null;
     }
@@ -259,9 +319,7 @@ export class OpenWebUiKnowledgeRetrievalAdapter
 
   private assertConfigured(config: AiRetrievalConfig): void {
     if (!this.isConfigured(config)) {
-      throw new BadGatewayException(
-        'Open WebUI retrieval is not configured',
-      );
+      throw new BadGatewayException('Open WebUI retrieval is not configured');
     }
   }
 }
