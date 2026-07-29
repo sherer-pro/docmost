@@ -1364,6 +1364,7 @@
     "searchSpace": "Search this space",
     "currentDocumentOnly": "Current document",
     "stop": "Stop",
+    "stopping": "Stopping…",
     "send": "Send",
     "sendShortcut": "Ctrl/⌘ + Enter to send",
     "chatName": "Chat name",
@@ -1533,6 +1534,7 @@
       "title": "Message context",
       "documents": "Documents and data",
       "dragHint": "Drop a page, database, or row here",
+      "dragFromSidebarHint": "Drag a page, database, or row from the sidebar directly into the chat.",
       "crossSpaceRejected": "Only sources from this space can be added.",
       "alreadyAdded": "This source is already in the context.",
       "addFromSpace": "Add from space",
@@ -1542,6 +1544,7 @@
       "searchPlaceholder": "Search pages, databases, and rows",
       "searchFailed": "Could not search this space.",
       "noResults": "No accessible sources found.",
+      "spaceRoot": "Space root",
       "loadMore": "Load more"
     },
     "selection": {

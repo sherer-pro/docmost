@@ -90,3 +90,97 @@ describe('AiContextService revisions', () => {
     expect(trx.deleteFrom).not.toHaveBeenCalled();
   });
 });
+
+describe('AiContextService search', () => {
+  it('returns row icons and accessible breadcrumbs', async () => {
+    const rowQuery: any = {
+      select: jest.fn(() => rowQuery),
+      where: jest.fn(() => rowQuery),
+      execute: jest.fn(async () => [
+        { id: 'database-row-id', pageId: 'row-page-id' },
+      ]),
+    };
+    const db = {
+      selectFrom: jest.fn(() => rowQuery),
+    };
+    const searchService = {
+      searchPage: jest.fn(async () => ({
+        items: [
+          {
+            id: 'page-id',
+            databaseId: null,
+            title: 'Page',
+            icon: '📄',
+            breadcrumbs: [],
+          },
+          {
+            id: 'database-page-id',
+            databaseId: 'database-id',
+            title: 'Database',
+            icon: '🗃️',
+            breadcrumbs: [{ id: 'root-page', title: 'Root' }],
+          },
+          {
+            id: 'row-page-id',
+            databaseId: null,
+            title: 'Database row',
+            icon: '📋',
+            breadcrumbs: [
+              { id: 'root-page', title: 'Root' },
+              { id: 'database-page', title: 'Database' },
+            ],
+          },
+        ],
+      })),
+    };
+    const service = new AiContextService(
+      db as any,
+      {
+        getOwnedEntity: jest.fn(async () => ({
+          id: 'conversation',
+          spaceId: 'space',
+        })),
+      } as any,
+      {} as any,
+      searchService as any,
+    );
+
+    await expect(
+      service.search(
+        'conversation',
+        { query: 'row', cursor: 0, limit: 20 } as any,
+        { id: 'user' } as any,
+        { id: 'workspace' } as any,
+      ),
+    ).resolves.toEqual({
+      items: [
+        expect.objectContaining({
+          sourceType: 'page',
+          sourceId: 'page-id',
+          pageId: 'page-id',
+          title: 'Page',
+          icon: '📄',
+          breadcrumbs: [],
+        }),
+        expect.objectContaining({
+          sourceType: 'database',
+          sourceId: 'database-id',
+          pageId: 'database-page-id',
+          title: 'Database',
+          icon: '🗃️',
+          breadcrumbs: ['Root'],
+        }),
+        expect.objectContaining({
+          sourceType: 'database_row',
+          sourceId: 'database-row-id',
+          pageId: 'row-page-id',
+          title: 'Database row',
+          icon: '📋',
+          breadcrumbs: ['Root', 'Database'],
+        }),
+      ],
+      hasMore: false,
+      nextCursor: null,
+    });
+  });
+});

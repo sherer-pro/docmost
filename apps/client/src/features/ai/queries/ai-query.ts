@@ -227,6 +227,9 @@ export function useCancelAiRunMutation() {
       setRuns(
         (current) => reduceAiRunState(current, { type: "rest", run }).runs,
       );
+      if (!["completed", "failed", "cancelled"].includes(run.status)) {
+        return;
+      }
       await queryClient.refetchQueries({
         queryKey: AI_QUERY_KEYS.messages(run.conversationId),
       });

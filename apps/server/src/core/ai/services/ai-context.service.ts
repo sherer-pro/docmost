@@ -208,6 +208,7 @@ export class AiContextService {
         sourceId: row.databaseId ?? databaseRowId ?? row.id,
         pageId: row.id,
         title: row.title?.trim() || '',
+        icon: row.icon ?? null,
         breadcrumbs: (row.breadcrumbs ?? []).map(
           (breadcrumb) => breadcrumb.title,
         ),
@@ -798,6 +799,7 @@ export class AiContextService {
           sourceId: input.sourceId,
           pageId: descriptor?.pageId ?? input.sourceId,
           title: descriptor?.title ?? '',
+          icon: descriptor?.icon ?? null,
           breadcrumbs: [],
           url: null,
           position,
@@ -822,7 +824,7 @@ export class AiContextService {
     if (input.sourceType === 'page') {
       const page = await this.db
         .selectFrom('pages')
-        .select(['id', 'title'])
+        .select(['id', 'title', 'icon'])
         .where('id', '=', input.sourceId)
         .where('spaceId', '=', spaceId)
         .where('workspaceId', '=', workspaceId)
@@ -835,6 +837,7 @@ export class AiContextService {
             sourceId: page.id,
             pageId: page.id,
             title: page.title?.trim() || '',
+            icon: page.icon ?? null,
             breadcrumbs: [],
             url: null,
           }
@@ -843,7 +846,7 @@ export class AiContextService {
     if (input.sourceType === 'database') {
       const database = await this.db
         .selectFrom('databases')
-        .select(['id', 'name', 'pageId'])
+        .select(['id', 'name', 'pageId', 'icon'])
         .where('id', '=', input.sourceId)
         .where('spaceId', '=', spaceId)
         .where('workspaceId', '=', workspaceId)
@@ -856,6 +859,7 @@ export class AiContextService {
             sourceId: database.id,
             pageId: database.pageId,
             title: database.name.trim(),
+            icon: database.icon ?? null,
             breadcrumbs: [],
             url: null,
           }
@@ -865,7 +869,7 @@ export class AiContextService {
       .selectFrom('databaseRows as r')
       .innerJoin('databases as d', 'd.id', 'r.databaseId')
       .innerJoin('pages as p', 'p.id', 'r.pageId')
-      .select(['r.id', 'r.pageId', 'p.title'])
+      .select(['r.id', 'r.pageId', 'p.title', 'p.icon'])
       .where((eb) =>
         eb.or([
           eb('r.id', '=', input.sourceId),
@@ -885,6 +889,7 @@ export class AiContextService {
           sourceId: row.id,
           pageId: row.pageId,
           title: row.title?.trim() || '',
+          icon: row.icon ?? null,
           breadcrumbs: [],
           url: null,
         }

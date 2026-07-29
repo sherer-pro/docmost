@@ -1364,6 +1364,7 @@
     "searchSpace": "Durchsuchen Sie diesen Bereich",
     "currentDocumentOnly": "Aktuelles Dokument",
     "stop": "Stopp",
+    "stopping": "Wird gestoppt…",
     "send": "Senden",
     "sendShortcut": "Strg/⌘ + Eingabetaste zum Senden",
     "chatName": "Chatname",
@@ -1533,6 +1534,7 @@
       "title": "Nachrichtenkontext",
       "documents": "Dokumente und Daten",
       "dragHint": "Legen Sie hier eine Seite, eine Datenbank oder eine Zeile ab",
+      "dragFromSidebarHint": "Ziehen Sie eine Seite, Datenbank oder Zeile aus der Seitenleiste direkt in den Chat.",
       "crossSpaceRejected": "Es können nur Quellen aus diesem Bereich hinzugefügt werden.",
       "alreadyAdded": "Diese Quelle ist bereits im Kontext.",
       "addFromSpace": "Aus dem Weltraum hinzufügen",
@@ -1542,6 +1544,7 @@
       "searchPlaceholder": "Durchsuchen Sie Seiten, Datenbanken und Zeilen",
       "searchFailed": "Dieser Bereich konnte nicht durchsucht werden.",
       "noResults": "Keine zugänglichen Quellen gefunden.",
+      "spaceRoot": "Stammverzeichnis des Bereichs",
       "loadMore": "Mehr laden"
     },
     "selection": {

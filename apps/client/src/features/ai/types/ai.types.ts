@@ -73,6 +73,7 @@ export interface AiStreamingRun {
   content: string;
   sequence: number;
   status: AiRunStatus;
+  cancelRequestedAt?: string | null;
   error?: string;
 }
 

@@ -1364,6 +1364,7 @@
     "searchSpace": "Cerca in questo spazio",
     "currentDocumentOnly": "Documento attuale",
     "stop": "Fermare",
+    "stopping": "Arresto in corso…",
     "send": "Invia",
     "sendShortcut": "Ctrl/⌘ + Invio per inviare",
     "chatName": "Nome della chat",
@@ -1533,6 +1534,7 @@
       "title": "Contesto del messaggio",
       "documents": "Documenti e dati",
       "dragHint": "Trascina una pagina, un database o una riga qui",
+      "dragFromSidebarHint": "Trascina una pagina, un database o una riga dalla barra laterale direttamente nella chat.",
       "crossSpaceRejected": "È possibile aggiungere solo le fonti da questo spazio.",
       "alreadyAdded": "Questa fonte è già nel contesto.",
       "addFromSpace": "Aggiungi dallo spazio",
@@ -1542,6 +1544,7 @@
       "searchPlaceholder": "Cerca pagine, database e righe",
       "searchFailed": "Impossibile eseguire la ricerca in questo spazio.",
       "noResults": "Nessuna fonte accessibile trovata.",
+      "spaceRoot": "Radice dello spazio",
       "loadMore": "Carica di più"
     },
     "selection": {

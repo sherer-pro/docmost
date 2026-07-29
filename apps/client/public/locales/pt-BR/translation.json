@@ -1364,6 +1364,7 @@
     "searchSpace": "Pesquisar este espaço",
     "currentDocumentOnly": "Documento atual",
     "stop": "Pare",
+    "stopping": "Parando…",
     "send": "Enviar",
     "sendShortcut": "Ctrl/⌘ + Enter para enviar",
     "chatName": "Nome do bate-papo",
@@ -1533,6 +1534,7 @@
       "title": "Contexto da mensagem",
       "documents": "Documentos e dados",
       "dragHint": "Solte uma página, banco de dados ou linha aqui",
+      "dragFromSidebarHint": "Arraste uma página, banco de dados ou linha da barra lateral diretamente para o chat.",
       "crossSpaceRejected": "Somente fontes deste espaço podem ser adicionadas.",
       "alreadyAdded": "Esta fonte já está no contexto.",
       "addFromSpace": "Adicionar do espaço",
@@ -1542,6 +1544,7 @@
       "searchPlaceholder": "Pesquisar páginas, bancos de dados e linhas",
       "searchFailed": "Não foi possível pesquisar este espaço.",
       "noResults": "Nenhuma fonte acessível encontrada.",
+      "spaceRoot": "Raiz do espaço",
       "loadMore": "Carregar mais"
     },
     "selection": {

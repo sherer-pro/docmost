@@ -93,9 +93,50 @@ describe("AI run state reducer", () => {
       reduceAiRunState(current, { type: "prune", runId: "run" }).runs,
       {},
     );
-    assert.deepEqual(
-      reduceAiRunState(current, { type: "reconnect" }).runs,
+    assert.deepEqual(reduceAiRunState(current, { type: "reconnect" }).runs, {});
+  });
+
+  it("preserves a cancellation request through streaming events", () => {
+    const cancelRequestedAt = "2026-07-29T20:00:00.000Z";
+    const running = reduceAiRunState(
       {},
+      {
+        type: "rest",
+        run: {
+          id: "run",
+          conversationId: "conversation",
+          assistantMessageId: "message",
+          sequence: 1,
+          status: "running",
+          cancelRequestedAt,
+        } as AiRun,
+      },
     );
+    const streaming = reduceAiRunState(running.runs, {
+      type: "delta",
+      event: {
+        runId: "run",
+        conversationId: "conversation",
+        messageId: "message",
+        pageId: "page",
+        sequence: 2,
+        delta: "partial",
+      },
+    });
+    const cancelled = reduceAiRunState(streaming.runs, {
+      type: "status",
+      event: {
+        runId: "run",
+        conversationId: "conversation",
+        messageId: "message",
+        pageId: "page",
+        sequence: 3,
+        status: "cancelled",
+      },
+    });
+
+    assert.equal(streaming.runs.run.cancelRequestedAt, cancelRequestedAt);
+    assert.equal(cancelled.runs.run.cancelRequestedAt, cancelRequestedAt);
+    assert.equal(cancelled.runs.run.status, "cancelled");
   });
 });

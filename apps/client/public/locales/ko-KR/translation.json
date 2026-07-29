@@ -1364,6 +1364,7 @@
     "searchSpace": "이 공간 검색",
     "currentDocumentOnly": "현재 문서",
     "stop": "중지",
+    "stopping": "중지 중…",
     "send": "보내기",
     "sendShortcut": "Ctrl/⌘ + Enter를 눌러 보내기",
     "chatName": "채팅 이름",
@@ -1533,6 +1534,7 @@
       "title": "메시지 컨텍스트",
       "documents": "문서 및 데이터",
       "dragHint": "여기에 페이지, 데이터베이스 또는 행을 놓습니다.",
+      "dragFromSidebarHint": "사이드바에서 페이지, 데이터베이스 또는 행을 채팅으로 직접 끌어다 놓으세요.",
       "crossSpaceRejected": "이 공간의 소스만 추가할 수 있습니다.",
       "alreadyAdded": "이 소스는 이미 컨텍스트에 있습니다.",
       "addFromSpace": "공간에서 추가",
@@ -1542,6 +1544,7 @@
       "searchPlaceholder": "페이지, 데이터베이스 및 행 검색",
       "searchFailed": "이 공간을 검색할 수 없습니다.",
       "noResults": "접근 가능한 소스를 찾을 수 없습니다.",
+      "spaceRoot": "공간 루트",
       "loadMore": "더 로드하기"
     },
     "selection": {

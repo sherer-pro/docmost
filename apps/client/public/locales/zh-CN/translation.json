@@ -1364,6 +1364,7 @@
     "searchSpace": "搜索这个空间",
     "currentDocumentOnly": "当前文件",
     "stop": "停止",
+    "stopping": "正在停止…",
     "send": "发送",
     "sendShortcut": "Ctrl/⌘ + Enter 发送",
     "chatName": "聊天名称",
@@ -1533,6 +1534,7 @@
       "title": "消息上下文",
       "documents": "文件和数据",
       "dragHint": "将页面、数据库或行拖放到此处",
+      "dragFromSidebarHint": "将页面、数据库或行从侧边栏直接拖到聊天中。",
       "crossSpaceRejected": "只能添加来自该空间的源。",
       "alreadyAdded": "这个来源已经在上下文中了。",
       "addFromSpace": "从空间添加",
@@ -1542,6 +1544,7 @@
       "searchPlaceholder": "搜索页面、数据库和行",
       "searchFailed": "无法搜索该空间。",
       "noResults": "找不到可访问的来源。",
+      "spaceRoot": "空间根目录",
       "loadMore": "加载更多"
     },
     "selection": {

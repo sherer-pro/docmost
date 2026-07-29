@@ -35,6 +35,8 @@ import { KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { notifications } from "@mantine/notifications";
 import { modals } from "@mantine/modals";
+import clsx from "clsx";
+import { useDrop } from "react-dnd";
 import {
   pageEditorAtom,
   titleEditorAtom,
@@ -88,11 +90,22 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEditorState } from "@tiptap/react";
 import { getAiConversationContext } from "@/features/ai/services/ai-service.ts";
 import { AI_QUERY_KEYS } from "@/features/ai/queries/ai-query.ts";
+import { treeDataAtom } from "@/features/page/tree/atoms/tree-data-atom.ts";
+import {
+  findTreeNodeById,
+  treeNodeToContextSource,
+} from "@/features/ai/utils/ai-context.ts";
+import {
+  createTreeExternalDropResult,
+  type TreeExternalDropResult,
+} from "@/features/page/tree/utils";
+import { isAiChatNearBottom } from "@/features/ai/utils/ai-scroll.ts";
 
 export function AiPanel() {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const documentContext = useAtomValue(aiDocumentContextAtom);
+  const tree = useAtomValue(treeDataAtom);
   const editor = useAtomValue(pageEditorAtom);
   const titleEditor = useAtomValue(titleEditorAtom);
   const liveDocumentTitle = useEditorState({
@@ -138,6 +151,7 @@ export function AiPanel() {
   const draftSaveChain = useRef<Promise<unknown>>(Promise.resolve());
   const contextSaveChain = useRef<Promise<AiConversationContext> | null>(null);
   const viewportRef = useRef<HTMLDivElement | null>(null);
+  const followOutputRef = useRef(true);
 
   const activeRuns = useMemo(
     () =>
@@ -151,9 +165,12 @@ export function AiPanel() {
       messagesQuery.data?.pages.flatMap((page) => page.items) ?? [],
     );
   }, [messagesQuery.data]);
+  const persistedRunState = persistedActiveRun
+    ? streamingRuns[persistedActiveRun.runId]
+    : undefined;
   const pendingRun =
     activeRuns.find((run) => ["queued", "running"].includes(run.status)) ??
-    persistedActiveRun;
+    (persistedActiveRun && !persistedRunState ? persistedActiveRun : undefined);
   const chatFiles = filesQuery.data ?? [];
   const pageAttachments = pageAttachmentsQuery.data ?? [];
   const context = contextQuery.data;
@@ -227,11 +244,25 @@ export function AiPanel() {
   }, [activeConversation, draft, updateConversation]);
 
   useEffect(() => {
-    const viewport = viewportRef.current;
-    if (viewport) {
-      viewport.scrollTo({ top: viewport.scrollHeight, behavior: "smooth" });
+    followOutputRef.current = true;
+  }, [activeConversationId]);
+
+  useEffect(() => {
+    if (!followOutputRef.current) {
+      return;
     }
-  }, [messagesQuery.data?.pages[0]?.items.at(-1)?.id, pendingRun?.content]);
+    const frame = window.requestAnimationFrame(() => {
+      const viewport = viewportRef.current;
+      if (viewport && followOutputRef.current) {
+        viewport.scrollTo({ top: viewport.scrollHeight, behavior: "auto" });
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [
+    activeConversationId,
+    messagesQuery.data?.pages[0]?.items.at(-1)?.id,
+    pendingRun?.content,
+  ]);
 
   const ensureConversation = async (): Promise<AiConversation> => {
     if (activeConversation) {
@@ -538,6 +569,95 @@ export function AiPanel() {
     })).finally(() => deleteFile.mutate(fileId));
   };
 
+  const selectedSourceIdentities = useMemo(
+    () =>
+      new Set(
+        (context?.sources ?? []).map(
+          (source) => `${source.sourceType}:${source.sourceId}`,
+        ),
+      ),
+    [context?.sources],
+  );
+  const [{ isOver: isContextDropOver, isAllowed: isContextDropAllowed }, drop] =
+    useDrop<
+      { id?: string },
+      TreeExternalDropResult,
+      { isOver: boolean; isAllowed: boolean }
+    >(
+      () => ({
+        accept: "NODE",
+        canDrop: (item) => Boolean(item.id && findTreeNodeById(tree, item.id)),
+        drop: (item) => {
+          const result = createTreeExternalDropResult("ai-context");
+          const node = item.id ? findTreeNodeById(tree, item.id) : undefined;
+          if (!node || node.spaceId !== documentContext?.spaceId) {
+            notifications.show({
+              message: t("ai.context.crossSpaceRejected"),
+              color: "orange",
+            });
+            return result;
+          }
+
+          const source = treeNodeToContextSource(node);
+          if (!source) return result;
+          if (
+            selectedSourceIdentities.has(
+              `${source.sourceType}:${source.sourceId}`,
+            )
+          ) {
+            notifications.show({ message: t("ai.context.alreadyAdded") });
+            return result;
+          }
+          if ((context?.sources.length ?? 0) >= 10) {
+            notifications.show({
+              message: t("ai.errorReason.contextSourceLimit"),
+              color: "orange",
+            });
+            return result;
+          }
+
+          void addContextSource(source).catch((error) => {
+            notifications.show({
+              message: resolveAiErrorMessage(
+                t,
+                i18n,
+                error?.["response"]?.data?.code,
+              ),
+              color: "red",
+            });
+          });
+          return result;
+        },
+        collect: (monitor) => {
+          const item = monitor.getItem<{ id?: string }>();
+          const node = item?.id ? findTreeNodeById(tree, item.id) : undefined;
+          const source = node ? treeNodeToContextSource(node) : undefined;
+          return {
+            isOver: monitor.isOver(),
+            isAllowed: Boolean(
+              monitor.canDrop() &&
+                node &&
+                node.spaceId === documentContext?.spaceId &&
+                source &&
+                !selectedSourceIdentities.has(
+                  `${source.sourceType}:${source.sourceId}`,
+                ) &&
+                (context?.sources.length ?? 0) < 10,
+            ),
+          };
+        },
+      }),
+      [
+        addContextSource,
+        context?.sources.length,
+        documentContext?.spaceId,
+        i18n,
+        selectedSourceIdentities,
+        t,
+        tree,
+      ],
+    );
+
   if (!documentContext) {
     return (
       <Stack align="center" justify="center" h="100%" p="lg">
@@ -632,7 +752,15 @@ export function AiPanel() {
   );
 
   return (
-    <Stack gap="sm" h="100%" className={classes.panel}>
+    <Stack
+      ref={drop}
+      gap="sm"
+      h="100%"
+      className={clsx(classes.panel, {
+        [classes.panelDropActive]: isContextDropOver && isContextDropAllowed,
+        [classes.panelDropRejected]: isContextDropOver && !isContextDropAllowed,
+      })}
+    >
       <Group gap="xs" wrap="nowrap" className={classes.conversationBar}>
         <Select
           aria-label={t("ai.chatHistory")}
@@ -697,6 +825,15 @@ export function AiPanel() {
         className={classes.messages}
         scrollbarSize={6}
         type="auto"
+        onScrollPositionChange={({ y }) => {
+          const viewport = viewportRef.current;
+          if (!viewport) return;
+          followOutputRef.current = isAiChatNearBottom({
+            scrollHeight: viewport.scrollHeight,
+            scrollTop: y,
+            clientHeight: viewport.clientHeight,
+          });
+        }}
       >
         <Stack gap="sm" p="xs">
           {activeConversation && messagesQuery.isLoading && (
@@ -927,9 +1064,25 @@ export function AiPanel() {
               variant="light"
               leftSection={<IconPlayerStop size={15} />}
               loading={cancelRun.isPending}
-              onClick={() => cancelRun.mutate(pendingRun.runId)}
+              disabled={Boolean(pendingRun.cancelRequestedAt)}
+              onClick={() =>
+                cancelRun.mutate(pendingRun.runId, {
+                  onError: (error) => {
+                    notifications.show({
+                      message: resolveAiErrorMessage(
+                        t,
+                        i18n,
+                        error?.["response"]?.data?.code,
+                      ),
+                      color: "red",
+                    });
+                  },
+                })
+              }
             >
-              {t("ai.stop")}
+              {cancelRun.isPending || pendingRun.cancelRequestedAt
+                ? t("ai.stopping")
+                : t("ai.stop")}
             </Button>
           ) : (
             <Tooltip label={t("ai.send")} withArrow>

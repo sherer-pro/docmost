@@ -29,6 +29,7 @@ describe("AI context tree drops", () => {
       sourceType: "database",
       sourceId: "database-id",
       pageId: "page-id",
+      icon: null,
     });
   });
 
@@ -41,6 +42,15 @@ describe("AI context tree drops", () => {
       sourceType: "database_row",
       sourceId: "page-id",
       pageId: "page-id",
+      icon: null,
+    });
+  });
+
+  it("preserves the tree emoji for the context descriptor", () => {
+    expect(treeNodeToContextSource(node({ icon: "📚" }))).toMatchObject({
+      sourceType: "page",
+      sourceId: "page-id",
+      icon: "📚",
     });
   });
 });

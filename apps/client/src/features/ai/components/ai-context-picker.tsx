@@ -1,6 +1,7 @@
 import {
   ActionIcon,
   Badge,
+  Box,
   Button,
   Checkbox,
   Divider,
@@ -23,25 +24,19 @@ import {
   IconPaperclip,
   IconPlus,
   IconSearch,
+  IconTableRow,
   IconTrash,
   IconUpload,
 } from "@tabler/icons-react";
-import { notifications } from "@mantine/notifications";
-import { useAtomValue } from "jotai";
 import { useMemo, useState } from "react";
 import { useDebouncedValue } from "@mantine/hooks";
-import { useDrop } from "react-dnd";
 import { useTranslation } from "react-i18next";
 import { useAiContextSourcesQuery } from "@/features/ai/queries/ai-query.ts";
 import {
   AiChatFile,
   AiContextSource,
-  AiContextSourceType,
   AiPageAttachment,
 } from "@/features/ai/types/ai.types.ts";
-import { treeNodeToContextSource } from "@/features/ai/utils/ai-context.ts";
-import { treeDataAtom } from "@/features/page/tree/atoms/tree-data-atom.ts";
-import { SpaceTreeNode } from "@/features/page/tree/types.ts";
 import classes from "./ai-panel.module.css";
 
 interface AiContextPickerProps {
@@ -73,7 +68,6 @@ export function AiContextPicker(props: AiContextPickerProps) {
   const [searchOpened, setSearchOpened] = useState(false);
   const [query, setQuery] = useState("");
   const [debouncedQuery] = useDebouncedValue(query, 250);
-  const tree = useAtomValue(treeDataAtom);
   const search = useAiContextSourcesQuery(props.conversationId, debouncedQuery);
   const searchItems = search.data?.pages.flatMap((page) => page.items) ?? [];
   const selectedIdentities = useMemo(
@@ -91,58 +85,14 @@ export function AiContextPicker(props: AiContextPickerProps) {
     props.fileIds.length +
     props.attachmentIds.length;
 
-  const [{ isOver, canDrop }, dropRef] = useDrop(
-    () => ({
-      accept: "NODE",
-      canDrop: (item: { id?: string }) => {
-        const node = item.id ? findTreeNode(tree, item.id) : undefined;
-        return Boolean(node && node.spaceId === props.spaceId);
-      },
-      drop: (item: { id?: string }) => {
-        const node = item.id ? findTreeNode(tree, item.id) : undefined;
-        if (!node || node.spaceId !== props.spaceId) {
-          notifications.show({
-            message: t("ai.context.crossSpaceRejected"),
-            color: "orange",
-          });
-          return;
-        }
-        const source = treeNodeToContextSource(node);
-        if (!source) return;
-        if (selectedIdentities.has(`${source.sourceType}:${source.sourceId}`)) {
-          notifications.show({ message: t("ai.context.alreadyAdded") });
-          return;
-        }
-        if (props.sources.length >= 10) {
-          notifications.show({
-            message: t("ai.errorReason.contextSourceLimit"),
-            color: "orange",
-          });
-          return;
-        }
-        void props.onAddSource(source);
-      },
-      collect: (monitor) => ({
-        isOver: monitor.isOver(),
-        canDrop: monitor.canDrop(),
-      }),
-    }),
-    [props, selectedIdentities, t, tree],
-  );
-
   return (
     <>
-      <div
-        ref={dropRef}
-        className={
-          isOver
-            ? canDrop
-              ? classes.contextDropActive
-              : classes.contextDropRejected
-            : undefined
-        }
-      >
-        <Menu position="top-start" withinPortal>
+      <div>
+        <Menu
+          position="top-end"
+          width="min(360px, calc(100vw - 24px))"
+          withinPortal
+        >
           <Menu.Target>
             <Indicator
               inline
@@ -169,6 +119,7 @@ export function AiContextPicker(props: AiContextPickerProps) {
                 size="xs"
                 checked={props.includeCurrentDocument}
                 label={props.documentTitle || t("ai.untitled")}
+                className={classes.contextFileCheckbox}
                 onChange={(event) =>
                   void props.onToggleCurrentDocument(
                     event.currentTarget.checked,
@@ -177,11 +128,12 @@ export function AiContextPicker(props: AiContextPickerProps) {
               />
             </Menu.Item>
             {props.sources.length > 0 && (
-              <Pill.Group px="xs" pb={4}>
+              <Pill.Group px="xs" pb={4} className={classes.contextSourceGroup}>
                 {props.sources.map((source) => (
                   <Pill
                     key={`${source.sourceType}:${source.sourceId}`}
                     withRemoveButton
+                    className={classes.contextSourcePill}
                     onRemove={() => void props.onRemoveSource(source)}
                     removeButtonProps={{
                       "aria-label": t("ai.context.removeSource"),
@@ -222,7 +174,7 @@ export function AiContextPicker(props: AiContextPickerProps) {
             )}
             {props.chatFiles.map((file) => (
               <Menu.Item key={file.id} closeMenuOnClick={false}>
-                <Group gap={4} wrap="nowrap">
+                <Group gap={4} wrap="nowrap" className={classes.contextFileRow}>
                   <Checkbox
                     size="xs"
                     checked={props.fileIds.includes(file.id)}
@@ -288,8 +240,13 @@ export function AiContextPicker(props: AiContextPickerProps) {
         onClose={() => setSearchOpened(false)}
         title={t("ai.context.searchTitle")}
         centered
+        size="md"
+        classNames={{
+          content: classes.contextSearchModalContent,
+          body: classes.contextSearchModalBody,
+        }}
       >
-        <Stack gap="sm">
+        <Stack gap="sm" className={classes.contextSearchLayout}>
           <TextInput
             value={query}
             onChange={(event) => setQuery(event.currentTarget.value)}
@@ -297,83 +254,108 @@ export function AiContextPicker(props: AiContextPickerProps) {
             leftSection={<IconSearch size={16} />}
             autoFocus
           />
-          {search.isLoading && (
-            <Group justify="center" py="lg">
-              <Loader size="sm" />
-            </Group>
-          )}
-          {search.isError && (
-            <Text c="red" size="sm">
-              {t("ai.context.searchFailed")}
-            </Text>
-          )}
-          {!search.isLoading && query.trim() && searchItems.length === 0 && (
-            <Text c="dimmed" size="sm" ta="center" py="lg">
-              {t("ai.context.noResults")}
-            </Text>
-          )}
-          <ScrollArea.Autosize mah={360}>
-            <Stack gap={4}>
-              {searchItems.map((source) => {
-                const selected = selectedIdentities.has(
-                  `${source.sourceType}:${source.sourceId}`,
-                );
-                return (
-                  <Tooltip
-                    key={`${source.sourceType}:${source.sourceId}`}
-                    label={source.breadcrumbs.join(" / ")}
-                    disabled={source.breadcrumbs.length === 0}
-                    withArrow
-                  >
+          <Box className={classes.contextSearchResultsRegion}>
+            {search.isLoading ? (
+              <Group justify="center" className={classes.contextSearchState}>
+                <Loader size="sm" />
+              </Group>
+            ) : search.isError ? (
+              <Text
+                c="red"
+                size="sm"
+                ta="center"
+                className={classes.contextSearchState}
+              >
+                {t("ai.context.searchFailed")}
+              </Text>
+            ) : query.trim() && searchItems.length === 0 ? (
+              <Text
+                c="dimmed"
+                size="sm"
+                ta="center"
+                className={classes.contextSearchState}
+              >
+                {t("ai.context.noResults")}
+              </Text>
+            ) : (
+              <ScrollArea
+                h="100%"
+                type="auto"
+                scrollbarSize={6}
+                className={classes.contextSearchResults}
+              >
+                <Stack gap={4} pr={4}>
+                  {searchItems.map((source) => {
+                    const selected = selectedIdentities.has(
+                      `${source.sourceType}:${source.sourceId}`,
+                    );
+                    const breadcrumbs =
+                      source.breadcrumbs.length > 0
+                        ? source.breadcrumbs.join(" / ")
+                        : t("ai.context.spaceRoot");
+                    return (
+                      <Tooltip
+                        key={`${source.sourceType}:${source.sourceId}`}
+                        label={breadcrumbs}
+                        withArrow
+                      >
+                        <Button
+                          variant="subtle"
+                          justify="flex-start"
+                          leftSection={sourceIcon(source)}
+                          disabled={selected || props.sources.length >= 10}
+                          className={classes.contextSearchResult}
+                          onClick={async () => {
+                            await props.onAddSource(source);
+                            setSearchOpened(false);
+                          }}
+                        >
+                          <Box className={classes.contextSearchResultText}>
+                            <Text size="sm" fw={500} truncate>
+                              {source.title || t("ai.untitled")}
+                            </Text>
+                            <Text size="xs" c="dimmed" truncate>
+                              {breadcrumbs}
+                            </Text>
+                          </Box>
+                        </Button>
+                      </Tooltip>
+                    );
+                  })}
+                  {search.hasNextPage && (
                     <Button
                       variant="subtle"
-                      justify="flex-start"
-                      leftSection={sourceIcon(source.sourceType)}
-                      disabled={selected || props.sources.length >= 10}
-                      onClick={async () => {
-                        await props.onAddSource(source);
-                        setSearchOpened(false);
-                      }}
+                      loading={search.isFetchingNextPage}
+                      onClick={() => void search.fetchNextPage()}
                     >
-                      <Text lineClamp={1}>
-                        {source.title || t("ai.untitled")}
-                      </Text>
+                      {t("ai.context.loadMore")}
                     </Button>
-                  </Tooltip>
-                );
-              })}
-            </Stack>
-          </ScrollArea.Autosize>
-          {search.hasNextPage && (
-            <Button
-              variant="subtle"
-              loading={search.isFetchingNextPage}
-              onClick={() => void search.fetchNextPage()}
-            >
-              {t("ai.context.loadMore")}
-            </Button>
-          )}
+                  )}
+                </Stack>
+              </ScrollArea>
+            )}
+          </Box>
+          <Text size="xs" c="dimmed" className={classes.contextSearchFooter}>
+            {t("ai.context.dragFromSidebarHint")}
+          </Text>
         </Stack>
       </Modal>
     </>
   );
 }
 
-function findTreeNode(
-  nodes: SpaceTreeNode[],
-  id: string,
-): SpaceTreeNode | undefined {
-  for (const node of nodes) {
-    if (node.id === id) return node;
-    const child = findTreeNode(node.children ?? [], id);
-    if (child) return child;
+function sourceIcon(source: AiContextSource) {
+  if (source.icon) {
+    return (
+      <Text span size="md" lh={1} aria-hidden>
+        {source.icon}
+      </Text>
+    );
   }
-  return undefined;
-}
-
-function sourceIcon(sourceType: AiContextSourceType) {
-  return sourceType === "page" ? (
+  return source.sourceType === "page" ? (
     <IconFileText size={15} />
+  ) : source.sourceType === "database_row" ? (
+    <IconTableRow size={15} />
   ) : (
     <IconDatabase size={15} />
   );

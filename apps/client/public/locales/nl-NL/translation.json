@@ -1364,6 +1364,7 @@
     "searchSpace": "Doorzoek deze ruimte",
     "currentDocumentOnly": "Huidig document",
     "stop": "Stop",
+    "stopping": "Stoppen…",
     "send": "Verzenden",
     "sendShortcut": "Ctrl/⌘ + Enter om te verzenden",
     "chatName": "Chatnaam",
@@ -1533,6 +1534,7 @@
       "title": "Berichtcontext",
       "documents": "Documenten en gegevens",
       "dragHint": "Zet hier een pagina, database of rij neer",
+      "dragFromSidebarHint": "Sleep een pagina, database of rij vanuit de zijbalk rechtstreeks naar de chat.",
       "crossSpaceRejected": "Alleen bronnen uit deze ruimte kunnen worden toegevoegd.",
       "alreadyAdded": "Deze bron staat al in de context.",
       "addFromSpace": "Toevoegen vanuit de ruimte",
@@ -1542,6 +1544,7 @@
       "searchPlaceholder": "Zoek in pagina's, databases en rijen",
       "searchFailed": "Kan deze ruimte niet doorzoeken.",
       "noResults": "Geen toegankelijke bronnen gevonden.",
+      "spaceRoot": "Hoofdmap van de ruimte",
       "loadMore": "Laad meer"
     },
     "selection": {
