@@ -110,7 +110,17 @@ Insert/Replace re-checks AI/page write availability immediately before mutation.
 
 The AI integration does not create a local embedding table or require pgvector. The existing `/api/rag/*` API remains the read-only, space-scoped synchronization surface for an external indexer. Query-time retrieval is a separate optional outbound adapter.
 
-The supported adapter identifier is `http-json-v1`. In production, its URL must have an origin listed in `AI_RETRIEVAL_ALLOWED_ORIGINS`:
+Each space selects exactly one retrieval mode:
+
+- `none`;
+- `http-json-v1`, the existing custom JSON contract;
+- `open-webui-knowledge-v1`, a dedicated Open WebUI Knowledge Base.
+
+The `http-json-v1` URL, key, and wire contract remain unchanged. Switching
+adapters does not clear the inactive adapter's URL, Knowledge ID, or encrypted
+credential, so rollback is a configuration change rather than a migration. In
+production, every configured retrieval origin must be listed in
+`AI_RETRIEVAL_ALLOWED_ORIGINS`:
 
 ```dotenv
 AI_RETRIEVAL_ALLOWED_ORIGINS=https://rag.example.com
@@ -153,12 +163,61 @@ The response contract is:
 
 The serialized request is limited to 1 MiB. The adapter accepts at most 40 candidates, 16 KiB of UTF-8 text per candidate, and 256 KiB for the complete response. Candidate source/page IDs must be UUIDs. Malformed candidates are discarded individually, duplicates are reduced to the best score, and valid siblings remain usable. The configured top-K is 8 by default and may be set from 1 to 20.
 
+For `open-webui-knowledge-v1`, configure the Open WebUI origin (for example,
+`https://open-webui.example.com`, without `/api`), a pre-created Knowledge ID,
+and a query-only API key. Docmost posts a fixed request to
+`/api/v1/retrieval/query/collection`:
+
+```json
+{
+  "collection_names": ["knowledge-id"],
+  "query": "What changed in the launch plan?",
+  "k": 40
+}
+```
+
+The adapter maps the first `documents`, `metadatas`, and `distances` arrays to
+the same internal retrieval hits. Open WebUI metadata must contain a versioned
+Docmost descriptor under `metadata.data.docmost`; `metadata.docmost` is accepted
+only as a compatibility fallback:
+
+```json
+{
+  "schemaVersion": 1,
+  "workspaceId": "019...",
+  "spaceId": "019...",
+  "sourceType": "page",
+  "sourceId": "019...",
+  "pageId": "019...",
+  "sourceUpdatedAtMs": 0,
+  "contentHash": "sha256"
+}
+```
+
+The adapter drops malformed, cross-workspace, and cross-space neighbors
+individually. A non-empty result without any compatible metadata is reported as
+`retrieval_invalid_response`; an empty collection is a successful empty search.
+External titles and URLs are never trusted.
+
+`apps/rag-sync` is the optional writer for Open WebUI 0.9.6. It reads only the
+API-key-scoped `/api/rag/*` feeds, stores checkpoints/mappings/space locks in a
+separate Redis namespace, and uploads files with `knowledge_id`, `file_hash`,
+and the Docmost metadata above. It never reads the Docmost database and never
+uses `AI_QUEUE` or `AI_CHAT_QUEUE`. Run it explicitly with
+`Dockerfile.rag-sync` and `docker-compose.rag-sync.yml`; the primary Compose
+stack does not start it.
+
 External results are candidates, not authorization decisions. Docmost resolves every returned ID against its own database, maps rows and attachments to their owning page, rejects deleted and cross-space sources, re-checks the requesting user's current page access, and constructs trusted titles and URLs locally. A run records whether retrieval was not requested, disabled, used, empty, or failed. A timeout, malformed response, authorization/rate-limit error, server error, or a result set with no currently readable sources does not fail the chat: generation continues with the live document and selected files, and the UI shows the retrieval outcome.
 
 An external indexer normally uses two independent credentials:
 
 - a space-scoped Docmost API key to synchronize content through `/api/rag/*`;
 - an adapter credential stored by Docmost to query the external retrieval URL.
+
+Open WebUI deployments use a third security boundary: the writer credential
+mounted into `apps/rag-sync` is separate from the query credential encrypted in
+`ai_space_configs`. Secret values are read from mounted files and must not be
+placed in the sync JSON, logs, jobs, or metrics.
 
 ## Security properties
 
