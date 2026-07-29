@@ -7,6 +7,8 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  Max,
+  MaxLength,
   Min,
 } from 'class-validator';
 
@@ -36,14 +38,28 @@ export class RagListPagesQueryDto {
   includeContent?: boolean = false;
 }
 
-export class RagUpdatesQueryDto {
+export class RagFeedPaginationDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(1000)
+  limit?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2048)
+  cursor?: string;
+}
+
+export class RagUpdatesQueryDto extends RagFeedPaginationDto {
   @Type(() => Number)
   @IsInt()
   @Min(0)
   updatedSince: number;
 }
 
-export class RagDeletedQueryDto {
+export class RagDeletedQueryDto extends RagFeedPaginationDto {
   @Type(() => Number)
   @IsInt()
   @Min(0)

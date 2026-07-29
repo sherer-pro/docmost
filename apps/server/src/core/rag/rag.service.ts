@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -32,6 +33,18 @@ interface RagDocumentFieldsConfig {
   stakeholders: boolean;
   aiRole: boolean;
 }
+
+type RagFeedPagination = {
+  limit?: number;
+  cursor?: string;
+};
+
+type RagFeedCursor = {
+  version: 1;
+  kind: string;
+  timestampMs: number;
+  id: string;
+};
 
 @Injectable()
 export class RagService {
@@ -503,7 +516,11 @@ export class RagService {
     };
   }
 
-  async getUpdates(scope: RagAuthContext, updatedSinceMs: number) {
+  async getUpdates(
+    scope: RagAuthContext,
+    updatedSinceMs: number,
+    pagination: RagFeedPagination = {},
+  ) {
     const updatedSince = new Date(updatedSinceMs);
     const readablePageIds = await this.getReadablePageIds(scope);
 
@@ -656,18 +673,30 @@ export class RagService {
         return a.id.localeCompare(b.id);
       });
 
-    const maxUpdatedAtMs =
-      items.length > 0
-        ? Math.max(...items.map((item) => item.updatedAtMs))
-        : updatedSinceMs;
+    const page = this.paginateFeed(
+      items,
+      'updates',
+      pagination,
+      (item) => item.updatedAtMs,
+      (item) => item.id,
+    );
 
     return {
-      items,
-      maxUpdatedAtMs,
+      items: page.items,
+      maxUpdatedAtMs:
+        page.items.length > 0
+          ? Math.max(...page.items.map((item) => item.updatedAtMs))
+          : updatedSinceMs,
+      hasMore: page.hasMore,
+      nextCursor: page.nextCursor,
     };
   }
 
-  async getDeleted(scope: RagAuthContext, deletedSinceMs: number) {
+  async getDeleted(
+    scope: RagAuthContext,
+    deletedSinceMs: number,
+    pagination: RagFeedPagination = {},
+  ) {
     const deletedSince = new Date(deletedSinceMs);
 
     const [deletedPages, deletedDatabases, deletedRows] = await Promise.all([
@@ -780,14 +809,137 @@ export class RagService {
         return a.id.localeCompare(b.id);
       });
 
-    const maxDeletedAtMs =
-      items.length > 0
-        ? Math.max(...items.map((item) => item.deletedAtMs))
-        : deletedSinceMs;
+    const page = this.paginateFeed(
+      items,
+      'deleted',
+      pagination,
+      (item) => item.deletedAtMs,
+      (item) => String(item.id),
+    );
 
     return {
+      items: page.items,
+      maxDeletedAtMs:
+        page.items.length > 0
+          ? Math.max(...page.items.map((item) => item.deletedAtMs))
+          : deletedSinceMs,
+      hasMore: page.hasMore,
+      nextCursor: page.nextCursor,
+    };
+  }
+
+  async getAttachmentUpdates(
+    scope: RagAuthContext,
+    updatedSinceMs: number,
+    pagination: RagFeedPagination = {},
+  ) {
+    const readablePageIds = await this.getReadablePageIds(scope);
+    const rows =
+      readablePageIds.size === 0
+        ? []
+        : await this.db
+            .selectFrom('attachments')
+            .select([
+              'id',
+              'fileName',
+              'fileSize',
+              'fileExt',
+              'mimeType',
+              'pageId',
+              'spaceId',
+              'createdAt',
+              'updatedAt',
+            ])
+            .where('workspaceId', '=', scope.workspace.id)
+            .where('spaceId', '=', scope.space.id)
+            .where('pageId', 'is not', null)
+            .where('pageId', 'in', [...readablePageIds])
+            .where('deletedAt', 'is', null)
+            .where('updatedAt', '>=', new Date(updatedSinceMs))
+            .execute();
+    const items = rows
+      .filter((row) => Boolean(row.pageId && row.spaceId))
+      .map((row) => ({
+        id: row.id,
+        fileId: row.id,
+        fileName: row.fileName,
+        fileExt: row.fileExt,
+        mimeType: row.mimeType,
+        fileSize: row.fileSize,
+        pageId: row.pageId!,
+        spaceId: row.spaceId!,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+        updatedAtMs: new Date(row.updatedAt).getTime(),
+        downloadUrl: `/api/rag/attachments/${row.id}/${encodeURIComponent(
+          row.fileName,
+        )}`,
+      }))
+      .sort(
+        (left, right) =>
+          left.updatedAtMs - right.updatedAtMs ||
+          left.id.localeCompare(right.id),
+      );
+    const page = this.paginateFeed(
       items,
-      maxDeletedAtMs,
+      'attachment-updates',
+      pagination,
+      (item) => item.updatedAtMs,
+      (item) => item.id,
+    );
+    return {
+      items: page.items,
+      maxUpdatedAtMs:
+        page.items.length > 0
+          ? Math.max(...page.items.map((item) => item.updatedAtMs))
+          : updatedSinceMs,
+      hasMore: page.hasMore,
+      nextCursor: page.nextCursor,
+    };
+  }
+
+  async getAttachmentDeleted(
+    scope: RagAuthContext,
+    deletedSinceMs: number,
+    pagination: RagFeedPagination = {},
+  ) {
+    const rows = await this.db
+      .selectFrom('attachments')
+      .select(['id', 'pageId', 'spaceId', 'deletedAt'])
+      .where('workspaceId', '=', scope.workspace.id)
+      .where('spaceId', '=', scope.space.id)
+      .where('deletedAt', 'is not', null)
+      .where('deletedAt', '>=', new Date(deletedSinceMs))
+      .execute();
+    const items = rows
+      .map((row) => ({
+        id: row.id,
+        fileId: row.id,
+        pageId: row.pageId,
+        spaceId: row.spaceId,
+        deletedAt: row.deletedAt!,
+        deletedAtMs: new Date(row.deletedAt!).getTime(),
+      }))
+      .sort(
+        (left, right) =>
+          left.deletedAtMs - right.deletedAtMs ||
+          left.id.localeCompare(right.id),
+      );
+    const page = this.paginateFeed(
+      items,
+      'attachment-deleted',
+      pagination,
+      (item) => item.deletedAtMs,
+      (item) => item.id,
+    );
+    return {
+      items: page.items,
+      maxDeletedAtMs:
+        page.items.length > 0
+          ? Math.max(...page.items.map((item) => item.deletedAtMs))
+          : deletedSinceMs,
+      hasMore: page.hasMore,
+      nextCursor: page.nextCursor,
     };
   }
 
@@ -988,7 +1140,7 @@ export class RagService {
   async resolveAttachmentForDownload(scope: RagAuthContext, fileId: string) {
     const attachment = await this.attachmentRepo.findById(fileId);
 
-    if (!attachment) {
+    if (!attachment || attachment.deletedAt) {
       throw new NotFoundException('File not found');
     }
 
@@ -1004,6 +1156,90 @@ export class RagService {
       throw new NotFoundException('File not found');
     }
 
+    const page = await this.pageRepo.findById(attachment.pageId);
+    if (
+      !page ||
+      page.deletedAt ||
+      page.workspaceId !== scope.workspace.id ||
+      page.spaceId !== scope.space.id
+    ) {
+      throw new NotFoundException('File not found');
+    }
+    const access = await this.pageAccessService.getEffectiveAccess(
+      page,
+      scope.user,
+    );
+    if (!access.capabilities.canRead) {
+      throw new ForbiddenException('File is outside API key scope');
+    }
+
     return attachment;
+  }
+
+  private paginateFeed<T>(
+    items: T[],
+    kind: string,
+    pagination: RagFeedPagination,
+    timestamp: (item: T) => number,
+    identity: (item: T) => string,
+  ): {
+    items: T[];
+    hasMore: boolean;
+    nextCursor: string | null;
+  } {
+    const cursor = pagination.cursor
+      ? this.decodeFeedCursor(pagination.cursor, kind)
+      : null;
+    const remaining = cursor
+      ? items.filter((item) => {
+          const itemTimestamp = timestamp(item);
+          return (
+            itemTimestamp > cursor.timestampMs ||
+            (itemTimestamp === cursor.timestampMs &&
+              identity(item).localeCompare(cursor.id) > 0)
+          );
+        })
+      : items;
+    const limit = pagination.limit ?? remaining.length;
+    const pageItems = remaining.slice(0, limit);
+    const hasMore = pageItems.length < remaining.length;
+    const last = pageItems.at(-1);
+    return {
+      items: pageItems,
+      hasMore,
+      nextCursor:
+        hasMore && last
+          ? Buffer.from(
+              JSON.stringify({
+                version: 1,
+                kind,
+                timestampMs: timestamp(last),
+                id: identity(last),
+              } satisfies RagFeedCursor),
+              'utf8',
+            ).toString('base64url')
+          : null,
+    };
+  }
+
+  private decodeFeedCursor(value: string, kind: string): RagFeedCursor {
+    try {
+      const parsed = JSON.parse(
+        Buffer.from(value, 'base64url').toString('utf8'),
+      ) as Partial<RagFeedCursor>;
+      if (
+        parsed.version !== 1 ||
+        parsed.kind !== kind ||
+        !Number.isSafeInteger(parsed.timestampMs) ||
+        Number(parsed.timestampMs) < 0 ||
+        typeof parsed.id !== 'string' ||
+        parsed.id.length === 0
+      ) {
+        throw new Error('Invalid cursor');
+      }
+      return parsed as RagFeedCursor;
+    } catch {
+      throw new BadRequestException('Invalid RAG feed cursor');
+    }
   }
 }

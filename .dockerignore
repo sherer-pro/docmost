@@ -37,6 +37,8 @@ Thumbs.db
 # env / logs
 .env
 .env*
+rag-sync.config.json
+secrets/
 *.log
 npm-debug.log*
 pnpm-debug.log*

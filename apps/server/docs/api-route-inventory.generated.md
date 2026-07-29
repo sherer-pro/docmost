@@ -188,6 +188,8 @@
 | DELETE | `/push/subscriptions/:id` | `apps/server/src/core/push/push.controller.ts` |
 | GET | `/push/vapid-public-key` | `apps/server/src/core/push/push.controller.ts` |
 | GET | `/rag/attachments/:fileId/:fileName` | `apps/server/src/core/rag/rag.controller.ts` |
+| GET | `/rag/attachments/deleted` | `apps/server/src/core/rag/rag.controller.ts` |
+| GET | `/rag/attachments/updates` | `apps/server/src/core/rag/rag.controller.ts` |
 | GET | `/rag/databases/:databaseIdOrPageSlug` | `apps/server/src/core/rag/rag.controller.ts` |
 | GET | `/rag/databases/:databaseIdOrPageSlug/rows` | `apps/server/src/core/rag/rag.controller.ts` |
 | GET | `/rag/deleted` | `apps/server/src/core/rag/rag.controller.ts` |

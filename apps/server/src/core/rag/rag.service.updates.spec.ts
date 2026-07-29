@@ -78,6 +78,8 @@ describe('RagService getUpdates SQL generation', () => {
     await expect(service.getUpdates(scope, 0)).resolves.toEqual({
       items: [],
       maxUpdatedAtMs: 0,
+      hasMore: false,
+      nextCursor: null,
     });
 
     const aggregationQuery = queries.find((query) => query.includes('GREATEST('));
@@ -96,5 +98,62 @@ describe('RagService getUpdates SQL generation', () => {
     expect(aggregationQuery).not.toContain('"rowsUpdatedAt"');
     expect(aggregationQuery).not.toContain('"cellsUpdatedAt"');
     expect(aggregationQuery).not.toContain('"rowPagesUpdatedAt"');
+  });
+
+  it('uses timestamp and id as an opaque pagination tie-breaker', () => {
+    const items = [
+      { id: 'a', updatedAtMs: 100 },
+      { id: 'b', updatedAtMs: 100 },
+      { id: 'c', updatedAtMs: 101 },
+    ];
+    const first = (service as any).paginateFeed(
+      items,
+      'updates',
+      { limit: 1 },
+      (item: any) => item.updatedAtMs,
+      (item: any) => item.id,
+    );
+    const second = (service as any).paginateFeed(
+      items,
+      'updates',
+      { limit: 2, cursor: first.nextCursor },
+      (item: any) => item.updatedAtMs,
+      (item: any) => item.id,
+    );
+
+    expect(first).toMatchObject({
+      items: [{ id: 'a', updatedAtMs: 100 }],
+      hasMore: true,
+    });
+    expect(second).toEqual({
+      items: [
+        { id: 'b', updatedAtMs: 100 },
+        { id: 'c', updatedAtMs: 101 },
+      ],
+      hasMore: false,
+      nextCursor: null,
+    });
+  });
+
+  it('rejects cursors from another feed', () => {
+    const cursor = Buffer.from(
+      JSON.stringify({
+        version: 1,
+        kind: 'deleted',
+        timestampMs: 100,
+        id: 'a',
+      }),
+      'utf8',
+    ).toString('base64url');
+
+    expect(() =>
+      (service as any).paginateFeed(
+        [],
+        'updates',
+        { limit: 1, cursor },
+        (item: any) => item.updatedAtMs,
+        (item: any) => item.id,
+      ),
+    ).toThrow('Invalid RAG feed cursor');
   });
 });
