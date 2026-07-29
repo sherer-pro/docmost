@@ -1,5 +1,5 @@
 import { Menu, Tooltip } from '@mantine/core';
-import { IconArrowsExchange, IconDots, IconInfoCircle, IconList, IconMessage, IconTrash } from '@tabler/icons-react';
+import { IconArrowsExchange, IconDots, IconInfoCircle, IconList, IconMessage, IconSparkles, IconTrash } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { useDisclosure } from '@mantine/hooks';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
@@ -345,7 +345,6 @@ export default function DatabaseHeaderMenu({
         <ShareModal
           pageId={resolvedDatabasePageId}
           readOnly={Boolean(readOnly)}
-          compactOnMobile
         />
       )}
 
@@ -373,6 +372,20 @@ export default function DatabaseHeaderMenu({
             onClick={handleOpenCommentsAside}
           >
             <IconMessage size={20} stroke={2} />
+          </AccessibleActionIcon>
+        </Tooltip>
+      )}
+
+      {!readOnly && hasDatabasePage && (
+        <Tooltip label={t('ai.openPanel')} openDelay={250} withArrow>
+          <AccessibleActionIcon
+            label={t('ai.openPanel')}
+            tooltip={false}
+            variant="subtle"
+            color="dark"
+            onClick={() => toggleAside('ai')}
+          >
+            <IconSparkles size={20} stroke={2} />
           </AccessibleActionIcon>
         </Tooltip>
       )}

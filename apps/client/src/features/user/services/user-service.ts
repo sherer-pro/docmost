@@ -73,6 +73,24 @@ function normalizeUserPreferences(user: IUser): IUser {
           ? { pageEditModeByPageId: normalizedPageEditModeByPageId }
           : {}),
         headingNumberingByPageId: normalizedHeadingNumberingByPageId,
+        aiPanelOpen: normalizePreferenceBoolean(
+          safePreferences.aiPanelOpen,
+          false,
+        ),
+        aiPanelWidth:
+          typeof safePreferences.aiPanelWidth === "number" &&
+          Number.isFinite(safePreferences.aiPanelWidth)
+            ? Math.min(600, Math.max(300, safePreferences.aiPanelWidth))
+            : 350,
+        aiPanelTab: ["", "comments", "toc", "ai"].includes(
+          String(safePreferences.aiPanelTab ?? ""),
+        )
+          ? (safePreferences.aiPanelTab as
+              | ""
+              | "comments"
+              | "toc"
+              | "ai")
+          : "",
         pushEnabled: normalizePreferenceBoolean(
           safePreferences.pushEnabled,
           DEFAULT_PUSH_ENABLED,

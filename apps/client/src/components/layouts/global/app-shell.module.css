@@ -28,4 +28,23 @@
   }
 }
 
+.asideResizeHandle {
+  width: 4px;
+  cursor: col-resize;
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 2;
+
+  &:hover,
+  &:active {
+    width: 6px;
+    background: light-dark(
+      var(--mantine-color-gray-4),
+      var(--mantine-color-dark-5)
+    );
+  }
+}
+
 

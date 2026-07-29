@@ -10,6 +10,8 @@ import { comparePasswordHash } from '../../common/helpers/utils';
 import { Workspace } from '@docmost/db/types/entity.types';
 import { validateSsoEnforcement } from '../auth/auth.util';
 import {
+  normalizeAiPanelWidth,
+  normalizeAsideTabPreference,
   normalizeBooleanPreferenceByPageId,
   normalizeNotificationFrequency,
   normalizePageEditModeByPageId,
@@ -92,6 +94,9 @@ export class UserService {
     const hasPreferenceUpdates =
       typeof updateUserDto.fullPageWidth !== 'undefined' ||
       typeof updateUserDto.fixedToolbar !== 'undefined' ||
+      typeof updateUserDto.aiPanelOpen !== 'undefined' ||
+      typeof updateUserDto.aiPanelWidth !== 'undefined' ||
+      typeof updateUserDto.aiPanelTab !== 'undefined' ||
       typeof updateUserDto.fullPageWidthByPageId !== 'undefined' ||
       typeof updateUserDto.headingNumberingByPageId !== 'undefined' ||
       typeof updateUserDto.pageEditModeByPageId !== 'undefined' ||
@@ -117,6 +122,42 @@ export class UserService {
         normalizePreferenceBoolean(
           updateUserDto.fixedToolbar,
           currentPreferences.fixedToolbar,
+        ),
+      );
+    }
+
+    if (typeof updateUserDto.aiPanelOpen !== 'undefined') {
+      await this.userRepo.updatePreference(
+        userId,
+        workspace.id,
+        'aiPanelOpen',
+        normalizePreferenceBoolean(
+          updateUserDto.aiPanelOpen,
+          currentPreferences.aiPanelOpen,
+        ),
+      );
+    }
+
+    if (typeof updateUserDto.aiPanelWidth !== 'undefined') {
+      await this.userRepo.updatePreference(
+        userId,
+        workspace.id,
+        'aiPanelWidth',
+        normalizeAiPanelWidth(
+          updateUserDto.aiPanelWidth,
+          currentPreferences.aiPanelWidth,
+        ),
+      );
+    }
+
+    if (typeof updateUserDto.aiPanelTab !== 'undefined') {
+      await this.userRepo.updatePreference(
+        userId,
+        workspace.id,
+        'aiPanelTab',
+        normalizeAsideTabPreference(
+          updateUserDto.aiPanelTab,
+          currentPreferences.aiPanelTab,
         ),
       );
     }
@@ -257,6 +298,9 @@ export class UserService {
 
     delete updateUserDto.confirmPassword;
     delete updateUserDto.fixedToolbar;
+    delete updateUserDto.aiPanelOpen;
+    delete updateUserDto.aiPanelWidth;
+    delete updateUserDto.aiPanelTab;
     delete updateUserDto.fullPageWidthByPageId;
     delete updateUserDto.headingNumberingByPageId;
     delete updateUserDto.pageEditModeByPageId;

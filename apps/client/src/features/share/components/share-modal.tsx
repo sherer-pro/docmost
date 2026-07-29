@@ -29,8 +29,8 @@ import useTrial from "@/ee/hooks/use-trial.tsx";
 import { useAtom } from "jotai";
 import { workspaceAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { useSpaceQuery } from "@/features/space/queries/space-query.ts";
-import { useMediaQuery } from "@mantine/hooks";
 import useUserRole from "@/hooks/use-user-role.tsx";
+import { AccessibleActionIcon } from "@/components/ui/accessible-action-icon.tsx";
 
 interface ShareModalProps {
   /**
@@ -41,18 +41,14 @@ interface ShareModalProps {
    */
   pageId?: string;
   readOnly?: boolean;
-  compactOnMobile?: boolean;
 }
 export default function ShareModal({
   pageId: pageIdProp,
   readOnly = false,
-  compactOnMobile = false,
 }: ShareModalProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { pageSlug } = useParams();
-  const isMobile = useMediaQuery("(max-width: 48em)");
-  const compactTarget = compactOnMobile && isMobile;
   const pageSlugId = extractPageSlugId(pageSlug);
   const pageQueryId = pageIdProp ?? pageSlugId;
   const { data: page } = usePageQuery({ pageId: pageQueryId });
@@ -167,41 +163,21 @@ export default function ShareModal({
   return (
     <Popover width={350} position="bottom" withArrow shadow="md">
       <Popover.Target>
-        {compactTarget ? (
-          <ActionIcon
-            aria-label={t("Share")}
-            variant="subtle"
-            color="dark"
-            size={32}
+        <AccessibleActionIcon
+          label={t("Share")}
+          tooltipProps={{ openDelay: 250, withArrow: true }}
+          variant="subtle"
+          color="dark"
+        >
+          <Indicator
+            color="green"
+            offset={5}
+            disabled={!isPagePublic}
+            withBorder
           >
-            <Indicator
-              color="green"
-              offset={5}
-              disabled={!isPagePublic}
-              withBorder
-            >
-              <IconWorld size={20} stroke={1.5} />
-            </Indicator>
-          </ActionIcon>
-        ) : (
-          <Button
-            size="sm"
-            leftSection={
-              <Indicator
-                color="green"
-                offset={5}
-                disabled={!isPagePublic}
-                withBorder
-              >
-                <IconWorld size={20} stroke={1.5} />
-              </Indicator>
-            }
-            color="dark"
-            variant="subtle"
-          >
-            {t("Share")}
-          </Button>
-        )}
+            <IconWorld size={20} stroke={1.5} />
+          </Indicator>
+        </AccessibleActionIcon>
       </Popover.Target>
       <Popover.Dropdown style={{ userSelect: "none" }}>
         {isCloud() && isTrial ? (

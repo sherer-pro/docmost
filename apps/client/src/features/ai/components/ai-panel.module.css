@@ -1,0 +1,172 @@
+.panel {
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.conversationBar,
+.conversationSelect {
+  min-width: 0;
+}
+
+.messages {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.composer {
+  flex: 0 0 auto;
+  min-width: 0;
+  border-top: 1px solid
+    light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-5));
+  padding-top: var(--mantine-spacing-sm);
+}
+
+.composerToolbar {
+  min-width: 0;
+  flex-wrap: nowrap;
+  margin-bottom: var(--mantine-spacing-xs);
+}
+
+.toolbarButton {
+  min-width: 0;
+  flex: 1 1 0;
+}
+
+.toolbarButton :global(.mantine-Button-label) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quickCommandsMenu {
+  max-height: min(360px, 50vh);
+  overflow-y: auto;
+}
+
+.messageInput {
+  min-width: 0;
+}
+
+.composerFooter {
+  min-width: 0;
+  margin-top: 6px;
+}
+
+.composerFooter > :first-child {
+  min-width: 0;
+}
+
+.contextFileList {
+  max-height: 190px;
+  overflow-y: auto;
+}
+
+.contextFileRow,
+.contextFileCheckbox {
+  min-width: 0;
+}
+
+.contextFileCheckbox {
+  flex: 1 1 auto;
+}
+
+.contextFileCheckbox :global(.mantine-Checkbox-label) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assistantMessage {
+  max-width: 100%;
+  align-self: stretch;
+  background: light-dark(
+    var(--mantine-color-white),
+    var(--mantine-color-dark-7)
+  );
+}
+
+.userMessage {
+  max-width: 92%;
+  align-self: flex-end;
+  background: light-dark(
+    var(--mantine-color-blue-0),
+    var(--mantine-color-blue-9)
+  );
+}
+
+.markdown {
+  overflow-wrap: anywhere;
+  font-size: var(--mantine-font-size-sm);
+  line-height: 1.55;
+}
+
+.markdown > :first-child {
+  margin-top: 0;
+}
+
+.markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown pre {
+  overflow-x: auto;
+  border-radius: var(--mantine-radius-sm);
+  padding: var(--mantine-spacing-sm);
+  background: light-dark(
+    var(--mantine-color-gray-1),
+    var(--mantine-color-dark-9)
+  );
+}
+
+.markdown code {
+  font-family: var(--mantine-font-family-monospace);
+}
+
+.markdown img {
+  max-width: 100%;
+}
+
+.sourceChip {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  border: 1px solid
+    light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-5));
+  border-radius: var(--mantine-radius-xl);
+  padding: 3px 8px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.sourceChip:hover {
+  background: light-dark(
+    var(--mantine-color-gray-0),
+    var(--mantine-color-dark-6)
+  );
+}
+
+.messageActions {
+  opacity: 0.72;
+  transition: opacity 120ms ease;
+}
+
+.generationIndicator {
+  min-height: 24px;
+}
+
+.assistantMessage:hover .messageActions,
+.assistantMessage:focus-within .messageActions,
+.userMessage:hover .messageActions,
+.userMessage:focus-within .messageActions {
+  opacity: 1;
+}
+
+@media (pointer: coarse) {
+  .messageActions {
+    opacity: 1;
+  }
+}

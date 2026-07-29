@@ -132,6 +132,63 @@ describe('UserService', () => {
     );
   });
 
+  it('updates AI panel state through user preferences', async () => {
+    const { service, userRepo } = createService();
+    const workspace = { id: 'ws-1' } as any;
+    const user = {
+      id: 'user-1',
+      email: 'john@example.com',
+      password: 'hash',
+      settings: { preferences: {} },
+    } as any;
+    const updatedPreferenceUser = {
+      ...user,
+      settings: {
+        preferences: {
+          aiPanelOpen: true,
+          aiPanelWidth: 420,
+          aiPanelTab: 'ai',
+        },
+      },
+    };
+
+    userRepo.findById
+      .mockResolvedValueOnce(user)
+      .mockResolvedValueOnce(updatedPreferenceUser);
+    userRepo.updatePreference.mockResolvedValue(updatedPreferenceUser);
+
+    const result = await service.update(
+      {
+        aiPanelOpen: true,
+        aiPanelWidth: 420,
+        aiPanelTab: 'ai',
+      } as any,
+      'user-1',
+      workspace,
+    );
+
+    expect(userRepo.updatePreference).toHaveBeenCalledWith(
+      'user-1',
+      'ws-1',
+      'aiPanelOpen',
+      true,
+    );
+    expect(userRepo.updatePreference).toHaveBeenCalledWith(
+      'user-1',
+      'ws-1',
+      'aiPanelWidth',
+      420,
+    );
+    expect(userRepo.updatePreference).toHaveBeenCalledWith(
+      'user-1',
+      'ws-1',
+      'aiPanelTab',
+      'ai',
+    );
+    expect(userRepo.updateUser).not.toHaveBeenCalled();
+    expect((result as any).settings.preferences.aiPanelTab).toBe('ai');
+  });
+
   it('updates and normalizes personal heading numbering overrides', async () => {
     const { service, userRepo } = createService();
     const workspace = { id: 'ws-1' } as any;

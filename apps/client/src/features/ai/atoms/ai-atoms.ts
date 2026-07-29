@@ -1,0 +1,29 @@
+import { atom } from "jotai";
+import type { SetStateAction } from "react";
+import {
+  AiDocumentContext,
+  AiEditorContext,
+  AiStreamingRun,
+} from "@/features/ai/types/ai.types.ts";
+
+const aiDocumentContextBaseAtom = atom({
+  value: null as AiDocumentContext | null,
+});
+
+export const aiDocumentContextAtom = atom(
+  (get) => get(aiDocumentContextBaseAtom).value,
+  (get, set, update: SetStateAction<AiDocumentContext | null>) => {
+    const current = get(aiDocumentContextBaseAtom).value;
+    set(aiDocumentContextBaseAtom, {
+      value: typeof update === "function" ? update(current) : update,
+    });
+  },
+);
+
+export const aiStreamingRunsAtom = atom<Record<string, AiStreamingRun>>({});
+
+export const aiLastEditorContextAtom = atom<
+  Record<string, AiEditorContext | undefined>
+>({});
+
+export const aiUnreadRunsAtom = atom<Record<string, number>>({});

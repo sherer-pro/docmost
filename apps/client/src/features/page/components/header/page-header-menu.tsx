@@ -9,6 +9,7 @@ import {
   IconMessage,
   IconTrash,
   IconWifiOff,
+  IconSparkles,
 } from "@tabler/icons-react";
 import React, { useEffect, useRef, useState } from "react";
 import useToggleAside from "@/hooks/use-toggle-aside.tsx";
@@ -116,9 +117,23 @@ export default function PageHeaderMenu({
 
       <PageFavoriteAction readOnly={isReadOnly} />
 
-      <ShareModal readOnly={!canMoveDeleteSharePage} compactOnMobile />
+      <ShareModal readOnly={!canMoveDeleteSharePage} />
 
       <PageDetailsAction readOnly={isReadOnly} />
+
+      {!isReadOnly && (
+        <Tooltip label={t("ai.openPanel")} openDelay={250} withArrow>
+          <AccessibleActionIcon
+            label={t("ai.openPanel")}
+            tooltip={false}
+            variant="subtle"
+            color="dark"
+            onClick={() => toggleAside("ai")}
+          >
+            <IconSparkles size={20} stroke={2} />
+          </AccessibleActionIcon>
+        </Tooltip>
+      )}
 
       <Tooltip label={t("Comments")} openDelay={250} withArrow>
         <AccessibleActionIcon

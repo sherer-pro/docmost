@@ -30,6 +30,7 @@ import { FavoriteModule } from './favorite/favorite.module';
 import { LabelModule } from './label/label.module';
 import { TransclusionModule } from './page/transclusion/transclusion.module';
 import { PresenceModule } from './presence/presence.module';
+import { AiModule } from './ai/ai.module';
 
 @Module({
   imports: [
@@ -58,6 +59,7 @@ import { PresenceModule } from './presence/presence.module';
     LabelModule,
     TransclusionModule,
     PresenceModule,
+    AiModule,
   ],
 })
 export class CoreModule implements NestModule {
