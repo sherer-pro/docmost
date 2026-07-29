@@ -1364,6 +1364,7 @@
     "searchSpace": "このスペースを検索",
     "currentDocumentOnly": "現在のドキュメント",
     "stop": "停止",
+    "stopping": "停止しています…",
     "send": "送信",
     "sendShortcut": "Ctrl/⌘ + Enter を押して送信します",
     "chatName": "チャット名",
@@ -1533,6 +1534,7 @@
       "title": "メッセージコンテキスト",
       "documents": "書類とデータ",
       "dragHint": "ここにページ、データベース、または行をドロップします",
+      "dragFromSidebarHint": "サイドバーからページ、データベース、または行をチャットに直接ドラッグできます。",
       "crossSpaceRejected": "このスペースのソースのみを追加できます。",
       "alreadyAdded": "このソースはすでにコンテキスト内にあります。",
       "addFromSpace": "スペースから追加",
@@ -1542,6 +1544,7 @@
       "searchPlaceholder": "ページ、データベース、行を検索する",
       "searchFailed": "このスペースを検索できませんでした。",
       "noResults": "アクセス可能なソースが見つかりません。",
+      "spaceRoot": "スペースのルート",
       "loadMore": "さらにロードする"
     },
     "selection": {

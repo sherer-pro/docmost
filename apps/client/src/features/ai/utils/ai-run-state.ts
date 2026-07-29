@@ -58,6 +58,7 @@ export function reduceAiRunState(
           content: action.content ?? current[run.id]?.content ?? "",
           sequence: run.sequence,
           status: run.status,
+          cancelRequestedAt: run.cancelRequestedAt,
           error: run.errorMessage ?? undefined,
         },
       },
@@ -97,6 +98,7 @@ export function reduceAiRunState(
           content: `${previous?.content ?? ""}${deltaEvent.delta}`,
           sequence: deltaEvent.sequence,
           status: "running",
+          cancelRequestedAt: previous?.cancelRequestedAt,
         },
       },
     };
@@ -113,6 +115,7 @@ export function reduceAiRunState(
         content: previous?.content ?? "",
         sequence: statusEvent.sequence,
         status: statusEvent.status,
+        cancelRequestedAt: previous?.cancelRequestedAt,
         error: statusEvent.errorMessage,
       },
     },

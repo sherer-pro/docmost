@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useDragDropManager } from "react-dnd";
 import {
   CreateHandler,
   DeleteHandler,
@@ -21,7 +22,11 @@ import {
 import { generateJitteredKeyBetween } from "fractional-indexing-jittered";
 import { SpaceTreeNode } from "@/features/page/tree/types.ts";
 import { buildPageUrl } from "@/features/page/page.utils.ts";
-import { dropTreeNode, mapPageToTreeNode } from "@/features/page/tree/utils";
+import {
+  dropTreeNode,
+  isTreeExternalDropResult,
+  mapPageToTreeNode,
+} from "@/features/page/tree/utils";
 import { getSpaceUrl } from "@/lib/config.ts";
 import { useQueryEmit } from "@/features/websocket/use-query-emit.ts";
 import { userAtom } from "@/features/user/atoms/current-user-atom.ts";
@@ -29,6 +34,7 @@ import { PageEditMode } from "@/features/user/types/user.types.ts";
 import { buildPageEditModeByPageId } from "@/features/user/utils/page-edit-mode.ts";
 
 export function useTreeMutation<T>(spaceId: string) {
+  const dndManager = useDragDropManager();
   const [data, setData] = useAtom(treeDataAtom);
   const tree = useMemo(() => new SimpleTree<SpaceTreeNode>(data), [data]);
   const createPageMutation = useCreatePageMutation({ syncTree: false });
@@ -115,6 +121,10 @@ export function useTreeMutation<T>(spaceId: string) {
     parentNode: NodeApi<T> | null;
     index: number;
   }) => {
+    if (isTreeExternalDropResult(dndManager.getMonitor().getDropResult())) {
+      return;
+    }
+
     const draggedNodeId = args.dragIds[0];
 
     tree.move({

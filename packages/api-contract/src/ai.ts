@@ -251,6 +251,7 @@ export interface AiContextSource {
   sourceId: string;
   pageId: string;
   title: string;
+  icon: string | null;
   breadcrumbs: string[];
   url: string | null;
   position: number;
