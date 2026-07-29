@@ -50,6 +50,7 @@
 - `apps/server/src/collaboration` and `apps/server/src/ws` — collaboration server, Yjs helpers, Socket.IO relay, and presence events.
 - `apps/server/src/integrations/{import,export,static,security,telemetry}` — import/export jobs, static frontend serving, security/version/robots helpers, and telemetry.
 - `ARCHITECTURE.md` — high-level repository architecture and verification map.
+- `docs/AI_ASSISTANT_AND_RAG.md` — current technical documentation for the core AI assistant, query-time retrieval, RAG sync API, Open WebUI integration, and their public contracts. Update it whenever changing core AI behavior, AI/retrieval configuration, `/api/ai/*` or `/api/rag/*` routes/contracts, or `apps/rag-sync`.
 - `docs/documentation-audit-2026-06-20.md` — latest local documentation audit report.
 - `apps/server/docs/api-routing-conventions.md` — API routing policy, endpoint inventory, and RPC migration plan.
 - `apps/server/docs/api-route-inventory.generated.md` — generated backend route inventory (`pnpm routes:inventory`).
