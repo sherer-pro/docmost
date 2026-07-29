@@ -2,10 +2,10 @@ import { BubbleMenu, BubbleMenuProps } from "@tiptap/react/menus";
 import { isNodeSelection, useEditorState } from "@tiptap/react";
 import type { Editor } from "@tiptap/react";
 import { FC, useEffect, useRef, useState } from "react";
-import { IconMessage, IconSparkles, IconBook2 } from "@tabler/icons-react";
+import { IconMessage, IconBook2 } from "@tabler/icons-react";
 import clsx from "clsx";
 import classes from "./bubble-menu.module.css";
-import { ActionIcon, Button, Tooltip } from "@mantine/core";
+import { ActionIcon, Tooltip } from "@mantine/core";
 import { ColorSelector } from "./color-selector";
 import { NodeSelector } from "./node-selector";
 import { TextAlignmentSelector } from "./text-alignment-selector";
@@ -14,7 +14,7 @@ import {
   draftCommentIdAtom,
   showCommentPopupAtom,
 } from "@/features/comment/atoms/comment-atom";
-import { useAtom, useAtomValue } from "jotai";
+import { useAtom } from "jotai";
 import { v7 as uuid7 } from "uuid";
 import {
   isCellSelection,
@@ -23,8 +23,6 @@ import {
 } from "@docmost/editor-ext";
 import { LinkSelector } from "@/features/editor/components/bubble-menu/link-selector.tsx";
 import { useTranslation } from "react-i18next";
-import { showAiMenuAtom } from "@/features/editor/atoms/editor-atoms";
-import { workspaceAtom } from "@/features/user/atoms/current-user-atom";
 import { DictionaryTermModal } from "@/features/dictionary/components/dictionary-term-modal";
 import { ToolbarActionButton } from "@/features/editor/components/bubble-menu/toolbar-action-button";
 import {
@@ -42,26 +40,18 @@ type EditorBubbleMenuProps = Omit<BubbleMenuProps, "children" | "editor"> & {
 
 export const EditorBubbleMenu: FC<EditorBubbleMenuProps> = (props) => {
   const { t } = useTranslation();
-  const [showAiMenu, setShowAiMenu] = useAtom(showAiMenuAtom);
   const [showCommentPopup, setShowCommentPopup] = useAtom(showCommentPopupAtom);
-  const workspace = useAtomValue(workspaceAtom);
-  const isGenerativeAiEnabled = workspace?.settings?.ai?.generative === true;
   const [, setDraftCommentId] = useAtom(draftCommentIdAtom);
   const [, setDraftCommentRange] = useAtom(draftCommentRangeAtom);
   const [dictionaryModalOpened, setDictionaryModalOpened] = useState(false);
   const [dictionaryInitialTerm, setDictionaryInitialTerm] = useState("");
   const showCommentPopupRef = useRef(showCommentPopup);
-  const showAiMenuRef = useRef(showAiMenu);
   const canCreateInlineComments = props.canCreateInlineComments ?? true;
   const textItems = useInlineTextToolbarItems(props.editor);
 
   useEffect(() => {
     showCommentPopupRef.current = showCommentPopup;
   }, [showCommentPopup]);
-
-  useEffect(() => {
-    showAiMenuRef.current = showAiMenu;
-  }, [showAiMenu]);
 
   const editorState = useEditorState({
     editor: props.editor,
@@ -125,7 +115,6 @@ export const EditorBubbleMenu: FC<EditorBubbleMenuProps> = (props) => {
         empty ||
         isNodeSelection(selection) ||
         isCellSelection(selection) ||
-        showAiMenuRef.current ||
         showCommentPopupRef?.current
       ) {
         return false;
@@ -149,9 +138,6 @@ export const EditorBubbleMenu: FC<EditorBubbleMenuProps> = (props) => {
   const [isLinkSelectorOpen, setIsLinkSelectorOpen] = useState(false);
   const [isColorSelectorOpen, setIsColorSelectorOpen] = useState(false);
 
-  // Hide the bubble menu immediately when AI menu is shown
-  if (showAiMenu) return;
-
   return (
     <>
       <BubbleMenu
@@ -159,22 +145,6 @@ export const EditorBubbleMenu: FC<EditorBubbleMenuProps> = (props) => {
         style={{ zIndex: 200, position: "relative" }}
       >
         <div className={classes.bubbleMenu}>
-        {isGenerativeAiEnabled && (
-          <>
-            <Button
-              variant="default"
-              className={clsx(classes.buttonRoot)}
-              radius="0"
-              leftSection={<IconSparkles size={16} />}
-              onClick={() => {
-                setShowAiMenu(true);
-              }}
-            >
-              {t("Ask AI")}
-            </Button>
-            <div className={classes.divider} />
-          </>
-        )}
         <NodeSelector
           editor={props.editor}
           isOpen={isNodeSelectorOpen}

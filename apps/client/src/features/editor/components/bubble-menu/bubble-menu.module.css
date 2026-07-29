@@ -28,14 +28,6 @@
   }
 }
 
-.buttonRoot {
-  height: 34px;
-  padding-left: rem(8);
-  padding-right: rem(4);
-  border: none;
-  border-radius: 6px;
-}
-
 .buttonSeparator {
   border-right: 1px solid
     light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4)) !important;

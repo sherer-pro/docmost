@@ -39,13 +39,6 @@
   flex-shrink: 0;
 }
 
-.aiButton {
-  border: none;
-  height: 34px;
-  padding-left: rem(8);
-  padding-right: rem(8);
-}
-
 .divider {
   align-self: center;
   background-color: light-dark(

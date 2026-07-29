@@ -121,7 +121,7 @@ export class WorkspaceService {
         let status = undefined;
         let plan = undefined;
         let billingEmail = undefined;
-        let settings = undefined;
+        const settings = undefined;
 
         if (this.environmentService.isCloud()) {
           // generate unique hostname
@@ -135,7 +135,6 @@ export class WorkspaceService {
           status = WorkspaceStatus.Active;
           plan = 'standard';
           billingEmail = user.email;
-          settings = { ai: { generative: true } };
         }
 
         // create workspace
@@ -359,15 +358,6 @@ export class WorkspaceService {
       }
 
       delete updateWorkspaceDto.aiSearch;
-    }
-
-    if (typeof updateWorkspaceDto.generativeAi !== 'undefined') {
-      await this.workspaceRepo.updateAiSettings(
-        workspaceId,
-        'generative',
-        updateWorkspaceDto.generativeAi,
-      );
-      delete updateWorkspaceDto.generativeAi;
     }
 
     if (typeof updateWorkspaceDto.disablePublicSharing !== 'undefined') {

@@ -16,5 +16,3 @@ export const readOnlyEditorAtom = atom<Editor | null>(null);
 export const yjsConnectionStatusAtom = atom<string>("");
 
 export const activePageUsersAtom = atom<IActivePageUser[]>([]);
-
-export const showAiMenuAtom = atom(false);

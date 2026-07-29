@@ -68,7 +68,6 @@ import { resolvePageEditMode } from "@/features/user/utils/page-edit-mode.ts";
 import { jwtDecode } from "jwt-decode";
 import { searchSpotlight } from "@/features/search/constants.ts";
 import { useEditorScroll } from "./hooks/use-editor-scroll";
-import { EditorAiMenu } from "@/ee/ai/components/editor/ai-menu/ai-menu";
 import { usePageEditorInteractions } from "@/features/editor/hooks/use-page-editor-interactions";
 import { DictionaryHighlightLayer } from "@/features/dictionary/components/dictionary-highlight-layer";
 import {
@@ -576,7 +575,6 @@ export default function PageEditor({
 
           {editor && editorIsEditable && (
             <div>
-              <EditorAiMenu editor={editor} />
               {!fixedToolbarEnabled && (
                 <EditorBubbleMenu
                   editor={editor}
