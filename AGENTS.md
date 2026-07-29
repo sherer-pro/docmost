@@ -33,6 +33,7 @@
 - `apps/server/src` — main backend code.
 - `apps/server/src/app.module.ts` — backend module wiring, global CSRF guard, static/client serving, Redis, queue, import/export, security, telemetry, and optional EE loading.
 - `apps/server/src/core/api-key` — workspace API key management used by RAG integrations.
+- `apps/server/src/core/ai` — per-space AI configuration, persistent private chat, async generation, chat files, and optional external retrieval.
 - `apps/server/src/core/database` — Notion-like database API, rows/properties/views, conversion, markdown/export support.
 - `apps/server/src/core/dictionary` — space-scoped dictionary API and services.
 - `apps/server/src/core/favorite` — page/space favorites API.
@@ -65,6 +66,7 @@
 - `apps/client/public/locales/*` — JSON translations.
 - `apps/client/public/{manifest.json,sw.js,offline.html}` — PWA manifest, Service Worker, and static offline page; these user-facing strings are outside the i18next locale JSON pipeline.
 - `apps/server/src/database` — migrations and DB tooling.
+- `apps/server/src/database/migrations/20260728T120000-ai-integration.ts` — AI provider/retrieval configuration, private chat, run, file, and citation schema.
 - `packages/editor-ext/src/lib/{audio,pdf,transclusion,indent,page-break,tag}` — editor nodes/extensions for audio, embedded PDFs, synced blocks, paragraph/heading indentation, print page breaks, and inline TBD/TODO tags.
 - `packages/api-contract/src` — shared API-facing TypeScript contracts used by server/client code; it builds to `packages/api-contract/dist` for runtime server consumption.
 - `patches/` — pnpm patch files (for example, for `react-arborist`).
@@ -215,6 +217,9 @@ Minimum:
 - Diagnostics: `DEBUG_MODE`, `DEBUG_DB`, `LOG_HTTP`
 - Search: `SEARCH_DRIVER`, `TYPESENSE_URL`, `TYPESENSE_API_KEY`, `TYPESENSE_LOCALE`
 - AI/RAG support: `AI_DRIVER`, `AI_EMBEDDING_MODEL`, `AI_COMPLETION_MODEL`, `AI_EMBEDDING_DIMENSION`, `OPENAI_API_KEY`, `OPENAI_API_URL`, `GEMINI_API_KEY`, `OLLAMA_API_URL`
+- Per-space AI provider network policy: `AI_PROVIDER_ALLOWED_ORIGINS` is a comma-separated list of exact trusted `http(s)` origins. Keep it empty until the provider origins are approved; development additionally permits loopback endpoints.
+- External retrieval network policy: `AI_RETRIEVAL_ALLOWED_ORIGINS` separately allowlists exact trusted `http(s)` origins for optional `http-json-v1` retrieval adapters. Development additionally permits loopback endpoints.
+- AI provider streaming: `AI_STREAM_IDLE_TIMEOUT_MS` controls the maximum wait between provider SSE chunks, including the first chunk. It defaults to 120000 ms, accepts 5000-600000 ms, resets on every chunk, and is capped by the per-space request timeout. Slow local reasoning models may use 300000 ms.
 - Reverse proxy attribution: `TRUSTED_PROXIES` is a comma-separated list of trusted proxy IPs/CIDRs or proxy-addr keywords (`loopback`, `linklocal`, `uniquelocal`). Leave it empty unless Docmost is behind a controlled proxy; `X-Forwarded-*` headers are ignored when it is empty.
 - Auth throttling storage: `AUTH_RATE_LIMIT_STORAGE` may be `memory` for local development, but production validation requires `redis`.
 - Embed iframe allowlist: `EMBED_ALLOWED_ORIGINS` is a comma-separated list of exact trusted `http(s)` origins for generic iframe embeds. Built-in providers are allowlisted separately; keep this empty unless the origin is trusted.
@@ -308,6 +313,15 @@ Minimum:
 - Backend production entrypoints are resolved from Nx/Nest build output under `apps/server/dist/apps/server/src/*` (not `apps/server/dist/main`).
 - The production image copies runtime workspace package builds for `packages/editor-ext` and `packages/api-contract`; keep their package manifests and `dist` outputs in sync with server imports.
 - Compose uses placeholders (`REPLACE_WITH_LONG_SECRET`, `STRONG_DB_PASSWORD`) in `.env.compose.example` and Docker defaults; do not forget to replace them.
+- Per-space model and retrieval credentials live in `ai_space_configs`, encrypted with the application secret. Never return encrypted credential columns, put secrets in queue payloads, or store them in `spaces.settings`.
+- Persistent AI chat uses the dedicated `AI_CHAT_QUEUE` for generation, file extraction, and retention cleanup. Do not attach its processor to the legacy `AI_QUEUE`, which still receives existing page/index lifecycle jobs.
+- AI provider calls are immutable attempts introduced by `20260729T120000-ai-reliability.ts`. Bull delivery is at-least-once; workers claim queued runs with database compare-and-set, and the post-migration reconciler repairs missing deterministic jobs. Never reopen a terminal `ai_runs` row or automatically retry a stale running provider call.
+- AI conversation/create/send/retry/regenerate idempotency keys are payload-bound. Private multipart chat uploads require `Idempotency-Key`, and deletes commit tombstones before retriable storage cleanup. Keep list responses exact (`{items}`; messages also include `hasMore` and `nextCursor`).
+- Core per-space AI is the only editor generation UX. Do not reintroduce the EE Ask AI menu or read/write `settings.ai.generative`; historical JSON remains inert. Legacy EE AI search, `/api/ai/answers`, `AI_QUEUE`, and PageEmbeddings/indexing remain supported independently.
+- `AI_PROVIDER_ALLOWED_ORIGINS` is the production SSRF boundary for administrator-configured model endpoints. Loopback URLs such as LM Studio are development-only, and `127.0.0.1` inside Docker refers to the Docmost container rather than the host.
+- `AI_RETRIEVAL_ALLOWED_ORIGINS` is an independent SSRF boundary for external retrieval endpoints. Retrieval candidates are untrusted until their Docmost source IDs and current user page access are revalidated.
+- `AI_STREAM_IDLE_TIMEOUT_MS` is a deployment-level inactivity limit, while `requestTimeoutMs` remains per-space and bounds the full provider request. The effective idle timeout is the smaller of the two.
+- `/api/rag/*` remains the API-key-only synchronization/export surface for an external index. Query-time AI retrieval is optional `http-json-v1`, does not create a local vector index, and must degrade to the live document/file context when unavailable.
 - Web Push compose defaults are intentionally empty; set all VAPID variables together when enabling push notifications.
 - `migration:codegen` reads env from `../../.env`; if the file is missing, the command fails.
 - Runtime image now includes headless `chromium` + Cyrillic-capable fonts for PDF export, and sets default `PDF_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium`.

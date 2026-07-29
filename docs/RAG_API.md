@@ -279,6 +279,30 @@ Body:
 
 ## 7. Recommended RAG integration flow
 
+### 7.0 Relationship to built-in AI chat
+
+The `/api/rag/*` endpoints are the synchronization/export side of an external
+RAG integration. They do not provide query-time semantic search.
+
+Built-in AI chat can optionally call a separately configured `http-json-v1`
+retrieval adapter. An external service may populate its index through this RAG
+API and expose the configured query endpoint to Docmost. The API key used by the
+external indexer and the credential Docmost uses to query that endpoint are
+independent secrets.
+
+Query results never grant access by themselves. The AI backend resolves returned
+Docmost source IDs and re-checks the requesting user's current page access before
+using content or creating citations.
+
+The query adapter keeps a separate SSRF allowlist from both this inbound sync API
+and the model provider. Its full timeout starts before DNS resolution, redirects
+and URL credentials are rejected, the serialized request is capped at 1 MiB, and
+the response is capped at 256 KiB. Individual malformed/non-UUID candidates are
+discarded without losing valid siblings; duplicate source identities keep the
+highest score. Timeout, oversized payload, `401`, `429`, `5xx`, or no readable
+results degrades safely to document/file context and never invokes the model
+inside the retrieval adapter.
+
 ### 7.1 Initial sync
 
 1. Create API key scoped to the target `spaceId`.
