@@ -11,7 +11,7 @@ import { ExpressionBuilder, sql } from 'kysely';
 import { DB, Workspaces } from '@docmost/db/types/db';
 
 const WORKSPACE_API_SETTINGS_KEYS = ['restrictToAdmins'] as const;
-const WORKSPACE_AI_SETTINGS_KEYS = ['search', 'generative'] as const;
+const WORKSPACE_AI_SETTINGS_KEYS = ['search'] as const;
 const WORKSPACE_SHARING_SETTINGS_KEYS = ['disabled'] as const;
 const WORKSPACE_TAG_SETTINGS_KEYS = ['disabled'] as const;
 

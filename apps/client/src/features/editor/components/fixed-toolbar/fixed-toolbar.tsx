@@ -1,6 +1,6 @@
 import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
-import { ActionIcon, Button, Tooltip } from "@mantine/core";
+import { ActionIcon, Tooltip } from "@mantine/core";
 import {
   IconBook2,
   IconCheckbox,
@@ -10,11 +10,10 @@ import {
   IconListNumbers,
   IconMessage,
   IconPageBreak,
-  IconSparkles,
 } from "@tabler/icons-react";
 import { isTextRangeSelected } from "@docmost/editor-ext";
 import clsx from "clsx";
-import { useAtom, useAtomValue } from "jotai";
+import { useAtom } from "jotai";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { v7 as uuid7 } from "uuid";
@@ -34,8 +33,6 @@ import {
   type EditorToolbarItem,
   useInlineTextToolbarItems,
 } from "@/features/editor/components/bubble-menu/toolbar-items";
-import { showAiMenuAtom } from "@/features/editor/atoms/editor-atoms";
-import { workspaceAtom } from "@/features/user/atoms/current-user-atom";
 import classes from "./fixed-toolbar.module.css";
 
 interface FixedToolbarProps {
@@ -54,12 +51,9 @@ export function FixedToolbar({
   canCreateInlineComments = true,
 }: FixedToolbarProps) {
   const { t } = useTranslation();
-  const [, setShowAiMenu] = useAtom(showAiMenuAtom);
   const [, setShowCommentPopup] = useAtom(showCommentPopupAtom);
   const [, setDraftCommentId] = useAtom(draftCommentIdAtom);
   const [, setDraftCommentRange] = useAtom(draftCommentRangeAtom);
-  const workspace = useAtomValue(workspaceAtom);
-  const isGenerativeAiEnabled = workspace?.settings?.ai?.generative === true;
   const [isNodeSelectorOpen, setIsNodeSelectorOpen] = useState(false);
   const [isTextAlignmentSelectorOpen, setIsTextAlignmentOpen] = useState(false);
   const [isLinkSelectorOpen, setIsLinkSelectorOpen] = useState(false);
@@ -176,24 +170,6 @@ export function FixedToolbar({
         aria-label={t("Editor toolbar")}
       >
         <div className={classes.toolbarInner}>
-          {isGenerativeAiEnabled && (
-            <>
-              <Button
-                variant="default"
-                className={classes.aiButton}
-                radius="0"
-                leftSection={<IconSparkles size={16} />}
-                onClick={() => {
-                  closeSelectorPopovers();
-                  setShowAiMenu(true);
-                }}
-              >
-                {t("Ask AI")}
-              </Button>
-              <div className={classes.divider} />
-            </>
-          )}
-
           <NodeSelector
             editor={editor}
             isOpen={isNodeSelectorOpen}

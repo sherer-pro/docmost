@@ -23,7 +23,6 @@ export interface IWorkspace {
   hasLicenseKey?: boolean;
   enforceMfa?: boolean;
   aiSearch?: boolean;
-  generativeAi?: boolean;
   disablePublicSharing?: boolean;
 }
 
@@ -35,7 +34,6 @@ export interface IWorkspaceSettings {
 
 export interface IWorkspaceAiSettings {
   search?: boolean;
-  generative?: boolean;
 }
 
 export interface IWorkspaceSharingSettings {
