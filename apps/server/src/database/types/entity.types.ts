@@ -1,11 +1,15 @@
 import { Insertable, Selectable, Updateable } from 'kysely';
 import {
+  AiAuxRuns,
   AiChatFiles,
+  AiConversationContextSources,
   AiConversations,
   AiFileUploadBatches,
   AiMessages,
   AiMessageSources,
+  AiRunContextSources,
   AiRuns,
+  AiRunSourceDependencies,
   AiSpaceConfigs,
   Attachments,
   Comments,
@@ -120,6 +124,15 @@ export type AiConversation = Selectable<AiConversations>;
 export type InsertableAiConversation = Insertable<AiConversations>;
 export type UpdatableAiConversation = Updateable<Omit<AiConversations, 'id'>>;
 
+// AI conversation context source
+export type AiConversationContextSource =
+  Selectable<AiConversationContextSources>;
+export type InsertableAiConversationContextSource =
+  Insertable<AiConversationContextSources>;
+export type UpdatableAiConversationContextSource = Updateable<
+  Omit<AiConversationContextSources, 'id'>
+>;
+
 // AI file upload batch
 export type AiFileUploadBatch = Selectable<AiFileUploadBatches>;
 export type InsertableAiFileUploadBatch = Insertable<AiFileUploadBatches>;
@@ -137,6 +150,20 @@ export type AiRun = Selectable<AiRuns>;
 export type InsertableAiRun = Insertable<AiRuns>;
 export type UpdatableAiRun = Updateable<Omit<AiRuns, 'id'>>;
 
+// AI run context source
+export type AiRunContextSource = Selectable<AiRunContextSources>;
+export type InsertableAiRunContextSource = Insertable<AiRunContextSources>;
+
+// AI run source dependency
+export type AiRunSourceDependency = Selectable<AiRunSourceDependencies>;
+export type InsertableAiRunSourceDependency =
+  Insertable<AiRunSourceDependencies>;
+
+// AI auxiliary run
+export type AiAuxRun = Selectable<AiAuxRuns>;
+export type InsertableAiAuxRun = Insertable<AiAuxRuns>;
+export type UpdatableAiAuxRun = Updateable<Omit<AiAuxRuns, 'id'>>;
+
 // AI chat file
 export type AiChatFile = Selectable<AiChatFiles>;
 export type InsertableAiChatFile = Insertable<AiChatFiles>;
@@ -145,9 +172,7 @@ export type UpdatableAiChatFile = Updateable<Omit<AiChatFiles, 'id'>>;
 // AI message source
 export type AiMessageSource = Selectable<AiMessageSources>;
 export type InsertableAiMessageSource = Insertable<AiMessageSources>;
-export type UpdatableAiMessageSource = Updateable<
-  Omit<AiMessageSources, 'id'>
->;
+export type UpdatableAiMessageSource = Updateable<Omit<AiMessageSources, 'id'>>;
 
 // Workspace
 export type Workspace = Selectable<Workspaces>;
@@ -242,8 +267,7 @@ export type UpdatableDictionaryTerm = Updateable<Omit<DictionaryTerms, 'id'>>;
 
 // DictionaryTermAlias
 export type DictionaryTermAlias = Selectable<DictionaryTermAliases>;
-export type InsertableDictionaryTermAlias =
-  Insertable<DictionaryTermAliases>;
+export type InsertableDictionaryTermAlias = Insertable<DictionaryTermAliases>;
 export type UpdatableDictionaryTermAlias = Updateable<
   Omit<DictionaryTermAliases, 'id'>
 >;
@@ -271,8 +295,7 @@ export type UpdatablePageTransclusion = Updateable<
 >;
 
 // PageTransclusionReference
-export type PageTransclusionReference =
-  Selectable<PageTransclusionReferences>;
+export type PageTransclusionReference = Selectable<PageTransclusionReferences>;
 export type InsertablePageTransclusionReference =
   Insertable<PageTransclusionReferences>;
 export type UpdatablePageTransclusionReference = Updateable<

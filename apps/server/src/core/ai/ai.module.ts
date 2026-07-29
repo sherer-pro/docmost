@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { WsModule } from '../../ws/ws.module';
+import { SearchModule } from '../search/search.module';
 import { AiChatProcessor } from './ai-chat.processor';
 import {
   AiConfigController,
@@ -11,11 +12,13 @@ import {
   AiPageAttachmentController,
 } from './controllers/ai-file.controller';
 import { AiRunController } from './controllers/ai-run.controller';
+import { AiEditorActionController } from './controllers/ai-editor-action.controller';
 import { AiRetrievalService } from './retrieval/ai-retrieval.service';
 import { HttpJsonAiRetrievalAdapter } from './retrieval/http-json-ai-retrieval.adapter';
 import { NoopAiRetrievalAdapter } from './retrieval/noop-ai-retrieval.adapter';
 import { AiConfigService } from './services/ai-config.service';
 import { AiConversationService } from './services/ai-conversation.service';
+import { AiContextService } from './services/ai-context.service';
 import { AiFileService } from './services/ai-file.service';
 import { AiOutboundUrlPolicyService } from './services/ai-outbound-url-policy.service';
 import { AiOperationalMetricsService } from './services/ai-operational-metrics.service';
@@ -27,9 +30,12 @@ import { AiRunExecutionService } from './services/ai-run-execution.service';
 import { AiRunEventService } from './services/ai-run-event.service';
 import { AiRunService } from './services/ai-run.service';
 import { OpenAiCompatibleProviderService } from './services/openai-compatible-provider.service';
+import { AiAuxRunService } from './services/ai-aux-run.service';
+import { AiAuxRunExecutionService } from './services/ai-aux-run-execution.service';
+import { AiAuxRunEventService } from './services/ai-aux-run-event.service';
 
 @Module({
-  imports: [WsModule],
+  imports: [WsModule, SearchModule],
   controllers: [
     AiConfigController,
     AiStatusController,
@@ -37,11 +43,13 @@ import { OpenAiCompatibleProviderService } from './services/openai-compatible-pr
     AiFileController,
     AiPageAttachmentController,
     AiRunController,
+    AiEditorActionController,
   ],
   providers: [
     AiChatProcessor,
     AiConfigService,
     AiConversationService,
+    AiContextService,
     AiFileService,
     AiOutboundUrlPolicyService,
     AiOperationalMetricsService,
@@ -53,6 +61,9 @@ import { OpenAiCompatibleProviderService } from './services/openai-compatible-pr
     AiRunExecutionService,
     AiRunEventService,
     AiRunService,
+    AiAuxRunService,
+    AiAuxRunExecutionService,
+    AiAuxRunEventService,
     HttpJsonAiRetrievalAdapter,
     NoopAiRetrievalAdapter,
     OpenAiCompatibleProviderService,

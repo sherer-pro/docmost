@@ -17,8 +17,6 @@ import {
   IconReplace,
 } from "@tabler/icons-react";
 import { Editor } from "@tiptap/core";
-import DOMPurify from "dompurify";
-import { marked } from "marked";
 import { notifications } from "@mantine/notifications";
 import { useTranslation } from "react-i18next";
 import {
@@ -30,12 +28,13 @@ import { AiDocumentContext } from "@/features/ai/types/ai.types.ts";
 import { isEditorContextCurrent } from "@/features/ai/utils/editor-context.ts";
 import {
   getAiApplyPolicy,
-  getAiErrorTranslationKey,
+  resolveAiErrorMessage,
   isAiMessageRetryable,
 } from "@/features/ai/utils/ai-policies.ts";
 import { AiMessageContent } from "./ai-message-content.tsx";
 import { getAiSpaceStatus } from "@/features/ai/services/ai-service.ts";
 import classes from "./ai-panel.module.css";
+import { sanitizeAiMarkdown } from "@/features/ai/utils/ai-markdown.ts";
 
 type ApplyMode = "replace" | "insert";
 
@@ -46,6 +45,7 @@ export function AiMessageCard({
   editorContext,
   onRetry,
   onRegenerate,
+  showRetrievalStatus = true,
 }: {
   message: AiMessage;
   editor: Editor | null;
@@ -53,8 +53,9 @@ export function AiMessageCard({
   editorContext?: AiEditorContext | AiApplyContext;
   onRetry?: () => void;
   onRegenerate?: () => void;
+  showRetrievalStatus?: boolean;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [applyMode, setApplyMode] = useState<ApplyMode | null>(null);
   const isAssistant = message.role === "assistant";
   const normalizedEditorContext = editorContext
@@ -161,7 +162,7 @@ export function AiMessageCard({
       return;
     }
 
-    const html = DOMPurify.sanitize(String(marked.parse(message.content)));
+    const html = sanitizeAiMarkdown(message.content);
     if (applyMode === "replace" && selection) {
       editor
         .chain()
@@ -175,11 +176,7 @@ export function AiMessageCard({
         )
         .run();
     } else if (current && selection) {
-      editor
-        .chain()
-        .focus()
-        .insertContentAt(selection.to, html)
-        .run();
+      editor.chain().focus().insertContentAt(selection.to, html).run();
     } else {
       editor.chain().focus().insertContent(html).run();
     }
@@ -232,7 +229,7 @@ export function AiMessageCard({
             p="xs"
           >
             <Text size="xs">
-              {t(getAiErrorTranslationKey(message.errorCode))}
+              {resolveAiErrorMessage(t, i18n, message.errorCode)}
             </Text>
           </Alert>
         )}
@@ -241,12 +238,12 @@ export function AiMessageCard({
             {t("ai.generationStopped")}
           </Text>
         )}
-        {message.retrievalOutcome === "failed" && (
+        {showRetrievalStatus && message.retrievalOutcome === "failed" && (
           <Text size="xs" c="orange">
             {t("ai.retrievalFallbackUsed")}
           </Text>
         )}
-        {message.retrievalOutcome === "empty" && (
+        {showRetrievalStatus && message.retrievalOutcome === "empty" && (
           <Text size="xs" c="dimmed">
             {t("ai.retrievalNoResults")}
           </Text>
@@ -330,7 +327,7 @@ export function AiMessageCard({
         </Text>
         <Group justify="flex-end" mt="lg">
           <Button variant="default" onClick={() => setApplyMode(null)}>
-            {t("Cancel")}
+            {t("ai.cancel")}
           </Button>
           <Button onClick={() => void confirmApply()}>{t("ai.apply")}</Button>
         </Group>

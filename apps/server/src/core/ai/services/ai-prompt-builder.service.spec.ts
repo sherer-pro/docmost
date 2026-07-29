@@ -31,6 +31,7 @@ describe('AiPromptBuilderService', () => {
       run,
       instructions: null,
       currentUserContent: 'current prompt',
+      contextSources: [],
       fileText: 'file context',
       fileSources: [{ sourceTitle: 'File' }],
       images: [],
@@ -74,19 +75,20 @@ describe('AiPromptBuilderService', () => {
         createdAt: new Date(2026, 0, 1, 0, index * 2 + 1),
       },
     ]).flat();
-    const messages = await createService(
-      chronological.slice().reverse(),
-    ).build({
-      run: { ...run, selectionText: null },
-      instructions: null,
-      currentUserContent: 'current',
-      fileText: '',
-      fileSources: [],
-      images: [],
-      retrievalSources: [],
-      contextWindow: 32_768,
-      maxOutputTokens: 2_048,
-    });
+    const messages = await createService(chronological.slice().reverse()).build(
+      {
+        run: { ...run, selectionText: null },
+        instructions: null,
+        currentUserContent: 'current',
+        contextSources: [],
+        fileText: '',
+        fileSources: [],
+        images: [],
+        retrievalSources: [],
+        contextWindow: 32_768,
+        maxOutputTokens: 2_048,
+      },
+    );
     const history = messages.slice(1, -1);
 
     expect(history).toHaveLength(20);

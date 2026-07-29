@@ -56,19 +56,36 @@ export interface AiChatFiles {
 
 export interface AiConversations {
   clientRequestId: string | null;
+  contextAttachmentIds: Generated<string[]>;
+  contextChatFileIds: Generated<string[]>;
+  contextFingerprint: Generated<string>;
+  contextRevision: Generated<number>;
   createdAt: Generated<Timestamp>;
   deletedAt: Timestamp | null;
   draft: string | null;
   id: Generated<string>;
+  includeCurrentDocument: Generated<boolean>;
   lastOpenedAt: Generated<Timestamp>;
   pageId: string;
   requestFingerprint: string | null;
   spaceId: string;
   title: string | null;
+  titleSource: string | null;
   updatedAt: Generated<Timestamp>;
   useSpaceSearch: Generated<boolean>;
   userId: string;
   workspaceId: string;
+}
+
+export interface AiConversationContextSources {
+  conversationId: string;
+  createdAt: Generated<Timestamp>;
+  id: Generated<string>;
+  pageId: string;
+  position: number;
+  sourceId: string;
+  sourceType: string;
+  updatedAt: Generated<Timestamp>;
 }
 
 export interface AiMessages {
@@ -104,6 +121,30 @@ export interface AiMessageSources {
   sourceUrl: string | null;
 }
 
+export interface AiRunContextSources {
+  contentSha256: string;
+  createdAt: Generated<Timestamp>;
+  id: Generated<string>;
+  markdownSnapshot: string;
+  origin: string;
+  pageId: string;
+  position: number;
+  runId: string;
+  sourceId: string;
+  sourceTitle: string;
+  sourceType: string;
+  sourceUrl: string | null;
+}
+
+export interface AiRunSourceDependencies {
+  contextSourceId: string | null;
+  createdAt: Generated<Timestamp>;
+  id: Generated<string>;
+  messageId: string;
+  pageId: string;
+  runId: string;
+}
+
 export interface AiRuns {
   attemptNo: Generated<number>;
   assistantMessageId: string;
@@ -112,6 +153,7 @@ export interface AiRuns {
   clientRequestId: string;
   completedAt: Timestamp | null;
   conversationId: string;
+  contextRevision: Generated<number>;
   createdAt: Generated<Timestamp>;
   chatFileIds: Generated<string[]>;
   documentSnapshot: string | null;
@@ -154,6 +196,43 @@ export interface AiFileUploadBatches {
   id: Generated<string>;
   idempotencyKey: string;
   requestFingerprint: string;
+  status: Generated<string>;
+  updatedAt: Generated<Timestamp>;
+  userId: string;
+  workspaceId: string;
+}
+
+export interface AiAuxRuns {
+  attemptNo: Generated<number>;
+  cancelRequestedAt: Timestamp | null;
+  clientRequestId: string | null;
+  commandId: string | null;
+  completedAt: Timestamp | null;
+  conversationId: string | null;
+  createdAt: Generated<Timestamp>;
+  enqueuedAt: Timestamp | null;
+  errorCode: string | null;
+  expiresAt: Generated<Timestamp>;
+  heartbeatAt: Timestamp | null;
+  id: Generated<string>;
+  inputTokens: Generated<Int8>;
+  inputSnapshot: string | null;
+  instruction: string | null;
+  kind: string;
+  outputTokens: Generated<Int8>;
+  pageId: string;
+  requestFingerprint: string;
+  reservedTokens: Generated<Int8>;
+  responseSnapshot: Generated<string>;
+  resultTitle: string | null;
+  selectionFrom: number | null;
+  selectionText: string | null;
+  selectionTo: number | null;
+  sequence: Generated<number>;
+  snapshotHash: string | null;
+  sourceRunId: string | null;
+  spaceId: string;
+  startedAt: Timestamp | null;
   status: Generated<string>;
   updatedAt: Generated<Timestamp>;
   userId: string;
@@ -329,7 +408,6 @@ export interface Favorites {
   userId: string;
   workspaceId: string;
 }
-
 
 export interface Databases {
   createdAt: Generated<Timestamp>;
@@ -762,12 +840,16 @@ export interface Watchers {
 }
 
 export interface DB {
+  aiAuxRuns: AiAuxRuns;
   aiChatFiles: AiChatFiles;
+  aiConversationContextSources: AiConversationContextSources;
   aiConversations: AiConversations;
   aiFileUploadBatches: AiFileUploadBatches;
   aiMessages: AiMessages;
   aiMessageSources: AiMessageSources;
+  aiRunContextSources: AiRunContextSources;
   aiRuns: AiRuns;
+  aiRunSourceDependencies: AiRunSourceDependencies;
   aiSpaceConfigs: AiSpaceConfigs;
   apiKeys: ApiKeys;
   attachments: Attachments;

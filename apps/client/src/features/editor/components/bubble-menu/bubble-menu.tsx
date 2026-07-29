@@ -29,9 +29,11 @@ import {
   type EditorToolbarItem,
   useInlineTextToolbarItems,
 } from "@/features/editor/components/bubble-menu/toolbar-items";
+import { AiSelectionActionButton } from "@/features/ai/components/ai-selection-action";
 
 type EditorBubbleMenuProps = Omit<BubbleMenuProps, "children" | "editor"> & {
   editor: Editor | null;
+  pageId?: string;
   spaceId?: string;
   dictionaryEnabled?: boolean;
   canManageDictionary?: boolean;
@@ -145,92 +147,104 @@ export const EditorBubbleMenu: FC<EditorBubbleMenuProps> = (props) => {
         style={{ zIndex: 200, position: "relative" }}
       >
         <div className={classes.bubbleMenu}>
-        <NodeSelector
-          editor={props.editor}
-          isOpen={isNodeSelectorOpen}
-          setIsOpen={() => {
-            setIsNodeSelectorOpen(!isNodeSelectorOpen);
-            setIsTextAlignmentOpen(false);
-            setIsLinkSelectorOpen(false);
-            setIsColorSelectorOpen(false);
-          }}
-        />
+          <NodeSelector
+            editor={props.editor}
+            isOpen={isNodeSelectorOpen}
+            setIsOpen={() => {
+              setIsNodeSelectorOpen(!isNodeSelectorOpen);
+              setIsTextAlignmentOpen(false);
+              setIsLinkSelectorOpen(false);
+              setIsColorSelectorOpen(false);
+            }}
+          />
 
-        <TextAlignmentSelector
-          editor={props.editor}
-          isOpen={isTextAlignmentSelectorOpen}
-          setIsOpen={() => {
-            setIsTextAlignmentOpen(!isTextAlignmentSelectorOpen);
-            setIsNodeSelectorOpen(false);
-            setIsLinkSelectorOpen(false);
-            setIsColorSelectorOpen(false);
-          }}
-        />
+          <TextAlignmentSelector
+            editor={props.editor}
+            isOpen={isTextAlignmentSelectorOpen}
+            setIsOpen={() => {
+              setIsTextAlignmentOpen(!isTextAlignmentSelectorOpen);
+              setIsNodeSelectorOpen(false);
+              setIsLinkSelectorOpen(false);
+              setIsColorSelectorOpen(false);
+            }}
+          />
 
-        <ActionIcon.Group>
-          {textItems.map((item) => (
-            <ToolbarActionButton
-              key={item.name}
-              item={item}
-              activeClassName={classes.active}
+          <ActionIcon.Group>
+            {textItems.map((item) => (
+              <ToolbarActionButton
+                key={item.name}
+                item={item}
+                activeClassName={classes.active}
+              />
+            ))}
+          </ActionIcon.Group>
+
+          <LinkSelector
+            editor={props.editor}
+            isOpen={isLinkSelectorOpen}
+            setIsOpen={(value) => {
+              setIsLinkSelectorOpen(value);
+              setIsNodeSelectorOpen(false);
+              setIsTextAlignmentOpen(false);
+              setIsColorSelectorOpen(false);
+            }}
+          />
+
+          <ColorSelector
+            editor={props.editor}
+            isOpen={isColorSelectorOpen}
+            setIsOpen={() => {
+              setIsColorSelectorOpen(!isColorSelectorOpen);
+              setIsNodeSelectorOpen(false);
+              setIsTextAlignmentOpen(false);
+              setIsLinkSelectorOpen(false);
+            }}
+          />
+
+          {props.editor && props.pageId && props.spaceId && (
+            <AiSelectionActionButton
+              editor={props.editor}
+              pageId={props.pageId}
+              spaceId={props.spaceId}
             />
-          ))}
-        </ActionIcon.Group>
+          )}
 
-        <LinkSelector
-          editor={props.editor}
-          isOpen={isLinkSelectorOpen}
-          setIsOpen={(value) => {
-            setIsLinkSelectorOpen(value);
-            setIsNodeSelectorOpen(false);
-            setIsTextAlignmentOpen(false);
-            setIsColorSelectorOpen(false);
-          }}
-        />
+          {props.spaceId &&
+            props.dictionaryEnabled &&
+            props.canManageDictionary && (
+              <Tooltip
+                label={t("Add to dictionary")}
+                withArrow
+                withinPortal={false}
+              >
+                <ActionIcon
+                  variant="default"
+                  size="lg"
+                  radius="6px"
+                  aria-label={t("Add to dictionary")}
+                  style={{ border: "none" }}
+                  onClick={openDictionaryModal}
+                >
+                  <IconBook2 size={16} stroke={2} />
+                </ActionIcon>
+              </Tooltip>
+            )}
 
-        <ColorSelector
-          editor={props.editor}
-          isOpen={isColorSelectorOpen}
-          setIsOpen={() => {
-            setIsColorSelectorOpen(!isColorSelectorOpen);
-            setIsNodeSelectorOpen(false);
-            setIsTextAlignmentOpen(false);
-            setIsLinkSelectorOpen(false);
-          }}
-        />
-
-        {props.spaceId &&
-          props.dictionaryEnabled &&
-          props.canManageDictionary && (
-            <Tooltip label={t("Add to dictionary")} withArrow withinPortal={false}>
+          {canCreateInlineComments && (
+            <Tooltip label={t(commentItem.name)} withArrow withinPortal={false}>
               <ActionIcon
                 variant="default"
                 size="lg"
                 radius="6px"
-                aria-label={t("Add to dictionary")}
+                aria-label={t(commentItem.name)}
+                className={clsx(commentItem.isActive && classes.active)}
                 style={{ border: "none" }}
-                onClick={openDictionaryModal}
+                onClick={commentItem.command}
               >
-                <IconBook2 size={16} stroke={2} />
+                <IconMessage size={16} stroke={2} />
               </ActionIcon>
             </Tooltip>
           )}
-
-        {canCreateInlineComments && (
-          <Tooltip label={t(commentItem.name)} withArrow withinPortal={false}>
-            <ActionIcon
-              variant="default"
-              size="lg"
-              radius="6px"
-              aria-label={t(commentItem.name)}
-              className={clsx(commentItem.isActive && classes.active)}
-              style={{ border: "none" }}
-              onClick={commentItem.command}
-            >
-              <IconMessage size={16} stroke={2} />
-            </ActionIcon>
-          </Tooltip>
-        )}
         </div>
       </BubbleMenu>
 

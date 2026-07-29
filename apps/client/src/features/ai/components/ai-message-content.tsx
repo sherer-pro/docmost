@@ -1,10 +1,9 @@
 import { useMemo } from "react";
 import { Anchor, Box, Group, Paper, Stack, Text, Tooltip } from "@mantine/core";
 import { IconFile, IconTable, IconTextCaption } from "@tabler/icons-react";
-import DOMPurify from "dompurify";
-import { marked } from "marked";
 import { AiCitation } from "@/features/ai/types/ai.types.ts";
 import { safeSourceUrl } from "@/features/ai/utils/source-url.ts";
+import { sanitizeAiMarkdown } from "@/features/ai/utils/ai-markdown.ts";
 import classes from "./ai-panel.module.css";
 import { useTranslation } from "react-i18next";
 
@@ -12,7 +11,7 @@ function SourceIcon({ sourceType }: Pick<AiCitation, "sourceType">) {
   if (sourceType === "attachment" || sourceType === "chat_file") {
     return <IconFile size={14} aria-hidden />;
   }
-  if (sourceType === "database_row") {
+  if (sourceType === "database" || sourceType === "database_row") {
     return <IconTable size={14} aria-hidden />;
   }
   return <IconTextCaption size={14} aria-hidden />;
@@ -26,13 +25,7 @@ export function AiMessageContent({
   sources?: AiCitation[];
 }) {
   const { t } = useTranslation();
-  const html = useMemo(
-    () =>
-      DOMPurify.sanitize(String(marked.parse(content || "")), {
-        USE_PROFILES: { html: true },
-      }),
-    [content],
-  );
+  const html = useMemo(() => sanitizeAiMarkdown(content || ""), [content]);
   const sortedSources = useMemo(
     () => [...sources].sort((left, right) => left.position - right.position),
     [sources],

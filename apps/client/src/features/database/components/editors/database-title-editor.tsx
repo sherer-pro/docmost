@@ -1,16 +1,18 @@
-import '@/features/editor/styles/index.css';
-import React, { useCallback, useEffect, useRef } from 'react';
-import { EditorContent, useEditor } from '@tiptap/react';
-import { Document } from '@tiptap/extension-document';
-import { Heading } from '@tiptap/extension-heading';
-import { Text } from '@tiptap/extension-text';
-import { Placeholder } from '@tiptap/extension-placeholder';
-import { History } from '@tiptap/extension-history';
-import { useDebouncedCallback } from '@mantine/hooks';
-import { useTranslation } from 'react-i18next';
-import { searchSpotlight } from '@/features/search/constants.ts';
-import { shouldApplyFocusSafeTitleSync } from '@/features/editor/utils/title-editor-sync.ts';
-import EmojiCommand from '@/features/editor/extensions/emoji-command.ts';
+import "@/features/editor/styles/index.css";
+import React, { useCallback, useEffect, useRef } from "react";
+import { EditorContent, useEditor } from "@tiptap/react";
+import { Document } from "@tiptap/extension-document";
+import { Heading } from "@tiptap/extension-heading";
+import { Text } from "@tiptap/extension-text";
+import { Placeholder } from "@tiptap/extension-placeholder";
+import { History } from "@tiptap/extension-history";
+import { useDebouncedCallback } from "@mantine/hooks";
+import { useTranslation } from "react-i18next";
+import { searchSpotlight } from "@/features/search/constants.ts";
+import { shouldApplyFocusSafeTitleSync } from "@/features/editor/utils/title-editor-sync.ts";
+import EmojiCommand from "@/features/editor/extensions/emoji-command.ts";
+import { useAtom } from "jotai";
+import { titleEditorAtom } from "@/features/editor/atoms/editor-atoms.ts";
 
 export interface DatabaseTitleEditorProps {
   databaseId: string;
@@ -41,6 +43,7 @@ export function DatabaseTitleEditor({
 }: DatabaseTitleEditorProps) {
   const { t } = useTranslation();
   const lastCommittedRef = useRef(value);
+  const [, setGlobalTitleEditor] = useAtom(titleEditorAtom);
   const didInitFocusRef = useRef(false);
   const lastSyncedDatabaseIdRef = useRef(databaseId);
 
@@ -66,14 +69,14 @@ export function DatabaseTitleEditor({
   const titleEditor = useEditor({
     extensions: [
       Document.extend({
-        content: 'heading',
+        content: "heading",
       }),
       Heading.configure({
         levels: [1],
       }),
       Text,
       Placeholder.configure({
-        placeholder: t('database.editor.untitled'),
+        placeholder: t("database.editor.untitled"),
         showOnlyWhenEditable: false,
       }),
       History.configure({
@@ -101,12 +104,12 @@ export function DatabaseTitleEditor({
           return false;
         },
         keydown: (_view, event) => {
-          if ((event.ctrlKey || event.metaKey) && event.code === 'KeyS') {
+          if ((event.ctrlKey || event.metaKey) && event.code === "KeyS") {
             event.preventDefault();
             return true;
           }
 
-          if ((event.ctrlKey || event.metaKey) && event.code === 'KeyK') {
+          if ((event.ctrlKey || event.metaKey) && event.code === "KeyK") {
             searchSpotlight.open();
             return true;
           }
@@ -124,7 +127,7 @@ export function DatabaseTitleEditor({
       return;
     }
 
-    const nextTitle = value ?? '';
+    const nextTitle = value ?? "";
     const currentTitle = titleEditor.getText();
     const { from, to } = titleEditor.state.selection;
 
@@ -153,6 +156,19 @@ export function DatabaseTitleEditor({
       return;
     }
 
+    setGlobalTitleEditor(titleEditor);
+    return () => {
+      setGlobalTitleEditor((current) =>
+        current === titleEditor ? null : current,
+      );
+    };
+  }, [setGlobalTitleEditor, titleEditor]);
+
+  useEffect(() => {
+    if (!titleEditor) {
+      return;
+    }
+
     titleEditor.setEditable(editable);
   }, [editable, titleEditor]);
 
@@ -168,7 +184,7 @@ export function DatabaseTitleEditor({
         return;
       }
 
-      titleEditor.commands.focus('end');
+      titleEditor.commands.focus("end");
     }, 300);
 
     return () => {

@@ -1,18 +1,13 @@
 import {
   ActionIcon,
   Alert,
-  Badge,
   Box,
   Button,
   Checkbox,
-  Divider,
-  FileButton,
   Group,
-  Indicator,
   Loader,
   Menu,
   Modal,
-  Popover,
   ScrollArea,
   Select,
   Stack,
@@ -26,9 +21,7 @@ import {
   IconCheck,
   IconChevronDown,
   IconDots,
-  IconFileText,
   IconMessagePlus,
-  IconPaperclip,
   IconPencil,
   IconPlayerStop,
   IconPlus,
@@ -36,14 +29,16 @@ import {
   IconSend,
   IconSparkles,
   IconTrash,
-  IconUpload,
 } from "@tabler/icons-react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { notifications } from "@mantine/notifications";
 import { modals } from "@mantine/modals";
-import { pageEditorAtom } from "@/features/editor/atoms/editor-atoms.ts";
+import {
+  pageEditorAtom,
+  titleEditorAtom,
+} from "@/features/editor/atoms/editor-atoms.ts";
 import {
   aiDocumentContextAtom,
   aiLastEditorContextAtom,
@@ -55,6 +50,8 @@ import {
   useAiMessagesQuery,
   useAiPageAttachmentsQuery,
   useAiSpaceStatusQuery,
+  useAiConversationContextQuery,
+  useUpdateAiConversationContextMutation,
   useCancelAiRunMutation,
   useCreateAiConversationMutation,
   useDeleteAiChatFileMutation,
@@ -68,6 +65,8 @@ import {
 } from "@/features/ai/queries/ai-query.ts";
 import {
   AiConversation,
+  AiConversationContext,
+  AiContextSource,
   AiMessage,
   AiStreamingRun,
 } from "@/features/ai/types/ai.types.ts";
@@ -79,14 +78,28 @@ import {
   getPersistedActiveRun,
   getLatestAiConversation,
   mergeAiQuickCommands,
+  shouldShowAiRetrievalUi,
   shouldShowAiPanelLoadFailure,
   sortAiMessagesChronologically,
 } from "@/features/ai/utils/ai-policies.ts";
+import { resolveAiErrorMessage } from "@/features/ai/utils/ai-policies.ts";
+import { AiContextPicker } from "./ai-context-picker.tsx";
+import { useQueryClient } from "@tanstack/react-query";
+import { useEditorState } from "@tiptap/react";
+import { getAiConversationContext } from "@/features/ai/services/ai-service.ts";
+import { AI_QUERY_KEYS } from "@/features/ai/queries/ai-query.ts";
 
 export function AiPanel() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const queryClient = useQueryClient();
   const documentContext = useAtomValue(aiDocumentContextAtom);
   const editor = useAtomValue(pageEditorAtom);
+  const titleEditor = useAtomValue(titleEditorAtom);
+  const liveDocumentTitle = useEditorState({
+    editor: titleEditor,
+    selector: ({ editor: currentTitleEditor }) =>
+      currentTitleEditor?.getText().trim() ?? "",
+  });
   const streamingRuns = useAtomValue(aiStreamingRunsAtom);
   const setStreamingRuns = useSetAtom(aiStreamingRunsAtom);
   const editorContexts = useAtomValue(aiLastEditorContextAtom);
@@ -102,6 +115,7 @@ export function AiPanel() {
     (conversation) => conversation.id === activeConversationId,
   );
   const messagesQuery = useAiMessagesQuery(activeConversationId);
+  const contextQuery = useAiConversationContextQuery(activeConversationId);
   const filesQuery = useAiChatFilesQuery(activeConversationId);
   const pageAttachmentsQuery = useAiPageAttachmentsQuery(pageId);
   const createConversation = useCreateAiConversationMutation();
@@ -110,21 +124,19 @@ export function AiPanel() {
   const deleteConversation = useDeleteAiConversationMutation(pageId);
   const sendMessage = useSendAiMessageMutation();
   const uploadFilesMutation = useUploadAiChatFilesMutation();
+  const updateContext = useUpdateAiConversationContextMutation();
   const cancelRun = useCancelAiRunMutation();
   const retryRun = useRetryAiRunMutation(activeConversationId);
   const regenerateMessage =
     useRegenerateAiMessageMutation(activeConversationId);
   const deleteFile = useDeleteAiChatFileMutation(activeConversationId);
   const [draft, setDraft] = useState("");
-  const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
-  const [selectedAttachmentIds, setSelectedAttachmentIds] = useState<string[]>(
-    [],
-  );
   const [useSpaceSearch, setUseSpaceSearch] = useState(false);
   const [renameOpened, setRenameOpened] = useState(false);
   const [renameValue, setRenameValue] = useState("");
   const draftHydratedFor = useRef<string | null>(null);
   const draftSaveChain = useRef<Promise<unknown>>(Promise.resolve());
+  const contextSaveChain = useRef<Promise<AiConversationContext> | null>(null);
   const viewportRef = useRef<HTMLDivElement | null>(null);
 
   const activeRuns = useMemo(
@@ -144,11 +156,12 @@ export function AiPanel() {
     persistedActiveRun;
   const chatFiles = filesQuery.data ?? [];
   const pageAttachments = pageAttachmentsQuery.data ?? [];
-  const selectedContextCount =
-    selectedFileIds.length + selectedAttachmentIds.length;
-  const selectedFilesAreReady = selectedFileIds.every((fileId) =>
+  const context = contextQuery.data;
+  const selectedFilesAreReady = (context?.fileIds ?? []).every((fileId) =>
     chatFiles.some((file) => file.id === fileId && file.status === "ready"),
   );
+  const documentTitle =
+    liveDocumentTitle || documentContext?.title?.trim() || t("ai.untitled");
 
   useEffect(() => {
     if (!persistedActiveRun) {
@@ -182,13 +195,13 @@ export function AiPanel() {
       setDraft("");
       setUseSpaceSearch(false);
       draftHydratedFor.current = null;
+      contextSaveChain.current = null;
       return;
     }
     draftHydratedFor.current = activeConversation.id;
     setDraft(activeConversation.draft ?? "");
     setUseSpaceSearch(Boolean(activeConversation.useSpaceSearch));
-    setSelectedFileIds([]);
-    setSelectedAttachmentIds([]);
+    contextSaveChain.current = null;
   }, [activeConversation?.id]);
 
   useEffect(() => {
@@ -237,6 +250,54 @@ export function AiPanel() {
     return conversation;
   };
 
+  const loadContext = async (
+    conversation: AiConversation,
+  ): Promise<AiConversationContext> => {
+    const pending = contextSaveChain.current;
+    if (pending) return pending;
+    const cached = queryClient.getQueryData<AiConversationContext>(
+      AI_QUERY_KEYS.context(conversation.id),
+    );
+    if (cached) return cached;
+    return queryClient.fetchQuery({
+      queryKey: AI_QUERY_KEYS.context(conversation.id),
+      queryFn: () => getAiConversationContext(conversation.id),
+    });
+  };
+
+  const saveContext = async (
+    transform: (current: AiConversationContext) => AiConversationContext,
+  ): Promise<AiConversationContext> => {
+    const conversation = await ensureConversation();
+    const previous = contextSaveChain.current;
+    const operation = (previous ?? loadContext(conversation))
+      .catch(() => getAiConversationContext(conversation.id))
+      .then((current) => {
+        const next = transform(current);
+        return updateContext.mutateAsync({
+          conversationId: conversation.id,
+          data: {
+            expectedRevision: current.revision,
+            includeCurrentDocument: next.includeCurrentDocument,
+            sources: next.sources.map((source) => ({
+              sourceType: source.sourceType,
+              sourceId: source.sourceId,
+            })),
+            fileIds: next.fileIds,
+            attachmentIds: next.attachmentIds,
+          },
+        });
+      });
+    contextSaveChain.current = operation;
+    try {
+      return await operation;
+    } finally {
+      if (contextSaveChain.current === operation) {
+        contextSaveChain.current = null;
+      }
+    }
+  };
+
   const submit = async (content: string) => {
     const normalizedContent = content.trim();
     if (
@@ -254,7 +315,7 @@ export function AiPanel() {
         });
       } else if (!selectedFilesAreReady) {
         notifications.show({
-          message: t("Uploading file"),
+          message: t("ai.fileUploading"),
           color: "blue",
         });
       }
@@ -263,6 +324,7 @@ export function AiPanel() {
 
     try {
       const conversation = await ensureConversation();
+      const savedContext = await loadContext(conversation);
       const editorContext = captureAiEditorContext(
         editor,
         documentContext.pageId,
@@ -272,10 +334,9 @@ export function AiPanel() {
         content: normalizedContent,
         pageId: documentContext.pageId,
         clientRequestId: crypto.randomUUID(),
+        contextRevision: savedContext.revision,
         useSpaceSearch:
           useSpaceSearch && availabilityQuery.data?.retrievalAvailable === true,
-        fileIds: selectedFileIds,
-        attachmentIds: selectedAttachmentIds,
         editorContext,
       });
 
@@ -286,15 +347,17 @@ export function AiPanel() {
         [result.assistantMessage.id]: editorContext,
       }));
       setDraft("");
-      setSelectedFileIds([]);
-      setSelectedAttachmentIds([]);
       updateConversation.mutate({
         conversationId: conversation.id,
         data: { draft: "" },
       });
     } catch (error) {
       notifications.show({
-        message: error?.["response"]?.data?.message ?? t("ai.sendFailed"),
+        message: resolveAiErrorMessage(
+          t,
+          i18n,
+          error?.["response"]?.data?.code,
+        ),
         color: "red",
       });
     }
@@ -340,7 +403,7 @@ export function AiPanel() {
     modals.openConfirmModal({
       title: t("ai.deleteChat"),
       children: <Text size="sm">{t("ai.deleteChatConfirm")}</Text>,
-      labels: { confirm: t("Delete"), cancel: t("Cancel") },
+      labels: { confirm: t("ai.delete"), cancel: t("ai.cancel") },
       confirmProps: { color: "red" },
       onConfirm: async () => {
         await deleteConversation.mutateAsync(activeConversation.id);
@@ -384,12 +447,21 @@ export function AiPanel() {
         files,
         idempotencyKey: crypto.randomUUID(),
       });
-      setSelectedFileIds((current) => [
-        ...new Set([...current, ...batch.files.map((file) => file.id)]),
-      ]);
+      const uploadedIds = batch.files.map((file) => file.id);
+      await saveContext((current) => ({
+        ...current,
+        fileIds: [...new Set([...current.fileIds, ...uploadedIds])].slice(
+          0,
+          10,
+        ),
+      }));
     } catch (error) {
       notifications.show({
-        message: error?.["response"]?.data?.message ?? t("ai.uploadFailed"),
+        message: resolveAiErrorMessage(
+          t,
+          i18n,
+          error?.["response"]?.data?.code ?? "ai_file_upload_failed",
+        ),
         color: "red",
       });
     }
@@ -403,6 +475,67 @@ export function AiPanel() {
         data: { useSpaceSearch: checked },
       });
     }
+  };
+
+  const toggleCurrentDocument = (included: boolean) =>
+    saveContext((current) => ({
+      ...current,
+      includeCurrentDocument: included,
+    }));
+
+  const addContextSource = (source: AiContextSource) =>
+    saveContext((current) => ({
+      ...current,
+      sources: [
+        ...current.sources,
+        { ...source, position: current.sources.length },
+      ]
+        .filter(
+          (item, index, all) =>
+            all.findIndex(
+              (candidate) =>
+                candidate.sourceType === item.sourceType &&
+                candidate.sourceId === item.sourceId,
+            ) === index,
+        )
+        .slice(0, 10),
+    }));
+
+  const removeContextSource = (source: AiContextSource) =>
+    saveContext((current) => ({
+      ...current,
+      sources: current.sources
+        .filter(
+          (item) =>
+            !(
+              item.sourceType === source.sourceType &&
+              item.sourceId === source.sourceId
+            ),
+        )
+        .map((item, position) => ({ ...item, position })),
+    }));
+
+  const toggleContextFile = (fileId: string, included: boolean) =>
+    saveContext((current) => ({
+      ...current,
+      fileIds: included
+        ? [...new Set([...current.fileIds, fileId])].slice(0, 10)
+        : current.fileIds.filter((id) => id !== fileId),
+    }));
+
+  const toggleContextAttachment = (attachmentId: string, included: boolean) =>
+    saveContext((current) => ({
+      ...current,
+      attachmentIds: included
+        ? [...new Set([...current.attachmentIds, attachmentId])].slice(0, 20)
+        : current.attachmentIds.filter((id) => id !== attachmentId),
+    }));
+
+  const removeChatFile = (fileId: string) => {
+    void saveContext((current) => ({
+      ...current,
+      fileIds: current.fileIds.filter((id) => id !== fileId),
+    })).finally(() => deleteFile.mutate(fileId));
   };
 
   if (!documentContext) {
@@ -449,7 +582,7 @@ export function AiPanel() {
               void conversationsQuery.refetch();
             }}
           >
-            {t("Try again")}
+            {t("ai.tryAgain")}
           </Button>
         </Alert>
       </Stack>
@@ -482,15 +615,16 @@ export function AiPanel() {
   const latestAssistantMessageId = messages
     .slice()
     .reverse()
-    .find(
-    (message) => message.role === "assistant",
-  )?.id;
-  const spaceSearchReady = availability.retrievalAvailable;
+    .find((message) => message.role === "assistant")?.id;
+  const spaceSearchReady = shouldShowAiRetrievalUi(
+    availability.retrievalAvailable,
+  );
   const quickCommands = mergeAiQuickCommands(
     DEFAULT_AI_QUICK_COMMANDS.map((command, position) => ({
       id: command.id,
       label: t(command.translationKey),
-      prompt: command.prompt,
+      prompt: t(command.promptTranslationKey),
+      description: t(command.descriptionTranslationKey),
       enabled: true,
       position,
     })),
@@ -558,12 +692,6 @@ export function AiPanel() {
         </Menu>
       </Group>
 
-      {!spaceSearchReady && useSpaceSearch && (
-        <Alert color="yellow" py="xs">
-          {t("ai.spaceSearchUnavailable")}
-        </Alert>
-      )}
-
       <ScrollArea
         viewportRef={viewportRef}
         className={classes.messages}
@@ -589,7 +717,7 @@ export function AiPanel() {
                 mt="xs"
                 onClick={() => void messagesQuery.refetch()}
               >
-                {t("Try again")}
+                {t("ai.tryAgain")}
               </Button>
             </Alert>
           )}
@@ -666,6 +794,7 @@ export function AiPanel() {
                         })
                     : undefined
                 }
+                showRetrievalStatus={spaceSearchReady}
               />
             );
           })}
@@ -699,197 +828,74 @@ export function AiPanel() {
             </Menu.Target>
             <Menu.Dropdown className={classes.quickCommandsMenu}>
               {quickCommands.map((command) => (
-                <Menu.Item
+                <Tooltip
                   key={command.id}
-                  leftSection={<IconSparkles size={15} />}
-                  onClick={() => handleQuickCommand(command.prompt)}
+                  label={command.description || command.prompt}
+                  position="right"
+                  withArrow
                 >
-                  {command.label}
-                </Menu.Item>
+                  <Menu.Item
+                    leftSection={<IconSparkles size={15} />}
+                    onClick={() => handleQuickCommand(command.prompt)}
+                    aria-description={command.description || command.prompt}
+                  >
+                    {command.label}
+                  </Menu.Item>
+                </Tooltip>
               ))}
             </Menu.Dropdown>
           </Menu>
 
-          <Menu position="top-start" withinPortal>
-            <Menu.Target>
-              <Button
-                variant="subtle"
-                size="compact-sm"
-                leftSection={
-                  useSpaceSearch && spaceSearchReady ? (
-                    <IconSearch size={16} />
-                  ) : (
-                    <IconFileText size={16} />
-                  )
-                }
-                rightSection={<IconChevronDown size={13} />}
-                disabled={Boolean(pendingRun)}
-                className={classes.toolbarButton}
-              >
-                {useSpaceSearch && spaceSearchReady
-                  ? t("ai.searchSpace")
-                  : t("ai.currentDocumentOnly")}
-              </Button>
-            </Menu.Target>
-            <Menu.Dropdown>
-              <Menu.Item
-                leftSection={<IconFileText size={15} />}
-                rightSection={
-                  !useSpaceSearch ? <IconCheck size={15} /> : undefined
-                }
-                onClick={() => toggleSpaceSearch(false)}
-              >
-                {t("ai.currentDocumentOnly")}
-              </Menu.Item>
-              <Menu.Item
-                leftSection={<IconSearch size={15} />}
-                rightSection={
-                  useSpaceSearch && spaceSearchReady ? (
-                    <IconCheck size={15} />
-                  ) : undefined
-                }
-                disabled={!spaceSearchReady}
-                onClick={() => toggleSpaceSearch(true)}
-              >
-                {t("ai.searchSpace")}
-              </Menu.Item>
-              {!spaceSearchReady && (
-                <Menu.Label>{t("ai.spaceSearchUnavailable")}</Menu.Label>
-              )}
-            </Menu.Dropdown>
-          </Menu>
-
-          <Popover width={300} position="top-end" shadow="md" withinPortal>
-            <Popover.Target>
-              <Indicator
-                inline
-                size={16}
-                label={selectedContextCount}
-                disabled={selectedContextCount === 0}
-                offset={3}
-              >
-                <ActionIcon
+          {spaceSearchReady && (
+            <Menu position="top-start" withinPortal>
+              <Menu.Target>
+                <Button
                   variant="subtle"
-                  size={34}
-                  aria-label={t("ai.attachFiles")}
+                  size="compact-sm"
+                  leftSection={<IconSearch size={16} />}
+                  rightSection={
+                    useSpaceSearch ? <IconCheck size={13} /> : undefined
+                  }
+                  disabled={Boolean(pendingRun)}
+                  className={classes.toolbarButton}
                 >
-                  <IconPaperclip size={18} />
-                </ActionIcon>
-              </Indicator>
-            </Popover.Target>
-            <Popover.Dropdown>
-              <Stack gap="xs">
-                <FileButton
-                  onChange={(files) => void uploadFiles(files)}
-                  accept=".pdf,.docx,.txt,.md,.jpg,.jpeg,.png,.webp"
-                  multiple
-                >
-                  {(props) => (
-                    <Button
-                      {...props}
-                      variant="light"
-                      size="sm"
-                      fullWidth
-                      leftSection={<IconUpload size={16} />}
-                    >
-                      {t("ai.attachFiles")}
-                    </Button>
-                  )}
-                </FileButton>
+                  {t("ai.searchSpace")}
+                </Button>
+              </Menu.Target>
+              <Menu.Dropdown>
+                <Menu.Item closeMenuOnClick={false}>
+                  <Checkbox
+                    checked={useSpaceSearch}
+                    label={t("ai.spaceSearchToggle")}
+                    onChange={(event) =>
+                      toggleSpaceSearch(event.currentTarget.checked)
+                    }
+                  />
+                </Menu.Item>
+              </Menu.Dropdown>
+            </Menu>
+          )}
 
-                {filesQuery.isLoading && (
-                  <Group justify="center" py="xs">
-                    <Loader size="xs" />
-                  </Group>
-                )}
-
-                {chatFiles.length > 0 && (
-                  <>
-                    <Divider
-                      label={t("ai.uploadedFiles")}
-                      labelPosition="left"
-                    />
-                    <Stack gap={4} className={classes.contextFileList}>
-                      {chatFiles.map((file) => (
-                        <Group
-                          key={file.id}
-                          gap={4}
-                          wrap="nowrap"
-                          className={classes.contextFileRow}
-                        >
-                          <Checkbox
-                            size="xs"
-                            checked={selectedFileIds.includes(file.id)}
-                            disabled={file.status !== "ready"}
-                            className={classes.contextFileCheckbox}
-                            onChange={(event) =>
-                              setSelectedFileIds((current) =>
-                                event.currentTarget.checked
-                                  ? [...new Set([...current, file.id])]
-                                  : current.filter((id) => id !== file.id),
-                              )
-                            }
-                            label={file.name}
-                          />
-                          {file.status !== "ready" && (
-                            <Badge
-                              variant="light"
-                              color={file.status === "failed" ? "red" : "blue"}
-                              size="xs"
-                            >
-                              {t(`ai.fileStatus.${file.status}`)}
-                            </Badge>
-                          )}
-                          <ActionIcon
-                            variant="subtle"
-                            color="red"
-                            size={28}
-                            aria-label={t("ai.deleteFile")}
-                            loading={deleteFile.isPending}
-                            onClick={() => {
-                              setSelectedFileIds((current) =>
-                                current.filter((id) => id !== file.id),
-                              );
-                              deleteFile.mutate(file.id);
-                            }}
-                          >
-                            <IconTrash size={14} />
-                          </ActionIcon>
-                        </Group>
-                      ))}
-                    </Stack>
-                  </>
-                )}
-
-                {pageAttachments.length > 0 && (
-                  <>
-                    <Divider
-                      label={t("ai.pageAttachments")}
-                      labelPosition="left"
-                    />
-                    <Stack gap={6} className={classes.contextFileList}>
-                      {pageAttachments.map((file) => (
-                        <Checkbox
-                          key={file.id}
-                          size="xs"
-                          checked={selectedAttachmentIds.includes(file.id)}
-                          className={classes.contextFileCheckbox}
-                          onChange={(event) =>
-                            setSelectedAttachmentIds((current) =>
-                              event.currentTarget.checked
-                                ? [...new Set([...current, file.id])]
-                                : current.filter((id) => id !== file.id),
-                            )
-                          }
-                          label={file.fileName}
-                        />
-                      ))}
-                    </Stack>
-                  </>
-                )}
-              </Stack>
-            </Popover.Dropdown>
-          </Popover>
+          <AiContextPicker
+            conversationId={activeConversationId}
+            spaceId={documentContext.spaceId}
+            documentTitle={documentTitle}
+            includeCurrentDocument={context?.includeCurrentDocument ?? true}
+            sources={context?.sources ?? []}
+            fileIds={context?.fileIds ?? []}
+            attachmentIds={context?.attachmentIds ?? []}
+            chatFiles={chatFiles}
+            pageAttachments={pageAttachments}
+            loadingFiles={filesQuery.isLoading}
+            saving={updateContext.isPending}
+            onToggleCurrentDocument={toggleCurrentDocument}
+            onAddSource={addContextSource}
+            onRemoveSource={removeContextSource}
+            onToggleFile={toggleContextFile}
+            onToggleAttachment={toggleContextAttachment}
+            onUpload={uploadFiles}
+            onDeleteFile={removeChatFile}
+          />
         </Group>
 
         <Textarea
@@ -968,7 +974,7 @@ export function AiPanel() {
         />
         <Group justify="flex-end" mt="lg">
           <Button variant="default" onClick={() => setRenameOpened(false)}>
-            {t("Cancel")}
+            {t("ai.cancel")}
           </Button>
           <Button
             leftSection={<IconCheck size={16} />}
@@ -976,7 +982,7 @@ export function AiPanel() {
             loading={updateConversation.isPending}
             onClick={() => void saveRename()}
           >
-            {t("Save")}
+            {t("ai.save")}
           </Button>
         </Group>
       </Modal>

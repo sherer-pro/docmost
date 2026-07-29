@@ -11,6 +11,8 @@ import { AiFileService } from './ai-file.service';
 import { AiPromptBuilderService } from './ai-prompt-builder.service';
 import { AiRunEventService } from './ai-run-event.service';
 import { OpenAiCompatibleProviderService } from './openai-compatible-provider.service';
+import { AiContextService } from './ai-context.service';
+import { AiAuxRunService } from './ai-aux-run.service';
 
 class AiRunCancelledError extends Error {}
 
@@ -27,6 +29,8 @@ export class AiRunExecutionService {
     private readonly provider: OpenAiCompatibleProviderService,
     private readonly promptBuilder: AiPromptBuilderService,
     private readonly events: AiRunEventService,
+    private readonly contexts: AiContextService,
+    private readonly auxRuns: AiAuxRunService,
   ) {}
 
   async execute(runId: string): Promise<void> {
@@ -90,6 +94,14 @@ export class AiRunExecutionService {
     let lastFlush = Date.now();
     let lastHeartbeat = 0;
     try {
+      const contextSources = await this.contexts.resolveRunContext(
+        run,
+        user as User,
+        Math.min(
+          500_000,
+          Math.max(16_000, (config.contextWindow - config.maxOutputTokens) * 2),
+        ),
+      );
       const fileContext = await this.files.buildContext(
         run.chatFileIds,
         run.attachmentIds,
@@ -149,6 +161,7 @@ export class AiRunExecutionService {
         currentUserContent: userMessage.content,
         fileText: fileContext.text,
         fileSources: fileContext.citations,
+        contextSources,
         images: fileContext.images,
         retrievalSources: retrievalOutcome.sources,
         contextWindow: config.contextWindow,
@@ -225,7 +238,7 @@ export class AiRunExecutionService {
 
       sequence += 1;
       const completedAt = new Date();
-      const completed = await this.db.transaction().execute(async (trx) => {
+      const completion = await this.db.transaction().execute(async (trx) => {
         const updated = await trx
           .updateTable('aiRuns')
           .set({
@@ -244,7 +257,7 @@ export class AiRunExecutionService {
           .where('cancelRequestedAt', 'is', null)
           .returning('id')
           .executeTakeFirst();
-        if (!updated) return false;
+        if (!updated) return { completed: false, titleRun: undefined };
         await trx
           .updateTable('aiMessages')
           .set({
@@ -258,8 +271,19 @@ export class AiRunExecutionService {
           .where('currentRunId', '=', run.id)
           .execute();
         const allSources = [
-          ...retrievalOutcome.sources,
+          ...contextSources
+            .filter((source) => source.origin === 'explicit')
+            .map((source) => ({
+              sourceType: source.sourceType,
+              sourceId: source.sourceId,
+              pageId: source.pageId,
+              sourceTitle: source.sourceTitle,
+              sourceUrl: source.sourceUrl,
+              excerpt: source.excerpt,
+              relevanceScore: null,
+            })),
           ...fileContext.citations,
+          ...retrievalOutcome.sources,
         ];
         if (allSources.length > 0) {
           await trx
@@ -280,11 +304,20 @@ export class AiRunExecutionService {
             )
             .execute();
         }
-        return true;
+        const titleRun = await this.auxRuns.scheduleConversationTitle(
+          trx,
+          run,
+          userMessage.content,
+          Number(config.dailyTokenLimitPerSpace),
+        );
+        return { completed: true, titleRun };
       });
-      if (!completed) {
+      if (!completion.completed) {
         await this.cancel(run, content);
         return;
+      }
+      if (completion.titleRun) {
+        await this.auxRuns.enqueue(completion.titleRun);
       }
       this.events.emitStatus(run, sequence, 'completed', {
         finishReason: 'stop',
@@ -343,9 +376,7 @@ export class AiRunExecutionService {
       .select(['status', 'cancelRequestedAt'])
       .where('id', '=', runId)
       .executeTakeFirst();
-    return (
-      !row || row.status === 'cancelled' || Boolean(row.cancelRequestedAt)
-    );
+    return !row || row.status === 'cancelled' || Boolean(row.cancelRequestedAt);
   }
 
   private async cancel(run: AiRun, content: string): Promise<void> {
@@ -432,6 +463,10 @@ export class AiRunExecutionService {
   }
 
   private errorCode(error: unknown): string {
+    const responseCode = (error as any)?.response?.code;
+    if (typeof responseCode === 'string') {
+      return responseCode;
+    }
     if ((error as any)?.aiErrorCode === 'provider_invalid_response') {
       return 'provider_invalid_response';
     }

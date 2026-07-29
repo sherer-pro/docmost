@@ -70,6 +70,24 @@
   min-width: 0;
 }
 
+.contextMenu {
+  width: min(360px, calc(100vw - 24px));
+  max-height: min(520px, 70vh);
+  overflow-y: auto;
+}
+
+.contextDropActive {
+  border-radius: var(--mantine-radius-sm);
+  outline: 2px solid var(--mantine-color-blue-5);
+  outline-offset: 2px;
+}
+
+.contextDropRejected {
+  border-radius: var(--mantine-radius-sm);
+  outline: 2px solid var(--mantine-color-red-5);
+  outline-offset: 2px;
+}
+
 .contextFileCheckbox {
   flex: 1 1 auto;
 }

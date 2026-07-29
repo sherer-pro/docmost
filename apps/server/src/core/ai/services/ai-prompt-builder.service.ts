@@ -2,10 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import { AiRun } from '@docmost/db/types/entity.types';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
-import {
-  AiProviderMessage,
-  AiSafeRetrievalSource,
-} from '../ai.types';
+import { AiProviderMessage, AiSafeRetrievalSource } from '../ai.types';
+import type { AiResolvedRunContextSource } from './ai-context.service';
 
 interface PromptFileSource {
   sourceTitle: string;
@@ -26,6 +24,7 @@ export class AiPromptBuilderService {
     currentUserContent: string;
     fileText: string;
     fileSources: PromptFileSource[];
+    contextSources: AiResolvedRunContextSource[];
     images: PromptImage[];
     retrievalSources: AiSafeRetrievalSource[];
     contextWindow: number;
@@ -37,6 +36,7 @@ export class AiPromptBuilderService {
       currentUserContent,
       fileText,
       fileSources,
+      contextSources,
       images,
       retrievalSources,
       contextWindow,
@@ -48,30 +48,46 @@ export class AiPromptBuilderService {
     );
     const currentPrompt = currentUserContent.slice(0, maxChars);
     const baseInstructions = [
-      instructions ||
-        'You are a document assistant. Be accurate and concise.',
+      instructions || 'You are a document assistant. Be accurate and concise.',
       'Cite only server-provided [S1], [S2], and similar markers. Never invent source markers.',
     ].join('\n\n');
     const available = Math.max(
       0,
       maxChars - currentPrompt.length - baseInstructions.length,
     );
-    const primaryBudget = Math.floor(available * 0.35);
-    const fileBudget = Math.floor(available * 0.25);
-    const historyBudget = Math.floor(available * 0.25);
+    const primaryBudget = Math.floor(available * 0.25);
+    const explicitBudget = Math.floor(available * 0.25);
+    const fileBudget = Math.floor(available * 0.2);
+    const historyBudget = Math.floor(available * 0.2);
     const retrievalBudget =
-      available - primaryBudget - fileBudget - historyBudget;
+      available - primaryBudget - explicitBudget - fileBudget - historyBudget;
 
+    const currentDocument = contextSources.find(
+      (source) => source.origin === 'current_document',
+    );
+    const explicitSources = contextSources.filter(
+      (source) => source.origin === 'explicit',
+    );
+    const currentDocumentMarkdown =
+      currentDocument?.markdown || run.documentSnapshot;
     const primaryContext = run.selectionText
       ? `Selected text (${run.selectionFrom}-${run.selectionTo}):\n${run.selectionText}`
-      : run.documentSnapshot
-        ? `Current document snapshot:\n${run.documentSnapshot}`
+      : currentDocumentMarkdown
+        ? `Current document snapshot:\n${currentDocumentMarkdown}`
         : '';
+    const explicitContext = explicitSources.length
+      ? `Selected context sources:\n${explicitSources
+          .map(
+            (source, index) =>
+              `[S${index + 1}] ${source.sourceTitle}\n${source.markdown}`,
+          )
+          .join('\n\n')}`
+      : '';
     const fileLabels = fileSources.length
       ? `Attached source labels:\n${fileSources
           .map(
             (source, index) =>
-              `[S${retrievalSources.length + index + 1}] ${source.sourceTitle}`,
+              `[S${explicitSources.length + index + 1}] ${source.sourceTitle}`,
           )
           .join('\n')}`
       : '';
@@ -79,13 +95,14 @@ export class AiPromptBuilderService {
       ? `Space search sources:\n${retrievalSources
           .map(
             (source, index) =>
-              `[S${index + 1}] ${source.sourceTitle}\n${source.excerpt}`,
+              `[S${explicitSources.length + fileSources.length + index + 1}] ${source.sourceTitle}\n${source.excerpt}`,
           )
           .join('\n\n')}`
       : '';
     const context = [
       baseInstructions,
       this.truncate(primaryContext, primaryBudget),
+      this.truncate(explicitContext, explicitBudget),
       this.truncate(
         [fileLabels, fileText].filter(Boolean).join('\n\n'),
         fileBudget,

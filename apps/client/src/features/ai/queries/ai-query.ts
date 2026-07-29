@@ -25,11 +25,17 @@ import {
   updateAiConversation,
   updateAiSpaceConfig,
   uploadAiChatFiles,
+  getAiConversationContext,
+  updateAiConversationContext,
+  searchAiContextSources,
+  createAiEditorAction,
+  cancelAiEditorAction,
 } from "@/features/ai/services/ai-service.ts";
 import {
   AiConversation,
   AiSpaceConfigUpdate,
   SendAiMessageInput,
+  UpdateAiConversationContextRequest,
 } from "@/features/ai/types/ai.types.ts";
 import { aiStreamingRunsAtom } from "@/features/ai/atoms/ai-atoms.ts";
 import { reduceAiRunState } from "@/features/ai/utils/ai-run-state.ts";
@@ -39,12 +45,65 @@ export const AI_QUERY_KEYS = {
   messages: (conversationId: string) =>
     ["ai", "messages", conversationId] as const,
   files: (conversationId: string) => ["ai", "files", conversationId] as const,
+  context: (conversationId: string) =>
+    ["ai", "context", conversationId] as const,
+  contextSources: (conversationId: string, query: string) =>
+    ["ai", "context-sources", conversationId, query] as const,
   pageAttachments: (pageId: string) =>
     ["ai", "page-attachments", pageId] as const,
   config: (spaceId: string) => ["ai", "config", spaceId] as const,
   status: (spaceId: string, pageId = "") =>
     ["ai", "status", spaceId, pageId] as const,
 };
+
+export function useAiConversationContextQuery(conversationId?: string) {
+  return useQuery({
+    queryKey: AI_QUERY_KEYS.context(conversationId ?? ""),
+    queryFn: () => getAiConversationContext(conversationId!),
+    enabled: Boolean(conversationId),
+  });
+}
+
+export function useUpdateAiConversationContextMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      conversationId,
+      data,
+    }: {
+      conversationId: string;
+      data: UpdateAiConversationContextRequest;
+    }) => updateAiConversationContext(conversationId, data),
+    onSuccess: (context) => {
+      queryClient.setQueryData(
+        AI_QUERY_KEYS.context(context.conversationId),
+        context,
+      );
+      void queryClient.invalidateQueries({
+        queryKey: ["ai", "conversations"],
+      });
+    },
+  });
+}
+
+export function useAiContextSourcesQuery(
+  conversationId: string | undefined,
+  query: string,
+) {
+  return useInfiniteQuery({
+    queryKey: AI_QUERY_KEYS.contextSources(conversationId ?? "", query),
+    queryFn: ({ pageParam }) =>
+      searchAiContextSources({
+        conversationId: conversationId!,
+        query,
+        cursor: pageParam,
+      }),
+    enabled: Boolean(conversationId && query.trim()),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) =>
+      lastPage.hasMore ? (lastPage.nextCursor ?? undefined) : undefined,
+  });
+}
 
 export function useAiConversationsQuery(pageId?: string) {
   return useQuery({
@@ -144,12 +203,13 @@ export function useSendAiMessageMutation() {
   return useMutation({
     mutationFn: (input: SendAiMessageInput) => sendAiMessage(input),
     onSuccess: (result, input) => {
-      setRuns((current) =>
-        reduceAiRunState(current, {
-          type: "rest",
-          run: result.run,
-          content: result.assistantMessage.content,
-        }).runs,
+      setRuns(
+        (current) =>
+          reduceAiRunState(current, {
+            type: "rest",
+            run: result.run,
+            content: result.assistantMessage.content,
+          }).runs,
       );
       void queryClient.invalidateQueries({
         queryKey: AI_QUERY_KEYS.messages(input.conversationId),
@@ -164,17 +224,26 @@ export function useCancelAiRunMutation() {
   return useMutation({
     mutationFn: cancelAiRun,
     onSuccess: async (run) => {
-      setRuns((current) =>
-        reduceAiRunState(current, { type: "rest", run }).runs,
+      setRuns(
+        (current) => reduceAiRunState(current, { type: "rest", run }).runs,
       );
       await queryClient.refetchQueries({
         queryKey: AI_QUERY_KEYS.messages(run.conversationId),
       });
-      setRuns((current) =>
-        reduceAiRunState(current, { type: "prune", runId: run.id }).runs,
+      setRuns(
+        (current) =>
+          reduceAiRunState(current, { type: "prune", runId: run.id }).runs,
       );
     },
   });
+}
+
+export function useCreateAiEditorActionMutation() {
+  return useMutation({ mutationFn: createAiEditorAction });
+}
+
+export function useCancelAiEditorActionMutation() {
+  return useMutation({ mutationFn: cancelAiEditorAction });
 }
 
 export function useRetryAiRunMutation(conversationId?: string) {
@@ -183,8 +252,8 @@ export function useRetryAiRunMutation(conversationId?: string) {
   return useMutation({
     mutationFn: retryAiRun,
     onSuccess: (run) => {
-      setRuns((current) =>
-        reduceAiRunState(current, { type: "rest", run }).runs,
+      setRuns(
+        (current) => reduceAiRunState(current, { type: "rest", run }).runs,
       );
       return queryClient.invalidateQueries({
         queryKey: AI_QUERY_KEYS.messages(conversationId ?? ""),
@@ -199,8 +268,8 @@ export function useRegenerateAiMessageMutation(conversationId?: string) {
   return useMutation({
     mutationFn: regenerateAiMessage,
     onSuccess: (run) => {
-      setRuns((current) =>
-        reduceAiRunState(current, { type: "rest", run }).runs,
+      setRuns(
+        (current) => reduceAiRunState(current, { type: "rest", run }).runs,
       );
       return queryClient.invalidateQueries({
         queryKey: AI_QUERY_KEYS.messages(conversationId ?? ""),

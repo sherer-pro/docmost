@@ -62,14 +62,45 @@ export const AI_CHAT_FILE_STATUSES = [
 ] as const;
 export type AiChatFileStatus = (typeof AI_CHAT_FILE_STATUSES)[number];
 
+export const AI_CONTEXT_SOURCE_TYPES = [
+  "page",
+  "database",
+  "database_row",
+] as const;
+export type AiContextSourceType = (typeof AI_CONTEXT_SOURCE_TYPES)[number];
+
 export const AI_SOURCE_TYPES = [
   "page",
+  "database",
   "database_row",
   "attachment",
   "chat_file",
 ] as const;
 export type AiSourceType = (typeof AI_SOURCE_TYPES)[number];
-export type AiRetrievalSourceType = Exclude<AiSourceType, "chat_file">;
+
+export const AI_RETRIEVAL_SOURCE_TYPES = [
+  "page",
+  "database_row",
+  "attachment",
+] as const;
+export type AiRetrievalSourceType = (typeof AI_RETRIEVAL_SOURCE_TYPES)[number];
+
+export const AI_CONVERSATION_TITLE_SOURCES = [
+  "manual",
+  "generated",
+  "fallback",
+] as const;
+export type AiConversationTitleSource =
+  (typeof AI_CONVERSATION_TITLE_SOURCES)[number];
+
+export const AI_AUX_RUN_KINDS = [
+  "conversation_title",
+  "editor_transform",
+] as const;
+export type AiAuxRunKind = (typeof AI_AUX_RUN_KINDS)[number];
+
+export const AI_AUX_RUN_STATUSES = AI_RUN_STATUSES;
+export type AiAuxRunStatus = AiRunStatus;
 
 export const AI_ERROR_CODES = [
   "ai_unavailable",
@@ -93,6 +124,12 @@ export const AI_ERROR_CODES = [
   "retrieval_url_rejected",
   "ai_file_processing_failed",
   "ai_file_upload_failed",
+  "ai_context_revision_conflict",
+  "ai_context_source_limit",
+  "context_source_unavailable",
+  "editor_selection_required",
+  "editor_context_stale",
+  "editor_action_not_found",
 ] as const;
 export type AiErrorCode = (typeof AI_ERROR_CODES)[number];
 
@@ -109,6 +146,7 @@ export interface AiQuickCommand {
   id: string;
   label: string;
   prompt: string;
+  description?: string;
   enabled: boolean;
   position: number;
 }
@@ -197,10 +235,36 @@ export interface AiConversation {
   userId: string;
   clientRequestId: string | null;
   title: string | null;
+  titleSource: AiConversationTitleSource | null;
   draft: string | null;
   useSpaceSearch: boolean;
+  includeCurrentDocument: boolean;
+  contextRevision: number;
   lastOpenedAt: string;
   createdAt: string;
+  updatedAt: string;
+}
+
+export interface AiContextSource {
+  id: string;
+  sourceType: AiContextSourceType;
+  sourceId: string;
+  pageId: string;
+  title: string;
+  breadcrumbs: string[];
+  url: string | null;
+  position: number;
+  available: boolean;
+}
+
+export interface AiConversationContext {
+  conversationId: string;
+  revision: number;
+  fingerprint: string;
+  includeCurrentDocument: boolean;
+  sources: AiContextSource[];
+  fileIds: string[];
+  attachmentIds: string[];
   updatedAt: string;
 }
 
@@ -269,6 +333,7 @@ export interface AiRun {
   trigger: AiRunTrigger;
   status: AiRunStatus;
   clientRequestId: string;
+  contextRevision: number;
   useSpaceSearch: boolean;
   chatFileIds: string[];
   attachmentIds: string[];
@@ -364,6 +429,23 @@ export interface UpdateAiConversationRequest {
   useSpaceSearch?: boolean;
 }
 
+export interface UpdateAiConversationContextRequest {
+  expectedRevision: number;
+  includeCurrentDocument: boolean;
+  sources: Array<{
+    sourceType: AiContextSourceType;
+    sourceId: string;
+  }>;
+  fileIds: string[];
+  attachmentIds: string[];
+}
+
+export interface AiContextSourceSearchRequest {
+  query?: string;
+  cursor?: string;
+  limit?: number;
+}
+
 export interface AiRunActionRequest {
   clientRequestId: string;
 }
@@ -371,6 +453,7 @@ export interface AiRunActionRequest {
 export interface SendAiMessageRequest {
   content: string;
   clientRequestId: string;
+  contextRevision: number;
   documentSnapshot?: string;
   snapshotHash?: string;
   selection?: AiSelection;
@@ -408,6 +491,38 @@ export interface AiPageAttachment {
   size: number;
 }
 
+export interface CreateAiEditorActionRequest {
+  pageId: string;
+  clientRequestId: string;
+  commandId: string;
+  instruction: string;
+  selection: AiSelection;
+  snapshotHash: string;
+}
+
+export interface AiEditorActionRun {
+  id: string;
+  kind: "editor_transform";
+  userId: string;
+  workspaceId: string;
+  spaceId: string;
+  pageId: string;
+  clientRequestId: string;
+  commandId: string;
+  selection: AiSelection;
+  snapshotHash: string;
+  status: AiAuxRunStatus;
+  sequence: number;
+  response: string;
+  inputTokens: number;
+  outputTokens: number;
+  cancelRequestedAt: string | null;
+  completedAt: string | null;
+  errorCode: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface AiPanelPreference {
   open: boolean;
   tab: "comments" | "toc" | "ai" | "";
@@ -435,4 +550,23 @@ export interface AiRunStatusEvent {
   retrievalErrorCode?: string;
   errorCode?: string;
   errorMessage?: string;
+}
+
+export interface AiConversationUpdatedEvent {
+  conversation: AiConversation;
+}
+
+export interface AiEditorActionDeltaEvent {
+  runId: string;
+  pageId: string;
+  sequence: number;
+  delta: string;
+}
+
+export interface AiEditorActionStatusEvent {
+  runId: string;
+  pageId: string;
+  sequence: number;
+  status: AiAuxRunStatus;
+  errorCode?: string;
 }

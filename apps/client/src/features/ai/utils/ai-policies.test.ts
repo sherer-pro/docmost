@@ -13,6 +13,7 @@ import {
   getAiPanelPreferencePayload,
   getPersistedActiveRun,
   getLatestAiConversation,
+  shouldShowAiRetrievalUi,
   isAiMessageRetryable,
   mergeAiQuickCommands,
   shouldShowAiPanelLoadFailure,
@@ -43,6 +44,12 @@ describe("AI error presentation", () => {
     assert.equal(shouldShowAiPanelLoadFailure(false, true, false), false);
     assert.equal(shouldShowAiPanelLoadFailure(false, true, true), true);
     assert.equal(shouldShowAiPanelLoadFailure(true, false, undefined), true);
+  });
+
+  it("hides every retrieval reminder when space search is unavailable", () => {
+    assert.equal(shouldShowAiRetrievalUi(undefined), false);
+    assert.equal(shouldShowAiRetrievalUi(false), false);
+    assert.equal(shouldShowAiRetrievalUi(true), true);
   });
 
   it("offers retry for failed and explicitly cancelled responses", () => {
@@ -155,8 +162,11 @@ describe("AI conversation selection", () => {
       workspaceId: "workspace",
       spaceId: "space",
       title: null,
+      titleSource: null,
       draft: "",
       useSpaceSearch: false,
+      includeCurrentDocument: true,
+      contextRevision: 0,
       createdAt: "2026-01-01T00:00:00.000Z",
       deletedAt: null,
     };

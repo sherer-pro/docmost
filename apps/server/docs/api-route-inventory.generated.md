@@ -14,8 +14,14 @@
 | GET | `/ai/conversations/:id` | `apps/server/src/core/ai/controllers/ai-conversation.controller.ts` |
 | PATCH | `/ai/conversations/:id` | `apps/server/src/core/ai/controllers/ai-conversation.controller.ts` |
 | POST | `/ai/conversations/:id/actions/open` | `apps/server/src/core/ai/controllers/ai-conversation.controller.ts` |
+| GET | `/ai/conversations/:id/context` | `apps/server/src/core/ai/controllers/ai-conversation.controller.ts` |
+| PUT | `/ai/conversations/:id/context` | `apps/server/src/core/ai/controllers/ai-conversation.controller.ts` |
+| GET | `/ai/conversations/:id/context-sources` | `apps/server/src/core/ai/controllers/ai-conversation.controller.ts` |
 | GET | `/ai/conversations/:id/messages` | `apps/server/src/core/ai/controllers/ai-conversation.controller.ts` |
 | POST | `/ai/conversations/:id/messages` | `apps/server/src/core/ai/controllers/ai-run.controller.ts` |
+| POST | `/ai/editor-actions` | `apps/server/src/core/ai/controllers/ai-editor-action.controller.ts` |
+| GET | `/ai/editor-actions/:id` | `apps/server/src/core/ai/controllers/ai-editor-action.controller.ts` |
+| POST | `/ai/editor-actions/:id/actions/cancel` | `apps/server/src/core/ai/controllers/ai-editor-action.controller.ts` |
 | POST | `/ai/messages/:id/actions/regenerate` | `apps/server/src/core/ai/controllers/ai-run.controller.ts` |
 | GET | `/ai/pages/:pageId/attachments` | `apps/server/src/core/ai/controllers/ai-file.controller.ts` |
 | GET | `/ai/runs/:id` | `apps/server/src/core/ai/controllers/ai-run.controller.ts` |

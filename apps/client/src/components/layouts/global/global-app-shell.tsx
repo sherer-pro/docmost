@@ -22,6 +22,8 @@ import { useSetAtom } from "jotai";
 import { AiSocketBridge } from "@/features/ai/hooks/use-ai-socket.ts";
 import { AiPanelPreferencesSync } from "@/features/ai/components/ai-panel-preferences-sync.tsx";
 import { useTranslation } from "react-i18next";
+import { DndProvider } from "react-dnd";
+import { HTML5Backend } from "react-dnd-html5-backend";
 
 export default function GlobalAppShell({
   children,
@@ -145,108 +147,110 @@ export default function GlobalAppShell({
   }, [isAsideHidden]);
 
   return (
-    <AppShell
-      header={{ height: 45 }}
-      navbar={
-        !hideSidebar && {
-          width: isSpaceRoute ? sidebarWidth : 300,
-          breakpoint: "sm",
-          collapsed: {
-            mobile: !mobileOpened,
-            desktop: !desktopOpened,
-          },
-        }
-      }
-      aside={
-        shouldShowAside &&
-        !isMobileViewport && {
-          width: asideWidth,
-          breakpoint: "sm",
-          collapsed: { mobile: !isAsideOpen, desktop: !isAsideOpen },
-        }
-      }
-      padding="md"
-    >
-      <AiSocketBridge />
-      <AiPanelPreferencesSync />
-      <AppShell.Header px="md" className={classes.header}>
-        <AppHeader />
-      </AppShell.Header>
-      {!hideSidebar && (
-        <AppShell.Navbar
-          id="docmost-primary-sidebar"
-          className={classes.navbar}
-          withBorder={false}
-          ref={sidebarRef}
-          aria-hidden={isNavbarHidden || undefined}
-        >
-          <div className={classes.resizeHandle} onMouseDown={startResizing} />
-          {isSpaceRoute && <SpaceSidebar />}
-          {isSettingsRoute && <SettingsSidebar />}
-        </AppShell.Navbar>
-      )}
-      <AppShell.Main>
-        {isSettingsRoute ? (
-          <PageFrame size="settings">{children}</PageFrame>
-        ) : (
-          children
-        )}
-      </AppShell.Main>
-
-      {shouldShowAside && !isMobileViewport && (
-        <AppShell.Aside
-          id="docmost-context-aside"
-          className={classes.aside}
-          p={0}
-          withBorder={false}
-          ref={asideRef}
-          aria-hidden={isAsideHidden || undefined}
-        >
-          <div
-            className={classes.asideResizeHandle}
-            onMouseDown={startAsideResizing}
-            role="separator"
-            aria-orientation="vertical"
-            aria-label={t("ai.resizePanel")}
-            aria-valuemin={300}
-            aria-valuemax={600}
-            aria-valuenow={asideWidth}
-            tabIndex={0}
-            onKeyDown={(event) => {
-              if (event.key === "ArrowLeft") {
-                setAsideWidth(Math.min(600, asideWidth + 10));
-              }
-              if (event.key === "ArrowRight") {
-                setAsideWidth(Math.max(300, asideWidth - 10));
-              }
-            }}
-          />
-          <Aside />
-        </AppShell.Aside>
-      )}
-
-      {shouldShowAside && Boolean(isMobileViewport) && (
-        <Drawer
-          opened={isAsideOpen}
-          onClose={() => setAsideState({ ...asideState, isAsideOpen: false })}
-          position="right"
-          size="100%"
-          withCloseButton={false}
-          padding={0}
-          title={null}
-          aria-label={t("ai.title")}
-          keepMounted
-          styles={{
-            body: {
-              height: "100dvh",
-              paddingTop: "env(safe-area-inset-top)",
-              paddingBottom: "env(safe-area-inset-bottom)",
+    <DndProvider backend={HTML5Backend}>
+      <AppShell
+        header={{ height: 45 }}
+        navbar={
+          !hideSidebar && {
+            width: isSpaceRoute ? sidebarWidth : 300,
+            breakpoint: "sm",
+            collapsed: {
+              mobile: !mobileOpened,
+              desktop: !desktopOpened,
             },
-          }}
-        >
-          <Aside />
-        </Drawer>
-      )}
-    </AppShell>
+          }
+        }
+        aside={
+          shouldShowAside &&
+          !isMobileViewport && {
+            width: asideWidth,
+            breakpoint: "sm",
+            collapsed: { mobile: !isAsideOpen, desktop: !isAsideOpen },
+          }
+        }
+        padding="md"
+      >
+        <AiSocketBridge />
+        <AiPanelPreferencesSync />
+        <AppShell.Header px="md" className={classes.header}>
+          <AppHeader />
+        </AppShell.Header>
+        {!hideSidebar && (
+          <AppShell.Navbar
+            id="docmost-primary-sidebar"
+            className={classes.navbar}
+            withBorder={false}
+            ref={sidebarRef}
+            aria-hidden={isNavbarHidden || undefined}
+          >
+            <div className={classes.resizeHandle} onMouseDown={startResizing} />
+            {isSpaceRoute && <SpaceSidebar />}
+            {isSettingsRoute && <SettingsSidebar />}
+          </AppShell.Navbar>
+        )}
+        <AppShell.Main>
+          {isSettingsRoute ? (
+            <PageFrame size="settings">{children}</PageFrame>
+          ) : (
+            children
+          )}
+        </AppShell.Main>
+
+        {shouldShowAside && !isMobileViewport && (
+          <AppShell.Aside
+            id="docmost-context-aside"
+            className={classes.aside}
+            p={0}
+            withBorder={false}
+            ref={asideRef}
+            aria-hidden={isAsideHidden || undefined}
+          >
+            <div
+              className={classes.asideResizeHandle}
+              onMouseDown={startAsideResizing}
+              role="separator"
+              aria-orientation="vertical"
+              aria-label={t("ai.resizePanel")}
+              aria-valuemin={300}
+              aria-valuemax={600}
+              aria-valuenow={asideWidth}
+              tabIndex={0}
+              onKeyDown={(event) => {
+                if (event.key === "ArrowLeft") {
+                  setAsideWidth(Math.min(600, asideWidth + 10));
+                }
+                if (event.key === "ArrowRight") {
+                  setAsideWidth(Math.max(300, asideWidth - 10));
+                }
+              }}
+            />
+            <Aside />
+          </AppShell.Aside>
+        )}
+
+        {shouldShowAside && Boolean(isMobileViewport) && (
+          <Drawer
+            opened={isAsideOpen}
+            onClose={() => setAsideState({ ...asideState, isAsideOpen: false })}
+            position="right"
+            size="100%"
+            withCloseButton={false}
+            padding={0}
+            title={null}
+            aria-label={t("ai.title")}
+            keepMounted
+            styles={{
+              body: {
+                height: "100dvh",
+                paddingTop: "env(safe-area-inset-top)",
+                paddingBottom: "env(safe-area-inset-bottom)",
+              },
+            }}
+          >
+            <Aside />
+          </Drawer>
+        )}
+      </AppShell>
+    </DndProvider>
   );
 }

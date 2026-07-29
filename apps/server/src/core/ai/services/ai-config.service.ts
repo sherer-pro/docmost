@@ -292,7 +292,9 @@ export class AiConfigService {
         visionEnabled: dto.visionEnabled ?? existing?.visionEnabled ?? false,
         quickCommands:
           dto.quickCommands !== undefined
-            ? (this.normalizeQuickCommands(dto.quickCommands) as unknown as JsonValue)
+            ? (this.normalizeQuickCommands(
+                dto.quickCommands,
+              ) as unknown as JsonValue)
             : (existing?.quickCommands ?? null),
         updatedById: user.id,
         updatedAt: new Date(),
@@ -502,11 +504,10 @@ export class AiConfigService {
       url: rawUrl
         ? (await this.retrievalUrlPolicy.assertAllowed(rawUrl)).toString()
         : null,
-      apiKey:
-        dto.retrieval?.clearApiKey
-          ? null
-          : dto.retrieval?.apiKey ||
-            this.decryptSecret(existing?.retrievalApiKeyEncrypted),
+      apiKey: dto.retrieval?.clearApiKey
+        ? null
+        : dto.retrieval?.apiKey ||
+          this.decryptSecret(existing?.retrievalApiKeyEncrypted),
       timeoutMs:
         dto.retrieval?.timeoutMs ??
         existing?.retrievalTimeoutMs ??
@@ -589,6 +590,7 @@ export class AiConfigService {
     return commands.map((command, index) => {
       const label = command.label.trim();
       const prompt = command.prompt.trim();
+      const description = command.description?.trim() || undefined;
       if (!label || !prompt) {
         throw new BadRequestException(
           'Quick command label and prompt cannot be empty',
@@ -602,6 +604,7 @@ export class AiConfigService {
         id: command.id,
         label,
         prompt,
+        ...(description ? { description } : {}),
         enabled: command.enabled ?? true,
         position: index,
       };
@@ -627,6 +630,9 @@ export class AiConfigService {
         id: item.id,
         label: item.label,
         prompt: item.prompt,
+        ...(typeof item.description === 'string' && item.description.trim()
+          ? { description: item.description.trim() }
+          : {}),
         enabled: true,
         position: Number.isFinite(item.position) ? item.position : 0,
       }))

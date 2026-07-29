@@ -5,6 +5,7 @@ import {
   TreeApi,
   SimpleTree,
 } from "react-arborist";
+import { useDragDropManager } from "react-dnd";
 import { useAtom, useSetAtom } from "jotai";
 import { treeApiAtom } from "@/features/page/tree/atoms/tree-api-atom.ts";
 import {
@@ -147,6 +148,7 @@ function SpaceTreeComponent(
   ref: ForwardedRef<SpaceTreeHandle>,
 ) {
   const { t } = useTranslation();
+  const dndManager = useDragDropManager();
   const { pageSlug, databaseSlug } = useParams();
   const activeTreeSlug = resolveActiveTreeSlug({ pageSlug, databaseSlug });
   const { data, setData, controllers } =
@@ -561,6 +563,7 @@ function SpaceTreeComponent(
           rowHeight={30}
           overscanCount={10}
           dndRootElement={rootElement.current}
+          dndManager={dndManager}
           onToggle={() => {
             if (isBulkToggleRef.current) {
               return;
@@ -990,9 +993,7 @@ function CreateNode({ node, treeApi, onExpandTree }: CreateNodeProps) {
 
     const createdRowSlugId = createdRow.slugId ?? createdRowPage.slugId;
     if (spaceSlug && createdRowSlugId) {
-      navigate(
-        buildPageUrl(spaceSlug, createdRowSlugId, createdRowPage.title),
-      );
+      navigate(buildPageUrl(spaceSlug, createdRowSlugId, createdRowPage.title));
     }
   }
 

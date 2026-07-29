@@ -39,6 +39,16 @@ The status endpoint accepts an optional `pageId`. Page-scoped calls return chat 
 
 Authenticated writers use `/api/ai/conversations`, nested message/file endpoints, and `/api/ai/runs/:runId/actions/*`. Conversations are private to their owner. Both HTTP handlers and the background worker re-check conversation scope and page access; workspace administrators do not receive an endpoint for reading other users' prompts or answers.
 
+Conversation context and selection-only editor actions use:
+
+- `GET/PUT /api/ai/conversations/:id/context`
+- `GET /api/ai/conversations/:id/context-sources`
+- `POST /api/ai/editor-actions`
+- `GET /api/ai/editor-actions/:id`
+- `POST /api/ai/editor-actions/:id/actions/cancel`
+
+Context updates are full, versioned replacements. An identical replay is idempotent; a conflicting stale `expectedRevision` returns `409 ai_context_revision_conflict`. Editor actions require a payload-bound `clientRequestId`, return `202`, and never create a conversation or message.
+
 Public mutation idempotency is explicit:
 
 - creating a conversation, sending a message, retrying, and regenerating require a `clientRequestId`;
@@ -48,7 +58,9 @@ Public mutation idempotency is explicit:
 
 `GET /api/ai/conversations/:id` is read-only. Only `POST /api/ai/conversations/:id/actions/open` updates `lastOpenedAt`. List endpoints return `{ "items": [...] }`; message pagination additionally returns `hasMore` and `nextCursor`. An invalid cursor is a `400` validation error.
 
-The right-side AI tab is part of the persistent application shell. Its open state, selected aside tab, and 300–600 px desktop width are stored in the user profile. Chat history, drafts, current-document/space-search choice, and the most recently opened page conversation are stored server-side. Mobile uses a full-screen focus-trapped drawer.
+The right-side AI tab is part of the persistent application shell. Its open state, selected aside tab, and 300–600 px desktop width are stored in the user profile. Chat history, drafts, per-conversation context, space-search choice, and the most recently opened page conversation are stored server-side. The current document can be included or excluded, and up to ten explicit pages, databases, or database rows can be added by search or desktop drag-and-drop. Mobile uses a full-screen focus-trapped drawer and search as the context-selection fallback.
+
+After the first successful assistant response, Docmost schedules one background title operation. It uses the first prompt and a bounded context summary, returns no more than four Unicode word segments or 80 characters, and publishes `ai:conversation.updated`. A manual rename always wins. After three provider failures, a deterministic title is derived from the first meaningful words without changing the successful chat response.
 
 ## Persistence, queues, and files
 
@@ -60,11 +72,13 @@ The migration `20260728T120000-ai-integration.ts` creates:
 
 The additive reliability migration `20260729T120000-ai-reliability.ts` preserves and backfills existing data, adds immutable provider attempts, assistant `currentRunId` projections, run-scoped citations, upload batches, and storage-cleanup state. Existing terminal answers are copied into per-attempt `responseSnapshot` values.
 
+The additive context/editor migration `20260729T180000-ai-context-editor-actions.ts` preserves existing conversations, enables the current document by default, and adds versioned conversation context, immutable run-context snapshots, source dependencies, and 24-hour auxiliary runs for conversation titles and selection-only editor transforms.
+
 Every provider call is a new `ai_runs` attempt. Retry and Regenerate never reopen or erase a terminal run: they create a row linked through `rootRunId`, `previousRunId`, and `attemptNo`. They are allowed only for the latest assistant turn; older turns return `409 ai_run_not_latest`. A terminal attempt is immutable, and its usage, error, response snapshot, and citations remain available for audit.
 
-AI generation, file extraction, and hourly retention cleanup run on `AI_CHAT_QUEUE`. The older `AI_QUEUE` remains untouched for existing page/index lifecycle jobs. Queue payloads contain only record IDs; workers resolve current configuration and encrypted credentials from the database.
+AI generation, auxiliary title/editor operations, file extraction, and hourly retention cleanup run on `AI_CHAT_QUEUE`. The older `AI_QUEUE` remains untouched for existing page/index lifecycle jobs. Queue payloads contain only record IDs; workers resolve current configuration and encrypted credentials from the database.
 
-BullMQ delivery is at-least-once; database transitions are effectively-once. A run job uses the deterministic identity `ai-run-<runId>`, and the worker can claim it only with an atomic `queued -> running` compare-and-set. Completion, failure, and cancellation are compare-and-set terminal transitions. The run sequence is incremented in the same transaction as persisted state.
+BullMQ delivery is at-least-once; database transitions are effectively-once. Run and auxiliary jobs use deterministic identities (`ai-run-<runId>` and `ai-aux-<runId>`; BullMQ custom IDs cannot contain `:`), and a worker can claim each record only with an atomic `queued -> running` compare-and-set. Completion, failure, and cancellation are compare-and-set terminal transitions. The sequence is incremented in the same transaction as persisted state.
 
 PostgreSQL is the source of truth when Redis is unavailable. A successfully admitted Send remains `queued` even if the initial `queue.add()` fails. A lifecycle-managed reconciler starts only after database migrations are ready, re-delivers missing deterministic jobs, resumes pending file work, and retries storage cleanup. Runs that cannot be delivered within five minutes fail with `queue_unavailable`. A running attempt without a heartbeat for 12 minutes is preserved as partial output and fails with `worker_lost`; it is never automatically sent to the provider again.
 
@@ -76,7 +90,7 @@ Private chat uploads support PDF, DOCX, TXT, MD, JPEG, PNG, and WebP. Limits are
 
 TXT/MD are decoded directly, DOCX uses `mammoth`, and PDF text uses `pdfjs-dist`. A textless PDF may be rendered for a configured vision model, up to 20 pages and the run's context/image budget. Existing page attachments are selected separately and their owning-page ACL is checked again by the worker.
 
-Socket.IO emits monotonic `ai:run.delta` and `ai:run.status` events only to the owning `user-*` room. The database and REST API remain authoritative: clients ignore duplicate sequences and refetch after a gap or reconnect.
+Socket.IO emits monotonic `ai:run.delta`, `ai:run.status`, `ai:editor-action.delta`, and `ai:editor-action.status` events only to the owning `user-*` room. Conversation title changes use `ai:conversation.updated`. The database and REST API remain authoritative: clients ignore duplicate sequences and refetch after a gap or reconnect.
 
 The client feeds REST results, deltas, status events, and reconnect recovery through one pure run-state reducer. Only active runs remain in ephemeral streaming state; a terminal run is pruned after persisted messages are refetched. Draft writes are serialized so an older response cannot replace a newer draft.
 
@@ -84,7 +98,11 @@ The client feeds REST results, deltas, status events, and reconnect recovery thr
 
 ## Prompt and editor safety
 
-The editor sends a Markdown document snapshot plus a SHA-256 hash of canonical editor JSON. It does not send TipTap JSON as model context. A selection is the primary document context; the full document is the fallback. `AiPromptBuilderService` allocates context in this order: system/safety instructions, current prompt, selection/document, selected files, the latest complete user/assistant turns (at most 20 messages), then optional retrieval. It excludes the current turn and never starts history with an orphan assistant message.
+The editor sends a Markdown document snapshot plus a SHA-256 hash of canonical editor JSON. It does not send TipTap JSON as model context. A selection is the primary document context; the enabled current document is the fallback. `AiPromptBuilderService` allocates context in this order: system/safety instructions, current prompt, selection/current document, explicit page/database/row snapshots, selected files, the latest complete user/assistant turns (at most 20 messages), then optional retrieval. It excludes the current turn and never starts history with an orphan assistant message.
+
+The worker resolves every explicit source with current workspace/space/deletion/ACL checks before first use and stores immutable Markdown in `ai_run_context_sources`. Retry and Regenerate copy those snapshots instead of reading changed pages. Databases contribute their description and only readable rows within the shared budget. Every page that actually contributed content is recorded in `ai_run_source_dependencies`; losing access to any dependency hides the complete derived assistant response.
+
+Selection AI captures the page ID, selected range/text, and canonical editor hash before focus leaves the editor. Its auxiliary run receives only the command and selection, without chat history, files, or retrieval. Replace/Insert actions require explicit confirmation, a current write check, and the unchanged hash. A stale result remains copyable but cannot mutate the editor.
 
 Insert/Replace re-checks AI/page write availability immediately before mutation. If the canonical snapshot is unchanged, Insert uses the captured cursor or selection end; it never silently appends to the document end. A changed editor/page requires a fresh confirmation and uses only the current cursor. Generated Markdown and links remain sanitized.
 
@@ -155,4 +173,6 @@ Provider streaming stores only `delta.content`; provider-specific reasoning fiel
 
 Core per-space AI is the only document-generation UX. The former EE editor Ask AI menu and workspace `settings.ai.generative` toggle are no longer read or written; historical JSON values remain inert for rollback. Legacy EE AI search, `AI_QUEUE`, `PageEmbeddings`, indexing listeners, and `/api/ai/answers` remain independent and unchanged.
 
-The client sanitizes rendered Markdown and links. `Copy` is always available for a normal assistant response. Replacing the original selection requires the same page and document snapshot hash; inserting below uses the original position only while that hash still matches. After the document changes, the only mutating option is an explicitly confirmed insert at the current cursor.
+The client uses one Markdown sanitizer and safe-link policy for chat and selection results. `Copy` is always available for a normal assistant response. Replacing the original selection requires the same page and document snapshot hash; inserting below uses the original position only while that hash still matches. After the document changes, the chat flow may offer an explicitly confirmed insert at the current cursor, while selection-only actions become copy-only.
+
+All core AI strings use explicit `ai.*` locale keys in every supported locale. Stable server error codes are resolved through a guarded localized fallback and never expose translation keys or remote provider messages. Service Worker cache version 3 loads `/locales/*` with a network-first strategy so an online client does not retain an older translation bundle.

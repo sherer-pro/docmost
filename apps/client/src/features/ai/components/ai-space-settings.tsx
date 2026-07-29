@@ -44,6 +44,7 @@ import {
   AiRetrievalTestResult,
   AiSpaceConfigUpdate,
 } from "@/features/ai/types/ai.types.ts";
+import { resolveAiErrorMessage } from "@/features/ai/utils/ai-policies.ts";
 
 type AiSettingsForm = {
   enabled: boolean;
@@ -77,10 +78,8 @@ const DEFAULT_FORM: AiSettingsForm = {
   maxOutputTokens: AI_SPACE_CONFIG_DEFAULTS.maxOutputTokens,
   contextWindow: AI_SPACE_CONFIG_DEFAULTS.contextWindow,
   requestTimeoutMs: AI_SPACE_CONFIG_DEFAULTS.requestTimeoutMs,
-  dailyRequestLimitPerUser:
-    AI_SPACE_CONFIG_DEFAULTS.dailyRequestLimitPerUser,
-  dailyTokenLimitPerSpace:
-    AI_SPACE_CONFIG_DEFAULTS.dailyTokenLimitPerSpace,
+  dailyRequestLimitPerUser: AI_SPACE_CONFIG_DEFAULTS.dailyRequestLimitPerUser,
+  dailyTokenLimitPerSpace: AI_SPACE_CONFIG_DEFAULTS.dailyTokenLimitPerSpace,
   retentionDays: AI_SPACE_CONFIG_DEFAULTS.retentionDays,
   visionEnabled: false,
   retrievalEnabled: false,
@@ -92,20 +91,18 @@ const DEFAULT_FORM: AiSettingsForm = {
 };
 
 export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const configQuery = useAiSpaceConfigQuery(spaceId);
   const statusQuery = useAiSpaceStatusQuery(spaceId);
   const updateConfig = useUpdateAiSpaceConfigMutation(spaceId);
   const testModel = useTestAiModelConfigMutation(spaceId);
   const testRetrieval = useTestAiRetrievalConfigMutation(spaceId);
-  const [modelTestResult, setModelTestResult] =
-    useState<AiModelTestResult | { ok: false; errorMessage: string } | null>(
-      null,
-    );
-  const [retrievalTestResult, setRetrievalTestResult] =
-    useState<
-      AiRetrievalTestResult | { ok: false; errorMessage: string } | null
-    >(null);
+  const [modelTestResult, setModelTestResult] = useState<
+    AiModelTestResult | { ok: false; errorMessage: string } | null
+  >(null);
+  const [retrievalTestResult, setRetrievalTestResult] = useState<
+    AiRetrievalTestResult | { ok: false; errorMessage: string } | null
+  >(null);
   const [clearApiKey, setClearApiKey] = useState(false);
   const [clearRetrievalApiKey, setClearRetrievalApiKey] = useState(false);
   const form = useForm<AiSettingsForm>({
@@ -193,7 +190,10 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
           ? t("ai.settings.clearApiKey")
           : t("ai.settings.clearRetrievalApiKey"),
       children: <Text size="sm">{t("ai.settings.clearApiKeyConfirm")}</Text>,
-      labels: { confirm: t("Delete"), cancel: t("Cancel") },
+      labels: {
+        confirm: t("ai.delete"),
+        cancel: t("ai.cancel"),
+      },
       confirmProps: { color: "red" },
       onConfirm: () => {
         if (target === "model") {
@@ -217,8 +217,9 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
       notifications.show({ message: t("ai.settings.saved") });
     } catch (error) {
       notifications.show({
-        message:
-          error?.["response"]?.data?.message ?? t("ai.settings.saveFailed"),
+        message: error?.["response"]?.data?.code
+          ? resolveAiErrorMessage(t, i18n, error["response"].data.code)
+          : t("ai.settings.saveFailed"),
         color: "red",
       });
     }
@@ -241,8 +242,9 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
     } catch (error) {
       setModelTestResult({
         ok: false,
-        errorMessage:
-          error?.["response"]?.data?.message ?? t("ai.settings.testFailed"),
+        errorMessage: error?.["response"]?.data?.code
+          ? resolveAiErrorMessage(t, i18n, error["response"].data.code)
+          : t("ai.settings.testFailed"),
       });
     }
   };
@@ -264,15 +266,15 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
     } catch (error) {
       setRetrievalTestResult({
         ok: false,
-        errorMessage:
-          error?.["response"]?.data?.message ??
-          t("ai.settings.retrievalTestFailed"),
+        errorMessage: error?.["response"]?.data?.code
+          ? resolveAiErrorMessage(t, i18n, error["response"].data.code)
+          : t("ai.settings.retrievalTestFailed"),
       });
     }
   };
 
   if (configQuery.isLoading) {
-    return <Text size="sm">{t("Loading...")}</Text>;
+    return <Text size="sm">{t("ai.settings.loading")}</Text>;
   }
 
   if (configQuery.isError) {
@@ -514,6 +516,7 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
                   id: crypto.randomUUID(),
                   label: "",
                   prompt: "",
+                  description: "",
                   enabled: true,
                   position: form.values.quickCommands.length,
                 })
@@ -540,7 +543,7 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
                   {...form.getInputProps(`quickCommands.${index}.label`)}
                 />
                 <Switch
-                  label={t("Enabled")}
+                  label={t("ai.settings.commandEnabled")}
                   {...form.getInputProps(`quickCommands.${index}.enabled`, {
                     type: "checkbox",
                   })}
@@ -594,6 +597,12 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
                 maxLength={4000}
                 {...form.getInputProps(`quickCommands.${index}.prompt`)}
               />
+              <TextInput
+                label={t("ai.settings.commandDescription")}
+                description={t("ai.settings.commandDescriptionHint")}
+                maxLength={240}
+                {...form.getInputProps(`quickCommands.${index}.description`)}
+              />
             </Stack>
           ))}
         </Stack>
@@ -642,7 +651,7 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
             {t("ai.settings.test")}
           </Button>
           <Button type="submit" loading={updateConfig.isPending}>
-            {t("Save")}
+            {t("ai.save")}
           </Button>
         </Group>
       </Stack>

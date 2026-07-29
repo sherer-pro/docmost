@@ -14,6 +14,8 @@ describe('AiQueueReconcilerService lifecycle', () => {
       {} as any,
       { waitUntilReady: jest.fn().mockResolvedValue(undefined) } as any,
       { observeReconciledJob: jest.fn() } as any,
+      {} as any,
+      {} as any,
     );
     jest.spyOn(service, 'reconcile').mockResolvedValue(undefined);
 
