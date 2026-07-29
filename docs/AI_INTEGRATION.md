@@ -172,14 +172,18 @@ and a query-only API key. Docmost posts a fixed request to
 {
   "collection_names": ["knowledge-id"],
   "query": "What changed in the launch plan?",
-  "k": 40
+  "k": 40,
+  "hybrid": false
 }
 ```
 
 The adapter maps the first `documents`, `metadatas`, and `distances` arrays to
 the same internal retrieval hits. Open WebUI metadata must contain a versioned
 Docmost descriptor under `metadata.data.docmost`; `metadata.docmost` is accepted
-only as a compatibility fallback:
+only as a compatibility fallback. Open WebUI 0.9.6 may return only `file_id` in
+the vector metadata, so Docmost hydrates each unique candidate from
+`GET /api/v1/files/:fileId` and reads the canonical descriptor from
+`file.meta.data.docmost`:
 
 ```json
 {
@@ -198,6 +202,11 @@ The adapter drops malformed, cross-workspace, and cross-space neighbors
 individually. A non-empty result without any compatible metadata is reported as
 `retrieval_invalid_response`; an empty collection is a successful empty search.
 External titles and URLs are never trusted.
+
+Docmost explicitly disables Open WebUI hybrid search for this adapter. The
+external reranker is not part of the integration contract, and an unhealthy
+global hybrid-search configuration must not make ordinary vector retrieval
+unavailable.
 
 `apps/rag-sync` is the optional writer for Open WebUI 0.9.6. It reads only the
 API-key-scoped `/api/rag/*` feeds, stores checkpoints/mappings/space locks in a

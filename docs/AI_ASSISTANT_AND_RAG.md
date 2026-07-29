@@ -130,7 +130,11 @@ tombstone в БД, затем повторяемо очищает storage.
 `docmost` schemaVersion 1, теми же `workspaceId` и `spaceId`. Разрешённые типы
 внешних результатов: `page`, `database_row`, `attachment`; внутренний
 `database` допустим как явно выбранный контекст, но не в контракте внешнего
-поиска. Distance Open WebUI преобразуется в score `1 / (1 + max(0, distance))`.
+поиска. Адаптер передаёт `hybrid: false`, чтобы неисправный внешний reranker не
+делал недоступным обычный vector search. Если ответ коллекции содержит только
+`file_id`, адаптер запрашивает `GET /api/v1/files/:fileId` и получает
+канонические метаданные из `file.meta.data.docmost`. Distance Open WebUI
+преобразуется в score `1 / (1 + max(0, distance))`.
 
 ## 4. Настройка и эксплуатация
 
