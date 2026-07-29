@@ -303,6 +303,11 @@ highest score. Timeout, oversized payload, `401`, `429`, `5xx`, or no readable
 results degrades safely to document/file context and never invokes the model
 inside the retrieval adapter.
 
+The chat's external retrieval source types remain `page`, `database_row`, and
+`attachment`. Core chat may separately resolve a whole database as an explicit
+conversation-context source, but that internal `database` type does not extend
+the external `http-json-v1` query contract.
+
 ### 7.1 Initial sync
 
 1. Create API key scoped to the target `spaceId`.

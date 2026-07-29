@@ -78,6 +78,7 @@ import { useDictionaryTermsQuery } from "@/features/dictionary/queries/dictionar
 import { createDictionaryMatcherIndex } from "@/features/dictionary/utils/dictionary-matcher";
 import { TransclusionLookupProvider } from "@/features/editor/components/transclusion/transclusion-lookup-context";
 import { FixedToolbar } from "@/features/editor/components/fixed-toolbar/fixed-toolbar";
+import { AiFixedSelectionBubble } from "@/features/ai/components/ai-selection-action";
 import { getEnabledTagDefinitions } from "@/features/editor/components/tag/tag-settings";
 
 interface PageEditorProps {
@@ -553,13 +554,22 @@ export default function PageEditor({
       <div className="editor-container" style={{ position: "relative" }}>
         <div ref={menuContainerRef}>
           {editor && editorIsEditable && fixedToolbarEnabled && (
-            <FixedToolbar
-              editor={editor}
-              spaceId={spaceId}
-              dictionaryEnabled={dictionaryEnabled}
-              canManageDictionary={canManageDictionary}
-              canCreateInlineComments={canCreateInlineComments}
-            />
+            <>
+              <FixedToolbar
+                editor={editor}
+                spaceId={spaceId}
+                dictionaryEnabled={dictionaryEnabled}
+                canManageDictionary={canManageDictionary}
+                canCreateInlineComments={canCreateInlineComments}
+              />
+              {pageId && spaceId && (
+                <AiFixedSelectionBubble
+                  editor={editor}
+                  pageId={pageId}
+                  spaceId={spaceId}
+                />
+              )}
+            </>
           )}
 
           <DictionaryHighlightLayer terms={activeDictionaryTerms}>
@@ -578,6 +588,7 @@ export default function PageEditor({
               {!fixedToolbarEnabled && (
                 <EditorBubbleMenu
                   editor={editor}
+                  pageId={pageId}
                   spaceId={spaceId}
                   dictionaryEnabled={dictionaryEnabled}
                   canManageDictionary={canManageDictionary}

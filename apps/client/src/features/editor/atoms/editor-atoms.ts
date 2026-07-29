@@ -1,4 +1,4 @@
-import { atom } from "jotai";
+import { atom, type PrimitiveAtom } from "jotai";
 import { Editor } from "@tiptap/core";
 
 export interface IActivePageUser {
@@ -7,11 +7,17 @@ export interface IActivePageUser {
   avatarUrl: string;
 }
 
-export const pageEditorAtom = atom<Editor | null>(null);
+export const pageEditorAtom = atom<Editor | null>(
+  null,
+) as PrimitiveAtom<Editor | null>;
 
-export const titleEditorAtom = atom<Editor | null>(null);
+export const titleEditorAtom = atom<Editor | null>(
+  null,
+) as PrimitiveAtom<Editor | null>;
 
-export const readOnlyEditorAtom = atom<Editor | null>(null);
+export const readOnlyEditorAtom = atom<Editor | null>(
+  null,
+) as PrimitiveAtom<Editor | null>;
 
 export const yjsConnectionStatusAtom = atom<string>("");
 

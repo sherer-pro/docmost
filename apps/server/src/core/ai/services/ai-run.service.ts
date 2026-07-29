@@ -33,6 +33,7 @@ import { AiConfigService } from './ai-config.service';
 import { AiConversationService } from './ai-conversation.service';
 import { PageAccessService } from '../../page-access/page-access.service';
 import { AiRunEventService } from './ai-run-event.service';
+import { AiContextService } from './ai-context.service';
 
 const AI_USER_CONCURRENCY = 2;
 const AI_SPACE_CONCURRENCY = 8;
@@ -47,6 +48,7 @@ export class AiRunService {
     private readonly configs: AiConfigService,
     private readonly pageAccessService: PageAccessService,
     private readonly events: AiRunEventService,
+    private readonly contexts: AiContextService,
   ) {}
 
   async send(
@@ -64,13 +66,25 @@ export class AiRunService {
       throw new BadRequestException('Selection range is invalid');
     }
 
-    const chatFileIds = [...new Set(dto.fileIds ?? [])].sort();
-    const attachmentIds = [...new Set(dto.attachmentIds ?? [])].sort();
+    if (dto.contextRevision !== conversation.contextRevision) {
+      throw new ConflictException({
+        code: 'ai_context_revision_conflict',
+        message: 'AI conversation context was updated elsewhere',
+      });
+    }
+    const chatFileIds = [...conversation.contextChatFileIds].sort();
+    const attachmentIds = [...conversation.contextAttachmentIds].sort();
     const fingerprint = this.fingerprint({
       content: dto.content,
-      documentSnapshot: dto.documentSnapshot ?? null,
+      documentSnapshot: conversation.includeCurrentDocument
+        ? (dto.documentSnapshot ?? null)
+        : null,
       snapshotHash: dto.snapshotHash ?? null,
-      selection: dto.selection ?? null,
+      selection: conversation.includeCurrentDocument
+        ? (dto.selection ?? null)
+        : null,
+      contextRevision: conversation.contextRevision,
+      contextFingerprint: conversation.contextFingerprint,
       chatFileIds,
       attachmentIds,
       useSpaceSearch: dto.useSpaceSearch ?? conversation.useSpaceSearch,
@@ -133,6 +147,12 @@ export class AiRunService {
           .executeTakeFirst();
         if (!lockedConversation) {
           throw new NotFoundException('AI conversation not found');
+        }
+        if (lockedConversation.contextRevision !== dto.contextRevision) {
+          throw new ConflictException({
+            code: 'ai_context_revision_conflict',
+            message: 'AI conversation context was updated elsewhere',
+          });
         }
 
         const raced = await trx
@@ -202,14 +222,23 @@ export class AiRunService {
             status: 'queued',
             clientRequestId: dto.clientRequestId,
             requestFingerprint: fingerprint,
+            contextRevision: lockedConversation.contextRevision,
             useSpaceSearch: dto.useSpaceSearch ?? conversation.useSpaceSearch,
             chatFileIds,
             attachmentIds,
-            documentSnapshot: dto.documentSnapshot ?? null,
+            documentSnapshot: lockedConversation.includeCurrentDocument
+              ? (dto.documentSnapshot ?? null)
+              : null,
             snapshotHash: dto.snapshotHash ?? null,
-            selectionText: dto.selection?.text ?? null,
-            selectionFrom: dto.selection?.from ?? null,
-            selectionTo: dto.selection?.to ?? null,
+            selectionText: lockedConversation.includeCurrentDocument
+              ? (dto.selection?.text ?? null)
+              : null,
+            selectionFrom: lockedConversation.includeCurrentDocument
+              ? (dto.selection?.from ?? null)
+              : null,
+            selectionTo: lockedConversation.includeCurrentDocument
+              ? (dto.selection?.to ?? null)
+              : null,
             retrievalOutcome: 'not_requested',
             reservedTokens,
             createdAt: now,
@@ -217,6 +246,12 @@ export class AiRunService {
           })
           .returningAll()
           .executeTakeFirstOrThrow();
+        await this.contexts.captureRunContext(
+          trx,
+          inserted.id,
+          lockedConversation,
+          dto,
+        );
         await trx
           .updateTable('aiMessages')
           .set({ currentRunId: inserted.id })
@@ -251,11 +286,7 @@ export class AiRunService {
     return this.toSendResult(run);
   }
 
-  async get(
-    runId: string,
-    user: User,
-    workspace: Workspace,
-  ): Promise<AiRun> {
+  async get(runId: string, user: User, workspace: Workspace): Promise<AiRun> {
     return this.toRun(await this.getOwnedRun(runId, user, workspace));
   }
 
@@ -386,7 +417,11 @@ export class AiRunService {
       .where('workspaceId', '=', workspace.id)
       .executeTakeFirst();
     if (!run) throw new NotFoundException('AI run not found');
-    await this.conversations.getOwnedEntity(run.conversationId, user, workspace);
+    await this.conversations.getOwnedEntity(
+      run.conversationId,
+      user,
+      workspace,
+    );
     return run;
   }
 
@@ -441,6 +476,7 @@ export class AiRunService {
       trigger: run.trigger as AiRunTrigger,
       status: run.status as AiRun['status'],
       clientRequestId: run.clientRequestId,
+      contextRevision: run.contextRevision,
       useSpaceSearch: run.useSpaceSearch,
       chatFileIds: run.chatFileIds,
       attachmentIds: run.attachmentIds,
@@ -496,7 +532,10 @@ export class AiRunService {
     );
     if (idempotent) return this.toRun(idempotent);
 
-    const config = await this.configs.getRawConfig(source.spaceId, workspace.id);
+    const config = await this.configs.getRawConfig(
+      source.spaceId,
+      workspace.id,
+    );
     if (!config?.enabled) {
       throw new ForbiddenException('AI is not available in this space');
     }
@@ -546,9 +585,7 @@ export class AiRunService {
           );
         }
         if (trigger === 'regenerate' && locked.status !== 'completed') {
-          throw new ConflictException(
-            'Only completed runs can be regenerated',
-          );
+          throw new ConflictException('Only completed runs can be regenerated');
         }
 
         const raced = await trx
@@ -605,6 +642,7 @@ export class AiRunService {
             status: 'queued',
             clientRequestId: dto.clientRequestId,
             requestFingerprint: fingerprint,
+            contextRevision: locked.contextRevision,
             useSpaceSearch: locked.useSpaceSearch,
             chatFileIds: locked.chatFileIds,
             attachmentIds: locked.attachmentIds,
@@ -620,6 +658,12 @@ export class AiRunService {
           })
           .returningAll()
           .executeTakeFirstOrThrow();
+        await this.contexts.copyRunContext(
+          trx,
+          locked.id,
+          run.id,
+          locked.assistantMessageId,
+        );
         await trx
           .updateTable('aiMessages')
           .set({
@@ -666,19 +710,36 @@ export class AiRunService {
   ): Promise<void> {
     const dayStart = new Date();
     dayStart.setUTCHours(0, 0, 0, 0);
-    const [requestCount, tokenRow, conversationActive, userActive, spaceActive] =
-      await Promise.all([
-        db
-          .selectFrom('aiRuns')
-          .select(sql<number>`count(*)`.as('count'))
-          .where('userId', '=', userId)
-          .where('spaceId', '=', spaceId)
-          .where('createdAt', '>=', dayStart)
-          .executeTakeFirstOrThrow(),
-        db
-          .selectFrom('aiRuns')
-          .select(
-            sql<number>`
+    const [
+      requestCount,
+      auxRequestCount,
+      tokenRow,
+      auxTokenRow,
+      conversationActive,
+      userActive,
+      userAuxActive,
+      spaceActive,
+      spaceAuxActive,
+    ] = await Promise.all([
+      db
+        .selectFrom('aiRuns')
+        .select(sql<number>`count(*)`.as('count'))
+        .where('userId', '=', userId)
+        .where('spaceId', '=', spaceId)
+        .where('createdAt', '>=', dayStart)
+        .executeTakeFirstOrThrow(),
+      db
+        .selectFrom('aiAuxRuns')
+        .select(sql<number>`count(*)`.as('count'))
+        .where('kind', '=', 'editor_transform')
+        .where('userId', '=', userId)
+        .where('spaceId', '=', spaceId)
+        .where('createdAt', '>=', dayStart)
+        .executeTakeFirstOrThrow(),
+      db
+        .selectFrom('aiRuns')
+        .select(
+          sql<number>`
               coalesce(sum(
                 case
                   when status in ('queued', 'running') then reserved_tokens
@@ -686,16 +747,37 @@ export class AiRunService {
                 end
               ), 0)
             `.as('tokens'),
-          )
-          .where('workspaceId', '=', workspaceId)
-          .where('spaceId', '=', spaceId)
-          .where('createdAt', '>=', dayStart)
-          .executeTakeFirstOrThrow(),
-        this.countActive(db, 'conversationId', conversationId),
-        this.countActive(db, 'userId', userId),
-        this.countActive(db, 'spaceId', spaceId),
-      ]);
-    if (Number(requestCount.count) >= requestLimit) {
+        )
+        .where('workspaceId', '=', workspaceId)
+        .where('spaceId', '=', spaceId)
+        .where('createdAt', '>=', dayStart)
+        .executeTakeFirstOrThrow(),
+      db
+        .selectFrom('aiAuxRuns')
+        .select(
+          sql<number>`
+              coalesce(sum(
+                case
+                  when status in ('queued', 'running') then reserved_tokens
+                  else input_tokens + output_tokens
+                end
+              ), 0)
+            `.as('tokens'),
+        )
+        .where('workspaceId', '=', workspaceId)
+        .where('spaceId', '=', spaceId)
+        .where('createdAt', '>=', dayStart)
+        .executeTakeFirstOrThrow(),
+      this.countActive(db, 'conversationId', conversationId),
+      this.countActive(db, 'userId', userId),
+      this.countActiveAux(db, 'userId', userId),
+      this.countActive(db, 'spaceId', spaceId),
+      this.countActiveAux(db, 'spaceId', spaceId),
+    ]);
+    if (
+      Number(requestCount.count) + Number(auxRequestCount.count) >=
+      requestLimit
+    ) {
       throw new HttpException(
         {
           code: 'ai_daily_request_limit',
@@ -704,7 +786,12 @@ export class AiRunService {
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
-    if (Number(tokenRow.tokens) + requestedReservation > tokenLimit) {
+    if (
+      Number(tokenRow.tokens) +
+        Number(auxTokenRow.tokens) +
+        requestedReservation >
+      tokenLimit
+    ) {
       throw new HttpException(
         {
           code: 'ai_daily_token_limit',
@@ -715,8 +802,8 @@ export class AiRunService {
     }
     if (
       Number(conversationActive) >= 1 ||
-      Number(userActive) >= AI_USER_CONCURRENCY ||
-      Number(spaceActive) >= AI_SPACE_CONCURRENCY
+      Number(userActive) + Number(userAuxActive) >= AI_USER_CONCURRENCY ||
+      Number(spaceActive) + Number(spaceAuxActive) >= AI_SPACE_CONCURRENCY
     ) {
       throw this.busyError();
     }
@@ -731,6 +818,23 @@ export class AiRunService {
       (
         await db
           .selectFrom('aiRuns')
+          .select(sql<number>`count(*)`.as('count'))
+          .where(field, '=', value)
+          .where('status', 'in', ['queued', 'running'])
+          .executeTakeFirstOrThrow()
+      ).count,
+    );
+  }
+
+  private async countActiveAux(
+    db: any,
+    field: 'userId' | 'spaceId',
+    value: string,
+  ): Promise<number> {
+    return Number(
+      (
+        await db
+          .selectFrom('aiAuxRuns')
           .select(sql<number>`count(*)`.as('count'))
           .where(field, '=', value)
           .where('status', 'in', ['queued', 'running'])
@@ -798,8 +902,10 @@ export class AiRunService {
     if (rows.length !== ids.length || rows.some((row) => !row.pageId)) {
       throw new BadRequestException('Attachments are missing or inaccessible');
     }
-    const snapshot =
-      await this.pageAccessService.getSidebarAccessSnapshot(user, spaceId);
+    const snapshot = await this.pageAccessService.getSidebarAccessSnapshot(
+      user,
+      spaceId,
+    );
     if (rows.some((row) => !snapshot.readablePageIds.has(row.pageId!))) {
       throw new ForbiddenException('Attachment access denied');
     }
@@ -824,10 +930,7 @@ export class AiRunService {
     return existing;
   }
 
-  private assertFingerprint(
-    existing: string | null,
-    expected: string,
-  ): void {
+  private assertFingerprint(existing: string | null, expected: string): void {
     if (existing && existing !== expected) {
       throw new ConflictException({
         code: 'idempotency_key_reused',
@@ -844,16 +947,13 @@ export class AiRunService {
     maxOutputTokens: number,
   ): number {
     const chars =
-      content.length +
-      (selectionText?.length ?? documentSnapshot?.length ?? 0);
+      content.length + (selectionText?.length ?? documentSnapshot?.length ?? 0);
     const inputBudget = Math.max(1, contextWindow - maxOutputTokens);
     return Math.min(inputBudget, Math.ceil(chars / 4)) + maxOutputTokens;
   }
 
   private fingerprint(value: unknown): string {
-    return createHash('sha256')
-      .update(JSON.stringify(value))
-      .digest('hex');
+    return createHash('sha256').update(JSON.stringify(value)).digest('hex');
   }
 
   private runJobId(runId: string): string {
@@ -878,9 +978,7 @@ export class AiRunService {
     });
   }
 
-  private async toSendResult(
-    run: AiRunEntity,
-  ): Promise<SendAiMessageResponse> {
+  private async toSendResult(run: AiRunEntity): Promise<SendAiMessageResponse> {
     const messages = await this.db
       .selectFrom('aiMessages')
       .selectAll()

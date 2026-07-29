@@ -1,4 +1,4 @@
-const CACHE_VERSION = "docmost-pwa-v2";
+const CACHE_VERSION = "docmost-pwa-v3";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -58,6 +58,11 @@ self.addEventListener("fetch", (event) => {
 
   if (request.mode === "navigate") {
     event.respondWith(networkFirstForDocuments(request));
+    return;
+  }
+
+  if (url.pathname.startsWith("/locales/")) {
+    event.respondWith(networkFirstForResource(request));
     return;
   }
 
@@ -166,6 +171,34 @@ async function networkFirstForDocuments(request) {
       return offlinePage;
     }
 
+    return new Response("Offline", {
+      status: 503,
+      statusText: "Offline",
+      headers: { "Content-Type": "text/plain; charset=UTF-8" },
+    });
+  }
+}
+
+/**
+ * Network First strategy for resources that must not remain stale while online.
+ *
+ * @param {Request} request - Original resource request.
+ * @returns {Promise<Response>} Fresh network response or the latest cached response.
+ */
+async function networkFirstForResource(request) {
+  const cache = await caches.open(RUNTIME_CACHE);
+
+  try {
+    const response = await fetch(request);
+    if (response.ok) {
+      cache.put(request, response.clone());
+    }
+    return response;
+  } catch {
+    const cachedResponse = await cache.match(request);
+    if (cachedResponse) {
+      return cachedResponse;
+    }
     return new Response("Offline", {
       status: 503,
       statusText: "Offline",

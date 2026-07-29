@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { AiRun as AiRunEntity } from '@docmost/db/types/entity.types';
 import {
+  AiConversation,
+  AiConversationUpdatedEvent,
   AiRunDeltaEvent,
   AiRunStatusEvent,
 } from '@docmost/api-contract';
@@ -13,6 +15,13 @@ export class AiRunEventService {
     private readonly ws: WsGateway,
     private readonly metrics: AiOperationalMetricsService,
   ) {}
+
+  emitConversationUpdated(conversation: AiConversation): void {
+    const event: AiConversationUpdatedEvent = { conversation };
+    this.ws.server
+      ?.to(`user-${conversation.userId}`)
+      .emit('ai:conversation.updated', event);
+  }
 
   emitDelta(run: AiRunEntity, sequence: number, delta: string): void {
     this.metrics.observeDelta(run);

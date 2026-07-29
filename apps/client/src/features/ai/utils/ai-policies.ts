@@ -5,16 +5,38 @@ import type {
   AiStreamingRun,
 } from "@/features/ai/types/ai.types.ts";
 import type { AsideTabPreference } from "@/features/user/types/user.types.ts";
+import type { i18n, TFunction } from "i18next";
 
 export type AiDeltaSequenceDecision = "apply" | "ignore" | "recover";
 
 const AI_ERROR_TRANSLATION_KEYS: Record<string, string> = {
   ai_unavailable: "ai.errorReason.aiUnavailable",
+  ai_quota_exceeded: "ai.errorReason.quotaExceeded",
+  ai_daily_request_limit: "ai.errorReason.dailyRequestLimit",
+  ai_daily_token_limit: "ai.errorReason.dailyTokenLimit",
+  ai_conversation_busy: "ai.errorReason.conversationBusy",
+  ai_run_not_latest: "ai.errorReason.runNotLatest",
+  idempotency_key_reused: "ai.errorReason.idempotencyKeyReused",
+  page_write_required: "ai.errorReason.pageWriteRequired",
+  page_unavailable: "ai.errorReason.pageUnavailable",
   provider_timeout: "ai.errorReason.providerTimeout",
   provider_url_rejected: "ai.errorReason.providerConfiguration",
   provider_invalid_response: "ai.errorReason.providerInvalidResponse",
   provider_unavailable: "ai.errorReason.providerUnavailable",
   queue_unavailable: "ai.errorReason.queueUnavailable",
+  worker_lost: "ai.errorReason.workerLost",
+  retrieval_request_too_large: "ai.errorReason.retrievalRequestTooLarge",
+  retrieval_timeout: "ai.errorReason.retrievalTimeout",
+  retrieval_unavailable: "ai.errorReason.retrievalUnavailable",
+  retrieval_url_rejected: "ai.errorReason.retrievalConfiguration",
+  ai_file_processing_failed: "ai.errorReason.fileProcessingFailed",
+  ai_file_upload_failed: "ai.errorReason.fileUploadFailed",
+  ai_context_revision_conflict: "ai.errorReason.contextRevisionConflict",
+  ai_context_source_limit: "ai.errorReason.contextSourceLimit",
+  context_source_unavailable: "ai.errorReason.contextSourceUnavailable",
+  editor_selection_required: "ai.errorReason.editorSelectionRequired",
+  editor_context_stale: "ai.errorReason.editorContextStale",
+  editor_action_not_found: "ai.errorReason.editorActionNotFound",
 };
 
 export function getAiErrorTranslationKey(
@@ -23,12 +45,36 @@ export function getAiErrorTranslationKey(
   return AI_ERROR_TRANSLATION_KEYS[errorCode ?? ""] ?? "ai.errorReason.unknown";
 }
 
+export function resolveAiErrorMessage(
+  t: TFunction,
+  i18nInstance: i18n,
+  errorCode: string | null | undefined,
+): string {
+  const key = getAiErrorTranslationKey(errorCode);
+  if (i18nInstance.exists(key)) {
+    const translated = t(key);
+    if (translated && translated !== key) return translated;
+  }
+  const fallbackKey = "ai.errorReason.unknown";
+  if (i18nInstance.exists(fallbackKey)) {
+    const translated = t(fallbackKey);
+    if (translated && translated !== fallbackKey) return translated;
+  }
+  return "The AI request could not be completed.";
+}
+
 export function shouldShowAiPanelLoadFailure(
   availabilityIsError: boolean,
   conversationsIsError: boolean,
   canUse: boolean | undefined,
 ): boolean {
   return availabilityIsError || (canUse === true && conversationsIsError);
+}
+
+export function shouldShowAiRetrievalUi(
+  retrievalAvailable: boolean | undefined,
+): boolean {
+  return retrievalAvailable === true;
 }
 
 export function isAiMessageRetryable(status: AiMessage["status"]): boolean {

@@ -7,5 +7,6 @@ import { ShareModule } from '../share/share.module';
   imports: [ShareModule],
   controllers: [SearchController],
   providers: [SearchService],
+  exports: [SearchService],
 })
 export class SearchModule {}

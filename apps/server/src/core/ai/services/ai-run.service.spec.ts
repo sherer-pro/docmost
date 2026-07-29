@@ -14,6 +14,7 @@ describe('AiRunService queue delivery', () => {
       {} as any,
       {} as any,
       {} as any,
+      {} as any,
     );
   }
 

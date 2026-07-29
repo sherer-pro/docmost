@@ -12,15 +12,15 @@ import { AiRunEventService } from './ai-run-event.service';
 import { AiRunService } from './ai-run.service';
 import { DatabaseReadinessService } from '@docmost/db/services/database-readiness.service';
 import { AiOperationalMetricsService } from './ai-operational-metrics.service';
+import { AiAuxRunService } from './ai-aux-run.service';
+import { AiAuxRunExecutionService } from './ai-aux-run-execution.service';
 
 const RECONCILE_INTERVAL_MS = 15_000;
 const RUN_DELIVERY_DEADLINE_MS = 5 * 60 * 1000;
 const RUN_STALE_HEARTBEAT_MS = 12 * 60 * 1000;
 
 @Injectable()
-export class AiQueueReconcilerService
-  implements OnModuleInit, OnModuleDestroy
-{
+export class AiQueueReconcilerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(AiQueueReconcilerService.name);
   private timer: NodeJS.Timeout | undefined;
   private reconciling = false;
@@ -33,13 +33,18 @@ export class AiQueueReconcilerService
     private readonly events: AiRunEventService,
     private readonly databaseReadiness: DatabaseReadinessService,
     private readonly metrics: AiOperationalMetricsService,
+    private readonly auxRuns: AiAuxRunService,
+    private readonly auxExecution: AiAuxRunExecutionService,
   ) {}
 
   onModuleInit(): void {
     if (this.timer) {
       return;
     }
-    this.timer = setInterval(() => void this.reconcile(), RECONCILE_INTERVAL_MS);
+    this.timer = setInterval(
+      () => void this.reconcile(),
+      RECONCILE_INTERVAL_MS,
+    );
     this.timer.unref();
     void this.reconcile();
   }
@@ -59,16 +64,49 @@ export class AiQueueReconcilerService
       await this.databaseReadiness.waitUntilReady();
       if (this.destroyed) return;
       await this.reconcileRuns();
+      await this.reconcileAuxRuns();
       const staleFileIds = await this.files.recoverStaleExtractions();
       const pendingFileIds = await this.files.pendingExtractionIds(100);
       for (const fileId of new Set([...staleFileIds, ...pendingFileIds])) {
         await this.files.enqueueExtraction(fileId);
       }
       await this.files.cleanupDeletedFiles(100);
+      await this.auxRuns.cleanupExpired(100);
     } catch {
       this.logger.warn('AI queue reconciliation failed');
     } finally {
       this.reconciling = false;
+    }
+  }
+
+  private async reconcileAuxRuns(): Promise<void> {
+    const queued = await this.db
+      .selectFrom('aiAuxRuns')
+      .selectAll()
+      .where('status', '=', 'queued')
+      .orderBy('createdAt', 'asc')
+      .limit(100)
+      .execute();
+    for (const run of queued) {
+      const enqueued = await this.auxRuns.enqueue(run);
+      if (
+        !enqueued &&
+        Date.now() - run.createdAt.getTime() >= RUN_DELIVERY_DEADLINE_MS
+      ) {
+        await this.auxExecution.recover(run.id, 'queue_unavailable');
+      }
+    }
+
+    const staleBefore = new Date(Date.now() - RUN_STALE_HEARTBEAT_MS);
+    const stale = await this.db
+      .selectFrom('aiAuxRuns')
+      .select('id')
+      .where('status', '=', 'running')
+      .where('heartbeatAt', '<', staleBefore)
+      .limit(100)
+      .execute();
+    for (const run of stale) {
+      await this.auxExecution.recover(run.id, 'worker_lost');
     }
   }
 

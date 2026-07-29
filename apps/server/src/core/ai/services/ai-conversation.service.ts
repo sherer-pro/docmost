@@ -58,6 +58,16 @@ export class AiConversationService {
         }),
       )
       .digest('hex');
+    const contextFingerprint = createHash('sha256')
+      .update(
+        JSON.stringify({
+          includeCurrentDocument: true,
+          sources: [],
+          fileIds: [],
+          attachmentIds: [],
+        }),
+      )
+      .digest('hex');
     const row = await this.db.transaction().execute(async (trx) => {
       await sql`
         select pg_advisory_xact_lock(
@@ -81,8 +91,7 @@ export class AiConversationService {
         ) {
           throw new ConflictException({
             code: 'idempotency_key_reused',
-            message:
-              'The idempotency key was already used for another request',
+            message: 'The idempotency key was already used for another request',
           });
         }
         return existing;
@@ -97,7 +106,9 @@ export class AiConversationService {
           clientRequestId: dto.clientRequestId,
           requestFingerprint: fingerprint,
           title: dto.title?.trim() || null,
+          titleSource: dto.title?.trim() ? 'manual' : null,
           useSpaceSearch: dto.useSpaceSearch ?? false,
+          contextFingerprint,
         })
         .returningAll()
         .executeTakeFirstOrThrow();
@@ -126,7 +137,10 @@ export class AiConversationService {
       .updateTable('aiConversations')
       .set({
         ...(dto.title !== undefined
-          ? { title: dto.title?.trim() || null }
+          ? {
+              title: dto.title?.trim() || null,
+              titleSource: dto.title?.trim() ? 'manual' : null,
+            }
           : {}),
         ...(dto.draft !== undefined ? { draft: dto.draft || null } : {}),
         ...(dto.useSpaceSearch !== undefined
@@ -137,7 +151,9 @@ export class AiConversationService {
       .where('id', '=', conversation.id)
       .returningAll()
       .executeTakeFirstOrThrow();
-    return this.toConversation(row);
+    const result = this.toConversation(row);
+    this.runEvents.emitConversationUpdated(result);
+    return result;
   }
 
   async remove(id: string, user: User, workspace: Workspace) {
@@ -259,11 +275,21 @@ export class AiConversationService {
           .where('id', 'in', currentRunIds)
           .execute()
       : [];
+    const dependencies = currentRunIds.length
+      ? await this.db
+          .selectFrom('aiRunSourceDependencies')
+          .select(['runId', 'messageId', 'pageId'])
+          .where('runId', 'in', currentRunIds)
+          .execute()
+      : [];
     const runByMessageId = new Map(
       runs.map((run) => [run.assistantMessageId, run]),
     );
     const readable = await this.currentReadablePageIds(
-      sources.map((source) => source.pageId).filter(Boolean) as string[],
+      [
+        ...sources.map((source) => source.pageId).filter(Boolean),
+        ...dependencies.map((dependency) => dependency.pageId),
+      ] as string[],
       conversation.spaceId,
       user,
     );
@@ -284,6 +310,11 @@ export class AiConversationService {
     const liveChatFileIds = new Set(liveChatFiles.map((file) => file.id));
     const sourcesByMessage = new Map<string, AiCitation[]>();
     const restrictedMessages = new Set<string>();
+    for (const dependency of dependencies) {
+      if (!readable.has(dependency.pageId)) {
+        restrictedMessages.add(dependency.messageId);
+      }
+    }
     for (const source of sources) {
       if (
         source.sourceType === 'chat_file'
@@ -380,7 +411,7 @@ export class AiConversationService {
     return new Set(pageIds.filter((id) => snapshot.readablePageIds.has(id)));
   }
 
-  private toConversation(row: AiConversationEntity): AiConversation {
+  toConversation(row: AiConversationEntity): AiConversation {
     return {
       id: row.id,
       workspaceId: row.workspaceId,
@@ -389,8 +420,11 @@ export class AiConversationService {
       userId: row.userId,
       clientRequestId: row.clientRequestId,
       title: row.title,
+      titleSource: row.titleSource as AiConversation['titleSource'],
       draft: row.draft,
       useSpaceSearch: row.useSpaceSearch,
+      includeCurrentDocument: row.includeCurrentDocument,
+      contextRevision: row.contextRevision,
       lastOpenedAt: row.lastOpenedAt.toISOString(),
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),

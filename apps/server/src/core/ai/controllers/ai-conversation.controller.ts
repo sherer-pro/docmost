@@ -7,6 +7,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -16,16 +17,22 @@ import { AuthWorkspace } from '../../../common/decorators/auth-workspace.decorat
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import {
   AiConversationListQueryDto,
+  AiContextSourceSearchQueryDto,
   AiMessagesQueryDto,
   CreateAiConversationDto,
+  UpdateAiConversationContextDto,
   UpdateAiConversationDto,
 } from '../dto/ai.dto';
 import { AiConversationService } from '../services/ai-conversation.service';
+import { AiContextService } from '../services/ai-context.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('ai/conversations')
 export class AiConversationController {
-  constructor(private readonly conversations: AiConversationService) {}
+  constructor(
+    private readonly conversations: AiConversationService,
+    private readonly contexts: AiContextService,
+  ) {}
 
   @Get()
   list(
@@ -90,5 +97,34 @@ export class AiConversationController {
     @AuthWorkspace() workspace: Workspace,
   ) {
     return this.conversations.listMessages(id, query, user, workspace);
+  }
+
+  @Get(':id/context')
+  context(
+    @Param('id', ParseUUIDPipe) id: string,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.contexts.get(id, user, workspace);
+  }
+
+  @Put(':id/context')
+  updateContext(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateAiConversationContextDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.contexts.update(id, dto, user, workspace);
+  }
+
+  @Get(':id/context-sources')
+  contextSources(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() query: AiContextSourceSearchQueryDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.contexts.search(id, query, user, workspace);
   }
 }

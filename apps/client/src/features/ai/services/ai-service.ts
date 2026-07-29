@@ -16,6 +16,11 @@ import {
   SendAiMessageResult,
   CreateAiConversationRequest,
   AiRun,
+  AiConversationContext,
+  AiContextSource,
+  UpdateAiConversationContextRequest,
+  CreateAiEditorActionRequest,
+  AiEditorActionRun,
 } from "@/features/ai/types/ai.types.ts";
 
 export interface AiCollectionPage<T> {
@@ -83,6 +88,45 @@ export async function getAiMessages(
   };
 }
 
+export async function getAiConversationContext(
+  conversationId: string,
+): Promise<AiConversationContext> {
+  const response = await api.get<AiConversationContext>(
+    `/ai/conversations/${conversationId}/context`,
+  );
+  return unwrapApiResponse<AiConversationContext>(response);
+}
+
+export async function updateAiConversationContext(
+  conversationId: string,
+  data: UpdateAiConversationContextRequest,
+): Promise<AiConversationContext> {
+  const response = await api.put<AiConversationContext>(
+    `/ai/conversations/${conversationId}/context`,
+    data,
+  );
+  return unwrapApiResponse<AiConversationContext>(response);
+}
+
+export async function searchAiContextSources(input: {
+  conversationId: string;
+  query: string;
+  cursor?: string;
+  limit?: number;
+}): Promise<AiCollectionPage<AiContextSource>> {
+  const response = await api.get<AiPageResponse<AiContextSource>>(
+    `/ai/conversations/${input.conversationId}/context-sources`,
+    {
+      params: {
+        query: input.query,
+        cursor: input.cursor,
+        limit: input.limit ?? 20,
+      },
+    },
+  );
+  return unwrapApiResponse<AiPageResponse<AiContextSource>>(response);
+}
+
 export async function sendAiMessage(
   input: SendAiMessageInput,
 ): Promise<SendAiMessageResult> {
@@ -100,10 +144,36 @@ export async function sendAiMessage(
   return unwrapApiResponse<SendAiMessageResult>(response);
 }
 
-export async function cancelAiRun(runId: string): Promise<AiRun> {
-  const response = await api.post<AiRun>(
-    `/ai/runs/${runId}/actions/cancel`,
+export async function createAiEditorAction(
+  input: CreateAiEditorActionRequest,
+): Promise<AiEditorActionRun> {
+  const response = await api.post<AiEditorActionRun>(
+    "/ai/editor-actions",
+    input,
   );
+  return unwrapApiResponse<AiEditorActionRun>(response);
+}
+
+export async function getAiEditorAction(
+  runId: string,
+): Promise<AiEditorActionRun> {
+  const response = await api.get<AiEditorActionRun>(
+    `/ai/editor-actions/${runId}`,
+  );
+  return unwrapApiResponse<AiEditorActionRun>(response);
+}
+
+export async function cancelAiEditorAction(
+  runId: string,
+): Promise<AiEditorActionRun> {
+  const response = await api.post<AiEditorActionRun>(
+    `/ai/editor-actions/${runId}/actions/cancel`,
+  );
+  return unwrapApiResponse<AiEditorActionRun>(response);
+}
+
+export async function cancelAiRun(runId: string): Promise<AiRun> {
+  const response = await api.post<AiRun>(`/ai/runs/${runId}/actions/cancel`);
   return unwrapApiResponse<AiRun>(response);
 }
 

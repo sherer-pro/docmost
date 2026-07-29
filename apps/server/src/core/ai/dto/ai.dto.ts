@@ -18,6 +18,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import {
+  AI_CONTEXT_SOURCE_TYPES,
   AI_PROVIDERS,
   AI_RETRIEVAL_ADAPTERS,
 } from '@docmost/api-contract';
@@ -34,6 +35,11 @@ export class AiQuickCommandDto {
   @IsString()
   @Length(1, 4000)
   prompt: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  description?: string;
 
   @IsOptional()
   @IsBoolean()
@@ -230,6 +236,61 @@ export class AiStatusQueryDto {
   pageId?: string;
 }
 
+export class AiContextSourceInputDto {
+  @IsIn(AI_CONTEXT_SOURCE_TYPES)
+  sourceType: 'page' | 'database' | 'database_row';
+
+  @IsUUID()
+  sourceId: string;
+}
+
+export class UpdateAiConversationContextDto {
+  @IsInt()
+  @Min(0)
+  expectedRevision: number;
+
+  @IsBoolean()
+  includeCurrentDocument: boolean;
+
+  @IsArray()
+  @ArrayMaxSize(10)
+  @ValidateNested({ each: true })
+  @Type(() => AiContextSourceInputDto)
+  sources: AiContextSourceInputDto[];
+
+  @IsArray()
+  @ArrayMaxSize(10)
+  @ArrayUnique()
+  @IsUUID(undefined, { each: true })
+  fileIds: string[];
+
+  @IsArray()
+  @ArrayMaxSize(20)
+  @ArrayUnique()
+  @IsUUID(undefined, { each: true })
+  attachmentIds: string[];
+}
+
+export class AiContextSourceSearchQueryDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(512)
+  query?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => Number(value))
+  @IsInt()
+  @Min(0)
+  cursor = 0;
+
+  @IsOptional()
+  @Transform(({ value }) => Number(value))
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  limit = 20;
+}
+
 export class AiSelectionDto {
   @IsString()
   @MaxLength(200000)
@@ -253,6 +314,10 @@ export class SendAiMessageDto {
   @Length(1, 128)
   clientRequestId: string;
 
+  @IsInt()
+  @Min(0)
+  contextRevision: number;
+
   @IsOptional()
   @IsString()
   @MaxLength(1000000)
@@ -270,20 +335,6 @@ export class SendAiMessageDto {
   selection?: AiSelectionDto;
 
   @IsOptional()
-  @IsArray()
-  @ArrayMaxSize(10)
-  @ArrayUnique()
-  @IsUUID(undefined, { each: true })
-  fileIds?: string[];
-
-  @IsOptional()
-  @IsArray()
-  @ArrayMaxSize(20)
-  @ArrayUnique()
-  @IsUUID(undefined, { each: true })
-  attachmentIds?: string[];
-
-  @IsOptional()
   @IsBoolean()
   useSpaceSearch?: boolean;
 }
@@ -292,4 +343,30 @@ export class AiRunActionDto {
   @IsString()
   @Length(1, 128)
   clientRequestId: string;
+}
+
+export class CreateAiEditorActionDto {
+  @IsUUID()
+  pageId: string;
+
+  @IsString()
+  @Length(1, 128)
+  clientRequestId: string;
+
+  @IsString()
+  @Length(1, 64)
+  commandId: string;
+
+  @IsString()
+  @Length(1, 4000)
+  instruction: string;
+
+  @IsObject()
+  @ValidateNested()
+  @Type(() => AiSelectionDto)
+  selection: AiSelectionDto;
+
+  @IsString()
+  @Length(1, 128)
+  snapshotHash: string;
 }

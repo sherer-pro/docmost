@@ -41,6 +41,8 @@ describe('AiRunExecutionService claim', () => {
       {} as any,
       {} as any,
       {} as any,
+      {} as any,
+      {} as any,
     );
 
     await expect((service as any).claim('run')).resolves.toBe(run);

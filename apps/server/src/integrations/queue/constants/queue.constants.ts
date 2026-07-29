@@ -65,6 +65,7 @@ export enum QueueJob {
   DELETE_PAGE_EMBEDDINGS = 'delete-page-embeddings',
 
   AI_CHAT_RUN = 'ai-chat-run',
+  AI_AUX_RUN = 'ai-aux-run',
   AI_CHAT_FILE_EXTRACT = 'ai-chat-file-extract',
   AI_CHAT_RETENTION_CLEANUP = 'ai-chat-retention-cleanup',
 

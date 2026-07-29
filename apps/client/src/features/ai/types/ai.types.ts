@@ -6,6 +6,13 @@ export type {
   AiChatFileStatus,
   AiCitation,
   AiConversation,
+  AiConversationContext,
+  AiContextSource,
+  AiContextSourceType,
+  AiConversationUpdatedEvent,
+  AiEditorActionRun,
+  AiEditorActionDeltaEvent,
+  AiEditorActionStatusEvent,
   AiFileUploadBatch,
   AiFileUploadBatchStatus,
   AiApplyContext,
@@ -33,6 +40,8 @@ export type {
   AiModelTestResult,
   AiRetrievalTestResult,
   CreateAiConversationRequest,
+  CreateAiEditorActionRequest,
+  UpdateAiConversationContextRequest,
   SendAiMessageResponse,
 } from "@docmost/api-contract";
 
@@ -73,8 +82,7 @@ export interface SendAiMessageInput {
   pageId: string;
   clientRequestId: string;
   useSpaceSearch: boolean;
-  fileIds?: string[];
-  attachmentIds?: string[];
+  contextRevision: number;
   editorContext: AiEditorContext;
 }
 
