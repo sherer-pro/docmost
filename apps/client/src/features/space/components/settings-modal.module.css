@@ -68,11 +68,13 @@
 
 @media (max-width: 48em) {
   .content {
-    max-height: calc(100dvh - rem(48px));
+    height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
   }
 
   .layout {
-    height: calc(100dvh - rem(136px));
+    height: calc(100dvh - rem(88px));
     min-height: rem(320px);
   }
 

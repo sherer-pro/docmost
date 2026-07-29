@@ -95,7 +95,8 @@
   position: sticky;
   z-index: 3;
   bottom: 0;
-  padding: var(--mantine-spacing-sm) 0;
+  padding: var(--mantine-spacing-sm) 0
+    calc(var(--mantine-spacing-sm) + env(safe-area-inset-bottom));
   border-top: 1px solid var(--mantine-color-default-border);
   background: var(--mantine-color-body);
   box-shadow: 0 rem(-12px) rem(18px) rem(-20px)

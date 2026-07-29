@@ -28,6 +28,11 @@
   }
 }
 
+.main {
+  min-width: 0;
+  overflow-x: clip;
+}
+
 .asideResizeHandle {
   width: 4px;
   cursor: col-resize;
@@ -44,6 +49,27 @@
       var(--mantine-color-gray-4),
       var(--mantine-color-dark-5)
     );
+  }
+}
+
+.overlayAside {
+  position: fixed;
+  z-index: 190;
+  inset-block: 45px 0;
+  inset-inline-end: 0;
+  min-width: 0;
+  max-width: calc(100vw - 24px);
+  overflow: hidden;
+  background-color: light-dark(#f6f7f9, var(--mantine-color-dark-8));
+  border-inline-start: 1px solid
+    light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-5));
+  box-shadow: var(--mantine-shadow-xl);
+  transition: transform 180ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlayAside {
+    transition: none;
   }
 }
 

@@ -78,7 +78,6 @@ import { useDictionaryTermsQuery } from "@/features/dictionary/queries/dictionar
 import { createDictionaryMatcherIndex } from "@/features/dictionary/utils/dictionary-matcher";
 import { TransclusionLookupProvider } from "@/features/editor/components/transclusion/transclusion-lookup-context";
 import { FixedToolbar } from "@/features/editor/components/fixed-toolbar/fixed-toolbar";
-import { AiFixedSelectionBubble } from "@/features/ai/components/ai-selection-action";
 import { getEnabledTagDefinitions } from "@/features/editor/components/tag/tag-settings";
 
 interface PageEditorProps {
@@ -562,13 +561,6 @@ export default function PageEditor({
                 canManageDictionary={canManageDictionary}
                 canCreateInlineComments={canCreateInlineComments}
               />
-              {pageId && spaceId && (
-                <AiFixedSelectionBubble
-                  editor={editor}
-                  pageId={pageId}
-                  spaceId={spaceId}
-                />
-              )}
             </>
           )}
 

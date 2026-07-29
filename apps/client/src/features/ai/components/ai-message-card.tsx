@@ -189,9 +189,10 @@ export function AiMessageCard({
 
   return (
     <Paper
-      p="sm"
+      component="article"
+      p={isAssistant ? "xs" : "sm"}
       radius="md"
-      withBorder={isAssistant}
+      withBorder={false}
       className={isAssistant ? classes.assistantMessage : classes.userMessage}
       aria-live={
         isAssistant && message.status === "streaming" ? "polite" : undefined
@@ -220,7 +221,9 @@ export function AiMessageCard({
           >
             <Loader size="xs" type="dots" />
             <Text size="xs" c="dimmed">
-              {t("ai.generating")}
+              {hasReasoning && !hasContent
+                ? t("ai.ux.reasoningInProgress")
+                : t("ai.generating")}
             </Text>
           </Group>
         )}
@@ -321,6 +324,7 @@ export function AiMessageCard({
         opened={Boolean(applyMode)}
         onClose={() => setApplyMode(null)}
         title={t("ai.applyConfirmTitle")}
+        closeButtonProps={{ "aria-label": t("Close") }}
         centered
       >
         <Text size="sm">

@@ -18,10 +18,44 @@
   min-width: 0;
 }
 
-.messages {
+.conversationOption {
+  min-width: 0;
+  width: 100%;
+}
+
+.mobileConversationButton {
+  min-width: 0;
+  min-height: 44px;
+}
+
+.mobileConversationButton :global(.mantine-Button-label) {
+  min-width: 0;
+}
+
+.conversationSelect :global(.mantine-Select-input) {
+  text-overflow: ellipsis;
+}
+
+.messagesRegion {
   flex: 1;
   min-height: 0;
   min-width: 0;
+  position: relative;
+}
+
+.messages {
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+}
+
+.jumpToLatest {
+  position: absolute;
+  z-index: 2;
+  inset-inline-start: 50%;
+  inset-block-end: var(--mantine-spacing-sm);
+  transform: translateX(-50%);
+  box-shadow: var(--mantine-shadow-md);
 }
 
 .composer {
@@ -29,7 +63,9 @@
   min-width: 0;
   border-top: 1px solid
     light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-5));
-  padding-top: var(--mantine-spacing-sm);
+  padding: var(--mantine-spacing-sm);
+  background: light-dark(rgba(255, 255, 255, 0.94), rgba(26, 27, 30, 0.94));
+  backdrop-filter: blur(10px);
 }
 
 .composerToolbar {
@@ -45,6 +81,12 @@
 
 .toolbarButton :global(.mantine-Button-label) {
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toolbarButtonLabel {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -190,19 +232,22 @@
 .assistantMessage {
   max-width: 100%;
   align-self: stretch;
-  background: light-dark(
-    var(--mantine-color-white),
-    var(--mantine-color-dark-7)
-  );
+  background: transparent;
 }
 
 .userMessage {
-  max-width: 92%;
+  max-width: 88%;
   align-self: flex-end;
   background: light-dark(
     var(--mantine-color-blue-0),
     var(--mantine-color-blue-9)
   );
+}
+
+.sourcesDisclosure {
+  border-inline-start: 2px solid
+    light-dark(var(--mantine-color-blue-2), var(--mantine-color-blue-8));
+  padding-inline-start: var(--mantine-spacing-xs);
 }
 
 .markdown {
@@ -293,5 +338,46 @@
 @media (pointer: coarse) {
   .messageActions {
     opacity: 1;
+  }
+}
+
+@media (max-width: 30em) {
+  .conversationBar {
+    gap: 6px;
+  }
+
+  .conversationBar > button,
+  .composerFooter > button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .toolbarButtonLabel {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .toolbarButton {
+    min-width: 44px;
+    min-height: 44px;
+    flex: 1 1 0;
+  }
+
+  .composerToolbar {
+    gap: 6px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .messageActions {
+    transition: none;
+  }
+
+  .jumpToLatest {
+    scroll-behavior: auto;
   }
 }

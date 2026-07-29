@@ -37,7 +37,10 @@ import {
   SendAiMessageInput,
   UpdateAiConversationContextRequest,
 } from "@/features/ai/types/ai.types.ts";
-import { aiStreamingRunsAtom } from "@/features/ai/atoms/ai-atoms.ts";
+import {
+  aiActivityAtom,
+  aiStreamingRunsAtom,
+} from "@/features/ai/atoms/ai-atoms.ts";
 import { reduceAiRunState } from "@/features/ai/utils/ai-run-state.ts";
 
 export const AI_QUERY_KEYS = {
@@ -199,6 +202,7 @@ export function useAiMessagesQuery(conversationId?: string) {
 export function useSendAiMessageMutation() {
   const queryClient = useQueryClient();
   const setRuns = useSetAtom(aiStreamingRunsAtom);
+  const setActivity = useSetAtom(aiActivityAtom);
 
   return useMutation({
     mutationFn: (input: SendAiMessageInput) => sendAiMessage(input),
@@ -212,6 +216,19 @@ export function useSendAiMessageMutation() {
             reasoning: result.assistantMessage.reasoning ?? "",
           }).runs,
       );
+      setActivity((current) => ({
+        ...current,
+        [result.run.id]: {
+          runId: result.run.id,
+          conversationId: result.run.conversationId,
+          pageId: input.pageId,
+          pageTitle: input.pageTitle,
+          pageHref: input.pageHref,
+          status: result.run.status,
+          unread: false,
+          updatedAt: new Date().toISOString(),
+        },
+      }));
       void queryClient.invalidateQueries({
         queryKey: AI_QUERY_KEYS.messages(input.conversationId),
       });

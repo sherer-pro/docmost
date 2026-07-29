@@ -40,3 +40,15 @@ export function findTreeNodeById(
   }
   return undefined;
 }
+
+export function dedupeAiContextSources(
+  sources: AiContextSource[],
+): AiContextSource[] {
+  const seen = new Set<string>();
+  return sources.filter((source) => {
+    const identity = `${source.sourceType}:${source.sourceId}`;
+    if (seen.has(identity)) return false;
+    seen.add(identity);
+    return true;
+  });
+}

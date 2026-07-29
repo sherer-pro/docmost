@@ -21,6 +21,7 @@ import {
 import { searchSpotlight } from "@/features/search/constants.ts";
 import { NotificationPopover } from "@/features/notification/components/notification-popover.tsx";
 import useUserRole from "@/hooks/use-user-role.tsx";
+import { AiActivityPopover } from "@/features/ai/components/ai-activity-popover.tsx";
 
 export function AppHeader() {
   const { t } = useTranslation();
@@ -90,6 +91,7 @@ export function AppHeader() {
         </Group>
 
         <Group wrap="nowrap" className={classes.right}>
+          <AiActivityPopover />
           <NotificationPopover />
           {isCloud() && isTrial && trialDaysLeft !== 0 && (
             <>

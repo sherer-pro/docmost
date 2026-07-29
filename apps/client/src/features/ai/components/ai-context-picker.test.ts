@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { treeNodeToContextSource } from "../utils/ai-context.ts";
+import {
+  dedupeAiContextSources,
+  treeNodeToContextSource,
+} from "../utils/ai-context.ts";
+import type { AiContextSource } from "@/features/ai/types/ai.types.ts";
 
 function node(
   overrides: Record<string, unknown>,
@@ -52,5 +56,31 @@ describe("AI context tree drops", () => {
       sourceId: "page-id",
       icon: "📚",
     });
+  });
+});
+
+describe("AI context search results", () => {
+  it("deduplicates identities while preserving the first result order", () => {
+    const source = (sourceId: string, title: string): AiContextSource =>
+      ({
+        id: `page:${sourceId}`,
+        sourceType: "page",
+        sourceId,
+        pageId: sourceId,
+        title,
+        icon: null,
+        breadcrumbs: [],
+        url: null,
+        position: 0,
+        available: true,
+      }) as AiContextSource;
+
+    expect(
+      dedupeAiContextSources([
+        source("one", "First"),
+        source("one", "Duplicate"),
+        source("two", "Second"),
+      ]).map((item) => item.title),
+    ).toEqual(["First", "Second"]);
   });
 });

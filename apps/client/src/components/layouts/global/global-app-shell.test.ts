@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { getShellVisibilityState } from "@/components/layouts/global/global-app-shell.utils";
+import {
+  getAsidePresentationMode,
+  getShellVisibilityState,
+} from "@/components/layouts/global/global-app-shell.utils";
 
 describe("getShellVisibilityState", () => {
   it("hides the mobile sidebar from accessibility state when collapsed", () => {
@@ -39,5 +42,40 @@ describe("getShellVisibilityState", () => {
         isAsideOpen: false,
       }).isAsideHidden,
     ).toBe(true);
+  });
+});
+
+describe("getAsidePresentationMode", () => {
+  it("uses a fullscreen drawer through the mobile breakpoint", () => {
+    expect(
+      getAsidePresentationMode({
+        viewportWidth: 768,
+        sidebarWidth: 300,
+        asideWidth: 400,
+        isSidebarVisible: true,
+      }),
+    ).toBe("fullscreen");
+  });
+
+  it("overlays the aside when docking would leave too little editor space", () => {
+    expect(
+      getAsidePresentationMode({
+        viewportWidth: 1200,
+        sidebarWidth: 300,
+        asideWidth: 400,
+        isSidebarVisible: true,
+      }),
+    ).toBe("overlay");
+  });
+
+  it("docks the aside when the editor keeps its minimum width", () => {
+    expect(
+      getAsidePresentationMode({
+        viewportWidth: 1440,
+        sidebarWidth: 300,
+        asideWidth: 400,
+        isSidebarVisible: true,
+      }),
+    ).toBe("docked");
   });
 });

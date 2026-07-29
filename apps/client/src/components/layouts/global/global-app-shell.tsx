@@ -1,5 +1,5 @@
 import { AppShell, Drawer } from "@mantine/core";
-import { useMediaQuery } from "@mantine/hooks";
+import { useMediaQuery, useViewportSize } from "@mantine/hooks";
 import React, { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import SettingsSidebar from "@/components/settings/settings-sidebar.tsx";
@@ -17,7 +17,10 @@ import Aside from "@/components/layouts/global/aside.tsx";
 import classes from "./app-shell.module.css";
 import { useTrialEndAction } from "@/ee/hooks/use-trial-end-action.tsx";
 import { PageFrame } from "@/components/ui/page-frame.tsx";
-import { getShellVisibilityState } from "@/components/layouts/global/global-app-shell.utils.ts";
+import {
+  getAsidePresentationMode,
+  getShellVisibilityState,
+} from "@/components/layouts/global/global-app-shell.utils.ts";
 import { useSetAtom } from "jotai";
 import { AiSocketBridge } from "@/features/ai/hooks/use-ai-socket.ts";
 import { AiPanelPreferencesSync } from "@/features/ai/components/ai-panel-preferences-sync.tsx";
@@ -44,6 +47,8 @@ export default function GlobalAppShell({
   const sidebarRef = useRef<HTMLElement | null>(null);
   const asideRef = useRef<HTMLElement | null>(null);
   const isMobileViewport = useMediaQuery("(max-width: 48em)");
+  const reduceMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
+  const { width: viewportWidth } = useViewportSize();
 
   const startResizing = React.useCallback((mouseDownEvent) => {
     mouseDownEvent.preventDefault();
@@ -60,8 +65,8 @@ export default function GlobalAppShell({
       if (isAsideResizing) {
         setAsideWidth(
           Math.min(
-            600,
-            Math.max(300, window.innerWidth - mouseMoveEvent.clientX),
+            520,
+            Math.max(360, window.innerWidth - mouseMoveEvent.clientX),
           ),
         );
         return;
@@ -113,6 +118,16 @@ export default function GlobalAppShell({
   const isDatabaseRoute = location.pathname.includes("/db/");
   const shouldShowAside = isPageRoute || isDatabaseRoute;
   const hideSidebar = isHomeRoute || isSpacesRoute;
+  const isDesktopSidebarVisible =
+    !isMobileViewport && desktopOpened && !hideSidebar;
+  const asideMode = getAsidePresentationMode({
+    viewportWidth,
+    sidebarWidth: isSpaceRoute ? sidebarWidth : 300,
+    asideWidth,
+    isSidebarVisible: isDesktopSidebarVisible,
+  });
+  const isDockedAside = asideMode === "docked";
+  const isOverlayAside = asideMode === "overlay";
   const { isNavbarHidden, isAsideHidden } = getShellVisibilityState({
     isMobileViewport: Boolean(isMobileViewport),
     mobileOpened,
@@ -162,7 +177,7 @@ export default function GlobalAppShell({
         }
         aside={
           shouldShowAside &&
-          !isMobileViewport && {
+          isDockedAside && {
             width: asideWidth,
             breakpoint: "sm",
             collapsed: { mobile: !isAsideOpen, desktop: !isAsideOpen },
@@ -188,7 +203,7 @@ export default function GlobalAppShell({
             {isSettingsRoute && <SettingsSidebar />}
           </AppShell.Navbar>
         )}
-        <AppShell.Main>
+        <AppShell.Main className={classes.main}>
           {isSettingsRoute ? (
             <PageFrame size="settings">{children}</PageFrame>
           ) : (
@@ -196,7 +211,7 @@ export default function GlobalAppShell({
           )}
         </AppShell.Main>
 
-        {shouldShowAside && !isMobileViewport && (
+        {shouldShowAside && isDockedAside && (
           <AppShell.Aside
             id="docmost-context-aside"
             className={classes.aside}
@@ -211,16 +226,16 @@ export default function GlobalAppShell({
               role="separator"
               aria-orientation="vertical"
               aria-label={t("ai.resizePanel")}
-              aria-valuemin={300}
-              aria-valuemax={600}
+              aria-valuemin={360}
+              aria-valuemax={520}
               aria-valuenow={asideWidth}
               tabIndex={0}
               onKeyDown={(event) => {
                 if (event.key === "ArrowLeft") {
-                  setAsideWidth(Math.min(600, asideWidth + 10));
+                  setAsideWidth(Math.min(520, asideWidth + 10));
                 }
                 if (event.key === "ArrowRight") {
-                  setAsideWidth(Math.max(300, asideWidth - 10));
+                  setAsideWidth(Math.max(360, asideWidth - 10));
                 }
               }}
             />
@@ -228,7 +243,22 @@ export default function GlobalAppShell({
           </AppShell.Aside>
         )}
 
-        {shouldShowAside && Boolean(isMobileViewport) && (
+        {shouldShowAside && isOverlayAside && (
+          <aside
+            id="docmost-context-aside"
+            className={classes.overlayAside}
+            aria-hidden={!isAsideOpen || undefined}
+            style={{
+              width: "clamp(360px, 42vw, 480px)",
+              transform: isAsideOpen ? "translateX(0)" : "translateX(100%)",
+            }}
+            ref={asideRef}
+          >
+            <Aside />
+          </aside>
+        )}
+
+        {shouldShowAside && asideMode === "fullscreen" && (
           <Drawer
             opened={isAsideOpen}
             onClose={() => setAsideState({ ...asideState, isAsideOpen: false })}
@@ -239,6 +269,7 @@ export default function GlobalAppShell({
             title={null}
             aria-label={t("ai.title")}
             keepMounted
+            transitionProps={{ duration: reduceMotion ? 0 : 180 }}
             styles={{
               body: {
                 height: "100dvh",

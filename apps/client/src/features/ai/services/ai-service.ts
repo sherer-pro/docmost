@@ -130,7 +130,14 @@ export async function searchAiContextSources(input: {
 export async function sendAiMessage(
   input: SendAiMessageInput,
 ): Promise<SendAiMessageResult> {
-  const { conversationId, editorContext, pageId: _pageId, ...message } = input;
+  const {
+    conversationId,
+    editorContext,
+    pageId: _pageId,
+    pageTitle: _pageTitle,
+    pageHref: _pageHref,
+    ...message
+  } = input;
   const payload = {
     ...message,
     documentSnapshot: editorContext.markdown,

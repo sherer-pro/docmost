@@ -15,6 +15,7 @@ import { useAtomValue } from "jotai";
 import { userAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { hasFullSpaceAccess } from "@/features/space/permissions/export-access.ts";
 import { AiSpaceSettings } from "@/features/ai/components/ai-space-settings.tsx";
+import { useMediaQuery } from "@mantine/hooks";
 
 interface SpaceSettingsModalProps {
   spaceId: string;
@@ -30,6 +31,7 @@ export default function SpaceSettingsModal({
   const { t } = useTranslation();
   const { data: space, isLoading } = useSpaceQuery(spaceId);
   const user = useAtomValue(userAtom);
+  const isMobile = useMediaQuery("(max-width: 48em)");
 
   const spaceRules = space?.membership?.permissions;
   const spaceAbility = useSpaceAbility(spaceRules);
@@ -51,6 +53,7 @@ export default function SpaceSettingsModal({
         padding="lg"
         yOffset={20}
         xOffset={20}
+        fullScreen={Boolean(isMobile)}
         classNames={{
           body: classes.body,
           content: classes.content,
@@ -60,8 +63,8 @@ export default function SpaceSettingsModal({
         <Modal.Overlay />
         <Modal.Content
           style={{
-            maxWidth: "min(680px, calc(100vw - 40px))",
-            width: "min(680px, calc(100vw - 40px))",
+            maxWidth: isMobile ? "100vw" : "min(680px, calc(100vw - 40px))",
+            width: isMobile ? "100vw" : "min(680px, calc(100vw - 40px))",
           }}
         >
           <Modal.Header py={0}>

@@ -1,5 +1,6 @@
 import {
   ActionIcon,
+  Alert,
   Badge,
   Box,
   Button,
@@ -7,7 +8,6 @@ import {
   Divider,
   FileButton,
   Group,
-  Indicator,
   Loader,
   Menu,
   Modal,
@@ -29,7 +29,7 @@ import {
   IconUpload,
 } from "@tabler/icons-react";
 import { useMemo, useState } from "react";
-import { useDebouncedValue } from "@mantine/hooks";
+import { useDebouncedValue, useMediaQuery } from "@mantine/hooks";
 import { useTranslation } from "react-i18next";
 import { useAiContextSourcesQuery } from "@/features/ai/queries/ai-query.ts";
 import {
@@ -38,6 +38,7 @@ import {
   AiPageAttachment,
 } from "@/features/ai/types/ai.types.ts";
 import classes from "./ai-panel.module.css";
+import { dedupeAiContextSources } from "@/features/ai/utils/ai-context.ts";
 
 interface AiContextPickerProps {
   conversationId?: string;
@@ -51,6 +52,7 @@ interface AiContextPickerProps {
   pageAttachments: AiPageAttachment[];
   loadingFiles: boolean;
   saving: boolean;
+  saveFailed: boolean;
   onToggleCurrentDocument: (included: boolean) => Promise<unknown>;
   onAddSource: (source: AiContextSource) => Promise<unknown>;
   onRemoveSource: (source: AiContextSource) => Promise<unknown>;
@@ -60,16 +62,24 @@ interface AiContextPickerProps {
     included: boolean,
   ) => Promise<unknown>;
   onUpload: (files: File[]) => Promise<void>;
-  onDeleteFile: (fileId: string) => void;
+  onDeleteFile: (fileId: string, fileName: string) => void;
+  onRetrySave: () => Promise<void>;
 }
 
 export function AiContextPicker(props: AiContextPickerProps) {
   const { t } = useTranslation();
   const [searchOpened, setSearchOpened] = useState(false);
   const [query, setQuery] = useState("");
+  const isCoarsePointer = useMediaQuery("(pointer: coarse)");
   const [debouncedQuery] = useDebouncedValue(query, 250);
   const search = useAiContextSourcesQuery(props.conversationId, debouncedQuery);
-  const searchItems = search.data?.pages.flatMap((page) => page.items) ?? [];
+  const searchItems = useMemo(
+    () =>
+      dedupeAiContextSources(
+        search.data?.pages.flatMap((page) => page.items) ?? [],
+      ),
+    [search.data?.pages],
+  );
   const selectedIdentities = useMemo(
     () =>
       new Set(
@@ -80,10 +90,7 @@ export function AiContextPicker(props: AiContextPickerProps) {
     [props.sources],
   );
   const selectedCount =
-    (props.includeCurrentDocument ? 1 : 0) +
-    props.sources.length +
-    props.fileIds.length +
-    props.attachmentIds.length;
+    props.sources.length + props.fileIds.length + props.attachmentIds.length;
 
   return (
     <>
@@ -94,23 +101,23 @@ export function AiContextPicker(props: AiContextPickerProps) {
           withinPortal
         >
           <Menu.Target>
-            <Indicator
-              inline
-              size={16}
-              label={selectedCount}
-              disabled={selectedCount === 0}
-              offset={3}
+            <Button
+              variant="subtle"
+              size="compact-sm"
+              leftSection={<IconPaperclip size={16} />}
+              rightSection={
+                <Badge size="xs" variant="light">
+                  {props.sources.length}/10
+                </Badge>
+              }
+              disabled={props.saving}
+              className={classes.toolbarButton}
+              aria-label={`${t("ai.context.title")}: ${selectedCount}`}
             >
-              <Button
-                variant="subtle"
-                size="compact-sm"
-                leftSection={<IconPaperclip size={16} />}
-                disabled={props.saving}
-                className={classes.toolbarButton}
-              >
+              <span className={classes.toolbarButtonLabel}>
                 {t("ai.context.title")}
-              </Button>
-            </Indicator>
+              </span>
+            </Button>
           </Menu.Target>
           <Menu.Dropdown className={classes.contextMenu}>
             <Menu.Label>{t("ai.context.documents")}</Menu.Label>
@@ -123,7 +130,7 @@ export function AiContextPicker(props: AiContextPickerProps) {
                 onChange={(event) =>
                   void props.onToggleCurrentDocument(
                     event.currentTarget.checked,
-                  )
+                  ).catch(() => undefined)
                 }
               />
             </Menu.Item>
@@ -134,7 +141,9 @@ export function AiContextPicker(props: AiContextPickerProps) {
                     key={`${source.sourceType}:${source.sourceId}`}
                     withRemoveButton
                     className={classes.contextSourcePill}
-                    onRemove={() => void props.onRemoveSource(source)}
+                    onRemove={() =>
+                      void props.onRemoveSource(source).catch(() => undefined)
+                    }
                     removeButtonProps={{
                       "aria-label": t("ai.context.removeSource"),
                     }}
@@ -185,7 +194,7 @@ export function AiContextPicker(props: AiContextPickerProps) {
                       void props.onToggleFile(
                         file.id,
                         event.currentTarget.checked,
-                      )
+                      ).catch(() => undefined)
                     }
                   />
                   {file.status !== "ready" && (
@@ -200,9 +209,9 @@ export function AiContextPicker(props: AiContextPickerProps) {
                   <ActionIcon
                     variant="subtle"
                     color="red"
-                    size={26}
-                    aria-label={t("ai.deleteFile")}
-                    onClick={() => props.onDeleteFile(file.id)}
+                    size={32}
+                    aria-label={`${t("ai.deleteFile")}: ${file.name}`}
+                    onClick={() => props.onDeleteFile(file.id, file.name)}
                   >
                     <IconTrash size={13} />
                   </ActionIcon>
@@ -223,14 +232,31 @@ export function AiContextPicker(props: AiContextPickerProps) {
                         void props.onToggleAttachment(
                           attachment.id,
                           event.currentTarget.checked,
-                        )
+                        ).catch(() => undefined)
                       }
                     />
                   </Menu.Item>
                 ))}
               </>
             )}
-            <Menu.Label>{t("ai.context.dragHint")}</Menu.Label>
+            {props.saveFailed && (
+              <Alert color="red" variant="light" p="xs">
+                <Group justify="space-between" gap="xs" wrap="nowrap">
+                  <Text size="xs">{t("ai.ux.contextSaveFailed")}</Text>
+                  <Button
+                    size="compact-xs"
+                    variant="subtle"
+                    color="red"
+                    onClick={() => void props.onRetrySave()}
+                  >
+                    {t("ai.tryAgain")}
+                  </Button>
+                </Group>
+              </Alert>
+            )}
+            {!isCoarsePointer && (
+              <Menu.Label>{t("ai.context.dragHint")}</Menu.Label>
+            )}
           </Menu.Dropdown>
         </Menu>
       </div>
@@ -239,6 +265,7 @@ export function AiContextPicker(props: AiContextPickerProps) {
         opened={searchOpened}
         onClose={() => setSearchOpened(false)}
         title={t("ai.context.searchTitle")}
+        closeButtonProps={{ "aria-label": t("Close") }}
         centered
         size="md"
         classNames={{
@@ -306,8 +333,12 @@ export function AiContextPicker(props: AiContextPickerProps) {
                           disabled={selected || props.sources.length >= 10}
                           className={classes.contextSearchResult}
                           onClick={async () => {
-                            await props.onAddSource(source);
-                            setSearchOpened(false);
+                            try {
+                              await props.onAddSource(source);
+                              setSearchOpened(false);
+                            } catch {
+                              // The context menu exposes the save error and retry.
+                            }
                           }}
                         >
                           <Box className={classes.contextSearchResultText}>
@@ -335,9 +366,11 @@ export function AiContextPicker(props: AiContextPickerProps) {
               </ScrollArea>
             )}
           </Box>
-          <Text size="xs" c="dimmed" className={classes.contextSearchFooter}>
-            {t("ai.context.dragFromSidebarHint")}
-          </Text>
+          {!isCoarsePointer && (
+            <Text size="xs" c="dimmed" className={classes.contextSearchFooter}>
+              {t("ai.context.dragFromSidebarHint")}
+            </Text>
+          )}
         </Stack>
       </Modal>
     </>

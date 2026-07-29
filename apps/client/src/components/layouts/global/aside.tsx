@@ -48,9 +48,12 @@ export default function Aside() {
       {(component || tab === "ai") && (
         <>
           <Group justify="space-between" mb="sm" wrap="nowrap">
-            <Text fw={500}>{t(title)}</Text>
+            <Text fw={500} truncate title={t(title)} style={{ minWidth: 0 }}>
+              {t(title)}
+            </Text>
             <CloseButton
               aria-label={t("Close panel")}
+              size="md"
               onClick={() => setAsideState({ tab, isAsideOpen: false })}
             />
           </Group>
