@@ -7,6 +7,7 @@ describe('OpenWebUiKnowledgeRetrievalAdapter', () => {
   const spaceId = '0198f2f5-a5a3-7000-8000-000000000002';
   const pageId = '0198f2f5-a5a3-7000-8000-000000000003';
   const secondPageId = '0198f2f5-a5a3-7000-8000-000000000004';
+  const fileId = '0198f2f5-a5a3-7000-8000-000000000006';
   const config = {
     adapter: 'open-webui-knowledge-v1' as const,
     url: null,
@@ -80,6 +81,7 @@ describe('OpenWebUiKnowledgeRetrievalAdapter', () => {
       collection_names: ['knowledge-1'],
       query: request.query,
       k: 40,
+      hybrid: false,
     });
   });
 
@@ -105,6 +107,35 @@ describe('OpenWebUiKnowledgeRetrievalAdapter', () => {
     await expect(adapter.retrieve(config, request)).resolves.toEqual([
       expect.objectContaining({ sourceId: pageId, score: 1 }),
       expect.objectContaining({ sourceId: secondPageId, score: 0.5 }),
+    ]);
+  });
+
+  it('hydrates Docmost metadata from the Open WebUI file record', async () => {
+    const calledUrls: string[] = [];
+    global.fetch = jest.fn(async (url) => {
+      calledUrls.push(String(url));
+      if (String(url).endsWith(`/api/v1/files/${fileId}`)) {
+        return jsonResponse({
+          meta: thisMetadata({ sourceId: pageId, pageId }),
+        });
+      }
+      return jsonResponse({
+        documents: [['content']],
+        metadatas: [[{ file_id: fileId }]],
+        distances: [[0.25]],
+      });
+    }) as any;
+
+    await expect(adapter.retrieve(config, request)).resolves.toEqual([
+      expect.objectContaining({
+        sourceId: pageId,
+        pageId,
+        text: 'content',
+      }),
+    ]);
+    expect(calledUrls).toEqual([
+      'https://open-webui.example.test/api/v1/retrieval/query/collection',
+      `https://open-webui.example.test/api/v1/files/${fileId}`,
     ]);
   });
 
@@ -161,12 +192,18 @@ describe('OpenWebUiKnowledgeRetrievalAdapter', () => {
 
   it.each([
     ['mismatched arrays', [['content']], [[]], [[0.1]]],
-    ['invalid UUID', [['content']], [[
-      thisMetadata({ sourceId: 'not-a-uuid', pageId }),
-    ]], [[0.1]]],
-    ['wrong workspace', [['content']], [[
-      thisMetadata({ sourceId: pageId, pageId, workspaceId: secondPageId }),
-    ]], [[0.1]]],
+    [
+      'invalid UUID',
+      [['content']],
+      [[thisMetadata({ sourceId: 'not-a-uuid', pageId })]],
+      [[0.1]],
+    ],
+    [
+      'wrong workspace',
+      [['content']],
+      [[thisMetadata({ sourceId: pageId, pageId, workspaceId: secondPageId })]],
+      [[0.1]],
+    ],
   ])(
     'rejects a non-empty incompatible response: %s',
     async (_name, documents, metadatas, distances) => {
@@ -183,8 +220,8 @@ describe('OpenWebUiKnowledgeRetrievalAdapter', () => {
   );
 
   it('rejects oversized response bodies without exposing them', async () => {
-    global.fetch = jest.fn(async () =>
-      new Response('x'.repeat(256 * 1024 + 1)),
+    global.fetch = jest.fn(
+      async () => new Response('x'.repeat(256 * 1024 + 1)),
     ) as any;
 
     await expect(adapter.retrieve(config, request)).rejects.toBeInstanceOf(
