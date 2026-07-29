@@ -65,7 +65,13 @@ export class AiRunExecutionService {
         .executeTakeFirst(),
     ]);
     if (!user || !config?.enabled || !userMessage || !conversation) {
-      await this.fail(run, '', 'ai_unavailable', 'AI is no longer available');
+      await this.fail(
+        run,
+        '',
+        '',
+        'ai_unavailable',
+        'AI is no longer available',
+      );
       return;
     }
     try {
@@ -78,18 +84,21 @@ export class AiRunExecutionService {
       await this.fail(
         run,
         '',
+        '',
         'page_write_required',
         'Page write access is required',
       );
       return;
     }
     if (await this.isCancelled(run.id)) {
-      await this.cancel(run, '');
+      await this.cancel(run, '', '');
       return;
     }
 
     let content = '';
     let pendingDelta = '';
+    let reasoning = '';
+    let pendingReasoningDelta = '';
     let sequence = run.sequence;
     let lastFlush = Date.now();
     let lastHeartbeat = 0;
@@ -180,14 +189,18 @@ export class AiRunExecutionService {
           .execute();
       };
       const flush = async (force = false) => {
+        const pendingLength =
+          pendingDelta.length + pendingReasoningDelta.length;
         if (
-          !pendingDelta ||
-          (!force && pendingDelta.length < 1024 && Date.now() - lastFlush < 250)
+          pendingLength === 0 ||
+          (!force && pendingLength < 1024 && Date.now() - lastFlush < 250)
         ) {
           return;
         }
         const delta = pendingDelta;
+        const reasoningDelta = pendingReasoningDelta;
         pendingDelta = '';
+        pendingReasoningDelta = '';
         lastFlush = Date.now();
         const nextSequence = sequence + 1;
         const persisted = await this.db.transaction().execute(async (trx) => {
@@ -206,7 +219,12 @@ export class AiRunExecutionService {
           if (!updated) return false;
           await trx
             .updateTable('aiMessages')
-            .set({ content, status: 'streaming', updatedAt: new Date() })
+            .set({
+              content,
+              reasoning,
+              status: 'streaming',
+              updatedAt: new Date(),
+            })
             .where('id', '=', run.assistantMessageId)
             .where('currentRunId', '=', run.id)
             .execute();
@@ -214,7 +232,7 @@ export class AiRunExecutionService {
         });
         if (!persisted) throw new AiRunCancelledError();
         sequence = nextSequence;
-        this.events.emitDelta(run, sequence, delta);
+        this.events.emitDelta(run, sequence, delta, reasoningDelta);
       };
 
       const usage = await this.provider.stream(
@@ -226,13 +244,20 @@ export class AiRunExecutionService {
             pendingDelta += delta;
             await flush();
           },
+          onReasoning: config.reasoningEnabled
+            ? async (delta) => {
+                reasoning += delta;
+                pendingReasoningDelta += delta;
+                await flush();
+              }
+            : undefined,
           onActivity: heartbeat,
           isCancelled: () => this.isCancelled(run.id),
         },
       );
       await flush(true);
       if (await this.isCancelled(run.id)) {
-        await this.cancel(run, content);
+        await this.cancel(run, content, reasoning);
         return;
       }
 
@@ -250,6 +275,7 @@ export class AiRunExecutionService {
             inputTokens: usage.inputTokens,
             outputTokens: usage.outputTokens,
             responseSnapshot: content,
+            reasoningSnapshot: reasoning,
             updatedAt: completedAt,
           })
           .where('id', '=', run.id)
@@ -262,6 +288,7 @@ export class AiRunExecutionService {
           .updateTable('aiMessages')
           .set({
             content,
+            reasoning,
             status: 'completed',
             inputTokens: usage.inputTokens,
             outputTokens: usage.outputTokens,
@@ -313,7 +340,7 @@ export class AiRunExecutionService {
         return { completed: true, titleRun };
       });
       if (!completion.completed) {
-        await this.cancel(run, content);
+        await this.cancel(run, content, reasoning);
         return;
       }
       if (completion.titleRun) {
@@ -329,13 +356,14 @@ export class AiRunExecutionService {
         error instanceof AiRunCancelledError ||
         (await this.isCancelled(run.id))
       ) {
-        await this.cancel(run, content);
+        await this.cancel(run, content, reasoning);
         return;
       }
       this.logger.warn(`AI run failed: ${run.id}`);
       await this.fail(
         run,
         content,
+        reasoning,
         this.errorCode(error),
         'AI generation failed',
       );
@@ -379,7 +407,11 @@ export class AiRunExecutionService {
     return !row || row.status === 'cancelled' || Boolean(row.cancelRequestedAt);
   }
 
-  private async cancel(run: AiRun, content: string): Promise<void> {
+  private async cancel(
+    run: AiRun,
+    content: string,
+    reasoning: string,
+  ): Promise<void> {
     const now = new Date();
     const cancelled = await this.db.transaction().execute(async (trx) => {
       const updated = await trx
@@ -390,6 +422,7 @@ export class AiRunExecutionService {
           completedAt: now,
           finishReason: 'cancelled',
           responseSnapshot: content,
+          reasoningSnapshot: reasoning,
           updatedAt: now,
         })
         .where('id', '=', run.id)
@@ -399,7 +432,7 @@ export class AiRunExecutionService {
       if (!updated) return undefined;
       await trx
         .updateTable('aiMessages')
-        .set({ content, status: 'cancelled', updatedAt: now })
+        .set({ content, reasoning, status: 'cancelled', updatedAt: now })
         .where('id', '=', run.assistantMessageId)
         .where('currentRunId', '=', run.id)
         .execute();
@@ -415,6 +448,7 @@ export class AiRunExecutionService {
   private async fail(
     run: AiRun,
     content: string,
+    reasoning: string,
     errorCode: string,
     errorMessage: string,
   ): Promise<void> {
@@ -430,6 +464,7 @@ export class AiRunExecutionService {
           errorCode,
           errorMessage,
           responseSnapshot: content,
+          reasoningSnapshot: reasoning,
           updatedAt: now,
         })
         .where('id', '=', run.id)
@@ -442,6 +477,7 @@ export class AiRunExecutionService {
         .updateTable('aiMessages')
         .set({
           content,
+          reasoning,
           status: 'failed',
           errorCode,
           errorMessage,
@@ -458,7 +494,7 @@ export class AiRunExecutionService {
         errorMessage,
       });
     } else if (await this.isCancelled(run.id)) {
-      await this.cancel(run, content);
+      await this.cancel(run, content, reasoning);
     }
   }
 

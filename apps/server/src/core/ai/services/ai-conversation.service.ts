@@ -443,6 +443,7 @@ export class AiConversationService {
       userId: row.userId,
       role: row.role,
       content: accessRestricted ? '' : row.content,
+      reasoning: accessRestricted ? '' : row.reasoning,
       status: row.status,
       clientRequestId: row.clientRequestId,
       currentRunId: row.currentRunId,

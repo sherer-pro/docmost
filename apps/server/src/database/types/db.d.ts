@@ -99,6 +99,7 @@ export interface AiMessages {
   id: Generated<string>;
   inputTokens: Generated<Int8>;
   outputTokens: Generated<Int8>;
+  reasoning: Generated<string>;
   role: string;
   status: Generated<string>;
   updatedAt: Generated<Timestamp>;
@@ -166,6 +167,7 @@ export interface AiRuns {
   enqueuedAt: Timestamp | null;
   outputTokens: Generated<Int8>;
   previousRunId: string | null;
+  reasoningSnapshot: string | null;
   reservedTokens: Generated<Int8>;
   responseSnapshot: string | null;
   requestFingerprint: string | null;
@@ -253,6 +255,7 @@ export interface AiSpaceConfigs {
   maxOutputTokens: Generated<number>;
   provider: Generated<string>;
   quickCommands: Json | null;
+  reasoningEnabled: Generated<boolean>;
   retrievalAdapter: Generated<string>;
   retrievalApiKeyEncrypted: string | null;
   retrievalMaxResults: Generated<number>;

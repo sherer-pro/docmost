@@ -25,7 +25,7 @@ type ProviderAbortReason =
 const PROVIDER_JSON_MAX_BYTES = 4 * 1024 * 1024;
 const PROVIDER_SSE_FRAME_MAX_BYTES = 256 * 1024;
 const PROVIDER_SSE_BUFFER_MAX_BYTES = 1024 * 1024;
-const PROVIDER_STREAM_CONTENT_MAX_CHARS = 8 * 1024 * 1024;
+const PROVIDER_STREAM_TEXT_MAX_CHARS = 8 * 1024 * 1024;
 
 export class AiProviderRequestCancelledError extends Error {
   constructor() {
@@ -84,6 +84,7 @@ export class OpenAiCompatibleProviderService {
     messages: AiProviderMessage[],
     handlers: {
       onText: (text: string) => Promise<void> | void;
+      onReasoning?: (text: string) => Promise<void> | void;
       onUsage?: (usage: AiProviderUsage) => Promise<void> | void;
       onActivity?: () => Promise<void> | void;
       isCancelled?: () => Promise<boolean> | boolean;
@@ -122,16 +123,23 @@ export class OpenAiCompatibleProviderService {
     let done = false;
     let bodyDone = false;
     let readingStream = false;
-    let contentChars = 0;
+    let streamedChars = 0;
+    const trackStreamText = (text: string) => {
+      streamedChars += text.length;
+      if (streamedChars > PROVIDER_STREAM_TEXT_MAX_CHARS) {
+        throw new AiProviderInvalidResponseError(
+          'AI provider stream exceeded the text limit',
+        );
+      }
+    };
     const frameHandlers = {
       onText: async (text: string) => {
-        contentChars += text.length;
-        if (contentChars > PROVIDER_STREAM_CONTENT_MAX_CHARS) {
-          throw new AiProviderInvalidResponseError(
-            'AI provider stream exceeded the content limit',
-          );
-        }
+        trackStreamText(text);
         await handlers.onText(text);
+      },
+      onReasoning: async (text: string) => {
+        trackStreamText(text);
+        await handlers.onReasoning?.(text);
       },
     };
 
@@ -214,6 +222,7 @@ export class OpenAiCompatibleProviderService {
     frame: string,
     handlers: {
       onText: (text: string) => Promise<void> | void;
+      onReasoning: (text: string) => Promise<void> | void;
     },
   ): Promise<{ done: boolean; usage?: AiProviderUsage }> {
     const data = frame
@@ -244,6 +253,17 @@ export class OpenAiCompatibleProviderService {
     );
     if (content) {
       await handlers.onText(content);
+    }
+
+    const reasoningDelta = payload?.choices?.[0]?.delta;
+    const reasoning =
+      typeof reasoningDelta?.reasoning_content === 'string'
+        ? reasoningDelta.reasoning_content
+        : typeof reasoningDelta?.reasoning === 'string'
+          ? reasoningDelta.reasoning
+          : '';
+    if (reasoning) {
+      await handlers.onReasoning(reasoning);
     }
 
     return {

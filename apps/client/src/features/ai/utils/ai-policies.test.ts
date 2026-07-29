@@ -82,6 +82,7 @@ describe("AI socket recovery policy", () => {
       id: "message",
       conversationId: "conversation",
       content: "partial",
+      reasoning: "partial reasoning",
       runId: "run",
       runStatus: "running",
       runSequence: 7,
@@ -92,6 +93,7 @@ describe("AI socket recovery policy", () => {
       conversationId: "conversation",
       messageId: "message",
       content: "partial",
+      reasoning: "partial reasoning",
       sequence: 7,
       status: "running",
     });

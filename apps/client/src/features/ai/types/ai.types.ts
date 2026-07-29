@@ -71,6 +71,7 @@ export interface AiStreamingRun {
   conversationId: string;
   messageId?: string;
   content: string;
+  reasoning: string;
   sequence: number;
   status: AiRunStatus;
   cancelRequestedAt?: string | null;

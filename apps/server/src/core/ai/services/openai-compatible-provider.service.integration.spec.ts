@@ -126,15 +126,17 @@ describe('OpenAiCompatibleProviderService SSE integration', () => {
   it('keeps a periodic SSE stream alive and returns usage', async () => {
     idleTimeoutMs = 500;
     const onText = jest.fn();
+    const onReasoning = jest.fn();
 
     await expect(
       service.stream(
         config('periodic', 2500),
         [{ role: 'user', content: 'Hi' }],
-        { onText },
+        { onText, onReasoning },
       ),
     ).resolves.toEqual({ inputTokens: 3, outputTokens: 1 });
     expect(onText).toHaveBeenCalledWith('Hello');
+    expect(onReasoning).toHaveBeenCalledWith('hidden');
   });
 
   it('rejects malformed SSE from the fake provider', async () => {
@@ -156,17 +158,19 @@ describe('OpenAiCompatibleProviderService SSE integration', () => {
     });
   });
 
-  it('ignores reasoning-only frames', async () => {
+  it('streams reasoning-only frames without answer content', async () => {
     const onText = jest.fn();
+    const onReasoning = jest.fn();
 
     await expect(
       service.stream(
         config('reasoning-only'),
         [{ role: 'user', content: 'Hi' }],
-        { onText },
+        { onText, onReasoning },
       ),
     ).resolves.toEqual({ inputTokens: 0, outputTokens: 0 });
     expect(onText).not.toHaveBeenCalled();
+    expect(onReasoning).toHaveBeenCalledWith('hidden');
   });
 
   it('cancels an active fake-provider request without a timeout error', async () => {

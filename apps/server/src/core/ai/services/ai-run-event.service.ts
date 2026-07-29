@@ -23,7 +23,12 @@ export class AiRunEventService {
       .emit('ai:conversation.updated', event);
   }
 
-  emitDelta(run: AiRunEntity, sequence: number, delta: string): void {
+  emitDelta(
+    run: AiRunEntity,
+    sequence: number,
+    delta: string,
+    reasoningDelta?: string,
+  ): void {
     this.metrics.observeDelta(run);
     const event: AiRunDeltaEvent = {
       runId: run.id,
@@ -32,6 +37,7 @@ export class AiRunEventService {
       pageId: run.pageId,
       sequence,
       delta,
+      ...(reasoningDelta ? { reasoningDelta } : {}),
     };
     this.ws.server?.to(`user-${run.userId}`).emit('ai:run.delta', event);
   }

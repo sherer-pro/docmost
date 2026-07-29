@@ -265,6 +265,24 @@
   min-height: 24px;
 }
 
+.reasoning {
+  border-left: 2px solid
+    light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-5));
+  padding-left: var(--mantine-spacing-xs);
+}
+
+.reasoningToggle {
+  color: light-dark(var(--mantine-color-gray-7), var(--mantine-color-dark-1));
+}
+
+.reasoningContent {
+  margin-top: var(--mantine-spacing-xs);
+  color: light-dark(var(--mantine-color-gray-7), var(--mantine-color-dark-1));
+  font-size: var(--mantine-font-size-xs);
+  max-height: 320px;
+  overflow-y: auto;
+}
+
 .assistantMessage:hover .messageActions,
 .assistantMessage:focus-within .messageActions,
 .userMessage:hover .messageActions,

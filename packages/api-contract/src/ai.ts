@@ -204,6 +204,7 @@ export interface AiSpaceConfig {
   dailyTokenLimitPerSpace: number;
   retentionDays: number;
   visionEnabled: boolean;
+  reasoningEnabled: boolean;
   quickCommands: AiQuickCommand[] | null;
   createdAt: string;
   updatedAt: string;
@@ -226,6 +227,7 @@ export interface AiSpaceConfigUpdate {
   dailyTokenLimitPerSpace?: number;
   retentionDays?: number;
   visionEnabled?: boolean;
+  reasoningEnabled?: boolean;
   quickCommands?: AiQuickCommand[] | null;
 }
 
@@ -305,6 +307,7 @@ export interface AiMessage {
   userId: string | null;
   role: AiMessageRole;
   content: string;
+  reasoning: string;
   status: AiMessageStatus;
   clientRequestId: string | null;
   inputTokens: number;
@@ -559,6 +562,7 @@ export interface AiRunDeltaEvent {
   pageId: string;
   sequence: number;
   delta: string;
+  reasoningDelta?: string;
 }
 
 export interface AiRunStatusEvent {

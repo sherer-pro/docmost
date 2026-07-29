@@ -32,6 +32,7 @@ import {
   isAiMessageRetryable,
 } from "@/features/ai/utils/ai-policies.ts";
 import { AiMessageContent } from "./ai-message-content.tsx";
+import { AiReasoningDisclosure } from "./ai-reasoning-disclosure.tsx";
 import { getAiSpaceStatus } from "@/features/ai/services/ai-service.ts";
 import classes from "./ai-panel.module.css";
 import { sanitizeAiMarkdown } from "@/features/ai/utils/ai-markdown.ts";
@@ -69,6 +70,7 @@ export function AiMessageCard({
     : undefined;
   const selection = editorContext?.selection ?? null;
   const hasContent = Boolean(message.content.trim());
+  const hasReasoning = Boolean(isAssistant && message.reasoning?.trim());
   const canApply = Boolean(
     isAssistant &&
       message.status === "completed" &&
@@ -199,6 +201,9 @@ export function AiMessageCard({
       }
     >
       <Stack gap="xs">
+        {hasReasoning && (
+          <AiReasoningDisclosure reasoning={message.reasoning ?? ""} />
+        )}
         {hasContent && (
           <AiMessageContent
             content={message.content}

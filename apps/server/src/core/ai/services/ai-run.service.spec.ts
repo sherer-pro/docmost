@@ -133,7 +133,10 @@ describe('AiRunService', () => {
     const messageSelect: any = {
       select: jest.fn(() => messageSelect),
       where: jest.fn(() => messageSelect),
-      executeTakeFirst: jest.fn(async () => ({ content: 'partial' })),
+      executeTakeFirst: jest.fn(async () => ({
+        content: 'partial',
+        reasoning: 'partial reasoning',
+      })),
     };
     const runUpdate: any = {
       set: jest.fn((patch) => {
@@ -187,6 +190,10 @@ describe('AiRunService', () => {
       finishReason: 'cancelled',
     });
     expect(remove).toHaveBeenCalledTimes(1);
+    expect(runPatch).toMatchObject({
+      responseSnapshot: 'partial',
+      reasoningSnapshot: 'partial reasoning',
+    });
     expect(events.emitStatus).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'cancelled' }),
       2,

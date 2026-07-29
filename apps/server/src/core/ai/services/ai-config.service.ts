@@ -343,6 +343,8 @@ export class AiConfigService {
           existing?.retentionDays ??
           AI_DEFAULTS.retentionDays,
         visionEnabled: dto.visionEnabled ?? existing?.visionEnabled ?? false,
+        reasoningEnabled:
+          dto.reasoningEnabled ?? existing?.reasoningEnabled ?? false,
         quickCommands:
           dto.quickCommands !== undefined
             ? (this.normalizeQuickCommands(
@@ -784,6 +786,7 @@ export class AiConfigService {
       dailyTokenLimitPerSpace: Number(config.dailyTokenLimitPerSpace),
       retentionDays: config.retentionDays,
       visionEnabled: config.visionEnabled,
+      reasoningEnabled: config.reasoningEnabled,
       quickCommands: config.quickCommands as unknown as AiQuickCommand[] | null,
       createdAt: config.createdAt.toISOString(),
       updatedAt: config.updatedAt.toISOString(),
