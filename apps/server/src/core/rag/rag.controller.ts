@@ -67,6 +67,7 @@ export class RagController {
     return this.ragService.getUpdates(
       this.buildScope(user, workspace, space),
       query.updatedSince,
+      { limit: query.limit, cursor: query.cursor },
     );
   }
 
@@ -81,6 +82,37 @@ export class RagController {
     return this.ragService.getDeleted(
       this.buildScope(user, workspace, space),
       query.deletedSince,
+      { limit: query.limit, cursor: query.cursor },
+    );
+  }
+
+  @SkipTransform()
+  @Get('attachments/updates')
+  async getAttachmentUpdates(
+    @Query() query: RagUpdatesQueryDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+    @AuthSpace() space: Space,
+  ) {
+    return this.ragService.getAttachmentUpdates(
+      this.buildScope(user, workspace, space),
+      query.updatedSince,
+      { limit: query.limit, cursor: query.cursor },
+    );
+  }
+
+  @SkipTransform()
+  @Get('attachments/deleted')
+  async getAttachmentDeleted(
+    @Query() query: RagDeletedQueryDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+    @AuthSpace() space: Space,
+  ) {
+    return this.ragService.getAttachmentDeleted(
+      this.buildScope(user, workspace, space),
+      query.deletedSince,
+      { limit: query.limit, cursor: query.cursor },
     );
   }
 

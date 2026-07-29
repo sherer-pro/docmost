@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "redisUrl": "redis://redis:6379/1",
+  "redisPrefix": "docmost:rag-sync",
+  "pollIntervalMs": 60000,
+  "requestTimeoutMs": 30000,
+  "processingTimeoutMs": 600000,
+  "maxAttachmentBytes": 26214400,
+  "bindings": [
+    {
+      "id": "example-space",
+      "workspaceId": "00000000-0000-4000-8000-000000000001",
+      "spaceId": "00000000-0000-4000-8000-000000000002",
+      "docmostBaseUrl": "http://docmost:3000",
+      "docmostApiKeyFile": "/run/secrets/docmost_rag_api_key",
+      "openWebUiBaseUrl": "https://open-webui.example.com",
+      "openWebUiApiKeyFile": "/run/secrets/open_webui_writer_api_key",
+      "knowledgeId": "replace-with-knowledge-id"
+    }
+  ]
+}
