@@ -439,7 +439,8 @@ export function AiPanel() {
       throw new Error("Page context is missing");
     }
 
-    const creation = createConversation.mutateAsync({
+    const creation = createConversation
+      .mutateAsync({
         pageId,
         clientRequestId: crypto.randomUUID(),
         useSpaceSearch,
@@ -667,9 +668,12 @@ export function AiPanel() {
     };
     if (isLocalDraft && draft.trim()) {
       modals.openConfirmModal({
-        title: t("ai.discardDraft"),
-        children: <Text size="sm">{t("ai.discardDraftConfirm")}</Text>,
-        labels: { confirm: t("ai.discard"), cancel: t("ai.cancel") },
+        title: t("ai.agent.discardDraft"),
+        children: <Text size="sm">{t("ai.agent.discardDraftConfirm")}</Text>,
+        labels: {
+          confirm: t("ai.agent.discard"),
+          cancel: t("ai.cancel"),
+        },
         confirmProps: { color: "red" },
         onConfirm: select,
       });
@@ -701,9 +705,12 @@ export function AiPanel() {
     };
     if (draft.trim()) {
       modals.openConfirmModal({
-        title: t("ai.discardDraft"),
-        children: <Text size="sm">{t("ai.discardDraftConfirm")}</Text>,
-        labels: { confirm: t("ai.discard"), cancel: t("ai.cancel") },
+        title: t("ai.agent.discardDraft"),
+        children: <Text size="sm">{t("ai.agent.discardDraftConfirm")}</Text>,
+        labels: {
+          confirm: t("ai.agent.discard"),
+          cancel: t("ai.cancel"),
+        },
         confirmProps: { color: "red" },
         onConfirm: beginDraft,
       });
@@ -1025,8 +1032,7 @@ export function AiPanel() {
     shouldShowAiPanelLoadFailure(
       availabilityQuery.isError,
       conversationsQuery.isError,
-      availabilityQuery.data?.canUse ||
-        availabilityQuery.data?.agentAvailable,
+      availabilityQuery.data?.canUse || availabilityQuery.data?.agentAvailable,
     )
   ) {
     return (

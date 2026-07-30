@@ -1,0 +1,39 @@
+.page {
+  width: 100%;
+  max-width: 1180px;
+  margin-inline: auto;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.sectionNav {
+  position: sticky;
+  top: calc(45px + var(--mantine-spacing-md));
+}
+
+.content {
+  min-width: 0;
+}
+
+.mobileSectionSelect {
+  display: none;
+}
+
+@media (max-width: 48em) {
+  .layout {
+    display: block;
+  }
+
+  .sectionNav {
+    display: none;
+  }
+
+  .mobileSectionSelect {
+    display: block;
+  }
+}

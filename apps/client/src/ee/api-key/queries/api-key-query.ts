@@ -20,6 +20,10 @@ import { useTranslation } from "react-i18next";
 
 export function useGetApiKeysQuery(
   params?: QueryParams,
+  options?: {
+    enabled?: boolean;
+    refetchInterval?: number | false;
+  },
 ): UseQueryResult<IPagination<IApiKey>, Error> {
   return useQuery({
     queryKey: ["api-key-list", params],
@@ -27,6 +31,8 @@ export function useGetApiKeysQuery(
     staleTime: 0,
     gcTime: 0,
     placeholderData: keepPreviousData,
+    enabled: options?.enabled,
+    refetchInterval: options?.refetchInterval,
   });
 }
 

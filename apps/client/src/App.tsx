@@ -68,6 +68,12 @@ const WorkspaceApiKeys = lazy(
   () => import("@/ee/api-key/pages/workspace-api-keys"),
 );
 const AiSettings = lazy(() => import("@/ee/ai/pages/ai-settings.tsx"));
+const AiIntegrationsSettings = lazy(
+  () => import("@/features/ai/pages/ai-integrations-settings.tsx"),
+);
+const AiSpaceSettingsPage = lazy(
+  () => import("@/features/ai/pages/ai-space-settings-page.tsx"),
+);
 
 function RouteFallback() {
   return (
@@ -132,10 +138,7 @@ export default function App() {
             path={"/s/:spaceSlug/databases/:databaseId"}
             element={<DatabaseLegacyRedirect />}
           />
-          <Route
-            path={"/s/:spaceSlug/p/:pageSlug"}
-            element={<Page />}
-          />
+          <Route path={"/s/:spaceSlug/p/:pageSlug"} element={<Page />} />
 
           <Route path={"/settings"}>
             <Route path={"account/profile"} element={<AccountSettings />} />
@@ -151,9 +154,18 @@ export default function App() {
             <Route path={"sharing"} element={<Shares />} />
             <Route element={<WorkspaceAdminRoute />}>
               <Route path={"workspace"} element={<WorkspaceSettings />} />
-              <Route path={"api-keys"} element={<WorkspaceApiKeys />} />
+              <Route
+                path={"api-keys"}
+                element={<Navigate to="/settings/ai/mcp" replace />}
+              />
               <Route path={"security"} element={<Security />} />
-              <Route path={"ai"} element={<AiSettings />} />
+              <Route path={"ai"} element={<AiIntegrationsSettings />} />
+              <Route
+                path={"ai/spaces/:spaceSlug"}
+                element={<AiSpaceSettingsPage />}
+              />
+              <Route path={"ai/mcp"} element={<WorkspaceApiKeys />} />
+              <Route path={"ai/search"} element={<AiSettings />} />
               {!isCloud() && <Route path={"license"} element={<License />} />}
               {isCloud() && <Route path={"billing"} element={<Billing />} />}
             </Route>

@@ -90,9 +90,7 @@ type NodeLocation = {
 };
 
 export function hashProseMirrorJson(document: ProseMirrorJson): string {
-  return createHash('sha256')
-    .update(JSON.stringify(document))
-    .digest('hex');
+  return createHash('sha256').update(JSON.stringify(document)).digest('hex');
 }
 
 export function getProseMirrorText(node: ProseMirrorJson): string {
@@ -113,12 +111,13 @@ export function getAiPageOutline(
       result.push({
         index,
         id:
-          typeof node.attrs?.id === 'string'
-            ? (node.attrs.id as string)
-            : null,
+          typeof node.attrs?.id === 'string' ? (node.attrs.id as string) : null,
         type: node.type ?? 'unknown',
         level,
-        text: getProseMirrorText(node).replace(/\s+/g, ' ').trim().slice(0, 240),
+        text: getProseMirrorText(node)
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 240),
       });
       index += 1;
     }
@@ -363,10 +362,7 @@ function isOutlineNode(node: ProseMirrorJson): boolean {
   return node.type !== 'doc' && node.type !== 'text';
 }
 
-function walk(
-  node: ProseMirrorJson,
-  visitor: (node: ProseMirrorJson) => void,
-) {
+function walk(node: ProseMirrorJson, visitor: (node: ProseMirrorJson) => void) {
   visitor(node);
   for (const child of node.content ?? []) {
     walk(child, visitor);

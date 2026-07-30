@@ -110,13 +110,7 @@ const groupedData: DataGroup[] = [
       { label: "Spaces", icon: IconSpaces, path: "/settings/spaces" },
       { label: "Public sharing", icon: IconWorld, path: "/settings/sharing" },
       {
-        label: "API management",
-        icon: IconKey,
-        path: "/settings/api-keys",
-        isAdmin: true,
-      },
-      {
-        label: "AI settings",
+        label: "AI and integrations",
         icon: IconSparkles,
         path: "/settings/ai",
         isAdmin: true,
@@ -255,7 +249,7 @@ export default function SettingsSidebar() {
             case "API keys":
               prefetchHandler = prefetchApiKeys;
               break;
-            case "API management":
+            case "AI and integrations":
               prefetchHandler = prefetchApiKeyManagement;
               break;
             default:

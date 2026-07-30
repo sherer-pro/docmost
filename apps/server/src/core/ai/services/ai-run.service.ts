@@ -308,7 +308,10 @@ export class AiRunService {
       .where('runId', '=', run.id)
       .orderBy('sequence', 'asc')
       .execute();
-    return { ...this.toRun(run), steps: steps.map((step) => this.toStep(step)) };
+    return {
+      ...this.toRun(run),
+      steps: steps.map((step) => this.toStep(step)),
+    };
   }
 
   async cancel(
@@ -863,11 +866,7 @@ export class AiRunService {
           .selectFrom('aiRuns')
           .select(sql<number>`count(*)`.as('count'))
           .where(field, '=', value)
-          .where('status', 'in', [
-            'queued',
-            'running',
-            'awaiting_approval',
-          ])
+          .where('status', 'in', ['queued', 'running', 'awaiting_approval'])
           .executeTakeFirstOrThrow()
       ).count,
     );

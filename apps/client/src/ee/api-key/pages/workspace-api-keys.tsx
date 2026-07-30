@@ -12,14 +12,16 @@ import { RevokeApiKeyModal } from "@/ee/api-key/components/revoke-api-key-modal"
 import Paginate from "@/components/common/paginate";
 import { useCursorPaginate } from "@/hooks/use-cursor-paginate";
 import { useGetApiKeysQuery } from "@/ee/api-key/queries/api-key-query.ts";
-import { IApiKey } from "@/ee/api-key";
-import useUserRole from '@/hooks/use-user-role.tsx';
+import { IApiKey, type McpClientPreset } from "@/ee/api-key";
+import useUserRole from "@/hooks/use-user-role.tsx";
 
 export default function WorkspaceApiKeys() {
   const { t } = useTranslation();
   const { cursor, goNext, goPrev } = useCursorPaginate();
   const [createModalOpened, setCreateModalOpened] = useState(false);
   const [createdApiKey, setCreatedApiKey] = useState<IApiKey | null>(null);
+  const [createdClient, setCreatedClient] =
+    useState<McpClientPreset>("universal");
   const [updateModalOpened, setUpdateModalOpened] = useState(false);
   const [revokeModalOpened, setRevokeModalOpened] = useState(false);
   const [selectedApiKey, setSelectedApiKey] = useState<IApiKey | null>(null);
@@ -30,8 +32,9 @@ export default function WorkspaceApiKeys() {
     return null;
   }
 
-  const handleCreateSuccess = (response: IApiKey) => {
+  const handleCreateSuccess = (response: IApiKey, client: McpClientPreset) => {
     setCreatedApiKey(response);
+    setCreatedClient(client);
   };
 
   const handleUpdate = (apiKey: IApiKey) => {
@@ -48,14 +51,14 @@ export default function WorkspaceApiKeys() {
     <>
       <Helmet>
         <title>
-          {t("API management")} - {getAppName()}
+          {t("apiKeys.workspaceTitle")} - {getAppName()}
         </title>
       </Helmet>
 
-      <SettingsTitle title={t("API management")} />
+      <SettingsTitle title={t("apiKeys.workspaceTitle")} />
 
       <Text size="md" c="dimmed" mb="md">
-        {t("Manage API keys for all users in the workspace")}
+        {t("apiKeys.workspaceDescription")}
       </Text>
 
       <Group justify="flex-end" mb="md">
@@ -95,6 +98,7 @@ export default function WorkspaceApiKeys() {
         opened={!!createdApiKey}
         onClose={() => setCreatedApiKey(null)}
         apiKey={createdApiKey}
+        preferredClient={createdClient}
       />
 
       <UpdateApiKeyModal

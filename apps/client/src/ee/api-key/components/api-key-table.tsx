@@ -1,6 +1,5 @@
 import { Group, Menu, Table, Text } from "@mantine/core";
 import { IconDots, IconEdit, IconTrash } from "@tabler/icons-react";
-import { format } from "date-fns";
 import { useTranslation } from "react-i18next";
 import { IApiKey } from "@/ee/api-key";
 import { CustomAvatar } from "@/components/ui/custom-avatar.tsx";
@@ -31,11 +30,13 @@ export function ApiKeyTable({
   onUpdate,
   onRevoke,
 }: ApiKeyTableProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   const formatDate = (date: Date | string | null) => {
     if (!date) return t("Never");
-    return format(new Date(date), "MMM dd, yyyy");
+    return new Intl.DateTimeFormat(i18n.language, {
+      dateStyle: "medium",
+    }).format(new Date(date));
   };
 
   const isExpired = (expiresAt: string | null) => {

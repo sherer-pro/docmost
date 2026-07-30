@@ -113,6 +113,7 @@ export default function GlobalAppShell({
 
   const location = useLocation();
   const isSettingsRoute = location.pathname.startsWith("/settings");
+  const isAiSettingsRoute = location.pathname.startsWith("/settings/ai");
   const isSpaceRoute = location.pathname.startsWith("/s/");
   const isHomeRoute = location.pathname.startsWith("/home");
   const isSpacesRoute = location.pathname === "/spaces";
@@ -207,7 +208,9 @@ export default function GlobalAppShell({
         )}
         <AppShell.Main className={classes.main}>
           {isSettingsRoute ? (
-            <PageFrame size="settings">{children}</PageFrame>
+            <PageFrame size={isAiSettingsRoute ? "wide" : "settings"}>
+              {children}
+            </PageFrame>
           ) : (
             children
           )}
