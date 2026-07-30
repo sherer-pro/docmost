@@ -1,14 +1,20 @@
-# AI assistant and smart search (RAG)
+# AI assistant, smart search (RAG), and MCP
 
 This document describes the current core AI architecture in Docmost: page-bound
 chat, conversation context, background runs, space retrieval, and integration
-with external RAG indexes. It also separates two related but distinct paths:
+with external RAG indexes and assistants. It also separates four related but
+distinct paths:
 
 1. **Query-time retrieval** finds sources while the AI assistant is answering.
 2. **RAG API** (`/api/rag/*`) is a read-only export and synchronization API for
    external indexes. It does not answer retrieval queries itself.
+3. **Agent mode** lets the private assistant call bounded Docmost tools and
+   propose safe current-page changes that require explicit user approval.
+4. **MCP** (`/mcp`) exposes the read-only subset of the same tool registry to
+   external assistants through stateless Streamable HTTP.
 
-All HTTP paths below include the global `/api` prefix.
+All HTTP paths below include the global `/api` prefix except `/mcp`, which is
+an explicit root-level protocol endpoint.
 
 ## 1. System components and boundaries
 
@@ -36,6 +42,9 @@ The main components are:
 | `AiRetrievalService`                     | safe query-time retrieval and reauthorization of returned sources                     |
 | `AiFileService`                          | uploads, text extraction, images, tombstone deletion, and chat-file cleanup           |
 | `AiAuxRunService`                        | auxiliary jobs for automatic conversation titles and editor-selection transforms      |
+| `AiToolRegistryService`                  | access-aware tools shared by agent mode and the read-only MCP surface                  |
+| `AiRunStepService`                       | initiator-only approval, safe Yjs application, history, and agent resumption           |
+| `McpController` / `McpApiKeyAuthGuard`   | stateless Streamable HTTP adapter and MCP-key-only authentication                      |
 
 Execution uses `AI_CHAT_QUEUE`. BullMQ delivery is at least once, so a worker
 atomically claims a specific `ai_runs` row from `queued` to `running`; a
@@ -73,6 +82,46 @@ Retry and regenerate create linked new attempts instead of rewriting the
 original attempt. Retry operates on a run; regenerate operates on an assistant
 message. Cancellation records a request that the worker checks during
 streaming and terminates the attempt as `cancelled`.
+
+### Agent mode
+
+Agent mode is a per-conversation opt-in and is disabled for a space by default.
+A space administrator must first run the tool-calling capability test against
+the currently configured provider, base URL, and chat model. The test forces a
+known tool call and records a configuration fingerprint only when the response
+is structurally valid. Changing those provider fields invalidates the
+fingerprint and disables agent mode until it is tested again.
+
+An agent run resolves the same initial conversation context, private files,
+page attachments, and optional query-time retrieval as normal chat. It may then
+perform at most eight model steps and sixteen total tool calls. Each tool result
+is limited to 32 KiB, and all results in one run are limited to 128 KiB. An
+invalid tool response, an unknown tool, or a limit violation fails closed.
+
+The shared registry exposes these read tools to both the agent and MCP:
+
+- `search`, `getTree`, and `getPageContext`;
+- `getPage`, `getOutline`, `getNode`, and `searchInPage`.
+
+Every read is constrained to the run/key space, current user or key creator,
+page ACL, deletion state, and the shared AI content-exclusion policy.
+
+Agent mode additionally exposes `editPageText`, `patchNode`, `insertNode`, and
+`deleteNode`. These tools never apply a model response directly. A call may
+only target the conversation's current page, requires the initiator's current
+write access, and creates one pending proposal with a content hash. The run
+enters `awaiting_approval`; only its initiating user may approve or reject that
+specific proposal, and the proposal expires after one hour. Approval rechecks
+ACL and the live Yjs document hash, validates the resulting ProseMirror
+document against the editor schema, applies one transaction, and records
+`Changed by AI agent` in page history. A stale or rejected proposal is returned
+to the model as a tool result so the bounded loop can continue.
+
+Safe writes cover text, ordinary text/list/heading/callout blocks, rich-text
+marks, and sanitized links. Page creation, page move/delete, databases and
+tables, comments, shares, whole-document replacement, media nodes, external
+images, arbitrary code execution, and external MCP servers are not agent
+tools.
 
 ### Context, files, and editor actions
 
@@ -276,7 +325,147 @@ only as paths to mounted files (`docmostApiKeyFile`,
 `spaceId` are validated at startup. The Docmost read key and the Open WebUI key
 used by the main server for retrieval are independent secrets.
 
-## 6. API
+## 6. External assistants through MCP
+
+### Purpose and relationship to RAG
+
+MCP is the interactive external-assistant surface. It is intended for a model
+or agent that needs to search and navigate one Docmost space while answering a
+user. It does not replace query-time retrieval or the synchronization API:
+
+| Surface                  | Caller                                      | Primary use                                      | Credential    | Data access                                                      |
+| ------------------------ | ------------------------------------------- | ------------------------------------------------ | ------------- | ---------------------------------------------------------------- |
+| query-time retrieval     | the Docmost AI worker                       | add ranked external context to one answer        | provider-side | validated excerpts returned by the configured retrieval adapter  |
+| `/api/rag/*`             | an external indexer such as `apps/rag-sync` | bulk/delta synchronization and export            | `keyType=rag` | pages, databases, comments, exports, and allowed attachment data |
+| `/mcp`                   | an external MCP-capable assistant           | interactive search and targeted document reading | `keyType=mcp` | seven bounded read-only tools; no attachment body extraction     |
+
+MCP calls do not create Docmost conversations, messages, citations, or
+`ai_runs`. They also do not use `AI_CHAT_QUEUE`, invoke the configured model,
+or depend on the per-space `agentEnabled` flag. Agent mode and MCP share tool
+implementations and authorization rules, but their execution lifecycles are
+independent.
+
+### Endpoint and transport
+
+The protocol endpoint is the root-level URL `/mcp`, not `/api/mcp`. It uses the
+official `@modelcontextprotocol/sdk` Streamable HTTP transport with
+`sessionIdGenerator: undefined`. A new MCP server and transport are created for
+each HTTP request, so Docmost stores no MCP session ID, event stream, or
+resumption state. Clients should use a normal Streamable HTTP MCP transport and
+send every lifecycle or tool request to the same URL.
+
+The endpoint is always mounted; there is no MCP feature environment variable.
+It advertises only the `tools` capability. Every listed tool has
+`readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, and
+`openWorldHint=false`.
+
+For a deployment at `https://docs.example.com`, the connection parameters are:
+
+| Parameter      | Value                                              |
+| -------------- | -------------------------------------------------- |
+| transport      | Streamable HTTP                                    |
+| URL            | `https://docs.example.com/mcp`                     |
+| authentication | `Authorization: Bearer <MCP_API_KEY>`              |
+| scope          | the single space selected when the key was created |
+
+Client configuration schemas differ, so use the client's Streamable HTTP/HTTP
+MCP option rather than copying a client-specific JSON format. Keep the token in
+the client's secret store or environment substitution; do not commit it to a
+configuration file.
+
+### Creating and validating an MCP key
+
+Workspace owners and administrators create the key on
+`/settings/api-keys` by selecting **MCP read-only** and one space. Personal API
+key management continues to create RAG keys and cannot mint an MCP key. The
+plaintext token is returned during creation and must be stored securely.
+
+The JWT embeds `apiKeyId`, creator `sub`, `workspaceId`, `spaceId`, and
+`keyType=mcp`, but the database row remains authoritative. Every request
+revalidates all of the following:
+
+- the token signature, issuer, and expiry;
+- the live API-key row, type, scope, revocation state, and optional hard
+  expiry;
+- the workspace, space, and key creator;
+- the creator's active/deactivated/deleted state;
+- current space membership for a non-admin creator;
+- page ACL and AI content-exclusion policy for each returned page.
+
+An MCP token is accepted only on `/mcp`. RAG tokens, user access tokens,
+cookies, and revoked or wrong-space keys are rejected. MCP tokens are rejected
+on `/api/rag/*` and ordinary user API routes. The endpoint is CSRF-exempt
+because it is bearer-only and does not accept cookie authentication.
+
+### Read tools
+
+All inputs use Docmost UUIDs and node identifiers returned by earlier tool
+calls. Optional limits are clamped by server-side validation, not only
+described in JSON Schema.
+
+| Tool             | Main inputs                         | Result and bounds                                                                                         |
+| ---------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `search`         | `query`, optional `limit`            | accessible pages and database rows with compact highlights and breadcrumbs; default 10, maximum 20       |
+| `getTree`        | none                                | up to 500 readable pages with hierarchy metadata; a hidden parent is returned as `parentPageId=null`      |
+| `getPageContext` | `pageId`                            | page metadata, visible allowed breadcrumbs, and up to 50 readable direct children                         |
+| `getPage`        | `pageId`                            | title, text, editor JSON when compact, outline fallback, update time, and a `truncated` flag               |
+| `getOutline`     | `pageId`                            | up to 300 structural nodes with index, optional stable ID, type, nesting level, and compact text          |
+| `getNode`        | `pageId`, `nodeId`                  | one ProseMirror node selected by stable ID or a fallback such as `#12` from the outline index             |
+| `searchInPage`   | `pageId`, `query`, optional `limit` | case-insensitive matches with character offsets and bounded excerpts; default 20, maximum 50              |
+
+`getPage` includes full editor JSON only when its serialized document fits the
+compact-response threshold. For larger pages it returns `content=null`, at
+most 16,000 text characters, and up to 80 outline items, with
+`truncated=true`. A client can then use `getOutline`, `getNode`, and
+`searchInPage` to read only the relevant sections. When an outline item has no
+stable `id`, use `#<index>` as the `getNode.nodeId`.
+
+Search and tree results include database rows where the underlying search/page
+model represents them as pages. MCP does not provide database mutation,
+schema-editing, table, comment, share, export, or page-management tools.
+
+### Result, error, and content boundaries
+
+A successful `tools/call` response contains one MCP text content item. Its text
+is a JSON serialization of the tool result. One serialized result is limited
+to 32 KiB. The 128 KiB cumulative budget belongs to an internal agent run and
+does not span independent stateless MCP requests.
+
+Expected authorization, validation, and not-found failures return
+`isError=true` with a bounded safe message. Unexpected internal exceptions are
+reported as the generic `MCP tool call failed`; database or stack details are
+not exposed.
+
+The shared content policy can hide an entire page subtree or individual pages
+from AI consumers. MCP applies that policy in addition to page ACL. It never
+fetches or returns attachment binaries, private chat files, or extracted
+attachment text. Page editor JSON may still contain ordinary attachment-node
+references already stored in the page; those references are not dereferenced
+by MCP.
+
+### Deployment checklist
+
+- Route `/mcp` at the reverse proxy without adding the `/api` prefix.
+- Preserve the `Authorization`, `Accept`, `Content-Type`, and
+  `MCP-Protocol-Version` headers.
+- Use HTTPS outside a trusted local development environment.
+- Create a separate least-privilege key for each external assistant and space.
+- Set an explicit expiry where practical and revoke the key when the client is
+  retired or compromised.
+- Verify `tools/list`, then test `search` and an ACL-restricted `getPage` before
+  production use.
+- Monitor the root endpoint separately: the generated backend route inventory
+  covers `/api/*` routes and therefore does not list `/mcp`.
+
+### Attribution
+
+The agent and MCP tool architecture was adapted from
+[`vvzvlad/gitmost`](https://github.com/vvzvlad/gitmost) and
+[`vvzvlad/docmost-mcp`](https://github.com/vvzvlad/docmost-mcp). The pinned
+source revisions and applicable AGPL/MIT notices are recorded in
+[`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md).
+
+## 7. API
 
 ### Authenticated AI API
 
@@ -287,6 +476,7 @@ CSRF contract.
 | ---------------------------------------------------------------- | -------------------------------------------------------------- |
 | `GET/PATCH /api/spaces/:spaceId/ai/config`                       | read or update space AI configuration                          |
 | `POST /api/spaces/:spaceId/ai/config/actions/test-model`         | test the provider and optional vision                          |
+| `POST /api/spaces/:spaceId/ai/config/actions/test-agent`         | force and validate provider tool calling                       |
 | `POST /api/spaces/:spaceId/ai/config/actions/test-retrieval`     | test external retrieval                                        |
 | `GET/PUT /api/spaces/:spaceId/ai/exclusions`                     | read or replace exclusion rules with optimistic revision       |
 | `GET /api/spaces/:spaceId/ai/exclusions/candidates`              | search page candidates for exclusions                          |
@@ -300,6 +490,8 @@ CSRF contract.
 | `GET /api/ai/conversations/:id/context-descendants`              | lazily list accessible direct descendants of a page root       |
 | `POST /api/ai/conversations/:id/messages`                        | send a message and create a run; returns `202`                 |
 | `GET /api/ai/runs/:id`                                           | read a single attempt                                          |
+| `POST /api/ai/runs/:id/steps/:stepId/actions/approve`            | approve one pending agent write as its initiating user         |
+| `POST /api/ai/runs/:id/steps/:stepId/actions/reject`             | reject one pending agent write and resume the bounded loop     |
 | `POST /api/ai/runs/:id/actions/cancel`                           | request cancellation                                           |
 | `POST /api/ai/runs/:id/actions/retry`                            | create a new attempt; returns `202`                            |
 | `POST /api/ai/messages/:id/actions/regenerate`                   | regenerate an answer; returns `202`                            |
@@ -340,13 +532,21 @@ upsert/delete operations.
 See [`RAG_API.md`](RAG_API.md) for the complete field specification and
 request examples.
 
-## 7. Contracts
+### MCP protocol API
+
+All MCP lifecycle, `tools/list`, and `tools/call` messages use the root
+`/mcp` Streamable HTTP endpoint described in section 6. This is a protocol
+surface rather than a conventional REST route and is intentionally outside the
+global `/api` prefix.
+
+## 8. Contracts
 
 Canonical TypeScript contracts live in `packages/api-contract/src/ai.ts`.
 Important enumerations include provider `openai-compatible`; adapters `none`,
-`http-json-v1`, and `open-webui-knowledge-v1`; run and message statuses
-`queued`, `running`, `completed`, `failed`, and `cancelled` as applicable; and
-source types `page`, `database`, `database_row`, `attachment`, and `chat_file`.
+`http-json-v1`, and `open-webui-knowledge-v1`; run statuses `queued`, `running`,
+`awaiting_approval`, `completed`, `failed`, and `cancelled`; execution modes
+`chat` and `agent`; and source types `page`, `database`, `database_row`,
+`attachment`, and `chat_file`.
 
 The primary public models are `AiSpaceConfig`, `AiAvailability`,
 `AiConversation`, `AiConversationContext`, `AiMessage`, `AiRun`, `AiCitation`,
@@ -354,6 +554,12 @@ The primary public models are `AiSpaceConfig`, `AiAvailability`,
 `runStatus`, `retrievalOutcome`, `retrievalErrorCode`, `applyContext`, and
 citations when applicable. Secret and credential fields are never part of
 public models.
+
+The MCP surface does not duplicate these TypeScript response models. Tool
+definitions are generated by `AiToolRegistryService`; the MCP adapter returns
+their JSON-serialized result inside an MCP text content item. The registry is
+the canonical source for tool names, JSON Schemas, exposure
+(`agent|mcp`), read/write classification, and per-result limits.
 
 `AiAvailability.assistantIdentity` is `{ name, gender }` or `null`. Normal
 space members receive it through page-scoped status even when AI is disabled or
@@ -388,6 +594,7 @@ type AiRetrievalQueryResponse = {
 ```
 
 Realtime Socket.IO contracts include `ai:run.delta`, `ai:run.status`,
+`ai:run.step`,
 `ai:conversation.updated`, `ai:content-policy.updated`,
 `ai:editor-action.delta`, and `ai:editor-action.status`. A run delta contains
 `runId`, `conversationId`, `messageId`, `pageId`, `sequence`, `delta`, and an
