@@ -17,7 +17,7 @@ export function useAiAssistantIdentity(
   const resolvedSpaceId = spaceId ?? documentContext?.spaceId;
   const resolvedPageId =
     pageId ??
-    (documentContext?.spaceId === resolvedSpaceId
+    (documentContext && documentContext.spaceId === resolvedSpaceId
       ? documentContext.pageId
       : undefined);
   const statusQuery = useAiSpaceStatusQuery(resolvedSpaceId, resolvedPageId);
