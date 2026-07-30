@@ -86,6 +86,7 @@ interface AiContextPickerProps {
   onUpload: (files: File[]) => Promise<void>;
   onDeleteFile: (fileId: string, fileName: string) => void;
   onRetrySave: () => Promise<void>;
+  onPrepareConversation?: () => Promise<unknown>;
 }
 
 interface SelectionTarget {
@@ -109,6 +110,7 @@ export function AiContextPicker(props: AiContextPickerProps) {
     useState<SelectionTarget | null>(null);
   const [scopeTarget, setScopeTarget] = useState<ScopeTarget | null>(null);
   const pendingSourceRef = useRef<string | null>(null);
+  const contextButtonRef = useRef<HTMLButtonElement | null>(null);
   const isCoarsePointer = useMediaQuery("(pointer: coarse)");
   const [debouncedQuery] = useDebouncedValue(query, 250);
   const search = useAiContextSourcesQuery(props.conversationId, debouncedQuery);
@@ -146,12 +148,28 @@ export function AiContextPicker(props: AiContextPickerProps) {
     selection: AiDescendantSelection,
     apply: SelectionTarget["apply"],
   ) => {
-    setSelectionTarget({
-      rootPageId,
-      title,
-      selectedPageIds: selection.pageIds,
-      apply,
-    });
+    props.onOpenedChange?.(false);
+    window.requestAnimationFrame(() =>
+      setSelectionTarget({
+        rootPageId,
+        title,
+        selectedPageIds: selection.pageIds,
+        apply,
+      }),
+    );
+  };
+
+  const closeSearch = (returnFocus = true) => {
+    setSearchOpened(false);
+    if (returnFocus) {
+      window.requestAnimationFrame(() => contextButtonRef.current?.focus());
+    }
+  };
+
+  const openSearch = async () => {
+    props.onOpenedChange?.(false);
+    await props.onPrepareConversation?.();
+    window.requestAnimationFrame(() => setSearchOpened(true));
   };
 
   const setCurrentMode = async (mode: AiDescendantSelectionMode) => {
@@ -189,13 +207,13 @@ export function AiContextPicker(props: AiContextPickerProps) {
         source,
         complete: async (selection) => {
           await props.onAddSource({ ...source, descendants: selection });
-          setSearchOpened(false);
+          closeSearch();
         },
       });
       return;
     }
     await props.onAddSource(source);
-    setSearchOpened(false);
+    closeSearch();
   };
 
   useEffect(() => {
@@ -235,6 +253,7 @@ export function AiContextPicker(props: AiContextPickerProps) {
         >
           <Menu.Target>
             <Button
+              ref={contextButtonRef}
               variant="subtle"
               size="compact-sm"
               leftSection={<IconPaperclip size={16} />}
@@ -358,7 +377,7 @@ export function AiContextPicker(props: AiContextPickerProps) {
             <Menu.Item
               leftSection={<IconPlus size={15} />}
               disabled={props.sources.length >= props.limits.manualRoots}
-              onClick={() => setSearchOpened(true)}
+              onClick={() => void openSearch()}
             >
               {t("ai.context.addFromSpace")}
             </Menu.Item>
@@ -467,7 +486,7 @@ export function AiContextPicker(props: AiContextPickerProps) {
 
       <Modal
         opened={searchOpened}
-        onClose={() => setSearchOpened(false)}
+        onClose={() => closeSearch()}
         title={t("ai.context.searchTitle")}
         closeButtonProps={{ "aria-label": t("Close") }}
         centered
@@ -543,9 +562,15 @@ export function AiContextPicker(props: AiContextPickerProps) {
                             props.sources.length >= props.limits.manualRoots
                           }
                           className={classes.contextSearchResult}
-                          onClick={() =>
-                            void addSource(source).catch(() => undefined)
-                          }
+                          onClick={() => {
+                            if (
+                              source.sourceType === "page" &&
+                              source.hasChildren
+                            ) {
+                              closeSearch(false);
+                            }
+                            void addSource(source).catch(() => undefined);
+                          }}
                         >
                           <Box className={classes.contextSearchResultText}>
                             <Text size="sm" fw={500} truncate>
