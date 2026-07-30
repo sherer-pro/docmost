@@ -131,7 +131,25 @@ const DEFAULT_FORM: AiSettingsForm = {
   quickCommands: [],
 };
 
-export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
+export type AiSpaceSettingsSection =
+  | "all"
+  | "overview"
+  | "identity"
+  | "model"
+  | "behavior"
+  | "agent"
+  | "retrieval"
+  | "limits";
+
+export function AiSpaceSettings({
+  spaceId,
+  section = "all",
+  onDirtyChange,
+}: {
+  spaceId: string;
+  section?: AiSpaceSettingsSection;
+  onDirtyChange?: (dirty: boolean) => void;
+}) {
   const { t, i18n } = useTranslation();
   const numberInputControlProps = {
     incrementButtonProps: {
@@ -258,26 +276,24 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
     setClearOpenWebUiApiKey(false);
   }, [configQuery.data]);
 
-  const toPayload = (values: AiSettingsForm): AiSpaceConfigUpdate => ({
-    enabled: values.enabled,
-    agentEnabled: values.agentEnabled,
-    ...buildAiAssistantIdentityUpdate(values),
-    provider: "openai-compatible",
-    baseUrl: values.baseUrl.trim(),
-    chatModel: values.chatModel.trim(),
-    ...(values.apiKey.trim() ? { apiKey: values.apiKey.trim() } : {}),
-    ...(clearApiKey ? { clearApiKey: true } : {}),
-    systemInstructions: values.systemInstructions.trim() || null,
-    temperature: values.temperature,
-    maxOutputTokens: values.maxOutputTokens,
-    contextWindow: values.contextWindow,
-    requestTimeoutMs: values.requestTimeoutMs,
-    dailyRequestLimitPerUser: values.dailyRequestLimitPerUser,
-    dailyTokenLimitPerSpace: values.dailyTokenLimitPerSpace,
-    retentionDays: values.retentionDays,
-    visionEnabled: values.visionEnabled,
-    reasoningEnabled: values.reasoningEnabled,
-    retrieval: {
+  useEffect(() => {
+    onDirtyChange?.(
+      form.isDirty() ||
+        clearApiKey ||
+        clearRetrievalApiKey ||
+        clearOpenWebUiApiKey,
+    );
+  }, [
+    clearApiKey,
+    clearOpenWebUiApiKey,
+    clearRetrievalApiKey,
+    form.values,
+    onDirtyChange,
+  ]);
+
+  const toRetrievalPayload = (
+    values: AiSettingsForm,
+  ): NonNullable<AiSpaceConfigUpdate["retrieval"]> => ({
       adapter: values.retrievalEnabled ? values.retrievalAdapter : "none",
       ...(values.retrievalEnabled && values.retrievalAdapter === "http-json-v1"
         ? {
@@ -307,12 +323,78 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
           : {}),
       timeoutMs: values.retrievalTimeoutMs,
       maxResults: values.retrievalMaxResults,
-    },
-    quickCommands: values.quickCommands.map((command, position) => ({
+    });
+
+  const toPayload = (
+    values: AiSettingsForm,
+    target: AiSpaceSettingsSection = section,
+  ): AiSpaceConfigUpdate => {
+    const include = (candidate: AiSpaceSettingsSection) =>
+      target === "all" || target === candidate;
+    return {
+      ...(include("overview") ? { enabled: values.enabled } : {}),
+      ...(include("identity") ? buildAiAssistantIdentityUpdate(values) : {}),
+      ...(include("model")
+        ? {
+            provider: "openai-compatible" as const,
+            baseUrl: values.baseUrl.trim(),
+            chatModel: values.chatModel.trim(),
+            ...(values.apiKey.trim() ? { apiKey: values.apiKey.trim() } : {}),
+            ...(clearApiKey ? { clearApiKey: true } : {}),
+            temperature: values.temperature,
+            maxOutputTokens: values.maxOutputTokens,
+            contextWindow: values.contextWindow,
+            requestTimeoutMs: values.requestTimeoutMs,
+            visionEnabled: values.visionEnabled,
+            reasoningEnabled: values.reasoningEnabled,
+          }
+        : {}),
+      ...(include("behavior")
+        ? {
+            systemInstructions: values.systemInstructions.trim() || null,
+            quickCommands: values.quickCommands.map((command, position) => ({
       ...command,
       position,
-    })),
-  });
+            })),
+          }
+        : {}),
+      ...(include("agent") ? { agentEnabled: values.agentEnabled } : {}),
+      ...(include("retrieval")
+        ? { retrieval: toRetrievalPayload(values) }
+        : {}),
+      ...(include("limits")
+        ? {
+            dailyRequestLimitPerUser: values.dailyRequestLimitPerUser,
+            dailyTokenLimitPerSpace: values.dailyTokenLimitPerSpace,
+            retentionDays: values.retentionDays,
+          }
+        : {}),
+    };
+  };
+
+  const hasValidationError = (fields: Array<keyof AiSettingsForm>) =>
+    fields.some((field) => form.validateField(field).hasError);
+
+  const validateSection = (target: AiSpaceSettingsSection) => {
+    if (target === "all") {
+      return form.validate().hasErrors;
+    }
+    if (target === "identity") {
+      return hasValidationError(["assistantName"]);
+    }
+    if (target === "model") {
+      return hasValidationError(["baseUrl", "chatModel"]);
+    }
+    if (target === "retrieval") {
+      return hasValidationError([
+        "retrievalUrl",
+        "openWebUiBaseUrl",
+        "openWebUiKnowledgeId",
+        "openWebUiApiKey",
+      ]);
+    }
+    return false;
+  };
 
   const confirmClearKey = (target: "model" | "retrieval" | "openWebUi") => {
     modals.openConfirmModal({
@@ -343,16 +425,24 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
     });
   };
 
-  const save = form.onSubmit(async (values) => {
+  const save = async () => {
+    if (validateSection(section)) {
+      return;
+    }
     try {
-      await updateConfig.mutateAsync(toPayload(values));
-      form.setFieldValue("apiKey", "");
-      form.setFieldValue("retrievalApiKey", "");
-      form.setFieldValue("openWebUiApiKey", "");
-      setClearApiKey(false);
-      setClearRetrievalApiKey(false);
-      setClearOpenWebUiApiKey(false);
+      await updateConfig.mutateAsync(toPayload(form.values));
+      if (section === "all" || section === "model") {
+        form.setFieldValue("apiKey", "");
+        setClearApiKey(false);
+      }
+      if (section === "all" || section === "retrieval") {
+        form.setFieldValue("retrievalApiKey", "");
+        form.setFieldValue("openWebUiApiKey", "");
+        setClearRetrievalApiKey(false);
+        setClearOpenWebUiApiKey(false);
+      }
       form.resetDirty();
+      onDirtyChange?.(false);
       notifications.show({ message: t("ai.settings.saved") });
     } catch (error) {
       notifications.show({
@@ -362,11 +452,10 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
         color: "red",
       });
     }
-  });
+  };
 
   const test = async () => {
-    const validation = form.validate();
-    if (validation.hasErrors) {
+    if (validateSection("model")) {
       return;
     }
     try {
@@ -389,12 +478,13 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
   };
 
   const testRetrievalConnection = async () => {
-    const validation = form.validate();
-    if (validation.hasErrors || !form.values.retrievalEnabled) {
+    if (validateSection("retrieval") || !form.values.retrievalEnabled) {
       return;
     }
     try {
-      const result = await testRetrieval.mutateAsync(toPayload(form.values));
+      const result = await testRetrieval.mutateAsync(
+        toPayload(form.values, "retrieval"),
+      );
       setRetrievalTestResult(result);
       const isEmpty = result.ok && result.state === "empty";
       notifications.show({
@@ -416,12 +506,13 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
   };
 
   const testAgentConnection = async () => {
-    const validation = form.validate();
-    if (validation.hasErrors) {
+    if (validateSection("model")) {
       return;
     }
     try {
-      const result = await testAgent.mutateAsync(toPayload(form.values));
+      const result = await testAgent.mutateAsync(
+        toPayload(form.values, "model"),
+      );
       setAgentTestResult(result);
       notifications.show({
         message: t("ai.settings.agentTestSucceeded"),
@@ -456,35 +547,49 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
           gender: form.values.assistantGender,
         }
       : null;
+  const showSection = (candidate: AiSpaceSettingsSection) =>
+    section === "all" || section === candidate;
 
   return (
-    <form onSubmit={save} className={classes.form}>
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        void save();
+      }}
+      className={classes.form}
+    >
       <Stack gap="lg">
-        <Stack gap={4} className={classes.pageHeader}>
-          <Text fw={600}>{t("ai.settings.title")}</Text>
-          <Text size="sm" c="dimmed">
-            {t("ai.settings.description")}
-          </Text>
-        </Stack>
+        {section === "all" && (
+          <Stack gap={4} className={classes.pageHeader}>
+            <Text fw={600}>{t("ai.settings.title")}</Text>
+            <Text size="sm" c="dimmed">
+              {t("ai.settings.description")}
+            </Text>
+          </Stack>
+        )}
 
-        <Paper withBorder radius="md" p="md" className={classes.enableCard}>
-          <Switch
-            label={resolveAiAssistantText(
-              t,
-              "settings.enable",
-              formAssistantIdentity,
-            )}
-            description={t("ai.settings.enableDescription")}
-            {...form.getInputProps("enabled", { type: "checkbox" })}
-          />
-        </Paper>
+        {showSection("overview") && (
+          <Paper withBorder radius="md" p="md" className={classes.enableCard}>
+            <Switch
+              label={resolveAiAssistantText(
+                t,
+                "settings.enable",
+                formAssistantIdentity,
+              )}
+              description={t("ai.settings.enableDescription")}
+              {...form.getInputProps("enabled", { type: "checkbox" })}
+            />
+          </Paper>
+        )}
 
-        <SettingsSection
-          icon={<IconMessageCircle size={18} />}
-          title={t("ai.settings.identitySection")}
-          description={t("ai.settings.identityDescription")}
-        >
-          <Stack gap="md">
+        {showSection("identity") && (
+          <>
+            <SettingsSection
+              icon={<IconMessageCircle size={18} />}
+              title={t("ai.settings.identitySection")}
+              description={t("ai.settings.identityDescription")}
+            >
+              <Stack gap="md">
             <Switch
               label={t("ai.settings.customNameEnabled")}
               description={t("ai.settings.customNameEnabledDescription")}
@@ -518,12 +623,14 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
                 {...form.getInputProps("assistantGender")}
               />
             </SimpleGrid>
-          </Stack>
-        </SettingsSection>
+              </Stack>
+            </SettingsSection>
 
-        <AiContentExclusionsSettings spaceId={spaceId} />
+            <AiContentExclusionsSettings spaceId={spaceId} />
+          </>
+        )}
 
-        {statusQuery.data?.usage && (
+        {showSection("overview") && statusQuery.data?.usage && (
           <SettingsSection
             icon={<IconActivity size={18} />}
             title={t("ai.settings.usageSection")}
@@ -546,7 +653,8 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
           </SettingsSection>
         )}
 
-        <SettingsSection
+        {showSection("model") && (
+          <SettingsSection
           icon={<IconRobot size={18} />}
           title={t("ai.settings.modelSection")}
           description={t("ai.settings.modelSectionDescription")}
@@ -690,9 +798,11 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
               </Alert>
             )}
           </Stack>
-        </SettingsSection>
+          </SettingsSection>
+        )}
 
-        <SettingsSection
+        {showSection("agent") && (
+          <SettingsSection
           icon={<IconRobot size={18} />}
           title={t("ai.settings.agentSection")}
           description={t("ai.settings.agentSectionDescription")}
@@ -727,9 +837,11 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
               </Alert>
             )}
           </Stack>
-        </SettingsSection>
+          </SettingsSection>
+        )}
 
-        <SettingsSection
+        {showSection("behavior") && (
+          <SettingsSection
           icon={<IconMessageCircle size={18} />}
           title={t("ai.settings.behaviorSection")}
           description={t("ai.settings.behaviorSectionDescription")}
@@ -882,9 +994,11 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
               ))}
             </Stack>
           </Stack>
-        </SettingsSection>
+          </SettingsSection>
+        )}
 
-        <SettingsSection
+        {showSection("retrieval") && (
+          <SettingsSection
           icon={<IconSearch size={18} />}
           title={t("ai.settings.retrievalSection")}
           description={t("ai.settings.retrievalDescription")}
@@ -1066,9 +1180,11 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
               </Stack>
             )}
           </Stack>
-        </SettingsSection>
+          </SettingsSection>
+        )}
 
-        <Accordion
+        {showSection("limits") && (
+          <Accordion
           variant="contained"
           radius="md"
           className={classes.limitsAccordion}
@@ -1116,19 +1232,22 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
               </SimpleGrid>
             </Accordion.Panel>
           </Accordion.Item>
-        </Accordion>
+          </Accordion>
+        )}
 
         <div className={classes.actionBar}>
           <Group justify="flex-end" className={classes.actionGroup}>
-            <Button
-              type="button"
-              variant="default"
-              leftSection={<IconPlayerPlay size={16} />}
-              loading={testModel.isPending}
-              onClick={() => void test()}
-            >
-              {t("ai.settings.test")}
-            </Button>
+            {showSection("model") && (
+              <Button
+                type="button"
+                variant="default"
+                leftSection={<IconPlayerPlay size={16} />}
+                loading={testModel.isPending}
+                onClick={() => void test()}
+              >
+                {t("ai.settings.test")}
+              </Button>
+            )}
             <Button type="submit" loading={updateConfig.isPending}>
               {t("ai.save")}
             </Button>
