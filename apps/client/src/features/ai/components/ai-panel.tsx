@@ -1681,6 +1681,7 @@ export function AiPanel() {
             onUpload={uploadFiles}
             onDeleteFile={removeChatFile}
             onRetrySave={retryContextSave}
+            onPrepareConversation={ensureConversation}
           />
         </Group>
 
