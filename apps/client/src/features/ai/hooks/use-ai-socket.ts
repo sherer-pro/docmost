@@ -14,6 +14,7 @@ import { AI_QUERY_KEYS } from "@/features/ai/queries/ai-query.ts";
 import {
   AiRunDeltaEvent,
   AiRunStatusEvent,
+  AiRunStepEvent,
   AiConversationUpdatedEvent,
   AiContentPolicyUpdatedEvent,
   AiActivityItem,
@@ -229,6 +230,15 @@ export function useAiSocket() {
       );
     };
 
+    const handleRunStep = (
+      rawEvent: AiRunStepEvent | { data: AiRunStepEvent },
+    ) => {
+      const event = unwrapAiEvent(rawEvent);
+      void queryClient.invalidateQueries({
+        queryKey: AI_QUERY_KEYS.run(event.runId),
+      });
+    };
+
     const handleReconnect = () => {
       setRuns(
         (current) => reduceAiRunState(current, { type: "reconnect" }).runs,
@@ -261,6 +271,7 @@ export function useAiSocket() {
 
     socket.on("ai:run.delta", handleDelta);
     socket.on("ai:run.status", handleStatus);
+    socket.on("ai:run.step", handleRunStep);
     socket.on("ai:conversation.updated", handleConversationUpdated);
     socket.on("ai:content-policy.updated", handleContentPolicyUpdated);
     socket.on("connect", handleReconnect);
@@ -272,6 +283,7 @@ export function useAiSocket() {
       pendingDeltas = [];
       socket.off("ai:run.delta", handleDelta);
       socket.off("ai:run.status", handleStatus);
+      socket.off("ai:run.step", handleRunStep);
       socket.off("ai:conversation.updated", handleConversationUpdated);
       socket.off("ai:content-policy.updated", handleContentPolicyUpdated);
       socket.off("connect", handleReconnect);

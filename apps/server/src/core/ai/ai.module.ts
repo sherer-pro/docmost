@@ -36,9 +36,19 @@ import { OpenAiCompatibleProviderService } from './services/openai-compatible-pr
 import { AiAuxRunService } from './services/ai-aux-run.service';
 import { AiAuxRunExecutionService } from './services/ai-aux-run-execution.service';
 import { AiAuxRunEventService } from './services/ai-aux-run-event.service';
+import { AiToolRegistryService } from './tools/ai-tool-registry.service';
+import { AiRunStepService } from './services/ai-run-step.service';
+import { PageModule } from '../page/page.module';
+import { CollaborationModule } from '../../collaboration/collaboration.module';
 
 @Module({
-  imports: [WsModule, SearchModule, AiContentPolicyModule],
+  imports: [
+    WsModule,
+    SearchModule,
+    AiContentPolicyModule,
+    PageModule,
+    CollaborationModule,
+  ],
   controllers: [
     AiConfigController,
     AiStatusController,
@@ -68,11 +78,13 @@ import { AiAuxRunEventService } from './services/ai-aux-run-event.service';
     AiAuxRunService,
     AiAuxRunExecutionService,
     AiAuxRunEventService,
+    AiToolRegistryService,
+    AiRunStepService,
     HttpJsonAiRetrievalAdapter,
     OpenWebUiKnowledgeRetrievalAdapter,
     NoopAiRetrievalAdapter,
     OpenAiCompatibleProviderService,
   ],
-  exports: [AiConfigService],
+  exports: [AiConfigService, AiToolRegistryService],
 })
 export class AiModule {}

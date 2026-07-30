@@ -88,6 +88,7 @@ export default function WorkspaceApiKeys() {
         opened={createModalOpened}
         onClose={() => setCreateModalOpened(false)}
         onSuccess={handleCreateSuccess}
+        allowMcp
       />
 
       <ApiKeyCreatedModal

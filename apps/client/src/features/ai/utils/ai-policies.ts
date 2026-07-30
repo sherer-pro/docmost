@@ -43,6 +43,17 @@ const AI_ERROR_TRANSLATION_KEYS: Record<string, string> = {
   editor_selection_required: "ai.errorReason.editorSelectionRequired",
   editor_context_stale: "ai.errorReason.editorContextStale",
   editor_action_not_found: "ai.errorReason.editorActionNotFound",
+  agent_disabled: "ai.errorReason.agentDisabled",
+  agent_provider_unverified: "ai.errorReason.agentProviderUnverified",
+  agent_tool_call_required: "ai.errorReason.agentToolCall",
+  agent_tool_call_invalid: "ai.errorReason.agentToolCall",
+  agent_step_limit: "ai.errorReason.agentLimit",
+  agent_tool_limit: "ai.errorReason.agentLimit",
+  agent_result_limit: "ai.errorReason.agentLimit",
+  agent_write_expired: "ai.errorReason.agentWriteExpired",
+  agent_write_stale: "ai.errorReason.agentWriteStale",
+  agent_write_rejected: "ai.errorReason.agentWriteRejected",
+  agent_write_not_allowed: "ai.errorReason.agentWriteNotAllowed",
 };
 
 export function getAiErrorTranslationKey(
@@ -118,7 +129,7 @@ export function getPersistedActiveRun(
     (item) =>
       item.runId &&
       item.runStatus &&
-      ["queued", "running"].includes(item.runStatus),
+      ["queued", "running", "awaiting_approval"].includes(item.runStatus),
   );
   return message?.runId && message.runStatus
     ? {

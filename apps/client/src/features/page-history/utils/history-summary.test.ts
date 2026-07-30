@@ -186,4 +186,16 @@ describe("history summary/details formatter", () => {
     expect(details[0].rows[1].oldValue).toBe("metka-2-r311");
     expect(details[0].rows[1].newValue).toBe("Label 4");
   });
+
+  it("labels approved agent writes explicitly", () => {
+    const details = formatHistoryEventDetails(
+      createHistoryItem({
+        changeType: "page.ai-agent.changed",
+        changeData: { runId: "run-1", stepId: "step-1" },
+      }),
+      (key: string) => key,
+    );
+
+    expect(details[0].title).toBe("history.event.ai-agent.changed");
+  });
 });

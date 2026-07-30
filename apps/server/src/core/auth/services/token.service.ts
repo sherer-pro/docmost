@@ -144,9 +144,17 @@ export class TokenService {
     user: User;
     workspaceId: string;
     spaceId: string;
+    keyType?: 'rag' | 'mcp';
     expiresIn?: string | number;
   }): Promise<string> {
-    const { apiKeyId, user, workspaceId, spaceId, expiresIn } = opts;
+    const {
+      apiKeyId,
+      user,
+      workspaceId,
+      spaceId,
+      keyType = 'rag',
+      expiresIn,
+    } = opts;
     if (user.deactivatedAt || user.deletedAt) {
       throw new ForbiddenException();
     }
@@ -156,6 +164,7 @@ export class TokenService {
       apiKeyId: apiKeyId,
       workspaceId,
       spaceId,
+      keyType,
       type: JwtType.API_KEY,
     };
 

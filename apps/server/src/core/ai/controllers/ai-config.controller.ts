@@ -63,6 +63,16 @@ export class AiConfigController {
   ) {
     return this.aiConfigService.testRetrieval(spaceId, dto, user, workspace);
   }
+
+  @Post('actions/test-agent')
+  testAgent(
+    @Param('spaceId', ParseUUIDPipe) spaceId: string,
+    @Body() dto: TestAiSpaceConfigDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.aiConfigService.testAgent(spaceId, dto, user, workspace);
+  }
 }
 
 @UseGuards(JwtAuthGuard)

@@ -13,6 +13,7 @@ export interface IApiKey {
   creatorId: string;
   workspaceId: string;
   spaceId: string;
+  keyType: "rag" | "mcp";
   expiresAt: string | null;
   lastUsedAt: string | null;
   createdAt: string;
@@ -23,6 +24,7 @@ export interface IApiKey {
 export interface ICreateApiKeyRequest {
   name: string;
   spaceId: string;
+  keyType?: "rag" | "mcp";
   expiresAt?: string;
 }
 

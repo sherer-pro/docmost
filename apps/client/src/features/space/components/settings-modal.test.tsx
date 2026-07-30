@@ -11,10 +11,16 @@ import SpaceSettingsModal from "./settings-modal";
 
 const SPACE_ID = "00000000-0000-4000-8000-000000000001";
 
-const { aiSpaceSettingsMock, hasFullSpaceAccessMock, useSpaceQueryMock } =
+const {
+  aiSpaceSettingsMock,
+  hasFullSpaceAccessMock,
+  useAiAssistantIdentityMock,
+  useSpaceQueryMock,
+} =
   vi.hoisted(() => ({
     aiSpaceSettingsMock: vi.fn(),
     hasFullSpaceAccessMock: vi.fn(),
+    useAiAssistantIdentityMock: vi.fn(() => ({ name: "AI" })),
     useSpaceQueryMock: vi.fn(),
   }));
 
@@ -58,7 +64,7 @@ vi.mock("jotai", () => ({
 }));
 
 vi.mock("@/features/ai/hooks/use-ai-assistant-identity.ts", () => ({
-  useAiAssistantIdentity: () => ({ name: "AI" }),
+  useAiAssistantIdentity: useAiAssistantIdentityMock,
 }));
 
 vi.mock("@/features/user/atoms/current-user-atom.ts", () => ({
@@ -112,6 +118,7 @@ describe("SpaceSettingsModal", () => {
     container = null;
     aiSpaceSettingsMock.mockReset();
     hasFullSpaceAccessMock.mockReset();
+    useAiAssistantIdentityMock.mockClear();
     useSpaceQueryMock.mockReset();
   });
 
@@ -141,6 +148,7 @@ describe("SpaceSettingsModal", () => {
     });
 
     expect(useSpaceQueryMock).toHaveBeenCalledWith("TS");
+    expect(useAiAssistantIdentityMock).toHaveBeenLastCalledWith(SPACE_ID);
     expect(aiSpaceSettingsMock).toHaveBeenCalledWith({
       spaceId: SPACE_ID,
     });

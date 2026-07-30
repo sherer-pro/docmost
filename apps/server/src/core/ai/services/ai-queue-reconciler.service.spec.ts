@@ -1,3 +1,7 @@
+jest.mock('./ai-run-step.service', () => ({
+  AiRunStepService: class AiRunStepService {},
+}));
+
 import { AiQueueReconcilerService } from './ai-queue-reconciler.service';
 
 describe('AiQueueReconcilerService lifecycle', () => {
@@ -16,6 +20,7 @@ describe('AiQueueReconcilerService lifecycle', () => {
       { observeReconciledJob: jest.fn() } as any,
       {} as any,
       {} as any,
+      { expirePending: jest.fn().mockResolvedValue(0) } as any,
     );
     jest.spyOn(service, 'reconcile').mockResolvedValue(undefined);
 

@@ -351,6 +351,15 @@ function buildEventDetail(
   t: TranslateFn,
   id: string,
 ): IHistoryEventDetail {
+  if (changeType === "page.ai-agent.changed") {
+    return {
+      id,
+      title: tHistory(t, "history.event.ai-agent.changed"),
+      lines: [],
+      rows: [],
+    };
+  }
+
   if (changeType === "page.custom-fields.updated") {
     const rows = asArray(changeData.changes)
       .map((change, index) =>

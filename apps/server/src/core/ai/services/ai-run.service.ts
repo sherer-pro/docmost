@@ -24,6 +24,7 @@ import {
 import {
   AiMessage,
   AiRun,
+  AiRunStep,
   AiRunTrigger,
   SendAiMessageResponse,
 } from '@docmost/api-contract';
@@ -32,6 +33,7 @@ import { AiRunActionDto, SendAiMessageDto } from '../dto/ai.dto';
 import { AiConfigService } from './ai-config.service';
 import { AiConversationService } from './ai-conversation.service';
 import { PageAccessService } from '../../page-access/page-access.service';
+import { extractAiApprovalPreview } from '../../../common/helpers/prosemirror/ai-page-operation';
 import { AiRunEventService } from './ai-run-event.service';
 import { AiContextService } from './ai-context.service';
 import { AI_CONCURRENCY_LIMITS } from '../ai.constants';
@@ -86,6 +88,7 @@ export class AiRunService {
       chatFileIds,
       attachmentIds,
       useSpaceSearch: dto.useSpaceSearch ?? conversation.useSpaceSearch,
+      executionMode: conversation.agentMode ? 'agent' : 'chat',
     });
     const existing = await this.findIdempotentRun(
       conversation.id,
@@ -101,6 +104,17 @@ export class AiRunService {
     );
     if (!config?.enabled || !config.baseUrl || !config.chatModel) {
       throw new ForbiddenException('AI is not available in this space');
+    }
+    if (
+      conversation.agentMode &&
+      (!config.agentEnabled ||
+        config.agentVerifiedProviderFingerprint !==
+          this.configs.getProviderFingerprint(config))
+    ) {
+      throw new ForbiddenException({
+        code: 'agent_provider_unverified',
+        message: 'The AI agent is disabled or its provider is unverified',
+      });
     }
     await this.assertChatFiles(
       chatFileIds,
@@ -218,6 +232,7 @@ export class AiRunService {
             userMessageId,
             assistantMessageId,
             status: 'queued',
+            executionMode: lockedConversation.agentMode ? 'agent' : 'chat',
             clientRequestId: dto.clientRequestId,
             requestFingerprint: fingerprint,
             contextRevision: lockedConversation.contextRevision,
@@ -286,7 +301,14 @@ export class AiRunService {
   }
 
   async get(runId: string, user: User, workspace: Workspace): Promise<AiRun> {
-    return this.toRun(await this.getOwnedRun(runId, user, workspace));
+    const run = await this.getOwnedRun(runId, user, workspace);
+    const steps = await this.db
+      .selectFrom('aiRunSteps')
+      .selectAll()
+      .where('runId', '=', run.id)
+      .orderBy('sequence', 'asc')
+      .execute();
+    return { ...this.toRun(run), steps: steps.map((step) => this.toStep(step)) };
   }
 
   async cancel(
@@ -306,7 +328,7 @@ export class AiRunService {
       if (this.isTerminal(run.status)) return run;
 
       const now = new Date();
-      if (run.status === 'queued') {
+      if (run.status === 'queued' || run.status === 'awaiting_approval') {
         const sequence = run.sequence + 1;
         const assistant = await trx
           .selectFrom('aiMessages')
@@ -326,7 +348,7 @@ export class AiRunService {
             updatedAt: now,
           })
           .where('id', '=', run.id)
-          .where('status', '=', 'queued')
+          .where('status', '=', run.status)
           .returningAll()
           .executeTakeFirst();
         if (!cancelled) {
@@ -342,6 +364,21 @@ export class AiRunService {
           .where('id', '=', run.assistantMessageId)
           .where('currentRunId', '=', run.id)
           .execute();
+        if (run.status === 'awaiting_approval') {
+          await trx
+            .updateTable('aiRunSteps')
+            .set({
+              status: 'expired',
+              errorCode: 'cancelled',
+              errorMessage: 'The run was cancelled',
+              decidedAt: now,
+              decidedById: user.id,
+              updatedAt: now,
+            })
+            .where('runId', '=', run.id)
+            .where('status', '=', 'pending_approval')
+            .execute();
+        }
         terminalEvent = cancelled;
         return cancelled;
       }
@@ -474,6 +511,7 @@ export class AiRunService {
       previousRunId: run.previousRunId,
       attemptNo: run.attemptNo,
       trigger: run.trigger as AiRunTrigger,
+      executionMode: run.executionMode as AiRun['executionMode'],
       status: run.status as AiRun['status'],
       clientRequestId: run.clientRequestId,
       contextRevision: run.contextRevision,
@@ -640,6 +678,7 @@ export class AiRunService {
             userMessageId: locked.userMessageId,
             assistantMessageId: locked.assistantMessageId,
             status: 'queued',
+            executionMode: locked.executionMode,
             clientRequestId: dto.clientRequestId,
             requestFingerprint: fingerprint,
             contextRevision: locked.contextRevision,
@@ -744,7 +783,7 @@ export class AiRunService {
           sql<number>`
               coalesce(sum(
                 case
-                  when status in ('queued', 'running') then reserved_tokens
+                  when status in ('queued', 'running', 'awaiting_approval') then reserved_tokens
                   else input_tokens + output_tokens
                 end
               ), 0)
@@ -760,7 +799,7 @@ export class AiRunService {
           sql<number>`
               coalesce(sum(
                 case
-                  when status in ('queued', 'running') then reserved_tokens
+                  when status in ('queued', 'running', 'awaiting_approval') then reserved_tokens
                   else input_tokens + output_tokens
                 end
               ), 0)
@@ -824,7 +863,11 @@ export class AiRunService {
           .selectFrom('aiRuns')
           .select(sql<number>`count(*)`.as('count'))
           .where(field, '=', value)
-          .where('status', 'in', ['queued', 'running'])
+          .where('status', 'in', [
+            'queued',
+            'running',
+            'awaiting_approval',
+          ])
           .executeTakeFirstOrThrow()
       ).count,
     );
@@ -845,6 +888,31 @@ export class AiRunService {
           .executeTakeFirstOrThrow()
       ).count,
     );
+  }
+
+  private toStep(row: any): AiRunStep {
+    return {
+      id: row.id,
+      runId: row.runId,
+      sequence: row.sequence,
+      modelStep: row.modelStep,
+      callIndex: row.callIndex,
+      toolCallId: row.toolCallId,
+      toolName: row.toolName,
+      writeClass: row.writeClass,
+      arguments: row.arguments as Record<string, unknown>,
+      result: row.result,
+      approvalPreview: extractAiApprovalPreview(row.result),
+      status: row.status,
+      errorCode: row.errorCode,
+      errorMessage: row.errorMessage,
+      targetPageId: row.targetPageId,
+      baseContentHash: row.baseContentHash,
+      expiresAt: row.expiresAt?.toISOString() ?? null,
+      decidedAt: row.decidedAt?.toISOString() ?? null,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    };
   }
 
   private async lockAdmission(

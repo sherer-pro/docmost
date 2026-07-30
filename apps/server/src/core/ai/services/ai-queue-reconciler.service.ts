@@ -14,6 +14,7 @@ import { DatabaseReadinessService } from '@docmost/db/services/database-readines
 import { AiOperationalMetricsService } from './ai-operational-metrics.service';
 import { AiAuxRunService } from './ai-aux-run.service';
 import { AiAuxRunExecutionService } from './ai-aux-run-execution.service';
+import { AiRunStepService } from './ai-run-step.service';
 
 const RECONCILE_INTERVAL_MS = 15_000;
 const RUN_DELIVERY_DEADLINE_MS = 5 * 60 * 1000;
@@ -35,6 +36,7 @@ export class AiQueueReconcilerService implements OnModuleInit, OnModuleDestroy {
     private readonly metrics: AiOperationalMetricsService,
     private readonly auxRuns: AiAuxRunService,
     private readonly auxExecution: AiAuxRunExecutionService,
+    private readonly steps: AiRunStepService,
   ) {}
 
   onModuleInit(): void {
@@ -63,6 +65,7 @@ export class AiQueueReconcilerService implements OnModuleInit, OnModuleDestroy {
     try {
       await this.databaseReadiness.waitUntilReady();
       if (this.destroyed) return;
+      await this.steps.expirePending(100);
       await this.reconcileRuns();
       await this.reconcileAuxRuns();
       const staleFileIds = await this.files.recoverStaleExtractions();

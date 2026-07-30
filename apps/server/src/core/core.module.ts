@@ -31,6 +31,7 @@ import { LabelModule } from './label/label.module';
 import { TransclusionModule } from './page/transclusion/transclusion.module';
 import { PresenceModule } from './presence/presence.module';
 import { AiModule } from './ai/ai.module';
+import { McpModule } from './mcp/mcp.module';
 
 @Module({
   imports: [
@@ -60,6 +61,7 @@ import { AiModule } from './ai/ai.module';
     TransclusionModule,
     PresenceModule,
     AiModule,
+    McpModule,
   ],
 })
 export class CoreModule implements NestModule {

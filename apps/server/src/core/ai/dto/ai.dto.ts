@@ -123,6 +123,10 @@ export class UpdateAiSpaceConfigDto {
   enabled?: boolean;
 
   @IsOptional()
+  @IsBoolean()
+  agentEnabled?: boolean;
+
+  @IsOptional()
   @IsIn(AI_PROVIDERS)
   provider?: 'openai-compatible';
 
@@ -255,6 +259,10 @@ export class CreateAiConversationDto {
   @IsOptional()
   @IsBoolean()
   useSpaceSearch?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  agentMode?: boolean;
 }
 
 export class UpdateAiConversationDto {
@@ -271,6 +279,10 @@ export class UpdateAiConversationDto {
   @IsOptional()
   @IsBoolean()
   useSpaceSearch?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  agentMode?: boolean;
 }
 
 export class AiConversationListQueryDto {

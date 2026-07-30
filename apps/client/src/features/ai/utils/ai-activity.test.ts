@@ -49,4 +49,16 @@ describe("AI activity lifecycle", () => {
 
     expect(Object.keys(cleared)).toEqual(["running"]);
   });
+
+  it("keeps an agent run visible while approval is pending", () => {
+    const visible = getVisibleAiActivities({
+      approval: activity({
+        runId: "approval",
+        status: "awaiting_approval",
+        unread: false,
+      }),
+    });
+
+    expect(visible.map((item) => item.runId)).toEqual(["approval"]);
+  });
 });

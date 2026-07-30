@@ -128,6 +128,12 @@ export class ApiKeyService {
   }
 
   async createApiKey(user: User, workspace: Workspace, dto: CreateApiKeyDto) {
+    const keyType = dto.keyType ?? 'rag';
+    if (keyType === 'mcp' && !this.isAdminOrOwner(user)) {
+      throw new ForbiddenException(
+        'Only workspace admins can create MCP API keys',
+      );
+    }
     await this.assertCanCreateApiKeyInSpace(user, workspace, dto.spaceId);
 
     const expiresAt = this.parseExpiry(dto.expiresAt);
@@ -137,6 +143,7 @@ export class ApiKeyService {
       creatorId: user.id,
       workspaceId: workspace.id,
       spaceId: dto.spaceId,
+      keyType,
       expiresAt,
     });
 
@@ -145,6 +152,7 @@ export class ApiKeyService {
       user,
       workspaceId: workspace.id,
       spaceId: dto.spaceId,
+      keyType,
       expiresIn: this.getTokenExpiresIn(expiresAt),
     });
 
@@ -198,7 +206,10 @@ export class ApiKeyService {
     });
   }
 
-  async validateApiKey(payload: JwtApiKeyPayload) {
+  async validateApiKey(
+    payload: JwtApiKeyPayload,
+    expectedType: 'rag' | 'mcp' = 'rag',
+  ) {
     const apiKey = await this.apiKeyRepo.findById(payload.apiKeyId);
 
     if (!apiKey || apiKey.deletedAt) {
@@ -211,6 +222,12 @@ export class ApiKeyService {
       apiKey.creatorId !== payload.sub
     ) {
       throw new UnauthorizedException('API key is invalid');
+    }
+    if (
+      apiKey.keyType !== expectedType ||
+      (payload.keyType !== undefined && payload.keyType !== apiKey.keyType)
+    ) {
+      throw new UnauthorizedException('API key type is invalid');
     }
 
     if (apiKey.expiresAt && apiKey.expiresAt <= new Date()) {

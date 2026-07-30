@@ -30,6 +30,7 @@ import {
   IconPencil,
   IconPlayerStop,
   IconPlus,
+  IconRobot,
   IconSearch,
   IconSend,
   IconSparkles,
@@ -72,6 +73,9 @@ import {
   useUploadAiChatFilesMutation,
   useOpenAiConversationMutation,
   useUpdateAiConversationMutation,
+  useAiRunQuery,
+  useApproveAiRunStepMutation,
+  useRejectAiRunStepMutation,
 } from "@/features/ai/queries/ai-query.ts";
 import {
   AiConversation,
@@ -113,6 +117,16 @@ import { isAiChatNearBottom } from "@/features/ai/utils/ai-scroll.ts";
 import { asideStateAtom } from "@/components/layouts/global/hooks/atoms/sidebar-atom.ts";
 import { clearAiPageActivity } from "@/features/ai/utils/ai-activity.ts";
 import { resolveAiAssistantText } from "@/features/ai/utils/ai-identity.ts";
+import { AiApprovalPreview } from "./ai-approval-preview.tsx";
+import {
+  getAiLocalDraftKey,
+  readAiLocalDraft,
+  writeAiLocalDraft,
+} from "@/features/ai/utils/ai-local-draft.ts";
+import {
+  userAtom,
+  workspaceAtom,
+} from "@/features/user/atoms/current-user-atom.ts";
 
 export function AiPanel() {
   const { t, i18n } = useTranslation();
@@ -120,6 +134,8 @@ export function AiPanel() {
   const reduceMotion = useReducedMotion();
   const isCompactMobile = useMediaQuery("(max-width: 30em)");
   const documentContext = useAtomValue(aiDocumentContextAtom);
+  const user = useAtomValue(userAtom);
+  const workspace = useAtomValue(workspaceAtom);
   const asideState = useAtomValue(asideStateAtom);
   const tree = useAtomValue(treeDataAtom);
   const editor = useAtomValue(pageEditorAtom);
@@ -139,8 +155,13 @@ export function AiPanel() {
   const spaceId = documentContext?.spaceId;
   const conversationsQuery = useAiConversationsQuery(pageId);
   const availabilityQuery = useAiSpaceStatusQuery(spaceId, pageId);
-  const [activeByPage, setActiveByPage] = useState<Record<string, string>>({});
-  const activeConversationId = pageId ? activeByPage[pageId] : undefined;
+  const [activeByPage, setActiveByPage] = useState<
+    Record<string, string | null>
+  >({});
+  const activeSelection = pageId ? activeByPage[pageId] : undefined;
+  const activeConversationId =
+    typeof activeSelection === "string" ? activeSelection : undefined;
+  const isLocalDraft = activeSelection === null;
   const conversations = conversationsQuery.data ?? [];
   const activeConversation = conversations.find(
     (conversation) => conversation.id === activeConversationId,
@@ -163,6 +184,7 @@ export function AiPanel() {
   const deleteFile = useDeleteAiChatFileMutation(activeConversationId);
   const [draft, setDraft] = useState("");
   const [useSpaceSearch, setUseSpaceSearch] = useState(false);
+  const [agentMode, setAgentMode] = useState(false);
   const [renameOpened, setRenameOpened] = useState(false);
   const [renameValue, setRenameValue] = useState("");
   const [quickCommandQuery, setQuickCommandQuery] = useState("");
@@ -178,6 +200,7 @@ export function AiPanel() {
     useState<AiContextSource | null>(null);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const draftHydratedFor = useRef<string | null>(null);
+  const ensureConversationRef = useRef<Promise<AiConversation> | null>(null);
   const draftSaveChain = useRef<Promise<unknown>>(Promise.resolve());
   const contextSaveChain = useRef<Promise<AiConversationContext> | null>(null);
   const lastContextTransformRef = useRef<
@@ -202,8 +225,19 @@ export function AiPanel() {
     ? streamingRuns[persistedActiveRun.runId]
     : undefined;
   const pendingRun =
-    activeRuns.find((run) => ["queued", "running"].includes(run.status)) ??
+    activeRuns.find((run) =>
+      ["queued", "running", "awaiting_approval"].includes(run.status),
+    ) ??
     (persistedActiveRun && !persistedRunState ? persistedActiveRun : undefined);
+  const pendingRunQuery = useAiRunQuery(
+    pendingRun?.runId,
+    pendingRun?.status === "awaiting_approval",
+  );
+  const approveStep = useApproveAiRunStepMutation();
+  const rejectStep = useRejectAiRunStepMutation();
+  const pendingApproval = pendingRunQuery.data?.steps?.find(
+    (step) => step.status === "pending_approval",
+  );
   const chatFiles = filesQuery.data ?? [];
   const pageAttachments = pageAttachmentsQuery.data ?? [];
   const context = contextQuery.data;
@@ -212,6 +246,10 @@ export function AiPanel() {
   );
   const documentTitle =
     liveDocumentTitle || documentContext?.title?.trim() || t("ai.untitled");
+  const localDraftKey =
+    workspace?.id && user?.id && pageId
+      ? getAiLocalDraftKey(workspace.id, user.id, pageId)
+      : null;
 
   useEffect(() => {
     if (!pageId || asideState.tab !== "ai" || !asideState.isAsideOpen) {
@@ -249,31 +287,94 @@ export function AiPanel() {
   }, [persistedActiveRun, setStreamingRuns]);
 
   useEffect(() => {
-    if (!pageId || activeByPage[pageId] || conversations.length === 0) {
+    if (
+      !pageId ||
+      activeByPage[pageId] !== undefined ||
+      conversationsQuery.isLoading
+    ) {
       return;
     }
     const latest = getLatestAiConversation(conversations);
     if (latest) {
       setActiveByPage((current) => ({ ...current, [pageId]: latest.id }));
       touchConversation(latest.id);
+    } else {
+      setActiveByPage((current) => ({ ...current, [pageId]: null }));
     }
-  }, [activeByPage, conversations, pageId, touchConversation]);
+  }, [
+    activeByPage,
+    conversations,
+    conversationsQuery.isLoading,
+    pageId,
+    touchConversation,
+  ]);
 
   useEffect(() => {
     if (!activeConversation) {
-      setDraft("");
-      setUseSpaceSearch(false);
-      draftHydratedFor.current = null;
+      if (!isLocalDraft || !localDraftKey) {
+        return;
+      }
+      const marker = `local:${localDraftKey}`;
+      if (draftHydratedFor.current !== marker) {
+        const saved = readAiLocalDraft(sessionStorage, localDraftKey);
+        const defaultAgentMode =
+          availabilityQuery.data?.agentAvailable === true &&
+          availabilityQuery.data?.canUse !== true;
+        setDraft(saved?.text ?? "");
+        setUseSpaceSearch(saved?.useSpaceSearch ?? false);
+        setAgentMode(saved?.agentMode ?? defaultAgentMode);
+        draftHydratedFor.current = marker;
+      }
       contextSaveChain.current = null;
       return;
     }
+    const shouldHydrateDraft =
+      draftHydratedFor.current !== activeConversation.id;
     draftHydratedFor.current = activeConversation.id;
-    setDraft(activeConversation.draft ?? "");
+    if (shouldHydrateDraft) {
+      setDraft(activeConversation.draft ?? "");
+    }
     setDraftStatus("idle");
     setUseSpaceSearch(Boolean(activeConversation.useSpaceSearch));
+    setAgentMode(Boolean(activeConversation.agentMode));
     contextSaveChain.current = null;
     setContextSaveFailed(false);
-  }, [activeConversation?.id]);
+  }, [
+    activeConversation,
+    availabilityQuery.data?.agentAvailable,
+    availabilityQuery.data?.canUse,
+    isLocalDraft,
+    localDraftKey,
+  ]);
+
+  useEffect(() => {
+    if (
+      !isLocalDraft ||
+      !localDraftKey ||
+      draftHydratedFor.current !== `local:${localDraftKey}`
+    ) {
+      return;
+    }
+    writeAiLocalDraft(sessionStorage, localDraftKey, {
+      text: draft,
+      useSpaceSearch,
+      agentMode,
+    });
+  }, [agentMode, draft, isLocalDraft, localDraftKey, useSpaceSearch]);
+
+  useEffect(() => {
+    if (
+      !activeConversation &&
+      availabilityQuery.data?.agentAvailable === true &&
+      availabilityQuery.data?.canUse !== true
+    ) {
+      setAgentMode(true);
+    }
+  }, [
+    activeConversation,
+    availabilityQuery.data?.agentAvailable,
+    availabilityQuery.data?.canUse,
+  ]);
 
   useEffect(() => {
     if (
@@ -331,17 +432,38 @@ export function AiPanel() {
     if (activeConversation) {
       return activeConversation;
     }
+    if (ensureConversationRef.current) {
+      return ensureConversationRef.current;
+    }
     if (!pageId) {
       throw new Error("Page context is missing");
     }
 
-    const conversation = await createConversation.mutateAsync({
-      pageId,
-      clientRequestId: crypto.randomUUID(),
-      useSpaceSearch: false,
-    });
-    setActiveByPage((current) => ({ ...current, [pageId]: conversation.id }));
-    return conversation;
+    const creation = createConversation.mutateAsync({
+        pageId,
+        clientRequestId: crypto.randomUUID(),
+        useSpaceSearch,
+        agentMode,
+      })
+      .then((conversation) => {
+        draftHydratedFor.current = conversation.id;
+        if (localDraftKey) {
+          sessionStorage.removeItem(localDraftKey);
+        }
+        setActiveByPage((current) => ({
+          ...current,
+          [pageId]: conversation.id,
+        }));
+        return conversation;
+      });
+    ensureConversationRef.current = creation;
+    try {
+      return await creation;
+    } finally {
+      if (ensureConversationRef.current === creation) {
+        ensureConversationRef.current = null;
+      }
+    }
   };
 
   const loadContext = async (
@@ -458,7 +580,7 @@ export function AiPanel() {
     const normalizedContent = content.trim();
     if (
       !normalizedContent ||
-      !documentContext?.canWrite ||
+      (!documentContext?.canWrite && !agentMode) ||
       !editor ||
       sendMessage.isPending ||
       Boolean(pendingRun) ||
@@ -539,24 +661,55 @@ export function AiPanel() {
     if (!pageId || !conversationId) {
       return;
     }
-    setActiveByPage((current) => ({ ...current, [pageId]: conversationId }));
-    touchConversation(conversationId);
+    const select = () => {
+      setActiveByPage((current) => ({ ...current, [pageId]: conversationId }));
+      touchConversation(conversationId);
+    };
+    if (isLocalDraft && draft.trim()) {
+      modals.openConfirmModal({
+        title: t("ai.discardDraft"),
+        children: <Text size="sm">{t("ai.discardDraftConfirm")}</Text>,
+        labels: { confirm: t("ai.discard"), cancel: t("ai.cancel") },
+        confirmProps: { color: "red" },
+        onConfirm: select,
+      });
+      return;
+    }
+    select();
   };
 
-  const createNewConversation = async () => {
+  const createNewConversation = () => {
     if (!pageId) {
       return;
     }
-    try {
-      const conversation = await createConversation.mutateAsync({
-        pageId,
-        clientRequestId: crypto.randomUUID(),
-        useSpaceSearch: false,
+    const beginDraft = () => {
+      if (localDraftKey) {
+        sessionStorage.removeItem(localDraftKey);
+        draftHydratedFor.current = `local:${localDraftKey}`;
+      }
+      ensureConversationRef.current = null;
+      setActiveByPage((current) => ({ ...current, [pageId]: null }));
+      setDraft("");
+      setDraftStatus("idle");
+      setUseSpaceSearch(false);
+      setAgentMode(
+        availabilityQuery.data?.agentAvailable === true &&
+          availabilityQuery.data?.canUse !== true,
+      );
+      setContextSaveFailed(false);
+      contextSaveChain.current = null;
+    };
+    if (draft.trim()) {
+      modals.openConfirmModal({
+        title: t("ai.discardDraft"),
+        children: <Text size="sm">{t("ai.discardDraftConfirm")}</Text>,
+        labels: { confirm: t("ai.discard"), cancel: t("ai.cancel") },
+        confirmProps: { color: "red" },
+        onConfirm: beginDraft,
       });
-      setActiveByPage((current) => ({ ...current, [pageId]: conversation.id }));
-    } catch {
-      notifications.show({ message: t("ai.createChatFailed"), color: "red" });
+      return;
     }
+    beginDraft();
   };
 
   const confirmDeleteConversation = () => {
@@ -637,6 +790,31 @@ export function AiPanel() {
         conversationId: activeConversation.id,
         data: { useSpaceSearch: checked },
       });
+    }
+  };
+
+  const toggleAgentMode = (checked: boolean) => {
+    setAgentMode(checked);
+    if (activeConversation) {
+      updateConversation.mutate(
+        {
+          conversationId: activeConversation.id,
+          data: { agentMode: checked },
+        },
+        {
+          onError: (error) => {
+            setAgentMode(!checked);
+            notifications.show({
+              message: resolveAiErrorMessage(
+                t,
+                i18n,
+                error?.["response"]?.data?.code,
+              ),
+              color: "red",
+            });
+          },
+        },
+      );
     }
   };
 
@@ -847,7 +1025,8 @@ export function AiPanel() {
     shouldShowAiPanelLoadFailure(
       availabilityQuery.isError,
       conversationsQuery.isError,
-      availabilityQuery.data?.canUse,
+      availabilityQuery.data?.canUse ||
+        availabilityQuery.data?.agentAvailable,
     )
   ) {
     return (
@@ -880,7 +1059,7 @@ export function AiPanel() {
   }
 
   const availability = availabilityQuery.data;
-  if (!availability?.canUse) {
+  if (!availability?.canUse && !availability?.agentAvailable) {
     return (
       <Stack p="md">
         <Alert
@@ -1139,7 +1318,10 @@ export function AiPanel() {
                 activeRuns.find((item) => item.messageId === message.id) ??
                 (pendingRun?.messageId === message.id ? pendingRun : undefined);
               const runIsActive = Boolean(
-                run && ["queued", "running"].includes(run.status),
+                run &&
+                  ["queued", "running", "awaiting_approval"].includes(
+                    run.status,
+                  ),
               );
               const renderedMessage = runIsActive
                 ? {
@@ -1206,6 +1388,89 @@ export function AiPanel() {
                   reasoningLabel={t("ai.ux.reasoningInProgress")}
                 />
               )}
+
+            {pendingRun?.status === "awaiting_approval" && (
+              <Alert
+                icon={<IconRobot size={18} />}
+                title={t("ai.agent.approvalTitle")}
+                color="blue"
+              >
+                {pendingRunQuery.isLoading ? (
+                  <Loader size="xs" />
+                ) : pendingApproval ? (
+                  <Stack gap="xs">
+                    <Text size="sm">
+                      {t(`ai.agent.tool.${pendingApproval.toolName}`, {
+                        defaultValue: pendingApproval.toolName,
+                      })}
+                    </Text>
+                    <Text size="xs" c="dimmed">
+                      {t("ai.agent.approvalDescription")}
+                    </Text>
+                    <AiApprovalPreview step={pendingApproval} />
+                    <Group gap="xs">
+                      <Button
+                        size="compact-sm"
+                        loading={approveStep.isPending}
+                        disabled={rejectStep.isPending}
+                        onClick={() =>
+                          approveStep.mutate(
+                            {
+                              runId: pendingRun.runId,
+                              stepId: pendingApproval.id,
+                            },
+                            {
+                              onError: (error) =>
+                                notifications.show({
+                                  message: resolveAiErrorMessage(
+                                    t,
+                                    i18n,
+                                    error?.["response"]?.data?.code,
+                                  ),
+                                  color: "red",
+                                }),
+                            },
+                          )
+                        }
+                      >
+                        {t("ai.agent.approve")}
+                      </Button>
+                      <Button
+                        size="compact-sm"
+                        variant="default"
+                        loading={rejectStep.isPending}
+                        disabled={approveStep.isPending}
+                        onClick={() =>
+                          rejectStep.mutate(
+                            {
+                              runId: pendingRun.runId,
+                              stepId: pendingApproval.id,
+                            },
+                            {
+                              onError: (error) =>
+                                notifications.show({
+                                  message: resolveAiErrorMessage(
+                                    t,
+                                    i18n,
+                                    error?.["response"]?.data?.code,
+                                  ),
+                                  color: "red",
+                                }),
+                            },
+                          )
+                        }
+                      >
+                        {t("ai.agent.reject")}
+                      </Button>
+                    </Group>
+                  </Stack>
+                ) : (
+                  <Text size="sm" c="dimmed">
+                    {t("ai.agent.loadingProposal")}
+                  </Text>
+                )}
+              </Alert>
+            )}
           </Stack>
         </ScrollArea>
         {showJumpToLatest && (
@@ -1343,6 +1608,38 @@ export function AiPanel() {
             </Menu>
           )}
 
+          {availability.agentAvailable && (
+            <Menu position="top-start" withinPortal>
+              <Menu.Target>
+                <Button
+                  variant="subtle"
+                  size="compact-sm"
+                  leftSection={<IconRobot size={16} />}
+                  rightSection={agentMode ? <IconCheck size={13} /> : undefined}
+                  disabled={Boolean(pendingRun)}
+                  className={classes.toolbarButton}
+                  aria-label={t("ai.agent.mode")}
+                >
+                  <span className={classes.toolbarButtonLabel}>
+                    {t("ai.agent.mode")}
+                  </span>
+                </Button>
+              </Menu.Target>
+              <Menu.Dropdown>
+                <Menu.Item closeMenuOnClick={false}>
+                  <Checkbox
+                    checked={agentMode}
+                    label={t("ai.agent.modeToggle")}
+                    description={t("ai.agent.modeDescription")}
+                    onChange={(event) =>
+                      toggleAgentMode(event.currentTarget.checked)
+                    }
+                  />
+                </Menu.Item>
+              </Menu.Dropdown>
+            </Menu>
+          )}
+
           <AiContextPicker
             conversationId={activeConversationId}
             documentPageId={documentContext.pageId}
@@ -1410,7 +1707,9 @@ export function AiPanel() {
         >
           {pendingRun ? (
             <Text size="xs" c="dimmed" lineClamp={1}>
-              {t("ai.generating")}
+              {pendingRun.status === "awaiting_approval"
+                ? t("ai.agent.awaitingApproval")
+                : t("ai.generating")}
             </Text>
           ) : draftStatus === "error" ? (
             <Button

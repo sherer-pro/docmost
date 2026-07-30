@@ -13,6 +13,14 @@ import { ApiKeyService } from '../../api-key/api-key.service';
 import { SessionActivityService } from '../../session/session-activity.service';
 import { JWT_ALGORITHM, JWT_ISSUER } from '../services/token.service';
 
+function isRouteOrDescendant(rawUrl: string, route: string): boolean {
+  return (
+    rawUrl === route ||
+    rawUrl.startsWith(`${route}/`) ||
+    rawUrl.startsWith(`${route}?`)
+  );
+}
+
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   private logger = new Logger('JwtStrategy');
@@ -31,8 +39,12 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
         const bearerToken = extractBearerTokenFromHeader(req);
         const rawUrl =
           request?.originalUrl ?? request?.raw?.url ?? request?.url ?? '';
-        const isRagRoute = rawUrl.startsWith('/api/rag');
+        const isRagRoute = isRouteOrDescendant(rawUrl, '/api/rag');
+        const isMcpRoute = isRouteOrDescendant(rawUrl, '/mcp');
 
+        if (isMcpRoute) {
+          return bearerToken;
+        }
         if (isRagRoute) {
           return bearerToken || request.cookies?.authToken;
         }
@@ -61,11 +73,14 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
         throw new UnauthorizedException();
       }
 
-      if (!this.isRagRoute(req)) {
-        throw new UnauthorizedException('API key can only be used on /rag routes');
+      const expectedType = this.getApiKeyType(req);
+      if (!expectedType) {
+        throw new UnauthorizedException(
+          'API key can only be used on /rag or /mcp routes',
+        );
       }
 
-      return this.validateApiKey(payload as JwtApiKeyPayload);
+      return this.validateApiKey(payload as JwtApiKeyPayload, expectedType);
     }
 
     if (payload.type !== JwtType.ACCESS) {
@@ -112,22 +127,27 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     return { user, workspace };
   }
 
-  private async validateApiKey(payload: JwtApiKeyPayload) {
+  private async validateApiKey(
+    payload: JwtApiKeyPayload,
+    expectedType: 'rag' | 'mcp',
+  ) {
     const apiKeyService = this.moduleRef.get(ApiKeyService, {
       strict: false,
     });
 
     if (apiKeyService) {
-      return apiKeyService.validateApiKey(payload);
+      return apiKeyService.validateApiKey(payload, expectedType);
     }
 
     this.logger.error('ApiKeyService is not available in DI container');
     throw new UnauthorizedException('API key auth is unavailable');
   }
 
-  private isRagRoute(req: any): boolean {
+  private getApiKeyType(req: any): 'rag' | 'mcp' | null {
     const rawUrl: string =
       req?.originalUrl ?? req?.raw?.url ?? req?.url ?? '';
-    return rawUrl.startsWith('/api/rag');
+    if (isRouteOrDescendant(rawUrl, '/api/rag')) return 'rag';
+    if (isRouteOrDescendant(rawUrl, '/mcp')) return 'mcp';
+    return null;
   }
 }
