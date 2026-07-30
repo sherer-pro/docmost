@@ -20,6 +20,7 @@ import { ExportService } from '../../integrations/export/export.service';
 import { sql } from 'kysely';
 import { getPageAiRole } from '../page/utils/page-settings.utils';
 import { PageAccessService } from '../page-access/page-access.service';
+import { AiContentPolicyService } from '../ai-content-policy/ai-content-policy.service';
 
 interface RagAuthContext {
   user: User;
@@ -58,6 +59,7 @@ export class RagService {
     private readonly commentRepo: CommentRepo,
     private readonly exportService: ExportService,
     private readonly pageAccessService: PageAccessService,
+    private readonly contentPolicy: AiContentPolicyService,
   ) {}
 
   /**
@@ -66,13 +68,32 @@ export class RagService {
    * API key would read pages its own creator is denied — turning the key into a
    * privilege-escalation primitive.
    */
-  private async getReadablePageIds(scope: RagAuthContext): Promise<Set<string>> {
+  private async getReadablePageIds(
+    scope: RagAuthContext,
+  ): Promise<Set<string>> {
     const snapshot = await this.pageAccessService.getSidebarAccessSnapshot(
       scope.user,
       scope.space.id,
     );
 
-    return snapshot.readablePageIds;
+    const excluded = await this.contentPolicy.getExcludedPageIds(
+      scope.space.id,
+      scope.workspace.id,
+    );
+    return new Set(
+      [...snapshot.readablePageIds].filter((pageId) => !excluded.has(pageId)),
+    );
+  }
+
+  async getScope(scope: RagAuthContext) {
+    const policy = await this.contentPolicy.getEffectivePolicy(
+      scope.space.id,
+      scope.workspace.id,
+    );
+    return {
+      fingerprint: policy.fingerprint,
+      excludedPageIds: policy.excludedPageIds,
+    };
   }
 
   private async filterReadablePageRows<T extends { id: string }>(
@@ -176,6 +197,15 @@ export class RagService {
     if (!access.capabilities.canRead) {
       throw new ForbiddenException('Page is outside API key scope');
     }
+    if (
+      await this.contentPolicy.isPageExcluded(
+        page.id,
+        scope.space.id,
+        scope.workspace.id,
+      )
+    ) {
+      throw new ForbiddenException('Page is excluded from AI and RAG');
+    }
 
     return page;
   }
@@ -197,7 +227,10 @@ export class RagService {
       const page = await this.resolvePageInScope(databaseIdOrPageSlug, scope, {
         allowDeleted: false,
       });
-      database = await this.databaseRepo.findByPageId(page.id, scope.workspace.id);
+      database = await this.databaseRepo.findByPageId(
+        page.id,
+        scope.workspace.id,
+      );
     }
 
     if (!database) {
@@ -207,6 +240,12 @@ export class RagService {
     if (database.spaceId !== scope.space.id) {
       throw new ForbiddenException('Database is outside API key scope');
     }
+    if (!database.pageId) {
+      throw new NotFoundException('Database page not found');
+    }
+    await this.resolvePageInScope(database.pageId, scope, {
+      allowDeleted: false,
+    });
 
     return database;
   }
@@ -245,11 +284,11 @@ export class RagService {
     }
   }
 
-  private buildDatabaseTableMarkdown(
-    properties: any[],
-    rows: any[],
-  ): string {
-    const header = ['Title', ...properties.map((item) => item.name || 'Column')];
+  private buildDatabaseTableMarkdown(properties: any[], rows: any[]): string {
+    const header = [
+      'Title',
+      ...properties.map((item) => item.name || 'Column'),
+    ];
     const separator = header.map(() => '---');
 
     const bodyRows = rows.map((row) => {
@@ -512,7 +551,9 @@ export class RagService {
       databaseId: linkedDatabase?.id ?? activeRow?.databaseId ?? null,
       createdAt: page.createdAt,
       updatedAt: page.updatedAt,
-      ...(includeContent ? { contentMarkdown: this.toMarkdown(page.content) } : {}),
+      ...(includeContent
+        ? { contentMarkdown: this.toMarkdown(page.content) }
+        : {}),
     };
   }
 
@@ -526,12 +567,7 @@ export class RagService {
 
     const pageUpdates = await this.db
       .selectFrom('pages')
-      .select([
-        'pages.id',
-        'pages.slugId',
-        'pages.title',
-        'pages.updatedAt',
-      ])
+      .select(['pages.id', 'pages.slugId', 'pages.title', 'pages.updatedAt'])
       .where('pages.workspaceId', '=', scope.workspace.id)
       .where('pages.spaceId', '=', scope.space.id)
       .where('pages.deletedAt', 'is', null)
@@ -597,8 +633,16 @@ export class RagService {
 
     const activeDatabases = await this.db
       .selectFrom('databases')
-      .innerJoin('pages as databasePages', 'databasePages.id', 'databases.pageId')
-      .leftJoin(propertiesChanges, 'propertiesChanges.databaseId', 'databases.id')
+      .innerJoin(
+        'pages as databasePages',
+        'databasePages.id',
+        'databases.pageId',
+      )
+      .leftJoin(
+        propertiesChanges,
+        'propertiesChanges.databaseId',
+        'databases.id',
+      )
       .leftJoin(rowsChanges, 'rowsChanges.databaseId', 'databases.id')
       .leftJoin(cellsChanges, 'cellsChanges.databaseId', 'databases.id')
       .leftJoin(rowPagesChanges, 'rowPagesChanges.databaseId', 'databases.id')
@@ -944,7 +988,10 @@ export class RagService {
   }
 
   async getDatabaseInfo(scope: RagAuthContext, databaseIdOrPageSlug: string) {
-    const database = await this.resolveDatabaseInScope(databaseIdOrPageSlug, scope);
+    const database = await this.resolveDatabaseInScope(
+      databaseIdOrPageSlug,
+      scope,
+    );
     const databasePage = await this.resolvePageInScope(database.pageId, scope, {
       includeContent: true,
     });
@@ -969,7 +1016,9 @@ export class RagService {
       rows,
     );
     const descriptionMarkdown =
-      this.toMarkdown(database.descriptionContent) ?? database.description ?? '';
+      this.toMarkdown(database.descriptionContent) ??
+      database.description ??
+      '';
     const rowsMarkdown = rows
       .map((row) => {
         const title = row.page?.title || row.pageTitle || row.pageId;
@@ -980,7 +1029,9 @@ export class RagService {
       .join('\n\n');
 
     const knowledgeMarkdownParts = [
-      descriptionMarkdown?.trim() ? `## Description\n\n${descriptionMarkdown}` : '',
+      descriptionMarkdown?.trim()
+        ? `## Description\n\n${descriptionMarkdown}`
+        : '',
       tableMarkdown?.trim() ? `## Table\n\n${tableMarkdown}` : '',
       rowsMarkdown?.trim() ? `## Rows\n\n${rowsMarkdown}` : '',
     ].filter(Boolean);
@@ -999,7 +1050,10 @@ export class RagService {
       position: databasePage.position,
       spaceId: database.spaceId,
       settings: mapPageSettings(databasePage.settings),
-      customFields: this.buildCustomFields(databasePage.settings, documentFields),
+      customFields: this.buildCustomFields(
+        databasePage.settings,
+        documentFields,
+      ),
       descriptionMarkdown,
       pageContentMarkdown: this.toMarkdown(databasePage.content),
       properties: normalizedProperties,
@@ -1015,7 +1069,10 @@ export class RagService {
     databaseIdOrPageSlug: string,
     pageIds?: string[],
   ) {
-    const database = await this.resolveDatabaseInScope(databaseIdOrPageSlug, scope);
+    const database = await this.resolveDatabaseInScope(
+      databaseIdOrPageSlug,
+      scope,
+    );
 
     const rows = await this.loadRowsWithContent(database.id, scope, {
       pageIds: pageIds ?? [],
@@ -1115,6 +1172,7 @@ export class RagService {
       undefined,
       // An API key never grants more than its creator can read.
       scope.user,
+      await this.getReadablePageIds(scope),
     );
 
     return {
@@ -1134,6 +1192,9 @@ export class RagService {
       scope.space.id,
       opts.format,
       opts.includeAttachments,
+      undefined,
+      undefined,
+      await this.getReadablePageIds(scope),
     );
   }
 
@@ -1171,6 +1232,15 @@ export class RagService {
     );
     if (!access.capabilities.canRead) {
       throw new ForbiddenException('File is outside API key scope');
+    }
+    if (
+      await this.contentPolicy.isPageExcluded(
+        page.id,
+        scope.space.id,
+        scope.workspace.id,
+      )
+    ) {
+      throw new ForbiddenException('File is excluded from AI and RAG');
     }
 
     return attachment;

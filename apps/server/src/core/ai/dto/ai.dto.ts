@@ -16,12 +16,17 @@ import {
   Max,
   MaxLength,
   Min,
+  ValidateBy,
   ValidateNested,
 } from 'class-validator';
 import {
+  AI_ASSISTANT_GENDERS,
+  AI_ASSISTANT_NAME_MAX_LENGTH,
   AI_CONTEXT_SOURCE_TYPES,
+  AI_DESCENDANT_SELECTION_MODES,
   AI_PROVIDERS,
   AI_RETRIEVAL_ADAPTERS,
+  hasInvalidAiAssistantNameCharacters,
 } from '@docmost/api-contract';
 
 export class AiQuickCommandDto {
@@ -139,6 +144,29 @@ export class UpdateAiSpaceConfigDto {
   @IsOptional()
   @IsBoolean()
   clearApiKey?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  assistantNameEnabled?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(AI_ASSISTANT_NAME_MAX_LENGTH)
+  @ValidateBy({
+    name: 'hasValidAiAssistantNameCharacters',
+    validator: {
+      validate: (value) =>
+        typeof value === 'string' &&
+        !hasInvalidAiAssistantNameCharacters(value),
+      defaultMessage: () =>
+        'assistantName must not contain control or bidirectional formatting characters',
+    },
+  })
+  assistantName?: string | null;
+
+  @IsOptional()
+  @IsIn(AI_ASSISTANT_GENDERS)
+  assistantGender?: 'masculine' | 'feminine';
 
   @IsOptional()
   @IsString()
@@ -269,12 +297,29 @@ export class AiStatusQueryDto {
   pageId?: string;
 }
 
+export class AiDescendantSelectionDto {
+  @IsIn(AI_DESCENDANT_SELECTION_MODES)
+  mode: 'none' | 'all' | 'selected';
+
+  @IsArray()
+  @ArrayMaxSize(50)
+  @ArrayUnique()
+  @IsUUID(undefined, { each: true })
+  pageIds: string[];
+}
+
 export class AiContextSourceInputDto {
   @IsIn(AI_CONTEXT_SOURCE_TYPES)
   sourceType: 'page' | 'database' | 'database_row';
 
   @IsUUID()
   sourceId: string;
+
+  @IsOptional()
+  @IsObject()
+  @ValidateNested()
+  @Type(() => AiDescendantSelectionDto)
+  descendants?: AiDescendantSelectionDto;
 }
 
 export class UpdateAiConversationContextDto {
@@ -284,6 +329,12 @@ export class UpdateAiConversationContextDto {
 
   @IsBoolean()
   includeCurrentDocument: boolean;
+
+  @IsOptional()
+  @IsObject()
+  @ValidateNested()
+  @Type(() => AiDescendantSelectionDto)
+  currentDocumentDescendants?: AiDescendantSelectionDto;
 
   @IsArray()
   @ArrayMaxSize(10)
@@ -322,6 +373,24 @@ export class AiContextSourceSearchQueryDto {
   @Min(1)
   @Max(50)
   limit = 20;
+}
+
+export class AiContextDescendantsQueryDto {
+  @IsUUID()
+  parentPageId: string;
+
+  @IsOptional()
+  @Transform(({ value }) => Number(value))
+  @IsInt()
+  @Min(0)
+  cursor = 0;
+
+  @IsOptional()
+  @Transform(({ value }) => Number(value))
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  limit = 50;
 }
 
 export class AiSelectionDto {

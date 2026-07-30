@@ -10,6 +10,8 @@ import { SearchService } from '../../search/search.service';
 import { PageAccessService } from '../../page-access/page-access.service';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 import {
+  AI_CONTEXT_LIMITS,
+  AiDescendantSelection,
   AiContextSource,
   AiContextSourceType,
   AiConversationContext,
@@ -23,11 +25,15 @@ import {
 } from '@docmost/db/types/entity.types';
 import {
   AiContextSourceSearchQueryDto,
+  AiContextDescendantsQueryDto,
   AiContextSourceInputDto,
+  AiDescendantSelectionDto,
   SendAiMessageDto,
   UpdateAiConversationContextDto,
 } from '../dto/ai.dto';
 import { AiConversationService } from './ai-conversation.service';
+import { AiContentPolicyService } from '../../ai-content-policy/ai-content-policy.service';
+import { PageRepo } from '@docmost/db/repos/page/page.repo';
 
 export interface AiResolvedRunContextSource {
   sourceType: AiContextSourceType;
@@ -43,6 +49,12 @@ export interface AiResolvedRunContextSource {
   origin: 'current_document' | 'explicit';
 }
 
+interface AiContextRoot {
+  source: AiContextSource;
+  descendants: AiDescendantSelection;
+  origin: 'current_document' | 'explicit';
+}
+
 @Injectable()
 export class AiContextService {
   constructor(
@@ -50,6 +62,8 @@ export class AiContextService {
     private readonly conversations: AiConversationService,
     private readonly pageAccessService: PageAccessService,
     private readonly searchService: SearchService,
+    private readonly pageRepo: PageRepo,
+    private readonly contentPolicy: AiContentPolicyService,
   ) {}
 
   async get(
@@ -77,13 +91,78 @@ export class AiContextService {
       workspace,
     );
     const normalizedSources = this.normalizeSourceInputs(dto.sources);
-    const resolved = await this.resolveDescriptors(
+    const resolvedSources = await this.resolveDescriptors(
       normalizedSources,
       conversation.spaceId,
       workspace.id,
       user,
       true,
     );
+    const excluded = await this.contentPolicy.getExcludedPageIds(
+      conversation.spaceId,
+      workspace.id,
+    );
+    if (resolvedSources.some((source) => excluded.has(source.pageId))) {
+      throw new BadRequestException({
+        code: 'ai_context_source_excluded',
+        message: 'An AI context source is excluded by space policy',
+      });
+    }
+    let currentDocumentDescendants = this.normalizeSelection(
+      dto.currentDocumentDescendants,
+    );
+    const includeCurrentDocument =
+      dto.includeCurrentDocument && !excluded.has(conversation.pageId);
+    const roots: AiContextRoot[] = [];
+    const seenPageIds = new Set<string>();
+    if (includeCurrentDocument) {
+      const duplicateIndex = resolvedSources.findIndex(
+        (source) => source.pageId === conversation.pageId,
+      );
+      if (duplicateIndex >= 0 && currentDocumentDescendants.mode === 'none') {
+        currentDocumentDescendants = this.normalizeSelection(
+          normalizedSources[duplicateIndex]?.descendants,
+        );
+      }
+      const current = await this.resolveDescriptor(
+        { sourceType: 'page', sourceId: conversation.pageId },
+        conversation.spaceId,
+        workspace.id,
+      );
+      if (!current) throw this.contextUnavailable();
+      roots.push({
+        source: {
+          ...current,
+          position: 0,
+          available: true,
+          hasChildren: await this.hasChildren(conversation.pageId),
+          descendants: currentDocumentDescendants,
+        },
+        descendants: currentDocumentDescendants,
+        origin: 'current_document',
+      });
+      seenPageIds.add(conversation.pageId);
+    }
+    for (const [index, source] of resolvedSources.entries()) {
+      if (seenPageIds.has(source.pageId)) continue;
+      seenPageIds.add(source.pageId);
+      const descendants =
+        source.sourceType === 'page'
+          ? this.normalizeSelection(normalizedSources[index]?.descendants)
+          : this.emptySelection();
+      roots.push({ source, descendants, origin: 'explicit' });
+    }
+    const expanded = await this.expandRoots(
+      roots,
+      conversation.spaceId,
+      workspace.id,
+      user,
+      excluded,
+      true,
+    );
+    if (expanded.length > AI_CONTEXT_LIMITS.resolvedSources) {
+      throw this.resolvedSourceLimit(expanded.length, roots);
+    }
     await this.assertFiles(dto.fileIds, conversation.id, user.id, workspace.id);
     await this.assertAttachments(
       dto.attachmentIds,
@@ -91,9 +170,15 @@ export class AiContextService {
       workspace.id,
       user,
     );
+    const explicitRoots = roots.filter((root) => root.origin === 'explicit');
     const fingerprint = this.fingerprint({
-      includeCurrentDocument: dto.includeCurrentDocument,
-      sources: normalizedSources,
+      includeCurrentDocument,
+      currentDocumentDescendants,
+      sources: explicitRoots.map((root) => ({
+        sourceType: root.source.sourceType,
+        sourceId: root.source.sourceId,
+        descendants: root.descendants,
+      })),
       fileIds: [...dto.fileIds].sort(),
       attachmentIds: [...dto.attachmentIds].sort(),
     });
@@ -126,16 +211,18 @@ export class AiContextService {
         .deleteFrom('aiConversationContextSources')
         .where('conversationId', '=', locked.id)
         .execute();
-      if (resolved.length > 0) {
+      if (explicitRoots.length > 0) {
         await trx
           .insertInto('aiConversationContextSources')
           .values(
-            resolved.map((source, position) => ({
+            explicitRoots.map((root, position) => ({
               conversationId: locked.id,
-              sourceType: source.sourceType,
-              sourceId: source.sourceId,
-              pageId: source.pageId,
+              sourceType: root.source.sourceType,
+              sourceId: root.source.sourceId,
+              pageId: root.source.pageId,
               position,
+              descendantMode: root.descendants.mode,
+              selectedDescendantPageIds: root.descendants.pageIds,
             })),
           )
           .execute();
@@ -143,7 +230,9 @@ export class AiContextService {
       return trx
         .updateTable('aiConversations')
         .set({
-          includeCurrentDocument: dto.includeCurrentDocument,
+          includeCurrentDocument,
+          currentDocumentDescendantMode: currentDocumentDescendants.mode,
+          currentDocumentSelectedPageIds: currentDocumentDescendants.pageIds,
           contextChatFileIds: [...dto.fileIds],
           contextAttachmentIds: [...dto.attachmentIds],
           contextFingerprint: fingerprint,
@@ -183,6 +272,99 @@ export class AiContextService {
       { userId: user.id, workspaceId: workspace.id },
     );
     const rows = result.items;
+    const excluded = await this.contentPolicy.getExcludedPageIds(
+      conversation.spaceId,
+      workspace.id,
+    );
+    const selectedRows = await this.db
+      .selectFrom('aiConversationContextSources')
+      .select([
+        'sourceType',
+        'sourceId',
+        'pageId',
+        'descendantMode',
+        'selectedDescendantPageIds',
+      ])
+      .where('conversationId', '=', conversation.id)
+      .execute();
+    const selectedDescriptors = await this.resolveDescriptors(
+      selectedRows.map((row) => ({
+        sourceType: row.sourceType as AiContextSourceType,
+        sourceId: row.sourceId,
+        descendants: {
+          mode: row.descendantMode as AiDescendantSelection['mode'],
+          pageIds: row.selectedDescendantPageIds,
+        },
+      })),
+      conversation.spaceId,
+      workspace.id,
+      user,
+      false,
+    );
+    const selectedRoots: AiContextRoot[] = selectedDescriptors.map(
+      (source) => ({
+        source,
+        descendants: source.descendants,
+        origin: 'explicit',
+      }),
+    );
+    if (
+      conversation.includeCurrentDocument &&
+      !excluded.has(conversation.pageId)
+    ) {
+      const [currentDescriptor] = await this.resolveDescriptors(
+        [
+          {
+            sourceType: 'page',
+            sourceId: conversation.pageId,
+            descendants: {
+              mode: conversation.currentDocumentDescendantMode as AiDescendantSelection['mode'],
+              pageIds: conversation.currentDocumentSelectedPageIds,
+            },
+          },
+        ],
+        conversation.spaceId,
+        workspace.id,
+        user,
+        false,
+      );
+      if (currentDescriptor?.available) {
+        selectedRoots.unshift({
+          source: currentDescriptor,
+          descendants: currentDescriptor.descendants,
+          origin: 'current_document',
+        });
+      }
+    }
+    const selectedPageIds = new Set(
+      (
+        await this.expandRoots(
+          selectedRoots,
+          conversation.spaceId,
+          workspace.id,
+          user,
+          excluded,
+          false,
+        )
+      ).map((item) => item.source.pageId),
+    );
+    const childRows = rows.length
+      ? await this.db
+          .selectFrom('pages')
+          .select('parentPageId')
+          .where(
+            'parentPageId',
+            'in',
+            rows.map((row) => row.id),
+          )
+          .where('deletedAt', 'is', null)
+          .execute()
+      : [];
+    const parentsWithChildren = new Set(
+      childRows
+        .map((row) => row.parentPageId)
+        .filter((id): id is string => Boolean(id)),
+    );
     const rowPages = rows.length
       ? await this.db
           .selectFrom('databaseRows')
@@ -215,7 +397,9 @@ export class AiContextService {
         ),
         url: null,
         position,
-        available: true,
+        available: !excluded.has(row.id) && !selectedPageIds.has(row.id),
+        hasChildren: parentsWithChildren.has(row.id),
+        descendants: this.emptySelection(),
       };
     });
     const seen = new Set<string>();
@@ -238,11 +422,73 @@ export class AiContextService {
     };
   }
 
+  async descendants(
+    conversationId: string,
+    query: AiContextDescendantsQueryDto,
+    user: User,
+    workspace: Workspace,
+  ) {
+    const conversation = await this.conversations.getOwnedEntity(
+      conversationId,
+      user,
+      workspace,
+    );
+    const root = await this.db
+      .selectFrom('pages')
+      .select(['id'])
+      .where('id', '=', query.parentPageId)
+      .where('spaceId', '=', conversation.spaceId)
+      .where('workspaceId', '=', workspace.id)
+      .where('deletedAt', 'is', null)
+      .executeTakeFirst();
+    if (!root) throw this.contextUnavailable();
+    const readable = await this.pageAccessService.getSidebarAccessSnapshot(
+      user,
+      conversation.spaceId,
+    );
+    if (!readable.readablePageIds.has(root.id)) {
+      throw this.contextUnavailable();
+    }
+    const excluded = await this.contentPolicy.getExcludedPageIds(
+      conversation.spaceId,
+      workspace.id,
+    );
+    const rows = await this.db
+      .selectFrom('pages')
+      .select(['id', 'position'])
+      .where('parentPageId', '=', root.id)
+      .where('deletedAt', 'is', null)
+      .orderBy('position', 'asc')
+      .offset(query.cursor)
+      .limit(query.limit + 1)
+      .execute();
+    const pageRows = rows.slice(0, query.limit);
+    const visible = pageRows.filter(
+      (row) => readable.readablePageIds.has(row.id) && !excluded.has(row.id),
+    );
+    const pageIds = visible.map((row) => row.id);
+    const inputs = await this.inputsForPageIds(pageIds);
+    const items = await this.resolveDescriptors(
+      inputs,
+      conversation.spaceId,
+      workspace.id,
+      user,
+      true,
+    );
+    return {
+      items,
+      hasMore: rows.length > query.limit,
+      nextCursor:
+        rows.length > query.limit ? String(query.cursor + query.limit) : null,
+    };
+  }
+
   async captureRunContext(
     trx: any,
     runId: string,
     conversation: AiConversation,
     dto: SendAiMessageDto,
+    user: User,
   ): Promise<void> {
     if (conversation.contextRevision !== dto.contextRevision) {
       throw new ConflictException({
@@ -256,21 +502,91 @@ export class AiContextService {
       .where('conversationId', '=', conversation.id)
       .orderBy('position', 'asc')
       .execute();
-    const pageIds = [
-      ...(conversation.includeCurrentDocument ? [conversation.pageId] : []),
-      ...explicit.map((source: any) => source.pageId),
-    ];
-    const pages = pageIds.length
-      ? await trx
-          .selectFrom('pages')
-          .select(['id', 'title', 'slugId'])
-          .where('id', 'in', pageIds)
-          .execute()
-      : [];
-    const pageById = new Map<
-      string,
-      { id: string; title: string | null; slugId: string }
-    >(pages.map((page: any) => [page.id, page]));
+    const excluded = await this.contentPolicy.getExcludedPageIds(
+      conversation.spaceId,
+      conversation.workspaceId,
+    );
+    if (
+      conversation.includeCurrentDocument &&
+      excluded.has(conversation.pageId)
+    ) {
+      await trx
+        .updateTable('aiRuns')
+        .set({
+          documentSnapshot: null,
+          snapshotHash: null,
+          selectionText: null,
+          selectionFrom: null,
+          selectionTo: null,
+        })
+        .where('id', '=', runId)
+        .execute();
+    }
+    const inputs = explicit.map((source: any) => ({
+      sourceType: source.sourceType as AiContextSourceType,
+      sourceId: source.sourceId,
+      descendants: {
+        mode: source.descendantMode,
+        pageIds: source.selectedDescendantPageIds,
+      },
+    }));
+    const descriptors = await this.resolveDescriptors(
+      inputs,
+      conversation.spaceId,
+      conversation.workspaceId,
+      user,
+      false,
+    );
+    const roots: AiContextRoot[] = [];
+    if (
+      conversation.includeCurrentDocument &&
+      !excluded.has(conversation.pageId)
+    ) {
+      const current = await this.resolveDescriptor(
+        { sourceType: 'page', sourceId: conversation.pageId },
+        conversation.spaceId,
+        conversation.workspaceId,
+      );
+      if (current) {
+        const descendants: AiDescendantSelection = {
+          mode: conversation.currentDocumentDescendantMode as
+            | 'none'
+            | 'all'
+            | 'selected',
+          pageIds: conversation.currentDocumentSelectedPageIds,
+        };
+        roots.push({
+          source: {
+            ...current,
+            position: 0,
+            available: true,
+            hasChildren: await this.hasChildren(conversation.pageId),
+            descendants,
+          },
+          descendants,
+          origin: 'current_document',
+        });
+      }
+    }
+    descriptors.forEach((source, index) => {
+      if (!source.available || excluded.has(source.pageId)) return;
+      const descendants =
+        source.sourceType === 'page'
+          ? this.normalizeSelection(inputs[index].descendants)
+          : this.emptySelection();
+      roots.push({ source, descendants, origin: 'explicit' });
+    });
+    const expanded = await this.expandRoots(
+      roots,
+      conversation.spaceId,
+      conversation.workspaceId,
+      user,
+      excluded,
+      false,
+    );
+    if (expanded.length > AI_CONTEXT_LIMITS.resolvedSources) {
+      throw this.resolvedSourceLimit(expanded.length, roots);
+    }
     const snapshots: Array<{
       runId: string;
       origin: 'current_document' | 'explicit';
@@ -284,41 +600,29 @@ export class AiContextService {
       position: number;
     }> = [];
 
-    if (
-      conversation.includeCurrentDocument &&
-      dto.documentSnapshot !== undefined
-    ) {
-      const markdown = dto.documentSnapshot;
+    for (const item of expanded) {
+      if (
+        item.origin === 'current_document' &&
+        dto.documentSnapshot === undefined
+      ) {
+        continue;
+      }
+      const markdown =
+        item.origin === 'current_document' ? dto.documentSnapshot! : '';
       snapshots.push({
         runId,
-        origin: 'current_document',
-        sourceType: 'page',
-        sourceId: conversation.pageId,
-        pageId: conversation.pageId,
-        sourceTitle: String(
-          pageById.get(conversation.pageId)?.title ?? '',
-        ).trim(),
+        origin: item.origin,
+        sourceType: item.source.sourceType,
+        sourceId: item.source.sourceId,
+        pageId: item.source.pageId,
+        sourceTitle: item.source.title,
         sourceUrl: null,
         markdownSnapshot: markdown,
-        contentSha256: this.fingerprint(markdown),
-        position: 0,
+        contentSha256:
+          item.origin === 'current_document' ? this.fingerprint(markdown) : '',
+        position: snapshots.length,
       });
     }
-    const explicitStartPosition = snapshots.length;
-    explicit.forEach((source: any, index: number) => {
-      snapshots.push({
-        runId,
-        origin: 'explicit',
-        sourceType: source.sourceType,
-        sourceId: source.sourceId,
-        pageId: source.pageId,
-        sourceTitle: String(pageById.get(source.pageId)?.title ?? '').trim(),
-        sourceUrl: null,
-        markdownSnapshot: '',
-        contentSha256: '',
-        position: explicitStartPosition + index,
-      });
-    });
     if (snapshots.length > 0) {
       await trx.insertInto('aiRunContextSources').values(snapshots).execute();
     }
@@ -329,15 +633,47 @@ export class AiContextService {
     sourceRunId: string,
     targetRunId: string,
     assistantMessageId: string,
+    user: User,
   ): Promise<void> {
-    const sources = await trx
-      .selectFrom('aiRunContextSources')
+    const sourceRun = await trx
+      .selectFrom('aiRuns')
+      .select(['spaceId', 'workspaceId'])
+      .where('id', '=', sourceRunId)
+      .executeTakeFirstOrThrow();
+    const excluded = await this.contentPolicy.getExcludedPageIds(
+      sourceRun.spaceId,
+      sourceRun.workspaceId,
+    );
+    const dependencies = await trx
+      .selectFrom('aiRunSourceDependencies')
       .selectAll()
       .where('runId', '=', sourceRunId)
-      .orderBy('position', 'asc')
       .execute();
+    const excludedContextSourceIds = new Set(
+      dependencies
+        .filter((dependency: any) => excluded.has(dependency.pageId))
+        .map((dependency: any) => dependency.contextSourceId)
+        .filter(Boolean),
+    );
+    const readable = await this.pageAccessService.getSidebarAccessSnapshot(
+      user,
+      sourceRun.spaceId,
+    );
+    const sources = (
+      await trx
+        .selectFrom('aiRunContextSources')
+        .selectAll()
+        .where('runId', '=', sourceRunId)
+        .orderBy('position', 'asc')
+        .execute()
+    ).filter(
+      (source: any) =>
+        !excluded.has(source.pageId) &&
+        readable.readablePageIds.has(source.pageId) &&
+        !excludedContextSourceIds.has(source.id),
+    );
     const sourceIdMap = new Map<string, string>();
-    for (const source of sources) {
+    for (const [position, source] of sources.entries()) {
       const inserted = await trx
         .insertInto('aiRunContextSources')
         .values({
@@ -350,22 +686,24 @@ export class AiContextService {
           sourceUrl: source.sourceUrl,
           markdownSnapshot: source.markdownSnapshot,
           contentSha256: source.contentSha256,
-          position: source.position,
+          position,
         })
         .returning('id')
         .executeTakeFirstOrThrow();
       sourceIdMap.set(source.id, inserted.id);
     }
-    const dependencies = await trx
-      .selectFrom('aiRunSourceDependencies')
-      .selectAll()
-      .where('runId', '=', sourceRunId)
-      .execute();
-    if (dependencies.length > 0) {
+    const allowedDependencies = dependencies.filter(
+      (dependency: any) =>
+        !excluded.has(dependency.pageId) &&
+        readable.readablePageIds.has(dependency.pageId) &&
+        (!dependency.contextSourceId ||
+          sourceIdMap.has(dependency.contextSourceId)),
+    );
+    if (allowedDependencies.length > 0) {
       await trx
         .insertInto('aiRunSourceDependencies')
         .values(
-          dependencies.map((dependency) => ({
+          allowedDependencies.map((dependency: any) => ({
             runId: targetRunId,
             messageId: assistantMessageId,
             contextSourceId: dependency.contextSourceId
@@ -393,12 +731,17 @@ export class AiContextService {
       user,
       run.spaceId,
     );
+    const excluded = await this.contentPolicy.getExcludedPageIds(
+      run.spaceId,
+      run.workspaceId,
+    );
+    const allowedPageIds = new Set(
+      [...readable.readablePageIds].filter((pageId) => !excluded.has(pageId)),
+    );
     const resolved: AiResolvedRunContextSource[] = [];
     let remaining = maxChars;
     for (const row of rows) {
-      if (!readable.readablePageIds.has(row.pageId)) {
-        throw this.contextUnavailable();
-      }
+      if (!allowedPageIds.has(row.pageId)) continue;
       let markdown = row.markdownSnapshot;
       let title = row.sourceTitle;
       let dependencies = [row.pageId];
@@ -408,7 +751,7 @@ export class AiContextService {
           user,
           run.workspaceId,
           run.spaceId,
-          readable.readablePageIds,
+          allowedPageIds,
           Math.max(0, remaining),
         );
         markdown = snapshot.markdown;
@@ -741,22 +1084,87 @@ export class AiContextService {
       .where('conversationId', '=', conversation.id)
       .orderBy('position', 'asc')
       .execute();
+    const inputs = rows.map((row) => ({
+      sourceType: row.sourceType as AiContextSourceType,
+      sourceId: row.sourceId,
+      descendants: {
+        mode: row.descendantMode as 'none' | 'all' | 'selected',
+        pageIds: row.selectedDescendantPageIds,
+      },
+    }));
     const sources = await this.resolveDescriptors(
-      rows.map((row) => ({
-        sourceType: row.sourceType as AiContextSourceType,
-        sourceId: row.sourceId,
-      })),
+      inputs,
       conversation.spaceId,
       conversation.workspaceId,
       user,
+      false,
+    );
+    const excluded = await this.contentPolicy.getExcludedPageIds(
+      conversation.spaceId,
+      conversation.workspaceId,
+    );
+    const currentDocumentDescendants: AiDescendantSelection = {
+      mode: conversation.currentDocumentDescendantMode as
+        | 'none'
+        | 'all'
+        | 'selected',
+      pageIds: conversation.currentDocumentSelectedPageIds,
+    };
+    const includeCurrentDocument =
+      conversation.includeCurrentDocument && !excluded.has(conversation.pageId);
+    const roots: AiContextRoot[] = [];
+    if (includeCurrentDocument) {
+      const current = await this.resolveDescriptor(
+        { sourceType: 'page', sourceId: conversation.pageId },
+        conversation.spaceId,
+        conversation.workspaceId,
+      );
+      if (current) {
+        roots.push({
+          source: {
+            ...current,
+            position: 0,
+            available: true,
+            hasChildren: await this.hasChildren(conversation.pageId),
+            descendants: currentDocumentDescendants,
+          },
+          descendants: currentDocumentDescendants,
+          origin: 'current_document',
+        });
+      }
+    }
+    sources.forEach((source, index) => {
+      const descendants =
+        source.sourceType === 'page'
+          ? this.normalizeSelection(inputs[index]?.descendants)
+          : this.emptySelection();
+      source.descendants = descendants;
+      if (source.available && !excluded.has(source.pageId)) {
+        roots.push({ source, descendants, origin: 'explicit' });
+      } else {
+        source.available = false;
+      }
+    });
+    const expanded = await this.expandRoots(
+      roots,
+      conversation.spaceId,
+      conversation.workspaceId,
+      user,
+      excluded,
       false,
     );
     return {
       conversationId: conversation.id,
       revision: conversation.contextRevision,
       fingerprint: conversation.contextFingerprint,
-      includeCurrentDocument: conversation.includeCurrentDocument,
+      includeCurrentDocument,
+      currentDocumentDescendants,
       sources,
+      resolvedSourceCount: expanded.length,
+      limits: {
+        manualRoots: AI_CONTEXT_LIMITS.manualRoots,
+        resolvedSources: AI_CONTEXT_LIMITS.resolvedSources,
+      },
       fileIds: conversation.contextChatFileIds,
       attachmentIds: conversation.contextAttachmentIds,
       updatedAt: conversation.updatedAt.toISOString(),
@@ -817,6 +1225,8 @@ export class AiContextService {
           url: null,
           position,
           available: false,
+          hasChildren: false,
+          descendants: this.normalizeSelection(input.descendants),
         });
         continue;
       }
@@ -824,6 +1234,14 @@ export class AiContextService {
         ...descriptor,
         position,
         available: true,
+        hasChildren:
+          descriptor.sourceType === 'page'
+            ? await this.hasChildren(descriptor.pageId)
+            : false,
+        descendants:
+          descriptor.sourceType === 'page'
+            ? this.normalizeSelection(input.descendants)
+            : this.emptySelection(),
       });
     }
     return descriptors;
@@ -833,7 +1251,10 @@ export class AiContextService {
     input: AiContextSourceInputDto,
     spaceId: string,
     workspaceId: string,
-  ): Promise<Omit<AiContextSource, 'position' | 'available'> | null> {
+  ): Promise<Omit<
+    AiContextSource,
+    'position' | 'available' | 'hasChildren' | 'descendants'
+  > | null> {
     if (input.sourceType === 'page') {
       const page = await this.db
         .selectFrom('pages')
@@ -909,6 +1330,204 @@ export class AiContextService {
       : null;
   }
 
+  private emptySelection(): AiDescendantSelection {
+    return { mode: 'none', pageIds: [] };
+  }
+
+  private normalizeSelection(
+    value?: AiDescendantSelectionDto | AiDescendantSelection,
+  ): AiDescendantSelection {
+    if (!value || !['none', 'all', 'selected'].includes(value.mode)) {
+      return this.emptySelection();
+    }
+    if (value.mode !== 'selected') {
+      return { mode: value.mode, pageIds: [] };
+    }
+    return {
+      mode: 'selected',
+      pageIds: [...new Set(value.pageIds ?? [])].sort(),
+    };
+  }
+
+  private async hasChildren(pageId: string): Promise<boolean> {
+    const child = await this.db
+      .selectFrom('pages')
+      .select('id')
+      .where('parentPageId', '=', pageId)
+      .where('deletedAt', 'is', null)
+      .limit(1)
+      .executeTakeFirst();
+    return Boolean(child);
+  }
+
+  private async inputsForPageIds(
+    pageIds: string[],
+  ): Promise<AiContextSourceInputDto[]> {
+    if (pageIds.length === 0) return [];
+    const [databases, rows] = await Promise.all([
+      this.db
+        .selectFrom('databases')
+        .select(['id', 'pageId'])
+        .where('pageId', 'in', pageIds)
+        .where('deletedAt', 'is', null)
+        .execute(),
+      this.db
+        .selectFrom('databaseRows')
+        .select(['id', 'pageId'])
+        .where('pageId', 'in', pageIds)
+        .where('archivedAt', 'is', null)
+        .execute(),
+    ]);
+    const databaseByPageId = new Map(
+      databases
+        .filter((database) => Boolean(database.pageId))
+        .map((database) => [database.pageId!, database.id]),
+    );
+    const rowByPageId = new Map(rows.map((row) => [row.pageId, row.id]));
+    return pageIds.map((pageId) => {
+      const databaseId = databaseByPageId.get(pageId);
+      if (databaseId) {
+        return { sourceType: 'database', sourceId: databaseId };
+      }
+      const rowId = rowByPageId.get(pageId);
+      if (rowId) {
+        return { sourceType: 'database_row', sourceId: rowId };
+      }
+      return { sourceType: 'page', sourceId: pageId };
+    });
+  }
+
+  private async expandRoots(
+    roots: AiContextRoot[],
+    spaceId: string,
+    workspaceId: string,
+    user: User,
+    excluded: Set<string>,
+    strict: boolean,
+  ): Promise<
+    Array<{
+      source: AiContextSource;
+      origin: 'current_document' | 'explicit';
+    }>
+  > {
+    const readable = await this.pageAccessService.getSidebarAccessSnapshot(
+      user,
+      spaceId,
+    );
+    const result: Array<{
+      source: AiContextSource;
+      origin: 'current_document' | 'explicit';
+    }> = [];
+    const seen = new Set<string>();
+    for (const root of roots) {
+      if (
+        excluded.has(root.source.pageId) ||
+        !readable.readablePageIds.has(root.source.pageId)
+      ) {
+        if (strict) {
+          throw new BadRequestException({
+            code: excluded.has(root.source.pageId)
+              ? 'ai_context_source_excluded'
+              : 'context_source_unavailable',
+            message: 'An AI context source is unavailable',
+          });
+        }
+        continue;
+      }
+      if (!seen.has(root.source.pageId)) {
+        seen.add(root.source.pageId);
+        result.push({ source: root.source, origin: root.origin });
+      }
+      if (
+        root.source.sourceType !== 'page' ||
+        root.descendants.mode === 'none'
+      ) {
+        continue;
+      }
+      const tree = await this.pageRepo.getPageAndDescendants(
+        root.source.pageId,
+        { includeContent: false },
+      );
+      const validDescendants = tree
+        .filter(
+          (page) =>
+            page.id !== root.source.pageId &&
+            page.spaceId === spaceId &&
+            page.workspaceId === workspaceId,
+        )
+        .map((page) => page.id);
+      const validSet = new Set(validDescendants);
+      let selectedIds =
+        root.descendants.mode === 'all'
+          ? validDescendants
+          : root.descendants.pageIds;
+      if (
+        root.descendants.mode === 'selected' &&
+        selectedIds.some((pageId) => !validSet.has(pageId))
+      ) {
+        if (strict) {
+          throw new BadRequestException({
+            code: 'ai_context_descendant_invalid',
+            message: 'A selected page is not a descendant of its context root',
+          });
+        }
+        selectedIds = selectedIds.filter((pageId) => validSet.has(pageId));
+      }
+      const blockedSelected = selectedIds.filter(
+        (pageId) =>
+          excluded.has(pageId) || !readable.readablePageIds.has(pageId),
+      );
+      if (
+        strict &&
+        root.descendants.mode === 'selected' &&
+        blockedSelected.length > 0
+      ) {
+        throw new BadRequestException({
+          code: blockedSelected.some((pageId) => excluded.has(pageId))
+            ? 'ai_context_source_excluded'
+            : 'context_source_unavailable',
+          message: 'A selected descendant is unavailable',
+        });
+      }
+      selectedIds = selectedIds.filter(
+        (pageId) =>
+          !excluded.has(pageId) && readable.readablePageIds.has(pageId),
+      );
+      const uniqueIds = selectedIds.filter((pageId) => !seen.has(pageId));
+      uniqueIds.forEach((pageId) => seen.add(pageId));
+      const inputs = await this.inputsForPageIds(uniqueIds);
+      const descriptors = await this.resolveDescriptors(
+        inputs,
+        spaceId,
+        workspaceId,
+        user,
+        false,
+      );
+      descriptors.forEach((source) => {
+        if (source.available) result.push({ source, origin: 'explicit' });
+      });
+      if (result.length > AI_CONTEXT_LIMITS.resolvedSources) {
+        return result;
+      }
+    }
+    return result;
+  }
+
+  private resolvedSourceLimit(
+    resolvedCount: number,
+    roots: AiContextRoot[],
+  ): BadRequestException {
+    return new BadRequestException({
+      code: 'ai_context_resolved_source_limit',
+      message: 'AI context expands beyond the resolved source limit',
+      limit: AI_CONTEXT_LIMITS.resolvedSources,
+      resolvedCount,
+      rootPageIds: roots
+        .filter((root) => root.descendants.mode !== 'none')
+        .map((root) => root.source.pageId),
+    });
+  }
+
   private async assertFiles(
     ids: string[],
     conversationId: string,
@@ -948,10 +1567,17 @@ export class AiContextService {
       user,
       spaceId,
     );
+    const excluded = await this.contentPolicy.getExcludedPageIds(
+      spaceId,
+      workspaceId,
+    );
     if (
       rows.length !== ids.length ||
       rows.some(
-        (row) => !row.pageId || !readable.readablePageIds.has(row.pageId),
+        (row) =>
+          !row.pageId ||
+          !readable.readablePageIds.has(row.pageId) ||
+          excluded.has(row.pageId),
       )
     ) {
       throw this.contextUnavailable();

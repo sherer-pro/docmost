@@ -13,6 +13,7 @@ describe('RagService AI role custom field', () => {
     {} as any,
     {} as any,
     {} as any,
+    {} as any,
   );
 
   it('includes the normalized default only when the space field is enabled', () => {
@@ -37,16 +38,10 @@ describe('RagService AI role custom field', () => {
     });
 
     expect(
-      (service as any).buildCustomFields(
-        { aiRole: 'COAUTHOR' },
-        config,
-      ),
+      (service as any).buildCustomFields({ aiRole: 'COAUTHOR' }, config),
     ).toEqual({ aiRole: 'COAUTHOR' });
     expect(
-      (service as any).buildCustomFields(
-        { aiRole: 'malformed' },
-        config,
-      ),
+      (service as any).buildCustomFields({ aiRole: 'malformed' }, config),
     ).toEqual({ aiRole: 'NONE' });
   });
 });

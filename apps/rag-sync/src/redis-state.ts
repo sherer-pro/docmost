@@ -1,9 +1,9 @@
-import { Redis } from 'ioredis';
+import { Redis } from "ioredis";
 import type {
   FeedCheckpointKind,
   SourceMapping,
   SyncStateStore,
-} from './types.js';
+} from "./types.js";
 
 export class RedisSyncStateStore implements SyncStateStore {
   private readonly redis: Redis;
@@ -27,12 +27,12 @@ export class RedisSyncStateStore implements SyncStateStore {
     await this.ensureConnected();
     return (
       (await this.redis.set(
-        this.key(bindingId, 'lock'),
+        this.key(bindingId, "lock"),
         token,
-        'PX',
+        "PX",
         ttlMs,
-        'NX',
-      )) === 'OK'
+        "NX",
+      )) === "OK"
     );
   }
 
@@ -47,7 +47,7 @@ export class RedisSyncStateStore implements SyncStateStore {
        end
        return 0`,
       1,
-      this.key(bindingId, 'lock'),
+      this.key(bindingId, "lock"),
       token,
       ttlMs,
     );
@@ -61,7 +61,7 @@ export class RedisSyncStateStore implements SyncStateStore {
        end
        return 0`,
       1,
-      this.key(bindingId, 'lock'),
+      this.key(bindingId, "lock"),
       token,
     );
   }
@@ -72,7 +72,7 @@ export class RedisSyncStateStore implements SyncStateStore {
   ): Promise<number> {
     await this.ensureConnected();
     const value = await this.redis.hget(
-      this.key(bindingId, 'checkpoints'),
+      this.key(bindingId, "checkpoints"),
       kind,
     );
     const parsed = Number(value ?? 0);
@@ -85,10 +85,22 @@ export class RedisSyncStateStore implements SyncStateStore {
     value: number,
   ): Promise<void> {
     await this.redis.hset(
-      this.key(bindingId, 'checkpoints'),
+      this.key(bindingId, "checkpoints"),
       kind,
       String(value),
     );
+  }
+
+  async getScopeFingerprint(bindingId: string): Promise<string | null> {
+    await this.ensureConnected();
+    return this.redis.get(this.key(bindingId, "scope-fingerprint"));
+  }
+
+  async setScopeFingerprint(
+    bindingId: string,
+    fingerprint: string,
+  ): Promise<void> {
+    await this.redis.set(this.key(bindingId, "scope-fingerprint"), fingerprint);
   }
 
   async getMapping(
@@ -96,40 +108,37 @@ export class RedisSyncStateStore implements SyncStateStore {
     identity: string,
   ): Promise<SourceMapping | null> {
     const value = await this.redis.hget(
-      this.key(bindingId, 'mappings'),
+      this.key(bindingId, "mappings"),
       identity,
     );
     return value ? (JSON.parse(value) as SourceMapping) : null;
   }
 
   async listMappings(bindingId: string): Promise<SourceMapping[]> {
-    const values = await this.redis.hvals(this.key(bindingId, 'mappings'));
+    const values = await this.redis.hvals(this.key(bindingId, "mappings"));
     return values.map((value) => JSON.parse(value) as SourceMapping);
   }
 
-  async setMapping(
-    bindingId: string,
-    mapping: SourceMapping,
-  ): Promise<void> {
+  async setMapping(bindingId: string, mapping: SourceMapping): Promise<void> {
     await this.redis.hset(
-      this.key(bindingId, 'mappings'),
+      this.key(bindingId, "mappings"),
       mapping.identity,
       JSON.stringify(mapping),
     );
   }
 
   async deleteMapping(bindingId: string, identity: string): Promise<void> {
-    await this.redis.hdel(this.key(bindingId, 'mappings'), identity);
+    await this.redis.hdel(this.key(bindingId, "mappings"), identity);
   }
 
   async close(): Promise<void> {
-    if (this.redis.status !== 'end') {
+    if (this.redis.status !== "end") {
       await this.redis.quit();
     }
   }
 
   private async ensureConnected(): Promise<void> {
-    if (this.redis.status === 'wait') {
+    if (this.redis.status === "wait") {
       await this.redis.connect();
     }
   }

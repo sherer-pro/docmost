@@ -16,6 +16,7 @@
 | POST | `/ai/conversations/:id/actions/open` | `apps/server/src/core/ai/controllers/ai-conversation.controller.ts` |
 | GET | `/ai/conversations/:id/context` | `apps/server/src/core/ai/controllers/ai-conversation.controller.ts` |
 | PUT | `/ai/conversations/:id/context` | `apps/server/src/core/ai/controllers/ai-conversation.controller.ts` |
+| GET | `/ai/conversations/:id/context-descendants` | `apps/server/src/core/ai/controllers/ai-conversation.controller.ts` |
 | GET | `/ai/conversations/:id/context-sources` | `apps/server/src/core/ai/controllers/ai-conversation.controller.ts` |
 | GET | `/ai/conversations/:id/messages` | `apps/server/src/core/ai/controllers/ai-conversation.controller.ts` |
 | POST | `/ai/conversations/:id/messages` | `apps/server/src/core/ai/controllers/ai-run.controller.ts` |
@@ -198,6 +199,7 @@
 | GET | `/rag/pages/:pageIdOrSlug/attachments` | `apps/server/src/core/rag/rag.controller.ts` |
 | GET | `/rag/pages/:pageIdOrSlug/comments` | `apps/server/src/core/rag/rag.controller.ts` |
 | GET | `/rag/pages/:pageIdOrSlug/export` | `apps/server/src/core/rag/rag.controller.ts` |
+| GET | `/rag/scope` | `apps/server/src/core/rag/rag.controller.ts` |
 | GET | `/rag/space/export` | `apps/server/src/core/rag/rag.controller.ts` |
 | GET | `/rag/updates` | `apps/server/src/core/rag/rag.controller.ts` |
 | GET | `/robots.txt` | `apps/server/src/integrations/security/robots.txt.controller.ts` |
@@ -240,6 +242,9 @@
 | PATCH | `/spaces/:spaceId/ai/config` | `apps/server/src/core/ai/controllers/ai-config.controller.ts` |
 | POST | `/spaces/:spaceId/ai/config/actions/test-model` | `apps/server/src/core/ai/controllers/ai-config.controller.ts` |
 | POST | `/spaces/:spaceId/ai/config/actions/test-retrieval` | `apps/server/src/core/ai/controllers/ai-config.controller.ts` |
+| GET | `/spaces/:spaceId/ai/exclusions` | `apps/server/src/core/ai-content-policy/ai-content-policy.controller.ts` |
+| PUT | `/spaces/:spaceId/ai/exclusions` | `apps/server/src/core/ai-content-policy/ai-content-policy.controller.ts` |
+| GET | `/spaces/:spaceId/ai/exclusions/candidates` | `apps/server/src/core/ai-content-policy/ai-content-policy.controller.ts` |
 | GET | `/spaces/:spaceId/ai/status` | `apps/server/src/core/ai/controllers/ai-config.controller.ts` |
 | POST | `/spaces/actions/export` | `apps/server/src/integrations/export/export.controller.ts` |
 | GET | `/spaces/member-users` | `apps/server/src/core/space/space.controller.ts` |

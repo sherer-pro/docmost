@@ -1422,6 +1422,7 @@ export class ExportService {
     locale?: string,
     headingNumberingByPageId?: Record<string, boolean>,
     authorizedUser?: User,
+    allowedPageIds?: Set<string>,
   ) {
     let pages: Page[];
 
@@ -1434,13 +1435,16 @@ export class ExportService {
       if (authorizedUser) {
         pages = await this.filterReadablePages(pages, pageId, authorizedUser);
       }
+      if (allowedPageIds) {
+        pages = pages.filter((page) => allowedPageIds.has(page.id));
+      }
     } else {
       // Only fetch the single page when includeChildren is false
       const page = await this.pageRepo.findById(pageId, {
         includeContent: true,
       });
       if (page) {
-        pages = [page];
+        pages = !allowedPageIds || allowedPageIds.has(page.id) ? [page] : [];
       }
     }
 
@@ -1503,6 +1507,7 @@ export class ExportService {
     includeAttachments: boolean,
     locale?: string,
     headingNumberingByPageId?: Record<string, boolean>,
+    allowedPageIds?: Set<string>,
   ) {
     const space = await this.db
       .selectFrom('spaces')
@@ -1514,7 +1519,7 @@ export class ExportService {
       throw new NotFoundException('Space not found');
     }
 
-    const pages = await this.db
+    let pages = await this.db
       .selectFrom('pages')
       .select([
         'pages.id',
@@ -1533,6 +1538,9 @@ export class ExportService {
       .where('spaceId', '=', spaceId)
       .where('deletedAt', 'is', null)
       .execute();
+    if (allowedPageIds) {
+      pages = pages.filter((page) => allowedPageIds.has(page.id));
+    }
 
     if (format === ExportFormat.Docmost) {
       const zip = await this.createDocmostArchive({

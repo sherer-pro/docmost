@@ -11,10 +11,14 @@ import {
   Workspace,
 } from '@docmost/db/types/entity.types';
 import {
+  AI_ASSISTANT_NAME_MAX_LENGTH,
+  AiAssistantGender,
+  AiAssistantIdentity,
   AiAvailability,
   AiQuickCommand,
   AiRetrievalAdapter,
   AiSpaceConfig,
+  hasInvalidAiAssistantNameCharacters,
 } from '@docmost/api-contract';
 import { EnvironmentService } from '../../../integrations/environment/environment.service';
 import SpaceAbilityFactory from '../../casl/abilities/space-ability.factory';
@@ -34,6 +38,7 @@ import { AiRetrievalUrlPolicyService } from './ai-retrieval-url-policy.service';
 import { v7 as uuidv7 } from 'uuid';
 import { sql } from 'kysely';
 import { JsonValue } from '../../../database/types/db';
+import { AiContentPolicyService } from '../../ai-content-policy/ai-content-policy.service';
 
 @Injectable()
 export class AiConfigService {
@@ -47,6 +52,7 @@ export class AiConfigService {
     private readonly retrievalUrlPolicy: AiRetrievalUrlPolicyService,
     private readonly provider: OpenAiCompatibleProviderService,
     private readonly retrievalService: AiRetrievalService,
+    private readonly contentPolicy: AiContentPolicyService,
   ) {}
 
   async getAdminConfig(
@@ -86,6 +92,7 @@ export class AiConfigService {
     }
     let canWrite = false;
     let pageUnavailable = false;
+    let pageExcluded = false;
     if (pageId) {
       const page = await this.pageRepo.findById(pageId);
       if (
@@ -99,6 +106,11 @@ export class AiConfigService {
         }
         pageUnavailable = true;
       } else {
+        pageExcluded = await this.contentPolicy.isPageExcluded(
+          page.id,
+          spaceId,
+          workspace.id,
+        );
         const access = await this.pageAccessService.getEffectiveAccess(
           page,
           user,
@@ -158,6 +170,13 @@ export class AiConfigService {
       configured,
       canUse,
       canManage,
+      currentDocumentAvailable: Boolean(
+        pageId && !pageUnavailable && !pageExcluded,
+      ),
+      editorActionsAvailable: Boolean(
+        pageId && !pageUnavailable && !pageExcluded && canWrite,
+      ),
+      assistantIdentity: this.toAssistantIdentity(config),
       retrievalAvailable: Boolean(
         retrieval && this.isRetrievalConfigured(retrieval),
       ),
@@ -256,6 +275,8 @@ export class AiConfigService {
           : dto.retrieval?.openWebUi?.knowledgeId?.trim() ||
             existing?.retrievalOpenWebuiKnowledgeId ||
             null;
+      const { assistantName, assistantNameEnabled, assistantGender } =
+        this.resolveAssistantIdentityUpdate(existing, dto);
       if (
         retrievalAdapter === 'open-webui-knowledge-v1' &&
         (!openWebUiBaseUrl || !openWebUiKnowledgeId)
@@ -268,11 +289,7 @@ export class AiConfigService {
         openWebUiBaseUrl &&
         (retrievalAdapter === 'open-webui-knowledge-v1' ||
           dto.retrieval?.openWebUi?.baseUrl !== undefined)
-          ? (
-              await this.retrievalUrlPolicy.assertBaseAllowed(
-                openWebUiBaseUrl,
-              )
-            )
+          ? (await this.retrievalUrlPolicy.assertBaseAllowed(openWebUiBaseUrl))
               .toString()
               .replace(/\/+$/, '')
           : openWebUiBaseUrl;
@@ -280,6 +297,9 @@ export class AiConfigService {
         workspaceId: workspace.id,
         spaceId,
         enabled: dto.enabled ?? existing?.enabled ?? false,
+        assistantNameEnabled,
+        assistantName,
+        assistantGender,
         provider: 'openai-compatible',
         baseUrl: normalizedBaseUrl,
         chatModel,
@@ -461,18 +481,22 @@ export class AiConfigService {
         'At least one page is required to test retrieval',
       );
     }
-    return this.retrievalService.test(config, {
-      schemaVersion: 1,
-      requestId: uuidv7(),
-      workspaceId: workspace.id,
-      spaceId,
-      pageId: page.id,
-      query: 'Docmost retrieval connection test',
-      allowedPageIds: [page.id],
-      sourceTypes: ['page', 'database_row', 'attachment'],
-      limit: Math.min(config.maxResults, 3),
-      candidateLimit: AI_RETRIEVAL_DEFAULTS.candidateLimit,
-    });
+    return this.retrievalService.test(
+      config,
+      {
+        schemaVersion: 1,
+        requestId: uuidv7(),
+        workspaceId: workspace.id,
+        spaceId,
+        pageId: page.id,
+        query: 'Docmost retrieval connection test',
+        allowedPageIds: [page.id],
+        sourceTypes: ['page', 'database_row', 'attachment'],
+        limit: Math.min(config.maxResults, 3),
+        candidateLimit: AI_RETRIEVAL_DEFAULTS.candidateLimit,
+      },
+      user,
+    );
   }
 
   async getRawConfig(
@@ -511,6 +535,19 @@ export class AiConfigService {
       ),
       timeoutMs: config.retrievalTimeoutMs,
       maxResults: config.retrievalMaxResults,
+    };
+  }
+
+  toAssistantIdentity(
+    config: AiSpaceConfigEntity | null | undefined,
+  ): AiAssistantIdentity | null {
+    const name = config?.assistantName?.trim();
+    if (!config?.assistantNameEnabled || !name) {
+      return null;
+    }
+    return {
+      name,
+      gender: config.assistantGender === 'feminine' ? 'feminine' : 'masculine',
     };
   }
 
@@ -583,8 +620,7 @@ export class AiConfigService {
       adapter,
       url:
         rawUrl &&
-        (adapter === 'http-json-v1' ||
-          dto.retrieval?.url !== undefined)
+        (adapter === 'http-json-v1' || dto.retrieval?.url !== undefined)
           ? (await this.retrievalUrlPolicy.assertAllowed(rawUrl)).toString()
           : rawUrl,
       apiKey: dto.retrieval?.clearApiKey
@@ -753,6 +789,56 @@ export class AiConfigService {
       .sort((left, right) => left.position - right.position);
   }
 
+  private normalizeAssistantName(value: string): string | null {
+    const normalized = value.trim();
+    if (!normalized) {
+      return null;
+    }
+    if (Array.from(normalized).length > AI_ASSISTANT_NAME_MAX_LENGTH) {
+      throw new BadRequestException(
+        `assistantName must not exceed ${AI_ASSISTANT_NAME_MAX_LENGTH} characters`,
+      );
+    }
+    if (hasInvalidAiAssistantNameCharacters(normalized)) {
+      throw new BadRequestException(
+        'assistantName contains unsupported control characters',
+      );
+    }
+    return normalized;
+  }
+
+  private resolveAssistantIdentityUpdate(
+    existing: AiSpaceConfigEntity | undefined,
+    dto: UpdateAiSpaceConfigDto,
+  ): {
+    assistantNameEnabled: boolean;
+    assistantName: string | null;
+    assistantGender: AiAssistantGender;
+  } {
+    const assistantName =
+      dto.assistantName === null
+        ? null
+        : dto.assistantName !== undefined
+          ? this.normalizeAssistantName(dto.assistantName)
+          : (existing?.assistantName ?? null);
+    const assistantNameEnabled =
+      dto.assistantNameEnabled ?? existing?.assistantNameEnabled ?? false;
+    const assistantGender =
+      dto.assistantGender ??
+      (existing?.assistantGender as AiAssistantGender | undefined) ??
+      'masculine';
+    if (assistantNameEnabled && !assistantName) {
+      throw new BadRequestException(
+        'assistantName is required when custom assistant naming is enabled',
+      );
+    }
+    return {
+      assistantNameEnabled,
+      assistantName,
+      assistantGender,
+    };
+  }
+
   private toPublicConfig(config: AiSpaceConfigEntity): AiSpaceConfig {
     return {
       id: config.id,
@@ -763,6 +849,10 @@ export class AiConfigService {
       baseUrl: config.baseUrl,
       chatModel: config.chatModel,
       apiKeyConfigured: Boolean(config.apiKeyEncrypted),
+      assistantNameEnabled: config.assistantNameEnabled,
+      assistantName: config.assistantName,
+      assistantGender:
+        config.assistantGender === 'feminine' ? 'feminine' : 'masculine',
       retrieval: {
         adapter: config.retrievalAdapter as AiRetrievalAdapter,
         url: config.retrievalUrl,
@@ -772,9 +862,7 @@ export class AiConfigService {
         openWebUi: {
           baseUrl: config.retrievalOpenWebuiBaseUrl,
           knowledgeId: config.retrievalOpenWebuiKnowledgeId,
-          apiKeyConfigured: Boolean(
-            config.retrievalOpenWebuiApiKeyEncrypted,
-          ),
+          apiKeyConfigured: Boolean(config.retrievalOpenWebuiApiKeyEncrypted),
         },
       },
       systemInstructions: config.systemInstructions,

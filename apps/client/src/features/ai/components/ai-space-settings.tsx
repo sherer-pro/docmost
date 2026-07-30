@@ -37,6 +37,7 @@ import { useTranslation } from "react-i18next";
 import { notifications } from "@mantine/notifications";
 import { modals } from "@mantine/modals";
 import {
+  AI_ASSISTANT_NAME_MAX_LENGTH,
   AI_RETRIEVAL_CONFIG_DEFAULTS,
   AI_SPACE_CONFIG_DEFAULTS,
 } from "@docmost/api-contract";
@@ -48,6 +49,7 @@ import {
   useUpdateAiSpaceConfigMutation,
 } from "@/features/ai/queries/ai-query.ts";
 import {
+  AiAssistantGender,
   AiModelTestResult,
   AiQuickCommand,
   AiRetrievalAdapter,
@@ -58,9 +60,18 @@ import { resolveAiErrorMessage } from "@/features/ai/utils/ai-policies.ts";
 import { AccessibleActionIcon } from "@/components/ui/accessible-action-icon.tsx";
 import { EmptyState } from "@/components/ui/empty-state.tsx";
 import classes from "./ai-space-settings.module.css";
+import {
+  buildAiAssistantIdentityUpdate,
+  hasInvalidAiAssistantNameCharacters,
+  resolveAiAssistantText,
+} from "@/features/ai/utils/ai-identity.ts";
+import { AiContentExclusionsSettings } from "./ai-content-exclusions-settings.tsx";
 
 type AiSettingsForm = {
   enabled: boolean;
+  assistantNameEnabled: boolean;
+  assistantName: string;
+  assistantGender: AiAssistantGender;
   baseUrl: string;
   chatModel: string;
   systemInstructions: string;
@@ -88,6 +99,9 @@ type AiSettingsForm = {
 
 const DEFAULT_FORM: AiSettingsForm = {
   enabled: false,
+  assistantNameEnabled: false,
+  assistantName: "",
+  assistantGender: "masculine",
   baseUrl: "",
   chatModel: "",
   apiKey: "",
@@ -140,6 +154,21 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
   const form = useForm<AiSettingsForm>({
     initialValues: DEFAULT_FORM,
     validate: {
+      assistantName: (value, values) => {
+        if (!values.assistantNameEnabled) {
+          return null;
+        }
+        if (!value.trim()) {
+          return t("ai.settings.assistantNameRequired");
+        }
+        if (
+          Array.from(value.trim()).length > AI_ASSISTANT_NAME_MAX_LENGTH ||
+          hasInvalidAiAssistantNameCharacters(value)
+        ) {
+          return t("ai.settings.assistantNameInvalid");
+        }
+        return null;
+      },
       baseUrl: (value) =>
         /^https?:\/\/.+/i.test(value) ? null : t("ai.settings.invalidUrl"),
       chatModel: (value) =>
@@ -181,6 +210,9 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
     const config = configQuery.data;
     form.setValues({
       enabled: config.enabled,
+      assistantNameEnabled: config.assistantNameEnabled,
+      assistantName: config.assistantName ?? "",
+      assistantGender: config.assistantGender,
       baseUrl: config.baseUrl,
       chatModel: config.chatModel,
       apiKey: "",
@@ -219,6 +251,7 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
 
   const toPayload = (values: AiSettingsForm): AiSpaceConfigUpdate => ({
     enabled: values.enabled,
+    ...buildAiAssistantIdentityUpdate(values),
     provider: "openai-compatible",
     baseUrl: values.baseUrl.trim(),
     chatModel: values.chatModel.trim(),
@@ -353,11 +386,14 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
     try {
       const result = await testRetrieval.mutateAsync(toPayload(form.values));
       setRetrievalTestResult(result);
+      const isEmpty = result.ok && result.state === "empty";
       notifications.show({
-        message: result.ok
-          ? t("ai.settings.retrievalTestSucceeded")
-          : t("ai.settings.retrievalTestFailed"),
-        color: result.ok ? "green" : "red",
+        message: isEmpty
+          ? t("ai.settings.retrievalTestEmpty")
+          : result.ok
+            ? t("ai.settings.retrievalTestSucceeded")
+            : t("ai.settings.retrievalTestFailed"),
+        color: isEmpty ? "yellow" : result.ok ? "green" : "red",
       });
     } catch (error) {
       setRetrievalTestResult({
@@ -381,6 +417,14 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
     );
   }
 
+  const formAssistantIdentity =
+    form.values.assistantNameEnabled && form.values.assistantName.trim()
+      ? {
+          name: form.values.assistantName.trim(),
+          gender: form.values.assistantGender,
+        }
+      : null;
+
   return (
     <form onSubmit={save} className={classes.form}>
       <Stack gap="lg">
@@ -393,11 +437,59 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
 
         <Paper withBorder radius="md" p="md" className={classes.enableCard}>
           <Switch
-            label={t("ai.settings.enable")}
+            label={resolveAiAssistantText(
+              t,
+              "settings.enable",
+              formAssistantIdentity,
+            )}
             description={t("ai.settings.enableDescription")}
             {...form.getInputProps("enabled", { type: "checkbox" })}
           />
         </Paper>
+
+        <SettingsSection
+          icon={<IconMessageCircle size={18} />}
+          title={t("ai.settings.identitySection")}
+          description={t("ai.settings.identityDescription")}
+        >
+          <Stack gap="md">
+            <Switch
+              label={t("ai.settings.customNameEnabled")}
+              description={t("ai.settings.customNameEnabledDescription")}
+              {...form.getInputProps("assistantNameEnabled", {
+                type: "checkbox",
+              })}
+            />
+            <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
+              <TextInput
+                label={t("ai.settings.assistantName")}
+                description={t("ai.settings.assistantNameDescription")}
+                required={form.values.assistantNameEnabled}
+                disabled={!form.values.assistantNameEnabled}
+                {...form.getInputProps("assistantName")}
+              />
+              <Select
+                label={t("ai.settings.assistantGender")}
+                description={t("ai.settings.assistantGenderDescription")}
+                data={[
+                  {
+                    value: "masculine",
+                    label: t("ai.settings.assistantGenderMasculine"),
+                  },
+                  {
+                    value: "feminine",
+                    label: t("ai.settings.assistantGenderFeminine"),
+                  },
+                ]}
+                allowDeselect={false}
+                disabled={!form.values.assistantNameEnabled}
+                {...form.getInputProps("assistantGender")}
+              />
+            </SimpleGrid>
+          </Stack>
+        </SettingsSection>
+
+        <AiContentExclusionsSettings spaceId={spaceId} />
 
         {statusQuery.data?.usage && (
           <SettingsSection
@@ -875,7 +967,15 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
                 </Button>
                 {retrievalTestResult && (
                   <Alert
-                    color={retrievalTestResult.ok ? "green" : "red"}
+                    color={
+                      retrievalTestResult.ok &&
+                      !("errorMessage" in retrievalTestResult) &&
+                      retrievalTestResult.state === "empty"
+                        ? "yellow"
+                        : retrievalTestResult.ok
+                          ? "green"
+                          : "red"
+                    }
                     py="xs"
                   >
                     {"errorMessage" in retrievalTestResult

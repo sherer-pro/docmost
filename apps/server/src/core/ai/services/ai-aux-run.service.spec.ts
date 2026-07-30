@@ -17,6 +17,7 @@ describe('AiAuxRunService', () => {
         {} as any,
         {} as any,
         {} as any,
+        {} as any,
       ),
     };
   }
@@ -33,6 +34,7 @@ describe('AiAuxRunService', () => {
         getJob: jest.fn().mockResolvedValue(undefined),
         add,
       } as any,
+      {} as any,
       {} as any,
       {} as any,
       {} as any,
@@ -63,6 +65,7 @@ describe('AiAuxRunService', () => {
         }),
         add,
       } as any,
+      {} as any,
       {} as any,
       {} as any,
       {} as any,

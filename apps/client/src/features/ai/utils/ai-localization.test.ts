@@ -98,6 +98,28 @@ describe("AI localization contract", () => {
     }
   });
 
+  it("keeps named assistant templates complete in every locale", () => {
+    const templateGroups = [
+      "titleNamed",
+      "openPanelNamed",
+      "loadFailedNamed",
+      "openDocumentNamed",
+      "unavailableNamed",
+      "settings.enableNamed",
+    ];
+
+    for (const locale of LOCALES) {
+      const localized = flatten(readAiLocale(locale));
+      for (const group of templateGroups) {
+        for (const gender of ["masculine", "feminine"]) {
+          expect(localized[`${group}.${gender}`]).toContain(
+            "{{assistantName}}",
+          );
+        }
+      }
+    }
+  });
+
   it("never returns a raw translation key when locale data is missing", () => {
     const message = resolveAiErrorMessage(
       ((key: string) => key) as any,

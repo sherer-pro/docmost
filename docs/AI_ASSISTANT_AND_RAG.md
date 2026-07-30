@@ -1,283 +1,361 @@
-# ИИ-помощник и умный поиск (RAG)
+# AI assistant and smart search (RAG)
 
-Этот документ описывает фактическую архитектуру core-ИИ в Docmost: чат по
-страницам, контекст, фоновые запуски, поиск по пространству и интеграцию с
-внешними RAG-индексами. Он также отделяет два похожих, но разных контура:
+This document describes the current core AI architecture in Docmost: page-bound
+chat, conversation context, background runs, space retrieval, and integration
+with external RAG indexes. It also separates two related but distinct paths:
 
-1. **Query-time retrieval** — поиск источников во время ответа ИИ-помощника.
-2. **RAG API** (`/api/rag/*`) — read-only API для выгрузки и синхронизации
-   данных во внешний индекс. Само оно не отвечает на поисковые запросы.
+1. **Query-time retrieval** finds sources while the AI assistant is answering.
+2. **RAG API** (`/api/rag/*`) is a read-only export and synchronization API for
+   external indexes. It does not answer retrieval queries itself.
 
-Все HTTP-пути ниже указаны с глобальным префиксом `/api`.
+All HTTP paths below include the global `/api` prefix.
 
-## 1. Состав и границы системы
+## 1. System components and boundaries
 
-Core ИИ расположен в `apps/server/src/core/ai`, клиентская часть — в
-`apps/client/src/features/ai`, а общие TypeScript-контракты — в
+Core AI lives in `apps/server/src/core/ai`, the client UI lives in
+`apps/client/src/features/ai`, and shared TypeScript contracts live in
 `packages/api-contract/src/ai.ts`.
 
-На уровне пространства (`space`) хранится отдельная запись `ai_space_configs`:
-она не использует `spaces.settings`. В ней находятся параметры OpenAI-compatible
-провайдера, зашифрованные ключи, политика хранения, лимиты, включённые функции и
-настройка внешнего retrieval. Источники правды для истории и выполнения —
-таблицы разговоров, сообщений, запусков, файлов и снимков источников; очередь
-не является источником состояния.
+Each space has a separate `ai_space_configs` record; AI configuration is not
+stored in `spaces.settings`. The record contains OpenAI-compatible provider
+settings, encrypted credentials, retention policy, limits, enabled features,
+and external retrieval configuration. Conversation, message, run, file, and
+source-snapshot tables are the source of truth for history and execution. The
+queue is not a state store.
 
-Основные компоненты:
+The main components are:
 
-| Компонент | Назначение |
-| --- | --- |
-| `AiConversationService` | личные разговоры пользователя в контексте страницы, сообщения и черновики |
-| `AiContextService` | версионируемый состав контекста разговора и проверка доступа к источникам |
-| `AiRunService` / `AiRunExecutionService` | создание попыток, лимиты, идемпотентность, выполнение и потоковая запись ответа |
-| `AiPromptBuilderService` | сборка ограниченного по бюджету prompt из истории, контекста, файлов и результатов поиска |
-| `OpenAiCompatibleProviderService` | запросы и streaming к совместимому с OpenAI API провайдеру |
-| `AiRetrievalService` | безопасный query-time retrieval и повторная авторизация найденных источников |
-| `AiFileService` | загрузка, извлечение текста, изображения, tombstone-удаление и очистка файлов чата |
-| `AiAuxRunService` | отдельные фоновые задачи: автоматический заголовок беседы и преобразование выделения в редакторе |
+| Component                                | Responsibility                                                                        |
+| ---------------------------------------- | ------------------------------------------------------------------------------------- |
+| `AiConversationService`                  | private user conversations in page context, messages, and drafts                      |
+| `AiContextService`                       | versioned conversation context and source-access validation                           |
+| `AiContentPolicyService`                 | shared space exclusions for AI context, editor actions, retrieval, and the RAG API    |
+| `AiRunService` / `AiRunExecutionService` | immutable attempts, limits, idempotency, execution, and streamed response persistence |
+| `AiPromptBuilderService`                 | bounded prompt assembly from history, context, files, and retrieval results           |
+| `OpenAiCompatibleProviderService`        | requests and streaming against an OpenAI-compatible provider                          |
+| `AiRetrievalService`                     | safe query-time retrieval and reauthorization of returned sources                     |
+| `AiFileService`                          | uploads, text extraction, images, tombstone deletion, and chat-file cleanup           |
+| `AiAuxRunService`                        | auxiliary jobs for automatic conversation titles and editor-selection transforms      |
 
-Выполнение обслуживает `AI_CHAT_QUEUE`. В BullMQ доставка как минимум один раз,
-поэтому worker атомарно переводит конкретный `ai_runs` из `queued` в `running`;
-терминальная попытка не открывается повторно. Детерминированные job id,
-compare-and-set переходы, порядковая последовательность событий и reconciler
-закрывают границу PostgreSQL/Redis без автоматического повтора зависшего вызова
-провайдера.
+Execution uses `AI_CHAT_QUEUE`. BullMQ delivery is at least once, so a worker
+atomically claims a specific `ai_runs` row from `queued` to `running`; a
+terminal attempt is never reopened. Deterministic job IDs, compare-and-set
+transitions, ordered event sequences, and the reconciler close the
+PostgreSQL/Redis boundary without automatically repeating a stale provider
+call.
 
-## 2. Как работает ИИ-помощник
+## 2. AI assistant flow
 
-### Обычный ответ в чате
+### Normal chat response
 
-1. Клиент создаёт или открывает личный разговор, привязанный к `pageId`.
-2. При отправке создаются пользовательское сообщение, ожидаемое сообщение
-   ассистента и неизменяемая попытка `ai_run`. Ключ `clientRequestId` связывает
-   идемпотентный запрос с его содержимым; одинаковый ключ с иным payload
-   отклоняется.
-3. Проверяются доступность ИИ, текущий пользователь, принадлежность странице и
-   право записи в неё, лимиты и конкуренция. Одновременно разрешены максимум
-   1 запуск на разговор, 6 на пользователя и 30 на пространство.
-4. Worker фиксирует запуск как `running`, разрешает снимок контекста, файлы и,
-   если включён `useSpaceSearch`, внешние результаты retrieval.
-5. `AiPromptBuilderService` строит сообщения провайдеру из system instructions,
-   истории, текущего документа, явно выбранных источников, файлов/изображений и
-   безопасных фрагментов поиска. Бюджеты рассчитываются от `contextWindow` и
-   `maxOutputTokens`, поэтому большие источники усекаются.
-6. Провайдер отдаёт текстовый поток. Дельты и, если разрешено, reasoning
-   буферизуются, периодически сохраняются в БД и передаются через Socket.IO.
-   В `ai_runs.sequence` сохраняется монотонная последовательность для
-   упорядочивания событий на клиенте.
-7. При успехе сохраняются расход токенов, снимок ответа/reasoning и citations.
-   Для первой успешной реплики может быть запланирована отдельная задача
-   заголовка: до четырёх Unicode-слов; ручное переименование всегда имеет
-   приоритет. При ошибке или отмене сообщения и попытка получают терминальный
-   статус.
+1. The client creates or opens a private conversation bound to a `pageId`.
+2. A send creates the user message, a pending assistant message, and an
+   immutable `ai_run` attempt. `clientRequestId` binds the idempotency key to
+   the request payload; reusing the key with a different payload is rejected.
+3. The server validates AI availability, the current user, page binding, page
+   write access, quotas, and concurrency. At most one run per conversation,
+   six per user, and thirty per space may run at the same time.
+4. The worker claims the run, resolves the context snapshot and files, and,
+   when `useSpaceSearch` is enabled, resolves external retrieval results.
+5. `AiPromptBuilderService` builds provider messages from system instructions,
+   history, the current document, explicitly selected sources, files/images,
+   and safe retrieval excerpts. Budgets are derived from `contextWindow` and
+   `maxOutputTokens`, so oversized sources are truncated.
+6. The provider returns a text stream. Text and, when enabled, reasoning deltas
+   are buffered, periodically persisted, and sent over Socket.IO.
+   `ai_runs.sequence` provides a monotonic ordering key for the client.
+7. On success, usage, response/reasoning snapshots, and citations are stored.
+   The first successful response may schedule a separate title job limited to
+   four Unicode word segments. A manual rename always wins. On failure or
+   cancellation, both the message and attempt receive a terminal status.
 
-Повтор (`retry`) и регенерация (`regenerate`) создают связанные новые попытки,
-а не перезаписывают исходную. `retry` относится к запуску, `regenerate` — к
-сообщению ассистента. Отмена выставляет запрос на отмену; worker проверяет его
-во время streaming и завершает текущую попытку как `cancelled`.
+Retry and regenerate create linked new attempts instead of rewriting the
+original attempt. Retry operates on a run; regenerate operates on an assistant
+message. Cancellation records a request that the worker checks during
+streaming and terminates the attempt as `cancelled`.
 
-### Контекст, файлы и действия в редакторе
+### Context, files, and editor actions
 
-Контекст беседы имеет revision. В него входят флаг текущего документа, до 10
-явных источников (`page`, `database`, `database_row`), до 10 файлов чата и до
-20 вложений страницы. При `PUT` клиент указывает `expectedRevision`; конфликт
-возвращается как `ai_context_revision_conflict`. На каждый запуск сохраняется
-снимок разрешённого контекста, поэтому повтор воспроизводим, а утрата доступа
-не позволяет использовать или показать производные данные.
+Conversation context has a revision. The current document is stored separately
+from up to ten manual roots (`page`, `database`, or `database_row`). A page root
+has an `AiDescendantSelection`:
 
-Личные multipart-файлы требуют заголовок `Idempotency-Key`. Допустимы PDF,
-DOCX, TXT, Markdown, JPEG, PNG и WebP; ограничения: до 10 файлов, 25 MiB на
-файл и 100 MiB на разговор. Извлечение текста идёт асинхронно, а изображения
-передаются провайдеру только при `visionEnabled`. Удаление сначала фиксирует
-tombstone в БД, затем повторяемо очищает storage.
+- `none` includes only the root;
+- `all` dynamically resolves every accessible descendant on each new send;
+- `selected` stores explicit descendant page IDs and does not automatically
+  include new pages.
 
-Преобразование выделения в редакторе (`editor_transform`) — это `ai_aux_run`.
-Оно использует выделение и hash снимка страницы, транслирует результат в
-реальном времени, но не создаёт сообщений чата и не меняет его историю.
+Selection supports arbitrary nesting. A checkbox selects only the specific
+page and never selects its branch implicitly.
 
-## 3. Умный поиск во время ответа
+Before a run is created, roots are expanded, checked against page ACL and the
+content policy, deduplicated by backing `pageId`, and limited to fifty unique
+resolved sources including the current document. When dynamic expansion exceeds
+the limit, no run or messages are created and the server returns
+`ai_context_resolved_source_limit` with `resolvedCount`, `limit`, and
+`rootPageIds`. The current document remains primary context; its descendants
+are normal explicit, citable sources. Enabling the current document merges or
+removes a manual source with the same `pageId`. Disabling it allows that page
+to be added manually.
 
-### Включение и поток данных
+Chat files and page attachments retain separate limits of ten and twenty.
+Context updates include `expectedRevision`; conflicts return
+`ai_context_revision_conflict`. Every run stores an allowed context snapshot,
+which makes retries reproducible without allowing lost access to expose or
+reuse derived data.
 
-Для конкретной отправки флаг `useSpaceSearch` запрашивает поиск, но поиск
-возможен только когда в конфигурации пространства настроен adapter. Состояния
-в `AiRun.retrievalOutcome`: `not_requested`, `disabled`, `used`, `empty`,
-`failed`. Сбой поиска не прерывает генерацию: модель получает доступный
-документный/файловый контекст без внешних результатов.
+Private multipart uploads require an `Idempotency-Key` header. Supported types
+are PDF, DOCX, TXT, Markdown, JPEG, PNG, and WebP. Limits are ten files,
+25 MiB per file, and 100 MiB per conversation. Text extraction is asynchronous.
+Images are sent to the provider only when `visionEnabled` is true. Deletion
+first commits a database tombstone and then performs retryable storage cleanup.
 
-Перед внешним вызовом сервер получает текущий `getSidebarAccessSnapshot` для
-пользователя. Список разрешённых страниц попадает в запрос только для
-`http-json-v1`; независимо от ответа сервера каждый найденный кандидат снова
-сверяется с БД, workspace, space, состоянием удаления и текущими page ACL.
-Только после этого его excerpt добавляется в prompt и становится citation.
-Следовательно, внешний индекс не является источником авторизации и не может
-сам расширить доступ пользователя.
+An editor selection transform (`editor_transform`) is an `ai_aux_run`. It uses
+the selected text and a page-snapshot hash and streams its result, but it does
+not create chat messages or change chat history.
 
-Внешний запрос ограничен: до 40 кандидатов, до 8 итоговых результатов по
-умолчанию, 16 KiB текста на hit, 1 MiB serialized request и 256 KiB response.
-Некорректные, слишком большие или не-UUID кандидаты отбрасываются по одному;
-дубликаты одной идентичности оставляют лучший score.
+### Shared content exclusion policy
 
-### Поддерживаемые адаптеры
+A space administrator may store up to one hundred page rules in
+`ai_space_content_exclusions`. A rule excludes either only the selected
+document or the document and its current subtree. The effective set is
+resolved through a recursive CTE bounded by `MAX_PAGE_TREE_DEPTH`. Its
+fingerprint is calculated from sorted effective `pageId` values, so moving a
+page across an excluded subtree boundary also changes the fingerprint.
 
-| Adapter | Настройка | Вызов и ожидания |
-| --- | --- | --- |
-| `none` | дополнительных полей нет | retrieval отключён |
-| `http-json-v1` | `url`, опциональный API key, timeout, maxResults | `POST` на указанный URL с версионированным JSON-запросом; ожидается `{ items }` |
-| `open-webui-knowledge-v1` | base URL, API key Open WebUI, `knowledgeId`, timeout, maxResults | проверяет Knowledge Base и вызывает `POST /api/v1/retrieval/query/collection` Open WebUI |
+Exclusions apply to current and manual conversation context, page attachments,
+editor actions, query-time retrieval, and all live/detail/export RAG routes.
+Normal Docmost search and private chat files are unaffected. Chat remains
+available on an excluded current page without page context, while editor
+actions are disabled.
 
-Для `open-webui-knowledge-v1` поддерживаются лишь документы с метаданными
-`docmost` schemaVersion 1, теми же `workspaceId` и `spaceId`. Разрешённые типы
-внешних результатов: `page`, `database_row`, `attachment`; внутренний
-`database` допустим как явно выбранный контекст, но не в контракте внешнего
-поиска. Адаптер передаёт `hybrid: false`, чтобы неисправный внешний reranker не
-делал недоступным обычный vector search. Если ответ коллекции содержит только
-`file_id`, адаптер запрашивает `GET /api/v1/files/:fileId` и получает
-канонические метаданные из `file.meta.data.docmost`. Distance Open WebUI
-преобразуется в score `1 / (1 + max(0, distance))`.
+When the policy changes, affected active contexts are reconciled, their
+revision is incremented, and `ai:content-policy.updated` is emitted. Old
+messages and snapshots remain visible, but `prompt_history_cutoff_at` prevents
+them from entering future prompts. Retry and regenerate copy only allowed
+snapshots. A source with an excluded dependency is omitted as a whole.
 
-## 4. Настройка и эксплуатация
+## 3. Smart search during an answer
 
-### Параметры пространства
+### Enablement and data flow
 
-Единственный поддерживаемый provider — `openai-compatible`. Значения по
-умолчанию: `temperature` 0.2, `maxOutputTokens` 8192, `contextWindow` 131072,
-`requestTimeoutMs` 300000, 100 запросов/день на пользователя, 2 000 000
-токенов/день на пространство и 90 дней хранения. `maxOutputTokens` обязан
-оставлять минимум 1024 токена для входного контекста.
+`useSpaceSearch` requests retrieval for a send, but retrieval is available only
+when the space has a configured adapter. `AiRun.retrievalOutcome` is one of
+`not_requested`, `disabled`, `used`, `empty`, or `failed`. Retrieval failure
+does not fail generation; the model continues with available document and file
+context.
 
-Для retrieval по умолчанию используются `http-json-v1`, timeout 8000 ms и
-`maxResults` 8. API принимает timeout 1000–60000 ms и 1–20 результатов.
-Настройки также включают `systemInstructions`, `visionEnabled`,
-`reasoningEnabled` и до 50 быстрых команд. Секреты модели, retrieval и
-Open WebUI шифруются application secret; публичные ответы возвращают только
-флаги `apiKeyConfigured`.
+Before an external request, the server obtains the user's current
+`getSidebarAccessSnapshot`. Allowed page IDs are sent only to `http-json-v1`.
+Regardless of adapter output, every candidate is revalidated against the
+database, workspace, space, deletion state, current page ACL, and content
+policy before its excerpt enters the prompt or becomes a citation. An external
+index is therefore never an authorization authority and cannot expand user
+access.
 
-Администратор пространства с полным доступом может получить/изменить
-конфигурацию и проверить соединение модели или retrieval. Проверка модели
-пытается получить список моделей, выполняет короткий completion и, когда
-запрошено, проверяет vision. Проверка Open WebUI дополнительно проверяет
-доступность collection и может вернуть версию удалённого сервиса.
+An external request is bounded to forty candidates, eight final results by
+default, 16 KiB of text per hit, a 1 MiB serialized request, and a 256 KiB
+response. Malformed, oversized, and non-UUID candidates are rejected
+individually. Duplicate identities retain the highest score.
 
-### Сетевые и защитные ограничения
+### Supported adapters
 
-`AI_PROVIDER_ALLOWED_ORIGINS` и `AI_RETRIEVAL_ALLOWED_ORIGINS` — разные
-production allowlist точных HTTP(S)-origin для model endpoint и retrieval.
-URL с credentials, query или fragment отклоняются; для Open WebUI base URL
-также требуется чистый origin. Общая outbound-политика проверяет URL/DNS,
-запрещает redirects и ограничивает транспорт. В development разрешены loopback
-адреса; в Docker `127.0.0.1` означает контейнер Docmost, а не хост.
+| Adapter                   | Configuration                                                    | Request and expected behavior                                          |
+| ------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `none`                    | no additional fields                                             | retrieval is disabled                                                  |
+| `http-json-v1`            | `url`, optional API key, timeout, and maxResults                 | versioned JSON `POST` to the configured URL; expects `{ items }`       |
+| `open-webui-knowledge-v1` | base URL, Open WebUI API key, `knowledgeId`, timeout, maxResults | validates the Knowledge Base and calls Open WebUI collection retrieval |
 
-`AI_STREAM_IDLE_TIMEOUT_MS` ограничивает паузу между SSE-частями (включая
-первую) в пределах 5000–600000 ms, по умолчанию 120000 ms. Он обновляется на
-каждой части и дополнительно ограничен полным `requestTimeoutMs` пространства.
+`open-webui-knowledge-v1` accepts only documents with `docmost`
+`schemaVersion: 1` metadata and matching `workspaceId` and `spaceId`. External
+result types are `page`, `database_row`, and `attachment`. A `database` may be
+explicit context but is not an external retrieval result type. The adapter
+sends `hybrid: false`, so a broken external reranker does not disable normal
+vector search. When the collection response contains only `file_id`, the
+adapter calls `GET /api/v1/files/:fileId` and reads canonical metadata from
+`file.meta.data.docmost`. Open WebUI distance is converted to
+`1 / (1 + max(0, distance))`.
 
-Все обычные изменяющие endpoints ИИ требуют JWT и проходят глобальную CSRF
-проверку. У чата сохраняются только собственные разговоры пользователя; доступ
-к странице и источникам проверяется повторно. Cтатистика retrieval хранится
-как безопасные агрегаты (результаты, задержки и счётчики), без содержимого.
+## 4. Configuration and operation
 
-## 5. Внешняя синхронизация с Open WebUI
+### Space configuration
 
-`apps/rag-sync` — отдельный optional-процесс, не часть backend runtime. Он
-читает только `/api/rag/*`, не импортирует server repositories, не имеет доступа
-к БД Docmost и не использует `AI_QUEUE`/`AI_CHAT_QUEUE`. Одна предварительно
-созданная Knowledge Base Open WebUI сопоставляется одному пространству Docmost.
+The only supported provider kind is `openai-compatible`. Defaults are
+temperature 0.2, `maxOutputTokens` 8192, `contextWindow` 131072,
+`requestTimeoutMs` 300000, one hundred requests per user per day, two million
+tokens per space per day, and ninety days of retention. `maxOutputTokens` must
+leave at least 1024 tokens for input context.
 
-Процесс хранит checkpoint, source-to-file mapping и распределённые lock в
-отдельном Redis namespace (по умолчанию `docmost:rag-sync`). Он обрабатывает
-полную и delta-синхронизацию, сохраняет inclusive checkpoint только после
-успешной обработки, восстанавливает утраченные mappings из
-`meta.data.docmost`, игнорирует чужие workspace/space, удаляет дубликаты и
-заменяет файл лишь после его обработки Open WebUI. Поддерживаются страницы,
-строки БД и PDF, DOCX, TXT, MD, JPEG, PNG, WebP-вложения. Логи содержат IDs,
-состояния, счётчики, lag и длительности, но не документный текст и секреты.
+Retrieval defaults are `http-json-v1`, an 8000 ms timeout, and eight results.
+The API accepts timeouts from 1000 to 60000 ms and one to twenty results.
+Configuration also includes `systemInstructions`, `visionEnabled`,
+`reasoningEnabled`, and up to fifty quick commands. Model, retrieval, and Open
+WebUI secrets are encrypted with the application secret. Public responses
+return only `apiKeyConfigured` flags.
 
-Конфигурация задаётся через `RAG_SYNC_CONFIG_PATH`; пример —
-`rag-sync.config.example.json`. В JSON указываются URLs, Redis, интервалы,
-максимальный размер вложения и bindings. Секреты задаются только путями к
-смонтированным файлам (`docmostApiKeyFile`, `openWebUiApiKeyFile`), а не
-inline-значениями. `knowledgeId`, `workspaceId` и `spaceId` проверяются при
-загрузке. API-ключ для чтения Docmost и ключ, которым основной сервер ищет в
-Open WebUI, — независимые секреты.
+The assistant's display identity is stored in the same space configuration:
+`assistantNameEnabled`, `assistantName` (up to eighty characters), and
+`assistantGender` (`masculine|feminine`). The name is trimmed and may contain
+Unicode, punctuation, and emoji, but not line breaks, control characters, or
+bidi-control characters. Enabling the setting requires a non-empty name.
+Disabling it restores the standard localized label without deleting the saved
+name or gender. `assistantName: null` clears the name only while the feature is
+disabled. The client never translates or inflects the configured name; only
+the generic role word may be inflected.
+
+A full-access space administrator can read or update configuration and test the
+model or retrieval connection. The model test attempts model discovery, runs a
+short completion, and optionally checks vision. The Open WebUI test also
+validates collection availability, candidate metadata compatibility, and that
+returned IDs resolve to current Docmost sources accessible to the user. A
+reachable endpoint without current allowed sources returns `state=empty` as a
+warning rather than reporting retrieval as ready.
+
+### Network and security boundaries
+
+`AI_PROVIDER_ALLOWED_ORIGINS` and `AI_RETRIEVAL_ALLOWED_ORIGINS` are separate
+production allowlists of exact HTTP(S) origins for model and retrieval
+endpoints. URLs with credentials, query strings, or fragments are rejected.
+An Open WebUI base URL must also be a clean origin. Shared outbound policy
+validates URL and DNS resolution, rejects redirects, and bounds transport.
+Loopback addresses are development-only. Inside Docker, `127.0.0.1` addresses
+the Docmost container rather than the host.
+
+`AI_STREAM_IDLE_TIMEOUT_MS` bounds the delay between SSE chunks, including the
+first chunk, from 5000 to 600000 ms and defaults to 120000 ms. It resets on each
+chunk and is additionally capped by the space's full `requestTimeoutMs`.
+
+Normal mutating AI endpoints require JWT authentication and pass the global
+CSRF guard. Users can access only their own conversations, and page/source
+access is rechecked. Retrieval telemetry stores safe aggregates such as counts
+and latency, never document content.
+
+For a normal chat run, the worker reads current configuration and appends an
+authoritative identity directive after space instructions. The directive uses
+JSON-encoded `displayName` and `grammaticalGender`, requires the name to remain
+verbatim without translation, transliteration, or inflection, and aligns
+self-reference with the selected grammatical gender. A new name therefore
+applies to subsequent send, retry, and regenerate operations without changing
+the fingerprint or historical messages. Auxiliary title generation and editor
+selection transforms do not receive this directive.
+
+## 5. External synchronization with Open WebUI
+
+`apps/rag-sync` is an optional standalone process, not part of the backend
+runtime. It reads only `/api/rag/*`, imports no server repositories, has no
+Docmost database access, and does not use `AI_QUEUE` or `AI_CHAT_QUEUE`. One
+pre-created Open WebUI Knowledge Base maps to one Docmost space.
+
+The process stores checkpoints, source-to-file mappings, and distributed locks
+in a separate Redis namespace, `docmost:rag-sync` by default. It supports full
+and delta synchronization, advances inclusive checkpoints only after complete
+processing, reconstructs lost mappings from `meta.data.docmost`, ignores
+foreign workspace/space metadata, deletes duplicates and failed artifacts,
+skips empty pages, and replaces a file only after Open WebUI has processed the
+new file successfully. Supported objects include pages, database rows, and
+PDF, DOCX, TXT, MD, JPEG, PNG, and WebP attachments. Logs contain IDs, states,
+counts, lag, and durations but never document text or secrets.
+
+Before every cycle, the writer reads `GET /api/rag/scope`. When the fingerprint
+changes, it reconstructs mappings from Open WebUI metadata, deletes files and
+mappings whose backing `pageId` is excluded, resets the live `updates` and
+`attachment-updates` checkpoints to zero, and reprocesses all allowed data. The
+new fingerprint is stored only after the entire cycle succeeds. Structured
+`scope.changed` and `scope.purged` events contain only safe IDs and counts.
+
+Configuration is loaded from `RAG_SYNC_CONFIG_PATH`; see
+`rag-sync.config.example.json`. The JSON contains URLs, Redis settings,
+intervals, attachment size limits, and bindings. Credentials are specified
+only as paths to mounted files (`docmostApiKeyFile`,
+`openWebUiApiKeyFile`), never inline. `knowledgeId`, `workspaceId`, and
+`spaceId` are validated at startup. The Docmost read key and the Open WebUI key
+used by the main server for retrieval are independent secrets.
 
 ## 6. API
 
-### Аутентифицированный API ИИ
+### Authenticated AI API
 
-Все эти endpoints требуют пользовательский JWT; mutating routes также требуют
-стандартный CSRF контракт.
+These endpoints require a user JWT. Mutating routes also require the standard
+CSRF contract.
 
-| Метод и путь | Назначение |
-| --- | --- |
-| `GET/PATCH /api/spaces/:spaceId/ai/config` | получить/изменить конфигурацию ИИ пространства |
-| `POST /api/spaces/:spaceId/ai/config/actions/test-model` | проверить provider и опционально vision |
-| `POST /api/spaces/:spaceId/ai/config/actions/test-retrieval` | проверить внешний retrieval |
-| `GET /api/spaces/:spaceId/ai/status?pageId=` | доступность, права, usage и быстрые команды |
-| `GET/POST /api/ai/conversations` | список по обязательному `pageId` / создание разговора |
-| `GET/PATCH/DELETE /api/ai/conversations/:id` | чтение, изменение, soft delete своего разговора |
-| `POST /api/ai/conversations/:id/actions/open` | обновить момент открытия |
-| `GET /api/ai/conversations/:id/messages` | сообщения с `before`, `limit` |
-| `GET/PUT /api/ai/conversations/:id/context` | получить/версионированно заменить контекст |
-| `GET /api/ai/conversations/:id/context-sources` | поиск доступных кандидатов для явного контекста |
-| `POST /api/ai/conversations/:id/messages` | отправить сообщение, создаёт run, ответ `202` |
-| `GET /api/ai/runs/:id` | состояние отдельной попытки |
-| `POST /api/ai/runs/:id/actions/cancel` | запросить отмену |
-| `POST /api/ai/runs/:id/actions/retry` | создать новую попытку, ответ `202` |
-| `POST /api/ai/messages/:id/actions/regenerate` | заново сгенерировать ответ, `202` |
-| `GET/POST /api/ai/conversations/:conversationId/files` | список/идемпотентная multipart-загрузка файлов |
-| `GET/DELETE /api/ai/conversations/:conversationId/files/:fileId` | скачать/удалить личный файл |
-| `GET /api/ai/pages/:pageId/attachments` | доступные для контекста вложения страницы |
-| `POST /api/ai/editor-actions` | создать трансформацию выделения, `202` |
-| `GET /api/ai/editor-actions/:id` | состояние editor action |
-| `POST /api/ai/editor-actions/:id/actions/cancel` | отменить editor action |
+| Method and path                                                  | Purpose                                                        |
+| ---------------------------------------------------------------- | -------------------------------------------------------------- |
+| `GET/PATCH /api/spaces/:spaceId/ai/config`                       | read or update space AI configuration                          |
+| `POST /api/spaces/:spaceId/ai/config/actions/test-model`         | test the provider and optional vision                          |
+| `POST /api/spaces/:spaceId/ai/config/actions/test-retrieval`     | test external retrieval                                        |
+| `GET/PUT /api/spaces/:spaceId/ai/exclusions`                     | read or replace exclusion rules with optimistic revision       |
+| `GET /api/spaces/:spaceId/ai/exclusions/candidates`              | search page candidates for exclusions                          |
+| `GET /api/spaces/:spaceId/ai/status?pageId=`                     | availability, permissions, identity, usage, and quick commands |
+| `GET/POST /api/ai/conversations`                                 | list by required `pageId` or create a conversation             |
+| `GET/PATCH/DELETE /api/ai/conversations/:id`                     | read, update, or soft-delete an owned conversation             |
+| `POST /api/ai/conversations/:id/actions/open`                    | update the last-opened time                                    |
+| `GET /api/ai/conversations/:id/messages`                         | list messages with `before` and `limit`                        |
+| `GET/PUT /api/ai/conversations/:id/context`                      | read or version-replace context                                |
+| `GET /api/ai/conversations/:id/context-sources`                  | search accessible explicit-context candidates                  |
+| `GET /api/ai/conversations/:id/context-descendants`              | lazily list accessible direct descendants of a page root       |
+| `POST /api/ai/conversations/:id/messages`                        | send a message and create a run; returns `202`                 |
+| `GET /api/ai/runs/:id`                                           | read a single attempt                                          |
+| `POST /api/ai/runs/:id/actions/cancel`                           | request cancellation                                           |
+| `POST /api/ai/runs/:id/actions/retry`                            | create a new attempt; returns `202`                            |
+| `POST /api/ai/messages/:id/actions/regenerate`                   | regenerate an answer; returns `202`                            |
+| `GET/POST /api/ai/conversations/:conversationId/files`           | list files or perform idempotent multipart upload              |
+| `GET/DELETE /api/ai/conversations/:conversationId/files/:fileId` | download or delete a private chat file                         |
+| `GET /api/ai/pages/:pageId/attachments`                          | list page attachments available for context                    |
+| `POST /api/ai/editor-actions`                                    | create an editor-selection transform; returns `202`            |
+| `GET /api/ai/editor-actions/:id`                                 | read editor-action state                                       |
+| `POST /api/ai/editor-actions/:id/actions/cancel`                 | cancel an editor action                                        |
 
-### RAG API синхронизации
+### Synchronization RAG API
 
-Все `/api/rag/*` routes read-only (`GET`), не используют CSRF и принимают
-только API key: `Authorization: Bearer <token>`. Пользовательский JWT/cookie
-на них отвергается; API key вне `/api/rag/*` также отвергается. Ключ несёт
-`workspaceId`, `spaceId`, `apiKeyId`, `sub`; scope, текущая membership создателя
-и page ACL ограничивают данные. Cursor feeds имеют at-least-once семантику:
-потребитель обязан делать idempotent upsert/delete.
+Every `/api/rag/*` route is read-only (`GET`), does not use CSRF, and accepts
+only `Authorization: Bearer <token>` from a workspace API key. User JWTs and
+cookies are rejected, and API keys are rejected outside `/api/rag/*`. The key
+contains `workspaceId`, `spaceId`, `apiKeyId`, and `sub`; key scope, current
+creator membership, page ACL, and the content policy bound all live data.
+Cursor feeds are at least once, so consumers must perform idempotent
+upsert/delete operations.
 
-| Путь | Данные |
-| --- | --- |
-| `GET /api/rag/pages?includeContent=` | полный список активных pages/databases |
-| `GET /api/rag/updates?updatedSince=&limit=&cursor=` | изменившиеся pages/databases |
-| `GET /api/rag/deleted?deletedSince=&limit=&cursor=` | tombstones page/database/databaseRow |
-| `GET /api/rag/attachments/updates?updatedSince=&limit=&cursor=` | изменения вложений |
-| `GET /api/rag/attachments/deleted?deletedSince=&limit=&cursor=` | tombstones вложений |
-| `GET /api/rag/pages/:pageIdOrSlug?includeContent=` | детали страницы или контейнера БД |
-| `GET /api/rag/databases/:databaseIdOrPageSlug` | структурированная БД и `knowledgeMarkdown` |
-| `GET /api/rag/databases/:databaseIdOrPageSlug/rows?pageIds=` | строки, ячейки и Markdown строк |
-| `GET /api/rag/pages/:pageIdOrSlug/attachments` | метаданные вложений и download URL |
-| `GET /api/rag/attachments/:fileId/:fileName` | бинарный поток вложения с повторной ACL-проверкой |
-| `GET /api/rag/pages/:pageIdOrSlug/comments` | комментарии, включая resolved |
-| `GET /api/rag/pages/:pageIdOrSlug/export` | ZIP экспорта страницы (`format`, `includeAttachments`, `includeChildren`) |
-| `GET /api/rag/space/export` | ZIP экспорта scope-пространства (`format`, `includeAttachments`) |
+| Path                                                            | Data                                                               |
+| --------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `GET /api/rag/scope`                                            | current policy fingerprint and effective `excludedPageIds`         |
+| `GET /api/rag/pages?includeContent=`                            | complete active page/database list                                 |
+| `GET /api/rag/updates?updatedSince=&limit=&cursor=`             | changed pages and databases                                        |
+| `GET /api/rag/deleted?deletedSince=&limit=&cursor=`             | page/database/database-row tombstones                              |
+| `GET /api/rag/attachments/updates?updatedSince=&limit=&cursor=` | changed attachments                                                |
+| `GET /api/rag/attachments/deleted?deletedSince=&limit=&cursor=` | attachment tombstones                                              |
+| `GET /api/rag/pages/:pageIdOrSlug?includeContent=`              | page or database-container details                                 |
+| `GET /api/rag/databases/:databaseIdOrPageSlug`                  | structured database data and `knowledgeMarkdown`                   |
+| `GET /api/rag/databases/:databaseIdOrPageSlug/rows?pageIds=`    | rows, cells, and row Markdown                                      |
+| `GET /api/rag/pages/:pageIdOrSlug/attachments`                  | attachment metadata and download URLs                              |
+| `GET /api/rag/attachments/:fileId/:fileName`                    | attachment stream with a repeated ACL/policy check                 |
+| `GET /api/rag/pages/:pageIdOrSlug/comments`                     | comments, including resolved comments                              |
+| `GET /api/rag/pages/:pageIdOrSlug/export`                       | page ZIP export with format, attachment, and child options         |
+| `GET /api/rag/space/export`                                     | scope-filtered space ZIP export with format and attachment options |
 
-Полная спецификация полей и примеры запросов для этого контура находятся в
-[`RAG_API.md`](RAG_API.md).
+See [`RAG_API.md`](RAG_API.md) for the complete field specification and
+request examples.
 
-## 7. Контракты
+## 7. Contracts
 
-Канонические TypeScript-контракты находятся в
-`packages/api-contract/src/ai.ts`. Ключевые перечисления: provider
-`openai-compatible`; adapters `none`, `http-json-v1`,
-`open-webui-knowledge-v1`; статусы run `queued`, `running`, `completed`,
-`failed`, `cancelled`; статусы message `pending`, `streaming`, `completed`,
-`failed`, `cancelled`; source types `page`, `database`, `database_row`,
-`attachment`, `chat_file`.
+Canonical TypeScript contracts live in `packages/api-contract/src/ai.ts`.
+Important enumerations include provider `openai-compatible`; adapters `none`,
+`http-json-v1`, and `open-webui-knowledge-v1`; run and message statuses
+`queued`, `running`, `completed`, `failed`, and `cancelled` as applicable; and
+source types `page`, `database`, `database_row`, `attachment`, and `chat_file`.
 
-Главные публичные модели: `AiSpaceConfig`, `AiAvailability`,
+The primary public models are `AiSpaceConfig`, `AiAvailability`,
 `AiConversation`, `AiConversationContext`, `AiMessage`, `AiRun`, `AiCitation`,
-`AiChatFile`, `AiEditorActionRun`. В ответе assistant-сообщения присутствуют
-`reasoning`, `runStatus`, `retrievalOutcome`, `retrievalErrorCode`,
-`applyContext` и citations, когда они применимы. Парольные/ключевые поля в
-публичные модели не входят.
+`AiChatFile`, and `AiEditorActionRun`. Assistant messages expose `reasoning`,
+`runStatus`, `retrievalOutcome`, `retrievalErrorCode`, `applyContext`, and
+citations when applicable. Secret and credential fields are never part of
+public models.
 
-Контракт `http-json-v1`:
+`AiAvailability.assistantIdentity` is `{ name, gender }` or `null`. Normal
+space members receive it through page-scoped status even when AI is disabled or
+temporarily unavailable; administrative configuration and secrets are not
+exposed with it.
+
+The `http-json-v1` contract is:
 
 ```ts
 type AiRetrievalQueryRequest = {
@@ -288,14 +366,14 @@ type AiRetrievalQueryRequest = {
   pageId: string;
   query: string;
   allowedPageIds: string[];
-  sourceTypes: Array<'page' | 'database_row' | 'attachment'>;
+  sourceTypes: Array<"page" | "database_row" | "attachment">;
   limit: number;
   candidateLimit: number;
 };
 
 type AiRetrievalQueryResponse = {
   items: Array<{
-    sourceType: 'page' | 'database_row' | 'attachment';
+    sourceType: "page" | "database_row" | "attachment";
     sourceId: string;
     pageId: string;
     text: string;
@@ -304,15 +382,17 @@ type AiRetrievalQueryResponse = {
 };
 ```
 
-Realtime Socket.IO-события также описаны контрактами: `ai:run.delta`,
-`ai:run.status`, `ai:conversation.updated`, `ai:editor-action.delta` и
-`ai:editor-action.status`. Дельта run содержит `runId`, `conversationId`,
-`messageId`, `pageId`, `sequence`, `delta` и необязательный `reasoningDelta`;
-статус может добавлять retrieval outcome/error и ошибку выполнения.
+Realtime Socket.IO contracts include `ai:run.delta`, `ai:run.status`,
+`ai:conversation.updated`, `ai:content-policy.updated`,
+`ai:editor-action.delta`, and `ai:editor-action.status`. A run delta contains
+`runId`, `conversationId`, `messageId`, `pageId`, `sequence`, `delta`, and an
+optional `reasoningDelta`. Status events may include retrieval outcome/error
+and execution errors.
 
-Ошибки ИИ передаются стабильными кодами из `AiErrorCode`, включая квоты,
-идемпотентность, права страницы, provider, очередь, retrieval, контекст,
-файлы и editor action. В частности, retrieval использует
-`retrieval_request_too_large`, `retrieval_timeout`, `retrieval_unavailable`,
-`retrieval_url_rejected`, `retrieval_invalid_response` и
-`retrieval_collection_unavailable`.
+AI errors use stable `AiErrorCode` values for quotas, idempotency, page access,
+provider behavior, queues, retrieval, context, files, and editor actions.
+Content and context additions include `ai_context_resolved_source_limit`,
+`ai_context_source_excluded`, and `ai_context_descendant_invalid`. Retrieval
+codes include `retrieval_request_too_large`, `retrieval_timeout`,
+`retrieval_unavailable`, `retrieval_url_rejected`,
+`retrieval_invalid_response`, and `retrieval_collection_unavailable`.

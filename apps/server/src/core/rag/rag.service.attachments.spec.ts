@@ -25,11 +25,10 @@ describe('RagService attachment download authorization', () => {
     attachment?: any;
     page?: any;
     canRead?: boolean;
+    excluded?: boolean;
   }) {
     const attachmentRepo = {
-      findById: jest
-        .fn()
-        .mockResolvedValue(options?.attachment ?? attachment),
+      findById: jest.fn().mockResolvedValue(options?.attachment ?? attachment),
     };
     const pageRepo = {
       findById: jest.fn().mockResolvedValue(options?.page ?? page),
@@ -49,6 +48,10 @@ describe('RagService attachment download authorization', () => {
       {} as any,
       {} as any,
       pageAccess as any,
+      {
+        isPageExcluded: jest.fn().mockResolvedValue(options?.excluded ?? false),
+        getExcludedPageIds: jest.fn().mockResolvedValue(new Set()),
+      } as any,
     );
     return { service, pageAccess };
   }
@@ -67,6 +70,14 @@ describe('RagService attachment download authorization', () => {
 
   it('rejects a file after page access is revoked', async () => {
     const { service } = createService({ canRead: false });
+
+    await expect(
+      service.resolveAttachmentForDownload(scope, attachment.id),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('rejects an attachment owned by an AI-excluded page', async () => {
+    const { service } = createService({ excluded: true });
 
     await expect(
       service.resolveAttachmentForDownload(scope, attachment.id),

@@ -5,23 +5,22 @@ import type {
   RagDatabaseDetail,
   RagDeletedItem,
   RagPageDetail,
+  RagScope,
   RagUpdateItem,
-} from '@docmost/api-contract';
-import { BoundedHttpClient, RemoteHttpError, delay } from './http-client.js';
-import type {
-  DocmostSourceClient,
-  OpenWebUiFile,
-  OpenWebUiWriterClient,
-  RagSyncBinding,
-} from './types.js';
+} from "@docmost/api-contract";
+import { BoundedHttpClient, RemoteHttpError, delay } from "./http-client.js";
+import {
+  OpenWebUiFileProcessingError,
+  type DocmostSourceClient,
+  type OpenWebUiFile,
+  type OpenWebUiWriterClient,
+  type RagSyncBinding,
+} from "./types.js";
 
 export class DocmostClient implements DocmostSourceClient {
   private readonly http: BoundedHttpClient;
 
-  constructor(
-    binding: RagSyncBinding,
-    requestTimeoutMs: number,
-  ) {
+  constructor(binding: RagSyncBinding, requestTimeoutMs: number) {
     this.http = new BoundedHttpClient(
       binding.docmostBaseUrl,
       binding.docmostApiKey,
@@ -29,18 +28,32 @@ export class DocmostClient implements DocmostSourceClient {
     );
   }
 
+  getScope(): Promise<RagScope> {
+    return this.http.json("api/rag/scope", {}, 8 * 1024 * 1024);
+  }
+
   getUpdates(updatedSince: number, cursor?: string) {
-    return this.feed<RagUpdateItem>('api/rag/updates', 'updatedSince', updatedSince, cursor);
+    return this.feed<RagUpdateItem>(
+      "api/rag/updates",
+      "updatedSince",
+      updatedSince,
+      cursor,
+    );
   }
 
   getDeleted(deletedSince: number, cursor?: string) {
-    return this.feed<RagDeletedItem>('api/rag/deleted', 'deletedSince', deletedSince, cursor);
+    return this.feed<RagDeletedItem>(
+      "api/rag/deleted",
+      "deletedSince",
+      deletedSince,
+      cursor,
+    );
   }
 
   getAttachmentUpdates(updatedSince: number, cursor?: string) {
     return this.feed<RagAttachmentItem>(
-      'api/rag/attachments/updates',
-      'updatedSince',
+      "api/rag/attachments/updates",
+      "updatedSince",
       updatedSince,
       cursor,
     );
@@ -48,8 +61,8 @@ export class DocmostClient implements DocmostSourceClient {
 
   getAttachmentDeleted(deletedSince: number, cursor?: string) {
     return this.feed<RagAttachmentDeletedItem>(
-      'api/rag/attachments/deleted',
-      'deletedSince',
+      "api/rag/attachments/deleted",
+      "deletedSince",
       deletedSince,
       cursor,
     );
@@ -73,9 +86,9 @@ export class DocmostClient implements DocmostSourceClient {
     item: RagAttachmentItem,
     maxBytes: number,
   ): Promise<Uint8Array> {
-    const path = item.downloadUrl.replace(/^\/+/, '');
-    if (!path.startsWith('api/rag/attachments/')) {
-      throw new Error('Docmost returned an invalid attachment URL');
+    const path = item.downloadUrl.replace(/^\/+/, "");
+    if (!path.startsWith("api/rag/attachments/")) {
+      throw new Error("Docmost returned an invalid attachment URL");
     }
     return this.http.bytes(path, {}, maxBytes);
   }
@@ -88,9 +101,9 @@ export class DocmostClient implements DocmostSourceClient {
   ): Promise<RagChangeFeed<T>> {
     const query = new URLSearchParams({
       [parameter]: String(since),
-      limit: '500',
+      limit: "500",
     });
-    if (cursor) query.set('cursor', cursor);
+    if (cursor) query.set("cursor", cursor);
     return this.http.json(`${path}?${query.toString()}`, {}, 8 * 1024 * 1024);
   }
 }
@@ -119,11 +132,11 @@ export class OpenWebUiClient implements OpenWebUiWriterClient {
     const form = new FormData();
     const fileBytes = new Uint8Array(content.byteLength);
     fileBytes.set(content);
-    form.set('file', new Blob([fileBytes], { type: mimeType }), fileName);
-    form.set('metadata', JSON.stringify(metadata));
+    form.set("file", new Blob([fileBytes], { type: mimeType }), fileName);
+    form.set("metadata", JSON.stringify(metadata));
     return this.http.json<OpenWebUiFile>(
-      'api/v1/files/?process=true&process_in_background=true',
-      { method: 'POST', body: form },
+      "api/v1/files/?process=true&process_in_background=true",
+      { method: "POST", body: form },
       1024 * 1024,
     );
   }
@@ -136,20 +149,20 @@ export class OpenWebUiClient implements OpenWebUiWriterClient {
         {},
         16 * 1024,
       );
-      if (result.status === 'completed') return;
-      if (result.status === 'failed' || result.status === 'not_found') {
-        throw new Error('Open WebUI failed to process an uploaded file');
+      if (result.status === "completed") return;
+      if (result.status === "failed" || result.status === "not_found") {
+        throw new OpenWebUiFileProcessingError(fileId, result.status);
       }
       await delay(1000);
     }
-    throw new Error('Open WebUI file processing timed out');
+    throw new OpenWebUiFileProcessingError(fileId, "timeout");
   }
 
   async deleteFile(fileId: string): Promise<void> {
     try {
       await this.http.discard(
         `api/v1/files/${encodeURIComponent(fileId)}`,
-        { method: 'DELETE' },
+        { method: "DELETE" },
         [404],
       );
     } catch (error) {
@@ -175,7 +188,8 @@ export class OpenWebUiClient implements OpenWebUiWriterClient {
       result.push(...items);
       if (
         items.length === 0 ||
-        (Number.isFinite(response.total) && result.length >= Number(response.total))
+        (Number.isFinite(response.total) &&
+          result.length >= Number(response.total))
       ) {
         break;
       }

@@ -26,16 +26,22 @@ import {
   updateAiSpaceConfig,
   uploadAiChatFiles,
   getAiConversationContext,
+  getAiContextDescendants,
+  getAiSpaceContentPolicy,
+  searchAiSpaceContentPolicyCandidates,
   updateAiConversationContext,
+  updateAiSpaceContentPolicy,
   searchAiContextSources,
   createAiEditorAction,
   cancelAiEditorAction,
 } from "@/features/ai/services/ai-service.ts";
 import {
+  AiAvailability,
   AiConversation,
   AiSpaceConfigUpdate,
   SendAiMessageInput,
   UpdateAiConversationContextRequest,
+  UpdateAiSpaceContentPolicyRequest,
 } from "@/features/ai/types/ai.types.ts";
 import {
   aiActivityAtom,
@@ -52,11 +58,17 @@ export const AI_QUERY_KEYS = {
     ["ai", "context", conversationId] as const,
   contextSources: (conversationId: string, query: string) =>
     ["ai", "context-sources", conversationId, query] as const,
+  contextDescendants: (conversationId: string, parentPageId: string) =>
+    ["ai", "context-descendants", conversationId, parentPageId] as const,
   pageAttachments: (pageId: string) =>
     ["ai", "page-attachments", pageId] as const,
   config: (spaceId: string) => ["ai", "config", spaceId] as const,
   status: (spaceId: string, pageId = "") =>
     ["ai", "status", spaceId, pageId] as const,
+  contentPolicy: (spaceId: string) =>
+    ["ai", "content-policy", spaceId] as const,
+  contentPolicyCandidates: (spaceId: string, query: string) =>
+    ["ai", "content-policy-candidates", spaceId, query] as const,
 };
 
 export function useAiConversationContextQuery(conversationId?: string) {
@@ -105,6 +117,25 @@ export function useAiContextSourcesQuery(
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) =>
       lastPage.hasMore ? (lastPage.nextCursor ?? undefined) : undefined,
+  });
+}
+
+export function useAiContextDescendantsQuery(
+  conversationId: string | undefined,
+  parentPageId: string | undefined,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: AI_QUERY_KEYS.contextDescendants(
+      conversationId ?? "",
+      parentPageId ?? "",
+    ),
+    queryFn: () =>
+      getAiContextDescendants({
+        conversationId: conversationId!,
+        parentPageId: parentPageId!,
+      }),
+    enabled: Boolean(enabled && conversationId && parentPageId),
   });
 }
 
@@ -368,15 +399,76 @@ export function useAiSpaceStatusQuery(spaceId?: string, pageId?: string) {
   });
 }
 
+export function useAiSpaceContentPolicyQuery(spaceId?: string) {
+  return useQuery({
+    queryKey: AI_QUERY_KEYS.contentPolicy(spaceId ?? ""),
+    queryFn: () => getAiSpaceContentPolicy(spaceId!),
+    enabled: Boolean(spaceId),
+  });
+}
+
+export function useAiSpaceContentPolicyCandidatesQuery(
+  spaceId: string | undefined,
+  query: string,
+) {
+  return useInfiniteQuery({
+    queryKey: AI_QUERY_KEYS.contentPolicyCandidates(spaceId ?? "", query),
+    queryFn: ({ pageParam }) =>
+      searchAiSpaceContentPolicyCandidates({
+        spaceId: spaceId!,
+        query,
+        cursor: pageParam,
+      }),
+    enabled: Boolean(spaceId && query.trim()),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) =>
+      lastPage.hasMore ? (lastPage.nextCursor ?? undefined) : undefined,
+  });
+}
+
+export function useUpdateAiSpaceContentPolicyMutation(spaceId?: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: UpdateAiSpaceContentPolicyRequest) =>
+      updateAiSpaceContentPolicy(spaceId!, data),
+    onSuccess: (policy) => {
+      queryClient.setQueryData(
+        AI_QUERY_KEYS.contentPolicy(spaceId ?? policy.spaceId),
+        policy,
+      );
+      void queryClient.invalidateQueries({
+        queryKey: ["ai", "status", policy.spaceId],
+      });
+    },
+  });
+}
+
 export function useUpdateAiSpaceConfigMutation(spaceId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: AiSpaceConfigUpdate) =>
       updateAiSpaceConfig(spaceId!, data),
     onSuccess: (config) => {
-      queryClient.setQueryData(AI_QUERY_KEYS.config(spaceId ?? ""), config);
-      queryClient.invalidateQueries({
-        queryKey: ["ai", "status", spaceId ?? ""],
+      const effectiveSpaceId = spaceId ?? config.spaceId;
+      queryClient.setQueryData(AI_QUERY_KEYS.config(effectiveSpaceId), config);
+      queryClient.setQueriesData<AiAvailability>(
+        { queryKey: ["ai", "status", effectiveSpaceId] },
+        (status) =>
+          status
+            ? {
+                ...status,
+                assistantIdentity:
+                  config.assistantNameEnabled && config.assistantName
+                    ? {
+                        name: config.assistantName,
+                        gender: config.assistantGender,
+                      }
+                    : null,
+              }
+            : status,
+      );
+      void queryClient.invalidateQueries({
+        queryKey: ["ai", "status", effectiveSpaceId],
       });
     },
   });

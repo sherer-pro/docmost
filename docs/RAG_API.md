@@ -58,6 +58,14 @@ RAG uses keys created by API key management endpoints:
 
 Only workspace `owner|admin` can manage API keys. `spaceId` is required when creating a key.
 
+### 2.6 AI/RAG content exclusions
+
+Every live RAG response is also filtered by the space AI content policy.
+Rules may exclude one page or its current descendant subtree. The same filter
+applies to pages, databases, rows, attachments, detail routes, and exports by
+their backing `pageId`. Deleted feeds remain unfiltered so consumers can remove
+objects that were indexed before a rule changed.
+
 ## 3. Error model
 
 Common status codes:
@@ -124,6 +132,20 @@ and `nextCursor`. The cursor binds the feed kind, timestamp, and ID tie-breaker;
 an invalid or cross-feed cursor returns `400`. Consumers should not parse it.
 
 ## 5. RAG endpoints
+
+### 5.0 `GET /api/rag/scope`
+
+Returns the current effective indexing scope:
+
+```json
+{
+  "fingerprint": "<sha256>",
+  "excludedPageIds": ["<page-uuid>"]
+}
+```
+
+The fingerprint is based on the sorted effective page set, not only stored
+rules, so moving pages into or out of an excluded subtree changes it.
 
 ### 5.1 `GET /api/rag/pages`
 
@@ -359,6 +381,10 @@ Base maps to one Docmost space. The application:
   superseded files, and ignores foreign workspace/space metadata;
 - supports page, database-row, PDF, DOCX, TXT, MD, JPEG, PNG, and WebP sources;
 - logs only IDs, states, counters, lag, and durations.
+- reads `/api/rag/scope` before each cycle; on fingerprint change it restores
+  mappings from Open WebUI metadata, purges excluded mappings, resets the live
+  update checkpoints to `0`, and stores the new fingerprint only after a
+  successful reindex cycle.
 
 Configuration is loaded through `RAG_SYNC_CONFIG_PATH`. Docmost and Open WebUI
 writer keys are paths to mounted secret files, never literal values in the JSON.
@@ -368,14 +394,15 @@ be created in advance; the worker never creates or deletes it.
 ### 7.1 Initial sync
 
 1. Create API key scoped to the target `spaceId`.
-2. Call `GET /api/rag/pages?includeContent=true`.
-3. For each document:
+2. Call `GET /api/rag/scope` and store its fingerprint.
+3. Call `GET /api/rag/pages?includeContent=true`.
+4. For each document:
    - `type=page` -> index as page
    - `type=database` -> call `GET /api/rag/databases/:databaseIdOrPageSlug`
-4. For pages with attachments:
+5. For pages with attachments:
    - call `GET /api/rag/pages/:id/attachments`
    - download binaries through `downloadUrl` or `/api/rag/attachments/:fileId/:fileName`
-5. Initialize checkpoints:
+6. Initialize checkpoints:
    - `updatedSince = 0`
    - `deletedSince = 0`
    - attachment `updatedSince = 0`
@@ -383,18 +410,22 @@ be created in advance; the worker never creates or deletes it.
 
 ### 7.2 Incremental sync loop
 
-1. `GET /api/rag/updates?updatedSince=<lastUpdatedCheckpoint>&limit=500`
-2. Upsert updated documents:
+1. Read `/api/rag/scope`. If the fingerprint changed, purge mappings whose
+   backing `pageId` is excluded and reset document/attachment update
+   checkpoints to `0`.
+2. `GET /api/rag/updates?updatedSince=<lastUpdatedCheckpoint>&limit=500`
+3. Upsert updated documents:
    - `type=page` -> `GET /api/rag/pages/:id?includeContent=true`
    - `type=database` -> `GET /api/rag/databases/:databaseIdOrPageSlug`
-3. Follow `nextCursor` while `hasMore=true`
-4. Process `/api/rag/attachments/updates` using its own checkpoint
-5. Process `/api/rag/deleted` and `/api/rag/attachments/deleted`
-6. Delete/deactivate tombstoned records in the index
-7. Update each checkpoint only after its complete feed page succeeds:
+4. Follow `nextCursor` while `hasMore=true`
+5. Process `/api/rag/attachments/updates` using its own checkpoint
+6. Process `/api/rag/deleted` and `/api/rag/attachments/deleted`
+7. Delete/deactivate tombstoned records in the index
+8. Update each checkpoint only after its complete feed page succeeds:
    - `lastUpdatedCheckpoint = maxUpdatedAtMs`
    - `lastDeletedCheckpoint = maxDeletedAtMs`
    - attachment update/delete checkpoints advance independently
+9. Persist the new scope fingerprint only after the complete cycle succeeds.
 
 ### 7.3 Idempotency requirement
 

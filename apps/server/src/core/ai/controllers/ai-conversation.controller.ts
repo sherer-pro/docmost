@@ -17,6 +17,7 @@ import { AuthWorkspace } from '../../../common/decorators/auth-workspace.decorat
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import {
   AiConversationListQueryDto,
+  AiContextDescendantsQueryDto,
   AiContextSourceSearchQueryDto,
   AiMessagesQueryDto,
   CreateAiConversationDto,
@@ -126,5 +127,15 @@ export class AiConversationController {
     @AuthWorkspace() workspace: Workspace,
   ) {
     return this.contexts.search(id, query, user, workspace);
+  }
+
+  @Get(':id/context-descendants')
+  contextDescendants(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() query: AiContextDescendantsQueryDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.contexts.descendants(id, query, user, workspace);
   }
 }

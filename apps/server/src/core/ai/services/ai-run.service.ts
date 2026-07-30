@@ -249,6 +249,7 @@ export class AiRunService {
           inserted.id,
           lockedConversation,
           dto,
+          user,
         );
         await trx
           .updateTable('aiMessages')
@@ -662,6 +663,7 @@ export class AiRunService {
           locked.id,
           run.id,
           locked.assistantMessageId,
+          user,
         );
         await trx
           .updateTable('aiMessages')

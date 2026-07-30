@@ -18,6 +18,8 @@ import {
   AiRun,
   AiConversationContext,
   AiContextSource,
+  AiSpaceContentPolicy,
+  UpdateAiSpaceContentPolicyRequest,
   UpdateAiConversationContextRequest,
   CreateAiEditorActionRequest,
   AiEditorActionRun,
@@ -121,6 +123,25 @@ export async function searchAiContextSources(input: {
         query: input.query,
         cursor: input.cursor,
         limit: input.limit ?? 20,
+      },
+    },
+  );
+  return unwrapApiResponse<AiPageResponse<AiContextSource>>(response);
+}
+
+export async function getAiContextDescendants(input: {
+  conversationId: string;
+  parentPageId: string;
+  cursor?: string;
+  limit?: number;
+}): Promise<AiCollectionPage<AiContextSource>> {
+  const response = await api.get<AiPageResponse<AiContextSource>>(
+    `/ai/conversations/${input.conversationId}/context-descendants`,
+    {
+      params: {
+        parentPageId: input.parentPageId,
+        cursor: input.cursor,
+        limit: input.limit ?? 50,
       },
     },
   );
@@ -304,4 +325,43 @@ export async function getAiSpaceStatus(
     pageId ? { params: { pageId } } : undefined,
   );
   return unwrapApiResponse<AiAvailability>(response);
+}
+
+export async function getAiSpaceContentPolicy(
+  spaceId: string,
+): Promise<AiSpaceContentPolicy> {
+  const response = await api.get<AiSpaceContentPolicy>(
+    `/spaces/${spaceId}/ai/exclusions`,
+  );
+  return unwrapApiResponse<AiSpaceContentPolicy>(response);
+}
+
+export async function updateAiSpaceContentPolicy(
+  spaceId: string,
+  data: UpdateAiSpaceContentPolicyRequest,
+): Promise<AiSpaceContentPolicy> {
+  const response = await api.put<AiSpaceContentPolicy>(
+    `/spaces/${spaceId}/ai/exclusions`,
+    data,
+  );
+  return unwrapApiResponse<AiSpaceContentPolicy>(response);
+}
+
+export async function searchAiSpaceContentPolicyCandidates(input: {
+  spaceId: string;
+  query: string;
+  cursor?: string;
+  limit?: number;
+}): Promise<AiCollectionPage<AiContextSource>> {
+  const response = await api.get<AiPageResponse<AiContextSource>>(
+    `/spaces/${input.spaceId}/ai/exclusions/candidates`,
+    {
+      params: {
+        query: input.query,
+        cursor: input.cursor,
+        limit: input.limit ?? 20,
+      },
+    },
+  );
+  return unwrapApiResponse<AiPageResponse<AiContextSource>>(response);
 }

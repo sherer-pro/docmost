@@ -1,32 +1,33 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from "node:crypto";
 import type {
   RagAttachmentItem,
   RagDatabaseDetail,
   RagDeletedItem,
   RagPageDetail,
   RagUpdateItem,
-} from '@docmost/api-contract';
-import type {
-  DocmostMetadata,
-  DocmostSourceClient,
-  FeedCheckpointKind,
-  OpenWebUiFile,
-  OpenWebUiWriterClient,
-  RagSyncBinding,
-  SourceMapping,
-  SyncSource,
-  SyncStateStore,
-} from './types.js';
+} from "@docmost/api-contract";
+import {
+  OpenWebUiFileProcessingError,
+  type DocmostMetadata,
+  type DocmostSourceClient,
+  type FeedCheckpointKind,
+  type OpenWebUiFile,
+  type OpenWebUiWriterClient,
+  type RagSyncBinding,
+  type SourceMapping,
+  type SyncSource,
+  type SyncStateStore,
+} from "./types.js";
 
 const SUPPORTED_ATTACHMENT_EXTENSIONS = new Set([
-  '.pdf',
-  '.docx',
-  '.txt',
-  '.md',
-  '.jpg',
-  '.jpeg',
-  '.png',
-  '.webp',
+  ".pdf",
+  ".docx",
+  ".txt",
+  ".md",
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".webp",
 ]);
 
 export class RagSynchronizer {
@@ -46,41 +47,64 @@ export class RagSynchronizer {
   async syncOnce(): Promise<boolean> {
     const token = randomUUID();
     if (
-      !(await this.state.acquireLock(
-        this.binding.id,
-        token,
-        this.lockTtlMs,
-      ))
+      !(await this.state.acquireLock(this.binding.id, token, this.lockTtlMs))
     ) {
       return false;
     }
     let lockValid = true;
-    const renew = setInterval(() => {
-      void this.state.renewLock(
-        this.binding.id,
-        token,
-        this.lockTtlMs,
-      )
-        .then((renewed) => {
-          if (!renewed) {
+    const renew = setInterval(
+      () => {
+        void this.state
+          .renewLock(this.binding.id, token, this.lockTtlMs)
+          .then((renewed) => {
+            if (!renewed) {
+              lockValid = false;
+              this.log("lock.lost", {});
+            }
+          })
+          .catch(() => {
             lockValid = false;
-            this.log('lock.lost', {});
-          }
-        })
-        .catch(() => {
-          lockValid = false;
-          this.log('lock.renew_failed', {});
-        });
-    }, Math.max(10_000, Math.floor(this.lockTtlMs / 3)));
+            this.log("lock.renew_failed", {});
+          });
+      },
+      Math.max(10_000, Math.floor(this.lockTtlMs / 3)),
+    );
     renew.unref();
     const startedAt = Date.now();
     const assertLock = () => {
       if (!lockValid) {
-        throw new Error('RAG sync lock was lost');
+        throw new Error("RAG sync lock was lost");
       }
     };
     try {
+      const scope = await this.docmost.getScope();
       await this.reconcileRemoteMappings();
+      assertLock();
+      const previousScopeFingerprint = await this.state.getScopeFingerprint(
+        this.binding.id,
+      );
+      const scopeChanged = previousScopeFingerprint !== scope.fingerprint;
+      if (scopeChanged) {
+        this.log("scope.changed", {
+          previousFingerprint: previousScopeFingerprint,
+          fingerprint: scope.fingerprint,
+          excludedPageCount: scope.excludedPageIds.length,
+        });
+        const excluded = new Set(scope.excludedPageIds);
+        let purged = 0;
+        for (const mapping of await this.state.listMappings(this.binding.id)) {
+          if (!excluded.has(mapping.pageId)) continue;
+          await this.deleteIdentity(mapping.identity);
+          purged += 1;
+        }
+        await this.state.setCheckpoint(this.binding.id, "updates", 0);
+        await this.state.setCheckpoint(
+          this.binding.id,
+          "attachment-updates",
+          0,
+        );
+        this.log("scope.purged", { count: purged });
+      }
       assertLock();
       await this.processUpdateFeed();
       assertLock();
@@ -90,7 +114,13 @@ export class RagSynchronizer {
       assertLock();
       await this.processAttachmentDeletedFeed();
       assertLock();
-      this.log('sync.completed', {
+      if (scopeChanged) {
+        await this.state.setScopeFingerprint(
+          this.binding.id,
+          scope.fingerprint,
+        );
+      }
+      this.log("sync.completed", {
         durationMs: Date.now() - startedAt,
       });
       return true;
@@ -99,13 +129,14 @@ export class RagSynchronizer {
       try {
         await this.state.releaseLock(this.binding.id, token);
       } catch {
-        this.log('lock.release_failed', {});
+        this.log("lock.release_failed", {});
       }
     }
   }
 
   async reconcileRemoteMappings(): Promise<void> {
     const remoteFiles = await this.openWebUi.listKnowledgeFiles();
+    const usableRemoteIds = new Set<string>();
     const byIdentity = new Map<
       string,
       Array<{ file: OpenWebUiFile; metadata: DocmostMetadata }>
@@ -113,10 +144,16 @@ export class RagSynchronizer {
     for (const file of remoteFiles) {
       const metadata = this.readRemoteMetadata(file);
       if (!metadata) continue;
-      const identity = sourceIdentity(
-        metadata.sourceType,
-        metadata.sourceId,
-      );
+      if (file.data?.status === "failed") {
+        await this.openWebUi.deleteFile(file.id);
+        this.log("source.skipped", {
+          identity: sourceIdentity(metadata.sourceType, metadata.sourceId),
+          reason: "remote-processing-failed",
+        });
+        continue;
+      }
+      usableRemoteIds.add(file.id);
+      const identity = sourceIdentity(metadata.sourceType, metadata.sourceId);
       const group = byIdentity.get(identity) ?? [];
       group.push({ file, metadata });
       byIdentity.set(identity, group);
@@ -125,8 +162,7 @@ export class RagSynchronizer {
     for (const [identity, candidates] of byIdentity) {
       candidates.sort(
         (left, right) =>
-          right.metadata.sourceUpdatedAtMs -
-            left.metadata.sourceUpdatedAtMs ||
+          right.metadata.sourceUpdatedAtMs - left.metadata.sourceUpdatedAtMs ||
           right.file.id.localeCompare(left.file.id),
       );
       const [current, ...duplicates] = candidates;
@@ -144,31 +180,28 @@ export class RagSynchronizer {
         await this.openWebUi.deleteFile(duplicate.file.id);
       }
       if (duplicates.length > 0) {
-        this.log('reconcile.duplicates', {
+        this.log("reconcile.duplicates", {
           identity,
           count: duplicates.length,
         });
       }
     }
 
-    const remoteIds = new Set(
-      remoteFiles.map((file) => file.id),
-    );
     for (const mapping of await this.state.listMappings(this.binding.id)) {
-      if (!remoteIds.has(mapping.fileId)) {
+      if (!usableRemoteIds.has(mapping.fileId)) {
         await this.state.deleteMapping(this.binding.id, mapping.identity);
       }
     }
   }
 
-  async upsertSource(source: SyncSource): Promise<'uploaded' | 'unchanged'> {
+  async upsertSource(source: SyncSource): Promise<"uploaded" | "unchanged"> {
     const contentHash = sha256(source.content);
     const existing = await this.state.getMapping(
       this.binding.id,
       source.identity,
     );
     if (existing?.contentHash === contentHash) {
-      return 'unchanged';
+      return "unchanged";
     }
     const metadata: DocmostMetadata = {
       schemaVersion: 1,
@@ -192,7 +225,7 @@ export class RagSynchronizer {
       },
     );
     if (!uploaded.id) {
-      throw new Error('Open WebUI upload response is missing file id');
+      throw new Error("Open WebUI upload response is missing file id");
     }
     const processingStartedAt = Date.now();
     await this.openWebUi.waitUntilProcessed(uploaded.id);
@@ -210,11 +243,11 @@ export class RagSynchronizer {
     if (existing && existing.fileId !== uploaded.id) {
       await this.openWebUi.deleteFile(existing.fileId);
     }
-    this.log(existing ? 'source.replaced' : 'source.uploaded', {
+    this.log(existing ? "source.replaced" : "source.uploaded", {
       identity: source.identity,
       processingMs: Date.now() - processingStartedAt,
     });
-    return 'uploaded';
+    return "uploaded";
   }
 
   async deleteIdentity(identity: string): Promise<void> {
@@ -222,42 +255,43 @@ export class RagSynchronizer {
     if (!existing) return;
     await this.openWebUi.deleteFile(existing.fileId);
     await this.state.deleteMapping(this.binding.id, identity);
-    this.log('source.deleted', { identity });
+    this.log("source.deleted", { identity });
   }
 
   private async processUpdateFeed(): Promise<void> {
     await this.processFeed(
-      'updates',
+      "updates",
       (since, cursor) => this.docmost.getUpdates(since, cursor),
       async (item) => this.processUpdate(item),
-      'maxUpdatedAtMs',
+      "maxUpdatedAtMs",
     );
   }
 
   private async processDeletedFeed(): Promise<void> {
     await this.processFeed(
-      'deleted',
+      "deleted",
       (since, cursor) => this.docmost.getDeleted(since, cursor),
       async (item) => this.processDeleted(item),
-      'maxDeletedAtMs',
+      "maxDeletedAtMs",
     );
   }
 
   private async processAttachmentUpdateFeed(): Promise<void> {
     await this.processFeed(
-      'attachment-updates',
+      "attachment-updates",
       (since, cursor) => this.docmost.getAttachmentUpdates(since, cursor),
       async (item) => this.processAttachment(item),
-      'maxUpdatedAtMs',
+      "maxUpdatedAtMs",
     );
   }
 
   private async processAttachmentDeletedFeed(): Promise<void> {
     await this.processFeed(
-      'attachment-deleted',
+      "attachment-deleted",
       (since, cursor) => this.docmost.getAttachmentDeleted(since, cursor),
-      async (item) => this.deleteIdentity(sourceIdentity('attachment', item.id)),
-      'maxDeletedAtMs',
+      async (item) =>
+        this.deleteIdentity(sourceIdentity("attachment", item.id)),
+      "maxDeletedAtMs",
     );
   }
 
@@ -274,7 +308,7 @@ export class RagSynchronizer {
       maxDeletedAtMs?: number;
     }>,
     process: (item: T) => Promise<void>,
-    checkpointField: 'maxUpdatedAtMs' | 'maxDeletedAtMs',
+    checkpointField: "maxUpdatedAtMs" | "maxDeletedAtMs",
   ): Promise<void> {
     let checkpoint = await this.state.getCheckpoint(this.binding.id, kind);
     let cursor: string | undefined;
@@ -284,35 +318,36 @@ export class RagSynchronizer {
       for (const item of page.items) await process(item);
       const nextCheckpoint = page[checkpointField] ?? checkpoint;
       if (nextCheckpoint < checkpoint) {
-        throw new Error('Docmost feed checkpoint moved backwards');
+        throw new Error("Docmost feed checkpoint moved backwards");
       }
-      await this.state.setCheckpoint(
-        this.binding.id,
-        kind,
-        nextCheckpoint,
-      );
+      await this.state.setCheckpoint(this.binding.id, kind, nextCheckpoint);
       checkpoint = nextCheckpoint;
-      this.log('feed.processed', {
+      this.log("feed.processed", {
         kind,
         count: page.items.length,
         checkpoint,
         lagMs: checkpoint > 0 ? Math.max(0, Date.now() - checkpoint) : null,
         durationMs: Date.now() - pageStartedAt,
       });
-      cursor = page.hasMore
-        ? page.nextCursor || undefined
-        : undefined;
+      cursor = page.hasMore ? page.nextCursor || undefined : undefined;
       if (page.hasMore && !cursor) {
-        throw new Error('Docmost feed omitted nextCursor');
+        throw new Error("Docmost feed omitted nextCursor");
       }
     } while (cursor);
   }
 
   private async processUpdate(item: RagUpdateItem): Promise<void> {
-    if (item.type === 'page') {
-      await this.upsertSource(
-        pageToSource(await this.docmost.getPage(item.id), item.updatedAtMs),
-      );
+    if (item.type === "page") {
+      const page = await this.docmost.getPage(item.id);
+      if (!page.title?.trim() && !page.contentMarkdown?.trim()) {
+        await this.deleteIdentity(sourceIdentity("page", page.id));
+        this.log("source.skipped", {
+          identity: sourceIdentity("page", page.id),
+          reason: "empty",
+        });
+        return;
+      }
+      await this.upsertSource(pageToSource(page, item.updatedAtMs));
       return;
     }
     const database = await this.docmost.getDatabase(item.databaseId);
@@ -324,46 +359,62 @@ export class RagSynchronizer {
     updatedAtMs: number,
   ): Promise<void> {
     const pageContent = database.knowledgeMarkdown || database.title;
-    await this.upsertSource({
-      identity: sourceIdentity('page', database.id),
-      sourceType: 'page',
-      sourceId: database.id,
-      pageId: database.id,
-      databaseId: database.databaseId,
-      updatedAtMs,
-      fileName: safeFileName(database.title, database.id, '.md'),
-      mimeType: 'text/markdown',
-      content: encodeMarkdown(`# ${database.title}\n\n${pageContent}`),
-    });
+    const databasePageIdentity = sourceIdentity("page", database.id);
+    try {
+      await this.upsertSource({
+        identity: databasePageIdentity,
+        sourceType: "page",
+        sourceId: database.id,
+        pageId: database.id,
+        databaseId: database.databaseId,
+        updatedAtMs,
+        fileName: safeFileName(database.title, database.id, ".md"),
+        mimeType: "text/markdown",
+        content: encodeMarkdown(`# ${database.title}\n\n${pageContent}`),
+      });
+    } catch (error) {
+      if (
+        !(error instanceof OpenWebUiFileProcessingError) ||
+        error.status !== "failed"
+      ) {
+        throw error;
+      }
+      try {
+        await this.openWebUi.deleteFile(error.fileId);
+      } catch {
+        // Reconciliation removes a failed artifact on the next cycle.
+      }
+      await this.state.deleteMapping(this.binding.id, databasePageIdentity);
+      this.log("source.skipped", {
+        identity: databasePageIdentity,
+        reason: "remote-processing-failed",
+      });
+    }
     const currentRows = new Set<string>();
     for (const row of database.rows) {
       currentRows.add(row.id);
       const title = row.page?.title || row.pageTitle || row.id;
       const cells = (row.cells ?? [])
         .map((cell) => `- ${cell.propertyId}: ${stringifyValue(cell.value)}`)
-        .join('\n');
-      const markdown = [
-        `# ${title}`,
-        cells,
-        row.rowMarkdown || '',
-      ]
+        .join("\n");
+      const markdown = [`# ${title}`, cells, row.rowMarkdown || ""]
         .filter(Boolean)
-        .join('\n\n');
+        .join("\n\n");
       await this.upsertSource({
-        identity: sourceIdentity('database_row', row.id),
-        sourceType: 'database_row',
+        identity: sourceIdentity("database_row", row.id),
+        sourceType: "database_row",
         sourceId: row.id,
         pageId: row.pageId,
         databaseId: database.databaseId,
         updatedAtMs: dateToMs(row.updatedAt, updatedAtMs),
-        fileName: safeFileName(title, row.id, '.md'),
-        mimeType: 'text/markdown',
+        fileName: safeFileName(title, row.id, ".md"),
+        mimeType: "text/markdown",
         content: encodeMarkdown(markdown),
       });
     }
     for (const mapping of await this.state.listMappings(this.binding.id)) {
       if (
-        mapping.sourceType === 'database_row' &&
+        mapping.sourceType === "database_row" &&
         mapping.databaseId === database.databaseId &&
         !currentRows.has(mapping.sourceId)
       ) {
@@ -373,14 +424,14 @@ export class RagSynchronizer {
   }
 
   private async processDeleted(item: RagDeletedItem): Promise<void> {
-    if (item.type === 'databaseRow') {
+    if (item.type === "databaseRow") {
       if (item.rowId) {
-        await this.deleteIdentity(sourceIdentity('database_row', item.rowId));
+        await this.deleteIdentity(sourceIdentity("database_row", item.rowId));
       }
       return;
     }
-    await this.deleteIdentity(sourceIdentity('page', item.id));
-    if (item.type === 'database' && item.databaseId) {
+    await this.deleteIdentity(sourceIdentity("page", item.id));
+    if (item.type === "database" && item.databaseId) {
       for (const mapping of await this.state.listMappings(this.binding.id)) {
         if (mapping.databaseId === item.databaseId) {
           await this.deleteIdentity(mapping.identity);
@@ -396,11 +447,11 @@ export class RagSynchronizer {
       !SUPPORTED_ATTACHMENT_EXTENSIONS.has(extension) ||
       (Number.isFinite(size) && size > this.maxAttachmentBytes)
     ) {
-      this.log('source.skipped', {
-        identity: sourceIdentity('attachment', item.id),
+      this.log("source.skipped", {
+        identity: sourceIdentity("attachment", item.id),
         reason: !SUPPORTED_ATTACHMENT_EXTENSIONS.has(extension)
-          ? 'unsupported'
-          : 'oversized',
+          ? "unsupported"
+          : "oversized",
       });
       return;
     }
@@ -408,22 +459,42 @@ export class RagSynchronizer {
       item,
       this.maxAttachmentBytes,
     );
-    await this.upsertSource({
-      identity: sourceIdentity('attachment', item.id),
-      sourceType: 'attachment',
-      sourceId: item.id,
-      pageId: item.pageId,
-      updatedAtMs: item.updatedAtMs,
-      fileName: safeFileName(item.fileName, item.id, extension),
-      mimeType: item.mimeType || 'application/octet-stream',
-      content,
-    });
+    const identity = sourceIdentity("attachment", item.id);
+    try {
+      await this.upsertSource({
+        identity,
+        sourceType: "attachment",
+        sourceId: item.id,
+        pageId: item.pageId,
+        updatedAtMs: item.updatedAtMs,
+        fileName: safeFileName(item.fileName, item.id, extension),
+        mimeType: item.mimeType || "application/octet-stream",
+        content,
+      });
+    } catch (error) {
+      if (
+        !(error instanceof OpenWebUiFileProcessingError) ||
+        error.status !== "failed"
+      ) {
+        throw error;
+      }
+      try {
+        await this.openWebUi.deleteFile(error.fileId);
+      } catch {
+        // Reconciliation removes a failed artifact on the next cycle.
+      }
+      await this.state.deleteMapping(this.binding.id, identity);
+      this.log("source.skipped", {
+        identity,
+        reason: "remote-processing-failed",
+      });
+    }
   }
 
   private readRemoteMetadata(file: OpenWebUiFile): DocmostMetadata | null {
     const data = file.meta?.data;
     const candidate =
-      data?.docmost && typeof data.docmost === 'object'
+      data?.docmost && typeof data.docmost === "object"
         ? (data.docmost as Record<string, unknown>)
         : null;
     if (
@@ -431,12 +502,12 @@ export class RagSynchronizer {
       candidate.schemaVersion !== 1 ||
       candidate.workspaceId !== this.binding.workspaceId ||
       candidate.spaceId !== this.binding.spaceId ||
-      !['page', 'database_row', 'attachment'].includes(
+      !["page", "database_row", "attachment"].includes(
         String(candidate.sourceType),
       ) ||
-      typeof candidate.sourceId !== 'string' ||
-      typeof candidate.pageId !== 'string' ||
-      typeof candidate.contentHash !== 'string' ||
+      typeof candidate.sourceId !== "string" ||
+      typeof candidate.pageId !== "string" ||
+      typeof candidate.contentHash !== "string" ||
       !Number.isSafeInteger(candidate.sourceUpdatedAtMs)
     ) {
       return null;
@@ -447,7 +518,7 @@ export class RagSynchronizer {
   private log(event: string, fields: Record<string, unknown>): void {
     console.log(
       JSON.stringify({
-        component: 'rag-sync',
+        component: "rag-sync",
         event,
         bindingId: this.binding.id,
         spaceId: this.binding.spaceId,
@@ -458,30 +529,30 @@ export class RagSynchronizer {
 }
 
 export function sourceIdentity(
-  sourceType: 'page' | 'database_row' | 'attachment',
+  sourceType: "page" | "database_row" | "attachment",
   sourceId: string,
 ): string {
   return `${sourceType}:${sourceId}`;
 }
 
 function pageToSource(page: RagPageDetail, updatedAtMs: number): SyncSource {
-  const title = page.title || 'Untitled';
+  const title = page.title || "Untitled";
   return {
-    identity: sourceIdentity('page', page.id),
-    sourceType: 'page',
+    identity: sourceIdentity("page", page.id),
+    sourceType: "page",
     sourceId: page.id,
     pageId: page.id,
     updatedAtMs,
-    fileName: safeFileName(title, page.id, '.md'),
-    mimeType: 'text/markdown',
+    fileName: safeFileName(title, page.id, ".md"),
+    mimeType: "text/markdown",
     content: encodeMarkdown(
-      [`# ${title}`, page.contentMarkdown || ''].filter(Boolean).join('\n\n'),
+      [`# ${title}`, page.contentMarkdown || ""].filter(Boolean).join("\n\n"),
     ),
   };
 }
 
 function sha256(value: Uint8Array): string {
-  return createHash('sha256').update(value).digest('hex');
+  return createHash("sha256").update(value).digest("hex");
 }
 
 function encodeMarkdown(value: string): Uint8Array {
@@ -494,11 +565,11 @@ function safeFileName(
   extension: string,
 ): string {
   const base = title
-    .normalize('NFKC')
-    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-')
+    .normalize("NFKC")
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-")
     .trim()
     .slice(0, 120);
-  const normalizedExtension = extension.startsWith('.')
+  const normalizedExtension = extension.startsWith(".")
     ? extension
     : `.${extension}`;
   return `${base || fallback}${normalizedExtension}`;
@@ -506,7 +577,7 @@ function safeFileName(
 
 function normalizeExtension(value: string): string {
   const match = value.toLowerCase().match(/\.[a-z0-9]+$/);
-  return match?.[0] ?? '';
+  return match?.[0] ?? "";
 }
 
 function dateToMs(value: string | undefined, fallback: number): number {
@@ -516,8 +587,8 @@ function dateToMs(value: string | undefined, fallback: number): number {
 }
 
 function stringifyValue(value: unknown): string {
-  if (value === null || value === undefined) return '';
-  if (typeof value === 'string') return value;
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return value;
   try {
     return JSON.stringify(value);
   } catch {

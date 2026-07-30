@@ -11,15 +11,12 @@ import SpaceSettingsModal from "./settings-modal";
 
 const SPACE_ID = "00000000-0000-4000-8000-000000000001";
 
-const {
-  aiSpaceSettingsMock,
-  hasFullSpaceAccessMock,
-  useSpaceQueryMock,
-} = vi.hoisted(() => ({
-  aiSpaceSettingsMock: vi.fn(),
-  hasFullSpaceAccessMock: vi.fn(),
-  useSpaceQueryMock: vi.fn(),
-}));
+const { aiSpaceSettingsMock, hasFullSpaceAccessMock, useSpaceQueryMock } =
+  vi.hoisted(() => ({
+    aiSpaceSettingsMock: vi.fn(),
+    hasFullSpaceAccessMock: vi.fn(),
+    useSpaceQueryMock: vi.fn(),
+  }));
 
 vi.mock("@mantine/core", () => {
   const Wrapper = ({ children }: { children?: React.ReactNode }) => (
@@ -58,6 +55,10 @@ vi.mock("react-i18next", () => ({
 
 vi.mock("jotai", () => ({
   useAtomValue: () => ({ role: "admin" }),
+}));
+
+vi.mock("@/features/ai/hooks/use-ai-assistant-identity.ts", () => ({
+  useAiAssistantIdentity: () => ({ name: "AI" }),
 }));
 
 vi.mock("@/features/user/atoms/current-user-atom.ts", () => ({
@@ -135,11 +136,7 @@ describe("SpaceSettingsModal", () => {
 
     act(() => {
       root?.render(
-        <SpaceSettingsModal
-          spaceId="TS"
-          opened
-          onClose={() => undefined}
-        />,
+        <SpaceSettingsModal spaceId="TS" opened onClose={() => undefined} />,
       );
     });
 
@@ -170,11 +167,7 @@ describe("SpaceSettingsModal", () => {
 
     act(() => {
       root?.render(
-        <SpaceSettingsModal
-          spaceId="TS"
-          opened
-          onClose={() => undefined}
-        />,
+        <SpaceSettingsModal spaceId="TS" opened onClose={() => undefined} />,
       );
     });
 
