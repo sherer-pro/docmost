@@ -2,11 +2,10 @@ import {
   ActionIcon,
   Alert,
   Button,
-  Drawer,
   Group,
   Loader,
+  Modal,
   Paper,
-  Popover,
   ScrollArea,
   Stack,
   Text,
@@ -23,11 +22,9 @@ import {
   IconSparkles,
 } from "@tabler/icons-react";
 import { Editor } from "@tiptap/core";
-import { BubbleMenu } from "@tiptap/react/menus";
 import { useAtomValue } from "jotai";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useMediaQuery } from "@mantine/hooks";
 import { socketAtom } from "@/features/websocket/atoms/socket-atom.ts";
 import { DEFAULT_AI_QUICK_COMMANDS } from "@/features/ai/constants/quick-commands.ts";
 import {
@@ -54,7 +51,7 @@ import {
   resolveAiErrorMessage,
 } from "@/features/ai/utils/ai-policies.ts";
 import { sanitizeAiMarkdown } from "@/features/ai/utils/ai-markdown.ts";
-import classes from "@/features/editor/components/bubble-menu/bubble-menu.module.css";
+import { lockEditorInteraction } from "@/features/ai/utils/editor-interaction-lock.ts";
 
 type ApplyMode = "replace" | "before" | "after";
 
@@ -62,17 +59,16 @@ interface AiSelectionActionButtonProps {
   editor: Editor;
   pageId: string;
   spaceId: string;
-  compact?: boolean;
+  disabled?: boolean;
 }
 
 export function AiSelectionActionButton({
   editor,
   pageId,
   spaceId,
+  disabled = false,
 }: AiSelectionActionButtonProps) {
   const { t, i18n } = useTranslation();
-  const isMobile = useMediaQuery("(max-width: 48em)");
-  const reduceMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
   const socket = useAtomValue(socketAtom);
   const availability = useAiSpaceStatusQuery(spaceId, pageId);
   const createAction = useCreateAiEditorActionMutation();
@@ -97,6 +93,13 @@ export function AiSelectionActionButton({
       ),
     [availability.data?.quickCommands, t],
   );
+
+  useEffect(() => {
+    if (!opened) {
+      return;
+    }
+    return lockEditorInteraction(editor);
+  }, [editor, opened]);
 
   useEffect(() => {
     if (!socket || !run) return;
@@ -381,7 +384,9 @@ export function AiSelectionActionButton({
         radius="6px"
         aria-label={t("ai.selection.open")}
         style={{ border: "none" }}
-        disabled={availability.data?.editorActionsAvailable === false}
+        disabled={
+          disabled || availability.data?.editorActionsAvailable === false
+        }
         onMouseDown={(event) => event.preventDefault()}
         onClick={open}
       >
@@ -392,87 +397,20 @@ export function AiSelectionActionButton({
 
   return (
     <>
-      <Popover
-        opened={!isMobile && opened}
-        onChange={setOpened}
-        position="bottom-end"
-        width={440}
-        shadow="lg"
-        withinPortal
+      {trigger}
+      <Modal
+        opened={opened}
+        onClose={() => setOpened(false)}
+        title={t("ai.selection.title")}
+        centered
+        size="lg"
+        closeOnClickOutside={false}
         trapFocus
-        transitionProps={{ duration: reduceMotion ? 0 : 160 }}
+        closeButtonProps={{ "aria-label": t("Close") }}
       >
-        <Popover.Target>{trigger}</Popover.Target>
-        {!isMobile && (
-          <Popover.Dropdown>
-            <Text fw={600} size="sm" mb="sm">
-              {t("ai.selection.title")}
-            </Text>
-            {content}
-          </Popover.Dropdown>
-        )}
-      </Popover>
-      {isMobile && (
-        <Drawer
-          opened={opened}
-          onClose={() => setOpened(false)}
-          title={t("ai.selection.title")}
-          closeButtonProps={{ "aria-label": t("Close") }}
-          position="bottom"
-          size="85dvh"
-          padding="md"
-          trapFocus
-          transitionProps={{ duration: reduceMotion ? 0 : 180 }}
-          styles={{
-            content: {
-              borderStartStartRadius: "var(--mantine-radius-lg)",
-              borderStartEndRadius: "var(--mantine-radius-lg)",
-            },
-            body: {
-              paddingBottom:
-                "calc(var(--mantine-spacing-md) + env(safe-area-inset-bottom))",
-            },
-          }}
-        >
-          {content}
-        </Drawer>
-      )}
+        {content}
+      </Modal>
     </>
-  );
-}
-
-export function AiFixedSelectionBubble({
-  editor,
-  pageId,
-  spaceId,
-}: {
-  editor: Editor;
-  pageId: string;
-  spaceId: string;
-}) {
-  return (
-    <BubbleMenu
-      editor={editor}
-      shouldShow={({ editor: currentEditor, state }) => {
-        const { from, to, empty } = state.selection;
-        return (
-          currentEditor.isEditable &&
-          !empty &&
-          Boolean(state.doc.textBetween(from, to, " ").trim())
-        );
-      }}
-      options={{ placement: "top", offset: 8 }}
-      style={{ zIndex: 201, position: "relative" }}
-    >
-      <div className={classes.bubbleMenu}>
-        <AiSelectionActionButton
-          editor={editor}
-          pageId={pageId}
-          spaceId={spaceId}
-          compact
-        />
-      </div>
-    </BubbleMenu>
   );
 }
 

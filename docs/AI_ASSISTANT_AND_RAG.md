@@ -114,6 +114,11 @@ An editor selection transform (`editor_transform`) is an `ai_aux_run`. It uses
 the selected text and a page-snapshot hash and streams its result, but it does
 not create chat messages or change chat history.
 
+The selection action stays inside the active editor toolbar: the persistent
+toolbar when fixed-toolbar mode is enabled, or the contextual bubble toolbar
+otherwise. Commands and generated results open in a modal dialog, and the
+editor remains inert until that dialog is closed.
+
 ### Shared content exclusion policy
 
 A space administrator may store up to one hundred page rules in

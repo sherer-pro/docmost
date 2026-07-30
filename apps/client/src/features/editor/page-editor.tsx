@@ -556,6 +556,7 @@ export default function PageEditor({
             <>
               <FixedToolbar
                 editor={editor}
+                pageId={pageId}
                 spaceId={spaceId}
                 dictionaryEnabled={dictionaryEnabled}
                 canManageDictionary={canManageDictionary}
