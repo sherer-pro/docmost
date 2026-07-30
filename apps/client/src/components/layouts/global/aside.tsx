@@ -9,6 +9,7 @@ import { useAtomValue } from "jotai";
 import { pageEditorAtom } from "@/features/editor/atoms/editor-atoms.ts";
 import { AiPanel } from "@/features/ai/components/ai-panel.tsx";
 import { useAiAssistantIdentity } from "@/features/ai/hooks/use-ai-assistant-identity.ts";
+import classes from "./app-shell.module.css";
 
 export default function Aside() {
   const [{ tab }, setAsideState] = useAtom(asideStateAtom);
@@ -56,6 +57,7 @@ export default function Aside() {
             <CloseButton
               aria-label={t("Close panel")}
               size="md"
+              className={classes.panelClose}
               onClick={() => setAsideState({ tab, isAsideOpen: false })}
             />
           </Group>

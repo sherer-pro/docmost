@@ -2,6 +2,7 @@ import {
   applyAiPageOperation,
   assertSafeAiPageOperation,
   buildAiApprovalPreview,
+  extractAiApprovalPreview,
   getAiPageOutline,
   hashProseMirrorJson,
 } from './ai-page-operation';
@@ -198,5 +199,22 @@ describe('AI page operations', () => {
 
     expect(preview.beforeText).toHaveLength(4000);
     expect(preview.truncated).toBe(true);
+  });
+
+  it('reads only structurally valid approval previews from step results', () => {
+    const preview = buildAiApprovalPreview(
+      document,
+      { kind: 'deleteNode', nodeId: 'paragraph-1' },
+      'page-1',
+      'Release',
+    );
+    expect(extractAiApprovalPreview({ approvalPreview: preview })).toEqual(
+      preview,
+    );
+    expect(
+      extractAiApprovalPreview({
+        approvalPreview: { ...preview, beforeText: 42 },
+      }),
+    ).toBeNull();
   });
 });

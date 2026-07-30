@@ -26,15 +26,16 @@ describe("AI local draft", () => {
     ).toBeNull();
   });
 
-  it("removes an empty draft instead of persisting an orphan", () => {
+  it("persists an empty local marker without creating a server orphan", () => {
     const setItem = vi.fn();
     const removeItem = vi.fn();
-    writeAiLocalDraft({ setItem, removeItem }, "draft", {
+    const draft = {
       text: "",
       useSpaceSearch: false,
       agentMode: false,
-    });
-    expect(removeItem).toHaveBeenCalledWith("draft");
-    expect(setItem).not.toHaveBeenCalled();
+    };
+    writeAiLocalDraft({ setItem, removeItem }, "draft", draft);
+    expect(setItem).toHaveBeenCalledWith("draft", JSON.stringify(draft));
+    expect(removeItem).not.toHaveBeenCalled();
   });
 });

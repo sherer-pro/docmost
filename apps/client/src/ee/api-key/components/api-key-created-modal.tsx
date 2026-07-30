@@ -20,6 +20,7 @@ import {
 } from "@tabler/icons-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useModalBackgroundInert } from "@/components/ui/use-modal-background-inert";
 import { IApiKey, type McpClientPreset } from "@/ee/api-key";
 import CopyTextButton from "@/components/common/copy.tsx";
 import { getAppUrl, getServerAppUrl } from "@/lib/config.ts";
@@ -42,6 +43,7 @@ export function ApiKeyCreatedModal({
   apiKey,
   preferredClient = "universal",
 }: ApiKeyCreatedModalProps) {
+  useModalBackgroundInert(opened && Boolean(apiKey));
   const { t, i18n } = useTranslation();
   const [client, setClient] = useState<McpClientPreset>(preferredClient);
   const isMcp = apiKey?.keyType === "mcp";
@@ -82,7 +84,7 @@ export function ApiKeyCreatedModal({
           {t("apiKeys.oneTimeDescription")}
         </Alert>
 
-        <TokenField label={t("API key")} value={apiKey.token} secret />
+        <TokenField label={t("API key")} value={apiKey.token} />
 
         {isMcp ? (
           <>
