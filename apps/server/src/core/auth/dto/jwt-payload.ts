@@ -49,5 +49,6 @@ export type JwtApiKeyPayload = {
   workspaceId: string;
   spaceId: string;
   apiKeyId: string;
+  keyType?: 'rag' | 'mcp';
   type: 'api_key';
 };

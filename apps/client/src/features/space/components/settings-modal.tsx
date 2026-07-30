@@ -34,7 +34,7 @@ export default function SpaceSettingsModal({
   const user = useAtomValue(userAtom);
   const isMobile = useMediaQuery("(max-width: 48em)");
   const assistantIdentity = useAiAssistantIdentity(
-    opened ? spaceId : undefined,
+    opened ? space?.id : undefined,
   );
 
   const spaceRules = space?.membership?.permissions;

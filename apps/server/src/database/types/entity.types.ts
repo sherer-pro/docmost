@@ -9,6 +9,7 @@ import {
   AiMessageSources,
   AiRunContextSources,
   AiRuns,
+  AiRunSteps,
   AiRunSourceDependencies,
   AiSpaceContentExclusions,
   AiSpaceContentPolicies,
@@ -155,6 +156,11 @@ export type UpdatableAiMessage = Updateable<Omit<AiMessages, 'id'>>;
 export type AiRun = Selectable<AiRuns>;
 export type InsertableAiRun = Insertable<AiRuns>;
 export type UpdatableAiRun = Updateable<Omit<AiRuns, 'id'>>;
+
+// AI run tool step
+export type AiRunStep = Selectable<AiRunSteps>;
+export type InsertableAiRunStep = Insertable<AiRunSteps>;
+export type UpdatableAiRunStep = Updateable<Omit<AiRunSteps, 'id'>>;
 
 // AI run context source
 export type AiRunContextSource = Selectable<AiRunContextSources>;

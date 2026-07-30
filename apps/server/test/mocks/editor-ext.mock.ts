@@ -59,6 +59,11 @@ export function addHeadingNumbersToJson(doc: any) {
 }
 export function htmlToMarkdown(input: string) { return input; }
 export function markdownToHtml(input: string) { return input; }
+export function sanitizeUrl(input: string | undefined) {
+  if (!input) return '';
+  const normalized = input.trim();
+  return /^(https?:|mailto:|tel:|\/|#)/i.test(normalized) ? normalized : '';
+}
 export function getEmbedUrlAndProvider(url: string) {
   return { embedUrl: url, provider: 'iframe' };
 }

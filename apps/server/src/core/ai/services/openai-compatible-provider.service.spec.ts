@@ -180,6 +180,94 @@ describe('OpenAiCompatibleProviderService', () => {
     });
   });
 
+  it('parses bounded OpenAI-compatible tool calls', async () => {
+    global.fetch = jest.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            choices: [
+              {
+                finish_reason: 'tool_calls',
+                message: {
+                  role: 'assistant',
+                  content: null,
+                  tool_calls: [
+                    {
+                      id: 'call-1',
+                      type: 'function',
+                      function: {
+                        name: 'getTree',
+                        arguments: '{}',
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+            usage: { prompt_tokens: 10, completion_tokens: 2 },
+          }),
+        ),
+    ) as any;
+
+    const response = await service.completeWithTools(
+      config,
+      [{ role: 'user', content: 'Inspect the space' }],
+      [
+        {
+          type: 'function',
+          function: {
+            name: 'getTree',
+            description: 'List pages',
+            parameters: { type: 'object', properties: {} },
+          },
+        },
+      ],
+    );
+
+    expect(response).toEqual({
+      content: '',
+      finishReason: 'tool_calls',
+      toolCalls: [
+        {
+          id: 'call-1',
+          type: 'function',
+          function: { name: 'getTree', arguments: '{}' },
+        },
+      ],
+      usage: { inputTokens: 10, outputTokens: 2 },
+    });
+  });
+
+  it('fails closed on malformed provider tool calls', async () => {
+    global.fetch = jest.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  tool_calls: [
+                    {
+                      id: 'call-1',
+                      type: 'function',
+                      function: { name: 'getTree', arguments: {} },
+                    },
+                  ],
+                },
+              },
+            ],
+          }),
+        ),
+    ) as any;
+
+    await expect(
+      service.completeWithTools(config, [{ role: 'user', content: 'Hi' }], []),
+    ).rejects.toMatchObject({
+      status: 502,
+      aiErrorCode: 'provider_invalid_response',
+    });
+  });
+
   it('maps network failures to a stable gateway error', async () => {
     global.fetch = jest.fn(async () => {
       throw new TypeError('fetch failed: connect ECONNREFUSED 127.0.0.1:56254');

@@ -23,6 +23,8 @@ import {
 import { createHash } from 'node:crypto';
 import { sql } from 'kysely';
 import { AiRunEventService } from './ai-run-event.service';
+import { AiConfigService } from './ai-config.service';
+import { AiContentPolicyService } from '../../ai-content-policy/ai-content-policy.service';
 
 @Injectable()
 export class AiConversationService {
@@ -31,30 +33,39 @@ export class AiConversationService {
     private readonly pageRepo: PageRepo,
     private readonly pageAccessService: PageAccessService,
     private readonly runEvents: AiRunEventService,
+    private readonly configService: AiConfigService,
+    private readonly contentPolicy: AiContentPolicyService,
   ) {}
 
   async list(pageId: string, user: User, workspace: Workspace) {
-    await this.assertWritablePage(pageId, user, workspace.id);
-    const rows = await this.db
+    const page = await this.assertReadablePage(pageId, user, workspace.id);
+    const access = await this.pageAccessService.getEffectiveAccess(page, user);
+    let query = this.db
       .selectFrom('aiConversations')
       .selectAll()
       .where('pageId', '=', pageId)
       .where('userId', '=', user.id)
       .where('workspaceId', '=', workspace.id)
-      .where('deletedAt', 'is', null)
-      .orderBy('lastOpenedAt', 'desc')
-      .execute();
+      .where('deletedAt', 'is', null);
+    if (!access.capabilities.canWrite) {
+      query = query.where('agentMode', '=', true);
+    }
+    const rows = await query.orderBy('lastOpenedAt', 'desc').execute();
     return { items: rows.map((row) => this.toConversation(row)) };
   }
 
   async create(dto: CreateAiConversationDto, user: User, workspace: Workspace) {
-    const page = await this.assertWritablePage(dto.pageId, user, workspace.id);
+    const agentMode = dto.agentMode ?? false;
+    const page = agentMode
+      ? await this.assertAgentAvailable(dto.pageId, user, workspace)
+      : await this.assertWritablePage(dto.pageId, user, workspace.id);
     const fingerprint = createHash('sha256')
       .update(
         JSON.stringify({
           pageId: page.id,
           title: dto.title?.trim() || null,
           useSpaceSearch: dto.useSpaceSearch ?? false,
+          agentMode,
         }),
       )
       .digest('hex');
@@ -108,6 +119,7 @@ export class AiConversationService {
           title: dto.title?.trim() || null,
           titleSource: dto.title?.trim() ? 'manual' : null,
           useSpaceSearch: dto.useSpaceSearch ?? false,
+          agentMode,
           contextFingerprint,
         })
         .returningAll()
@@ -133,6 +145,11 @@ export class AiConversationService {
     workspace: Workspace,
   ) {
     const conversation = await this.getOwnedEntity(id, user, workspace);
+    if (dto.agentMode === true) {
+      await this.assertAgentAvailable(conversation.pageId, user, workspace);
+    } else if (dto.agentMode === false) {
+      await this.assertWritablePage(conversation.pageId, user, workspace.id);
+    }
     const row = await this.db
       .updateTable('aiConversations')
       .set({
@@ -146,6 +163,7 @@ export class AiConversationService {
         ...(dto.useSpaceSearch !== undefined
           ? { useSpaceSearch: dto.useSpaceSearch }
           : {}),
+        ...(dto.agentMode !== undefined ? { agentMode: dto.agentMode } : {}),
         updatedAt: new Date(),
       })
       .where('id', '=', conversation.id)
@@ -189,7 +207,11 @@ export class AiConversationService {
           updatedAt: now,
         })
         .where('conversationId', '=', conversation.id)
-        .where('status', 'in', ['queued', 'running'])
+        .where('status', 'in', [
+          'queued',
+          'running',
+          'awaiting_approval',
+        ])
         .returningAll()
         .execute();
       await trx
@@ -370,7 +392,11 @@ export class AiConversationService {
     if (!row) {
       throw new NotFoundException('AI conversation not found');
     }
-    await this.assertWritablePage(row.pageId, user, workspace.id);
+    if (row.agentMode) {
+      await this.assertReadablePage(row.pageId, user, workspace.id);
+    } else {
+      await this.assertWritablePage(row.pageId, user, workspace.id);
+    }
     if (touch) {
       const now = new Date();
       await this.db
@@ -393,6 +419,59 @@ export class AiConversationService {
       throw new NotFoundException('Page not found');
     }
     await this.pageAccessService.assertCanWritePage(page, user);
+    return page;
+  }
+
+  async assertReadablePage(
+    pageId: string,
+    user: User,
+    workspaceId: string,
+  ): Promise<Page> {
+    const page = await this.pageRepo.findById(pageId);
+    if (!page || page.deletedAt || page.workspaceId !== workspaceId) {
+      throw new NotFoundException('Page not found');
+    }
+    await this.pageAccessService.assertCanReadPage(page, user);
+    return page;
+  }
+
+  private async assertAgentAvailable(
+    pageId: string,
+    user: User,
+    workspace: Workspace,
+  ): Promise<Page> {
+    const page = await this.assertReadablePage(pageId, user, workspace.id);
+    if (
+      await this.contentPolicy.isPageExcluded(
+        page.id,
+        page.spaceId,
+        workspace.id,
+      )
+    ) {
+      throw new BadRequestException({
+        code: 'agent_disabled',
+        message: 'The current page is excluded from AI access',
+      });
+    }
+    const config = await this.configService.getRawConfig(
+      page.spaceId,
+      workspace.id,
+    );
+    if (!config?.enabled || !config.agentEnabled) {
+      throw new BadRequestException({
+        code: 'agent_disabled',
+        message: 'The AI agent is disabled for this space',
+      });
+    }
+    if (
+      config.agentVerifiedProviderFingerprint !==
+      this.configService.getProviderFingerprint(config)
+    ) {
+      throw new BadRequestException({
+        code: 'agent_provider_unverified',
+        message: 'The current AI provider has not passed the tool calling test',
+      });
+    }
     return page;
   }
 
@@ -423,6 +502,7 @@ export class AiConversationService {
       titleSource: row.titleSource as AiConversation['titleSource'],
       draft: row.draft,
       useSpaceSearch: row.useSpaceSearch,
+      agentMode: row.agentMode,
       includeCurrentDocument: row.includeCurrentDocument,
       contextRevision: row.contextRevision,
       lastOpenedAt: row.lastOpenedAt.toISOString(),

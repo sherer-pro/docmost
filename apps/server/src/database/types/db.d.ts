@@ -105,6 +105,7 @@ export interface AiConversationContextSources {
 }
 
 export interface AiConversations {
+  agentMode: Generated<boolean>;
   clientRequestId: string | null;
   contextAttachmentIds: Generated<string[]>;
   contextChatFileIds: Generated<string[]>;
@@ -207,6 +208,7 @@ export interface AiRuns {
   enqueuedAt: Timestamp | null;
   errorCode: string | null;
   errorMessage: string | null;
+  executionMode: Generated<string>;
   finishReason: string | null;
   heartbeatAt: Timestamp | null;
   id: Generated<string>;
@@ -237,6 +239,30 @@ export interface AiRuns {
   workspaceId: string;
 }
 
+export interface AiRunSteps {
+  arguments: Json;
+  assistantContent: string | null;
+  baseContentHash: string | null;
+  callIndex: number;
+  createdAt: Generated<Timestamp>;
+  decidedAt: Timestamp | null;
+  decidedById: string | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+  expiresAt: Timestamp | null;
+  id: Generated<string>;
+  modelStep: number;
+  result: Json | null;
+  runId: string;
+  sequence: number;
+  status: string;
+  targetPageId: string | null;
+  toolCallId: string;
+  toolName: string;
+  updatedAt: Generated<Timestamp>;
+  writeClass: string;
+}
+
 export interface AiRunSourceDependencies {
   contextSourceId: string | null;
   createdAt: Generated<Timestamp>;
@@ -247,6 +273,9 @@ export interface AiRunSourceDependencies {
 }
 
 export interface AiSpaceConfigs {
+  agentEnabled: Generated<boolean>;
+  agentVerifiedAt: Timestamp | null;
+  agentVerifiedProviderFingerprint: string | null;
   apiKeyEncrypted: string | null;
   assistantGender: Generated<string>;
   assistantName: string | null;
@@ -308,6 +337,7 @@ export interface ApiKeys {
   deletedAt: Timestamp | null;
   expiresAt: Timestamp | null;
   id: Generated<string>;
+  keyType: Generated<string>;
   lastUsedAt: Timestamp | null;
   name: string;
   spaceId: string;
@@ -882,6 +912,7 @@ export interface DB {
   aiMessageSources: AiMessageSources;
   aiRunContextSources: AiRunContextSources;
   aiRuns: AiRuns;
+  aiRunSteps: AiRunSteps;
   aiRunSourceDependencies: AiRunSourceDependencies;
   aiSpaceConfigs: AiSpaceConfigs;
   aiSpaceContentExclusions: AiSpaceContentExclusions;

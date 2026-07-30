@@ -175,6 +175,7 @@ describe("AI conversation selection", () => {
       titleSource: null,
       draft: "",
       useSpaceSearch: false,
+      agentMode: false,
       includeCurrentDocument: true,
       contextRevision: 0,
       createdAt: "2026-01-01T00:00:00.000Z",

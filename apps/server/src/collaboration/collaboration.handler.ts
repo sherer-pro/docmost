@@ -7,6 +7,12 @@ import {
 } from './collaboration.util';
 import * as Y from 'yjs';
 import { User } from '@docmost/db/types/entity.types';
+import {
+  AiPageOperation,
+  applyAiPageOperation,
+  hashProseMirrorJson,
+} from '../common/helpers/prosemirror/ai-page-operation';
+import { strictJsonToNode } from './collaboration.util';
 
 export type CollabEventHandlers = ReturnType<
   CollaborationHandler['getHandlers']
@@ -65,21 +71,64 @@ export class CollaborationHandler {
           },
         );
       },
+      applyAiPageOperation: async (
+        documentName: string,
+        payload: {
+          operation: AiPageOperation;
+          baseContentHash: string;
+          user: User;
+        },
+      ) => {
+        const { operation, baseContentHash, user } = payload;
+        this.logger.debug('Applying approved AI page operation', documentName);
+        return this.withYdocConnection(
+          hocuspocus,
+          documentName,
+          { user },
+          (doc) => {
+            const current = TiptapTransformer.fromYdoc(doc, 'default');
+            const beforeHash = hashProseMirrorJson(current);
+            if (beforeHash !== baseContentHash) {
+              throw new Error('agent_write_stale');
+            }
+            const next = applyAiPageOperation(current, operation);
+            strictJsonToNode(next as any);
+            const fragment = doc.getXmlFragment('default');
+            if (fragment.length > 0) {
+              fragment.delete(0, fragment.length);
+            }
+            const newDoc = TiptapTransformer.toYdoc(
+              next,
+              'default',
+              tiptapExtensions,
+            );
+            Y.applyUpdate(doc, Y.encodeStateAsUpdate(newDoc));
+            return {
+              beforeHash,
+              afterHash: hashProseMirrorJson(next),
+            };
+          },
+        );
+      },
     };
   }
 
-  async withYdocConnection(
+  async withYdocConnection<T = void>(
     hocuspocus: Hocuspocus,
     documentName: string,
     context: any = {},
-    fn: (doc: Document) => void,
-  ): Promise<void> {
+    fn: (doc: Document) => T,
+  ): Promise<T> {
     const connection = await hocuspocus.openDirectConnection(
       documentName,
       context,
     );
+    let result: T;
     try {
-      await connection.transact(fn);
+      await connection.transact((doc) => {
+        result = fn(doc);
+      });
+      return result!;
     } finally {
       await connection.disconnect();
     }

@@ -20,11 +20,13 @@ interface CreateApiKeyModalProps {
   opened: boolean;
   onClose: () => void;
   onSuccess: (response: IApiKey) => void;
+  allowMcp?: boolean;
 }
 
 const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
   spaceId: z.string().uuid("Space is required"),
+  keyType: z.enum(["rag", "mcp"]),
   expiresAt: z.string().optional(),
 });
 type FormValues = z.infer<typeof formSchema>;
@@ -33,6 +35,7 @@ export function CreateApiKeyModal({
   opened,
   onClose,
   onSuccess,
+  allowMcp = false,
 }: CreateApiKeyModalProps) {
   const { t } = useTranslation();
   const [expirationOption, setExpirationOption] = useState<string>("never");
@@ -46,6 +49,7 @@ export function CreateApiKeyModal({
     initialValues: {
       name: "",
       spaceId: "",
+      keyType: "rag",
       expiresAt: "",
     },
   });
@@ -113,6 +117,7 @@ export function CreateApiKeyModal({
   const handleSubmit = async (data: {
     name?: string;
     spaceId?: string;
+    keyType?: "rag" | "mcp";
     expiresAt?: string | Date;
   }) => {
     const expiresAt = getExpirationDate();
@@ -124,6 +129,7 @@ export function CreateApiKeyModal({
     const requestPayload = {
       name: data.name,
       spaceId: data.spaceId,
+      keyType: data.keyType,
       expiresAt,
     };
 
@@ -174,6 +180,19 @@ export function CreateApiKeyModal({
             disabled={isSpacesLoading || spaceOptions.length === 0}
             error={form.errors.spaceId}
           />
+
+          {allowMcp && (
+            <Select
+              label={t("Type")}
+              data={[
+                { value: "rag", label: t("RAG sync") },
+                { value: "mcp", label: t("MCP read-only") },
+              ]}
+              allowDeselect={false}
+              required
+              {...form.getInputProps("keyType")}
+            />
+          )}
 
           <Select
             label={t("Expiration")}

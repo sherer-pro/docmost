@@ -7,21 +7,25 @@ import {
 import { useSetAtom } from "jotai";
 import {
   cancelAiRun,
+  approveAiRunStep,
   createAiConversation,
   deleteAiChatFile,
   deleteAiConversation,
   getAiChatFiles,
   getAiConversations,
   getAiMessages,
+  getAiRun,
   getAiPageAttachments,
   getAiSpaceConfig,
   getAiSpaceStatus,
   openAiConversation,
   regenerateAiMessage,
   retryAiRun,
+  rejectAiRunStep,
   sendAiMessage,
   testAiModelConfig,
   testAiRetrievalConfig,
+  testAiAgentConfig,
   updateAiConversation,
   updateAiSpaceConfig,
   uploadAiChatFiles,
@@ -53,6 +57,7 @@ export const AI_QUERY_KEYS = {
   conversations: (pageId: string) => ["ai", "conversations", pageId] as const,
   messages: (conversationId: string) =>
     ["ai", "messages", conversationId] as const,
+  run: (runId: string) => ["ai", "run", runId] as const,
   files: (conversationId: string) => ["ai", "files", conversationId] as const,
   context: (conversationId: string) =>
     ["ai", "context", conversationId] as const,
@@ -171,7 +176,12 @@ export function useUpdateAiConversationMutation(pageId?: string) {
       data,
     }: {
       conversationId: string;
-      data: { title?: string; draft?: string; useSpaceSearch?: boolean };
+      data: {
+        title?: string;
+        draft?: string;
+        useSpaceSearch?: boolean;
+        agentMode?: boolean;
+      };
     }) => updateAiConversation(conversationId, data),
     onSuccess: (conversation) => {
       queryClient.setQueryData<AiConversation[]>(
@@ -286,6 +296,52 @@ export function useCancelAiRunMutation() {
         (current) =>
           reduceAiRunState(current, { type: "prune", runId: run.id }).runs,
       );
+    },
+  });
+}
+
+export function useAiRunQuery(runId?: string, enabled = true) {
+  return useQuery({
+    queryKey: AI_QUERY_KEYS.run(runId ?? ""),
+    queryFn: () => getAiRun(runId!),
+    enabled: Boolean(enabled && runId),
+  });
+}
+
+export function useApproveAiRunStepMutation() {
+  const queryClient = useQueryClient();
+  const setRuns = useSetAtom(aiStreamingRunsAtom);
+  return useMutation({
+    mutationFn: approveAiRunStep,
+    onSuccess: ({ run }) => {
+      setRuns(
+        (current) => reduceAiRunState(current, { type: "rest", run }).runs,
+      );
+      void queryClient.invalidateQueries({
+        queryKey: AI_QUERY_KEYS.run(run.id),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: AI_QUERY_KEYS.messages(run.conversationId),
+      });
+    },
+  });
+}
+
+export function useRejectAiRunStepMutation() {
+  const queryClient = useQueryClient();
+  const setRuns = useSetAtom(aiStreamingRunsAtom);
+  return useMutation({
+    mutationFn: rejectAiRunStep,
+    onSuccess: ({ run }) => {
+      setRuns(
+        (current) => reduceAiRunState(current, { type: "rest", run }).runs,
+      );
+      void queryClient.invalidateQueries({
+        queryKey: AI_QUERY_KEYS.run(run.id),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: AI_QUERY_KEYS.messages(run.conversationId),
+      });
     },
   });
 }
@@ -485,5 +541,17 @@ export function useTestAiRetrievalConfigMutation(spaceId?: string) {
   return useMutation({
     mutationFn: (data?: AiSpaceConfigUpdate) =>
       testAiRetrievalConfig(spaceId!, data),
+  });
+}
+
+export function useTestAiAgentConfigMutation(spaceId?: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data?: AiSpaceConfigUpdate) =>
+      testAiAgentConfig(spaceId!, data),
+    onSuccess: () =>
+      queryClient.invalidateQueries({
+        queryKey: AI_QUERY_KEYS.config(spaceId ?? ""),
+      }),
   });
 }

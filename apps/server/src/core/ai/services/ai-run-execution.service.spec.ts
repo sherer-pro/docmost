@@ -1,3 +1,11 @@
+jest.mock('../tools/ai-tool-registry.service', () => ({
+  AI_AGENT_MAX_MODEL_STEPS: 8,
+  AI_AGENT_MAX_TOOL_CALLS: 16,
+  AI_TOOL_RESULTS_TOTAL_MAX_BYTES: 128 * 1024,
+  AI_WRITE_PROPOSAL_TTL_MS: 60 * 60 * 1000,
+  AiToolRegistryService: class AiToolRegistryService {},
+}));
+
 import { AiRunExecutionService } from './ai-run-execution.service';
 
 describe('AiRunExecutionService claim', () => {
@@ -34,6 +42,7 @@ describe('AiRunExecutionService claim', () => {
           execute: (callback: (value: typeof trx) => unknown) => callback(trx),
         }),
       } as any,
+      {} as any,
       {} as any,
       {} as any,
       {} as any,
@@ -100,6 +109,7 @@ describe('AiRunExecutionService claim', () => {
       {} as any,
       {} as any,
       events as any,
+      {} as any,
       {} as any,
       {} as any,
     );
@@ -172,6 +182,7 @@ describe('AiRunExecutionService claim', () => {
       {} as any,
       {} as any,
       events as any,
+      {} as any,
       {} as any,
       {} as any,
     );

@@ -46,11 +46,13 @@ import {
   useAiSpaceStatusQuery,
   useTestAiModelConfigMutation,
   useTestAiRetrievalConfigMutation,
+  useTestAiAgentConfigMutation,
   useUpdateAiSpaceConfigMutation,
 } from "@/features/ai/queries/ai-query.ts";
 import {
   AiAssistantGender,
   AiModelTestResult,
+  AiAgentTestResult,
   AiQuickCommand,
   AiRetrievalAdapter,
   AiRetrievalTestResult,
@@ -69,6 +71,7 @@ import { AiContentExclusionsSettings } from "./ai-content-exclusions-settings.ts
 
 type AiSettingsForm = {
   enabled: boolean;
+  agentEnabled: boolean;
   assistantNameEnabled: boolean;
   assistantName: string;
   assistantGender: AiAssistantGender;
@@ -99,6 +102,7 @@ type AiSettingsForm = {
 
 const DEFAULT_FORM: AiSettingsForm = {
   enabled: false,
+  agentEnabled: false,
   assistantNameEnabled: false,
   assistantName: "",
   assistantGender: "masculine",
@@ -142,11 +146,15 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
   const updateConfig = useUpdateAiSpaceConfigMutation(spaceId);
   const testModel = useTestAiModelConfigMutation(spaceId);
   const testRetrieval = useTestAiRetrievalConfigMutation(spaceId);
+  const testAgent = useTestAiAgentConfigMutation(spaceId);
   const [modelTestResult, setModelTestResult] = useState<
     AiModelTestResult | { ok: false; errorMessage: string } | null
   >(null);
   const [retrievalTestResult, setRetrievalTestResult] = useState<
     AiRetrievalTestResult | { ok: false; errorMessage: string } | null
+  >(null);
+  const [agentTestResult, setAgentTestResult] = useState<
+    AiAgentTestResult | { ok: false; errorMessage: string } | null
   >(null);
   const [clearApiKey, setClearApiKey] = useState(false);
   const [clearRetrievalApiKey, setClearRetrievalApiKey] = useState(false);
@@ -210,6 +218,7 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
     const config = configQuery.data;
     form.setValues({
       enabled: config.enabled,
+      agentEnabled: config.agentEnabled,
       assistantNameEnabled: config.assistantNameEnabled,
       assistantName: config.assistantName ?? "",
       assistantGender: config.assistantGender,
@@ -251,6 +260,7 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
 
   const toPayload = (values: AiSettingsForm): AiSpaceConfigUpdate => ({
     enabled: values.enabled,
+    agentEnabled: values.agentEnabled,
     ...buildAiAssistantIdentityUpdate(values),
     provider: "openai-compatible",
     baseUrl: values.baseUrl.trim(),
@@ -401,6 +411,28 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
         errorMessage: error?.["response"]?.data?.code
           ? resolveAiErrorMessage(t, i18n, error["response"].data.code)
           : t("ai.settings.retrievalTestFailed"),
+      });
+    }
+  };
+
+  const testAgentConnection = async () => {
+    const validation = form.validate();
+    if (validation.hasErrors) {
+      return;
+    }
+    try {
+      const result = await testAgent.mutateAsync(toPayload(form.values));
+      setAgentTestResult(result);
+      notifications.show({
+        message: t("ai.settings.agentTestSucceeded"),
+        color: "green",
+      });
+    } catch (error) {
+      setAgentTestResult({
+        ok: false,
+        errorMessage: error?.["response"]?.data?.code
+          ? resolveAiErrorMessage(t, i18n, error["response"].data.code)
+          : t("ai.settings.agentTestFailed"),
       });
     }
   };
@@ -655,6 +687,43 @@ export function AiSpaceSettings({ spaceId }: { spaceId: string }) {
                   : modelTestResult.ok
                     ? t("ai.settings.testSucceeded")
                     : t("ai.settings.testFailed")}
+              </Alert>
+            )}
+          </Stack>
+        </SettingsSection>
+
+        <SettingsSection
+          icon={<IconRobot size={18} />}
+          title={t("ai.settings.agentSection")}
+          description={t("ai.settings.agentSectionDescription")}
+        >
+          <Stack gap="md">
+            <Switch
+              label={t("ai.settings.agentEnabled")}
+              description={t("ai.settings.agentEnabledDescription")}
+              disabled={
+                !configQuery.data?.agentVerifiedAt &&
+                !configQuery.data?.agentEnabled
+              }
+              {...form.getInputProps("agentEnabled", { type: "checkbox" })}
+            />
+            <Button
+              type="button"
+              variant="default"
+              leftSection={<IconPlayerPlay size={16} />}
+              loading={testAgent.isPending}
+              onClick={() => void testAgentConnection()}
+            >
+              {t("ai.settings.testAgent")}
+            </Button>
+            {agentTestResult && (
+              <Alert
+                color={agentTestResult.ok ? "green" : "red"}
+                icon={agentTestResult.ok ? <IconCheck size={17} /> : undefined}
+              >
+                {"errorMessage" in agentTestResult
+                  ? agentTestResult.errorMessage
+                  : t("ai.settings.agentTestSucceeded")}
               </Alert>
             )}
           </Stack>

@@ -363,6 +363,53 @@
   overflow-y: auto;
 }
 
+.approvalPreview {
+  border: 1px solid
+    light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-5));
+  border-radius: var(--mantine-radius-md);
+  padding: var(--mantine-spacing-sm);
+  background: light-dark(
+    var(--mantine-color-gray-0),
+    var(--mantine-color-dark-7)
+  );
+}
+
+.approvalAnchor,
+.approvalBefore,
+.approvalAfter {
+  border-radius: var(--mantine-radius-sm);
+  padding: var(--mantine-spacing-xs);
+}
+
+.approvalAnchor {
+  border: 1px dashed
+    light-dark(var(--mantine-color-gray-4), var(--mantine-color-dark-4));
+}
+
+.approvalBefore {
+  border-inline-start: 3px solid var(--mantine-color-red-6);
+  background: light-dark(
+    var(--mantine-color-red-0),
+    color-mix(in srgb, var(--mantine-color-red-9) 35%, transparent)
+  );
+}
+
+.approvalAfter {
+  border-inline-start: 3px solid var(--mantine-color-green-6);
+  background: light-dark(
+    var(--mantine-color-green-0),
+    color-mix(in srgb, var(--mantine-color-green-9) 35%, transparent)
+  );
+}
+
+.approvalText {
+  margin-top: 4px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
 .assistantMessage:hover .messageActions,
 .assistantMessage:focus-within .messageActions,
 .userMessage:hover .messageActions,

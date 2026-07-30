@@ -39,6 +39,7 @@ import { v7 as uuidv7 } from 'uuid';
 import { sql } from 'kysely';
 import { JsonValue } from '../../../database/types/db';
 import { AiContentPolicyService } from '../../ai-content-policy/ai-content-policy.service';
+import { createHash } from 'node:crypto';
 
 @Injectable()
 export class AiConfigService {
@@ -91,6 +92,7 @@ export class AiConfigService {
       throw new NotFoundException('AI status not found');
     }
     let canWrite = false;
+    let canRead = false;
     let pageUnavailable = false;
     let pageExcluded = false;
     if (pageId) {
@@ -115,6 +117,7 @@ export class AiConfigService {
           page,
           user,
         );
+        canRead = access.capabilities.canRead;
         canWrite = access.capabilities.canWrite;
       }
     }
@@ -126,6 +129,20 @@ export class AiConfigService {
       configured &&
       !pageUnavailable &&
       (pageId ? canWrite : canManage);
+    const providerFingerprint = config
+      ? this.getProviderFingerprint(config)
+      : null;
+    const agentAvailable =
+      enabled &&
+      configured &&
+      Boolean(config?.agentEnabled) &&
+      Boolean(
+        providerFingerprint &&
+          config?.agentVerifiedProviderFingerprint === providerFingerprint,
+      ) &&
+      !pageUnavailable &&
+      !pageExcluded &&
+      (pageId ? canRead : canManage);
     const retrieval = config ? this.toRetrievalConfig(config) : null;
     let usage:
       | {
@@ -155,7 +172,11 @@ export class AiConfigService {
           .select((eb) => eb.fn.countAll<number>().as('count'))
           .where('workspaceId', '=', workspace.id)
           .where('spaceId', '=', spaceId)
-          .where('status', 'in', ['queued', 'running'])
+          .where('status', 'in', [
+            'queued',
+            'running',
+            'awaiting_approval',
+          ])
           .executeTakeFirstOrThrow(),
       ]);
       usage = {
@@ -170,6 +191,8 @@ export class AiConfigService {
       configured,
       canUse,
       canManage,
+      agentAvailable,
+      canWriteCurrentPage: canWrite,
       currentDocumentAvailable: Boolean(
         pageId && !pageUnavailable && !pageExcluded,
       ),
@@ -188,7 +211,7 @@ export class AiConfigService {
           ? { unavailableReason: 'disabled' }
           : pageUnavailable
             ? { unavailableReason: 'page_unavailable' }
-            : pageId && !canWrite
+            : pageId && !canWrite && !agentAvailable
               ? { unavailableReason: 'page_write_required' }
               : {}),
     };
@@ -242,6 +265,33 @@ export class AiConfigService {
         );
       }
       const normalizedBaseUrl = await this.normalizeUrl(baseUrl);
+      const providerFingerprint = this.getProviderFingerprint({
+        provider: 'openai-compatible',
+        baseUrl: normalizedBaseUrl,
+        chatModel,
+      });
+      const providerIdentityUnchanged =
+        existing &&
+        this.getProviderFingerprint(existing) === providerFingerprint;
+      const agentVerifiedProviderFingerprint =
+        existing?.agentVerifiedProviderFingerprint === providerFingerprint
+          ? providerFingerprint
+          : null;
+      const agentVerifiedAt = agentVerifiedProviderFingerprint
+        ? (existing?.agentVerifiedAt ?? null)
+        : null;
+      const requestedAgentEnabled =
+        dto.agentEnabled ??
+        (providerIdentityUnchanged ? existing?.agentEnabled : false) ??
+        false;
+      if (
+        requestedAgentEnabled &&
+        agentVerifiedProviderFingerprint !== providerFingerprint
+      ) {
+        throw new BadRequestException(
+          'Test tool calling for the current provider before enabling the agent',
+        );
+      }
       const retrievalAdapter =
         dto.retrieval?.adapter ??
         (existing?.retrievalAdapter as AiRetrievalAdapter) ??
@@ -297,6 +347,9 @@ export class AiConfigService {
         workspaceId: workspace.id,
         spaceId,
         enabled: dto.enabled ?? existing?.enabled ?? false,
+        agentEnabled: requestedAgentEnabled,
+        agentVerifiedProviderFingerprint,
+        agentVerifiedAt,
         assistantNameEnabled,
         assistantName,
         assistantGender,
@@ -453,6 +506,94 @@ export class AiConfigService {
         models.includes(config.chatModel),
       vision,
       latencyMs: Date.now() - startedAt,
+    };
+  }
+
+  async testAgent(
+    spaceId: string,
+    dto: TestAiSpaceConfigDto,
+    user: User,
+    workspace: Workspace,
+  ) {
+    await this.spaceAbility.assertHasFullSpaceAccess(user, spaceId);
+    const existing = await this.getRawConfig(spaceId, workspace.id);
+    if (!existing) {
+      throw new BadRequestException(
+        'Save the AI configuration before testing tool calling',
+      );
+    }
+    const config = await this.mergeProviderConfig(existing, dto);
+    const providerFingerprint = this.getProviderFingerprint({
+      provider: 'openai-compatible',
+      baseUrl: config.baseUrl,
+      chatModel: config.chatModel,
+    });
+    const startedAt = Date.now();
+    const toolName = 'capabilityProbe';
+    const completion = await this.provider.completeWithTools(
+      { ...config, maxOutputTokens: Math.min(config.maxOutputTokens, 256) },
+      [
+        {
+          role: 'user',
+          content:
+            'Call the capabilityProbe tool with {"value":"ok"}. Do not answer with text.',
+        },
+      ],
+      [
+        {
+          type: 'function',
+          function: {
+            name: toolName,
+            description: 'Tests whether the model can call a function.',
+            parameters: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['value'],
+              properties: {
+                value: { type: 'string', enum: ['ok'] },
+              },
+            },
+          },
+        },
+      ],
+      { type: 'function', function: { name: toolName } },
+    );
+    const call = completion.toolCalls[0];
+    let parsedArguments: unknown;
+    try {
+      parsedArguments = call ? JSON.parse(call.function.arguments) : null;
+    } catch {
+      parsedArguments = null;
+    }
+    if (
+      completion.toolCalls.length !== 1 ||
+      call?.function.name !== toolName ||
+      !parsedArguments ||
+      typeof parsedArguments !== 'object' ||
+      (parsedArguments as Record<string, unknown>).value !== 'ok'
+    ) {
+      throw new BadRequestException(
+        'The provider did not complete the required tool call',
+      );
+    }
+
+    await this.db
+      .updateTable('aiSpaceConfigs')
+      .set({
+        agentVerifiedProviderFingerprint: providerFingerprint,
+        agentVerifiedAt: new Date(),
+        updatedById: user.id,
+        updatedAt: new Date(),
+      })
+      .where('id', '=', existing.id)
+      .where('workspaceId', '=', workspace.id)
+      .executeTakeFirstOrThrow();
+
+    return {
+      ok: true,
+      toolName,
+      latencyMs: Date.now() - startedAt,
+      providerFingerprint,
     };
   }
 
@@ -661,6 +802,20 @@ export class AiConfigService {
       .replace(/\/+$/, '');
   }
 
+  getProviderFingerprint(
+    config: Pick<AiSpaceConfigEntity, 'provider' | 'baseUrl' | 'chatModel'>,
+  ): string {
+    return createHash('sha256')
+      .update(
+        JSON.stringify({
+          provider: config.provider,
+          baseUrl: config.baseUrl.replace(/\/+$/, ''),
+          chatModel: config.chatModel,
+        }),
+      )
+      .digest('hex');
+  }
+
   private updateEncryptedSecret(params: {
     existing?: string | null;
     next?: string;
@@ -853,6 +1008,8 @@ export class AiConfigService {
       assistantName: config.assistantName,
       assistantGender:
         config.assistantGender === 'feminine' ? 'feminine' : 'masculine',
+      agentEnabled: config.agentEnabled,
+      agentVerifiedAt: config.agentVerifiedAt?.toISOString() ?? null,
       retrieval: {
         adapter: config.retrievalAdapter as AiRetrievalAdapter,
         url: config.retrievalUrl,

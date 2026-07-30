@@ -97,9 +97,59 @@ describe('JwtStrategy', () => {
         workspaceId: 'workspace-1',
         spaceId: 'space-1',
       }),
+      'rag',
     );
     expect(result).toEqual({ authType: 'api_key' });
   });
+
+  it('validates an API key on /mcp as an MCP key', async () => {
+    apiKeyService.validateApiKey.mockResolvedValue({
+      authType: 'api_key',
+    });
+
+    await strategy.validate(
+      {
+        originalUrl: '/mcp',
+        raw: { workspaceId: 'workspace-1' },
+      },
+      {
+        sub: 'user-1',
+        apiKeyId: 'key-1',
+        workspaceId: 'workspace-1',
+        spaceId: 'space-1',
+        keyType: 'mcp',
+        type: JwtType.API_KEY,
+      },
+    );
+
+    expect(apiKeyService.validateApiKey).toHaveBeenCalledWith(
+      expect.objectContaining({ apiKeyId: 'key-1', keyType: 'mcp' }),
+      'mcp',
+    );
+  });
+
+  it.each(['/mcproxy', '/api/ragged'])(
+    'does not treat a similarly prefixed route as an API key surface: %s',
+    async (originalUrl) => {
+      await expect(
+        strategy.validate(
+          {
+            originalUrl,
+            raw: { workspaceId: 'workspace-1' },
+          },
+          {
+            sub: 'user-1',
+            apiKeyId: 'key-1',
+            workspaceId: 'workspace-1',
+            spaceId: 'space-1',
+            type: JwtType.API_KEY,
+          },
+        ),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+
+      expect(apiKeyService.validateApiKey).not.toHaveBeenCalled();
+    },
+  );
 
   it('rejects API key payload without space scope', async () => {
     await expect(

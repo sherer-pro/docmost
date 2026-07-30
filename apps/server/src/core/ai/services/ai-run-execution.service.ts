@@ -1,7 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
-import { AiRun, User } from '@docmost/db/types/entity.types';
+import {
+  AiRun,
+  AiRunStep,
+  User,
+} from '@docmost/db/types/entity.types';
 import { sql } from 'kysely';
 import { AI_RETRIEVAL_DEFAULTS } from '../ai.constants';
 import { AiRetrievalService } from '../retrieval/ai-retrieval.service';
@@ -13,8 +17,24 @@ import { AiRunEventService } from './ai-run-event.service';
 import { OpenAiCompatibleProviderService } from './openai-compatible-provider.service';
 import { AiContextService } from './ai-context.service';
 import { AiAuxRunService } from './ai-aux-run.service';
+import {
+  AI_AGENT_MAX_MODEL_STEPS,
+  AI_AGENT_MAX_TOOL_CALLS,
+  AI_TOOL_RESULTS_TOTAL_MAX_BYTES,
+  AI_WRITE_PROPOSAL_TTL_MS,
+  AiToolRegistryService,
+} from '../tools/ai-tool-registry.service';
+import { AiProviderMessage, AiProviderUsage } from '../ai.types';
 
 class AiRunCancelledError extends Error {}
+class AiAgentExecutionError extends Error {
+  constructor(
+    readonly code: string,
+    message: string,
+  ) {
+    super(message);
+  }
+}
 
 @Injectable()
 export class AiRunExecutionService {
@@ -31,6 +51,7 @@ export class AiRunExecutionService {
     private readonly events: AiRunEventService,
     private readonly contexts: AiContextService,
     private readonly auxRuns: AiAuxRunService,
+    private readonly tools: AiToolRegistryService,
   ) {}
 
   async execute(runId: string): Promise<void> {
@@ -75,18 +96,40 @@ export class AiRunExecutionService {
       return;
     }
     try {
-      await this.conversations.assertWritablePage(
-        run.pageId,
-        user as User,
-        run.workspaceId,
-      );
+      if (run.executionMode === 'agent') {
+        await this.conversations.assertReadablePage(
+          run.pageId,
+          user as User,
+          run.workspaceId,
+        );
+        if (
+          !config.agentEnabled ||
+          config.agentVerifiedProviderFingerprint !==
+            this.configs.getProviderFingerprint(config)
+        ) {
+          throw new AiAgentExecutionError(
+            'agent_provider_unverified',
+            'The AI agent provider is not verified',
+          );
+        }
+      } else {
+        await this.conversations.assertWritablePage(
+          run.pageId,
+          user as User,
+          run.workspaceId,
+        );
+      }
     } catch {
       await this.fail(
         run,
         '',
         '',
-        'page_write_required',
-        'Page write access is required',
+        run.executionMode === 'agent'
+          ? 'agent_provider_unverified'
+          : 'page_write_required',
+        run.executionMode === 'agent'
+          ? 'The AI agent is unavailable'
+          : 'Page write access is required',
       );
       return;
     }
@@ -177,6 +220,20 @@ export class AiRunExecutionService {
         contextWindow: config.contextWindow,
         maxOutputTokens: config.maxOutputTokens,
       });
+
+      if (run.executionMode === 'agent') {
+        await this.executeAgent({
+          run,
+          user: user as User,
+          config,
+          messages,
+          contextSources,
+          fileCitations: fileContext.citations,
+          retrievalOutcome,
+          userContent: userMessage.content,
+        });
+        return;
+      }
 
       const heartbeat = async () => {
         const now = Date.now();
@@ -371,6 +428,542 @@ export class AiRunExecutionService {
     }
   }
 
+  private async executeAgent(params: {
+    run: AiRun;
+    user: User;
+    config: any;
+    messages: AiProviderMessage[];
+    contextSources: any[];
+    fileCitations: any[];
+    retrievalOutcome: {
+      status: any;
+      errorCode?: string;
+      sources: any[];
+    };
+    userContent: string;
+  }): Promise<void> {
+    const {
+      run,
+      user,
+      config,
+      contextSources,
+      fileCitations,
+      retrievalOutcome,
+      userContent,
+    } = params;
+    const definitions = this.tools.list('agent');
+    const providerTools = definitions.map((tool) => ({
+      type: 'function' as const,
+      function: {
+        name: tool.name,
+        description: tool.description,
+        parameters: tool.inputSchema,
+      },
+    }));
+    const messages: AiProviderMessage[] = [
+      {
+        role: 'system',
+        content:
+          'You are operating in a bounded Docmost agent mode. Use tools iteratively when they improve accuracy. Read tools may inspect only authorized content. Write tools create proposals only for the current page and always require the initiating user to approve them. Call at most one write tool in a model turn. Never claim that a proposed change was applied until its tool result confirms approval.',
+      },
+      ...params.messages,
+    ];
+    const previousSteps = await this.db
+      .selectFrom('aiRunSteps')
+      .selectAll()
+      .where('runId', '=', run.id)
+      .orderBy('modelStep', 'asc')
+      .orderBy('callIndex', 'asc')
+      .execute();
+    this.appendStepHistory(messages, previousSteps);
+
+    let toolCallCount = previousSteps.length;
+    let resultBytes = previousSteps.reduce(
+      (sum, step) =>
+        sum + Buffer.byteLength(JSON.stringify(step.result ?? {}), 'utf8'),
+      0,
+    );
+    let usage: AiProviderUsage = {
+      inputTokens: Number(run.inputTokens),
+      outputTokens: Number(run.outputTokens),
+    };
+    let modelStep =
+      previousSteps.length > 0
+        ? Math.max(...previousSteps.map((step) => step.modelStep)) + 1
+        : 0;
+
+    for (; modelStep < AI_AGENT_MAX_MODEL_STEPS; modelStep += 1) {
+      if (await this.isCancelled(run.id)) {
+        throw new AiRunCancelledError();
+      }
+      const response = await this.provider.completeWithTools(
+        this.configs.toProviderConfig(config),
+        messages,
+        providerTools,
+        'auto',
+      );
+      usage = {
+        inputTokens: usage.inputTokens + response.usage.inputTokens,
+        outputTokens: usage.outputTokens + response.usage.outputTokens,
+      };
+
+      if (response.toolCalls.length === 0) {
+        if (response.finishReason === 'tool_calls' || !response.content.trim()) {
+          throw new AiAgentExecutionError(
+            'agent_tool_call_required',
+            'The provider did not return a valid tool call or final answer',
+          );
+        }
+        await this.completeAgentRun({
+          run,
+          content: response.content,
+          usage,
+          contextSources,
+          fileCitations,
+          retrievalOutcome,
+          userContent,
+          dailyTokenLimitPerSpace: Number(config.dailyTokenLimitPerSpace),
+        });
+        return;
+      }
+
+      if (
+        toolCallCount + response.toolCalls.length >
+        AI_AGENT_MAX_TOOL_CALLS
+      ) {
+        throw new AiAgentExecutionError(
+          'agent_tool_limit',
+          'The agent exceeded the tool call limit',
+        );
+      }
+      const resolvedDefinitions = response.toolCalls.map((call) =>
+        this.tools.get(call.function.name, 'agent'),
+      );
+      if (
+        resolvedDefinitions.some((tool) => tool?.writeClass === 'write') &&
+        response.toolCalls.length !== 1
+      ) {
+        throw new AiAgentExecutionError(
+          'agent_tool_call_invalid',
+          'A write proposal must be the only tool call in a model turn',
+        );
+      }
+
+      messages.push({
+        role: 'assistant',
+        content: response.content || null,
+        tool_calls: response.toolCalls,
+      });
+
+      for (let callIndex = 0; callIndex < response.toolCalls.length; callIndex += 1) {
+        const call = response.toolCalls[callIndex];
+        toolCallCount += 1;
+        let args: Record<string, unknown> = {};
+        let parseError: string | null = null;
+        try {
+          const parsed = JSON.parse(call.function.arguments);
+          if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+            throw new Error('Tool arguments must be an object');
+          }
+          args = parsed as Record<string, unknown>;
+        } catch {
+          parseError = 'The provider returned malformed tool arguments';
+        }
+
+        const definition = resolvedDefinitions[callIndex];
+        if (parseError || !definition) {
+          const errorMessage =
+            parseError ?? `Unknown tool: ${call.function.name}`;
+          const result = { ok: false, error: errorMessage };
+          const step = await this.insertToolStep({
+            run,
+            modelStep,
+            callIndex,
+            toolCallId: call.id,
+            toolName: call.function.name,
+            writeClass: definition?.writeClass ?? 'read_only',
+            args,
+            result,
+            assistantContent: response.content,
+            status: 'failed',
+            errorCode: 'agent_tool_call_invalid',
+            errorMessage,
+          });
+          this.events.emitStep(run, step);
+          messages.push({
+            role: 'tool',
+            tool_call_id: call.id,
+            content: JSON.stringify(result),
+          });
+          continue;
+        }
+
+        try {
+          const execution = await this.tools.execute(
+            call.function.name,
+            args,
+            {
+              user,
+              workspaceId: run.workspaceId,
+              spaceId: run.spaceId,
+              currentPageId: run.pageId,
+              source: 'agent',
+            },
+          );
+          const bytes = Buffer.byteLength(
+            JSON.stringify(execution.content),
+            'utf8',
+          );
+          resultBytes += bytes;
+          if (resultBytes > AI_TOOL_RESULTS_TOTAL_MAX_BYTES) {
+            throw new AiAgentExecutionError(
+              'agent_result_limit',
+              'The agent exceeded the cumulative tool result limit',
+            );
+          }
+
+          if (execution.writeProposal) {
+            await this.pauseForApproval({
+              run,
+              modelStep,
+              callIndex,
+              call,
+              args,
+              assistantContent: response.content,
+              result: execution.content,
+              proposal: execution.writeProposal,
+              usage,
+            });
+            return;
+          }
+
+          const step = await this.insertToolStep({
+            run,
+            modelStep,
+            callIndex,
+            toolCallId: call.id,
+            toolName: call.function.name,
+            writeClass: 'read_only',
+            args,
+            result: execution.content,
+            assistantContent: response.content,
+            status: 'completed',
+          });
+          this.events.emitStep(run, step);
+          messages.push({
+            role: 'tool',
+            tool_call_id: call.id,
+            content: JSON.stringify({ ok: true, result: execution.content }),
+          });
+        } catch (error) {
+          if (error instanceof AiAgentExecutionError) {
+            throw error;
+          }
+          const errorMessage = this.safeToolError(error);
+          const result = { ok: false, error: errorMessage };
+          const step = await this.insertToolStep({
+            run,
+            modelStep,
+            callIndex,
+            toolCallId: call.id,
+            toolName: call.function.name,
+            writeClass: definition.writeClass,
+            args,
+            result,
+            assistantContent: response.content,
+            status: 'failed',
+            errorCode: 'agent_tool_call_invalid',
+            errorMessage,
+          });
+          this.events.emitStep(run, step);
+          messages.push({
+            role: 'tool',
+            tool_call_id: call.id,
+            content: JSON.stringify(result),
+          });
+        }
+      }
+    }
+
+    throw new AiAgentExecutionError(
+      'agent_step_limit',
+      'The agent exceeded the model step limit',
+    );
+  }
+
+  private appendStepHistory(
+    messages: AiProviderMessage[],
+    steps: AiRunStep[],
+  ): void {
+    const byModelStep = new Map<number, AiRunStep[]>();
+    for (const step of steps) {
+      const current = byModelStep.get(step.modelStep) ?? [];
+      current.push(step);
+      byModelStep.set(step.modelStep, current);
+    }
+    for (const group of [...byModelStep.values()]) {
+      messages.push({
+        role: 'assistant',
+        content: group[0]?.assistantContent || null,
+        tool_calls: group.map((step) => ({
+          id: step.toolCallId,
+          type: 'function' as const,
+          function: {
+            name: step.toolName,
+            arguments: JSON.stringify(step.arguments),
+          },
+        })),
+      });
+      for (const step of group) {
+        if (step.status === 'pending_approval') {
+          throw new AiAgentExecutionError(
+            'agent_tool_call_invalid',
+            'The run resumed with an undecided write proposal',
+          );
+        }
+        messages.push({
+          role: 'tool',
+          tool_call_id: step.toolCallId,
+          content: JSON.stringify({
+            ok: ['completed', 'approved'].includes(step.status),
+            status: step.status,
+            result: step.result,
+            error: step.errorMessage,
+          }),
+        });
+      }
+    }
+  }
+
+  private async insertToolStep(params: {
+    run: AiRun;
+    modelStep: number;
+    callIndex: number;
+    toolCallId: string;
+    toolName: string;
+    writeClass: 'read_only' | 'write';
+    args: Record<string, unknown>;
+    result: unknown;
+    assistantContent: string;
+    status: 'completed' | 'failed';
+    errorCode?: string;
+    errorMessage?: string;
+  }): Promise<AiRunStep> {
+    const last = await this.db
+      .selectFrom('aiRunSteps')
+      .select((eb) => eb.fn.max<number>('sequence').as('sequence'))
+      .where('runId', '=', params.run.id)
+      .executeTakeFirstOrThrow();
+    return this.db
+      .insertInto('aiRunSteps')
+      .values({
+        runId: params.run.id,
+        sequence: Number(last.sequence ?? -1) + 1,
+        modelStep: params.modelStep,
+        callIndex: params.callIndex,
+        toolCallId: params.toolCallId,
+        toolName: params.toolName,
+        writeClass: params.writeClass,
+        arguments: params.args as any,
+        result: params.result as any,
+        assistantContent: params.assistantContent || null,
+        status: params.status,
+        errorCode: params.errorCode ?? null,
+        errorMessage: params.errorMessage ?? null,
+      })
+      .returningAll()
+      .executeTakeFirstOrThrow();
+  }
+
+  private async pauseForApproval(params: {
+    run: AiRun;
+    modelStep: number;
+    callIndex: number;
+    call: {
+      id: string;
+      function: { name: string };
+    };
+    args: Record<string, unknown>;
+    assistantContent: string;
+    result: unknown;
+    proposal: {
+      pageId: string;
+      baseContentHash: string;
+      operation: unknown;
+    };
+    usage: AiProviderUsage;
+  }): Promise<void> {
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + AI_WRITE_PROPOSAL_TTL_MS);
+    const result = await this.db.transaction().execute(async (trx) => {
+      const last = await trx
+        .selectFrom('aiRunSteps')
+        .select((eb) => eb.fn.max<number>('sequence').as('sequence'))
+        .where('runId', '=', params.run.id)
+        .executeTakeFirstOrThrow();
+      const step = await trx
+        .insertInto('aiRunSteps')
+        .values({
+          runId: params.run.id,
+          sequence: Number(last.sequence ?? -1) + 1,
+          modelStep: params.modelStep,
+          callIndex: params.callIndex,
+          toolCallId: params.call.id,
+          toolName: params.call.function.name,
+          writeClass: 'write',
+          arguments: params.args as any,
+          result: params.result as any,
+          assistantContent: params.assistantContent || null,
+          status: 'pending_approval',
+          targetPageId: params.proposal.pageId,
+          baseContentHash: params.proposal.baseContentHash,
+          expiresAt,
+        })
+        .returningAll()
+        .executeTakeFirstOrThrow();
+      const updated = await trx
+        .updateTable('aiRuns')
+        .set({
+          status: 'awaiting_approval',
+          sequence: sql`sequence + 1`,
+          inputTokens: params.usage.inputTokens,
+          outputTokens: params.usage.outputTokens,
+          heartbeatAt: now,
+          updatedAt: now,
+        })
+        .where('id', '=', params.run.id)
+        .where('status', '=', 'running')
+        .where('cancelRequestedAt', 'is', null)
+        .returningAll()
+        .executeTakeFirst();
+      if (!updated) throw new AiRunCancelledError();
+      return { step, run: updated };
+    });
+    this.events.emitStep(result.run, result.step);
+    this.events.emitStatus(
+      result.run,
+      result.run.sequence,
+      'awaiting_approval',
+    );
+  }
+
+  private async completeAgentRun(params: {
+    run: AiRun;
+    content: string;
+    usage: AiProviderUsage;
+    contextSources: any[];
+    fileCitations: any[];
+    retrievalOutcome: {
+      status: any;
+      errorCode?: string;
+      sources: any[];
+    };
+    userContent: string;
+    dailyTokenLimitPerSpace: number;
+  }): Promise<void> {
+    const completedAt = new Date();
+    const completion = await this.db.transaction().execute(async (trx) => {
+      const updated = await trx
+        .updateTable('aiRuns')
+        .set({
+          status: 'completed',
+          sequence: sql`sequence + 1`,
+          completedAt,
+          heartbeatAt: completedAt,
+          finishReason: 'stop',
+          inputTokens: params.usage.inputTokens,
+          outputTokens: params.usage.outputTokens,
+          responseSnapshot: params.content,
+          reasoningSnapshot: '',
+          updatedAt: completedAt,
+        })
+        .where('id', '=', params.run.id)
+        .where('status', '=', 'running')
+        .where('cancelRequestedAt', 'is', null)
+        .returningAll()
+        .executeTakeFirst();
+      if (!updated) return { run: undefined, titleRun: undefined };
+      await trx
+        .updateTable('aiMessages')
+        .set({
+          content: params.content,
+          reasoning: '',
+          status: 'completed',
+          inputTokens: params.usage.inputTokens,
+          outputTokens: params.usage.outputTokens,
+          updatedAt: completedAt,
+        })
+        .where('id', '=', params.run.assistantMessageId)
+        .where('currentRunId', '=', params.run.id)
+        .execute();
+      const allSources = [
+        ...params.contextSources
+          .filter((source) => source.origin === 'explicit')
+          .map((source) => ({
+            sourceType: source.sourceType,
+            sourceId: source.sourceId,
+            pageId: source.pageId,
+            sourceTitle: source.sourceTitle,
+            sourceUrl: source.sourceUrl,
+            excerpt: source.excerpt,
+            relevanceScore: null,
+          })),
+        ...params.fileCitations,
+        ...params.retrievalOutcome.sources,
+      ];
+      if (allSources.length > 0) {
+        await trx
+          .insertInto('aiMessageSources')
+          .values(
+            allSources.map((source, position) => ({
+              runId: params.run.id,
+              messageId: params.run.assistantMessageId,
+              sourceType: source.sourceType,
+              sourceId: source.sourceId,
+              pageId: source.pageId,
+              sourceTitle: source.sourceTitle,
+              sourceUrl: source.sourceUrl,
+              excerpt: source.excerpt,
+              position,
+              relevanceScore: source.relevanceScore,
+            })),
+          )
+          .execute();
+      }
+      const titleRun = await this.auxRuns.scheduleConversationTitle(
+        trx,
+        params.run,
+        params.userContent,
+        params.dailyTokenLimitPerSpace,
+      );
+      return { run: updated, titleRun };
+    });
+    if (!completion.run) {
+      throw new AiRunCancelledError();
+    }
+    if (completion.titleRun) {
+      await this.auxRuns.enqueue(completion.titleRun);
+    }
+    this.events.emitStatus(
+      completion.run,
+      completion.run.sequence,
+      'completed',
+      {
+        finishReason: 'stop',
+        retrievalOutcome: params.retrievalOutcome.status,
+        retrievalErrorCode: params.retrievalOutcome.errorCode,
+      },
+    );
+  }
+
+  private safeToolError(error: unknown): string {
+    const message =
+      (error as any)?.response?.message ??
+      (error as Error)?.message ??
+      'Tool execution failed';
+    return String(message).slice(0, 500);
+  }
+
   private async claim(runId: string): Promise<AiRun | undefined> {
     const now = new Date();
     return this.db.transaction().execute(async (trx) => {
@@ -500,6 +1093,9 @@ export class AiRunExecutionService {
   }
 
   private errorCode(error: unknown): string {
+    if (error instanceof AiAgentExecutionError) {
+      return error.code;
+    }
     const responseCode = (error as any)?.response?.code;
     if (typeof responseCode === 'string') {
       return responseCode;

@@ -3,6 +3,7 @@ import {
   IsDateString,
   IsNotEmpty,
   IsOptional,
+  IsIn,
   IsString,
   IsUUID,
   MaxLength,
@@ -18,6 +19,10 @@ export class CreateApiKeyDto {
 
   @IsUUID()
   spaceId: string;
+
+  @IsOptional()
+  @IsIn(['rag', 'mcp'])
+  keyType?: 'rag' | 'mcp';
 
   @IsOptional()
   @IsDateString()

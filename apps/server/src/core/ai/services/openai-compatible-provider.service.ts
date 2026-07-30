@@ -7,6 +7,9 @@ import {
 import {
   AiProviderConfig,
   AiProviderMessage,
+  AiProviderTool,
+  AiProviderToolCall,
+  AiProviderToolResponse,
   AiProviderUsage,
 } from '../ai.types';
 import { EnvironmentService } from '../../../integrations/environment/environment.service';
@@ -76,6 +79,44 @@ export class OpenAiCompatibleProviderService {
     return {
       content: this.readMessageContent(data?.choices?.[0]?.message?.content),
       usage: this.readUsage(data?.usage),
+    };
+  }
+
+  async completeWithTools(
+    config: AiProviderConfig,
+    messages: AiProviderMessage[],
+    tools: AiProviderTool[],
+    toolChoice:
+      | 'auto'
+      | 'required'
+      | { type: 'function'; function: { name: string } } = 'auto',
+  ): Promise<AiProviderToolResponse> {
+    const { data } = await this.requestJson<any>(config, 'chat/completions', {
+      method: 'POST',
+      body: JSON.stringify({
+        model: config.chatModel,
+        messages,
+        tools,
+        tool_choice: toolChoice,
+        temperature: config.temperature,
+        max_tokens: config.maxOutputTokens,
+        stream: false,
+      }),
+    });
+
+    const choice = data?.choices?.[0];
+    if (!choice?.message || typeof choice.message !== 'object') {
+      throw new AiProviderInvalidResponseError(
+        'AI provider returned no assistant message',
+      );
+    }
+
+    return {
+      content: this.readMessageContent(choice.message.content),
+      toolCalls: this.readToolCalls(choice.message.tool_calls),
+      usage: this.readUsage(data?.usage),
+      finishReason:
+        typeof choice.finish_reason === 'string' ? choice.finish_reason : null,
     };
   }
 
@@ -290,6 +331,64 @@ export class OpenAiCompatibleProviderService {
           : '',
       )
       .join('');
+  }
+
+  private readToolCalls(value: unknown): AiProviderToolCall[] {
+    if (value === undefined) {
+      return [];
+    }
+    if (!Array.isArray(value)) {
+      throw new AiProviderInvalidResponseError(
+        'AI provider returned invalid tool calls',
+      );
+    }
+    if (value.length > 16) {
+      throw new AiProviderInvalidResponseError(
+        'AI provider returned too many tool calls',
+      );
+    }
+
+    return value.map((call, index) => {
+      const record =
+        call && typeof call === 'object'
+          ? (call as Record<string, unknown>)
+          : null;
+      const fn =
+        record?.function && typeof record.function === 'object'
+          ? (record.function as Record<string, unknown>)
+          : null;
+      if (
+        !record ||
+        typeof record.id !== 'string' ||
+        !record.id ||
+        record.type !== 'function' ||
+        !fn ||
+        typeof fn.name !== 'string' ||
+        !fn.name ||
+        typeof fn.arguments !== 'string'
+      ) {
+        throw new AiProviderInvalidResponseError(
+          `AI provider returned invalid tool call at index ${index}`,
+        );
+      }
+      if (
+        record.id.length > 255 ||
+        fn.name.length > 128 ||
+        fn.arguments.length > 64 * 1024
+      ) {
+        throw new AiProviderInvalidResponseError(
+          'AI provider tool call exceeded the size limit',
+        );
+      }
+      return {
+        id: record.id,
+        type: 'function' as const,
+        function: {
+          name: fn.name,
+          arguments: fn.arguments,
+        },
+      };
+    });
   }
 
   private readUsage(value: any): AiProviderUsage {

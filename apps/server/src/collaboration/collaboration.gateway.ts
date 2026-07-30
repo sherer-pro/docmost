@@ -34,6 +34,7 @@ export class CollaborationGateway {
   private readonly redisSync: RedisSyncExtension<CollabEventHandlers> | null =
     null;
   private readonly withRedis: boolean;
+  private readonly localHandlers: CollabEventHandlers;
 
   constructor(
     private authenticationExtension: AuthenticationExtension,
@@ -55,6 +56,7 @@ export class CollaborationGateway {
         this.loggerExtension,
       ],
     });
+    this.localHandlers = this.collabEventsService.getHandlers(this.hocuspocus);
 
     if (this.withRedis) {
       // @ts-ignore
@@ -72,7 +74,7 @@ export class CollaborationGateway {
         pack,
         unpack,
         // @ts-ignore
-        customEvents: this.collabEventsService.getHandlers(this.hocuspocus),
+        customEvents: this.localHandlers,
       });
       this.hocuspocus.configuration.extensions.push(this.redisSync);
       // @ts-ignore
@@ -142,7 +144,14 @@ export class CollaborationGateway {
     documentName: string,
     payload: Parameters<CollabEventHandlers[TName]>[1],
   ) {
-    return this.redisSync?.handleEvent(eventName, documentName, payload);
+    if (this.redisSync) {
+      return this.redisSync.handleEvent(eventName, documentName, payload);
+    }
+    const handler = this.localHandlers[eventName] as (
+      documentName: string,
+      payload: Parameters<CollabEventHandlers[TName]>[1],
+    ) => unknown;
+    return handler(documentName, payload);
   }
 
   openDirectConnection(documentName: string, context?: any) {

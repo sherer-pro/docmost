@@ -6,6 +6,7 @@ import {
   AiListResponse,
   AiMessage,
   AiModelTestResult,
+  AiAgentTestResult,
   AiPageResponse,
   AiSpaceConfigUpdate,
   AiAvailability,
@@ -50,7 +51,12 @@ export async function createAiConversation(
 
 export async function updateAiConversation(
   conversationId: string,
-  data: { title?: string; draft?: string; useSpaceSearch?: boolean },
+  data: {
+    title?: string;
+    draft?: string;
+    useSpaceSearch?: boolean;
+    agentMode?: boolean;
+  },
 ): Promise<AiConversation> {
   const response = await api.patch<AiConversation>(
     `/ai/conversations/${conversationId}`,
@@ -205,6 +211,31 @@ export async function cancelAiRun(runId: string): Promise<AiRun> {
   return unwrapApiResponse<AiRun>(response);
 }
 
+export async function getAiRun(runId: string): Promise<AiRun> {
+  const response = await api.get<AiRun>(`/ai/runs/${runId}`);
+  return unwrapApiResponse<AiRun>(response);
+}
+
+export async function approveAiRunStep(input: {
+  runId: string;
+  stepId: string;
+}): Promise<{ run: AiRun }> {
+  const response = await api.post<{ run: AiRun }>(
+    `/ai/runs/${input.runId}/steps/${input.stepId}/actions/approve`,
+  );
+  return unwrapApiResponse<{ run: AiRun }>(response);
+}
+
+export async function rejectAiRunStep(input: {
+  runId: string;
+  stepId: string;
+}): Promise<{ run: AiRun }> {
+  const response = await api.post<{ run: AiRun }>(
+    `/ai/runs/${input.runId}/steps/${input.stepId}/actions/reject`,
+  );
+  return unwrapApiResponse<{ run: AiRun }>(response);
+}
+
 export async function retryAiRun(input: {
   runId: string;
   clientRequestId: string;
@@ -314,6 +345,17 @@ export async function testAiRetrievalConfig(
     data,
   );
   return unwrapApiResponse<AiRetrievalTestResult>(response);
+}
+
+export async function testAiAgentConfig(
+  spaceId: string,
+  data?: AiSpaceConfigUpdate,
+): Promise<AiAgentTestResult> {
+  const response = await api.post<AiAgentTestResult>(
+    `/spaces/${spaceId}/ai/config/actions/test-agent`,
+    data,
+  );
+  return unwrapApiResponse<AiAgentTestResult>(response);
 }
 
 export async function getAiSpaceStatus(

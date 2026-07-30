@@ -66,14 +66,31 @@ export type AiMessageStatus = (typeof AI_MESSAGE_STATUSES)[number];
 export const AI_RUN_STATUSES = [
   "queued",
   "running",
+  "awaiting_approval",
   "completed",
   "failed",
   "cancelled",
 ] as const;
 export type AiRunStatus = (typeof AI_RUN_STATUSES)[number];
 
+export const AI_EXECUTION_MODES = ["chat", "agent"] as const;
+export type AiExecutionMode = (typeof AI_EXECUTION_MODES)[number];
+
 export const AI_RUN_TRIGGERS = ["send", "retry", "regenerate"] as const;
 export type AiRunTrigger = (typeof AI_RUN_TRIGGERS)[number];
+
+export const AI_RUN_STEP_STATUSES = [
+  "completed",
+  "pending_approval",
+  "approved",
+  "rejected",
+  "failed",
+  "expired",
+] as const;
+export type AiRunStepStatus = (typeof AI_RUN_STEP_STATUSES)[number];
+
+export const AI_TOOL_WRITE_CLASSES = ["read_only", "write"] as const;
+export type AiToolWriteClass = (typeof AI_TOOL_WRITE_CLASSES)[number];
 
 export const AI_CHAT_FILE_STATUSES = [
   "pending",
@@ -135,8 +152,14 @@ export const AI_AUX_RUN_KINDS = [
 ] as const;
 export type AiAuxRunKind = (typeof AI_AUX_RUN_KINDS)[number];
 
-export const AI_AUX_RUN_STATUSES = AI_RUN_STATUSES;
-export type AiAuxRunStatus = AiRunStatus;
+export const AI_AUX_RUN_STATUSES = [
+  "queued",
+  "running",
+  "completed",
+  "failed",
+  "cancelled",
+] as const;
+export type AiAuxRunStatus = (typeof AI_AUX_RUN_STATUSES)[number];
 
 export const AI_ERROR_CODES = [
   "ai_unavailable",
@@ -171,6 +194,17 @@ export const AI_ERROR_CODES = [
   "editor_selection_required",
   "editor_context_stale",
   "editor_action_not_found",
+  "agent_disabled",
+  "agent_provider_unverified",
+  "agent_tool_call_required",
+  "agent_tool_call_invalid",
+  "agent_step_limit",
+  "agent_tool_limit",
+  "agent_result_limit",
+  "agent_write_expired",
+  "agent_write_stale",
+  "agent_write_rejected",
+  "agent_write_not_allowed",
 ] as const;
 export type AiErrorCode = (typeof AI_ERROR_CODES)[number];
 
@@ -237,6 +271,8 @@ export interface AiSpaceConfig {
   assistantNameEnabled: boolean;
   assistantName: string | null;
   assistantGender: AiAssistantGender;
+  agentEnabled: boolean;
+  agentVerifiedAt: string | null;
   retrieval: AiRetrievalConfig;
   systemInstructions: string | null;
   temperature: number;
@@ -263,6 +299,7 @@ export interface AiSpaceConfigUpdate {
   assistantNameEnabled?: boolean;
   assistantName?: string | null;
   assistantGender?: AiAssistantGender;
+  agentEnabled?: boolean;
   retrieval?: AiRetrievalConfigUpdate;
   systemInstructions?: string | null;
   temperature?: number;
@@ -282,6 +319,8 @@ export interface AiAvailability {
   configured: boolean;
   canUse: boolean;
   canManage: boolean;
+  agentAvailable: boolean;
+  canWriteCurrentPage: boolean;
   currentDocumentAvailable: boolean;
   editorActionsAvailable: boolean;
   assistantIdentity: AiAssistantIdentity | null;
@@ -306,6 +345,7 @@ export interface AiConversation {
   titleSource: AiConversationTitleSource | null;
   draft: string | null;
   useSpaceSearch: boolean;
+  agentMode: boolean;
   includeCurrentDocument: boolean;
   contextRevision: number;
   lastOpenedAt: string;
@@ -414,6 +454,7 @@ export interface AiRun {
   previousRunId: string | null;
   attemptNo: number;
   trigger: AiRunTrigger;
+  executionMode: AiExecutionMode;
   status: AiRunStatus;
   clientRequestId: string;
   contextRevision: number;
@@ -434,6 +475,58 @@ export interface AiRun {
   retrievalErrorCode: string | null;
   inputTokens: number;
   outputTokens: number;
+  steps?: AiRunStep[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface AiApprovalPreviewBase {
+  pageId: string;
+  pageTitle: string;
+  beforeText: string;
+  afterText: string;
+  truncated: boolean;
+}
+
+export type AiApprovalPreview =
+  | (AiApprovalPreviewBase & {
+      kind: "editPageText";
+      anchorNodeId: string;
+    })
+  | (AiApprovalPreviewBase & {
+      kind: "patchNode";
+      anchorNodeId: string;
+    })
+  | (AiApprovalPreviewBase & {
+      kind: "insertNode";
+      anchorNodeId: string;
+      anchorText: string;
+      position: "before" | "after";
+    })
+  | (AiApprovalPreviewBase & {
+      kind: "deleteNode";
+      anchorNodeId: string;
+    });
+
+export interface AiRunStep {
+  id: string;
+  runId: string;
+  sequence: number;
+  modelStep: number;
+  callIndex: number;
+  toolCallId: string;
+  toolName: string;
+  writeClass: AiToolWriteClass;
+  arguments: Record<string, unknown>;
+  result: unknown | null;
+  approvalPreview: AiApprovalPreview | null;
+  status: AiRunStepStatus;
+  errorCode: string | null;
+  errorMessage: string | null;
+  targetPageId: string | null;
+  baseContentHash: string | null;
+  expiresAt: string | null;
+  decidedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -504,12 +597,14 @@ export interface CreateAiConversationRequest {
   clientRequestId: string;
   title?: string;
   useSpaceSearch?: boolean;
+  agentMode?: boolean;
 }
 
 export interface UpdateAiConversationRequest {
   title?: string | null;
   draft?: string | null;
   useSpaceSearch?: boolean;
+  agentMode?: boolean;
 }
 
 export interface UpdateAiConversationContextRequest {
@@ -594,6 +689,13 @@ export interface AiModelTestResult {
   latencyMs: number;
 }
 
+export interface AiAgentTestResult {
+  ok: boolean;
+  toolName: string;
+  latencyMs: number;
+  providerFingerprint: string;
+}
+
 export interface AiRetrievalTestResult {
   ok: boolean;
   skipped?: boolean;
@@ -673,6 +775,13 @@ export interface AiRunStatusEvent {
   retrievalErrorCode?: string;
   errorCode?: string;
   errorMessage?: string;
+}
+
+export interface AiRunStepEvent {
+  runId: string;
+  conversationId: string;
+  pageId: string;
+  step: AiRunStep;
 }
 
 export interface AiConversationUpdatedEvent {

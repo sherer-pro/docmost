@@ -8,6 +8,7 @@ import {
   AiMessageSources,
   AiRunContextSources,
   AiRuns,
+  AiRunSteps,
   AiRunSourceDependencies,
   AiSpaceConfigs,
   ApiKeys,
@@ -61,6 +62,7 @@ export interface DbInterface {
   aiMessageSources: AiMessageSources;
   aiRunContextSources: AiRunContextSources;
   aiRuns: AiRuns;
+  aiRunSteps: AiRunSteps;
   aiRunSourceDependencies: AiRunSourceDependencies;
   aiSpaceConfigs: AiSpaceConfigs;
   attachments: Attachments;

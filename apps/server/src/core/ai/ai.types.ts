@@ -1,7 +1,8 @@
 export type AiProviderMessage = {
-  role: 'system' | 'user' | 'assistant';
+  role: 'system' | 'user' | 'assistant' | 'tool';
   content:
     | string
+    | null
     | Array<
         | { type: 'text'; text: string }
         | {
@@ -9,6 +10,33 @@ export type AiProviderMessage = {
             image_url: { url: string; detail?: 'auto' | 'low' | 'high' };
           }
       >;
+  tool_calls?: AiProviderToolCall[];
+  tool_call_id?: string;
+};
+
+export type AiProviderToolCall = {
+  id: string;
+  type: 'function';
+  function: {
+    name: string;
+    arguments: string;
+  };
+};
+
+export type AiProviderTool = {
+  type: 'function';
+  function: {
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  };
+};
+
+export type AiProviderToolResponse = {
+  content: string;
+  toolCalls: AiProviderToolCall[];
+  usage: AiProviderUsage;
+  finishReason: string | null;
 };
 
 export type AiProviderConfig = {

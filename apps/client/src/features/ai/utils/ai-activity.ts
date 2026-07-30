@@ -1,7 +1,11 @@
 import type { AiActivityItem } from "@/features/ai/types/ai.types.ts";
 
 export function isAiActivityActive(item: AiActivityItem): boolean {
-  return item.status === "queued" || item.status === "running";
+  return (
+    item.status === "queued" ||
+    item.status === "running" ||
+    item.status === "awaiting_approval"
+  );
 }
 
 export function getVisibleAiActivities(

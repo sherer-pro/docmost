@@ -58,6 +58,7 @@ export function ApiKeyTable({
             <Table.Th>{t("Name")}</Table.Th>
             {showUserColumn && <Table.Th>{t("User")}</Table.Th>}
             {showSpaceColumn && <Table.Th>{t("Space")}</Table.Th>}
+            <Table.Th>{t("Type")}</Table.Th>
             <Table.Th>{t("Last used")}</Table.Th>
             <Table.Th>{t("Expires")}</Table.Th>
             <Table.Th>{t("Created")}</Table.Th>
@@ -97,6 +98,14 @@ export function ApiKeyTable({
                     </Text>
                   </Table.Td>
                 )}
+
+                <Table.Td {...getResponsiveMetaCellProps(t("Type"))}>
+                  <Text fz="sm">
+                    {apiKey.keyType === "mcp"
+                      ? t("MCP read-only")
+                      : t("RAG sync")}
+                  </Text>
+                </Table.Td>
 
                 <Table.Td {...getResponsiveMetaCellProps(t("Last used"))}>
                   <Text fz="sm" style={{ whiteSpace: "nowrap" }}>
@@ -165,7 +174,7 @@ export function ApiKeyTable({
           ) : (
             <NoTableResults
               text={t("No API keys found")}
-              colSpan={5 + (showUserColumn ? 1 : 0) + (showSpaceColumn ? 1 : 0)}
+              colSpan={6 + (showUserColumn ? 1 : 0) + (showSpaceColumn ? 1 : 0)}
             />
           )}
         </Table.Tbody>

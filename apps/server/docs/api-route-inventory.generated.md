@@ -28,6 +28,8 @@
 | GET | `/ai/runs/:id` | `apps/server/src/core/ai/controllers/ai-run.controller.ts` |
 | POST | `/ai/runs/:id/actions/cancel` | `apps/server/src/core/ai/controllers/ai-run.controller.ts` |
 | POST | `/ai/runs/:id/actions/retry` | `apps/server/src/core/ai/controllers/ai-run.controller.ts` |
+| POST | `/ai/runs/:runId/steps/:stepId/actions/approve` | `apps/server/src/core/ai/controllers/ai-run.controller.ts` |
+| POST | `/ai/runs/:runId/steps/:stepId/actions/reject` | `apps/server/src/core/ai/controllers/ai-run.controller.ts` |
 | POST | `/api-keys` | `apps/server/src/core/api-key/api-key.controller.ts` |
 | POST | `/api-keys/create` | `apps/server/src/core/api-key/api-key.controller.ts` |
 | POST | `/api-keys/revoke` | `apps/server/src/core/api-key/api-key.controller.ts` |
@@ -240,6 +242,7 @@
 | POST | `/spaces/:spaceId/actions/unarchive` | `apps/server/src/core/space/space.controller.ts` |
 | GET | `/spaces/:spaceId/ai/config` | `apps/server/src/core/ai/controllers/ai-config.controller.ts` |
 | PATCH | `/spaces/:spaceId/ai/config` | `apps/server/src/core/ai/controllers/ai-config.controller.ts` |
+| POST | `/spaces/:spaceId/ai/config/actions/test-agent` | `apps/server/src/core/ai/controllers/ai-config.controller.ts` |
 | POST | `/spaces/:spaceId/ai/config/actions/test-model` | `apps/server/src/core/ai/controllers/ai-config.controller.ts` |
 | POST | `/spaces/:spaceId/ai/config/actions/test-retrieval` | `apps/server/src/core/ai/controllers/ai-config.controller.ts` |
 | GET | `/spaces/:spaceId/ai/exclusions` | `apps/server/src/core/ai-content-policy/ai-content-policy.controller.ts` |

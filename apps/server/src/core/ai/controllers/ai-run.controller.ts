@@ -14,11 +14,15 @@ import { AuthWorkspace } from '../../../common/decorators/auth-workspace.decorat
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { AiRunActionDto, SendAiMessageDto } from '../dto/ai.dto';
 import { AiRunService } from '../services/ai-run.service';
+import { AiRunStepService } from '../services/ai-run-step.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller()
 export class AiRunController {
-  constructor(private readonly runs: AiRunService) {}
+  constructor(
+    private readonly runs: AiRunService,
+    private readonly steps: AiRunStepService,
+  ) {}
 
   @Post('ai/conversations/:id/messages')
   @HttpCode(202)
@@ -69,5 +73,25 @@ export class AiRunController {
     @AuthWorkspace() workspace: Workspace,
   ) {
     return this.runs.regenerate(id, dto, user, workspace);
+  }
+
+  @Post('ai/runs/:runId/steps/:stepId/actions/approve')
+  approveStep(
+    @Param('runId', ParseUUIDPipe) runId: string,
+    @Param('stepId', ParseUUIDPipe) stepId: string,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.steps.approve(runId, stepId, user, workspace);
+  }
+
+  @Post('ai/runs/:runId/steps/:stepId/actions/reject')
+  rejectStep(
+    @Param('runId', ParseUUIDPipe) runId: string,
+    @Param('stepId', ParseUUIDPipe) stepId: string,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.steps.reject(runId, stepId, user, workspace);
   }
 }

@@ -93,6 +93,7 @@ describe('ApiKeyService', () => {
       creatorId: creator.id,
       workspaceId: workspace.id,
       spaceId: 'space-1',
+      keyType: 'rag',
       deletedAt: null,
       expiresAt: null,
     } as any);
@@ -111,6 +112,7 @@ describe('ApiKeyService', () => {
       apiKeyId: 'key-1',
       workspaceId: workspace.id,
       spaceId: 'space-1',
+      keyType: 'rag',
       type: JwtType.API_KEY,
     }) as any;
 
@@ -162,6 +164,7 @@ describe('ApiKeyService', () => {
       creatorId: ownerUser.id,
       workspaceId: workspace.id,
       spaceId: 'space-1',
+      keyType: 'rag',
       createdAt: new Date(),
       updatedAt: new Date(),
       deletedAt: null,
@@ -174,6 +177,7 @@ describe('ApiKeyService', () => {
       name: 'RAG key',
       spaceId: 'space-1',
       workspaceId: workspace.id,
+      keyType: 'rag',
     } as any);
 
     await service.createApiKey(ownerUser, workspace, {
@@ -186,6 +190,7 @@ describe('ApiKeyService', () => {
         apiKeyId: 'key-1',
         workspaceId: workspace.id,
         spaceId: 'space-1',
+        keyType: 'rag',
         // Bounded on purpose: an unbounded token stays replayable forever.
         expiresIn: '365d',
       }),
@@ -198,6 +203,7 @@ describe('ApiKeyService', () => {
       creatorId: ownerUser.id,
       workspaceId: workspace.id,
       spaceId: 'space-1',
+      keyType: 'rag',
       deletedAt: null,
       expiresAt: null,
     } as any);
@@ -227,6 +233,7 @@ describe('ApiKeyService', () => {
       creatorId: memberUser.id,
       workspaceId: workspace.id,
       spaceId: 'space-1',
+      keyType: 'rag',
       createdAt: new Date(),
       updatedAt: new Date(),
       deletedAt: null,
@@ -240,6 +247,7 @@ describe('ApiKeyService', () => {
       creatorId: memberUser.id,
       workspaceId: workspace.id,
       spaceId: 'space-1',
+      keyType: 'rag',
     } as any);
 
     await service.createApiKey(memberUser, workspace, {
@@ -252,8 +260,59 @@ describe('ApiKeyService', () => {
         creatorId: memberUser.id,
         workspaceId: workspace.id,
         spaceId: 'space-1',
+        keyType: 'rag',
       }),
     );
+  });
+
+  it('allows only workspace admins to create MCP keys', async () => {
+    spaceRepo.findById.mockResolvedValue({
+      id: 'space-1',
+      workspaceId: workspace.id,
+    } as any);
+
+    await expect(
+      service.createApiKey(memberUser, workspace, {
+        name: 'MCP key',
+        spaceId: 'space-1',
+        keyType: 'mcp',
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    apiKeyRepo.insertApiKey.mockResolvedValue({
+      id: 'key-mcp',
+      creatorId: ownerUser.id,
+      workspaceId: workspace.id,
+      spaceId: 'space-1',
+      keyType: 'mcp',
+      expiresAt: null,
+    } as any);
+    apiKeyRepo.findById.mockResolvedValue({
+      id: 'key-mcp',
+      creatorId: ownerUser.id,
+      workspaceId: workspace.id,
+      spaceId: 'space-1',
+      keyType: 'mcp',
+    } as any);
+    tokenService.generateApiToken.mockResolvedValue('mcp-token');
+
+    await service.createApiKey(ownerUser, workspace, {
+      name: 'MCP key',
+      spaceId: 'space-1',
+      keyType: 'mcp',
+    });
+
+    expect(tokenService.generateApiToken).toHaveBeenCalledWith(
+      expect.objectContaining({ keyType: 'mcp' }),
+    );
+  });
+
+  it('does not accept RAG and MCP key types interchangeably', async () => {
+    stubValidKey(ownerUser);
+
+    await expect(
+      service.validateApiKey(validPayload(ownerUser), 'mcp'),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
   it('rejects adminView listing for member users', async () => {
