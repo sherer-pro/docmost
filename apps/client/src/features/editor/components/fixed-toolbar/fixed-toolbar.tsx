@@ -33,10 +33,12 @@ import {
   type EditorToolbarItem,
   useInlineTextToolbarItems,
 } from "@/features/editor/components/bubble-menu/toolbar-items";
+import { AiSelectionActionButton } from "@/features/ai/components/ai-selection-action";
 import classes from "./fixed-toolbar.module.css";
 
 interface FixedToolbarProps {
   editor: Editor;
+  pageId?: string;
   spaceId?: string;
   dictionaryEnabled?: boolean;
   canManageDictionary?: boolean;
@@ -45,6 +47,7 @@ interface FixedToolbarProps {
 
 export function FixedToolbar({
   editor,
+  pageId,
   spaceId,
   dictionaryEnabled = false,
   canManageDictionary = false,
@@ -159,8 +162,10 @@ export function FixedToolbar({
   const showDictionaryAction = Boolean(
     spaceId && dictionaryEnabled && canManageDictionary,
   );
+  const showAiAction = Boolean(pageId && spaceId);
   const showCommentAction = canCreateInlineComments;
-  const showRightActions = showDictionaryAction || showCommentAction;
+  const showRightActions =
+    showAiAction || showDictionaryAction || showCommentAction;
 
   return (
     <>
@@ -246,6 +251,15 @@ export function FixedToolbar({
             <div className={classes.rightActions}>
               <div className={classes.divider} />
               <ActionIcon.Group>
+                {pageId && spaceId && (
+                  <AiSelectionActionButton
+                    editor={editor}
+                    pageId={pageId}
+                    spaceId={spaceId}
+                    disabled={!editorState?.hasTextSelection}
+                  />
+                )}
+
                 {showDictionaryAction && (
                   <Tooltip label={t("Add to dictionary")} withArrow>
                     <ActionIcon
