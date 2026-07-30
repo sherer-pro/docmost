@@ -44,9 +44,5 @@ export function writeAiLocalDraft(
   key: string,
   draft: AiLocalDraft,
 ): void {
-  if (!draft.text && !draft.useSpaceSearch && !draft.agentMode) {
-    storage.removeItem(key);
-    return;
-  }
   storage.setItem(key, JSON.stringify(draft));
 }

@@ -77,7 +77,10 @@ export default function SpaceSettingsModal({
                 {space?.name}
               </Text>
             </Modal.Title>
-            <Modal.CloseButton aria-label={t("Close")} />
+            <Modal.CloseButton
+              aria-label={t("Close")}
+              className={classes.closeButton}
+            />
           </Modal.Header>
           <Modal.Body>
             <div className={classes.layout}>

@@ -28,6 +28,7 @@ import { useTranslation } from "react-i18next";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import { useAiAssistantIdentity } from "@/features/ai/hooks/use-ai-assistant-identity.ts";
+import { useModalBackgroundInert } from "@/components/ui/use-modal-background-inert.ts";
 
 export default function GlobalAppShell({
   children,
@@ -131,6 +132,9 @@ export default function GlobalAppShell({
   });
   const isDockedAside = asideMode === "docked";
   const isOverlayAside = asideMode === "overlay";
+  useModalBackgroundInert(
+    shouldShowAside && asideMode === "fullscreen" && isAsideOpen,
+  );
   const { isNavbarHidden, isAsideHidden } = getShellVisibilityState({
     isMobileViewport: Boolean(isMobileViewport),
     mobileOpened,

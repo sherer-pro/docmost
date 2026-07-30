@@ -57,23 +57,29 @@ call.
 
 ### Normal chat response
 
-1. The client creates or opens a private conversation bound to a `pageId`.
-2. A send creates the user message, a pending assistant message, and an
+1. Opening the panel or choosing **New chat** creates only a local draft. The
+   draft text and mode flags are stored in `sessionStorage`, scoped by
+   workspace, user, and page. An empty draft never creates a database row.
+2. The first meaningful action (send, private-file upload, or context change)
+   creates exactly one private conversation bound to the `pageId`, using the
+   current `agentMode` and `useSpaceSearch` flags. Concurrent first actions
+   share one in-flight creation promise.
+3. A send creates the user message, a pending assistant message, and an
    immutable `ai_run` attempt. `clientRequestId` binds the idempotency key to
    the request payload; reusing the key with a different payload is rejected.
-3. The server validates AI availability, the current user, page binding, page
+4. The server validates AI availability, the current user, page binding, page
    write access, quotas, and concurrency. At most one run per conversation,
    six per user, and thirty per space may run at the same time.
-4. The worker claims the run, resolves the context snapshot and files, and,
+5. The worker claims the run, resolves the context snapshot and files, and,
    when `useSpaceSearch` is enabled, resolves external retrieval results.
-5. `AiPromptBuilderService` builds provider messages from system instructions,
+6. `AiPromptBuilderService` builds provider messages from system instructions,
    history, the current document, explicitly selected sources, files/images,
    and safe retrieval excerpts. Budgets are derived from `contextWindow` and
    `maxOutputTokens`, so oversized sources are truncated.
-6. The provider returns a text stream. Text and, when enabled, reasoning deltas
+7. The provider returns a text stream. Text and, when enabled, reasoning deltas
    are buffered, periodically persisted, and sent over Socket.IO.
    `ai_runs.sequence` provides a monotonic ordering key for the client.
-7. On success, usage, response/reasoning snapshots, and citations are stored.
+8. On success, usage, response/reasoning snapshots, and citations are stored.
    The first successful response may schedule a separate title job limited to
    four Unicode word segments. A manual rename always wins. On failure or
    cancellation, both the message and attempt receive a terminal status.
@@ -116,6 +122,13 @@ ACL and the live Yjs document hash, validates the resulting ProseMirror
 document against the editor schema, applies one transaction, and records
 `Changed by AI agent` in page history. A stale or rejected proposal is returned
 to the model as a tool result so the bounded loop can continue.
+
+At proposal time the server also creates `approvalPreview` for the target
+page and operation. It contains the page title, explicit before/after text,
+the anchor and insert position where applicable, and a `truncated` flag.
+Each text fragment is capped at 4,000 characters. The preview is stored in the
+existing step `result` JSON and is not reconstructed from untrusted model
+arguments by the client.
 
 Safe writes cover text, ordinary text/list/heading/callout blocks, rich-text
 marks, and sanitized links. Page creation, page move/delete, databases and
@@ -368,17 +381,31 @@ For a deployment at `https://docs.example.com`, the connection parameters are:
 | authentication | `Authorization: Bearer <MCP_API_KEY>`              |
 | scope          | the single space selected when the key was created |
 
-Client configuration schemas differ, so use the client's Streamable HTTP/HTTP
-MCP option rather than copying a client-specific JSON format. Keep the token in
-the client's secret store or environment substitution; do not commit it to a
-configuration file.
+The creation UI provides verified presets for:
+
+- Codex `config.toml`, using `[mcp_servers.docmost]`, `url`, and
+  `bearer_token_env_var = "DOCMOST_MCP_TOKEN"`;
+- VS Code `mcp.json`, using `type: "http"`, an Authorization header, and a
+  password `promptString` input rather than embedding the token;
+- Claude Desktop through the experimental local
+  `npx -y mcp-remote@0.1.38` bridge. This option requires Node.js 18+, a
+  Claude restart, and stores the Bearer token in the local Claude
+  configuration.
+
+The token appears only in the post-creation step. Ordinary key lists contain
+metadata only. The step polls `lastUsedAt` and reports when the first
+connection reaches Docmost.
 
 ### Creating and validating an MCP key
 
 Workspace owners and administrators create the key on
-`/settings/api-keys` by selecting **MCP read-only** and one space. Personal API
-key management continues to create RAG keys and cannot mint an MCP key. The
-plaintext token is returned during creation and must be stored securely.
+`/settings/ai/mcp` through the type, space, name/expiry, client, creation, and
+connection flow. The legacy `/settings/api-keys` URL permanently redirects to
+this page. Personal `/settings/account/api-keys` management continues to
+create RAG keys and cannot mint an MCP key. The plaintext token is returned
+during creation and must be stored securely. The UI always selects an explicit
+30, 60, 90, or 365 day expiry (or a valid custom future date); it does not
+present an unlimited option.
 
 The JWT embeds `apiKeyId`, creator `sub`, `workspaceId`, `spaceId`, and
 `keyType=mcp`, but the database row remains authoritative. Every request
@@ -467,6 +494,22 @@ source revisions and applicable AGPL/MIT notices are recorded in
 
 ## 7. API
 
+### Administrative UI routes
+
+| Route                                  | Purpose                                                        |
+| -------------------------------------- | -------------------------------------------------------------- |
+| `/settings/ai`                         | AI and integrations overview with per-space entry points       |
+| `/settings/ai/spaces/:spaceSlug`       | sectioned full-page configuration for one space                |
+| `/settings/ai/mcp`                     | MCP onboarding and workspace API-key administration            |
+| `/settings/ai/search`                  | Enterprise semantic-search configuration                       |
+| `/settings/account/api-keys`           | personal, space-scoped RAG synchronization keys                |
+| `/settings/api-keys`                   | compatibility redirect to `/settings/ai/mcp`                  |
+
+The space settings modal contains only an AI status summary and a link to the
+full-page configuration. Provider, retrieval, and agent tests validate their
+own sections. Unsaved section changes are marked and protected when switching
+sections or closing the browser page.
+
 ### Authenticated AI API
 
 These endpoints require a user JWT. Mutating routes also require the standard
@@ -550,7 +593,9 @@ Important enumerations include provider `openai-compatible`; adapters `none`,
 
 The primary public models are `AiSpaceConfig`, `AiAvailability`,
 `AiConversation`, `AiConversationContext`, `AiMessage`, `AiRun`, `AiCitation`,
-`AiChatFile`, and `AiEditorActionRun`. Assistant messages expose `reasoning`,
+`AiRunStep`, `AiChatFile`, and `AiEditorActionRun`. `AiRunStep` exposes the
+discriminated `approvalPreview` for `editPageText`, `patchNode`, `insertNode`,
+and `deleteNode`. Assistant messages expose `reasoning`,
 `runStatus`, `retrievalOutcome`, `retrievalErrorCode`, `applyContext`, and
 citations when applicable. Secret and credential fields are never part of
 public models.

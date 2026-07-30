@@ -67,6 +67,18 @@
   transition: transform 180ms ease;
 }
 
+.panelClose {
+  min-width: 32px;
+  min-height: 32px;
+}
+
+@media (pointer: coarse) {
+  .panelClose {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .overlayAside {
     transition: none;

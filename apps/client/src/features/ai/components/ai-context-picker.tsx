@@ -33,6 +33,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useDebouncedValue, useMediaQuery } from "@mantine/hooks";
 import { useTranslation } from "react-i18next";
+import { useModalBackgroundInert } from "@/components/ui/use-modal-background-inert";
 import {
   useAiContextDescendantsQuery,
   useAiContextSourcesQuery,
@@ -109,6 +110,9 @@ export function AiContextPicker(props: AiContextPickerProps) {
   const [selectionTarget, setSelectionTarget] =
     useState<SelectionTarget | null>(null);
   const [scopeTarget, setScopeTarget] = useState<ScopeTarget | null>(null);
+  useModalBackgroundInert(
+    searchOpened || Boolean(selectionTarget) || Boolean(scopeTarget),
+  );
   const pendingSourceRef = useRef<string | null>(null);
   const contextButtonRef = useRef<HTMLButtonElement | null>(null);
   const isCoarsePointer = useMediaQuery("(pointer: coarse)");

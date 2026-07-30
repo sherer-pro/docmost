@@ -117,12 +117,6 @@ export default function PageHeaderMenu({
 
       {!isReadOnly && <PageStateSegmentedControl size="xs" pageId={page?.id} />}
 
-      <PageFavoriteAction readOnly={isReadOnly} />
-
-      <ShareModal readOnly={!canMoveDeleteSharePage} />
-
-      <PageDetailsAction readOnly={isReadOnly} />
-
       {!isReadOnly && (
         <Tooltip
           label={assistantIdentity.text("openPanel")}
@@ -140,6 +134,12 @@ export default function PageHeaderMenu({
           </AccessibleActionIcon>
         </Tooltip>
       )}
+
+      <PageFavoriteAction readOnly={isReadOnly} />
+
+      <ShareModal readOnly={!canMoveDeleteSharePage} />
+
+      <PageDetailsAction readOnly={isReadOnly} />
 
       <Tooltip label={t("Comments")} openDelay={250} withArrow>
         <AccessibleActionIcon
@@ -307,10 +307,10 @@ function PageActionMenu({ readOnly, canMoveDeleteShare }: PageActionMenuProps) {
     pageId: page?.id,
     preferences: user?.settings?.preferences,
   });
-  const resolvedSpaceSettings =
-    currentSpace?.settings ?? page?.space?.settings;
-  const spaceHeadingNumberingEnabled =
-    resolveSpaceHeadingNumberingEnabled(resolvedSpaceSettings);
+  const resolvedSpaceSettings = currentSpace?.settings ?? page?.space?.settings;
+  const spaceHeadingNumberingEnabled = resolveSpaceHeadingNumberingEnabled(
+    resolvedSpaceSettings,
+  );
   const headingNumberingEnabled = resolveHeadingNumberingEnabled({
     pageId: page?.id,
     preferences: user?.settings?.preferences,
@@ -390,9 +390,7 @@ function PageActionMenu({ readOnly, canMoveDeleteShare }: PageActionMenuProps) {
 
         restored = true;
         window.removeEventListener("afterprint", restorePersonalNumbering);
-        pageEditor.commands.setHeadingNumberingEnabled(
-          headingNumberingEnabled,
-        );
+        pageEditor.commands.setHeadingNumberingEnabled(headingNumberingEnabled);
       };
 
       window.addEventListener("afterprint", restorePersonalNumbering, {

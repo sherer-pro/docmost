@@ -30,3 +30,7 @@ export const aiLastEditorContextAtom = atom<
 export const aiUnreadRunsAtom = atom<Record<string, number>>({});
 
 export const aiActivityAtom = atom<Record<string, AiActivityItem>>({});
+
+export const aiActiveConversationByPageAtom = atom<
+  Record<string, string | null>
+>({});

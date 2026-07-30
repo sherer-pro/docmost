@@ -13,6 +13,7 @@ import {
 import { useForm } from "@mantine/form";
 import { useTranslation } from "react-i18next";
 import { IconCalendar, IconInfoCircle } from "@tabler/icons-react";
+import { useModalBackgroundInert } from "@/components/ui/use-modal-background-inert";
 import { useCreateApiKeyMutation } from "@/ee/api-key/queries/api-key-query";
 import { IApiKey, type McpClientPreset } from "@/ee/api-key";
 import { useGetSpacesQuery } from "@/features/space/queries/space-query.ts";
@@ -43,6 +44,7 @@ export function CreateApiKeyModal({
   onSuccess,
   allowMcp = false,
 }: CreateApiKeyModalProps) {
+  useModalBackgroundInert(opened);
   const { t, i18n } = useTranslation();
   const [active, setActive] = useState(0);
   const [expirationOption, setExpirationOption] = useState("365");

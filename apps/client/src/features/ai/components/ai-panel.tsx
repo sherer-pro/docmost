@@ -36,7 +36,7 @@ import {
   IconSparkles,
   IconTrash,
 } from "@tabler/icons-react";
-import { useAtomValue, useSetAtom } from "jotai";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useMediaQuery, useReducedMotion } from "@mantine/hooks";
 import { useTranslation } from "react-i18next";
@@ -51,6 +51,7 @@ import {
 import {
   aiDocumentContextAtom,
   aiActivityAtom,
+  aiActiveConversationByPageAtom,
   aiLastEditorContextAtom,
   aiStreamingRunsAtom,
   aiUnreadRunsAtom,
@@ -155,9 +156,9 @@ export function AiPanel() {
   const spaceId = documentContext?.spaceId;
   const conversationsQuery = useAiConversationsQuery(pageId);
   const availabilityQuery = useAiSpaceStatusQuery(spaceId, pageId);
-  const [activeByPage, setActiveByPage] = useState<
-    Record<string, string | null>
-  >({});
+  const [activeByPage, setActiveByPage] = useAtom(
+    aiActiveConversationByPageAtom,
+  );
   const activeSelection = pageId ? activeByPage[pageId] : undefined;
   const activeConversationId =
     typeof activeSelection === "string" ? activeSelection : undefined;
@@ -289,9 +290,14 @@ export function AiPanel() {
   useEffect(() => {
     if (
       !pageId ||
+      !localDraftKey ||
       activeByPage[pageId] !== undefined ||
       conversationsQuery.isLoading
     ) {
+      return;
+    }
+    if (readAiLocalDraft(sessionStorage, localDraftKey) !== null) {
+      setActiveByPage((current) => ({ ...current, [pageId]: null }));
       return;
     }
     const latest = getLatestAiConversation(conversations);
@@ -305,6 +311,7 @@ export function AiPanel() {
     activeByPage,
     conversations,
     conversationsQuery.isLoading,
+    localDraftKey,
     pageId,
     touchConversation,
   ]);
@@ -663,6 +670,9 @@ export function AiPanel() {
       return;
     }
     const select = () => {
+      if (localDraftKey) {
+        sessionStorage.removeItem(localDraftKey);
+      }
       setActiveByPage((current) => ({ ...current, [pageId]: conversationId }));
       touchConversation(conversationId);
     };
@@ -688,7 +698,13 @@ export function AiPanel() {
     }
     const beginDraft = () => {
       if (localDraftKey) {
-        sessionStorage.removeItem(localDraftKey);
+        writeAiLocalDraft(sessionStorage, localDraftKey, {
+          text: "",
+          useSpaceSearch: false,
+          agentMode:
+            availabilityQuery.data?.agentAvailable === true &&
+            availabilityQuery.data?.canUse !== true,
+        });
         draftHydratedFor.current = `local:${localDraftKey}`;
       }
       ensureConversationRef.current = null;
