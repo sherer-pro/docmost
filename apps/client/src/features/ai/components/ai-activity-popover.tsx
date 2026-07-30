@@ -9,7 +9,12 @@ import {
   Stack,
   Text,
 } from "@mantine/core";
-import { IconCheck, IconSparkles, IconX } from "@tabler/icons-react";
+import {
+  IconCheck,
+  IconClockExclamation,
+  IconSparkles,
+  IconX,
+} from "@tabler/icons-react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -73,10 +78,16 @@ export function AiActivityPopover() {
           </Text>
           {visible.map((item) => {
             const active = isAiActivityActive(item);
+            const awaitingApproval = item.status === "awaiting_approval";
             return (
               <Group key={item.runId} gap="xs" wrap="nowrap">
                 <Box w={20}>
-                  {active ? (
+                  {awaitingApproval ? (
+                    <IconClockExclamation
+                      size={17}
+                      color="var(--mantine-color-orange-6)"
+                    />
+                  ) : active ? (
                     <Loader size={16} />
                   ) : (
                     <IconCheck size={17} color="var(--mantine-color-green-6)" />
@@ -100,9 +111,13 @@ export function AiActivityPopover() {
                     <Badge
                       size="xs"
                       variant="light"
-                      color={active ? "blue" : "green"}
+                      color={
+                        awaitingApproval ? "orange" : active ? "blue" : "green"
+                      }
                     >
-                      {active
+                      {awaitingApproval
+                        ? t("ai.ux.activityApprovalRequired")
+                        : active
                         ? t("ai.ux.activityRunning")
                         : t("ai.ux.activityCompleted")}
                     </Badge>
