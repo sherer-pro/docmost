@@ -7,13 +7,13 @@ import "@/features/dictionary/styles/dictionary-highlight.css";
 import ReactDOM from "react-dom/client";
 import App from "./App.tsx";
 import { mantineCssResolver, theme } from "@/theme";
-import { MantineProvider } from "@mantine/core";
+import { Center, Loader, MantineProvider } from "@mantine/core";
 import { BrowserRouter } from "react-router-dom";
 import { ModalsProvider } from "@mantine/modals";
 import { Notifications } from "@mantine/notifications";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { HelmetProvider } from "react-helmet-async";
-import "./i18n";
+import { i18nReady } from "./i18n";
 import { PostHogProvider } from "posthog-js/react";
 import {
   getPostHogHost,
@@ -49,8 +49,19 @@ const root = ReactDOM.createRoot(
 );
 
 root.render(
-  <BrowserRouter>
-    <MantineProvider theme={theme} cssVariablesResolver={mantineCssResolver}>
+  <MantineProvider theme={theme} cssVariablesResolver={mantineCssResolver}>
+    <Center h="100dvh" role="status" aria-live="polite">
+      <Loader size="sm" />
+    </Center>
+  </MantineProvider>,
+);
+
+void i18nReady
+  .catch(() => undefined)
+  .then(() =>
+    root.render(
+      <BrowserRouter>
+        <MantineProvider theme={theme} cssVariablesResolver={mantineCssResolver}>
       <ModalsProvider>
         <QueryClientProvider client={queryClient}>
           <Notifications position="bottom-center" limit={3} zIndex={10000} />
@@ -61,9 +72,10 @@ root.render(
           </HelmetProvider>
         </QueryClientProvider>
       </ModalsProvider>
-    </MantineProvider>
-  </BrowserRouter>,
-);
+        </MantineProvider>
+      </BrowserRouter>,
+    ),
+  );
 
 // Register the PWA worker outside the React tree so offline caching logic
 // is not coupled to the lifecycle of React components.
