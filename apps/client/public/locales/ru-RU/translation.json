@@ -1306,6 +1306,44 @@
   "Search icons": "Поиск иконок",
   "Delete the link {{name}}?": "Удалить ссылку {{name}}?",
   "ai": {
+    "integrations": {
+      "title": "ИИ и интеграции",
+      "description": "Настройка ИИ-помощников, внешнего доступа, поиска и поведения в пространствах.",
+      "mcpTitle": "Доступ по MCP",
+      "mcpDescription": "Подключайте внешних помощников к Docmost с помощью ограниченных ключей только для чтения.",
+      "searchTitle": "Поиск для ИИ",
+      "searchDescription": "Управление поиском по рабочему пространству и интеграцией извлечения данных.",
+      "ragTitle": "API синхронизации RAG",
+      "ragDescription": "Используйте ограниченные API-ключи для синхронизации Docmost с внешним индексом.",
+      "workspaceLevel": "Рабочее пространство",
+      "enterprise": "Enterprise",
+      "open": "Открыть",
+      "spacesTitle": "Помощники пространств",
+      "spacesDescription": "Настройте помощника отдельно для каждого пространства.",
+      "spaceCount": "Пространств: {{count}}",
+      "spaceFallbackDescription": "Описание пространства отсутствует",
+      "configureSpace": "Настроить",
+      "statusReady": "Готово",
+      "statusNeedsSetup": "Нужна настройка",
+      "spaceCardTitle": "ИИ-помощник",
+      "spaceCardDescription": "Модель, имя, поведение, агентный режим, поиск и лимиты настраиваются на отдельной странице.",
+      "openFullSettings": "Открыть полные настройки",
+      "backToOverview": "Назад к ИИ и интеграциям",
+      "spaceSettingsDescription": "Настройте ИИ-помощника для этого пространства.",
+      "sectionLabel": "Раздел настроек",
+      "section": {
+        "overview": "Обзор",
+        "identity": "Имя и образ",
+        "model": "Модель",
+        "behavior": "Поведение",
+        "agent": "Агентный режим",
+        "retrieval": "Поиск по пространству",
+        "limits": "Лимиты"
+      },
+      "unsaved": "Есть несохранённые изменения",
+      "unsavedNavigationConfirm": "Отменить несохранённые изменения и открыть другой раздел?",
+      "spaceNotFound": "Пространство не найдено"
+    },
     "title": "ИИ-помощник",
     "titleNamed": {
       "masculine": "Помощник «{{assistantName}}»",
@@ -1418,7 +1456,21 @@
         "patchNode": "Заменить блок на текущей странице",
         "insertNode": "Вставить блок на текущую страницу",
         "deleteNode": "Удалить блок с текущей страницы"
-      }
+      },
+      "previewUnavailable": "Структурированный preview недоступен. Не подтверждайте операцию, если не понимаете её.",
+      "previewLabel": "Предлагаемое изменение страницы",
+      "page": "Страница",
+      "untitledPage": "Без названия",
+      "requiresApproval": "Нужно подтверждение",
+      "insertBefore": "Вставить перед этим блоком",
+      "insertAfter": "Вставить после этого блока",
+      "before": "До / удаляется",
+      "after": "После / вставляется",
+      "previewTruncated": "Preview усечён. Операция по-прежнему ограничена указанным блоком.",
+      "expiresAt": "Подтверждение доступно до {{date}}",
+      "discardDraft": "Удалить черновик?",
+      "discardDraftConfirm": "Для черновика чат ещё не создан. Удалить текст и выбранный контекст?",
+      "discard": "Удалить"
     },
     "errorReason": {
       "agentDisabled": "ИИ-агент отключён для этого пространства.",
@@ -1700,7 +1752,8 @@
       "activityTitle": "Активность ИИ",
       "activityRunning": "Генерация",
       "activityCompleted": "Ответ готов",
-      "activityDismiss": "Скрыть"
+      "activityDismiss": "Скрыть",
+      "activityApprovalRequired": "Требуется подтверждение"
     },
     "selection": {
       "open": "Обработать выделение с помощью ИИ",
@@ -1716,5 +1769,64 @@
         "after": "Вставить результат после выделенного текста?"
       }
     }
+  },
+  "AI and integrations": "ИИ и интеграции",
+  "apiKeys": {
+    "validation": {
+      "nameRequired": "Укажите название ключа.",
+      "spaceRequired": "Выберите пространство.",
+      "expirationRequired": "Выберите дату окончания.",
+      "expirationFuture": "Дата окончания должна быть в будущем."
+    },
+    "expirationOption": "{{days}} дней ({{date}})",
+    "customExpiration": "Своя дата",
+    "createTitle": "Создать API-ключ",
+    "steps": {
+      "type": "Тип",
+      "space": "Пространство",
+      "details": "Параметры",
+      "client": "Клиент"
+    },
+    "keyType": "Тип ключа",
+    "mcpDifference": "MCP позволяет внешнему ИИ-клиенту читать доступный контент одного пространства через инструменты Docmost. Изменять контент нельзя.",
+    "ragDifference": "RAG-ключи предназначены для серверной синхронизации контента с внешним индексом. MCP endpoint их не принимает.",
+    "spaceDescription": "Ключ получит доступ только к этому пространству.",
+    "nameDescription": "Укажите клиент или интеграцию, для которой создаётся ключ.",
+    "expirationDescription": "Срок действия ключей всегда ограничен. Регулярно создавайте новые ключи.",
+    "client": "MCP-клиент",
+    "clientDescription": "Мы подготовим проверенный пресет для этого клиента.",
+    "universalClient": "Универсальный",
+    "reviewTitle": "Проверьте перед созданием",
+    "review": "{{type}} · {{space}} · {{name}}",
+    "back": "Назад",
+    "next": "Далее",
+    "createdTitle": "Подключение API-ключа",
+    "oneTimeTitle": "Скопируйте токен сейчас",
+    "oneTimeDescription": "Токен показывается только на этом шаге. Docmost хранит метаданные, но не повторно доступную копию секрета.",
+    "endpoint": "Endpoint",
+    "transport": "Транспорт",
+    "authentication": "Аутентификация",
+    "permissions": "Права",
+    "expiresIn365Days": "365 дней",
+    "connectionDetected": "Первое подключение обнаружено",
+    "waitingForConnection": "Ожидание первого подключения",
+    "lastConnectedAt": "Последнее использование: {{date}}",
+    "connectionHint": "Оставьте этот шаг открытым при подключении клиента. Статус обновится автоматически.",
+    "connected": "Подключено",
+    "checking": "Проверка",
+    "universalInstructions": "Используйте Streamable HTTP и передавайте токен в заголовке Authorization: Bearer.",
+    "bearerInstruction": "Authorization: Bearer <токен>",
+    "codexConfigTitle": "Codex config.toml",
+    "codexDescription": "Добавьте блок сервера, задайте DOCMOST_MCP_TOKEN в окружении и перезапустите Codex.",
+    "vscodeDescription": "Добавьте конфигурацию в mcp.json. VS Code запросит токен через защищённое поле.",
+    "claudeWarning": "Локальный bridge экспериментальный и сохраняет токен в конфигурации Claude Desktop. Нужны Node.js 18+ и перезапуск Claude.",
+    "claudeDescription": "Добавьте блок в конфигурацию Claude Desktop. Используется mcp-remote@0.1.38 через npx.",
+    "ragCreatedTitle": "Ключ синхронизации RAG готов",
+    "ragCreatedDescription": "Используйте токен только с маршрутами /api/rag/*. Для MCP он не подходит.",
+    "savedToken": "Я сохранил токен",
+    "workspaceTitle": "MCP и API-ключи пространства",
+    "workspaceDescription": "Создавайте MCP-ключи только для чтения с ограничением по пространству и управляйте RAG-интеграциями.",
+    "personalRagTitle": "Персональные RAG-ключи",
+    "personalRagDescription": "Эти ключи синхронизируют пространство с внешним индексом. Workspace MCP-ключи создаёт администратор в разделе «ИИ и интеграции»."
   }
 }

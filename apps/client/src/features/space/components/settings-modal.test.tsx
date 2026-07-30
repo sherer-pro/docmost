@@ -12,17 +12,16 @@ import SpaceSettingsModal from "./settings-modal";
 const SPACE_ID = "00000000-0000-4000-8000-000000000001";
 
 const {
-  aiSpaceSettingsMock,
+  aiSpaceSettingsSummaryMock,
   hasFullSpaceAccessMock,
   useAiAssistantIdentityMock,
   useSpaceQueryMock,
-} =
-  vi.hoisted(() => ({
-    aiSpaceSettingsMock: vi.fn(),
-    hasFullSpaceAccessMock: vi.fn(),
-    useAiAssistantIdentityMock: vi.fn(() => ({ name: "AI" })),
-    useSpaceQueryMock: vi.fn(),
-  }));
+} = vi.hoisted(() => ({
+  aiSpaceSettingsSummaryMock: vi.fn(),
+  hasFullSpaceAccessMock: vi.fn(),
+  useAiAssistantIdentityMock: vi.fn(() => ({ name: "AI" })),
+  useSpaceQueryMock: vi.fn(),
+}));
 
 vi.mock("@mantine/core", () => {
   const Wrapper = ({ children }: { children?: React.ReactNode }) => (
@@ -98,10 +97,14 @@ vi.mock("@/features/space/components/space-details.tsx", () => ({
   default: () => null,
 }));
 
-vi.mock("@/features/ai/components/ai-space-settings.tsx", () => ({
-  AiSpaceSettings: (props: { spaceId: string }) => {
-    aiSpaceSettingsMock(props);
-    return <div data-testid="ai-space-settings" />;
+vi.mock("@/features/ai/components/ai-space-settings-summary.tsx", () => ({
+  AiSpaceSettingsSummary: (props: {
+    spaceId: string;
+    spaceSlug: string;
+    onNavigate?: () => void;
+  }) => {
+    aiSpaceSettingsSummaryMock(props);
+    return <div data-testid="ai-space-settings-summary" />;
   },
 }));
 
@@ -116,7 +119,7 @@ describe("SpaceSettingsModal", () => {
     container?.remove();
     root = null;
     container = null;
-    aiSpaceSettingsMock.mockReset();
+    aiSpaceSettingsSummaryMock.mockReset();
     hasFullSpaceAccessMock.mockReset();
     useAiAssistantIdentityMock.mockClear();
     useSpaceQueryMock.mockReset();
@@ -149,8 +152,10 @@ describe("SpaceSettingsModal", () => {
 
     expect(useSpaceQueryMock).toHaveBeenCalledWith("TS");
     expect(useAiAssistantIdentityMock).toHaveBeenLastCalledWith(SPACE_ID);
-    expect(aiSpaceSettingsMock).toHaveBeenCalledWith({
+    expect(aiSpaceSettingsSummaryMock).toHaveBeenCalledWith({
       spaceId: SPACE_ID,
+      spaceSlug: "TS",
+      onNavigate: expect.any(Function),
     });
   });
 
@@ -180,6 +185,6 @@ describe("SpaceSettingsModal", () => {
     });
 
     expect(container.innerHTML).toBe("");
-    expect(aiSpaceSettingsMock).not.toHaveBeenCalled();
+    expect(aiSpaceSettingsSummaryMock).not.toHaveBeenCalled();
   });
 });

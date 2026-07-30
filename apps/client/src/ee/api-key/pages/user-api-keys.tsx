@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Button, Group, Space } from "@mantine/core";
+import { Alert, Button, Group, Space, Text } from "@mantine/core";
 import { Helmet } from "react-helmet-async";
 import { useTranslation } from "react-i18next";
 import SettingsTitle from "@/components/settings/settings-title";
@@ -12,20 +12,23 @@ import { RevokeApiKeyModal } from "@/ee/api-key/components/revoke-api-key-modal"
 import Paginate from "@/components/common/paginate";
 import { useCursorPaginate } from "@/hooks/use-cursor-paginate";
 import { useGetApiKeysQuery } from "@/ee/api-key/queries/api-key-query.ts";
-import { IApiKey } from "@/ee/api-key";
+import { IApiKey, type McpClientPreset } from "@/ee/api-key";
 
 export default function UserApiKeys() {
   const { t } = useTranslation();
   const { cursor, goNext, goPrev } = useCursorPaginate();
   const [createModalOpened, setCreateModalOpened] = useState(false);
   const [createdApiKey, setCreatedApiKey] = useState<IApiKey | null>(null);
+  const [createdClient, setCreatedClient] =
+    useState<McpClientPreset>("universal");
   const [updateModalOpened, setUpdateModalOpened] = useState(false);
   const [revokeModalOpened, setRevokeModalOpened] = useState(false);
   const [selectedApiKey, setSelectedApiKey] = useState<IApiKey | null>(null);
   const { data, isLoading } = useGetApiKeysQuery({ cursor });
 
-  const handleCreateSuccess = (response: IApiKey) => {
+  const handleCreateSuccess = (response: IApiKey, client: McpClientPreset) => {
     setCreatedApiKey(response);
+    setCreatedClient(client);
   };
 
   const handleUpdate = (apiKey: IApiKey) => {
@@ -47,6 +50,10 @@ export default function UserApiKeys() {
       </Helmet>
 
       <SettingsTitle title={t("API keys")} />
+
+      <Alert color="blue" mb="md" title={t("apiKeys.personalRagTitle")}>
+        <Text size="sm">{t("apiKeys.personalRagDescription")}</Text>
+      </Alert>
 
       <Group justify="flex-end" mb="md">
         <Button onClick={() => setCreateModalOpened(true)}>
@@ -82,6 +89,7 @@ export default function UserApiKeys() {
         opened={!!createdApiKey}
         onClose={() => setCreatedApiKey(null)}
         apiKey={createdApiKey}
+        preferredClient={createdClient}
       />
 
       <UpdateApiKeyModal

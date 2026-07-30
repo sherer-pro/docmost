@@ -14,7 +14,7 @@ import classes from "./settings-modal.module.css";
 import { useAtomValue } from "jotai";
 import { userAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { hasFullSpaceAccess } from "@/features/space/permissions/export-access.ts";
-import { AiSpaceSettings } from "@/features/ai/components/ai-space-settings.tsx";
+import { AiSpaceSettingsSummary } from "@/features/ai/components/ai-space-settings-summary.tsx";
 import { useMediaQuery } from "@mantine/hooks";
 import { useAiAssistantIdentity } from "@/features/ai/hooks/use-ai-assistant-identity.ts";
 
@@ -144,7 +144,11 @@ export default function SpaceSettingsModal({
                     pr={8}
                   >
                     <div className={classes.generalContent}>
-                      <AiSpaceSettings spaceId={space.id} />
+                      <AiSpaceSettingsSummary
+                        spaceId={space.id}
+                        spaceSlug={space.slug}
+                        onNavigate={onClose}
+                      />
                     </div>
                   </ScrollArea>
                 </Tabs.Panel>

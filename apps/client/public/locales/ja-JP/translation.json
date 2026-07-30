@@ -1306,6 +1306,44 @@
   "Search icons": "Search icons",
   "Delete the link {{name}}?": "Delete the link {{name}}?",
   "ai": {
+    "integrations": {
+      "title": "AI and integrations",
+      "description": "Configure AI assistants, external access, search, and per-space behavior.",
+      "mcpTitle": "MCP access",
+      "mcpDescription": "Connect external assistants to Docmost with scoped read-only keys.",
+      "searchTitle": "AI search",
+      "searchDescription": "Manage the workspace search and retrieval integration.",
+      "ragTitle": "RAG synchronization API",
+      "ragDescription": "Use scoped API keys to synchronize Docmost content with an external index.",
+      "workspaceLevel": "Workspace",
+      "enterprise": "Enterprise",
+      "open": "Open",
+      "spacesTitle": "Space assistants",
+      "spacesDescription": "Configure the assistant independently for each space.",
+      "spaceCount": "{{count}} spaces",
+      "spaceFallbackDescription": "No space description",
+      "configureSpace": "Configure",
+      "statusReady": "Ready",
+      "statusNeedsSetup": "Needs setup",
+      "spaceCardTitle": "AI assistant",
+      "spaceCardDescription": "Model, identity, behavior, agent mode, search, and usage limits are managed on a dedicated page.",
+      "openFullSettings": "Open full settings",
+      "backToOverview": "Back to AI and integrations",
+      "spaceSettingsDescription": "Configure the AI assistant for this space.",
+      "sectionLabel": "Settings section",
+      "section": {
+        "overview": "Overview",
+        "identity": "Identity",
+        "model": "Model",
+        "behavior": "Behavior",
+        "agent": "Agent mode",
+        "retrieval": "Space search",
+        "limits": "Limits"
+      },
+      "unsaved": "Unsaved changes",
+      "unsavedNavigationConfirm": "Discard unsaved changes and open another section?",
+      "spaceNotFound": "Space not found"
+    },
     "title": "AIアシスタント",
     "titleNamed": {
       "masculine": "アシスタント「{{assistantName}}」",
@@ -1418,7 +1456,21 @@
         "patchNode": "Replace a block on the current page",
         "insertNode": "Insert a block on the current page",
         "deleteNode": "Delete a block from the current page"
-      }
+      },
+      "previewUnavailable": "A structured preview is unavailable. Do not approve unless you understand the operation.",
+      "previewLabel": "Proposed page change",
+      "page": "Page",
+      "untitledPage": "Untitled page",
+      "requiresApproval": "Requires approval",
+      "insertBefore": "Insert before this block",
+      "insertAfter": "Insert after this block",
+      "before": "Before / removed",
+      "after": "After / inserted",
+      "previewTruncated": "The preview is truncated. The operation remains limited to the identified block.",
+      "expiresAt": "Approval expires {{date}}",
+      "discardDraft": "Discard this draft?",
+      "discardDraftConfirm": "The draft has not created a chat yet. Discard its text and context choices?",
+      "discard": "Discard"
     },
     "errorReason": {
       "agentDisabled": "The AI agent is disabled for this space.",
@@ -1700,7 +1752,8 @@
       "activityTitle": "AI アクティビティ",
       "activityRunning": "生成中",
       "activityCompleted": "回答の準備完了",
-      "activityDismiss": "非表示"
+      "activityDismiss": "非表示",
+      "activityApprovalRequired": "Approval required"
     },
     "selection": {
       "open": "選択時に AI を使用する",
@@ -1716,5 +1769,64 @@
         "after": "この結果を選択したテキストの後に挿入しますか?"
       }
     }
+  },
+  "AI and integrations": "AI and integrations",
+  "apiKeys": {
+    "validation": {
+      "nameRequired": "Enter a key name.",
+      "spaceRequired": "Select a space.",
+      "expirationRequired": "Select an expiration date.",
+      "expirationFuture": "The expiration date must be in the future."
+    },
+    "expirationOption": "{{days}} days ({{date}})",
+    "customExpiration": "Custom date",
+    "createTitle": "Create API key",
+    "steps": {
+      "type": "Type",
+      "space": "Space",
+      "details": "Details",
+      "client": "Client"
+    },
+    "keyType": "Key type",
+    "mcpDifference": "MCP lets an external AI client read accessible content in one space through the Docmost tool set. It cannot modify content.",
+    "ragDifference": "RAG keys are for server-to-server content synchronization with an external index. They are not accepted by the MCP endpoint.",
+    "spaceDescription": "The key can access only this space.",
+    "nameDescription": "Use a name that identifies the client or integration.",
+    "expirationDescription": "Keys always expire. Choose a bounded lifetime and rotate them regularly.",
+    "client": "MCP client",
+    "clientDescription": "We will prepare a verified preset for this client.",
+    "universalClient": "Universal",
+    "reviewTitle": "Review before creation",
+    "review": "{{type}} · {{space}} · {{name}}",
+    "back": "Back",
+    "next": "Next",
+    "createdTitle": "Connect the API key",
+    "oneTimeTitle": "Copy this token now",
+    "oneTimeDescription": "The token is shown only in this step. Docmost stores metadata, not a reusable copy of the secret.",
+    "endpoint": "Endpoint",
+    "transport": "Transport",
+    "authentication": "Authentication",
+    "permissions": "Permissions",
+    "expiresIn365Days": "365 days",
+    "connectionDetected": "First connection detected",
+    "waitingForConnection": "Waiting for the first connection",
+    "lastConnectedAt": "Last used {{date}}",
+    "connectionHint": "Leave this step open while connecting the client. Status updates automatically.",
+    "connected": "Connected",
+    "checking": "Checking",
+    "universalInstructions": "Use Streamable HTTP and send the token as an Authorization: Bearer header.",
+    "bearerInstruction": "Authorization: Bearer <token>",
+    "codexConfigTitle": "Codex config.toml",
+    "codexDescription": "Add this server block, set DOCMOST_MCP_TOKEN in the environment, and restart Codex.",
+    "vscodeDescription": "Add this configuration to mcp.json. VS Code requests the token through a protected input.",
+    "claudeWarning": "The local bridge is experimental and stores the token in the Claude Desktop configuration. Requires Node.js 18+ and a Claude restart.",
+    "claudeDescription": "Add this block to the Claude Desktop configuration. It uses mcp-remote@0.1.38 through npx.",
+    "ragCreatedTitle": "RAG synchronization key is ready",
+    "ragCreatedDescription": "Use this token only with /api/rag/* endpoints. It cannot authenticate MCP.",
+    "savedToken": "I saved the token",
+    "workspaceTitle": "MCP and workspace API keys",
+    "workspaceDescription": "Create space-scoped MCP read-only keys and administer workspace RAG integrations.",
+    "personalRagTitle": "Personal RAG keys",
+    "personalRagDescription": "These keys synchronize a space with an external index. Workspace MCP keys are created by an administrator under AI and integrations."
   }
 }

@@ -108,8 +108,7 @@ export class AiToolRegistryService {
   ): Promise<AiToolExecutionResult> {
     const tool = this.tools.find(
       (candidate) =>
-        candidate.name === name &&
-        candidate.exposures.includes(context.source),
+        candidate.name === name && candidate.exposures.includes(context.source),
     );
     if (!tool) {
       throw new BadRequestException('Unknown or unavailable AI tool');
@@ -118,10 +117,7 @@ export class AiToolRegistryService {
       throw new BadRequestException('AI tool arguments must be an object');
     }
 
-    const result = await tool.execute(
-      args as Record<string, unknown>,
-      context,
-    );
+    const result = await tool.execute(args as Record<string, unknown>, context);
     const size = Buffer.byteLength(JSON.stringify(result.content), 'utf8');
     if (size > AI_TOOL_RESULT_MAX_BYTES) {
       throw new BadRequestException('AI tool result exceeds 32 KiB');
@@ -192,10 +188,7 @@ export class AiToolRegistryService {
         writeClass: 'read_only',
         exposures: ['agent', 'mcp'],
         execute: (args, context) =>
-          this.getPage(
-            this.requireString(args, 'pageId', false, 64),
-            context,
-          ),
+          this.getPage(this.requireString(args, 'pageId', false, 64), context),
       },
       {
         name: 'getOutline',
@@ -283,12 +276,7 @@ export class AiToolRegistryService {
             {
               kind: 'editPageText',
               nodeId: this.requireString(args, 'nodeId', false, 128),
-              oldText: this.requireString(
-                args,
-                'oldText',
-                false,
-                16 * 1024,
-              ),
+              oldText: this.requireString(args, 'oldText', false, 16 * 1024),
               newText: this.requireString(args, 'newText', true, 16 * 1024),
             },
             this.requireString(args, 'pageId', false, 64),
@@ -428,7 +416,14 @@ export class AiToolRegistryService {
     );
     const rows = await this.db
       .selectFrom('pages')
-      .select(['id', 'parentPageId', 'title', 'slugId', 'position', 'updatedAt'])
+      .select([
+        'id',
+        'parentPageId',
+        'title',
+        'slugId',
+        'position',
+        'updatedAt',
+      ])
       .where('workspaceId', '=', context.workspaceId)
       .where('spaceId', '=', context.spaceId)
       .where('deletedAt', 'is', null)
@@ -520,7 +515,9 @@ export class AiToolRegistryService {
         updatedAt: page.updatedAt,
         content: fits ? document : null,
         text: getProseMirrorText(document ?? {}).slice(0, 16000),
-        outline: fits ? undefined : getAiPageOutline(document ?? {}).slice(0, 80),
+        outline: fits
+          ? undefined
+          : getAiPageOutline(document ?? {}).slice(0, 80),
         truncated: !fits,
       },
     };
@@ -569,7 +566,10 @@ export class AiToolRegistryService {
       if (match < 0) break;
       items.push({
         offset: match,
-        excerpt: text.slice(Math.max(0, match - 120), match + query.length + 120),
+        excerpt: text.slice(
+          Math.max(0, match - 120),
+          match + query.length + 120,
+        ),
       });
       offset = match + Math.max(query.length, 1);
     }
@@ -586,7 +586,9 @@ export class AiToolRegistryService {
       !context.currentPageId ||
       pageId !== context.currentPageId
     ) {
-      throw new ForbiddenException('Agent writes are limited to the current page');
+      throw new ForbiddenException(
+        'Agent writes are limited to the current page',
+      );
     }
     const page = await this.getReadablePage(pageId, context);
     await this.pageAccess.assertCanWritePage(page, context.user);
@@ -679,7 +681,11 @@ export class AiToolRegistryService {
     max: number,
   ): number {
     const value = args[key] ?? fallback;
-    if (!Number.isInteger(value) || Number(value) < min || Number(value) > max) {
+    if (
+      !Number.isInteger(value) ||
+      Number(value) < min ||
+      Number(value) > max
+    ) {
       throw new BadRequestException(`Invalid AI tool argument: ${key}`);
     }
     return Number(value);

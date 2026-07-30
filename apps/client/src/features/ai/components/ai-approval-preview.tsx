@@ -70,10 +70,7 @@ export function AiApprovalPreview({ step }: { step: AiRunStep }) {
       )}
 
       {preview.afterText && (
-        <Box
-          className={classes.approvalAfter}
-          aria-label={t("ai.agent.after")}
-        >
+        <Box className={classes.approvalAfter} aria-label={t("ai.agent.after")}>
           <Text size="xs" fw={600}>
             + {t("ai.agent.after")}
           </Text>

@@ -19,10 +19,7 @@ describe("AI local draft", () => {
       agentMode: false,
     };
     expect(
-      readAiLocalDraft(
-        { getItem: () => JSON.stringify(value) },
-        "draft",
-      ),
+      readAiLocalDraft({ getItem: () => JSON.stringify(value) }, "draft"),
     ).toEqual(value);
     expect(
       readAiLocalDraft({ getItem: () => '{"text":1}' }, "draft"),

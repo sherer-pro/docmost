@@ -1,0 +1,11 @@
+.page {
+  width: 100%;
+  max-width: 1180px;
+  margin-inline: auto;
+}
+
+.cardAction {
+  align-self: flex-start;
+  margin-inline-start: calc(var(--mantine-spacing-xs) * -1);
+  margin-top: var(--mantine-spacing-xs);
+}

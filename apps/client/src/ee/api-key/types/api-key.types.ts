@@ -1,4 +1,7 @@
 import { IUser } from "@/features/user/types/user.types.ts";
+import type { McpClientPreset } from "@/ee/api-key/utils/mcp-presets.ts";
+
+export type { McpClientPreset };
 
 export interface IApiKeySpace {
   id: string;
