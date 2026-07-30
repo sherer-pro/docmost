@@ -101,6 +101,10 @@ Supported capabilities include:
 
 This allows Docmost content to serve as an up-to-date knowledge base for local or corporate LLMs.
 
+The same access-aware tool layer now powers an optional agent mode in private AI chats and a stateless, read-only MCP endpoint for external assistants. Agent writes are limited to safe operations on the current page and require a separate confirmation from the initiating user.
+
+Agent and MCP tool architecture adapted from [vvzvlad/gitmost](https://github.com/vvzvlad/gitmost) and [vvzvlad/docmost-mcp](https://github.com/vvzvlad/docmost-mcp). Special thanks to [@vvzvlad](https://github.com/vvzvlad) for developing and maintaining the fork, and to Moritz Krause, the original author of `docmost-mcp`.
+
 ### 4. Reliable AI request infrastructure
 
 AI features are implemented as a separate server-side subsystem:
