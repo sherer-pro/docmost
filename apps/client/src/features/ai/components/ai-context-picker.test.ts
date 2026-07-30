@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   dedupeAiContextSources,
+  getAiIncludedPageIds,
   treeNodeToContextSource,
 } from "../utils/ai-context.ts";
 import type { AiContextSource } from "@/features/ai/types/ai.types.ts";
@@ -73,6 +74,8 @@ describe("AI context search results", () => {
         url: null,
         position: 0,
         available: true,
+        hasChildren: false,
+        descendants: { mode: "none", pageIds: [] },
       }) as AiContextSource;
 
     expect(
@@ -82,5 +85,62 @@ describe("AI context search results", () => {
         source("two", "Second"),
       ]).map((item) => item.title),
     ).toEqual(["First", "Second"]);
+  });
+
+  it("deduplicates different source identities by backing page id", () => {
+    const page = {
+      id: "page:page-id",
+      sourceType: "page",
+      sourceId: "page-id",
+      pageId: "page-id",
+      title: "Page",
+      icon: null,
+      breadcrumbs: [],
+      url: null,
+      position: 0,
+      available: true,
+      hasChildren: false,
+      descendants: { mode: "none", pageIds: [] },
+    } as AiContextSource;
+    const row = {
+      ...page,
+      id: "database_row:row-id",
+      sourceType: "database_row",
+      sourceId: "row-id",
+      title: "Row",
+    } as AiContextSource;
+
+    expect(dedupeAiContextSources([page, row])).toEqual([page]);
+  });
+
+  it("treats the current page and selected descendants as already included", () => {
+    const source = {
+      id: "page:root",
+      sourceType: "page",
+      sourceId: "root",
+      pageId: "root",
+      title: "Root",
+      icon: null,
+      breadcrumbs: [],
+      url: null,
+      position: 0,
+      available: true,
+      hasChildren: true,
+      descendants: { mode: "selected", pageIds: ["nested"] },
+    } as AiContextSource;
+
+    expect(
+      getAiIncludedPageIds(
+        {
+          includeCurrentDocument: true,
+          currentDocumentDescendants: {
+            mode: "selected",
+            pageIds: ["current-child"],
+          },
+          sources: [source],
+        },
+        "current",
+      ),
+    ).toEqual(new Set(["current", "current-child", "root", "nested"]));
   });
 });

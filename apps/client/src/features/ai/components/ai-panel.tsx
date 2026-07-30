@@ -26,6 +26,7 @@ import {
   IconChevronDown,
   IconDots,
   IconMessagePlus,
+  IconPaperclip,
   IconPencil,
   IconPlayerStop,
   IconPlus,
@@ -76,6 +77,7 @@ import {
   AiConversation,
   AiConversationContext,
   AiContextSource,
+  AiDescendantSelection,
   AiMessage,
   AiStreamingRun,
 } from "@/features/ai/types/ai.types.ts";
@@ -110,6 +112,7 @@ import {
 import { isAiChatNearBottom } from "@/features/ai/utils/ai-scroll.ts";
 import { asideStateAtom } from "@/components/layouts/global/hooks/atoms/sidebar-atom.ts";
 import { clearAiPageActivity } from "@/features/ai/utils/ai-activity.ts";
+import { resolveAiAssistantText } from "@/features/ai/utils/ai-identity.ts";
 
 export function AiPanel() {
   const { t, i18n } = useTranslation();
@@ -170,6 +173,9 @@ export function AiPanel() {
     "idle" | "saving" | "saved" | "error"
   >("idle");
   const [contextSaveFailed, setContextSaveFailed] = useState(false);
+  const [contextManagerOpened, setContextManagerOpened] = useState(false);
+  const [pendingDroppedSource, setPendingDroppedSource] =
+    useState<AiContextSource | null>(null);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const draftHydratedFor = useRef<string | null>(null);
   const draftSaveChain = useRef<Promise<unknown>>(Promise.resolve());
@@ -208,11 +214,7 @@ export function AiPanel() {
     liveDocumentTitle || documentContext?.title?.trim() || t("ai.untitled");
 
   useEffect(() => {
-    if (
-      !pageId ||
-      asideState.tab !== "ai" ||
-      !asideState.isAsideOpen
-    ) {
+    if (!pageId || asideState.tab !== "ai" || !asideState.isAsideOpen) {
       return;
     }
     setUnreadRuns((current) => {
@@ -373,9 +375,11 @@ export function AiPanel() {
           data: {
             expectedRevision: current.revision,
             includeCurrentDocument: next.includeCurrentDocument,
+            currentDocumentDescendants: next.currentDocumentDescendants,
             sources: next.sources.map((source) => ({
               sourceType: source.sourceType,
               sourceId: source.sourceId,
+              descendants: source.descendants,
             })),
             fileIds: next.fileIds,
             attachmentIds: next.attachmentIds,
@@ -429,7 +433,11 @@ export function AiPanel() {
     }
   };
 
-  const trackRunActivity = (run: { id: string; conversationId: string; status: AiStreamingRun["status"] }) => {
+  const trackRunActivity = (run: {
+    id: string;
+    conversationId: string;
+    status: AiStreamingRun["status"];
+  }) => {
     if (!pageId) return;
     setActivity((current) => ({
       ...current,
@@ -502,6 +510,11 @@ export function AiPanel() {
         data: { draft: "" },
       });
     } catch (error) {
+      if (
+        error?.["response"]?.data?.code === "ai_context_resolved_source_limit"
+      ) {
+        setContextManagerOpened(true);
+      }
       notifications.show({
         message: resolveAiErrorMessage(
           t,
@@ -628,9 +641,31 @@ export function AiPanel() {
   };
 
   const toggleCurrentDocument = (included: boolean) =>
+    saveContext((current) => {
+      const duplicate = current.sources.find(
+        (source) => source.pageId === pageId,
+      );
+      return {
+        ...current,
+        includeCurrentDocument: included,
+        currentDocumentDescendants:
+          included &&
+          duplicate &&
+          current.currentDocumentDescendants.mode === "none"
+            ? duplicate.descendants
+            : current.currentDocumentDescendants,
+        sources: included
+          ? current.sources
+              .filter((source) => source.pageId !== pageId)
+              .map((source, position) => ({ ...source, position }))
+          : current.sources,
+      };
+    });
+
+  const setCurrentDocumentDescendants = (descendants: AiDescendantSelection) =>
     saveContext((current) => ({
       ...current,
-      includeCurrentDocument: included,
+      currentDocumentDescendants: descendants,
     }));
 
   const addContextSource = (source: AiContextSource) =>
@@ -642,27 +677,30 @@ export function AiPanel() {
       ]
         .filter(
           (item, index, all) =>
-            all.findIndex(
-              (candidate) =>
-                candidate.sourceType === item.sourceType &&
-                candidate.sourceId === item.sourceId,
-            ) === index,
+            (!current.includeCurrentDocument || item.pageId !== pageId) &&
+            all.findIndex((candidate) => candidate.pageId === item.pageId) ===
+              index,
         )
-        .slice(0, 10),
+        .slice(0, current.limits.manualRoots),
     }));
 
   const removeContextSource = (source: AiContextSource) =>
     saveContext((current) => ({
       ...current,
       sources: current.sources
-        .filter(
-          (item) =>
-            !(
-              item.sourceType === source.sourceType &&
-              item.sourceId === source.sourceId
-            ),
-        )
+        .filter((item) => item.pageId !== source.pageId)
         .map((item, position) => ({ ...item, position })),
+    }));
+
+  const setContextSourceDescendants = (
+    source: AiContextSource,
+    descendants: AiDescendantSelection,
+  ) =>
+    saveContext((current) => ({
+      ...current,
+      sources: current.sources.map((item) =>
+        item.pageId === source.pageId ? { ...item, descendants } : item,
+      ),
     }));
 
   const toggleContextFile = (fileId: string, included: boolean) =>
@@ -685,7 +723,9 @@ export function AiPanel() {
     modals.openConfirmModal({
       title: t("ai.deleteFile"),
       children: (
-        <Text size="sm">{t("ai.ux.deleteFileConfirm", { name: fileName })}</Text>
+        <Text size="sm">
+          {t("ai.ux.deleteFileConfirm", { name: fileName })}
+        </Text>
       ),
       labels: { confirm: t("ai.delete"), cancel: t("ai.cancel") },
       confirmProps: { color: "red" },
@@ -703,15 +743,17 @@ export function AiPanel() {
     });
   };
 
-  const selectedSourceIdentities = useMemo(
-    () =>
-      new Set(
-        (context?.sources ?? []).map(
-          (source) => `${source.sourceType}:${source.sourceId}`,
-        ),
-      ),
-    [context?.sources],
-  );
+  const selectedContextPageIds = useMemo(() => {
+    const ids = new Set(
+      (context?.sources ?? []).map((source) => source.pageId),
+    );
+    if ((context?.includeCurrentDocument ?? true) && pageId) ids.add(pageId);
+    for (const source of context?.sources ?? []) {
+      source.descendants.pageIds.forEach((id) => ids.add(id));
+    }
+    context?.currentDocumentDescendants.pageIds.forEach((id) => ids.add(id));
+    return ids;
+  }, [context, pageId]);
   const [{ isOver: isContextDropOver, isAllowed: isContextDropAllowed }, drop] =
     useDrop<
       { id?: string },
@@ -734,15 +776,14 @@ export function AiPanel() {
 
           const source = treeNodeToContextSource(node);
           if (!source) return result;
-          if (
-            selectedSourceIdentities.has(
-              `${source.sourceType}:${source.sourceId}`,
-            )
-          ) {
+          if (selectedContextPageIds.has(source.pageId)) {
             notifications.show({ message: t("ai.context.alreadyAdded") });
             return result;
           }
-          if ((context?.sources.length ?? 0) >= 10) {
+          if (
+            (context?.sources.length ?? 0) >=
+            (context?.limits.manualRoots ?? 10)
+          ) {
             notifications.show({
               message: t("ai.errorReason.contextSourceLimit"),
               color: "orange",
@@ -750,16 +791,8 @@ export function AiPanel() {
             return result;
           }
 
-          void addContextSource(source).catch((error) => {
-            notifications.show({
-              message: resolveAiErrorMessage(
-                t,
-                i18n,
-                error?.["response"]?.data?.code,
-              ),
-              color: "red",
-            });
-          });
+          setPendingDroppedSource(source);
+          setContextManagerOpened(true);
           return result;
         },
         collect: (monitor) => {
@@ -773,20 +806,19 @@ export function AiPanel() {
                 node &&
                 node.spaceId === documentContext?.spaceId &&
                 source &&
-                !selectedSourceIdentities.has(
-                  `${source.sourceType}:${source.sourceId}`,
-                ) &&
-                (context?.sources.length ?? 0) < 10,
+                !selectedContextPageIds.has(source.pageId) &&
+                (context?.sources.length ?? 0) <
+                  (context?.limits.manualRoots ?? 10),
             ),
           };
         },
       }),
       [
-        addContextSource,
+        context?.limits.manualRoots,
         context?.sources.length,
         documentContext?.spaceId,
         i18n,
-        selectedSourceIdentities,
+        selectedContextPageIds,
         t,
         tree,
       ],
@@ -797,7 +829,7 @@ export function AiPanel() {
       <Stack align="center" justify="center" h="100%" p="lg">
         <IconMessagePlus size={36} />
         <Text size="sm" c="dimmed" ta="center">
-          {t("ai.openDocument")}
+          {resolveAiAssistantText(t, "openDocument", null)}
         </Text>
       </Stack>
     );
@@ -822,7 +854,11 @@ export function AiPanel() {
       <Stack align="center" justify="center" h="100%" p="md">
         <Alert
           icon={<IconAlertTriangle size={18} />}
-          title={t("ai.loadFailed")}
+          title={resolveAiAssistantText(
+            t,
+            "loadFailed",
+            availabilityQuery.data?.assistantIdentity,
+          )}
           color="red"
           w="100%"
         >
@@ -849,7 +885,11 @@ export function AiPanel() {
       <Stack p="md">
         <Alert
           icon={<IconAlertTriangle size={18} />}
-          title={t("ai.unavailable")}
+          title={resolveAiAssistantText(
+            t,
+            "unavailable",
+            availability?.assistantIdentity,
+          )}
           color="yellow"
         >
           {t(
@@ -900,8 +940,7 @@ export function AiPanel() {
       .toLocaleLowerCase(i18n.language)
       .includes(historyQuery.trim().toLocaleLowerCase(i18n.language)),
   );
-  const activeConversationTitle =
-    activeConversation?.title || t("ai.newChat");
+  const activeConversationTitle = activeConversation?.title || t("ai.newChat");
 
   return (
     <Stack
@@ -913,6 +952,24 @@ export function AiPanel() {
         [classes.panelDropRejected]: isContextDropOver && !isContextDropAllowed,
       })}
     >
+      {isContextDropOver && (
+        <Box
+          className={clsx(
+            classes.contextDropOverlay,
+            isContextDropAllowed
+              ? classes.contextDropAccepted
+              : classes.contextDropRejected,
+          )}
+          aria-hidden
+        >
+          <IconPaperclip size={28} />
+          <Text size="sm" fw={600}>
+            {isContextDropAllowed
+              ? t("ai.context.dropAccepted")
+              : t("ai.context.dropRejected")}
+          </Text>
+        </Box>
+      )}
       <Group gap="xs" wrap="nowrap" className={classes.conversationBar}>
         {isCompactMobile ? (
           <Button
@@ -930,21 +987,21 @@ export function AiPanel() {
           </Button>
         ) : (
           <Select
-          aria-label={t("ai.chatHistory")}
-          data={conversations.map((conversation) => ({
-            value: conversation.id,
-            label: conversation.title || t("ai.newChat"),
-          }))}
-          value={activeConversationId ?? null}
-          onChange={selectConversation}
-          placeholder={t("ai.newChat")}
-          searchable
-          allowDeselect={false}
-          flex={1}
-          size="sm"
-          className={classes.conversationSelect}
-          maxDropdownHeight={360}
-          nothingFoundMessage={t("ai.ux.noChatsFound")}
+            aria-label={t("ai.chatHistory")}
+            data={conversations.map((conversation) => ({
+              value: conversation.id,
+              label: conversation.title || t("ai.newChat"),
+            }))}
+            value={activeConversationId ?? null}
+            onChange={selectConversation}
+            placeholder={t("ai.newChat")}
+            searchable
+            allowDeselect={false}
+            flex={1}
+            size="sm"
+            className={classes.conversationSelect}
+            maxDropdownHeight={360}
+            nothingFoundMessage={t("ai.ux.noChatsFound")}
             renderOption={({ option }) => {
               const conversation = conversationById.get(option.value);
               return (
@@ -1111,13 +1168,13 @@ export function AiPanel() {
                     !pendingRun &&
                     message.id === latestAssistantMessageId
                       ? () =>
-                        retryRun.mutate(
-                          {
-                            runId,
-                            clientRequestId: crypto.randomUUID(),
-                          },
-                          { onSuccess: trackRunActivity },
-                        )
+                          retryRun.mutate(
+                            {
+                              runId,
+                              clientRequestId: crypto.randomUUID(),
+                            },
+                            { onSuccess: trackRunActivity },
+                          )
                       : undefined
                   }
                   onRegenerate={
@@ -1125,13 +1182,13 @@ export function AiPanel() {
                     !pendingRun &&
                     message.id === latestAssistantMessageId
                       ? () =>
-                        regenerateMessage.mutate(
-                          {
-                            messageId: message.id,
-                            clientRequestId: crypto.randomUUID(),
-                          },
-                          { onSuccess: trackRunActivity },
-                        )
+                          regenerateMessage.mutate(
+                            {
+                              messageId: message.id,
+                              clientRequestId: crypto.randomUUID(),
+                            },
+                            { onSuccess: trackRunActivity },
+                          )
                       : undefined
                   }
                   showRetrievalStatus={spaceSearchReady}
@@ -1143,11 +1200,11 @@ export function AiPanel() {
               !messages.some(
                 (message) => message.id === pendingRun.messageId,
               ) && (
-              <AiStreamingPlaceholder
-                run={pendingRun}
-                generatingLabel={t("ai.generating")}
-                reasoningLabel={t("ai.ux.reasoningInProgress")}
-              />
+                <AiStreamingPlaceholder
+                  run={pendingRun}
+                  generatingLabel={t("ai.generating")}
+                  reasoningLabel={t("ai.ux.reasoningInProgress")}
+                />
               )}
           </Stack>
         </ScrollArea>
@@ -1194,62 +1251,62 @@ export function AiPanel() {
             </Button>
           ) : (
             <Menu position="top-start" withinPortal>
-            <Menu.Target>
-              <Button
-                variant="subtle"
-                size="compact-sm"
-                leftSection={<IconSparkles size={16} />}
-                rightSection={<IconChevronDown size={13} />}
-                disabled={Boolean(pendingRun)}
-                className={classes.toolbarButton}
-                aria-label={t("ai.settings.quickCommands")}
-              >
-                <span className={classes.toolbarButtonLabel}>
-                  {t("ai.settings.quickCommands")}
-                </span>
-              </Button>
-            </Menu.Target>
-            <Menu.Dropdown className={classes.quickCommandsMenu}>
-              <TextInput
-                value={quickCommandQuery}
-                onChange={(event) =>
-                  setQuickCommandQuery(event.currentTarget.value)
-                }
-                placeholder={t("ai.ux.searchCommands")}
-                leftSection={<IconSearch size={14} />}
-                size="xs"
-                mb="xs"
-                onKeyDown={(event) => event.stopPropagation()}
-              />
-              {visibleQuickCommands.map((command) => (
-                <Tooltip
-                  key={command.id}
-                  label={command.description || command.prompt}
-                  position="right"
-                  withArrow
+              <Menu.Target>
+                <Button
+                  variant="subtle"
+                  size="compact-sm"
+                  leftSection={<IconSparkles size={16} />}
+                  rightSection={<IconChevronDown size={13} />}
+                  disabled={Boolean(pendingRun)}
+                  className={classes.toolbarButton}
+                  aria-label={t("ai.settings.quickCommands")}
                 >
-                  <Menu.Item
-                    leftSection={<IconSparkles size={15} />}
-                    rightSection={
-                      <Badge size="xs" variant="light" color="gray">
-                        {customQuickCommandIds.has(command.id)
-                          ? t("ai.ux.customCommand")
-                          : t("ai.ux.builtInCommand")}
-                      </Badge>
-                    }
-                    onClick={() => handleQuickCommand(command.prompt)}
-                    aria-description={command.description || command.prompt}
+                  <span className={classes.toolbarButtonLabel}>
+                    {t("ai.settings.quickCommands")}
+                  </span>
+                </Button>
+              </Menu.Target>
+              <Menu.Dropdown className={classes.quickCommandsMenu}>
+                <TextInput
+                  value={quickCommandQuery}
+                  onChange={(event) =>
+                    setQuickCommandQuery(event.currentTarget.value)
+                  }
+                  placeholder={t("ai.ux.searchCommands")}
+                  leftSection={<IconSearch size={14} />}
+                  size="xs"
+                  mb="xs"
+                  onKeyDown={(event) => event.stopPropagation()}
+                />
+                {visibleQuickCommands.map((command) => (
+                  <Tooltip
+                    key={command.id}
+                    label={command.description || command.prompt}
+                    position="right"
+                    withArrow
                   >
-                    {command.label}
-                  </Menu.Item>
-                </Tooltip>
-              ))}
-              {visibleQuickCommands.length === 0 && (
-                <Text size="xs" c="dimmed" ta="center" py="sm">
-                  {t("ai.ux.noCommandsFound")}
-                </Text>
-              )}
-            </Menu.Dropdown>
+                    <Menu.Item
+                      leftSection={<IconSparkles size={15} />}
+                      rightSection={
+                        <Badge size="xs" variant="light" color="gray">
+                          {customQuickCommandIds.has(command.id)
+                            ? t("ai.ux.customCommand")
+                            : t("ai.ux.builtInCommand")}
+                        </Badge>
+                      }
+                      onClick={() => handleQuickCommand(command.prompt)}
+                      aria-description={command.description || command.prompt}
+                    >
+                      {command.label}
+                    </Menu.Item>
+                  </Tooltip>
+                ))}
+                {visibleQuickCommands.length === 0 && (
+                  <Text size="xs" c="dimmed" ta="center" py="sm">
+                    {t("ai.ux.noCommandsFound")}
+                  </Text>
+                )}
+              </Menu.Dropdown>
             </Menu>
           )}
 
@@ -1288,10 +1345,24 @@ export function AiPanel() {
 
           <AiContextPicker
             conversationId={activeConversationId}
-            spaceId={documentContext.spaceId}
+            documentPageId={documentContext.pageId}
             documentTitle={documentTitle}
+            currentDocumentAvailable={
+              availability.currentDocumentAvailable ?? true
+            }
             includeCurrentDocument={context?.includeCurrentDocument ?? true}
+            currentDocumentDescendants={
+              context?.currentDocumentDescendants ?? {
+                mode: "none",
+                pageIds: [],
+              }
+            }
             sources={context?.sources ?? []}
+            resolvedSourceCount={
+              context?.resolvedSourceCount ??
+              (availability.currentDocumentAvailable === false ? 0 : 1)
+            }
+            limits={context?.limits ?? { manualRoots: 10, resolvedSources: 50 }}
             fileIds={context?.fileIds ?? []}
             attachmentIds={context?.attachmentIds ?? []}
             chatFiles={chatFiles}
@@ -1299,9 +1370,15 @@ export function AiPanel() {
             loadingFiles={filesQuery.isLoading}
             saving={updateContext.isPending}
             saveFailed={contextSaveFailed}
+            opened={contextManagerOpened}
+            onOpenedChange={setContextManagerOpened}
+            pendingSource={pendingDroppedSource}
+            onPendingSourceHandled={() => setPendingDroppedSource(null)}
             onToggleCurrentDocument={toggleCurrentDocument}
+            onSetCurrentDocumentDescendants={setCurrentDocumentDescendants}
             onAddSource={addContextSource}
             onRemoveSource={removeContextSource}
+            onSetSourceDescendants={setContextSourceDescendants}
             onToggleFile={toggleContextFile}
             onToggleAttachment={toggleContextAttachment}
             onUpload={uploadFiles}

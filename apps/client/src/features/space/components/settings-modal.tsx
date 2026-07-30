@@ -16,6 +16,7 @@ import { userAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { hasFullSpaceAccess } from "@/features/space/permissions/export-access.ts";
 import { AiSpaceSettings } from "@/features/ai/components/ai-space-settings.tsx";
 import { useMediaQuery } from "@mantine/hooks";
+import { useAiAssistantIdentity } from "@/features/ai/hooks/use-ai-assistant-identity.ts";
 
 interface SpaceSettingsModalProps {
   spaceId: string;
@@ -32,6 +33,9 @@ export default function SpaceSettingsModal({
   const { data: space, isLoading } = useSpaceQuery(spaceId);
   const user = useAtomValue(userAtom);
   const isMobile = useMediaQuery("(max-width: 48em)");
+  const assistantIdentity = useAiAssistantIdentity(
+    opened ? spaceId : undefined,
+  );
 
   const spaceRules = space?.membership?.permissions;
   const spaceAbility = useSpaceAbility(spaceRules);
@@ -86,7 +90,7 @@ export default function SpaceSettingsModal({
                     {t("Members")}
                   </Tabs.Tab>
                   <Tabs.Tab fw={500} value="ai">
-                    {t("ai.title")}
+                    {assistantIdentity.name}
                   </Tabs.Tab>
                 </Tabs.List>
 

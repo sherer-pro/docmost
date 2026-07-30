@@ -43,6 +43,16 @@ export class RagController {
   }
 
   @SkipTransform()
+  @Get('scope')
+  async getScope(
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+    @AuthSpace() space: Space,
+  ) {
+    return this.ragService.getScope(this.buildScope(user, workspace, space));
+  }
+
+  @SkipTransform()
   @Get('pages')
   async listPages(
     @Query() query: RagListPagesQueryDto,

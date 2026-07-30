@@ -11,6 +11,108 @@ function queryReturning(rows: unknown[]) {
 }
 
 describe('AiRetrievalService', () => {
+  it.each([
+    {
+      name: 'reports ready when a candidate resolves to a readable live page',
+      pages: [
+        {
+          id: 'page-id',
+          slugId: 'live-page',
+          title: 'Live page',
+          workspaceId: 'workspace-id',
+          spaceId: 'space-id',
+          deletedAt: null,
+          spaceSlug: 'docs',
+        },
+      ],
+      expectedState: 'ready',
+      expectedCount: 1,
+    },
+    {
+      name: 'reports empty when remote candidates no longer exist locally',
+      pages: [],
+      expectedState: 'empty',
+      expectedCount: 0,
+    },
+  ])('$name', async ({ pages, expectedState, expectedCount }) => {
+    const adapter = {
+      kind: 'http-json-v1',
+      test: jest.fn(async () => ({
+        ok: true,
+        latencyMs: 10,
+        adapter: 'http-json-v1',
+        candidateCount: 1,
+        validCandidateCount: 1,
+        state: 'ready',
+      })),
+      retrieve: jest.fn(async () => [
+        {
+          sourceType: 'page',
+          sourceId: 'page-id',
+          pageId: 'page-id',
+          text: 'Candidate excerpt',
+          score: 0.9,
+        },
+      ]),
+    };
+    const pageAccessService = {
+      getSidebarAccessSnapshot: jest.fn(async () => ({
+        readablePageIds: new Set(['page-id']),
+      })),
+    };
+    const db = {
+      selectFrom: jest.fn(() => queryReturning(pages)),
+    };
+    const service = new AiRetrievalService(
+      db as any,
+      pageAccessService as any,
+      adapter as any,
+      { kind: 'none' } as any,
+      {
+        observeRetrieval: jest.fn(),
+        observeRetrievalQuery: jest.fn(),
+      } as any,
+    );
+    const config = {
+      adapter: 'http-json-v1' as const,
+      url: 'https://retrieval.example/query',
+      apiKey: null,
+      timeoutMs: 8000,
+      maxResults: 8,
+    };
+    const request = {
+      schemaVersion: 1 as const,
+      requestId: 'request-id',
+      workspaceId: 'workspace-id',
+      spaceId: 'space-id',
+      pageId: 'page-id',
+      query: 'query',
+      allowedPageIds: ['page-id'],
+      sourceTypes: ['page' as const],
+      limit: 3,
+      candidateLimit: 40,
+    };
+
+    await expect(service.test(config, request, {} as any)).resolves.toEqual(
+      expect.objectContaining({
+        ok: true,
+        candidateCount: 1,
+        validCandidateCount: expectedCount,
+        state: expectedState,
+      }),
+    );
+    expect(pageAccessService.getSidebarAccessSnapshot).toHaveBeenCalledWith(
+      {},
+      'space-id',
+    );
+    expect(adapter.retrieve).toHaveBeenCalledWith(
+      config,
+      expect.objectContaining({
+        allowedPageIds: ['page-id'],
+      }),
+    );
+  });
+
   it('uses only locally resolved, readable sources and ignores remote metadata', async () => {
     const pageId = '0198f2f5-a5a3-7000-8000-000000000001';
     const otherPageId = '0198f2f5-a5a3-7000-8000-000000000002';

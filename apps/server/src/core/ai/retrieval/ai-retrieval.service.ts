@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { User } from '@docmost/db/types/entity.types';
@@ -13,6 +13,7 @@ import { HttpJsonAiRetrievalAdapter } from './http-json-ai-retrieval.adapter';
 import { NoopAiRetrievalAdapter } from './noop-ai-retrieval.adapter';
 import { OpenWebUiKnowledgeRetrievalAdapter } from './open-webui-knowledge-retrieval.adapter';
 import { AiOperationalMetricsService } from '../services/ai-operational-metrics.service';
+import { AiContentPolicyService } from '../../ai-content-policy/ai-content-policy.service';
 
 export type AiRetrievalOutcome = {
   status: 'not_requested' | 'disabled' | 'used' | 'empty' | 'failed';
@@ -31,10 +32,47 @@ export class AiRetrievalService {
     private readonly noopAdapter: NoopAiRetrievalAdapter,
     private readonly metrics: AiOperationalMetricsService,
     private readonly openWebUiAdapter?: OpenWebUiKnowledgeRetrievalAdapter,
+    @Optional()
+    private readonly contentPolicy?: AiContentPolicyService,
   ) {}
 
-  async test(config: AiRetrievalConfig, request: AiRetrievalRequest) {
-    return this.getAdapter(config).test(config, request);
+  async test(
+    config: AiRetrievalConfig,
+    request: AiRetrievalRequest,
+    user: User,
+  ) {
+    const adapter = this.getAdapter(config);
+    const result = await adapter.test(config, request);
+    const snapshot = await this.pageAccessService.getSidebarAccessSnapshot(
+      user,
+      request.spaceId,
+    );
+    const excluded = this.contentPolicy
+      ? await this.contentPolicy.getExcludedPageIds(
+          request.spaceId,
+          request.workspaceId,
+        )
+      : new Set<string>();
+    const allowedPageIds = [...snapshot.readablePageIds].filter(
+      (pageId) => !excluded.has(pageId),
+    );
+    const hits = await adapter.retrieve(config, {
+      ...request,
+      allowedPageIds,
+    });
+    const sources = await this.resolveSafeSources(
+      hits,
+      new Set(allowedPageIds),
+      request.workspaceId,
+      request.spaceId,
+      config.maxResults,
+    );
+
+    return {
+      ...result,
+      validCandidateCount: sources.length,
+      state: sources.length > 0 ? ('ready' as const) : ('empty' as const),
+    };
   }
 
   async retrieveSafe(params: {
@@ -58,7 +96,15 @@ export class AiRetrievalService {
         params.user,
         params.request.spaceId,
       );
-      const allowedPageIds = [...snapshot.readablePageIds];
+      const excluded = this.contentPolicy
+        ? await this.contentPolicy.getExcludedPageIds(
+            params.request.spaceId,
+            params.request.workspaceId,
+          )
+        : new Set<string>();
+      const allowedPageIds = [...snapshot.readablePageIds].filter(
+        (pageId) => !excluded.has(pageId),
+      );
       const hits = await adapter.retrieve(
         params.config,
         {
@@ -210,11 +256,7 @@ export class AiRetrievalService {
           continue;
         }
       } else if (hit.sourceType === 'database_row') {
-        if (
-          !row ||
-          row.pageId !== page.id ||
-          row.workspaceId !== workspaceId
-        ) {
+        if (!row || row.pageId !== page.id || row.workspaceId !== workspaceId) {
           continue;
         }
       } else {
@@ -237,9 +279,7 @@ export class AiRetrievalService {
         sourceTitle: title,
         sourceUrl: `/s/${encodeURIComponent(page.spaceSlug)}/p/${encodeURIComponent(page.slugId)}`,
         excerpt: this.sanitizeExcerpt(hit.text),
-        relevanceScore: Number.isFinite(hit.score)
-          ? Number(hit.score)
-          : null,
+        relevanceScore: Number.isFinite(hit.score) ? Number(hit.score) : null,
       });
       if (safe.length >= topK) {
         break;
@@ -253,7 +293,12 @@ export class AiRetrievalService {
     return Array.from(value)
       .filter((character) => {
         const code = character.charCodeAt(0);
-        return code === 9 || code === 10 || code === 13 || (code >= 32 && code !== 127);
+        return (
+          code === 9 ||
+          code === 10 ||
+          code === 13 ||
+          (code >= 32 && code !== 127)
+        );
       })
       .join('')
       .slice(0, 16000);

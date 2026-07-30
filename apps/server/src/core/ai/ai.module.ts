@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AiContentPolicyModule } from '../ai-content-policy/ai-content-policy.module';
 import { WsModule } from '../../ws/ws.module';
 import { SearchModule } from '../search/search.module';
 import { AiChatProcessor } from './ai-chat.processor';
@@ -37,7 +38,7 @@ import { AiAuxRunExecutionService } from './services/ai-aux-run-execution.servic
 import { AiAuxRunEventService } from './services/ai-aux-run-event.service';
 
 @Module({
-  imports: [WsModule, SearchModule],
+  imports: [WsModule, SearchModule, AiContentPolicyModule],
   controllers: [
     AiConfigController,
     AiStatusController,

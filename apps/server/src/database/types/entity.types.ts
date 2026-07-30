@@ -10,6 +10,8 @@ import {
   AiRunContextSources,
   AiRuns,
   AiRunSourceDependencies,
+  AiSpaceContentExclusions,
+  AiSpaceContentPolicies,
   AiSpaceConfigs,
   Attachments,
   Comments,
@@ -118,6 +120,10 @@ export interface PageSettings {
 export type AiSpaceConfig = Selectable<AiSpaceConfigs>;
 export type InsertableAiSpaceConfig = Insertable<AiSpaceConfigs>;
 export type UpdatableAiSpaceConfig = Updateable<Omit<AiSpaceConfigs, 'id'>>;
+
+export type AiSpaceContentPolicyEntity = Selectable<AiSpaceContentPolicies>;
+export type AiSpaceContentExclusionEntity =
+  Selectable<AiSpaceContentExclusions>;
 
 // AI conversation
 export type AiConversation = Selectable<AiConversations>;

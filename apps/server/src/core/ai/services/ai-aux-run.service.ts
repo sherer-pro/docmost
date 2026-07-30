@@ -26,6 +26,7 @@ import { AiConfigService } from './ai-config.service';
 import { AiConversationService } from './ai-conversation.service';
 import { AiAuxRunEventService } from './ai-aux-run-event.service';
 import { AI_CONCURRENCY_LIMITS } from '../ai.constants';
+import { AiContentPolicyService } from '../../ai-content-policy/ai-content-policy.service';
 
 @Injectable()
 export class AiAuxRunService {
@@ -36,6 +37,7 @@ export class AiAuxRunService {
     private readonly configs: AiConfigService,
     private readonly conversations: AiConversationService,
     private readonly events: AiAuxRunEventService,
+    private readonly contentPolicy: AiContentPolicyService,
   ) {}
 
   async createEditorAction(
@@ -57,6 +59,18 @@ export class AiAuxRunService {
       user,
       workspace.id,
     );
+    if (
+      await this.contentPolicy.isPageExcluded(
+        page.id,
+        page.spaceId,
+        workspace.id,
+      )
+    ) {
+      throw new ForbiddenException({
+        code: 'ai_context_source_excluded',
+        message: 'The page is excluded from AI use',
+      });
+    }
     const config = await this.configs.getRawConfig(page.spaceId, workspace.id);
     if (!config?.enabled || !config.baseUrl || !config.chatModel) {
       throw new ForbiddenException({

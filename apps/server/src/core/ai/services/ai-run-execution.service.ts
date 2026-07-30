@@ -167,6 +167,7 @@ export class AiRunExecutionService {
       const messages = await this.promptBuilder.build({
         run,
         instructions: config.systemInstructions,
+        assistantIdentity: this.configs.toAssistantIdentity(config),
         currentUserContent: userMessage.content,
         fileText: fileContext.text,
         fileSources: fileContext.citations,

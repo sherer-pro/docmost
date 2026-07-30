@@ -8,10 +8,12 @@ import { TableOfContents } from "@/features/editor/components/table-of-contents/
 import { useAtomValue } from "jotai";
 import { pageEditorAtom } from "@/features/editor/atoms/editor-atoms.ts";
 import { AiPanel } from "@/features/ai/components/ai-panel.tsx";
+import { useAiAssistantIdentity } from "@/features/ai/hooks/use-ai-assistant-identity.ts";
 
 export default function Aside() {
   const [{ tab }, setAsideState] = useAtom(asideStateAtom);
   const { t } = useTranslation();
+  const assistantIdentity = useAiAssistantIdentity();
   const pageEditor = useAtomValue(pageEditorAtom);
 
   let title: string;
@@ -20,19 +22,19 @@ export default function Aside() {
   switch (tab) {
     case "comments":
       component = <CommentListWithTabs />;
-      title = "Comments";
+      title = t("Comments");
       break;
     case "toc":
       component = <TableOfContents editor={pageEditor} />;
-      title = "Table of contents";
+      title = t("Table of contents");
       break;
     case "ai":
       component = null;
-      title = "ai.title";
+      title = assistantIdentity.name;
       break;
     default:
       component = null;
-      title = null;
+      title = "";
   }
 
   return (
@@ -48,8 +50,8 @@ export default function Aside() {
       {(component || tab === "ai") && (
         <>
           <Group justify="space-between" mb="sm" wrap="nowrap">
-            <Text fw={500} truncate title={t(title)} style={{ minWidth: 0 }}>
-              {t(title)}
+            <Text fw={500} truncate title={title} style={{ minWidth: 0 }}>
+              {title}
             </Text>
             <CloseButton
               aria-label={t("Close panel")}

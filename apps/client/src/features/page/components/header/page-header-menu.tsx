@@ -68,6 +68,7 @@ import { PageOperationMenuItems } from "@/features/page/components/page-operatio
 import { invalidateSidebarTree } from "@/features/page/queries/cache-invalidation.ts";
 import { queryClient } from "@/main.tsx";
 import { canExportDocument } from "@/features/space/permissions/export-access.ts";
+import { useAiAssistantIdentity } from "@/features/ai/hooks/use-ai-assistant-identity.ts";
 
 interface PageHeaderMenuProps {
   readOnly?: boolean;
@@ -83,6 +84,7 @@ export default function PageHeaderMenu({
   const { data: page } = usePageQuery({
     pageId: extractPageSlugId(pageSlug),
   });
+  const assistantIdentity = useAiAssistantIdentity(page?.spaceId, page?.id);
   const pageCapabilities = page?.access?.capabilities;
   const canWritePage = pageCapabilities?.canWrite ?? !readOnly;
   const canMoveDeleteSharePage =
@@ -122,9 +124,13 @@ export default function PageHeaderMenu({
       <PageDetailsAction readOnly={isReadOnly} />
 
       {!isReadOnly && (
-        <Tooltip label={t("ai.openPanel")} openDelay={250} withArrow>
+        <Tooltip
+          label={assistantIdentity.text("openPanel")}
+          openDelay={250}
+          withArrow
+        >
           <AccessibleActionIcon
-            label={t("ai.openPanel")}
+            label={assistantIdentity.text("openPanel")}
             tooltip={false}
             variant="subtle"
             color="dark"

@@ -1,6 +1,23 @@
 export const AI_PROVIDERS = ["openai-compatible"] as const;
 export type AiProvider = (typeof AI_PROVIDERS)[number];
 
+export const AI_ASSISTANT_GENDERS = ["masculine", "feminine"] as const;
+export type AiAssistantGender = (typeof AI_ASSISTANT_GENDERS)[number];
+
+export const AI_ASSISTANT_NAME_MAX_LENGTH = 80;
+
+export function hasInvalidAiAssistantNameCharacters(value: string): boolean {
+  return Array.from(value).some((character) => {
+    const codePoint = character.codePointAt(0) ?? 0;
+    return (
+      codePoint <= 0x1f ||
+      (codePoint >= 0x7f && codePoint <= 0x9f) ||
+      (codePoint >= 0x202a && codePoint <= 0x202e) ||
+      (codePoint >= 0x2066 && codePoint <= 0x2069)
+    );
+  });
+}
+
 export const AI_SPACE_CONFIG_DEFAULTS = {
   provider: "openai-compatible",
   temperature: 0.2,
@@ -73,6 +90,21 @@ export const AI_CONTEXT_SOURCE_TYPES = [
 ] as const;
 export type AiContextSourceType = (typeof AI_CONTEXT_SOURCE_TYPES)[number];
 
+export const AI_DESCENDANT_SELECTION_MODES = [
+  "none",
+  "all",
+  "selected",
+] as const;
+export type AiDescendantSelectionMode =
+  (typeof AI_DESCENDANT_SELECTION_MODES)[number];
+
+export const AI_CONTEXT_LIMITS = {
+  manualRoots: 10,
+  resolvedSources: 50,
+  files: 10,
+  attachments: 20,
+} as const;
+
 export const AI_SOURCE_TYPES = [
   "page",
   "database",
@@ -132,6 +164,9 @@ export const AI_ERROR_CODES = [
   "ai_file_upload_failed",
   "ai_context_revision_conflict",
   "ai_context_source_limit",
+  "ai_context_resolved_source_limit",
+  "ai_context_source_excluded",
+  "ai_context_descendant_invalid",
   "context_source_unavailable",
   "editor_selection_required",
   "editor_context_stale",
@@ -185,6 +220,11 @@ export interface AiRetrievalConfigUpdate {
   };
 }
 
+export interface AiAssistantIdentity {
+  name: string;
+  gender: AiAssistantGender;
+}
+
 export interface AiSpaceConfig {
   id: string;
   workspaceId: string;
@@ -194,6 +234,9 @@ export interface AiSpaceConfig {
   baseUrl: string;
   chatModel: string;
   apiKeyConfigured: boolean;
+  assistantNameEnabled: boolean;
+  assistantName: string | null;
+  assistantGender: AiAssistantGender;
   retrieval: AiRetrievalConfig;
   systemInstructions: string | null;
   temperature: number;
@@ -217,6 +260,9 @@ export interface AiSpaceConfigUpdate {
   chatModel?: string;
   apiKey?: string;
   clearApiKey?: boolean;
+  assistantNameEnabled?: boolean;
+  assistantName?: string | null;
+  assistantGender?: AiAssistantGender;
   retrieval?: AiRetrievalConfigUpdate;
   systemInstructions?: string | null;
   temperature?: number;
@@ -236,6 +282,9 @@ export interface AiAvailability {
   configured: boolean;
   canUse: boolean;
   canManage: boolean;
+  currentDocumentAvailable: boolean;
+  editorActionsAvailable: boolean;
+  assistantIdentity: AiAssistantIdentity | null;
   retrievalAvailable: boolean;
   quickCommands?: AiQuickCommand[];
   usage?: {
@@ -275,6 +324,13 @@ export interface AiContextSource {
   url: string | null;
   position: number;
   available: boolean;
+  hasChildren: boolean;
+  descendants: AiDescendantSelection;
+}
+
+export interface AiDescendantSelection {
+  mode: AiDescendantSelectionMode;
+  pageIds: string[];
 }
 
 export interface AiConversationContext {
@@ -282,7 +338,13 @@ export interface AiConversationContext {
   revision: number;
   fingerprint: string;
   includeCurrentDocument: boolean;
+  currentDocumentDescendants: AiDescendantSelection;
   sources: AiContextSource[];
+  resolvedSourceCount: number;
+  limits: {
+    manualRoots: number;
+    resolvedSources: number;
+  };
   fileIds: string[];
   attachmentIds: string[];
   updatedAt: string;
@@ -453,9 +515,11 @@ export interface UpdateAiConversationRequest {
 export interface UpdateAiConversationContextRequest {
   expectedRevision: number;
   includeCurrentDocument: boolean;
+  currentDocumentDescendants?: AiDescendantSelection;
   sources: Array<{
     sourceType: AiContextSourceType;
     sourceId: string;
+    descendants?: AiDescendantSelection;
   }>;
   fileIds: string[];
   attachmentIds: string[];
@@ -465,6 +529,38 @@ export interface AiContextSourceSearchRequest {
   query?: string;
   cursor?: string;
   limit?: number;
+}
+
+export interface AiSpaceContentExclusion {
+  pageId: string;
+  title: string;
+  icon: string | null;
+  breadcrumbs: string[];
+  includeDescendants: boolean;
+  effectivePageCount: number;
+  available: boolean;
+}
+
+export interface AiSpaceContentPolicy {
+  spaceId: string;
+  revision: number;
+  fingerprint: string;
+  exclusions: AiSpaceContentExclusion[];
+  updatedAt: string | null;
+}
+
+export interface UpdateAiSpaceContentPolicyRequest {
+  expectedRevision: number;
+  exclusions: Array<{
+    pageId: string;
+    includeDescendants: boolean;
+  }>;
+}
+
+export interface AiContentPolicyUpdatedEvent {
+  spaceId: string;
+  revision: number;
+  fingerprint: string;
 }
 
 export interface AiRunActionRequest {

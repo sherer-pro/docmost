@@ -53,10 +53,13 @@ describe('RagService getUpdates SQL generation', () => {
     // Page access rules are not the subject of this SQL-shape test.
     {
       getSidebarAccessSnapshot: async () => ({
-        readablePageIds: { has: () => true } as unknown as Set<string>,
+        readablePageIds: new Set<string>(),
         visiblePageIds: { has: () => true } as unknown as Set<string>,
         writablePageIds: { has: () => true } as unknown as Set<string>,
       }),
+    } as any,
+    {
+      getExcludedPageIds: async () => new Set<string>(),
     } as any,
   );
 
@@ -82,7 +85,9 @@ describe('RagService getUpdates SQL generation', () => {
       nextCursor: null,
     });
 
-    const aggregationQuery = queries.find((query) => query.includes('GREATEST('));
+    const aggregationQuery = queries.find((query) =>
+      query.includes('GREATEST('),
+    );
 
     expect(aggregationQuery).toBeDefined();
     expect(aggregationQuery).toContain('"databases"."updated_at"');
@@ -92,7 +97,9 @@ describe('RagService getUpdates SQL generation', () => {
     );
     expect(aggregationQuery).toContain('"rows_changes"."rows_updated_at"');
     expect(aggregationQuery).toContain('"cells_changes"."cells_updated_at"');
-    expect(aggregationQuery).toContain('"row_pages_changes"."row_pages_updated_at"');
+    expect(aggregationQuery).toContain(
+      '"row_pages_changes"."row_pages_updated_at"',
+    );
     expect(aggregationQuery).not.toContain('"updatedAt"');
     expect(aggregationQuery).not.toContain('"propertiesUpdatedAt"');
     expect(aggregationQuery).not.toContain('"rowsUpdatedAt"');

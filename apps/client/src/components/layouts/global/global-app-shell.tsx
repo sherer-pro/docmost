@@ -27,6 +27,7 @@ import { AiPanelPreferencesSync } from "@/features/ai/components/ai-panel-prefer
 import { useTranslation } from "react-i18next";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
+import { useAiAssistantIdentity } from "@/features/ai/hooks/use-ai-assistant-identity.ts";
 
 export default function GlobalAppShell({
   children,
@@ -35,6 +36,7 @@ export default function GlobalAppShell({
 }) {
   useTrialEndAction();
   const { t } = useTranslation();
+  const assistantIdentity = useAiAssistantIdentity();
   const [mobileOpened] = useAtom(mobileSidebarAtom);
   const [desktopOpened] = useAtom(desktopSidebarAtom);
   const [asideState] = useAtom(asideStateAtom);
@@ -267,7 +269,7 @@ export default function GlobalAppShell({
             withCloseButton={false}
             padding={0}
             title={null}
-            aria-label={t("ai.title")}
+            aria-label={assistantIdentity.name}
             keepMounted
             transitionProps={{ duration: reduceMotion ? 0 : 180 }}
             styles={{

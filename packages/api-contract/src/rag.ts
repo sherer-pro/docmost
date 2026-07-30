@@ -1,6 +1,11 @@
 export type RagDocumentType = "page" | "database" | "databaseRow";
 export type RagSyncSourceType = "page" | "database_row" | "attachment";
 
+export interface RagScope {
+  fingerprint: string;
+  excludedPageIds: string[];
+}
+
 export interface RagPageChange {
   type: "page";
   id: string;

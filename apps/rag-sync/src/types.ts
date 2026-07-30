@@ -1,4 +1,4 @@
-import type { RagSyncSourceType } from '@docmost/api-contract';
+import type { RagScope, RagSyncSourceType } from "@docmost/api-contract";
 
 export type RagSyncBindingConfig = {
   id: string;
@@ -63,10 +63,10 @@ export type SourceMapping = {
 };
 
 export type FeedCheckpointKind =
-  | 'updates'
-  | 'deleted'
-  | 'attachment-updates'
-  | 'attachment-deleted';
+  | "updates"
+  | "deleted"
+  | "attachment-updates"
+  | "attachment-deleted";
 
 export type OpenWebUiFile = {
   id: string;
@@ -80,8 +80,22 @@ export type OpenWebUiFile = {
   };
 };
 
+export class OpenWebUiFileProcessingError extends Error {
+  constructor(
+    readonly fileId: string,
+    readonly status: "failed" | "not_found" | "timeout",
+  ) {
+    super("Open WebUI failed to process an uploaded file");
+    this.name = "OpenWebUiFileProcessingError";
+  }
+}
+
 export interface SyncStateStore {
-  acquireLock(bindingId: string, token: string, ttlMs: number): Promise<boolean>;
+  acquireLock(
+    bindingId: string,
+    token: string,
+    ttlMs: number,
+  ): Promise<boolean>;
   renewLock(bindingId: string, token: string, ttlMs: number): Promise<boolean>;
   releaseLock(bindingId: string, token: string): Promise<void>;
   getCheckpoint(bindingId: string, kind: FeedCheckpointKind): Promise<number>;
@@ -90,6 +104,8 @@ export interface SyncStateStore {
     kind: FeedCheckpointKind,
     value: number,
   ): Promise<void>;
+  getScopeFingerprint(bindingId: string): Promise<string | null>;
+  setScopeFingerprint(bindingId: string, fingerprint: string): Promise<void>;
   getMapping(
     bindingId: string,
     identity: string,
@@ -101,36 +117,47 @@ export interface SyncStateStore {
 }
 
 export interface DocmostSourceClient {
+  getScope(): Promise<RagScope>;
   getUpdates(
     updatedSince: number,
     cursor?: string,
-  ): Promise<import('@docmost/api-contract').RagChangeFeed<
-    import('@docmost/api-contract').RagUpdateItem
-  >>;
+  ): Promise<
+    import("@docmost/api-contract").RagChangeFeed<
+      import("@docmost/api-contract").RagUpdateItem
+    >
+  >;
   getDeleted(
     deletedSince: number,
     cursor?: string,
-  ): Promise<import('@docmost/api-contract').RagChangeFeed<
-    import('@docmost/api-contract').RagDeletedItem
-  >>;
+  ): Promise<
+    import("@docmost/api-contract").RagChangeFeed<
+      import("@docmost/api-contract").RagDeletedItem
+    >
+  >;
   getAttachmentUpdates(
     updatedSince: number,
     cursor?: string,
-  ): Promise<import('@docmost/api-contract').RagChangeFeed<
-    import('@docmost/api-contract').RagAttachmentItem
-  >>;
+  ): Promise<
+    import("@docmost/api-contract").RagChangeFeed<
+      import("@docmost/api-contract").RagAttachmentItem
+    >
+  >;
   getAttachmentDeleted(
     deletedSince: number,
     cursor?: string,
-  ): Promise<import('@docmost/api-contract').RagChangeFeed<
-    import('@docmost/api-contract').RagAttachmentDeletedItem
-  >>;
-  getPage(pageId: string): Promise<import('@docmost/api-contract').RagPageDetail>;
+  ): Promise<
+    import("@docmost/api-contract").RagChangeFeed<
+      import("@docmost/api-contract").RagAttachmentDeletedItem
+    >
+  >;
+  getPage(
+    pageId: string,
+  ): Promise<import("@docmost/api-contract").RagPageDetail>;
   getDatabase(
     databaseId: string,
-  ): Promise<import('@docmost/api-contract').RagDatabaseDetail>;
+  ): Promise<import("@docmost/api-contract").RagDatabaseDetail>;
   downloadAttachment(
-    item: import('@docmost/api-contract').RagAttachmentItem,
+    item: import("@docmost/api-contract").RagAttachmentItem,
     maxBytes: number,
   ): Promise<Uint8Array>;
 }

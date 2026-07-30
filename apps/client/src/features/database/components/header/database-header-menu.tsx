@@ -61,6 +61,7 @@ import { invalidateSidebarTree } from '@/features/page/queries/cache-invalidatio
 import { queryClient } from '@/main.tsx';
 import { useNavigate } from 'react-router-dom';
 import { canExportDocument } from '@/features/space/permissions/export-access.ts';
+import { useAiAssistantIdentity } from '@/features/ai/hooks/use-ai-assistant-identity.ts';
 
 interface DatabaseHeaderMenuProps {
   databaseId: string;
@@ -105,6 +106,10 @@ export default function DatabaseHeaderMenu({
   const { data: space } = useGetSpaceBySlugQuery(spaceSlug);
   const { data: database } = useGetDatabaseQuery(databaseId);
   const resolvedDatabasePageId = databasePageId ?? databaseContext.databasePageId;
+  const assistantIdentity = useAiAssistantIdentity(
+    database?.spaceId ?? space?.id,
+    resolvedDatabasePageId,
+  );
   const databasePageSlugId = databaseContext.databasePageSlugId;
   const { data: properties = [] } = useDatabasePropertiesQuery(databaseId);
   const tableExportStateByDatabase = useAtomValue(databaseTableExportStateAtom);
@@ -377,9 +382,13 @@ export default function DatabaseHeaderMenu({
       )}
 
       {!readOnly && hasDatabasePage && (
-        <Tooltip label={t('ai.openPanel')} openDelay={250} withArrow>
+        <Tooltip
+          label={assistantIdentity.text('openPanel')}
+          openDelay={250}
+          withArrow
+        >
           <AccessibleActionIcon
-            label={t('ai.openPanel')}
+            label={assistantIdentity.text('openPanel')}
             tooltip={false}
             variant="subtle"
             color="dark"

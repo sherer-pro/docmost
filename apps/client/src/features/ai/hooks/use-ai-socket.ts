@@ -15,6 +15,7 @@ import {
   AiRunDeltaEvent,
   AiRunStatusEvent,
   AiConversationUpdatedEvent,
+  AiContentPolicyUpdatedEvent,
   AiActivityItem,
 } from "@/features/ai/types/ai.types.ts";
 import { AI_RECONNECT_QUERY_KEY } from "@/features/ai/utils/ai-policies.ts";
@@ -240,9 +241,28 @@ export function useAiSocket() {
       void queryClient.invalidateQueries({ queryKey: AI_RECONNECT_QUERY_KEY });
     };
 
+    const handleContentPolicyUpdated = (
+      rawEvent:
+        | AiContentPolicyUpdatedEvent
+        | { data: AiContentPolicyUpdatedEvent },
+    ) => {
+      const event = unwrapAiEvent(rawEvent);
+      void queryClient.invalidateQueries({
+        queryKey: AI_QUERY_KEYS.contentPolicy(event.spaceId),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["ai", "status", event.spaceId],
+      });
+      void queryClient.invalidateQueries({ queryKey: ["ai", "context"] });
+      void queryClient.invalidateQueries({
+        queryKey: ["ai", "context-sources"],
+      });
+    };
+
     socket.on("ai:run.delta", handleDelta);
     socket.on("ai:run.status", handleStatus);
     socket.on("ai:conversation.updated", handleConversationUpdated);
+    socket.on("ai:content-policy.updated", handleContentPolicyUpdated);
     socket.on("connect", handleReconnect);
 
     return () => {
@@ -253,6 +273,7 @@ export function useAiSocket() {
       socket.off("ai:run.delta", handleDelta);
       socket.off("ai:run.status", handleStatus);
       socket.off("ai:conversation.updated", handleConversationUpdated);
+      socket.off("ai:content-policy.updated", handleContentPolicyUpdated);
       socket.off("connect", handleReconnect);
     };
   }, [

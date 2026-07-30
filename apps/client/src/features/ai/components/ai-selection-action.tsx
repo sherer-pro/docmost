@@ -202,7 +202,9 @@ export function AiSelectionActionButton({
     if (!snapshot || !run?.response) return;
     try {
       const currentAvailability = await getAiSpaceStatus(spaceId, pageId);
-      if (!currentAvailability.canUse) throw new Error("not-writable");
+      if (!currentAvailability.editorActionsAvailable) {
+        throw new Error("not-writable");
+      }
       if (!isEditorContextCurrent(editor, pageId, snapshot)) {
         notifications.show({
           message: t("ai.errorReason.editorContextStale"),
@@ -251,123 +253,123 @@ export function AiSelectionActionButton({
 
   const content = (
     <Stack gap="sm">
-          <Paper withBorder p="sm">
-            <Text size="xs" c="dimmed" mb={4}>
-              {t("ai.selection.selectedText")}
-            </Text>
-            <Text size="sm" lineClamp={6}>
-              {snapshot?.selection.text}
-            </Text>
-          </Paper>
+      <Paper withBorder p="sm">
+        <Text size="xs" c="dimmed" mb={4}>
+          {t("ai.selection.selectedText")}
+        </Text>
+        <Text size="sm" lineClamp={6}>
+          {snapshot?.selection.text}
+        </Text>
+      </Paper>
 
-          {!run && (
-            <ScrollArea.Autosize mah={320}>
-              <Stack gap={6}>
-                {commands.map((command) => (
-                  <Tooltip
-                    key={command.id}
-                    label={command.description || command.prompt}
-                    position="right"
-                    withArrow
-                  >
-                    <Button
-                      variant="light"
-                      justify="flex-start"
-                      leftSection={<IconSparkles size={15} />}
-                      loading={createAction.isPending}
-                      onClick={() => void execute(command)}
-                    >
-                      <Stack gap={0} align="flex-start">
-                        <Text size="sm">{command.label}</Text>
-                        <Text size="xs" c="dimmed" lineClamp={2}>
-                          {command.description || command.prompt}
-                        </Text>
-                      </Stack>
-                    </Button>
-                  </Tooltip>
-                ))}
-              </Stack>
-            </ScrollArea.Autosize>
-          )}
-
-          {selectedDescription && (
-            <Text size="xs" c="dimmed">
-              {selectedDescription}
-            </Text>
-          )}
-          {run && (
-            <Paper withBorder p="sm" aria-live="polite">
-              {run.response ? (
-                <Text style={{ whiteSpace: "pre-wrap" }}>{run.response}</Text>
-              ) : active ? (
-                <Group gap="xs" role="status">
-                  <Loader size="xs" type="dots" />
-                  <Text size="sm">{t("ai.generating")}</Text>
-                </Group>
-              ) : null}
-              {run.status === "failed" && (
-                <Alert color="red" mt="xs">
-                  {resolveAiErrorMessage(t, i18n, run.errorCode)}
-                </Alert>
-              )}
-            </Paper>
-          )}
-
-          <Group justify="space-between" wrap="wrap">
-            {active ? (
-              <Button
-                color="red"
-                variant="light"
-                leftSection={<IconPlayerStop size={15} />}
-                loading={cancelAction.isPending}
-                onClick={async () => {
-                  if (!run) return;
-                  setRun(await cancelAction.mutateAsync(run.id));
-                }}
+      {!run && (
+        <ScrollArea.Autosize mah={320}>
+          <Stack gap={6}>
+            {commands.map((command) => (
+              <Tooltip
+                key={command.id}
+                label={command.description || command.prompt}
+                position="right"
+                withArrow
               >
-                {t("ai.stop")}
-              </Button>
-            ) : (
-              <span />
-            )}
-            {completed && (
-              <Group gap="xs" wrap="wrap">
                 <Button
-                  variant="subtle"
-                  leftSection={<IconCopy size={15} />}
-                  onClick={() => void copy()}
+                  variant="light"
+                  justify="flex-start"
+                  leftSection={<IconSparkles size={15} />}
+                  loading={createAction.isPending}
+                  onClick={() => void execute(command)}
                 >
-                  {t("ai.copy")}
+                  <Stack gap={0} align="flex-start">
+                    <Text size="sm">{command.label}</Text>
+                    <Text size="xs" c="dimmed" lineClamp={2}>
+                      {command.description || command.prompt}
+                    </Text>
+                  </Stack>
                 </Button>
-                <Button
-                  variant="subtle"
-                  leftSection={<IconArrowUp size={15} />}
-                  disabled={!contextCurrent}
-                  onClick={() => apply("before")}
-                >
-                  {t("ai.selection.insertBefore")}
-                </Button>
-                <Button
-                  variant="subtle"
-                  leftSection={<IconArrowDown size={15} />}
-                  disabled={!contextCurrent}
-                  onClick={() => apply("after")}
-                >
-                  {t("ai.selection.insertAfter")}
-                </Button>
-                <Button
-                  leftSection={<IconReplace size={15} />}
-                  disabled={!contextCurrent}
-                  onClick={() => apply("replace")}
-                >
-                  {t("ai.replaceSelection")}
-                </Button>
-              </Group>
-            )}
-          </Group>
-          {completed && !contextCurrent && (
-            <Alert color="orange">{t("ai.selection.staleCopyOnly")}</Alert>
+              </Tooltip>
+            ))}
+          </Stack>
+        </ScrollArea.Autosize>
+      )}
+
+      {selectedDescription && (
+        <Text size="xs" c="dimmed">
+          {selectedDescription}
+        </Text>
+      )}
+      {run && (
+        <Paper withBorder p="sm" aria-live="polite">
+          {run.response ? (
+            <Text style={{ whiteSpace: "pre-wrap" }}>{run.response}</Text>
+          ) : active ? (
+            <Group gap="xs" role="status">
+              <Loader size="xs" type="dots" />
+              <Text size="sm">{t("ai.generating")}</Text>
+            </Group>
+          ) : null}
+          {run.status === "failed" && (
+            <Alert color="red" mt="xs">
+              {resolveAiErrorMessage(t, i18n, run.errorCode)}
+            </Alert>
           )}
+        </Paper>
+      )}
+
+      <Group justify="space-between" wrap="wrap">
+        {active ? (
+          <Button
+            color="red"
+            variant="light"
+            leftSection={<IconPlayerStop size={15} />}
+            loading={cancelAction.isPending}
+            onClick={async () => {
+              if (!run) return;
+              setRun(await cancelAction.mutateAsync(run.id));
+            }}
+          >
+            {t("ai.stop")}
+          </Button>
+        ) : (
+          <span />
+        )}
+        {completed && (
+          <Group gap="xs" wrap="wrap">
+            <Button
+              variant="subtle"
+              leftSection={<IconCopy size={15} />}
+              onClick={() => void copy()}
+            >
+              {t("ai.copy")}
+            </Button>
+            <Button
+              variant="subtle"
+              leftSection={<IconArrowUp size={15} />}
+              disabled={!contextCurrent}
+              onClick={() => apply("before")}
+            >
+              {t("ai.selection.insertBefore")}
+            </Button>
+            <Button
+              variant="subtle"
+              leftSection={<IconArrowDown size={15} />}
+              disabled={!contextCurrent}
+              onClick={() => apply("after")}
+            >
+              {t("ai.selection.insertAfter")}
+            </Button>
+            <Button
+              leftSection={<IconReplace size={15} />}
+              disabled={!contextCurrent}
+              onClick={() => apply("replace")}
+            >
+              {t("ai.replaceSelection")}
+            </Button>
+          </Group>
+        )}
+      </Group>
+      {completed && !contextCurrent && (
+        <Alert color="orange">{t("ai.selection.staleCopyOnly")}</Alert>
+      )}
     </Stack>
   );
 
@@ -379,7 +381,7 @@ export function AiSelectionActionButton({
         radius="6px"
         aria-label={t("ai.selection.open")}
         style={{ border: "none" }}
-        disabled={availability.data?.canUse === false}
+        disabled={availability.data?.editorActionsAvailable === false}
         onMouseDown={(event) => event.preventDefault()}
         onClick={open}
       >
@@ -427,7 +429,8 @@ export function AiSelectionActionButton({
               borderStartEndRadius: "var(--mantine-radius-lg)",
             },
             body: {
-              paddingBottom: "calc(var(--mantine-spacing-md) + env(safe-area-inset-bottom))",
+              paddingBottom:
+                "calc(var(--mantine-spacing-md) + env(safe-area-inset-bottom))",
             },
           }}
         >

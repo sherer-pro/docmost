@@ -1,4 +1,5 @@
 import {
+  AiConversationContext,
   AiContextSource,
   AiContextSourceType,
 } from "@/features/ai/types/ai.types.ts";
@@ -26,7 +27,27 @@ export function treeNodeToContextSource(
     url: null,
     position: 0,
     available: true,
+    hasChildren: Boolean(node.hasChildren || node.children?.length),
+    descendants: { mode: "none", pageIds: [] },
   };
+}
+
+export function getAiIncludedPageIds(
+  context: Pick<
+    AiConversationContext,
+    "includeCurrentDocument" | "currentDocumentDescendants" | "sources"
+  >,
+  currentPageId: string,
+): Set<string> {
+  const ids = new Set(context.sources.map((source) => source.pageId));
+  if (context.includeCurrentDocument) ids.add(currentPageId);
+  context.currentDocumentDescendants.pageIds.forEach((pageId) =>
+    ids.add(pageId),
+  );
+  context.sources.forEach((source) =>
+    source.descendants.pageIds.forEach((pageId) => ids.add(pageId)),
+  );
+  return ids;
 }
 
 export function findTreeNodeById(
@@ -46,7 +67,7 @@ export function dedupeAiContextSources(
 ): AiContextSource[] {
   const seen = new Set<string>();
   return sources.filter((source) => {
-    const identity = `${source.sourceType}:${source.sourceId}`;
+    const identity = source.pageId;
     if (seen.has(identity)) return false;
     seen.add(identity);
     return true;

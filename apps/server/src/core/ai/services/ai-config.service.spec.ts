@@ -13,6 +13,7 @@ describe('AiConfigService secret handling', () => {
       {} as any,
       {} as any,
       {} as any,
+      {} as any,
     );
 
   it('encrypts secrets and clears them only when explicitly requested', () => {
@@ -41,6 +42,9 @@ describe('AiConfigService secret handling', () => {
       workspaceId: 'workspace-id',
       spaceId: 'space-id',
       enabled: true,
+      assistantNameEnabled: true,
+      assistantName: 'Алиса',
+      assistantGender: 'feminine',
       provider: 'openai-compatible',
       baseUrl: 'https://provider.example/v1',
       chatModel: 'model',
@@ -70,6 +74,11 @@ describe('AiConfigService secret handling', () => {
     });
 
     expect(publicConfig.apiKeyConfigured).toBe(true);
+    expect(publicConfig).toMatchObject({
+      assistantNameEnabled: true,
+      assistantName: 'Алиса',
+      assistantGender: 'feminine',
+    });
     expect(publicConfig.reasoningEnabled).toBe(true);
     expect(publicConfig.retrieval.apiKeyConfigured).toBe(true);
     expect(publicConfig.retrieval.openWebUi).toEqual({
@@ -177,6 +186,72 @@ describe('AiConfigService secret handling', () => {
     });
     expect(service.retrievalUrlPolicy.assertAllowed).not.toHaveBeenCalled();
   });
+
+  it('trims assistant names and preserves them while naming is disabled', () => {
+    const service = createService() as any;
+    const existing = {
+      assistantNameEnabled: true,
+      assistantName: 'Алиса',
+      assistantGender: 'feminine',
+    };
+
+    expect(
+      service.resolveAssistantIdentityUpdate(existing, {
+        assistantNameEnabled: false,
+      }),
+    ).toEqual({
+      assistantNameEnabled: false,
+      assistantName: 'Алиса',
+      assistantGender: 'feminine',
+    });
+    expect(
+      service.resolveAssistantIdentityUpdate(existing, {
+        assistantNameEnabled: true,
+        assistantName: '  Макс 🤖  ',
+        assistantGender: 'masculine',
+      }),
+    ).toEqual({
+      assistantNameEnabled: true,
+      assistantName: 'Макс 🤖',
+      assistantGender: 'masculine',
+    });
+  });
+
+  it('requires an effective name when custom naming is enabled', () => {
+    const service = createService() as any;
+
+    expect(() =>
+      service.resolveAssistantIdentityUpdate(undefined, {
+        assistantNameEnabled: true,
+        assistantName: '   ',
+      }),
+    ).toThrow('assistantName is required');
+    expect(() =>
+      service.resolveAssistantIdentityUpdate(undefined, {
+        assistantNameEnabled: true,
+        assistantName: null,
+      }),
+    ).toThrow('assistantName is required');
+  });
+
+  it('returns only an active masculine or feminine identity', () => {
+    const service = createService();
+
+    expect(
+      service.toAssistantIdentity({
+        assistantNameEnabled: true,
+        assistantName: '  Алиса  ',
+        assistantGender: 'feminine',
+      } as any),
+    ).toEqual({ name: 'Алиса', gender: 'feminine' });
+    expect(
+      service.toAssistantIdentity({
+        assistantNameEnabled: false,
+        assistantName: 'Макс',
+        assistantGender: 'masculine',
+      } as any),
+    ).toBeNull();
+  });
 });
 
 describe('AiConfigService availability', () => {
@@ -200,10 +275,16 @@ describe('AiConfigService availability', () => {
     retrievalApiKeyEncrypted: null,
     retrievalTimeoutMs: 8000,
     retrievalMaxResults: 8,
+    assistantNameEnabled: true,
+    assistantName: 'Алиса',
+    assistantGender: 'feminine',
     quickCommands: null,
   } as any;
 
-  function createStatusService(page: any) {
+  function createStatusService(
+    page: any,
+    options: { canManage?: boolean; config?: any } = {},
+  ) {
     const usageResults = [{ requests: 1, tokens: 25 }, { count: 0 }];
     const db = {
       selectFrom: jest.fn(() => {
@@ -218,7 +299,10 @@ describe('AiConfigService availability', () => {
       }),
     };
     const spaceAbility = {
-      assertHasFullSpaceAccess: jest.fn().mockResolvedValue(undefined),
+      assertHasFullSpaceAccess:
+        options.canManage === false
+          ? jest.fn().mockRejectedValue(new Error('forbidden'))
+          : jest.fn().mockResolvedValue(undefined),
     };
     const pageRepo = {
       findById: jest.fn().mockResolvedValue(page),
@@ -238,8 +322,11 @@ describe('AiConfigService availability', () => {
       {} as any,
       {} as any,
       {} as any,
+      { isPageExcluded: jest.fn().mockResolvedValue(false) } as any,
     );
-    jest.spyOn(service, 'getRawConfig').mockResolvedValue(config);
+    jest
+      .spyOn(service, 'getRawConfig')
+      .mockResolvedValue(options.config ?? config);
     return { service, pageAccess };
   }
 
@@ -261,6 +348,10 @@ describe('AiConfigService availability', () => {
     expect(status).toMatchObject({
       canManage: true,
       canUse: true,
+      assistantIdentity: {
+        name: 'Алиса',
+        gender: 'feminine',
+      },
     });
     expect(status).not.toHaveProperty('unavailableReason');
   });
@@ -281,5 +372,37 @@ describe('AiConfigService availability', () => {
       unavailableReason: 'page_unavailable',
     });
     expect(pageAccess.getEffectiveAccess).not.toHaveBeenCalled();
+  });
+
+  it('exposes an active identity to a member while AI is disabled', async () => {
+    const member = {
+      id: 'member-id',
+      workspaceId: workspace.id,
+      role: 'member',
+    } as any;
+    const { service } = createStatusService(
+      {
+        id: 'page-id',
+        workspaceId: workspace.id,
+        spaceId: config.spaceId,
+        deletedAt: null,
+      },
+      {
+        canManage: false,
+        config: { ...config, enabled: false },
+      },
+    );
+
+    await expect(
+      service.getStatus(config.spaceId, 'page-id', member, workspace),
+    ).resolves.toMatchObject({
+      canManage: false,
+      canUse: false,
+      unavailableReason: 'disabled',
+      assistantIdentity: {
+        name: 'Алиса',
+        gender: 'feminine',
+      },
+    });
   });
 });

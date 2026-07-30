@@ -6,6 +6,15 @@ Docmost provides a core, per-space OpenAI-compatible integration for private pag
 
 Each space has an independent record in `ai_space_configs`. Space administrators and workspace owners/admins can configure the provider base URL, chat model, generation limits, retention, vision, quick commands, and an optional retrieval adapter. Model and retrieval API keys are encrypted independently with the application credential-protection helper. API responses expose only whether each key is configured.
 
+The same record stores the optional display identity through
+`assistantNameEnabled`, `assistantName` (up to 80 characters), and
+`assistantGender` (`masculine|feminine`). Names are trimmed and may contain
+Unicode, punctuation, and emoji, but not line breaks, control characters, or
+bidi controls. Enabling requires an effective non-empty name. Disabling restores
+the standard localized title while retaining the saved name and gender; a null
+name is accepted only while naming is disabled. Clients keep the name verbatim
+and inflect only the localized generic role around it.
+
 The first provider implementation is OpenAI-compatible. An API key is optional so local endpoints such as LM Studio can be used.
 
 Set `AI_PROVIDER_ALLOWED_ORIGINS` to a comma-separated list of exact trusted `http(s)` origins:
@@ -35,7 +44,7 @@ Space configuration is available only to a space administrator or workspace `own
 - `POST /api/spaces/:spaceId/ai/config/actions/test-retrieval`
 - `GET /api/spaces/:spaceId/ai/status`
 
-The status endpoint accepts an optional `pageId`. Page-scoped calls return chat availability after the current write ACL check. Calls without `pageId` require full space access and include only aggregate daily request/token and active-run counts.
+The status endpoint accepts an optional `pageId`. Page-scoped calls return chat availability after the current write ACL check. Calls without `pageId` require full space access and include only aggregate daily request/token and active-run counts. Every status response also contains `assistantIdentity: {name, gender} | null`; page-scoped members receive it even when AI is disabled or temporarily unavailable, without any administrative configuration or secret fields.
 
 Authenticated writers use `/api/ai/conversations`, nested message/file endpoints, and `/api/ai/runs/:runId/actions/*`. Conversations are private to their owner. Both HTTP handlers and the background worker re-check conversation scope and page access; workspace administrators do not receive an endpoint for reading other users' prompts or answers.
 
@@ -74,6 +83,11 @@ The additive reliability migration `20260729T120000-ai-reliability.ts` preserves
 
 The additive context/editor migration `20260729T180000-ai-context-editor-actions.ts` preserves existing conversations, enables the current document by default, and adds versioned conversation context, immutable run-context snapshots, source dependencies, and 24-hour auxiliary runs for conversation titles and selection-only editor transforms.
 
+The additive assistant identity migration
+`20260730T130000-ai-assistant-identity.ts` preserves the default behavior for
+existing spaces and adds the optional name, enable flag, grammatical gender,
+and database constraints.
+
 Every provider call is a new `ai_runs` attempt. Retry and Regenerate never reopen or erase a terminal run: they create a row linked through `rootRunId`, `previousRunId`, and `attemptNo`. They are allowed only for the latest assistant turn; older turns return `409 ai_run_not_latest`. A terminal attempt is immutable, and its usage, error, response snapshot, and citations remain available for audit.
 
 AI generation, auxiliary title/editor operations, file extraction, and hourly retention cleanup run on `AI_CHAT_QUEUE`. The older `AI_QUEUE` remains untouched for existing page/index lifecycle jobs. Queue payloads contain only record IDs; workers resolve current configuration and encrypted credentials from the database.
@@ -99,6 +113,15 @@ The client feeds REST results, deltas, status events, and reconnect recovery thr
 ## Prompt and editor safety
 
 The editor sends a Markdown document snapshot plus a SHA-256 hash of canonical editor JSON. It does not send TipTap JSON as model context. A selection is the primary document context; the enabled current document is the fallback. `AiPromptBuilderService` allocates context in this order: system/safety instructions, current prompt, selection/current document, explicit page/database/row snapshots, selected files, the latest complete user/assistant turns (at most 20 messages), then optional retrieval. It excludes the current turn and never starts history with an orphan assistant message.
+
+For ordinary chat runs, the worker reads the current space configuration at
+execution time and appends an authoritative identity directive after the space
+instructions. Its JSON-encoded `displayName` and `grammaticalGender` are treated
+as data: the model must use the name verbatim without translating,
+transliterating, or inflecting it, and use the selected gender for
+self-reference. This applies to new Send, Retry, and Regenerate attempts without
+changing request fingerprints or historical messages. Conversation-title and
+selection-only auxiliary prompts intentionally do not receive the identity.
 
 The worker resolves every explicit source with current workspace/space/deletion/ACL checks before first use and stores immutable Markdown in `ai_run_context_sources`. Retry and Regenerate copy those snapshots instead of reading changed pages. Databases contribute their description and only readable rows within the shared budget. Every page that actually contributed content is recorded in `ai_run_source_dependencies`; losing access to any dependency hides the complete derived assistant response.
 
