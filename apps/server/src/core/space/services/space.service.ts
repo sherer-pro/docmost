@@ -119,7 +119,11 @@ export class SpaceService {
         );
 
         if (updateSpaceDto.disablePublicSharing) {
-          await this.shareRepo.deleteBySpaceId(updateSpaceDto.spaceId, trx);
+          await this.shareRepo.deleteBySpaceId(
+            updateSpaceDto.spaceId,
+            workspaceId,
+            trx,
+          );
         }
       });
     }

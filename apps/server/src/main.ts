@@ -257,7 +257,6 @@ async function bootstrap() {
         '/api/auth/setup',
         '/api/health',
         '/api/workspace/check-hostname',
-        '/api/sso/google',
         '/api/workspace/create',
         '/api/workspace/joined',
       ];

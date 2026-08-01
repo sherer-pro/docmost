@@ -138,11 +138,13 @@ export class ShareRepo {
 
   async deleteBySpaceId(
     spaceId: string,
+    workspaceId: string,
     trx?: KyselyTransaction,
   ): Promise<void> {
     await dbOrTx(this.db, trx)
       .deleteFrom('shares')
       .where('spaceId', '=', spaceId)
+      .where('workspaceId', '=', workspaceId)
       .execute();
   }
 
