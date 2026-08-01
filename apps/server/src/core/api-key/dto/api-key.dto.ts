@@ -9,7 +9,11 @@ import {
   MaxLength,
 } from 'class-validator';
 
-export class ListApiKeysDto extends PaginationOptions {}
+export class ListApiKeysDto extends PaginationOptions {
+  @IsOptional()
+  @IsIn(['rag', 'mcp'])
+  keyType?: 'rag' | 'mcp';
+}
 
 export class CreateApiKeyDto {
   @IsString()
