@@ -15,7 +15,6 @@ import {
   Skeleton,
   Stack,
   Text,
-  Textarea,
   TextInput,
   Tooltip,
 } from "@mantine/core";
@@ -37,7 +36,7 @@ import {
   IconTrash,
 } from "@tabler/icons-react";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
-import { KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMediaQuery, useReducedMotion } from "@mantine/hooks";
 import { useTranslation } from "react-i18next";
 import { notifications } from "@mantine/notifications";
@@ -88,6 +87,7 @@ import {
 } from "@/features/ai/types/ai.types.ts";
 import { captureAiEditorContext } from "@/features/ai/utils/editor-context.ts";
 import { AiMessageCard } from "./ai-message-card.tsx";
+import { AiMarkdownComposer } from "./ai-markdown-composer.tsx";
 import { AiReasoningDisclosure } from "./ai-reasoning-disclosure.tsx";
 import classes from "./ai-panel.module.css";
 import { DEFAULT_AI_QUICK_COMMANDS } from "@/features/ai/constants/quick-commands.ts";
@@ -657,13 +657,6 @@ export function AiPanel() {
   };
 
   const handleQuickCommand = (prompt: string) => void submit(prompt);
-
-  const handleComposerKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-      event.preventDefault();
-      void submit(draft);
-    }
-  };
 
   const selectConversation = (conversationId: string | null) => {
     if (!pageId || !conversationId) {
@@ -1717,19 +1710,15 @@ export function AiPanel() {
           />
         </Group>
 
-        <Textarea
-          aria-label={t("ai.messagePlaceholder")}
-          placeholder={t("ai.messagePlaceholder")}
+        <AiMarkdownComposer
           value={draft}
-          onChange={(event) => {
-            setDraft(event.currentTarget.value);
+          ariaLabel={t("ai.messagePlaceholder")}
+          placeholder={t("ai.messagePlaceholder")}
+          onChange={(nextDraft) => {
+            setDraft(nextDraft);
             setDraftStatus(activeConversation ? "saving" : "idle");
           }}
-          onKeyDown={handleComposerKeyDown}
-          minRows={2}
-          maxRows={8}
-          autosize
-          className={classes.messageInput}
+          onSubmit={() => void submit(draft)}
         />
 
         <Group

@@ -129,8 +129,145 @@
   overflow-y: auto;
 }
 
-.messageInput {
+.markdownComposer {
   min-width: 0;
+  border: 1px solid
+    light-dark(var(--mantine-color-gray-4), var(--mantine-color-dark-4));
+  border-radius: var(--mantine-radius-sm);
+  background: light-dark(
+    var(--mantine-color-white),
+    var(--mantine-color-dark-6)
+  );
+}
+
+.markdownComposer :global(.ProseMirror) {
+  min-height: 48px;
+  max-height: 192px;
+  overflow-y: auto;
+  padding: 8px 10px;
+  outline: none;
+  color: var(--mantine-color-text);
+  font-size: var(--mantine-font-size-sm);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.markdownComposer :global(.ProseMirror-focused) {
+  box-shadow: 0 0 0 1px var(--mantine-primary-color-filled);
+}
+
+.markdownComposer :global(.ProseMirror p) {
+  margin: 0;
+}
+
+.markdownComposer :global(.ProseMirror p + p),
+.markdownComposer :global(.ProseMirror blockquote + p),
+.markdownComposer :global(.ProseMirror pre + p),
+.markdownComposer :global(.ProseMirror ul + p),
+.markdownComposer :global(.ProseMirror ol + p) {
+  margin-top: 0.5em;
+}
+
+.markdownComposer :global(.ProseMirror h1),
+.markdownComposer :global(.ProseMirror h2),
+.markdownComposer :global(.ProseMirror h3),
+.markdownComposer :global(.ProseMirror h4),
+.markdownComposer :global(.ProseMirror h5),
+.markdownComposer :global(.ProseMirror h6) {
+  margin: 0.55em 0 0;
+  line-height: 1.25;
+}
+
+.markdownComposer :global(.ProseMirror h1) {
+  font-size: 1.3em;
+}
+
+.markdownComposer :global(.ProseMirror h2) {
+  font-size: 1.18em;
+}
+
+.markdownComposer :global(.ProseMirror h3),
+.markdownComposer :global(.ProseMirror h4),
+.markdownComposer :global(.ProseMirror h5),
+.markdownComposer :global(.ProseMirror h6) {
+  font-size: 1.05em;
+}
+
+.markdownComposer :global(.ProseMirror ul),
+.markdownComposer :global(.ProseMirror ol) {
+  margin: 0.4em 0;
+  padding-inline-start: 1.35rem;
+}
+
+.markdownComposer :global(.ProseMirror ul[data-type="taskList"]) {
+  padding-inline-start: 0;
+  list-style: none;
+}
+
+.markdownComposer :global(.ProseMirror ul[data-type="taskList"] li) {
+  display: flex;
+  gap: 6px;
+}
+
+.markdownComposer :global(.ProseMirror ul[data-type="taskList"] li > div) {
+  min-width: 0;
+  flex: 1;
+}
+
+.markdownComposer :global(.ProseMirror ul[data-type="taskList"] input) {
+  width: 16px;
+  height: 16px;
+  margin: 3px 0 0;
+}
+
+.markdownComposer :global(.ProseMirror blockquote) {
+  margin: 0.45em 0;
+  border-inline-start: 2px solid var(--mantine-color-gray-4);
+  padding-inline-start: var(--mantine-spacing-xs);
+  color: light-dark(
+    var(--mantine-color-gray-7),
+    var(--mantine-color-dark-1)
+  );
+}
+
+.markdownComposer :global(.ProseMirror pre) {
+  margin: 0.45em 0;
+  overflow-x: auto;
+  border-radius: var(--mantine-radius-xs);
+  padding: var(--mantine-spacing-xs);
+  background: light-dark(
+    var(--mantine-color-gray-1),
+    var(--mantine-color-dark-9)
+  );
+}
+
+.markdownComposer :global(.ProseMirror code) {
+  font-family: var(--mantine-font-family-monospace);
+}
+
+.markdownComposer
+  :global(.ProseMirror p.is-editor-empty:first-child::before) {
+  float: left;
+  height: 0;
+  color: var(--mantine-color-placeholder);
+  content: attr(data-placeholder);
+  pointer-events: none;
+}
+
+.markdownComposer :global(.aiMarkdownSyntaxActive::before),
+.markdownComposer :global(.aiMarkdownSyntaxActive::after) {
+  color: var(--mantine-color-dimmed);
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 0.9em;
+  font-weight: 400;
+}
+
+.markdownComposer :global(.aiMarkdownSyntaxActive::before) {
+  content: attr(data-markdown-prefix);
+}
+
+.markdownComposer :global(.aiMarkdownSyntaxActive::after) {
+  content: attr(data-markdown-suffix);
 }
 
 .composerFooter {
