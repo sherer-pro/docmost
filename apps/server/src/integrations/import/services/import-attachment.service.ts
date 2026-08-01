@@ -10,7 +10,10 @@ import { getMimeType, sanitizeFileName } from '../../../common/helpers';
 import { v7 } from 'uuid';
 import { FileTask } from '@docmost/db/types/entity.types';
 import { getAttachmentFolderPath } from '../../../core/attachment/attachment.utils';
-import { AttachmentType } from '../../../core/attachment/attachment.constants';
+import {
+  AttachmentType,
+  CONTENT_INDEXABLE_EXTENSIONS,
+} from '../../../core/attachment/attachment.constants';
 import { unwrapFromParagraph } from '../utils/import-formatter';
 import { resolveRelativeAttachmentPath } from '../utils/import.utils';
 import { load } from 'cheerio';
@@ -404,6 +407,9 @@ export class ImportAttachmentService {
     } = opts;
 
     let lastError: Error;
+    const isContentIndexable = CONTENT_INDEXABLE_EXTENSIONS.includes(
+      ext?.toLowerCase() as (typeof CONTENT_INDEXABLE_EXTENSIONS)[number],
+    );
 
     for (let attempt = 1; attempt <= this.MAX_RETRIES; attempt++) {
       try {
@@ -441,12 +447,12 @@ export class ImportAttachmentService {
             workspaceId: fileTask.workspaceId,
             pageId,
             spaceId: fileTask.spaceId,
+            contentIndexStatus: isContentIndexable ? 'pending' : null,
           })
           .execute();
 
         // Queue PDF and DOCX files for indexing
-        const supportedExtensions = ['.pdf', '.docx'];
-        if (supportedExtensions.includes(ext.toLowerCase())) {
+        if (isContentIndexable) {
           try {
             await this.attachmentQueue.add(
               QueueJob.ATTACHMENT_INDEX_CONTENT,

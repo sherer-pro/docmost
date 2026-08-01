@@ -16,7 +16,11 @@ import {
 } from '../attachment.utils';
 import { v4 as uuid4, v7 as uuid7 } from 'uuid';
 import { AttachmentRepo } from '@docmost/db/repos/attachment/attachment.repo';
-import { AttachmentType, validImageExtensions } from '../attachment.constants';
+import {
+  AttachmentType,
+  CONTENT_INDEXABLE_EXTENSIONS,
+  validImageExtensions,
+} from '../attachment.constants';
 import { KyselyDB, KyselyTransaction } from '@docmost/db/types/kysely.types';
 import { Attachment, User, Workspace } from '@docmost/db/types/entity.types';
 import { InjectKysely } from 'nestjs-kysely';
@@ -131,6 +135,13 @@ export class AttachmentService {
             mimeType: preparedFile.mimeType,
             fileExt: preparedFile.fileExtension,
             textContent: null,
+            contentIndexStatus: this.initialContentIndexStatus(
+              preparedFile.fileExtension,
+            ),
+            contentIndexError: null,
+            contentIndexStartedAt: null,
+            contentIndexedAt: null,
+            contentIndexVersion: null,
             updatedAt: new Date(),
           },
           attachmentId,
@@ -169,7 +180,7 @@ export class AttachmentService {
       await this.deleteRedundantFile(existingAttachment.filePath);
     }
 
-    if (['.pdf', '.docx'].includes(attachment.fileExt.toLowerCase())) {
+    if (this.initialContentIndexStatus(attachment.fileExt) === 'pending') {
       try {
         await this.attachmentQueue.add(
           QueueJob.ATTACHMENT_INDEX_CONTENT,
@@ -365,9 +376,23 @@ export class AttachmentService {
         workspaceId: workspaceId,
         pageId: pageId,
         spaceId: spaceId,
+        contentIndexStatus: this.initialContentIndexStatus(
+          preparedFile.fileExtension,
+        ),
       },
       trx,
     );
+  }
+
+  /**
+   * Only formats the extractor understands enter the content indexing pipeline.
+   */
+  private initialContentIndexStatus(fileExtension: string): string | null {
+    return CONTENT_INDEXABLE_EXTENSIONS.includes(
+      fileExtension?.toLowerCase() as (typeof CONTENT_INDEXABLE_EXTENSIONS)[number],
+    )
+      ? 'pending'
+      : null;
   }
 
   async handleDeleteSpaceAttachments(spaceId: string) {

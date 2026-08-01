@@ -32,13 +32,16 @@ export class AttachmentProcessor extends WorkerHost implements OnModuleDestroy {
         job.name === QueueJob.ATTACHMENT_INDEX_CONTENT ||
         job.name === QueueJob.ATTACHMENT_INDEXING
       ) {
+        const retryFailed = Boolean(job.data.retryFailed);
         if (job.name === QueueJob.ATTACHMENT_INDEX_CONTENT) {
           await this.attachmentContentService.indexAttachment(
             job.data.attachmentId,
+            { retryFailed },
           );
         } else if (job.name === QueueJob.ATTACHMENT_INDEXING) {
           await this.attachmentContentService.indexWorkspace(
             job.data.workspaceId,
+            { retryFailed },
           );
         }
       }

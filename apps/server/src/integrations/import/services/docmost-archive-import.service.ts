@@ -40,6 +40,7 @@ import {
 } from '../../../core/database/utils/database-copy.utils';
 import { sql } from 'kysely';
 import { QueueJob, QueueName } from '../../queue/constants';
+import { CONTENT_INDEXABLE_EXTENSIONS } from '../../../core/attachment/attachment.constants';
 
 interface StagedAttachment {
   sourceId: string;
@@ -197,6 +198,11 @@ export class DocmostArchiveImportService {
                 pageId: attachment.pageId,
                 spaceId: fileTask.spaceId!,
                 workspaceId: fileTask.workspaceId,
+                contentIndexStatus: CONTENT_INDEXABLE_EXTENSIONS.includes(
+                  attachment.fileExt?.toLowerCase() as (typeof CONTENT_INDEXABLE_EXTENSIONS)[number],
+                )
+                  ? 'pending'
+                  : null,
               })),
             )
             .execute();
@@ -247,7 +253,9 @@ export class DocmostArchiveImportService {
     await Promise.all(
       stagedAttachments
         .filter((attachment) =>
-          ['.pdf', '.docx'].includes(attachment.fileExt.toLowerCase()),
+          CONTENT_INDEXABLE_EXTENSIONS.includes(
+            attachment.fileExt?.toLowerCase() as (typeof CONTENT_INDEXABLE_EXTENSIONS)[number],
+          ),
         )
         .map(async (attachment) => {
           try {

@@ -9,19 +9,42 @@ import {
   createZipReadBudget,
   readZipEntryWithBudget,
 } from '../../../integrations/import/utils/file.utils';
-import { sql } from 'kysely';
 import * as yauzl from 'yauzl';
 import { executeTx } from '@docmost/db/utils';
+import { CONTENT_INDEXABLE_EXTENSIONS } from '../attachment.constants';
 
-const SUPPORTED_ATTACHMENT_EXTENSIONS = ['.pdf', '.docx'] as const;
+const SUPPORTED_ATTACHMENT_EXTENSIONS = CONTENT_INDEXABLE_EXTENSIONS;
 const MAX_ATTACHMENT_FILE_BYTES = 50 * 1024 * 1024;
 const MAX_EXTRACTED_TEXT_CHARS = 1_000_000;
 const MAX_PDF_PAGES = 500;
 const MAX_DOCX_ENTRY_BYTES = 25 * 1024 * 1024;
 const MAX_DOCX_UNCOMPRESSED_BYTES = 100 * 1024 * 1024;
 const MAX_DOCX_ENTRIES = 10_000;
+const EXTRACTION_TIMEOUT_MS = 60_000;
 const BACKFILL_CONCURRENCY = 2;
 const BACKFILL_BATCH_SIZE = 100;
+export const ATTACHMENT_CONTENT_INDEX_VERSION = 1;
+
+export type AttachmentContentIndexStatus =
+  | 'pending'
+  | 'processing'
+  | 'ready'
+  | 'skipped'
+  | 'failed';
+
+/** Raised for content that can never be extracted, so it is not retried. */
+class UnextractableAttachmentError extends Error {
+  constructor(readonly code: string) {
+    super(code);
+  }
+}
+
+/** Raised for infrastructure failures that should be retried later. */
+class TransientExtractionError extends Error {
+  constructor(readonly code: string, readonly cause: unknown) {
+    super(code);
+  }
+}
 
 @Injectable()
 export class AttachmentContentService implements OnApplicationBootstrap {
@@ -38,15 +61,14 @@ export class AttachmentContentService implements OnApplicationBootstrap {
 
   async onApplicationBootstrap(): Promise<void> {
     try {
+      await this.recoverStuckExtractions();
+
       const workspaces = await this.db
         .selectFrom('attachments')
         .select('workspaceId')
         .distinct()
         .where('deletedAt', 'is', null)
-        .where('textContent', 'is', null)
-        .where(sql`LOWER(file_ext)`, 'in', [
-          ...SUPPORTED_ATTACHMENT_EXTENSIONS,
-        ])
+        .where('contentIndexStatus', '=', 'pending')
         .execute();
 
       await Promise.all(
@@ -72,7 +94,35 @@ export class AttachmentContentService implements OnApplicationBootstrap {
     }
   }
 
-  async indexAttachment(attachmentId: string): Promise<void> {
+  /**
+   * Returns extractions abandoned by a crashed worker to the pending state.
+   */
+  private async recoverStuckExtractions(): Promise<void> {
+    const staleBefore = new Date(Date.now() - EXTRACTION_TIMEOUT_MS * 2);
+    const recovered = await this.db
+      .updateTable('attachments')
+      .set({ contentIndexStatus: 'pending', contentIndexStartedAt: null })
+      .where('contentIndexStatus', '=', 'processing')
+      .where((eb) =>
+        eb.or([
+          eb('contentIndexStartedAt', 'is', null),
+          eb('contentIndexStartedAt', '<', staleBefore),
+        ]),
+      )
+      .returning('id')
+      .execute();
+
+    if (recovered.length > 0) {
+      this.logger.log(
+        `Reset ${recovered.length} stuck attachment content extraction(s) to pending`,
+      );
+    }
+  }
+
+  async indexAttachment(
+    attachmentId: string,
+    opts: { retryFailed?: boolean } = {},
+  ): Promise<void> {
     const attachment = await this.db
       .selectFrom('attachments')
       .select([
@@ -82,6 +132,8 @@ export class AttachmentContentService implements OnApplicationBootstrap {
         'fileExt',
         'fileSize',
         'updatedAt',
+        'contentIndexStatus',
+        'contentIndexVersion',
       ])
       .where('id', '=', attachmentId)
       .where('deletedAt', 'is', null)
@@ -93,39 +145,65 @@ export class AttachmentContentService implements OnApplicationBootstrap {
 
     const extension = attachment.fileExt?.toLowerCase();
     if (!this.isSupportedExtension(extension)) {
+      await this.markTerminalState(attachment, 'skipped', 'unsupported_type');
       return;
     }
 
-    const fileSize = Number(attachment.fileSize ?? 0);
-    if (fileSize > MAX_ATTACHMENT_FILE_BYTES) {
-      this.logger.warn(
-        `Attachment ${attachment.id} exceeds the content indexing size limit`,
-      );
-      await this.saveExtractedText(attachment, '');
+    if (
+      attachment.contentIndexStatus === 'ready' &&
+      attachment.contentIndexVersion === ATTACHMENT_CONTENT_INDEX_VERSION
+    ) {
+      return;
+    }
+    if (attachment.contentIndexStatus === 'skipped') {
+      return;
+    }
+    if (attachment.contentIndexStatus === 'failed' && !opts.retryFailed) {
       return;
     }
 
-    const buffer = await this.storageService.read(attachment.filePath);
-    if (buffer.byteLength > MAX_ATTACHMENT_FILE_BYTES) {
-      this.logger.warn(
-        `Attachment ${attachment.id} exceeds the content indexing size limit`,
-      );
-      await this.saveExtractedText(attachment, '');
+    if (!(await this.claimForProcessing(attachment, opts.retryFailed))) {
       return;
     }
 
-    const extracted =
-      extension === '.pdf'
-        ? await this.extractPdfText(buffer)
-        : await this.extractDocxText(buffer);
-    const text = this.normalizeText(extracted);
+    try {
+      const fileSize = Number(attachment.fileSize ?? 0);
+      if (fileSize > MAX_ATTACHMENT_FILE_BYTES) {
+        throw new UnextractableAttachmentError('file_too_large');
+      }
 
-    await this.saveExtractedText(attachment, text);
+      let buffer: Buffer;
+      try {
+        buffer = await this.storageService.read(attachment.filePath);
+      } catch (error) {
+        throw new TransientExtractionError('storage_unavailable', error);
+      }
+      if (buffer.byteLength > MAX_ATTACHMENT_FILE_BYTES) {
+        throw new UnextractableAttachmentError('file_too_large');
+      }
+
+      const deadline = Date.now() + EXTRACTION_TIMEOUT_MS;
+      const extracted =
+        extension === '.pdf'
+          ? await this.extractPdfText(buffer, deadline)
+          : await this.extractDocxText(buffer, deadline);
+
+      await this.saveExtractedText(attachment, this.normalizeText(extracted));
+    } catch (error) {
+      await this.handleExtractionError(attachment, error);
+    }
   }
 
-  async indexWorkspace(workspaceId: string): Promise<void> {
+  async indexWorkspace(
+    workspaceId: string,
+    opts: { retryFailed?: boolean } = {},
+  ): Promise<void> {
+    const statuses: AttachmentContentIndexStatus[] = opts.retryFailed
+      ? ['pending', 'failed']
+      : ['pending'];
     let cursor: string | null = null;
-    let failureCount = 0;
+    let transientFailureCount = 0;
+    let processedCount = 0;
 
     while (true) {
       let query = this.db
@@ -133,10 +211,7 @@ export class AttachmentContentService implements OnApplicationBootstrap {
         .select('id')
         .where('workspaceId', '=', workspaceId)
         .where('deletedAt', 'is', null)
-        .where('textContent', 'is', null)
-        .where(sql`LOWER(file_ext)`, 'in', [
-          ...SUPPORTED_ATTACHMENT_EXTENSIONS,
-        ])
+        .where('contentIndexStatus', 'in', statuses)
         .orderBy('id', 'asc')
         .limit(BACKFILL_BATCH_SIZE);
       if (cursor) {
@@ -148,6 +223,7 @@ export class AttachmentContentService implements OnApplicationBootstrap {
         break;
       }
 
+      cursor = attachments.at(-1).id;
       const pendingIds = attachments.map(({ id }) => id);
       const workerCount = Math.min(BACKFILL_CONCURRENCY, pendingIds.length);
       await Promise.all(
@@ -156,10 +232,11 @@ export class AttachmentContentService implements OnApplicationBootstrap {
             const id = pendingIds.shift();
             if (!id) return;
 
+            processedCount += 1;
             try {
-              await this.indexAttachment(id);
+              await this.indexAttachment(id, opts);
             } catch (error) {
-              failureCount += 1;
+              transientFailureCount += 1;
               this.logger.warn(
                 `Attachment content indexing failed for ${id}: ${this.errorMessage(error)}`,
               );
@@ -167,14 +244,112 @@ export class AttachmentContentService implements OnApplicationBootstrap {
           }
         }),
       );
-      cursor = attachments.at(-1).id;
     }
 
-    if (failureCount > 0) {
+    this.logger.log(
+      `Attachment content backfill finished. workspaceId=${workspaceId}, processedCount=${processedCount}, transientFailureCount=${transientFailureCount}`,
+    );
+
+    // Only infrastructure failures are worth another queue attempt; content
+    // that can never be parsed is already recorded as a terminal state.
+    if (transientFailureCount > 0) {
       throw new Error(
-        `Attachment content backfill failed for ${failureCount} attachments`,
+        `Attachment content backfill hit ${transientFailureCount} transient failure(s)`,
       );
     }
+  }
+
+  /**
+   * Moves an attachment into `processing` only if no other worker owns it.
+   */
+  private async claimForProcessing(
+    attachment: { id: string; updatedAt: Date },
+    retryFailed?: boolean,
+  ): Promise<boolean> {
+    const claimable: AttachmentContentIndexStatus[] = retryFailed
+      ? ['pending', 'failed']
+      : ['pending'];
+    const claimed = await this.db
+      .updateTable('attachments')
+      .set({
+        contentIndexStatus: 'processing',
+        contentIndexStartedAt: new Date(),
+        contentIndexError: null,
+      })
+      .where('id', '=', attachment.id)
+      .where('updatedAt', '=', attachment.updatedAt)
+      .where('deletedAt', 'is', null)
+      .where((eb) =>
+        eb.or([
+          eb('contentIndexStatus', 'is', null),
+          eb('contentIndexStatus', 'in', claimable),
+        ]),
+      )
+      .returning('id')
+      .executeTakeFirst();
+
+    return Boolean(claimed);
+  }
+
+  private async handleExtractionError(
+    attachment: { id: string; updatedAt: Date },
+    error: unknown,
+  ): Promise<void> {
+    if (error instanceof TransientExtractionError) {
+      // Release the claim so a later attempt can pick the attachment up again.
+      await this.markTerminalState(attachment, 'pending', error.code);
+      throw error.cause;
+    }
+
+    const code =
+      error instanceof UnextractableAttachmentError
+        ? error.code
+        : this.classifyExtractionError(error);
+    const status: AttachmentContentIndexStatus =
+      error instanceof UnextractableAttachmentError ||
+      code === 'encrypted_document'
+        ? 'skipped'
+        : 'failed';
+
+    this.logger.warn(
+      `Attachment ${attachment.id} content extraction ended as ${status}/${code}`,
+    );
+    await this.markTerminalState(attachment, status, code);
+  }
+
+  private classifyExtractionError(error: unknown): string {
+    const name = (error as { name?: string })?.name ?? '';
+    const message = this.errorMessage(error).toLowerCase();
+
+    if (name === 'PasswordException' || message.includes('password')) {
+      return 'encrypted_document';
+    }
+    if (message.includes('timed out')) {
+      return 'extraction_timeout';
+    }
+    if (message.includes('too many entries') || message.includes('budget')) {
+      return 'archive_limits_exceeded';
+    }
+    return 'unreadable_document';
+  }
+
+  private async markTerminalState(
+    attachment: { id: string; updatedAt: Date },
+    status: AttachmentContentIndexStatus,
+    errorCode: string | null,
+  ): Promise<void> {
+    await this.db
+      .updateTable('attachments')
+      .set({
+        contentIndexStatus: status,
+        contentIndexError: errorCode,
+        contentIndexStartedAt: null,
+        contentIndexedAt: status === 'ready' ? new Date() : null,
+      })
+      .where('id', '=', attachment.id)
+      .where('updatedAt', '=', attachment.updatedAt)
+      .where('deletedAt', 'is', null)
+      .execute();
   }
 
   private async saveExtractedText(
@@ -188,12 +363,18 @@ export class AttachmentContentService implements OnApplicationBootstrap {
     await executeTx(this.db, async (trx) => {
       const updated = await trx
         .updateTable('attachments')
-        .set({ textContent })
+        .set({
+          textContent,
+          contentIndexStatus: 'ready',
+          contentIndexError: null,
+          contentIndexStartedAt: null,
+          contentIndexedAt: new Date(),
+          contentIndexVersion: ATTACHMENT_CONTENT_INDEX_VERSION,
+        })
         .where('id', '=', attachment.id)
         .where('filePath', '=', attachment.filePath)
         .where('updatedAt', '=', attachment.updatedAt)
         .where('deletedAt', 'is', null)
-        .where(sql<boolean>`text_content IS DISTINCT FROM ${textContent}`)
         .returning('id')
         .executeTakeFirst();
 
@@ -215,8 +396,11 @@ export class AttachmentContentService implements OnApplicationBootstrap {
     });
   }
 
-  private async extractDocxText(buffer: Buffer): Promise<string> {
-    await this.assertDocxEntryCount(buffer);
+  private async extractDocxText(
+    buffer: Buffer,
+    deadline: number,
+  ): Promise<string> {
+    await this.withDeadline(this.assertDocxEntryCount(buffer), deadline);
     const JSZip = (await import('jszip')).default;
     const archive = await JSZip.loadAsync(buffer, {
       // CRC validation in loadAsync eagerly inflates every entry before the
@@ -236,12 +420,14 @@ export class AttachmentContentService implements OnApplicationBootstrap {
 
     for (const entry of entries) {
       if (!entry.dir) {
-        await readZipEntryWithBudget(entry, budget);
+        await this.withDeadline(readZipEntryWithBudget(entry, budget), deadline);
       }
     }
 
     const mammoth = await import('mammoth');
-    return (await mammoth.extractRawText({ buffer })).value;
+    return (
+      await this.withDeadline(mammoth.extractRawText({ buffer }), deadline)
+    ).value;
   }
 
   private async assertDocxEntryCount(buffer: Buffer): Promise<void> {
@@ -266,19 +452,38 @@ export class AttachmentContentService implements OnApplicationBootstrap {
     });
   }
 
-  private async extractPdfText(buffer: Buffer): Promise<string> {
+  private async extractPdfText(
+    buffer: Buffer,
+    deadline: number,
+  ): Promise<string> {
     const pdfjs: any = await import('pdfjs-dist/legacy/build/pdf.mjs');
-    const document = await pdfjs.getDocument({
+    const loadingTask = pdfjs.getDocument({
       data: new Uint8Array(buffer),
       isEvalSupported: false,
       useWorkerFetch: false,
-    }).promise;
+    });
+    let document: any;
+    try {
+      document = await this.withDeadline(loadingTask.promise, deadline);
+    } catch (error) {
+      await loadingTask.destroy().catch(() => undefined);
+      throw error;
+    }
     const parts: string[] = [];
     let extractedCharacters = 0;
 
     try {
       const pageCount = Math.min(document.numPages, MAX_PDF_PAGES);
       for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
+        // A slow document is truncated like the page and character limits
+        // instead of blocking the worker indefinitely.
+        if (Date.now() > deadline) {
+          this.logger.warn(
+            `PDF text extraction stopped at page ${pageNumber} after reaching the time limit`,
+          );
+          break;
+        }
+
         const page = await document.getPage(pageNumber);
         const content = await page.getTextContent();
         const pageText = content.items
@@ -296,6 +501,31 @@ export class AttachmentContentService implements OnApplicationBootstrap {
     }
 
     return parts.join('\n\n');
+  }
+
+  private async withDeadline<T>(
+    operation: Promise<T>,
+    deadline: number,
+  ): Promise<T> {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) {
+      throw new Error('Attachment text extraction timed out');
+    }
+
+    let timer: NodeJS.Timeout;
+    try {
+      return await Promise.race([
+        operation,
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(
+            () => reject(new Error('Attachment text extraction timed out')),
+            remaining,
+          );
+        }),
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   private normalizeText(value: string): string {
