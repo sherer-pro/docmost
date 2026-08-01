@@ -27,7 +27,7 @@ Security-sensitive cross-cutting behavior is centralized:
 - Page and space visibility is resolved through `PageAccessService`. Space-level CASL abilities are not a substitute for it: any surface that expands a single authorized page into a subtree or a list (export, the Notion-like database API, RAG, search) must filter through `PageAccessService` as well, either per page or via the batched `getEffectiveAccessForPages` / `getSidebarAccessSnapshot` helpers.
 - Recursive page-hierarchy queries are depth-bounded by `MAX_PAGE_TREE_DEPTH`, and `PageService.movePage` rejects moves that would place a page under its own descendant, so `pages.parent_page_id` cannot be turned into a cycle that stalls those queries.
 - RAG routes use API-key auth and reject regular user JWT/cookie auth. API keys re-check the creator's space membership on every use and resolve page and database-row reads through `PageAccessService`, so a key never grants more than its creator currently has. Scope schema v2 fingerprints the effective readable-page set plus content policy, and the opaque blocked-page feed lets an external writer purge data after ACL changes.
-- RAG and MCP keys are distinct database-authoritative key types. `/mcp` accepts only one-space MCP keys, exposes no write tools, and applies the same page ACL and AI content exclusions as internal agent reads. Agent writes target only the current page and require an initiator-only, expiring approval plus a live Yjs content-hash check. Pending approvals have separate user/space limits and do not consume provider concurrency; approval is serialized by the existing PostgreSQL admission locks.
+- RAG and MCP keys are distinct database-authoritative key types. `/mcp` accepts only one-space MCP keys, exposes no write tools, and applies the same page ACL and AI content exclusions as internal agent reads. Agent writes target only the current page and require an initiator-only, expiring approval plus a live Yjs content-hash check. Pending approvals have separate user/space limits and do not consume provider concurrency; approval is serialized by PostgreSQL admission locks, stores an expected post-apply hash, and is recovered after a crash only when the live Yjs hash proves that replay or finalization is safe.
 - Link preview metadata fetching validates public destinations and pins the resolved IP for the outbound request.
 - Attachment uploads validate trusted signatures for inline-capable formats; attachment responses only render inline when stored MIME and extension match the safe inline allowlist.
 - PDF and DOCX attachment text is extracted by the attachment queue with bounded decompression/page/character budgets. Extracted text is stored on the attachment row and indexed by both PostgreSQL full-text search and the optional Typesense driver.
@@ -38,7 +38,7 @@ Security-sensitive cross-cutting behavior is centralized:
 - Embed iframes are restricted by a shared provider frame-source policy used by both client validation and server CSP. Generic iframe origins must be explicitly configured through `EMBED_ALLOWED_ORIGINS`.
 - Per-space AI provider and external retrieval endpoints are restricted through independent `AI_PROVIDER_ALLOWED_ORIGINS` and `AI_RETRIEVAL_ALLOWED_ORIGINS` policies. Credentials are encrypted at rest, redacted from API responses, and resolved by workers instead of being copied into queue payloads. External retrieval candidates are mapped back to Docmost sources and filtered through current page access before entering a prompt or citation.
 - Query-time retrieval selects one of `none`, the unchanged `http-json-v1` contract, or `open-webui-knowledge-v1`. Both HTTP adapters share bounded transport and SSRF enforcement. The Open WebUI adapter accepts only versioned Docmost metadata and still performs the same local database and page-ACL validation.
-- AI, RAG, MCP, and RAG Sync emit 60-second or per-cycle low-cardinality structured summaries through the existing logger. Prompts, document content, credential-bearing URLs, tokens, API-key/user/source IDs, and fingerprints are excluded; no metrics exporter or public diagnostics endpoint is introduced.
+- AI, RAG, MCP, and RAG Sync emit 60-second or per-cycle low-cardinality structured summaries through the existing logger. Prompts, document content, credential-bearing URLs, tokens, API-key/user/source IDs, and fingerprints are excluded; no metrics exporter or public diagnostics endpoint is introduced. RAG/MCP request concurrency leases are renewed for the full HTTP response lifecycle instead of expiring during a long export.
 - File import treats attachment upload failure as task failure so imported pages are not committed with broken attachment references.
 
 The database schema is managed through Kysely migrations in `apps/server/src/database/migrations`. Generated Kysely types live under `apps/server/src/database/types`. AI chat persists configuration, conversations, runs, files, and citation snapshots without requiring a local vector index.
@@ -90,7 +90,11 @@ pre-created Open WebUI Knowledge Base per space. It owns separate Redis
 checkpoints, mappings, and distributed locks, reads credentials from mounted
 secret files, and has no Docmost database or BullMQ access. `Dockerfile.rag-sync`
 and `docker-compose.rag-sync.yml` deploy it explicitly; the main Compose stack
-remains unchanged.
+remains unchanged. The current lock-renewal state is checked around remote
+operations and every mapping/checkpoint write; observed loss stops further
+commits, and the next cycle reconstructs remote state from versioned Docmost
+metadata. This is recovery containment, not remote fencing for an Open WebUI
+request already in flight.
 
 Production startup validation requires `APP_URL` to be valid, rejects trust-all proxy configuration, and requires `AUTH_RATE_LIMIT_STORAGE=redis`.
 

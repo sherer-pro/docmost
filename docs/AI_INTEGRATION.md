@@ -2,6 +2,11 @@
 
 Docmost provides a core, per-space OpenAI-compatible integration for private page conversations, document actions, file context, and optional retrieval from an external service. Chat history and runs are persisted; Socket.IO progress events are an optimization, while REST state remains authoritative after navigation or reconnects.
 
+This is the operator setup and troubleshooting guide. The canonical
+architecture, limits, security invariants, and recovery behavior are maintained
+in [`AI_ASSISTANT_AND_RAG.md`](./AI_ASSISTANT_AND_RAG.md); the external sync
+contract is maintained in [`RAG_API.md`](./RAG_API.md).
+
 ## Provider configuration
 
 Each space has an independent record in `ai_space_configs`. Space administrators and workspace owners/admins can configure the provider base URL, chat model, generation limits, retention, vision, quick commands, and an optional retrieval adapter. Model and retrieval API keys are encrypted independently with the application credential-protection helper. API responses expose only whether each key is configured.
@@ -25,7 +30,11 @@ AI_PROVIDER_ALLOWED_ORIGINS=https://llm.example.com
 
 Development additionally permits loopback endpoints, including `http://127.0.0.1:56254`, when the backend runs directly on the host. When Docmost runs in Docker Desktop, use `http://host.docker.internal:56254/v1` as the space Base URL and add `http://host.docker.internal:56254` to `AI_PROVIDER_ALLOWED_ORIGINS`; `127.0.0.1` inside the container points back to Docmost itself.
 
-For the current local LM Studio setup, use `google/gemma-4-26b-a4b-qat` as the model. The host-run Base URL is `http://127.0.0.1:56254/v1`; the Docker Base URL is `http://host.docker.internal:56254/v1`. These are setup examples only and are not application defaults.
+For example, if LM Studio listens on port `56254`, the host-run Base URL is
+`http://127.0.0.1:56254/v1` and the Docker Desktop Base URL is
+`http://host.docker.internal:56254/v1`. Select a model actually loaded by the
+local provider. The port, URL, and model are examples, not application
+defaults.
 
 Streaming has two independent limits. The per-space `requestTimeoutMs` limits the complete provider request, including body consumption. `AI_STREAM_IDLE_TIMEOUT_MS` limits the time between any two bytes received from the provider SSE stream, including the wait for the first byte and reasoning-only or keep-alive frames. The idle timeout defaults to 120000 ms, accepts 5000-600000 ms, resets for every received stream chunk, and is capped by the per-space request timeout. Slow local reasoning models may use 300000 ms:
 
@@ -98,7 +107,13 @@ PostgreSQL is the source of truth when Redis is unavailable. A successfully admi
 
 Admission uses transaction-scoped PostgreSQL advisory locks in the stable space/user/conversation order. Each provider attempt consumes a daily request. Queued/running attempts reserve estimated input plus maximum output tokens; terminal attempts account for actual usage. The partial unique active-run index remains the final one-run-per-conversation barrier.
 
-By default, a space permits 100 requests per user per day, 2,000,000 input/output tokens per day, one active run per conversation, two per user, and eight per space. Conversations expire after 90 days. Deletion first commits database tombstones and cancellation requests, then retriable cleanup removes private storage; hard purge happens only after cleanup.
+By default, a space permits 100 requests per user per day, 2,000,000
+input/output tokens per day, one active run per conversation, six per user, and
+thirty per space. Conversations expire after 90 days. Deletion first commits
+database tombstones and cancellation requests, then retriable cleanup removes
+private storage; hard purge happens only after cleanup. Agent approval recovery
+and the distinction between pending-approval and provider-slot limits are
+defined in the canonical architecture document.
 
 Private chat uploads support PDF, DOCX, TXT, MD, JPEG, PNG, and WebP. Limits are 10 files, 25 MiB per file, and 100 MiB per conversation. Upload batches move through `processing|completed|failed`; deterministic file IDs/storage keys and SHA-256 fingerprints make retries safe. Extraction claims only uploaded, non-deleted `pending` files with compare-and-set, so duplicate jobs cannot extract twice and deletion cannot be reverted to `ready`.
 
@@ -260,7 +275,14 @@ placed in the sync JSON, logs, jobs, or metrics.
 - Treat external candidates as untrusted and build citations only after resolving source metadata and current page access server-side.
 - Apply generated text to an editor only after explicit user confirmation and a fresh page/write-access check.
 
-Provider streaming stores only `delta.content`; provider-specific reasoning fields are ignored. Redirects are rejected, full-request and idle timeouts start before DNS resolution and remain active until the response body is consumed, cancellation aborts URL resolution/header waits/body reads, and remote response bodies are never copied into client-facing errors or logs. JSON responses are limited to 4 MiB; SSE frames to 256 KiB; undecoded SSE buffers to 1 MiB; and cumulative generated content to 8 MiB.
+Provider streaming stores `delta.content` and, when reasoning display is
+enabled, compatible `delta.reasoning_content` or `delta.reasoning` fields.
+Redirects are rejected, full-request and idle timeouts start before DNS
+resolution and remain active until the response body is consumed, cancellation
+aborts URL resolution/header waits/body reads for streaming and agent tool
+requests, and remote response bodies are never copied into client-facing errors
+or logs. JSON responses are limited to 4 MiB; SSE frames to 256 KiB; undecoded
+SSE buffers to 1 MiB; and cumulative generated content to 8 MiB.
 
 Core per-space AI is the only document-generation UX. The retired AI Answers routes, embedding table, legacy indexing queue, editor Ask AI menu, and workspace `settings.ai.generative` toggle are not part of the current implementation.
 

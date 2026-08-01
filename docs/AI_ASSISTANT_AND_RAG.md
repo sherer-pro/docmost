@@ -16,6 +16,12 @@ distinct paths:
 All HTTP paths below include the global `/api` prefix except `/mcp`, which is
 an explicit root-level protocol endpoint.
 
+This file is the canonical source for AI/RAG/MCP architecture, security
+boundaries, limits, and recovery behavior. `AI_INTEGRATION.md` is the operator
+setup guide, while `RAG_API.md` is the external synchronization wire contract;
+those documents should link here instead of copying changing implementation
+details.
+
 ## 1. System components and boundaries
 
 Core AI lives in `apps/server/src/core/ai`, the client UI lives in
@@ -82,6 +88,10 @@ call.
 7. The provider returns a text stream. Text and, when enabled, reasoning deltas
    are buffered, periodically persisted, and sent over Socket.IO.
    `ai_runs.sequence` provides a monotonic ordering key for the client.
+   Cancellation aborts provider URL resolution, response-header waits, and
+   response-body reads for both streaming chat and non-streaming agent tool
+   turns; terminal database checks remain authoritative if an adapter returns
+   after cancellation.
 8. On success, usage, response/reasoning snapshots, and citations are stored.
    The first successful response may schedule a separate title job limited to
    four Unicode word segments. A manual rename always wins. On failure or
@@ -125,6 +135,16 @@ ACL and the live Yjs document hash, validates the resulting ProseMirror
 document against the editor schema, applies one transaction, and records
 `Changed by AI agent` in page history. A stale or rejected proposal is returned
 to the model as a tool result so the bounded loop can continue.
+
+Before approval is stored, safe block operations receive stable node IDs and
+the step records the expected post-apply content hash in its existing result
+JSON. The step decision and run resume are committed in one database
+transaction. If a process stops after approval, the reconciler serializes
+recovery with a PostgreSQL advisory lock: it reapplies the approved operation
+only when the live hash is still the proposal base, finalizes without replay
+when the expected post-apply hash is already live, and fails stale for every
+other hash. Legacy approved steps without recovery metadata fail safely and
+resume without another page mutation.
 
 Pending proposals have a separate admission limit of six per user and thirty
 per space. Approval obtains the same PostgreSQL admission locks as a new run.
@@ -175,6 +195,13 @@ Context updates include `expectedRevision`; conflicts return
 `ai_context_revision_conflict`. Every run stores an allowed context snapshot,
 which makes retries reproducible without allowing lost access to expose or
 reuse derived data.
+
+The chat composer uses a bounded TipTap schema but keeps Markdown as its public
+draft/send format. Supported headings, lists and task lists, blockquotes, code,
+bold/italic/strike, and sanitized links can be entered through Markdown input
+rules or pasted as Markdown; the composer serializes them back to Markdown for
+the existing API. Active inline formatting shows its Markdown delimiters, and
+`Ctrl+Enter`/`Cmd+Enter` keeps the existing send shortcut.
 
 Private multipart uploads require an `Idempotency-Key` header. Supported types
 are PDF, DOCX, TXT, Markdown, JPEG, PNG, and WebP. Limits are ten files,
@@ -328,6 +355,40 @@ minute with eight concurrent requests and two concurrent bulk operations, and
 in-memory fallback. Configure these through `RAG_API_RATE_LIMIT_PER_MINUTE`,
 `RAG_API_MAX_CONCURRENT`, `RAG_API_BULK_MAX_CONCURRENT`,
 `MCP_RATE_LIMIT_PER_MINUTE`, and `MCP_MAX_CONCURRENT`.
+Concurrency leases have a ten-minute safety TTL and are renewed every third of
+that interval until the request finishes, closes, or aborts. Release and renewal
+use the random internal lease ID; API-key IDs and tokens are not logged.
+
+### Recovery and diagnostics
+
+- PostgreSQL is authoritative for AI runs. The lifecycle reconciler delivers
+  missing deterministic BullMQ jobs, fails undeliverable queued runs after five
+  minutes, and fails a running attempt after twelve minutes without a heartbeat;
+  it never repeats a stale provider call automatically.
+- An `awaiting_approval` run with a decided step is recovered by the hash rules
+  in **Agent mode** above. Do not repair it by editing Yjs content or reopening a
+  terminal `ai_runs` row.
+- A user cancellation should release a streaming or agent provider request on
+  the next cancellation poll. Diagnose longer delays from the structured
+  provider outcome and cancel-latency summaries before changing timeouts.
+- RAG/MCP `429` responses include `Retry-After`; `503 api_key_limit_unavailable`
+  means Redis admission is unavailable. Long-running
+  exports retain their slots through lease renewal until the HTTP lifecycle
+  finishes.
+- `apps/rag-sync` checkpoints advance only after a complete feed page. On lock
+  loss it stops before another mapping/checkpoint write, and Open WebUI polling
+  checks lock ownership between polls. A remote operation that finished during
+  lock loss is reconciled from `meta.data.docmost` during the next cycle.
+- If RAG Sync state is lost, keep the Knowledge Base, restore Redis, and start
+  the writer so it reconstructs mappings and removes duplicates. Revoke or
+  rotate the Docmost RAG key only after a successful final scope cycle; if the
+  key was revoked first, inaccessible Knowledge Base content requires manual
+  removal.
+- Safe local diagnostics are `pnpm check:env`,
+  `pnpm routes:inventory:check`, the targeted server AI/RAG/MCP tests,
+  `pnpm rag-sync:test`, and the low-cardinality structured summaries. Never put
+  prompts, document bodies, credentials, API-key IDs, source IDs, or
+  credential-bearing URLs into diagnostic logs.
 
 For a normal chat run, the worker reads current configuration and appends an
 authoritative identity directive after space instructions. The directive uses
@@ -352,8 +413,14 @@ processing, reconstructs lost mappings from `meta.data.docmost`, ignores
 foreign workspace/space metadata, deletes duplicates and failed artifacts,
 skips empty pages, and replaces a file only after Open WebUI has processed the
 new file successfully. Supported objects include pages, database rows, and
-PDF, DOCX, TXT, MD, JPEG, PNG, and WebP attachments. Logs contain IDs, states,
-counts, lag, and durations but never document text or secrets.
+PDF, DOCX, TXT, MD, JPEG, PNG, and WebP attachments. The distributed lock is
+renewed during a cycle; remote operations and Redis state writes check the
+current renewal state before and after each awaited boundary, and file-processing
+polling stops after observed lock loss. This is not remote fencing: an Open
+WebUI request already in flight may finish, but no later mapping/checkpoint
+commit is made and the artifact is reconciled on the next cycle. Logs contain
+only low-cardinality states, counters, reason codes, lag, and durations, never
+stable binding/source IDs, document text, or secrets.
 
 Before every cycle, the writer reads `GET /api/rag/scope`. Scope schema v2
 fingerprints both content policy and the effective readable-page set. When it

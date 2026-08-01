@@ -20,6 +20,7 @@
     "verify": "corepack pnpm run verify:full",
     "routes:inventory": "node scripts/generate-api-route-inventory.mjs",
     "routes:inventory:check": "node scripts/generate-api-route-inventory.mjs --check",
+    "check:rag-docs": "node scripts/check-rag-doc-contract.mjs",
     "start": "corepack pnpm --filter ./apps/server run start:prod",
     "collab": "corepack pnpm --filter ./apps/server run collab:prod",
     "collab:dev": "corepack pnpm --filter ./apps/server run collab:dev",

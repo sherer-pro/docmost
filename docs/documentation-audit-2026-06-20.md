@@ -1,5 +1,9 @@
 # Documentation Audit 2026-06-20
 
+> Historical snapshot: resolutions below describe the repository as audited on
+> 2026-06-20. Use current code, generated route inventory, and the canonical
+> documents linked from `AGENTS.md` for present behavior.
+
 ## Scope
 
 This audit checked repository documentation against the current local code and configuration. External documentation links were recorded as references only and were not live-audited.
