@@ -152,9 +152,13 @@ export class OpenWebUiClient implements OpenWebUiWriterClient {
     );
   }
 
-  async waitUntilProcessed(fileId: string): Promise<void> {
+  async waitUntilProcessed(
+    fileId: string,
+    assertActive?: () => void,
+  ): Promise<void> {
     const deadline = Date.now() + this.processingTimeoutMs;
     while (Date.now() < deadline) {
+      assertActive?.();
       const result = await this.http.json<{ status?: string }>(
         `api/v1/files/${encodeURIComponent(fileId)}/process/status`,
         {},
@@ -165,6 +169,7 @@ export class OpenWebUiClient implements OpenWebUiWriterClient {
         throw new OpenWebUiFileProcessingError(fileId, result.status);
       }
       await delay(1000);
+      assertActive?.();
     }
     throw new OpenWebUiFileProcessingError(fileId, "timeout");
   }

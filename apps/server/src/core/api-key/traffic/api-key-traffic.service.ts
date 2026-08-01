@@ -21,6 +21,7 @@ export interface ApiKeyTrafficLease {
   retryAfterMs: number;
   leaseId?: string;
   keys?: string[];
+  renewAfterMs?: number;
 }
 
 type TrafficProfile = 'rag' | 'mcp';
@@ -75,6 +76,9 @@ export class ApiKeyTrafficService implements OnModuleInit, OnModuleDestroy {
   private readonly redis: Redis;
   private readonly prefix = 'api-key:traffic';
   private readonly concurrencyTtlMs = 10 * 60_000;
+  private readonly concurrencyRenewMs = Math.floor(
+    this.concurrencyTtlMs / 3,
+  );
   private readonly summaries: Record<TrafficProfile, TrafficSummary> = {
     rag: trafficSummary(),
     mcp: trafficSummary(),
@@ -109,6 +113,19 @@ export class ApiKeyTrafficService implements OnModuleInit, OnModuleDestroy {
       redis.call('PEXPIRE', KEYS[3], ARGV[8])
     end
     return {1, 0}
+  `;
+
+  private readonly renewScript = `
+    for index = 1, #KEYS do
+      if not redis.call('ZSCORE', KEYS[index], ARGV[2]) then
+        return 0
+      end
+    end
+    for index = 1, #KEYS do
+      redis.call('ZADD', KEYS[index], ARGV[1], ARGV[2])
+      redis.call('PEXPIRE', KEYS[index], ARGV[3])
+    end
+    return 1
   `;
 
   constructor(redisService: RedisService) {
@@ -166,7 +183,13 @@ export class ApiKeyTrafficService implements OnModuleInit, OnModuleDestroy {
         };
       }
       this.summaries[input.profile].admission.allowed += 1;
-      return { allowed: true, retryAfterMs: 0, leaseId, keys };
+      return {
+        allowed: true,
+        retryAfterMs: 0,
+        leaseId,
+        keys,
+        renewAfterMs: this.concurrencyRenewMs,
+      };
     } catch (error) {
       this.summaries[input.profile].admission.backendError += 1;
       this.logger.error('Redis API key traffic limiter failed');
@@ -185,6 +208,25 @@ export class ApiKeyTrafficService implements OnModuleInit, OnModuleDestroy {
       if (lease.keys[1]) await this.redis.zrem(lease.keys[1], lease.leaseId);
     } catch {
       this.logger.warn('Failed to release API key concurrency lease');
+    }
+  }
+
+  async renew(lease: ApiKeyTrafficLease): Promise<boolean> {
+    if (!lease.leaseId || !lease.keys?.length) return false;
+    try {
+      const expiresAt = Date.now() + this.concurrencyTtlMs;
+      const renewed = await this.redis.eval(
+        this.renewScript,
+        lease.keys.length,
+        ...lease.keys,
+        expiresAt,
+        lease.leaseId,
+        this.concurrencyTtlMs,
+      );
+      return Number(renewed) === 1;
+    } catch {
+      this.logger.warn('Failed to renew API key concurrency lease');
+      return false;
     }
   }
 

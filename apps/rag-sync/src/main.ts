@@ -2,6 +2,7 @@ import { loadConfig } from './config.js';
 import { DocmostClient, OpenWebUiClient } from './clients.js';
 import { RedisSyncStateStore } from './redis-state.js';
 import { RagSynchronizer } from './synchronizer.js';
+import { logCycleFailures } from './cycle-logging.js';
 
 const configPath = process.env.RAG_SYNC_CONFIG_PATH;
 if (!configPath) {
@@ -34,20 +35,7 @@ async function runCycle(): Promise<void> {
   cycle = Promise.allSettled(
     synchronizers.map((synchronizer) => synchronizer.syncOnce()),
   )
-    .then((results) => {
-      results.forEach((result, index) => {
-        if (result.status === 'rejected') {
-          console.error(
-            JSON.stringify({
-              component: 'rag-sync',
-              event: 'sync.failed',
-              bindingId: bindings[index]?.id,
-              errorCode: errorCode(result.reason),
-            }),
-          );
-        }
-      });
-    })
+    .then((results) => logCycleFailures(results))
     .finally(() => {
       cycle = null;
     });
@@ -68,11 +56,3 @@ process.once('SIGINT', () => void shutdown());
 process.once('SIGTERM', () => void shutdown());
 
 await runCycle();
-
-function errorCode(error: unknown): string {
-  const status = Number((error as { status?: unknown })?.status);
-  if (status === 429) return 'rate_limited';
-  if (status >= 500) return 'remote_unavailable';
-  if ((error as Error)?.name === 'AbortError') return 'timeout';
-  return 'sync_failed';
-}

@@ -103,6 +103,27 @@ describe("RagSynchronizer", () => {
     assert.deepEqual(writer.deleted, []);
   });
 
+  it("does not persist a mapping after the distributed lock is lost", async () => {
+    const state = new MemoryState();
+    const writer = new MemoryWriter();
+    const synchronizer = createSynchronizer(state, writer);
+    const activeLock = { valid: true };
+    (synchronizer as any).activeLock = activeLock;
+    writer.afterUpload = () => {
+      activeLock.valid = false;
+    };
+
+    await assert.rejects(
+      synchronizer.upsertSource(markdownSource("first")),
+      /RAG sync lock was lost/,
+    );
+    assert.equal(writer.uploaded.length, 1);
+    assert.equal(
+      await state.getMapping(binding.id, sourceIdentity("page", PAGE_ID)),
+      null,
+    );
+  });
+
   it("reconciles duplicate remote files and ignores foreign metadata", async () => {
     const state = new MemoryState();
     const writer = new MemoryWriter();
@@ -516,6 +537,7 @@ class MemoryWriter implements OpenWebUiWriterClient {
   remoteFiles: OpenWebUiFile[] = [];
   failProcessing = false;
   failWithProcessingError = false;
+  afterUpload?: () => void;
 
   async upload(
     fileName: string,
@@ -524,11 +546,16 @@ class MemoryWriter implements OpenWebUiWriterClient {
     metadata: Record<string, unknown>,
   ): Promise<OpenWebUiFile> {
     this.uploaded.push({ fileName, metadata });
+    this.afterUpload?.();
     return { id: `file-${this.uploaded.length}` };
   }
 
-  async waitUntilProcessed(fileId: string): Promise<void> {
+  async waitUntilProcessed(
+    fileId: string,
+    assertActive?: () => void,
+  ): Promise<void> {
     this.waited.push(fileId);
+    assertActive?.();
     if (this.failProcessing) throw new Error("processing failed");
     if (this.failWithProcessingError) {
       throw new OpenWebUiFileProcessingError(fileId, "failed");

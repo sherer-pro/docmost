@@ -176,7 +176,10 @@ export interface OpenWebUiWriterClient {
     content: Uint8Array,
     metadata: Record<string, unknown>,
   ): Promise<OpenWebUiFile>;
-  waitUntilProcessed(fileId: string): Promise<void>;
+  waitUntilProcessed(
+    fileId: string,
+    assertActive?: () => void,
+  ): Promise<void>;
   deleteFile(fileId: string): Promise<void>;
   listKnowledgeFiles(): Promise<OpenWebUiFile[]>;
 }

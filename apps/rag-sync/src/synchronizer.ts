@@ -33,6 +33,7 @@ const SUPPORTED_ATTACHMENT_EXTENSIONS = new Set([
 export class RagSynchronizer {
   private readonly sourceOutcomes = new Map<string, number>();
   private readonly lockTtlMs: number;
+  private activeLock: { valid: boolean } | undefined;
 
   constructor(
     private readonly binding: RagSyncBinding,
@@ -52,19 +53,20 @@ export class RagSynchronizer {
     ) {
       return false;
     }
-    let lockValid = true;
+    const activeLock = { valid: true };
+    this.activeLock = activeLock;
     const renew = setInterval(
       () => {
         void this.state
           .renewLock(this.binding.id, token, this.lockTtlMs)
           .then((renewed) => {
             if (!renewed) {
-              lockValid = false;
+              activeLock.valid = false;
               this.log("lock.lost", {});
             }
           })
           .catch(() => {
-            lockValid = false;
+            activeLock.valid = false;
             this.log("lock.renew_failed", {});
           });
       },
@@ -72,17 +74,11 @@ export class RagSynchronizer {
     );
     renew.unref();
     const startedAt = Date.now();
-    const assertLock = () => {
-      if (!lockValid) {
-        throw new Error("RAG sync lock was lost");
-      }
-    };
     try {
-      const scope = await this.docmost.getScope();
+      const scope = await this.guarded(() => this.docmost.getScope());
       await this.reconcileRemoteMappings();
-      assertLock();
-      const previousScopeFingerprint = await this.state.getScopeFingerprint(
-        this.binding.id,
+      const previousScopeFingerprint = await this.guarded(() =>
+        this.state.getScopeFingerprint(this.binding.id),
       );
       const effectiveScopeFingerprint = sha256(
         new TextEncoder().encode(
@@ -109,32 +105,35 @@ export class RagSynchronizer {
             ? await this.loadBlockedPageIds()
             : new Set(scope.excludedPageIds);
         let purged = 0;
-        for (const mapping of await this.state.listMappings(this.binding.id)) {
+        for (const mapping of await this.guarded(() =>
+          this.state.listMappings(this.binding.id),
+        )) {
           if (!blocked.has(mapping.pageId)) continue;
           await this.deleteIdentity(mapping.identity);
           purged += 1;
         }
-        await this.state.setCheckpoint(this.binding.id, "updates", 0);
-        await this.state.setCheckpoint(
-          this.binding.id,
-          "attachment-updates",
-          0,
+        await this.guarded(() =>
+          this.state.setCheckpoint(this.binding.id, "updates", 0),
+        );
+        await this.guarded(() =>
+          this.state.setCheckpoint(
+            this.binding.id,
+            "attachment-updates",
+            0,
+          ),
         );
         this.log("scope.purged", { count: purged });
       }
-      assertLock();
       await this.processUpdateFeed();
-      assertLock();
       await this.processDeletedFeed();
-      assertLock();
       await this.processAttachmentUpdateFeed();
-      assertLock();
       await this.processAttachmentDeletedFeed();
-      assertLock();
       if (scopeChanged) {
-        await this.state.setScopeFingerprint(
-          this.binding.id,
-          effectiveScopeFingerprint,
+        await this.guarded(() =>
+          this.state.setScopeFingerprint(
+            this.binding.id,
+            effectiveScopeFingerprint,
+          ),
         );
       }
       this.log("sync.completed", {
@@ -153,6 +152,9 @@ export class RagSynchronizer {
       throw error;
     } finally {
       clearInterval(renew);
+      if (this.activeLock === activeLock) {
+        this.activeLock = undefined;
+      }
       try {
         await this.state.releaseLock(this.binding.id, token);
       } catch {
@@ -162,7 +164,9 @@ export class RagSynchronizer {
   }
 
   async reconcileRemoteMappings(): Promise<void> {
-    const remoteFiles = await this.openWebUi.listKnowledgeFiles();
+    const remoteFiles = await this.guarded(() =>
+      this.openWebUi.listKnowledgeFiles(),
+    );
     const usableRemoteIds = new Set<string>();
     const byIdentity = new Map<
       string,
@@ -172,7 +176,7 @@ export class RagSynchronizer {
       const metadata = this.readRemoteMetadata(file);
       if (!metadata) continue;
       if (file.data?.status === "failed") {
-        await this.openWebUi.deleteFile(file.id);
+        await this.guarded(() => this.openWebUi.deleteFile(file.id));
         this.log("source.skipped", {
           identity: sourceIdentity(metadata.sourceType, metadata.sourceId),
           reason: "remote-processing-failed",
@@ -193,18 +197,22 @@ export class RagSynchronizer {
           right.file.id.localeCompare(left.file.id),
       );
       const [current, ...duplicates] = candidates;
-      await this.state.setMapping(this.binding.id, {
-        identity,
-        fileId: current.file.id,
-        contentHash: current.metadata.contentHash,
-        sourceType: current.metadata.sourceType,
-        sourceId: current.metadata.sourceId,
-        pageId: current.metadata.pageId,
-        databaseId: current.metadata.databaseId,
-        updatedAtMs: current.metadata.sourceUpdatedAtMs,
-      });
+      await this.guarded(() =>
+        this.state.setMapping(this.binding.id, {
+          identity,
+          fileId: current.file.id,
+          contentHash: current.metadata.contentHash,
+          sourceType: current.metadata.sourceType,
+          sourceId: current.metadata.sourceId,
+          pageId: current.metadata.pageId,
+          databaseId: current.metadata.databaseId,
+          updatedAtMs: current.metadata.sourceUpdatedAtMs,
+        }),
+      );
       for (const duplicate of duplicates) {
-        await this.openWebUi.deleteFile(duplicate.file.id);
+        await this.guarded(() =>
+          this.openWebUi.deleteFile(duplicate.file.id),
+        );
       }
       if (duplicates.length > 0) {
         this.log("reconcile.duplicates", {
@@ -214,18 +222,21 @@ export class RagSynchronizer {
       }
     }
 
-    for (const mapping of await this.state.listMappings(this.binding.id)) {
+    for (const mapping of await this.guarded(() =>
+      this.state.listMappings(this.binding.id),
+    )) {
       if (!usableRemoteIds.has(mapping.fileId)) {
-        await this.state.deleteMapping(this.binding.id, mapping.identity);
+        await this.guarded(() =>
+          this.state.deleteMapping(this.binding.id, mapping.identity),
+        );
       }
     }
   }
 
   async upsertSource(source: SyncSource): Promise<"uploaded" | "unchanged"> {
     const contentHash = sha256(source.content);
-    const existing = await this.state.getMapping(
-      this.binding.id,
-      source.identity,
+    const existing = await this.guarded(() =>
+      this.state.getMapping(this.binding.id, source.identity),
     );
     if (existing?.contentHash === contentHash) {
       return "unchanged";
@@ -241,21 +252,25 @@ export class RagSynchronizer {
       sourceUpdatedAtMs: source.updatedAtMs,
       contentHash,
     };
-    const uploaded = await this.openWebUi.upload(
-      source.fileName,
-      source.mimeType,
-      source.content,
-      {
-        knowledge_id: this.binding.knowledgeId,
-        file_hash: contentHash,
-        docmost: metadata,
-      },
+    const uploaded = await this.guarded(() =>
+      this.openWebUi.upload(
+        source.fileName,
+        source.mimeType,
+        source.content,
+        {
+          knowledge_id: this.binding.knowledgeId,
+          file_hash: contentHash,
+          docmost: metadata,
+        },
+      ),
     );
     if (!uploaded.id) {
       throw new Error("Open WebUI upload response is missing file id");
     }
     const processingStartedAt = Date.now();
-    await this.openWebUi.waitUntilProcessed(uploaded.id);
+    await this.guarded(() =>
+      this.openWebUi.waitUntilProcessed(uploaded.id, () => this.assertLock()),
+    );
     const mapping: SourceMapping = {
       identity: source.identity,
       fileId: uploaded.id,
@@ -266,9 +281,9 @@ export class RagSynchronizer {
       databaseId: source.databaseId,
       updatedAtMs: source.updatedAtMs,
     };
-    await this.state.setMapping(this.binding.id, mapping);
+    await this.guarded(() => this.state.setMapping(this.binding.id, mapping));
     if (existing && existing.fileId !== uploaded.id) {
-      await this.openWebUi.deleteFile(existing.fileId);
+      await this.guarded(() => this.openWebUi.deleteFile(existing.fileId));
     }
     this.log(existing ? "source.replaced" : "source.uploaded", {
       identity: source.identity,
@@ -278,10 +293,14 @@ export class RagSynchronizer {
   }
 
   async deleteIdentity(identity: string): Promise<void> {
-    const existing = await this.state.getMapping(this.binding.id, identity);
+    const existing = await this.guarded(() =>
+      this.state.getMapping(this.binding.id, identity),
+    );
     if (!existing) return;
-    await this.openWebUi.deleteFile(existing.fileId);
-    await this.state.deleteMapping(this.binding.id, identity);
+    await this.guarded(() => this.openWebUi.deleteFile(existing.fileId));
+    await this.guarded(() =>
+      this.state.deleteMapping(this.binding.id, identity),
+    );
     this.log("source.deleted", { identity });
   }
 
@@ -337,17 +356,21 @@ export class RagSynchronizer {
     process: (item: T) => Promise<void>,
     checkpointField: "maxUpdatedAtMs" | "maxDeletedAtMs",
   ): Promise<void> {
-    let checkpoint = await this.state.getCheckpoint(this.binding.id, kind);
+    let checkpoint = await this.guarded(() =>
+      this.state.getCheckpoint(this.binding.id, kind),
+    );
     let cursor: string | undefined;
     do {
       const pageStartedAt = Date.now();
-      const page = await load(checkpoint, cursor);
+      const page = await this.guarded(() => load(checkpoint, cursor));
       for (const item of page.items) await process(item);
       const nextCheckpoint = page[checkpointField] ?? checkpoint;
       if (nextCheckpoint < checkpoint) {
         throw new Error("Docmost feed checkpoint moved backwards");
       }
-      await this.state.setCheckpoint(this.binding.id, kind, nextCheckpoint);
+      await this.guarded(() =>
+        this.state.setCheckpoint(this.binding.id, kind, nextCheckpoint),
+      );
       checkpoint = nextCheckpoint;
       this.log("feed.processed", {
         kind,
@@ -365,7 +388,7 @@ export class RagSynchronizer {
 
   private async processUpdate(item: RagUpdateItem): Promise<void> {
     if (item.type === "page") {
-      const page = await this.docmost.getPage(item.id);
+      const page = await this.guarded(() => this.docmost.getPage(item.id));
       if (!page.title?.trim() && !page.contentMarkdown?.trim()) {
         await this.deleteIdentity(sourceIdentity("page", page.id));
         this.log("source.skipped", {
@@ -377,7 +400,9 @@ export class RagSynchronizer {
       await this.upsertSource(pageToSource(page, item.updatedAtMs));
       return;
     }
-    const database = await this.docmost.getDatabase(item.databaseId);
+    const database = await this.guarded(() =>
+      this.docmost.getDatabase(item.databaseId),
+    );
     await this.upsertDatabase(database, item.updatedAtMs);
   }
 
@@ -407,11 +432,13 @@ export class RagSynchronizer {
         throw error;
       }
       try {
-        await this.openWebUi.deleteFile(error.fileId);
+        await this.guarded(() => this.openWebUi.deleteFile(error.fileId));
       } catch {
         // Reconciliation removes a failed artifact on the next cycle.
       }
-      await this.state.deleteMapping(this.binding.id, databasePageIdentity);
+      await this.guarded(() =>
+        this.state.deleteMapping(this.binding.id, databasePageIdentity),
+      );
       this.log("source.skipped", {
         identity: databasePageIdentity,
         reason: "remote-processing-failed",
@@ -439,7 +466,9 @@ export class RagSynchronizer {
         content: encodeMarkdown(markdown),
       });
     }
-    for (const mapping of await this.state.listMappings(this.binding.id)) {
+    for (const mapping of await this.guarded(() =>
+      this.state.listMappings(this.binding.id),
+    )) {
       if (
         mapping.sourceType === "database_row" &&
         mapping.databaseId === database.databaseId &&
@@ -459,7 +488,9 @@ export class RagSynchronizer {
     }
     await this.deleteIdentity(sourceIdentity("page", item.id));
     if (item.type === "database" && item.databaseId) {
-      for (const mapping of await this.state.listMappings(this.binding.id)) {
+      for (const mapping of await this.guarded(() =>
+        this.state.listMappings(this.binding.id),
+      )) {
         if (mapping.databaseId === item.databaseId) {
           await this.deleteIdentity(mapping.identity);
         }
@@ -483,9 +514,8 @@ export class RagSynchronizer {
       });
       return;
     }
-    const content = await this.docmost.downloadAttachment(
-      item,
-      this.maxAttachmentBytes,
+    const content = await this.guarded(() =>
+      this.docmost.downloadAttachment(item, this.maxAttachmentBytes),
     );
     const identity = sourceIdentity("attachment", item.id);
     try {
@@ -507,11 +537,13 @@ export class RagSynchronizer {
         throw error;
       }
       try {
-        await this.openWebUi.deleteFile(error.fileId);
+        await this.guarded(() => this.openWebUi.deleteFile(error.fileId));
       } catch {
         // Reconciliation removes a failed artifact on the next cycle.
       }
-      await this.state.deleteMapping(this.binding.id, identity);
+      await this.guarded(() =>
+        this.state.deleteMapping(this.binding.id, identity),
+      );
       this.log("source.skipped", {
         identity,
         reason: "remote-processing-failed",
@@ -523,7 +555,9 @@ export class RagSynchronizer {
     const blocked = new Set<string>();
     let cursor: string | undefined;
     do {
-      const page = await this.docmost.getBlockedPages(cursor);
+      const page = await this.guarded(() =>
+        this.docmost.getBlockedPages(cursor),
+      );
       for (const item of page.items) blocked.add(item.pageId);
       cursor = page.hasMore ? page.nextCursor || undefined : undefined;
       if (page.hasMore && !cursor) {
@@ -555,6 +589,19 @@ export class RagSynchronizer {
       return null;
     }
     return candidate as DocmostMetadata;
+  }
+
+  private assertLock(): void {
+    if (this.activeLock && !this.activeLock.valid) {
+      throw new Error("RAG sync lock was lost");
+    }
+  }
+
+  private async guarded<T>(operation: () => Promise<T>): Promise<T> {
+    this.assertLock();
+    const result = await operation();
+    this.assertLock();
+    return result;
   }
 
   private log(event: string, fields: Record<string, unknown>): void {
