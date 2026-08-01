@@ -37,6 +37,7 @@
     "clean": "node scripts/clean.mjs",
     "check:comments:en": "node scripts/check-english-comments.mjs",
     "check:env": "node scripts/check-env-contract.mjs",
+    "check:no-ee": "node scripts/check-no-ee.mjs",
     "audit:deps": "node scripts/run-nonblocking-audit.mjs deps",
     "audit:dead-code": "node scripts/run-nonblocking-audit.mjs dead-code",
     "audit:duplicates": "node scripts/run-nonblocking-audit.mjs duplicates",
