@@ -53,7 +53,9 @@
 - `apps/server/src/integrations/{import,export,static,security,telemetry}` — import/export jobs, static frontend serving, security/version/robots helpers, and telemetry.
 - `ARCHITECTURE.md` — high-level repository architecture and verification map.
 - `docs/AI_ASSISTANT_AND_RAG.md` — current technical documentation for the core AI assistant, query-time retrieval, RAG sync API, Open WebUI integration, and their public contracts. Update it whenever changing core AI behavior, AI/retrieval configuration, `/api/ai/*` or `/api/rag/*` routes/contracts, or `apps/rag-sync`.
-- `docs/documentation-audit-2026-06-20.md` — latest local documentation audit report.
+- `docs/AI_INTEGRATION.md` — operator setup and troubleshooting guide; link to the canonical AI document instead of copying changing limits and recovery rules.
+- `docs/RAG_API.md` and `docs/Docmost RAG API.postman_collection.json` — external RAG wire contract and executable examples; keep them aligned with the RAG controller, DTOs, and generated route inventory.
+- `docs/documentation-audit-2026-08-01.md` — latest AI/RAG/MCP-focused documentation audit; dated audit files are historical snapshots, not current contracts.
 - `apps/server/docs/api-routing-conventions.md` — API routing policy, endpoint inventory, and RPC migration plan.
 - `apps/server/docs/api-route-inventory.generated.md` — generated backend route inventory (`pnpm routes:inventory`).
 - `apps/server/docs/security-regression-runbook.md` — security pre-release checks for GHSA regression classes.
@@ -107,6 +109,7 @@
 - Check `.env.example`, `.env.compose.example`, local `.env`, server validation, and frontend runtime env drift: `pnpm check:env`
 - Regenerate backend route inventory from controllers: `pnpm routes:inventory`
 - Check route inventory drift without rewriting the generated file: `pnpm routes:inventory:check`
+- Check the RAG Postman collection against route inventory and key-type examples: `pnpm check:rag-docs`
 - Run dependency boundary audit (non-blocking report): `pnpm audit:deps`
 - Run dead-code audit (non-blocking report): `pnpm audit:dead-code`
 - Run duplicate-code audit (non-blocking report): `pnpm audit:duplicates`
@@ -259,7 +262,7 @@ Minimum:
 
 - The repository includes GitHub Actions workflows:
   - `.github/workflows/docker.yml` — release/docker build and push.
-  - `.github/workflows/ci.yml` — PR validation (`install`, `build`, `routes:inventory:check`, `check:env`, `lint`, client/server/RAG Sync tests, RAG Sync image smoke build, `pnpm test:security`, `check:comments:en`, exception-journal validation, and `pnpm audit --prod` fail on unignored high/critical).
+  - `.github/workflows/ci.yml` — PR validation (`install`, `build`, `routes:inventory:check`, `check:rag-docs`, `check:env`, `lint`, client/server/RAG Sync tests, RAG Sync image smoke build, `pnpm test:security`, `check:comments:en`, exception-journal validation, and `pnpm audit --prod` fail on unignored high/critical).
 - De facto required local pipeline before PR:
   1. `pnpm install --frozen-lockfile`
   2. for quick checks on day-to-day changes: `pnpm verify:quick`.
@@ -294,8 +297,9 @@ Minimum:
   - key scope is enforced by `spaceId` inside API key JWT payload;
   - page-level access rules are enforced as well: single-page reads go through `PageAccessService`, and `GET /api/rag/pages` / `GET /api/rag/updates` are filtered by the key creator's readable pages, so a key never exposes more than its creator can read. `GET /api/rag/deleted` intentionally still returns tombstones for deleted pages, because the access snapshot only covers live pages.
 - API key management routes are active in this fork:
-  - user page: `/settings/account/api-keys`;
-  - workspace management page: `/settings/api-keys`;
+  - RAG management page: `/settings/ai/rag`;
+  - MCP management page: `/settings/ai/mcp`;
+  - `/settings/account/api-keys` and `/settings/api-keys` are compatibility redirects, not management pages;
   - create key requires selecting `spaceId`;
   - access is restricted to workspace `admin|owner`;
   - space membership is re-checked on **every** key use, so removing the creator from the scoped space invalidates their keys (workspace `admin|owner` are exempt);
@@ -332,6 +336,7 @@ Minimum:
 - Agent mode is disabled by default and must pass the provider tool-calling test for the current provider/base URL/model fingerprint before it can be enabled. It is a per-conversation opt-in, uses the existing context/RAG pipeline, and is bounded to 8 model steps, 16 tool calls, 32 KiB per tool result, and 128 KiB total.
 - Agent writes are limited to safe operations on the current page. Each operation creates an initiator-only approval that expires after one hour; approval must recheck write ACL and the live Yjs content hash. Never add whole-document replacement, page lifecycle, table/database, comment/share, media, arbitrary-code, or external-MCP write tools.
 - Pending agent approvals do not consume provider concurrency, but new agent runs are limited to 6 pending approvals per user and 30 per space. Approval uses the shared PostgreSQL admission locks, and an approved step reserves a provider slot until the run returns to `queued`.
+- Agent write proposals persist deterministic node IDs and an expected post-apply hash in the existing step result JSON. The reconciler may replay a decided approval only while the live Yjs hash still equals the proposal base, finalizes without replay when the expected hash is already live, and fails stale otherwise. Do not remove this recovery metadata or split the step/run resume transaction.
 - `/mcp` is always mounted as stateless Streamable HTTP and accepts only `key_type=mcp` API keys scoped to one space. It exposes the read-only shared tools, excludes attachment binaries/extracted text, and must keep page ACL and the AI content policy authoritative. RAG and MCP keys are not interchangeable.
 - Persistent AI chat uses the dedicated `AI_CHAT_QUEUE` for generation, file extraction, and retention cleanup. Search indexing uses `SEARCH_QUEUE`; do not mix those processors or payload contracts.
 - AI provider calls are immutable attempts introduced by `20260729T120000-ai-reliability.ts`. Bull delivery is at-least-once; workers claim queued runs with database compare-and-set, and the post-migration reconciler repairs missing deterministic jobs. Never reopen a terminal `ai_runs` row or automatically retry a stale running provider call.
@@ -345,6 +350,8 @@ Minimum:
 - `AI_STREAM_IDLE_TIMEOUT_MS` is a deployment-level inactivity limit, while `requestTimeoutMs` remains per-space and bounds the full provider request. The effective idle timeout is the smaller of the two.
 - `/api/rag/*` remains the API-key-only synchronization/export surface for an external index. Query-time AI retrieval selects `none`, the unchanged `http-json-v1`, or `open-webui-knowledge-v1`; it does not create a local vector index and must degrade to live document/file context when unavailable.
 - `apps/rag-sync` is the optional Open WebUI writer. One Knowledge Base maps to one Docmost space. It reads only `/api/rag/*`, uses a separate Redis namespace for locks/checkpoints/mappings, reads Docmost/Open WebUI keys from mounted secret files, and must never import server repositories, use backend queues, create a Knowledge Base, or log document content and secrets.
+- RAG Sync must check the current distributed-lock renewal state around every remote side effect and mapping/checkpoint write. Open WebUI processing polls must stop after observed lock loss; the lease does not fence a request already in flight, so remote artifacts left at that boundary are repaired from `meta.data.docmost` on the next cycle.
+- RAG/MCP concurrency admission uses renewable Redis leases for the full HTTP lifecycle. Any new streaming route guarded by `ApiKeyTrafficGuard` must preserve renewal until `finish`, `close`, or request abort and release by the random lease ID.
 - Typesense is selected with `SEARCH_DRIVER=typesense`. It is a candidate index only: page/attachment rows and all ACL/public-sharing decisions must be revalidated against PostgreSQL before results are returned.
 - PDF/DOCX attachment extraction runs on the attachment queue with hard byte, page, ZIP-entry, text-size, and wall-clock limits. Updating an attachment clears stale extracted text before a new extraction and search-index job.
 - Optional per-provider SSO group sync only honours mappings an administrator created through `/api/sso/group-mappings*`. A provider can neither create workspace groups nor attach users to unmapped ones, and the default group cannot be mapped. Provenance is recorded only for memberships SSO itself created, so pre-existing manual memberships are never revoked.

@@ -487,7 +487,39 @@ Open-source collaborative wiki and documentation software.
 
 ## Getting started
 
-To get started with Docmost, please refer to our [documentation](https://docmost.com/docs).
+The upstream [Docmost documentation](https://docmost.com/docs) remains the
+product baseline. This fork's local files are authoritative for its added
+AI/RAG/MCP behavior and deployment variables.
+
+Host development:
+
+```bash
+cp .env.example .env
+# Set APP_SECRET, DATABASE_URL, and REDIS_URL in .env.
+corepack pnpm install --frozen-lockfile
+corepack pnpm dev
+```
+
+Docker Compose:
+
+```bash
+cp .env.compose.example .env
+# Replace REPLACE_WITH_LONG_SECRET and STRONG_DB_PASSWORD in .env.
+docker compose up -d
+```
+
+The optional Open WebUI writer is started explicitly after configuring
+`rag-sync.config.example.json` and mounted secret files:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.rag-sync.yml up -d rag-sync
+```
+
+See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for system boundaries,
+[`docs/AI_ASSISTANT_AND_RAG.md`](./docs/AI_ASSISTANT_AND_RAG.md) for the
+canonical AI/RAG/MCP architecture and recovery guide,
+[`docs/AI_INTEGRATION.md`](./docs/AI_INTEGRATION.md) for operator setup, and
+[`docs/RAG_API.md`](./docs/RAG_API.md) for the external synchronization API.
 
 ## Features
 
@@ -552,6 +584,7 @@ Before release candidates or broad architecture changes, run:
 ```bash
 pnpm verify:full
 pnpm routes:inventory:check
+pnpm check:rag-docs
 pnpm check:env
 pnpm check:comments:en
 ```

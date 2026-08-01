@@ -11,30 +11,7 @@
       "name": "01 - API Keys Management (owner/admin session required)",
       "item": [
         {
-          "name": "List API Keys (own)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"limit\": 20,\n  \"query\": \"\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api-keys",
-              "host": ["{{baseUrl}}"],
-              "path": ["api-keys"]
-            },
-            "description": "List current user's API keys."
-          },
-          "response": []
-        },
-        {
-          "name": "List API Keys (workspace/adminView)",
+          "name": "List RAG API Keys (workspace owner/admin)",
           "event": [
             {
               "listen": "test",
@@ -62,14 +39,14 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"limit\": 20,\n  \"adminView\": true,\n  \"query\": \"\"\n}"
+              "raw": "{\n  \"limit\": 20,\n  \"keyType\": \"rag\",\n  \"query\": \"\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api-keys",
               "host": ["{{baseUrl}}"],
               "path": ["api-keys"]
             },
-            "description": "List all workspace API keys. Useful to auto-fill createdApiKeyId and spaceId."
+            "description": "List workspace RAG keys. The endpoint always requires owner/admin; adminView is retired."
           },
           "response": []
         },
@@ -103,7 +80,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"{{apiKeyName}}\",\n  \"spaceId\": \"{{spaceId}}\"\n}"
+              "raw": "{\n  \"name\": \"{{apiKeyName}}\",\n  \"spaceId\": \"{{spaceId}}\",\n  \"keyType\": \"rag\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api-keys/create",
@@ -191,6 +168,41 @@
           "response": []
         },
         {
+          "name": "GET /rag/scope/blocked",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ragApiKey}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/rag/scope/blocked?limit={{limit}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["rag", "scope", "blocked"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "{{limit}}"
+                },
+                {
+                  "key": "cursor",
+                  "value": "{{cursor}}",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Opaque feed of backing page IDs that left the effective synchronization scope."
+          },
+          "response": []
+        },
+        {
           "name": "GET /rag/pages",
           "event": [
             {
@@ -226,13 +238,22 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/rag/pages?includeContent={{includeContent}}",
+              "raw": "{{baseUrl}}/rag/pages?includeContent={{includeContent}}&limit={{limit}}",
               "host": ["{{baseUrl}}"],
               "path": ["rag", "pages"],
               "query": [
                 {
                   "key": "includeContent",
                   "value": "{{includeContent}}"
+                },
+                {
+                  "key": "limit",
+                  "value": "{{limit}}"
+                },
+                {
+                  "key": "cursor",
+                  "value": "{{cursor}}",
+                  "disabled": true
                 }
               ]
             },
@@ -270,13 +291,22 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/rag/updates?updatedSince={{updatedSince}}",
+              "raw": "{{baseUrl}}/rag/updates?updatedSince={{updatedSince}}&limit={{limit}}",
               "host": ["{{baseUrl}}"],
               "path": ["rag", "updates"],
               "query": [
                 {
                   "key": "updatedSince",
                   "value": "{{updatedSince}}"
+                },
+                {
+                  "key": "limit",
+                  "value": "{{limit}}"
+                },
+                {
+                  "key": "cursor",
+                  "value": "{{cursor}}",
+                  "disabled": true
                 }
               ]
             },
@@ -314,17 +344,132 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/rag/deleted?deletedSince={{deletedSince}}",
+              "raw": "{{baseUrl}}/rag/deleted?deletedSince={{deletedSince}}&limit={{limit}}",
               "host": ["{{baseUrl}}"],
               "path": ["rag", "deleted"],
               "query": [
                 {
                   "key": "deletedSince",
                   "value": "{{deletedSince}}"
+                },
+                {
+                  "key": "limit",
+                  "value": "{{limit}}"
+                },
+                {
+                  "key": "cursor",
+                  "value": "{{cursor}}",
+                  "disabled": true
                 }
               ]
             },
             "description": "Incremental deletions; maxDeletedAtMs is auto-saved into deletedSince."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /rag/attachments/updates",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (typeof res?.maxUpdatedAtMs === 'number') {",
+                  "  pm.collectionVariables.set('attachmentUpdatedSince', String(res.maxUpdatedAtMs));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ragApiKey}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/rag/attachments/updates?updatedSince={{attachmentUpdatedSince}}&limit={{limit}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["rag", "attachments", "updates"],
+              "query": [
+                {
+                  "key": "updatedSince",
+                  "value": "{{attachmentUpdatedSince}}"
+                },
+                {
+                  "key": "limit",
+                  "value": "{{limit}}"
+                },
+                {
+                  "key": "cursor",
+                  "value": "{{cursor}}",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Incremental attachment updates with an independent checkpoint."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /rag/attachments/deleted",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (typeof res?.maxDeletedAtMs === 'number') {",
+                  "  pm.collectionVariables.set('attachmentDeletedSince', String(res.maxDeletedAtMs));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ragApiKey}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/rag/attachments/deleted?deletedSince={{attachmentDeletedSince}}&limit={{limit}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["rag", "attachments", "deleted"],
+              "query": [
+                {
+                  "key": "deletedSince",
+                  "value": "{{attachmentDeletedSince}}"
+                },
+                {
+                  "key": "limit",
+                  "value": "{{limit}}"
+                },
+                {
+                  "key": "cursor",
+                  "value": "{{cursor}}",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Incremental attachment tombstones with an independent checkpoint."
           },
           "response": []
         },
@@ -638,7 +783,27 @@
       "type": "string"
     },
     {
+      "key": "limit",
+      "value": "500",
+      "type": "string"
+    },
+    {
+      "key": "cursor",
+      "value": "",
+      "type": "string"
+    },
+    {
       "key": "updatedSince",
+      "value": "0",
+      "type": "string"
+    },
+    {
+      "key": "attachmentUpdatedSince",
+      "value": "0",
+      "type": "string"
+    },
+    {
+      "key": "attachmentDeletedSince",
       "value": "0",
       "type": "string"
     },

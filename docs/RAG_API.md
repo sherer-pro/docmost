@@ -2,6 +2,13 @@
 
 This document describes the current RAG API contract implemented in `docmost` core: API-key authentication, scope behavior, endpoint semantics, and integration patterns.
 
+This file is the canonical external synchronization wire contract. Architecture,
+internal AI behavior, security rationale, and recovery procedures live in
+[`AI_ASSISTANT_AND_RAG.md`](./AI_ASSISTANT_AND_RAG.md). Executable examples are
+kept in [`Docmost RAG API.postman_collection.json`](./Docmost%20RAG%20API.postman_collection.json).
+`pnpm check:rag-docs` verifies that the collection covers every generated RAG
+route and that its API-key examples explicitly create and list RAG keys.
+
 ## 1. Core behavior
 
 - Backend API prefix: `/api`
@@ -57,6 +64,7 @@ RAG uses keys created by API key management endpoints:
 - `POST /api/api-keys/revoke`
 
 Only workspace `owner|admin` can manage API keys. `spaceId` is required when creating a key.
+Create RAG keys with `keyType: "rag"`; MCP keys are not accepted by this API.
 
 ### 2.6 AI/RAG content exclusions
 
@@ -324,9 +332,11 @@ Body:
 - `cursor` (optional)
 - `beforeCursor` (optional)
 - `query` (optional, name filter)
-- `adminView` (optional bool):
-  - `true` -> all workspace keys
-  - `false` or omitted -> current user keys only
+- `keyType` (optional, `rag|mcp`); use `rag` for this integration
+
+The endpoint always requires workspace `owner|admin` and lists matching keys
+across the workspace. The retired `adminView` field is ignored and must not be
+used by new clients.
 
 ### 6.2 `POST /api/api-keys/create`
 
@@ -336,6 +346,7 @@ Body:
 
 - `name` (required, max 255)
 - `spaceId` (required, UUID)
+- `keyType` (required by this integration: `rag`)
 - `expiresAt` (optional ISO datetime)
 
 ### 6.3 `POST /api/api-keys/update`
@@ -399,7 +410,8 @@ Base maps to one Docmost space. The application:
 - reconstructs lost Redis mappings from `meta.data.docmost`, removes duplicate
   superseded files, and ignores foreign workspace/space metadata;
 - supports page, database-row, PDF, DOCX, TXT, MD, JPEG, PNG, and WebP sources;
-- logs only IDs, states, counters, lag, and durations.
+- logs only low-cardinality states, counters, reason codes, lag, and durations;
+  stable binding, space, source, checkpoint, and fingerprint IDs are excluded;
 - reads `/api/rag/scope` before each cycle; on fingerprint change it restores
   mappings from Open WebUI metadata, pages through `/api/rag/scope/blocked`,
   purges inaccessible mappings, resets the live update checkpoints to `0`, and
@@ -407,6 +419,11 @@ Base maps to one Docmost space. The application:
 - deletes an existing attachment mapping when the file becomes too large or
   its extension is no longer allowed, while retaining mappings on transient
   remote/read errors for a later retry.
+- renews the distributed lock during each cycle and checks the current renewal
+  state before and after remote operations and Redis state writes. Once loss is
+  observed, no further mapping/checkpoint commit is made. The lease does not
+  fence an already in-flight Open WebUI request; the next cycle reconciles any
+  resulting remote artifact from `meta.data.docmost`.
 
 Configuration is loaded through `RAG_SYNC_CONFIG_PATH`. Docmost and Open WebUI
 writer keys are paths to mounted secret files, never literal values in the JSON.
@@ -464,3 +481,8 @@ Because delivery is at-least-once, consumers must:
 - For large datasets, enable compression (gzip/br) in reverse proxy or server layer.
 - In `/rag/attachments/:fileId/:fileName`, the file is resolved by `fileId`; `fileName` is URL metadata.
 - Use separate API keys per integration client and per space.
+- RAG and MCP request concurrency leases are renewed while the HTTP response is
+  active, so exports longer than the ten-minute safety TTL retain their slot.
+- For queue, checkpoint, mapping, lock-loss, and key-rotation recovery, follow
+  the canonical [Recovery and diagnostics](./AI_ASSISTANT_AND_RAG.md#recovery-and-diagnostics)
+  procedure.
