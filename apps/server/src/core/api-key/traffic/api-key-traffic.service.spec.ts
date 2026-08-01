@@ -5,20 +5,33 @@ class SharedRedisFake {
   private readonly rates = new Map<string, number>();
   private readonly leases = new Map<string, Map<string, number>>();
 
-  async eval(
-    _script: string,
-    _numKeys: number,
-    rateKey: string,
-    concurrentKey: string,
-    bulkKey: string,
-    _windowMs: number,
-    rateLimit: number,
-    now: number,
-    expiresAt: number,
-    concurrencyLimit: number,
-    bulkLimit: number,
-    leaseId: string,
-  ) {
+  async eval(script: string, numKeys: number, ...args: any[]) {
+    if (script.includes('ZSCORE')) {
+      const keys = args.slice(0, numKeys) as string[];
+      const expiresAt = Number(args[numKeys]);
+      const leaseId = String(args[numKeys + 1]);
+      if (
+        keys.some((key) => !this.leases.get(key)?.has(leaseId))
+      ) {
+        return 0;
+      }
+      for (const key of keys) {
+        this.leases.get(key)!.set(leaseId, expiresAt);
+      }
+      return 1;
+    }
+    const [
+      rateKey,
+      concurrentKey,
+      bulkKey,
+      _windowMs,
+      rateLimit,
+      now,
+      expiresAt,
+      concurrencyLimit,
+      bulkLimit,
+      leaseId,
+    ] = args;
     const rate = (this.rates.get(rateKey) ?? 0) + 1;
     this.rates.set(rateKey, rate);
     if (rate > Number(rateLimit)) return [-1, 60_000];
@@ -49,6 +62,10 @@ class SharedRedisFake {
 }
 
 describe('ApiKeyTrafficService', () => {
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   it('enforces shared concurrency atomically across service instances', async () => {
     const redis = new SharedRedisFake();
     const redisService = { getOrThrow: () => redis } as any;
@@ -145,6 +162,34 @@ describe('ApiKeyTrafficService', () => {
       allowed: false,
       reason: 'concurrency',
     });
+  });
+
+  it('renews a long-running concurrency lease before its original expiry', async () => {
+    jest.useFakeTimers({ now: 0 });
+    const redis = new SharedRedisFake();
+    const service = new ApiKeyTrafficService({
+      getOrThrow: () => redis,
+    } as any);
+    (service as any).concurrencyTtlMs = 90;
+    const limits = { ratePerMinute: 100, maxConcurrent: 1 };
+    const lease = await service.acquire({
+      profile: 'mcp',
+      apiKeyId: 'key-1',
+      bulk: false,
+      limits,
+    });
+
+    jest.advanceTimersByTime(60);
+    await expect(service.renew(lease)).resolves.toBe(true);
+    jest.advanceTimersByTime(60);
+    await expect(
+      service.acquire({
+        profile: 'mcp',
+        apiKeyId: 'key-1',
+        bulk: false,
+        limits,
+      }),
+    ).resolves.toMatchObject({ allowed: false, reason: 'concurrency' });
   });
 
   it('logs low-cardinality edge summaries and resets the interval', async () => {

@@ -63,9 +63,17 @@ export class ApiKeyTrafficGuard implements CanActivate {
 
     let released = false;
     const startedAt = Date.now();
+    const renewTimer = lease.renewAfterMs
+      ? setInterval(
+          () => void this.traffic.renew(lease),
+          lease.renewAfterMs,
+        )
+      : undefined;
+    renewTimer?.unref();
     const release = (outcome: 'completed' | 'aborted' | 'error') => {
       if (released) return;
       released = true;
+      if (renewTimer) clearInterval(renewTimer);
       const rawLength = Number(response.raw?.getHeader?.('content-length'));
       this.traffic.observeRequest(
         profile,
