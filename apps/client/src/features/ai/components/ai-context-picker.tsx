@@ -145,6 +145,15 @@ export function AiContextPicker(props: AiContextPickerProps) {
     props.resolvedSourceCount +
     props.fileIds.length +
     props.attachmentIds.length;
+  const currentDocumentSelected =
+    props.currentDocumentAvailable && props.includeCurrentDocument;
+  const extraSourceCount = Math.max(
+    0,
+    selectedCount - (currentDocumentSelected ? 1 : 0),
+  );
+  const triggerLabel = currentDocumentSelected
+    ? t("ai.currentDocumentOnly")
+    : t("ai.context.title");
 
   const openSelection = (
     rootPageId: string,
@@ -263,16 +272,25 @@ export function AiContextPicker(props: AiContextPickerProps) {
                 size="compact-sm"
                 leftSection={<IconPaperclip size={16} />}
                 rightSection={
-                  <Badge size="xs" variant="light">
-                    {props.resolvedSourceCount}/{props.limits.resolvedSources}
-                  </Badge>
+                  extraSourceCount > 0 ? (
+                    <Badge size="xs" variant="light">
+                      +{extraSourceCount}
+                    </Badge>
+                  ) : undefined
                 }
                 disabled={props.saving}
-                className={classes.toolbarButton}
+                className={classes.contextButton}
                 aria-label={`${t("ai.context.title")}: ${selectedCount}`}
               >
-                <span className={classes.toolbarButtonLabel}>
-                  {t("ai.context.title")}
+                <span className={classes.contextButtonLabel}>
+                  <span className={classes.contextButtonFullLabel}>
+                    {triggerLabel}
+                  </span>
+                  <span className={classes.contextButtonShortLabel}>
+                    {currentDocumentSelected
+                      ? t("ai.composer.document")
+                      : triggerLabel}
+                  </span>
                 </span>
               </Button>
             </Tooltip>
