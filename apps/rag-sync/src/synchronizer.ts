@@ -31,6 +31,7 @@ const SUPPORTED_ATTACHMENT_EXTENSIONS = new Set([
 ]);
 
 export class RagSynchronizer {
+  private readonly sourceOutcomes = new Map<string, number>();
   private readonly lockTtlMs: number;
 
   constructor(
@@ -83,17 +84,33 @@ export class RagSynchronizer {
       const previousScopeFingerprint = await this.state.getScopeFingerprint(
         this.binding.id,
       );
-      const scopeChanged = previousScopeFingerprint !== scope.fingerprint;
+      const effectiveScopeFingerprint = sha256(
+        new TextEncoder().encode(
+          JSON.stringify({
+            schemaVersion: 2,
+            serverScopeFingerprint: scope.fingerprint,
+            maxAttachmentBytes: this.maxAttachmentBytes,
+            supportedAttachmentExtensions: [
+              ...SUPPORTED_ATTACHMENT_EXTENSIONS,
+            ].sort(),
+          }),
+        ),
+      );
+      const scopeChanged =
+        previousScopeFingerprint !== effectiveScopeFingerprint;
       if (scopeChanged) {
         this.log("scope.changed", {
           previousFingerprint: previousScopeFingerprint,
-          fingerprint: scope.fingerprint,
+          fingerprint: effectiveScopeFingerprint,
           excludedPageCount: scope.excludedPageIds.length,
         });
-        const excluded = new Set(scope.excludedPageIds);
+        const blocked =
+          scope.schemaVersion === 2
+            ? await this.loadBlockedPageIds()
+            : new Set(scope.excludedPageIds);
         let purged = 0;
         for (const mapping of await this.state.listMappings(this.binding.id)) {
-          if (!excluded.has(mapping.pageId)) continue;
+          if (!blocked.has(mapping.pageId)) continue;
           await this.deleteIdentity(mapping.identity);
           purged += 1;
         }
@@ -117,13 +134,23 @@ export class RagSynchronizer {
       if (scopeChanged) {
         await this.state.setScopeFingerprint(
           this.binding.id,
-          scope.fingerprint,
+          effectiveScopeFingerprint,
         );
       }
       this.log("sync.completed", {
         durationMs: Date.now() - startedAt,
+        sourceOutcomes: Object.fromEntries(this.sourceOutcomes),
       });
+      this.sourceOutcomes.clear();
       return true;
+    } catch (error) {
+      this.log("sync.failed", {
+        durationMs: Date.now() - startedAt,
+        errorType: error instanceof Error ? error.constructor.name : "unknown",
+        sourceOutcomes: Object.fromEntries(this.sourceOutcomes),
+      });
+      this.sourceOutcomes.clear();
+      throw error;
     } finally {
       clearInterval(renew);
       try {
@@ -447,6 +474,7 @@ export class RagSynchronizer {
       !SUPPORTED_ATTACHMENT_EXTENSIONS.has(extension) ||
       (Number.isFinite(size) && size > this.maxAttachmentBytes)
     ) {
+      await this.deleteIdentity(sourceIdentity("attachment", item.id));
       this.log("source.skipped", {
         identity: sourceIdentity("attachment", item.id),
         reason: !SUPPORTED_ATTACHMENT_EXTENSIONS.has(extension)
@@ -491,6 +519,20 @@ export class RagSynchronizer {
     }
   }
 
+  private async loadBlockedPageIds(): Promise<Set<string>> {
+    const blocked = new Set<string>();
+    let cursor: string | undefined;
+    do {
+      const page = await this.docmost.getBlockedPages(cursor);
+      for (const item of page.items) blocked.add(item.pageId);
+      cursor = page.hasMore ? page.nextCursor || undefined : undefined;
+      if (page.hasMore && !cursor) {
+        throw new Error("Docmost blocked-page feed omitted nextCursor");
+      }
+    } while (cursor);
+    return blocked;
+  }
+
   private readRemoteMetadata(file: OpenWebUiFile): DocmostMetadata | null {
     const data = file.meta?.data;
     const candidate =
@@ -516,13 +558,30 @@ export class RagSynchronizer {
   }
 
   private log(event: string, fields: Record<string, unknown>): void {
+    if (event.startsWith("source.")) {
+      const reason = typeof fields.reason === "string" ? fields.reason : "none";
+      const key = `${event}:${reason}`;
+      this.sourceOutcomes.set(key, (this.sourceOutcomes.get(key) ?? 0) + 1);
+      return;
+    }
+    const safeFields = Object.fromEntries(
+      Object.entries(fields).filter(
+        ([key]) =>
+          ![
+            "bindingId",
+            "spaceId",
+            "identity",
+            "previousFingerprint",
+            "fingerprint",
+            "checkpoint",
+          ].includes(key),
+      ),
+    );
     console.log(
       JSON.stringify({
         component: "rag-sync",
         event,
-        bindingId: this.binding.id,
-        spaceId: this.binding.spaceId,
-        ...fields,
+        ...safeFields,
       }),
     );
   }

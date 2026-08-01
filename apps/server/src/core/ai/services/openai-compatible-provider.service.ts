@@ -14,6 +14,11 @@ import {
 } from '../ai.types';
 import { EnvironmentService } from '../../../integrations/environment/environment.service';
 import { AiProviderUrlPolicyService } from './ai-provider-url-policy.service';
+import {
+  AiPinnedDispatcher,
+  createAiPinnedDispatcher,
+} from './ai-pinned-http.util';
+import type { Dispatcher } from 'undici';
 
 type ProviderResponse<T> = {
   data: T;
@@ -449,6 +454,7 @@ export class OpenAiCompatibleProviderService {
     const controller = new AbortController();
     let abortReason: ProviderAbortReason | undefined;
     let cleanedUp = false;
+    let pinnedDispatcher: AiPinnedDispatcher | undefined;
     const abort = (reason: ProviderAbortReason) => {
       if (controller.signal.aborted) {
         return;
@@ -523,25 +529,30 @@ export class OpenAiCompatibleProviderService {
         clearTimeout(idleTimeout);
         idleTimeout = undefined;
       }
+      void pinnedDispatcher?.close();
     };
 
     try {
-      const baseUrl = await Promise.race([
-        this.urlPolicy.assertAllowed(config.baseUrl),
+      const resolvedBaseUrl = await Promise.race([
+        this.urlPolicy.resolveAllowed(config.baseUrl),
         abortBeforeFetch,
       ]);
       const target = new URL(
         path.replace(/^\/+/, ''),
-        `${baseUrl.toString().replace(/\/+$/, '')}/`,
+        `${resolvedBaseUrl.url.toString().replace(/\/+$/, '')}/`,
       );
       if (controller.signal.aborted) {
         throw new DOMException('Aborted', 'AbortError');
       }
       resetIdleTimeout();
+      pinnedDispatcher = createAiPinnedDispatcher(
+        resolvedBaseUrl.addresses,
+      );
       const response = await fetch(target, {
         ...init,
         redirect: 'manual',
         signal: controller.signal,
+        dispatcher: pinnedDispatcher.dispatcher,
         headers: {
           accept: streaming ? 'text/event-stream' : 'application/json',
           'content-type': 'application/json',
@@ -550,7 +561,7 @@ export class OpenAiCompatibleProviderService {
             : {}),
           ...(init.headers ?? {}),
         },
-      });
+      } as RequestInit & { dispatcher: Dispatcher });
 
       if (response.status >= 300 && response.status < 400) {
         throw new BadGatewayException(

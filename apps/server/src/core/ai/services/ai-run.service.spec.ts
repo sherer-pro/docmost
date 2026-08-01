@@ -59,6 +59,8 @@ describe('AiRunService', () => {
       { count: 0 },
       { count: 5 },
       { count: 0 },
+      { count: 0 },
+      { count: 0 },
     ];
     const query: any = {
       select: jest.fn(() => query),
@@ -78,6 +80,7 @@ describe('AiRunService', () => {
         100,
         10000,
         100,
+        'chat',
       ),
     ).resolves.toBeUndefined();
   });
@@ -93,6 +96,8 @@ describe('AiRunService', () => {
       { count: 0 },
       { count: 6 },
       { count: 0 },
+      { count: 0 },
+      { count: 0 },
     ];
     const query: any = {
       select: jest.fn(() => query),
@@ -112,6 +117,7 @@ describe('AiRunService', () => {
         100,
         10000,
         100,
+        'chat',
       ),
     ).rejects.toMatchObject({
       status: 409,
@@ -119,6 +125,115 @@ describe('AiRunService', () => {
         code: 'ai_conversation_busy',
       },
     });
+  });
+
+  it('does not count pending approvals as provider concurrency for chat', async () => {
+    const results = [
+      { count: 0 },
+      { count: 0 },
+      { tokens: 0 },
+      { tokens: 0 },
+      { count: 0 },
+      { count: 0 },
+      { count: 0 },
+      { count: 0 },
+      { count: 0 },
+      { count: 6 },
+      { count: 30 },
+    ];
+    const query: any = {
+      select: jest.fn(() => query),
+      where: jest.fn(() => query),
+      executeTakeFirstOrThrow: jest.fn(async () => results.shift()),
+    };
+    const db = { selectFrom: jest.fn(() => query) };
+    const service = createService({} as any, db);
+
+    await expect(
+      (service as any).assertQuotaAndConcurrency(
+        db,
+        'user-id',
+        'workspace-id',
+        'space-id',
+        'conversation-id',
+        100,
+        10000,
+        100,
+        'chat',
+      ),
+    ).resolves.toBeUndefined();
+  });
+
+  it('bounds pending approvals for new agent runs', async () => {
+    const results = [
+      { count: 0 },
+      { count: 0 },
+      { tokens: 0 },
+      { tokens: 0 },
+      { count: 0 },
+      { count: 0 },
+      { count: 0 },
+      { count: 0 },
+      { count: 0 },
+      { count: 6 },
+      { count: 6 },
+    ];
+    const query: any = {
+      select: jest.fn(() => query),
+      where: jest.fn(() => query),
+      executeTakeFirstOrThrow: jest.fn(async () => results.shift()),
+    };
+    const db = { selectFrom: jest.fn(() => query) };
+    const service = createService({} as any, db);
+
+    await expect(
+      (service as any).assertQuotaAndConcurrency(
+        db,
+        'user-id',
+        'workspace-id',
+        'space-id',
+        'conversation-id',
+        100,
+        10000,
+        100,
+        'agent',
+      ),
+    ).rejects.toMatchObject({
+      status: 409,
+      response: { code: 'ai_conversation_busy' },
+    });
+  });
+
+  it('leaves an approval unclaimed when no provider slot is available', async () => {
+    const trx = {};
+    const db = {
+      transaction: jest.fn(() => ({
+        execute: (callback: (value: any) => unknown) => callback(trx),
+      })),
+    };
+    const service = createService({} as any, db);
+    jest.spyOn(service as any, 'lockAdmission').mockResolvedValue(undefined);
+    jest
+      .spyOn(service as any, 'countProviderActive')
+      .mockResolvedValueOnce(6)
+      .mockResolvedValueOnce(6);
+    jest.spyOn(service as any, 'countActiveAux').mockResolvedValue(0);
+    const claim = jest.fn(async () => ({ id: 'step-id' }));
+
+    await expect(
+      service.withProviderAdmission(
+        {
+          userId: 'user-id',
+          spaceId: 'space-id',
+          conversationId: 'conversation-id',
+        } as any,
+        claim,
+      ),
+    ).rejects.toMatchObject({
+      status: 409,
+      response: { code: 'ai_conversation_busy' },
+    });
+    expect(claim).not.toHaveBeenCalled();
   });
 
   it('cancels a queued run terminally and removes its Bull job', async () => {

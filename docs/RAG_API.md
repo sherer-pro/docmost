@@ -74,6 +74,8 @@ Common status codes:
 - `401 Unauthorized` - token missing/invalid, user JWT on `/rag/*`, or API key outside `/rag/*`
 - `403 Forbidden` - resource is outside API key `spaceId` scope
 - `404 Not Found` - resource not found or unavailable
+- `429 Too Many Requests` - the per-key request or concurrency limit is saturated; retry after the `Retry-After` delay
+- `503 Service Unavailable` - Redis admission control is unavailable, so the external endpoint fails closed
 
 ## 4. Data semantics
 
@@ -121,15 +123,17 @@ Rules:
 
 ### 4.5 Delta pagination
 
-`/rag/updates`, `/rag/deleted`, `/rag/attachments/updates`, and
-`/rag/attachments/deleted` accept:
+`/rag/pages`, `/rag/updates`, `/rag/deleted`,
+`/rag/attachments/updates`, `/rag/attachments/deleted`, and
+`/rag/scope/blocked` accept:
 
 - `limit` (optional, `1..1000`);
 - `cursor` (optional opaque string returned as `nextCursor`).
 
-Responses retain `items` and `maxUpdatedAtMs|maxDeletedAtMs` and add `hasMore`
-and `nextCursor`. The cursor binds the feed kind, timestamp, and ID tie-breaker;
-an invalid or cross-feed cursor returns `400`. Consumers should not parse it.
+Change feeds retain `items` and `maxUpdatedAtMs|maxDeletedAtMs`; every
+paginated response includes `hasMore` and `nextCursor`. The cursor binds the
+feed kind, timestamp, and ID tie-breaker; an invalid or cross-feed cursor
+returns `400`. Consumers should not parse it.
 
 ## 5. RAG endpoints
 
@@ -139,13 +143,22 @@ Returns the current effective indexing scope:
 
 ```json
 {
+  "schemaVersion": 2,
   "fingerprint": "<sha256>",
   "excludedPageIds": ["<page-uuid>"]
 }
 ```
 
-The fingerprint is based on the sorted effective page set, not only stored
-rules, so moving pages into or out of an excluded subtree changes it.
+The fingerprint is based on both the effective content policy and the sorted
+set of pages currently readable by the key creator. ACL, group-membership,
+space-role, or exclusion changes therefore invalidate an external sync. The
+legacy `excludedPageIds` field remains for one compatibility transition.
+
+### 5.0.1 `GET /api/rag/scope/blocked`
+
+Returns a paginated opaque list of `{ "pageId": "<uuid>" }` records for live
+pages that the key creator cannot currently read or that the AI content policy
+excludes. No title, slug, hierarchy, or content metadata is returned.
 
 ### 5.1 `GET /api/rag/pages`
 
@@ -156,6 +169,7 @@ Query:
 - `includeContent` (optional, default `false`)
   - truthy: `1|true|yes|on`
   - falsy: `0|false|no|off`
+- optional `limit` and opaque `cursor` as described above
 
 `contentMarkdown` and `descriptionMarkdown` are returned only when `includeContent=true`.
 
@@ -193,6 +207,11 @@ Sort order:
 
 - `deletedAt ASC`
 - tie-breaker: `id ASC`
+
+Tombstones contain only the stable identifiers required to delete a remote
+mapping and the deletion timestamp. Deprecated `slugId`, `title`, and
+`parentPageId` fields are returned as `null`; attachment tombstones likewise
+return deprecated `pageId` and `spaceId` as `null`.
 
 ### 5.4 `GET /api/rag/attachments/updates`
 
@@ -382,9 +401,12 @@ Base maps to one Docmost space. The application:
 - supports page, database-row, PDF, DOCX, TXT, MD, JPEG, PNG, and WebP sources;
 - logs only IDs, states, counters, lag, and durations.
 - reads `/api/rag/scope` before each cycle; on fingerprint change it restores
-  mappings from Open WebUI metadata, purges excluded mappings, resets the live
-  update checkpoints to `0`, and stores the new fingerprint only after a
-  successful reindex cycle.
+  mappings from Open WebUI metadata, pages through `/api/rag/scope/blocked`,
+  purges inaccessible mappings, resets the live update checkpoints to `0`, and
+  stores the new fingerprint only after a successful reindex cycle;
+- deletes an existing attachment mapping when the file becomes too large or
+  its extension is no longer allowed, while retaining mappings on transient
+  remote/read errors for a later retry.
 
 Configuration is loaded through `RAG_SYNC_CONFIG_PATH`. Docmost and Open WebUI
 writer keys are paths to mounted secret files, never literal values in the JSON.
@@ -395,7 +417,8 @@ be created in advance; the worker never creates or deletes it.
 
 1. Create API key scoped to the target `spaceId`.
 2. Call `GET /api/rag/scope` and store its fingerprint.
-3. Call `GET /api/rag/pages?includeContent=true`.
+3. Page through `GET /api/rag/pages?includeContent=true&limit=500`, following
+   `nextCursor` until `hasMore=false`.
 4. For each document:
    - `type=page` -> index as page
    - `type=database` -> call `GET /api/rag/databases/:databaseIdOrPageSlug`

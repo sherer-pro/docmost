@@ -31,13 +31,6 @@ function parseBoolean(value: unknown, defaultValue = false): boolean {
   return defaultValue;
 }
 
-export class RagListPagesQueryDto {
-  @IsOptional()
-  @Transform(({ value }) => parseBoolean(value, false))
-  @IsBoolean()
-  includeContent?: boolean = false;
-}
-
 export class RagFeedPaginationDto {
   @IsOptional()
   @Type(() => Number)
@@ -51,6 +44,15 @@ export class RagFeedPaginationDto {
   @MaxLength(2048)
   cursor?: string;
 }
+
+export class RagListPagesQueryDto extends RagFeedPaginationDto {
+  @IsOptional()
+  @Transform(({ value }) => parseBoolean(value, false))
+  @IsBoolean()
+  includeContent?: boolean = false;
+}
+
+export class RagBlockedPagesQueryDto extends RagFeedPaginationDto {}
 
 export class RagUpdatesQueryDto extends RagFeedPaginationDto {
   @Type(() => Number)

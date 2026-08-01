@@ -69,12 +69,15 @@ call.
    the request payload; reusing the key with a different payload is rejected.
 4. The server validates AI availability, the current user, page binding, page
    write access, quotas, and concurrency. At most one run per conversation,
-   six per user, and thirty per space may run at the same time.
+   six per user, and thirty per space may use or reserve a provider slot at the
+   same time. A run waiting for user approval does not consume that slot.
 5. The worker claims the run, resolves the context snapshot and files, and,
    when `useSpaceSearch` is enabled, resolves external retrieval results.
-6. `AiPromptBuilderService` builds provider messages from system instructions,
-   history, the current document, explicitly selected sources, files/images,
-   and safe retrieval excerpts. Budgets are derived from `contextWindow` and
+6. `AiPromptBuilderService` keeps only server policy, space-admin instructions,
+   and assistant identity in the trusted `system` role. Document snapshots,
+   selections, files/images, and retrieval excerpts are JSON-marked as
+   untrusted reference data in the final `user` message, with the actual user
+   request last. Budgets are derived from `contextWindow` and
    `maxOutputTokens`, so oversized sources are truncated.
 7. The provider returns a text stream. Text and, when enabled, reasoning deltas
    are buffered, periodically persisted, and sent over Socket.IO.
@@ -122,6 +125,13 @@ ACL and the live Yjs document hash, validates the resulting ProseMirror
 document against the editor schema, applies one transaction, and records
 `Changed by AI agent` in page history. A stale or rejected proposal is returned
 to the model as a tool result so the bounded loop can continue.
+
+Pending proposals have a separate admission limit of six per user and thirty
+per space. Approval obtains the same PostgreSQL admission locks as a new run.
+If no provider slot is available, the proposal remains pending and the client
+receives the existing retriable concurrency error. An approved step reserves
+that slot until the run is atomically returned to `queued`, preventing two
+concurrent approvals from bypassing the limit.
 
 At proposal time the server also creates `approvalPreview` for the target
 page and operation. It contains the page title, explicit before/after text,
@@ -171,6 +181,13 @@ are PDF, DOCX, TXT, Markdown, JPEG, PNG, and WebP. Limits are ten files,
 25 MiB per file, and 100 MiB per conversation. Text extraction is asynchronous.
 Images are sent to the provider only when `visionEnabled` is true. Deletion
 first commits a database tombstone and then performs retryable storage cleanup.
+
+Untrusted document parsing has additional worker budgets. DOCX extraction is
+limited to 25 MiB per ZIP entry, 100 MiB decompressed total, 10,000 entries,
+and 60 seconds. AI PDF rendering is limited to 20 pages, 8192 pixels per side,
+16,777,216 pixels per page, 67,108,864 cumulative pixels, 10 MiB of PNG output,
+and 60 seconds. At most two heavy parse/render operations run concurrently;
+loading documents, render tasks, and canvases are released on every exit path.
 
 An editor selection transform (`editor_transform`) is an `ai_aux_run`. It uses
 the selected text and a page-snapshot hash and streams its result, but it does
@@ -287,7 +304,10 @@ warning rather than reporting retrieval as ready.
 production allowlists of exact HTTP(S) origins for model and retrieval
 endpoints. URLs with credentials, query strings, or fragments are rejected.
 An Open WebUI base URL must also be a clean origin. Shared outbound policy
-validates URL and DNS resolution, rejects redirects, and bounds transport.
+validates URL and DNS resolution, pins the HTTP connection to the exact
+approved IPv4/IPv6 results while preserving the original Host/SNI name,
+rejects redirects, and bounds transport. This prevents a second DNS lookup
+from changing the destination after validation.
 Loopback addresses are development-only. Inside Docker, `127.0.0.1` addresses
 the Docmost container rather than the host.
 
@@ -299,6 +319,15 @@ Normal mutating AI endpoints require JWT authentication and pass the global
 CSRF guard. Users can access only their own conversations, and page/source
 access is rechecked. Retrieval telemetry stores safe aggregates such as counts
 and latency, never document content.
+
+RAG and MCP requests use Redis-backed per-key admission control keyed by the
+internal API-key ID, never by the raw token. Defaults are 120 RAG requests per
+minute with eight concurrent requests and two concurrent bulk operations, and
+60 MCP requests per minute with four concurrent requests. Saturation returns
+`429` with `Retry-After`; Redis failure returns `503` without a production
+in-memory fallback. Configure these through `RAG_API_RATE_LIMIT_PER_MINUTE`,
+`RAG_API_MAX_CONCURRENT`, `RAG_API_BULK_MAX_CONCURRENT`,
+`MCP_RATE_LIMIT_PER_MINUTE`, and `MCP_MAX_CONCURRENT`.
 
 For a normal chat run, the worker reads current configuration and appends an
 authoritative identity directive after space instructions. The directive uses
@@ -326,12 +355,18 @@ new file successfully. Supported objects include pages, database rows, and
 PDF, DOCX, TXT, MD, JPEG, PNG, and WebP attachments. Logs contain IDs, states,
 counts, lag, and durations but never document text or secrets.
 
-Before every cycle, the writer reads `GET /api/rag/scope`. When the fingerprint
-changes, it reconstructs mappings from Open WebUI metadata, deletes files and
-mappings whose backing `pageId` is excluded, resets the live `updates` and
-`attachment-updates` checkpoints to zero, and reprocesses all allowed data. The
-new fingerprint is stored only after the entire cycle succeeds. Structured
-`scope.changed` and `scope.purged` events contain only safe IDs and counts.
+Before every cycle, the writer reads `GET /api/rag/scope`. Scope schema v2
+fingerprints both content policy and the effective readable-page set. When it
+changes, the writer reconstructs mappings from Open WebUI metadata, pages
+through the opaque `GET /api/rag/scope/blocked` feed, deletes inaccessible
+files/mappings, resets the live `updates` and `attachment-updates` checkpoints
+to zero, and reprocesses all allowed data. The new composite fingerprint also
+includes local attachment size/extension policy and is stored only after the
+entire cycle succeeds. A deterministic size/extension skip deletes an existing
+mapping; transient read/remote failures keep it for retry. Structured sync
+events contain counts, latency, lag, retry outcome, and low-cardinality reason
+codes; binding, space, source, checkpoint, and fingerprint identifiers are not
+logged. Per-source outcomes are aggregated into each cycle summary.
 
 Configuration is loaded from `RAG_SYNC_CONFIG_PATH`; see
 `rag-sync.config.example.json`. The JSON contains URLs, Redis settings,
@@ -340,6 +375,22 @@ only as paths to mounted files (`docmostApiKeyFile`,
 `openWebUiApiKeyFile`), never inline. `knowledgeId`, `workspaceId`, and
 `spaceId` are validated at startup. The Docmost read key and the Open WebUI key
 used by the main server for retrieval are independent secrets.
+
+The production image creates an ephemeral inject-workspace lockfile in its
+builder stage and uses `pnpm deploy --prod`; the repository lockfile remains
+unchanged. The runner uses the unprivileged `node` user and contains only
+`dist`, production dependencies, and the built API-contract workspace package.
+Revoking the source RAG key prevents the writer from fetching a final blocked
+feed; operators must then delete the corresponding external Knowledge Base
+contents manually.
+
+Every server process writes a 60-second low-cardinality AI summary for queue
+wait, run/provider outcomes, timeouts, retrieval, reconciliation, and rejected
+files. The RAG/MCP admission layer writes request latency, response size,
+429/503 saturation, and MCP tool latency/result-size summaries. These records
+never include prompts, document content, credential-bearing URLs, API-key IDs,
+user IDs, tokens, or source IDs. They use the existing application logger and
+do not introduce a metrics exporter or diagnostics endpoint.
 
 ## 6. External assistants through MCP
 
@@ -572,8 +623,9 @@ upsert/delete operations.
 
 | Path                                                            | Data                                                               |
 | --------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `GET /api/rag/scope`                                            | current policy fingerprint and effective `excludedPageIds`         |
-| `GET /api/rag/pages?includeContent=`                            | complete active page/database list                                 |
+| `GET /api/rag/scope`                                            | schema-v2 policy and readable-page fingerprint                      |
+| `GET /api/rag/scope/blocked?limit=&cursor=`                     | opaque IDs currently outside effective sync scope                  |
+| `GET /api/rag/pages?includeContent=&limit=&cursor=`             | active page/database list with optional SQL-backed pagination      |
 | `GET /api/rag/updates?updatedSince=&limit=&cursor=`             | changed pages and databases                                        |
 | `GET /api/rag/deleted?deletedSince=&limit=&cursor=`             | page/database/database-row tombstones                              |
 | `GET /api/rag/attachments/updates?updatedSince=&limit=&cursor=` | changed attachments                                                |

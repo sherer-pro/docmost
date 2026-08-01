@@ -23,6 +23,7 @@ module.exports = {
       '<rootDir>/src/integrations/transactional/$1',
     '^@docmost/editor-ext$': '<rootDir>/test/mocks/editor-ext.mock.ts',
     '^@docmost/editor-ext/(.*)$': '<rootDir>/test/mocks/editor-ext.mock.ts',
+    '^p-limit$': '<rootDir>/test/mocks/p-limit.mock.cjs',
   },
   moduleDirectories: ['node_modules', '<rootDir>/src'],
   collectCoverageFrom: ['src/**/*.{ts,js}', '!**/*.spec.ts', '!**/*.d.ts', '!main.ts'],

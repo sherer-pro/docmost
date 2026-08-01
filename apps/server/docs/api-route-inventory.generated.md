@@ -202,6 +202,7 @@
 | GET | `/rag/pages/:pageIdOrSlug/comments` | `apps/server/src/core/rag/rag.controller.ts` |
 | GET | `/rag/pages/:pageIdOrSlug/export` | `apps/server/src/core/rag/rag.controller.ts` |
 | GET | `/rag/scope` | `apps/server/src/core/rag/rag.controller.ts` |
+| GET | `/rag/scope/blocked` | `apps/server/src/core/rag/rag.controller.ts` |
 | GET | `/rag/space/export` | `apps/server/src/core/rag/rag.controller.ts` |
 | GET | `/rag/updates` | `apps/server/src/core/rag/rag.controller.ts` |
 | GET | `/robots.txt` | `apps/server/src/integrations/security/robots.txt.controller.ts` |

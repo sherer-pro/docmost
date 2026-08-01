@@ -96,6 +96,10 @@ Supported capabilities include:
 
 - filtering and revalidation of access permissions for retrieved sources;
 
+- automatic removal from Open WebUI after page ACL or content-policy changes;
+
+- SQL-backed cursor pagination and opaque deletion feeds;
+
 - deduplication of contextual search results.
 
 
@@ -123,7 +127,9 @@ AI features are implemented as a separate server-side subsystem:
 
 - concurrent-run limits;
 
-- up to five parallel requests per user;
+- up to six parallel provider requests per user;
+
+- waiting agent approvals do not consume those provider slots and have a separate bounded queue;
 
 - token and quota controls;
 
@@ -391,6 +397,12 @@ Additional protection mechanisms include:
 - allowlists for iframes and external resources;
 
 - SSRF protection when connecting AI and RAG providers;
+
+- DNS-pinned outbound AI/RAG connections after allowlist validation;
+
+- Redis-backed per-key rate and concurrency limits for RAG and MCP;
+
+- bounded PDF and DOCX parsing for private AI files;
 
 - page-tree depth limits;
 

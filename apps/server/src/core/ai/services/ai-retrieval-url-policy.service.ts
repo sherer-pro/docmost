@@ -1,6 +1,9 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { EnvironmentService } from '../../../integrations/environment/environment.service';
-import { AiOutboundUrlPolicyService } from './ai-outbound-url-policy.service';
+import {
+  AiOutboundUrlPolicyService,
+  AiResolvedOutboundUrl,
+} from './ai-outbound-url-policy.service';
 
 @Injectable()
 export class AiRetrievalUrlPolicyService {
@@ -11,6 +14,15 @@ export class AiRetrievalUrlPolicyService {
 
   async assertAllowed(rawUrl: string): Promise<URL> {
     return this.outboundPolicy.assertAllowed(rawUrl, {
+      kind: 'retrieval',
+      allowedOrigins:
+        this.environmentService.getAiRetrievalAllowedOrigins(),
+      allowQuery: true,
+    });
+  }
+
+  async resolveAllowed(rawUrl: string): Promise<AiResolvedOutboundUrl> {
+    return this.outboundPolicy.resolveAllowed(rawUrl, {
       kind: 'retrieval',
       allowedOrigins:
         this.environmentService.getAiRetrievalAllowedOrigins(),

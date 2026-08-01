@@ -27,6 +27,40 @@ const binding: RagSyncBinding = {
 };
 
 describe("RagSynchronizer", () => {
+  it("aggregates source outcomes without logging raw identifiers", () => {
+    const synchronizer = createSynchronizer(
+      new MemoryState(),
+      new MemoryWriter(),
+    );
+    const messages: string[] = [];
+    const originalLog = console.log;
+    console.log = (message?: unknown) => messages.push(String(message));
+    try {
+      (synchronizer as any).log("source.uploaded", {
+        identity: sourceIdentity("page", PAGE_ID),
+        processingMs: 10,
+      });
+      (synchronizer as any).log("sync.completed", {
+        durationMs: 20,
+        bindingId: binding.id,
+        spaceId: binding.spaceId,
+        fingerprint: "secret-fingerprint",
+        sourceOutcomes: Object.fromEntries(
+          (synchronizer as any).sourceOutcomes,
+        ),
+      });
+    } finally {
+      console.log = originalLog;
+    }
+
+    assert.equal(messages.length, 1);
+    assert.match(messages[0], /source\.uploaded:none/);
+    assert.doesNotMatch(
+      messages[0],
+      new RegExp(`${PAGE_ID}|${binding.id}|${binding.spaceId}|secret-fingerprint`),
+    );
+  });
+
   it("uses safe replacement and skips an unchanged source", async () => {
     const state = new MemoryState();
     const writer = new MemoryWriter();
@@ -247,6 +281,40 @@ describe("RagSynchronizer", () => {
     );
   });
 
+  it("deletes an existing attachment mapping after a deterministic policy skip", async () => {
+    const state = new MemoryState();
+    const writer = new MemoryWriter();
+    const identity = sourceIdentity("attachment", "attachment-id");
+    await state.setMapping(binding.id, {
+      identity,
+      fileId: "existing-file",
+      contentHash: "old-hash",
+      sourceType: "attachment",
+      sourceId: "attachment-id",
+      pageId: PAGE_ID,
+      updatedAtMs: 50,
+    });
+    const synchronizer = createSynchronizer(state, writer);
+
+    await (synchronizer as any).processAttachment({
+      id: "attachment-id",
+      fileId: "attachment-id",
+      fileName: "archive.exe",
+      fileExt: ".exe",
+      mimeType: "application/octet-stream",
+      fileSize: 10,
+      pageId: PAGE_ID,
+      spaceId: binding.spaceId,
+      createdAt: new Date(100).toISOString(),
+      updatedAt: new Date(100).toISOString(),
+      updatedAtMs: 100,
+      downloadUrl: "/api/rag/attachments/attachment-id/archive.exe",
+    });
+
+    assert.deepEqual(writer.deleted, ["existing-file"]);
+    assert.equal(await state.getMapping(binding.id, identity), null);
+  });
+
   it("advances a checkpoint only after the complete feed page succeeds", async () => {
     const state = new MemoryState();
     const writer = new MemoryWriter();
@@ -282,7 +350,7 @@ describe("RagSynchronizer", () => {
     assert.equal(await state.getCheckpoint(binding.id, "updates"), 0);
   });
 
-  it("purges excluded remote mappings and resets live checkpoints on a scope change", async () => {
+  it("purges blocked remote mappings and resets live checkpoints on a v2 scope change", async () => {
     const state = new MemoryState();
     state.scopeFingerprint = "old-scope";
     state.checkpoints.set(`${binding.id}:updates`, 500);
@@ -291,8 +359,14 @@ describe("RagSynchronizer", () => {
     writer.remoteFiles = [remoteFile("excluded-file", 100, "hash")];
     const docmost = emptyDocmost();
     docmost.getScope = async () => ({
+      schemaVersion: 2,
       fingerprint: "new-scope",
-      excludedPageIds: [PAGE_ID],
+      excludedPageIds: [],
+    });
+    docmost.getBlockedPages = async () => ({
+      items: [{ pageId: PAGE_ID }],
+      hasMore: false,
+      nextCursor: null,
     });
     const synchronizer = new RagSynchronizer(
       binding,
@@ -310,10 +384,13 @@ describe("RagSynchronizer", () => {
       await state.getCheckpoint(binding.id, "attachment-updates"),
       0,
     );
-    assert.equal(await state.getScopeFingerprint(binding.id), "new-scope");
+    const storedFingerprint = await state.getScopeFingerprint(binding.id);
+    assert.notEqual(storedFingerprint, "old-scope");
+    assert.ok(storedFingerprint);
 
     assert.equal(await synchronizer.syncOnce(), true);
     assert.deepEqual(writer.deleted, ["excluded-file"]);
+    assert.equal(await state.getScopeFingerprint(binding.id), storedFingerprint);
   });
 
   it("stores a changed scope fingerprint only after a successful cycle", async () => {
@@ -415,6 +492,7 @@ function emptyDocmost(): DocmostSourceClient {
       fingerprint: "empty-scope",
       excludedPageIds: [],
     }),
+    getBlockedPages: empty,
     getUpdates: empty,
     getDeleted: empty,
     getAttachmentUpdates: empty,

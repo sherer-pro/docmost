@@ -2,8 +2,13 @@ export type RagDocumentType = "page" | "database" | "databaseRow";
 export type RagSyncSourceType = "page" | "database_row" | "attachment";
 
 export interface RagScope {
+  schemaVersion?: 1 | 2;
   fingerprint: string;
   excludedPageIds: string[];
+}
+
+export interface RagBlockedPageItem {
+  pageId: string;
 }
 
 export interface RagPageChange {
@@ -32,8 +37,11 @@ export interface RagDeletedItem {
   id: string;
   rowId?: string;
   databaseId?: string;
+  /** @deprecated Tombstones no longer expose page metadata. */
   slugId?: string | null;
+  /** @deprecated Tombstones no longer expose page metadata. */
   title?: string | null;
+  /** @deprecated Tombstones no longer expose page metadata. */
   parentPageId?: string | null;
   deletedAt: string;
   deletedAtMs: number;
@@ -57,7 +65,9 @@ export interface RagAttachmentItem {
 export interface RagAttachmentDeletedItem {
   id: string;
   fileId: string;
+  /** @deprecated Tombstones no longer expose owning-page metadata. */
   pageId: string | null;
+  /** @deprecated Tombstones no longer expose space metadata. */
   spaceId: string | null;
   deletedAt: string;
   deletedAtMs: number;

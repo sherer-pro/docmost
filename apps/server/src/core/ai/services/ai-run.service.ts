@@ -188,6 +188,7 @@ export class AiRunService {
           config.dailyRequestLimitPerUser,
           Number(config.dailyTokenLimitPerSpace),
           reservedTokens,
+          conversation.agentMode ? 'agent' : 'chat',
         );
         await trx
           .insertInto('aiMessages')
@@ -657,6 +658,7 @@ export class AiRunService {
           config.dailyRequestLimitPerUser,
           Number(config.dailyTokenLimitPerSpace),
           reservedTokens,
+          locked.executionMode as AiRun['executionMode'],
         );
         const latestAttempt = await trx
           .selectFrom('aiRuns')
@@ -751,6 +753,7 @@ export class AiRunService {
     requestLimit: number,
     tokenLimit: number,
     requestedReservation: number,
+    executionMode: AiRun['executionMode'],
   ): Promise<void> {
     const dayStart = new Date();
     dayStart.setUTCHours(0, 0, 0, 0);
@@ -764,6 +767,8 @@ export class AiRunService {
       userAuxActive,
       spaceActive,
       spaceAuxActive,
+      userPendingApprovals,
+      spacePendingApprovals,
     ] = await Promise.all([
       db
         .selectFrom('aiRuns')
@@ -812,11 +817,13 @@ export class AiRunService {
         .where('spaceId', '=', spaceId)
         .where('createdAt', '>=', dayStart)
         .executeTakeFirstOrThrow(),
-      this.countActive(db, 'conversationId', conversationId),
-      this.countActive(db, 'userId', userId),
+      this.countConversationActive(db, conversationId),
+      this.countProviderActive(db, 'userId', userId),
       this.countActiveAux(db, 'userId', userId),
-      this.countActive(db, 'spaceId', spaceId),
+      this.countProviderActive(db, 'spaceId', spaceId),
       this.countActiveAux(db, 'spaceId', spaceId),
+      this.countPendingApprovals(db, 'userId', userId),
+      this.countPendingApprovals(db, 'spaceId', spaceId),
     ]);
     if (
       Number(requestCount.count) + Number(auxRequestCount.count) >=
@@ -853,11 +860,62 @@ export class AiRunService {
     ) {
       throw this.busyError();
     }
+    if (
+      executionMode === 'agent' &&
+      (Number(userPendingApprovals) >= AI_CONCURRENCY_LIMITS.perUser ||
+        Number(spacePendingApprovals) >= AI_CONCURRENCY_LIMITS.perSpace)
+    ) {
+      throw this.busyError();
+    }
   }
 
-  private async countActive(
+  async withProviderAdmission<T>(
+    run: AiRunEntity,
+    operation: (trx: any) => Promise<T>,
+  ): Promise<T> {
+    return this.db.transaction().execute(async (trx) => {
+      await this.lockAdmission(
+        trx,
+        run.spaceId,
+        run.userId,
+        run.conversationId,
+      );
+      const [userActive, userAuxActive, spaceActive, spaceAuxActive] =
+        await Promise.all([
+          this.countProviderActive(trx, 'userId', run.userId),
+          this.countActiveAux(trx, 'userId', run.userId),
+          this.countProviderActive(trx, 'spaceId', run.spaceId),
+          this.countActiveAux(trx, 'spaceId', run.spaceId),
+        ]);
+      if (
+        userActive + userAuxActive >= AI_CONCURRENCY_LIMITS.perUser ||
+        spaceActive + spaceAuxActive >= AI_CONCURRENCY_LIMITS.perSpace
+      ) {
+        throw this.busyError();
+      }
+      return operation(trx);
+    });
+  }
+
+  private async countConversationActive(
     db: any,
-    field: 'conversationId' | 'userId' | 'spaceId',
+    conversationId: string,
+  ): Promise<number> {
+    return Number(
+      (
+        await db
+          .selectFrom('aiRuns')
+          .select(sql<number>`count(*)`.as('count'))
+          .where('conversationId', '=', conversationId)
+          .where('status', 'in', ['queued', 'running', 'awaiting_approval'])
+          .executeTakeFirstOrThrow()
+      ).count,
+    );
+  }
+
+  private async countProviderActive(
+    db: any,
+    field: 'userId' | 'spaceId',
     value: string,
   ): Promise<number> {
     return Number(
@@ -866,7 +924,47 @@ export class AiRunService {
           .selectFrom('aiRuns')
           .select(sql<number>`count(*)`.as('count'))
           .where(field, '=', value)
-          .where('status', 'in', ['queued', 'running', 'awaiting_approval'])
+          .where((eb: any) =>
+            eb.or([
+              eb('status', 'in', ['queued', 'running']),
+              eb.and([
+                eb('status', '=', 'awaiting_approval'),
+                eb.exists(
+                  eb
+                    .selectFrom('aiRunSteps')
+                    .select('aiRunSteps.id')
+                    .whereRef('aiRunSteps.runId', '=', 'aiRuns.id')
+                    .where('aiRunSteps.status', '=', 'approved'),
+                ),
+              ]),
+            ]),
+          )
+          .executeTakeFirstOrThrow()
+      ).count,
+    );
+  }
+
+  private async countPendingApprovals(
+    db: any,
+    field: 'userId' | 'spaceId',
+    value: string,
+  ): Promise<number> {
+    return Number(
+      (
+        await db
+          .selectFrom('aiRuns')
+          .select(sql<number>`count(*)`.as('count'))
+          .where(field, '=', value)
+          .where('status', '=', 'awaiting_approval')
+          .where((eb: any) =>
+            eb.exists(
+              eb
+                .selectFrom('aiRunSteps')
+                .select('aiRunSteps.id')
+                .whereRef('aiRunSteps.runId', '=', 'aiRuns.id')
+                .where('aiRunSteps.status', '=', 'pending_approval'),
+            ),
+          )
           .executeTakeFirstOrThrow()
       ).count,
     );

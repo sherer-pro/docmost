@@ -361,6 +361,34 @@ describe('SearchService', () => {
     expect(result.items).toEqual([{ ...readableRow, breadcrumbs: [] }]);
   });
 
+  it('backfills search results beyond content-policy exclusions', async () => {
+    const excludedRow = createSearchRow({
+      id: 'page-excluded',
+      slugId: 'page-excluded',
+      title: 'Excluded Roadmap',
+    });
+    const readableRow = createSearchRow({
+      id: 'page-readable',
+      slugId: 'page-readable',
+      title: 'Readable Roadmap',
+    });
+    const { service } = createPageSearchService(
+      [excludedRow, readableRow],
+      new Set(['page-excluded', 'page-readable']),
+    );
+
+    const result = await service.searchPage(
+      { labelId: 'label-1', limit: 1 } as any,
+      {
+        userId: 'user-1',
+        workspaceId: 'workspace-1',
+        excludedPageIds: new Set(['page-excluded']),
+      },
+    );
+
+    expect(result.items).toEqual([{ ...readableRow, breadcrumbs: [] }]);
+  });
+
   it('searches indexed attachment names and extracted content', async () => {
     const row = {
       id: 'attachment-1',

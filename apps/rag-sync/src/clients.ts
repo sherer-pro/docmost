@@ -1,6 +1,7 @@
 import type {
   RagAttachmentDeletedItem,
   RagAttachmentItem,
+  RagBlockedPageItem,
   RagChangeFeed,
   RagDatabaseDetail,
   RagDeletedItem,
@@ -30,6 +31,16 @@ export class DocmostClient implements DocmostSourceClient {
 
   getScope(): Promise<RagScope> {
     return this.http.json("api/rag/scope", {}, 8 * 1024 * 1024);
+  }
+
+  getBlockedPages(cursor?: string): Promise<RagChangeFeed<RagBlockedPageItem>> {
+    const query = new URLSearchParams({ limit: "500" });
+    if (cursor) query.set("cursor", cursor);
+    return this.http.json(
+      `api/rag/scope/blocked?${query.toString()}`,
+      {},
+      8 * 1024 * 1024,
+    );
   }
 
   getUpdates(updatedSince: number, cursor?: string) {

@@ -8,7 +8,7 @@ import { QueueJob, QueueName } from '../../../integrations/queue/constants';
 import {
   createZipReadBudget,
   readZipEntryWithBudget,
-} from '../../../integrations/import/utils/file.utils';
+} from '../../../common/security/untrusted-document.util';
 import * as yauzl from 'yauzl';
 import { executeTx } from '@docmost/db/utils';
 import { CONTENT_INDEXABLE_EXTENSIONS } from '../attachment.constants';

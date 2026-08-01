@@ -38,7 +38,10 @@ describe('OpenWebUiKnowledgeRetrievalAdapter', () => {
     originalFetch = global.fetch;
     adapter = new OpenWebUiKnowledgeRetrievalAdapter(
       new AiRetrievalHttpClient({
-        assertAllowed: jest.fn(async (value: string) => new URL(value)),
+        resolveAllowed: jest.fn(async (value: string) => ({
+          url: new URL(value),
+          addresses: [{ address: '127.0.0.1', family: 4 }],
+        })),
       } as any),
     );
   });

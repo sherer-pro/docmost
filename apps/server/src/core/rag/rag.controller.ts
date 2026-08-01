@@ -13,11 +13,14 @@ import { sanitize } from 'sanitize-filename-ts';
 import { validate as isValidUuid } from 'uuid';
 import { RagService } from './rag.service';
 import { ApiKeyAuthGuard } from '../../common/guards/api-key-auth.guard';
+import { ApiKeyTrafficGuard } from '../api-key/traffic/api-key-traffic.guard';
+import { ApiKeyTraffic } from '../api-key/traffic/api-key-traffic.decorator';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
 import { AuthWorkspace } from '../../common/decorators/auth-workspace.decorator';
 import { AuthSpace } from '../../common/decorators/auth-space.decorator';
 import {
   RagDatabaseIdentifierParamsDto,
+  RagBlockedPagesQueryDto,
   RagDatabaseRowsQueryDto,
   RagDeletedQueryDto,
   RagListPagesQueryDto,
@@ -30,7 +33,8 @@ import {
 import { SkipTransform } from '../../common/decorators/skip-transform.decorator';
 import { StorageService } from '../../integrations/storage/storage.service';
 
-@UseGuards(ApiKeyAuthGuard)
+@ApiKeyTraffic('rag')
+@UseGuards(ApiKeyAuthGuard, ApiKeyTrafficGuard)
 @Controller('rag')
 export class RagController {
   constructor(
@@ -53,6 +57,20 @@ export class RagController {
   }
 
   @SkipTransform()
+  @Get('scope/blocked')
+  async getBlockedPages(
+    @Query() query: RagBlockedPagesQueryDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+    @AuthSpace() space: Space,
+  ) {
+    return this.ragService.getBlockedPages(
+      this.buildScope(user, workspace, space),
+      { limit: query.limit, cursor: query.cursor },
+    );
+  }
+
+  @SkipTransform()
   @Get('pages')
   async listPages(
     @Query() query: RagListPagesQueryDto,
@@ -63,6 +81,7 @@ export class RagController {
     return this.ragService.listPages(
       this.buildScope(user, workspace, space),
       query.includeContent,
+      { limit: query.limit, cursor: query.cursor },
     );
   }
 

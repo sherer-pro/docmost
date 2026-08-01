@@ -6,7 +6,11 @@ import {
 } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
-import { User, Workspace } from '@docmost/db/types/entity.types';
+import {
+  AiRunStep as AiRunStepEntity,
+  User,
+  Workspace,
+} from '@docmost/db/types/entity.types';
 import { AiRunService } from './ai-run.service';
 import { AiRunEventService } from './ai-run-event.service';
 import { PageAccessService } from '../../page-access/page-access.service';
@@ -64,19 +68,23 @@ export class AiRunStepService {
       });
     }
 
-    const claimed = await this.db
-      .updateTable('aiRunSteps')
-      .set({
-        status: 'approved',
-        decidedAt: now,
-        decidedById: user.id,
-        updatedAt: now,
-      })
-      .where('id', '=', step.id)
-      .where('runId', '=', run.id)
-      .where('status', '=', 'pending_approval')
-      .returningAll()
-      .executeTakeFirst();
+    const claimed = await this.runs.withProviderAdmission<
+      AiRunStepEntity | undefined
+    >(run, (trx) =>
+      trx
+        .updateTable('aiRunSteps')
+        .set({
+          status: 'approved',
+          decidedAt: now,
+          decidedById: user.id,
+          updatedAt: now,
+        })
+        .where('id', '=', step.id)
+        .where('runId', '=', run.id)
+        .where('status', '=', 'pending_approval')
+        .returningAll()
+        .executeTakeFirst(),
+    );
     if (!claimed) {
       throw new ConflictException('The write proposal was already decided');
     }

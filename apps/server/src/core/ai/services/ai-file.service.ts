@@ -10,8 +10,10 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { InjectKysely } from 'nestjs-kysely';
 import { MultipartFile } from '@fastify/multipart';
 import { Queue } from 'bullmq';
+import pLimit from 'p-limit';
 import { createHash } from 'node:crypto';
 import * as path from 'node:path';
+import * as yauzl from 'yauzl';
 import { v7 as uuidv7 } from 'uuid';
 import { sql } from 'kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
@@ -43,6 +45,23 @@ import { AiProviderMessage } from '../ai.types';
 import { AiConversationService } from './ai-conversation.service';
 import { PageAccessService } from '../../page-access/page-access.service';
 import { AiOperationalMetricsService } from './ai-operational-metrics.service';
+import {
+  assertPdfCanvasWithinBudget,
+  createZipReadBudget,
+  readZipEntryWithBudget,
+  withDeadline,
+} from '../../../common/security/untrusted-document.util';
+
+const AI_DOCUMENT_EXTRACTION_TIMEOUT_MS = 60_000;
+const AI_DOCX_MAX_ENTRY_BYTES = 25 * 1024 * 1024;
+const AI_DOCX_MAX_TOTAL_BYTES = 100 * 1024 * 1024;
+const AI_DOCX_MAX_ENTRIES = 10_000;
+const AI_PDF_MAX_PAGES = 20;
+const AI_PDF_MAX_CANVAS_DIMENSION = 8192;
+const AI_PDF_MAX_PIXELS_PER_PAGE = 16_777_216;
+const AI_PDF_MAX_CUMULATIVE_PIXELS = 67_108_864;
+const AI_PDF_MAX_RENDERED_BYTES = 10 * 1024 * 1024;
+const AI_DOCUMENT_CONCURRENCY = 2;
 
 type FileContext = {
   text: string;
@@ -53,6 +72,7 @@ type FileContext = {
 @Injectable()
 export class AiFileService {
   private readonly logger = new Logger(AiFileService.name);
+  private readonly documentWorkLimit = pLimit(AI_DOCUMENT_CONCURRENCY);
 
   constructor(
     @InjectKysely() private readonly db: KyselyDB,
@@ -430,10 +450,19 @@ export class AiFileService {
       if (extension === '.txt' || extension === '.md') {
         text = buffer.toString('utf8');
       } else if (extension === '.docx') {
-        const mammoth = await import('mammoth');
-        text = (await mammoth.extractRawText({ buffer })).value;
+        text = await this.documentWorkLimit(() =>
+          this.extractDocxText(
+            buffer,
+            Date.now() + AI_DOCUMENT_EXTRACTION_TIMEOUT_MS,
+          ),
+        );
       } else if (extension === '.pdf') {
-        text = await this.extractPdfText(buffer);
+        text = await this.documentWorkLimit(() =>
+          this.extractPdfText(
+            buffer,
+            Date.now() + AI_DOCUMENT_EXTRACTION_TIMEOUT_MS,
+          ),
+        );
       }
       const ready = await this.db
         .updateTable('aiChatFiles')
@@ -838,23 +867,115 @@ export class AiFileService {
     };
   }
 
-  private async extractPdfText(buffer: Buffer): Promise<string | null> {
+  private async extractDocxText(
+    buffer: Buffer,
+    deadline: number,
+  ): Promise<string | null> {
+    await withDeadline(
+      this.assertDocxEntryCount(buffer),
+      deadline,
+      'AI document extraction timed out',
+    );
+    const JSZip = (await import('jszip')).default;
+    const archive = await withDeadline(
+      JSZip.loadAsync(buffer, { checkCRC32: false, createFolders: false }),
+      deadline,
+      'AI document extraction timed out',
+    );
+    const entries = Object.values(archive.files);
+    if (entries.length > AI_DOCX_MAX_ENTRIES) {
+      throw new Error('DOCX archive contains too many entries');
+    }
+    const budget = createZipReadBudget({
+      maxEntryUncompressedBytes: AI_DOCX_MAX_ENTRY_BYTES,
+      maxTotalUncompressedBytes: AI_DOCX_MAX_TOTAL_BYTES,
+    });
+    for (const entry of entries) {
+      if (!entry.dir) {
+        await withDeadline(
+          readZipEntryWithBudget(entry, budget),
+          deadline,
+          'AI document extraction timed out',
+        );
+      }
+    }
+    const mammoth = await import('mammoth');
+    const result = await withDeadline(
+      mammoth.extractRawText({ buffer }),
+      deadline,
+      'AI document extraction timed out',
+    );
+    return result.value || null;
+  }
+
+  private async assertDocxEntryCount(buffer: Buffer): Promise<void> {
+    await new Promise<void>((resolve, reject) => {
+      yauzl.fromBuffer(
+        buffer,
+        { lazyEntries: true, decodeStrings: false },
+        (error, zipfile) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+          if (zipfile.entryCount > AI_DOCX_MAX_ENTRIES) {
+            zipfile.close();
+            reject(new Error('DOCX archive contains too many entries'));
+            return;
+          }
+          zipfile.close();
+          resolve();
+        },
+      );
+    });
+  }
+
+  private async extractPdfText(
+    buffer: Buffer,
+    deadline: number,
+  ): Promise<string | null> {
     const pdfjs: any = await import('pdfjs-dist/legacy/build/pdf.mjs');
-    const document = await pdfjs.getDocument({
+    const loadingTask = pdfjs.getDocument({
       data: new Uint8Array(buffer),
       isEvalSupported: false,
       useWorkerFetch: false,
-    }).promise;
-    const parts: string[] = [];
-    const pages = Math.min(document.numPages, 20);
-    for (let pageNumber = 1; pageNumber <= pages; pageNumber += 1) {
-      const page = await document.getPage(pageNumber);
-      const content = await page.getTextContent();
-      parts.push(
-        content.items
-          .map((item: any) => (typeof item.str === 'string' ? item.str : ''))
-          .join(' '),
+    });
+    let document: any;
+    try {
+      document = await withDeadline(
+        loadingTask.promise,
+        deadline,
+        'AI document extraction timed out',
       );
+    } catch (error) {
+      await loadingTask.destroy().catch(() => undefined);
+      throw error;
+    }
+    const parts: string[] = [];
+    try {
+      const pages = Math.min(document.numPages, AI_PDF_MAX_PAGES);
+      for (let pageNumber = 1; pageNumber <= pages; pageNumber += 1) {
+        const page: any = await withDeadline<any>(
+          document.getPage(pageNumber),
+          deadline,
+          'AI document extraction timed out',
+        );
+        const content: any = await withDeadline<any>(
+          page.getTextContent(),
+          deadline,
+          'AI document extraction timed out',
+        );
+        parts.push(
+          content.items
+            .map((item: any) =>
+              typeof item.str === 'string' ? item.str : '',
+            )
+            .join(' '),
+        );
+        page.cleanup?.();
+      }
+    } finally {
+      await document.destroy().catch(() => undefined);
     }
     const text = parts.join('\n\n').trim();
     return text || null;
@@ -864,39 +985,91 @@ export class AiFileService {
     buffer: Buffer,
     maxBytes: number,
   ): Promise<{ images: FileContext['images']; bytes: number; length: number }> {
+    return this.documentWorkLimit(() =>
+      this.renderPdfImagesBounded(buffer, maxBytes),
+    );
+  }
+
+  private async renderPdfImagesBounded(
+    buffer: Buffer,
+    maxBytes: number,
+  ): Promise<{ images: FileContext['images']; bytes: number; length: number }> {
+    const deadline = Date.now() + AI_DOCUMENT_EXTRACTION_TIMEOUT_MS;
     const pdfjs: any = await import('pdfjs-dist/legacy/build/pdf.mjs');
     const canvasModule: any = await import('@napi-rs/canvas');
-    const document = await pdfjs.getDocument({
+    const loadingTask = pdfjs.getDocument({
       data: new Uint8Array(buffer),
       isEvalSupported: false,
       useWorkerFetch: false,
-    }).promise;
+    });
+    let document: any;
+    try {
+      document = await withDeadline(
+        loadingTask.promise,
+        deadline,
+        'AI PDF rendering timed out',
+      );
+    } catch (error) {
+      await loadingTask.destroy().catch(() => undefined);
+      throw error;
+    }
     const result: FileContext['images'] = [];
     let totalBytes = 0;
-    for (
-      let pageNumber = 1;
-      pageNumber <= Math.min(document.numPages, 20);
-      pageNumber += 1
-    ) {
-      const page = await document.getPage(pageNumber);
-      const viewport = page.getViewport({ scale: 1.2 });
-      const canvas = canvasModule.createCanvas(
-        Math.ceil(viewport.width),
-        Math.ceil(viewport.height),
-      );
-      await page.render({
-        canvasContext: canvas.getContext('2d'),
-        viewport,
-      }).promise;
-      const image = canvas.toBuffer('image/png');
-      if (
-        totalBytes + image.length >
-        Math.min(maxBytes, 10 * 1024 * 1024)
+    let cumulativePixels = 0;
+    try {
+      for (
+        let pageNumber = 1;
+        pageNumber <= Math.min(document.numPages, AI_PDF_MAX_PAGES);
+        pageNumber += 1
       ) {
-        break;
+        const page: any = await withDeadline<any>(
+          document.getPage(pageNumber),
+          deadline,
+          'AI PDF rendering timed out',
+        );
+        const viewport = page.getViewport({ scale: 1.2 });
+        cumulativePixels = assertPdfCanvasWithinBudget(
+          viewport.width,
+          viewport.height,
+          cumulativePixels,
+          {
+            maxDimension: AI_PDF_MAX_CANVAS_DIMENSION,
+            maxPixelsPerPage: AI_PDF_MAX_PIXELS_PER_PAGE,
+            maxCumulativePixels: AI_PDF_MAX_CUMULATIVE_PIXELS,
+          },
+        );
+        const canvas = canvasModule.createCanvas(
+          Math.ceil(viewport.width),
+          Math.ceil(viewport.height),
+        );
+        const renderTask = page.render({
+          canvasContext: canvas.getContext('2d'),
+          viewport,
+        });
+        try {
+          await withDeadline(
+            renderTask.promise,
+            deadline,
+            'AI PDF rendering timed out',
+          );
+        } catch (error) {
+          renderTask.cancel?.();
+          throw error;
+        } finally {
+          page.cleanup?.();
+        }
+        const image = canvas.toBuffer('image/png');
+        if (
+          totalBytes + image.length >
+          Math.min(maxBytes, AI_PDF_MAX_RENDERED_BYTES)
+        ) {
+          break;
+        }
+        totalBytes += image.length;
+        result.push(this.toImagePart(image, 'image/png'));
       }
-      totalBytes += image.length;
-      result.push(this.toImagePart(image, 'image/png'));
+    } finally {
+      await document.destroy().catch(() => undefined);
     }
     return { images: result, bytes: totalBytes, length: result.length };
   }

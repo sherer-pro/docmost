@@ -22,6 +22,9 @@ import { AuthWorkspace } from '../../common/decorators/auth-workspace.decorator'
 import { AuthSpace } from '../../common/decorators/auth-space.decorator';
 import { AiToolRegistryService } from '../ai/tools/ai-tool-registry.service';
 import { McpApiKeyAuthGuard } from './mcp-api-key-auth.guard';
+import { ApiKeyTrafficGuard } from '../api-key/traffic/api-key-traffic.guard';
+import { ApiKeyTraffic } from '../api-key/traffic/api-key-traffic.decorator';
+import { ApiKeyTrafficService } from '../api-key/traffic/api-key-traffic.service';
 
 /*
  * The shared tool-registry approach and Streamable HTTP adapter were adapted
@@ -29,9 +32,13 @@ import { McpApiKeyAuthGuard } from './mcp-api-key-auth.guard';
  * for the source revisions and applicable license notices.
  */
 @Controller('mcp')
-@UseGuards(McpApiKeyAuthGuard)
+@ApiKeyTraffic('mcp')
+@UseGuards(McpApiKeyAuthGuard, ApiKeyTrafficGuard)
 export class McpController {
-  constructor(private readonly tools: AiToolRegistryService) {}
+  constructor(
+    private readonly tools: AiToolRegistryService,
+    private readonly traffic: ApiKeyTrafficService,
+  ) {}
 
   @All()
   @CsrfExempt()
@@ -68,6 +75,7 @@ export class McpController {
     }));
 
     server.setRequestHandler(CallToolRequestSchema, async (call) => {
+      const startedAt = Date.now();
       try {
         const result = await this.tools.execute(
           call.params.name,
@@ -79,21 +87,33 @@ export class McpController {
             source: 'mcp',
           },
         );
+        const text = JSON.stringify(result.content);
+        this.traffic.observeMcpTool(
+          'success',
+          Date.now() - startedAt,
+          Buffer.byteLength(text),
+        );
         return {
           content: [
             {
               type: 'text' as const,
-              text: JSON.stringify(result.content),
+              text,
             },
           ],
         };
       } catch (error) {
+        const text = this.safeError(error);
+        this.traffic.observeMcpTool(
+          'error',
+          Date.now() - startedAt,
+          Buffer.byteLength(text),
+        );
         return {
           isError: true,
           content: [
             {
               type: 'text' as const,
-              text: this.safeError(error),
+              text,
             },
           ],
         };

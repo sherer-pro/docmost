@@ -5,6 +5,11 @@ import {
   PayloadTooLargeException,
 } from '@nestjs/common';
 import { AiRetrievalUrlPolicyService } from '../services/ai-retrieval-url-policy.service';
+import {
+  AiPinnedDispatcher,
+  createAiPinnedDispatcher,
+} from '../services/ai-pinned-http.util';
+import type { Dispatcher } from 'undici';
 
 export class AiRetrievalHttpError extends BadGatewayException {
   constructor(
@@ -65,18 +70,23 @@ export class AiRetrievalHttpClient {
         ),
       options.timeoutMs,
     );
+    let pinnedDispatcher: AiPinnedDispatcher | undefined;
 
     try {
-      const target = await Promise.race([
-        this.urlPolicy.assertAllowed(options.url),
+      const resolvedTarget = await Promise.race([
+        this.urlPolicy.resolveAllowed(options.url),
         deadline,
       ]);
+      pinnedDispatcher = createAiPinnedDispatcher(
+        resolvedTarget.addresses,
+      );
       const response = await Promise.race([
-        fetch(target, {
+        fetch(resolvedTarget.url, {
           method: options.method ?? 'GET',
           body: options.body,
           redirect: 'manual',
           signal: controller.signal,
+          dispatcher: pinnedDispatcher.dispatcher,
           headers: {
             accept: 'application/json',
             ...(options.body ? { 'content-type': 'application/json' } : {}),
@@ -84,7 +94,7 @@ export class AiRetrievalHttpClient {
               ? { authorization: `Bearer ${options.apiKey}` }
               : {}),
           },
-        }),
+        } as RequestInit & { dispatcher: Dispatcher }),
         deadline,
       ]);
       if (response.status >= 300 && response.status < 400) {
@@ -132,6 +142,7 @@ export class AiRetrievalHttpClient {
     } finally {
       clearTimeout(timeout);
       options.signal?.removeEventListener('abort', onParentAbort);
+      await pinnedDispatcher?.close();
     }
   }
 

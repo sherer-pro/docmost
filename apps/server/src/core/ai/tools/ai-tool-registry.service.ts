@@ -384,13 +384,15 @@ export class AiToolRegistryService {
     );
     const response = await this.search.searchPage(
       { query, spaceId: context.spaceId, limit, offset: 0 },
-      { userId: context.user.id, workspaceId: context.workspaceId },
+      {
+        userId: context.user.id,
+        workspaceId: context.workspaceId,
+        excludedPageIds: excluded,
+      },
     );
     return {
       content: {
-        items: response.items
-          .filter((item) => !excluded.has(item.id))
-          .map((item) => ({
+        items: response.items.map((item) => ({
             pageId: item.id,
             type: item.databaseId ? 'database_row' : 'page',
             databaseId: item.databaseId ?? null,
@@ -414,6 +416,12 @@ export class AiToolRegistryService {
       context.spaceId,
       context.workspaceId,
     );
+    const readablePageIds = [...snapshot.readablePageIds].filter(
+      (pageId) => !excluded.has(pageId),
+    );
+    if (readablePageIds.length === 0) {
+      return { content: { items: [] } };
+    }
     const rows = await this.db
       .selectFrom('pages')
       .select([
@@ -427,18 +435,14 @@ export class AiToolRegistryService {
       .where('workspaceId', '=', context.workspaceId)
       .where('spaceId', '=', context.spaceId)
       .where('deletedAt', 'is', null)
+      .where('id', 'in', readablePageIds)
       .orderBy('parentPageId', 'asc')
       .orderBy('position', 'asc')
       .limit(500)
       .execute();
     return {
       content: {
-        items: rows
-          .filter(
-            (row) =>
-              snapshot.readablePageIds.has(row.id) && !excluded.has(row.id),
-          )
-          .map((row) => ({
+        items: rows.map((row) => ({
             ...row,
             parentPageId:
               row.parentPageId &&
@@ -464,16 +468,24 @@ export class AiToolRegistryService {
       context.spaceId,
       context.workspaceId,
     );
+    const readableChildIds = [...snapshot.readablePageIds].filter(
+      (childId) => !excluded.has(childId),
+    );
     const [breadcrumbs, children] = await Promise.all([
       this.pages.getPageBreadCrumbs(pageId),
-      this.db
-        .selectFrom('pages')
-        .select(['id', 'title', 'slugId', 'position', 'updatedAt'])
-        .where('parentPageId', '=', pageId)
-        .where('deletedAt', 'is', null)
-        .orderBy('position', 'asc')
-        .limit(50)
-        .execute(),
+      readableChildIds.length === 0
+        ? Promise.resolve([])
+        : this.db
+            .selectFrom('pages')
+            .select(['id', 'title', 'slugId', 'position', 'updatedAt'])
+            .where('workspaceId', '=', context.workspaceId)
+            .where('spaceId', '=', context.spaceId)
+            .where('parentPageId', '=', pageId)
+            .where('deletedAt', 'is', null)
+            .where('id', 'in', readableChildIds)
+            .orderBy('position', 'asc')
+            .limit(50)
+            .execute(),
     ]);
     return {
       content: {
@@ -489,10 +501,7 @@ export class AiToolRegistryService {
               snapshot.visiblePageIds.has(item.id) && !excluded.has(item.id),
           )
           .map((item) => ({ id: item.id, title: item.title })),
-        children: children.filter(
-          (item) =>
-            snapshot.readablePageIds.has(item.id) && !excluded.has(item.id),
-        ),
+        children,
       },
     };
   }
