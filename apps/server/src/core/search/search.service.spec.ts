@@ -361,7 +361,7 @@ describe('SearchService', () => {
     expect(result.items).toEqual([{ ...readableRow, breadcrumbs: [] }]);
   });
 
-  it('searches attachments by filename tokens without requiring attachment tsv data', async () => {
+  it('searches indexed attachment names and extracted content', async () => {
     const row = {
       id: 'attachment-1',
       fileName: 'Quarterly Budget.pdf',
@@ -393,10 +393,8 @@ describe('SearchService', () => {
     expect(result.items).toEqual([row]);
     expect(
       state.whereCalls.some(([column]) => column === 'attachments.tsv'),
-    ).toBe(false);
-    expect(
-      state.whereCalls.filter(([condition]) => typeof condition === 'function'),
-    ).toHaveLength(2);
+    ).toBe(true);
+    expect(state.orderByCalls).toContainEqual(['rank', 'desc']);
   });
 
   it('returns no attachment results for a blank query', async () => {
@@ -628,9 +626,12 @@ describe('SearchService share search', () => {
     const { service, pageRepo, isSharingAllowed } =
       createShareSearchService(false);
 
-    const result = await service.searchPage({ query: 'secret', shareId: 'share-1' } as any, {
-      workspaceId: 'workspace-1',
-    });
+    const result = await service.searchPage(
+      { query: 'secret', shareId: 'share-1' } as any,
+      {
+        workspaceId: 'workspace-1',
+      },
+    );
 
     expect(result).toEqual({ items: [] });
     expect(isSharingAllowed).toHaveBeenCalledWith('workspace-1', 'space-1');

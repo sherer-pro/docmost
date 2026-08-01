@@ -1,12 +1,13 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { CreateShareDto, ShareInfoDto, UpdateShareDto } from './dto/share.dto';
 import { InjectKysely } from 'nestjs-kysely';
-import { KyselyDB } from '@docmost/db/types/kysely.types';
+import { KyselyDB, KyselyTransaction } from '@docmost/db/types/kysely.types';
 import { nanoIdGen } from '../../common/helpers';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { jsonToNode } from '../../collaboration/collaboration.util';
@@ -24,6 +25,8 @@ import { MAX_PAGE_TREE_DEPTH } from '../../common/config/page-tree.constants';
 import { validate as isValidUUID } from 'uuid';
 import { TransclusionService } from '../page/transclusion/transclusion.service';
 import { resolveHeadingNumberingEnabled } from '../page/utils/heading-numbering-settings.utils';
+import { executeTx } from '@docmost/db/utils';
+import { PublicSharingPolicyService } from './public-sharing-policy.service';
 
 @Injectable()
 export class ShareService {
@@ -33,12 +36,23 @@ export class ShareService {
     private readonly shareRepo: ShareRepo,
     private readonly pageRepo: PageRepo,
     @InjectKysely() private readonly db: KyselyDB,
-    private readonly transclusionService?: TransclusionService,
+    private readonly transclusionService: TransclusionService,
+    private readonly publicSharingPolicy: PublicSharingPolicyService,
   ) {}
 
   async getShareTree(shareId: string, workspaceId: string) {
     const share = await this.shareRepo.findById(shareId);
     if (!share || share.workspaceId !== workspaceId) {
+      throw new NotFoundException('Share not found');
+    }
+
+    const rootPage = await this.pageRepo.findById(share.pageId);
+    if (
+      !rootPage ||
+      rootPage.deletedAt ||
+      rootPage.workspaceId !== workspaceId ||
+      rootPage.spaceId !== share.spaceId
+    ) {
       throw new NotFoundException('Share not found');
     }
 
@@ -61,30 +75,61 @@ export class ShareService {
   }) {
     const { authUserId, workspaceId, page, createShareDto } = opts;
 
-    try {
-      const shares = await this.shareRepo.findByPageId(page.id);
-      if (shares) {
-        return shares;
+    return executeTx(this.db, async (trx) => {
+      const workspace = await trx
+        .selectFrom('workspaces')
+        .select(['id', 'settings'])
+        .where('id', '=', workspaceId)
+        .forUpdate()
+        .executeTakeFirst();
+      const space = await trx
+        .selectFrom('spaces')
+        .select(['id', 'workspaceId', 'settings'])
+        .where('id', '=', page.spaceId)
+        .where('workspaceId', '=', workspaceId)
+        .forUpdate()
+        .executeTakeFirst();
+
+      if (
+        !workspace ||
+        !space ||
+        !this.isSharingAllowedBySettings(workspace.settings, space.settings)
+      ) {
+        throw new ForbiddenException('Public sharing is disabled');
       }
 
-      return await this.shareRepo.insertShare({
-        key: nanoIdGen().toLowerCase(),
-        pageId: page.id,
-        includeSubPages: createShareDto.includeSubPages ?? false,
-        searchIndexing: createShareDto.searchIndexing ?? false,
-        creatorId: authUserId,
-        spaceId: page.spaceId,
+      await this.lockSharePage(
+        trx,
+        page.id,
         workspaceId,
+        page.spaceId,
+      );
+
+      const existingShare = await this.shareRepo.findByPageId(page.id, {
+        trx,
       });
-    } catch (err) {
-      this.logger.error(err);
-      throw new BadRequestException('Failed to share page');
-    }
+      if (existingShare) {
+        return existingShare;
+      }
+
+      return this.shareRepo.insertShare(
+        {
+          key: nanoIdGen().toLowerCase(),
+          pageId: page.id,
+          includeSubPages: createShareDto.includeSubPages ?? false,
+          searchIndexing: createShareDto.searchIndexing ?? false,
+          creatorId: authUserId,
+          spaceId: page.spaceId,
+          workspaceId,
+        },
+        trx,
+      );
+    });
   }
 
   async updateShare(shareId: string, updateShareDto: UpdateShareDto) {
     try {
-      return this.shareRepo.updateShare(
+      return await this.shareRepo.updateShare(
         {
           includeSubPages: updateShareDto.includeSubPages,
           searchIndexing: updateShareDto.searchIndexing,
@@ -119,7 +164,12 @@ export class ShareService {
       }
 
       const rootPage = await this.pageRepo.findById(shareById.pageId);
-      if (!rootPage || rootPage.deletedAt) {
+      if (
+        !rootPage ||
+        rootPage.deletedAt ||
+        rootPage.workspaceId !== workspaceId ||
+        rootPage.spaceId !== shareById.spaceId
+      ) {
         throw new NotFoundException('Shared page not found');
       }
 
@@ -184,6 +234,8 @@ export class ShareService {
             'pages.title',
             'pages.icon',
             'pages.parentPageId',
+            'pages.spaceId as pageSpaceId',
+            'pages.workspaceId as pageWorkspaceId',
             sql`0`.as('level'),
             'shares.id as shareId',
             'shares.key as shareKey',
@@ -208,6 +260,8 @@ export class ShareService {
                   'p.title',
                   'p.icon',
                   'p.parentPageId',
+                  'p.spaceId as pageSpaceId',
+                  'p.workspaceId as pageWorkspaceId',
                   sql`ph.level + 1`.as('level'),
                   's.id as shareId',
                   's.key as shareKey',
@@ -229,7 +283,12 @@ export class ShareService {
       .limit(1)
       .executeTakeFirst();
 
-    if (!share || share.workspaceId !== workspaceId) {
+    if (
+      !share ||
+      share.workspaceId !== workspaceId ||
+      share.pageWorkspaceId !== workspaceId ||
+      share.pageSpaceId !== share.spaceId
+    ) {
       return undefined;
     }
 
@@ -346,10 +405,6 @@ export class ShareService {
       throw new NotFoundException('Share not found');
     }
 
-    if (!this.transclusionService) {
-      throw new NotFoundException('Sync block lookup is not available');
-    }
-
     const candidatePageIds = [
       ...new Set(references.map((reference) => reference.sourcePageId)),
     ];
@@ -381,26 +436,39 @@ export class ShareService {
   async isSharingAllowed(
     workspaceId: string,
     spaceId: string,
+    trx?: KyselyTransaction,
   ): Promise<boolean> {
-    const result = await this.db
-      .selectFrom('workspaces')
-      .innerJoin('spaces', 'spaces.workspaceId', 'workspaces.id')
-      .select([
-        'workspaces.settings as workspaceSettings',
-        'spaces.settings as spaceSettings',
-      ])
-      .where('workspaces.id', '=', workspaceId)
-      .where('spaces.id', '=', spaceId)
+    return this.publicSharingPolicy.isAllowed(workspaceId, spaceId, trx);
+  }
+
+  private isSharingAllowedBySettings(
+    workspaceSettings: unknown,
+    spaceSettings: unknown,
+  ): boolean {
+    return this.publicSharingPolicy.isAllowedBySettings(
+      workspaceSettings,
+      spaceSettings,
+    );
+  }
+
+  private async lockSharePage(
+    trx: KyselyTransaction,
+    pageId: string,
+    workspaceId: string,
+    spaceId: string,
+  ) {
+    const page = await trx
+      .selectFrom('pages')
+      .select('id')
+      .where('id', '=', pageId)
+      .where('workspaceId', '=', workspaceId)
+      .where('spaceId', '=', spaceId)
+      .where('deletedAt', 'is', null)
+      .forUpdate()
       .executeTakeFirst();
-
-    if (!result) return false;
-
-    const workspaceDisabled =
-      (result.workspaceSettings as any)?.sharing?.disabled === true;
-    const spaceDisabled =
-      (result.spaceSettings as any)?.sharing?.disabled === true;
-
-    return !workspaceDisabled && !spaceDisabled;
+    if (!page) {
+      throw new NotFoundException('Page not found');
+    }
   }
 
   async updatePublicAttachments(page: Page): Promise<any> {

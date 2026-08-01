@@ -129,6 +129,8 @@ export class AuthController {
     @Body() passwordResetDto: PasswordResetDto,
     @AuthWorkspace() workspace: Workspace,
   ) {
+    validateSsoEnforcement(workspace);
+
     const result = await this.authService.passwordReset(
       passwordResetDto,
       workspace,

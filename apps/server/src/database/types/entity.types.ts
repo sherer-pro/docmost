@@ -40,9 +40,10 @@ import {
   WorkspaceInvitations,
   UserTokens,
   Backlinks,
-  Billing as BillingSubscription,
   AuthProviders,
   AuthAccounts,
+  AuthProviderGroupMappings,
+  AuthProviderGroupMemberships,
   Shares,
   FileTasks,
   UserMfa as _UserMFA,
@@ -53,8 +54,8 @@ import {
   PushNotificationJobs,
   JsonValue,
   PageAccessRules,
+  SsoLoginStates,
 } from './db';
-import { PageEmbeddings } from '@docmost/db/types/embeddings.types';
 import type { PageAiRole } from '@docmost/api-contract';
 
 /**
@@ -334,11 +335,6 @@ export type Backlink = Selectable<Backlinks>;
 export type InsertableBacklink = Insertable<Backlink>;
 export type UpdatableBacklink = Updateable<Omit<Backlink, 'id'>>;
 
-// Billing
-export type Billing = Selectable<BillingSubscription>;
-export type InsertableBilling = Insertable<BillingSubscription>;
-export type UpdatableBilling = Updateable<Omit<BillingSubscription, 'id'>>;
-
 // Auth Provider
 export type AuthProvider = Selectable<AuthProviders>;
 export type InsertableAuthProvider = Insertable<AuthProviders>;
@@ -348,6 +344,12 @@ export type UpdatableAuthProvider = Updateable<Omit<AuthProviders, 'id'>>;
 export type AuthAccount = Selectable<AuthAccounts>;
 export type InsertableAuthAccount = Insertable<AuthAccounts>;
 export type UpdatableAuthAccount = Updateable<Omit<AuthAccounts, 'id'>>;
+
+export type AuthProviderGroupMapping =
+  Selectable<AuthProviderGroupMappings>;
+export type AuthProviderGroupMembership =
+  Selectable<AuthProviderGroupMemberships>;
+export type SsoLoginState = Selectable<SsoLoginStates>;
 
 // Share
 export type Share = Selectable<Shares>;
@@ -368,11 +370,6 @@ export type UpdatableUserMFA = Updateable<Omit<_UserMFA, 'id'>>;
 export type ApiKey = Selectable<ApiKeys>;
 export type InsertableApiKey = Insertable<ApiKeys>;
 export type UpdatableApiKey = Updateable<Omit<ApiKeys, 'id'>>;
-
-// Page Embedding
-export type PageEmbedding = Selectable<PageEmbeddings>;
-export type InsertablePageEmbedding = Insertable<PageEmbeddings>;
-export type UpdatablePageEmbedding = Updateable<Omit<PageEmbeddings, 'id'>>;
 
 // Notification
 export type Notification = Selectable<Notifications>;

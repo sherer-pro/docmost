@@ -4,7 +4,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { Error404 } from "@/components/ui/error-404.tsx";
 import { isCloud } from "@/lib/config.ts";
 import { useTranslation } from "react-i18next";
-import { useRedirectToCloudSelect } from "@/ee/hooks/use-redirect-to-cloud-select.tsx";
+import { useRedirectToCloudSelect } from "@/features/cloud/hooks/use-redirect-to-cloud-select.tsx";
 import { useTrackOrigin } from "@/hooks/use-track-origin";
 import WorkspaceAdminRoute from "@/components/settings/workspace-admin-route.tsx";
 
@@ -33,11 +33,13 @@ const Layout = lazy(() => import("@/components/layouts/global/layout.tsx"));
 const InviteSignup = lazy(() => import("@/pages/auth/invite-signup.tsx"));
 const ForgotPassword = lazy(() => import("@/pages/auth/forgot-password.tsx"));
 const PasswordReset = lazy(() => import("./pages/auth/password-reset"));
-const Billing = lazy(() => import("@/ee/billing/pages/billing.tsx"));
-const CloudLogin = lazy(() => import("@/ee/pages/cloud-login.tsx"));
-const CreateWorkspace = lazy(() => import("@/ee/pages/create-workspace.tsx"));
-const Security = lazy(() => import("@/ee/security/pages/security.tsx"));
-const License = lazy(() => import("@/ee/licence/pages/license.tsx"));
+const CloudLogin = lazy(() => import("@/features/cloud/pages/cloud-login.tsx"));
+const CreateWorkspace = lazy(
+  () => import("@/features/cloud/pages/create-workspace.tsx"),
+);
+const Security = lazy(
+  () => import("@/features/security/pages/security.tsx"),
+);
 const SharedPage = lazy(() => import("@/pages/share/shared-page.tsx"));
 const Shares = lazy(() => import("@/pages/settings/shares/shares.tsx"));
 const ShareLayout = lazy(
@@ -46,12 +48,12 @@ const ShareLayout = lazy(
 const ShareRedirect = lazy(() => import("@/pages/share/share-redirect.tsx"));
 const SpacesPage = lazy(() => import("@/pages/spaces/spaces.tsx"));
 const MfaChallengePage = lazy(() =>
-  import("@/ee/mfa/pages/mfa-challenge-page").then((module) => ({
+  import("@/features/mfa/pages/mfa-challenge-page").then((module) => ({
     default: module.MfaChallengePage,
   })),
 );
 const MfaSetupRequiredPage = lazy(() =>
-  import("@/ee/mfa/pages/mfa-setup-required-page").then((module) => ({
+  import("@/features/mfa/pages/mfa-setup-required-page").then((module) => ({
     default: module.MfaSetupRequiredPage,
   })),
 );
@@ -63,11 +65,12 @@ const DatabasePage = lazy(() => import("@/pages/database/database-page.tsx"));
 const DatabaseLegacyRedirect = lazy(
   () => import("@/pages/database/database-legacy-redirect.tsx"),
 );
-const UserApiKeys = lazy(() => import("@/ee/api-key/pages/user-api-keys"));
-const WorkspaceApiKeys = lazy(
-  () => import("@/ee/api-key/pages/workspace-api-keys"),
+const UserApiKeys = lazy(
+  () => import("@/features/api-key/pages/user-api-keys"),
 );
-const AiSettings = lazy(() => import("@/ee/ai/pages/ai-settings.tsx"));
+const WorkspaceApiKeys = lazy(
+  () => import("@/features/api-key/pages/workspace-api-keys"),
+);
 const AiIntegrationsSettings = lazy(
   () => import("@/features/ai/pages/ai-integrations-settings.tsx"),
 );
@@ -165,9 +168,6 @@ export default function App() {
                 element={<AiSpaceSettingsPage />}
               />
               <Route path={"ai/mcp"} element={<WorkspaceApiKeys />} />
-              <Route path={"ai/search"} element={<AiSettings />} />
-              {!isCloud() && <Route path={"license"} element={<License />} />}
-              {isCloud() && <Route path={"billing"} element={<Billing />} />}
             </Route>
           </Route>
         </Route>

@@ -47,7 +47,6 @@ function createService(params?: {
     (params?.db ?? {}) as any,
     {} as any,
     {} as any,
-    {} as any,
     (params?.generalQueue ?? { add: jest.fn() }) as any,
     {} as any,
     (params?.eventEmitter ?? { emit: jest.fn() }) as any,

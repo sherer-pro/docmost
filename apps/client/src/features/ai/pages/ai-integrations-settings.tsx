@@ -14,7 +14,6 @@ import {
   IconApi,
   IconBrain,
   IconPlugConnected,
-  IconSearch,
   IconSettings,
 } from "@tabler/icons-react";
 import { Link } from "react-router-dom";
@@ -51,13 +50,6 @@ export default function AiIntegrationsSettings() {
           description={t("ai.integrations.mcpDescription")}
           href="/settings/ai/mcp"
           badge={t("ai.integrations.workspaceLevel")}
-        />
-        <IntegrationCard
-          icon={IconSearch}
-          title={t("ai.integrations.searchTitle")}
-          description={t("ai.integrations.searchDescription")}
-          href="/settings/ai/search"
-          badge={t("ai.integrations.enterprise")}
         />
       </SimpleGrid>
 

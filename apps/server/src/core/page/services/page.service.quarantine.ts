@@ -23,7 +23,6 @@ describe.skip('PageService [quarantine: DOC-2471]', () => {
         { provide: 'KyselyModuleConnectionToken', useValue: {} },
         { provide: StorageService, useValue: {} },
         { provide: getQueueToken(QueueName.ATTACHMENT_QUEUE), useValue: {} },
-        { provide: getQueueToken(QueueName.AI_QUEUE), useValue: {} },
         { provide: getQueueToken(QueueName.GENERAL_QUEUE), useValue: {} },
         { provide: getQueueToken(QueueName.NOTIFICATION_QUEUE), useValue: {} },
         { provide: EventEmitter2, useValue: {} },

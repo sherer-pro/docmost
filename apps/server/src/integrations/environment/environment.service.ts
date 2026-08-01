@@ -72,6 +72,10 @@ export class EnvironmentService {
     return this.configService.get<string>('AI_RETRIEVAL_ALLOWED_ORIGINS', '');
   }
 
+  getSsoAllowedEndpoints(): string {
+    return this.configService.get<string>('SSO_ALLOWED_ENDPOINTS', '');
+  }
+
   getAiStreamIdleTimeoutMs(): number {
     const rawTimeout = this.configService.get<string | number>(
       'AI_STREAM_IDLE_TIMEOUT_MS',
@@ -248,22 +252,6 @@ export class EnvironmentService {
     return !this.isCloud();
   }
 
-  getStripePublishableKey(): string {
-    return this.configService.get<string>('STRIPE_PUBLISHABLE_KEY');
-  }
-
-  getStripeSecretKey(): string {
-    return this.configService.get<string>('STRIPE_SECRET_KEY');
-  }
-
-  getStripeWebhookSecret(): string {
-    return this.configService.get<string>('STRIPE_WEBHOOK_SECRET');
-  }
-
-  getBillingTrialDays(): number {
-    return parseInt(this.configService.get<string>('BILLING_TRIAL_DAYS', '14'));
-  }
-
   getCollabUrl(): string {
     return this.configService.get<string>('COLLAB_URL');
   }
@@ -331,7 +319,7 @@ export class EnvironmentService {
   getTypesenseUrl(): string {
     return this.configService
       .get<string>('TYPESENSE_URL', 'http://localhost:8108')
-      .toLowerCase();
+      .trim();
   }
 
   getTypesenseApiKey(): string {

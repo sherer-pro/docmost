@@ -35,7 +35,6 @@ describe('PageService move', () => {
       {} as any,
       {} as any,
       {} as any,
-      {} as any,
     );
   }
 

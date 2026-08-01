@@ -2,7 +2,6 @@ import {
   BadRequestException,
   Body,
   Controller,
-  ForbiddenException,
   Get,
   HttpCode,
   HttpStatus,
@@ -13,7 +12,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
-import { User, Workspace } from '@docmost/db/types/entity.types';
+import { Share, User, Workspace } from '@docmost/db/types/entity.types';
 import { AuthWorkspace } from '../../common/decorators/auth-workspace.decorator';
 import { ShareService } from './share.service';
 import {
@@ -29,7 +28,6 @@ import { Public } from '../../common/decorators/public.decorator';
 import { ShareRepo } from '@docmost/db/repos/share/share.repo';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import { EnvironmentService } from '../../integrations/environment/environment.service';
-import { hasLicenseOrEE } from '../../common/helpers';
 import { FastifyReply } from 'fastify';
 import { TokenService } from '../auth/services/token.service';
 import {
@@ -116,14 +114,7 @@ export class ShareController {
 
     await this.setAttachmentAccessCookie(res, shareData.page.id, workspace.id);
 
-    return {
-      ...shareData,
-      hasLicenseKey: hasLicenseOrEE({
-        licenseKey: workspace.licenseKey,
-        isCloud: this.environmentService.isCloud(),
-        plan: workspace.plan,
-      }),
-    };
+    return shareData;
   }
 
   @Public()
@@ -145,11 +136,11 @@ export class ShareController {
   @UseGuards(AuthRateLimitGuard)
   @AuthRateLimit({ endpoint: 'shareRead', accountField: 'shareId' })
   async getShare(@Body() dto: ShareIdDto) {
-    const share = await this.shareRepo.findById(dto.shareId, {
+    const share = (await this.shareRepo.findById(dto.shareId, {
       includeSharedPage: true,
-    });
+    })) as (Share & { sharedPage?: { id: string } | null }) | undefined;
 
-    if (!share) {
+    if (!share || !share.sharedPage) {
       throw new NotFoundException('Share not found');
     }
 
@@ -223,14 +214,6 @@ export class ShareController {
     }
 
     await this.pageAccessService.assertCanMoveDeleteShare(page, user);
-
-    const sharingAllowed = await this.shareService.isSharingAllowed(
-      workspace.id,
-      page.spaceId,
-    );
-    if (!sharingAllowed) {
-      throw new ForbiddenException('Public sharing is disabled');
-    }
 
     return this.shareService.createShare({
       page,
@@ -359,14 +342,7 @@ export class ShareController {
       throw new NotFoundException('Share not found');
     }
 
-    return {
-      ...treeData,
-      hasLicenseKey: hasLicenseOrEE({
-        licenseKey: workspace.licenseKey,
-        isCloud: this.environmentService.isCloud(),
-        plan: workspace.plan,
-      }),
-    };
+    return treeData;
   }
 
   private async setAttachmentAccessCookie(

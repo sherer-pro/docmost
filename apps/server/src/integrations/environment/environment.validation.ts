@@ -48,6 +48,10 @@ export class EnvironmentVariables {
   AI_RETRIEVAL_ALLOWED_ORIGINS: string;
 
   @IsOptional()
+  @IsString()
+  SSO_ALLOWED_ENDPOINTS: string;
+
+  @IsOptional()
   @Matches(/^\d+$/)
   AI_STREAM_IDLE_TIMEOUT_MS: string;
 
@@ -259,22 +263,6 @@ export class EnvironmentVariables {
   @IsOptional()
   @IsUrl({ protocols: ['http', 'https'], require_tld: false })
   DRAWIO_URL: string;
-
-  @IsOptional()
-  @Matches(/^\d+$/)
-  BILLING_TRIAL_DAYS: string;
-
-  @IsOptional()
-  @IsString()
-  STRIPE_PUBLISHABLE_KEY: string;
-
-  @IsOptional()
-  @IsString()
-  STRIPE_SECRET_KEY: string;
-
-  @IsOptional()
-  @IsString()
-  STRIPE_WEBHOOK_SECRET: string;
 
   @IsOptional()
   @IsUrl({ protocols: ['http', 'https'], require_tld: false })

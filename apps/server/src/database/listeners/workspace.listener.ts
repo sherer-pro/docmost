@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { EventName } from '../../common/events/event.contants';
 import { InjectQueue } from '@nestjs/bullmq';
@@ -12,12 +12,9 @@ export class WorkspaceEvent {
 
 @Injectable()
 export class WorkspaceListener {
-  private readonly logger = new Logger(WorkspaceListener.name);
-
   constructor(
     private readonly environmentService: EnvironmentService,
     @InjectQueue(QueueName.SEARCH_QUEUE) private searchQueue: Queue,
-    @InjectQueue(QueueName.AI_QUEUE) private aiQueue: Queue,
   ) {}
 
   @OnEvent(EventName.WORKSPACE_DELETED)
@@ -26,8 +23,6 @@ export class WorkspaceListener {
     if (this.isTypesense()) {
       await this.searchQueue.add(QueueJob.WORKSPACE_DELETED, { workspaceId });
     }
-
-    await this.aiQueue.add(QueueJob.WORKSPACE_DELETED, { workspaceId });
   }
 
   isTypesense(): boolean {

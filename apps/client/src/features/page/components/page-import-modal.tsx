@@ -9,13 +9,11 @@ import {
   Stack,
   Switch,
   Text,
-  Tooltip,
 } from "@mantine/core";
 import {
   IconBrandNotion,
   IconCheck,
   IconFileCode,
-  IconFileTypeDocx,
   IconFileTypeZip,
   IconMarkdown,
   IconX,
@@ -34,10 +32,8 @@ import { buildTree } from "@/features/page/tree/utils";
 import { IPage } from "@/features/page/types/page.types.ts";
 import React, { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ConfluenceIcon } from "@/components/icons/confluence-icon.tsx";
-import { getFileImportSizeLimit, isCloud } from "@/lib/config.ts";
+import { getFileImportSizeLimit } from "@/lib/config.ts";
 import { formatBytes } from "@/lib";
-import { workspaceAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { getFileTaskById } from "@/features/file-task/services/file-task-service.ts";
 import { getRecentDocmostImportReports } from "@/features/file-task/services/file-task-service.ts";
 import type { IFileTask } from "@/features/file-task/types/file-task.types.ts";
@@ -156,15 +152,12 @@ function ImportFormatSelection({
 }: ImportFormatSelection) {
   const { t } = useTranslation();
   const [treeData, setTreeData] = useAtom(treeDataAtom);
-  const [workspace] = useAtom(workspaceAtom);
   const [fileTaskId, setFileTaskId] = useState<string | null>(null);
   const emit = useQueryEmit();
 
   const markdownFileRef = useRef<() => void>(null);
   const htmlFileRef = useRef<() => void>(null);
-  const docxFileRef = useRef<() => void>(null);
   const notionFileRef = useRef<() => void>(null);
-  const confluenceFileRef = useRef<() => void>(null);
   const zipFileRef = useRef<() => void>(null);
   const docmostFileRef = useRef<() => void>(null);
   const [docmostPreview, setDocmostPreview] = useState<ImportPreview | null>(
@@ -181,9 +174,6 @@ function ImportFormatSelection({
   const [recentDocmostImports, setRecentDocmostImports] = useState<IFileTask[]>(
     [],
   );
-
-  const canUseConfluence = isCloud() || workspace?.hasLicenseKey;
-  const canUseDocx = isCloud() || workspace?.hasLicenseKey;
 
   useEffect(() => {
     if (!open) return;
@@ -300,8 +290,6 @@ function ImportFormatSelection({
       // Reset file input after successful upload
       if (source === "notion" && notionFileRef.current) {
         notionFileRef.current();
-      } else if (source === "confluence" && confluenceFileRef.current) {
-        confluenceFileRef.current();
       } else if (source === "generic" && zipFileRef.current) {
         zipFileRef.current();
       }
@@ -450,7 +438,6 @@ function ImportFormatSelection({
       // Reset file inputs after successful upload
       if (markdownFileRef.current) markdownFileRef.current();
       if (htmlFileRef.current) htmlFileRef.current();
-      if (docxFileRef.current) docxFileRef.current();
 
       const pageCountText =
         pageCount === 1 ? `1 ${t("page")}` : `${pageCount} ${t("pages")}`;
@@ -629,30 +616,6 @@ function ImportFormatSelection({
             </FileButton>
 
             <FileButton
-              onChange={handleFileUpload}
-              accept=".docx"
-              multiple
-              resetRef={docxFileRef}
-            >
-              {(props) => (
-                <Tooltip
-                  label={t("Available in enterprise edition")}
-                  disabled={canUseDocx}
-                >
-                  <Button
-                    disabled={!canUseDocx}
-                    justify="start"
-                    variant="default"
-                    leftSection={<IconFileTypeDocx size={18} />}
-                    {...props}
-                  >
-                    {t("Word (DOCX)")}
-                  </Button>
-                </Tooltip>
-              )}
-            </FileButton>
-
-            <FileButton
               onChange={(file) => handleZipUpload(file, "notion")}
               accept="application/zip"
               resetRef={notionFileRef}
@@ -666,28 +629,6 @@ function ImportFormatSelection({
                 >
                   {t("Notion")}
                 </Button>
-              )}
-            </FileButton>
-            <FileButton
-              onChange={(file) => handleZipUpload(file, "confluence")}
-              accept="application/zip"
-              resetRef={confluenceFileRef}
-            >
-              {(props) => (
-                <Tooltip
-                  label={t("Available in enterprise edition")}
-                  disabled={canUseConfluence}
-                >
-                  <Button
-                    disabled={!canUseConfluence}
-                    justify="start"
-                    variant="default"
-                    leftSection={<ConfluenceIcon size={18} />}
-                    {...props}
-                  >
-                    {t("Confluence")}
-                  </Button>
-                </Tooltip>
               )}
             </FileButton>
           </SimpleGrid>

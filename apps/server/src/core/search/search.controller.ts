@@ -6,7 +6,6 @@ import {
   Get,
   HttpCode,
   HttpStatus,
-  Logger,
   Post,
   Query,
   UseGuards,
@@ -23,23 +22,21 @@ import { User, Workspace } from '@docmost/db/types/entity.types';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { EnvironmentService } from '../../integrations/environment/environment.service';
-import { ModuleRef } from '@nestjs/core';
 import { PageAccessService } from '../page-access/page-access.service';
 import { DeprecatedRoute } from '../../common/decorators/deprecated-route.decorator';
 import { LEGACY_API_SUNSET } from '../../common/config/api-deprecation.constants';
 import { AuthRateLimitGuard } from '../auth/rate-limit/auth-rate-limit.guard';
 import { AuthRateLimit } from '../auth/rate-limit/auth-rate-limit.decorator';
+import { TypesenseSearchService } from './typesense-search.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('search')
 export class SearchController {
-  private readonly logger = new Logger(SearchController.name);
-
   constructor(
     private readonly searchService: SearchService,
+    private readonly typesenseSearchService: TypesenseSearchService,
     private readonly pageAccessService: PageAccessService,
     private readonly environmentService: EnvironmentService,
-    private moduleRef: ModuleRef,
   ) {}
 
   @HttpCode(HttpStatus.OK)
@@ -67,7 +64,7 @@ export class SearchController {
       !searchDto.labelId &&
       !searchDto.tag
     ) {
-      return this.searchTypesense(searchDto, {
+      return this.typesenseSearchService.searchPages(searchDto, {
         userId: user.id,
         workspaceId: workspace.id,
       });
@@ -105,10 +102,15 @@ export class SearchController {
       }
     }
 
-    return this.searchService.searchAttachments(searchDto, {
+    const search = {
       userId: user.id,
       workspaceId: workspace.id,
-    });
+    };
+    if (this.environmentService.getSearchDriver() === 'typesense') {
+      return this.typesenseSearchService.searchAttachments(searchDto, search);
+    }
+
+    return this.searchService.searchAttachments(searchDto, search);
   }
 
   @HttpCode(HttpStatus.OK)
@@ -155,7 +157,7 @@ export class SearchController {
     }
 
     if (this.environmentService.getSearchDriver() === 'typesense') {
-      return this.searchTypesense(searchDto, {
+      return this.typesenseSearchService.searchPages(searchDto, {
         workspaceId: workspace.id,
       });
     }
@@ -163,38 +165,5 @@ export class SearchController {
     return this.searchService.searchPage(searchDto, {
       workspaceId: workspace.id,
     });
-  }
-
-  async searchTypesense(
-    searchParams: SearchDTO,
-    opts: {
-      userId?: string;
-      workspaceId: string;
-    },
-  ) {
-    const { userId, workspaceId } = opts;
-    let TypesenseModule: any;
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      TypesenseModule = require('./../../ee/typesense/services/page-search.service');
-
-      const PageSearchService = this.moduleRef.get(
-        TypesenseModule.PageSearchService,
-        {
-          strict: false,
-        },
-      );
-
-      return PageSearchService.searchPage(searchParams, {
-        userId: userId,
-        workspaceId,
-      });
-    } catch (err) {
-      this.logger.debug(
-        'Typesense module requested but enterprise module not bundled in this build',
-      );
-    }
-
-    throw new BadRequestException('Enterprise Typesense search module missing');
   }
 }

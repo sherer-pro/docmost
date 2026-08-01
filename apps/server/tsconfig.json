@@ -35,9 +35,6 @@
       "@docmost/transactional/*": [
         "./src/integrations/transactional/*"
       ],
-      "@docmost/ee/*": [
-        "./src/ee/*"
-      ],
       "@docmost/editor-ext": [
         "../../packages/editor-ext/src/index.ts"
       ],

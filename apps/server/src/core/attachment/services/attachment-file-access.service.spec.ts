@@ -53,18 +53,37 @@ describe('AttachmentFileAccessService', () => {
       readStream: jest.fn().mockResolvedValue(Readable.from(['ok'])),
       readRangeStream: jest.fn().mockResolvedValue(Readable.from(['ok'])),
     };
+    const pageRepo = {
+      findById: jest.fn().mockResolvedValue({
+        id: pageId,
+        workspaceId: workspace.id,
+        spaceId: resolvedAttachment.spaceId,
+        deletedAt: null,
+      }),
+    };
+    const publicSharingPolicy = {
+      isAllowed: jest.fn().mockResolvedValue(true),
+    };
 
     const service = new AttachmentFileAccessService(
       {} as any,
       {} as any,
-      {} as any,
+      pageRepo as any,
       attachmentRepo as any,
       {} as any,
       tokenService as any,
       storageService as any,
+      publicSharingPolicy as any,
     );
 
-    return { attachmentRepo, service, storageService, tokenService };
+    return {
+      attachmentRepo,
+      pageRepo,
+      publicSharingPolicy,
+      service,
+      storageService,
+      tokenService,
+    };
   }
 
   it('adds deprecation headers when public access uses legacy jwt query token', async () => {
@@ -118,6 +137,7 @@ describe('AttachmentFileAccessService', () => {
       expect.any(String),
     );
     expect(res.headerValues['Content-Type']).toBe('image/png');
+    expect(res.headerValues['Cache-Control']).toBe('private, no-store');
   });
 
   it('serves spoofed inline extensions as downloads with safe content type', async () => {
@@ -201,5 +221,20 @@ describe('AttachmentFileAccessService', () => {
       expect.any(String),
     );
     expect(res.headerValues['Content-Type']).toBeUndefined();
+  });
+
+  it('revokes an existing public token when sharing is disabled', async () => {
+    const { service, publicSharingPolicy, storageService, tokenService } =
+      createService();
+    publicSharingPolicy.isAllowed.mockResolvedValue(false);
+    const req = { headers: {}, cookies: {} } as any;
+    const res = createReply();
+
+    await expect(
+      service.getPublicFile(req, res, workspace, fileId, 'query-token'),
+    ).rejects.toThrow('File not found');
+
+    expect(tokenService.verifyJwt).not.toHaveBeenCalled();
+    expect(storageService.readStream).not.toHaveBeenCalled();
   });
 });

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { EventName } from '../../common/events/event.contants';
 import { InjectQueue } from '@nestjs/bullmq';
@@ -12,13 +12,18 @@ export class SpaceEvent {
 
 @Injectable()
 export class SpaceListener {
-  private readonly logger = new Logger(SpaceListener.name);
-
   constructor(
     private readonly environmentService: EnvironmentService,
     @InjectQueue(QueueName.SEARCH_QUEUE) private searchQueue: Queue,
-    @InjectQueue(QueueName.AI_QUEUE) private aiQueue: Queue,
   ) {}
+
+  @OnEvent(EventName.SPACE_UPDATED)
+  async handleSpaceUpdated(event: SpaceEvent) {
+    const { spaceId } = event;
+    if (this.isTypesense()) {
+      await this.searchQueue.add(QueueJob.SPACE_UPDATED, { spaceId });
+    }
+  }
 
   @OnEvent(EventName.SPACE_DELETED)
   async handleSpaceDeleted(event: SpaceEvent) {
@@ -26,8 +31,6 @@ export class SpaceListener {
     if (this.isTypesense()) {
       await this.searchQueue.add(QueueJob.SPACE_DELETED, { spaceId });
     }
-
-    await this.aiQueue.add(QueueJob.SPACE_DELETED, { spaceId });
   }
 
   isTypesense(): boolean {

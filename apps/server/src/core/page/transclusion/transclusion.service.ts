@@ -463,6 +463,7 @@ export class TransclusionService {
           workspaceId: referencePage.workspaceId,
           pageId: referencePageId,
           spaceId: referencePage.spaceId,
+          textContent: old.textContent,
         });
       }
     }

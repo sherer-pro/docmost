@@ -64,7 +64,6 @@ describe('UserController', () => {
 
     const workspace = {
       id: 'workspace-id',
-      licenseKey: null,
     } as any;
 
     workspaceRepoMock.getActiveUserCount.mockResolvedValue(10);
@@ -91,7 +90,6 @@ describe('UserController', () => {
 
     const workspace = {
       id: 'workspace-id',
-      licenseKey: 'license-key',
     } as any;
 
     workspaceRepoMock.getActiveUserCount.mockResolvedValue(10);
@@ -106,6 +104,5 @@ describe('UserController', () => {
     );
     expect(userRepoMock.getWorkspaceVisibleUsersCount).not.toHaveBeenCalled();
     expect(result.workspace.memberCount).toBe(10);
-    expect(result.workspace.hasLicenseKey).toBe(true);
   });
 });

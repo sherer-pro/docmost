@@ -35,6 +35,8 @@ import {
   HISTORY_MAX_INTERVAL,
 } from '../constants';
 import { TransclusionService } from '../../core/page/transclusion/transclusion.service';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventName } from '../../common/events/event.contants';
 
 @Injectable()
 export class PersistenceExtension implements Extension {
@@ -45,10 +47,10 @@ export class PersistenceExtension implements Extension {
     private readonly pageRepo: PageRepo,
     @InjectKysely() private readonly db: KyselyDB,
     @InjectQueue(QueueName.GENERAL_QUEUE) private generalQueue: Queue,
-    @InjectQueue(QueueName.AI_QUEUE) private aiQueue: Queue,
     @InjectQueue(QueueName.NOTIFICATION_QUEUE) private notificationQueue: Queue,
     private readonly collabHistory: CollabHistoryService,
     private readonly transclusionService: TransclusionService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async onLoadDocument(data: onLoadDocumentPayload) {
@@ -199,7 +201,7 @@ export class PersistenceExtension implements Extension {
         } as IPageMentionNotificationJob);
       }
 
-      await this.aiQueue.add(QueueJob.PAGE_CONTENT_UPDATED, {
+      await this.eventEmitter.emitAsync(EventName.PAGE_UPDATED, {
         pageIds: [pageId],
         workspaceId: page.workspaceId,
       });

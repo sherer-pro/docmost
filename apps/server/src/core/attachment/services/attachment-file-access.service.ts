@@ -19,6 +19,7 @@ import { JwtAttachmentPayload, JwtType } from '../../auth/dto/jwt-payload';
 import { inlineFileExtensions } from '../attachment.constants';
 import { resolveAttachmentAccessTokenDetails } from '../attachment-public-token.util';
 import { PageAccessService } from '../../page-access/page-access.service';
+import { PublicSharingPolicyService } from '../../share/public-sharing-policy.service';
 
 const fallbackDownloadMimeType = 'application/octet-stream';
 
@@ -56,6 +57,7 @@ export class AttachmentFileAccessService {
     private readonly environmentService: EnvironmentService,
     private readonly tokenService: TokenService,
     private readonly storageService: StorageService,
+    private readonly publicSharingPolicy: PublicSharingPolicyService,
   ) {}
 
   async uploadFile(
@@ -181,6 +183,20 @@ export class AttachmentFileAccessService {
       throw new NotFoundException('File not found');
     }
 
+    const page = await this.pageRepo.findById(attachment.pageId);
+    if (
+      !page ||
+      page.deletedAt ||
+      page.workspaceId !== workspace.id ||
+      page.spaceId !== attachment.spaceId ||
+      !(await this.publicSharingPolicy.isAllowed(
+        workspace.id,
+        attachment.spaceId,
+      ))
+    ) {
+      throw new NotFoundException('File not found');
+    }
+
     const accessTokenDetails = resolveAttachmentAccessTokenDetails(
       req,
       attachment.pageId,
@@ -238,6 +254,8 @@ export class AttachmentFileAccessService {
     const rangeHeader = req.headers.range;
     const shouldInline = this.shouldServeInline(attachment);
     const contentType = this.getResponseContentType(attachment, shouldInline);
+    const cacheControl =
+      cacheScope === 'public' ? 'private, no-store' : 'private, max-age=3600';
 
     if (rangeHeader && fileSize) {
       const match = rangeHeader.match(/bytes=(\d+)-(\d*)/);
@@ -265,7 +283,7 @@ export class AttachmentFileAccessService {
           'Content-Type': contentType,
           'Content-Range': `bytes ${start}-${end}/${fileSize}`,
           'Content-Length': end - start + 1,
-          'Cache-Control': `${cacheScope}, max-age=3600`,
+          'Cache-Control': cacheControl,
         });
 
         return res.send(fileStream);
@@ -279,7 +297,7 @@ export class AttachmentFileAccessService {
     this.setFileResponseHeaders(res, attachment, shouldInline);
     res.headers({
       'Content-Type': contentType,
-      'Cache-Control': `${cacheScope}, max-age=3600`,
+      'Cache-Control': cacheControl,
     });
 
     const isSvg = attachment.fileExt === '.svg';

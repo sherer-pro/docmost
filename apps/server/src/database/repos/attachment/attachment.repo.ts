@@ -24,6 +24,7 @@ export class AttachmentRepo {
     'pageId',
     'spaceId',
     'workspaceId',
+    'textContent',
     'createdAt',
     'updatedAt',
     'deletedAt',

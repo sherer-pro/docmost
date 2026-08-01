@@ -34,8 +34,7 @@ import {
   ResponsiveSettingsControl,
   ResponsiveSettingsRow,
 } from "@/components/ui/responsive-settings-row.tsx";
-import SpacePublicSharingToggle from "@/ee/security/components/space-public-sharing-toggle.tsx";
-import useEnterpriseAccess from "@/ee/hooks/use-enterprise-access.tsx";
+import SpacePublicSharingToggle from "@/features/security/components/space-public-sharing-toggle.tsx";
 import {
   IconArchive,
   IconArchiveOff,
@@ -61,8 +60,7 @@ export default function SpaceDetails({ spaceId, readOnly }: SpaceDetailsProps) {
     useArchiveSpaceMutation();
   const { mutateAsync: unarchiveSpace, isPending: isUnarchivingSpace } =
     useUnarchiveSpaceMutation();
-  const hasEnterpriseAccess = useEnterpriseAccess();
-  const showSharingToggle = !readOnly && hasEnterpriseAccess;
+  const showSharingToggle = !readOnly;
   const [exportOpened, { open: openExportModal, close: closeExportModal }] =
     useDisclosure(false);
   const [isIconUploading, setIsIconUploading] = useState(false);

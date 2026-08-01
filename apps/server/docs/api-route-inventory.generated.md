@@ -257,6 +257,16 @@
 | POST | `/spaces/members/add` | `apps/server/src/core/space/space.controller.ts` |
 | POST | `/spaces/members/change-role` | `apps/server/src/core/space/space.controller.ts` |
 | POST | `/spaces/members/remove` | `apps/server/src/core/space/space.controller.ts` |
+| POST | `/sso/create` | `apps/server/src/core/sso/sso.controller.ts` |
+| POST | `/sso/delete` | `apps/server/src/core/sso/sso.controller.ts` |
+| POST | `/sso/info` | `apps/server/src/core/sso/sso.controller.ts` |
+| POST | `/sso/ldap/:providerId/login` | `apps/server/src/core/sso/sso.controller.ts` |
+| GET | `/sso/oidc/:providerId/callback` | `apps/server/src/core/sso/sso.controller.ts` |
+| GET | `/sso/oidc/:providerId/login` | `apps/server/src/core/sso/sso.controller.ts` |
+| POST | `/sso/providers` | `apps/server/src/core/sso/sso.controller.ts` |
+| POST | `/sso/saml/:providerId/callback` | `apps/server/src/core/sso/sso.controller.ts` |
+| GET | `/sso/saml/:providerId/login` | `apps/server/src/core/sso/sso.controller.ts` |
+| POST | `/sso/update` | `apps/server/src/core/sso/sso.controller.ts` |
 | GET | `/system/hello` | `apps/server/src/app.controller.ts` |
 | GET | `/users/me` | `apps/server/src/core/user/user.controller.ts` |
 | POST | `/users/me` | `apps/server/src/core/user/user.controller.ts` |

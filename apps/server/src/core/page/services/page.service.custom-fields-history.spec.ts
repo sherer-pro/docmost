@@ -31,7 +31,6 @@ describe('PageService custom fields history', () => {
     {} as any,
     {} as any,
     queue as any,
-    {} as any,
     queue as any,
     queue as any,
     {} as any,

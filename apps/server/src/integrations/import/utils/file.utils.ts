@@ -11,7 +11,6 @@ export enum FileImportSource {
   Docmost = 'docmost',
   Generic = 'generic',
   Notion = 'notion',
-  Confluence = 'confluence',
 }
 
 export enum FileTaskStatus {

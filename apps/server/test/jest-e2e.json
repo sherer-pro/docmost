@@ -21,8 +21,7 @@
     "^@docmost/db/(.*)$": "<rootDir>/../src/database/$1",
     "^@docmost/transactional/(.*)$": "<rootDir>/../src/integrations/transactional/$1",
     "^@docmost/editor-ext$": "<rootDir>/mocks/editor-ext.mock.ts",
-    "^@docmost/editor-ext/(.*)$": "<rootDir>/mocks/editor-ext.mock.ts",
-    "^@docmost/ee/(.*)$": "<rootDir>/../src/ee/$1"
+    "^@docmost/editor-ext/(.*)$": "<rootDir>/mocks/editor-ext.mock.ts"
   },
   "transform": {
     "^.+\\.(t|j)sx?$": [

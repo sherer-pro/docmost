@@ -14,9 +14,10 @@ import {
   ApiKeys,
   Attachments,
   AuthAccounts,
+  AuthProviderGroupMappings,
+  AuthProviderGroupMemberships,
   AuthProviders,
   Backlinks,
-  Billing,
   Comments,
   Databases,
   DatabaseProperties,
@@ -42,6 +43,7 @@ import {
   PushSubscriptions,
   SpaceMembers,
   Spaces,
+  SsoLoginStates,
   UserMfa,
   UserSessions,
   Users,
@@ -50,7 +52,6 @@ import {
   WorkspaceInvitations,
   Workspaces,
 } from '@docmost/db/types/db';
-import { PageEmbeddings } from '@docmost/db/types/embeddings.types';
 
 export interface DbInterface {
   aiAuxRuns: AiAuxRuns;
@@ -67,9 +68,10 @@ export interface DbInterface {
   aiSpaceConfigs: AiSpaceConfigs;
   attachments: Attachments;
   authAccounts: AuthAccounts;
+  authProviderGroupMappings: AuthProviderGroupMappings;
+  authProviderGroupMemberships: AuthProviderGroupMemberships;
   authProviders: AuthProviders;
   backlinks: Backlinks;
-  billing: Billing;
   comments: Comments;
   databases: Databases;
   databaseProperties: DatabaseProperties;
@@ -89,13 +91,13 @@ export interface DbInterface {
   pageTransclusions: PageTransclusions;
   pageTransclusionReferences: PageTransclusionReferences;
   pushNotificationJobs: PushNotificationJobs;
-  pageEmbeddings: PageEmbeddings;
   pageHistory: PageHistory;
   pages: Pages;
   shares: Shares;
   pushSubscriptions: PushSubscriptions;
   spaceMembers: SpaceMembers;
   spaces: Spaces;
+  ssoLoginStates: SsoLoginStates;
   userMfa: UserMfa;
   userSessions: UserSessions;
   users: Users;

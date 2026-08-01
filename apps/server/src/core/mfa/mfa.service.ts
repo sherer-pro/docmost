@@ -62,13 +62,39 @@ export class MfaService {
       throw new UnauthorizedException(errorMessage);
     }
 
-    const hasEnabledMfa = Boolean(user['mfa']?.isEnabled);
+    return this.issueLoginTokenForUser(user, workspace, request);
+  }
+
+  /**
+   * Determines whether an already authenticated user must complete MFA.
+   */
+  async issueLoginTokenForUser(
+    user: User,
+    workspace: Workspace,
+    request?: FastifyRequest,
+  ) {
+    const userWithMfa = await this.userRepo.findById(user.id, workspace.id, {
+      includeUserMfa: true,
+    });
+
+    if (
+      !userWithMfa ||
+      userWithMfa.deletedAt ||
+      userWithMfa.deactivatedAt
+    ) {
+      throw new UnauthorizedException('Account is not active');
+    }
+
+    const hasEnabledMfa = Boolean(userWithMfa['mfa']?.isEnabled);
     const requiresMfaSetup = Boolean(workspace.enforceMfa && !hasEnabledMfa);
 
     if (!hasEnabledMfa && !requiresMfaSetup) {
-      await this.userRepo.updateLastLogin(user.id, workspace.id);
+      await this.userRepo.updateLastLogin(userWithMfa.id, workspace.id);
       const authToken = await this.sessionService.createSessionAndToken(
-        user,
+        {
+          ...userWithMfa,
+          workspaceId: workspace.id,
+        },
         request,
       );
       return {
@@ -79,7 +105,10 @@ export class MfaService {
       };
     }
 
-    const mfaToken = await this.tokenService.generateMfaToken(user, workspace.id);
+    const mfaToken = await this.tokenService.generateMfaToken(
+      userWithMfa,
+      workspace.id,
+    );
     return {
       userHasMfa: hasEnabledMfa,
       requiresMfaSetup,

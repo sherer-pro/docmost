@@ -1,6 +1,11 @@
 import { Logger, OnModuleDestroy } from '@nestjs/common';
-import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
-import { Job } from 'bullmq';
+import {
+  InjectQueue,
+  OnWorkerEvent,
+  Processor,
+  WorkerHost,
+} from '@nestjs/bullmq';
+import { Job, Queue } from 'bullmq';
 import pLimit from 'p-limit';
 import { QueueJob, QueueName } from '../constants';
 import {
@@ -38,6 +43,10 @@ export class GeneralQueueProcessor
     private readonly backlinkRepo: BacklinkRepo,
     private readonly watcherRepo: WatcherRepo,
     private readonly storageService: StorageService,
+    @InjectQueue(QueueName.SEARCH_QUEUE)
+    private readonly searchQueue: Queue,
+    @InjectQueue(QueueName.ATTACHMENT_QUEUE)
+    private readonly attachmentQueue: Queue,
   ) {
     super();
   }
@@ -120,9 +129,11 @@ export class GeneralQueueProcessor
         'creatorId',
         'workspaceId',
         'pageId',
+        'textContent',
       ])
       .where('id', 'in', attachmentIds)
       .where('workspaceId', '=', data.workspaceId)
+      .where('deletedAt', 'is', null)
       .execute();
 
     const limit = pLimit(
@@ -131,6 +142,8 @@ export class GeneralQueueProcessor
 
     let successCount = 0;
     let errorCount = 0;
+    const indexedAttachmentIds: string[] = [];
+    const contentAttachmentIds: string[] = [];
 
     await Promise.all(
       attachments.map((attachment) =>
@@ -159,26 +172,65 @@ export class GeneralQueueProcessor
           );
 
           try {
-            await this.storageService.copy(attachment.filePath, newPathFile);
+            const existing = await this.db
+              .selectFrom('attachments')
+              .select([
+                'id',
+                'workspaceId',
+                'pageId',
+                'spaceId',
+                'filePath',
+                'fileExt',
+                'textContent',
+              ])
+              .where('id', '=', mapping.newAttachmentId)
+              .executeTakeFirst();
 
-            await this.db
-              .insertInto('attachments')
-              .values({
-                id: mapping.newAttachmentId,
-                type: attachment.type,
-                filePath: newPathFile,
-                fileName: attachment.fileName,
-                fileSize: attachment.fileSize,
-                mimeType: attachment.mimeType,
-                fileExt: attachment.fileExt,
-                creatorId: attachment.creatorId,
-                workspaceId: attachment.workspaceId,
-                pageId: mapping.newPageId,
-                spaceId: data.spaceId,
-              })
-              .execute();
+            if (existing) {
+              if (
+                existing.workspaceId !== data.workspaceId ||
+                existing.pageId !== mapping.newPageId ||
+                existing.spaceId !== data.spaceId ||
+                existing.filePath !== newPathFile
+              ) {
+                throw new Error('Existing duplicate attachment is inconsistent');
+              }
+              if (!(await this.storageService.exists(newPathFile))) {
+                await this.storageService.copy(
+                  attachment.filePath,
+                  newPathFile,
+                );
+              }
+            } else {
+              await this.storageService.copy(attachment.filePath, newPathFile);
+
+              await this.db
+                .insertInto('attachments')
+                .values({
+                  id: mapping.newAttachmentId,
+                  type: attachment.type,
+                  filePath: newPathFile,
+                  fileName: attachment.fileName,
+                  fileSize: attachment.fileSize,
+                  mimeType: attachment.mimeType,
+                  fileExt: attachment.fileExt,
+                  creatorId: attachment.creatorId,
+                  workspaceId: attachment.workspaceId,
+                  pageId: mapping.newPageId,
+                  spaceId: data.spaceId,
+                  textContent: attachment.textContent,
+                })
+                .execute();
+            }
 
             successCount += 1;
+            indexedAttachmentIds.push(mapping.newAttachmentId);
+            if (
+              !attachment.textContent &&
+              ['.pdf', '.docx'].includes(attachment.fileExt.toLowerCase())
+            ) {
+              contentAttachmentIds.push(mapping.newAttachmentId);
+            }
           } catch (err) {
             errorCount += 1;
             this.logger.error(
@@ -198,14 +250,41 @@ export class GeneralQueueProcessor
       );
     }
 
+    if (indexedAttachmentIds.length > 0) {
+      await this.searchQueue.add(
+        QueueJob.SEARCH_INDEX_ATTACHMENT,
+        { attachmentIds: indexedAttachmentIds },
+        {
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 10_000 },
+          removeOnComplete: true,
+          removeOnFail: true,
+        },
+      );
+    }
+    await Promise.all(
+      contentAttachmentIds.map((attachmentId) =>
+        this.attachmentQueue.add(
+          QueueJob.ATTACHMENT_INDEX_CONTENT,
+          { attachmentId },
+          {
+            attempts: 3,
+            backoff: { type: 'exponential', delay: 10_000 },
+            removeOnComplete: true,
+            removeOnFail: true,
+          },
+        ),
+      ),
+    );
+
     const durationMs = Date.now() - startedAt;
     this.logger.log(
       `Duplicate attachments job finished. rootPageId=${data.rootPageId}, newPageId=${data.newPageId}, workspaceId=${data.workspaceId}, durationMs=${durationMs}, successCount=${successCount}, errorCount=${errorCount}`,
     );
 
     if (errorCount > 0) {
-      this.logger.warn(
-        `Duplicate attachments job completed with partial errors. rootPageId=${data.rootPageId}, newPageId=${data.newPageId}, workspaceId=${data.workspaceId}, successCount=${successCount}, errorCount=${errorCount}`,
+      throw new Error(
+        `Duplicate attachments job has partial errors. rootPageId=${data.rootPageId}, newPageId=${data.newPageId}, workspaceId=${data.workspaceId}, successCount=${successCount}, errorCount=${errorCount}`,
       );
     }
   }

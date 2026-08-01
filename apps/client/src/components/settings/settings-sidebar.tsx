@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Group, Text, ScrollArea, ActionIcon, Tooltip } from "@mantine/core";
+import { Group, Text, ScrollArea, ActionIcon } from "@mantine/core";
 import {
   IconUser,
   IconSettings,
@@ -8,7 +8,6 @@ import {
   IconUsersGroup,
   IconSpaces,
   IconBrush,
-  IconCoin,
   IconLock,
   IconKey,
   IconWorld,
@@ -23,14 +22,11 @@ import { useAtom } from "jotai";
 import { useQuery } from "@tanstack/react-query";
 import {
   currentUserAtom,
-  workspaceAtom,
 } from "@/features/user/atoms/current-user-atom.ts";
 import {
   prefetchApiKeyManagement,
   prefetchApiKeys,
-  prefetchBilling,
   prefetchGroups,
-  prefetchLicense,
   prefetchShares,
   prefetchSpaces,
   prefetchSsoProviders,
@@ -47,11 +43,7 @@ interface DataItem {
   label: string;
   icon: React.ElementType;
   path: string;
-  isCloud?: boolean;
-  isEnterprise?: boolean;
   isAdmin?: boolean;
-  isSelfhosted?: boolean;
-  showDisabledInNonEE?: boolean;
 }
 
 interface DataGroup {
@@ -91,20 +83,10 @@ const groupedData: DataGroup[] = [
         path: "/settings/members",
       },
       {
-        label: "Billing",
-        icon: IconCoin,
-        path: "/settings/billing",
-        isCloud: true,
-        isAdmin: true,
-      },
-      {
         label: "Security & SSO",
         icon: IconLock,
         path: "/settings/security",
-        isCloud: true,
-        isEnterprise: true,
         isAdmin: true,
-        showDisabledInNonEE: true,
       },
       { label: "Groups", icon: IconUsersGroup, path: "/settings/groups" },
       { label: "Spaces", icon: IconSpaces, path: "/settings/spaces" },
@@ -117,16 +99,6 @@ const groupedData: DataGroup[] = [
       },
     ],
   },
-  {
-    heading: "System",
-    items: [
-      {
-        label: "License & Edition",
-        icon: IconKey,
-        path: "/settings/license",
-      },
-    ],
-  },
 ];
 
 export default function SettingsSidebar() {
@@ -135,7 +107,6 @@ export default function SettingsSidebar() {
   const [active, setActive] = useState(location.pathname);
   const { goBack } = useSettingsNavigation();
   const { isAdmin } = useUserRole();
-  const [workspace] = useAtom(workspaceAtom);
   const [currentUser] = useAtom(currentUserAtom);
   const [mobileSidebarOpened] = useAtom(mobileSidebarAtom);
   const toggleMobileSidebar = useToggleSidebar(mobileSidebarAtom);
@@ -170,28 +141,6 @@ export default function SettingsSidebar() {
       return false;
     }
 
-    if (item.showDisabledInNonEE && item.isEnterprise) {
-      // Check admin permission regardless of license
-      return item.isAdmin ? isAdmin : true;
-    }
-
-    if (item.isCloud && item.isEnterprise) {
-      if (!(isCloud() || workspace?.hasLicenseKey)) return false;
-      return item.isAdmin ? isAdmin : true;
-    }
-
-    if (item.isCloud) {
-      return isCloud() ? (item.isAdmin ? isAdmin : true) : false;
-    }
-
-    if (item.isSelfhosted) {
-      return !isCloud() ? (item.isAdmin ? isAdmin : true) : false;
-    }
-
-    if (item.isEnterprise) {
-      return workspace?.hasLicenseKey ? (item.isAdmin ? isAdmin : true) : false;
-    }
-
     if (item.isAdmin) {
       return isAdmin;
     }
@@ -199,18 +148,7 @@ export default function SettingsSidebar() {
     return true;
   };
 
-  const isItemDisabled = (item: DataItem) => {
-    if (item.showDisabledInNonEE && item.isEnterprise) {
-      return !(isCloud() || workspace?.hasLicenseKey);
-    }
-    return false;
-  };
-
   const menuItems = groupedData.map((group) => {
-    if (group.heading === "System" && (!isAdmin || isCloud())) {
-      return null;
-    }
-
     return (
       <div key={group.heading}>
         <Text c="dimmed" className={classes.linkHeader}>
@@ -232,14 +170,6 @@ export default function SettingsSidebar() {
             case "Groups":
               prefetchHandler = prefetchGroups;
               break;
-            case "Billing":
-              prefetchHandler = prefetchBilling;
-              break;
-            case "License & Edition":
-              if (workspace?.hasLicenseKey) {
-                prefetchHandler = prefetchLicense;
-              }
-              break;
             case "Security & SSO":
               prefetchHandler = prefetchSsoProviders;
               break;
@@ -254,27 +184,6 @@ export default function SettingsSidebar() {
               break;
             default:
               break;
-          }
-
-          if (isItemDisabled(item)) {
-            return (
-              <Tooltip
-                key={item.label}
-                label={t("Available in enterprise edition")}
-                position="right"
-                withArrow
-              >
-                <div
-                  className={classes.link}
-                  data-disabled
-                  aria-disabled="true"
-                  role="link"
-                >
-                  <item.icon className={classes.linkIcon} stroke={2} />
-                  <span>{t(item.label)}</span>
-                </div>
-              </Tooltip>
-            );
           }
 
           return (

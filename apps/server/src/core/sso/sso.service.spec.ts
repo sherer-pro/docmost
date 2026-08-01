@@ -1,0 +1,277 @@
+import {
+  BadRequestException,
+  ForbiddenException,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { SsoService } from './sso.service';
+
+describe('SsoService security helpers', () => {
+  const appSecret = 'very-strong-app-secret-for-sso-tests';
+
+  const createService = (db: any = {}) =>
+    new SsoService(
+      db,
+      {} as any,
+      {} as any,
+      {} as any,
+      {
+        getAppSecret: () => appSecret,
+        isDevelopment: () => false,
+        getSsoAllowedEndpoints: () => '',
+      } as any,
+      { getUrl: () => 'https://docs.example.com' } as any,
+      { assertAllowed: jest.fn() } as any,
+    );
+
+  it('encrypts provider secrets and redacts them from responses', () => {
+    const service = createService();
+    const encrypted = (service as any).encryptSecret('client-secret');
+
+    expect(encrypted).not.toContain('client-secret');
+    expect((service as any).decryptSecret(encrypted)).toBe('client-secret');
+    expect(
+      (service as any).sanitizeProvider({
+        oidcClientSecret: encrypted,
+        ldapBindPassword: encrypted,
+      }),
+    ).toMatchObject({
+      oidcClientSecret: '********',
+      ldapBindPassword: '********',
+    });
+  });
+
+  it('does not allow an unverified OIDC email to create a new link', async () => {
+    const service = createService();
+    const client = {
+      userinfo: jest.fn().mockRejectedValue(new Error('not available')),
+    };
+    const tokenSet = {
+      access_token: 'access-token',
+      claims: () => ({
+        sub: 'external-user',
+        email: 'user@example.com',
+        email_verified: false,
+      }),
+    };
+
+    const identity = await (service as any).identityFromOidc(client, tokenSet);
+
+    expect(identity.emailVerified).toBe(false);
+    expect(() =>
+      (service as any).assertEmailVerifiedForLinking(identity),
+    ).toThrow(UnauthorizedException);
+  });
+
+  it('keeps email verification bound to the claim source', async () => {
+    const service = createService();
+    const client = {
+      userinfo: jest.fn().mockResolvedValue({
+        sub: 'external-user',
+        email: 'other@example.com',
+        email_verified: true,
+      }),
+    };
+    const tokenSet = {
+      access_token: 'access-token',
+      claims: () => ({
+        sub: 'external-user',
+        email: 'user@example.com',
+        email_verified: false,
+      }),
+    };
+
+    const identity = await (service as any).identityFromOidc(client, tokenSet);
+
+    expect(identity).toMatchObject({
+      email: 'user@example.com',
+      emailVerified: false,
+    });
+  });
+
+  it('escapes every RFC4515 special character in LDAP usernames', () => {
+    const service = createService();
+
+    expect((service as any).escapeLdapFilterValue('a*(b)\\\0')).toBe(
+      'a\\2a\\28b\\29\\5c\\00',
+    );
+  });
+
+  it('requires an LDAP username placeholder before enabling a provider', () => {
+    const service = createService();
+
+    expect(() =>
+      (service as any).validateProviderConfiguration({
+        type: 'ldap',
+        ldapUrl: 'ldaps://directory.example.com',
+        ldapBindDn: 'cn=service,dc=example,dc=com',
+        ldapBindPassword: 'encrypted',
+        ldapBaseDn: 'dc=example,dc=com',
+        ldapUserSearchFilter: '(mail=user@example.com)',
+      }),
+    ).toThrow(BadRequestException);
+  });
+
+  it('does not treat a truncated group list as an authoritative snapshot', () => {
+    const service = createService();
+    const externalGroups = Array.from({ length: 101 }, (_, index) => ({
+      id: `group-${String(index).padStart(3, '0')}`,
+      name: `Group ${index}`,
+    }));
+
+    const snapshot = (service as any).prepareGroupSyncSnapshot(externalGroups);
+
+    expect(snapshot.groups).toHaveLength(100);
+    expect(snapshot.completeSnapshot).toBe(false);
+    expect(snapshot.groups[0].id).toBe('group-000');
+  });
+
+  it('enforces workspace email domains for just-in-time signup', () => {
+    const service = createService();
+
+    expect(() =>
+      (service as any).assertSignupDomainAllowed('user@other.example', {
+        emailDomains: ['example.com'],
+      }),
+    ).toThrow(ForbiddenException);
+  });
+
+  it('binds SAML request lookup to the matching login state', async () => {
+    const where = jest.fn();
+    const query: any = {
+      select: jest.fn(() => query),
+      where: jest.fn((...args: any[]) => {
+        where(...args);
+        return query;
+      }),
+      executeTakeFirst: jest.fn().mockResolvedValue({
+        requestValue: 'request-value',
+      }),
+    };
+    const db = {
+      selectFrom: jest.fn(() => query),
+    };
+    const service = createService(db);
+    const cache = (service as any).createSamlCacheProvider(
+      'provider-id',
+      'state-hash',
+    );
+
+    await expect(cache.getAsync('request-id')).resolves.toBe('request-value');
+    expect(where).toHaveBeenCalledWith('stateHash', '=', 'state-hash');
+    expect(where).toHaveBeenCalledWith('requestId', '=', 'request-id');
+  });
+
+  it('claims a login state with one atomic conditional update', async () => {
+    const where = jest.fn();
+    const query: any = {
+      set: jest.fn(() => query),
+      where: jest.fn((...args: any[]) => {
+        where(...args);
+        return query;
+      }),
+      returningAll: jest.fn(() => query),
+      executeTakeFirst: jest.fn().mockResolvedValue({ id: 'state-id' }),
+    };
+    const db = {
+      updateTable: jest.fn(() => query),
+    };
+    const service = createService(db);
+
+    await expect(
+      (service as any).claimLoginState(
+        'raw-state',
+        'provider-id',
+        'workspace-id',
+      ),
+    ).resolves.toMatchObject({ id: 'state-id' });
+
+    expect(db.updateTable).toHaveBeenCalledWith('ssoLoginStates');
+    expect(where).toHaveBeenCalledWith('consumedAt', 'is', null);
+    expect(query.returningAll).toHaveBeenCalledTimes(1);
+  });
+
+  it('transfers an SSO-owned group membership to another active provider', async () => {
+    const deletedTables: string[] = [];
+    const updatedIds: string[] = [];
+    const createDeleteQuery = (table: string) => {
+      const query: any = {
+        where: jest.fn(() => query),
+        execute: jest.fn(async () => {
+          deletedTables.push(table);
+        }),
+      };
+      return query;
+    };
+    const selectQuery: any = {
+      innerJoin: jest.fn(() => selectQuery),
+      select: jest.fn(() => selectQuery),
+      where: jest.fn(() => selectQuery),
+      orderBy: jest.fn(() => selectQuery),
+      executeTakeFirst: jest.fn().mockResolvedValue({ id: 'successor-id' }),
+    };
+    const createUpdateQuery = () => {
+      const query: any = {
+        set: jest.fn(() => query),
+        where: jest.fn((field: string, _operator: string, value: string) => {
+          if (field === 'id') updatedIds.push(value);
+          return query;
+        }),
+        execute: jest.fn(),
+      };
+      return query;
+    };
+    const trx = {
+      deleteFrom: jest.fn((table: string) => createDeleteQuery(table)),
+      selectFrom: jest.fn(() => selectQuery),
+      updateTable: jest.fn(() => createUpdateQuery()),
+    };
+    const service = createService();
+
+    await (service as any).releaseProviderGroupMembership(
+      {
+        id: 'membership-id',
+        userId: 'user-id',
+        groupId: 'group-id',
+        ownsGroupMembership: true,
+      },
+      trx,
+    );
+
+    expect(deletedTables).toEqual(['authProviderGroupMemberships']);
+    expect(updatedIds).toContain('successor-id');
+    expect(selectQuery.where).toHaveBeenCalledWith(
+      'authProviders.isEnabled',
+      '=',
+      true,
+    );
+  });
+
+  it('preserves a manual group membership when SSO tracking is removed', async () => {
+    const deletedTables: string[] = [];
+    const createDeleteQuery = (table: string) => {
+      const query: any = {
+        where: jest.fn(() => query),
+        execute: jest.fn(async () => {
+          deletedTables.push(table);
+        }),
+      };
+      return query;
+    };
+    const trx = {
+      deleteFrom: jest.fn((table: string) => createDeleteQuery(table)),
+    };
+    const service = createService();
+
+    await (service as any).releaseProviderGroupMembership(
+      {
+        id: 'membership-id',
+        userId: 'user-id',
+        groupId: 'group-id',
+        ownsGroupMembership: false,
+      },
+      trx,
+    );
+
+    expect(deletedTables).toEqual(['authProviderGroupMemberships']);
+  });
+});

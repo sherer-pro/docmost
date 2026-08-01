@@ -82,8 +82,6 @@ describe('ShareController', () => {
       { pageId: 'page-uuid' } as any,
       {
         id: 'workspace-1',
-        licenseKey: null,
-        plan: 'free',
       } as any,
       res as any,
     );

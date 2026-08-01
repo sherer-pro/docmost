@@ -12,7 +12,7 @@ import {
   useDeleteCommentMutation,
   useUpdateCommentMutation,
 } from "@/features/comment/queries/comment-query";
-import { useResolveCommentMutation } from "@/ee/comment/queries/comment-query";
+import { useResolveCommentMutation } from "@/features/comment/queries/comment-query";
 import { IComment } from "@/features/comment/types/comment.types";
 import { CustomAvatar } from "@/components/ui/custom-avatar.tsx";
 import { currentUserAtom } from "@/features/user/atoms/current-user-atom.ts";

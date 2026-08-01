@@ -2,10 +2,8 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
-  Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { LicenseCheckService } from '../../../integrations/environment/license-check.service';
 import { CreateWorkspaceDto } from '../dto/create-workspace.dto';
 import { UpdateWorkspaceDto } from '../dto/update-workspace.dto';
 import { SpaceService } from '../../space/services/space.service';
@@ -16,7 +14,7 @@ import { WorkspaceRepo } from '@docmost/db/repos/workspace/workspace.repo';
 import { KyselyDB, KyselyTransaction } from '@docmost/db/types/kysely.types';
 import { executeTx } from '@docmost/db/utils';
 import { InjectKysely } from 'nestjs-kysely';
-import { User } from '@docmost/db/types/entity.types';
+import { AuthProvider, User } from '@docmost/db/types/entity.types';
 import { GroupUserRepo } from '@docmost/db/repos/group/group-user.repo';
 import { GroupRepo } from '@docmost/db/repos/group/group.repo';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
@@ -25,24 +23,24 @@ import { UserRepo } from '@docmost/db/repos/user/user.repo';
 import { EnvironmentService } from '../../../integrations/environment/environment.service';
 import { DomainService } from '../../../integrations/environment/domain.service';
 import { jsonArrayFrom } from 'kysely/helpers/postgres';
-import { addDays } from 'date-fns';
-import { DISALLOWED_HOSTNAMES, WorkspaceStatus } from '../workspace.constants';
+import { DISALLOWED_HOSTNAMES } from '../workspace.constants';
+import { SSO_PROVIDER_TYPES } from '../../sso/dto/sso.dto';
+import { isUsableSsoProvider } from '../../sso/sso-provider.util';
 import { v4 } from 'uuid';
 import { InjectQueue } from '@nestjs/bullmq';
 import { QueueJob, QueueName } from '../../../integrations/queue/constants';
 import { Queue } from 'bullmq';
 import { generateRandomSuffixNumbers } from '../../../common/helpers';
-import { isPageEmbeddingsTableExists } from '@docmost/db/helpers/helpers';
 import { CursorPaginationResult } from '@docmost/db/pagination/cursor-pagination';
 import { ShareRepo } from '@docmost/db/repos/share/share.repo';
 import { WatcherRepo } from '@docmost/db/repos/watcher/watcher.repo';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EventName } from '../../../common/events/event.contants';
+import { sql } from 'kysely';
+import { SsoEndpointPolicyService } from '../../../integrations/environment/sso-endpoint-policy.service';
 
 @Injectable()
 export class WorkspaceService {
-  private readonly logger = new Logger(WorkspaceService.name);
-
   constructor(
     private workspaceRepo: WorkspaceRepo,
     private spaceService: SpaceService,
@@ -52,14 +50,12 @@ export class WorkspaceService {
     private userRepo: UserRepo,
     private environmentService: EnvironmentService,
     private domainService: DomainService,
-    private licenseCheckService: LicenseCheckService,
     private shareRepo: ShareRepo,
     private watcherRepo: WatcherRepo,
     @InjectKysely() private readonly db: KyselyDB,
     @InjectQueue(QueueName.ATTACHMENT_QUEUE) private attachmentQueue: Queue,
-    @InjectQueue(QueueName.BILLING_QUEUE) private billingQueue: Queue,
-    @InjectQueue(QueueName.AI_QUEUE) private aiQueue: Queue,
     private eventEmitter: EventEmitter2,
+    private readonly ssoEndpointPolicy: SsoEndpointPolicyService,
   ) {}
 
   async findById(workspaceId: string) {
@@ -78,7 +74,7 @@ export class WorkspaceService {
   async getWorkspacePublicData(workspaceId: string) {
     const workspace = await this.db
       .selectFrom('workspaces')
-      .select(['id', 'name', 'logo', 'hostname', 'enforceSso', 'licenseKey'])
+      .select(['id', 'name', 'logo', 'hostname', 'enforceSso'])
       .select((eb) =>
         jsonArrayFrom(
           eb
@@ -89,6 +85,44 @@ export class WorkspaceService {
               'authProviders.type',
             ])
             .where('authProviders.isEnabled', '=', true)
+            .where('authProviders.deletedAt', 'is', null)
+            .where('authProviders.type', 'in', [...SSO_PROVIDER_TYPES])
+            .where((provider) =>
+              provider.or([
+                provider.and([
+                  provider('authProviders.type', '=', 'oidc'),
+                  provider('authProviders.oidcIssuer', 'is not', null),
+                  provider('authProviders.oidcIssuer', '!=', ''),
+                  provider('authProviders.oidcClientId', 'is not', null),
+                  provider('authProviders.oidcClientId', '!=', ''),
+                  provider('authProviders.oidcClientSecret', 'is not', null),
+                  provider('authProviders.oidcClientSecret', '!=', ''),
+                ]),
+                provider.and([
+                  provider('authProviders.type', '=', 'saml'),
+                  provider('authProviders.samlUrl', 'is not', null),
+                  provider('authProviders.samlUrl', '!=', ''),
+                  provider('authProviders.samlCertificate', 'is not', null),
+                  provider('authProviders.samlCertificate', '!=', ''),
+                ]),
+                provider.and([
+                  provider('authProviders.type', '=', 'ldap'),
+                  provider('authProviders.ldapUrl', 'is not', null),
+                  provider('authProviders.ldapUrl', '!=', ''),
+                  provider('authProviders.ldapBindDn', 'is not', null),
+                  provider('authProviders.ldapBindDn', '!=', ''),
+                  provider('authProviders.ldapBindPassword', 'is not', null),
+                  provider('authProviders.ldapBindPassword', '!=', ''),
+                  provider('authProviders.ldapBaseDn', 'is not', null),
+                  provider('authProviders.ldapBaseDn', '!=', ''),
+                  provider.or([
+                    sql<boolean>`lower(${provider.ref('authProviders.ldapUrl')}) LIKE 'ldaps://%'`,
+                    provider('authProviders.ldapTlsEnabled', '=', true),
+                  ]),
+                  sql<boolean>`coalesce(nullif(${provider.ref('authProviders.ldapUserSearchFilter')}, ''), '(mail={{username}})') LIKE '%{{username}}%'`,
+                ]),
+              ]),
+            )
             .where('workspaceId', '=', workspaceId),
         ).as('authProviders'),
       )
@@ -99,11 +133,9 @@ export class WorkspaceService {
       throw new NotFoundException('Workspace not found');
     }
 
-    const { licenseKey, ...rest } = workspace;
-
     return {
-      ...rest,
-      hasLicenseKey: Boolean(licenseKey),
+      ...workspace,
+      authProviders: workspace.authProviders,
     };
   }
 
@@ -112,15 +144,10 @@ export class WorkspaceService {
     createWorkspaceDto: CreateWorkspaceDto,
     trx?: KyselyTransaction,
   ) {
-    let trialEndAt = undefined;
-
     const createdWorkspace = await executeTx(
       this.db,
       async (trx) => {
         let hostname = undefined;
-        let status = undefined;
-        let plan = undefined;
-        let billingEmail = undefined;
         const settings = undefined;
 
         if (this.environmentService.isCloud()) {
@@ -128,13 +155,6 @@ export class WorkspaceService {
           hostname = await this.generateHostname(
             createWorkspaceDto.hostname ?? createWorkspaceDto.name,
           );
-          trialEndAt = addDays(
-            new Date(),
-            this.environmentService.getBillingTrialDays(),
-          );
-          status = WorkspaceStatus.Active;
-          plan = 'standard';
-          billingEmail = user.email;
         }
 
         // create workspace
@@ -143,10 +163,6 @@ export class WorkspaceService {
             name: createWorkspaceDto.name,
             description: createWorkspaceDto.description,
             hostname,
-            status,
-            trialEndAt,
-            plan,
-            billingEmail,
             settings,
           },
           trx,
@@ -223,26 +239,6 @@ export class WorkspaceService {
       trx,
     );
 
-    if (this.environmentService.isCloud() && trialEndAt) {
-      try {
-        const delay = trialEndAt.getTime() - Date.now();
-
-        await this.billingQueue.add(
-          QueueJob.TRIAL_ENDED,
-          { workspaceId: createdWorkspace.id },
-          { delay },
-        );
-
-        await this.billingQueue.add(
-          QueueJob.WELCOME_EMAIL,
-          { userId: user.id },
-          { delay: 60 * 1000 }, // 1m
-        );
-      } catch (err) {
-        this.logger.error(err);
-      }
-    }
-
     return createdWorkspace;
   }
 
@@ -279,19 +275,39 @@ export class WorkspaceService {
   }
 
   async update(workspaceId: string, updateWorkspaceDto: UpdateWorkspaceDto) {
-    if (updateWorkspaceDto.enforceSso) {
-      const sso = await this.db
-        .selectFrom('authProviders')
-        .selectAll()
-        .where('isEnabled', '=', true)
-        .where('workspaceId', '=', workspaceId)
-        .execute();
+    if (typeof updateWorkspaceDto.enforceSso !== 'undefined') {
+      await executeTx(this.db, async (trx) => {
+        await trx
+          .selectFrom('workspaces')
+          .select('id')
+          .where('id', '=', workspaceId)
+          .forUpdate()
+          .executeTakeFirstOrThrow();
 
-      if (sso && sso?.length === 0) {
-        throw new BadRequestException(
-          'There must be at least one active SSO provider to enforce SSO.',
+        if (updateWorkspaceDto.enforceSso) {
+          const providers = await trx
+            .selectFrom('authProviders')
+            .selectAll()
+            .where('isEnabled', '=', true)
+            .where('deletedAt', 'is', null)
+            .where('type', 'in', [...SSO_PROVIDER_TYPES])
+            .where('workspaceId', '=', workspaceId)
+            .execute();
+
+          if (!(await this.hasAllowedSsoProvider(providers))) {
+            throw new BadRequestException(
+              'There must be at least one usable and allowed SSO provider to enforce SSO.',
+            );
+          }
+        }
+
+        await this.workspaceRepo.updateWorkspace(
+          { enforceSso: updateWorkspaceDto.enforceSso },
+          workspaceId,
+          trx,
         );
-      }
+      });
+      delete updateWorkspaceDto.enforceSso;
     }
 
     if (updateWorkspaceDto.emailDomains) {
@@ -324,64 +340,19 @@ export class WorkspaceService {
       delete updateWorkspaceDto.restrictApiToAdmins;
     }
 
-    if (typeof updateWorkspaceDto.aiSearch !== 'undefined') {
-      await this.workspaceRepo.updateAiSettings(
-        workspaceId,
-        'search',
-        updateWorkspaceDto.aiSearch,
-      );
-
-      if (updateWorkspaceDto.aiSearch) {
-        const tableExists = await isPageEmbeddingsTableExists(this.db);
-        if (!tableExists) {
-          throw new BadRequestException(
-            'Failed to activate. Make sure pgvector postgres extension is installed.',
-          );
-        }
-
-        await this.aiQueue.add(QueueJob.WORKSPACE_CREATE_EMBEDDINGS, {
-          workspaceId,
-        });
-      } else {
-        // Schedule deletion after 24 hours
-        const deleteJobId = `ai-search-disabled-${workspaceId}`;
-        await this.aiQueue.add(
-          QueueJob.WORKSPACE_DELETE_EMBEDDINGS,
-          { workspaceId },
-          {
-            jobId: deleteJobId,
-            delay: 24 * 60 * 60 * 1000,
-            removeOnComplete: true,
-            removeOnFail: true,
-          },
-        );
-      }
-
-      delete updateWorkspaceDto.aiSearch;
-    }
-
     if (typeof updateWorkspaceDto.disablePublicSharing !== 'undefined') {
-      const currentWorkspace = await this.workspaceRepo.findById(workspaceId, {
-        withLicenseKey: true,
-      });
-
-      if (
-        !this.licenseCheckService.isValidEELicense(currentWorkspace.licenseKey)
-      ) {
-        throw new ForbiddenException(
-          'This feature requires a valid enterprise license',
+      await executeTx(this.db, async (trx) => {
+        await this.workspaceRepo.updateSharingSettings(
+          workspaceId,
+          'disabled',
+          updateWorkspaceDto.disablePublicSharing,
+          trx,
         );
-      }
 
-      await this.workspaceRepo.updateSharingSettings(
-        workspaceId,
-        'disabled',
-        updateWorkspaceDto.disablePublicSharing,
-      );
-
-      if (updateWorkspaceDto.disablePublicSharing) {
-        await this.shareRepo.deleteByWorkspaceId(workspaceId);
-      }
+        if (updateWorkspaceDto.disablePublicSharing) {
+          await this.shareRepo.deleteByWorkspaceId(workspaceId, trx);
+        }
+      });
 
       delete updateWorkspaceDto.disablePublicSharing;
     }
@@ -397,16 +368,42 @@ export class WorkspaceService {
 
     await this.workspaceRepo.updateWorkspace(updateWorkspaceDto, workspaceId);
 
-    const workspace = await this.workspaceRepo.findById(workspaceId, {
+    return this.workspaceRepo.findById(workspaceId, {
       withMemberCount: true,
-      withLicenseKey: true,
     });
+  }
 
-    const { licenseKey, ...rest } = workspace;
-    return {
-      ...rest,
-      hasLicenseKey: Boolean(licenseKey),
-    };
+  private async hasAllowedSsoProvider(
+    providers: AuthProvider[],
+  ): Promise<boolean> {
+    for (const provider of providers) {
+      if (!isUsableSsoProvider(provider)) {
+        continue;
+      }
+
+      const endpoint =
+        provider.type === 'oidc'
+          ? provider.oidcIssuer
+          : provider.type === 'saml'
+            ? provider.samlUrl
+            : provider.ldapUrl;
+      const protocols =
+        provider.type === 'ldap'
+          ? (['ldap:', 'ldaps:'] as const)
+          : (['http:', 'https:'] as const);
+      try {
+        await this.ssoEndpointPolicy.assertAllowed(
+          endpoint,
+          protocols,
+          'SSO provider',
+        );
+        return true;
+      } catch {
+        // Another configured provider may still make enforcement safe.
+      }
+    }
+
+    return false;
   }
 
   async getWorkspaceUsers(

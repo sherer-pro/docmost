@@ -1,7 +1,6 @@
 import {
   ActionIcon,
   Anchor,
-  Button,
   Group,
   Indicator,
   Popover,
@@ -17,19 +16,17 @@ import {
   useShareForPageQuery,
   useUpdateShareMutation,
 } from "@/features/share/queries/share-query.ts";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { extractPageSlugId, getPageIcon } from "@/lib";
 import { useTranslation } from "react-i18next";
 import { usePageQuery } from "@/features/page/queries/page-query.ts";
 import CopyTextButton from "@/components/common/copy.tsx";
-import { getAppUrl, isCloud } from "@/lib/config.ts";
+import { getAppUrl } from "@/lib/config.ts";
 import { buildPageUrl, buildSharedPageUrl } from "@/features/page/page.utils.ts";
 import classes from "@/features/share/components/share.module.css";
-import useTrial from "@/ee/hooks/use-trial.tsx";
 import { useAtom } from "jotai";
 import { workspaceAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { useSpaceQuery } from "@/features/space/queries/space-query.ts";
-import useUserRole from "@/hooks/use-user-role.tsx";
 import { AccessibleActionIcon } from "@/components/ui/accessible-action-icon.tsx";
 
 interface ShareModalProps {
@@ -47,7 +44,6 @@ export default function ShareModal({
   readOnly = false,
 }: ShareModalProps) {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const { pageSlug } = useParams();
   const pageSlugId = extractPageSlugId(pageSlug);
   const pageQueryId = pageIdProp ?? pageSlugId;
@@ -62,8 +58,6 @@ export default function ShareModal({
     enabled: hasValidSharePageContext,
   });
   const { spaceSlug } = useParams();
-  const { isTrial } = useTrial();
-  const { isAdmin } = useUserRole();
   const [workspace] = useAtom(workspaceAtom);
   const { data: space } = useSpaceQuery(spaceSlug);
   const workspaceDisabled = workspace?.settings?.sharing?.disabled === true;
@@ -180,30 +174,7 @@ export default function ShareModal({
         </AccessibleActionIcon>
       </Popover.Target>
       <Popover.Dropdown style={{ userSelect: "none" }}>
-        {isCloud() && isTrial ? (
-          <>
-            <Group justify="center" mb="sm">
-              <IconLock size={20} stroke={1.5} />
-            </Group>
-            <Text size="sm" ta="center" fw={500} mb="xs">
-              {t("Upgrade to share pages")}
-            </Text>
-            <Text size="sm" c="dimmed" ta="center" mb="sm">
-              {t(
-                "Page sharing is available on paid plans. Upgrade to share your pages publicly.",
-              )}
-            </Text>
-            {isAdmin && (
-              <Button
-                size="xs"
-                onClick={() => navigate("/settings/billing")}
-                fullWidth
-              >
-                {t("Upgrade Plan")}
-              </Button>
-            )}
-          </>
-        ) : sharingDisabled ? (
+        {sharingDisabled ? (
           <>
             <Group justify="center" mb="sm">
               <IconLock size={20} stroke={1.5} />
