@@ -1,4 +1,5 @@
 import { EditorContent, useEditor } from "@tiptap/react";
+import type { Editor } from "@tiptap/core";
 import { useEffect, useRef } from "react";
 import {
   composerHtmlToMarkdown,
@@ -15,12 +16,14 @@ export function AiMarkdownComposer({
   value,
   onChange,
   onSubmit,
+  onEditorChange,
   ariaLabel,
   placeholder,
 }: {
   value: string;
   onChange: (value: string) => void;
   onSubmit: () => void;
+  onEditorChange?: (editor: Editor | null) => void;
   ariaLabel: string;
   placeholder: string;
 }) {
@@ -89,6 +92,11 @@ export function AiMarkdownComposer({
       });
     }
   }, [editor, value]);
+
+  useEffect(() => {
+    onEditorChange?.(editor ?? null);
+    return () => onEditorChange?.(null);
+  }, [editor, onEditorChange]);
 
   return <EditorContent editor={editor} className={classes.markdownComposer} />;
 }
