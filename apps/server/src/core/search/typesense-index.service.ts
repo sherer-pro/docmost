@@ -39,6 +39,7 @@ export class TypesenseIndexService implements OnApplicationBootstrap {
   private readonly logger = new Logger(TypesenseIndexService.name);
   private readonly client: Client | null;
   private collectionsReady: Promise<void> | null = null;
+  private collectionsCreated = false;
 
   constructor(
     private readonly environmentService: EnvironmentService,
@@ -64,23 +65,33 @@ export class TypesenseIndexService implements OnApplicationBootstrap {
 
     try {
       await this.ensureCollections();
-      await this.searchQueue.add(
-        QueueJob.TYPESENSE_FLUSH,
-        {},
-        {
-          jobId: 'typesense-core-backfill-v2',
-          delay: 15_000,
-          attempts: 3,
-          backoff: { type: 'exponential', delay: 20_000 },
-          removeOnComplete: true,
-          removeOnFail: true,
-        },
-      );
+
+      // A full rebuild is only needed the first time a collection appears.
+      // Afterwards lifecycle jobs keep the index current, so restarting the
+      // server must not reindex every page and attachment again.
+      if (this.collectionsCreated) {
+        await this.enqueueRebuild('typesense-core-backfill-bootstrap');
+      }
     } catch (error) {
       this.logger.error(
         `Failed to initialize Typesense: ${this.errorMessage(error)}`,
       );
     }
+  }
+
+  async enqueueRebuild(jobId?: string): Promise<void> {
+    await this.searchQueue.add(
+      QueueJob.TYPESENSE_FLUSH,
+      {},
+      {
+        ...(jobId ? { jobId } : {}),
+        delay: 15_000,
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 20_000 },
+        removeOnComplete: true,
+        removeOnFail: true,
+      },
+    );
   }
 
   isEnabled(): boolean {
@@ -414,6 +425,7 @@ export class TypesenseIndexService implements OnApplicationBootstrap {
 
     try {
       await client.collections().create(schema as any);
+      this.collectionsCreated = true;
     } catch (error) {
       if (this.httpStatus(error) !== 409) {
         throw error;
