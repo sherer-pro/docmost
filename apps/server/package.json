@@ -21,6 +21,8 @@
     "migration:latest": "tsx src/database/migrate.ts latest",
     "migration:redo": "tsx src/database/migrate.ts redo",
     "migration:reset": "tsx src/database/migrate.ts down-to NO_MIGRATIONS",
+    "search:reindex": "tsx src/cli/search-reindex.ts",
+    "sso:disable-enforcement": "tsx src/cli/sso-disable-enforcement.ts",
     "migration:codegen": "kysely-codegen --dialect=postgres --camel-case --env-file=../../.env --out-file=./src/database/types/db.d.ts",
     "lint": "eslint \"src/**/*.ts\" \"test/**/*.ts\" --fix",
     "test": "jest --config jest.config.cjs",
