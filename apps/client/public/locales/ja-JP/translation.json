@@ -1247,6 +1247,8 @@
   "Delete the link {{name}}?": "Delete the link {{name}}?",
   "ai": {
     "integrations": {
+      "backToSpace": "スペースに戻る",
+      "spacesEmptyTitle": "スペースが見つかりません",
       "title": "AI and integrations",
       "description": "Configure AI assistants, external access, search, and per-space behavior.",
       "mcpTitle": "MCP access",
@@ -1265,10 +1267,11 @@
       "spaceCardTitle": "AI assistant",
       "spaceCardDescription": "Model, identity, behavior, agent mode, search, and usage limits are managed on a dedicated page.",
       "openFullSettings": "Open full settings",
-      "backToOverview": "Back to AI and integrations",
+      "backToOverview": "AI アシスタントに戻る",
       "spaceSettingsDescription": "Configure the AI assistant for this space.",
       "sectionLabel": "Settings section",
       "section": {
+        "content": "ナレッジへのアクセス",
         "overview": "Overview",
         "identity": "Identity",
         "model": "Model",
@@ -1455,6 +1458,7 @@
     "generationCompleted": "AIによる対応が可能です。",
     "generationStopped": "AIの生成が停止しました。",
     "settings": {
+      "contentPolicyDescription": "除外設定は AI チャット、スペース検索、RAG 同期、MCP に適用されます。通常の Docmost 検索には影響しません。",
       "agentSection": "Agent mode",
       "agentSectionDescription": "Enable bounded tool use and individually confirmed edits.",
       "agentEnabled": "Enable AI agent",
@@ -1669,6 +1673,7 @@
       "loadMore": "さらにロードする"
     },
     "ux": {
+      "toggleSecretVisibility": "シークレットを表示または非表示",
       "loading": "読み込み中…",
       "jumpToLatest": "最新の回答へ移動",
       "draftSaving": "下書きを保存中…",

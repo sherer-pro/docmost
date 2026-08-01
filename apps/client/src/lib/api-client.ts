@@ -91,6 +91,7 @@ declare module "axios" {
      * needs headers, binary body, and other full `AxiosResponse` fields.
      */
     skipEnvelopeUnwrap?: boolean;
+    skipAuthRedirect?: boolean;
   }
 }
 
@@ -182,6 +183,7 @@ api.interceptors.response.use(
     if (error.response) {
       switch (error.response.status) {
         case 401: {
+          if (error.config?.skipAuthRedirect) break;
           const url = new URL(error.request.responseURL)?.pathname;
           if (url === "/api/auth/collab-token") return;
           if (window.location.pathname.startsWith("/share/")) return;

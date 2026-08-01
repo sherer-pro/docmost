@@ -1247,6 +1247,8 @@
   "Delete the link {{name}}?": "Delete the link {{name}}?",
   "ai": {
     "integrations": {
+      "backToSpace": "Terug naar ruimte",
+      "spacesEmptyTitle": "Geen ruimtes gevonden",
       "title": "AI and integrations",
       "description": "Configure AI assistants, external access, search, and per-space behavior.",
       "mcpTitle": "MCP access",
@@ -1265,10 +1267,11 @@
       "spaceCardTitle": "AI assistant",
       "spaceCardDescription": "Model, identity, behavior, agent mode, search, and usage limits are managed on a dedicated page.",
       "openFullSettings": "Open full settings",
-      "backToOverview": "Back to AI and integrations",
+      "backToOverview": "Terug naar AI-assistent",
       "spaceSettingsDescription": "Configure the AI assistant for this space.",
       "sectionLabel": "Settings section",
       "section": {
+        "content": "Kennistoegang",
         "overview": "Overview",
         "identity": "Identity",
         "model": "Model",
@@ -1455,6 +1458,7 @@
     "generationCompleted": "AI-reactie is klaar.",
     "generationStopped": "De AI-generatie is gestopt.",
     "settings": {
+      "contentPolicyDescription": "Uitsluitingen gelden voor AI-chat, zoeken in de ruimte, RAG-synchronisatie en MCP. Normaal zoeken in Docmost blijft ongewijzigd.",
       "agentSection": "Agent mode",
       "agentSectionDescription": "Enable bounded tool use and individually confirmed edits.",
       "agentEnabled": "Enable AI agent",
@@ -1669,6 +1673,7 @@
       "loadMore": "Laad meer"
     },
     "ux": {
+      "toggleSecretVisibility": "Geheim tonen of verbergen",
       "loading": "Laden…",
       "jumpToLatest": "Naar het nieuwste antwoord",
       "draftSaving": "Concept opslaan…",

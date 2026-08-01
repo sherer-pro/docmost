@@ -19,6 +19,7 @@ import {
   IconFileOff,
   IconFileText,
   IconPlus,
+  IconRefresh,
   IconSearch,
   IconTrash,
 } from "@tabler/icons-react";
@@ -35,6 +36,7 @@ import {
   AiSpaceContentPolicy,
 } from "@/features/ai/types/ai.types.ts";
 import { resolveAiErrorMessage } from "@/features/ai/utils/ai-policies.ts";
+import { EmptyState } from "@/components/ui/empty-state.tsx";
 
 export function AiContentExclusionsSettings({ spaceId }: { spaceId: string }) {
   const { t, i18n } = useTranslation();
@@ -109,8 +111,11 @@ export function AiContentExclusionsSettings({ spaceId }: { spaceId: string }) {
   if (policyQuery.isLoading) {
     return (
       <Paper withBorder radius="md" p="md">
-        <Group justify="center">
+        <Group justify="center" role="status">
           <Loader size="sm" />
+          <Text size="sm" c="dimmed">
+            {t("ai.settings.exclusionsTitle")}
+          </Text>
         </Group>
       </Paper>
     );
@@ -119,7 +124,18 @@ export function AiContentExclusionsSettings({ spaceId }: { spaceId: string }) {
   if (policyQuery.isError || !policyQuery.data) {
     return (
       <Alert color="red" title={t("ai.settings.exclusionsTitle")}>
-        {t("ai.settings.exclusionsLoadFailed")}
+        <Stack gap="sm" align="flex-start">
+          <Text size="sm">{t("ai.settings.exclusionsLoadFailed")}</Text>
+          <Button
+            type="button"
+            size="xs"
+            variant="light"
+            leftSection={<IconRefresh size={15} />}
+            onClick={() => void policyQuery.refetch()}
+          >
+            {t("ai.retry")}
+          </Button>
+        </Stack>
       </Alert>
     );
   }
@@ -135,7 +151,7 @@ export function AiContentExclusionsSettings({ spaceId }: { spaceId: string }) {
                 {t("ai.settings.exclusionsTitle")}
               </Text>
               <Text size="xs" c="dimmed">
-                {t("ai.settings.exclusionsDescription")}
+                {t("ai.settings.contentPolicyDescription")}
               </Text>
             </Box>
             <Badge variant="light">
@@ -144,9 +160,11 @@ export function AiContentExclusionsSettings({ spaceId }: { spaceId: string }) {
           </Group>
 
           {policyQuery.data.exclusions.length === 0 ? (
-            <Text size="sm" c="dimmed">
-              {t("ai.settings.exclusionsEmpty")}
-            </Text>
+            <EmptyState
+              compact
+              icon={IconFileOff}
+              title={t("ai.settings.exclusionsEmpty")}
+            />
           ) : (
             <Stack gap="xs">
               {policyQuery.data.exclusions.map((item) => (
@@ -228,6 +246,7 @@ export function AiContentExclusionsSettings({ spaceId }: { spaceId: string }) {
               size="compact-sm"
               variant="light"
               leftSection={<IconPlus size={14} />}
+              style={{ minHeight: 32 }}
               disabled={
                 policyQuery.data.exclusions.length >= 100 ||
                 updatePolicy.isPending
@@ -257,9 +276,21 @@ export function AiContentExclusionsSettings({ spaceId }: { spaceId: string }) {
           />
           <ScrollArea h={360}>
             {candidates.isLoading ? (
-              <Group justify="center" py="xl">
+              <Group justify="center" py="xl" role="status">
                 <Loader size="sm" />
               </Group>
+            ) : candidates.isError ? (
+              <Alert color="red" title={t("ai.settings.exclusionsLoadFailed")}>
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="light"
+                  leftSection={<IconRefresh size={15} />}
+                  onClick={() => void candidates.refetch()}
+                >
+                  {t("ai.retry")}
+                </Button>
+              </Alert>
             ) : candidateItems.length === 0 ? (
               <Text size="sm" c="dimmed" ta="center" py="xl">
                 {query.trim()
@@ -288,6 +319,7 @@ export function AiContentExclusionsSettings({ spaceId }: { spaceId: string }) {
                           type="button"
                           size="compact-xs"
                           variant="default"
+                          style={{ minHeight: 32 }}
                           disabled={disabled || updatePolicy.isPending}
                           onClick={() =>
                             void add(source, false).catch(() => undefined)
@@ -298,6 +330,7 @@ export function AiContentExclusionsSettings({ spaceId }: { spaceId: string }) {
                         <Button
                           type="button"
                           size="compact-xs"
+                          style={{ minHeight: 32 }}
                           disabled={disabled || updatePolicy.isPending}
                           onClick={() =>
                             void add(source, true).catch(() => undefined)
