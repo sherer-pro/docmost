@@ -1247,6 +1247,8 @@
   "Delete the link {{name}}?": "Delete the link {{name}}?",
   "ai": {
     "integrations": {
+      "backToSpace": "Назад до простору",
+      "spacesEmptyTitle": "Простори не знайдено",
       "title": "AI and integrations",
       "description": "Configure AI assistants, external access, search, and per-space behavior.",
       "mcpTitle": "MCP access",
@@ -1265,10 +1267,11 @@
       "spaceCardTitle": "AI assistant",
       "spaceCardDescription": "Model, identity, behavior, agent mode, search, and usage limits are managed on a dedicated page.",
       "openFullSettings": "Open full settings",
-      "backToOverview": "Back to AI and integrations",
+      "backToOverview": "Назад до AI-помічника",
       "spaceSettingsDescription": "Configure the AI assistant for this space.",
       "sectionLabel": "Settings section",
       "section": {
+        "content": "Доступ до знань",
         "overview": "Overview",
         "identity": "Identity",
         "model": "Model",
@@ -1455,6 +1458,7 @@
     "generationCompleted": "Відповідь ШІ готова.",
     "generationStopped": "Генерація ШІ припинена.",
     "settings": {
+      "contentPolicyDescription": "Виключення застосовуються до AI-чату, пошуку в просторі, RAG-синхронізації та MCP. Звичайний пошук Docmost не змінюється.",
       "agentSection": "Режим агента",
       "agentSectionDescription": "Увімкніть обмежені інструменти та окреме підтвердження кожної зміни.",
       "agentEnabled": "Увімкнути ШІ-агента",
@@ -1669,6 +1673,7 @@
       "loadMore": "Завантажте більше"
     },
     "ux": {
+      "toggleSecretVisibility": "Показати або приховати секрет",
       "loading": "Завантаження…",
       "jumpToLatest": "До останньої відповіді",
       "draftSaving": "Чернетка зберігається…",

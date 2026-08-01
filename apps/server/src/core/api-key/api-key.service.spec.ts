@@ -219,65 +219,11 @@ describe('ApiKeyService', () => {
     ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
-  it('allows member user to create API key in accessible space', async () => {
+  it('allows workspace admins to create MCP keys', async () => {
     spaceRepo.findById.mockResolvedValue({
       id: 'space-1',
       workspaceId: workspace.id,
     } as any);
-    spaceMemberRepo.getUserSpaceRoles.mockResolvedValue([
-      { userId: memberUser.id, role: 'reader' } as any,
-    ]);
-    apiKeyRepo.insertApiKey.mockResolvedValue({
-      id: 'key-2',
-      name: 'Member key',
-      creatorId: memberUser.id,
-      workspaceId: workspace.id,
-      spaceId: 'space-1',
-      keyType: 'rag',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      deletedAt: null,
-      expiresAt: null,
-      lastUsedAt: null,
-    } as any);
-    tokenService.generateApiToken.mockResolvedValue('member-token');
-    apiKeyRepo.findById.mockResolvedValue({
-      id: 'key-2',
-      name: 'Member key',
-      creatorId: memberUser.id,
-      workspaceId: workspace.id,
-      spaceId: 'space-1',
-      keyType: 'rag',
-    } as any);
-
-    await service.createApiKey(memberUser, workspace, {
-      name: 'Member key',
-      spaceId: 'space-1',
-    });
-
-    expect(apiKeyRepo.insertApiKey).toHaveBeenCalledWith(
-      expect.objectContaining({
-        creatorId: memberUser.id,
-        workspaceId: workspace.id,
-        spaceId: 'space-1',
-        keyType: 'rag',
-      }),
-    );
-  });
-
-  it('allows only workspace admins to create MCP keys', async () => {
-    spaceRepo.findById.mockResolvedValue({
-      id: 'space-1',
-      workspaceId: workspace.id,
-    } as any);
-
-    await expect(
-      service.createApiKey(memberUser, workspace, {
-        name: 'MCP key',
-        spaceId: 'space-1',
-        keyType: 'mcp',
-      }),
-    ).rejects.toBeInstanceOf(ForbiddenException);
 
     apiKeyRepo.insertApiKey.mockResolvedValue({
       id: 'key-mcp',
@@ -315,52 +261,19 @@ describe('ApiKeyService', () => {
     ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
-  it('rejects adminView listing for member users', async () => {
+  it('rejects API key management for member users', async () => {
     await expect(
       service.listApiKeys(memberUser, workspace, {
         adminView: true,
       } as any),
     ).rejects.toBeInstanceOf(ForbiddenException);
-  });
-
-  it('lists only creator keys for member users in default view', async () => {
-    apiKeyRepo.listApiKeys.mockResolvedValue({
-      items: [],
-      meta: {},
-    } as any);
-
-    await service.listApiKeys(memberUser, workspace, {} as any);
-
-    expect(apiKeyRepo.listApiKeys).toHaveBeenCalledWith(
-      workspace.id,
-      expect.any(Object),
-      { creatorId: memberUser.id },
-    );
-  });
-
-  it('rejects API key creation for inaccessible spaces', async () => {
-    spaceRepo.findById.mockResolvedValue({
-      id: 'space-1',
-      workspaceId: workspace.id,
-    } as any);
-    spaceMemberRepo.getUserSpaceRoles.mockResolvedValue(undefined as any);
 
     await expect(
       service.createApiKey(memberUser, workspace, {
-        name: 'Forbidden key',
+        name: 'Member key',
         spaceId: 'space-1',
       }),
     ).rejects.toBeInstanceOf(ForbiddenException);
-  });
-
-  it('rejects update of another user API key for member users', async () => {
-    apiKeyRepo.findById.mockResolvedValue({
-      id: 'key-3',
-      creatorId: ownerUser.id,
-      workspaceId: workspace.id,
-      spaceId: 'space-1',
-      deletedAt: null,
-    } as any);
 
     await expect(
       service.updateApiKey(memberUser, workspace, {
@@ -368,5 +281,26 @@ describe('ApiKeyService', () => {
         name: 'Updated by member',
       }),
     ).rejects.toBeInstanceOf(ForbiddenException);
+
+    await expect(
+      service.revokeApiKey(memberUser, workspace, {
+        apiKeyId: 'key-3',
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('passes the key type filter to the repository before pagination', async () => {
+    apiKeyRepo.listApiKeys.mockResolvedValue({ items: [], meta: {} } as any);
+
+    await service.listApiKeys(ownerUser, workspace, {
+      keyType: 'mcp',
+      limit: 20,
+    } as any);
+
+    expect(apiKeyRepo.listApiKeys).toHaveBeenCalledWith(
+      workspace.id,
+      expect.objectContaining({ keyType: 'mcp', limit: 20 }),
+      { keyType: 'mcp' },
+    );
   });
 });

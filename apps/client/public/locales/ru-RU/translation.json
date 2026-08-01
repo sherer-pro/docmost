@@ -1247,6 +1247,8 @@
   "Delete the link {{name}}?": "Удалить ссылку {{name}}?",
   "ai": {
     "integrations": {
+      "backToSpace": "Назад в пространство",
+      "spacesEmptyTitle": "Пространства не найдены",
       "title": "ИИ и интеграции",
       "description": "Настройка ИИ-помощников, внешнего доступа, поиска и поведения в пространствах.",
       "mcpTitle": "Доступ по MCP",
@@ -1265,10 +1267,11 @@
       "spaceCardTitle": "ИИ-помощник",
       "spaceCardDescription": "Модель, имя, поведение, агентный режим, поиск и лимиты настраиваются на отдельной странице.",
       "openFullSettings": "Открыть полные настройки",
-      "backToOverview": "Назад к ИИ и интеграциям",
+      "backToOverview": "Назад к ИИ-помощнику",
       "spaceSettingsDescription": "Настройте ИИ-помощника для этого пространства.",
       "sectionLabel": "Раздел настроек",
       "section": {
+        "content": "Доступ к знаниям",
         "overview": "Обзор",
         "identity": "Имя и образ",
         "model": "Модель",
@@ -1455,6 +1458,7 @@
     "generationCompleted": "Ответ ИИ готов.",
     "generationStopped": "Генерация ответа остановлена.",
     "settings": {
+      "contentPolicyDescription": "Исключения действуют для чата с ИИ, поиска по пространству, RAG-синхронизации и MCP. Обычный поиск Docmost не меняется.",
       "agentSection": "Режим агента",
       "agentSectionDescription": "Включите ограниченные инструменты и отдельное подтверждение каждой правки для участников пространства.",
       "agentEnabled": "Включить ИИ-агента",
@@ -1669,6 +1673,7 @@
       "loadMore": "Загрузить ещё"
     },
     "ux": {
+      "toggleSecretVisibility": "Показать или скрыть секрет",
       "loading": "Загрузка…",
       "jumpToLatest": "К последнему ответу",
       "draftSaving": "Черновик сохраняется…",

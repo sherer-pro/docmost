@@ -1,8 +1,10 @@
-import React, { useState } from "react";
-import { Button, Group, Space, Text } from "@mantine/core";
+import { useState } from "react";
+import { Alert, Button, Group, Loader, Space, Stack, Text } from "@mantine/core";
+import { IconAlertCircle, IconKeyOff, IconRefresh } from "@tabler/icons-react";
 import { Helmet } from "react-helmet-async";
 import { useTranslation } from "react-i18next";
 import SettingsTitle from "@/components/settings/settings-title";
+import { EmptyState } from "@/components/ui/empty-state.tsx";
 import { getAppName } from "@/lib/config";
 import { ApiKeyTable } from "@/features/api-key/components/api-key-table";
 import { CreateApiKeyModal } from "@/features/api-key/components/create-api-key-modal";
@@ -13,9 +15,12 @@ import Paginate from "@/components/common/paginate";
 import { useCursorPaginate } from "@/hooks/use-cursor-paginate";
 import { useGetApiKeysQuery } from "@/features/api-key/queries/api-key-query.ts";
 import { IApiKey, type McpClientPreset } from "@/features/api-key";
-import useUserRole from "@/hooks/use-user-role.tsx";
 
-export default function WorkspaceApiKeys() {
+interface WorkspaceApiKeysPageProps {
+  keyType: "rag" | "mcp";
+}
+
+export function WorkspaceApiKeysPage({ keyType }: WorkspaceApiKeysPageProps) {
   const { t } = useTranslation();
   const { cursor, goNext, goPrev } = useCursorPaginate();
   const [createModalOpened, setCreateModalOpened] = useState(false);
@@ -25,12 +30,21 @@ export default function WorkspaceApiKeys() {
   const [updateModalOpened, setUpdateModalOpened] = useState(false);
   const [revokeModalOpened, setRevokeModalOpened] = useState(false);
   const [selectedApiKey, setSelectedApiKey] = useState<IApiKey | null>(null);
-  const { data, isLoading } = useGetApiKeysQuery({ cursor, adminView: true });
-  const { isAdmin } = useUserRole();
-
-  if (!isAdmin) {
-    return null;
-  }
+  const keysQuery = useGetApiKeysQuery({
+    cursor,
+    adminView: true,
+    keyType,
+  });
+  const title = t(
+    keyType === "rag"
+      ? "ai.integrations.ragTitle"
+      : "ai.integrations.mcpTitle",
+  );
+  const description = t(
+    keyType === "rag"
+      ? "ai.integrations.ragDescription"
+      : "ai.integrations.mcpDescription",
+  );
 
   const handleCreateSuccess = (response: IApiKey, client: McpClientPreset) => {
     setCreatedApiKey(response);
@@ -47,51 +61,83 @@ export default function WorkspaceApiKeys() {
     setRevokeModalOpened(true);
   };
 
+  const createButton = (
+    <Button onClick={() => setCreateModalOpened(true)}>
+      {t("Create API Key")}
+    </Button>
+  );
+
   return (
     <>
       <Helmet>
         <title>
-          {t("apiKeys.workspaceTitle")} - {getAppName()}
+          {title} - {getAppName()}
         </title>
       </Helmet>
 
-      <SettingsTitle title={t("apiKeys.workspaceTitle")} />
-
+      <SettingsTitle title={title} />
       <Text size="md" c="dimmed" mb="md">
-        {t("apiKeys.workspaceDescription")}
+        {description}
       </Text>
 
-      <Group justify="flex-end" mb="md">
-        <Button onClick={() => setCreateModalOpened(true)}>
-          {t("Create API Key")}
-        </Button>
-      </Group>
-
-      <ApiKeyTable
-        apiKeys={data?.items || []}
-        isLoading={isLoading}
-        showUserColumn
-        showSpaceColumn
-        onUpdate={handleUpdate}
-        onRevoke={handleRevoke}
-      />
-
-      <Space h="md" />
-
-      {data?.items.length > 0 && (
-        <Paginate
-          hasPrevPage={data?.meta?.hasPrevPage}
-          hasNextPage={data?.meta?.hasNextPage}
-          onNext={() => goNext(data?.meta?.nextCursor)}
-          onPrev={goPrev}
+      {keysQuery.isLoading ? (
+        <Group justify="center" py="xl" role="status">
+          <Loader size="sm" />
+        </Group>
+      ) : keysQuery.isError ? (
+        <Alert
+          color="red"
+          icon={<IconAlertCircle size={18} />}
+          title={t("Error")}
+        >
+          <Stack gap="sm" align="flex-start">
+            <Text size="sm">{t("Failed to load page. An error occurred.")}</Text>
+            <Button
+              size="xs"
+              variant="light"
+              leftSection={<IconRefresh size={15} />}
+              onClick={() => void keysQuery.refetch()}
+            >
+              {t("ai.retry")}
+            </Button>
+          </Stack>
+        </Alert>
+      ) : keysQuery.data?.items.length === 0 ? (
+        <EmptyState
+          icon={IconKeyOff}
+          title={t("No API keys found")}
+          description={description}
+          action={createButton}
         />
+      ) : (
+        <>
+          <Group justify="flex-end" mb="md">
+            {createButton}
+          </Group>
+          <ApiKeyTable
+            apiKeys={keysQuery.data?.items ?? []}
+            showUserColumn
+            showSpaceColumn
+            showTypeColumn={false}
+            onUpdate={handleUpdate}
+            onRevoke={handleRevoke}
+          />
+
+          <Space h="md" />
+          <Paginate
+            hasPrevPage={keysQuery.data?.meta?.hasPrevPage}
+            hasNextPage={keysQuery.data?.meta?.hasNextPage}
+            onNext={() => goNext(keysQuery.data?.meta?.nextCursor)}
+            onPrev={goPrev}
+          />
+        </>
       )}
 
       <CreateApiKeyModal
         opened={createModalOpened}
         onClose={() => setCreateModalOpened(false)}
         onSuccess={handleCreateSuccess}
-        allowMcp
+        keyType={keyType}
       />
 
       <ApiKeyCreatedModal

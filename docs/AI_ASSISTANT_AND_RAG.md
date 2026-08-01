@@ -235,10 +235,13 @@ fingerprint is calculated from sorted effective `pageId` values, so moving a
 page across an excluded subtree boundary also changes the fingerprint.
 
 Exclusions apply to current and manual conversation context, page attachments,
-editor actions, query-time retrieval, and all live/detail/export RAG routes.
-Normal Docmost search and private chat files are unaffected. Chat remains
-available on an excluded current page without page context, while editor
-actions are disabled.
+editor actions, AI space search/query-time retrieval, every live/detail/export
+RAG route, and all MCP tools. Normal Docmost search and private chat files are
+unaffected. Chat remains available on an excluded current page without page
+context, while editor actions are disabled. The full-page space settings expose
+these rules in the dedicated **Knowledge access** section. Adding and removing
+rules persists immediately and is intentionally separate from the section Save
+button used by provider and behavior configuration.
 
 When the policy changes, affected active contexts are reconciled, their
 revision is incremented, and `ai:content-policy.updated` is emitted. Old
@@ -516,14 +519,16 @@ connection reaches Docmost.
 
 ### Creating and validating an MCP key
 
-Workspace owners and administrators create the key on
-`/settings/ai/mcp` through the type, space, name/expiry, client, creation, and
-connection flow. The legacy `/settings/api-keys` URL permanently redirects to
-this page. Personal `/settings/account/api-keys` management continues to
-create RAG keys and cannot mint an MCP key. The plaintext token is returned
-during creation and must be stored securely. The UI always selects an explicit
-30, 60, 90, or 365 day expiry (or a valid custom future date); it does not
-present an unlimited option.
+Workspace owners and administrators create the key on `/settings/ai/mcp`
+through the fixed MCP flow: space, name/expiry, client, creation, and
+connection. The legacy `/settings/api-keys` URL redirects to this page.
+`/settings/account/api-keys` redirects a workspace owner or administrator to
+`/settings/ai/rag` and a member to their profile. RAG and MCP key management is
+therefore workspace-admin-only; existing member-created RAG tokens are not
+revoked or migrated and continue through the normal live validation rules.
+The plaintext token is returned during creation and must be stored securely.
+The UI always selects an explicit 30, 60, 90, or 365 day expiry (or a valid
+custom future date); it does not present an unlimited option.
 
 The JWT embeds `apiKeyId`, creator `sub`, `workspaceId`, `spaceId`, and
 `keyType=mcp`, but the database row remains authoritative. Every request
@@ -614,18 +619,29 @@ source revisions and applicable AGPL/MIT notices are recorded in
 
 ### Administrative UI routes
 
-| Route                                  | Purpose                                                        |
-| -------------------------------------- | -------------------------------------------------------------- |
-| `/settings/ai`                         | AI and integrations overview with per-space entry points       |
-| `/settings/ai/spaces/:spaceSlug`       | sectioned full-page configuration for one space                |
-| `/settings/ai/mcp`                     | MCP onboarding and workspace API-key administration            |
-| `/settings/account/api-keys`           | personal, space-scoped RAG synchronization keys                |
-| `/settings/api-keys`                   | compatibility redirect to `/settings/ai/mcp`                  |
+| Route                            | Purpose                                                               |
+| -------------------------------- | --------------------------------------------------------------------- |
+| `/settings/ai`                   | AI assistant overview with per-space configuration entry points       |
+| `/settings/ai/spaces/:spaceSlug` | sectioned full-page configuration for one space                       |
+| `/settings/ai/rag`               | RAG synchronization onboarding and workspace RAG-key administration   |
+| `/settings/ai/mcp`               | MCP onboarding and workspace MCP-key administration                   |
+| `/settings/account/api-keys`     | compatibility redirect to RAG for admins or profile for members       |
+| `/settings/api-keys`             | compatibility redirect to `/settings/ai/mcp`                          |
 
 The space settings modal contains only an AI status summary and a link to the
-full-page configuration. Provider, retrieval, and agent tests validate their
-own sections. Unsaved section changes are marked and protected when switching
-sections or closing the browser page.
+full-page configuration. Workspace owners and administrators and space
+administrators have full access to that route; writers and readers receive a
+structured access-denied state without configuration or secret flags.
+Provider, retrieval, and agent tests validate their own sections. Unsaved
+section changes are marked and protected when switching sections or closing the
+browser page.
+
+The authenticated API-key management endpoints for list, create, update, and
+revoke require workspace `owner|admin`. List requests accept optional
+`keyType=rag|mcp`; filtering is applied before cursor pagination so the two
+specialized pages cannot mix key types. Token validation is unchanged, which
+preserves the lifetime and access checks of previously issued member-created
+RAG tokens.
 
 ### Authenticated AI API
 

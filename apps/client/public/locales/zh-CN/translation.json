@@ -1247,6 +1247,8 @@
   "Delete the link {{name}}?": "Delete the link {{name}}?",
   "ai": {
     "integrations": {
+      "backToSpace": "返回空间",
+      "spacesEmptyTitle": "未找到空间",
       "title": "AI and integrations",
       "description": "Configure AI assistants, external access, search, and per-space behavior.",
       "mcpTitle": "MCP access",
@@ -1265,10 +1267,11 @@
       "spaceCardTitle": "AI assistant",
       "spaceCardDescription": "Model, identity, behavior, agent mode, search, and usage limits are managed on a dedicated page.",
       "openFullSettings": "Open full settings",
-      "backToOverview": "Back to AI and integrations",
+      "backToOverview": "返回 AI 助手",
       "spaceSettingsDescription": "Configure the AI assistant for this space.",
       "sectionLabel": "Settings section",
       "section": {
+        "content": "知识访问",
         "overview": "Overview",
         "identity": "Identity",
         "model": "Model",
@@ -1455,6 +1458,7 @@
     "generationCompleted": "AI 响应已准备就绪。",
     "generationStopped": "人工智能一代停止了。",
     "settings": {
+      "contentPolicyDescription": "排除规则适用于 AI 聊天、空间搜索、RAG 同步和 MCP。常规 Docmost 搜索不受影响。",
       "agentSection": "Agent mode",
       "agentSectionDescription": "Enable bounded tool use and individually confirmed edits.",
       "agentEnabled": "Enable AI agent",
@@ -1669,6 +1673,7 @@
       "loadMore": "加载更多"
     },
     "ux": {
+      "toggleSecretVisibility": "显示或隐藏密钥",
       "loading": "正在加载…",
       "jumpToLatest": "跳到最新回复",
       "draftSaving": "正在保存草稿…",
