@@ -1,4 +1,4 @@
-import { BadGatewayException, Injectable } from '@nestjs/common';
+import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import { jsonObjectFrom } from 'kysely/helpers/postgres';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
@@ -118,9 +118,12 @@ export class TypesenseSearchService {
           continue;
         }
 
-        const { textContent, ...publicRow } = row;
+        const { textContent, space, ...publicRow } = row;
         results.push({
           ...publicRow,
+          // Anonymous share results never expose space metadata, matching the
+          // PostgreSQL driver which omits it for share searches.
+          ...(publicShare ? {} : { space }),
           rank: Number(hit.text_match ?? 0),
           highlight: this.buildAuthoritativeHighlight(query, [
             textContent,
@@ -413,17 +416,27 @@ export class TypesenseSearchService {
         .replace(/\s+/g, ' ')
         .trim();
       const lowerValue = value.toLocaleLowerCase();
-      const matchAt = needles.reduce((earliest, needle) => {
+      let matchAt = -1;
+      let matchLength = 0;
+      for (const needle of needles) {
         const index = lowerValue.indexOf(needle);
-        return index >= 0 && (earliest < 0 || index < earliest)
-          ? index
-          : earliest;
-      }, -1);
+        if (index >= 0 && (matchAt < 0 || index < matchAt)) {
+          matchAt = index;
+          matchLength = needle.length;
+        }
+      }
 
       if (matchAt >= 0) {
         const start = Math.max(0, matchAt - 80);
         const end = Math.min(value.length, matchAt + 160);
-        return `${start > 0 ? '…' : ''}${value.slice(start, end)}${
+        const matchEnd = Math.min(end, matchAt + matchLength);
+        // The PostgreSQL driver returns ts_headline markup, so the Typesense
+        // driver marks the match too. Everything else is escaped first.
+        const snippet =
+          this.escapeHtml(value.slice(start, matchAt)) +
+          `<mark>${this.escapeHtml(value.slice(matchAt, matchEnd))}</mark>` +
+          this.escapeHtml(value.slice(matchEnd, end));
+        return `${start > 0 ? '…' : ''}${snippet}${
           end < value.length ? '…' : ''
         }`;
       }
@@ -432,11 +445,20 @@ export class TypesenseSearchService {
     return '';
   }
 
+  private escapeHtml(value: string): string {
+    return value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   private async runTypesenseRequest<T>(request: () => Promise<T>): Promise<T> {
     try {
       return await request();
     } catch {
-      throw new BadGatewayException('Typesense search is unavailable');
+      throw new ServiceUnavailableException('Search service unavailable');
     }
   }
 }
