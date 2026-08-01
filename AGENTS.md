@@ -33,7 +33,7 @@
 
 - `apps/server/src` — main backend code.
 - `apps/rag-sync` — optional standalone `/api/rag/*` to Open WebUI Knowledge synchronizer; it has no Docmost database or queue access.
-- `apps/server/src/app.module.ts` — backend module wiring, global CSRF guard, static/client serving, Redis, queue, import/export, security, telemetry, and optional EE loading.
+- `apps/server/src/app.module.ts` — backend module wiring, global CSRF guard, static/client serving, Redis, queue, import/export, security, and telemetry.
 - `apps/server/src/core/api-key` — workspace API key management used by RAG integrations.
 - `apps/server/src/core/ai` — per-space AI configuration, persistent private chat, async generation, chat files, and optional external retrieval.
 - `apps/server/src/core/database` — Notion-like database API, rows/properties/views, conversion, markdown/export support.
@@ -48,6 +48,7 @@
 - `apps/server/src/core/rag` — API-key-only RAG export and sync API.
 - `apps/server/src/core/mcp` — stateless read-only MCP Streamable HTTP endpoint backed by the shared AI tool registry.
 - `apps/server/src/core/session` — user session API and active session revocation.
+- `apps/server/src/core/sso` — core OIDC, SAML, and LDAP provider management and authentication.
 - `apps/server/src/collaboration` and `apps/server/src/ws` — collaboration server, Yjs helpers, Socket.IO relay, and presence events.
 - `apps/server/src/integrations/{import,export,static,security,telemetry}` — import/export jobs, static frontend serving, security/version/robots helpers, and telemetry.
 - `ARCHITECTURE.md` — high-level repository architecture and verification map.
@@ -72,10 +73,15 @@
 - `apps/server/src/database` — migrations and DB tooling.
 - `apps/server/src/database/migrations/20260728T120000-ai-integration.ts` — AI provider/retrieval configuration, private chat, run, file, and citation schema.
 - `apps/server/src/database/migrations/20260729T220000-open-webui-rag.ts` — additive Open WebUI retrieval configuration and attachment sync indexes.
+- `apps/server/src/database/migrations/20260730T150000-remove-legacy-ee-imports-and-ai-search.ts` — removal of retired Confluence/DOCX import tasks, legacy AI search settings, embeddings, and queue data.
+- `apps/server/src/database/migrations/20260730T160000-attachment-content-search-vector.ts` — PostgreSQL full-text indexing for attachment names and extracted PDF/DOCX content.
+- `apps/server/src/database/migrations/20260730T170000-core-sso.ts` — core SSO login state and provider-group mapping schema. It resets existing `enforce_sso` values to `false`; configure `SSO_ALLOWED_ENDPOINTS`, verify a provider, and explicitly re-enable enforcement after upgrading.
+- `apps/server/src/database/migrations/20260730T180000-remove-ee-license-column.ts` — removal of the obsolete workspace license key column.
+- `apps/server/src/database/migrations/20260730T190000-remove-ee-billing.ts` — removal of the retired EE billing schema.
+- `apps/server/src/database/migrations/20260730T200000-share-page-uniqueness.ts` — deterministic cleanup of duplicate page shares and database-enforced active-share uniqueness.
 - `packages/editor-ext/src/lib/{audio,pdf,transclusion,indent,page-break,tag}` — editor nodes/extensions for audio, embedded PDFs, synced blocks, paragraph/heading indentation, print page breaks, and inline TBD/TODO tags.
 - `packages/api-contract/src` — shared API-facing TypeScript contracts used by server/client code; it builds to `packages/api-contract/dist` for runtime server consumption.
 - `patches/` — pnpm patch files (for example, for `react-arborist`).
-- `packages/ee`, `apps/*/src/ee` — Enterprise code (separate license).
 
 ### What can be safely ignored during analysis
 
@@ -222,6 +228,7 @@ Minimum:
 - PDF export: `PDF_CHROMIUM_EXECUTABLE_PATH`, `PDF_RENDER_TIMEOUT_MS`
 - Diagnostics: `DEBUG_MODE`, `DEBUG_DB`, `LOG_HTTP`
 - Search: `SEARCH_DRIVER`, `TYPESENSE_URL`, `TYPESENSE_API_KEY`, `TYPESENSE_LOCALE`
+- SSO network policy: `SSO_ALLOWED_ENDPOINTS` is a comma-separated allowlist of exact approved OIDC, SAML, and LDAP endpoints. Development additionally permits loopback endpoints.
 - AI/RAG support: `AI_DRIVER`, `AI_EMBEDDING_MODEL`, `AI_COMPLETION_MODEL`, `AI_EMBEDDING_DIMENSION`, `OPENAI_API_KEY`, `OPENAI_API_URL`, `GEMINI_API_KEY`, `OLLAMA_API_URL`
 - Per-space AI provider network policy: `AI_PROVIDER_ALLOWED_ORIGINS` is a comma-separated list of exact trusted `http(s)` origins. Keep it empty until the provider origins are approved; development additionally permits loopback endpoints.
 - External retrieval network policy: `AI_RETRIEVAL_ALLOWED_ORIGINS` separately allowlists exact trusted `http(s)` origins for optional `http-json-v1` and `open-webui-knowledge-v1` retrieval adapters. Development additionally permits loopback endpoints.
@@ -229,7 +236,7 @@ Minimum:
 - Reverse proxy attribution: `TRUSTED_PROXIES` is a comma-separated list of trusted proxy IPs/CIDRs or proxy-addr keywords (`loopback`, `linklocal`, `uniquelocal`). Leave it empty unless Docmost is behind a controlled proxy; `X-Forwarded-*` headers are ignored when it is empty.
 - Auth throttling storage: `AUTH_RATE_LIMIT_STORAGE` may be `memory` for local development, but production validation requires `redis`.
 - Embed iframe allowlist: `EMBED_ALLOWED_ORIGINS` is a comma-separated list of exact trusted `http(s)` origins for generic iframe embeds. Built-in providers are allowlisted separately; keep this empty unless the origin is trusted.
-- Frontend build-time defines are loaded via `vite loadEnv`; deployment/runtime defines such as `APP_URL`, `COLLAB_URL`, `SUBDOMAIN_HOST`, `POSTHOG_*`, `BILLING_TRIAL_DAYS`, `FILE_UPLOAD_SIZE_LIMIT`, `FILE_IMPORT_SIZE_LIMIT`, `EMBED_ALLOWED_ORIGINS`, and `DRAWIO_URL` are served by the backend from `/window-config.js` without mutating built client files. Keep this contract in sync with `pnpm check:env`.
+- Frontend build-time defines are loaded via `vite loadEnv`; deployment/runtime defines such as `APP_URL`, `COLLAB_URL`, `SUBDOMAIN_HOST`, `POSTHOG_*`, `FILE_UPLOAD_SIZE_LIMIT`, `FILE_IMPORT_SIZE_LIMIT`, `EMBED_ALLOWED_ORIGINS`, and `DRAWIO_URL` are served by the backend from `/window-config.js` without mutating built client files. Keep this contract in sync with `pnpm check:env`.
 
 ---
 
@@ -323,22 +330,24 @@ Minimum:
 - Agent mode is disabled by default and must pass the provider tool-calling test for the current provider/base URL/model fingerprint before it can be enabled. It is a per-conversation opt-in, uses the existing context/RAG pipeline, and is bounded to 8 model steps, 16 tool calls, 32 KiB per tool result, and 128 KiB total.
 - Agent writes are limited to safe operations on the current page. Each operation creates an initiator-only approval that expires after one hour; approval must recheck write ACL and the live Yjs content hash. Never add whole-document replacement, page lifecycle, table/database, comment/share, media, arbitrary-code, or external-MCP write tools.
 - `/mcp` is always mounted as stateless Streamable HTTP and accepts only `key_type=mcp` API keys scoped to one space. It exposes the read-only shared tools, excludes attachment binaries/extracted text, and must keep page ACL and the AI content policy authoritative. RAG and MCP keys are not interchangeable.
-- Persistent AI chat uses the dedicated `AI_CHAT_QUEUE` for generation, file extraction, and retention cleanup. Do not attach its processor to the legacy `AI_QUEUE`, which still receives existing page/index lifecycle jobs.
+- Persistent AI chat uses the dedicated `AI_CHAT_QUEUE` for generation, file extraction, and retention cleanup. Search indexing uses `SEARCH_QUEUE`; do not mix those processors or payload contracts.
 - AI provider calls are immutable attempts introduced by `20260729T120000-ai-reliability.ts`. Bull delivery is at-least-once; workers claim queued runs with database compare-and-set, and the post-migration reconciler repairs missing deterministic jobs. Never reopen a terminal `ai_runs` row or automatically retry a stale running provider call.
 - AI conversation/create/send/retry/regenerate idempotency keys are payload-bound. Private multipart chat uploads require `Idempotency-Key`, and deletes commit tombstones before retriable storage cleanup. Keep list responses exact (`{items}`; messages also include `hasMore` and `nextCursor`).
 - AI conversation context is versioned through `GET/PUT /api/ai/conversations/:id/context`; explicit page/database/row sources are snapshotted per run and included in the Send fingerprint. Selection-only transforms use `/api/ai/editor-actions`, `ai_aux_runs`, and `ai:editor-action.*` events and must never create chat messages.
 - The first successful chat response may schedule one auxiliary title run. Generated/fallback titles are limited to four Unicode word segments, manual rename wins every race, and realtime updates use `ai:conversation.updated`.
 - Core AI locale strings live only under explicit `ai.*` keys in all supported translation files. `/locales/*` uses a network-first Service Worker strategy; bump the cache version when that delivery contract changes.
-- Core per-space AI is the only editor generation UX. Do not reintroduce the EE Ask AI menu or read/write `settings.ai.generative`; historical JSON remains inert. Legacy EE AI search, `/api/ai/answers`, `AI_QUEUE`, and PageEmbeddings/indexing remain supported independently.
+- Core per-space AI is the only editor generation UX. The retired AI Answers routes, embedding table, and legacy indexing queue were removed; do not reintroduce them or the former workspace `settings.ai.generative` toggle.
 - `AI_PROVIDER_ALLOWED_ORIGINS` is the production SSRF boundary for administrator-configured model endpoints. Loopback URLs such as LM Studio are development-only, and `127.0.0.1` inside Docker refers to the Docmost container rather than the host.
 - `AI_RETRIEVAL_ALLOWED_ORIGINS` is an independent SSRF boundary for external retrieval endpoints. Retrieval candidates are untrusted until their Docmost source IDs and current user page access are revalidated.
 - `AI_STREAM_IDLE_TIMEOUT_MS` is a deployment-level inactivity limit, while `requestTimeoutMs` remains per-space and bounds the full provider request. The effective idle timeout is the smaller of the two.
 - `/api/rag/*` remains the API-key-only synchronization/export surface for an external index. Query-time AI retrieval selects `none`, the unchanged `http-json-v1`, or `open-webui-knowledge-v1`; it does not create a local vector index and must degrade to live document/file context when unavailable.
-- `apps/rag-sync` is the optional Open WebUI writer. One Knowledge Base maps to one Docmost space. It reads only `/api/rag/*`, uses a separate Redis namespace for locks/checkpoints/mappings, reads Docmost/Open WebUI keys from mounted secret files, and must never import server repositories, use `AI_QUEUE`/`AI_CHAT_QUEUE`, create a Knowledge Base, or log document content and secrets.
+- `apps/rag-sync` is the optional Open WebUI writer. One Knowledge Base maps to one Docmost space. It reads only `/api/rag/*`, uses a separate Redis namespace for locks/checkpoints/mappings, reads Docmost/Open WebUI keys from mounted secret files, and must never import server repositories, use backend queues, create a Knowledge Base, or log document content and secrets.
+- Typesense is selected with `SEARCH_DRIVER=typesense`. It is a candidate index only: page/attachment rows and all ACL/public-sharing decisions must be revalidated against PostgreSQL before results are returned.
+- PDF/DOCX attachment extraction runs on the attachment queue with hard byte, page, ZIP-entry, and text-size limits. Updating an attachment clears stale extracted text before a new extraction and search-index job.
+- Core SSO supports OIDC Authorization Code with PKCE/state/nonce, signed SAML responses bound to stored request IDs, and LDAP service/user binds with escaped filters and bounded search. Outbound IdP/directory traffic is restricted by `SSO_ALLOWED_ENDPOINTS`. SSO credentials are encrypted with `APP_SECRET`, redacted in responses, and never placed in queue payloads or logs.
 - Web Push compose defaults are intentionally empty; set all VAPID variables together when enabling push notifications.
 - `migration:codegen` reads env from `../../.env`; if the file is missing, the command fails.
 - Runtime image now includes headless `chromium` + Cyrillic-capable fonts for PDF export, and sets default `PDF_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium`.
-- There are Enterprise areas (`*/ee`): edits there may affect license-restricted code.
 - The repository includes lock/override/patched dependencies — do not remove seemingly redundant pins without verification.
 
 ---
