@@ -90,7 +90,7 @@ and database constraints.
 
 Every provider call is a new `ai_runs` attempt. Retry and Regenerate never reopen or erase a terminal run: they create a row linked through `rootRunId`, `previousRunId`, and `attemptNo`. They are allowed only for the latest assistant turn; older turns return `409 ai_run_not_latest`. A terminal attempt is immutable, and its usage, error, response snapshot, and citations remain available for audit.
 
-AI generation, auxiliary title/editor operations, file extraction, and hourly retention cleanup run on `AI_CHAT_QUEUE`. The older `AI_QUEUE` remains untouched for existing page/index lifecycle jobs. Queue payloads contain only record IDs; workers resolve current configuration and encrypted credentials from the database.
+AI generation, auxiliary title/editor operations, file extraction, and hourly retention cleanup run on `AI_CHAT_QUEUE`. Search indexing has its own `SEARCH_QUEUE`; queue payloads contain only record IDs, and workers resolve current configuration and encrypted credentials from the database.
 
 BullMQ delivery is at-least-once; database transitions are effectively-once. Run and auxiliary jobs use deterministic identities (`ai-run-<runId>` and `ai-aux-<runId>`; BullMQ custom IDs cannot contain `:`), and a worker can claim each record only with an atomic `queued -> running` compare-and-set. Completion, failure, and cancellation are compare-and-set terminal transitions. The sequence is incremented in the same transaction as persisted state.
 
@@ -235,7 +235,7 @@ unavailable.
 API-key-scoped `/api/rag/*` feeds, stores checkpoints/mappings/space locks in a
 separate Redis namespace, and uploads files with `knowledge_id`, `file_hash`,
 and the Docmost metadata above. It never reads the Docmost database and never
-uses `AI_QUEUE` or `AI_CHAT_QUEUE`. Run it explicitly with
+uses backend queues. Run it explicitly with
 `Dockerfile.rag-sync` and `docker-compose.rag-sync.yml`; the primary Compose
 stack does not start it.
 
@@ -262,7 +262,7 @@ placed in the sync JSON, logs, jobs, or metrics.
 
 Provider streaming stores only `delta.content`; provider-specific reasoning fields are ignored. Redirects are rejected, full-request and idle timeouts start before DNS resolution and remain active until the response body is consumed, cancellation aborts URL resolution/header waits/body reads, and remote response bodies are never copied into client-facing errors or logs. JSON responses are limited to 4 MiB; SSE frames to 256 KiB; undecoded SSE buffers to 1 MiB; and cumulative generated content to 8 MiB.
 
-Core per-space AI is the only document-generation UX. The former EE editor Ask AI menu and workspace `settings.ai.generative` toggle are no longer read or written; historical JSON values remain inert for rollback. Legacy EE AI search, `AI_QUEUE`, `PageEmbeddings`, indexing listeners, and `/api/ai/answers` remain independent and unchanged.
+Core per-space AI is the only document-generation UX. The retired AI Answers routes, embedding table, legacy indexing queue, editor Ask AI menu, and workspace `settings.ai.generative` toggle are not part of the current implementation.
 
 The client uses one Markdown sanitizer and safe-link policy for chat and selection results. `Copy` is always available for a normal assistant response. Replacing the original selection requires the same page and document snapshot hash; inserting below uses the original position only while that hash still matches. After the document changes, the chat flow may offer an explicitly confirmed insert at the current cursor, while selection-only actions become copy-only.
 

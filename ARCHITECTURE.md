@@ -9,7 +9,6 @@ Docmost is a pnpm workspace orchestrated by Nx. The main runtime surfaces are:
 - `apps/rag-sync` - optional standalone Docmost-to-Open-WebUI index synchronizer.
 - `packages/editor-ext` - shared Tiptap/ProseMirror editor extensions consumed by the client and server-side rendering paths.
 - `packages/api-contract` - shared API-facing TypeScript contracts used by backend and frontend code.
-- `packages/ee` plus `apps/*/src/ee` - Enterprise Edition code loaded conditionally by app-level EE modules.
 
 The production container uses Node.js 22 and runs the built backend entrypoint directly with `node apps/server/dist/apps/server/src/main`. The root `pnpm build` task builds all workspace projects.
 
@@ -17,9 +16,9 @@ The production container uses Node.js 22 and runs the built backend entrypoint d
 
 The backend is organized around Nest modules under `apps/server/src/core`. Most HTTP controllers are served under the global `/api` prefix; explicit `robots.txt` and share SEO exclusions remain outside that prefix. Domain services own business rules and database writes. Kysely repositories under `apps/server/src/database/repos` encapsulate repeated database access patterns.
 
-At the application level, `apps/server/src/app.module.ts` wires the core domain module, collaboration and general WebSocket modules, queue, static frontend serving, health, import/export, storage, mail, security headers/version/robots support, telemetry, Redis, database access, and optional Enterprise modules.
+At the application level, `apps/server/src/app.module.ts` wires the core domain module, collaboration and general WebSocket modules, queue, static frontend serving, health, import/export, storage, mail, security headers/version/robots support, telemetry, Redis, and database access.
 
-`CoreModule` currently groups auth, workspace, page, attachment, comment, search, space, group, share, notification/watcher, MFA, push, database, API key, RAG, AI, MCP, page access, dictionary, session, favorite, label, synced block transclusion, and presence functionality. The core AI feature keeps per-space provider and optional external retrieval configuration separate from `spaces.settings`, persists private per-user/page conversations, and treats background runs in the database as the source of truth while Socket.IO delivers realtime progress. Its access-aware tool registry is shared by the optional private-chat agent loop and the stateless read-only `/mcp` endpoint.
+`CoreModule` currently groups auth, workspace, page, attachment, comment, search, space, group, share, notification/watcher, MFA, SSO, push, database, API key, RAG, AI, MCP, page access, dictionary, session, favorite, label, synced block transclusion, and presence functionality. The core AI feature keeps per-space provider and optional external retrieval configuration separate from `spaces.settings`, persists private per-user/page conversations, and treats background runs in the database as the source of truth while Socket.IO delivers realtime progress. Its access-aware tool registry is shared by the optional private-chat agent loop and the stateless read-only `/mcp` endpoint.
 
 Security-sensitive cross-cutting behavior is centralized:
 
@@ -31,6 +30,9 @@ Security-sensitive cross-cutting behavior is centralized:
 - RAG and MCP keys are distinct database-authoritative key types. `/mcp` accepts only one-space MCP keys, exposes no write tools, and applies the same page ACL and AI content exclusions as internal agent reads. Agent writes target only the current page and require an initiator-only, expiring approval plus a live Yjs content-hash check.
 - Link preview metadata fetching validates public destinations and pins the resolved IP for the outbound request.
 - Attachment uploads validate trusted signatures for inline-capable formats; attachment responses only render inline when stored MIME and extension match the safe inline allowlist.
+- PDF and DOCX attachment text is extracted by the attachment queue with bounded decompression/page/character budgets. Extracted text is stored on the attachment row and indexed by both PostgreSQL full-text search and the optional Typesense driver.
+- Workspace administrators can configure OIDC, SAML, or LDAP SSO providers in the core SSO module. OIDC uses authorization code flow with PKCE, state, and nonce; SAML responses are signature-checked and bound to an unconsumed request; LDAP uses escaped filters, bounded search, service bind, and user bind. Provider secrets are encrypted at rest and redacted from API responses. All outbound SSO endpoints must match the exact scheme, host, and port configured in `SSO_ALLOWED_ENDPOINTS`; the SSO migration resets existing enforcement so an administrator can verify that policy before explicitly re-enabling it.
+- Public sharing can be disabled for the entire workspace or an individual space. Share creation, public page reads, public search, and attachment access all enforce the current workspace/space setting server-side.
 - PDF export uses Chromium request interception and only allows `data:`, `about:blank`, and same-origin public attachment URLs. Mermaid diagrams are rendered in strict mode and sanitized before insertion into the PDF DOM.
 - `X-Forwarded-*` request headers are trusted only when `TRUSTED_PROXIES` explicitly configures the reverse proxy IP/CIDR ranges. Rate limiting, session IP capture, request logging, and HTTPS/HSTS detection use the Fastify-resolved client request metadata.
 - Embed iframes are restricted by a shared provider frame-source policy used by both client validation and server CSP. Generic iframe origins must be explicitly configured through `EMBED_ALLOWED_ORIGINS`.
@@ -61,7 +63,7 @@ Synced blocks use `transclusionSource` and `transclusionReference` nodes. Server
 
 ## Search
 
-Page search supports the database full-text implementation and the Typesense driver selected by `SEARCH_DRIVER`. Attachment search uses a trigram index on normalized `attachments.file_name` values and applies the same page access filtering through `PageAccessService`.
+Page and attachment search support the PostgreSQL full-text implementation and the Typesense driver selected by `SEARCH_DRIVER`. Typesense stores candidate IDs and searchable content; every result is rehydrated from PostgreSQL and filtered through current workspace, space, deletion, public-sharing, and page-access rules before it is returned. Attachment search covers both file names and extracted PDF/DOCX text.
 
 Generated backend route inventory is maintained by `pnpm routes:inventory` and checked by CI through `pnpm routes:inventory:check`.
 
@@ -79,7 +81,7 @@ Persistent core AI chat uses immutable `ai_runs` attempts. Retry/Regenerate crea
 
 AI conversation context is a versioned aggregate: the current document flag, explicit page/database/row descriptors, private chat files, and page attachments are persisted per conversation. Each provider attempt owns immutable resolved context snapshots and page dependencies so retries remain deterministic and access loss hides derived output. `ai_aux_runs` applies the same deterministic queue/CAS model to automatic four-word conversation titles and selection-only editor transforms without adding those results to chat history.
 
-AI chat file uploads use idempotent upload batches, deterministic storage keys, extraction compare-and-set, database-first tombstones, and retriable storage cleanup. Legacy `AI_QUEUE`, PageEmbeddings/indexing, EE AI search, and `/api/ai/answers` stay separate. The removed EE editor Ask AI flow and `settings.ai.generative` toggle are not part of the core AI architecture.
+AI chat file uploads use idempotent upload batches, deterministic storage keys, extraction compare-and-set, database-first tombstones, and retriable storage cleanup. The retired AI Answers routes, embedding table, and legacy indexing queue are not part of the current architecture. Core per-space AI is the only document-generation UX.
 
 The optional `apps/rag-sync` process is not part of the backend runtime. It
 consumes API-key-authenticated `/api/rag/*` cursor feeds and writes one

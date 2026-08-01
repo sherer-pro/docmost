@@ -310,7 +310,7 @@ selection transforms do not receive this directive.
 
 `apps/rag-sync` is an optional standalone process, not part of the backend
 runtime. It reads only `/api/rag/*`, imports no server repositories, has no
-Docmost database access, and does not use `AI_QUEUE` or `AI_CHAT_QUEUE`. One
+Docmost database access, and does not use backend queues. One
 pre-created Open WebUI Knowledge Base maps to one Docmost space.
 
 The process stores checkpoints, source-to-file mappings, and distributed locks
@@ -501,7 +501,6 @@ source revisions and applicable AGPL/MIT notices are recorded in
 | `/settings/ai`                         | AI and integrations overview with per-space entry points       |
 | `/settings/ai/spaces/:spaceSlug`       | sectioned full-page configuration for one space                |
 | `/settings/ai/mcp`                     | MCP onboarding and workspace API-key administration            |
-| `/settings/ai/search`                  | Enterprise semantic-search configuration                       |
 | `/settings/account/api-keys`           | personal, space-scoped RAG synchronization keys                |
 | `/settings/api-keys`                   | compatibility redirect to `/settings/ai/mcp`                  |
 

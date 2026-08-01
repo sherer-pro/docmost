@@ -32,7 +32,7 @@ The fork includes its own AI assistant, configured separately for each space:
 - model connection testing from the administration interface.
 
 
-The previous text-generation workflow from the Enterprise editor has been removed and replaced with a unified assistant integrated into the core version of the fork.
+The previous legacy editor text-generation workflow has been removed and replaced with a unified assistant integrated into the core version of the fork.
 
 ### 2. Context-aware AI workflows inside documents
 
@@ -499,13 +499,8 @@ To get started with Docmost, please refer to our [documentation](https://docmost
 </p>
 
 ### License
-Docmost core is licensed under the open-source AGPL 3.0 license.  
-Enterprise features are available under an enterprise license (Enterprise Edition).  
 
-All files in the following directories are licensed under the Docmost Enterprise license defined in `packages/ee/License`.
-  - apps/server/src/ee
-  - apps/client/src/ee
-  - packages/ee
+This repository is licensed under the open-source AGPL 3.0 license.
 
 ### Contributing
 

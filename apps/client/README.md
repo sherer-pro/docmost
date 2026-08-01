@@ -46,7 +46,6 @@ The client reads these values via `vite loadEnv`:
 - `DRAWIO_URL`
 - `CLOUD`
 - `SUBDOMAIN_HOST`
-- `BILLING_TRIAL_DAYS`
 - `POSTHOG_HOST`
 - `POSTHOG_KEY`
 
