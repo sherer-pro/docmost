@@ -24,6 +24,7 @@ import {
 import { InsertableWatcher } from '@docmost/db/types/entity.types';
 import { processBacklinks } from '../tasks/backlinks.task';
 import { StorageService } from '../../storage/storage.service';
+import { CONTENT_INDEXABLE_EXTENSIONS } from '../../../core/attachment/attachment.constants';
 
 @Processor(QueueName.GENERAL_QUEUE)
 export class GeneralQueueProcessor
@@ -130,6 +131,9 @@ export class GeneralQueueProcessor
         'workspaceId',
         'pageId',
         'textContent',
+        'contentIndexStatus',
+        'contentIndexVersion',
+        'contentIndexedAt',
       ])
       .where('id', 'in', attachmentIds)
       .where('workspaceId', '=', data.workspaceId)
@@ -219,6 +223,9 @@ export class GeneralQueueProcessor
                   pageId: mapping.newPageId,
                   spaceId: data.spaceId,
                   textContent: attachment.textContent,
+                  contentIndexStatus: attachment.contentIndexStatus,
+                  contentIndexVersion: attachment.contentIndexVersion,
+                  contentIndexedAt: attachment.contentIndexedAt,
                 })
                 .execute();
             }
@@ -227,7 +234,9 @@ export class GeneralQueueProcessor
             indexedAttachmentIds.push(mapping.newAttachmentId);
             if (
               !attachment.textContent &&
-              ['.pdf', '.docx'].includes(attachment.fileExt.toLowerCase())
+              CONTENT_INDEXABLE_EXTENSIONS.includes(
+                attachment.fileExt?.toLowerCase() as (typeof CONTENT_INDEXABLE_EXTENSIONS)[number],
+              )
             ) {
               contentAttachmentIds.push(mapping.newAttachmentId);
             }

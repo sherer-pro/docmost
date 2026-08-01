@@ -346,6 +346,11 @@ export interface ApiKeys {
 }
 
 export interface Attachments {
+  contentIndexedAt: Timestamp | null;
+  contentIndexError: string | null;
+  contentIndexStartedAt: Timestamp | null;
+  contentIndexStatus: string | null;
+  contentIndexVersion: number | null;
   createdAt: Generated<Timestamp>;
   creatorId: string;
   deletedAt: Timestamp | null;
