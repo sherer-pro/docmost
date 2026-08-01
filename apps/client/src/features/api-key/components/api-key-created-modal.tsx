@@ -48,7 +48,7 @@ export function ApiKeyCreatedModal({
   const [client, setClient] = useState<McpClientPreset>(preferredClient);
   const isMcp = apiKey?.keyType === "mcp";
   const keys = useGetApiKeysQuery(
-    { adminView: true, limit: 100 },
+    { adminView: true, keyType: "mcp", limit: 100 },
     {
       enabled: opened && isMcp,
       refetchInterval: opened && isMcp ? 3000 : false,

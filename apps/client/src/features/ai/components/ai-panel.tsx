@@ -1523,35 +1523,39 @@ export function AiPanel() {
       <Box className={classes.composer}>
         <Group gap={4} wrap="nowrap" className={classes.composerToolbar}>
           {isCompactMobile ? (
-            <Button
-              variant="subtle"
-              size="compact-sm"
-              leftSection={<IconSparkles size={16} />}
-              disabled={Boolean(pendingRun)}
-              className={classes.toolbarButton}
-              aria-label={t("ai.settings.quickCommands")}
-              onClick={() => setQuickCommandsOpened(true)}
-            >
-              <span className={classes.toolbarButtonLabel}>
-                {t("ai.settings.quickCommands")}
-              </span>
-            </Button>
+            <Tooltip label={t("ai.settings.quickCommands")} withArrow>
+              <Button
+                variant="subtle"
+                size="compact-sm"
+                leftSection={<IconSparkles size={16} />}
+                disabled={Boolean(pendingRun)}
+                className={classes.toolbarButton}
+                aria-label={t("ai.settings.quickCommands")}
+                onClick={() => setQuickCommandsOpened(true)}
+              >
+                <span className={classes.toolbarButtonLabel}>
+                  {t("ai.settings.quickCommands")}
+                </span>
+              </Button>
+            </Tooltip>
           ) : (
             <Menu position="top-start" withinPortal>
               <Menu.Target>
-                <Button
-                  variant="subtle"
-                  size="compact-sm"
-                  leftSection={<IconSparkles size={16} />}
-                  rightSection={<IconChevronDown size={13} />}
-                  disabled={Boolean(pendingRun)}
-                  className={classes.toolbarButton}
-                  aria-label={t("ai.settings.quickCommands")}
-                >
-                  <span className={classes.toolbarButtonLabel}>
-                    {t("ai.settings.quickCommands")}
-                  </span>
-                </Button>
+                <Tooltip label={t("ai.settings.quickCommands")} withArrow>
+                  <Button
+                    variant="subtle"
+                    size="compact-sm"
+                    leftSection={<IconSparkles size={16} />}
+                    rightSection={<IconChevronDown size={13} />}
+                    disabled={Boolean(pendingRun)}
+                    className={classes.toolbarButton}
+                    aria-label={t("ai.settings.quickCommands")}
+                  >
+                    <span className={classes.toolbarButtonLabel}>
+                      {t("ai.settings.quickCommands")}
+                    </span>
+                  </Button>
+                </Tooltip>
               </Menu.Target>
               <Menu.Dropdown className={classes.quickCommandsMenu}>
                 <TextInput
@@ -1600,21 +1604,23 @@ export function AiPanel() {
           {spaceSearchReady && (
             <Menu position="top-start" withinPortal>
               <Menu.Target>
-                <Button
-                  variant="subtle"
-                  size="compact-sm"
-                  leftSection={<IconSearch size={16} />}
-                  rightSection={
-                    useSpaceSearch ? <IconCheck size={13} /> : undefined
-                  }
-                  disabled={Boolean(pendingRun)}
-                  className={classes.toolbarButton}
-                  aria-label={t("ai.searchSpace")}
-                >
-                  <span className={classes.toolbarButtonLabel}>
-                    {t("ai.searchSpace")}
-                  </span>
-                </Button>
+                <Tooltip label={t("ai.searchSpace")} withArrow>
+                  <Button
+                    variant="subtle"
+                    size="compact-sm"
+                    leftSection={<IconSearch size={16} />}
+                    rightSection={
+                      useSpaceSearch ? <IconCheck size={13} /> : undefined
+                    }
+                    disabled={Boolean(pendingRun)}
+                    className={classes.toolbarButton}
+                    aria-label={t("ai.searchSpace")}
+                  >
+                    <span className={classes.toolbarButtonLabel}>
+                      {t("ai.searchSpace")}
+                    </span>
+                  </Button>
+                </Tooltip>
               </Menu.Target>
               <Menu.Dropdown>
                 <Menu.Item closeMenuOnClick={false}>
@@ -1633,19 +1639,23 @@ export function AiPanel() {
           {availability.agentAvailable && (
             <Menu position="top-start" withinPortal>
               <Menu.Target>
-                <Button
-                  variant="subtle"
-                  size="compact-sm"
-                  leftSection={<IconRobot size={16} />}
-                  rightSection={agentMode ? <IconCheck size={13} /> : undefined}
-                  disabled={Boolean(pendingRun)}
-                  className={classes.toolbarButton}
-                  aria-label={t("ai.agent.mode")}
-                >
-                  <span className={classes.toolbarButtonLabel}>
-                    {t("ai.agent.mode")}
-                  </span>
-                </Button>
+                <Tooltip label={t("ai.agent.mode")} withArrow>
+                  <Button
+                    variant="subtle"
+                    size="compact-sm"
+                    leftSection={<IconRobot size={16} />}
+                    rightSection={
+                      agentMode ? <IconCheck size={13} /> : undefined
+                    }
+                    disabled={Boolean(pendingRun)}
+                    className={classes.toolbarButton}
+                    aria-label={t("ai.agent.mode")}
+                  >
+                    <span className={classes.toolbarButtonLabel}>
+                      {t("ai.agent.mode")}
+                    </span>
+                  </Button>
+                </Tooltip>
               </Menu.Target>
               <Menu.Dropdown>
                 <Menu.Item closeMenuOnClick={false}>

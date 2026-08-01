@@ -95,6 +95,8 @@
   padding: var(--mantine-spacing-sm);
   background: light-dark(rgba(255, 255, 255, 0.94), rgba(26, 27, 30, 0.94));
   backdrop-filter: blur(10px);
+  container-type: inline-size;
+  container-name: ai-composer;
 }
 
 .composerToolbar {
@@ -105,6 +107,7 @@
 
 .toolbarButton {
   min-width: 0;
+  min-height: 32px;
   flex: 1 1 0;
 }
 
@@ -341,6 +344,11 @@
   transition: opacity 120ms ease;
 }
 
+.messageActions :global(.mantine-Button-root) {
+  min-width: 32px;
+  min-height: 32px;
+}
+
 .generationIndicator {
   min-height: 24px;
 }
@@ -420,6 +428,22 @@
 @media (pointer: coarse) {
   .messageActions {
     opacity: 1;
+  }
+}
+
+@container ai-composer (max-width: 420px) {
+  .toolbarButtonLabel {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .toolbarButton {
+    min-width: 32px;
+    flex: 1 1 0;
   }
 }
 

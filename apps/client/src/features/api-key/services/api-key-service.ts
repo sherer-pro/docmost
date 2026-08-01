@@ -2,12 +2,13 @@ import api from "@/lib/api-client";
 import {
   ICreateApiKeyRequest,
   IApiKey,
+  ApiKeyQueryParams,
   IUpdateApiKeyRequest,
 } from "@/features/api-key/types/api-key.types";
-import { IPagination, QueryParams } from "@/lib/types.ts";
+import { IPagination } from "@/lib/types.ts";
 
 export async function getApiKeys(
-  params?: QueryParams,
+  params?: ApiKeyQueryParams,
 ): Promise<IPagination<IApiKey>> {
   const req = await api.post("/api-keys", { ...params });
   return req.data;
