@@ -21,6 +21,9 @@ export interface IAuthProvider {
   isEnabled: boolean;
   groupSync: boolean;
   creatorId: string | null;
+  verifiedAt: string | null;
+  lastSuccessfulLoginAt: string | null;
+  lastErrorCode: string | null;
   workspaceId: string;
   createdAt: string;
   updatedAt: string;
@@ -34,3 +37,13 @@ export type ICreateAuthProvider = Pick<IAuthProvider, "name" | "type">;
 export type IUpdateAuthProvider = Partial<IAuthProvider> & {
   providerId: string;
 };
+
+export interface ISsoGroupMapping {
+  id: string;
+  authProviderId: string;
+  externalGroupId: string;
+  groupId: string;
+  groupName: string;
+  createdAt: string;
+  updatedAt: string;
+}

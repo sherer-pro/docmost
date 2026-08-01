@@ -392,6 +392,8 @@ export interface AuthProviders {
   ldapUrl: string | null;
   ldapUserAttributes: Generated<Json | null>;
   ldapUserSearchFilter: string | null;
+  lastErrorCode: string | null;
+  lastSuccessfulLoginAt: Timestamp | null;
   name: string;
   oidcClientId: string | null;
   oidcClientSecret: string | null;
@@ -401,6 +403,7 @@ export interface AuthProviders {
   settings: Generated<Json | null>;
   type: string;
   updatedAt: Generated<Timestamp>;
+  verifiedAt: Timestamp | null;
   workspaceId: string;
 }
 

@@ -42,14 +42,19 @@ import { executeTx } from '@docmost/db/utils';
 import { sql } from 'kysely';
 import { isEmail } from 'class-validator';
 import {
+  CreateSsoGroupMappingDto,
   CreateSsoProviderDto,
   SSO_PROVIDER_TYPES,
   SsoProviderType,
+  UpdateSsoGroupMappingDto,
   UpdateSsoProviderDto,
 } from './dto/sso.dto';
 import { DomainService } from '../../integrations/environment/domain.service';
 import { SsoEndpointPolicyService } from '../../integrations/environment/sso-endpoint-policy.service';
-import { isUsableSsoProvider } from './sso-provider.util';
+import {
+  isEnforcementReadyProvider,
+  SECURITY_CRITICAL_PROVIDER_FIELDS,
+} from './sso-provider.util';
 
 const REDACTED_SECRET = '********';
 const SSO_STATE_TTL_MS = 10 * 60 * 1000;
@@ -158,6 +163,20 @@ export class SsoService {
         await this.validateProviderEndpoints(candidate);
       }
 
+      // Any change to how the provider talks to the identity provider makes an
+      // earlier verification meaningless, so it has to be tested again.
+      if (
+        SECURITY_CRITICAL_PROVIDER_FIELDS.some(
+          (field) =>
+            field in updates &&
+            String(JSON.stringify(updates[field] ?? null)) !==
+              String(JSON.stringify(current[field] ?? null)),
+        )
+      ) {
+        updates.verifiedAt = null;
+        updates.lastErrorCode = null;
+      }
+
       if (current.isEnabled && input.isEnabled === false) {
         await this.assertSsoWillRemainAvailable(
           workspaceId,
@@ -210,6 +229,178 @@ export class SsoService {
 
       await this.removeProviderGroupMemberships(provider.id, trx);
     });
+  }
+
+  async listGroupMappings(providerId: string, workspaceId: string) {
+    await this.requireProvider(providerId, workspaceId);
+
+    const items = await this.db
+      .selectFrom('authProviderGroupMappings')
+      .innerJoin('groups', 'groups.id', 'authProviderGroupMappings.groupId')
+      .select([
+        'authProviderGroupMappings.id',
+        'authProviderGroupMappings.authProviderId',
+        'authProviderGroupMappings.externalGroupId',
+        'authProviderGroupMappings.groupId',
+        'authProviderGroupMappings.createdAt',
+        'authProviderGroupMappings.updatedAt',
+        'groups.name as groupName',
+      ])
+      .where('authProviderGroupMappings.authProviderId', '=', providerId)
+      .orderBy('authProviderGroupMappings.externalGroupId', 'asc')
+      .execute();
+
+    return { items };
+  }
+
+  async createGroupMapping(
+    dto: CreateSsoGroupMappingDto,
+    workspaceId: string,
+  ) {
+    await this.requireProvider(dto.providerId, workspaceId);
+    await this.requireWorkspaceGroup(dto.groupId, workspaceId);
+
+    const existing = await this.db
+      .selectFrom('authProviderGroupMappings')
+      .select('id')
+      .where('authProviderId', '=', dto.providerId)
+      .where('externalGroupId', '=', dto.externalGroupId)
+      .executeTakeFirst();
+    if (existing) {
+      throw new BadRequestException(
+        'This external group is already mapped for the provider',
+      );
+    }
+
+    return this.db
+      .insertInto('authProviderGroupMappings')
+      .values({
+        authProviderId: dto.providerId,
+        externalGroupId: dto.externalGroupId,
+        groupId: dto.groupId,
+      })
+      .returningAll()
+      .executeTakeFirstOrThrow();
+  }
+
+  async updateGroupMapping(
+    dto: UpdateSsoGroupMappingDto,
+    workspaceId: string,
+  ) {
+    return executeTx(this.db, async (trx) => {
+      const mapping = await this.requireGroupMapping(
+        dto.mappingId,
+        workspaceId,
+        trx,
+      );
+
+      if (dto.groupId && dto.groupId !== mapping.groupId) {
+        await this.requireWorkspaceGroup(dto.groupId, workspaceId, trx);
+        // The previous group is no longer SSO-managed for this provider.
+        await this.releaseMappedGroupMemberships(mapping, trx);
+      }
+
+      return trx
+        .updateTable('authProviderGroupMappings')
+        .set({
+          ...(dto.externalGroupId
+            ? { externalGroupId: dto.externalGroupId }
+            : {}),
+          ...(dto.groupId ? { groupId: dto.groupId } : {}),
+          updatedAt: new Date(),
+        })
+        .where('id', '=', mapping.id)
+        .returningAll()
+        .executeTakeFirstOrThrow();
+    });
+  }
+
+  async deleteGroupMapping(mappingId: string, workspaceId: string) {
+    await executeTx(this.db, async (trx) => {
+      const mapping = await this.requireGroupMapping(
+        mappingId,
+        workspaceId,
+        trx,
+      );
+
+      await this.releaseMappedGroupMemberships(mapping, trx);
+      await trx
+        .deleteFrom('authProviderGroupMappings')
+        .where('id', '=', mapping.id)
+        .execute();
+    });
+  }
+
+  private async requireGroupMapping(
+    mappingId: string,
+    workspaceId: string,
+    trx?: KyselyTransaction,
+  ) {
+    const mapping = await (trx ?? this.db)
+      .selectFrom('authProviderGroupMappings')
+      .innerJoin(
+        'authProviders',
+        'authProviders.id',
+        'authProviderGroupMappings.authProviderId',
+      )
+      .select([
+        'authProviderGroupMappings.id',
+        'authProviderGroupMappings.authProviderId',
+        'authProviderGroupMappings.groupId',
+        'authProviderGroupMappings.externalGroupId',
+      ])
+      .where('authProviderGroupMappings.id', '=', mappingId)
+      .where('authProviders.workspaceId', '=', workspaceId)
+      .where('authProviders.deletedAt', 'is', null)
+      .executeTakeFirst();
+
+    if (!mapping) {
+      throw new NotFoundException('SSO group mapping not found');
+    }
+    return mapping;
+  }
+
+  private async requireWorkspaceGroup(
+    groupId: string,
+    workspaceId: string,
+    trx?: KyselyTransaction,
+  ) {
+    const group = await (trx ?? this.db)
+      .selectFrom('groups')
+      .select(['id', 'isDefault'])
+      .where('id', '=', groupId)
+      .where('workspaceId', '=', workspaceId)
+      .where('deletedAt', 'is', null)
+      .executeTakeFirst();
+
+    if (!group) {
+      throw new NotFoundException('Group not found');
+    }
+    // Every member already belongs to the default group; syncing it would only
+    // let a provider remove people from it.
+    if (group.isDefault) {
+      throw new BadRequestException(
+        'The default workspace group cannot be mapped to an external group',
+      );
+    }
+    return group;
+  }
+
+  private async releaseMappedGroupMemberships(
+    mapping: { authProviderId: string; groupId: string },
+    trx: KyselyTransaction,
+  ) {
+    const memberships = await trx
+      .selectFrom('authProviderGroupMemberships')
+      .select(['id', 'userId', 'groupId', 'ownsGroupMembership'])
+      .where('authProviderId', '=', mapping.authProviderId)
+      .where('groupId', '=', mapping.groupId)
+      .orderBy('userId', 'asc')
+      .execute();
+
+    for (const membership of memberships) {
+      await this.releaseProviderGroupMembership(membership, trx);
+    }
   }
 
   async getOidcAuthorizeUrl(
@@ -372,7 +563,166 @@ export class SsoService {
       await this.syncGroups(provider, user, identity.groups);
     }
 
-    return this.mfaService.issueLoginTokenForUser(user, workspace, request);
+    const loginToken = await this.mfaService.issueLoginTokenForUser(
+      user,
+      workspace,
+      request,
+    );
+
+    await this.db
+      .updateTable('authProviders')
+      .set({
+        lastSuccessfulLoginAt: new Date(),
+        verifiedAt: provider.verifiedAt ?? new Date(),
+        lastErrorCode: null,
+      })
+      .where('id', '=', provider.id)
+      .where('workspaceId', '=', provider.workspaceId)
+      .execute();
+
+    return loginToken;
+  }
+
+  /**
+   * Checks a provider against the live identity provider without signing a user
+   * in. Success is what unlocks SSO enforcement together with a real login.
+   */
+  async testProvider(providerId: string, workspace: Workspace) {
+    const workspaceId = workspace.id;
+    const provider = await this.requireProvider(providerId, workspaceId);
+
+    try {
+      this.validateProviderConfiguration(provider);
+      await this.validateProviderEndpoints(provider);
+
+      if (provider.type === 'oidc') {
+        await this.testOidcProvider(provider, workspace);
+      } else if (provider.type === 'saml') {
+        this.testSamlProvider(provider);
+      } else {
+        await this.testLdapProvider(provider);
+      }
+    } catch (error) {
+      const errorCode = this.toProviderErrorCode(error);
+      await this.db
+        .updateTable('authProviders')
+        .set({ verifiedAt: null, lastErrorCode: errorCode })
+        .where('id', '=', provider.id)
+        .where('workspaceId', '=', workspaceId)
+        .execute();
+
+      throw error instanceof BadRequestException ||
+        error instanceof UnauthorizedException
+        ? error
+        : new BadRequestException(
+            `SSO provider configuration test failed (${errorCode})`,
+          );
+    }
+
+    const verified = await this.db
+      .updateTable('authProviders')
+      .set({ verifiedAt: new Date(), lastErrorCode: null })
+      .where('id', '=', provider.id)
+      .where('workspaceId', '=', workspaceId)
+      .returningAll()
+      .executeTakeFirstOrThrow();
+
+    return this.sanitizeProvider(verified);
+  }
+
+  private async testOidcProvider(
+    provider: AuthProvider,
+    workspace: Workspace,
+  ) {
+    const callbackUrl = this.buildCallbackUrl(
+      this.getWorkspaceOrigin(workspace),
+      'oidc',
+      provider.id,
+    );
+    const issuer = await Issuer.discover(provider.oidcIssuer);
+    if (!issuer.metadata.jwks_uri || !issuer.metadata.authorization_endpoint) {
+      throw new BadRequestException(
+        'OIDC discovery document is missing the JWKS or authorization endpoint',
+      );
+    }
+    await this.createOidcClient(provider, callbackUrl);
+  }
+
+  private testSamlProvider(provider: AuthProvider) {
+    const certificate = provider.samlCertificate.trim();
+    const normalized = certificate
+      .replace(/-----(BEGIN|END) CERTIFICATE-----/g, '')
+      .replace(/\s+/g, '');
+
+    if (normalized.length < 100 || !/^[A-Za-z0-9+/=]+$/.test(normalized)) {
+      throw new BadRequestException(
+        'SAML signing certificate is not valid base64 DER data',
+      );
+    }
+
+    try {
+      // A truncated or corrupted certificate fails to decode here.
+      Buffer.from(normalized, 'base64');
+    } catch {
+      throw new BadRequestException('SAML signing certificate cannot be read');
+    }
+  }
+
+  private async testLdapProvider(provider: AuthProvider) {
+    const url = await this.endpointPolicy.assertAllowed(
+      provider.ldapUrl,
+      ['ldap:', 'ldaps:'],
+      'LDAP',
+    );
+    const tlsOptions = {
+      rejectUnauthorized: true,
+      ...(provider.ldapTlsCaCert ? { ca: [provider.ldapTlsCaCert] } : undefined),
+    };
+    const client = new LdapClient({
+      url: provider.ldapUrl,
+      timeout: 10_000,
+      connectTimeout: 10_000,
+      ...(url.protocol === 'ldaps:' ? { tlsOptions } : undefined),
+    });
+
+    try {
+      if (url.protocol === 'ldap:' && provider.ldapTlsEnabled) {
+        await client.startTLS(tlsOptions);
+      }
+      // Service bind only: no user lookup is performed during a config test.
+      await client.bind(
+        provider.ldapBindDn,
+        this.decryptSecret(provider.ldapBindPassword),
+      );
+    } finally {
+      await client.unbind().catch(() => undefined);
+    }
+  }
+
+  private toProviderErrorCode(error: unknown): string {
+    const message = (
+      error instanceof Error ? error.message : String(error)
+    ).toLowerCase();
+
+    if (message.includes('not in sso_allowed_endpoints')) {
+      return 'endpoint_not_allowed';
+    }
+    if (message.includes('cannot be resolved')) {
+      return 'dns_resolution_failed';
+    }
+    if (message.includes('certificate')) {
+      return 'invalid_certificate';
+    }
+    if (message.includes('credential') || message.includes('invalid')) {
+      return 'invalid_credentials';
+    }
+    if (message.includes('timeout') || message.includes('timed out')) {
+      return 'connection_timeout';
+    }
+    if (message.includes('incomplete')) {
+      return 'incomplete_configuration';
+    }
+    return 'connection_failed';
   }
 
   private async resolveIdentity(
@@ -541,35 +891,11 @@ export class SsoService {
       const activeGroupIds = new Set<string>();
 
       for (const externalGroup of groups) {
-        let mapping = mappingByExternalId.get(externalGroup.id);
-
+        // Only mappings an administrator created are honoured. A provider can
+        // never invent a workspace group or attach a user to one by name.
+        const mapping = mappingByExternalId.get(externalGroup.id);
         if (!mapping) {
-          const groupId = await this.resolveGroupId(
-            provider,
-            externalGroup.name,
-            trx,
-          );
-          mapping = await trx
-            .insertInto('authProviderGroupMappings')
-            .values({
-              authProviderId: provider.id,
-              groupId,
-              externalGroupId: externalGroup.id,
-            })
-            .onConflict((oc) =>
-              oc
-                .columns(['authProviderId', 'externalGroupId'])
-                .doNothing(),
-            )
-            .returningAll()
-            .executeTakeFirst();
-          mapping ??= await trx
-            .selectFrom('authProviderGroupMappings')
-            .selectAll()
-            .where('authProviderId', '=', provider.id)
-            .where('externalGroupId', '=', externalGroup.id)
-            .executeTakeFirstOrThrow();
-          mappingByExternalId.set(externalGroup.id, mapping);
+          continue;
         }
 
         activeGroupIds.add(mapping.groupId);
@@ -745,58 +1071,6 @@ export class SsoService {
       groups: sortedGroups.slice(0, MAX_SYNCED_GROUPS),
       completeSnapshot,
     };
-  }
-
-  private async resolveGroupId(
-    provider: AuthProvider,
-    rawName: string,
-    trx: KyselyTransaction,
-  ) {
-    const name = rawName.trim().slice(0, 100);
-    await sql`
-      select pg_advisory_xact_lock(
-        hashtextextended(
-          ${`sso-group:${provider.workspaceId}:${name.toLocaleLowerCase()}`},
-          0
-        )
-      )
-    `.execute(trx);
-    const existing = await trx
-      .selectFrom('groups')
-      .select('id')
-      .where('workspaceId', '=', provider.workspaceId)
-      .where(sql`LOWER(name)`, '=', sql`LOWER(${name})`)
-      .where('deletedAt', 'is', null)
-      .executeTakeFirst();
-
-    if (existing) {
-      return existing.id;
-    }
-
-    const created = await trx
-      .insertInto('groups')
-      .values({
-        name,
-        description: `Synced from ${provider.name} SSO`,
-        isDefault: false,
-        workspaceId: provider.workspaceId,
-        creatorId: provider.creatorId,
-      })
-      .onConflict((oc) => oc.columns(['name', 'workspaceId']).doNothing())
-      .returning('id')
-      .executeTakeFirst();
-    if (created) {
-      return created.id;
-    }
-
-    const raced = await trx
-      .selectFrom('groups')
-      .select('id')
-      .where('workspaceId', '=', provider.workspaceId)
-      .where('name', '=', name)
-      .where('deletedAt', 'is', null)
-      .executeTakeFirstOrThrow();
-    return raced.id;
   }
 
   private async identityFromOidc(client: OidcClient, tokenSet: TokenSet) {
@@ -1343,11 +1617,11 @@ export class SsoService {
       .where('type', 'in', [...SSO_PROVIDER_TYPES])
       .execute();
 
-    const otherProvider = otherProviders.some(isUsableSsoProvider);
+    const otherProvider = otherProviders.some(isEnforcementReadyProvider);
 
     if (!otherProvider) {
       throw new BadRequestException(
-        'At least one enabled SSO provider is required while SSO is enforced',
+        'At least one verified SSO provider with a successful login is required while SSO is enforced',
       );
     }
   }

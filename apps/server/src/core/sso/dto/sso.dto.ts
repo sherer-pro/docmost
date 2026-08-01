@@ -117,6 +117,35 @@ export class UpdateSsoProviderDto extends SsoProviderIdDto {
   groupSync?: boolean;
 }
 
+export class SsoGroupMappingIdDto {
+  @IsUUID()
+  mappingId: string;
+}
+
+export class CreateSsoGroupMappingDto extends SsoProviderIdDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(1024)
+  @Transform(({ value }: TransformFnParams) => value?.trim())
+  externalGroupId: string;
+
+  @IsUUID()
+  groupId: string;
+}
+
+export class UpdateSsoGroupMappingDto extends SsoGroupMappingIdDto {
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(1024)
+  @Transform(({ value }: TransformFnParams) => value?.trim())
+  externalGroupId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  groupId?: string;
+}
+
 export class LdapLoginDto {
   @IsString()
   @IsNotEmpty()

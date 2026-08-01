@@ -6,6 +6,7 @@ import { SSO_PROVIDER } from "@/features/security/constants.ts";
 import { SsoOIDCForm } from "@/features/security/components/sso-oidc-form.tsx";
 import { SsoLDAPForm } from "@/features/security/components/sso-ldap-form.tsx";
 import { useTranslation } from "react-i18next";
+import { SsoGroupMappings } from "@/features/security/components/sso-group-mappings.tsx";
 
 interface SsoModalProps {
   opened: boolean;
@@ -43,6 +44,8 @@ export default function SsoProviderModal({
       {provider.type === SSO_PROVIDER.LDAP && (
         <SsoLDAPForm provider={provider} onClose={onClose} />
       )}
+
+      {provider.groupSync && <SsoGroupMappings providerId={provider.id} />}
     </Modal>
   );
 }
