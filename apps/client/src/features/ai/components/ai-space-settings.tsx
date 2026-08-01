@@ -135,7 +135,6 @@ export type AiSpaceSettingsSection =
   | "all"
   | "overview"
   | "identity"
-  | "content"
   | "model"
   | "behavior"
   | "agent"
@@ -153,11 +152,12 @@ export function AiSpaceSettings({
 }) {
   const { t, i18n } = useTranslation();
   const numberInputControlProps = {
-    hideControls: true,
-  };
-  const visibilityToggleButtonProps = {
-    "aria-label": t("ai.ux.toggleSecretVisibility"),
-    style: { minWidth: 32, minHeight: 32 },
+    incrementButtonProps: {
+      "aria-label": t("ai.ux.incrementValue"),
+    },
+    decrementButtonProps: {
+      "aria-label": t("ai.ux.decrementValue"),
+    },
   };
   const configQuery = useAiSpaceConfigQuery(spaceId);
   const statusQuery = useAiSpaceStatusQuery(spaceId);
@@ -583,7 +583,8 @@ export function AiSpaceSettings({
         )}
 
         {showSection("identity") && (
-          <SettingsSection
+          <>
+            <SettingsSection
               icon={<IconMessageCircle size={18} />}
               title={t("ai.settings.identitySection")}
               description={t("ai.settings.identityDescription")}
@@ -623,11 +624,10 @@ export function AiSpaceSettings({
                   />
                 </SimpleGrid>
               </Stack>
-          </SettingsSection>
-        )}
+            </SettingsSection>
 
-        {showSection("content") && (
-          <AiContentExclusionsSettings spaceId={spaceId} />
+            <AiContentExclusionsSettings spaceId={spaceId} />
+          </>
         )}
 
         {showSection("overview") && statusQuery.data?.usage && (
@@ -675,7 +675,6 @@ export function AiSpaceSettings({
                 {...form.getInputProps("chatModel")}
               />
               <PasswordInput
-                visibilityToggleButtonProps={visibilityToggleButtonProps}
                 label={t("ai.settings.apiKey")}
                 description={
                   configQuery.data?.apiKeyConfigured && !clearApiKey
@@ -1050,9 +1049,6 @@ export function AiSpaceSettings({
                         {...form.getInputProps("retrievalUrl")}
                       />
                       <PasswordInput
-                        visibilityToggleButtonProps={
-                          visibilityToggleButtonProps
-                        }
                         label={t("ai.settings.retrievalApiKey")}
                         description={
                           configQuery.data?.retrieval.apiKeyConfigured &&
@@ -1103,9 +1099,6 @@ export function AiSpaceSettings({
                         {...form.getInputProps("openWebUiKnowledgeId")}
                       />
                       <PasswordInput
-                        visibilityToggleButtonProps={
-                          visibilityToggleButtonProps
-                        }
                         label={t("ai.settings.openWebUiApiKey")}
                         description={
                           configQuery.data?.retrieval.openWebUi
@@ -1255,26 +1248,24 @@ export function AiSpaceSettings({
           </Accordion>
         )}
 
-        {section !== "content" && (
-          <div className={classes.actionBar}>
-            <Group justify="flex-end" className={classes.actionGroup}>
-              {showSection("model") && (
-                <Button
-                  type="button"
-                  variant="default"
-                  leftSection={<IconPlayerPlay size={16} />}
-                  loading={testModel.isPending}
-                  onClick={() => void test()}
-                >
-                  {t("ai.settings.test")}
-                </Button>
-              )}
-              <Button type="submit" loading={updateConfig.isPending}>
-                {t("ai.save")}
+        <div className={classes.actionBar}>
+          <Group justify="flex-end" className={classes.actionGroup}>
+            {showSection("model") && (
+              <Button
+                type="button"
+                variant="default"
+                leftSection={<IconPlayerPlay size={16} />}
+                loading={testModel.isPending}
+                onClick={() => void test()}
+              >
+                {t("ai.settings.test")}
               </Button>
-            </Group>
-          </div>
-        )}
+            )}
+            <Button type="submit" loading={updateConfig.isPending}>
+              {t("ai.save")}
+            </Button>
+          </Group>
+        </div>
       </Stack>
     </form>
   );

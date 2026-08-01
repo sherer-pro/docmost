@@ -1247,8 +1247,6 @@
   "Delete the link {{name}}?": "Delete the link {{name}}?",
   "ai": {
     "integrations": {
-      "backToSpace": "Zurück zum Bereich",
-      "spacesEmptyTitle": "Keine Bereiche gefunden",
       "title": "AI and integrations",
       "description": "Configure AI assistants, external access, search, and per-space behavior.",
       "mcpTitle": "MCP access",
@@ -1267,11 +1265,10 @@
       "spaceCardTitle": "AI assistant",
       "spaceCardDescription": "Model, identity, behavior, agent mode, search, and usage limits are managed on a dedicated page.",
       "openFullSettings": "Open full settings",
-      "backToOverview": "Zurück zum KI-Assistenten",
+      "backToOverview": "Back to AI and integrations",
       "spaceSettingsDescription": "Configure the AI assistant for this space.",
       "sectionLabel": "Settings section",
       "section": {
-        "content": "Wissenszugriff",
         "overview": "Overview",
         "identity": "Identity",
         "model": "Model",
@@ -1458,7 +1455,6 @@
     "generationCompleted": "Die KI-Antwort ist bereit.",
     "generationStopped": "Die KI-Generierung wurde gestoppt.",
     "settings": {
-      "contentPolicyDescription": "Ausschlüsse gelten für KI-Chat, Bereichssuche, RAG-Synchronisierung und MCP. Die normale Docmost-Suche bleibt unverändert.",
       "agentSection": "Agent mode",
       "agentSectionDescription": "Enable bounded tool use and individually confirmed edits.",
       "agentEnabled": "Enable AI agent",
@@ -1673,7 +1669,6 @@
       "loadMore": "Mehr laden"
     },
     "ux": {
-      "toggleSecretVisibility": "Geheimnis ein- oder ausblenden",
       "loading": "Wird geladen…",
       "jumpToLatest": "Zur neuesten Antwort",
       "draftSaving": "Entwurf wird gespeichert…",

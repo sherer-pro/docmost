@@ -3,15 +3,6 @@ import type { McpClientPreset } from "@/features/api-key/utils/mcp-presets.ts";
 
 export type { McpClientPreset };
 
-export interface ApiKeyQueryParams {
-  query?: string;
-  cursor?: string;
-  beforeCursor?: string;
-  limit?: number;
-  adminView?: boolean;
-  keyType?: "rag" | "mcp";
-}
-
 export interface IApiKeySpace {
   id: string;
   name: string;

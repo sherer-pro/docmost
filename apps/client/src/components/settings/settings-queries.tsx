@@ -45,10 +45,16 @@ export const prefetchShares = () => {
   });
 };
 
-export const prefetchApiKeyManagement = (keyType: "rag" | "mcp") => {
-  const params = { adminView: true, keyType } as const;
+export const prefetchApiKeys = () => {
   queryClient.prefetchQuery({
-    queryKey: ["api-key-list", params],
-    queryFn: () => getApiKeys(params),
+    queryKey: ["api-key-list", {}],
+    queryFn: () => getApiKeys({}),
+  });
+};
+
+export const prefetchApiKeyManagement = () => {
+  queryClient.prefetchQuery({
+    queryKey: ["api-key-list", { adminView: true }],
+    queryFn: () => getApiKeys({ adminView: true }),
   });
 };
