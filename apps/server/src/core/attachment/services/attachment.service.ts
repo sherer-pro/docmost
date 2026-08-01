@@ -46,6 +46,7 @@ export class AttachmentService {
     private readonly spaceRepo: SpaceRepo,
     @InjectKysely() private readonly db: KyselyDB,
     @InjectQueue(QueueName.ATTACHMENT_QUEUE) private attachmentQueue: Queue,
+    @InjectQueue(QueueName.SEARCH_QUEUE) private searchQueue: Queue,
   ) {}
 
   async uploadFile(opts: {
@@ -129,6 +130,7 @@ export class AttachmentService {
             fileSize: preparedFile.fileSize,
             mimeType: preparedFile.mimeType,
             fileExt: preparedFile.fileExtension,
+            textContent: null,
             updatedAt: new Date(),
           },
           attachmentId,
@@ -175,16 +177,33 @@ export class AttachmentService {
             attachmentId: attachmentId,
           },
           {
-            attempts: 2,
+            attempts: 3,
             backoff: {
               type: 'exponential',
               delay: 10000,
             },
+            removeOnComplete: true,
+            removeOnFail: true,
           },
         );
       } catch (err) {
         this.logger.error('Failed to queue attachment indexing', err);
       }
+    }
+
+    try {
+      await this.searchQueue.add(
+        QueueJob.SEARCH_INDEX_ATTACHMENT,
+        { attachmentIds: [attachment.id] },
+        {
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 10_000 },
+          removeOnComplete: true,
+          removeOnFail: true,
+        },
+      );
+    } catch (err) {
+      this.logger.error('Failed to queue attachment search indexing', err);
     }
 
     return attachment;

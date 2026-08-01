@@ -11,12 +11,10 @@ import { ExpressionBuilder, sql } from 'kysely';
 import { DB, Workspaces } from '@docmost/db/types/db';
 
 const WORKSPACE_API_SETTINGS_KEYS = ['restrictToAdmins'] as const;
-const WORKSPACE_AI_SETTINGS_KEYS = ['search'] as const;
 const WORKSPACE_SHARING_SETTINGS_KEYS = ['disabled'] as const;
 const WORKSPACE_TAG_SETTINGS_KEYS = ['disabled'] as const;
 
 type WorkspaceApiSettingsKey = (typeof WORKSPACE_API_SETTINGS_KEYS)[number];
-type WorkspaceAiSettingsKey = (typeof WORKSPACE_AI_SETTINGS_KEYS)[number];
 type WorkspaceSharingSettingsKey =
   (typeof WORKSPACE_SHARING_SETTINGS_KEYS)[number];
 type WorkspaceTagSettingsKey = (typeof WORKSPACE_TAG_SETTINGS_KEYS)[number];
@@ -37,12 +35,7 @@ export class WorkspaceRepo {
     'createdAt',
     'updatedAt',
     'deletedAt',
-    'stripeCustomerId',
-    'status',
-    'billingEmail',
-    'trialEndAt',
     'enforceSso',
-    'plan',
     'enforceMfa',
   ];
   constructor(@InjectKysely() private readonly db: KyselyDB) {}
@@ -52,7 +45,6 @@ export class WorkspaceRepo {
     opts?: {
       withLock?: boolean;
       withMemberCount?: boolean;
-      withLicenseKey?: boolean;
       trx?: KyselyTransaction;
     },
   ): Promise<Workspace> {
@@ -65,10 +57,6 @@ export class WorkspaceRepo {
 
     if (opts?.withMemberCount) {
       query = query.select(this.withMemberCount);
-    }
-
-    if (opts?.withLicenseKey) {
-      query = query.select('licenseKey');
     }
 
     if (opts?.withLock && opts?.trx) {
@@ -189,38 +177,17 @@ export class WorkspaceRepo {
       .executeTakeFirst();
   }
 
-  async updateAiSettings(
-    workspaceId: string,
-    prefKey: WorkspaceAiSettingsKey,
-    prefValue: string | boolean,
-  ) {
-    if (!WORKSPACE_AI_SETTINGS_KEYS.includes(prefKey)) {
-      throw new Error(`Unsupported workspace AI setting key: ${prefKey}`);
-    }
-
-    return this.db
-      .updateTable('workspaces')
-      .set({
-        settings: sql`COALESCE(settings, '{}'::jsonb)
-                || jsonb_build_object('ai', COALESCE(settings->'ai', '{}'::jsonb)
-                || jsonb_build_object(${prefKey}::text, ${JSON.stringify(prefValue)}::jsonb))`,
-        updatedAt: new Date(),
-      })
-      .where('id', '=', workspaceId)
-      .returning(this.baseFields)
-      .executeTakeFirst();
-  }
-
   async updateSharingSettings(
     workspaceId: string,
     prefKey: WorkspaceSharingSettingsKey,
     prefValue: string | boolean,
+    trx?: KyselyTransaction,
   ) {
     if (!WORKSPACE_SHARING_SETTINGS_KEYS.includes(prefKey)) {
       throw new Error(`Unsupported workspace sharing setting key: ${prefKey}`);
     }
 
-    return this.db
+    return dbOrTx(this.db, trx)
       .updateTable('workspaces')
       .set({
         settings: sql`COALESCE(settings, '{}'::jsonb)

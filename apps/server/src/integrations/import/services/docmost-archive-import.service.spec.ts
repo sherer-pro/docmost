@@ -15,6 +15,7 @@ describe('DocmostArchiveImportService reference rewriting', () => {
     {} as any,
     {} as any,
     {} as any,
+    {} as any,
   );
 
   const report = () => ({

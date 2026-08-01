@@ -16,6 +16,7 @@ import fastifyCookie from '@fastify/cookie';
 import * as request from 'supertest';
 import { CsrfGuard } from '../src/common/guards/csrf.guard';
 import { CsrfExempt } from '../src/common/decorators/csrf-exempt.decorator';
+import { EnvironmentService } from '../src/integrations/environment/environment.service';
 
 @Controller('auth')
 class AuthTestController {
@@ -77,6 +78,13 @@ class WorkspaceTestController {
   controllers: [AuthTestController, WorkspaceTestController],
   providers: [
     {
+      provide: EnvironmentService,
+      useValue: {
+        getAppUrl: () => 'http://localhost:3000',
+        isHttps: () => false,
+      },
+    },
+    {
       provide: APP_GUARD,
       useClass: CsrfGuard,
     },
@@ -102,7 +110,7 @@ describe('CSRF guard (integration)', () => {
   });
 
   afterAll(async () => {
-    await app.close();
+    await app?.close();
   });
 
   it('rejects POST /api/auth/change-password without CSRF token', async () => {

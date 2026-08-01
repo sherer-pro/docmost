@@ -63,7 +63,7 @@ export class ImportController {
   }
 
   private async handleImportPage(req: any, user: User, workspace: Workspace) {
-    const validFileExtensions = ['.md', '.html', '.docx'];
+    const validFileExtensions = ['.md', '.html'];
 
     const maxFileSize = bytes('10mb');
 
@@ -249,10 +249,10 @@ export class ImportController {
     const spaceId = file.fields?.spaceId?.value;
     const source = file.fields?.source?.value;
 
-    const validZipSources = ['docmost', 'generic', 'notion', 'confluence'];
+    const validZipSources = ['docmost', 'generic', 'notion'];
     if (!validZipSources.includes(source)) {
       throw new BadRequestException(
-        'Invalid import source. Import source must be docmost, generic, notion or confluence.',
+        'Invalid import source. Import source must be docmost, generic or notion.',
       );
     }
     if (preview && source !== 'docmost') {

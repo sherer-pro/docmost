@@ -1,4 +1,6 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB, KyselyTransaction } from '@docmost/db/types/kysely.types';
 import { FileTask } from '@docmost/db/types/entity.types';
@@ -37,6 +39,7 @@ import {
   remapDatabaseViewConfig,
 } from '../../../core/database/utils/database-copy.utils';
 import { sql } from 'kysely';
+import { QueueJob, QueueName } from '../../queue/constants';
 
 interface StagedAttachment {
   sourceId: string;
@@ -52,6 +55,8 @@ interface StagedAttachment {
 
 @Injectable()
 export class DocmostArchiveImportService {
+  private readonly logger = new Logger(DocmostArchiveImportService.name);
+
   constructor(
     @InjectKysely() private readonly db: KyselyDB,
     private readonly importService: ImportService,
@@ -60,6 +65,8 @@ export class DocmostArchiveImportService {
     private readonly backlinkRepo: BacklinkRepo,
     private readonly transclusionService: TransclusionService,
     private readonly eventEmitter: EventEmitter2,
+    @InjectQueue(QueueName.ATTACHMENT_QUEUE)
+    private readonly attachmentQueue: Queue,
   ) {}
 
   async process(opts: {
@@ -236,6 +243,32 @@ export class DocmostArchiveImportService {
       );
       throw error;
     }
+
+    await Promise.all(
+      stagedAttachments
+        .filter((attachment) =>
+          ['.pdf', '.docx'].includes(attachment.fileExt.toLowerCase()),
+        )
+        .map(async (attachment) => {
+          try {
+            await this.attachmentQueue.add(
+              QueueJob.ATTACHMENT_INDEX_CONTENT,
+              { attachmentId: attachment.id },
+              {
+                attempts: 3,
+                backoff: { type: 'exponential', delay: 10_000 },
+                removeOnComplete: true,
+                removeOnFail: true,
+              },
+            );
+          } catch (error) {
+            this.logger.warn(
+              `Failed to queue attachment content indexing for ${attachment.id}`,
+              error,
+            );
+          }
+        }),
+    );
 
     this.eventEmitter.emit(EventName.PAGE_CREATED, {
       pageIds: createdPageIds,

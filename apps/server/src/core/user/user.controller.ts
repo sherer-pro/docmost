@@ -79,12 +79,9 @@ export class UserController {
         ? await this.userRepo.getWorkspaceVisibleUsersCount(workspace.id, user)
         : await this.workspaceRepo.getActiveUserCount(workspace.id);
 
-    const { licenseKey, ...rest } = workspace;
-
     const workspaceInfo = {
-      ...rest,
+      ...workspace,
       memberCount,
-      hasLicenseKey: Boolean(licenseKey),
     };
 
     /**

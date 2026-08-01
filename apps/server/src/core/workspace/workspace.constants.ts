@@ -1,19 +1,12 @@
-export enum WorkspaceStatus {
-  Active = 'active',
-  Suspended = 'suspended',
-}
-
 export const DISALLOWED_HOSTNAMES = [
   'app',
   'help',
   'account',
-  'billing',
   'docs',
   'blog',
   'status',
   'payment',
   'updates',
-  'license',
   'customer',
   'customers',
   'dashboard',

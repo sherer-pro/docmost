@@ -237,7 +237,7 @@ export class SearchService {
     return breadcrumbs.reverse();
   }
 
-  private async attachBreadcrumbsToResults(
+  async attachBreadcrumbsToResults(
     searchResults: SearchResponseDto[],
     visiblePageIdsBySpaceId?: Map<string, Set<string>>,
   ): Promise<SearchResponseDto[]> {
@@ -532,12 +532,14 @@ export class SearchService {
       workspaceId: string;
     },
   ): Promise<{ items: AttachmentSearchResponseDto[] }> {
-    const query = searchParams.query ?? '';
-    const searchTokens = query.trim().split(/\s+/).filter(Boolean);
+    const query = searchParams.query?.trim() ?? '';
 
-    if (searchTokens.length < 1) {
+    if (!query) {
       return { items: [] };
     }
+
+    const searchQuery = tsquery(query + '*');
+    const textQuery = sql<string>`to_tsquery('english', f_unaccent(${searchQuery}))`;
 
     let queryResults = this.db
       .selectFrom('attachments')
@@ -550,8 +552,13 @@ export class SearchService {
         'attachments.creatorId as creatorId',
         'attachments.createdAt as createdAt',
         'attachments.updatedAt as updatedAt',
-        sql<number>`1`.as('rank'),
-        sql<string>`${''}`.as('highlight'),
+        sql<number>`ts_rank(attachments.tsv, ${textQuery})`.as('rank'),
+        sql<string>`ts_headline(
+          'english',
+          coalesce(attachments.text_content, ''),
+          ${textQuery},
+          'MinWords=9, MaxWords=18, MaxFragments=3'
+        )`.as('highlight'),
       ])
       .select((eb) => [
         jsonObjectFrom(
@@ -579,17 +586,9 @@ export class SearchService {
       .where('pages.deletedAt', 'is', null)
       .where('spaces.archivedAt', 'is', null)
       .where('spaces.deletedAt', 'is', null)
+      .where('attachments.tsv', '@@', textQuery)
+      .orderBy('rank', 'desc')
       .orderBy('attachments.fileName', 'asc');
-
-    for (const token of searchTokens) {
-      queryResults = queryResults.where((eb) =>
-        eb(
-          sql`LOWER(f_unaccent(attachments.file_name))`,
-          'like',
-          sql`LOWER(f_unaccent(${`%${token}%`}))`,
-        ),
-      );
-    }
 
     if (searchParams.spaceId) {
       queryResults = queryResults.where(

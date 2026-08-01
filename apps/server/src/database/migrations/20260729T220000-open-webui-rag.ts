@@ -54,22 +54,22 @@ export async function up(db: Kysely<any>): Promise<void> {
     .createIndex('idx_attachments_space_updated_id')
     .ifNotExists()
     .on('attachments')
-    .columns(['spaceId', 'updatedAt', 'id'])
+    .columns(['space_id', 'updated_at', 'id'])
     .execute();
 
   await db.schema
     .createIndex('idx_attachments_space_deleted_id')
     .ifNotExists()
     .on('attachments')
-    .columns(['spaceId', 'deletedAt', 'id'])
+    .columns(['space_id', 'deleted_at', 'id'])
     .execute();
 }
 
 export async function down(db: Kysely<any>): Promise<void> {
   await db
-    .updateTable('aiSpaceConfigs')
-    .set({ retrievalAdapter: 'none' })
-    .where('retrievalAdapter', '=', 'open-webui-knowledge-v1')
+    .updateTable('ai_space_configs')
+    .set({ retrieval_adapter: 'none' })
+    .where('retrieval_adapter', '=', 'open-webui-knowledge-v1')
     .execute();
 
   await db.schema

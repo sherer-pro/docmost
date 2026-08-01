@@ -49,7 +49,6 @@ describe('ImportService Docmost archive preview', () => {
     {} as any,
     {} as any,
     {} as any,
-    {} as any,
   );
 
   const buildArchive = async (overrides?: {

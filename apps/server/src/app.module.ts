@@ -23,20 +23,6 @@ import { APP_GUARD } from '@nestjs/core';
 import { CsrfGuard } from './common/guards/csrf.guard';
 import { CommonSecurityModule } from './common/security/security.module';
 
-const enterpriseModules = [];
-try {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  if (require('./ee/ee.module')?.EeModule) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    enterpriseModules.push(require('./ee/ee.module')?.EeModule);
-  }
-} catch (err) {
-  if (process.env.CLOUD === 'true') {
-    console.warn('Failed to load enterprise modules. Exiting program.\n', err);
-    process.exit(1);
-  }
-}
-
 @Module({
   imports: [
     LoggerModule,
@@ -63,7 +49,6 @@ try {
     EventEmitterModule.forRoot(),
     SecurityModule,
     TelemetryModule,
-    ...enterpriseModules,
   ],
   controllers: [AppController],
   providers: [

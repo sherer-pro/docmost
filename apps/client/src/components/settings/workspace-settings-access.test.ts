@@ -7,8 +7,6 @@ describe("workspace settings navigation access", () => {
     "/settings/security",
     "/settings/api-keys",
     "/settings/ai",
-    "/settings/billing",
-    "/settings/license",
   ])("hides configuration path %s from workspace members", (path) => {
     expect(canAccessSettingsPath(path, false)).toBe(false);
     expect(canAccessSettingsPath(path, true)).toBe(true);

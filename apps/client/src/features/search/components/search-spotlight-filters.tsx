@@ -8,7 +8,6 @@ import {
   ScrollArea,
   Avatar,
   Group,
-  Switch,
   getDefaultZIndex,
 } from "@mantine/core";
 import {
@@ -23,8 +22,6 @@ import { useTranslation } from "react-i18next";
 import { useDebouncedValue } from "@mantine/hooks";
 import { useGetSpacesQuery } from "@/features/space/queries/space-query";
 import classes from "./search-spotlight-filters.module.css";
-import { useAtom } from "jotai";
-import { workspaceAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { getSearchContentTypeOptions } from "./search-content-type-options";
 import { useSearchLabelsQuery } from "../queries/search-query";
 import { IPageSearchLabel } from "../types/search.types";
@@ -38,16 +35,12 @@ import type { TagValue } from "@docmost/editor-ext";
 
 interface SearchSpotlightFiltersProps {
   onFiltersChange?: (filters: SearchFilterPayload) => void;
-  onAskClick?: () => void;
   spaceId?: string;
-  isAiMode?: boolean;
 }
 
 export function SearchSpotlightFilters({
   onFiltersChange,
-  onAskClick,
   spaceId,
-  isAiMode = false,
 }: SearchSpotlightFiltersProps) {
   const { t } = useTranslation();
   const [selectedSpaceId, setSelectedSpaceId] = useState<string | null>(
@@ -61,8 +54,7 @@ export function SearchSpotlightFilters({
   const [selectedTag, setSelectedTag] = useState<TagValue | null>(null);
   const [labelSearchQuery, setLabelSearchQuery] = useState("");
   const [debouncedLabelQuery] = useDebouncedValue(labelSearchQuery, 300);
-  const [workspace] = useAtom(workspaceAtom);
-  const arePageFiltersDisabled = isAiMode || contentType === "attachment";
+  const arePageFiltersDisabled = contentType === "attachment";
   const isLabelFilterDisabled = arePageFiltersDisabled || !selectedSpaceId;
 
   const { data: spacesData } = useGetSpacesQuery({
@@ -125,7 +117,6 @@ export function SearchSpotlightFilters({
         contentType: nextContentType,
         label: nextLabel,
         tag: nextTag,
-        isAiMode,
       }),
     );
   };
@@ -208,31 +199,6 @@ export function SearchSpotlightFilters({
 
   return (
     <div className={classes.filtersContainer}>
-      {workspace?.settings?.ai?.search === true && (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            height: "32px",
-            paddingLeft: "8px",
-            paddingRight: "8px",
-          }}
-        >
-          <Switch
-            checked={isAiMode}
-            onChange={(event) => onAskClick()}
-            label={t("AI Answers")}
-            size="sm"
-            color="blue"
-            labelPosition="left"
-            styles={{
-              root: { display: "flex", alignItems: "center" },
-              label: { paddingRight: "8px", fontSize: "13px", fontWeight: 500 },
-            }}
-          />
-        </div>
-      )}
-
       <Menu
         shadow="md"
         width={250}
@@ -461,21 +427,12 @@ export function SearchSpotlightFilters({
             <Menu.Item
               key={option.value}
               onClick={() =>
-                !(isAiMode && option.value === "attachment") &&
                 contentType !== option.value &&
                 handleFilterChange("contentType", option.value)
               }
-              disabled={isAiMode && option.value === "attachment"}
             >
               <Group flex="1" gap="xs">
-                <div>
-                  <Text size="sm">{option.label}</Text>
-                  {isAiMode && option.value === "attachment" && (
-                    <Text size="xs" mt={4}>
-                      {t("AI Answers not available for attachments")}
-                    </Text>
-                  )}
-                </div>
+                <Text size="sm">{option.label}</Text>
                 {contentType === option.value && <IconCheck size={20} />}
               </Group>
             </Menu.Item>

@@ -15,7 +15,7 @@ describe('WorkspaceService', () => {
   const workspaceId = 'workspace-id';
   const actor = { id: 'actor-id', role: UserRole.ADMIN } as any;
 
-  const createService = () => {
+  const createService = (ssoEndpointAllowed = true) => {
     const workspaceRepo = {
       findById: jest.fn(),
       updateTagSettings: jest.fn(),
@@ -29,6 +29,11 @@ describe('WorkspaceService', () => {
 
     const eventEmitter = {
       emit: jest.fn(),
+    };
+    const ssoEndpointPolicy = {
+      assertAllowed: ssoEndpointAllowed
+        ? jest.fn().mockResolvedValue(new URL('https://idp.example.com'))
+        : jest.fn().mockRejectedValue(new Error('Endpoint is not allowed')),
     };
 
     const service = new WorkspaceService(
@@ -44,14 +49,41 @@ describe('WorkspaceService', () => {
       {} as any,
       {} as any,
       {} as any,
-      {} as any,
-      {} as any,
-      {} as any,
       eventEmitter as any,
+      ssoEndpointPolicy as any,
     );
 
-    return { service, workspaceRepo, userRepo, eventEmitter };
+    return {
+      service,
+      workspaceRepo,
+      userRepo,
+      eventEmitter,
+      ssoEndpointPolicy,
+    };
   };
+
+  it('requires an endpoint-policy-approved provider before SSO enforcement', async () => {
+    const provider = {
+      type: 'oidc',
+      oidcIssuer: 'https://idp.example.com',
+      oidcClientId: 'client-id',
+      oidcClientSecret: 'encrypted-secret',
+    } as any;
+    const allowed = createService(true);
+    const denied = createService(false);
+
+    await expect(
+      (allowed.service as any).hasAllowedSsoProvider([provider]),
+    ).resolves.toBe(true);
+    await expect(
+      (denied.service as any).hasAllowedSsoProvider([provider]),
+    ).resolves.toBe(false);
+    expect(allowed.ssoEndpointPolicy.assertAllowed).toHaveBeenCalledWith(
+      provider.oidcIssuer,
+      ['http:', 'https:'],
+      'SSO provider',
+    );
+  });
 
   it('should prevent self-deactivation', async () => {
     const { service, userRepo } = createService();
@@ -169,7 +201,6 @@ describe('WorkspaceService', () => {
     workspaceRepo.updateWorkspace.mockResolvedValue({});
     workspaceRepo.findById.mockResolvedValue({
       id: workspaceId,
-      licenseKey: null,
       settings: {
         tags: {
           disabled: ['done'],
@@ -185,7 +216,6 @@ describe('WorkspaceService', () => {
       } as any),
     ).resolves.toMatchObject({
       id: workspaceId,
-      hasLicenseKey: false,
     });
 
     expect(workspaceRepo.updateTagSettings).toHaveBeenCalledWith(

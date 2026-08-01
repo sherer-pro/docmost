@@ -25,6 +25,7 @@ describe('AttachmentService spoof validation', () => {
     selectFrom: jest.fn(),
   };
   const attachmentQueue = { add: jest.fn() };
+  const searchQueue = { add: jest.fn() };
 
   const service = new AttachmentService(
     storageService as any,
@@ -34,6 +35,7 @@ describe('AttachmentService spoof validation', () => {
     spaceRepo as any,
     db as any,
     attachmentQueue as any,
+    searchQueue as any,
   );
 
   beforeEach(() => {
@@ -132,6 +134,7 @@ describe('AttachmentService uploadFile attachment overwrite validation', () => {
     selectFrom: jest.fn(),
   };
   const attachmentQueue = { add: jest.fn() };
+  const searchQueue = { add: jest.fn() };
 
   const service = new AttachmentService(
     storageService as any,
@@ -141,6 +144,7 @@ describe('AttachmentService uploadFile attachment overwrite validation', () => {
     spaceRepo as any,
     db as any,
     attachmentQueue as any,
+    searchQueue as any,
   );
 
   const basePreparedFile = {

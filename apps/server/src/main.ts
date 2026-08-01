@@ -233,6 +233,8 @@ async function bootstrap() {
 
   app.useWebSocketAdapter(redisIoAdapter);
 
+  // Nest already registers an `application/x-www-form-urlencoded` parser
+  // (see `rawBody: true` above), so `@fastify/formbody` must not be added here.
   await app.register(fastifyMultipart);
   await app.register(fastifyCookie);
 
@@ -254,7 +256,6 @@ async function bootstrap() {
       const excludedPaths = [
         '/api/auth/setup',
         '/api/health',
-        '/api/billing/stripe/webhook',
         '/api/workspace/check-hostname',
         '/api/sso/google',
         '/api/workspace/create',

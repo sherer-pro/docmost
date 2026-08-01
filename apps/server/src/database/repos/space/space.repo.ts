@@ -111,7 +111,7 @@ export class SpaceRepo {
   }
 
   async archiveSpace(spaceId: string, workspaceId: string): Promise<Space> {
-    return this.db
+    const space = await this.db
       .updateTable('spaces')
       .set({
         archivedAt: new Date(),
@@ -121,10 +121,14 @@ export class SpaceRepo {
       .where('workspaceId', '=', workspaceId)
       .returningAll()
       .executeTakeFirst();
+    if (space) {
+      this.eventEmitter.emit(EventName.SPACE_UPDATED, { spaceId: space.id });
+    }
+    return space;
   }
 
   async unarchiveSpace(spaceId: string, workspaceId: string): Promise<Space> {
-    return this.db
+    const space = await this.db
       .updateTable('spaces')
       .set({
         archivedAt: null,
@@ -134,6 +138,10 @@ export class SpaceRepo {
       .where('workspaceId', '=', workspaceId)
       .returningAll()
       .executeTakeFirst();
+    if (space) {
+      this.eventEmitter.emit(EventName.SPACE_UPDATED, { spaceId: space.id });
+    }
+    return space;
   }
 
   async updateSharingSettings(
@@ -141,12 +149,13 @@ export class SpaceRepo {
     workspaceId: string,
     prefKey: SpaceSharingSettingsKey,
     prefValue: string | boolean,
+    trx?: KyselyTransaction,
   ) {
     if (!SPACE_SHARING_SETTINGS_KEYS.includes(prefKey)) {
       throw new Error(`Unsupported space sharing setting key: ${prefKey}`);
     }
 
-    return this.db
+    return dbOrTx(this.db, trx)
       .updateTable('spaces')
       .set({
         settings: sql`COALESCE(settings, '{}'::jsonb)

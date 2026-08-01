@@ -36,6 +36,8 @@ import { DatabaseViewRepo } from './repos/database/database-view.repo';
 import { ApiKeyRepo } from './repos/api-key/api-key.repo';
 import { DictionaryTermRepo } from './repos/dictionary/dictionary-term.repo';
 import { PageListener } from '@docmost/db/listeners/page.listener';
+import { SpaceListener } from '@docmost/db/listeners/space.listener';
+import { WorkspaceListener } from '@docmost/db/listeners/workspace.listener';
 import { PostgresJSDialect } from 'kysely-postgres-js';
 import * as postgres from 'postgres';
 import { normalizePostgresUrl } from '../common/helpers';
@@ -117,6 +119,8 @@ import { DatabaseReadinessService } from '@docmost/db/services/database-readines
     PageTransclusionsRepo,
     PageTransclusionReferencesRepo,
     PageListener,
+    SpaceListener,
+    WorkspaceListener,
   ],
   exports: [
     WorkspaceRepo,

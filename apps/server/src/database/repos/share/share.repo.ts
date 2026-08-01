@@ -136,15 +136,21 @@ export class ShareRepo {
     await query.execute();
   }
 
-  async deleteBySpaceId(spaceId: string): Promise<void> {
-    await this.db
+  async deleteBySpaceId(
+    spaceId: string,
+    trx?: KyselyTransaction,
+  ): Promise<void> {
+    await dbOrTx(this.db, trx)
       .deleteFrom('shares')
       .where('spaceId', '=', spaceId)
       .execute();
   }
 
-  async deleteByWorkspaceId(workspaceId: string): Promise<void> {
-    await this.db
+  async deleteByWorkspaceId(
+    workspaceId: string,
+    trx?: KyselyTransaction,
+  ): Promise<void> {
+    await dbOrTx(this.db, trx)
       .deleteFrom('shares')
       .where('workspaceId', '=', workspaceId)
       .execute();
@@ -252,7 +258,10 @@ export class ShareRepo {
           'pages.icon',
           'pages.parentPageId',
         ])
-        .whereRef('pages.id', '=', 'shares.pageId'),
+        .whereRef('pages.id', '=', 'shares.pageId')
+        .whereRef('pages.workspaceId', '=', 'shares.workspaceId')
+        .whereRef('pages.spaceId', '=', 'shares.spaceId')
+        .where('pages.deletedAt', 'is', null),
     ).as('sharedPage');
   }
 }

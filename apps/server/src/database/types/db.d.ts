@@ -404,41 +404,30 @@ export interface AuthProviders {
   workspaceId: string;
 }
 
+export interface AuthProviderGroupMappings {
+  authProviderId: string;
+  createdAt: Generated<Timestamp>;
+  externalGroupId: string;
+  groupId: string;
+  id: Generated<string>;
+  updatedAt: Generated<Timestamp>;
+}
+
+export interface AuthProviderGroupMemberships {
+  authProviderId: string;
+  createdAt: Generated<Timestamp>;
+  groupId: string;
+  id: Generated<string>;
+  ownsGroupMembership: Generated<boolean>;
+  updatedAt: Generated<Timestamp>;
+  userId: string;
+}
+
 export interface Backlinks {
   createdAt: Generated<Timestamp>;
   id: Generated<string>;
   sourcePageId: string;
   targetPageId: string;
-  updatedAt: Generated<Timestamp>;
-  workspaceId: string;
-}
-
-export interface Billing {
-  amount: Int8 | null;
-  billingScheme: string | null;
-  cancelAt: Timestamp | null;
-  cancelAtPeriodEnd: boolean | null;
-  canceledAt: Timestamp | null;
-  createdAt: Generated<Timestamp>;
-  currency: string | null;
-  deletedAt: Timestamp | null;
-  endedAt: Timestamp | null;
-  id: Generated<string>;
-  interval: string | null;
-  metadata: Json | null;
-  periodEndAt: Timestamp | null;
-  periodStartAt: Timestamp;
-  planName: string | null;
-  quantity: Int8 | null;
-  status: string;
-  stripeCustomerId: string | null;
-  stripeItemId: string | null;
-  stripePriceId: string | null;
-  stripeProductId: string | null;
-  stripeSubscriptionId: string;
-  tieredFlatAmount: Int8 | null;
-  tieredUnitAmount: Int8 | null;
-  tieredUpTo: string | null;
   updatedAt: Generated<Timestamp>;
   workspaceId: string;
 }
@@ -763,6 +752,20 @@ export interface Shares {
   workspaceId: string;
 }
 
+export interface SsoLoginStates {
+  authProviderId: string;
+  codeVerifier: string | null;
+  consumedAt: Timestamp | null;
+  createdAt: Generated<Timestamp>;
+  expiresAt: Timestamp;
+  id: Generated<string>;
+  nonce: string | null;
+  requestId: string | null;
+  requestValue: string | null;
+  stateHash: string;
+  workspaceId: string;
+}
+
 export interface SpaceMembers {
   addedById: string | null;
   createdAt: Generated<Timestamp>;
@@ -879,7 +882,6 @@ export interface WorkspaceInvitations {
 }
 
 export interface Workspaces {
-  billingEmail: string | null;
   createdAt: Generated<Timestamp>;
   customDomain: string | null;
   defaultRole: Generated<string>;
@@ -891,14 +893,9 @@ export interface Workspaces {
   enforceSso: Generated<boolean>;
   hostname: string | null;
   id: Generated<string>;
-  licenseKey: string | null;
   logo: string | null;
   name: string | null;
-  plan: string | null;
   settings: Json | null;
-  status: string | null;
-  stripeCustomerId: string | null;
-  trialEndAt: Timestamp | null;
   updatedAt: Generated<Timestamp>;
 }
 
@@ -920,9 +917,10 @@ export interface DB {
   apiKeys: ApiKeys;
   attachments: Attachments;
   authAccounts: AuthAccounts;
+  authProviderGroupMappings: AuthProviderGroupMappings;
+  authProviderGroupMemberships: AuthProviderGroupMemberships;
   authProviders: AuthProviders;
   backlinks: Backlinks;
-  billing: Billing;
   comments: Comments;
   databaseCells: DatabaseCells;
   databaseProperties: DatabaseProperties;
@@ -948,6 +946,7 @@ export interface DB {
   shares: Shares;
   spaceMembers: SpaceMembers;
   spaces: Spaces;
+  ssoLoginStates: SsoLoginStates;
   userMfa: UserMfa;
   users: Users;
   userSessions: UserSessions;

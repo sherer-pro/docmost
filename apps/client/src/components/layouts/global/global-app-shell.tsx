@@ -15,7 +15,6 @@ import { SpaceSidebar } from "@/features/space/components/sidebar/space-sidebar.
 import { AppHeader } from "@/components/layouts/global/app-header.tsx";
 import Aside from "@/components/layouts/global/aside.tsx";
 import classes from "./app-shell.module.css";
-import { useTrialEndAction } from "@/ee/hooks/use-trial-end-action.tsx";
 import { PageFrame } from "@/components/ui/page-frame.tsx";
 import {
   getAsidePresentationMode,
@@ -35,7 +34,6 @@ export default function GlobalAppShell({
 }: {
   children: React.ReactNode;
 }) {
-  useTrialEndAction();
   const { t } = useTranslation();
   const assistantIdentity = useAiAssistantIdentity();
   const [mobileOpened] = useAtom(mobileSidebarAtom);

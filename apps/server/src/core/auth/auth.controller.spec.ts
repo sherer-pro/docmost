@@ -7,6 +7,7 @@ jest.mock('../mfa/mfa.service', () => ({
 }));
 
 import { AuthController } from './auth.controller';
+import { BadRequestException } from '@nestjs/common';
 
 describe('AuthController', () => {
   const createController = () => {
@@ -39,5 +40,17 @@ describe('AuthController', () => {
     await controller.logout(user, req, res);
 
     expect(authCookieService.clearAuthCookies).toHaveBeenCalledWith(res);
+  });
+
+  it('rejects password reset when SSO is enforced', async () => {
+    const { controller } = createController();
+
+    await expect(
+      controller.passwordReset(
+        {} as any,
+        {} as any,
+        { enforceSso: true } as any,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 });

@@ -43,10 +43,6 @@ export class UpdateWorkspaceDto extends PartialType(CreateWorkspaceDto) {
 
   @IsOptional()
   @IsBoolean()
-  aiSearch: boolean;
-
-  @IsOptional()
-  @IsBoolean()
   disablePublicSharing: boolean;
 
   @IsOptional()

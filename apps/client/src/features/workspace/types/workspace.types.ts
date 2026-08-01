@@ -1,4 +1,4 @@
-import { IAuthProvider } from "@/ee/security/types/security.types.ts";
+import { IPublicAuthProvider } from "@/features/security/types/security.types.ts";
 
 export interface IWorkspace {
   id: string;
@@ -10,30 +10,18 @@ export interface IWorkspace {
   customDomain: string;
   enableInvite: boolean;
   settings: IWorkspaceSettings;
-  status: string;
   enforceSso: boolean;
-  stripeCustomerId: string;
-  billingEmail: string;
-  trialEndAt: Date;
   createdAt: Date;
   updatedAt: Date;
   emailDomains: string[];
   memberCount?: number;
-  plan?: string;
-  hasLicenseKey?: boolean;
   enforceMfa?: boolean;
-  aiSearch?: boolean;
   disablePublicSharing?: boolean;
 }
 
 export interface IWorkspaceSettings {
-  ai?: IWorkspaceAiSettings;
   sharing?: IWorkspaceSharingSettings;
   tags?: IWorkspaceTagSettings;
-}
-
-export interface IWorkspaceAiSettings {
-  search?: boolean;
 }
 
 export interface IWorkspaceSharingSettings {
@@ -77,8 +65,7 @@ export interface IPublicWorkspace {
   logo: string;
   hostname: string;
   enforceSso: boolean;
-  authProviders: IAuthProvider[];
-  hasLicenseKey?: boolean;
+  authProviders: IPublicAuthProvider[];
 }
 
 export interface IVersion {

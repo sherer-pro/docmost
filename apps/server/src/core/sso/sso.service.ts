@@ -1,0 +1,1523 @@
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { InjectKysely } from 'nestjs-kysely';
+import { KyselyDB, KyselyTransaction } from '@docmost/db/types/kysely.types';
+import {
+  AuthProvider,
+  SsoLoginState,
+  User,
+  Workspace,
+} from '@docmost/db/types/entity.types';
+import { UserRepo } from '@docmost/db/repos/user/user.repo';
+import { SignupService } from '../auth/services/signup.service';
+import { MfaService } from '../mfa/mfa.service';
+import { EnvironmentService } from '../../integrations/environment/environment.service';
+import {
+  decryptProtectedValue,
+  encryptProtectedValue,
+  hashProtectedValue,
+} from '../../common/security/credential-protection.util';
+import { randomBytes } from 'node:crypto';
+import {
+  Client as OidcClient,
+  generators,
+  Issuer,
+  TokenSet,
+  UserinfoResponse,
+} from 'openid-client';
+import {
+  CacheProvider,
+  Profile,
+  SAML,
+  ValidateInResponseTo,
+} from '@node-saml/passport-saml';
+import { Client as LdapClient, Entry as LdapEntry } from 'ldapts';
+import { FastifyRequest } from 'fastify';
+import { executeTx } from '@docmost/db/utils';
+import { sql } from 'kysely';
+import { isEmail } from 'class-validator';
+import {
+  CreateSsoProviderDto,
+  SSO_PROVIDER_TYPES,
+  SsoProviderType,
+  UpdateSsoProviderDto,
+} from './dto/sso.dto';
+import { DomainService } from '../../integrations/environment/domain.service';
+import { SsoEndpointPolicyService } from '../../integrations/environment/sso-endpoint-policy.service';
+import { isUsableSsoProvider } from './sso-provider.util';
+
+const REDACTED_SECRET = '********';
+const SSO_STATE_TTL_MS = 10 * 60 * 1000;
+const MAX_SYNCED_GROUPS = 100;
+const MAX_EXTERNAL_IDENTIFIER_LENGTH = 1024;
+
+interface ExternalIdentity {
+  providerUserId: string;
+  email: string;
+  emailVerified: boolean;
+  name?: string;
+  groupsProvided: boolean;
+  groups: Array<{ id: string; name: string }>;
+}
+
+@Injectable()
+export class SsoService {
+  constructor(
+    @InjectKysely() private readonly db: KyselyDB,
+    private readonly userRepo: UserRepo,
+    private readonly signupService: SignupService,
+    private readonly mfaService: MfaService,
+    private readonly environmentService: EnvironmentService,
+    private readonly domainService: DomainService,
+    private readonly endpointPolicy: SsoEndpointPolicyService,
+  ) {}
+
+  async listProviders(workspaceId: string) {
+    const providers = await this.db
+      .selectFrom('authProviders')
+      .selectAll()
+      .where('workspaceId', '=', workspaceId)
+      .where('deletedAt', 'is', null)
+      .where('type', 'in', [...SSO_PROVIDER_TYPES])
+      .orderBy('createdAt', 'desc')
+      .execute();
+
+    return {
+      items: providers.map((provider) => this.sanitizeProvider(provider)),
+    };
+  }
+
+  getWorkspaceOrigin(workspace: Workspace) {
+    return this.domainService.getUrl(workspace.hostname ?? undefined);
+  }
+
+  async getProvider(providerId: string, workspaceId: string) {
+    return this.sanitizeProvider(
+      await this.requireProvider(providerId, workspaceId),
+    );
+  }
+
+  async createProvider(
+    dto: CreateSsoProviderDto,
+    creatorId: string,
+    workspaceId: string,
+  ) {
+    const provider = await this.db
+      .insertInto('authProviders')
+      .values({
+        name: dto.name,
+        type: dto.type,
+        creatorId,
+        workspaceId,
+      })
+      .returningAll()
+      .executeTakeFirstOrThrow();
+
+    return this.sanitizeProvider(provider);
+  }
+
+  async updateProvider(dto: UpdateSsoProviderDto, workspaceId: string) {
+    return executeTx(this.db, async (trx) => {
+      const current = await this.requireProvider(
+        dto.providerId,
+        workspaceId,
+        trx,
+      );
+      const { providerId: _, ...input } = dto;
+      const updates: Record<string, unknown> = {
+        ...input,
+        updatedAt: new Date(),
+      };
+
+      if (
+        input.oidcClientSecret === REDACTED_SECRET ||
+        input.oidcClientSecret === ''
+      ) {
+        delete updates.oidcClientSecret;
+      } else if (input.oidcClientSecret) {
+        updates.oidcClientSecret = this.encryptSecret(input.oidcClientSecret);
+      }
+
+      if (
+        input.ldapBindPassword === REDACTED_SECRET ||
+        input.ldapBindPassword === ''
+      ) {
+        delete updates.ldapBindPassword;
+      } else if (input.ldapBindPassword) {
+        updates.ldapBindPassword = this.encryptSecret(input.ldapBindPassword);
+      }
+
+      const candidate = { ...current, ...updates } as AuthProvider;
+      if (candidate.isEnabled) {
+        this.validateProviderConfiguration(candidate);
+        await this.validateProviderEndpoints(candidate);
+      }
+
+      if (current.isEnabled && input.isEnabled === false) {
+        await this.assertSsoWillRemainAvailable(
+          workspaceId,
+          current.id,
+          trx,
+        );
+      }
+
+      const provider = await trx
+        .updateTable('authProviders')
+        .set(updates)
+        .where('id', '=', current.id)
+        .where('workspaceId', '=', workspaceId)
+        .returningAll()
+        .executeTakeFirstOrThrow();
+
+      if (input.isEnabled === false || input.groupSync === false) {
+        await this.removeProviderGroupMemberships(provider.id, trx);
+      }
+
+      return this.sanitizeProvider(provider);
+    });
+  }
+
+  async deleteProvider(providerId: string, workspaceId: string) {
+    await executeTx(this.db, async (trx) => {
+      const provider = await this.requireProvider(
+        providerId,
+        workspaceId,
+        trx,
+      );
+      if (provider.isEnabled) {
+        await this.assertSsoWillRemainAvailable(
+          workspaceId,
+          provider.id,
+          trx,
+        );
+      }
+
+      await trx
+        .updateTable('authProviders')
+        .set({
+          isEnabled: false,
+          deletedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where('id', '=', provider.id)
+        .where('workspaceId', '=', workspaceId)
+        .execute();
+
+      await this.removeProviderGroupMemberships(provider.id, trx);
+    });
+  }
+
+  async getOidcAuthorizeUrl(
+    providerId: string,
+    workspace: Workspace,
+    origin: string,
+  ) {
+    const provider = await this.requireEnabledProvider(
+      providerId,
+      workspace.id,
+      'oidc',
+    );
+    const callbackUrl = this.buildCallbackUrl(origin, 'oidc', provider.id);
+    const client = await this.createOidcClient(provider, callbackUrl);
+    const state = generators.state();
+    const nonce = generators.nonce();
+    const codeVerifier = generators.codeVerifier();
+
+    await this.createLoginState({
+      state,
+      provider,
+      codeVerifier,
+      nonce,
+    });
+
+    return client.authorizationUrl({
+      scope: 'openid email profile groups',
+      response_type: 'code',
+      redirect_uri: callbackUrl,
+      state,
+      nonce,
+      code_challenge: generators.codeChallenge(codeVerifier),
+      code_challenge_method: 'S256',
+    });
+  }
+
+  async completeOidcLogin(
+    providerId: string,
+    workspace: Workspace,
+    origin: string,
+    callbackParams: Record<string, string | string[] | undefined>,
+    request?: FastifyRequest,
+  ) {
+    const state = this.requireSingleString(callbackParams.state, 'state');
+    const loginState = await this.claimLoginState(
+      state,
+      providerId,
+      workspace.id,
+    );
+    const provider = await this.requireEnabledProvider(
+      providerId,
+      workspace.id,
+      'oidc',
+    );
+    const callbackUrl = this.buildCallbackUrl(origin, 'oidc', provider.id);
+    const client = await this.createOidcClient(provider, callbackUrl);
+    const codeVerifier = this.decryptSecret(loginState.codeVerifier);
+
+    const tokenSet = await client.callback(
+      callbackUrl,
+      callbackParams as Record<string, string>,
+      {
+        state,
+        nonce: loginState.nonce,
+        code_verifier: codeVerifier,
+      },
+    );
+
+    const identity = await this.identityFromOidc(client, tokenSet);
+    return this.finishLogin(provider, workspace, identity, request);
+  }
+
+  async getSamlAuthorizeUrl(
+    providerId: string,
+    workspace: Workspace,
+    origin: string,
+    host?: string,
+  ) {
+    const provider = await this.requireEnabledProvider(
+      providerId,
+      workspace.id,
+      'saml',
+    );
+    const state = generators.state();
+    await this.createLoginState({ state, provider });
+
+    const saml = this.createSamlClient(
+      provider,
+      origin,
+      this.createSamlCacheProvider(provider.id, this.hashState(state)),
+    );
+
+    return saml.getAuthorizeUrlAsync(state, host, {});
+  }
+
+  async completeSamlLogin(
+    providerId: string,
+    workspace: Workspace,
+    origin: string,
+    body: Record<string, string | undefined>,
+    request?: FastifyRequest,
+  ) {
+    const state = this.requireSingleString(body.RelayState, 'RelayState');
+    const samlResponse = this.requireSingleString(
+      body.SAMLResponse,
+      'SAMLResponse',
+    );
+    const loginState = await this.claimLoginState(
+      state,
+      providerId,
+      workspace.id,
+    );
+    const provider = await this.requireEnabledProvider(
+      providerId,
+      workspace.id,
+      'saml',
+    );
+    const saml = this.createSamlClient(
+      provider,
+      origin,
+      this.createSamlCacheProvider(provider.id, loginState.stateHash),
+    );
+    const result = await saml.validatePostResponseAsync({
+      SAMLResponse: samlResponse,
+    });
+
+    if (!result.profile || result.loggedOut) {
+      throw new UnauthorizedException('Invalid SAML response');
+    }
+
+    const identity = this.identityFromSaml(result.profile);
+    return this.finishLogin(provider, workspace, identity, request);
+  }
+
+  async loginWithLdap(
+    providerId: string,
+    workspace: Workspace,
+    username: string,
+    password: string,
+    request?: FastifyRequest,
+  ) {
+    const provider = await this.requireEnabledProvider(
+      providerId,
+      workspace.id,
+      'ldap',
+    );
+    const identity = await this.authenticateLdap(provider, username, password);
+    return this.finishLogin(provider, workspace, identity, request);
+  }
+
+  private async finishLogin(
+    provider: AuthProvider,
+    workspace: Workspace,
+    identity: ExternalIdentity,
+    request?: FastifyRequest,
+  ) {
+    const user = await this.resolveIdentity(provider, workspace, identity);
+
+    if (provider.groupSync && identity.groupsProvided) {
+      await this.syncGroups(provider, user, identity.groups);
+    }
+
+    return this.mfaService.issueLoginTokenForUser(user, workspace, request);
+  }
+
+  private async resolveIdentity(
+    provider: AuthProvider,
+    workspace: Workspace,
+    identity: ExternalIdentity,
+  ): Promise<User> {
+    return executeTx(this.db, async (trx) => {
+      await sql`
+        select pg_advisory_xact_lock(
+          hashtextextended(
+            ${`sso-identity:${provider.id}:${identity.providerUserId}`},
+            0
+          )
+        )
+      `.execute(trx);
+
+      const existingAccount = await trx
+        .selectFrom('authAccounts')
+        .select(['userId'])
+        .where('authProviderId', '=', provider.id)
+        .where('providerUserId', '=', identity.providerUserId)
+        .where('deletedAt', 'is', null)
+        .executeTakeFirst();
+
+      if (existingAccount) {
+        const existingUser = await this.userRepo.findById(
+          existingAccount.userId,
+          workspace.id,
+          { trx },
+        );
+        this.assertActiveUser(existingUser);
+        return existingUser;
+      }
+
+      this.assertEmailVerifiedForLinking(identity);
+
+      await sql`
+        select pg_advisory_xact_lock(
+          hashtextextended(
+            ${`sso-identity-email:${workspace.id}:${identity.email}`},
+            0
+          )
+        )
+      `.execute(trx);
+
+      let user = await this.userRepo.findByEmail(identity.email, workspace.id, {
+        trx,
+      });
+
+      if (!user) {
+        if (!provider.allowSignup) {
+          throw new ForbiddenException(
+            'No account is linked to this SSO identity',
+          );
+        }
+
+        this.assertSignupDomainAllowed(identity.email, workspace);
+        user = await this.signupService.signup(
+          {
+            email: identity.email,
+            name: identity.name,
+            password: randomBytes(48).toString('base64url'),
+          },
+          workspace.id,
+          trx,
+        );
+
+        await trx
+          .updateTable('users')
+          .set({
+            emailVerifiedAt: new Date(),
+            hasGeneratedPassword: true,
+            updatedAt: new Date(),
+          })
+          .where('id', '=', user.id)
+          .where('workspaceId', '=', workspace.id)
+          .execute();
+        user = {
+          ...user,
+          emailVerifiedAt: new Date(),
+          hasGeneratedPassword: true,
+        };
+      } else {
+        this.assertActiveUser(user);
+      }
+
+      const existingUserLink = await trx
+        .selectFrom('authAccounts')
+        .select(['id', 'providerUserId', 'deletedAt'])
+        .where('authProviderId', '=', provider.id)
+        .where('userId', '=', user.id)
+        .executeTakeFirst();
+
+      if (existingUserLink && !existingUserLink.deletedAt) {
+        throw new ForbiddenException(
+          'This account is already linked to another identity from this provider',
+        );
+      }
+
+      if (existingUserLink) {
+        await trx
+          .updateTable('authAccounts')
+          .set({
+            providerUserId: identity.providerUserId,
+            workspaceId: workspace.id,
+            deletedAt: null,
+            updatedAt: new Date(),
+          })
+          .where('id', '=', existingUserLink.id)
+          .execute();
+      } else {
+        await trx
+          .insertInto('authAccounts')
+          .values({
+            userId: user.id,
+            providerUserId: identity.providerUserId,
+            authProviderId: provider.id,
+            workspaceId: workspace.id,
+          })
+          .execute();
+      }
+
+      return user;
+    });
+  }
+
+  private async syncGroups(
+    provider: AuthProvider,
+    user: User,
+    externalGroups: Array<{ id: string; name: string }>,
+  ) {
+    const { groups, completeSnapshot } =
+      this.prepareGroupSyncSnapshot(externalGroups);
+
+    await executeTx(this.db, async (trx) => {
+      const currentProvider = await trx
+        .selectFrom('authProviders')
+        .select(['isEnabled', 'groupSync', 'deletedAt'])
+        .where('id', '=', provider.id)
+        .where('workspaceId', '=', provider.workspaceId)
+        .forShare()
+        .executeTakeFirst();
+      if (
+        !currentProvider?.isEnabled ||
+        !currentProvider.groupSync ||
+        currentProvider.deletedAt
+      ) {
+        return;
+      }
+
+      await sql`
+        select pg_advisory_xact_lock(
+          hashtextextended(${`sso-groups:${user.id}`}, 0)
+        )
+      `.execute(trx);
+
+      const mappings = await trx
+        .selectFrom('authProviderGroupMappings')
+        .selectAll()
+        .where('authProviderId', '=', provider.id)
+        .execute();
+      const mappingByExternalId = new Map(
+        mappings.map((mapping) => [mapping.externalGroupId, mapping]),
+      );
+      const activeGroupIds = new Set<string>();
+
+      for (const externalGroup of groups) {
+        let mapping = mappingByExternalId.get(externalGroup.id);
+
+        if (!mapping) {
+          const groupId = await this.resolveGroupId(
+            provider,
+            externalGroup.name,
+            trx,
+          );
+          mapping = await trx
+            .insertInto('authProviderGroupMappings')
+            .values({
+              authProviderId: provider.id,
+              groupId,
+              externalGroupId: externalGroup.id,
+            })
+            .onConflict((oc) =>
+              oc
+                .columns(['authProviderId', 'externalGroupId'])
+                .doNothing(),
+            )
+            .returningAll()
+            .executeTakeFirst();
+          mapping ??= await trx
+            .selectFrom('authProviderGroupMappings')
+            .selectAll()
+            .where('authProviderId', '=', provider.id)
+            .where('externalGroupId', '=', externalGroup.id)
+            .executeTakeFirstOrThrow();
+          mappingByExternalId.set(externalGroup.id, mapping);
+        }
+
+        activeGroupIds.add(mapping.groupId);
+        const insertedMembership = await trx
+          .insertInto('groupUsers')
+          .values({ userId: user.id, groupId: mapping.groupId })
+          .onConflict((oc) => oc.columns(['groupId', 'userId']).doNothing())
+          .returning('id')
+          .executeTakeFirst();
+
+        const trackedMembership = await trx
+          .selectFrom('authProviderGroupMemberships')
+          .select(['id', 'ownsGroupMembership'])
+          .where('authProviderId', '=', provider.id)
+          .where('userId', '=', user.id)
+          .where('groupId', '=', mapping.groupId)
+          .executeTakeFirst();
+
+        if (trackedMembership) {
+          if (insertedMembership && !trackedMembership.ownsGroupMembership) {
+            await trx
+              .updateTable('authProviderGroupMemberships')
+              .set({ ownsGroupMembership: true, updatedAt: new Date() })
+              .where('id', '=', trackedMembership.id)
+              .execute();
+          }
+        } else {
+          await trx
+            .insertInto('authProviderGroupMemberships')
+            .values({
+              authProviderId: provider.id,
+              userId: user.id,
+              groupId: mapping.groupId,
+              ownsGroupMembership: Boolean(insertedMembership),
+            })
+            .execute();
+        }
+      }
+
+      const trackedMemberships = await trx
+        .selectFrom('authProviderGroupMemberships')
+        .select(['id', 'groupId', 'ownsGroupMembership'])
+        .where('authProviderId', '=', provider.id)
+        .where('userId', '=', user.id)
+        .execute();
+      if (!completeSnapshot) {
+        return;
+      }
+      const staleMemberships = trackedMemberships.filter(
+        (membership) => !activeGroupIds.has(membership.groupId),
+      );
+
+      for (const staleMembership of staleMemberships) {
+        await this.releaseProviderGroupMembership(
+          {
+            ...staleMembership,
+            userId: user.id,
+          },
+          trx,
+        );
+      }
+    });
+  }
+
+  private async removeProviderGroupMemberships(
+    providerId: string,
+    trx: KyselyTransaction,
+  ) {
+    const userRows = await trx
+      .selectFrom('authProviderGroupMemberships')
+      .select('userId')
+      .distinct()
+      .where('authProviderId', '=', providerId)
+      .orderBy('userId', 'asc')
+      .execute();
+
+    for (const { userId } of userRows) {
+      await sql`
+        select pg_advisory_xact_lock(
+          hashtextextended(${`sso-groups:${userId}`}, 0)
+        )
+      `.execute(trx);
+
+      const memberships = await trx
+        .selectFrom('authProviderGroupMemberships')
+        .select(['id', 'userId', 'groupId', 'ownsGroupMembership'])
+        .where('authProviderId', '=', providerId)
+        .where('userId', '=', userId)
+        .orderBy('groupId', 'asc')
+        .execute();
+
+      for (const membership of memberships) {
+        await this.releaseProviderGroupMembership(membership, trx);
+      }
+    }
+  }
+
+  private async releaseProviderGroupMembership(
+    membership: {
+      id: string;
+      userId: string;
+      groupId: string;
+      ownsGroupMembership: boolean;
+    },
+    trx: KyselyTransaction,
+  ) {
+    await trx
+      .deleteFrom('authProviderGroupMemberships')
+      .where('id', '=', membership.id)
+      .execute();
+
+    if (!membership.ownsGroupMembership) {
+      return;
+    }
+
+    const successor = await trx
+      .selectFrom('authProviderGroupMemberships')
+      .innerJoin(
+        'authProviders',
+        'authProviders.id',
+        'authProviderGroupMemberships.authProviderId',
+      )
+      .select('authProviderGroupMemberships.id')
+      .where('authProviderGroupMemberships.userId', '=', membership.userId)
+      .where('authProviderGroupMemberships.groupId', '=', membership.groupId)
+      .where('authProviders.isEnabled', '=', true)
+      .where('authProviders.groupSync', '=', true)
+      .where('authProviders.deletedAt', 'is', null)
+      .orderBy('authProviderGroupMemberships.createdAt', 'asc')
+      .executeTakeFirst();
+
+    if (successor) {
+      await trx
+        .updateTable('authProviderGroupMemberships')
+        .set({ ownsGroupMembership: true, updatedAt: new Date() })
+        .where('id', '=', successor.id)
+        .execute();
+      return;
+    }
+
+    await trx
+      .deleteFrom('groupUsers')
+      .where('userId', '=', membership.userId)
+      .where('groupId', '=', membership.groupId)
+      .execute();
+  }
+
+  private prepareGroupSyncSnapshot(
+    externalGroups: Array<{ id: string; name: string }>,
+  ) {
+    const normalizedGroups = externalGroups
+      .map((group) => ({
+        id: group.id.trim(),
+        name: group.name.trim().slice(0, 100),
+      }))
+      .filter((group) => group.id && group.name);
+    const uniqueGroups = new Map<string, { id: string; name: string }>();
+    let completeSnapshot = true;
+    for (const group of normalizedGroups) {
+      if (group.id.length > MAX_EXTERNAL_IDENTIFIER_LENGTH) {
+        completeSnapshot = false;
+        continue;
+      }
+      uniqueGroups.set(group.id, group);
+    }
+    const sortedGroups = [...uniqueGroups.values()].sort((left, right) =>
+      left.id.localeCompare(right.id),
+    );
+    if (sortedGroups.length > MAX_SYNCED_GROUPS) {
+      completeSnapshot = false;
+    }
+    return {
+      groups: sortedGroups.slice(0, MAX_SYNCED_GROUPS),
+      completeSnapshot,
+    };
+  }
+
+  private async resolveGroupId(
+    provider: AuthProvider,
+    rawName: string,
+    trx: KyselyTransaction,
+  ) {
+    const name = rawName.trim().slice(0, 100);
+    await sql`
+      select pg_advisory_xact_lock(
+        hashtextextended(
+          ${`sso-group:${provider.workspaceId}:${name.toLocaleLowerCase()}`},
+          0
+        )
+      )
+    `.execute(trx);
+    const existing = await trx
+      .selectFrom('groups')
+      .select('id')
+      .where('workspaceId', '=', provider.workspaceId)
+      .where(sql`LOWER(name)`, '=', sql`LOWER(${name})`)
+      .where('deletedAt', 'is', null)
+      .executeTakeFirst();
+
+    if (existing) {
+      return existing.id;
+    }
+
+    const created = await trx
+      .insertInto('groups')
+      .values({
+        name,
+        description: `Synced from ${provider.name} SSO`,
+        isDefault: false,
+        workspaceId: provider.workspaceId,
+        creatorId: provider.creatorId,
+      })
+      .onConflict((oc) => oc.columns(['name', 'workspaceId']).doNothing())
+      .returning('id')
+      .executeTakeFirst();
+    if (created) {
+      return created.id;
+    }
+
+    const raced = await trx
+      .selectFrom('groups')
+      .select('id')
+      .where('workspaceId', '=', provider.workspaceId)
+      .where('name', '=', name)
+      .where('deletedAt', 'is', null)
+      .executeTakeFirstOrThrow();
+    return raced.id;
+  }
+
+  private async identityFromOidc(client: OidcClient, tokenSet: TokenSet) {
+    const claims = tokenSet.claims();
+    let userInfo: Partial<UserinfoResponse> = {};
+
+    if (tokenSet.access_token) {
+      try {
+        userInfo = await client.userinfo(tokenSet);
+      } catch {
+        // Some providers return complete identity claims in the ID token only.
+      }
+    }
+
+    const identity = { ...claims, ...userInfo } as Record<string, unknown>;
+    const emailClaims = this.valueAsString(claims.email)
+      ? (claims as Record<string, unknown>)
+      : (userInfo as Record<string, unknown>);
+    identity.sub = claims.sub;
+    identity.email = emailClaims.email;
+    identity.email_verified = emailClaims.email_verified;
+    const providerUserId = this.valueAsString(identity.sub);
+    const email = this.valueAsString(identity.email);
+    if (
+      !providerUserId ||
+      providerUserId.length > MAX_EXTERNAL_IDENTIFIER_LENGTH ||
+      !email
+    ) {
+      throw new UnauthorizedException(
+        'OIDC provider did not return the required subject and email claims',
+      );
+    }
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!isEmail(normalizedEmail)) {
+      throw new UnauthorizedException(
+        'OIDC provider returned an invalid email address',
+      );
+    }
+
+    const name =
+      this.valueAsString(identity.name) ||
+      [identity.given_name, identity.family_name]
+        .map((value) => this.valueAsString(value))
+        .filter(Boolean)
+        .join(' ');
+
+    const groupClaims = this.extractGroups(identity);
+    return {
+      providerUserId,
+      email: normalizedEmail,
+      emailVerified:
+        identity.email_verified === true || identity.email_verified === 'true',
+      name: name?.trim().slice(0, 50) || undefined,
+      groupsProvided: groupClaims.provided,
+      groups: groupClaims.groups,
+    };
+  }
+
+  private identityFromSaml(profile: Profile): ExternalIdentity {
+    const identity = profile as Record<string, unknown>;
+    const providerUserId = this.valueAsString(profile.nameID);
+    const email =
+      this.valueAsString(profile.email) ||
+      this.valueAsString(profile.mail) ||
+      this.valueAsString(profile['urn:oid:0.9.2342.19200300.100.1.3']) ||
+      (providerUserId?.includes('@') ? providerUserId : null);
+
+    if (
+      !providerUserId ||
+      providerUserId.length > MAX_EXTERNAL_IDENTIFIER_LENGTH ||
+      !email
+    ) {
+      throw new UnauthorizedException(
+        'SAML provider did not return the required NameID and email claims',
+      );
+    }
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!isEmail(normalizedEmail)) {
+      throw new UnauthorizedException(
+        'SAML provider returned an invalid email address',
+      );
+    }
+
+    const name =
+      this.valueAsString(identity.displayName) ||
+      this.valueAsString(identity.cn) ||
+      [identity.givenName, identity.surname]
+        .map((value) => this.valueAsString(value))
+        .filter(Boolean)
+        .join(' ');
+
+    const groupClaims = this.extractGroups(identity);
+    return {
+      providerUserId,
+      email: normalizedEmail,
+      emailVerified: true,
+      name: name?.trim().slice(0, 50) || undefined,
+      groupsProvided: groupClaims.provided,
+      groups: groupClaims.groups,
+    };
+  }
+
+  private async authenticateLdap(
+    provider: AuthProvider,
+    username: string,
+    password: string,
+  ): Promise<ExternalIdentity> {
+    const url = await this.endpointPolicy.assertAllowed(
+      provider.ldapUrl,
+      ['ldap:', 'ldaps:'],
+      'LDAP',
+    );
+    if (!['ldap:', 'ldaps:'].includes(url.protocol)) {
+      throw new BadRequestException('LDAP URL must use ldap:// or ldaps://');
+    }
+
+    const tlsOptions = {
+      rejectUnauthorized: true,
+      ...(provider.ldapTlsCaCert
+        ? { ca: [provider.ldapTlsCaCert] }
+        : undefined),
+    };
+    const client = new LdapClient({
+      url: provider.ldapUrl,
+      timeout: 10_000,
+      connectTimeout: 10_000,
+      ...(url.protocol === 'ldaps:' ? { tlsOptions } : undefined),
+    });
+
+    try {
+      if (url.protocol === 'ldap:' && provider.ldapTlsEnabled) {
+        await client.startTLS(tlsOptions);
+      }
+
+      await client.bind(
+        provider.ldapBindDn,
+        this.decryptSecret(provider.ldapBindPassword),
+      );
+
+      const attributes = this.getLdapAttributeMapping(provider);
+      const filterTemplate =
+        provider.ldapUserSearchFilter || '(mail={{username}})';
+      const filter = filterTemplate.replace(
+        /\{\{username\}\}/g,
+        this.escapeLdapFilterValue(username.trim()),
+      );
+      const requestedAttributes = Array.from(
+        new Set([
+          attributes.id,
+          attributes.email,
+          attributes.name,
+          attributes.groups,
+          'entryUUID',
+          'objectGUID',
+        ]),
+      ).filter(Boolean);
+      const result = await client.search(provider.ldapBaseDn, {
+        scope: 'sub',
+        filter,
+        attributes: requestedAttributes,
+        sizeLimit: 2,
+        timeLimit: 10,
+      });
+
+      if (result.searchEntries.length !== 1) {
+        throw new UnauthorizedException('LDAP account was not found');
+      }
+
+      const entry = result.searchEntries[0];
+      await client.bind(entry.dn, password);
+      return this.identityFromLdap(entry, attributes, username);
+    } catch (error) {
+      if (
+        error instanceof BadRequestException ||
+        error instanceof UnauthorizedException
+      ) {
+        throw error;
+      }
+      throw new UnauthorizedException('LDAP authentication failed');
+    } finally {
+      await client.unbind().catch(() => undefined);
+    }
+  }
+
+  private identityFromLdap(
+    entry: LdapEntry,
+    attributes: Record<'id' | 'email' | 'name' | 'groups', string>,
+    username: string,
+  ): ExternalIdentity {
+    const email =
+      this.ldapValue(entry[attributes.email]) ||
+      (username.includes('@') ? username : null);
+    const providerUserId =
+      this.ldapValue(entry[attributes.id]) ||
+      this.ldapValue(entry.entryUUID) ||
+      this.ldapValue(entry.objectGUID) ||
+      entry.dn;
+
+    const normalizedEmail = email?.trim().toLowerCase();
+    if (
+      !normalizedEmail ||
+      !providerUserId ||
+      providerUserId.length > MAX_EXTERNAL_IDENTIFIER_LENGTH ||
+      !isEmail(normalizedEmail)
+    ) {
+      throw new UnauthorizedException(
+        'LDAP entry is missing a stable identifier or email address',
+      );
+    }
+
+    const groupValues = this.ldapValues(entry[attributes.groups]);
+    return {
+      providerUserId,
+      email: normalizedEmail,
+      emailVerified: true,
+      name:
+        this.ldapValue(entry[attributes.name])?.trim().slice(0, 50) ||
+        undefined,
+      groupsProvided: true,
+      groups: groupValues.map((group) => ({
+        id: group,
+        name: this.ldapGroupName(group),
+      })),
+    };
+  }
+
+  private getLdapAttributeMapping(provider: AuthProvider) {
+    const configured =
+      provider.ldapUserAttributes &&
+      typeof provider.ldapUserAttributes === 'object'
+        ? (provider.ldapUserAttributes as Record<string, unknown>)
+        : {};
+
+    return {
+      id: this.valueAsString(configured.id) || 'entryUUID',
+      email: this.valueAsString(configured.email) || 'mail',
+      name: this.valueAsString(configured.name) || 'displayName',
+      groups: this.valueAsString(configured.groups) || 'memberOf',
+    };
+  }
+
+  private createSamlClient(
+    provider: AuthProvider,
+    origin: string,
+    cacheProvider: CacheProvider,
+  ) {
+    return new SAML({
+      entryPoint: provider.samlUrl,
+      idpCert: provider.samlCertificate,
+      issuer: this.buildLoginUrl(origin, 'saml', provider.id),
+      callbackUrl: this.buildCallbackUrl(origin, 'saml', provider.id),
+      wantAssertionsSigned: true,
+      wantAuthnResponseSigned: true,
+      validateInResponseTo: ValidateInResponseTo.always,
+      requestIdExpirationPeriodMs: SSO_STATE_TTL_MS,
+      cacheProvider,
+    });
+  }
+
+  private createSamlCacheProvider(
+    providerId: string,
+    stateHash: string,
+  ): CacheProvider {
+    return {
+      saveAsync: async (key: string, value: string) => {
+        const row = await this.db
+          .updateTable('ssoLoginStates')
+          .set({ requestId: key, requestValue: value })
+          .where('stateHash', '=', stateHash)
+          .where('authProviderId', '=', providerId)
+          .where('consumedAt', 'is', null)
+          .returning(['createdAt'])
+          .executeTakeFirst();
+        return row ? { value, createdAt: row.createdAt.getTime() } : null;
+      },
+      getAsync: async (key: string) => {
+        const row = await this.db
+          .selectFrom('ssoLoginStates')
+          .select('requestValue')
+          .where('authProviderId', '=', providerId)
+          .where('stateHash', '=', stateHash)
+          .where('requestId', '=', key)
+          .where('expiresAt', '>', new Date())
+          .executeTakeFirst();
+        return row?.requestValue ?? null;
+      },
+      removeAsync: async (key: string) => {
+        const row = await this.db
+          .selectFrom('ssoLoginStates')
+          .select('requestValue')
+          .where('authProviderId', '=', providerId)
+          .where('stateHash', '=', stateHash)
+          .where('requestId', '=', key)
+          .executeTakeFirst();
+
+        if (!row) {
+          return null;
+        }
+
+        await this.db
+          .updateTable('ssoLoginStates')
+          .set({ requestValue: null })
+          .where('authProviderId', '=', providerId)
+          .where('stateHash', '=', stateHash)
+          .where('requestId', '=', key)
+          .execute();
+        return row.requestValue;
+      },
+    };
+  }
+
+  private async createOidcClient(provider: AuthProvider, callbackUrl: string) {
+    const issuer = await Issuer.discover(provider.oidcIssuer);
+    const metadataEndpoints = [
+      issuer.metadata.authorization_endpoint,
+      issuer.metadata.token_endpoint,
+      issuer.metadata.userinfo_endpoint,
+      issuer.metadata.jwks_uri,
+    ].filter((value): value is string => Boolean(value));
+    for (const endpoint of metadataEndpoints) {
+      await this.endpointPolicy.assertAllowed(
+        endpoint,
+        ['http:', 'https:'],
+        'OIDC metadata',
+      );
+    }
+    return new issuer.Client({
+      client_id: provider.oidcClientId,
+      client_secret: this.decryptSecret(provider.oidcClientSecret),
+      redirect_uris: [callbackUrl],
+      response_types: ['code'],
+    });
+  }
+
+  private async createLoginState(input: {
+    state: string;
+    provider: AuthProvider;
+    codeVerifier?: string;
+    nonce?: string;
+  }) {
+    await this.db
+      .insertInto('ssoLoginStates')
+      .values({
+        stateHash: this.hashState(input.state),
+        authProviderId: input.provider.id,
+        workspaceId: input.provider.workspaceId,
+        codeVerifier: input.codeVerifier
+          ? this.encryptSecret(input.codeVerifier)
+          : null,
+        nonce: input.nonce,
+        expiresAt: new Date(Date.now() + SSO_STATE_TTL_MS),
+      })
+      .execute();
+
+    await this.db
+      .deleteFrom('ssoLoginStates')
+      .where('expiresAt', '<', new Date())
+      .execute();
+  }
+
+  private async claimLoginState(
+    state: string,
+    providerId: string,
+    workspaceId: string,
+  ): Promise<SsoLoginState> {
+    const loginState = await this.db
+      .updateTable('ssoLoginStates')
+      .set({ consumedAt: new Date() })
+      .where('stateHash', '=', this.hashState(state))
+      .where('authProviderId', '=', providerId)
+      .where('workspaceId', '=', workspaceId)
+      .where('expiresAt', '>', new Date())
+      .where('consumedAt', 'is', null)
+      .returningAll()
+      .executeTakeFirst();
+
+    if (!loginState) {
+      throw new UnauthorizedException('SSO login state is invalid or expired');
+    }
+    return loginState;
+  }
+
+  private async requireProvider(
+    providerId: string,
+    workspaceId: string,
+    trx?: KyselyTransaction,
+  ) {
+    const provider = await (trx ?? this.db)
+      .selectFrom('authProviders')
+      .selectAll()
+      .where('id', '=', providerId)
+      .where('workspaceId', '=', workspaceId)
+      .where('deletedAt', 'is', null)
+      .executeTakeFirst();
+
+    if (!provider) {
+      throw new NotFoundException('SSO provider not found');
+    }
+    return provider;
+  }
+
+  private async requireEnabledProvider(
+    providerId: string,
+    workspaceId: string,
+    type: SsoProviderType,
+  ) {
+    const provider = await this.requireProvider(providerId, workspaceId);
+    if (!provider.isEnabled || provider.type !== type) {
+      throw new NotFoundException('SSO provider not found');
+    }
+    this.validateProviderConfiguration(provider);
+    await this.validateProviderEndpoints(provider);
+    return provider;
+  }
+
+  private validateProviderConfiguration(provider: AuthProvider) {
+    if (provider.type === 'oidc') {
+      this.requireFields(provider, [
+        'oidcIssuer',
+        'oidcClientId',
+        'oidcClientSecret',
+      ]);
+      this.assertHttpUrl(provider.oidcIssuer, 'OIDC issuer');
+      return;
+    }
+
+    if (provider.type === 'saml') {
+      this.requireFields(provider, ['samlUrl', 'samlCertificate']);
+      this.assertHttpUrl(provider.samlUrl, 'SAML login');
+      return;
+    }
+
+    if (provider.type === 'ldap') {
+      this.requireFields(provider, [
+        'ldapUrl',
+        'ldapBindDn',
+        'ldapBindPassword',
+        'ldapBaseDn',
+      ]);
+      let ldapUrl: URL;
+      try {
+        ldapUrl = new URL(provider.ldapUrl);
+      } catch {
+        throw new BadRequestException('LDAP URL is invalid');
+      }
+      if (!['ldap:', 'ldaps:'].includes(ldapUrl.protocol)) {
+        throw new BadRequestException('LDAP URL must use ldap:// or ldaps://');
+      }
+      if (ldapUrl.username || ldapUrl.password || ldapUrl.hash) {
+        throw new BadRequestException(
+          'LDAP URL cannot contain credentials or a fragment',
+        );
+      }
+      if (ldapUrl.protocol === 'ldap:' && !provider.ldapTlsEnabled) {
+        throw new BadRequestException(
+          'LDAP must use LDAPS or enable StartTLS before credentials are sent',
+        );
+      }
+      const filter = provider.ldapUserSearchFilter || '(mail={{username}})';
+      if (!filter.includes('{{username}}')) {
+        throw new BadRequestException(
+          'LDAP user search filter must contain {{username}}',
+        );
+      }
+      const attributes = this.getLdapAttributeMapping(provider);
+      if (
+        Object.values(attributes).some(
+          (attribute) => !/^[a-zA-Z][a-zA-Z0-9;._-]{0,127}$/.test(attribute),
+        )
+      ) {
+        throw new BadRequestException(
+          'LDAP attribute names contain unsupported characters',
+        );
+      }
+      return;
+    }
+
+    throw new BadRequestException('Unsupported SSO provider type');
+  }
+
+  private async validateProviderEndpoints(provider: AuthProvider) {
+    if (provider.type === 'oidc') {
+      await this.endpointPolicy.assertAllowed(
+        provider.oidcIssuer,
+        ['http:', 'https:'],
+        'OIDC issuer',
+      );
+      return;
+    }
+
+    if (provider.type === 'saml') {
+      await this.endpointPolicy.assertAllowed(
+        provider.samlUrl,
+        ['http:', 'https:'],
+        'SAML login',
+      );
+      return;
+    }
+
+    if (provider.type === 'ldap') {
+      await this.endpointPolicy.assertAllowed(
+        provider.ldapUrl,
+        ['ldap:', 'ldaps:'],
+        'LDAP',
+      );
+    }
+  }
+
+  private requireFields(
+    provider: AuthProvider,
+    fields: Array<keyof AuthProvider>,
+  ) {
+    const missing = fields.filter((field) => !provider[field]);
+    if (missing.length) {
+      throw new BadRequestException(
+        `SSO provider configuration is incomplete: ${missing.join(', ')}`,
+      );
+    }
+  }
+
+  private async assertSsoWillRemainAvailable(
+    workspaceId: string,
+    excludedProviderId: string,
+    trx: KyselyTransaction,
+  ) {
+    const workspace = await trx
+      .selectFrom('workspaces')
+      .select('enforceSso')
+      .where('id', '=', workspaceId)
+      .forUpdate()
+      .executeTakeFirstOrThrow();
+
+    if (!workspace.enforceSso) {
+      return;
+    }
+
+    const otherProviders = await trx
+      .selectFrom('authProviders')
+      .selectAll()
+      .where('workspaceId', '=', workspaceId)
+      .where('id', '!=', excludedProviderId)
+      .where('isEnabled', '=', true)
+      .where('deletedAt', 'is', null)
+      .where('type', 'in', [...SSO_PROVIDER_TYPES])
+      .execute();
+
+    const otherProvider = otherProviders.some(isUsableSsoProvider);
+
+    if (!otherProvider) {
+      throw new BadRequestException(
+        'At least one enabled SSO provider is required while SSO is enforced',
+      );
+    }
+  }
+
+  private sanitizeProvider(provider: AuthProvider) {
+    const { ldapConfig: _, settings: __, ...safeProvider } = provider;
+    return {
+      ...safeProvider,
+      oidcClientSecret: provider.oidcClientSecret ? REDACTED_SECRET : '',
+      ldapBindPassword: provider.ldapBindPassword ? REDACTED_SECRET : '',
+    };
+  }
+
+  private assertSignupDomainAllowed(email: string, workspace: Workspace) {
+    const allowedDomains = (workspace.emailDomains || []).map((domain) =>
+      domain.toLowerCase(),
+    );
+    if (!allowedDomains.length) {
+      return;
+    }
+
+    const domain = email.split('@').pop()?.toLowerCase();
+    if (!domain || !allowedDomains.includes(domain)) {
+      throw new ForbiddenException(
+        'Email domain is not allowed in this workspace',
+      );
+    }
+  }
+
+  private assertActiveUser(user?: User) {
+    if (!user || user.deletedAt || user.deactivatedAt) {
+      throw new ForbiddenException('Account is not active');
+    }
+  }
+
+  private assertEmailVerifiedForLinking(identity: ExternalIdentity) {
+    if (!identity.emailVerified) {
+      throw new UnauthorizedException(
+        'SSO provider did not verify the email address',
+      );
+    }
+  }
+
+  private extractGroups(identity: Record<string, unknown>) {
+    const claimNames = [
+      'groups',
+      'memberOf',
+      'http://schemas.microsoft.com/ws/2008/06/identity/claims/groups',
+      'http://schemas.xmlsoap.org/claims/Group',
+    ];
+    const claimName = claimNames.find((name) =>
+      Object.prototype.hasOwnProperty.call(identity, name),
+    );
+    if (!claimName) {
+      return { provided: false, groups: [] };
+    }
+
+    return {
+      provided: true,
+      groups: this.valuesAsStrings(identity[claimName])
+        .map((group) => ({ id: group, name: group })),
+    };
+  }
+
+  private valuesAsStrings(value: unknown): string[] {
+    const values = Array.isArray(value) ? value : value ? [value] : [];
+    return values
+      .map((item) => this.valueAsString(item)?.trim())
+      .filter((item): item is string => Boolean(item));
+  }
+
+  private valueAsString(value: unknown): string | null {
+    if (typeof value === 'string') {
+      return value;
+    }
+    if (typeof value === 'number') {
+      return String(value);
+    }
+    if (Buffer.isBuffer(value)) {
+      return value.toString('base64url');
+    }
+    return null;
+  }
+
+  private ldapValue(
+    value: string | string[] | Buffer | Buffer[] | undefined,
+  ): string | null {
+    return this.ldapValues(value)[0] ?? null;
+  }
+
+  private ldapValues(
+    value: string | string[] | Buffer | Buffer[] | undefined,
+  ): string[] {
+    const values = Array.isArray(value) ? value : value ? [value] : [];
+    return values
+      .map((item) =>
+        Buffer.isBuffer(item) ? item.toString('base64url') : String(item),
+      )
+      .filter(Boolean);
+  }
+
+  private ldapGroupName(value: string) {
+    const match = /^cn=([^,]+)/i.exec(value);
+    return (match?.[1] || value).replace(/\\([,=+<>#;"])/g, '$1').slice(0, 100);
+  }
+
+  private escapeLdapFilterValue(value: string) {
+    return value
+      .replace(/\\/g, '\\5c')
+      .replace(/\*/g, '\\2a')
+      .replace(/\(/g, '\\28')
+      .replace(/\)/g, '\\29')
+      .replace(/\0/g, '\\00');
+  }
+
+  private requireSingleString(
+    value: string | string[] | undefined,
+    field: string,
+  ) {
+    if (typeof value !== 'string' || !value) {
+      throw new BadRequestException(`${field} is required`);
+    }
+    return value;
+  }
+
+  private assertHttpUrl(value: string, label: string) {
+    let parsed: URL;
+    try {
+      parsed = new URL(value);
+    } catch {
+      throw new BadRequestException(`${label} URL is invalid`);
+    }
+    if (!['https:', 'http:'].includes(parsed.protocol)) {
+      throw new BadRequestException(`${label} URL must use HTTP or HTTPS`);
+    }
+    if (parsed.username || parsed.password || parsed.hash) {
+      throw new BadRequestException(
+        `${label} URL cannot contain credentials or a fragment`,
+      );
+    }
+  }
+
+  private buildLoginUrl(
+    origin: string,
+    type: 'oidc' | 'saml',
+    providerId: string,
+  ) {
+    return `${origin}/api/sso/${type}/${providerId}/login`;
+  }
+
+  private buildCallbackUrl(
+    origin: string,
+    type: 'oidc' | 'saml',
+    providerId: string,
+  ) {
+    return `${origin}/api/sso/${type}/${providerId}/callback`;
+  }
+
+  private hashState(state: string) {
+    return hashProtectedValue(state);
+  }
+
+  private encryptSecret(value: string) {
+    return encryptProtectedValue(value, this.environmentService.getAppSecret());
+  }
+
+  private decryptSecret(value?: string | null) {
+    if (!value) {
+      throw new BadRequestException('SSO provider secret is missing');
+    }
+    return decryptProtectedValue(value, this.environmentService.getAppSecret());
+  }
+}

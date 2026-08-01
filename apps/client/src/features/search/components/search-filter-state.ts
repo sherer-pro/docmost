@@ -17,7 +17,6 @@ interface SearchFilterPayloadInput {
   contentType: string | null;
   label: SelectedSearchLabel | null;
   tag: TagValue | null;
-  isAiMode: boolean;
 }
 
 export function getSearchFilterPayload({
@@ -25,9 +24,8 @@ export function getSearchFilterPayload({
   contentType,
   label,
   tag,
-  isAiMode,
 }: SearchFilterPayloadInput): SearchFilterPayload {
-  const supportsPageFilters = contentType !== "attachment" && !isAiMode;
+  const supportsPageFilters = contentType !== "attachment";
 
   return {
     spaceId,
