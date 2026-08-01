@@ -1247,6 +1247,8 @@
   "Delete the link {{name}}?": "Delete the link {{name}}?",
   "ai": {
     "integrations": {
+      "backToSpace": "스페이스로 돌아가기",
+      "spacesEmptyTitle": "스페이스를 찾을 수 없습니다",
       "title": "AI and integrations",
       "description": "Configure AI assistants, external access, search, and per-space behavior.",
       "mcpTitle": "MCP access",
@@ -1265,10 +1267,11 @@
       "spaceCardTitle": "AI assistant",
       "spaceCardDescription": "Model, identity, behavior, agent mode, search, and usage limits are managed on a dedicated page.",
       "openFullSettings": "Open full settings",
-      "backToOverview": "Back to AI and integrations",
+      "backToOverview": "AI 어시스턴트로 돌아가기",
       "spaceSettingsDescription": "Configure the AI assistant for this space.",
       "sectionLabel": "Settings section",
       "section": {
+        "content": "지식 액세스",
         "overview": "Overview",
         "identity": "Identity",
         "model": "Model",
@@ -1455,6 +1458,7 @@
     "generationCompleted": "AI 응답이 준비되었습니다.",
     "generationStopped": "AI 생성이 중단되었습니다.",
     "settings": {
+      "contentPolicyDescription": "제외 설정은 AI 채팅, 스페이스 검색, RAG 동기화 및 MCP에 적용됩니다. 일반 Docmost 검색은 변경되지 않습니다.",
       "agentSection": "Agent mode",
       "agentSectionDescription": "Enable bounded tool use and individually confirmed edits.",
       "agentEnabled": "Enable AI agent",
@@ -1669,6 +1673,7 @@
       "loadMore": "더 로드하기"
     },
     "ux": {
+      "toggleSecretVisibility": "비밀 표시 또는 숨기기",
       "loading": "불러오는 중…",
       "jumpToLatest": "최신 답변으로 이동",
       "draftSaving": "초안 저장 중…",

@@ -9,9 +9,10 @@ import {
   IconSpaces,
   IconBrush,
   IconLock,
-  IconKey,
   IconWorld,
   IconSparkles,
+  IconDatabase,
+  IconPlugConnected,
 } from "@tabler/icons-react";
 import { Link, useLocation } from "react-router-dom";
 import classes from "./settings.module.css";
@@ -25,7 +26,6 @@ import {
 } from "@/features/user/atoms/current-user-atom.ts";
 import {
   prefetchApiKeyManagement,
-  prefetchApiKeys,
   prefetchGroups,
   prefetchShares,
   prefetchSpaces,
@@ -37,7 +37,10 @@ import { mobileSidebarAtom } from "@/components/layouts/global/hooks/atoms/sideb
 import { useToggleSidebar } from "@/components/layouts/global/hooks/hooks/use-toggle-sidebar.ts";
 import { useSettingsNavigation } from "@/hooks/use-settings-navigation";
 import { getGroups } from "@/features/group/services/group-service.ts";
-import { canAccessSettingsPath } from "@/components/settings/workspace-settings-access.ts";
+import {
+  canAccessSettingsPath,
+  isSettingsItemActive,
+} from "@/components/settings/workspace-settings-access.ts";
 
 interface DataItem {
   label: string;
@@ -60,11 +63,6 @@ const groupedData: DataGroup[] = [
         label: "Preferences",
         icon: IconBrush,
         path: "/settings/account/preferences",
-      },
-      {
-        label: "API keys",
-        icon: IconKey,
-        path: "/settings/account/api-keys",
       },
     ],
   },
@@ -92,9 +90,21 @@ const groupedData: DataGroup[] = [
       { label: "Spaces", icon: IconSpaces, path: "/settings/spaces" },
       { label: "Public sharing", icon: IconWorld, path: "/settings/sharing" },
       {
-        label: "AI and integrations",
+        label: "ai.title",
         icon: IconSparkles,
         path: "/settings/ai",
+        isAdmin: true,
+      },
+      {
+        label: "RAG sync",
+        icon: IconDatabase,
+        path: "/settings/ai/rag",
+        isAdmin: true,
+      },
+      {
+        label: "MCP",
+        icon: IconPlugConnected,
+        path: "/settings/ai/mcp",
         isAdmin: true,
       },
     ],
@@ -176,11 +186,11 @@ export default function SettingsSidebar() {
             case "Public sharing":
               prefetchHandler = prefetchShares;
               break;
-            case "API keys":
-              prefetchHandler = prefetchApiKeys;
+            case "RAG sync":
+              prefetchHandler = () => prefetchApiKeyManagement("rag");
               break;
-            case "AI and integrations":
-              prefetchHandler = prefetchApiKeyManagement;
+            case "MCP":
+              prefetchHandler = () => prefetchApiKeyManagement("mcp");
               break;
             default:
               break;
@@ -190,7 +200,9 @@ export default function SettingsSidebar() {
             <Link
               onMouseEnter={prefetchHandler}
               className={classes.link}
-              data-active={active.startsWith(item.path) || undefined}
+              data-active={
+                isSettingsItemActive(active, item.path) || undefined
+              }
               key={item.label}
               to={item.path}
               onClick={() => {
@@ -220,7 +232,7 @@ export default function SettingsSidebar() {
           }}
           variant="transparent"
           c="gray"
-          aria-label="Back"
+          aria-label={t("apiKeys.back")}
         >
           <IconArrowLeft stroke={2} />
         </ActionIcon>

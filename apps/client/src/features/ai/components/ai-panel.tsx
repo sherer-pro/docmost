@@ -15,7 +15,6 @@ import {
   Skeleton,
   Stack,
   Text,
-  Textarea,
   TextInput,
   Tooltip,
 } from "@mantine/core";
@@ -37,7 +36,7 @@ import {
   IconTrash,
 } from "@tabler/icons-react";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
-import { KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMediaQuery, useReducedMotion } from "@mantine/hooks";
 import { useTranslation } from "react-i18next";
 import { notifications } from "@mantine/notifications";
@@ -88,6 +87,7 @@ import {
 } from "@/features/ai/types/ai.types.ts";
 import { captureAiEditorContext } from "@/features/ai/utils/editor-context.ts";
 import { AiMessageCard } from "./ai-message-card.tsx";
+import { AiMarkdownComposer } from "./ai-markdown-composer.tsx";
 import { AiReasoningDisclosure } from "./ai-reasoning-disclosure.tsx";
 import classes from "./ai-panel.module.css";
 import { DEFAULT_AI_QUICK_COMMANDS } from "@/features/ai/constants/quick-commands.ts";
@@ -657,13 +657,6 @@ export function AiPanel() {
   };
 
   const handleQuickCommand = (prompt: string) => void submit(prompt);
-
-  const handleComposerKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-      event.preventDefault();
-      void submit(draft);
-    }
-  };
 
   const selectConversation = (conversationId: string | null) => {
     if (!pageId || !conversationId) {
@@ -1523,35 +1516,39 @@ export function AiPanel() {
       <Box className={classes.composer}>
         <Group gap={4} wrap="nowrap" className={classes.composerToolbar}>
           {isCompactMobile ? (
-            <Button
-              variant="subtle"
-              size="compact-sm"
-              leftSection={<IconSparkles size={16} />}
-              disabled={Boolean(pendingRun)}
-              className={classes.toolbarButton}
-              aria-label={t("ai.settings.quickCommands")}
-              onClick={() => setQuickCommandsOpened(true)}
-            >
-              <span className={classes.toolbarButtonLabel}>
-                {t("ai.settings.quickCommands")}
-              </span>
-            </Button>
+            <Tooltip label={t("ai.settings.quickCommands")} withArrow>
+              <Button
+                variant="subtle"
+                size="compact-sm"
+                leftSection={<IconSparkles size={16} />}
+                disabled={Boolean(pendingRun)}
+                className={classes.toolbarButton}
+                aria-label={t("ai.settings.quickCommands")}
+                onClick={() => setQuickCommandsOpened(true)}
+              >
+                <span className={classes.toolbarButtonLabel}>
+                  {t("ai.settings.quickCommands")}
+                </span>
+              </Button>
+            </Tooltip>
           ) : (
             <Menu position="top-start" withinPortal>
               <Menu.Target>
-                <Button
-                  variant="subtle"
-                  size="compact-sm"
-                  leftSection={<IconSparkles size={16} />}
-                  rightSection={<IconChevronDown size={13} />}
-                  disabled={Boolean(pendingRun)}
-                  className={classes.toolbarButton}
-                  aria-label={t("ai.settings.quickCommands")}
-                >
-                  <span className={classes.toolbarButtonLabel}>
-                    {t("ai.settings.quickCommands")}
-                  </span>
-                </Button>
+                <Tooltip label={t("ai.settings.quickCommands")} withArrow>
+                  <Button
+                    variant="subtle"
+                    size="compact-sm"
+                    leftSection={<IconSparkles size={16} />}
+                    rightSection={<IconChevronDown size={13} />}
+                    disabled={Boolean(pendingRun)}
+                    className={classes.toolbarButton}
+                    aria-label={t("ai.settings.quickCommands")}
+                  >
+                    <span className={classes.toolbarButtonLabel}>
+                      {t("ai.settings.quickCommands")}
+                    </span>
+                  </Button>
+                </Tooltip>
               </Menu.Target>
               <Menu.Dropdown className={classes.quickCommandsMenu}>
                 <TextInput
@@ -1600,21 +1597,23 @@ export function AiPanel() {
           {spaceSearchReady && (
             <Menu position="top-start" withinPortal>
               <Menu.Target>
-                <Button
-                  variant="subtle"
-                  size="compact-sm"
-                  leftSection={<IconSearch size={16} />}
-                  rightSection={
-                    useSpaceSearch ? <IconCheck size={13} /> : undefined
-                  }
-                  disabled={Boolean(pendingRun)}
-                  className={classes.toolbarButton}
-                  aria-label={t("ai.searchSpace")}
-                >
-                  <span className={classes.toolbarButtonLabel}>
-                    {t("ai.searchSpace")}
-                  </span>
-                </Button>
+                <Tooltip label={t("ai.searchSpace")} withArrow>
+                  <Button
+                    variant="subtle"
+                    size="compact-sm"
+                    leftSection={<IconSearch size={16} />}
+                    rightSection={
+                      useSpaceSearch ? <IconCheck size={13} /> : undefined
+                    }
+                    disabled={Boolean(pendingRun)}
+                    className={classes.toolbarButton}
+                    aria-label={t("ai.searchSpace")}
+                  >
+                    <span className={classes.toolbarButtonLabel}>
+                      {t("ai.searchSpace")}
+                    </span>
+                  </Button>
+                </Tooltip>
               </Menu.Target>
               <Menu.Dropdown>
                 <Menu.Item closeMenuOnClick={false}>
@@ -1633,19 +1632,23 @@ export function AiPanel() {
           {availability.agentAvailable && (
             <Menu position="top-start" withinPortal>
               <Menu.Target>
-                <Button
-                  variant="subtle"
-                  size="compact-sm"
-                  leftSection={<IconRobot size={16} />}
-                  rightSection={agentMode ? <IconCheck size={13} /> : undefined}
-                  disabled={Boolean(pendingRun)}
-                  className={classes.toolbarButton}
-                  aria-label={t("ai.agent.mode")}
-                >
-                  <span className={classes.toolbarButtonLabel}>
-                    {t("ai.agent.mode")}
-                  </span>
-                </Button>
+                <Tooltip label={t("ai.agent.mode")} withArrow>
+                  <Button
+                    variant="subtle"
+                    size="compact-sm"
+                    leftSection={<IconRobot size={16} />}
+                    rightSection={
+                      agentMode ? <IconCheck size={13} /> : undefined
+                    }
+                    disabled={Boolean(pendingRun)}
+                    className={classes.toolbarButton}
+                    aria-label={t("ai.agent.mode")}
+                  >
+                    <span className={classes.toolbarButtonLabel}>
+                      {t("ai.agent.mode")}
+                    </span>
+                  </Button>
+                </Tooltip>
               </Menu.Target>
               <Menu.Dropdown>
                 <Menu.Item closeMenuOnClick={false}>
@@ -1707,19 +1710,15 @@ export function AiPanel() {
           />
         </Group>
 
-        <Textarea
-          aria-label={t("ai.messagePlaceholder")}
-          placeholder={t("ai.messagePlaceholder")}
+        <AiMarkdownComposer
           value={draft}
-          onChange={(event) => {
-            setDraft(event.currentTarget.value);
+          ariaLabel={t("ai.messagePlaceholder")}
+          placeholder={t("ai.messagePlaceholder")}
+          onChange={(nextDraft) => {
+            setDraft(nextDraft);
             setDraftStatus(activeConversation ? "saving" : "idle");
           }}
-          onKeyDown={handleComposerKeyDown}
-          minRows={2}
-          maxRows={8}
-          autosize
-          className={classes.messageInput}
+          onSubmit={() => void submit(draft)}
         />
 
         <Group

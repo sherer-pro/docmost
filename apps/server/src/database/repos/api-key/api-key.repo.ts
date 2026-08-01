@@ -89,7 +89,7 @@ export class ApiKeyRepo {
     workspaceId: string,
     pagination: PaginationOptions,
     opts?: {
-      creatorId?: string;
+      keyType?: 'rag' | 'mcp';
     },
   ) {
     let query = this.db
@@ -99,8 +99,8 @@ export class ApiKeyRepo {
       .select((eb) => this.withSpace(eb))
       .where('workspaceId', '=', workspaceId)
       .where('deletedAt', 'is', null)
-      .$if(Boolean(opts?.creatorId), (qb) =>
-        qb.where('creatorId', '=', opts?.creatorId),
+      .$if(Boolean(opts?.keyType), (qb) =>
+        qb.where('keyType', '=', opts.keyType),
       )
       .orderBy('createdAt', 'desc')
       .orderBy('id', 'desc');

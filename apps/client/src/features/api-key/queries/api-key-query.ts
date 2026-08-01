@@ -1,4 +1,4 @@
-import { IPagination, QueryParams } from "@/lib/types.ts";
+import { IPagination } from "@/lib/types.ts";
 import {
   keepPreviousData,
   useMutation,
@@ -10,6 +10,7 @@ import {
   createApiKey,
   getApiKeys,
   IApiKey,
+  ApiKeyQueryParams,
   ICreateApiKeyRequest,
   IUpdateApiKeyRequest,
   revokeApiKey,
@@ -19,7 +20,7 @@ import { notifications } from "@mantine/notifications";
 import { useTranslation } from "react-i18next";
 
 export function useGetApiKeysQuery(
-  params?: QueryParams,
+  params?: ApiKeyQueryParams,
   options?: {
     enabled?: boolean;
     refetchInterval?: number | false;

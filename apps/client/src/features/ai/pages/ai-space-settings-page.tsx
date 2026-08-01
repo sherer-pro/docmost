@@ -9,12 +9,16 @@ import {
   Text,
   Title,
 } from "@mantine/core";
-import { IconArrowLeft } from "@tabler/icons-react";
+import { IconArrowLeft, IconLock, IconMapOff } from "@tabler/icons-react";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Helmet } from "react-helmet-async";
 import { getAppName } from "@/lib/config.ts";
+import { EmptyState } from "@/components/ui/empty-state.tsx";
+import useCurrentUser from "@/features/user/hooks/use-current-user.ts";
+import { hasFullSpaceAccess } from "@/features/space/permissions/export-access.ts";
+import { UserRole } from "@/lib/types.ts";
 import { useSpaceQuery } from "@/features/space/queries/space-query.ts";
 import {
   AiSpaceSettings,
@@ -25,6 +29,7 @@ import classes from "./ai-space-settings-page.module.css";
 const SECTIONS: Exclude<AiSpaceSettingsSection, "all">[] = [
   "overview",
   "identity",
+  "content",
   "model",
   "behavior",
   "agent",
@@ -36,6 +41,7 @@ export default function AiSpaceSettingsPage() {
   const { t } = useTranslation();
   const { spaceSlug = "" } = useParams();
   const spaceQuery = useSpaceQuery(spaceSlug);
+  const currentUserQuery = useCurrentUser();
   const [section, setSection] =
     useState<Exclude<AiSpaceSettingsSection, "all">>("overview");
   const [dirty, setDirty] = useState(false);
@@ -61,18 +67,52 @@ export default function AiSpaceSettingsPage() {
     setSection(next);
   };
 
-  if (spaceQuery.isLoading) {
+  if (spaceQuery.isLoading || currentUserQuery.isLoading) {
     return (
       <Group justify="center" py="xl" role="status">
         <Loader size="sm" />
       </Group>
     );
   }
-  if (!spaceQuery.data) {
-    return <Text c="red">{t("ai.integrations.spaceNotFound")}</Text>;
+  if (spaceQuery.isError || !spaceQuery.data) {
+    return (
+      <EmptyState
+        icon={IconMapOff}
+        title={t("ai.integrations.spaceNotFound")}
+        description={t("This page may have been deleted, moved, or you may not have access.")}
+        action={
+          <Button component={Link} to="/home" variant="light">
+            {t("Take me back to homepage")}
+          </Button>
+        }
+      />
+    );
   }
 
   const space = spaceQuery.data;
+  const workspaceRole = currentUserQuery.data?.user?.role;
+  const fullSpaceAccess = hasFullSpaceAccess({
+    workspaceRole,
+    spaceRole: space.membership?.role,
+  });
+  const isWorkspaceAdmin =
+    workspaceRole === UserRole.OWNER || workspaceRole === UserRole.ADMIN;
+  const backPath = isWorkspaceAdmin ? "/settings/ai" : `/s/${space.slug}`;
+
+  if (!fullSpaceAccess) {
+    return (
+      <EmptyState
+        icon={IconLock}
+        title={t("page.access.role.none")}
+        description={t("This page may have been deleted, moved, or you may not have access.")}
+        action={
+          <Button component={Link} to={`/s/${space.slug}`} variant="light">
+            {t("ai.integrations.backToSpace")}
+          </Button>
+        }
+      />
+    );
+  }
   const options = SECTIONS.map((value) => ({
     value,
     label: t(`ai.integrations.section.${value}`),
@@ -88,13 +128,17 @@ export default function AiSpaceSettingsPage() {
       <div>
         <Button
           component={Link}
-          to="/settings/ai"
+          to={backPath}
           variant="subtle"
           size="compact-sm"
           leftSection={<IconArrowLeft size={15} />}
           px={0}
         >
-          {t("ai.integrations.backToOverview")}
+          {t(
+            isWorkspaceAdmin
+              ? "ai.integrations.backToOverview"
+              : "ai.integrations.backToSpace",
+          )}
         </Button>
         <Group mt="xs" gap="xs">
           <Title order={1} size="h2">
