@@ -28,12 +28,13 @@ interface CreateApiKeyModalProps {
   opened: boolean;
   onClose: () => void;
   onSuccess: (response: IApiKey, client: McpClientPreset) => void;
-  keyType: "rag" | "mcp";
+  allowMcp?: boolean;
 }
 
 type FormValues = {
   name: string;
   spaceId: string;
+  keyType: "rag" | "mcp";
   expiresAt: string | Date | null;
 };
 
@@ -41,7 +42,7 @@ export function CreateApiKeyModal({
   opened,
   onClose,
   onSuccess,
-  keyType,
+  allowMcp = false,
 }: CreateApiKeyModalProps) {
   useModalBackgroundInert(opened);
   const { t, i18n } = useTranslation();
@@ -56,6 +57,7 @@ export function CreateApiKeyModal({
     initialValues: {
       name: "",
       spaceId: "",
+      keyType: allowMcp ? "mcp" : "rag",
       expiresAt: null,
     },
     validate: {
@@ -118,19 +120,20 @@ export function CreateApiKeyModal({
   };
 
   const next = () => {
-    if (active === 0 && form.validateField("spaceId").hasError) return;
+    if (active === 1 && form.validateField("spaceId").hasError) return;
     if (
-      active === 1 &&
+      active === 2 &&
       (form.validateField("name").hasError ||
         form.validateField("expiresAt").hasError)
     ) {
       return;
     }
-    setActive((value) => Math.min(value + 1, 2));
+    setActive((value) => Math.min(value + 1, 3));
   };
 
   const reset = () => {
     form.reset();
+    form.setFieldValue("keyType", allowMcp ? "mcp" : "rag");
     setActive(0);
     setClient("codex");
     setExpirationOption("365");
@@ -146,10 +149,10 @@ export function CreateApiKeyModal({
     const createdKey = await createApiKeyMutation.mutateAsync({
       name: form.values.name.trim(),
       spaceId: form.values.spaceId,
-      keyType,
+      keyType: form.values.keyType,
       expiresAt: getExpirationDate(),
     });
-    onSuccess(createdKey, keyType === "mcp" ? client : "universal");
+    onSuccess(createdKey, form.values.keyType === "mcp" ? client : "universal");
     reset();
     onClose();
   };
@@ -163,33 +166,28 @@ export function CreateApiKeyModal({
       closeButtonProps={{ "aria-label": t("Close") }}
     >
       <Stepper active={active} size="sm" mb="xl" allowNextStepsSelect={false}>
+        <Stepper.Step label={t("apiKeys.steps.type")} />
         <Stepper.Step label={t("apiKeys.steps.space")} />
         <Stepper.Step label={t("apiKeys.steps.details")} />
-        <Stepper.Step
-          label={
-            keyType === "mcp"
-              ? t("apiKeys.steps.client")
-              : t("apiKeys.reviewTitle")
-          }
-        />
+        <Stepper.Step label={t("apiKeys.steps.client")} />
       </Stepper>
 
       <Stack gap="md" mih={250}>
         {active === 0 && (
           <>
             <Select
-              label={t("Space")}
-              description={t("apiKeys.spaceDescription")}
-              placeholder={t("Select a space")}
-              data={spaceOptions}
-              searchable
+              label={t("apiKeys.keyType")}
+              data={[
+                { value: "rag", label: t("RAG sync") },
+                ...(allowMcp
+                  ? [{ value: "mcp", label: t("MCP read-only") }]
+                  : []),
+              ]}
               allowDeselect={false}
-              required
-              disabled={isSpacesLoading || spaceOptions.length === 0}
-              {...form.getInputProps("spaceId")}
+              {...form.getInputProps("keyType")}
             />
             <Alert icon={<IconInfoCircle size={18} />} color="blue">
-              {keyType === "mcp"
+              {form.values.keyType === "mcp"
                 ? t("apiKeys.mcpDifference")
                 : t("apiKeys.ragDifference")}
             </Alert>
@@ -197,6 +195,20 @@ export function CreateApiKeyModal({
         )}
 
         {active === 1 && (
+          <Select
+            label={t("Space")}
+            description={t("apiKeys.spaceDescription")}
+            placeholder={t("Select a space")}
+            data={spaceOptions}
+            searchable
+            allowDeselect={false}
+            required
+            disabled={isSpacesLoading || spaceOptions.length === 0}
+            {...form.getInputProps("spaceId")}
+          />
+        )}
+
+        {active === 2 && (
           <>
             <TextInput
               label={t("Name")}
@@ -228,9 +240,9 @@ export function CreateApiKeyModal({
           </>
         )}
 
-        {active === 2 && (
+        {active === 3 && (
           <>
-            {keyType === "mcp" && (
+            {form.values.keyType === "mcp" && (
               <Select
                 label={t("apiKeys.client")}
                 description={t("apiKeys.clientDescription")}
@@ -254,7 +266,7 @@ export function CreateApiKeyModal({
               <Text size="sm">
                 {t("apiKeys.review", {
                   type:
-                    keyType === "mcp"
+                    form.values.keyType === "mcp"
                       ? t("MCP read-only")
                       : t("RAG sync"),
                   space: selectedSpace?.name || selectedSpace?.slug,
@@ -273,7 +285,7 @@ export function CreateApiKeyModal({
         >
           {active === 0 ? t("Cancel") : t("apiKeys.back")}
         </Button>
-        {active < 2 ? (
+        {active < 3 ? (
           <Button onClick={next} disabled={spaceOptions.length === 0}>
             {t("apiKeys.next")}
           </Button>

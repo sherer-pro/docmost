@@ -2,13 +2,11 @@
   width: 100%;
   max-width: 1180px;
   margin-inline: auto;
-  container-type: inline-size;
-  container-name: ai-space-settings;
 }
 
 .layout {
   display: grid;
-  grid-template-columns: 240px minmax(440px, 1fr);
+  grid-template-columns: 240px minmax(0, 1fr);
   gap: 24px;
   align-items: start;
 }
@@ -26,7 +24,7 @@
   display: none;
 }
 
-@container ai-space-settings (max-width: 759px) {
+@media (max-width: 48em) {
   .layout {
     display: block;
   }

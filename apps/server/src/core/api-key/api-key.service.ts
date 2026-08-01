@@ -43,9 +43,19 @@ export class ApiKeyService {
     return [UserRole.OWNER, UserRole.ADMIN].includes(user.role as UserRole);
   }
 
-  private assertCanManageApiKeys(user: User) {
-    if (!this.isAdminOrOwner(user)) {
+  private assertCanUseAdminView(user: User, adminView?: boolean) {
+    if (adminView && !this.isAdminOrOwner(user)) {
       throw new ForbiddenException('Only workspace admins can manage API keys');
+    }
+  }
+
+  private assertCanManageApiKey(user: User, creatorId: string) {
+    if (this.isAdminOrOwner(user)) {
+      return;
+    }
+
+    if (creatorId !== user.id) {
+      throw new ForbiddenException('You can only manage your own API keys');
     }
   }
 
@@ -109,16 +119,21 @@ export class ApiKeyService {
   }
 
   async listApiKeys(user: User, workspace: Workspace, dto: ListApiKeysDto) {
-    this.assertCanManageApiKeys(user);
+    this.assertCanUseAdminView(user, dto.adminView);
 
-    return this.apiKeyRepo.listApiKeys(workspace.id, dto, {
-      keyType: dto.keyType,
-    });
+    const creatorId =
+      dto.adminView && this.isAdminOrOwner(user) ? undefined : user.id;
+
+    return this.apiKeyRepo.listApiKeys(workspace.id, dto, { creatorId });
   }
 
   async createApiKey(user: User, workspace: Workspace, dto: CreateApiKeyDto) {
-    this.assertCanManageApiKeys(user);
     const keyType = dto.keyType ?? 'rag';
+    if (keyType === 'mcp' && !this.isAdminOrOwner(user)) {
+      throw new ForbiddenException(
+        'Only workspace admins can create MCP API keys',
+      );
+    }
     await this.assertCanCreateApiKeyInSpace(user, workspace, dto.spaceId);
 
     const expiresAt = this.parseExpiry(dto.expiresAt);
@@ -153,7 +168,6 @@ export class ApiKeyService {
   }
 
   async updateApiKey(user: User, workspace: Workspace, dto: UpdateApiKeyDto) {
-    this.assertCanManageApiKeys(user);
     const existing = await this.apiKeyRepo.findById(dto.apiKeyId);
     if (
       !existing ||
@@ -162,6 +176,8 @@ export class ApiKeyService {
     ) {
       throw new NotFoundException('API key not found');
     }
+
+    this.assertCanManageApiKey(user, existing.creatorId);
 
     await this.apiKeyRepo.updateApiKey(dto.apiKeyId, {
       name: dto.name,
@@ -174,7 +190,6 @@ export class ApiKeyService {
   }
 
   async revokeApiKey(user: User, workspace: Workspace, dto: RevokeApiKeyDto) {
-    this.assertCanManageApiKeys(user);
     const existing = await this.apiKeyRepo.findById(dto.apiKeyId);
     if (
       !existing ||
@@ -183,6 +198,8 @@ export class ApiKeyService {
     ) {
       throw new NotFoundException('API key not found');
     }
+
+    this.assertCanManageApiKey(user, existing.creatorId);
 
     await this.apiKeyRepo.updateApiKey(dto.apiKeyId, {
       deletedAt: new Date(),

@@ -15,18 +15,18 @@ import {
 
 interface ApiKeyTableProps {
   apiKeys: IApiKey[];
+  isLoading?: boolean;
   showUserColumn?: boolean;
   showSpaceColumn?: boolean;
-  showTypeColumn?: boolean;
   onUpdate?: (apiKey: IApiKey) => void;
   onRevoke?: (apiKey: IApiKey) => void;
 }
 
 export function ApiKeyTable({
   apiKeys,
+  isLoading,
   showUserColumn = false,
   showSpaceColumn = false,
-  showTypeColumn = true,
   onUpdate,
   onRevoke,
 }: ApiKeyTableProps) {
@@ -59,7 +59,7 @@ export function ApiKeyTable({
             <Table.Th>{t("Name")}</Table.Th>
             {showUserColumn && <Table.Th>{t("User")}</Table.Th>}
             {showSpaceColumn && <Table.Th>{t("Space")}</Table.Th>}
-            {showTypeColumn && <Table.Th>{t("Type")}</Table.Th>}
+            <Table.Th>{t("Type")}</Table.Th>
             <Table.Th>{t("Last used")}</Table.Th>
             <Table.Th>{t("Expires")}</Table.Th>
             <Table.Th>{t("Created")}</Table.Th>
@@ -69,8 +69,8 @@ export function ApiKeyTable({
 
         <Table.Tbody>
           {apiKeys && apiKeys.length > 0 ? (
-            apiKeys.map((apiKey: IApiKey) => (
-              <Table.Tr key={apiKey.id}>
+            apiKeys.map((apiKey: IApiKey, index: number) => (
+              <Table.Tr key={index}>
                 <Table.Td {...getResponsivePrimaryCellProps(t("Name"))}>
                   <Text fz="sm" fw={500}>
                     {apiKey.name}
@@ -100,15 +100,13 @@ export function ApiKeyTable({
                   </Table.Td>
                 )}
 
-                {showTypeColumn && (
-                  <Table.Td {...getResponsiveMetaCellProps(t("Type"))}>
-                    <Text fz="sm">
-                      {apiKey.keyType === "mcp"
-                        ? t("MCP read-only")
-                        : t("RAG sync")}
-                    </Text>
-                  </Table.Td>
-                )}
+                <Table.Td {...getResponsiveMetaCellProps(t("Type"))}>
+                  <Text fz="sm">
+                    {apiKey.keyType === "mcp"
+                      ? t("MCP read-only")
+                      : t("RAG sync")}
+                  </Text>
+                </Table.Td>
 
                 <Table.Td {...getResponsiveMetaCellProps(t("Last used"))}>
                   <Text fz="sm" style={{ whiteSpace: "nowrap" }}>
@@ -177,12 +175,7 @@ export function ApiKeyTable({
           ) : (
             <NoTableResults
               text={t("No API keys found")}
-              colSpan={
-                5 +
-                (showTypeColumn ? 1 : 0) +
-                (showUserColumn ? 1 : 0) +
-                (showSpaceColumn ? 1 : 0)
-              }
+              colSpan={6 + (showUserColumn ? 1 : 0) + (showSpaceColumn ? 1 : 0)}
             />
           )}
         </Table.Tbody>

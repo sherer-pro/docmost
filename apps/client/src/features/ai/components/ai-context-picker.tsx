@@ -256,26 +256,24 @@ export function AiContextPicker(props: AiContextPickerProps) {
           closeOnItemClick={false}
         >
           <Menu.Target>
-            <Tooltip label={t("ai.context.title")} withArrow>
-              <Button
-                ref={contextButtonRef}
-                variant="subtle"
-                size="compact-sm"
-                leftSection={<IconPaperclip size={16} />}
-                rightSection={
-                  <Badge size="xs" variant="light">
-                    {props.resolvedSourceCount}/{props.limits.resolvedSources}
-                  </Badge>
-                }
-                disabled={props.saving}
-                className={classes.toolbarButton}
-                aria-label={`${t("ai.context.title")}: ${selectedCount}`}
-              >
-                <span className={classes.toolbarButtonLabel}>
-                  {t("ai.context.title")}
-                </span>
-              </Button>
-            </Tooltip>
+            <Button
+              ref={contextButtonRef}
+              variant="subtle"
+              size="compact-sm"
+              leftSection={<IconPaperclip size={16} />}
+              rightSection={
+                <Badge size="xs" variant="light">
+                  {props.resolvedSourceCount}/{props.limits.resolvedSources}
+                </Badge>
+              }
+              disabled={props.saving}
+              className={classes.toolbarButton}
+              aria-label={`${t("ai.context.title")}: ${selectedCount}`}
+            >
+              <span className={classes.toolbarButtonLabel}>
+                {t("ai.context.title")}
+              </span>
+            </Button>
           </Menu.Target>
           <Menu.Dropdown className={classes.contextMenu}>
             <Group justify="space-between" px="xs" py={4}>

@@ -125,15 +125,12 @@ function normalizeCurrentUserResponse(payload: ICurrentUser): ICurrentUser {
  * We use GET so the request is not treated as a mutating method by CSRF checks
  * and works correctly even before the CSRF cookie is initialized.
  */
-export async function getMyInfo(options?: {
-  skipAuthRedirect?: boolean;
-}): Promise<ICurrentUser> {
+export async function getMyInfo(): Promise<ICurrentUser> {
   const req = await api.get<ICurrentUser>("/users/me", {
     headers: {
       "Cache-Control": "no-cache",
       Pragma: "no-cache",
     },
-    skipAuthRedirect: options?.skipAuthRedirect,
   });
   return normalizeCurrentUserResponse(unwrapResponse<ICurrentUser>(req));
 }

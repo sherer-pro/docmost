@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Button, Group, Space, Text } from "@mantine/core";
+import { Alert, Button, Group, Space, Text } from "@mantine/core";
 import { Helmet } from "react-helmet-async";
 import { useTranslation } from "react-i18next";
 import SettingsTitle from "@/components/settings/settings-title";
@@ -13,9 +13,8 @@ import Paginate from "@/components/common/paginate";
 import { useCursorPaginate } from "@/hooks/use-cursor-paginate";
 import { useGetApiKeysQuery } from "@/features/api-key/queries/api-key-query.ts";
 import { IApiKey, type McpClientPreset } from "@/features/api-key";
-import useUserRole from "@/hooks/use-user-role.tsx";
 
-export default function WorkspaceApiKeys() {
+export default function UserApiKeys() {
   const { t } = useTranslation();
   const { cursor, goNext, goPrev } = useCursorPaginate();
   const [createModalOpened, setCreateModalOpened] = useState(false);
@@ -25,12 +24,7 @@ export default function WorkspaceApiKeys() {
   const [updateModalOpened, setUpdateModalOpened] = useState(false);
   const [revokeModalOpened, setRevokeModalOpened] = useState(false);
   const [selectedApiKey, setSelectedApiKey] = useState<IApiKey | null>(null);
-  const { data, isLoading } = useGetApiKeysQuery({ cursor, adminView: true });
-  const { isAdmin } = useUserRole();
-
-  if (!isAdmin) {
-    return null;
-  }
+  const { data, isLoading } = useGetApiKeysQuery({ cursor });
 
   const handleCreateSuccess = (response: IApiKey, client: McpClientPreset) => {
     setCreatedApiKey(response);
@@ -51,15 +45,15 @@ export default function WorkspaceApiKeys() {
     <>
       <Helmet>
         <title>
-          {t("apiKeys.workspaceTitle")} - {getAppName()}
+          {t("API keys")} - {getAppName()}
         </title>
       </Helmet>
 
-      <SettingsTitle title={t("apiKeys.workspaceTitle")} />
+      <SettingsTitle title={t("API keys")} />
 
-      <Text size="md" c="dimmed" mb="md">
-        {t("apiKeys.workspaceDescription")}
-      </Text>
+      <Alert color="blue" mb="md" title={t("apiKeys.personalRagTitle")}>
+        <Text size="sm">{t("apiKeys.personalRagDescription")}</Text>
+      </Alert>
 
       <Group justify="flex-end" mb="md">
         <Button onClick={() => setCreateModalOpened(true)}>
@@ -70,8 +64,6 @@ export default function WorkspaceApiKeys() {
       <ApiKeyTable
         apiKeys={data?.items || []}
         isLoading={isLoading}
-        showUserColumn
-        showSpaceColumn
         onUpdate={handleUpdate}
         onRevoke={handleRevoke}
       />
@@ -91,7 +83,6 @@ export default function WorkspaceApiKeys() {
         opened={createModalOpened}
         onClose={() => setCreateModalOpened(false)}
         onSuccess={handleCreateSuccess}
-        allowMcp
       />
 
       <ApiKeyCreatedModal

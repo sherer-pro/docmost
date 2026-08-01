@@ -1,7 +1,7 @@
 import { Center, Loader } from "@mantine/core";
 import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
-import { AuthenticatedError404 } from "@/components/ui/authenticated-error-404.tsx";
+import { Error404 } from "@/components/ui/error-404.tsx";
 import { isCloud } from "@/lib/config.ts";
 import { useTranslation } from "react-i18next";
 import { useRedirectToCloudSelect } from "@/features/cloud/hooks/use-redirect-to-cloud-select.tsx";
@@ -65,11 +65,11 @@ const DatabasePage = lazy(() => import("@/pages/database/database-page.tsx"));
 const DatabaseLegacyRedirect = lazy(
   () => import("@/pages/database/database-legacy-redirect.tsx"),
 );
-const WorkspaceRagApiKeys = lazy(
-  () => import("@/features/api-key/pages/workspace-rag-api-keys"),
+const UserApiKeys = lazy(
+  () => import("@/features/api-key/pages/user-api-keys"),
 );
-const WorkspaceMcpApiKeys = lazy(
-  () => import("@/features/api-key/pages/workspace-mcp-api-keys"),
+const WorkspaceApiKeys = lazy(
+  () => import("@/features/api-key/pages/workspace-api-keys"),
 );
 const AiIntegrationsSettings = lazy(
   () => import("@/features/ai/pages/ai-integrations-settings.tsx"),
@@ -149,20 +149,13 @@ export default function App() {
               path={"account/preferences"}
               element={<AccountPreferences />}
             />
+            <Route path={"account/api-keys"} element={<UserApiKeys />} />
             <Route path={"members"} element={<WorkspaceMembers />} />
             <Route path={"groups"} element={<Groups />} />
             <Route path={"groups/:groupId"} element={<GroupInfo />} />
             <Route path={"spaces"} element={<Spaces />} />
             <Route path={"sharing"} element={<Shares />} />
-            <Route
-              path={"ai/spaces/:spaceSlug"}
-              element={<AiSpaceSettingsPage />}
-            />
             <Route element={<WorkspaceAdminRoute />}>
-              <Route
-                path={"account/api-keys"}
-                element={<Navigate to="/settings/ai/rag" replace />}
-              />
               <Route path={"workspace"} element={<WorkspaceSettings />} />
               <Route
                 path={"api-keys"}
@@ -170,13 +163,16 @@ export default function App() {
               />
               <Route path={"security"} element={<Security />} />
               <Route path={"ai"} element={<AiIntegrationsSettings />} />
-              <Route path={"ai/rag"} element={<WorkspaceRagApiKeys />} />
-              <Route path={"ai/mcp"} element={<WorkspaceMcpApiKeys />} />
+              <Route
+                path={"ai/spaces/:spaceSlug"}
+                element={<AiSpaceSettingsPage />}
+              />
+              <Route path={"ai/mcp"} element={<WorkspaceApiKeys />} />
             </Route>
           </Route>
         </Route>
 
-        <Route path="*" element={<AuthenticatedError404 />} />
+        <Route path="*" element={<Error404 />} />
       </Routes>
     </Suspense>
   );
