@@ -95,19 +95,25 @@ export class OpenAiCompatibleProviderService {
       | 'auto'
       | 'required'
       | { type: 'function'; function: { name: string } } = 'auto',
+    isCancelled?: () => Promise<boolean> | boolean,
   ): Promise<AiProviderToolResponse> {
-    const { data } = await this.requestJson<any>(config, 'chat/completions', {
-      method: 'POST',
-      body: JSON.stringify({
-        model: config.chatModel,
-        messages,
-        tools,
-        tool_choice: toolChoice,
-        temperature: config.temperature,
-        max_tokens: config.maxOutputTokens,
-        stream: false,
-      }),
-    });
+    const { data } = await this.requestJson<any>(
+      config,
+      'chat/completions',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          model: config.chatModel,
+          messages,
+          tools,
+          tool_choice: toolChoice,
+          temperature: config.temperature,
+          max_tokens: config.maxOutputTokens,
+          stream: false,
+        }),
+      },
+      isCancelled,
+    );
 
     const choice = data?.choices?.[0];
     if (!choice?.message || typeof choice.message !== 'object') {
@@ -413,8 +419,15 @@ export class OpenAiCompatibleProviderService {
     config: Pick<AiProviderConfig, 'baseUrl' | 'apiKey' | 'requestTimeoutMs'>,
     path: string,
     init: RequestInit,
+    isCancelled?: () => Promise<boolean> | boolean,
   ): Promise<ProviderResponse<T>> {
-    const result = await this.openRequest(config, path, init);
+    const result = await this.openRequest(
+      config,
+      path,
+      init,
+      false,
+      isCancelled,
+    );
     try {
       const body = await this.readLimitedBody(
         result.response,

@@ -255,6 +255,17 @@ export function assertSafeAiPageOperation(operation: AiPageOperation): void {
   }
 }
 
+export function prepareAiPageOperation(
+  operation: AiPageOperation,
+): AiPageOperation {
+  const prepared = structuredClone(operation);
+  assertSafeAiPageOperation(prepared);
+  if (prepared.kind === 'insertNode' || prepared.kind === 'patchNode') {
+    addMissingNodeIds(prepared.node);
+  }
+  return prepared;
+}
+
 export function applyAiPageOperation(
   document: ProseMirrorJson,
   operation: AiPageOperation,

@@ -5,6 +5,7 @@ import {
   extractAiApprovalPreview,
   getAiPageOutline,
   hashProseMirrorJson,
+  prepareAiPageOperation,
 } from './ai-page-operation';
 
 describe('AI page operations', () => {
@@ -36,6 +37,24 @@ describe('AI page operations', () => {
     expect(next.content?.[1].content?.[0].text).toBe('The updated summary.');
     expect(document.content[1].content?.[0].text).toBe('The old summary.');
     expect(hashProseMirrorJson(next)).not.toBe(hashProseMirrorJson(document));
+  });
+
+  it('prepares stable node IDs before an approval is persisted', () => {
+    const prepared = prepareAiPageOperation({
+      kind: 'insertNode',
+      anchorNodeId: 'paragraph-1',
+      position: 'after',
+      node: {
+        type: 'paragraph',
+        content: [{ type: 'text', text: 'Inserted.' }],
+      },
+    });
+    expect(prepared.kind).toBe('insertNode');
+    if (prepared.kind !== 'insertNode') throw new Error('unexpected operation');
+    expect(prepared.node.attrs?.id).toEqual(expect.any(String));
+    expect(
+      hashProseMirrorJson(applyAiPageOperation(document, prepared)),
+    ).toBe(hashProseMirrorJson(applyAiPageOperation(document, prepared)));
   });
 
   it('rejects ambiguous text edits', () => {

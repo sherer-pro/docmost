@@ -14,12 +14,14 @@ import { PageService } from '../../page/services/page.service';
 import {
   AiPageOperation,
   ProseMirrorJson,
+  applyAiPageOperation,
   assertSafeAiPageOperation,
   buildAiApprovalPreview,
   getAiPageNode,
   getAiPageOutline,
   getProseMirrorText,
   hashProseMirrorJson,
+  prepareAiPageOperation,
 } from '../../../common/helpers/prosemirror/ai-page-operation';
 
 export const AI_AGENT_MAX_MODEL_STEPS = 8;
@@ -42,6 +44,7 @@ export type AiToolExecutionContext = {
 export type AiToolWriteProposal = {
   pageId: string;
   baseContentHash: string;
+  expectedAfterHash: string;
   operation: AiPageOperation;
 };
 
@@ -601,7 +604,7 @@ export class AiToolRegistryService {
     }
     const page = await this.getReadablePage(pageId, context);
     await this.pageAccess.assertCanWritePage(page, context.user);
-    assertSafeAiPageOperation(operation);
+    const preparedOperation = prepareAiPageOperation(operation);
     const document = (page.content ?? {
       type: 'doc',
       content: [],
@@ -609,11 +612,14 @@ export class AiToolRegistryService {
     const writeProposal = {
       pageId,
       baseContentHash: hashProseMirrorJson(document),
-      operation,
+      expectedAfterHash: hashProseMirrorJson(
+        applyAiPageOperation(document, preparedOperation),
+      ),
+      operation: preparedOperation,
     };
     const approvalPreview = buildAiApprovalPreview(
       document,
-      operation,
+      preparedOperation,
       pageId,
       page.title ?? '',
     );

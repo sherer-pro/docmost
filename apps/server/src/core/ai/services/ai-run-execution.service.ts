@@ -501,7 +501,11 @@ export class AiRunExecutionService {
         messages,
         providerTools,
         'auto',
+        () => this.isCancelled(run.id),
       );
+      if (await this.isCancelled(run.id)) {
+        throw new AiRunCancelledError();
+      }
       usage = {
         inputTokens: usage.inputTokens + response.usage.inputTokens,
         outputTokens: usage.outputTokens + response.usage.outputTokens,
@@ -628,7 +632,6 @@ export class AiRunExecutionService {
               modelStep,
               callIndex,
               call,
-              args,
               assistantContent: response.content,
               result: execution.content,
               proposal: execution.writeProposal,
@@ -783,13 +786,13 @@ export class AiRunExecutionService {
       id: string;
       function: { name: string };
     };
-    args: Record<string, unknown>;
     assistantContent: string;
     result: unknown;
     proposal: {
       pageId: string;
       baseContentHash: string;
-      operation: unknown;
+      expectedAfterHash: string;
+      operation: Record<string, unknown> & { kind: string };
     };
     usage: AiProviderUsage;
   }): Promise<void> {
@@ -811,8 +814,8 @@ export class AiRunExecutionService {
           toolCallId: params.call.id,
           toolName: params.call.function.name,
           writeClass: 'write',
-          arguments: params.args as any,
-          result: params.result as any,
+          arguments: this.writeProposalArguments(params.proposal) as any,
+          result: this.writeProposalResult(params.result, params.proposal) as any,
           assistantContent: params.assistantContent || null,
           status: 'pending_approval',
           targetPageId: params.proposal.pageId,
@@ -845,6 +848,28 @@ export class AiRunExecutionService {
       result.run.sequence,
       'awaiting_approval',
     );
+  }
+
+  private writeProposalArguments(proposal: {
+    pageId: string;
+    operation: Record<string, unknown> & { kind: string };
+  }): Record<string, unknown> {
+    const { kind: _kind, ...operationArguments } = proposal.operation;
+    return { pageId: proposal.pageId, ...operationArguments };
+  }
+
+  private writeProposalResult(
+    result: unknown,
+    proposal: { expectedAfterHash: string },
+  ): Record<string, unknown> {
+    const record =
+      result && typeof result === 'object' && !Array.isArray(result)
+        ? (result as Record<string, unknown>)
+        : { value: result };
+    return {
+      ...record,
+      expectedAfterHash: proposal.expectedAfterHash,
+    };
   }
 
   private async completeAgentRun(params: {
