@@ -4,6 +4,13 @@ import {
   OpenAiCompatibleProviderService,
 } from './openai-compatible-provider.service';
 
+jest.mock('./ai-pinned-http.util', () => ({
+  createAiPinnedDispatcher: jest.fn(() => ({
+    dispatcher: {},
+    close: jest.fn(async () => undefined),
+  })),
+}));
+
 describe('OpenAiCompatibleProviderService', () => {
   const config = {
     baseUrl: 'http://127.0.0.1:56254/v1',
@@ -22,7 +29,10 @@ describe('OpenAiCompatibleProviderService', () => {
     idleTimeoutMs = 1000;
     service = new OpenAiCompatibleProviderService(
       {
-        assertAllowed: jest.fn(async (value: string) => new URL(value)),
+        resolveAllowed: jest.fn(async (value: string) => ({
+          url: new URL(value),
+          addresses: [{ address: '127.0.0.1', family: 4 }],
+        })),
       } as any,
       {
         getAiStreamIdleTimeoutMs: () => idleTimeoutMs,
@@ -457,7 +467,9 @@ describe('OpenAiCompatibleProviderService', () => {
   it('cancels while provider URL resolution or response headers are pending', async () => {
     const delayedService = new OpenAiCompatibleProviderService(
       {
-        assertAllowed: jest.fn(() => new Promise<URL>(() => undefined)),
+        resolveAllowed: jest.fn(
+          () => new Promise<never>(() => undefined),
+        ),
       } as any,
       {
         getAiStreamIdleTimeoutMs: () => 1000,
@@ -477,7 +489,9 @@ describe('OpenAiCompatibleProviderService', () => {
   it('includes provider URL resolution in the whole-request timeout', async () => {
     const delayedService = new OpenAiCompatibleProviderService(
       {
-        assertAllowed: jest.fn(() => new Promise<URL>(() => undefined)),
+        resolveAllowed: jest.fn(
+          () => new Promise<never>(() => undefined),
+        ),
       } as any,
       {
         getAiStreamIdleTimeoutMs: () => 1000,

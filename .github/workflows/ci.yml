@@ -45,6 +45,12 @@ jobs:
       - name: Server tests
         run: pnpm --filter ./apps/server test
 
+      - name: RAG Sync tests
+        run: pnpm rag-sync:test
+
+      - name: RAG Sync image smoke build
+        run: docker build -f Dockerfile.rag-sync -t docmost-rag-sync:ci .
+
       - name: Security regression tests
         run: pnpm test:security
 
@@ -52,4 +58,6 @@ jobs:
         run: pnpm check:comments:en
 
       - name: Production audit (fail on high/critical)
-        run: pnpm audit --prod --audit-level high
+        run: |
+          pnpm check:audit-exceptions
+          pnpm audit --prod --audit-level high

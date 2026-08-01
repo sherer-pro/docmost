@@ -118,6 +118,13 @@ export interface SyncStateStore {
 
 export interface DocmostSourceClient {
   getScope(): Promise<RagScope>;
+  getBlockedPages(
+    cursor?: string,
+  ): Promise<
+    import("@docmost/api-contract").RagChangeFeed<
+      import("@docmost/api-contract").RagBlockedPageItem
+    >
+  >;
   getUpdates(
     updatedSince: number,
     cursor?: string,

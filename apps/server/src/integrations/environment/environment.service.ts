@@ -121,6 +121,73 @@ export class EnvironmentService {
     return storage === 'redis' ? 'redis' : 'memory';
   }
 
+  getRagApiTrafficLimits() {
+    return {
+      ratePerMinute: this.getRagApiRateLimitPerMinute(),
+      maxConcurrent: this.getRagApiMaxConcurrent(),
+      maxBulkConcurrent: this.getRagApiBulkMaxConcurrent(),
+    };
+  }
+
+  getMcpTrafficLimits() {
+    return {
+      ratePerMinute: this.getMcpRateLimitPerMinute(),
+      maxConcurrent: this.getMcpMaxConcurrent(),
+    };
+  }
+
+  getRagApiRateLimitPerMinute(): number {
+    return this.normalizePositiveInteger(
+      this.configService.get<string | number>(
+        'RAG_API_RATE_LIMIT_PER_MINUTE',
+        120,
+      ),
+      120,
+    );
+  }
+
+  getRagApiMaxConcurrent(): number {
+    return this.normalizePositiveInteger(
+      this.configService.get<string | number>('RAG_API_MAX_CONCURRENT', 8),
+      8,
+    );
+  }
+
+  getRagApiBulkMaxConcurrent(): number {
+    return this.normalizePositiveInteger(
+      this.configService.get<string | number>(
+        'RAG_API_BULK_MAX_CONCURRENT',
+        2,
+      ),
+      2,
+    );
+  }
+
+  getMcpRateLimitPerMinute(): number {
+    return this.normalizePositiveInteger(
+      this.configService.get<string | number>(
+        'MCP_RATE_LIMIT_PER_MINUTE',
+        60,
+      ),
+      60,
+    );
+  }
+
+  getMcpMaxConcurrent(): number {
+    return this.normalizePositiveInteger(
+      this.configService.get<string | number>('MCP_MAX_CONCURRENT', 4),
+      4,
+    );
+  }
+
+  private normalizePositiveInteger(
+    rawValue: string | number | undefined,
+    fallback: number,
+  ): number {
+    const value = Number(rawValue);
+    return Number.isSafeInteger(value) && value > 0 ? value : fallback;
+  }
+
   getJwtTokenExpiresIn(): string {
     return this.configService.get<string>('JWT_TOKEN_EXPIRES_IN', '90d');
   }
@@ -330,44 +397,6 @@ export class EnvironmentService {
     return this.configService
       .get<string>('TYPESENSE_LOCALE', 'en')
       .toLowerCase();
-  }
-
-  getAiDriver(): string {
-    return this.configService.get<string>('AI_DRIVER');
-  }
-
-  getAiEmbeddingModel(): string {
-    return this.configService.get<string>('AI_EMBEDDING_MODEL');
-  }
-
-  getAiCompletionModel(): string {
-    return this.configService.get<string>('AI_COMPLETION_MODEL');
-  }
-
-  getAiEmbeddingDimension(): number {
-    return parseInt(
-      this.configService.get<string>('AI_EMBEDDING_DIMENSION'),
-      10,
-    );
-  }
-
-  getOpenAiApiKey(): string {
-    return this.configService.get<string>('OPENAI_API_KEY');
-  }
-
-  getOpenAiApiUrl(): string {
-    return this.configService.get<string>('OPENAI_API_URL');
-  }
-
-  getGeminiApiKey(): string {
-    return this.configService.get<string>('GEMINI_API_KEY');
-  }
-
-  getOllamaApiUrl(): string {
-    return this.configService.get<string>(
-      'OLLAMA_API_URL',
-      'http://localhost:11434',
-    );
   }
 
   getPdfChromiumExecutablePath(): string | undefined {

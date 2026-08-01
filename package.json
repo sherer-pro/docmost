@@ -14,7 +14,7 @@
     "test:editor-ext": "corepack pnpm --filter ./apps/client exec vitest run --config ../../packages/editor-ext/vitest.config.ts",
     "test:security": "corepack pnpm --filter ./apps/server test:security && corepack pnpm --filter ./apps/client test:security",
     "test": "corepack pnpm run test:server && corepack pnpm run test:client:smoke",
-    "test:all": "corepack pnpm run test && corepack pnpm run test:client",
+    "test:all": "corepack pnpm run test && corepack pnpm run test:client && corepack pnpm run rag-sync:test",
     "verify:quick": "corepack pnpm run check:env && corepack pnpm run lint && corepack pnpm run test && corepack pnpm run test:security",
     "verify:full": "corepack pnpm run check:env && corepack pnpm run build && corepack pnpm run lint && corepack pnpm run test:all && corepack pnpm run test:security",
     "verify": "corepack pnpm run verify:full",
@@ -38,6 +38,7 @@
     "check:comments:en": "node scripts/check-english-comments.mjs",
     "check:env": "node scripts/check-env-contract.mjs",
     "check:no-ee": "node scripts/check-no-ee.mjs",
+    "check:audit-exceptions": "node scripts/check-audit-exceptions.mjs",
     "audit:deps": "node scripts/run-nonblocking-audit.mjs deps",
     "audit:dead-code": "node scripts/run-nonblocking-audit.mjs dead-code",
     "audit:duplicates": "node scripts/run-nonblocking-audit.mjs duplicates",
@@ -123,10 +124,20 @@
   },
   "packageManager": "pnpm@10.4.0",
   "pnpm": {
+    "auditConfig": {
+      "ignoreGhsas": [
+        "GHSA-83w8-p2f5-377r",
+        "GHSA-qwww-vcr4-c8h2"
+      ]
+    },
     "overrides": {
       "axios": "1.18.0",
+      "engine.io": "6.6.9",
       "fast-xml-parser": "5.8.0",
-      "linkify-it": "5.0.1",
+      "fast-uri": "3.1.5",
+      "find-my-way": "9.7.0",
+      "immutable": "4.3.9",
+      "linkify-it": "5.0.2",
       "lodash": "4.18.1",
       "lodash-es": "4.18.1",
       "nodemailer": "9.0.3",

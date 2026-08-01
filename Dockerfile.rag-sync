@@ -11,6 +11,7 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml nx.json .npmrc ./
 COPY apps/rag-sync/package.json ./apps/rag-sync/package.json
 COPY packages/api-contract/package.json ./packages/api-contract/package.json
+COPY packages/editor-ext/package.json ./packages/editor-ext/package.json
 
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile --filter @docmost/rag-sync...
@@ -19,20 +20,19 @@ COPY packages/api-contract ./packages/api-contract
 COPY apps/rag-sync ./apps/rag-sync
 
 RUN pnpm --filter @docmost/api-contract build && \
-    pnpm --filter @docmost/rag-sync build
+    pnpm --filter @docmost/rag-sync build && \
+    pnpm --config.inject-workspace-packages=true install \
+      --lockfile-only --no-frozen-lockfile --filter @docmost/rag-sync... && \
+    pnpm --config.inject-workspace-packages=true \
+      --filter @docmost/rag-sync deploy --prod /app/deploy/rag-sync
 
 FROM node:22-slim AS runner
 
 ENV NODE_ENV=production
 WORKDIR /app
 
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/apps/rag-sync/node_modules ./apps/rag-sync/node_modules
-COPY --from=builder /app/apps/rag-sync/package.json ./apps/rag-sync/package.json
-COPY --from=builder /app/apps/rag-sync/dist ./apps/rag-sync/dist
-COPY --from=builder /app/packages/api-contract/package.json ./packages/api-contract/package.json
-COPY --from=builder /app/packages/api-contract/dist ./packages/api-contract/dist
+COPY --from=builder --chown=node:node /app/deploy/rag-sync ./
 
 USER node
 
-CMD ["node", "apps/rag-sync/dist/main.js"]
+CMD ["node", "dist/main.js"]

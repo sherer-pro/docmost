@@ -33,7 +33,10 @@ describe('HttpJsonAiRetrievalAdapter', () => {
     originalFetch = global.fetch;
     adapter = new HttpJsonAiRetrievalAdapter(
       new AiRetrievalHttpClient({
-        assertAllowed: jest.fn(async (value: string) => new URL(value)),
+        resolveAllowed: jest.fn(async (value: string) => ({
+          url: new URL(value),
+          addresses: [{ address: '127.0.0.1', family: 4 }],
+        })),
       } as any),
     );
   });
@@ -142,7 +145,9 @@ describe('HttpJsonAiRetrievalAdapter', () => {
   it('includes URL policy resolution in the retrieval timeout', async () => {
     adapter = new HttpJsonAiRetrievalAdapter(
       new AiRetrievalHttpClient({
-        assertAllowed: jest.fn(() => new Promise<URL>(() => undefined)),
+        resolveAllowed: jest.fn(
+          () => new Promise<never>(() => undefined),
+        ),
       } as any),
     );
 

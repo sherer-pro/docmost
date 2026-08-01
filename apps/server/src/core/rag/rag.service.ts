@@ -18,6 +18,7 @@ import { validate as isValidUuid } from 'uuid';
 import { CommentRepo } from '@docmost/db/repos/comment/comment.repo';
 import { ExportService } from '../../integrations/export/export.service';
 import { sql } from 'kysely';
+import { createHash } from 'node:crypto';
 import { getPageAiRole } from '../page/utils/page-settings.utils';
 import { PageAccessService } from '../page-access/page-access.service';
 import { AiContentPolicyService } from '../ai-content-policy/ai-content-policy.service';
@@ -86,13 +87,88 @@ export class RagService {
   }
 
   async getScope(scope: RagAuthContext) {
-    const policy = await this.contentPolicy.getEffectivePolicy(
-      scope.space.id,
-      scope.workspace.id,
+    const [policy, readablePageIds] = await Promise.all([
+      this.contentPolicy.getEffectivePolicy(
+        scope.space.id,
+        scope.workspace.id,
+      ),
+      this.getReadablePageIds(scope),
+    ]);
+    const fingerprint = createHash('sha256')
+      .update(
+        JSON.stringify({
+          schemaVersion: 2,
+          policyFingerprint: policy.fingerprint,
+          readablePageIds: [...readablePageIds].sort(),
+        }),
+      )
+      .digest('hex');
+    return {
+      schemaVersion: 2 as const,
+      fingerprint,
+      excludedPageIds: policy.excludedPageIds,
+    };
+  }
+
+  async getBlockedPages(
+    scope: RagAuthContext,
+    pagination: RagFeedPagination = {},
+  ) {
+    const readablePageIds = await this.getReadablePageIds(scope);
+    const cursor = pagination.cursor
+      ? this.decodeFeedCursor(pagination.cursor, 'scope-blocked')
+      : null;
+    const loadBatch = async (afterId?: string) => {
+      let query = this.db
+        .selectFrom('pages')
+        .select('id')
+        .where('workspaceId', '=', scope.workspace.id)
+        .where('spaceId', '=', scope.space.id)
+        .where('deletedAt', 'is', null);
+      if (afterId) {
+        query = query.where('id', '>', afterId);
+      }
+      query = query.orderBy('id', 'asc');
+      if (pagination.limit) {
+        query = query.limit(
+          Math.min(1000, Math.max(100, pagination.limit * 2)),
+        );
+      }
+      return query.execute();
+    };
+    let allPages: Array<{ id: string }> = [];
+    if (!pagination.limit) {
+      allPages = await loadBatch(cursor?.id);
+    } else {
+      let afterId = cursor?.id;
+      while (allPages.length <= pagination.limit) {
+        const batch = await loadBatch(afterId);
+        if (batch.length === 0) {
+          break;
+        }
+        allPages.push(
+          ...batch.filter((page) => !readablePageIds.has(page.id)),
+        );
+        afterId = batch.at(-1)!.id;
+        if (batch.length < Math.min(1000, Math.max(100, pagination.limit * 2))) {
+          break;
+        }
+      }
+    }
+    const items = allPages
+      .filter((page) => !readablePageIds.has(page.id))
+      .map((page) => ({ pageId: page.id }));
+    const page = this.paginateFeed(
+      items,
+      'scope-blocked',
+      pagination,
+      () => 0,
+      (item) => item.pageId,
     );
     return {
-      fingerprint: policy.fingerprint,
-      excludedPageIds: policy.excludedPageIds,
+      items: page.items,
+      hasMore: page.hasMore,
+      nextCursor: page.nextCursor,
     };
   }
 
@@ -320,10 +396,18 @@ export class RagService {
       scope.space.id,
     );
 
-    const rowList =
+    const selectedRows =
       opts?.pageIds && opts.pageIds.length > 0
         ? allRows.filter((row) => opts.pageIds.includes(row.pageId))
         : allRows;
+
+    // A readable database container does not imply read access to every row
+    // page. Apply the creator's current page ACL before loading row content or
+    // returning cell values.
+    const readablePageIds = await this.getReadablePageIds(scope);
+    const rowList = selectedRows.filter((row) =>
+      readablePageIds.has(row.pageId),
+    );
 
     const rowPageIds = rowList.map((row) => row.pageId);
     const rowPages =
@@ -381,82 +465,117 @@ export class RagService {
     });
   }
 
-  async listPages(scope: RagAuthContext, includeContent = false) {
+  async listPages(
+    scope: RagAuthContext,
+    includeContent = false,
+    pagination: RagFeedPagination = {},
+  ) {
     const documentFields = this.getDocumentFieldsConfig(scope.space);
-
-    const [allRegularPages, allDatabaseNodes] = await Promise.all([
-      this.db
-        .selectFrom('pages')
-        .select([
-          'pages.id',
-          'pages.slugId',
-          'pages.title',
-          'pages.icon',
-          'pages.parentPageId',
-          'pages.position',
-          'pages.settings',
-          'pages.createdAt',
-          'pages.updatedAt',
-        ])
-        .$if(includeContent, (qb) => qb.select('pages.content'))
-        .where('pages.workspaceId', '=', scope.workspace.id)
-        .where('pages.spaceId', '=', scope.space.id)
-        .where('pages.deletedAt', 'is', null)
-        .where(({ not, exists, selectFrom }) =>
-          not(
-            exists(
-              selectFrom('databases')
-                .select('databases.id')
-                .whereRef('databases.pageId', '=', 'pages.id')
-                .where('databases.deletedAt', 'is', null),
-            ),
-          ),
-        )
-        .where(({ not, exists, selectFrom }) =>
-          not(
-            exists(
-              selectFrom('databaseRows')
-                .select('databaseRows.id')
-                .whereRef('databaseRows.pageId', '=', 'pages.id')
-                .where('databaseRows.archivedAt', 'is', null),
-            ),
-          ),
-        )
-        .execute(),
-      this.db
-        .selectFrom('databases')
-        .innerJoin('pages', 'pages.id', 'databases.pageId')
-        .select([
-          'databases.id as databaseId',
-          'databases.name as title',
-          'databases.description',
-          'databases.descriptionContent',
-          'databases.icon',
-          'databases.createdAt',
-          'databases.updatedAt',
-          'pages.id',
-          'pages.slugId',
-          'pages.parentPageId',
-          'pages.position',
-          'pages.settings',
-        ])
-        .$if(includeContent, (qb) => qb.select('pages.content'))
-        .where('databases.workspaceId', '=', scope.workspace.id)
-        .where('databases.spaceId', '=', scope.space.id)
-        .where('databases.deletedAt', 'is', null)
-        .where('pages.deletedAt', 'is', null)
-        .execute(),
-    ]);
-
-    // Space scoping alone is not enough: drop anything the key creator is denied
-    // by a page access rule.
     const readablePageIds = await this.getReadablePageIds(scope);
-    const regularPages = allRegularPages.filter((page) =>
-      readablePageIds.has(page.id),
-    );
-    const databaseNodes = allDatabaseNodes.filter((node) =>
-      readablePageIds.has(node.id),
-    );
+    const cursor = pagination.cursor
+      ? this.decodeFeedCursor(pagination.cursor, 'pages')
+      : null;
+    const queryLimit = pagination.limit ? pagination.limit + 1 : null;
+
+    let regularPagesQuery = this.db
+      .selectFrom('pages')
+      .select([
+        'pages.id',
+        'pages.slugId',
+        'pages.title',
+        'pages.icon',
+        'pages.parentPageId',
+        'pages.position',
+        'pages.settings',
+        'pages.createdAt',
+        'pages.updatedAt',
+      ])
+      .$if(includeContent, (qb) => qb.select('pages.content'))
+      .where('pages.workspaceId', '=', scope.workspace.id)
+      .where('pages.spaceId', '=', scope.space.id)
+      .where('pages.id', 'in', [...readablePageIds])
+      .where('pages.deletedAt', 'is', null)
+      .where(({ not, exists, selectFrom }) =>
+        not(
+          exists(
+            selectFrom('databases')
+              .select('databases.id')
+              .whereRef('databases.pageId', '=', 'pages.id')
+              .where('databases.deletedAt', 'is', null),
+          ),
+        ),
+      )
+      .where(({ not, exists, selectFrom }) =>
+        not(
+          exists(
+            selectFrom('databaseRows')
+              .select('databaseRows.id')
+              .whereRef('databaseRows.pageId', '=', 'pages.id')
+              .where('databaseRows.archivedAt', 'is', null),
+          ),
+        ),
+      );
+    let databaseNodesQuery = this.db
+      .selectFrom('databases')
+      .innerJoin('pages', 'pages.id', 'databases.pageId')
+      .select([
+        'databases.id as databaseId',
+        'databases.name as title',
+        'databases.description',
+        'databases.descriptionContent',
+        'databases.icon',
+        'databases.createdAt',
+        'databases.updatedAt',
+        'pages.id',
+        'pages.slugId',
+        'pages.parentPageId',
+        'pages.position',
+        'pages.settings',
+      ])
+      .$if(includeContent, (qb) => qb.select('pages.content'))
+      .where('databases.workspaceId', '=', scope.workspace.id)
+      .where('databases.spaceId', '=', scope.space.id)
+      .where('databases.deletedAt', 'is', null)
+      .where('pages.deletedAt', 'is', null)
+      .where('pages.id', 'in', [...readablePageIds]);
+    if (cursor) {
+      const cursorDate = new Date(cursor.timestampMs);
+      regularPagesQuery = regularPagesQuery.where((eb) =>
+        eb.or([
+          eb('pages.updatedAt', '>', cursorDate),
+          eb.and([
+            eb('pages.updatedAt', '=', cursorDate),
+            eb('pages.id', '>', cursor.id),
+          ]),
+        ]),
+      );
+      databaseNodesQuery = databaseNodesQuery.where((eb) =>
+        eb.or([
+          eb('databases.updatedAt', '>', cursorDate),
+          eb.and([
+            eb('databases.updatedAt', '=', cursorDate),
+            eb('pages.id', '>', cursor.id),
+          ]),
+        ]),
+      );
+    }
+    if (queryLimit) {
+      regularPagesQuery = regularPagesQuery
+        .orderBy('pages.updatedAt', 'asc')
+        .orderBy('pages.id', 'asc')
+        .limit(queryLimit);
+      databaseNodesQuery = databaseNodesQuery
+        .orderBy('databases.updatedAt', 'asc')
+        .orderBy('pages.id', 'asc')
+        .limit(queryLimit);
+    }
+    const [regularPages, databaseNodes] =
+      readablePageIds.size === 0
+        ? [[], []]
+        : await Promise.all([
+            regularPagesQuery.execute(),
+            databaseNodesQuery.execute(),
+          ]);
 
     const items = [
       ...regularPages.map((page) => ({
@@ -507,7 +626,16 @@ export class RagService {
       return a.id.localeCompare(b.id);
     });
 
-    return { items };
+    if (!pagination.limit && !pagination.cursor) {
+      return { items };
+    }
+    return this.paginateFeed(
+      items,
+      'pages',
+      pagination,
+      (item) => new Date(item.updatedAt).getTime(),
+      (item) => item.id,
+    );
   }
 
   async getPageInfo(
@@ -564,14 +692,19 @@ export class RagService {
   ) {
     const updatedSince = new Date(updatedSinceMs);
     const readablePageIds = await this.getReadablePageIds(scope);
+    const cursor = pagination.cursor
+      ? this.decodeFeedCursor(pagination.cursor, 'updates')
+      : null;
+    const queryLimit = pagination.limit ? pagination.limit + 1 : null;
 
-    const pageUpdates = await this.db
+    let pageUpdatesQuery = this.db
       .selectFrom('pages')
       .select(['pages.id', 'pages.slugId', 'pages.title', 'pages.updatedAt'])
       .where('pages.workspaceId', '=', scope.workspace.id)
       .where('pages.spaceId', '=', scope.space.id)
       .where('pages.deletedAt', 'is', null)
       .where('pages.updatedAt', '>=', updatedSince)
+      .where('pages.id', 'in', [...readablePageIds])
       .where(({ not, exists, selectFrom }) =>
         not(
           exists(
@@ -591,8 +724,27 @@ export class RagService {
               .where('databaseRows.archivedAt', 'is', null),
           ),
         ),
-      )
-      .execute();
+      );
+    if (cursor) {
+      const cursorDate = new Date(cursor.timestampMs);
+      pageUpdatesQuery = pageUpdatesQuery.where((eb) =>
+        eb.or([
+          eb('pages.updatedAt', '>', cursorDate),
+          eb.and([
+            eb('pages.updatedAt', '=', cursorDate),
+            eb('pages.id', '>', cursor.id),
+          ]),
+        ]),
+      );
+    }
+    if (queryLimit) {
+      pageUpdatesQuery = pageUpdatesQuery
+        .orderBy('pages.updatedAt', 'asc')
+        .orderBy('pages.id', 'asc')
+        .limit(queryLimit);
+    }
+    const pageUpdates =
+      readablePageIds.size === 0 ? [] : await pageUpdatesQuery.execute();
 
     const propertiesChanges = this.db
       .selectFrom('databaseProperties')
@@ -631,7 +783,15 @@ export class RagService {
       .groupBy('databaseRows.databaseId')
       .as('rowPagesChanges');
 
-    const activeDatabases = await this.db
+    const lastChangedAtExpression = sql<Date>`GREATEST(
+      COALESCE(${this.db.dynamic.ref('databases.updatedAt')}, to_timestamp(0)),
+      COALESCE(${this.db.dynamic.ref('databasePages.updatedAt')}, to_timestamp(0)),
+      COALESCE(${this.db.dynamic.ref('propertiesChanges.propertiesUpdatedAt')}, to_timestamp(0)),
+      COALESCE(${this.db.dynamic.ref('rowsChanges.rowsUpdatedAt')}, to_timestamp(0)),
+      COALESCE(${this.db.dynamic.ref('cellsChanges.cellsUpdatedAt')}, to_timestamp(0)),
+      COALESCE(${this.db.dynamic.ref('rowPagesChanges.rowPagesUpdatedAt')}, to_timestamp(0))
+    )`;
+    let activeDatabasesQuery = this.db
       .selectFrom('databases')
       .innerJoin(
         'pages as databasePages',
@@ -651,20 +811,30 @@ export class RagService {
         'databasePages.id as pageId',
         'databasePages.slugId',
         'databases.name as title',
-        sql<Date>`GREATEST(
-          COALESCE(${this.db.dynamic.ref('databases.updatedAt')}, to_timestamp(0)),
-          COALESCE(${this.db.dynamic.ref('databasePages.updatedAt')}, to_timestamp(0)),
-          COALESCE(${this.db.dynamic.ref('propertiesChanges.propertiesUpdatedAt')}, to_timestamp(0)),
-          COALESCE(${this.db.dynamic.ref('rowsChanges.rowsUpdatedAt')}, to_timestamp(0)),
-          COALESCE(${this.db.dynamic.ref('cellsChanges.cellsUpdatedAt')}, to_timestamp(0)),
-          COALESCE(${this.db.dynamic.ref('rowPagesChanges.rowPagesUpdatedAt')}, to_timestamp(0))
-        )`.as('lastChangedAt'),
+        lastChangedAtExpression.as('lastChangedAt'),
       ])
       .where('databases.workspaceId', '=', scope.workspace.id)
       .where('databases.spaceId', '=', scope.space.id)
       .where('databases.deletedAt', 'is', null)
       .where('databasePages.deletedAt', 'is', null)
-      .execute();
+      .where('databasePages.id', 'in', [...readablePageIds])
+      .where(lastChangedAtExpression, '>=', updatedSince);
+    if (cursor) {
+      const cursorDate = new Date(cursor.timestampMs);
+      activeDatabasesQuery = activeDatabasesQuery.where(
+        sql<boolean>`(${lastChangedAtExpression} > ${cursorDate} OR (${lastChangedAtExpression} = ${cursorDate} AND ${this.db.dynamic.ref('databasePages.id')} > ${cursor.id}))`,
+      );
+    }
+    if (queryLimit) {
+      activeDatabasesQuery = activeDatabasesQuery
+        .orderBy(lastChangedAtExpression, 'asc')
+        .orderBy('databasePages.id', 'asc')
+        .limit(queryLimit);
+    }
+    const activeDatabases =
+      readablePageIds.size === 0
+        ? []
+        : await activeDatabasesQuery.execute();
 
     const databaseUpdates: Array<{
       type: string;
@@ -742,17 +912,14 @@ export class RagService {
     pagination: RagFeedPagination = {},
   ) {
     const deletedSince = new Date(deletedSinceMs);
+    const cursor = pagination.cursor
+      ? this.decodeFeedCursor(pagination.cursor, 'deleted')
+      : null;
+    const queryLimit = pagination.limit ? pagination.limit + 1 : null;
 
-    const [deletedPages, deletedDatabases, deletedRows] = await Promise.all([
-      this.db
+    let deletedPagesQuery = this.db
         .selectFrom('pages')
-        .select([
-          'pages.id',
-          'pages.slugId',
-          'pages.title',
-          'pages.parentPageId',
-          'pages.deletedAt',
-        ])
+        .select(['pages.id', 'pages.deletedAt'])
         .where('pages.workspaceId', '=', scope.workspace.id)
         .where('pages.spaceId', '=', scope.space.id)
         .where('pages.deletedAt', 'is not', null)
@@ -774,52 +941,86 @@ export class RagService {
                 .whereRef('databaseRows.pageId', '=', 'pages.id'),
             ),
           ),
-        )
-        .execute(),
-      this.db
+        );
+    let deletedDatabasesQuery = this.db
         .selectFrom('databases')
-        .leftJoin('pages', 'pages.id', 'databases.pageId')
         .select([
           'databases.id as databaseId',
           'databases.pageId',
-          'databases.name as title',
           'databases.deletedAt',
-          'pages.slugId',
-          'pages.parentPageId',
         ])
         .where('databases.workspaceId', '=', scope.workspace.id)
         .where('databases.spaceId', '=', scope.space.id)
         .where('databases.deletedAt', 'is not', null)
-        .where('databases.deletedAt', '>=', deletedSince)
-        .execute(),
-      this.db
+        .where('databases.deletedAt', '>=', deletedSince);
+    let deletedRowsQuery = this.db
         .selectFrom('databaseRows')
         .innerJoin('databases', 'databases.id', 'databaseRows.databaseId')
-        .leftJoin('pages', 'pages.id', 'databaseRows.pageId')
         .select([
           'databaseRows.id as rowId',
           'databaseRows.databaseId',
           'databaseRows.pageId',
           'databaseRows.archivedAt',
-          'pages.slugId',
-          'pages.title',
-          'pages.parentPageId',
         ])
         .where('databaseRows.workspaceId', '=', scope.workspace.id)
         .where('databases.workspaceId', '=', scope.workspace.id)
         .where('databases.spaceId', '=', scope.space.id)
         .where('databaseRows.archivedAt', 'is not', null)
-        .where('databaseRows.archivedAt', '>=', deletedSince)
-        .execute(),
+        .where('databaseRows.archivedAt', '>=', deletedSince);
+    if (cursor) {
+      const cursorDate = new Date(cursor.timestampMs);
+      deletedPagesQuery = deletedPagesQuery.where((eb) =>
+        eb.or([
+          eb('pages.deletedAt', '>', cursorDate),
+          eb.and([
+            eb('pages.deletedAt', '=', cursorDate),
+            eb('pages.id', '>', cursor.id),
+          ]),
+        ]),
+      );
+      deletedDatabasesQuery = deletedDatabasesQuery.where(
+        sql<boolean>`(${this.db.dynamic.ref('databases.deletedAt')} > ${cursorDate} OR (${this.db.dynamic.ref('databases.deletedAt')} = ${cursorDate} AND COALESCE(${this.db.dynamic.ref('databases.pageId')}, ${this.db.dynamic.ref('databases.id')}) > ${cursor.id}))`,
+      );
+      deletedRowsQuery = deletedRowsQuery.where((eb) =>
+        eb.or([
+          eb('databaseRows.archivedAt', '>', cursorDate),
+          eb.and([
+            eb('databaseRows.archivedAt', '=', cursorDate),
+            eb('databaseRows.pageId', '>', cursor.id),
+          ]),
+        ]),
+      );
+    }
+    if (queryLimit) {
+      deletedPagesQuery = deletedPagesQuery
+        .orderBy('pages.deletedAt', 'asc')
+        .orderBy('pages.id', 'asc')
+        .limit(queryLimit);
+      deletedDatabasesQuery = deletedDatabasesQuery
+        .orderBy('databases.deletedAt', 'asc')
+        .orderBy(
+          sql<string>`COALESCE(${this.db.dynamic.ref('databases.pageId')}, ${this.db.dynamic.ref('databases.id')})`,
+          'asc',
+        )
+        .limit(queryLimit);
+      deletedRowsQuery = deletedRowsQuery
+        .orderBy('databaseRows.archivedAt', 'asc')
+        .orderBy('databaseRows.pageId', 'asc')
+        .limit(queryLimit);
+    }
+    const [deletedPages, deletedDatabases, deletedRows] = await Promise.all([
+      deletedPagesQuery.execute(),
+      deletedDatabasesQuery.execute(),
+      deletedRowsQuery.execute(),
     ]);
 
     const items = [
       ...deletedPages.map((page) => ({
         type: 'page',
         id: page.id,
-        slugId: page.slugId,
-        title: page.title,
-        parentPageId: page.parentPageId,
+        slugId: null,
+        title: null,
+        parentPageId: null,
         deletedAt: page.deletedAt,
         deletedAtMs: new Date(page.deletedAt).getTime(),
       })),
@@ -827,9 +1028,9 @@ export class RagService {
         type: 'database',
         id: database.pageId ?? database.databaseId,
         databaseId: database.databaseId,
-        slugId: database.slugId,
-        title: database.title,
-        parentPageId: database.parentPageId,
+        slugId: null,
+        title: null,
+        parentPageId: null,
         deletedAt: database.deletedAt,
         deletedAtMs: new Date(database.deletedAt).getTime(),
       })),
@@ -838,9 +1039,9 @@ export class RagService {
         id: row.pageId,
         rowId: row.rowId,
         databaseId: row.databaseId,
-        slugId: row.slugId,
-        title: row.title,
-        parentPageId: row.parentPageId,
+        slugId: null,
+        title: null,
+        parentPageId: null,
         deletedAt: row.archivedAt,
         deletedAtMs: new Date(row.archivedAt).getTime(),
       })),
@@ -878,29 +1079,51 @@ export class RagService {
     pagination: RagFeedPagination = {},
   ) {
     const readablePageIds = await this.getReadablePageIds(scope);
+    const cursor = pagination.cursor
+      ? this.decodeFeedCursor(pagination.cursor, 'attachment-updates')
+      : null;
+    const queryLimit = pagination.limit ? pagination.limit + 1 : null;
+    let rowsQuery = this.db
+      .selectFrom('attachments')
+      .select([
+        'id',
+        'fileName',
+        'fileSize',
+        'fileExt',
+        'mimeType',
+        'pageId',
+        'spaceId',
+        'createdAt',
+        'updatedAt',
+      ])
+      .where('workspaceId', '=', scope.workspace.id)
+      .where('spaceId', '=', scope.space.id)
+      .where('pageId', 'is not', null)
+      .where('pageId', 'in', [...readablePageIds])
+      .where('deletedAt', 'is', null)
+      .where('updatedAt', '>=', new Date(updatedSinceMs));
+    if (cursor) {
+      const cursorDate = new Date(cursor.timestampMs);
+      rowsQuery = rowsQuery.where((eb) =>
+        eb.or([
+          eb('updatedAt', '>', cursorDate),
+          eb.and([
+            eb('updatedAt', '=', cursorDate),
+            eb('id', '>', cursor.id),
+          ]),
+        ]),
+      );
+    }
+    if (queryLimit) {
+      rowsQuery = rowsQuery
+        .orderBy('updatedAt', 'asc')
+        .orderBy('id', 'asc')
+        .limit(queryLimit);
+    }
     const rows =
       readablePageIds.size === 0
         ? []
-        : await this.db
-            .selectFrom('attachments')
-            .select([
-              'id',
-              'fileName',
-              'fileSize',
-              'fileExt',
-              'mimeType',
-              'pageId',
-              'spaceId',
-              'createdAt',
-              'updatedAt',
-            ])
-            .where('workspaceId', '=', scope.workspace.id)
-            .where('spaceId', '=', scope.space.id)
-            .where('pageId', 'is not', null)
-            .where('pageId', 'in', [...readablePageIds])
-            .where('deletedAt', 'is', null)
-            .where('updatedAt', '>=', new Date(updatedSinceMs))
-            .execute();
+        : await rowsQuery.execute();
     const items = rows
       .filter((row) => Boolean(row.pageId && row.spaceId))
       .map((row) => ({
@@ -947,20 +1170,42 @@ export class RagService {
     deletedSinceMs: number,
     pagination: RagFeedPagination = {},
   ) {
-    const rows = await this.db
+    const cursor = pagination.cursor
+      ? this.decodeFeedCursor(pagination.cursor, 'attachment-deleted')
+      : null;
+    const queryLimit = pagination.limit ? pagination.limit + 1 : null;
+    let rowsQuery = this.db
       .selectFrom('attachments')
-      .select(['id', 'pageId', 'spaceId', 'deletedAt'])
+      .select(['id', 'deletedAt'])
       .where('workspaceId', '=', scope.workspace.id)
       .where('spaceId', '=', scope.space.id)
       .where('deletedAt', 'is not', null)
-      .where('deletedAt', '>=', new Date(deletedSinceMs))
-      .execute();
+      .where('deletedAt', '>=', new Date(deletedSinceMs));
+    if (cursor) {
+      const cursorDate = new Date(cursor.timestampMs);
+      rowsQuery = rowsQuery.where((eb) =>
+        eb.or([
+          eb('deletedAt', '>', cursorDate),
+          eb.and([
+            eb('deletedAt', '=', cursorDate),
+            eb('id', '>', cursor.id),
+          ]),
+        ]),
+      );
+    }
+    if (queryLimit) {
+      rowsQuery = rowsQuery
+        .orderBy('deletedAt', 'asc')
+        .orderBy('id', 'asc')
+        .limit(queryLimit);
+    }
+    const rows = await rowsQuery.execute();
     const items = rows
       .map((row) => ({
         id: row.id,
         fileId: row.id,
-        pageId: row.pageId,
-        spaceId: row.spaceId,
+        pageId: null,
+        spaceId: null,
         deletedAt: row.deletedAt!,
         deletedAtMs: new Date(row.deletedAt!).getTime(),
       }))

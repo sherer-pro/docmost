@@ -264,6 +264,7 @@ export class SearchService {
     opts: {
       userId?: string;
       workspaceId: string;
+      excludedPageIds?: ReadonlySet<string>;
     },
   ): Promise<{ items: SearchResponseDto[] }> {
     const { labelId, tag } = searchParams;
@@ -478,7 +479,7 @@ export class SearchService {
         const readableBatch = this.filterReadableResults(
           normalizedBatch,
           snapshotBySpaceId,
-        );
+        ).filter((result) => !opts.excludedPageIds?.has(result.id));
 
         for (const result of readableBatch) {
           if (readableRowsToSkip > 0) {
@@ -517,7 +518,7 @@ export class SearchService {
         .execute();
       const searchResults = this.normalizeSearchHighlights(
         rawResults as unknown as SearchResponseDto[],
-      );
+      ).filter((result) => !opts.excludedPageIds?.has(result.id));
       const searchResultsWithBreadcrumbs =
         await this.attachBreadcrumbsToResults(searchResults);
 

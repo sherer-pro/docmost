@@ -10,6 +10,16 @@ export interface AiOutboundUrlPolicy {
   trimTrailingSlash?: boolean;
 }
 
+export type AiResolvedAddress = {
+  address: string;
+  family: 4 | 6;
+};
+
+export type AiResolvedOutboundUrl = {
+  url: URL;
+  addresses: AiResolvedAddress[];
+};
+
 @Injectable()
 export class AiOutboundUrlPolicyService {
   constructor(private readonly environmentService: EnvironmentService) {}
@@ -18,6 +28,13 @@ export class AiOutboundUrlPolicyService {
     rawUrl: string,
     policy: AiOutboundUrlPolicy,
   ): Promise<URL> {
+    return (await this.resolveAllowed(rawUrl, policy)).url;
+  }
+
+  async resolveAllowed(
+    rawUrl: string,
+    policy: AiOutboundUrlPolicy,
+  ): Promise<AiResolvedOutboundUrl> {
     const label = `AI ${policy.kind}`;
     let url: URL;
     try {
@@ -47,7 +64,7 @@ export class AiOutboundUrlPolicyService {
     const addresses = await this.resolveAddresses(url.hostname, label);
     const loopbackOnly =
       addresses.length > 0 &&
-      addresses.every((address) => this.isLoopbackAddress(address));
+      addresses.every((entry) => this.isLoopbackAddress(entry.address));
 
     if (
       !explicitlyAllowed &&
@@ -58,7 +75,7 @@ export class AiOutboundUrlPolicyService {
       );
     }
     if (
-      addresses.some((address) => this.isLinkLocalAddress(address)) &&
+      addresses.some((entry) => this.isLinkLocalAddress(entry.address)) &&
       !loopbackOnly
     ) {
       throw new BadRequestException(
@@ -69,7 +86,7 @@ export class AiOutboundUrlPolicyService {
     if (policy.trimTrailingSlash) {
       url.pathname = url.pathname.replace(/\/+$/, '');
     }
-    return url;
+    return { url, addresses };
   }
 
   private parseOrigins(raw: string): Set<string> {
@@ -92,10 +109,11 @@ export class AiOutboundUrlPolicyService {
   private async resolveAddresses(
     hostname: string,
     label: string,
-  ): Promise<string[]> {
+  ): Promise<AiResolvedAddress[]> {
     const normalized = hostname.replace(/^\[|\]$/g, '');
-    if (isIP(normalized)) {
-      return [normalized];
+    const literalFamily = isIP(normalized);
+    if (literalFamily === 4 || literalFamily === 6) {
+      return [{ address: normalized, family: literalFamily }];
     }
 
     try {
@@ -106,7 +124,10 @@ export class AiOutboundUrlPolicyService {
       if (addresses.length === 0) {
         throw new Error('No addresses returned');
       }
-      return addresses.map((entry) => entry.address);
+      return addresses.map((entry) => ({
+        address: entry.address,
+        family: entry.family === 6 ? 6 : 4,
+      }));
     } catch {
       throw new BadRequestException(`${label} hostname cannot be resolved`);
     }

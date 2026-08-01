@@ -53,7 +53,7 @@ describe('RagService getUpdates SQL generation', () => {
     // Page access rules are not the subject of this SQL-shape test.
     {
       getSidebarAccessSnapshot: async () => ({
-        readablePageIds: new Set<string>(),
+        readablePageIds: new Set<string>(['page-1']),
         visiblePageIds: { has: () => true } as unknown as Set<string>,
         writablePageIds: { has: () => true } as unknown as Set<string>,
       }),
@@ -105,6 +105,63 @@ describe('RagService getUpdates SQL generation', () => {
     expect(aggregationQuery).not.toContain('"rowsUpdatedAt"');
     expect(aggregationQuery).not.toContain('"cellsUpdatedAt"');
     expect(aggregationQuery).not.toContain('"rowPagesUpdatedAt"');
+  });
+
+  it('pushes paginated update limits into both SQL streams', async () => {
+    await service.getUpdates(scope, 0, { limit: 500 });
+
+    const pageQuery = queries.find((query) =>
+      query.includes('from "pages"'),
+    );
+    const databaseQuery = queries.find((query) =>
+      query.includes('GREATEST('),
+    );
+
+    expect(pageQuery).toContain('order by "pages"."updated_at" asc');
+    expect(pageQuery).toContain('limit $');
+    expect(databaseQuery).toContain('order by GREATEST(');
+    expect(databaseQuery).toContain('limit $');
+  });
+
+  it('pushes pagination into deleted and attachment SQL streams', async () => {
+    await service.getDeleted(scope, 0, { limit: 500 });
+    await service.getAttachmentUpdates(scope, 0, { limit: 500 });
+    await service.getAttachmentDeleted(scope, 0, { limit: 500 });
+
+    const deletedQueries = queries.filter(
+      (query) =>
+        query.includes('deleted_at') || query.includes('archived_at'),
+    );
+    expect(deletedQueries.filter((query) => query.includes('limit $')).length).toBeGreaterThanOrEqual(5);
+    expect(
+      queries.some(
+        (query) =>
+          query.includes('from "attachments"') &&
+          query.includes('order by "updated_at" asc') &&
+          query.includes('limit $'),
+      ),
+    ).toBe(true);
+  });
+
+  it('pushes optional page listing pagination into both SQL streams', async () => {
+    await service.listPages(scope, false, { limit: 500 });
+
+    expect(
+      queries.some(
+        (query) =>
+          query.includes('from "pages"') &&
+          query.includes('order by "pages"."updated_at" asc') &&
+          query.includes('limit $'),
+      ),
+    ).toBe(true);
+    expect(
+      queries.some(
+        (query) =>
+          query.includes('from "databases"') &&
+          query.includes('order by "databases"."updated_at" asc') &&
+          query.includes('limit $'),
+      ),
+    ).toBe(true);
   });
 
   it('uses timestamp and id as an opaque pagination tie-breaker', () => {

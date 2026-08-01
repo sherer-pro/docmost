@@ -11,7 +11,7 @@
   - `packages/editor-ext` — shared TypeScript package with editor extensions.
   - `packages/api-contract` — shared API-facing TypeScript contracts.
 - Root package manager is pinned: `pnpm@10.4.0`.
-- **Only the root `package.json` `pnpm.overrides` block actually affects resolution.** The `overrides` and `patchedDependencies` blocks in `pnpm-workspace.yaml` are inert: pnpm reads those keys from that file only from v10.6 onward, and `packageManager` pins pnpm 10.4.0. `pnpm-lock.yaml` therefore records just the 7 root overrides, and the `react-arborist` patch is not applied. See the warning comment in `pnpm-workspace.yaml` for how to activate them (requires a lockfile regeneration with network access and a full re-verification).
+- **Only the root `package.json` `pnpm.overrides` block actually affects resolution.** The `overrides` and `patchedDependencies` blocks in `pnpm-workspace.yaml` are inert: pnpm reads those keys from that file only from v10.6 onward, and `packageManager` pins pnpm 10.4.0. `pnpm-lock.yaml` therefore records only the root overrides, and the `react-arborist` patch is not applied. See the warning comment in `pnpm-workspace.yaml` for how to activate them (requires a lockfile regeneration with network access and a full re-verification).
 - Root composite scripts call `corepack pnpm` internally, so `corepack pnpm verify:full` works even when a global `pnpm` shim is not on `PATH`.
 - `node:22-slim` is used for the production image.
 
@@ -131,7 +131,7 @@
 ### Tests
 
 - Combined default test stage (backend + frontend smoke): `pnpm test`
-- Full root test stage (default + frontend unit): `pnpm test:all`
+- Full root test stage (default + frontend unit + RAG Sync): `pnpm test:all`
 - Security regression suite (server + client targeted tests): `pnpm test:security`
 - Backend unit/integration: `pnpm --filter ./apps/server test`
 - Backend security subset (share SEO, cloud host parsing, CSRF origin checks, ZIP traversal/quotas/decompression budget, attachment token/MIME handling, attachment image path resolution, import embed formatting, PDF resource allowlist, page ACL resolution, space abilities, API key scoping, JWT session binding, collab token session binding, WebSocket room authorization, credential protection, trusted proxies, database-module page access, and page move cycle guard): `pnpm --filter ./apps/server test:security`
@@ -162,6 +162,7 @@
 - Docker Compose env: copy `.env.compose.example` to `.env`, replace `REPLACE_WITH_LONG_SECRET` and `STRONG_DB_PASSWORD`, keep `AUTH_RATE_LIMIT_STORAGE=redis`, then run `docker compose up -d`.
 - Local container startup (prebuilt image): `docker compose up -d`
 - Optional Open WebUI sync stack: `docker compose -f docker-compose.yml -f docker-compose.rag-sync.yml up -d rag-sync`
+- `Dockerfile.rag-sync` builds the workspace packages, creates a Docker-local inject-workspace lockfile for a portable production-only `pnpm deploy` directory, and runs `dist/main.js` as `USER node`; do not copy the builder `node_modules` or source tree into its runner stage.
 - Build the current code into an image: `docker build -t docmost:local .`
 - The production image starts the built backend directly with `node apps/server/dist/apps/server/src/main`; it should not invoke `pnpm start` or Corepack at runtime.
 - Local file storage resolves to `<repo-or-runtime-root>/data/storage`; the Docker image uses runtime root `/app`, and Compose mounts the `docmost` volume at `/app/data/storage`.
@@ -230,7 +231,7 @@ Minimum:
 - Diagnostics: `DEBUG_MODE`, `DEBUG_DB`, `LOG_HTTP`
 - Search: `SEARCH_DRIVER`, `TYPESENSE_URL`, `TYPESENSE_API_KEY`, `TYPESENSE_LOCALE`
 - SSO network policy: `SSO_ALLOWED_ENDPOINTS` is a comma-separated allowlist of exact approved OIDC, SAML, and LDAP endpoints. Development additionally permits loopback endpoints.
-- AI/RAG support: `AI_DRIVER`, `AI_EMBEDDING_MODEL`, `AI_COMPLETION_MODEL`, `AI_EMBEDDING_DIMENSION`, `OPENAI_API_KEY`, `OPENAI_API_URL`, `GEMINI_API_KEY`, `OLLAMA_API_URL`
+- AI/RAG network policy and admission control: `AI_PROVIDER_ALLOWED_ORIGINS`, `AI_RETRIEVAL_ALLOWED_ORIGINS`, `AI_STREAM_IDLE_TIMEOUT_MS`, `RAG_API_RATE_LIMIT_PER_MINUTE`, `RAG_API_MAX_CONCURRENT`, `RAG_API_BULK_MAX_CONCURRENT`, `MCP_RATE_LIMIT_PER_MINUTE`, `MCP_MAX_CONCURRENT`. Provider credentials and models are configured per space and encrypted in the database.
 - Per-space AI provider network policy: `AI_PROVIDER_ALLOWED_ORIGINS` is a comma-separated list of exact trusted `http(s)` origins. Keep it empty until the provider origins are approved; development additionally permits loopback endpoints.
 - External retrieval network policy: `AI_RETRIEVAL_ALLOWED_ORIGINS` separately allowlists exact trusted `http(s)` origins for optional `http-json-v1` and `open-webui-knowledge-v1` retrieval adapters. Development additionally permits loopback endpoints.
 - AI provider streaming: `AI_STREAM_IDLE_TIMEOUT_MS` controls the maximum wait between provider SSE chunks, including the first chunk. It defaults to 120000 ms, accepts 5000-600000 ms, resets on every chunk, and is capped by the per-space request timeout. Slow local reasoning models may use 300000 ms.
@@ -258,7 +259,7 @@ Minimum:
 
 - The repository includes GitHub Actions workflows:
   - `.github/workflows/docker.yml` — release/docker build and push.
-  - `.github/workflows/ci.yml` — PR validation (`install`, `build`, `routes:inventory:check`, `check:env`, `lint`, `client test`, `server test`, `pnpm test:security`, `check:comments:en`, `pnpm audit --prod` fail on high/critical).
+  - `.github/workflows/ci.yml` — PR validation (`install`, `build`, `routes:inventory:check`, `check:env`, `lint`, client/server/RAG Sync tests, RAG Sync image smoke build, `pnpm test:security`, `check:comments:en`, exception-journal validation, and `pnpm audit --prod` fail on unignored high/critical).
 - De facto required local pipeline before PR:
   1. `pnpm install --frozen-lockfile`
   2. for quick checks on day-to-day changes: `pnpm verify:quick`.
@@ -330,6 +331,7 @@ Minimum:
 - Per-space model and retrieval credentials live in `ai_space_configs`, encrypted with the application secret. Never return encrypted credential columns, put secrets in queue payloads, or store them in `spaces.settings`.
 - Agent mode is disabled by default and must pass the provider tool-calling test for the current provider/base URL/model fingerprint before it can be enabled. It is a per-conversation opt-in, uses the existing context/RAG pipeline, and is bounded to 8 model steps, 16 tool calls, 32 KiB per tool result, and 128 KiB total.
 - Agent writes are limited to safe operations on the current page. Each operation creates an initiator-only approval that expires after one hour; approval must recheck write ACL and the live Yjs content hash. Never add whole-document replacement, page lifecycle, table/database, comment/share, media, arbitrary-code, or external-MCP write tools.
+- Pending agent approvals do not consume provider concurrency, but new agent runs are limited to 6 pending approvals per user and 30 per space. Approval uses the shared PostgreSQL admission locks, and an approved step reserves a provider slot until the run returns to `queued`.
 - `/mcp` is always mounted as stateless Streamable HTTP and accepts only `key_type=mcp` API keys scoped to one space. It exposes the read-only shared tools, excludes attachment binaries/extracted text, and must keep page ACL and the AI content policy authoritative. RAG and MCP keys are not interchangeable.
 - Persistent AI chat uses the dedicated `AI_CHAT_QUEUE` for generation, file extraction, and retention cleanup. Search indexing uses `SEARCH_QUEUE`; do not mix those processors or payload contracts.
 - AI provider calls are immutable attempts introduced by `20260729T120000-ai-reliability.ts`. Bull delivery is at-least-once; workers claim queued runs with database compare-and-set, and the post-migration reconciler repairs missing deterministic jobs. Never reopen a terminal `ai_runs` row or automatically retry a stale running provider call.

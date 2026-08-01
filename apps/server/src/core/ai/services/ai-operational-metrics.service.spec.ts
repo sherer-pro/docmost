@@ -1,4 +1,5 @@
 import { AiOperationalMetricsService } from './ai-operational-metrics.service';
+import { Logger } from '@nestjs/common';
 
 describe('AiOperationalMetricsService', () => {
   it('records safe aggregate run, retrieval, reconciliation, and file metrics', () => {
@@ -39,5 +40,31 @@ describe('AiOperationalMetricsService', () => {
       },
       fileLifecycle: { storage_deleted: 1 },
     });
+  });
+
+  it('logs and resets a low-cardinality periodic summary', () => {
+    const log = jest.spyOn(Logger.prototype, 'log').mockImplementation();
+    const metrics = new AiOperationalMetricsService();
+    const run = {
+      id: 'long-running-run',
+      createdAt: new Date(0),
+      startedAt: new Date(10),
+    } as any;
+    metrics.observeDelta(run, 20);
+    metrics.observeRetrieval('success');
+    metrics.observeRetrievalQuery(25, 4, 4);
+
+    metrics.flushSummary();
+
+    expect(log).toHaveBeenCalledWith(
+      expect.stringContaining('"event":"operational.summary"'),
+    );
+    expect(log.mock.calls[0][0]).not.toContain('userId');
+    expect(metrics.getSnapshot().retrievalQuery.latency.count).toBe(0);
+    metrics.observeDelta(run, 30);
+    expect(metrics.getSnapshot().durations.firstToken.count).toBe(0);
+    metrics.flushSummary();
+    expect(log).toHaveBeenCalledTimes(1);
+    log.mockRestore();
   });
 });

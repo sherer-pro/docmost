@@ -1,4 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { AiRun as AiRunEntity } from '@docmost/db/types/entity.types';
 import { AiRunStatus } from '@docmost/api-contract';
 
@@ -13,7 +18,9 @@ function durationMetric(): DurationMetric {
 }
 
 @Injectable()
-export class AiOperationalMetricsService {
+export class AiOperationalMetricsService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(AiOperationalMetricsService.name);
+  private summaryTimer?: NodeJS.Timeout;
   private readonly firstTokenRuns = new Set<string>();
   private readonly durations = {
     queueWait: durationMetric(),
@@ -31,6 +38,15 @@ export class AiOperationalMetricsService {
   private attemptTotal = 0;
   private attemptMax = 0;
   private reconciledJobs = 0;
+
+  onModuleInit(): void {
+    this.summaryTimer = setInterval(() => this.flushSummary(), 60_000);
+    this.summaryTimer.unref();
+  }
+
+  onModuleDestroy(): void {
+    if (this.summaryTimer) clearInterval(this.summaryTimer);
+  }
 
   observeDelta(run: AiRunEntity, observedAt = Date.now()): void {
     if (this.firstTokenRuns.has(run.id)) return;
@@ -123,6 +139,20 @@ export class AiOperationalMetricsService {
     };
   }
 
+  flushSummary(): void {
+    const snapshot = this.getSnapshot();
+    if (!this.hasActivity(snapshot)) return;
+    this.logger.log(
+      JSON.stringify({
+        component: 'ai',
+        event: 'operational.summary',
+        intervalSeconds: 60,
+        ...snapshot,
+      }),
+    );
+    this.reset();
+  }
+
   private observeDuration(metric: DurationMetric, value: number): void {
     const duration = Math.max(0, Math.round(value));
     metric.count += 1;
@@ -132,5 +162,32 @@ export class AiOperationalMetricsService {
 
   private increment(target: Map<string, number>, key: string): void {
     target.set(key, (target.get(key) ?? 0) + 1);
+  }
+
+  private hasActivity(snapshot: ReturnType<typeof this.getSnapshot>): boolean {
+    return (
+      Object.values(snapshot.durations).some((metric) => metric.count > 0) ||
+      Object.keys(snapshot.terminalStatuses).length > 0 ||
+      snapshot.reconciledJobs > 0 ||
+      Object.keys(snapshot.retrievalOutcomes).length > 0 ||
+      snapshot.retrievalQuery.latency.count > 0 ||
+      Object.keys(snapshot.fileLifecycle).length > 0
+    );
+  }
+
+  private reset(): void {
+    for (const metric of Object.values(this.durations)) {
+      Object.assign(metric, durationMetric());
+    }
+    this.terminalStatuses.clear();
+    this.retrievalOutcomes.clear();
+    Object.assign(this.retrievalLatency, durationMetric());
+    this.retrievalCandidateCount = 0;
+    this.retrievalValidCandidateCount = 0;
+    this.fileLifecycle.clear();
+    this.attemptCount = 0;
+    this.attemptTotal = 0;
+    this.attemptMax = 0;
+    this.reconciledJobs = 0;
   }
 }
