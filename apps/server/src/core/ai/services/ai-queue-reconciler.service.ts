@@ -66,6 +66,7 @@ export class AiQueueReconcilerService implements OnModuleInit, OnModuleDestroy {
       await this.databaseReadiness.waitUntilReady();
       if (this.destroyed) return;
       await this.steps.expirePending(100);
+      await this.steps.recoverApproved(100);
       await this.reconcileRuns();
       await this.reconcileAuxRuns();
       const staleFileIds = await this.files.recoverStaleExtractions();

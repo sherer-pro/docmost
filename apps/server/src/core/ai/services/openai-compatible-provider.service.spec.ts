@@ -486,6 +486,31 @@ describe('OpenAiCompatibleProviderService', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
+  it('cancels a non-streaming tool request while URL resolution is pending', async () => {
+    const delayedService = new OpenAiCompatibleProviderService(
+      {
+        resolveAllowed: jest.fn(
+          () => new Promise<never>(() => undefined),
+        ),
+      } as any,
+      {
+        getAiStreamIdleTimeoutMs: () => 1000,
+      } as any,
+    );
+    global.fetch = jest.fn() as any;
+
+    await expect(
+      delayedService.completeWithTools(
+        config,
+        [{ role: 'user', content: 'Hi' }],
+        [],
+        'auto',
+        jest.fn(async () => true),
+      ),
+    ).rejects.toBeInstanceOf(AiProviderRequestCancelledError);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
   it('includes provider URL resolution in the whole-request timeout', async () => {
     const delayedService = new OpenAiCompatibleProviderService(
       {

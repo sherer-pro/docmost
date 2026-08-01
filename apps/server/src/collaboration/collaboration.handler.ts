@@ -76,10 +76,11 @@ export class CollaborationHandler {
         payload: {
           operation: AiPageOperation;
           baseContentHash: string;
+          expectedAfterHash: string;
           user: User;
         },
       ) => {
-        const { operation, baseContentHash, user } = payload;
+        const { operation, baseContentHash, expectedAfterHash, user } = payload;
         this.logger.debug('Applying approved AI page operation', documentName);
         return this.withYdocConnection(
           hocuspocus,
@@ -93,6 +94,10 @@ export class CollaborationHandler {
             }
             const next = applyAiPageOperation(current, operation);
             strictJsonToNode(next as any);
+            const afterHash = hashProseMirrorJson(next);
+            if (afterHash !== expectedAfterHash) {
+              throw new Error('agent_write_recovery_mismatch');
+            }
             const fragment = doc.getXmlFragment('default');
             if (fragment.length > 0) {
               fragment.delete(0, fragment.length);
@@ -105,9 +110,23 @@ export class CollaborationHandler {
             Y.applyUpdate(doc, Y.encodeStateAsUpdate(newDoc));
             return {
               beforeHash,
-              afterHash: hashProseMirrorJson(next),
+              afterHash,
             };
           },
+        );
+      },
+      getAiPageContentHash: async (
+        documentName: string,
+        payload: { user: User },
+      ) => {
+        return this.withYdocConnection(
+          hocuspocus,
+          documentName,
+          { user: payload.user },
+          (doc) =>
+            hashProseMirrorJson(
+              TiptapTransformer.fromYdoc(doc, 'default'),
+            ),
         );
       },
     };
