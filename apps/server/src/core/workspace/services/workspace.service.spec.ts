@@ -68,6 +68,8 @@ describe('WorkspaceService', () => {
       oidcIssuer: 'https://idp.example.com',
       oidcClientId: 'client-id',
       oidcClientSecret: 'encrypted-secret',
+      verifiedAt: new Date(),
+      lastSuccessfulLoginAt: new Date(),
     } as any;
     const allowed = createService(true);
     const denied = createService(false);
@@ -83,6 +85,26 @@ describe('WorkspaceService', () => {
       ['http:', 'https:'],
       'SSO provider',
     );
+  });
+
+  it('refuses SSO enforcement through a provider nobody has signed in with', async () => {
+    const allowed = createService(true);
+    const unverified = {
+      type: 'oidc',
+      oidcIssuer: 'https://idp.example.com',
+      oidcClientId: 'client-id',
+      oidcClientSecret: 'encrypted-secret',
+      verifiedAt: null,
+      lastSuccessfulLoginAt: null,
+    } as any;
+    const neverUsed = { ...unverified, verifiedAt: new Date() };
+
+    await expect(
+      (allowed.service as any).hasAllowedSsoProvider([unverified]),
+    ).resolves.toBe(false);
+    await expect(
+      (allowed.service as any).hasAllowedSsoProvider([neverUsed]),
+    ).resolves.toBe(false);
   });
 
   it('should prevent self-deactivation', async () => {

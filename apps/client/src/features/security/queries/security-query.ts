@@ -5,16 +5,21 @@ import {
   UseQueryResult,
 } from "@tanstack/react-query";
 import {
+  createSsoGroupMapping,
   createSsoProvider,
+  deleteSsoGroupMapping,
   deleteSsoProvider,
+  getSsoGroupMappings,
   getSsoProviderById,
   getSsoProviders,
+  testSsoProvider,
   updateSsoProvider,
 } from "@/features/security/services/security-service.ts";
 import { notifications } from "@mantine/notifications";
 import {
   IAuthProvider,
   ICreateAuthProvider,
+  ISsoGroupMapping,
   IUpdateAuthProvider,
 } from "@/features/security/types/security.types.ts";
 import { IPagination } from "@/lib/types.ts";
@@ -86,6 +91,73 @@ export function useDeleteSsoProviderMutation() {
 
       queryClient.invalidateQueries({
         queryKey: ["sso-providers"],
+      });
+    },
+    onError: (error) => {
+      const errorMessage = error["response"]?.data?.message;
+      notifications.show({ message: errorMessage, color: "red" });
+    },
+  });
+}
+
+export function useTestSsoProviderMutation() {
+  const queryClient = useQueryClient();
+  const { t } = useTranslation();
+
+  return useMutation<IAuthProvider, Error, string>({
+    mutationFn: (providerId) => testSsoProvider({ providerId }),
+    onSuccess: () => {
+      notifications.show({ message: t("SSO provider configuration verified") });
+      queryClient.invalidateQueries({ queryKey: ["sso-providers"] });
+    },
+    onError: (error) => {
+      const errorMessage = error["response"]?.data?.message;
+      notifications.show({ message: errorMessage, color: "red" });
+      queryClient.invalidateQueries({ queryKey: ["sso-providers"] });
+    },
+  });
+}
+
+export function useSsoGroupMappings(
+  providerId: string,
+  enabled = true,
+): UseQueryResult<{ items: ISsoGroupMapping[] }, Error> {
+  return useQuery({
+    queryKey: ["sso-group-mappings", providerId],
+    queryFn: () => getSsoGroupMappings({ providerId }),
+    enabled: enabled && !!providerId,
+  });
+}
+
+export function useCreateSsoGroupMappingMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    ISsoGroupMapping,
+    Error,
+    { providerId: string; externalGroupId: string; groupId: string }
+  >({
+    mutationFn: (data) => createSsoGroupMapping(data),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ["sso-group-mappings", variables.providerId],
+      });
+    },
+    onError: (error) => {
+      const errorMessage = error["response"]?.data?.message;
+      notifications.show({ message: errorMessage, color: "red" });
+    },
+  });
+}
+
+export function useDeleteSsoGroupMappingMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation<void, Error, { mappingId: string; providerId: string }>({
+    mutationFn: ({ mappingId }) => deleteSsoGroupMapping({ mappingId }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ["sso-group-mappings", variables.providerId],
       });
     },
     onError: (error) => {

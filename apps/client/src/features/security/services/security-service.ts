@@ -2,6 +2,7 @@ import api from "@/lib/api-client.ts";
 import {
   IAuthProvider,
   ICreateAuthProvider,
+  ISsoGroupMapping,
   IUpdateAuthProvider,
 } from "@/features/security/types/security.types.ts";
 import { IPagination } from "@/lib/types.ts";
@@ -36,4 +37,39 @@ export async function updateSsoProvider(
 ): Promise<IAuthProvider> {
   const req = await api.post<IAuthProvider>("/sso/update", data);
   return req.data;
+}
+
+export async function testSsoProvider(data: {
+  providerId: string;
+}): Promise<IAuthProvider> {
+  const req = await api.post<IAuthProvider>("/sso/test", data);
+  return req.data;
+}
+
+export async function getSsoGroupMappings(data: {
+  providerId: string;
+}): Promise<{ items: ISsoGroupMapping[] }> {
+  const req = await api.post<{ items: ISsoGroupMapping[] }>(
+    "/sso/group-mappings",
+    data,
+  );
+  return req.data;
+}
+
+export async function createSsoGroupMapping(data: {
+  providerId: string;
+  externalGroupId: string;
+  groupId: string;
+}): Promise<ISsoGroupMapping> {
+  const req = await api.post<ISsoGroupMapping>(
+    "/sso/group-mappings/create",
+    data,
+  );
+  return req.data;
+}
+
+export async function deleteSsoGroupMapping(data: {
+  mappingId: string;
+}): Promise<void> {
+  await api.post<void>("/sso/group-mappings/delete", data);
 }

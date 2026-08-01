@@ -47,3 +47,38 @@ export function isUsableSsoProvider(
   }
   return false;
 }
+
+/**
+ * Fields whose change invalidates a previous successful configuration test.
+ */
+export const SECURITY_CRITICAL_PROVIDER_FIELDS = [
+  'oidcIssuer',
+  'oidcClientId',
+  'oidcClientSecret',
+  'samlUrl',
+  'samlCertificate',
+  'ldapUrl',
+  'ldapBindDn',
+  'ldapBindPassword',
+  'ldapBaseDn',
+  'ldapUserSearchFilter',
+  'ldapUserAttributes',
+  'ldapTlsEnabled',
+  'ldapTlsCaCert',
+] as const;
+
+/**
+ * SSO may only be enforced through a provider that is completely configured,
+ * was verified against the live identity provider, and has already signed a
+ * user in at least once. This is what keeps a workspace from locking itself out.
+ */
+export function isEnforcementReadyProvider(
+  provider: Parameters<typeof isUsableSsoProvider>[0] &
+    Pick<AuthProvider, 'verifiedAt' | 'lastSuccessfulLoginAt'>,
+): boolean {
+  return Boolean(
+    isUsableSsoProvider(provider) &&
+      provider.verifiedAt &&
+      provider.lastSuccessfulLoginAt,
+  );
+}

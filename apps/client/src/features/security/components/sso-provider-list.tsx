@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import {
   useDeleteSsoProviderMutation,
   useGetSsoProviders,
+  useTestSsoProviderMutation,
 } from "@/features/security/queries/security-query.ts";
 import {
   ActionIcon,
@@ -14,10 +15,12 @@ import {
   ThemeIcon,
 } from "@mantine/core";
 import {
+  IconAlertTriangle,
   IconCheck,
   IconDots,
   IconLock,
   IconPencil,
+  IconPlugConnected,
   IconTrash,
   IconX,
 } from "@tabler/icons-react";
@@ -32,6 +35,7 @@ export default function SsoProviderList() {
   const { data, isLoading } = useGetSsoProviders();
   const [opened, { open, close }] = useDisclosure(false);
   const deleteSsoProviderMutation = useDeleteSsoProviderMutation();
+  const testSsoProviderMutation = useTestSsoProviderMutation();
   const [editProvider, setEditProvider] = useState<IAuthProvider | null>(null);
 
   if (isLoading || !data) {
@@ -77,6 +81,7 @@ export default function SsoProviderList() {
                 <Table.Th>{t("Name")}</Table.Th>
                 <Table.Th>{t("Type")}</Table.Th>
                 <Table.Th>{t("Status")}</Table.Th>
+                <Table.Th>{t("Configuration")}</Table.Th>
                 <Table.Th>{t("Allow signup")}</Table.Th>
                 <Table.Th>{t("Action")}</Table.Th>
               </Table.Tr>
@@ -110,6 +115,25 @@ export default function SsoProviderList() {
                       >
                         {provider.isEnabled ? "Active" : "InActive"}
                       </Badge>
+                    </Table.Td>
+                    <Table.Td>
+                      {provider.verifiedAt ? (
+                        <Badge color="green" variant="light">
+                          {provider.lastSuccessfulLoginAt
+                            ? t("Verified")
+                            : t("Verified, no login yet")}
+                        </Badge>
+                      ) : (
+                        <Badge
+                          color="orange"
+                          variant="light"
+                          leftSection={<IconAlertTriangle size={12} />}
+                        >
+                          {provider.lastErrorCode
+                            ? t("Test failed")
+                            : t("Not verified")}
+                        </Badge>
+                      )}
                     </Table.Td>
                     <Table.Td>
                       {provider.allowSignup ? (
@@ -160,6 +184,14 @@ export default function SsoProviderList() {
                               leftSection={<IconPencil size={16} />}
                             >
                               {t("Edit")}
+                            </Menu.Item>
+                            <Menu.Item
+                              onClick={() =>
+                                testSsoProviderMutation.mutate(provider.id)
+                              }
+                              leftSection={<IconPlugConnected size={16} />}
+                            >
+                              {t("Test configuration")}
                             </Menu.Item>
                             <Menu.Item
                               onClick={() => openDeleteModal(provider.id)}

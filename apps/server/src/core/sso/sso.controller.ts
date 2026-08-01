@@ -15,9 +15,12 @@ import {
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { SsoService } from './sso.service';
 import {
+  CreateSsoGroupMappingDto,
   CreateSsoProviderDto,
   LdapLoginDto,
+  SsoGroupMappingIdDto,
   SsoProviderIdDto,
+  UpdateSsoGroupMappingDto,
   UpdateSsoProviderDto,
 } from './dto/sso.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -88,6 +91,17 @@ export class SsoController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @Post('test')
+  async testProvider(
+    @Body() dto: SsoProviderIdDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    this.assertCanManage(user, workspace);
+    return this.ssoService.testProvider(dto.providerId, workspace);
+  }
+
+  @HttpCode(HttpStatus.OK)
   @Post('delete')
   async deleteProvider(
     @Body() dto: SsoProviderIdDto,
@@ -96,6 +110,50 @@ export class SsoController {
   ) {
     this.assertCanManage(user, workspace);
     await this.ssoService.deleteProvider(dto.providerId, workspace.id);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('group-mappings')
+  async listGroupMappings(
+    @Body() dto: SsoProviderIdDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    this.assertCanManage(user, workspace);
+    return this.ssoService.listGroupMappings(dto.providerId, workspace.id);
+  }
+
+  @HttpCode(HttpStatus.CREATED)
+  @Post('group-mappings/create')
+  async createGroupMapping(
+    @Body() dto: CreateSsoGroupMappingDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    this.assertCanManage(user, workspace);
+    return this.ssoService.createGroupMapping(dto, workspace.id);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('group-mappings/update')
+  async updateGroupMapping(
+    @Body() dto: UpdateSsoGroupMappingDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    this.assertCanManage(user, workspace);
+    return this.ssoService.updateGroupMapping(dto, workspace.id);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('group-mappings/delete')
+  async deleteGroupMapping(
+    @Body() dto: SsoGroupMappingIdDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    this.assertCanManage(user, workspace);
+    await this.ssoService.deleteGroupMapping(dto.mappingId, workspace.id);
   }
 
   @Public()

@@ -1,4 +1,4 @@
-import { Button, Group, Switch } from "@mantine/core";
+import { Button, Group, Switch, Text } from "@mantine/core";
 import type { UseFormReturnType } from "@mantine/form";
 import { useTranslation } from "react-i18next";
 import classes from "@/features/security/components/sso.module.css";
@@ -23,7 +23,14 @@ export function SsoCommonControls<T extends CommonSsoFormValues>({
   return (
     <>
       <Group justify="space-between">
-        <div>{t("Group sync")}</div>
+        <div>
+          <div>{t("Group sync")}</div>
+          <Text size="xs" c="dimmed" maw={340}>
+            {t(
+              "Sync group membership from the provider using the mappings you define for this provider. Only memberships created by this provider are removed again.",
+            )}
+          </Text>
+        </div>
         <Switch
           aria-label={t("Group sync")}
           className={classes.switch}

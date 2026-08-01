@@ -4,6 +4,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { SsoService } from './sso.service';
+import { isEnforcementReadyProvider } from './sso-provider.util';
 
 describe('SsoService security helpers', () => {
   const appSecret = 'very-strong-app-secret-for-sso-tests';
@@ -273,5 +274,123 @@ describe('SsoService security helpers', () => {
     );
 
     expect(deletedTables).toEqual(['authProviderGroupMemberships']);
+  });
+
+  it('never maps an external group that no administrator configured', async () => {
+    const groupUserInserts: unknown[] = [];
+    const trx: any = {
+      // Minimal executor so the advisory-lock raw query can run against the mock.
+      getExecutor: () => ({
+        transformQuery: (node: unknown) => node,
+        compileQuery: () => ({ sql: '', parameters: [] }),
+        executeQuery: async () => ({ rows: [] }),
+      }),
+      selectFrom: jest.fn((table: string) => {
+        const query: any = {
+          select: jest.fn(() => query),
+          selectAll: jest.fn(() => query),
+          where: jest.fn(() => query),
+          forShare: jest.fn(() => query),
+          orderBy: jest.fn(() => query),
+          executeTakeFirst: jest.fn(async () =>
+            table === 'authProviders'
+              ? { isEnabled: true, groupSync: true, deletedAt: null }
+              : undefined,
+          ),
+          execute: jest.fn(async () => []),
+        };
+        return query;
+      }),
+      insertInto: jest.fn((table: string) => {
+        const query: any = {
+          values: jest.fn((value: unknown) => {
+            groupUserInserts.push({ table, value });
+            return query;
+          }),
+          onConflict: jest.fn(() => query),
+          returning: jest.fn(() => query),
+          returningAll: jest.fn(() => query),
+          execute: jest.fn(),
+          executeTakeFirst: jest.fn(),
+        };
+        return query;
+      }),
+      updateTable: jest.fn(() => {
+        const query: any = {
+          set: jest.fn(() => query),
+          where: jest.fn(() => query),
+          execute: jest.fn(),
+        };
+        return query;
+      }),
+      deleteFrom: jest.fn(() => {
+        const query: any = {
+          where: jest.fn(() => query),
+          execute: jest.fn(),
+        };
+        return query;
+      }),
+    };
+    const db: any = {
+      transaction: () => ({
+        execute: (callback: (t: unknown) => unknown) => callback(trx),
+      }),
+    };
+    const service = createService(db);
+
+    await (service as any).syncGroups(
+      { id: 'provider-1', workspaceId: 'workspace-1', groupSync: true },
+      { id: 'user-1' },
+      [{ id: 'Admins', name: 'Admins' }],
+    );
+
+    // No mapping exists, so no group is created and no membership is granted.
+    expect(groupUserInserts).toHaveLength(0);
+    expect(trx.insertInto).not.toHaveBeenCalledWith('groups');
+  });
+
+  it('requires verification and a real login before SSO can be enforced', () => {
+    const base = {
+      type: 'oidc' as const,
+      oidcIssuer: 'https://idp.example.com',
+      oidcClientId: 'client',
+      oidcClientSecret: 'enc:v1:secret',
+    };
+
+    expect(
+      isEnforcementReadyProvider({
+        ...base,
+        verifiedAt: null,
+        lastSuccessfulLoginAt: null,
+      } as any),
+    ).toBe(false);
+    expect(
+      isEnforcementReadyProvider({
+        ...base,
+        verifiedAt: new Date(),
+        lastSuccessfulLoginAt: null,
+      } as any),
+    ).toBe(false);
+    expect(
+      isEnforcementReadyProvider({
+        ...base,
+        verifiedAt: new Date(),
+        lastSuccessfulLoginAt: new Date(),
+      } as any),
+    ).toBe(true);
+  });
+
+  it('rejects a base64-invalid SAML signing certificate', () => {
+    const service = createService();
+
+    expect(() =>
+      (service as any).testSamlProvider({
+        samlCertificate: [
+          '-----BEGIN CERTIFICATE-----',
+          'not base64!!!',
+          '-----END CERTIFICATE-----',
+        ].join('\n'),
+      }),
+    ).toThrow(BadRequestException);
   });
 });

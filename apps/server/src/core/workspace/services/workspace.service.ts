@@ -22,10 +22,12 @@ import { UpdateWorkspaceUserRoleDto } from '../dto/update-workspace-user-role.dt
 import { UserRepo } from '@docmost/db/repos/user/user.repo';
 import { EnvironmentService } from '../../../integrations/environment/environment.service';
 import { DomainService } from '../../../integrations/environment/domain.service';
-import { jsonArrayFrom } from 'kysely/helpers/postgres';
 import { DISALLOWED_HOSTNAMES } from '../workspace.constants';
 import { SSO_PROVIDER_TYPES } from '../../sso/dto/sso.dto';
-import { isUsableSsoProvider } from '../../sso/sso-provider.util';
+import {
+  isEnforcementReadyProvider,
+  isUsableSsoProvider,
+} from '../../sso/sso-provider.util';
 import { v4 } from 'uuid';
 import { InjectQueue } from '@nestjs/bullmq';
 import { QueueJob, QueueName } from '../../../integrations/queue/constants';
@@ -36,7 +38,6 @@ import { ShareRepo } from '@docmost/db/repos/share/share.repo';
 import { WatcherRepo } from '@docmost/db/repos/watcher/watcher.repo';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EventName } from '../../../common/events/event.contants';
-import { sql } from 'kysely';
 import { SsoEndpointPolicyService } from '../../../integrations/environment/sso-endpoint-policy.service';
 
 @Injectable()
@@ -75,57 +76,6 @@ export class WorkspaceService {
     const workspace = await this.db
       .selectFrom('workspaces')
       .select(['id', 'name', 'logo', 'hostname', 'enforceSso'])
-      .select((eb) =>
-        jsonArrayFrom(
-          eb
-            .selectFrom('authProviders')
-            .select([
-              'authProviders.id',
-              'authProviders.name',
-              'authProviders.type',
-            ])
-            .where('authProviders.isEnabled', '=', true)
-            .where('authProviders.deletedAt', 'is', null)
-            .where('authProviders.type', 'in', [...SSO_PROVIDER_TYPES])
-            .where((provider) =>
-              provider.or([
-                provider.and([
-                  provider('authProviders.type', '=', 'oidc'),
-                  provider('authProviders.oidcIssuer', 'is not', null),
-                  provider('authProviders.oidcIssuer', '!=', ''),
-                  provider('authProviders.oidcClientId', 'is not', null),
-                  provider('authProviders.oidcClientId', '!=', ''),
-                  provider('authProviders.oidcClientSecret', 'is not', null),
-                  provider('authProviders.oidcClientSecret', '!=', ''),
-                ]),
-                provider.and([
-                  provider('authProviders.type', '=', 'saml'),
-                  provider('authProviders.samlUrl', 'is not', null),
-                  provider('authProviders.samlUrl', '!=', ''),
-                  provider('authProviders.samlCertificate', 'is not', null),
-                  provider('authProviders.samlCertificate', '!=', ''),
-                ]),
-                provider.and([
-                  provider('authProviders.type', '=', 'ldap'),
-                  provider('authProviders.ldapUrl', 'is not', null),
-                  provider('authProviders.ldapUrl', '!=', ''),
-                  provider('authProviders.ldapBindDn', 'is not', null),
-                  provider('authProviders.ldapBindDn', '!=', ''),
-                  provider('authProviders.ldapBindPassword', 'is not', null),
-                  provider('authProviders.ldapBindPassword', '!=', ''),
-                  provider('authProviders.ldapBaseDn', 'is not', null),
-                  provider('authProviders.ldapBaseDn', '!=', ''),
-                  provider.or([
-                    sql<boolean>`lower(${provider.ref('authProviders.ldapUrl')}) LIKE 'ldaps://%'`,
-                    provider('authProviders.ldapTlsEnabled', '=', true),
-                  ]),
-                  sql<boolean>`coalesce(nullif(${provider.ref('authProviders.ldapUserSearchFilter')}, ''), '(mail={{username}})') LIKE '%{{username}}%'`,
-                ]),
-              ]),
-            )
-            .where('workspaceId', '=', workspaceId),
-        ).as('authProviders'),
-      )
       .where('id', '=', workspaceId)
       .executeTakeFirst();
 
@@ -133,9 +83,24 @@ export class WorkspaceService {
       throw new NotFoundException('Workspace not found');
     }
 
+    const providers = await this.db
+      .selectFrom('authProviders')
+      .selectAll()
+      .where('workspaceId', '=', workspaceId)
+      .where('isEnabled', '=', true)
+      .where('deletedAt', 'is', null)
+      .where('type', 'in', [...SSO_PROVIDER_TYPES])
+      .execute();
+
+    // The usable-provider rule lives in a single predicate so the login screen
+    // can never advertise a provider that the login endpoints would reject.
     return {
       ...workspace,
-      authProviders: workspace.authProviders,
+      authProviders: providers.filter(isUsableSsoProvider).map((provider) => ({
+        id: provider.id,
+        name: provider.name,
+        type: provider.type,
+      })),
     };
   }
 
@@ -296,7 +261,7 @@ export class WorkspaceService {
 
           if (!(await this.hasAllowedSsoProvider(providers))) {
             throw new BadRequestException(
-              'There must be at least one usable and allowed SSO provider to enforce SSO.',
+              'There must be at least one verified SSO provider with a successful login to enforce SSO.',
             );
           }
         }
@@ -377,7 +342,7 @@ export class WorkspaceService {
     providers: AuthProvider[],
   ): Promise<boolean> {
     for (const provider of providers) {
-      if (!isUsableSsoProvider(provider)) {
+      if (!isEnforcementReadyProvider(provider)) {
         continue;
       }
 
