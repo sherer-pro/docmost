@@ -131,7 +131,12 @@ export class AiRetrievalService {
       });
     } catch (error) {
       const errorCode = this.toErrorCode(error);
-      this.logger.warn(`External AI retrieval failed: ${errorCode}`);
+      const status = Number((error as any)?.status);
+      this.logger.warn(
+        `External AI retrieval failed: ${errorCode}${
+          Number.isFinite(status) ? ` (${status})` : ''
+        }`,
+      );
       return this.outcome({ status: 'failed', errorCode, sources: [] });
     }
   }
