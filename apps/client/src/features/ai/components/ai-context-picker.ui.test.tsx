@@ -34,13 +34,19 @@ const searchQuery: {
   fetchNextPage: vi.fn(),
 };
 
+const descendantsQuery: {
+  data: { items: AiContextSource[] };
+  isLoading: boolean;
+  isError: boolean;
+} = {
+  data: { items: [] },
+  isLoading: false,
+  isError: false,
+};
+
 vi.mock("@/features/ai/queries/ai-query.ts", () => ({
   useAiContextSourcesQuery: () => searchQuery,
-  useAiContextDescendantsQuery: () => ({
-    data: { items: [] },
-    isLoading: false,
-    isError: false,
-  }),
+  useAiContextDescendantsQuery: () => descendantsQuery,
 }));
 
 const translations: Record<string, string> = {
@@ -236,6 +242,7 @@ describe("AiContextPicker UI", () => {
     container?.remove();
     document.querySelectorAll("[data-portal]").forEach((node) => node.remove());
     searchQuery.data = { pages: [{ items: [] }] };
+    descendantsQuery.data = { items: [] };
     root = null;
     container = null;
     vi.clearAllMocks();
@@ -368,6 +375,31 @@ describe("AiContextPicker UI", () => {
     act(() => choose("Selected child pages")?.click());
     expect(document.body.textContent).toContain(
       "Choose pages under Design brief",
+    );
+  });
+
+  it("only renders expand actions for pages with children", () => {
+    descendantsQuery.data = {
+      items: [
+        source({ pageId: "branch", title: "Branch page", hasChildren: true }),
+        source({ pageId: "leaf", title: "Leaf page", hasChildren: false }),
+      ],
+    };
+    renderPicker(createProps({ opened: true }));
+
+    const openScope = [...document.body.querySelectorAll("button")].find(
+      (button) => button.textContent?.trim() === "Document only",
+    );
+    act(() => openScope?.click());
+    const selectPages = [...document.body.querySelectorAll("button")].find(
+      (button) => button.textContent?.includes("Selected child pages"),
+    );
+    act(() => selectPages?.click());
+
+    expect(document.body.textContent).toContain("Branch page");
+    expect(document.body.textContent).toContain("Leaf page");
+    expect(document.body.querySelectorAll('button[aria-label="Expand"]')).toHaveLength(
+      1,
     );
   });
 
