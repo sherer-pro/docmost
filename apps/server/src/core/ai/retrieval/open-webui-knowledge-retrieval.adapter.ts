@@ -1,4 +1,4 @@
-import { BadGatewayException, Injectable } from '@nestjs/common';
+import { BadGatewayException, Injectable, Logger } from '@nestjs/common';
 import { validate as isUuid } from 'uuid';
 import { AI_RETRIEVAL_DEFAULTS } from '../ai.constants';
 import {
@@ -25,8 +25,22 @@ type OpenWebUiFileResponse = {
 @Injectable()
 export class OpenWebUiKnowledgeRetrievalAdapter implements AiRetrievalAdapter {
   readonly kind = 'open-webui-knowledge-v1' as const;
+  private readonly logger = new Logger(
+    OpenWebUiKnowledgeRetrievalAdapter.name,
+  );
 
   constructor(private readonly http: AiRetrievalHttpClient) {}
+
+  /**
+   * Bounded, low-cardinality failure reason. Only messages produced by the
+   * retrieval HTTP client reach this helper, so no remote content is logged.
+   */
+  private safeReason(error: unknown): string {
+    const response = (error as any)?.response;
+    const code = typeof response?.code === 'string' ? response.code : undefined;
+    const status = Number((error as any)?.status);
+    return `${code ?? 'unknown'}${Number.isFinite(status) ? ` (${status})` : ''}`;
+  }
 
   isConfigured(config: AiRetrievalConfig): boolean {
     return Boolean(
@@ -196,7 +210,16 @@ export class OpenWebUiKnowledgeRetrievalAdapter implements AiRetrievalAdapter {
         }
         let request = requests.get(fileId);
         if (!request) {
-          request = this.fetchFileDocmostMetadata(config, fileId, signal);
+          // An unreadable or oversized file record must reject only its own
+          // candidates instead of failing the whole retrieval request.
+          request = this.fetchFileDocmostMetadata(config, fileId, signal).catch(
+            (error) => {
+              this.logger.warn(
+                `Open WebUI file metadata is unavailable: ${this.safeReason(error)}`,
+              );
+              return undefined;
+            },
+          );
           requests.set(fileId, request);
         }
         const docmost = await request;
