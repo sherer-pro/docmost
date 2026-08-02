@@ -142,16 +142,69 @@ export class AiQueueReconcilerService implements OnModuleInit, OnModuleDestroy {
     const staleBefore = new Date(Date.now() - RUN_STALE_HEARTBEAT_MS);
     const stale = await this.db
       .selectFrom('aiRuns')
-      .select('id')
+      .select(['id', 'cancelRequestedAt'])
       .where('status', '=', 'running')
       .where('heartbeatAt', '<', staleBefore)
       .limit(100)
       .execute();
     for (const run of stale) {
+      if (run.cancelRequestedAt) {
+        await this.cancelRun(run.id);
+        continue;
+      }
       await this.failRun(
         run.id,
         'worker_lost',
         'AI generation worker stopped responding',
+      );
+    }
+  }
+
+  private async cancelRun(runId: string): Promise<void> {
+    const now = new Date();
+    const cancelled = await this.db.transaction().execute(async (trx) => {
+      const message = await trx
+        .selectFrom('aiRuns as r')
+        .innerJoin('aiMessages as m', 'm.id', 'r.assistantMessageId')
+        .select(['m.content', 'm.reasoning'])
+        .where('r.id', '=', runId)
+        .executeTakeFirst();
+      const run = await trx
+        .updateTable('aiRuns')
+        .set({
+          status: 'cancelled',
+          sequence: sql`sequence + 1`,
+          completedAt: now,
+          finishReason: 'cancelled',
+          responseSnapshot: message?.content ?? '',
+          reasoningSnapshot: message?.reasoning ?? '',
+          updatedAt: now,
+        })
+        .where('id', '=', runId)
+        .where('status', '=', 'running')
+        .where('cancelRequestedAt', 'is not', null)
+        .returningAll()
+        .executeTakeFirst();
+      if (!run) return undefined;
+      await trx
+        .updateTable('aiMessages')
+        .set({
+          content: message?.content ?? '',
+          reasoning: message?.reasoning ?? '',
+          status: 'cancelled',
+          updatedAt: now,
+        })
+        .where('id', '=', run.assistantMessageId)
+        .where('currentRunId', '=', run.id)
+        .execute();
+      return run;
+    });
+    if (cancelled) {
+      this.events.emitStatus(
+        cancelled,
+        cancelled.sequence,
+        'cancelled',
+        { finishReason: 'cancelled' },
       );
     }
   }

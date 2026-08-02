@@ -374,8 +374,10 @@ use the random internal lease ID; API-key IDs and tokens are not logged.
 
 - PostgreSQL is authoritative for AI runs. The lifecycle reconciler delivers
   missing deterministic BullMQ jobs, fails undeliverable queued runs after five
-  minutes, and fails a running attempt after twelve minutes without a heartbeat;
-  it never repeats a stale provider call automatically.
+  minutes, and terminalizes a running attempt after twelve minutes without a
+  heartbeat. A stale attempt with a recorded cancellation request becomes
+  `cancelled`; every other stale attempt fails with `worker_lost`. The
+  reconciler never repeats a stale provider call automatically.
 - An `awaiting_approval` run with a decided step is recovered by the hash rules
   in **Agent mode** above. Do not repair it by editing Yjs content or reopening a
   terminal `ai_runs` row.
@@ -567,7 +569,7 @@ described in JSON Schema.
 | Tool             | Main inputs                         | Result and bounds                                                                                         |
 | ---------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | `search`         | `query`, optional `limit`            | accessible pages and database rows with compact highlights and breadcrumbs; default 10, maximum 20       |
-| `getTree`        | none                                | up to 500 readable pages with hierarchy metadata; a hidden parent is returned as `parentPageId=null`      |
+| `getTree`        | none                                | readable hierarchy metadata, size-truncated within the 32 KiB tool limit; a hidden parent is returned as `parentPageId=null` |
 | `getPageContext` | `pageId`                            | page metadata, visible allowed breadcrumbs, and up to 50 readable direct children                         |
 | `getPage`        | `pageId`                            | title, text, editor JSON when compact, outline fallback, update time, and a `truncated` flag               |
 | `getOutline`     | `pageId`                            | up to 300 structural nodes with index, optional stable ID, type, nesting level, and compact text          |

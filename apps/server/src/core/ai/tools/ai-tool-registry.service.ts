@@ -38,6 +38,30 @@ export const AI_TOOL_RESULT_MAX_BYTES = 32 * 1024;
 export const AI_TOOL_RESULTS_TOTAL_MAX_BYTES = 128 * 1024;
 export const AI_WRITE_PROPOSAL_TTL_MS = 60 * 60 * 1000;
 
+export function fitAiToolItems(
+  items: unknown[],
+  maxBytes = AI_TOOL_RESULT_MAX_BYTES,
+): { items: unknown[]; truncated: boolean } {
+  const content = { items, truncated: false };
+  if (Buffer.byteLength(JSON.stringify(content), 'utf8') <= maxBytes) {
+    return content;
+  }
+
+  let low = 0;
+  let high = items.length;
+  while (low < high) {
+    const middle = Math.ceil((low + high) / 2);
+    const candidate = { items: items.slice(0, middle), truncated: true };
+    if (Buffer.byteLength(JSON.stringify(candidate), 'utf8') <= maxBytes) {
+      low = middle;
+    } else {
+      high = middle - 1;
+    }
+  }
+
+  return { items: items.slice(0, low), truncated: true };
+}
+
 export type AiToolExposure = 'agent' | 'mcp';
 export type AiToolWriteClass = 'read_only' | 'write';
 
@@ -469,8 +493,8 @@ export class AiToolRegistryService {
       .limit(500)
       .execute();
     return {
-      content: {
-        items: rows.map((row) => ({
+      content: fitAiToolItems(
+        rows.map((row) => ({
             ...row,
             parentPageId:
               row.parentPageId &&
@@ -479,7 +503,7 @@ export class AiToolRegistryService {
                 ? row.parentPageId
                 : null,
           })),
-      },
+      ),
     };
   }
 
