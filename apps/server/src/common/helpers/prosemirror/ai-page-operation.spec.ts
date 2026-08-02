@@ -39,6 +39,36 @@ describe('AI page operations', () => {
     expect(hashProseMirrorJson(next)).not.toBe(hashProseMirrorJson(document));
   });
 
+  it('hashes the same document identically regardless of key order', () => {
+    // `pages.content` is a jsonb column and returns keys in PostgreSQL storage
+    // order, while the live Yjs document is serialized in ProseMirror order.
+    const jsonbOrdered = {
+      content: [
+        {
+          attrs: { id: 'heading-1', level: 2 },
+          content: [{ text: 'Release notes', type: 'text' }],
+          type: 'heading',
+        },
+        {
+          attrs: { id: 'paragraph-1' },
+          content: [{ text: 'The old summary.', type: 'text' }],
+          type: 'paragraph',
+        },
+      ],
+      type: 'doc',
+    };
+
+    expect(hashProseMirrorJson(jsonbOrdered)).toBe(
+      hashProseMirrorJson(document),
+    );
+    expect(
+      hashProseMirrorJson({
+        ...jsonbOrdered,
+        content: [jsonbOrdered.content[1], jsonbOrdered.content[0]],
+      }),
+    ).not.toBe(hashProseMirrorJson(document));
+  });
+
   it('prepares stable node IDs before an approval is persisted', () => {
     const prepared = prepareAiPageOperation({
       kind: 'insertNode',

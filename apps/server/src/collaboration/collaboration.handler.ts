@@ -129,6 +129,17 @@ export class CollaborationHandler {
             ),
         );
       },
+      getAiPageContent: async (
+        documentName: string,
+        payload: { user: User },
+      ) => {
+        return this.withYdocConnection(
+          hocuspocus,
+          documentName,
+          { user: payload.user },
+          (doc) => TiptapTransformer.fromYdoc(doc, 'default'),
+        );
+      },
     };
   }
 
