@@ -2,6 +2,7 @@ import {
   AiConversationContext,
   AiContextSource,
   AiContextSourceType,
+  AiDescendantSelection,
 } from "@/features/ai/types/ai.types.ts";
 import { SpaceTreeNode } from "@/features/page/tree/types.ts";
 
@@ -72,4 +73,33 @@ export function dedupeAiContextSources(
     seen.add(identity);
     return true;
   });
+}
+
+interface AiContextTriggerCountInput {
+  currentDocumentAvailable: boolean;
+  includeCurrentDocument: boolean;
+  sourceCount: number;
+  fileCount: number;
+  attachmentCount: number;
+}
+
+export function getAiContextTriggerCount(
+  input: AiContextTriggerCountInput,
+): number {
+  return (
+    (input.currentDocumentAvailable && input.includeCurrentDocument ? 1 : 0) +
+    input.sourceCount +
+    input.fileCount +
+    input.attachmentCount
+  );
+}
+
+export function getAiContextScopeSummary(selection: AiDescendantSelection): {
+  mode: AiDescendantSelection["mode"];
+  selectedCount: number;
+} {
+  return {
+    mode: selection.mode,
+    selectedCount: selection.mode === "selected" ? selection.pageIds.length : 0,
+  };
 }

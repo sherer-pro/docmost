@@ -1,24 +1,22 @@
 import {
-  ActionIcon,
   Alert,
   Badge,
   Box,
   Button,
   Checkbox,
-  Divider,
   FileButton,
   Group,
   Loader,
-  Menu,
   Modal,
+  Paper,
   ScrollArea,
-  Select,
   Stack,
+  Switch,
   Text,
   TextInput,
-  Tooltip,
 } from "@mantine/core";
 import {
+  IconArrowLeft,
   IconChevronDown,
   IconChevronRight,
   IconDatabase,
@@ -30,9 +28,12 @@ import {
   IconTrash,
   IconUpload,
 } from "@tabler/icons-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useDebouncedValue, useMediaQuery } from "@mantine/hooks";
+import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
+import { AccessibleActionIcon } from "@/components/ui/accessible-action-icon";
+import { EmptyState } from "@/components/ui/empty-state";
 import { useModalBackgroundInert } from "@/components/ui/use-modal-background-inert";
 import {
   useAiContextDescendantsQuery,
@@ -42,11 +43,14 @@ import {
   AiChatFile,
   AiContextSource,
   AiDescendantSelection,
-  AiDescendantSelectionMode,
   AiPageAttachment,
 } from "@/features/ai/types/ai.types.ts";
+import {
+  dedupeAiContextSources,
+  getAiContextScopeSummary,
+  getAiContextTriggerCount,
+} from "@/features/ai/utils/ai-context.ts";
 import classes from "./ai-panel.module.css";
-import { dedupeAiContextSources } from "@/features/ai/utils/ai-context.ts";
 
 interface AiContextPickerProps {
   conversationId?: string;
@@ -90,6 +94,17 @@ interface AiContextPickerProps {
   onPrepareConversation?: () => Promise<unknown>;
 }
 
+type ContextManagerView = "overview" | "search" | "scope" | "descendants";
+
+interface ScopeTarget {
+  rootPageId: string;
+  title: string;
+  selection: AiDescendantSelection;
+  returnView: "overview" | "search";
+  complete: (selection: AiDescendantSelection) => Promise<unknown>;
+  cancel?: () => void;
+}
+
 interface SelectionTarget {
   rootPageId: string;
   title: string;
@@ -97,27 +112,21 @@ interface SelectionTarget {
   apply: (selection: AiDescendantSelection) => Promise<unknown>;
 }
 
-interface ScopeTarget {
-  source: AiContextSource;
-  complete: (selection: AiDescendantSelection) => Promise<unknown>;
-  cancel?: () => void;
-}
-
 export function AiContextPicker(props: AiContextPickerProps) {
   const { t } = useTranslation();
-  const [searchOpened, setSearchOpened] = useState(false);
+  const opened = Boolean(props.opened);
+  const isMobile = useMediaQuery("(max-width: 48em)");
+  const [view, setView] = useState<ContextManagerView>("overview");
   const [query, setQuery] = useState("");
+  const [scopeTarget, setScopeTarget] = useState<ScopeTarget | null>(null);
   const [selectionTarget, setSelectionTarget] =
     useState<SelectionTarget | null>(null);
-  const [scopeTarget, setScopeTarget] = useState<ScopeTarget | null>(null);
-  useModalBackgroundInert(
-    searchOpened || Boolean(selectionTarget) || Boolean(scopeTarget),
-  );
   const pendingSourceRef = useRef<string | null>(null);
   const contextButtonRef = useRef<HTMLButtonElement | null>(null);
-  const isCoarsePointer = useMediaQuery("(pointer: coarse)");
   const [debouncedQuery] = useDebouncedValue(query, 250);
   const search = useAiContextSourcesQuery(props.conversationId, debouncedQuery);
+  useModalBackgroundInert(opened);
+
   const searchItems = useMemo(
     () =>
       dedupeAiContextSources(
@@ -141,92 +150,92 @@ export function AiContextPicker(props: AiContextPickerProps) {
     props.includeCurrentDocument,
     props.sources,
   ]);
-  const selectedCount =
-    props.resolvedSourceCount +
-    props.fileIds.length +
-    props.attachmentIds.length;
-  const currentDocumentSelected =
-    props.currentDocumentAvailable && props.includeCurrentDocument;
-  const extraSourceCount = Math.max(
-    0,
-    selectedCount - (currentDocumentSelected ? 1 : 0),
-  );
-  const triggerLabel = currentDocumentSelected
-    ? t("ai.currentDocumentOnly")
-    : t("ai.context.title");
+  const selectedCount = getAiContextTriggerCount({
+    currentDocumentAvailable: props.currentDocumentAvailable,
+    includeCurrentDocument: props.includeCurrentDocument,
+    sourceCount: props.sources.length,
+    fileCount: props.fileIds.length,
+    attachmentCount: props.attachmentIds.length,
+  });
 
-  const openSelection = (
-    rootPageId: string,
-    title: string,
-    selection: AiDescendantSelection,
-    apply: SelectionTarget["apply"],
-  ) => {
-    props.onOpenedChange?.(false);
-    window.requestAnimationFrame(() =>
-      setSelectionTarget({
-        rootPageId,
-        title,
-        selectedPageIds: selection.pageIds,
-        apply,
-      }),
-    );
+  const resetNavigation = () => {
+    setView("overview");
+    setQuery("");
+    setScopeTarget(null);
+    setSelectionTarget(null);
   };
 
-  const closeSearch = (returnFocus = true) => {
-    setSearchOpened(false);
-    if (returnFocus) {
-      window.requestAnimationFrame(() => contextButtonRef.current?.focus());
-    }
+  const closeManager = () => {
+    scopeTarget?.cancel?.();
+    resetNavigation();
+    props.onOpenedChange?.(false);
+    window.requestAnimationFrame(() => contextButtonRef.current?.focus());
+  };
+
+  const openManager = () => {
+    props.onOpenedChange?.(true);
   };
 
   const openSearch = async () => {
-    props.onOpenedChange?.(false);
     await props.onPrepareConversation?.();
-    window.requestAnimationFrame(() => setSearchOpened(true));
+    setView("search");
   };
 
-  const setCurrentMode = async (mode: AiDescendantSelectionMode) => {
-    if (mode === "selected") {
-      openSelection(
-        props.documentPageId,
-        props.documentTitle,
-        props.currentDocumentDescendants,
-        props.onSetCurrentDocumentDescendants,
-      );
-      return;
-    }
-    await props.onSetCurrentDocumentDescendants({ mode, pageIds: [] });
+  const openScope = (target: ScopeTarget) => {
+    setScopeTarget(target);
+    setSelectionTarget(null);
+    setView("scope");
   };
 
-  const setSourceMode = async (
-    source: AiContextSource,
-    mode: AiDescendantSelectionMode,
-  ) => {
-    if (mode === "selected") {
-      openSelection(
-        source.pageId,
-        source.title,
-        source.descendants,
-        (selection) => props.onSetSourceDescendants(source, selection),
-      );
+  const completeScope = async (selection: AiDescendantSelection) => {
+    if (!scopeTarget) return;
+    await scopeTarget.complete(selection);
+    setScopeTarget(null);
+    setSelectionTarget(null);
+    setView("overview");
+  };
+
+  const openDescendantSelection = () => {
+    if (!scopeTarget) return;
+    setSelectionTarget({
+      rootPageId: scopeTarget.rootPageId,
+      title: scopeTarget.title,
+      selectedPageIds: scopeTarget.selection.pageIds,
+      apply: completeScope,
+    });
+    setView("descendants");
+  };
+
+  const goBack = () => {
+    if (view === "descendants") {
+      setSelectionTarget(null);
+      setView("scope");
       return;
     }
-    await props.onSetSourceDescendants(source, { mode, pageIds: [] });
+    if (view === "scope") {
+      const returnView = scopeTarget?.returnView ?? "overview";
+      scopeTarget?.cancel?.();
+      setScopeTarget(null);
+      setView(returnView);
+      return;
+    }
+    setView("overview");
   };
 
   const addSource = async (source: AiContextSource) => {
     if (source.sourceType === "page" && source.hasChildren) {
-      setScopeTarget({
-        source,
-        complete: async (selection) => {
-          await props.onAddSource({ ...source, descendants: selection });
-          closeSearch();
-        },
+      openScope({
+        rootPageId: source.pageId,
+        title: source.title,
+        selection: source.descendants,
+        returnView: "search",
+        complete: (selection) =>
+          props.onAddSource({ ...source, descendants: selection }),
       });
       return;
     }
     await props.onAddSource(source);
-    closeSearch();
+    setView("overview");
   };
 
   useEffect(() => {
@@ -237,14 +246,18 @@ export function AiContextPicker(props: AiContextPickerProps) {
     const source = props.pendingSource;
     if (pendingSourceRef.current === source.pageId) return;
     pendingSourceRef.current = source.pageId;
+    props.onOpenedChange?.(true);
     if (!source.hasChildren || source.sourceType !== "page") {
       void props
         .onAddSource(source)
         .finally(() => props.onPendingSourceHandled?.());
       return;
     }
-    setScopeTarget({
-      source,
+    openScope({
+      rootPageId: source.pageId,
+      title: source.title,
+      selection: source.descendants,
+      returnView: "overview",
       complete: async (selection) => {
         await props.onAddSource({ ...source, descendants: selection });
         props.onPendingSourceHandled?.();
@@ -253,118 +266,289 @@ export function AiContextPicker(props: AiContextPickerProps) {
     });
   }, [props.onAddSource, props.onPendingSourceHandled, props.pendingSource]);
 
+  const title =
+    view === "search"
+      ? t("ai.context.searchTitle")
+      : view === "scope"
+        ? t("ai.context.chooseScopeTitle")
+        : view === "descendants"
+          ? t("ai.context.selectDescendantsTitle", {
+              title: selectionTarget?.title || t("ai.untitled"),
+            })
+          : t("ai.context.managerTitle");
+
   return (
     <>
-      <div>
-        <Menu
-          opened={props.opened}
-          onChange={props.onOpenedChange}
-          position="top-end"
-          width="min(420px, calc(100vw - 24px))"
-          withinPortal
-          closeOnItemClick={false}
-        >
-          <Menu.Target>
-            <Tooltip label={t("ai.context.title")} withArrow>
-              <Button
-                ref={contextButtonRef}
+      <Button
+        ref={contextButtonRef}
+        variant="subtle"
+        size="compact-sm"
+        leftSection={<IconPaperclip size={16} />}
+        className={classes.contextButton}
+        aria-label={t("ai.context.triggerLabel", { count: selectedCount })}
+        onClick={openManager}
+      >
+        <span className={classes.contextButtonLabel}>
+          <span className={classes.contextButtonFullLabel}>
+            {t("ai.context.trigger", { count: selectedCount })}
+          </span>
+          <span className={classes.contextButtonShortLabel} aria-hidden>
+            {selectedCount}
+          </span>
+        </span>
+      </Button>
+
+      <Modal
+        opened={opened}
+        onClose={closeManager}
+        title={
+          <Group gap="xs" wrap="nowrap">
+            {view !== "overview" && (
+              <AccessibleActionIcon
+                label={t("ai.context.back")}
                 variant="subtle"
-                size="compact-sm"
-                leftSection={<IconPaperclip size={16} />}
-                rightSection={
-                  extraSourceCount > 0 ? (
-                    <Badge size="xs" variant="light">
-                      +{extraSourceCount}
-                    </Badge>
-                  ) : undefined
-                }
-                disabled={props.saving}
-                className={classes.contextButton}
-                aria-label={`${t("ai.context.title")}: ${selectedCount}`}
+                onClick={goBack}
               >
-                <span className={classes.contextButtonLabel}>
-                  <span className={classes.contextButtonFullLabel}>
-                    {triggerLabel}
-                  </span>
-                  <span className={classes.contextButtonShortLabel}>
-                    {currentDocumentSelected
-                      ? t("ai.composer.document")
-                      : triggerLabel}
-                  </span>
-                </span>
-              </Button>
-            </Tooltip>
-          </Menu.Target>
-          <Menu.Dropdown className={classes.contextMenu}>
-            <Group justify="space-between" px="xs" py={4}>
-              <Text size="xs" fw={600}>
-                {t("ai.context.currentDocument")}
+                <IconArrowLeft size={18} />
+              </AccessibleActionIcon>
+            )}
+            <Text fw={600} size="lg" truncate>
+              {title}
+            </Text>
+          </Group>
+        }
+        closeButtonProps={{ "aria-label": t("Close") }}
+        centered={!isMobile}
+        fullScreen={Boolean(isMobile)}
+        size="lg"
+        classNames={{
+          content: classes.contextManagerContent,
+          body: classes.contextManagerBody,
+        }}
+      >
+        <Box className={classes.contextManagerLayout} aria-busy={props.saving}>
+          <Group
+            justify="space-between"
+            gap="xs"
+            wrap="wrap"
+            className={classes.contextManagerIntro}
+          >
+            {view === "overview" && (
+              <Text size="sm" c="dimmed" className={classes.contextManagerLead}>
+                {t("ai.context.managerDescription")}
               </Text>
-              <Text size="xs" c="dimmed">
+            )}
+            <Group gap="xs" wrap="nowrap">
+              <Badge variant="light" size="sm">
                 {t("ai.context.resolvedCounter", {
                   count: props.resolvedSourceCount,
                   limit: props.limits.resolvedSources,
                 })}
-              </Text>
-            </Group>
-            <Box px="xs" pb="xs">
-              <Group wrap="nowrap" align="center">
-                <Checkbox
-                  size="xs"
-                  checked={
-                    props.currentDocumentAvailable &&
-                    props.includeCurrentDocument
-                  }
-                  disabled={!props.currentDocumentAvailable}
-                  label={props.documentTitle || t("ai.untitled")}
-                  className={classes.contextFileCheckbox}
-                  onChange={(event) =>
-                    void props
-                      .onToggleCurrentDocument(event.currentTarget.checked)
-                      .catch(() => undefined)
-                  }
-                />
-                {props.includeCurrentDocument &&
-                  props.currentDocumentAvailable && (
-                    <ScopeSelect
-                      value={props.currentDocumentDescendants.mode}
-                      onChange={(mode) =>
-                        void setCurrentMode(mode).catch(() => undefined)
-                      }
-                    />
-                  )}
-              </Group>
-              {!props.currentDocumentAvailable && (
-                <Text size="xs" c="orange" mt={4}>
-                  {t("ai.context.currentExcluded")}
+              </Badge>
+              {props.saving ? (
+                <Group gap={5} wrap="nowrap">
+                  <Loader size={13} />
+                  <Text size="xs" c="dimmed">
+                    {t("ai.context.saving")}
+                  </Text>
+                </Group>
+              ) : (
+                <Text size="xs" c="dimmed">
+                  {t("ai.context.autosaveHint")}
                 </Text>
               )}
-            </Box>
+            </Group>
+          </Group>
 
-            <Divider />
-            <Group justify="space-between" px="xs" py={6}>
-              <Text size="xs" fw={600}>
-                {t("ai.context.addedDocuments")}
+          {props.saveFailed && (
+            <Alert color="red" variant="light" p="xs" radius={0}>
+              <Group justify="space-between" gap="xs" wrap="nowrap">
+                <Text size="sm">{t("ai.ux.contextSaveFailed")}</Text>
+                <Button
+                  size="compact-xs"
+                  variant="subtle"
+                  color="red"
+                  disabled={props.saving}
+                  onClick={() => void props.onRetrySave()}
+                >
+                  {t("ai.tryAgain")}
+                </Button>
+              </Group>
+            </Alert>
+          )}
+
+          {view === "overview" && (
+            <OverviewView
+              {...props}
+              onOpenSearch={() => void openSearch().catch(() => undefined)}
+              onOpenCurrentScope={() =>
+                openScope({
+                  rootPageId: props.documentPageId,
+                  title: props.documentTitle,
+                  selection: props.currentDocumentDescendants,
+                  returnView: "overview",
+                  complete: props.onSetCurrentDocumentDescendants,
+                })
+              }
+              onOpenSourceScope={(source) =>
+                openScope({
+                  rootPageId: source.pageId,
+                  title: source.title,
+                  selection: source.descendants,
+                  returnView: "overview",
+                  complete: (selection) =>
+                    props.onSetSourceDescendants(source, selection),
+                })
+              }
+            />
+          )}
+          {view === "search" && (
+            <SearchView
+              query={query}
+              setQuery={setQuery}
+              search={search}
+              searchItems={searchItems}
+              includedPageIds={includedPageIds}
+              sourceCount={props.sources.length}
+              sourceLimit={props.limits.manualRoots}
+              saving={props.saving}
+              onAddSource={addSource}
+            />
+          )}
+          {view === "scope" && scopeTarget && (
+            <ScopeView
+              target={scopeTarget}
+              saving={props.saving}
+              onSelect={(selection) =>
+                void completeScope(selection).catch(() => undefined)
+              }
+              onOpenDescendants={openDescendantSelection}
+            />
+          )}
+          {view === "descendants" && selectionTarget && (
+            <DescendantSelectionView
+              key={selectionTarget.rootPageId}
+              conversationId={props.conversationId}
+              target={selectionTarget}
+              saving={props.saving}
+            />
+          )}
+        </Box>
+      </Modal>
+    </>
+  );
+}
+
+function OverviewView(
+  props: AiContextPickerProps & {
+    onOpenSearch: () => void;
+    onOpenCurrentScope: () => void;
+    onOpenSourceScope: (source: AiContextSource) => void;
+  },
+) {
+  const { t } = useTranslation();
+  const hasFiles =
+    props.chatFiles.length > 0 || props.pageAttachments.length > 0;
+  return (
+    <ScrollArea className={classes.contextManagerScroll} type="auto">
+      <Stack gap="md" p="md">
+        <ContextSection
+          icon={<IconFileText size={18} />}
+          title={t("ai.context.currentDocument")}
+          description={t("ai.context.currentDocumentDescription")}
+        >
+          <Paper withBorder p="sm" className={classes.contextManagerPrimaryRow}>
+            <Group justify="space-between" gap="sm" wrap="nowrap">
+              <Switch
+                checked={
+                  props.currentDocumentAvailable && props.includeCurrentDocument
+                }
+                disabled={!props.currentDocumentAvailable || props.saving}
+                label={props.documentTitle || t("ai.untitled")}
+                className={classes.contextManagerSwitch}
+                onChange={(event) =>
+                  void props
+                    .onToggleCurrentDocument(event.currentTarget.checked)
+                    .catch(() => undefined)
+                }
+              />
+              {props.includeCurrentDocument &&
+                props.currentDocumentAvailable && (
+                  <ScopeButton
+                    selection={props.currentDocumentDescendants}
+                    disabled={props.saving}
+                    onClick={props.onOpenCurrentScope}
+                  />
+                )}
+            </Group>
+            {!props.currentDocumentAvailable && (
+              <Text size="xs" c="orange" mt="xs">
+                {t("ai.context.currentExcluded")}
               </Text>
-              <Badge size="xs" variant="light">
+            )}
+          </Paper>
+        </ContextSection>
+
+        <ContextSection
+          icon={<IconDatabase size={18} />}
+          title={t("ai.context.addedDocuments")}
+          description={t("ai.context.addedDocumentsDescription")}
+          action={
+            <Group gap="xs" wrap="nowrap">
+              <Badge variant="light">
                 {props.sources.length}/{props.limits.manualRoots}
               </Badge>
+              {props.sources.length > 0 && (
+                <Button
+                  size="compact-sm"
+                  leftSection={<IconPlus size={15} />}
+                  disabled={
+                    props.saving ||
+                    props.sources.length >= props.limits.manualRoots
+                  }
+                  onClick={props.onOpenSearch}
+                >
+                  {t("ai.context.addFromSpace")}
+                </Button>
+              )}
             </Group>
-            {props.sources.length === 0 ? (
-              <Text size="xs" c="dimmed" px="xs" pb="xs">
-                {t("ai.context.noAddedDocuments")}
-              </Text>
-            ) : (
-              <Stack gap={5} px="xs" pb="xs">
-                {props.sources.map((source) => (
+          }
+        >
+          {props.sources.length === 0 ? (
+            <EmptyState
+              compact
+              icon={IconDatabase}
+              title={t("ai.context.noAddedDocuments")}
+              description={t("ai.context.noAddedDocumentsDescription")}
+              action={
+                <Button
+                  variant="light"
+                  size="compact-sm"
+                  leftSection={<IconPlus size={15} />}
+                  disabled={props.saving}
+                  onClick={props.onOpenSearch}
+                >
+                  {t("ai.context.addFromSpace")}
+                </Button>
+              }
+            />
+          ) : (
+            <Stack gap="xs">
+              {props.sources.map((source) => (
+                <Paper
+                  key={`${source.sourceType}:${source.sourceId}`}
+                  withBorder
+                  p="xs"
+                  className={classes.contextManagerSourceRow}
+                >
                   <Group
-                    key={`${source.sourceType}:${source.sourceId}`}
+                    gap="xs"
                     wrap="nowrap"
-                    className={classes.contextSourceRow}
+                    className={classes.contextSourceTitle}
                   >
                     {sourceIcon(source)}
                     <Box className={classes.contextSourceTitle}>
-                      <Text size="sm" truncate>
+                      <Text size="sm" fw={500} truncate>
                         {source.title || t("ai.untitled")}
                       </Text>
                       {source.breadcrumbs.length > 0 && (
@@ -373,408 +557,485 @@ export function AiContextPicker(props: AiContextPickerProps) {
                         </Text>
                       )}
                     </Box>
-                    {source.sourceType === "page" && (
-                      <ScopeSelect
-                        value={source.descendants.mode}
-                        onChange={(mode) =>
-                          void setSourceMode(source, mode).catch(
-                            () => undefined,
-                          )
-                        }
+                  </Group>
+                  <Group gap={6} wrap="nowrap" justify="flex-end">
+                    {source.sourceType === "page" && source.hasChildren && (
+                      <ScopeButton
+                        selection={source.descendants}
+                        disabled={props.saving}
+                        onClick={() => props.onOpenSourceScope(source)}
                       />
                     )}
-                    <ActionIcon
+                    <AccessibleActionIcon
+                      label={t("ai.context.removeSource")}
                       variant="subtle"
                       color="red"
-                      size={32}
-                      aria-label={t("ai.context.removeSource")}
+                      disabled={props.saving}
                       onClick={() =>
                         void props.onRemoveSource(source).catch(() => undefined)
                       }
                     >
-                      <IconTrash size={14} />
-                    </ActionIcon>
+                      <IconTrash size={15} />
+                    </AccessibleActionIcon>
                   </Group>
-                ))}
-              </Stack>
-            )}
-            <Menu.Item
-              leftSection={<IconPlus size={15} />}
-              disabled={props.sources.length >= props.limits.manualRoots}
-              onClick={() => void openSearch()}
-            >
-              {t("ai.context.addFromSpace")}
-            </Menu.Item>
+                </Paper>
+              ))}
+            </Stack>
+          )}
+        </ContextSection>
 
-            <Divider my="xs" />
-            <Menu.Label>{t("ai.context.filesAndAttachments")}</Menu.Label>
+        <ContextSection
+          icon={<IconPaperclip size={18} />}
+          title={t("ai.context.filesAndAttachments")}
+          description={t("ai.context.filesDescription")}
+          action={
             <FileButton
               onChange={(files) => void props.onUpload(files)}
               accept=".pdf,.docx,.txt,.md,.jpg,.jpeg,.png,.webp"
               multiple
             >
               {(fileButtonProps) => (
-                <Menu.Item
+                <Button
                   {...fileButtonProps}
+                  size="compact-sm"
                   leftSection={<IconUpload size={15} />}
+                  disabled={props.saving}
                 >
                   {t("ai.context.uploadPrivateFiles")}
-                </Menu.Item>
+                </Button>
               )}
             </FileButton>
-            {props.loadingFiles && (
-              <Group justify="center" py="xs">
-                <Loader size="xs" />
-              </Group>
-            )}
-            {props.chatFiles.map((file) => (
-              <Menu.Item key={file.id}>
-                <Group gap={4} wrap="nowrap" className={classes.contextFileRow}>
-                  <Checkbox
-                    size="xs"
-                    checked={props.fileIds.includes(file.id)}
-                    disabled={file.status !== "ready"}
-                    label={file.name}
-                    className={classes.contextFileCheckbox}
-                    onChange={(event) =>
-                      void props
-                        .onToggleFile(file.id, event.currentTarget.checked)
-                        .catch(() => undefined)
-                    }
-                  />
-                  {file.status !== "ready" && (
-                    <Badge
-                      variant="light"
-                      color={file.status === "failed" ? "red" : "blue"}
-                      size="xs"
+          }
+        >
+          <Group gap="xs" mb={hasFiles ? "sm" : 0}>
+            <Badge variant="light" color="gray">
+              {t("ai.context.privateFilesCounter", {
+                count: props.fileIds.length,
+                limit: 10,
+              })}
+            </Badge>
+            <Badge variant="light" color="gray">
+              {t("ai.context.attachmentsCounter", {
+                count: props.attachmentIds.length,
+                limit: 20,
+              })}
+            </Badge>
+          </Group>
+          {props.loadingFiles ? (
+            <Group justify="center" py="lg">
+              <Loader size="sm" />
+            </Group>
+          ) : !hasFiles ? (
+            <EmptyState
+              compact
+              icon={IconPaperclip}
+              title={t("ai.context.noFiles")}
+              description={t("ai.context.noFilesDescription")}
+            />
+          ) : (
+            <Stack gap="md">
+              {props.chatFiles.length > 0 && (
+                <Stack gap="xs">
+                  <Text size="xs" fw={600} c="dimmed">
+                    {t("ai.context.privateFiles")}
+                  </Text>
+                  {props.chatFiles.map((file) => (
+                    <Paper
+                      key={file.id}
+                      withBorder
+                      p="xs"
+                      className={classes.contextManagerFileRow}
                     >
-                      {t(`ai.fileStatus.${file.status}`)}
-                    </Badge>
-                  )}
-                  <ActionIcon
-                    variant="subtle"
-                    color="red"
-                    size={32}
-                    aria-label={`${t("ai.deleteFile")}: ${file.name}`}
-                    onClick={() => props.onDeleteFile(file.id, file.name)}
-                  >
-                    <IconTrash size={13} />
-                  </ActionIcon>
-                </Group>
-              </Menu.Item>
-            ))}
-            {props.pageAttachments.length > 0 && (
-              <>
-                <Menu.Label>{t("ai.pageAttachments")}</Menu.Label>
-                {props.pageAttachments.map((attachment) => (
-                  <Menu.Item key={attachment.id}>
-                    <Checkbox
-                      size="xs"
-                      checked={props.attachmentIds.includes(attachment.id)}
-                      label={attachment.fileName}
-                      className={classes.contextFileCheckbox}
-                      onChange={(event) =>
-                        void props
-                          .onToggleAttachment(
-                            attachment.id,
-                            event.currentTarget.checked,
-                          )
-                          .catch(() => undefined)
-                      }
-                    />
-                  </Menu.Item>
-                ))}
-              </>
-            )}
-            {props.saveFailed && (
-              <Alert color="red" variant="light" p="xs">
-                <Group justify="space-between" gap="xs" wrap="nowrap">
-                  <Text size="xs">{t("ai.ux.contextSaveFailed")}</Text>
-                  <Button
-                    size="compact-xs"
-                    variant="subtle"
-                    color="red"
-                    onClick={() => void props.onRetrySave()}
-                  >
-                    {t("ai.tryAgain")}
-                  </Button>
-                </Group>
-              </Alert>
-            )}
-            {!isCoarsePointer && (
-              <Menu.Label>{t("ai.context.dragHint")}</Menu.Label>
-            )}
-          </Menu.Dropdown>
-        </Menu>
-      </div>
-
-      <Modal
-        opened={searchOpened}
-        onClose={() => closeSearch()}
-        title={t("ai.context.searchTitle")}
-        closeButtonProps={{ "aria-label": t("Close") }}
-        centered
-        size="md"
-        classNames={{
-          content: classes.contextSearchModalContent,
-          body: classes.contextSearchModalBody,
-        }}
-      >
-        <Stack gap="sm" className={classes.contextSearchLayout}>
-          <TextInput
-            value={query}
-            onChange={(event) => setQuery(event.currentTarget.value)}
-            placeholder={t("ai.context.searchPlaceholder")}
-            leftSection={<IconSearch size={16} />}
-            autoFocus
-          />
-          <Box className={classes.contextSearchResultsRegion}>
-            {search.isLoading ? (
-              <Group justify="center" className={classes.contextSearchState}>
-                <Loader size="sm" />
-              </Group>
-            ) : search.isError ? (
-              <Text
-                c="red"
-                size="sm"
-                ta="center"
-                className={classes.contextSearchState}
-              >
-                {t("ai.context.searchFailed")}
-              </Text>
-            ) : query.trim() && searchItems.length === 0 ? (
-              <Text
-                c="dimmed"
-                size="sm"
-                ta="center"
-                className={classes.contextSearchState}
-              >
-                {t("ai.context.noResults")}
-              </Text>
-            ) : (
-              <ScrollArea
-                h="100%"
-                type="auto"
-                scrollbarSize={6}
-                className={classes.contextSearchResults}
-              >
-                <Stack gap={4} pr={4}>
-                  {searchItems.map((source) => {
-                    const selected = includedPageIds.has(source.pageId);
-                    const blocked = selected || !source.available;
-                    const breadcrumbs =
-                      source.breadcrumbs.length > 0
-                        ? source.breadcrumbs.join(" / ")
-                        : t("ai.context.spaceRoot");
-                    const reason = selected
-                      ? t("ai.context.alreadyIncluded")
-                      : !source.available
-                        ? t("ai.context.sourceExcluded")
-                        : breadcrumbs;
-                    return (
-                      <Tooltip
-                        key={`${source.sourceType}:${source.sourceId}`}
-                        label={reason}
-                        withArrow
-                      >
-                        <Button
+                      <Checkbox
+                        size="sm"
+                        checked={props.fileIds.includes(file.id)}
+                        disabled={file.status !== "ready" || props.saving}
+                        label={file.name}
+                        className={classes.contextFileCheckbox}
+                        onChange={(event) =>
+                          void props
+                            .onToggleFile(file.id, event.currentTarget.checked)
+                            .catch(() => undefined)
+                        }
+                      />
+                      <Group gap={6} wrap="nowrap">
+                        {file.status !== "ready" && (
+                          <Badge
+                            variant="light"
+                            color={file.status === "failed" ? "red" : "blue"}
+                            size="xs"
+                          >
+                            {t(`ai.fileStatus.${file.status}`)}
+                          </Badge>
+                        )}
+                        <AccessibleActionIcon
+                          label={`${t("ai.deleteFile")}: ${file.name}`}
                           variant="subtle"
-                          justify="flex-start"
-                          leftSection={sourceIcon(source)}
-                          disabled={
-                            blocked ||
-                            props.sources.length >= props.limits.manualRoots
-                          }
-                          className={classes.contextSearchResult}
-                          onClick={() => {
-                            if (
-                              source.sourceType === "page" &&
-                              source.hasChildren
-                            ) {
-                              closeSearch(false);
-                            }
-                            void addSource(source).catch(() => undefined);
-                          }}
+                          color="red"
+                          disabled={props.saving}
+                          onClick={() => props.onDeleteFile(file.id, file.name)}
                         >
-                          <Box className={classes.contextSearchResultText}>
-                            <Text size="sm" fw={500} truncate>
-                              {source.title || t("ai.untitled")}
-                            </Text>
-                            <Text size="xs" c="dimmed" truncate>
-                              {reason}
-                            </Text>
-                          </Box>
-                        </Button>
-                      </Tooltip>
-                    );
-                  })}
-                  {search.hasNextPage && (
-                    <Button
-                      variant="subtle"
-                      loading={search.isFetchingNextPage}
-                      onClick={() => void search.fetchNextPage()}
-                    >
-                      {t("ai.context.loadMore")}
-                    </Button>
-                  )}
+                          <IconTrash size={15} />
+                        </AccessibleActionIcon>
+                      </Group>
+                    </Paper>
+                  ))}
                 </Stack>
-              </ScrollArea>
-            )}
-          </Box>
-          {!isCoarsePointer && (
-            <Text size="xs" c="dimmed" className={classes.contextSearchFooter}>
-              {t("ai.context.dragFromSidebarHint")}
-            </Text>
+              )}
+              {props.pageAttachments.length > 0 && (
+                <Stack gap="xs">
+                  <Text size="xs" fw={600} c="dimmed">
+                    {t("ai.context.currentDocumentAttachments")}
+                  </Text>
+                  {props.pageAttachments.map((attachment) => (
+                    <Paper key={attachment.id} withBorder p="xs">
+                      <Checkbox
+                        size="sm"
+                        checked={props.attachmentIds.includes(attachment.id)}
+                        disabled={props.saving}
+                        label={attachment.fileName}
+                        className={classes.contextFileCheckbox}
+                        onChange={(event) =>
+                          void props
+                            .onToggleAttachment(
+                              attachment.id,
+                              event.currentTarget.checked,
+                            )
+                            .catch(() => undefined)
+                        }
+                      />
+                    </Paper>
+                  ))}
+                </Stack>
+              )}
+            </Stack>
           )}
-        </Stack>
-      </Modal>
-
-      <DescendantSelectionModal
-        conversationId={props.conversationId}
-        target={selectionTarget}
-        onClose={() => setSelectionTarget(null)}
-      />
-      <Modal
-        opened={Boolean(scopeTarget)}
-        onClose={() => {
-          scopeTarget?.cancel?.();
-          setScopeTarget(null);
-        }}
-        title={t("ai.context.chooseScopeTitle")}
-        centered
-        size="sm"
-      >
-        <Stack gap="xs">
-          <Text size="sm">{scopeTarget?.source.title || t("ai.untitled")}</Text>
-          {(["none", "all"] as const).map((mode) => (
-            <Button
-              key={mode}
-              variant="light"
-              justify="flex-start"
-              onClick={async () => {
-                await scopeTarget?.complete({ mode, pageIds: [] });
-                setScopeTarget(null);
-              }}
-            >
-              {t(`ai.context.scope.${mode}`)}
-            </Button>
-          ))}
-          <Button
-            variant="light"
-            justify="flex-start"
-            onClick={() => {
-              if (!scopeTarget) return;
-              const target = scopeTarget;
-              setScopeTarget(null);
-              openSelection(
-                target.source.pageId,
-                target.source.title,
-                target.source.descendants,
-                target.complete,
-              );
-            }}
-          >
-            {t("ai.context.scope.selected")}
-          </Button>
-        </Stack>
-      </Modal>
-    </>
+        </ContextSection>
+      </Stack>
+    </ScrollArea>
   );
 }
 
-function ScopeSelect({
-  value,
-  onChange,
+function SearchView({
+  query,
+  setQuery,
+  search,
+  searchItems,
+  includedPageIds,
+  sourceCount,
+  sourceLimit,
+  saving,
+  onAddSource,
 }: {
-  value: AiDescendantSelectionMode;
-  onChange: (mode: AiDescendantSelectionMode) => void;
+  query: string;
+  setQuery: (query: string) => void;
+  search: ReturnType<typeof useAiContextSourcesQuery>;
+  searchItems: AiContextSource[];
+  includedPageIds: Set<string>;
+  sourceCount: number;
+  sourceLimit: number;
+  saving: boolean;
+  onAddSource: (source: AiContextSource) => Promise<void>;
 }) {
   const { t } = useTranslation();
   return (
-    <Select
-      size="xs"
-      w={132}
-      value={value}
-      allowDeselect={false}
-      aria-label={t("ai.context.descendantScope")}
-      data={[
-        { value: "none", label: t("ai.context.scope.none") },
-        { value: "all", label: t("ai.context.scope.all") },
-        { value: "selected", label: t("ai.context.scope.selected") },
-      ]}
-      onChange={(next) => next && onChange(next as AiDescendantSelectionMode)}
-    />
+    <Stack gap="sm" p="md" className={classes.contextManagerSearchLayout}>
+      <TextInput
+        value={query}
+        onChange={(event) => setQuery(event.currentTarget.value)}
+        placeholder={t("ai.context.searchPlaceholder")}
+        leftSection={<IconSearch size={16} />}
+        autoFocus
+      />
+      <Box className={classes.contextSearchResultsRegion}>
+        {search.isLoading ? (
+          <Group justify="center" className={classes.contextSearchState}>
+            <Loader size="sm" />
+          </Group>
+        ) : search.isError ? (
+          <EmptyState
+            compact
+            icon={IconSearch}
+            title={t("ai.context.searchFailed")}
+          />
+        ) : query.trim() && searchItems.length === 0 ? (
+          <EmptyState
+            compact
+            icon={IconSearch}
+            title={t("ai.context.noResults")}
+          />
+        ) : (
+          <ScrollArea h="100%" type="auto" scrollbarSize={6}>
+            <Stack gap="xs" pr={4}>
+              {searchItems.map((source) => {
+                const selected = includedPageIds.has(source.pageId);
+                const blocked = selected || !source.available;
+                const breadcrumbs =
+                  source.breadcrumbs.length > 0
+                    ? source.breadcrumbs.join(" / ")
+                    : t("ai.context.spaceRoot");
+                const reason = selected
+                  ? t("ai.context.alreadyIncluded")
+                  : !source.available
+                    ? t("ai.context.sourceExcluded")
+                    : breadcrumbs;
+                return (
+                  <Button
+                    key={`${source.sourceType}:${source.sourceId}`}
+                    variant="default"
+                    justify="flex-start"
+                    leftSection={sourceIcon(source)}
+                    disabled={saving || blocked || sourceCount >= sourceLimit}
+                    className={classes.contextSearchResult}
+                    onClick={() =>
+                      void onAddSource(source).catch(() => undefined)
+                    }
+                  >
+                    <Box className={classes.contextSearchResultText}>
+                      <Text size="sm" fw={500} truncate>
+                        {source.title || t("ai.untitled")}
+                      </Text>
+                      <Text
+                        size="xs"
+                        c={!source.available ? "orange" : "dimmed"}
+                        truncate
+                      >
+                        {reason}
+                      </Text>
+                    </Box>
+                  </Button>
+                );
+              })}
+              {search.hasNextPage && (
+                <Button
+                  variant="subtle"
+                  loading={search.isFetchingNextPage}
+                  onClick={() => void search.fetchNextPage()}
+                >
+                  {t("ai.context.loadMore")}
+                </Button>
+              )}
+            </Stack>
+          </ScrollArea>
+        )}
+      </Box>
+    </Stack>
   );
 }
 
-function DescendantSelectionModal({
+function ScopeView({
+  target,
+  saving,
+  onSelect,
+  onOpenDescendants,
+}: {
+  target: ScopeTarget;
+  saving: boolean;
+  onSelect: (selection: AiDescendantSelection) => void;
+  onOpenDescendants: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <ScrollArea className={classes.contextManagerScroll} type="auto">
+      <Stack gap="md" p="md">
+        <Box>
+          <Text fw={600}>{target.title || t("ai.untitled")}</Text>
+          <Text size="sm" c="dimmed" mt={4}>
+            {t("ai.context.chooseScopeDescription")}
+          </Text>
+        </Box>
+        <ScopeOption
+          title={t("ai.context.scope.none")}
+          description={t("ai.context.scopeDescription.none")}
+          selected={target.selection.mode === "none"}
+          disabled={saving}
+          onClick={() => onSelect({ mode: "none", pageIds: [] })}
+        />
+        <ScopeOption
+          title={t("ai.context.scope.all")}
+          description={t("ai.context.scopeDescription.all")}
+          selected={target.selection.mode === "all"}
+          disabled={saving}
+          onClick={() => onSelect({ mode: "all", pageIds: [] })}
+        />
+        <ScopeOption
+          title={t("ai.context.scope.selected")}
+          description={t("ai.context.scopeDescription.selected")}
+          selected={target.selection.mode === "selected"}
+          badge={t("ai.context.selectedCount", {
+            count: target.selection.pageIds.length,
+          })}
+          disabled={saving}
+          onClick={onOpenDescendants}
+        />
+      </Stack>
+    </ScrollArea>
+  );
+}
+
+function ScopeOption({
+  title,
+  description,
+  selected,
+  badge,
+  disabled,
+  onClick,
+}: {
+  title: string;
+  description: string;
+  selected: boolean;
+  badge?: string;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <Button
+      variant={selected ? "light" : "default"}
+      justify="space-between"
+      disabled={disabled}
+      onClick={onClick}
+      className={classes.contextScopeOption}
+    >
+      <Group justify="space-between" wrap="nowrap" w="100%">
+        <Box className={classes.contextScopeOptionText}>
+          <Text size="sm" fw={600}>
+            {title}
+          </Text>
+          <Text size="xs" c="dimmed" fw={400}>
+            {description}
+          </Text>
+        </Box>
+        {badge && <Badge variant="light">{badge}</Badge>}
+      </Group>
+    </Button>
+  );
+}
+
+function ScopeButton({
+  selection,
+  disabled,
+  onClick,
+}: {
+  selection: AiDescendantSelection;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  const { t } = useTranslation();
+  const summary = getAiContextScopeSummary(selection);
+  const label = getScopeLabel(t, summary);
+  return (
+    <Button
+      variant="default"
+      size="compact-xs"
+      rightSection={<IconChevronRight size={13} />}
+      disabled={disabled}
+      onClick={onClick}
+      className={classes.contextManagerScopeButton}
+    >
+      {label}
+    </Button>
+  );
+}
+
+function getScopeLabel(
+  t: TFunction,
+  summary: ReturnType<typeof getAiContextScopeSummary>,
+): string {
+  if (summary.mode === "selected") {
+    return t("ai.context.scopeSelectedCount", { count: summary.selectedCount });
+  }
+  return t(`ai.context.scope.${summary.mode}`);
+}
+
+function ContextSection({
+  icon,
+  title,
+  description,
+  action,
+  children,
+}: {
+  icon: ReactNode;
+  title: string;
+  description: string;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <Paper withBorder radius="md" className={classes.contextManagerSection}>
+      <Group
+        justify="space-between"
+        gap="sm"
+        align="flex-start"
+        className={classes.contextManagerSectionHeader}
+      >
+        <Group gap="xs" wrap="nowrap" align="flex-start">
+          <Box c="dimmed" mt={2}>
+            {icon}
+          </Box>
+          <Box>
+            <Text fw={600}>{title}</Text>
+            <Text size="xs" c="dimmed">
+              {description}
+            </Text>
+          </Box>
+        </Group>
+        {action}
+      </Group>
+      <Box className={classes.contextManagerSectionBody}>{children}</Box>
+    </Paper>
+  );
+}
+
+function DescendantSelectionView({
   conversationId,
   target,
-  onClose,
+  saving,
 }: {
   conversationId?: string;
-  target: SelectionTarget | null;
-  onClose: () => void;
+  target: SelectionTarget;
+  saving: boolean;
 }) {
   const { t } = useTranslation();
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-
-  const close = () => {
-    setSelected(new Set());
-    onClose();
-  };
-
+  const [selected, setSelected] = useState<Set<string>>(
+    new Set(target.selectedPageIds),
+  );
   return (
-    <Modal
-      opened={Boolean(target)}
-      onClose={close}
-      title={t("ai.context.selectDescendantsTitle", {
-        title: target?.title || t("ai.untitled"),
-      })}
-      centered
-      size="md"
-      onEnterTransitionEnd={() =>
-        setSelected(new Set(target?.selectedPageIds ?? []))
-      }
-    >
-      <Stack gap="sm">
+    <Box className={classes.contextDescendantLayout}>
+      <Box p="md">
         <Text size="sm" c="dimmed">
           {t("ai.context.selectDescendantsHint")}
         </Text>
-        <ScrollArea h={360} type="auto">
-          {target && (
-            <DescendantList
-              conversationId={conversationId}
-              parentPageId={target.rootPageId}
-              selected={selected}
-              setSelected={setSelected}
-            />
-          )}
-        </ScrollArea>
-        <Group justify="space-between">
-          <Text size="xs" c="dimmed">
-            {t("ai.context.selectedCount", { count: selected.size })}
-          </Text>
-          <Group gap="xs">
-            <Button variant="default" onClick={close}>
-              {t("Cancel")}
-            </Button>
-            <Button
-              onClick={async () => {
-                if (!target) return;
-                await target.apply({
-                  mode: "selected",
-                  pageIds: [...selected],
-                });
-                close();
-              }}
-            >
-              {t("ai.context.applySelection")}
-            </Button>
-          </Group>
-        </Group>
-      </Stack>
-    </Modal>
+      </Box>
+      <ScrollArea className={classes.contextDescendantScroll} type="auto">
+        <Box px="md" pb="md">
+          <DescendantList
+            conversationId={conversationId}
+            parentPageId={target.rootPageId}
+            selected={selected}
+            setSelected={setSelected}
+          />
+        </Box>
+      </ScrollArea>
+      <Group
+        justify="space-between"
+        gap="xs"
+        className={classes.contextDescendantFooter}
+      >
+        <Text size="sm" c="dimmed">
+          {t("ai.context.selectedCount", { count: selected.size })}
+        </Text>
+        <Button
+          disabled={saving}
+          onClick={() =>
+            void target
+              .apply({ mode: "selected", pageIds: [...selected] })
+              .catch(() => undefined)
+          }
+        >
+          {t("ai.context.applySelection")}
+        </Button>
+      </Group>
+    </Box>
   );
 }
 
@@ -811,9 +1072,11 @@ function DescendantList({
   }
   if (!query.data?.items.length) {
     return (
-      <Text size="sm" c="dimmed" ta="center" py="md">
-        {t("ai.context.noChildPages")}
-      </Text>
+      <EmptyState
+        compact
+        icon={IconFileText}
+        title={t("ai.context.noChildPages")}
+      />
     );
   }
   return (
@@ -847,11 +1110,12 @@ function DescendantRow({
   return (
     <Box>
       <Group gap={4} wrap="nowrap" className={classes.contextDescendantRow}>
-        <ActionIcon
+        <AccessibleActionIcon
           variant="subtle"
-          size={28}
+          size={32}
+          minTargetSize={32}
           disabled={!source.hasChildren}
-          aria-label={expanded ? t("Collapse") : t("Expand")}
+          label={expanded ? t("Collapse") : t("Expand")}
           onClick={() => setExpanded((value) => !value)}
         >
           {source.hasChildren ? (
@@ -861,9 +1125,9 @@ function DescendantRow({
               <IconChevronRight size={14} />
             )
           ) : null}
-        </ActionIcon>
+        </AccessibleActionIcon>
         <Checkbox
-          size="xs"
+          size="sm"
           checked={selected.has(source.pageId)}
           label={source.title || t("ai.untitled")}
           onChange={(event) => {
@@ -897,10 +1161,10 @@ function sourceIcon(source: AiContextSource) {
     );
   }
   return source.sourceType === "page" ? (
-    <IconFileText size={15} />
+    <IconFileText size={16} />
   ) : source.sourceType === "database_row" ? (
-    <IconTableRow size={15} />
+    <IconTableRow size={16} />
   ) : (
-    <IconDatabase size={15} />
+    <IconDatabase size={16} />
   );
 }
