@@ -105,12 +105,14 @@ import {
   getDatabaseSelectSettings,
 } from '@/features/database/utils/database-cell-value.ts';
 import {
+  DATABASE_PROPERTY_DRAG_MIME,
   getSelectedPreparedRowIds,
   isDatabaseFilterControlsVisible,
   getCheckboxFilterOptions,
   isSameCellPayloadValue,
   mergePinnedDatabaseRow,
   reorderDatabaseProperties,
+  resolveDraggedDatabasePropertyId,
   resolveDatabasePropertyRename,
   shouldShowDatabaseFilterRemove,
   shouldDeleteCellPayload,
@@ -282,6 +284,7 @@ export function DatabaseTableView({
     useState<IDatabaseRowWithCells | null>(null);
   const [draggedPropertyId, setDraggedPropertyId] = useState<string | null>(null);
   const [dragOverPropertyId, setDragOverPropertyId] = useState<string | null>(null);
+  const draggedPropertyIdRef = useRef<string | null>(null);
   const [movingRow, setMovingRow] = useState<IDatabaseRowWithCells | null>(null);
   const [copyingRow, setCopyingRow] = useState<IDatabaseRowWithCells | null>(null);
   const [selectedRowPageIds, setSelectedRowPageIds] = useState<Record<string, boolean>>({});
@@ -404,6 +407,7 @@ export function DatabaseTableView({
     setRenamingRowPageId(null);
     setRenamingRowInitialTitle('');
     setRenamingRowTitleDraft('');
+    draggedPropertyIdRef.current = null;
     setDraggedPropertyId(null);
     setDragOverPropertyId(null);
     setTableScrollTop(0);
@@ -933,6 +937,12 @@ export function DatabaseTableView({
         message: t('Failed to update data'),
       });
     }
+  };
+
+  const clearPropertyDragState = () => {
+    draggedPropertyIdRef.current = null;
+    setDraggedPropertyId(null);
+    setDragOverPropertyId(null);
   };
 
   const movePropertyByVisibleOffset = (
@@ -2479,10 +2489,11 @@ export function DatabaseTableView({
                     draggedPropertyId !== property.id
                   }
                   onDragOver={(event) => {
+                    const movedPropertyId = draggedPropertyIdRef.current;
                     if (
                       !isEditable ||
-                      !draggedPropertyId ||
-                      draggedPropertyId === property.id
+                      !movedPropertyId ||
+                      movedPropertyId === property.id
                     ) {
                       return;
                     }
@@ -2493,14 +2504,12 @@ export function DatabaseTableView({
                   }}
                   onDrop={(event) => {
                     event.preventDefault();
-                    const movedPropertyId =
-                      draggedPropertyId ||
-                      event.dataTransfer.getData(
-                        'application/x-docmost-database-property',
-                      );
+                    const movedPropertyId = resolveDraggedDatabasePropertyId(
+                      draggedPropertyIdRef.current,
+                      event.dataTransfer,
+                    );
 
-                    setDraggedPropertyId(null);
-                    setDragOverPropertyId(null);
+                    clearPropertyDragState();
 
                     if (movedPropertyId && movedPropertyId !== property.id) {
                       void moveProperty(movedPropertyId, property.id);
@@ -2520,16 +2529,15 @@ export function DatabaseTableView({
                           onDragStart={(event) => {
                             event.dataTransfer.effectAllowed = 'move';
                             event.dataTransfer.setData(
-                              'application/x-docmost-database-property',
+                              DATABASE_PROPERTY_DRAG_MIME,
                               property.id,
                             );
+                            event.dataTransfer.setData('text/plain', property.id);
+                            draggedPropertyIdRef.current = property.id;
                             setDraggedPropertyId(property.id);
                             setDragOverPropertyId(null);
                           }}
-                          onDragEnd={() => {
-                            setDraggedPropertyId(null);
-                            setDragOverPropertyId(null);
-                          }}
+                          onDragEnd={clearPropertyDragState}
                           onKeyDown={(event) => {
                             if (event.key === 'ArrowLeft') {
                               event.preventDefault();

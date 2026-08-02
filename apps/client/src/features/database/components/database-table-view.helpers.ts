@@ -1,6 +1,18 @@
 import { DatabasePropertyType } from '@docmost/api-contract';
 import type { IDatabaseRowWithCells } from '@/features/database/types/database-table.types';
 
+export const DATABASE_PROPERTY_DRAG_MIME =
+  'application/x-docmost-database-property';
+
+export const resolveDraggedDatabasePropertyId = (
+  activePropertyId: string | null,
+  dataTransfer: Pick<DataTransfer, 'getData'>,
+): string | null =>
+  activePropertyId ||
+  dataTransfer.getData(DATABASE_PROPERTY_DRAG_MIME) ||
+  dataTransfer.getData('text/plain') ||
+  null;
+
 const hasEmptyUserReference = (value: unknown): boolean => {
   return (
     typeof value === 'object' &&
