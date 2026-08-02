@@ -1,3 +1,5 @@
+[Russian version of Fork-Specific Enhancements](./FORK_SPECIFIC_ENHANCEMENTS_RU.md)
+
 > [!NOTE]
 > This is a custom fork of Docmost that I created to simplify team collaboration and better structure the knowledge base. My goal was to make the system more predictable, secure, and practical for real-world use — without unnecessary complexity and with the ability to evolve faster using AI agents. I have great respect for the Docmost team and the work they’ve done. However, their focus on releasing features primarily for commercial use does not resonate with me, so I decided to develop my own fork — with an emphasis on openness, practicality, and independence.
 
@@ -8,6 +10,8 @@
 The fork transforms Docmost from a primarily wiki-oriented system into a platform for managing corporate knowledge, structured data, and document workflows.
 
 Its key differences include a built-in AI assistant for each space, RAG and Open WebUI synchronization, Notion-style databases, extended document properties, a terminology dictionary, a more capable editor, portable archives, push notifications, and a stricter security model.
+
+Capabilities that previously depended on separate Enterprise Edition modules, including SSO, MFA, comments, advanced search, and sharing controls, are implemented directly in the core fork. The repository is distributed under AGPL 3.0 without a separate enterprise code tree.
 
 ### 1. Built-in AI assistant for each space
 
@@ -29,10 +33,14 @@ The fork includes its own AI assistant, configured separately for each space:
 
 - optional display of reasoning text returned by the model;
 
-- model connection testing from the administration interface.
+- model connection testing from the administration interface;
+
+- a unified, responsive Markdown composer with visible context, space-search, and Chat/Agent controls, Enter-to-send keyboard behavior, and an auto-saving context manager that groups the current document, space sources, private files, and attachments in one flow.
 
 
 The previous legacy editor text-generation workflow has been removed and replaced with a unified assistant integrated into the core version of the fork.
+
+![AI assistant with document context and Markdown composer](./docs/images/fork-specific-enhancements/en/ai-assistant-context.png)
 
 ### 2. Context-aware AI workflows inside documents
 
@@ -72,6 +80,14 @@ AI output can be:
 
 The assistant also supports draft persistence, automatic chat titles, search across chats and commands, background AI activity indicators, and streamed generation.
 
+The context manager uses one responsive dialog for overview, space search, child-page scope, and explicit descendant selection instead of stacking menus and nested dialogs.
+
+The composer presents input and settings as one focus-aware card: context and search stay directly available, Chat/Agent mode uses a compact segment, and templates, Markdown tools, status, and send/stop actions remain in a stable footer. On narrow panels, secondary labels collapse without introducing horizontal scrolling.
+
+Agent mode is an optional per-conversation workflow. It can search and navigate accessible Docmost content, then propose bounded edits to the current page. Every write requires a separate initiator-only confirmation and is rejected if the page content or write permission changed before approval.
+
+![Per-space assistant and agent mode settings](./docs/images/fork-specific-enhancements/en/ai-agent-settings.png)
+
 ### 3. RAG and Open WebUI integration
 
 The fork includes its own RAG API and integrations with external knowledge-retrieval systems.
@@ -100,14 +116,20 @@ Supported capabilities include:
 
 - SQL-backed cursor pagination and opaque deletion feeds;
 
-- deduplication of contextual search results.
+- deduplication of contextual search results;
+
+- separate RAG and MCP key types, management screens, and onboarding presets;
+
+- a shared content-exclusion policy applied to retrieval, synchronization, agent tools, and MCP results;
+
+- a stateless read-only MCP endpoint for external assistants, using the same access-aware tool registry as agent mode.
 
 
-This allows Docmost content to serve as an up-to-date knowledge base for local or corporate LLMs.
-
-The same access-aware tool layer now powers an optional agent mode in private AI chats and a stateless, read-only MCP endpoint for external assistants. Agent writes are limited to safe operations on the current page and require a separate confirmation from the initiating user.
+This allows Docmost content to serve as an up-to-date knowledge base for local or corporate LLMs. RAG and MCP keys are scoped to one space, are not interchangeable, and are revalidated on every request against the creator's current membership and page access.
 
 Agent and MCP tool architecture adapted from [vvzvlad/gitmost](https://github.com/vvzvlad/gitmost) and [vvzvlad/docmost-mcp](https://github.com/vvzvlad/docmost-mcp). Special thanks to [@vvzvlad](https://github.com/vvzvlad) for developing and maintaining the fork, and to Moritz Krause, the original author of `docmost-mcp`.
+
+![RAG synchronization and MCP access](./docs/images/fork-specific-enhancements/en/rag-mcp-access.png)
 
 ### 4. Reliable AI request infrastructure
 
@@ -130,6 +152,10 @@ AI features are implemented as a separate server-side subsystem:
 - up to six parallel provider requests per user;
 
 - waiting agent approvals do not consume those provider slots and have a separate bounded queue;
+
+- separate per-approval and whole-run budgets for agent model steps and tool calls;
+
+- safe recovery of decided agent proposals after worker or queue interruption;
 
 - token and quota controls;
 
@@ -201,6 +227,8 @@ The AI role field indicates how AI participated in creating the document:
 
 Changes to significant properties are recorded in the document history.
 
+![Notion-style database and document fields](./docs/images/fork-specific-enhancements/en/database-document-fields.png)
+
 ### 7. Tags and terminology dictionary
 
 The fork provides more advanced terminology management:
@@ -221,8 +249,29 @@ The fork provides more advanced terminology management:
 
 - JSON dictionary import and export.
 
+![Space terminology dictionary](./docs/images/fork-specific-enhancements/en/dictionary.png)
 
-### 8. Extended editor
+
+### 8. Search and content indexing
+
+Search works across pages, databases, rows, and attachments while preserving current workspace, space, public-sharing, and page-level access rules:
+
+- PostgreSQL full-text search is available by default;
+
+- Typesense can be selected as a scalable candidate index;
+
+- PDF and DOCX names and extracted text are searchable;
+
+- extraction has bounded byte, page, archive-entry, text-size, and wall-clock budgets;
+
+- indexing status distinguishes pending, processing, ready, skipped, and failed files;
+
+- abandoned work is reconciled after restart, while permanently unreadable files are not retried forever;
+
+- indexed candidates are always reloaded from PostgreSQL and rechecked against live access policy before being returned.
+
+
+### 9. Extended editor
 
 The editor includes the following additional capabilities:
 
@@ -244,6 +293,8 @@ The editor includes the following additional capabilities:
 
 - improved table rendering;
 
+- consistent default table widths and paste behavior;
+
 - improved Draw.io, Excalidraw, and Mermaid diagrams;
 
 - a subpage navigation block;
@@ -252,14 +303,16 @@ The editor includes the following additional capabilities:
 
 - transclusion of one document inside another;
 
-- quotation of a selected document fragment;
+- synced blocks created from selected document fragments, with reference lookup and safe unsyncing;
 
 - audio file upload and playback;
 
 - alternative text for images and media.
 
+![Extended editor, tables, and navigation](./docs/images/fork-specific-enhancements/en/extended-editor.png)
 
-### 9. Import, export, and data portability
+
+### 10. Import, export, and data portability
 
 The export system for pages, spaces, and databases has been redesigned:
 
@@ -292,8 +345,10 @@ A custom portable Docmost archive format has also been added:
 
 - protection against corrupted and excessively large ZIP archives.
 
+![Import and export options](./docs/images/fork-specific-enhancements/en/import-export.png)
 
-### 10. Comments and collaboration
+
+### 11. Comments and collaboration
 
 The collaboration system has been extended with:
 
@@ -315,8 +370,10 @@ The collaboration system has been extended with:
 
 - more reliable page-tree synchronization.
 
+![Comments, presence, and collaboration](./docs/images/fork-specific-enhancements/en/collaboration.png)
 
-### 11. Notifications
+
+### 12. Notifications
 
 An extended notification system has been added:
 
@@ -345,7 +402,7 @@ An extended notification system has been added:
 - recipient access checks for the document.
 
 
-### 12. Access control
+### 13. Access control
 
 The fork provides stricter permission management:
 
@@ -367,8 +424,14 @@ The fork provides stricter permission management:
 
 - API key access is revalidated on every request.
 
+- public sharing can be disabled for the entire workspace or for an individual space;
 
-### 13. Security
+- public pages, public search, and public attachments recheck the current sharing policy;
+
+- OIDC, SAML, and LDAP group synchronization follows only mappings explicitly created by an administrator.
+
+
+### 14. Security
 
 Additional protection mechanisms include:
 
@@ -412,10 +475,24 @@ Additional protection mechanisms include:
 
 - resource filtering during PDF export;
 
-- stricter validation of WebSocket rooms and messages.
+- stricter validation of WebSocket rooms and messages;
+
+- core OIDC Authorization Code flow with PKCE, state, and nonce;
+
+- signed SAML responses bound to stored login requests;
+
+- LDAP service and user binds with escaped filters and bounded searches;
+
+- encrypted and redacted SSO credentials plus an explicit endpoint allowlist;
+
+- provider verification before it is offered for sign-in, and a successful real login before SSO can be enforced;
+
+- explicit administrator-managed SSO group mappings that never create arbitrary workspace groups.
+
+![Security, sharing controls, MFA, and SSO](./docs/images/fork-specific-enhancements/en/security-sso.png)
 
 
-### 14. PWA, interface, and navigation
+### 15. PWA, interface, and navigation
 
 The fork can be installed as a Progressive Web App:
 
@@ -447,7 +524,7 @@ It also adds:
 - more consistent placement of controls.
 
 
-### 15. Operations and development
+### 16. Operations and development
 
 The fork includes its own maintenance and development infrastructure:
 

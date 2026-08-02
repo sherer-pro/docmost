@@ -400,6 +400,13 @@ Minimum:
 
 If a change is not reflected in `AGENTS.md`, the automation task is considered incomplete.
 
+### Fork enhancement documentation
+
+- When implementing or substantially changing a large user-facing feature, ask the user before completing the task whether both fork enhancement overviews should be updated: the English `Fork-Specific Enhancements` section in `README.md` and `FORK_SPECIFIC_ENHANCEMENTS_RU.md`.
+- Do not update those overviews automatically without the user's answer unless the original request already includes that documentation work.
+- When the user confirms the update, keep both language versions equivalent in structure and factual coverage.
+- This confirmation is not required for small fixes, internal refactoring, or technical changes without a material user-facing effect.
+
 ## graphify
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
