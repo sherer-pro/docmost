@@ -6020,8 +6020,8 @@
     "semantic_hash": ""
   },
   "apps/server/src/core/ai/services/openai-compatible-provider.service.ts": {
-    "mtime": 1785614208.374773,
-    "ast_hash": "2551facd90d4fb3fd16d0b5e3599be27",
+    "mtime": 1785711113.9155524,
+    "ast_hash": "017c889625933ead9fd360e53e8f54b4",
     "semantic_hash": ""
   },
   "apps/server/src/database/migrations/20260728T120000-ai-integration.ts": {
@@ -6160,8 +6160,8 @@
     "semantic_hash": ""
   },
   "apps/server/src/core/ai/services/ai-run-execution.service.ts": {
-    "mtime": 1785624336.3560674,
-    "ast_hash": "ba948610a3f14e8d6cc5555e6170a947",
+    "mtime": 1785711194.730871,
+    "ast_hash": "8684cadba4bf8f90e5e23224a262cb87",
     "semantic_hash": ""
   },
   "apps/server/src/core/ai/services/ai-run.service.ts": {
@@ -6175,8 +6175,8 @@
     "semantic_hash": ""
   },
   "apps/server/src/core/ai/services/openai-compatible-provider.service.spec.ts": {
-    "mtime": 1785614419.4555883,
-    "ast_hash": "f7794dc91cd98746df2972abbda4b5eb",
+    "mtime": 1785710989.9833207,
+    "ast_hash": "7a8eb63b197eb8803b3e46b3b75ff7e0",
     "semantic_hash": ""
   },
   "apps/client/src/features/space/components/settings-modal.test.tsx": {
@@ -6280,8 +6280,8 @@
     "semantic_hash": ""
   },
   "apps/server/src/core/ai/services/ai-run-execution.service.spec.ts": {
-    "mtime": 1785624347.031662,
-    "ast_hash": "b991eacbf2fa72f8d36edc1abbd690d6",
+    "mtime": 1785711133.3140626,
+    "ast_hash": "943320cc640d632ac35ef442330dd71c",
     "semantic_hash": ""
   },
   "apps/server/src/core/ai/services/ai-run.service.spec.ts": {
@@ -6365,12 +6365,12 @@
     "semantic_hash": ""
   },
   "apps/server/src/core/ai/services/ai-context.service.spec.ts": {
-    "mtime": 1785368294.5640485,
+    "mtime": 1785711060.814574,
     "ast_hash": "ff406078fae27914e9478bdc27e9baa8",
     "semantic_hash": ""
   },
   "apps/server/src/core/ai/services/ai-context.service.ts": {
-    "mtime": 1785368879.89262,
+    "mtime": 1785711060.8134208,
     "ast_hash": "92b5ba3491ad8937c81f7193d0444ea9",
     "semantic_hash": ""
   },
@@ -6575,8 +6575,8 @@
     "semantic_hash": ""
   },
   "docs/AI_ASSISTANT_AND_RAG.md": {
-    "mtime": 1785698542.5184305,
-    "ast_hash": "ded58c300527caf77bb6f68b97c3014f",
+    "mtime": 1785711141.7625875,
+    "ast_hash": "a9c085ff19faef9e458c07a45ada940d",
     "semantic_hash": ""
   },
   "graphify-out/memory/query_20260729_205806_\u043f\u0440\u043e\u0432\u0435\u0440\u044c_\u0440\u0430\u0431\u043e\u0442\u043e\u0441\u043f\u043e\u0441\u043e\u0431\u043d\u043e\u0441\u0442\u044c_\u043f\u043e\u0438\u0441\u043a\u0430_\u043f\u043e_\u043f\u0440\u043e\u0441\u0442\u0440\u0430\u043d\u0441\u0442\u0432\u0443.md": {
