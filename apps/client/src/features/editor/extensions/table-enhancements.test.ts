@@ -427,11 +427,11 @@ describe("table sorting", () => {
     }
   });
 
-  it("defaults existing tables without width mode to normal", () => {
+  it("defaults existing tables without width mode to wide", () => {
     const editor = createEditor(tableContent);
 
     try {
-      expect(getTableNode(editor).attrs.widthMode).toBe("normal");
+      expect(getTableNode(editor).attrs.widthMode).toBe("wide");
     } finally {
       editor.destroy();
     }
@@ -595,7 +595,7 @@ describe("table paste handling", () => {
         ["A", "A much longer value than the first column"],
       ]);
 
-      expect(table.attrs.widthMode).toBe("normal");
+      expect(table.attrs.widthMode).toBe("wide");
       expect(table.child(0).firstChild?.type.name).toBe("tableHeader");
       expect(table.child(1).firstChild?.type.name).toBe("tableCell");
       expect(table.child(0).child(0).attrs.colwidth).toBeNull();
@@ -653,7 +653,7 @@ describe("table paste handling", () => {
       '<table width="900" style="width: 900px"><colgroup><col width="120"><col style="width: 240px"></colgroup><tr><th width="120">Name</th><th style="width: 240px; min-width: 200px">Score</th></tr><tr><td colwidth="120">Alpha</td><td colwidth="240" style="max-width: 300px">2</td></tr></table>',
     );
 
-    expect(html).toContain('data-table-width-mode="normal"');
+    expect(html).toContain('data-table-width-mode="wide"');
     expect(html).not.toContain("<colgroup");
     expect(html).not.toContain("colwidth");
     expect(html).not.toContain('width="120"');
@@ -669,7 +669,7 @@ describe("table paste handling", () => {
       '<table><tr><th>ID</th><th>Detailed description</th></tr><tr><td>1</td><td>A much longer value than the first column</td></tr></table>',
     );
 
-    expect(html).toContain('data-table-width-mode="normal"');
+    expect(html).toContain('data-table-width-mode="wide"');
     expect(html).not.toContain("colwidth");
   });
 });
