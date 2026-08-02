@@ -5,6 +5,7 @@ import {
   composerHtmlToMarkdown,
   isSupportedMarkdownPaste,
   markdownToComposerHtml,
+  shouldSubmitAiComposer,
 } from "./ai-markdown-composer.utils.ts";
 import {
   createAiMarkdownComposerExtensions,
@@ -59,11 +60,7 @@ export function AiMarkdownComposer({
         return insertMarkdownPaste(view, text);
       },
       handleKeyDown: (_view, event) => {
-        if (
-          event.key === "Enter" &&
-          (event.metaKey || event.ctrlKey) &&
-          !event.isComposing
-        ) {
+        if (shouldSubmitAiComposer(event)) {
           event.preventDefault();
           onSubmitRef.current();
           return true;

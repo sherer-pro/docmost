@@ -4,7 +4,6 @@ import {
   Badge,
   Box,
   Button,
-  Checkbox,
   Drawer,
   Group,
   Loader,
@@ -103,6 +102,8 @@ import {
 } from "@/features/ai/utils/ai-policies.ts";
 import { resolveAiErrorMessage } from "@/features/ai/utils/ai-policies.ts";
 import { AiContextPicker } from "./ai-context-picker.tsx";
+import { AiComposerShell } from "./ai-composer-shell.tsx";
+import { AccessibleActionIcon } from "@/components/ui/accessible-action-icon.tsx";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEditorState } from "@tiptap/react";
 import { getAiConversationContext } from "@/features/ai/services/ai-service.ts";
@@ -805,12 +806,28 @@ export function AiPanel() {
   };
 
   const toggleSpaceSearch = (checked: boolean) => {
+    const previous = useSpaceSearch;
     setUseSpaceSearch(checked);
     if (activeConversation) {
-      updateConversation.mutate({
-        conversationId: activeConversation.id,
-        data: { useSpaceSearch: checked },
-      });
+      updateConversation.mutate(
+        {
+          conversationId: activeConversation.id,
+          data: { useSpaceSearch: checked },
+        },
+        {
+          onError: (error) => {
+            setUseSpaceSearch(previous);
+            notifications.show({
+              message: resolveAiErrorMessage(
+                t,
+                i18n,
+                error?.["response"]?.data?.code,
+              ),
+              color: "red",
+            });
+          },
+        },
+      );
     }
   };
 
@@ -1542,397 +1559,341 @@ export function AiPanel() {
       </Box>
 
       <Box className={classes.composer}>
-        <Group gap="xs" wrap="nowrap" className={classes.composerContextRow}>
-          <AiContextPicker
-            conversationId={activeConversationId}
-            documentPageId={documentContext.pageId}
-            documentTitle={documentTitle}
-            currentDocumentAvailable={
-              availability.currentDocumentAvailable ?? true
-            }
-            includeCurrentDocument={context?.includeCurrentDocument ?? true}
-            currentDocumentDescendants={
-              context?.currentDocumentDescendants ?? {
-                mode: "none",
-                pageIds: [],
+        <AiComposerShell
+          contextControl={
+            <AiContextPicker
+              conversationId={activeConversationId}
+              documentPageId={documentContext.pageId}
+              documentTitle={documentTitle}
+              currentDocumentAvailable={
+                availability.currentDocumentAvailable ?? true
               }
-            }
-            sources={context?.sources ?? []}
-            resolvedSourceCount={
-              context?.resolvedSourceCount ??
-              (availability.currentDocumentAvailable === false ? 0 : 1)
-            }
-            limits={context?.limits ?? { manualRoots: 10, resolvedSources: 50 }}
-            fileIds={context?.fileIds ?? []}
-            attachmentIds={context?.attachmentIds ?? []}
-            chatFiles={chatFiles}
-            pageAttachments={pageAttachments}
-            loadingFiles={filesQuery.isLoading}
-            saving={updateContext.isPending}
-            saveFailed={contextSaveFailed}
-            opened={contextManagerOpened}
-            onOpenedChange={setContextManagerOpened}
-            pendingSource={pendingDroppedSource}
-            onPendingSourceHandled={() => setPendingDroppedSource(null)}
-            onToggleCurrentDocument={toggleCurrentDocument}
-            onSetCurrentDocumentDescendants={setCurrentDocumentDescendants}
-            onAddSource={addContextSource}
-            onRemoveSource={removeContextSource}
-            onSetSourceDescendants={setContextSourceDescendants}
-            onToggleFile={toggleContextFile}
-            onToggleAttachment={toggleContextAttachment}
-            onUpload={uploadFiles}
-            onDeleteFile={removeChatFile}
-            onRetrySave={retryContextSave}
-            onPrepareConversation={ensureConversation}
-          />
-
-          {availability.agentAvailable && (
-            <Menu position="top-start" withinPortal>
-              <Menu.Target>
-                <Button
-                  variant={agentMode ? "light" : "subtle"}
-                  size="compact-sm"
-                  leftSection={<IconRobot size={16} />}
-                  rightSection={<IconChevronDown size={13} />}
-                  disabled={Boolean(pendingRun)}
-                  className={classes.composerModeButton}
-                  aria-label={
-                    agentMode ? t("ai.agent.mode") : t("ai.composer.chat")
-                  }
-                >
-                  {agentMode ? t("ai.agent.mode") : t("ai.composer.chat")}
-                </Button>
-              </Menu.Target>
-              <Menu.Dropdown className={classes.composerMenu}>
-                <Menu.Label>{t("ai.composer.mode")}</Menu.Label>
-                <Menu.Item
-                  leftSection={
-                    !agentMode ? (
-                      <IconCheck size={15} />
-                    ) : (
-                      <IconMessagePlus size={15} />
-                    )
-                  }
-                  onClick={() => toggleAgentMode(false)}
-                >
-                  {t("ai.composer.chat")}
-                </Menu.Item>
-                <Menu.Item
-                  leftSection={
-                    agentMode ? (
-                      <IconCheck size={15} />
-                    ) : (
-                      <IconRobot size={15} />
-                    )
-                  }
-                  onClick={() => toggleAgentMode(true)}
-                >
-                  {t("ai.agent.mode")}
-                </Menu.Item>
-                <Text size="xs" c="dimmed" px="sm" pb="xs">
-                  {t("ai.agent.modeDescription")}
-                </Text>
-              </Menu.Dropdown>
-            </Menu>
-          )}
-
-          {spaceSearchReady && (
-            <Menu position="top-start" withinPortal>
-              <Menu.Target>
-                <Tooltip label={t("ai.composer.tools")} withArrow>
-                  <ActionIcon
-                    variant={useSpaceSearch ? "light" : "subtle"}
-                    size={32}
-                    disabled={Boolean(pendingRun)}
-                    className={classes.composerInlineAction}
-                    aria-label={t("ai.composer.tools")}
-                  >
-                    <IconDots size={17} />
-                  </ActionIcon>
-                </Tooltip>
-              </Menu.Target>
-              <Menu.Dropdown>
-                <Menu.Item closeMenuOnClick={false}>
-                  <Checkbox
-                    checked={useSpaceSearch}
-                    label={t("ai.spaceSearchToggle")}
-                    onChange={(event) =>
-                      toggleSpaceSearch(event.currentTarget.checked)
-                    }
-                  />
-                </Menu.Item>
-              </Menu.Dropdown>
-            </Menu>
-          )}
-        </Group>
-
-        <AiMarkdownComposer
-          value={draft}
-          ariaLabel={t("ai.messagePlaceholder")}
-          placeholder={t("ai.messagePlaceholder")}
-          onEditorChange={setComposerEditor}
-          onChange={(nextDraft) => {
-            setDraft(nextDraft);
-            setDraftStatus(activeConversation ? "saving" : "idle");
-          }}
-          onSubmit={() => void submit(draft)}
-        />
-
-        <Group
-          justify="space-between"
-          gap="xs"
-          wrap="nowrap"
-          className={classes.composerFooter}
+              includeCurrentDocument={context?.includeCurrentDocument ?? true}
+              currentDocumentDescendants={
+                context?.currentDocumentDescendants ?? {
+                  mode: "none",
+                  pageIds: [],
+                }
+              }
+              sources={context?.sources ?? []}
+              resolvedSourceCount={
+                context?.resolvedSourceCount ??
+                (availability.currentDocumentAvailable === false ? 0 : 1)
+              }
+              limits={
+                context?.limits ?? { manualRoots: 10, resolvedSources: 50 }
+              }
+              fileIds={context?.fileIds ?? []}
+              attachmentIds={context?.attachmentIds ?? []}
+              chatFiles={chatFiles}
+              pageAttachments={pageAttachments}
+              loadingFiles={filesQuery.isLoading}
+              saving={updateContext.isPending}
+              saveFailed={contextSaveFailed}
+              opened={contextManagerOpened}
+              onOpenedChange={setContextManagerOpened}
+              pendingSource={pendingDroppedSource}
+              onPendingSourceHandled={() => setPendingDroppedSource(null)}
+              onToggleCurrentDocument={toggleCurrentDocument}
+              onSetCurrentDocumentDescendants={setCurrentDocumentDescendants}
+              onAddSource={addContextSource}
+              onRemoveSource={removeContextSource}
+              onSetSourceDescendants={setContextSourceDescendants}
+              onToggleFile={toggleContextFile}
+              onToggleAttachment={toggleContextAttachment}
+              onUpload={uploadFiles}
+              onDeleteFile={removeChatFile}
+              onRetrySave={retryContextSave}
+              onPrepareConversation={ensureConversation}
+            />
+          }
+          editor={
+            <AiMarkdownComposer
+              value={draft}
+              ariaLabel={t("ai.messagePlaceholder")}
+              placeholder={t("ai.messagePlaceholder")}
+              onEditorChange={setComposerEditor}
+              onChange={(nextDraft) => {
+                setDraft(nextDraft);
+                setDraftStatus(activeConversation ? "saving" : "idle");
+              }}
+              onSubmit={() => void submit(draft)}
+            />
+          }
+          agentAvailable={availability.agentAvailable}
+          agentMode={agentMode}
+          spaceSearchAvailable={spaceSearchReady}
+          spaceSearchEnabled={useSpaceSearch}
+          settingsDisabled={Boolean(pendingRun) || updateConversation.isPending}
+          onAgentModeChange={toggleAgentMode}
+          onSpaceSearchChange={toggleSpaceSearch}
         >
-          {isCompactMobile ? (
-            <Tooltip label={t("ai.composer.templates")} withArrow>
-              <Button
-                variant="subtle"
-                size="compact-sm"
-                leftSection={<IconSparkles size={16} />}
-                disabled={Boolean(pendingRun)}
-                className={classes.composerFooterButton}
-                aria-label={t("ai.composer.templates")}
-                onClick={() => setQuickCommandsOpened(true)}
-              >
-                {t("ai.composer.templates")}
-              </Button>
-            </Tooltip>
-          ) : (
-            <Menu position="top-start" withinPortal>
-              <Menu.Target>
-                <Tooltip label={t("ai.composer.templates")} withArrow>
-                  <Button
-                    variant="subtle"
-                    size="compact-sm"
-                    leftSection={<IconSparkles size={16} />}
-                    rightSection={<IconChevronDown size={13} />}
-                    disabled={Boolean(pendingRun)}
-                    className={classes.composerFooterButton}
-                    aria-label={t("ai.composer.templates")}
-                  >
+          <Group
+            justify="space-between"
+            gap="xs"
+            wrap="nowrap"
+            className={classes.composerFooter}
+          >
+            {isCompactMobile ? (
+              <Tooltip label={t("ai.composer.templates")} withArrow>
+                <Button
+                  variant="subtle"
+                  size="compact-sm"
+                  leftSection={<IconSparkles size={16} />}
+                  disabled={Boolean(pendingRun)}
+                  className={classes.composerFooterButton}
+                  aria-label={t("ai.composer.templates")}
+                  onClick={() => setQuickCommandsOpened(true)}
+                >
+                  <span className={classes.composerResponsiveLabel}>
                     {t("ai.composer.templates")}
-                  </Button>
-                </Tooltip>
-              </Menu.Target>
-              <Menu.Dropdown className={classes.quickCommandsMenu}>
-                <TextInput
-                  value={quickCommandQuery}
-                  onChange={(event) =>
-                    setQuickCommandQuery(event.currentTarget.value)
-                  }
-                  placeholder={t("ai.ux.searchCommands")}
-                  leftSection={<IconSearch size={14} />}
-                  size="xs"
-                  mb="xs"
-                  onKeyDown={(event) => event.stopPropagation()}
-                />
-                {visibleQuickCommands.map((command) => (
-                  <Tooltip
-                    key={command.id}
-                    label={command.description || command.prompt}
-                    position="right"
-                    withArrow
-                  >
-                    <Menu.Item
-                      leftSection={<IconSparkles size={15} />}
-                      rightSection={
-                        <Badge size="xs" variant="light" color="gray">
-                          {customQuickCommandIds.has(command.id)
-                            ? t("ai.ux.customCommand")
-                            : t("ai.ux.builtInCommand")}
-                        </Badge>
-                      }
-                      onClick={() => handleQuickCommand(command.prompt)}
-                      aria-description={command.description || command.prompt}
+                  </span>
+                </Button>
+              </Tooltip>
+            ) : (
+              <Menu position="top-start" withinPortal>
+                <Menu.Target>
+                  <Tooltip label={t("ai.composer.templates")} withArrow>
+                    <Button
+                      variant="subtle"
+                      size="compact-sm"
+                      leftSection={<IconSparkles size={16} />}
+                      rightSection={<IconChevronDown size={13} />}
+                      disabled={Boolean(pendingRun)}
+                      className={classes.composerFooterButton}
+                      aria-label={t("ai.composer.templates")}
                     >
-                      {command.label}
-                    </Menu.Item>
+                      <span className={classes.composerResponsiveLabel}>
+                        {t("ai.composer.templates")}
+                      </span>
+                    </Button>
                   </Tooltip>
-                ))}
-                {visibleQuickCommands.length === 0 && (
-                  <Text size="xs" c="dimmed" ta="center" py="sm">
-                    {t("ai.ux.noCommandsFound")}
-                  </Text>
-                )}
-              </Menu.Dropdown>
-            </Menu>
-          )}
+                </Menu.Target>
+                <Menu.Dropdown className={classes.quickCommandsMenu}>
+                  <TextInput
+                    value={quickCommandQuery}
+                    onChange={(event) =>
+                      setQuickCommandQuery(event.currentTarget.value)
+                    }
+                    placeholder={t("ai.ux.searchCommands")}
+                    leftSection={<IconSearch size={14} />}
+                    size="xs"
+                    mb="xs"
+                    onKeyDown={(event) => event.stopPropagation()}
+                  />
+                  {visibleQuickCommands.map((command) => (
+                    <Tooltip
+                      key={command.id}
+                      label={command.description || command.prompt}
+                      position="right"
+                      withArrow
+                    >
+                      <Menu.Item
+                        leftSection={<IconSparkles size={15} />}
+                        rightSection={
+                          <Badge size="xs" variant="light" color="gray">
+                            {customQuickCommandIds.has(command.id)
+                              ? t("ai.ux.customCommand")
+                              : t("ai.ux.builtInCommand")}
+                          </Badge>
+                        }
+                        onClick={() => handleQuickCommand(command.prompt)}
+                        aria-description={command.description || command.prompt}
+                      >
+                        {command.label}
+                      </Menu.Item>
+                    </Tooltip>
+                  ))}
+                  {visibleQuickCommands.length === 0 && (
+                    <Text size="xs" c="dimmed" ta="center" py="sm">
+                      {t("ai.ux.noCommandsFound")}
+                    </Text>
+                  )}
+                </Menu.Dropdown>
+              </Menu>
+            )}
 
-          <Menu position="top-end" withinPortal>
-            <Menu.Target>
-              <Tooltip label={t("ai.composer.formatting")} withArrow>
-                <ActionIcon
+            <Menu position="top-end" withinPortal>
+              <Menu.Target>
+                <AccessibleActionIcon
+                  label={t("ai.composer.formatting")}
                   variant="subtle"
                   size={32}
                   className={classes.composerInlineAction}
-                  aria-label={t("ai.composer.formatting")}
                 >
                   <IconCode size={17} />
-                </ActionIcon>
-              </Tooltip>
-            </Menu.Target>
-            <Menu.Dropdown className={classes.composerMenu}>
-              <Menu.Label>{t("ai.composer.formatting")}</Menu.Label>
-              <Menu.Item
-                onClick={() =>
-                  runComposerCommand((editor) =>
-                    editor.chain().focus().toggleBold().run(),
-                  )
-                }
-              >
-                {t("ai.composer.bold")}
-              </Menu.Item>
-              <Menu.Item
-                onClick={() =>
-                  runComposerCommand((editor) =>
-                    editor.chain().focus().toggleItalic().run(),
-                  )
-                }
-              >
-                {t("ai.composer.italic")}
-              </Menu.Item>
-              <Menu.Item
-                onClick={() =>
-                  runComposerCommand((editor) =>
-                    editor.chain().focus().toggleStrike().run(),
-                  )
-                }
-              >
-                {t("ai.composer.strikethrough")}
-              </Menu.Item>
-              <Menu.Item
-                onClick={() =>
-                  runComposerCommand((editor) =>
-                    editor.chain().focus().toggleCode().run(),
-                  )
-                }
-              >
-                {t("ai.composer.inlineCode")}
-              </Menu.Item>
-              <Menu.Item onClick={openMarkdownLink}>
-                {t("ai.composer.addLink")}
-              </Menu.Item>
-              <Menu.Divider />
-              <Menu.Item
-                onClick={() =>
-                  runComposerCommand((editor) =>
-                    editor.chain().focus().toggleHeading({ level: 1 }).run(),
-                  )
-                }
-              >
-                {t("ai.composer.heading")}
-              </Menu.Item>
-              <Menu.Item
-                onClick={() =>
-                  runComposerCommand((editor) =>
-                    editor.chain().focus().toggleBulletList().run(),
-                  )
-                }
-              >
-                {t("ai.composer.bulletList")}
-              </Menu.Item>
-              <Menu.Item
-                onClick={() =>
-                  runComposerCommand((editor) =>
-                    editor.chain().focus().toggleOrderedList().run(),
-                  )
-                }
-              >
-                {t("ai.composer.orderedList")}
-              </Menu.Item>
-              <Menu.Item
-                onClick={() =>
-                  runComposerCommand((editor) =>
-                    editor.chain().focus().toggleTaskList().run(),
-                  )
-                }
-              >
-                {t("ai.composer.taskList")}
-              </Menu.Item>
-              <Menu.Item
-                onClick={() =>
-                  runComposerCommand((editor) =>
-                    editor.chain().focus().toggleBlockquote().run(),
-                  )
-                }
-              >
-                {t("ai.composer.quote")}
-              </Menu.Item>
-              <Menu.Item
-                onClick={() =>
-                  runComposerCommand((editor) =>
-                    editor.chain().focus().toggleCodeBlock().run(),
-                  )
-                }
-              >
-                {t("ai.composer.codeBlock")}
-              </Menu.Item>
-            </Menu.Dropdown>
-          </Menu>
+                </AccessibleActionIcon>
+              </Menu.Target>
+              <Menu.Dropdown className={classes.composerMenu}>
+                <Menu.Label>{t("ai.composer.formatting")}</Menu.Label>
+                <Menu.Item
+                  onClick={() =>
+                    runComposerCommand((editor) =>
+                      editor.chain().focus().toggleBold().run(),
+                    )
+                  }
+                >
+                  {t("ai.composer.bold")}
+                </Menu.Item>
+                <Menu.Item
+                  onClick={() =>
+                    runComposerCommand((editor) =>
+                      editor.chain().focus().toggleItalic().run(),
+                    )
+                  }
+                >
+                  {t("ai.composer.italic")}
+                </Menu.Item>
+                <Menu.Item
+                  onClick={() =>
+                    runComposerCommand((editor) =>
+                      editor.chain().focus().toggleStrike().run(),
+                    )
+                  }
+                >
+                  {t("ai.composer.strikethrough")}
+                </Menu.Item>
+                <Menu.Item
+                  onClick={() =>
+                    runComposerCommand((editor) =>
+                      editor.chain().focus().toggleCode().run(),
+                    )
+                  }
+                >
+                  {t("ai.composer.inlineCode")}
+                </Menu.Item>
+                <Menu.Item onClick={openMarkdownLink}>
+                  {t("ai.composer.addLink")}
+                </Menu.Item>
+                <Menu.Divider />
+                <Menu.Item
+                  onClick={() =>
+                    runComposerCommand((editor) =>
+                      editor.chain().focus().toggleHeading({ level: 1 }).run(),
+                    )
+                  }
+                >
+                  {t("ai.composer.heading")}
+                </Menu.Item>
+                <Menu.Item
+                  onClick={() =>
+                    runComposerCommand((editor) =>
+                      editor.chain().focus().toggleBulletList().run(),
+                    )
+                  }
+                >
+                  {t("ai.composer.bulletList")}
+                </Menu.Item>
+                <Menu.Item
+                  onClick={() =>
+                    runComposerCommand((editor) =>
+                      editor.chain().focus().toggleOrderedList().run(),
+                    )
+                  }
+                >
+                  {t("ai.composer.orderedList")}
+                </Menu.Item>
+                <Menu.Item
+                  onClick={() =>
+                    runComposerCommand((editor) =>
+                      editor.chain().focus().toggleTaskList().run(),
+                    )
+                  }
+                >
+                  {t("ai.composer.taskList")}
+                </Menu.Item>
+                <Menu.Item
+                  onClick={() =>
+                    runComposerCommand((editor) =>
+                      editor.chain().focus().toggleBlockquote().run(),
+                    )
+                  }
+                >
+                  {t("ai.composer.quote")}
+                </Menu.Item>
+                <Menu.Item
+                  onClick={() =>
+                    runComposerCommand((editor) =>
+                      editor.chain().focus().toggleCodeBlock().run(),
+                    )
+                  }
+                >
+                  {t("ai.composer.codeBlock")}
+                </Menu.Item>
+              </Menu.Dropdown>
+            </Menu>
 
-          <Box className={classes.composerStatus}>
+            <Box className={classes.composerStatus}>
+              {pendingRun ? (
+                <Text size="xs" c="dimmed" lineClamp={1}>
+                  {pendingRun.status === "awaiting_approval"
+                    ? t("ai.agent.awaitingApproval")
+                    : t("ai.generating")}
+                </Text>
+              ) : draftStatus === "error" ? (
+                <Button
+                  variant="subtle"
+                  color="red"
+                  size="compact-xs"
+                  onClick={() => void retryDraftSave()}
+                >
+                  {t("ai.ux.draftSaveFailed")}
+                </Button>
+              ) : (
+                <Text size="xs" c="dimmed" lineClamp={1} role="status">
+                  {draftStatus === "saving" ? (
+                    t("ai.ux.draftSaving")
+                  ) : draftStatus === "saved" ? (
+                    t("ai.ux.draftSaved")
+                  ) : (
+                    <>
+                      <span className={classes.sendShortcutFull}>
+                        {t("ai.composer.sendShortcut")}
+                      </span>
+                      <span className={classes.sendShortcutShort}>
+                        {t("ai.composer.sendShortcutShort")}
+                      </span>
+                    </>
+                  )}
+                </Text>
+              )}
+            </Box>
+
             {pendingRun ? (
-              <Text size="xs" c="dimmed" lineClamp={1}>
-                {pendingRun.status === "awaiting_approval"
-                  ? t("ai.agent.awaitingApproval")
-                  : t("ai.generating")}
-              </Text>
-            ) : draftStatus === "error" ? (
               <Button
-                variant="subtle"
+                size="compact-sm"
                 color="red"
-                size="compact-xs"
-                onClick={() => void retryDraftSave()}
+                variant="light"
+                leftSection={<IconPlayerStop size={15} />}
+                loading={cancelRun.isPending}
+                disabled={Boolean(pendingRun.cancelRequestedAt)}
+                onClick={() =>
+                  cancelRun.mutate(pendingRun.runId, {
+                    onError: (error) => {
+                      notifications.show({
+                        message: resolveAiErrorMessage(
+                          t,
+                          i18n,
+                          error?.["response"]?.data?.code,
+                        ),
+                        color: "red",
+                      });
+                    },
+                  })
+                }
               >
-                {t("ai.ux.draftSaveFailed")}
+                {cancelRun.isPending || pendingRun.cancelRequestedAt
+                  ? t("ai.stopping")
+                  : t("ai.stop")}
               </Button>
             ) : (
-              <Text size="xs" c="dimmed" lineClamp={1} role="status">
-                {draftStatus === "saving"
-                  ? t("ai.ux.draftSaving")
-                  : draftStatus === "saved"
-                    ? t("ai.ux.draftSaved")
-                    : t("ai.sendShortcut")}
-              </Text>
-            )}
-          </Box>
-
-          {pendingRun ? (
-            <Button
-              size="compact-sm"
-              color="red"
-              variant="light"
-              leftSection={<IconPlayerStop size={15} />}
-              loading={cancelRun.isPending}
-              disabled={Boolean(pendingRun.cancelRequestedAt)}
-              onClick={() =>
-                cancelRun.mutate(pendingRun.runId, {
-                  onError: (error) => {
-                    notifications.show({
-                      message: resolveAiErrorMessage(
-                        t,
-                        i18n,
-                        error?.["response"]?.data?.code,
-                      ),
-                      color: "red",
-                    });
-                  },
-                })
-              }
-            >
-              {cancelRun.isPending || pendingRun.cancelRequestedAt
-                ? t("ai.stopping")
-                : t("ai.stop")}
-            </Button>
-          ) : (
-            <Tooltip label={t("ai.send")} withArrow>
-              <ActionIcon
-                size={36}
+              <AccessibleActionIcon
+                label={t("ai.send")}
+                size={40}
+                minTargetSize={40}
+                radius="xl"
                 variant="filled"
                 className={classes.sendButton}
-                aria-label={t("ai.send")}
                 disabled={
                   !draft.trim() ||
                   sendMessage.isPending ||
@@ -1942,11 +1903,11 @@ export function AiPanel() {
                 loading={sendMessage.isPending}
                 onClick={() => void submit(draft)}
               >
-                <IconSend size={17} />
-              </ActionIcon>
-            </Tooltip>
-          )}
-        </Group>
+                <IconSend size={18} />
+              </AccessibleActionIcon>
+            )}
+          </Group>
+        </AiComposerShell>
       </Box>
 
       <Modal

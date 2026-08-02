@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   dedupeAiContextSources,
+  getAiContextScopeSummary,
+  getAiContextTriggerCount,
   getAiIncludedPageIds,
   treeNodeToContextSource,
 } from "../utils/ai-context.ts";
@@ -142,5 +144,43 @@ describe("AI context search results", () => {
         "current",
       ),
     ).toEqual(new Set(["current", "current-child", "root", "nested"]));
+  });
+});
+
+describe("AI context manager summaries", () => {
+  it("counts root-level context items without expanding descendants", () => {
+    expect(
+      getAiContextTriggerCount({
+        currentDocumentAvailable: true,
+        includeCurrentDocument: true,
+        sourceCount: 2,
+        fileCount: 1,
+        attachmentCount: 3,
+      }),
+    ).toBe(7);
+  });
+
+  it("does not count an unavailable current document", () => {
+    expect(
+      getAiContextTriggerCount({
+        currentDocumentAvailable: false,
+        includeCurrentDocument: true,
+        sourceCount: 0,
+        fileCount: 0,
+        attachmentCount: 0,
+      }),
+    ).toBe(0);
+  });
+
+  it("reports the explicit descendant count only for selected scope", () => {
+    expect(
+      getAiContextScopeSummary({
+        mode: "selected",
+        pageIds: ["one", "two"],
+      }),
+    ).toEqual({ mode: "selected", selectedCount: 2 });
+    expect(
+      getAiContextScopeSummary({ mode: "all", pageIds: ["ignored"] }),
+    ).toEqual({ mode: "all", selectedCount: 0 });
   });
 });

@@ -10,6 +10,20 @@ const MARKDOWN_PASTE_PATTERNS = [
   /\[[^\]\n]+\]\([^\s)]+\)/,
 ];
 
+interface AiComposerKeyboardEvent {
+  key: string;
+  shiftKey: boolean;
+  isComposing: boolean;
+  ctrlKey?: boolean;
+  metaKey?: boolean;
+}
+
+export function shouldSubmitAiComposer(
+  event: AiComposerKeyboardEvent,
+): boolean {
+  return event.key === "Enter" && !event.shiftKey && !event.isComposing;
+}
+
 export function markdownToComposerHtml(markdown: string): string {
   const html = markdownToHtml(markdown);
   if (typeof html !== "string") {

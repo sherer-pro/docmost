@@ -99,20 +99,57 @@
   container-name: ai-composer;
 }
 
-.composerContextRow {
+.composerCard {
   min-width: 0;
-  flex-wrap: nowrap;
-  margin-bottom: var(--mantine-spacing-xs);
+  overflow: hidden;
+  border: 1px solid
+    light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+  border-radius: var(--mantine-radius-md);
+  background: light-dark(
+    var(--mantine-color-white),
+    var(--mantine-color-dark-6)
+  );
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.composerCard:focus-within {
+  border-color: light-dark(
+    var(--mantine-color-blue-5),
+    var(--mantine-color-blue-6)
+  );
+  box-shadow: 0 0 0 2px
+    light-dark(
+      color-mix(in srgb, var(--mantine-color-blue-5) 18%, transparent),
+      color-mix(in srgb, var(--mantine-color-blue-6) 24%, transparent)
+    );
+}
+
+.composerToolbar {
+  min-width: 0;
+  min-height: 44px;
+  padding: 6px 8px;
+  background: light-dark(
+    color-mix(in srgb, var(--mantine-color-gray-0) 72%, transparent),
+    color-mix(in srgb, var(--mantine-color-dark-7) 70%, transparent)
+  );
+}
+
+.composerToolbarStart {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .contextButton {
   min-width: 0;
   min-height: 32px;
-  flex: 1 1 auto;
+  max-width: 190px;
+  flex: 0 1 auto;
 }
 
-.contextButton :global(.mantine-Button-label),
-.composerModeButton :global(.mantine-Button-label) {
+.contextButton :global(.mantine-Button-label) {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -129,10 +166,30 @@
   display: none;
 }
 
-.composerModeButton {
-  min-width: 0;
+.composerSearchButton {
   min-height: 32px;
-  flex: 0 1 auto;
+  flex: 0 0 auto;
+  color: light-dark(var(--mantine-color-gray-7), var(--mantine-color-dark-1));
+}
+
+.composerSearchButton[aria-pressed="true"] {
+  color: light-dark(var(--mantine-color-blue-7), var(--mantine-color-blue-2));
+}
+
+.composerModeControl {
+  flex: 0 0 auto;
+  background: light-dark(
+    var(--mantine-color-gray-1),
+    var(--mantine-color-dark-7)
+  );
+}
+
+.composerModeControl :global(.mantine-SegmentedControl-indicator) {
+  box-shadow: none;
+  background: light-dark(
+    var(--mantine-color-white),
+    var(--mantine-color-dark-5)
+  );
 }
 
 .composerInlineAction {
@@ -152,20 +209,20 @@
 
 .markdownComposer {
   min-width: 0;
-  border: 1px solid
-    light-dark(var(--mantine-color-gray-4), var(--mantine-color-dark-4));
-  border-radius: var(--mantine-radius-sm);
-  background: light-dark(
-    var(--mantine-color-white),
-    var(--mantine-color-dark-6)
-  );
+  background: transparent;
+}
+
+.composerEditor {
+  min-width: 0;
+  border-block: 1px solid
+    light-dark(var(--mantine-color-gray-2), var(--mantine-color-dark-5));
 }
 
 .markdownComposer :global(.ProseMirror) {
-  min-height: 88px;
+  min-height: 72px;
   max-height: 220px;
   overflow-y: auto;
-  padding: 8px 10px;
+  padding: 12px 14px;
   outline: none;
   color: var(--mantine-color-text);
   font-size: var(--mantine-font-size-sm);
@@ -174,7 +231,7 @@
 }
 
 .markdownComposer :global(.ProseMirror-focused) {
-  box-shadow: 0 0 0 1px var(--mantine-primary-color-filled);
+  box-shadow: none;
 }
 
 .markdownComposer :global(.ProseMirror p) {
@@ -289,7 +346,8 @@
 
 .composerFooter {
   min-width: 0;
-  margin-top: 6px;
+  min-height: 48px;
+  padding: 6px 8px;
 }
 
 .composerFooterButton {
@@ -301,34 +359,108 @@
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.contextFileList {
-  max-height: 190px;
-  overflow-y: auto;
+.sendShortcutShort {
+  display: none;
 }
 
-.contextFileRow,
-.contextFileCheckbox {
+.contextManagerContent {
+  height: min(760px, calc(100dvh - 32px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.contextManagerBody {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  padding: 0;
+}
+
+.contextManagerLayout {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.contextManagerIntro {
+  flex: 0 0 auto;
+  padding: 10px var(--mantine-spacing-md);
+  border-bottom: 1px solid
+    light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-5));
+  background: light-dark(
+    var(--mantine-color-gray-0),
+    var(--mantine-color-dark-7)
+  );
+}
+
+.contextManagerLead {
+  flex: 1 1 260px;
+}
+
+.contextManagerScroll {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.contextManagerSection {
+  min-width: 0;
+  overflow: hidden;
+  background: light-dark(
+    var(--mantine-color-white),
+    var(--mantine-color-dark-7)
+  );
+}
+
+.contextManagerSectionHeader {
+  padding: var(--mantine-spacing-sm) var(--mantine-spacing-md);
+}
+
+.contextManagerSectionBody {
+  padding: var(--mantine-spacing-md);
+  border-top: 1px solid
+    light-dark(var(--mantine-color-gray-2), var(--mantine-color-dark-5));
+}
+
+.contextManagerPrimaryRow {
+  background: light-dark(
+    var(--mantine-color-gray-0),
+    var(--mantine-color-dark-6)
+  );
+}
+
+.contextManagerSwitch,
+.contextManagerSwitch :global(.mantine-Switch-body),
+.contextManagerSwitch :global(.mantine-Switch-labelWrapper),
+.contextSourceTitle,
+.contextFileCheckbox,
+.contextFileCheckbox :global(.mantine-Checkbox-body),
+.contextFileCheckbox :global(.mantine-Checkbox-labelWrapper) {
   min-width: 0;
 }
 
-.contextMenu {
-  max-width: calc(100vw - 24px);
-  max-height: min(520px, 70vh);
-  overflow-y: auto;
-  overflow-x: hidden;
+.contextManagerSwitch {
+  flex: 1 1 auto;
 }
 
-.contextMenu :global(.mantine-Menu-itemLabel) {
-  min-width: 0;
+.contextManagerSwitch :global(.mantine-Switch-label),
+.contextFileCheckbox :global(.mantine-Checkbox-label) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.contextSourceRow {
-  width: 100%;
-  min-width: 0;
-  padding: 4px;
-  border-radius: var(--mantine-radius-sm);
+.contextManagerSourceRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--mantine-spacing-xs);
   background: light-dark(
     var(--mantine-color-gray-0),
     var(--mantine-color-dark-6)
@@ -337,12 +469,26 @@
 
 .contextSourceTitle {
   flex: 1 1 auto;
-  min-width: 0;
 }
 
-.contextDescendantRow {
+.contextManagerScopeButton {
+  max-width: 180px;
   min-height: 32px;
+}
+
+.contextManagerScopeButton :global(.mantine-Button-label) {
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.contextManagerFileRow {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mantine-spacing-xs);
 }
 
 .contextFileCheckbox {
@@ -350,34 +496,7 @@
   width: 100%;
 }
 
-.contextFileRow {
-  width: 100%;
-}
-
-.contextFileCheckbox :global(.mantine-Checkbox-label) {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.contextFileCheckbox :global(.mantine-Checkbox-body),
-.contextFileCheckbox :global(.mantine-Checkbox-labelWrapper) {
-  min-width: 0;
-}
-
-.contextSearchModalContent {
-  height: min(520px, calc(100dvh - 32px));
-  display: flex;
-  flex-direction: column;
-}
-
-.contextSearchModalBody {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-}
-
-.contextSearchLayout {
+.contextManagerSearchLayout {
   flex: 1 1 auto;
   min-height: 0;
   width: 100%;
@@ -421,11 +540,51 @@
   text-align: left;
 }
 
-.contextSearchFooter {
+.contextScopeOption {
+  width: 100%;
+  height: auto;
+  min-height: 68px;
+  padding-block: var(--mantine-spacing-sm);
+}
+
+.contextScopeOption :global(.mantine-Button-inner),
+.contextScopeOption :global(.mantine-Button-label) {
+  width: 100%;
+}
+
+.contextScopeOptionText {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
+  white-space: normal;
+}
+
+.contextDescendantLayout {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.contextDescendantScroll {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.contextDescendantRow {
+  min-height: 36px;
+  min-width: 0;
+}
+
+.contextDescendantFooter {
   flex: 0 0 auto;
-  padding-top: var(--mantine-spacing-xs);
+  padding: var(--mantine-spacing-sm) var(--mantine-spacing-md);
   border-top: 1px solid
     light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-5));
+  background: light-dark(
+    var(--mantine-color-white),
+    var(--mantine-color-dark-7)
+  );
 }
 
 .assistantMessage {
@@ -590,11 +749,30 @@
   .messageActions {
     opacity: 1;
   }
+
+  .contextManagerScopeButton,
+  .contextScopeOption,
+  .contextSearchResult,
+  .contextDescendantFooter button {
+    min-height: 44px;
+  }
 }
 
 @container ai-composer (max-width: 420px) {
+  .composerToolbar,
+  .composerFooter {
+    gap: 6px;
+    padding-inline: 6px;
+  }
+
+  .composerToolbarStart {
+    gap: 4px;
+  }
+
   .contextButton {
-    max-width: 156px;
+    min-width: 44px;
+    min-height: 44px;
+    max-width: 88px;
   }
 
   .contextButtonFullLabel {
@@ -602,6 +780,47 @@
   }
 
   .contextButtonShortLabel {
+    display: inline;
+  }
+
+  .composerResponsiveLabel,
+  .sendShortcutFull,
+  .sendShortcutShort {
+    display: none;
+  }
+
+  .composerSearchButton,
+  .composerInlineAction,
+  .composerFooterButton,
+  .sendButton {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .composerSearchButton {
+    padding-inline: 0;
+  }
+
+  .composerFooterButton
+    :global(.mantine-Button-section[data-position="right"]) {
+    display: none;
+  }
+
+  .composerModeControl :global(.mantine-SegmentedControl-control) {
+    min-height: 44px;
+  }
+
+  .composerStatus {
+    flex-basis: 0;
+  }
+}
+
+@container ai-composer (min-width: 421px) and (max-width: 520px) {
+  .sendShortcutFull {
+    display: none;
+  }
+
+  .sendShortcutShort {
     display: inline;
   }
 }
@@ -623,17 +842,50 @@
     min-height: 44px;
   }
 
-  .composerModeButton,
   .contextButton {
     min-height: 44px;
   }
+}
 
-  .composerContextRow {
-    gap: 6px;
+@media (max-width: 48em) {
+  .contextManagerContent {
+    height: 100dvh;
+  }
+
+  .contextManagerContent :global(.mantine-Modal-close),
+  .contextManagerContent :global(.mantine-ActionIcon-root) {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .contextManagerLayout button,
+  .contextManagerSwitch,
+  .contextFileCheckbox {
+    min-height: 44px;
+  }
+
+  .contextManagerIntro,
+  .contextManagerSectionHeader,
+  .contextManagerSectionBody,
+  .contextDescendantFooter {
+    padding-inline: var(--mantine-spacing-sm);
+  }
+
+  .contextManagerSourceRow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .contextManagerSourceRow > :last-child {
+    justify-content: flex-start;
+  }
+
+  .contextManagerScopeButton {
+    max-width: min(220px, 65vw);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .composerCard,
   .messageActions {
     transition: none;
   }
