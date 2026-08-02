@@ -68,15 +68,15 @@
 
     tbody > tr:nth-child(odd) > td:not([data-background-color]) {
       background-color: light-dark(
-        var(--mantine-color-white),
-        var(--mantine-color-dark-7)
+        var(--mantine-color-gray-0),
+        var(--mantine-color-dark-6)
       );
     }
 
     tbody > tr:nth-child(even) > td:not([data-background-color]) {
       background-color: light-dark(
-        var(--mantine-color-gray-0),
-        var(--mantine-color-dark-6)
+        var(--mantine-color-white),
+        var(--mantine-color-dark-7)
       );
     }
 
