@@ -25,6 +25,22 @@ import { ShareService } from '../share/share.service';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const tsquery = require('pg-tsquery')();
 
+// `pg-tsquery` keeps characters it does not recognize as operators inside the
+// tokens it emits. `f_unaccent` then expands some of them into tsquery
+// structure - guillemets become `<<` and `>>`, for example - and `to_tsquery`
+// raises a syntax error for the whole request. Keep word characters, marks and
+// the operators `pg-tsquery` understands, and drop everything else.
+const UNSAFE_SEARCH_QUERY_CHARS = /[^\p{L}\p{M}\p{Nd}_\s&|!()"'+,\-*]/gu;
+
+export function buildSearchTsQuery(rawQuery: string): string | undefined {
+  const normalized = rawQuery.replace(UNSAFE_SEARCH_QUERY_CHARS, ' ').trim();
+  if (!normalized) return undefined;
+  const searchQuery = tsquery(normalized + '*');
+  return typeof searchQuery === 'string' && searchQuery.trim().length > 0
+    ? searchQuery
+    : undefined;
+}
+
 interface SearchAncestorRow {
   id: string;
   title: string | null;
@@ -269,13 +285,13 @@ export class SearchService {
   ): Promise<{ items: SearchResponseDto[] }> {
     const { labelId, tag } = searchParams;
     const query = searchParams.query?.trim() ?? '';
-    const hasTextQuery = query.length > 0;
+    const searchQuery = query ? buildSearchTsQuery(query) : undefined;
+    const hasTextQuery = searchQuery !== undefined;
 
     if (!hasTextQuery && !labelId && !tag) {
       return { items: [] };
     }
 
-    const searchQuery = hasTextQuery ? tsquery(query + '*') : undefined;
     const rankExpression = hasTextQuery
       ? sql<number>`ts_rank(tsv, to_tsquery('english', f_unaccent(${searchQuery})))`
       : sql<number>`0`;
@@ -534,12 +550,12 @@ export class SearchService {
     },
   ): Promise<{ items: AttachmentSearchResponseDto[] }> {
     const query = searchParams.query?.trim() ?? '';
+    const searchQuery = query ? buildSearchTsQuery(query) : undefined;
 
-    if (!query) {
+    if (!searchQuery) {
       return { items: [] };
     }
 
-    const searchQuery = tsquery(query + '*');
     const textQuery = sql<string>`to_tsquery('english', f_unaccent(${searchQuery}))`;
 
     let queryResults = this.db
