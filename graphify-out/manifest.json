@@ -5550,8 +5550,8 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1785705128.4192674,
-    "ast_hash": "7d235d51325279f9c35f0f1a548d40a0",
+    "mtime": 1785710068.5137339,
+    "ast_hash": "3d5b6691253021a78deca2fb74f247ac",
     "semantic_hash": ""
   },
   "apps/client/README.md": {
@@ -6310,8 +6310,8 @@
     "semantic_hash": ""
   },
   "apps/client/src/features/ai/components/ai-context-picker.tsx": {
-    "mtime": 1785704847.8627768,
-    "ast_hash": "392cdd238b96ea1198b1eeeb6792ba44",
+    "mtime": 1785709631.860675,
+    "ast_hash": "0ea5ece0e77f8b7374e5b4cfc132d15e",
     "semantic_hash": ""
   },
   "apps/client/src/features/ai/components/ai-selection-action.tsx": {
@@ -7370,8 +7370,8 @@
     "semantic_hash": ""
   },
   "FORK_SPECIFIC_ENHANCEMENTS_RU.md": {
-    "mtime": 1785705128.4192674,
-    "ast_hash": "e108403bb19e94493fde969b0f588c99",
+    "mtime": 1785710068.5137339,
+    "ast_hash": "a5d7b089f8946bb3721c61669074a95b",
     "semantic_hash": ""
   },
   "apps/client/src/features/ai/components/ai-composer-shell.test.tsx": {
@@ -7385,13 +7385,18 @@
     "semantic_hash": ""
   },
   "apps/client/src/features/ai/components/ai-context-picker.ui.test.tsx": {
-    "mtime": 1785703183.4047287,
-    "ast_hash": "ef1b0adec6c17f48189bd7e5be0f3a7f",
+    "mtime": 1785709631.8626795,
+    "ast_hash": "e7426846dcc0b5d0387a79c28a546aa5",
     "semantic_hash": ""
   },
   "graphify-out/memory/query_20260802_204903_\u0432_\u0431\u0430\u0437\u0430_\u0434\u0430\u043d\u043d\u044b\u0445__\u0442\u0438\u043f_\u0437\u0430\u043f\u0438\u0441\u0435\u0439__\u043d\u0435_\u0440\u0430\u0431\u043e\u0442\u0430\u0435\u0442_\u0441\u043c\u0435\u043d\u0430_\u043f\u043e\u0440\u044f.md": {
     "mtime": 1785703743.208914,
     "ast_hash": "767c75536a2f2af4369424e399f7e2ea",
+    "semantic_hash": ""
+  },
+  "graphify-out/memory/query_20260802_222921_why_do_leaf_pages_show_a_disabled_expand_button_an.md": {
+    "mtime": 1785709761.7909968,
+    "ast_hash": "fb51c44e113c53233c17bc030ad3a2e5",
     "semantic_hash": ""
   }
 }

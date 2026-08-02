@@ -302,7 +302,12 @@ export function AiContextPicker(props: AiContextPickerProps) {
         opened={opened}
         onClose={closeManager}
         title={
-          <Group gap="xs" wrap="nowrap">
+          <Group
+            gap="xs"
+            wrap="nowrap"
+            align="flex-start"
+            className={classes.contextManagerTitle}
+          >
             {view !== "overview" && (
               <AccessibleActionIcon
                 label={t("ai.context.back")}
@@ -312,7 +317,11 @@ export function AiContextPicker(props: AiContextPickerProps) {
                 <IconArrowLeft size={18} />
               </AccessibleActionIcon>
             )}
-            <Text fw={600} size="lg" truncate>
+            <Text
+              fw={600}
+              size="lg"
+              className={classes.contextManagerTitleText}
+            >
               {title}
             </Text>
           </Group>
@@ -1110,22 +1119,23 @@ function DescendantRow({
   return (
     <Box>
       <Group gap={4} wrap="nowrap" className={classes.contextDescendantRow}>
-        <AccessibleActionIcon
-          variant="subtle"
-          size={32}
-          minTargetSize={32}
-          disabled={!source.hasChildren}
-          label={expanded ? t("Collapse") : t("Expand")}
-          onClick={() => setExpanded((value) => !value)}
-        >
-          {source.hasChildren ? (
+        {source.hasChildren ? (
+          <AccessibleActionIcon
+            variant="subtle"
+            size={32}
+            minTargetSize={32}
+            label={expanded ? t("Collapse") : t("Expand")}
+            onClick={() => setExpanded((value) => !value)}
+          >
             expanded ? (
               <IconChevronDown size={14} />
             ) : (
               <IconChevronRight size={14} />
             )
-          ) : null}
-        </AccessibleActionIcon>
+          </AccessibleActionIcon>
+        ) : (
+          <Box className={classes.contextDescendantToggleSpacer} aria-hidden />
+        )}
         <Checkbox
           size="sm"
           checked={selected.has(source.pageId)}

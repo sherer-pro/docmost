@@ -374,6 +374,27 @@
   overflow: hidden;
 }
 
+.contextManagerContent :global(.mantine-Modal-header) {
+  align-items: flex-start;
+}
+
+.contextManagerContent :global(.mantine-Modal-title) {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.contextManagerTitle {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.contextManagerTitleText {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .contextManagerBody {
   flex: 1 1 auto;
   min-height: 0;
@@ -574,6 +595,12 @@
 .contextDescendantRow {
   min-height: 36px;
   min-width: 0;
+}
+
+.contextDescendantToggleSpacer {
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
 }
 
 .contextDescendantFooter {
@@ -856,6 +883,12 @@
   .contextManagerContent :global(.mantine-ActionIcon-root) {
     min-width: 44px;
     min-height: 44px;
+  }
+
+  .contextDescendantToggleSpacer {
+    flex-basis: 44px;
+    width: 44px;
+    height: 44px;
   }
 
   .contextManagerLayout button,
