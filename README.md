@@ -11,7 +11,8 @@ The fork transforms Docmost from a primarily wiki-oriented system into a platfor
 
 Its key differences include a built-in AI assistant for each space, RAG and Open WebUI synchronization, Notion-style databases, extended document properties, a terminology dictionary, a more capable editor, portable archives, push notifications, and a stricter security model.
 
-Capabilities that previously depended on separate Enterprise Edition modules, including SSO, MFA, comments, advanced search, and sharing controls, are implemented directly in the core fork. The repository is distributed under AGPL 3.0 without a separate enterprise code tree.
+> [!IMPORTANT]
+> **The entire Enterprise Edition application layer has been removed.** The fork has no separate EE runtime modules, imports, license enforcement, billing integration, or enterprise code tree. Former EE user-facing capabilities—including SSO, MFA, comments, advanced search, and sharing controls—are implemented directly in the AGPL 3.0 core. Historical database migrations retain some legacy schema names only to remove obsolete EE data during upgrades.
 
 ### 1. Built-in AI assistant for each space
 
