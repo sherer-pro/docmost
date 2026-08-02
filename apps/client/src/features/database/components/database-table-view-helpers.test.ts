@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DATABASE_PROPERTY_DRAG_MIME,
   getCheckboxFilterOptions,
   getSelectedPreparedRowIds,
   isDatabaseFilterControlsVisible,
   isSameCellPayloadValue,
   mergePinnedDatabaseRow,
   reorderDatabaseProperties,
+  resolveDraggedDatabasePropertyId,
   resolveDatabasePropertyRename,
   shouldShowDatabaseFilterRemove,
   shouldDeleteCellPayload,
@@ -53,6 +55,24 @@ describe('database-table-view helpers', () => {
     expect(reorderDatabaseProperties(properties, 'property-a', 'missing-property')).toBe(
       properties,
     );
+  });
+
+  it('resolves dragged property from synchronous state and compatible transfer data', () => {
+    const transferredValues: Record<string, string> = {
+      [DATABASE_PROPERTY_DRAG_MIME]: 'property-custom',
+      'text/plain': 'property-plain',
+    };
+    const dataTransfer = {
+      getData: (format: string) => transferredValues[format] ?? '',
+    };
+
+    expect(resolveDraggedDatabasePropertyId('property-active', dataTransfer)).toBe(
+      'property-active',
+    );
+    expect(resolveDraggedDatabasePropertyId(null, dataTransfer)).toBe('property-custom');
+
+    delete transferredValues[DATABASE_PROPERTY_DRAG_MIME];
+    expect(resolveDraggedDatabasePropertyId(null, dataTransfer)).toBe('property-plain');
   });
 
   it('normalizes inline property rename payload', () => {
