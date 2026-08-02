@@ -8,7 +8,28 @@ jest.mock('../tools/ai-tool-registry.service', () => ({
   AiToolRegistryService: class AiToolRegistryService {},
 }));
 
-import { AiRunExecutionService } from './ai-run-execution.service';
+import {
+  AiRunExecutionService,
+  getEmptyResponseFallbackLimits,
+} from './ai-run-execution.service';
+
+describe('getEmptyResponseFallbackLimits', () => {
+  it('uses a conservative one-time retry budget for empty provider responses', () => {
+    expect(
+      getEmptyResponseFallbackLimits({
+        contextWindow: 131_072,
+        maxOutputTokens: 16_384,
+      }),
+    ).toEqual({ contextWindow: 32_768, maxOutputTokens: 4_096 });
+
+    expect(
+      getEmptyResponseFallbackLimits({
+        contextWindow: 8_192,
+        maxOutputTokens: 2_048,
+      }),
+    ).toEqual({ contextWindow: 8_192, maxOutputTokens: 2_048 });
+  });
+});
 
 describe('AiRunExecutionService claim', () => {
   it('allows only one worker to claim the same queued run', async () => {

@@ -88,6 +88,10 @@ call.
 7. The provider returns a text stream. Text and, when enabled, reasoning deltas
    are buffered, periodically persisted, and sent over Socket.IO.
    `ai_runs.sequence` provides a monotonic ordering key for the client.
+   A terminal stream with neither answer nor reasoning content is not recorded
+   as a successful blank message. Normal chat retries it once with a bounded
+   32K context/4K output fallback; a second empty stream fails with the stable
+   `provider_invalid_response` error.
    Cancellation aborts provider URL resolution, response-header waits, and
    response-body reads for both streaming chat and non-streaming agent tool
    turns; terminal database checks remain authoritative if an adapter returns

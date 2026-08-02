@@ -46,6 +46,8 @@ export class AiProviderInvalidResponseError extends BadGatewayException {
   readonly aiErrorCode = 'provider_invalid_response';
 }
 
+export class AiProviderEmptyResponseError extends AiProviderInvalidResponseError {}
+
 @Injectable()
 export class OpenAiCompatibleProviderService {
   constructor(
@@ -264,6 +266,10 @@ export class OpenAiCompatibleProviderService {
       }
       reader.releaseLock();
       request.cleanup();
+    }
+
+    if (streamedChars === 0) {
+      throw new AiProviderEmptyResponseError('AI provider returned no content');
     }
 
     await handlers.onUsage?.(usage);

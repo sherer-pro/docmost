@@ -121,6 +121,7 @@ describe('OpenAiCompatibleProviderService', () => {
       async () =>
         new Response(
           'data: {"choices":[{"delta":{"reasoning_content":{"text":"hidden"},"reasoning":["hidden"]}}]}\n\n' +
+            'data: {"choices":[{"delta":{"content":"Hello"}}]}\n\n' +
             'data: [DONE]\n\n',
         ),
     ) as any;
@@ -132,6 +133,27 @@ describe('OpenAiCompatibleProviderService', () => {
     });
 
     expect(onReasoning).not.toHaveBeenCalled();
+  });
+
+  it('rejects a completed stream without answer or reasoning content', async () => {
+    global.fetch = jest.fn(
+      async () =>
+        new Response(
+          'data: {"usage":{"prompt_tokens":16379,"completion_tokens":1},"choices":[]}\n\n' +
+            'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n' +
+            'data: [DONE]\n\n',
+        ),
+    ) as any;
+
+    await expect(
+      service.stream(config, [{ role: 'user', content: 'Hi' }], {
+        onText: jest.fn(),
+        onReasoning: jest.fn(),
+      }),
+    ).rejects.toMatchObject({
+      status: 502,
+      message: 'AI provider returned no content',
+    });
   });
 
   it('applies the combined stream text limit to reasoning', async () => {
@@ -542,7 +564,12 @@ describe('OpenAiCompatibleProviderService', () => {
     global.fetch = jest.fn(async () => {
       const body = new ReadableStream({
         start(controller) {
-          controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+          controller.enqueue(
+            new TextEncoder().encode(
+              'data: {"choices":[{"delta":{"content":"Hello"}}]}\n\n' +
+                'data: [DONE]\n\n',
+            ),
+          );
         },
         cancel,
       });
