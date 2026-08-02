@@ -66,6 +66,20 @@
       text-align: left;
     }
 
+    tbody > tr:nth-child(odd) > td:not([data-background-color]) {
+      background-color: light-dark(
+        var(--mantine-color-white),
+        var(--mantine-color-dark-7)
+      );
+    }
+
+    tbody > tr:nth-child(even) > td:not([data-background-color]) {
+      background-color: light-dark(
+        var(--mantine-color-gray-0),
+        var(--mantine-color-dark-6)
+      );
+    }
+
     .selectedCell:after {
       background: rgba(200, 200, 255, 0.4);
       content: "";

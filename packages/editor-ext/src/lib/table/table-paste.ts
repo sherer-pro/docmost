@@ -13,6 +13,7 @@ import {
 } from '@tiptap/pm/state';
 import type { EditorView } from '@tiptap/pm/view';
 import { findTable } from './utils';
+import { DEFAULT_TABLE_WIDTH_MODE } from './utils/width-mode';
 
 const tablePasteKey = new PluginKey('tablePaste');
 
@@ -63,7 +64,10 @@ export function createTableNodeFromRows(
     return schema.nodes.tableRow.createChecked(null, cells);
   });
 
-  return schema.nodes.table.createChecked({ widthMode: 'normal' }, tableRows);
+  return schema.nodes.table.createChecked(
+    { widthMode: DEFAULT_TABLE_WIDTH_MODE },
+    tableRows,
+  );
 }
 
 function getSingleTableNodeFromSlice(slice: Slice): ProseMirrorNode | null {
@@ -377,7 +381,7 @@ export function normalizePastedTableHTML(html: string): string {
 
   doc.querySelectorAll<HTMLTableElement>('table').forEach((table) => {
     if (!table.hasAttribute('data-table-width-mode')) {
-      table.setAttribute('data-table-width-mode', 'normal');
+      table.setAttribute('data-table-width-mode', DEFAULT_TABLE_WIDTH_MODE);
       changed = true;
     }
 

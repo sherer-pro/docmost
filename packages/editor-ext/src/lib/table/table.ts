@@ -4,6 +4,7 @@ import { DOMOutputSpec } from "@tiptap/pm/model";
 import { TextSelection } from "@tiptap/pm/state";
 import { cellAround } from "@tiptap/pm/tables";
 import {
+  DEFAULT_TABLE_WIDTH_MODE,
   getTableWidthModeClass,
   normalizeTableWidthMode,
 } from "./utils/width-mode";
@@ -42,7 +43,7 @@ export const CustomTable = Table.extend({
     return {
       ...this.parent?.(),
       widthMode: {
-        default: "normal",
+        default: DEFAULT_TABLE_WIDTH_MODE,
         parseHTML: (element) => {
           const wrapperMode = element
             .closest(".tableWrapper")

@@ -32,7 +32,7 @@ describe('block width modes', () => {
     assert.equal(normalizeBlockWidthMode('wide'), 'wide');
     assert.equal(normalizeBlockWidthMode('unknown'), 'normal');
     assert.equal(normalizeTableWidthMode('full'), 'full');
-    assert.equal(normalizeTableWidthMode(null), 'normal');
+    assert.equal(normalizeTableWidthMode(null), 'wide');
   });
 
   it('round-trips diagram width modes through HTML', () => {
