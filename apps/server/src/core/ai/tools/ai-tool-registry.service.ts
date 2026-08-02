@@ -2,7 +2,9 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
@@ -11,6 +13,7 @@ import { PageAccessService } from '../../page-access/page-access.service';
 import { SearchService } from '../../search/search.service';
 import { AiContentPolicyService } from '../../ai-content-policy/ai-content-policy.service';
 import { PageService } from '../../page/services/page.service';
+import { CollaborationGateway } from '../../../collaboration/collaboration.gateway';
 import {
   AiPageOperation,
   ProseMirrorJson,
@@ -24,8 +27,13 @@ import {
   prepareAiPageOperation,
 } from '../../../common/helpers/prosemirror/ai-page-operation';
 
+// Model steps and tool calls are budgeted per approval segment: an approved,
+// rejected, or expired write proposal starts a new segment. The run-level
+// ceilings still bound the whole attempt.
 export const AI_AGENT_MAX_MODEL_STEPS = 8;
 export const AI_AGENT_MAX_TOOL_CALLS = 16;
+export const AI_AGENT_MAX_RUN_MODEL_STEPS = 32;
+export const AI_AGENT_MAX_RUN_TOOL_CALLS = 64;
 export const AI_TOOL_RESULT_MAX_BYTES = 32 * 1024;
 export const AI_TOOL_RESULTS_TOTAL_MAX_BYTES = 128 * 1024;
 export const AI_WRITE_PROPOSAL_TTL_MS = 60 * 60 * 1000;
@@ -74,8 +82,24 @@ const PAGE_ID_SCHEMA = {
   description: 'A page ID from this space.',
 };
 
+const CURRENT_PAGE_ID_SCHEMA = {
+  type: 'string',
+  format: 'uuid',
+  description:
+    'Optional. Writes always target the current page, so omit this field unless you repeat the exact current page ID given in the system message.',
+};
+
+const NODE_ID_SCHEMA = {
+  type: 'string',
+  minLength: 1,
+  maxLength: 128,
+  description:
+    'A node ID from getOutline. Use the item "id" when it is present, otherwise its "#index" form such as "#3".',
+};
+
 @Injectable()
 export class AiToolRegistryService {
+  private readonly logger = new Logger(AiToolRegistryService.name);
   private readonly tools: InternalAiToolDefinition[];
 
   constructor(
@@ -84,6 +108,7 @@ export class AiToolRegistryService {
     private readonly search: SearchService,
     private readonly contentPolicy: AiContentPolicyService,
     private readonly pages: PageService,
+    private readonly collaboration: CollaborationGateway,
   ) {
     this.tools = this.createTools();
   }
@@ -260,14 +285,14 @@ export class AiToolRegistryService {
       {
         name: 'editPageText',
         description:
-          'Propose one exact text replacement in a node on the current page. Requires user approval.',
+          'Propose one exact text replacement in a node on the current page. oldText must sit inside one unstyled text run, so use patchNode when the fragment crosses bold, italic, or link boundaries. Requires user approval.',
         inputSchema: {
           type: 'object',
           additionalProperties: false,
-          required: ['pageId', 'nodeId', 'oldText', 'newText'],
+          required: ['nodeId', 'oldText', 'newText'],
           properties: {
-            pageId: PAGE_ID_SCHEMA,
-            nodeId: { type: 'string', minLength: 1, maxLength: 128 },
+            pageId: CURRENT_PAGE_ID_SCHEMA,
+            nodeId: NODE_ID_SCHEMA,
             oldText: { type: 'string', minLength: 1, maxLength: 16384 },
             newText: { type: 'string', maxLength: 16384 },
           },
@@ -282,7 +307,7 @@ export class AiToolRegistryService {
               oldText: this.requireString(args, 'oldText', false, 16 * 1024),
               newText: this.requireString(args, 'newText', true, 16 * 1024),
             },
-            this.requireString(args, 'pageId', false, 64),
+            this.resolveWritePageId(args, context),
             context,
           ),
       },
@@ -293,10 +318,10 @@ export class AiToolRegistryService {
         inputSchema: {
           type: 'object',
           additionalProperties: false,
-          required: ['pageId', 'nodeId', 'node'],
+          required: ['nodeId', 'node'],
           properties: {
-            pageId: PAGE_ID_SCHEMA,
-            nodeId: { type: 'string', minLength: 1, maxLength: 128 },
+            pageId: CURRENT_PAGE_ID_SCHEMA,
+            nodeId: NODE_ID_SCHEMA,
             node: { type: 'object' },
           },
         },
@@ -309,7 +334,7 @@ export class AiToolRegistryService {
               nodeId: this.requireString(args, 'nodeId', false, 128),
               node: this.requireObject(args, 'node') as ProseMirrorJson,
             },
-            this.requireString(args, 'pageId', false, 64),
+            this.resolveWritePageId(args, context),
             context,
           ),
       },
@@ -320,10 +345,10 @@ export class AiToolRegistryService {
         inputSchema: {
           type: 'object',
           additionalProperties: false,
-          required: ['pageId', 'anchorNodeId', 'position', 'node'],
+          required: ['anchorNodeId', 'position', 'node'],
           properties: {
-            pageId: PAGE_ID_SCHEMA,
-            anchorNodeId: { type: 'string', minLength: 1, maxLength: 128 },
+            pageId: CURRENT_PAGE_ID_SCHEMA,
+            anchorNodeId: NODE_ID_SCHEMA,
             position: { type: 'string', enum: ['before', 'after'] },
             node: { type: 'object' },
           },
@@ -343,7 +368,7 @@ export class AiToolRegistryService {
               position: this.requireEnum(args, 'position', ['before', 'after']),
               node: this.requireObject(args, 'node') as ProseMirrorJson,
             },
-            this.requireString(args, 'pageId', false, 64),
+            this.resolveWritePageId(args, context),
             context,
           ),
       },
@@ -354,10 +379,10 @@ export class AiToolRegistryService {
         inputSchema: {
           type: 'object',
           additionalProperties: false,
-          required: ['pageId', 'nodeId'],
+          required: ['nodeId'],
           properties: {
-            pageId: PAGE_ID_SCHEMA,
-            nodeId: { type: 'string', minLength: 1, maxLength: 128 },
+            pageId: CURRENT_PAGE_ID_SCHEMA,
+            nodeId: NODE_ID_SCHEMA,
           },
         },
         writeClass: 'write',
@@ -368,7 +393,7 @@ export class AiToolRegistryService {
               kind: 'deleteNode',
               nodeId: this.requireString(args, 'nodeId', false, 128),
             },
-            this.requireString(args, 'pageId', false, 64),
+            this.resolveWritePageId(args, context),
             context,
           ),
       },
@@ -599,16 +624,18 @@ export class AiToolRegistryService {
       pageId !== context.currentPageId
     ) {
       throw new ForbiddenException(
-        'Agent writes are limited to the current page',
+        context.source === 'agent' && context.currentPageId
+          ? `Agent writes are limited to the current page. Retry with pageId "${context.currentPageId}" or omit pageId.`
+          : 'Agent writes are limited to the current page',
       );
     }
     const page = await this.getReadablePage(pageId, context);
     await this.pageAccess.assertCanWritePage(page, context.user);
     const preparedOperation = prepareAiPageOperation(operation);
-    const document = (page.content ?? {
-      type: 'doc',
-      content: [],
-    }) as ProseMirrorJson;
+    // The approval applies the operation to the live Yjs document, so the
+    // proposal must be derived from that same document instead of the
+    // periodically persisted `pages.content` snapshot.
+    const document = await this.getLivePageContent(pageId, context);
     const writeProposal = {
       pageId,
       baseContentHash: hashProseMirrorJson(document),
@@ -632,6 +659,31 @@ export class AiToolRegistryService {
       },
       writeProposal,
     };
+  }
+
+  private async getLivePageContent(
+    pageId: string,
+    context: AiToolExecutionContext,
+  ): Promise<ProseMirrorJson> {
+    try {
+      const content = (await this.collaboration.handleYjsEvent(
+        'getAiPageContent',
+        `page.${pageId}`,
+        { user: context.user },
+      )) as ProseMirrorJson | null;
+      if (!content || content.type !== 'doc') {
+        throw new Error('invalid live document');
+      }
+      return content;
+    } catch (error) {
+      this.logger.error(
+        'Failed to read the live document for an AI write proposal',
+        (error as Error)?.stack,
+      );
+      throw new ServiceUnavailableException(
+        'The live document is unavailable, so the change cannot be proposed yet',
+      );
+    }
   }
 
   private async getReadablePage(
@@ -658,6 +710,26 @@ export class AiToolRegistryService {
       throw new ForbiddenException('Page is excluded from AI access');
     }
     return page;
+  }
+
+  /**
+   * Write tools always target the conversation page. The model does not have
+   * to repeat that ID, so an omitted `pageId` resolves to the current page;
+   * an explicit value is still checked against it by `proposeWrite`.
+   */
+  private resolveWritePageId(
+    args: Record<string, unknown>,
+    context: AiToolExecutionContext,
+  ): string {
+    if (args.pageId === undefined || args.pageId === null) {
+      if (!context.currentPageId) {
+        throw new ForbiddenException(
+          'Agent writes are limited to the current page',
+        );
+      }
+      return context.currentPageId;
+    }
+    return this.requireString(args, 'pageId', false, 64);
   }
 
   private requireString(

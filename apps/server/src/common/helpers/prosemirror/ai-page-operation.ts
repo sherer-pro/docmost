@@ -90,14 +90,46 @@ type NodeLocation = {
 };
 
 export function hashProseMirrorJson(document: ProseMirrorJson): string {
-  return createHash('sha256').update(JSON.stringify(document)).digest('hex');
+  return createHash('sha256')
+    .update(canonicalJsonString(document))
+    .digest('hex');
+}
+
+/**
+ * Serializes a document so that the hash only depends on its values.
+ * The same document reaches this helper both as a `jsonb` column, which
+ * returns object keys in PostgreSQL storage order, and as ProseMirror JSON
+ * produced from the live Yjs document, which uses insertion order. Sorting
+ * object keys keeps both representations comparable.
+ */
+function canonicalJsonString(value: unknown): string {
+  if (value === null || typeof value !== 'object') {
+    return JSON.stringify(value) ?? 'null';
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map(canonicalJsonString).join(',')}]`;
+  }
+  const entries = Object.entries(value as Record<string, unknown>)
+    .filter(([, item]) => item !== undefined)
+    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+    .map(([key, item]) => `${JSON.stringify(key)}:${canonicalJsonString(item)}`);
+  return `{${entries.join(',')}}`;
 }
 
 export function getProseMirrorText(node: ProseMirrorJson): string {
   if (typeof node.text === 'string') {
     return node.text;
   }
-  return (node.content ?? []).map(getProseMirrorText).join(' ');
+  const children = node.content ?? [];
+  // Inline runs of one block belong to the same sentence, so they are
+  // concatenated verbatim. Only block boundaries introduce a separator.
+  return children
+    .map((child, index) => {
+      const text = getProseMirrorText(child);
+      if (index === 0) return text;
+      return (child.text === undefined ? '\n' : '') + text;
+    })
+    .join('');
 }
 
 export function getAiPageOutline(
@@ -287,8 +319,17 @@ export function applyAiPageOperation(
         matches.push(node);
       }
     });
-    if (matches.length !== 1) {
-      throw new Error('agent_text_match_ambiguous');
+    if (matches.length === 0) {
+      // A styled paragraph stores its text in several runs, so text that
+      // spans a mark boundary never matches one run.
+      throw new Error(
+        'agent_text_not_found: no single text run of this node contains oldText. Read the node with getNode and replace it with patchNode instead.',
+      );
+    }
+    if (matches.length > 1) {
+      throw new Error(
+        'agent_text_match_ambiguous: oldText occurs in several text runs of this node. Use a longer unique fragment or patchNode.',
+      );
     }
     matches[0].text = matches[0].text!.replace(
       operation.oldText,
@@ -332,7 +373,8 @@ function findNode(
   document: ProseMirrorJson,
   nodeId: string,
 ): NodeLocation | null {
-  const requestedIndex = /^#(\d+)$/.exec(nodeId)?.[1];
+  // Models frequently return the outline index without its leading marker.
+  const requestedIndex = /^#?(\d+)$/.exec(nodeId)?.[1];
   let currentIndex = 0;
   let result: NodeLocation | null = null;
 
