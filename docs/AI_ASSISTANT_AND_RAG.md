@@ -113,9 +113,17 @@ fingerprint and disables agent mode until it is tested again.
 
 An agent run resolves the same initial conversation context, private files,
 page attachments, and optional query-time retrieval as normal chat. It may then
-perform at most eight model steps and sixteen total tool calls. Each tool result
-is limited to 32 KiB, and all results in one run are limited to 128 KiB. An
-invalid tool response, an unknown tool, or a limit violation fails closed.
+perform at most eight model steps and sixteen tool calls per approval segment.
+An approved, rejected, or expired write proposal starts a new segment, because
+the user has to act between segments; the whole run is additionally bounded to
+thirty-two model steps and sixty-four tool calls. Each tool result is limited to
+32 KiB, and all results in one run are limited to 128 KiB. An invalid tool
+response, an unknown tool, or a limit violation fails closed.
+
+The trusted agent preamble also states the current page ID and title, so the
+model never has to guess them. `pageId` is optional on the four write tools and
+defaults to the conversation page; an explicit value that names another page is
+still rejected.
 
 The shared registry exposes these read tools to both the agent and MCP:
 
@@ -128,7 +136,10 @@ page ACL, deletion state, and the shared AI content-exclusion policy.
 Agent mode additionally exposes `editPageText`, `patchNode`, `insertNode`, and
 `deleteNode`. These tools never apply a model response directly. A call may
 only target the conversation's current page, requires the initiator's current
-write access, and creates one pending proposal with a content hash. The run
+write access, and creates one pending proposal with a content hash. Both the
+proposal and the approval read the live Yjs document, and the hash is computed
+from a key-order independent serialization, so the persisted `pages.content`
+snapshot and the live document cannot disagree. The run
 enters `awaiting_approval`; only its initiating user may approve or reject that
 specific proposal, and the proposal expires after one hour. Approval rechecks
 ACL and the live Yjs document hash, validates the resulting ProseMirror

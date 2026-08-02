@@ -19,6 +19,8 @@ import { AiContextService } from './ai-context.service';
 import { AiAuxRunService } from './ai-aux-run.service';
 import {
   AI_AGENT_MAX_MODEL_STEPS,
+  AI_AGENT_MAX_RUN_MODEL_STEPS,
+  AI_AGENT_MAX_RUN_TOOL_CALLS,
   AI_AGENT_MAX_TOOL_CALLS,
   AI_TOOL_RESULTS_TOTAL_MAX_BYTES,
   AI_WRITE_PROPOSAL_TTL_MS,
@@ -463,8 +465,7 @@ export class AiRunExecutionService {
     const messages: AiProviderMessage[] = [
       {
         role: 'system',
-        content:
-          'You are operating in a bounded Docmost agent mode. Use tools iteratively when they improve accuracy. Read tools may inspect only authorized content. Write tools create proposals only for the current page and always require the initiating user to approve them. Call at most one write tool in a model turn. Never claim that a proposed change was applied until its tool result confirms approval.',
+        content: await this.buildAgentInstructions(run),
       },
       ...params.messages,
     ];
@@ -477,7 +478,14 @@ export class AiRunExecutionService {
       .execute();
     this.appendStepHistory(messages, previousSteps);
 
-    let toolCallCount = previousSteps.length;
+    // Every write approval resumes the same run, so the step and tool-call
+    // budgets are counted from the last write the user decided on. The run
+    // still has a hard overall ceiling that no sequence of approvals can pass.
+    const segmentSteps = previousSteps.filter(
+      (step) => step.modelStep >= this.lastDecidedWriteModelStep(previousSteps),
+    );
+    let toolCallCount = segmentSteps.length;
+    let totalToolCallCount = previousSteps.length;
     let resultBytes = previousSteps.reduce(
       (sum, step) =>
         sum + Buffer.byteLength(JSON.stringify(step.result ?? {}), 'utf8'),
@@ -491,8 +499,16 @@ export class AiRunExecutionService {
       previousSteps.length > 0
         ? Math.max(...previousSteps.map((step) => step.modelStep)) + 1
         : 0;
+    let segmentModelStep = segmentSteps.length
+      ? modelStep - Math.min(...segmentSteps.map((step) => step.modelStep))
+      : 0;
 
-    for (; modelStep < AI_AGENT_MAX_MODEL_STEPS; modelStep += 1) {
+    for (
+      ;
+      segmentModelStep < AI_AGENT_MAX_MODEL_STEPS &&
+      modelStep < AI_AGENT_MAX_RUN_MODEL_STEPS;
+      modelStep += 1, segmentModelStep += 1
+    ) {
       if (await this.isCancelled(run.id)) {
         throw new AiRunCancelledError();
       }
@@ -532,8 +548,9 @@ export class AiRunExecutionService {
       }
 
       if (
-        toolCallCount + response.toolCalls.length >
-        AI_AGENT_MAX_TOOL_CALLS
+        toolCallCount + response.toolCalls.length > AI_AGENT_MAX_TOOL_CALLS ||
+        totalToolCallCount + response.toolCalls.length >
+          AI_AGENT_MAX_RUN_TOOL_CALLS
       ) {
         throw new AiAgentExecutionError(
           'agent_tool_limit',
@@ -562,6 +579,7 @@ export class AiRunExecutionService {
       for (let callIndex = 0; callIndex < response.toolCalls.length; callIndex += 1) {
         const call = response.toolCalls[callIndex];
         toolCallCount += 1;
+        totalToolCallCount += 1;
         let args: Record<string, unknown> = {};
         let parseError: string | null = null;
         try {
@@ -692,6 +710,39 @@ export class AiRunExecutionService {
       'agent_step_limit',
       'The agent exceeded the model step limit',
     );
+  }
+
+  /**
+   * The first model step that belongs to the current approval segment: the
+   * step right after the last write proposal the initiating user decided on.
+   */
+  private lastDecidedWriteModelStep(steps: AiRunStep[]): number {
+    const decided = steps.filter(
+      (step) =>
+        step.writeClass === 'write' &&
+        ['approved', 'rejected', 'expired'].includes(step.status),
+    );
+    return decided.length
+      ? Math.max(...decided.map((step) => step.modelStep)) + 1
+      : 0;
+  }
+
+  /**
+   * Server-controlled agent preamble. The page identity comes from the run
+   * row, never from document content, so it stays trusted instruction data.
+   */
+  private async buildAgentInstructions(run: AiRun): Promise<string> {
+    const page = await this.db
+      .selectFrom('pages')
+      .select(['id', 'title'])
+      .where('id', '=', run.pageId)
+      .executeTakeFirst();
+    const title = (page?.title ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
+    return [
+      'You are operating in a bounded Docmost agent mode. Use tools iteratively when they improve accuracy. Read tools may inspect only authorized content. Write tools create proposals only for the current page and always require the initiating user to approve them. Call at most one write tool in a model turn. Never claim that a proposed change was applied until its tool result confirms approval.',
+      `The current page ID is ${run.pageId}${title ? ` and its title is ${JSON.stringify(title)}` : ''}. Use exactly this ID whenever a tool asks for a page ID of the current page, and never invent placeholder identifiers.`,
+      'To change the current page, first call getOutline with the current page ID, then pass one of the returned node identifiers to editPageText, patchNode, insertNode, or deleteNode. Use the outline item "id" when it exists, otherwise its "#index" form such as "#3". Never guess a node identifier.',
+    ].join('\n\n');
   }
 
   private appendStepHistory(
