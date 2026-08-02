@@ -14,7 +14,10 @@ import { AiConversationService } from './ai-conversation.service';
 import { AiFileService } from './ai-file.service';
 import { AiPromptBuilderService } from './ai-prompt-builder.service';
 import { AiRunEventService } from './ai-run-event.service';
-import { OpenAiCompatibleProviderService } from './openai-compatible-provider.service';
+import {
+  AiProviderEmptyResponseError,
+  OpenAiCompatibleProviderService,
+} from './openai-compatible-provider.service';
 import { AiContextService } from './ai-context.service';
 import { AiAuxRunService } from './ai-aux-run.service';
 import {
@@ -29,6 +32,22 @@ import {
 import { AiProviderMessage, AiProviderUsage } from '../ai.types';
 
 class AiRunCancelledError extends Error {}
+
+export function getEmptyResponseFallbackLimits(config: {
+  contextWindow: number;
+  maxOutputTokens: number;
+}): { contextWindow: number; maxOutputTokens: number } {
+  const contextWindow = Math.min(config.contextWindow, 32_768);
+  return {
+    contextWindow,
+    maxOutputTokens: Math.min(
+      config.maxOutputTokens,
+      4_096,
+      Math.max(1_024, contextWindow - 1_024),
+    ),
+  };
+}
+
 class AiAgentExecutionError extends Error {
   constructor(
     readonly code: string,
@@ -209,19 +228,27 @@ export class AiRunExecutionService {
         .where('status', '=', 'running')
         .execute();
 
-      const messages = await this.promptBuilder.build({
-        run,
-        instructions: config.systemInstructions,
-        assistantIdentity: this.configs.toAssistantIdentity(config),
-        currentUserContent: userMessage.content,
-        fileText: fileContext.text,
-        fileSources: fileContext.citations,
-        contextSources,
-        images: fileContext.images,
-        retrievalSources: retrievalOutcome.sources,
-        contextWindow: config.contextWindow,
-        maxOutputTokens: config.maxOutputTokens,
-      });
+      const buildMessages = (
+        contextWindow: number,
+        maxOutputTokens: number,
+      ) =>
+        this.promptBuilder.build({
+          run,
+          instructions: config.systemInstructions,
+          assistantIdentity: this.configs.toAssistantIdentity(config),
+          currentUserContent: userMessage.content,
+          fileText: fileContext.text,
+          fileSources: fileContext.citations,
+          contextSources,
+          images: fileContext.images,
+          retrievalSources: retrievalOutcome.sources,
+          contextWindow,
+          maxOutputTokens,
+        });
+      const messages = await buildMessages(
+        config.contextWindow,
+        config.maxOutputTokens,
+      );
 
       if (run.executionMode === 'agent') {
         await this.executeAgent({
@@ -295,26 +322,45 @@ export class AiRunExecutionService {
         this.events.emitDelta(run, sequence, delta, reasoningDelta);
       };
 
-      const usage = await this.provider.stream(
-        this.configs.toProviderConfig(config),
-        messages,
-        {
-          onText: async (delta) => {
-            content += delta;
-            pendingDelta += delta;
-            await flush();
+      const stream = (
+        providerMessages: AiProviderMessage[],
+        maxOutputTokens: number,
+      ) =>
+        this.provider.stream(
+          {
+            ...this.configs.toProviderConfig(config),
+            maxOutputTokens,
           },
-          onReasoning: config.reasoningEnabled
-            ? async (delta) => {
-                reasoning += delta;
-                pendingReasoningDelta += delta;
-                await flush();
-              }
-            : undefined,
-          onActivity: heartbeat,
-          isCancelled: () => this.isCancelled(run.id),
-        },
-      );
+          providerMessages,
+          {
+            onText: async (delta) => {
+              content += delta;
+              pendingDelta += delta;
+              await flush();
+            },
+            onReasoning: config.reasoningEnabled
+              ? async (delta) => {
+                  reasoning += delta;
+                  pendingReasoningDelta += delta;
+                  await flush();
+                }
+              : undefined,
+            onActivity: heartbeat,
+            isCancelled: () => this.isCancelled(run.id),
+          },
+        );
+      let usage: AiProviderUsage;
+      try {
+        usage = await stream(messages, config.maxOutputTokens);
+      } catch (error) {
+        if (!(error instanceof AiProviderEmptyResponseError)) throw error;
+        const fallback = getEmptyResponseFallbackLimits(config);
+        const fallbackMessages = await buildMessages(
+          fallback.contextWindow,
+          fallback.maxOutputTokens,
+        );
+        usage = await stream(fallbackMessages, fallback.maxOutputTokens);
+      }
       await flush(true);
       if (await this.isCancelled(run.id)) {
         await this.cancel(run, content, reasoning);
