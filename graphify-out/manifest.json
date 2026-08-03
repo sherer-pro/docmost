@@ -95,8 +95,8 @@
     "semantic_hash": ""
   },
   "apps/client/src/App.tsx": {
-    "mtime": 1785618375.3438153,
-    "ast_hash": "97b9f9136f3100c68aa3fdc5f705c8ba",
+    "mtime": 1785713214.1484728,
+    "ast_hash": "0ca2b9d2c23fef66cd1a11565484c6b1",
     "semantic_hash": ""
   },
   "apps/client/src/components/common/avatar-uploader.tsx": {
@@ -250,8 +250,8 @@
     "semantic_hash": ""
   },
   "apps/client/src/components/layouts/global/global-app-shell.tsx": {
-    "mtime": 1785442966.405867,
-    "ast_hash": "520fdfcd30727f287dcee956c2937a45",
+    "mtime": 1785713245.718758,
+    "ast_hash": "65802a41ecbb8b752562170e6274ac4c",
     "semantic_hash": ""
   },
   "apps/client/src/components/layouts/global/global-app-shell.utils.ts": {
@@ -295,8 +295,8 @@
     "semantic_hash": ""
   },
   "apps/client/src/components/settings/settings-sidebar.tsx": {
-    "mtime": 1785618375.3448164,
-    "ast_hash": "dba693e007b1d9382aeee5874f2558d3",
+    "mtime": 1785713228.550445,
+    "ast_hash": "44bf8df1d5ad2134649a6d1c6d214145",
     "semantic_hash": ""
   },
   "apps/client/src/components/settings/settings-title.tsx": {
@@ -5540,8 +5540,8 @@
     "semantic_hash": ""
   },
   "AGENTS.md": {
-    "mtime": 1785700288.609292,
-    "ast_hash": "31933ec13b648f5ac2645c05741fb58f",
+    "mtime": 1785713286.2937093,
+    "ast_hash": "19b39257e4f361a807180182e9bd4fb9",
     "semantic_hash": ""
   },
   "ARCHITECTURE.md": {
@@ -6195,13 +6195,13 @@
     "semantic_hash": ""
   },
   "apps/client/src/components/settings/workspace-settings-access.test.ts": {
-    "mtime": 1785618375.3458135,
-    "ast_hash": "ee8e861e054db4334fc4e1352d88427b",
+    "mtime": 1785713257.7119274,
+    "ast_hash": "aa5351bea466a27bb6df79cc119cbc0c",
     "semantic_hash": ""
   },
   "apps/client/src/components/settings/workspace-settings-access.ts": {
-    "mtime": 1785618375.3458135,
-    "ast_hash": "14d050ccd307ea1463139375e17b15d0",
+    "mtime": 1785713232.3855076,
+    "ast_hash": "e476669555a6bfa538aa7479b4837051",
     "semantic_hash": ""
   },
   "graphify-out/memory/query_20260728_215000_\u0432_\u0432\u0435\u0440\u0445\u043d\u0435\u043c_\u043c\u0435\u043d\u044e_\u0441\u0442\u0440\u0430\u043d\u0438\u0446_\u0438_\u0431\u0430\u0437_\u0434\u0430\u043d\u043d\u044b\u0445_\u0435\u0441\u0442\u044c_\u043a\u043d\u043e\u043f\u043a\u0430_\u0434\u0435.md": {
@@ -6575,8 +6575,8 @@
     "semantic_hash": ""
   },
   "docs/AI_ASSISTANT_AND_RAG.md": {
-    "mtime": 1785711141.7625875,
-    "ast_hash": "a9c085ff19faef9e458c07a45ada940d",
+    "mtime": 1785713312.5115044,
+    "ast_hash": "0e35a375d1198295614f0753db26bde3",
     "semantic_hash": ""
   },
   "graphify-out/memory/query_20260729_205806_\u043f\u0440\u043e\u0432\u0435\u0440\u044c_\u0440\u0430\u0431\u043e\u0442\u043e\u0441\u043f\u043e\u0441\u043e\u0431\u043d\u043e\u0441\u0442\u044c_\u043f\u043e\u0438\u0441\u043a\u0430_\u043f\u043e_\u043f\u0440\u043e\u0441\u0442\u0440\u0430\u043d\u0441\u0442\u0432\u0443.md": {
@@ -6825,8 +6825,8 @@
     "semantic_hash": ""
   },
   "apps/client/src/features/api-key/pages/workspace-api-keys.tsx": {
-    "mtime": 1785618375.356561,
-    "ast_hash": "5fefb59f89d7623deeb557141ed497ec",
+    "mtime": 1785713182.3619802,
+    "ast_hash": "6d8a05f9dc9158e70f1f83deebb91329",
     "semantic_hash": ""
   },
   "apps/client/src/features/api-key/queries/api-key-query.ts": {
@@ -6840,8 +6840,8 @@
     "semantic_hash": ""
   },
   "apps/client/src/features/api-key/types/api-key.types.ts": {
-    "mtime": 1785618375.35861,
-    "ast_hash": "111d0d6002eb7ba1fdc20759df069565",
+    "mtime": 1785713180.2846348,
+    "ast_hash": "81533689c1f7fee1c9556310d3252939",
     "semantic_hash": ""
   },
   "apps/client/src/features/api-key/utils/mcp-presets.test.ts": {
@@ -7344,16 +7344,6 @@
     "ast_hash": "a89d00b5cb8bdfe7077d0af582abfcfb",
     "semantic_hash": ""
   },
-  "apps/client/src/features/api-key/pages/workspace-mcp-api-keys.tsx": {
-    "mtime": 1785618375.356561,
-    "ast_hash": "46f8dd2e910a4c59482e7914223fd96d",
-    "semantic_hash": ""
-  },
-  "apps/client/src/features/api-key/pages/workspace-rag-api-keys.tsx": {
-    "mtime": 1785618375.356561,
-    "ast_hash": "fe275790d15a95b8025b61501351c056",
-    "semantic_hash": ""
-  },
   "graphify-out/memory/query_20260801_213552_\u043a\u0430\u043a\u0438\u0435_\u043a\u043e\u043c\u043f\u043e\u043d\u0435\u043d\u0442\u044b_\u0438_\u0441\u0442\u0438\u043b\u0438_\u0440\u0435\u0430\u043b\u0438\u0437\u0443\u044e\u0442_\u0444\u043e\u0440\u043c\u0443_\u043e\u0442\u043f\u0440\u0430\u0432\u043a\u0438.md": {
     "mtime": 1785620152.386178,
     "ast_hash": "e0c0c676082be67f6418bbb0ce8ca2b8",
@@ -7397,6 +7387,16 @@
   "graphify-out/memory/query_20260802_222921_why_do_leaf_pages_show_a_disabled_expand_button_an.md": {
     "mtime": 1785709761.7909968,
     "ast_hash": "fb51c44e113c53233c17bc030ad3a2e5",
+    "semantic_hash": ""
+  },
+  "apps/client/src/features/api-key/pages/workspace-api-keys-settings.tsx": {
+    "mtime": 1785713191.7033424,
+    "ast_hash": "c87e296fdbe513eabf5a84d9dd3b10db",
+    "semantic_hash": ""
+  },
+  "apps/client/src/features/api-key/utils/api-keys-settings-tabs.ts": {
+    "mtime": 1785713196.5564213,
+    "ast_hash": "5c6f00d30464207a4f0a67b1be558ed5",
     "semantic_hash": ""
   }
 }
