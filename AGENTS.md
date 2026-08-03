@@ -297,9 +297,8 @@ Minimum:
   - key scope is enforced by `spaceId` inside API key JWT payload;
   - page-level access rules are enforced as well: single-page reads go through `PageAccessService`, and `GET /api/rag/pages` / `GET /api/rag/updates` are filtered by the key creator's readable pages, so a key never exposes more than its creator can read. `GET /api/rag/deleted` intentionally still returns tombstones for deleted pages, because the access snapshot only covers live pages.
 - API key management routes are active in this fork:
-  - RAG management page: `/settings/ai/rag`;
-  - MCP management page: `/settings/ai/mcp`;
-  - `/settings/account/api-keys` and `/settings/api-keys` are compatibility redirects, not management pages;
+  - combined management page: `/settings/keys` ("API keys"), split into the `/settings/keys/mcp` and `/settings/keys/rag` tabs; `/settings/keys` redirects to the MCP tab;
+  - `/settings/account/api-keys`, `/settings/api-keys`, `/settings/ai/rag`, and `/settings/ai/mcp` are compatibility redirects, not management pages;
   - create key requires selecting `spaceId`;
   - access is restricted to workspace `admin|owner`;
   - space membership is re-checked on **every** key use, so removing the creator from the scoped space invalidates their keys (workspace `admin|owner` are exempt);

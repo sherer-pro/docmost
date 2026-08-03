@@ -4,8 +4,9 @@ const WORKSPACE_ADMIN_SETTINGS_PATHS = new Set([
   "/settings/api-keys",
   "/settings/account/api-keys",
   "/settings/ai",
-  "/settings/ai/rag",
-  "/settings/ai/mcp",
+  "/settings/keys",
+  "/settings/keys/mcp",
+  "/settings/keys/rag",
 ]);
 
 export function canAccessSettingsPath(path: string, isAdmin: boolean) {

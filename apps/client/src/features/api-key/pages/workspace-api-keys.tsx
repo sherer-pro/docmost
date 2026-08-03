@@ -1,11 +1,8 @@
 import { useState } from "react";
 import { Alert, Button, Group, Loader, Space, Stack, Text } from "@mantine/core";
 import { IconAlertCircle, IconKeyOff, IconRefresh } from "@tabler/icons-react";
-import { Helmet } from "react-helmet-async";
 import { useTranslation } from "react-i18next";
-import SettingsTitle from "@/components/settings/settings-title";
 import { EmptyState } from "@/components/ui/empty-state.tsx";
-import { getAppName } from "@/lib/config";
 import { ApiKeyTable } from "@/features/api-key/components/api-key-table";
 import { CreateApiKeyModal } from "@/features/api-key/components/create-api-key-modal";
 import { ApiKeyCreatedModal } from "@/features/api-key/components/api-key-created-modal";
@@ -14,13 +11,17 @@ import { RevokeApiKeyModal } from "@/features/api-key/components/revoke-api-key-
 import Paginate from "@/components/common/paginate";
 import { useCursorPaginate } from "@/hooks/use-cursor-paginate";
 import { useGetApiKeysQuery } from "@/features/api-key/queries/api-key-query.ts";
-import { IApiKey, type McpClientPreset } from "@/features/api-key";
+import {
+  IApiKey,
+  type ApiKeyType,
+  type McpClientPreset,
+} from "@/features/api-key";
 
-interface WorkspaceApiKeysPageProps {
-  keyType: "rag" | "mcp";
+interface WorkspaceApiKeysPanelProps {
+  keyType: ApiKeyType;
 }
 
-export function WorkspaceApiKeysPage({ keyType }: WorkspaceApiKeysPageProps) {
+export function WorkspaceApiKeysPanel({ keyType }: WorkspaceApiKeysPanelProps) {
   const { t } = useTranslation();
   const { cursor, goNext, goPrev } = useCursorPaginate();
   const [createModalOpened, setCreateModalOpened] = useState(false);
@@ -35,11 +36,6 @@ export function WorkspaceApiKeysPage({ keyType }: WorkspaceApiKeysPageProps) {
     adminView: true,
     keyType,
   });
-  const title = t(
-    keyType === "rag"
-      ? "ai.integrations.ragTitle"
-      : "ai.integrations.mcpTitle",
-  );
   const description = t(
     keyType === "rag"
       ? "ai.integrations.ragDescription"
@@ -69,13 +65,6 @@ export function WorkspaceApiKeysPage({ keyType }: WorkspaceApiKeysPageProps) {
 
   return (
     <>
-      <Helmet>
-        <title>
-          {title} - {getAppName()}
-        </title>
-      </Helmet>
-
-      <SettingsTitle title={title} />
       <Text size="md" c="dimmed" mb="md">
         {description}
       </Text>

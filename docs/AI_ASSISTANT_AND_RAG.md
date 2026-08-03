@@ -536,11 +536,13 @@ connection reaches Docmost.
 
 ### Creating and validating an MCP key
 
-Workspace owners and administrators create the key on `/settings/ai/mcp`
-through the fixed MCP flow: space, name/expiry, client, creation, and
-connection. The legacy `/settings/api-keys` URL redirects to this page.
-`/settings/account/api-keys` redirects a workspace owner or administrator to
-`/settings/ai/rag` and a member to their profile. RAG and MCP key management is
+Workspace owners and administrators create the key on the MCP tab of
+`/settings/keys` (`/settings/keys/mcp`) through the fixed MCP flow: space,
+name/expiry, client, creation, and connection. The legacy `/settings/api-keys`
+and `/settings/ai/mcp` URLs redirect to this tab.
+`/settings/account/api-keys` and `/settings/ai/rag` redirect a workspace owner
+or administrator to `/settings/keys/rag`, and `/settings/account/api-keys`
+redirects a member to their profile. RAG and MCP key management is
 therefore workspace-admin-only; existing member-created RAG tokens are not
 revoked or migrated and continue through the normal live validation rules.
 The plaintext token is returned during creation and must be stored securely.
@@ -640,10 +642,13 @@ source revisions and applicable AGPL/MIT notices are recorded in
 | -------------------------------- | --------------------------------------------------------------------- |
 | `/settings/ai`                   | AI assistant overview with per-space configuration entry points       |
 | `/settings/ai/spaces/:spaceSlug` | sectioned full-page configuration for one space                       |
-| `/settings/ai/rag`               | RAG synchronization onboarding and workspace RAG-key administration   |
-| `/settings/ai/mcp`               | MCP onboarding and workspace MCP-key administration                   |
-| `/settings/account/api-keys`     | compatibility redirect to RAG for admins or profile for members       |
-| `/settings/api-keys`             | compatibility redirect to `/settings/ai/mcp`                          |
+| `/settings/keys`                 | "API keys" page; redirects to the MCP tab                             |
+| `/settings/keys/mcp`             | MCP onboarding and workspace MCP-key administration                   |
+| `/settings/keys/rag`             | RAG synchronization onboarding and workspace RAG-key administration   |
+| `/settings/ai/mcp`               | compatibility redirect to `/settings/keys/mcp`                        |
+| `/settings/ai/rag`               | compatibility redirect to `/settings/keys/rag`                        |
+| `/settings/account/api-keys`     | compatibility redirect to the RAG tab for admins or profile for members |
+| `/settings/api-keys`             | compatibility redirect to `/settings/keys/mcp`                        |
 
 The space settings modal contains only an AI status summary and a link to the
 full-page configuration. Workspace owners and administrators and space
