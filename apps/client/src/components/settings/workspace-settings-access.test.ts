@@ -11,8 +11,9 @@ describe("workspace settings navigation access", () => {
     "/settings/api-keys",
     "/settings/account/api-keys",
     "/settings/ai",
-    "/settings/ai/rag",
-    "/settings/ai/mcp",
+    "/settings/keys",
+    "/settings/keys/mcp",
+    "/settings/keys/rag",
   ])("hides configuration path %s from workspace members", (path) => {
     expect(canAccessSettingsPath(path, false)).toBe(false);
     expect(canAccessSettingsPath(path, true)).toBe(true);
@@ -29,21 +30,19 @@ describe("workspace settings navigation access", () => {
     expect(canAccessSettingsPath(path, false)).toBe(true);
   });
 
-  it("keeps AI, RAG, and MCP active states mutually exclusive", () => {
+  it("keeps AI and API keys active states mutually exclusive", () => {
     expect(isSettingsItemActive("/settings/ai", "/settings/ai")).toBe(true);
     expect(isSettingsItemActive("/settings/ai/spaces/demo", "/settings/ai")).toBe(
       true,
     );
-    expect(isSettingsItemActive("/settings/ai/rag", "/settings/ai")).toBe(
+    expect(isSettingsItemActive("/settings/keys/mcp", "/settings/ai")).toBe(
       false,
     );
-    expect(isSettingsItemActive("/settings/ai/mcp", "/settings/ai")).toBe(
-      false,
-    );
-    expect(isSettingsItemActive("/settings/ai/rag", "/settings/ai/rag")).toBe(
+    expect(isSettingsItemActive("/settings/keys", "/settings/keys")).toBe(true);
+    expect(isSettingsItemActive("/settings/keys/mcp", "/settings/keys")).toBe(
       true,
     );
-    expect(isSettingsItemActive("/settings/ai/mcp", "/settings/ai/mcp")).toBe(
+    expect(isSettingsItemActive("/settings/keys/rag", "/settings/keys")).toBe(
       true,
     );
   });

@@ -65,11 +65,8 @@ const DatabasePage = lazy(() => import("@/pages/database/database-page.tsx"));
 const DatabaseLegacyRedirect = lazy(
   () => import("@/pages/database/database-legacy-redirect.tsx"),
 );
-const WorkspaceRagApiKeys = lazy(
-  () => import("@/features/api-key/pages/workspace-rag-api-keys"),
-);
-const WorkspaceMcpApiKeys = lazy(
-  () => import("@/features/api-key/pages/workspace-mcp-api-keys"),
+const WorkspaceApiKeysSettings = lazy(
+  () => import("@/features/api-key/pages/workspace-api-keys-settings"),
 );
 const AiIntegrationsSettings = lazy(
   () => import("@/features/ai/pages/ai-integrations-settings.tsx"),
@@ -161,17 +158,31 @@ export default function App() {
             <Route element={<WorkspaceAdminRoute />}>
               <Route
                 path={"account/api-keys"}
-                element={<Navigate to="/settings/ai/rag" replace />}
+                element={<Navigate to="/settings/keys/rag" replace />}
               />
               <Route path={"workspace"} element={<WorkspaceSettings />} />
               <Route
                 path={"api-keys"}
-                element={<Navigate to="/settings/ai/mcp" replace />}
+                element={<Navigate to="/settings/keys/mcp" replace />}
               />
               <Route path={"security"} element={<Security />} />
               <Route path={"ai"} element={<AiIntegrationsSettings />} />
-              <Route path={"ai/rag"} element={<WorkspaceRagApiKeys />} />
-              <Route path={"ai/mcp"} element={<WorkspaceMcpApiKeys />} />
+              <Route
+                path={"ai/rag"}
+                element={<Navigate to="/settings/keys/rag" replace />}
+              />
+              <Route
+                path={"ai/mcp"}
+                element={<Navigate to="/settings/keys/mcp" replace />}
+              />
+              <Route
+                path={"keys"}
+                element={<Navigate to="/settings/keys/mcp" replace />}
+              />
+              <Route
+                path={"keys/:keyType"}
+                element={<WorkspaceApiKeysSettings />}
+              />
             </Route>
           </Route>
         </Route>

@@ -11,8 +11,7 @@ import {
   IconLock,
   IconWorld,
   IconSparkles,
-  IconDatabase,
-  IconPlugConnected,
+  IconKey,
 } from "@tabler/icons-react";
 import { Link, useLocation } from "react-router-dom";
 import classes from "./settings.module.css";
@@ -96,15 +95,9 @@ const groupedData: DataGroup[] = [
         isAdmin: true,
       },
       {
-        label: "RAG sync",
-        icon: IconDatabase,
-        path: "/settings/ai/rag",
-        isAdmin: true,
-      },
-      {
-        label: "MCP",
-        icon: IconPlugConnected,
-        path: "/settings/ai/mcp",
+        label: "API keys",
+        icon: IconKey,
+        path: "/settings/keys",
         isAdmin: true,
       },
     ],
@@ -186,10 +179,7 @@ export default function SettingsSidebar() {
             case "Public sharing":
               prefetchHandler = prefetchShares;
               break;
-            case "RAG sync":
-              prefetchHandler = () => prefetchApiKeyManagement("rag");
-              break;
-            case "MCP":
+            case "API keys":
               prefetchHandler = () => prefetchApiKeyManagement("mcp");
               break;
             default:
