@@ -1,8 +1,8 @@
-# AI assistant, smart search (RAG), and MCP
+# AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
 This document describes the current core AI architecture in Docmost: page-bound
 chat, conversation context, background runs, space retrieval, and integration
-with external RAG indexes and assistants. It also separates four related but
+with external RAG indexes and assistants. It also separates five related but
 distinct paths:
 
 1. **Query-time retrieval** finds sources while the AI assistant is answering.
@@ -10,8 +10,16 @@ distinct paths:
    external indexes. It does not answer retrieval queries itself.
 3. **Agent mode** lets the private assistant call bounded Docmost tools and
    propose safe current-page changes that require explicit user approval.
-4. **MCP** (`/mcp`) exposes the read-only subset of the same tool registry to
-   external assistants through stateless Streamable HTTP.
+4. **Inbound MCP** (`/mcp`) exposes the read-only subset of the same tool
+   registry to external assistants through stateless Streamable HTTP. Docmost is
+   the MCP *server* here.
+5. **Outbound external MCP** lets the internal agent call read-only tools on
+   remote MCP servers after workspace approval, space binding, and per-user
+   opt-in. Docmost is the MCP *client* here.
+
+Paths 4 and 5 are opposite directions. They share no configuration and no
+credentials: an inbound `keyType=mcp` API key has nothing to do with an outbound
+server's request headers.
 
 All HTTP paths below include the global `/api` prefix except `/mcp`, which is
 an explicit root-level protocol endpoint.
@@ -178,8 +186,13 @@ arguments by the client.
 Safe writes cover text, ordinary text/list/heading/callout blocks, rich-text
 marks, and sanitized links. Page creation, page move/delete, databases and
 tables, comments, shares, whole-document replacement, media nodes, external
-images, arbitrary code execution, and external MCP servers are not agent
-tools.
+images, arbitrary code execution, and *write* operations on external MCP servers
+are not agent tools.
+
+Read-only tools on approved external MCP servers are a separate, gated surface
+described in section 7. They can never propose a page change and never create an
+approval step; `ai_run_steps` carries a check constraint that makes an
+`external_mcp` step with `write_class = 'write'` unrepresentable.
 
 ### Context, files, and editor actions
 
@@ -476,11 +489,11 @@ never include prompts, document content, credential-bearing URLs, API-key IDs,
 user IDs, tokens, or source IDs. They use the existing application logger and
 do not introduce a metrics exporter or diagnostics endpoint.
 
-## 6. External assistants through MCP
+## 6. Inbound MCP for external assistants
 
 ### Purpose and relationship to RAG
 
-MCP is the interactive external-assistant surface. It is intended for a model
+Inbound MCP is the interactive external-assistant surface. It is intended for a model
 or agent that needs to search and navigate one Docmost space while answering a
 user. It does not replace query-time retrieval or the synchronization API:
 
@@ -488,7 +501,8 @@ user. It does not replace query-time retrieval or the synchronization API:
 | ------------------------ | ------------------------------------------- | ------------------------------------------------ | ------------- | ---------------------------------------------------------------- |
 | query-time retrieval     | the Docmost AI worker                       | add ranked external context to one answer        | provider-side | validated excerpts returned by the configured retrieval adapter  |
 | `/api/rag/*`             | an external indexer such as `apps/rag-sync` | bulk/delta synchronization and export            | `keyType=rag` | pages, databases, comments, exports, and allowed attachment data |
-| `/mcp`                   | an external MCP-capable assistant           | interactive search and targeted document reading | `keyType=mcp` | seven bounded read-only tools; no attachment body extraction     |
+| `/mcp` (inbound)         | an external MCP-capable assistant           | interactive search and targeted document reading | `keyType=mcp` | seven bounded read-only tools; no attachment body extraction     |
+| external MCP (outbound)  | the Docmost AI worker                       | call approved read-only remote tools during an agent run | per-server encrypted HTTP headers | the prompt, selected context, and page text are sent outward; the remote result returns as untrusted data |
 
 MCP calls do not create Docmost conversations, messages, citations, or
 `ai_runs`. They also do not use `AI_CHAT_QUEUE`, invoke the configured model,
@@ -634,13 +648,223 @@ The agent and MCP tool architecture was adapted from
 source revisions and applicable AGPL/MIT notices are recorded in
 [`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md).
 
-## 7. API
+## 7. Outbound external MCP servers
+
+Docmost is the MCP **client** here, calling remote servers on behalf of the
+internal agent. This is the opposite direction from section 6.
+
+Server code lives in `apps/server/src/core/ai/mcp`, client code in
+`apps/client/src/features/ai-external-mcp`, and contracts in
+`packages/api-contract/src/ai-external-mcp.ts`.
+
+### The access gate
+
+A tool is offered to the model only when every factor holds:
+
+```
+AI_EXTERNAL_MCP_ENABLED        (deployment kill switch, default false)
+  and workspace master switch  (ai_mcp_workspace_settings.enabled, default false)
+  and server enabled           (ai_mcp_servers.enabled, default false)
+  and space binding enabled    (ai_mcp_space_bindings.enabled, default false)
+  and no group denies it       (ai_mcp_group_policies.deny_connection)
+  and the user opted in        (ai_mcp_user_preferences.enabled, default false)
+```
+
+Every level defaults to closed, and a missing row means disabled. A lower scope
+can only narrow a higher one: a space may pick from the workspace catalog and
+reduce the tool list, and a workspace allowlist entry is rejected unless the
+deployment allowlist already contains it.
+
+The effective tool set is the intersection of the workspace-approved read tools,
+the space allowlist, the agent-profile allowlist, and every group allowlist that
+applies to the calling user. Version 1 has one built-in profile, `default`; the
+profile key is persisted so a second profile is additive.
+
+### Lifecycle
+
+1. A workspace administrator creates a server. It is **always stored disabled**.
+2. `actions/test` opens a throwaway connection, initializes, and closes it.
+3. `actions/discover` walks `tools/list` pagination, accepting at most 128 tools
+   across at most 8 pages. Exceeding either limit rejects the whole discovery
+   rather than truncating, because a truncated catalog would make "the
+   administrator approved everything they saw" false. The probe and every page
+   of discovery share one absolute deadline; pagination cannot multiply it.
+4. The administrator approves tools individually and writes the model-facing
+   description for each.
+5. Only then can the server be enabled, and only with at least one approved
+   tool.
+6. A space administrator binds the server and optionally narrows the tool list
+   and adds prompt hints.
+7. Each user opts in per binding. Absence of a stored preference is opt-out.
+
+### Why remote text is untrusted
+
+A remote server controls its tool names, titles, descriptions, annotations, and
+JSON Schemas. All of it is treated as hostile input:
+
+- Remote titles and descriptions are **not stored**. Only a boolean recording
+  that the server shipped prose is kept, so an administrator can see that fact
+  without the text entering our data flow.
+- `readOnlyHint` and the other annotations are displayed as claims and never
+  used to decide the read/write class. The class is `read_only` because an
+  administrator approved it, not because a server asserted it.
+- JSON Schemas are rebuilt from an allowlist of structural keywords.
+  `description`, `title`, `$comment`, `examples`, and `default` are dropped;
+  `$ref`, `$defs`, `pattern`, string `enum`/`const` values, and dynamic object
+  properties are dropped as well. Every remote property name is replaced by an
+  opaque deterministic alias before the schema reaches the model, then mapped
+  back immediately before the RPC. The mapping remains server-side. This
+  removes remote-controlled prose from both keys and values while retaining a
+  callable structural contract. Depth is capped at 5, nodes at 256, properties
+  at 64 per object, and the serialized schema at 8 KiB.
+- The only model-facing text about a tool is the description the administrator
+  typed.
+- Every result is wrapped in a server-generated envelope with
+  `source: "external_mcp"` and `untrusted: true`, carrying the namespace only,
+  never the URL or the server id.
+- The agent preamble states the fixed Docmost policy first and the external-tool
+  rules after it, and space hints last, explicitly marked as non-overriding. The
+  remote server's own `instructions` are never placed in a prompt.
+
+### Tool naming
+
+`mcp__<namespace>__<slug>_<hash16>`, at most 64 characters. The namespace is
+`^[a-z][a-z0-9_]{0,23}$` and is immutable after creation because it is part of
+every tool name the model has already been shown. The hash is the first 16 hex
+characters of `sha256(remoteName)`, taken from the full remote name, so two
+remote names that collapse to the same slug still produce different tool names.
+Discovery also rejects the entire catalog if two remote names ever map to the
+same internal name. The `mcp__` prefix is reserved: the tool registry throws at
+boot if a built-in tool claims it.
+
+### Network policy
+
+`AiMcpUrlPolicyService` wraps the shared outbound policy with three additional
+constraints:
+
+- **Dual allowlist.** The origin must appear in `AI_MCP_ALLOWED_ORIGINS` *and* in
+  the workspace allowlist. Membership is decided per parsed origin, never by
+  string comparison.
+- **No development escape hatch.** An unlisted origin is rejected even in
+  development, unlike the provider and retrieval policies.
+- **Loopback.** Rejected unconditionally in production. In development it is
+  accepted only when both allowlists name it, so a local server can be tested
+  without weakening the production posture.
+
+Link-local, unspecified, and multicast addresses are always rejected, as are URL
+credentials, query strings, and fragments. Only HTTP(S) and only Streamable HTTP
+are supported: no stdio, no legacy SSE, no WebSocket, and no OAuth browser flow.
+
+All transport policy lives in a `fetch` override rather than the transport's
+`requestInit`, because the Streamable HTTP client overwrites `signal` on POST and
+DELETE and does not spread `requestInit` at all for the GET SSE stream. The
+override pins DNS results, forces `redirect: "manual"`, rejects every 3xx,
+verifies the request URL has not drifted, and caps the response at 1 MiB while it
+streams.
+
+### Secrets
+
+Request headers are validated case-insensitively against a blocklist covering
+hop-by-hop, forwarding, cookie, and transport-owned names. `mcp-session-id`,
+`mcp-protocol-version`, and `last-event-id` are on that list because the SDK
+merges caller headers over its own. Limits are 20 fields, 8 KiB per value, and
+32 KiB in total.
+
+The whole map is stored as one AES-256-GCM envelope keyed from `APP_SECRET`.
+Responses expose `headersConfigured` and, for workspace administrators only, the
+header **names**. No endpoint returns a value, and no contract type has a field
+that could carry one.
+
+Update semantics: omitting `headers` keeps the stored ciphertext, `clearHeaders:
+true` deletes it, and sending both is rejected. Deleting a server hard-deletes
+the row so the ciphertext stops existing; run steps keep their audit trail
+through an on-delete-set-null reference. Rotating `APP_SECRET` requires
+re-entering headers.
+
+### Connection pooling
+
+Clients are cached per `serverId:configVersion:policyVersion`, so any version
+bump yields a different key and a superseded client can never be found. Before
+every lease the pool re-reads those versions from the database: Redis
+invalidation on `ai:mcp:invalidate` is a latency optimisation, not a correctness
+dependency, and a missed event costs one query.
+
+At most 32 clients are cached, with a 5-minute idle and 30-minute absolute TTL.
+Creation is single-flight. A retired entry aborts its holder immediately so the
+lease fails fast rather than blocking a close for a full timeout. Any timeout,
+abort, protocol error, oversized response, or unsupported content type discards
+the connection, because the SDK settles the pending request on abort but only
+`transport.close()` ends the underlying HTTP request and SSE stream.
+Invalidation also aborts a pending build, so an obsolete client can never be
+published after a config change. `OnModuleDestroy` rejects new acquisition and
+closes everything, including builds that finish during shutdown.
+
+### Run integration
+
+When an agent run is created, a bounded snapshot is resolved **in the same
+transaction** and stored in `ai_runs.mcp_policy_snapshot`: profile key, workspace
+policy version, and per connection the server id, namespace, config version,
+binding id, binding policy version, space hints, and the namespaced tool
+definitions with their schema fingerprints. It carries no URL, no headers, and no
+secret; the URL is re-read at connect time so it cannot go stale. The snapshot is
+capped at 64 KiB and run creation fails closed above that rather than silently
+narrowing what the space allowed.
+
+Version 1 limits are 8 connections and 32 external tools per run, and at most 48
+built-in plus external definitions in one model turn.
+
+The snapshot is not authorization. Before every call, every 500 ms while a call
+is active, and once again before accepting its response, the policy resolver
+re-checks membership, the deployment and workspace switches, the server and
+binding state, current group membership and denials, the current user opt-in, all
+three version numbers, and the tool's schema fingerprint. Loosening policy after
+a run starts does not widen it; any narrowing or version change aborts the
+connection and ends the run with `agent_mcp_config_changed` or
+`agent_mcp_access_revoked`. Retry and regenerate resolve a fresh snapshot;
+resuming after a write approval keeps the original one and passes the same
+checks.
+
+External results flow through exactly the same budgets as built-in tool results:
+32 KiB per result, 128 KiB cumulative, and the existing 16/64 tool-call ceilings.
+Only MCP text blocks and JSON `structuredContent` are accepted; image, audio,
+embedded resource, resource link, and task outputs are rejected. A valid MCP
+response carrying `isError: true` is recorded as a failed external-tool step,
+not returned to the model as a successful observation.
+
+`ai_run_steps.tool_source` distinguishes `builtin` from `external_mcp`. An
+external step is always `read_only`, never carries an `approvalPreview`, and
+never participates in the approval or resume lifecycle.
+
+External tools reach the internal agent only. Chat, query-time retrieval, and the
+inbound `/mcp` surface never see them.
+
+### Observability
+
+The 60-second operational summary gains an `externalMcp` block: cache
+hit/miss/evict/retire/close, test and discovery outcomes with latency, call
+outcomes from a closed vocabulary, call latency, wire bytes, normalized result
+bytes, and high-water lease counts. It records no workspace, server, tool, or
+user id, no URL, no namespace, no arguments, and no output. Identifiers live only
+in database rows.
+
+### Rollout and rollback
+
+The migration is additive. Deploy with `AI_EXTERNAL_MCP_ENABLED=false`, set the
+deployment origins, then enable the workspace master switch and one test server
+and space. Emergency rollback is flipping the deployment switch: the pool closes
+its clients and the tables and ciphertext are preserved. Run the down migration
+only after exporting configuration, because it drops the catalog and the stored
+headers.
+
+## 8. API
 
 ### Administrative UI routes
 
 | Route                            | Purpose                                                               |
 | -------------------------------- | --------------------------------------------------------------------- |
-| `/settings/ai`                   | AI assistant overview with per-space configuration entry points       |
+| `/settings/ai`                   | redirects to `/settings/ai/spaces`                                    |
+| `/settings/ai/spaces`            | AI assistant overview with per-space configuration entry points       |
+| `/settings/ai/external-tools`    | outbound external MCP catalog, tool approvals, and the workspace switch |
 | `/settings/ai/spaces/:spaceSlug` | sectioned full-page configuration for one space                       |
 | `/settings/keys`                 | "API keys" page; redirects to the MCP tab                             |
 | `/settings/keys/mcp`             | MCP onboarding and workspace MCP-key administration                   |
@@ -700,6 +924,21 @@ CSRF contract.
 | `GET /api/ai/editor-actions/:id`                                 | read editor-action state                                       |
 | `POST /api/ai/editor-actions/:id/actions/cancel`                 | cancel an editor action                                        |
 
+Outbound external MCP adds the following. The `/ai/mcp-*` routes require
+workspace `owner|admin`; the space routes require full space access, except
+`mcp-preferences`, which is the calling user's own consent.
+
+| Method and path                                                     | Purpose                                                       |
+| ------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `GET/PATCH /api/ai/mcp-settings`                                     | read or update the workspace master switch and allowlist       |
+| `GET/POST /api/ai/mcp-servers`                                        | list the catalog or create a server (always stored disabled)   |
+| `GET/PATCH/DELETE /api/ai/mcp-servers/:serverId`                      | read, update, or hard-delete one server                        |
+| `POST /api/ai/mcp-servers/:serverId/actions/test`                     | probe the connection without caching a client                  |
+| `POST /api/ai/mcp-servers/:serverId/actions/discover`                 | list remote tools and store a sanitized snapshot               |
+| `GET /api/spaces/:spaceId/ai/mcp-bindings`                            | read space bindings plus the bindable catalog                  |
+| `PUT/DELETE /api/spaces/:spaceId/ai/mcp-bindings/:serverId`            | bind and narrow, or remove the binding                         |
+| `GET/PUT /api/spaces/:spaceId/ai/mcp-preferences`                      | read or fully replace the calling user's opt-in set; omitted bindings become disabled |
+
 ### Synchronization RAG API
 
 Every `/api/rag/*` route is read-only (`GET`), does not use CSRF, and accepts
@@ -738,7 +977,7 @@ All MCP lifecycle, `tools/list`, and `tools/call` messages use the root
 surface rather than a conventional REST route and is intentionally outside the
 global `/api` prefix.
 
-## 8. Contracts
+## 9. Contracts
 
 Canonical TypeScript contracts live in `packages/api-contract/src/ai.ts`.
 Important enumerations include provider `openai-compatible`; adapters `none`,
@@ -755,6 +994,18 @@ and `deleteNode`. Assistant messages expose `reasoning`,
 `runStatus`, `retrievalOutcome`, `retrievalErrorCode`, `applyContext`, and
 citations when applicable. Secret and credential fields are never part of
 public models.
+
+Outbound external MCP contracts live in
+`packages/api-contract/src/ai-external-mcp.ts`: `AiExternalMcpSettings`,
+`AiExternalMcpServerListItem`, `AiExternalMcpServer`,
+`AiExternalMcpCatalogEntry`, `AiExternalMcpDiscoveredTool`,
+`AiExternalMcpApprovedTool`, `AiExternalMcpBinding`,
+`AiExternalMcpUserPreference`, and their request types. `AiRunStep` gains
+`toolSource` (`builtin | external_mcp`) and `toolNamespace`, and `AiAvailability`
+gains an optional `externalMcp` block. Two invariants hold by construction: no
+type in that file carries an HTTP header value, and
+`AiExternalMcpApprovedTool.writeClass` is the literal `"read_only"`, which makes
+an external write tool unrepresentable at compile time.
 
 The MCP surface does not duplicate these TypeScript response models. Tool
 definitions are generated by `AiToolRegistryService`; the MCP adapter returns

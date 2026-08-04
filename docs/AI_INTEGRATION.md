@@ -266,6 +266,53 @@ mounted into `apps/rag-sync` is separate from the query credential encrypted in
 `ai_space_configs`. Secret values are read from mounted files and must not be
 placed in the sync JSON, logs, jobs, or metrics.
 
+## Outbound external MCP servers
+
+This lets the internal agent call read-only tools on remote MCP servers. It is
+the opposite direction from the inbound `/mcp` endpoint and shares no
+configuration or credentials with it. Canonical detail lives in
+[`AI_ASSISTANT_AND_RAG.md`](./AI_ASSISTANT_AND_RAG.md) section 7; this section
+covers only operator setup.
+
+Two environment keys, both off by default:
+
+- `AI_EXTERNAL_MCP_ENABLED` — deployment kill switch. While `false` the feature
+  is unreachable no matter how a workspace, space, or user is configured.
+- `AI_MCP_ALLOWED_ORIGINS` — comma-separated exact `http(s)` origins. Independent
+  from the provider and retrieval allowlists. A workspace administrator can
+  narrow this list but never widen it: an origin must appear here **and** in the
+  workspace allowlist.
+
+Setup order, each step owned by a different role:
+
+1. An operator sets `AI_EXTERNAL_MCP_ENABLED=true` and lists the origins.
+2. A workspace administrator turns on the master switch at
+   `/settings/ai/external-tools`, narrows the deployment allowlist with the
+   editable workspace allowlist, adds a server, runs Test and Discover, approves
+   individual tools with a description each, then enables the server.
+3. A space administrator binds the server to a space and optionally narrows the
+   tool list and adds prompt hints.
+4. Each user opts in from the AI composer. Absence of a stored preference is
+   opt-out, so nothing is sent outward until a user explicitly agrees. Saving
+   preferences replaces the complete set; omitted bindings are disabled.
+
+Operational notes:
+
+- **Loopback is rejected in production**, and accepted in development only when
+  both allowlists name it. Testing against a local MCP server therefore needs a
+  LAN or container address listed in both places, which is the same dual-approval
+  path that private ranges use.
+- Use read-only credentials on the remote side. An administrator marking a tool
+  read-only records a Docmost-side classification; it is not proof that the
+  remote server has no side effects.
+- Emergency rollback is flipping `AI_EXTERNAL_MCP_ENABLED` to `false`. Cached
+  clients close, and configuration and encrypted headers are preserved.
+- Membership, all policy gates, and policy/config versions are re-checked during
+  an active remote call and immediately before accepting its response. Revoking
+  access aborts the connection instead of waiting for the remote timeout.
+- Rotating `APP_SECRET` invalidates stored request headers; they must be
+  re-entered.
+
 ## Security properties
 
 - Never store AI credentials in `spaces.settings`, logs, WebSocket events, or queue payloads.
