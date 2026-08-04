@@ -67,6 +67,7 @@ describe('PageExportController markdown copy with comments', () => {
     );
     expect(copyMarkdownWithCommentsService.build).toHaveBeenCalledWith(
       page,
+      expect.objectContaining({ role: 'admin' }),
       'en-US',
     );
   });

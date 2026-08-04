@@ -1,8 +1,4 @@
-import {
-  NodeViewContent,
-  NodeViewProps,
-  NodeViewWrapper,
-} from "@tiptap/react";
+import { NodeViewContent, NodeViewProps, NodeViewWrapper } from "@tiptap/react";
 import { ActionIcon, Menu, Tooltip } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import {
@@ -16,6 +12,10 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import classes from "./transclusion.module.css";
 import SyncBlockReferencesDropdown from "@/features/transclusion/components/sync-block-references-dropdown";
+import {
+  buildSyncedBlockClipboardPayload,
+  writeTransclusionClipboard,
+} from "@/features/editor/extensions/transclusion-clipboard";
 
 export default function TransclusionView(props: NodeViewProps) {
   const { editor, node, deleteNode } = props;
@@ -32,21 +32,20 @@ export default function TransclusionView(props: NodeViewProps) {
   const [copied, setCopied] = useState(false);
   const handleCopy = async () => {
     if (!sourcePageId || !transclusionId) return;
-    const html = `<div data-type="transclusionReference" data-source-page-id="${sourcePageId}" data-transclusion-id="${transclusionId}"></div>`;
+    const payload = buildSyncedBlockClipboardPayload({
+      editor,
+      content: node.content,
+      sourcePageId,
+      transclusionId,
+      strings: {
+        label: t("Synced block"),
+        unavailable: t("Synced block content unavailable"),
+      },
+    });
     try {
-      await navigator.clipboard.write([
-        new ClipboardItem({
-          "text/html": new Blob([html], { type: "text/html" }),
-          "text/plain": new Blob([html], { type: "text/plain" }),
-        }),
-      ]);
+      await writeTransclusionClipboard(payload);
     } catch {
-      // Fallback for browsers without ClipboardItem write support
-      try {
-        await navigator.clipboard.writeText(html);
-      } catch {
-        return;
-      }
+      return;
     }
     setCopied(true);
     window.setTimeout(() => setCopied(false), 2000);

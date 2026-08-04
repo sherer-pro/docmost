@@ -59,8 +59,7 @@ class ExportControllerDelegate {
       dto.includeAttachments,
       dto.includeChildren,
       user.locale,
-      normalizeUserSettings(user.settings).preferences
-        .headingNumberingByPageId,
+      normalizeUserSettings(user.settings).preferences.headingNumberingByPageId,
       // Only the root page is authorized above; the service filters descendants
       // through the page access rules.
       user,
@@ -85,8 +84,9 @@ class ExportControllerDelegate {
       dto.format,
       dto.includeAttachments,
       user.locale,
-      normalizeUserSettings(user.settings).preferences
-        .headingNumberingByPageId,
+      normalizeUserSettings(user.settings).preferences.headingNumberingByPageId,
+      undefined,
+      user,
     );
 
     res.headers({
@@ -154,6 +154,7 @@ export class PageExportController {
 
     const markdown = await this.copyMarkdownWithCommentsService.build(
       page,
+      user,
       user.locale,
     );
 
@@ -192,5 +193,4 @@ export class SpaceExportController {
   ) {
     return this.delegate.exportSpace(dto, user, res);
   }
-
 }

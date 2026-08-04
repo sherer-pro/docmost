@@ -98,6 +98,7 @@ import i18n from "@/i18n.ts";
 import { MarkdownClipboard } from "@/features/editor/extensions/markdown-clipboard.ts";
 import EmojiCommand from "./emoji-command";
 import { InlineCodeNoWrap } from "./inline-code-no-wrap";
+import { TransclusionClipboard } from "./transclusion-clipboard";
 
 const lowlight = createLowlight(common);
 lowlight.register("mermaid", plaintext);
@@ -287,6 +288,7 @@ export const mainExtensions = [
   TransclusionReference.configure({
     view: TransclusionReferenceView,
   }),
+  TransclusionClipboard,
   MarkdownClipboard.configure({
     transformPastedText: true,
   }),

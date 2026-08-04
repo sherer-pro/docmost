@@ -1,16 +1,20 @@
 jest.mock('../../collaboration/collaboration.util', () => ({
-  jsonToHtml: (input: any) =>
-    (input.content ?? [])
-      .map((node: any) => {
-        const text = (node.content ?? [])
-          .map((child: any) => child.text ?? '')
-          .join('');
-        if (node.type === 'heading') {
-          return `<h${node.attrs?.level}>${text}</h${node.attrs?.level}>`;
-        }
-        return `<p>${text || 'mock-content'}</p>`;
-      })
-      .join(''),
+  jsonToHtml: (input: any) => {
+    const render = (node: any): string => {
+      const text = (node.content ?? [])
+        .map((child: any) => child.text ?? '')
+        .join('');
+      if (node.type === 'heading') {
+        return `<h${node.attrs?.level}>${text}</h${node.attrs?.level}>`;
+      }
+      if (node.type === 'transclusionSource') {
+        return `<div data-type="transclusionSource" data-docmost-transclusion="true" style="border: 1px dashed"><div data-docmost-transclusion-content>${(node.content ?? []).map(render).join('')}</div></div>`;
+      }
+      return `<p>${text || 'mock-content'}</p>`;
+    };
+
+    return (input.content ?? []).map(render).join('');
+  },
   jsonToNode: (input: any) => ({
     descendants: (callback: (node: any, pos?: number) => void) => {
       const visit = (node: any) => {
@@ -86,11 +90,17 @@ describe('ExportService PDF export', () => {
   };
 
   const pageAccessService = {
-    getEffectiveAccessForPages: jest.fn(async (pages: Array<{ id: string }>) => {
-      return new Map(
-        pages.map((page) => [page.id, { capabilities: { canRead: true } }]),
-      );
-    }),
+    getEffectiveAccessForPages: jest.fn(
+      async (pages: Array<{ id: string }>) => {
+        return new Map(
+          pages.map((page) => [page.id, { capabilities: { canRead: true } }]),
+        );
+      },
+    ),
+  };
+
+  const transclusionService = {
+    lookup: jest.fn(async () => ({ items: [] })),
   };
 
   const service = new ExportService(
@@ -101,6 +111,7 @@ describe('ExportService PDF export', () => {
     htmlPdfRendererService as any,
     tokenService as any,
     pageAccessService as any,
+    transclusionService as any,
   );
 
   const streamToBuffer = async (
@@ -192,6 +203,104 @@ describe('ExportService PDF export', () => {
     jest.clearAllMocks();
     spaceSettings = {};
     mockUserLookup([]);
+    transclusionService.lookup.mockResolvedValue({ items: [] });
+  });
+
+  it('materializes references with a framed localized snapshot', async () => {
+    const page = createPage({
+      id: 'page-1',
+      slugId: 'slug-1',
+      title: 'Root',
+      parentPageId: null,
+      text: 'unused',
+    });
+    (page as any).content = {
+      type: 'doc',
+      content: [
+        {
+          type: 'transclusionReference',
+          attrs: { sourcePageId: 'source-1', transclusionId: 'block-1' },
+        },
+      ],
+    };
+    const user = { id: 'user-1', workspaceId: 'ws-1' } as any;
+    transclusionService.lookup.mockResolvedValue({
+      items: [
+        {
+          sourcePageId: 'source-1',
+          transclusionId: 'block-1',
+          content: {
+            type: 'doc',
+            content: [
+              {
+                type: 'paragraph',
+                content: [{ type: 'text', text: 'Shared text' }],
+              },
+            ],
+          },
+          sourceUpdatedAt: new Date(),
+        },
+      ],
+    });
+
+    const exported = await service.exportPage(
+      ExportFormat.HTML,
+      page as any,
+      true,
+      'ru-RU',
+      undefined,
+      undefined,
+      user,
+    );
+
+    expect(transclusionService.lookup).toHaveBeenCalledWith(
+      [{ sourcePageId: 'source-1', transclusionId: 'block-1' }],
+      user,
+    );
+    expect(exported).toContain('Синхронизируемый блок');
+    expect(exported).toContain('Shared text');
+    expect(exported).toContain('border: 1px dashed');
+  });
+
+  it('does not expose denied reference content', async () => {
+    const page = createPage({
+      id: 'page-1',
+      slugId: 'slug-1',
+      title: 'Root',
+      parentPageId: null,
+      text: 'unused',
+    });
+    (page as any).content = {
+      type: 'doc',
+      content: [
+        {
+          type: 'transclusionReference',
+          attrs: { sourcePageId: 'source-1', transclusionId: 'block-1' },
+        },
+      ],
+    };
+    transclusionService.lookup.mockResolvedValue({
+      items: [
+        {
+          sourcePageId: 'source-1',
+          transclusionId: 'block-1',
+          status: 'no_access',
+        },
+      ],
+    });
+
+    const exported = await service.exportPage(
+      ExportFormat.HTML,
+      page as any,
+      true,
+      'ru-RU',
+      undefined,
+      undefined,
+      { id: 'user-1', workspaceId: 'ws-1' } as any,
+    );
+
+    expect(exported).toContain('Содержимое недоступно');
+    expect(exported).not.toContain('Secret source content');
   });
 
   it('exports a page as PDF through HTML renderer', async () => {
@@ -406,9 +515,7 @@ describe('ExportService PDF export', () => {
     await service.exportPage(ExportFormat.PDF, page as any, true, 'ru-RU');
 
     const [renderedHtml] = htmlPdfRendererService.render.mock.calls[0];
-    expect(renderedHtml).toContain(
-      '\u0420\u043e\u043b\u044c \u0418\u0418',
-    );
+    expect(renderedHtml).toContain('\u0420\u043e\u043b\u044c \u0418\u0418');
     expect(renderedHtml).toContain(
       '\u0421\u043e\u0430\u0432\u0442\u043e\u0440+',
     );
@@ -549,9 +656,7 @@ describe('ExportService PDF export', () => {
 
     expect(zip.file('Root.html')).toBeDefined();
     expect(zip.file('Root/Child.html')).toBeDefined();
-    expect(
-      pageAccessService.getEffectiveAccessForPages,
-    ).not.toHaveBeenCalled();
+    expect(pageAccessService.getEffectiveAccessForPages).not.toHaveBeenCalled();
   });
 
   it('ignores legacy page overrides in one ZIP export', async () => {
