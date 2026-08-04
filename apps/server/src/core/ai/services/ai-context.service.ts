@@ -11,6 +11,7 @@ import { PageAccessService } from '../../page-access/page-access.service';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 import {
   AI_CONTEXT_LIMITS,
+  AiDocumentHeading,
   AiDescendantSelection,
   AiContextSource,
   AiContextSourceType,
@@ -47,6 +48,7 @@ export interface AiResolvedRunContextSource {
   contextSourceId: string;
   dependencyPageIds: string[];
   origin: 'current_document' | 'explicit';
+  citationHeadings: AiDocumentHeading[];
 }
 
 interface AiContextRoot {
@@ -594,8 +596,9 @@ export class AiContextService {
       sourceId: string;
       pageId: string;
       sourceTitle: string;
-      sourceUrl: null;
+      sourceUrl: string | null;
       markdownSnapshot: string;
+      citationHeadings: AiDocumentHeading[];
       contentSha256: string;
       position: number;
     }> = [];
@@ -616,8 +619,12 @@ export class AiContextService {
         sourceId: item.source.sourceId,
         pageId: item.source.pageId,
         sourceTitle: item.source.title,
-        sourceUrl: null,
+        sourceUrl: item.source.url,
         markdownSnapshot: markdown,
+        citationHeadings:
+          item.origin === 'current_document'
+            ? (dto.documentHeadings ?? [])
+            : [],
         contentSha256:
           item.origin === 'current_document' ? this.fingerprint(markdown) : '',
         position: snapshots.length,
@@ -685,6 +692,7 @@ export class AiContextService {
           sourceTitle: source.sourceTitle,
           sourceUrl: source.sourceUrl,
           markdownSnapshot: source.markdownSnapshot,
+          citationHeadings: source.citationHeadings,
           contentSha256: source.contentSha256,
           position,
         })
@@ -745,6 +753,9 @@ export class AiContextService {
       let markdown = row.markdownSnapshot;
       let title = row.sourceTitle;
       let dependencies = [row.pageId];
+      let citationHeadings = this.normalizeCitationHeadings(
+        row.citationHeadings,
+      );
       if (row.origin === 'explicit' && row.contentSha256 === '') {
         const snapshot = await this.resolveSnapshot(
           row,
@@ -757,6 +768,7 @@ export class AiContextService {
         markdown = snapshot.markdown;
         title = snapshot.title;
         dependencies = snapshot.dependencyPageIds;
+        citationHeadings = snapshot.citationHeadings;
       }
       const bounded = markdown.slice(0, Math.max(0, remaining));
       remaining -= bounded.length;
@@ -766,19 +778,22 @@ export class AiContextService {
         title,
         bounded,
         dependencies,
+        citationHeadings,
       );
+      const sourceUrl = row.sourceUrl ?? (await this.buildSourceUrl(row));
       resolved.push({
         sourceType: row.sourceType as AiContextSourceType,
         sourceId: row.sourceId,
         pageId: row.pageId,
         sourceTitle: title,
-        sourceUrl: row.sourceUrl,
+        sourceUrl,
         excerpt: bounded.slice(0, 1000),
         markdown: bounded,
         position: row.position,
         contextSourceId: stored.id,
         dependencyPageIds: dependencies,
         origin: row.origin as 'current_document' | 'explicit',
+        citationHeadings,
       });
     }
     return resolved;
@@ -790,6 +805,7 @@ export class AiContextService {
     title: string,
     markdown: string,
     dependencyPageIds: string[],
+    citationHeadings: AiDocumentHeading[],
   ): Promise<AiRunContextSource> {
     return this.db.transaction().execute(async (trx) => {
       const updated = await trx
@@ -798,6 +814,7 @@ export class AiContextService {
           sourceTitle: title,
           markdownSnapshot: markdown,
           contentSha256: this.fingerprint(markdown),
+          citationHeadings,
         })
         .where('id', '=', row.id)
         .where('runId', '=', run.id)
@@ -832,6 +849,7 @@ export class AiContextService {
     title: string;
     markdown: string;
     dependencyPageIds: string[];
+    citationHeadings: AiDocumentHeading[];
   }> {
     if (row.sourceType === 'page') {
       const page = await this.db
@@ -853,6 +871,7 @@ export class AiContextService {
           page.textContent,
         ).slice(0, maxChars),
         dependencyPageIds: [page.id],
+        citationHeadings: this.extractCitationHeadings(page.content),
       };
     }
     if (row.sourceType === 'database_row') {
@@ -928,6 +947,7 @@ export class AiContextService {
         row.pageId,
         ...(row.databasePageId ? [row.databasePageId] : []),
       ],
+      citationHeadings: this.extractCitationHeadings(row.content),
     };
   }
 
@@ -992,7 +1012,99 @@ export class AiContextService {
       title: database.name,
       markdown: markdown.slice(0, maxChars),
       dependencyPageIds: usedPageIds,
+      citationHeadings: [],
     };
+  }
+
+  private normalizeCitationHeadings(value: unknown): AiDocumentHeading[] {
+    if (!Array.isArray(value)) return [];
+    const headings = value
+      .filter((item): item is Record<string, unknown> =>
+        Boolean(item && typeof item === 'object' && !Array.isArray(item)),
+      )
+      .map((item) => ({
+        id: typeof item.id === 'string' ? item.id : '',
+        title: typeof item.title === 'string' ? item.title.slice(0, 500) : '',
+        level: Math.min(6, Math.max(1, Number(item.level) || 1)),
+        position: Math.max(0, Number(item.position) || 0),
+      }))
+      .filter(
+        (item) =>
+          item.id.length > 0 &&
+          item.id.length <= 128 &&
+          /^[A-Za-z0-9_-]+$/.test(item.id),
+      );
+    const counts = new Map<string, number>();
+    headings.forEach((heading) =>
+      counts.set(heading.id, (counts.get(heading.id) ?? 0) + 1),
+    );
+    return headings
+      .filter((heading) => counts.get(heading.id) === 1)
+      .slice(0, 500);
+  }
+
+  private extractCitationHeadings(content: unknown): AiDocumentHeading[] {
+    if (!content || typeof content !== 'object') return [];
+    const headings: AiDocumentHeading[] = [];
+    let position = 0;
+    const visit = (value: unknown) => {
+      if (!value || typeof value !== 'object') return;
+      const node = value as {
+        type?: string;
+        attrs?: Record<string, unknown>;
+        content?: unknown[];
+        text?: string;
+      };
+      const start = position;
+      position += 1;
+      if (node.type === 'heading') {
+        const id = typeof node.attrs?.id === 'string' ? node.attrs.id : '';
+        if (/^[A-Za-z0-9_-]{1,128}$/.test(id)) {
+          headings.push({
+            id,
+            title: this.proseMirrorText(node).slice(0, 500),
+            level: Math.min(6, Math.max(1, Number(node.attrs?.level) || 1)),
+            position: start,
+          });
+        }
+      }
+      node.content?.forEach(visit);
+      position += 1;
+    };
+    visit(content);
+    const counts = new Map<string, number>();
+    headings.forEach((heading) =>
+      counts.set(heading.id, (counts.get(heading.id) ?? 0) + 1),
+    );
+    return headings
+      .filter((heading) => counts.get(heading.id) === 1)
+      .slice(0, 500);
+  }
+
+  private proseMirrorText(value: unknown): string {
+    if (!value || typeof value !== 'object') return '';
+    const node = value as { text?: string; content?: unknown[] };
+    return [
+      node.text ?? '',
+      ...(node.content?.map((item) => this.proseMirrorText(item)) ?? []),
+    ]
+      .join('')
+      .trim();
+  }
+
+  private async buildSourceUrl(
+    row: AiRunContextSource,
+  ): Promise<string | null> {
+    const page = await this.db
+      .selectFrom('pages as p')
+      .innerJoin('spaces as s', 's.id', 'p.spaceId')
+      .select(['p.slugId', 's.slug as spaceSlug'])
+      .where('p.id', '=', row.pageId)
+      .where('p.deletedAt', 'is', null)
+      .executeTakeFirst();
+    if (!page) return null;
+    const route = row.sourceType === 'database' ? 'db' : 'p';
+    return `/s/${encodeURIComponent(page.spaceSlug)}/${route}/${encodeURIComponent(page.slugId)}`;
   }
 
   private async databaseRowCells(databaseId: string, pageIds: string[]) {

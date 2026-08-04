@@ -11,6 +11,65 @@ function queryReturning(rows: unknown[]) {
 }
 
 describe('AiRetrievalService', () => {
+  it('maps a unique excerpt to a stable heading and rejects ambiguous matches', () => {
+    const service = new AiRetrievalService(
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+    const content = {
+      type: 'doc',
+      content: [
+        {
+          type: 'heading',
+          attrs: { id: 'first', level: 2 },
+          content: [{ type: 'text', text: 'First section' }],
+        },
+        {
+          type: 'paragraph',
+          content: [{ type: 'text', text: 'Unique section evidence text.' }],
+        },
+        {
+          type: 'heading',
+          attrs: { id: 'second', level: 2 },
+          content: [{ type: 'text', text: 'Second section' }],
+        },
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'Repeated evidence appears in both places.' },
+          ],
+        },
+        {
+          type: 'heading',
+          attrs: { id: 'third', level: 2 },
+          content: [{ type: 'text', text: 'Third section' }],
+        },
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'Repeated evidence appears in both places.' },
+          ],
+        },
+      ],
+    };
+
+    expect(
+      (service as any).matchPageSection(
+        content,
+        'Unique section evidence text.',
+      ),
+    ).toEqual({ id: 'first', title: 'First section' });
+    expect(
+      (service as any).matchPageSection(
+        content,
+        'Repeated evidence appears in both places.',
+      ),
+    ).toBeNull();
+  });
+
   it.each([
     {
       name: 'reports ready when a candidate resolves to a readable live page',

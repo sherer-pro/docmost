@@ -419,6 +419,26 @@ export class AiSelectionDto {
   to: number;
 }
 
+export class AiDocumentHeadingDto {
+  @IsString()
+  @Length(1, 128)
+  @Matches(/^[A-Za-z0-9_-]+$/)
+  id: string;
+
+  @IsString()
+  @MaxLength(500)
+  title: string;
+
+  @IsInt()
+  @Min(1)
+  @Max(6)
+  level: number;
+
+  @IsInt()
+  @Min(0)
+  position: number;
+}
+
 export class SendAiMessageDto {
   @IsString()
   @Length(1, 32000)
@@ -441,6 +461,13 @@ export class SendAiMessageDto {
   @IsString()
   @MaxLength(128)
   snapshotHash?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(500)
+  @ValidateNested({ each: true })
+  @Type(() => AiDocumentHeadingDto)
+  documentHeadings?: AiDocumentHeadingDto[];
 
   @IsOptional()
   @IsObject()

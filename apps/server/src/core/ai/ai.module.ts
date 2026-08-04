@@ -22,6 +22,7 @@ import { AiRetrievalHttpClient } from './retrieval/ai-retrieval-http-client.serv
 import { AiConfigService } from './services/ai-config.service';
 import { AiConversationService } from './services/ai-conversation.service';
 import { AiContextService } from './services/ai-context.service';
+import { AiCitationService } from './services/ai-citation.service';
 import { AiFileService } from './services/ai-file.service';
 import { AiOutboundUrlPolicyService } from './services/ai-outbound-url-policy.service';
 import { AiOperationalMetricsService } from './services/ai-operational-metrics.service';
@@ -75,6 +76,7 @@ import { CollaborationModule } from '../../collaboration/collaboration.module';
     AiChatProcessor,
     AiConfigService,
     AiConversationService,
+    AiCitationService,
     AiContextService,
     AiFileService,
     AiOutboundUrlPolicyService,

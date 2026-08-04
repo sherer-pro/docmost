@@ -236,7 +236,11 @@ export interface AiMessages {
 }
 
 export interface AiMessageSources {
+  candidateKey: string | null;
+  citationKey: string | null;
+  citationState: Generated<string>;
   createdAt: Generated<Timestamp>;
+  displayPosition: number | null;
   excerpt: string | null;
   id: Generated<string>;
   messageId: string;
@@ -244,6 +248,8 @@ export interface AiMessageSources {
   position: number;
   relevanceScore: number | null;
   runId: string;
+  sectionId: string | null;
+  sectionTitle: string | null;
   sourceId: string;
   sourceTitle: string;
   sourceType: string;
@@ -251,6 +257,7 @@ export interface AiMessageSources {
 }
 
 export interface AiRunContextSources {
+  citationHeadings: Generated<unknown>;
   contentSha256: string;
   createdAt: Generated<Timestamp>;
   id: Generated<string>;

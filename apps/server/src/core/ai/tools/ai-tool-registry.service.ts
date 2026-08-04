@@ -26,6 +26,7 @@ import {
   hashProseMirrorJson,
   prepareAiPageOperation,
 } from '../../../common/helpers/prosemirror/ai-page-operation';
+import { AiCitationCandidate } from '../ai.types';
 import { AI_MCP_TOOL_NAME_PREFIX } from '../mcp/ai-mcp.constants';
 
 // Model steps and tool calls are budgeted per approval segment: an approved,
@@ -84,6 +85,7 @@ export type AiToolWriteProposal = {
 export type AiToolExecutionResult = {
   content: unknown;
   writeProposal?: AiToolWriteProposal;
+  citations?: Array<Omit<AiCitationCandidate, 'marker'>>;
 };
 
 export type AiToolDefinition = {
@@ -454,18 +456,20 @@ export class AiToolRegistryService {
         excludedPageIds: excluded,
       },
     );
+    const items = response.items.map((item) => ({
+      pageId: item.id,
+      type: (item.databaseId ? 'database_row' : 'page') as
+        | 'page'
+        | 'database_row',
+      databaseId: item.databaseId ?? null,
+      title: item.title,
+      highlight: item.highlight,
+      breadcrumbs: item.breadcrumbs?.map((crumb) => crumb.title) ?? [],
+      updatedAt: item.updatedAt,
+    }));
     return {
-      content: {
-        items: response.items.map((item) => ({
-            pageId: item.id,
-            type: item.databaseId ? 'database_row' : 'page',
-            databaseId: item.databaseId ?? null,
-            title: item.title,
-            highlight: item.highlight,
-            breadcrumbs: item.breadcrumbs?.map((crumb) => crumb.title) ?? [],
-            updatedAt: item.updatedAt,
-          })),
-      },
+      content: { items },
+      citations: await this.pageRootCitations(items, context),
     };
   }
 
@@ -504,17 +508,22 @@ export class AiToolRegistryService {
       .orderBy('position', 'asc')
       .limit(500)
       .execute();
+    const content = fitAiToolItems(
+      rows.map((row) => ({
+        ...row,
+        parentPageId:
+          row.parentPageId &&
+          snapshot.readablePageIds.has(row.parentPageId) &&
+          !excluded.has(row.parentPageId)
+            ? row.parentPageId
+            : null,
+      })),
+    );
     return {
-      content: fitAiToolItems(
-        rows.map((row) => ({
-            ...row,
-            parentPageId:
-              row.parentPageId &&
-              snapshot.readablePageIds.has(row.parentPageId) &&
-              !excluded.has(row.parentPageId)
-                ? row.parentPageId
-                : null,
-          })),
+      content,
+      citations: await this.pageRootCitations(
+        content.items.map((item: any) => ({ pageId: item.id, type: 'page' })),
+        context,
       ),
     };
   }
@@ -567,6 +576,13 @@ export class AiToolRegistryService {
           .map((item) => ({ id: item.id, title: item.title })),
         children,
       },
+      citations: [
+        ...(await this.pageCitations(page, undefined, context)),
+        ...(await this.pageRootCitations(
+          children.map((child) => ({ pageId: child.id, type: 'page' })),
+          context,
+        )),
+      ],
     };
   }
 
@@ -593,6 +609,7 @@ export class AiToolRegistryService {
           : getAiPageOutline(document ?? {}).slice(0, 80),
         truncated: !fits,
       },
+      citations: await this.pageCitations(page, document, context),
     };
   }
 
@@ -604,7 +621,14 @@ export class AiToolRegistryService {
     const outline = getAiPageOutline(
       (page.content ?? { type: 'doc', content: [] }) as ProseMirrorJson,
     );
-    return { content: { pageId, items: outline.slice(0, 300) } };
+    return {
+      content: { pageId, items: outline.slice(0, 300) },
+      citations: await this.pageCitations(
+        page,
+        (page.content ?? { type: 'doc', content: [] }) as ProseMirrorJson,
+        context,
+      ),
+    };
   }
 
   private async getNode(
@@ -617,7 +641,15 @@ export class AiToolRegistryService {
       (page.content ?? { type: 'doc', content: [] }) as ProseMirrorJson,
       nodeId,
     );
-    return { content: { pageId, nodeId, node } };
+    return {
+      content: { pageId, nodeId, node },
+      citations: await this.pageCitations(
+        page,
+        (page.content ?? { type: 'doc', content: [] }) as ProseMirrorJson,
+        context,
+        nodeId,
+      ),
+    };
   }
 
   private async searchInPage(
@@ -646,7 +678,135 @@ export class AiToolRegistryService {
       });
       offset = match + Math.max(query.length, 1);
     }
-    return { content: { pageId, items } };
+    return {
+      content: { pageId, items },
+      citations: await this.pageCitations(page, undefined, context),
+    };
+  }
+
+  private async pageCitations(
+    page: any,
+    document: ProseMirrorJson | undefined,
+    context: AiToolExecutionContext,
+    preferredNodeId?: string,
+  ): Promise<Array<Omit<AiCitationCandidate, 'marker'>>> {
+    const space = await this.db
+      .selectFrom('spaces')
+      .select('slug')
+      .where('id', '=', context.spaceId)
+      .executeTakeFirst();
+    const baseUrl = space
+      ? `/s/${encodeURIComponent(space.slug)}/p/${encodeURIComponent(page.slugId)}`
+      : null;
+    const root: Omit<AiCitationCandidate, 'marker'> = {
+      candidateKey: `page:${page.id}:root`,
+      sourceType: 'page',
+      sourceId: page.id,
+      pageId: page.id,
+      sourceTitle: page.title?.trim() || 'Untitled',
+      sourceUrl: baseUrl,
+      excerpt: null,
+      relevanceScore: null,
+      sectionId: null,
+      sectionTitle: null,
+      root: true,
+    };
+    if (!document) return [root];
+    const outline = getAiPageOutline(document);
+    const stableHeadings = outline.filter(
+      (item) =>
+        item.type === 'heading' &&
+        typeof item.id === 'string' &&
+        /^[A-Za-z0-9_-]{1,128}$/.test(item.id),
+    );
+    const idCounts = new Map<string, number>();
+    stableHeadings.forEach((item) =>
+      idCounts.set(item.id!, (idCounts.get(item.id!) ?? 0) + 1),
+    );
+    const headings = stableHeadings.filter(
+      (item) => idCounts.get(item.id!) === 1,
+    );
+    const selected = preferredNodeId
+      ? headings.filter((item) => item.id === preferredNodeId)
+      : headings;
+    return [
+      root,
+      ...selected.slice(0, 300).map((item) => ({
+        ...root,
+        candidateKey: `page:${page.id}:${item.id}`,
+        sourceUrl: baseUrl
+          ? `${baseUrl}#${encodeURIComponent(item.id!)}`
+          : null,
+        excerpt: item.text,
+        sectionId: item.id,
+        sectionTitle: item.text,
+        root: false,
+      })),
+    ];
+  }
+
+  private async pageRootCitations(
+    sources: Array<{ pageId: string; type: 'page' | 'database_row' }>,
+    context: AiToolExecutionContext,
+  ): Promise<Array<Omit<AiCitationCandidate, 'marker'>>> {
+    const sourceTypes = new Map(
+      sources.map((source) => [source.pageId, source.type] as const),
+    );
+    const uniquePageIds = [...sourceTypes.keys()].slice(0, 512);
+    if (uniquePageIds.length === 0) return [];
+    const databaseRowPageIds = uniquePageIds.filter(
+      (pageId) => sourceTypes.get(pageId) === 'database_row',
+    );
+    const [space, pages, databaseRows] = await Promise.all([
+      this.db
+        .selectFrom('spaces')
+        .select('slug')
+        .where('id', '=', context.spaceId)
+        .executeTakeFirst(),
+      this.db
+        .selectFrom('pages')
+        .select(['id', 'title', 'slugId'])
+        .where('workspaceId', '=', context.workspaceId)
+        .where('spaceId', '=', context.spaceId)
+        .where('deletedAt', 'is', null)
+        .where('id', 'in', uniquePageIds)
+        .execute(),
+      databaseRowPageIds.length
+        ? this.db
+            .selectFrom('databaseRows')
+            .select(['id', 'pageId'])
+            .where('workspaceId', '=', context.workspaceId)
+            .where('pageId', 'in', databaseRowPageIds)
+            .execute()
+        : Promise.resolve([]),
+    ]);
+    const byId = new Map(pages.map((page) => [page.id, page]));
+    const rowByPageId = new Map(
+      databaseRows.map((row) => [row.pageId, row.id] as const),
+    );
+    return uniquePageIds.flatMap((pageId) => {
+      const page = byId.get(pageId);
+      if (!page) return [];
+      const sourceType = sourceTypes.get(pageId) ?? 'page';
+      const sourceId = rowByPageId.get(pageId) ?? page.id;
+      return [
+        {
+          candidateKey: `${sourceType}:${sourceId}:root`,
+          sourceType,
+          sourceId,
+          pageId: page.id,
+          sourceTitle: page.title?.trim() || 'Untitled',
+          sourceUrl: space
+            ? `/s/${encodeURIComponent(space.slug)}/p/${encodeURIComponent(page.slugId)}`
+            : null,
+          excerpt: null,
+          relevanceScore: null,
+          sectionId: null,
+          sectionTitle: null,
+          root: true,
+        },
+      ];
+    });
   }
 
   private async proposeWrite(

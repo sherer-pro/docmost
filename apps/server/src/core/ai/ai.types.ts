@@ -93,4 +93,26 @@ export type AiSafeRetrievalSource = {
   sourceUrl: string | null;
   excerpt: string;
   relevanceScore: number | null;
+  sectionId?: string | null;
+  sectionTitle?: string | null;
+};
+
+export type AiCitationCandidate = {
+  marker: string;
+  candidateKey: string;
+  sourceType: 'page' | 'database' | 'database_row' | 'attachment' | 'chat_file';
+  sourceId: string;
+  pageId: string | null;
+  sourceTitle: string;
+  sourceUrl: string | null;
+  excerpt: string | null;
+  relevanceScore: number | null;
+  sectionId: string | null;
+  sectionTitle: string | null;
+  root: boolean;
+};
+
+export type AiPromptBuildResult = {
+  messages: AiProviderMessage[];
+  citationCandidates: AiCitationCandidate[];
 };

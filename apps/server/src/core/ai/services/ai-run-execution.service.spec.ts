@@ -77,6 +77,7 @@ describe('AiRunExecutionService claim', () => {
       {} as any,
       {} as any,
       {} as any,
+      {} as any,
     );
 
     await expect((service as any).claim('run')).resolves.toBe(run);
@@ -127,6 +128,7 @@ describe('AiRunExecutionService claim', () => {
           execute: (callback: (value: typeof trx) => unknown) => callback(trx),
         }),
       } as any,
+      {} as any,
       {} as any,
       {} as any,
       {} as any,
@@ -202,6 +204,7 @@ describe('AiRunExecutionService claim', () => {
           execute: (callback: (value: typeof trx) => unknown) => callback(trx),
         }),
       } as any,
+      {} as any,
       {} as any,
       {} as any,
       {} as any,

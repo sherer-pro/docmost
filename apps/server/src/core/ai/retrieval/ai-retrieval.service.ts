@@ -218,6 +218,7 @@ export class AiRetrievalService {
         'pages.workspaceId as workspaceId',
         'pages.spaceId as spaceId',
         'pages.deletedAt as deletedAt',
+        'pages.content as content',
         'spaces.slug as spaceSlug',
       ])
       .where('pages.id', 'in', pageIds)
@@ -277,14 +278,26 @@ export class AiRetrievalService {
         title = file.fileName;
       }
 
+      const section =
+        hit.sourceType === 'attachment'
+          ? null
+          : this.matchPageSection(page.content, hit.text);
+      const pageUrl = `/s/${encodeURIComponent(page.spaceSlug)}/p/${encodeURIComponent(page.slugId)}`;
       safe.push({
         sourceType: hit.sourceType,
         sourceId: hit.sourceId,
         pageId: page.id,
         sourceTitle: title,
-        sourceUrl: `/s/${encodeURIComponent(page.spaceSlug)}/p/${encodeURIComponent(page.slugId)}`,
+        sourceUrl:
+          hit.sourceType === 'attachment'
+            ? `/api/attachments/files/${encodeURIComponent(file.id)}/${encodeURIComponent(file.fileName)}`
+            : section
+              ? `${pageUrl}#${encodeURIComponent(section.id)}`
+              : pageUrl,
         excerpt: this.sanitizeExcerpt(hit.text),
         relevanceScore: Number.isFinite(hit.score) ? Number(hit.score) : null,
+        sectionId: section?.id ?? null,
+        sectionTitle: section?.title ?? null,
       });
       if (safe.length >= topK) {
         break;
@@ -307,6 +320,61 @@ export class AiRetrievalService {
       })
       .join('')
       .slice(0, 16000);
+  }
+
+  private matchPageSection(
+    content: unknown,
+    excerpt: string,
+  ): { id: string; title: string } | null {
+    if (!content || typeof content !== 'object') return null;
+    const document = content as { content?: unknown[] };
+    const sections: Array<{ id: string; title: string; text: string }> = [];
+    let current: { id: string; title: string; text: string } | null = null;
+    for (const value of document.content ?? []) {
+      if (!value || typeof value !== 'object') continue;
+      const node = value as {
+        type?: string;
+        attrs?: Record<string, unknown>;
+      };
+      if (node.type === 'heading') {
+        const id = typeof node.attrs?.id === 'string' ? node.attrs.id : '';
+        if (/^[A-Za-z0-9_-]{1,128}$/.test(id)) {
+          current = { id, title: this.nodeText(node).slice(0, 500), text: '' };
+          sections.push(current);
+        } else {
+          current = null;
+        }
+      }
+      if (current) current.text += ` ${this.nodeText(node)}`;
+    }
+    const needle = this.normalizeSectionText(excerpt);
+    if (needle.length < 16) return null;
+    const idCounts = new Map<string, number>();
+    sections.forEach((section) =>
+      idCounts.set(section.id, (idCounts.get(section.id) ?? 0) + 1),
+    );
+    const matches = sections.filter((section) => {
+      if (idCounts.get(section.id) !== 1) return false;
+      const haystack = this.normalizeSectionText(section.text);
+      if (!haystack) return false;
+      return haystack.includes(needle) || needle.includes(haystack);
+    });
+    return matches.length === 1
+      ? { id: matches[0].id, title: matches[0].title }
+      : null;
+  }
+
+  private nodeText(value: unknown): string {
+    if (!value || typeof value !== 'object') return '';
+    const node = value as { text?: string; content?: unknown[] };
+    return [
+      node.text ?? '',
+      ...(node.content?.map((item) => this.nodeText(item)) ?? []),
+    ].join('');
+  }
+
+  private normalizeSectionText(value: string): string {
+    return value.toLocaleLowerCase().replace(/\s+/g, ' ').trim();
   }
 
   private toErrorCode(error: unknown): string {

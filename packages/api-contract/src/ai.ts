@@ -429,6 +429,17 @@ export interface AiCitation {
   excerpt: string | null;
   position: number;
   relevanceScore: number | null;
+  citationKey: string | null;
+  citationState: "cited" | "context" | "legacy";
+  sectionId: string | null;
+  sectionTitle: string | null;
+}
+
+export interface AiDocumentHeading {
+  id: string;
+  title: string;
+  level: number;
+  position: number;
 }
 
 export interface AiMessage {
@@ -704,6 +715,7 @@ export interface SendAiMessageRequest {
   contextRevision: number;
   documentSnapshot?: string;
   snapshotHash?: string;
+  documentHeadings?: AiDocumentHeading[];
   selection?: AiSelection;
   fileIds?: string[];
   attachmentIds?: string[];

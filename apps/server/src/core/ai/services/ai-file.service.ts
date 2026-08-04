@@ -24,7 +24,6 @@ import {
 } from '@docmost/db/types/entity.types';
 import {
   AiChatFile,
-  AiCitation,
   AiFileUploadBatch,
   AiListResponse,
 } from '@docmost/api-contract';
@@ -66,7 +65,15 @@ const AI_DOCUMENT_CONCURRENCY = 2;
 type FileContext = {
   text: string;
   images: Array<{ type: 'image_url'; image_url: { url: string } }>;
-  citations: Array<Omit<AiCitation, 'id' | 'messageId' | 'position'>>;
+  citations: Array<{
+    sourceType: 'attachment' | 'chat_file';
+    sourceId: string;
+    pageId: string | null;
+    sourceTitle: string;
+    sourceUrl: string | null;
+    excerpt: string | null;
+    relevanceScore: number | null;
+  }>;
 };
 
 @Injectable()
@@ -102,11 +109,7 @@ export class AiFileService {
     return { items: rows.map((row) => this.toFile(row)) };
   }
 
-  async listPageAttachments(
-    pageId: string,
-    user: User,
-    workspace: Workspace,
-  ) {
+  async listPageAttachments(pageId: string, user: User, workspace: Workspace) {
     const page = await this.conversations.assertWritablePage(
       pageId,
       user,
@@ -163,9 +166,7 @@ export class AiFileService {
       if (file.type !== 'file') {
         continue;
       }
-      if (
-        prepared.length >= AI_CHAT_LIMITS.maxFilesPerConversation
-      ) {
+      if (prepared.length >= AI_CHAT_LIMITS.maxFilesPerConversation) {
         throw new BadRequestException('Too many AI chat files');
       }
       const item = await prepareFile(Promise.resolve(file));
@@ -239,8 +240,7 @@ export class AiFileService {
         if (existingBatch.requestFingerprint !== requestFingerprint) {
           throw new ConflictException({
             code: 'idempotency_key_reused',
-            message:
-              'The idempotency key was already used for another upload',
+            message: 'The idempotency key was already used for another upload',
           });
         }
         const rows = await trx
@@ -548,11 +548,10 @@ export class AiFileService {
       if (!user) {
         attachments = [];
       } else {
-        const snapshot =
-          await this.pageAccessService.getSidebarAccessSnapshot(
-            user as User,
-            params.spaceId,
-          );
+        const snapshot = await this.pageAccessService.getSidebarAccessSnapshot(
+          user as User,
+          params.spaceId,
+        );
         attachments = attachments.filter(
           (attachment) =>
             attachment.pageId &&
@@ -582,9 +581,7 @@ export class AiFileService {
           ? await this.storage.read(file.storageKey)
           : null;
       if (file.extractedText) {
-        if (
-          !appendText(`Chat file "${file.name}":`, file.extractedText)
-        ) {
+        if (!appendText(`Chat file "${file.name}":`, file.extractedText)) {
           continue;
         }
       } else if (buffer && file.mimeType.startsWith('image/')) {
@@ -607,7 +604,7 @@ export class AiFileService {
         sourceId: file.id,
         pageId: null,
         sourceTitle: file.name,
-        sourceUrl: null,
+        sourceUrl: `/api/ai/conversations/${encodeURIComponent(params.conversationId)}/files/${encodeURIComponent(file.id)}`,
         excerpt: file.extractedText?.slice(0, 2000) ?? null,
         relevanceScore: null,
       });
@@ -615,9 +612,7 @@ export class AiFileService {
 
     for (const file of attachments) {
       if (file.textContent) {
-        if (
-          !appendText(`Attachment "${file.fileName}":`, file.textContent)
-        ) {
+        if (!appendText(`Attachment "${file.fileName}":`, file.textContent)) {
           continue;
         }
       } else if (params.visionEnabled && file.mimeType?.startsWith('image/')) {
@@ -625,10 +620,7 @@ export class AiFileService {
         if (buffer.length > remainingImageBytes) continue;
         images.push(this.toImagePart(buffer, file.mimeType));
         remainingImageBytes -= buffer.length;
-      } else if (
-        params.visionEnabled &&
-        file.mimeType === 'application/pdf'
-      ) {
+      } else if (params.visionEnabled && file.mimeType === 'application/pdf') {
         const buffer = await this.storage.read(file.filePath);
         const rendered = await this.renderPdfImages(
           buffer,
@@ -645,7 +637,7 @@ export class AiFileService {
         sourceId: file.id,
         pageId: file.pageId,
         sourceTitle: file.fileName,
-        sourceUrl: null,
+        sourceUrl: `/api/attachments/files/${encodeURIComponent(file.id)}/${encodeURIComponent(file.fileName)}`,
         excerpt: file.textContent?.slice(0, 2000) ?? null,
         relevanceScore: null,
       });
@@ -673,7 +665,9 @@ export class AiFileService {
       .where('deletedAt', 'is not', null)
       .where('storageDeletedAt', 'is', null)
       .execute();
-    const results = await Promise.all(rows.map((row) => this.cleanupDeletedFile(row.id)));
+    const results = await Promise.all(
+      rows.map((row) => this.cleanupDeletedFile(row.id)),
+    );
     return results.every(Boolean);
   }
 
@@ -752,7 +746,11 @@ export class AiFileService {
         if (removable.length === 0) break;
         await this.db
           .deleteFrom('aiConversations')
-          .where('id', 'in', removable.map((row) => row.id))
+          .where(
+            'id',
+            'in',
+            removable.map((row) => row.id),
+          )
           .execute();
         if (removable.length < 500) break;
       }
@@ -967,9 +965,7 @@ export class AiFileService {
         );
         parts.push(
           content.items
-            .map((item: any) =>
-              typeof item.str === 'string' ? item.str : '',
-            )
+            .map((item: any) => (typeof item.str === 'string' ? item.str : ''))
             .join(' '),
         );
         page.cleanup?.();

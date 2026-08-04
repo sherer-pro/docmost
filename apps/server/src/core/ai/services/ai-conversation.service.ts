@@ -207,11 +207,7 @@ export class AiConversationService {
           updatedAt: now,
         })
         .where('conversationId', '=', conversation.id)
-        .where('status', 'in', [
-          'queued',
-          'running',
-          'awaiting_approval',
-        ])
+        .where('status', 'in', ['queued', 'running', 'awaiting_approval'])
         .returningAll()
         .execute();
       await trx
@@ -287,6 +283,7 @@ export class AiConversationService {
           .selectFrom('aiMessageSources')
           .selectAll()
           .where('runId', 'in', currentRunIds)
+          .where('citationState', '!=', 'candidate')
           .orderBy('position', 'asc')
           .execute()
       : [];
@@ -356,8 +353,12 @@ export class AiConversationService {
         sourceTitle: source.sourceTitle,
         sourceUrl: source.sourceUrl,
         excerpt: source.excerpt,
-        position: source.position,
+        position: source.displayPosition ?? source.position,
         relevanceScore: source.relevanceScore,
+        citationKey: source.citationKey,
+        citationState: source.citationState as AiCitation['citationState'],
+        sectionId: source.sectionId,
+        sectionTitle: source.sectionTitle,
       });
       sourcesByMessage.set(source.messageId, current);
     }

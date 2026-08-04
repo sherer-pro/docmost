@@ -12,10 +12,10 @@ distinct paths:
    propose safe current-page changes that require explicit user approval.
 4. **Inbound MCP** (`/mcp`) exposes the read-only subset of the same tool
    registry to external assistants through stateless Streamable HTTP. Docmost is
-   the MCP *server* here.
+   the MCP _server_ here.
 5. **Outbound external MCP** lets the internal agent call read-only tools on
    remote MCP servers after workspace approval, space binding, and per-user
-   opt-in. Docmost is the MCP *client* here.
+   opt-in. Docmost is the MCP _client_ here.
 
 Paths 4 and 5 are opposite directions. They share no configuration and no
 credentials: an inbound `keyType=mcp` API key has nothing to do with an outbound
@@ -52,13 +52,14 @@ The main components are:
 | `AiContentPolicyService`                 | shared space exclusions for AI context, editor actions, retrieval, and the RAG API    |
 | `AiRunService` / `AiRunExecutionService` | immutable attempts, limits, idempotency, execution, and streamed response persistence |
 | `AiPromptBuilderService`                 | bounded prompt assembly from history, context, files, and retrieval results           |
+| `AiCitationService`                      | source-marker registration, validation, normalization, and context fallback           |
 | `OpenAiCompatibleProviderService`        | requests and streaming against an OpenAI-compatible provider                          |
 | `AiRetrievalService`                     | safe query-time retrieval and reauthorization of returned sources                     |
 | `AiFileService`                          | uploads, text extraction, images, tombstone deletion, and chat-file cleanup           |
 | `AiAuxRunService`                        | auxiliary jobs for automatic conversation titles and editor-selection transforms      |
-| `AiToolRegistryService`                  | access-aware tools shared by agent mode and the read-only MCP surface                  |
-| `AiRunStepService`                       | initiator-only approval, safe Yjs application, history, and agent resumption           |
-| `McpController` / `McpApiKeyAuthGuard`   | stateless Streamable HTTP adapter and MCP-key-only authentication                      |
+| `AiToolRegistryService`                  | access-aware tools shared by agent mode and the read-only MCP surface                 |
+| `AiRunStepService`                       | initiator-only approval, safe Yjs application, history, and agent resumption          |
+| `McpController` / `McpApiKeyAuthGuard`   | stateless Streamable HTTP adapter and MCP-key-only authentication                     |
 
 Execution uses `AI_CHAT_QUEUE`. BullMQ delivery is at least once, so a worker
 atomically claims a specific `ai_runs` row from `queued` to `running`; a
@@ -92,7 +93,10 @@ call.
    selections, files/images, and retrieval excerpts are JSON-marked as
    untrusted reference data in the final `user` message, with the actual user
    request last. Budgets are derived from `contextWindow` and
-   `maxOutputTokens`, so oversized sources are truncated.
+   `maxOutputTokens`, so oversized sources are truncated. Every included
+   citable document, stable section, and file receives a server-controlled
+   `[S<n>]` marker. A run admits at most 512 candidates and omits reference
+   content if its source cannot be registered.
 7. The provider returns a text stream. Text and, when enabled, reasoning deltas
    are buffered, periodically persisted, and sent over Socket.IO.
    `ai_runs.sequence` provides a monotonic ordering key for the client.
@@ -104,7 +108,11 @@ call.
    response-body reads for both streaming chat and non-streaming agent tool
    turns; terminal database checks remain authoritative if an adapter returns
    after cancellation.
-8. On success, usage, response/reasoning snapshots, and citations are stored.
+8. On success, the raw provider text is stored in `ai_runs.response_snapshot`.
+   Valid source markers are renumbered by first appearance to `[C1]`, `[C2]`,
+   and so on before the user-visible text is stored in `ai_messages.content`.
+   Only validated cited sources, or root context sources used for the no-marker
+   fallback, are stored with the message.
    The first successful response may schedule a separate title job limited to
    four Unicode word segments. A manual rename always wins. On failure or
    cancellation, both the message and attempt receive a terminal status.
@@ -113,6 +121,48 @@ Retry and regenerate create linked new attempts instead of rewriting the
 original attempt. Retry operates on a run; regenerate operates on an assistant
 message. Cancellation records a request that the worker checks during
 streaming and terminates the attempt as `cancelled`.
+
+### Citation contract
+
+The citation contract applies to new chat and agent generations. Existing
+message sources are retained with `citationState=legacy`; historical answer
+text is not reconstructed. Provider markers inside fenced or inline code are
+not citations. Unknown markers are discarded, repeated valid markers reuse the
+same citation number, and different stable sections of one page remain separate
+citations. Before a historical assistant turn is reused as provider history,
+technical `[S<n>]` and `[C<n>]` markers outside code are removed.
+
+Page Markdown is divided by headings whose ProseMirror `attrs.id` is a stable
+identifier. Text before the first stable heading cites the document root; later
+text cites the nearest preceding stable heading. Headings without a stable ID
+fall back to the document URL. The current editor sends at most 500 heading
+records `{id,title,level,position}`; these records are stored in the immutable
+run-context snapshot, so Retry and Regenerate preserve the original anchors.
+Page and database URLs are canonical relative application URLs. Section URLs
+append `#headingId`, while private files use authenticated download routes.
+
+Retrieval excerpts are matched against the currently authorized local page
+content. An exact or unique normalized match may resolve to a stable section;
+an ambiguous match falls back to the page root. Attachment retrieval results
+link directly to the authenticated attachment route. Built-in agent read tools
+return internal citation references, and the execution layer adds the assigned
+`[S<n>]` markers plus page source dependencies. Outbound external MCP results
+cannot create Docmost citations.
+
+The message API exposes `citationKey`, `citationState`, `sectionId`, and
+`sectionTitle` and never returns `candidate` rows. `position` is the order of
+first appearance in the normalized answer. The client replaces `[C<n>]`
+outside code, preformatted blocks, and existing links with safe inline links.
+Internal URLs open in the current tab; external HTTP(S) URLs open in a new tab.
+Unresolved streaming `[S<n>]` markers remain hidden until the terminal REST
+refetch. Copy and apply-to-editor operations convert normalized markers to
+ordinary Markdown or HTML links.
+
+If at least one valid citation is present, the UI shows only **Used sources**.
+If none is present, it shows the deduplicated root **Context sources** list.
+Legacy messages retain their previous source presentation. Existing ACL and
+source-dependency checks continue to hide a derived answer when a required page
+becomes unavailable.
 
 ### Agent mode
 
@@ -186,7 +236,7 @@ arguments by the client.
 Safe writes cover text, ordinary text/list/heading/callout blocks, rich-text
 marks, and sanitized links. Page creation, page move/delete, databases and
 tables, comments, shares, whole-document replacement, media nodes, external
-images, arbitrary code execution, and *write* operations on external MCP servers
+images, arbitrary code execution, and _write_ operations on external MCP servers
 are not agent tools.
 
 Read-only tools on approved external MCP servers are a separate, gated surface
@@ -503,12 +553,12 @@ Inbound MCP is the interactive external-assistant surface. It is intended for a 
 or agent that needs to search and navigate one Docmost space while answering a
 user. It does not replace query-time retrieval or the synchronization API:
 
-| Surface                  | Caller                                      | Primary use                                      | Credential    | Data access                                                      |
-| ------------------------ | ------------------------------------------- | ------------------------------------------------ | ------------- | ---------------------------------------------------------------- |
-| query-time retrieval     | the Docmost AI worker                       | add ranked external context to one answer        | provider-side | validated excerpts returned by the configured retrieval adapter  |
-| `/api/rag/*`             | an external indexer such as `apps/rag-sync` | bulk/delta synchronization and export            | `keyType=rag` | pages, databases, comments, exports, and allowed attachment data |
-| `/mcp` (inbound)         | an external MCP-capable assistant           | interactive search and targeted document reading | `keyType=mcp` | seven bounded read-only tools; no attachment body extraction     |
-| external MCP (outbound)  | the Docmost AI worker                       | call approved read-only remote tools during an agent run | per-server encrypted HTTP headers | the prompt, selected context, and page text are sent outward; the remote result returns as untrusted data |
+| Surface                 | Caller                                      | Primary use                                              | Credential                        | Data access                                                                                               |
+| ----------------------- | ------------------------------------------- | -------------------------------------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| query-time retrieval    | the Docmost AI worker                       | add ranked external context to one answer                | provider-side                     | validated excerpts returned by the configured retrieval adapter                                           |
+| `/api/rag/*`            | an external indexer such as `apps/rag-sync` | bulk/delta synchronization and export                    | `keyType=rag`                     | pages, databases, comments, exports, and allowed attachment data                                          |
+| `/mcp` (inbound)        | an external MCP-capable assistant           | interactive search and targeted document reading         | `keyType=mcp`                     | seven bounded read-only tools; no attachment body extraction                                              |
+| external MCP (outbound) | the Docmost AI worker                       | call approved read-only remote tools during an agent run | per-server encrypted HTTP headers | the prompt, selected context, and page text are sent outward; the remote result returns as untrusted data |
 
 MCP calls do not create Docmost conversations, messages, citations, or
 `ai_runs`. They also do not use `AI_CHAT_QUEUE`, invoke the configured model,
@@ -592,15 +642,15 @@ All inputs use Docmost UUIDs and node identifiers returned by earlier tool
 calls. Optional limits are clamped by server-side validation, not only
 described in JSON Schema.
 
-| Tool             | Main inputs                         | Result and bounds                                                                                         |
-| ---------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `search`         | `query`, optional `limit`            | accessible pages and database rows with compact highlights and breadcrumbs; default 10, maximum 20       |
+| Tool             | Main inputs                         | Result and bounds                                                                                                            |
+| ---------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `search`         | `query`, optional `limit`           | accessible pages and database rows with compact highlights and breadcrumbs; default 10, maximum 20                           |
 | `getTree`        | none                                | readable hierarchy metadata, size-truncated within the 32 KiB tool limit; a hidden parent is returned as `parentPageId=null` |
-| `getPageContext` | `pageId`                            | page metadata, visible allowed breadcrumbs, and up to 50 readable direct children                         |
-| `getPage`        | `pageId`                            | title, text, editor JSON when compact, outline fallback, update time, and a `truncated` flag               |
-| `getOutline`     | `pageId`                            | up to 300 structural nodes with index, optional stable ID, type, nesting level, and compact text          |
-| `getNode`        | `pageId`, `nodeId`                  | one ProseMirror node selected by stable ID or a fallback such as `#12` from the outline index             |
-| `searchInPage`   | `pageId`, `query`, optional `limit` | case-insensitive matches with character offsets and bounded excerpts; default 20, maximum 50              |
+| `getPageContext` | `pageId`                            | page metadata, visible allowed breadcrumbs, and up to 50 readable direct children                                            |
+| `getPage`        | `pageId`                            | title, text, editor JSON when compact, outline fallback, update time, and a `truncated` flag                                 |
+| `getOutline`     | `pageId`                            | up to 300 structural nodes with index, optional stable ID, type, nesting level, and compact text                             |
+| `getNode`        | `pageId`, `nodeId`                  | one ProseMirror node selected by stable ID or a fallback such as `#12` from the outline index                                |
+| `searchInPage`   | `pageId`, `query`, optional `limit` | case-insensitive matches with character offsets and bounded excerpts; default 20, maximum 50                                 |
 
 `getPage` includes full editor JSON only when its serialized document fits the
 compact-response threshold. For larger pages it returns `content=null`, at
@@ -748,7 +798,7 @@ boot if a built-in tool claims it.
 `AiMcpUrlPolicyService` wraps the shared outbound policy with three additional
 constraints:
 
-- **Dual allowlist.** The origin must appear in `AI_MCP_ALLOWED_ORIGINS` *and* in
+- **Dual allowlist.** The origin must appear in `AI_MCP_ALLOWED_ORIGINS` _and_ in
   the workspace allowlist. Membership is decided per parsed origin, never by
   string comparison.
 - **No development escape hatch.** An unlisted origin is rejected even in
@@ -866,19 +916,19 @@ headers.
 
 ### Administrative UI routes
 
-| Route                            | Purpose                                                               |
-| -------------------------------- | --------------------------------------------------------------------- |
-| `/settings/ai`                   | redirects to `/settings/ai/spaces`                                    |
-| `/settings/ai/spaces`            | AI assistant overview with per-space configuration entry points       |
+| Route                            | Purpose                                                                 |
+| -------------------------------- | ----------------------------------------------------------------------- |
+| `/settings/ai`                   | redirects to `/settings/ai/spaces`                                      |
+| `/settings/ai/spaces`            | AI assistant overview with per-space configuration entry points         |
 | `/settings/ai/external-tools`    | outbound external MCP catalog, tool approvals, and the workspace switch |
-| `/settings/ai/spaces/:spaceSlug` | sectioned full-page configuration for one space                       |
-| `/settings/keys`                 | "API keys" page; redirects to the MCP tab                             |
-| `/settings/keys/mcp`             | MCP onboarding and workspace MCP-key administration                   |
-| `/settings/keys/rag`             | RAG synchronization onboarding and workspace RAG-key administration   |
-| `/settings/ai/mcp`               | compatibility redirect to `/settings/keys/mcp`                        |
-| `/settings/ai/rag`               | compatibility redirect to `/settings/keys/rag`                        |
+| `/settings/ai/spaces/:spaceSlug` | sectioned full-page configuration for one space                         |
+| `/settings/keys`                 | "API keys" page; redirects to the MCP tab                               |
+| `/settings/keys/mcp`             | MCP onboarding and workspace MCP-key administration                     |
+| `/settings/keys/rag`             | RAG synchronization onboarding and workspace RAG-key administration     |
+| `/settings/ai/mcp`               | compatibility redirect to `/settings/keys/mcp`                          |
+| `/settings/ai/rag`               | compatibility redirect to `/settings/keys/rag`                          |
 | `/settings/account/api-keys`     | compatibility redirect to the RAG tab for admins or profile for members |
-| `/settings/api-keys`             | compatibility redirect to `/settings/keys/mcp`                        |
+| `/settings/api-keys`             | compatibility redirect to `/settings/keys/mcp`                          |
 
 The space settings modal contains only an AI status summary and a link to the
 full-page configuration. Workspace owners and administrators and space
@@ -934,16 +984,16 @@ Outbound external MCP adds the following. The `/ai/mcp-*` routes require
 workspace `owner|admin`; the space routes require full space access, except
 `mcp-preferences`, which is the calling user's own consent.
 
-| Method and path                                                     | Purpose                                                       |
-| ------------------------------------------------------------------- | ------------------------------------------------------------- |
-| `GET/PATCH /api/ai/mcp-settings`                                     | read or update the workspace master switch and allowlist       |
-| `GET/POST /api/ai/mcp-servers`                                        | list the catalog or create a server (always stored disabled)   |
-| `GET/PATCH/DELETE /api/ai/mcp-servers/:serverId`                      | read, update, or hard-delete one server                        |
-| `POST /api/ai/mcp-servers/:serverId/actions/test`                     | probe the connection without caching a client                  |
-| `POST /api/ai/mcp-servers/:serverId/actions/discover`                 | list remote tools and store a sanitized snapshot               |
-| `GET /api/spaces/:spaceId/ai/mcp-bindings`                            | read space bindings plus the bindable catalog                  |
-| `PUT/DELETE /api/spaces/:spaceId/ai/mcp-bindings/:serverId`            | bind and narrow, or remove the binding                         |
-| `GET/PUT /api/spaces/:spaceId/ai/mcp-preferences`                      | read or fully replace the calling user's opt-in set; omitted bindings become disabled |
+| Method and path                                             | Purpose                                                                               |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `GET/PATCH /api/ai/mcp-settings`                            | read or update the workspace master switch and allowlist                              |
+| `GET/POST /api/ai/mcp-servers`                              | list the catalog or create a server (always stored disabled)                          |
+| `GET/PATCH/DELETE /api/ai/mcp-servers/:serverId`            | read, update, or hard-delete one server                                               |
+| `POST /api/ai/mcp-servers/:serverId/actions/test`           | probe the connection without caching a client                                         |
+| `POST /api/ai/mcp-servers/:serverId/actions/discover`       | list remote tools and store a sanitized snapshot                                      |
+| `GET /api/spaces/:spaceId/ai/mcp-bindings`                  | read space bindings plus the bindable catalog                                         |
+| `PUT/DELETE /api/spaces/:spaceId/ai/mcp-bindings/:serverId` | bind and narrow, or remove the binding                                                |
+| `GET/PUT /api/spaces/:spaceId/ai/mcp-preferences`           | read or fully replace the calling user's opt-in set; omitted bindings become disabled |
 
 ### Synchronization RAG API
 
@@ -957,7 +1007,7 @@ upsert/delete operations.
 
 | Path                                                            | Data                                                               |
 | --------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `GET /api/rag/scope`                                            | schema-v2 policy and readable-page fingerprint                      |
+| `GET /api/rag/scope`                                            | schema-v2 policy and readable-page fingerprint                     |
 | `GET /api/rag/scope/blocked?limit=&cursor=`                     | opaque IDs currently outside effective sync scope                  |
 | `GET /api/rag/pages?includeContent=&limit=&cursor=`             | active page/database list with optional SQL-backed pagination      |
 | `GET /api/rag/updates?updatedSince=&limit=&cursor=`             | changed pages and databases                                        |

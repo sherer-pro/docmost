@@ -35,7 +35,10 @@ import { AiMessageContent } from "./ai-message-content.tsx";
 import { AiReasoningDisclosure } from "./ai-reasoning-disclosure.tsx";
 import { getAiSpaceStatus } from "@/features/ai/services/ai-service.ts";
 import classes from "./ai-panel.module.css";
-import { sanitizeAiMarkdown } from "@/features/ai/utils/ai-markdown.ts";
+import {
+  aiMarkdownWithCitationLinks,
+  sanitizeAiMarkdown,
+} from "@/features/ai/utils/ai-markdown.ts";
 
 type ApplyMode = "replace" | "insert";
 
@@ -112,7 +115,9 @@ export function AiMessageCard({
   }
 
   const copyContent = async () => {
-    await navigator.clipboard.writeText(message.content);
+    await navigator.clipboard.writeText(
+      aiMarkdownWithCitationLinks(message.content, message.sources),
+    );
     notifications.show({ message: t("ai.copied") });
   };
 
@@ -164,7 +169,7 @@ export function AiMessageCard({
       return;
     }
 
-    const html = sanitizeAiMarkdown(message.content);
+    const html = sanitizeAiMarkdown(message.content, message.sources);
     if (applyMode === "replace" && selection) {
       editor
         .chain()

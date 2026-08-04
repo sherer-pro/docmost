@@ -115,6 +115,38 @@ describe('AiContextService revisions', () => {
     ).rejects.toBeInstanceOf(ConflictException);
     expect(trx.deleteFrom).not.toHaveBeenCalled();
   });
+
+  it('extracts only stable heading anchors in document order', () => {
+    const { service } = createService();
+    const headings = (service as any).extractCitationHeadings({
+      type: 'doc',
+      content: [
+        {
+          type: 'heading',
+          attrs: { id: 'stable-one', level: 2 },
+          content: [{ type: 'text', text: 'First' }],
+        },
+        {
+          type: 'heading',
+          attrs: { id: 'not stable', level: 3 },
+          content: [{ type: 'text', text: 'Ignored' }],
+        },
+        {
+          type: 'heading',
+          attrs: { id: 'stable-two', level: 9 },
+          content: [{ type: 'text', text: 'Second' }],
+        },
+      ],
+    });
+
+    expect(
+      headings.map(({ id, title, level }: any) => ({ id, title, level })),
+    ).toEqual([
+      { id: 'stable-one', title: 'First', level: 2 },
+      { id: 'stable-two', title: 'Second', level: 6 },
+    ]);
+    expect(headings[0].position).toBeLessThan(headings[1].position);
+  });
 });
 
 describe('AiContextService search', () => {
