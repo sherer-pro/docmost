@@ -19,8 +19,12 @@ type SocketMock = {
   data: {
     authorizedRooms?: Set<string>;
     user?: Record<string, unknown>;
+    userId?: string;
+    workspaceId?: string;
     sessionId?: string | null;
     deviceName?: string | null;
+    allowedSpaceIds?: Set<string>;
+    workspaceAssuranceSatisfied?: boolean;
   };
   rooms: Set<string>;
   broadcast: {
@@ -83,6 +87,9 @@ describe('WsGateway.handleMessage', () => {
       pageAccessService as any,
       userSessionRepo as any,
       presenceService as any,
+      {} as any,
+      {} as any,
+      { findPageUsagesBySource: jest.fn(async () => []) } as any,
     );
     (gateway as any).server = {
       sockets: {
@@ -92,6 +99,9 @@ describe('WsGateway.handleMessage', () => {
         sockets: new Map(),
       },
     };
+    jest
+      .spyOn(gateway as any, 'refreshClientAuthorization')
+      .mockResolvedValue(true);
     jest.clearAllMocks();
   });
 
@@ -218,6 +228,40 @@ describe('WsGateway.handleMessage', () => {
     );
   });
 
+  it('rejects workspace presence from an assurance-restricted socket', async () => {
+    const socket = createSocketMock(['space-space-a']);
+    socket.data.user = { id: 'user-1', workspaceId: 'workspace-1' };
+    socket.data.workspaceAssuranceSatisfied = false;
+    socket.data.allowedSpaceIds = new Set(['space-a']);
+
+    await gateway.handlePresenceUpdate(socket as any, {
+      type: 'workspace',
+      path: '/home',
+      tabId: 'tab-1',
+    });
+
+    expect(presenceService.updateConnection).not.toHaveBeenCalled();
+  });
+
+  it('allows presence in an eligible space for a restricted socket', async () => {
+    const socket = createSocketMock(['space-space-a']);
+    socket.data.user = { id: 'user-1', workspaceId: 'workspace-1' };
+    socket.data.workspaceAssuranceSatisfied = false;
+    socket.data.allowedSpaceIds = new Set(['space-a']);
+    (gateway as any).spacePolicy.resolveSpaceId = jest
+      .fn()
+      .mockResolvedValue('space-a');
+
+    await gateway.handlePresenceUpdate(socket as any, {
+      type: 'space',
+      spaceId: 'eligible-space',
+      path: '/s/eligible-space',
+      tabId: 'tab-1',
+    });
+
+    expect(presenceService.updateConnection).toHaveBeenCalledTimes(1);
+  });
+
   it('rejects invalid presence payloads', async () => {
     const socket = createSocketMock(['workspace-workspace-a']);
     socket.data.user = { id: 'user-1', workspaceId: 'workspace-a' };
@@ -236,5 +280,103 @@ describe('WsGateway.handleMessage', () => {
     await gateway.handleDisconnect(socket as any);
 
     expect(presenceService.removeConnection).toHaveBeenCalledWith(socket.id);
+  });
+
+  it('refreshes matching sockets when authorization state changes', async () => {
+    const socket = createSocketMock(['space-space-a']);
+    socket.data.userId = 'user-1';
+    socket.data.workspaceId = 'workspace-1';
+    socket.data.sessionId = 'session-1';
+    (gateway as any).server.sockets.sockets.set(socket.id, socket);
+
+    await gateway.handleAuthorizationChanged({
+      workspaceId: 'workspace-1',
+      userId: 'user-1',
+      sessionId: 'session-1',
+    });
+
+    expect(
+      (gateway as any).refreshClientAuthorization,
+    ).toHaveBeenCalledWith(socket);
+  });
+
+  it('removes a space room immediately when its effective policy becomes stricter', async () => {
+    const memberRepo = {
+      getUserSpaceIds: jest.fn().mockResolvedValue(['space-a']),
+    };
+    const accessService = {
+      getSpaceIdsWithPageRuleAccess: jest.fn().mockResolvedValue([]),
+    };
+    const sessionRepo = {
+      findActiveById: jest.fn().mockResolvedValue({
+        id: 'session-1',
+        userId: 'user-1',
+        workspaceId: 'workspace-1',
+        deviceName: 'Browser',
+        mfaVerifiedAt: null,
+      }),
+    };
+    const policyService = {
+      resolve: jest.fn().mockResolvedValue({
+        effective: { enforceMfa: true, enforceSso: false },
+      }),
+      getWorkspaceValues: jest.fn().mockReturnValue({
+        enforceMfa: false,
+        enforceSso: false,
+      }),
+      evaluateAuthentication: jest.fn((values) => ({
+        satisfied: values.enforceMfa !== true,
+      })),
+    };
+    const refreshedGateway = new WsGatewayClass(
+      {} as any,
+      memberRepo as any,
+      {
+        findById: jest.fn().mockResolvedValue({
+          id: 'user-1',
+          workspaceId: 'workspace-1',
+          deactivatedAt: null,
+          deletedAt: null,
+        }),
+      } as any,
+      {} as any,
+      accessService as any,
+      sessionRepo as any,
+      presenceService as any,
+      { findById: jest.fn().mockResolvedValue({ id: 'workspace-1' }) } as any,
+      policyService as any,
+      { findPageUsagesBySource: jest.fn() } as any,
+    );
+    const leave = jest.fn();
+    const socket = {
+      id: 'socket-1',
+      data: {
+        userId: 'user-1',
+        workspaceId: 'workspace-1',
+        sessionId: 'session-1',
+        authorizedRooms: new Set([
+          'user-user-1',
+          'workspace-workspace-1',
+          'space-space-a',
+        ]),
+      },
+      rooms: new Set([
+        'socket-1',
+        'user-user-1',
+        'workspace-workspace-1',
+        'space-space-a',
+      ]),
+      leave,
+      join: jest.fn(),
+    } as any;
+
+    await expect(
+      (refreshedGateway as any).refreshClientAuthorization(socket),
+    ).resolves.toBe(true);
+
+    expect(leave).toHaveBeenCalledWith('space-space-a');
+    expect(socket.data.authorizedRooms).toEqual(
+      new Set(['user-user-1', 'workspace-workspace-1']),
+    );
   });
 });

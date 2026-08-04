@@ -10,6 +10,7 @@ import {
 import { IPagination, QueryParams } from "@/lib/types.ts";
 import { SpaceUserInfo } from "@/features/space/types/space.types.ts";
 import { downloadBlobFromAxiosResponse } from '@/lib/download';
+import type { SpacePolicyContext } from "@docmost/api-contract";
 
 export async function getSpaces(
   params?: QueryParams,
@@ -67,6 +68,15 @@ export async function getSpaceMembers(
 ): Promise<IPagination<ISpaceMember>> {
   const req = await api.get<any>("/spaces/members", {
     params: { spaceId, ...params },
+  });
+  return req.data;
+}
+
+export async function getSpacePolicyContext(
+  spaceSlug: string,
+): Promise<SpacePolicyContext> {
+  const req = await api.get<SpacePolicyContext>("/spaces/policy-context", {
+    params: { spaceSlug },
   });
   return req.data;
 }

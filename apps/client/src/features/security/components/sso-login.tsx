@@ -8,9 +8,15 @@ import { SSO_PROVIDER } from "@/features/security/constants.ts";
 import { LdapLoginModal } from "@/features/security/components/ldap-login-modal.tsx";
 import { useTranslation } from "react-i18next";
 
-export default function SsoLogin() {
+export default function SsoLogin({
+  spaceSlug,
+  returnTo,
+}: {
+  spaceSlug?: string;
+  returnTo?: string;
+}) {
   const { t } = useTranslation();
-  const { data } = useWorkspacePublicDataQuery();
+  const { data } = useWorkspacePublicDataQuery(spaceSlug);
   const [ldapModalOpened, setLdapModalOpened] = useState(false);
   const [selectedLdapProvider, setSelectedLdapProvider] =
     useState<IPublicAuthProvider | null>(null);
@@ -29,6 +35,8 @@ export default function SsoLogin() {
       window.location.href = buildSsoLoginUrl({
         providerId: provider.id,
         type: provider.type,
+        spaceSlug,
+        returnTo,
       });
     }
   };
@@ -50,6 +58,8 @@ export default function SsoLogin() {
             setSelectedLdapProvider(null);
           }}
           provider={selectedLdapProvider}
+          spaceSlug={spaceSlug}
+          returnTo={returnTo}
         />
       )}
 

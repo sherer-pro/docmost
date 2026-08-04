@@ -5,6 +5,7 @@ import {
   requireStringArg,
   runCli,
 } from './cli.util';
+import { sql } from 'kysely';
 
 /**
  * Recovery path for a workspace whose SSO providers stopped working while
@@ -20,24 +21,46 @@ async function main(): Promise<void> {
   const { db, close } = createCliDatabase();
 
   try {
-    let query = db
-      .updateTable('workspaces')
-      .set({ enforceSso: false, updatedAt: new Date() })
-      .where('enforceSso', '=', true);
+    const updated = await db.transaction().execute(async (trx) => {
+      let workspaceQuery = trx
+        .selectFrom('workspaces')
+        .select(['id', 'name'])
+        .forUpdate();
+      if (workspace !== 'all') {
+        workspaceQuery = workspaceQuery.where('id', '=', workspace);
+      }
+      const targets = await workspaceQuery.execute();
+      const targetIds = targets.map((target) => target.id);
+      if (targetIds.length === 0) {
+        return [];
+      }
 
-    if (workspace !== 'all') {
-      query = query.where('id', '=', workspace);
-    }
-
-    const updated = await query.returning(['id', 'name']).execute();
+      await trx
+        .updateTable('workspaces')
+        .set({ enforceSso: false, updatedAt: new Date() })
+        .where('id', 'in', targetIds)
+        .execute();
+      await trx
+        .updateTable('spaces')
+        .set({
+          settings: sql`settings #- '{security,enforceSso}'`,
+          updatedAt: new Date(),
+        })
+        .where('workspaceId', 'in', targetIds)
+        .where(sql<boolean>`settings #>> '{security,enforceSso}' = 'true'`)
+        .execute();
+      return targets;
+    });
 
     if (updated.length === 0) {
-      console.log('No workspace had SSO enforcement enabled.');
+      console.log('No matching workspace was found.');
       return;
     }
 
     for (const row of updated) {
-      console.log(`Disabled SSO enforcement for workspace ${row.id} (${row.name})`);
+      console.log(
+        `Disabled SSO enforcement for workspace ${row.id} (${row.name})`,
+      );
     }
   } finally {
     await close();

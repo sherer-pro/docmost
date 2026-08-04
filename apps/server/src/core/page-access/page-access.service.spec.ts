@@ -70,6 +70,7 @@ describe('PageAccessService', () => {
       spaceMemberRepo as any,
       pageHistoryRecorder as any,
       environmentService as any,
+      { emit: jest.fn() } as any,
     );
 
     jest.spyOn(service as any, 'getSpaceArchivedAt').mockResolvedValue(null);
@@ -256,6 +257,7 @@ describe('PageAccessService', () => {
       spaceMemberRepo as any,
       pageHistoryRecorder as any,
       environmentService as any,
+      { emit: jest.fn() } as any,
     );
     jest
       .spyOn(batchService as any, 'getSpaceArchivedAt')

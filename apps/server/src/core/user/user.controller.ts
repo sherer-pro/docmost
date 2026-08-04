@@ -7,6 +7,7 @@ import {
   HttpCode,
   HttpStatus,
   Post,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import { UserService } from './user.service';
@@ -20,6 +21,9 @@ import { UserRepo } from '@docmost/db/repos/user/user.repo';
 import { UserRole } from '../../common/helpers/types/permission';
 import { DeprecatedRoute } from '../../common/decorators/deprecated-route.decorator';
 import { LEGACY_API_SUNSET } from '../../common/config/api-deprecation.constants';
+import { AuthPolicyScope } from '../../common/decorators/auth-policy-scope.decorator';
+import { AuthenticationAssuranceService } from '../space-policy/authentication-assurance.service';
+import { FastifyRequest } from 'fastify';
 
 @UseGuards(JwtAuthGuard)
 @Controller('users')
@@ -28,6 +32,7 @@ export class UserController {
     private readonly userService: UserService,
     private readonly workspaceRepo: WorkspaceRepo,
     private readonly userRepo: UserRepo,
+    private readonly authenticationAssurance: AuthenticationAssuranceService,
   ) {}
 
   /**
@@ -41,12 +46,14 @@ export class UserController {
   @HttpCode(HttpStatus.OK)
   @Header('Cache-Control', 'no-store, max-age=0')
   @Header('Pragma', 'no-cache')
+  @AuthPolicyScope('bootstrap')
   @Get('me')
   async getUserInfoViaGet(
     @AuthUser() authUser: User,
     @AuthWorkspace() workspace: Workspace,
+    @Req() req: FastifyRequest,
   ) {
-    return this.getUserInfo(authUser, workspace);
+    return this.getUserInfo(authUser, workspace, req);
   }
 
   @HttpCode(HttpStatus.OK)
@@ -56,10 +63,12 @@ export class UserController {
     sunset: LEGACY_API_SUNSET,
     replacement: 'GET /api/users/me',
   })
+  @AuthPolicyScope('bootstrap')
   @Post('me')
   async getUserInfo(
     @AuthUser() authUser: User,
     @AuthWorkspace() workspace: Workspace,
+    @Req() req: FastifyRequest,
   ) {
     const user = await this.userService.findById(authUser.id, workspace.id);
 
@@ -103,6 +112,11 @@ export class UserController {
         canAccessMembersDirectory,
       },
       workspace: workspaceInfo,
+      authenticationAssurance:
+        this.authenticationAssurance.getAuthenticationAssurance(
+          workspace,
+          (req as any).user?.session ?? (req.raw as any).userSession,
+        ),
     };
   }
 

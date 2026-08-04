@@ -35,7 +35,12 @@ import { useForm } from "@mantine/form";
 import { useMutation } from "@tanstack/react-query";
 import { notifications } from "@mantine/notifications";
 import { useTranslation } from "react-i18next";
-import { enableMfa, setupMfa } from "@/features/mfa/services/mfa-service";
+import {
+  enableMfa,
+  enableRequiredMfa,
+  setupMfa,
+  setupRequiredMfa,
+} from "@/features/mfa/services/mfa-service";
 import { zodResolver } from "mantine-form-zod-resolver";
 import { z } from "zod";
 
@@ -63,6 +68,7 @@ export function MfaSetupModal({
   opened,
   onClose,
   onComplete,
+  isRequired = false,
 }: MfaSetupModalProps) {
   const { t } = useTranslation();
   const setupSchema = createSetupSchema(t);
@@ -79,7 +85,10 @@ export function MfaSetupModal({
   });
 
   const setupMutation = useMutation({
-    mutationFn: () => setupMfa({ method: "totp" }),
+    mutationFn: () =>
+      isRequired
+        ? setupRequiredMfa({ method: "totp" })
+        : setupMfa({ method: "totp" }),
     onSuccess: (data) => {
       setSetupData(data);
     },
@@ -101,7 +110,7 @@ export function MfaSetupModal({
 
   const enableMutation = useMutation({
     mutationFn: (verificationCode: string) =>
-      enableMfa({
+      (isRequired ? enableRequiredMfa : enableMfa)({
         secret: setupData!.secret,
         verificationCode,
       }),

@@ -16,9 +16,13 @@ const createFormSchema = (t: (key: string) => string) =>
 
 interface PasswordResetFormProps {
   resetToken?: string;
+  spaceSlug?: string;
 }
 
-export function PasswordResetForm({ resetToken }: PasswordResetFormProps) {
+export function PasswordResetForm({
+  resetToken,
+  spaceSlug,
+}: PasswordResetFormProps) {
   const { t } = useTranslation();
   const formSchema = createFormSchema(t);
   const { passwordReset, isLoading } = useAuth();
@@ -35,6 +39,7 @@ export function PasswordResetForm({ resetToken }: PasswordResetFormProps) {
     await passwordReset({
       token: resetToken,
       newPassword: data.newPassword,
+      spaceSlug,
     });
   }
 

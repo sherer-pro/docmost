@@ -17,6 +17,7 @@ export type JwtPayload = {
 export type JwtCollabPayload = {
   sub: string;
   workspaceId: string;
+  pageId?: string;
   /**
    * Optional only for tokens minted before session binding was introduced.
    * The collaboration server rejects a token without it.
@@ -34,6 +35,7 @@ export type JwtExchangePayload = {
 export type JwtAttachmentPayload = {
   attachmentId?: string;
   pageId: string;
+  pageIds?: string[];
   workspaceId: string;
   type: 'attachment';
 };
@@ -41,6 +43,8 @@ export type JwtAttachmentPayload = {
 export interface JwtMfaTokenPayload {
   sub: string;
   workspaceId: string;
+  ssoAuthProviderId?: string;
+  targetSpaceId?: string;
   type: 'mfa_token';
 }
 

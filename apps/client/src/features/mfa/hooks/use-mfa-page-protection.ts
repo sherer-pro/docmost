@@ -26,14 +26,14 @@ export function useMfaPageProtection() {
 
       if (result.requiresMfaSetup && !isOnSetupPage) {
         // User needs to set up MFA but is on challenge page
-        navigate(APP_ROUTE.AUTH.MFA_SETUP_REQUIRED);
+        navigate(`${APP_ROUTE.AUTH.MFA_SETUP_REQUIRED}${location.search}`);
       } else if (
         !result.requiresMfaSetup &&
         result.userHasMfa &&
         !isOnChallengePage
       ) {
         // User has MFA and should be on challenge page
-        navigate(APP_ROUTE.AUTH.MFA_CHALLENGE);
+        navigate(`${APP_ROUTE.AUTH.MFA_CHALLENGE}${location.search}`);
       } else if (!result.isTransferToken) {
         // User has a regular auth token, shouldn't be on MFA pages
         navigate(APP_ROUTE.HOME);

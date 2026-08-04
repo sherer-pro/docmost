@@ -5,6 +5,7 @@ import {
   HttpCode,
   HttpStatus,
   Post,
+  Query,
   Req,
   Res,
   UseGuards,
@@ -23,7 +24,6 @@ import { PasswordResetDto } from './dto/password-reset.dto';
 import { VerifyUserTokenDto } from './dto/verify-user-token.dto';
 import { FastifyReply } from 'fastify';
 import { FastifyRequest } from 'fastify';
-import { validateSsoEnforcement } from './auth.util';
 import { CsrfExempt } from '../../common/decorators/csrf-exempt.decorator';
 import { AuthRateLimitGuard } from './rate-limit/auth-rate-limit.guard';
 import { AuthRateLimit } from './rate-limit/auth-rate-limit.decorator';
@@ -32,6 +32,8 @@ import { AuthCookieService } from '../../common/security/auth-cookie.service';
 import { SessionService } from '../session/session.service';
 import { DeprecatedRoute } from '../../common/decorators/deprecated-route.decorator';
 import { LEGACY_API_SUNSET } from '../../common/config/api-deprecation.constants';
+import { AuthPolicyScope } from '../../common/decorators/auth-policy-scope.decorator';
+import { CollabTokenQueryDto } from './dto/collab-token-query.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -53,8 +55,6 @@ export class AuthController {
     @Res({ passthrough: true }) res: FastifyReply,
     @Body() loginInput: LoginDto,
   ) {
-    validateSsoEnforcement(workspace);
-
     const mfaResult = await this.mfaService.checkMfaRequirements(
       loginInput,
       workspace,
@@ -115,7 +115,6 @@ export class AuthController {
     @Body() forgotPasswordDto: ForgotPasswordDto,
     @AuthWorkspace() workspace: Workspace,
   ) {
-    validateSsoEnforcement(workspace);
     return this.authService.forgotPassword(forgotPasswordDto, workspace);
   }
 
@@ -129,8 +128,6 @@ export class AuthController {
     @Body() passwordResetDto: PasswordResetDto,
     @AuthWorkspace() workspace: Workspace,
   ) {
-    validateSsoEnforcement(workspace);
-
     const result = await this.authService.passwordReset(
       passwordResetDto,
       workspace,
@@ -169,14 +166,22 @@ export class AuthController {
    * POST remains for backward compatibility with older client builds.
    */
   @UseGuards(JwtAuthGuard)
+  @AuthPolicyScope('page', { source: 'query', key: 'pageId' })
   @HttpCode(HttpStatus.OK)
   @Get('collab-token')
   async collabTokenViaGet(
+    @Query() query: CollabTokenQueryDto,
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
     @Req() req?: FastifyRequest,
   ) {
-    return this.collabToken(user, workspace, req);
+    const sessionId = (req?.raw as any)?.sessionId;
+    return this.authService.getCollabToken(
+      user,
+      workspace.id,
+      sessionId,
+      query.pageId,
+    );
   }
 
   @UseGuards(JwtAuthGuard)
@@ -199,6 +204,7 @@ export class AuthController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @AuthPolicyScope('bootstrap')
   @HttpCode(HttpStatus.OK)
   @Post('logout')
   async logout(

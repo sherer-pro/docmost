@@ -39,7 +39,15 @@ describe('AuthenticationExtension collab token session binding', () => {
         id: 'session-1',
         userId: 'user-1',
         workspaceId: 'workspace-1',
+        ssoVerifiedAt: null,
+        mfaVerifiedAt: null,
       })),
+    };
+    const spacePolicy = {
+      resolve: jest.fn(async () => ({
+        effective: { enforceSso: false, enforceMfa: false },
+      })),
+      evaluateAuthentication: jest.fn(() => ({ satisfied: true })),
     };
 
     const extension = new AuthenticationExtension(
@@ -48,9 +56,16 @@ describe('AuthenticationExtension collab token session binding', () => {
       pageRepo as any,
       pageAccessService as any,
       userSessionRepo as any,
+      spacePolicy as any,
     );
 
-    return { extension, userSessionRepo, pageRepo, pageAccessService };
+    return {
+      extension,
+      userSessionRepo,
+      pageRepo,
+      pageAccessService,
+      spacePolicy,
+    };
   }
 
   const authPayload = (documentName = `page.${PAGE_ID}`) =>
@@ -76,6 +91,60 @@ describe('AuthenticationExtension collab token session binding', () => {
       }),
     );
     expect(userSessionRepo.findActiveById).toHaveBeenCalledWith('session-1');
+  });
+
+  it('rejects a collab session that does not satisfy the page space policy', async () => {
+    const { extension, spacePolicy } = createExtension({
+      sub: 'user-1',
+      workspaceId: 'workspace-1',
+      sessionId: 'session-1',
+      pageId: PAGE_ID,
+      type: JwtType.COLLAB,
+    });
+    spacePolicy.evaluateAuthentication.mockReturnValue({ satisfied: false });
+
+    await expect(extension.onAuthenticate(authPayload())).rejects.toThrow(
+      'Additional authentication is required',
+    );
+  });
+
+  it('closes an existing collab connection when assurance is no longer valid', async () => {
+    const { extension, spacePolicy } = createExtension({
+      sub: 'user-1',
+      workspaceId: 'workspace-1',
+      sessionId: 'session-1',
+      pageId: PAGE_ID,
+      type: JwtType.COLLAB,
+    });
+    const context = await extension.onAuthenticate(authPayload());
+    spacePolicy.evaluateAuthentication.mockReturnValue({ satisfied: false });
+    const connection = {
+      context,
+      readOnly: false,
+      close: jest.fn(),
+    } as any;
+
+    await expect(
+      extension.beforeHandleMessage({
+        connection,
+        document: { getConnections: () => [connection] },
+      } as any),
+    ).rejects.toThrow('Collaboration authorization is no longer valid');
+    expect(connection.close).toHaveBeenCalled();
+  });
+
+  it('rejects a canonical collab token used for another page', async () => {
+    const { extension } = createExtension({
+      sub: 'user-1',
+      workspaceId: 'workspace-1',
+      sessionId: 'session-1',
+      pageId: '018f4f6a-6f5a-7f2c-9c0d-000000000000',
+      type: JwtType.COLLAB,
+    });
+
+    await expect(extension.onAuthenticate(authPayload())).rejects.toThrow(
+      'Collab token is bound to a different page',
+    );
   });
 
   it('rejects a collab token that carries no session id', async () => {

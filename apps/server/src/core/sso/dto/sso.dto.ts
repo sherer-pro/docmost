@@ -156,4 +156,23 @@ export class LdapLoginDto {
   @IsNotEmpty()
   @MaxLength(4096)
   password: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  spaceSlug?: string;
 }
+
+export class SsoLoginContextDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  spaceSlug?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2048)
+  returnTo?: string;
+}
+
+export class LdapStepUpDto extends LdapLoginDto {}

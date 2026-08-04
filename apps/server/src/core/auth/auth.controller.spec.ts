@@ -7,8 +7,6 @@ jest.mock('../mfa/mfa.service', () => ({
 }));
 
 import { AuthController } from './auth.controller';
-import { BadRequestException } from '@nestjs/common';
-
 describe('AuthController', () => {
   const createController = () => {
     const authCookieService = {
@@ -16,14 +14,19 @@ describe('AuthController', () => {
       setAuthCookies: jest.fn(),
     };
 
+    const authService = {
+      passwordReset: jest.fn().mockResolvedValue({
+        requiresLogin: true,
+      }),
+    };
     const controller = new AuthController(
-      {} as any,
+      authService as any,
       authCookieService as any,
       {} as any,
       { revokeSession: jest.fn() } as any,
     );
 
-    return { controller, authCookieService };
+    return { controller, authCookieService, authService };
   };
 
   it('should be defined', () => {
@@ -42,15 +45,14 @@ describe('AuthController', () => {
     expect(authCookieService.clearAuthCookies).toHaveBeenCalledWith(res);
   });
 
-  it('rejects password reset when SSO is enforced', async () => {
-    const { controller } = createController();
+  it('delegates targeted password reset enforcement to the auth service', async () => {
+    const { controller, authService } = createController();
+    const dto = { spaceSlug: 'eligible-space' } as any;
+    const workspace = { enforceSso: true } as any;
 
     await expect(
-      controller.passwordReset(
-        {} as any,
-        {} as any,
-        { enforceSso: true } as any,
-      ),
-    ).rejects.toBeInstanceOf(BadRequestException);
+      controller.passwordReset({} as any, dto, workspace),
+    ).resolves.toEqual({ requiresLogin: true });
+    expect(authService.passwordReset).toHaveBeenCalledWith(dto, workspace);
   });
 });

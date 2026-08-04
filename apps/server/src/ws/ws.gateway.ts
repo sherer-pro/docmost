@@ -23,6 +23,11 @@ import { User } from '@docmost/db/types/entity.types';
 import { UserSessionRepo } from '@docmost/db/repos/session/user-session.repo';
 import { PresenceService } from '../core/presence/presence.service';
 import { PresenceUpdateDto } from '../core/presence/dto/presence-update.dto';
+import { SpacePolicyService } from '../core/space-policy/space-policy.service';
+import { WorkspaceRepo } from '@docmost/db/repos/workspace/workspace.repo';
+import { OnEvent } from '@nestjs/event-emitter';
+import { EventName } from '../common/events/event.contants';
+import { PageTransclusionReferencesRepo } from '@docmost/db/repos/page-transclusions/page-transclusion-references.repo';
 
 const wsCorsOriginValidator = createCorsOriginValidator();
 
@@ -45,7 +50,105 @@ export class WsGateway
     private readonly pageAccessService: PageAccessService,
     private readonly userSessionRepo: UserSessionRepo,
     private readonly presenceService: PresenceService,
+    private readonly workspaceRepo: WorkspaceRepo,
+    private readonly spacePolicy: SpacePolicyService,
+    private readonly pageTransclusionReferencesRepo: PageTransclusionReferencesRepo,
   ) {}
+
+  @OnEvent(EventName.PAGE_UPDATED)
+  async handlePageEmbedSourceUpdated(event: {
+    pageIds: string[];
+    workspaceId: string;
+  }): Promise<void> {
+    try {
+      const spaceIds = new Set<string>();
+      for (const sourcePageId of event.pageIds) {
+        const usages =
+          await this.pageTransclusionReferencesRepo.findPageUsagesBySource(
+            sourcePageId,
+            event.workspaceId,
+          );
+        for (const consumerPageId of new Set(
+          usages.map((usage) => usage.referencePageId),
+        )) {
+          const consumer = await this.pageRepo.findById(consumerPageId);
+          if (consumer && !consumer.deletedAt) spaceIds.add(consumer.spaceId);
+        }
+      }
+      this.emitPageEmbedInvalidation(spaceIds);
+    } catch (error) {
+      this.logger.warn('Failed to invalidate page embed consumers', error);
+    }
+  }
+
+  @OnEvent(EventName.AUTHORIZATION_CHANGED)
+  async handleAuthorizationChanged(event: {
+    workspaceId: string;
+    userId?: string;
+    sessionId?: string;
+  }): Promise<void> {
+    if (!this.server) return;
+
+    for (const socket of this.server.sockets.sockets.values()) {
+      if (
+        socket.data.workspaceId !== event.workspaceId ||
+        (event.userId && socket.data.userId !== event.userId) ||
+        (event.sessionId && socket.data.sessionId !== event.sessionId)
+      ) {
+        continue;
+      }
+
+      let authorized = false;
+      try {
+        authorized = await this.refreshClientAuthorization(socket);
+      } catch (error) {
+        this.logger.warn(
+          `Failed to refresh authorization for socket ${socket.id}`,
+          error,
+        );
+      }
+      if (!authorized) {
+        this.disconnectUnauthorized(socket);
+      }
+    }
+  }
+
+  @OnEvent(EventName.PAGE_SOFT_DELETED)
+  async handlePageEmbedSourceTrashed(event: {
+    pageIds: string[];
+    workspaceId: string;
+  }): Promise<void> {
+    await this.handlePageEmbedSourceUpdated(event);
+  }
+
+  @OnEvent(EventName.PAGE_RESTORED)
+  async handlePageEmbedSourceRestored(event: {
+    pageIds: string[];
+    workspaceId: string;
+  }): Promise<void> {
+    await this.handlePageEmbedSourceUpdated(event);
+  }
+
+  @OnEvent(EventName.PAGE_DELETED)
+  async handlePageEmbedSourceDeleted(event: {
+    pageIds: string[];
+    workspaceId: string;
+  }): Promise<void> {
+    await this.handlePageEmbedSourceUpdated(event);
+  }
+
+  @OnEvent(EventName.PAGE_EMBED_VISIBILITY_CHANGED)
+  handlePageEmbedVisibilityChanged(event: { workspaceId: string }): void {
+    if (!this.server) return;
+    for (const socket of this.server.sockets.sockets.values()) {
+      const user = socket.data.user as User | undefined;
+      if (user?.workspaceId === event.workspaceId) {
+        socket.emit('page-embed:invalidate', {
+          operation: 'page_embed_invalidate',
+        });
+      }
+    }
+  }
 
   /**
    * Authenticates a newly connected socket and joins it to all authorized rooms.
@@ -63,10 +166,6 @@ export class WsGateway
 
       const userId = token.sub;
       const workspaceId = token.workspaceId;
-      const user = await this.userRepo.findById(userId, workspaceId);
-      if (!user) {
-        throw new Error('Unauthorized');
-      }
 
       // A token without `sessionId` bypasses every revocation control, so it is
       // not accepted here either.
@@ -74,41 +173,15 @@ export class WsGateway
         throw new Error('Unauthorized');
       }
 
-      const session = await this.userSessionRepo.findActiveById(token.sessionId);
-      if (
-        !session ||
-        session.userId !== userId ||
-        session.workspaceId !== workspaceId
-      ) {
+      client.data.userId = userId;
+      client.data.workspaceId = workspaceId;
+      client.data.sessionId = token.sessionId;
+
+      if (!(await this.refreshClientAuthorization(client))) {
         throw new Error('Unauthorized');
       }
-      const deviceName: string | null = session.deviceName;
-
-      const [memberSpaceIds, pageRuleSpaceIds] = await Promise.all([
-        this.spaceMemberRepo.getUserSpaceIds(userId),
-        this.pageAccessService.getSpaceIdsWithPageRuleAccess(userId, workspaceId),
-      ]);
-      const userSpaceIds = [...new Set([...memberSpaceIds, ...pageRuleSpaceIds])];
-
-      const userRoom = `user-${userId}`;
-      const workspaceRoom = `workspace-${workspaceId}`;
-      const spaceRooms = userSpaceIds.map((id) => this.getSpaceRoomName(id));
-      const authorizedRooms = new Set([userRoom, workspaceRoom, ...spaceRooms]);
-
-      /**
-       * Keep allowed room names in socket context for strict server-side checks.
-       * This prevents a client from relaying events to arbitrary rooms by
-       * tampering with payload values.
-       */
-      client.data.authorizedRooms = authorizedRooms;
-      client.data.user = user;
-      client.data.sessionId = token.sessionId ?? null;
-      client.data.deviceName = deviceName;
-
-      client.join([...authorizedRooms]);
     } catch (err) {
-      client.emit('Unauthorized');
-      client.disconnect();
+      this.disconnectUnauthorized(client);
     }
   }
 
@@ -134,6 +207,11 @@ export class WsGateway
       this.logger.warn(
         `Invalid WS payload from client ${client.id}: ${JSON.stringify(validationErrors)}`,
       );
+      return;
+    }
+
+    if (!(await this.refreshClientAuthorization(client))) {
+      this.disconnectUnauthorized(client);
       return;
     }
 
@@ -180,7 +258,13 @@ export class WsGateway
 
       if (pageId) {
         const page = await this.pageRepo.findById(pageId);
-        if (!page || page.deletedAt) {
+        const sender = client.data.user as User | undefined;
+        if (
+          !page ||
+          page.deletedAt ||
+          page.spaceId !== payload.spaceId ||
+          page.workspaceId !== sender?.workspaceId
+        ) {
           return;
         }
 
@@ -196,6 +280,17 @@ export class WsGateway
 
           const socket = this.server.sockets.sockets.get(socketId);
           if (!socket) {
+            continue;
+          }
+
+          if (!(await this.refreshClientAuthorization(socket))) {
+            this.disconnectUnauthorized(socket);
+            continue;
+          }
+
+          const socketRooms: Set<string> =
+            socket.data.authorizedRooms ?? new Set();
+          if (!socketRooms.has(payload.targetRoom)) {
             continue;
           }
 
@@ -216,6 +311,23 @@ export class WsGateway
         }
 
         return;
+      }
+    }
+
+    const room =
+      this.server.sockets.adapter.rooms.get(payload.targetRoom) ?? new Set();
+
+    for (const socketId of [...room]) {
+      if (socketId === client.id) {
+        continue;
+      }
+      const socket = this.server.sockets.sockets.get(socketId);
+      if (!socket) {
+        continue;
+      }
+      if (!(await this.refreshClientAuthorization(socket))) {
+        this.disconnectUnauthorized(socket);
+        continue;
       }
     }
 
@@ -248,9 +360,36 @@ export class WsGateway
       return;
     }
 
+    if (!(await this.refreshClientAuthorization(client))) {
+      this.disconnectUnauthorized(client);
+      return;
+    }
+
     const user = client.data.user as User | undefined;
     if (!user) {
       return;
+    }
+
+    if (client.data.workspaceAssuranceSatisfied === false) {
+      const allowedSpaceIds = (client.data.allowedSpaceIds ?? new Set()) as Set<
+        string
+      >;
+      let targetSpaceId: string | null = null;
+
+      if (payload.type === 'space') {
+        targetSpaceId = await this.spacePolicy.resolveSpaceId(
+          user.workspaceId,
+          payload.spaceId,
+        );
+      } else if (payload.type === 'page' && payload.pageId) {
+        const page = await this.pageRepo.findById(payload.pageId);
+        targetSpaceId =
+          page && page.workspaceId === user.workspaceId ? page.spaceId : null;
+      }
+
+      if (!targetSpaceId || !allowedSpaceIds.has(targetSpaceId)) {
+        return;
+      }
     }
 
     await this.presenceService.updateConnection(
@@ -283,6 +422,16 @@ export class WsGateway
    */
   getSpaceRoomName(spaceId: string): string {
     return `space-${spaceId}`;
+  }
+
+  emitPageEmbedInvalidation(spaceIds: Iterable<string>): void {
+    if (!this.server) return;
+    for (const spaceId of new Set(spaceIds)) {
+      this.server.to(this.getSpaceRoomName(spaceId)).emit(
+        'page-embed:invalidate',
+        { operation: 'page_embed_invalidate' },
+      );
+    }
   }
 
   /**
@@ -345,5 +494,84 @@ export class WsGateway
       typeof data.operation === 'string' &&
       (WS_RELAY_EVENT_OPERATIONS as readonly string[]).includes(data.operation)
     );
+  }
+
+  private async refreshClientAuthorization(client: Socket): Promise<boolean> {
+    const userId = client.data.userId as string | undefined;
+    const workspaceId = client.data.workspaceId as string | undefined;
+    const sessionId = client.data.sessionId as string | undefined;
+    if (!userId || !workspaceId || !sessionId) {
+      return false;
+    }
+
+    const [user, workspace, session] = await Promise.all([
+      this.userRepo.findById(userId, workspaceId),
+      this.workspaceRepo.findById(workspaceId),
+      this.userSessionRepo.findActiveById(sessionId),
+    ]);
+    if (
+      !user ||
+      user.deactivatedAt ||
+      user.deletedAt ||
+      !workspace ||
+      !session ||
+      session.userId !== userId ||
+      session.workspaceId !== workspaceId
+    ) {
+      return false;
+    }
+
+    const [memberSpaceIds, pageRuleSpaceIds] = await Promise.all([
+      this.spaceMemberRepo.getUserSpaceIds(userId),
+      this.pageAccessService.getSpaceIdsWithPageRuleAccess(userId, workspaceId),
+    ]);
+    const userSpaceIds = [...new Set([...memberSpaceIds, ...pageRuleSpaceIds])];
+    const allowedSpaceIds = (
+      await Promise.all(
+        userSpaceIds.map(async (spaceId) => {
+          const policy = await this.spacePolicy.resolve(workspaceId, spaceId);
+          return policy &&
+            this.spacePolicy.evaluateAuthentication(policy.effective, session)
+              .satisfied
+            ? spaceId
+            : null;
+        }),
+      )
+    ).filter((spaceId): spaceId is string => Boolean(spaceId));
+    const workspaceAssuranceSatisfied = this.spacePolicy.evaluateAuthentication(
+      this.spacePolicy.getWorkspaceValues(workspace),
+      session,
+    ).satisfied;
+    const authorizedRooms = new Set([
+      ...(workspaceAssuranceSatisfied
+        ? [`user-${userId}`, `workspace-${workspaceId}`]
+        : []),
+      ...allowedSpaceIds.map((spaceId) => this.getSpaceRoomName(spaceId)),
+    ]);
+    const previousRooms: Set<string> =
+      client.data.authorizedRooms ?? new Set<string>();
+
+    for (const room of previousRooms) {
+      if (!authorizedRooms.has(room)) {
+        await client.leave(room);
+      }
+    }
+    for (const room of authorizedRooms) {
+      if (!client.rooms.has(room)) {
+        await client.join(room);
+      }
+    }
+
+    client.data.authorizedRooms = authorizedRooms;
+    client.data.user = user;
+    client.data.deviceName = session.deviceName;
+    client.data.allowedSpaceIds = new Set(allowedSpaceIds);
+    client.data.workspaceAssuranceSatisfied = workspaceAssuranceSatisfied;
+    return true;
+  }
+
+  private disconnectUnauthorized(client: Socket): void {
+    client.emit('Unauthorized');
+    client.disconnect();
   }
 }

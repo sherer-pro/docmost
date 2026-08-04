@@ -29,6 +29,7 @@ import { CommentRepo } from '@docmost/db/repos/comment/comment.repo';
 import { PageAccessService } from '../page-access/page-access.service';
 import { DeprecatedRoute } from '../../common/decorators/deprecated-route.decorator';
 import { LEGACY_API_SUNSET } from '../../common/config/api-deprecation.constants';
+import { AuthPolicyScope } from '../../common/decorators/auth-policy-scope.decorator';
 
 @UseGuards(JwtAuthGuard)
 @Controller('comments')
@@ -41,6 +42,7 @@ export class CommentController {
   ) {}
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('page', { source: 'body', key: 'pageId' })
   @Post('actions/create')
   async createViaAction(
     @Body() createCommentDto: CreateCommentDto,
@@ -55,6 +57,7 @@ export class CommentController {
     sunset: LEGACY_API_SUNSET,
     replacement: 'POST /api/comments/actions/create',
   })
+  @AuthPolicyScope('page', { source: 'body', key: 'pageId' })
   @Post('create')
   async create(
     @Body() createCommentDto: CreateCommentDto,
@@ -79,6 +82,7 @@ export class CommentController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('page', { source: 'query', key: 'pageId' })
   @Get('/')
   async findPageCommentsViaQuery(
     @Query() input: PageCommentsQueryDto,
@@ -92,6 +96,7 @@ export class CommentController {
     sunset: LEGACY_API_SUNSET,
     replacement: 'GET /api/comments',
   })
+  @AuthPolicyScope('page', { source: 'body', key: 'pageId' })
   @Post('/')
   async findPageComments(
     @Body() input: PageCommentsQueryDto,
@@ -107,6 +112,11 @@ export class CommentController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('resource', {
+    source: 'query',
+    key: 'commentId',
+    resourceType: 'comment',
+  })
   @Get('info')
   async findOneViaQuery(@Query() input: CommentIdDto, @AuthUser() user: User) {
     return this.findOne(input, user);
@@ -116,6 +126,11 @@ export class CommentController {
   @DeprecatedRoute({
     sunset: LEGACY_API_SUNSET,
     replacement: 'GET /api/comments/info',
+  })
+  @AuthPolicyScope('resource', {
+    source: 'body',
+    key: 'commentId',
+    resourceType: 'comment',
   })
   @Post('info')
   async findOne(@Body() input: CommentIdDto, @AuthUser() user: User) {
@@ -134,6 +149,11 @@ export class CommentController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('resource', {
+    source: 'body',
+    key: 'commentId',
+    resourceType: 'comment',
+  })
   @Post('actions/update')
   async updateViaAction(@Body() dto: UpdateCommentDto, @AuthUser() user: User) {
     return this.update(dto, user);
@@ -143,6 +163,11 @@ export class CommentController {
   @DeprecatedRoute({
     sunset: LEGACY_API_SUNSET,
     replacement: 'POST /api/comments/actions/update',
+  })
+  @AuthPolicyScope('resource', {
+    source: 'body',
+    key: 'commentId',
+    resourceType: 'comment',
   })
   @Post('update')
   async update(@Body() dto: UpdateCommentDto, @AuthUser() user: User) {
@@ -168,6 +193,11 @@ export class CommentController {
    * accidental cross-page updates via payload tampering.
    */
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('resource', {
+    source: 'body',
+    key: 'commentId',
+    resourceType: 'comment',
+  })
   @Post('resolve')
   async resolve(@Body() dto: ResolveCommentDto, @AuthUser() user: User) {
     const comment = await this.commentRepo.findById(dto.commentId);
@@ -190,6 +220,11 @@ export class CommentController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('resource', {
+    source: 'body',
+    key: 'commentId',
+    resourceType: 'comment',
+  })
   @Post('actions/delete')
   async deleteViaAction(@Body() input: CommentIdDto, @AuthUser() user: User) {
     return this.delete(input, user);
@@ -199,6 +234,11 @@ export class CommentController {
   @DeprecatedRoute({
     sunset: LEGACY_API_SUNSET,
     replacement: 'POST /api/comments/actions/delete',
+  })
+  @AuthPolicyScope('resource', {
+    source: 'body',
+    key: 'commentId',
+    resourceType: 'comment',
   })
   @Post('delete')
   async delete(@Body() input: CommentIdDto, @AuthUser() user: User) {

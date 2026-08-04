@@ -15,6 +15,8 @@ describe('MfaService security helpers', () => {
       {} as any,
       {} as any,
       { getAppSecret: () => appSecret } as any,
+      {} as any,
+      {} as any,
     );
 
   it('hashBackupCodes stores backup codes as hashes', () => {
@@ -53,6 +55,38 @@ describe('MfaService security helpers', () => {
 
     expect(() => (service as any).getTotpSecret('enc:v1:broken')).toThrow(
       BadRequestException,
+    );
+  });
+
+  it('clears MFA assurance from every active session when MFA is disabled', async () => {
+    const query: any = {
+      where: jest.fn(() => query),
+      execute: jest.fn().mockResolvedValue(undefined),
+    };
+    const assurance = {
+      clearMfaForUser: jest.fn().mockResolvedValue(undefined),
+    };
+    const service = new MfaService(
+      { deleteFrom: jest.fn(() => query) } as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      { getAppSecret: () => appSecret } as any,
+      assurance as any,
+      {} as any,
+    );
+
+    await expect(
+      service.disable(
+        { id: 'user-1', hasGeneratedPassword: true } as any,
+        'workspace-1',
+        {} as any,
+      ),
+    ).resolves.toEqual({ success: true });
+
+    expect(assurance.clearMfaForUser).toHaveBeenCalledWith(
+      'user-1',
+      'workspace-1',
     );
   });
 });

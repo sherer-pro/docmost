@@ -39,15 +39,21 @@ describe('ShareService public sharing invariants', () => {
     };
     const publicSharingPolicy = {
       isAllowedBySettings: jest.fn(
-        (workspaceSettings: any, spaceSettings: any) =>
-          workspaceSettings?.sharing?.disabled !== true &&
-          spaceSettings?.sharing?.disabled !== true,
+        (workspaceSettings: any, spaceSettings: any) => {
+          const override = spaceSettings?.sharing?.disabled;
+          const disabled =
+            typeof override === 'boolean'
+              ? override
+              : workspaceSettings?.sharing?.disabled === true;
+          return !disabled;
+        },
       ),
     };
     const service = new ShareService(
       shareRepo as any,
       {} as any,
       db as any,
+      {} as any,
       {} as any,
       publicSharingPolicy as any,
     );
@@ -91,6 +97,18 @@ describe('ShareService public sharing invariants', () => {
     expect(shareRepo.findByPageId).toHaveBeenCalledWith('page-1', { trx });
     expect(shareRepo.insertShare).not.toHaveBeenCalled();
   });
+
+  it('allows an explicit space override under a disabled workspace default', async () => {
+    const { service, shareRepo } = createService({
+      workspace: { sharing: { disabled: true } },
+      space: { sharing: { disabled: false } },
+    });
+
+    await expect(service.createShare(createInput)).resolves.toEqual({
+      id: 'share-1',
+    });
+    expect(shareRepo.insertShare).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('ShareService getSharedPage', () => {
@@ -109,6 +127,7 @@ describe('ShareService getSharedPage', () => {
     service = new ShareService(
       shareRepo as any,
       pageRepo as any,
+      {} as any,
       {} as any,
       {} as any,
       {} as any,

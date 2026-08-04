@@ -34,6 +34,19 @@ Deprecation tracking:
 3. Keep read-only computational/service endpoints under explicit domain namespaces:
    - `/search`, `/health`, `/version`, `/collab`
 
+## Authentication policy scopes
+
+- Routes without an explicit scope use the workspace policy.
+- Bootstrap routes expose only the authenticated principal and minimal navigation
+  context needed to complete step-up authentication.
+- `GET /spaces` is the paginated bootstrap catalog. `GET
+  /spaces/policy-context?spaceSlug=...` is the canonical bootstrap lookup for an
+  active route and is not limited to the first catalog page.
+- Space/resource routes resolve the owning space before evaluating MFA and SSO
+  assurance. A failed evaluation returns `428
+  AUTHENTICATION_ASSURANCE_REQUIRED`; it must not be converted into a global
+  login redirect.
+
 ## RAG API namespace
 
 - RAG ingestion endpoints are exposed under `/rag/*`.
@@ -55,6 +68,27 @@ Deprecation tracking:
   - `GET /rag/pages/:pageIdOrSlug/comments`
   - `GET /rag/pages/:pageIdOrSlug/export`
   - `GET /rag/space/export`
+
+## AI tool policy and MCP namespaces
+
+- Workspace built-in tool policy uses the singleton resource
+  `GET/PATCH /ai/tool-policy`. It is restricted to workspace `owner|admin` and
+  returns the catalog together with the deployment maximum and exact workspace
+  allowlist.
+- Space narrowing is a nested singleton resource:
+  `GET/PUT /spaces/:spaceId/ai/tool-policy`. It requires the space
+  `Manage Settings` ability; the stored allowlist is nullable so `null` means
+  inherit and `[]` means deny all.
+- API-key management remains under the existing authenticated API-key routes.
+  The `allowedCapabilities` field is valid only for `keyType=mcp`; RAG keys
+  reject it.
+- The inbound MCP protocol endpoint is the root-level `/mcp`, outside the
+  global `/api` prefix and outside this controller-generated inventory. It is
+  stateless, accepts only `keyType=mcp`, and exposes only read definitions
+  allowed by the shared policy resolver and the key's exact allowlist.
+- Outbound external MCP settings remain under `/ai/mcp-*` and
+  `/spaces/:spaceId/ai/mcp-*`. They are not part of the inbound key policy and
+  must not reuse its routes or credentials.
 
 ## Current status
 

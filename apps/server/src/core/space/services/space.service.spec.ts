@@ -1,12 +1,14 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getQueueToken } from '@nestjs/bullmq';
-import { NotFoundException } from '@nestjs/common';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { SpaceService } from './space.service';
 import { SpaceRepo } from '@docmost/db/repos/space/space.repo';
 import { SpaceMemberService } from './space-member.service';
 import { ShareRepo } from '@docmost/db/repos/share/share.repo';
 import { WorkspaceRepo } from '@docmost/db/repos/workspace/workspace.repo';
 import { QueueName } from '../../../integrations/queue/constants';
+import { SpacePolicyService } from '../../space-policy/space-policy.service';
+import { SsoEndpointPolicyService } from '../../../integrations/environment/sso-endpoint-policy.service';
 
 describe('SpaceService', () => {
   let service: SpaceService;
@@ -17,7 +19,10 @@ describe('SpaceService', () => {
     updateSpace: jest.Mock;
     archiveSpace: jest.Mock;
     unarchiveSpace: jest.Mock;
+    findById: jest.Mock;
   };
+  let workspaceRepo: { findById: jest.Mock };
+  let shareRepo: { deleteBySpaceId: jest.Mock };
 
   beforeEach(async () => {
     spaceRepo = {
@@ -27,6 +32,14 @@ describe('SpaceService', () => {
       updateSpace: jest.fn(),
       archiveSpace: jest.fn(),
       unarchiveSpace: jest.fn(),
+      findById: jest.fn(),
+    };
+    workspaceRepo = { findById: jest.fn() };
+    shareRepo = { deleteBySpaceId: jest.fn() };
+    const db = {
+      transaction: jest.fn(() => ({
+        execute: (callback: (trx: unknown) => unknown) => callback({}),
+      })),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -34,9 +47,11 @@ describe('SpaceService', () => {
         SpaceService,
         { provide: SpaceRepo, useValue: spaceRepo },
         { provide: SpaceMemberService, useValue: {} },
-        { provide: ShareRepo, useValue: {} },
-        { provide: WorkspaceRepo, useValue: {} },
-        { provide: 'KyselyModuleConnectionToken', useValue: {} },
+        { provide: ShareRepo, useValue: shareRepo },
+        { provide: WorkspaceRepo, useValue: workspaceRepo },
+        SpacePolicyService,
+        { provide: SsoEndpointPolicyService, useValue: {} },
+        { provide: 'KyselyModuleConnectionToken', useValue: db },
         { provide: getQueueToken(QueueName.ATTACHMENT_QUEUE), useValue: {} },
       ],
     }).compile();
@@ -132,5 +147,118 @@ describe('SpaceService', () => {
     await expect(
       service.archiveSpace('space-1', 'workspace-1'),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('rejects a space administrator transition that weakens MFA', async () => {
+    workspaceRepo.findById.mockResolvedValue({
+      enforceMfa: true,
+      enforceSso: false,
+      settings: {},
+    });
+    spaceRepo.findById.mockResolvedValue({
+      id: 'space-1',
+      settings: {},
+    });
+
+    await expect(
+      service.updateSpace(
+        { spaceId: 'space-1', enforceMfa: false },
+        'workspace-1',
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('rejects an explicit disabled override from a space administrator even when the workspace default is disabled', async () => {
+    await expect(
+      service.updateSpace(
+        { spaceId: 'space-1', enforceMfa: false },
+        'workspace-1',
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(workspaceRepo.findById).not.toHaveBeenCalled();
+  });
+
+  it('rejects resetting an override from a space administrator', async () => {
+    await expect(
+      service.updateSpace(
+        { spaceId: 'space-1', enforceSso: null },
+        'workspace-1',
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(workspaceRepo.findById).not.toHaveBeenCalled();
+  });
+
+  it('allows a workspace administrator to set a weaker override', async () => {
+    workspaceRepo.findById.mockResolvedValue({
+      enforceMfa: true,
+      enforceSso: false,
+      settings: {},
+    });
+    spaceRepo.findById.mockResolvedValue({
+      id: 'space-1',
+      settings: {},
+    });
+    spaceRepo.updateSpace.mockResolvedValue({ id: 'space-1' });
+
+    await service.updateSpace(
+      { spaceId: 'space-1', enforceMfa: false },
+      'workspace-1',
+      { canLoosenPolicy: true },
+    );
+
+    expect(spaceRepo.updateSpace).toHaveBeenCalledWith(
+      { settings: { security: { enforceMfa: false } } },
+      'space-1',
+      'workspace-1',
+      expect.anything(),
+    );
+  });
+
+  it('deletes shares only on an allowed to disabled transition', async () => {
+    workspaceRepo.findById.mockResolvedValue({
+      enforceMfa: false,
+      enforceSso: false,
+      settings: { sharing: { disabled: true } },
+    });
+    spaceRepo.findById.mockResolvedValue({
+      id: 'space-1',
+      settings: { sharing: { disabled: false } },
+    });
+    spaceRepo.updateSpace.mockResolvedValue({ id: 'space-1' });
+
+    await service.updateSpace(
+      { spaceId: 'space-1', disablePublicSharing: null },
+      'workspace-1',
+      { canLoosenPolicy: true },
+    );
+
+    expect(shareRepo.deleteBySpaceId).toHaveBeenCalledWith(
+      'space-1',
+      'workspace-1',
+      expect.anything(),
+    );
+  });
+
+  it('does not delete links for an explicit allowed override', async () => {
+    workspaceRepo.findById.mockResolvedValue({
+      enforceMfa: false,
+      enforceSso: false,
+      settings: { sharing: { disabled: true } },
+    });
+    spaceRepo.findById.mockResolvedValue({
+      id: 'space-1',
+      settings: { sharing: { disabled: false } },
+    });
+    spaceRepo.updateSpace.mockResolvedValue({ id: 'space-1' });
+
+    await service.updateSpace(
+      { spaceId: 'space-1', disablePublicSharing: false },
+      'workspace-1',
+      { canLoosenPolicy: true },
+    );
+
+    expect(shareRepo.deleteBySpaceId).not.toHaveBeenCalled();
   });
 });

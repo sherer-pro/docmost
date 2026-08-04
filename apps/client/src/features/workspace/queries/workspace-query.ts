@@ -42,13 +42,13 @@ export function useWorkspaceQuery(): UseQueryResult<IWorkspace, Error> {
   });
 }
 
-export function useWorkspacePublicDataQuery(): UseQueryResult<
+export function useWorkspacePublicDataQuery(spaceSlug?: string): UseQueryResult<
   IPublicWorkspace,
   Error
 > {
   return useQuery({
-    queryKey: ["workspace-public"],
-    queryFn: () => getWorkspacePublicData(),
+    queryKey: ["workspace-public", spaceSlug],
+    queryFn: () => getWorkspacePublicData(spaceSlug),
   });
 }
 

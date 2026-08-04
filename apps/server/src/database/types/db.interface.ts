@@ -1,4 +1,6 @@
 import {
+  AiBuiltinToolSpacePolicies,
+  AiBuiltinToolWorkspacePolicies,
   AiAuxRuns,
   AiChatFiles,
   AiConversationContextSources,
@@ -38,8 +40,13 @@ import {
   Labels,
   Notifications,
   PageLabels,
+  PageEmbedGraphFences,
   PageTransclusions,
   PageTransclusionReferences,
+  PageTemplateGroupPolicies,
+  PageTemplateOperations,
+  PageTemplateSpacePolicies,
+  PageTemplateWorkspacePolicies,
   PageAccessRules,
   PushNotificationJobs,
   PageHistory,
@@ -59,6 +66,8 @@ import {
 } from '@docmost/db/types/db';
 
 export interface DbInterface {
+  aiBuiltinToolSpacePolicies: AiBuiltinToolSpacePolicies;
+  aiBuiltinToolWorkspacePolicies: AiBuiltinToolWorkspacePolicies;
   aiAuxRuns: AiAuxRuns;
   aiChatFiles: AiChatFiles;
   aiConversationContextSources: AiConversationContextSources;
@@ -100,9 +109,14 @@ export interface DbInterface {
   pageLabels: PageLabels;
   pageTransclusions: PageTransclusions;
   pageTransclusionReferences: PageTransclusionReferences;
+  pageTemplateGroupPolicies: PageTemplateGroupPolicies;
+  pageTemplateOperations: PageTemplateOperations;
+  pageTemplateSpacePolicies: PageTemplateSpacePolicies;
+  pageTemplateWorkspacePolicies: PageTemplateWorkspacePolicies;
   pushNotificationJobs: PushNotificationJobs;
   pageHistory: PageHistory;
   pages: Pages;
+  pageEmbedGraphFences: PageEmbedGraphFences;
   shares: Shares;
   pushSubscriptions: PushSubscriptions;
   spaceMembers: SpaceMembers;

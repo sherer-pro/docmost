@@ -30,6 +30,7 @@ import {
 import { FavoriteService } from './favorite.service';
 import { DeprecatedRoute } from '../../common/decorators/deprecated-route.decorator';
 import { LEGACY_API_SUNSET } from '../../common/config/api-deprecation.constants';
+import { AuthPolicyScope } from '../../common/decorators/auth-policy-scope.decorator';
 
 @UseGuards(JwtAuthGuard)
 @Controller('favorites')
@@ -43,6 +44,12 @@ export class FavoriteController {
   ) {}
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('space', {
+    source: 'body',
+    key: 'spaceId',
+    fallbackKey: 'pageId',
+    fallbackScope: 'page',
+  })
   @Post('add')
   async addFavorite(
     @Body() dto: AddFavoriteDto,
@@ -59,6 +66,12 @@ export class FavoriteController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('space', {
+    source: 'body',
+    key: 'spaceId',
+    fallbackKey: 'pageId',
+    fallbackScope: 'page',
+  })
   @Post('remove')
   async removeFavorite(
     @Body() dto: RemoveFavoriteDto,
@@ -75,6 +88,11 @@ export class FavoriteController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('space', {
+    source: 'query',
+    key: 'spaceId',
+    optional: true,
+  })
   @Get('ids')
   async getFavoriteIdsViaQuery(
     @Query() dto: FavoriteIdsDto,
@@ -88,6 +106,11 @@ export class FavoriteController {
   @DeprecatedRoute({
     sunset: LEGACY_API_SUNSET,
     replacement: 'GET /api/favorites/ids',
+  })
+  @AuthPolicyScope('space', {
+    source: 'body',
+    key: 'spaceId',
+    optional: true,
   })
   @Post('ids')
   async getFavoriteIds(
@@ -104,6 +127,11 @@ export class FavoriteController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('space', {
+    source: 'query',
+    key: 'spaceId',
+    optional: true,
+  })
   @Get()
   async getUserFavoritesViaQuery(
     @Query() query: ListFavoritesQueryDto,
@@ -116,6 +144,11 @@ export class FavoriteController {
   @DeprecatedRoute({
     sunset: LEGACY_API_SUNSET,
     replacement: 'GET /api/favorites',
+  })
+  @AuthPolicyScope('space', {
+    source: 'body',
+    key: 'spaceId',
+    optional: true,
   })
   @Post()
   async getUserFavorites(

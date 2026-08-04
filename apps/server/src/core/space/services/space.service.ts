@@ -1,7 +1,9 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { CreateSpaceDto } from '../dto/create-space.dto';
@@ -19,6 +21,13 @@ import { Queue } from 'bullmq';
 import { InjectQueue } from '@nestjs/bullmq';
 import { CursorPaginationResult } from '@docmost/db/pagination/cursor-pagination';
 import { ShareRepo } from '@docmost/db/repos/share/share.repo';
+import { WorkspaceRepo } from '@docmost/db/repos/workspace/workspace.repo';
+import { SpacePolicyService } from '../../space-policy/space-policy.service';
+import { isEnforcementReadyProvider } from '../../sso/sso-provider.util';
+import { SsoEndpointPolicyService } from '../../../integrations/environment/sso-endpoint-policy.service';
+import type { AuthProvider, SpaceSettings } from '@docmost/db/types/entity.types';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventName } from '../../../common/events/event.contants';
 
 @Injectable()
 export class SpaceService {
@@ -26,8 +35,12 @@ export class SpaceService {
     private spaceRepo: SpaceRepo,
     private spaceMemberService: SpaceMemberService,
     private shareRepo: ShareRepo,
+    private workspaceRepo: WorkspaceRepo,
+    private readonly spacePolicy: SpacePolicyService,
+    private readonly ssoEndpointPolicy: SsoEndpointPolicyService,
     @InjectKysely() private readonly db: KyselyDB,
     @InjectQueue(QueueName.ATTACHMENT_QUEUE) private attachmentQueue: Queue,
+    @Optional() private readonly eventEmitter?: EventEmitter2,
   ) {}
 
   async createSpace(
@@ -94,6 +107,7 @@ export class SpaceService {
   async updateSpace(
     updateSpaceDto: UpdateSpaceDto,
     workspaceId: string,
+    options: { canLoosenPolicy?: boolean } = {},
   ): Promise<Space> {
     if (updateSpaceDto?.slug) {
       const slugExists = await this.spaceRepo.slugExists(
@@ -108,17 +122,85 @@ export class SpaceService {
       }
     }
 
-    if (typeof updateSpaceDto.disablePublicSharing !== 'undefined') {
+    const hasPolicyUpdate =
+      typeof updateSpaceDto.disablePublicSharing !== 'undefined' ||
+      typeof updateSpaceDto.enforceMfa !== 'undefined' ||
+      typeof updateSpaceDto.enforceSso !== 'undefined';
+
+    if (hasPolicyUpdate) {
+      const requestedOverrides = [
+        updateSpaceDto.disablePublicSharing,
+        updateSpaceDto.enforceMfa,
+        updateSpaceDto.enforceSso,
+      ].filter((value) => typeof value !== 'undefined');
+
+      if (
+        !options.canLoosenPolicy &&
+        requestedOverrides.some((value) => value !== true)
+      ) {
+        throw new ForbiddenException(
+          'Only workspace administrators can disable or reset a space policy override',
+        );
+      }
+
       await executeTx(this.db, async (trx) => {
-        await this.spaceRepo.updateSharingSettings(
+        const workspace = await this.workspaceRepo.findById(workspaceId, {
+          withLock: true,
+          trx,
+        });
+        const space = await this.spaceRepo.findById(
           updateSpaceDto.spaceId,
           workspaceId,
-          'disabled',
-          updateSpaceDto.disablePublicSharing,
+          { withLock: true, trx },
+        );
+
+        if (!workspace || !space) {
+          throw new NotFoundException('Space not found');
+        }
+
+        const currentPolicy = this.spacePolicy.resolveFromSettings(
+          workspace,
+          space.settings,
+        );
+        const nextSettings = this.applyPolicyUpdates(
+          space.settings,
+          updateSpaceDto,
+        );
+        const nextPolicy = this.spacePolicy.resolveFromSettings(
+          workspace,
+          nextSettings,
+        );
+
+        if (
+          !options.canLoosenPolicy &&
+          this.spacePolicy.isLoosening(
+            currentPolicy.effective,
+            nextPolicy.effective,
+          )
+        ) {
+          throw new ForbiddenException(
+            'Only workspace administrators can loosen a space policy',
+          );
+        }
+
+        if (
+          !currentPolicy.effective.enforceSso &&
+          nextPolicy.effective.enforceSso
+        ) {
+          await this.assertSsoEnforcementReady(workspaceId, trx);
+        }
+
+        await this.spaceRepo.updateSpace(
+          { settings: nextSettings as any },
+          updateSpaceDto.spaceId,
+          workspaceId,
           trx,
         );
 
-        if (updateSpaceDto.disablePublicSharing) {
+        if (
+          !currentPolicy.effective.disablePublicSharing &&
+          nextPolicy.effective.disablePublicSharing
+        ) {
           await this.shareRepo.deleteBySpaceId(
             updateSpaceDto.spaceId,
             workspaceId,
@@ -126,7 +208,16 @@ export class SpaceService {
           );
         }
       });
+
+      await this.eventEmitter?.emitAsync(EventName.AUTHORIZATION_CHANGED, {
+        workspaceId,
+        spaceId: updateSpaceDto.spaceId,
+      });
     }
+
+    delete updateSpaceDto.disablePublicSharing;
+    delete updateSpaceDto.enforceMfa;
+    delete updateSpaceDto.enforceSso;
 
     if (updateSpaceDto.documentFields) {
       await this.spaceRepo.updateDocumentFieldsSettings(
@@ -167,7 +258,7 @@ export class SpaceService {
       );
     }
 
-    return await this.spaceRepo.updateSpace(
+    const updatedSpace = await this.spaceRepo.updateSpace(
       {
         name: updateSpaceDto.name,
         description: updateSpaceDto.description,
@@ -176,6 +267,11 @@ export class SpaceService {
       updateSpaceDto.spaceId,
       workspaceId,
     );
+
+    const workspace = await this.workspaceRepo.findById(workspaceId);
+    return workspace && updatedSpace
+      ? (this.spacePolicy.withPolicy(updatedSpace, workspace) as Space)
+      : updatedSpace;
   }
 
   async getSpaceInfo(spaceId: string, workspaceId: string): Promise<Space> {
@@ -186,7 +282,10 @@ export class SpaceService {
       throw new NotFoundException('Space not found');
     }
 
-    return space;
+    const workspace = await this.workspaceRepo.findById(workspaceId);
+    return workspace
+      ? (this.spacePolicy.withPolicy(space, workspace) as Space)
+      : space;
   }
 
   async archiveSpace(spaceId: string, workspaceId: string): Promise<Space> {
@@ -222,5 +321,102 @@ export class SpaceService {
 
     await this.spaceRepo.deleteSpace(spaceId, workspaceId);
     await this.attachmentQueue.add(QueueJob.DELETE_SPACE_ATTACHMENTS, space);
+  }
+
+  private applyPolicyUpdates(
+    rawSettings: unknown,
+    dto: Pick<
+      UpdateSpaceDto,
+      'disablePublicSharing' | 'enforceMfa' | 'enforceSso'
+    >,
+  ): SpaceSettings {
+    const settings = structuredClone((rawSettings ?? {}) as SpaceSettings);
+    settings.security = { ...(settings.security ?? {}) };
+    settings.sharing = { ...(settings.sharing ?? {}) };
+
+    this.applyOverride(
+      settings.security,
+      'enforceMfa',
+      dto.enforceMfa,
+    );
+    this.applyOverride(
+      settings.security,
+      'enforceSso',
+      dto.enforceSso,
+    );
+    this.applyOverride(
+      settings.sharing,
+      'disabled',
+      dto.disablePublicSharing,
+    );
+
+    if (Object.keys(settings.security).length === 0) {
+      delete settings.security;
+    }
+    if (Object.keys(settings.sharing).length === 0) {
+      delete settings.sharing;
+    }
+
+    return settings;
+  }
+
+  private applyOverride<T extends object, K extends keyof T>(
+    target: T,
+    key: K,
+    value: T[K] | null | undefined,
+  ): void {
+    if (typeof value === 'undefined') {
+      return;
+    }
+    if (value === null) {
+      delete target[key];
+      return;
+    }
+    target[key] = value;
+  }
+
+  private async assertSsoEnforcementReady(
+    workspaceId: string,
+    trx: KyselyTransaction,
+  ): Promise<void> {
+    const providers = await trx
+      .selectFrom('authProviders')
+      .selectAll()
+      .where('workspaceId', '=', workspaceId)
+      .where('isEnabled', '=', true)
+      .where('deletedAt', 'is', null)
+      .execute();
+
+    for (const provider of providers as AuthProvider[]) {
+      if (!isEnforcementReadyProvider(provider)) {
+        continue;
+      }
+
+      const endpoint =
+        provider.type === 'oidc'
+          ? provider.oidcIssuer
+          : provider.type === 'saml'
+            ? provider.samlUrl
+            : provider.ldapUrl;
+      const protocols =
+        provider.type === 'ldap'
+          ? (['ldap:', 'ldaps:'] as const)
+          : (['http:', 'https:'] as const);
+
+      try {
+        await this.ssoEndpointPolicy.assertAllowed(
+          endpoint,
+          protocols,
+          'SSO provider',
+        );
+        return;
+      } catch {
+        // Continue checking other configured providers.
+      }
+    }
+
+    throw new BadRequestException(
+      'At least one enabled and verified SSO provider is required',
+    );
   }
 }

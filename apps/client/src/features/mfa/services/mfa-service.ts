@@ -22,10 +22,24 @@ export async function setupMfa(
   return req.data;
 }
 
+export async function setupRequiredMfa(
+  data: MfaSetupRequest,
+): Promise<MfaSetupResponse> {
+  const req = await api.post<MfaSetupResponse>("/mfa/setup-required", data);
+  return req.data;
+}
+
 export async function enableMfa(
   data: MfaEnableRequest,
 ): Promise<MfaEnableResponse> {
   const req = await api.post<MfaEnableResponse>("/mfa/enable", data);
+  return req.data;
+}
+
+export async function enableRequiredMfa(
+  data: MfaEnableRequest,
+): Promise<MfaEnableResponse> {
+  const req = await api.post<MfaEnableResponse>("/mfa/enable-required", data);
   return req.data;
 }
 
@@ -48,6 +62,11 @@ export async function regenerateBackupCodes(data: {
 
 export async function verifyMfa(code: string): Promise<any> {
   const req = await api.post("/mfa/verify", { code });
+  return req.data;
+}
+
+export async function stepUpMfa(code: string): Promise<{ success: boolean }> {
+  const req = await api.post<{ success: boolean }>("/mfa/step-up", { code });
   return req.data;
 }
 

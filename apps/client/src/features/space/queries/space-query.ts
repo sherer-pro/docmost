@@ -20,6 +20,7 @@ import {
   getSpaceBySlug,
   getSpaceMembers,
   getSpaces,
+  getSpacePolicyContext,
   removeSpaceMember,
   archiveSpace,
   createSpace,
@@ -68,6 +69,16 @@ export function useGetSpacesQuery(
     queryFn: () => getSpaces(params),
     placeholderData: keepPreviousData,
     refetchOnMount: true,
+  });
+}
+
+export function useSpacePolicyContextQuery(spaceSlug?: string) {
+  return useQuery({
+    queryKey: ["space-policy-context", spaceSlug],
+    queryFn: () => getSpacePolicyContext(spaceSlug as string),
+    enabled: Boolean(spaceSlug),
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 }
 

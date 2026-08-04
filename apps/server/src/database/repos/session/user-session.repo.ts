@@ -57,6 +57,35 @@ export class UserSessionRepo {
       .execute();
   }
 
+  async updateAssurance(
+    id: string,
+    assurance: Pick<
+      Partial<UserSession>,
+      'ssoVerifiedAt' | 'ssoAuthProviderId' | 'mfaVerifiedAt'
+    >,
+  ): Promise<void> {
+    await this.db
+      .updateTable('userSessions')
+      .set(assurance)
+      .where('id', '=', id)
+      .where('revokedAt', 'is', null)
+      .where('expiresAt', '>', new Date())
+      .execute();
+  }
+
+  async clearMfaAssuranceForUser(
+    userId: string,
+    workspaceId: string,
+  ): Promise<void> {
+    await this.db
+      .updateTable('userSessions')
+      .set({ mfaVerifiedAt: null })
+      .where('userId', '=', userId)
+      .where('workspaceId', '=', workspaceId)
+      .where('revokedAt', 'is', null)
+      .execute();
+  }
+
   async revokeById(
     id: string,
     userId: string,

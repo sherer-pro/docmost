@@ -5,6 +5,7 @@ export enum EventName {
   PAGE_DELETED = 'page.deleted',
   PAGE_SOFT_DELETED = 'page.soft_deleted',
   PAGE_RESTORED = 'page.restored',
+  PAGE_EMBED_VISIBILITY_CHANGED = 'page_embed.visibility_changed',
 
   SPACE_CREATED = 'space.created',
   SPACE_UPDATED = 'space.updated',
@@ -14,4 +15,6 @@ export enum EventName {
   WORKSPACE_UPDATED = 'workspace.updated',
   WORKSPACE_DELETED = 'workspace.deleted',
   WORKSPACE_MEMBER_DEACTIVATED = 'workspace.member.deactivated',
+
+  AUTHORIZATION_CHANGED = 'authorization.changed',
 }

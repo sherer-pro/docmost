@@ -6,7 +6,12 @@ import axios, {
 } from "axios";
 import APP_ROUTE from "@/lib/app-route.ts";
 import { isCloud } from "@/lib/config.ts";
-import type { ApiResponseEnvelope } from "@docmost/api-contract";
+import type {
+  ApiResponseEnvelope,
+  AuthenticationAssuranceRequiredError,
+} from "@docmost/api-contract";
+import { notifications } from "@mantine/notifications";
+import i18n from "@/i18n.ts";
 
 type ApiRequestConfig<D = unknown> = AxiosRequestConfig<D> & {
   skipEnvelopeUnwrap?: false;
@@ -125,6 +130,34 @@ export function unwrapApiResponse<T>(value: unknown): T {
   return isApiResponseEnvelope<T>(value) ? (value.data as T) : (value as T);
 }
 
+export function isAuthenticationAssuranceMutationError(error: any): boolean {
+  const method = error?.config?.method?.toUpperCase() ?? "GET";
+  return (
+    error?.response?.status === 428 &&
+    error?.response?.data?.code === "AUTHENTICATION_ASSURANCE_REQUIRED" &&
+    !["GET", "HEAD", "OPTIONS"].includes(method)
+  );
+}
+
+export const AUTHENTICATION_ASSURANCE_REQUIRED_EVENT =
+  "docmost:authentication-assurance-required";
+
+export function getAuthenticationAssuranceReadError(
+  error: any,
+): AuthenticationAssuranceRequiredError | null {
+  const method = error?.config?.method?.toUpperCase() ?? "GET";
+  const data = error?.response?.data;
+  if (
+    error?.response?.status !== 428 ||
+    data?.code !== "AUTHENTICATION_ASSURANCE_REQUIRED" ||
+    !["GET", "HEAD", "OPTIONS"].includes(method)
+  ) {
+    return null;
+  }
+
+  return data as AuthenticationAssuranceRequiredError;
+}
+
 /**
  * Reads a cookie value by its name.
  *
@@ -181,6 +214,23 @@ api.interceptors.response.use(
   },
   (error) => {
     if (error.response) {
+      if (isAuthenticationAssuranceMutationError(error)) {
+        notifications.show({
+          id: "authentication-assurance-required",
+          color: "yellow",
+          message: i18n.t("Additional authentication required"),
+        });
+      }
+
+      const assuranceReadError = getAuthenticationAssuranceReadError(error);
+      if (assuranceReadError && typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent(AUTHENTICATION_ASSURANCE_REQUIRED_EVENT, {
+            detail: assuranceReadError,
+          }),
+        );
+      }
+
       switch (error.response.status) {
         case 401: {
           if (error.config?.skipAuthRedirect) break;
@@ -231,7 +281,14 @@ function redirectToLogin() {
     "/invites",
   ];
   if (!exemptPaths.some((path) => window.location.pathname.startsWith(path))) {
-    window.location.href = APP_ROUTE.AUTH.LOGIN;
+    const params = new URLSearchParams();
+    const returnTo = `${window.location.pathname}${window.location.search}`;
+    params.set("returnTo", returnTo);
+    const spaceMatch = window.location.pathname.match(/^\/s\/([^/]+)/);
+    if (spaceMatch?.[1]) {
+      params.set("spaceSlug", decodeURIComponent(spaceMatch[1]));
+    }
+    window.location.href = `${APP_ROUTE.AUTH.LOGIN}?${params}`;
   }
 }
 

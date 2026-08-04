@@ -1,4 +1,5 @@
 import { IWorkspace } from "@/features/workspace/types/workspace.types";
+import type { AuthenticationAssurance } from "@docmost/api-contract";
 
 export interface IUser {
   id: string;
@@ -37,6 +38,7 @@ export interface IUser {
 export interface ICurrentUser {
   user: IUser;
   workspace: IWorkspace;
+  authenticationAssurance?: AuthenticationAssurance;
 }
 
 export interface IUserSettings {

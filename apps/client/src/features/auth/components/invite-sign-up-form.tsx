@@ -75,7 +75,7 @@ export function InviteSignUpForm() {
 
         <SsoLogin />
 
-        {!invitation.enforceSso && (
+        {(invitation.passwordAllowed ?? !invitation.enforceSso) && (
           <Stack align="stretch" justify="center" gap="xl">
             <form onSubmit={form.onSubmit(onSubmit)}>
               <TextInput

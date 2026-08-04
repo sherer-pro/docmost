@@ -14,10 +14,13 @@ export function useVerifyUserTokenQuery(
   });
 }
 
-export function useCollabToken(): UseQueryResult<ICollabToken, Error> {
+export function useCollabToken(
+  pageId?: string,
+): UseQueryResult<ICollabToken, Error> {
   return useQuery({
-    queryKey: ["collab-token"],
-    queryFn: () => getCollabToken(),
+    queryKey: ["collab-token", pageId],
+    queryFn: () => getCollabToken(pageId!),
+    enabled: Boolean(pageId),
     // Must stay below the server-side collab token lifetime (4h in
     // TokenService.COLLAB_TOKEN_EXPIRES_IN), otherwise the editor opens with an
     // expired cached token and only recovers after a failed authentication.

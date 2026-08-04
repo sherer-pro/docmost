@@ -31,8 +31,10 @@ import { useModalBackgroundInert } from "@/components/ui/use-modal-background-in
 
 export default function GlobalAppShell({
   children,
+  restricted = false,
 }: {
   children: React.ReactNode;
+  restricted?: boolean;
 }) {
   const { t } = useTranslation();
   const assistantIdentity = useAiAssistantIdentity();
@@ -120,7 +122,7 @@ export default function GlobalAppShell({
   const isSpacesRoute = location.pathname === "/spaces";
   const isPageRoute = location.pathname.includes("/p/");
   const isDatabaseRoute = location.pathname.includes("/db/");
-  const shouldShowAside = isPageRoute || isDatabaseRoute;
+  const shouldShowAside = !restricted && (isPageRoute || isDatabaseRoute);
   const hideSidebar = isHomeRoute || isSpacesRoute;
   const isDesktopSidebarVisible =
     !isMobileViewport && desktopOpened && !hideSidebar;
@@ -192,10 +194,10 @@ export default function GlobalAppShell({
         }
         padding="md"
       >
-        <AiSocketBridge />
-        <AiPanelPreferencesSync />
+        {!restricted && <AiSocketBridge />}
+        {!restricted && <AiPanelPreferencesSync />}
         <AppShell.Header px="md" className={classes.header}>
-          <AppHeader />
+          <AppHeader restricted={restricted} />
         </AppShell.Header>
         {!hideSidebar && (
           <AppShell.Navbar

@@ -9,6 +9,12 @@ import { Reflector } from '@nestjs/core';
 import { EnvironmentService } from '../../integrations/environment/environment.service';
 import { addDays } from 'date-fns';
 import { CsrfService } from '../security/csrf.service';
+import {
+  AUTH_POLICY_SCOPE_KEY,
+  AuthPolicyScopeMetadata,
+} from '../decorators/auth-policy-scope.decorator';
+import { AuthenticationAssuranceService } from '../../core/space-policy/authentication-assurance.service';
+import { isObservable, lastValueFrom } from 'rxjs';
 
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
@@ -16,11 +22,12 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     private reflector: Reflector,
     private environmentService: EnvironmentService,
     private csrfService: CsrfService,
+    private readonly authenticationAssurance: AuthenticationAssuranceService,
   ) {
     super();
   }
 
-  canActivate(context: ExecutionContext) {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),
@@ -30,7 +37,24 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       return true;
     }
 
-    return super.canActivate(context);
+    const activation = super.canActivate(context);
+    const activated = isObservable(activation)
+      ? await lastValueFrom(activation)
+      : await activation;
+
+    if (activated) {
+      const metadata =
+        this.reflector.getAllAndOverride<AuthPolicyScopeMetadata>(
+          AUTH_POLICY_SCOPE_KEY,
+          [context.getHandler(), context.getClass()],
+        );
+      await this.authenticationAssurance.assertRequestScope(
+        metadata,
+        context.switchToHttp().getRequest(),
+      );
+    }
+
+    return Boolean(activated);
   }
 
   handleRequest(err: any, user: any, info: any, ctx: ExecutionContext) {

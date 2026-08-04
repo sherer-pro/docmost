@@ -19,7 +19,7 @@ import { searchSpotlight } from "@/features/search/constants.ts";
 import { NotificationPopover } from "@/features/notification/components/notification-popover.tsx";
 import { AiActivityPopover } from "@/features/ai/components/ai-activity-popover.tsx";
 
-export function AppHeader() {
+export function AppHeader({ restricted = false }: { restricted?: boolean }) {
   const { t } = useTranslation();
   const [mobileOpened] = useAtom(mobileSidebarAtom);
   const toggleMobile = useToggleSidebar(mobileSidebarAtom);
@@ -75,18 +75,18 @@ export function AppHeader() {
           </Text>
         </Group>
 
-        <Group className={classes.search}>
+        {!restricted && <Group className={classes.search}>
           <Group visibleFrom="sm" className={classes.search}>
             <SearchControl onClick={searchSpotlight.open} />
           </Group>
           <Group hiddenFrom="sm">
             <SearchMobileControl onSearch={searchSpotlight.open} />
           </Group>
-        </Group>
+        </Group>}
 
         <Group wrap="nowrap" className={classes.right}>
-          <AiActivityPopover />
-          <NotificationPopover />
+          {!restricted && <AiActivityPopover />}
+          {!restricted && <NotificationPopover />}
           <TopMenu />
         </Group>
       </Group>

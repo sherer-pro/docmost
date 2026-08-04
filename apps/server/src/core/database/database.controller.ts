@@ -35,6 +35,7 @@ import {
   ExportDatabaseDto,
 } from './dto/database.dto';
 import { FastifyReply } from 'fastify';
+import { AuthPolicyScope } from '../../common/decorators/auth-policy-scope.decorator';
 
 @UseGuards(JwtAuthGuard)
 @Controller('databases')
@@ -45,6 +46,7 @@ export class DatabaseController {
    * Creates a database.
    */
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('space', { source: 'body', key: 'spaceId' })
   @Post()
   async create(
     @Body() dto: CreateDatabaseDto,
@@ -57,6 +59,7 @@ export class DatabaseController {
   /**
    * Returns a list of databases by spaceId.
    */
+  @AuthPolicyScope('space', { source: 'query', key: 'spaceId' })
   @Get()
   async list(
     @Query() query: ListDatabasesQueryDto,
@@ -69,6 +72,7 @@ export class DatabaseController {
   /**
    * Returns one database.
    */
+  @AuthPolicyScope('resource', { resourceType: 'database', key: 'databaseId' })
   @Get(':databaseId')
   async getOne(
     @Param('databaseId', ParseUUIDPipe) databaseId: string,
@@ -81,6 +85,7 @@ export class DatabaseController {
   /**
    * Updates the database.
    */
+  @AuthPolicyScope('resource', { resourceType: 'database', key: 'databaseId' })
   @Patch(':databaseId')
   async update(
     @Param('databaseId', ParseUUIDPipe) databaseId: string,
@@ -100,6 +105,7 @@ export class DatabaseController {
    * Deletes a database (soft delete).
    */
   @HttpCode(HttpStatus.NO_CONTENT)
+  @AuthPolicyScope('resource', { resourceType: 'database', key: 'databaseId' })
   @Delete(':databaseId')
   async remove(
     @Param('databaseId', ParseUUIDPipe) databaseId: string,
@@ -114,6 +120,7 @@ export class DatabaseController {
    * Converts the database back to a regular page.
    */
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('resource', { resourceType: 'database', key: 'databaseId' })
   @Post(':databaseId/convert-to-page')
   async convertToPage(
     @Param('databaseId', ParseUUIDPipe) databaseId: string,
@@ -130,6 +137,7 @@ export class DatabaseController {
   /**
    * Creates a new database property.
    */
+  @AuthPolicyScope('resource', { resourceType: 'database', key: 'databaseId' })
   @Post(':databaseId/properties')
   async createProperty(
     @Param('databaseId', ParseUUIDPipe) databaseId: string,
@@ -148,6 +156,7 @@ export class DatabaseController {
   /**
    * Returns a list of database properties.
    */
+  @AuthPolicyScope('resource', { resourceType: 'database', key: 'databaseId' })
   @Get(':databaseId/properties')
   async listProperties(
     @Param('databaseId', ParseUUIDPipe) databaseId: string,
@@ -160,6 +169,7 @@ export class DatabaseController {
   /**
    * Updates a database property.
    */
+  @AuthPolicyScope('resource', { resourceType: 'database', key: 'databaseId' })
   @Patch(':databaseId/properties/:propertyId')
   async updateProperty(
     @Param('databaseId', ParseUUIDPipe) databaseId: string,
@@ -181,6 +191,7 @@ export class DatabaseController {
    * Deletes a database property (soft delete).
    */
   @HttpCode(HttpStatus.NO_CONTENT)
+  @AuthPolicyScope('resource', { resourceType: 'database', key: 'databaseId' })
   @Delete(':databaseId/properties/:propertyId')
   async removeProperty(
     @Param('databaseId', ParseUUIDPipe) databaseId: string,
@@ -199,6 +210,7 @@ export class DatabaseController {
   /**
    * Creates a row in the database.
    */
+  @AuthPolicyScope('resource', { resourceType: 'database', key: 'databaseId' })
   @Post(':databaseId/rows')
   async createRow(
     @Param('databaseId', ParseUUIDPipe) databaseId: string,
@@ -212,6 +224,7 @@ export class DatabaseController {
   /**
    * Returns a list of database rows.
    */
+  @AuthPolicyScope('resource', { resourceType: 'database', key: 'databaseId' })
   @Get(':databaseId/rows')
   async listRows(
     @Param('databaseId', ParseUUIDPipe) databaseId: string,
@@ -225,6 +238,7 @@ export class DatabaseController {
   /**
    * Performs batch row operations (bulk cell upserts/deletes and row deletes).
    */
+  @AuthPolicyScope('resource', { resourceType: 'database', key: 'databaseId' })
   @Patch(':databaseId/rows/batch')
   async batchUpdateRows(
     @Param('databaseId', ParseUUIDPipe) databaseId: string,
@@ -243,6 +257,7 @@ export class DatabaseController {
   /**
    * Renames a database row page and regenerates row slug.
    */
+  @AuthPolicyScope('resource', { resourceType: 'database', key: 'databaseId' })
   @Patch(':databaseId/rows/:pageId')
   async updateRow(
     @Param('databaseId', ParseUUIDPipe) databaseId: string,
@@ -262,6 +277,7 @@ export class DatabaseController {
 
 
   @HttpCode(HttpStatus.NO_CONTENT)
+  @AuthPolicyScope('resource', { resourceType: 'database', key: 'databaseId' })
   @Delete(':databaseId/rows/:pageId')
   async removeRow(
     @Param('databaseId', ParseUUIDPipe) databaseId: string,
@@ -273,6 +289,7 @@ export class DatabaseController {
   }
 
 
+  @AuthPolicyScope('page', { key: 'pageId' })
   @Get('rows/:pageId/context')
   async getRowContextByPage(
     @Param() dto: DatabaseRowPageIdDto,
@@ -285,6 +302,7 @@ export class DatabaseController {
   /**
    * Performs a batch update of cells for a row.
    */
+  @AuthPolicyScope('resource', { resourceType: 'database', key: 'databaseId' })
   @Patch(':databaseId/rows/:pageId/cells')
   async batchUpdateRowCells(
     @Param('databaseId', ParseUUIDPipe) databaseId: string,
@@ -307,6 +325,7 @@ export class DatabaseController {
   /**
    * Returns a markdown representation of the database table.
    */
+  @AuthPolicyScope('resource', { resourceType: 'database', key: 'databaseId' })
   @Get(':databaseId/markdown')
   async getMarkdown(
     @Param('databaseId', ParseUUIDPipe) databaseId: string,
@@ -326,6 +345,7 @@ export class DatabaseController {
    * Exports the database to a file.
    */
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('resource', { resourceType: 'database', key: 'databaseId' })
   @Post(':databaseId/export')
   async exportDatabase(
     @Param('databaseId', ParseUUIDPipe) databaseId: string,
@@ -354,6 +374,7 @@ export class DatabaseController {
   /**
    * Creates a database view.
    */
+  @AuthPolicyScope('resource', { resourceType: 'database', key: 'databaseId' })
   @Post(':databaseId/views')
   async createView(
     @Param('databaseId', ParseUUIDPipe) databaseId: string,
@@ -367,6 +388,7 @@ export class DatabaseController {
   /**
    * Returns a list of database views.
    */
+  @AuthPolicyScope('resource', { resourceType: 'database', key: 'databaseId' })
   @Get(':databaseId/views')
   async listViews(
     @Param('databaseId', ParseUUIDPipe) databaseId: string,
@@ -379,6 +401,7 @@ export class DatabaseController {
   /**
    * Updates the database view.
    */
+  @AuthPolicyScope('resource', { resourceType: 'database', key: 'databaseId' })
   @Patch(':databaseId/views/:viewId')
   async updateView(
     @Param('databaseId', ParseUUIDPipe) databaseId: string,
@@ -400,6 +423,7 @@ export class DatabaseController {
    * Deletes a database view (soft delete).
    */
   @HttpCode(HttpStatus.NO_CONTENT)
+  @AuthPolicyScope('resource', { resourceType: 'database', key: 'databaseId' })
   @Delete(':databaseId/views/:viewId')
   async removeView(
     @Param('databaseId', ParseUUIDPipe) databaseId: string,

@@ -28,6 +28,35 @@ describe('UpdateSpaceDto heading numbering', () => {
   });
 });
 
+describe('UpdateSpaceDto security policy overrides', () => {
+  it.each(['enforceMfa', 'enforceSso', 'disablePublicSharing'] as const)(
+    'accepts boolean and null values for %s',
+    async (field) => {
+      for (const value of [true, false, null]) {
+        const dto = Object.assign(new UpdateSpaceDto(), {
+          spaceId: '11111111-1111-4111-8111-111111111111',
+          [field]: value,
+        });
+
+        expect(await validate(dto)).toEqual([]);
+      }
+    },
+  );
+
+  it.each(['enforceMfa', 'enforceSso', 'disablePublicSharing'] as const)(
+    'rejects non-boolean values for %s',
+    async (field) => {
+      const dto = Object.assign(new UpdateSpaceDto(), {
+        spaceId: '11111111-1111-4111-8111-111111111111',
+        [field]: 'inherit',
+      });
+
+      const errors = await validate(dto);
+      expect(errors.some((error) => error.property === field)).toBe(true);
+    },
+  );
+});
+
 describe('UpdateSpaceDto AI role field', () => {
   it.each([true, false])('accepts %p', async (aiRole) => {
     const documentFields = Object.assign(new UpdateSpaceDocumentFieldsDto(), {
