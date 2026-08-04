@@ -128,6 +128,52 @@ Supported capabilities include:
 
 This allows Docmost content to serve as an up-to-date knowledge base for local or corporate LLMs. RAG and MCP keys are scoped to one space, are not interchangeable, and are revalidated on every request against the creator's current membership and page access.
 
+#### Outbound external MCP servers
+
+The fork also supports the opposite direction: the internal agent can call
+read-only tools on remote MCP servers. Docmost is the MCP client here, and this
+surface shares no configuration or credentials with the inbound endpoint above.
+
+Access requires every level to agree, and each one defaults to closed:
+
+- a deployment kill switch (`AI_EXTERNAL_MCP_ENABLED`, off by default);
+- a workspace master switch;
+- the server being enabled, which is impossible until tools are approved;
+- a space binding;
+- no group denial;
+- an explicit per-user opt-in, shown with a warning naming the destination.
+
+A lower scope can only narrow a higher one. A workspace allowlist entry is
+rejected unless the deployment allowlist already contains that origin, and a
+space can only pick from what the workspace approved.
+
+Everything a remote server says about itself is treated as hostile input. Remote
+titles and descriptions are not stored at all, only the fact that they exist;
+`readOnlyHint` and the other annotations are shown as claims and never decide the
+read/write class; and JSON Schemas are rebuilt from an allowlist of structural
+keywords, with remote property names replaced by opaque aliases and prose-bearing
+keywords and string values dropped. The server-side mapping restores argument
+names only at the RPC boundary. The only text about a tool that the model ever
+sees is the description a workspace administrator typed. Results are
+wrapped in an envelope marked untrusted, and the fixed Docmost safety policy is
+stated before the external-tool rules, with space hints last and explicitly
+non-overriding.
+
+Other properties:
+
+- read-only only, enforced both by the contract type and by a database check
+  constraint, so an external tool can never propose a page change;
+- per-server request headers encrypted with the application secret and never
+  returned by any endpoint, only a boolean and, for workspace administrators, the
+  header names;
+- Streamable HTTP only, with a dual origin allowlist, DNS pinning, manual
+  redirect handling, and a streaming response size cap;
+- every agent run carries a versioned capability snapshot that is re-verified
+  before each call, so revoking access or changing configuration stops a run in
+  flight rather than widening it;
+- an operational summary that records outcomes and latencies but no identifier,
+  address, argument, or output.
+
 Agent and MCP tool architecture adapted from [vvzvlad/gitmost](https://github.com/vvzvlad/gitmost) and [vvzvlad/docmost-mcp](https://github.com/vvzvlad/docmost-mcp). Special thanks to [@vvzvlad](https://github.com/vvzvlad) for developing and maintaining the fork, and to Moritz Krause, the original author of `docmost-mcp`.
 
 ![RAG synchronization and MCP access](./docs/images/fork-specific-enhancements/en/rag-mcp-access.png)
