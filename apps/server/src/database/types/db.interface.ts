@@ -4,6 +4,11 @@ import {
   AiConversationContextSources,
   AiConversations,
   AiFileUploadBatches,
+  AiMcpGroupPolicies,
+  AiMcpServers,
+  AiMcpSpaceBindings,
+  AiMcpUserPreferences,
+  AiMcpWorkspaceSettings,
   AiMessages,
   AiMessageSources,
   AiRunContextSources,
@@ -59,6 +64,11 @@ export interface DbInterface {
   aiConversationContextSources: AiConversationContextSources;
   aiConversations: AiConversations;
   aiFileUploadBatches: AiFileUploadBatches;
+  aiMcpGroupPolicies: AiMcpGroupPolicies;
+  aiMcpServers: AiMcpServers;
+  aiMcpSpaceBindings: AiMcpSpaceBindings;
+  aiMcpUserPreferences: AiMcpUserPreferences;
+  aiMcpWorkspaceSettings: AiMcpWorkspaceSettings;
   aiMessages: AiMessages;
   aiMessageSources: AiMessageSources;
   aiRunContextSources: AiRunContextSources;

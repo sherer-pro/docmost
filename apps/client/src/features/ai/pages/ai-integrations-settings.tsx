@@ -1,35 +1,26 @@
-import {
-  Alert,
-  Badge,
-  Button,
-  Card,
-  Group,
-  Loader,
-  SimpleGrid,
-  Stack,
-  Text,
-  ThemeIcon,
-  Title,
-} from "@mantine/core";
-import {
-  IconAlertCircle,
-  IconBrain,
-  IconRefresh,
-  IconSettings,
-} from "@tabler/icons-react";
-import { Link } from "react-router-dom";
+import { Space, Stack, Tabs, Text } from "@mantine/core";
+import { IconSparkles, IconTool } from "@tabler/icons-react";
+import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Helmet } from "react-helmet-async";
 import { getAppName } from "@/lib/config.ts";
 import SettingsTitle from "@/components/settings/settings-title.tsx";
-import { EmptyState } from "@/components/ui/empty-state.tsx";
-import { useGetSpacesQuery } from "@/features/space/queries/space-query.ts";
+import AiSpacesPanel from "@/features/ai/components/ai-spaces-panel.tsx";
+import ExternalMcpSettingsPanel from "@/features/ai-external-mcp/components/external-mcp-settings-panel.tsx";
+import {
+  AI_SETTINGS_DEFAULT_TAB,
+  isAiSettingsTab,
+} from "@/features/ai/utils/ai-settings-tabs.ts";
 import classes from "./ai-integrations-settings.module.css";
 
 export default function AiIntegrationsSettings() {
   const { t } = useTranslation();
-  const spacesQuery = useGetSpacesQuery({ limit: 100 });
-  const spaces = spacesQuery.data?.items ?? [];
+  const navigate = useNavigate();
+  const { aiTab } = useParams();
+
+  if (!isAiSettingsTab(aiTab)) {
+    return <Navigate to={`/settings/ai/${AI_SETTINGS_DEFAULT_TAB}`} replace />;
+  }
 
   return (
     <Stack gap="xl" className={classes.page}>
@@ -45,89 +36,45 @@ export default function AiIntegrationsSettings() {
         </Text>
       </div>
 
-      <section aria-labelledby="ai-spaces-title">
-        <Group justify="space-between" align="flex-end" mb="md">
-          <div>
-            <Title order={2} size="h3" id="ai-spaces-title">
-              {t("ai.integrations.spacesTitle")}
-            </Title>
-            <Text size="sm" c="dimmed">
-              {t("ai.integrations.spacesDescription")}
-            </Text>
-          </div>
-          {!spacesQuery.isLoading && !spacesQuery.isError && (
-            <Badge variant="light">
-              {t("ai.integrations.spaceCount", { count: spaces.length })}
-            </Badge>
-          )}
-        </Group>
-
-        {spacesQuery.isLoading ? (
-          <Group justify="center" py="xl" role="status">
-            <Loader size="sm" />
-          </Group>
-        ) : spacesQuery.isError ? (
-          <Alert
-            color="red"
-            icon={<IconAlertCircle size={18} />}
-            title={t("Error")}
-          >
-            <Stack gap="sm" align="flex-start">
-              <Text size="sm">
-                {t("ai.loadFailed")}
-              </Text>
-              <Button
-                size="xs"
-                variant="light"
-                leftSection={<IconRefresh size={15} />}
-                onClick={() => void spacesQuery.refetch()}
-              >
-                {t("ai.retry")}
-              </Button>
-            </Stack>
-          </Alert>
-        ) : spaces.length === 0 ? (
-          <EmptyState
-            icon={IconBrain}
-            title={t("ai.integrations.spacesEmptyTitle")}
-            description={t("ai.integrations.spacesDescription")}
-            action={
-              <Button component={Link} to="/settings/spaces" variant="light">
-                {t("Spaces")}
-              </Button>
+      <div>
+        <Tabs
+          value={aiTab}
+          onChange={(value) => {
+            if (isAiSettingsTab(value)) {
+              navigate(`/settings/ai/${value}`);
             }
-          />
+          }}
+        >
+          <Tabs.List>
+            <Tabs.Tab
+              value="spaces"
+              leftSection={<IconSparkles size={18} stroke={2} />}
+            >
+              <Text size="sm" fw={500}>
+                {t("ai.integrations.spacesTitle")}
+              </Text>
+            </Tabs.Tab>
+            {/* Deliberately not IconPlugConnected: that icon already marks the
+                inbound MCP surface under /settings/keys/mcp. */}
+            <Tabs.Tab
+              value="external-tools"
+              leftSection={<IconTool size={18} stroke={2} />}
+            >
+              <Text size="sm" fw={500}>
+                {t("ai.externalTools.title")}
+              </Text>
+            </Tabs.Tab>
+          </Tabs.List>
+        </Tabs>
+
+        <Space my="md" />
+
+        {aiTab === "spaces" ? (
+          <AiSpacesPanel key={aiTab} />
         ) : (
-          <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
-            {spaces.map((space) => (
-              <Card key={space.id} withBorder radius="md" p="md">
-                <Group wrap="nowrap" align="flex-start">
-                  <ThemeIcon variant="light" radius="md" size="lg">
-                    <IconBrain size={18} />
-                  </ThemeIcon>
-                  <Stack gap={4} flex={1}>
-                    <Text fw={600}>{space.name}</Text>
-                    <Text size="xs" c="dimmed" lineClamp={2}>
-                      {space.description ||
-                        t("ai.integrations.spaceFallbackDescription")}
-                    </Text>
-                    <Button
-                      component={Link}
-                      to={`/settings/ai/spaces/${space.slug}`}
-                      variant="subtle"
-                      size="compact-sm"
-                      leftSection={<IconSettings size={15} />}
-                      className={classes.cardAction}
-                    >
-                      {t("ai.integrations.configureSpace")}
-                    </Button>
-                  </Stack>
-                </Group>
-              </Card>
-            ))}
-          </SimpleGrid>
+          <ExternalMcpSettingsPanel key={aiTab} />
         )}
-      </section>
+      </div>
     </Stack>
   );
 }

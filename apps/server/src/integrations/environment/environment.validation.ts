@@ -48,6 +48,14 @@ export class EnvironmentVariables {
   AI_RETRIEVAL_ALLOWED_ORIGINS: string;
 
   @IsOptional()
+  @IsIn(['true', 'false'])
+  AI_EXTERNAL_MCP_ENABLED: string;
+
+  @IsOptional()
+  @IsString()
+  AI_MCP_ALLOWED_ORIGINS: string;
+
+  @IsOptional()
   @IsString()
   SSO_ALLOWED_ENDPOINTS: string;
 

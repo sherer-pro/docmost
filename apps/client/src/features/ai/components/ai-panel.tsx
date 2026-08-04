@@ -103,6 +103,7 @@ import {
 import { resolveAiErrorMessage } from "@/features/ai/utils/ai-policies.ts";
 import { AiContextPicker } from "./ai-context-picker.tsx";
 import { AiComposerShell } from "./ai-composer-shell.tsx";
+import AiExternalMcpOptInControl from "@/features/ai-external-mcp/components/ai-external-mcp-opt-in-control.tsx";
 import { AccessibleActionIcon } from "@/components/ui/accessible-action-icon.tsx";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEditorState } from "@tiptap/react";
@@ -1625,6 +1626,14 @@ export function AiPanel() {
           spaceSearchAvailable={spaceSearchReady}
           spaceSearchEnabled={useSpaceSearch}
           settingsDisabled={Boolean(pendingRun) || updateConversation.isPending}
+          externalToolsControl={
+            agentMode && spaceId && availability.externalMcp?.available ? (
+              <AiExternalMcpOptInControl
+                spaceId={spaceId}
+                disabled={Boolean(pendingRun)}
+              />
+            ) : null
+          }
           onAgentModeChange={toggleAgentMode}
           onSpaceSearchChange={toggleSpaceSearch}
         >

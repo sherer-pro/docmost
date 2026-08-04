@@ -92,6 +92,9 @@ export type AiRunStepStatus = (typeof AI_RUN_STEP_STATUSES)[number];
 export const AI_TOOL_WRITE_CLASSES = ["read_only", "write"] as const;
 export type AiToolWriteClass = (typeof AI_TOOL_WRITE_CLASSES)[number];
 
+export const AI_TOOL_SOURCES = ["builtin", "external_mcp"] as const;
+export type AiToolSource = (typeof AI_TOOL_SOURCES)[number];
+
 export const AI_CHAT_FILE_STATUSES = [
   "pending",
   "processing",
@@ -205,6 +208,22 @@ export const AI_ERROR_CODES = [
   "agent_write_stale",
   "agent_write_rejected",
   "agent_write_not_allowed",
+  "agent_mcp_config_changed",
+  "agent_mcp_access_revoked",
+  "agent_mcp_tool_definition_limit",
+  "agent_mcp_snapshot_too_large",
+  "agent_mcp_capacity",
+  "external_mcp_disabled",
+  "external_mcp_url_rejected",
+  "external_mcp_unavailable",
+  "external_mcp_timeout",
+  "external_mcp_invalid_response",
+  "external_mcp_namespace_conflict",
+  "external_mcp_headers_conflict",
+  "external_mcp_tool_not_approved",
+  "external_mcp_not_opted_in",
+  "external_mcp_result_limit",
+  "external_mcp_remote_error",
 ] as const;
 export type AiErrorCode = (typeof AI_ERROR_CODES)[number];
 
@@ -330,6 +349,15 @@ export interface AiAvailability {
     requestsToday: number;
     tokensToday: number;
     activeRuns: number;
+  };
+  /**
+   * Present when the space has at least one external MCP binding that passes
+   * every gate except the user's own opt-in.
+   */
+  externalMcp?: {
+    available: boolean;
+    optedInCount: number;
+    totalCount: number;
   };
   unavailableReason?: string;
 }
@@ -517,6 +545,14 @@ export interface AiRunStep {
   toolCallId: string;
   toolName: string;
   writeClass: AiToolWriteClass;
+  /**
+   * Where the tool came from. The migration backfills `builtin`, so this is
+   * always present. An `external_mcp` step always has `writeClass: "read_only"`
+   * and `approvalPreview: null`: external tools cannot propose a page change.
+   */
+  toolSource: AiToolSource;
+  /** Administrator-chosen namespace. Set only for `external_mcp` steps. */
+  toolNamespace: string | null;
   arguments: Record<string, unknown>;
   result: unknown | null;
   approvalPreview: AiApprovalPreview | null;

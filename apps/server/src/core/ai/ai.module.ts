@@ -38,6 +38,16 @@ import { AiAuxRunExecutionService } from './services/ai-aux-run-execution.servic
 import { AiAuxRunEventService } from './services/ai-aux-run-event.service';
 import { AiToolRegistryService } from './tools/ai-tool-registry.service';
 import { AiRunStepService } from './services/ai-run-step.service';
+import { AiMcpUrlPolicyService } from './services/ai-mcp-url-policy.service';
+import { AiMcpClientPoolService } from './mcp/ai-mcp-client-pool.service';
+import { AiMcpAdminService } from './mcp/ai-mcp-admin.service';
+import { AiMcpPolicyService } from './mcp/ai-mcp-policy.service';
+import { AiMcpToolCallService } from './mcp/ai-mcp-tool-call.service';
+import {
+  AiMcpServersController,
+  AiMcpSettingsController,
+} from './controllers/ai-mcp-settings.controller';
+import { AiMcpSpaceController } from './controllers/ai-mcp-space.controller';
 import { PageModule } from '../page/page.module';
 import { CollaborationModule } from '../../collaboration/collaboration.module';
 
@@ -57,6 +67,9 @@ import { CollaborationModule } from '../../collaboration/collaboration.module';
     AiPageAttachmentController,
     AiRunController,
     AiEditorActionController,
+    AiMcpSettingsController,
+    AiMcpServersController,
+    AiMcpSpaceController,
   ],
   providers: [
     AiChatProcessor,
@@ -80,6 +93,11 @@ import { CollaborationModule } from '../../collaboration/collaboration.module';
     AiAuxRunEventService,
     AiToolRegistryService,
     AiRunStepService,
+    AiMcpUrlPolicyService,
+    AiMcpClientPoolService,
+    AiMcpAdminService,
+    AiMcpPolicyService,
+    AiMcpToolCallService,
     HttpJsonAiRetrievalAdapter,
     OpenWebUiKnowledgeRetrievalAdapter,
     NoopAiRetrievalAdapter,

@@ -72,6 +72,18 @@ export class EnvironmentService {
     return this.configService.get<string>('AI_RETRIEVAL_ALLOWED_ORIGINS', '');
   }
 
+  isAiExternalMcpEnabled(): boolean {
+    return (
+      this.configService
+        .get<string>('AI_EXTERNAL_MCP_ENABLED', 'false')
+        .toLowerCase() === 'true'
+    );
+  }
+
+  getAiMcpAllowedOrigins(): string {
+    return this.configService.get<string>('AI_MCP_ALLOWED_ORIGINS', '');
+  }
+
   getSsoAllowedEndpoints(): string {
     return this.configService.get<string>('SSO_ALLOWED_ENDPOINTS', '');
   }

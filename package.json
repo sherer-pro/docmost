@@ -89,7 +89,7 @@
     "cross-env": "^7.0.3",
     "date-fns": "^4.1.0",
     "diff": "8.0.3",
-    "dompurify": "^3.4.7",
+    "dompurify": "^3.4.13",
     "fractional-indexing-jittered": "^1.0.0",
     "highlight.js": "^11.11.1",
     "image-dimensions": "^2.5.0",
@@ -127,22 +127,37 @@
   "pnpm": {
     "auditConfig": {
       "ignoreGhsas": [
-        "GHSA-83w8-p2f5-377r",
         "GHSA-qwww-vcr4-c8h2"
       ]
     },
+    "peerDependencyRules": {
+      "allowedVersions": {
+        "@fastify/static": "10.1.2"
+      }
+    },
     "overrides": {
+      "@babel/core": "7.29.6",
+      "@hono/node-server": "2.1.0",
+      "@opentelemetry/core": "2.10.0",
       "axios": "1.18.0",
+      "dompurify": "3.4.13",
       "engine.io": "6.6.9",
       "fast-xml-parser": "5.8.0",
       "fast-uri": "3.1.5",
       "find-my-way": "9.7.0",
+      "hono": "4.13.0",
       "immutable": "4.3.9",
+      "ip-address": "10.4.0",
       "linkify-it": "5.0.2",
       "lodash": "4.18.1",
       "lodash-es": "4.18.1",
+      "markdown-it": "14.3.0",
+      "nanoid@<3.3.8": "3.3.11",
+      "nanoid@>=4.0.0 <5.0.9": "5.0.9",
       "nodemailer": "9.0.3",
-      "undici": "7.28.0",
+      "protobufjs": "7.6.5",
+      "socket.io-parser": "4.2.7",
+      "undici": "7.29.0",
       "uuid": "11.1.1",
       "ws": "8.21.0"
     }

@@ -33,6 +33,7 @@ const SECTIONS: Exclude<AiSpaceSettingsSection, "all">[] = [
   "model",
   "behavior",
   "agent",
+  "externalTools",
   "retrieval",
   "limits",
 ];
@@ -97,7 +98,9 @@ export default function AiSpaceSettingsPage() {
   });
   const isWorkspaceAdmin =
     workspaceRole === UserRole.OWNER || workspaceRole === UserRole.ADMIN;
-  const backPath = isWorkspaceAdmin ? "/settings/ai" : `/s/${space.slug}`;
+  const backPath = isWorkspaceAdmin
+    ? "/settings/ai/spaces"
+    : `/s/${space.slug}`;
 
   if (!fullSpaceAccess) {
     return (

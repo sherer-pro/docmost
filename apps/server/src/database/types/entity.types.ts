@@ -5,6 +5,11 @@ import {
   AiConversationContextSources,
   AiConversations,
   AiFileUploadBatches,
+  AiMcpGroupPolicies,
+  AiMcpServers,
+  AiMcpSpaceBindings,
+  AiMcpUserPreferences,
+  AiMcpWorkspaceSettings,
   AiMessages,
   AiMessageSources,
   AiRunContextSources,
@@ -186,6 +191,40 @@ export type UpdatableAiChatFile = Updateable<Omit<AiChatFiles, 'id'>>;
 export type AiMessageSource = Selectable<AiMessageSources>;
 export type InsertableAiMessageSource = Insertable<AiMessageSources>;
 export type UpdatableAiMessageSource = Updateable<Omit<AiMessageSources, 'id'>>;
+
+// External MCP workspace settings
+export type AiMcpWorkspaceSetting = Selectable<AiMcpWorkspaceSettings>;
+export type InsertableAiMcpWorkspaceSetting =
+  Insertable<AiMcpWorkspaceSettings>;
+export type UpdatableAiMcpWorkspaceSetting = Updateable<
+  Omit<AiMcpWorkspaceSettings, 'id'>
+>;
+
+// External MCP server connection
+export type AiMcpServer = Selectable<AiMcpServers>;
+export type InsertableAiMcpServer = Insertable<AiMcpServers>;
+export type UpdatableAiMcpServer = Updateable<Omit<AiMcpServers, 'id'>>;
+
+// External MCP space binding
+export type AiMcpSpaceBinding = Selectable<AiMcpSpaceBindings>;
+export type InsertableAiMcpSpaceBinding = Insertable<AiMcpSpaceBindings>;
+export type UpdatableAiMcpSpaceBinding = Updateable<
+  Omit<AiMcpSpaceBindings, 'id'>
+>;
+
+// External MCP group policy
+export type AiMcpGroupPolicy = Selectable<AiMcpGroupPolicies>;
+export type InsertableAiMcpGroupPolicy = Insertable<AiMcpGroupPolicies>;
+export type UpdatableAiMcpGroupPolicy = Updateable<
+  Omit<AiMcpGroupPolicies, 'id'>
+>;
+
+// External MCP user preference
+export type AiMcpUserPreference = Selectable<AiMcpUserPreferences>;
+export type InsertableAiMcpUserPreference = Insertable<AiMcpUserPreferences>;
+export type UpdatableAiMcpUserPreference = Updateable<
+  Omit<AiMcpUserPreferences, 'id'>
+>;
 
 // Workspace
 export type Workspace = Selectable<Workspaces>;

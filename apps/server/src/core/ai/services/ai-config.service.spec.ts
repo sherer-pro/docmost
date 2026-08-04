@@ -14,6 +14,7 @@ describe('AiConfigService secret handling', () => {
       {} as any,
       {} as any,
       {} as any,
+      {} as any,
     );
 
   it('encrypts secrets and clears them only when explicitly requested', () => {
@@ -323,6 +324,7 @@ describe('AiConfigService availability', () => {
       {} as any,
       {} as any,
       { isPageExcluded: jest.fn().mockResolvedValue(false) } as any,
+      { getAvailability: jest.fn().mockResolvedValue(null) } as any,
     );
     jest
       .spyOn(service, 'getRawConfig')

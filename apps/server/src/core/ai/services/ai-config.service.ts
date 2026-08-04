@@ -40,6 +40,7 @@ import { sql } from 'kysely';
 import { JsonValue } from '../../../database/types/db';
 import { AiContentPolicyService } from '../../ai-content-policy/ai-content-policy.service';
 import { createHash } from 'node:crypto';
+import { AiMcpPolicyService } from '../mcp/ai-mcp-policy.service';
 
 @Injectable()
 export class AiConfigService {
@@ -54,6 +55,7 @@ export class AiConfigService {
     private readonly provider: OpenAiCompatibleProviderService,
     private readonly retrievalService: AiRetrievalService,
     private readonly contentPolicy: AiContentPolicyService,
+    private readonly mcpPolicy: AiMcpPolicyService,
   ) {}
 
   async getAdminConfig(
@@ -186,6 +188,20 @@ export class AiConfigService {
       };
     }
 
+    let externalMcp: AiAvailability['externalMcp'];
+    if (agentAvailable) {
+      try {
+        externalMcp =
+          (await this.mcpPolicy.getAvailability(spaceId, user, workspace)) ??
+          undefined;
+      } catch {
+        // Status remains available when the user is not a member of the space
+        // or the external policy cannot be read. The MCP control is simply not
+        // advertised in that case.
+        externalMcp = undefined;
+      }
+    }
+
     return {
       enabled,
       configured,
@@ -204,6 +220,7 @@ export class AiConfigService {
         retrieval && this.isRetrievalConfigured(retrieval),
       ),
       quickCommands: this.publicQuickCommands(config?.quickCommands),
+      ...(externalMcp ? { externalMcp } : {}),
       ...(usage ? { usage } : {}),
       ...(!configured
         ? { unavailableReason: 'not_configured' }

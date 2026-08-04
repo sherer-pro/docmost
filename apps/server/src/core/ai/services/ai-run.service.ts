@@ -37,6 +37,8 @@ import { extractAiApprovalPreview } from '../../../common/helpers/prosemirror/ai
 import { AiRunEventService } from './ai-run-event.service';
 import { AiContextService } from './ai-context.service';
 import { AI_CONCURRENCY_LIMITS } from '../ai.constants';
+import { toAiRunStepContract } from '../utils/ai-run-step.mapper';
+import { AiMcpPolicyService } from '../mcp/ai-mcp-policy.service';
 
 @Injectable()
 export class AiRunService {
@@ -49,6 +51,7 @@ export class AiRunService {
     private readonly pageAccessService: PageAccessService,
     private readonly events: AiRunEventService,
     private readonly contexts: AiContextService,
+    private readonly mcpPolicy: AiMcpPolicyService,
   ) {}
 
   async send(
@@ -217,6 +220,14 @@ export class AiRunService {
             },
           ])
           .execute();
+        // Resolved inside the same transaction as the run, so the capability
+        // list and the run row can never disagree.
+        const mcpSnapshot = await this.mcpPolicy.buildRunSnapshot(trx, {
+          workspaceId: workspace.id,
+          spaceId: conversation.spaceId,
+          userId: user.id,
+          executionMode: lockedConversation.agentMode ? 'agent' : 'chat',
+        });
         const inserted = await trx
           .insertInto('aiRuns')
           .values({
@@ -225,6 +236,10 @@ export class AiRunService {
             previousRunId: null,
             attemptNo: 1,
             trigger: 'send',
+            mcpPolicySnapshot: mcpSnapshot as never,
+            mcpPolicyFingerprint: mcpSnapshot
+              ? this.mcpPolicy.fingerprintSnapshot(mcpSnapshot)
+              : null,
             conversationId: conversation.id,
             userId: user.id,
             workspaceId: workspace.id,
@@ -667,6 +682,15 @@ export class AiRunService {
           .executeTakeFirstOrThrow();
         const id = uuidv7();
         const now = new Date();
+        // Retry and regenerate resolve a fresh capability list. Resuming after
+        // an approval keeps the original snapshot, which is why resumeRun does
+        // not touch these columns.
+        const mcpSnapshot = await this.mcpPolicy.buildRunSnapshot(trx, {
+          workspaceId: locked.workspaceId,
+          spaceId: locked.spaceId,
+          userId: locked.userId,
+          executionMode: locked.executionMode,
+        });
         const run = await trx
           .insertInto('aiRuns')
           .values({
@@ -675,6 +699,10 @@ export class AiRunService {
             previousRunId: locked.id,
             attemptNo: Number(latestAttempt.attemptNo ?? locked.attemptNo) + 1,
             trigger,
+            mcpPolicySnapshot: mcpSnapshot as never,
+            mcpPolicyFingerprint: mcpSnapshot
+              ? this.mcpPolicy.fingerprintSnapshot(mcpSnapshot)
+              : null,
             conversationId: locked.conversationId,
             userId: locked.userId,
             workspaceId: locked.workspaceId,
@@ -988,28 +1016,7 @@ export class AiRunService {
   }
 
   private toStep(row: any): AiRunStep {
-    return {
-      id: row.id,
-      runId: row.runId,
-      sequence: row.sequence,
-      modelStep: row.modelStep,
-      callIndex: row.callIndex,
-      toolCallId: row.toolCallId,
-      toolName: row.toolName,
-      writeClass: row.writeClass,
-      arguments: row.arguments as Record<string, unknown>,
-      result: row.result,
-      approvalPreview: extractAiApprovalPreview(row.result),
-      status: row.status,
-      errorCode: row.errorCode,
-      errorMessage: row.errorMessage,
-      targetPageId: row.targetPageId,
-      baseContentHash: row.baseContentHash,
-      expiresAt: row.expiresAt?.toISOString() ?? null,
-      decidedAt: row.decidedAt?.toISOString() ?? null,
-      createdAt: row.createdAt.toISOString(),
-      updatedAt: row.updatedAt.toISOString(),
-    };
+    return toAiRunStepContract(row);
   }
 
   private async lockAdmission(

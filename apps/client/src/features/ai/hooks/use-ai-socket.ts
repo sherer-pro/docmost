@@ -237,6 +237,21 @@ export function useAiSocket() {
       void queryClient.invalidateQueries({
         queryKey: AI_QUERY_KEYS.run(event.runId),
       });
+
+      // Surface that a run reached outside Docmost. Recorded on the activity
+      // entry so it stays visible after the run finishes.
+      if (event.step?.toolSource === "external_mcp") {
+        setActivity((current) => {
+          const existing = current[event.runId];
+          if (!existing || existing.hasExternalToolCall) {
+            return current;
+          }
+          return {
+            ...current,
+            [event.runId]: { ...existing, hasExternalToolCall: true },
+          };
+        });
+      }
     };
 
     const handleReconnect = () => {

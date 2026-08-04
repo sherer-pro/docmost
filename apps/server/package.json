@@ -29,7 +29,7 @@
     "test:watch": "jest --config jest.config.cjs --watch",
     "test:cov": "jest --config jest.config.cjs --coverage",
     "test:cov:smoke": "jest --config jest.config.cjs --coverage --runInBand --testPathPatterns=coverage-smoke.spec.ts",
-    "test:security": "jest --config jest.config.cjs --runInBand --testPathPatterns=\"share-seo.controller.spec.ts|host.util.spec.ts|csrf.guard.spec.ts|file.utils.spec.ts|file-validation.spec.ts|untrusted-document.util.spec.ts|attachment-public-token.util.spec.ts|attachment-file-access.service.spec.ts|attachment.service.spec.ts|attachment.controller.spec.ts|html-pdf-renderer.service.spec.ts|import-formatter.spec.ts|page-access.service.spec.ts|space-ability.factory.spec.ts|api-key-auth.guard.spec.ts|api-key.service.spec.ts|api-key-traffic.service.spec.ts|mcp-api-key-auth.guard.spec.ts|mcp.controller.spec.ts|rag.service.security.spec.ts|rag.service.updates.spec.ts|ai-prompt-builder.service.spec.ts|ai-pinned-http.util.spec.ts|ai-url-policy.service.spec.ts|jwt.strategy.spec.ts|authentication.extension.spec.ts|ws.gateway.spec.ts|credential-protection.util.spec.ts|trusted-proxy.util.spec.ts|database.service.page-access.spec.ts|page.service.move.spec.ts\"",
+    "test:security": "jest --config jest.config.cjs --runInBand --testPathPatterns=\"share-seo.controller.spec.ts|host.util.spec.ts|csrf.guard.spec.ts|file.utils.spec.ts|file-validation.spec.ts|untrusted-document.util.spec.ts|attachment-public-token.util.spec.ts|attachment-file-access.service.spec.ts|attachment.service.spec.ts|attachment.controller.spec.ts|html-pdf-renderer.service.spec.ts|import-formatter.spec.ts|page-access.service.spec.ts|space-ability.factory.spec.ts|api-key-auth.guard.spec.ts|api-key.service.spec.ts|api-key-traffic.service.spec.ts|mcp-api-key-auth.guard.spec.ts|mcp.controller.spec.ts|rag.service.security.spec.ts|rag.service.updates.spec.ts|ai-prompt-builder.service.spec.ts|ai-pinned-http.util.spec.ts|ai-url-policy.service.spec.ts|ai-mcp-url-policy.service.spec.ts|ai-mcp-tool-schema.util.spec.ts|ai-mcp-headers.util.spec.ts|ai-mcp-result.util.spec.ts|ai-mcp-pinned-fetch.spec.ts|ai-mcp-client-pool.service.spec.ts|ai-mcp-admin.service.spec.ts|ai-mcp-policy.service.spec.ts|ai-mcp-tool-call.service.spec.ts|ai-run-execution.mcp.spec.ts|jwt.strategy.spec.ts|authentication.extension.spec.ts|ws.gateway.spec.ts|credential-protection.util.spec.ts|trusted-proxy.util.spec.ts|database.service.page-access.spec.ts|page.service.move.spec.ts\"",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --config jest.config.cjs --runInBand",
     "test:e2e": "jest --config test/jest-e2e.json",
     "test:alias:smoke": "jest --config test/jest-alias-smoke.json --runInBand"
@@ -42,8 +42,8 @@
     "@fastify/cookie": "^11.0.2",
     "@fastify/multipart": "^9.4.0",
     "@fastify/proxy-addr": "5.0.0",
-    "@fastify/static": "^9.1.1",
-    "@modelcontextprotocol/sdk": "1.26.0",
+    "@fastify/static": "10.1.2",
+    "@modelcontextprotocol/sdk": "1.30.0",
     "@napi-rs/canvas": "0.1.82",
     "@nestjs-labs/nestjs-ioredis": "^11.0.4",
     "@nestjs/bullmq": "^11.0.4",
@@ -107,7 +107,7 @@
     "tmp-promise": "^3.0.3",
     "tseep": "^1.3.1",
     "typesense": "^2.1.0",
-    "undici": "7.28.0",
+    "undici": "7.29.0",
     "web-push": "^3.6.7",
     "ws": "^8.20.1",
     "yauzl": "^3.2.1"

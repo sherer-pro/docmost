@@ -121,6 +121,11 @@ export function AiActivityPopover() {
                         ? t("ai.ux.activityRunning")
                         : t("ai.ux.activityCompleted")}
                     </Badge>
+                    {item.hasExternalToolCall && (
+                      <Badge size="xs" variant="light" color="grape" ml={4}>
+                        {t("ai.externalTools.activityExternalUsed")}
+                      </Badge>
+                    )}
                   </Box>
                 </Button>
                 {!active && (
