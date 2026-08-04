@@ -43,6 +43,8 @@ import {
   TRANSCLUSION_LABEL_STYLE,
   type TransclusionPresentationStrings,
   htmlToMarkdown,
+  collectPageEmbedPresentationReferences,
+  materializePageEmbedsForPresentation,
 } from '@docmost/editor-ext';
 import { getAppVersion } from '../../common/helpers/get-app-version';
 import {
@@ -62,7 +64,7 @@ import { resolveHeadingNumberingEnabled } from '../../core/page/utils/heading-nu
 import {
   DOCMOST_ARCHIVE_SCHEMA_VERSION,
   type DocmostArchiveAttachment,
-  type DocmostArchiveDataV2,
+  type DocmostArchiveDataV3,
   type DocmostArchiveDatabase,
   type DocmostArchiveDatabaseCell,
   type DocmostArchiveDatabaseProperty,
@@ -70,7 +72,8 @@ import {
   type DocmostArchiveDatabaseView,
   type DocmostArchiveDictionaryTerm,
   type DocmostArchiveLabel,
-  type DocmostArchiveManifestV2,
+  type DocmostArchiveManifestV3,
+  type DocmostArchivePageEmbedSnapshot,
   type DocmostArchivePage,
   type DocmostArchiveScope,
   type DocmostArchiveTransclusionSnapshot,
@@ -81,8 +84,10 @@ import {
 } from '@docmost/api-contract';
 import { sanitize } from 'sanitize-filename-ts';
 import { collectReferencesFromPmJson } from '../../core/page/transclusion/utils/transclusion-prosemirror.util';
+import { collectPageEmbedsFromPmJson } from '../../core/page/transclusion/utils/transclusion-prosemirror.util';
 import { createHash } from 'node:crypto';
 import { TransclusionService } from '../../core/page/transclusion/transclusion.service';
+import { PageEmbedService } from '../../core/page/transclusion/page-embed.service';
 
 const PAGE_STATUS_LABELS: Record<string, string> = {
   TODO: 'To do',
@@ -158,6 +163,7 @@ export class ExportService {
     private readonly tokenService: TokenService,
     private readonly pageAccessService: PageAccessService,
     private readonly transclusionService: TransclusionService,
+    private readonly pageEmbedService: PageEmbedService,
   ) {}
 
   async exportPage(
@@ -169,7 +175,12 @@ export class ExportService {
     spaceAiRoleEnabled?: boolean,
     authorizedUser?: User,
   ) {
-    const { title: pageTitle, pageHtml } = await this.buildPageExportHtml(
+    const {
+      title: pageTitle,
+      pageHtml,
+      attachmentPageIds,
+      attachmentIds,
+    } = await this.buildPageExportHtml(
       page,
       singlePage,
       spaceHeadingNumberingEnabled,
@@ -203,6 +214,8 @@ export class ExportService {
         locale,
         singlePage,
         pageHtml,
+        attachmentPageIds,
+        attachmentIds,
         spaceAiRoleEnabled,
         authorizedUser,
       });
@@ -210,7 +223,7 @@ export class ExportService {
       return this.renderPdfFromHtmlDocument({
         title: pagePdfBody.title,
         bodyHtml: pagePdfBody.bodyHtml,
-        attachmentToken: pagePdfBody.attachmentToken,
+        attachmentTokens: pagePdfBody.attachmentTokens,
       });
     }
 
@@ -224,9 +237,17 @@ export class ExportService {
     pageHtml?: string;
     spaceAiRoleEnabled?: boolean;
     authorizedUser?: User;
-  }): Promise<{ title: string; bodyHtml: string; attachmentToken: string }> {
+    attachmentPageIds?: string[];
+    attachmentIds?: string[];
+  }): Promise<{
+    title: string;
+    bodyHtml: string;
+    attachmentTokens: Record<string, string>;
+  }> {
     const pageTitle = getPageTitle(params.page.title);
     let pageHtml = params.pageHtml;
+    let attachmentPageIds = params.attachmentPageIds;
+    let attachmentIds = params.attachmentIds;
 
     if (!pageHtml) {
       const pageHtmlResult = await this.buildPageExportHtml(
@@ -237,6 +258,8 @@ export class ExportService {
         params.locale,
       );
       pageHtml = pageHtmlResult.pageHtml;
+      attachmentPageIds = pageHtmlResult.attachmentPageIds;
+      attachmentIds = pageHtmlResult.attachmentIds;
     }
 
     const metadataRows = await this.resolvePageMetadataRows(
@@ -249,17 +272,16 @@ export class ExportService {
       metadataRows,
       params.page,
     );
-    const attachmentToken = await this.tokenService.generateAttachmentPageToken(
-      {
-        pageId: params.page.id,
-        workspaceId: params.page.workspaceId,
-      },
+    const attachmentTokens = await this.createPdfAttachmentTokens(
+      attachmentIds ?? this.extractAttachmentIdsFromHtml(bodyHtml),
+      new Set(attachmentPageIds ?? [params.page.id]),
+      params.page.workspaceId,
     );
 
     return {
       title: pageTitle,
       bodyHtml,
-      attachmentToken,
+      attachmentTokens,
     };
   }
 
@@ -269,18 +291,25 @@ export class ExportService {
     spaceHeadingNumberingEnabled?: boolean,
     authorizedUser?: User,
     locale?: string,
-  ): Promise<{ title: string; pageHtml: string }> {
+  ): Promise<{
+    title: string;
+    pageHtml: string;
+    attachmentPageIds: string[];
+    attachmentIds: string[];
+  }> {
     const titleNode = {
       type: 'heading',
       attrs: { level: 1 },
       content: [{ type: 'text', text: getPageTitle(page.title) }],
     };
 
-    let prosemirrorJson: any = await this.materializeTransclusions(
+    const materialized = await this.materializeTransclusionsWithAccess(
       getProsemirrorContent(page.content),
       authorizedUser,
       locale,
+      page.id,
     );
+    let prosemirrorJson: any = materialized.content;
 
     if (singlePage) {
       prosemirrorJson = await this.turnPageMentionsToLinks(
@@ -309,6 +338,8 @@ export class ExportService {
     return {
       title: getPageTitle(page.title),
       pageHtml,
+      attachmentPageIds: Array.from(materialized.attachmentPageIds),
+      attachmentIds: getAttachmentIds(prosemirrorJson),
     };
   }
 
@@ -316,8 +347,71 @@ export class ExportService {
     prosemirrorJson: unknown,
     authorizedUser?: User,
     locale?: string,
+    referencePageId?: string,
   ): Promise<unknown> {
-    const references = collectReferencesFromPmJson(prosemirrorJson);
+    return (
+      await this.materializeTransclusionsWithAccess(
+        prosemirrorJson,
+        authorizedUser,
+        locale,
+        referencePageId,
+      )
+    ).content;
+  }
+
+  private async materializeTransclusionsWithAccess(
+    prosemirrorJson: unknown,
+    authorizedUser?: User,
+    locale?: string,
+    referencePageId?: string,
+  ): Promise<{ content: unknown; attachmentPageIds: Set<string> }> {
+    const attachmentPageIds = new Set<string>();
+    if (referencePageId) attachmentPageIds.add(referencePageId);
+    const pageResolutions = new Map<
+      string,
+      { content?: unknown; status?: string }
+    >();
+    if (authorizedUser) {
+      let frontier = collectPageEmbedPresentationReferences(prosemirrorJson);
+      for (
+        let depth = 0;
+        depth < this.environmentService.getMaxPageEmbedDepth();
+        depth += 1
+      ) {
+        frontier = frontier.filter(
+          (sourcePageId) => !pageResolutions.has(sourcePageId),
+        );
+        if (frontier.length === 0) break;
+        const result = await this.pageEmbedService.lookup(
+          frontier,
+          authorizedUser,
+          referencePageId,
+        );
+        const next = new Set<string>();
+        for (const item of result.items) {
+          const resolution =
+            'content' in item
+              ? { content: item.content }
+              : { status: item.status };
+          pageResolutions.set(item.sourcePageId, resolution);
+          if ('content' in item) {
+            attachmentPageIds.add(item.sourcePageId);
+            collectPageEmbedPresentationReferences(item.content).forEach((id) =>
+              next.add(id),
+            );
+          }
+        }
+        frontier = Array.from(next);
+      }
+    }
+
+    const pageMaterialized = materializePageEmbedsForPresentation(
+      prosemirrorJson,
+      pageResolutions,
+      this.resolveTransclusionPresentationStrings(locale).unavailable,
+      this.environmentService.getMaxPageEmbedDepth(),
+    );
+    const references = collectReferencesFromPmJson(pageMaterialized);
     const resolutions = new Map<
       string,
       { content?: unknown; status?: string }
@@ -329,6 +423,7 @@ export class ExportService {
         authorizedUser,
       );
       for (const item of result.items) {
+        if ('content' in item) attachmentPageIds.add(item.sourcePageId);
         resolutions.set(
           getTransclusionReferenceKey(item.sourcePageId, item.transclusionId),
           'content' in item
@@ -338,11 +433,14 @@ export class ExportService {
       }
     }
 
-    return materializeTransclusionsForPresentation(
-      prosemirrorJson,
-      resolutions,
-      this.resolveTransclusionPresentationStrings(locale),
-    );
+    return {
+      content: materializeTransclusionsForPresentation(
+        pageMaterialized,
+        resolutions,
+        this.resolveTransclusionPresentationStrings(locale),
+      ),
+      attachmentPageIds,
+    };
   }
 
   async prepareProsemirrorForExport(
@@ -350,11 +448,13 @@ export class ExportService {
     workspaceId: string,
     authorizedUser: User,
     locale?: string,
+    referencePageId?: string,
   ): Promise<unknown> {
     const materializedJson = await this.materializeTransclusions(
       prosemirrorJson,
       authorizedUser,
       locale,
+      referencePageId,
     );
 
     return this.turnPageMentionsToLinks(materializedJson, workspaceId);
@@ -465,6 +565,7 @@ export class ExportService {
     title: string;
     bodyHtml: string;
     attachmentToken?: string;
+    attachmentTokens?: Record<string, string>;
   }): Promise<Buffer> {
     const htmlDocument = this.buildPdfHtmlDocument(
       params.title,
@@ -472,7 +573,53 @@ export class ExportService {
     );
     return this.htmlPdfRendererService.render(htmlDocument, {
       attachmentToken: params.attachmentToken,
+      attachmentTokens: params.attachmentTokens,
     });
+  }
+
+  private async createPdfAttachmentTokens(
+    attachmentIds: string[],
+    allowedPageIds: Set<string>,
+    workspaceId: string,
+  ): Promise<Record<string, string>> {
+    const uniqueIds = [...new Set(attachmentIds)].filter(isValidUuid);
+    if (uniqueIds.length === 0) return {};
+    const attachments = await this.db
+      .selectFrom('attachments')
+      .select(['id', 'pageId'])
+      .where('id', 'in', uniqueIds)
+      .where('workspaceId', '=', workspaceId)
+      .where('deletedAt', 'is', null)
+      .execute();
+    const entries = await Promise.all(
+      attachments
+        .filter(
+          (attachment): attachment is typeof attachment & { pageId: string } =>
+            Boolean(attachment.pageId && allowedPageIds.has(attachment.pageId)),
+        )
+        .map(
+          async (attachment) =>
+            [
+              attachment.id,
+              await this.tokenService.generateAttachmentToken({
+                attachmentId: attachment.id,
+                pageId: attachment.pageId,
+                workspaceId,
+              }),
+            ] as const,
+        ),
+    );
+    return Object.fromEntries(entries);
+  }
+
+  private extractAttachmentIdsFromHtml(html: string): string[] {
+    const ids = new Set<string>();
+    const pattern =
+      /\/api\/(?:attachments\/files|files)(?:\/public)?\/([0-9a-f-]{36})(?:\/|[?"'])/gi;
+    for (const match of html.matchAll(pattern)) {
+      if (isValidUuid(match[1])) ids.add(match[1]);
+    }
+    return Array.from(ids);
   }
 
   private removeColgroupTags(html: string): string {
@@ -1890,42 +2037,53 @@ export class ExportService {
           : page.parentPageId,
       content: getProsemirrorContent(page.content),
       settings: normalizePageSettings(page.settings),
+      isTemplate: page.isTemplate,
     }));
-    const externalReferences = new Map<
-      string,
-      { sourcePageId: string; transclusionId: string }
-    >();
+    const transclusionSnapshots: DocmostArchiveTransclusionSnapshot[] = [];
     for (const page of archivePages) {
-      for (const reference of collectReferencesFromPmJson(page.content)) {
-        if (pageIdSet.has(reference.sourcePageId)) continue;
-        externalReferences.set(
-          getTransclusionReferenceKey(
-            reference.sourcePageId,
-            reference.transclusionId,
-          ),
-          reference,
-        );
+      const references = collectReferencesFromPmJson(page.content).filter(
+        (reference) => !pageIdSet.has(reference.sourcePageId),
+      );
+      if (references.length === 0) continue;
+      const lookup = await this.transclusionService.lookup(
+        references,
+        params.authorizedUser,
+      );
+      for (const item of lookup.items) {
+        if (!('content' in item)) continue;
+        transclusionSnapshots.push({
+          referencePageId: page.id,
+          sourcePageId: item.sourcePageId,
+          transclusionId: item.transclusionId,
+          content: item.content,
+        });
       }
     }
-    const externalLookup =
-      externalReferences.size > 0
-        ? await this.transclusionService.lookup(
-            Array.from(externalReferences.values()),
-            params.authorizedUser,
-          )
-        : { items: [] };
-    const transclusionSnapshots: DocmostArchiveTransclusionSnapshot[] =
-      externalLookup.items.flatMap((item) =>
-        'content' in item
-          ? [
-              {
-                sourcePageId: item.sourcePageId,
-                transclusionId: item.transclusionId,
-                content: item.content,
-              },
-            ]
-          : [],
+
+    const pageEmbedSnapshots: DocmostArchivePageEmbedSnapshot[] = [];
+    for (const page of archivePages) {
+      const references = collectPageEmbedsFromPmJson(page.content).filter(
+        (reference) => !pageIdSet.has(reference.sourcePageId),
       );
+      if (references.length === 0) continue;
+      const lookup = await this.pageEmbedService.lookup(
+        references.map((reference) => reference.sourcePageId),
+        params.authorizedUser,
+        page.id,
+      );
+      for (let index = 0; index < references.length; index += 1) {
+        const item = lookup.items[index];
+        if (!item || !('content' in item)) continue;
+        pageEmbedSnapshots.push({
+          referencePageId: page.id,
+          referenceNodeId: references[index].referenceNodeId,
+          sourcePageId: item.sourcePageId,
+          title: item.title,
+          icon: item.icon,
+          content: item.content,
+        });
+      }
+    }
 
     const [propertyRows, cellRows, viewRows] =
       databaseIds.length > 0
@@ -2065,10 +2223,17 @@ export class ExportService {
     }
 
     const attachmentIds = new Set<string>();
-    const snapshotAttachmentIds = new Set<string>();
+    const attachmentOwners = new Map<string, Set<string>>();
+    const allowAttachment = (attachmentId: string, pageId: string | null) => {
+      attachmentIds.add(attachmentId);
+      if (!pageId) return;
+      const owners = attachmentOwners.get(attachmentId) ?? new Set<string>();
+      owners.add(pageId);
+      attachmentOwners.set(attachmentId, owners);
+    };
     for (const page of archivePages) {
       for (const attachmentId of getAttachmentIds(page.content)) {
-        attachmentIds.add(attachmentId);
+        allowAttachment(attachmentId, page.id);
       }
     }
     for (const database of archiveDatabases) {
@@ -2079,18 +2244,22 @@ export class ExportService {
         for (const attachmentId of getAttachmentIds(
           database.descriptionContent,
         )) {
-          attachmentIds.add(attachmentId);
+          allowAttachment(attachmentId, database.pageId);
         }
       }
     }
     for (const snapshot of transclusionSnapshots) {
       for (const attachmentId of getAttachmentIds(snapshot.content)) {
-        attachmentIds.add(attachmentId);
-        snapshotAttachmentIds.add(attachmentId);
+        allowAttachment(attachmentId, snapshot.sourcePageId);
+      }
+    }
+    for (const snapshot of pageEmbedSnapshots) {
+      for (const attachmentId of getAttachmentIds(snapshot.content)) {
+        allowAttachment(attachmentId, snapshot.sourcePageId);
       }
     }
     for (const cell of archiveCells) {
-      if (cell.attachmentId) attachmentIds.add(cell.attachmentId);
+      if (cell.attachmentId) allowAttachment(cell.attachmentId, cell.pageId);
     }
     const attachmentRows =
       attachmentIds.size > 0
@@ -2102,10 +2271,11 @@ export class ExportService {
             .where('deletedAt', 'is', null)
             .execute()
         : [];
-    const authorizedAttachmentRows = attachmentRows.filter(
-      (attachment) =>
-        attachment.spaceId === params.spaceId ||
-        snapshotAttachmentIds.has(attachment.id),
+    const authorizedAttachmentRows = attachmentRows.filter((attachment) =>
+      Boolean(
+        attachment.pageId &&
+          attachmentOwners.get(attachment.id)?.has(attachment.pageId),
+      ),
     );
     if (authorizedAttachmentRows.length !== attachmentIds.size) {
       const found = new Set(
@@ -2162,6 +2332,12 @@ export class ExportService {
         referencedIds.add(userId);
       }
     }
+    for (const snapshot of pageEmbedSnapshots) {
+      this.collectUuidStrings(snapshot.content, referencedIds);
+      for (const userId of extractUserMentionIdsFromJson(snapshot.content)) {
+        referencedIds.add(userId);
+      }
+    }
     for (const cell of archiveCells) {
       this.collectUuidStrings(cell.value, referencedIds);
     }
@@ -2208,7 +2384,7 @@ export class ExportService {
       : ({ pages: {} } as ExportMetadata);
 
     const portableSpaceSettings = this.getPortableSpaceSettings(space.settings);
-    const data: DocmostArchiveDataV2 = {
+    const data: DocmostArchiveDataV3 = {
       schemaVersion: DOCMOST_ARCHIVE_SCHEMA_VERSION,
       scope: params.scope,
       sourceSpace: {
@@ -2220,6 +2396,7 @@ export class ExportService {
       attachments: archiveAttachments,
       users,
       transclusionSnapshots,
+      pageEmbedSnapshots,
       databases: archiveDatabases,
       databaseProperties: archiveProperties,
       databaseRows: archiveRows,
@@ -2228,7 +2405,7 @@ export class ExportService {
       labels: Array.from(labelsById.values()),
       dictionary,
     };
-    const manifest: DocmostArchiveManifestV2 = {
+    const manifest: DocmostArchiveManifestV3 = {
       source: 'docmost',
       schemaVersion: DOCMOST_ARCHIVE_SCHEMA_VERSION,
       version: this.appVersion,
@@ -2324,12 +2501,13 @@ export class ExportService {
         const childPages = tree[page.id] || [];
 
         const originalJson = getProsemirrorContent(page.content);
-        const originalAttachmentIds = new Set(getAttachmentIds(originalJson));
-        const materializedJson = await this.materializeTransclusions(
+        const materialized = await this.materializeTransclusionsWithAccess(
           originalJson,
           authorizedUser,
           locale,
+          page.id,
         );
+        const materializedJson = materialized.content;
         const prosemirrorJson = await this.turnPageMentionsToLinks(
           materializedJson,
           page.workspaceId,
@@ -2344,17 +2522,12 @@ export class ExportService {
         );
 
         if (includeAttachments) {
-          const externalSnapshotAttachmentIds = new Set(
-            getAttachmentIds(updatedJsonContent).filter(
-              (attachmentId) => !originalAttachmentIds.has(attachmentId),
-            ),
-          );
           await this.zipAttachments(
             updatedJsonContent,
             page.spaceId,
             page.workspaceId,
             folder,
-            externalSnapshotAttachmentIds,
+            materialized.attachmentPageIds,
           );
           if (format !== ExportFormat.PDF) {
             updatedJsonContent =
@@ -2426,7 +2599,7 @@ export class ExportService {
     spaceId: string,
     workspaceId: string,
     zip: JSZip,
-    externalSnapshotAttachmentIds = new Set<string>(),
+    allowedAttachmentPageIds = new Set<string>(),
   ) {
     const attachmentIds = getAttachmentIds(prosemirrorJson);
 
@@ -2440,10 +2613,11 @@ export class ExportService {
 
       await Promise.all(
         attachments
-          .filter(
-            (attachment) =>
-              attachment.spaceId === spaceId ||
-              externalSnapshotAttachmentIds.has(attachment.id),
+          .filter((attachment) =>
+            Boolean(
+              attachment.pageId &&
+                allowedAttachmentPageIds.has(attachment.pageId),
+            ),
           )
           .map(async (attachment) => {
             try {

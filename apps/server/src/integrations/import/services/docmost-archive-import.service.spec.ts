@@ -16,6 +16,7 @@ describe('DocmostArchiveImportService reference rewriting', () => {
     {} as any,
     {} as any,
     {} as any,
+    {} as any,
   );
 
   const report = () => ({
@@ -169,15 +170,18 @@ describe('DocmostArchiveImportService reference rewriting', () => {
         userIdMap: new Map(),
         transclusionSnapshots: new Map([
           [
-            'external-page::block-1',
+            '*::external-page::block-1',
             {
-              type: 'doc',
-              content: [
-                {
-                  type: 'paragraph',
-                  content: [{ type: 'text', text: 'Snapshot content' }],
-                },
-              ],
+              content: {
+                type: 'doc',
+                content: [
+                  {
+                    type: 'paragraph',
+                    content: [{ type: 'text', text: 'Snapshot content' }],
+                  },
+                ],
+              },
+              attachmentIdMap: new Map(),
             },
           ],
         ]),
@@ -192,6 +196,126 @@ describe('DocmostArchiveImportService reference rewriting', () => {
         content: [{ type: 'text', text: 'Snapshot content' }],
       },
     ]);
+  });
+
+  it('resolves external page snapshots by consumer and occurrence', () => {
+    const snapshots = new Map([
+      [
+        'consumer-a::occurrence::external-page',
+        {
+          content: {
+            type: 'doc',
+            content: [
+              {
+                type: 'image',
+                attrs: {
+                  attachmentId: 'attachment-old',
+                  src: '/api/files/attachment-old/image.png',
+                },
+              },
+            ],
+          },
+          attachmentIdMap: new Map(),
+        },
+      ],
+      [
+        'consumer-b::occurrence::external-page',
+        {
+          content: {
+            type: 'doc',
+            content: [
+              { type: 'paragraph', content: [{ type: 'text', text: 'B' }] },
+            ],
+          },
+          attachmentIdMap: new Map(),
+        },
+      ],
+    ]);
+    const rewrite = (
+      consumerId: string,
+      attachmentIdMap: Map<string, string>,
+    ) =>
+      (service as any).rewritePmNode(
+        {
+          type: 'pageEmbed',
+          attrs: { id: 'occurrence', sourcePageId: 'external-page' },
+        },
+        {
+          pageIdMap: new Map(),
+          slugIdMap: new Map(),
+          databaseIdMap: new Map(),
+          attachmentIdMap: new Map(),
+          externalSnapshotAttachmentIdMap: attachmentIdMap,
+          sourceArchivePageId: consumerId,
+          userIdMap: new Map(),
+          transclusionSnapshots: new Map(),
+          pageEmbedSnapshots: snapshots,
+          allowPageEmbeds: true,
+          fallbackUserId: 'importer',
+          report: report(),
+        },
+      );
+
+    const consumerA = rewrite(
+      'consumer-a',
+      new Map([['attachment-old', 'attachment-consumer-a']]),
+    );
+    const consumerB = rewrite('consumer-b', new Map());
+
+    expect(consumerA[0].attrs).toMatchObject({
+      attachmentId: 'attachment-consumer-a',
+      src: '/api/files/attachment-consumer-a/image.png',
+    });
+    expect(consumerB[0].content[0].text).toBe('B');
+  });
+
+  it('uses the consumer attachment mapping when disabled internal embeds materialize', () => {
+    const rewritten = (service as any).rewritePmNode(
+      {
+        type: 'pageEmbed',
+        attrs: { id: 'occurrence', sourcePageId: 'source-page' },
+      },
+      {
+        pageIdMap: new Map([['source-page', 'source-page-new']]),
+        slugIdMap: new Map(),
+        databaseIdMap: new Map(),
+        attachmentIdMap: new Map([
+          ['attachment-old', 'attachment-source-page'],
+        ]),
+        externalSnapshotAttachmentIdMap: new Map([
+          ['attachment-old', 'attachment-consumer-page'],
+        ]),
+        sourceArchivePageId: 'consumer-page',
+        userIdMap: new Map(),
+        transclusionSnapshots: new Map(),
+        pageEmbedSnapshots: new Map(),
+        archivePageContentById: new Map([
+          [
+            'source-page',
+            {
+              type: 'doc',
+              content: [
+                {
+                  type: 'image',
+                  attrs: {
+                    attachmentId: 'attachment-old',
+                    src: '/api/files/attachment-old/image.png',
+                  },
+                },
+              ],
+            },
+          ],
+        ]),
+        allowPageEmbeds: false,
+        fallbackUserId: 'importer',
+        report: report(),
+      },
+    );
+
+    expect(rewritten[0].attrs).toMatchObject({
+      attachmentId: 'attachment-consumer-page',
+      src: '/api/files/attachment-consumer-page/image.png',
+    });
   });
 
   it('restores external references without snapshots as placeholders', () => {

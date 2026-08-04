@@ -33,7 +33,71 @@ export const TableReadonlySort = {} as any;
 export const TableView = {} as any;
 export const TransclusionSource = {} as any;
 export const TransclusionReference = {} as any;
+export const PageEmbed = {} as any;
 export const TRANSCLUSION_LABEL_STYLE = 'font-weight: 600';
+
+export function collectPageEmbedPresentationReferences(document: any) {
+  const sourcePageIds = new Set<string>();
+  const visit = (node: any): void => {
+    if (!node || typeof node !== 'object') return;
+    if (
+      node.type === 'pageEmbed' &&
+      typeof node.attrs?.sourcePageId === 'string'
+    ) {
+      sourcePageIds.add(node.attrs.sourcePageId);
+    }
+    if (Array.isArray(node.content)) node.content.forEach(visit);
+  };
+  visit(document);
+  return Array.from(sourcePageIds);
+}
+
+export function materializePageEmbedsForPresentation(
+  document: any,
+  resolutions: Map<string, any>,
+  unavailable: string,
+  maxDepth = 5,
+) {
+  const visit = (node: any, depth: number, visited: Set<string>): any => {
+    if (!node || typeof node !== 'object') return node;
+    if (Array.isArray(node)) {
+      return node.flatMap((child) => visit(child, depth, visited));
+    }
+    if (node.type === 'pageEmbed') {
+      const sourcePageId = node.attrs?.sourcePageId;
+      const resolution = resolutions.get(sourcePageId);
+      if (
+        typeof sourcePageId !== 'string' ||
+        depth >= maxDepth ||
+        visited.has(sourcePageId) ||
+        !resolution ||
+        resolution.status ||
+        !Array.isArray(resolution.content?.content)
+      ) {
+        return {
+          type: 'paragraph',
+          content: [{ type: 'text', text: unavailable }],
+        };
+      }
+      const nextVisited = new Set(visited);
+      nextVisited.add(sourcePageId);
+      return resolution.content.content.flatMap((child: any) =>
+        visit(child, depth + 1, nextVisited),
+      );
+    }
+    return {
+      ...node,
+      ...(Array.isArray(node.content)
+        ? {
+            content: node.content.flatMap((child: any) =>
+              visit(child, depth, visited),
+            ),
+          }
+        : {}),
+    };
+  };
+  return visit(document, 0, new Set());
+}
 
 export function getTransclusionReferenceKey(
   sourcePageId?: string | null,
@@ -113,6 +177,19 @@ export function sanitizeUrl(input: string | undefined) {
   if (!input) return '';
   const normalized = input.trim();
   return /^(https?:|mailto:|tel:|\/|#)/i.test(normalized) ? normalized : '';
+}
+export function diffProseMirrorDocuments() {
+  return {
+    summary: { inserted: 0, deleted: 0, blocksChanged: 0 },
+    integrity: {
+      images: [0, 0],
+      links: [0, 0],
+      tables: [0, 0],
+      callouts: [0, 0],
+    },
+    changes: [],
+    precise: true,
+  };
 }
 export function getEmbedUrlAndProvider(url: string) {
   return { embedUrl: url, provider: 'iframe' };

@@ -24,6 +24,7 @@ import { sanitize } from 'sanitize-filename-ts';
 import { PageAccessService } from '../../core/page-access/page-access.service';
 import { CopyMarkdownWithCommentsService } from './copy-markdown-with-comments.service';
 import { normalizeUserSettings } from '../../core/user/utils/user-preferences.util';
+import { AuthPolicyScope } from '../../common/decorators/auth-policy-scope.decorator';
 
 /**
  * Shared service layer for export controllers.
@@ -124,6 +125,7 @@ export class PageExportController {
    * New command-style endpoint.
    */
   @UseGuards(JwtAuthGuard)
+  @AuthPolicyScope('page', { source: 'body', key: 'pageId' })
   @HttpCode(HttpStatus.OK)
   @Post('actions/export')
   async exportPageAction(
@@ -135,6 +137,7 @@ export class PageExportController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @AuthPolicyScope('page', { source: 'body', key: 'pageId' })
   @HttpCode(HttpStatus.OK)
   @Post('actions/copy-markdown-with-comments')
   async copyMarkdownWithCommentsAction(
@@ -184,6 +187,7 @@ export class SpaceExportController {
    * New command-style endpoint.
    */
   @UseGuards(JwtAuthGuard)
+  @AuthPolicyScope('space', { source: 'body', key: 'spaceId' })
   @HttpCode(HttpStatus.OK)
   @Post('actions/export')
   async exportSpaceAction(

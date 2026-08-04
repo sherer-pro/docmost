@@ -12,7 +12,7 @@ export type RewriteResult = {
 
 /**
  * Walk a ProseMirror JSON tree, rewrite every attachment-like node so its
- * `attachmentId` (and any `src` substring matching that id) point at a fresh
+ * `attachmentId` (and any `src`/`url` substring matching that id) point at a fresh
  * id. Each unique old id maps to exactly one new id; the caller is responsible
  * for actually copying the underlying storage file.
  *
@@ -20,7 +20,7 @@ export type RewriteResult = {
  */
 export function rewriteAttachmentsForUnsync(
   content: unknown,
-  generateId: () => string,
+  generateId: (oldAttachmentId?: string) => string,
 ): RewriteResult {
   const cloned = content ? JSON.parse(JSON.stringify(content)) : content;
   const idMap = new Map<string, string>();
@@ -37,12 +37,17 @@ export function rewriteAttachmentsForUnsync(
       if (typeof oldId === 'string' && oldId.length > 0) {
         let newId = idMap.get(oldId);
         if (!newId) {
-          newId = generateId();
+          newId = generateId(oldId);
           idMap.set(oldId, newId);
         }
         node.attrs.attachmentId = newId;
-        if (typeof node.attrs.src === 'string' && node.attrs.src.includes(oldId)) {
-          node.attrs.src = node.attrs.src.split(oldId).join(newId);
+        for (const key of ['src', 'url']) {
+          if (
+            typeof node.attrs[key] === 'string' &&
+            node.attrs[key].includes(oldId)
+          ) {
+            node.attrs[key] = node.attrs[key].split(oldId).join(newId);
+          }
         }
       }
     }

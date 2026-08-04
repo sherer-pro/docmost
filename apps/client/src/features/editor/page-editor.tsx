@@ -77,6 +77,8 @@ import {
 import { useDictionaryTermsQuery } from "@/features/dictionary/queries/dictionary-query";
 import { createDictionaryMatcherIndex } from "@/features/dictionary/utils/dictionary-matcher";
 import { TransclusionLookupProvider } from "@/features/editor/components/transclusion/transclusion-lookup-context";
+import { PageEmbedLookupProvider } from "@/features/editor/components/page-embed/page-embed-lookup-context";
+import { PageTemplatePicker } from "@/features/page-template/components/page-template-picker";
 import { FixedToolbar } from "@/features/editor/components/fixed-toolbar/fixed-toolbar";
 import { getEnabledTagDefinitions } from "@/features/editor/components/tag/tag-settings";
 
@@ -139,7 +141,8 @@ export default function PageEditor({
     userId: currentUser?.user.id,
     supportPlainTextPaste: true,
   });
-  const { data: collabQuery, refetch: refetchCollabToken } = useCollabToken();
+  const { data: collabQuery, refetch: refetchCollabToken } =
+    useCollabToken(pageId);
   const { isIdle, resetIdle } = useIdle(FIVE_MINUTES, { initialState: false });
   const documentState = useDocumentVisibility();
   const { pageSlug } = useParams();
@@ -529,7 +532,9 @@ export default function PageEditor({
 
   if (showStatic) {
     return (
+      <>
       <TransclusionLookupProvider>
+        <PageEmbedLookupProvider referencePageId={pageId}>
         <DictionaryHighlightLayer terms={activeDictionaryTerms}>
           <EditorProvider
             key={staticContentKey}
@@ -544,12 +549,17 @@ export default function PageEditor({
             }}
           />
         </DictionaryHighlightLayer>
+        </PageEmbedLookupProvider>
       </TransclusionLookupProvider>
+      <PageTemplatePicker pageId={pageId} spaceId={spaceId} />
+      </>
     );
   }
 
   return (
+    <>
     <TransclusionLookupProvider>
+      <PageEmbedLookupProvider referencePageId={pageId}>
       <div className="editor-container" style={{ position: "relative" }}>
         <div ref={menuContainerRef}>
           {editor && editorIsEditable && fixedToolbarEnabled && (
@@ -615,6 +625,9 @@ export default function PageEditor({
           ></div>
         )}
       </div>
+      </PageEmbedLookupProvider>
     </TransclusionLookupProvider>
+    <PageTemplatePicker pageId={pageId} spaceId={spaceId} />
+    </>
   );
 }

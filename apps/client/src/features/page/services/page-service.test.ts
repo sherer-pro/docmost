@@ -175,6 +175,7 @@ describe("page-service uploadFile", () => {
       "/attachments/actions/upload-file",
       expect.any(FormData),
       {
+        params: { pageId: "page-id" },
         headers: {
           "Content-Type": "multipart/form-data",
         },

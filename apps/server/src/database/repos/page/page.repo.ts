@@ -52,6 +52,7 @@ export class PageRepo {
     'workspaceId',
     'settings',
     'isLocked',
+    'isTemplate',
     'createdAt',
     'updatedAt',
     'deletedAt',
@@ -201,7 +202,11 @@ export class PageRepo {
     pageId: PageIdentifier,
     trx?: KyselyTransaction,
   ) {
-    return this.updatePages(this.normalizeSettings(updatablePage), [pageId], trx);
+    return this.updatePages(
+      this.normalizeSettings(updatablePage),
+      [pageId],
+      trx,
+    );
   }
 
   /**
@@ -254,6 +259,7 @@ export class PageRepo {
   async insertPage(
     insertablePage: InsertablePage,
     trx?: KyselyTransaction,
+    emitEvent = true,
   ): Promise<Page> {
     const db = dbOrTx(this.db, trx);
     const result = await db
@@ -262,10 +268,12 @@ export class PageRepo {
       .returning(this.baseFields)
       .executeTakeFirst();
 
-    this.eventEmitter.emit(EventName.PAGE_CREATED, {
-      pageIds: [result.id],
-      workspaceId: result.workspaceId,
-    });
+    if (emitEvent) {
+      this.eventEmitter.emit(EventName.PAGE_CREATED, {
+        pageIds: [result.id],
+        workspaceId: result.workspaceId,
+      });
+    }
 
     return result;
   }
@@ -617,66 +625,68 @@ export class PageRepo {
     parentPageId: string,
     opts: { includeContent: boolean },
   ) {
-    return this.db
-      .withRecursive('page_hierarchy', (db) =>
-        db
-          .selectFrom('pages')
-          .select([
-            'id',
-            'slugId',
-            'title',
-            'icon',
-            'position',
-            'parentPageId',
-            'spaceId',
-            'workspaceId',
-            'settings',
-            'createdAt',
-            'updatedAt',
-            sql<number>`0`.as('level'),
-          ])
-          .$if(opts?.includeContent, (qb) => qb.select('content'))
-          .where('id', '=', parentPageId)
-          .where('deletedAt', 'is', null)
-          .unionAll((exp) =>
-            exp
-              .selectFrom('pages as p')
-              .select([
-                'p.id',
-                'p.slugId',
-                'p.title',
-                'p.icon',
-                'p.position',
-                'p.parentPageId',
-                'p.spaceId',
-                'p.workspaceId',
-                'p.settings',
-                'p.createdAt',
-                'p.updatedAt',
-                sql<number>`ph.level + 1`.as('level'),
-              ])
-              .$if(opts?.includeContent, (qb) => qb.select('p.content'))
-              .innerJoin('page_hierarchy as ph', 'p.parentPageId', 'ph.id')
-              .where('p.deletedAt', 'is', null)
-              .where(sql`ph.level`, '<', sql.lit(MAX_PAGE_TREE_DEPTH)),
-          ),
-      )
-      .selectFrom('page_hierarchy')
-      // `level` only bounds the traversal; it must not leak into page payloads.
-      .select([
-        'id',
-        'slugId',
-        'title',
-        'icon',
-        'position',
-        'parentPageId',
-        'spaceId',
-        'workspaceId',
-        'settings',
-        'createdAt',
-        'updatedAt',
-      ])
-      .$if(opts?.includeContent, (qb) => qb.select('content'))
-      .execute();
+    return (
+      this.db
+        .withRecursive('page_hierarchy', (db) =>
+          db
+            .selectFrom('pages')
+            .select([
+              'id',
+              'slugId',
+              'title',
+              'icon',
+              'position',
+              'parentPageId',
+              'spaceId',
+              'workspaceId',
+              'settings',
+              'createdAt',
+              'updatedAt',
+              sql<number>`0`.as('level'),
+            ])
+            .$if(opts?.includeContent, (qb) => qb.select('content'))
+            .where('id', '=', parentPageId)
+            .where('deletedAt', 'is', null)
+            .unionAll((exp) =>
+              exp
+                .selectFrom('pages as p')
+                .select([
+                  'p.id',
+                  'p.slugId',
+                  'p.title',
+                  'p.icon',
+                  'p.position',
+                  'p.parentPageId',
+                  'p.spaceId',
+                  'p.workspaceId',
+                  'p.settings',
+                  'p.createdAt',
+                  'p.updatedAt',
+                  sql<number>`ph.level + 1`.as('level'),
+                ])
+                .$if(opts?.includeContent, (qb) => qb.select('p.content'))
+                .innerJoin('page_hierarchy as ph', 'p.parentPageId', 'ph.id')
+                .where('p.deletedAt', 'is', null)
+                .where(sql`ph.level`, '<', sql.lit(MAX_PAGE_TREE_DEPTH)),
+            ),
+        )
+        .selectFrom('page_hierarchy')
+        // `level` only bounds the traversal; it must not leak into page payloads.
+        .select([
+          'id',
+          'slugId',
+          'title',
+          'icon',
+          'position',
+          'parentPageId',
+          'spaceId',
+          'workspaceId',
+          'settings',
+          'createdAt',
+          'updatedAt',
+        ])
+        .$if(opts?.includeContent, (qb) => qb.select('content'))
+        .execute()
+    );
   }
 }

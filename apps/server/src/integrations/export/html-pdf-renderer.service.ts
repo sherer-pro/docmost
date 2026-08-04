@@ -14,6 +14,7 @@ const FALLBACK_CHROMIUM_PATHS = [
 
 interface RenderPdfOptions {
   attachmentToken?: string;
+  attachmentTokens?: Record<string, string>;
 }
 
 const allowedPdfAttachmentPathPrefixes = [
@@ -24,7 +25,10 @@ const allowedPdfAttachmentPathPrefixes = [
 const allowedPdfDataUrlPattern =
   /^data:image\/(?:png|jpe?g|gif|webp);base64,[a-z0-9+/=\s]*$/i;
 
-export function isAllowedPdfResourceUrl(rawUrl: string, appUrl: string): boolean {
+export function isAllowedPdfResourceUrl(
+  rawUrl: string,
+  appUrl: string,
+): boolean {
   const normalizedUrl = rawUrl?.trim();
   if (!normalizedUrl) {
     return false;
@@ -62,7 +66,10 @@ export class HtmlPdfRendererService {
 
   constructor(private readonly environmentService: EnvironmentService) {}
 
-  async render(htmlDocument: string, opts: RenderPdfOptions = {}): Promise<Buffer> {
+  async render(
+    htmlDocument: string,
+    opts: RenderPdfOptions = {},
+  ): Promise<Buffer> {
     const browser = await this.launchBrowser();
     let page: Awaited<ReturnType<Browser['newPage']>> | null = null;
 
@@ -71,7 +78,7 @@ export class HtmlPdfRendererService {
       page = await browser.newPage();
       page.setDefaultNavigationTimeout(timeout);
       page.setDefaultTimeout(timeout);
-      await this.configureRequestInterception(page);
+      await this.configureRequestInterception(page, opts.attachmentTokens);
       const attachmentToken = opts.attachmentToken?.trim();
       if (attachmentToken) {
         await page.setExtraHTTPHeaders({
@@ -173,9 +180,17 @@ export class HtmlPdfRendererService {
             return null;
           }
 
-          const forbiddenTags = new Set(['script', 'iframe', 'object', 'embed']);
+          const forbiddenTags = new Set([
+            'script',
+            'iframe',
+            'object',
+            'embed',
+          ]);
           const uriAttrs = new Set(['href', 'xlink:href', 'src']);
-          const elements = [svgRoot, ...Array.from(svgRoot.querySelectorAll('*'))];
+          const elements = [
+            svgRoot,
+            ...Array.from(svgRoot.querySelectorAll('*')),
+          ];
 
           for (const element of elements) {
             const tagName = element.tagName.toLowerCase();
@@ -264,13 +279,30 @@ export class HtmlPdfRendererService {
     }
   }
 
-  private async configureRequestInterception(page: Page): Promise<void> {
+  private async configureRequestInterception(
+    page: Page,
+    attachmentTokens?: Record<string, string>,
+  ): Promise<void> {
     const appUrl = this.environmentService.getAppUrl();
     await page.setRequestInterception(true);
     page.on('request', (request: HTTPRequest) => {
-      const action = isAllowedPdfResourceUrl(request.url(), appUrl)
-        ? request.continue()
-        : request.abort();
+      const allowed = isAllowedPdfResourceUrl(request.url(), appUrl);
+      const attachmentId = allowed
+        ? this.getAttachmentIdFromResourceUrl(request.url(), appUrl)
+        : null;
+      const token = attachmentId ? attachmentTokens?.[attachmentId] : null;
+      const action = !allowed
+        ? request.abort()
+        : attachmentId && attachmentTokens
+          ? token
+            ? request.continue({
+                headers: {
+                  ...request.headers(),
+                  'x-attachment-token': token,
+                },
+              })
+            : request.abort()
+          : request.continue();
 
       action.catch((err) => {
         this.logger.warn(
@@ -279,6 +311,23 @@ export class HtmlPdfRendererService {
         );
       });
     });
+  }
+
+  private getAttachmentIdFromResourceUrl(
+    rawUrl: string,
+    appUrl: string,
+  ): string | null {
+    let url: URL;
+    try {
+      url = new URL(rawUrl, appUrl);
+    } catch {
+      return null;
+    }
+    for (const prefix of allowedPdfAttachmentPathPrefixes) {
+      if (!url.pathname.startsWith(prefix)) continue;
+      return url.pathname.slice(prefix.length).split('/')[0] || null;
+    }
+    return null;
   }
 
   private async launchBrowser(): Promise<Browser> {
@@ -298,12 +347,15 @@ export class HtmlPdfRendererService {
   }
 
   private resolveChromiumExecutablePath(): string {
-    const configuredPath = this.environmentService.getPdfChromiumExecutablePath();
+    const configuredPath =
+      this.environmentService.getPdfChromiumExecutablePath();
     if (configuredPath) {
       return configuredPath;
     }
 
-    const detectedPath = FALLBACK_CHROMIUM_PATHS.find((path) => existsSync(path));
+    const detectedPath = FALLBACK_CHROMIUM_PATHS.find((path) =>
+      existsSync(path),
+    );
     if (detectedPath) {
       this.logger.debug(
         `Using detected Chromium executable path for PDF export: ${detectedPath}`,

@@ -1,0 +1,9 @@
+.item {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--mantine-radius-sm);
+}
+
+.item:hover {
+  background: light-dark(var(--mantine-color-gray-1), var(--mantine-color-dark-6));
+}

@@ -9,6 +9,7 @@ import {
 } from '@hocuspocus/server';
 import RedisClient from 'ioredis';
 import { readVarString } from 'lib0/decoding.js';
+import { HttpException } from '@nestjs/common';
 import { CollabProxySocket } from './collab-proxy-socket';
 import {
   BaseWebSocket,
@@ -32,6 +33,34 @@ type ServerId = string;
 type DocumentName = string;
 type SocketId = string;
 
+type SerializedCustomEventError = NonNullable<
+  RSAMessageCustomEventComplete['error']
+>;
+
+export function serializeCustomEventError(
+  error: unknown,
+): SerializedCustomEventError {
+  if (error instanceof HttpException) {
+    const response = error.getResponse();
+    return {
+      status: error.getStatus(),
+      response: typeof response === 'string' ? response : { ...response },
+      message: error.message,
+    };
+  }
+  return {
+    status: 500,
+    response: { message: 'Collaboration operation failed' },
+    message: 'Collaboration operation failed',
+  };
+}
+
+export function deserializeCustomEventError(
+  error: SerializedCustomEventError,
+): HttpException {
+  return new HttpException(error.response, error.status);
+}
+
 export class RedisSyncExtension<TCE extends CustomEvents> implements Extension {
   priority = 1000;
   private readonly pub: RedisClient;
@@ -51,9 +80,14 @@ export class RedisSyncExtension<TCE extends CustomEvents> implements Extension {
   private instance!: Hocuspocus;
   private readonly customEvents: TCE;
   private replyIdCounter: number = 0;
-  // @ts-ignore
-  private pendingReplies: Record<number, PromiseWithResolvers<any>['resolve']> =
-    {};
+  private pendingReplies: Record<
+    number,
+    {
+      resolve: (value: unknown) => void;
+      reject: (reason?: unknown) => void;
+      timeout: NodeJS.Timeout;
+    }
+  > = {};
 
   constructor(configuration: Configuration<TCE>) {
     const {
@@ -176,25 +210,39 @@ export class RedisSyncExtension<TCE extends CustomEvents> implements Extension {
     }
     if (type === 'customEventStart') {
       const { documentName, eventName, payload, replyTo, replyId } = msg;
-      const res = await this.handleEventLocally(
-        eventName as Extract<keyof TCE, string>,
-        documentName,
-        payload,
-      );
-      const reply: RSAMessageCustomEventComplete = {
-        type: 'customEventComplete',
-        replyId,
-        payload: res,
-      };
+      let reply: RSAMessageCustomEventComplete;
+      try {
+        const result = await this.handleEventLocally(
+          eventName as Extract<keyof TCE, string>,
+          documentName,
+          payload,
+        );
+        reply = {
+          type: 'customEventComplete',
+          replyId,
+          payload: result,
+        };
+      } catch (error) {
+        reply = {
+          type: 'customEventComplete',
+          replyId,
+          error: serializeCustomEventError(error),
+        };
+      }
       this.pub.publish(`${replyTo}`, this.pack(reply));
       return;
     }
     if (type === 'customEventComplete') {
-      const { replyId, payload } = msg;
-      const resolveFn = this.pendingReplies[replyId];
-      if (!resolveFn) return;
+      const { replyId, payload, error } = msg;
+      const pending = this.pendingReplies[replyId];
+      if (!pending) return;
       delete this.pendingReplies[replyId];
-      resolveFn(payload);
+      clearTimeout(pending.timeout);
+      if (error) {
+        pending.reject(deserializeCustomEventError(error));
+      } else {
+        pending.resolve(payload);
+      }
       return;
     }
     const { socketId } = msg;
@@ -273,12 +321,17 @@ export class RedisSyncExtension<TCE extends CustomEvents> implements Extension {
       };
       const msg = this.pack(proxyMessage);
       this.pub.publish(`${this.msgChannel}:${proxyTo}`, msg);
-      // @ts-ignore
-      const { promise, resolve, reject } = Promise.withResolvers();
-      this.pendingReplies[replyId] = resolve;
-      setTimeout(() => {
-        reject('TIMEOUT');
+      let resolve!: (value: unknown) => void;
+      let reject!: (reason?: unknown) => void;
+      const promise = new Promise<unknown>((resolvePromise, rejectPromise) => {
+        resolve = resolvePromise;
+        reject = rejectPromise;
+      });
+      const timeout = setTimeout(() => {
+        delete this.pendingReplies[replyId];
+        reject(new Error('Collaboration event timed out'));
       }, this.customEventTTL);
+      this.pendingReplies[replyId] = { resolve, reject, timeout };
       return promise as Promise<ReturnType<TCE[TName]>>;
     }
     // This server owns the document, but hocuspocus hasn't loaded it yet

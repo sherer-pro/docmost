@@ -68,17 +68,12 @@ export async function up(db: Kysely<any>): Promise<void> {
   await db.schema
     .createTable('page_template_workspace_policies')
     .addColumn('workspace_id', 'uuid', (column) =>
-      column
-        .primaryKey()
-        .references('workspaces.id')
-        .onDelete('cascade'),
+      column.primaryKey().references('workspaces.id').onDelete('cascade'),
     )
     .addColumn('enabled', 'boolean', (column) =>
       column.notNull().defaultTo(false),
     )
-    .addColumn('revision', 'integer', (column) =>
-      column.notNull().defaultTo(0),
-    )
+    .addColumn('revision', 'integer', (column) => column.notNull().defaultTo(0))
     .addColumn('updated_by_id', 'uuid', (column) =>
       column.references('users.id').onDelete('set null'),
     )
@@ -113,9 +108,7 @@ export async function up(db: Kysely<any>): Promise<void> {
     .addColumn('allow_public_live_embed', 'boolean', (column) =>
       column.notNull().defaultTo(false),
     )
-    .addColumn('revision', 'integer', (column) =>
-      column.notNull().defaultTo(0),
-    )
+    .addColumn('revision', 'integer', (column) => column.notNull().defaultTo(0))
     .addColumn('updated_by_id', 'uuid', (column) =>
       column.references('users.id').onDelete('set null'),
     )
@@ -148,9 +141,7 @@ export async function up(db: Kysely<any>): Promise<void> {
       column.notNull().references('groups.id').onDelete('cascade'),
     )
     .addColumn('allowed_actions', 'jsonb')
-    .addColumn('revision', 'integer', (column) =>
-      column.notNull().defaultTo(0),
-    )
+    .addColumn('revision', 'integer', (column) => column.notNull().defaultTo(0))
     .addColumn('updated_by_id', 'uuid', (column) =>
       column.references('users.id').onDelete('set null'),
     )
@@ -175,10 +166,7 @@ export async function up(db: Kysely<any>): Promise<void> {
   await db.schema
     .createTable('page_embed_graph_fences')
     .addColumn('workspace_id', 'uuid', (column) =>
-      column
-        .primaryKey()
-        .references('workspaces.id')
-        .onDelete('cascade'),
+      column.primaryKey().references('workspaces.id').onDelete('cascade'),
     )
     .addColumn('last_token', 'bigint', (column) => column.notNull())
     .addColumn('updated_at', 'timestamptz', (column) =>

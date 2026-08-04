@@ -1,11 +1,18 @@
 import { TransclusionNodeSnapshot } from '../transclusion.types';
+import { validate as isUuid } from 'uuid';
 
 const TRANSCLUSION_TYPE = 'transclusionSource';
 const REFERENCE_TYPE = 'transclusionReference';
+const PAGE_EMBED_TYPE = 'pageEmbed';
 
 export type TransclusionReferenceSnapshot = {
   sourcePageId: string;
   transclusionId: string;
+};
+
+export type PageEmbedReferenceSnapshot = {
+  referenceNodeId: string;
+  sourcePageId: string;
 };
 
 /**
@@ -60,10 +67,13 @@ export function collectReferencesFromPmJson(
   const seen = new Set<string>();
   const out: TransclusionReferenceSnapshot[] = [];
 
-  const visit = (node: any): void => {
+  const visit = (node: any, insideTransclusionSource: boolean): void => {
     if (!node || typeof node !== 'object') return;
 
     if (node.type === REFERENCE_TYPE) {
+      if (insideTransclusionSource) {
+        throw new Error('page_embed_malformed_mixed_content');
+      }
       const sourcePageId = node.attrs?.sourcePageId;
       const transclusionId = node.attrs?.transclusionId;
       if (
@@ -81,15 +91,61 @@ export function collectReferencesFromPmJson(
       return; // atom node - no children
     }
 
-    // References cannot live inside a source (schema-enforced); skip recursing
-    // so a malformed inbound doc can't sneak in a nested reference here.
-    if (node.type === TRANSCLUSION_TYPE) return;
-
     if (Array.isArray(node.content)) {
-      for (const child of node.content) visit(child);
+      for (const child of node.content) {
+        visit(
+          child,
+          insideTransclusionSource || node.type === TRANSCLUSION_TYPE,
+        );
+      }
     }
   };
 
-  visit(doc);
+  visit(doc, false);
   return out;
+}
+
+/**
+ * Collects exact whole-page embed occurrences. Unlike block references, page
+ * embeds are indexed per node so repeated references on one page remain
+ * independently addressable for detach and diagnostics.
+ */
+export function collectPageEmbedsFromPmJson(
+  doc: unknown,
+): PageEmbedReferenceSnapshot[] {
+  if (!doc || typeof doc !== 'object') return [];
+
+  const byNodeId = new Map<string, PageEmbedReferenceSnapshot>();
+
+  const visit = (node: any, insideTransclusionSource: boolean): void => {
+    if (!node || typeof node !== 'object') return;
+
+    if (node.type === PAGE_EMBED_TYPE) {
+      if (insideTransclusionSource) {
+        throw new Error('page_embed_inside_transclusion_source');
+      }
+      const referenceNodeId = node.attrs?.id;
+      const sourcePageId = node.attrs?.sourcePageId;
+      if (typeof referenceNodeId !== 'string' || !isUuid(referenceNodeId)) {
+        throw new Error('page_embed_invalid_reference_node_id');
+      }
+      if (typeof sourcePageId !== 'string' || !isUuid(sourcePageId)) {
+        throw new Error('page_embed_invalid_source_page_id');
+      }
+      if (byNodeId.has(referenceNodeId)) {
+        throw new Error('page_embed_duplicate_reference_node_id');
+      }
+      byNodeId.set(referenceNodeId, { referenceNodeId, sourcePageId });
+      return;
+    }
+
+    const nextInside =
+      insideTransclusionSource || node.type === TRANSCLUSION_TYPE;
+    if (Array.isArray(node.content)) {
+      for (const child of node.content) visit(child, nextInside);
+    }
+  };
+
+  visit(doc, false);
+  return [...byNodeId.values()];
 }

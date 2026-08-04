@@ -35,6 +35,7 @@ import {
   WorkspaceCaslAction,
   WorkspaceCaslSubject,
 } from '../../core/casl/interfaces/workspace-ability.type';
+import { AuthPolicyScope } from '../../common/decorators/auth-policy-scope.decorator';
 
 @Controller('pages')
 export class ImportController {
@@ -52,6 +53,7 @@ export class ImportController {
    */
   @UseInterceptors(FileInterceptor)
   @UseGuards(JwtAuthGuard)
+  @AuthPolicyScope('space', { source: 'query', key: 'spaceId' })
   @HttpCode(HttpStatus.OK)
   @Post('actions/import')
   async importPageAction(
@@ -116,6 +118,7 @@ export class ImportController {
    */
   @UseInterceptors(FileInterceptor)
   @UseGuards(JwtAuthGuard)
+  @AuthPolicyScope('space', { source: 'query', key: 'spaceId' })
   @HttpCode(HttpStatus.OK)
   @Post('actions/import-zip')
   async importZipAction(
@@ -128,6 +131,7 @@ export class ImportController {
 
   @UseInterceptors(FileInterceptor)
   @UseGuards(JwtAuthGuard)
+  @AuthPolicyScope('space', { source: 'query', key: 'spaceId' })
   @HttpCode(HttpStatus.OK)
   @Post('actions/import-zip/preview')
   async previewImportZipAction(
@@ -139,6 +143,11 @@ export class ImportController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @AuthPolicyScope('resource', {
+    source: 'body',
+    key: 'fileTaskId',
+    resourceType: 'fileTask',
+  })
   @HttpCode(HttpStatus.OK)
   @Post('actions/import-zip/confirm')
   async confirmImportZipAction(
@@ -191,6 +200,11 @@ export class ImportController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @AuthPolicyScope('resource', {
+    source: 'body',
+    key: 'fileTaskId',
+    resourceType: 'fileTask',
+  })
   @HttpCode(HttpStatus.NO_CONTENT)
   @Post('actions/import-zip/cancel')
   async cancelImportZipAction(

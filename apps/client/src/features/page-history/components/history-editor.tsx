@@ -5,9 +5,8 @@ import { mainExtensions } from "@/features/editor/extensions/extensions";
 import { Title } from "@mantine/core";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import historyClasses from "./css/history.module.css";
-import { recreateTransform } from "@docmost/editor-ext";
+import { getProseMirrorChanges } from "@docmost/editor-ext";
 import { DOMSerializer, Node } from "@tiptap/pm/model";
-import { ChangeSet, simplifyChanges } from "@tiptap/pm/changeset";
 import { useAtom } from "jotai";
 import {
   diffCountsAtom,
@@ -50,18 +49,7 @@ export function HistoryEditor({
         const oldContent = Node.fromJSON(schema, previousContent);
         const newContent = Node.fromJSON(schema, content);
 
-        const tr = recreateTransform(oldContent, newContent, {
-          complexSteps: false,
-          wordDiffs: true,
-          simplifyDiff: true,
-        });
-
-        const changeSet = ChangeSet.create(oldContent).addSteps(
-          tr.doc,
-          tr.mapping.maps,
-          [],
-        );
-        const changes = simplifyChanges(changeSet.changes, newContent);
+        const changes = getProseMirrorChanges(oldContent, newContent);
 
         editor.commands.setContent(content);
 

@@ -134,16 +134,18 @@ export class PageTemplatePolicyService {
               revision: 1,
               updatedById: params.userId,
             })
-            .onConflict((conflict) => conflict.column('workspaceId').doNothing())
+            .onConflict((conflict) =>
+              conflict.column('workspaceId').doNothing(),
+            )
             .returning('revision')
             .executeTakeFirst()
         : await this.db
             .updateTable('pageTemplateWorkspacePolicies')
             .set({
-          enabled: params.enabled,
+              enabled: params.enabled,
               revision: params.expectedRevision + 1,
-          updatedById: params.userId,
-          updatedAt: new Date(),
+              updatedById: params.userId,
+              updatedAt: new Date(),
             })
             .where('workspaceId', '=', params.workspaceId)
             .where('revision', '=', params.expectedRevision)
@@ -204,14 +206,14 @@ export class PageTemplatePolicyService {
         : await this.db
             .updateTable('pageTemplateSpacePolicies')
             .set({
-          templatesEnabled: params.templatesEnabled,
-          allowCreateTemplate: params.allowCreateTemplate,
-          allowSnapshot: params.allowSnapshot,
-          allowLiveEmbed: params.allowLiveEmbed,
-          allowPublicLiveEmbed: params.allowPublicLiveEmbed,
+              templatesEnabled: params.templatesEnabled,
+              allowCreateTemplate: params.allowCreateTemplate,
+              allowSnapshot: params.allowSnapshot,
+              allowLiveEmbed: params.allowLiveEmbed,
+              allowPublicLiveEmbed: params.allowPublicLiveEmbed,
               revision: params.expectedRevision + 1,
-          updatedById: params.userId,
-          updatedAt: new Date(),
+              updatedById: params.userId,
+              updatedAt: new Date(),
             })
             .where('workspaceId', '=', params.workspaceId)
             .where('spaceId', '=', params.spaceId)
@@ -223,11 +225,7 @@ export class PageTemplatePolicyService {
     return this.getSpacePolicy(params.workspaceId, params.spaceId);
   }
 
-  async getGroupPolicy(
-    workspaceId: string,
-    spaceId: string,
-    groupId: string,
-  ) {
+  async getGroupPolicy(workspaceId: string, spaceId: string, groupId: string) {
     const row = await this.db
       .selectFrom('pageTemplateGroupPolicies')
       .selectAll()
@@ -278,10 +276,10 @@ export class PageTemplatePolicyService {
         : await this.db
             .updateTable('pageTemplateGroupPolicies')
             .set({
-          allowedActions: params.allowedActions,
+              allowedActions: params.allowedActions,
               revision: params.expectedRevision + 1,
-          updatedById: params.userId,
-          updatedAt: new Date(),
+              updatedById: params.userId,
+              updatedAt: new Date(),
             })
             .where('workspaceId', '=', params.workspaceId)
             .where('spaceId', '=', params.spaceId)

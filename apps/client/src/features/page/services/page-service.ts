@@ -210,6 +210,7 @@ export async function importPage(file: File, spaceId: string) {
   formData.append("file", file);
 
   const req = await api.post<IPage>("/pages/actions/import", formData, {
+    params: { spaceId },
     headers: {
       "Content-Type": "multipart/form-data",
     },
@@ -229,6 +230,7 @@ export async function importZip(
   formData.append("file", file);
 
   const req = await api.post<any>("/pages/actions/import-zip", formData, {
+    params: { spaceId },
     headers: {
       "Content-Type": "multipart/form-data",
     },
@@ -250,6 +252,7 @@ export async function previewDocmostZip(
     "/pages/actions/import-zip/preview",
     formData,
     {
+      params: { spaceId },
       headers: { "Content-Type": "multipart/form-data" },
     },
   );
@@ -287,6 +290,7 @@ export async function uploadFile(
     "/attachments/actions/upload-file",
     formData,
     {
+      params: { pageId },
       headers: {
         "Content-Type": "multipart/form-data",
       },

@@ -113,7 +113,12 @@ export class ShareController {
       throw new NotFoundException('Shared page not found');
     }
 
-    await this.setAttachmentAccessCookie(res, shareData.page.id, workspace.id);
+    await this.setAttachmentAccessCookie(
+      res,
+      shareData.page.id,
+      workspace.id,
+      shareData.share.id,
+    );
 
     return shareData;
   }
@@ -334,6 +339,8 @@ export class ShareController {
           res,
           item.sourcePageId,
           workspace.id,
+          dto.shareId,
+          item.kind === 'page',
           false,
         );
       } else if (item?.sourcePageId) {
@@ -388,11 +395,15 @@ export class ShareController {
     res: FastifyReply,
     pageId: string,
     workspaceId: string,
+    shareId?: string,
+    pageEmbedSource = false,
     includeLegacy = true,
   ) {
     const token = await this.tokenService.generateAttachmentPageToken({
       pageId,
       workspaceId,
+      shareId,
+      pageEmbedSource,
     });
 
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
@@ -411,10 +422,7 @@ export class ShareController {
     }
   }
 
-  private clearAttachmentAccessCookie(
-    res: FastifyReply,
-    pageId: string,
-  ): void {
+  private clearAttachmentAccessCookie(res: FastifyReply, pageId: string): void {
     res.clearCookie(getAttachmentTokenCookieName(pageId), {
       path: '/api',
       secure: this.environmentService.isHttps(),

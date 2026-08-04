@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   Logger,
   NotFoundException,
@@ -75,6 +76,8 @@ import {
 import { PageHistoryRecorderService } from './page-history-recorder.service';
 import { PageAccessService } from '../../page-access/page-access.service';
 import { TransclusionService } from '../transclusion/transclusion.service';
+import { PageEmbedService } from '../transclusion/page-embed.service';
+import type { PageEmbedGraphLease } from '../transclusion/page-embed-graph-lock.service';
 import {
   remapDatabasePageReference,
   remapDatabaseViewConfig,
@@ -119,6 +122,7 @@ export class PageService {
     private readonly pageHistoryRecorder: PageHistoryRecorderService,
     private readonly pageAccessService: PageAccessService,
     private readonly transclusionService?: TransclusionService,
+    private readonly pageEmbedService?: PageEmbedService,
   ) {}
 
   async resolvePageDatabaseId(
@@ -584,7 +588,10 @@ export class PageService {
       return [];
     });
 
-    const usersById = await this.resolveHistoryUserReferences(userIds, workspaceId);
+    const usersById = await this.resolveHistoryUserReferences(
+      userIds,
+      workspaceId,
+    );
 
     return changes.map((change) => {
       if (change.field === 'assigneeId') {
@@ -624,13 +631,21 @@ export class PageService {
     userId: string,
     workspaceId: string,
     createPageDto: CreatePageDto,
+    internalOptions?: {
+      pageId?: string;
+      isTemplate?: boolean;
+      trx?: KyselyTransaction;
+      deferSideEffects?: boolean;
+    },
   ): Promise<Page> {
     let parentPageId = undefined;
     let parentPage: Page = null;
 
     // check if parent page exists
     if (createPageDto.parentPageId) {
-      parentPage = await this.pageRepo.findById(createPageDto.parentPageId);
+      parentPage = await this.pageRepo.findById(createPageDto.parentPageId, {
+        trx: internalOptions?.trx,
+      });
 
       if (!parentPage || parentPage.spaceId !== createPageDto.spaceId) {
         throw new NotFoundException('Parent page not found');
@@ -654,30 +669,30 @@ export class PageService {
       ydoc = createYdocFromJson(prosemirrorJson);
     }
 
-    const page = await this.pageRepo.insertPage({
-      slugId: generateSlugId(),
-      title: createPageDto.title,
-      position: await this.nextPagePosition(
-        createPageDto.spaceId,
-        parentPageId,
-      ),
-      icon: createPageDto.icon,
-      parentPageId: parentPageId,
-      spaceId: createPageDto.spaceId,
-      creatorId: userId,
-      workspaceId: workspaceId,
-      lastUpdatedById: userId,
-      content,
-      textContent,
-      ydoc,
-      settings: stripLegacyHeadingNumberingSetting(createPageDto.settings),
-    });
-
-    await this.userRepo.updatePageEditModeByPageId(
-      userId,
-      workspaceId,
-      page.id,
-      'edit',
+    const page = await this.pageRepo.insertPage(
+      {
+        id: internalOptions?.pageId,
+        slugId: generateSlugId(),
+        title: createPageDto.title,
+        position: await this.nextPagePosition(
+          createPageDto.spaceId,
+          parentPageId,
+          internalOptions?.trx,
+        ),
+        icon: createPageDto.icon,
+        parentPageId: parentPageId,
+        spaceId: createPageDto.spaceId,
+        creatorId: userId,
+        workspaceId: workspaceId,
+        lastUpdatedById: userId,
+        content,
+        textContent,
+        ydoc,
+        settings: stripLegacyHeadingNumberingSetting(createPageDto.settings),
+        isTemplate: internalOptions?.isTemplate ?? false,
+      },
+      internalOptions?.trx,
+      false,
     );
 
     if (parentPageId && parentPage) {
@@ -685,27 +700,55 @@ export class PageService {
         parentPageId,
         page,
         userId,
+        internalOptions?.trx,
       );
     }
 
-    this.generalQueue
-      .add(QueueJob.ADD_PAGE_WATCHERS, {
-        userIds: [userId],
-        pageId: page.id,
-        spaceId: createPageDto.spaceId,
-        workspaceId,
-      })
-      .catch((err) =>
-        this.logger.warn(`Failed to queue add-page-watchers: ${err.message}`),
-      );
+    if (!internalOptions?.deferSideEffects) {
+      await this.finalizeCreatedPage(page, userId);
+    }
 
     return page;
   }
 
-  async nextPagePosition(spaceId: string, parentPageId?: string) {
+  async finalizeCreatedPage(page: Page, userId: string): Promise<void> {
+    try {
+      await this.userRepo.updatePageEditModeByPageId(
+        userId,
+        page.workspaceId,
+        page.id,
+        'edit',
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Failed to update edit mode for newly created page ${page.id}`,
+        error,
+      );
+    }
+    this.eventEmitter.emit(EventName.PAGE_CREATED, {
+      pageIds: [page.id],
+      workspaceId: page.workspaceId,
+    });
+    this.generalQueue
+      .add(QueueJob.ADD_PAGE_WATCHERS, {
+        userIds: [userId],
+        pageId: page.id,
+        spaceId: page.spaceId,
+        workspaceId: page.workspaceId,
+      })
+      .catch((err) =>
+        this.logger.warn(`Failed to queue add-page-watchers: ${err.message}`),
+      );
+  }
+
+  async nextPagePosition(
+    spaceId: string,
+    parentPageId?: string,
+    trx?: KyselyTransaction,
+  ) {
     let pagePosition: string;
 
-    const lastPageQuery = this.db
+    const lastPageQuery = (trx ?? this.db)
       .selectFrom('pages')
       .select(['position'])
       .where('spaceId', '=', spaceId)
@@ -754,21 +797,19 @@ export class PageService {
 
     const currentSettings = (page.settings as PageSettings | null) ?? null;
     const nextSettings = updatePageDto.toSettingsPayload(currentSettings);
-    const resolvedNextSettings = (nextSettings ?? currentSettings) as
-      | PageSettings
-      | null;
+    const resolvedNextSettings = (nextSettings ??
+      currentSettings) as PageSettings | null;
     const space = await this.spaceRepo.findById(page.spaceId, page.workspaceId);
-    const documentFields =
-      (space?.settings as Record<string, unknown> | null)?.[
-        'documentFields'
-      ] as
-        | {
-            status?: boolean;
-            assignee?: boolean;
-            stakeholders?: boolean;
-            aiRole?: boolean;
-          }
-        | undefined;
+    const documentFields = (
+      space?.settings as Record<string, unknown> | null
+    )?.['documentFields'] as
+      | {
+          status?: boolean;
+          assignee?: boolean;
+          stakeholders?: boolean;
+          aiRole?: boolean;
+        }
+      | undefined;
     const customFieldChanges = this.collectCustomFieldHistoryChanges(
       currentSettings,
       resolvedNextSettings,
@@ -805,10 +846,11 @@ export class PageService {
 
     // Compute assignment deltas right after the update
     // to notify only newly assigned role participants.
-    const assignmentDelta = this.recipientResolverService.resolveAssignmentDelta(
-      currentSettings,
-      nextSettings ?? null,
-    );
+    const assignmentDelta =
+      this.recipientResolverService.resolveAssignmentDelta(
+        currentSettings,
+        nextSettings ?? null,
+      );
 
     if (assignmentDelta.newAssigneeId) {
       await this.notificationQueue.add(QueueJob.PAGE_RECIPIENT_NOTIFICATION, {
@@ -847,11 +889,15 @@ export class PageService {
     }
 
     if (customFieldChanges.length > 0) {
-      const databaseId = await this.resolvePageDatabaseId(page.id, page.workspaceId);
-      const changesWithDisplayNames = await this.enrichCustomFieldHistoryChanges(
-        customFieldChanges,
+      const databaseId = await this.resolvePageDatabaseId(
+        page.id,
         page.workspaceId,
       );
+      const changesWithDisplayNames =
+        await this.enrichCustomFieldHistoryChanges(
+          customFieldChanges,
+          page.workspaceId,
+        );
 
       await this.pageHistoryRecorder.enqueuePageEvent({
         pageId: page.id,
@@ -890,19 +936,36 @@ export class PageService {
     );
   }
 
-
   /**
    * Converts a regular page into a database.
    *
    * Within one transaction, a database record is created, after which
    * all current direct children of the page are bound as database rows.
    */
-  async convertPageToDatabase(page: Page, actorId: string): Promise<{ databaseId: string; pageId: string }> {
-    const database = await executeTx(this.db, async (trx) => {
-      const existingDatabase = await this.databaseRepo.findByPageIdIncludingDeleted(
+  async convertPageToDatabase(
+    page: Page,
+    actorId: string,
+  ): Promise<{ databaseId: string; pageId: string }> {
+    if (
+      page.isTemplate ||
+      (await this.pageEmbedService?.hasIncomingUsages(
         page.id,
         page.workspaceId,
-      );
+      )) ||
+      (await this.pageEmbedService?.hasOutgoingUsages(page.id))
+    ) {
+      throw new ConflictException({
+        code: 'page_embed_source_in_use',
+        message:
+          'A template or embedded source cannot be converted to a database',
+      });
+    }
+    const database = await executeTx(this.db, async (trx) => {
+      const existingDatabase =
+        await this.databaseRepo.findByPageIdIncludingDeleted(
+          page.id,
+          page.workspaceId,
+        );
 
       const basePayload = {
         spaceId: page.spaceId,
@@ -1075,7 +1138,11 @@ export class PageService {
             eb.exists(
               eb
                 .selectFrom('databases as childDatabase')
-                .innerJoin('pages as childPage', 'childPage.id', 'childDatabase.pageId')
+                .innerJoin(
+                  'pages as childPage',
+                  'childPage.id',
+                  'childDatabase.pageId',
+                )
                 .select('childDatabase.id')
                 .where('childDatabase.deletedAt', 'is', null)
                 .where('childPage.deletedAt', 'is', null)
@@ -1119,7 +1186,11 @@ export class PageService {
       query = query.unionAll(
         this.db
           .selectFrom('databases')
-          .innerJoin('pages as databasePage', 'databasePage.id', 'databases.pageId')
+          .innerJoin(
+            'pages as databasePage',
+            'databasePage.id',
+            'databases.pageId',
+          )
           .select([
             'databasePage.id as id',
             'databasePage.slugId as slugId',
@@ -1148,7 +1219,11 @@ export class PageService {
               when ${eb.exists(
                 eb
                   .selectFrom('pages as childPage')
-                  .innerJoin('databaseRows as childRow', 'childRow.pageId', 'childPage.id')
+                  .innerJoin(
+                    'databaseRows as childRow',
+                    'childRow.pageId',
+                    'childPage.id',
+                  )
                   .select('childPage.id')
                   .whereRef('childPage.parentPageId', '=', 'databasePage.id')
                   .where('childPage.deletedAt', 'is', null)
@@ -1161,8 +1236,12 @@ export class PageService {
           .where('databases.deletedAt', 'is', null)
           .where('databasePage.deletedAt', 'is', null)
           .where('databases.spaceId', '=', spaceId)
-          .$if(!!pageId, (qb) => qb.where('databasePage.parentPageId', '=', pageId))
-          .$if(!pageId, (qb) => qb.where('databasePage.parentPageId', 'is', null)),
+          .$if(!!pageId, (qb) =>
+            qb.where('databasePage.parentPageId', '=', pageId),
+          )
+          .$if(!pageId, (qb) =>
+            qb.where('databasePage.parentPageId', 'is', null),
+          ),
       );
     }
 
@@ -1327,9 +1406,9 @@ export class PageService {
                   //@ts-ignore
                   node.attrs.attachmentId = newAttachmentId;
 
-                  if (node.attrs.src) {
+                  if (node.attrs.url) {
                     //@ts-ignore
-                    node.attrs.src = node.attrs.src.replace(
+                    node.attrs.url = node.attrs.url.replace(
                       attachmentId,
                       newAttachmentId,
                     );
@@ -1373,6 +1452,16 @@ export class PageService {
               node.attrs.sourcePageId = mappedPage.newPageId;
             }
           }
+
+          if (node.type.name === 'pageEmbed') {
+            //@ts-ignore
+            node.attrs.id = uuid7();
+            const sourcePageId = node.attrs.sourcePageId;
+            if (sourcePageId && pageMap.has(sourcePageId)) {
+              //@ts-ignore
+              node.attrs.sourcePageId = pageMap.get(sourcePageId).newPageId;
+            }
+          }
         });
 
         const prosemirrorJson = prosemirrorDoc.toJSON();
@@ -1390,6 +1479,7 @@ export class PageService {
           title: title,
           icon: page.icon,
           settings: page.settings,
+          isTemplate: false,
           content: prosemirrorJson,
           textContent: jsonToText(prosemirrorJson),
           ydoc: createYdocFromJson(prosemirrorJson),
@@ -1414,34 +1504,70 @@ export class PageService {
       pages.map((page, index) => [page.id, insertablePages[index]]),
     );
 
-    await executeTx(this.db, async (trx) => {
-      await trx.insertInto('pages').values(insertablePages).execute();
-      await this.duplicateLinkedDatabases({
-        pageMap,
-        copiedPageByOriginalId,
-        spaceId,
+    let graphLease: PageEmbedGraphLease | undefined;
+    try {
+      graphLease = await this.pageEmbedService?.prepareBulkPageReferences(
+        insertablePages.map((page) => ({
+          id: page.id as string,
+          workspaceId: page.workspaceId,
+          spaceId: page.spaceId,
+          content: page.content,
+        })),
         authUser,
-        trx,
-      });
-      if (isDuplicateInSameSpace) {
-        await this.duplicateRowsInExistingDatabases({
+        'duplication',
+      );
+      await executeTx(this.db, async (trx) => {
+        await trx.insertInto('pages').values(insertablePages).execute();
+        await this.duplicateLinkedDatabases({
           pageMap,
+          copiedPageByOriginalId,
+          spaceId,
           authUser,
           trx,
         });
+        if (isDuplicateInSameSpace) {
+          await this.duplicateRowsInExistingDatabases({
+            pageMap,
+            authUser,
+            trx,
+          });
+        }
+        const transclusionPages = insertablePages.map((page) => ({
+          id: page.id as string,
+          workspaceId: page.workspaceId,
+          content: page.content,
+        }));
+        if (this.transclusionService) {
+          await this.transclusionService.insertTransclusionsForPages(
+            transclusionPages,
+            trx,
+          );
+          await this.transclusionService.insertReferencesForPages(
+            transclusionPages,
+            trx,
+          );
+        }
+        if (this.pageEmbedService) {
+          await this.pageEmbedService.insertPageReferencesForPages(
+            insertablePages.map((page) => ({
+              id: page.id as string,
+              workspaceId: page.workspaceId,
+              spaceId: page.spaceId,
+              content: page.content,
+            })),
+            trx,
+            graphLease,
+          );
+        }
+      });
+    } finally {
+      if (graphLease) {
+        try {
+          await graphLease.release();
+        } catch (error) {
+          this.logger.error('Failed to release page embed graph lease', error);
+        }
       }
-    });
-
-    const transclusionPages = insertablePages.map((page) => ({
-      id: page.id,
-      workspaceId: page.workspaceId,
-      content: page.content,
-    }));
-    if (this.transclusionService) {
-      await this.transclusionService.insertTransclusionsForPages(
-        transclusionPages,
-      );
-      await this.transclusionService.insertReferencesForPages(transclusionPages);
     }
 
     const insertedPageIds = insertablePages.map((page) => page.id);

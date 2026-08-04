@@ -56,6 +56,7 @@ import {
   builtInTagDefinitions,
   TransclusionSource,
   TransclusionReference,
+  PageEmbed,
 } from "@docmost/editor-ext";
 import type { TagDefinition } from "@docmost/editor-ext";
 import {
@@ -80,6 +81,7 @@ import SubpagesView from "@/features/editor/components/subpages/subpages-view.ts
 import TagView from "@/features/editor/components/tag/tag-view.tsx";
 import TransclusionView from "@/features/editor/components/transclusion/transclusion-view.tsx";
 import TransclusionReferenceView from "@/features/editor/components/transclusion/transclusion-reference-view.tsx";
+import PageEmbedView from "@/features/editor/components/page-embed/page-embed-view";
 import { common, createLowlight } from "lowlight";
 import plaintext from "highlight.js/lib/languages/plaintext";
 import powershell from "highlight.js/lib/languages/powershell";
@@ -134,7 +136,7 @@ export const mainExtensions = [
   Heading,
   HeadingNumbering,
   UniqueID.configure({
-    types: ["heading", "paragraph", "transclusionSource"],
+    types: ["heading", "paragraph", "transclusionSource", "pageEmbed"],
     filterTransaction: (transaction) => !isChangeOrigin(transaction),
   }),
   Placeholder.configure({
@@ -287,6 +289,9 @@ export const mainExtensions = [
   }),
   TransclusionReference.configure({
     view: TransclusionReferenceView,
+  }),
+  PageEmbed.configure({
+    view: PageEmbedView,
   }),
   TransclusionClipboard,
   MarkdownClipboard.configure({

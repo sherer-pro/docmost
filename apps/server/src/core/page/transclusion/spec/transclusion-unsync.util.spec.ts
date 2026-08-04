@@ -4,10 +4,10 @@ import {
 } from '../utils/transclusion-unsync.util';
 
 describe('rewriteAttachmentsForUnsync', () => {
-  const fixedIds = (() => {
+  const fixedIds = () => {
     let i = 0;
     return () => `new-${++i}`;
-  });
+  };
 
   it('returns content unchanged when no attachment nodes are present', () => {
     const content = {
@@ -31,6 +31,7 @@ describe('rewriteAttachmentsForUnsync', () => {
           attrs: {
             attachmentId: oldId,
             src: `/api/files/${oldId}/cat.png`,
+            url: `/api/files/${oldId}/cat.png?download=1`,
           },
         },
       ],
@@ -46,6 +47,7 @@ describe('rewriteAttachmentsForUnsync', () => {
     const img = (r.content as any).content[0];
     expect(img.attrs.attachmentId).toBe('new-1');
     expect(img.attrs.src).toBe('/api/files/new-1/cat.png');
+    expect(img.attrs.url).toBe('/api/files/new-1/cat.png?download=1');
   });
 
   it('rewrites every attachment node type (image, video, audio, attachment, drawio, excalidraw, pdf)', () => {
@@ -70,9 +72,9 @@ describe('rewriteAttachmentsForUnsync', () => {
     };
     const r = rewriteAttachmentsForUnsync(content, fixedIds());
     expect(r.copies).toHaveLength(types.length);
-    expect((r.content as any).content.map((n: any) => n.attrs.attachmentId)).toEqual(
-      Array.from({ length: types.length }, (_, i) => `new-${i + 1}`),
-    );
+    expect(
+      (r.content as any).content.map((n: any) => n.attrs.attachmentId),
+    ).toEqual(Array.from({ length: types.length }, (_, i) => `new-${i + 1}`));
   });
 
   it('reuses one new id per old attachmentId across nodes (dedupe)', () => {

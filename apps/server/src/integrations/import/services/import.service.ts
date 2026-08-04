@@ -46,8 +46,9 @@ import * as JSZip from 'jszip';
 import { Readable } from 'node:stream';
 import {
   DOCMOST_ARCHIVE_SCHEMA_VERSION,
-  type DocmostArchiveDataV2,
-  type DocmostArchiveManifestV2,
+  DOCMOST_ARCHIVE_LEGACY_SCHEMA_VERSION,
+  type DocmostArchiveData,
+  type DocmostArchiveManifest,
   type DocmostImportOptions,
   type ImportPreview,
 } from '@docmost/api-contract';
@@ -542,11 +543,11 @@ export class ImportService {
     if (!metadataFile) {
       throw new BadRequestException('Docmost archive metadata is missing');
     }
-    let manifest: DocmostArchiveManifestV2;
+    let manifest: DocmostArchiveManifest;
     try {
       manifest = JSON.parse(
         (await this.readArchiveEntry(metadataFile, readBudget)).toString('utf8'),
-      ) as DocmostArchiveManifestV2;
+      ) as DocmostArchiveManifest;
     } catch (error) {
       if (error instanceof BadRequestException) {
         throw error;
@@ -562,14 +563,18 @@ export class ImportService {
     ) {
       throw new BadRequestException('Invalid Docmost archive metadata');
     }
-    if (manifest.schemaVersion > DOCMOST_ARCHIVE_SCHEMA_VERSION) {
+    const manifestSchemaVersion = Number(manifest.schemaVersion);
+    if (manifestSchemaVersion > DOCMOST_ARCHIVE_SCHEMA_VERSION) {
       throw new BadRequestException(
-        `Archive schema ${manifest.schemaVersion} is newer than supported schema ${DOCMOST_ARCHIVE_SCHEMA_VERSION}`,
+        `Archive schema ${manifestSchemaVersion} is newer than supported schema ${DOCMOST_ARCHIVE_SCHEMA_VERSION}`,
       );
     }
-    if (manifest.schemaVersion !== DOCMOST_ARCHIVE_SCHEMA_VERSION) {
+    if (
+      manifestSchemaVersion !== DOCMOST_ARCHIVE_LEGACY_SCHEMA_VERSION &&
+      manifestSchemaVersion !== DOCMOST_ARCHIVE_SCHEMA_VERSION
+    ) {
       throw new BadRequestException(
-        `Unsupported Docmost archive schema ${manifest.schemaVersion}`,
+        `Unsupported Docmost archive schema ${manifestSchemaVersion}`,
       );
     }
 
@@ -577,11 +582,11 @@ export class ImportService {
     if (!dataFile) {
       throw new BadRequestException('Docmost archive data is missing');
     }
-    let data: DocmostArchiveDataV2;
+    let data: DocmostArchiveData;
     try {
       data = JSON.parse(
         (await this.readArchiveEntry(dataFile, readBudget)).toString('utf8'),
-      ) as DocmostArchiveDataV2;
+      ) as DocmostArchiveData;
     } catch (error) {
       if (error instanceof BadRequestException) {
         throw error;
@@ -589,7 +594,7 @@ export class ImportService {
       throw new BadRequestException('Invalid Docmost archive data JSON');
     }
     if (
-      data.schemaVersion !== DOCMOST_ARCHIVE_SCHEMA_VERSION ||
+      data.schemaVersion !== manifest.schemaVersion ||
       data.scope !== manifest.scope ||
       !data.sourceSpace ||
       !Array.isArray(data.pages) ||
@@ -698,7 +703,7 @@ export class ImportService {
     };
   }
 
-  private assertDocmostArchiveReferences(data: DocmostArchiveDataV2): void {
+  private assertDocmostArchiveReferences(data: DocmostArchiveData): void {
     const uniqueIds = (
       values: Array<{ id: string }>,
       label: string,

@@ -119,7 +119,11 @@ export class TransclusionService {
       referencePageId,
       trx,
     );
-    const existingKeys = new Set(existing.map(keyOf));
+    const existingBlockReferences = existing.filter(
+      (reference): reference is typeof reference & { transclusionId: string } =>
+        typeof reference.transclusionId === 'string',
+    );
+    const existingKeys = new Set(existingBlockReferences.map(keyOf));
 
     const toInsert = desired
       .filter((d) => !existingKeys.has(keyOf(d)))
@@ -128,9 +132,11 @@ export class TransclusionService {
         referencePageId,
         sourcePageId: d.sourcePageId,
         transclusionId: d.transclusionId,
+        referenceKind: 'block' as const,
+        referenceNodeId: null,
       }));
 
-    const toDelete = existing
+    const toDelete = existingBlockReferences
       .filter((e) => !desiredKeys.has(keyOf(e)))
       .map((e) => ({
         sourcePageId: e.sourcePageId,
@@ -194,6 +200,8 @@ export class TransclusionService {
       referencePageId: string;
       sourcePageId: string;
       transclusionId: string;
+      referenceKind: 'block';
+      referenceNodeId: null;
     }> = [];
     for (const page of pages) {
       const refs = collectReferencesFromPmJson(page.content);
@@ -203,6 +211,8 @@ export class TransclusionService {
           referencePageId: page.id,
           sourcePageId: r.sourcePageId,
           transclusionId: r.transclusionId,
+          referenceKind: 'block',
+          referenceNodeId: null,
         });
       }
     }

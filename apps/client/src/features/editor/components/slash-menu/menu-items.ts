@@ -26,6 +26,7 @@ import {
   IconRepeat,
   IconPageBreak,
   IconTag,
+  IconTemplate,
 } from "@tabler/icons-react";
 import {
   CommandProps,
@@ -187,6 +188,19 @@ const CommandGroups: SlashMenuGroupedItemsType = {
           .deleteRange(range)
           .insertTransclusionSource()
           .run(),
+    },
+    {
+      title: "Embed template page",
+      description: "Insert a live view of a template page.",
+      searchTerms: ["template", "page", "embed", "live", "reuse"],
+      icon: IconTemplate,
+      command: ({ editor, range }: CommandProps) => {
+        window.dispatchEvent(
+          new CustomEvent("docmost:page-template-picker", {
+            detail: { mode: "live", editor, range },
+          }),
+        );
+      },
     },
     {
       title: "Code",
