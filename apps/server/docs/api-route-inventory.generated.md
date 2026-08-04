@@ -23,6 +23,15 @@
 | POST | `/ai/editor-actions` | `apps/server/src/core/ai/controllers/ai-editor-action.controller.ts` |
 | GET | `/ai/editor-actions/:id` | `apps/server/src/core/ai/controllers/ai-editor-action.controller.ts` |
 | POST | `/ai/editor-actions/:id/actions/cancel` | `apps/server/src/core/ai/controllers/ai-editor-action.controller.ts` |
+| GET | `/ai/mcp-servers` | `apps/server/src/core/ai/controllers/ai-mcp-settings.controller.ts` |
+| POST | `/ai/mcp-servers` | `apps/server/src/core/ai/controllers/ai-mcp-settings.controller.ts` |
+| DELETE | `/ai/mcp-servers/:serverId` | `apps/server/src/core/ai/controllers/ai-mcp-settings.controller.ts` |
+| GET | `/ai/mcp-servers/:serverId` | `apps/server/src/core/ai/controllers/ai-mcp-settings.controller.ts` |
+| PATCH | `/ai/mcp-servers/:serverId` | `apps/server/src/core/ai/controllers/ai-mcp-settings.controller.ts` |
+| POST | `/ai/mcp-servers/:serverId/actions/discover` | `apps/server/src/core/ai/controllers/ai-mcp-settings.controller.ts` |
+| POST | `/ai/mcp-servers/:serverId/actions/test` | `apps/server/src/core/ai/controllers/ai-mcp-settings.controller.ts` |
+| GET | `/ai/mcp-settings` | `apps/server/src/core/ai/controllers/ai-mcp-settings.controller.ts` |
+| PATCH | `/ai/mcp-settings` | `apps/server/src/core/ai/controllers/ai-mcp-settings.controller.ts` |
 | POST | `/ai/messages/:id/actions/regenerate` | `apps/server/src/core/ai/controllers/ai-run.controller.ts` |
 | GET | `/ai/pages/:pageId/attachments` | `apps/server/src/core/ai/controllers/ai-file.controller.ts` |
 | GET | `/ai/runs/:id` | `apps/server/src/core/ai/controllers/ai-run.controller.ts` |
@@ -249,6 +258,11 @@
 | GET | `/spaces/:spaceId/ai/exclusions` | `apps/server/src/core/ai-content-policy/ai-content-policy.controller.ts` |
 | PUT | `/spaces/:spaceId/ai/exclusions` | `apps/server/src/core/ai-content-policy/ai-content-policy.controller.ts` |
 | GET | `/spaces/:spaceId/ai/exclusions/candidates` | `apps/server/src/core/ai-content-policy/ai-content-policy.controller.ts` |
+| GET | `/spaces/:spaceId/ai/mcp-bindings` | `apps/server/src/core/ai/controllers/ai-mcp-space.controller.ts` |
+| DELETE | `/spaces/:spaceId/ai/mcp-bindings/:serverId` | `apps/server/src/core/ai/controllers/ai-mcp-space.controller.ts` |
+| PUT | `/spaces/:spaceId/ai/mcp-bindings/:serverId` | `apps/server/src/core/ai/controllers/ai-mcp-space.controller.ts` |
+| GET | `/spaces/:spaceId/ai/mcp-preferences` | `apps/server/src/core/ai/controllers/ai-mcp-space.controller.ts` |
+| PUT | `/spaces/:spaceId/ai/mcp-preferences` | `apps/server/src/core/ai/controllers/ai-mcp-space.controller.ts` |
 | GET | `/spaces/:spaceId/ai/status` | `apps/server/src/core/ai/controllers/ai-config.controller.ts` |
 | POST | `/spaces/actions/export` | `apps/server/src/integrations/export/export.controller.ts` |
 | GET | `/spaces/member-users` | `apps/server/src/core/space/space.controller.ts` |

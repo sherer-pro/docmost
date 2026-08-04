@@ -1,4 +1,4 @@
-jest.mock('../tools/ai-tool-registry.service', () => ({
+﻿jest.mock('../tools/ai-tool-registry.service', () => ({
   AI_AGENT_MAX_MODEL_STEPS: 8,
   AI_AGENT_MAX_TOOL_CALLS: 16,
   AI_AGENT_MAX_RUN_MODEL_STEPS: 32,
@@ -75,6 +75,8 @@ describe('AiRunExecutionService claim', () => {
       {} as any,
       {} as any,
       {} as any,
+      {} as any,
+      {} as any,
     );
 
     await expect((service as any).claim('run')).resolves.toBe(run);
@@ -132,6 +134,8 @@ describe('AiRunExecutionService claim', () => {
       {} as any,
       {} as any,
       events as any,
+      {} as any,
+      {} as any,
       {} as any,
       {} as any,
       {} as any,
@@ -205,6 +209,8 @@ describe('AiRunExecutionService claim', () => {
       {} as any,
       {} as any,
       events as any,
+      {} as any,
+      {} as any,
       {} as any,
       {} as any,
       {} as any,

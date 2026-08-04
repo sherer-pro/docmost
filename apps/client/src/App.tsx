@@ -166,7 +166,12 @@ export default function App() {
                 element={<Navigate to="/settings/keys/mcp" replace />}
               />
               <Route path={"security"} element={<Security />} />
-              <Route path={"ai"} element={<AiIntegrationsSettings />} />
+              <Route
+                path={"ai"}
+                element={<Navigate to="/settings/ai/spaces" replace />}
+              />
+              {/* Static segments outrank the dynamic :aiTab route below, so
+                  these legacy redirects keep working. */}
               <Route
                 path={"ai/rag"}
                 element={<Navigate to="/settings/keys/rag" replace />}
@@ -175,6 +180,7 @@ export default function App() {
                 path={"ai/mcp"}
                 element={<Navigate to="/settings/keys/mcp" replace />}
               />
+              <Route path={"ai/:aiTab"} element={<AiIntegrationsSettings />} />
               <Route
                 path={"keys"}
                 element={<Navigate to="/settings/keys/mcp" replace />}

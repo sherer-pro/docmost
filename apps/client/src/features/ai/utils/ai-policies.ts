@@ -54,6 +54,22 @@ const AI_ERROR_TRANSLATION_KEYS: Record<string, string> = {
   agent_write_stale: "ai.errorReason.agentWriteStale",
   agent_write_rejected: "ai.errorReason.agentWriteRejected",
   agent_write_not_allowed: "ai.errorReason.agentWriteNotAllowed",
+  agent_mcp_config_changed: "ai.errorReason.externalMcpConfigChanged",
+  agent_mcp_access_revoked: "ai.errorReason.externalMcpAccessRevoked",
+  agent_mcp_tool_definition_limit: "ai.errorReason.externalMcpToolLimit",
+  agent_mcp_snapshot_too_large: "ai.errorReason.externalMcpToolLimit",
+  agent_mcp_capacity: "ai.errorReason.externalMcpUnavailable",
+  external_mcp_disabled: "ai.errorReason.externalMcpDisabled",
+  external_mcp_url_rejected: "ai.errorReason.externalMcpUrlRejected",
+  external_mcp_unavailable: "ai.errorReason.externalMcpUnavailable",
+  external_mcp_timeout: "ai.errorReason.externalMcpTimeout",
+  external_mcp_invalid_response: "ai.errorReason.externalMcpInvalidResponse",
+  external_mcp_namespace_conflict: "ai.errorReason.externalMcpNamespaceConflict",
+  external_mcp_headers_conflict: "ai.errorReason.externalMcpHeadersConflict",
+  external_mcp_tool_not_approved: "ai.errorReason.externalMcpToolNotApproved",
+  external_mcp_not_opted_in: "ai.errorReason.externalMcpNotOptedIn",
+  external_mcp_result_limit: "ai.errorReason.externalMcpResultLimit",
+  external_mcp_remote_error: "ai.errorReason.externalMcpRemoteError",
 };
 
 export function getAiErrorTranslationKey(

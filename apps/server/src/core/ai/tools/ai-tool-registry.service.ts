@@ -26,6 +26,7 @@ import {
   hashProseMirrorJson,
   prepareAiPageOperation,
 } from '../../../common/helpers/prosemirror/ai-page-operation';
+import { AI_MCP_TOOL_NAME_PREFIX } from '../mcp/ai-mcp.constants';
 
 // Model steps and tool calls are budgeted per approval segment: an approved,
 // rejected, or expired write proposal starts a new segment. The run-level
@@ -135,6 +136,17 @@ export class AiToolRegistryService {
     private readonly collaboration: CollaborationGateway,
   ) {
     this.tools = this.createTools();
+    // The mcp__ prefix is reserved for outbound external MCP tools. Reusing it
+    // for a built-in tool would let an external definition shadow a Docmost one
+    // in the merged agent tool list.
+    const reserved = this.tools.find((tool) =>
+      tool.name.startsWith(AI_MCP_TOOL_NAME_PREFIX),
+    );
+    if (reserved) {
+      throw new Error(
+        `Built-in AI tool "${reserved.name}" must not use the reserved ${AI_MCP_TOOL_NAME_PREFIX} prefix`,
+      );
+    }
   }
 
   list(exposure: AiToolExposure): AiToolDefinition[] {

@@ -68,6 +68,7 @@ import {
   resolveAiAssistantText,
 } from "@/features/ai/utils/ai-identity.ts";
 import { AiContentExclusionsSettings } from "./ai-content-exclusions-settings.tsx";
+import AiSpaceExternalMcpSettings from "@/features/ai-external-mcp/components/ai-space-external-mcp-settings.tsx";
 
 type AiSettingsForm = {
   enabled: boolean;
@@ -139,6 +140,7 @@ export type AiSpaceSettingsSection =
   | "model"
   | "behavior"
   | "agent"
+  | "externalTools"
   | "retrieval"
   | "limits";
 
@@ -849,6 +851,12 @@ export function AiSpaceSettings({
           </SettingsSection>
         )}
 
+        {/* External tools are only reachable in agent mode, so this sits next
+            to the agent section. It persists on its own, like content. */}
+        {showSection("externalTools") && (
+          <AiSpaceExternalMcpSettings spaceId={spaceId} />
+        )}
+
         {showSection("behavior") && (
           <SettingsSection
             icon={<IconMessageCircle size={18} />}
@@ -1255,7 +1263,10 @@ export function AiSpaceSettings({
           </Accordion>
         )}
 
-        {section !== "content" && (
+        {/* Both of these sections persist immediately and contribute nothing to
+            the shared form payload, so a Save button here would fire an empty
+            PATCH. */}
+        {section !== "content" && section !== "externalTools" && (
           <div className={classes.actionBar}>
             <Group justify="flex-end" className={classes.actionGroup}>
               {showSection("model") && (

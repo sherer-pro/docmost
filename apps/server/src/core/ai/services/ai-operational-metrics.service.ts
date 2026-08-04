@@ -17,6 +17,33 @@ function durationMetric(): DurationMetric {
   return { count: 0, totalMs: 0, maxMs: 0 };
 }
 
+export type AiMcpCacheEvent =
+  | 'hit'
+  | 'miss'
+  | 'evict'
+  | 'retire'
+  | 'close';
+
+/**
+ * Closed vocabulary. An error message must never be interpolated into a metric
+ * key, or the summary becomes unbounded in cardinality and can leak content.
+ */
+export type AiMcpObservedOutcome =
+  | 'ok'
+  | 'remote_error'
+  | 'connect_error'
+  | 'protocol_error'
+  | 'idle_timeout'
+  | 'total_timeout'
+  | 'abort'
+  | 'oversize'
+  | 'unsupported_content'
+  | 'policy_denied'
+  | 'config_changed'
+  | 'access_revoked'
+  | 'schema_rejected'
+  | 'capacity';
+
 @Injectable()
 export class AiOperationalMetricsService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(AiOperationalMetricsService.name);
@@ -34,6 +61,17 @@ export class AiOperationalMetricsService implements OnModuleInit, OnModuleDestro
   private retrievalCandidateCount = 0;
   private retrievalValidCandidateCount = 0;
   private readonly fileLifecycle = new Map<string, number>();
+  // Outbound external MCP. Deliberately identifier-free: no workspace, server,
+  // tool, or user id, no URL, no namespace, no argument, and no output.
+  private readonly mcpCacheEvents = new Map<string, number>();
+  private readonly mcpCallOutcomes = new Map<string, number>();
+  private readonly mcpCallLatency = durationMetric();
+  private readonly mcpProbeOutcomes = new Map<string, number>();
+  private readonly mcpProbeLatency = durationMetric();
+  private mcpWireBytes = 0;
+  private mcpResultBytes = 0;
+  private mcpActiveLeasesMax = 0;
+  private mcpRetiringLeasesMax = 0;
   private attemptCount = 0;
   private attemptTotal = 0;
   private attemptMax = 0;
@@ -113,6 +151,36 @@ export class AiOperationalMetricsService implements OnModuleInit, OnModuleDestro
     this.reconciledJobs += 1;
   }
 
+  observeMcpCache(event: AiMcpCacheEvent): void {
+    this.increment(this.mcpCacheEvents, event);
+  }
+
+  observeMcpProbe(
+    mode: 'test' | 'discover',
+    outcome: AiMcpObservedOutcome,
+    durationMs: number,
+  ): void {
+    this.increment(this.mcpProbeOutcomes, `${mode}.${outcome}`);
+    this.observeDuration(this.mcpProbeLatency, durationMs);
+  }
+
+  observeMcpCall(
+    outcome: AiMcpObservedOutcome,
+    durationMs: number,
+    wireBytes: number,
+    resultBytes: number,
+  ): void {
+    this.increment(this.mcpCallOutcomes, outcome);
+    this.observeDuration(this.mcpCallLatency, durationMs);
+    this.mcpWireBytes += Math.max(0, wireBytes);
+    this.mcpResultBytes += Math.max(0, resultBytes);
+  }
+
+  observeMcpLeases(active: number, retiring: number): void {
+    this.mcpActiveLeasesMax = Math.max(this.mcpActiveLeasesMax, active);
+    this.mcpRetiringLeasesMax = Math.max(this.mcpRetiringLeasesMax, retiring);
+  }
+
   getSnapshot() {
     return {
       durations: structuredClone(this.durations),
@@ -136,6 +204,23 @@ export class AiOperationalMetricsService implements OnModuleInit, OnModuleDestro
         ),
       },
       fileLifecycle: Object.fromEntries(this.fileLifecycle),
+      externalMcp: {
+        cache: Object.fromEntries(this.mcpCacheEvents),
+        probe: {
+          outcomes: Object.fromEntries(this.mcpProbeOutcomes),
+          latency: structuredClone(this.mcpProbeLatency),
+        },
+        calls: {
+          outcomes: Object.fromEntries(this.mcpCallOutcomes),
+          latency: structuredClone(this.mcpCallLatency),
+          wireBytes: this.mcpWireBytes,
+          resultBytes: this.mcpResultBytes,
+        },
+        leases: {
+          activeMax: this.mcpActiveLeasesMax,
+          retiringMax: this.mcpRetiringLeasesMax,
+        },
+      },
     };
   }
 
@@ -171,7 +256,11 @@ export class AiOperationalMetricsService implements OnModuleInit, OnModuleDestro
       snapshot.reconciledJobs > 0 ||
       Object.keys(snapshot.retrievalOutcomes).length > 0 ||
       snapshot.retrievalQuery.latency.count > 0 ||
-      Object.keys(snapshot.fileLifecycle).length > 0
+      Object.keys(snapshot.fileLifecycle).length > 0 ||
+      Object.keys(snapshot.externalMcp.cache).length > 0 ||
+      Object.keys(snapshot.externalMcp.probe.outcomes).length > 0 ||
+      Object.keys(snapshot.externalMcp.calls.outcomes).length > 0 ||
+      snapshot.externalMcp.leases.activeMax > 0
     );
   }
 
@@ -185,6 +274,15 @@ export class AiOperationalMetricsService implements OnModuleInit, OnModuleDestro
     this.retrievalCandidateCount = 0;
     this.retrievalValidCandidateCount = 0;
     this.fileLifecycle.clear();
+    this.mcpCacheEvents.clear();
+    this.mcpCallOutcomes.clear();
+    Object.assign(this.mcpCallLatency, durationMetric());
+    this.mcpProbeOutcomes.clear();
+    Object.assign(this.mcpProbeLatency, durationMetric());
+    this.mcpWireBytes = 0;
+    this.mcpResultBytes = 0;
+    this.mcpActiveLeasesMax = 0;
+    this.mcpRetiringLeasesMax = 0;
     this.attemptCount = 0;
     this.attemptTotal = 0;
     this.attemptMax = 0;

@@ -13,6 +13,11 @@ interface AiComposerShellProps {
   spaceSearchAvailable: boolean;
   spaceSearchEnabled: boolean;
   settingsDisabled: boolean;
+  /**
+   * Rendered next to the mode control. Used for the external-tool consent
+   * popover, which only matters in agent mode.
+   */
+  externalToolsControl?: ReactNode;
   onAgentModeChange: (enabled: boolean) => void;
   onSpaceSearchChange: (enabled: boolean) => void;
 }
@@ -26,6 +31,7 @@ export function AiComposerShell({
   spaceSearchAvailable,
   spaceSearchEnabled,
   settingsDisabled,
+  externalToolsControl,
   onAgentModeChange,
   onSpaceSearchChange,
 }: AiComposerShellProps) {
@@ -61,22 +67,25 @@ export function AiComposerShell({
           )}
         </Group>
 
-        {agentAvailable && (
-          <Tooltip label={t("ai.agent.modeDescription")} withArrow>
-            <SegmentedControl
-              size="xs"
-              value={agentMode ? "agent" : "chat"}
-              disabled={settingsDisabled}
-              className={classes.composerModeControl}
-              aria-label={t("ai.composer.mode")}
-              data={[
-                { label: t("ai.composer.chat"), value: "chat" },
-                { label: t("ai.agent.mode"), value: "agent" },
-              ]}
-              onChange={(value) => onAgentModeChange(value === "agent")}
-            />
-          </Tooltip>
-        )}
+        <Group gap="xs" wrap="nowrap">
+          {externalToolsControl}
+          {agentAvailable && (
+            <Tooltip label={t("ai.agent.modeDescription")} withArrow>
+              <SegmentedControl
+                size="xs"
+                value={agentMode ? "agent" : "chat"}
+                disabled={settingsDisabled}
+                className={classes.composerModeControl}
+                aria-label={t("ai.composer.mode")}
+                data={[
+                  { label: t("ai.composer.chat"), value: "chat" },
+                  { label: t("ai.agent.mode"), value: "agent" },
+                ]}
+                onChange={(value) => onAgentModeChange(value === "agent")}
+              />
+            </Tooltip>
+          )}
+        </Group>
       </Group>
 
       <Box className={classes.composerEditor}>{editor}</Box>

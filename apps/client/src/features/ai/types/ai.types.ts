@@ -99,6 +99,8 @@ export interface AiActivityItem {
   status: AiRunStatus;
   unread: boolean;
   updatedAt: string;
+  /** Set once a run calls a tool on an external MCP server. */
+  hasExternalToolCall?: boolean;
 }
 
 export interface SendAiMessageInput {

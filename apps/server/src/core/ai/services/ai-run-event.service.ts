@@ -12,7 +12,7 @@ import {
 } from '@docmost/api-contract';
 import { WsGateway } from '../../../ws/ws.gateway';
 import { AiOperationalMetricsService } from './ai-operational-metrics.service';
-import { extractAiApprovalPreview } from '../../../common/helpers/prosemirror/ai-page-operation';
+import { toAiRunStepContract } from '../utils/ai-run-step.mapper';
 
 @Injectable()
 export class AiRunEventService {
@@ -71,28 +71,7 @@ export class AiRunEventService {
       runId: run.id,
       conversationId: run.conversationId,
       pageId: run.pageId,
-      step: {
-        id: step.id,
-        runId: step.runId,
-        sequence: step.sequence,
-        modelStep: step.modelStep,
-        callIndex: step.callIndex,
-        toolCallId: step.toolCallId,
-        toolName: step.toolName,
-        writeClass: step.writeClass as AiRunStepEvent['step']['writeClass'],
-        arguments: step.arguments as Record<string, unknown>,
-        result: step.result,
-        approvalPreview: extractAiApprovalPreview(step.result),
-        status: step.status as AiRunStepEvent['step']['status'],
-        errorCode: step.errorCode,
-        errorMessage: step.errorMessage,
-        targetPageId: step.targetPageId,
-        baseContentHash: step.baseContentHash,
-        expiresAt: step.expiresAt?.toISOString() ?? null,
-        decidedAt: step.decidedAt?.toISOString() ?? null,
-        createdAt: step.createdAt.toISOString(),
-        updatedAt: step.updatedAt.toISOString(),
-      },
+      step: toAiRunStepContract(step),
     };
     this.ws.server?.to(`user-${run.userId}`).emit('ai:run.step', event);
   }

@@ -144,6 +144,78 @@ export interface AiFileUploadBatches {
   workspaceId: string;
 }
 
+export interface AiMcpGroupPolicies {
+  allowedTools: Json | null;
+  bindingId: string;
+  createdAt: Generated<Timestamp>;
+  createdById: string | null;
+  denyConnection: Generated<boolean>;
+  groupId: string;
+  id: Generated<string>;
+  updatedAt: Generated<Timestamp>;
+}
+
+export interface AiMcpServers {
+  approvedTools: Generated<Json>;
+  configVersion: Generated<number>;
+  createdAt: Generated<Timestamp>;
+  createdById: string | null;
+  discoveredAt: Timestamp | null;
+  discoveredTools: Generated<Json>;
+  discoveryToolCount: Generated<number>;
+  enabled: Generated<boolean>;
+  headerNames: Generated<Json>;
+  headersEncrypted: string | null;
+  id: Generated<string>;
+  name: string;
+  namespace: string;
+  testCheckedAt: Timestamp | null;
+  testErrorCode: string | null;
+  testStatus: Generated<string>;
+  transport: Generated<string>;
+  updatedAt: Generated<Timestamp>;
+  updatedById: string | null;
+  url: string;
+  workspaceId: string;
+}
+
+export interface AiMcpSpaceBindings {
+  allowedTools: Generated<Json>;
+  createdAt: Generated<Timestamp>;
+  createdById: string | null;
+  enabled: Generated<boolean>;
+  id: Generated<string>;
+  instructions: string | null;
+  policyVersion: Generated<number>;
+  profileAllowedTools: Generated<Json>;
+  serverId: string;
+  spaceId: string;
+  updatedAt: Generated<Timestamp>;
+  updatedById: string | null;
+  workspaceId: string;
+}
+
+export interface AiMcpUserPreferences {
+  bindingId: string;
+  createdAt: Generated<Timestamp>;
+  enabled: Generated<boolean>;
+  id: Generated<string>;
+  updatedAt: Generated<Timestamp>;
+  userId: string;
+}
+
+export interface AiMcpWorkspaceSettings {
+  allowedOrigins: Generated<string>;
+  createdAt: Generated<Timestamp>;
+  createdById: string | null;
+  enabled: Generated<boolean>;
+  id: Generated<string>;
+  policyVersion: Generated<number>;
+  updatedAt: Generated<Timestamp>;
+  updatedById: string | null;
+  workspaceId: string;
+}
+
 export interface AiMessages {
   clientRequestId: string | null;
   content: Generated<string>;
@@ -213,6 +285,8 @@ export interface AiRuns {
   heartbeatAt: Timestamp | null;
   id: Generated<string>;
   inputTokens: Generated<Int8>;
+  mcpPolicyFingerprint: string | null;
+  mcpPolicySnapshot: Json | null;
   outputTokens: Generated<Int8>;
   pageId: string;
   previousRunId: string | null;
@@ -239,6 +313,15 @@ export interface AiRuns {
   workspaceId: string;
 }
 
+export interface AiRunSourceDependencies {
+  contextSourceId: string | null;
+  createdAt: Generated<Timestamp>;
+  id: Generated<string>;
+  messageId: string;
+  pageId: string;
+  runId: string;
+}
+
 export interface AiRunSteps {
   arguments: Json;
   assistantContent: string | null;
@@ -251,6 +334,9 @@ export interface AiRunSteps {
   errorMessage: string | null;
   expiresAt: Timestamp | null;
   id: Generated<string>;
+  mcpConfigVersion: number | null;
+  mcpServerId: string | null;
+  mcpToolName: string | null;
   modelStep: number;
   result: Json | null;
   runId: string;
@@ -259,17 +345,9 @@ export interface AiRunSteps {
   targetPageId: string | null;
   toolCallId: string;
   toolName: string;
+  toolSource: Generated<string>;
   updatedAt: Generated<Timestamp>;
   writeClass: string;
-}
-
-export interface AiRunSourceDependencies {
-  contextSourceId: string | null;
-  createdAt: Generated<Timestamp>;
-  id: Generated<string>;
-  messageId: string;
-  pageId: string;
-  runId: string;
 }
 
 export interface AiSpaceConfigs {
@@ -380,38 +458,6 @@ export interface AuthAccounts {
   workspaceId: string;
 }
 
-export interface AuthProviders {
-  allowSignup: Generated<boolean>;
-  createdAt: Generated<Timestamp>;
-  creatorId: string | null;
-  deletedAt: Timestamp | null;
-  groupSync: Generated<boolean>;
-  id: Generated<string>;
-  isEnabled: Generated<boolean>;
-  ldapBaseDn: string | null;
-  ldapBindDn: string | null;
-  ldapBindPassword: string | null;
-  ldapConfig: Generated<Json | null>;
-  ldapTlsCaCert: string | null;
-  ldapTlsEnabled: Generated<boolean | null>;
-  ldapUrl: string | null;
-  ldapUserAttributes: Generated<Json | null>;
-  ldapUserSearchFilter: string | null;
-  lastErrorCode: string | null;
-  lastSuccessfulLoginAt: Timestamp | null;
-  name: string;
-  oidcClientId: string | null;
-  oidcClientSecret: string | null;
-  oidcIssuer: string | null;
-  samlCertificate: string | null;
-  samlUrl: string | null;
-  settings: Generated<Json | null>;
-  type: string;
-  updatedAt: Generated<Timestamp>;
-  verifiedAt: Timestamp | null;
-  workspaceId: string;
-}
-
 export interface AuthProviderGroupMappings {
   authProviderId: string;
   createdAt: Generated<Timestamp>;
@@ -429,6 +475,38 @@ export interface AuthProviderGroupMemberships {
   ownsGroupMembership: Generated<boolean>;
   updatedAt: Generated<Timestamp>;
   userId: string;
+}
+
+export interface AuthProviders {
+  allowSignup: Generated<boolean>;
+  createdAt: Generated<Timestamp>;
+  creatorId: string | null;
+  deletedAt: Timestamp | null;
+  groupSync: Generated<boolean>;
+  id: Generated<string>;
+  isEnabled: Generated<boolean>;
+  lastErrorCode: string | null;
+  lastSuccessfulLoginAt: Timestamp | null;
+  ldapBaseDn: string | null;
+  ldapBindDn: string | null;
+  ldapBindPassword: string | null;
+  ldapConfig: Generated<Json | null>;
+  ldapTlsCaCert: string | null;
+  ldapTlsEnabled: Generated<boolean | null>;
+  ldapUrl: string | null;
+  ldapUserAttributes: Generated<Json | null>;
+  ldapUserSearchFilter: string | null;
+  name: string;
+  oidcClientId: string | null;
+  oidcClientSecret: string | null;
+  oidcIssuer: string | null;
+  samlCertificate: string | null;
+  samlUrl: string | null;
+  settings: Generated<Json | null>;
+  type: string;
+  updatedAt: Generated<Timestamp>;
+  verifiedAt: Timestamp | null;
+  workspaceId: string;
 }
 
 export interface Backlinks {
@@ -760,20 +838,6 @@ export interface Shares {
   workspaceId: string;
 }
 
-export interface SsoLoginStates {
-  authProviderId: string;
-  codeVerifier: string | null;
-  consumedAt: Timestamp | null;
-  createdAt: Generated<Timestamp>;
-  expiresAt: Timestamp;
-  id: Generated<string>;
-  nonce: string | null;
-  requestId: string | null;
-  requestValue: string | null;
-  stateHash: string;
-  workspaceId: string;
-}
-
 export interface SpaceMembers {
   addedById: string | null;
   createdAt: Generated<Timestamp>;
@@ -800,6 +864,20 @@ export interface Spaces {
   slug: string;
   updatedAt: Generated<Timestamp>;
   visibility: Generated<string>;
+  workspaceId: string;
+}
+
+export interface SsoLoginStates {
+  authProviderId: string;
+  codeVerifier: string | null;
+  consumedAt: Timestamp | null;
+  createdAt: Generated<Timestamp>;
+  expiresAt: Timestamp;
+  id: Generated<string>;
+  nonce: string | null;
+  requestId: string | null;
+  requestValue: string | null;
+  stateHash: string;
   workspaceId: string;
 }
 
@@ -913,12 +991,17 @@ export interface DB {
   aiConversationContextSources: AiConversationContextSources;
   aiConversations: AiConversations;
   aiFileUploadBatches: AiFileUploadBatches;
+  aiMcpGroupPolicies: AiMcpGroupPolicies;
+  aiMcpServers: AiMcpServers;
+  aiMcpSpaceBindings: AiMcpSpaceBindings;
+  aiMcpUserPreferences: AiMcpUserPreferences;
+  aiMcpWorkspaceSettings: AiMcpWorkspaceSettings;
   aiMessages: AiMessages;
   aiMessageSources: AiMessageSources;
   aiRunContextSources: AiRunContextSources;
   aiRuns: AiRuns;
-  aiRunSteps: AiRunSteps;
   aiRunSourceDependencies: AiRunSourceDependencies;
+  aiRunSteps: AiRunSteps;
   aiSpaceConfigs: AiSpaceConfigs;
   aiSpaceContentExclusions: AiSpaceContentExclusions;
   aiSpaceContentPolicies: AiSpaceContentPolicies;
