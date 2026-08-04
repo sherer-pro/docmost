@@ -667,6 +667,16 @@
   max-width: 100%;
 }
 
+.markdown :global(.ai-inline-citation) {
+  display: inline-block;
+  margin-inline: 0.12em;
+  color: var(--mantine-color-blue-6);
+  font-size: 0.82em;
+  font-weight: 600;
+  text-decoration: none;
+  vertical-align: 0.12em;
+}
+
 .sourceChip {
   display: inline-flex;
   max-width: 100%;

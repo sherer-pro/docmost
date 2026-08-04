@@ -19,6 +19,22 @@ export function captureAiEditorContext(
 ): AiEditorContext {
   const document = editor.getJSON() as Record<string, unknown>;
   const { from, to } = editor.state.selection;
+  const headings: AiEditorContext["headings"] = [];
+  editor.state.doc.descendants((node, position) => {
+    if (node.type.name !== "heading") return;
+    const id = typeof node.attrs.id === "string" ? node.attrs.id : "";
+    if (!id || !/^[A-Za-z0-9_-]{1,128}$/.test(id)) return;
+    headings.push({
+      id,
+      title: node.textContent.slice(0, 500),
+      level: Math.min(6, Math.max(1, Number(node.attrs.level) || 1)),
+      position,
+    });
+  });
+  const headingIdCounts = new Map<string, number>();
+  headings.forEach((heading) =>
+    headingIdCounts.set(heading.id, (headingIdCounts.get(heading.id) ?? 0) + 1),
+  );
 
   return {
     pageId,
@@ -26,6 +42,9 @@ export function captureAiEditorContext(
     documentHash: hashEditorDocument(document),
     markdown: htmlToMarkdown(editor.getHTML()),
     text: editor.getText({ blockSeparator: "\n\n" }),
+    headings: headings
+      .filter((heading) => headingIdCounts.get(heading.id) === 1)
+      .slice(0, 500),
     selection: {
       from,
       to,

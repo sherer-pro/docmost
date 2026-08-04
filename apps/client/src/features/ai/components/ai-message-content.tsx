@@ -43,11 +43,15 @@ export function AiMessageContent({
   const { t } = useTranslation();
   const reduceMotion = useReducedMotion();
   const [sourcesOpened, setSourcesOpened] = useState(false);
-  const html = useMemo(() => sanitizeAiMarkdown(content || ""), [content]);
+  const html = useMemo(
+    () => sanitizeAiMarkdown(content || "", sources),
+    [content, sources],
+  );
   const sortedSources = useMemo(
     () => [...sources].sort((left, right) => left.position - right.position),
     [sources],
   );
+  const sourceState = sortedSources[0]?.citationState ?? "legacy";
 
   return (
     <Stack gap="xs">
@@ -71,7 +75,14 @@ export function AiMessageContent({
             aria-expanded={sourcesOpened}
             onClick={() => setSourcesOpened((value) => !value)}
           >
-            {t("ai.sources")} · {sortedSources.length}
+            {t(
+              sourceState === "cited"
+                ? "ai.usedSources"
+                : sourceState === "context"
+                  ? "ai.contextSources"
+                  : "ai.sources",
+            )}{" "}
+            · {sortedSources.length}
           </Button>
           <Collapse
             in={sourcesOpened}
@@ -80,7 +91,7 @@ export function AiMessageContent({
             <Group gap={6} mt={6}>
               {sortedSources.map((source) => {
                 const href = safeSourceUrl(source.sourceUrl);
-                const label = `S${source.position + 1} · ${source.sourceTitle}`;
+                const label = `${source.position + 1} · ${source.sourceTitle}${source.sectionTitle ? ` — ${source.sectionTitle}` : ""}`;
                 const chip = (
                   <Group gap={4} wrap="nowrap">
                     <SourceIcon sourceType={source.sourceType} />
@@ -93,7 +104,9 @@ export function AiMessageContent({
                 return (
                   <Tooltip
                     key={source.id}
-                    label={source.excerpt || source.sourceTitle}
+                    label={[source.sourceTitle, source.sectionTitle]
+                      .filter(Boolean)
+                      .join(" — ")}
                     multiline
                     maw={320}
                   >

@@ -1,11 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
-import {
-  AiRun,
-  AiRunStep,
-  User,
-} from '@docmost/db/types/entity.types';
+import { AiRun, AiRunStep, User } from '@docmost/db/types/entity.types';
 import { sql } from 'kysely';
 import { AI_RETRIEVAL_DEFAULTS } from '../ai.constants';
 import { AiRetrievalService } from '../retrieval/ai-retrieval.service';
@@ -30,7 +26,12 @@ import {
   AiToolDefinition,
   AiToolRegistryService,
 } from '../tools/ai-tool-registry.service';
-import { AiProviderMessage, AiProviderUsage } from '../ai.types';
+import {
+  AiCitationCandidate,
+  AiProviderMessage,
+  AiProviderUsage,
+} from '../ai.types';
+import { AiCitationService } from './ai-citation.service';
 import { AiMcpPolicyService } from '../mcp/ai-mcp-policy.service';
 import {
   AiMcpToolCallService,
@@ -81,6 +82,7 @@ export class AiRunExecutionService {
     private readonly retrieval: AiRetrievalService,
     private readonly provider: OpenAiCompatibleProviderService,
     private readonly promptBuilder: AiPromptBuilderService,
+    private readonly citations: AiCitationService,
     private readonly events: AiRunEventService,
     private readonly contexts: AiContextService,
     private readonly auxRuns: AiAuxRunService,
@@ -255,10 +257,7 @@ export class AiRunExecutionService {
         .where('status', '=', 'running')
         .execute();
 
-      const buildMessages = (
-        contextWindow: number,
-        maxOutputTokens: number,
-      ) =>
+      const buildMessages = (contextWindow: number, maxOutputTokens: number) =>
         this.promptBuilder.build({
           run,
           instructions: config.systemInstructions,
@@ -272,7 +271,7 @@ export class AiRunExecutionService {
           contextWindow,
           maxOutputTokens,
         });
-      const messages = await buildMessages(
+      let prompt = await buildMessages(
         config.contextWindow,
         config.maxOutputTokens,
       );
@@ -282,7 +281,8 @@ export class AiRunExecutionService {
           run,
           user: user as User,
           config,
-          messages,
+          messages: prompt.messages,
+          citationCandidates: prompt.citationCandidates,
           contextSources,
           fileCitations: fileContext.citations,
           retrievalOutcome,
@@ -378,15 +378,15 @@ export class AiRunExecutionService {
         );
       let usage: AiProviderUsage;
       try {
-        usage = await stream(messages, config.maxOutputTokens);
+        usage = await stream(prompt.messages, config.maxOutputTokens);
       } catch (error) {
         if (!(error instanceof AiProviderEmptyResponseError)) throw error;
         const fallback = getEmptyResponseFallbackLimits(config);
-        const fallbackMessages = await buildMessages(
+        prompt = await buildMessages(
           fallback.contextWindow,
           fallback.maxOutputTokens,
         );
-        usage = await stream(fallbackMessages, fallback.maxOutputTokens);
+        usage = await stream(prompt.messages, fallback.maxOutputTokens);
       }
       await flush(true);
       if (await this.isCancelled(run.id)) {
@@ -396,6 +396,10 @@ export class AiRunExecutionService {
 
       sequence += 1;
       const completedAt = new Date();
+      const finalized = this.citations.finalize(
+        content,
+        prompt.citationCandidates,
+      );
       const completion = await this.db.transaction().execute(async (trx) => {
         const updated = await trx
           .updateTable('aiRuns')
@@ -420,7 +424,7 @@ export class AiRunExecutionService {
         await trx
           .updateTable('aiMessages')
           .set({
-            content,
+            content: finalized.content,
             reasoning,
             status: 'completed',
             inputTokens: usage.inputTokens,
@@ -430,26 +434,11 @@ export class AiRunExecutionService {
           .where('id', '=', run.assistantMessageId)
           .where('currentRunId', '=', run.id)
           .execute();
-        const allSources = [
-          ...contextSources
-            .filter((source) => source.origin === 'explicit')
-            .map((source) => ({
-              sourceType: source.sourceType,
-              sourceId: source.sourceId,
-              pageId: source.pageId,
-              sourceTitle: source.sourceTitle,
-              sourceUrl: source.sourceUrl,
-              excerpt: source.excerpt,
-              relevanceScore: null,
-            })),
-          ...fileContext.citations,
-          ...retrievalOutcome.sources,
-        ];
-        if (allSources.length > 0) {
+        if (finalized.sources.length > 0) {
           await trx
             .insertInto('aiMessageSources')
             .values(
-              allSources.map((source, position) => ({
+              finalized.sources.map((source, position) => ({
                 runId: run.id,
                 messageId: run.assistantMessageId,
                 sourceType: source.sourceType,
@@ -460,6 +449,12 @@ export class AiRunExecutionService {
                 excerpt: source.excerpt,
                 position,
                 relevanceScore: source.relevanceScore,
+                candidateKey: source.candidateKey,
+                citationKey: source.citationKey,
+                citationState: source.citationState,
+                sectionId: source.sectionId,
+                sectionTitle: source.sectionTitle,
+                displayPosition: source.displayPosition,
               })),
             )
             .execute();
@@ -508,6 +503,7 @@ export class AiRunExecutionService {
     user: User;
     config: any;
     messages: AiProviderMessage[];
+    citationCandidates: AiCitationCandidate[];
     contextSources: any[];
     fileCitations: any[];
     retrievalOutcome: {
@@ -525,6 +521,7 @@ export class AiRunExecutionService {
       fileCitations,
       retrievalOutcome,
       userContent,
+      citationCandidates,
     } = params;
     const mcpSnapshot = this.mcpPolicy.readRunSnapshot(run);
     // One merged list, and one lookup source built from it. Resolving a call
@@ -565,6 +562,7 @@ export class AiRunExecutionService {
       .orderBy('modelStep', 'asc')
       .orderBy('callIndex', 'asc')
       .execute();
+    this.restoreToolCitationCandidates(previousSteps, citationCandidates);
     this.appendStepHistory(messages, previousSteps, definitionsByName);
 
     // Every write approval resumes the same run, so the step and tool-call
@@ -577,7 +575,11 @@ export class AiRunExecutionService {
     let totalToolCallCount = previousSteps.length;
     let resultBytes = previousSteps.reduce(
       (sum, step) =>
-        sum + Buffer.byteLength(JSON.stringify(step.result ?? {}), 'utf8'),
+        sum +
+        Buffer.byteLength(
+          JSON.stringify(this.toolResultForModel(step.result) ?? {}),
+          'utf8',
+        ),
       0,
     );
     let usage: AiProviderUsage = {
@@ -617,7 +619,10 @@ export class AiRunExecutionService {
       };
 
       if (response.toolCalls.length === 0) {
-        if (response.finishReason === 'tool_calls' || !response.content.trim()) {
+        if (
+          response.finishReason === 'tool_calls' ||
+          !response.content.trim()
+        ) {
           throw new AiAgentExecutionError(
             'agent_tool_call_required',
             'The provider did not return a valid tool call or final answer',
@@ -632,6 +637,7 @@ export class AiRunExecutionService {
           retrievalOutcome,
           userContent,
           dailyTokenLimitPerSpace: Number(config.dailyTokenLimitPerSpace),
+          citationCandidates,
         });
         return;
       }
@@ -665,7 +671,11 @@ export class AiRunExecutionService {
         tool_calls: response.toolCalls,
       });
 
-      for (let callIndex = 0; callIndex < response.toolCalls.length; callIndex += 1) {
+      for (
+        let callIndex = 0;
+        callIndex < response.toolCalls.length;
+        callIndex += 1
+      ) {
         const call = response.toolCalls[callIndex];
         toolCallCount += 1;
         totalToolCallCount += 1;
@@ -725,8 +735,15 @@ export class AiRunExecutionService {
                 currentPageId: run.pageId,
                 source: 'agent',
               });
+          const executionContent = external
+            ? this.neutralizeExternalCitationMarkers(execution.content)
+            : this.attachToolCitations(
+                this.citations.neutralizeUntrustedValue(execution.content),
+                execution.citations ?? [],
+                citationCandidates,
+              );
           const bytes = Buffer.byteLength(
-            JSON.stringify(execution.content),
+            JSON.stringify(this.toolResultForModel(executionContent)),
             'utf8',
           );
           resultBytes += bytes;
@@ -744,11 +761,15 @@ export class AiRunExecutionService {
               callIndex,
               call,
               assistantContent: response.content,
-              result: execution.content,
+              result: executionContent,
               proposal: execution.writeProposal,
               usage,
             });
             return;
+          }
+
+          if (!external && execution.citations?.length) {
+            await this.recordToolSourceDependencies(run, execution.citations);
           }
 
           const step = await this.insertToolStep({
@@ -759,7 +780,7 @@ export class AiRunExecutionService {
             toolName: call.function.name,
             writeClass: 'read_only',
             args,
-            result: execution.content,
+            result: executionContent,
             assistantContent: response.content,
             status: 'completed',
             toolSource: external ? 'external_mcp' : 'builtin',
@@ -771,7 +792,10 @@ export class AiRunExecutionService {
           messages.push({
             role: 'tool',
             tool_call_id: call.id,
-            content: JSON.stringify({ ok: true, result: execution.content }),
+            content: JSON.stringify({
+              ok: true,
+              result: this.toolResultForModel(executionContent),
+            }),
           });
         } catch (error) {
           if (error instanceof AiAgentExecutionError) {
@@ -835,6 +859,157 @@ export class AiRunExecutionService {
       : 0;
   }
 
+  private attachToolCitations(
+    content: unknown,
+    sources: Array<Omit<AiCitationCandidate, 'marker'>>,
+    candidates: AiCitationCandidate[],
+  ): unknown {
+    const registered: AiCitationCandidate[] = [];
+    for (const source of sources) {
+      const candidate = this.citations.register(candidates, source);
+      if (!candidate) break;
+      registered.push(candidate);
+    }
+    if (registered.length === 0) {
+      return sources.length > 0
+        ? { omitted: true, reason: 'citation_candidate_limit' }
+        : content;
+    }
+    let boundedContent = content;
+    if (
+      registered.length < sources.length &&
+      sources.every((source) => source.root) &&
+      content &&
+      typeof content === 'object' &&
+      !Array.isArray(content) &&
+      Array.isArray((content as Record<string, unknown>).items)
+    ) {
+      const allowedPageIds = new Set(
+        registered.map((candidate) => candidate.pageId).filter(Boolean),
+      );
+      boundedContent = {
+        ...(content as Record<string, unknown>),
+        items: ((content as Record<string, unknown>).items as unknown[]).filter(
+          (item) => {
+            if (!item || typeof item !== 'object') return false;
+            const record = item as Record<string, unknown>;
+            const pageId = record.pageId ?? record.id;
+            return typeof pageId === 'string' && allowedPageIds.has(pageId);
+          },
+        ),
+        truncated: true,
+      };
+    }
+    const citationMetadata = registered.map((candidate) => {
+      const safeCandidate = this.citations.neutralizeUntrustedValue(
+        candidate,
+      ) as AiCitationCandidate;
+      return {
+        marker: `[${candidate.marker}]`,
+        sourceTitle: safeCandidate.sourceTitle,
+        sectionTitle: safeCandidate.sectionTitle,
+        source: safeCandidate,
+      };
+    });
+    if (
+      boundedContent &&
+      typeof boundedContent === 'object' &&
+      !Array.isArray(boundedContent)
+    ) {
+      return {
+        ...(boundedContent as Record<string, unknown>),
+        docmostCitations: citationMetadata,
+      };
+    }
+    return { value: boundedContent, docmostCitations: citationMetadata };
+  }
+
+  private neutralizeExternalCitationMarkers(value: unknown): unknown {
+    return this.citations.neutralizeUntrustedValue(value);
+  }
+
+  private toolResultForModel(value: unknown): unknown {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return value;
+    }
+    const result = value as Record<string, unknown>;
+    if (!Array.isArray(result.docmostCitations)) return value;
+    return {
+      ...result,
+      docmostCitations: result.docmostCitations.map((item) => {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) {
+          return item;
+        }
+        const citation = item as Record<string, unknown>;
+        return {
+          marker: citation.marker,
+          sourceTitle: citation.sourceTitle,
+          sectionTitle: citation.sectionTitle,
+        };
+      }),
+    };
+  }
+
+  private restoreToolCitationCandidates(
+    steps: AiRunStep[],
+    candidates: AiCitationCandidate[],
+  ): void {
+    for (const step of steps) {
+      const result = step.result as {
+        docmostCitations?: Array<{
+          marker?: string;
+          source?: AiCitationCandidate;
+        }>;
+      } | null;
+      for (const item of result?.docmostCitations ?? []) {
+        const source = item.source;
+        if (
+          !source ||
+          typeof source.marker !== 'string' ||
+          !/^S\d+$/.test(source.marker)
+        ) {
+          continue;
+        }
+        const { marker, ...candidate } = source;
+        const registered = this.citations.register(
+          candidates,
+          candidate,
+          marker,
+        );
+        if (registered) {
+          item.marker = `[${registered.marker}]`;
+          item.source = registered;
+        }
+      }
+    }
+  }
+
+  private async recordToolSourceDependencies(
+    run: AiRun,
+    sources: Array<Omit<AiCitationCandidate, 'marker'>>,
+  ): Promise<void> {
+    const pageIds = [
+      ...new Set(
+        sources
+          .map((source) => source.pageId)
+          .filter((pageId): pageId is string => Boolean(pageId)),
+      ),
+    ];
+    if (pageIds.length === 0) return;
+    await this.db
+      .insertInto('aiRunSourceDependencies')
+      .values(
+        pageIds.map((pageId) => ({
+          runId: run.id,
+          messageId: run.assistantMessageId,
+          contextSourceId: null,
+          pageId,
+        })),
+      )
+      .onConflict((oc) => oc.columns(['runId', 'pageId']).doNothing())
+      .execute();
+  }
+
   /**
    * Server-controlled agent preamble. The page identity comes from the run
    * row, never from document content, so it stays trusted instruction data.
@@ -853,6 +1028,7 @@ export class AiRunExecutionService {
       'You are operating in a bounded Docmost agent mode. Use tools iteratively when they improve accuracy. Read tools may inspect only authorized content. Write tools create proposals only for the current page and always require the initiating user to approve them. Call at most one write tool in a model turn. Never claim that a proposed change was applied until its tool result confirms approval.',
       `The current page ID is ${run.pageId}${title ? ` and its title is ${JSON.stringify(title)}` : ''}. Use exactly this ID whenever a tool asks for a page ID of the current page, and never invent placeholder identifiers.`,
       'To change the current page, first call getOutline with the current page ID, then pass one of the returned node identifiers to editPageText, patchNode, insertNode, or deleteNode. Use the outline item "id" when it exists, otherwise its "#index" form such as "#3". Never guess a node identifier.',
+      'When a built-in Docmost read tool returns docmostCitations, cite factual claims with the exact supplied [S1]-style marker. Prefer a section marker when it identifies the supporting heading. Never invent, alter, or reuse a marker from an older answer.',
     ];
 
     // Appended after the fixed policy above, so the external-tool rules are
@@ -930,7 +1106,7 @@ export class AiRunExecutionService {
           content: JSON.stringify({
             ok: ['completed', 'approved'].includes(step.status),
             status: step.status,
-            result: step.result,
+            result: this.toolResultForModel(step.result),
             error: step.errorMessage,
           }),
         });
@@ -1023,7 +1199,10 @@ export class AiRunExecutionService {
           toolName: params.call.function.name,
           writeClass: 'write',
           arguments: this.writeProposalArguments(params.proposal) as any,
-          result: this.writeProposalResult(params.result, params.proposal) as any,
+          result: this.writeProposalResult(
+            params.result,
+            params.proposal,
+          ) as any,
           assistantContent: params.assistantContent || null,
           status: 'pending_approval',
           targetPageId: params.proposal.pageId,
@@ -1093,8 +1272,13 @@ export class AiRunExecutionService {
     };
     userContent: string;
     dailyTokenLimitPerSpace: number;
+    citationCandidates: AiCitationCandidate[];
   }): Promise<void> {
     const completedAt = new Date();
+    const finalized = this.citations.finalize(
+      params.content,
+      params.citationCandidates,
+    );
     const completion = await this.db.transaction().execute(async (trx) => {
       const updated = await trx
         .updateTable('aiRuns')
@@ -1119,7 +1303,7 @@ export class AiRunExecutionService {
       await trx
         .updateTable('aiMessages')
         .set({
-          content: params.content,
+          content: finalized.content,
           reasoning: '',
           status: 'completed',
           inputTokens: params.usage.inputTokens,
@@ -1129,26 +1313,11 @@ export class AiRunExecutionService {
         .where('id', '=', params.run.assistantMessageId)
         .where('currentRunId', '=', params.run.id)
         .execute();
-      const allSources = [
-        ...params.contextSources
-          .filter((source) => source.origin === 'explicit')
-          .map((source) => ({
-            sourceType: source.sourceType,
-            sourceId: source.sourceId,
-            pageId: source.pageId,
-            sourceTitle: source.sourceTitle,
-            sourceUrl: source.sourceUrl,
-            excerpt: source.excerpt,
-            relevanceScore: null,
-          })),
-        ...params.fileCitations,
-        ...params.retrievalOutcome.sources,
-      ];
-      if (allSources.length > 0) {
+      if (finalized.sources.length > 0) {
         await trx
           .insertInto('aiMessageSources')
           .values(
-            allSources.map((source, position) => ({
+            finalized.sources.map((source, position) => ({
               runId: params.run.id,
               messageId: params.run.assistantMessageId,
               sourceType: source.sourceType,
@@ -1159,6 +1328,12 @@ export class AiRunExecutionService {
               excerpt: source.excerpt,
               position,
               relevanceScore: source.relevanceScore,
+              candidateKey: source.candidateKey,
+              citationKey: source.citationKey,
+              citationState: source.citationState,
+              sectionId: source.sectionId,
+              sectionTitle: source.sectionTitle,
+              displayPosition: source.displayPosition,
             })),
           )
           .execute();

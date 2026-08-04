@@ -1,4 +1,9 @@
-import type { AiMessage, AiRun, AiRunStatus } from "@docmost/api-contract";
+import type {
+  AiDocumentHeading,
+  AiMessage,
+  AiRun,
+  AiRunStatus,
+} from "@docmost/api-contract";
 
 export type {
   AiAssistantGender,
@@ -50,6 +55,7 @@ export type {
   UpdateAiSpaceContentPolicyRequest,
   AiModelTestResult,
   AiAgentTestResult,
+  AiDocumentHeading,
   AiRetrievalTestResult,
   CreateAiConversationRequest,
   CreateAiEditorActionRequest,
@@ -63,6 +69,7 @@ export interface AiEditorContext {
   document: Record<string, unknown>;
   markdown: string;
   text: string;
+  headings: AiDocumentHeading[];
   selection: {
     from: number;
     to: number;

@@ -80,6 +80,23 @@ The right-side AI tab is part of the persistent application shell. Its open stat
 
 After the first successful assistant response, Docmost schedules one background title operation. It uses the first prompt and a bounded context summary, returns no more than four Unicode word segments or 80 characters, and publishes `ai:conversation.updated`. A manual rename always wins. After three provider failures, a deterministic title is derived from the first meaningful words without changing the successful chat response.
 
+## Answer citations
+
+New chat and agent answers use server-controlled source markers. The provider
+receives `[S<n>]` markers for authorized documents, stable heading sections,
+and files; Docmost validates and renumbers only genuine markers to `[C<n>]`
+before persisting the visible message. Page citations link to the canonical
+page route and append `#headingId` when the supporting section has a stable
+ProseMirror `attrs.id`. File citations use authenticated download routes.
+
+The UI renders the normalized markers as inline numbered links and lists either
+**Used sources** or, when the provider supplied no valid marker, deduplicated
+**Context sources**. During streaming unresolved source markers are hidden and
+the terminal REST response is authoritative. Historical messages keep the
+legacy source presentation. See [Citation contract](./AI_ASSISTANT_AND_RAG.md#citation-contract)
+for candidate limits, retrieval matching, copy/apply behavior, and Agent tool
+rules.
+
 ## Persistence, queues, and files
 
 The migration `20260728T120000-ai-integration.ts` creates:
@@ -96,6 +113,11 @@ The additive assistant identity migration
 `20260730T130000-ai-assistant-identity.ts` preserves the default behavior for
 existing spaces and adds the optional name, enable flag, grammatical gender,
 and database constraints.
+
+The additive citation migration `20260804T120000-ai-citations.ts` marks existing
+message sources as `legacy`, adds stable candidate/citation keys, citation
+state, section metadata, display position, and immutable run-context heading
+snapshots. It does not rewrite historical answers.
 
 Every provider call is a new `ai_runs` attempt. Retry and Regenerate never reopen or erase a terminal run: they create a row linked through `rootRunId`, `previousRunId`, and `attemptNo`. They are allowed only for the latest assistant turn; older turns return `409 ai_run_not_latest`. A terminal attempt is immutable, and its usage, error, response snapshot, and citations remain available for audit.
 

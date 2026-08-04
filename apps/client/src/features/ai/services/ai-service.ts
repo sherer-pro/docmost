@@ -169,6 +169,7 @@ export async function sendAiMessage(
     ...message,
     documentSnapshot: editorContext.markdown,
     snapshotHash: editorContext.documentHash,
+    documentHeadings: editorContext.headings,
     selection: editorContext.selection,
   };
   const response = await api.post<SendAiMessageResult>(
