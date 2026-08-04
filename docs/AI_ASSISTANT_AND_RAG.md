@@ -335,6 +335,12 @@ Configuration also includes `systemInstructions`, `visionEnabled`,
 WebUI secrets are encrypted with the application secret. Public responses
 return only `apiKeyConfigured` flags.
 
+The client provides nine localized built-in quick commands. Each built-in
+prompt contains five explicit numbered instructions covering the requested
+transformation, preservation constraints, editing rules, unsupported-content
+guardrails, and the expected output-only response. Space administrators can
+replace these defaults with custom quick commands.
+
 The assistant's display identity is stored in the same space configuration:
 `assistantNameEnabled`, `assistantName` (up to eighty characters), and
 `assistantGender` (`masculine|feminine`). The name is trimmed and may contain

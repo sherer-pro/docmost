@@ -1650,15 +1650,15 @@
     "untitled": "Senza titolo",
     "spaceSearchToggle": "Includi la ricerca spaziale",
     "commandPrompt": {
-      "summarize": "Riassumi questo contenuto.",
-      "shorten": "Accorcia questo contenuto preservandone il significato.",
-      "explain": "Spiega chiaramente questo contenuto.",
-      "improve": "Migliorare la chiarezza e la struttura di questo contenuto.",
-      "grammar": "Correggi grammatica, ortografia e punteggiatura.",
-      "expand": "Espandi questo contenuto con dettagli utili.",
-      "continue": "Continua a scrivere da dove finisce il documento.",
-      "tone": "Riscrivi questo contenuto in un tono chiaro e professionale.",
-      "translate": "Traduci questo contenuto nella lingua specificata."
+      "summarize": "1) Individua il messaggio principale e i fatti chiave. 2) Condensali in un riepilogo conciso. 3) Conserva nomi, numeri e precisazioni importanti. 4) Elimina ripetizioni e dettagli secondari senza aggiungere nuove informazioni. 5) Restituisci solo il riepilogo nella lingua originale.",
+      "shorten": "1) Riduci notevolmente la lunghezza del testo. 2) Conserva il significato originale e i fatti chiave. 3) Elimina ripetizioni, riempitivi ed esempi ridondanti. 4) Mantieni il tono, la lingua e la formattazione essenziale. 5) Restituisci solo il testo abbreviato.",
+      "explain": "1) Individua i concetti principali e le loro relazioni. 2) Spiegali con parole semplici a una persona non esperta. 3) Definisci il gergo necessario e aggiungi un breve esempio quando utile. 4) Mantieni l’accuratezza e segnala le incertezze invece di inventare dettagli. 5) Restituisci solo la spiegazione.",
+      "improve": "1) Conserva l’intento e i fatti originali. 2) Migliora chiarezza, scorrevolezza e struttura. 3) Sostituisci le formulazioni vaghe o poco naturali e rafforza i passaggi. 4) Mantieni lingua, tono e formattazione originali salvo quando è necessario cambiarli. 5) Restituisci solo il testo migliorato.",
+      "grammar": "1) Correggi grammatica, ortografia e punteggiatura. 2) Correggi concordanze, forme delle parole ed errori di battitura. 3) Conserva significato, voce, terminologia e formattazione originali. 4) Non aggiungere né rimuovere contenuti fattuali. 5) Restituisci solo il testo corretto.",
+      "expand": "1) Conserva l’idea principale, l’intento e il tono. 2) Aggiungi spiegazioni, contesto o esempi pertinenti. 3) Sviluppa le idee incomplete e collegale con passaggi chiari. 4) Non inventare fatti non verificabili e non aggiungere riempitivi. 5) Restituisci solo il testo ampliato.",
+      "continue": "1) Deduci stile, voce, formato e direzione del documento. 2) Continua in modo naturale dalla fine senza ripetere il testo esistente. 3) Sviluppa il punto logico successivo con un livello di dettaglio coerente. 4) Non introdurre fatti non supportati o una conclusione improvvisa. 5) Restituisci solo la continuazione.",
+      "tone": "1) Conserva il significato e i fatti originali. 2) Usa un tono chiaro, professionale, sicuro e rispettoso. 3) Migliora lessico, ritmo delle frasi e passaggi. 4) Evita gergo, cliché, esagerazioni e formalità non necessarie. 5) Restituisci solo il testo riscritto.",
+      "translate": "1) Determina significato, contesto e tono del testo di partenza. 2) Traduci nella lingua richiesta; se non è specificata, usa la lingua di questa istruzione. 3) Conserva nomi, numeri, formattazione e terminologia consolidata. 4) Preferisci una formulazione naturale alla traduzione letterale senza aggiungere informazioni. 5) Restituisci solo la traduzione."
     },
     "commandDescription": {
       "summarize": "Crea un riepilogo conciso del contesto selezionato.",

@@ -1650,15 +1650,15 @@
     "untitled": "Sans titre",
     "spaceSearchToggle": "Inclure la recherche d'espace",
     "commandPrompt": {
-      "summarize": "Résumez ce contenu.",
-      "shorten": "Raccourcissez ce contenu tout en préservant son sens.",
-      "explain": "Expliquez clairement ce contenu.",
-      "improve": "Améliorer la clarté et la structure de ce contenu.",
-      "grammar": "Corrigez la grammaire, l’orthographe et la ponctuation.",
-      "expand": "Développez ce contenu avec des détails utiles.",
-      "continue": "Continuez à écrire là où le document se termine.",
-      "tone": "Réécrivez ce contenu sur un ton clair et professionnel.",
-      "translate": "Traduisez ce contenu dans la langue que je précise."
+      "summarize": "1) Identifiez le message principal et les faits essentiels. 2) Condensez-les en un résumé concis. 3) Conservez les noms, les nombres et les réserves importants. 4) Supprimez les répétitions et les détails secondaires sans ajouter d’informations. 5) Renvoyez uniquement le résumé dans la langue d’origine.",
+      "shorten": "1) Réduisez nettement la longueur du texte. 2) Préservez le sens initial et les faits essentiels. 3) Supprimez les répétitions, le remplissage et les exemples superflus. 4) Conservez le ton, la langue et la mise en forme essentielle. 5) Renvoyez uniquement le texte raccourci.",
+      "explain": "1) Identifiez les concepts principaux et leurs relations. 2) Expliquez-les simplement à une personne non spécialiste. 3) Définissez le jargon nécessaire et ajoutez un bref exemple si utile. 4) Restez exact et signalez les incertitudes au lieu d’inventer des détails. 5) Renvoyez uniquement l’explication.",
+      "improve": "1) Préservez l’intention et les faits d’origine. 2) Améliorez la clarté, la fluidité et la structure. 3) Remplacez les formulations vagues ou maladroites et renforcez les transitions. 4) Conservez la langue, le ton et la mise en forme sauf si un changement est nécessaire. 5) Renvoyez uniquement le texte amélioré.",
+      "grammar": "1) Corrigez la grammaire, l’orthographe et la ponctuation. 2) Corrigez les accords, les formes de mots et les fautes de frappe. 3) Préservez le sens, la voix, la terminologie et la mise en forme. 4) N’ajoutez ni ne supprimez aucun contenu factuel. 5) Renvoyez uniquement le texte corrigé.",
+      "expand": "1) Préservez l’idée principale, l’intention et le ton. 2) Ajoutez des explications, du contexte ou des exemples pertinents. 3) Développez les idées incomplètes et reliez-les par des transitions claires. 4) N’inventez pas de faits invérifiables et n’ajoutez pas de remplissage. 5) Renvoyez uniquement le texte développé.",
+      "continue": "1) Déduisez le style, la voix, le format et la direction du document. 2) Poursuivez naturellement à partir de la fin sans répéter le texte existant. 3) Développez le point logique suivant avec le même niveau de détail. 4) N’introduisez pas de faits non étayés ni de conclusion abrupte. 5) Renvoyez uniquement la suite.",
+      "tone": "1) Préservez le sens et les faits d’origine. 2) Adoptez un ton clair, professionnel, assuré et respectueux. 3) Améliorez le vocabulaire, le rythme des phrases et les transitions. 4) Évitez le jargon, les clichés, les exagérations et la formalité inutile. 5) Renvoyez uniquement le texte réécrit.",
+      "translate": "1) Déterminez le sens, le contexte et le ton du texte source. 2) Traduisez dans la langue demandée ; si aucune n’est précisée, utilisez la langue de cette instruction. 3) Conservez les noms, les nombres, la mise en forme et la terminologie établie. 4) Préférez une formulation naturelle à une traduction mot à mot sans ajouter d’informations. 5) Renvoyez uniquement la traduction."
     },
     "commandDescription": {
       "summarize": "Crée un résumé concis du contexte sélectionné.",
