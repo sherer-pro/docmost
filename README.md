@@ -119,7 +119,7 @@ Supported capabilities include:
 
 - deduplication of contextual search results;
 
-- separate RAG and MCP key types, management screens, and onboarding presets;
+- separate RAG and MCP key types managed from one API keys page with dedicated tabs and onboarding presets;
 
 - a shared content-exclusion policy applied to retrieval, synchronization, agent tools, and MCP results;
 
@@ -214,6 +214,8 @@ AI features are implemented as a separate server-side subsystem:
 
 - hiding responses when access to the source material has been lost.
 
+![AI request limits and retention controls](./docs/images/fork-specific-enhancements/en/ai-request-infrastructure.png)
+
 
 ### 5. Notion-style databases
 
@@ -239,7 +241,11 @@ The fork includes structured databases:
 
 - database change history;
 
+- administrator-only deletion of individual history versions;
+
 - correct copying and duplication of structures together with attachments.
+
+![Database page and table controls](./docs/images/fork-specific-enhancements/en/database.png)
 
 
 ### 6. Extended document properties
@@ -309,6 +315,10 @@ Search works across pages, databases, rows, and attachments while preserving cur
 
 - PDF and DOCX names and extracted text are searchable;
 
+- search filters cover spaces, content types, page labels, and inline TBD/TODO tags;
+
+- result breadcrumbs show where a page or database row sits in the content tree;
+
 - extraction has bounded byte, page, archive-entry, text-size, and wall-clock budgets;
 
 - indexing status distinguishes pending, processing, ready, skipped, and failed files;
@@ -316,6 +326,8 @@ Search works across pages, databases, rows, and attachments while preserving cur
 - abandoned work is reconciled after restart, while permanently unreadable files are not retried forever;
 
 - indexed candidates are always reloaded from PostgreSQL and rechecked against live access policy before being returned.
+
+![Search filters and result breadcrumbs](./docs/images/fork-specific-enhancements/en/search-indexing.png)
 
 
 ### 9. Extended editor
@@ -411,6 +423,10 @@ The collaboration system has been extended with:
 
 - hiding resolved discussions;
 
+- automatic collapsing of long comments and reply threads;
+
+- copying a page to Markdown together with open and resolved comments and their document locations;
+
 - indicators showing users who are viewing or editing a document;
 
 - real-time user presence;
@@ -448,6 +464,8 @@ An extended notification system has been added:
 
 - recipient access checks for the document.
 
+![Push and email notification preferences](./docs/images/fork-specific-enhancements/en/notifications.png)
+
 
 ### 13. Access control
 
@@ -469,13 +487,15 @@ The fork provides stricter permission management:
 
 - an API key cannot grant more permissions than its creator has;
 
-- API key access is revalidated on every request.
+- API key access is revalidated on every request;
 
 - public sharing can be disabled for the entire workspace or for an individual space;
 
 - public pages, public search, and public attachments recheck the current sharing policy;
 
 - OIDC, SAML, and LDAP group synchronization follows only mappings explicitly created by an administrator.
+
+![Page access control for users and groups](./docs/images/fork-specific-enhancements/en/access-control.png)
 
 
 ### 14. Security
@@ -562,13 +582,23 @@ It also adds:
 
 - accessibility improvements;
 
+- per-page Edit/Read mode and full-width preferences;
+
+- optional restoration of the last scroll position;
+
 - persistence of page-tree state;
 
 - expansion of the entire tree;
 
 - custom links with icons in the space sidebar;
 
+- favorites for pages and spaces;
+
+- space archiving and unarchiving, with archived content kept read-only;
+
 - more consistent placement of controls.
+
+![Home navigation and recently updated pages](./docs/images/fork-specific-enhancements/en/pwa-navigation.png)
 
 
 ### 16. Operations and development
@@ -583,7 +613,11 @@ The fork includes its own maintenance and development infrastructure:
 
 - environment variable validation;
 
+- quick and full composite verification pipelines;
+
 - API route inventory generation;
+
+- automated checks for RAG documentation drift and removed Enterprise Edition runtime remnants;
 
 - security tests;
 
@@ -597,7 +631,11 @@ The fork includes its own maintenance and development infrastructure:
 
 - an `AGENTS.md` file for AI agents working with the repository;
 
+- console-only recovery commands for rebuilding the search index and disabling broken SSO enforcement;
+
 - Graphify support.
+
+![Repository verification and recovery toolchain](./docs/images/fork-specific-enhancements/en/operations-development.svg)
 
 ---
 
