@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
@@ -24,6 +25,10 @@ import {
   safeStringEqual,
   verifyHashedProtectedValue,
 } from '../../common/security/credential-protection.util';
+import { AuthenticationAssuranceService } from '../space-policy/authentication-assurance.service';
+import { SpacePolicyService } from '../space-policy/space-policy.service';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventName } from '../../common/events/event.contants';
 
 @Injectable()
 export class MfaService {
@@ -33,6 +38,9 @@ export class MfaService {
     private readonly sessionService: SessionService,
     private readonly userRepo: UserRepo,
     private readonly environmentService: EnvironmentService,
+    private readonly authenticationAssurance: AuthenticationAssuranceService,
+    private readonly spacePolicy: SpacePolicyService,
+    @Optional() private readonly eventEmitter?: EventEmitter2,
   ) {}
 
   /**
@@ -62,7 +70,28 @@ export class MfaService {
       throw new UnauthorizedException(errorMessage);
     }
 
-    return this.issueLoginTokenForUser(user, workspace, request);
+    const target = loginDto.spaceSlug
+      ? await this.spacePolicy.resolveAccessibleTarget(
+          workspace,
+          user,
+          loginDto.spaceSlug,
+        )
+      : null;
+
+    if (loginDto.spaceSlug && !target) {
+      throw new UnauthorizedException(errorMessage);
+    }
+
+    const effectivePolicy = target?.policy.effective ??
+      this.spacePolicy.getWorkspaceValues(workspace);
+    if (effectivePolicy.enforceSso) {
+      throw new BadRequestException('This scope requires SSO login.');
+    }
+
+    return this.issueLoginTokenForUser(user, workspace, request, {
+      enforceMfa: effectivePolicy.enforceMfa,
+      targetSpaceId: target?.space.id,
+    });
   }
 
   /**
@@ -72,6 +101,11 @@ export class MfaService {
     user: User,
     workspace: Workspace,
     request?: FastifyRequest,
+    context: {
+      enforceMfa?: boolean;
+      ssoAuthProviderId?: string;
+      targetSpaceId?: string;
+    } = {},
   ) {
     const userWithMfa = await this.userRepo.findById(user.id, workspace.id, {
       includeUserMfa: true,
@@ -86,7 +120,8 @@ export class MfaService {
     }
 
     const hasEnabledMfa = Boolean(userWithMfa['mfa']?.isEnabled);
-    const requiresMfaSetup = Boolean(workspace.enforceMfa && !hasEnabledMfa);
+    const isMfaEnforced = context.enforceMfa ?? Boolean(workspace.enforceMfa);
+    const requiresMfaSetup = Boolean(isMfaEnforced && !hasEnabledMfa);
 
     if (!hasEnabledMfa && !requiresMfaSetup) {
       await this.userRepo.updateLastLogin(userWithMfa.id, workspace.id);
@@ -96,11 +131,12 @@ export class MfaService {
           workspaceId: workspace.id,
         },
         request,
+        { ssoAuthProviderId: context.ssoAuthProviderId },
       );
       return {
         userHasMfa: false,
         requiresMfaSetup: false,
-        isMfaEnforced: Boolean(workspace.enforceMfa),
+        isMfaEnforced,
         authToken,
       };
     }
@@ -108,11 +144,15 @@ export class MfaService {
     const mfaToken = await this.tokenService.generateMfaToken(
       userWithMfa,
       workspace.id,
+      {
+        ssoAuthProviderId: context.ssoAuthProviderId,
+        targetSpaceId: context.targetSpaceId,
+      },
     );
     return {
       userHasMfa: hasEnabledMfa,
       requiresMfaSetup,
-      isMfaEnforced: Boolean(workspace.enforceMfa),
+      isMfaEnforced,
       mfaToken,
     };
   }
@@ -142,7 +182,13 @@ export class MfaService {
     };
   }
 
-  async enable(user: User, workspaceId: string, secret: string, code: string) {
+  async enable(
+    user: User,
+    workspaceId: string,
+    secret: string,
+    code: string,
+    sessionId?: string,
+  ) {
     if (!this.validateTotp(secret, code, 2)) {
       throw new BadRequestException('Invalid verification code');
     }
@@ -182,6 +228,15 @@ export class MfaService {
         .execute();
     }
 
+    if (sessionId) {
+      await this.authenticationAssurance.markMfaVerified(sessionId);
+      await this.eventEmitter?.emitAsync(EventName.AUTHORIZATION_CHANGED, {
+        workspaceId,
+        userId: user.id,
+        sessionId,
+      });
+    }
+
     return { success: true, backupCodes };
   }
 
@@ -202,6 +257,12 @@ export class MfaService {
       .where('userId', '=', user.id)
       .where('workspaceId', '=', workspaceId)
       .execute();
+
+    await this.authenticationAssurance.clearMfaForUser(user.id, workspaceId);
+    await this.eventEmitter?.emitAsync(EventName.AUTHORIZATION_CHANGED, {
+      workspaceId,
+      userId: user.id,
+    });
 
     return { success: true };
   }
@@ -278,9 +339,91 @@ export class MfaService {
         workspaceId: payload.workspaceId,
       },
       request,
+      {
+        mfaVerified: true,
+        ssoAuthProviderId: payload.ssoAuthProviderId,
+      },
     );
 
     return { authToken };
+  }
+
+  async setupWithMfaToken(token: string) {
+    const { user, workspace } = await this.resolveMfaSetupPrincipal(token);
+    return this.setup(user, workspace);
+  }
+
+  async enableWithMfaToken(
+    token: string,
+    secret: string,
+    code: string,
+    request?: FastifyRequest,
+  ) {
+    const payload = await this.tokenService.verifyJwt(token, 'mfa_token');
+    const { user } = await this.resolveMfaSetupPrincipal(token);
+    const enabled = await this.enable(
+      user,
+      payload.workspaceId,
+      secret,
+      code,
+    );
+    await this.userRepo.updateLastLogin(user.id, payload.workspaceId);
+    const authToken = await this.sessionService.createSessionAndToken(
+      { ...user, workspaceId: payload.workspaceId },
+      request,
+      {
+        mfaVerified: true,
+        ssoAuthProviderId: payload.ssoAuthProviderId,
+      },
+    );
+    return { ...enabled, authToken };
+  }
+
+  async stepUp(
+    user: User,
+    workspaceId: string,
+    sessionId: string,
+    code: string,
+  ) {
+    const userWithMfa = await this.userRepo.findById(user.id, workspaceId, {
+      includeUserMfa: true,
+    });
+    const mfa = userWithMfa?.['mfa'];
+    if (!userWithMfa || !mfa?.isEnabled || !mfa.secret) {
+      throw new BadRequestException('MFA is not enabled for this account');
+    }
+
+    const normalizedCode = code.trim();
+    const totpSecret = this.getTotpSecret(mfa.secret);
+    let isValid = this.validateTotp(totpSecret, normalizedCode, 1);
+
+    if (!isValid) {
+      const consumeResult = this.consumeBackupCode(
+        normalizedCode,
+        mfa.backupCodes || [],
+      );
+      if (consumeResult.matched) {
+        isValid = true;
+        await this.db
+          .updateTable('userMfa')
+          .set({ backupCodes: consumeResult.remaining, updatedAt: new Date() })
+          .where('userId', '=', user.id)
+          .where('workspaceId', '=', workspaceId)
+          .execute();
+      }
+    }
+
+    if (!isValid) {
+      throw new BadRequestException('Invalid verification code');
+    }
+
+    await this.authenticationAssurance.markMfaVerified(sessionId);
+    await this.eventEmitter?.emitAsync(EventName.AUTHORIZATION_CHANGED, {
+      workspaceId,
+      userId: user.id,
+      sessionId,
+    });
+    return { success: true };
   }
 
   async validateMfaAccess(token?: string) {
@@ -334,6 +477,30 @@ export class MfaService {
     if (!validPassword) {
       throw new BadRequestException('Invalid password');
     }
+  }
+
+  private async resolveMfaSetupPrincipal(token: string) {
+    const payload = await this.tokenService.verifyJwt(token, 'mfa_token');
+    const [user, workspace] = await Promise.all([
+      this.userRepo.findById(payload.sub, payload.workspaceId, {
+        includeUserMfa: true,
+      }),
+      this.db
+        .selectFrom('workspaces')
+        .selectAll()
+        .where('id', '=', payload.workspaceId)
+        .executeTakeFirst(),
+    ]);
+    if (
+      !user ||
+      !workspace ||
+      user.deletedAt ||
+      user.deactivatedAt ||
+      user['mfa']?.isEnabled
+    ) {
+      throw new UnauthorizedException('Invalid MFA setup session');
+    }
+    return { user, workspace };
   }
 
   private validateTotp(secret: string, token: string, window = 1) {

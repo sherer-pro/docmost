@@ -218,7 +218,8 @@ export class AttachmentFileAccessService {
 
     if (
       jwtPayload.workspaceId !== workspace.id ||
-      jwtPayload.pageId !== attachment.pageId ||
+      (jwtPayload.pageId !== attachment.pageId &&
+        !jwtPayload.pageIds?.includes(attachment.pageId)) ||
       (jwtPayload.attachmentId && jwtPayload.attachmentId !== fileId)
     ) {
       throw new NotFoundException('File not found');

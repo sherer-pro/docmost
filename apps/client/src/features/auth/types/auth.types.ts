@@ -1,6 +1,7 @@
 export interface ILogin {
   email: string;
   password: string;
+  spaceSlug?: string;
 }
 
 export interface IRegister {
@@ -23,11 +24,13 @@ export interface IChangePassword {
 
 export interface IForgotPassword {
   email: string;
+  spaceSlug?: string;
 }
 
 export interface IPasswordReset {
   token?: string;
   newPassword: string;
+  spaceSlug?: string;
 }
 
 export interface IVerifyUserToken {

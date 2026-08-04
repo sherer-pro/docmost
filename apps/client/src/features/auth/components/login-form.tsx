@@ -14,13 +14,14 @@ import {
 } from "@mantine/core";
 import classes from "./auth.module.css";
 import { useRedirectIfAuthenticated } from "@/features/auth/hooks/use-redirect-if-authenticated.ts";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import APP_ROUTE from "@/lib/app-route.ts";
 import { useTranslation } from "react-i18next";
 import SsoLogin from "@/features/security/components/sso-login.tsx";
 import { useWorkspacePublicDataQuery } from "@/features/workspace/queries/workspace-query.ts";
 import { Error404 } from "@/components/ui/error-404.tsx";
 import React from "react";
+import { sanitizeRelativeReturnTo } from "@/features/auth/utils/return-to.ts";
 
 const createFormSchema = (t: (key: string) => string) =>
   z.object({
@@ -36,18 +37,25 @@ export function LoginForm() {
   const formSchema = createFormSchema(t);
   const { signIn, isLoading } = useAuth();
   useRedirectIfAuthenticated();
+  const [searchParams] = useSearchParams();
+  const spaceSlug = searchParams.get("spaceSlug") || undefined;
+  const requestedReturnTo = searchParams.get("returnTo");
+  const returnTo = requestedReturnTo
+    ? sanitizeRelativeReturnTo(requestedReturnTo, APP_ROUTE.HOME)
+    : undefined;
   const {
     data,
     isLoading: isDataLoading,
     isError,
     error,
-  } = useWorkspacePublicDataQuery();
+  } = useWorkspacePublicDataQuery(spaceSlug);
 
   const form = useForm<ILogin>({
     validate: zodResolver(formSchema),
     initialValues: {
       email: "",
       password: "",
+      spaceSlug,
     },
   });
 
@@ -70,7 +78,7 @@ export function LoginForm() {
           {t("Login")}
         </Title>
 
-        <SsoLogin />
+        <SsoLogin spaceSlug={spaceSlug} returnTo={returnTo} />
 
         {!data?.enforceSso && (
           <>
@@ -94,7 +102,11 @@ export function LoginForm() {
 
               <Group justify="flex-end" mt="sm">
                 <Anchor
-                  to={APP_ROUTE.AUTH.FORGOT_PASSWORD}
+                  to={`${APP_ROUTE.AUTH.FORGOT_PASSWORD}${
+                    spaceSlug
+                      ? `?spaceSlug=${encodeURIComponent(spaceSlug)}`
+                      : ""
+                  }`}
                   component={Link}
                   underline="never"
                   size="sm"

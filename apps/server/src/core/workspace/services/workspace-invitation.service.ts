@@ -3,6 +3,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { AcceptInviteDto, InviteUserDto } from '../dto/invitation.dto';
@@ -28,9 +29,11 @@ import { executeWithCursorPagination } from '@docmost/db/pagination/cursor-pagin
 import { DomainService } from '../../../integrations/environment/domain.service';
 import {
   validateAllowedEmail,
-  validateSsoEnforcement,
 } from '../../auth/auth.util';
 import { FastifyRequest } from 'fastify';
+import { SpacePolicyService } from '../../space-policy/space-policy.service';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventName } from '../../../common/events/event.contants';
 
 const INVITATION_TOKEN_TTL_MS = 14 * 24 * 60 * 60 * 1000;
 
@@ -43,7 +46,9 @@ export class WorkspaceInvitationService {
     private mailService: MailService,
     private domainService: DomainService,
     private sessionService: SessionService,
+    private readonly spacePolicy: SpacePolicyService,
     @InjectKysely() private readonly db: KyselyDB,
+    @Optional() private readonly eventEmitter?: EventEmitter2,
   ) {}
 
   async getInvitations(workspaceId: string, pagination: PaginationOptions) {
@@ -78,7 +83,16 @@ export class WorkspaceInvitationService {
   ) {
     const invitation = await this.db
       .selectFrom('workspaceInvitations')
-      .select(['id', 'email', 'createdAt', 'expiresAt', 'token', 'tokenHash'])
+      .select([
+        'id',
+        'email',
+        'role',
+        'groupIds',
+        'createdAt',
+        'expiresAt',
+        'token',
+        'tokenHash',
+      ])
       .where('id', '=', invitationId)
       .where('workspaceId', '=', workspace.id)
       .executeTakeFirst();
@@ -89,11 +103,19 @@ export class WorkspaceInvitationService {
 
     await this.verifyInvitationToken(invitation, token);
 
+    const entrySpace = await this.spacePolicy.resolveInvitationEntrySpace(
+      workspace,
+      invitation.groupIds,
+      invitation.role,
+    );
+
     return {
       id: invitation.id,
       email: invitation.email,
       createdAt: invitation.createdAt,
-      enforceSso: workspace.enforceSso,
+      enforceSso: !entrySpace,
+      passwordAllowed: Boolean(entrySpace),
+      entrySpaceSlug: entrySpace?.space.slug ?? null,
     };
   }
 
@@ -225,6 +247,7 @@ export class WorkspaceInvitationService {
     authToken?: string;
     requiresLogin?: boolean;
     message?: string;
+    entrySpaceSlug?: string;
   }> {
     const invitation = await this.db
       .selectFrom('workspaceInvitations')
@@ -239,7 +262,16 @@ export class WorkspaceInvitationService {
 
     await this.verifyInvitationToken(invitation, dto.token);
 
-    validateSsoEnforcement(workspace);
+    const entrySpace = await this.spacePolicy.resolveInvitationEntrySpace(
+      workspace,
+      invitation.groupIds,
+      invitation.role,
+    );
+    if (!entrySpace) {
+      throw new BadRequestException(
+        'This invitation requires SSO login for every accessible space.',
+      );
+    }
     validateAllowedEmail(invitation.email, workspace);
 
     let newUser: User;
@@ -296,6 +328,9 @@ export class WorkspaceInvitationService {
           .where('id', '=', invitation.id)
           .execute();
       });
+      this.eventEmitter?.emit(EventName.PAGE_EMBED_VISIBILITY_CHANGED, {
+        workspaceId: workspace.id,
+      });
     } catch (err: any) {
       this.logger.error(`acceptInvitation - ${err}`);
       if (err.message.includes('unique constraint')) {
@@ -329,9 +364,12 @@ export class WorkspaceInvitationService {
       });
     }
 
-    if (workspace.enforceMfa) {
+    const requiresMfa =
+      entrySpace?.policy.effective.enforceMfa ?? workspace.enforceMfa;
+    if (requiresMfa) {
       return {
         requiresLogin: true,
+        entrySpaceSlug: entrySpace?.space.slug,
       };
     }
 
@@ -339,7 +377,7 @@ export class WorkspaceInvitationService {
       newUser,
       request,
     );
-    return { authToken };
+    return { authToken, entrySpaceSlug: entrySpace?.space.slug };
   }
 
   async resendInvitation(

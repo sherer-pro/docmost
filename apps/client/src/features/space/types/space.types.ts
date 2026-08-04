@@ -4,9 +4,15 @@ import {
   SpaceCaslSubject,
 } from "@/features/space/permissions/permissions.type.ts";
 import { ExportFormat } from "@/features/page/types/page.types.ts";
+import type { SpacePolicy } from "@docmost/api-contract";
 
 export interface ISpaceSharingSettings {
   disabled?: boolean;
+}
+
+export interface ISpaceSecuritySettings {
+  enforceMfa?: boolean;
+  enforceSso?: boolean;
 }
 
 export interface ISpaceDocumentFieldsSettings {
@@ -37,6 +43,7 @@ export interface ISpaceCustomLinksSettings {
 }
 
 export interface ISpaceSettings {
+  security?: ISpaceSecuritySettings;
   sharing?: ISpaceSharingSettings;
   documentFields?: ISpaceDocumentFieldsSettings;
   dictionary?: ISpaceDictionarySettings;
@@ -59,9 +66,13 @@ export interface ISpace {
   spaceId?: string;
   membership?: IMembership;
   settings?: ISpaceSettings;
+  policy?: SpacePolicy;
+  requiresStepUp?: boolean;
   documentFields?: ISpaceDocumentFieldsSettings;
   // for updates
-  disablePublicSharing?: boolean;
+  disablePublicSharing?: boolean | null;
+  enforceMfa?: boolean | null;
+  enforceSso?: boolean | null;
   dictionaryEnabled?: boolean;
   headingNumberingEnabled?: boolean;
   customLinks?: ISpaceCustomLinksSettings;

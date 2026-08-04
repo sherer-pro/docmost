@@ -33,6 +33,10 @@ pnpm verify:quick
 - Public invitation/share/search/hostname endpoints are covered by auth rate-limit buckets.
 - Workspace invitation links require token validation; stored invitation tokens are hashed and expire.
 - Legacy public attachment `?jwt=` query tokens are lower priority than header/cookie tokens and emit deprecation headers when used.
+- Space security policy overrides resolve MFA, SSO, and public-sharing enforcement as `space override ?? workspace default`.
+- Authentication assurance is session-bound: workspace routes require workspace policy, while explicitly scoped space resources use that space's effective policy and return HTTP 428 when step-up is required.
+- SSO step-up is one-time, bound to the current user/session, rejects account switching and unsafe return URLs, and does not create users or sessions.
+- Restricted WebSocket sessions join only eligible space rooms; canonical collab tokens are page-bound and recheck session assurance for the page's space.
 
 ## Manual staging smoke (required before production rollout)
 
@@ -67,6 +71,22 @@ pnpm verify:quick
 7. PDF export:
    - export a page containing external image URLs, private-network URLs, and public attachment images.
    - confirm only `data:` resources and same-origin public attachment URLs are fetched by Chromium.
+8. Space policy overrides and step-up:
+   - exercise all workspace values with space `inherit`, `enabled`, and `disabled` overrides for MFA, SSO, and public sharing.
+   - confirm a space administrator can only set an explicit `enabled` override; confirm only a workspace `admin|owner` can select `inherit` or `disabled`.
+   - use an old active session with null assurance and confirm workspace/global APIs return `428 AUTHENTICATION_ASSURANCE_REQUIRED`, while bootstrap endpoints and a space with a compatible override remain available.
+   - complete SSO then MFA step-up and confirm the same session gains both assurance flags and returns only to a relative `returnTo` path.
+   - replay an SSO state, alter the session cookie, and authenticate as another external identity; confirm every attempt is rejected.
+   - disable MFA and confirm all of the user's active sessions immediately lose MFA assurance.
+9. Public-sharing transitions:
+   - move a space from effective sharing allowed to disabled and confirm its share rows are deleted in the same policy transaction.
+   - set an explicit `disabled=false` override while the workspace default is disabled and confirm existing links are not deleted by that space update.
+   - concurrently create a share and change workspace/space sharing policy; confirm the workspace-then-space lock order prevents a share surviving an effective disabled transition.
+10. Restricted realtime access:
+   - connect with a session that fails workspace assurance but satisfies one space override.
+   - confirm it joins only that `space-*` room, cannot publish workspace presence, and cannot obtain a legacy unscoped collab token.
+   - request a canonical collab token with `pageId`; confirm it cannot be reused for another page and is rejected after policy or session assurance changes.
+   - tighten a workspace or space policy while Socket.IO and collab connections are idle; confirm Socket.IO rooms are refreshed immediately and collab authorization is re-evaluated before the next message is handled or broadcast.
 
 ## Alerting and triage
 

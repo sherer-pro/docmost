@@ -60,8 +60,11 @@ export class WorkspaceController {
   @Public()
   @HttpCode(HttpStatus.OK)
   @Get('/public')
-  async getWorkspacePublicInfoViaGet(@Req() req: any) {
-    return this.getWorkspacePublicInfo(req);
+  async getWorkspacePublicInfoViaGet(
+    @Req() req: any,
+    @Query('spaceSlug') spaceSlug?: string,
+  ) {
+    return this.getWorkspacePublicInfo(req, spaceSlug);
   }
 
   @Public()
@@ -71,8 +74,14 @@ export class WorkspaceController {
     replacement: 'GET /api/workspace/public',
   })
   @Post('/public')
-  async getWorkspacePublicInfo(@Req() req: any) {
-    return this.workspaceService.getWorkspacePublicData(req.raw.workspaceId);
+  async getWorkspacePublicInfo(
+    @Req() req: any,
+    @Query('spaceSlug') spaceSlug?: string,
+  ) {
+    return this.workspaceService.getWorkspacePublicData(
+      req.raw.workspaceId,
+      spaceSlug,
+    );
   }
 
   @HttpCode(HttpStatus.OK)

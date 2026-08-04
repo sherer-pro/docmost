@@ -272,10 +272,32 @@ export interface AiRunContextSources {
   sourceUrl: string | null;
 }
 
+export interface AiBuiltinToolSpacePolicies {
+  allowedCapabilities: Json | null;
+  createdAt: Generated<Timestamp>;
+  policyVersion: Generated<number>;
+  spaceId: string;
+  updatedAt: Generated<Timestamp>;
+  updatedById: string | null;
+  workspaceId: string;
+}
+
+export interface AiBuiltinToolWorkspacePolicies {
+  allowedCapabilities: Json;
+  createdAt: Generated<Timestamp>;
+  enabled: Generated<boolean>;
+  policyVersion: Generated<number>;
+  updatedAt: Generated<Timestamp>;
+  updatedById: string | null;
+  workspaceId: string;
+}
+
 export interface AiRuns {
   assistantMessageId: string;
   attachmentIds: Generated<string[]>;
   attemptNo: Generated<number>;
+  builtinToolPolicyFingerprint: string | null;
+  builtinToolPolicySnapshot: Json | null;
   cancelRequestedAt: Timestamp | null;
   chatFileIds: Generated<string[]>;
   clientRequestId: string;
@@ -417,6 +439,7 @@ export interface AiSpaceContentPolicies {
 }
 
 export interface ApiKeys {
+  allowedCapabilities: Json | null;
   createdAt: Generated<Timestamp>;
   creatorId: string;
   deletedAt: Timestamp | null;
@@ -768,6 +791,7 @@ export interface Pages {
   icon: string | null;
   id: Generated<string>;
   isLocked: Generated<boolean>;
+  isTemplate: Generated<boolean>;
   lastUpdatedById: string | null;
   parentPageId: string | null;
   position: string | null;
@@ -786,8 +810,76 @@ export interface PageTransclusionReferences {
   createdAt: Generated<Timestamp>;
   id: Generated<string>;
   referencePageId: string;
+  referenceKind: Generated<string>;
+  referenceNodeId: string | null;
   sourcePageId: string;
-  transclusionId: string;
+  transclusionId: string | null;
+  workspaceId: string;
+}
+
+export interface PageTemplateWorkspacePolicies {
+  createdAt: Generated<Timestamp>;
+  enabled: Generated<boolean>;
+  revision: Generated<number>;
+  updatedAt: Generated<Timestamp>;
+  updatedById: string | null;
+  workspaceId: string;
+}
+
+export interface PageTemplateSpacePolicies {
+  allowCreateTemplate: Generated<boolean>;
+  allowLiveEmbed: Generated<boolean>;
+  allowPublicLiveEmbed: Generated<boolean>;
+  allowSnapshot: Generated<boolean>;
+  createdAt: Generated<Timestamp>;
+  revision: Generated<number>;
+  spaceId: string;
+  templatesEnabled: Generated<boolean>;
+  updatedAt: Generated<Timestamp>;
+  updatedById: string | null;
+  workspaceId: string;
+}
+
+export interface PageTemplateGroupPolicies {
+  allowedActions: Json | null;
+  createdAt: Generated<Timestamp>;
+  groupId: string;
+  id: Generated<string>;
+  revision: Generated<number>;
+  spaceId: string;
+  updatedAt: Generated<Timestamp>;
+  updatedById: string | null;
+  workspaceId: string;
+}
+
+export interface PageTemplateOperations {
+  afterContentHash: string | null;
+  attachmentMapping: Json | null;
+  attemptCount: Generated<number>;
+  baseContentHash: string | null;
+  consumerPageId: string | null;
+  createdAt: Generated<Timestamp>;
+  errorCode: string | null;
+  graphFencingToken: Int8 | null;
+  id: Generated<string>;
+  idempotencyKey: string;
+  leaseToken: string | null;
+  leaseExpiresAt: Timestamp | null;
+  operationKind: string;
+  referenceNodeId: string | null;
+  requestHash: string;
+  requestedById: string;
+  resultPageId: string | null;
+  sourcePageId: string | null;
+  stagedContent: Json | null;
+  status: Generated<string>;
+  updatedAt: Generated<Timestamp>;
+  workspaceId: string;
+}
+
+export interface PageEmbedGraphFences {
+  lastToken: Int8;
+  updatedAt: Generated<Timestamp>;
   workspaceId: string;
 }
 
@@ -832,6 +924,7 @@ export interface PushSubscriptions {
 }
 
 export interface Shares {
+  allowPublicLiveEmbed: Generated<boolean>;
   createdAt: Generated<Timestamp>;
   creatorId: string | null;
   deletedAt: Timestamp | null;
@@ -882,9 +975,14 @@ export interface SsoLoginStates {
   expiresAt: Timestamp;
   id: Generated<string>;
   nonce: string | null;
+  purpose: Generated<string>;
   requestId: string | null;
   requestValue: string | null;
+  returnTo: string | null;
+  sessionId: string | null;
+  spaceId: string | null;
   stateHash: string;
+  userId: string | null;
   workspaceId: string;
 }
 
@@ -931,7 +1029,10 @@ export interface UserSessions {
   ipAddress: string | null;
   lastActiveAt: Generated<Timestamp>;
   metadata: Json | null;
+  mfaVerifiedAt: Timestamp | null;
   revokedAt: Timestamp | null;
+  ssoAuthProviderId: string | null;
+  ssoVerifiedAt: Timestamp | null;
   userAgent: string | null;
   userId: string;
   workspaceId: string;
@@ -993,6 +1094,8 @@ export interface Workspaces {
 }
 
 export interface DB {
+  aiBuiltinToolSpacePolicies: AiBuiltinToolSpacePolicies;
+  aiBuiltinToolWorkspacePolicies: AiBuiltinToolWorkspacePolicies;
   aiAuxRuns: AiAuxRuns;
   aiChatFiles: AiChatFiles;
   aiConversationContextSources: AiConversationContextSources;
@@ -1037,8 +1140,13 @@ export interface DB {
   pageHistory: PageHistory;
   pageLabels: PageLabels;
   pages: Pages;
+  pageEmbedGraphFences: PageEmbedGraphFences;
   pageTransclusionReferences: PageTransclusionReferences;
   pageTransclusions: PageTransclusions;
+  pageTemplateGroupPolicies: PageTemplateGroupPolicies;
+  pageTemplateOperations: PageTemplateOperations;
+  pageTemplateSpacePolicies: PageTemplateSpacePolicies;
+  pageTemplateWorkspacePolicies: PageTemplateWorkspacePolicies;
   pushNotificationJobs: PushNotificationJobs;
   pushSubscriptions: PushSubscriptions;
   shares: Shares;

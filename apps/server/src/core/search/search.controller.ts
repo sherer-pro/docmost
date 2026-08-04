@@ -28,6 +28,7 @@ import { LEGACY_API_SUNSET } from '../../common/config/api-deprecation.constants
 import { AuthRateLimitGuard } from '../auth/rate-limit/auth-rate-limit.guard';
 import { AuthRateLimit } from '../auth/rate-limit/auth-rate-limit.decorator';
 import { TypesenseSearchService } from './typesense-search.service';
+import { AuthPolicyScope } from '../../common/decorators/auth-policy-scope.decorator';
 
 @UseGuards(JwtAuthGuard)
 @Controller('search')
@@ -40,6 +41,11 @@ export class SearchController {
   ) {}
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('space', {
+    source: 'body',
+    key: 'spaceId',
+    optional: true,
+  })
   @Post()
   async pageSearch(
     @Body() searchDto: SearchDTO,
@@ -77,6 +83,11 @@ export class SearchController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('space', {
+    source: 'body',
+    key: 'spaceId',
+    optional: true,
+  })
   @Post('attachments')
   async attachmentSearch(
     @Body() searchDto: SearchDTO,
@@ -114,6 +125,11 @@ export class SearchController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('space', {
+    source: 'query',
+    key: 'spaceId',
+    optional: true,
+  })
   @Get('suggest')
   async searchSuggestionsViaQuery(
     @Query() dto: SearchSuggestionDTO,
@@ -127,6 +143,11 @@ export class SearchController {
   @DeprecatedRoute({
     sunset: LEGACY_API_SUNSET,
     replacement: 'GET /api/search/suggest',
+  })
+  @AuthPolicyScope('space', {
+    source: 'body',
+    key: 'spaceId',
+    optional: true,
   })
   @Post('suggest')
   async searchSuggestions(

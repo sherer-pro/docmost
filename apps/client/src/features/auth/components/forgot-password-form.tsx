@@ -7,6 +7,7 @@ import { Box, Button, Container, Text, TextInput, Title } from "@mantine/core";
 import classes from "./auth.module.css";
 import { useRedirectIfAuthenticated } from "@/features/auth/hooks/use-redirect-if-authenticated.ts";
 import { useTranslation } from "react-i18next";
+import { useSearchParams } from "react-router-dom";
 
 const createFormSchema = (t: (key: string) => string) =>
   z.object({
@@ -21,12 +22,15 @@ export function ForgotPasswordForm() {
   const formSchema = createFormSchema(t);
   const { forgotPassword, isLoading } = useAuth();
   const [isTokenSent, setIsTokenSent] = useState<boolean>(false);
+  const [searchParams] = useSearchParams();
+  const spaceSlug = searchParams.get("spaceSlug") || undefined;
   useRedirectIfAuthenticated();
 
   const form = useForm<IForgotPassword>({
     validate: zodResolver(formSchema),
     initialValues: {
       email: "",
+      spaceSlug,
     },
   });
 

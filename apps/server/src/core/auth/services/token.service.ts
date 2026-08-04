@@ -70,6 +70,7 @@ export class TokenService {
     user: User,
     workspaceId: string,
     sessionId?: string,
+    pageId?: string,
   ): Promise<string> {
     if (user.deactivatedAt || user.deletedAt) {
       throw new ForbiddenException();
@@ -79,6 +80,7 @@ export class TokenService {
       sub: user.id,
       workspaceId,
       sessionId,
+      pageId,
       type: JwtType.COLLAB,
     };
 
@@ -126,7 +128,31 @@ export class TokenService {
     return this.jwtService.sign(payload, { expiresIn: '1h' });
   }
 
-  async generateMfaToken(user: User, workspaceId: string): Promise<string> {
+  async generateAttachmentPageSetToken(opts: {
+    pageIds: string[];
+    workspaceId: string;
+  }): Promise<string> {
+    const pageIds = [...new Set(opts.pageIds)];
+    if (pageIds.length === 0) {
+      throw new Error('At least one attachment page is required');
+    }
+    const payload: JwtAttachmentPayload = {
+      pageId: pageIds[0],
+      pageIds,
+      workspaceId: opts.workspaceId,
+      type: JwtType.ATTACHMENT,
+    };
+    return this.jwtService.sign(payload, { expiresIn: '1h' });
+  }
+
+  async generateMfaToken(
+    user: User,
+    workspaceId: string,
+    context: {
+      ssoAuthProviderId?: string;
+      targetSpaceId?: string;
+    } = {},
+  ): Promise<string> {
     if (user.deactivatedAt || user.deletedAt) {
       throw new ForbiddenException();
     }
@@ -134,6 +160,8 @@ export class TokenService {
     const payload: JwtMfaTokenPayload = {
       sub: user.id,
       workspaceId,
+      ssoAuthProviderId: context.ssoAuthProviderId,
+      targetSpaceId: context.targetSpaceId,
       type: JwtType.MFA_TOKEN,
     };
     return this.jwtService.sign(payload, { expiresIn: '5m' });

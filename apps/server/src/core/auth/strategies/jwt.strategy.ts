@@ -118,13 +118,14 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     }
 
     req.raw.sessionId = sessionId;
+    req.raw.userSession = session;
     this.sessionActivityService.trackActivity(
       sessionId,
       payload.sub,
       payload.workspaceId,
     );
 
-    return { user, workspace };
+    return { user, workspace, session };
   }
 
   private async validateApiKey(

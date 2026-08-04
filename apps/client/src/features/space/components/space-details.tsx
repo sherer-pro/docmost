@@ -45,6 +45,7 @@ import { AccessibleActionIcon } from "@/components/ui/accessible-action-icon.tsx
 import { useAtomValue } from "jotai";
 import { userAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { hasFullSpaceAccess } from "@/features/space/permissions/export-access.ts";
+import { PageTemplateSpacePolicySettings } from "@/features/page-template/components/page-template-policy-settings";
 
 interface SpaceDetailsProps {
   spaceId: string;
@@ -203,6 +204,16 @@ export default function SpaceDetails({ spaceId, readOnly }: SpaceDetailsProps) {
             <>
               <Divider my="lg" />
               <SpacePublicSharingToggle space={space} />
+            </>
+          )}
+
+          {!readOnly && (
+            <>
+              <Divider my="lg" />
+              <PageTemplateSpacePolicySettings
+                spaceId={spaceId}
+                readOnly={readOnly}
+              />
             </>
           )}
 

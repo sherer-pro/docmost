@@ -46,6 +46,8 @@ export interface IInvitation {
   invitedById: string;
   createdAt: Date;
   enforceSso: boolean;
+  passwordAllowed?: boolean;
+  entrySpaceSlug?: string | null;
 }
 
 export interface IInvitationLink {
@@ -57,6 +59,11 @@ export interface IAcceptInvite {
   name: string;
   password: string;
   token: string;
+}
+
+export interface IAcceptInviteResponse {
+  requiresLogin?: boolean;
+  entrySpaceSlug?: string;
 }
 
 export interface IPublicWorkspace {

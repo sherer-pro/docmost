@@ -2,6 +2,7 @@ import SettingsTitle from "@/components/settings/settings-title.tsx";
 import WorkspaceNameForm from "@/features/workspace/components/settings/components/workspace-name-form";
 import WorkspaceIcon from "@/features/workspace/components/settings/components/workspace-icon.tsx";
 import WorkspaceTagsSettings from "@/features/workspace/components/settings/components/workspace-tags-settings";
+import { PageTemplateWorkspacePolicySettings } from "@/features/page-template/components/page-template-policy-settings";
 import { useTranslation } from "react-i18next";
 import { getAppName, isCloud } from "@/lib/config.ts";
 import { Helmet } from "react-helmet-async";
@@ -22,6 +23,7 @@ export default function WorkspaceSettings() {
       <WorkspaceNameForm />
       <Divider my="lg" />
       <WorkspaceTagsSettings />
+      <PageTemplateWorkspacePolicySettings />
 
       {isCloud() && (
         <>

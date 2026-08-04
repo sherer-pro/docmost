@@ -55,7 +55,9 @@ export async function verifyUserToken(data: IVerifyUserToken): Promise<any> {
  * Switching to GET removes the unnecessary CSRF-header dependency
  * and prevents 403 errors during initial app startup.
  */
-export async function getCollabToken(): Promise<ICollabToken> {
-  const req = await api.get<ICollabToken>("/auth/collab-token");
+export async function getCollabToken(pageId: string): Promise<ICollabToken> {
+  const req = await api.get<ICollabToken>("/auth/collab-token", {
+    params: { pageId },
+  });
   return req.data;
 }

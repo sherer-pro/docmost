@@ -33,6 +33,7 @@ import {
   UpdateDictionaryTermDto,
 } from './dto/dictionary-term.dto';
 import { FastifyReply } from 'fastify';
+import { AuthPolicyScope } from '../../common/decorators/auth-policy-scope.decorator';
 
 @UseGuards(JwtAuthGuard)
 @Controller('dictionary-terms')
@@ -42,6 +43,7 @@ export class DictionaryController {
     private readonly spaceAbility: SpaceAbilityFactory,
   ) {}
 
+  @AuthPolicyScope('space', { source: 'query', key: 'spaceId' })
   @Get()
   async list(
     @Query() query: ListDictionaryTermsQueryDto,
@@ -61,6 +63,7 @@ export class DictionaryController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('space', { source: 'body', key: 'spaceId' })
   @Post('actions/export')
   async exportTerms(
     @Body() dto: ExportDictionaryTermsDto,
@@ -86,6 +89,7 @@ export class DictionaryController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('space', { source: 'body', key: 'spaceId' })
   @Post('actions/import')
   async importTermsAction(
     @Body() dto: ImportDictionaryTermsDto,
@@ -103,6 +107,7 @@ export class DictionaryController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('space', { source: 'body', key: 'spaceId' })
   @Post()
   async create(
     @Body() dto: CreateDictionaryTermDto,
@@ -118,6 +123,10 @@ export class DictionaryController {
     return this.dictionaryService.createTerm(dto, user, workspace.id);
   }
 
+  @AuthPolicyScope('resource', {
+    key: 'termId',
+    resourceType: 'dictionaryTerm',
+  })
   @Patch(':termId')
   async update(
     @Param('termId', ParseUUIDPipe) termId: string,
@@ -142,6 +151,10 @@ export class DictionaryController {
   }
 
   @HttpCode(HttpStatus.NO_CONTENT)
+  @AuthPolicyScope('resource', {
+    key: 'termId',
+    resourceType: 'dictionaryTerm',
+  })
   @Delete(':termId')
   async remove(
     @Param('termId', ParseUUIDPipe) termId: string,

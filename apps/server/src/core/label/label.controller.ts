@@ -25,6 +25,7 @@ import {
   FindPagesByLabelRequestDto,
   ListLabelsRequestDto,
 } from './dto/label.dto';
+import { AuthPolicyScope } from '../../common/decorators/auth-policy-scope.decorator';
 
 @UseGuards(JwtAuthGuard)
 @Controller('labels')
@@ -36,6 +37,11 @@ export class LabelController {
   ) {}
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('space', {
+    source: 'body',
+    key: 'spaceId',
+    optional: true,
+  })
   @Post('/')
   async getLabels(
     @Body() dto: ListLabelsRequestDto,
@@ -58,6 +64,11 @@ export class LabelController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('space', {
+    source: 'body',
+    key: 'spaceId',
+    optional: true,
+  })
   @Post('pages')
   async findPagesByLabel(
     @Body() dto: FindPagesByLabelRequestDto,

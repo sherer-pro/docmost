@@ -25,6 +25,7 @@ import { UserRepo } from '@docmost/db/repos/user/user.repo';
 import { AuthRateLimitGuard } from '../auth/rate-limit/auth-rate-limit.guard';
 import { AuthRateLimit } from '../auth/rate-limit/auth-rate-limit.decorator';
 import { AuthCookieService } from '../../common/security/auth-cookie.service';
+import { AuthPolicyScope } from '../../common/decorators/auth-policy-scope.decorator';
 
 @Controller('mfa')
 export class MfaController {
@@ -35,6 +36,7 @@ export class MfaController {
   ) {}
 
   @UseGuards(JwtAuthGuard)
+  @AuthPolicyScope('bootstrap')
   @HttpCode(HttpStatus.OK)
   @Post('status')
   async status(@AuthUser() user: User, @AuthWorkspace() workspace: Workspace) {
@@ -42,6 +44,7 @@ export class MfaController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @AuthPolicyScope('bootstrap')
   @HttpCode(HttpStatus.OK)
   @Post('setup')
   async setup(
@@ -53,9 +56,11 @@ export class MfaController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @AuthPolicyScope('bootstrap')
   @HttpCode(HttpStatus.OK)
   @Post('enable')
   async enable(
+    @Req() req: FastifyRequest,
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
     @Body() dto: MfaEnableDto,
@@ -65,7 +70,64 @@ export class MfaController {
       workspace.id,
       dto.secret,
       dto.verificationCode,
+      (req.raw as any).sessionId,
     );
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('setup-required')
+  async setupRequired(
+    @Req() req: FastifyRequest,
+    @Body() _dto: MfaSetupDto,
+  ) {
+    const token = req.cookies?.authToken;
+    if (!token) {
+      throw new UnauthorizedException('MFA setup session is missing');
+    }
+    return this.mfaService.setupWithMfaToken(token);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('enable-required')
+  @UseGuards(AuthRateLimitGuard)
+  @AuthRateLimit({ endpoint: 'mfaVerify', accountField: 'authToken' })
+  async enableRequired(
+    @Req() req: FastifyRequest,
+    @Res({ passthrough: true }) res: FastifyReply,
+    @Body() dto: MfaEnableDto,
+  ) {
+    const token = req.cookies?.authToken;
+    if (!token) {
+      throw new UnauthorizedException('MFA setup session is missing');
+    }
+    const result = await this.mfaService.enableWithMfaToken(
+      token,
+      dto.secret,
+      dto.verificationCode,
+      req,
+    );
+    this.authCookieService.setAuthCookies(res, result.authToken);
+    return {
+      success: result.success,
+      backupCodes: result.backupCodes,
+    };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @AuthPolicyScope('bootstrap')
+  @HttpCode(HttpStatus.OK)
+  @Post('step-up')
+  async stepUp(
+    @Req() req: FastifyRequest,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+    @Body() dto: MfaVerifyDto,
+  ) {
+    const sessionId = (req.raw as any).sessionId;
+    if (!sessionId) {
+      throw new UnauthorizedException('Current session is missing');
+    }
+    return this.mfaService.stepUp(user, workspace.id, sessionId, dto.code);
   }
 
   @UseGuards(JwtAuthGuard)

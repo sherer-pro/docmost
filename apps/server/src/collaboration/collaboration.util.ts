@@ -41,6 +41,7 @@ import {
   Tag,
   TransclusionSource,
   TransclusionReference,
+  PageEmbed,
   addUniqueIdsToDoc,
   htmlToMarkdown,
 } from '@docmost/editor-ext';
@@ -63,7 +64,7 @@ export const tiptapExtensions = [
   }),
   Heading,
   UniqueID.configure({
-    types: ['heading', 'paragraph', 'transclusionSource'],
+    types: ['heading', 'paragraph', 'transclusionSource', 'pageEmbed'],
   }),
   Comment,
   TextAlign.configure({ types: ['heading', 'paragraph'] }),
@@ -107,6 +108,7 @@ export const tiptapExtensions = [
   Subpages,
   TransclusionSource,
   TransclusionReference,
+  PageEmbed,
 ] as any;
 
 export function jsonToHtml(tiptapJson: any) {

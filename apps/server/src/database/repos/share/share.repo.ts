@@ -26,6 +26,7 @@ export class ShareRepo {
     'id',
     'key',
     'pageId',
+    'allowPublicLiveEmbed',
     'includeSubPages',
     'searchIndexing',
     'creatorId',
@@ -156,6 +157,24 @@ export class ShareRepo {
       .deleteFrom('shares')
       .where('workspaceId', '=', workspaceId)
       .execute();
+  }
+
+  async deleteByWorkspacePolicy(
+    workspaceId: string,
+    trx?: KyselyTransaction,
+  ): Promise<void> {
+    const db = dbOrTx(this.db, trx);
+    await sql`
+      DELETE FROM shares
+      USING spaces
+      WHERE shares.space_id = spaces.id
+        AND shares.workspace_id = ${workspaceId}
+        AND spaces.workspace_id = ${workspaceId}
+        AND COALESCE(
+          (spaces.settings #>> '{sharing,disabled}')::boolean,
+          true
+        ) = true
+    `.execute(db);
   }
 
   async getShares(userId: string, pagination: PaginationOptions) {

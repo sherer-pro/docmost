@@ -5,12 +5,14 @@ interface ILdapLogin {
   username: string;
   password: string;
   providerId: string;
+  spaceSlug?: string;
 }
 
 export async function ldapLogin(data: ILdapLogin): Promise<ILoginResponse> {
   const requestData = {
     username: data.username,
     password: data.password,
+    spaceSlug: data.spaceSlug,
   };
 
   const response = await api.post<ILoginResponse>(
@@ -19,4 +21,12 @@ export async function ldapLogin(data: ILdapLogin): Promise<ILoginResponse> {
   );
 
   return response.data;
+}
+
+export async function ldapStepUp(data: ILdapLogin): Promise<void> {
+  await api.post(`/sso/ldap/${data.providerId}/step-up`, {
+    username: data.username,
+    password: data.password,
+    spaceSlug: data.spaceSlug,
+  });
 }

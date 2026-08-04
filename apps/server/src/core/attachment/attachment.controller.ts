@@ -50,6 +50,7 @@ import * as path from 'path';
 import { RemoveIconDto } from './dto/attachment.dto';
 import { AttachmentFileAccessService } from './services/attachment-file-access.service';
 import { DeprecatedRoute } from '../../common/decorators/deprecated-route.decorator';
+import { AuthPolicyScope } from '../../common/decorators/auth-policy-scope.decorator';
 
 const ATTACHMENT_LEGACY_ALIAS_SUNSET = 'Fri, 01 Jan 2027 00:00:00 GMT';
 
@@ -66,6 +67,7 @@ export class AttachmentController {
   ) {}
 
   @UseGuards(JwtAuthGuard)
+  @AuthPolicyScope('page', { source: 'query', key: 'pageId' })
   @HttpCode(HttpStatus.OK)
   @Post('actions/upload-file')
   @UseInterceptors(FileInterceptor)
@@ -84,6 +86,10 @@ export class AttachmentController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @AuthPolicyScope('resource', {
+    key: 'fileId',
+    resourceType: 'attachment',
+  })
   @Get('files/:fileId/:fileName')
   async getFile(
     @Req() req: FastifyRequest,
@@ -121,6 +127,11 @@ export class AttachmentController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @AuthPolicyScope('space', {
+    source: 'query',
+    key: 'spaceId',
+    optional: true,
+  })
   @HttpCode(HttpStatus.OK)
   @Post('actions/upload-image')
   @UseInterceptors(FileInterceptor)
@@ -266,6 +277,11 @@ export class AttachmentController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @AuthPolicyScope('space', {
+    source: 'body',
+    key: 'spaceId',
+    optional: true,
+  })
   @HttpCode(HttpStatus.OK)
   @Post('actions/remove-icon')
   async removeIcon(

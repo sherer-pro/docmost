@@ -11,15 +11,23 @@ import { hashProtectedValue } from '../../../common/security/credential-protecti
 import { BadRequestException } from '@nestjs/common';
 import { SessionService } from '../../session/session.service';
 import { UserSessionRepo } from '@docmost/db/repos/session/user-session.repo';
+import { SpacePolicyService } from '../../space-policy/space-policy.service';
 
 describe('AuthService', () => {
   let service: AuthService;
-  let userTokenRepo: { findById: jest.Mock };
+  let userTokenRepo: { findById: jest.Mock; insertUserToken: jest.Mock };
+  let userRepo: { findByEmail: jest.Mock };
+  let spacePolicy: { resolveAccessibleTarget: jest.Mock };
+  let mailService: { sendToQueue: jest.Mock };
 
   beforeEach(async () => {
     userTokenRepo = {
       findById: jest.fn(),
+      insertUserToken: jest.fn(),
     };
+    userRepo = { findByEmail: jest.fn() };
+    spacePolicy = { resolveAccessibleTarget: jest.fn() };
+    mailService = { sendToQueue: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -27,11 +35,12 @@ describe('AuthService', () => {
         { provide: SignupService, useValue: {} },
         { provide: TokenService, useValue: {} },
         { provide: SessionService, useValue: {} },
-        { provide: UserRepo, useValue: {} },
+        { provide: UserRepo, useValue: userRepo },
         { provide: UserTokenRepo, useValue: userTokenRepo },
         { provide: UserSessionRepo, useValue: {} },
-        { provide: MailService, useValue: {} },
-        { provide: DomainService, useValue: {} },
+        { provide: MailService, useValue: mailService },
+        { provide: DomainService, useValue: { getUrl: () => 'https://docs.example.com' } },
+        { provide: SpacePolicyService, useValue: spacePolicy },
         { provide: 'KyselyModuleConnectionToken', useValue: {} },
       ],
     }).compile();
@@ -107,5 +116,25 @@ describe('AuthService', () => {
         'workspace-1',
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('does not issue a password reset for a target space that enforces SSO', async () => {
+    userRepo.findByEmail.mockResolvedValue({
+      id: 'user-1',
+      workspaceId: 'workspace-1',
+      deletedAt: null,
+    });
+    spacePolicy.resolveAccessibleTarget.mockResolvedValue({
+      space: { id: 'space-1', slug: 'strict-space' },
+      policy: { effective: { enforceSso: true } },
+    });
+
+    await service.forgotPassword(
+      { email: 'user@example.com', spaceSlug: 'strict-space' },
+      { id: 'workspace-1', enforceSso: false } as any,
+    );
+
+    expect(userTokenRepo.insertUserToken).not.toHaveBeenCalled();
+    expect(mailService.sendToQueue).not.toHaveBeenCalled();
   });
 });

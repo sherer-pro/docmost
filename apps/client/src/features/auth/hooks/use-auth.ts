@@ -7,7 +7,7 @@ import {
   setupWorkspace,
   verifyUserToken,
 } from "@/features/auth/services/auth-service";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAtom } from "jotai";
 import { currentUserAtom } from "@/features/user/atoms/current-user-atom";
 import {
@@ -28,11 +28,29 @@ import { RESET } from "jotai/utils";
 import { useTranslation } from "react-i18next";
 import { isCloud } from "@/lib/config.ts";
 import { exchangeTokenRedirectUrl } from "@/features/cloud/cloud.utils.ts";
+import {
+  getSpaceReturnTo,
+  getTargetedLoginUrl,
+  sanitizeRelativeReturnTo,
+} from "@/features/auth/utils/return-to.ts";
 
 export default function useAuth() {
   const { t } = useTranslation();
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const requestedReturnTo = searchParams.get("returnTo");
+  const returnTo = sanitizeRelativeReturnTo(
+    requestedReturnTo,
+    APP_ROUTE.HOME,
+  );
+  const authContextQuery = (() => {
+    const params = new URLSearchParams();
+    const spaceSlug = searchParams.get("spaceSlug");
+    if (spaceSlug) params.set("spaceSlug", spaceSlug);
+    if (returnTo !== APP_ROUTE.HOME) params.set("returnTo", returnTo);
+    return params.size ? `?${params}` : "";
+  })();
   const [, setCurrentUser] = useAtom(currentUserAtom);
 
   const handleSignIn = async (data: ILogin) => {
@@ -44,11 +62,11 @@ export default function useAuth() {
 
       // Check if MFA is required
       if (response?.userHasMfa) {
-        navigate(APP_ROUTE.AUTH.MFA_CHALLENGE);
+        navigate(`${APP_ROUTE.AUTH.MFA_CHALLENGE}${authContextQuery}`);
       } else if (response?.requiresMfaSetup) {
-        navigate(APP_ROUTE.AUTH.MFA_SETUP_REQUIRED);
+        navigate(`${APP_ROUTE.AUTH.MFA_SETUP_REQUIRED}${authContextQuery}`);
       } else {
-        navigate(APP_ROUTE.HOME);
+        navigate(returnTo);
       }
     } catch (err) {
       setIsLoading(false);
@@ -73,9 +91,20 @@ export default function useAuth() {
             "Account created successfully. Please log in to set up two-factor authentication.",
           ),
         });
-        navigate(APP_ROUTE.AUTH.LOGIN);
+        const params = new URLSearchParams();
+        if (response.entrySpaceSlug) {
+          params.set("spaceSlug", response.entrySpaceSlug);
+          params.set("returnTo", getSpaceReturnTo(response.entrySpaceSlug));
+        }
+        navigate(
+          `${APP_ROUTE.AUTH.LOGIN}${params.size ? `?${params}` : ""}`,
+        );
       } else {
-        navigate(APP_ROUTE.HOME);
+        navigate(
+          response?.entrySpaceSlug
+            ? getSpaceReturnTo(response.entrySpaceSlug)
+            : APP_ROUTE.HOME,
+        );
       }
     } catch (err) {
       setIsLoading(false);
@@ -127,9 +156,9 @@ export default function useAuth() {
             "Password reset was successful. Please log in with your new password.",
           ),
         });
-        navigate(APP_ROUTE.AUTH.LOGIN);
+        navigate(getTargetedLoginUrl(data.spaceSlug));
       } else {
-        navigate(APP_ROUTE.HOME);
+        navigate(getSpaceReturnTo(data.spaceSlug));
         notifications.show({
           message: t("Password reset was successful"),
         });

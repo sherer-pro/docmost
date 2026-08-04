@@ -29,6 +29,7 @@ describe('WorkspaceService', () => {
 
     const eventEmitter = {
       emit: jest.fn(),
+      emitAsync: jest.fn().mockResolvedValue([]),
     };
     const ssoEndpointPolicy = {
       assertAllowed: ssoEndpointAllowed
@@ -51,6 +52,7 @@ describe('WorkspaceService', () => {
       {} as any,
       eventEmitter as any,
       ssoEndpointPolicy as any,
+      {} as any,
     );
 
     return {

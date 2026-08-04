@@ -1,10 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB, KyselyTransaction } from '@docmost/db/types/kysely.types';
+import { SpacePolicyService } from '../space-policy/space-policy.service';
 
 @Injectable()
 export class PublicSharingPolicyService {
-  constructor(@InjectKysely() private readonly db: KyselyDB) {}
+  constructor(
+    @InjectKysely() private readonly db: KyselyDB,
+    private readonly spacePolicy: SpacePolicyService,
+  ) {}
 
   async isAllowed(
     workspaceId: string,
@@ -34,9 +38,9 @@ export class PublicSharingPolicyService {
     workspaceSettings: unknown,
     spaceSettings: unknown,
   ): boolean {
-    const workspaceDisabled =
-      (workspaceSettings as any)?.sharing?.disabled === true;
-    const spaceDisabled = (spaceSettings as any)?.sharing?.disabled === true;
-    return !workspaceDisabled && !spaceDisabled;
+    return !this.spacePolicy.getEffectivePublicSharingDisabled(
+      workspaceSettings,
+      spaceSettings,
+    );
   }
 }

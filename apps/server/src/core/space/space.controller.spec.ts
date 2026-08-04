@@ -12,6 +12,7 @@ import {
   SpaceCaslSubject,
 } from '../casl/interfaces/space-ability.type';
 import { PageAccessService } from '../page-access/page-access.service';
+import { SpacePolicyService } from '../space-policy/space-policy.service';
 
 describe('SpaceController', () => {
   let controller: SpaceController;
@@ -29,6 +30,10 @@ describe('SpaceController', () => {
   const mockPageAccessService = {
     hasAnyReadablePageInSpace: jest.fn(),
   };
+  const mockSpacePolicy = {
+    resolveAccessibleSpace: jest.fn(),
+    evaluateAuthentication: jest.fn(),
+  };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -42,6 +47,7 @@ describe('SpaceController', () => {
         { provide: SpaceAbilityFactory, useValue: mockSpaceAbility },
         { provide: WorkspaceAbilityFactory, useValue: {} },
         { provide: PageAccessService, useValue: mockPageAccessService },
+        { provide: SpacePolicyService, useValue: mockSpacePolicy },
       ],
     }).overrideGuard(JwtAuthGuard)
       .useValue({ canActivate: jest.fn(() => true) });
@@ -96,6 +102,45 @@ describe('SpaceController', () => {
       SpaceCaslSubject.Settings,
     );
     expect(result.membership.role).toBeNull();
+  });
+
+  it('returns a bootstrap policy context for an accessible target space', async () => {
+    const user = { id: 'user-1' } as any;
+    const workspace = { id: 'workspace-1' } as any;
+    const policy = {
+      overrides: {
+        enforceMfa: null,
+        enforceSso: true,
+        disablePublicSharing: null,
+      },
+      effective: {
+        enforceMfa: false,
+        enforceSso: true,
+        disablePublicSharing: false,
+      },
+    };
+    mockSpacePolicy.resolveAccessibleSpace.mockResolvedValue({
+      space: { id: 'space-101', slug: 'target', name: 'Target' },
+      policy,
+    });
+    mockSpacePolicy.evaluateAuthentication.mockReturnValue({
+      satisfied: false,
+    });
+
+    await expect(
+      controller.getSpacePolicyContext(
+        { spaceSlug: 'target' },
+        user,
+        workspace,
+        { raw: { userSession: { id: 'session-1' } } } as any,
+      ),
+    ).resolves.toEqual({
+      id: 'space-101',
+      slug: 'target',
+      name: 'Target',
+      policy,
+      requiresStepUp: true,
+    });
   });
 
   it('archives a space when user can manage settings', async () => {

@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next";
 import { IPublicAuthProvider } from "@/features/security/types/security.types";
 import APP_ROUTE from "@/lib/app-route";
 import { ldapLogin } from "@/features/security/services/ldap-auth-service";
+import { sanitizeRelativeReturnTo } from "@/features/auth/utils/return-to";
 
 const createFormSchema = (t: (key: string) => string) =>
   z.object({
@@ -20,18 +21,23 @@ interface LdapLoginModalProps {
   opened: boolean;
   onClose: () => void;
   provider: IPublicAuthProvider;
+  spaceSlug?: string;
+  returnTo?: string;
 }
 
 export function LdapLoginModal({
   opened,
   onClose,
   provider,
+  spaceSlug,
+  returnTo,
 }: LdapLoginModalProps) {
   const { t } = useTranslation();
   const formSchema = createFormSchema(t);
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const safeReturnTo = sanitizeRelativeReturnTo(returnTo, APP_ROUTE.HOME);
 
   const form = useForm({
     validate: zodResolver(formSchema),
@@ -53,18 +59,23 @@ export function LdapLoginModal({
         username: values.username,
         password: values.password,
         providerId: provider.id,
+        spaceSlug,
       });
 
       // Handle MFA like the regular login
+      const authParams = new URLSearchParams();
+      if (spaceSlug) authParams.set("spaceSlug", spaceSlug);
+      if (returnTo) authParams.set("returnTo", safeReturnTo);
+      const authQuery = authParams.size ? `?${authParams}` : "";
       if (response?.userHasMfa) {
         onClose();
-        navigate(APP_ROUTE.AUTH.MFA_CHALLENGE);
+        navigate(`${APP_ROUTE.AUTH.MFA_CHALLENGE}${authQuery}`);
       } else if (response?.requiresMfaSetup) {
         onClose();
-        navigate(APP_ROUTE.AUTH.MFA_SETUP_REQUIRED);
+        navigate(`${APP_ROUTE.AUTH.MFA_SETUP_REQUIRED}${authQuery}`);
       } else {
         onClose();
-        navigate(APP_ROUTE.HOME);
+        navigate(safeReturnTo);
       }
     } catch (err: any) {
       setIsLoading(false);

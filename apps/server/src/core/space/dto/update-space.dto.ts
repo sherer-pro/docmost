@@ -216,7 +216,15 @@ export class UpdateSpaceDto extends PartialType(CreateSpaceDto) {
 
   @IsOptional()
   @IsBoolean()
-  disablePublicSharing?: boolean;
+  disablePublicSharing?: boolean | null;
+
+  @IsOptional()
+  @IsBoolean()
+  enforceMfa?: boolean | null;
+
+  @IsOptional()
+  @IsBoolean()
+  enforceSso?: boolean | null;
 
   @IsOptional()
   @ValidateNested()

@@ -62,6 +62,7 @@ export async function uploadIcon(
     "/attachments/actions/upload-image",
     formData,
     {
+      params: spaceId ? { spaceId } : undefined,
       headers: {
         "Content-Type": "multipart/form-data",
       },

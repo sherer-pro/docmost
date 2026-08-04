@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { Hocuspocus, Document } from '@hocuspocus/server';
 import { TiptapTransformer } from '@hocuspocus/transformer';
 import {
@@ -115,6 +115,76 @@ export class CollaborationHandler {
           },
         );
       },
+      applyPageTemplateMutation: async (
+        documentName: string,
+        payload: {
+          originalContent: unknown;
+          nextContent: unknown;
+          baseContentHash: string;
+          mutationId: string;
+          user: User;
+        },
+      ) => {
+        const {
+          originalContent,
+          nextContent,
+          baseContentHash,
+          mutationId,
+          user,
+        } = payload;
+        strictJsonToNode(nextContent as any);
+        const mutationAfterHash = hashProseMirrorJson(nextContent as any);
+        let mutationApplied = false;
+        try {
+          return await this.withYdocConnection(
+            hocuspocus,
+            documentName,
+            { user, pageTemplateMutationId: mutationId },
+            (doc) => {
+              const current = TiptapTransformer.fromYdoc(doc, 'default');
+              const beforeHash = hashProseMirrorJson(current);
+              if (beforeHash !== baseContentHash) {
+                throw new ConflictException({
+                  code: 'page_embed_stale',
+                  message: 'The document changed',
+                });
+              }
+              this.replaceDocumentContent(doc, nextContent);
+              mutationApplied = true;
+              return {
+                beforeHash,
+                afterHash: mutationAfterHash,
+              };
+            },
+          );
+        } catch (error) {
+          if (!mutationApplied) throw error;
+          // A failed persistence hook must not leave an unpersisted live node in
+          // the shared Yjs document. Restore only while this mutation is still
+          // the current state so a concurrent winner can never be overwritten.
+          try {
+            await this.withYdocConnection(
+              hocuspocus,
+              documentName,
+              { user, pageTemplateRecovery: true },
+              (doc) => {
+                const current = TiptapTransformer.fromYdoc(doc, 'default');
+                if (hashProseMirrorJson(current) !== mutationAfterHash) {
+                  return false;
+                }
+                this.replaceDocumentContent(doc, originalContent);
+                return true;
+              },
+            );
+          } catch (recoveryError) {
+            this.logger.error(
+              `Failed to restore page template mutation ${mutationId}`,
+              recoveryError as Error,
+            );
+          }
+          throw error;
+        }
+      },
       getAiPageContentHash: async (
         documentName: string,
         payload: { user: User },
@@ -162,5 +232,16 @@ export class CollaborationHandler {
     } finally {
       await connection.disconnect();
     }
+  }
+
+  private replaceDocumentContent(doc: Document, content: unknown): void {
+    const fragment = doc.getXmlFragment('default');
+    if (fragment.length > 0) fragment.delete(0, fragment.length);
+    const next = TiptapTransformer.toYdoc(
+      content as any,
+      'default',
+      tiptapExtensions,
+    );
+    Y.applyUpdate(doc, Y.encodeStateAsUpdate(next));
   }
 }

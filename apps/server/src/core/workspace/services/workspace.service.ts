@@ -39,6 +39,7 @@ import { WatcherRepo } from '@docmost/db/repos/watcher/watcher.repo';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EventName } from '../../../common/events/event.contants';
 import { SsoEndpointPolicyService } from '../../../integrations/environment/sso-endpoint-policy.service';
+import { SpacePolicyService } from '../../space-policy/space-policy.service';
 
 @Injectable()
 export class WorkspaceService {
@@ -57,6 +58,7 @@ export class WorkspaceService {
     @InjectQueue(QueueName.ATTACHMENT_QUEUE) private attachmentQueue: Queue,
     private eventEmitter: EventEmitter2,
     private readonly ssoEndpointPolicy: SsoEndpointPolicyService,
+    private readonly spacePolicy: SpacePolicyService,
   ) {}
 
   async findById(workspaceId: string) {
@@ -72,7 +74,7 @@ export class WorkspaceService {
     return workspace;
   }
 
-  async getWorkspacePublicData(workspaceId: string) {
+  async getWorkspacePublicData(workspaceId: string, spaceSlug?: string) {
     const workspace = await this.db
       .selectFrom('workspaces')
       .select(['id', 'name', 'logo', 'hostname', 'enforceSso'])
@@ -81,6 +83,18 @@ export class WorkspaceService {
 
     if (!workspace) {
       throw new NotFoundException('Workspace not found');
+    }
+
+    let enforceSso = workspace.enforceSso;
+    if (spaceSlug) {
+      const spaceId = await this.spacePolicy.resolveSpaceId(
+        workspaceId,
+        spaceSlug,
+      );
+      const policy = spaceId
+        ? await this.spacePolicy.resolve(workspaceId, spaceId)
+        : null;
+      enforceSso = policy?.effective.enforceSso ?? enforceSso;
     }
 
     const providers = await this.db
@@ -92,11 +106,21 @@ export class WorkspaceService {
       .where('type', 'in', [...SSO_PROVIDER_TYPES])
       .execute();
 
-    // The usable-provider rule lives in a single predicate so the login screen
-    // can never advertise a provider that the login endpoints would reject.
+    const allowedProviders = (
+      await Promise.all(
+        providers.map(async (provider) =>
+          isUsableSsoProvider(provider) &&
+          (await this.isSsoProviderEndpointAllowed(provider))
+            ? provider
+            : null,
+        ),
+      )
+    ).filter((provider): provider is AuthProvider => provider !== null);
+
     return {
       ...workspace,
-      authProviders: providers.filter(isUsableSsoProvider).map((provider) => ({
+      enforceSso,
+      authProviders: allowedProviders.map((provider) => ({
         id: provider.id,
         name: provider.name,
         type: provider.type,
@@ -240,6 +264,10 @@ export class WorkspaceService {
   }
 
   async update(workspaceId: string, updateWorkspaceDto: UpdateWorkspaceDto) {
+    const updatesAuthenticationPolicy =
+      typeof updateWorkspaceDto.enforceSso !== 'undefined' ||
+      typeof updateWorkspaceDto.enforceMfa !== 'undefined';
+
     if (typeof updateWorkspaceDto.enforceSso !== 'undefined') {
       await executeTx(this.db, async (trx) => {
         await trx
@@ -307,6 +335,23 @@ export class WorkspaceService {
 
     if (typeof updateWorkspaceDto.disablePublicSharing !== 'undefined') {
       await executeTx(this.db, async (trx) => {
+        const workspace = await this.workspaceRepo.findById(workspaceId, {
+          withLock: true,
+          trx,
+        });
+        if (!workspace) {
+          throw new NotFoundException('Workspace not found');
+        }
+
+        await trx
+          .selectFrom('spaces')
+          .select('id')
+          .where('workspaceId', '=', workspaceId)
+          .forUpdate()
+          .execute();
+
+        const wasDisabled =
+          (workspace.settings as any)?.sharing?.disabled === true;
         await this.workspaceRepo.updateSharingSettings(
           workspaceId,
           'disabled',
@@ -314,8 +359,8 @@ export class WorkspaceService {
           trx,
         );
 
-        if (updateWorkspaceDto.disablePublicSharing) {
-          await this.shareRepo.deleteByWorkspaceId(workspaceId, trx);
+        if (!wasDisabled && updateWorkspaceDto.disablePublicSharing) {
+          await this.shareRepo.deleteByWorkspacePolicy(workspaceId, trx);
         }
       });
 
@@ -333,6 +378,12 @@ export class WorkspaceService {
 
     await this.workspaceRepo.updateWorkspace(updateWorkspaceDto, workspaceId);
 
+    if (updatesAuthenticationPolicy) {
+      await this.eventEmitter.emitAsync(EventName.AUTHORIZATION_CHANGED, {
+        workspaceId,
+      });
+    }
+
     return this.workspaceRepo.findById(workspaceId, {
       withMemberCount: true,
     });
@@ -346,29 +397,38 @@ export class WorkspaceService {
         continue;
       }
 
-      const endpoint =
-        provider.type === 'oidc'
-          ? provider.oidcIssuer
-          : provider.type === 'saml'
-            ? provider.samlUrl
-            : provider.ldapUrl;
-      const protocols =
-        provider.type === 'ldap'
-          ? (['ldap:', 'ldaps:'] as const)
-          : (['http:', 'https:'] as const);
-      try {
-        await this.ssoEndpointPolicy.assertAllowed(
-          endpoint,
-          protocols,
-          'SSO provider',
-        );
+      if (await this.isSsoProviderEndpointAllowed(provider)) {
         return true;
-      } catch {
-        // Another configured provider may still make enforcement safe.
       }
     }
 
     return false;
+  }
+
+  private async isSsoProviderEndpointAllowed(
+    provider: AuthProvider,
+  ): Promise<boolean> {
+    const endpoint =
+      provider.type === 'oidc'
+        ? provider.oidcIssuer
+        : provider.type === 'saml'
+          ? provider.samlUrl
+          : provider.ldapUrl;
+    const protocols =
+      provider.type === 'ldap'
+        ? (['ldap:', 'ldaps:'] as const)
+        : (['http:', 'https:'] as const);
+
+    try {
+      await this.ssoEndpointPolicy.assertAllowed(
+        endpoint,
+        protocols,
+        'SSO provider',
+      );
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   async getWorkspaceUsers(
@@ -631,6 +691,10 @@ export class WorkspaceService {
       await this.watcherRepo.deleteByUserAndWorkspace(userId, workspaceId, {
         trx,
       });
+    });
+
+    this.eventEmitter.emit(EventName.PAGE_EMBED_VISIBILITY_CHANGED, {
+      workspaceId,
     });
 
     try {

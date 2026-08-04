@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
@@ -55,6 +56,13 @@ import {
   isEnforcementReadyProvider,
   SECURITY_CRITICAL_PROVIDER_FIELDS,
 } from './sso-provider.util';
+import { SpacePolicyService } from '../space-policy/space-policy.service';
+import { AuthenticationAssuranceService } from '../space-policy/authentication-assurance.service';
+import { TokenService } from '../auth/services/token.service';
+import { AuthCookieService } from '../../common/security/auth-cookie.service';
+import { JwtPayload, JwtType } from '../auth/dto/jwt-payload';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventName } from '../../common/events/event.contants';
 
 const REDACTED_SECRET = '********';
 const SSO_STATE_TTL_MS = 10 * 60 * 1000;
@@ -70,6 +78,28 @@ interface ExternalIdentity {
   groups: Array<{ id: string; name: string }>;
 }
 
+interface SsoLoginContext {
+  purpose?: 'login' | 'step_up';
+  userId?: string;
+  sessionId?: string;
+  spaceId?: string;
+  returnTo?: string;
+}
+
+interface SsoLoginRequestContext extends SsoLoginContext {
+  spaceSlug?: string;
+}
+
+export interface SsoAuthenticationResult {
+  authToken?: string;
+  mfaToken?: string;
+  userHasMfa: boolean;
+  requiresMfaSetup: boolean;
+  isMfaEnforced?: boolean;
+  stepUp?: boolean;
+  returnTo?: string;
+}
+
 @Injectable()
 export class SsoService {
   constructor(
@@ -80,6 +110,10 @@ export class SsoService {
     private readonly environmentService: EnvironmentService,
     private readonly domainService: DomainService,
     private readonly endpointPolicy: SsoEndpointPolicyService,
+    private readonly spacePolicy: SpacePolicyService,
+    private readonly assuranceService: AuthenticationAssuranceService,
+    private readonly tokenService: TokenService,
+    @Optional() private readonly eventEmitter?: EventEmitter2,
   ) {}
 
   async listProviders(workspaceId: string) {
@@ -127,7 +161,7 @@ export class SsoService {
   }
 
   async updateProvider(dto: UpdateSsoProviderDto, workspaceId: string) {
-    return executeTx(this.db, async (trx) => {
+    const result = await executeTx(this.db, async (trx) => {
       const current = await this.requireProvider(
         dto.providerId,
         workspaceId,
@@ -165,19 +199,22 @@ export class SsoService {
 
       // Any change to how the provider talks to the identity provider makes an
       // earlier verification meaningless, so it has to be tested again.
-      if (
-        SECURITY_CRITICAL_PROVIDER_FIELDS.some(
-          (field) =>
-            field in updates &&
-            String(JSON.stringify(updates[field] ?? null)) !==
-              String(JSON.stringify(current[field] ?? null)),
-        )
-      ) {
+      const invalidatesVerification = SECURITY_CRITICAL_PROVIDER_FIELDS.some(
+        (field) =>
+          field in updates &&
+          String(JSON.stringify(updates[field] ?? null)) !==
+            String(JSON.stringify(current[field] ?? null)),
+      );
+
+      if (invalidatesVerification) {
         updates.verifiedAt = null;
         updates.lastErrorCode = null;
       }
 
-      if (current.isEnabled && input.isEnabled === false) {
+      if (
+        current.isEnabled &&
+        (input.isEnabled === false || invalidatesVerification)
+      ) {
         await this.assertSsoWillRemainAvailable(
           workspaceId,
           current.id,
@@ -199,6 +236,10 @@ export class SsoService {
 
       return this.sanitizeProvider(provider);
     });
+    if (dto.isEnabled === false || dto.groupSync === false) {
+      this.emitPageEmbedVisibilityChanged(workspaceId);
+    }
+    return result;
   }
 
   async deleteProvider(providerId: string, workspaceId: string) {
@@ -229,6 +270,7 @@ export class SsoService {
 
       await this.removeProviderGroupMemberships(provider.id, trx);
     });
+    this.emitPageEmbedVisibilityChanged(workspaceId);
   }
 
   async listGroupMappings(providerId: string, workspaceId: string) {
@@ -287,7 +329,7 @@ export class SsoService {
     dto: UpdateSsoGroupMappingDto,
     workspaceId: string,
   ) {
-    return executeTx(this.db, async (trx) => {
+    const result = await executeTx(this.db, async (trx) => {
       const mapping = await this.requireGroupMapping(
         dto.mappingId,
         workspaceId,
@@ -313,6 +355,8 @@ export class SsoService {
         .returningAll()
         .executeTakeFirstOrThrow();
     });
+    this.emitPageEmbedVisibilityChanged(workspaceId);
+    return result;
   }
 
   async deleteGroupMapping(mappingId: string, workspaceId: string) {
@@ -329,6 +373,7 @@ export class SsoService {
         .where('id', '=', mapping.id)
         .execute();
     });
+    this.emitPageEmbedVisibilityChanged(workspaceId);
   }
 
   private async requireGroupMapping(
@@ -407,6 +452,7 @@ export class SsoService {
     providerId: string,
     workspace: Workspace,
     origin: string,
+    loginContext?: SsoLoginRequestContext,
   ) {
     const provider = await this.requireEnabledProvider(
       providerId,
@@ -418,12 +464,17 @@ export class SsoService {
     const state = generators.state();
     const nonce = generators.nonce();
     const codeVerifier = generators.codeVerifier();
+    const context = await this.resolveLoginContext(
+      workspace,
+      loginContext,
+    );
 
     await this.createLoginState({
       state,
       provider,
       codeVerifier,
       nonce,
+      ...context,
     });
 
     return client.authorizationUrl({
@@ -470,7 +521,19 @@ export class SsoService {
     );
 
     const identity = await this.identityFromOidc(client, tokenSet);
-    return this.finishLogin(provider, workspace, identity, request);
+    if (loginState.purpose === 'step_up') {
+      return this.finishStepUp(
+        provider,
+        workspace,
+        identity,
+        loginState,
+        request,
+      );
+    }
+    return this.finishLogin(provider, workspace, identity, request, {
+      spaceId: loginState.spaceId ?? undefined,
+      returnTo: loginState.returnTo ?? undefined,
+    });
   }
 
   async getSamlAuthorizeUrl(
@@ -478,6 +541,7 @@ export class SsoService {
     workspace: Workspace,
     origin: string,
     host?: string,
+    loginContext?: SsoLoginRequestContext,
   ) {
     const provider = await this.requireEnabledProvider(
       providerId,
@@ -485,7 +549,11 @@ export class SsoService {
       'saml',
     );
     const state = generators.state();
-    await this.createLoginState({ state, provider });
+    const context = await this.resolveLoginContext(
+      workspace,
+      loginContext,
+    );
+    await this.createLoginState({ state, provider, ...context });
 
     const saml = this.createSamlClient(
       provider,
@@ -532,7 +600,19 @@ export class SsoService {
     }
 
     const identity = this.identityFromSaml(result.profile);
-    return this.finishLogin(provider, workspace, identity, request);
+    if (loginState.purpose === 'step_up') {
+      return this.finishStepUp(
+        provider,
+        workspace,
+        identity,
+        loginState,
+        request,
+      );
+    }
+    return this.finishLogin(provider, workspace, identity, request, {
+      spaceId: loginState.spaceId ?? undefined,
+      returnTo: loginState.returnTo ?? undefined,
+    });
   }
 
   async loginWithLdap(
@@ -541,6 +621,7 @@ export class SsoService {
     username: string,
     password: string,
     request?: FastifyRequest,
+    loginContext?: SsoLoginRequestContext,
   ) {
     const provider = await this.requireEnabledProvider(
       providerId,
@@ -548,7 +629,76 @@ export class SsoService {
       'ldap',
     );
     const identity = await this.authenticateLdap(provider, username, password);
-    return this.finishLogin(provider, workspace, identity, request);
+    const context = await this.resolveLoginContext(workspace, loginContext);
+    return this.finishLogin(provider, workspace, identity, request, context);
+  }
+
+  async getOidcStepUpUrl(
+    providerId: string,
+    workspace: Workspace,
+    origin: string,
+    userId: string,
+    sessionId: string,
+    input?: { spaceSlug?: string; returnTo?: string },
+  ) {
+    const target = await this.resolveLoginContext(workspace, input);
+    return this.getOidcAuthorizeUrl(providerId, workspace, origin, {
+      purpose: 'step_up',
+      userId,
+      sessionId,
+      spaceId: target.spaceId,
+      returnTo: target.returnTo,
+    });
+  }
+
+  async getSamlStepUpUrl(
+    providerId: string,
+    workspace: Workspace,
+    origin: string,
+    userId: string,
+    sessionId: string,
+    input?: { spaceSlug?: string; returnTo?: string },
+  ) {
+    const target = await this.resolveLoginContext(workspace, input);
+    const url = await this.getSamlAuthorizeUrl(
+      providerId,
+      workspace,
+      origin,
+      new URL(origin).hostname,
+      {
+        purpose: 'step_up',
+        userId,
+        sessionId,
+        spaceId: target.spaceId,
+        returnTo: target.returnTo,
+      },
+    );
+    return url;
+  }
+
+  async stepUpWithLdap(
+    providerId: string,
+    workspace: Workspace,
+    user: User,
+    sessionId: string,
+    username: string,
+    password: string,
+  ) {
+    const provider = await this.requireEnabledProvider(
+      providerId,
+      workspace.id,
+      'ldap',
+    );
+    const identity = await this.authenticateLdap(provider, username, password);
+    await this.assertStepUpIdentity(provider, workspace, identity, user.id);
+    await this.assuranceService.markSsoVerified(sessionId, provider.id);
+    await this.eventEmitter?.emitAsync(EventName.AUTHORIZATION_CHANGED, {
+      workspaceId: workspace.id,
+      userId: user.id,
+      sessionId,
+    });
+    await this.recordSuccessfulLogin(provider);
+    return { ssoVerified: true };
   }
 
   private async finishLogin(
@@ -556,8 +706,22 @@ export class SsoService {
     workspace: Workspace,
     identity: ExternalIdentity,
     request?: FastifyRequest,
-  ) {
+    context: Pick<SsoLoginContext, 'spaceId' | 'returnTo'> = {},
+  ): Promise<SsoAuthenticationResult> {
     const user = await this.resolveIdentity(provider, workspace, identity);
+
+    let enforceMfa = Boolean(workspace.enforceMfa);
+    if (context.spaceId) {
+      const target = await this.spacePolicy.resolveAccessibleSpace(
+        workspace,
+        user,
+        context.spaceId,
+      );
+      if (!target) {
+        throw new ForbiddenException('The target space is not accessible');
+      }
+      enforceMfa = target.policy.effective.enforceMfa;
+    }
 
     if (provider.groupSync && identity.groupsProvided) {
       await this.syncGroups(provider, user, identity.groups);
@@ -567,8 +731,220 @@ export class SsoService {
       user,
       workspace,
       request,
+      {
+        enforceMfa,
+        ssoAuthProviderId: provider.id,
+        targetSpaceId: context.spaceId,
+      },
     );
 
+    await this.recordSuccessfulLogin(provider);
+
+    return {
+      ...loginToken,
+      returnTo: context.returnTo,
+    };
+  }
+
+  private async finishStepUp(
+    provider: AuthProvider,
+    workspace: Workspace,
+    identity: ExternalIdentity,
+    loginState: SsoLoginState,
+    request?: FastifyRequest,
+  ): Promise<SsoAuthenticationResult> {
+    if (!loginState.userId || !loginState.sessionId) {
+      throw new UnauthorizedException('SSO step-up state is incomplete');
+    }
+
+    await this.assertCurrentSessionBinding(
+      request,
+      workspace.id,
+      loginState.userId,
+      loginState.sessionId,
+    );
+    const user = await this.assertStepUpIdentity(
+      provider,
+      workspace,
+      identity,
+      loginState.userId,
+    );
+
+    if (loginState.spaceId) {
+      const target = await this.spacePolicy.resolveAccessibleSpace(
+        workspace,
+        user,
+        loginState.spaceId,
+      );
+      if (!target) {
+        throw new ForbiddenException('The target space is not accessible');
+      }
+    }
+
+    if (provider.groupSync && identity.groupsProvided) {
+      await this.syncGroups(provider, user, identity.groups);
+    }
+
+    await this.assuranceService.markSsoVerified(
+      loginState.sessionId,
+      provider.id,
+    );
+    await this.eventEmitter?.emitAsync(EventName.AUTHORIZATION_CHANGED, {
+      workspaceId: workspace.id,
+      userId: user.id,
+      sessionId: loginState.sessionId,
+    });
+    await this.recordSuccessfulLogin(provider);
+
+    return {
+      userHasMfa: false,
+      requiresMfaSetup: false,
+      stepUp: true,
+      returnTo: this.safeReturnTo(loginState.returnTo),
+    };
+  }
+
+  private async assertCurrentSessionBinding(
+    request: FastifyRequest | undefined,
+    workspaceId: string,
+    userId: string,
+    sessionId: string,
+  ) {
+    const authToken = (request as any)?.cookies?.[
+      AuthCookieService.AUTH_COOKIE_NAME
+    ];
+    if (!authToken) {
+      throw new UnauthorizedException(
+        'The current session is required for SSO step-up',
+      );
+    }
+
+    const payload = (await this.tokenService.verifyJwt(
+      authToken,
+      JwtType.ACCESS,
+    )) as JwtPayload;
+    if (
+      payload.sub !== userId ||
+      payload.workspaceId !== workspaceId ||
+      payload.sessionId !== sessionId
+    ) {
+      throw new UnauthorizedException('SSO step-up session does not match');
+    }
+
+    const session = await this.db
+      .selectFrom('userSessions')
+      .select(['id', 'userId', 'workspaceId'])
+      .where('id', '=', sessionId)
+      .where('userId', '=', userId)
+      .where('workspaceId', '=', workspaceId)
+      .where('revokedAt', 'is', null)
+      .where('expiresAt', '>', new Date())
+      .executeTakeFirst();
+    if (!session) {
+      throw new UnauthorizedException('SSO step-up session is no longer active');
+    }
+  }
+
+  private async assertStepUpIdentity(
+    provider: AuthProvider,
+    workspace: Workspace,
+    identity: ExternalIdentity,
+    expectedUserId: string,
+  ): Promise<User> {
+    const account = await this.db
+      .selectFrom('authAccounts')
+      .select('userId')
+      .where('authProviderId', '=', provider.id)
+      .where('providerUserId', '=', identity.providerUserId)
+      .where('deletedAt', 'is', null)
+      .executeTakeFirst();
+
+    let user: User | undefined;
+    if (account) {
+      if (account.userId !== expectedUserId) {
+        throw new ForbiddenException(
+          'The SSO identity belongs to a different user',
+        );
+      }
+      user = await this.userRepo.findById(expectedUserId, workspace.id);
+    } else {
+      this.assertEmailVerifiedForLinking(identity);
+      user = await this.userRepo.findByEmail(identity.email, workspace.id);
+      if (!user || user.id !== expectedUserId) {
+        throw new ForbiddenException(
+          'The SSO identity belongs to a different user',
+        );
+      }
+    }
+
+    this.assertActiveUser(user);
+    return user;
+  }
+
+  private async resolveLoginContext(
+    workspace: Workspace,
+    input?: SsoLoginRequestContext,
+  ): Promise<SsoLoginContext> {
+    let spaceId = input?.spaceId;
+    if (!spaceId && input?.spaceSlug) {
+      spaceId =
+        (await this.spacePolicy.resolveSpaceId(
+          workspace.id,
+          input.spaceSlug,
+        )) ?? undefined;
+      if (!spaceId) {
+        throw new NotFoundException('Space not found');
+      }
+    }
+
+    return {
+      purpose: input?.purpose ?? 'login',
+      userId: input?.userId,
+      sessionId: input?.sessionId,
+      spaceId,
+      returnTo: input?.returnTo
+        ? this.safeReturnTo(input.returnTo)
+        : undefined,
+    };
+  }
+
+  private safeReturnTo(returnTo?: string | null): string {
+    if (
+      !returnTo ||
+      !returnTo.startsWith('/') ||
+      returnTo.startsWith('//') ||
+      returnTo.includes('\\') ||
+      this.hasControlCharacters(returnTo)
+    ) {
+      return '/home';
+    }
+
+    let decoded: string;
+    try {
+      decoded = decodeURIComponent(returnTo);
+    } catch {
+      return '/home';
+    }
+    if (
+      !decoded.startsWith('/') ||
+      decoded.startsWith('//') ||
+      decoded.includes('\\') ||
+      this.hasControlCharacters(decoded)
+    ) {
+      return '/home';
+    }
+
+    return returnTo;
+  }
+
+  private hasControlCharacters(value: string): boolean {
+    return [...value].some((character) => {
+      const code = character.charCodeAt(0);
+      return code <= 31 || code === 127;
+    });
+  }
+
+  private async recordSuccessfulLogin(provider: AuthProvider) {
     await this.db
       .updateTable('authProviders')
       .set({
@@ -579,8 +955,6 @@ export class SsoService {
       .where('id', '=', provider.id)
       .where('workspaceId', '=', provider.workspaceId)
       .execute();
-
-    return loginToken;
   }
 
   /**
@@ -957,6 +1331,13 @@ export class SsoService {
           trx,
         );
       }
+    });
+    this.emitPageEmbedVisibilityChanged(provider.workspaceId);
+  }
+
+  private emitPageEmbedVisibilityChanged(workspaceId: string): void {
+    this.eventEmitter?.emit(EventName.PAGE_EMBED_VISIBILITY_CHANGED, {
+      workspaceId,
     });
   }
 
@@ -1410,13 +1791,18 @@ export class SsoService {
     provider: AuthProvider;
     codeVerifier?: string;
     nonce?: string;
-  }) {
+  } & SsoLoginContext) {
     await this.db
       .insertInto('ssoLoginStates')
       .values({
         stateHash: this.hashState(input.state),
         authProviderId: input.provider.id,
         workspaceId: input.provider.workspaceId,
+        purpose: input.purpose ?? 'login',
+        userId: input.userId,
+        sessionId: input.sessionId,
+        spaceId: input.spaceId,
+        returnTo: input.returnTo,
         codeVerifier: input.codeVerifier
           ? this.encryptSecret(input.codeVerifier)
           : null,
@@ -1596,14 +1982,14 @@ export class SsoService {
     excludedProviderId: string,
     trx: KyselyTransaction,
   ) {
-    const workspace = await trx
+    await trx
       .selectFrom('workspaces')
-      .select('enforceSso')
+      .select('id')
       .where('id', '=', workspaceId)
       .forUpdate()
       .executeTakeFirstOrThrow();
 
-    if (!workspace.enforceSso) {
+    if (!(await this.spacePolicy.hasEffectiveSsoEnforcement(workspaceId, trx))) {
       return;
     }
 
@@ -1617,13 +2003,34 @@ export class SsoService {
       .where('type', 'in', [...SSO_PROVIDER_TYPES])
       .execute();
 
-    const otherProvider = otherProviders.some(isEnforcementReadyProvider);
+    const otherProvider = await this.hasAllowedEnforcementReadyProvider(
+      otherProviders,
+    );
 
     if (!otherProvider) {
       throw new BadRequestException(
         'At least one verified SSO provider with a successful login is required while SSO is enforced',
       );
     }
+  }
+
+  private async hasAllowedEnforcementReadyProvider(
+    providers: AuthProvider[],
+  ): Promise<boolean> {
+    for (const provider of providers) {
+      if (!isEnforcementReadyProvider(provider)) {
+        continue;
+      }
+
+      try {
+        await this.validateProviderEndpoints(provider);
+        return true;
+      } catch {
+        continue;
+      }
+    }
+
+    return false;
   }
 
   private sanitizeProvider(provider: AuthProvider) {

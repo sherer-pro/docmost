@@ -6,7 +6,7 @@ import {
   onStoreDocumentPayload,
 } from '@hocuspocus/server';
 import * as Y from 'yjs';
-import { Injectable, Logger } from '@nestjs/common';
+import { HttpException, Injectable, Logger } from '@nestjs/common';
 import { TiptapTransformer } from '@hocuspocus/transformer';
 import { getPageId, jsonToText, tiptapExtensions } from '../collaboration.util';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
@@ -20,6 +20,7 @@ import {
   extractMentions,
   extractPageMentions,
   extractUserMentions,
+  getProsemirrorContent,
 } from '../../common/helpers/prosemirror/utils';
 import { isDeepStrictEqual } from 'node:util';
 import {
@@ -35,8 +36,11 @@ import {
   HISTORY_MAX_INTERVAL,
 } from '../constants';
 import { TransclusionService } from '../../core/page/transclusion/transclusion.service';
+import { PageEmbedService } from '../../core/page/transclusion/page-embed.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EventName } from '../../common/events/event.contants';
+import { hashProseMirrorJson } from '../../common/helpers/prosemirror/ai-page-operation';
+import type { PageEmbedGraphLease } from '../../core/page/transclusion/page-embed-graph-lock.service';
 
 @Injectable()
 export class PersistenceExtension implements Extension {
@@ -50,6 +54,7 @@ export class PersistenceExtension implements Extension {
     @InjectQueue(QueueName.NOTIFICATION_QUEUE) private notificationQueue: Queue,
     private readonly collabHistory: CollabHistoryService,
     private readonly transclusionService: TransclusionService,
+    private readonly pageEmbedService: PageEmbedService,
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
@@ -117,8 +122,16 @@ export class PersistenceExtension implements Extension {
 
     let page: Page = null;
     const editingUserIds = this.consumeContributors(documentName);
+    let graphLease: PageEmbedGraphLease | undefined;
 
     try {
+      const preflightPage = await this.pageRepo.findById(pageId);
+      if (preflightPage) {
+        graphLease = await this.pageEmbedService.acquireGraphLeaseForContent(
+          preflightPage.workspaceId,
+          tiptapJson,
+        );
+      }
       await executeTx(this.db, async (trx) => {
         page = await this.pageRepo.findById(pageId, {
           withLock: true,
@@ -163,12 +176,58 @@ export class PersistenceExtension implements Extension {
           page.workspaceId,
           tiptapJson,
           trx,
+          context?.pageTemplateMutationId,
+          graphLease,
         );
+
+        if (context?.pageTemplateMutationId) {
+          await trx
+            .updateTable('pageTemplateOperations')
+            .set({
+              status: 'completed',
+              afterContentHash: hashProseMirrorJson(tiptapJson),
+              errorCode: null,
+              leaseToken: null,
+              leaseExpiresAt: null,
+              updatedAt: new Date(),
+            })
+            .where('id', '=', context.pageTemplateMutationId)
+            .where('status', '=', 'pending')
+            .execute();
+        }
 
         this.logger.debug(`Page updated: ${pageId} - SlugId: ${page.slugId}`);
       });
     } catch (err) {
       this.logger.error(`Failed to update page ${pageId}`, err);
+      page = null;
+      const integrityCode = this.getPageEmbedIntegrityErrorCode(err);
+      if (integrityCode && !context?.pageTemplateMutationId) {
+        await this.restorePersistedDocument(document, pageId);
+        document.broadcastStateless(
+          JSON.stringify({
+            type: 'page_embed_integrity_error',
+            code: integrityCode,
+          }),
+        );
+        for (const socket of document.connections.keys()) {
+          socket.close(4409, 'page_embed_integrity_error');
+        }
+      }
+      if (context?.pageTemplateMutationId || integrityCode) {
+        throw err;
+      }
+    } finally {
+      if (graphLease) {
+        try {
+          await graphLease.release();
+        } catch (error) {
+          this.logger.error(
+            `Failed to release page embed graph lease for ${pageId}`,
+            error as Error,
+          );
+        }
+      }
     }
 
     if (page) {
@@ -255,6 +314,8 @@ export class PersistenceExtension implements Extension {
     workspaceId: string,
     tiptapJson: unknown,
     trx: Parameters<TransclusionService['syncPageTransclusions']>[3],
+    pageTemplateMutationId?: string,
+    graphLease?: PageEmbedGraphLease,
   ): Promise<void> {
     await this.transclusionService.syncPageTransclusions(
       pageId,
@@ -268,5 +329,48 @@ export class PersistenceExtension implements Extension {
       tiptapJson,
       trx,
     );
+    await this.pageEmbedService.syncPageReferences(
+      pageId,
+      workspaceId,
+      tiptapJson,
+      trx,
+      pageTemplateMutationId,
+      graphLease,
+    );
+  }
+
+  private getPageEmbedIntegrityErrorCode(error: unknown): string | null {
+    if (!(error instanceof HttpException)) {
+      const message = (error as Error)?.message;
+      return typeof message === 'string' && message.startsWith('page_embed_')
+        ? message
+        : null;
+    }
+    const response = error.getResponse();
+    if (!response || typeof response !== 'object') return null;
+    const code = (response as { code?: unknown }).code;
+    return typeof code === 'string' && code.startsWith('page_embed_')
+      ? code
+      : null;
+  }
+
+  private async restorePersistedDocument(
+    document: onStoreDocumentPayload['document'],
+    pageId: string,
+  ): Promise<void> {
+    const persisted = await this.pageRepo.findById(pageId, {
+      includeContent: true,
+    });
+    if (!persisted) return;
+    const fragment = document.getXmlFragment('default');
+    document.transact(() => {
+      if (fragment.length > 0) fragment.delete(0, fragment.length);
+      const restored = TiptapTransformer.toYdoc(
+        getProsemirrorContent(persisted.content),
+        'default',
+        tiptapExtensions,
+      );
+      Y.applyUpdate(document, Y.encodeStateAsUpdate(restored));
+    }, 'page_embed_integrity_recovery');
   }
 }

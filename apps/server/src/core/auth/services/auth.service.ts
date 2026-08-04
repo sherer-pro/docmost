@@ -32,6 +32,7 @@ import { VerifyUserTokenDto } from '../dto/verify-user-token.dto';
 import { DomainService } from '../../../integrations/environment/domain.service';
 import { hashProtectedValue } from '../../../common/security/credential-protection.util';
 import { UserSessionRepo } from '@docmost/db/repos/session/user-session.repo';
+import { SpacePolicyService } from '../../space-policy/space-policy.service';
 
 @Injectable()
 export class AuthService {
@@ -44,6 +45,7 @@ export class AuthService {
     private userSessionRepo: UserSessionRepo,
     private mailService: MailService,
     private domainService: DomainService,
+    private readonly spacePolicy: SpacePolicyService,
     @InjectKysely() private readonly db: KyselyDB,
   ) {}
 
@@ -149,10 +151,30 @@ export class AuthService {
       return;
     }
 
+    const target = forgotPasswordDto.spaceSlug
+      ? await this.spacePolicy.resolveAccessibleTarget(
+          workspace,
+          user,
+          forgotPasswordDto.spaceSlug,
+        )
+      : null;
+    if (
+      (forgotPasswordDto.spaceSlug && !target) ||
+      (target
+        ? target.policy.effective.enforceSso
+        : workspace.enforceSso)
+    ) {
+      return;
+    }
+
     const token = nanoIdGen(16);
     const tokenHash = hashProtectedValue(token);
 
-    const resetLink = `${this.domainService.getUrl(workspace.hostname)}/password-reset?token=${token}`;
+    const resetParams = new URLSearchParams({ token });
+    if (target) {
+      resetParams.set('spaceSlug', target.space.slug);
+    }
+    const resetLink = `${this.domainService.getUrl(workspace.hostname)}/password-reset?${resetParams.toString()}`;
 
     await this.userTokenRepo.insertUserToken({
       token: tokenHash,
@@ -198,6 +220,22 @@ export class AuthService {
       throw new NotFoundException('User not found');
     }
 
+    const target = passwordResetDto.spaceSlug
+      ? await this.spacePolicy.resolveAccessibleTarget(
+          workspace,
+          user,
+          passwordResetDto.spaceSlug,
+        )
+      : null;
+    if (
+      (passwordResetDto.spaceSlug && !target) ||
+      (target
+        ? target.policy.effective.enforceSso
+        : workspace.enforceSso)
+    ) {
+      throw new BadRequestException('Password reset requires an eligible space');
+    }
+
     const newPasswordHash = await hashPassword(passwordResetDto.newPassword);
 
     await executeTx(this.db, async (trx) => {
@@ -229,7 +267,8 @@ export class AuthService {
 
     // Check if user has MFA enabled or workspace enforces MFA
     const userHasMfa = user?.['mfa']?.isEnabled || false;
-    const workspaceEnforcesMfa = workspace.enforceMfa || false;
+    const workspaceEnforcesMfa =
+      target?.policy.effective.enforceMfa ?? workspace.enforceMfa ?? false;
 
     if (userHasMfa || workspaceEnforcesMfa) {
       return {
@@ -259,11 +298,17 @@ export class AuthService {
     }
   }
 
-  async getCollabToken(user: User, workspaceId: string, sessionId?: string) {
+  async getCollabToken(
+    user: User,
+    workspaceId: string,
+    sessionId?: string,
+    pageId?: string,
+  ) {
     const token = await this.tokenService.generateCollabToken(
       user,
       workspaceId,
       sessionId,
+      pageId,
     );
     return { token };
   }

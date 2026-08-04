@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   Container,
   Title,
@@ -18,10 +18,12 @@ import { MfaSetupModal } from "@/features/mfa/components/mfa-setup-modal";
 import classes from "@/features/auth/components/auth.module.css";
 import { notifications } from "@mantine/notifications";
 import { useMfaPageProtection } from "@/features/mfa/hooks/use-mfa-page-protection";
+import { sanitizeRelativeReturnTo } from "@/features/auth/utils/return-to";
 
 export function MfaSetupRequiredPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
   const [setupModalOpen, setSetupModalOpen] = useState(false);
   const { isValid } = useMfaPageProtection();
 
@@ -30,12 +32,13 @@ export function MfaSetupRequiredPage() {
 
     notifications.show({
       title: t("Success"),
-      message: t(
-        "Two-factor authentication has been set up. Please log in again.",
-      ),
+      message: t("Two-factor authentication has been set up."),
     });
 
-    navigate(APP_ROUTE.AUTH.LOGIN);
+    const returnTo = new URLSearchParams(location.search).get("returnTo");
+    navigate(sanitizeRelativeReturnTo(returnTo, APP_ROUTE.HOME), {
+      replace: true,
+    });
   };
 
   const handleLogout = () => {

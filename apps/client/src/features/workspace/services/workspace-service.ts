@@ -5,6 +5,7 @@ import {
   IInvitation,
   IWorkspace,
   IAcceptInvite,
+  IAcceptInviteResponse,
   IPublicWorkspace,
   IInvitationLink,
   IVersion,
@@ -19,8 +20,12 @@ export async function getWorkspace(): Promise<IWorkspace> {
   return req.data;
 }
 
-export async function getWorkspacePublicData(): Promise<IPublicWorkspace> {
-  const req = await api.get<IPublicWorkspace>("/workspace/public");
+export async function getWorkspacePublicData(
+  spaceSlug?: string,
+): Promise<IPublicWorkspace> {
+  const req = await api.get<IPublicWorkspace>("/workspace/public", {
+    params: spaceSlug ? { spaceSlug } : undefined,
+  });
   return req.data;
 }
 
@@ -103,7 +108,7 @@ export async function createInvitation(data: ICreateInvite) {
 
 export async function acceptInvitation(
   data: IAcceptInvite,
-): Promise<{ requiresLogin?: boolean }> {
+): Promise<IAcceptInviteResponse> {
   const req = await api.post("/workspace/invites/accept", data);
   return req.data;
 }

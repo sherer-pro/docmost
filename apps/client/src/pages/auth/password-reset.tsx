@@ -15,6 +15,7 @@ export default function PasswordReset() {
     type: "forgot-password",
   });
   const resetToken = searchParams.get("token");
+  const spaceSlug = searchParams.get("spaceSlug") || undefined;
 
   if (isLoading) {
     return <div></div>;
@@ -54,7 +55,7 @@ export default function PasswordReset() {
           {t("Password Reset")} - {getAppName()}
         </title>
       </Helmet>
-      <PasswordResetForm resetToken={resetToken} />
+      <PasswordResetForm resetToken={resetToken} spaceSlug={spaceSlug} />
     </>
   );
 }

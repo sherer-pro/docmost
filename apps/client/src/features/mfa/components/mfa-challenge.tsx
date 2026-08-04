@@ -14,7 +14,7 @@ import {
 import { useForm } from "@mantine/form";
 import { zodResolver } from "mantine-form-zod-resolver";
 import { IconDeviceMobile, IconLock } from "@tabler/icons-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { notifications } from "@mantine/notifications";
 import classes from "./mfa-challenge.module.css";
 import { verifyMfa } from "@/features/mfa/services/mfa-service";
@@ -22,6 +22,7 @@ import APP_ROUTE from "@/lib/app-route";
 import { useTranslation } from "react-i18next";
 import * as z from "zod";
 import { MfaBackupCodeInput } from "./mfa-backup-code-input";
+import { sanitizeRelativeReturnTo } from "@/features/auth/utils/return-to";
 
 const createFormSchema = (t: (key: string) => string) =>
   z.object({
@@ -40,6 +41,7 @@ export function MfaChallenge() {
   const formSchema = createFormSchema(t);
   type MfaChallengeFormValues = z.infer<typeof formSchema>;
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
   const [useBackupCode, setUseBackupCode] = useState(false);
 
@@ -54,7 +56,8 @@ export function MfaChallenge() {
     setIsLoading(true);
     try {
       await verifyMfa(values.code);
-      navigate(APP_ROUTE.HOME);
+      const requestedReturnTo = searchParams.get("returnTo");
+      navigate(sanitizeRelativeReturnTo(requestedReturnTo, APP_ROUTE.HOME));
     } catch (error: any) {
       setIsLoading(false);
       notifications.show({

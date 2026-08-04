@@ -24,6 +24,8 @@ import { PageHistoryRecorderService } from '../page/services/page-history-record
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import { executeWithCursorPagination } from '@docmost/db/pagination/cursor-pagination';
 import { EnvironmentService } from '../../integrations/environment/environment.service';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventName } from '../../common/events/event.contants';
 
 export type PageAccessSource = 'system' | 'space' | 'page_user' | 'page_group';
 
@@ -78,6 +80,7 @@ export class PageAccessService {
     private readonly spaceMemberRepo: SpaceMemberRepo,
     private readonly pageHistoryRecorder: PageHistoryRecorderService,
     private readonly environmentService: EnvironmentService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   isWorkspaceBypassUser(user: User, workspaceId?: string): boolean {
@@ -667,6 +670,7 @@ export class PageAccessService {
       },
       trx,
     });
+    this.emitPageEmbedVisibilityChanged(page.workspaceId);
   }
 
   async closeUserAccessForSubtree(
@@ -724,6 +728,7 @@ export class PageAccessService {
       },
       trx,
     });
+    this.emitPageEmbedVisibilityChanged(page.workspaceId);
   }
 
   async grantGroupAccessForSubtree(
@@ -773,6 +778,7 @@ export class PageAccessService {
       },
       trx,
     });
+    this.emitPageEmbedVisibilityChanged(page.workspaceId);
   }
 
   async closeGroupAccessForSubtree(
@@ -820,6 +826,13 @@ export class PageAccessService {
         cascadedPageCount: pageIds.length,
       },
       trx,
+    });
+    this.emitPageEmbedVisibilityChanged(page.workspaceId);
+  }
+
+  private emitPageEmbedVisibilityChanged(workspaceId: string): void {
+    this.eventEmitter.emit(EventName.PAGE_EMBED_VISIBILITY_CHANGED, {
+      workspaceId,
     });
   }
 

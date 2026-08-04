@@ -18,6 +18,8 @@ import {
   CreateSsoGroupMappingDto,
   CreateSsoProviderDto,
   LdapLoginDto,
+  LdapStepUpDto,
+  SsoLoginContextDto,
   SsoGroupMappingIdDto,
   SsoProviderIdDto,
   UpdateSsoGroupMappingDto,
@@ -37,6 +39,8 @@ import {
 import { AuthCookieService } from '../../common/security/auth-cookie.service';
 import { AuthRateLimitGuard } from '../auth/rate-limit/auth-rate-limit.guard';
 import { AuthRateLimit } from '../auth/rate-limit/auth-rate-limit.decorator';
+import { AuthPolicyScope } from '../../common/decorators/auth-policy-scope.decorator';
+import { SsoAuthenticationResult } from './sso.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('sso')
@@ -161,6 +165,7 @@ export class SsoController {
   @Get('oidc/:providerId/login')
   async oidcLogin(
     @Param('providerId') providerId: string,
+    @Query() query: SsoLoginContextDto,
     @AuthWorkspace() workspace: Workspace,
     @Res() response: FastifyReply,
   ) {
@@ -169,6 +174,29 @@ export class SsoController {
       providerId,
       workspace,
       origin,
+      query,
+    );
+    return response.redirect(url);
+  }
+
+  @AuthPolicyScope('bootstrap')
+  @Get('oidc/:providerId/step-up')
+  async oidcStepUp(
+    @Param('providerId') providerId: string,
+    @Query() query: SsoLoginContextDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+    @Req() request: FastifyRequest,
+    @Res() response: FastifyReply,
+  ) {
+    const origin = this.ssoService.getWorkspaceOrigin(workspace);
+    const url = await this.ssoService.getOidcStepUpUrl(
+      providerId,
+      workspace,
+      origin,
+      user.id,
+      this.getSessionId(request),
+      query,
     );
     return response.redirect(url);
   }
@@ -199,6 +227,7 @@ export class SsoController {
   @Get('saml/:providerId/login')
   async samlLogin(
     @Param('providerId') providerId: string,
+    @Query() query: SsoLoginContextDto,
     @AuthWorkspace() workspace: Workspace,
     @Res() response: FastifyReply,
   ) {
@@ -208,6 +237,29 @@ export class SsoController {
       workspace,
       origin,
       new URL(origin).hostname,
+      query,
+    );
+    return response.redirect(url);
+  }
+
+  @AuthPolicyScope('bootstrap')
+  @Get('saml/:providerId/step-up')
+  async samlStepUp(
+    @Param('providerId') providerId: string,
+    @Query() query: SsoLoginContextDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+    @Req() request: FastifyRequest,
+    @Res() response: FastifyReply,
+  ) {
+    const origin = this.ssoService.getWorkspaceOrigin(workspace);
+    const url = await this.ssoService.getSamlStepUpUrl(
+      providerId,
+      workspace,
+      origin,
+      user.id,
+      this.getSessionId(request),
+      query,
     );
     return response.redirect(url);
   }
@@ -252,6 +304,7 @@ export class SsoController {
       dto.username,
       dto.password,
       request,
+      { spaceSlug: dto.spaceSlug },
     );
     const token = result.authToken || result.mfaToken;
     this.authCookieService.setAuthCookies(response, token);
@@ -263,25 +316,67 @@ export class SsoController {
     };
   }
 
+  @AuthPolicyScope('bootstrap')
+  @HttpCode(HttpStatus.OK)
+  @Post('ldap/:providerId/step-up')
+  async ldapStepUp(
+    @Param('providerId') providerId: string,
+    @Body() dto: LdapStepUpDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+    @Req() request: FastifyRequest,
+  ) {
+    return this.ssoService.stepUpWithLdap(
+      providerId,
+      workspace,
+      user,
+      this.getSessionId(request),
+      dto.username,
+      dto.password,
+    );
+  }
+
   private completeBrowserLogin(
     response: FastifyReply,
-    result: {
-      authToken?: string;
-      mfaToken?: string;
-      userHasMfa: boolean;
-      requiresMfaSetup: boolean;
-    },
+    result: SsoAuthenticationResult,
   ) {
+    if (result.stepUp) {
+      return response.redirect(result.returnTo || '/home');
+    }
+
     const token = result.authToken || result.mfaToken;
     this.authCookieService.setAuthCookies(response, token);
 
     if (result.userHasMfa) {
-      return response.redirect('/login/mfa');
+      return response.redirect(
+        this.buildAuthenticationRedirect('/login/mfa', result.returnTo),
+      );
     }
     if (result.requiresMfaSetup) {
-      return response.redirect('/login/mfa/setup');
+      return response.redirect(
+        this.buildAuthenticationRedirect(
+          '/login/mfa/setup',
+          result.returnTo,
+        ),
+      );
     }
-    return response.redirect('/home');
+    return response.redirect(result.returnTo || '/home');
+  }
+
+  private buildAuthenticationRedirect(path: string, returnTo?: string) {
+    if (!returnTo) {
+      return path;
+    }
+    const query = new URLSearchParams({ returnTo });
+    return `${path}?${query.toString()}`;
+  }
+
+  private getSessionId(request: FastifyRequest): string {
+    const sessionId = (request.raw as any).sessionId;
+    if (!sessionId) {
+      throw new ForbiddenException('An active session is required');
+    }
+    return sessionId;
   }
 
   private assertCanManage(user: User, workspace: Workspace) {

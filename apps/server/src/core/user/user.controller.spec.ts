@@ -5,6 +5,7 @@ import { WorkspaceRepo } from '@docmost/db/repos/workspace/workspace.repo';
 import { UserRepo } from '@docmost/db/repos/user/user.repo';
 import { UserRole } from '../../common/helpers/types/permission';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { AuthenticationAssuranceService } from '../space-policy/authentication-assurance.service';
 
 describe('UserController', () => {
   let controller: UserController;
@@ -21,6 +22,14 @@ describe('UserController', () => {
   const userRepoMock = {
     hasNonDefaultGroupMembership: jest.fn(),
     getWorkspaceVisibleUsersCount: jest.fn(),
+  };
+
+  const authenticationAssuranceMock = {
+    getAuthenticationAssurance: jest.fn().mockReturnValue({
+      ssoVerified: false,
+      mfaVerified: false,
+      workspaceRequirements: [],
+    }),
   };
 
   beforeEach(async () => {
@@ -40,6 +49,10 @@ describe('UserController', () => {
         {
           provide: UserRepo,
           useValue: userRepoMock,
+        },
+        {
+          provide: AuthenticationAssuranceService,
+          useValue: authenticationAssuranceMock,
         },
       ],
     }).overrideGuard(JwtAuthGuard)
@@ -71,7 +84,8 @@ describe('UserController', () => {
     userRepoMock.hasNonDefaultGroupMembership.mockResolvedValue(true);
     userServiceMock.findById.mockResolvedValue(authUser);
 
-    const result = await controller.getUserInfo(authUser, workspace);
+    const request = { user: { session: {} }, raw: {} } as any;
+    const result = await controller.getUserInfo(authUser, workspace, request);
 
     expect(userServiceMock.findById).toHaveBeenCalledWith(authUser.id, workspace.id);
     expect(userRepoMock.getWorkspaceVisibleUsersCount).toHaveBeenCalledWith(
@@ -80,6 +94,9 @@ describe('UserController', () => {
     );
     expect(workspaceRepoMock.getActiveUserCount).not.toHaveBeenCalled();
     expect(result.workspace.memberCount).toBe(2);
+    expect(
+      authenticationAssuranceMock.getAuthenticationAssurance,
+    ).toHaveBeenCalledWith(workspace, request.user.session);
   });
 
   it('returns global member count for admins and owners', async () => {
@@ -96,7 +113,8 @@ describe('UserController', () => {
     userRepoMock.getWorkspaceVisibleUsersCount.mockResolvedValue(2);
     userServiceMock.findById.mockResolvedValue(authUser);
 
-    const result = await controller.getUserInfo(authUser, workspace);
+    const request = { user: { session: {} }, raw: {} } as any;
+    const result = await controller.getUserInfo(authUser, workspace, request);
 
     expect(userServiceMock.findById).toHaveBeenCalledWith(authUser.id, workspace.id);
     expect(workspaceRepoMock.getActiveUserCount).toHaveBeenCalledWith(

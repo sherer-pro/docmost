@@ -1,5 +1,7 @@
 import { Insertable, Selectable, Updateable } from 'kysely';
 import {
+  AiBuiltinToolSpacePolicies,
+  AiBuiltinToolWorkspacePolicies,
   AiAuxRuns,
   AiChatFiles,
   AiConversationContextSources,
@@ -35,6 +37,10 @@ import {
   PageLabels,
   PageTransclusions,
   PageTransclusionReferences,
+  PageTemplateGroupPolicies,
+  PageTemplateOperations,
+  PageTemplateSpacePolicies,
+  PageTemplateWorkspacePolicies,
   Pages,
   Spaces,
   Users,
@@ -102,6 +108,15 @@ export interface SpaceCustomLinksSettings {
   links?: SpaceCustomLink[];
 }
 
+export interface SpaceSecuritySettings {
+  enforceMfa?: boolean;
+  enforceSso?: boolean;
+}
+
+export interface SpaceSharingSettings {
+  disabled?: boolean;
+}
+
 /**
  * Space settings container.
  */
@@ -110,6 +125,8 @@ export interface SpaceSettings {
   dictionary?: SpaceDictionarySettings;
   headingNumbering?: HeadingNumberingSettings;
   customLinks?: SpaceCustomLinksSettings;
+  security?: SpaceSecuritySettings;
+  sharing?: SpaceSharingSettings;
 }
 
 /**
@@ -167,6 +184,10 @@ export type UpdatableAiRun = Updateable<Omit<AiRuns, 'id'>>;
 export type AiRunStep = Selectable<AiRunSteps>;
 export type InsertableAiRunStep = Insertable<AiRunSteps>;
 export type UpdatableAiRunStep = Updateable<Omit<AiRunSteps, 'id'>>;
+
+export type AiBuiltinToolWorkspacePolicy =
+  Selectable<AiBuiltinToolWorkspacePolicies>;
+export type AiBuiltinToolSpacePolicy = Selectable<AiBuiltinToolSpacePolicies>;
 
 // AI run context source
 export type AiRunContextSource = Selectable<AiRunContextSources>;
@@ -353,6 +374,12 @@ export type InsertablePageTransclusionReference =
 export type UpdatablePageTransclusionReference = Updateable<
   Omit<PageTransclusionReferences, 'id'>
 >;
+
+export type PageTemplateWorkspacePolicy =
+  Selectable<PageTemplateWorkspacePolicies>;
+export type PageTemplateSpacePolicy = Selectable<PageTemplateSpacePolicies>;
+export type PageTemplateGroupPolicy = Selectable<PageTemplateGroupPolicies>;
+export type PageTemplateOperation = Selectable<PageTemplateOperations>;
 
 // Attachment
 export type Attachment = Selectable<Attachments>;

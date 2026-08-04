@@ -13,13 +13,18 @@ import {
   Patch,
   Post,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import { SpaceService } from './services/space.service';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
 import { AuthWorkspace } from '../../common/decorators/auth-workspace.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { SpaceIdDto, SpaceMembersQueryDto } from './dto/space-id.dto';
+import {
+  SpaceIdDto,
+  SpaceMembersQueryDto,
+  SpacePolicyContextQueryDto,
+} from './dto/space-id.dto';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import { SpaceMemberService } from './services/space-member.service';
 import { User, Workspace } from '@docmost/db/types/entity.types';
@@ -43,6 +48,10 @@ import { CreateSpaceDto } from './dto/create-space.dto';
 import { PageAccessService } from '../page-access/page-access.service';
 import { DeprecatedRoute } from '../../common/decorators/deprecated-route.decorator';
 import { LEGACY_API_SUNSET } from '../../common/config/api-deprecation.constants';
+import { AuthPolicyScope } from '../../common/decorators/auth-policy-scope.decorator';
+import { FastifyRequest } from 'fastify';
+import { SpacePolicyService } from '../space-policy/space-policy.service';
+import type { SpacePolicyContext } from '@docmost/api-contract';
 
 @UseGuards(JwtAuthGuard)
 @Controller('spaces')
@@ -54,18 +63,61 @@ export class SpaceController {
     private readonly spaceAbility: SpaceAbilityFactory,
     private readonly workspaceAbility: WorkspaceAbilityFactory,
     private readonly pageAccessService: PageAccessService,
+    private readonly spacePolicy: SpacePolicyService,
   ) {}
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('bootstrap')
   @Get('/')
   async listSpaces(
     @Query()
     pagination: PaginationOptions,
     @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+    @Req() req: FastifyRequest,
   ) {
-    return this.spaceMemberService.getUserSpaces(user.id, pagination);
+    return this.spaceMemberService.getUserSpaces(
+      user,
+      workspace,
+      (req as any).user?.session ?? (req.raw as any).userSession,
+      pagination,
+    );
   }
 
+  @AuthPolicyScope('bootstrap')
+  @Get('policy-context')
+  async getSpacePolicyContext(
+    @Query() query: SpacePolicyContextQueryDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+    @Req() req: FastifyRequest,
+  ): Promise<SpacePolicyContext> {
+    const target = await this.spacePolicy.resolveAccessibleSpace(
+      workspace,
+      user,
+      query.spaceSlug,
+    );
+    if (!target) {
+      throw new NotFoundException('Space not found');
+    }
+
+    const session =
+      (req as any).user?.session ?? (req.raw as any).userSession;
+    const authentication = this.spacePolicy.evaluateAuthentication(
+      target.policy.effective,
+      session,
+    );
+
+    return {
+      id: target.space.id,
+      slug: target.space.slug,
+      name: target.space.name,
+      policy: target.policy,
+      requiresStepUp: !authentication.satisfied,
+    };
+  }
+
+  @AuthPolicyScope('space', { source: 'params', key: 'spaceId' })
   @Get(':spaceId')
   async getSpace(
     @Param('spaceId') spaceId: string,
@@ -135,6 +187,7 @@ export class SpaceController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('space', { source: 'params', key: 'spaceId' })
   @Patch(':spaceId')
   async updateSpace(
     @Param('spaceId', ParseUUIDPipe) spaceId: string,
@@ -149,10 +202,15 @@ export class SpaceController {
     return this.spaceService.updateSpace(
       { ...updateSpaceDto, spaceId },
       workspace.id,
+      {
+        canLoosenPolicy:
+          user.role === 'owner' || user.role === 'admin',
+      },
     );
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('space', { source: 'params', key: 'spaceId' })
   @Post(':spaceId/actions/archive')
   async archiveSpace(
     @Param('spaceId', ParseUUIDPipe) spaceId: string,
@@ -169,6 +227,7 @@ export class SpaceController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('space', { source: 'params', key: 'spaceId' })
   @Post(':spaceId/actions/unarchive')
   async unarchiveSpace(
     @Param('spaceId', ParseUUIDPipe) spaceId: string,
@@ -185,6 +244,7 @@ export class SpaceController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('space', { source: 'params', key: 'spaceId' })
   @Delete(':spaceId')
   async deleteSpace(
     @Param('spaceId', ParseUUIDPipe) spaceId: string,
@@ -199,6 +259,7 @@ export class SpaceController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('space', { source: 'query', key: 'spaceId' })
   @Get('member-users')
   async getSpaceMemberUsersViaQuery(
     @Query() query: SpaceMembersQueryDto,
@@ -213,6 +274,7 @@ export class SpaceController {
     sunset: LEGACY_API_SUNSET,
     replacement: 'GET /api/spaces/member-users',
   })
+  @AuthPolicyScope('space', { source: 'body', key: 'spaceId' })
   @Post('member-users')
   async getSpaceMemberUsers(
     @Body() spaceIdDto: SpaceMembersQueryDto,
@@ -236,6 +298,7 @@ export class SpaceController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('space', { source: 'query', key: 'spaceId' })
   @Get('members')
   async getSpaceMembersViaQuery(
     @Query() query: SpaceMembersQueryDto,
@@ -250,6 +313,7 @@ export class SpaceController {
     sunset: LEGACY_API_SUNSET,
     replacement: 'GET /api/spaces/members',
   })
+  @AuthPolicyScope('space', { source: 'body', key: 'spaceId' })
   @Post('members')
   async getSpaceMembers(
     @Body() spaceIdDto: SpaceMembersQueryDto,
@@ -273,6 +337,7 @@ export class SpaceController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('space', { source: 'body', key: 'spaceId' })
   @Post('members/add')
   async addSpaceMember(
     @Body() dto: AddSpaceMembersDto,
@@ -299,6 +364,7 @@ export class SpaceController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('space', { source: 'body', key: 'spaceId' })
   @Post('members/remove')
   async removeSpaceMember(
     @Body() dto: RemoveSpaceMemberDto,
@@ -316,6 +382,7 @@ export class SpaceController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('space', { source: 'body', key: 'spaceId' })
   @Post('members/change-role')
   async updateSpaceMemberRole(
     @Body() dto: UpdateSpaceMemberRoleDto,

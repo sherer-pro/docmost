@@ -40,6 +40,7 @@ import { DeprecatedRoute } from '../../common/decorators/deprecated-route.decora
 import { LEGACY_API_SUNSET } from '../../common/config/api-deprecation.constants';
 import { AuthRateLimitGuard } from '../auth/rate-limit/auth-rate-limit.guard';
 import { AuthRateLimit } from '../auth/rate-limit/auth-rate-limit.decorator';
+import { AuthPolicyScope } from '../../common/decorators/auth-policy-scope.decorator';
 
 @UseGuards(JwtAuthGuard)
 @Controller('shares')
@@ -156,6 +157,7 @@ export class ShareController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('page', { source: 'query', key: 'pageId' })
   @Get('/for-page')
   async getShareForPageViaQuery(
     @Query() dto: SharePageIdDto,
@@ -170,6 +172,7 @@ export class ShareController {
     sunset: LEGACY_API_SUNSET,
     replacement: 'GET /api/shares/for-page',
   })
+  @AuthPolicyScope('page', { source: 'body', key: 'pageId' })
   @Post('/for-page')
   async getShareForPage(
     @Body() dto: SharePageIdDto,
@@ -187,6 +190,7 @@ export class ShareController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('page', { source: 'body', key: 'pageId' })
   @Post('actions/create')
   async createViaAction(
     @Body() createShareDto: CreateShareDto,
@@ -201,6 +205,7 @@ export class ShareController {
     sunset: LEGACY_API_SUNSET,
     replacement: 'POST /api/shares/actions/create',
   })
+  @AuthPolicyScope('page', { source: 'body', key: 'pageId' })
   @Post('create')
   async create(
     @Body() createShareDto: CreateShareDto,
@@ -224,6 +229,11 @@ export class ShareController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('resource', {
+    source: 'body',
+    key: 'shareId',
+    resourceType: 'share',
+  })
   @Post('actions/update')
   async updateViaAction(
     @Body() updateShareDto: UpdateShareDto,
@@ -236,6 +246,11 @@ export class ShareController {
   @DeprecatedRoute({
     sunset: LEGACY_API_SUNSET,
     replacement: 'POST /api/shares/actions/update',
+  })
+  @AuthPolicyScope('resource', {
+    source: 'body',
+    key: 'shareId',
+    resourceType: 'share',
   })
   @Post('update')
   async update(@Body() updateShareDto: UpdateShareDto, @AuthUser() user: User) {
@@ -255,6 +270,11 @@ export class ShareController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('resource', {
+    source: 'body',
+    key: 'shareId',
+    resourceType: 'share',
+  })
   @Post('actions/delete')
   async deleteViaAction(
     @Body() shareIdDto: ShareIdDto,
@@ -267,6 +287,11 @@ export class ShareController {
   @DeprecatedRoute({
     sunset: LEGACY_API_SUNSET,
     replacement: 'POST /api/shares/actions/delete',
+  })
+  @AuthPolicyScope('resource', {
+    source: 'body',
+    key: 'shareId',
+    resourceType: 'share',
   })
   @Post('delete')
   async delete(@Body() shareIdDto: ShareIdDto, @AuthUser() user: User) {
@@ -296,12 +321,26 @@ export class ShareController {
   async lookupTransclusion(
     @Body() dto: ShareTransclusionLookupDto,
     @AuthWorkspace() workspace: Workspace,
+    @Res({ passthrough: true }) res: FastifyReply,
   ) {
-    return this.shareService.lookupTransclusionForShare(
+    const result = await this.shareService.lookupTransclusionForShare(
       dto.shareId,
       dto.references,
       workspace.id,
     );
+    for (const item of result.items) {
+      if (item && 'content' in item) {
+        await this.setAttachmentAccessCookie(
+          res,
+          item.sourcePageId,
+          workspace.id,
+          false,
+        );
+      } else if (item?.sourcePageId) {
+        this.clearAttachmentAccessCookie(res, item.sourcePageId);
+      }
+    }
+    return result;
   }
 
   @Public()
@@ -349,6 +388,7 @@ export class ShareController {
     res: FastifyReply,
     pageId: string,
     workspaceId: string,
+    includeLegacy = true,
   ) {
     const token = await this.tokenService.generateAttachmentPageToken({
       pageId,
@@ -365,7 +405,20 @@ export class ShareController {
     };
 
     res.setCookie(getAttachmentTokenCookieName(pageId), token, cookieOptions);
-    // Keep generic cookie during migration for older handlers/clients.
-    res.setCookie(LEGACY_ATTACHMENT_TOKEN_COOKIE, token, cookieOptions);
+    if (includeLegacy) {
+      // Keep generic cookie during migration for older handlers/clients.
+      res.setCookie(LEGACY_ATTACHMENT_TOKEN_COOKIE, token, cookieOptions);
+    }
+  }
+
+  private clearAttachmentAccessCookie(
+    res: FastifyReply,
+    pageId: string,
+  ): void {
+    res.clearCookie(getAttachmentTokenCookieName(pageId), {
+      path: '/api',
+      secure: this.environmentService.isHttps(),
+      sameSite: 'lax',
+    });
   }
 }

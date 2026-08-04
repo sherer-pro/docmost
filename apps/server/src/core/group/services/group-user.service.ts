@@ -4,6 +4,7 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import { GroupService } from './group.service';
@@ -16,6 +17,8 @@ import { executeTx } from '@docmost/db/utils';
 import { WatcherRepo } from '@docmost/db/repos/watcher/watcher.repo';
 import { User } from '@docmost/db/types/entity.types';
 import { UserRole } from '../../../common/helpers/types/permission';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventName } from '../../../common/events/event.contants';
 
 @Injectable()
 export class GroupUserService {
@@ -27,6 +30,7 @@ export class GroupUserService {
     private groupService: GroupService,
     private readonly watcherRepo: WatcherRepo,
     @InjectKysely() private readonly db: KyselyDB,
+    @Optional() private readonly eventEmitter?: EventEmitter2,
   ) {}
 
   async getGroupUsers(
@@ -91,6 +95,7 @@ export class GroupUserService {
       .values(groupUsersToInsert)
       .onConflict((oc) => oc.columns(['userId', 'groupId']).doNothing())
       .execute();
+    this.emitPageEmbedVisibilityChanged(workspaceId);
   }
 
   async removeUserFromGroup(
@@ -136,6 +141,13 @@ export class GroupUserService {
           spaceId,
         );
       }
+    });
+    this.emitPageEmbedVisibilityChanged(workspaceId);
+  }
+
+  private emitPageEmbedVisibilityChanged(workspaceId: string): void {
+    this.eventEmitter?.emit(EventName.PAGE_EMBED_VISIBILITY_CHANGED, {
+      workspaceId,
     });
   }
 }

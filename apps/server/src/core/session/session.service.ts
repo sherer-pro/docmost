@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
 import { TokenService } from '../auth/services/token.service';
 import { UserSessionRepo } from '@docmost/db/repos/session/user-session.repo';
@@ -6,9 +6,16 @@ import { EnvironmentService } from '../../integrations/environment/environment.s
 import { User } from '@docmost/db/types/entity.types';
 import { FastifyRequest } from 'fastify';
 import { getClientIpFromFastifyRequest } from '../../common/security/trusted-proxy.util';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventName } from '../../common/events/event.contants';
 
 const MAX_SESSIONS_PER_USER = 25;
 const RETENTION_DAYS = 7;
+
+export interface SessionAssuranceContext {
+  ssoAuthProviderId?: string | null;
+  mfaVerified?: boolean;
+}
 
 @Injectable()
 export class SessionService {
@@ -18,6 +25,7 @@ export class SessionService {
     private readonly tokenService: TokenService,
     private readonly userSessionRepo: UserSessionRepo,
     private readonly environmentService: EnvironmentService,
+    @Optional() private readonly eventEmitter?: EventEmitter2,
   ) {}
 
   @Interval('session-cleanup', 24 * 60 * 60 * 1000)
@@ -34,6 +42,7 @@ export class SessionService {
   async createSessionAndToken(
     user: User,
     request?: FastifyRequest,
+    assurance: SessionAssuranceContext = {},
   ): Promise<string> {
     const userAgent = this.getUserAgent(request);
     const session = await this.userSessionRepo.insertSession({
@@ -43,6 +52,9 @@ export class SessionService {
       userAgent,
       ipAddress: this.getIpAddress(request),
       expiresAt: this.environmentService.getCookieExpiresIn(),
+      ssoVerifiedAt: assurance.ssoAuthProviderId ? new Date() : null,
+      ssoAuthProviderId: assurance.ssoAuthProviderId ?? null,
+      mfaVerifiedAt: assurance.mfaVerified ? new Date() : null,
     });
 
     return this.tokenService.generateAccessToken(user, session.id);
@@ -80,6 +92,11 @@ export class SessionService {
     workspaceId: string,
   ): Promise<void> {
     await this.userSessionRepo.revokeById(sessionId, userId, workspaceId);
+    await this.eventEmitter?.emitAsync(EventName.AUTHORIZATION_CHANGED, {
+      workspaceId,
+      userId,
+      sessionId,
+    });
   }
 
   async revokeAllOtherSessions(
@@ -92,6 +109,10 @@ export class SessionService {
       userId,
       workspaceId,
     );
+    await this.eventEmitter?.emitAsync(EventName.AUTHORIZATION_CHANGED, {
+      workspaceId,
+      userId,
+    });
   }
 
   private getUserAgent(request?: FastifyRequest): string | null {
