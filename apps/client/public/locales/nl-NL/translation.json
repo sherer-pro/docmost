@@ -1650,15 +1650,15 @@
     "untitled": "Zonder titel",
     "spaceSearchToggle": "Inclusief zoeken naar ruimte",
     "commandPrompt": {
-      "summarize": "Vat deze inhoud samen.",
-      "shorten": "Verkort deze inhoud met behoud van de betekenis ervan.",
-      "explain": "Leg deze inhoud duidelijk uit.",
-      "improve": "Verbeter de duidelijkheid en structuur van deze inhoud.",
-      "grammar": "Herstel grammatica, spelling en interpunctie.",
-      "expand": "Breid deze inhoud uit met nuttige details.",
-      "continue": "Ga door met schrijven vanaf het punt waar het document eindigt.",
-      "tone": "Herschrijf deze inhoud op een duidelijke, professionele toon.",
-      "translate": "Vertaal deze inhoud in de taal die ik specificeer."
+      "summarize": "1) Bepaal de hoofdboodschap en de belangrijkste feiten. 2) Verwerk deze in een beknopte samenvatting. 3) Behoud belangrijke namen, getallen en nuanceringen. 4) Verwijder herhaling en bijzaken zonder nieuwe informatie toe te voegen. 5) Geef alleen de samenvatting in de oorspronkelijke taal terug.",
+      "shorten": "1) Maak de tekst aanzienlijk korter. 2) Behoud de oorspronkelijke betekenis en belangrijkste feiten. 3) Verwijder herhaling, opvulling en overbodige voorbeelden. 4) Behoud de oorspronkelijke toon, taal en essentiële opmaak. 5) Geef alleen de verkorte tekst terug.",
+      "explain": "1) Bepaal de belangrijkste begrippen en hun onderlinge relaties. 2) Leg ze in gewone taal uit aan een niet-deskundige. 3) Definieer noodzakelijk jargon en voeg waar nuttig een kort voorbeeld toe. 4) Blijf nauwkeurig en benoem onzekerheid in plaats van details te verzinnen. 5) Geef alleen de uitleg terug.",
+      "improve": "1) Behoud de oorspronkelijke bedoeling en feiten. 2) Verbeter duidelijkheid, samenhang en structuur. 3) Vervang vage of onhandige formuleringen en versterk overgangen. 4) Behoud taal, toon en opmaak tenzij een wijziging nodig is. 5) Geef alleen de verbeterde tekst terug.",
+      "grammar": "1) Corrigeer grammatica, spelling en interpunctie. 2) Corrigeer congruentie, woordvormen en typefouten. 3) Behoud betekenis, stem, terminologie en opmaak. 4) Voeg geen feitelijke inhoud toe en verwijder die ook niet. 5) Geef alleen de gecorrigeerde tekst terug.",
+      "expand": "1) Behoud de hoofdgedachte, bedoeling en toon. 2) Voeg relevante uitleg, context of voorbeelden toe. 3) Werk onvolledige ideeën uit en verbind ze met duidelijke overgangen. 4) Verzin geen niet-verifieerbare feiten en voeg geen opvulling toe. 5) Geef alleen de uitgebreide tekst terug.",
+      "continue": "1) Leid de stijl, stem, opmaak en richting van het document af. 2) Ga naadloos verder vanaf het einde zonder bestaande tekst te herhalen. 3) Werk het volgende logische punt uit met een vergelijkbaar detailniveau. 4) Introduceer geen ongefundeerde feiten of abrupte conclusie. 5) Geef alleen het vervolg terug.",
+      "tone": "1) Behoud de oorspronkelijke betekenis en feiten. 2) Gebruik een heldere, professionele, zelfverzekerde en respectvolle toon. 3) Verbeter woordkeuze, zinsritme en overgangen. 4) Vermijd jargon, clichés, overdrijving en onnodige formaliteit. 5) Geef alleen de herschreven tekst terug.",
+      "translate": "1) Bepaal de betekenis, context en toon van de brontekst. 2) Vertaal naar de gevraagde taal; gebruik de taal van deze instructie als er geen taal is opgegeven. 3) Behoud namen, getallen, opmaak en gangbare terminologie. 4) Kies natuurlijke formuleringen boven een woordelijke vertaling zonder informatie toe te voegen. 5) Geef alleen de vertaling terug."
     },
     "commandDescription": {
       "summarize": "Creëert een beknopte samenvatting van de geselecteerde context.",

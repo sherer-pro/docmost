@@ -1650,15 +1650,15 @@
     "untitled": "Sem título",
     "spaceSearchToggle": "Incluir pesquisa de espaço",
     "commandPrompt": {
-      "summarize": "Resuma este conteúdo.",
-      "shorten": "Encurte este conteúdo preservando seu significado.",
-      "explain": "Explique este conteúdo claramente.",
-      "improve": "Melhore a clareza e a estrutura deste conteúdo.",
-      "grammar": "Corrija gramática, ortografia e pontuação.",
-      "expand": "Expanda este conteúdo com detalhes úteis.",
-      "continue": "Continue escrevendo de onde o documento termina.",
-      "tone": "Reescreva este conteúdo em um tom claro e profissional.",
-      "translate": "Traduza este conteúdo para o idioma que eu especificar."
+      "summarize": "1) Identifique a mensagem principal e os fatos essenciais. 2) Condense-os em um resumo conciso. 3) Preserve nomes, números e ressalvas importantes. 4) Remova repetições e detalhes secundários sem acrescentar novas informações. 5) Retorne apenas o resumo no idioma original.",
+      "shorten": "1) Reduza consideravelmente o tamanho do texto. 2) Preserve o significado original e os fatos essenciais. 3) Remova repetições, trechos supérfluos e exemplos redundantes. 4) Mantenha o tom, o idioma e a formatação essencial. 5) Retorne apenas o texto encurtado.",
+      "explain": "1) Identifique os conceitos principais e suas relações. 2) Explique-os em linguagem simples para uma pessoa não especialista. 3) Defina os termos técnicos necessários e acrescente um exemplo breve quando útil. 4) Preserve a precisão e indique incertezas em vez de inventar detalhes. 5) Retorne apenas a explicação.",
+      "improve": "1) Preserve a intenção e os fatos originais. 2) Melhore a clareza, a fluidez e a estrutura. 3) Substitua formulações vagas ou pouco naturais e fortaleça as transições. 4) Mantenha o idioma, o tom e a formatação originais, salvo quando uma mudança for necessária. 5) Retorne apenas o texto melhorado.",
+      "grammar": "1) Corrija a gramática, a ortografia e a pontuação. 2) Corrija concordâncias, formas das palavras e erros de digitação. 3) Preserve o significado, a voz, a terminologia e a formatação originais. 4) Não acrescente nem remova conteúdo factual. 5) Retorne apenas o texto corrigido.",
+      "expand": "1) Preserve a ideia principal, a intenção e o tom. 2) Acrescente explicações, contexto ou exemplos relevantes. 3) Desenvolva ideias incompletas e conecte-as com transições claras. 4) Não invente fatos não verificáveis nem acrescente conteúdo de preenchimento. 5) Retorne apenas o texto expandido.",
+      "continue": "1) Identifique o estilo, a voz, o formato e a direção do documento. 2) Continue naturalmente a partir do final sem repetir o texto existente. 3) Desenvolva o próximo ponto lógico com um nível de detalhe consistente. 4) Não introduza fatos sem respaldo nem uma conclusão abrupta. 5) Retorne apenas a continuação.",
+      "tone": "1) Preserve o significado e os fatos originais. 2) Use um tom claro, profissional, seguro e respeitoso. 3) Melhore o vocabulário, o ritmo das frases e as transições. 4) Evite jargão, clichês, exageros e formalidade desnecessária. 5) Retorne apenas o texto reescrito.",
+      "translate": "1) Determine o significado, o contexto e o tom do texto original. 2) Traduza para o idioma solicitado; se nenhum for especificado, use o idioma desta instrução. 3) Preserve nomes, números, formatação e terminologia consagrada. 4) Prefira uma redação natural à tradução palavra por palavra sem acrescentar informações. 5) Retorne apenas a tradução."
     },
     "commandDescription": {
       "summarize": "Cria um resumo conciso do contexto selecionado.",
