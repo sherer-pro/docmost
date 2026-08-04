@@ -1311,10 +1311,13 @@ export class DatabaseService {
       throw new NotFoundException('Database root page not found');
     }
 
-    const rootPageContentWithMentions = await this.exportService.turnPageMentionsToLinks(
-      getProsemirrorContent(rootPage.content),
-      rootPage.workspaceId,
-    );
+    const rootPageContentWithMentions =
+      await this.exportService.prepareProsemirrorForExport(
+        getProsemirrorContent(rootPage.content),
+        rootPage.workspaceId,
+        params.user,
+        params.locale,
+      );
     const rootPageContentWithLocalLinks = replaceInternalLinks(
       rootPageContentWithMentions,
       params.slugIdToExportPath,
@@ -1327,6 +1330,7 @@ export class DatabaseService {
         content: rootPageContentWithLocalLinks,
       },
       locale: params.locale,
+      authorizedUser: params.user,
     });
     const tableSectionHtml = await this.buildDatabaseRowsTableSectionHtml(
       params.databaseId,
@@ -1375,7 +1379,10 @@ export class DatabaseService {
     const safeName = (database.name?.trim() || 'database').replace(/\s+/g, '-').toLowerCase();
 
     if (format === DatabaseExportFormat.Docmost) {
-      const archive = await this.exportService.exportDatabaseArchive(databaseId);
+      const archive = await this.exportService.exportDatabaseArchive(
+        databaseId,
+        user,
+      );
       return {
         contentType: 'application/zip',
         fileName: archive.fileName,
@@ -2764,4 +2771,3 @@ export class DatabaseService {
     return null;
   }
 }
-

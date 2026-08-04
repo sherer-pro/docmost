@@ -1,6 +1,10 @@
-import { mergeAttributes, Node } from "@tiptap/core";
-import { ReactNodeViewRenderer } from "@tiptap/react";
-import { TRANSCLUSION_SOURCE_CONTENT_EXPRESSION } from "./constants";
+import { mergeAttributes, Node } from '@tiptap/core';
+import { ReactNodeViewRenderer } from '@tiptap/react';
+import { TRANSCLUSION_SOURCE_CONTENT_EXPRESSION } from './constants';
+import {
+  getTransclusionPresentationAttributes,
+  TRANSCLUSION_CONTENT_ATTRIBUTE,
+} from './transclusion-presentation';
 
 export interface TransclusionSourceOptions {
   HTMLAttributes: Record<string, any>;
@@ -11,7 +15,7 @@ export interface TransclusionSourceAttributes {
   id?: string | null;
 }
 
-declare module "@tiptap/core" {
+declare module '@tiptap/core' {
   interface Commands<ReturnType> {
     transclusionSource: {
       insertTransclusionSource: (
@@ -24,7 +28,7 @@ declare module "@tiptap/core" {
 }
 
 export const TransclusionSource = Node.create<TransclusionSourceOptions>({
-  name: "transclusionSource",
+  name: 'transclusionSource',
 
   addOptions() {
     return {
@@ -33,7 +37,7 @@ export const TransclusionSource = Node.create<TransclusionSourceOptions>({
     };
   },
 
-  group: "block",
+  group: 'block',
   // Schema-enforced allow-list. Excludes `transclusionSource` (no nesting)
   content: TRANSCLUSION_SOURCE_CONTENT_EXPRESSION,
   defining: true,
@@ -43,26 +47,40 @@ export const TransclusionSource = Node.create<TransclusionSourceOptions>({
     return {
       id: {
         default: null,
-        parseHTML: (el) => el.getAttribute("data-id"),
-        renderHTML: (attrs) =>
-          attrs.id ? { "data-id": attrs.id } : {},
+        parseHTML: (el) => el.getAttribute('data-id'),
+        renderHTML: (attrs) => (attrs.id ? { 'data-id': attrs.id } : {}),
       },
     };
   },
 
   parseHTML() {
-    return [{ tag: `div[data-type="${this.name}"]` }];
+    return [
+      {
+        tag: `div[data-type="${this.name}"]`,
+        contentElement: (element) => {
+          const htmlElement = element as HTMLElement;
+          return (
+            htmlElement.querySelector<HTMLElement>(
+              `[${TRANSCLUSION_CONTENT_ATTRIBUTE}]`,
+            ) ?? htmlElement
+          );
+        },
+      },
+    ];
   },
 
   renderHTML({ HTMLAttributes }) {
     return [
-      "div",
+      'div',
       mergeAttributes(
-        { "data-type": this.name },
+        {
+          'data-type': this.name,
+          ...getTransclusionPresentationAttributes(),
+        },
         this.options.HTMLAttributes,
         HTMLAttributes,
       ),
-      0,
+      ['div', { [TRANSCLUSION_CONTENT_ATTRIBUTE]: '' }, 0],
     ];
   },
 
@@ -79,12 +97,12 @@ export const TransclusionSource = Node.create<TransclusionSourceOptions>({
           const node = {
             type: this.name,
             attrs: attributes ?? {},
-            content: [{ type: "paragraph" }],
+            content: [{ type: 'paragraph' }],
           };
 
           const parent = $from.parent;
           const isEmptyParagraph =
-            parent.type.name === "paragraph" && parent.content.size === 0;
+            parent.type.name === 'paragraph' && parent.content.size === 0;
 
           if (isEmptyParagraph) {
             return chain()

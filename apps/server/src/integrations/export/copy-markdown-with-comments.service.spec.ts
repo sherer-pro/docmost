@@ -32,6 +32,7 @@ describe('CopyMarkdownWithCommentsService', () => {
     content: { type: 'doc', content: [] },
     workspaceId: 'workspace-1',
   };
+  const user = { id: 'user-1', workspaceId: 'workspace-1' } as any;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -41,7 +42,7 @@ describe('CopyMarkdownWithCommentsService', () => {
   it('returns page markdown without comments section when page has no comments', async () => {
     commentRepo.findAllPageCommentsWithActors.mockResolvedValue([]);
 
-    await expect(service.build(page as any, 'en-US')).resolves.toBe(
+    await expect(service.build(page as any, user, 'en-US')).resolves.toBe(
       '# Page title\n\nDocument body',
     );
     expect(exportService.exportPage).toHaveBeenCalledWith(
@@ -49,6 +50,9 @@ describe('CopyMarkdownWithCommentsService', () => {
       page,
       true,
       'en-US',
+      undefined,
+      undefined,
+      user,
     );
   });
 
@@ -77,7 +81,7 @@ describe('CopyMarkdownWithCommentsService', () => {
       }),
     ]);
 
-    const markdown = await service.build(page as any);
+    const markdown = await service.build(page as any, user);
 
     expect(markdown).toContain('# Page title');
     expect(markdown).toContain('## Comments');
@@ -96,19 +100,21 @@ describe('CopyMarkdownWithCommentsService', () => {
   });
 
   it('adds section, markdown line, and surrounding context for inline roots', async () => {
-    exportService.exportPage.mockResolvedValue([
-      '# Page title',
-      '',
-      '## Alpha',
-      '',
-      'Repeated target in alpha.',
-      '',
-      '## Beta',
-      '',
-      '### Nested',
-      '',
-      'Repeated target in beta.',
-    ].join('\n'));
+    exportService.exportPage.mockResolvedValue(
+      [
+        '# Page title',
+        '',
+        '## Alpha',
+        '',
+        'Repeated target in alpha.',
+        '',
+        '## Beta',
+        '',
+        '### Nested',
+        '',
+        'Repeated target in beta.',
+      ].join('\n'),
+    );
     commentRepo.findAllPageCommentsWithActors.mockResolvedValue([
       createComment({
         id: 'alpha-comment',
@@ -149,6 +155,7 @@ describe('CopyMarkdownWithCommentsService', () => {
           ],
         },
       } as any,
+      user,
     );
 
     expect(markdown).toContain('### Thread 1: Inline (Open)');
@@ -160,7 +167,9 @@ describe('CopyMarkdownWithCommentsService', () => {
     expect(markdown).toContain('- Markdown line: 11');
     expect(markdown).toContain('- Context: Repeated target in beta.');
     expect(markdown).toContain('#### Reply 2.1');
-    expect(markdown).not.toContain('#### Reply 2.1\n\n- Type: Inline\n- Status: Open\n- Section:');
+    expect(markdown).not.toContain(
+      '#### Reply 2.1\n\n- Type: Inline\n- Status: Open\n- Section:',
+    );
   });
 
   it('keeps malformed page and comment content from breaking markdown generation', async () => {
@@ -171,7 +180,10 @@ describe('CopyMarkdownWithCommentsService', () => {
       }),
     ]);
 
-    const markdown = await service.build({ ...page, content: 'broken' } as any);
+    const markdown = await service.build(
+      { ...page, content: 'broken' } as any,
+      user,
+    );
 
     expect(markdown).toContain('### Thread 1: Inline (Open)');
     expect(markdown).toContain('- Location: Inline anchor not found');

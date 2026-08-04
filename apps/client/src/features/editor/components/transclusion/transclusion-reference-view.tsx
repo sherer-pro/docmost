@@ -7,7 +7,7 @@ import {
   IconRefresh,
   IconTrash,
 } from "@tabler/icons-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ErrorBoundary } from "react-error-boundary";
@@ -23,6 +23,8 @@ import {
   useUnsyncReferenceMutation,
 } from "@/features/transclusion/queries/transclusion-query";
 import { buildPageUrl } from "@/features/page/page.utils";
+import { getTransclusionReferenceKey } from "@docmost/editor-ext";
+import type { TransclusionClipboardStorage } from "@/features/editor/extensions/transclusion-clipboard";
 
 export default function TransclusionReferenceView(props: NodeViewProps) {
   const isEditable = props.editor.isEditable;
@@ -66,6 +68,15 @@ function TransclusionReferenceBody({
     sourcePageId,
     transclusionId,
   );
+  useEffect(() => {
+    if (!sourcePageId || !transclusionId || !result) return;
+    const storage = (editor.storage as any)
+      .transclusionClipboard as TransclusionClipboardStorage;
+    storage?.items.set(
+      getTransclusionReferenceKey(sourcePageId, transclusionId),
+      result,
+    );
+  }, [editor, result, sourcePageId, transclusionId]);
   const [refreshing, setRefreshing] = useState(false);
   const handleRefresh = async () => {
     setRefreshing(true);

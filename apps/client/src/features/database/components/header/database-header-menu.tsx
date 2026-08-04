@@ -177,18 +177,19 @@ export default function DatabaseHeaderMenu({
 
   const getCurrentTableMarkdown = async () => {
     const rows = await getRowsForMarkdownCopy();
+    const descriptionMarkdown = pageEditor
+      ? await getEditorMarkdown(
+          pageEditor,
+          resolveSpaceHeadingNumberingEnabled(
+            space?.settings ?? databaseContext.pageByRoute?.space?.settings,
+          ),
+        )
+      : undefined;
 
     return buildDatabaseMarkdownFromState({
       title: (database?.name || t('database.editor.untitled')).trim(),
       description: database?.description,
-      descriptionMarkdown: pageEditor
-        ? getEditorMarkdown(
-            pageEditor,
-            resolveSpaceHeadingNumberingEnabled(
-              space?.settings ?? databaseContext.pageByRoute?.space?.settings,
-            ),
-          )
-        : undefined,
+      descriptionMarkdown,
       properties,
       rows,
       state: tableExportState,

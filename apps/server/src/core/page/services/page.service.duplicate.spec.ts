@@ -1,9 +1,26 @@
 jest.mock('lib0/decoding.js', () => ({ readVarString: jest.fn() }));
 
-const mockJsonToNode = jest.fn((content: unknown) => ({
-  descendants: jest.fn(),
-  toJSON: jest.fn(() => content),
-}));
+const mockJsonToNode = jest.fn((content: any) => {
+  const descendants = jest.fn((callback: (node: any) => void) => {
+    const visit = (node: any) => {
+      if (!node || typeof node !== 'object') return;
+      if (node.type && node.type !== 'doc') {
+        callback({
+          type: { name: node.type },
+          attrs: node.attrs ?? {},
+          marks: node.marks ?? [],
+        });
+      }
+      for (const child of node.content ?? []) visit(child);
+    };
+    visit(content);
+  });
+
+  return {
+    descendants,
+    toJSON: jest.fn(() => content),
+  };
+});
 
 jest.mock('../../../collaboration/collaboration.util', () => ({
   htmlToJson: jest.fn(),
@@ -161,7 +178,18 @@ describe('PageService duplicatePage properties', () => {
           slugId: 'child-slug',
           title: 'Child',
           icon: null,
-          content: { type: 'doc', content: [] },
+          content: {
+            type: 'doc',
+            content: [
+              {
+                type: 'transclusionReference',
+                attrs: {
+                  sourcePageId: 'page-root',
+                  transclusionId: 'block-1',
+                },
+              },
+            ],
+          },
           position: 'a1',
           parentPageId: 'page-root',
           spaceId: 'space-1',
@@ -207,6 +235,9 @@ describe('PageService duplicatePage properties', () => {
       expect(insertedPages[1].creatorId).toBe('user-1');
       expect(insertedPages[0]).not.toHaveProperty('createdAt');
       expect(insertedPages[1].parentPageId).toBe(insertedPages[0].id);
+      expect(insertedPages[1].content.content[0].attrs.sourcePageId).toBe(
+        insertedPages[0].id,
+      );
       expect(
         insertedPages.every(
           (page) => page.spaceId === (targetSpaceId ?? 'space-1'),

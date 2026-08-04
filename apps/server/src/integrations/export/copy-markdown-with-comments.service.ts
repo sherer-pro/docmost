@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Page } from '@docmost/db/types/entity.types';
+import { Page, User } from '@docmost/db/types/entity.types';
 import {
   CommentRepo,
   CommentWithActors,
@@ -44,7 +44,7 @@ export class CopyMarkdownWithCommentsService {
     private readonly commentRepo: CommentRepo,
   ) {}
 
-  async build(page: Page, locale?: string): Promise<string> {
+  async build(page: Page, user: User, locale?: string): Promise<string> {
     const pageMarkdown =
       (
         await this.exportService.exportPage(
@@ -52,6 +52,9 @@ export class CopyMarkdownWithCommentsService {
           page,
           true,
           locale,
+          undefined,
+          undefined,
+          user,
         )
       )
         ?.toString()
@@ -92,7 +95,8 @@ export class CopyMarkdownWithCommentsService {
         continue;
       }
 
-      const existing = childCommentsByParentId.get(comment.parentCommentId) ?? [];
+      const existing =
+        childCommentsByParentId.get(comment.parentCommentId) ?? [];
       existing.push(comment);
       childCommentsByParentId.set(comment.parentCommentId, existing);
     }
@@ -146,10 +150,7 @@ export class CopyMarkdownWithCommentsService {
       .map((comment, index) => {
         const replyPrefix = `${prefix}.${index + 1}`;
         return [
-          this.buildCommentEntryMarkdown(
-            comment,
-            `#### Reply ${replyPrefix}`,
-          ),
+          this.buildCommentEntryMarkdown(comment, `#### Reply ${replyPrefix}`),
           this.buildReplyMarkdown(
             comment.id,
             replyPrefix,
@@ -174,10 +175,16 @@ export class CopyMarkdownWithCommentsService {
       this.buildMetadataLine('Author', this.getActorName(comment)),
       this.buildMetadataLine('Created', this.toIsoDate(comment.createdAt)),
       comment.resolvedAt
-        ? this.buildMetadataLine('Resolved at', this.toIsoDate(comment.resolvedAt))
+        ? this.buildMetadataLine(
+            'Resolved at',
+            this.toIsoDate(comment.resolvedAt),
+          )
         : null,
       comment.resolvedAt
-        ? this.buildMetadataLine('Resolved by', this.getActorName(comment, true))
+        ? this.buildMetadataLine(
+            'Resolved by',
+            this.getActorName(comment, true),
+          )
         : null,
     ].filter(Boolean);
     const selection = this.formatSelection(comment.selection);
@@ -263,7 +270,10 @@ export class CopyMarkdownWithCommentsService {
     };
   }
 
-  private getFirstContentMarkdownLine(page: Page, pageMarkdown: string): number {
+  private getFirstContentMarkdownLine(
+    page: Page,
+    pageMarkdown: string,
+  ): number {
     const title = page.title?.trim();
     const firstLine = pageMarkdown.split(/\r?\n/, 1)[0]?.trim() ?? '';
 
@@ -360,7 +370,8 @@ export class CopyMarkdownWithCommentsService {
     node: ProseMirrorJsonNode,
     state: CommentContextState,
   ): void {
-    const rows = node.content?.filter((child) => child.type === 'tableRow') ?? [];
+    const rows =
+      node.content?.filter((child) => child.type === 'tableRow') ?? [];
 
     for (const row of rows) {
       this.captureCommentContextsFromBlock(row, state.nextMarkdownLine, state);

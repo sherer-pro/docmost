@@ -345,15 +345,22 @@ function PageActionMenu({ readOnly, canMoveDeleteShare }: PageActionMenuProps) {
     notifications.show({ message: t("Link copied") });
   };
 
-  const handleCopyAsMarkdown = () => {
+  const handleCopyAsMarkdown = async () => {
     if (!pageEditor) return;
-    const markdown = getEditorMarkdown(
-      pageEditor,
-      spaceHeadingNumberingEnabled,
-    );
-    const title = page?.title ? `# ${page.title}\n\n` : "";
-    clipboard.copy(`${title}${markdown}`);
-    notifications.show({ message: t("Copied") });
+    try {
+      const markdown = await getEditorMarkdown(
+        pageEditor,
+        spaceHeadingNumberingEnabled,
+      );
+      const title = page?.title ? `# ${page.title}\n\n` : "";
+      clipboard.copy(`${title}${markdown}`);
+      notifications.show({ message: t("Copied") });
+    } catch {
+      notifications.show({
+        message: t("Failed to copy as Markdown"),
+        color: "red",
+      });
+    }
   };
 
   const handleCopyMarkdownWithComments = async () => {

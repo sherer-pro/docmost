@@ -36,7 +36,14 @@ import {
   getAttachmentIds,
   getProsemirrorContent,
 } from '../../common/helpers/prosemirror/utils';
-import { htmlToMarkdown } from '@docmost/editor-ext';
+import {
+  addHeadingNumbersToJson,
+  getTransclusionReferenceKey,
+  materializeTransclusionsForPresentation,
+  TRANSCLUSION_LABEL_STYLE,
+  type TransclusionPresentationStrings,
+  htmlToMarkdown,
+} from '@docmost/editor-ext';
 import { getAppVersion } from '../../common/helpers/get-app-version';
 import {
   getPageAiRole,
@@ -51,7 +58,6 @@ import { join } from 'node:path';
 import { resolveClientDistPath } from '../../common/utils/client-dist-path';
 import { TokenService } from '../../core/auth/services/token.service';
 import { validate as isValidUuid } from 'uuid';
-import { addHeadingNumbersToJson } from '@docmost/editor-ext';
 import { resolveHeadingNumberingEnabled } from '../../core/page/utils/heading-numbering-settings.utils';
 import {
   DOCMOST_ARCHIVE_SCHEMA_VERSION,
@@ -76,6 +82,7 @@ import {
 import { sanitize } from 'sanitize-filename-ts';
 import { collectReferencesFromPmJson } from '../../core/page/transclusion/utils/transclusion-prosemirror.util';
 import { createHash } from 'node:crypto';
+import { TransclusionService } from '../../core/page/transclusion/transclusion.service';
 
 const PAGE_STATUS_LABELS: Record<string, string> = {
   TODO: 'To do',
@@ -150,6 +157,7 @@ export class ExportService {
     private readonly htmlPdfRendererService: HtmlPdfRendererService,
     private readonly tokenService: TokenService,
     private readonly pageAccessService: PageAccessService,
+    private readonly transclusionService: TransclusionService,
   ) {}
 
   async exportPage(
@@ -159,11 +167,14 @@ export class ExportService {
     locale?: string,
     spaceHeadingNumberingEnabled?: boolean,
     spaceAiRoleEnabled?: boolean,
+    authorizedUser?: User,
   ) {
     const { title: pageTitle, pageHtml } = await this.buildPageExportHtml(
       page,
       singlePage,
       spaceHeadingNumberingEnabled,
+      authorizedUser,
+      locale,
     );
 
     if (format === ExportFormat.HTML) {
@@ -171,13 +182,19 @@ export class ExportService {
       <html>
         <head>
          <title>${pageTitle}</title>
+         <style>
+           [data-docmost-transclusion="true"] { break-inside: avoid; }
+           [data-docmost-transclusion-label="true"] { line-height: 1.4; }
+         </style>
         </head>
         <body>${pageHtml}</body>
       </html>`;
     }
 
     if (format === ExportFormat.Markdown) {
-      return htmlToMarkdown(pageHtml);
+      return htmlToMarkdown(pageHtml, {
+        transclusion: this.resolveTransclusionPresentationStrings(locale),
+      });
     }
 
     if (format === ExportFormat.PDF) {
@@ -187,6 +204,7 @@ export class ExportService {
         singlePage,
         pageHtml,
         spaceAiRoleEnabled,
+        authorizedUser,
       });
 
       return this.renderPdfFromHtmlDocument({
@@ -205,6 +223,7 @@ export class ExportService {
     singlePage?: boolean;
     pageHtml?: string;
     spaceAiRoleEnabled?: boolean;
+    authorizedUser?: User;
   }): Promise<{ title: string; bodyHtml: string; attachmentToken: string }> {
     const pageTitle = getPageTitle(params.page.title);
     let pageHtml = params.pageHtml;
@@ -213,6 +232,9 @@ export class ExportService {
       const pageHtmlResult = await this.buildPageExportHtml(
         params.page,
         params.singlePage,
+        undefined,
+        params.authorizedUser,
+        params.locale,
       );
       pageHtml = pageHtmlResult.pageHtml;
     }
@@ -245,6 +267,8 @@ export class ExportService {
     page: Page,
     singlePage?: boolean,
     spaceHeadingNumberingEnabled?: boolean,
+    authorizedUser?: User,
+    locale?: string,
   ): Promise<{ title: string; pageHtml: string }> {
     const titleNode = {
       type: 'heading',
@@ -252,16 +276,17 @@ export class ExportService {
       content: [{ type: 'text', text: getPageTitle(page.title) }],
     };
 
-    let prosemirrorJson: any;
+    let prosemirrorJson: any = await this.materializeTransclusions(
+      getProsemirrorContent(page.content),
+      authorizedUser,
+      locale,
+    );
 
     if (singlePage) {
       prosemirrorJson = await this.turnPageMentionsToLinks(
-        getProsemirrorContent(page.content),
+        prosemirrorJson,
         page.workspaceId,
       );
-    } else {
-      // mentions is already turned to links during the zip process
-      prosemirrorJson = getProsemirrorContent(page.content);
     }
 
     const headingNumberingEnabled =
@@ -276,12 +301,126 @@ export class ExportService {
       prosemirrorJson.content.unshift(titleNode);
     }
 
-    const pageHtml = this.removeColgroupTags(jsonToHtml(prosemirrorJson));
+    const pageHtml = this.decorateTransclusionHtml(
+      this.removeColgroupTags(jsonToHtml(prosemirrorJson)),
+      this.resolveTransclusionPresentationStrings(locale),
+    );
 
     return {
       title: getPageTitle(page.title),
       pageHtml,
     };
+  }
+
+  private async materializeTransclusions(
+    prosemirrorJson: unknown,
+    authorizedUser?: User,
+    locale?: string,
+  ): Promise<unknown> {
+    const references = collectReferencesFromPmJson(prosemirrorJson);
+    const resolutions = new Map<
+      string,
+      { content?: unknown; status?: string }
+    >();
+
+    if (authorizedUser && references.length > 0) {
+      const result = await this.transclusionService.lookup(
+        references,
+        authorizedUser,
+      );
+      for (const item of result.items) {
+        resolutions.set(
+          getTransclusionReferenceKey(item.sourcePageId, item.transclusionId),
+          'content' in item
+            ? { content: item.content }
+            : { status: item.status },
+        );
+      }
+    }
+
+    return materializeTransclusionsForPresentation(
+      prosemirrorJson,
+      resolutions,
+      this.resolveTransclusionPresentationStrings(locale),
+    );
+  }
+
+  async prepareProsemirrorForExport(
+    prosemirrorJson: unknown,
+    workspaceId: string,
+    authorizedUser: User,
+    locale?: string,
+  ): Promise<unknown> {
+    const materializedJson = await this.materializeTransclusions(
+      prosemirrorJson,
+      authorizedUser,
+      locale,
+    );
+
+    return this.turnPageMentionsToLinks(materializedJson, workspaceId);
+  }
+
+  private resolveTransclusionPresentationStrings(
+    locale?: string,
+  ): TransclusionPresentationStrings {
+    const fallbacks: TransclusionPresentationStrings = {
+      label: 'Synced block',
+      unavailable: 'Content unavailable',
+    };
+    const keys: Record<keyof TransclusionPresentationStrings, string> = {
+      label: 'Synced block',
+      unavailable: 'Synced block content unavailable',
+    };
+    const resolved = { ...fallbacks };
+    const unresolved = new Set<keyof TransclusionPresentationStrings>([
+      'label',
+      'unavailable',
+    ]);
+
+    for (const localeCandidate of this.buildLocaleFallbackChain(locale)) {
+      const translations = this.readLocaleTranslations(localeCandidate);
+      if (!translations) continue;
+
+      for (const name of Object.keys(keys) as Array<
+        keyof TransclusionPresentationStrings
+      >) {
+        if (!unresolved.has(name)) continue;
+        const value = this.readTranslationString(translations, keys[name]);
+        if (value) {
+          resolved[name] = value;
+          unresolved.delete(name);
+        }
+      }
+    }
+
+    return resolved;
+  }
+
+  private decorateTransclusionHtml(
+    html: string,
+    strings: TransclusionPresentationStrings,
+  ): string {
+    const $ = cheerio.load(html, null, false);
+
+    $('[data-docmost-transclusion="true"]').each((_index, element) => {
+      const container = $(element);
+      if (container.children('[data-docmost-transclusion-label]').length > 0) {
+        return;
+      }
+
+      const label = $('<div></div>')
+        .attr('data-docmost-transclusion-label', 'true')
+        .attr('style', TRANSCLUSION_LABEL_STYLE)
+        .text(strings.label);
+      const content = container.children('[data-docmost-transclusion-content]');
+      if (content.length > 0) {
+        content.first().before(label);
+      } else {
+        container.prepend(label);
+      }
+    });
+
+    return $.root().html() ?? html;
   }
 
   private async getSpaceHeadingNumberingDefault(
@@ -371,6 +510,13 @@ export class ExportService {
       }
       .docmost-export-root {
         width: 100%;
+      }
+      [data-docmost-transclusion="true"] {
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+      [data-docmost-transclusion-label="true"] {
+        line-height: 1.4;
       }
       h1,
       h2,
@@ -1453,6 +1599,11 @@ export class ExportService {
     }
 
     if (format === ExportFormat.Docmost) {
+      if (!authorizedUser) {
+        throw new BadRequestException(
+          'Authorized user is required for Docmost archive export',
+        );
+      }
       const rootPage = pages.find((page) => page.id === pageId) ?? pages[0];
       const zip = await this.createDocmostArchive({
         scope: 'page',
@@ -1460,6 +1611,7 @@ export class ExportService {
         spaceId: rootPage.spaceId,
         pages,
         rootPageId: pageId,
+        authorizedUser,
       });
 
       return zip.generateNodeStream({
@@ -1490,6 +1642,7 @@ export class ExportService {
       spaceHeadingNumberingEnabled,
       spaceAiRoleEnabled,
       headingNumberingByPageId,
+      authorizedUser,
     );
 
     const zipFile = zip.generateNodeStream({
@@ -1508,6 +1661,7 @@ export class ExportService {
     locale?: string,
     headingNumberingByPageId?: Record<string, boolean>,
     allowedPageIds?: Set<string>,
+    authorizedUser?: User,
   ) {
     const space = await this.db
       .selectFrom('spaces')
@@ -1543,11 +1697,17 @@ export class ExportService {
     }
 
     if (format === ExportFormat.Docmost) {
+      if (!authorizedUser) {
+        throw new BadRequestException(
+          'Authorized user is required for Docmost archive export',
+        );
+      }
       const zip = await this.createDocmostArchive({
         scope: 'space',
         displayName: space.name || 'space',
         spaceId,
         pages: pages as Page[],
+        authorizedUser,
       });
       return {
         fileStream: zip.generateNodeStream({
@@ -1572,6 +1732,7 @@ export class ExportService {
       resolveHeadingNumberingEnabled(space.settings),
       this.resolveSpaceAiRoleEnabled(space.settings),
       headingNumberingByPageId,
+      authorizedUser,
     );
 
     const zipFile = zip.generateNodeStream({
@@ -1587,7 +1748,10 @@ export class ExportService {
     };
   }
 
-  async exportDatabaseArchive(databaseId: string): Promise<{
+  async exportDatabaseArchive(
+    databaseId: string,
+    authorizedUser: User,
+  ): Promise<{
     fileStream: NodeJS.ReadableStream;
     fileName: string;
   }> {
@@ -1602,9 +1766,14 @@ export class ExportService {
       throw new NotFoundException('Database not found');
     }
 
-    const pages = await this.pageRepo.getPageAndDescendants(database.pageId, {
+    let pages = (await this.pageRepo.getPageAndDescendants(database.pageId, {
       includeContent: true,
-    });
+    })) as Page[];
+    pages = await this.filterReadablePages(
+      pages,
+      database.pageId,
+      authorizedUser,
+    );
     const zip = await this.createDocmostArchive({
       scope: 'database',
       displayName: database.name,
@@ -1612,6 +1781,7 @@ export class ExportService {
       pages: pages as Page[],
       databaseId,
       rootPageId: database.pageId,
+      authorizedUser,
     });
 
     return {
@@ -1631,6 +1801,7 @@ export class ExportService {
     pages: Page[];
     rootPageId?: string;
     databaseId?: string;
+    authorizedUser: User;
   }): Promise<JSZip> {
     const space = await this.db
       .selectFrom('spaces')
@@ -1683,7 +1854,15 @@ export class ExportService {
         .where('id', 'in', missingRowPageIds)
         .where('deletedAt', 'is', null)
         .execute();
+      const accessByPageId =
+        await this.pageAccessService.getEffectiveAccessForPages(
+          missingPages as Page[],
+          params.authorizedUser,
+        );
       for (const page of missingPages) {
+        if (!accessByPageId.get(page.id)?.capabilities.canRead) {
+          continue;
+        }
         pageMap.set(page.id, page as Page);
       }
     }
@@ -1712,35 +1891,41 @@ export class ExportService {
       content: getProsemirrorContent(page.content),
       settings: normalizePageSettings(page.settings),
     }));
-    const externalReferenceKeys = new Set<string>();
-    const externalSourcePageIds = new Set<string>();
+    const externalReferences = new Map<
+      string,
+      { sourcePageId: string; transclusionId: string }
+    >();
     for (const page of archivePages) {
       for (const reference of collectReferencesFromPmJson(page.content)) {
         if (pageIdSet.has(reference.sourcePageId)) continue;
-        externalReferenceKeys.add(
-          `${reference.sourcePageId}::${reference.transclusionId}`,
+        externalReferences.set(
+          getTransclusionReferenceKey(
+            reference.sourcePageId,
+            reference.transclusionId,
+          ),
+          reference,
         );
-        externalSourcePageIds.add(reference.sourcePageId);
       }
     }
-    const externalTransclusionRows =
-      externalSourcePageIds.size > 0
-        ? await this.db
-            .selectFrom('pageTransclusions')
-            .select(['pageId', 'transclusionId', 'content'])
-            .where('pageId', 'in', Array.from(externalSourcePageIds))
-            .execute()
-        : [];
+    const externalLookup =
+      externalReferences.size > 0
+        ? await this.transclusionService.lookup(
+            Array.from(externalReferences.values()),
+            params.authorizedUser,
+          )
+        : { items: [] };
     const transclusionSnapshots: DocmostArchiveTransclusionSnapshot[] =
-      externalTransclusionRows
-        .filter((row) =>
-          externalReferenceKeys.has(`${row.pageId}::${row.transclusionId}`),
-        )
-        .map((row) => ({
-          sourcePageId: row.pageId,
-          transclusionId: row.transclusionId,
-          content: row.content,
-        }));
+      externalLookup.items.flatMap((item) =>
+        'content' in item
+          ? [
+              {
+                sourcePageId: item.sourcePageId,
+                transclusionId: item.transclusionId,
+                content: item.content,
+              },
+            ]
+          : [],
+      );
 
     const [propertyRows, cellRows, viewRows] =
       databaseIds.length > 0
@@ -1880,6 +2065,7 @@ export class ExportService {
     }
 
     const attachmentIds = new Set<string>();
+    const snapshotAttachmentIds = new Set<string>();
     for (const page of archivePages) {
       for (const attachmentId of getAttachmentIds(page.content)) {
         attachmentIds.add(attachmentId);
@@ -1900,6 +2086,7 @@ export class ExportService {
     for (const snapshot of transclusionSnapshots) {
       for (const attachmentId of getAttachmentIds(snapshot.content)) {
         attachmentIds.add(attachmentId);
+        snapshotAttachmentIds.add(attachmentId);
       }
     }
     for (const cell of archiveCells) {
@@ -1911,12 +2098,19 @@ export class ExportService {
             .selectFrom('attachments')
             .selectAll()
             .where('id', 'in', Array.from(attachmentIds))
-            .where('spaceId', '=', params.spaceId)
+            .where('workspaceId', '=', space.workspaceId)
             .where('deletedAt', 'is', null)
             .execute()
         : [];
-    if (attachmentRows.length !== attachmentIds.size) {
-      const found = new Set(attachmentRows.map((attachment) => attachment.id));
+    const authorizedAttachmentRows = attachmentRows.filter(
+      (attachment) =>
+        attachment.spaceId === params.spaceId ||
+        snapshotAttachmentIds.has(attachment.id),
+    );
+    if (authorizedAttachmentRows.length !== attachmentIds.size) {
+      const found = new Set(
+        authorizedAttachmentRows.map((attachment) => attachment.id),
+      );
       const missing = Array.from(attachmentIds).filter((id) => !found.has(id));
       throw new BadRequestException(
         `Cannot create lossless archive: missing attachments ${missing.join(', ')}`,
@@ -1925,15 +2119,15 @@ export class ExportService {
 
     const attachmentBuffers = new Map<string, Buffer>();
     await Promise.all(
-      attachmentRows.map(async (attachment) => {
+      authorizedAttachmentRows.map(async (attachment) => {
         attachmentBuffers.set(
           attachment.id,
           await this.storageService.read(attachment.filePath),
         );
       }),
     );
-    const archiveAttachments: DocmostArchiveAttachment[] = attachmentRows.map(
-      (attachment) => {
+    const archiveAttachments: DocmostArchiveAttachment[] =
+      authorizedAttachmentRows.map((attachment) => {
         const safeFileName =
           sanitize(attachment.fileName) ||
           `${attachment.id}${attachment.fileExt || ''}`;
@@ -1949,8 +2143,7 @@ export class ExportService {
           archivePath: `files/${attachment.id}/${safeFileName}`,
           sha256: createHash('sha256').update(fileBuffer).digest('hex'),
         };
-      },
-    );
+      });
 
     const referencedIds = new Set<string>();
     for (const page of archivePages) {
@@ -2005,6 +2198,8 @@ export class ExportService {
       DEFAULT_EXPORT_LOCALE,
       resolveHeadingNumberingEnabled(space.settings),
       this.resolveSpaceAiRoleEnabled(space.settings),
+      undefined,
+      params.authorizedUser,
     );
 
     const legacyMetadataFile = zip.file('docmost-metadata.json');
@@ -2109,6 +2304,7 @@ export class ExportService {
     spaceHeadingNumberingEnabled?: boolean,
     spaceAiRoleEnabled?: boolean,
     headingNumberingByPageId?: Record<string, boolean>,
+    authorizedUser?: User,
   ): Promise<void> {
     const slugIdToPath: Record<string, string> = {};
     const pageIdToFilePath: Record<string, string> = {};
@@ -2127,8 +2323,15 @@ export class ExportService {
       for (const page of children) {
         const childPages = tree[page.id] || [];
 
+        const originalJson = getProsemirrorContent(page.content);
+        const originalAttachmentIds = new Set(getAttachmentIds(originalJson));
+        const materializedJson = await this.materializeTransclusions(
+          originalJson,
+          authorizedUser,
+          locale,
+        );
         const prosemirrorJson = await this.turnPageMentionsToLinks(
-          getProsemirrorContent(page.content),
+          materializedJson,
           page.workspaceId,
         );
 
@@ -2141,7 +2344,18 @@ export class ExportService {
         );
 
         if (includeAttachments) {
-          await this.zipAttachments(updatedJsonContent, page.spaceId, folder);
+          const externalSnapshotAttachmentIds = new Set(
+            getAttachmentIds(updatedJsonContent).filter(
+              (attachmentId) => !originalAttachmentIds.has(attachmentId),
+            ),
+          );
+          await this.zipAttachments(
+            updatedJsonContent,
+            page.spaceId,
+            page.workspaceId,
+            folder,
+            externalSnapshotAttachmentIds,
+          );
           if (format !== ExportFormat.PDF) {
             updatedJsonContent =
               updateAttachmentUrlsToLocalPaths(updatedJsonContent);
@@ -2167,6 +2381,7 @@ export class ExportService {
           locale,
           pageHeadingNumberingEnabled,
           spaceAiRoleEnabled,
+          authorizedUser,
         );
 
         folder.file(
@@ -2206,7 +2421,13 @@ export class ExportService {
     zip.file('docmost-metadata.json', JSON.stringify(metadata, null, 2));
   }
 
-  async zipAttachments(prosemirrorJson: any, spaceId: string, zip: JSZip) {
+  async zipAttachments(
+    prosemirrorJson: any,
+    spaceId: string,
+    workspaceId: string,
+    zip: JSZip,
+    externalSnapshotAttachmentIds = new Set<string>(),
+  ) {
     const attachmentIds = getAttachmentIds(prosemirrorJson);
 
     if (attachmentIds.length > 0) {
@@ -2214,21 +2435,30 @@ export class ExportService {
         .selectFrom('attachments')
         .selectAll()
         .where('id', 'in', attachmentIds)
-        .where('spaceId', '=', spaceId)
+        .where('workspaceId', '=', workspaceId)
         .execute();
 
       await Promise.all(
-        attachments.map(async (attachment) => {
-          try {
-            const fileBuffer = await this.storageService.read(
-              attachment.filePath,
-            );
-            const filePath = `/files/${attachment.id}/${attachment.fileName}`;
-            zip.file(filePath, fileBuffer);
-          } catch (err) {
-            this.logger.debug(`Attachment export error ${attachment.id}`, err);
-          }
-        }),
+        attachments
+          .filter(
+            (attachment) =>
+              attachment.spaceId === spaceId ||
+              externalSnapshotAttachmentIds.has(attachment.id),
+          )
+          .map(async (attachment) => {
+            try {
+              const fileBuffer = await this.storageService.read(
+                attachment.filePath,
+              );
+              const filePath = `/files/${attachment.id}/${attachment.fileName}`;
+              zip.file(filePath, fileBuffer);
+            } catch (err) {
+              this.logger.debug(
+                `Attachment export error ${attachment.id}`,
+                err,
+              );
+            }
+          }),
       );
     }
   }

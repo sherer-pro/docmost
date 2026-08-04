@@ -63,6 +63,7 @@ describe('DatabaseService mixed tree flows', () => {
   const exportService = {
     exportDatabaseArchive: jest.fn(),
     exportPages: jest.fn(),
+    prepareProsemirrorForExport: jest.fn(),
     turnPageMentionsToLinks: jest.fn(),
     buildPagePdfBody: jest.fn(),
     renderPdfFromHtmlDocument: jest.fn(),
@@ -185,6 +186,9 @@ describe('DatabaseService mixed tree flows', () => {
       }),
     });
     exportService.turnPageMentionsToLinks.mockImplementation(async (content: unknown) => content);
+    exportService.prepareProsemirrorForExport.mockImplementation(
+      async (content: unknown) => content,
+    );
     exportService.buildPagePdfBody.mockResolvedValue({
       title: 'Root',
       bodyHtml: '<article>Root content</article>',
@@ -411,6 +415,7 @@ describe('DatabaseService mixed tree flows', () => {
           id: 'db-root-page',
         }),
         locale: 'ru-RU',
+        authorizedUser: user,
       }),
     );
     expect(exportService.renderPdfFromHtmlDocument).toHaveBeenCalledWith(
@@ -460,7 +465,10 @@ describe('DatabaseService mixed tree flows', () => {
       'ws-1',
     );
 
-    expect(exportService.exportDatabaseArchive).toHaveBeenCalledWith('db-1');
+    expect(exportService.exportDatabaseArchive).toHaveBeenCalledWith(
+      'db-1',
+      user,
+    );
     expect(exportService.exportPages).not.toHaveBeenCalled();
     expect(exported.fileName).toBe('database-docmost-archive.zip');
   });

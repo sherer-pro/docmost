@@ -10,6 +10,20 @@ import { htmlToMarkdown, markdownToHtml } from './index';
 const extensions = [StarterKit, Tag];
 
 describe('tag markdown', () => {
+  it('exports transclusion presentation wrappers as blockquotes', () => {
+    const markdown = htmlToMarkdown(
+      '<div data-type="transclusionSource"><div data-docmost-transclusion-content><p>Shared text</p></div></div>',
+      {
+        transclusion: {
+          label: 'Synced block',
+          unavailable: 'Content unavailable',
+        },
+      },
+    );
+
+    assert.equal(markdown.trim(), '> **Synced block**\n>\n> Shared text');
+  });
+
   it('exports tag nodes as custom inline markdown', () => {
     const markdown = htmlToMarkdown(
       '<p>Fix <span data-type="tag" data-tag-value="tbd">TBD</span> later</p>',

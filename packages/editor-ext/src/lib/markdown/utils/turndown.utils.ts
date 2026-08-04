@@ -1,12 +1,24 @@
 import * as _TurndownService from '@joplin/turndown';
 import * as TurndownPluginGfm from '@joplin/turndown-plugin-gfm';
 import { getTagLabel, getValidTagValue } from '../../tag';
+import {
+  formatTransclusionMarkdown,
+  TRANSCLUSION_CONTENT_ATTRIBUTE,
+  TransclusionPresentationStrings,
+} from '../../transclusion/transclusion-presentation';
 import { getBasename } from './basename';
 
 // CJS/ESM interop: .default exists in Vite, not in NestJS
 const TurndownService = (_TurndownService as any).default || _TurndownService;
 
-export function htmlToMarkdown(html: string): string {
+export interface HtmlToMarkdownOptions {
+  transclusion?: TransclusionPresentationStrings;
+}
+
+export function htmlToMarkdown(
+  html: string,
+  options: HtmlToMarkdownOptions = {},
+): string {
   const turndownService = new TurndownService({
     headingStyle: 'atx',
     codeBlockStyle: 'fenced',
@@ -27,8 +39,40 @@ export function htmlToMarkdown(html: string): string {
     mathBlock,
     iframeEmbed,
     video,
+    (service) => transclusion(service, options.transclusion),
   ]);
   return turndownService.turndown(html).replaceAll('<br>', ' ');
+}
+
+function transclusion(
+  turndownService: _TurndownService,
+  strings?: TransclusionPresentationStrings,
+) {
+  turndownService.addRule('transclusion', {
+    filter: function (node: HTMLInputElement) {
+      const type = node.getAttribute('data-type');
+      return (
+        node.nodeName === 'DIV' &&
+        (type === 'transclusionSource' || type === 'transclusionReference')
+      );
+    },
+    replacement: function (_content: string, node: HTMLInputElement) {
+      const contentElement = node.querySelector(
+        `[${TRANSCLUSION_CONTENT_ATTRIBUTE}]`,
+      );
+      const markdown = contentElement
+        ? turndownService.turndown(contentElement.innerHTML)
+        : '';
+
+      return formatTransclusionMarkdown(
+        markdown,
+        strings ?? {
+          label: 'Synced block',
+          unavailable: 'Content unavailable',
+        },
+      );
+    },
+  });
 }
 
 function listParagraph(turndownService: _TurndownService) {

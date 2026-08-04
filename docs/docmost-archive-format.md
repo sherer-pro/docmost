@@ -27,6 +27,21 @@ labels, dictionary terms, and synced blocks. All entity identifiers are
 regenerated. Page and user references are remapped before the transaction is
 committed.
 
+### Synced blocks
+
+Lossless synced-block restoration is available only through the Docmost
+archive. References whose source page is part of the same archive are remapped
+to the new page identifiers and remain synchronized. An accessible reference
+to a source outside the archive is stored in `transclusionSnapshots` and is
+restored as ordinary editable content. References that the exporting user
+cannot read are never included in `transclusionSnapshots`; the importer
+replaces them with an unavailable-content placeholder.
+
+Markdown, HTML, and PDF exports are presentation-only representations. They
+materialize each synced block as a labeled, framed block with its current
+content, or with a localized unavailable-content placeholder. Importing those
+formats does not recreate synchronization relationships.
+
 Workspace members, access rules, public shares, comments, history, favorites,
 API keys, and personal preferences are intentionally excluded. Space identity
 and security settings are not overwritten. Portable document-field,

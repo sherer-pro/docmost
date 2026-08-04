@@ -194,6 +194,42 @@ describe('DocmostArchiveImportService reference rewriting', () => {
     ]);
   });
 
+  it('restores external references without snapshots as placeholders', () => {
+    const rewritten = (service as any).rewritePmNode(
+      {
+        type: 'doc',
+        content: [
+          {
+            type: 'transclusionReference',
+            attrs: {
+              sourcePageId: 'external-page',
+              transclusionId: 'block-1',
+            },
+          },
+        ],
+      },
+      {
+        pageIdMap: new Map(),
+        slugIdMap: new Map(),
+        databaseIdMap: new Map(),
+        attachmentIdMap: new Map(),
+        userIdMap: new Map(),
+        transclusionSnapshots: new Map(),
+        fallbackUserId: 'importer',
+        report: report(),
+      },
+    );
+
+    expect(rewritten.content).toEqual([
+      {
+        type: 'paragraph',
+        content: [
+          { type: 'text', text: '[Synced block unavailable after import]' },
+        ],
+      },
+    ]);
+  });
+
   it('remaps database identifiers embedded in editor JSON', () => {
     const rewritten = (service as any).rewritePmNode(
       {

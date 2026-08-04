@@ -1,13 +1,17 @@
 import { Module } from '@nestjs/common';
 import { ExportService } from './export.service';
-import { PageExportController, SpaceExportController } from './export.controller';
+import {
+  PageExportController,
+  SpaceExportController,
+} from './export.controller';
 import { StorageModule } from '../storage/storage.module';
 import { HtmlPdfRendererService } from './html-pdf-renderer.service';
 import { TokenModule } from '../../core/auth/token.module';
 import { CopyMarkdownWithCommentsService } from './copy-markdown-with-comments.service';
+import { TransclusionModule } from '../../core/page/transclusion/transclusion.module';
 
 @Module({
-  imports: [StorageModule, TokenModule],
+  imports: [StorageModule, TokenModule, TransclusionModule],
   providers: [
     ExportService,
     HtmlPdfRendererService,
