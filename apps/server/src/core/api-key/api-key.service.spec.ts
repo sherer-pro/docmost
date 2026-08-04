@@ -1,3 +1,5 @@
+jest.mock('lib0/decoding.js', () => ({ readVarString: jest.fn() }));
+
 import { Test, TestingModule } from '@nestjs/testing';
 import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { ApiKeyService } from './api-key.service';
@@ -9,6 +11,10 @@ import { SpaceRepo } from '@docmost/db/repos/space/space.repo';
 import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 import { UserRole } from '../../common/helpers/types/permission';
 import { JwtType } from '../auth/dto/jwt-payload';
+import {
+  AI_BUILTIN_TOOL_POLICY_RESOLVER,
+  AiBuiltinToolPolicyResolver,
+} from '../ai/tools/ai-builtin-tool-policy.token';
 
 describe('ApiKeyService', () => {
   let service: ApiKeyService;
@@ -18,6 +24,7 @@ describe('ApiKeyService', () => {
   let spaceMemberRepo: jest.Mocked<SpaceMemberRepo>;
   let userRepo: jest.Mocked<UserRepo>;
   let workspaceRepo: jest.Mocked<WorkspaceRepo>;
+  let builtinToolPolicy: jest.Mocked<AiBuiltinToolPolicyResolver>;
 
   const workspace = { id: 'workspace-1' } as any;
   const ownerUser = {
@@ -74,6 +81,14 @@ describe('ApiKeyService', () => {
             getUserSpaceRoles: jest.fn(),
           },
         },
+        {
+          provide: AI_BUILTIN_TOOL_POLICY_RESOLVER,
+          useValue: {
+            getEffectiveCapabilities: jest.fn(async () => [
+              'page.content.read',
+            ]),
+          },
+        },
       ],
     }).compile();
 
@@ -84,6 +99,7 @@ describe('ApiKeyService', () => {
     spaceMemberRepo = module.get(SpaceMemberRepo);
     userRepo = module.get(UserRepo);
     workspaceRepo = module.get(WorkspaceRepo);
+    builtinToolPolicy = module.get(AI_BUILTIN_TOOL_POLICY_RESOLVER);
   });
 
   /** Sets up a valid key row plus resolvable workspace/user/space. */
@@ -139,9 +155,7 @@ describe('ApiKeyService', () => {
 
     const result = await service.validateApiKey(validPayload(memberUser));
 
-    expect(result).toEqual(
-      expect.objectContaining({ authType: 'api_key' }),
-    );
+    expect(result).toEqual(expect.objectContaining({ authType: 'api_key' }));
   });
 
   it('does not require space membership for workspace admins and owners', async () => {
@@ -246,11 +260,37 @@ describe('ApiKeyService', () => {
       name: 'MCP key',
       spaceId: 'space-1',
       keyType: 'mcp',
+      allowedCapabilities: ['page.content.read'],
     });
 
     expect(tokenService.generateApiToken).toHaveBeenCalledWith(
       expect.objectContaining({ keyType: 'mcp' }),
     );
+    expect(apiKeyRepo.insertApiKey).toHaveBeenCalledWith(
+      expect.objectContaining({
+        allowedCapabilities: ['page.content.read'],
+      }),
+    );
+    expect(builtinToolPolicy.getEffectiveCapabilities).toHaveBeenCalledWith(
+      workspace.id,
+      'space-1',
+      'mcp',
+    );
+  });
+
+  it('requires a non-empty exact capability list for new MCP keys', async () => {
+    spaceRepo.findById.mockResolvedValue({
+      id: 'space-1',
+      workspaceId: workspace.id,
+    } as any);
+
+    await expect(
+      service.createApiKey(ownerUser, workspace, {
+        name: 'MCP key',
+        spaceId: 'space-1',
+        keyType: 'mcp',
+      }),
+    ).rejects.toThrow('Select at least one capability');
   });
 
   it('does not accept RAG and MCP key types interchangeably', async () => {

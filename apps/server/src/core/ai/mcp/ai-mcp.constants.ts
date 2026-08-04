@@ -63,6 +63,6 @@ export const AI_MCP_MAX_RUN_EXTERNAL_TOOLS = 32;
  * belongs here rather than in the tool registry because it bounds the merged
  * set, not the built-in set.
  */
-export const AI_AGENT_MAX_TOOL_DEFINITIONS = 48;
+export const AI_AGENT_MAX_TOOL_DEFINITIONS = 64;
 
 export const AI_MCP_REDIS_INVALIDATION_CHANNEL = 'ai:mcp:invalidate';

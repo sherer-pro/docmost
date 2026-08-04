@@ -22,14 +22,27 @@ describe('McpController protocol', () => {
         },
         writeClass: 'read_only',
         exposures: ['mcp'],
+        annotations: {
+          destructive: false,
+          idempotent: true,
+          openWorld: false,
+        },
       },
     ]),
     execute,
   };
   const traffic = { observeMcpTool: jest.fn() };
+  const toolPolicy = {
+    listForMcp: jest.fn(async () => tools.list()),
+    assertMcpToolAllowed: jest.fn(async () => undefined),
+  };
 
   beforeAll(async () => {
-    const controller = new McpController(tools as any, traffic as any);
+    const controller = new McpController(
+      tools as any,
+      traffic as any,
+      toolPolicy as any,
+    );
     httpServer = createServer(async (request, response) => {
       try {
         const chunks: Buffer[] = [];
@@ -45,6 +58,7 @@ describe('McpController protocol', () => {
           { id: 'user-1' } as any,
           { id: 'workspace-1' } as any,
           { id: 'space-1' } as any,
+          { id: 'key-1' } as any,
         );
       } catch (error) {
         if (!response.headersSent) {

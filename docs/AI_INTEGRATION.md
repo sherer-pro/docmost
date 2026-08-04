@@ -288,6 +288,76 @@ mounted into `apps/rag-sync` is separate from the query credential encrypted in
 `ai_space_configs`. Secret values are read from mounted files and must not be
 placed in the sync JSON, logs, jobs, or metrics.
 
+## Built-in Agent and inbound MCP tool policy
+
+The Agent loop and inbound `/mcp` endpoint share one access-aware built-in tool
+registry, but they remain different security surfaces: Agent is bound to a
+private conversation and may create one of the existing current-page proposals,
+while inbound MCP is API-key-only and read-only. The catalog, capability IDs,
+result limits, and approval invariants are canonical in
+[`AI_ASSISTANT_AND_RAG.md`](./AI_ASSISTANT_AND_RAG.md) sections 2 and 6.
+
+Optional built-in reads are closed at the deployment boundary by default:
+
+```dotenv
+AI_BUILTIN_TOOL_EXTENSIONS_ENABLED=false
+```
+
+Enabling the environment switch only raises the deployment maximum. It does
+not grant a capability to a workspace, space, Agent run, or MCP key. Complete
+the rollout in this order:
+
+1. Set `AI_BUILTIN_TOOL_EXTENSIONS_ENABLED=true` and restart the backend.
+2. As a workspace owner or administrator, open `/settings/ai/spaces` and enable
+   the built-in tool policy with an exact capability selection. The same
+   workspace policy panel is also visible on `/settings/ai/external-tools`.
+3. In `/settings/ai/spaces/:spaceSlug`, use the **Tools** section to inherit the
+   workspace list or replace it with a narrower exact space list. An empty list
+   disables all built-in tools for the space; inheritance never widens the
+   workspace maximum.
+4. Re-run the provider Agent tool-calling test when provider verification is
+   not current, then start a new Agent conversation run. Existing paused runs
+   are intentionally not projected onto a changed registry or policy.
+5. For inbound MCP, create or update a key on `/settings/keys/mcp` and select a
+   non-empty subset of the effective space capabilities. RAG keys reject this
+   field.
+
+Existing data is conservative: legacy Agent runs see only the original Agent
+catalog, and existing MCP keys keep exactly the seven baseline read
+capabilities. Adding a tool to a UI category never grants it automatically,
+because saved policies contain exact capability IDs rather than category names.
+
+Page-template discovery adds three optional read-only capabilities:
+`page.templates.list`, `page.template.metadata.read`, and
+`page.template.usages.read`. They expose metadata and readable same-space
+usages only; marker, snapshot, live-insert, and detach write tools are not
+registered. The page-template system/workspace/space/group policy must also
+permit the read at call time.
+
+Policy and access are checked again during execution. A policy or registry
+version change ends an affected Agent run with `agent_tool_policy_changed`.
+The check runs before and after every provider model turn, including a final
+answer without tool calls, so an in-flight revocation cannot be bypassed;
+retry or regenerate creates a fresh immutable snapshot. MCP `tools/list` and
+`tools/call` use the same policy resolver and read the authoritative API-key row
+on every request, so revocation requires neither a token reissue nor a server
+restart.
+
+For emergency rollback, remove selected optional capabilities or set
+`AI_BUILTIN_TOOL_EXTENSIONS_ENABLED=false`; the legacy deployment maximum then
+remains available subject to the saved workspace, space, and key allowlists.
+Turning off the workspace master switch is the broader containment option and
+disables its legacy capabilities as well. Stored policies and run snapshots
+remain in place, and neither rollback path requires a schema rollback or key
+reissue.
+
+The workspace policy response separates `allowedCapabilities` (the saved exact
+selection), `maximumCapabilities` (the current deployment ceiling), and
+`effectiveCapabilities` (their active intersection after the master switch).
+The settings UI preserves saved optional selections while the deployment
+extension switch is off and labels them as inactive instead of silently
+deleting them.
+
 ## Outbound external MCP servers
 
 This lets the internal agent call read-only tools on remote MCP servers. It is

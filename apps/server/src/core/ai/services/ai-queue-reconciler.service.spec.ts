@@ -1,6 +1,9 @@
 jest.mock('./ai-run-step.service', () => ({
   AiRunStepService: class AiRunStepService {},
 }));
+jest.mock('./ai-run.service', () => ({
+  AiRunService: class AiRunService {},
+}));
 
 import { AiQueueReconcilerService } from './ai-queue-reconciler.service';
 

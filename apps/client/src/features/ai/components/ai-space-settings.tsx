@@ -69,6 +69,7 @@ import {
 } from "@/features/ai/utils/ai-identity.ts";
 import { AiContentExclusionsSettings } from "./ai-content-exclusions-settings.tsx";
 import AiSpaceExternalMcpSettings from "@/features/ai-external-mcp/components/ai-space-external-mcp-settings.tsx";
+import { AiBuiltinToolSpacePolicy } from "./ai-builtin-tool-space-policy.tsx";
 
 type AiSettingsForm = {
   enabled: boolean;
@@ -140,6 +141,7 @@ export type AiSpaceSettingsSection =
   | "model"
   | "behavior"
   | "agent"
+  | "tools"
   | "externalTools"
   | "retrieval"
   | "limits";
@@ -849,6 +851,10 @@ export function AiSpaceSettings({
               )}
             </Stack>
           </SettingsSection>
+        )}
+
+        {showSection("tools") && (
+          <AiBuiltinToolSpacePolicy spaceId={spaceId} />
         )}
 
         {/* External tools are only reachable in agent mode, so this sits next

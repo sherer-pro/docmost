@@ -33,6 +33,7 @@ const SECTIONS: Exclude<AiSpaceSettingsSection, "all">[] = [
   "model",
   "behavior",
   "agent",
+  "tools",
   "externalTools",
   "retrieval",
   "limits",

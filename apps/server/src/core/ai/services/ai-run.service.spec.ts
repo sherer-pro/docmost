@@ -1,3 +1,5 @@
+jest.mock('lib0/decoding.js', () => ({ readVarString: jest.fn() }));
+
 import { AiRunService } from './ai-run.service';
 
 describe('AiRunService', () => {
@@ -10,6 +12,7 @@ describe('AiRunService', () => {
     return new AiRunService(
       db ?? ({ updateTable: jest.fn(() => query) } as any),
       queue,
+      {} as any,
       {} as any,
       {} as any,
       {} as any,
@@ -295,6 +298,7 @@ describe('AiRunService', () => {
       events as any,
       {} as any,
       {} as any,
+      {} as any,
     );
     jest.spyOn(service as any, 'getOwnedRun').mockResolvedValue(run);
 
@@ -351,6 +355,7 @@ describe('AiRunService', () => {
     };
     const service = new AiRunService(
       db as any,
+      {} as any,
       {} as any,
       {} as any,
       {} as any,

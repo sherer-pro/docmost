@@ -1,5 +1,6 @@
 import { IUser } from "@/features/user/types/user.types.ts";
 import type { McpClientPreset } from "@/features/api-key/utils/mcp-presets.ts";
+import type { AiBuiltinToolCapability } from "@docmost/api-contract";
 
 export type { McpClientPreset };
 
@@ -31,6 +32,7 @@ export interface IApiKey {
   expiresAt: string | null;
   lastUsedAt: string | null;
   createdAt: string;
+  allowedCapabilities: AiBuiltinToolCapability[] | null;
   creator: Partial<IUser>;
   space?: IApiKeySpace;
 }
@@ -40,9 +42,11 @@ export interface ICreateApiKeyRequest {
   spaceId: string;
   keyType?: "rag" | "mcp";
   expiresAt?: string;
+  allowedCapabilities?: AiBuiltinToolCapability[];
 }
 
 export interface IUpdateApiKeyRequest {
   apiKeyId: string;
   name: string;
+  allowedCapabilities?: AiBuiltinToolCapability[];
 }

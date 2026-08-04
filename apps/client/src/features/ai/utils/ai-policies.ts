@@ -54,6 +54,7 @@ const AI_ERROR_TRANSLATION_KEYS: Record<string, string> = {
   agent_write_stale: "ai.errorReason.agentWriteStale",
   agent_write_rejected: "ai.errorReason.agentWriteRejected",
   agent_write_not_allowed: "ai.errorReason.agentWriteNotAllowed",
+  agent_tool_policy_changed: "ai.errorReason.agentToolPolicyChanged",
   agent_mcp_config_changed: "ai.errorReason.externalMcpConfigChanged",
   agent_mcp_access_revoked: "ai.errorReason.externalMcpAccessRevoked",
   agent_mcp_tool_definition_limit: "ai.errorReason.externalMcpToolLimit",

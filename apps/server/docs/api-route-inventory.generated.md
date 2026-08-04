@@ -338,3 +338,7 @@
 | GET | `/workspace/public` | `apps/server/src/core/workspace/controllers/workspace.controller.ts` |
 | POST | `/workspace/public` | `apps/server/src/core/workspace/controllers/workspace.controller.ts` |
 | POST | `/workspace/update` | `apps/server/src/core/workspace/controllers/workspace.controller.ts` |
+| GET | `/ai/tool-policy` | `apps/server/src/core/ai/controllers/ai-builtin-tool-policy.controller.ts` |
+| PATCH | `/ai/tool-policy` | `apps/server/src/core/ai/controllers/ai-builtin-tool-policy.controller.ts` |
+| GET | `/spaces/:spaceId/ai/tool-policy` | `apps/server/src/core/ai/controllers/ai-builtin-tool-policy.controller.ts` |
+| PUT | `/spaces/:spaceId/ai/tool-policy` | `apps/server/src/core/ai/controllers/ai-builtin-tool-policy.controller.ts` |

@@ -1,8 +1,9 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
   Alert,
   Button,
   Group,
+  Loader,
   Modal,
   Select,
   Stack,
@@ -17,6 +18,15 @@ import { useModalBackgroundInert } from "@/components/ui/use-modal-background-in
 import { useCreateApiKeyMutation } from "@/features/api-key/queries/api-key-query";
 import { IApiKey, type McpClientPreset } from "@/features/api-key";
 import { useGetSpacesQuery } from "@/features/space/queries/space-query.ts";
+import type { AiBuiltinToolCapability } from "@docmost/api-contract";
+import { useAiBuiltinToolSpacePolicyQuery } from "@/features/ai/queries/ai-tool-policy-query.ts";
+import { AiToolCapabilityList } from "@/features/ai/components/ai-tool-capability-list.tsx";
+import {
+  getAvailableMcpCapabilities,
+  getMcpCapabilityPolicyState,
+  getUnavailableMcpCapabilities,
+  initializeMcpCapabilitySelection,
+} from "@/features/api-key/utils/mcp-capability-policy.ts";
 
 const DateInput = lazy(() =>
   import("@mantine/dates").then((module) => ({
@@ -48,6 +58,12 @@ export function CreateApiKeyModal({
   const [active, setActive] = useState(0);
   const [expirationOption, setExpirationOption] = useState("365");
   const [client, setClient] = useState<McpClientPreset>("codex");
+  const [allowedCapabilities, setAllowedCapabilities] = useState<
+    AiBuiltinToolCapability[]
+  >([]);
+  const selectionsBySpace = useRef(
+    new Map<string, AiBuiltinToolCapability[]>(),
+  );
   const createApiKeyMutation = useCreateApiKeyMutation();
   const { data: spacesData, isLoading: isSpacesLoading } = useGetSpacesQuery({
     limit: 100,
@@ -73,12 +89,53 @@ export function CreateApiKeyModal({
       },
     },
   });
+  const toolPolicy = useAiBuiltinToolSpacePolicyQuery(
+    keyType === "mcp" ? form.values.spaceId : undefined,
+  );
 
   useEffect(() => {
     if (opened && !form.values.spaceId && spacesData?.items?.length) {
       form.setFieldValue("spaceId", spacesData.items[0].id);
     }
   }, [opened, spacesData?.items, form.values.spaceId]);
+
+  useEffect(() => {
+    if (
+      !opened ||
+      keyType !== "mcp" ||
+      !toolPolicy.data ||
+      toolPolicy.data.spaceId !== form.values.spaceId
+    ) {
+      return;
+    }
+    setAllowedCapabilities(
+      initializeMcpCapabilitySelection(
+        selectionsBySpace.current,
+        form.values.spaceId,
+        getAvailableMcpCapabilities(toolPolicy.data),
+      ),
+    );
+  }, [opened, keyType, form.values.spaceId, toolPolicy.data]);
+
+  const setCapabilities = (capabilities: AiBuiltinToolCapability[]) => {
+    setAllowedCapabilities(capabilities);
+    if (form.values.spaceId) {
+      selectionsBySpace.current.set(form.values.spaceId, [...capabilities]);
+    }
+  };
+  const selectedPolicy =
+    toolPolicy.data?.spaceId === form.values.spaceId
+      ? toolPolicy.data
+      : undefined;
+  const policyState = getMcpCapabilityPolicyState({
+    policy: selectedPolicy,
+    loading: toolPolicy.isLoading || toolPolicy.isFetching,
+    error: toolPolicy.isError,
+  });
+  const unavailableCapabilities = getUnavailableMcpCapabilities(
+    allowedCapabilities,
+    selectedPolicy,
+  );
 
   const spaceOptions =
     spacesData?.items?.map((space) => ({
@@ -119,6 +176,15 @@ export function CreateApiKeyModal({
 
   const next = () => {
     if (active === 0 && form.validateField("spaceId").hasError) return;
+    if (active === 0 && keyType === "mcp") {
+      if (
+        policyState !== "ready" ||
+        allowedCapabilities.length === 0 ||
+        unavailableCapabilities.length > 0
+      ) {
+        return;
+      }
+    }
     if (
       active === 1 &&
       (form.validateField("name").hasError ||
@@ -134,6 +200,8 @@ export function CreateApiKeyModal({
     setActive(0);
     setClient("codex");
     setExpirationOption("365");
+    setAllowedCapabilities([]);
+    selectionsBySpace.current.clear();
   };
 
   const handleClose = () => {
@@ -148,6 +216,7 @@ export function CreateApiKeyModal({
       spaceId: form.values.spaceId,
       keyType,
       expiresAt: getExpirationDate(),
+      ...(keyType === "mcp" ? { allowedCapabilities } : {}),
     });
     onSuccess(createdKey, keyType === "mcp" ? client : "universal");
     reset();
@@ -193,6 +262,71 @@ export function CreateApiKeyModal({
                 ? t("apiKeys.mcpDifference")
                 : t("apiKeys.ragDifference")}
             </Alert>
+            {keyType === "mcp" && policyState === "loading" && (
+              <Group gap="xs">
+                <Loader size="sm" />
+                <Text size="sm">{t("apiKeys.capabilitiesLoading")}</Text>
+              </Group>
+            )}
+            {keyType === "mcp" && policyState === "error" && (
+              <Alert color="red" title={t("apiKeys.capabilitiesLoadFailed")}>
+                <Button
+                  mt="xs"
+                  size="xs"
+                  variant="light"
+                  onClick={() => void toolPolicy.refetch()}
+                >
+                  {t("ai.tryAgain")}
+                </Button>
+              </Alert>
+            )}
+            {keyType === "mcp" && policyState === "empty" && (
+              <Alert color="yellow">{t("apiKeys.noCapabilities")}</Alert>
+            )}
+            {keyType === "mcp" && policyState === "ready" && selectedPolicy && (
+              <Stack gap="xs">
+                <Text size="sm" fw={500}>
+                  {t("apiKeys.capabilities")}
+                </Text>
+                <Text size="xs" c="dimmed">
+                  {t("apiKeys.capabilitiesDescription")}
+                </Text>
+                <AiToolCapabilityList
+                  catalog={selectedPolicy.catalog}
+                  available={getAvailableMcpCapabilities(selectedPolicy)}
+                  exposure="mcp"
+                  allowed={allowedCapabilities}
+                  onChange={setCapabilities}
+                />
+                {unavailableCapabilities.length > 0 && (
+                  <Alert color="yellow" title={t("apiKeys.capabilitiesRevoked")}>
+                    <Text size="xs">
+                      {unavailableCapabilities.join(", ")}
+                    </Text>
+                    <Button
+                      mt="xs"
+                      size="xs"
+                      variant="light"
+                      onClick={() =>
+                        setCapabilities(
+                          allowedCapabilities.filter(
+                            (capability) =>
+                              !unavailableCapabilities.includes(capability),
+                          ),
+                        )
+                      }
+                    >
+                      {t("apiKeys.removeUnavailableCapabilities")}
+                    </Button>
+                  </Alert>
+                )}
+                {allowedCapabilities.length === 0 && (
+                  <Text size="xs" c="red">
+                    {t("apiKeys.validation.capabilityRequired")}
+                  </Text>
+                )}
+              </Stack>
+            )}
           </>
         )}
 
@@ -253,10 +387,7 @@ export function CreateApiKeyModal({
             <Alert color="gray" title={t("apiKeys.reviewTitle")}>
               <Text size="sm">
                 {t("apiKeys.review", {
-                  type:
-                    keyType === "mcp"
-                      ? t("MCP read-only")
-                      : t("RAG sync"),
+                  type: keyType === "mcp" ? t("MCP read-only") : t("RAG sync"),
                   space: selectedSpace?.name || selectedSpace?.slug,
                   name: form.values.name,
                 })}
@@ -274,7 +405,13 @@ export function CreateApiKeyModal({
           {active === 0 ? t("Cancel") : t("apiKeys.back")}
         </Button>
         {active < 2 ? (
-          <Button onClick={next} disabled={spaceOptions.length === 0}>
+          <Button
+            onClick={next}
+            disabled={
+              spaceOptions.length === 0 ||
+              (active === 0 && keyType === "mcp" && policyState !== "ready")
+            }
+          >
             {t("apiKeys.next")}
           </Button>
         ) : (

@@ -24,6 +24,7 @@ import {
 } from '../../../common/helpers/prosemirror/ai-page-operation';
 import { JsonObject, JsonValue } from '../../../database/types/db';
 import { approvedStepRecoveryAction } from './ai-run-step-recovery';
+import { AiBuiltinToolPolicyService } from '../tools/ai-builtin-tool-policy.service';
 
 const APPROVED_STEP_RECOVERY_DELAY_MS = 30_000;
 
@@ -39,6 +40,7 @@ export class AiRunStepService {
     private readonly pageAccess: PageAccessService,
     private readonly history: PageHistoryRecorderService,
     private readonly collaboration: CollaborationGateway,
+    private readonly builtinToolPolicy: AiBuiltinToolPolicyService,
   ) {}
 
   async approve(
@@ -314,6 +316,16 @@ export class AiRunStepService {
         if (!user || !workspace || step.decidedById !== run.userId) {
           throw new Error('agent_write_not_allowed');
         }
+        const definition = await this.builtinToolPolicy.assertRunToolAllowed(
+          run,
+          step.toolName,
+        );
+        if (
+          definition.writeClass !== 'write' ||
+          definition.approvalMode !== 'current_page_hash'
+        ) {
+          throw new Error('agent_write_not_allowed');
+        }
         if (
           step.targetPageId !== run.pageId ||
           step.targetPageId !==
@@ -377,14 +389,19 @@ export class AiRunStepService {
           ...appliedResult,
         };
       } catch (error) {
+        const responseCode = (error as any)?.response?.code;
         errorCode =
-          (error as Error)?.message === 'agent_write_stale'
-            ? 'agent_write_stale'
-            : 'agent_write_not_allowed';
+          responseCode === 'agent_tool_policy_changed'
+            ? 'agent_tool_policy_changed'
+            : (error as Error)?.message === 'agent_write_stale'
+              ? 'agent_write_stale'
+              : 'agent_write_not_allowed';
         errorMessage =
-          errorCode === 'agent_write_stale'
-            ? 'The page changed after the proposal was created'
-            : 'The approved write could not be applied';
+          errorCode === 'agent_tool_policy_changed'
+            ? 'The built-in tool policy changed during this run'
+            : errorCode === 'agent_write_stale'
+              ? 'The page changed after the proposal was created'
+              : 'The approved write could not be applied';
         result = { ok: false, applied: false, error: errorMessage };
       }
 
@@ -402,8 +419,16 @@ export class AiRunStepService {
         .where('status', '=', 'approved')
         .returningAll()
         .executeTakeFirstOrThrow();
-      const updatedRun = await this.resumeRun(trx, run.id, now);
-      return { run: updatedRun, step: updatedStep, applied };
+      const policyChanged = errorCode === 'agent_tool_policy_changed';
+      const updatedRun = policyChanged
+        ? await this.failRunForPolicyChange(trx, run.id, now, errorMessage!)
+        : await this.resumeRun(trx, run.id, now);
+      return {
+        run: updatedRun,
+        step: updatedStep,
+        applied,
+        policyChanged,
+      };
     });
     if (!outcome) return undefined;
 
@@ -426,8 +451,40 @@ export class AiRunStepService {
         );
       }
     }
-    await this.publishResume(outcome.run, outcome.step);
+    if (outcome.policyChanged) {
+      this.events.emitStep(outcome.run, outcome.step);
+      this.events.emitStatus(outcome.run, outcome.run.sequence, 'failed', {
+        errorCode: 'agent_tool_policy_changed',
+        errorMessage: outcome.run.errorMessage,
+      });
+    } else {
+      await this.publishResume(outcome.run, outcome.step);
+    }
     return outcome;
+  }
+
+  private async failRunForPolicyChange(
+    trx: any,
+    runId: string,
+    now: Date,
+    errorMessage: string,
+  ) {
+    return trx
+      .updateTable('aiRuns')
+      .set({
+        status: 'failed',
+        errorCode: 'agent_tool_policy_changed',
+        errorMessage,
+        finishReason: 'error',
+        completedAt: now,
+        sequence: sql`sequence + 1`,
+        heartbeatAt: null,
+        updatedAt: now,
+      })
+      .where('id', '=', runId)
+      .where('status', '=', 'awaiting_approval')
+      .returningAll()
+      .executeTakeFirstOrThrow();
   }
 
   private async resumeRun(trx: any, runId: string, now: Date) {

@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ForbiddenException,
+  Inject,
   Injectable,
   NotFoundException,
   UnauthorizedException,
@@ -20,6 +21,11 @@ import { UserRepo } from '@docmost/db/repos/user/user.repo';
 import { WorkspaceRepo } from '@docmost/db/repos/workspace/workspace.repo';
 import { SpaceRepo } from '@docmost/db/repos/space/space.repo';
 import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
+import { AiBuiltinToolCapability } from '@docmost/api-contract';
+import {
+  AI_BUILTIN_TOOL_POLICY_RESOLVER,
+  AiBuiltinToolPolicyResolver,
+} from '../ai/tools/ai-builtin-tool-policy.token';
 
 /**
  * Ceiling for API key JWTs created without an explicit expiry date. The key row
@@ -37,7 +43,37 @@ export class ApiKeyService {
     private readonly workspaceRepo: WorkspaceRepo,
     private readonly spaceRepo: SpaceRepo,
     private readonly spaceMemberRepo: SpaceMemberRepo,
+    @Inject(AI_BUILTIN_TOOL_POLICY_RESOLVER)
+    private readonly builtinToolPolicy: AiBuiltinToolPolicyResolver,
   ) {}
+
+  private async resolveMcpCapabilities(
+    dtoCapabilities: AiBuiltinToolCapability[] | undefined,
+    workspaceId: string,
+    spaceId: string,
+  ): Promise<AiBuiltinToolCapability[]> {
+    if (!dtoCapabilities?.length) {
+      throw new BadRequestException(
+        'Select at least one capability for an MCP API key',
+      );
+    }
+    const effective = new Set(
+      await this.builtinToolPolicy.getEffectiveCapabilities(
+        workspaceId,
+        spaceId,
+        'mcp',
+      ),
+    );
+    const invalid = dtoCapabilities.find(
+      (capability) => !effective.has(capability),
+    );
+    if (invalid) {
+      throw new BadRequestException(
+        `MCP capability is not allowed in this space: ${invalid}`,
+      );
+    }
+    return [...new Set(dtoCapabilities)];
+  }
 
   private isAdminOrOwner(user: User) {
     return [UserRole.OWNER, UserRole.ADMIN].includes(user.role as UserRole);
@@ -122,6 +158,19 @@ export class ApiKeyService {
     await this.assertCanCreateApiKeyInSpace(user, workspace, dto.spaceId);
 
     const expiresAt = this.parseExpiry(dto.expiresAt);
+    if (keyType === 'rag' && dto.allowedCapabilities !== undefined) {
+      throw new BadRequestException(
+        'Tool capabilities are only supported by MCP API keys',
+      );
+    }
+    const allowedCapabilities =
+      keyType === 'mcp'
+        ? await this.resolveMcpCapabilities(
+            dto.allowedCapabilities,
+            workspace.id,
+            dto.spaceId,
+          )
+        : null;
 
     const createdKey = await this.apiKeyRepo.insertApiKey({
       name: dto.name,
@@ -129,6 +178,7 @@ export class ApiKeyService {
       workspaceId: workspace.id,
       spaceId: dto.spaceId,
       keyType,
+      allowedCapabilities: allowedCapabilities as never,
       expiresAt,
     });
 
@@ -162,9 +212,23 @@ export class ApiKeyService {
     ) {
       throw new NotFoundException('API key not found');
     }
+    if (existing.keyType !== 'mcp' && dto.allowedCapabilities !== undefined) {
+      throw new BadRequestException(
+        'Tool capabilities are only supported by MCP API keys',
+      );
+    }
 
     await this.apiKeyRepo.updateApiKey(dto.apiKeyId, {
       name: dto.name,
+      ...(existing.keyType === 'mcp' && dto.allowedCapabilities !== undefined
+        ? {
+            allowedCapabilities: (await this.resolveMcpCapabilities(
+              dto.allowedCapabilities,
+              workspace.id,
+              existing.spaceId,
+            )) as never,
+          }
+        : {}),
     });
 
     return this.apiKeyRepo.findById(dto.apiKeyId, {

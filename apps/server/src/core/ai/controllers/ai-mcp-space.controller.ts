@@ -14,6 +14,7 @@ import { User, Workspace } from '@docmost/db/types/entity.types';
 import { AuthUser } from '../../../common/decorators/auth-user.decorator';
 import { AuthWorkspace } from '../../../common/decorators/auth-workspace.decorator';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
+import { AuthPolicyScope } from '../../../common/decorators/auth-policy-scope.decorator';
 import { AiMcpPolicyService } from '../mcp/ai-mcp-policy.service';
 import { PutAiMcpBindingDto, PutAiMcpPreferencesDto } from '../dto/ai-mcp.dto';
 
@@ -25,6 +26,7 @@ import { PutAiMcpBindingDto, PutAiMcpPreferencesDto } from '../dto/ai-mcp.dto';
  * the individual user's own consent and need no space administration rights.
  */
 @UseGuards(JwtAuthGuard)
+@AuthPolicyScope('space', { source: 'params', key: 'spaceId' })
 @Controller('spaces/:spaceId/ai')
 export class AiMcpSpaceController {
   constructor(private readonly policyService: AiMcpPolicyService) {}
