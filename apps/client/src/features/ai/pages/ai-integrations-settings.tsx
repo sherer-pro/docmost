@@ -7,6 +7,7 @@ import { getAppName } from "@/lib/config.ts";
 import SettingsTitle from "@/components/settings/settings-title.tsx";
 import AiSpacesPanel from "@/features/ai/components/ai-spaces-panel.tsx";
 import ExternalMcpSettingsPanel from "@/features/ai-external-mcp/components/external-mcp-settings-panel.tsx";
+import { AiBuiltinToolWorkspacePolicy } from "@/features/ai/components/ai-builtin-tool-workspace-policy.tsx";
 import {
   AI_SETTINGS_DEFAULT_TAB,
   isAiSettingsTab,
@@ -35,6 +36,8 @@ export default function AiIntegrationsSettings() {
           {t("ai.integrations.spacesDescription")}
         </Text>
       </div>
+
+      <AiBuiltinToolWorkspacePolicy />
 
       <div>
         <Tabs

@@ -69,7 +69,10 @@ describe("AI localization contract", () => {
       "context.title",
       "selection.title",
       "errorReason.unknown",
+      "errorReason.agentToolPolicyChanged",
       "settings.title",
+      "toolPolicy.workspaceTitle",
+      "toolPolicy.deploymentDisabled",
     ];
 
     for (const locale of LOCALES) {
@@ -85,6 +88,32 @@ describe("AI localization contract", () => {
           expect(localized[key]).not.toBe(english[key]);
         }
         expect(readLocale(locale)["Close panel"]).not.toBe("Close panel");
+      }
+    }
+  });
+
+  it("localizes MCP capability policy states in every supported locale", () => {
+    const keys = [
+      "capabilities",
+      "capabilitiesDescription",
+      "capabilitiesLoading",
+      "capabilitiesLoadFailed",
+      "noCapabilities",
+      "capabilitiesRevoked",
+      "removeUnavailableCapabilities",
+      "validation.capabilityRequired",
+    ];
+    const english = flatten(
+      readLocale("en-US").apiKeys as Record<string, unknown>,
+    );
+
+    for (const locale of LOCALES.filter((value) => value !== "en-US")) {
+      const localized = flatten(
+        readLocale(locale).apiKeys as Record<string, unknown>,
+      );
+      for (const key of keys) {
+        expect(localized[key]).toBeTruthy();
+        expect(localized[key]).not.toBe(english[key]);
       }
     }
   });

@@ -31,6 +31,106 @@ describe('getEmptyResponseFallbackLimits', () => {
   });
 });
 
+describe('agent built-in policy guard', () => {
+  function buildPolicyGuardService(assertRunPolicyCurrent: jest.Mock) {
+    return new AiRunExecutionService(
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      { assertRunPolicyCurrent } as any,
+      {} as any,
+      {} as any,
+    );
+  }
+
+  it('does not call the provider operation after a pre-turn revocation', async () => {
+    const policyError = {
+      response: { code: 'agent_tool_policy_changed' },
+    };
+    const service = buildPolicyGuardService(
+      jest.fn(async () => Promise.reject(policyError)),
+    );
+    const operation = jest.fn(async () => ({ content: 'must not run' }));
+
+    await expect(
+      (service as any).withCurrentBuiltinPolicy({ id: 'run-1' }, operation),
+    ).rejects.toMatchObject({ code: 'agent_tool_policy_changed' });
+    expect(operation).not.toHaveBeenCalled();
+  });
+
+  it('rejects a final answer when policy changes during the provider call', async () => {
+    const policyError = {
+      response: { code: 'agent_tool_policy_changed' },
+    };
+    const assertRunPolicyCurrent = jest
+      .fn()
+      .mockResolvedValueOnce([])
+      .mockRejectedValueOnce(policyError);
+    const service = buildPolicyGuardService(assertRunPolicyCurrent);
+    const operation = jest.fn(async () => ({ content: 'stale final answer' }));
+
+    await expect(
+      (service as any).withCurrentBuiltinPolicy({ id: 'run-1' }, operation),
+    ).rejects.toMatchObject({ code: 'agent_tool_policy_changed' });
+    expect(operation).toHaveBeenCalledTimes(1);
+    expect(assertRunPolicyCurrent).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('agent tool source dependencies', () => {
+  it('records every distinct page returned by a built-in read tool', async () => {
+    let values: unknown[] = [];
+    const insert: any = {
+      values: jest.fn((next) => {
+        values = next;
+        return insert;
+      }),
+      onConflict: jest.fn(() => insert),
+      execute: jest.fn(async () => undefined),
+    };
+    const service = new AiRunExecutionService(
+      { insertInto: jest.fn(() => insert) } as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+
+    await (service as any).recordToolSourceDependencies(
+      { id: 'run-1', assistantMessageId: 'message-1' },
+      [
+        { pageId: 'database-root' },
+        { pageId: 'row-page' },
+        { pageId: 'row-page' },
+      ],
+    );
+
+    expect(values).toEqual([
+      expect.objectContaining({ pageId: 'database-root' }),
+      expect.objectContaining({ pageId: 'row-page' }),
+    ]);
+  });
+});
+
 describe('AiRunExecutionService claim', () => {
   it('allows only one worker to claim the same queued run', async () => {
     const run = {
@@ -65,6 +165,7 @@ describe('AiRunExecutionService claim', () => {
           execute: (callback: (value: typeof trx) => unknown) => callback(trx),
         }),
       } as any,
+      {} as any,
       {} as any,
       {} as any,
       {} as any,
@@ -141,6 +242,7 @@ describe('AiRunExecutionService claim', () => {
       {} as any,
       {} as any,
       {} as any,
+      {} as any,
     );
 
     await (service as any).cancel(run, 'partial answer', 'partial reasoning');
@@ -212,6 +314,7 @@ describe('AiRunExecutionService claim', () => {
       {} as any,
       {} as any,
       events as any,
+      {} as any,
       {} as any,
       {} as any,
       {} as any,

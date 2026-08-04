@@ -14,7 +14,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { User, Workspace, Space } from '@docmost/db/types/entity.types';
+import { ApiKey, User, Workspace, Space } from '@docmost/db/types/entity.types';
 import { CsrfExempt } from '../../common/decorators/csrf-exempt.decorator';
 import { SkipTransform } from '../../common/decorators/skip-transform.decorator';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
@@ -25,6 +25,8 @@ import { McpApiKeyAuthGuard } from './mcp-api-key-auth.guard';
 import { ApiKeyTrafficGuard } from '../api-key/traffic/api-key-traffic.guard';
 import { ApiKeyTraffic } from '../api-key/traffic/api-key-traffic.decorator';
 import { ApiKeyTrafficService } from '../api-key/traffic/api-key-traffic.service';
+import { AuthApiKey } from '../../common/decorators/auth-api-key.decorator';
+import { AiBuiltinToolPolicyService } from '../ai/tools/ai-builtin-tool-policy.service';
 
 /*
  * The shared tool-registry approach and Streamable HTTP adapter were adapted
@@ -38,6 +40,7 @@ export class McpController {
   constructor(
     private readonly tools: AiToolRegistryService,
     private readonly traffic: ApiKeyTrafficService,
+    private readonly toolPolicy: AiBuiltinToolPolicyService,
   ) {}
 
   @All()
@@ -50,7 +53,9 @@ export class McpController {
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
     @AuthSpace() space: Space,
+    @AuthApiKey() apiKey: ApiKey,
   ): Promise<void> {
+    const allowedTools = await this.toolPolicy.listForMcp(apiKey);
     const server = new Server(
       { name: 'docmost', version: '1.0.0' },
       {
@@ -61,15 +66,15 @@ export class McpController {
     );
 
     server.setRequestHandler(ListToolsRequestSchema, async () => ({
-      tools: this.tools.list('mcp').map((tool) => ({
+      tools: allowedTools.map((tool) => ({
         name: tool.name,
         description: tool.description,
         inputSchema: tool.inputSchema as any,
         annotations: {
-          readOnlyHint: true,
-          destructiveHint: false,
-          idempotentHint: true,
-          openWorldHint: false,
+          readOnlyHint: tool.writeClass === 'read_only',
+          destructiveHint: tool.annotations.destructive,
+          idempotentHint: tool.annotations.idempotent,
+          openWorldHint: tool.annotations.openWorld,
         },
       })),
     }));
@@ -77,6 +82,7 @@ export class McpController {
     server.setRequestHandler(CallToolRequestSchema, async (call) => {
       const startedAt = Date.now();
       try {
+        await this.toolPolicy.assertMcpToolAllowed(apiKey, call.params.name);
         const result = await this.tools.execute(
           call.params.name,
           call.params.arguments ?? {},
@@ -142,7 +148,7 @@ export class McpController {
         ? response
         : Array.isArray((response as any)?.message)
           ? (response as any).message.join(', ')
-          : (response as any)?.message ?? 'MCP tool call failed';
+          : ((response as any)?.message ?? 'MCP tool call failed');
     return String(message).slice(0, 500);
   }
 }

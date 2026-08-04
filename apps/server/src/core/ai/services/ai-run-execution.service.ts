@@ -23,7 +23,7 @@ import {
   AI_AGENT_MAX_TOOL_CALLS,
   AI_TOOL_RESULTS_TOTAL_MAX_BYTES,
   AI_WRITE_PROPOSAL_TTL_MS,
-  AiToolDefinition,
+  AiCallableToolDefinition,
   AiToolRegistryService,
 } from '../tools/ai-tool-registry.service';
 import {
@@ -39,6 +39,7 @@ import {
 } from '../mcp/ai-mcp-tool-call.service';
 import { AiMcpPolicyError } from '../mcp/ai-mcp.types';
 import { AiMcpRunSnapshot } from '../mcp/ai-mcp-snapshot.types';
+import { AiBuiltinToolPolicyService } from '../tools/ai-builtin-tool-policy.service';
 import {
   AI_AGENT_MAX_TOOL_DEFINITIONS,
   AI_MCP_INSTRUCTIONS_MAX_LENGTH,
@@ -87,6 +88,7 @@ export class AiRunExecutionService {
     private readonly contexts: AiContextService,
     private readonly auxRuns: AiAuxRunService,
     private readonly tools: AiToolRegistryService,
+    private readonly builtinToolPolicy: AiBuiltinToolPolicyService,
     private readonly mcpPolicy: AiMcpPolicyService,
     private readonly mcpCalls: AiMcpToolCallService,
   ) {}
@@ -98,7 +100,7 @@ export class AiRunExecutionService {
    * never be dispatched to a remote server even if it were named like one.
    */
   private asExternalDefinition(
-    definition: AiToolDefinition | undefined,
+    definition: AiCallableToolDefinition | undefined,
   ): AiMcpToolDefinition | null {
     const candidate = definition as AiMcpToolDefinition | undefined;
     return candidate?.toolSource === 'external_mcp' ? candidate : null;
@@ -528,7 +530,7 @@ export class AiRunExecutionService {
     // against a different source than the one offered is how an external tool
     // could otherwise be routed as a built-in.
     const definitions = [
-      ...this.tools.list('agent'),
+      ...(await this.assertCurrentBuiltinPolicy(run)),
       ...this.mcpCalls.listSnapshotDefinitions(mcpSnapshot),
     ];
     if (definitions.length > AI_AGENT_MAX_TOOL_DEFINITIONS) {
@@ -603,12 +605,14 @@ export class AiRunExecutionService {
       if (await this.isCancelled(run.id)) {
         throw new AiRunCancelledError();
       }
-      const response = await this.provider.completeWithTools(
-        this.configs.toProviderConfig(config),
-        messages,
-        providerTools,
-        'auto',
-        () => this.isCancelled(run.id),
+      const response = await this.withCurrentBuiltinPolicy(run, () =>
+        this.provider.completeWithTools(
+          this.configs.toProviderConfig(config),
+          messages,
+          providerTools,
+          'auto',
+          () => this.isCancelled(run.id),
+        ),
       );
       if (await this.isCancelled(run.id)) {
         throw new AiRunCancelledError();
@@ -728,13 +732,19 @@ export class AiRunExecutionService {
                 snapshot: mcpSnapshot!,
                 isCancelled: () => this.isCancelled(run.id),
               })
-            : await this.tools.execute(call.function.name, args, {
-                user,
-                workspaceId: run.workspaceId,
-                spaceId: run.spaceId,
-                currentPageId: run.pageId,
-                source: 'agent',
-              });
+            : await (async () => {
+                await this.builtinToolPolicy.assertRunToolAllowed(
+                  run,
+                  call.function.name,
+                );
+                return this.tools.execute(call.function.name, args, {
+                  user,
+                  workspaceId: run.workspaceId,
+                  spaceId: run.spaceId,
+                  currentPageId: run.pageId,
+                  source: 'agent',
+                });
+              })();
           const executionContent = external
             ? this.neutralizeExternalCitationMarkers(execution.content)
             : this.attachToolCitations(
@@ -808,6 +818,12 @@ export class AiRunExecutionService {
           if (error instanceof AiMcpPolicyError) {
             throw new AiAgentExecutionError(error.code, error.message);
           }
+          if ((error as any)?.response?.code === 'agent_tool_policy_changed') {
+            throw new AiAgentExecutionError(
+              'agent_tool_policy_changed',
+              'The built-in tool policy changed during this run',
+            );
+          }
           const errorMessage = this.safeToolError(error);
           const result = { ok: false, error: errorMessage };
           const step = await this.insertToolStep({
@@ -857,6 +873,32 @@ export class AiRunExecutionService {
     return decided.length
       ? Math.max(...decided.map((step) => step.modelStep)) + 1
       : 0;
+  }
+
+  private async assertCurrentBuiltinPolicy(
+    run: AiRun,
+  ): Promise<AiCallableToolDefinition[]> {
+    try {
+      return await this.builtinToolPolicy.assertRunPolicyCurrent(run);
+    } catch (error) {
+      if ((error as any)?.response?.code === 'agent_tool_policy_changed') {
+        throw new AiAgentExecutionError(
+          'agent_tool_policy_changed',
+          'The built-in tool policy changed during this run',
+        );
+      }
+      throw error;
+    }
+  }
+
+  private async withCurrentBuiltinPolicy<T>(
+    run: AiRun,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    await this.assertCurrentBuiltinPolicy(run);
+    const result = await operation();
+    await this.assertCurrentBuiltinPolicy(run);
+    return result;
   }
 
   private attachToolCitations(
@@ -1060,7 +1102,7 @@ export class AiRunExecutionService {
   private appendStepHistory(
     messages: AiProviderMessage[],
     steps: AiRunStep[],
-    definitionsByName: Map<string, AiToolDefinition>,
+    definitionsByName: Map<string, AiCallableToolDefinition>,
   ): void {
     const byModelStep = new Map<number, AiRunStep[]>();
     for (const step of steps) {

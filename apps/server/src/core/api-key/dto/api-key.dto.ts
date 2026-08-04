@@ -1,5 +1,7 @@
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import {
+  ArrayUnique,
+  IsArray,
   IsDateString,
   IsNotEmpty,
   IsOptional,
@@ -8,6 +10,10 @@ import {
   IsUUID,
   MaxLength,
 } from 'class-validator';
+import {
+  AI_BUILTIN_TOOL_CAPABILITIES,
+  AiBuiltinToolCapability,
+} from '@docmost/api-contract';
 
 export class ListApiKeysDto extends PaginationOptions {
   @IsOptional()
@@ -31,6 +37,12 @@ export class CreateApiKeyDto {
   @IsOptional()
   @IsDateString()
   expiresAt?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @IsIn(AI_BUILTIN_TOOL_CAPABILITIES, { each: true })
+  allowedCapabilities?: AiBuiltinToolCapability[];
 }
 
 export class UpdateApiKeyDto {
@@ -41,6 +53,12 @@ export class UpdateApiKeyDto {
   @IsNotEmpty()
   @MaxLength(255)
   name: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @IsIn(AI_BUILTIN_TOOL_CAPABILITIES, { each: true })
+  allowedCapabilities?: AiBuiltinToolCapability[];
 }
 
 export class RevokeApiKeyDto {

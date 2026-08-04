@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AiRun, User } from '@docmost/db/types/entity.types';
 import {
-  AiToolDefinition,
+  AiCallableToolDefinition,
   AiToolExecutionResult,
   AI_TOOL_RESULT_MAX_BYTES,
 } from '../tools/ai-tool-registry.service';
@@ -30,7 +30,7 @@ import { remapAiMcpArguments } from './ai-mcp-tool-schema.util';
  * `writeClass` is always `read_only`, so the merged agent tool list can never
  * contain an external write tool.
  */
-export type AiMcpToolDefinition = AiToolDefinition & {
+export type AiMcpToolDefinition = AiCallableToolDefinition & {
   toolSource: 'external_mcp';
   mcpServerId: string;
   mcpNamespace: string;

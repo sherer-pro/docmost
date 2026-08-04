@@ -38,6 +38,12 @@ import { AiAuxRunService } from './services/ai-aux-run.service';
 import { AiAuxRunExecutionService } from './services/ai-aux-run-execution.service';
 import { AiAuxRunEventService } from './services/ai-aux-run-event.service';
 import { AiToolRegistryService } from './tools/ai-tool-registry.service';
+import { AiBuiltinToolPolicyService } from './tools/ai-builtin-tool-policy.service';
+import { AI_BUILTIN_TOOL_POLICY_RESOLVER } from './tools/ai-builtin-tool-policy.token';
+import {
+  AiBuiltinToolSpacePolicyController,
+  AiBuiltinToolWorkspacePolicyController,
+} from './controllers/ai-builtin-tool-policy.controller';
 import { AiRunStepService } from './services/ai-run-step.service';
 import { AiMcpUrlPolicyService } from './services/ai-mcp-url-policy.service';
 import { AiMcpClientPoolService } from './mcp/ai-mcp-client-pool.service';
@@ -51,6 +57,8 @@ import {
 import { AiMcpSpaceController } from './controllers/ai-mcp-space.controller';
 import { PageModule } from '../page/page.module';
 import { CollaborationModule } from '../../collaboration/collaboration.module';
+import { ShareModule } from '../share/share.module';
+import { TransclusionModule } from '../page/transclusion/transclusion.module';
 
 @Module({
   imports: [
@@ -59,6 +67,8 @@ import { CollaborationModule } from '../../collaboration/collaboration.module';
     AiContentPolicyModule,
     PageModule,
     CollaborationModule,
+    ShareModule,
+    TransclusionModule,
   ],
   controllers: [
     AiConfigController,
@@ -71,6 +81,8 @@ import { CollaborationModule } from '../../collaboration/collaboration.module';
     AiMcpSettingsController,
     AiMcpServersController,
     AiMcpSpaceController,
+    AiBuiltinToolWorkspacePolicyController,
+    AiBuiltinToolSpacePolicyController,
   ],
   providers: [
     AiChatProcessor,
@@ -94,6 +106,11 @@ import { CollaborationModule } from '../../collaboration/collaboration.module';
     AiAuxRunExecutionService,
     AiAuxRunEventService,
     AiToolRegistryService,
+    AiBuiltinToolPolicyService,
+    {
+      provide: AI_BUILTIN_TOOL_POLICY_RESOLVER,
+      useExisting: AiBuiltinToolPolicyService,
+    },
     AiRunStepService,
     AiMcpUrlPolicyService,
     AiMcpClientPoolService,
@@ -105,6 +122,11 @@ import { CollaborationModule } from '../../collaboration/collaboration.module';
     NoopAiRetrievalAdapter,
     OpenAiCompatibleProviderService,
   ],
-  exports: [AiConfigService, AiToolRegistryService],
+  exports: [
+    AiConfigService,
+    AiToolRegistryService,
+    AiBuiltinToolPolicyService,
+    AI_BUILTIN_TOOL_POLICY_RESOLVER,
+  ],
 })
 export class AiModule {}

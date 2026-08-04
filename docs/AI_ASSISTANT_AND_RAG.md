@@ -58,6 +58,7 @@ The main components are:
 | `AiFileService`                          | uploads, text extraction, images, tombstone deletion, and chat-file cleanup           |
 | `AiAuxRunService`                        | auxiliary jobs for automatic conversation titles and editor-selection transforms      |
 | `AiToolRegistryService`                  | access-aware tools shared by agent mode and the read-only MCP surface                 |
+| `AiBuiltinToolPolicyService`             | deployment/workspace/space/key intersections and immutable Agent tool snapshots       |
 | `AiRunStepService`                       | initiator-only approval, safe Yjs application, history, and agent resumption          |
 | `McpController` / `McpApiKeyAuthGuard`   | stateless Streamable HTTP adapter and MCP-key-only authentication                     |
 
@@ -192,6 +193,55 @@ The shared registry exposes these read tools to both the agent and MCP:
 - `search`, `getTree`, and `getPageContext`;
 - `getPage`, `getOutline`, `getNode`, and `searchInPage`.
 
+Those seven reads are the backward-compatible baseline. The extension catalog
+adds `getWorkspaceContext`, `getSpaceContext`, `getDatabaseContext`,
+`listDatabaseRows`, `getDatabaseRowContext`, `getTable`, `listComments`,
+`listPageHistory`, `diffPageVersion`, `listTransclusionReferences`,
+`listPageAttachments`, `getPublicShareInfo`, `listPageTemplates`,
+`getPageTemplateMetadata`, and `listPageTemplateUsages`. The extension catalog is
+deployment-gated by `AI_BUILTIN_TOOL_EXTENSIONS_ENABLED=false` and is never
+granted to an existing workspace, space, Agent run, or MCP key merely because a
+tool was added to a category.
+
+Each registry definition has a stable capability ID, UI category, target
+scope, approval mode, per-tool byte limit, and MCP-safe annotations. The
+registry validates unique names and capabilities, the reserved `mcp__` prefix,
+read/write exposure rules, approval compatibility, and the 32 KiB global
+ceiling at startup. Workspace and space policy store exact capability arrays;
+a category checkbox expands to the exact capabilities visible at save time.
+The effective set is always an intersection: deployment maximum, enabled
+workspace allowlist, optional space narrowing, and for inbound MCP the key's
+own exact allowlist. ACL, deletion state, content exclusion, and live object
+state are still checked on every call.
+
+New Agent runs store the resolved built-in catalog, registry manifest
+fingerprint, and workspace/space policy versions in
+`ai_runs.builtin_tool_policy_snapshot`. The live manifest, deployment maximum,
+workspace/space versions, and every snapshotted capability are rechecked before
+and after each provider model turn. This includes a final answer with no tool
+call, so a response produced concurrently with revocation is never accepted. A
+resumed run fails with `agent_tool_policy_changed` if the manifest or live
+policy changed.
+Legacy runs without a snapshot continue to see only the original eleven Agent
+capabilities. Retry and regenerate create a fresh snapshot.
+
+The built-in-policy migration is additive. Existing workspaces start with the
+exact eleven legacy Agent capabilities, and existing MCP keys receive the exact
+seven legacy read capabilities. Deploy with
+`AI_BUILTIN_TOOL_EXTENSIONS_ENABLED=false`, then raise the deployment maximum,
+select exact workspace capabilities, optionally narrow each space, and finally
+opt individual MCP keys into a non-empty subset. A newly registered tool or a
+category membership change never alters a saved policy.
+
+Operational rollback removes optional capabilities or returns
+`AI_BUILTIN_TOOL_EXTENSIONS_ENABLED` to `false`; this preserves the legacy
+system maximum while all saved workspace, space, key, and run-snapshot data
+remain in place. The workspace master switch is a stronger kill switch and
+disables both legacy and optional built-in capabilities. Do not use the down
+migration for operational rollback because it destroys policy and snapshot
+data; MCP JWTs do not need to be reissued because each request reads the
+authoritative key row.
+
 Every read is constrained to the run/key space, current user or key creator,
 page ACL, deletion state, and the shared AI content-exclusion policy.
 
@@ -218,6 +268,11 @@ only when the live hash is still the proposal base, finalizes without replay
 when the expected post-apply hash is already live, and fails stale for every
 other hash. Legacy approved steps without recovery metadata fail safely and
 resume without another page mutation.
+
+Approval also resolves the stored `toolName` through the built-in registry and
+requires `writeClass=write` plus `approvalMode=current_page_hash`. Live policy
+is checked again before recovery; this does not turn the strict four-operation
+page proposal union into a generic callback mechanism.
 
 Pending proposals have a separate admission limit of six per user and thirty
 per space. Approval obtains the same PostgreSQL admission locks as a new run.
@@ -557,7 +612,7 @@ user. It does not replace query-time retrieval or the synchronization API:
 | ----------------------- | ------------------------------------------- | -------------------------------------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | query-time retrieval    | the Docmost AI worker                       | add ranked external context to one answer                | provider-side                     | validated excerpts returned by the configured retrieval adapter                                           |
 | `/api/rag/*`            | an external indexer such as `apps/rag-sync` | bulk/delta synchronization and export                    | `keyType=rag`                     | pages, databases, comments, exports, and allowed attachment data                                          |
-| `/mcp` (inbound)        | an external MCP-capable assistant           | interactive search and targeted document reading         | `keyType=mcp`                     | seven bounded read-only tools; no attachment body extraction                                              |
+| `/mcp` (inbound)        | an external MCP-capable assistant           | interactive search and targeted document reading         | `keyType=mcp`                     | seven baseline reads plus explicitly selected opt-in reads; no attachment body extraction                 |
 | external MCP (outbound) | the Docmost AI worker                       | call approved read-only remote tools during an agent run | per-server encrypted HTTP headers | the prompt, selected context, and page text are sent outward; the remote result returns as untrusted data |
 
 MCP calls do not create Docmost conversations, messages, citations, or
@@ -575,7 +630,9 @@ each HTTP request, so Docmost stores no MCP session ID, event stream, or
 resumption state. Clients should use a normal Streamable HTTP MCP transport and
 send every lifecycle or tool request to the same URL.
 
-The endpoint is always mounted; there is no MCP feature environment variable.
+The endpoint is always mounted; there is no MCP transport feature environment
+variable. `AI_BUILTIN_TOOL_EXTENSIONS_ENABLED` only caps the optional shared
+tool catalog and does not disable the seven baseline MCP reads.
 It advertises only the `tools` capability. Every listed tool has
 `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, and
 `openWorldHint=false`.
@@ -608,7 +665,11 @@ connection reaches Docmost.
 
 Workspace owners and administrators create the key on the MCP tab of
 `/settings/keys` (`/settings/keys/mcp`) through the fixed MCP flow: space,
-name/expiry, client, creation, and connection. The legacy `/settings/api-keys`
+exact non-empty read capability selection, name/expiry, client, creation, and
+connection. Existing MCP keys were migrated to the exact seven legacy read
+capabilities. The JWT shape is unchanged; the authoritative
+`api_keys.allowed_capabilities` row is read for every request. RAG keys reject
+this field. The legacy `/settings/api-keys`
 and `/settings/ai/mcp` URLs redirect to this tab.
 `/settings/account/api-keys` and `/settings/ai/rag` redirect a workspace owner
 or administrator to `/settings/keys/rag`, and `/settings/account/api-keys`
@@ -651,6 +712,26 @@ described in JSON Schema.
 | `getOutline`     | `pageId`                            | up to 300 structural nodes with index, optional stable ID, type, nesting level, and compact text                             |
 | `getNode`        | `pageId`, `nodeId`                  | one ProseMirror node selected by stable ID or a fallback such as `#12` from the outline index                                |
 | `searchInPage`   | `pageId`, `query`, optional `limit` | case-insensitive matches with character offsets and bounded excerpts; default 20, maximum 50                                 |
+| `getWorkspaceContext` | none | curated workspace identity and actor role; never raw workspace settings |
+| `getSpaceContext` | none | current-space metadata, explicit `spaceRole`, workspace role, and safe actor capability flags |
+| `getDatabaseContext` | `databaseId` | curated database metadata, normalized property schema, and compact views |
+| `listDatabaseRows` | `databaseId`, optional `limit`, `cursor` | readable row pages and cells; default 20, maximum 50 |
+| `getDatabaseRowContext` | `pageId` | readable row, its database root, schema, and cells |
+| `getTable` | `pageId`, `tableRef` | bounded text/cell-ID matrices for one structural table |
+| `listComments` | `pageId`, optional `limit`, `cursor` | active comments, parent/resolution state, compact content, and safe actors; maximum 50 |
+| `listPageHistory` | `pageId`, optional `limit`, `cursor` | version metadata only; maximum 50 |
+| `diffPageVersion` | `pageId`, `historyId` | bounded semantic version-to-live-Yjs diff, integrity counts, and current hash |
+| `listTransclusionReferences` | `sourcePageId`, `transclusionId`, optional pagination | readable, same-space, non-excluded reference pages |
+| `listPageAttachments` | `pageId`, optional pagination | metadata/index status only; no path, bytes, extracted text, or token; maximum 100 |
+| `getPublicShareInfo` | `pageId` | effective direct/inherited share state, indexing flag, and public URL |
+| `listPageTemplates` | optional `query`, `limit` | readable marked templates in the key/run's current space; metadata only, maximum 50 |
+| `getPageTemplateMetadata` | `pageId` | safe metadata for one readable marked template in the current scoped space |
+| `listPageTemplateUsages` | `pageId`, optional `limit` | readable consumer pages and visible occurrence count in the current scoped space; maximum 50 |
+
+Paginated built-in reads use opaque versioned keyset cursors bound to the tool
+name and target resource. Replaying a cursor for another page, database, or
+tool, or supplying a malformed or oversized cursor, returns `400`; cursors do
+not encode a caller-controlled SQL offset.
 
 `getPage` includes full editor JSON only when its serialized document fits the
 compact-response threshold. For larger pages it returns `content=null`, at
@@ -660,8 +741,17 @@ most 16,000 text characters, and up to 80 outline items, with
 stable `id`, use `#<index>` as the `getNode.nodeId`.
 
 Search and tree results include database rows where the underlying search/page
-model represents them as pages. MCP does not provide database mutation,
-schema-editing, table, comment, share, export, or page-management tools.
+model represents them as pages. The opt-in database, table, comment, history,
+attachment, transclusion, template, and share tools remain read-only. The
+three template capabilities are `page.templates.list`,
+`page.template.metadata.read`, and `page.template.usages.read`. They are not
+part of either legacy catalog and require the deployment extension switch,
+workspace and space exact allowlists, current template policy, and (for MCP)
+the authoritative one-space API-key capability. Hidden or cross-space
+consumers are neither returned nor included in the MCP-visible usage count.
+MCP does not
+provide database mutation, schema editing, comment mutation, restore, export,
+attachment bodies, or page-management tools.
 
 ### Result, error, and content boundaries
 
@@ -866,7 +956,7 @@ secret; the URL is re-read at connect time so it cannot go stale. The snapshot i
 capped at 64 KiB and run creation fails closed above that rather than silently
 narrowing what the space allowed.
 
-Version 1 limits are 8 connections and 32 external tools per run, and at most 48
+Version 1 limits are 8 connections and 32 external tools per run, and at most 64
 built-in plus external definitions in one model turn.
 
 The snapshot is not authorization. Before every call, every 500 ms while a call
@@ -953,6 +1043,8 @@ CSRF contract.
 | Method and path                                                  | Purpose                                                        |
 | ---------------------------------------------------------------- | -------------------------------------------------------------- |
 | `GET/PATCH /api/spaces/:spaceId/ai/config`                       | read or update space AI configuration                          |
+| `GET/PATCH /api/ai/tool-policy`                                  | workspace catalog, master switch, stored exact allowlist, deployment `maximumCapabilities`, and active `effectiveCapabilities` |
+| `GET/PUT /api/spaces/:spaceId/ai/tool-policy`                    | effective policy and optional exact space narrowing            |
 | `POST /api/spaces/:spaceId/ai/config/actions/test-model`         | test the provider and optional vision                          |
 | `POST /api/spaces/:spaceId/ai/config/actions/test-agent`         | force and validate provider tool calling                       |
 | `POST /api/spaces/:spaceId/ai/config/actions/test-retrieval`     | test external retrieval                                        |
@@ -1035,7 +1127,9 @@ global `/api` prefix.
 
 ## 9. Contracts
 
-Canonical TypeScript contracts live in `packages/api-contract/src/ai.ts`.
+Canonical TypeScript contracts live in `packages/api-contract/src/ai.ts` and
+the built-in catalog/policy contracts live in
+`packages/api-contract/src/ai-tools.ts`.
 Important enumerations include provider `openai-compatible`; adapters `none`,
 `http-json-v1`, and `open-webui-knowledge-v1`; run statuses `queued`, `running`,
 `awaiting_approval`, `completed`, `failed`, and `cancelled`; execution modes

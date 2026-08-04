@@ -10,6 +10,11 @@ import {
   AI_STREAM_IDLE_TIMEOUT_MAX_MS,
   AI_STREAM_IDLE_TIMEOUT_MIN_MS,
 } from './environment.constants';
+import {
+  DEFAULT_MAX_PAGE_EMBED_DEPTH,
+  MAX_CONFIGURED_PAGE_EMBED_DEPTH,
+  MIN_PAGE_EMBED_DEPTH,
+} from '../../common/config/page-embed.constants';
 
 @Injectable()
 export class EnvironmentService {
@@ -78,6 +83,38 @@ export class EnvironmentService {
         .get<string>('AI_EXTERNAL_MCP_ENABLED', 'false')
         .toLowerCase() === 'true'
     );
+  }
+
+  isAiBuiltinToolExtensionsEnabled(): boolean {
+    return (
+      this.configService
+        .get<string>('AI_BUILTIN_TOOL_EXTENSIONS_ENABLED', 'false')
+        .trim()
+        .toLowerCase() === 'true'
+    );
+  }
+
+  isPageTemplatesEnabled(): boolean {
+    return (
+      this.configService
+        .get<string>('PAGE_TEMPLATES_ENABLED', 'false')
+        .trim()
+        .toLowerCase() === 'true'
+    );
+  }
+
+  getMaxPageEmbedDepth(): number {
+    const value = Number(
+      this.configService.get<string | number>(
+        'MAX_PAGE_EMBED_DEPTH',
+        DEFAULT_MAX_PAGE_EMBED_DEPTH,
+      ),
+    );
+    return Number.isInteger(value) &&
+      value >= MIN_PAGE_EMBED_DEPTH &&
+      value <= MAX_CONFIGURED_PAGE_EMBED_DEPTH
+      ? value
+      : DEFAULT_MAX_PAGE_EMBED_DEPTH;
   }
 
   getAiMcpAllowedOrigins(): string {

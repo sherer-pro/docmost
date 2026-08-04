@@ -208,6 +208,7 @@ export const AI_ERROR_CODES = [
   "agent_write_stale",
   "agent_write_rejected",
   "agent_write_not_allowed",
+  "agent_tool_policy_changed",
   "agent_mcp_config_changed",
   "agent_mcp_access_revoked",
   "agent_mcp_tool_definition_limit",

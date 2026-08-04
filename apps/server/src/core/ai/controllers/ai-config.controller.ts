@@ -13,6 +13,7 @@ import { User, Workspace } from '@docmost/db/types/entity.types';
 import { AuthUser } from '../../../common/decorators/auth-user.decorator';
 import { AuthWorkspace } from '../../../common/decorators/auth-workspace.decorator';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
+import { AuthPolicyScope } from '../../../common/decorators/auth-policy-scope.decorator';
 import {
   AiStatusQueryDto,
   TestAiSpaceConfigDto,
@@ -21,6 +22,7 @@ import {
 import { AiConfigService } from '../services/ai-config.service';
 
 @UseGuards(JwtAuthGuard)
+@AuthPolicyScope('space', { source: 'params', key: 'spaceId' })
 @Controller('spaces/:spaceId/ai/config')
 export class AiConfigController {
   constructor(private readonly aiConfigService: AiConfigService) {}
@@ -76,6 +78,7 @@ export class AiConfigController {
 }
 
 @UseGuards(JwtAuthGuard)
+@AuthPolicyScope('space', { source: 'params', key: 'spaceId' })
 @Controller('spaces/:spaceId/ai/status')
 export class AiStatusController {
   constructor(private readonly aiConfigService: AiConfigService) {}

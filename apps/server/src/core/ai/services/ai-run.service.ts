@@ -39,6 +39,7 @@ import { AiContextService } from './ai-context.service';
 import { AI_CONCURRENCY_LIMITS } from '../ai.constants';
 import { toAiRunStepContract } from '../utils/ai-run-step.mapper';
 import { AiMcpPolicyService } from '../mcp/ai-mcp-policy.service';
+import { AiBuiltinToolPolicyService } from '../tools/ai-builtin-tool-policy.service';
 
 @Injectable()
 export class AiRunService {
@@ -52,6 +53,7 @@ export class AiRunService {
     private readonly events: AiRunEventService,
     private readonly contexts: AiContextService,
     private readonly mcpPolicy: AiMcpPolicyService,
+    private readonly builtinToolPolicy: AiBuiltinToolPolicyService,
   ) {}
 
   async send(
@@ -228,6 +230,12 @@ export class AiRunService {
           userId: user.id,
           executionMode: lockedConversation.agentMode ? 'agent' : 'chat',
         });
+        const builtinToolSnapshot =
+          await this.builtinToolPolicy.buildRunSnapshot(trx, {
+            workspaceId: workspace.id,
+            spaceId: conversation.spaceId,
+            executionMode: lockedConversation.agentMode ? 'agent' : 'chat',
+          });
         const inserted = await trx
           .insertInto('aiRuns')
           .values({
@@ -239,6 +247,10 @@ export class AiRunService {
             mcpPolicySnapshot: mcpSnapshot as never,
             mcpPolicyFingerprint: mcpSnapshot
               ? this.mcpPolicy.fingerprintSnapshot(mcpSnapshot)
+              : null,
+            builtinToolPolicySnapshot: builtinToolSnapshot as never,
+            builtinToolPolicyFingerprint: builtinToolSnapshot
+              ? this.builtinToolPolicy.fingerprintSnapshot(builtinToolSnapshot)
               : null,
             conversationId: conversation.id,
             userId: user.id,
@@ -691,6 +703,12 @@ export class AiRunService {
           userId: locked.userId,
           executionMode: locked.executionMode,
         });
+        const builtinToolSnapshot =
+          await this.builtinToolPolicy.buildRunSnapshot(trx, {
+            workspaceId: locked.workspaceId,
+            spaceId: locked.spaceId,
+            executionMode: locked.executionMode,
+          });
         const run = await trx
           .insertInto('aiRuns')
           .values({
@@ -702,6 +720,10 @@ export class AiRunService {
             mcpPolicySnapshot: mcpSnapshot as never,
             mcpPolicyFingerprint: mcpSnapshot
               ? this.mcpPolicy.fingerprintSnapshot(mcpSnapshot)
+              : null,
+            builtinToolPolicySnapshot: builtinToolSnapshot as never,
+            builtinToolPolicyFingerprint: builtinToolSnapshot
+              ? this.builtinToolPolicy.fingerprintSnapshot(builtinToolSnapshot)
               : null,
             conversationId: locked.conversationId,
             userId: locked.userId,
