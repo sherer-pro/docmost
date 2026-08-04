@@ -84,7 +84,9 @@ export class TokenService {
       type: JwtType.COLLAB,
     };
 
-    return this.jwtService.sign(payload, { expiresIn: COLLAB_TOKEN_EXPIRES_IN });
+    return this.jwtService.sign(payload, {
+      expiresIn: COLLAB_TOKEN_EXPIRES_IN,
+    });
   }
 
   async generateExchangeToken(
@@ -117,11 +119,15 @@ export class TokenService {
   async generateAttachmentPageToken(opts: {
     pageId: string;
     workspaceId: string;
+    shareId?: string;
+    pageEmbedSource?: boolean;
   }): Promise<string> {
-    const { pageId, workspaceId } = opts;
+    const { pageId, workspaceId, shareId, pageEmbedSource } = opts;
     const payload: JwtAttachmentPayload = {
       pageId,
       workspaceId,
+      shareId,
+      pageEmbedSource,
       type: JwtType.ATTACHMENT,
     };
 

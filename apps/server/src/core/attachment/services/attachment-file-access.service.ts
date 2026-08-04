@@ -20,6 +20,7 @@ import { inlineFileExtensions } from '../attachment.constants';
 import { resolveAttachmentAccessTokenDetails } from '../attachment-public-token.util';
 import { PageAccessService } from '../../page-access/page-access.service';
 import { PublicSharingPolicyService } from '../../share/public-sharing-policy.service';
+import { ShareService } from '../../share/share.service';
 
 const fallbackDownloadMimeType = 'application/octet-stream';
 
@@ -58,6 +59,7 @@ export class AttachmentFileAccessService {
     private readonly tokenService: TokenService,
     private readonly storageService: StorageService,
     private readonly publicSharingPolicy: PublicSharingPolicyService,
+    private readonly shareService: ShareService,
   ) {}
 
   async uploadFile(
@@ -188,11 +190,7 @@ export class AttachmentFileAccessService {
       !page ||
       page.deletedAt ||
       page.workspaceId !== workspace.id ||
-      page.spaceId !== attachment.spaceId ||
-      !(await this.publicSharingPolicy.isAllowed(
-        workspace.id,
-        attachment.spaceId,
-      ))
+      page.spaceId !== attachment.spaceId
     ) {
       throw new NotFoundException('File not found');
     }
@@ -223,6 +221,43 @@ export class AttachmentFileAccessService {
       (jwtPayload.attachmentId && jwtPayload.attachmentId !== fileId)
     ) {
       throw new NotFoundException('File not found');
+    }
+
+    const isTrustedAttachmentSpecificToken = Boolean(
+      jwtPayload.attachmentId === fileId && !jwtPayload.shareId,
+    );
+    if (
+      !isTrustedAttachmentSpecificToken &&
+      !(await this.publicSharingPolicy.isAllowed(
+        workspace.id,
+        attachment.spaceId,
+      ))
+    ) {
+      throw new NotFoundException('File not found');
+    }
+
+    if (jwtPayload.shareId) {
+      const inheritedShare = await this.shareService.getShareForPage(
+        page.slugId,
+        workspace.id,
+        jwtPayload.shareId,
+      );
+      if (!inheritedShare) throw new NotFoundException('File not found');
+      if (jwtPayload.pageEmbedSource) {
+        const result = await this.shareService.lookupTransclusionForShare(
+          jwtPayload.shareId,
+          [
+            {
+              kind: 'page',
+              sourcePageId: page.id,
+            },
+          ],
+          workspace.id,
+        );
+        if (!result.items[0] || !('content' in result.items[0])) {
+          throw new NotFoundException('File not found');
+        }
+      }
     }
 
     if (accessTokenDetails.source === 'query') {

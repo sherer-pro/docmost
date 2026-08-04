@@ -71,7 +71,12 @@ export type RSAMessageCustomEventStart<TName = string, TPayload = unknown> = {
 export type RSAMessageCustomEventComplete = {
   type: 'customEventComplete';
   replyId: number;
-  payload: unknown;
+  payload?: unknown;
+  error?: {
+    status: number;
+    response: string | Record<string, unknown>;
+    message: string;
+  };
 };
 
 export type RSAMessage =

@@ -77,16 +77,31 @@ describe('ExportService PDF export', () => {
 
   const environmentService = {
     getAppUrl: jest.fn(() => 'http://localhost:3000'),
+    getMaxPageEmbedDepth: jest.fn(() => 5),
   };
 
   const htmlPdfRendererService = {
-    render: jest.fn<Promise<Buffer>, [string, { attachmentToken?: string }?]>(
-      async () => Buffer.from('%PDF-1.7 mock'),
-    ),
+    render: jest.fn<
+      Promise<Buffer>,
+      [
+        string,
+        {
+          attachmentToken?: string;
+          attachmentTokens?: Record<string, string>;
+        }?,
+      ]
+    >(async () => Buffer.from('%PDF-1.7 mock')),
   };
 
   const tokenService = {
+    generateAttachmentToken: jest.fn(
+      async ({ attachmentId }: { attachmentId: string }) =>
+        `attachment-token:${attachmentId}`,
+    ),
     generateAttachmentPageToken: jest.fn(async () => 'attachment-page-token'),
+    generateAttachmentPageSetToken: jest.fn(
+      async () => 'attachment-page-token',
+    ),
   };
 
   const pageAccessService = {
@@ -102,6 +117,9 @@ describe('ExportService PDF export', () => {
   const transclusionService = {
     lookup: jest.fn(async () => ({ items: [] })),
   };
+  const pageEmbedService = {
+    lookup: jest.fn(async () => ({ items: [] })),
+  };
 
   const service = new ExportService(
     pageRepo as any,
@@ -112,6 +130,7 @@ describe('ExportService PDF export', () => {
     tokenService as any,
     pageAccessService as any,
     transclusionService as any,
+    pageEmbedService as any,
   );
 
   const streamToBuffer = async (
@@ -327,7 +346,10 @@ describe('ExportService PDF export', () => {
     expect(renderedHtml).toContain('overflow-wrap: break-word;');
     expect(renderedHtml).toContain('word-break: normal;');
     expect(renderedHtml).not.toContain('table-layout: fixed;');
-    expect(renderOpts).toEqual({ attachmentToken: 'attachment-page-token' });
+    expect(renderOpts).toEqual({
+      attachmentToken: undefined,
+      attachmentTokens: {},
+    });
   });
 
   it('numbers body headings without numbering the page title', async () => {
@@ -378,21 +400,94 @@ describe('ExportService PDF export', () => {
       text: 'Hello from page',
     });
 
+    const firstAttachmentId = '11111111-1111-4111-8111-111111111111';
+    const secondAttachmentId = '22222222-2222-4222-8222-222222222222';
+    const previousSelectFromImplementation =
+      db.selectFrom.getMockImplementation();
+    db.selectFrom.mockImplementation((tableName: string) => {
+      if (tableName === 'attachments') {
+        const query: any = {
+          select: () => query,
+          where: () => query,
+          executeTakeFirst: async () => undefined,
+          execute: async () => [
+            { id: firstAttachmentId, pageId: 'page-1' },
+            { id: secondAttachmentId, pageId: 'embedded-page' },
+          ],
+        };
+        return query;
+      }
+      return previousSelectFromImplementation?.(tableName);
+    });
+
     const body = await service.buildPagePdfBody({
       page: page as any,
-      pageHtml:
-        '<p><img src="/api/files/file-1/image.png?t=10" alt="img" /></p>' +
-        '<div data-type="drawio" data-src="/api/files/file-2/diagram.drawio.svg"></div>',
+      pageHtml: `<p><img src="/api/files/${firstAttachmentId}/image.png?t=10" alt="img" /></p><div data-type="drawio" data-src="/api/files/${secondAttachmentId}/diagram.drawio.svg"></div>`,
+      attachmentPageIds: ['page-1', 'embedded-page'],
     });
 
     expect(body.bodyHtml).toContain(
-      'http://localhost:3000/api/files/public/file-1/image.png?t=10',
+      `http://localhost:3000/api/files/public/${firstAttachmentId}/image.png?t=10`,
     );
     expect(body.bodyHtml).toContain(
-      'http://localhost:3000/api/files/public/file-2/diagram.drawio.svg',
+      `http://localhost:3000/api/files/public/${secondAttachmentId}/diagram.drawio.svg`,
     );
     expect(body.bodyHtml).toContain('<img');
-    expect(body.attachmentToken).toBe('attachment-page-token');
+    expect(body.attachmentTokens).toEqual({
+      [firstAttachmentId]: `attachment-token:${firstAttachmentId}`,
+      [secondAttachmentId]: `attachment-token:${secondAttachmentId}`,
+    });
+    expect(tokenService.generateAttachmentToken).toHaveBeenCalledTimes(2);
+    db.selectFrom.mockImplementation(previousSelectFromImplementation!);
+  });
+
+  it('does not ZIP an attachment whose proven owner page is outside the materialized set', async () => {
+    const attachmentId = '11111111-1111-4111-8111-111111111111';
+    const previousSelectFromImplementation =
+      db.selectFrom.getMockImplementation();
+    db.selectFrom.mockImplementation((tableName: string) => {
+      if (tableName === 'attachments') {
+        const query: any = {
+          selectAll: () => query,
+          where: () => query,
+          execute: async () => [
+            {
+              id: attachmentId,
+              pageId: 'foreign-page',
+              filePath: 'foreign/file.png',
+              fileName: 'file.png',
+            },
+          ],
+        };
+        return query;
+      }
+
+      return previousSelectFromImplementation?.(tableName);
+    });
+    const zip = new JSZip();
+
+    await service.zipAttachments(
+      {
+        type: 'doc',
+        content: [
+          {
+            type: 'image',
+            attrs: {
+              attachmentId,
+              src: `/api/files/${attachmentId}/file.png`,
+            },
+          },
+        ],
+      },
+      'space-1',
+      'workspace-1',
+      zip,
+      new Set(['consumer-page']),
+    );
+
+    expect(storageService.read).not.toHaveBeenCalled();
+    expect(Object.keys(zip.files)).toEqual([]);
+    db.selectFrom.mockImplementation(previousSelectFromImplementation!);
   });
 
   it('inlines excalidraw diagram svg from storage for PDF content', async () => {

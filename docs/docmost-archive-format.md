@@ -1,55 +1,66 @@
 # Docmost archive format
 
 Docmost archive is the lossless ZIP format used to move content between
-spaces. Markdown, HTML, and PDF remain presentation formats and are not used
-as the canonical restore payload.
+spaces. Markdown, HTML, and PDF are presentation formats and are not canonical
+restore payloads.
 
-## Version 2 layout
+## Version 3 layout
 
-- `docmost-metadata.json` — manifest with `source: "docmost"`,
-  `schemaVersion: 2`, export scope, display name, and the legacy page-path map.
-- `docmost-data.json` — canonical ProseMirror page JSON, portable space
-  settings, databases, labels, dictionary terms, user references, and
-  attachment descriptors. External synced-block sources are stored as
-  snapshots so they can be restored as ordinary editable blocks.
-- `files/<sourceAttachmentId>/<fileName>` — attachment payloads.
-- Markdown page files — a human-readable compatibility representation.
+- `docmost-metadata.json` is the manifest with `source: "docmost"`,
+  `schemaVersion: 3`, export scope, display name, and the legacy page-path map.
+- `docmost-data.json` contains canonical ProseMirror page JSON, portable space
+  settings, databases, labels, dictionary terms, user references, attachment
+  descriptors, synced-block snapshots, and whole-page embed snapshots.
+- `files/<sourceAttachmentId>/<fileName>` contains attachment payloads.
+- Markdown page files provide a human-readable compatibility representation.
 
-The importer rejects archives created with a newer schema and archives that
-contain editor nodes unsupported by the running server. It never silently
-drops an unknown node. Attachment descriptors include a SHA-256 checksum;
-preview verifies both the declared size and checksum before a task can start.
+Version 3 preserves `pages[].isTemplate` and `pageEmbed` occurrence IDs.
+Whole-page references to pages inside the archive are remapped to imported page
+IDs and remain live. For an accessible source outside the archive,
+`pageEmbedSnapshots` stores a presentation snapshot keyed by
+`referencePageId + referenceNodeId + sourcePageId`. The key is occurrence-scoped,
+so policy and attachment fallback are evaluated independently for each consumer.
+Referenced attachments are copied with a stable per-consumer mapping and owned
+by the imported consumer page; import materializes the snapshot as ordinary
+editable content. If no safe
+snapshot exists, import writes a neutral placeholder and never retains the
+cross-workspace reference. Derived reference rows are rebuilt from page content.
+
+The importer continues to accept version 2 archives. It rejects archives made
+with a newer schema and archives containing editor nodes unsupported by the
+running server. It never silently drops an unknown node. Attachment descriptors
+include SHA-256 checksums; preview verifies both size and checksum before a task
+can start.
 
 ## Imported and excluded data
 
 The archive restores pages, page settings, databases and views, attachments,
-labels, dictionary terms, and synced blocks. All entity identifiers are
-regenerated. Page and user references are remapped before the transaction is
-committed.
+labels, dictionary terms, synced blocks, template markers, and supported live
+page relationships. All entity identifiers are regenerated. Page, attachment,
+and user references are remapped before the transaction commits.
 
-### Synced blocks
+Database roots, database rows, and database content cannot contain live
+`pageEmbed` nodes in v1. Import clears a template marker on those pages and
+replaces any such node with a neutral placeholder.
 
-Lossless synced-block restoration is available only through the Docmost
-archive. References whose source page is part of the same archive are remapped
-to the new page identifiers and remain synchronized. An accessible reference
-to a source outside the archive is stored in `transclusionSnapshots` and is
-restored as ordinary editable content. References that the exporting user
-cannot read are never included in `transclusionSnapshots`; the importer
-replaces them with an unavailable-content placeholder.
+### Synced blocks and page embeds
 
-Markdown, HTML, and PDF exports are presentation-only representations. They
-materialize each synced block as a labeled, framed block with its current
-content, or with a localized unavailable-content placeholder. Importing those
-formats does not recreate synchronization relationships.
+References whose source page is in the same archive are remapped and remain
+synchronized. Accessible external synced blocks use `transclusionSnapshots`;
+accessible external page embeds use `pageEmbedSnapshots`. Both become ordinary
+editable content on import. Sources the exporting user cannot read are never
+included as snapshots.
+
+Markdown, HTML, and PDF recursively materialize currently permitted live page
+embeds and synced blocks. Rendering is depth-bounded; an unavailable source is
+represented by a localized neutral placeholder. Importing those formats never
+recreates a live relationship.
 
 Workspace members, access rules, public shares, comments, history, favorites,
 API keys, and personal preferences are intentionally excluded. Space identity
 and security settings are not overwritten. Portable document-field,
 dictionary, and heading-numbering settings are applied only when selected in
-the import preview. Document fields and heading numbering require permission to
-manage the target space settings; dictionary import requires a workspace
-administrator. Unavailable groups are disabled while content import remains
-available.
+the import preview.
 
 ## Import workflow
 
@@ -60,14 +71,12 @@ available.
 4. `POST /api/file-tasks/info` returns the persisted preview and final report.
 
 Structural data is committed atomically. Attachment payloads are staged before
-the database transaction and removed if the transaction fails. Re-importing an
-archive always creates a new copy; it never updates source objects.
+the database transaction and removed if it fails. Re-importing an archive
+always creates a new copy; it never updates source objects.
 
 ## Compatibility
 
-Version 2 archives keep the legacy Markdown page map for older consumers.
-When a human-readable Docmost ZIP marks heading numbers as materialized, the
-generic importer removes them exactly. For older archives without the flag,
-numbers are removed only when the complete H1-H3 sequence matches Docmost's
-hierarchical numbering algorithm. Ambiguous manual-looking prefixes are
-preserved and recorded in the import report.
+Version 2 and 3 archives keep the legacy Markdown page map for older consumers.
+Version 2 has no template marker or whole-page snapshot sidecar, so only its
+existing data is restored. Heading-number compatibility follows the same
+materialized-number rules used by the generic importer.

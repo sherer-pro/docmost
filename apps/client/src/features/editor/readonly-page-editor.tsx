@@ -10,6 +10,7 @@ import { useAtom } from "jotai";
 import { readOnlyEditorAtom } from "@/features/editor/atoms/editor-atoms.ts";
 import { useEditorScroll } from "./hooks/use-editor-scroll";
 import { TransclusionLookupProvider } from "@/features/editor/components/transclusion/transclusion-lookup-context";
+import { PageEmbedLookupProvider } from "@/features/editor/components/page-embed/page-embed-lookup-context";
 import { PageReadingTime } from "@/features/page/components/reading-time/page-reading-time.tsx";
 import editorClasses from "@/features/editor/styles/editor.module.css";
 
@@ -55,7 +56,7 @@ export default function ReadonlyPageEditor({
     return [
       ...filteredExtensions,
       UniqueID.configure({
-        types: ["heading", "paragraph", "transclusionSource"],
+        types: ["heading", "paragraph", "transclusionSource", "pageEmbed"],
         updateDocument: false,
       }),
     ];
@@ -75,6 +76,7 @@ export default function ReadonlyPageEditor({
 
   return (
     <TransclusionLookupProvider shareId={shareId}>
+      <PageEmbedLookupProvider shareId={shareId} referencePageId={pageId}>
       <EditorProvider
         editable={false}
         immediatelyRender={true}
@@ -110,6 +112,7 @@ export default function ReadonlyPageEditor({
         }}
       ></EditorProvider>
       <div style={{ paddingBottom: "20vh" }}></div>
+      </PageEmbedLookupProvider>
     </TransclusionLookupProvider>
   );
 }

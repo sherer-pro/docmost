@@ -10,6 +10,8 @@ import {
   IconTrash,
   IconWifiOff,
   IconSparkles,
+  IconTemplate,
+  IconTemplateOff,
 } from "@tabler/icons-react";
 import React, { useEffect, useRef, useState } from "react";
 import useToggleAside from "@/hooks/use-toggle-aside.tsx";
@@ -65,10 +67,14 @@ import {
 import { getEditorMarkdown } from "@/features/editor/utils/editor-markdown";
 import CopyPageModal from "@/features/page/components/copy-page-modal.tsx";
 import { PageOperationMenuItems } from "@/features/page/components/page-operation-menu-items.tsx";
-import { invalidateSidebarTree } from "@/features/page/queries/cache-invalidation.ts";
+import {
+  invalidatePageEntity,
+  invalidateSidebarTree,
+} from "@/features/page/queries/cache-invalidation.ts";
 import { queryClient } from "@/main.tsx";
 import { canExportDocument } from "@/features/space/permissions/export-access.ts";
 import { useAiAssistantIdentity } from "@/features/ai/hooks/use-ai-assistant-identity.ts";
+import { setPageTemplate } from "@/features/page-template/services/page-template-api";
 
 interface PageHeaderMenuProps {
   readOnly?: boolean;
@@ -455,6 +461,35 @@ function PageActionMenu({ readOnly, canMoveDeleteShare }: PageActionMenuProps) {
     openConvertDatabaseToPageConfirm();
   };
 
+  const handleToggleTemplate = async () => {
+    if (!page?.id) return;
+    try {
+      await setPageTemplate(page.id, !page.isTemplate);
+      invalidatePageEntity(
+        { pageId: page.id, pageSlugId: page.slugId },
+        { client: queryClient },
+      );
+      notifications.show({
+        message: page.isTemplate
+          ? t("Template marker removed")
+          : t("Page marked as template"),
+      });
+    } catch (error: any) {
+      notifications.show({
+        color: "red",
+        message: error?.response?.data?.message ?? t("Action is not allowed"),
+      });
+    }
+  };
+
+  const handleCreateFromTemplate = () => {
+    window.dispatchEvent(
+      new CustomEvent("docmost:page-template-picker", {
+        detail: { mode: "snapshot" },
+      }),
+    );
+  };
+
   const handleConvertToDatabase = () => {
     if (!page?.id) {
       return;
@@ -558,6 +593,32 @@ function PageActionMenu({ readOnly, canMoveDeleteShare }: PageActionMenuProps) {
                   </Menu.Item>
                 </>
               )}
+            </>
+          )}
+
+          {canWritePage && !page?.databaseId && (
+            <>
+              <Menu.Divider />
+              <Menu.Item
+                leftSection={
+                  page?.isTemplate ? (
+                    <IconTemplateOff size={16} />
+                  ) : (
+                    <IconTemplate size={16} />
+                  )
+                }
+                onClick={() => void handleToggleTemplate()}
+              >
+                {page?.isTemplate
+                  ? t("Remove template marker")
+                  : t("Mark as template")}
+              </Menu.Item>
+              <Menu.Item
+                leftSection={<IconTemplate size={16} />}
+                onClick={handleCreateFromTemplate}
+              >
+                {t("Create child from template")}
+              </Menu.Item>
             </>
           )}
 

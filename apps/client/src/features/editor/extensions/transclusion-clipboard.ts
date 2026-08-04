@@ -1,6 +1,7 @@
 import { Extension, type Editor } from "@tiptap/core";
 import { DOMSerializer, type Fragment, type Schema } from "@tiptap/pm/model";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
+import type { EditorView } from "@tiptap/pm/view";
 import {
   getTransclusionPresentationAttributes,
   getTransclusionReferenceKey,
@@ -11,9 +12,13 @@ import {
 } from "@docmost/editor-ext";
 import type { TransclusionLookup } from "@/features/transclusion/types/transclusion.types";
 import i18n from "@/i18n";
+import type { PageEmbedLookup } from "@/features/page-template/types/page-template.types";
 
 export interface TransclusionClipboardStorage {
   items: Map<string, TransclusionLookup>;
+  pageItems: Map<string, PageEmbedLookup>;
+  pageItemOccurrences: Map<string, Map<string, PageEmbedLookup>>;
+  maxPageEmbedDepth: number | null;
 }
 
 export interface TransclusionClipboardPayload {
@@ -28,52 +33,68 @@ export const TransclusionClipboard = Extension.create<
   name: "transclusionClipboard",
 
   addStorage() {
-    return { items: new Map() };
+    return {
+      items: new Map(),
+      pageItems: new Map(),
+      pageItemOccurrences: new Map(),
+      maxPageEmbedDepth: null,
+    };
   },
 
   addProseMirrorPlugins() {
+    const storage = this.storage;
     return [
       new Plugin({
         key: new PluginKey("transclusionClipboard"),
         props: {
           handleDOMEvents: {
             copy: (view, event) => {
+              return writeMaterializedSelection(view, event as ClipboardEvent);
+            },
+            cut: (view, event) => {
               const clipboardEvent = event as ClipboardEvent;
-              if (!clipboardEvent.clipboardData) return false;
-
-              const slice = view.state.selection.content();
-              if (
-                slice.openStart !== 0 ||
-                slice.openEnd !== 0 ||
-                !fragmentHasTransclusion(slice.content)
-              ) {
-                return false;
+              const handled = writeMaterializedSelection(view, clipboardEvent);
+              if (handled) {
+                view.dispatch(view.state.tr.deleteSelection().scrollIntoView());
               }
-
-              const ownerDocument = view.dom.ownerDocument;
-              const container = ownerDocument.createElement("div");
-              container.appendChild(
-                DOMSerializer.fromSchema(view.state.schema).serializeFragment(
-                  slice.content,
-                  { document: ownerDocument },
-                ),
-              );
-              const payload = createTransclusionClipboardPayload({
-                container,
-                schema: view.state.schema,
-                resolutions: this.storage.items,
-                strings: getStrings(),
-              });
-
-              clipboardEvent.clipboardData.setData("text/html", payload.html);
-              clipboardEvent.clipboardData.setData("text/plain", payload.text);
-              clipboardEvent.preventDefault();
-              return true;
+              return handled;
             },
           },
         },
       }),
     ];
+
+    function writeMaterializedSelection(
+      view: EditorView,
+      clipboardEvent: ClipboardEvent,
+    ): boolean {
+      if (!clipboardEvent.clipboardData) return false;
+
+      const slice = view.state.selection.content();
+      if (!fragmentHasMaterializedReference(slice.content)) return false;
+
+      const ownerDocument = view.dom.ownerDocument;
+      const container = ownerDocument.createElement("div");
+      container.appendChild(
+        DOMSerializer.fromSchema(view.state.schema).serializeFragment(
+          slice.content,
+          { document: ownerDocument },
+        ),
+      );
+      const payload = createTransclusionClipboardPayload({
+        container,
+        schema: view.state.schema,
+        resolutions: storage.items,
+        pageResolutions: storage.pageItems,
+        maxPageEmbedDepth: storage.maxPageEmbedDepth,
+        strings: getStrings(),
+      });
+
+      clipboardEvent.clipboardData.setData("text/html", payload.html);
+      clipboardEvent.clipboardData.setData("text/plain", payload.text);
+      clipboardEvent.preventDefault();
+      return true;
+    }
   },
 });
 
@@ -131,6 +152,8 @@ export function createTransclusionClipboardPayload(params: {
   container: HTMLElement;
   schema: Schema;
   resolutions: Map<string, TransclusionLookup>;
+  pageResolutions?: Map<string, PageEmbedLookup>;
+  maxPageEmbedDepth?: number | null;
   strings: TransclusionPresentationStrings;
 }): TransclusionClipboardPayload {
   const serializer = DOMSerializer.fromSchema(params.schema);
@@ -193,6 +216,44 @@ export function createTransclusionClipboardPayload(params: {
       }
     });
 
+  for (let depth = 0; depth < (params.maxPageEmbedDepth ?? 0); depth += 1) {
+    const embeds = Array.from(
+      params.container.querySelectorAll<HTMLElement>('[data-type="pageEmbed"]'),
+    );
+    if (embeds.length === 0) break;
+    for (const element of embeds) {
+      const sourcePageId = element.dataset.sourcePageId;
+      const resolution = sourcePageId
+        ? params.pageResolutions?.get(sourcePageId)
+        : undefined;
+      const replacement = ownerDocument.createElement("div");
+      if (resolution && !("status" in resolution)) {
+        try {
+          const documentNode = params.schema.nodeFromJSON(
+            resolution.content as any,
+          );
+          replacement.appendChild(
+            serializer.serializeFragment(documentNode.content, {
+              document: ownerDocument,
+            }),
+          );
+        } catch {
+          appendUnavailable(replacement, params.strings.unavailable);
+        }
+      } else {
+        appendUnavailable(replacement, params.strings.unavailable);
+      }
+      element.replaceWith(...Array.from(replacement.childNodes));
+    }
+  }
+  params.container
+    .querySelectorAll<HTMLElement>('[data-type="pageEmbed"]')
+    .forEach((element) => {
+      const replacement = ownerDocument.createElement("div");
+      appendUnavailable(replacement, params.strings.unavailable);
+      element.replaceWith(...Array.from(replacement.childNodes));
+    });
+
   const html = params.container.innerHTML;
   return {
     html,
@@ -200,12 +261,13 @@ export function createTransclusionClipboardPayload(params: {
   };
 }
 
-function fragmentHasTransclusion(fragment: Fragment): boolean {
+function fragmentHasMaterializedReference(fragment: Fragment): boolean {
   let found = false;
   fragment.descendants((node) => {
     if (
       node.type.name === "transclusionSource" ||
-      node.type.name === "transclusionReference"
+      node.type.name === "transclusionReference" ||
+      node.type.name === "pageEmbed"
     ) {
       found = true;
       return false;

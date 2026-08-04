@@ -1,4 +1,7 @@
-import { isAllowedPdfResourceUrl } from './html-pdf-renderer.service';
+import {
+  HtmlPdfRendererService,
+  isAllowedPdfResourceUrl,
+} from './html-pdf-renderer.service';
 
 describe('isAllowedPdfResourceUrl', () => {
   const appUrl = 'https://docs.example.com';
@@ -36,9 +39,9 @@ describe('isAllowedPdfResourceUrl', () => {
         appUrl,
       ),
     ).toBe(false);
-    expect(isAllowedPdfResourceUrl('data:text/html,<script></script>', appUrl)).toBe(
-      false,
-    );
+    expect(
+      isAllowedPdfResourceUrl('data:text/html,<script></script>', appUrl),
+    ).toBe(false);
   });
 
   it('blocks external and private-network resources', () => {
@@ -55,7 +58,53 @@ describe('isAllowedPdfResourceUrl', () => {
 
   it('blocks same-origin non-attachment resources', () => {
     expect(
-      isAllowedPdfResourceUrl('https://docs.example.com/window-config.js', appUrl),
+      isAllowedPdfResourceUrl(
+        'https://docs.example.com/window-config.js',
+        appUrl,
+      ),
     ).toBe(false);
+  });
+});
+
+describe('HtmlPdfRendererService attachment request authorization', () => {
+  it('injects an attachment-specific token and aborts unknown attachments', async () => {
+    let requestHandler: ((request: any) => void) | undefined;
+    const page = {
+      setRequestInterception: jest.fn(async () => undefined),
+      on: jest.fn((_event: string, handler: (request: any) => void) => {
+        requestHandler = handler;
+      }),
+    };
+    const service = new HtmlPdfRendererService({
+      getAppUrl: () => 'https://docs.example.com',
+    } as any);
+    await (service as any).configureRequestInterception(page, {
+      'known-id': 'known-token',
+    });
+
+    const known = {
+      url: () => 'https://docs.example.com/api/files/public/known-id/image.png',
+      headers: () => ({ accept: 'image/*' }),
+      continue: jest.fn(async () => undefined),
+      abort: jest.fn(async () => undefined),
+    };
+    requestHandler!(known);
+    expect(known.continue).toHaveBeenCalledWith({
+      headers: {
+        accept: 'image/*',
+        'x-attachment-token': 'known-token',
+      },
+    });
+
+    const unknown = {
+      url: () =>
+        'https://docs.example.com/api/files/public/unknown-id/image.png',
+      headers: () => ({}),
+      continue: jest.fn(async () => undefined),
+      abort: jest.fn(async () => undefined),
+    };
+    requestHandler!(unknown);
+    expect(unknown.abort).toHaveBeenCalledTimes(1);
+    expect(unknown.continue).not.toHaveBeenCalled();
   });
 });

@@ -9,6 +9,7 @@ describe('ShareController', () => {
     getShareForPage: jest.fn(),
     getSharedPage: jest.fn(),
     isSharingAllowed: jest.fn(),
+    lookupTransclusionForShare: jest.fn(),
   };
   const shareRepo = {};
   const pageRepo = {
@@ -89,6 +90,8 @@ describe('ShareController', () => {
     expect(tokenService.generateAttachmentPageToken).toHaveBeenCalledWith({
       pageId: 'page-uuid',
       workspaceId: 'workspace-1',
+      shareId: 'share-1',
+      pageEmbedSource: false,
     });
 
     expect(res.setCookie).toHaveBeenCalledWith(
@@ -108,6 +111,58 @@ describe('ShareController', () => {
         httpOnly: true,
         path: '/api',
       }),
+    );
+  });
+
+  it('sets and clears page-scoped cookies for embedded share sources', async () => {
+    shareService.lookupTransclusionForShare.mockResolvedValueOnce({
+      items: [
+        {
+          kind: 'page',
+          sourcePageId: 'source-readable',
+          content: { type: 'doc', content: [] },
+        },
+        {
+          kind: 'page',
+          sourcePageId: 'source-hidden',
+          status: 'no_access',
+        },
+      ],
+      maxDepth: 5,
+    });
+    const res = { setCookie: jest.fn(), clearCookie: jest.fn() };
+
+    await controller.lookupTransclusion(
+      {
+        shareId: 'share-1',
+        references: [
+          { kind: 'page', sourcePageId: 'source-readable' },
+          { kind: 'page', sourcePageId: 'source-hidden' },
+        ],
+      } as any,
+      { id: 'workspace-1' } as any,
+      res as any,
+    );
+
+    expect(res.setCookie).toHaveBeenCalledWith(
+      getAttachmentTokenCookieName('source-readable'),
+      'token-1',
+      expect.objectContaining({ httpOnly: true, path: '/api' }),
+    );
+    expect(tokenService.generateAttachmentPageToken).toHaveBeenCalledWith({
+      pageId: 'source-readable',
+      workspaceId: 'workspace-1',
+      shareId: 'share-1',
+      pageEmbedSource: true,
+    });
+    expect(res.setCookie).not.toHaveBeenCalledWith(
+      LEGACY_ATTACHMENT_TOKEN_COOKIE,
+      expect.anything(),
+      expect.anything(),
+    );
+    expect(res.clearCookie).toHaveBeenCalledWith(
+      getAttachmentTokenCookieName('source-hidden'),
+      expect.objectContaining({ path: '/api' }),
     );
   });
 });

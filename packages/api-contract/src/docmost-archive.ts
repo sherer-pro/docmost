@@ -1,4 +1,5 @@
-export const DOCMOST_ARCHIVE_SCHEMA_VERSION = 2 as const;
+export const DOCMOST_ARCHIVE_LEGACY_SCHEMA_VERSION = 2 as const;
+export const DOCMOST_ARCHIVE_SCHEMA_VERSION = 3 as const;
 
 export type DocmostArchiveScope = "space" | "page" | "database";
 
@@ -15,7 +16,7 @@ export interface DocmostArchiveLegacyPageMetadata {
 
 export interface DocmostArchiveManifestV2 {
   source: "docmost";
-  schemaVersion: typeof DOCMOST_ARCHIVE_SCHEMA_VERSION;
+  schemaVersion: typeof DOCMOST_ARCHIVE_LEGACY_SCHEMA_VERSION;
   version: string;
   exportedAt: string;
   scope: DocmostArchiveScope;
@@ -33,6 +34,7 @@ export interface DocmostArchivePage {
   parentPageId: string | null;
   content: unknown;
   settings: unknown;
+  isTemplate?: boolean;
 }
 
 export interface DocmostArchiveAttachment {
@@ -54,8 +56,18 @@ export interface DocmostArchiveUserReference {
 }
 
 export interface DocmostArchiveTransclusionSnapshot {
+  referencePageId?: string;
   sourcePageId: string;
   transclusionId: string;
+  content: unknown;
+}
+
+export interface DocmostArchivePageEmbedSnapshot {
+  referencePageId: string;
+  referenceNodeId: string;
+  sourcePageId: string;
+  title: string | null;
+  icon: string | null;
   content: unknown;
 }
 
@@ -120,7 +132,7 @@ export interface DocmostPortableSpaceSettings {
 }
 
 export interface DocmostArchiveDataV2 {
-  schemaVersion: typeof DOCMOST_ARCHIVE_SCHEMA_VERSION;
+  schemaVersion: typeof DOCMOST_ARCHIVE_LEGACY_SCHEMA_VERSION;
   scope: DocmostArchiveScope;
   sourceSpace: {
     id: string;
@@ -139,6 +151,22 @@ export interface DocmostArchiveDataV2 {
   labels: DocmostArchiveLabel[];
   dictionary: DocmostArchiveDictionaryTerm[];
 }
+
+export interface DocmostArchiveManifestV3
+  extends Omit<DocmostArchiveManifestV2, "schemaVersion"> {
+  schemaVersion: typeof DOCMOST_ARCHIVE_SCHEMA_VERSION;
+}
+
+export interface DocmostArchiveDataV3
+  extends Omit<DocmostArchiveDataV2, "schemaVersion"> {
+  schemaVersion: typeof DOCMOST_ARCHIVE_SCHEMA_VERSION;
+  pageEmbedSnapshots: DocmostArchivePageEmbedSnapshot[];
+}
+
+export type DocmostArchiveManifest =
+  | DocmostArchiveManifestV2
+  | DocmostArchiveManifestV3;
+export type DocmostArchiveData = DocmostArchiveDataV2 | DocmostArchiveDataV3;
 
 export interface ImportPreview {
   fileTaskId: string;

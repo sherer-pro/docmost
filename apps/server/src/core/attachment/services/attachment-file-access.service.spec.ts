@@ -56,6 +56,7 @@ describe('AttachmentFileAccessService', () => {
     const pageRepo = {
       findById: jest.fn().mockResolvedValue({
         id: pageId,
+        slugId: 'source-page',
         workspaceId: workspace.id,
         spaceId: resolvedAttachment.spaceId,
         deletedAt: null,
@@ -63,6 +64,18 @@ describe('AttachmentFileAccessService', () => {
     };
     const publicSharingPolicy = {
       isAllowed: jest.fn().mockResolvedValue(true),
+    };
+    const shareService = {
+      getShareForPage: jest.fn().mockResolvedValue({ id: 'share-1' }),
+      lookupTransclusionForShare: jest.fn().mockResolvedValue({
+        items: [
+          {
+            kind: 'page',
+            sourcePageId: pageId,
+            content: { type: 'doc', content: [] },
+          },
+        ],
+      }),
     };
 
     const service = new AttachmentFileAccessService(
@@ -74,12 +87,14 @@ describe('AttachmentFileAccessService', () => {
       tokenService as any,
       storageService as any,
       publicSharingPolicy as any,
+      shareService as any,
     );
 
     return {
       attachmentRepo,
       pageRepo,
       publicSharingPolicy,
+      shareService,
       service,
       storageService,
       tokenService,
@@ -119,6 +134,76 @@ describe('AttachmentFileAccessService', () => {
       'Warning',
       expect.stringContaining('Attachment jwt query tokens are deprecated'),
     );
+  });
+
+  it('accepts a PDF token scoped to the attachment owner page set', async () => {
+    const { service, tokenService } = createService();
+    tokenService.verifyJwt.mockResolvedValueOnce({
+      workspaceId: workspace.id,
+      pageId: 'root-page',
+      pageIds: ['root-page', pageId],
+    });
+    const req = {
+      headers: { 'x-attachment-token': 'page-set-token' },
+      cookies: {},
+    } as any;
+
+    await expect(
+      service.getPublicFile(req, createReply(), workspace, fileId),
+    ).resolves.toBeDefined();
+  });
+
+  it('revalidates share and embed policy for an embedded-source cookie', async () => {
+    const { service, shareService, tokenService } = createService();
+    tokenService.verifyJwt.mockResolvedValueOnce({
+      workspaceId: workspace.id,
+      pageId,
+      shareId: 'share-1',
+      pageEmbedSource: true,
+    });
+
+    await expect(
+      service.getPublicFile(
+        { headers: {}, cookies: {} } as any,
+        createReply(),
+        workspace,
+        fileId,
+        'share-token',
+      ),
+    ).resolves.toBeDefined();
+    expect(shareService.getShareForPage).toHaveBeenCalledWith(
+      'source-page',
+      workspace.id,
+      'share-1',
+    );
+    expect(shareService.lookupTransclusionForShare).toHaveBeenCalledWith(
+      'share-1',
+      [{ kind: 'page', sourcePageId: pageId }],
+      workspace.id,
+    );
+  });
+
+  it('rejects a stale embedded-source cookie after public access is lost', async () => {
+    const { service, shareService, tokenService } = createService();
+    tokenService.verifyJwt.mockResolvedValueOnce({
+      workspaceId: workspace.id,
+      pageId,
+      shareId: 'share-1',
+      pageEmbedSource: true,
+    });
+    shareService.lookupTransclusionForShare.mockResolvedValueOnce({
+      items: [{ kind: 'page', sourcePageId: pageId, status: 'disabled' }],
+    });
+
+    await expect(
+      service.getPublicFile(
+        { headers: {}, cookies: {} } as any,
+        createReply(),
+        workspace,
+        fileId,
+        'share-token',
+      ),
+    ).rejects.toThrow('File not found');
   });
 
   it('keeps trusted inline image responses inline', async () => {
@@ -226,6 +311,10 @@ describe('AttachmentFileAccessService', () => {
   it('revokes an existing public token when sharing is disabled', async () => {
     const { service, publicSharingPolicy, storageService, tokenService } =
       createService();
+    tokenService.verifyJwt.mockResolvedValueOnce({
+      workspaceId: workspace.id,
+      pageId,
+    });
     publicSharingPolicy.isAllowed.mockResolvedValue(false);
     const req = { headers: {}, cookies: {} } as any;
     const res = createReply();
@@ -234,7 +323,7 @@ describe('AttachmentFileAccessService', () => {
       service.getPublicFile(req, res, workspace, fileId, 'query-token'),
     ).rejects.toThrow('File not found');
 
-    expect(tokenService.verifyJwt).not.toHaveBeenCalled();
+    expect(tokenService.verifyJwt).toHaveBeenCalled();
     expect(storageService.readStream).not.toHaveBeenCalled();
   });
 });

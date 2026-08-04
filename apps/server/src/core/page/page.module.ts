@@ -12,9 +12,11 @@ import { LabelModule } from '../label/label.module';
 import { BacklinkService } from './services/backlink.service';
 import { TransclusionModule } from './transclusion/transclusion.module';
 import { LinkPreviewService } from './services/link-preview.service';
+import { PageTemplateController } from './page-template.controller';
+import { PageTemplateService } from './services/page-template.service';
 
 @Module({
-  controllers: [PageController],
+  controllers: [PageController, PageTemplateController],
   providers: [
     PageService,
     PageHistoryService,
@@ -22,6 +24,7 @@ import { LinkPreviewService } from './services/link-preview.service';
     TrashCleanupService,
     BacklinkService,
     LinkPreviewService,
+    PageTemplateService,
   ],
   exports: [PageService, PageHistoryService, PageHistoryRecorderService],
   imports: [

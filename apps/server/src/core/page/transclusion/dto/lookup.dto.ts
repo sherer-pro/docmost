@@ -2,19 +2,27 @@ import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
+  IsIn,
+  IsOptional,
   IsString,
   IsUUID,
   MaxLength,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 
 export class LookupReferenceDto {
+  @IsOptional()
+  @IsIn(['block', 'page'])
+  kind?: 'block' | 'page';
+
   @IsUUID()
   sourcePageId!: string;
 
+  @ValidateIf((value) => (value.kind ?? 'block') === 'block')
   @IsString()
   @MaxLength(36)
-  transclusionId!: string;
+  transclusionId?: string;
 }
 
 export class LookupDto {
@@ -23,4 +31,8 @@ export class LookupDto {
   @ValidateNested({ each: true })
   @Type(() => LookupReferenceDto)
   references!: LookupReferenceDto[];
+
+  @IsOptional()
+  @IsUUID()
+  referencePageId?: string;
 }

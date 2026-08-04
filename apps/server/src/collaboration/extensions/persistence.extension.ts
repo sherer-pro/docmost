@@ -6,7 +6,12 @@ import {
   onStoreDocumentPayload,
 } from '@hocuspocus/server';
 import * as Y from 'yjs';
-import { HttpException, Injectable, Logger } from '@nestjs/common';
+import {
+  ConflictException,
+  HttpException,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
 import { TiptapTransformer } from '@hocuspocus/transformer';
 import { getPageId, jsonToText, tiptapExtensions } from '../collaboration.util';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
@@ -122,16 +127,11 @@ export class PersistenceExtension implements Extension {
 
     let page: Page = null;
     const editingUserIds = this.consumeContributors(documentName);
-    let graphLease: PageEmbedGraphLease | undefined;
+    const graphLease = context?.pageEmbedGraphLease as
+      | PageEmbedGraphLease
+      | undefined;
 
     try {
-      const preflightPage = await this.pageRepo.findById(pageId);
-      if (preflightPage) {
-        graphLease = await this.pageEmbedService.acquireGraphLeaseForContent(
-          preflightPage.workspaceId,
-          tiptapJson,
-        );
-      }
       await executeTx(this.db, async (trx) => {
         page = await this.pageRepo.findById(pageId, {
           withLock: true,
@@ -153,7 +153,11 @@ export class PersistenceExtension implements Extension {
         try {
           const existingContributors = page.contributorIds || [];
           contributorIds = Array.from(
-            new Set([...existingContributors, ...editingUserIds, page.creatorId]),
+            new Set([
+              ...existingContributors,
+              ...editingUserIds,
+              page.creatorId,
+            ]),
           );
         } catch (err) {
           //this.logger.debug('Contributors error:' + err?.['message']);
@@ -181,7 +185,7 @@ export class PersistenceExtension implements Extension {
         );
 
         if (context?.pageTemplateMutationId) {
-          await trx
+          const completedOperation = await trx
             .updateTable('pageTemplateOperations')
             .set({
               status: 'completed',
@@ -193,7 +197,20 @@ export class PersistenceExtension implements Extension {
             })
             .where('id', '=', context.pageTemplateMutationId)
             .where('status', '=', 'pending')
-            .execute();
+            .where(
+              'leaseToken',
+              '=',
+              context.pageTemplateOperationLeaseToken as string,
+            )
+            .where('leaseExpiresAt', '>', new Date())
+            .returning('id')
+            .executeTakeFirst();
+          if (!completedOperation) {
+            throw new ConflictException({
+              code: 'page_template_operation_lease_lost',
+              message: 'The page template operation lease was lost',
+            });
+          }
         }
 
         this.logger.debug(`Page updated: ${pageId} - SlugId: ${page.slugId}`);
@@ -217,17 +234,6 @@ export class PersistenceExtension implements Extension {
       if (context?.pageTemplateMutationId || integrityCode) {
         throw err;
       }
-    } finally {
-      if (graphLease) {
-        try {
-          await graphLease.release();
-        } catch (error) {
-          this.logger.error(
-            `Failed to release page embed graph lease for ${pageId}`,
-            error as Error,
-          );
-        }
-      }
     }
 
     if (page) {
@@ -244,7 +250,9 @@ export class PersistenceExtension implements Extension {
 
       const userMentions = extractUserMentions(mentions);
       const oldMentions = page.content ? extractMentions(page.content) : [];
-      const oldMentionedUserIds = extractUserMentions(oldMentions).map((m) => m.entityId);
+      const oldMentionedUserIds = extractUserMentions(oldMentions).map(
+        (m) => m.entityId,
+      );
 
       if (userMentions.length > 0) {
         await this.notificationQueue.add(QueueJob.PAGE_MENTION_NOTIFICATION, {

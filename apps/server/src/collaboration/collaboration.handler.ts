@@ -13,6 +13,7 @@ import {
   hashProseMirrorJson,
 } from '../common/helpers/prosemirror/ai-page-operation';
 import { strictJsonToNode } from './collaboration.util';
+import { PageEmbedService } from '../core/page/transclusion/page-embed.service';
 
 export type CollabEventHandlers = ReturnType<
   CollaborationHandler['getHandlers']
@@ -22,7 +23,7 @@ export type CollabEventHandlers = ReturnType<
 export class CollaborationHandler {
   private readonly logger = new Logger(CollaborationHandler.name);
 
-  constructor() {}
+  constructor(private readonly pageEmbeds: PageEmbedService) {}
 
   getHandlers(hocuspocus: Hocuspocus) {
     return {
@@ -64,8 +65,7 @@ export class CollaborationHandler {
             } else {
               const newContent = prosemirrorJson.content || [];
               const yElements = newContent.map(prosemirrorNodeToYElement);
-              const position =
-                operation === 'prepend' ? 0 : fragment.length;
+              const position = operation === 'prepend' ? 0 : fragment.length;
               fragment.insert(position, yElements);
             }
           },
@@ -122,6 +122,8 @@ export class CollaborationHandler {
           nextContent: unknown;
           baseContentHash: string;
           mutationId: string;
+          operationLeaseToken: string;
+          workspaceId: string;
           user: User;
         },
       ) => {
@@ -130,16 +132,27 @@ export class CollaborationHandler {
           nextContent,
           baseContentHash,
           mutationId,
+          operationLeaseToken,
+          workspaceId,
           user,
         } = payload;
         strictJsonToNode(nextContent as any);
         const mutationAfterHash = hashProseMirrorJson(nextContent as any);
         let mutationApplied = false;
+        const graphLease = await this.pageEmbeds.acquireGraphLeaseForContent(
+          workspaceId,
+          nextContent,
+        );
         try {
           return await this.withYdocConnection(
             hocuspocus,
             documentName,
-            { user, pageTemplateMutationId: mutationId },
+            {
+              user,
+              pageTemplateMutationId: mutationId,
+              pageTemplateOperationLeaseToken: operationLeaseToken,
+              pageEmbedGraphLease: graphLease,
+            },
             (doc) => {
               const current = TiptapTransformer.fromYdoc(doc, 'default');
               const beforeHash = hashProseMirrorJson(current);
@@ -183,6 +196,17 @@ export class CollaborationHandler {
             );
           }
           throw error;
+        } finally {
+          if (graphLease) {
+            try {
+              await graphLease.release();
+            } catch (releaseError) {
+              this.logger.error(
+                `Failed to release page embed graph lease for ${mutationId}`,
+                releaseError as Error,
+              );
+            }
+          }
         }
       },
       getAiPageContentHash: async (
@@ -194,9 +218,7 @@ export class CollaborationHandler {
           documentName,
           { user: payload.user },
           (doc) =>
-            hashProseMirrorJson(
-              TiptapTransformer.fromYdoc(doc, 'default'),
-            ),
+            hashProseMirrorJson(TiptapTransformer.fromYdoc(doc, 'default')),
         );
       },
       getAiPageContent: async (
