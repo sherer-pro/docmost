@@ -26,6 +26,7 @@ function createNode(
     hasChildren: children.length > 0,
     spaceId: "space-1",
     parentPageId,
+    childrenLoaded: true,
     children,
   };
 }
@@ -101,5 +102,60 @@ describe("tree event reducer", () => {
 
     assert.equal(nextTree[0].children.length, 0);
     assert.equal(nextTree[0].hasChildren, false);
+  });
+
+  it("removes a moved source when its unloaded destination is not in the tree", () => {
+    const child = createNode("child", [], "old-parent");
+    const oldParent = createNode("old-parent", [child]);
+
+    const nextTree = applyMoveTreeNode([oldParent], {
+      id: "child",
+      oldParentId: "old-parent",
+      parentId: "unloaded-parent",
+      node: { id: "child", spaceId: "space-1" },
+    });
+
+    assert.equal(nextTree[0].id, "old-parent");
+    assert.equal(nextTree[0].children.length, 0);
+    assert.equal(
+      nextTree.some((node) => node.id === "child"),
+      false,
+    );
+  });
+
+  it("does not clear hasChildren for a parent whose children are not fully loaded", () => {
+    const child = createNode("child", [], "old-parent");
+    const oldParent = {
+      ...createNode("old-parent", [child]),
+      childrenLoaded: false,
+    };
+
+    const nextTree = applyMoveTreeNode([oldParent], {
+      id: "child",
+      oldParentId: "old-parent",
+      parentId: null,
+      node: { id: "child", spaceId: "space-1", position: "z" },
+    });
+
+    assert.equal(
+      nextTree.find((node) => node.id === "old-parent")?.hasChildren,
+      true,
+    );
+  });
+
+  it("keeps a subtree intact when an out-of-order move targets its descendant", () => {
+    const grandchild = createNode("grandchild", [], "child");
+    const child = createNode("child", [grandchild]);
+    const tree = [child];
+
+    const nextTree = applyMoveTreeNode(tree, {
+      id: "child",
+      oldParentId: null,
+      parentId: "grandchild",
+      node: { id: "child", spaceId: "space-1" },
+    });
+
+    assert.equal(nextTree, tree);
+    assert.equal(nextTree[0].children[0].id, "grandchild");
   });
 });

@@ -29,6 +29,12 @@ function getTreeNode(treeItems: SpaceTreeNode[], id: string) {
   return new SimpleTree<SpaceTreeNode>(treeItems).find(id)?.data;
 }
 
+function containsNode(nodes: SpaceTreeNode[], id: string): boolean {
+  return nodes.some(
+    (node) => node.id === id || containsNode(node.children ?? [], id),
+  );
+}
+
 function getSiblingInsertionIndex(
   treeItems: SpaceTreeNode[],
   parentPageId: string | null,
@@ -107,7 +113,7 @@ function clearParentHasChildrenIfEmpty(
   }
 
   const parent = getTreeNode(treeItems, parentPageId);
-  if (!parent || parent.children.length > 0) {
+  if (!parent || parent.childrenLoaded !== true || parent.children.length > 0) {
     return treeItems;
   }
 
@@ -172,6 +178,23 @@ export function applyMoveTreeNode(
           parentPageId: input.parentId,
         })
       : treeItems;
+  }
+
+  if (
+    input.parentId &&
+    containsNode(currentNode.children ?? [], input.parentId)
+  ) {
+    // An out-of-order event can temporarily name a descendant as the new
+    // parent. Keep the visible subtree intact until a canonical refetch/event.
+    return treeItems;
+  }
+
+  if (input.parentId && !getTreeNode(treeItems, input.parentId)) {
+    const treeWithoutNode = dropTreeNode(treeItems, input.id);
+    return clearParentHasChildrenIfEmpty(
+      treeWithoutNode,
+      input.oldParentId ?? currentNode.parentPageId,
+    );
   }
 
   const nextNode: SpaceTreeNode = {

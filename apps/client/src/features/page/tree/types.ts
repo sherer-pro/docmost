@@ -32,6 +32,8 @@ export type SpaceTreeNode = {
   spaceId: string;
   parentPageId: string | null;
   hasChildren: boolean;
+  /** Whether `children` is an authoritative loaded list, not just known items. */
+  childrenLoaded?: boolean;
   access?: PageAccessInfo;
   children: SpaceTreeNode[];
 };

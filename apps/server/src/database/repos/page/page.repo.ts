@@ -201,11 +201,13 @@ export class PageRepo {
     updatablePage: UpdatablePage,
     pageId: PageIdentifier,
     trx?: KyselyTransaction,
+    emitEvent = true,
   ) {
     return this.updatePages(
       this.normalizeSettings(updatablePage),
       [pageId],
       trx,
+      emitEvent,
     );
   }
 
@@ -217,6 +219,7 @@ export class PageRepo {
     updatePageData: UpdatablePage,
     pageIds: PageIdentifier[],
     trx?: KyselyTransaction,
+    emitEvent = true,
   ) {
     const { uuidIds, slugIds } = splitPageIdentifiers(pageIds);
 
@@ -248,10 +251,12 @@ export class PageRepo {
       })
       .executeTakeFirst();
 
-    this.eventEmitter.emit(EventName.PAGE_UPDATED, {
-      pageIds: pageIds,
-      workspaceId: updatePageData.workspaceId,
-    });
+    if (emitEvent) {
+      this.eventEmitter.emit(EventName.PAGE_UPDATED, {
+        pageIds: pageIds,
+        workspaceId: updatePageData.workspaceId,
+      });
+    }
 
     return result;
   }

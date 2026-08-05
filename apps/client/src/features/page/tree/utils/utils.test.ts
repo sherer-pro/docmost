@@ -108,6 +108,7 @@ describe("tree node mappers", () => {
       parentPageId: null,
       access: undefined,
       children: [],
+      childrenLoaded: false,
     });
   });
 
