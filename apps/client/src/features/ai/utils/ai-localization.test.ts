@@ -32,11 +32,36 @@ const PROFILE_ERROR_REASON_KEYS = [
 ];
 const PROFILE_IDENTICAL_VALUE_ALLOWLIST: Record<string, Set<string>> = {
   "de-DE": new Set(["profiles.name"]),
-  "fr-FR": new Set([
-    "profiles.profileDescription",
-    "profiles.instructions",
-  ]),
+  "fr-FR": new Set(["profiles.profileDescription", "profiles.instructions"]),
 };
+const BUILTIN_TOOL_NAMES = [
+  "search",
+  "getTree",
+  "getPageContext",
+  "getPage",
+  "getOutline",
+  "getNode",
+  "searchInPage",
+  "getWorkspaceContext",
+  "getSpaceContext",
+  "getDatabaseContext",
+  "listDatabaseRows",
+  "getDatabaseRowContext",
+  "getTable",
+  "listComments",
+  "listPageHistory",
+  "diffPageVersion",
+  "listTransclusionReferences",
+  "listPageAttachments",
+  "getPublicShareInfo",
+  "listPageTemplates",
+  "getPageTemplateMetadata",
+  "listPageTemplateUsages",
+  "editPageText",
+  "patchNode",
+  "insertNode",
+  "deleteNode",
+];
 
 function readLocale(locale: string): Record<string, unknown> {
   return JSON.parse(
@@ -130,6 +155,22 @@ describe("AI localization contract", () => {
       for (const key of keys) {
         expect(localized[key]).toBeTruthy();
         expect(localized[key]).not.toBe(english[key]);
+      }
+    }
+  });
+
+  it("localizes every built-in tool name in every supported locale", () => {
+    const english = flatten(readAiLocale("en-US"));
+
+    for (const locale of LOCALES) {
+      const localized = flatten(readAiLocale(locale));
+      for (const toolName of BUILTIN_TOOL_NAMES) {
+        const key = `toolPolicy.tool.${toolName}`;
+        expect(localized[key]).toBeTruthy();
+        expect(localized[key]).not.toBe(toolName);
+        if (locale !== "en-US") {
+          expect(localized[key]).not.toBe(english[key]);
+        }
       }
     }
   });
