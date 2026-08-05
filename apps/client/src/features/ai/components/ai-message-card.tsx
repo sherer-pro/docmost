@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import {
   Alert,
   Button,
@@ -42,7 +42,7 @@ import {
 
 type ApplyMode = "replace" | "insert";
 
-export function AiMessageCard({
+export const AiMessageCard = memo(function AiMessageCard({
   message,
   editor,
   documentContext,
@@ -348,4 +348,4 @@ export function AiMessageCard({
       </Modal>
     </Paper>
   );
-}
+});

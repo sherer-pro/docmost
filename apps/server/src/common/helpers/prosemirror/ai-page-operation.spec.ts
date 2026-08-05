@@ -82,9 +82,9 @@ describe('AI page operations', () => {
     expect(prepared.kind).toBe('insertNode');
     if (prepared.kind !== 'insertNode') throw new Error('unexpected operation');
     expect(prepared.node.attrs?.id).toEqual(expect.any(String));
-    expect(
+    expect(hashProseMirrorJson(applyAiPageOperation(document, prepared))).toBe(
       hashProseMirrorJson(applyAiPageOperation(document, prepared)),
-    ).toBe(hashProseMirrorJson(applyAiPageOperation(document, prepared)));
+    );
   });
 
   it('rejects ambiguous text edits', () => {
@@ -162,6 +162,62 @@ describe('AI page operations', () => {
         type: 'paragraph',
       }),
     ]);
+  });
+
+  it('rejects an ambiguous duplicate node id without mutating either node', () => {
+    const duplicateDocument = {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          attrs: { id: 'duplicate' },
+          content: [{ type: 'text', text: 'first' }],
+        },
+        {
+          type: 'paragraph',
+          attrs: { id: 'duplicate' },
+          content: [{ type: 'text', text: 'second' }],
+        },
+      ],
+    };
+
+    expect(() =>
+      applyAiPageOperation(duplicateDocument, {
+        kind: 'deleteNode',
+        nodeId: 'duplicate',
+      }),
+    ).toThrow('agent_ambiguous_node_id');
+    expect(duplicateDocument.content).toHaveLength(2);
+  });
+
+  it('rejects an inserted id that duplicates an existing document id', () => {
+    expect(() =>
+      applyAiPageOperation(document, {
+        kind: 'insertNode',
+        anchorNodeId: 'paragraph-1',
+        position: 'after',
+        node: {
+          type: 'paragraph',
+          attrs: { id: 'heading-1' },
+          content: [{ type: 'text', text: 'Duplicate id.' }],
+        },
+      }),
+    ).toThrow('agent_duplicate_node_id');
+  });
+
+  it('accepts only the explicit #index fallback syntax', () => {
+    expect(
+      applyAiPageOperation(document, {
+        kind: 'deleteNode',
+        nodeId: '#1',
+      }).content,
+    ).toHaveLength(1);
+    expect(() =>
+      applyAiPageOperation(document, {
+        kind: 'deleteNode',
+        nodeId: '1',
+      }),
+    ).toThrow('agent_node_not_found');
   });
 
   it.each([

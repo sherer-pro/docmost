@@ -6,6 +6,7 @@ import {
   tiptapExtensions,
 } from './collaboration.util';
 import * as Y from 'yjs';
+import { updateYFragment } from 'y-prosemirror';
 import { User } from '@docmost/db/types/entity.types';
 import {
   AiPageOperation,
@@ -93,24 +94,25 @@ export class CollaborationHandler {
               throw new Error('agent_write_stale');
             }
             const next = applyAiPageOperation(current, operation);
-            strictJsonToNode(next as any);
+            const nextNode = strictJsonToNode(next as any);
             const afterHash = hashProseMirrorJson(next);
             if (afterHash !== expectedAfterHash) {
               throw new Error('agent_write_recovery_mismatch');
             }
             const fragment = doc.getXmlFragment('default');
-            if (fragment.length > 0) {
-              fragment.delete(0, fragment.length);
-            }
-            const newDoc = TiptapTransformer.toYdoc(
-              next,
-              'default',
-              tiptapExtensions,
+            updateYFragment(doc, fragment, nextNode, {
+              mapping: new Map(),
+              isOMark: new Map(),
+            });
+            const liveAfterHash = hashProseMirrorJson(
+              TiptapTransformer.fromYdoc(doc, 'default'),
             );
-            Y.applyUpdate(doc, Y.encodeStateAsUpdate(newDoc));
+            if (liveAfterHash !== expectedAfterHash) {
+              throw new Error('agent_write_recovery_mismatch');
+            }
             return {
               beforeHash,
-              afterHash,
+              afterHash: liveAfterHash,
             };
           },
         );

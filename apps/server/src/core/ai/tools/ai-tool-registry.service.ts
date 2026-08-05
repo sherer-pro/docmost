@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   Logger,
@@ -166,6 +167,13 @@ const NODE_ID_SCHEMA = {
     'A node ID from getOutline. Use the item "id" when it is present, otherwise its "#index" form such as "#3".',
 };
 
+const OUTLINE_CONTENT_HASH_SCHEMA = {
+  type: 'string',
+  pattern: '^[a-f0-9]{64}$',
+  description:
+    'Required when a node reference uses #index. Pass the contentHash returned by getOutline.',
+};
+
 const READ_TOOL_POLICY = {
   approvalMode: 'none',
   maxResultBytes: AI_TOOL_RESULT_MAX_BYTES,
@@ -233,9 +241,12 @@ export class AiToolRegistryService {
         tool.name.trim().length === 0 ||
         !AI_BUILTIN_TOOL_CAPABILITIES.includes(tool.capability) ||
         !AI_BUILTIN_TOOL_CATEGORIES.includes(tool.category) ||
-        !['workspace', 'current_space', 'readable_page', 'current_page'].includes(
-          tool.targetScope,
-        ) ||
+        ![
+          'workspace',
+          'current_space',
+          'readable_page',
+          'current_page',
+        ].includes(tool.targetScope) ||
         !['none', 'current_page_hash'].includes(tool.approvalMode) ||
         !['read_only', 'write'].includes(tool.writeClass) ||
         tool.exposures.length === 0 ||
@@ -869,6 +880,7 @@ export class AiToolRegistryService {
           properties: {
             pageId: CURRENT_PAGE_ID_SCHEMA,
             nodeId: NODE_ID_SCHEMA,
+            outlineContentHash: OUTLINE_CONTENT_HASH_SCHEMA,
             oldText: { type: 'string', minLength: 1, maxLength: 16384 },
             newText: { type: 'string', maxLength: 16384 },
           },
@@ -889,6 +901,7 @@ export class AiToolRegistryService {
             },
             this.resolveWritePageId(args, context),
             context,
+            this.optionalString(args, 'outlineContentHash', 64),
           ),
       },
       {
@@ -902,6 +915,7 @@ export class AiToolRegistryService {
           properties: {
             pageId: CURRENT_PAGE_ID_SCHEMA,
             nodeId: NODE_ID_SCHEMA,
+            outlineContentHash: OUTLINE_CONTENT_HASH_SCHEMA,
             node: { type: 'object' },
           },
         },
@@ -920,6 +934,7 @@ export class AiToolRegistryService {
             },
             this.resolveWritePageId(args, context),
             context,
+            this.optionalString(args, 'outlineContentHash', 64),
           ),
       },
       {
@@ -933,6 +948,7 @@ export class AiToolRegistryService {
           properties: {
             pageId: CURRENT_PAGE_ID_SCHEMA,
             anchorNodeId: NODE_ID_SCHEMA,
+            outlineContentHash: OUTLINE_CONTENT_HASH_SCHEMA,
             position: { type: 'string', enum: ['before', 'after'] },
             node: { type: 'object' },
           },
@@ -958,6 +974,7 @@ export class AiToolRegistryService {
             },
             this.resolveWritePageId(args, context),
             context,
+            this.optionalString(args, 'outlineContentHash', 64),
           ),
       },
       {
@@ -971,6 +988,7 @@ export class AiToolRegistryService {
           properties: {
             pageId: CURRENT_PAGE_ID_SCHEMA,
             nodeId: NODE_ID_SCHEMA,
+            outlineContentHash: OUTLINE_CONTENT_HASH_SCHEMA,
           },
         },
         writeClass: 'write',
@@ -991,6 +1009,7 @@ export class AiToolRegistryService {
             },
             this.resolveWritePageId(args, context),
             context,
+            this.optionalString(args, 'outlineContentHash', 64),
           ),
       },
     ];
@@ -1176,14 +1195,20 @@ export class AiToolRegistryService {
     context: AiToolExecutionContext,
   ): Promise<AiToolExecutionResult> {
     const page = await this.getReadablePage(pageId, context);
-    const outline = getAiPageOutline(
-      (page.content ?? { type: 'doc', content: [] }) as ProseMirrorJson,
-    );
+    const document =
+      context.source === 'agent' && context.currentPageId === pageId
+        ? await this.getLivePageContent(pageId, context, 'read')
+        : ((page.content ?? { type: 'doc', content: [] }) as ProseMirrorJson);
+    const outline = getAiPageOutline(document);
     return {
-      content: { pageId, items: outline.slice(0, 300) },
+      content: {
+        pageId,
+        contentHash: hashProseMirrorJson(document),
+        items: outline.slice(0, 300),
+      },
       citations: await this.pageCitations(
         page,
-        (page.content ?? { type: 'doc', content: [] }) as ProseMirrorJson,
+        document,
         context,
       ),
     };
@@ -1195,15 +1220,24 @@ export class AiToolRegistryService {
     context: AiToolExecutionContext,
   ): Promise<AiToolExecutionResult> {
     const page = await this.getReadablePage(pageId, context);
+    const document =
+      context.source === 'agent' && context.currentPageId === pageId
+        ? await this.getLivePageContent(pageId, context, 'read')
+        : ((page.content ?? { type: 'doc', content: [] }) as ProseMirrorJson);
     const node = getAiPageNode(
-      (page.content ?? { type: 'doc', content: [] }) as ProseMirrorJson,
+      document,
       nodeId,
     );
     return {
-      content: { pageId, nodeId, node },
+      content: {
+        pageId,
+        nodeId,
+        contentHash: hashProseMirrorJson(document),
+        node,
+      },
       citations: await this.pageCitations(
         page,
-        (page.content ?? { type: 'doc', content: [] }) as ProseMirrorJson,
+        document,
         context,
         nodeId,
       ),
@@ -1281,10 +1315,7 @@ export class AiToolRegistryService {
     if (!space) throw new NotFoundException('Space not found');
     const [ability, spaceRoles] = await Promise.all([
       this.spaceAbility.createForUser(context.user, context.spaceId),
-      this.spaceMemberRepo.getUserSpaceRoles(
-        context.user.id,
-        context.spaceId,
-      ),
+      this.spaceMemberRepo.getUserSpaceRoles(context.user.id, context.spaceId),
     ]);
     const spaceRole =
       (findHighestUserSpaceRole(spaceRoles) as SpaceRole | undefined) ?? null;
@@ -1835,14 +1866,10 @@ export class AiToolRegistryService {
         items: fitted.items,
         nextCursor:
           (hasMore || fitted.truncated) && cursorRow
-            ? this.encodeCursor(
-                'listTransclusionReferences',
-                resourceId,
-                {
-                  sortAt: cursorRow.updatedAt,
-                  id: cursorRow.id,
-                },
-              )
+            ? this.encodeCursor('listTransclusionReferences', resourceId, {
+                sortAt: cursorRow.updatedAt,
+                id: cursorRow.id,
+              })
             : null,
         truncated: hasMore || fitted.truncated,
       },
@@ -2459,6 +2486,7 @@ export class AiToolRegistryService {
     operation: AiPageOperation,
     pageId: string,
     context: AiToolExecutionContext,
+    outlineContentHash?: string,
   ): Promise<AiToolExecutionResult> {
     if (
       context.source !== 'agent' ||
@@ -2478,9 +2506,27 @@ export class AiToolRegistryService {
     // proposal must be derived from that same document instead of the
     // periodically persisted `pages.content` snapshot.
     const document = await this.getLivePageContent(pageId, context);
+    const baseContentHash = hashProseMirrorJson(document);
+    const nodeReference =
+      operation.kind === 'insertNode'
+        ? operation.anchorNodeId
+        : operation.nodeId;
+    if (/^#\d+$/.test(nodeReference)) {
+      if (
+        !outlineContentHash ||
+        !/^[a-f0-9]{64}$/.test(outlineContentHash) ||
+        outlineContentHash !== baseContentHash
+      ) {
+        throw new ConflictException({
+          code: 'agent_outline_stale',
+          message:
+            'The page changed after getOutline. Read the outline again before using a #index.',
+        });
+      }
+    }
     const writeProposal = {
       pageId,
-      baseContentHash: hashProseMirrorJson(document),
+      baseContentHash,
       expectedAfterHash: hashProseMirrorJson(
         applyAiPageOperation(document, preparedOperation),
       ),

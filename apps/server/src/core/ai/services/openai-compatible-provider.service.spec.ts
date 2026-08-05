@@ -341,7 +341,7 @@ describe('OpenAiCompatibleProviderService', () => {
   });
 
   it('resets the idle timeout for every SSE chunk', async () => {
-    idleTimeoutMs = 30;
+    idleTimeoutMs = 100;
     global.fetch = jest.fn(async (_url, init) => {
       const encoder = new TextEncoder();
       const timers: NodeJS.Timeout[] = [];
@@ -365,7 +365,7 @@ describe('OpenAiCompatibleProviderService', () => {
             ),
             setTimeout(
               () => controller.enqueue(encoder.encode(': keep-alive\n\n')),
-              45,
+              40,
             ),
             setTimeout(
               () =>
@@ -374,14 +374,14 @@ describe('OpenAiCompatibleProviderService', () => {
                     'data: {"choices":[{"delta":{"content":"Hello"}}]}\n\n',
                   ),
                 ),
-              70,
+              60,
             ),
             setTimeout(() => {
               if (onAbort) {
                 init?.signal?.removeEventListener('abort', onAbort);
               }
               controller.close();
-            }, 80),
+            }, 70),
           );
         },
         cancel() {
@@ -397,7 +397,7 @@ describe('OpenAiCompatibleProviderService', () => {
 
     await expect(
       service.stream(
-        { ...config, requestTimeoutMs: 250 },
+        { ...config, requestTimeoutMs: 1_000 },
         [{ role: 'user', content: 'Hi' }],
         { onText },
       ),

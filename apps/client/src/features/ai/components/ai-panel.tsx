@@ -247,6 +247,15 @@ export function AiPanel() {
       ),
     [activeConversationId, streamingRuns],
   );
+  const activeRunByMessageId = useMemo(
+    () =>
+      new Map(
+        activeRuns
+          .filter((run) => run.messageId)
+          .map((run) => [run.messageId!, run]),
+      ),
+    [activeRuns],
+  );
   const persistedActiveRun = useMemo(() => {
     return getPersistedActiveRun(
       messagesQuery.data?.pages.flatMap((page) => page.items) ?? [],
@@ -375,9 +384,7 @@ export function AiPanel() {
                 profile.availability === "available",
             ));
         setAssistantProfileId(
-          saved && savedProfileAvailable
-            ? savedProfileId
-            : fallbackProfileId,
+          saved && savedProfileAvailable ? savedProfileId : fallbackProfileId,
         );
         skipLocalDraftWriteFor.current = marker;
         draftHydratedFor.current = marker;
@@ -1732,7 +1739,7 @@ export function AiPanel() {
 
             {messages.map((message) => {
               const run =
-                activeRuns.find((item) => item.messageId === message.id) ??
+                activeRunByMessageId.get(message.id) ??
                 (pendingRun?.messageId === message.id ? pendingRun : undefined);
               const runIsActive = Boolean(
                 run &&
@@ -2034,8 +2041,8 @@ export function AiPanel() {
                               togglePreferredProfile(selectedProfile.id)
                             }
                           >
-                            {profilePreferencesQuery.data?.preferredProfileId ===
-                            selectedProfile.id
+                            {profilePreferencesQuery.data
+                              ?.preferredProfileId === selectedProfile.id
                               ? t("ai.profiles.clearPreferred")
                               : t("ai.profiles.makePreferred")}
                           </Menu.Item>

@@ -78,7 +78,12 @@ const SAFE_MARK_TYPES = new Set([
 
 const AI_APPROVAL_PREVIEW_TEXT_LIMIT = 4000;
 
-const ID_NODE_TYPES = new Set(['paragraph', 'heading']);
+const ID_NODE_TYPES = new Set([
+  'paragraph',
+  'heading',
+  'transclusionSource',
+  'pageEmbed',
+]);
 const MAX_NODE_JSON_BYTES = 32 * 1024;
 const MAX_OPERATION_TEXT_LENGTH = 16 * 1024;
 
@@ -112,7 +117,9 @@ function canonicalJsonString(value: unknown): string {
   const entries = Object.entries(value as Record<string, unknown>)
     .filter(([, item]) => item !== undefined)
     .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
-    .map(([key, item]) => `${JSON.stringify(key)}:${canonicalJsonString(item)}`);
+    .map(
+      ([key, item]) => `${JSON.stringify(key)}:${canonicalJsonString(item)}`,
+    );
   return `{${entries.join(',')}}`;
 }
 
@@ -335,6 +342,7 @@ export function applyAiPageOperation(
       operation.oldText,
       operation.newText,
     );
+    assertUniqueNodeIds(nextDocument);
     return nextDocument;
   }
 
@@ -347,6 +355,7 @@ export function applyAiPageOperation(
 
   if (operation.kind === 'deleteNode') {
     target.parent.content.splice(target.position, 1);
+    assertUniqueNodeIds(nextDocument);
     return nextDocument;
   }
 
@@ -361,11 +370,13 @@ export function applyAiPageOperation(
       safeNode.attrs = { ...(safeNode.attrs ?? {}), id: currentId };
     }
     target.parent.content[target.position] = safeNode;
+    assertUniqueNodeIds(nextDocument);
     return nextDocument;
   }
 
   const offset = operation.position === 'after' ? 1 : 0;
   target.parent.content.splice(target.position + offset, 0, safeNode);
+  assertUniqueNodeIds(nextDocument);
   return nextDocument;
 }
 
@@ -373,17 +384,15 @@ function findNode(
   document: ProseMirrorJson,
   nodeId: string,
 ): NodeLocation | null {
-  // Models frequently return the outline index without its leading marker.
-  const requestedIndex = /^#?(\d+)$/.exec(nodeId)?.[1];
+  const requestedIndex = /^#(\d+)$/.exec(nodeId)?.[1];
   let currentIndex = 0;
-  let result: NodeLocation | null = null;
+  const matches: NodeLocation[] = [];
 
   const visit = (
     node: ProseMirrorJson,
     parent: ProseMirrorJson | null,
     position: number,
   ) => {
-    if (result) return;
     if (isOutlineNode(node)) {
       const nodeIdentifier =
         typeof node.attrs?.id === 'string' ? node.attrs.id : null;
@@ -392,13 +401,12 @@ function findNode(
         (requestedIndex !== undefined &&
           currentIndex === Number(requestedIndex))
       ) {
-        result = {
+        matches.push({
           node,
           parent,
           position,
           index: currentIndex,
-        };
-        return;
+        });
       }
       currentIndex += 1;
     }
@@ -408,7 +416,21 @@ function findNode(
   };
 
   visit(document, null, 0);
-  return result;
+  if (requestedIndex === undefined && matches.length > 1) {
+    throw new Error('agent_ambiguous_node_id');
+  }
+  return matches[0] ?? null;
+}
+
+export function assertUniqueNodeIds(document: ProseMirrorJson): void {
+  const seen = new Set<string>();
+  walk(document, (node) => {
+    if (!node.type || !ID_NODE_TYPES.has(node.type)) return;
+    const id = node.attrs?.id;
+    if (typeof id !== 'string' || id.length === 0) return;
+    if (seen.has(id)) throw new Error('agent_duplicate_node_id');
+    seen.add(id);
+  });
 }
 
 function isOutlineNode(node: ProseMirrorJson): boolean {

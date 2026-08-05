@@ -5,6 +5,10 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AiReasoningDisclosure } from "./ai-reasoning-disclosure";
 
+const { sanitizeAiMarkdown } = vi.hoisted(() => ({
+  sanitizeAiMarkdown: vi.fn((value: string) => `<p>${value}</p>`),
+}));
+
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: () => "Reasoning" }),
 }));
@@ -44,7 +48,7 @@ vi.mock("@mantine/core", () => ({
 }));
 
 vi.mock("@/features/ai/utils/ai-markdown.ts", () => ({
-  sanitizeAiMarkdown: (value: string) => `<p>${value}</p>`,
+  sanitizeAiMarkdown,
 }));
 
 (
@@ -56,6 +60,7 @@ describe("AiReasoningDisclosure", () => {
   let container: HTMLElement | null = null;
 
   afterEach(() => {
+    sanitizeAiMarkdown.mockClear();
     if (root && container) {
       act(() => root?.unmount());
       container.remove();
@@ -76,6 +81,7 @@ describe("AiReasoningDisclosure", () => {
     const button = container.querySelector("button");
     expect(button?.getAttribute("aria-expanded")).toBe("false");
     expect(container.querySelector('[role="region"]')).toBeNull();
+    expect(sanitizeAiMarkdown).not.toHaveBeenCalled();
 
     act(() => button?.click());
 
@@ -83,5 +89,6 @@ describe("AiReasoningDisclosure", () => {
     expect(container.querySelector('[role="region"]')?.textContent).toContain(
       "Model reasoning",
     );
+    expect(sanitizeAiMarkdown).toHaveBeenCalledTimes(1);
   });
 });

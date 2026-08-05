@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import {
   Anchor,
   Box,
@@ -33,9 +33,11 @@ function SourceIcon({ sourceType }: Pick<AiCitation, "sourceType">) {
   return <IconTextCaption size={14} aria-hidden />;
 }
 
-export function AiMessageContent({
+const EMPTY_SOURCES: AiCitation[] = [];
+
+export const AiMessageContent = memo(function AiMessageContent({
   content,
-  sources = [],
+  sources = EMPTY_SOURCES,
 }: {
   content: string;
   sources?: AiCitation[];
@@ -135,4 +137,4 @@ export function AiMessageContent({
       )}
     </Stack>
   );
-}
+});

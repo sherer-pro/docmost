@@ -2,6 +2,7 @@ jest.mock('lib0/decoding.js', () => ({ readVarString: jest.fn() }));
 
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   NotFoundException,
   ServiceUnavailableException,
@@ -80,6 +81,7 @@ function buildRegistry(options?: {
     assertCanReadPage: jest.fn(async () => {
       if (options?.pageAccessDenied) throw new ForbiddenException();
     }),
+    assertCanWritePage: jest.fn(async () => undefined),
     getSidebarAccessSnapshot: jest.fn(async () => ({
       readablePageIds: new Set(options?.readablePageIds ?? []),
     })),
@@ -131,10 +133,71 @@ function buildRegistry(options?: {
 }
 
 describe('extended built-in AI read tools', () => {
+  it('binds #index proposals to the exact live outline hash', async () => {
+    const liveContent = {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          attrs: { id: 'stable-paragraph' },
+          content: [{ type: 'text', text: 'Before' }],
+        },
+      ],
+    };
+    const { registry } = buildRegistry({
+      liveContent,
+      rows: { spaces: [{ slug: 'space' }] },
+    });
+    const context = { ...CONTEXT, currentPageId: PAGE.id };
+    const outline = await registry.execute(
+      'getOutline',
+      { pageId: PAGE.id },
+      context,
+    );
+    const contentHash = (outline.content as any).contentHash;
+
+    await expect(
+      registry.execute(
+        'editPageText',
+        {
+          nodeId: '#0',
+          oldText: 'Before',
+          newText: 'After',
+          outlineContentHash: contentHash,
+        },
+        context,
+      ),
+    ).resolves.toMatchObject({
+      content: { status: 'pending_user_approval' },
+      writeProposal: { baseContentHash: contentHash },
+    });
+
+    await expect(
+      registry.execute(
+        'editPageText',
+        {
+          nodeId: '#0',
+          oldText: 'Before',
+          newText: 'After',
+          outlineContentHash: '0'.repeat(64),
+        },
+        context,
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
   it('marks a template list truncated when another readable row exists', async () => {
     const templates = [
-      { ...PAGE, id: 'template-1', updatedAt: new Date('2026-08-04T02:00:00Z') },
-      { ...PAGE, id: 'template-2', updatedAt: new Date('2026-08-04T01:00:00Z') },
+      {
+        ...PAGE,
+        id: 'template-1',
+        updatedAt: new Date('2026-08-04T02:00:00Z'),
+      },
+      {
+        ...PAGE,
+        id: 'template-2',
+        updatedAt: new Date('2026-08-04T01:00:00Z'),
+      },
     ];
     const { registry } = buildRegistry({
       readablePageIds: templates.map((page) => page.id),
@@ -258,9 +321,7 @@ describe('extended built-in AI read tools', () => {
     expect(content.properties[0].settings).toEqual({
       options: [{ label: 'Open', value: 'open', color: 'blue' }],
     });
-    expect(content.properties[0].settings).not.toHaveProperty(
-      'providerSecret',
-    );
+    expect(content.properties[0].settings).not.toHaveProperty('providerSecret');
     expect(result.citations).toEqual([
       expect.objectContaining({ pageId: PAGE.id, sourceType: 'page' }),
     ]);
@@ -664,11 +725,7 @@ describe('extended built-in AI read tools', () => {
     const cursor = (first.content as any).nextCursor;
 
     await expect(
-      registry.execute(
-        'listComments',
-        { pageId: PAGE.id, cursor },
-        CONTEXT,
-      ),
+      registry.execute('listComments', { pageId: PAGE.id, cursor }, CONTEXT),
     ).rejects.toBeInstanceOf(BadRequestException);
     await expect(
       registry.execute(
@@ -737,10 +794,14 @@ describe('extended built-in AI read tools', () => {
       },
     });
 
-    const result = await registry.execute('getSpaceContext', {}, {
-      ...CONTEXT,
-      user: { ...CONTEXT.user, role: 'admin' },
-    });
+    const result = await registry.execute(
+      'getSpaceContext',
+      {},
+      {
+        ...CONTEXT,
+        user: { ...CONTEXT.user, role: 'admin' },
+      },
+    );
 
     expect((result.content as any).actor).toMatchObject({
       workspaceRole: 'admin',
