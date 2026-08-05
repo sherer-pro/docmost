@@ -34,7 +34,7 @@ export class CollabProxySocket extends EventEmitter {
   }
 
   private publish(msg: RSAMessageClose | RSAMessagePing | RSAMessageSend) {
-    this.pub.publish(this.replyTo, this.pack(msg));
+    void this.pub.publish(this.replyTo, this.pack(msg)).catch(() => {});
   }
 
   close(code?: number, reason?: string) {

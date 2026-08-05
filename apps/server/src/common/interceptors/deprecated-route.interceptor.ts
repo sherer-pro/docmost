@@ -5,6 +5,7 @@ import {
   NestInterceptor,
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
+import { sanitizeUrlForLogging } from '../logger/log-sanitizer.util';
 
 export type DeprecatedRouteOptions = {
   sunset: string;
@@ -33,7 +34,7 @@ export class DeprecatedRouteInterceptor implements NestInterceptor {
       replacement: this.options.replacement,
       sunset: this.options.sunset,
       method: req?.method,
-      path: req?.url,
+      path: sanitizeUrlForLogging(req?.url),
     };
 
     if (req?.log?.warn) {

@@ -1,8 +1,8 @@
 import * as dotenv from 'dotenv';
 import { Kysely } from 'kysely';
 import { PostgresJSDialect } from 'kysely-postgres-js';
-import * as postgres from 'postgres';
 import { envPath, normalizePostgresUrl } from '../common/helpers';
+import { postgres } from '../database/postgres-client';
 
 export type CliArgs = Record<string, string | boolean>;
 

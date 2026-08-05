@@ -6,7 +6,10 @@ import { AuthRateLimitService } from './auth-rate-limit.service';
 type StorageMode = 'memory' | 'redis';
 
 class FakeRedisClient {
-  private readonly store = new Map<string, { count: number; expiresAt: number }>();
+  private readonly store = new Map<
+    string,
+    { count: number; expiresAt: number }
+  >();
 
   async eval(_script: string, _numKeys: number, key: string, windowMs: number) {
     const now = Date.now();
@@ -34,7 +37,10 @@ class FakeRedisClient {
     return Math.max(0, value.expiresAt - now);
   }
 
-  async scan(_cursor: string, ...args: (string | number)[]): Promise<[string, string[]]> {
+  async scan(
+    _cursor: string,
+    ...args: (string | number)[]
+  ): Promise<[string, string[]]> {
     const now = Date.now();
     this.evictExpired(now);
 
@@ -92,9 +98,12 @@ describe('AuthRateLimitService', () => {
       getRedisUrl: () => 'redis://127.0.0.1:6379',
     } as any;
 
-    return new AuthRateLimitService(eventEmitter, environmentService, redisClient as any);
+    return new AuthRateLimitService(
+      eventEmitter,
+      environmentService,
+      redisClient as any,
+    );
   }
-
 
   it('is resolved by Nest DI without explicit Redis provider', async () => {
     const moduleRef = await Test.createTestingModule({
@@ -114,7 +123,31 @@ describe('AuthRateLimitService', () => {
       ],
     }).compile();
 
-    expect(moduleRef.get(AuthRateLimitService)).toBeInstanceOf(AuthRateLimitService);
+    expect(moduleRef.get(AuthRateLimitService)).toBeInstanceOf(
+      AuthRateLimitService,
+    );
+  });
+
+  it('disconnects an unopened Redis client without sending QUIT', async () => {
+    const redisClient = {
+      status: 'wait',
+      disconnect: jest.fn(),
+      quit: jest.fn(),
+    };
+    const environmentService = {
+      getAuthRateLimitStorage: () => 'redis',
+      getRedisUrl: () => 'redis://127.0.0.1:6379',
+    } as any;
+    const service = new AuthRateLimitService(
+      eventEmitter,
+      environmentService,
+      redisClient as any,
+    );
+
+    await service.onModuleDestroy();
+
+    expect(redisClient.disconnect).toHaveBeenCalledTimes(1);
+    expect(redisClient.quit).not.toHaveBeenCalled();
   });
 
   it('blocks requests after exceeding the limit and publishes a telemetry event', async () => {
@@ -155,7 +188,8 @@ describe('AuthRateLimitService', () => {
   it.each<StorageMode>(['memory', 'redis'])(
     'resets the rate-limit window after TTL expiration in %s mode',
     async (storage) => {
-      const redisClient = storage === 'redis' ? new FakeRedisClient() : undefined;
+      const redisClient =
+        storage === 'redis' ? new FakeRedisClient() : undefined;
       const service = createService(storage, redisClient);
 
       const first = await service.consume({
@@ -193,7 +227,8 @@ describe('AuthRateLimitService', () => {
   it.each<StorageMode>(['memory', 'redis'])(
     'handles concurrent requests correctly in %s mode',
     async (storage) => {
-      const redisClient = storage === 'redis' ? new FakeRedisClient() : undefined;
+      const redisClient =
+        storage === 'redis' ? new FakeRedisClient() : undefined;
       const service = createService(storage, redisClient);
 
       const responses = await Promise.all(
@@ -208,7 +243,9 @@ describe('AuthRateLimitService', () => {
         ),
       );
 
-      const allowedCount = responses.filter((response) => response.allowed).length;
+      const allowedCount = responses.filter(
+        (response) => response.allowed,
+      ).length;
       const blockedCount = responses.length - allowedCount;
 
       expect(allowedCount).toBe(5);
@@ -221,13 +258,37 @@ describe('AuthRateLimitService', () => {
     const redisService = createService('redis', new FakeRedisClient());
 
     const testInputs = [
-      { endpoint: 'login', scope: 'ip' as const, key: '10.0.0.1', limit: 2, windowMs: 1_000 },
-      { endpoint: 'login', scope: 'ip' as const, key: '10.0.0.1', limit: 2, windowMs: 1_000 },
-      { endpoint: 'login', scope: 'ip' as const, key: '10.0.0.1', limit: 2, windowMs: 1_000 },
+      {
+        endpoint: 'login',
+        scope: 'ip' as const,
+        key: '10.0.0.1',
+        limit: 2,
+        windowMs: 1_000,
+      },
+      {
+        endpoint: 'login',
+        scope: 'ip' as const,
+        key: '10.0.0.1',
+        limit: 2,
+        windowMs: 1_000,
+      },
+      {
+        endpoint: 'login',
+        scope: 'ip' as const,
+        key: '10.0.0.1',
+        limit: 2,
+        windowMs: 1_000,
+      },
     ];
 
-    const memoryResults = [] as Array<{ allowed: boolean; retryAfterMs: number }>;
-    const redisResults = [] as Array<{ allowed: boolean; retryAfterMs: number }>;
+    const memoryResults = [] as Array<{
+      allowed: boolean;
+      retryAfterMs: number;
+    }>;
+    const redisResults = [] as Array<{
+      allowed: boolean;
+      retryAfterMs: number;
+    }>;
 
     for (const input of testInputs) {
       memoryResults.push(await memoryService.consume(input));

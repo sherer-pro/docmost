@@ -1011,6 +1011,25 @@ export interface PushSubscriptions {
   workspaceId: string;
 }
 
+export interface QueueOutbox {
+  attemptCount: Generated<number>;
+  availableAt: Generated<Timestamp>;
+  cancelledAt: Timestamp | null;
+  completedAt: Timestamp | null;
+  createdAt: Generated<Timestamp>;
+  dedupeKey: string;
+  failedAt: Timestamp | null;
+  id: Generated<string>;
+  kind: string;
+  lastErrorCode: string | null;
+  leaseExpiresAt: Timestamp | null;
+  leaseToken: string | null;
+  payload: Json;
+  secretPayload: string | null;
+  status: Generated<string>;
+  updatedAt: Generated<Timestamp>;
+}
+
 export interface Shares {
   allowPublicLiveEmbed: Generated<boolean>;
   createdAt: Generated<Timestamp>;
@@ -1243,6 +1262,7 @@ export interface DB {
   pageTemplateWorkspacePolicies: PageTemplateWorkspacePolicies;
   pushNotificationJobs: PushNotificationJobs;
   pushSubscriptions: PushSubscriptions;
+  queueOutbox: QueueOutbox;
   shares: Shares;
   spaceMembers: SpaceMembers;
   spaces: Spaces;

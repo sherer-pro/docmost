@@ -28,6 +28,7 @@ import { NotificationRepo } from '@docmost/db/repos/notification/notification.re
 import { WatcherRepo } from '@docmost/db/repos/watcher/watcher.repo';
 import { PushSubscriptionRepo } from '@docmost/db/repos/push-subscription/push-subscription.repo';
 import { PushNotificationJobRepo } from '@docmost/db/repos/push-notification-job/push-notification-job.repo';
+import { QueueOutboxRepo } from '@docmost/db/repos/queue-outbox/queue-outbox.repo';
 import { DatabaseRepo } from './repos/database/database.repo';
 import { DatabasePropertyRepo } from './repos/database/database-property.repo';
 import { DatabaseRowRepo } from './repos/database/database-row.repo';
@@ -39,8 +40,8 @@ import { PageListener } from '@docmost/db/listeners/page.listener';
 import { SpaceListener } from '@docmost/db/listeners/space.listener';
 import { WorkspaceListener } from '@docmost/db/listeners/workspace.listener';
 import { PostgresJSDialect } from 'kysely-postgres-js';
-import * as postgres from 'postgres';
 import { normalizePostgresUrl } from '../common/helpers';
+import { postgres } from './postgres-client';
 import { PageAccessRuleRepo } from './repos/page/page-access-rule.repo';
 import { UserSessionRepo } from './repos/session/user-session.repo';
 import { FavoriteRepo } from './repos/favorite/favorite.repo';
@@ -105,6 +106,7 @@ import { DatabaseReadinessService } from '@docmost/db/services/database-readines
     WatcherRepo,
     PushSubscriptionRepo,
     PushNotificationJobRepo,
+    QueueOutboxRepo,
     DatabaseRepo,
     DatabasePropertyRepo,
     DatabaseRowRepo,
@@ -140,6 +142,7 @@ import { DatabaseReadinessService } from '@docmost/db/services/database-readines
     WatcherRepo,
     PushSubscriptionRepo,
     PushNotificationJobRepo,
+    QueueOutboxRepo,
     DatabaseRepo,
     DatabasePropertyRepo,
     DatabaseRowRepo,

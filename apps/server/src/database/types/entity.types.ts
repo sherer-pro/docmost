@@ -69,6 +69,7 @@ import {
   Watchers,
   PushSubscriptions,
   PushNotificationJobs,
+  QueueOutbox,
   JsonValue,
   PageAccessRules,
   SsoLoginStates,
@@ -481,3 +482,8 @@ export type InsertablePushNotificationJob = Insertable<PushNotificationJobs>;
 export type UpdatablePushNotificationJob = Updateable<
   Omit<PushNotificationJobs, 'id'>
 >;
+
+// Queue outbox
+export type QueueOutboxEntry = Selectable<QueueOutbox>;
+export type InsertableQueueOutboxEntry = Insertable<QueueOutbox>;
+export type UpdatableQueueOutboxEntry = Updateable<Omit<QueueOutbox, 'id'>>;

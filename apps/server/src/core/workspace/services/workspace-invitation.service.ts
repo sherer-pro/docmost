@@ -9,31 +9,27 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { AcceptInviteDto, InviteUserDto } from '../dto/invitation.dto';
 import { UserRepo } from '@docmost/db/repos/user/user.repo';
 import { InjectKysely } from 'nestjs-kysely';
-import { KyselyDB } from '@docmost/db/types/kysely.types';
+import { KyselyDB, KyselyTransaction } from '@docmost/db/types/kysely.types';
 import { sql } from 'kysely';
-import { executeTx } from '@docmost/db/utils';
+import { dbOrTx, executeTx } from '@docmost/db/utils';
 import {
   Group,
   User,
   Workspace,
   WorkspaceInvitation,
 } from '@docmost/db/types/entity.types';
-import { MailService } from '../../../integrations/mail/mail.service';
-import InvitationEmail from '@docmost/transactional/emails/invitation-email';
 import { GroupUserRepo } from '@docmost/db/repos/group/group-user.repo';
-import InvitationAcceptedEmail from '@docmost/transactional/emails/invitation-accepted-email';
 import { SessionService } from '../../session/session.service';
 import { nanoIdGen } from '../../../common/helpers';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import { executeWithCursorPagination } from '@docmost/db/pagination/cursor-pagination';
 import { DomainService } from '../../../integrations/environment/domain.service';
-import {
-  validateAllowedEmail,
-} from '../../auth/auth.util';
+import { validateAllowedEmail } from '../../auth/auth.util';
 import { FastifyRequest } from 'fastify';
 import { SpacePolicyService } from '../../space-policy/space-policy.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EventName } from '../../../common/events/event.contants';
+import { QueueOutboxService } from '../../../integrations/queue/outbox/queue-outbox.service';
 
 const INVITATION_TOKEN_TTL_MS = 14 * 24 * 60 * 60 * 1000;
 
@@ -43,7 +39,7 @@ export class WorkspaceInvitationService {
   constructor(
     private userRepo: UserRepo,
     private groupUserRepo: GroupUserRepo,
-    private mailService: MailService,
+    private readonly queueOutbox: QueueOutboxService,
     private domainService: DomainService,
     private sessionService: SessionService,
     private readonly spacePolicy: SpacePolicyService,
@@ -131,9 +127,8 @@ export class WorkspaceInvitationService {
       throw new NotFoundException('Invitation not found');
     }
 
-    return {
-      token: await this.rotateInvitationToken(invitationId, workspaceId),
-    };
+    const rotated = await this.rotateInvitationToken(invitationId, workspaceId);
+    return { token: rotated.token };
   }
 
   async createInvitation(
@@ -143,12 +138,12 @@ export class WorkspaceInvitationService {
   ): Promise<void> {
     const { emails, role, groupIds } = inviteUserDto;
 
-    let invites: WorkspaceInvitation[] = [];
+    let outboxCreated = false;
 
     try {
       await executeTx(this.db, async (trx) => {
         // we do not want to invite existing members
-        const findExistingUsers = await this.db
+        const findExistingUsers = await trx
           .selectFrom('users')
           .select(['email'])
           .where('users.email', 'in', emails)
@@ -197,7 +192,7 @@ export class WorkspaceInvitationService {
           return;
         }
 
-        invites = await trx
+        const invites = await trx
           .insertInto('workspaceInvitations')
           .values(inviteDrafts.map((draft) => draft.values))
           .onConflict((oc) => oc.columns(['email', 'workspaceId']).doNothing())
@@ -207,35 +202,35 @@ export class WorkspaceInvitationService {
         const tokenByEmail = new Map(
           inviteDrafts.map((draft) => [draft.email, draft.token]),
         );
-        invites = invites.map((invitation) => ({
-          ...invitation,
-          token: invitation.email
-            ? tokenByEmail.get(invitation.email) ?? null
-            : null,
-        }));
+        for (const invitation of invites) {
+          if (!invitation.email) continue;
+          const inviteToken = tokenByEmail.get(invitation.email);
+          if (!inviteToken || !invitation.tokenHash) continue;
+
+          await this.queueOutbox.enqueueWorkspaceInvitationEmail(
+            {
+              workspaceId: workspace.id,
+              invitationId: invitation.id,
+              inviteeEmail: invitation.email,
+              invitedByName: authUser.name,
+              hostname: workspace.hostname ?? undefined,
+              tokenHash: invitation.tokenHash,
+              inviteToken,
+            },
+            trx,
+          );
+          outboxCreated = true;
+        }
       });
-    } catch (err) {
-      this.logger.error(`createInvitation - ${err}`);
+    } catch {
+      this.logger.error('Failed to create workspace invitations');
       throw new BadRequestException(
         'An error occurred while processing the invitations.',
       );
     }
 
-    // do not send code to do nothing users
-    if (invites) {
-      invites.forEach((invitation: WorkspaceInvitation) => {
-        if (!invitation.email || !invitation.token) {
-          return;
-        }
-
-        this.sendInvitationMail(
-          invitation.id,
-          invitation.email,
-          invitation.token,
-          authUser.name,
-          workspace.hostname,
-        );
-      });
+    if (outboxCreated) {
+      this.queueOutbox.kick();
     }
   }
 
@@ -322,6 +317,29 @@ export class WorkspaceInvitationService {
           }
         }
 
+        if (invitation.invitedById) {
+          const invitedByUser = await trx
+            .selectFrom('users')
+            .select(['email'])
+            .where('id', '=', invitation.invitedById)
+            .where('workspaceId', '=', workspace.id)
+            .where('deletedAt', 'is', null)
+            .executeTakeFirst();
+
+          if (invitedByUser?.email) {
+            await this.queueOutbox.enqueueWorkspaceInvitationAcceptedEmail(
+              {
+                invitationId: invitation.id,
+                acceptedUserId: newUser.id,
+                recipientEmail: invitedByUser.email,
+                invitedUserName: newUser.name,
+                invitedUserEmail: newUser.email,
+              },
+              trx,
+            );
+          }
+        }
+
         // delete invitation record
         await trx
           .deleteFrom('workspaceInvitations')
@@ -331,9 +349,10 @@ export class WorkspaceInvitationService {
       this.eventEmitter?.emit(EventName.PAGE_EMBED_VISIBILITY_CHANGED, {
         workspaceId: workspace.id,
       });
+      this.queueOutbox.kick();
     } catch (err: any) {
-      this.logger.error(`acceptInvitation - ${err}`);
-      if (err.message.includes('unique constraint')) {
+      this.logger.error('Failed to accept a workspace invitation');
+      if (err instanceof Error && err.message.includes('unique constraint')) {
         throw new BadRequestException('Invitation already accepted');
       }
       throw new BadRequestException(
@@ -343,25 +362,6 @@ export class WorkspaceInvitationService {
 
     if (!newUser) {
       return;
-    }
-
-    // notify the inviter
-    const invitedByUser = await this.userRepo.findById(
-      invitation.invitedById,
-      workspace.id,
-    );
-
-    if (invitedByUser) {
-      const emailTemplate = InvitationAcceptedEmail({
-        invitedUserName: newUser.name,
-        invitedUserEmail: newUser.email,
-      });
-
-      await this.mailService.sendToQueue({
-        to: invitedByUser.email,
-        subject: `${newUser.name} has accepted your Docmost invite`,
-        template: emailTemplate,
-      });
     }
 
     const requiresMfa =
@@ -384,42 +384,55 @@ export class WorkspaceInvitationService {
     invitationId: string,
     workspace: Workspace,
   ): Promise<void> {
-    const invitation = await this.db
-      .selectFrom('workspaceInvitations')
-      .selectAll()
-      .where('id', '=', invitationId)
-      .where('workspaceId', '=', workspace.id)
-      .executeTakeFirst();
+    await executeTx(this.db, async (trx) => {
+      const invitation = await trx
+        .selectFrom('workspaceInvitations')
+        .selectAll()
+        .where('id', '=', invitationId)
+        .where('workspaceId', '=', workspace.id)
+        .forUpdate()
+        .executeTakeFirst();
 
-    if (!invitation) {
-      throw new BadRequestException('Invitation not found');
-    }
+      if (!invitation) {
+        throw new BadRequestException('Invitation not found');
+      }
+      if (!invitation.email) {
+        throw new BadRequestException('Invitation is missing an email address');
+      }
+      if (!invitation.invitedById) {
+        throw new BadRequestException('Invitation inviter not found');
+      }
 
-    if (!invitation.email) {
-      throw new BadRequestException('Invitation is missing an email address');
-    }
+      const invitedByUser = await trx
+        .selectFrom('users')
+        .select(['name'])
+        .where('id', '=', invitation.invitedById)
+        .where('workspaceId', '=', workspace.id)
+        .where('deletedAt', 'is', null)
+        .executeTakeFirst();
+      if (!invitedByUser) {
+        throw new BadRequestException('Invitation inviter not found');
+      }
 
-    const inviteToken = await this.rotateInvitationToken(
-      invitation.id,
-      workspace.id,
-    );
-
-    const invitedByUser = await this.userRepo.findById(
-      invitation.invitedById,
-      workspace.id,
-    );
-
-    if (!invitedByUser) {
-      throw new BadRequestException('Invitation inviter not found');
-    }
-
-    await this.sendInvitationMail(
-      invitation.id,
-      invitation.email,
-      inviteToken,
-      invitedByUser.name,
-      workspace.hostname,
-    );
+      const rotated = await this.rotateInvitationToken(
+        invitation.id,
+        workspace.id,
+        trx,
+      );
+      await this.queueOutbox.enqueueWorkspaceInvitationEmail(
+        {
+          workspaceId: workspace.id,
+          invitationId: invitation.id,
+          inviteeEmail: invitation.email,
+          invitedByName: invitedByUser.name,
+          hostname: workspace.hostname ?? undefined,
+          tokenHash: rotated.tokenHash,
+          inviteToken: rotated.token,
+        },
+        trx,
+      );
+    });
+    this.queueOutbox.kick();
   }
 
   async revokeInvitation(
@@ -508,7 +521,10 @@ export class WorkspaceInvitationService {
     throw new BadRequestException('Invalid invitation token');
   }
 
-  private async migrateLegacyInvitationToken(invitationId: string, token: string) {
+  private async migrateLegacyInvitationToken(
+    invitationId: string,
+    token: string,
+  ) {
     await this.db
       .updateTable('workspaceInvitations')
       .set({
@@ -525,14 +541,17 @@ export class WorkspaceInvitationService {
   private async rotateInvitationToken(
     invitationId: string,
     workspaceId: string,
-  ): Promise<string> {
+    trx?: KyselyTransaction,
+  ): Promise<{ token: string; tokenHash: string }> {
     const token = this.generateInvitationToken();
+    const tokenHash = this.hashInvitationToken(token);
+    const db = dbOrTx(this.db, trx);
 
-    await this.db
+    await db
       .updateTable('workspaceInvitations')
       .set({
         token: null,
-        tokenHash: this.hashInvitationToken(token),
+        tokenHash,
         expiresAt: this.getInvitationExpiry(),
         updatedAt: new Date(),
       })
@@ -540,30 +559,6 @@ export class WorkspaceInvitationService {
       .where('workspaceId', '=', workspaceId)
       .execute();
 
-    return token;
-  }
-
-  async sendInvitationMail(
-    invitationId: string,
-    inviteeEmail: string,
-    inviteToken: string,
-    invitedByName: string,
-    hostname?: string,
-  ): Promise<void> {
-    const inviteLink = await this.buildInviteLink({
-      invitationId,
-      inviteToken,
-      hostname,
-    });
-
-    const emailTemplate = InvitationEmail({
-      inviteLink,
-    });
-
-    await this.mailService.sendToQueue({
-      to: inviteeEmail,
-      subject: `${invitedByName} invited you to Docmost`,
-      template: emailTemplate,
-    });
+    return { token, tokenHash };
   }
 }

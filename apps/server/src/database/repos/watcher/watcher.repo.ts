@@ -5,7 +5,7 @@ import { InsertableWatcher, Watcher } from '@docmost/db/types/entity.types';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import { executeWithCursorPagination } from '@docmost/db/pagination/cursor-pagination';
 import { ExpressionBuilder } from 'kysely';
-import { DB } from '@docmost/db/types/db';
+import type { DB } from '@docmost/db/types/db';
 import { jsonObjectFrom } from 'kysely/helpers/postgres';
 import { dbOrTx } from '@docmost/db/utils';
 

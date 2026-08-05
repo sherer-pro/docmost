@@ -11,7 +11,7 @@ import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import { executeWithCursorPagination } from '@docmost/db/pagination/cursor-pagination';
 import { validate as isValidUUID } from 'uuid';
 import { ExpressionBuilder, sql } from 'kysely';
-import { DB } from '@docmost/db/types/db';
+import type { DB } from '@docmost/db/types/db';
 import { jsonObjectFrom } from 'kysely/helpers/postgres';
 import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 

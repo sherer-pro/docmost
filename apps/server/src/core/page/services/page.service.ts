@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { CreatePageDto, ContentFormat } from '../dto/create-page.dto';
 import { ContentOperation, UpdatePageDto } from '../dto/update-page.dto';
@@ -83,6 +84,7 @@ import {
   remapDatabasePageReference,
   remapDatabaseViewConfig,
 } from '../../database/utils/database-copy.utils';
+import { QueueOutboxService } from '../../../integrations/queue/outbox/queue-outbox.service';
 
 interface IHistoryUserRef {
   id: string;
@@ -129,6 +131,7 @@ export class PageService {
     private readonly pageAccessMutationService: PageAccessMutationService,
     private readonly transclusionService?: TransclusionService,
     private readonly pageEmbedService?: PageEmbedService,
+    @Optional() private readonly queueOutboxService?: QueueOutboxService,
   ) {}
 
   async resolvePageDatabaseId(
@@ -1509,6 +1512,10 @@ export class PageService {
     const copiedPageByOriginalId: CopiedPageByOriginalId = new Map(
       pages.map((page, index) => [page.id, insertablePages[index]]),
     );
+    const attachmentMappings: IDuplicatePageAttachmentMapping[] = Array.from(
+      attachmentMap.values(),
+    );
+    const newPageId = pageMap.get(rootPage.id).newPageId;
 
     let graphLease: PageEmbedGraphLease | undefined;
     try {
@@ -1565,6 +1572,21 @@ export class PageService {
             graphLease,
           );
         }
+        if (attachmentMappings.length > 0) {
+          if (!this.queueOutboxService) {
+            throw new Error('Queue outbox service is unavailable');
+          }
+          await this.queueOutboxService.enqueueDuplicatePageAttachments(
+            {
+              workspaceId: rootPage.workspaceId,
+              rootPageId: rootPage.id,
+              newPageId,
+              spaceId,
+              attachmentMappings,
+            },
+            trx,
+          );
+        }
       });
     } finally {
       if (graphLease) {
@@ -1582,39 +1604,10 @@ export class PageService {
       workspaceId: authUser.workspaceId,
     });
 
-    const attachmentMappings: IDuplicatePageAttachmentMapping[] = Array.from(
-      attachmentMap.values(),
-    );
-
     if (attachmentMappings.length > 0) {
-      // Queue attachment copy to avoid blocking the API response.
-      this.generalQueue
-        .add(
-          QueueJob.DUPLICATE_PAGE_ATTACHMENTS,
-          {
-            workspaceId: rootPage.workspaceId,
-            rootPageId: rootPage.id,
-            newPageId: pageMap.get(rootPage.id).newPageId,
-            spaceId,
-            attachmentMappings,
-          },
-          {
-            attempts: 5,
-            backoff: {
-              type: 'exponential',
-              delay: 5000,
-            },
-          },
-        )
-        .catch((err) => {
-          this.logger.error(
-            `Failed to queue duplicate-page-attachments job for page ${rootPage.id}`,
-            err,
-          );
-        });
+      this.queueOutboxService!.kick();
     }
 
-    const newPageId = pageMap.get(rootPage.id).newPageId;
     const duplicatedPage = await this.pageRepo.findById(newPageId, {
       includeSpace: true,
     });

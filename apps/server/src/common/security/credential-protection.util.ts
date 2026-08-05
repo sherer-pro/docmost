@@ -9,6 +9,10 @@ import {
 const HASH_PREFIX = 'sha256:';
 const ENCRYPTION_PREFIX = 'enc:v1';
 
+export function isEncryptedProtectedValue(value?: string | null): boolean {
+  return Boolean(value?.startsWith(`${ENCRYPTION_PREFIX}:`));
+}
+
 /**
  * Hashes a token/value with SHA-256 and a stable prefix.
  */
@@ -88,7 +92,7 @@ export function decryptProtectedValue(
   value: string,
   appSecret: string,
 ): string {
-  if (!value.startsWith(`${ENCRYPTION_PREFIX}:`)) {
+  if (!isEncryptedProtectedValue(value)) {
     return value;
   }
 

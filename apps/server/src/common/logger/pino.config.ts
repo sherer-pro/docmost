@@ -1,6 +1,7 @@
 import { Params } from 'nestjs-pino';
 import { stdTimeFunctions } from 'pino';
 import { getClientIpFromRawRequest } from '../security/trusted-proxy.util';
+import { sanitizeUrlForLogging } from './log-sanitizer.util';
 
 const CONTEXTS_TO_IGNORE = [
   'InstanceLoader',
@@ -41,7 +42,10 @@ export function createPinoConfig(): Params {
             for (const arg of inputArgs) {
               if (typeof arg === 'object' && arg !== null && 'context' in arg) {
                 const context = (arg as Record<string, unknown>)['context'];
-                if (typeof context === 'string' && CONTEXTS_TO_IGNORE.includes(context)) {
+                if (
+                  typeof context === 'string' &&
+                  CONTEXTS_TO_IGNORE.includes(context)
+                ) {
                   return;
                 }
               }
@@ -54,7 +58,7 @@ export function createPinoConfig(): Params {
         req: (req) => {
           return {
             method: req.method,
-            url: req.url,
+            url: sanitizeUrlForLogging(req.url),
             ip: getClientIpFromRawRequest(req),
             userAgent: req.headers?.['user-agent'],
           };

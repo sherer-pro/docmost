@@ -1,4 +1,4 @@
-import {
+import type {
   AiAgentToolVerifications,
   AiAssistantProfileGroupPolicies,
   AiAssistantProfileMcpTools,
@@ -59,6 +59,7 @@ import {
   Pages,
   Shares,
   PushSubscriptions,
+  QueueOutbox,
   SpaceMembers,
   Spaces,
   SsoLoginStates,
@@ -131,6 +132,7 @@ export interface DbInterface {
   pageEmbedGraphFences: PageEmbedGraphFences;
   shares: Shares;
   pushSubscriptions: PushSubscriptions;
+  queueOutbox: QueueOutbox;
   spaceMembers: SpaceMembers;
   spaces: Spaces;
   ssoLoginStates: SsoLoginStates;

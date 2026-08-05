@@ -139,6 +139,7 @@ export class GroupUserService {
         await this.watcherRepo.deleteByUsersWithoutSpaceAccess(
           [userId],
           spaceId,
+          { trx },
         );
       }
     });

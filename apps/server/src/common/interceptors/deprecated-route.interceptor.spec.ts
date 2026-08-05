@@ -14,7 +14,7 @@ describe('DeprecatedRouteInterceptor', () => {
       switchToHttp: () => ({
         getRequest: () => ({
           method: 'POST',
-          url: '/api/pages/info',
+          url: '/api/files/public/file/name?jwt=secret-token&download=true',
           log: { warn },
         }),
         getResponse: () => ({ header }),
@@ -34,10 +34,11 @@ describe('DeprecatedRouteInterceptor', () => {
           deprecated_route: true,
           replacement: 'GET /api/pages/info',
           method: 'POST',
-          path: '/api/pages/info',
+          path: '/api/files/public/file/name?jwt&download',
         }),
         'Deprecated API alias route was called',
       );
+      expect(JSON.stringify(warn.mock.calls)).not.toContain('secret-token');
       done();
     });
   });

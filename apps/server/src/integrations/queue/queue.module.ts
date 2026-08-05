@@ -4,6 +4,9 @@ import { EnvironmentService } from '../environment/environment.service';
 import { createRetryStrategy, parseRedisUrl } from '../../common/helpers';
 import { QueueName } from './constants';
 import { GeneralQueueProcessor } from './processors/general-queue.processor';
+import { DuplicatePageAttachmentsService } from './services/duplicate-page-attachments.service';
+import { QueueOutboxService } from './outbox/queue-outbox.service';
+import { QueueOutboxBootstrapService } from './outbox/queue-outbox-bootstrap.service';
 
 export interface QueueModuleOptions {
   registerGeneralWorker?: boolean;
@@ -13,6 +16,16 @@ export interface QueueModuleOptions {
 @Module({})
 export class QueueModule {
   static forRoot(options: QueueModuleOptions = {}): DynamicModule {
+    const registerWorker = options.registerGeneralWorker !== false;
+    const workerProviders = registerWorker
+      ? [
+          DuplicatePageAttachmentsService,
+          QueueOutboxService,
+          QueueOutboxBootstrapService,
+          GeneralQueueProcessor,
+        ]
+      : [];
+
     return {
       module: QueueModule,
       imports: [
@@ -94,9 +107,8 @@ export class QueueModule {
           name: QueueName.NOTIFICATION_QUEUE,
         }),
       ],
-      exports: [BullModule],
-      providers:
-        options.registerGeneralWorker === false ? [] : [GeneralQueueProcessor],
+      exports: [BullModule, ...(registerWorker ? [QueueOutboxService] : [])],
+      providers: workerProviders,
     };
   }
 }

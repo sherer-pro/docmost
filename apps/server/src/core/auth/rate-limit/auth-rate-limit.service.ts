@@ -35,10 +35,19 @@ interface AuthRateLimitOperationMetrics {
 }
 
 interface RedisClientLike {
-  eval(script: string, numKeys: number, ...args: (string | number)[]): Promise<unknown>;
+  eval(
+    script: string,
+    numKeys: number,
+    ...args: (string | number)[]
+  ): Promise<unknown>;
   pttl(key: string): Promise<number>;
-  scan(cursor: string, ...args: (string | number)[]): Promise<[string, string[]]>;
+  scan(
+    cursor: string,
+    ...args: (string | number)[]
+  ): Promise<[string, string[]]>;
   del(...keys: string[]): Promise<number>;
+  status?: string;
+  disconnect?(): void;
   quit?(): Promise<'OK' | unknown>;
 }
 
@@ -136,7 +145,9 @@ export class AuthRateLimitService implements OnModuleDestroy {
    */
   async getOperationalMetrics(): Promise<AuthRateLimitOperationMetrics> {
     const activeKeys =
-      this.storageBackend === 'redis' ? await this.countRedisKeys() : this.buckets.size;
+      this.storageBackend === 'redis'
+        ? await this.countRedisKeys()
+        : this.buckets.size;
 
     return {
       storage: this.storageBackend,
@@ -144,7 +155,9 @@ export class AuthRateLimitService implements OnModuleDestroy {
       totalRequests: this.totalRequests,
       rejectedRequests: this.rejectedRequests,
       rejectRate:
-        this.totalRequests === 0 ? 0 : this.rejectedRequests / this.totalRequests,
+        this.totalRequests === 0
+          ? 0
+          : this.rejectedRequests / this.totalRequests,
     };
   }
 
@@ -167,8 +180,19 @@ export class AuthRateLimitService implements OnModuleDestroy {
       clearInterval(this.cleanupTimer);
     }
 
-    if (this.redisClient?.quit) {
-      await this.redisClient.quit();
+    if (!this.redisClient) return;
+
+    if (this.redisClient.status && this.redisClient.status !== 'ready') {
+      this.redisClient.disconnect?.();
+      return;
+    }
+
+    if (this.redisClient.quit) {
+      try {
+        await this.redisClient.quit();
+      } catch {
+        this.redisClient.disconnect?.();
+      }
     }
   }
 
@@ -179,7 +203,11 @@ export class AuthRateLimitService implements OnModuleDestroy {
     limit: number;
     windowMs: number;
   }) {
-    const bucketKey = this.getRedisBucketKey(input.endpoint, input.scope, input.key);
+    const bucketKey = this.getRedisBucketKey(
+      input.endpoint,
+      input.scope,
+      input.key,
+    );
 
     try {
       const countResult = await this.redisClient!.eval(
@@ -192,7 +220,10 @@ export class AuthRateLimitService implements OnModuleDestroy {
       const count = Number(countResult);
 
       if (count > input.limit) {
-        const retryAfterMs = Math.max(0, await this.redisClient!.pttl(bucketKey));
+        const retryAfterMs = Math.max(
+          0,
+          await this.redisClient!.pttl(bucketKey),
+        );
         this.handleLimitExceeded(input, retryAfterMs);
 
         return {
@@ -206,7 +237,9 @@ export class AuthRateLimitService implements OnModuleDestroy {
         retryAfterMs: 0,
       } as const;
     } catch (error) {
-      this.logger.warn('Redis auth rate limiter failed, falling back to memory backend');
+      this.logger.warn(
+        'Redis auth rate limiter failed, falling back to memory backend',
+      );
       return this.consumeMemory({ ...input, now: Date.now() });
     }
   }
@@ -248,7 +281,13 @@ export class AuthRateLimitService implements OnModuleDestroy {
   }
 
   private handleLimitExceeded(
-    input: { endpoint: string; scope: 'ip' | 'account'; key: string; limit: number; windowMs: number },
+    input: {
+      endpoint: string;
+      scope: 'ip' | 'account';
+      key: string;
+      limit: number;
+      windowMs: number;
+    },
     retryAfterMs: number,
   ) {
     this.rejectedRequests += 1;
@@ -297,7 +336,11 @@ export class AuthRateLimitService implements OnModuleDestroy {
     }) as unknown as RedisClientLike;
   }
 
-  private getRedisBucketKey(endpoint: string, scope: 'ip' | 'account', key: string) {
+  private getRedisBucketKey(
+    endpoint: string,
+    scope: 'ip' | 'account',
+    key: string,
+  ) {
     return `${this.redisPrefix}:${endpoint}:${scope}:${this.hashIdentifier(key)}`;
   }
 
@@ -308,7 +351,13 @@ export class AuthRateLimitService implements OnModuleDestroy {
 
     let cursor = '0';
     do {
-      const [nextCursor, keys] = await this.redisClient.scan(cursor, 'MATCH', `${this.redisPrefix}:*`, 'COUNT', 100);
+      const [nextCursor, keys] = await this.redisClient.scan(
+        cursor,
+        'MATCH',
+        `${this.redisPrefix}:*`,
+        'COUNT',
+        100,
+      );
       cursor = nextCursor;
       if (keys.length > 0) {
         await this.redisClient.del(...keys);
@@ -325,7 +374,13 @@ export class AuthRateLimitService implements OnModuleDestroy {
     let total = 0;
 
     do {
-      const [nextCursor, keys] = await this.redisClient.scan(cursor, 'MATCH', `${this.redisPrefix}:*`, 'COUNT', 100);
+      const [nextCursor, keys] = await this.redisClient.scan(
+        cursor,
+        'MATCH',
+        `${this.redisPrefix}:*`,
+        'COUNT',
+        100,
+      );
       cursor = nextCursor;
       total += keys.length;
     } while (cursor !== '0');

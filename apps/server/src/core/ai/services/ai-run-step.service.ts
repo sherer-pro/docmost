@@ -22,7 +22,7 @@ import {
   AiPageOperation,
   assertSafeAiPageOperation,
 } from '../../../common/helpers/prosemirror/ai-page-operation';
-import { JsonObject, JsonValue } from '../../../database/types/db';
+import type { JsonObject, JsonValue } from '../../../database/types/db';
 import { approvedStepRecoveryAction } from './ai-run-step-recovery';
 import { AiBuiltinToolPolicyService } from '../tools/ai-builtin-tool-policy.service';
 

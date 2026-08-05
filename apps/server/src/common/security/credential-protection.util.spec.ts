@@ -2,6 +2,7 @@ import {
   decryptProtectedValue,
   encryptProtectedValue,
   hashProtectedValue,
+  isEncryptedProtectedValue,
   isHashedProtectedValue,
   safeStringEqual,
   verifyHashedProtectedValue,
@@ -37,6 +38,8 @@ describe('credential-protection.util', () => {
 
     expect(encrypted.startsWith('enc:v1:')).toBe(true);
     expect(decrypted).toBe(payload);
+    expect(isEncryptedProtectedValue(encrypted)).toBe(true);
+    expect(isEncryptedProtectedValue(payload)).toBe(false);
   });
 
   it('returns plaintext as-is for backward compatibility', () => {

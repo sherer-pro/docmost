@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { existsSync } from 'node:fs';
 import puppeteer, { Browser, HTTPRequest, Page } from 'puppeteer-core';
 import { EnvironmentService } from '../environment/environment.service';
+import { sanitizeUrlForLogging } from '../../common/logger/log-sanitizer.util';
 import { MERMAID_SANITIZATION_POLICY } from '@docmost/api-contract';
 
 const FALLBACK_CHROMIUM_PATHS = [
@@ -336,7 +337,7 @@ export class HtmlPdfRendererService {
 
       action.catch((err) => {
         this.logger.warn(
-          `Failed to handle PDF resource request ${request.url()}`,
+          `Failed to handle PDF resource request ${sanitizeUrlForLogging(request.url())}`,
           err,
         );
       });
