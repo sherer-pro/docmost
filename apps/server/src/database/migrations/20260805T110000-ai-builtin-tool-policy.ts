@@ -103,14 +103,14 @@ export async function up(db: Kysely<any>): Promise<void> {
       enabled,
       allowed_capabilities
     )
-    select id, true, ${JSON.stringify(LEGACY_AGENT_CAPABILITIES)}::jsonb
+    select id, true, ${sql.lit(JSON.stringify(LEGACY_AGENT_CAPABILITIES))}::jsonb
     from workspaces
     on conflict (workspace_id) do nothing
   `.execute(db);
 
   await sql`
     update api_keys
-    set allowed_capabilities = ${JSON.stringify(LEGACY_MCP_CAPABILITIES)}::jsonb
+    set allowed_capabilities = ${sql.lit(JSON.stringify(LEGACY_MCP_CAPABILITIES))}::jsonb
     where key_type = 'mcp' and allowed_capabilities is null
   `.execute(db);
 
