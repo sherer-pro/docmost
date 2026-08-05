@@ -78,7 +78,7 @@ export function AiToolCapabilityList({
                 >
                   <Checkbox
                     size="xs"
-                    label={tool.name}
+                    label={t(`ai.toolPolicy.tool.${tool.name}`)}
                     checked={allowedSet.has(tool.capability)}
                     disabled={disabled}
                     onChange={(event) => {
