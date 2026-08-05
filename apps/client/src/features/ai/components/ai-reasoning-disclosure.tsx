@@ -12,7 +12,12 @@ export function AiReasoningDisclosure({ reasoning }: { reasoning: string }) {
   const [opened, setOpened] = useState(false);
   const contentId = useId();
   const labelId = `${contentId}-label`;
-  const html = useMemo(() => sanitizeAiMarkdown(reasoning || ""), [reasoning]);
+  // Reasoning is collapsed by default. Parsing and sanitizing every streamed
+  // token while the block is invisible adds avoidable main-thread work.
+  const html = useMemo(
+    () => (opened ? sanitizeAiMarkdown(reasoning || "") : ""),
+    [opened, reasoning],
+  );
 
   if (!reasoning.trim()) {
     return null;
