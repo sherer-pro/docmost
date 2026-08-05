@@ -33,9 +33,11 @@ import { PresenceModule } from './presence/presence.module';
 import { AiModule } from './ai/ai.module';
 import { McpModule } from './mcp/mcp.module';
 import { SsoModule } from './sso/sso.module';
+import { SpacePolicyModule } from './space-policy/space-policy.module';
 
 @Module({
   imports: [
+    SpacePolicyModule,
     UserModule,
     AuthModule,
     WorkspaceModule,
@@ -54,7 +56,7 @@ import { SsoModule } from './sso/sso.module';
     DatabaseFeatureModule,
     ApiKeyModule,
     RagModule,
-    PageAccessModule,
+    PageAccessModule.forRoot(),
     DictionaryModule,
     SessionModule,
     FavoriteModule,

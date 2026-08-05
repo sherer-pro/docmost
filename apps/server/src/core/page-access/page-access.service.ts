@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB, KyselyTransaction } from '@docmost/db/types/kysely.types';
@@ -78,7 +79,8 @@ export class PageAccessService {
     private readonly pageAccessRuleRepo: PageAccessRuleRepo,
     private readonly groupUserRepo: GroupUserRepo,
     private readonly spaceMemberRepo: SpaceMemberRepo,
-    private readonly pageHistoryRecorder: PageHistoryRecorderService,
+    @Optional()
+    private readonly pageHistoryRecorder: PageHistoryRecorderService | null,
     private readonly environmentService: EnvironmentService,
     private readonly eventEmitter: EventEmitter2,
   ) {}
@@ -656,7 +658,7 @@ export class PageAccessService {
       trx,
     );
 
-    await this.pageHistoryRecorder.recordPageEvent({
+    await this.requireHistoryRecorder().recordPageEvent({
       pageId: page.id,
       actorId: actor.id,
       changeType: 'page.access.updated',
@@ -714,7 +716,7 @@ export class PageAccessService {
       trx,
     );
 
-    await this.pageHistoryRecorder.recordPageEvent({
+    await this.requireHistoryRecorder().recordPageEvent({
       pageId: page.id,
       actorId: actor.id,
       changeType: 'page.access.updated',
@@ -764,7 +766,7 @@ export class PageAccessService {
       trx,
     );
 
-    await this.pageHistoryRecorder.recordPageEvent({
+    await this.requireHistoryRecorder().recordPageEvent({
       pageId: page.id,
       actorId: actor.id,
       changeType: 'page.access.updated',
@@ -813,7 +815,7 @@ export class PageAccessService {
       trx,
     );
 
-    await this.pageHistoryRecorder.recordPageEvent({
+    await this.requireHistoryRecorder().recordPageEvent({
       pageId: page.id,
       actorId: actor.id,
       changeType: 'page.access.updated',
@@ -1507,5 +1509,12 @@ export class PageAccessService {
       fields: [{ expression: 'id', direction: 'asc' }],
       parseCursor: (cursor) => ({ id: cursor.id as string }),
     });
+  }
+
+  private requireHistoryRecorder(): PageHistoryRecorderService {
+    if (!this.pageHistoryRecorder) {
+      throw new Error('Page history recorder is unavailable');
+    }
+    return this.pageHistoryRecorder;
   }
 }

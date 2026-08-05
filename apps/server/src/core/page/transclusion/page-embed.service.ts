@@ -1,4 +1,10 @@
-import { ConflictException, Injectable, Logger } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  Optional,
+} from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB, KyselyTransaction } from '@docmost/db/types/kysely.types';
 import { PageTransclusionReferencesRepo } from '@docmost/db/repos/page-transclusions/page-transclusion-references.repo';
@@ -31,7 +37,7 @@ export class PageEmbedService {
     @InjectKysely() private readonly db: KyselyDB,
     private readonly referencesRepo: PageTransclusionReferencesRepo,
     private readonly pageRepo: PageRepo,
-    private readonly pageAccessService: PageAccessService,
+    @Optional() private readonly pageAccessService: PageAccessService | null,
     private readonly policy: PageTemplatePolicyService,
     private readonly graphLock: PageEmbedGraphLockService,
   ) {}
@@ -217,7 +223,7 @@ export class PageEmbedService {
           'Page embed source is unavailable',
         );
       }
-      await this.pageAccessService.assertCanReadPage(source, actor);
+      await this.requirePageAccess().assertCanReadPage(source, actor);
     }
     return this.graphLock.acquire(actor.workspaceId);
   }
@@ -399,7 +405,7 @@ export class PageEmbedService {
           })),
         };
       }
-      const consumerAccess = await this.pageAccessService.getEffectiveAccess(
+      const consumerAccess = await this.requirePageAccess().getEffectiveAccess(
         consumer,
         viewer,
       );
@@ -543,7 +549,7 @@ export class PageEmbedService {
     if (!source || source.workspaceId !== viewer.workspaceId) {
       return { references: [], hiddenCount: 0, occurrenceCount: 0 };
     }
-    await this.pageAccessService.assertCanReadPage(source, viewer);
+    await this.requirePageAccess().assertCanReadPage(source, viewer);
     const usages = await this.referencesRepo.findPageUsagesBySource(
       sourcePageId,
       viewer.workspaceId,
@@ -570,7 +576,7 @@ export class PageEmbedService {
         hiddenCount += occurrenceCount;
         continue;
       }
-      const access = await this.pageAccessService.getEffectiveAccess(
+      const access = await this.requirePageAccess().getEffectiveAccess(
         page,
         viewer,
       );
@@ -712,7 +718,7 @@ export class PageEmbedService {
       if (!page || page.deletedAt || page.workspaceId !== viewer.workspaceId) {
         continue;
       }
-      const access = await this.pageAccessService.getEffectiveAccess(
+      const access = await this.requirePageAccess().getEffectiveAccess(
         page,
         viewer,
       );
@@ -723,5 +729,12 @@ export class PageEmbedService {
 
   private graphError(code: string, message: string): ConflictException {
     return new ConflictException({ code, message });
+  }
+
+  private requirePageAccess(): PageAccessService {
+    if (!this.pageAccessService) {
+      throw new ForbiddenException('Page access service is unavailable');
+    }
+    return this.pageAccessService;
   }
 }

@@ -3,6 +3,7 @@ import {
   Logger,
   ForbiddenException,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { isDeepStrictEqual } from 'node:util';
 import { v7 as uuid7 } from 'uuid';
@@ -40,7 +41,7 @@ export class TransclusionService {
     private readonly pageRepo: PageRepo,
     private readonly attachmentRepo: AttachmentRepo,
     private readonly storageService: StorageService,
-    private readonly pageAccessService: PageAccessService,
+    @Optional() private readonly pageAccessService?: PageAccessService,
   ) {}
 
   async syncPageTransclusions(
@@ -109,16 +110,15 @@ export class TransclusionService {
     trx?: KyselyTransaction,
   ): Promise<{ inserted: number; deleted: number }> {
     const desired = collectReferencesFromPmJson(pmJson);
-    const keyOf = (s: {
-      sourcePageId: string;
-      transclusionId: string;
-    }) => `${s.sourcePageId}::${s.transclusionId}`;
+    const keyOf = (s: { sourcePageId: string; transclusionId: string }) =>
+      `${s.sourcePageId}::${s.transclusionId}`;
     const desiredKeys = new Set(desired.map(keyOf));
 
-    const existing = await this.pageTransclusionReferencesRepo.findByReferencePageId(
-      referencePageId,
-      trx,
-    );
+    const existing =
+      await this.pageTransclusionReferencesRepo.findByReferencePageId(
+        referencePageId,
+        trx,
+      );
     const existingBlockReferences = existing.filter(
       (reference): reference is typeof reference & { transclusionId: string } =>
         typeof reference.transclusionId === 'string',
@@ -235,7 +235,11 @@ export class TransclusionService {
       viewer,
     );
 
-    return this.lookupWithAccessSet(references, accessibleSet, viewer.workspaceId);
+    return this.lookupWithAccessSet(
+      references,
+      accessibleSet,
+      viewer.workspaceId,
+    );
   }
 
   /**
@@ -419,8 +423,9 @@ export class TransclusionService {
       throw new ForbiddenException();
     }
 
-    await this.pageAccessService.assertCanWritePage(referencePage, user);
-    await this.pageAccessService.assertCanReadPage(sourcePage, user);
+    const pageAccess = this.requirePageAccess();
+    await pageAccess.assertCanWritePage(referencePage, user);
+    await pageAccess.assertCanReadPage(sourcePage, user);
 
     const transclusion =
       await this.pageTransclusionsRepo.findByPageAndTransclusion(
@@ -440,9 +445,7 @@ export class TransclusionService {
       const oldIds = copies.map((c) => c.oldAttachmentId);
       const oldRows = await this.attachmentRepo.findByIds(oldIds);
       const byOldId = new Map(
-        oldRows
-          .filter((a) => a.pageId === sourcePageId)
-          .map((a) => [a.id, a]),
+        oldRows.filter((a) => a.pageId === sourcePageId).map((a) => [a.id, a]),
       );
 
       for (const plan of copies) {
@@ -500,12 +503,22 @@ export class TransclusionService {
         continue;
       }
 
-      const access = await this.pageAccessService.getEffectiveAccess(page, user);
+      const access = await this.requirePageAccess().getEffectiveAccess(
+        page,
+        user,
+      );
       if (access.capabilities.canRead) {
         readablePageIds.add(page.id);
       }
     }
 
     return readablePageIds;
+  }
+
+  private requirePageAccess(): PageAccessService {
+    if (!this.pageAccessService) {
+      throw new ForbiddenException('Page access service is unavailable');
+    }
+    return this.pageAccessService;
   }
 }
