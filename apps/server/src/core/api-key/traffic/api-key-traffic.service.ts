@@ -29,7 +29,11 @@ type RequestOutcome = 'completed' | 'aborted' | 'error';
 
 type TrafficSummary = {
   admission: Record<
-    'allowed' | 'rateLimited' | 'concurrencyLimited' | 'backendError',
+    | 'allowed'
+    | 'rateLimited'
+    | 'concurrencyLimited'
+    | 'backendError'
+    | 'leaseLost',
     number
   >;
   requests: Record<RequestOutcome, number> & {
@@ -51,6 +55,7 @@ function trafficSummary(): TrafficSummary {
       rateLimited: 0,
       concurrencyLimited: 0,
       backendError: 0,
+      leaseLost: 0,
     },
     requests: {
       completed: 0,
@@ -228,6 +233,10 @@ export class ApiKeyTrafficService implements OnModuleInit, OnModuleDestroy {
       this.logger.warn('Failed to renew API key concurrency lease');
       return false;
     }
+  }
+
+  observeLeaseLoss(profile: TrafficProfile): void {
+    this.summaries[profile].admission.leaseLost += 1;
   }
 
   observeRequest(

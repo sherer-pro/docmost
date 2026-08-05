@@ -199,7 +199,9 @@ describe('ApiKeyTrafficService', () => {
     } as any);
 
     service.observeRequest('rag', 'completed', 12, 256);
+    service.observeLeaseLoss('rag');
     service.observeMcpTool('success', 8, 128);
+    expect(service.getOperationalSnapshot().rag.admission.leaseLost).toBe(1);
     service.flushSummary();
 
     expect(log).toHaveBeenCalledTimes(2);
@@ -207,6 +209,7 @@ describe('ApiKeyTrafficService', () => {
       /apiKeyId|token|userId/,
     );
     expect(service.getOperationalSnapshot().rag.requests.completed).toBe(0);
+    expect(service.getOperationalSnapshot().rag.admission.leaseLost).toBe(0);
     expect(service.getOperationalSnapshot().mcp.tools.success).toBe(0);
     log.mockRestore();
   });
