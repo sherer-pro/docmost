@@ -13,6 +13,7 @@ interface AiComposerShellProps {
   spaceSearchAvailable: boolean;
   spaceSearchEnabled: boolean;
   settingsDisabled: boolean;
+  profileControl?: ReactNode;
   /**
    * Rendered next to the mode control. Used for the external-tool consent
    * popover, which only matters in agent mode.
@@ -31,6 +32,7 @@ export function AiComposerShell({
   spaceSearchAvailable,
   spaceSearchEnabled,
   settingsDisabled,
+  profileControl,
   externalToolsControl,
   onAgentModeChange,
   onSpaceSearchChange,
@@ -68,6 +70,7 @@ export function AiComposerShell({
         </Group>
 
         <Group gap="xs" wrap="nowrap">
+          {profileControl}
           {externalToolsControl}
           {agentAvailable && (
             <Tooltip label={t("ai.agent.modeDescription")} withArrow>

@@ -2,6 +2,7 @@ export interface AiLocalDraft {
   text: string;
   useSpaceSearch: boolean;
   agentMode: boolean;
+  assistantProfileId: string | null;
 }
 
 export function getAiLocalDraftKey(
@@ -33,6 +34,10 @@ export function readAiLocalDraft(
       text: record.text,
       useSpaceSearch: record.useSpaceSearch,
       agentMode: record.agentMode,
+      assistantProfileId:
+        typeof record.assistantProfileId === "string"
+          ? record.assistantProfileId
+          : null,
     };
   } catch {
     return null;

@@ -178,6 +178,16 @@ describe("AI conversation selection", () => {
       agentMode: false,
       includeCurrentDocument: true,
       contextRevision: 0,
+      assistantProfile: {
+        source: "legacy_space" as const,
+        id: null,
+        version: null,
+        name: null,
+        description: null,
+        icon: null,
+        quickCommands: null,
+        availability: "available" as const,
+      },
       createdAt: "2026-01-01T00:00:00.000Z",
       deletedAt: null,
     };
