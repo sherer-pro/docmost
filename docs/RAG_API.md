@@ -482,7 +482,10 @@ Because delivery is at-least-once, consumers must:
 - In `/rag/attachments/:fileId/:fileName`, the file is resolved by `fileId`; `fileName` is URL metadata.
 - Use separate API keys per integration client and per space.
 - RAG and MCP request concurrency leases are renewed while the HTTP response is
-  active, so exports longer than the ten-minute safety TTL retain their slot.
+  active, so exports longer than the ten-minute safety TTL retain their slot. If
+  renewal can no longer confirm the lease, a response that has not started fails
+  with `503 api_key_limit_lease_lost`; an active stream is closed. Retry only
+  idempotent reads after Redis admission is healthy.
 - For queue, checkpoint, mapping, lock-loss, and key-rotation recovery, follow
   the canonical [Recovery and diagnostics](./AI_ASSISTANT_AND_RAG.md#recovery-and-diagnostics)
   procedure.

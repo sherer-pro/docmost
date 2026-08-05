@@ -94,10 +94,15 @@ space access and return no administrative profile fields:
 - `POST /api/spaces/:spaceId/ai/profiles/:profileId/actions/test-agent`
 - `GET/PUT /api/spaces/:spaceId/ai/profile-preferences`
 - `POST /api/spaces/:spaceId/ai/config/actions/test-model`
+- `POST /api/spaces/:spaceId/ai/config/actions/test-agent`
 - `POST /api/spaces/:spaceId/ai/config/actions/test-retrieval`
 - `GET /api/spaces/:spaceId/ai/status`
 
 The status endpoint accepts an optional `pageId`. Page-scoped calls return chat availability after the current write ACL check. Calls without `pageId` require full space access and include only aggregate daily request/token and active-run counts. Every status response also contains `assistantIdentity: {name, gender} | null`; page-scoped members receive it even when AI is disabled or temporarily unavailable, without any administrative configuration or secret fields.
+
+Run the space-level `test-agent` action before enabling Agent mode. It forces a
+tool-calling response for the effective provider, base URL, and model
+fingerprint; a successful model-only test is not sufficient.
 
 Authenticated writers use `/api/ai/conversations`, nested message/file endpoints, and `/api/ai/runs/:runId/actions/*`. Conversations are private to their owner. Both HTTP handlers and the background worker re-check conversation scope and page access; workspace administrators do not receive an endpoint for reading other users' prompts or answers.
 
@@ -143,25 +148,18 @@ rules.
 
 ## Persistence, queues, and files
 
-The migration `20260728T120000-ai-integration.ts` creates:
+The canonical [AI and RAG migration ledger](./AI_ASSISTANT_AND_RAG.md#ai-and-rag-migration-ledger)
+is the single inventory of schema changes, backfills, destructive `down`
+operations, and operational rollback switches. Apply the ordered set with:
 
-- per-space configuration;
-- private conversations, messages, generation runs, and chat files;
-- immutable citation snapshots for sources used in assistant messages.
+```bash
+pnpm --filter ./apps/server migration:latest
+```
 
-The additive reliability migration `20260729T120000-ai-reliability.ts` preserves and backfills existing data, adds immutable provider attempts, assistant `currentRunId` projections, run-scoped citations, upload batches, and storage-cleanup state. Existing terminal answers are copied into per-attempt `responseSnapshot` values.
-
-The additive context/editor migration `20260729T180000-ai-context-editor-actions.ts` preserves existing conversations, enables the current document by default, and adds versioned conversation context, immutable run-context snapshots, source dependencies, and 24-hour auxiliary runs for conversation titles and selection-only editor transforms.
-
-The additive assistant identity migration
-`20260730T130000-ai-assistant-identity.ts` preserves the default behavior for
-existing spaces and adds the optional name, enable flag, grammatical gender,
-and database constraints.
-
-The additive citation migration `20260804T120000-ai-citations.ts` marks existing
-message sources as `legacy`, adds stable candidate/citation keys, citation
-state, section metadata, display position, and immutable run-context heading
-snapshots. It does not rewrite historical answers.
+Do not use `migration:down` as a feature rollback: several AI migrations delete
+immutable attempt, citation, profile, policy, or encrypted integration data.
+Use the deployment/workspace switches linked from the ledger unless a reviewed
+database restore is intended.
 
 Every provider call is a new `ai_runs` attempt. Retry and Regenerate never reopen or erase a terminal run: they create a row linked through `rootRunId`, `previousRunId`, and `attemptNo`. They are allowed only for the latest assistant turn; older turns return `409 ai_run_not_latest`. A terminal attempt is immutable, and its usage, error, response snapshot, and citations remain available for audit.
 

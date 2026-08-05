@@ -44,6 +44,9 @@ jobs:
       - name: RAG documentation contract check
         run: pnpm check:rag-docs
 
+      - name: AI documentation contract check
+        run: pnpm check:ai-docs
+
       - name: Environment contract check
         run: pnpm check:env
 

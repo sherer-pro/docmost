@@ -569,7 +569,12 @@ in-memory fallback. Configure these through `RAG_API_RATE_LIMIT_PER_MINUTE`,
 `MCP_RATE_LIMIT_PER_MINUTE`, and `MCP_MAX_CONCURRENT`.
 Concurrency leases have a ten-minute safety TTL and are renewed every third of
 that interval until the request finishes, closes, or aborts. Release and renewal
-use the random internal lease ID; API-key IDs and tokens are not logged.
+use the random internal lease ID; API-key IDs and tokens are not logged. Only one
+renewal is in flight at a time. If Redis cannot confirm an existing lease, the
+guard fails closed: before response headers it returns `503
+api_key_limit_lease_lost`, and after streaming begins it closes the connection.
+The low-cardinality operational summary increments `leaseLost` without logging
+the key or lease identity.
 
 ### Recovery and diagnostics
 
@@ -586,9 +591,11 @@ use the random internal lease ID; API-key IDs and tokens are not logged.
   the next cancellation poll. Diagnose longer delays from the structured
   provider outcome and cancel-latency summaries before changing timeouts.
 - RAG/MCP `429` responses include `Retry-After`; `503 api_key_limit_unavailable`
-  means Redis admission is unavailable. Long-running
-  exports retain their slots through lease renewal until the HTTP lifecycle
-  finishes.
+  means Redis admission is unavailable. Long-running exports retain their slots
+  through lease renewal until the HTTP lifecycle finishes. A `503
+  api_key_limit_lease_lost`, or a connection close after response headers, means
+  the active lease could no longer be confirmed; retry only an idempotent read
+  after Redis admission is healthy.
 - `apps/rag-sync` checkpoints advance only after a complete feed page. On lock
   loss it stops before another mapping/checkpoint write, and Open WebUI polling
   checks lock ownership between polls. A remote operation that finished during
@@ -612,6 +619,33 @@ self-reference with the selected grammatical gender. A new name therefore
 applies to subsequent send, retry, and regenerate operations without changing
 the fingerprint or historical messages. Auxiliary title generation and editor
 selection transforms do not receive this directive.
+
+### AI and RAG migration ledger
+
+The migration files are the schema source of truth. This ledger records the
+data treatment and rollback boundary that operators need; feature sections
+above remain authoritative for runtime rollout switches and recovery behavior.
+
+| Migration | Authoritative change and data treatment | `down` impact |
+| --- | --- | --- |
+| [`20260728T120000-ai-integration.ts`](../apps/server/src/database/migrations/20260728T120000-ai-integration.ts) | Creates per-space provider/retrieval configuration, private conversations and messages, generation runs, chat files, and message-source snapshots. | Drops every core AI table and all stored AI configuration, conversations, attempts, files, and sources. |
+| [`20260729T120000-ai-reliability.ts`](../apps/server/src/database/migrations/20260729T120000-ai-reliability.ts) | Adds immutable attempt lineage, idempotency fingerprints, upload batches, and storage-cleanup state. Backfills each run's root, terminal response snapshot, assistant-message projection, and run-scoped message sources; the migration aborts if mandatory source/run links cannot be backfilled. | Removes lineage, response snapshots, upload-batch and cleanup metadata. Base conversation/message rows remain, but the added audit and retry state is lost. |
+| [`20260729T180000-ai-context-editor-actions.ts`](../apps/server/src/database/migrations/20260729T180000-ai-context-editor-actions.ts) | Enables the current document by default, marks existing non-empty titles as manual, and adds versioned conversation context, immutable run-context/source-dependency snapshots, and expiring auxiliary title/editor runs. | Drops context, dependency, and auxiliary-run tables and their conversation/run columns. Saved selections and auxiliary history are lost. |
+| [`20260729T220000-open-webui-rag.ts`](../apps/server/src/database/migrations/20260729T220000-open-webui-rag.ts) | Adds the `open-webui-knowledge-v1` retrieval configuration, encrypted credential storage, and attachment update/delete feed indexes. | Changes affected adapters to `none`, drops the Open WebUI URL, credential, and Knowledge ID columns, and removes the attachment indexes. |
+| [`20260729T230000-ai-reasoning.ts`](../apps/server/src/database/migrations/20260729T230000-ai-reasoning.ts) | Adds the per-space reasoning switch, streamed message reasoning, and immutable run reasoning snapshot. | Deletes stored reasoning values and the configuration switch. |
+| [`20260730T120000-ai-content-policy.ts`](../apps/server/src/database/migrations/20260730T120000-ai-content-policy.ts) | Adds space-scoped exclusion policies, descendant selection, prompt-history cutoffs, and bounded expanded context snapshots. Existing conversations default to no descendant expansion. | Deletes exclusion policy and descendant-selection data and removes the associated conversation/context columns. |
+| [`20260730T130000-ai-assistant-identity.ts`](../apps/server/src/database/migrations/20260730T130000-ai-assistant-identity.ts) | Adds optional assistant name and grammatical gender. Existing spaces remain disabled and use the masculine default until explicitly configured. | Deletes saved assistant identity settings. |
+| [`20260730T140000-ai-agent-mcp.ts`](../apps/server/src/database/migrations/20260730T140000-ai-agent-mcp.ts) | Adds Agent enablement/verification, conversation and run execution modes, durable tool/approval steps, and the authoritative `rag` or `mcp` API-key type. Existing keys default to `rag`. | Deletes tool-step and approval history, Agent state, and API-key type metadata; use runtime switches for operational rollback. |
+| [`20260730T150000-remove-legacy-ee-imports-and-ai-search.ts`](../apps/server/src/database/migrations/20260730T150000-remove-legacy-ee-imports-and-ai-search.ts) | Fails in-flight retired Confluence and DOCX imports, removes legacy workspace AI-search settings, and drops `page_embeddings`. | No-op: removed settings, embeddings, and prior in-flight task state are not restorable. |
+| [`20260803T120000-ai-external-mcp.ts`](../apps/server/src/database/migrations/20260803T120000-ai-external-mcp.ts) | Adds the disabled-by-default outbound MCP catalog, encrypted headers, layered workspace/space/group/user policy, run snapshots, and read-only external step provenance. | Drops the catalog, encrypted headers, policy/preferences, run snapshots, and external step metadata. Export configuration first; use `AI_EXTERNAL_MCP_ENABLED=false` for operational rollback. |
+| [`20260804T120000-ai-citations.ts`](../apps/server/src/database/migrations/20260804T120000-ai-citations.ts) | Marks existing sources as `legacy`, adds stable candidate/citation keys and section/display metadata, snapshots citation headings, and normalizes historical `database` sources to their page identity. Historical answer text is not rewritten. | Drops citation metadata and heading snapshots. The prior `database` source type is not reconstructed from normalized page rows. |
+| [`20260805T100000-ai-assistant-profiles.ts`](../apps/server/src/database/migrations/20260805T100000-ai-assistant-profiles.ts) | Adds disabled-by-default workspace/profile/group/user policy, exact external-tool selections, immutable conversation/run/provider snapshots, and Agent verification rows. Existing conversations keep the legacy no-profile path. | Destroys profile configuration, preferences, verifications, and immutable profile/provider history; use deployment or workspace switches instead. |
+| [`20260805T110000-ai-builtin-tool-policy.ts`](../apps/server/src/database/migrations/20260805T110000-ai-builtin-tool-policy.ts) | Adds exact workspace/space capability policy and run snapshots. Seeds workspaces with the eleven legacy Agent capabilities and existing MCP keys with the seven legacy read capabilities. | Deletes saved policy, API-key capability lists, and run snapshots; use policy switches or `AI_BUILTIN_TOOL_EXTENSIONS_ENABLED=false` instead. |
+
+Apply the ordered set with `pnpm --filter ./apps/server migration:latest` only
+after a database backup and normal deployment review. A schema `down` operation
+is not an operational feature rollback unless the applicable row above states
+that its data loss is acceptable.
 
 ## 5. External synchronization with Open WebUI
 
