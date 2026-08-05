@@ -30,6 +30,11 @@ overrides:
   uuid: 11.1.1
   ws: 8.21.0
 
+patchedDependencies:
+  '@tiptap/extension-bubble-menu@3.17.1':
+    hash: 6f7a394b27b7aa4f856e57321e2502a57a390103c56d7129f967211fda07c035
+    path: patches/@tiptap__extension-bubble-menu@3.17.1.patch
+
 importers:
 
   .:
@@ -16313,7 +16318,7 @@ snapshots:
     dependencies:
       '@tiptap/core': 3.17.1(@tiptap/pm@3.17.1)
 
-  '@tiptap/extension-bubble-menu@3.17.1(@tiptap/core@3.17.1(@tiptap/pm@3.17.1))(@tiptap/pm@3.17.1)':
+  '@tiptap/extension-bubble-menu@3.17.1(patch_hash=6f7a394b27b7aa4f856e57321e2502a57a390103c56d7129f967211fda07c035)(@tiptap/core@3.17.1(@tiptap/pm@3.17.1))(@tiptap/pm@3.17.1)':
     dependencies:
       '@floating-ui/dom': 1.7.4
       '@tiptap/core': 3.17.1(@tiptap/pm@3.17.1)
@@ -16522,7 +16527,7 @@ snapshots:
       react-dom: 18.3.1(react@18.3.1)
       use-sync-external-store: 1.6.0(react@18.3.1)
     optionalDependencies:
-      '@tiptap/extension-bubble-menu': 3.17.1(@tiptap/core@3.17.1(@tiptap/pm@3.17.1))(@tiptap/pm@3.17.1)
+      '@tiptap/extension-bubble-menu': 3.17.1(patch_hash=6f7a394b27b7aa4f856e57321e2502a57a390103c56d7129f967211fda07c035)(@tiptap/core@3.17.1(@tiptap/pm@3.17.1))(@tiptap/pm@3.17.1)
       '@tiptap/extension-floating-menu': 3.19.0(@floating-ui/dom@1.7.3)(@tiptap/core@3.17.1(@tiptap/pm@3.17.1))(@tiptap/pm@3.17.1)
     transitivePeerDependencies:
       - '@floating-ui/dom'

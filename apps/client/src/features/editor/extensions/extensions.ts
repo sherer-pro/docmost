@@ -59,10 +59,7 @@ import {
   PageEmbed,
 } from "@docmost/editor-ext";
 import type { TagDefinition } from "@docmost/editor-ext";
-import {
-  randomElement,
-  userColors,
-} from "@/features/editor/extensions/utils.ts";
+import { getUserColor } from "@/features/editor/extensions/utils.ts";
 import { IUser } from "@/features/user/types/user.types.ts";
 import MathInlineView from "@/features/editor/components/math/math-inline.tsx";
 import MathBlockView from "@/features/editor/components/math/math-block.tsx";
@@ -348,7 +345,7 @@ export const collabExtensions: CollabExtensions = (provider, user) => [
       id: user.id,
       name: user.name,
       avatarUrl: user.avatarUrl,
-      color: randomElement(userColors),
+      color: getUserColor(user.id),
     },
   }),
 ];

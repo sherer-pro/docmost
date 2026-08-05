@@ -3,6 +3,28 @@ import { getCollabToken, verifyUserToken } from "../services/auth-service";
 import { ICollabToken, IVerifyUserToken } from "../types/auth.types";
 import { isAxiosError } from "axios";
 
+const COLLAB_TOKEN_MAX_RETRIES = 10;
+const COLLAB_TOKEN_RETRY_BASE_DELAY_MS = 5_000;
+const COLLAB_TOKEN_RETRY_MAX_DELAY_MS = 60_000;
+
+export function shouldRetryCollabToken(
+  failureCount: number,
+  error: Error,
+): boolean {
+  if (isAxiosError(error) && error.response?.status === 404) {
+    return false;
+  }
+
+  return failureCount < COLLAB_TOKEN_MAX_RETRIES;
+}
+
+export function getCollabTokenRetryDelay(retryAttempt: number): number {
+  return Math.min(
+    COLLAB_TOKEN_RETRY_BASE_DELAY_MS * Math.pow(2, retryAttempt),
+    COLLAB_TOKEN_RETRY_MAX_DELAY_MS,
+  );
+}
+
 export function useVerifyUserTokenQuery(
   verify: IVerifyUserToken,
 ): UseQueryResult<any, Error> {
@@ -26,16 +48,7 @@ export function useCollabToken(
     // expired cached token and only recovers after a failed authentication.
     staleTime: 3 * 60 * 60 * 1000, // 3hrs
     refetchOnMount: true,
-    //@ts-ignore
-    retry: (failureCount, error) => {
-      if (isAxiosError(error) && error.response.status === 404) {
-        return false;
-      }
-      return 10;
-    },
-    retryDelay: (retryAttempt) => {
-      // Exponential backoff: 5s, 10s, 20s, etc.
-      return 5000 * Math.pow(2, retryAttempt - 1);
-    },
+    retry: shouldRetryCollabToken,
+    retryDelay: getCollabTokenRetryDelay,
   });
 }
