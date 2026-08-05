@@ -62,14 +62,8 @@ export class ApiKeyTrafficGuard implements CanActivate {
     }
 
     let released = false;
+    let renewing = false;
     const startedAt = Date.now();
-    const renewTimer = lease.renewAfterMs
-      ? setInterval(
-          () => void this.traffic.renew(lease),
-          lease.renewAfterMs,
-        )
-      : undefined;
-    renewTimer?.unref();
     const release = (outcome: 'completed' | 'aborted' | 'error') => {
       if (released) return;
       released = true;
@@ -83,6 +77,54 @@ export class ApiKeyTrafficGuard implements CanActivate {
       );
       void this.traffic.release(lease);
     };
+    const failClosed = () => {
+      if (released) return;
+      this.traffic.observeLeaseLoss(profile);
+      release('error');
+
+      const payload = {
+        statusCode: 503,
+        code: 'api_key_limit_lease_lost',
+        message: 'API key traffic lease was lost',
+      };
+      const raw = response.raw;
+      if (!raw?.headersSent && !response.sent) {
+        try {
+          if (
+            typeof response.code === 'function' &&
+            typeof response.send === 'function'
+          ) {
+            response.code(503);
+            response.send(payload);
+            return;
+          }
+          raw.statusCode = 503;
+          raw.setHeader?.('content-type', 'application/json; charset=utf-8');
+          raw.end?.(JSON.stringify(payload));
+          return;
+        } catch {
+          // Fall through to a hard close if the framework already committed.
+        }
+      }
+      if (!raw?.destroyed) raw?.destroy?.();
+    };
+    const renew = async () => {
+      if (released || renewing) return;
+      renewing = true;
+      try {
+        if (!(await this.traffic.renew(lease))) {
+          failClosed();
+        }
+      } catch {
+        failClosed();
+      } finally {
+        renewing = false;
+      }
+    };
+    const renewTimer = lease.renewAfterMs
+      ? setInterval(() => void renew(), lease.renewAfterMs)
+      : undefined;
+    renewTimer?.unref();
     response.raw?.once('finish', () =>
       release(response.raw?.statusCode >= 500 ? 'error' : 'completed'),
     );
