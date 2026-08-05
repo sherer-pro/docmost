@@ -1,5 +1,10 @@
 import { Stack, Tabs, Text } from "@mantine/core";
-import { IconShieldCheck, IconSparkles, IconTool } from "@tabler/icons-react";
+import {
+  IconBook2,
+  IconShieldCheck,
+  IconSparkles,
+  IconTool,
+} from "@tabler/icons-react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Helmet } from "react-helmet-async";
@@ -8,6 +13,7 @@ import SettingsTitle from "@/components/settings/settings-title.tsx";
 import AiSpacesPanel from "@/features/ai/components/ai-spaces-panel.tsx";
 import ExternalMcpSettingsPanel from "@/features/ai-external-mcp/components/external-mcp-settings-panel.tsx";
 import { AiBuiltinToolWorkspacePolicy } from "@/features/ai/components/ai-builtin-tool-workspace-policy.tsx";
+import AiAdminGuide from "@/features/ai/components/ai-admin-guide.tsx";
 import {
   AI_SETTINGS_DEFAULT_TAB,
   isAiSettingsTab,
@@ -77,6 +83,15 @@ export default function AiIntegrationsSettings() {
               {t("ai.externalTools.title")}
             </Text>
           </Tabs.Tab>
+          <Tabs.Tab
+            value="guide"
+            leftSection={<IconBook2 size={18} stroke={2} />}
+            className={classes.tab}
+          >
+            <Text size="sm" fw={500}>
+              {t("ai.adminGuide.tab")}
+            </Text>
+          </Tabs.Tab>
         </Tabs.List>
 
         <Tabs.Panel value="spaces" className={classes.tabPanel}>
@@ -87,6 +102,9 @@ export default function AiIntegrationsSettings() {
         </Tabs.Panel>
         <Tabs.Panel value="external-tools" className={classes.tabPanel}>
           <ExternalMcpSettingsPanel />
+        </Tabs.Panel>
+        <Tabs.Panel value="guide" className={classes.tabPanel}>
+          <AiAdminGuide />
         </Tabs.Panel>
       </Tabs>
     </Stack>

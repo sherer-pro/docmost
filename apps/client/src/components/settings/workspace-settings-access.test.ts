@@ -14,6 +14,7 @@ describe("workspace settings navigation access", () => {
     "/settings/ai/spaces",
     "/settings/ai/built-in-tools",
     "/settings/ai/external-tools",
+    "/settings/ai/guide",
     "/settings/keys",
     "/settings/keys/mcp",
     "/settings/keys/rag",
@@ -41,9 +42,9 @@ describe("workspace settings navigation access", () => {
 
   it("keeps AI and API keys active states mutually exclusive", () => {
     expect(isSettingsItemActive("/settings/ai", "/settings/ai")).toBe(true);
-    expect(isSettingsItemActive("/settings/ai/spaces/demo", "/settings/ai")).toBe(
-      true,
-    );
+    expect(
+      isSettingsItemActive("/settings/ai/spaces/demo", "/settings/ai"),
+    ).toBe(true);
     // Both tab routes must keep the sidebar item highlighted.
     expect(isSettingsItemActive("/settings/ai/spaces", "/settings/ai")).toBe(
       true,
@@ -54,6 +55,9 @@ describe("workspace settings navigation access", () => {
     expect(
       isSettingsItemActive("/settings/ai/external-tools", "/settings/ai"),
     ).toBe(true);
+    expect(isSettingsItemActive("/settings/ai/guide", "/settings/ai")).toBe(
+      true,
+    );
     expect(isSettingsItemActive("/settings/keys/mcp", "/settings/ai")).toBe(
       false,
     );

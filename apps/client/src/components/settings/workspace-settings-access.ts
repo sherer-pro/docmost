@@ -7,6 +7,7 @@ const WORKSPACE_ADMIN_SETTINGS_PATHS = new Set([
   "/settings/ai/spaces",
   "/settings/ai/built-in-tools",
   "/settings/ai/external-tools",
+  "/settings/ai/guide",
   "/settings/keys",
   "/settings/keys/mcp",
   "/settings/keys/rag",
