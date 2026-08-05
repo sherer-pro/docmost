@@ -32,11 +32,14 @@ describe('getEmptyResponseFallbackLimits', () => {
 });
 
 describe('agent built-in policy guard', () => {
-  function buildPolicyGuardService(assertRunPolicyCurrent: jest.Mock) {
+  function buildPolicyGuardService(
+    assertRunPolicyCurrent: jest.Mock,
+    assertReadablePage = jest.fn(async () => undefined),
+  ) {
     return new AiRunExecutionService(
       {} as any,
       {} as any,
-      {} as any,
+      { assertReadablePage } as any,
       {} as any,
       {} as any,
       {} as any,
@@ -49,6 +52,7 @@ describe('agent built-in policy guard', () => {
       { assertRunPolicyCurrent } as any,
       {} as any,
       {} as any,
+      { assertRunProfileCurrent: jest.fn(async () => undefined) } as any,
     );
   }
 
@@ -62,7 +66,11 @@ describe('agent built-in policy guard', () => {
     const operation = jest.fn(async () => ({ content: 'must not run' }));
 
     await expect(
-      (service as any).withCurrentBuiltinPolicy({ id: 'run-1' }, operation),
+      (service as any).withCurrentBuiltinPolicy(
+        { id: 'run-1' },
+        {},
+        operation,
+      ),
     ).rejects.toMatchObject({ code: 'agent_tool_policy_changed' });
     expect(operation).not.toHaveBeenCalled();
   });
@@ -79,10 +87,38 @@ describe('agent built-in policy guard', () => {
     const operation = jest.fn(async () => ({ content: 'stale final answer' }));
 
     await expect(
-      (service as any).withCurrentBuiltinPolicy({ id: 'run-1' }, operation),
+      (service as any).withCurrentBuiltinPolicy(
+        { id: 'run-1' },
+        {},
+        operation,
+      ),
     ).rejects.toMatchObject({ code: 'agent_tool_policy_changed' });
     expect(operation).toHaveBeenCalledTimes(1);
     expect(assertRunPolicyCurrent).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not call the provider after page access is revoked', async () => {
+    const assertReadablePage = jest.fn(async () =>
+      Promise.reject(new Error('revoked')),
+    );
+    const service = buildPolicyGuardService(
+      jest.fn(async () => []),
+      assertReadablePage,
+    );
+    const operation = jest.fn(async () => ({ content: 'must not run' }));
+
+    await expect(
+      (service as any).withCurrentBuiltinPolicy(
+        {
+          id: 'run-1',
+          pageId: 'page-1',
+          workspaceId: 'workspace-1',
+        },
+        { id: 'user-1' },
+        operation,
+      ),
+    ).rejects.toMatchObject({ code: 'page_write_required' });
+    expect(operation).not.toHaveBeenCalled();
   });
 });
 
@@ -99,6 +135,7 @@ describe('agent tool source dependencies', () => {
     };
     const service = new AiRunExecutionService(
       { insertInto: jest.fn(() => insert) } as any,
+      {} as any,
       {} as any,
       {} as any,
       {} as any,
@@ -179,6 +216,7 @@ describe('AiRunExecutionService claim', () => {
       {} as any,
       {} as any,
       {} as any,
+      {} as any,
     );
 
     await expect((service as any).claim('run')).resolves.toBe(run);
@@ -237,6 +275,7 @@ describe('AiRunExecutionService claim', () => {
       {} as any,
       {} as any,
       events as any,
+      {} as any,
       {} as any,
       {} as any,
       {} as any,
@@ -314,6 +353,7 @@ describe('AiRunExecutionService claim', () => {
       {} as any,
       {} as any,
       events as any,
+      {} as any,
       {} as any,
       {} as any,
       {} as any,

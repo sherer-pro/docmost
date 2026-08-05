@@ -1,7 +1,10 @@
+jest.mock('lib0/decoding.js', () => ({ readVarString: jest.fn() }));
+
 import { AiConversationService } from './ai-conversation.service';
 
 describe('AiConversationService message serialization', () => {
   const service = new AiConversationService(
+    {} as any,
     {} as any,
     {} as any,
     {} as any,

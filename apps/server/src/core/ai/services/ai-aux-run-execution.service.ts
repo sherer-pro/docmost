@@ -337,7 +337,11 @@ export class AiAuxRunExecutionService {
     });
     if (result.conversation) {
       this.runEvents.emitConversationUpdated(
-        this.conversations.toConversation(result.conversation),
+        await this.conversations.toConversation(
+          result.conversation,
+          result.conversation.userId,
+          result.conversation.workspaceId,
+        ),
       );
     }
   }

@@ -212,6 +212,7 @@ export interface AiExternalMcpDiscoverResult {
 }
 
 export interface AiExternalMcpBinding {
+  bindingId: string;
   serverId: string;
   serverName: string;
   namespace: string;

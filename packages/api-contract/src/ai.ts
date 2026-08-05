@@ -209,6 +209,13 @@ export const AI_ERROR_CODES = [
   "agent_write_rejected",
   "agent_write_not_allowed",
   "agent_tool_policy_changed",
+  "ai_profile_disabled",
+  "ai_profile_not_allowed",
+  "ai_profile_locked",
+  "ai_profile_version_conflict",
+  "agent_profile_unverified",
+  "agent_profile_policy_changed",
+  "agent_provider_config_changed",
   "agent_mcp_config_changed",
   "agent_mcp_access_revoked",
   "agent_mcp_tool_definition_limit",
@@ -305,6 +312,7 @@ export interface AiSpaceConfig {
   visionEnabled: boolean;
   reasoningEnabled: boolean;
   quickCommands: AiQuickCommand[] | null;
+  defaultAssistantProfileId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -332,6 +340,7 @@ export interface AiSpaceConfigUpdate {
   visionEnabled?: boolean;
   reasoningEnabled?: boolean;
   quickCommands?: AiQuickCommand[] | null;
+  defaultAssistantProfileId?: string | null;
 }
 
 export interface AiAvailability {
@@ -377,6 +386,7 @@ export interface AiConversation {
   agentMode: boolean;
   includeCurrentDocument: boolean;
   contextRevision: number;
+  assistantProfile: import("./ai-profiles").AiAssistantProfileConversationSummary;
   lastOpenedAt: string;
   createdAt: string;
   updatedAt: string;
@@ -646,6 +656,7 @@ export interface CreateAiConversationRequest {
   title?: string;
   useSpaceSearch?: boolean;
   agentMode?: boolean;
+  assistantProfileId?: string | null;
 }
 
 export interface UpdateAiConversationRequest {
@@ -653,6 +664,7 @@ export interface UpdateAiConversationRequest {
   draft?: string | null;
   useSpaceSearch?: boolean;
   agentMode?: boolean;
+  assistantProfileId?: string | null;
 }
 
 export interface UpdateAiConversationContextRequest {

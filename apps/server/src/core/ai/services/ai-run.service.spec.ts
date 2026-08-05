@@ -19,6 +19,7 @@ describe('AiRunService', () => {
       {} as any,
       {} as any,
       {} as any,
+      {} as any,
     );
   }
 
@@ -299,6 +300,7 @@ describe('AiRunService', () => {
       {} as any,
       {} as any,
       {} as any,
+      {} as any,
     );
     jest.spyOn(service as any, 'getOwnedRun').mockResolvedValue(run);
 
@@ -355,6 +357,7 @@ describe('AiRunService', () => {
     };
     const service = new AiRunService(
       db as any,
+      {} as any,
       {} as any,
       {} as any,
       {} as any,

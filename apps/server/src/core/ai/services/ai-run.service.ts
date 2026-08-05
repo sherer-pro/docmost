@@ -40,6 +40,7 @@ import { AI_CONCURRENCY_LIMITS } from '../ai.constants';
 import { toAiRunStepContract } from '../utils/ai-run-step.mapper';
 import { AiMcpPolicyService } from '../mcp/ai-mcp-policy.service';
 import { AiBuiltinToolPolicyService } from '../tools/ai-builtin-tool-policy.service';
+import { AiAssistantProfileService } from './ai-assistant-profile.service';
 
 @Injectable()
 export class AiRunService {
@@ -54,6 +55,7 @@ export class AiRunService {
     private readonly contexts: AiContextService,
     private readonly mcpPolicy: AiMcpPolicyService,
     private readonly builtinToolPolicy: AiBuiltinToolPolicyService,
+    private readonly profiles: AiAssistantProfileService,
   ) {}
 
   async send(
@@ -79,6 +81,58 @@ export class AiRunService {
     }
     const chatFileIds = [...conversation.contextChatFileIds].sort();
     const attachmentIds = [...conversation.contextAttachmentIds].sort();
+    const config = await this.configs.getRawConfig(
+      conversation.spaceId,
+      workspace.id,
+    );
+    if (!config?.enabled || !config.baseUrl || !config.chatModel) {
+      throw new ForbiddenException('AI is not available in this space');
+    }
+    const resolvedProfile = conversation.assistantProfileSnapshot
+      ? {
+          snapshot: this.profiles.readSnapshot(
+            conversation.assistantProfileSnapshot,
+            conversation.assistantProfileFingerprint,
+          ),
+          fingerprint: conversation.assistantProfileFingerprint,
+        }
+      : await this.profiles.resolveConversationSnapshot(this.db, {
+          workspaceId: workspace.id,
+          spaceId: conversation.spaceId,
+          userId: user.id,
+          assistantProfileId: null,
+        });
+    if (!resolvedProfile.snapshot || !resolvedProfile.fingerprint) {
+      throw new ConflictException({
+        code: 'agent_profile_policy_changed',
+        message: 'The assistant profile snapshot failed its integrity check',
+      });
+    }
+    await this.profiles.assertSnapshotLive(resolvedProfile.snapshot, user.id);
+    if (conversation.agentMode) {
+      if (resolvedProfile.snapshot.source === 'assistant_profile') {
+        await this.profiles.assertProfileAgentAvailable(
+          resolvedProfile.snapshot,
+          config,
+          user.id,
+        );
+      } else if (
+        !config.agentEnabled ||
+        config.agentVerifiedProviderFingerprint !==
+          this.configs.getProviderFingerprint(config)
+      ) {
+        throw new ForbiddenException({
+          code: 'agent_provider_unverified',
+          message: 'The AI agent is disabled or its provider is unverified',
+        });
+      }
+    }
+    const providerSnapshot = this.profiles.buildProviderSnapshot(
+      config,
+      resolvedProfile.snapshot,
+    );
+    const providerFingerprint =
+      this.profiles.providerSnapshotFingerprint(providerSnapshot);
     const fingerprint = this.fingerprint({
       content: dto.content,
       documentSnapshot: conversation.includeCurrentDocument
@@ -94,6 +148,8 @@ export class AiRunService {
       attachmentIds,
       useSpaceSearch: dto.useSpaceSearch ?? conversation.useSpaceSearch,
       executionMode: conversation.agentMode ? 'agent' : 'chat',
+      assistantProfileFingerprint: resolvedProfile.fingerprint,
+      providerFingerprint,
     });
     const existing = await this.findIdempotentRun(
       conversation.id,
@@ -102,25 +158,6 @@ export class AiRunService {
       fingerprint,
     );
     if (existing) return this.toSendResult(existing);
-
-    const config = await this.configs.getRawConfig(
-      conversation.spaceId,
-      workspace.id,
-    );
-    if (!config?.enabled || !config.baseUrl || !config.chatModel) {
-      throw new ForbiddenException('AI is not available in this space');
-    }
-    if (
-      conversation.agentMode &&
-      (!config.agentEnabled ||
-        config.agentVerifiedProviderFingerprint !==
-          this.configs.getProviderFingerprint(config))
-    ) {
-      throw new ForbiddenException({
-        code: 'agent_provider_unverified',
-        message: 'The AI agent is disabled or its provider is unverified',
-      });
-    }
     await this.assertChatFiles(
       chatFileIds,
       conversation.id,
@@ -138,14 +175,6 @@ export class AiRunService {
     const assistantMessageId = uuidv7();
     const runId = uuidv7();
     const now = new Date();
-    const reservedTokens = this.estimateReservation(
-      dto.content,
-      dto.documentSnapshot,
-      dto.selection?.text,
-      config.contextWindow,
-      config.maxOutputTokens,
-    );
-
     let run: AiRunEntity;
     try {
       run = await this.db.transaction().execute(async (trx) => {
@@ -171,6 +200,65 @@ export class AiRunService {
             message: 'AI conversation context was updated elsewhere',
           });
         }
+        if (
+          lockedConversation.assistantProfileFingerprint &&
+          lockedConversation.assistantProfileFingerprint !==
+            resolvedProfile.fingerprint
+        ) {
+          throw new ConflictException({
+            code: 'ai_profile_locked',
+            message: 'The assistant profile changed before the message was sent',
+          });
+        }
+        const lockedConfig = await trx
+          .selectFrom('aiSpaceConfigs')
+          .selectAll()
+          .where('workspaceId', '=', workspace.id)
+          .where('spaceId', '=', conversation.spaceId)
+          .forUpdate()
+          .executeTakeFirst();
+        if (!lockedConfig?.enabled) {
+          throw new ForbiddenException('AI is not available in this space');
+        }
+        if (lockedConversation.agentMode) {
+          if (resolvedProfile.snapshot.source === 'assistant_profile') {
+            await this.profiles.assertProfileAgentAvailable(
+              resolvedProfile.snapshot,
+              lockedConfig,
+              user.id,
+              trx,
+            );
+          } else if (
+            !lockedConfig.agentEnabled ||
+            lockedConfig.agentVerifiedProviderFingerprint !==
+              this.configs.getProviderFingerprint(lockedConfig)
+          ) {
+            throw new ForbiddenException({
+              code: 'agent_provider_unverified',
+              message: 'The AI agent is disabled or its provider is unverified',
+            });
+          }
+        }
+        const lockedProviderSnapshot = this.profiles.buildProviderSnapshot(
+          lockedConfig,
+          resolvedProfile.snapshot,
+        );
+        if (
+          this.profiles.providerSnapshotFingerprint(lockedProviderSnapshot) !==
+          providerFingerprint
+        ) {
+          throw new ConflictException({
+            code: 'agent_provider_config_changed',
+            message: 'The AI provider changed before the run was created',
+          });
+        }
+        const reservedTokens = this.estimateReservation(
+          dto.content,
+          dto.documentSnapshot,
+          dto.selection?.text,
+          lockedConfig.contextWindow,
+          lockedProviderSnapshot.maxOutputTokens,
+        );
 
         const raced = await trx
           .selectFrom('aiRuns')
@@ -190,8 +278,8 @@ export class AiRunService {
           workspace.id,
           conversation.spaceId,
           conversation.id,
-          config.dailyRequestLimitPerUser,
-          Number(config.dailyTokenLimitPerSpace),
+          lockedConfig.dailyRequestLimitPerUser,
+          Number(lockedConfig.dailyTokenLimitPerSpace),
           reservedTokens,
           conversation.agentMode ? 'agent' : 'chat',
         );
@@ -224,17 +312,25 @@ export class AiRunService {
           .execute();
         // Resolved inside the same transaction as the run, so the capability
         // list and the run row can never disagree.
+        const profilePolicy = await this.profiles.resolveRunToolPolicy(
+          resolvedProfile.snapshot,
+          user.id,
+          trx,
+        );
         const mcpSnapshot = await this.mcpPolicy.buildRunSnapshot(trx, {
           workspaceId: workspace.id,
           spaceId: conversation.spaceId,
           userId: user.id,
           executionMode: lockedConversation.agentMode ? 'agent' : 'chat',
+          profileKey: profilePolicy.profileKey,
+          profileAllowedTools: profilePolicy.externalTools,
         });
         const builtinToolSnapshot =
           await this.builtinToolPolicy.buildRunSnapshot(trx, {
             workspaceId: workspace.id,
             spaceId: conversation.spaceId,
             executionMode: lockedConversation.agentMode ? 'agent' : 'chat',
+            maximumCapabilities: profilePolicy.maximumBuiltinCapabilities,
           });
         const inserted = await trx
           .insertInto('aiRuns')
@@ -252,6 +348,10 @@ export class AiRunService {
             builtinToolPolicyFingerprint: builtinToolSnapshot
               ? this.builtinToolPolicy.fingerprintSnapshot(builtinToolSnapshot)
               : null,
+            assistantProfileSnapshot: resolvedProfile.snapshot as never,
+            assistantProfileFingerprint: resolvedProfile.fingerprint,
+            providerConfigSnapshot: lockedProviderSnapshot as never,
+            providerConfigFingerprint: providerFingerprint,
             conversationId: conversation.id,
             userId: user.id,
             workspaceId: workspace.id,
@@ -305,6 +405,15 @@ export class AiRunService {
             draft: null,
             lastOpenedAt: now,
             updatedAt: now,
+            ...(lockedConversation.assistantProfileSnapshot
+              ? {}
+              : {
+                  assistantProfileId: resolvedProfile.snapshot.profileId,
+                  assistantProfileVersion:
+                    resolvedProfile.snapshot.profileVersion,
+                  assistantProfileSnapshot: resolvedProfile.snapshot as never,
+                  assistantProfileFingerprint: resolvedProfile.fingerprint,
+                }),
           })
           .where('id', '=', conversation.id)
           .execute();
@@ -608,6 +717,41 @@ export class AiRunService {
     if (!config?.enabled) {
       throw new ForbiddenException('AI is not available in this space');
     }
+    const profileSnapshot = this.profiles.readSnapshot(
+      source.assistantProfileSnapshot,
+      source.assistantProfileFingerprint,
+    );
+    if (source.assistantProfileSnapshot && !profileSnapshot) {
+      throw new ConflictException({
+        code: 'agent_profile_policy_changed',
+        message: 'The assistant profile snapshot failed its integrity check',
+      });
+    }
+    await this.profiles.assertRunProfileCurrent(source);
+    this.profiles.assertProviderSnapshotCurrent(source, config);
+    if (source.executionMode === 'agent') {
+      if (profileSnapshot?.source === 'assistant_profile') {
+        await this.profiles.assertProfileAgentAvailable(
+          profileSnapshot,
+          config,
+          user.id,
+        );
+      } else if (
+        !config.agentEnabled ||
+        config.agentVerifiedProviderFingerprint !==
+          this.configs.getProviderFingerprint(config)
+      ) {
+        throw new ForbiddenException({
+          code: 'agent_provider_unverified',
+          message: 'The AI agent is disabled or its provider is unverified',
+        });
+      }
+    }
+    const effectiveProvider = this.profiles.providerConfigForRun(
+      source,
+      config,
+    );
+    const frozenProvider = this.profiles.providerSnapshotForRun(source, config);
 
     let created: AiRunEntity;
     try {
@@ -673,8 +817,8 @@ export class AiRunService {
           '',
           locked.documentSnapshot ?? undefined,
           locked.selectionText ?? undefined,
-          config.contextWindow,
-          config.maxOutputTokens,
+          frozenProvider?.contextWindow ?? config.contextWindow,
+          effectiveProvider.maxOutputTokens,
         );
         await this.assertQuotaAndConcurrency(
           trx,
@@ -694,21 +838,8 @@ export class AiRunService {
           .executeTakeFirstOrThrow();
         const id = uuidv7();
         const now = new Date();
-        // Retry and regenerate resolve a fresh capability list. Resuming after
-        // an approval keeps the original snapshot, which is why resumeRun does
-        // not touch these columns.
-        const mcpSnapshot = await this.mcpPolicy.buildRunSnapshot(trx, {
-          workspaceId: locked.workspaceId,
-          spaceId: locked.spaceId,
-          userId: locked.userId,
-          executionMode: locked.executionMode,
-        });
-        const builtinToolSnapshot =
-          await this.builtinToolPolicy.buildRunSnapshot(trx, {
-            workspaceId: locked.workspaceId,
-            spaceId: locked.spaceId,
-            executionMode: locked.executionMode,
-          });
+        // Retry and regenerate preserve the original behavioral snapshots.
+        // Live ACL and narrowing checks still run before execution.
         const run = await trx
           .insertInto('aiRuns')
           .values({
@@ -717,14 +848,14 @@ export class AiRunService {
             previousRunId: locked.id,
             attemptNo: Number(latestAttempt.attemptNo ?? locked.attemptNo) + 1,
             trigger,
-            mcpPolicySnapshot: mcpSnapshot as never,
-            mcpPolicyFingerprint: mcpSnapshot
-              ? this.mcpPolicy.fingerprintSnapshot(mcpSnapshot)
-              : null,
-            builtinToolPolicySnapshot: builtinToolSnapshot as never,
-            builtinToolPolicyFingerprint: builtinToolSnapshot
-              ? this.builtinToolPolicy.fingerprintSnapshot(builtinToolSnapshot)
-              : null,
+            mcpPolicySnapshot: locked.mcpPolicySnapshot,
+            mcpPolicyFingerprint: locked.mcpPolicyFingerprint,
+            builtinToolPolicySnapshot: locked.builtinToolPolicySnapshot,
+            builtinToolPolicyFingerprint: locked.builtinToolPolicyFingerprint,
+            assistantProfileSnapshot: locked.assistantProfileSnapshot,
+            assistantProfileFingerprint: locked.assistantProfileFingerprint,
+            providerConfigSnapshot: locked.providerConfigSnapshot,
+            providerConfigFingerprint: locked.providerConfigFingerprint,
             conversationId: locked.conversationId,
             userId: locked.userId,
             workspaceId: locked.workspaceId,

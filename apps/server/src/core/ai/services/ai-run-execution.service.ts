@@ -28,6 +28,7 @@ import {
 } from '../tools/ai-tool-registry.service';
 import {
   AiCitationCandidate,
+  AiProviderConfig,
   AiProviderMessage,
   AiProviderUsage,
 } from '../ai.types';
@@ -44,6 +45,7 @@ import {
   AI_AGENT_MAX_TOOL_DEFINITIONS,
   AI_MCP_INSTRUCTIONS_MAX_LENGTH,
 } from '../mcp/ai-mcp.constants';
+import { AiAssistantProfileService } from './ai-assistant-profile.service';
 
 class AiRunCancelledError extends Error {}
 
@@ -91,6 +93,7 @@ export class AiRunExecutionService {
     private readonly builtinToolPolicy: AiBuiltinToolPolicyService,
     private readonly mcpPolicy: AiMcpPolicyService,
     private readonly mcpCalls: AiMcpToolCallService,
+    private readonly profiles: AiAssistantProfileService,
   ) {}
 
   /**
@@ -147,14 +150,50 @@ export class AiRunExecutionService {
       );
       return;
     }
+    const profileSnapshot = this.profiles.readSnapshot(
+      run.assistantProfileSnapshot,
+      run.assistantProfileFingerprint,
+    );
+    if (run.assistantProfileSnapshot && !profileSnapshot) {
+      await this.fail(
+        run,
+        '',
+        '',
+        'agent_profile_policy_changed',
+        'The assistant profile snapshot failed its integrity check',
+      );
+      return;
+    }
+    let providerConfig: AiProviderConfig;
+    let providerRuntime = {
+      contextWindow: config.contextWindow,
+      visionEnabled: config.visionEnabled,
+      reasoningEnabled: config.reasoningEnabled,
+    };
     try {
+      const frozenProvider = this.profiles.providerSnapshotForRun(run, config);
+      if (frozenProvider) {
+        providerRuntime = {
+          contextWindow: frozenProvider.contextWindow,
+          visionEnabled: frozenProvider.visionEnabled,
+          reasoningEnabled: frozenProvider.reasoningEnabled,
+        };
+      }
+      providerConfig = this.profiles.providerConfigForRun(run, config);
+      await this.profiles.assertRunProfileCurrent(run);
       if (run.executionMode === 'agent') {
         await this.conversations.assertReadablePage(
           run.pageId,
           user as User,
           run.workspaceId,
         );
-        if (
+        if (profileSnapshot?.source === 'assistant_profile') {
+          await this.profiles.assertProfileAgentAvailable(
+            profileSnapshot,
+            config,
+            user.id,
+          );
+        } else if (
           !config.agentEnabled ||
           config.agentVerifiedProviderFingerprint !==
             this.configs.getProviderFingerprint(config)
@@ -171,17 +210,22 @@ export class AiRunExecutionService {
           run.workspaceId,
         );
       }
-    } catch {
+    } catch (error) {
+      const policyCode = (error as any)?.response?.code;
       await this.fail(
         run,
         '',
         '',
-        run.executionMode === 'agent'
-          ? 'agent_provider_unverified'
-          : 'page_write_required',
-        run.executionMode === 'agent'
-          ? 'The AI agent is unavailable'
-          : 'Page write access is required',
+        typeof policyCode === 'string'
+          ? policyCode
+          : run.executionMode === 'agent'
+            ? 'agent_provider_unverified'
+            : 'page_write_required',
+        typeof policyCode === 'string'
+          ? 'The assistant profile or provider policy changed'
+          : run.executionMode === 'agent'
+            ? 'The AI agent is unavailable'
+            : 'Page write access is required',
       );
       return;
     }
@@ -203,7 +247,11 @@ export class AiRunExecutionService {
         user as User,
         Math.min(
           500_000,
-          Math.max(16_000, (config.contextWindow - config.maxOutputTokens) * 2),
+          Math.max(
+            16_000,
+            (providerRuntime.contextWindow - providerConfig.maxOutputTokens) *
+              2,
+          ),
         ),
       );
       const fileContext = await this.files.buildContext(
@@ -214,19 +262,23 @@ export class AiRunExecutionService {
           userId: run.userId,
           workspaceId: run.workspaceId,
           spaceId: run.spaceId,
-          visionEnabled: config.visionEnabled,
+          visionEnabled: providerRuntime.visionEnabled,
           maxTextChars: Math.min(
             250_000,
             Math.max(
               8_000,
-              (config.contextWindow - config.maxOutputTokens) * 1.5,
+              (providerRuntime.contextWindow -
+                providerConfig.maxOutputTokens) *
+                1.5,
             ),
           ),
           maxImageBytes: Math.min(
             2 * 1024 * 1024,
             Math.max(
               256 * 1024,
-              (config.contextWindow - config.maxOutputTokens) * 4,
+              (providerRuntime.contextWindow -
+                providerConfig.maxOutputTokens) *
+                4,
             ),
           ),
         },
@@ -262,7 +314,8 @@ export class AiRunExecutionService {
       const buildMessages = (contextWindow: number, maxOutputTokens: number) =>
         this.promptBuilder.build({
           run,
-          instructions: config.systemInstructions,
+          instructions:
+            profileSnapshot?.instructions ?? config.systemInstructions,
           assistantIdentity: this.configs.toAssistantIdentity(config),
           currentUserContent: userMessage.content,
           fileText: fileContext.text,
@@ -274,8 +327,8 @@ export class AiRunExecutionService {
           maxOutputTokens,
         });
       let prompt = await buildMessages(
-        config.contextWindow,
-        config.maxOutputTokens,
+        providerRuntime.contextWindow,
+        providerConfig.maxOutputTokens,
       );
 
       if (run.executionMode === 'agent') {
@@ -289,6 +342,7 @@ export class AiRunExecutionService {
           fileCitations: fileContext.citations,
           retrievalOutcome,
           userContent: userMessage.content,
+          providerConfig,
         });
         return;
       }
@@ -351,13 +405,14 @@ export class AiRunExecutionService {
         this.events.emitDelta(run, sequence, delta, reasoningDelta);
       };
 
-      const stream = (
+      const stream = async (
         providerMessages: AiProviderMessage[],
         maxOutputTokens: number,
-      ) =>
-        this.provider.stream(
+      ) => {
+        await this.profiles.assertRunProfileCurrent(run);
+        const result = await this.provider.stream(
           {
-            ...this.configs.toProviderConfig(config),
+            ...providerConfig,
             maxOutputTokens,
           },
           providerMessages,
@@ -367,7 +422,7 @@ export class AiRunExecutionService {
               pendingDelta += delta;
               await flush();
             },
-            onReasoning: config.reasoningEnabled
+            onReasoning: providerRuntime.reasoningEnabled
               ? async (delta) => {
                   reasoning += delta;
                   pendingReasoningDelta += delta;
@@ -378,12 +433,18 @@ export class AiRunExecutionService {
             isCancelled: () => this.isCancelled(run.id),
           },
         );
+        await this.profiles.assertRunProfileCurrent(run);
+        return result;
+      };
       let usage: AiProviderUsage;
       try {
-        usage = await stream(prompt.messages, config.maxOutputTokens);
+        usage = await stream(prompt.messages, providerConfig.maxOutputTokens);
       } catch (error) {
         if (!(error instanceof AiProviderEmptyResponseError)) throw error;
-        const fallback = getEmptyResponseFallbackLimits(config);
+        const fallback = getEmptyResponseFallbackLimits({
+          contextWindow: providerRuntime.contextWindow,
+          maxOutputTokens: providerConfig.maxOutputTokens,
+        });
         prompt = await buildMessages(
           fallback.contextWindow,
           fallback.maxOutputTokens,
@@ -514,6 +575,7 @@ export class AiRunExecutionService {
       sources: any[];
     };
     userContent: string;
+    providerConfig: AiProviderConfig;
   }): Promise<void> {
     const {
       run,
@@ -524,6 +586,7 @@ export class AiRunExecutionService {
       retrievalOutcome,
       userContent,
       citationCandidates,
+      providerConfig,
     } = params;
     const mcpSnapshot = this.mcpPolicy.readRunSnapshot(run);
     // One merged list, and one lookup source built from it. Resolving a call
@@ -605,9 +668,9 @@ export class AiRunExecutionService {
       if (await this.isCancelled(run.id)) {
         throw new AiRunCancelledError();
       }
-      const response = await this.withCurrentBuiltinPolicy(run, () =>
+      const response = await this.withCurrentBuiltinPolicy(run, user, () =>
         this.provider.completeWithTools(
-          this.configs.toProviderConfig(config),
+          providerConfig,
           messages,
           providerTools,
           'auto',
@@ -725,26 +788,28 @@ export class AiRunExecutionService {
 
         const external = this.asExternalDefinition(definition);
         try {
-          const execution = external
-            ? await this.mcpCalls.execute(call.function.name, args, {
-                run,
-                user,
-                snapshot: mcpSnapshot!,
-                isCancelled: () => this.isCancelled(run.id),
-              })
-            : await (async () => {
-                await this.builtinToolPolicy.assertRunToolAllowed(
+          const execution = await this.withCurrentBuiltinPolicy(run, user, () =>
+            external
+              ? this.mcpCalls.execute(call.function.name, args, {
                   run,
-                  call.function.name,
-                );
-                return this.tools.execute(call.function.name, args, {
                   user,
-                  workspaceId: run.workspaceId,
-                  spaceId: run.spaceId,
-                  currentPageId: run.pageId,
-                  source: 'agent',
-                });
-              })();
+                  snapshot: mcpSnapshot!,
+                  isCancelled: () => this.isCancelled(run.id),
+                })
+              : (async () => {
+                  await this.builtinToolPolicy.assertRunToolAllowed(
+                    run,
+                    call.function.name,
+                  );
+                  return this.tools.execute(call.function.name, args, {
+                    user,
+                    workspaceId: run.workspaceId,
+                    spaceId: run.spaceId,
+                    currentPageId: run.pageId,
+                    source: 'agent',
+                  });
+                })(),
+          );
           const executionContent = external
             ? this.neutralizeExternalCitationMarkers(execution.content)
             : this.attachToolCitations(
@@ -893,12 +958,35 @@ export class AiRunExecutionService {
 
   private async withCurrentBuiltinPolicy<T>(
     run: AiRun,
+    user: User,
     operation: () => Promise<T>,
   ): Promise<T> {
+    await this.assertCurrentAgentPageAccess(run, user);
+    await this.profiles.assertRunProfileCurrent(run);
     await this.assertCurrentBuiltinPolicy(run);
     const result = await operation();
     await this.assertCurrentBuiltinPolicy(run);
+    await this.profiles.assertRunProfileCurrent(run);
+    await this.assertCurrentAgentPageAccess(run, user);
     return result;
+  }
+
+  private async assertCurrentAgentPageAccess(
+    run: AiRun,
+    user: User,
+  ): Promise<void> {
+    try {
+      await this.conversations.assertReadablePage(
+        run.pageId,
+        user,
+        run.workspaceId,
+      );
+    } catch {
+      throw new AiAgentExecutionError(
+        'page_write_required',
+        'Page access changed during this Agent run',
+      );
+    }
   }
 
   private attachToolCitations(

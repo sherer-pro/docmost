@@ -1,3 +1,5 @@
+jest.mock('lib0/decoding.js', () => ({ readVarString: jest.fn() }));
+
 import { AiAuxRunService } from './ai-aux-run.service';
 import { AI_CONCURRENCY_LIMITS } from '../ai.constants';
 

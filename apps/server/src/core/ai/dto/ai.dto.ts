@@ -17,6 +17,7 @@ import {
   MaxLength,
   Min,
   ValidateBy,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import {
@@ -125,6 +126,11 @@ export class UpdateAiSpaceConfigDto {
   @IsOptional()
   @IsBoolean()
   agentEnabled?: boolean;
+
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @IsUUID()
+  defaultAssistantProfileId?: string | null;
 
   @IsOptional()
   @IsIn(AI_PROVIDERS)
@@ -263,6 +269,11 @@ export class CreateAiConversationDto {
   @IsOptional()
   @IsBoolean()
   agentMode?: boolean;
+
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @IsUUID()
+  assistantProfileId?: string | null;
 }
 
 export class UpdateAiConversationDto {
@@ -283,6 +294,11 @@ export class UpdateAiConversationDto {
   @IsOptional()
   @IsBoolean()
   agentMode?: boolean;
+
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @IsUUID()
+  assistantProfileId?: string | null;
 }
 
 export class AiConversationListQueryDto {

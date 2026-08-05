@@ -319,6 +319,28 @@ describe('AiMcpPolicyService tool intersection', () => {
     ]);
   });
 
+  it('uses relation-backed exact tools instead of the dormant legacy default', async () => {
+    const { service } = build(ALL_OPEN, {
+      approvedTools: [approvedTool(), second],
+      profileAllowed: [second.toolName],
+    });
+    const snapshot = await service.buildRunSnapshot({} as never, {
+      workspaceId: WORKSPACE_ID,
+      spaceId: SPACE_ID,
+      userId: USER_ID,
+      executionMode: 'agent',
+      profileKey: 'profile-1',
+      profileAllowedTools: [
+        { bindingId: 'binding-1', toolName: TOOL_NAME },
+      ],
+    });
+
+    expect(snapshot?.profileKey).toBe('profile-1');
+    expect(snapshot?.connections[0].tools.map((tool) => tool.name)).toEqual([
+      TOOL_NAME,
+    ]);
+  });
+
   it('intersects every applicable group allowlist', async () => {
     const snapshot = await snapshotFor(ALL_OPEN, {
       approvedTools: [approvedTool(), second],
@@ -466,6 +488,19 @@ describe('AiMcpPolicyService assertCallAllowed', () => {
     ).resolves.toMatchObject({ tool: { name: TOOL_NAME } });
   });
 
+  it('does not apply the legacy default allowlist to a profile snapshot', async () => {
+    const { service } = build(ALL_OPEN, {
+      profileAllowed: ['mcp__remote__other_00000000'],
+    });
+
+    await expect(
+      service.assertCallAllowed({
+        snapshot: snapshot({ profileKey: 'profile-1' }),
+        ...args,
+      }),
+    ).resolves.toMatchObject({ tool: { name: TOOL_NAME } });
+  });
+
   it('rejects a tool absent from the snapshot', async () => {
     const { service } = build(ALL_OPEN);
 
@@ -589,5 +624,59 @@ describe('AiMcpPolicyService readRunSnapshot', () => {
         mcpPolicySnapshot: { schemaVersion: 1, connections: [] },
       } as never),
     ).toMatchObject({ schemaVersion: 1 });
+  });
+});
+
+describe('AiMcpPolicyService profile verification fingerprint', () => {
+  function transaction(bindingPolicyVersion: number) {
+    const query: any = {};
+    query.innerJoin = jest.fn(() => query);
+    query.select = jest.fn(() => query);
+    query.where = jest.fn(() => query);
+    query.execute = jest.fn(async () => [
+      {
+        bindingId: 'binding-1',
+        bindingEnabled: true,
+        allowedTools: [],
+        bindingPolicyVersion,
+        serverEnabled: true,
+        configVersion: 1,
+        approvedTools: [approvedTool()],
+      },
+    ]);
+    return { selectFrom: jest.fn(() => query) } as any;
+  }
+
+  it('invalidates verification when the workspace or binding maximum changes', async () => {
+    const { service } = build(ALL_OPEN);
+    const readSettings = jest.spyOn(
+      service as never as { readSettings: () => Promise<unknown> },
+      'readSettings',
+    );
+    readSettings
+      .mockResolvedValueOnce({ enabled: true, allowedOrigins: '', policyVersion: 1 })
+      .mockResolvedValueOnce({ enabled: true, allowedOrigins: '', policyVersion: 2 })
+      .mockResolvedValueOnce({ enabled: true, allowedOrigins: '', policyVersion: 2 });
+    const params = {
+      workspaceId: WORKSPACE_ID,
+      spaceId: SPACE_ID,
+      tools: [{ bindingId: 'binding-1', toolName: TOOL_NAME }],
+    };
+
+    const initial = await service.maximumProfilePolicyFingerprint(
+      transaction(1),
+      params,
+    );
+    const workspaceChanged = await service.maximumProfilePolicyFingerprint(
+      transaction(1),
+      params,
+    );
+    const bindingChanged = await service.maximumProfilePolicyFingerprint(
+      transaction(2),
+      params,
+    );
+
+    expect(workspaceChanged).not.toBe(initial);
+    expect(bindingChanged).not.toBe(workspaceChanged);
   });
 });

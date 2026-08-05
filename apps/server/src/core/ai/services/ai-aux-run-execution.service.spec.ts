@@ -1,3 +1,5 @@
+jest.mock('lib0/decoding.js', () => ({ readVarString: jest.fn() }));
+
 import { AiAuxRunExecutionService } from './ai-aux-run-execution.service';
 
 function createService(db: any, overrides: Record<string, any> = {}) {

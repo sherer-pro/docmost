@@ -59,6 +59,11 @@ import { PageModule } from '../page/page.module';
 import { CollaborationModule } from '../../collaboration/collaboration.module';
 import { ShareModule } from '../share/share.module';
 import { TransclusionModule } from '../page/transclusion/transclusion.module';
+import {
+  AiAssistantProfileController,
+  AiAssistantProfilePolicyController,
+} from './controllers/ai-assistant-profile.controller';
+import { AiAssistantProfileService } from './services/ai-assistant-profile.service';
 
 @Module({
   imports: [
@@ -83,6 +88,8 @@ import { TransclusionModule } from '../page/transclusion/transclusion.module';
     AiMcpSpaceController,
     AiBuiltinToolWorkspacePolicyController,
     AiBuiltinToolSpacePolicyController,
+    AiAssistantProfileController,
+    AiAssistantProfilePolicyController,
   ],
   providers: [
     AiChatProcessor,
@@ -117,6 +124,7 @@ import { TransclusionModule } from '../page/transclusion/transclusion.module';
     AiMcpAdminService,
     AiMcpPolicyService,
     AiMcpToolCallService,
+    AiAssistantProfileService,
     HttpJsonAiRetrievalAdapter,
     OpenWebUiKnowledgeRetrievalAdapter,
     NoopAiRetrievalAdapter,

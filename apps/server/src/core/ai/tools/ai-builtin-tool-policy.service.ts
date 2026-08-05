@@ -85,6 +85,31 @@ export class AiBuiltinToolPolicyService {
       .digest('hex');
   }
 
+  toolSchemaFingerprint(
+    capabilities: readonly AiBuiltinToolCapability[],
+  ): string {
+    const allowed = new Set(capabilities);
+    return createHash('sha256')
+      .update(
+        JSON.stringify(
+          this.registry
+            .list('agent')
+            .filter((tool) => allowed.has(tool.capability))
+            .map((tool) => ({
+              name: tool.name,
+              capability: tool.capability,
+              description: tool.description,
+              inputSchema: tool.inputSchema,
+              writeClass: tool.writeClass,
+              targetScope: tool.targetScope,
+              approvalMode: tool.approvalMode,
+            })),
+        ),
+        'utf8',
+      )
+      .digest('hex');
+  }
+
   async getWorkspaceView(
     user: User,
     workspace: Workspace,
@@ -226,7 +251,12 @@ export class AiBuiltinToolPolicyService {
 
   async buildRunSnapshot(
     trx: KyselyTransaction | KyselyDB,
-    params: { workspaceId: string; spaceId: string; executionMode: string },
+    params: {
+      workspaceId: string;
+      spaceId: string;
+      executionMode: string;
+      maximumCapabilities?: readonly AiBuiltinToolCapability[];
+    },
   ): Promise<AiBuiltinToolRunSnapshot | null> {
     if (params.executionMode !== 'agent') return null;
     const resolved = await this.resolve(
@@ -236,7 +266,16 @@ export class AiBuiltinToolPolicyService {
       undefined,
       trx,
     );
-    const definitions = this.filterDefinitions('agent', resolved.capabilities);
+    const maximum =
+      params.maximumCapabilities === undefined
+        ? null
+        : new Set(params.maximumCapabilities);
+    const definitions = this.filterDefinitions(
+      'agent',
+      maximum
+        ? resolved.capabilities.filter((capability) => maximum.has(capability))
+        : resolved.capabilities,
+    );
     return {
       schemaVersion: 1,
       registryManifestFingerprint: this.manifestFingerprint(),

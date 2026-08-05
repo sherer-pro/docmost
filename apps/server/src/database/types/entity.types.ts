@@ -1,5 +1,11 @@
 import { Insertable, Selectable, Updateable } from 'kysely';
 import {
+  AiAgentToolVerifications,
+  AiAssistantProfileGroupPolicies,
+  AiAssistantProfileMcpTools,
+  AiAssistantProfiles,
+  AiAssistantProfileUserPreferences,
+  AiAssistantProfileWorkspaceSettings,
   AiBuiltinToolSpacePolicies,
   AiBuiltinToolWorkspacePolicies,
   AiAuxRuns,
@@ -144,6 +150,21 @@ export interface PageSettings {
 export type AiSpaceConfig = Selectable<AiSpaceConfigs>;
 export type InsertableAiSpaceConfig = Insertable<AiSpaceConfigs>;
 export type UpdatableAiSpaceConfig = Updateable<Omit<AiSpaceConfigs, 'id'>>;
+
+export type AiAssistantProfile = Selectable<AiAssistantProfiles>;
+export type InsertableAiAssistantProfile = Insertable<AiAssistantProfiles>;
+export type UpdatableAiAssistantProfile = Updateable<
+  Omit<AiAssistantProfiles, 'id'>
+>;
+export type AiAssistantProfileMcpTool =
+  Selectable<AiAssistantProfileMcpTools>;
+export type AiAssistantProfileGroupPolicy =
+  Selectable<AiAssistantProfileGroupPolicies>;
+export type AiAssistantProfileWorkspaceSetting =
+  Selectable<AiAssistantProfileWorkspaceSettings>;
+export type AiAssistantProfileUserPreference =
+  Selectable<AiAssistantProfileUserPreferences>;
+export type AiAgentToolVerification = Selectable<AiAgentToolVerifications>;
 
 export type AiSpaceContentPolicyEntity = Selectable<AiSpaceContentPolicies>;
 export type AiSpaceContentExclusionEntity =

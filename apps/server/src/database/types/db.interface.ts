@@ -1,4 +1,10 @@
 import {
+  AiAgentToolVerifications,
+  AiAssistantProfileGroupPolicies,
+  AiAssistantProfileMcpTools,
+  AiAssistantProfiles,
+  AiAssistantProfileUserPreferences,
+  AiAssistantProfileWorkspaceSettings,
   AiBuiltinToolSpacePolicies,
   AiBuiltinToolWorkspacePolicies,
   AiAuxRuns,
@@ -66,6 +72,12 @@ import {
 } from '@docmost/db/types/db';
 
 export interface DbInterface {
+  aiAgentToolVerifications: AiAgentToolVerifications;
+  aiAssistantProfileGroupPolicies: AiAssistantProfileGroupPolicies;
+  aiAssistantProfileMcpTools: AiAssistantProfileMcpTools;
+  aiAssistantProfiles: AiAssistantProfiles;
+  aiAssistantProfileUserPreferences: AiAssistantProfileUserPreferences;
+  aiAssistantProfileWorkspaceSettings: AiAssistantProfileWorkspaceSettings;
   aiBuiltinToolSpacePolicies: AiBuiltinToolSpacePolicies;
   aiBuiltinToolWorkspacePolicies: AiBuiltinToolWorkspacePolicies;
   aiAuxRuns: AiAuxRuns;
