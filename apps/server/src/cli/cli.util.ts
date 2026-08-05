@@ -1,7 +1,7 @@
 import * as dotenv from 'dotenv';
 import { Kysely } from 'kysely';
 import { PostgresJSDialect } from 'kysely-postgres-js';
-import postgres from 'postgres';
+import * as postgres from 'postgres';
 import { envPath, normalizePostgresUrl } from '../common/helpers';
 
 export type CliArgs = Record<string, string | boolean>;
@@ -29,10 +29,7 @@ export function parseCliArgs(argv: string[]): CliArgs {
   return args;
 }
 
-export function requireStringArg(
-  args: CliArgs,
-  name: string,
-): string {
+export function requireStringArg(args: CliArgs, name: string): string {
   const value = args[name];
   if (typeof value !== 'string' || !value.trim()) {
     throw new Error(`--${name}=<value> is required`);
@@ -52,9 +49,7 @@ export function createCliDatabase(): {
   db: Kysely<any>;
   close: () => Promise<void>;
 } {
-  const client = postgres(
-    normalizePostgresUrl(requireEnv('DATABASE_URL')),
-  );
+  const client = postgres(normalizePostgresUrl(requireEnv('DATABASE_URL')));
   const db = new Kysely<any>({
     dialect: new PostgresJSDialect({ postgres: client }),
   });
