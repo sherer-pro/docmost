@@ -5,7 +5,7 @@ import { run } from 'kysely-migration-cli';
 import * as dotenv from 'dotenv';
 import { envPath, normalizePostgresUrl } from '../common/helpers';
 import { PostgresJSDialect } from 'kysely-postgres-js';
-import postgres from 'postgres';
+import * as postgres from 'postgres';
 
 dotenv.config({ path: envPath });
 
