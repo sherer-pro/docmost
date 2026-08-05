@@ -1,13 +1,10 @@
 import {
   BadRequestException,
-  forwardRef,
-  Inject,
   Injectable,
   NotFoundException,
   Optional,
 } from '@nestjs/common';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
-import { GroupService } from './group.service';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { InjectKysely } from 'nestjs-kysely';
 import { GroupUserRepo } from '@docmost/db/repos/group/group-user.repo';
@@ -19,6 +16,7 @@ import { User } from '@docmost/db/types/entity.types';
 import { UserRole } from '../../../common/helpers/types/permission';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EventName } from '../../../common/events/event.contants';
+import { GroupRepo } from '@docmost/db/repos/group/group.repo';
 
 @Injectable()
 export class GroupUserService {
@@ -26,8 +24,7 @@ export class GroupUserService {
     private groupUserRepo: GroupUserRepo,
     private spaceMemberRepo: SpaceMemberRepo,
     private userRepo: UserRepo,
-    @Inject(forwardRef(() => GroupService))
-    private groupService: GroupService,
+    private groupRepo: GroupRepo,
     private readonly watcherRepo: WatcherRepo,
     @InjectKysely() private readonly db: KyselyDB,
     @Optional() private readonly eventEmitter?: EventEmitter2,
@@ -39,7 +36,10 @@ export class GroupUserService {
     pagination: PaginationOptions,
     authUser?: User,
   ) {
-    const group = await this.groupService.findAndValidateGroup(groupId, workspaceId);
+    const group = await this.groupRepo.findByIdOrThrow(
+      groupId,
+      workspaceId,
+    );
 
     // MEMBER can view participants only in groups they belong to.
     if (authUser?.role === UserRole.MEMBER) {
@@ -70,7 +70,7 @@ export class GroupUserService {
     groupId: string,
     workspaceId: string,
   ): Promise<void> {
-    await this.groupService.findAndValidateGroup(groupId, workspaceId);
+    await this.groupRepo.findByIdOrThrow(groupId, workspaceId);
 
     // make sure we have valid workspace users
     const validUsers = await this.db
@@ -103,7 +103,7 @@ export class GroupUserService {
     groupId: string,
     workspaceId: string,
   ): Promise<void> {
-    const group = await this.groupService.findAndValidateGroup(
+    const group = await this.groupRepo.findByIdOrThrow(
       groupId,
       workspaceId,
     );

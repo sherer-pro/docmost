@@ -75,6 +75,7 @@ import {
 } from '../utils/page-settings.utils';
 import { PageHistoryRecorderService } from './page-history-recorder.service';
 import { PageAccessService } from '../../page-access/page-access.service';
+import { PageAccessMutationService } from './page-access-mutation.service';
 import { TransclusionService } from '../transclusion/transclusion.service';
 import { PageEmbedService } from '../transclusion/page-embed.service';
 import type { PageEmbedGraphLease } from '../transclusion/page-embed-graph-lock.service';
@@ -125,6 +126,7 @@ export class PageService {
     private readonly userRepo: UserRepo,
     private readonly pageHistoryRecorder: PageHistoryRecorderService,
     private readonly pageAccessService: PageAccessService,
+    private readonly pageAccessMutationService: PageAccessMutationService,
     private readonly transclusionService?: TransclusionService,
     private readonly pageEmbedService?: PageEmbedService,
   ) {}
@@ -700,7 +702,7 @@ export class PageService {
     );
 
     if (parentPageId && parentPage) {
-      await this.pageAccessService.copyParentRulesToChild(
+      await this.pageAccessMutationService.copyParentRulesToChild(
         parentPageId,
         page,
         userId,
@@ -1334,7 +1336,7 @@ export class PageService {
         );
 
         // Page ACL rules are space-bound and must be reset when subtree moves to another space.
-        await this.pageAccessService.clearRulesByPageIds(pageIds, trx);
+        await this.pageAccessMutationService.clearRulesByPageIds(pageIds, trx);
 
         // Update watchers and remove those without access to new space
         await this.watcherService.movePageWatchersToSpace(pageIds, spaceId, {

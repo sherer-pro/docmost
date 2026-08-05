@@ -66,6 +66,7 @@ import {
   ResolvePageAccessUsersDto,
 } from './dto/page-access.dto';
 import { LinkPreviewService } from './services/link-preview.service';
+import { PageAccessMutationService } from './services/page-access-mutation.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('pages')
@@ -77,6 +78,7 @@ export class PageController {
     private readonly spaceAbility: SpaceAbilityFactory,
     private readonly databaseRepo: DatabaseRepo,
     private readonly pageAccessService: PageAccessService,
+    private readonly pageAccessMutationService: PageAccessMutationService,
     private readonly labelService: LabelService,
     private readonly backlinkService: BacklinkService,
     private readonly linkPreviewService: LinkPreviewService,
@@ -375,7 +377,7 @@ export class PageController {
       throw new NotFoundException('Page not found');
     }
 
-    await this.pageAccessService.grantUserAccessForSubtree(
+    await this.pageAccessMutationService.grantUserAccessForSubtree(
       page,
       dto.userId,
       dto.role,
@@ -397,7 +399,7 @@ export class PageController {
       throw new NotFoundException('Page not found');
     }
 
-    await this.pageAccessService.closeUserAccessForSubtree(
+    await this.pageAccessMutationService.closeUserAccessForSubtree(
       page,
       dto.userId,
       user,
@@ -418,7 +420,7 @@ export class PageController {
       throw new NotFoundException('Page not found');
     }
 
-    await this.pageAccessService.grantGroupAccessForSubtree(
+    await this.pageAccessMutationService.grantGroupAccessForSubtree(
       page,
       dto.groupId,
       dto.role,
@@ -440,7 +442,7 @@ export class PageController {
       throw new NotFoundException('Page not found');
     }
 
-    await this.pageAccessService.closeGroupAccessForSubtree(
+    await this.pageAccessMutationService.closeGroupAccessForSubtree(
       page,
       dto.groupId,
       user,

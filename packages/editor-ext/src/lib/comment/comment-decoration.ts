@@ -1,6 +1,9 @@
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
-import { commentDecorationMetaKey, commentMarkClass } from './comment';
+import {
+  commentDecorationMetaKey,
+  commentMarkClass,
+} from './comment.constants';
 
 export function commentDecoration(): Plugin {
   const commentDecorationPlugin = new PluginKey('commentDecoration');

@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { ForbiddenException } from '@nestjs/common';
 import { PageAccessService } from './page-access.service';
 import {
   PageAccessEffect,
@@ -33,10 +33,6 @@ describe('PageAccessService', () => {
     getUserSpaceRoles: jest.fn(),
   };
 
-  const pageHistoryRecorder = {
-    recordPageEvent: jest.fn(),
-  };
-
   const environmentService = {
     isDebugMode: jest.fn(() => false),
   };
@@ -68,9 +64,7 @@ describe('PageAccessService', () => {
       pageAccessRuleRepo as any,
       groupUserRepo as any,
       spaceMemberRepo as any,
-      pageHistoryRecorder as any,
       environmentService as any,
-      { emit: jest.fn() } as any,
     );
 
     jest.spyOn(service as any, 'getSpaceArchivedAt').mockResolvedValue(null);
@@ -255,9 +249,7 @@ describe('PageAccessService', () => {
       pageAccessRuleRepo as any,
       groupUserRepo as any,
       spaceMemberRepo as any,
-      pageHistoryRecorder as any,
       environmentService as any,
-      { emit: jest.fn() } as any,
     );
     jest
       .spyOn(batchService as any, 'getSpaceArchivedAt')
@@ -316,132 +308,4 @@ describe('PageAccessService', () => {
     });
   });
 
-  it('cascades grant user access to all descendants and records history', async () => {
-    const actor = {
-      id: 'admin-1',
-      role: UserRole.ADMIN,
-      workspaceId: 'workspace-1',
-    } as any;
-    const ensureWorkspaceUserSpy = jest
-      .spyOn(service as any, 'ensureWorkspaceUser')
-      .mockResolvedValue({ id: 'user-1', role: UserRole.MEMBER });
-    const subtreeSpy = jest
-      .spyOn(service as any, 'getSubtreePageIds')
-      .mockResolvedValue(['page-1', 'page-2', 'page-3']);
-
-    await service.grantUserAccessForSubtree(
-      page,
-      'user-1',
-      PageRole.READER,
-      actor,
-    );
-
-    expect(ensureWorkspaceUserSpy).toHaveBeenCalledWith(
-      page.workspaceId,
-      'user-1',
-    );
-    expect(subtreeSpy).toHaveBeenCalledWith(page.id);
-    expect(pageAccessRuleRepo.upsertUserRuleForPages).toHaveBeenCalledWith(
-      ['page-1', 'page-2', 'page-3'],
-      expect.objectContaining({
-        userId: 'user-1',
-        effect: PageAccessEffect.ALLOW,
-        role: PageRole.READER,
-        sourcePageId: page.id,
-        actorId: actor.id,
-      }),
-      undefined,
-    );
-    expect(pageHistoryRecorder.recordPageEvent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        pageId: page.id,
-        actorId: actor.id,
-        changeType: 'page.access.updated',
-      }),
-    );
-  });
-
-  it('rejects page access changes in archived spaces', async () => {
-    const actor = {
-      id: 'admin-1',
-      role: UserRole.ADMIN,
-      workspaceId: 'workspace-1',
-    } as any;
-    (service as any).getSpaceArchivedAt.mockResolvedValueOnce(new Date());
-
-    await expect(
-      service.grantUserAccessForSubtree(page, 'user-1', PageRole.READER, actor),
-    ).rejects.toBeInstanceOf(ForbiddenException);
-  });
-
-  it('writes user deny on close and rejects close for workspace owner/admin', async () => {
-    const actor = {
-      id: 'admin-1',
-      role: UserRole.ADMIN,
-      workspaceId: 'workspace-1',
-    } as any;
-    jest
-      .spyOn(service as any, 'getSubtreePageIds')
-      .mockResolvedValue(['page-1', 'page-2']);
-
-    jest
-      .spyOn(service as any, 'ensureWorkspaceUser')
-      .mockResolvedValueOnce({ id: 'owner-1', role: UserRole.OWNER });
-
-    await expect(
-      service.closeUserAccessForSubtree(page, 'owner-1', actor),
-    ).rejects.toBeInstanceOf(BadRequestException);
-
-    (service as any).ensureWorkspaceUser.mockResolvedValueOnce({
-      id: 'user-1',
-      role: UserRole.MEMBER,
-    });
-
-    await service.closeUserAccessForSubtree(page, 'user-1', actor);
-
-    expect(pageAccessRuleRepo.upsertUserRuleForPages).toHaveBeenCalledWith(
-      ['page-1', 'page-2'],
-      expect.objectContaining({
-        userId: 'user-1',
-        effect: PageAccessEffect.DENY,
-        role: null,
-      }),
-      undefined,
-    );
-  });
-
-  it('copies parent ACL to new child and clears ACL by subtree', async () => {
-    const subtreeSpy = jest
-      .spyOn(service as any, 'getSubtreePageIds')
-      .mockResolvedValue(['page-1', 'page-2']);
-
-    await service.copyParentRulesToChild(
-      'parent-1',
-      {
-        id: 'child-1',
-        workspaceId: 'workspace-1',
-        spaceId: 'space-1',
-      } as any,
-      'actor-1',
-    );
-
-    expect(pageAccessRuleRepo.copyRulesFromParentToChild).toHaveBeenCalledWith(
-      'parent-1',
-      'child-1',
-      {
-        actorId: 'actor-1',
-        workspaceId: 'workspace-1',
-        spaceId: 'space-1',
-      },
-      undefined,
-    );
-
-    await service.clearRulesForSubtree('page-1');
-
-    expect(subtreeSpy).toHaveBeenCalledWith('page-1');
-    expect(pageAccessRuleRepo.deleteRulesByPageIds).toHaveBeenCalledWith(
-      ['page-1', 'page-2'],
-      undefined,
-    );
-  });
 });
