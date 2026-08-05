@@ -57,7 +57,9 @@ describe("RagSynchronizer", () => {
     assert.match(messages[0], /source\.uploaded:none/);
     assert.doesNotMatch(
       messages[0],
-      new RegExp(`${PAGE_ID}|${binding.id}|${binding.spaceId}|secret-fingerprint`),
+      new RegExp(
+        `${PAGE_ID}|${binding.id}|${binding.spaceId}|secret-fingerprint`,
+      ),
     );
   });
 
@@ -107,7 +109,10 @@ describe("RagSynchronizer", () => {
     const state = new MemoryState();
     const writer = new MemoryWriter();
     const synchronizer = createSynchronizer(state, writer);
-    const activeLock = { valid: true };
+    const activeLock = {
+      valid: true,
+      abortController: new AbortController(),
+    };
     (synchronizer as any).activeLock = activeLock;
     writer.afterUpload = () => {
       activeLock.valid = false;
@@ -118,6 +123,44 @@ describe("RagSynchronizer", () => {
       /RAG sync lock was lost/,
     );
     assert.equal(writer.uploaded.length, 1);
+    assert.equal(
+      await state.getMapping(binding.id, sourceIdentity("page", PAGE_ID)),
+      null,
+    );
+  });
+
+  it("aborts an in-flight Open WebUI write as soon as the lease is lost", async () => {
+    const state = new MemoryState();
+    const writer = new MemoryWriter();
+    let uploadStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      uploadStarted = resolve;
+    });
+    writer.upload = async (
+      _fileName: string,
+      _mimeType: string,
+      _content: Uint8Array,
+      _metadata: Record<string, unknown>,
+      signal?: AbortSignal,
+    ) => {
+      uploadStarted();
+      return new Promise<OpenWebUiFile>((_resolve, reject) => {
+        signal?.addEventListener("abort", () => reject(signal.reason), {
+          once: true,
+        });
+      });
+    };
+    const synchronizer = createSynchronizer(state, writer);
+    const abortController = new AbortController();
+    const activeLock = { valid: true, abortController };
+    (synchronizer as any).activeLock = activeLock;
+
+    const pending = synchronizer.upsertSource(markdownSource("content"));
+    await started;
+    activeLock.valid = false;
+    abortController.abort(new Error("RAG sync lock was lost"));
+
+    await assert.rejects(pending, /lock was lost/);
     assert.equal(
       await state.getMapping(binding.id, sourceIdentity("page", PAGE_ID)),
       null,
@@ -411,7 +454,10 @@ describe("RagSynchronizer", () => {
 
     assert.equal(await synchronizer.syncOnce(), true);
     assert.deepEqual(writer.deleted, ["excluded-file"]);
-    assert.equal(await state.getScopeFingerprint(binding.id), storedFingerprint);
+    assert.equal(
+      await state.getScopeFingerprint(binding.id),
+      storedFingerprint,
+    );
   });
 
   it("stores a changed scope fingerprint only after a successful cycle", async () => {
@@ -544,6 +590,7 @@ class MemoryWriter implements OpenWebUiWriterClient {
     _mimeType: string,
     _content: Uint8Array,
     metadata: Record<string, unknown>,
+    _signal?: AbortSignal,
   ): Promise<OpenWebUiFile> {
     this.uploaded.push({ fileName, metadata });
     this.afterUpload?.();
