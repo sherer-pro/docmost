@@ -1,9 +1,4 @@
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-} from "react";
+import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   lookupTransclusion,
   lookupTransclusionForShare,
@@ -15,6 +10,8 @@ import {
   type LookupKey,
   type Subscriber,
 } from "./transclusion-lookup-context-value";
+
+const RETRY_DELAYS_MS = [250, 1_000, 2_000, 5_000, 10_000, 30_000];
 
 export function TransclusionLookupProvider({
   children,
@@ -45,10 +42,65 @@ export function TransclusionLookupProvider({
   // subscriber is added to subscribersRef and will be notified when the
   // pending request completes.
   const inFlightRef = useRef(new Set<LookupKey>());
+  const retryAttemptsRef = useRef(new Map<LookupKey, number>());
+  const retryDueAtRef = useRef(new Map<LookupKey, number>());
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flushRef = useRef<() => void>(() => undefined);
+  const armRetryTimerRef = useRef<() => void>(() => undefined);
   // Resolvers waiting on the next response for a key. Populated by refresh()
   // so callers can await the fetch round-trip; resolved on success and on
   // network error so the UI never hangs in a loading state.
   const pendingRef = useRef(new Map<LookupKey, Array<() => void>>());
+
+  const armRetryTimer = useCallback(() => {
+    if (retryTimerRef.current) {
+      clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
+
+    for (const key of retryDueAtRef.current.keys()) {
+      if (!subscribersRef.current.has(key)) {
+        retryDueAtRef.current.delete(key);
+        retryAttemptsRef.current.delete(key);
+      }
+    }
+
+    const nextRetryAt = Math.min(...retryDueAtRef.current.values());
+
+    if (!Number.isFinite(nextRetryAt)) {
+      return;
+    }
+
+    retryTimerRef.current = setTimeout(
+      () => {
+        retryTimerRef.current = null;
+        const now = Date.now();
+
+        for (const [key, dueAt] of retryDueAtRef.current) {
+          if (dueAt > now) {
+            continue;
+          }
+
+          retryDueAtRef.current.delete(key);
+
+          if (
+            subscribersRef.current.has(key) &&
+            !inFlightRef.current.has(key)
+          ) {
+            queueRef.current.add(key);
+          }
+        }
+
+        if (queueRef.current.size > 0 && tickRef.current === null) {
+          tickRef.current = setTimeout(() => flushRef.current(), 10);
+        }
+
+        armRetryTimerRef.current();
+      },
+      Math.max(0, nextRetryAt - Date.now()),
+    );
+  }, []);
+  armRetryTimerRef.current = armRetryTimer;
 
   const flush = useCallback(async () => {
     tickRef.current = null;
@@ -70,6 +122,23 @@ export function TransclusionLookupProvider({
       for (const w of waiters) w();
     };
 
+    const clearRetry = (key: LookupKey) => {
+      retryDueAtRef.current.delete(key);
+      retryAttemptsRef.current.delete(key);
+    };
+
+    const scheduleRetry = (key: LookupKey) => {
+      if (!subscribersRef.current.has(key)) {
+        return;
+      }
+
+      const attempt = retryAttemptsRef.current.get(key) ?? 0;
+      const delay =
+        RETRY_DELAYS_MS[Math.min(attempt, RETRY_DELAYS_MS.length - 1)];
+      retryAttemptsRef.current.set(key, attempt + 1);
+      retryDueAtRef.current.set(key, Date.now() + delay);
+    };
+
     try {
       const activeShareId = shareIdRef.current;
       const { items } = activeShareId
@@ -78,8 +147,15 @@ export function TransclusionLookupProvider({
             references,
           })
         : await lookupTransclusion({ references });
+      const returnedKeys = new Set<LookupKey>();
       for (const r of items) {
+        if (!r) {
+          continue;
+        }
+
         const key = `${r.sourcePageId}::${r.transclusionId}`;
+        returnedKeys.add(key);
+        clearRetry(key);
         resultCacheRef.current.set(key, r);
         inFlightRef.current.delete(key);
         const subs = subscribersRef.current.get(key);
@@ -88,15 +164,24 @@ export function TransclusionLookupProvider({
         }
         resolveWaiters(key);
       }
+      for (const key of keys) {
+        if (returnedKeys.has(key)) continue;
+        inFlightRef.current.delete(key);
+        resolveWaiters(key);
+        scheduleRetry(key);
+      }
     } catch {
-      // Network error — leave subscribers in pending state and clear the
-      // in-flight flag so a future subscribe can retry.
+      // Keep active subscribers pending and retry transient lookup failures.
       for (const k of keys) {
         inFlightRef.current.delete(k);
         resolveWaiters(k);
+        scheduleRetry(k);
       }
+    } finally {
+      armRetryTimerRef.current();
     }
   }, []);
+  flushRef.current = flush;
 
   const enqueue = useCallback(
     (key: LookupKey) => {
@@ -124,8 +209,12 @@ export function TransclusionLookupProvider({
       return () => {
         const cur = subscribersRef.current.get(s.key) ?? [];
         const next = cur.filter((x) => x !== s);
-        if (next.length === 0) subscribersRef.current.delete(s.key);
-        else subscribersRef.current.set(s.key, next);
+        if (next.length === 0) {
+          subscribersRef.current.delete(s.key);
+          retryDueAtRef.current.delete(s.key);
+          retryAttemptsRef.current.delete(s.key);
+          armRetryTimerRef.current();
+        } else subscribersRef.current.set(s.key, next);
       };
     },
     [enqueue],
@@ -134,8 +223,10 @@ export function TransclusionLookupProvider({
   const refresh = useCallback<ContextValue["refresh"]>(
     (key) =>
       new Promise<void>((resolve) => {
-        resultCacheRef.current.delete(key);
         inFlightRef.current.delete(key);
+        retryDueAtRef.current.delete(key);
+        retryAttemptsRef.current.delete(key);
+        armRetryTimerRef.current();
         const waiters = pendingRef.current.get(key) ?? [];
         waiters.push(resolve);
         pendingRef.current.set(key, waiters);
@@ -147,6 +238,13 @@ export function TransclusionLookupProvider({
   useEffect(
     () => () => {
       if (tickRef.current) clearTimeout(tickRef.current);
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+      retryDueAtRef.current.clear();
+      retryAttemptsRef.current.clear();
+      for (const waiters of pendingRef.current.values()) {
+        for (const resolve of waiters) resolve();
+      }
+      pendingRef.current.clear();
     },
     [],
   );
