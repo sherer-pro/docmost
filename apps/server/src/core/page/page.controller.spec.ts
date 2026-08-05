@@ -109,6 +109,7 @@ describe('PageController guardrails and mixed-id contract', () => {
   const linkPreviewService = {
     getPreview: jest.fn(),
   };
+  const pageAccessMutationService = {};
 
   const controller = new PageController(
     pageService as any,
@@ -117,6 +118,7 @@ describe('PageController guardrails and mixed-id contract', () => {
     spaceAbility as any,
     databaseRepo as any,
     pageAccessService as any,
+    pageAccessMutationService as any,
     labelService as any,
     backlinkService as any,
     linkPreviewService as any,

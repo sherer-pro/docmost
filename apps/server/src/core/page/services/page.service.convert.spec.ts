@@ -61,6 +61,7 @@ describe('PageService convertPageToDatabase reversibility', () => {
     {} as any,
     pageHistoryRecorder as any,
     {} as any,
+    {} as any,
   );
 
   beforeEach(() => {

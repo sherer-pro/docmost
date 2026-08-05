@@ -37,7 +37,7 @@ import { SpacePolicyModule } from '../core/space-policy/space-policy.module';
     TokenModule,
     WatcherModule,
     TransclusionPersistenceModule,
-    PageAccessModule.forCollaboration(),
+    PageAccessModule,
     SpacePolicyModule,
   ],
 })

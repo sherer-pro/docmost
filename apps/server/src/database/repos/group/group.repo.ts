@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB, KyselyTransaction } from '@docmost/db/types/kysely.types';
 import { dbOrTx } from '@docmost/db/utils';
@@ -9,7 +9,7 @@ import {
 } from '@docmost/db/types/entity.types';
 import { ExpressionBuilder, sql } from 'kysely';
 import { PaginationOptions } from '../../pagination/pagination-options';
-import { DB } from '@docmost/db/types/db';
+import type { DB } from '@docmost/db/types/db';
 import { DefaultGroup } from '../../../core/group/dto/create-group.dto';
 import { executeWithCursorPagination } from '@docmost/db/pagination/cursor-pagination';
 
@@ -30,6 +30,20 @@ export class GroupRepo {
       .where('id', '=', groupId)
       .where('workspaceId', '=', workspaceId)
       .executeTakeFirst();
+  }
+
+  async findByIdOrThrow(
+    groupId: string,
+    workspaceId: string,
+    opts?: { includeMemberCount?: boolean; trx?: KyselyTransaction },
+  ): Promise<Group> {
+    const group = await this.findById(groupId, workspaceId, opts);
+
+    if (!group) {
+      throw new NotFoundException('Group not found');
+    }
+
+    return group;
   }
 
   async findByName(

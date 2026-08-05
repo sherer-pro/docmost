@@ -46,6 +46,7 @@ describe('PageService custom fields history', () => {
     userRepo as any,
     pageHistoryRecorder as any,
     {} as any,
+    {} as any,
   );
 
   beforeEach(() => {

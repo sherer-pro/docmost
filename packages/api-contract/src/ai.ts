@@ -1,3 +1,7 @@
+import type { AiQuickCommand } from "./ai-quick-command";
+
+export type { AiQuickCommand } from "./ai-quick-command";
+
 export const AI_PROVIDERS = ["openai-compatible"] as const;
 export type AiProvider = (typeof AI_PROVIDERS)[number];
 
@@ -242,15 +246,6 @@ export interface AiListResponse<T> {
 export interface AiPageResponse<T> extends AiListResponse<T> {
   hasMore: boolean;
   nextCursor: string | null;
-}
-
-export interface AiQuickCommand {
-  id: string;
-  label: string;
-  prompt: string;
-  description?: string;
-  enabled: boolean;
-  position: number;
 }
 
 export interface AiRetrievalConfig {

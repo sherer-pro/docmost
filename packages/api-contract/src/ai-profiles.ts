@@ -1,4 +1,4 @@
-import type { AiQuickCommand } from "./ai";
+import type { AiQuickCommand } from "./ai-quick-command";
 import type { AiBuiltinToolCapability } from "./ai-tools";
 
 export const AI_ASSISTANT_PROFILE_ICONS = [

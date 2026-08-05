@@ -1,10 +1,8 @@
 import {
-  BadRequestException,
   ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
-  Optional,
 } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB, KyselyTransaction } from '@docmost/db/types/kysely.types';
@@ -21,12 +19,9 @@ import {
   UserRole,
 } from '../../common/helpers/types/permission';
 import { findHighestUserSpaceRole } from '@docmost/db/repos/space/utils';
-import { PageHistoryRecorderService } from '../page/services/page-history-recorder.service';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import { executeWithCursorPagination } from '@docmost/db/pagination/cursor-pagination';
 import { EnvironmentService } from '../../integrations/environment/environment.service';
-import { EventEmitter2 } from '@nestjs/event-emitter';
-import { EventName } from '../../common/events/event.contants';
 
 export type PageAccessSource = 'system' | 'space' | 'page_user' | 'page_group';
 
@@ -79,10 +74,7 @@ export class PageAccessService {
     private readonly pageAccessRuleRepo: PageAccessRuleRepo,
     private readonly groupUserRepo: GroupUserRepo,
     private readonly spaceMemberRepo: SpaceMemberRepo,
-    @Optional()
-    private readonly pageHistoryRecorder: PageHistoryRecorderService | null,
     private readonly environmentService: EnvironmentService,
-    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   isWorkspaceBypassUser(user: User, workspaceId?: string): boolean {
@@ -283,7 +275,7 @@ export class PageAccessService {
     return (space?.archivedAt as Date | null | undefined) ?? null;
   }
 
-  private async assertSpaceIsActive(
+  async assertSpaceIsActive(
     spaceId: string,
     trx?: KyselyTransaction,
   ): Promise<void> {
@@ -582,293 +574,6 @@ export class PageAccessService {
     if (!this.isWorkspaceBypassUser(user, workspaceId)) {
       throw new ForbiddenException();
     }
-  }
-
-  private async getSubtreePageIds(pageId: string): Promise<string[]> {
-    const pages = await this.pageRepo.getPageAndDescendants(pageId, {
-      includeContent: false,
-    });
-    return pages.map((page) => page.id);
-  }
-
-  private async ensureWorkspaceUser(
-    workspaceId: string,
-    userId: string,
-  ): Promise<{ id: string; role: UserRole | null } | null> {
-    const user = await this.db
-      .selectFrom('users')
-      .select(['id', 'role'])
-      .where('id', '=', userId)
-      .where('workspaceId', '=', workspaceId)
-      .where('deletedAt', 'is', null)
-      .executeTakeFirst();
-
-    if (!user) {
-      return null;
-    }
-
-    return {
-      id: user.id,
-      role: (user.role as UserRole | null) ?? null,
-    };
-  }
-
-  private async ensureWorkspaceGroup(
-    workspaceId: string,
-    groupId: string,
-  ): Promise<{ id: string } | null> {
-    return this.db
-      .selectFrom('groups')
-      .select(['id'])
-      .where('id', '=', groupId)
-      .where('workspaceId', '=', workspaceId)
-      .executeTakeFirst();
-  }
-
-  async grantUserAccessForSubtree(
-    page: Page,
-    targetUserId: string,
-    role: PageRole,
-    actor: User,
-    trx?: KyselyTransaction,
-  ): Promise<void> {
-    this.assertCanManageAccess(actor, page.workspaceId);
-    await this.assertSpaceIsActive(page.spaceId, trx);
-
-    const targetUser = await this.ensureWorkspaceUser(
-      page.workspaceId,
-      targetUserId,
-    );
-    if (!targetUser) {
-      throw new NotFoundException('User not found');
-    }
-
-    const pageIds = await this.getSubtreePageIds(page.id);
-    await this.pageAccessRuleRepo.upsertUserRuleForPages(
-      pageIds,
-      {
-        userId: targetUserId,
-        workspaceId: page.workspaceId,
-        spaceId: page.spaceId,
-        effect: PageAccessEffect.ALLOW,
-        role,
-        sourcePageId: page.id,
-        actorId: actor.id,
-      },
-      trx,
-    );
-
-    await this.requireHistoryRecorder().recordPageEvent({
-      pageId: page.id,
-      actorId: actor.id,
-      changeType: 'page.access.updated',
-      changeData: {
-        operation: 'grant',
-        principalType: PageAccessPrincipalType.USER,
-        principalId: targetUserId,
-        effect: PageAccessEffect.ALLOW,
-        role,
-        cascadedPageCount: pageIds.length,
-      },
-      trx,
-    });
-    this.emitPageEmbedVisibilityChanged(page.workspaceId);
-  }
-
-  async closeUserAccessForSubtree(
-    page: Page,
-    targetUserId: string,
-    actor: User,
-    trx?: KyselyTransaction,
-  ): Promise<void> {
-    this.assertCanManageAccess(actor, page.workspaceId);
-    await this.assertSpaceIsActive(page.spaceId, trx);
-
-    const targetUser = await this.ensureWorkspaceUser(
-      page.workspaceId,
-      targetUserId,
-    );
-    if (!targetUser) {
-      throw new NotFoundException('User not found');
-    }
-
-    if (
-      targetUser.role === UserRole.OWNER ||
-      targetUser.role === UserRole.ADMIN
-    ) {
-      throw new BadRequestException(
-        'Workspace owner/admin has system access and cannot be closed',
-      );
-    }
-
-    const pageIds = await this.getSubtreePageIds(page.id);
-    await this.pageAccessRuleRepo.upsertUserRuleForPages(
-      pageIds,
-      {
-        userId: targetUserId,
-        workspaceId: page.workspaceId,
-        spaceId: page.spaceId,
-        effect: PageAccessEffect.DENY,
-        role: null,
-        sourcePageId: page.id,
-        actorId: actor.id,
-      },
-      trx,
-    );
-
-    await this.requireHistoryRecorder().recordPageEvent({
-      pageId: page.id,
-      actorId: actor.id,
-      changeType: 'page.access.updated',
-      changeData: {
-        operation: 'close',
-        principalType: PageAccessPrincipalType.USER,
-        principalId: targetUserId,
-        effect: PageAccessEffect.DENY,
-        role: null,
-        cascadedPageCount: pageIds.length,
-      },
-      trx,
-    });
-    this.emitPageEmbedVisibilityChanged(page.workspaceId);
-  }
-
-  async grantGroupAccessForSubtree(
-    page: Page,
-    targetGroupId: string,
-    role: PageRole,
-    actor: User,
-    trx?: KyselyTransaction,
-  ): Promise<void> {
-    this.assertCanManageAccess(actor, page.workspaceId);
-    await this.assertSpaceIsActive(page.spaceId, trx);
-
-    const targetGroup = await this.ensureWorkspaceGroup(
-      page.workspaceId,
-      targetGroupId,
-    );
-    if (!targetGroup) {
-      throw new NotFoundException('Group not found');
-    }
-
-    const pageIds = await this.getSubtreePageIds(page.id);
-    await this.pageAccessRuleRepo.upsertGroupRuleForPages(
-      pageIds,
-      {
-        groupId: targetGroupId,
-        workspaceId: page.workspaceId,
-        spaceId: page.spaceId,
-        effect: PageAccessEffect.ALLOW,
-        role,
-        sourcePageId: page.id,
-        actorId: actor.id,
-      },
-      trx,
-    );
-
-    await this.requireHistoryRecorder().recordPageEvent({
-      pageId: page.id,
-      actorId: actor.id,
-      changeType: 'page.access.updated',
-      changeData: {
-        operation: 'grant',
-        principalType: PageAccessPrincipalType.GROUP,
-        principalId: targetGroupId,
-        effect: PageAccessEffect.ALLOW,
-        role,
-        cascadedPageCount: pageIds.length,
-      },
-      trx,
-    });
-    this.emitPageEmbedVisibilityChanged(page.workspaceId);
-  }
-
-  async closeGroupAccessForSubtree(
-    page: Page,
-    targetGroupId: string,
-    actor: User,
-    trx?: KyselyTransaction,
-  ): Promise<void> {
-    this.assertCanManageAccess(actor, page.workspaceId);
-    await this.assertSpaceIsActive(page.spaceId, trx);
-
-    const targetGroup = await this.ensureWorkspaceGroup(
-      page.workspaceId,
-      targetGroupId,
-    );
-    if (!targetGroup) {
-      throw new NotFoundException('Group not found');
-    }
-
-    const pageIds = await this.getSubtreePageIds(page.id);
-    await this.pageAccessRuleRepo.upsertGroupRuleForPages(
-      pageIds,
-      {
-        groupId: targetGroupId,
-        workspaceId: page.workspaceId,
-        spaceId: page.spaceId,
-        effect: PageAccessEffect.DENY,
-        role: null,
-        sourcePageId: page.id,
-        actorId: actor.id,
-      },
-      trx,
-    );
-
-    await this.requireHistoryRecorder().recordPageEvent({
-      pageId: page.id,
-      actorId: actor.id,
-      changeType: 'page.access.updated',
-      changeData: {
-        operation: 'close',
-        principalType: PageAccessPrincipalType.GROUP,
-        principalId: targetGroupId,
-        effect: PageAccessEffect.DENY,
-        role: null,
-        cascadedPageCount: pageIds.length,
-      },
-      trx,
-    });
-    this.emitPageEmbedVisibilityChanged(page.workspaceId);
-  }
-
-  private emitPageEmbedVisibilityChanged(workspaceId: string): void {
-    this.eventEmitter.emit(EventName.PAGE_EMBED_VISIBILITY_CHANGED, {
-      workspaceId,
-    });
-  }
-
-  async copyParentRulesToChild(
-    parentPageId: string,
-    childPage: Page,
-    actorId: string,
-    trx?: KyselyTransaction,
-  ): Promise<void> {
-    await this.pageAccessRuleRepo.copyRulesFromParentToChild(
-      parentPageId,
-      childPage.id,
-      {
-        actorId,
-        workspaceId: childPage.workspaceId,
-        spaceId: childPage.spaceId,
-      },
-      trx,
-    );
-  }
-
-  async clearRulesForSubtree(
-    rootPageId: string,
-    trx?: KyselyTransaction,
-  ): Promise<void> {
-    const pageIds = await this.getSubtreePageIds(rootPageId);
-    await this.pageAccessRuleRepo.deleteRulesByPageIds(pageIds, trx);
-  }
-
-  async clearRulesByPageIds(
-    pageIds: string[],
-    trx?: KyselyTransaction,
-  ): Promise<void> {
-    await this.pageAccessRuleRepo.deleteRulesByPageIds(pageIds, trx);
   }
 
   async getSidebarAccessSnapshot(
@@ -1509,12 +1214,5 @@ export class PageAccessService {
       fields: [{ expression: 'id', direction: 'asc' }],
       parseCursor: (cursor) => ({ id: cursor.id as string }),
     });
-  }
-
-  private requireHistoryRecorder(): PageHistoryRecorderService {
-    if (!this.pageHistoryRecorder) {
-      throw new Error('Page history recorder is unavailable');
-    }
-    return this.pageHistoryRecorder;
   }
 }

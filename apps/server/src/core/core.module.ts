@@ -56,7 +56,7 @@ import { SpacePolicyModule } from './space-policy/space-policy.module';
     DatabaseFeatureModule,
     ApiKeyModule,
     RagModule,
-    PageAccessModule.forRoot(),
+    PageAccessModule,
     DictionaryModule,
     SessionModule,
     FavoriteModule,

@@ -1,6 +1,12 @@
 import { Mark, mergeAttributes } from "@tiptap/core";
 import { commentDecoration } from "./comment-decoration";
 import { Plugin } from "@tiptap/pm/state";
+import {
+  commentDecorationMetaKey,
+  commentMarkClass,
+} from "./comment.constants";
+
+export { commentDecorationMetaKey, commentMarkClass } from "./comment.constants";
 
 export interface ICommentOptions {
   HTMLAttributes: Record<string, any>;
@@ -9,9 +15,6 @@ export interface ICommentOptions {
 export interface ICommentStorage {
   activeCommentId: string | null;
 }
-
-export const commentMarkClass = "comment-mark";
-export const commentDecorationMetaKey = "decorateComment";
 
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {

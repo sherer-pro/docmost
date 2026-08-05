@@ -1,7 +1,5 @@
 import {
   BadRequestException,
-  forwardRef,
-  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -26,7 +24,6 @@ export class GroupService {
     private groupRepo: GroupRepo,
     private groupUserRepo: GroupUserRepo,
     private spaceMemberRepo: SpaceMemberRepo,
-    @Inject(forwardRef(() => GroupUserService))
     private groupUserService: GroupUserService,
     private readonly watcherRepo: WatcherRepo,
     @InjectKysely() private readonly db: KyselyDB,
@@ -160,7 +157,7 @@ export class GroupService {
   }
 
   async deleteGroup(groupId: string, workspaceId: string): Promise<void> {
-    const group = await this.findAndValidateGroup(groupId, workspaceId);
+    const group = await this.groupRepo.findByIdOrThrow(groupId, workspaceId);
     if (group.isDefault) {
       throw new BadRequestException('You cannot delete a default group');
     }
@@ -184,15 +181,4 @@ export class GroupService {
     });
   }
 
-  async findAndValidateGroup(
-    groupId: string,
-    workspaceId: string,
-  ): Promise<Group> {
-    const group = await this.groupRepo.findById(groupId, workspaceId);
-    if (!group) {
-      throw new NotFoundException('Group not found');
-    }
-
-    return group;
-  }
 }

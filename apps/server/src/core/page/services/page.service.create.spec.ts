@@ -37,6 +37,7 @@ describe('PageService create', () => {
     userRepo as any,
     {} as any,
     {} as any,
+    {} as any,
   );
 
   beforeEach(() => {

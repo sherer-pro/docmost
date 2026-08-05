@@ -14,6 +14,8 @@ import { TransclusionModule } from './transclusion/transclusion.module';
 import { LinkPreviewService } from './services/link-preview.service';
 import { PageTemplateController } from './page-template.controller';
 import { PageTemplateService } from './services/page-template.service';
+import { PageAccessModule } from '../page-access/page-access.module';
+import { PageAccessMutationService } from './services/page-access-mutation.service';
 
 @Module({
   controllers: [PageController, PageTemplateController],
@@ -21,6 +23,7 @@ import { PageTemplateService } from './services/page-template.service';
     PageService,
     PageHistoryService,
     PageHistoryRecorderService,
+    PageAccessMutationService,
     TrashCleanupService,
     BacklinkService,
     LinkPreviewService,
@@ -34,6 +37,7 @@ import { PageTemplateService } from './services/page-template.service';
     NotificationModule,
     LabelModule,
     TransclusionModule,
+    PageAccessModule,
   ],
 })
 export class PageModule {}
