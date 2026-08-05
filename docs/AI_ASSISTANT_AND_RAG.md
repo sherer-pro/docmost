@@ -30,6 +30,14 @@ setup guide, while `RAG_API.md` is the external synchronization wire contract;
 those documents should link here instead of copying changing implementation
 details.
 
+The administrator-facing summary of this document is embedded in Docmost at
+`/settings/ai/guide` and implemented in
+`apps/client/src/features/ai/components/ai-admin-guide.tsx` with the
+`ai.adminGuide.*` locale keys. A change to AI/RAG/MCP behavior, configuration,
+contracts, routes, limits, security boundaries, tools, or recovery procedures
+must update both the applicable Markdown documentation and that embedded guide
+in the same change.
+
 ## 1. System components and boundaries
 
 Core AI lives in `apps/server/src/core/ai`, the client UI lives in
@@ -506,8 +514,11 @@ temperature 0.2, `maxOutputTokens` 8192, `contextWindow` 131072,
 tokens per space per day, and ninety days of retention. `maxOutputTokens` must
 leave at least 1024 tokens for input context.
 
-Retrieval defaults are `http-json-v1`, an 8000 ms timeout, and eight results.
-The API accepts timeouts from 1000 to 60000 ms and one to twenty results.
+New space configurations store `none`, so retrieval stays disabled until an
+administrator enables it. The configuration form preselects `http-json-v1`
+when retrieval is enabled; the timeout defaults to 8000 ms and the result limit
+to eight. The API accepts timeouts from 1000 to 60000 ms and one to twenty
+results.
 Configuration also includes `systemInstructions`, `visionEnabled`,
 `reasoningEnabled`, and up to fifty quick commands. Model, retrieval, and Open
 WebUI secrets are encrypted with the application secret. Public responses
@@ -1117,7 +1128,9 @@ headers.
 | -------------------------------- | ----------------------------------------------------------------------- |
 | `/settings/ai`                   | redirects to `/settings/ai/spaces`                                      |
 | `/settings/ai/spaces`            | AI assistant overview with per-space configuration entry points         |
+| `/settings/ai/built-in-tools`    | workspace policy for built-in Agent and inbound MCP capabilities        |
 | `/settings/ai/external-tools`    | outbound external MCP catalog, tool approvals, and the workspace switch |
+| `/settings/ai/guide`             | administrator-facing AI/RAG/MCP operation and risk guide                |
 | `/settings/ai/spaces/:spaceSlug` | sectioned full-page configuration, including per-space assistant profiles |
 | `/settings/keys`                 | "API keys" page; redirects to the MCP tab                               |
 | `/settings/keys/mcp`             | MCP onboarding and workspace MCP-key administration                     |
