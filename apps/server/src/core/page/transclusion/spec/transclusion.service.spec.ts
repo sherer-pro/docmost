@@ -240,7 +240,7 @@ describe('TransclusionService.syncPageReferences', () => {
     expect(refRepo.deleteByReferenceAndKeys).not.toHaveBeenCalled();
   });
 
-  it('ignores references nested inside a source (schema-forbidden)', async () => {
+  it('rejects references nested inside a source (schema-forbidden)', async () => {
     refRepo.findByReferencePageId.mockResolvedValue([]);
     const pm = {
       type: 'doc',
@@ -258,10 +258,11 @@ describe('TransclusionService.syncPageReferences', () => {
       ],
     };
 
-    const result = await service.syncPageReferences(referencePageId, workspaceId, pm);
-
-    expect(result).toEqual({ inserted: 0, deleted: 0 });
+    await expect(
+      service.syncPageReferences(referencePageId, workspaceId, pm),
+    ).rejects.toThrow('page_embed_malformed_mixed_content');
     expect(refRepo.insertMany).not.toHaveBeenCalled();
+    expect(refRepo.deleteByReferenceAndKeys).not.toHaveBeenCalled();
   });
 
   it('deletes references that no longer appear', async () => {

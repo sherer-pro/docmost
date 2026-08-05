@@ -1,5 +1,6 @@
 import {
   afterUnloadDocumentPayload,
+  beforeUnloadDocumentPayload,
   Extension,
   onChangePayload,
   onLoadDocumentPayload,
@@ -51,6 +52,23 @@ import type { PageEmbedGraphLease } from '../../core/page/transclusion/page-embe
 export class PersistenceExtension implements Extension {
   private readonly logger = new Logger(PersistenceExtension.name);
   private contributors: Map<string, Set<string>> = new Map();
+  private readonly dirtyDocuments = new Map<
+    string,
+    {
+      data: onStoreDocumentPayload;
+      retryIndex: number;
+    }
+  >();
+  private readonly dirtyRetryTimers = new Map<
+    string,
+    ReturnType<typeof setTimeout>
+  >();
+
+  private static readonly STORE_ATTEMPTS = 3;
+  private static readonly STORE_RETRY_DELAYS_MS = [50, 150] as const;
+  private static readonly DIRTY_RETRY_DELAYS_MS = [
+    1_000, 2_000, 5_000, 10_000, 30_000,
+  ] as const;
 
   constructor(
     private readonly pageRepo: PageRepo,
@@ -110,6 +128,19 @@ export class PersistenceExtension implements Extension {
   }
 
   async onStoreDocument(data: onStoreDocumentPayload) {
+    await this.storeDocument(data, false);
+  }
+
+  async beforeUnloadDocument(data: beforeUnloadDocumentPayload) {
+    if (this.dirtyDocuments.has(data.documentName)) {
+      throw new Error('collaboration_document_has_unpersisted_changes');
+    }
+  }
+
+  private async storeDocument(
+    data: onStoreDocumentPayload,
+    backgroundRetry: boolean,
+  ): Promise<void> {
     const { documentName, document, context } = data;
 
     const pageId = getPageId(documentName);
@@ -126,135 +157,203 @@ export class PersistenceExtension implements Extension {
     }
 
     let page: Page = null;
-    const editingUserIds = this.consumeContributors(documentName);
+    const editingUserIds = this.peekContributors(documentName);
     const graphLease = context?.pageEmbedGraphLease as
       | PageEmbedGraphLease
       | undefined;
 
-    try {
-      await executeTx(this.db, async (trx) => {
-        page = await this.pageRepo.findById(pageId, {
-          withLock: true,
-          includeContent: true,
-          trx,
-        });
+    let persistenceError: unknown = null;
+    for (
+      let attempt = 1;
+      attempt <= PersistenceExtension.STORE_ATTEMPTS;
+      attempt += 1
+    ) {
+      page = null;
+      try {
+        await executeTx(this.db, async (trx) => {
+          const lockedPage = await this.pageRepo.findById(pageId, {
+            withLock: true,
+            includeContent: true,
+            trx,
+          });
 
-        if (!page) {
-          this.logger.error(`Page with id ${pageId} not found`);
-          return;
-        }
+          if (!lockedPage) {
+            this.logger.error(`Page with id ${pageId} not found`);
+            return;
+          }
 
-        if (isDeepStrictEqual(tiptapJson, page.content)) {
-          page = null;
-          return;
-        }
+          if (isDeepStrictEqual(tiptapJson, lockedPage.content)) {
+            return;
+          }
 
-        let contributorIds = undefined;
-        try {
-          const existingContributors = page.contributorIds || [];
-          contributorIds = Array.from(
-            new Set([
-              ...existingContributors,
-              ...editingUserIds,
-              page.creatorId,
-            ]),
+          let contributorIds = undefined;
+          try {
+            const existingContributors = lockedPage.contributorIds || [];
+            contributorIds = Array.from(
+              new Set([
+                ...existingContributors,
+                ...editingUserIds,
+                lockedPage.creatorId,
+              ]),
+            );
+          } catch (err) {
+            //this.logger.debug('Contributors error:' + err?.['message']);
+          }
+
+          await this.pageRepo.updatePage(
+            {
+              content: tiptapJson,
+              textContent: textContent,
+              ydoc: ydocState,
+              lastUpdatedById: context.user.id,
+              contributorIds: contributorIds,
+            },
+            pageId,
+            trx,
           );
-        } catch (err) {
-          //this.logger.debug('Contributors error:' + err?.['message']);
-        }
 
-        await this.pageRepo.updatePage(
-          {
-            content: tiptapJson,
-            textContent: textContent,
-            ydoc: ydocState,
-            lastUpdatedById: context.user.id,
-            contributorIds: contributorIds,
-          },
-          pageId,
-          trx,
-        );
+          await this.syncTransclusionState(
+            pageId,
+            lockedPage.workspaceId,
+            tiptapJson,
+            trx,
+            context?.pageTemplateMutationId,
+            graphLease,
+          );
 
-        await this.syncTransclusionState(
-          pageId,
-          page.workspaceId,
-          tiptapJson,
-          trx,
-          context?.pageTemplateMutationId,
-          graphLease,
-        );
+          if (context?.pageTemplateMutationId) {
+            const completedOperation = await trx
+              .updateTable('pageTemplateOperations')
+              .set({
+                status: 'completed',
+                afterContentHash: hashProseMirrorJson(tiptapJson),
+                errorCode: null,
+                leaseToken: null,
+                leaseExpiresAt: null,
+                updatedAt: new Date(),
+              })
+              .where('id', '=', context.pageTemplateMutationId)
+              .where('status', '=', 'pending')
+              .where(
+                'leaseToken',
+                '=',
+                context.pageTemplateOperationLeaseToken as string,
+              )
+              .where('leaseExpiresAt', '>', new Date())
+              .returning('id')
+              .executeTakeFirst();
+            if (!completedOperation) {
+              throw new ConflictException({
+                code: 'page_template_operation_lease_lost',
+                message: 'The page template operation lease was lost',
+              });
+            }
+          }
 
-        if (context?.pageTemplateMutationId) {
-          const completedOperation = await trx
-            .updateTable('pageTemplateOperations')
-            .set({
-              status: 'completed',
-              afterContentHash: hashProseMirrorJson(tiptapJson),
-              errorCode: null,
-              leaseToken: null,
-              leaseExpiresAt: null,
-              updatedAt: new Date(),
-            })
-            .where('id', '=', context.pageTemplateMutationId)
-            .where('status', '=', 'pending')
-            .where(
-              'leaseToken',
-              '=',
-              context.pageTemplateOperationLeaseToken as string,
-            )
-            .where('leaseExpiresAt', '>', new Date())
-            .returning('id')
-            .executeTakeFirst();
-          if (!completedOperation) {
-            throw new ConflictException({
-              code: 'page_template_operation_lease_lost',
-              message: 'The page template operation lease was lost',
-            });
+          page = lockedPage;
+          this.logger.debug(
+            `Page updated: ${pageId} - SlugId: ${lockedPage.slugId}`,
+          );
+        });
+        persistenceError = null;
+        break;
+      } catch (err) {
+        persistenceError = err;
+        page = null;
+        const integrityCode = this.getPageEmbedIntegrityErrorCode(err);
+        if (integrityCode && !context?.pageTemplateMutationId) {
+          await this.restorePersistedDocument(document, pageId);
+          document.broadcastStateless(
+            JSON.stringify({
+              type: 'page_embed_integrity_error',
+              code: integrityCode,
+            }),
+          );
+          for (const socket of document.connections.keys()) {
+            socket.close(4409, 'page_embed_integrity_error');
           }
         }
-
-        this.logger.debug(`Page updated: ${pageId} - SlugId: ${page.slugId}`);
-      });
-    } catch (err) {
-      this.logger.error(`Failed to update page ${pageId}`, err);
-      page = null;
-      const integrityCode = this.getPageEmbedIntegrityErrorCode(err);
-      if (integrityCode && !context?.pageTemplateMutationId) {
-        await this.restorePersistedDocument(document, pageId);
-        document.broadcastStateless(
-          JSON.stringify({
-            type: 'page_embed_integrity_error',
-            code: integrityCode,
-          }),
-        );
-        for (const socket of document.connections.keys()) {
-          socket.close(4409, 'page_embed_integrity_error');
+        if (context?.pageTemplateMutationId || integrityCode) {
+          this.removeContributors(documentName, editingUserIds);
+          throw err;
         }
-      }
-      if (context?.pageTemplateMutationId || integrityCode) {
-        throw err;
+
+        const code = this.getDatabaseErrorCode(err) ?? 'unknown';
+        this.logger.error(
+          `Failed to update page ${pageId}; code=${code}; attempt=${attempt}/${PersistenceExtension.STORE_ATTEMPTS}`,
+        );
+        if (
+          !this.isRetryableDatabaseError(err) ||
+          attempt === PersistenceExtension.STORE_ATTEMPTS
+        ) {
+          break;
+        }
+        await this.sleep(
+          PersistenceExtension.STORE_RETRY_DELAYS_MS[attempt - 1],
+        );
       }
     }
 
+    if (persistenceError) {
+      this.markDocumentDirty(data, backgroundRetry);
+      return;
+    }
+
+    this.clearDocumentDirty(documentName);
+    this.removeContributors(documentName, editingUserIds);
+
     if (page) {
+      await this.runSuccessSideEffects(
+        documentName,
+        page,
+        tiptapJson,
+        editingUserIds,
+      );
+    }
+
+    if (backgroundRetry) {
+      setTimeout(() => {
+        void data.instance.unloadDocument(document);
+      }, 0);
+    }
+  }
+
+  private async runSuccessSideEffects(
+    documentName: string,
+    page: Page,
+    tiptapJson: unknown,
+    editingUserIds: string[],
+  ): Promise<void> {
+    const pageId = page.id;
+
+    try {
       await this.collabHistory.addContributors(pageId, editingUserIds);
+    } catch (error) {
+      this.restoreContributors(documentName, editingUserIds);
+      this.logSideEffectFailure('contributors', pageId, error);
+    }
 
-      const mentions = extractMentions(tiptapJson);
-      const pageMentions = extractPageMentions(mentions);
+    const mentions = extractMentions(tiptapJson);
+    const pageMentions = extractPageMentions(mentions);
 
+    try {
       await this.generalQueue.add(QueueJob.PAGE_BACKLINKS, {
-        pageId: pageId,
+        pageId,
         workspaceId: page.workspaceId,
         mentions: pageMentions,
       } as IPageBacklinkJob);
+    } catch (error) {
+      this.logSideEffectFailure('backlinks', pageId, error);
+    }
 
-      const userMentions = extractUserMentions(mentions);
-      const oldMentions = page.content ? extractMentions(page.content) : [];
-      const oldMentionedUserIds = extractUserMentions(oldMentions).map(
-        (m) => m.entityId,
-      );
+    const userMentions = extractUserMentions(mentions);
+    const oldMentions = page.content ? extractMentions(page.content) : [];
+    const oldMentionedUserIds = extractUserMentions(oldMentions).map(
+      (m) => m.entityId,
+    );
 
-      if (userMentions.length > 0) {
+    if (userMentions.length > 0) {
+      try {
         await this.notificationQueue.add(QueueJob.PAGE_MENTION_NOTIFICATION, {
           userMentions: userMentions.map((m) => ({
             userId: m.entityId,
@@ -266,14 +365,24 @@ export class PersistenceExtension implements Extension {
           spaceId: page.spaceId,
           workspaceId: page.workspaceId,
         } as IPageMentionNotificationJob);
+      } catch (error) {
+        this.logSideEffectFailure('mentions', pageId, error);
       }
+    }
 
+    try {
       await this.eventEmitter.emitAsync(EventName.PAGE_UPDATED, {
         pageIds: [pageId],
         workspaceId: page.workspaceId,
       });
+    } catch (error) {
+      this.logSideEffectFailure('page_updated', pageId, error);
+    }
 
+    try {
       await this.enqueuePageHistory(page);
+    } catch (error) {
+      this.logSideEffectFailure('history', pageId, error);
     }
   }
 
@@ -292,15 +401,118 @@ export class PersistenceExtension implements Extension {
 
   async afterUnloadDocument(data: afterUnloadDocumentPayload) {
     const documentName = data.documentName;
+    if (this.dirtyDocuments.has(documentName)) return;
     this.contributors.delete(documentName);
   }
 
-  private consumeContributors(documentName: string): string[] {
+  private peekContributors(documentName: string): string[] {
     const contributorSet = this.contributors.get(documentName);
     if (!contributorSet) return [];
-    const userIds = [...contributorSet];
-    this.contributors.delete(documentName);
-    return userIds;
+    return [...contributorSet];
+  }
+
+  private removeContributors(documentName: string, userIds: string[]): void {
+    const contributorSet = this.contributors.get(documentName);
+    if (!contributorSet) return;
+    for (const userId of userIds) contributorSet.delete(userId);
+    if (contributorSet.size === 0) this.contributors.delete(documentName);
+  }
+
+  private restoreContributors(documentName: string, userIds: string[]): void {
+    if (userIds.length === 0) return;
+    const contributorSet = this.contributors.get(documentName) ?? new Set();
+    for (const userId of userIds) contributorSet.add(userId);
+    this.contributors.set(documentName, contributorSet);
+  }
+
+  private markDocumentDirty(
+    data: onStoreDocumentPayload,
+    backgroundRetry: boolean,
+  ): void {
+    const existing = this.dirtyDocuments.get(data.documentName);
+    this.dirtyDocuments.set(data.documentName, {
+      data,
+      retryIndex: backgroundRetry
+        ? Math.min(
+            (existing?.retryIndex ?? 0) + 1,
+            PersistenceExtension.DIRTY_RETRY_DELAYS_MS.length - 1,
+          )
+        : 0,
+    });
+    this.scheduleDirtyRetry(data.documentName);
+  }
+
+  private scheduleDirtyRetry(documentName: string): void {
+    if (this.dirtyRetryTimers.has(documentName)) return;
+    const dirty = this.dirtyDocuments.get(documentName);
+    if (!dirty) return;
+    const delay =
+      PersistenceExtension.DIRTY_RETRY_DELAYS_MS[dirty.retryIndex] ??
+      PersistenceExtension.DIRTY_RETRY_DELAYS_MS.at(-1);
+    const timer = setTimeout(() => {
+      this.dirtyRetryTimers.delete(documentName);
+      const current = this.dirtyDocuments.get(documentName);
+      if (!current) return;
+      void current.data.document.saveMutex
+        .runExclusive(() => this.storeDocument(current.data, true))
+        .catch((error) => {
+          this.logSideEffectFailure(
+            'dirty_retry',
+            getPageId(documentName),
+            error,
+          );
+          this.markDocumentDirty(current.data, true);
+        });
+    }, delay);
+    timer.unref?.();
+    this.dirtyRetryTimers.set(documentName, timer);
+  }
+
+  private clearDocumentDirty(documentName: string): void {
+    this.dirtyDocuments.delete(documentName);
+    const timer = this.dirtyRetryTimers.get(documentName);
+    if (timer) clearTimeout(timer);
+    this.dirtyRetryTimers.delete(documentName);
+  }
+
+  private getDatabaseErrorCode(error: unknown): string | null {
+    if (!error || typeof error !== 'object') return null;
+    const code = (error as { code?: unknown }).code;
+    if (typeof code === 'string') return code;
+    const cause = (error as { cause?: unknown }).cause;
+    if (!cause || typeof cause !== 'object') return null;
+    const causeCode = (cause as { code?: unknown }).code;
+    return typeof causeCode === 'string' ? causeCode : null;
+  }
+
+  private isRetryableDatabaseError(error: unknown): boolean {
+    const code = this.getDatabaseErrorCode(error);
+    if (!code) return false;
+    return (
+      code === '40001' ||
+      code === '40P01' ||
+      code === '55P03' ||
+      code === '53300' ||
+      code === '57P01' ||
+      code === '57P02' ||
+      code === '57P03' ||
+      code.startsWith('08')
+    );
+  }
+
+  private async sleep(delayMs: number): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+
+  private logSideEffectFailure(
+    effect: string,
+    pageId: string,
+    error: unknown,
+  ): void {
+    const code = this.getDatabaseErrorCode(error) ?? 'unknown';
+    this.logger.error(
+      `Collaboration persistence effect failed; effect=${effect}; pageId=${pageId}; code=${code}`,
+    );
   }
 
   private async enqueuePageHistory(page: Page): Promise<void> {

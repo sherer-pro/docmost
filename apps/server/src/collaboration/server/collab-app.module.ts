@@ -11,6 +11,7 @@ import { CollaborationController } from './collaboration.controller';
 import { LoggerModule } from '../../common/logger/logger.module';
 import { RedisModule } from '@nestjs-labs/nestjs-ioredis';
 import { RedisConfigService } from '../../integrations/redis/redis-config.service';
+import { StorageModule } from '../../integrations/storage/storage.module';
 
 @Module({
   imports: [
@@ -18,7 +19,10 @@ import { RedisConfigService } from '../../integrations/redis/redis-config.servic
     DatabaseModule,
     EnvironmentModule,
     CollaborationModule,
-    QueueModule,
+    QueueModule.forRoot({ registerGeneralWorker: false }),
+    StorageModule.forRootAsync({
+      imports: [EnvironmentModule],
+    }),
     HealthModule,
     EventEmitterModule.forRoot(),
     RedisModule.forRootAsync({

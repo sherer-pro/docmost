@@ -35,7 +35,7 @@ import { CommonSecurityModule } from './common/security/security.module';
     }),
     CollaborationModule,
     WsModule,
-    QueueModule,
+    QueueModule.forRoot(),
     StaticModule,
     HealthModule,
     ImportModule,
