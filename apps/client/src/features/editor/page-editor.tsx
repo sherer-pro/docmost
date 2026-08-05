@@ -65,7 +65,6 @@ import { extractPageSlugId } from "@/lib";
 import { FIVE_MINUTES } from "@/lib/constants.ts";
 import { PageEditMode } from "@/features/user/types/user.types.ts";
 import { resolvePageEditMode } from "@/features/user/utils/page-edit-mode.ts";
-import { jwtDecode } from "jwt-decode";
 import { searchSpotlight } from "@/features/search/constants.ts";
 import { useEditorScroll } from "./hooks/use-editor-scroll";
 import { usePageEditorInteractions } from "@/features/editor/hooks/use-page-editor-interactions";
@@ -81,6 +80,7 @@ import { PageEmbedLookupProvider } from "@/features/editor/components/page-embed
 import { PageTemplatePicker } from "@/features/page-template/components/page-template-picker";
 import { FixedToolbar } from "@/features/editor/components/fixed-toolbar/fixed-toolbar";
 import { getEnabledTagDefinitions } from "@/features/editor/components/tag/tag-settings";
+import { getUserColor } from "@/features/editor/extensions/utils.ts";
 
 interface PageEditorProps {
   pageId: string;
@@ -117,6 +117,10 @@ export default function PageEditor({
 
   useEffect(() => {
     isComponentMounted.current = true;
+
+    return () => {
+      isComponentMounted.current = false;
+    };
   }, []);
 
   const [currentUser] = useAtom(currentUserAtom);
@@ -143,6 +147,11 @@ export default function PageEditor({
   });
   const { data: collabQuery, refetch: refetchCollabToken } =
     useCollabToken(pageId);
+  const collabTokenRef = useRef(collabQuery?.token);
+  const refetchCollabTokenRef = useRef(refetchCollabToken);
+  collabTokenRef.current = collabQuery?.token;
+  refetchCollabTokenRef.current = refetchCollabToken;
+  const hasCollabToken = Boolean(collabQuery?.token);
   const { isIdle, resetIdle } = useIdle(FIVE_MINUTES, { initialState: false });
   const documentState = useDocumentVisibility();
   const { pageSlug } = useParams();
@@ -224,7 +233,7 @@ export default function PageEditor({
     (targetEditor?: Editor | null) => {
       const currentEditor = targetEditor ?? editorRef.current;
 
-      if (!currentEditor) {
+      if (!currentEditor || currentEditor.isDestroyed) {
         return;
       }
 
@@ -248,7 +257,19 @@ export default function PageEditor({
   const [providersReady, setProvidersReady] = useState(false);
 
   useEffect(() => {
+    if (!hasCollabToken) {
+      return;
+    }
+
+    let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+
     if (!providersRef.current) {
+      const initialToken = collabTokenRef.current;
+
+      if (!initialToken) {
+        return;
+      }
+
       const documentName = `page.${pageId}`;
       const ydoc = new Y.Doc();
       const local = new IndexeddbPersistence(documentName, ydoc);
@@ -264,27 +285,48 @@ export default function PageEditor({
       const onSyncedHandler = (event: onSyncedParameters) => {
         setIsRemoteSynced(event.state);
       };
-      const onAuthenticationFailedHandler = () => {
-        const payload = jwtDecode(collabQuery?.token);
-        const now = Date.now().valueOf() / 1000;
-        const isTokenExpired = now >= payload.exp;
-        if (isTokenExpired) {
-          refetchCollabToken().then((result) => {
-            if (result.data?.token) {
-              socket.disconnect();
-              setTimeout(() => {
-                remote.configuration.token = result.data.token;
-                socket.connect();
-              }, 100);
+      let authRefreshInFlight = false;
+      const onAuthenticationFailedHandler = async () => {
+        if (authRefreshInFlight || !isComponentMounted.current) {
+          return;
+        }
+
+        authRefreshInFlight = true;
+
+        try {
+          const result = await refetchCollabTokenRef.current();
+          const nextToken = result.data?.token;
+
+          if (!nextToken || !isComponentMounted.current) {
+            return;
+          }
+
+          collabTokenRef.current = nextToken;
+          remote.configuration.token = nextToken;
+          socket.disconnect();
+          reconnectTimeout = setTimeout(() => {
+            reconnectTimeout = null;
+
+            if (
+              isComponentMounted.current &&
+              providersRef.current?.remote === remote
+            ) {
+              socket.connect();
             }
-          });
+
+            authRefreshInFlight = false;
+          }, 100);
+        } finally {
+          if (!reconnectTimeout) {
+            authRefreshInFlight = false;
+          }
         }
       };
       const remote = new HocuspocusProvider({
         websocketProvider: socket,
         name: documentName,
         document: ydoc,
-        token: collabQuery?.token,
+        token: initialToken,
         onAuthenticationFailed: onAuthenticationFailedHandler,
         onStatus: onStatusHandler,
         onSynced: onSyncedHandler,
@@ -334,13 +376,23 @@ export default function PageEditor({
     }
     // Only destroy on final unmount
     return () => {
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+      }
       setActivePageUsers([]);
       providersRef.current?.socket.destroy();
       providersRef.current?.remote.destroy();
       providersRef.current?.local.destroy();
       providersRef.current = null;
+      setProvidersReady(false);
     };
-  }, [pageId, setActivePageUsers]);
+  }, [
+    collaborationURL,
+    hasCollabToken,
+    pageId,
+    setActivePageUsers,
+    setYjsConnectionStatus,
+  ]);
 
   // Only connect/disconnect on tab/idle, not destroy
   useEffect(() => {
@@ -375,8 +427,13 @@ export default function PageEditor({
     };
   }, [providersReady, pageId]);
 
+  const collaborationUserRef = useRef(currentUser?.user);
+  collaborationUserRef.current = currentUser?.user;
+  const collaborationUserId = currentUser?.user.id;
   const extensions = useMemo(() => {
-    if (!providersReady || !providersRef.current || !currentUser?.user) {
+    const collaborationUser = collaborationUserRef.current;
+
+    if (!providersReady || !providersRef.current || !collaborationUser) {
       return editorExtensions;
     }
 
@@ -384,9 +441,9 @@ export default function PageEditor({
 
     return [
       ...editorExtensions,
-      ...collabExtensions(remoteProvider, currentUser?.user),
+      ...collabExtensions(remoteProvider, collaborationUser),
     ];
-  }, [providersReady, currentUser?.user, editorExtensions]);
+  }, [collaborationUserId, editorExtensions, providersReady]);
 
   const editor = useEditor(
     {
@@ -432,8 +489,24 @@ export default function PageEditor({
         debouncedUpdateContent(editorJson);
       },
     },
-    [pageId, editable, extensions],
+    [pageId, extensions],
   );
+
+  useEffect(() => {
+    if (!editor) {
+      return;
+    }
+
+    return () => {
+      if (editorRef.current === editor) {
+        editorRef.current = null;
+      }
+
+      setEditor((currentEditor) =>
+        currentEditor === editor ? null : currentEditor,
+      );
+    };
+  }, [editor, setEditor]);
 
   useEffect(() => {
     if (!editor) {
@@ -442,6 +515,27 @@ export default function PageEditor({
 
     syncDictionaryHighlights(editor);
   }, [editor, syncDictionaryHighlights]);
+
+  useEffect(() => {
+    const user = currentUser?.user;
+
+    if (!editor || editor.isDestroyed || !providersReady || !user) {
+      return;
+    }
+
+    editor.commands.updateUser({
+      id: user.id,
+      name: user.name,
+      avatarUrl: user.avatarUrl,
+      color: getUserColor(user.id),
+    });
+  }, [
+    currentUser?.user.avatarUrl,
+    currentUser?.user.id,
+    currentUser?.user.name,
+    editor,
+    providersReady,
+  ]);
 
   useEffect(() => {
     editor?.commands.setHeadingNumberingEnabled(headingNumberingEnabled);
@@ -509,26 +603,6 @@ export default function PageEditor({
       setShowStatic(false);
     }
   }, [yjsConnectionStatus, isSynced]);
-
-  useEffect(() => {
-    if (showStatic || !isSynced) {
-      return;
-    }
-
-    syncDictionaryHighlights(editor);
-    const animationFrameId = window.requestAnimationFrame(() =>
-      syncDictionaryHighlights(editor),
-    );
-    const timeoutId = window.setTimeout(
-      () => syncDictionaryHighlights(editor),
-      250,
-    );
-
-    return () => {
-      window.cancelAnimationFrame(animationFrameId);
-      window.clearTimeout(timeoutId);
-    };
-  }, [isSynced, showStatic, syncDictionaryHighlights]);
 
   if (showStatic) {
     return (

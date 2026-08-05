@@ -1,0 +1,519 @@
+diff --git a/dist/index.cjs b/dist/index.cjs
+index 914efc90f60adc122b946116e04d1c622253399c..2dd6dc5c21e7c60eb413ff6deeb3e7d38f0faa6b 100644
+--- a/dist/index.cjs
++++ b/dist/index.cjs
+@@ -60,6 +60,7 @@ var BubbleMenuView = class {
+   }) {
+     this.preventHide = false;
+     this.isVisible = false;
++    this.isDestroyed = false;
+     this.scrollTarget = window;
+     this.floatingUIOptions = {
+       strategy: "absolute",
+@@ -100,15 +101,36 @@ var BubbleMenuView = class {
+      * The delay is defined by the `resizeDelay` property.
+      */
+     this.resizeHandler = () => {
++      if (this.isDestroyed || this.editor.isDestroyed) {
++        return;
++      }
+       if (this.resizeDebounceTimer) {
+         clearTimeout(this.resizeDebounceTimer);
+       }
+       this.resizeDebounceTimer = window.setTimeout(() => {
++        this.resizeDebounceTimer = void 0;
++        if (this.isDestroyed || this.editor.isDestroyed) {
++          return;
++        }
+         this.updatePosition();
+       }, this.resizeDelay);
+     };
+     this.focusHandler = () => {
+-      setTimeout(() => this.update(this.editor.view));
++      if (this.focusDebounceTimer) {
++        clearTimeout(this.focusDebounceTimer);
++      }
++      this.focusDebounceTimer = window.setTimeout(() => {
++        var _a, _b;
++        this.focusDebounceTimer = void 0;
++        if (this.isDestroyed || this.editor.isDestroyed) {
++          return;
++        }
++        const view = this.editor.view;
++        if (!((_b = (_a = view == null ? void 0 : view.dom) == null ? void 0 : _a.isConnected) != null ? _b : false)) {
++          return;
++        }
++        this.update(view);
++      });
+     };
+     this.blurHandler = ({ event }) => {
+       var _a;
+@@ -138,10 +160,19 @@ var BubbleMenuView = class {
+         clearTimeout(this.updateDebounceTimer);
+       }
+       this.updateDebounceTimer = window.setTimeout(() => {
++        var _a, _b;
++        this.updateDebounceTimer = void 0;
++        if (this.isDestroyed || this.editor.isDestroyed || !((_b = (_a = view == null ? void 0 : view.dom) == null ? void 0 : _a.isConnected) != null ? _b : false)) {
++          return;
++        }
+         this.updateHandler(view, selectionChanged, docChanged, oldState);
+       }, this.updateDelay);
+     };
+     this.updateHandler = (view, selectionChanged, docChanged, oldState) => {
++      var _a, _b;
++      if (this.isDestroyed || this.editor.isDestroyed || !((_b = (_a = view == null ? void 0 : view.dom) == null ? void 0 : _a.isConnected) != null ? _b : false)) {
++        return;
++      }
+       const { composing } = view;
+       const isSame = !selectionChanged && !docChanged;
+       if (composing || isSame) {
+@@ -152,8 +183,8 @@ var BubbleMenuView = class {
+         this.hide();
+         return;
+       }
+-      this.updatePosition();
+       this.show();
++      this.updatePosition();
+     };
+     this.transactionHandler = ({ transaction: tr }) => {
+       const meta = tr.getMeta("bubbleMenu");
+@@ -231,6 +262,9 @@ var BubbleMenuView = class {
+   }
+   get virtualElement() {
+     var _a, _b, _c;
++    if (this.isDestroyed || this.editor.isDestroyed || !((_c = (_b = this.view) == null ? void 0 : _b.dom) == null ? void 0 : _c.isConnected)) {
++      return;
++    }
+     const { selection } = this.editor.state;
+     const referencedVirtualElement = (_a = this.getReferencedVirtualElement) == null ? void 0 : _a.call(this);
+     if (referencedVirtualElement) {
+@@ -278,6 +312,9 @@ var BubbleMenuView = class {
+     return virtualElement;
+   }
+   updatePosition() {
++    if (this.isDestroyed || !this.isVisible || this.editor.isDestroyed || !this.element.isConnected) {
++      return;
++    }
+     const virtualElement = this.virtualElement;
+     if (!virtualElement) {
+       return;
+@@ -288,6 +325,9 @@ var BubbleMenuView = class {
+       middleware: this.middlewares
+     }).then(({ x, y, strategy, middlewareData }) => {
+       var _a, _b;
++      if (this.isDestroyed || !this.isVisible || this.editor.isDestroyed || !this.element.isConnected) {
++        return;
++      }
+       if (((_a = middlewareData.hide) == null ? void 0 : _a.referenceHidden) || ((_b = middlewareData.hide) == null ? void 0 : _b.escaped)) {
+         this.element.style.visibility = "hidden";
+         return;
+@@ -303,6 +343,10 @@ var BubbleMenuView = class {
+     });
+   }
+   update(view, oldState) {
++    var _a, _b;
++    if (this.isDestroyed || this.editor.isDestroyed || !((_b = (_a = view == null ? void 0 : view.dom) == null ? void 0 : _a.isConnected) != null ? _b : false)) {
++      return;
++    }
+     const { state } = view;
+     const hasValidSelection = state.selection.from !== state.selection.to;
+     if (this.updateDelay > 0 && hasValidSelection) {
+@@ -314,7 +358,10 @@ var BubbleMenuView = class {
+     this.updateHandler(view, selectionChanged, docChanged, oldState);
+   }
+   getShouldShow(oldState) {
+-    var _a;
++    var _a, _b, _c;
++    if (this.isDestroyed || this.editor.isDestroyed || !((_c = (_b = this.view) == null ? void 0 : _b.dom) == null ? void 0 : _c.isConnected)) {
++      return false;
++    }
+     const { state } = this.view;
+     const { selection } = state;
+     const { ranges } = selection;
+@@ -332,8 +379,8 @@ var BubbleMenuView = class {
+     return shouldShow || false;
+   }
+   show() {
+-    var _a;
+-    if (this.isVisible) {
++    var _a, _b, _c;
++    if (this.isVisible || this.isDestroyed || this.editor.isDestroyed || !((_c = (_b = this.view) == null ? void 0 : _b.dom) == null ? void 0 : _c.isConnected)) {
+       return;
+     }
+     this.element.style.visibility = "visible";
+@@ -358,6 +405,22 @@ var BubbleMenuView = class {
+     this.isVisible = false;
+   }
+   destroy() {
++    if (this.isDestroyed) {
++      return;
++    }
++    this.isDestroyed = true;
++    if (this.updateDebounceTimer) {
++      clearTimeout(this.updateDebounceTimer);
++      this.updateDebounceTimer = void 0;
++    }
++    if (this.resizeDebounceTimer) {
++      clearTimeout(this.resizeDebounceTimer);
++      this.resizeDebounceTimer = void 0;
++    }
++    if (this.focusDebounceTimer) {
++      clearTimeout(this.focusDebounceTimer);
++      this.focusDebounceTimer = void 0;
++    }
+     this.hide();
+     this.element.removeEventListener("mousedown", this.mousedownHandler, { capture: true });
+     this.view.dom.removeEventListener("dragstart", this.dragstartHandler);
+diff --git a/dist/index.js b/dist/index.js
+index a35d3bd914fe25a5565b1902b1c630be5667a7c9..6d757fc08b7117549f652eca2b3d3324c8155620 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -41,6 +41,7 @@ var BubbleMenuView = class {
+   }) {
+     this.preventHide = false;
+     this.isVisible = false;
++    this.isDestroyed = false;
+     this.scrollTarget = window;
+     this.floatingUIOptions = {
+       strategy: "absolute",
+@@ -81,15 +82,36 @@ var BubbleMenuView = class {
+      * The delay is defined by the `resizeDelay` property.
+      */
+     this.resizeHandler = () => {
++      if (this.isDestroyed || this.editor.isDestroyed) {
++        return;
++      }
+       if (this.resizeDebounceTimer) {
+         clearTimeout(this.resizeDebounceTimer);
+       }
+       this.resizeDebounceTimer = window.setTimeout(() => {
++        this.resizeDebounceTimer = void 0;
++        if (this.isDestroyed || this.editor.isDestroyed) {
++          return;
++        }
+         this.updatePosition();
+       }, this.resizeDelay);
+     };
+     this.focusHandler = () => {
+-      setTimeout(() => this.update(this.editor.view));
++      if (this.focusDebounceTimer) {
++        clearTimeout(this.focusDebounceTimer);
++      }
++      this.focusDebounceTimer = window.setTimeout(() => {
++        var _a, _b;
++        this.focusDebounceTimer = void 0;
++        if (this.isDestroyed || this.editor.isDestroyed) {
++          return;
++        }
++        const view = this.editor.view;
++        if (!((_b = (_a = view == null ? void 0 : view.dom) == null ? void 0 : _a.isConnected) != null ? _b : false)) {
++          return;
++        }
++        this.update(view);
++      });
+     };
+     this.blurHandler = ({ event }) => {
+       var _a;
+@@ -119,10 +141,19 @@ var BubbleMenuView = class {
+         clearTimeout(this.updateDebounceTimer);
+       }
+       this.updateDebounceTimer = window.setTimeout(() => {
++        var _a, _b;
++        this.updateDebounceTimer = void 0;
++        if (this.isDestroyed || this.editor.isDestroyed || !((_b = (_a = view == null ? void 0 : view.dom) == null ? void 0 : _a.isConnected) != null ? _b : false)) {
++          return;
++        }
+         this.updateHandler(view, selectionChanged, docChanged, oldState);
+       }, this.updateDelay);
+     };
+     this.updateHandler = (view, selectionChanged, docChanged, oldState) => {
++      var _a, _b;
++      if (this.isDestroyed || this.editor.isDestroyed || !((_b = (_a = view == null ? void 0 : view.dom) == null ? void 0 : _a.isConnected) != null ? _b : false)) {
++        return;
++      }
+       const { composing } = view;
+       const isSame = !selectionChanged && !docChanged;
+       if (composing || isSame) {
+@@ -133,8 +164,8 @@ var BubbleMenuView = class {
+         this.hide();
+         return;
+       }
+-      this.updatePosition();
+       this.show();
++      this.updatePosition();
+     };
+     this.transactionHandler = ({ transaction: tr }) => {
+       const meta = tr.getMeta("bubbleMenu");
+@@ -212,6 +243,9 @@ var BubbleMenuView = class {
+   }
+   get virtualElement() {
+     var _a, _b, _c;
++    if (this.isDestroyed || this.editor.isDestroyed || !((_c = (_b = this.view) == null ? void 0 : _b.dom) == null ? void 0 : _c.isConnected)) {
++      return;
++    }
+     const { selection } = this.editor.state;
+     const referencedVirtualElement = (_a = this.getReferencedVirtualElement) == null ? void 0 : _a.call(this);
+     if (referencedVirtualElement) {
+@@ -259,6 +293,9 @@ var BubbleMenuView = class {
+     return virtualElement;
+   }
+   updatePosition() {
++    if (this.isDestroyed || !this.isVisible || this.editor.isDestroyed || !this.element.isConnected) {
++      return;
++    }
+     const virtualElement = this.virtualElement;
+     if (!virtualElement) {
+       return;
+@@ -269,6 +306,9 @@ var BubbleMenuView = class {
+       middleware: this.middlewares
+     }).then(({ x, y, strategy, middlewareData }) => {
+       var _a, _b;
++      if (this.isDestroyed || !this.isVisible || this.editor.isDestroyed || !this.element.isConnected) {
++        return;
++      }
+       if (((_a = middlewareData.hide) == null ? void 0 : _a.referenceHidden) || ((_b = middlewareData.hide) == null ? void 0 : _b.escaped)) {
+         this.element.style.visibility = "hidden";
+         return;
+@@ -284,6 +324,10 @@ var BubbleMenuView = class {
+     });
+   }
+   update(view, oldState) {
++    var _a, _b;
++    if (this.isDestroyed || this.editor.isDestroyed || !((_b = (_a = view == null ? void 0 : view.dom) == null ? void 0 : _a.isConnected) != null ? _b : false)) {
++      return;
++    }
+     const { state } = view;
+     const hasValidSelection = state.selection.from !== state.selection.to;
+     if (this.updateDelay > 0 && hasValidSelection) {
+@@ -295,7 +339,10 @@ var BubbleMenuView = class {
+     this.updateHandler(view, selectionChanged, docChanged, oldState);
+   }
+   getShouldShow(oldState) {
+-    var _a;
++    var _a, _b, _c;
++    if (this.isDestroyed || this.editor.isDestroyed || !((_c = (_b = this.view) == null ? void 0 : _b.dom) == null ? void 0 : _c.isConnected)) {
++      return false;
++    }
+     const { state } = this.view;
+     const { selection } = state;
+     const { ranges } = selection;
+@@ -313,8 +360,8 @@ var BubbleMenuView = class {
+     return shouldShow || false;
+   }
+   show() {
+-    var _a;
+-    if (this.isVisible) {
++    var _a, _b, _c;
++    if (this.isVisible || this.isDestroyed || this.editor.isDestroyed || !((_c = (_b = this.view) == null ? void 0 : _b.dom) == null ? void 0 : _c.isConnected)) {
+       return;
+     }
+     this.element.style.visibility = "visible";
+@@ -339,6 +386,22 @@ var BubbleMenuView = class {
+     this.isVisible = false;
+   }
+   destroy() {
++    if (this.isDestroyed) {
++      return;
++    }
++    this.isDestroyed = true;
++    if (this.updateDebounceTimer) {
++      clearTimeout(this.updateDebounceTimer);
++      this.updateDebounceTimer = void 0;
++    }
++    if (this.resizeDebounceTimer) {
++      clearTimeout(this.resizeDebounceTimer);
++      this.resizeDebounceTimer = void 0;
++    }
++    if (this.focusDebounceTimer) {
++      clearTimeout(this.focusDebounceTimer);
++      this.focusDebounceTimer = void 0;
++    }
+     this.hide();
+     this.element.removeEventListener("mousedown", this.mousedownHandler, { capture: true });
+     this.view.dom.removeEventListener("dragstart", this.dragstartHandler);
+diff --git a/src/bubble-menu-plugin.ts b/src/bubble-menu-plugin.ts
+index 7387a29cd76f1c77d55c32aacf14e4696e5eeac1..c4e99b849ef6052c5b6d957a4a03ba03c21beb4e 100644
+--- a/src/bubble-menu-plugin.ts
++++ b/src/bubble-menu-plugin.ts
+@@ -169,8 +169,12 @@ export class BubbleMenuView implements PluginView {
+ 
+   private resizeDebounceTimer: number | undefined
+ 
++  private focusDebounceTimer: number | undefined
++
+   private isVisible = false
+ 
++  private isDestroyed = false
++
+   private scrollTarget: HTMLElement | Window = window
+ 
+   private floatingUIOptions: NonNullable<BubbleMenuPluginProps['options']> = {
+@@ -262,6 +266,10 @@ export class BubbleMenuView implements PluginView {
+   }
+ 
+   private get virtualElement(): VirtualElement | undefined {
++    if (this.isDestroyed || this.editor.isDestroyed || !this.view?.dom?.isConnected) {
++      return
++    }
++
+     const { selection } = this.editor.state
+ 
+     const referencedVirtualElement = this.getReferencedVirtualElement?.()
+@@ -388,18 +396,46 @@ export class BubbleMenuView implements PluginView {
+    * The delay is defined by the `resizeDelay` property.
+    */
+   resizeHandler = () => {
++    if (this.isDestroyed || this.editor.isDestroyed) {
++      return
++    }
++
+     if (this.resizeDebounceTimer) {
+       clearTimeout(this.resizeDebounceTimer)
+     }
+ 
+     this.resizeDebounceTimer = window.setTimeout(() => {
++      this.resizeDebounceTimer = undefined
++
++      if (this.isDestroyed || this.editor.isDestroyed) {
++        return
++      }
++
+       this.updatePosition()
+     }, this.resizeDelay)
+   }
+ 
+   focusHandler = () => {
+     // we use `setTimeout` to make sure `selection` is already updated
+-    setTimeout(() => this.update(this.editor.view))
++    if (this.focusDebounceTimer) {
++      clearTimeout(this.focusDebounceTimer)
++    }
++
++    this.focusDebounceTimer = window.setTimeout(() => {
++      this.focusDebounceTimer = undefined
++
++      if (this.isDestroyed || this.editor.isDestroyed) {
++        return
++      }
++
++      const view = this.editor.view
++
++      if (!view?.dom?.isConnected) {
++        return
++      }
++
++      this.update(view)
++    })
+   }
+ 
+   blurHandler = ({ event }: { event: FocusEvent }) => {
+@@ -426,6 +462,10 @@ export class BubbleMenuView implements PluginView {
+   }
+ 
+   updatePosition() {
++    if (this.isDestroyed || !this.isVisible || this.editor.isDestroyed || !this.element.isConnected) {
++      return
++    }
++
+     const virtualElement = this.virtualElement
+ 
+     if (!virtualElement) {
+@@ -437,6 +477,10 @@ export class BubbleMenuView implements PluginView {
+       strategy: this.floatingUIOptions.strategy,
+       middleware: this.middlewares,
+     }).then(({ x, y, strategy, middlewareData }) => {
++      if (this.isDestroyed || !this.isVisible || this.editor.isDestroyed || !this.element.isConnected) {
++        return
++      }
++
+       // Handle hide middleware - hide element if reference is hidden or element has escaped
+       if (middlewareData.hide?.referenceHidden || middlewareData.hide?.escaped) {
+         this.element.style.visibility = 'hidden'
+@@ -456,6 +500,10 @@ export class BubbleMenuView implements PluginView {
+   }
+ 
+   update(view: EditorView, oldState?: EditorState) {
++    if (this.isDestroyed || this.editor.isDestroyed || !view?.dom?.isConnected) {
++      return
++    }
++
+     const { state } = view
+     const hasValidSelection = state.selection.from !== state.selection.to
+ 
+@@ -483,11 +531,21 @@ export class BubbleMenuView implements PluginView {
+     }
+ 
+     this.updateDebounceTimer = window.setTimeout(() => {
++      this.updateDebounceTimer = undefined
++
++      if (this.isDestroyed || this.editor.isDestroyed || !view?.dom?.isConnected) {
++        return
++      }
++
+       this.updateHandler(view, selectionChanged, docChanged, oldState)
+     }, this.updateDelay)
+   }
+ 
+   getShouldShow(oldState?: EditorState) {
++    if (this.isDestroyed || this.editor.isDestroyed || !this.view?.dom?.isConnected) {
++      return false
++    }
++
+     const { state } = this.view
+     const { selection } = state
+ 
+@@ -510,6 +568,10 @@ export class BubbleMenuView implements PluginView {
+   }
+ 
+   updateHandler = (view: EditorView, selectionChanged: boolean, docChanged: boolean, oldState?: EditorState) => {
++    if (this.isDestroyed || this.editor.isDestroyed || !view?.dom?.isConnected) {
++      return
++    }
++
+     const { composing } = view
+ 
+     const isSame = !selectionChanged && !docChanged
+@@ -526,12 +588,12 @@ export class BubbleMenuView implements PluginView {
+       return
+     }
+ 
+-    this.updatePosition()
+     this.show()
++    this.updatePosition()
+   }
+ 
+   show() {
+-    if (this.isVisible) {
++    if (this.isVisible || this.isDestroyed || this.editor.isDestroyed || !this.view?.dom?.isConnected) {
+       return
+     }
+ 
+@@ -574,6 +636,27 @@ export class BubbleMenuView implements PluginView {
+   }
+ 
+   destroy() {
++    if (this.isDestroyed) {
++      return
++    }
++
++    this.isDestroyed = true
++
++    if (this.updateDebounceTimer) {
++      clearTimeout(this.updateDebounceTimer)
++      this.updateDebounceTimer = undefined
++    }
++
++    if (this.resizeDebounceTimer) {
++      clearTimeout(this.resizeDebounceTimer)
++      this.resizeDebounceTimer = undefined
++    }
++
++    if (this.focusDebounceTimer) {
++      clearTimeout(this.focusDebounceTimer)
++      this.focusDebounceTimer = undefined
++    }
++
+     this.hide()
+     this.element.removeEventListener('mousedown', this.mousedownHandler, { capture: true })
+     this.view.dom.removeEventListener('dragstart', this.dragstartHandler)
