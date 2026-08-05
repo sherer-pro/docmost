@@ -168,6 +168,10 @@ function SpaceTreeComponent(
   });
   const setTreeApi = useSetAtom(treeApiAtom);
   const treeApiRef = useRef<TreeApi<SpaceTreeNode> | null>(null);
+  const revealedActiveNodeRef = useRef<{
+    nodeId: string;
+    treeApi: TreeApi<SpaceTreeNode>;
+  } | null>(null);
   const bulkOperationIdRef = useRef(0);
   const isBulkToggleRef = useRef(false);
   const [isTreeReady, setIsTreeReady] = useState(false);
@@ -196,6 +200,7 @@ function SpaceTreeComponent(
   const { data: currentPage } = usePageQuery({
     pageId: extractPageSlugId(activeTreeSlug),
   });
+  const activeTreeNodeId = activeTreeSlug ? currentPage?.id : undefined;
   const { data: space } = useSpaceQuery(spaceId);
   const [user] = useAtom(userAtom);
   const fullSpaceAccess = hasFullSpaceAccess({
@@ -238,34 +243,19 @@ function SpaceTreeComponent(
   }, [pagesData, hasNextPage, spaceId]);
 
   useEffect(() => {
-    if (!activeTreeSlug) {
-      treeApiRef.current?.deselectAll();
-      return;
-    }
-
-    if (!isDataLoaded || !currentPage?.id) {
+    if (!isDataLoaded || !isTreeReady || !activeTreeNodeId) {
       return;
     }
 
     let isCancelled = false;
-    let selectTimer: number | undefined;
-
-    const selectActiveNode = () => {
-      selectTimer = window.setTimeout(() => {
-        if (!isCancelled) {
-          treeApiRef.current?.select(currentPage.id, { align: "auto" });
-        }
-      }, 100);
-    };
 
     const restoreActiveNode = async () => {
-      const existingNode = dfs(treeApiRef.current?.root, currentPage.id);
+      const existingNode = dfs(treeApiRef.current?.root, activeTreeNodeId);
       if (existingNode) {
-        selectActiveNode();
         return;
       }
 
-      const ancestors = await getPageBreadcrumbs(currentPage.id);
+      const ancestors = await getPageBreadcrumbs(activeTreeNodeId);
       if (
         isCancelled ||
         spaceIdRef.current !== spaceId ||
@@ -278,7 +268,7 @@ function SpaceTreeComponent(
       let flatTreeItems = buildTree(ancestors);
       const ancestorChildren = await Promise.all(
         ancestors
-          .filter((ancestor: IPage) => ancestor.id !== currentPage.id)
+          .filter((ancestor: IPage) => ancestor.id !== activeTreeNodeId)
           .map((ancestor: IPage) =>
             fetchAllAncestorChildren({
               pageId: ancestor.id,
@@ -305,7 +295,6 @@ function SpaceTreeComponent(
       setData((currentData) =>
         appendNodeChildren(currentData, rootChild.id, rootChild.children),
       );
-      selectActiveNode();
     };
 
     restoreActiveNode().catch((error) => {
@@ -316,11 +305,31 @@ function SpaceTreeComponent(
 
     return () => {
       isCancelled = true;
-      if (selectTimer !== undefined) {
-        window.clearTimeout(selectTimer);
-      }
     };
-  }, [activeTreeSlug, currentPage?.id, isDataLoaded, setData, spaceId]);
+  }, [activeTreeNodeId, isDataLoaded, isTreeReady, setData, spaceId]);
+
+  useEffect(() => {
+    if (!isDataLoaded || !isTreeReady || !activeTreeNodeId) {
+      revealedActiveNodeRef.current = null;
+      return;
+    }
+
+    const treeApi = treeApiRef.current;
+    if (!treeApi || !dfs(treeApi.root, activeTreeNodeId)) {
+      revealedActiveNodeRef.current = null;
+      return;
+    }
+
+    if (
+      revealedActiveNodeRef.current?.nodeId === activeTreeNodeId &&
+      revealedActiveNodeRef.current.treeApi === treeApi
+    ) {
+      return;
+    }
+
+    revealedActiveNodeRef.current = { nodeId: activeTreeNodeId, treeApi };
+    void treeApi.scrollTo(activeTreeNodeId, "auto");
+  }, [activeTreeNodeId, data, isDataLoaded, isTreeReady]);
 
   // Clean up tree API on unmount
   useEffect(() => {
@@ -563,6 +572,7 @@ function SpaceTreeComponent(
           ref={handleTreeRef}
           openByDefault={false}
           disableMultiSelection={true}
+          selection={activeTreeNodeId}
           className={classes.tree}
           rowClassName={classes.row}
           rowHeight={30}
