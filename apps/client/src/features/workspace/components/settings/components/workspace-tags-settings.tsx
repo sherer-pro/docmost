@@ -56,7 +56,7 @@ export default function WorkspaceTagsSettings() {
           )}
         </Text>
       </ResponsiveSettingsContent>
-      <ResponsiveSettingsControl>
+      <ResponsiveSettingsControl wide>
         <Stack gap="xs">
           {builtInTagDefinitions.map((tag) => (
             <Checkbox

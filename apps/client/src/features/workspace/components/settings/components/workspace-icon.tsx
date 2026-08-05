@@ -10,6 +10,11 @@ import {
 import { AvatarIconType } from "@/features/attachments/types/attachment.types.ts";
 import { workspaceAtom } from "@/features/user/atoms/current-user-atom.ts";
 import useUserRole from "@/hooks/use-user-role.tsx";
+import {
+  ResponsiveSettingsContent,
+  ResponsiveSettingsControl,
+  ResponsiveSettingsRow,
+} from "@/components/ui/responsive-settings-row.tsx";
 
 export default function WorkspaceIcon() {
   const { t } = useTranslation();
@@ -46,22 +51,24 @@ export default function WorkspaceIcon() {
   };
 
   return (
-    <div style={{ marginBottom: "24px" }}>
-      <Text size="sm" fw={500} mb="xs">
-        {t("Icon")}
-      </Text>
-      <AvatarUploader
-        currentImageUrl={workspace?.logo}
-        fallbackName={workspace?.name}
-        type={AvatarIconType.WORKSPACE_ICON}
-        size="60px"
-        radius="sm"
-        variant="filled"
-        onUpload={handleIconUpload}
-        onRemove={handleIconRemove}
-        isLoading={isLoading}
-        disabled={!isAdmin}
-      />
-    </div>
+    <ResponsiveSettingsRow>
+      <ResponsiveSettingsContent>
+        <Text size="md">{t("Icon")}</Text>
+      </ResponsiveSettingsContent>
+      <ResponsiveSettingsControl wide>
+        <AvatarUploader
+          currentImageUrl={workspace?.logo}
+          fallbackName={workspace?.name}
+          type={AvatarIconType.WORKSPACE_ICON}
+          size="60px"
+          radius="sm"
+          variant="filled"
+          onUpload={handleIconUpload}
+          onRemove={handleIconRemove}
+          isLoading={isLoading}
+          disabled={!isAdmin}
+        />
+      </ResponsiveSettingsControl>
+    </ResponsiveSettingsRow>
   );
 }

@@ -4,12 +4,17 @@ import * as z from "zod";
 import { useState } from "react";
 import { updateWorkspace } from "@/features/workspace/services/workspace-service.ts";
 import { IWorkspace } from "@/features/workspace/types/workspace.types.ts";
-import { TextInput, Button } from "@mantine/core";
+import { Button, Group, Text, TextInput } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { zodResolver } from "mantine-form-zod-resolver";
 import { notifications } from "@mantine/notifications";
 import useUserRole from "@/hooks/use-user-role.tsx";
 import { useTranslation } from "react-i18next";
+import {
+  ResponsiveSettingsContent,
+  ResponsiveSettingsControl,
+  ResponsiveSettingsRow,
+} from "@/components/ui/responsive-settings-row.tsx";
 
 const formSchema = z.object({
   name: z.string().min(1),
@@ -49,26 +54,35 @@ export default function WorkspaceNameForm() {
   }
 
   return (
-    <form onSubmit={form.onSubmit(handleSubmit)}>
-      <TextInput
-        id="name"
-        label={t("Name")}
-        placeholder={t("e.g ACME")}
-        variant="filled"
-        readOnly={!isAdmin}
-        {...form.getInputProps("name")}
-      />
+    <ResponsiveSettingsRow>
+      <ResponsiveSettingsContent>
+        <Text size="md">{t("Workspace Name")}</Text>
+      </ResponsiveSettingsContent>
+      <ResponsiveSettingsControl wide>
+        <form onSubmit={form.onSubmit(handleSubmit)} style={{ width: "100%" }}>
+          <Group gap="sm" align="flex-end" wrap="nowrap">
+            <TextInput
+              id="name"
+              aria-label={t("Workspace Name")}
+              placeholder={t("e.g ACME")}
+              variant="filled"
+              readOnly={!isAdmin}
+              style={{ flex: 1 }}
+              {...form.getInputProps("name")}
+            />
 
-      {isAdmin && (
-        <Button
-          mt="sm"
-          type="submit"
-          disabled={isLoading || !form.isDirty()}
-          loading={isLoading}
-        >
-          {t("Save")}
-        </Button>
-      )}
-    </form>
+            {isAdmin && (
+              <Button
+                type="submit"
+                disabled={isLoading || !form.isDirty()}
+                loading={isLoading}
+              >
+                {t("Save")}
+              </Button>
+            )}
+          </Group>
+        </form>
+      </ResponsiveSettingsControl>
+    </ResponsiveSettingsRow>
   );
 }

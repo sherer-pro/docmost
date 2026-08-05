@@ -24,10 +24,20 @@ export function ResponsiveSettingsContent({
 
 interface ResponsiveSettingsControlProps {
   children: React.ReactNode;
+  wide?: boolean;
 }
 
 export function ResponsiveSettingsControl({
   children,
+  wide = false,
 }: ResponsiveSettingsControlProps) {
-  return <Box className={classes.control}>{children}</Box>;
+  return (
+    <Box
+      className={[classes.control, wide && classes.wide]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      {children}
+    </Box>
+  );
 }

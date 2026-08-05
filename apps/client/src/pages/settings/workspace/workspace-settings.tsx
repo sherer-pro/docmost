@@ -7,7 +7,7 @@ import { useTranslation } from "react-i18next";
 import { getAppName, isCloud } from "@/lib/config.ts";
 import { Helmet } from "react-helmet-async";
 import ManageHostname from "@/features/workspace/components/manage-hostname.tsx";
-import { Divider } from "@mantine/core";
+import { Divider, Stack } from "@mantine/core";
 
 export default function WorkspaceSettings() {
   const { t } = useTranslation();
@@ -19,18 +19,22 @@ export default function WorkspaceSettings() {
         </title>
       </Helmet>
       <SettingsTitle title={t("General")} />
-      <WorkspaceIcon />
-      <WorkspaceNameForm />
-      <Divider my="lg" />
-      <WorkspaceTagsSettings />
-      <PageTemplateWorkspacePolicySettings />
+      <Stack gap="lg">
+        <WorkspaceIcon />
+        <Divider />
+        <WorkspaceNameForm />
+        <Divider />
+        <WorkspaceTagsSettings />
+        <Divider />
+        <PageTemplateWorkspacePolicySettings />
 
-      {isCloud() && (
-        <>
-          <Divider my="md" />
-          <ManageHostname />
-        </>
-      )}
+        {isCloud() && (
+          <>
+            <Divider />
+            <ManageHostname />
+          </>
+        )}
+      </Stack>
     </>
   );
 }
