@@ -1,3 +1,5 @@
+jest.mock('lib0/decoding.js', () => ({ readVarString: jest.fn() }));
+
 jest.mock('./ai-run-step.service', () => ({
   AiRunStepService: class AiRunStepService {},
 }));

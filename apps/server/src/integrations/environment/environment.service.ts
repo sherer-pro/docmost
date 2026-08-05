@@ -94,6 +94,15 @@ export class EnvironmentService {
     );
   }
 
+  isAiAssistantProfilesEnabled(): boolean {
+    return (
+      this.configService
+        .get<string>('AI_ASSISTANT_PROFILES_ENABLED', 'false')
+        .trim()
+        .toLowerCase() === 'true'
+    );
+  }
+
   isPageTemplatesEnabled(): boolean {
     return (
       this.configService

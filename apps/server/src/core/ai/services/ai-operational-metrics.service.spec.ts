@@ -39,6 +39,7 @@ describe('AiOperationalMetricsService', () => {
         cancel: { count: 1, totalMs: 200, maxMs: 200 },
       },
       terminalStatuses: { cancelled: 1 },
+      assistantProfiles: { outcomes: {} },
       attempts: { count: 1, average: 2, max: 2 },
       reconciledJobs: 1,
       retrievalOutcomes: { empty: 1 },

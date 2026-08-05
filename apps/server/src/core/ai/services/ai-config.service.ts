@@ -344,6 +344,46 @@ export class AiConfigService {
             null;
       const { assistantName, assistantNameEnabled, assistantGender } =
         this.resolveAssistantIdentityUpdate(existing, dto);
+      const defaultAssistantProfileId =
+        dto.defaultAssistantProfileId !== undefined
+          ? dto.defaultAssistantProfileId
+          : (existing?.defaultAssistantProfileId ?? null);
+      if (
+        dto.defaultAssistantProfileId !== undefined &&
+        defaultAssistantProfileId
+      ) {
+        if (!this.environmentService.isAiAssistantProfilesEnabled()) {
+          throw new BadRequestException({
+            code: 'ai_profile_disabled',
+            message: 'Assistant profiles are disabled for this deployment',
+          });
+        }
+        const [profile, profilePolicy] = await Promise.all([
+          trx
+            .selectFrom('aiAssistantProfiles')
+            .select('id')
+            .where('id', '=', defaultAssistantProfileId)
+            .where('workspaceId', '=', workspace.id)
+            .where('spaceId', '=', spaceId)
+            .where('enabled', '=', true)
+            .where('deletedAt', 'is', null)
+            .executeTakeFirst(),
+          trx
+            .selectFrom('aiAssistantProfileWorkspaceSettings')
+            .select('enabled')
+            .where('workspaceId', '=', workspace.id)
+            .executeTakeFirst(),
+        ]);
+        if (!profile) {
+          throw new NotFoundException('Assistant profile not found');
+        }
+        if (!profilePolicy?.enabled) {
+          throw new BadRequestException({
+            code: 'ai_profile_disabled',
+            message: 'Assistant profiles are disabled for this workspace',
+          });
+        }
+      }
       if (
         retrievalAdapter === 'open-webui-knowledge-v1' &&
         (!openWebUiBaseUrl || !openWebUiKnowledgeId)
@@ -367,6 +407,7 @@ export class AiConfigService {
         agentEnabled: requestedAgentEnabled,
         agentVerifiedProviderFingerprint,
         agentVerifiedAt,
+        defaultAssistantProfileId,
         assistantNameEnabled,
         assistantName,
         assistantGender,
@@ -1050,6 +1091,7 @@ export class AiConfigService {
       visionEnabled: config.visionEnabled,
       reasoningEnabled: config.reasoningEnabled,
       quickCommands: config.quickCommands as unknown as AiQuickCommand[] | null,
+      defaultAssistantProfileId: config.defaultAssistantProfileId,
       createdAt: config.createdAt.toISOString(),
       updatedAt: config.updatedAt.toISOString(),
     };

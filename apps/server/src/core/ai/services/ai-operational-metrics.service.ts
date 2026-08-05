@@ -44,6 +44,20 @@ export type AiMcpObservedOutcome =
   | 'schema_rejected'
   | 'capacity';
 
+export type AiAssistantProfileOutcome =
+  | 'policy_updated'
+  | 'created'
+  | 'updated'
+  | 'deleted'
+  | 'selected'
+  | 'test_model_ok'
+  | 'test_agent_ok'
+  | 'test_agent_failed'
+  | 'provider_config_changed'
+  | 'policy_changed'
+  | 'not_allowed'
+  | 'disabled';
+
 @Injectable()
 export class AiOperationalMetricsService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(AiOperationalMetricsService.name);
@@ -68,6 +82,7 @@ export class AiOperationalMetricsService implements OnModuleInit, OnModuleDestro
   private readonly mcpCallLatency = durationMetric();
   private readonly mcpProbeOutcomes = new Map<string, number>();
   private readonly mcpProbeLatency = durationMetric();
+  private readonly assistantProfileOutcomes = new Map<string, number>();
   private mcpWireBytes = 0;
   private mcpResultBytes = 0;
   private mcpActiveLeasesMax = 0;
@@ -181,6 +196,10 @@ export class AiOperationalMetricsService implements OnModuleInit, OnModuleDestro
     this.mcpRetiringLeasesMax = Math.max(this.mcpRetiringLeasesMax, retiring);
   }
 
+  observeProfileOutcome(outcome: AiAssistantProfileOutcome): void {
+    this.increment(this.assistantProfileOutcomes, outcome);
+  }
+
   getSnapshot() {
     return {
       durations: structuredClone(this.durations),
@@ -221,6 +240,9 @@ export class AiOperationalMetricsService implements OnModuleInit, OnModuleDestro
           retiringMax: this.mcpRetiringLeasesMax,
         },
       },
+      assistantProfiles: {
+        outcomes: Object.fromEntries(this.assistantProfileOutcomes),
+      },
     };
   }
 
@@ -260,7 +282,8 @@ export class AiOperationalMetricsService implements OnModuleInit, OnModuleDestro
       Object.keys(snapshot.externalMcp.cache).length > 0 ||
       Object.keys(snapshot.externalMcp.probe.outcomes).length > 0 ||
       Object.keys(snapshot.externalMcp.calls.outcomes).length > 0 ||
-      snapshot.externalMcp.leases.activeMax > 0
+      snapshot.externalMcp.leases.activeMax > 0 ||
+      Object.keys(snapshot.assistantProfiles.outcomes).length > 0
     );
   }
 
@@ -278,6 +301,7 @@ export class AiOperationalMetricsService implements OnModuleInit, OnModuleDestro
     this.mcpCallOutcomes.clear();
     Object.assign(this.mcpCallLatency, durationMetric());
     this.mcpProbeOutcomes.clear();
+    this.assistantProfileOutcomes.clear();
     Object.assign(this.mcpProbeLatency, durationMetric());
     this.mcpWireBytes = 0;
     this.mcpResultBytes = 0;

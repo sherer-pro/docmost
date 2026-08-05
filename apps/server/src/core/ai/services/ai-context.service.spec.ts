@@ -1,3 +1,5 @@
+jest.mock('lib0/decoding.js', () => ({ readVarString: jest.fn() }));
+
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { AiContextService } from './ai-context.service';
 

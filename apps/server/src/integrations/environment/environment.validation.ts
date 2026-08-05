@@ -57,6 +57,10 @@ export class EnvironmentVariables {
 
   @IsOptional()
   @IsIn(['true', 'false'])
+  AI_ASSISTANT_PROFILES_ENABLED: string;
+
+  @IsOptional()
+  @IsIn(['true', 'false'])
   PAGE_TEMPLATES_ENABLED: string;
 
   @IsOptional()

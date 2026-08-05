@@ -358,6 +358,11 @@ export class AiMcpPolicyService {
       spaceId: string;
       userId: string;
       executionMode: string;
+      profileKey?: string;
+      profileAllowedTools?: ReadonlyArray<{
+        bindingId: string;
+        toolName: string;
+      }>;
     },
   ): Promise<AiMcpRunSnapshot | null> {
     // External tools exist only for the internal agent. Chat, retrieval, and
@@ -380,6 +385,15 @@ export class AiMcpPolicyService {
 
     const connections: AiMcpSnapshotConnection[] = [];
     let toolCount = 0;
+    const exactProfileTools =
+      params.profileAllowedTools === undefined
+        ? null
+        : new Map<string, Set<string>>();
+    for (const selected of params.profileAllowedTools ?? []) {
+      const names = exactProfileTools!.get(selected.bindingId) ?? new Set();
+      names.add(selected.toolName);
+      exactProfileTools!.set(selected.bindingId, names);
+    }
 
     for (const row of rows) {
       if (this.unavailableReason(row, settings.enabled) !== null) {
@@ -388,7 +402,13 @@ export class AiMcpPolicyService {
       if (row.optedIn !== true) {
         continue;
       }
-      const tools = this.effectiveToolNames(row);
+      let tools = this.effectiveToolNames(row, exactProfileTools === null);
+      if (exactProfileTools) {
+        const allowed = exactProfileTools.get(row.bindingId);
+        tools = allowed
+          ? tools.filter((tool) => allowed.has(tool.toolName))
+          : [];
+      }
       if (tools.length === 0) {
         continue;
       }
@@ -429,7 +449,7 @@ export class AiMcpPolicyService {
 
     const snapshot: AiMcpRunSnapshot = {
       schemaVersion: 1,
-      profileKey: AI_MCP_DEFAULT_PROFILE_KEY,
+      profileKey: params.profileKey ?? AI_MCP_DEFAULT_PROFILE_KEY,
       workspacePolicyVersion: settings.policyVersion,
       connections,
     };
@@ -453,6 +473,82 @@ export class AiMcpPolicyService {
   fingerprintSnapshot(snapshot: AiMcpRunSnapshot): string {
     return createHash('sha256')
       .update(JSON.stringify(snapshot), 'utf8')
+      .digest('hex');
+  }
+
+  async maximumProfilePolicyFingerprint(
+    trx: KyselyTransaction | KyselyDB,
+    params: {
+      workspaceId: string;
+      spaceId: string;
+      tools: ReadonlyArray<{ bindingId: string; toolName: string }>;
+    },
+  ): Promise<string> {
+    const tools = [...params.tools].sort((left, right) =>
+      `${left.bindingId}:${left.toolName}`.localeCompare(
+        `${right.bindingId}:${right.toolName}`,
+      ),
+    );
+    if (tools.length === 0) {
+      return createHash('sha256')
+        .update(JSON.stringify({ source: 'profile_external_mcp', tools: [] }))
+        .digest('hex');
+    }
+    const bindingIds = [...new Set(tools.map((tool) => tool.bindingId))];
+    const [settings, rows] = await Promise.all([
+      this.readSettings(params.workspaceId, trx),
+      trx
+        .selectFrom('aiMcpSpaceBindings as b')
+        .innerJoin('aiMcpServers as s', 's.id', 'b.serverId')
+        .select([
+          'b.id as bindingId',
+          'b.enabled as bindingEnabled',
+          'b.allowedTools',
+          'b.policyVersion as bindingPolicyVersion',
+          's.enabled as serverEnabled',
+          's.configVersion',
+          's.approvedTools',
+        ])
+        .where('b.workspaceId', '=', params.workspaceId)
+        .where('b.spaceId', '=', params.spaceId)
+        .where('b.id', 'in', bindingIds)
+        .execute(),
+    ]);
+    const byBinding = new Map(rows.map((row) => [row.bindingId, row]));
+    const manifest = tools.map((tool) => {
+      const row = byBinding.get(tool.bindingId);
+      const approved = row
+        ? this.readApproved(row.approvedTools).find(
+            (candidate) => candidate.toolName === tool.toolName,
+          )
+        : undefined;
+      const spaceAllowed = row
+        ? this.readStringArray(row.allowedTools)
+        : [];
+      return {
+        bindingId: tool.bindingId,
+        toolName: tool.toolName,
+        bindingFound: Boolean(row),
+        bindingEnabled: row?.bindingEnabled ?? false,
+        bindingPolicyVersion: Number(row?.bindingPolicyVersion ?? 0),
+        serverEnabled: row?.serverEnabled ?? false,
+        serverConfigVersion: Number(row?.configVersion ?? 0),
+        approved: Boolean(approved),
+        spaceAllowed:
+          Boolean(row) &&
+          (spaceAllowed.length === 0 || spaceAllowed.includes(tool.toolName)),
+      };
+    });
+    return createHash('sha256')
+      .update(
+        JSON.stringify({
+          source: 'profile_external_mcp',
+          deploymentEnabled: this.isDeploymentEnabled(),
+          workspaceEnabled: settings.enabled,
+          workspacePolicyVersion: settings.policyVersion,
+          tools: manifest,
+        }),
+      )
       .digest('hex');
   }
 
@@ -513,7 +609,6 @@ export class AiMcpPolicyService {
         'Workspace external MCP policy changed',
       );
     }
-
     const rows = await this.loadEffective(
       params.spaceId,
       params.workspaceId,
@@ -554,10 +649,12 @@ export class AiMcpPolicyService {
         'External MCP space configuration changed',
       );
     }
-
     // The tool must still be effective right now, with the same schema the
     // model was shown.
-    const effective = this.effectiveToolNames(row).find(
+    const effective = this.effectiveToolNames(
+      row,
+      params.snapshot.profileKey === AI_MCP_DEFAULT_PROFILE_KEY,
+    ).find(
       (candidate) => candidate.toolName === params.toolName,
     );
     if (!effective) {
@@ -702,7 +799,10 @@ export class AiMcpPolicyService {
    * workspace-approved ∧ space allowlist ∧ profile allowlist ∧ every group
    * allowlist that applies to this user.
    */
-  private effectiveToolNames(row: EffectiveRow): AiMcpStoredApprovedTool[] {
+  private effectiveToolNames(
+    row: EffectiveRow,
+    includeLegacyProfile = true,
+  ): AiMcpStoredApprovedTool[] {
     const approved = this.readApproved(row.approvedTools);
     const spaceAllowed = this.readStringArray(row.allowedTools);
     const profileMap =
@@ -718,7 +818,7 @@ export class AiMcpPolicyService {
       const allowed = new Set(spaceAllowed);
       result = result.filter((tool) => allowed.has(tool.toolName));
     }
-    if (profileAllowed.length > 0) {
+    if (includeLegacyProfile && profileAllowed.length > 0) {
       const allowed = new Set(profileAllowed);
       result = result.filter((tool) => allowed.has(tool.toolName));
     }
@@ -755,6 +855,7 @@ export class AiMcpPolicyService {
     const approved = this.readApproved(row.approvedTools);
     const spaceAllowed = this.readStringArray(row.allowedTools);
     return {
+      bindingId: row.bindingId,
       serverId: row.serverId,
       serverName: row.serverName,
       namespace: row.namespace,

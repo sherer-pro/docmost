@@ -104,8 +104,91 @@ export interface AiConversationContextSources {
   updatedAt: Generated<Timestamp>;
 }
 
+export interface AiAgentToolVerifications {
+  id: Generated<string>;
+  probeToolName: string;
+  profileId: string;
+  profileVersion: number;
+  providerFingerprint: string;
+  spaceId: string;
+  testedAt: Generated<Timestamp>;
+  testedById: string | null;
+  toolPolicyFingerprint: string;
+  toolSchemaFingerprint: string;
+  verificationFingerprint: string;
+  workspaceId: string;
+}
+
+export interface AiAssistantProfileGroupPolicies {
+  allowedBuiltinCapabilities: Json | null;
+  available: Generated<boolean>;
+  createdAt: Generated<Timestamp>;
+  createdById: string | null;
+  groupId: string;
+  id: Generated<string>;
+  profileId: string;
+  updatedAt: Generated<Timestamp>;
+}
+
+export interface AiAssistantProfileMcpTools {
+  bindingId: string;
+  createdAt: Generated<Timestamp>;
+  id: Generated<string>;
+  profileId: string;
+  toolName: string;
+}
+
+export interface AiAssistantProfiles {
+  allowedBuiltinCapabilities: Generated<Json>;
+  autoStart: Generated<boolean>;
+  chatModelOverride: string | null;
+  createdAt: Generated<Timestamp>;
+  createdById: string | null;
+  deletedAt: Timestamp | null;
+  description: string | null;
+  enabled: Generated<boolean>;
+  icon: string;
+  id: Generated<string>;
+  instructions: string;
+  launchMessage: string | null;
+  maxOutputTokensOverride: number | null;
+  name: string;
+  quickCommands: Json | null;
+  spaceId: string;
+  temperatureOverride: number | null;
+  updatedAt: Generated<Timestamp>;
+  updatedById: string | null;
+  version: Generated<number>;
+  workspaceId: string;
+}
+
+export interface AiAssistantProfileUserPreferences {
+  createdAt: Generated<Timestamp>;
+  hiddenProfileIds: Generated<string[]>;
+  id: Generated<string>;
+  preferredProfileId: string | null;
+  spaceId: string;
+  updatedAt: Generated<Timestamp>;
+  userId: string;
+  workspaceId: string;
+}
+
+export interface AiAssistantProfileWorkspaceSettings {
+  createdAt: Generated<Timestamp>;
+  enabled: Generated<boolean>;
+  modelOverridesEnabled: Generated<boolean>;
+  policyVersion: Generated<number>;
+  updatedAt: Generated<Timestamp>;
+  updatedById: string | null;
+  workspaceId: string;
+}
+
 export interface AiConversations {
   agentMode: Generated<boolean>;
+  assistantProfileFingerprint: string | null;
+  assistantProfileId: string | null;
+  assistantProfileSnapshot: Json | null;
+  assistantProfileVersion: number | null;
   clientRequestId: string | null;
   contextAttachmentIds: Generated<string[]>;
   contextChatFileIds: Generated<string[]>;
@@ -294,6 +377,8 @@ export interface AiBuiltinToolWorkspacePolicies {
 
 export interface AiRuns {
   assistantMessageId: string;
+  assistantProfileFingerprint: string | null;
+  assistantProfileSnapshot: Json | null;
   attachmentIds: Generated<string[]>;
   attemptNo: Generated<number>;
   builtinToolPolicyFingerprint: string | null;
@@ -319,6 +404,8 @@ export interface AiRuns {
   outputTokens: Generated<Int8>;
   pageId: string;
   previousRunId: string | null;
+  providerConfigFingerprint: string | null;
+  providerConfigSnapshot: Json | null;
   reasoningSnapshot: string | null;
   requestFingerprint: string | null;
   reservedTokens: Generated<Int8>;
@@ -394,6 +481,7 @@ export interface AiSpaceConfigs {
   createdById: string | null;
   dailyRequestLimitPerUser: Generated<number>;
   dailyTokenLimitPerSpace: Generated<Int8>;
+  defaultAssistantProfileId: string | null;
   enabled: Generated<boolean>;
   id: Generated<string>;
   maxOutputTokens: Generated<number>;
@@ -1094,6 +1182,12 @@ export interface Workspaces {
 }
 
 export interface DB {
+  aiAgentToolVerifications: AiAgentToolVerifications;
+  aiAssistantProfileGroupPolicies: AiAssistantProfileGroupPolicies;
+  aiAssistantProfileMcpTools: AiAssistantProfileMcpTools;
+  aiAssistantProfiles: AiAssistantProfiles;
+  aiAssistantProfileUserPreferences: AiAssistantProfileUserPreferences;
+  aiAssistantProfileWorkspaceSettings: AiAssistantProfileWorkspaceSettings;
   aiBuiltinToolSpacePolicies: AiBuiltinToolSpacePolicies;
   aiBuiltinToolWorkspacePolicies: AiBuiltinToolWorkspacePolicies;
   aiAuxRuns: AiAuxRuns;

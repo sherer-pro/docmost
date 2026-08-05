@@ -12,7 +12,12 @@ import {
   User,
   Workspace,
 } from '@docmost/db/types/entity.types';
-import { AiCitation, AiConversation, AiMessage } from '@docmost/api-contract';
+import {
+  AiAssistantProfileSnapshot,
+  AiCitation,
+  AiConversation,
+  AiMessage,
+} from '@docmost/api-contract';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { PageAccessService } from '../../page-access/page-access.service';
 import {
@@ -25,6 +30,7 @@ import { sql } from 'kysely';
 import { AiRunEventService } from './ai-run-event.service';
 import { AiConfigService } from './ai-config.service';
 import { AiContentPolicyService } from '../../ai-content-policy/ai-content-policy.service';
+import { AiAssistantProfileService } from './ai-assistant-profile.service';
 
 @Injectable()
 export class AiConversationService {
@@ -35,6 +41,7 @@ export class AiConversationService {
     private readonly runEvents: AiRunEventService,
     private readonly configService: AiConfigService,
     private readonly contentPolicy: AiContentPolicyService,
+    private readonly profiles: AiAssistantProfileService,
   ) {}
 
   async list(pageId: string, user: User, workspace: Workspace) {
@@ -51,13 +58,17 @@ export class AiConversationService {
       query = query.where('agentMode', '=', true);
     }
     const rows = await query.orderBy('lastOpenedAt', 'desc').execute();
-    return { items: rows.map((row) => this.toConversation(row)) };
+    return {
+      items: await Promise.all(
+        rows.map((row) => this.toConversation(row, user.id, workspace.id)),
+      ),
+    };
   }
 
   async create(dto: CreateAiConversationDto, user: User, workspace: Workspace) {
     const agentMode = dto.agentMode ?? false;
     const page = agentMode
-      ? await this.assertAgentAvailable(dto.pageId, user, workspace)
+      ? await this.assertAgentPage(dto.pageId, user, workspace)
       : await this.assertWritablePage(dto.pageId, user, workspace.id);
     const fingerprint = createHash('sha256')
       .update(
@@ -66,6 +77,7 @@ export class AiConversationService {
           title: dto.title?.trim() || null,
           useSpaceSearch: dto.useSpaceSearch ?? false,
           agentMode,
+          assistantProfileId: dto.assistantProfileId,
         }),
       )
       .digest('hex');
@@ -107,6 +119,36 @@ export class AiConversationService {
         }
         return existing;
       }
+      const resolvedProfile = await this.profiles.resolveConversationSnapshot(
+        trx,
+        {
+          workspaceId: workspace.id,
+          spaceId: page.spaceId,
+          userId: user.id,
+          assistantProfileId: dto.assistantProfileId,
+        },
+      );
+      if (agentMode) {
+        const config = await trx
+          .selectFrom('aiSpaceConfigs')
+          .selectAll()
+          .where('spaceId', '=', page.spaceId)
+          .where('workspaceId', '=', workspace.id)
+          .executeTakeFirst();
+        if (!config) {
+          throw new BadRequestException('Configure AI for this space first');
+        }
+        if (resolvedProfile.snapshot.source === 'assistant_profile') {
+          await this.profiles.assertProfileAgentAvailable(
+            resolvedProfile.snapshot,
+            config,
+            user.id,
+            trx,
+          );
+        } else {
+          this.assertLegacyAgentConfig(config);
+        }
+      }
       return trx
         .insertInto('aiConversations')
         .values({
@@ -121,20 +163,30 @@ export class AiConversationService {
           useSpaceSearch: dto.useSpaceSearch ?? false,
           agentMode,
           contextFingerprint,
+          assistantProfileId: resolvedProfile.snapshot.profileId,
+          assistantProfileVersion: resolvedProfile.snapshot.profileVersion,
+          assistantProfileSnapshot: resolvedProfile.snapshot as never,
+          assistantProfileFingerprint: resolvedProfile.fingerprint,
         })
         .returningAll()
         .executeTakeFirstOrThrow();
     });
-    return this.toConversation(row);
+    return this.toConversation(row, user.id, workspace.id);
   }
 
   async get(id: string, user: User, workspace: Workspace) {
-    return this.toConversation(await this.getOwnedEntity(id, user, workspace));
+    return this.toConversation(
+      await this.getOwnedEntity(id, user, workspace),
+      user.id,
+      workspace.id,
+    );
   }
 
   async open(id: string, user: User, workspace: Workspace) {
     return this.toConversation(
       await this.getOwnedEntity(id, user, workspace, true),
+      user.id,
+      workspace.id,
     );
   }
 
@@ -146,30 +198,98 @@ export class AiConversationService {
   ) {
     const conversation = await this.getOwnedEntity(id, user, workspace);
     if (dto.agentMode === true) {
-      await this.assertAgentAvailable(conversation.pageId, user, workspace);
+      await this.assertAgentPage(conversation.pageId, user, workspace);
     } else if (dto.agentMode === false) {
       await this.assertWritablePage(conversation.pageId, user, workspace.id);
     }
-    const row = await this.db
-      .updateTable('aiConversations')
-      .set({
-        ...(dto.title !== undefined
-          ? {
-              title: dto.title?.trim() || null,
-              titleSource: dto.title?.trim() ? 'manual' : null,
-            }
-          : {}),
-        ...(dto.draft !== undefined ? { draft: dto.draft || null } : {}),
-        ...(dto.useSpaceSearch !== undefined
-          ? { useSpaceSearch: dto.useSpaceSearch }
-          : {}),
-        ...(dto.agentMode !== undefined ? { agentMode: dto.agentMode } : {}),
-        updatedAt: new Date(),
-      })
-      .where('id', '=', conversation.id)
-      .returningAll()
-      .executeTakeFirstOrThrow();
-    const result = this.toConversation(row);
+    const row = await this.db.transaction().execute(async (trx) => {
+      const locked = await trx
+        .selectFrom('aiConversations')
+        .selectAll()
+        .where('id', '=', conversation.id)
+        .forUpdate()
+        .executeTakeFirstOrThrow();
+      let profileUpdate: Record<string, unknown> = {};
+      let effectiveSnapshot = this.profiles.readSnapshot(
+        locked.assistantProfileSnapshot,
+        locked.assistantProfileFingerprint,
+      );
+      if (dto.assistantProfileId !== undefined) {
+        const activity = await trx
+          .selectFrom('aiMessages')
+          .select((eb) => eb.fn.countAll<number>().as('count'))
+          .where('conversationId', '=', locked.id)
+          .executeTakeFirstOrThrow();
+        const runActivity = await trx
+          .selectFrom('aiRuns')
+          .select((eb) => eb.fn.countAll<number>().as('count'))
+          .where('conversationId', '=', locked.id)
+          .executeTakeFirstOrThrow();
+        if (Number(activity.count) > 0 || Number(runActivity.count) > 0) {
+          throw new ConflictException({
+            code: 'ai_profile_locked',
+            message: 'Start a new conversation to change assistant profile',
+          });
+        }
+        const resolved = await this.profiles.resolveConversationSnapshot(trx, {
+          workspaceId: workspace.id,
+          spaceId: locked.spaceId,
+          userId: user.id,
+          assistantProfileId: dto.assistantProfileId,
+        });
+        effectiveSnapshot = resolved.snapshot;
+        profileUpdate = {
+          assistantProfileId: resolved.snapshot.profileId,
+          assistantProfileVersion: resolved.snapshot.profileVersion,
+          assistantProfileSnapshot: resolved.snapshot as never,
+          assistantProfileFingerprint: resolved.fingerprint,
+        };
+      }
+      const effectiveAgentMode = dto.agentMode ?? locked.agentMode;
+      if (effectiveAgentMode) {
+        const snapshot = effectiveSnapshot ?? this.legacySnapshot();
+        const config = await trx
+          .selectFrom('aiSpaceConfigs')
+          .selectAll()
+          .where('spaceId', '=', locked.spaceId)
+          .where('workspaceId', '=', workspace.id)
+          .executeTakeFirst();
+        if (!config) {
+          throw new BadRequestException('Configure AI for this space first');
+        }
+        if (snapshot.source === 'assistant_profile') {
+          await this.profiles.assertProfileAgentAvailable(
+            snapshot,
+            config,
+            user.id,
+            trx,
+          );
+        } else {
+          this.assertLegacyAgentConfig(config);
+        }
+      }
+      return trx
+        .updateTable('aiConversations')
+        .set({
+          ...(dto.title !== undefined
+            ? {
+                title: dto.title?.trim() || null,
+                titleSource: dto.title?.trim() ? 'manual' : null,
+              }
+            : {}),
+          ...(dto.draft !== undefined ? { draft: dto.draft || null } : {}),
+          ...(dto.useSpaceSearch !== undefined
+            ? { useSpaceSearch: dto.useSpaceSearch }
+            : {}),
+          ...(dto.agentMode !== undefined ? { agentMode: dto.agentMode } : {}),
+          ...profileUpdate,
+          updatedAt: new Date(),
+        })
+        .where('id', '=', locked.id)
+        .returningAll()
+        .executeTakeFirstOrThrow();
+    });
+    const result = await this.toConversation(row, user.id, workspace.id);
     this.runEvents.emitConversationUpdated(result);
     return result;
   }
@@ -436,7 +556,7 @@ export class AiConversationService {
     return page;
   }
 
-  private async assertAgentAvailable(
+  private async assertAgentPage(
     pageId: string,
     user: User,
     workspace: Workspace,
@@ -454,11 +574,13 @@ export class AiConversationService {
         message: 'The current page is excluded from AI access',
       });
     }
-    const config = await this.configService.getRawConfig(
-      page.spaceId,
-      workspace.id,
-    );
-    if (!config?.enabled || !config.agentEnabled) {
+    return page;
+  }
+
+  private assertLegacyAgentConfig(
+    config: Awaited<ReturnType<AiConfigService['getRawConfig']>> & {},
+  ): void {
+    if (!config.enabled || !config.agentEnabled) {
       throw new BadRequestException({
         code: 'agent_disabled',
         message: 'The AI agent is disabled for this space',
@@ -473,7 +595,6 @@ export class AiConversationService {
         message: 'The current AI provider has not passed the tool calling test',
       });
     }
-    return page;
   }
 
   private async currentReadablePageIds(
@@ -491,7 +612,21 @@ export class AiConversationService {
     return new Set(pageIds.filter((id) => snapshot.readablePageIds.has(id)));
   }
 
-  toConversation(row: AiConversationEntity): AiConversation {
+  async toConversation(
+    row: AiConversationEntity,
+    userId: string,
+    workspaceId: string,
+  ): Promise<AiConversation> {
+    const snapshot =
+      this.profiles.readSnapshot(
+        row.assistantProfileSnapshot,
+        row.assistantProfileFingerprint,
+      ) ?? this.legacySnapshot();
+    const availability = await this.profiles.snapshotAvailability(
+      snapshot,
+      userId,
+      workspaceId,
+    );
     return {
       id: row.id,
       workspaceId: row.workspaceId,
@@ -506,9 +641,33 @@ export class AiConversationService {
       agentMode: row.agentMode,
       includeCurrentDocument: row.includeCurrentDocument,
       contextRevision: row.contextRevision,
+      assistantProfile: this.profiles.toConversationSummary(
+        snapshot,
+        availability,
+      ),
       lastOpenedAt: row.lastOpenedAt.toISOString(),
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
+    };
+  }
+
+  private legacySnapshot(): AiAssistantProfileSnapshot {
+    return {
+      schemaVersion: 1,
+      source: 'legacy_space',
+      profileId: null,
+      profileVersion: null,
+      display: null,
+      instructions: null,
+      quickCommands: null,
+      chatModelOverride: null,
+      temperatureOverride: null,
+      maxOutputTokensOverride: null,
+      allowedBuiltinCapabilities: null,
+      allowedExternalTools: null,
+      autoStart: false,
+      launchMessage: null,
+      toolPolicyFingerprint: 'legacy_space',
     };
   }
 

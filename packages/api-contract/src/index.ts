@@ -5,6 +5,7 @@ export * from "./page-custom-field";
 export * from "./page";
 export * from "./docmost-archive";
 export * from "./ai";
+export * from "./ai-profiles";
 export * from "./ai-external-mcp";
 export * from "./ai-tools";
 export * from "./rag";

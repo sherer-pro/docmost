@@ -74,6 +74,7 @@ function buildService() {
     {} as never,
     {} as never,
     mcpCalls,
+    {} as never,
   );
 
   return { service, mcpCalls };

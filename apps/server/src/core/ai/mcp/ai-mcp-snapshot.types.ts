@@ -31,7 +31,7 @@ export type AiMcpSnapshotConnection = {
 
 export type AiMcpRunSnapshot = {
   schemaVersion: 1;
-  profileKey: 'default';
+  profileKey: string;
   workspacePolicyVersion: number;
   connections: AiMcpSnapshotConnection[];
 };
