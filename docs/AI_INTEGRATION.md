@@ -20,6 +20,41 @@ the standard localized title while retaining the saved name and gender; a null
 name is accepted only while naming is disabled. Clients keep the name verbatim
 and inflect only the localized generic role around it.
 
+## Assistant profiles
+
+Per-space assistant profiles are an optional layer over the same provider and
+identity. They replace the admin-authored behavior instructions and may narrow
+exact built-in/external tools or apply permitted model, temperature, and output
+overrides. They cannot supply a URL, protocol, credential, header, retrieval
+configuration, context window, retention rule, or quota.
+
+Roll out profiles in this order:
+
+1. Apply additive migration `20260805T100000-ai-assistant-profiles.ts` and deploy
+   with `AI_ASSISTANT_PROFILES_ENABLED=false`.
+2. Verify legacy no-profile Chat/Agent, then set the deployment flag to `true`.
+3. In the space **Profiles** settings, enable the workspace switch. Enable the
+   separate provider-override switch only when workspace policy permits it.
+4. Create profiles disabled, configure exact tool IDs/group visibility, run the
+   effective model test, and run the exact Agent test when Agent should be
+   available. Enable the profile only after the tests succeed.
+5. Assign a space default only after canarying profile selection, history,
+   Retry/Regenerate, and live policy revocation.
+
+Existing spaces receive no profiles and no default. Members may select an
+available profile, store a preferred profile, or hide profiles from their own
+picker. Conversation history exposes only the frozen display summary and
+availability; instructions, model/tool policy, fingerprints, and secrets remain
+admin-only or server-only. A profile can change only while a persisted
+conversation has no messages or runs. `autoStart` sends its launch text through
+the ordinary idempotent message endpoint, so it appears as a normal user
+message.
+
+Operational rollback is `AI_ASSISTANT_PROFILES_ENABLED=false` or the workspace
+switch. Profile-bound history remains readable, new profile runs fail closed,
+and legacy no-profile conversations continue. Do not run the down migration in
+production because it deletes profile/audit snapshots.
+
 The first provider implementation is OpenAI-compatible. An API key is optional so local endpoints such as LM Studio can be used.
 
 Set `AI_PROVIDER_ALLOWED_ORIGINS` to a comma-separated list of exact trusted `http(s)` origins:
@@ -46,9 +81,18 @@ Increasing the idle timeout does not extend the complete request timeout. Keep `
 
 ## API and permissions
 
-Space configuration is available only to a space administrator or workspace `owner|admin`:
+Space configuration and profile mutations require Manage Settings (or workspace
+`owner|admin`); the profile policy route itself requires workspace
+`owner|admin`. The profile list and current user's preferences require ordinary
+space access and return no administrative profile fields:
 
 - `GET/PATCH /api/spaces/:spaceId/ai/config`
+- `GET/PATCH /api/ai/profile-policy`
+- `GET/POST /api/spaces/:spaceId/ai/profiles`
+- `GET/PATCH/DELETE /api/spaces/:spaceId/ai/profiles/:profileId`
+- `POST /api/spaces/:spaceId/ai/profiles/:profileId/actions/test-model`
+- `POST /api/spaces/:spaceId/ai/profiles/:profileId/actions/test-agent`
+- `GET/PUT /api/spaces/:spaceId/ai/profile-preferences`
 - `POST /api/spaces/:spaceId/ai/config/actions/test-model`
 - `POST /api/spaces/:spaceId/ai/config/actions/test-retrieval`
 - `GET /api/spaces/:spaceId/ai/status`
@@ -337,8 +381,9 @@ permit the read at call time.
 Policy and access are checked again during execution. A policy or registry
 version change ends an affected Agent run with `agent_tool_policy_changed`.
 The check runs before and after every provider model turn, including a final
-answer without tool calls, so an in-flight revocation cannot be bypassed;
-retry or regenerate creates a fresh immutable snapshot. MCP `tools/list` and
+  answer without tool calls, so an in-flight revocation cannot be bypassed;
+  profile-aware retry or regenerate preserves the source snapshot and reruns
+  every live check. MCP `tools/list` and
 `tools/call` use the same policy resolver and read the authoritative API-key row
 on every request, so revocation requires neither a token reissue nor a server
 restart.

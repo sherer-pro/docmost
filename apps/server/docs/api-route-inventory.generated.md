@@ -34,6 +34,8 @@
 | PATCH | `/ai/mcp-settings` | `apps/server/src/core/ai/controllers/ai-mcp-settings.controller.ts` |
 | POST | `/ai/messages/:id/actions/regenerate` | `apps/server/src/core/ai/controllers/ai-run.controller.ts` |
 | GET | `/ai/pages/:pageId/attachments` | `apps/server/src/core/ai/controllers/ai-file.controller.ts` |
+| GET | `/ai/profile-policy` | `apps/server/src/core/ai/controllers/ai-assistant-profile.controller.ts` |
+| PATCH | `/ai/profile-policy` | `apps/server/src/core/ai/controllers/ai-assistant-profile.controller.ts` |
 | GET | `/ai/runs/:id` | `apps/server/src/core/ai/controllers/ai-run.controller.ts` |
 | POST | `/ai/runs/:id/actions/cancel` | `apps/server/src/core/ai/controllers/ai-run.controller.ts` |
 | POST | `/ai/runs/:id/actions/retry` | `apps/server/src/core/ai/controllers/ai-run.controller.ts` |
@@ -280,6 +282,15 @@
 | PUT | `/spaces/:spaceId/ai/mcp-bindings/:serverId` | `apps/server/src/core/ai/controllers/ai-mcp-space.controller.ts` |
 | GET | `/spaces/:spaceId/ai/mcp-preferences` | `apps/server/src/core/ai/controllers/ai-mcp-space.controller.ts` |
 | PUT | `/spaces/:spaceId/ai/mcp-preferences` | `apps/server/src/core/ai/controllers/ai-mcp-space.controller.ts` |
+| GET | `/spaces/:spaceId/ai/profile-preferences` | `apps/server/src/core/ai/controllers/ai-assistant-profile.controller.ts` |
+| PUT | `/spaces/:spaceId/ai/profile-preferences` | `apps/server/src/core/ai/controllers/ai-assistant-profile.controller.ts` |
+| GET | `/spaces/:spaceId/ai/profiles` | `apps/server/src/core/ai/controllers/ai-assistant-profile.controller.ts` |
+| POST | `/spaces/:spaceId/ai/profiles` | `apps/server/src/core/ai/controllers/ai-assistant-profile.controller.ts` |
+| DELETE | `/spaces/:spaceId/ai/profiles/:profileId` | `apps/server/src/core/ai/controllers/ai-assistant-profile.controller.ts` |
+| GET | `/spaces/:spaceId/ai/profiles/:profileId` | `apps/server/src/core/ai/controllers/ai-assistant-profile.controller.ts` |
+| PATCH | `/spaces/:spaceId/ai/profiles/:profileId` | `apps/server/src/core/ai/controllers/ai-assistant-profile.controller.ts` |
+| POST | `/spaces/:spaceId/ai/profiles/:profileId/actions/test-agent` | `apps/server/src/core/ai/controllers/ai-assistant-profile.controller.ts` |
+| POST | `/spaces/:spaceId/ai/profiles/:profileId/actions/test-model` | `apps/server/src/core/ai/controllers/ai-assistant-profile.controller.ts` |
 | GET | `/spaces/:spaceId/ai/status` | `apps/server/src/core/ai/controllers/ai-config.controller.ts` |
 | GET | `/spaces/:spaceId/ai/tool-policy` | `apps/server/src/core/ai/controllers/ai-builtin-tool-policy.controller.ts` |
 | PUT | `/spaces/:spaceId/ai/tool-policy` | `apps/server/src/core/ai/controllers/ai-builtin-tool-policy.controller.ts` |
@@ -338,7 +349,3 @@
 | GET | `/workspace/public` | `apps/server/src/core/workspace/controllers/workspace.controller.ts` |
 | POST | `/workspace/public` | `apps/server/src/core/workspace/controllers/workspace.controller.ts` |
 | POST | `/workspace/update` | `apps/server/src/core/workspace/controllers/workspace.controller.ts` |
-| GET | `/ai/tool-policy` | `apps/server/src/core/ai/controllers/ai-builtin-tool-policy.controller.ts` |
-| PATCH | `/ai/tool-policy` | `apps/server/src/core/ai/controllers/ai-builtin-tool-policy.controller.ts` |
-| GET | `/spaces/:spaceId/ai/tool-policy` | `apps/server/src/core/ai/controllers/ai-builtin-tool-policy.controller.ts` |
-| PUT | `/spaces/:spaceId/ai/tool-policy` | `apps/server/src/core/ai/controllers/ai-builtin-tool-policy.controller.ts` |

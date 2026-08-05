@@ -48,6 +48,7 @@ The main components are:
 | Component                                | Responsibility                                                                        |
 | ---------------------------------------- | ------------------------------------------------------------------------------------- |
 | `AiConversationService`                  | private user conversations in page context, messages, and drafts                      |
+| `AiAssistantProfileService`              | space-owned profile CRUD, effective resolution, immutable snapshots, and Agent verification |
 | `AiContextService`                       | versioned conversation context and source-access validation                           |
 | `AiContentPolicyService`                 | shared space exclusions for AI context, editor actions, retrieval, and the RAG API    |
 | `AiRunService` / `AiRunExecutionService` | immutable attempts, limits, idempotency, execution, and streamed response persistence |
@@ -74,14 +75,18 @@ call.
 ### Normal chat response
 
 1. Opening the panel or choosing **New chat** creates only a local draft. The
-   draft text and mode flags are stored in `sessionStorage`, scoped by
+   draft text, mode flags, and `assistantProfileId` are stored in `sessionStorage`, scoped by
    workspace, user, and page. An empty draft never creates a database row.
 2. The first meaningful action (send, private-file upload, or context change)
    creates exactly one private conversation bound to the `pageId`, using the
-   current `agentMode` and `useSpaceSearch` flags. Concurrent first actions
-   share one in-flight creation promise.
+   current `agentMode`, `useSpaceSearch`, and selected assistant profile. The
+   server resolves preferred/default fallbacks and freezes the profile snapshot
+   in the same transaction. Concurrent first actions share one in-flight
+   creation promise.
 3. A send creates the user message, a pending assistant message, and an
-   immutable `ai_run` attempt. `clientRequestId` binds the idempotency key to
+   immutable `ai_run` attempt. It copies the frozen profile and stores exact
+   built-in/MCP tool snapshots plus a non-secret effective provider snapshot.
+   `clientRequestId` binds the idempotency key to
    the request payload; reusing the key with a different payload is rejected.
 4. The server validates AI availability, the current user, page binding, page
    write access, quotas, and concurrency. At most one run per conversation,
@@ -89,8 +94,10 @@ call.
    same time. A run waiting for user approval does not consume that slot.
 5. The worker claims the run, resolves the context snapshot and files, and,
    when `useSpaceSearch` is enabled, resolves external retrieval results.
-6. `AiPromptBuilderService` keeps only server policy, space-admin instructions,
-   and assistant identity in the trusted `system` role. Document snapshots,
+6. `AiPromptBuilderService` keeps only server policy, the frozen space/profile
+   instructions, and assistant identity in the trusted `system` role. Profile
+   instructions are delimited and sandwiched between platform-safety rules;
+   space identity metadata has higher priority. Document snapshots,
    selections, files/images, and retrieval excerpts are JSON-marked as
    untrusted reference data in the final `user` message, with the actual user
    request last. Budgets are derived from `contextWindow` and
@@ -119,9 +126,11 @@ call.
    cancellation, both the message and attempt receive a terminal status.
 
 Retry and regenerate create linked new attempts instead of rewriting the
-original attempt. Retry operates on a run; regenerate operates on an assistant
-message. Cancellation records a request that the worker checks during
-streaming and terminates the attempt as `cancelled`.
+original attempt. They copy the original profile, provider, built-in, and MCP
+snapshots; live ACL and policy narrowing are still rechecked. Retry operates on
+a run; regenerate operates on an assistant message. Cancellation records a
+request that the worker checks during streaming and terminates the attempt as
+`cancelled`.
 
 ### Citation contract
 
@@ -174,6 +183,69 @@ known tool call and records a configuration fingerprint only when the response
 is structurally valid. Changing those provider fields invalidates the
 fingerprint and disables agent mode until it is tested again.
 
+### Per-space assistant profiles
+
+Assistant profiles are space-owned behavior presets. They do not replace the
+space assistant identity: `assistantName` and `assistantGender` remain common to
+the space, while a selected profile replaces only the admin-authored behavior
+instructions and may narrow tools or apply permitted provider overrides. A
+conversation with no profile uses the existing `legacy_space` assistant path.
+
+Profiles are deployment-disabled by default through
+`AI_ASSISTANT_PROFILES_ENABLED=false`. A workspace `owner|admin` must also
+enable `ai_assistant_profile_workspace_settings`; absence of that row means
+disabled. The separate `model_overrides_enabled` switch controls model,
+temperature, and maximum-output overrides. Overrides never carry a protocol,
+origin, credential, headers, retrieval configuration, retention rule, context
+window, or usage limit. The current encrypted space credential is used only
+when the frozen provider origin still equals the current configured origin.
+
+Each profile has a stable ID, version, curated icon, name, description,
+required instructions, optional quick-command replacement, optional provider
+overrides, exact built-in capability IDs, exact external `bindingId + toolName`
+rows, group availability/narrowing, `autoStart`, and an optional visible launch
+message. `quickCommands=null` inherits space custom commands; an array replaces
+them, while built-ins remain available. No external rows means no external MCP
+for that profile. Names are unique case-insensitively among non-deleted profiles
+in one space, at most fifty active rows are allowed, updates require
+`expectedVersion`, and normal deletion is soft.
+
+Selection precedence for a new local draft is the user's available preferred
+profile, then the available space default, then `legacy_space`. Hidden IDs affect
+only the picker. An empty persisted conversation may replace its profile
+transactionally. After its first message or run, the profile is locked;
+`ai_profile_locked` instructs the client to start a new conversation without
+discarding its draft. Selecting a profile never sends a message. An explicit
+Start action for `autoStart=true` sends `launchMessage` through the normal
+idempotent message flow, so it is immediately visible as a user message.
+
+Conversation snapshots preserve profile ID/version, display fields,
+instructions, resolved quick commands, permitted overrides, exact built-in and
+external selections, launch behavior, and a tool-policy fingerprint. Runs copy
+that snapshot and add exact tool catalogs and a non-secret provider snapshot.
+History therefore keeps the old profile name/version after edits or deletion.
+Member profile responses and conversation history never expose instructions,
+model/tool policy, fingerprints, or secrets.
+
+Profile Chat requires only a currently enabled and allowed profile. Profile
+Agent mode additionally requires at least one effective tool and an immutable
+`ai_agent_tool_verifications` row matching the effective provider, current
+built-in/external tool schemas, and frozen maximum policy. A model override has
+a different provider fingerprint from the space default. Group restrictions
+and per-user external MCP opt-in can only remove tools and do not create a new
+verification maximum. The worker rechecks profile state, group availability,
+provider origin, ACL, and live tool policies before/after every provider turn;
+revocation fails closed.
+
+Migration `20260805T100000-ai-assistant-profiles.ts` is additive. Existing
+spaces receive no profile/default and existing null-snapshot conversations stay
+on the legacy path; new no-profile conversations receive an explicit
+`legacy_space` snapshot. Roll out schema and code with the deployment flag off,
+then enable the workspace switch and canary profiles. Operational rollback is
+the deployment or workspace switch: profile history remains readable, new
+profile-bound runs stop, and legacy no-profile conversations continue. Do not
+run the down migration in production because it destroys audit/history rows.
+
 An agent run resolves the same initial conversation context, private files,
 page attachments, and optional query-time retrieval as normal chat. It may then
 perform at most eight model steps and sixteen tool calls per approval segment.
@@ -223,7 +295,8 @@ call, so a response produced concurrently with revocation is never accepted. A
 resumed run fails with `agent_tool_policy_changed` if the manifest or live
 policy changed.
 Legacy runs without a snapshot continue to see only the original eleven Agent
-capabilities. Retry and regenerate create a fresh snapshot.
+capabilities. Profile-aware Retry and Regenerate preserve the source run's
+snapshot; all live revocation checks still apply.
 
 The built-in-policy migration is additive. Existing workspaces start with the
 exact eleven legacy Agent capabilities, and existing MCP keys receive the exact
@@ -822,9 +895,10 @@ reduce the tool list, and a workspace allowlist entry is rejected unless the
 deployment allowlist already contains it.
 
 The effective tool set is the intersection of the workspace-approved read tools,
-the space allowlist, the agent-profile allowlist, and every group allowlist that
-applies to the calling user. Version 1 has one built-in profile, `default`; the
-profile key is persisted so a second profile is additive.
+the space allowlist, the selected assistant profile's exact relation rows, and
+every group allowlist that applies to the calling user. The dormant
+`profile_allowed_tools.default` JSON remains only for legacy no-profile runs;
+profile-aware runs do not inherit it.
 
 ### Lifecycle
 
@@ -966,9 +1040,8 @@ binding state, current group membership and denials, the current user opt-in, al
 three version numbers, and the tool's schema fingerprint. Loosening policy after
 a run starts does not widen it; any narrowing or version change aborts the
 connection and ends the run with `agent_mcp_config_changed` or
-`agent_mcp_access_revoked`. Retry and regenerate resolve a fresh snapshot;
-resuming after a write approval keeps the original one and passes the same
-checks.
+`agent_mcp_access_revoked`. Retry, regenerate, and approval resume keep the
+original snapshot and pass the same live checks.
 
 External results flow through exactly the same budgets as built-in tool results:
 32 KiB per result, 128 KiB cumulative, and the existing 16/64 tool-call ceilings.
@@ -1011,7 +1084,7 @@ headers.
 | `/settings/ai`                   | redirects to `/settings/ai/spaces`                                      |
 | `/settings/ai/spaces`            | AI assistant overview with per-space configuration entry points         |
 | `/settings/ai/external-tools`    | outbound external MCP catalog, tool approvals, and the workspace switch |
-| `/settings/ai/spaces/:spaceSlug` | sectioned full-page configuration for one space                         |
+| `/settings/ai/spaces/:spaceSlug` | sectioned full-page configuration, including per-space assistant profiles |
 | `/settings/keys`                 | "API keys" page; redirects to the MCP tab                               |
 | `/settings/keys/mcp`             | MCP onboarding and workspace MCP-key administration                     |
 | `/settings/keys/rag`             | RAG synchronization onboarding and workspace RAG-key administration     |
@@ -1043,6 +1116,12 @@ CSRF contract.
 | Method and path                                                  | Purpose                                                        |
 | ---------------------------------------------------------------- | -------------------------------------------------------------- |
 | `GET/PATCH /api/spaces/:spaceId/ai/config`                       | read or update space AI configuration                          |
+| `GET/PATCH /api/ai/profile-policy`                               | workspace profile and provider-override switches               |
+| `GET/POST /api/spaces/:spaceId/ai/profiles`                      | member-safe picker list or create a profile                    |
+| `GET/PATCH/DELETE /api/spaces/:spaceId/ai/profiles/:profileId`   | admin detail, optimistic update, or soft delete                |
+| `POST /api/spaces/:spaceId/ai/profiles/:profileId/actions/test-model` | test the effective profile provider                       |
+| `POST /api/spaces/:spaceId/ai/profiles/:profileId/actions/test-agent` | test and record the exact Agent verification              |
+| `GET/PUT /api/spaces/:spaceId/ai/profile-preferences`            | current user's preferred and hidden profile IDs                |
 | `GET/PATCH /api/ai/tool-policy`                                  | workspace catalog, master switch, stored exact allowlist, deployment `maximumCapabilities`, and active `effectiveCapabilities` |
 | `GET/PUT /api/spaces/:spaceId/ai/tool-policy`                    | effective policy and optional exact space narrowing            |
 | `POST /api/spaces/:spaceId/ai/config/actions/test-model`         | test the provider and optional vision                          |
@@ -1144,6 +1223,13 @@ and `deleteNode`. Assistant messages expose `reasoning`,
 `runStatus`, `retrievalOutcome`, `retrievalErrorCode`, `applyContext`, and
 citations when applicable. Secret and credential fields are never part of
 public models.
+
+Assistant-profile contracts live in
+`packages/api-contract/src/ai-profiles.ts`. Member-safe summaries expose display
+fields, frozen quick commands, launch behavior, availability, and a coarse
+Agent status. Only Manage Settings responses expose instructions, provider
+overrides, exact tool selections, group policies, actor IDs, or verification
+fingerprint details.
 
 Outbound external MCP contracts live in
 `packages/api-contract/src/ai-external-mcp.ts`: `AiExternalMcpSettings`,

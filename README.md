@@ -24,6 +24,10 @@ The fork includes its own AI assistant, configured separately for each space:
 
 - space-level system instructions;
 
+- optional space-owned assistant profiles with frozen instructions, exact tool
+  allowlists, group visibility, preferred/default selection, and verified model
+  overrides;
+
 - built-in and custom quick commands;
 
 - model, temperature, context window, timeout, and limit settings;
@@ -85,7 +89,21 @@ The context manager uses one responsive dialog for overview, space search, child
 
 The composer presents input and settings as one focus-aware card: context and search stay directly available, Chat/Agent mode uses a compact segment, and templates, Markdown tools, status, and send/stop actions remain in a stable footer. On narrow panels, secondary labels collapse without introducing horizontal scrolling.
 
-Agent mode is an optional per-conversation workflow. It can search and navigate accessible Docmost content, then propose bounded edits to the current page. Every write requires a separate initiator-only confirmation and is rejected if the page content or write permission changed before approval.
+Assistant profiles are deployment- and workspace-gated. Selecting a profile
+does not send a message; an optional Start action can send a visible launch
+message through the ordinary chat flow. Profile display name/version and
+behavior snapshots remain stable in history, while live ACL and tool-policy
+revocation still fail closed. Existing spaces and no-profile conversations keep
+their previous behavior.
+
+Agent mode is an optional per-conversation workflow. It can search and navigate
+accessible Docmost content, then propose bounded edits to the current page.
+Every write requires a separate initiator-only confirmation and is rejected if
+the page content, write permission, or built-in tool policy changed before
+approval. The shared built-in tool catalog is controlled by exact workspace and
+space capability allowlists; optional context, database, table, comment,
+history, transclusion, attachment-metadata, and public-share reads are off at
+the deployment boundary by default and require explicit opt-in.
 
 ![Per-space assistant and agent mode settings](./docs/images/fork-specific-enhancements/en/ai-agent-settings.png)
 
@@ -123,10 +141,15 @@ Supported capabilities include:
 
 - a shared content-exclusion policy applied to retrieval, synchronization, agent tools, and MCP results;
 
-- a stateless read-only MCP endpoint for external assistants, using the same access-aware tool registry as agent mode.
+- a stateless read-only MCP endpoint for external assistants, using the same
+  access-aware tool registry and exact capability policy as agent mode.
 
 
-This allows Docmost content to serve as an up-to-date knowledge base for local or corporate LLMs. RAG and MCP keys are scoped to one space, are not interchangeable, and are revalidated on every request against the creator's current membership and page access.
+This allows Docmost content to serve as an up-to-date knowledge base for local
+or corporate LLMs. RAG and MCP keys are scoped to one space, are not
+interchangeable, and are revalidated on every request against the creator's
+current membership and page access. Existing MCP keys retain only the seven
+baseline reads; optional reads must be selected explicitly for each key.
 
 #### Outbound external MCP servers
 
