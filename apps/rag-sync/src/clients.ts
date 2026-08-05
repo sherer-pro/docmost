@@ -29,66 +29,85 @@ export class DocmostClient implements DocmostSourceClient {
     );
   }
 
-  getScope(): Promise<RagScope> {
-    return this.http.json("api/rag/scope", {}, 8 * 1024 * 1024);
+  getScope(signal?: AbortSignal): Promise<RagScope> {
+    return this.http.json("api/rag/scope", { signal }, 8 * 1024 * 1024);
   }
 
-  getBlockedPages(cursor?: string): Promise<RagChangeFeed<RagBlockedPageItem>> {
+  getBlockedPages(
+    cursor?: string,
+    signal?: AbortSignal,
+  ): Promise<RagChangeFeed<RagBlockedPageItem>> {
     const query = new URLSearchParams({ limit: "500" });
     if (cursor) query.set("cursor", cursor);
     return this.http.json(
       `api/rag/scope/blocked?${query.toString()}`,
-      {},
+      { signal },
       8 * 1024 * 1024,
     );
   }
 
-  getUpdates(updatedSince: number, cursor?: string) {
+  getUpdates(updatedSince: number, cursor?: string, signal?: AbortSignal) {
     return this.feed<RagUpdateItem>(
       "api/rag/updates",
       "updatedSince",
       updatedSince,
       cursor,
+      signal,
     );
   }
 
-  getDeleted(deletedSince: number, cursor?: string) {
+  getDeleted(deletedSince: number, cursor?: string, signal?: AbortSignal) {
     return this.feed<RagDeletedItem>(
       "api/rag/deleted",
       "deletedSince",
       deletedSince,
       cursor,
+      signal,
     );
   }
 
-  getAttachmentUpdates(updatedSince: number, cursor?: string) {
+  getAttachmentUpdates(
+    updatedSince: number,
+    cursor?: string,
+    signal?: AbortSignal,
+  ) {
     return this.feed<RagAttachmentItem>(
       "api/rag/attachments/updates",
       "updatedSince",
       updatedSince,
       cursor,
+      signal,
     );
   }
 
-  getAttachmentDeleted(deletedSince: number, cursor?: string) {
+  getAttachmentDeleted(
+    deletedSince: number,
+    cursor?: string,
+    signal?: AbortSignal,
+  ) {
     return this.feed<RagAttachmentDeletedItem>(
       "api/rag/attachments/deleted",
       "deletedSince",
       deletedSince,
       cursor,
+      signal,
     );
   }
 
-  getPage(pageId: string): Promise<RagPageDetail> {
+  getPage(pageId: string, signal?: AbortSignal): Promise<RagPageDetail> {
     return this.http.json(
       `api/rag/pages/${encodeURIComponent(pageId)}?includeContent=true`,
+      { signal },
     );
   }
 
-  getDatabase(databaseId: string): Promise<RagDatabaseDetail> {
+  getDatabase(
+    databaseId: string,
+    signal?: AbortSignal,
+  ): Promise<RagDatabaseDetail> {
     return this.http.json(
       `api/rag/databases/${encodeURIComponent(databaseId)}`,
-      {},
+      { signal },
       8 * 1024 * 1024,
     );
   }
@@ -96,12 +115,13 @@ export class DocmostClient implements DocmostSourceClient {
   downloadAttachment(
     item: RagAttachmentItem,
     maxBytes: number,
+    signal?: AbortSignal,
   ): Promise<Uint8Array> {
     const path = item.downloadUrl.replace(/^\/+/, "");
     if (!path.startsWith("api/rag/attachments/")) {
       throw new Error("Docmost returned an invalid attachment URL");
     }
-    return this.http.bytes(path, {}, maxBytes);
+    return this.http.bytes(path, { signal }, maxBytes);
   }
 
   private feed<T>(
@@ -109,13 +129,18 @@ export class DocmostClient implements DocmostSourceClient {
     parameter: string,
     since: number,
     cursor?: string,
+    signal?: AbortSignal,
   ): Promise<RagChangeFeed<T>> {
     const query = new URLSearchParams({
       [parameter]: String(since),
       limit: "500",
     });
     if (cursor) query.set("cursor", cursor);
-    return this.http.json(`${path}?${query.toString()}`, {}, 8 * 1024 * 1024);
+    return this.http.json(
+      `${path}?${query.toString()}`,
+      { signal },
+      8 * 1024 * 1024,
+    );
   }
 }
 
@@ -139,6 +164,7 @@ export class OpenWebUiClient implements OpenWebUiWriterClient {
     mimeType: string,
     content: Uint8Array,
     metadata: Record<string, unknown>,
+    signal?: AbortSignal,
   ): Promise<OpenWebUiFile> {
     const form = new FormData();
     const fileBytes = new Uint8Array(content.byteLength);
@@ -147,7 +173,7 @@ export class OpenWebUiClient implements OpenWebUiWriterClient {
     form.set("metadata", JSON.stringify(metadata));
     return this.http.json<OpenWebUiFile>(
       "api/v1/files/?process=true&process_in_background=true",
-      { method: "POST", body: form },
+      { method: "POST", body: form, signal },
       1024 * 1024,
     );
   }
@@ -155,30 +181,31 @@ export class OpenWebUiClient implements OpenWebUiWriterClient {
   async waitUntilProcessed(
     fileId: string,
     assertActive?: () => void,
+    signal?: AbortSignal,
   ): Promise<void> {
     const deadline = Date.now() + this.processingTimeoutMs;
     while (Date.now() < deadline) {
       assertActive?.();
       const result = await this.http.json<{ status?: string }>(
         `api/v1/files/${encodeURIComponent(fileId)}/process/status`,
-        {},
+        { signal },
         16 * 1024,
       );
       if (result.status === "completed") return;
       if (result.status === "failed" || result.status === "not_found") {
         throw new OpenWebUiFileProcessingError(fileId, result.status);
       }
-      await delay(1000);
+      await delay(1000, signal);
       assertActive?.();
     }
     throw new OpenWebUiFileProcessingError(fileId, "timeout");
   }
 
-  async deleteFile(fileId: string): Promise<void> {
+  async deleteFile(fileId: string, signal?: AbortSignal): Promise<void> {
     try {
       await this.http.discard(
         `api/v1/files/${encodeURIComponent(fileId)}`,
-        { method: "DELETE" },
+        { method: "DELETE", signal },
         [404],
       );
     } catch (error) {
@@ -187,7 +214,7 @@ export class OpenWebUiClient implements OpenWebUiWriterClient {
     }
   }
 
-  async listKnowledgeFiles(): Promise<OpenWebUiFile[]> {
+  async listKnowledgeFiles(signal?: AbortSignal): Promise<OpenWebUiFile[]> {
     const result: OpenWebUiFile[] = [];
     for (let page = 1; ; page += 1) {
       const response = await this.http.json<{
@@ -197,7 +224,7 @@ export class OpenWebUiClient implements OpenWebUiWriterClient {
         `api/v1/knowledge/${encodeURIComponent(
           this.binding.knowledgeId,
         )}/files?page=${page}&limit=500&include_content=false`,
-        {},
+        { signal },
         8 * 1024 * 1024,
       );
       const items = Array.isArray(response.items) ? response.items : [];

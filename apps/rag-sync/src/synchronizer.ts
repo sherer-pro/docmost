@@ -33,7 +33,9 @@ const SUPPORTED_ATTACHMENT_EXTENSIONS = new Set([
 export class RagSynchronizer {
   private readonly sourceOutcomes = new Map<string, number>();
   private readonly lockTtlMs: number;
-  private activeLock: { valid: boolean } | undefined;
+  private activeLock:
+    | { valid: boolean; abortController: AbortController }
+    | undefined;
 
   constructor(
     private readonly binding: RagSyncBinding,
@@ -53,7 +55,10 @@ export class RagSynchronizer {
     ) {
       return false;
     }
-    const activeLock = { valid: true };
+    const activeLock = {
+      valid: true,
+      abortController: new AbortController(),
+    };
     this.activeLock = activeLock;
     const renew = setInterval(
       () => {
@@ -62,11 +67,17 @@ export class RagSynchronizer {
           .then((renewed) => {
             if (!renewed) {
               activeLock.valid = false;
+              activeLock.abortController.abort(
+                new Error("RAG sync lock was lost"),
+              );
               this.log("lock.lost", {});
             }
           })
           .catch(() => {
             activeLock.valid = false;
+            activeLock.abortController.abort(
+              new Error("RAG sync lock renewal failed"),
+            );
             this.log("lock.renew_failed", {});
           });
       },
@@ -75,7 +86,9 @@ export class RagSynchronizer {
     renew.unref();
     const startedAt = Date.now();
     try {
-      const scope = await this.guarded(() => this.docmost.getScope());
+      const scope = await this.guarded((signal) =>
+        this.docmost.getScope(signal),
+      );
       await this.reconcileRemoteMappings();
       const previousScopeFingerprint = await this.guarded(() =>
         this.state.getScopeFingerprint(this.binding.id),
@@ -116,11 +129,7 @@ export class RagSynchronizer {
           this.state.setCheckpoint(this.binding.id, "updates", 0),
         );
         await this.guarded(() =>
-          this.state.setCheckpoint(
-            this.binding.id,
-            "attachment-updates",
-            0,
-          ),
+          this.state.setCheckpoint(this.binding.id, "attachment-updates", 0),
         );
         this.log("scope.purged", { count: purged });
       }
@@ -164,8 +173,8 @@ export class RagSynchronizer {
   }
 
   async reconcileRemoteMappings(): Promise<void> {
-    const remoteFiles = await this.guarded(() =>
-      this.openWebUi.listKnowledgeFiles(),
+    const remoteFiles = await this.guarded((signal) =>
+      this.openWebUi.listKnowledgeFiles(signal),
     );
     const usableRemoteIds = new Set<string>();
     const byIdentity = new Map<
@@ -176,7 +185,9 @@ export class RagSynchronizer {
       const metadata = this.readRemoteMetadata(file);
       if (!metadata) continue;
       if (file.data?.status === "failed") {
-        await this.guarded(() => this.openWebUi.deleteFile(file.id));
+        await this.guarded((signal) =>
+          this.openWebUi.deleteFile(file.id, signal),
+        );
         this.log("source.skipped", {
           identity: sourceIdentity(metadata.sourceType, metadata.sourceId),
           reason: "remote-processing-failed",
@@ -210,8 +221,8 @@ export class RagSynchronizer {
         }),
       );
       for (const duplicate of duplicates) {
-        await this.guarded(() =>
-          this.openWebUi.deleteFile(duplicate.file.id),
+        await this.guarded((signal) =>
+          this.openWebUi.deleteFile(duplicate.file.id, signal),
         );
       }
       if (duplicates.length > 0) {
@@ -252,7 +263,7 @@ export class RagSynchronizer {
       sourceUpdatedAtMs: source.updatedAtMs,
       contentHash,
     };
-    const uploaded = await this.guarded(() =>
+    const uploaded = await this.guarded((signal) =>
       this.openWebUi.upload(
         source.fileName,
         source.mimeType,
@@ -262,14 +273,19 @@ export class RagSynchronizer {
           file_hash: contentHash,
           docmost: metadata,
         },
+        signal,
       ),
     );
     if (!uploaded.id) {
       throw new Error("Open WebUI upload response is missing file id");
     }
     const processingStartedAt = Date.now();
-    await this.guarded(() =>
-      this.openWebUi.waitUntilProcessed(uploaded.id, () => this.assertLock()),
+    await this.guarded((signal) =>
+      this.openWebUi.waitUntilProcessed(
+        uploaded.id,
+        () => this.assertLock(),
+        signal,
+      ),
     );
     const mapping: SourceMapping = {
       identity: source.identity,
@@ -283,7 +299,9 @@ export class RagSynchronizer {
     };
     await this.guarded(() => this.state.setMapping(this.binding.id, mapping));
     if (existing && existing.fileId !== uploaded.id) {
-      await this.guarded(() => this.openWebUi.deleteFile(existing.fileId));
+      await this.guarded((signal) =>
+        this.openWebUi.deleteFile(existing.fileId, signal),
+      );
     }
     this.log(existing ? "source.replaced" : "source.uploaded", {
       identity: source.identity,
@@ -297,7 +315,9 @@ export class RagSynchronizer {
       this.state.getMapping(this.binding.id, identity),
     );
     if (!existing) return;
-    await this.guarded(() => this.openWebUi.deleteFile(existing.fileId));
+    await this.guarded((signal) =>
+      this.openWebUi.deleteFile(existing.fileId, signal),
+    );
     await this.guarded(() =>
       this.state.deleteMapping(this.binding.id, identity),
     );
@@ -307,7 +327,7 @@ export class RagSynchronizer {
   private async processUpdateFeed(): Promise<void> {
     await this.processFeed(
       "updates",
-      (since, cursor) => this.docmost.getUpdates(since, cursor),
+      (since, cursor, signal) => this.docmost.getUpdates(since, cursor, signal),
       async (item) => this.processUpdate(item),
       "maxUpdatedAtMs",
     );
@@ -316,7 +336,7 @@ export class RagSynchronizer {
   private async processDeletedFeed(): Promise<void> {
     await this.processFeed(
       "deleted",
-      (since, cursor) => this.docmost.getDeleted(since, cursor),
+      (since, cursor, signal) => this.docmost.getDeleted(since, cursor, signal),
       async (item) => this.processDeleted(item),
       "maxDeletedAtMs",
     );
@@ -325,7 +345,8 @@ export class RagSynchronizer {
   private async processAttachmentUpdateFeed(): Promise<void> {
     await this.processFeed(
       "attachment-updates",
-      (since, cursor) => this.docmost.getAttachmentUpdates(since, cursor),
+      (since, cursor, signal) =>
+        this.docmost.getAttachmentUpdates(since, cursor, signal),
       async (item) => this.processAttachment(item),
       "maxUpdatedAtMs",
     );
@@ -334,7 +355,8 @@ export class RagSynchronizer {
   private async processAttachmentDeletedFeed(): Promise<void> {
     await this.processFeed(
       "attachment-deleted",
-      (since, cursor) => this.docmost.getAttachmentDeleted(since, cursor),
+      (since, cursor, signal) =>
+        this.docmost.getAttachmentDeleted(since, cursor, signal),
       async (item) =>
         this.deleteIdentity(sourceIdentity("attachment", item.id)),
       "maxDeletedAtMs",
@@ -346,6 +368,7 @@ export class RagSynchronizer {
     load: (
       since: number,
       cursor?: string,
+      signal?: AbortSignal,
     ) => Promise<{
       items: T[];
       hasMore: boolean;
@@ -362,7 +385,9 @@ export class RagSynchronizer {
     let cursor: string | undefined;
     do {
       const pageStartedAt = Date.now();
-      const page = await this.guarded(() => load(checkpoint, cursor));
+      const page = await this.guarded((signal) =>
+        load(checkpoint, cursor, signal),
+      );
       for (const item of page.items) await process(item);
       const nextCheckpoint = page[checkpointField] ?? checkpoint;
       if (nextCheckpoint < checkpoint) {
@@ -388,7 +413,9 @@ export class RagSynchronizer {
 
   private async processUpdate(item: RagUpdateItem): Promise<void> {
     if (item.type === "page") {
-      const page = await this.guarded(() => this.docmost.getPage(item.id));
+      const page = await this.guarded((signal) =>
+        this.docmost.getPage(item.id, signal),
+      );
       if (!page.title?.trim() && !page.contentMarkdown?.trim()) {
         await this.deleteIdentity(sourceIdentity("page", page.id));
         this.log("source.skipped", {
@@ -400,8 +427,8 @@ export class RagSynchronizer {
       await this.upsertSource(pageToSource(page, item.updatedAtMs));
       return;
     }
-    const database = await this.guarded(() =>
-      this.docmost.getDatabase(item.databaseId),
+    const database = await this.guarded((signal) =>
+      this.docmost.getDatabase(item.databaseId, signal),
     );
     await this.upsertDatabase(database, item.updatedAtMs);
   }
@@ -432,7 +459,9 @@ export class RagSynchronizer {
         throw error;
       }
       try {
-        await this.guarded(() => this.openWebUi.deleteFile(error.fileId));
+        await this.guarded((signal) =>
+          this.openWebUi.deleteFile(error.fileId, signal),
+        );
       } catch {
         // Reconciliation removes a failed artifact on the next cycle.
       }
@@ -514,8 +543,8 @@ export class RagSynchronizer {
       });
       return;
     }
-    const content = await this.guarded(() =>
-      this.docmost.downloadAttachment(item, this.maxAttachmentBytes),
+    const content = await this.guarded((signal) =>
+      this.docmost.downloadAttachment(item, this.maxAttachmentBytes, signal),
     );
     const identity = sourceIdentity("attachment", item.id);
     try {
@@ -537,7 +566,9 @@ export class RagSynchronizer {
         throw error;
       }
       try {
-        await this.guarded(() => this.openWebUi.deleteFile(error.fileId));
+        await this.guarded((signal) =>
+          this.openWebUi.deleteFile(error.fileId, signal),
+        );
       } catch {
         // Reconciliation removes a failed artifact on the next cycle.
       }
@@ -555,8 +586,8 @@ export class RagSynchronizer {
     const blocked = new Set<string>();
     let cursor: string | undefined;
     do {
-      const page = await this.guarded(() =>
-        this.docmost.getBlockedPages(cursor),
+      const page = await this.guarded((signal) =>
+        this.docmost.getBlockedPages(cursor, signal),
       );
       for (const item of page.items) blocked.add(item.pageId);
       cursor = page.hasMore ? page.nextCursor || undefined : undefined;
@@ -597,9 +628,11 @@ export class RagSynchronizer {
     }
   }
 
-  private async guarded<T>(operation: () => Promise<T>): Promise<T> {
+  private async guarded<T>(
+    operation: (signal?: AbortSignal) => Promise<T>,
+  ): Promise<T> {
     this.assertLock();
-    const result = await operation();
+    const result = await operation(this.activeLock?.abortController.signal);
     this.assertLock();
     return result;
   }

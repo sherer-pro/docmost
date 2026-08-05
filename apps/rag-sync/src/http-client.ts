@@ -69,14 +69,20 @@ export class BoundedHttpClient {
     }
     let lastError: unknown;
     for (let attempt = 0; attempt < 4; attempt += 1) {
+      if (init.signal?.aborted) {
+        throw init.signal.reason ?? new DOMException('Aborted', 'AbortError');
+      }
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+      const signal = init.signal
+        ? AbortSignal.any([controller.signal, init.signal])
+        : controller.signal;
       let returned = false;
       try {
         const response = await fetch(target, {
           ...init,
           redirect: 'manual',
-          signal: controller.signal,
+          signal,
           headers: {
             accept: 'application/json',
             authorization: `Bearer ${this.apiKey}`,
@@ -90,10 +96,7 @@ export class BoundedHttpClient {
             'Remote redirects are not allowed',
           );
         }
-        if (
-          response.ok ||
-          acceptedStatuses.includes(response.status)
-        ) {
+        if (response.ok || acceptedStatuses.includes(response.status)) {
           returned = true;
           return {
             response,
@@ -111,6 +114,9 @@ export class BoundedHttpClient {
         lastError = error;
       } catch (error) {
         lastError = error;
+        if (init.signal?.aborted) {
+          throw init.signal.reason ?? error;
+        }
         if (
           error instanceof RemoteHttpError &&
           error.status !== 429 &&
@@ -161,6 +167,21 @@ async function readBounded(
   return result;
 }
 
-export function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+export function delay(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) {
+    return Promise.reject(
+      signal.reason ?? new DOMException('Aborted', 'AbortError'),
+    );
+  }
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timeout);
+      reject(signal?.reason ?? new DOMException('Aborted', 'AbortError'));
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
 }

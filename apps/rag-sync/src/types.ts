@@ -117,9 +117,10 @@ export interface SyncStateStore {
 }
 
 export interface DocmostSourceClient {
-  getScope(): Promise<RagScope>;
+  getScope(signal?: AbortSignal): Promise<RagScope>;
   getBlockedPages(
     cursor?: string,
+    signal?: AbortSignal,
   ): Promise<
     import("@docmost/api-contract").RagChangeFeed<
       import("@docmost/api-contract").RagBlockedPageItem
@@ -128,6 +129,7 @@ export interface DocmostSourceClient {
   getUpdates(
     updatedSince: number,
     cursor?: string,
+    signal?: AbortSignal,
   ): Promise<
     import("@docmost/api-contract").RagChangeFeed<
       import("@docmost/api-contract").RagUpdateItem
@@ -136,6 +138,7 @@ export interface DocmostSourceClient {
   getDeleted(
     deletedSince: number,
     cursor?: string,
+    signal?: AbortSignal,
   ): Promise<
     import("@docmost/api-contract").RagChangeFeed<
       import("@docmost/api-contract").RagDeletedItem
@@ -144,6 +147,7 @@ export interface DocmostSourceClient {
   getAttachmentUpdates(
     updatedSince: number,
     cursor?: string,
+    signal?: AbortSignal,
   ): Promise<
     import("@docmost/api-contract").RagChangeFeed<
       import("@docmost/api-contract").RagAttachmentItem
@@ -152,6 +156,7 @@ export interface DocmostSourceClient {
   getAttachmentDeleted(
     deletedSince: number,
     cursor?: string,
+    signal?: AbortSignal,
   ): Promise<
     import("@docmost/api-contract").RagChangeFeed<
       import("@docmost/api-contract").RagAttachmentDeletedItem
@@ -159,13 +164,16 @@ export interface DocmostSourceClient {
   >;
   getPage(
     pageId: string,
+    signal?: AbortSignal,
   ): Promise<import("@docmost/api-contract").RagPageDetail>;
   getDatabase(
     databaseId: string,
+    signal?: AbortSignal,
   ): Promise<import("@docmost/api-contract").RagDatabaseDetail>;
   downloadAttachment(
     item: import("@docmost/api-contract").RagAttachmentItem,
     maxBytes: number,
+    signal?: AbortSignal,
   ): Promise<Uint8Array>;
 }
 
@@ -175,11 +183,13 @@ export interface OpenWebUiWriterClient {
     mimeType: string,
     content: Uint8Array,
     metadata: Record<string, unknown>,
+    signal?: AbortSignal,
   ): Promise<OpenWebUiFile>;
   waitUntilProcessed(
     fileId: string,
     assertActive?: () => void,
+    signal?: AbortSignal,
   ): Promise<void>;
-  deleteFile(fileId: string): Promise<void>;
-  listKnowledgeFiles(): Promise<OpenWebUiFile[]>;
+  deleteFile(fileId: string, signal?: AbortSignal): Promise<void>;
+  listKnowledgeFiles(signal?: AbortSignal): Promise<OpenWebUiFile[]>;
 }
