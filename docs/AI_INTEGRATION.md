@@ -5,7 +5,10 @@ Docmost provides a core, per-space OpenAI-compatible integration for private pag
 This is the operator setup and troubleshooting guide. The canonical
 architecture, limits, security invariants, and recovery behavior are maintained
 in [`AI_ASSISTANT_AND_RAG.md`](./AI_ASSISTANT_AND_RAG.md); the external sync
-contract is maintained in [`RAG_API.md`](./RAG_API.md).
+contract is maintained in [`RAG_API.md`](./RAG_API.md). Workspace owners and
+administrators can also open `/settings/ai/guide` for the localized in-product
+operation and risk summary. Relevant implementation changes must update that
+guide together with the applicable Markdown documentation.
 
 ## Provider configuration
 
