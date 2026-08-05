@@ -12,6 +12,7 @@ describe("workspace settings navigation access", () => {
     "/settings/account/api-keys",
     "/settings/ai",
     "/settings/ai/spaces",
+    "/settings/ai/built-in-tools",
     "/settings/ai/external-tools",
     "/settings/keys",
     "/settings/keys/mcp",
@@ -47,6 +48,9 @@ describe("workspace settings navigation access", () => {
     expect(isSettingsItemActive("/settings/ai/spaces", "/settings/ai")).toBe(
       true,
     );
+    expect(
+      isSettingsItemActive("/settings/ai/built-in-tools", "/settings/ai"),
+    ).toBe(true);
     expect(
       isSettingsItemActive("/settings/ai/external-tools", "/settings/ai"),
     ).toBe(true);
