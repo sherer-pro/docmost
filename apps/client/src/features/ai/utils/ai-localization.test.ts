@@ -200,6 +200,30 @@ describe("AI localization contract", () => {
     }
   });
 
+  it("localizes the complete administrator AI guide", () => {
+    const english = flatten(readAiLocale("en-US"));
+    const guideKeys = Object.keys(english).filter((key) =>
+      key.startsWith("adminGuide."),
+    );
+
+    expect(guideKeys).toHaveLength(36);
+    expect(english["adminGuide.maintenanceRule"]).toContain(
+      "Markdown documentation",
+    );
+    expect(english["adminGuide.maintenanceRule"]).toContain("embedded guide");
+
+    for (const locale of LOCALES.filter((value) => value !== "en-US")) {
+      const localized = flatten(readAiLocale(locale));
+      for (const key of guideKeys) {
+        expect(localized[key]).toBeTruthy();
+        expect(localized[key]).not.toBe(english[key]);
+        expect(localized[key].match(/{{[^}]+}}/g) ?? []).toEqual(
+          english[key].match(/{{[^}]+}}/g) ?? [],
+        );
+      }
+    }
+  });
+
   it("maps every stable AI error code to a localized key", () => {
     const english = flatten(readAiLocale("en-US"));
     for (const errorCode of AI_ERROR_CODES) {

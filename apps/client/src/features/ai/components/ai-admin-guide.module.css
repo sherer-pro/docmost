@@ -1,0 +1,38 @@
+.hero {
+  padding: clamp(var(--mantine-spacing-md), 3vw, var(--mantine-spacing-xl));
+  background: linear-gradient(
+    135deg,
+    light-dark(var(--mantine-color-violet-0), var(--mantine-color-dark-7)),
+    light-dark(var(--mantine-color-blue-0), var(--mantine-color-dark-8))
+  );
+}
+
+.surfaceCard {
+  height: 100%;
+}
+
+.heroContent {
+  min-width: 0;
+}
+
+.settingsLink {
+  min-height: rem(42px);
+  height: auto;
+  padding-block: rem(9px);
+}
+
+.settingsLink :global(.mantine-Button-label) {
+  white-space: normal;
+  line-height: 1.25;
+  text-align: start;
+}
+
+.stepNumber {
+  flex: 0 0 auto;
+  font-size: var(--mantine-font-size-xs);
+  font-weight: 700;
+}
+
+.maintenance {
+  border-style: dashed;
+}
