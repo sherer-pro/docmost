@@ -3,11 +3,16 @@ name: CI
 on:
   pull_request:
   workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
 
 jobs:
   validate:
+    name: Build, lint, and unit tests
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
 
     steps:
       - name: Checkout
@@ -26,6 +31,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Community-edition boundary check
+        run: pnpm check:no-ee
 
       - name: Build
         run: pnpm build
@@ -51,9 +59,6 @@ jobs:
       - name: RAG Sync tests
         run: pnpm rag-sync:test
 
-      - name: RAG Sync image smoke build
-        run: docker build -f Dockerfile.rag-sync -t docmost-rag-sync:ci .
-
       - name: Security regression tests
         run: pnpm test:security
 
@@ -64,3 +69,190 @@ jobs:
         run: |
           pnpm check:audit-exceptions
           pnpm audit --prod --audit-level high
+
+  integration:
+    name: PostgreSQL, Redis, migrations, and server E2E
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: docmost
+          POSTGRES_USER: docmost
+          POSTGRES_PASSWORD: docmost-ci-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U docmost -d docmost"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+      redis:
+        image: redis:8
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      NODE_ENV: test
+      APP_URL: http://127.0.0.1:3000
+      APP_SECRET: ci-only-app-secret-at-least-32-characters
+      DATABASE_URL: postgresql://docmost:docmost-ci-password@127.0.0.1:5432/docmost
+      REDIS_URL: redis://127.0.0.1:6379
+      AUTH_RATE_LIMIT_STORAGE: redis
+      DISABLE_TELEMETRY: "true"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.4.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build server and workspace packages
+        run: pnpm server:build
+
+      - name: Apply every migration to an empty PostgreSQL database
+        run: pnpm --filter ./apps/server migration:latest
+
+      - name: Server integration tests
+        run: pnpm --filter ./apps/server test:e2e
+
+  production-smoke:
+    name: Production images, MCP, collaboration, and health
+    needs: integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.4.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install smoke-test dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build the production image once
+        run: docker build --build-arg PNPM_OFFLINE=0 -t docmost:ci .
+
+      - name: Build and inspect the RAG Sync image
+        run: |
+          docker build -f Dockerfile.rag-sync -t docmost-rag-sync:ci .
+          test "$(docker inspect --format '{{.Config.User}}' docmost-rag-sync:ci)" = "node"
+          docker run --rm --entrypoint node docmost-rag-sync:ci -e "const fs=require('node:fs'); if(!fs.existsSync('dist/main.js')) process.exit(1)"
+
+      - name: Start PostgreSQL and Redis
+        run: |
+          docker network create docmost-ci
+          docker run -d --name docmost-db --network docmost-ci \
+            -e POSTGRES_DB=docmost \
+            -e POSTGRES_USER=docmost \
+            -e POSTGRES_PASSWORD=docmost-ci-password \
+            postgres:18
+          docker run -d --name docmost-redis --network docmost-ci redis:8 \
+            redis-server --appendonly no --maxmemory-policy noeviction
+          for attempt in $(seq 1 30); do
+            docker exec docmost-db pg_isready -U docmost -d docmost && exit 0
+            sleep 1
+          done
+          exit 1
+
+      - name: Run migrations from the built image
+        run: |
+          docker run --rm --network docmost-ci \
+            -e DATABASE_URL=postgresql://docmost:docmost-ci-password@docmost-db:5432/docmost \
+            --entrypoint node docmost:ci \
+            apps/server/dist/apps/server/src/database/migrate.js latest
+
+      - name: Start API and collaboration processes from the same image
+        run: |
+          docker run -d --name docmost-app --network docmost-ci -p 3000:3000 \
+            -e NODE_ENV=production \
+            -e APP_URL=http://127.0.0.1:3000 \
+            -e COLLAB_URL=http://127.0.0.1:3001 \
+            -e APP_SECRET=ci-only-app-secret-at-least-32-characters \
+            -e DATABASE_URL=postgresql://docmost:docmost-ci-password@docmost-db:5432/docmost \
+            -e REDIS_URL=redis://docmost-redis:6379 \
+            -e AUTH_RATE_LIMIT_STORAGE=redis \
+            -e DISABLE_TELEMETRY=true \
+            docmost:ci
+          docker run -d --name docmost-collab --network docmost-ci -p 3001:3001 \
+            -e NODE_ENV=production \
+            -e APP_URL=http://127.0.0.1:3000 \
+            -e COLLAB_URL=http://127.0.0.1:3001 \
+            -e COLLAB_PORT=3001 \
+            -e APP_SECRET=ci-only-app-secret-at-least-32-characters \
+            -e DATABASE_URL=postgresql://docmost:docmost-ci-password@docmost-db:5432/docmost \
+            -e REDIS_URL=redis://docmost-redis:6379 \
+            -e AUTH_RATE_LIMIT_STORAGE=redis \
+            -e DISABLE_TELEMETRY=true \
+            --entrypoint node docmost:ci \
+            apps/server/dist/apps/server/src/collaboration/server/collab-main.js
+
+      - name: Wait for health checks
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3000/api/health >/dev/null && \
+               curl --fail --silent http://127.0.0.1:3001/api/health >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          exit 1
+
+      - name: MCP and collaboration E2E against production processes
+        env:
+          CI_SMOKE_BASE_URL: http://127.0.0.1:3000
+          CI_SMOKE_COLLAB_URL: http://127.0.0.1:3001
+        run: node scripts/ci-production-smoke.mjs
+
+      - name: Capture server logs
+        if: always()
+        run: |
+          mkdir -p ci-artifacts
+          docker logs docmost-app >ci-artifacts/server.log 2>&1 || true
+          docker logs docmost-collab >ci-artifacts/collaboration.log 2>&1 || true
+          docker logs docmost-db >ci-artifacts/postgres.log 2>&1 || true
+          docker logs docmost-redis >ci-artifacts/redis.log 2>&1 || true
+
+      - name: Upload server logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-smoke-logs
+          path: ci-artifacts
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Stop smoke containers
+        if: always()
+        run: |
+          docker rm -f docmost-app docmost-collab docmost-db docmost-redis 2>/dev/null || true
+          docker network rm docmost-ci 2>/dev/null || true

@@ -5,9 +5,19 @@ on:
   release:
     types: [published]
 
+permissions:
+  contents: read
+
 jobs:
-  build:
+  gates:
+    name: Required release gates
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    name: Publish verified image
+    needs: gates
     runs-on: ubuntu-latest
+    timeout-minutes: 45
 
     steps:
       - name: Checkout
@@ -19,22 +29,26 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Set version
-        id: version
+      - name: Resolve immutable version
+        shell: bash
         run: |
-          TAG="${{ github.event.release.tag_name }}"
-          if [ -z "$TAG" ]; then
-            TAG="manual"
+          if [ "${{ github.event_name }}" = "release" ]; then
+            tag="${{ github.event.release.tag_name }}"
+            version="${tag#v}"
+          else
+            version="manual-${GITHUB_SHA::12}"
           fi
-          VERSION="${TAG#v}"
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          test -n "$version"
+          echo "VERSION=$version" >> "$GITHUB_ENV"
 
-      - name: Build image
+      - name: Build the release image
+        run: docker build --build-arg PNPM_OFFLINE=0 -t shererpro/docmost:${VERSION} .
+
+      - name: Push the immutable version first
+        run: docker push shererpro/docmost:${VERSION}
+
+      - name: Publish latest only after the versioned push succeeds
+        if: github.event_name == 'release'
         run: |
-          docker build -t shererpro/docmost:${VERSION} .
           docker tag shererpro/docmost:${VERSION} shererpro/docmost:latest
-
-      - name: Push image
-        run: |
-          docker push shererpro/docmost:${VERSION}
           docker push shererpro/docmost:latest

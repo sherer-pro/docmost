@@ -9,6 +9,7 @@ FROM base AS builder
 WORKDIR /app
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml nx.json .npmrc ./
+COPY patches ./patches
 COPY apps/rag-sync/package.json ./apps/rag-sync/package.json
 COPY packages/api-contract/package.json ./packages/api-contract/package.json
 COPY packages/editor-ext/package.json ./packages/editor-ext/package.json
