@@ -52,6 +52,7 @@ export function mapPageToTreeNode(
     hasChildren: Boolean(page.hasChildren),
     spaceId: page.spaceId,
     parentPageId: page.parentPageId ?? null,
+    childrenLoaded: false,
     access: page.access,
     ...overrides,
     children: overrides.children ?? [],
@@ -78,6 +79,7 @@ export function mapDatabaseToTreeNode(
     hasChildren: Boolean(page.hasChildren),
     spaceId: database.spaceId ?? page.spaceId,
     parentPageId: page.parentPageId ?? null,
+    childrenLoaded: false,
     access: page.access,
     ...overrides,
     children: overrides.children ?? [],
@@ -349,13 +351,18 @@ export function appendNodeChildren(
       const merged = children.map((newChild) => {
         const existing = existingMap.get(newChild.id);
         return existing && existing.children
-          ? { ...newChild, children: existing.children }
+          ? {
+              ...newChild,
+              children: existing.children,
+              childrenLoaded: existing.childrenLoaded,
+            }
           : newChild;
       });
 
       return {
         ...node,
         children: merged,
+        childrenLoaded: true,
       };
     }
 
@@ -479,19 +486,25 @@ export function insertOrUpdateTreeNode(
 }
 
 /**
- * Merge root nodes; keep existing ones intact, append new ones,
+ * Reconcile an authoritative root response while preserving loaded branches.
+ * Roots missing from the response are removed, which prevents reconnects from
+ * leaving pages at both their old root position and their new parent.
  */
 export function mergeRootTrees(
   prevRoots: SpaceTreeNode[],
   incomingRoots: SpaceTreeNode[],
 ): SpaceTreeNode[] {
-  const seen = new Set(prevRoots.map((r) => r.id));
-
-  // add new roots that were not present before
-  const merged = [...prevRoots];
-  incomingRoots.forEach((node) => {
-    if (!seen.has(node.id)) merged.push(node);
-  });
-
-  return sortPositionKeys(merged);
+  const previousById = new Map(prevRoots.map((node) => [node.id, node]));
+  return sortPositionKeys(
+    incomingRoots.map((incoming) => {
+      const previous = previousById.get(incoming.id);
+      if (!previous) return incoming;
+      return {
+        ...previous,
+        ...incoming,
+        children: previous.children,
+        childrenLoaded: previous.childrenLoaded,
+      };
+    }),
+  );
 }

@@ -215,7 +215,8 @@ export class WsGateway
       return;
     }
 
-    const authorizedRooms: Set<string> = client.data.authorizedRooms ?? new Set();
+    const authorizedRooms: Set<string> =
+      client.data.authorizedRooms ?? new Set();
 
     if (!this.isPayloadConsistent(payload)) {
       this.logger.warn(
@@ -268,6 +269,8 @@ export class WsGateway
           return;
         }
 
+        const relayPayload = this.canonicalizePageRelay(payload, page);
+
         const room = this.server.sockets.adapter.rooms.get(payload.targetRoom);
         if (!room || room.size === 0) {
           return;
@@ -307,7 +310,7 @@ export class WsGateway
             continue;
           }
 
-          socket.emit('message', payload);
+          socket.emit('message', relayPayload);
         }
 
         return;
@@ -371,9 +374,8 @@ export class WsGateway
     }
 
     if (client.data.workspaceAssuranceSatisfied === false) {
-      const allowedSpaceIds = (client.data.allowedSpaceIds ?? new Set()) as Set<
-        string
-      >;
+      const allowedSpaceIds = (client.data.allowedSpaceIds ??
+        new Set()) as Set<string>;
       let targetSpaceId: string | null = null;
 
       if (payload.type === 'space') {
@@ -427,10 +429,9 @@ export class WsGateway
   emitPageEmbedInvalidation(spaceIds: Iterable<string>): void {
     if (!this.server) return;
     for (const spaceId of new Set(spaceIds)) {
-      this.server.to(this.getSpaceRoomName(spaceId)).emit(
-        'page-embed:invalidate',
-        { operation: 'page_embed_invalidate' },
-      );
+      this.server
+        .to(this.getSpaceRoomName(spaceId))
+        .emit('page-embed:invalidate', { operation: 'page_embed_invalidate' });
     }
   }
 
@@ -467,7 +468,9 @@ export class WsGateway
       return payload.id;
     }
 
-    const nestedPayload = payload.payload as Record<string, unknown> | undefined;
+    const nestedPayload = payload.payload as
+      | Record<string, unknown>
+      | undefined;
     if (nestedPayload) {
       if (
         typeof nestedPayload.pageId === 'string' &&
@@ -494,6 +497,58 @@ export class WsGateway
       typeof data.operation === 'string' &&
       (WS_RELAY_EVENT_OPERATIONS as readonly string[]).includes(data.operation)
     );
+  }
+
+  /**
+   * Replaces client-supplied move coordinates with the committed database
+   * values. This makes delayed or reordered relays converge on server state.
+   */
+  private canonicalizePageRelay(
+    payload: WsMessageDto,
+    page: {
+      id: string;
+      spaceId: string;
+      parentPageId?: string | null;
+      position?: string | null;
+    },
+  ): WsMessageDto {
+    if (payload.data.operation !== 'moveTreeNode') {
+      return payload;
+    }
+
+    const movePayload = payload.data.payload;
+    if (!movePayload || typeof movePayload !== 'object') {
+      return payload;
+    }
+
+    const move = movePayload as Record<string, unknown>;
+    const node =
+      move.node && typeof move.node === 'object'
+        ? (move.node as Record<string, unknown>)
+        : {};
+    const parentId = page.parentPageId ?? null;
+    const position = page.position ?? null;
+
+    return {
+      ...payload,
+      data: {
+        ...payload.data,
+        spaceId: page.spaceId,
+        payload: {
+          ...move,
+          id: page.id,
+          parentId,
+          position,
+          node: {
+            ...node,
+            id: page.id,
+            spaceId: page.spaceId,
+            parentPageId: parentId,
+            position,
+          },
+        },
+      },
+    };
   }
 
   private async refreshClientAuthorization(client: Socket): Promise<boolean> {

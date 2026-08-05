@@ -24,7 +24,7 @@ describe('PageService create', () => {
     {} as any,
     generalQueue as any,
     {} as any,
-    {} as any,
+    { emit: jest.fn() } as any,
     {} as any,
     {} as any,
     {} as any,

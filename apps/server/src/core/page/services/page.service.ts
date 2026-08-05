@@ -96,6 +96,10 @@ type CustomFieldHistoryChange = {
 
 type CopiedPageByOriginalId = Map<string, InsertablePage>;
 
+// Keep page-tree mutations for a space in a single, short critical section.
+// The namespace avoids colliding with unrelated two-key advisory locks.
+const PAGE_MOVE_LOCK_NAMESPACE = 0x70616765;
+
 @Injectable()
 export class PageService {
   private readonly logger = new Logger(PageService.name);
@@ -1629,23 +1633,45 @@ export class PageService {
       throw new BadRequestException('Invalid move position');
     }
 
-    let parentPageId = null;
-    if (movedPage.parentPageId === dto.parentPageId) {
-      parentPageId = undefined;
-    } else {
-      // changing the page's parent
-      if (dto.parentPageId) {
-        const parentPage = await this.pageRepo.findById(dto.parentPageId);
-        if (!parentPage || parentPage.spaceId !== movedPage.spaceId) {
+    const updateResult = await executeTx(this.db, async (trx) => {
+      await sql`select pg_advisory_xact_lock(${sql.lit(
+        PAGE_MOVE_LOCK_NAMESPACE,
+      )}, hashtext(${movedPage.spaceId}))`.execute(trx);
+
+      // Re-read after acquiring the per-space lock. The controller snapshot can
+      // be stale when another move committed while this request was waiting.
+      const lockedMovedPage = await this.pageRepo.findById(dto.pageId, {
+        withLock: true,
+        trx,
+      });
+      if (
+        !lockedMovedPage ||
+        lockedMovedPage.deletedAt ||
+        lockedMovedPage.spaceId !== movedPage.spaceId
+      ) {
+        throw new NotFoundException('Page not found');
+      }
+
+      let parentPageId: string | null | undefined = null;
+      if (lockedMovedPage.parentPageId === dto.parentPageId) {
+        parentPageId = undefined;
+      } else if (dto.parentPageId) {
+        const parentPage = await this.pageRepo.findById(dto.parentPageId, {
+          withLock: true,
+          trx,
+        });
+        if (
+          !parentPage ||
+          parentPage.deletedAt ||
+          parentPage.spaceId !== lockedMovedPage.spaceId
+        ) {
           throw new NotFoundException('Parent page not found');
         }
 
-        // Moving a page under itself or under one of its own descendants would
-        // create a cycle in the page tree, which makes every recursive
-        // hierarchy query walk it until the depth cap is reached.
         const wouldCreateCycle = await this.pageRepo.hasSelfOrAncestor(
           parentPage.id,
-          movedPage.id,
+          lockedMovedPage.id,
+          trx,
         );
 
         if (wouldCreateCycle) {
@@ -1656,15 +1682,29 @@ export class PageService {
 
         parentPageId = parentPage.id;
       }
+
+      return this.pageRepo.updatePage(
+        {
+          position: dto.position,
+          parentPageId,
+        },
+        dto.pageId,
+        trx,
+        false,
+      );
+    });
+
+    if (!updateResult || updateResult.numUpdatedRows === 0n) {
+      return;
     }
 
-    await this.pageRepo.updatePage(
-      {
-        position: dto.position,
-        parentPageId: parentPageId,
-      },
-      dto.pageId,
-    );
+    // PageRepo normally emits this event immediately after an UPDATE. A move
+    // defers it until after COMMIT so a transaction rollback cannot publish a
+    // tree change that does not exist in PostgreSQL.
+    this.eventEmitter.emit(EventName.PAGE_UPDATED, {
+      pageIds: [dto.pageId],
+      workspaceId: movedPage.workspaceId,
+    });
   }
 
   async getPageBreadCrumbs(childPageId: string) {

@@ -16,6 +16,7 @@ type BroadcastToMock = {
 
 type SocketMock = {
   id: string;
+  emit: jest.Mock;
   data: {
     authorizedRooms?: Set<string>;
     user?: Record<string, unknown>;
@@ -49,6 +50,7 @@ const createSocketMock = (
 
   return {
     id: 'socket-1',
+    emit,
     data: { authorizedRooms: new Set(authorizedRooms) },
     rooms: new Set(joinedRooms),
     broadcast: { to },
@@ -173,6 +175,61 @@ describe('WsGateway.handleMessage', () => {
     expect(socket.broadcast.to).not.toHaveBeenCalled();
   });
 
+  it('relays committed move coordinates instead of stale client values', async () => {
+    const sender = createSocketMock(['space-space-a']);
+    sender.id = 'sender';
+    sender.data.user = { id: 'user-1', workspaceId: 'workspace-a' };
+    const receiver = createSocketMock(['space-space-a']);
+    receiver.id = 'receiver';
+    receiver.data.user = { id: 'user-2', workspaceId: 'workspace-a' };
+    pageRepo.findById.mockResolvedValue({
+      id: 'page-1',
+      spaceId: 'space-a',
+      workspaceId: 'workspace-a',
+      parentPageId: 'committed-parent',
+      position: 'committed-position',
+      deletedAt: null,
+    });
+    (gateway as any).server.sockets.adapter.rooms.set(
+      'space-space-a',
+      new Set(['sender', 'receiver']),
+    );
+    (gateway as any).server.sockets.sockets.set('receiver', receiver);
+
+    await gateway.handleMessage(sender as any, {
+      operation: 'broadcast',
+      targetRoom: 'space-space-a',
+      spaceId: 'space-a',
+      data: {
+        operation: 'moveTreeNode',
+        spaceId: 'space-a',
+        payload: {
+          id: 'page-1',
+          parentId: 'stale-parent',
+          oldParentId: null,
+          position: 'stale-position',
+          node: { id: 'page-1', spaceId: 'space-a' },
+        },
+      },
+    });
+
+    expect(receiver.emit).toHaveBeenCalledWith(
+      'message',
+      expect.objectContaining({
+        data: expect.objectContaining({
+          payload: expect.objectContaining({
+            parentId: 'committed-parent',
+            position: 'committed-position',
+            node: expect.objectContaining({
+              parentPageId: 'committed-parent',
+              position: 'committed-position',
+            }),
+          }),
+        }),
+      }),
+    );
+  });
+
   it('rejects unsupported envelope operations', async () => {
     const socket = createSocketMock(['space-space-a']);
 
@@ -295,9 +352,9 @@ describe('WsGateway.handleMessage', () => {
       sessionId: 'session-1',
     });
 
-    expect(
-      (gateway as any).refreshClientAuthorization,
-    ).toHaveBeenCalledWith(socket);
+    expect((gateway as any).refreshClientAuthorization).toHaveBeenCalledWith(
+      socket,
+    );
   });
 
   it('removes a space room immediately when its effective policy becomes stricter', async () => {

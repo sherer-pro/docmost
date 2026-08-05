@@ -913,6 +913,13 @@ export function updateCacheOnMovePage(
     );
   }
 
+  // A move relay can arrive after a newer move. Keep the immediate local
+  // update responsive, then reconcile every already loaded branch with the
+  // server-authoritative hierarchy without discarding loaded grandchildren.
+  getSpaceSidebarCacheKeys(spaceId).forEach((queryKey) => {
+    void queryClient.invalidateQueries({ queryKey, exact: true });
+  });
+
   invalidateDatabaseTreeConsistency();
 }
 
