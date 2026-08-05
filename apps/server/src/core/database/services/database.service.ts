@@ -133,7 +133,9 @@ export class DatabaseService {
    * For backward compatibility, let's normalize it to `multiline_text`
    * before any read/convert operations.
    */
-  private normalizePropertyType(type: string | null | undefined): DatabasePropertyType {
+  private normalizePropertyType(
+    type: string | null | undefined,
+  ): DatabasePropertyType {
     if (type === 'text') {
       return 'multiline_text';
     }
@@ -144,7 +146,9 @@ export class DatabaseService {
   /**
    * Casts property types to the actual contract in API responses.
    */
-  private normalizeProperties<T extends { type: string | null }>(properties: T[]): T[] {
+  private normalizeProperties<T extends { type: string | null }>(
+    properties: T[],
+  ): T[] {
     return properties.map((property) => ({
       ...property,
       type: this.normalizePropertyType(property.type),
@@ -230,7 +234,9 @@ export class DatabaseService {
   /**
    * Checks that the value is stored in the fallback container format.
    */
-  private isCellFallbackValue(value: unknown): value is IDatabaseCellValueWithFallback {
+  private isCellFallbackValue(
+    value: unknown,
+  ): value is IDatabaseCellValueWithFallback {
     if (!value || typeof value !== 'object') {
       return false;
     }
@@ -257,7 +263,9 @@ export class DatabaseService {
   /**
    * Returns fallback source type if it exists in the legacy conversion payload.
    */
-  private extractFallbackSourceType(value: unknown): DatabasePropertyType | null {
+  private extractFallbackSourceType(
+    value: unknown,
+  ): DatabasePropertyType | null {
     if (!this.isCellFallbackValue(value)) {
       return null;
     }
@@ -288,7 +296,8 @@ export class DatabaseService {
       return cachedName;
     }
 
-    const displayValue = (await this.resolveUserNameById(userId, workspaceId)) || userId;
+    const displayValue =
+      (await this.resolveUserNameById(userId, workspaceId)) || userId;
     cache.set(userId, displayValue);
     return displayValue;
   }
@@ -364,7 +373,8 @@ export class DatabaseService {
       return { id: userId, name: cachedName };
     }
 
-    const userName = (await this.resolveUserNameById(userId, workspaceId)) || userId;
+    const userName =
+      (await this.resolveUserNameById(userId, workspaceId)) || userId;
     cache.set(userId, userName);
     return { id: userId, name: userName };
   }
@@ -393,7 +403,7 @@ export class DatabaseService {
     const pageRef: IDatabasePageReferenceCellValue = {
       id: pageId,
       title: canUsePageMeta ? page.title?.trim() || pageId : pageId,
-      slugId: canUsePageMeta ? page.slugId ?? null : null,
+      slugId: canUsePageMeta ? (page.slugId ?? null) : null,
     };
 
     cache.set(pageId, pageRef);
@@ -420,7 +430,8 @@ export class DatabaseService {
 
         const candidate = option as IDatabaseHistorySelectOption;
         return (
-          typeof candidate.value === 'string' && typeof candidate.label === 'string'
+          typeof candidate.value === 'string' &&
+          typeof candidate.label === 'string'
         );
       })
       .map((option) => ({
@@ -546,24 +557,29 @@ export class DatabaseService {
       return rows;
     }
 
-    const userIds = [...new Set(
-      rows.flatMap((row) =>
-        (row?.cells ?? [])
-          .filter((cell) => userPropertyIds.has(cell.propertyId))
-          .map((cell) => this.extractUserIdFromCellValue(cell.value))
-          .filter((userId): userId is string => Boolean(userId)),
+    const userIds = [
+      ...new Set(
+        rows.flatMap((row) =>
+          (row?.cells ?? [])
+            .filter((cell) => userPropertyIds.has(cell.propertyId))
+            .map((cell) => this.extractUserIdFromCellValue(cell.value))
+            .filter((userId): userId is string => Boolean(userId)),
+        ),
       ),
-    )];
+    ];
 
     if (userIds.length === 0) {
       return rows;
     }
 
     const userDisplayEntries = await Promise.all(
-      userIds.map(async (userId) => [
-        userId,
-        (await this.resolveUserNameById(userId, workspaceId)) || userId,
-      ] as const),
+      userIds.map(
+        async (userId) =>
+          [
+            userId,
+            (await this.resolveUserNameById(userId, workspaceId)) || userId,
+          ] as const,
+      ),
     );
 
     const userNameById = new Map(userDisplayEntries);
@@ -651,15 +667,23 @@ export class DatabaseService {
 
   private extractUserNameFromCellValue(value: unknown): string | null {
     const currentValue = this.extractCurrentCellValue(value);
-    if (!currentValue || typeof currentValue !== 'object' || !('name' in currentValue)) {
+    if (
+      !currentValue ||
+      typeof currentValue !== 'object' ||
+      !('name' in currentValue)
+    ) {
       return null;
     }
 
     const candidate = (currentValue as IDatabaseUserCellValue).name;
-    return typeof candidate === 'string' && candidate.trim() ? candidate.trim() : null;
+    return typeof candidate === 'string' && candidate.trim()
+      ? candidate.trim()
+      : null;
   }
 
-  private parseRowsFilters(rawFilters?: string): IDatabaseRowsFilterCondition[] {
+  private parseRowsFilters(
+    rawFilters?: string,
+  ): IDatabaseRowsFilterCondition[] {
     if (!rawFilters) {
       return [];
     }
@@ -726,7 +750,10 @@ export class DatabaseService {
   ): Promise<Map<string, string>> {
     const pageReferencePropertyIds = new Set(
       [...propertiesById.values()]
-        .filter((property) => this.normalizePropertyType(property.type) === 'page_reference')
+        .filter(
+          (property) =>
+            this.normalizePropertyType(property.type) === 'page_reference',
+        )
         .map((property) => property.id),
     );
 
@@ -734,14 +761,16 @@ export class DatabaseService {
       return new Map();
     }
 
-    const pageIds = [...new Set(
-      rows.flatMap((row) =>
-        (row?.cells ?? [])
-          .filter((cell) => pageReferencePropertyIds.has(cell.propertyId))
-          .map((cell) => this.extractPageIdFromCellValue(cell.value))
-          .filter((pageId): pageId is string => Boolean(pageId)),
+    const pageIds = [
+      ...new Set(
+        rows.flatMap((row) =>
+          (row?.cells ?? [])
+            .filter((cell) => pageReferencePropertyIds.has(cell.propertyId))
+            .map((cell) => this.extractPageIdFromCellValue(cell.value))
+            .filter((pageId): pageId is string => Boolean(pageId)),
+        ),
       ),
-    )];
+    ];
 
     if (pageIds.length === 0) {
       return new Map();
@@ -772,7 +801,10 @@ export class DatabaseService {
   private getRowCellDisplayValue(params: {
     row: any;
     propertyId: string;
-    propertiesById: Map<string, { id: string; type: string | null; settings?: unknown }>;
+    propertiesById: Map<
+      string,
+      { id: string; type: string | null; settings?: unknown }
+    >;
     pageTitleById: Map<string, string>;
   }): string {
     const property = params.propertiesById.get(params.propertyId);
@@ -810,9 +842,10 @@ export class DatabaseService {
       }
 
       const optionLabel =
-        this.extractSelectOptionsFromSettings(property.settings)
-          .find((option) => option.value === optionValue || option.label === optionValue)
-          ?.label ?? null;
+        this.extractSelectOptionsFromSettings(property.settings).find(
+          (option) =>
+            option.value === optionValue || option.label === optionValue,
+        )?.label ?? null;
 
       return optionLabel || optionValue;
     }
@@ -864,7 +897,10 @@ export class DatabaseService {
     filters: IDatabaseRowsFilterCondition[];
     sortPropertyId?: string;
     sortDirection?: 'asc' | 'desc';
-    propertiesById: Map<string, { id: string; type: string | null; settings?: unknown }>;
+    propertiesById: Map<
+      string,
+      { id: string; type: string | null; settings?: unknown }
+    >;
     pageTitleById: Map<string, string>;
   }): any[] {
     const filteredRows = params.rows.filter((row) =>
@@ -908,8 +944,12 @@ export class DatabaseService {
         return sortDirection === 'asc' ? result : -result;
       }
 
-      const leftPosition = String(left?.pagePosition ?? left?.page?.position ?? '');
-      const rightPosition = String(right?.pagePosition ?? right?.page?.position ?? '');
+      const leftPosition = String(
+        left?.pagePosition ?? left?.page?.position ?? '',
+      );
+      const rightPosition = String(
+        right?.pagePosition ?? right?.page?.position ?? '',
+      );
       return leftPosition.localeCompare(rightPosition, undefined, {
         numeric: true,
         sensitivity: 'base',
@@ -933,11 +973,16 @@ export class DatabaseService {
     toType: DatabasePropertyType,
     workspaceId: string,
     userDisplayCache: Map<string, string>,
-  ): Promise<{ converted: unknown; isConvertible: boolean; isRollback: boolean }> {
+  ): Promise<{
+    converted: unknown;
+    isConvertible: boolean;
+    isRollback: boolean;
+  }> {
     const fallbackSourceType = this.extractFallbackSourceType(value);
     if (fallbackSourceType && fallbackSourceType === toType) {
       return {
-        converted: (value as IDatabaseCellValueWithFallback).rawValueBeforeTypeChange,
+        converted: (value as IDatabaseCellValueWithFallback)
+          .rawValueBeforeTypeChange,
         isConvertible: true,
         isRollback: true,
       };
@@ -962,7 +1007,11 @@ export class DatabaseService {
     }
 
     if (!this.canConvertToType(toType)) {
-      return { converted: normalizedValue, isConvertible: false, isRollback: false };
+      return {
+        converted: normalizedValue,
+        isConvertible: false,
+        isRollback: false,
+      };
     }
 
     if (fromType === 'checkbox' && toType === 'multiline_text') {
@@ -975,12 +1024,20 @@ export class DatabaseService {
       }
 
       const booleanValue = String(normalizedValue).toLowerCase() === 'true';
-      return { converted: booleanValue ? 'Yes' : 'No', isConvertible: true, isRollback: false };
+      return {
+        converted: booleanValue ? 'Yes' : 'No',
+        isConvertible: true,
+        isRollback: false,
+      };
     }
 
     if (fromType === 'select' && toType === 'multiline_text') {
       if (typeof normalizedValue === 'string') {
-        return { converted: normalizedValue, isConvertible: true, isRollback: false };
+        return {
+          converted: normalizedValue,
+          isConvertible: true,
+          isRollback: false,
+        };
       }
 
       if (typeof normalizedValue === 'object') {
@@ -988,16 +1045,27 @@ export class DatabaseService {
         const optionLabel = option.label;
         const optionValue = option.value;
         if (typeof optionLabel === 'string') {
-          return { converted: optionLabel, isConvertible: true, isRollback: false };
+          return {
+            converted: optionLabel,
+            isConvertible: true,
+            isRollback: false,
+          };
         }
 
         if (typeof optionValue === 'string') {
-          return { converted: optionValue, isConvertible: true, isRollback: false };
+          return {
+            converted: optionValue,
+            isConvertible: true,
+            isRollback: false,
+          };
         }
       }
     }
 
-    if (fromType === 'user' && (toType === 'multiline_text' || toType === 'code')) {
+    if (
+      fromType === 'user' &&
+      (toType === 'multiline_text' || toType === 'code')
+    ) {
       const userDisplayValue = await this.resolveUserDisplayValue(
         normalizedValue,
         workspaceId,
@@ -1005,7 +1073,11 @@ export class DatabaseService {
       );
 
       if (userDisplayValue !== null) {
-        return { converted: userDisplayValue, isConvertible: true, isRollback: false };
+        return {
+          converted: userDisplayValue,
+          isConvertible: true,
+          isRollback: false,
+        };
       }
     }
 
@@ -1015,13 +1087,25 @@ export class DatabaseService {
 
     if (toType === 'multiline_text' || toType === 'code') {
       if (typeof normalizedValue === 'string') {
-        return { converted: normalizedValue, isConvertible: true, isRollback: false };
+        return {
+          converted: normalizedValue,
+          isConvertible: true,
+          isRollback: false,
+        };
       }
 
-      return { converted: JSON.stringify(normalizedValue), isConvertible: true, isRollback: false };
+      return {
+        converted: JSON.stringify(normalizedValue),
+        isConvertible: true,
+        isRollback: false,
+      };
     }
 
-    return { converted: normalizedValue, isConvertible: true, isRollback: false };
+    return {
+      converted: normalizedValue,
+      isConvertible: true,
+      isRollback: false,
+    };
   }
 
   /**
@@ -1036,30 +1120,40 @@ export class DatabaseService {
     spaceId: string,
   ): Promise<void> {
     const rows =
-      (await this.databaseRowRepo.findByDatabaseId(databaseId, workspaceId, spaceId)) ?? [];
+      (await this.databaseRowRepo.findByDatabaseId(
+        databaseId,
+        workspaceId,
+        spaceId,
+      )) ?? [];
     const userDisplayCache = new Map<string, string>();
 
     for (const row of rows) {
-      const cells = await this.databaseCellRepo.findByDatabaseAndPage(databaseId, row.pageId);
+      const cells = await this.databaseCellRepo.findByDatabaseAndPage(
+        databaseId,
+        row.pageId,
+      );
       const targetCell = cells.find((cell) => cell.propertyId === propertyId);
 
       if (!targetCell) {
         continue;
       }
 
-      const { converted, isConvertible, isRollback } = await this.convertCellValueByPropertyType(
-        targetCell.value,
-        fromType,
-        toType,
-        workspaceId,
-        userDisplayCache,
-      );
+      const { converted, isConvertible, isRollback } =
+        await this.convertCellValueByPropertyType(
+          targetCell.value,
+          fromType,
+          toType,
+          workspaceId,
+          userDisplayCache,
+        );
 
       const nextValue = isRollback
         ? converted
         : {
             value: isConvertible ? converted : null,
-            rawValueBeforeTypeChange: this.extractCurrentCellValue(targetCell.value),
+            rawValueBeforeTypeChange: this.extractCurrentCellValue(
+              targetCell.value,
+            ),
             rawTypeBeforeTypeChange: fromType,
           };
 
@@ -1072,7 +1166,11 @@ export class DatabaseService {
   /**
    * Collects a markdown representation of the current database table.
    */
-  async buildDatabaseMarkdown(databaseId: string, user: User, workspaceId: string) {
+  async buildDatabaseMarkdown(
+    databaseId: string,
+    user: User,
+    workspaceId: string,
+  ) {
     const tableState = await this.buildDatabaseExportTableState(
       databaseId,
       user,
@@ -1120,7 +1218,11 @@ export class DatabaseService {
 
     const [properties, rows] = await Promise.all([
       this.databasePropertyRepo.findByDatabaseId(databaseId),
-      this.databaseRowRepo.findByDatabaseId(databaseId, workspaceId, database.spaceId),
+      this.databaseRowRepo.findByDatabaseId(
+        databaseId,
+        workspaceId,
+        database.spaceId,
+      ),
     ]);
 
     const normalizedProperties = this.normalizeProperties(properties);
@@ -1175,15 +1277,16 @@ export class DatabaseService {
             .map((row) => {
               const titleCell = row.page?.title || row.pageTitle || '';
               const valueCells = tableState.properties
-                .map((property) =>
-                  `<td>${this.escapeHtml(
-                    this.getRowCellDisplayValue({
-                      row,
-                      propertyId: property.id,
-                      propertiesById: tableState.propertiesById,
-                      pageTitleById: tableState.pageTitleById,
-                    }),
-                  )}</td>`,
+                .map(
+                  (property) =>
+                    `<td>${this.escapeHtml(
+                      this.getRowCellDisplayValue({
+                        row,
+                        propertyId: property.id,
+                        propertiesById: tableState.propertiesById,
+                        pageTitleById: tableState.pageTitleById,
+                      }),
+                    )}</td>`,
                 )
                 .join('');
 
@@ -1264,7 +1367,10 @@ export class DatabaseService {
     }
 
     const [metadataPath] = rootMetadataEntry;
-    const zipPathCandidates = [metadataPath, this.decodeExportPath(metadataPath)];
+    const zipPathCandidates = [
+      metadataPath,
+      this.decodeExportPath(metadataPath),
+    ];
     const uniqueZipPathCandidates = [...new Set(zipPathCandidates)];
 
     for (const zipPathCandidate of uniqueZipPathCandidates) {
@@ -1280,10 +1386,14 @@ export class DatabaseService {
     throw new NotFoundException('Root PDF file is missing in export archive');
   }
 
-  private buildSlugIdToExportPathMap(metadata: ExportMetadata): Record<string, string> {
+  private buildSlugIdToExportPathMap(
+    metadata: ExportMetadata,
+  ): Record<string, string> {
     const slugIdToExportPath: Record<string, string> = {};
 
-    for (const [exportPath, pageMetadata] of Object.entries(metadata.pages || {})) {
+    for (const [exportPath, pageMetadata] of Object.entries(
+      metadata.pages || {},
+    )) {
       if (!pageMetadata?.slugId) {
         continue;
       }
@@ -1302,12 +1412,20 @@ export class DatabaseService {
     locale?: string;
     rootMetadataPath: string;
     slugIdToExportPath: Record<string, string>;
-  }): Promise<{ title: string; bodyHtml: string; attachmentToken: string }> {
+  }): Promise<{
+    title: string;
+    bodyHtml: string;
+    attachmentTokens: Record<string, string>;
+  }> {
     const rootPage = await this.pageRepo.findById(params.databasePageId, {
       includeContent: true,
     });
 
-    if (!rootPage || rootPage.deletedAt || rootPage.workspaceId !== params.workspaceId) {
+    if (
+      !rootPage ||
+      rootPage.deletedAt ||
+      rootPage.workspaceId !== params.workspaceId
+    ) {
       throw new NotFoundException('Database root page not found');
     }
 
@@ -1341,7 +1459,7 @@ export class DatabaseService {
     return {
       title: rootPagePdfBody.title,
       bodyHtml: `${rootPagePdfBody.bodyHtml}${tableSectionHtml}`,
-      attachmentToken: rootPagePdfBody.attachmentToken,
+      attachmentTokens: rootPagePdfBody.attachmentTokens,
     };
   }
 
@@ -1376,7 +1494,9 @@ export class DatabaseService {
       await this.spaceAbility.assertHasFullSpaceAccess(user, database.spaceId);
     }
 
-    const safeName = (database.name?.trim() || 'database').replace(/\s+/g, '-').toLowerCase();
+    const safeName = (database.name?.trim() || 'database')
+      .replace(/\s+/g, '-')
+      .toLowerCase();
 
     if (format === DatabaseExportFormat.Docmost) {
       const archive = await this.exportService.exportDatabaseArchive(
@@ -1403,7 +1523,9 @@ export class DatabaseService {
       );
       const zip = await JSZip.loadAsync(pagesZipBuffer);
       const rootPdfPath = await this.resolveRootPdfPathFromMetadata(zip);
-      const slugIdToExportPath = this.buildSlugIdToExportPathMap(rootPdfPath.metadata);
+      const slugIdToExportPath = this.buildSlugIdToExportPathMap(
+        rootPdfPath.metadata,
+      );
       const mergedRootPdfBody = await this.buildMergedRootPdfBodyHtml({
         databaseId,
         databasePageId: database.pageId,
@@ -1413,11 +1535,12 @@ export class DatabaseService {
         rootMetadataPath: rootPdfPath.metadataPath,
         slugIdToExportPath,
       });
-      const mergedRootPdfBuffer = await this.exportService.renderPdfFromHtmlDocument({
-        title: mergedRootPdfBody.title,
-        bodyHtml: mergedRootPdfBody.bodyHtml,
-        attachmentToken: mergedRootPdfBody.attachmentToken,
-      });
+      const mergedRootPdfBuffer =
+        await this.exportService.renderPdfFromHtmlDocument({
+          title: mergedRootPdfBody.title,
+          bodyHtml: mergedRootPdfBody.bodyHtml,
+          attachmentTokens: mergedRootPdfBody.attachmentTokens,
+        });
 
       zip.file(rootPdfPath.zipPath, mergedRootPdfBuffer);
 
@@ -1433,7 +1556,9 @@ export class DatabaseService {
     }
 
     const pageExportFormat =
-      format === DatabaseExportFormat.HTML ? ExportFormat.HTML : ExportFormat.Markdown;
+      format === DatabaseExportFormat.HTML
+        ? ExportFormat.HTML
+        : ExportFormat.Markdown;
 
     const zipFileStream = await this.exportPagesForUser(
       database.pageId,
@@ -1596,16 +1721,24 @@ export class DatabaseService {
     dto: UpdateDatabaseDto,
     actor: User,
     workspaceId: string,
-  ): Promise<Awaited<ReturnType<DatabaseRepo['updateDatabase']>> & IUpdatedDatabaseResponse> {
+  ): Promise<
+    Awaited<ReturnType<DatabaseRepo['updateDatabase']>> &
+      IUpdatedDatabaseResponse
+  > {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
     await this.assertCanManageDatabasePages(actor, database.spaceId);
-    const hasNameChanged = typeof dto.name === 'string' && dto.name !== database.name;
+    const hasNameChanged =
+      typeof dto.name === 'string' && dto.name !== database.name;
 
-    const updated = await this.databaseRepo.updateDatabase(databaseId, workspaceId, {
-      ...dto,
-      descriptionContent: dto.descriptionContent as never,
-      lastUpdatedById: actor.id,
-    });
+    const updated = await this.databaseRepo.updateDatabase(
+      databaseId,
+      workspaceId,
+      {
+        ...dto,
+        descriptionContent: dto.descriptionContent as never,
+        lastUpdatedById: actor.id,
+      },
+    );
 
     if (!updated) {
       throw new NotFoundException('Database not found');
@@ -1684,9 +1817,8 @@ export class DatabaseService {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
     await this.assertCanManageDatabasePages(actor, database.spaceId);
 
-    const currentProperties = await this.databasePropertyRepo.findByDatabaseId(
-      databaseId,
-    );
+    const currentProperties =
+      await this.databasePropertyRepo.findByDatabaseId(databaseId);
 
     const property = await this.databasePropertyRepo.insertProperty({
       databaseId,
@@ -1729,7 +1861,8 @@ export class DatabaseService {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
     await this.assertCanReadDatabasePages(user, database.spaceId);
 
-    const properties = await this.databasePropertyRepo.findByDatabaseId(databaseId);
+    const properties =
+      await this.databasePropertyRepo.findByDatabaseId(databaseId);
     return this.normalizeProperties(properties);
   }
 
@@ -1772,7 +1905,9 @@ export class DatabaseService {
       }
 
       if (dto.position >= currentProperties.length) {
-        throw new BadRequestException('Database property position is out of range');
+        throw new BadRequestException(
+          'Database property position is out of range',
+        );
       }
 
       const reorderedProperties = [...currentProperties];
@@ -1785,7 +1920,10 @@ export class DatabaseService {
       reorderedProperties.splice(dto.position, 0, movedProperty);
 
       await executeTx(this.db, async (trx) => {
-        for (const [position, currentProperty] of reorderedProperties.entries()) {
+        for (const [
+          position,
+          currentProperty,
+        ] of reorderedProperties.entries()) {
           const nextProperty = await this.databasePropertyRepo.updateProperty(
             currentProperty.id,
             currentProperty.id === propertyId
@@ -1823,10 +1961,7 @@ export class DatabaseService {
       newValue: unknown;
     }> = [];
 
-    if (
-      typeof dto.name === 'string' &&
-      dto.name !== property.name
-    ) {
+    if (typeof dto.name === 'string' && dto.name !== property.name) {
       propertyChanges.push({
         field: 'name',
         oldValue: property.name,
@@ -2069,13 +2204,15 @@ export class DatabaseService {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
     await this.assertCanReadDatabasePages(user, database.spaceId);
 
-    const properties = await this.databasePropertyRepo.findByDatabaseId(databaseId);
+    const properties =
+      await this.databasePropertyRepo.findByDatabaseId(databaseId);
     const normalizedProperties = this.normalizeProperties(properties);
     const propertiesById = new Map(
       normalizedProperties.map((property) => [property.id, property]),
     );
     const rowsFilters = this.parseRowsFilters(query?.filters);
-    const hasServerRowsState = rowsFilters.length > 0 || Boolean(query?.sortPropertyId);
+    const hasServerRowsState =
+      rowsFilters.length > 0 || Boolean(query?.sortPropertyId);
 
     const userPropertyIds = new Set(
       normalizedProperties
@@ -2168,7 +2305,10 @@ export class DatabaseService {
       user,
     );
 
-    const row = await this.databaseRowRepo.findByDatabaseAndPage(databaseId, pageId);
+    const row = await this.databaseRowRepo.findByDatabaseAndPage(
+      databaseId,
+      pageId,
+    );
     if (!row || row.archivedAt) {
       throw new NotFoundException('Database row not found');
     }
@@ -2253,7 +2393,6 @@ export class DatabaseService {
     };
   }
 
-
   async deleteRow(
     databaseId: string,
     pageId: string,
@@ -2270,7 +2409,10 @@ export class DatabaseService {
       user,
     );
 
-    const row = await this.databaseRowRepo.findByDatabaseAndPage(databaseId, pageId);
+    const row = await this.databaseRowRepo.findByDatabaseAndPage(
+      databaseId,
+      pageId,
+    );
     if (!row || row.archivedAt) {
       throw new NotFoundException('Database row not found');
     }
@@ -2311,9 +2453,11 @@ export class DatabaseService {
     await this.pageRepo.removePage(pageId, user.id, workspaceId);
   }
 
-
   async getRowContextByPage(pageId: string, user: User, workspaceId: string) {
-    const row = await this.databaseRowRepo.findActiveByPageId(pageId, workspaceId);
+    const row = await this.databaseRowRepo.findActiveByPageId(
+      pageId,
+      workspaceId,
+    );
 
     if (!row) {
       return null;
@@ -2327,7 +2471,12 @@ export class DatabaseService {
       this.databaseCellRepo.findByDatabaseAndPage(database.id, pageId),
     ]);
 
-    return { database, row, properties: this.normalizeProperties(properties), cells };
+    return {
+      database,
+      row,
+      properties: this.normalizeProperties(properties),
+      cells,
+    };
   }
 
   /**
@@ -2372,7 +2521,10 @@ export class DatabaseService {
     const normalizedProperties = this.normalizeProperties(properties);
 
     const previousCellsByPropertyId = new Map(
-      existingCells.map((existingCell) => [existingCell.propertyId, existingCell]),
+      existingCells.map((existingCell) => [
+        existingCell.propertyId,
+        existingCell,
+      ]),
     );
     const propertyById = new Map(
       normalizedProperties.map((property) => [property.id, property]),
@@ -2396,7 +2548,9 @@ export class DatabaseService {
       const property = propertyById.get(cell.propertyId);
       const previousCell = previousCellsByPropertyId.get(cell.propertyId);
       const previousUserId =
-        property?.type === 'user' ? this.extractUserIdFromCellValue(previousCell?.value) : null;
+        property?.type === 'user'
+          ? this.extractUserIdFromCellValue(previousCell?.value)
+          : null;
       const propertyType = property
         ? this.normalizePropertyType(property.type)
         : null;
@@ -2456,7 +2610,11 @@ export class DatabaseService {
       if (property?.type === 'user') {
         const nextUserId = this.extractUserIdFromCellValue(normalizedValue);
 
-        if (nextUserId && nextUserId !== previousUserId && nextUserId !== user.id) {
+        if (
+          nextUserId &&
+          nextUserId !== previousUserId &&
+          nextUserId !== user.id
+        ) {
           await this.notifyDatabaseUserAssignment({
             actorId: user.id,
             pageId,
@@ -2592,12 +2750,18 @@ export class DatabaseService {
       return normalizedValue;
     }
 
-    if (!currentValue || typeof currentValue !== 'object' || !('id' in currentValue)) {
+    if (
+      !currentValue ||
+      typeof currentValue !== 'object' ||
+      !('id' in currentValue)
+    ) {
       return null;
     }
 
     const candidate = (currentValue as IDatabaseUserCellValue).id;
-    return typeof candidate === 'string' && candidate.trim() ? candidate.trim() : null;
+    return typeof candidate === 'string' && candidate.trim()
+      ? candidate.trim()
+      : null;
   }
 
   /**
@@ -2722,11 +2886,19 @@ export class DatabaseService {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
     await this.assertCanManageDatabasePages(user, database.spaceId);
 
-   const updatedAt = new Date();
+    const updatedAt = new Date();
 
     await executeTx(this.db, async (trx) => {
-      await this.databaseRowRepo.archiveByDatabaseId(database.id, workspaceId, trx);
-      await this.databaseViewRepo.softDeleteByDatabaseId(database.id, workspaceId, trx);
+      await this.databaseRowRepo.archiveByDatabaseId(
+        database.id,
+        workspaceId,
+        trx,
+      );
+      await this.databaseViewRepo.softDeleteByDatabaseId(
+        database.id,
+        workspaceId,
+        trx,
+      );
 
       await trx
         .updateTable('databaseProperties')

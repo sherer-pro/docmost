@@ -14,7 +14,7 @@ describe('AiQueueReconcilerService lifecycle', () => {
     jest.useRealTimers();
   });
 
-  it('creates one timer and removes it during shutdown', () => {
+  it('creates one timer and removes it during shutdown', async () => {
     jest.useFakeTimers();
     const service = new AiQueueReconcilerService(
       {} as any,
@@ -38,8 +38,53 @@ describe('AiQueueReconcilerService lifecycle', () => {
     expect(jest.getTimerCount()).toBe(1);
     expect(service.reconcile).toHaveBeenCalledTimes(1);
 
-    service.onModuleDestroy();
+    await service.onModuleDestroy();
     expect(jest.getTimerCount()).toBe(0);
+  });
+
+  it('waits for in-flight reconciliation before shutdown completes', async () => {
+    let finishStep!: () => void;
+    const pendingStep = new Promise<void>((resolve) => {
+      finishStep = resolve;
+    });
+    const steps = {
+      expirePending: jest.fn(() => pendingStep),
+      recoverApproved: jest.fn().mockResolvedValue(0),
+    };
+    const files = {
+      recoverStaleExtractions: jest.fn().mockResolvedValue([]),
+      pendingExtractionIds: jest.fn().mockResolvedValue([]),
+      enqueueExtraction: jest.fn(),
+      cleanupDeletedFiles: jest.fn().mockResolvedValue(0),
+    };
+    const service = new AiQueueReconcilerService(
+      {} as any,
+      {} as any,
+      files as any,
+      {} as any,
+      { waitUntilReady: jest.fn().mockResolvedValue(undefined) } as any,
+      {} as any,
+      { cleanupExpired: jest.fn().mockResolvedValue(0) } as any,
+      {} as any,
+      steps as any,
+    );
+    jest.spyOn(service as any, 'reconcileRuns').mockResolvedValue(undefined);
+    jest.spyOn(service as any, 'reconcileAuxRuns').mockResolvedValue(undefined);
+
+    const reconciliation = service.reconcile();
+    await Promise.resolve();
+    let shutdownCompleted = false;
+    const shutdown = service.onModuleDestroy().then(() => {
+      shutdownCompleted = true;
+    });
+
+    await Promise.resolve();
+    expect(shutdownCompleted).toBe(false);
+
+    finishStep();
+    await reconciliation;
+    await shutdown;
+    expect(shutdownCompleted).toBe(true);
   });
 
   it('recovers decided approvals before reconciling queued work', async () => {
@@ -67,9 +112,7 @@ describe('AiQueueReconcilerService lifecycle', () => {
     const reconcileRuns = jest
       .spyOn(service as any, 'reconcileRuns')
       .mockResolvedValue(undefined);
-    jest
-      .spyOn(service as any, 'reconcileAuxRuns')
-      .mockResolvedValue(undefined);
+    jest.spyOn(service as any, 'reconcileAuxRuns').mockResolvedValue(undefined);
 
     await service.reconcile();
 
@@ -175,12 +218,9 @@ describe('AiQueueReconcilerService lifecycle', () => {
     });
     expect(messageUpdateExecute).toHaveBeenCalledTimes(1);
     expect(events.emitStatus).toHaveBeenCalledTimes(1);
-    expect(events.emitStatus).toHaveBeenCalledWith(
-      run,
-      2,
-      'cancelled',
-      { finishReason: 'cancelled' },
-    );
+    expect(events.emitStatus).toHaveBeenCalledWith(run, 2, 'cancelled', {
+      finishReason: 'cancelled',
+    });
   });
 
   it('keeps worker-loss recovery idempotent when a worker wins the race', async () => {

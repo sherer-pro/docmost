@@ -35,22 +35,22 @@ describe('OpenAiCompatibleProviderService SSE integration', () => {
               ),
             100,
           ),
-          setTimeout(() => response.write(': keep-alive\n\n'), 300),
+          setTimeout(() => response.write(': keep-alive\n\n'), 700),
           setTimeout(
             () =>
               response.write(
                 'data: {"choices":[{"delta":{"content":"Hello"}}]}\n\n',
               ),
-            500,
+            1300,
           ),
           setTimeout(
             () =>
               response.write(
                 'data: {"usage":{"prompt_tokens":3,"completion_tokens":1},"choices":[]}\n\n',
               ),
-            700,
+            1900,
           ),
-          setTimeout(() => response.end('data: [DONE]\n\n'), 900),
+          setTimeout(() => response.end('data: [DONE]\n\n'), 2500),
         ];
         response.on('close', () => timers.forEach(clearTimeout));
         return;
@@ -127,13 +127,15 @@ describe('OpenAiCompatibleProviderService SSE integration', () => {
   });
 
   it('keeps a periodic SSE stream alive and returns usage', async () => {
-    idleTimeoutMs = 500;
+    // The total stream exceeds the idle timeout, while each chunk gap leaves
+    // enough scheduler headroom for the full parallel Jest suite.
+    idleTimeoutMs = 2000;
     const onText = jest.fn();
     const onReasoning = jest.fn();
 
     await expect(
       service.stream(
-        config('periodic', 2500),
+        config('periodic', 6000),
         [{ role: 'user', content: 'Hi' }],
         { onText, onReasoning },
       ),

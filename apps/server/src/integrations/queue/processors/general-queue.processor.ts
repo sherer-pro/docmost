@@ -1,16 +1,9 @@
 import { Logger, OnModuleDestroy } from '@nestjs/common';
-import {
-  InjectQueue,
-  OnWorkerEvent,
-  Processor,
-  WorkerHost,
-} from '@nestjs/bullmq';
-import { Job, Queue } from 'bullmq';
-import pLimit from 'p-limit';
+import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
+import { Job } from 'bullmq';
 import { QueueJob, QueueName } from '../constants';
 import {
   IAddPageWatchersJob,
-  IDuplicatePageAttachmentMapping,
   IDuplicatePageAttachmentsJob,
   IPageBacklinkJob,
 } from '../constants/queue.interface';
@@ -23,8 +16,8 @@ import {
 } from '@docmost/db/repos/watcher/watcher.repo';
 import { InsertableWatcher } from '@docmost/db/types/entity.types';
 import { processBacklinks } from '../tasks/backlinks.task';
-import { StorageService } from '../../storage/storage.service';
-import { CONTENT_INDEXABLE_EXTENSIONS } from '../../../core/attachment/attachment.constants';
+import { DuplicatePageAttachmentsService } from '../services/duplicate-page-attachments.service';
+import { QueueOutboxService } from '../outbox/queue-outbox.service';
 
 @Processor(QueueName.GENERAL_QUEUE)
 export class GeneralQueueProcessor
@@ -33,285 +26,64 @@ export class GeneralQueueProcessor
 {
   private readonly logger = new Logger(GeneralQueueProcessor.name);
 
-  /**
-   * Concurrency limit for attachment copy during page duplication.
-   * A small limit protects storage from spikes of concurrent operations.
-   */
-  private static readonly DUPLICATE_ATTACHMENTS_CONCURRENCY = 5;
-
   constructor(
     @InjectKysely() private readonly db: KyselyDB,
     private readonly backlinkRepo: BacklinkRepo,
     private readonly watcherRepo: WatcherRepo,
-    private readonly storageService: StorageService,
-    @InjectQueue(QueueName.SEARCH_QUEUE)
-    private readonly searchQueue: Queue,
-    @InjectQueue(QueueName.ATTACHMENT_QUEUE)
-    private readonly attachmentQueue: Queue,
+    private readonly duplicatePageAttachments: DuplicatePageAttachmentsService,
+    private readonly queueOutbox: QueueOutboxService,
   ) {
     super();
   }
 
   async process(job: Job): Promise<void> {
-    try {
-      switch (job.name) {
-        case QueueJob.ADD_PAGE_WATCHERS: {
-          const { userIds, pageId, spaceId, workspaceId } =
-            job.data as IAddPageWatchersJob;
-          const watchers: InsertableWatcher[] = userIds.map((userId) => ({
-            userId,
-            pageId,
-            spaceId,
-            workspaceId,
-            type: WatcherType.PAGE,
-            addedById: userId,
-          }));
-          await this.watcherRepo.insertMany(watchers);
-          break;
-        }
-
-        case QueueJob.PAGE_BACKLINKS: {
-          await processBacklinks(
-            this.db,
-            this.backlinkRepo,
-            job.data as IPageBacklinkJob,
-          );
-          break;
-        }
-
-        case QueueJob.DUPLICATE_PAGE_ATTACHMENTS: {
-          await this.processDuplicatePageAttachments(
-            job.data as IDuplicatePageAttachmentsJob,
-          );
-          break;
-        }
+    switch (job.name) {
+      case QueueJob.ADD_PAGE_WATCHERS: {
+        const { userIds, pageId, spaceId, workspaceId } =
+          job.data as IAddPageWatchersJob;
+        const watchers: InsertableWatcher[] = userIds.map((userId) => ({
+          userId,
+          pageId,
+          spaceId,
+          workspaceId,
+          type: WatcherType.PAGE,
+          addedById: userId,
+        }));
+        await this.watcherRepo.insertMany(watchers);
+        return;
       }
-    } catch (err) {
-      throw err;
-    }
-  }
-
-  /**
-   * Asynchronously copies attachments after duplicating a page tree.
-   * This runs in a worker so the duplicate API can respond quickly.
-   */
-  private async processDuplicatePageAttachments(
-    data: IDuplicatePageAttachmentsJob,
-  ): Promise<void> {
-    const startedAt = Date.now();
-
-    const mappingByOldAttachmentId = new Map<
-      string,
-      IDuplicatePageAttachmentMapping
-    >();
-    for (const mapping of data.attachmentMappings) {
-      mappingByOldAttachmentId.set(mapping.oldAttachmentId, mapping);
-    }
-
-    const attachmentIds = Array.from(mappingByOldAttachmentId.keys());
-
-    if (attachmentIds.length === 0) {
-      this.logger.debug(
-        `Duplicate attachments job skipped: no attachments. rootPageId=${data.rootPageId}, newPageId=${data.newPageId}`,
-      );
-      return;
-    }
-
-    const attachments = await this.db
-      .selectFrom('attachments')
-      .select([
-        'id',
-        'type',
-        'filePath',
-        'fileName',
-        'fileSize',
-        'mimeType',
-        'fileExt',
-        'creatorId',
-        'workspaceId',
-        'pageId',
-        'textContent',
-        'contentIndexStatus',
-        'contentIndexVersion',
-        'contentIndexedAt',
-      ])
-      .where('id', 'in', attachmentIds)
-      .where('workspaceId', '=', data.workspaceId)
-      .where('deletedAt', 'is', null)
-      .execute();
-
-    const limit = pLimit(
-      GeneralQueueProcessor.DUPLICATE_ATTACHMENTS_CONCURRENCY,
-    );
-
-    let successCount = 0;
-    let errorCount = 0;
-    const indexedAttachmentIds: string[] = [];
-    const contentAttachmentIds: string[] = [];
-
-    await Promise.all(
-      attachments.map((attachment) =>
-        limit(async () => {
-          const mapping = mappingByOldAttachmentId.get(attachment.id);
-
-          if (!mapping) {
-            errorCount += 1;
-            this.logger.warn(
-              `Duplicate attachment mapping not found. attachmentId=${attachment.id}, rootPageId=${data.rootPageId}, newPageId=${data.newPageId}`,
-            );
-            return;
-          }
-
-          if (attachment.pageId !== mapping.oldPageId) {
-            errorCount += 1;
-            this.logger.warn(
-              `Duplicate attachment page mismatch. attachmentId=${attachment.id}, expectedPageId=${mapping.oldPageId}, actualPageId=${attachment.pageId}, rootPageId=${data.rootPageId}`,
-            );
-            return;
-          }
-
-          const newPathFile = attachment.filePath.replace(
-            attachment.id,
-            mapping.newAttachmentId,
-          );
-
-          try {
-            const existing = await this.db
-              .selectFrom('attachments')
-              .select([
-                'id',
-                'workspaceId',
-                'pageId',
-                'spaceId',
-                'filePath',
-                'fileExt',
-                'textContent',
-              ])
-              .where('id', '=', mapping.newAttachmentId)
-              .executeTakeFirst();
-
-            if (existing) {
-              if (
-                existing.workspaceId !== data.workspaceId ||
-                existing.pageId !== mapping.newPageId ||
-                existing.spaceId !== data.spaceId ||
-                existing.filePath !== newPathFile
-              ) {
-                throw new Error('Existing duplicate attachment is inconsistent');
-              }
-              if (!(await this.storageService.exists(newPathFile))) {
-                await this.storageService.copy(
-                  attachment.filePath,
-                  newPathFile,
-                );
-              }
-            } else {
-              await this.storageService.copy(attachment.filePath, newPathFile);
-
-              await this.db
-                .insertInto('attachments')
-                .values({
-                  id: mapping.newAttachmentId,
-                  type: attachment.type,
-                  filePath: newPathFile,
-                  fileName: attachment.fileName,
-                  fileSize: attachment.fileSize,
-                  mimeType: attachment.mimeType,
-                  fileExt: attachment.fileExt,
-                  creatorId: attachment.creatorId,
-                  workspaceId: attachment.workspaceId,
-                  pageId: mapping.newPageId,
-                  spaceId: data.spaceId,
-                  textContent: attachment.textContent,
-                  contentIndexStatus: attachment.contentIndexStatus,
-                  contentIndexVersion: attachment.contentIndexVersion,
-                  contentIndexedAt: attachment.contentIndexedAt,
-                })
-                .execute();
-            }
-
-            successCount += 1;
-            indexedAttachmentIds.push(mapping.newAttachmentId);
-            if (
-              !attachment.textContent &&
-              CONTENT_INDEXABLE_EXTENSIONS.includes(
-                attachment.fileExt?.toLowerCase() as (typeof CONTENT_INDEXABLE_EXTENSIONS)[number],
-              )
-            ) {
-              contentAttachmentIds.push(mapping.newAttachmentId);
-            }
-          } catch (err) {
-            errorCount += 1;
-            this.logger.error(
-              `Duplicate attachment copy failed. attachmentId=${attachment.id}, newAttachmentId=${mapping.newAttachmentId}, oldPageId=${mapping.oldPageId}, newPageId=${mapping.newPageId}, rootPageId=${data.rootPageId}, workspaceId=${data.workspaceId}`,
-              err,
-            );
-          }
-        }),
-      ),
-    );
-
-    const missingCount = data.attachmentMappings.length - attachments.length;
-    if (missingCount > 0) {
-      errorCount += missingCount;
-      this.logger.warn(
-        `Duplicate attachments missing source records. missing=${missingCount}, rootPageId=${data.rootPageId}, newPageId=${data.newPageId}, workspaceId=${data.workspaceId}`,
-      );
-    }
-
-    if (indexedAttachmentIds.length > 0) {
-      await this.searchQueue.add(
-        QueueJob.SEARCH_INDEX_ATTACHMENT,
-        { attachmentIds: indexedAttachmentIds },
-        {
-          attempts: 3,
-          backoff: { type: 'exponential', delay: 10_000 },
-          removeOnComplete: true,
-          removeOnFail: true,
-        },
-      );
-    }
-    await Promise.all(
-      contentAttachmentIds.map((attachmentId) =>
-        this.attachmentQueue.add(
-          QueueJob.ATTACHMENT_INDEX_CONTENT,
-          { attachmentId },
-          {
-            attempts: 3,
-            backoff: { type: 'exponential', delay: 10_000 },
-            removeOnComplete: true,
-            removeOnFail: true,
-          },
-        ),
-      ),
-    );
-
-    const durationMs = Date.now() - startedAt;
-    this.logger.log(
-      `Duplicate attachments job finished. rootPageId=${data.rootPageId}, newPageId=${data.newPageId}, workspaceId=${data.workspaceId}, durationMs=${durationMs}, successCount=${successCount}, errorCount=${errorCount}`,
-    );
-
-    if (errorCount > 0) {
-      throw new Error(
-        `Duplicate attachments job has partial errors. rootPageId=${data.rootPageId}, newPageId=${data.newPageId}, workspaceId=${data.workspaceId}, successCount=${successCount}, errorCount=${errorCount}`,
-      );
+      case QueueJob.PAGE_BACKLINKS:
+        await processBacklinks(
+          this.db,
+          this.backlinkRepo,
+          job.data as IPageBacklinkJob,
+        );
+        return;
+      case QueueJob.DUPLICATE_PAGE_ATTACHMENTS:
+        await this.duplicatePageAttachments.process(
+          job.data as IDuplicatePageAttachmentsJob,
+        );
+        return;
+      case QueueJob.PROCESS_QUEUE_OUTBOX:
+        await this.queueOutbox.processAvailable();
+        return;
     }
   }
 
   @OnWorkerEvent('active')
-  onActive(job: Job) {
+  onActive(job: Job): void {
     this.logger.debug(`Processing ${job.name} job`);
   }
 
   @OnWorkerEvent('failed')
-  onError(job: Job) {
+  onError(job: Job): void {
     this.logger.error(
       `Error processing ${job.name} job. Reason: ${job.failedReason}`,
     );
   }
 
   @OnWorkerEvent('completed')
-  onCompleted(job: Job) {
+  onCompleted(job: Job): void {
     this.logger.debug(`Completed ${job.name} job`);
   }
 

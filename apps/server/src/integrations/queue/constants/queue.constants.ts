@@ -21,6 +21,7 @@ export enum QueueJob {
   PAGE_BACKLINKS = 'page-backlinks',
   ADD_PAGE_WATCHERS = 'add-page-watchers',
   DUPLICATE_PAGE_ATTACHMENTS = 'duplicate-page-attachments',
+  PROCESS_QUEUE_OUTBOX = 'process-queue-outbox',
 
   IMPORT_TASK = 'import-task',
   EXPORT_TASK = 'export-task',

@@ -9,7 +9,11 @@ import {
 } from '@hocuspocus/server';
 import RedisClient from 'ioredis';
 import { readVarString } from 'lib0/decoding.js';
-import { HttpException } from '@nestjs/common';
+import {
+  HttpException,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { CollabProxySocket } from './collab-proxy-socket';
 import {
   BaseWebSocket,
@@ -37,6 +41,20 @@ type SerializedCustomEventError = NonNullable<
   RSAMessageCustomEventComplete['error']
 >;
 
+export const RENEW_DOCUMENT_LOCK_SCRIPT = `
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+  return redis.call('PEXPIRE', KEYS[1], ARGV[2])
+end
+return 0
+`;
+
+export const RELEASE_DOCUMENT_LOCK_SCRIPT = `
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+  return redis.call('DEL', KEYS[1])
+end
+return 0
+`;
+
 export function serializeCustomEventError(
   error: unknown,
 ): SerializedCustomEventError {
@@ -63,6 +81,7 @@ export function deserializeCustomEventError(
 
 export class RedisSyncExtension<TCE extends CustomEvents> implements Extension {
   priority = 1000;
+  private readonly logger = new Logger(RedisSyncExtension.name);
   private readonly pub: RedisClient;
   private sub: RedisClient;
   private readonly pack: Pack;
@@ -70,6 +89,8 @@ export class RedisSyncExtension<TCE extends CustomEvents> implements Extension {
   private originSockets: Record<SocketId, BaseWebSocket> = {};
   private locks: Record<DocumentName, NodeJS.Timeout> = {};
   private lockPromises: Record<DocumentName, Promise<ServerId | null>> = {};
+  private readonly lostLocks = new Set<DocumentName>();
+  private readonly leaseLosses: Record<DocumentName, Promise<void>> = {};
   private proxySockets: Record<SocketId, CollabProxySocket> = {};
   private readonly prefix: string;
   private readonly lockPrefix: string;
@@ -78,6 +99,7 @@ export class RedisSyncExtension<TCE extends CustomEvents> implements Extension {
   private readonly customEventTTL: number;
   private readonly lockTTL: number;
   private instance!: Hocuspocus;
+  private destroyed = false;
   private readonly customEvents: TCE;
   private replyIdCounter: number = 0;
   private pendingReplies: Record<
@@ -111,10 +133,20 @@ export class RedisSyncExtension<TCE extends CustomEvents> implements Extension {
     this.lockPrefix = `${this.prefix}Lock`;
     this.msgChannel = `${this.prefix}Msg`;
     this.customEvents = (customEvents as any) ?? ({} as any as CustomEvents);
-    this.sub.subscribe(this.msgChannel, `${this.msgChannel}:${this.serverId}`);
+    void this.sub
+      .subscribe(this.msgChannel, `${this.msgChannel}:${this.serverId}`)
+      .catch(() => {
+        this.logger.error(
+          'Failed to subscribe to collaboration Redis channels',
+        );
+      });
     this.sub.on('messageBuffer', this.handleRedisMessage);
-    this.pub.on('error', () => {});
-    this.sub.on('error', () => {});
+    this.pub.on('error', () => {
+      this.logger.error('Collaboration Redis publisher error');
+    });
+    this.sub.on('error', () => {
+      this.logger.error('Collaboration Redis subscriber error');
+    });
   }
   private getKey(documentName: string) {
     return `${this.lockPrefix}:${documentName}`;
@@ -136,7 +168,7 @@ export class RedisSyncExtension<TCE extends CustomEvents> implements Extension {
     this.proxySockets[socketId]?.emit('pong');
   }
 
-  private handleProxyMessage(
+  private async handleProxyMessage(
     msg: Pick<RSAMessageProxy, 'replyTo' | 'message' | 'serializedHTTPRequest'>,
   ) {
     const { replyTo, message, serializedHTTPRequest } = msg;
@@ -152,7 +184,7 @@ export class RedisSyncExtension<TCE extends CustomEvents> implements Extension {
         socketId,
       );
       this.proxySockets[socketId] = socket;
-      this.instance.handleConnection(
+      await this.instance.handleConnection(
         socket as any,
         serializedHTTPRequest as any,
         {},
@@ -161,21 +193,36 @@ export class RedisSyncExtension<TCE extends CustomEvents> implements Extension {
     socket.emit('message', message);
   }
 
-  private getOrClaimLock(documentName: string) {
-    const lockPromise = this.pub.set(
-      this.getKey(documentName),
-      this.serverId,
-      'PX',
-      this.lockTTL,
-      'NX',
-      'GET',
-    );
+  private getOrClaimLock(documentName: string): Promise<ServerId | null> {
+    const lockPromise = this.pub
+      .set(
+        this.getKey(documentName),
+        this.serverId,
+        'PX',
+        this.lockTTL,
+        'NX',
+        'GET',
+      )
+      .then((owner) => {
+        if (owner === null) {
+          this.lostLocks.delete(documentName);
+        }
+        return owner;
+      })
+      .catch((error) => {
+        if (this.lockPromises[documentName] === lockPromise) {
+          delete this.lockPromises[documentName];
+        }
+        throw error;
+      });
     this.lockPromises[documentName] = lockPromise;
     // Briefly cache the serverId that claimed the doc to reduce load on redis
     // When the claimant unloads the doc, it will send an unload message to immediately clear this
     // a lockTTL / 2 guarantees stale reads < lockTTL upon server crash
     setTimeout(() => {
-      delete this.lockPromises[documentName];
+      if (this.lockPromises[documentName] === lockPromise) {
+        delete this.lockPromises[documentName];
+      }
     }, this.lockTTL / 2);
     return lockPromise;
   }
@@ -186,14 +233,20 @@ export class RedisSyncExtension<TCE extends CustomEvents> implements Extension {
     return this.getOrClaimLock(documentName);
   }
 
-  private handleRedisMessage = async (
+  private handleRedisMessage = (
     _channel: Buffer,
     packedMessage: Buffer,
-  ) => {
+  ): void => {
+    void this.processRedisMessage(packedMessage).catch(() => {
+      this.logger.error('Failed to process a collaboration Redis message');
+    });
+  };
+
+  private async processRedisMessage(packedMessage: Buffer): Promise<void> {
     const msg = this.unpack(packedMessage) as RSAMessage;
     const { type } = msg;
     if (type === 'proxy') {
-      this.handleProxyMessage(msg);
+      await this.handleProxyMessage(msg);
       return;
     }
     if (type === 'closeProxy') {
@@ -212,6 +265,7 @@ export class RedisSyncExtension<TCE extends CustomEvents> implements Extension {
       const { documentName, eventName, payload, replyTo, replyId } = msg;
       let reply: RSAMessageCustomEventComplete;
       try {
+        await this.assertOwnsDocumentLock(documentName);
         const result = await this.handleEventLocally(
           eventName as Extract<keyof TCE, string>,
           documentName,
@@ -229,7 +283,7 @@ export class RedisSyncExtension<TCE extends CustomEvents> implements Extension {
           error: serializeCustomEventError(error),
         };
       }
-      this.pub.publish(`${replyTo}`, this.pack(reply));
+      await this.pub.publish(`${replyTo}`, this.pack(reply));
       return;
     }
     if (type === 'customEventComplete') {
@@ -261,27 +315,140 @@ export class RedisSyncExtension<TCE extends CustomEvents> implements Extension {
         type: 'pong',
         socketId,
       };
-      this.pub.publish(`${replyTo}`, this.pack(reply));
+      await this.pub.publish(`${replyTo}`, this.pack(reply));
     } else if (type === 'send') {
       socket.send(msg.message);
     }
-  };
+  }
 
-  async maintainLock(documentName: string) {
-    this.locks[documentName] = setInterval(() => {
-      this.pub.set(
-        this.getKey(documentName),
-        this.serverId,
-        'PX',
-        this.lockTTL,
-      );
+  async maintainLock(documentName: string): Promise<void> {
+    this.stopMaintainingLock(documentName);
+    const renewed = await this.renewOwnedLock(documentName);
+    if (!renewed) {
+      await this.handleLeaseLoss(documentName, 'ownership');
+      throw new Error('Could not maintain collaboration document lock');
+    }
+    this.scheduleLockRenewal(documentName);
+  }
+
+  async releaseLock(documentName: string): Promise<number> {
+    this.stopMaintainingLock(documentName);
+    delete this.lockPromises[documentName];
+    const released = await this.pub.eval(
+      RELEASE_DOCUMENT_LOCK_SCRIPT,
+      1,
+      this.getKey(documentName),
+      this.serverId,
+    );
+    if (!this.instance?.documents.has(documentName)) {
+      this.lostLocks.delete(documentName);
+    }
+    return Number(released);
+  }
+
+  private stopMaintainingLock(documentName: string): void {
+    clearTimeout(this.locks[documentName]);
+    delete this.locks[documentName];
+  }
+
+  private scheduleLockRenewal(documentName: string): void {
+    if (this.destroyed || this.lostLocks.has(documentName)) {
+      return;
+    }
+
+    this.locks[documentName] = setTimeout(() => {
+      delete this.locks[documentName];
+      void this.renewLockAndReschedule(documentName);
     }, this.lockTTL / 2);
   }
 
-  async releaseLock(documentName: string) {
-    clearInterval(this.locks[documentName]);
-    delete this.locks[documentName];
-    return this.pub.del(this.getKey(documentName));
+  private async renewLockAndReschedule(documentName: string): Promise<void> {
+    try {
+      const renewed = await this.renewOwnedLock(documentName);
+      if (!renewed) {
+        await this.handleLeaseLoss(documentName, 'ownership');
+        return;
+      }
+      this.scheduleLockRenewal(documentName);
+    } catch {
+      this.logger.error('Failed to renew a collaboration document lock');
+      await this.handleLeaseLoss(documentName, 'redis');
+    }
+  }
+
+  private async renewOwnedLock(documentName: string): Promise<boolean> {
+    const renewed = await this.pub.eval(
+      RENEW_DOCUMENT_LOCK_SCRIPT,
+      1,
+      this.getKey(documentName),
+      this.serverId,
+      String(this.lockTTL),
+    );
+    return Number(renewed) === 1;
+  }
+
+  private async assertOwnsDocumentLock(documentName: string): Promise<void> {
+    try {
+      if (await this.renewOwnedLock(documentName)) {
+        return;
+      }
+      await this.handleLeaseLoss(documentName, 'ownership');
+    } catch {
+      await this.handleLeaseLoss(documentName, 'redis');
+    }
+    throw new ServiceUnavailableException(
+      'Collaboration document is reconnecting',
+    );
+  }
+
+  private async handleLeaseLoss(
+    documentName: string,
+    reason: 'ownership' | 'redis',
+  ): Promise<void> {
+    const existing = this.leaseLosses[documentName];
+    if (existing) {
+      return existing;
+    }
+
+    const leaseLoss = (async () => {
+      this.stopMaintainingLock(documentName);
+      delete this.lockPromises[documentName];
+      this.lostLocks.add(documentName);
+      this.logger.error(
+        `Collaboration document lease lost; closing local connections (${reason})`,
+      );
+
+      if (!this.instance) {
+        return;
+      }
+
+      this.instance.closeConnections(documentName);
+      const document = this.instance.documents.get(documentName);
+      if (document) {
+        await this.instance.unloadDocument(document);
+        if (this.instance.documents.has(documentName)) {
+          this.logger.warn(
+            'Collaboration document unload was deferred by pending persistence work',
+          );
+        }
+      }
+    })().finally(() => {
+      delete this.leaseLosses[documentName];
+    });
+
+    this.leaseLosses[documentName] = leaseLoss;
+    return leaseLoss;
+  }
+
+  private assertLoadedDocumentLease(documentName: string): void {
+    if (
+      this.lostLocks.has(documentName) &&
+      this.instance.documents.has(documentName)
+    ) {
+      throw new ServiceUnavailableException(
+        'Collaboration document is reconnecting',
+      );
+    }
   }
 
   private async handleEventLocally<TName extends Extract<keyof TCE, string>>(
@@ -303,6 +470,7 @@ export class RedisSyncExtension<TCE extends CustomEvents> implements Extension {
     const isDocLoadedOnInstance = this.instance.documents.has(documentName);
 
     if (isDocLoadedOnInstance) {
+      this.assertLoadedDocumentLease(documentName);
       return this.handleEventLocally(eventName, documentName, payload);
     }
 
@@ -320,7 +488,6 @@ export class RedisSyncExtension<TCE extends CustomEvents> implements Extension {
         type: 'customEventStart',
       };
       const msg = this.pack(proxyMessage);
-      this.pub.publish(`${this.msgChannel}:${proxyTo}`, msg);
       let resolve!: (value: unknown) => void;
       let reject!: (reason?: unknown) => void;
       const promise = new Promise<unknown>((resolvePromise, rejectPromise) => {
@@ -332,6 +499,13 @@ export class RedisSyncExtension<TCE extends CustomEvents> implements Extension {
         reject(new Error('Collaboration event timed out'));
       }, this.customEventTTL);
       this.pendingReplies[replyId] = { resolve, reject, timeout };
+      try {
+        await this.pub.publish(`${this.msgChannel}:${proxyTo}`, msg);
+      } catch (error) {
+        delete this.pendingReplies[replyId];
+        clearTimeout(timeout);
+        throw error;
+      }
       return promise as Promise<ReturnType<TCE[TName]>>;
     }
     // This server owns the document, but hocuspocus hasn't loaded it yet
@@ -339,11 +513,12 @@ export class RedisSyncExtension<TCE extends CustomEvents> implements Extension {
   }
 
   async lockDocument(documentName: string) {
+    this.assertLoadedDocumentLease(documentName);
     const proxyTo = await this.getOrClaimLockThrottled(documentName);
     if (proxyTo && proxyTo !== this.serverId) {
       throw new Error(`Could not lock document: ${documentName}`);
     }
-    this.maintainLock(documentName);
+    await this.maintainLock(documentName);
     return () => this.releaseLock(documentName);
   }
 
@@ -355,11 +530,16 @@ export class RedisSyncExtension<TCE extends CustomEvents> implements Extension {
   ) {
     const socketId = serializedHTTPRequest.headers['sec-websocket-key']!;
     this.originSockets[socketId] = ws;
-    this.instance.handleConnection(
-      ws as any,
-      serializedHTTPRequest as any,
-      context,
-    );
+    try {
+      this.instance.handleConnection(
+        ws as any,
+        serializedHTTPRequest as any,
+        context,
+      );
+    } catch {
+      this.logger.error('Failed to initialize a collaboration connection');
+      ws.close(1011, 'Collaboration connection failed');
+    }
   }
 
   async onSocketMessage(
@@ -373,6 +553,12 @@ export class RedisSyncExtension<TCE extends CustomEvents> implements Extension {
     const isDocLoadedOnInstance = this.instance.documents.has(documentName);
 
     if (isDocLoadedOnInstance) {
+      try {
+        this.assertLoadedDocumentLease(documentName);
+      } catch {
+        ws.close(1012, 'Collaboration document is reconnecting');
+        return;
+      }
       ws.emit('message', message);
       return;
     }
@@ -387,7 +573,7 @@ export class RedisSyncExtension<TCE extends CustomEvents> implements Extension {
         type: 'proxy',
       };
       const msg = this.pack(proxyMessage);
-      this.pub.publish(`${this.msgChannel}:${proxyTo}`, msg);
+      await this.pub.publish(`${this.msgChannel}:${proxyTo}`, msg);
       return;
     }
     // This server owns the document, but hocuspocus hasn't loaded it yet
@@ -402,7 +588,9 @@ export class RedisSyncExtension<TCE extends CustomEvents> implements Extension {
     socket?.emit('close', code, reason);
     delete this.originSockets[socketId];
     const msg: RSAMessageCloseProxy = { type: 'closeProxy', socketId };
-    this.pub.publish(this.msgChannel, this.pack(msg)).catch(() => {});
+    void this.pub.publish(this.msgChannel, this.pack(msg)).catch(() => {
+      this.logger.error('Failed to publish collaboration proxy close');
+    });
   }
 
   /* Hocuspocus hooks */
@@ -413,18 +601,35 @@ export class RedisSyncExtension<TCE extends CustomEvents> implements Extension {
   async onLoadDocument(data: onLoadDocumentPayload) {
     const { documentName } = data;
     // Refresh the lock TTL
-    this.maintainLock(documentName);
+    await this.maintainLock(documentName);
   }
 
   async afterUnloadDocument(data: afterUnloadDocumentPayload) {
     const { documentName } = data;
-    this.releaseLock(documentName);
+    try {
+      await this.releaseLock(documentName);
+    } catch {
+      this.logger.error('Failed to release a collaboration document lock');
+    }
     // Broadcast to cluster to immediately remove the cached redis value
     const msg: RSAMessageUnload = { type: 'unload', documentName };
-    this.pub.publish(this.msgChannel, this.pack(msg));
+    try {
+      await this.pub.publish(this.msgChannel, this.pack(msg));
+    } catch {
+      this.logger.error('Failed to publish collaboration document unload');
+    }
   }
 
   async onDestroy() {
+    this.destroyed = true;
+    Object.keys(this.locks).forEach((documentName) =>
+      this.stopMaintainingLock(documentName),
+    );
+    Object.values(this.pendingReplies).forEach(({ timeout, reject }) => {
+      clearTimeout(timeout);
+      reject(new Error('Collaboration server is shutting down'));
+    });
+    this.pendingReplies = {};
     this.pub.disconnect(false);
     this.sub.disconnect(false);
   }

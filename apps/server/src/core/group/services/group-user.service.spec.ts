@@ -1,7 +1,7 @@
 import { GroupUserService } from './group-user.service';
 
 describe('GroupUserService', () => {
-  it('validates groups through GroupRepo before removing membership', async () => {
+  it('removes inaccessible watchers in the membership transaction', async () => {
     const trx = { kind: 'transaction' };
     const db = {
       transaction: () => ({
@@ -49,6 +49,7 @@ describe('GroupUserService', () => {
     expect(watcherRepo.deleteByUsersWithoutSpaceAccess).toHaveBeenCalledWith(
       ['user-id'],
       'space-id',
+      { trx },
     );
   });
 });

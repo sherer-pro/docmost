@@ -21,6 +21,8 @@ const mockJsonToNode = jest.fn((content: any) => {
     toJSON: jest.fn(() => content),
   };
 });
+const mockGetAttachmentIds = jest.fn((_content: unknown): string[] => []);
+const mockIsAttachmentNode = jest.fn((_type: string) => false);
 
 jest.mock('../../../collaboration/collaboration.util', () => ({
   htmlToJson: jest.fn(),
@@ -30,9 +32,9 @@ jest.mock('../../../collaboration/collaboration.util', () => ({
 
 jest.mock('../../../common/helpers/prosemirror/utils', () => ({
   createYdocFromJson: jest.fn(() => Buffer.from('ydoc')),
-  getAttachmentIds: jest.fn(() => []),
+  getAttachmentIds: (content: unknown) => mockGetAttachmentIds(content),
   getProsemirrorContent: jest.fn((content: unknown) => content),
-  isAttachmentNode: jest.fn(() => false),
+  isAttachmentNode: (type: string) => mockIsAttachmentNode(type),
   removeMarkTypeFromDoc: jest.fn((doc: unknown) => doc),
 }));
 
@@ -57,6 +59,10 @@ function createService(params?: {
   databaseRowRepo?: Record<string, jest.Mock>;
   generalQueue?: { add: jest.Mock };
   eventEmitter?: { emit: jest.Mock };
+  queueOutboxService?: {
+    enqueueDuplicatePageAttachments: jest.Mock;
+    kick: jest.Mock;
+  };
 }) {
   return new PageService(
     (params?.pageRepo ?? {}) as any,
@@ -80,6 +86,9 @@ function createService(params?: {
     {} as any,
     {} as any,
     {} as any,
+    undefined,
+    undefined,
+    params?.queueOutboxService as any,
   );
 }
 
@@ -141,6 +150,8 @@ function createMemoryTransaction(
 describe('PageService duplicatePage properties', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGetAttachmentIds.mockReturnValue([]);
+    mockIsAttachmentNode.mockReturnValue(false);
   });
 
   it.each([
@@ -584,5 +595,90 @@ describe('PageService duplicatePage properties', () => {
         value: 'child-page-copy',
       }),
     ]);
+  });
+
+  it('persists attachment-copy work in the page transaction before signaling the queue', async () => {
+    const rootPage = {
+      id: 'page-root',
+      slugId: 'root-slug',
+      title: 'Root',
+      icon: null,
+      content: {
+        type: 'doc',
+        content: [
+          {
+            type: 'image',
+            attrs: {
+              attachmentId: 'attachment-old',
+              src: '/api/attachments/files/attachment-old/image.png',
+            },
+          },
+        ],
+      },
+      position: 'a0',
+      parentPageId: null,
+      spaceId: 'space-1',
+      workspaceId: 'workspace-1',
+      settings: {},
+    };
+    const fakeTrx = {
+      insertInto: jest.fn(() => ({
+        values: jest.fn(() => ({ execute: jest.fn() })),
+      })),
+    };
+    let transactionActive = false;
+    let transactionCommitted = false;
+    const queueOutboxService = {
+      enqueueDuplicatePageAttachments: jest.fn(async (_payload, trx) => {
+        expect(transactionActive).toBe(true);
+        expect(trx).toBe(fakeTrx);
+      }),
+      kick: jest.fn(() => {
+        expect(transactionCommitted).toBe(true);
+      }),
+    };
+    const pageRepo = {
+      getPageAndDescendants: jest.fn(async () => [rootPage]),
+      findById: jest.fn(async (pageId: string) => ({ id: pageId })),
+    };
+    const service = createService({ pageRepo, queueOutboxService });
+    jest
+      .spyOn(service as any, 'duplicateLinkedDatabases')
+      .mockResolvedValue(undefined);
+    jest
+      .spyOn(service as any, 'duplicateRowsInExistingDatabases')
+      .mockResolvedValue(undefined);
+    (executeTx as jest.Mock).mockImplementation(async (_db, handler) => {
+      transactionActive = true;
+      const result = await handler(fakeTrx);
+      transactionActive = false;
+      transactionCommitted = true;
+      return result;
+    });
+    mockGetAttachmentIds.mockReturnValue(['attachment-old']);
+    mockIsAttachmentNode.mockImplementation((type) => type === 'image');
+
+    await service.duplicatePage(rootPage as any, undefined, {
+      id: 'user-1',
+      workspaceId: 'workspace-1',
+    } as any);
+
+    expect(
+      queueOutboxService.enqueueDuplicatePageAttachments,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: 'workspace-1',
+        rootPageId: 'page-root',
+        spaceId: 'space-1',
+        attachmentMappings: [
+          expect.objectContaining({
+            oldPageId: 'page-root',
+            oldAttachmentId: 'attachment-old',
+          }),
+        ],
+      }),
+      fakeTrx,
+    );
+    expect(queueOutboxService.kick).toHaveBeenCalledTimes(1);
   });
 });

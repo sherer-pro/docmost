@@ -6,7 +6,7 @@ import { InsertableFavorite, Favorite } from '@docmost/db/types/entity.types';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import { executeWithCursorPagination } from '@docmost/db/pagination/cursor-pagination';
-import { DB } from '@docmost/db/types/db';
+import type { DB } from '@docmost/db/types/db';
 
 export const FavoriteType = {
   PAGE: 'page',

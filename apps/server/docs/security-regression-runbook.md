@@ -32,6 +32,9 @@ pnpm verify:quick
 - CSRF origin/referer validation for authenticated mutating routes, including logout.
 - Public invitation/share/search/hostname endpoints are covered by auth rate-limit buckets.
 - Workspace invitation links require token validation; stored invitation tokens are hashed and expire.
+- Invitation create/resend/accept side effects are committed through the transactional outbox. Raw invitation tokens are encrypted outside the regular JSON payload, checked against the live invitation immediately before delivery, and cleared in every terminal state.
+- Logged URLs exclude query values, and mail logs exclude recipients, subjects, bodies, invitation links, and raw provider errors.
+- Redis collaboration leases renew and release only for their random owner token; renewal failure closes the local document before another instance can take ownership.
 - Legacy public attachment `?jwt=` query tokens are lower priority than header/cookie tokens and emit deprecation headers when used.
 - Space security policy overrides resolve MFA, SSO, and public-sharing enforcement as `space override ?? workspace default`.
 - Authentication assurance is session-bound: workspace routes require workspace policy, while explicitly scoped space resources use that space's effective policy and return HTTP 428 when step-up is required.
@@ -87,6 +90,15 @@ pnpm verify:quick
    - confirm it joins only that `space-*` room, cannot publish workspace presence, and cannot obtain a legacy unscoped collab token.
    - request a canonical collab token with `pageId`; confirm it cannot be reused for another page and is rejected after policy or session assurance changes.
    - tighten a workspace or space policy while Socket.IO and collab connections are idle; confirm Socket.IO rooms are refreshed immediately and collab authorization is re-evaluated before the next message is handled or broadcast.
+11. Invitation outbox and log privacy:
+   - stop the BullMQ worker, create or resend an invitation, and confirm the invitation plus one `pending` outbox row commit while no email is sent.
+   - restart the worker and confirm the periodic sweep processes the row without another API request.
+   - rotate or consume an invitation before its row is processed and confirm the stale row becomes `cancelled` without sending the old link.
+   - inspect application logs for these flows and confirm they contain no email address, subject, message body, invitation token, URL query value, or raw mail-provider response.
+12. Collaboration lease ownership:
+   - run two collaboration instances against the same Redis and document ID.
+   - confirm a non-owner cannot renew or release the current owner's lease.
+   - interrupt the owner's Redis renewal path and confirm it closes the local document; confirm only then can the second instance acquire ownership.
 
 ## Alerting and triage
 
@@ -94,6 +106,9 @@ Watch application logs for:
 
 - `[security][embed-url-rejected]`
 - `[security][zip-entry-rejected]`
+- `mail_delivery_disabled`
+- `Outbox entry <id> exhausted its processing attempts`
+- `Collaboration document lease lost`
 
 Recurring events usually indicate hostile payload attempts or malformed imports.
 Escalate repeated patterns to security review.

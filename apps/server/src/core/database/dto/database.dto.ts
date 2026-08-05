@@ -23,7 +23,7 @@ import {
   DatabaseExportFormat,
   type DatabasePropertyType,
 } from '@docmost/api-contract';
-import { JsonValue } from '../../../database/types/db';
+import type { JsonValue } from '../../../database/types/db';
 
 export { DatabaseExportFormat } from '@docmost/api-contract';
 

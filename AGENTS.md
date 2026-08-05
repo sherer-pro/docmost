@@ -59,6 +59,7 @@
 - `apps/server/docs/api-routing-conventions.md` — API routing policy, endpoint inventory, and RPC migration plan.
 - `apps/server/docs/api-route-inventory.generated.md` — generated backend route inventory (`pnpm routes:inventory`).
 - `apps/server/docs/security-regression-runbook.md` — security pre-release checks for GHSA regression classes.
+- `apps/server/docs/queue-outbox-runbook.md` — transactional queue outbox lifecycle, privacy-safe monitoring, at-least-once semantics, and recovery procedures.
 - `apps/server/docs/release-notes/security-ghsa-remediation-2026-03.md` — security advisory mapping and remediation notes.
 - `apps/client/src` — main frontend code.
 - `apps/client/src/features/dictionary` — dictionary page, term editor, matching/highlighting UI.
@@ -80,6 +81,8 @@
 - `apps/server/src/database/migrations/20260730T190000-remove-ee-billing.ts` — removal of the retired EE billing schema.
 - `apps/server/src/cli` — console-only recovery and maintenance commands (`search:reindex`, `sso:disable-enforcement`). They talk to PostgreSQL/Redis directly and never start queue workers.
 - `apps/server/src/database/migrations/20260730T200000-share-page-uniqueness.ts` — deterministic cleanup of duplicate page shares and database-enforced active-share uniqueness.
+- `apps/server/src/database/migrations/20260805T120000-watcher-access-cleanup.ts` — removes watcher rows whose users no longer have direct or group-based membership in the watcher's space. Notification delivery still rechecks current page read access separately.
+- `apps/server/src/database/migrations/20260805T130000-queue-outbox.ts` — durable transactional outbox for invitation email and page-duplication attachment side effects.
 - `packages/editor-ext/src/lib/{audio,pdf,transclusion,indent,page-break,tag}` — editor nodes/extensions for audio, embedded PDFs, synced blocks, paragraph/heading indentation, print page breaks, and inline TBD/TODO tags.
 - `packages/api-contract/src` — shared API-facing TypeScript contracts used by server/client code; it builds to `packages/api-contract/dist` for runtime server consumption.
 - `patches/` — pnpm patch files referenced by root `package.json`.
@@ -135,7 +138,7 @@
 - Full root test stage (default + frontend unit + RAG Sync): `pnpm test:all`
 - Security regression suite (server + client targeted tests): `pnpm test:security`
 - Backend unit/integration: `pnpm --filter ./apps/server test`
-- Backend security subset (share SEO, cloud host parsing, CSRF origin checks, ZIP traversal/quotas/decompression budget, attachment token/MIME handling, attachment image path resolution, import embed formatting, PDF resource allowlist, page ACL resolution, space abilities, API key scoping, JWT session binding, collab token session binding, WebSocket room authorization, credential protection, trusted proxies, database-module page access, and page move cycle guard): `pnpm --filter ./apps/server test:security`
+- Backend security subset (share SEO, cloud host parsing, CSRF origin checks, ZIP traversal/quotas/decompression budget, attachment token/MIME handling, attachment image path resolution, import embed formatting, PDF resource allowlist, page ACL resolution, space abilities, API key scoping, JWT session binding, collab token session binding, WebSocket room authorization, credential protection, sensitive-log redaction, transactional invitation outbox, collaboration lease ownership, trusted proxies, database-module page access, and page move cycle guard): `pnpm --filter ./apps/server test:security`
 - Frontend smoke test equivalent (build-based temporary target): `pnpm --filter ./apps/client build`
 - Frontend unit tests (Vitest): `pnpm --filter ./apps/client test`
 - Editor extension package-local tests (run through client Vitest): `pnpm test:editor-ext`
@@ -143,9 +146,7 @@
 - Backend coverage: `pnpm --filter ./apps/server test:cov`
 - Backend coverage smoke (fast regression check): `pnpm --filter ./apps/server test:cov:smoke`
 - Backend alias smoke (verify tsconfig alias resolution in Jest): `pnpm --filter ./apps/server test:alias:smoke`
-- Backend e2e: `pnpm --filter ./apps/server test:e2e`
-- Backend e2e quarantine note: `apps/server/test/app.e2e-quarantine.ts` is temporarily excluded from Jest by filename until DOC-2471 resolves ESM interoperability for collaboration dependencies.
-- Unit quarantine note: `apps/server/src/core/page/page.controller.quarantine.ts` and `apps/server/src/core/page/services/page.service.quarantine.ts` are temporarily excluded by filename for the same DOC-2471 reason.
+- Backend e2e: `pnpm --filter ./apps/server test:e2e`; it requires PostgreSQL, Redis, and an already migrated database, checks outbox deduplication/expired-lease owner fencing, and exercises collaboration lease ownership against real Redis.
 
 ### Database migrations (backend)
 
@@ -288,6 +289,9 @@ Minimum:
 - Docmost archive import never trusts the uncompressed sizes recorded in the ZIP central directory: entries are decompressed through `readZipEntryWithBudget`, which aborts as soon as the per-entry or cumulative byte budget is exceeded, and CRC32 checking is enabled.
 - PDF export runs Chromium with a resource allowlist: only `data:`, `about:blank`, and same-origin public attachment URLs are fetched; external URLs in page content are blocked.
 - File import fails the task if referenced attachment uploads fail after retries, preventing committed pages with broken attachment references.
+- Workspace invitation create/resend/accept and page-duplication attachment work use the transactional `queue_outbox` table. Domain rows and outbox rows must be committed in the same Kysely transaction; BullMQ carries only an empty wake-up signal. Delivery is at least once, invitation secrets are encrypted and cleared at terminal status, and operators must follow `apps/server/docs/queue-outbox-runbook.md`.
+- Redis collaboration document ownership is a random-token lease. Renew and release must remain owner-checked Lua operations, renewal loops must stay sequential, and observed renewal/pub-sub failure must close the local document before processing more custom operations.
+- URL and mail logs must not include query values, recipients, subjects, bodies, invitation links, or raw provider errors. The log mail driver is diagnostic-only and emits `mail_delivery_disabled` instead of message content in production.
 - Generic iframe embeds are blocked unless their exact origin is listed in `EMBED_ALLOWED_ORIGINS`; built-in providers use the shared frame-source allowlist and server CSP.
 - RAG API (`/api/rag/*`) is API-key-only:
   - pass `Authorization: Bearer <token>` from workspace API keys;

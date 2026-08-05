@@ -215,11 +215,7 @@ export class SsoService {
         current.isEnabled &&
         (input.isEnabled === false || invalidatesVerification)
       ) {
-        await this.assertSsoWillRemainAvailable(
-          workspaceId,
-          current.id,
-          trx,
-        );
+        await this.assertSsoWillRemainAvailable(workspaceId, current.id, trx);
       }
 
       const provider = await trx
@@ -244,17 +240,9 @@ export class SsoService {
 
   async deleteProvider(providerId: string, workspaceId: string) {
     await executeTx(this.db, async (trx) => {
-      const provider = await this.requireProvider(
-        providerId,
-        workspaceId,
-        trx,
-      );
+      const provider = await this.requireProvider(providerId, workspaceId, trx);
       if (provider.isEnabled) {
-        await this.assertSsoWillRemainAvailable(
-          workspaceId,
-          provider.id,
-          trx,
-        );
+        await this.assertSsoWillRemainAvailable(workspaceId, provider.id, trx);
       }
 
       await trx
@@ -295,10 +283,7 @@ export class SsoService {
     return { items };
   }
 
-  async createGroupMapping(
-    dto: CreateSsoGroupMappingDto,
-    workspaceId: string,
-  ) {
+  async createGroupMapping(dto: CreateSsoGroupMappingDto, workspaceId: string) {
     await this.requireProvider(dto.providerId, workspaceId);
     await this.requireWorkspaceGroup(dto.groupId, workspaceId);
 
@@ -325,10 +310,7 @@ export class SsoService {
       .executeTakeFirstOrThrow();
   }
 
-  async updateGroupMapping(
-    dto: UpdateSsoGroupMappingDto,
-    workspaceId: string,
-  ) {
+  async updateGroupMapping(dto: UpdateSsoGroupMappingDto, workspaceId: string) {
     const result = await executeTx(this.db, async (trx) => {
       const mapping = await this.requireGroupMapping(
         dto.mappingId,
@@ -464,10 +446,7 @@ export class SsoService {
     const state = generators.state();
     const nonce = generators.nonce();
     const codeVerifier = generators.codeVerifier();
-    const context = await this.resolveLoginContext(
-      workspace,
-      loginContext,
-    );
+    const context = await this.resolveLoginContext(workspace, loginContext);
 
     await this.createLoginState({
       state,
@@ -549,10 +528,7 @@ export class SsoService {
       'saml',
     );
     const state = generators.state();
-    const context = await this.resolveLoginContext(
-      workspace,
-      loginContext,
-    );
+    const context = await this.resolveLoginContext(workspace, loginContext);
     await this.createLoginState({ state, provider, ...context });
 
     const saml = this.createSamlClient(
@@ -841,7 +817,9 @@ export class SsoService {
       .where('expiresAt', '>', new Date())
       .executeTakeFirst();
     if (!session) {
-      throw new UnauthorizedException('SSO step-up session is no longer active');
+      throw new UnauthorizedException(
+        'SSO step-up session is no longer active',
+      );
     }
   }
 
@@ -902,9 +880,7 @@ export class SsoService {
       userId: input?.userId,
       sessionId: input?.sessionId,
       spaceId,
-      returnTo: input?.returnTo
-        ? this.safeReturnTo(input.returnTo)
-        : undefined,
+      returnTo: input?.returnTo ? this.safeReturnTo(input.returnTo) : undefined,
     };
   }
 
@@ -1004,10 +980,7 @@ export class SsoService {
     return this.sanitizeProvider(verified);
   }
 
-  private async testOidcProvider(
-    provider: AuthProvider,
-    workspace: Workspace,
-  ) {
+  private async testOidcProvider(provider: AuthProvider, workspace: Workspace) {
     const callbackUrl = this.buildCallbackUrl(
       this.getWorkspaceOrigin(workspace),
       'oidc',
@@ -1050,7 +1023,9 @@ export class SsoService {
     );
     const tlsOptions = {
       rejectUnauthorized: true,
-      ...(provider.ldapTlsCaCert ? { ca: [provider.ldapTlsCaCert] } : undefined),
+      ...(provider.ldapTlsCaCert
+        ? { ca: [provider.ldapTlsCaCert] }
+        : undefined),
     };
     const client = new LdapClient({
       url: provider.ldapUrl,
@@ -1786,12 +1761,14 @@ export class SsoService {
     });
   }
 
-  private async createLoginState(input: {
-    state: string;
-    provider: AuthProvider;
-    codeVerifier?: string;
-    nonce?: string;
-  } & SsoLoginContext) {
+  private async createLoginState(
+    input: {
+      state: string;
+      provider: AuthProvider;
+      codeVerifier?: string;
+      nonce?: string;
+    } & SsoLoginContext,
+  ) {
     await this.db
       .insertInto('ssoLoginStates')
       .values({
@@ -1989,7 +1966,9 @@ export class SsoService {
       .forUpdate()
       .executeTakeFirstOrThrow();
 
-    if (!(await this.spacePolicy.hasEffectiveSsoEnforcement(workspaceId, trx))) {
+    if (
+      !(await this.spacePolicy.hasEffectiveSsoEnforcement(workspaceId, trx))
+    ) {
       return;
     }
 
@@ -2003,9 +1982,8 @@ export class SsoService {
       .where('type', 'in', [...SSO_PROVIDER_TYPES])
       .execute();
 
-    const otherProvider = await this.hasAllowedEnforcementReadyProvider(
-      otherProviders,
-    );
+    const otherProvider =
+      await this.hasAllowedEnforcementReadyProvider(otherProviders);
 
     if (!otherProvider) {
       throw new BadRequestException(
@@ -2088,8 +2066,10 @@ export class SsoService {
 
     return {
       provided: true,
-      groups: this.valuesAsStrings(identity[claimName])
-        .map((group) => ({ id: group, name: group })),
+      groups: this.valuesAsStrings(identity[claimName]).map((group) => ({
+        id: group,
+        name: group,
+      })),
     };
   }
 

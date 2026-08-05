@@ -185,14 +185,16 @@ describe('DatabaseService mixed tree flows', () => {
         streamFiles: true,
       }),
     });
-    exportService.turnPageMentionsToLinks.mockImplementation(async (content: unknown) => content);
+    exportService.turnPageMentionsToLinks.mockImplementation(
+      async (content: unknown) => content,
+    );
     exportService.prepareProsemirrorForExport.mockImplementation(
       async (content: unknown) => content,
     );
     exportService.buildPagePdfBody.mockResolvedValue({
       title: 'Root',
       bodyHtml: '<article>Root content</article>',
-      attachmentToken: 'attachment-page-token',
+      attachmentTokens: {},
     });
     exportService.renderPdfFromHtmlDocument.mockResolvedValue(
       Buffer.from('%PDF-1.7 mock'),
@@ -250,9 +252,9 @@ describe('DatabaseService mixed tree flows', () => {
       cannot: jest.fn(() => true),
     } as any);
 
-    await expect(service.getDatabase('db-1', user, 'ws-1')).rejects.toBeInstanceOf(
-      ForbiddenException,
-    );
+    await expect(
+      service.getDatabase('db-1', user, 'ws-1'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it('checks manage permission before mutating database properties', async () => {
@@ -385,7 +387,11 @@ describe('DatabaseService mixed tree flows', () => {
       'row-page-1-child',
       'ws-1',
     );
-    expect(pageRepo.removePage).toHaveBeenCalledWith('row-page-1', 'u-1', 'ws-1');
+    expect(pageRepo.removePage).toHaveBeenCalledWith(
+      'row-page-1',
+      'u-1',
+      'ws-1',
+    );
   });
 
   it('exports database pdf as zip with merged root pdf only', async () => {
@@ -426,7 +432,9 @@ describe('DatabaseService mixed tree flows', () => {
     );
     expect(exported.fileStream).toBeDefined();
 
-    const zipBuffer = await streamToBuffer(exported.fileStream as NodeJS.ReadableStream);
+    const zipBuffer = await streamToBuffer(
+      exported.fileStream as NodeJS.ReadableStream,
+    );
     const zip = await JSZip.loadAsync(zipBuffer);
     const rootPdfEntry = zip.file('Root.pdf');
     const tablePdfEntry = zip.file('database-table.pdf');
@@ -445,17 +453,20 @@ describe('DatabaseService mixed tree flows', () => {
     DatabaseExportFormat.Markdown,
     DatabaseExportFormat.HTML,
     DatabaseExportFormat.PDF,
-  ])('rejects top-level %s export without full space access', async (format) => {
-    spaceAbility.assertHasFullSpaceAccess.mockRejectedValueOnce(
-      new ForbiddenException(),
-    );
+  ])(
+    'rejects top-level %s export without full space access',
+    async (format) => {
+      spaceAbility.assertHasFullSpaceAccess.mockRejectedValueOnce(
+        new ForbiddenException(),
+      );
 
-    await expect(
-      service.exportDatabase('db-1', format, user, 'ws-1'),
-    ).rejects.toBeInstanceOf(ForbiddenException);
+      await expect(
+        service.exportDatabase('db-1', format, user, 'ws-1'),
+      ).rejects.toBeInstanceOf(ForbiddenException);
 
-    expect(exportService.exportPages).not.toHaveBeenCalled();
-  });
+      expect(exportService.exportPages).not.toHaveBeenCalled();
+    },
+  );
 
   it('uses the lossless archive pipeline for Docmost export', async () => {
     const exported = await service.exportDatabase(
@@ -655,7 +666,9 @@ describe('DatabaseService mixed tree flows', () => {
       }),
     );
 
-    const zipBuffer = await streamToBuffer(exported.fileStream as NodeJS.ReadableStream);
+    const zipBuffer = await streamToBuffer(
+      exported.fileStream as NodeJS.ReadableStream,
+    );
     const zip = await JSZip.loadAsync(zipBuffer);
 
     const rootPdfEntry = zip.file('Root.pdf');
@@ -1037,7 +1050,12 @@ describe('DatabaseService mixed tree flows', () => {
       workspaceId: 'ws-1',
     });
 
-    await service.updateDatabase('db-1', { name: 'Renamed database' }, user, 'ws-1');
+    await service.updateDatabase(
+      'db-1',
+      { name: 'Renamed database' },
+      user,
+      'ws-1',
+    );
 
     expect(pageRepo.updatePage).toHaveBeenCalledWith(
       expect.not.objectContaining({ slugId: expect.any(String) }),
@@ -1062,15 +1080,28 @@ describe('DatabaseService mixed tree flows', () => {
 
     await service.deleteDatabase('db-1', user, 'ws-1');
 
-    expect(databaseCellRepo.softDeleteByDatabaseId).toHaveBeenCalledWith('db-1', 'ws-1');
-    expect(databaseViewRepo.softDeleteByDatabaseId).toHaveBeenCalledWith('db-1', 'ws-1');
+    expect(databaseCellRepo.softDeleteByDatabaseId).toHaveBeenCalledWith(
+      'db-1',
+      'ws-1',
+    );
+    expect(databaseViewRepo.softDeleteByDatabaseId).toHaveBeenCalledWith(
+      'db-1',
+      'ws-1',
+    );
     expect(databaseRowRepo.archiveByPageIds).toHaveBeenCalledWith(
       'db-1',
       'ws-1',
       ['db-root-page', 'row-page-1', 'regular-page-under-db'],
     );
-    expect(pageRepo.removePage).toHaveBeenCalledWith('db-root-page', 'u-2', 'ws-1');
-    expect(databaseRepo.softDeleteDatabase).toHaveBeenCalledWith('db-1', 'ws-1');
+    expect(pageRepo.removePage).toHaveBeenCalledWith(
+      'db-root-page',
+      'u-2',
+      'ws-1',
+    );
+    expect(databaseRepo.softDeleteDatabase).toHaveBeenCalledWith(
+      'db-1',
+      'ws-1',
+    );
   });
 
   it('converts database to page without deleting row cell values', async () => {
@@ -1078,9 +1109,17 @@ describe('DatabaseService mixed tree flows', () => {
 
     await service.convertDatabaseToPage('db-1', user, 'ws-1');
 
-    expect(databaseRowRepo.archiveByDatabaseId).toHaveBeenCalledWith('db-1', 'ws-1', trx);
+    expect(databaseRowRepo.archiveByDatabaseId).toHaveBeenCalledWith(
+      'db-1',
+      'ws-1',
+      trx,
+    );
     expect(databaseCellRepo.softDeleteByDatabaseId).not.toHaveBeenCalled();
-    expect(databaseViewRepo.softDeleteByDatabaseId).toHaveBeenCalledWith('db-1', 'ws-1', trx);
+    expect(databaseViewRepo.softDeleteByDatabaseId).toHaveBeenCalledWith(
+      'db-1',
+      'ws-1',
+      trx,
+    );
     expect(databaseRepo.updateDatabase).toHaveBeenCalled();
     expect(pageHistoryRecorder.recordPageEvent).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1096,7 +1135,10 @@ describe('DatabaseService mixed tree flows', () => {
       databaseId: 'db-1',
       type: 'checkbox',
     });
-    databasePropertyRepo.updateProperty.mockResolvedValue({ id: 'prop-1', type: 'multiline_text' });
+    databasePropertyRepo.updateProperty.mockResolvedValue({
+      id: 'prop-1',
+      type: 'multiline_text',
+    });
     databaseRowRepo.findByDatabaseId.mockResolvedValue([{ pageId: 'page-1' }]);
     databaseCellRepo.findByDatabaseAndPage.mockResolvedValue([
       { id: 'cell-1', propertyId: 'prop-1', value: true },
@@ -1125,7 +1167,10 @@ describe('DatabaseService mixed tree flows', () => {
       databaseId: 'db-1',
       type: 'user',
     });
-    databasePropertyRepo.updateProperty.mockResolvedValue({ id: 'prop-1', type: 'multiline_text' });
+    databasePropertyRepo.updateProperty.mockResolvedValue({
+      id: 'prop-1',
+      type: 'multiline_text',
+    });
     databaseRowRepo.findByDatabaseId.mockResolvedValue([{ pageId: 'page-1' }]);
     databaseCellRepo.findByDatabaseAndPage.mockResolvedValue([
       { id: 'cell-1', propertyId: 'prop-1', value: { id: 'user-42' } },
@@ -1159,7 +1204,10 @@ describe('DatabaseService mixed tree flows', () => {
       databaseId: 'db-1',
       type: 'text',
     });
-    databasePropertyRepo.updateProperty.mockResolvedValue({ id: 'prop-1', type: 'select' });
+    databasePropertyRepo.updateProperty.mockResolvedValue({
+      id: 'prop-1',
+      type: 'select',
+    });
     databaseRowRepo.findByDatabaseId.mockResolvedValue([{ pageId: 'page-1' }]);
     databaseCellRepo.findByDatabaseAndPage.mockResolvedValue([
       { id: 'cell-1', propertyId: 'prop-1', value: 'legacy' },
@@ -1188,7 +1236,10 @@ describe('DatabaseService mixed tree flows', () => {
       databaseId: 'db-1',
       type: 'select',
     });
-    databasePropertyRepo.updateProperty.mockResolvedValue({ id: 'prop-1', type: 'multiline_text' });
+    databasePropertyRepo.updateProperty.mockResolvedValue({
+      id: 'prop-1',
+      type: 'multiline_text',
+    });
     databaseRowRepo.findByDatabaseId.mockResolvedValue([{ pageId: 'page-1' }]);
     databaseCellRepo.findByDatabaseAndPage.mockResolvedValue([
       {
@@ -1263,7 +1314,9 @@ describe('DatabaseService mixed tree flows', () => {
           .mockResolvedValueOnce({ id: 'prop-1', type: toType })
           .mockResolvedValueOnce({ id: 'prop-1', type: fromType });
 
-        databaseRowRepo.findByDatabaseId.mockResolvedValue([{ pageId: 'page-1' }]);
+        databaseRowRepo.findByDatabaseId.mockResolvedValue([
+          { pageId: 'page-1' },
+        ]);
 
         databaseCellRepo.findByDatabaseAndPage.mockResolvedValueOnce([
           { id: 'cell-1', propertyId: 'prop-1', value: initialValue },
@@ -1277,7 +1330,8 @@ describe('DatabaseService mixed tree flows', () => {
           'ws-1',
         );
 
-        const firstConvertedValue = databaseCellRepo.updateCell.mock.calls[0][1].value;
+        const firstConvertedValue =
+          databaseCellRepo.updateCell.mock.calls[0][1].value;
         databaseCellRepo.findByDatabaseAndPage.mockResolvedValueOnce([
           { id: 'cell-1', propertyId: 'prop-1', value: firstConvertedValue },
         ]);
@@ -1290,7 +1344,8 @@ describe('DatabaseService mixed tree flows', () => {
           'ws-1',
         );
 
-        const rollbackValue = databaseCellRepo.updateCell.mock.calls[1][1].value;
+        const rollbackValue =
+          databaseCellRepo.updateCell.mock.calls[1][1].value;
         expect(rollbackValue).toEqual(initialValue);
       }
     }
@@ -1302,8 +1357,13 @@ describe('DatabaseService mixed tree flows', () => {
       databaseId: 'db-1',
       type: 'multiline_text',
     });
-    databasePropertyRepo.updateProperty.mockResolvedValueOnce({ id: 'prop-1', type: 'select' });
-    databaseRowRepo.findByDatabaseId.mockResolvedValueOnce([{ pageId: 'row-page-1' }]);
+    databasePropertyRepo.updateProperty.mockResolvedValueOnce({
+      id: 'prop-1',
+      type: 'select',
+    });
+    databaseRowRepo.findByDatabaseId.mockResolvedValueOnce([
+      { pageId: 'row-page-1' },
+    ]);
     databaseCellRepo.findByDatabaseAndPage.mockResolvedValueOnce([
       { id: 'cell-1', propertyId: 'prop-1', value: 'legacy' },
     ]);
@@ -1328,7 +1388,9 @@ describe('DatabaseService mixed tree flows', () => {
       pageId: 'row-page-1',
       archivedAt: null,
     });
-    databasePropertyRepo.findByDatabaseId.mockResolvedValue([{ id: 'prop-1', type: 'select' }]);
+    databasePropertyRepo.findByDatabaseId.mockResolvedValue([
+      { id: 'prop-1', type: 'select' },
+    ]);
     databaseCellRepo.findByDatabaseAndPage.mockResolvedValue([
       {
         id: 'cell-1',
@@ -1359,8 +1421,13 @@ describe('DatabaseService mixed tree flows', () => {
       databaseId: 'db-1',
       type: 'select',
     });
-    databasePropertyRepo.updateProperty.mockResolvedValueOnce({ id: 'prop-1', type: 'multiline_text' });
-    databaseRowRepo.findByDatabaseId.mockResolvedValueOnce([{ pageId: 'row-page-1' }]);
+    databasePropertyRepo.updateProperty.mockResolvedValueOnce({
+      id: 'prop-1',
+      type: 'multiline_text',
+    });
+    databaseRowRepo.findByDatabaseId.mockResolvedValueOnce([
+      { pageId: 'row-page-1' },
+    ]);
     databaseCellRepo.findByDatabaseAndPage.mockResolvedValueOnce([
       { id: 'cell-1', propertyId: 'prop-1', value: 'in_progress' },
     ]);
@@ -1395,7 +1462,9 @@ describe('DatabaseService mixed tree flows', () => {
       pageId: 'row-page-1',
       archivedAt: null,
     });
-    databasePropertyRepo.findByDatabaseId.mockResolvedValue([{ id: 'prop-user', type: 'user' }]);
+    databasePropertyRepo.findByDatabaseId.mockResolvedValue([
+      { id: 'prop-user', type: 'user' },
+    ]);
     databaseCellRepo.findByDatabaseAndPage.mockResolvedValue([
       { id: 'cell-old', propertyId: 'prop-user', value: { id: 'user-old' } },
     ]);
@@ -1435,7 +1504,9 @@ describe('DatabaseService mixed tree flows', () => {
       pageId: 'row-page-1',
       archivedAt: null,
     });
-    databasePropertyRepo.findByDatabaseId.mockResolvedValue([{ id: 'prop-user', type: 'user' }]);
+    databasePropertyRepo.findByDatabaseId.mockResolvedValue([
+      { id: 'prop-user', type: 'user' },
+    ]);
     databaseCellRepo.findByDatabaseAndPage.mockResolvedValue([
       { id: 'cell-old', propertyId: 'prop-user', value: { id: 'user-old' } },
     ]);
@@ -1471,9 +1542,21 @@ describe('DatabaseService mixed tree flows', () => {
     });
 
     databaseCellRepo.upsertCell
-      .mockResolvedValueOnce({ id: 'cell-bool-true', propertyId: 'prop-checkbox', value: true })
-      .mockResolvedValueOnce({ id: 'cell-bool-false', propertyId: 'prop-checkbox', value: false })
-      .mockResolvedValueOnce({ id: 'cell-text', propertyId: 'prop-text', value: 'plain text value' })
+      .mockResolvedValueOnce({
+        id: 'cell-bool-true',
+        propertyId: 'prop-checkbox',
+        value: true,
+      })
+      .mockResolvedValueOnce({
+        id: 'cell-bool-false',
+        propertyId: 'prop-checkbox',
+        value: false,
+      })
+      .mockResolvedValueOnce({
+        id: 'cell-text',
+        propertyId: 'prop-text',
+        value: 'plain text value',
+      })
       .mockResolvedValueOnce({
         id: 'cell-object',
         propertyId: 'prop-object',
@@ -1778,5 +1861,4 @@ describe('DatabaseService mixed tree flows', () => {
       }),
     );
   });
-
 });

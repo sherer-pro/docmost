@@ -457,12 +457,12 @@ export class WorkspaceService {
   ): Promise<string[]> {
     const uniqueUserIds = [...new Set(userIds.filter(Boolean))];
     const users = await Promise.all(
-      uniqueUserIds.map((userId) => this.userRepo.findById(userId, workspaceId)),
+      uniqueUserIds.map((userId) =>
+        this.userRepo.findById(userId, workspaceId),
+      ),
     );
     const visibleUserIds = new Set(
-      users
-        .filter((user) => user && !user.deletedAt)
-        .map((user) => user.id),
+      users.filter((user) => user && !user.deletedAt).map((user) => user.id),
     );
 
     return uniqueUserIds.filter((userId) => visibleUserIds.has(userId));
@@ -558,7 +558,6 @@ export class WorkspaceService {
     }
     return { hostname: this.domainService.getUrl(hostname) };
   }
-
 
   /**
    * Deactivates a workspace member with guardrail validations.

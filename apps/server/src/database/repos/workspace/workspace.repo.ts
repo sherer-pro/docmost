@@ -8,7 +8,7 @@ import {
   Workspace,
 } from '@docmost/db/types/entity.types';
 import { ExpressionBuilder, sql } from 'kysely';
-import { DB, Workspaces } from '@docmost/db/types/db';
+import type { DB, Workspaces } from '@docmost/db/types/db';
 
 const WORKSPACE_API_SETTINGS_KEYS = ['restrictToAdmins'] as const;
 const WORKSPACE_SHARING_SETTINGS_KEYS = ['disabled'] as const;

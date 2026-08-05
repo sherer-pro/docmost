@@ -9,7 +9,7 @@ import {
 } from '@docmost/db/types/entity.types';
 import { executeWithCursorPagination } from '@docmost/db/pagination/cursor-pagination';
 import { ExpressionBuilder } from 'kysely';
-import { DB } from '@docmost/db/types/db';
+import type { DB } from '@docmost/db/types/db';
 import { jsonObjectFrom } from 'kysely/helpers/postgres';
 
 type CommentPaginationOptions = {

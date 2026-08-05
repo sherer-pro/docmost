@@ -37,7 +37,7 @@ import { AiRetrievalService } from '../retrieval/ai-retrieval.service';
 import { AiRetrievalUrlPolicyService } from './ai-retrieval-url-policy.service';
 import { v7 as uuidv7 } from 'uuid';
 import { sql } from 'kysely';
-import { JsonValue } from '../../../database/types/db';
+import type { JsonValue } from '../../../database/types/db';
 import { AiContentPolicyService } from '../../ai-content-policy/ai-content-policy.service';
 import { createHash } from 'node:crypto';
 import { AiMcpPolicyService } from '../mcp/ai-mcp-policy.service';

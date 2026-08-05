@@ -25,6 +25,7 @@ export class AiQueueReconcilerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(AiQueueReconcilerService.name);
   private timer: NodeJS.Timeout | undefined;
   private reconciling = false;
+  private reconciliationPromise?: Promise<void>;
   private destroyed = false;
 
   constructor(
@@ -51,17 +52,31 @@ export class AiQueueReconcilerService implements OnModuleInit, OnModuleDestroy {
     void this.reconcile();
   }
 
-  onModuleDestroy(): void {
+  async onModuleDestroy(): Promise<void> {
     this.destroyed = true;
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = undefined;
     }
+    await this.reconciliationPromise;
   }
 
   async reconcile(): Promise<void> {
     if (this.reconciling || this.destroyed) return;
     this.reconciling = true;
+    const reconciliation = this.performReconciliation();
+    this.reconciliationPromise = reconciliation;
+    try {
+      await reconciliation;
+    } finally {
+      if (this.reconciliationPromise === reconciliation) {
+        this.reconciliationPromise = undefined;
+      }
+      this.reconciling = false;
+    }
+  }
+
+  private async performReconciliation(): Promise<void> {
     try {
       await this.databaseReadiness.waitUntilReady();
       if (this.destroyed) return;
@@ -78,8 +93,6 @@ export class AiQueueReconcilerService implements OnModuleInit, OnModuleDestroy {
       await this.auxRuns.cleanupExpired(100);
     } catch {
       this.logger.warn('AI queue reconciliation failed');
-    } finally {
-      this.reconciling = false;
     }
   }
 
@@ -200,12 +213,9 @@ export class AiQueueReconcilerService implements OnModuleInit, OnModuleDestroy {
       return run;
     });
     if (cancelled) {
-      this.events.emitStatus(
-        cancelled,
-        cancelled.sequence,
-        'cancelled',
-        { finishReason: 'cancelled' },
-      );
+      this.events.emitStatus(cancelled, cancelled.sequence, 'cancelled', {
+        finishReason: 'cancelled',
+      });
     }
   }
 

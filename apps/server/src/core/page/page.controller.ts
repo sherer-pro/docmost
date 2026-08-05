@@ -66,6 +66,7 @@ import {
   ResolvePageAccessUsersDto,
 } from './dto/page-access.dto';
 import { LinkPreviewService } from './services/link-preview.service';
+import { AuthPolicyScope } from '../../common/decorators/auth-policy-scope.decorator';
 import { PageAccessMutationService } from './services/page-access-mutation.service';
 
 @UseGuards(JwtAuthGuard)
@@ -105,12 +106,14 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('page', { source: 'query' })
   @Get('/info')
   async getPageViaQuery(@Query() dto: PageInfoDto, @AuthUser() user: User) {
     return this.getPage(dto, user);
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('page', { source: 'body' })
   @Post('labels')
   async getPageLabels(@Body() dto: PageLabelsQueryDto, @AuthUser() user: User) {
     const page = await this.pageRepo.findById(dto.pageId);
@@ -124,6 +127,7 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('page', { source: 'body' })
   @Post('labels/add')
   async addPageLabels(
     @Body() dto: AddLabelsDto,
@@ -146,6 +150,7 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('page', { source: 'body' })
   @Post('labels/remove')
   async removePageLabel(
     @Body() dto: RemoveLabelDto,
@@ -167,6 +172,7 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('page', { source: 'query' })
   @Get('backlinks-count')
   async getBacklinksCountViaQuery(
     @Query() dto: PageIdDto,
@@ -176,6 +182,7 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('page', { source: 'query' })
   @Get('backlinks')
   async getBacklinksViaQuery(
     @Query() query: BacklinksListQueryDto,
@@ -191,6 +198,7 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('space', { source: 'body', key: 'spaceId' })
   @Post('/')
   async createViaResource(
     @Body() createPageDto: CreatePageDto,
@@ -201,6 +209,7 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('page', { source: 'body' })
   @Post('actions/update')
   async updateViaAction(
     @Body() updatePageDto: UpdatePageDto,
@@ -210,6 +219,7 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('page', { source: 'body' })
   @Post('actions/delete')
   async deleteViaAction(
     @Body() deletePageDto: DeletePageDto,
@@ -220,6 +230,7 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('page', { source: 'body' })
   @Post('restore')
   async restore(
     @Body() pageIdDto: PageIdDto,
@@ -255,6 +266,11 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('space', {
+    source: 'query',
+    key: 'spaceId',
+    optional: true,
+  })
   @Get('recent')
   async getRecentPagesViaQuery(
     @Query() query: RecentPagesQueryDto,
@@ -264,6 +280,10 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('space', {
+    source: 'query',
+    key: 'spaceId',
+  })
   @Get('trash')
   async getDeletedPagesViaQuery(
     @Query() query: DeletedPagesQueryDto,
@@ -273,6 +293,7 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('page', { source: 'query' })
   @Get('/history')
   async getPageHistoryViaQuery(
     @Query() query: PageHistoryQueryDto,
@@ -282,6 +303,11 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('resource', {
+    source: 'query',
+    key: 'historyId',
+    resourceType: 'pageHistory',
+  })
   @Get('/history/info')
   async getPageHistoryInfoViaQuery(
     @Query() dto: PageHistoryIdDto,
@@ -291,6 +317,10 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.NO_CONTENT)
+  @AuthPolicyScope('resource', {
+    key: 'historyId',
+    resourceType: 'pageHistory',
+  })
   @Delete('/history/:historyId')
   async deletePageHistory(
     @Param() dto: PageHistoryIdDto,
@@ -309,6 +339,12 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('space', {
+    source: 'query',
+    key: 'spaceId',
+    fallbackKey: 'pageId',
+    fallbackScope: 'page',
+  })
   @Get('/sidebar-pages')
   async getSidebarPagesViaQuery(
     @Query() query: SidebarPagesQueryDto,
@@ -318,6 +354,7 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('page', { key: 'pageId' })
   @Post(':pageId/actions/access/users')
   async listPageAccessUsers(
     @Param('pageId', ParseUUIDPipe) pageId: string,
@@ -334,6 +371,7 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('page', { key: 'pageId' })
   @Post(':pageId/actions/access/resolve-users')
   async resolvePageAccessUsers(
     @Param('pageId', ParseUUIDPipe) pageId: string,
@@ -350,6 +388,7 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('page', { key: 'pageId' })
   @Post(':pageId/actions/access/groups')
   async listPageAccessGroups(
     @Param('pageId', ParseUUIDPipe) pageId: string,
@@ -366,6 +405,7 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('page', { key: 'pageId' })
   @Post(':pageId/actions/access/grant-user')
   async grantPageUserAccess(
     @Param('pageId', ParseUUIDPipe) pageId: string,
@@ -388,6 +428,7 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('page', { key: 'pageId' })
   @Post(':pageId/actions/access/close-user')
   async closePageUserAccess(
     @Param('pageId', ParseUUIDPipe) pageId: string,
@@ -409,6 +450,7 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('page', { key: 'pageId' })
   @Post(':pageId/actions/access/grant-group')
   async grantPageGroupAccess(
     @Param('pageId', ParseUUIDPipe) pageId: string,
@@ -431,6 +473,7 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('page', { key: 'pageId' })
   @Post(':pageId/actions/access/close-group')
   async closePageGroupAccess(
     @Param('pageId', ParseUUIDPipe) pageId: string,
@@ -452,6 +495,7 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('page', { key: 'pageId' })
   @Post(':pageId/convert-to-database')
   async convertToDatabase(
     @Param('pageId', ParseUUIDPipe) pageId: string,
@@ -477,6 +521,13 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('page', {
+    source: 'body',
+    key: 'pageId',
+    additionalTargets: [
+      { scope: 'space', source: 'body', key: 'spaceId' },
+    ],
+  })
   @Post('move-to-space')
   async movePageToSpace(
     @Body() dto: MovePageToSpaceDto,
@@ -506,6 +557,18 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('page', {
+    source: 'body',
+    key: 'pageId',
+    additionalTargets: [
+      {
+        scope: 'space',
+        source: 'body',
+        key: 'spaceId',
+        optional: true,
+      },
+    ],
+  })
   @Post('duplicate')
   async duplicatePage(@Body() dto: DuplicatePageDto, @AuthUser() user: User) {
     const copiedPage = await this.pageRepo.findById(dto.pageId);
@@ -571,6 +634,7 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('page', { source: 'body', key: 'pageId' })
   @Post('move')
   async movePage(@Body() dto: MovePageDto, @AuthUser() user: User) {
     const movedPage = await this.pageRepo.findById(dto.pageId);
@@ -601,6 +665,7 @@ export class PageController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('page', { source: 'query', key: 'pageId' })
   @Get('/breadcrumbs')
   async getPageBreadcrumbsViaQuery(
     @Query() dto: PageIdDto,

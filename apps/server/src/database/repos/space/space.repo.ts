@@ -17,7 +17,7 @@ import {
   shouldIncludeArchived,
 } from '../../pagination/pagination-options';
 import { executeWithCursorPagination } from '@docmost/db/pagination/cursor-pagination';
-import { DB } from '@docmost/db/types/db';
+import type { DB } from '@docmost/db/types/db';
 import { validate as isValidUUID } from 'uuid';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EventName } from '../../../common/events/event.contants';
