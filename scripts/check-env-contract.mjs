@@ -7,12 +7,18 @@ const ENV_VALIDATION_PATH =
   'apps/server/src/integrations/environment/environment.validation.ts';
 const VITE_CONFIG_PATH = 'apps/client/vite.config.ts';
 const STATIC_MODULE_PATH = 'apps/server/src/integrations/static/static.module.ts';
+const COMPOSE_PATH = 'docker-compose.yml';
 const COMPOSE_ONLY_ENV_KEYS = new Set([
   'POSTGRES_DB',
   'POSTGRES_PASSWORD',
   'POSTGRES_USER',
 ]);
 const SYNTHETIC_WINDOW_CONFIG_KEYS = new Set(['ENV']);
+const REQUIRED_COMPOSE_RUNTIME_KEYS = new Set([
+  'AI_ASSISTANT_PROFILES_ENABLED',
+  'AI_BUILTIN_TOOL_EXTENSIONS_ENABLED',
+  'PAGE_TEMPLATES_ENABLED',
+]);
 
 function parseEnvKeys(filePath) {
   const content = readFileSync(filePath, 'utf8');
@@ -72,6 +78,42 @@ function extractWindowConfigKeys() {
   );
 }
 
+function extractComposeServiceEnv() {
+  const entries = new Map();
+  let inDocmostService = false;
+  let inEnvironment = false;
+
+  for (const line of readFileSync(COMPOSE_PATH, 'utf8').split(/\r?\n/)) {
+    if (/^  docmost:\s*$/.test(line)) {
+      inDocmostService = true;
+      continue;
+    }
+    if (inDocmostService && /^  \S/.test(line)) {
+      break;
+    }
+    if (!inDocmostService) {
+      continue;
+    }
+    if (/^    environment:\s*$/.test(line)) {
+      inEnvironment = true;
+      continue;
+    }
+    if (inEnvironment && /^    \S/.test(line)) {
+      break;
+    }
+    if (!inEnvironment) {
+      continue;
+    }
+
+    const match = /^      ([A-Z][A-Z0-9_]+):\s*(.+)$/.exec(line);
+    if (match) {
+      entries.set(match[1], match[2].trim());
+    }
+  }
+
+  return entries;
+}
+
 function sortedDiff(left, right) {
   return [...left].filter((value) => !right.has(value)).sort();
 }
@@ -127,6 +169,30 @@ if (existsSync(COMPOSE_ENV_PATH)) {
   issues.push(composeMissing, composeExtra);
   reportDiff('Keys from .env.example missing from .env.compose.example', composeMissing);
   reportDiff('Keys in .env.compose.example missing from .env.example', composeExtra);
+}
+
+if (existsSync(COMPOSE_PATH)) {
+  const composeServiceEnv = extractComposeServiceEnv();
+  const composeRuntimeMissing = sortedDiff(
+    REQUIRED_COMPOSE_RUNTIME_KEYS,
+    new Set(composeServiceEnv.keys()),
+  );
+  const composeRuntimeNotForwarded = [...REQUIRED_COMPOSE_RUNTIME_KEYS]
+    .filter((key) => {
+      const value = composeServiceEnv.get(key) ?? '';
+      return !value.includes(`\${${key}`);
+    })
+    .sort();
+
+  issues.push(composeRuntimeMissing, composeRuntimeNotForwarded);
+  reportDiff(
+    'Required runtime keys missing from the docmost Compose service',
+    composeRuntimeMissing,
+  );
+  reportDiff(
+    'Required runtime keys not forwarded from the Compose environment',
+    composeRuntimeNotForwarded,
+  );
 }
 
 if (existsSync(LOCAL_ENV_PATH)) {
