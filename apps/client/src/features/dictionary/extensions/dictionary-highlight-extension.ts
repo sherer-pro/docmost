@@ -1,5 +1,11 @@
-import { Extension } from "@tiptap/core";
-import { Plugin, PluginKey, Transaction } from "@tiptap/pm/state";
+import {
+  Extension,
+  findChildrenInRange,
+  getChangedRanges,
+  type ChangedRange,
+  type NodeWithPos,
+} from "@tiptap/core";
+import { EditorState, Plugin, PluginKey, Transaction } from "@tiptap/pm/state";
 import { Node as PMNode } from "@tiptap/pm/model";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { IDictionaryTerm } from "@/features/dictionary/types/dictionary.types";
@@ -21,6 +27,7 @@ interface DictionaryHighlightPluginState {
   terms: IDictionaryTerm[];
   matcherIndex: DictionaryMatcherIndex;
   enabled: boolean;
+  scannedTextBlockCount: number;
 }
 
 interface DictionaryHighlightPluginMeta extends DictionaryHighlightOptions {
@@ -35,28 +42,38 @@ interface TextNodesWithPosition {
 interface DictionaryDecorationResult {
   decorations: DecorationSet;
   hasDecorations: boolean;
+  scannedTextBlockCount: number;
 }
 
-const DICTIONARY_HIGHLIGHT_REBUILD_DELAY_MS = 250;
+interface DictionaryDecorationBatch {
+  decorations: Decoration[];
+  scannedTextBlockCount: number;
+}
+
+const FULL_REBUILD_MIN_CHANGED_SIZE = 5_000;
+const FULL_REBUILD_CHANGED_RATIO = 0.5;
 
 export const dictionaryHighlightPluginKey =
   new PluginKey<DictionaryHighlightPluginState>("dictionaryHighlight");
 
-function collectTextNodes(doc: PMNode): TextNodesWithPosition[] {
+function collectTextNodes(
+  node: PMNode,
+  basePosition = 0,
+): TextNodesWithPosition[] {
   const textNodesWithPosition: TextNodesWithPosition[] = [];
   let index = 0;
 
-  doc.descendants((node, pos) => {
-    if (node.isText) {
+  node.descendants((child, pos) => {
+    if (child.isText) {
       if (textNodesWithPosition[index]) {
         textNodesWithPosition[index] = {
-          text: textNodesWithPosition[index].text + node.text,
+          text: textNodesWithPosition[index].text + child.text,
           pos: textNodesWithPosition[index].pos,
         };
       } else {
         textNodesWithPosition[index] = {
-          text: `${node.text}`,
-          pos,
+          text: `${child.text}`,
+          pos: basePosition + pos,
         };
       }
     } else {
@@ -109,10 +126,11 @@ export const DictionaryHighlightExtension =
                   terms,
                   matcherIndex,
                   enabled,
+                  scannedTextBlockCount: 0,
                 };
               }
 
-              if (meta || meta?.rebuild) {
+              if (meta) {
                 return buildPluginState(newState.doc, {
                   enabled,
                   terms,
@@ -121,10 +139,7 @@ export const DictionaryHighlightExtension =
               }
 
               if (transaction.docChanged) {
-                if (
-                  !oldPluginState.hasDecorations &&
-                  oldState.doc.textContent.length === 0
-                ) {
+                if (oldState.doc.textContent.length === 0) {
                   return buildPluginState(newState.doc, {
                     enabled,
                     terms,
@@ -132,28 +147,15 @@ export const DictionaryHighlightExtension =
                   });
                 }
 
-                return {
-                  decorations: oldPluginState.decorations.map(
-                    transaction.mapping,
-                    transaction.doc,
-                  ),
-                  hasDecorations: oldPluginState.hasDecorations,
-                  terms,
-                  matcherIndex,
-                  enabled,
-                };
+                return updateChangedDecorations(
+                  transaction,
+                  oldPluginState,
+                  newState,
+                  { enabled, terms, matcherIndex },
+                );
               }
 
-              return {
-                decorations: oldPluginState.decorations.map(
-                  transaction.mapping,
-                  transaction.doc,
-                ),
-                hasDecorations: oldPluginState.hasDecorations,
-                terms,
-                matcherIndex,
-                enabled,
-              };
+              return oldPluginState;
             },
           },
           props: {
@@ -163,58 +165,6 @@ export const DictionaryHighlightExtension =
                 DecorationSet.empty
               );
             },
-          },
-          view(view) {
-            let rebuildTimeout: ReturnType<typeof setTimeout> | null = null;
-
-            const clearRebuildTimeout = () => {
-              if (rebuildTimeout) {
-                clearTimeout(rebuildTimeout);
-                rebuildTimeout = null;
-              }
-            };
-
-            const scheduleRebuild = () => {
-              clearRebuildTimeout();
-              rebuildTimeout = setTimeout(() => {
-                rebuildTimeout = null;
-                const pluginState = dictionaryHighlightPluginKey.getState(
-                  view.state,
-                );
-
-                if (!pluginState?.enabled) {
-                  return;
-                }
-
-                view.dispatch(
-                  view.state.tr.setMeta(dictionaryHighlightPluginKey, {
-                    enabled: pluginState.enabled,
-                    terms: pluginState.terms,
-                    matcherIndex: pluginState.matcherIndex,
-                    rebuild: true,
-                  } satisfies DictionaryHighlightPluginMeta),
-                );
-              }, DICTIONARY_HIGHLIGHT_REBUILD_DELAY_MS);
-            };
-
-            return {
-              update(nextView, previousState) {
-                const pluginState = dictionaryHighlightPluginKey.getState(
-                  nextView.state,
-                );
-
-                if (
-                  previousState.doc !== nextView.state.doc &&
-                  pluginState?.enabled &&
-                  pluginState.matcherIndex.patterns.length > 0
-                ) {
-                  scheduleRebuild();
-                }
-              },
-              destroy() {
-                clearRebuildTimeout();
-              },
-            };
           },
         }),
       ];
@@ -245,6 +195,7 @@ function buildPluginState(
       terms: options.terms,
       matcherIndex,
       enabled: options.enabled,
+      scannedTextBlockCount: 0,
     };
   }
 
@@ -256,6 +207,7 @@ function buildPluginState(
     terms: options.terms,
     matcherIndex,
     enabled: options.enabled,
+    scannedTextBlockCount: decorationResult.scannedTextBlockCount,
   };
 }
 
@@ -263,29 +215,173 @@ function buildDecorations(
   doc: PMNode,
   matcherIndex: DictionaryMatcherIndex,
 ): DictionaryDecorationResult {
+  const textBlocks = collectTextBlocks(doc);
+  const result = buildDecorationsForTextBlocks(doc, textBlocks, matcherIndex);
+
+  return {
+    decorations: DecorationSet.create(doc, result.decorations),
+    hasDecorations: result.decorations.length > 0,
+    scannedTextBlockCount: result.scannedTextBlockCount,
+  };
+}
+
+function buildDecorationsForTextBlocks(
+  doc: PMNode,
+  textBlocks: NodeWithPos[],
+  matcherIndex: DictionaryMatcherIndex,
+): DictionaryDecorationBatch {
   const decorations: Decoration[] = [];
 
-  collectTextNodes(doc).forEach((textNode) => {
-    findDictionaryMatches(textNode.text, matcherIndex).forEach((match) => {
-      const from = textNode.pos + match.from;
-      const to = textNode.pos + match.to;
+  textBlocks.forEach(({ node, pos }) => {
+    collectTextNodes(node, pos + 1).forEach((textNode) => {
+      findDictionaryMatches(textNode.text, matcherIndex).forEach((match) => {
+        const from = textNode.pos + match.from;
+        const to = textNode.pos + match.to;
 
-      if (from >= to || from < 0 || to > doc.content.size) {
-        return;
-      }
+        if (from >= to || from < 0 || to > doc.content.size) {
+          return;
+        }
 
-      decorations.push(
-        Decoration.inline(from, to, {
-          class: "dictionary-highlight",
-          "data-dictionary-term-id": match.term.id,
-          tabindex: "0",
-        }),
-      );
+        decorations.push(
+          Decoration.inline(from, to, {
+            class: "dictionary-highlight",
+            "data-dictionary-term-id": match.term.id,
+            tabindex: "0",
+          }),
+        );
+      });
     });
   });
 
   return {
-    decorations: DecorationSet.create(doc, decorations),
-    hasDecorations: decorations.length > 0,
+    decorations,
+    scannedTextBlockCount: textBlocks.length,
   };
+}
+
+function collectTextBlocks(doc: PMNode): NodeWithPos[] {
+  const textBlocks: NodeWithPos[] = [];
+
+  doc.descendants((node, pos) => {
+    if (node.isTextblock) {
+      textBlocks.push({ node, pos });
+      return false;
+    }
+
+    return true;
+  });
+
+  return textBlocks;
+}
+
+function collectChangedTextBlocks(
+  doc: PMNode,
+  changedRanges: ChangedRange[],
+): NodeWithPos[] {
+  const textBlocks = new Map<number, NodeWithPos>();
+  const addTextBlock = (textBlock: NodeWithPos) => {
+    textBlocks.set(textBlock.pos, textBlock);
+  };
+
+  changedRanges.forEach(({ newRange }) => {
+    const from = Math.max(0, Math.min(newRange.from - 1, doc.content.size));
+    const to = Math.max(from, Math.min(newRange.to + 1, doc.content.size));
+
+    findChildrenInRange(doc, { from, to }, (node) => node.isTextblock).forEach(
+      addTextBlock,
+    );
+
+    [from, to].forEach((position) => {
+      const resolvedPosition = doc.resolve(position);
+
+      for (let depth = resolvedPosition.depth; depth > 0; depth -= 1) {
+        const node = resolvedPosition.node(depth);
+
+        if (node.isTextblock) {
+          addTextBlock({ node, pos: resolvedPosition.before(depth) });
+          break;
+        }
+      }
+    });
+  });
+
+  return Array.from(textBlocks.values()).sort(
+    (left, right) => left.pos - right.pos,
+  );
+}
+
+function shouldRebuildAllDecorations(
+  doc: PMNode,
+  changedRanges: ChangedRange[],
+): boolean {
+  if (changedRanges.length === 0) {
+    return true;
+  }
+
+  const changedSize = changedRanges.reduce(
+    (total, { newRange }) => total + Math.max(1, newRange.to - newRange.from),
+    0,
+  );
+
+  return (
+    changedSize >= FULL_REBUILD_MIN_CHANGED_SIZE &&
+    changedSize >= doc.content.size * FULL_REBUILD_CHANGED_RATIO
+  );
+}
+
+function updateChangedDecorations(
+  transaction: Transaction,
+  oldPluginState: DictionaryHighlightPluginState,
+  newState: EditorState,
+  options: DictionaryHighlightOptions & {
+    matcherIndex: DictionaryMatcherIndex;
+  },
+): DictionaryHighlightPluginState {
+  const changedRanges = getChangedRanges(transaction);
+
+  if (shouldRebuildAllDecorations(newState.doc, changedRanges)) {
+    return buildPluginState(newState.doc, options);
+  }
+
+  const changedTextBlocks = collectChangedTextBlocks(
+    newState.doc,
+    changedRanges,
+  );
+
+  if (changedTextBlocks.length === 0) {
+    return buildPluginState(newState.doc, options);
+  }
+
+  const mappedDecorations = oldPluginState.decorations.map(
+    transaction.mapping,
+    newState.doc,
+  );
+  const decorationsToRemove = changedTextBlocks.flatMap(({ node, pos }) =>
+    mappedDecorations.find(pos, pos + node.nodeSize),
+  );
+  const retainedDecorations = mappedDecorations.remove(decorationsToRemove);
+  const rebuiltDecorations = buildDecorationsForTextBlocks(
+    newState.doc,
+    changedTextBlocks,
+    options.matcherIndex,
+  );
+  const decorations = retainedDecorations.add(
+    newState.doc,
+    rebuiltDecorations.decorations,
+  );
+
+  return {
+    decorations,
+    hasDecorations: decorations.find().length > 0,
+    terms: options.terms,
+    matcherIndex: options.matcherIndex,
+    enabled: options.enabled,
+    scannedTextBlockCount: rebuiltDecorations.scannedTextBlockCount,
+  };
+}
+
+export function getDictionaryHighlightScanCount(state: EditorState): number {
+  return (
+    dictionaryHighlightPluginKey.getState(state)?.scannedTextBlockCount ?? 0
+  );
 }
