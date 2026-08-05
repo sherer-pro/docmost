@@ -5,6 +5,7 @@ const WORKSPACE_ADMIN_SETTINGS_PATHS = new Set([
   "/settings/account/api-keys",
   "/settings/ai",
   "/settings/ai/spaces",
+  "/settings/ai/built-in-tools",
   "/settings/ai/external-tools",
   "/settings/keys",
   "/settings/keys/mcp",
@@ -17,7 +18,7 @@ export function canAccessSettingsPath(path: string, isAdmin: boolean) {
 
 export function isSettingsItemActive(pathname: string, itemPath: string) {
   // The AI item used to need a special case for its per-space child routes.
-  // Now that /settings/ai has tabs, the generic prefix rule covers both
-  // /settings/ai/spaces and /settings/ai/external-tools as well.
+  // Now that /settings/ai has tabs, the generic prefix rule covers all
+  // workspace AI tabs as well.
   return pathname === itemPath || pathname.startsWith(`${itemPath}/`);
 }

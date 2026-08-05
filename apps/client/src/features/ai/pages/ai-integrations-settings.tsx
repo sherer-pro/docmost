@@ -1,5 +1,5 @@
-import { Space, Stack, Tabs, Text } from "@mantine/core";
-import { IconSparkles, IconTool } from "@tabler/icons-react";
+import { Stack, Tabs, Text } from "@mantine/core";
+import { IconShieldCheck, IconSparkles, IconTool } from "@tabler/icons-react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Helmet } from "react-helmet-async";
@@ -33,51 +33,62 @@ export default function AiIntegrationsSettings() {
       <div>
         <SettingsTitle title={t("ai.title")} />
         <Text c="dimmed" maw={720}>
-          {t("ai.integrations.spacesDescription")}
+          {t("ai.integrations.description")}
         </Text>
       </div>
 
-      <AiBuiltinToolWorkspacePolicy />
+      <Tabs
+        value={aiTab}
+        variant="pills"
+        keepMounted={false}
+        onChange={(value) => {
+          if (isAiSettingsTab(value)) {
+            navigate(`/settings/ai/${value}`);
+          }
+        }}
+      >
+        <Tabs.List className={classes.tabList}>
+          <Tabs.Tab
+            value="spaces"
+            leftSection={<IconSparkles size={18} stroke={2} />}
+            className={classes.tab}
+          >
+            <Text size="sm" fw={500}>
+              {t("ai.integrations.spacesTitle")}
+            </Text>
+          </Tabs.Tab>
+          <Tabs.Tab
+            value="built-in-tools"
+            leftSection={<IconShieldCheck size={18} stroke={2} />}
+            className={classes.tab}
+          >
+            <Text size="sm" fw={500}>
+              {t("ai.toolPolicy.workspaceTitle")}
+            </Text>
+          </Tabs.Tab>
+          {/* Deliberately not IconPlugConnected: that icon already marks the
+              inbound MCP surface under /settings/keys/mcp. */}
+          <Tabs.Tab
+            value="external-tools"
+            leftSection={<IconTool size={18} stroke={2} />}
+            className={classes.tab}
+          >
+            <Text size="sm" fw={500}>
+              {t("ai.externalTools.title")}
+            </Text>
+          </Tabs.Tab>
+        </Tabs.List>
 
-      <div>
-        <Tabs
-          value={aiTab}
-          onChange={(value) => {
-            if (isAiSettingsTab(value)) {
-              navigate(`/settings/ai/${value}`);
-            }
-          }}
-        >
-          <Tabs.List>
-            <Tabs.Tab
-              value="spaces"
-              leftSection={<IconSparkles size={18} stroke={2} />}
-            >
-              <Text size="sm" fw={500}>
-                {t("ai.integrations.spacesTitle")}
-              </Text>
-            </Tabs.Tab>
-            {/* Deliberately not IconPlugConnected: that icon already marks the
-                inbound MCP surface under /settings/keys/mcp. */}
-            <Tabs.Tab
-              value="external-tools"
-              leftSection={<IconTool size={18} stroke={2} />}
-            >
-              <Text size="sm" fw={500}>
-                {t("ai.externalTools.title")}
-              </Text>
-            </Tabs.Tab>
-          </Tabs.List>
-        </Tabs>
-
-        <Space my="md" />
-
-        {aiTab === "spaces" ? (
-          <AiSpacesPanel key={aiTab} />
-        ) : (
-          <ExternalMcpSettingsPanel key={aiTab} />
-        )}
-      </div>
+        <Tabs.Panel value="spaces" className={classes.tabPanel}>
+          <AiSpacesPanel />
+        </Tabs.Panel>
+        <Tabs.Panel value="built-in-tools" className={classes.tabPanel}>
+          <AiBuiltinToolWorkspacePolicy />
+        </Tabs.Panel>
+        <Tabs.Panel value="external-tools" className={classes.tabPanel}>
+          <ExternalMcpSettingsPanel />
+        </Tabs.Panel>
+      </Tabs>
     </Stack>
   );
 }

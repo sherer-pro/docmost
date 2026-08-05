@@ -15,6 +15,7 @@ describe("isAiSettingsTab", () => {
     [null],
     [""],
     ["spaces/"],
+    ["built_in_tools"],
     ["external_tools"],
     // The inbound MCP key-type tabs must not resolve here.
     ["mcp"],

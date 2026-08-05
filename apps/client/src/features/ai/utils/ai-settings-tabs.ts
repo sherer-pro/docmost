@@ -1,4 +1,8 @@
-export const AI_SETTINGS_TABS = ["spaces", "external-tools"] as const;
+export const AI_SETTINGS_TABS = [
+  "spaces",
+  "built-in-tools",
+  "external-tools",
+] as const;
 
 export type AiSettingsTab = (typeof AI_SETTINGS_TABS)[number];
 
