@@ -21,6 +21,22 @@ const LOCALES = [
   "uk-UA",
   "zh-CN",
 ];
+const PROFILE_ERROR_REASON_KEYS = [
+  "errorReason.profileDisabled",
+  "errorReason.profileNotAllowed",
+  "errorReason.profileLocked",
+  "errorReason.profileVersionConflict",
+  "errorReason.agentProfileUnverified",
+  "errorReason.agentProfilePolicyChanged",
+  "errorReason.agentProviderConfigChanged",
+];
+const PROFILE_IDENTICAL_VALUE_ALLOWLIST: Record<string, Set<string>> = {
+  "de-DE": new Set(["profiles.name"]),
+  "fr-FR": new Set([
+    "profiles.profileDescription",
+    "profiles.instructions",
+  ]),
+};
 
 function readLocale(locale: string): Record<string, unknown> {
   return JSON.parse(
@@ -114,6 +130,31 @@ describe("AI localization contract", () => {
       for (const key of keys) {
         expect(localized[key]).toBeTruthy();
         expect(localized[key]).not.toBe(english[key]);
+      }
+    }
+  });
+
+  it("localizes the complete assistant profile surface", () => {
+    const english = flatten(readAiLocale("en-US"));
+    const profileKeys = [
+      ...Object.keys(english).filter((key) => key.startsWith("profiles.")),
+      "integrations.section.profiles",
+      ...PROFILE_ERROR_REASON_KEYS,
+    ];
+    expect(profileKeys).toHaveLength(73);
+
+    for (const locale of LOCALES.filter((value) => value !== "en-US")) {
+      const localized = flatten(readAiLocale(locale));
+      const allowlist = PROFILE_IDENTICAL_VALUE_ALLOWLIST[locale] ?? new Set();
+
+      for (const key of profileKeys) {
+        expect(localized[key]).toBeTruthy();
+        if (!allowlist.has(key)) {
+          expect(localized[key]).not.toBe(english[key]);
+        }
+        expect(localized[key].match(/{{[^}]+}}/g) ?? []).toEqual(
+          english[key].match(/{{[^}]+}}/g) ?? [],
+        );
       }
     }
   });
