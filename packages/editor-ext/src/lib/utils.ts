@@ -395,7 +395,12 @@ export function sanitizeUrl(url: string | undefined): string {
 export function isInternalFileUrl(url: string | undefined): boolean {
   if (!url) return false;
   const normalized = url.trim();
-  return normalized.startsWith("/api/files/") || normalized.startsWith("/files/");
+  return [
+    "/api/attachments/files/",
+    "/attachments/files/",
+    "/api/files/",
+    "/files/",
+  ].some((prefix) => normalized.startsWith(prefix));
 }
 
 const alphabet = "abcdefghijklmnopqrstuvwxyz";

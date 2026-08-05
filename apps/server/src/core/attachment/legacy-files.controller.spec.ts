@@ -22,7 +22,6 @@ function expectDeprecatedRoute(methodName: string, replacement: string) {
 
 describe('LegacyFilesController', () => {
   const attachmentFileAccessService = {
-    uploadFile: jest.fn(),
     getPrivateFile: jest.fn(),
     getPublicFile: jest.fn(),
   };
@@ -33,30 +32,12 @@ describe('LegacyFilesController', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    attachmentFileAccessService.uploadFile.mockResolvedValue('upload-result');
     attachmentFileAccessService.getPrivateFile.mockResolvedValue(
       'private-result',
     );
     attachmentFileAccessService.getPublicFile.mockResolvedValue(
       'public-result',
     );
-  });
-
-  it('delegates uploadFile to AttachmentFileAccessService', async () => {
-    const req = { file: jest.fn() } as any;
-    const res = {} as any;
-    const user = { id: 'user-1' } as any;
-    const workspace = { id: 'workspace-1' } as any;
-
-    const result = await controller.uploadFile(req, res, user, workspace);
-
-    expect(attachmentFileAccessService.uploadFile).toHaveBeenCalledWith(
-      req,
-      res,
-      user,
-      workspace,
-    );
-    expect(result).toBe('upload-result');
   });
 
   it('delegates getFile to AttachmentFileAccessService', async () => {
@@ -112,10 +93,6 @@ describe('LegacyFilesController', () => {
   });
 
   it.each([
-    {
-      methodName: 'uploadFile',
-      replacement: 'POST /api/attachments/actions/upload-file',
-    },
     {
       methodName: 'getFile',
       replacement: 'GET /api/attachments/files/:fileId/:fileName',

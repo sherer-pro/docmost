@@ -278,7 +278,7 @@ Minimum:
 - Attachment/file API notes:
   - canonical upload routes: `POST /api/attachments/actions/upload-file`, `POST /api/attachments/actions/upload-image`, `POST /api/attachments/actions/remove-icon`.
   - canonical file routes: `GET /api/attachments/files/:fileId/:fileName`, `GET /api/attachments/files/public/:fileId/:fileName`.
-  - compatibility aliases are still enabled for older clients/content: `POST /api/files/upload`, `GET /api/files/:fileId/:fileName`, `GET /api/files/public/:fileId/:fileName`, `POST /api/attachments/upload-image`, `POST /api/attachments/remove-icon`.
+  - the only compatibility aliases still enabled are `GET /api/files/:fileId/:fileName` and `GET /api/files/public/:fileId/:fileName`, because persisted content may still reference those URLs. Command and read-like aliases were removed in August 2026; use the generated route inventory as the supported contract.
   - public attachment `?jwt=` query tokens remain accepted only as a legacy fallback after header/cookie tokens; responses using the query token include deprecation headers.
   - inline responses are allowed only for trusted extension/MIME pairs; spoofed inline extensions such as `.mp4` with HTML content are served as downloads with a safe content type.
   - `GET /api/attachments/img/:attachmentType/:fileName` stays unauthenticated (workspace logos and avatars are needed on the login and public share pages), but the storage path is rebuilt from the validated UUID plus an allowlisted image extension. The raw route parameter is never concatenated into the path, so encoded separators (`%2F`) cannot reach another workspace's folder.

@@ -36,8 +36,6 @@ import {
 } from '../attachment/attachment-public-token.util';
 import { PageAccessService } from '../page-access/page-access.service';
 import { ShareTransclusionLookupDto } from './dto/share-transclusion-lookup.dto';
-import { DeprecatedRoute } from '../../common/decorators/deprecated-route.decorator';
-import { LEGACY_API_SUNSET } from '../../common/config/api-deprecation.constants';
 import { AuthRateLimitGuard } from '../auth/rate-limit/auth-rate-limit.guard';
 import { AuthRateLimit } from '../auth/rate-limit/auth-rate-limit.decorator';
 import { AuthPolicyScope } from '../../common/decorators/auth-policy-scope.decorator';
@@ -63,19 +61,6 @@ export class ShareController {
     return this.getShares(user, pagination);
   }
 
-  @HttpCode(HttpStatus.OK)
-  @DeprecatedRoute({
-    sunset: LEGACY_API_SUNSET,
-    replacement: 'GET /api/shares',
-  })
-  @Post('/')
-  async getShares(
-    @AuthUser() user: User,
-    @Body() pagination: PaginationOptions,
-  ) {
-    return this.shareRepo.getShares(user.id, pagination);
-  }
-
   @Public()
   @HttpCode(HttpStatus.OK)
   @Get('/page-info')
@@ -89,76 +74,11 @@ export class ShareController {
 
   @Public()
   @HttpCode(HttpStatus.OK)
-  @DeprecatedRoute({
-    sunset: LEGACY_API_SUNSET,
-    replacement: 'GET /api/shares/page-info',
-  })
-  @Post('/page-info')
-  async getSharedPageInfo(
-    @Body() dto: ShareInfoDto,
-    @AuthWorkspace() workspace: Workspace,
-    @Res({ passthrough: true }) res: FastifyReply,
-  ) {
-    if (!dto.pageId && !dto.shareId) {
-      throw new BadRequestException();
-    }
-
-    const shareData = await this.shareService.getSharedPage(dto, workspace.id);
-
-    const sharingAllowed = await this.shareService.isSharingAllowed(
-      workspace.id,
-      shareData.share.spaceId,
-    );
-    if (!sharingAllowed) {
-      throw new NotFoundException('Shared page not found');
-    }
-
-    await this.setAttachmentAccessCookie(
-      res,
-      shareData.page.id,
-      workspace.id,
-      shareData.share.id,
-    );
-
-    return shareData;
-  }
-
-  @Public()
-  @HttpCode(HttpStatus.OK)
   @Get('/info')
   @UseGuards(AuthRateLimitGuard)
   @AuthRateLimit({ endpoint: 'shareRead', accountField: 'shareId' })
   async getShareViaQuery(@Query() dto: ShareIdDto) {
     return this.getShare(dto);
-  }
-
-  @Public()
-  @HttpCode(HttpStatus.OK)
-  @DeprecatedRoute({
-    sunset: LEGACY_API_SUNSET,
-    replacement: 'GET /api/shares/info',
-  })
-  @Post('/info')
-  @UseGuards(AuthRateLimitGuard)
-  @AuthRateLimit({ endpoint: 'shareRead', accountField: 'shareId' })
-  async getShare(@Body() dto: ShareIdDto) {
-    const share = (await this.shareRepo.findById(dto.shareId, {
-      includeSharedPage: true,
-    })) as (Share & { sharedPage?: { id: string } | null }) | undefined;
-
-    if (!share || !share.sharedPage) {
-      throw new NotFoundException('Share not found');
-    }
-
-    const sharingAllowed = await this.shareService.isSharingAllowed(
-      share.workspaceId,
-      share.spaceId,
-    );
-    if (!sharingAllowed) {
-      throw new NotFoundException('Share not found');
-    }
-
-    return share;
   }
 
   @HttpCode(HttpStatus.OK)
@@ -173,28 +93,6 @@ export class ShareController {
   }
 
   @HttpCode(HttpStatus.OK)
-  @DeprecatedRoute({
-    sunset: LEGACY_API_SUNSET,
-    replacement: 'GET /api/shares/for-page',
-  })
-  @AuthPolicyScope('page', { source: 'body', key: 'pageId' })
-  @Post('/for-page')
-  async getShareForPage(
-    @Body() dto: SharePageIdDto,
-    @AuthUser() user: User,
-    @AuthWorkspace() workspace: Workspace,
-  ) {
-    const page = await this.pageRepo.findById(dto.pageId);
-    if (!page) {
-      throw new NotFoundException('Shared page not found');
-    }
-
-    await this.pageAccessService.assertCanMoveDeleteShare(page, user);
-
-    return this.shareService.getShareForPage(page.slugId, workspace.id);
-  }
-
-  @HttpCode(HttpStatus.OK)
   @AuthPolicyScope('page', { source: 'body', key: 'pageId' })
   @Post('actions/create')
   async createViaAction(
@@ -203,34 +101,6 @@ export class ShareController {
     @AuthWorkspace() workspace: Workspace,
   ) {
     return this.create(createShareDto, user, workspace);
-  }
-
-  @HttpCode(HttpStatus.OK)
-  @DeprecatedRoute({
-    sunset: LEGACY_API_SUNSET,
-    replacement: 'POST /api/shares/actions/create',
-  })
-  @AuthPolicyScope('page', { source: 'body', key: 'pageId' })
-  @Post('create')
-  async create(
-    @Body() createShareDto: CreateShareDto,
-    @AuthUser() user: User,
-    @AuthWorkspace() workspace: Workspace,
-  ) {
-    const page = await this.pageRepo.findById(createShareDto.pageId);
-
-    if (!page || workspace.id !== page.workspaceId) {
-      throw new NotFoundException('Page not found');
-    }
-
-    await this.pageAccessService.assertCanMoveDeleteShare(page, user);
-
-    return this.shareService.createShare({
-      page,
-      authUserId: user.id,
-      workspaceId: workspace.id,
-      createShareDto,
-    });
   }
 
   @HttpCode(HttpStatus.OK)
@@ -248,33 +118,6 @@ export class ShareController {
   }
 
   @HttpCode(HttpStatus.OK)
-  @DeprecatedRoute({
-    sunset: LEGACY_API_SUNSET,
-    replacement: 'POST /api/shares/actions/update',
-  })
-  @AuthPolicyScope('resource', {
-    source: 'body',
-    key: 'shareId',
-    resourceType: 'share',
-  })
-  @Post('update')
-  async update(@Body() updateShareDto: UpdateShareDto, @AuthUser() user: User) {
-    const share = await this.shareRepo.findById(updateShareDto.shareId);
-
-    if (!share) {
-      throw new NotFoundException('Share not found');
-    }
-
-    const page = await this.pageRepo.findById(share.pageId);
-    if (!page || page.deletedAt) {
-      throw new NotFoundException('Page not found');
-    }
-    await this.pageAccessService.assertCanMoveDeleteShare(page, user);
-
-    return this.shareService.updateShare(share.id, updateShareDto);
-  }
-
-  @HttpCode(HttpStatus.OK)
   @AuthPolicyScope('resource', {
     source: 'body',
     key: 'shareId',
@@ -286,33 +129,6 @@ export class ShareController {
     @AuthUser() user: User,
   ) {
     return this.delete(shareIdDto, user);
-  }
-
-  @HttpCode(HttpStatus.OK)
-  @DeprecatedRoute({
-    sunset: LEGACY_API_SUNSET,
-    replacement: 'POST /api/shares/actions/delete',
-  })
-  @AuthPolicyScope('resource', {
-    source: 'body',
-    key: 'shareId',
-    resourceType: 'share',
-  })
-  @Post('delete')
-  async delete(@Body() shareIdDto: ShareIdDto, @AuthUser() user: User) {
-    const share = await this.shareRepo.findById(shareIdDto.shareId);
-
-    if (!share) {
-      throw new NotFoundException('Share not found');
-    }
-
-    const page = await this.pageRepo.findById(share.pageId);
-    if (!page || page.deletedAt) {
-      throw new NotFoundException('Page not found');
-    }
-    await this.pageAccessService.assertCanMoveDeleteShare(page, user);
-
-    await this.shareRepo.deleteShare(share.id);
   }
 
   @Public()
@@ -362,35 +178,6 @@ export class ShareController {
     return this.getSharePageTree(dto, workspace);
   }
 
-  @Public()
-  @HttpCode(HttpStatus.OK)
-  @DeprecatedRoute({
-    sunset: LEGACY_API_SUNSET,
-    replacement: 'GET /api/shares/tree',
-  })
-  @Post('/tree')
-  @UseGuards(AuthRateLimitGuard)
-  @AuthRateLimit({ endpoint: 'shareRead', accountField: 'shareId' })
-  async getSharePageTree(
-    @Body() dto: ShareIdDto,
-    @AuthWorkspace() workspace: Workspace,
-  ) {
-    const treeData = await this.shareService.getShareTree(
-      dto.shareId,
-      workspace.id,
-    );
-
-    const sharingAllowed = await this.shareService.isSharingAllowed(
-      workspace.id,
-      treeData.share.spaceId,
-    );
-    if (!sharingAllowed) {
-      throw new NotFoundException('Share not found');
-    }
-
-    return treeData;
-  }
-
   private async setAttachmentAccessCookie(
     res: FastifyReply,
     pageId: string,
@@ -428,5 +215,149 @@ export class ShareController {
       secure: this.environmentService.isHttps(),
       sameSite: 'lax',
     });
+  }
+
+  async getShares(
+    @AuthUser() user: User,
+    @Body() pagination: PaginationOptions,
+  ) {
+    return this.shareRepo.getShares(user.id, pagination);
+  }
+
+  async getSharedPageInfo(
+    @Body() dto: ShareInfoDto,
+    @AuthWorkspace() workspace: Workspace,
+    @Res({ passthrough: true }) res: FastifyReply,
+  ) {
+    if (!dto.pageId && !dto.shareId) {
+      throw new BadRequestException();
+    }
+
+    const shareData = await this.shareService.getSharedPage(dto, workspace.id);
+
+    const sharingAllowed = await this.shareService.isSharingAllowed(
+      workspace.id,
+      shareData.share.spaceId,
+    );
+    if (!sharingAllowed) {
+      throw new NotFoundException('Shared page not found');
+    }
+
+    await this.setAttachmentAccessCookie(
+      res,
+      shareData.page.id,
+      workspace.id,
+      shareData.share.id,
+    );
+
+    return shareData;
+  }
+
+  async getShare(@Body() dto: ShareIdDto) {
+    const share = (await this.shareRepo.findById(dto.shareId, {
+      includeSharedPage: true,
+    })) as (Share & { sharedPage?: { id: string } | null }) | undefined;
+
+    if (!share || !share.sharedPage) {
+      throw new NotFoundException('Share not found');
+    }
+
+    const sharingAllowed = await this.shareService.isSharingAllowed(
+      share.workspaceId,
+      share.spaceId,
+    );
+    if (!sharingAllowed) {
+      throw new NotFoundException('Share not found');
+    }
+
+    return share;
+  }
+
+  async getShareForPage(
+    @Body() dto: SharePageIdDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const page = await this.pageRepo.findById(dto.pageId);
+    if (!page) {
+      throw new NotFoundException('Shared page not found');
+    }
+
+    await this.pageAccessService.assertCanMoveDeleteShare(page, user);
+
+    return this.shareService.getShareForPage(page.slugId, workspace.id);
+  }
+
+  async create(
+    @Body() createShareDto: CreateShareDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const page = await this.pageRepo.findById(createShareDto.pageId);
+
+    if (!page || workspace.id !== page.workspaceId) {
+      throw new NotFoundException('Page not found');
+    }
+
+    await this.pageAccessService.assertCanMoveDeleteShare(page, user);
+
+    return this.shareService.createShare({
+      page,
+      authUserId: user.id,
+      workspaceId: workspace.id,
+      createShareDto,
+    });
+  }
+
+  async update(@Body() updateShareDto: UpdateShareDto, @AuthUser() user: User) {
+    const share = await this.shareRepo.findById(updateShareDto.shareId);
+
+    if (!share) {
+      throw new NotFoundException('Share not found');
+    }
+
+    const page = await this.pageRepo.findById(share.pageId);
+    if (!page || page.deletedAt) {
+      throw new NotFoundException('Page not found');
+    }
+    await this.pageAccessService.assertCanMoveDeleteShare(page, user);
+
+    return this.shareService.updateShare(share.id, updateShareDto);
+  }
+
+  async delete(@Body() shareIdDto: ShareIdDto, @AuthUser() user: User) {
+    const share = await this.shareRepo.findById(shareIdDto.shareId);
+
+    if (!share) {
+      throw new NotFoundException('Share not found');
+    }
+
+    const page = await this.pageRepo.findById(share.pageId);
+    if (!page || page.deletedAt) {
+      throw new NotFoundException('Page not found');
+    }
+    await this.pageAccessService.assertCanMoveDeleteShare(page, user);
+
+    await this.shareRepo.deleteShare(share.id);
+  }
+
+  async getSharePageTree(
+    @Body() dto: ShareIdDto,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const treeData = await this.shareService.getShareTree(
+      dto.shareId,
+      workspace.id,
+    );
+
+    const sharingAllowed = await this.shareService.isSharingAllowed(
+      workspace.id,
+      treeData.share.spaceId,
+    );
+    if (!sharingAllowed) {
+      throw new NotFoundException('Share not found');
+    }
+
+    return treeData;
   }
 }

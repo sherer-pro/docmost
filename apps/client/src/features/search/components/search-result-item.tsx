@@ -19,6 +19,7 @@ import {
 } from "@/features/search/types/search.types";
 import DOMPurify from "dompurify";
 import { useTranslation } from "react-i18next";
+import { buildAttachmentFileUrl } from "@docmost/editor-ext";
 
 interface SearchResultItemProps {
   result: IPageSearch | IAttachmentSearch;
@@ -39,7 +40,10 @@ export function SearchResultItem({
     const handleDownload = (e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      const downloadUrl = `/api/files/${attachmentResult.id}/${attachmentResult.fileName}`;
+      const downloadUrl = buildAttachmentFileUrl(
+        attachmentResult.id,
+        attachmentResult.fileName,
+      );
       window.open(downloadUrl, "_blank");
     };
 

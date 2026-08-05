@@ -30,8 +30,6 @@ import { AuthRateLimit } from './rate-limit/auth-rate-limit.decorator';
 import { MfaService } from '../mfa/mfa.service';
 import { AuthCookieService } from '../../common/security/auth-cookie.service';
 import { SessionService } from '../session/session.service';
-import { DeprecatedRoute } from '../../common/decorators/deprecated-route.decorator';
-import { LEGACY_API_SUNSET } from '../../common/config/api-deprecation.constants';
 import { AuthPolicyScope } from '../../common/decorators/auth-policy-scope.decorator';
 import { CollabTokenQueryDto } from './dto/collab-token-query.dto';
 
@@ -185,25 +183,6 @@ export class AuthController {
   }
 
   @UseGuards(JwtAuthGuard)
-  @HttpCode(HttpStatus.OK)
-  @DeprecatedRoute({
-    sunset: LEGACY_API_SUNSET,
-    replacement: 'GET /api/auth/collab-token',
-  })
-  @Post('collab-token')
-  async collabToken(
-    @AuthUser() user: User,
-    @AuthWorkspace() workspace: Workspace,
-    @Req() req?: FastifyRequest,
-  ) {
-    // Bind the collab token to the issuing session so revoking that session
-    // also cuts off collaboration access.
-    const sessionId = (req?.raw as any)?.sessionId;
-
-    return this.authService.getCollabToken(user, workspace.id, sessionId);
-  }
-
-  @UseGuards(JwtAuthGuard)
   @AuthPolicyScope('bootstrap')
   @HttpCode(HttpStatus.OK)
   @Post('logout')
@@ -222,5 +201,17 @@ export class AuthController {
     }
 
     this.authCookieService.clearAuthCookies(res);
+  }
+
+  async collabToken(
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+    @Req() req?: FastifyRequest,
+  ) {
+    // Bind the collab token to the issuing session so revoking that session
+    // also cuts off collaboration access.
+    const sessionId = (req?.raw as any)?.sessionId;
+
+    return this.authService.getCollabToken(user, workspace.id, sessionId);
   }
 }

@@ -1,22 +1,17 @@
 import {
   Controller,
   Get,
-  HttpCode,
-  HttpStatus,
   Param,
-  Post,
   Query,
   Req,
   Res,
   UseGuards,
-  UseInterceptors,
 } from '@nestjs/common';
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
 import { AuthWorkspace } from '../../common/decorators/auth-workspace.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { User, Workspace } from '@docmost/db/types/entity.types';
-import { FileInterceptor } from '../../common/interceptors/file.interceptor';
 import { AttachmentFileAccessService } from './services/attachment-file-access.service';
 import { DeprecatedRoute } from '../../common/decorators/deprecated-route.decorator';
 
@@ -33,28 +28,6 @@ export class LegacyFilesController {
   constructor(
     private readonly attachmentFileAccessService: AttachmentFileAccessService,
   ) {}
-
-  @UseGuards(JwtAuthGuard)
-  @HttpCode(HttpStatus.OK)
-  @DeprecatedRoute({
-    sunset: ATTACHMENT_LEGACY_ALIAS_SUNSET,
-    replacement: 'POST /api/attachments/actions/upload-file',
-  })
-  @Post('upload')
-  @UseInterceptors(FileInterceptor)
-  async uploadFile(
-    @Req() req: any,
-    @Res() res: FastifyReply,
-    @AuthUser() user: User,
-    @AuthWorkspace() workspace: Workspace,
-  ) {
-    return this.attachmentFileAccessService.uploadFile(
-      req,
-      res,
-      user,
-      workspace,
-    );
-  }
 
   @UseGuards(JwtAuthGuard)
   @DeprecatedRoute({
@@ -98,6 +71,20 @@ export class LegacyFilesController {
       workspace,
       fileId,
       jwtToken,
+    );
+  }
+
+  async uploadFile(
+    @Req() req: any,
+    @Res() res: FastifyReply,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.attachmentFileAccessService.uploadFile(
+      req,
+      res,
+      user,
+      workspace,
     );
   }
 }

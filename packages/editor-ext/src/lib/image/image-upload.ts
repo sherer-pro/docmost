@@ -1,5 +1,9 @@
 import { imageDimensionsFromData } from 'image-dimensions';
-import { MediaUploadOptions, UploadFn } from '../media-utils';
+import {
+  buildAttachmentFileUrl,
+  MediaUploadOptions,
+  UploadFn,
+} from '../media-utils';
 import { IAttachment } from '../types';
 import { generateNodeId } from '../utils';
 import { Node } from '@tiptap/pm/model';
@@ -85,7 +89,7 @@ const handleImageUpload =
 
         // Update the placeholder node with the actual image data
         tr.setNodeMarkup(currentPos, undefined, {
-          src: `/api/files/${attachment.id}/${attachment.fileName}`,
+          src: buildAttachmentFileUrl(attachment.id, attachment.fileName),
           attachmentId: attachment.id,
           size: attachment.fileSize,
           aspectRatio,

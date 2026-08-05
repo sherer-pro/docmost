@@ -49,10 +49,7 @@ import { validate as isValidUUID } from 'uuid';
 import * as path from 'path';
 import { RemoveIconDto } from './dto/attachment.dto';
 import { AttachmentFileAccessService } from './services/attachment-file-access.service';
-import { DeprecatedRoute } from '../../common/decorators/deprecated-route.decorator';
 import { AuthPolicyScope } from '../../common/decorators/auth-policy-scope.decorator';
-
-const ATTACHMENT_LEGACY_ALIAS_SUNSET = 'Fri, 01 Jan 2027 00:00:00 GMT';
 
 @Controller('attachments')
 export class AttachmentController {
@@ -215,23 +212,6 @@ export class AttachmentController {
     }
   }
 
-  @UseGuards(JwtAuthGuard)
-  @HttpCode(HttpStatus.OK)
-  @DeprecatedRoute({
-    sunset: ATTACHMENT_LEGACY_ALIAS_SUNSET,
-    replacement: 'POST /api/attachments/actions/upload-image',
-  })
-  @Post('upload-image')
-  @UseInterceptors(FileInterceptor)
-  async uploadAvatarOrLogoLegacy(
-    @Req() req: any,
-    @Res() res: FastifyReply,
-    @AuthUser() user: User,
-    @AuthWorkspace() workspace: Workspace,
-  ) {
-    return this.uploadAvatarOrLogo(req, res, user, workspace);
-  }
-
   @Get('img/:attachmentType/:fileName')
   async getLogoOrAvatar(
     @Res() res: FastifyReply,
@@ -332,13 +312,15 @@ export class AttachmentController {
     }
   }
 
-  @UseGuards(JwtAuthGuard)
-  @HttpCode(HttpStatus.OK)
-  @DeprecatedRoute({
-    sunset: ATTACHMENT_LEGACY_ALIAS_SUNSET,
-    replacement: 'POST /api/attachments/actions/remove-icon',
-  })
-  @Post('remove-icon')
+  async uploadAvatarOrLogoLegacy(
+    @Req() req: any,
+    @Res() res: FastifyReply,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.uploadAvatarOrLogo(req, res, user, workspace);
+  }
+
   async removeIconLegacy(
     @Body() dto: RemoveIconDto,
     @AuthUser() user: User,

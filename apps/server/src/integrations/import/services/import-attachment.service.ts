@@ -102,7 +102,7 @@ export class ImportAttachmentService {
         fileTask.workspaceId,
       )}/${attachmentId}/${fileNameWithExt}`;
 
-      const apiFilePath = `/api/files/${attachmentId}/${fileNameWithExt}`;
+      const apiFilePath = `/api/attachments/files/${attachmentId}/${fileNameWithExt}`;
 
       attachmentTasks.push(() =>
         this.uploadWithRetry({

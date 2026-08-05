@@ -202,5 +202,17 @@ describe("SearchResultItem", () => {
       buildPageUrl("engineering", "slug-2", "Regular Page"),
     );
     expect(downloadButton.props["aria-label"]).toBe("Download attachment");
+
+    const openSpy = vi.fn();
+    vi.stubGlobal("window", { open: openSpy });
+    downloadButton.props.onClick({
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+    });
+    expect(openSpy).toHaveBeenCalledWith(
+      "/api/attachments/files/attachment-1/brief.pdf",
+      "_blank",
+    );
+    vi.unstubAllGlobals();
   });
 });

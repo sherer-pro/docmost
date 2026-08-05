@@ -14,8 +14,6 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import { User } from '@docmost/db/types/entity.types';
 import { MarkNotificationsReadDto } from './dto/notification.dto';
-import { DeprecatedRoute } from '../../common/decorators/deprecated-route.decorator';
-import { LEGACY_API_SUNSET } from '../../common/config/api-deprecation.constants';
 
 @UseGuards(JwtAuthGuard)
 @Controller('notifications')
@@ -32,33 +30,9 @@ export class NotificationController {
   }
 
   @HttpCode(HttpStatus.OK)
-  @DeprecatedRoute({
-    sunset: LEGACY_API_SUNSET,
-    replacement: 'GET /api/notifications',
-  })
-  @Post('/')
-  async getNotifications(
-    @Body() pagination: PaginationOptions,
-    @AuthUser() user: User,
-  ) {
-    return this.notificationService.findByUserId(user.id, pagination);
-  }
-
-  @HttpCode(HttpStatus.OK)
   @Get('unread-count')
   async getUnreadCountViaGet(@AuthUser() user: User) {
     return this.getUnreadCount(user);
-  }
-
-  @HttpCode(HttpStatus.OK)
-  @DeprecatedRoute({
-    sunset: LEGACY_API_SUNSET,
-    replacement: 'GET /api/notifications/unread-count',
-  })
-  @Post('unread-count')
-  async getUnreadCount(@AuthUser() user: User) {
-    const count = await this.notificationService.getUnreadCount(user.id);
-    return { count };
   }
 
   @HttpCode(HttpStatus.OK)
@@ -79,5 +53,17 @@ export class NotificationController {
   @Post('mark-all-read')
   async markAllAsRead(@AuthUser() user: User) {
     await this.notificationService.markAllAsRead(user.id);
+  }
+
+  async getNotifications(
+    @Body() pagination: PaginationOptions,
+    @AuthUser() user: User,
+  ) {
+    return this.notificationService.findByUserId(user.id, pagination);
+  }
+
+  async getUnreadCount(@AuthUser() user: User) {
+    const count = await this.notificationService.getUnreadCount(user.id);
+    return { count };
   }
 }
