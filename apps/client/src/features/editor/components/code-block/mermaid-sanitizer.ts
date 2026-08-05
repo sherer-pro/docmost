@@ -1,5 +1,17 @@
-const FORBIDDEN_TAGS = new Set(['script', 'iframe', 'object', 'embed']);
-const URI_ATTRS = new Set(['href', 'xlink:href', 'src']);
+import { MERMAID_SANITIZATION_POLICY } from '@docmost/api-contract';
+
+const FORBIDDEN_TAGS: ReadonlySet<string> = new Set(
+  MERMAID_SANITIZATION_POLICY.forbiddenTags,
+);
+const URI_ATTRS: ReadonlySet<string> = new Set(
+  MERMAID_SANITIZATION_POLICY.uriAttributes,
+);
+const ALLOWED_PROTOCOLS: ReadonlySet<string> = new Set(
+  MERMAID_SANITIZATION_POLICY.allowedProtocols,
+);
+const ALLOWED_DATA_IMAGE_MIME_TYPES: ReadonlySet<string> = new Set(
+  MERMAID_SANITIZATION_POLICY.allowedDataImageMimeTypes,
+);
 
 function parseSvgRoot(svg: string): Element | null {
   const parser = new DOMParser();
@@ -18,6 +30,10 @@ function parseSvgRoot(svg: string): Element | null {
 }
 
 function compactUrlForProtocolCheck(value: string): string {
+  if (!MERMAID_SANITIZATION_POLICY.stripControlWhitespaceBeforeProtocolCheck) {
+    return value;
+  }
+
   let compactValue = '';
 
   for (const char of value) {
@@ -48,17 +64,23 @@ function isSafeUrl(value: string): boolean {
     return true;
   }
 
-  if (/^data:image\/(png|jpe?g|gif|webp);base64,/.test(compactLowerValue)) {
-    return true;
+  const dataImageMatch = compactLowerValue.match(
+    /^data:image\/([a-z0-9.+-]+);base64,/,
+  );
+  if (dataImageMatch) {
+    return ALLOWED_DATA_IMAGE_MIME_TYPES.has(dataImageMatch[1]);
   }
 
-  if (compactLowerValue.startsWith('//')) {
+  if (
+    MERMAID_SANITIZATION_POLICY.rejectProtocolRelative &&
+    compactLowerValue.startsWith('//')
+  ) {
     return false;
   }
 
   try {
     const parsedUrl = new URL(normalizedValue, 'https://docmost.local');
-    return ['http:', 'https:'].includes(parsedUrl.protocol);
+    return ALLOWED_PROTOCOLS.has(parsedUrl.protocol);
   } catch {
     return false;
   }

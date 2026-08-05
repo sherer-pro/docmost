@@ -2,6 +2,7 @@ import {
   HtmlPdfRendererService,
   isAllowedPdfResourceUrl,
 } from './html-pdf-renderer.service';
+import { MERMAID_SANITIZATION_POLICY } from '@docmost/api-contract';
 
 describe('isAllowedPdfResourceUrl', () => {
   const appUrl = 'https://docs.example.com';
@@ -106,5 +107,28 @@ describe('HtmlPdfRendererService attachment request authorization', () => {
     requestHandler!(unknown);
     expect(unknown.abort).toHaveBeenCalledTimes(1);
     expect(unknown.continue).not.toHaveBeenCalled();
+  });
+});
+
+describe('HtmlPdfRendererService Mermaid sanitization', () => {
+  it('passes the shared sanitization policy into the isolated page context', async () => {
+    const page = {
+      evaluate: jest
+        .fn()
+        .mockResolvedValueOnce(true)
+        .mockResolvedValueOnce(undefined),
+      addScriptTag: jest.fn().mockResolvedValue(undefined),
+    };
+    const service = new HtmlPdfRendererService({} as any);
+    jest
+      .spyOn(service as any, 'resolveMermaidScriptPath')
+      .mockReturnValue('mermaid.min.js');
+
+    await (service as any).renderMermaidDiagrams(page);
+
+    expect(page.evaluate).toHaveBeenCalledTimes(2);
+    expect(page.evaluate.mock.calls[1][1]).toEqual(
+      MERMAID_SANITIZATION_POLICY,
+    );
   });
 });
