@@ -16,6 +16,11 @@ import type {
   PageTemplateGroupPolicy,
   PageTemplateWorkspacePolicy,
 } from "../services/page-template-api";
+import {
+  ResponsiveSettingsContent,
+  ResponsiveSettingsControl,
+  ResponsiveSettingsRow,
+} from "@/components/ui/responsive-settings-row";
 
 export function PageTemplateWorkspacePolicySettings() {
   const { t } = useTranslation();
@@ -28,40 +33,47 @@ export function PageTemplateWorkspacePolicySettings() {
   }, []);
   if (!policy) return null;
   return (
-    <Stack gap="xs" mt="xl">
-      <Divider />
-      <Text fw={600}>{t("Page templates")}</Text>
+    <Stack gap="md">
       {!policy.systemEnabled && (
         <Alert color="yellow">
           {t("Page templates are disabled by the server administrator.")}
         </Alert>
       )}
-      <Checkbox
-        label={t("Enable page templates for this workspace")}
-        description={t("Spaces remain disabled until explicitly enabled.")}
-        checked={policy.enabled}
-        disabled={!policy.systemEnabled || pending}
-        onChange={async (event) => {
-          setPending(true);
-          try {
-            setPolicy(
-              await updatePageTemplateWorkspacePolicy(
-                policy,
-                event.currentTarget.checked,
-              ),
-            );
-          } catch {
-            // Keep the last server-confirmed policy on request failure.
-          } finally {
-            setPending(false);
-          }
-        }}
-      />
-      <Text size="xs" c="dimmed">
-        {t("Maximum live embed depth: {{depth}}", {
-          depth: policy.maxPageEmbedDepth,
-        })}
-      </Text>
+      <ResponsiveSettingsRow>
+        <ResponsiveSettingsContent>
+          <Text size="md">{t("Page templates")}</Text>
+          <Text size="sm" c="dimmed">
+            {t("Spaces remain disabled until explicitly enabled.")}
+          </Text>
+          <Text size="xs" c="dimmed" mt={4}>
+            {t("Maximum live embed depth: {{depth}}", {
+              depth: policy.maxPageEmbedDepth,
+            })}
+          </Text>
+        </ResponsiveSettingsContent>
+        <ResponsiveSettingsControl wide>
+          <Checkbox
+            label={t("Enable page templates for this workspace")}
+            checked={policy.enabled}
+            disabled={!policy.systemEnabled || pending}
+            onChange={async (event) => {
+              setPending(true);
+              try {
+                setPolicy(
+                  await updatePageTemplateWorkspacePolicy(
+                    policy,
+                    event.currentTarget.checked,
+                  ),
+                );
+              } catch {
+                // Keep the last server-confirmed policy on request failure.
+              } finally {
+                setPending(false);
+              }
+            }}
+          />
+        </ResponsiveSettingsControl>
+      </ResponsiveSettingsRow>
     </Stack>
   );
 }

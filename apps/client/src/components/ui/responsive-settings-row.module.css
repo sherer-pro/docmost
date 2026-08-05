@@ -22,6 +22,11 @@
   min-width: min(rem(220px), 100%);
 }
 
+.wide {
+  flex: 0 1 rem(480px);
+  max-width: 100%;
+}
+
 @media (max-width: 48em) {
   .row {
     align-items: stretch;
