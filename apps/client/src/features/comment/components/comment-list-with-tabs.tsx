@@ -1,7 +1,5 @@
-import React, { useState, useRef, useCallback, memo, useMemo } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import {
-  Divider,
-  Paper,
   Text,
   ScrollArea,
   Button,
@@ -9,16 +7,11 @@ import {
   Collapse,
   Group,
 } from "@mantine/core";
-import CommentListItem from "@/features/comment/components/comment-list-item";
 import {
   useCommentsQuery,
   useCreateCommentMutation,
 } from "@/features/comment/queries/comment-query";
-import CommentEditor from "@/features/comment/components/comment-editor";
-import CommentActions from "@/features/comment/components/comment-actions";
-import { useFocusWithin } from "@mantine/hooks";
 import { IComment } from "@/features/comment/types/comment.types.ts";
-import { IPagination } from "@/lib/types.ts";
 import { useTranslation } from "react-i18next";
 import { useQueryEmit } from "@/features/websocket/use-query-emit";
 import { useGetSpaceBySlugQuery } from "@/features/space/queries/space-query.ts";
@@ -29,14 +22,10 @@ import {
 } from "@/features/space/permissions/permissions.type.ts";
 import { useDatabasePageContext } from "@/features/database/hooks/use-database-page-context.ts";
 import { isInlineOrLegacyComment } from "@/features/comment/utils/comment-type-filter";
-import {
-  countCommentThreadReplies,
-  isCommentInThread,
-  shouldCollapseCommentThread,
-} from "@/features/comment/utils/comment-collapse";
 import { useAtomValue } from "jotai";
 import { activeCommentIdAtom } from "@/features/comment/atoms/comment-atom";
 import { COMMENT_LIMIT } from "@/features/comment/comment.constants";
+import { CommentThreadList } from "./comment-thread-list";
 
 function CommentListWithTabs() {
   const { t } = useTranslation();
@@ -60,9 +49,6 @@ function CommentListWithTabs() {
   const createCommentMutation = useCreateCommentMutation();
   const [isLoading, setIsLoading] = useState(false);
   const [showResolved, setShowResolved] = useState(false);
-  const [expandedThreadIds, setExpandedThreadIds] = useState<Set<string>>(
-    () => new Set(),
-  );
   const activeCommentId = useAtomValue(activeCommentIdAtom);
   const emit = useQueryEmit();
   const { data: space } = useGetSpaceBySlugQuery(pageByRoute?.space?.slug);
@@ -136,105 +122,6 @@ function CommentListWithTabs() {
     [commentsPageId, createCommentMutation, emit, pageByRoute?.spaceId, pageByRoute?.workspaceId]
   );
 
-  const handleExpandThread = useCallback((commentId: string) => {
-    setExpandedThreadIds((currentThreadIds) => {
-      const nextThreadIds = new Set(currentThreadIds);
-      nextThreadIds.add(commentId);
-      return nextThreadIds;
-    });
-  }, []);
-
-  /**
-   * Renders a root comment card with its children and reply form.
-   *
-   * Pass `canResolveComments` explicitly so the menu does not show
-   * Resolve/Re-open actions to users without page edit permission.
-   */
-  const renderComments = useCallback(
-    (comment: IComment) => {
-      const commentItems = comments?.items ?? [];
-      const replyCount = countCommentThreadReplies(commentItems, comment.id);
-      const isActiveThread = isCommentInThread(
-        commentItems,
-        comment.id,
-        activeCommentId,
-      );
-      const isThreadCollapsed =
-        shouldCollapseCommentThread(replyCount) &&
-        !expandedThreadIds.has(comment.id) &&
-        !isActiveThread;
-
-      return (
-        <Paper
-          shadow="sm"
-          radius="md"
-          p="sm"
-          mb="sm"
-          withBorder
-          key={comment.id}
-          data-comment-id={comment.id}
-        >
-          <div>
-            <CommentListItem
-              comment={comment}
-              pageId={commentsPageId}
-              canComment={canComment}
-              canResolve={canResolveComments}
-              userSpaceRole={space?.membership?.role}
-            />
-
-            {!isThreadCollapsed && (
-              <MemoizedChildComments
-                comments={comments}
-                parentId={comment.id}
-                pageId={commentsPageId}
-                canComment={canComment}
-                canResolve={canResolveComments}
-                userSpaceRole={space?.membership?.role}
-              />
-            )}
-          </div>
-
-          {isThreadCollapsed && (
-            <Button
-              variant="subtle"
-              color="gray"
-              size="compact-sm"
-              px={0}
-              onClick={() => handleExpandThread(comment.id)}
-            >
-              {t("More")}
-            </Button>
-          )}
-
-          {!comment.resolvedAt && canComment && !isThreadCollapsed && (
-            <>
-              <Divider my={4} />
-              <CommentEditorWithActions
-                commentId={comment.id}
-                onSave={handleAddReply}
-                isLoading={isLoading}
-              />
-            </>
-          )}
-        </Paper>
-      );
-    },
-    [
-      activeCommentId,
-      canComment,
-      canResolveComments,
-      comments,
-      commentsPageId,
-      expandedThreadIds,
-      handleAddReply,
-      handleExpandThread,
-      isLoading,
-      space?.membership?.role,
-      t,
-    ],
-  );
-
   if (isCommentsLoading) {
     return <></>;
   }
@@ -271,7 +158,18 @@ function CommentListWithTabs() {
               {t("No open comments.")}
             </Text>
           ) : (
-            activeComments.map(renderComments)
+            <CommentThreadList
+              comments={comments}
+              rootComments={activeComments}
+              pageId={commentsPageId}
+              canComment={canComment}
+              canResolve={canResolveComments}
+              userSpaceRole={space?.membership?.role}
+              activeCommentId={activeCommentId}
+              isReplyLoading={isLoading}
+              includesComment={isInlineOrLegacyComment}
+              onReply={handleAddReply}
+            />
           )}
 
           {/*
@@ -299,7 +197,18 @@ function CommentListWithTabs() {
                 <Text size="sm" fw={600} mb="sm">
                   {t("Resolved comments")}
                 </Text>
-                {resolvedComments.map(renderComments)}
+                <CommentThreadList
+                  comments={comments}
+                  rootComments={resolvedComments}
+                  pageId={commentsPageId}
+                  canComment={canComment}
+                  canResolve={canResolveComments}
+                  userSpaceRole={space?.membership?.role}
+                  activeCommentId={activeCommentId}
+                  isReplyLoading={isLoading}
+                  includesComment={isInlineOrLegacyComment}
+                  onReply={handleAddReply}
+                />
               </Collapse>
             </>
           )}
@@ -308,82 +217,5 @@ function CommentListWithTabs() {
     </div>
   );
 }
-
-interface ChildCommentsProps {
-  comments: IPagination<IComment>;
-  parentId: string;
-  pageId: string;
-  canComment: boolean;
-  canResolve: boolean;
-  userSpaceRole?: string;
-}
-const ChildComments = ({
-  comments,
-  parentId,
-  pageId,
-  canComment,
-  canResolve,
-  userSpaceRole,
-}: ChildCommentsProps) => {
-  const getChildComments = useCallback(
-    (parentId: string) =>
-      comments.items.filter(
-        (comment: IComment) =>
-          comment.parentCommentId === parentId &&
-          isInlineOrLegacyComment(comment)
-      ),
-    [comments.items]
-  );
-
-  return (
-    <div>
-      {getChildComments(parentId).map((childComment) => (
-        <div key={childComment.id}>
-          <CommentListItem
-            comment={childComment}
-            pageId={pageId}
-            canComment={canComment}
-            canResolve={canResolve}
-            userSpaceRole={userSpaceRole}
-          />
-          <MemoizedChildComments
-            comments={comments}
-            parentId={childComment.id}
-            pageId={pageId}
-            canComment={canComment}
-            canResolve={canResolve}
-            userSpaceRole={userSpaceRole}
-          />
-        </div>
-      ))}
-    </div>
-  );
-};
-
-const MemoizedChildComments = memo(ChildComments);
-
-const CommentEditorWithActions = ({ commentId, onSave, isLoading }) => {
-  const [content, setContent] = useState("");
-  const { ref, focused } = useFocusWithin();
-  const commentEditorRef = useRef(null);
-
-  const handleSave = useCallback(() => {
-    onSave(commentId, content);
-    setContent("");
-    commentEditorRef.current?.clearContent();
-  }, [commentId, content, onSave]);
-
-  return (
-    <div ref={ref}>
-      <CommentEditor
-        ref={commentEditorRef}
-        onUpdate={setContent}
-        onSave={handleSave}
-        editable={true}
-      />
-      {focused && <CommentActions onSave={handleSave} isLoading={isLoading} />}
-    </div>
-  );
-};
 
 export default CommentListWithTabs;

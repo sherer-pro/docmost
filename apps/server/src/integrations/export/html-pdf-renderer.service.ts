@@ -2,6 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { existsSync } from 'node:fs';
 import puppeteer, { Browser, HTTPRequest, Page } from 'puppeteer-core';
 import { EnvironmentService } from '../environment/environment.service';
+import { sanitizeUrlForLogging } from '../../common/logger/log-sanitizer.util';
+import { MERMAID_SANITIZATION_POLICY } from '@docmost/api-contract';
 
 const FALLBACK_CHROMIUM_PATHS = [
   '/usr/bin/chromium',
@@ -135,7 +137,7 @@ export class HtmlPdfRendererService {
 
     try {
       await page.addScriptTag({ path: mermaidScriptPath });
-      await page.evaluate(async () => {
+      await page.evaluate(async (sanitizationPolicy) => {
         const mermaid = (window as any).mermaid;
         if (!mermaid) {
           return;
@@ -147,6 +149,13 @@ export class HtmlPdfRendererService {
           theme: 'default',
         });
 
+        const allowedProtocols = new Set<string>(
+          sanitizationPolicy.allowedProtocols,
+        );
+        const allowedDataImageMimeTypes = new Set<string>(
+          sanitizationPolicy.allowedDataImageMimeTypes,
+        );
+
         const isSafeSvgUrl = (value: string): boolean => {
           const normalizedValue = value.trim();
           if (!normalizedValue) {
@@ -154,6 +163,17 @@ export class HtmlPdfRendererService {
           }
 
           const lowerValue = normalizedValue.toLowerCase();
+          let compactLowerValue = lowerValue;
+          if (sanitizationPolicy.stripControlWhitespaceBeforeProtocolCheck) {
+            compactLowerValue = '';
+            for (const char of lowerValue) {
+              const code = char.charCodeAt(0);
+              if (code <= 0x1f || code === 0x7f || char.trim() === '') {
+                continue;
+              }
+              compactLowerValue += char;
+            }
+          }
           if (
             lowerValue.startsWith('#') ||
             (lowerValue.startsWith('/') && !lowerValue.startsWith('//')) ||
@@ -163,9 +183,23 @@ export class HtmlPdfRendererService {
             return true;
           }
 
+          const dataImageMatch = compactLowerValue.match(
+            /^data:image\/([a-z0-9.+-]+);base64,/,
+          );
+          if (dataImageMatch) {
+            return allowedDataImageMimeTypes.has(dataImageMatch[1]);
+          }
+
+          if (
+            sanitizationPolicy.rejectProtocolRelative &&
+            compactLowerValue.startsWith('//')
+          ) {
+            return false;
+          }
+
           try {
             const parsedUrl = new URL(normalizedValue, window.location.href);
-            return ['http:', 'https:'].includes(parsedUrl.protocol);
+            return allowedProtocols.has(parsedUrl.protocol);
           } catch {
             return false;
           }
@@ -180,13 +214,10 @@ export class HtmlPdfRendererService {
             return null;
           }
 
-          const forbiddenTags = new Set([
-            'script',
-            'iframe',
-            'object',
-            'embed',
-          ]);
-          const uriAttrs = new Set(['href', 'xlink:href', 'src']);
+          const forbiddenTags = new Set<string>(
+            sanitizationPolicy.forbiddenTags,
+          );
+          const uriAttrs = new Set<string>(sanitizationPolicy.uriAttributes);
           const elements = [
             svgRoot,
             ...Array.from(svgRoot.querySelectorAll('*')),
@@ -262,7 +293,7 @@ export class HtmlPdfRendererService {
             // Keep the original Mermaid source block if rendering fails.
           }
         }
-      });
+      }, MERMAID_SANITIZATION_POLICY);
     } catch (err) {
       this.logger.warn('Failed to render Mermaid diagrams for PDF export', err);
     }
@@ -306,7 +337,7 @@ export class HtmlPdfRendererService {
 
       action.catch((err) => {
         this.logger.warn(
-          `Failed to handle PDF resource request ${request.url()}`,
+          `Failed to handle PDF resource request ${sanitizeUrlForLogging(request.url())}`,
           err,
         );
       });

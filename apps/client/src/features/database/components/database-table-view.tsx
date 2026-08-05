@@ -125,6 +125,7 @@ import MovePageModal from '@/features/page/components/move-page-modal.tsx';
 import CopyPageModal from '@/features/page/components/copy-page-modal.tsx';
 import { PageOperationMenuItems } from '@/features/page/components/page-operation-menu-items.tsx';
 import { invalidateSidebarTree } from '@/features/page/queries/cache-invalidation.ts';
+import { DatabaseFilterEditor } from './database-filter-editor';
 
 interface DatabaseTableViewProps {
   databaseId: string;
@@ -2102,275 +2103,33 @@ export function DatabaseTableView({
               })}
             </Menu.Dropdown>
           </Menu>
-          <Stack gap="xs">
-            {filters.map((condition, index) => {
-              const selectedFilterProperty = activeProperties.find(
-                (property) => property.id === condition.propertyId,
-              );
-              const isCheckboxProperty = selectedFilterProperty?.type === 'checkbox';
-
-              return (
-                <Stack key={`drawer-filter-${index}`} gap="xs">
-                  <Select
-                    aria-label={t('Filter field')}
-                    placeholder={t('Field')}
-                    data={activeProperties.map((property) => ({
-                      value: property.id,
-                      label: property.name,
-                    }))}
-                    value={condition.propertyId}
-                    onChange={(value) => {
-                      const nextProperty = activeProperties.find(
-                        (property) => property.id === value,
-                      );
-                      const shouldResetValue = nextProperty?.type === 'checkbox' &&
-                        condition.value !== 'true' &&
-                        condition.value !== 'false';
-
-                      setFilters((prev) =>
-                        prev.map((item, itemIndex) =>
-                          itemIndex === index
-                            ? {
-                                ...item,
-                                propertyId: value || '',
-                                value: shouldResetValue ? '' : item.value,
-                              }
-                            : item,
-                        ),
-                      );
-                    }}
-                  />
-                  <Select
-                    aria-label={t('Filter operator')}
-                    data={[
-                      { value: 'contains', label: t('contains') },
-                      { value: 'equals', label: t('equals') },
-                      { value: 'not_equals', label: t('not equals') },
-                    ]}
-                    value={condition.operator}
-                    onChange={(value) => {
-                      if (!value) {
-                        return;
-                      }
-
-                      setFilters((prev) =>
-                        prev.map((item, itemIndex) =>
-                          itemIndex === index
-                            ? {
-                                ...item,
-                                operator: value as IDatabaseFilterCondition['operator'],
-                              }
-                            : item,
-                        ),
-                      );
-                    }}
-                  />
-                  {isCheckboxProperty ? (
-                    <Select
-                      aria-label={t('Filter value')}
-                      placeholder={t('Value')}
-                      data={checkboxFilterOptions}
-                      value={condition.value || null}
-                      onChange={(value) => {
-                        setFilters((prev) =>
-                          prev.map((item, itemIndex) =>
-                            itemIndex === index ? { ...item, value: value || '' } : item,
-                          ),
-                        );
-                      }}
-                      allowDeselect
-                    />
-                  ) : (
-                    <TextInput
-                      aria-label={t('Filter value')}
-                      placeholder={t('Value')}
-                      value={condition.value}
-                      onChange={(event) => {
-                        setFilters((prev) =>
-                          prev.map((item, itemIndex) =>
-                            itemIndex === index
-                              ? { ...item, value: event.currentTarget.value }
-                              : item,
-                          ),
-                        );
-                      }}
-                    />
-                  )}
-                  {shouldShowDatabaseFilterRemove(filters.length) && (
-                    <Button
-                      variant="subtle"
-                      color="red"
-                      onClick={() =>
-                        setFilters((prev) =>
-                          prev.filter((_, itemIndex) => itemIndex !== index),
-                        )
-                      }
-                    >
-                      {t('Remove')}
-                    </Button>
-                  )}
-                </Stack>
-              );
-            })}
-            <Group gap="xs">
-              <Button
-                variant="subtle"
-                leftSection={<IconPlus size={14} />}
-                disabled={filters.length >= MAX_FILTERS}
-                onClick={() => setFilters((prev) => [...prev, cloneDefaultFilter()])}
-              >
-                {t('Filter')}
-              </Button>
-              <Button variant="subtle" onClick={clearFilters}>
-                {t('Clear filters')}
-              </Button>
-            </Group>
-          </Stack>
-          <Button variant="subtle" onClick={resetTableViewState}>
-            {t('Reset')}
-          </Button>
+          <DatabaseFilterEditor
+            filters={filters}
+            properties={activeProperties}
+            checkboxOptions={checkboxFilterOptions}
+            maxFilters={MAX_FILTERS}
+            layout="stacked"
+            createFilter={cloneDefaultFilter}
+            onChange={setFilters}
+            onClear={clearFilters}
+            onReset={resetTableViewState}
+          />
         </Stack>
       </Drawer>
 
       {isDatabaseFilterControlsVisible(isMobileViewport) && (
-        <Stack mb="md" gap="xs">
-          {filters.map((condition, index) => {
-            const selectedFilterProperty = activeProperties.find(
-              (property) => property.id === condition.propertyId,
-            );
-            const isCheckboxProperty = selectedFilterProperty?.type === 'checkbox';
+        <DatabaseFilterEditor
+          filters={filters}
+          properties={activeProperties}
+          checkboxOptions={checkboxFilterOptions}
+          maxFilters={MAX_FILTERS}
+          layout="inline"
+          createFilter={cloneDefaultFilter}
+          onChange={setFilters}
+          onClear={clearFilters}
+          onReset={resetTableViewState}
+        />
 
-            return (
-              <Group
-                key={`filter-${index}`}
-                align="end"
-                wrap={isMobileViewport ? 'wrap' : 'nowrap'}
-              >
-                <Select
-                  aria-label={t('Filter field')}
-                  placeholder={t('Field')}
-                  data={activeProperties.map((property) => ({
-                    value: property.id,
-                    label: property.name,
-                  }))}
-                  value={condition.propertyId}
-                  onChange={(value) => {
-                    const nextProperty = activeProperties.find(
-                      (property) => property.id === value,
-                    );
-                    const shouldResetValue = nextProperty?.type === 'checkbox' &&
-                      condition.value !== 'true' &&
-                      condition.value !== 'false';
-
-                    setFilters((prev) =>
-                      prev.map((item, itemIndex) =>
-                        itemIndex === index
-                          ? {
-                              ...item,
-                              propertyId: value || '',
-                              value: shouldResetValue ? '' : item.value,
-                            }
-                          : item,
-                      ),
-                    );
-                  }}
-                />
-
-                <Select
-                  aria-label={t('Filter operator')}
-                  w={140}
-                  data={[
-                    { value: 'contains', label: t('contains') },
-                    { value: 'equals', label: t('equals') },
-                    { value: 'not_equals', label: t('not equals') },
-                  ]}
-                  value={condition.operator}
-                  onChange={(value) => {
-                    if (!value) {
-                      return;
-                    }
-
-                    setFilters((prev) =>
-                      prev.map((item, itemIndex) =>
-                        itemIndex === index
-                          ? {
-                              ...item,
-                              operator: value as IDatabaseFilterCondition['operator'],
-                            }
-                          : item,
-                      ),
-                    );
-                  }}
-                />
-
-                {isCheckboxProperty ? (
-                  <Select
-                    aria-label={t('Filter value')}
-                    placeholder={t('Value')}
-                    data={checkboxFilterOptions}
-                    value={condition.value || null}
-                    onChange={(value) => {
-                      setFilters((prev) =>
-                        prev.map((item, itemIndex) =>
-                          itemIndex === index ? { ...item, value: value || '' } : item,
-                        ),
-                      );
-                    }}
-                    allowDeselect
-                  />
-                ) : (
-                  <TextInput
-                    aria-label={t('Filter value')}
-
-                    placeholder={t('Value')}
-                    value={condition.value}
-                    onChange={(event) => {
-                      setFilters((prev) =>
-                        prev.map((item, itemIndex) =>
-                          itemIndex === index
-                            ? { ...item, value: event.currentTarget.value }
-                            : item,
-                        ),
-                      );
-                    }}
-                  />
-                )}
-
-                {shouldShowDatabaseFilterRemove(filters.length) && (
-                  <Button
-                    variant="subtle"
-                    color="red"
-                    onClick={() =>
-                      setFilters((prev) =>
-                        prev.filter((_, itemIndex) => itemIndex !== index),
-                      )
-                    }
-                  >
-                    {t('Remove')}
-                  </Button>
-                )}
-              </Group>
-            );
-          })}
-
-          <Group gap="xs">
-            <Button
-              w="fit-content"
-              variant="subtle"
-              leftSection={<IconPlus size={14} />}
-              disabled={filters.length >= MAX_FILTERS}
-              onClick={() => setFilters((prev) => [...prev, cloneDefaultFilter()])}
-            >
-              {t('Filter')}
-            </Button>
-            <Button variant="subtle" onClick={clearFilters}>
-              {t('Clear filters')}
-            </Button>
-            <Button variant="subtle" onClick={resetTableViewState}>
-              {t('Reset')}
-            </Button>
-          </Group>
-        </Stack>
       )}
 
 
