@@ -23,8 +23,6 @@ import { AuthUser } from '../../common/decorators/auth-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { EnvironmentService } from '../../integrations/environment/environment.service';
 import { PageAccessService } from '../page-access/page-access.service';
-import { DeprecatedRoute } from '../../common/decorators/deprecated-route.decorator';
-import { LEGACY_API_SUNSET } from '../../common/config/api-deprecation.constants';
 import { AuthRateLimitGuard } from '../auth/rate-limit/auth-rate-limit.guard';
 import { AuthRateLimit } from '../auth/rate-limit/auth-rate-limit.decorator';
 import { TypesenseSearchService } from './typesense-search.service';
@@ -139,25 +137,6 @@ export class SearchController {
     return this.searchSuggestions(dto, user, workspace);
   }
 
-  @HttpCode(HttpStatus.OK)
-  @DeprecatedRoute({
-    sunset: LEGACY_API_SUNSET,
-    replacement: 'GET /api/search/suggest',
-  })
-  @AuthPolicyScope('space', {
-    source: 'body',
-    key: 'spaceId',
-    optional: true,
-  })
-  @Post('suggest')
-  async searchSuggestions(
-    @Body() dto: SearchSuggestionDTO,
-    @AuthUser() user: User,
-    @AuthWorkspace() workspace: Workspace,
-  ) {
-    return this.searchService.searchSuggestions(dto, user, workspace.id);
-  }
-
   @Public()
   @HttpCode(HttpStatus.OK)
   @Post('share-search')
@@ -186,5 +165,13 @@ export class SearchController {
     return this.searchService.searchPage(searchDto, {
       workspaceId: workspace.id,
     });
+  }
+
+  async searchSuggestions(
+    @Body() dto: SearchSuggestionDTO,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.searchService.searchSuggestions(dto, user, workspace.id);
   }
 }

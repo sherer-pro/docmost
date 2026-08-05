@@ -28,8 +28,6 @@ import {
   ListFavoritesQueryDto,
 } from './dto/list-favorites.dto';
 import { FavoriteService } from './favorite.service';
-import { DeprecatedRoute } from '../../common/decorators/deprecated-route.decorator';
-import { LEGACY_API_SUNSET } from '../../common/config/api-deprecation.constants';
 import { AuthPolicyScope } from '../../common/decorators/auth-policy-scope.decorator';
 
 @UseGuards(JwtAuthGuard)
@@ -103,30 +101,6 @@ export class FavoriteController {
   }
 
   @HttpCode(HttpStatus.OK)
-  @DeprecatedRoute({
-    sunset: LEGACY_API_SUNSET,
-    replacement: 'GET /api/favorites/ids',
-  })
-  @AuthPolicyScope('space', {
-    source: 'body',
-    key: 'spaceId',
-    optional: true,
-  })
-  @Post('ids')
-  async getFavoriteIds(
-    @Body() dto: FavoriteIdsDto,
-    @AuthUser() user: User,
-    @AuthWorkspace() workspace: Workspace,
-  ) {
-    return this.favoriteService.getFavoriteIds(
-      user.id,
-      workspace.id,
-      dto.type as FavoriteType,
-      dto.spaceId,
-    );
-  }
-
-  @HttpCode(HttpStatus.OK)
   @AuthPolicyScope('space', {
     source: 'query',
     key: 'spaceId',
@@ -138,29 +112,6 @@ export class FavoriteController {
     @AuthUser() user: User,
   ) {
     return this.getUserFavorites(query, user);
-  }
-
-  @HttpCode(HttpStatus.OK)
-  @DeprecatedRoute({
-    sunset: LEGACY_API_SUNSET,
-    replacement: 'GET /api/favorites',
-  })
-  @AuthPolicyScope('space', {
-    source: 'body',
-    key: 'spaceId',
-    optional: true,
-  })
-  @Post()
-  async getUserFavorites(
-    @Body() dto: ListFavoritesQueryDto,
-    @AuthUser() user: User,
-  ) {
-    return this.favoriteService.getUserFavorites(
-      user,
-      dto,
-      dto.type as FavoriteType | undefined,
-      dto.spaceId,
-    );
   }
 
   private async resolveAndValidate(
@@ -207,5 +158,30 @@ export class FavoriteController {
     if (!userSpaceIds.includes(spaceId)) {
       throw new ForbiddenException();
     }
+  }
+
+  async getFavoriteIds(
+    @Body() dto: FavoriteIdsDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.favoriteService.getFavoriteIds(
+      user.id,
+      workspace.id,
+      dto.type as FavoriteType,
+      dto.spaceId,
+    );
+  }
+
+  async getUserFavorites(
+    @Body() dto: ListFavoritesQueryDto,
+    @AuthUser() user: User,
+  ) {
+    return this.favoriteService.getUserFavorites(
+      user,
+      dto,
+      dto.type as FavoriteType | undefined,
+      dto.spaceId,
+    );
   }
 }

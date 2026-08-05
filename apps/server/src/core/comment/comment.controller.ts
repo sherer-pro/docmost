@@ -27,8 +27,6 @@ import { User, Workspace } from '@docmost/db/types/entity.types';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { CommentRepo } from '@docmost/db/repos/comment/comment.repo';
 import { PageAccessService } from '../page-access/page-access.service';
-import { DeprecatedRoute } from '../../common/decorators/deprecated-route.decorator';
-import { LEGACY_API_SUNSET } from '../../common/config/api-deprecation.constants';
 import { AuthPolicyScope } from '../../common/decorators/auth-policy-scope.decorator';
 
 @UseGuards(JwtAuthGuard)
@@ -53,35 +51,6 @@ export class CommentController {
   }
 
   @HttpCode(HttpStatus.OK)
-  @DeprecatedRoute({
-    sunset: LEGACY_API_SUNSET,
-    replacement: 'POST /api/comments/actions/create',
-  })
-  @AuthPolicyScope('page', { source: 'body', key: 'pageId' })
-  @Post('create')
-  async create(
-    @Body() createCommentDto: CreateCommentDto,
-    @AuthUser() user: User,
-    @AuthWorkspace() workspace: Workspace,
-  ) {
-    const page = await this.pageRepo.findById(createCommentDto.pageId);
-    if (!page || page.deletedAt) {
-      throw new NotFoundException('Page not found');
-    }
-
-    await this.pageAccessService.assertCanWritePage(page, user);
-
-    return this.commentService.create(
-      {
-        userId: user.id,
-        page,
-        workspaceId: workspace.id,
-      },
-      createCommentDto,
-    );
-  }
-
-  @HttpCode(HttpStatus.OK)
   @AuthPolicyScope('page', { source: 'query', key: 'pageId' })
   @Get('/')
   async findPageCommentsViaQuery(
@@ -89,26 +58,6 @@ export class CommentController {
     @AuthUser() user: User,
   ) {
     return this.findPageComments(input, user);
-  }
-
-  @HttpCode(HttpStatus.OK)
-  @DeprecatedRoute({
-    sunset: LEGACY_API_SUNSET,
-    replacement: 'GET /api/comments',
-  })
-  @AuthPolicyScope('page', { source: 'body', key: 'pageId' })
-  @Post('/')
-  async findPageComments(
-    @Body() input: PageCommentsQueryDto,
-    @AuthUser() user: User,
-  ) {
-    const page = await this.pageRepo.findById(input.pageId);
-    if (!page) {
-      throw new NotFoundException('Page not found');
-    }
-
-    await this.pageAccessService.assertCanReadPage(page, user);
-    return this.commentService.findByPageId(page.id, input);
   }
 
   @HttpCode(HttpStatus.OK)
@@ -123,32 +72,6 @@ export class CommentController {
   }
 
   @HttpCode(HttpStatus.OK)
-  @DeprecatedRoute({
-    sunset: LEGACY_API_SUNSET,
-    replacement: 'GET /api/comments/info',
-  })
-  @AuthPolicyScope('resource', {
-    source: 'body',
-    key: 'commentId',
-    resourceType: 'comment',
-  })
-  @Post('info')
-  async findOne(@Body() input: CommentIdDto, @AuthUser() user: User) {
-    const comment = await this.commentRepo.findById(input.commentId);
-    if (!comment) {
-      throw new NotFoundException('Comment not found');
-    }
-
-    const page = await this.pageRepo.findById(comment.pageId);
-    if (!page || page.deletedAt) {
-      throw new NotFoundException('Page not found');
-    }
-
-    await this.pageAccessService.assertCanReadPage(page, user);
-    return comment;
-  }
-
-  @HttpCode(HttpStatus.OK)
   @AuthPolicyScope('resource', {
     source: 'body',
     key: 'commentId',
@@ -157,33 +80,6 @@ export class CommentController {
   @Post('actions/update')
   async updateViaAction(@Body() dto: UpdateCommentDto, @AuthUser() user: User) {
     return this.update(dto, user);
-  }
-
-  @HttpCode(HttpStatus.OK)
-  @DeprecatedRoute({
-    sunset: LEGACY_API_SUNSET,
-    replacement: 'POST /api/comments/actions/update',
-  })
-  @AuthPolicyScope('resource', {
-    source: 'body',
-    key: 'commentId',
-    resourceType: 'comment',
-  })
-  @Post('update')
-  async update(@Body() dto: UpdateCommentDto, @AuthUser() user: User) {
-    const comment = await this.commentRepo.findById(dto.commentId);
-    if (!comment) {
-      throw new NotFoundException('Comment not found');
-    }
-
-    const page = await this.pageRepo.findById(comment.pageId);
-    if (!page || page.deletedAt) {
-      throw new NotFoundException('Page not found');
-    }
-
-    await this.pageAccessService.assertCanWritePage(page, user);
-
-    return this.commentService.update(comment, dto, user);
   }
 
   /**
@@ -230,17 +126,72 @@ export class CommentController {
     return this.delete(input, user);
   }
 
-  @HttpCode(HttpStatus.OK)
-  @DeprecatedRoute({
-    sunset: LEGACY_API_SUNSET,
-    replacement: 'POST /api/comments/actions/delete',
-  })
-  @AuthPolicyScope('resource', {
-    source: 'body',
-    key: 'commentId',
-    resourceType: 'comment',
-  })
-  @Post('delete')
+  async create(
+    @Body() createCommentDto: CreateCommentDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const page = await this.pageRepo.findById(createCommentDto.pageId);
+    if (!page || page.deletedAt) {
+      throw new NotFoundException('Page not found');
+    }
+
+    await this.pageAccessService.assertCanWritePage(page, user);
+
+    return this.commentService.create(
+      {
+        userId: user.id,
+        page,
+        workspaceId: workspace.id,
+      },
+      createCommentDto,
+    );
+  }
+
+  async findPageComments(
+    @Body() input: PageCommentsQueryDto,
+    @AuthUser() user: User,
+  ) {
+    const page = await this.pageRepo.findById(input.pageId);
+    if (!page) {
+      throw new NotFoundException('Page not found');
+    }
+
+    await this.pageAccessService.assertCanReadPage(page, user);
+    return this.commentService.findByPageId(page.id, input);
+  }
+
+  async findOne(@Body() input: CommentIdDto, @AuthUser() user: User) {
+    const comment = await this.commentRepo.findById(input.commentId);
+    if (!comment) {
+      throw new NotFoundException('Comment not found');
+    }
+
+    const page = await this.pageRepo.findById(comment.pageId);
+    if (!page || page.deletedAt) {
+      throw new NotFoundException('Page not found');
+    }
+
+    await this.pageAccessService.assertCanReadPage(page, user);
+    return comment;
+  }
+
+  async update(@Body() dto: UpdateCommentDto, @AuthUser() user: User) {
+    const comment = await this.commentRepo.findById(dto.commentId);
+    if (!comment) {
+      throw new NotFoundException('Comment not found');
+    }
+
+    const page = await this.pageRepo.findById(comment.pageId);
+    if (!page || page.deletedAt) {
+      throw new NotFoundException('Page not found');
+    }
+
+    await this.pageAccessService.assertCanWritePage(page, user);
+
+    return this.commentService.update(comment, dto, user);
+  }
+
   async delete(@Body() input: CommentIdDto, @AuthUser() user: User) {
     const comment = await this.commentRepo.findById(input.commentId);
     if (!comment) {

@@ -1,5 +1,9 @@
 import { Node } from "@tiptap/pm/model";
-import { MediaUploadOptions, UploadFn } from "../media-utils";
+import {
+  buildAttachmentFileUrl,
+  MediaUploadOptions,
+  UploadFn,
+} from "../media-utils";
 import { IAttachment } from "../types";
 import { generateNodeId } from "../utils";
 import { Command } from "@tiptap/core";
@@ -86,7 +90,7 @@ const handleAttachmentUpload =
 
         // Update the placeholder node with the actual attachment data
         tr.setNodeMarkup(currentPos, undefined, {
-          url: `/api/files/${attachment.id}/${attachment.fileName}`,
+          url: buildAttachmentFileUrl(attachment.id, attachment.fileName),
           name: attachment.fileName,
           mime: attachment.mimeType,
           size: attachment.fileSize,

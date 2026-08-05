@@ -93,22 +93,20 @@ Deprecation tracking:
 ## Current status
 
 - Canonical action/resource routes are primary API surface.
-- Legacy compatibility aliases are intentionally preserved where migration safety is required (for example `/files/*` and select `/attachments/*` aliases).
+- The only retained compatibility aliases are the private and public `GET /api/files/*` routes because persisted page content may still reference them.
 - Any alias route must have a documented deprecation path and backward-compatibility tests.
 - Retained legacy aliases should use `@DeprecatedRoute(...)` so responses include `Deprecation` and `Sunset` headers and server logs point to the canonical replacement.
-- First-pass canonical command routes are active for pages, shares, groups, and comments under resource roots or `/actions/*`; old `/create`, `/update`, and `/delete` routes remain compatibility aliases.
+- Canonical command routes for pages, shares, groups, and comments are active under resource roots or `/actions/*`. The old `/create`, `/update`, `/delete`, and read-like aliases were removed in August 2026; see `release-notes/api-alias-removal-2026-08.md`.
 
-## Read-like POST migration plan
+## Read-like route policy
 
 Several existing read-only endpoints still use `POST` for historical body-shaped queries (`/info`, `/recent`, `/ids`, `/pages`, `/lookup`, and similar routes). Do not add new read-only `POST` endpoints unless the request body is too complex for query parameters or the route intentionally requires CSRF semantics.
 
-Migration rules:
+Rules:
 
 - Add a canonical `GET` route for read-only operations when parameters can be represented as path/query values.
-- Keep the old `POST` route as a compatibility alias until older clients are no longer supported.
-- Mark compatibility `POST` aliases with `@DeprecatedRoute(...)` and a concrete replacement route.
-- Add route inventory updates and tests that prove the `GET` and compatibility `POST` routes return equivalent results.
-- Document every retained read-like `POST` alias with a deprecation/removal condition.
+- Do not add a second method or path for an existing operation without an explicit compatibility decision and removal condition.
+- Regenerate the route inventory and test the canonical route behavior whenever the routing contract changes.
 - Leave command-like routes (`/actions/*`, create/update/delete, imports, exports, revoke, unsync) as mutating methods.
 
 ## Databases API shape

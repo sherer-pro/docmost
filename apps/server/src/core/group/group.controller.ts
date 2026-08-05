@@ -26,8 +26,6 @@ import {
   WorkspaceCaslAction,
   WorkspaceCaslSubject,
 } from '../casl/interfaces/workspace-ability.type';
-import { DeprecatedRoute } from '../../common/decorators/deprecated-route.decorator';
-import { LEGACY_API_SUNSET } from '../../common/config/api-deprecation.constants';
 
 @UseGuards(JwtAuthGuard)
 @Controller('groups')
@@ -49,25 +47,6 @@ export class GroupController {
   }
 
   @HttpCode(HttpStatus.OK)
-  @DeprecatedRoute({
-    sunset: LEGACY_API_SUNSET,
-    replacement: 'GET /api/groups',
-  })
-  @Post('/')
-  getWorkspaceGroups(
-    @Body() pagination: PaginationOptions,
-    @AuthUser() user: User,
-    @AuthWorkspace() workspace: Workspace,
-  ) {
-    const ability = this.workspaceAbility.createForUser(user, workspace);
-    if (ability.cannot(WorkspaceCaslAction.Read, WorkspaceCaslSubject.Group)) {
-      throw new ForbiddenException();
-    }
-
-    return this.groupService.getWorkspaceGroups(workspace.id, pagination, user);
-  }
-
-  @HttpCode(HttpStatus.OK)
   @Get('/info')
   getGroupViaQuery(
     @Query() groupIdDto: GroupIdDto,
@@ -75,28 +54,6 @@ export class GroupController {
     @AuthWorkspace() workspace: Workspace,
   ) {
     return this.getGroup(groupIdDto, user, workspace);
-  }
-
-  @HttpCode(HttpStatus.OK)
-  @DeprecatedRoute({
-    sunset: LEGACY_API_SUNSET,
-    replacement: 'GET /api/groups/info',
-  })
-  @Post('/info')
-  getGroup(
-    @Body() groupIdDto: GroupIdDto,
-    @AuthUser() user: User,
-    @AuthWorkspace() workspace: Workspace,
-  ) {
-    const ability = this.workspaceAbility.createForUser(user, workspace);
-    if (ability.cannot(WorkspaceCaslAction.Read, WorkspaceCaslSubject.Group)) {
-      throw new ForbiddenException();
-    }
-    return this.groupService.getGroupInfo(
-      groupIdDto.groupId,
-      workspace.id,
-      user,
-    );
   }
 
   @HttpCode(HttpStatus.OK)
@@ -110,26 +67,6 @@ export class GroupController {
   }
 
   @HttpCode(HttpStatus.OK)
-  @DeprecatedRoute({
-    sunset: LEGACY_API_SUNSET,
-    replacement: 'POST /api/groups/actions/create',
-  })
-  @Post('create')
-  createGroup(
-    @Body() createGroupDto: CreateGroupDto,
-    @AuthUser() user: User,
-    @AuthWorkspace() workspace: Workspace,
-  ) {
-    const ability = this.workspaceAbility.createForUser(user, workspace);
-    if (
-      ability.cannot(WorkspaceCaslAction.Manage, WorkspaceCaslSubject.Group)
-    ) {
-      throw new ForbiddenException();
-    }
-    return this.groupService.createGroup(user, workspace.id, createGroupDto);
-  }
-
-  @HttpCode(HttpStatus.OK)
   @Post('actions/update')
   updateGroupViaAction(
     @Body() updateGroupDto: UpdateGroupDto,
@@ -140,27 +77,6 @@ export class GroupController {
   }
 
   @HttpCode(HttpStatus.OK)
-  @DeprecatedRoute({
-    sunset: LEGACY_API_SUNSET,
-    replacement: 'POST /api/groups/actions/update',
-  })
-  @Post('update')
-  updateGroup(
-    @Body() updateGroupDto: UpdateGroupDto,
-    @AuthUser() user: User,
-    @AuthWorkspace() workspace: Workspace,
-  ) {
-    const ability = this.workspaceAbility.createForUser(user, workspace);
-    if (
-      ability.cannot(WorkspaceCaslAction.Manage, WorkspaceCaslSubject.Group)
-    ) {
-      throw new ForbiddenException();
-    }
-
-    return this.groupService.updateGroup(workspace.id, updateGroupDto);
-  }
-
-  @HttpCode(HttpStatus.OK)
   @Get('members')
   getGroupMembersViaQuery(
     @Query() query: GroupMembersQueryDto,
@@ -168,30 +84,6 @@ export class GroupController {
     @AuthWorkspace() workspace: Workspace,
   ) {
     return this.getGroupMembers(query, user, workspace);
-  }
-
-  @HttpCode(HttpStatus.OK)
-  @DeprecatedRoute({
-    sunset: LEGACY_API_SUNSET,
-    replacement: 'GET /api/groups/members',
-  })
-  @Post('members')
-  getGroupMembers(
-    @Body() groupIdDto: GroupMembersQueryDto,
-    @AuthUser() user: User,
-    @AuthWorkspace() workspace: Workspace,
-  ) {
-    const ability = this.workspaceAbility.createForUser(user, workspace);
-    if (ability.cannot(WorkspaceCaslAction.Read, WorkspaceCaslSubject.Group)) {
-      throw new ForbiddenException();
-    }
-
-    return this.groupUserService.getGroupUsers(
-      groupIdDto.groupId,
-      workspace.id,
-      groupIdDto,
-      user,
-    );
   }
 
   @HttpCode(HttpStatus.OK)
@@ -246,12 +138,82 @@ export class GroupController {
     return this.deleteGroup(groupIdDto, user, workspace);
   }
 
-  @HttpCode(HttpStatus.OK)
-  @DeprecatedRoute({
-    sunset: LEGACY_API_SUNSET,
-    replacement: 'POST /api/groups/actions/delete',
-  })
-  @Post('delete')
+  getWorkspaceGroups(
+    @Body() pagination: PaginationOptions,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const ability = this.workspaceAbility.createForUser(user, workspace);
+    if (ability.cannot(WorkspaceCaslAction.Read, WorkspaceCaslSubject.Group)) {
+      throw new ForbiddenException();
+    }
+
+    return this.groupService.getWorkspaceGroups(workspace.id, pagination, user);
+  }
+
+  getGroup(
+    @Body() groupIdDto: GroupIdDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const ability = this.workspaceAbility.createForUser(user, workspace);
+    if (ability.cannot(WorkspaceCaslAction.Read, WorkspaceCaslSubject.Group)) {
+      throw new ForbiddenException();
+    }
+    return this.groupService.getGroupInfo(
+      groupIdDto.groupId,
+      workspace.id,
+      user,
+    );
+  }
+
+  createGroup(
+    @Body() createGroupDto: CreateGroupDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const ability = this.workspaceAbility.createForUser(user, workspace);
+    if (
+      ability.cannot(WorkspaceCaslAction.Manage, WorkspaceCaslSubject.Group)
+    ) {
+      throw new ForbiddenException();
+    }
+    return this.groupService.createGroup(user, workspace.id, createGroupDto);
+  }
+
+  updateGroup(
+    @Body() updateGroupDto: UpdateGroupDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const ability = this.workspaceAbility.createForUser(user, workspace);
+    if (
+      ability.cannot(WorkspaceCaslAction.Manage, WorkspaceCaslSubject.Group)
+    ) {
+      throw new ForbiddenException();
+    }
+
+    return this.groupService.updateGroup(workspace.id, updateGroupDto);
+  }
+
+  getGroupMembers(
+    @Body() groupIdDto: GroupMembersQueryDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const ability = this.workspaceAbility.createForUser(user, workspace);
+    if (ability.cannot(WorkspaceCaslAction.Read, WorkspaceCaslSubject.Group)) {
+      throw new ForbiddenException();
+    }
+
+    return this.groupUserService.getGroupUsers(
+      groupIdDto.groupId,
+      workspace.id,
+      groupIdDto,
+      user,
+    );
+  }
+
   deleteGroup(
     @Body() groupIdDto: GroupIdDto,
     @AuthUser() user: User,

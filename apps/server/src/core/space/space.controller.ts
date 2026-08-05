@@ -46,8 +46,6 @@ import {
 import WorkspaceAbilityFactory from '../casl/abilities/workspace-ability.factory';
 import { CreateSpaceDto } from './dto/create-space.dto';
 import { PageAccessService } from '../page-access/page-access.service';
-import { DeprecatedRoute } from '../../common/decorators/deprecated-route.decorator';
-import { LEGACY_API_SUNSET } from '../../common/config/api-deprecation.constants';
 import { AuthPolicyScope } from '../../common/decorators/auth-policy-scope.decorator';
 import { FastifyRequest } from 'fastify';
 import { SpacePolicyService } from '../space-policy/space-policy.service';
@@ -270,34 +268,6 @@ export class SpaceController {
   }
 
   @HttpCode(HttpStatus.OK)
-  @DeprecatedRoute({
-    sunset: LEGACY_API_SUNSET,
-    replacement: 'GET /api/spaces/member-users',
-  })
-  @AuthPolicyScope('space', { source: 'body', key: 'spaceId' })
-  @Post('member-users')
-  async getSpaceMemberUsers(
-    @Body() spaceIdDto: SpaceMembersQueryDto,
-    @AuthUser() user: User,
-    @AuthWorkspace() workspace: Workspace,
-  ) {
-    const ability = await this.spaceAbility.createForUser(
-      user,
-      spaceIdDto.spaceId,
-    );
-
-    if (ability.cannot(SpaceCaslAction.Read, SpaceCaslSubject.Member)) {
-      throw new ForbiddenException();
-    }
-
-    return this.spaceMemberService.getSpaceUserMembers(
-      spaceIdDto.spaceId,
-      workspace.id,
-      spaceIdDto,
-    );
-  }
-
-  @HttpCode(HttpStatus.OK)
   @AuthPolicyScope('space', { source: 'query', key: 'spaceId' })
   @Get('members')
   async getSpaceMembersViaQuery(
@@ -306,34 +276,6 @@ export class SpaceController {
     @AuthWorkspace() workspace: Workspace,
   ) {
     return this.getSpaceMembers(query, user, workspace);
-  }
-
-  @HttpCode(HttpStatus.OK)
-  @DeprecatedRoute({
-    sunset: LEGACY_API_SUNSET,
-    replacement: 'GET /api/spaces/members',
-  })
-  @AuthPolicyScope('space', { source: 'body', key: 'spaceId' })
-  @Post('members')
-  async getSpaceMembers(
-    @Body() spaceIdDto: SpaceMembersQueryDto,
-    @AuthUser() user: User,
-    @AuthWorkspace() workspace: Workspace,
-  ) {
-    const ability = await this.spaceAbility.createForUser(
-      user,
-      spaceIdDto.spaceId,
-    );
-
-    if (ability.cannot(SpaceCaslAction.Read, SpaceCaslSubject.Member)) {
-      throw new ForbiddenException();
-    }
-
-    return this.spaceMemberService.getSpaceMembers(
-      spaceIdDto.spaceId,
-      workspace.id,
-      spaceIdDto,
-    );
   }
 
   @HttpCode(HttpStatus.OK)
@@ -408,5 +350,47 @@ export class SpaceController {
         'please provide either a userId or groupId and both',
       );
     }
+  }
+
+  async getSpaceMemberUsers(
+    @Body() spaceIdDto: SpaceMembersQueryDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const ability = await this.spaceAbility.createForUser(
+      user,
+      spaceIdDto.spaceId,
+    );
+
+    if (ability.cannot(SpaceCaslAction.Read, SpaceCaslSubject.Member)) {
+      throw new ForbiddenException();
+    }
+
+    return this.spaceMemberService.getSpaceUserMembers(
+      spaceIdDto.spaceId,
+      workspace.id,
+      spaceIdDto,
+    );
+  }
+
+  async getSpaceMembers(
+    @Body() spaceIdDto: SpaceMembersQueryDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const ability = await this.spaceAbility.createForUser(
+      user,
+      spaceIdDto.spaceId,
+    );
+
+    if (ability.cannot(SpaceCaslAction.Read, SpaceCaslSubject.Member)) {
+      throw new ForbiddenException();
+    }
+
+    return this.spaceMemberService.getSpaceMembers(
+      spaceIdDto.spaceId,
+      workspace.id,
+      spaceIdDto,
+    );
   }
 }

@@ -19,8 +19,6 @@ import { User, Workspace } from '@docmost/db/types/entity.types';
 import { WorkspaceRepo } from '@docmost/db/repos/workspace/workspace.repo';
 import { UserRepo } from '@docmost/db/repos/user/user.repo';
 import { UserRole } from '../../common/helpers/types/permission';
-import { DeprecatedRoute } from '../../common/decorators/deprecated-route.decorator';
-import { LEGACY_API_SUNSET } from '../../common/config/api-deprecation.constants';
 import { AuthPolicyScope } from '../../common/decorators/auth-policy-scope.decorator';
 import { AuthenticationAssuranceService } from '../space-policy/authentication-assurance.service';
 import { FastifyRequest } from 'fastify';
@@ -57,14 +55,15 @@ export class UserController {
   }
 
   @HttpCode(HttpStatus.OK)
-  @Header('Cache-Control', 'no-store, max-age=0')
-  @Header('Pragma', 'no-cache')
-  @DeprecatedRoute({
-    sunset: LEGACY_API_SUNSET,
-    replacement: 'GET /api/users/me',
-  })
-  @AuthPolicyScope('bootstrap')
-  @Post('me')
+  @Post('update')
+  async updateUser(
+    @Body() updateUserDto: UpdateUserDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.userService.update(updateUserDto, user.id, workspace);
+  }
+
   async getUserInfo(
     @AuthUser() authUser: User,
     @AuthWorkspace() workspace: Workspace,
@@ -118,15 +117,5 @@ export class UserController {
           (req as any).user?.session ?? (req.raw as any).userSession,
         ),
     };
-  }
-
-  @HttpCode(HttpStatus.OK)
-  @Post('update')
-  async updateUser(
-    @Body() updateUserDto: UpdateUserDto,
-    @AuthUser() user: User,
-    @AuthWorkspace() workspace: Workspace,
-  ) {
-    return this.userService.update(updateUserDto, user.id, workspace);
   }
 }

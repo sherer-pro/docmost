@@ -40,8 +40,6 @@ import { RemoveWorkspaceUserDto } from '../dto/remove-workspace-user.dto';
 import { DeactivateWorkspaceUserDto } from '../dto/deactivate-workspace-user.dto';
 import { AuthCookieService } from '../../../common/security/auth-cookie.service';
 import { PresenceService } from '../../presence/presence.service';
-import { DeprecatedRoute } from '../../../common/decorators/deprecated-route.decorator';
-import { LEGACY_API_SUNSET } from '../../../common/config/api-deprecation.constants';
 import { AuthRateLimitGuard } from '../../auth/rate-limit/auth-rate-limit.guard';
 import { AuthRateLimit } from '../../auth/rate-limit/auth-rate-limit.decorator';
 
@@ -67,37 +65,10 @@ export class WorkspaceController {
     return this.getWorkspacePublicInfo(req, spaceSlug);
   }
 
-  @Public()
-  @HttpCode(HttpStatus.OK)
-  @DeprecatedRoute({
-    sunset: LEGACY_API_SUNSET,
-    replacement: 'GET /api/workspace/public',
-  })
-  @Post('/public')
-  async getWorkspacePublicInfo(
-    @Req() req: any,
-    @Query('spaceSlug') spaceSlug?: string,
-  ) {
-    return this.workspaceService.getWorkspacePublicData(
-      req.raw.workspaceId,
-      spaceSlug,
-    );
-  }
-
   @HttpCode(HttpStatus.OK)
   @Get('/info')
   async getWorkspaceViaGet(@AuthWorkspace() workspace: Workspace) {
     return this.getWorkspace(workspace);
-  }
-
-  @HttpCode(HttpStatus.OK)
-  @DeprecatedRoute({
-    sunset: LEGACY_API_SUNSET,
-    replacement: 'GET /api/workspace/info',
-  })
-  @Post('/info')
-  async getWorkspace(@AuthWorkspace() workspace: Workspace) {
-    return this.workspaceService.getWorkspaceInfo(workspace.id);
   }
 
   @HttpCode(HttpStatus.OK)
@@ -144,57 +115,12 @@ export class WorkspaceController {
   }
 
   @HttpCode(HttpStatus.OK)
-  @DeprecatedRoute({
-    sunset: LEGACY_API_SUNSET,
-    replacement: 'GET /api/workspace/members',
-  })
-  @Post('members')
-  async getWorkspaceMembers(
-    @Body()
-    pagination: PaginationOptions,
-    @AuthUser() user: User,
-    @AuthWorkspace() workspace: Workspace,
-  ) {
-    const ability = this.workspaceAbility.createForUser(user, workspace);
-    if (ability.cannot(WorkspaceCaslAction.Read, WorkspaceCaslSubject.Member)) {
-      throw new ForbiddenException();
-    }
-
-    return this.workspaceService.getWorkspaceUsers(
-      user,
-      workspace.id,
-      pagination,
-    );
-  }
-
-  @HttpCode(HttpStatus.OK)
   @Get('members/count')
   async getWorkspaceVisibleMembersCountViaGet(
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
     return this.getWorkspaceVisibleMembersCount(user, workspace);
-  }
-
-  @HttpCode(HttpStatus.OK)
-  @DeprecatedRoute({
-    sunset: LEGACY_API_SUNSET,
-    replacement: 'GET /api/workspace/members/count',
-  })
-  @Post('members/count')
-  async getWorkspaceVisibleMembersCount(
-    @AuthUser() user: User,
-    @AuthWorkspace() workspace: Workspace,
-  ) {
-    const ability = this.workspaceAbility.createForUser(user, workspace);
-    if (ability.cannot(WorkspaceCaslAction.Read, WorkspaceCaslSubject.Member)) {
-      throw new ForbiddenException();
-    }
-
-    return this.workspaceService.getWorkspaceVisibleUsersCount(
-      user,
-      workspace.id,
-    );
   }
 
   @HttpCode(HttpStatus.OK)
@@ -293,31 +219,6 @@ export class WorkspaceController {
     return this.getInvitations(user, workspace, pagination);
   }
 
-  @HttpCode(HttpStatus.OK)
-  @DeprecatedRoute({
-    sunset: LEGACY_API_SUNSET,
-    replacement: 'GET /api/workspace/invites',
-  })
-  @Post('invites')
-  async getInvitations(
-    @AuthUser() user: User,
-    @AuthWorkspace() workspace: Workspace,
-    @Body()
-    pagination: PaginationOptions,
-  ) {
-    const ability = this.workspaceAbility.createForUser(user, workspace);
-    if (
-      ability.cannot(WorkspaceCaslAction.Manage, WorkspaceCaslSubject.Member)
-    ) {
-      throw new ForbiddenException();
-    }
-
-    return this.workspaceInvitationService.getInvitations(
-      workspace.id,
-      pagination,
-    );
-  }
-
   @Public()
   @HttpCode(HttpStatus.OK)
   @Get('invites/info')
@@ -328,26 +229,6 @@ export class WorkspaceController {
     @AuthWorkspace() workspace: Workspace,
   ) {
     return this.getInvitationById(dto, workspace);
-  }
-
-  @Public()
-  @HttpCode(HttpStatus.OK)
-  @DeprecatedRoute({
-    sunset: LEGACY_API_SUNSET,
-    replacement: 'GET /api/workspace/invites/info',
-  })
-  @Post('invites/info')
-  @UseGuards(AuthRateLimitGuard)
-  @AuthRateLimit({ endpoint: 'invitationInfo', accountField: 'invitationId' })
-  async getInvitationById(
-    @Body() dto: InvitationInfoDto,
-    @AuthWorkspace() workspace: Workspace,
-  ) {
-    return this.workspaceInvitationService.getInvitationById(
-      dto.invitationId,
-      workspace,
-      dto.token,
-    );
   }
 
   @HttpCode(HttpStatus.OK)
@@ -477,5 +358,82 @@ export class WorkspaceController {
       );
 
     return { inviteLink };
+  }
+
+  async getWorkspacePublicInfo(
+    @Req() req: any,
+    @Query('spaceSlug') spaceSlug?: string,
+  ) {
+    return this.workspaceService.getWorkspacePublicData(
+      req.raw.workspaceId,
+      spaceSlug,
+    );
+  }
+
+  async getWorkspace(@AuthWorkspace() workspace: Workspace) {
+    return this.workspaceService.getWorkspaceInfo(workspace.id);
+  }
+
+  async getWorkspaceMembers(
+    @Body()
+    pagination: PaginationOptions,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const ability = this.workspaceAbility.createForUser(user, workspace);
+    if (ability.cannot(WorkspaceCaslAction.Read, WorkspaceCaslSubject.Member)) {
+      throw new ForbiddenException();
+    }
+
+    return this.workspaceService.getWorkspaceUsers(
+      user,
+      workspace.id,
+      pagination,
+    );
+  }
+
+  async getWorkspaceVisibleMembersCount(
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const ability = this.workspaceAbility.createForUser(user, workspace);
+    if (ability.cannot(WorkspaceCaslAction.Read, WorkspaceCaslSubject.Member)) {
+      throw new ForbiddenException();
+    }
+
+    return this.workspaceService.getWorkspaceVisibleUsersCount(
+      user,
+      workspace.id,
+    );
+  }
+
+  async getInvitations(
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+    @Body()
+    pagination: PaginationOptions,
+  ) {
+    const ability = this.workspaceAbility.createForUser(user, workspace);
+    if (
+      ability.cannot(WorkspaceCaslAction.Manage, WorkspaceCaslSubject.Member)
+    ) {
+      throw new ForbiddenException();
+    }
+
+    return this.workspaceInvitationService.getInvitations(
+      workspace.id,
+      pagination,
+    );
+  }
+
+  async getInvitationById(
+    @Body() dto: InvitationInfoDto,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.workspaceInvitationService.getInvitationById(
+      dto.invitationId,
+      workspace,
+      dto.token,
+    );
   }
 }
