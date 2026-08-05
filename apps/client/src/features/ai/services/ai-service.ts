@@ -24,6 +24,15 @@ import {
   UpdateAiConversationContextRequest,
   CreateAiEditorActionRequest,
   AiEditorActionRun,
+  AiAssistantProfile,
+  AiAssistantProfilePreferences,
+  AiAssistantProfilesView,
+  AiAssistantProfileTestResult,
+  AiAssistantProfileWorkspacePolicy,
+  CreateAiAssistantProfileRequest,
+  UpdateAiAssistantProfileRequest,
+  UpdateAiAssistantProfilePreferencesRequest,
+  UpdateAiAssistantProfileWorkspacePolicyRequest,
 } from "@/features/ai/types/ai.types.ts";
 
 export interface AiCollectionPage<T> {
@@ -56,6 +65,7 @@ export async function updateAiConversation(
     draft?: string;
     useSpaceSearch?: boolean;
     agentMode?: boolean;
+    assistantProfileId?: string | null;
   },
 ): Promise<AiConversation> {
   const response = await api.patch<AiConversation>(
@@ -63,6 +73,112 @@ export async function updateAiConversation(
     data,
   );
   return unwrapApiResponse<AiConversation>(response);
+}
+
+export async function getAiAssistantProfilePolicy(): Promise<AiAssistantProfileWorkspacePolicy> {
+  const response = await api.get<AiAssistantProfileWorkspacePolicy>(
+    "/ai/profile-policy",
+  );
+  return unwrapApiResponse(response);
+}
+
+export async function updateAiAssistantProfilePolicy(
+  data: UpdateAiAssistantProfileWorkspacePolicyRequest,
+): Promise<AiAssistantProfileWorkspacePolicy> {
+  const response = await api.patch<AiAssistantProfileWorkspacePolicy>(
+    "/ai/profile-policy",
+    data,
+  );
+  return unwrapApiResponse(response);
+}
+
+export async function getAiAssistantProfiles(
+  spaceId: string,
+): Promise<AiAssistantProfilesView> {
+  const response = await api.get<AiAssistantProfilesView>(
+    `/spaces/${spaceId}/ai/profiles`,
+  );
+  return unwrapApiResponse(response);
+}
+
+export async function getAiAssistantProfile(
+  spaceId: string,
+  profileId: string,
+): Promise<AiAssistantProfile> {
+  const response = await api.get<AiAssistantProfile>(
+    `/spaces/${spaceId}/ai/profiles/${profileId}`,
+  );
+  return unwrapApiResponse(response);
+}
+
+export async function createAiAssistantProfile(
+  spaceId: string,
+  data: CreateAiAssistantProfileRequest,
+): Promise<AiAssistantProfile> {
+  const response = await api.post<AiAssistantProfile>(
+    `/spaces/${spaceId}/ai/profiles`,
+    data,
+  );
+  return unwrapApiResponse(response);
+}
+
+export async function updateAiAssistantProfile(
+  spaceId: string,
+  profileId: string,
+  data: UpdateAiAssistantProfileRequest,
+): Promise<AiAssistantProfile> {
+  const response = await api.patch<AiAssistantProfile>(
+    `/spaces/${spaceId}/ai/profiles/${profileId}`,
+    data,
+  );
+  return unwrapApiResponse(response);
+}
+
+export async function deleteAiAssistantProfile(
+  spaceId: string,
+  profileId: string,
+): Promise<void> {
+  await api.delete(`/spaces/${spaceId}/ai/profiles/${profileId}`);
+}
+
+export async function testAiAssistantProfileModel(
+  spaceId: string,
+  profileId: string,
+): Promise<AiAssistantProfileTestResult> {
+  const response = await api.post<AiAssistantProfileTestResult>(
+    `/spaces/${spaceId}/ai/profiles/${profileId}/actions/test-model`,
+  );
+  return unwrapApiResponse(response);
+}
+
+export async function testAiAssistantProfileAgent(
+  spaceId: string,
+  profileId: string,
+): Promise<AiAssistantProfileTestResult> {
+  const response = await api.post<AiAssistantProfileTestResult>(
+    `/spaces/${spaceId}/ai/profiles/${profileId}/actions/test-agent`,
+  );
+  return unwrapApiResponse(response);
+}
+
+export async function getAiAssistantProfilePreferences(
+  spaceId: string,
+): Promise<AiAssistantProfilePreferences> {
+  const response = await api.get<AiAssistantProfilePreferences>(
+    `/spaces/${spaceId}/ai/profile-preferences`,
+  );
+  return unwrapApiResponse(response);
+}
+
+export async function updateAiAssistantProfilePreferences(
+  spaceId: string,
+  data: UpdateAiAssistantProfilePreferencesRequest,
+): Promise<AiAssistantProfilePreferences> {
+  const response = await api.put<AiAssistantProfilePreferences>(
+    `/spaces/${spaceId}/ai/profile-preferences`,
+    data,
+  );
+  return unwrapApiResponse(response);
 }
 
 export async function openAiConversation(

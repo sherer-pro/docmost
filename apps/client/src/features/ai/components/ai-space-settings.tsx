@@ -70,6 +70,7 @@ import {
 import { AiContentExclusionsSettings } from "./ai-content-exclusions-settings.tsx";
 import AiSpaceExternalMcpSettings from "@/features/ai-external-mcp/components/ai-space-external-mcp-settings.tsx";
 import { AiBuiltinToolSpacePolicy } from "./ai-builtin-tool-space-policy.tsx";
+import { AiAssistantProfilesSettings } from "./ai-assistant-profiles-settings.tsx";
 
 type AiSettingsForm = {
   enabled: boolean;
@@ -141,20 +142,30 @@ export type AiSpaceSettingsSection =
   | "model"
   | "behavior"
   | "agent"
+  | "profiles"
   | "tools"
   | "externalTools"
   | "retrieval"
   | "limits";
 
-export function AiSpaceSettings({
-  spaceId,
-  section = "all",
-  onDirtyChange,
-}: {
+type AiSpaceSettingsProps = {
   spaceId: string;
   section?: AiSpaceSettingsSection;
   onDirtyChange?: (dirty: boolean) => void;
-}) {
+};
+
+export function AiSpaceSettings(props: AiSpaceSettingsProps) {
+  if (props.section === "profiles") {
+    return <AiAssistantProfilesSettings spaceId={props.spaceId} />;
+  }
+  return <AiSpaceProviderSettings {...props} />;
+}
+
+function AiSpaceProviderSettings({
+  spaceId,
+  section = "all",
+  onDirtyChange,
+}: AiSpaceSettingsProps) {
   const { t, i18n } = useTranslation();
   const numberInputControlProps = {
     hideControls: true,

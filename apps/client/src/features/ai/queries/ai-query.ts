@@ -38,6 +38,17 @@ import {
   searchAiContextSources,
   createAiEditorAction,
   cancelAiEditorAction,
+  createAiAssistantProfile,
+  deleteAiAssistantProfile,
+  getAiAssistantProfile,
+  getAiAssistantProfilePreferences,
+  getAiAssistantProfilePolicy,
+  getAiAssistantProfiles,
+  testAiAssistantProfileAgent,
+  testAiAssistantProfileModel,
+  updateAiAssistantProfile,
+  updateAiAssistantProfilePolicy,
+  updateAiAssistantProfilePreferences,
 } from "@/features/ai/services/ai-service.ts";
 import {
   AiAvailability,
@@ -46,6 +57,10 @@ import {
   SendAiMessageInput,
   UpdateAiConversationContextRequest,
   UpdateAiSpaceContentPolicyRequest,
+  CreateAiAssistantProfileRequest,
+  UpdateAiAssistantProfileRequest,
+  UpdateAiAssistantProfilePreferencesRequest,
+  UpdateAiAssistantProfileWorkspacePolicyRequest,
 } from "@/features/ai/types/ai.types.ts";
 import {
   aiActivityAtom,
@@ -74,7 +89,149 @@ export const AI_QUERY_KEYS = {
     ["ai", "content-policy", spaceId] as const,
   contentPolicyCandidates: (spaceId: string, query: string) =>
     ["ai", "content-policy-candidates", spaceId, query] as const,
+  profilePolicy: ["ai", "assistant-profile-policy"] as const,
+  profiles: (spaceId: string) => ["ai", "assistant-profiles", spaceId] as const,
+  profile: (spaceId: string, profileId: string) =>
+    ["ai", "assistant-profile", spaceId, profileId] as const,
+  profilePreferences: (spaceId: string) =>
+    ["ai", "assistant-profile-preferences", spaceId] as const,
 };
+
+export function useAiAssistantProfilePolicyQuery() {
+  return useQuery({
+    queryKey: AI_QUERY_KEYS.profilePolicy,
+    queryFn: getAiAssistantProfilePolicy,
+  });
+}
+
+export function useUpdateAiAssistantProfilePolicyMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: UpdateAiAssistantProfileWorkspacePolicyRequest) =>
+      updateAiAssistantProfilePolicy(data),
+    onSuccess: (policy) => {
+      queryClient.setQueryData(AI_QUERY_KEYS.profilePolicy, policy);
+      void queryClient.invalidateQueries({
+        queryKey: ["ai", "assistant-profiles"],
+      });
+    },
+  });
+}
+
+export function useAiAssistantProfilesQuery(spaceId?: string) {
+  return useQuery({
+    queryKey: AI_QUERY_KEYS.profiles(spaceId ?? ""),
+    queryFn: () => getAiAssistantProfiles(spaceId!),
+    enabled: Boolean(spaceId),
+  });
+}
+
+export function useAiAssistantProfilePreferencesQuery(spaceId?: string) {
+  return useQuery({
+    queryKey: AI_QUERY_KEYS.profilePreferences(spaceId ?? ""),
+    queryFn: () => getAiAssistantProfilePreferences(spaceId!),
+    enabled: Boolean(spaceId),
+  });
+}
+
+export function useAiAssistantProfileQuery(
+  spaceId?: string,
+  profileId?: string,
+) {
+  return useQuery({
+    queryKey: AI_QUERY_KEYS.profile(spaceId ?? "", profileId ?? ""),
+    queryFn: () => getAiAssistantProfile(spaceId!, profileId!),
+    enabled: Boolean(spaceId && profileId),
+  });
+}
+
+export function useCreateAiAssistantProfileMutation(spaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreateAiAssistantProfileRequest) =>
+      createAiAssistantProfile(spaceId, data),
+    onSuccess: (preferences) => {
+      queryClient.setQueryData(
+        AI_QUERY_KEYS.profilePreferences(spaceId),
+        preferences,
+      );
+      return queryClient.invalidateQueries({
+        queryKey: AI_QUERY_KEYS.profiles(spaceId),
+      });
+    },
+  });
+}
+
+export function useUpdateAiAssistantProfileMutation(spaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      profileId,
+      data,
+    }: {
+      profileId: string;
+      data: UpdateAiAssistantProfileRequest;
+    }) => updateAiAssistantProfile(spaceId, profileId, data),
+    onSuccess: (profile) => {
+      queryClient.setQueryData(
+        AI_QUERY_KEYS.profile(spaceId, profile.id),
+        profile,
+      );
+      void queryClient.invalidateQueries({
+        queryKey: AI_QUERY_KEYS.profiles(spaceId),
+      });
+    },
+  });
+}
+
+export function useDeleteAiAssistantProfileMutation(spaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (profileId: string) =>
+      deleteAiAssistantProfile(spaceId, profileId),
+    onSuccess: () =>
+      queryClient.invalidateQueries({
+        queryKey: AI_QUERY_KEYS.profiles(spaceId),
+      }),
+  });
+}
+
+export function useTestAiAssistantProfileModelMutation(spaceId: string) {
+  return useMutation({
+    mutationFn: (profileId: string) =>
+      testAiAssistantProfileModel(spaceId, profileId),
+  });
+}
+
+export function useTestAiAssistantProfileAgentMutation(spaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (profileId: string) =>
+      testAiAssistantProfileAgent(spaceId, profileId),
+    onSuccess: (_, profileId) => {
+      void queryClient.invalidateQueries({
+        queryKey: AI_QUERY_KEYS.profile(spaceId, profileId),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: AI_QUERY_KEYS.profiles(spaceId),
+      });
+    },
+  });
+}
+
+export function useUpdateAiAssistantProfilePreferencesMutation(
+  spaceId: string,
+) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: UpdateAiAssistantProfilePreferencesRequest) =>
+      updateAiAssistantProfilePreferences(spaceId, data),
+    onSuccess: () =>
+      queryClient.invalidateQueries({
+        queryKey: AI_QUERY_KEYS.profiles(spaceId),
+      }),
+  });
+}
 
 export function useAiConversationContextQuery(conversationId?: string) {
   return useQuery({
@@ -181,6 +338,7 @@ export function useUpdateAiConversationMutation(pageId?: string) {
         draft?: string;
         useSpaceSearch?: boolean;
         agentMode?: boolean;
+        assistantProfileId?: string | null;
       };
     }) => updateAiConversation(conversationId, data),
     onSuccess: (conversation) => {

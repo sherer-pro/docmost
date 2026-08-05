@@ -17,6 +17,7 @@ describe("AI local draft", () => {
       text: "Continue the summary",
       useSpaceSearch: true,
       agentMode: false,
+      assistantProfileId: null,
     };
     expect(
       readAiLocalDraft({ getItem: () => JSON.stringify(value) }, "draft"),
@@ -33,6 +34,7 @@ describe("AI local draft", () => {
       text: "",
       useSpaceSearch: false,
       agentMode: false,
+      assistantProfileId: "profile",
     };
     writeAiLocalDraft({ setItem, removeItem }, "draft", draft);
     expect(setItem).toHaveBeenCalledWith("draft", JSON.stringify(draft));

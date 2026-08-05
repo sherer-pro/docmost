@@ -9,6 +9,7 @@ import {
   Loader,
   Menu,
   Modal,
+  Paper,
   ScrollArea,
   Select,
   Skeleton,
@@ -20,10 +21,16 @@ import {
 import {
   IconAlertTriangle,
   IconArrowDown,
+  IconBook,
+  IconBrain,
+  IconBriefcase,
   IconCheck,
   IconChevronDown,
   IconCode,
   IconDots,
+  IconEye,
+  IconEyeOff,
+  IconLanguage,
   IconMessagePlus,
   IconPaperclip,
   IconPencil,
@@ -33,6 +40,7 @@ import {
   IconSearch,
   IconSend,
   IconSparkles,
+  IconStar,
   IconTrash,
 } from "@tabler/icons-react";
 import type { Editor } from "@tiptap/core";
@@ -77,9 +85,13 @@ import {
   useAiRunQuery,
   useApproveAiRunStepMutation,
   useRejectAiRunStepMutation,
+  useAiAssistantProfilesQuery,
+  useAiAssistantProfilePreferencesQuery,
+  useUpdateAiAssistantProfilePreferencesMutation,
 } from "@/features/ai/queries/ai-query.ts";
 import {
   AiConversation,
+  AiAssistantProfileIcon,
   AiConversationContext,
   AiContextSource,
   AiDescendantSelection,
@@ -160,6 +172,11 @@ export function AiPanel() {
   const spaceId = documentContext?.spaceId;
   const conversationsQuery = useAiConversationsQuery(pageId);
   const availabilityQuery = useAiSpaceStatusQuery(spaceId, pageId);
+  const profilesQuery = useAiAssistantProfilesQuery(spaceId);
+  const profilePreferencesQuery =
+    useAiAssistantProfilePreferencesQuery(spaceId);
+  const updateProfilePreferences =
+    useUpdateAiAssistantProfilePreferencesMutation(spaceId ?? "");
   const [activeByPage, setActiveByPage] = useAtom(
     aiActiveConversationByPageAtom,
   );
@@ -190,6 +207,11 @@ export function AiPanel() {
   const [draft, setDraft] = useState("");
   const [useSpaceSearch, setUseSpaceSearch] = useState(false);
   const [agentMode, setAgentMode] = useState(false);
+  const [assistantProfileId, setAssistantProfileId] = useState<string | null>(
+    null,
+  );
+  const [profilePickerOpened, setProfilePickerOpened] = useState(false);
+  const [profileQuery, setProfileQuery] = useState("");
   const [renameOpened, setRenameOpened] = useState(false);
   const [renameValue, setRenameValue] = useState("");
   const [quickCommandQuery, setQuickCommandQuery] = useState("");
@@ -208,6 +230,7 @@ export function AiPanel() {
     useState<AiContextSource | null>(null);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const draftHydratedFor = useRef<string | null>(null);
+  const skipLocalDraftWriteFor = useRef<string | null>(null);
   const ensureConversationRef = useRef<Promise<AiConversation> | null>(null);
   const draftSaveChain = useRef<Promise<unknown>>(Promise.resolve());
   const contextSaveChain = useRef<Promise<AiConversationContext> | null>(null);
@@ -328,6 +351,7 @@ export function AiPanel() {
       if (!isLocalDraft || !localDraftKey) {
         return;
       }
+      if (profilesQuery.isLoading) return;
       const marker = `local:${localDraftKey}`;
       if (draftHydratedFor.current !== marker) {
         const saved = readAiLocalDraft(sessionStorage, localDraftKey);
@@ -337,6 +361,25 @@ export function AiPanel() {
         setDraft(saved?.text ?? "");
         setUseSpaceSearch(saved?.useSpaceSearch ?? false);
         setAgentMode(saved?.agentMode ?? defaultAgentMode);
+        const fallbackProfileId =
+          profilesQuery.data?.preferredProfileId ??
+          profilesQuery.data?.defaultProfileId ??
+          null;
+        const savedProfileId = saved?.assistantProfileId;
+        const savedProfileAvailable =
+          savedProfileId === null ||
+          (typeof savedProfileId === "string" &&
+            profilesQuery.data?.items.some(
+              (profile) =>
+                profile.id === savedProfileId &&
+                profile.availability === "available",
+            ));
+        setAssistantProfileId(
+          saved && savedProfileAvailable
+            ? savedProfileId
+            : fallbackProfileId,
+        );
+        skipLocalDraftWriteFor.current = marker;
         draftHydratedFor.current = marker;
       }
       contextSaveChain.current = null;
@@ -351,6 +394,7 @@ export function AiPanel() {
     setDraftStatus("idle");
     setUseSpaceSearch(Boolean(activeConversation.useSpaceSearch));
     setAgentMode(Boolean(activeConversation.agentMode));
+    setAssistantProfileId(activeConversation.assistantProfile.id);
     contextSaveChain.current = null;
     setContextSaveFailed(false);
   }, [
@@ -359,6 +403,10 @@ export function AiPanel() {
     availabilityQuery.data?.canUse,
     isLocalDraft,
     localDraftKey,
+    profilesQuery.data?.defaultProfileId,
+    profilesQuery.data?.items,
+    profilesQuery.data?.preferredProfileId,
+    profilesQuery.isLoading,
   ]);
 
   useEffect(() => {
@@ -369,12 +417,24 @@ export function AiPanel() {
     ) {
       return;
     }
+    if (skipLocalDraftWriteFor.current === `local:${localDraftKey}`) {
+      skipLocalDraftWriteFor.current = null;
+      return;
+    }
     writeAiLocalDraft(sessionStorage, localDraftKey, {
       text: draft,
       useSpaceSearch,
       agentMode,
+      assistantProfileId,
     });
-  }, [agentMode, draft, isLocalDraft, localDraftKey, useSpaceSearch]);
+  }, [
+    agentMode,
+    assistantProfileId,
+    draft,
+    isLocalDraft,
+    localDraftKey,
+    useSpaceSearch,
+  ]);
 
   useEffect(() => {
     if (
@@ -442,7 +502,10 @@ export function AiPanel() {
     pendingRun?.reasoning,
   ]);
 
-  const ensureConversation = async (): Promise<AiConversation> => {
+  const ensureConversation = async (
+    profileId = assistantProfileId,
+    requestedAgentMode = agentMode,
+  ): Promise<AiConversation> => {
     if (activeConversation) {
       return activeConversation;
     }
@@ -458,7 +521,8 @@ export function AiPanel() {
         pageId,
         clientRequestId: crypto.randomUUID(),
         useSpaceSearch,
-        agentMode,
+        agentMode: requestedAgentMode,
+        assistantProfileId: profileId,
       })
       .then((conversation) => {
         draftHydratedFor.current = conversation.id;
@@ -591,7 +655,10 @@ export function AiPanel() {
     }));
   };
 
-  const submit = async (content: string) => {
+  const submit = async (
+    content: string,
+    preparedConversation?: AiConversation,
+  ) => {
     const normalizedContent = content.trim();
     if (
       !normalizedContent ||
@@ -616,7 +683,7 @@ export function AiPanel() {
     }
 
     try {
-      const conversation = await ensureConversation();
+      const conversation = preparedConversation ?? (await ensureConversation());
       const savedContext = await loadContext(conversation);
       const editorContext = captureAiEditorContext(
         editor,
@@ -704,6 +771,10 @@ export function AiPanel() {
           agentMode:
             availabilityQuery.data?.agentAvailable === true &&
             availabilityQuery.data?.canUse !== true,
+          assistantProfileId:
+            profilesQuery.data?.preferredProfileId ??
+            profilesQuery.data?.defaultProfileId ??
+            null,
         });
         draftHydratedFor.current = `local:${localDraftKey}`;
       }
@@ -715,6 +786,11 @@ export function AiPanel() {
       setAgentMode(
         availabilityQuery.data?.agentAvailable === true &&
           availabilityQuery.data?.canUse !== true,
+      );
+      setAssistantProfileId(
+        profilesQuery.data?.preferredProfileId ??
+          profilesQuery.data?.defaultProfileId ??
+          null,
       );
       setContextSaveFailed(false);
       contextSaveChain.current = null;
@@ -833,6 +909,27 @@ export function AiPanel() {
   };
 
   const toggleAgentMode = (checked: boolean) => {
+    if (
+      checked &&
+      activeConversation?.assistantProfile.source === "assistant_profile" &&
+      activeConversation.assistantProfile.availability !== "available"
+    ) {
+      notifications.show({
+        message: t("ai.profiles.unavailable"),
+        color: "yellow",
+      });
+      return;
+    }
+    const profile = profilesQuery.data?.items.find(
+      (item) => item.id === assistantProfileId,
+    );
+    if (checked && profile && !profile.agent.available) {
+      notifications.show({
+        message: t(`ai.profiles.agentReason.${profile.agent.reason}`),
+        color: "yellow",
+      });
+      return;
+    }
     setAgentMode(checked);
     if (activeConversation) {
       updateConversation.mutate(
@@ -1146,6 +1243,25 @@ export function AiPanel() {
       .reverse()
       .flatMap((page) => page.items) ?? [],
   );
+  const allAvailableProfiles = (profilesQuery.data?.items ?? []).filter(
+    (profile) => profile.availability === "available",
+  );
+  const hiddenProfileIds = new Set(
+    profilePreferencesQuery.data?.hiddenProfileIds ?? [],
+  );
+  const availableProfiles = allAvailableProfiles.filter(
+    (profile) => !hiddenProfileIds.has(profile.id),
+  );
+  const selectedProfile = allAvailableProfiles.find(
+    (profile) => profile.id === assistantProfileId,
+  );
+  const profileAgentAvailable =
+    activeConversation?.assistantProfile.source === "assistant_profile" &&
+    activeConversation.assistantProfile.availability !== "available"
+      ? false
+      : selectedProfile
+        ? selectedProfile.agent.available
+        : availability.agentAvailable;
   const latestAssistantMessageId = messages
     .slice()
     .reverse()
@@ -1153,6 +1269,11 @@ export function AiPanel() {
   const spaceSearchReady = shouldShowAiRetrievalUi(
     availability.retrievalAvailable,
   );
+  const profileQuickCommands = activeConversation
+    ? activeConversation.assistantProfile.quickCommands
+    : selectedProfile?.quickCommands;
+  const effectiveCustomQuickCommands =
+    profileQuickCommands ?? availability.quickCommands ?? [];
   const quickCommands = mergeAiQuickCommands(
     DEFAULT_AI_QUICK_COMMANDS.map((command, position) => ({
       id: command.id,
@@ -1162,10 +1283,10 @@ export function AiPanel() {
       enabled: true,
       position,
     })),
-    availability.quickCommands ?? [],
+    effectiveCustomQuickCommands,
   );
   const customQuickCommandIds = new Set(
-    (availability.quickCommands ?? []).map((command) => command.id),
+    effectiveCustomQuickCommands.map((command) => command.id),
   );
   const visibleQuickCommands = quickCommands.filter((command) =>
     `${command.label} ${command.description ?? ""} ${command.prompt}`
@@ -1181,6 +1302,179 @@ export function AiPanel() {
       .includes(historyQuery.trim().toLocaleLowerCase(i18n.language)),
   );
   const activeConversationTitle = activeConversation?.title || t("ai.newChat");
+  const activeSnapshotProfileOption =
+    activeConversation?.assistantProfile.id &&
+    !availableProfiles.some(
+      (profile) => profile.id === activeConversation.assistantProfile.id,
+    )
+      ? {
+          value: activeConversation.assistantProfile.id,
+          label: `${activeConversation.assistantProfile.name ?? t("ai.profiles.unavailable")} · v${activeConversation.assistantProfile.version ?? "?"} · ${t("ai.profiles.unavailable")}`,
+          disabled: true,
+        }
+      : null;
+  const profileOptions = [
+    { value: "__legacy_space__", label: t("ai.profiles.spaceAssistant") },
+    ...availableProfiles.map((profile) => ({
+      value: profile.id,
+      label: `${profile.name} · v${profile.version}`,
+    })),
+    ...(activeSnapshotProfileOption ? [activeSnapshotProfileOption] : []),
+  ];
+
+  const beginLocalDraftWithProfile = (profileId: string | null) => {
+    if (!pageId) return;
+    ensureConversationRef.current = null;
+    setActiveByPage((current) => ({ ...current, [pageId]: null }));
+    setAssistantProfileId(profileId);
+    const profile = availableProfiles.find((item) => item.id === profileId);
+    const nextAgentMode = profile
+      ? agentMode && profile.agent.available
+      : agentMode && availability.agentAvailable;
+    if (agentMode !== nextAgentMode) {
+      setAgentMode(false);
+    }
+    if (localDraftKey) {
+      writeAiLocalDraft(sessionStorage, localDraftKey, {
+        text: draft,
+        useSpaceSearch,
+        agentMode: nextAgentMode,
+        assistantProfileId: profileId,
+      });
+      draftHydratedFor.current = `local:${localDraftKey}`;
+    }
+  };
+
+  const chooseAssistantProfile = (value: string | null) => {
+    const profileId = value === "__legacy_space__" ? null : value;
+    if (profileId === assistantProfileId) return;
+    if (!activeConversation) {
+      beginLocalDraftWithProfile(profileId);
+      return;
+    }
+    if (messages.length === 0 && !pendingRun) {
+      updateConversation.mutate(
+        {
+          conversationId: activeConversation.id,
+          data: { assistantProfileId: profileId },
+        },
+        {
+          onSuccess: (conversation) => {
+            setAssistantProfileId(conversation.assistantProfile.id);
+            if (
+              conversation.agentMode &&
+              conversation.assistantProfile.id &&
+              !availableProfiles.find(
+                (profile) => profile.id === conversation.assistantProfile.id,
+              )?.agent.available
+            ) {
+              setAgentMode(false);
+            }
+          },
+          onError: (error) =>
+            notifications.show({
+              message: resolveAiErrorMessage(
+                t,
+                i18n,
+                error?.["response"]?.data?.code,
+              ),
+              color: "red",
+            }),
+        },
+      );
+      return;
+    }
+    modals.openConfirmModal({
+      title: t("ai.profiles.startNewTitle"),
+      children: <Text size="sm">{t("ai.profiles.startNewDescription")}</Text>,
+      labels: { confirm: t("ai.profiles.startNew"), cancel: t("ai.cancel") },
+      onConfirm: () => beginLocalDraftWithProfile(profileId),
+    });
+  };
+
+  const saveProfilePreferences = (
+    preferredProfileId: string | null,
+    nextHiddenProfileIds: string[],
+  ) => {
+    updateProfilePreferences.mutate(
+      { preferredProfileId, hiddenProfileIds: nextHiddenProfileIds },
+      {
+        onError: (error) =>
+          notifications.show({
+            message: resolveAiErrorMessage(
+              t,
+              i18n,
+              error?.["response"]?.data?.code,
+            ),
+            color: "red",
+          }),
+      },
+    );
+  };
+
+  const togglePreferredProfile = (profileId: string) => {
+    saveProfilePreferences(
+      profilePreferencesQuery.data?.preferredProfileId === profileId
+        ? null
+        : profileId,
+      profilePreferencesQuery.data?.hiddenProfileIds ?? [],
+    );
+  };
+
+  const hideProfile = (profileId: string) => {
+    const nextHiddenProfileIds = [
+      ...new Set([
+        ...(profilePreferencesQuery.data?.hiddenProfileIds ?? []),
+        profileId,
+      ]),
+    ];
+    saveProfilePreferences(
+      profilePreferencesQuery.data?.preferredProfileId === profileId
+        ? null
+        : (profilePreferencesQuery.data?.preferredProfileId ?? null),
+      nextHiddenProfileIds,
+    );
+    if (!activeConversation && assistantProfileId === profileId) {
+      const fallback = availableProfiles.find(
+        (profile) =>
+          profile.id !== profileId &&
+          profile.id === profilesQuery.data?.defaultProfileId,
+      );
+      beginLocalDraftWithProfile(fallback?.id ?? null);
+    }
+  };
+
+  const showHiddenProfiles = () => {
+    saveProfilePreferences(
+      profilePreferencesQuery.data?.preferredProfileId ?? null,
+      [],
+    );
+  };
+
+  const startProfile = async (profileId: string) => {
+    const profile = availableProfiles.find((item) => item.id === profileId);
+    if (!profile) return;
+    beginLocalDraftWithProfile(profile.id);
+    composerEditor?.commands.focus();
+    if (!profile.autoStart || !profile.launchMessage) return;
+    try {
+      const conversation = await ensureConversation(
+        profile.id,
+        agentMode && profile.agent.available,
+      );
+      setDraft(profile.launchMessage);
+      await submit(profile.launchMessage, conversation);
+    } catch (error) {
+      notifications.show({
+        message: resolveAiErrorMessage(
+          t,
+          i18n,
+          error?.["response"]?.data?.code,
+        ),
+        color: "red",
+      });
+    }
+  };
 
   return (
     <Stack
@@ -1250,15 +1544,41 @@ export function AiPanel() {
                     {option.label}
                   </Text>
                   {conversation && (
-                    <Text size="xs" c="dimmed">
-                      {new Intl.DateTimeFormat(i18n.language, {
-                        dateStyle: "medium",
-                      }).format(
-                        new Date(
-                          conversation.lastOpenedAt || conversation.updatedAt,
-                        ),
+                    <Group gap={4} wrap="wrap">
+                      <Text size="xs" c="dimmed">
+                        {new Intl.DateTimeFormat(i18n.language, {
+                          dateStyle: "medium",
+                        }).format(
+                          new Date(
+                            conversation.lastOpenedAt || conversation.updatedAt,
+                          ),
+                        )}
+                      </Text>
+                      {conversation.assistantProfile.name && (
+                        <Badge
+                          size="xs"
+                          variant="light"
+                          color="gray"
+                          leftSection={
+                            conversation.assistantProfile.icon ? (
+                              <AssistantProfileIcon
+                                icon={conversation.assistantProfile.icon}
+                                size={11}
+                              />
+                            ) : undefined
+                          }
+                        >
+                          {conversation.assistantProfile.name} · v
+                          {conversation.assistantProfile.version}
+                        </Badge>
                       )}
-                    </Text>
+                      {conversation.assistantProfile.availability !==
+                        "available" && (
+                        <Badge size="xs" color="orange" variant="light">
+                          {t("ai.profiles.unavailable")}
+                        </Badge>
+                      )}
+                    </Group>
                   )}
                 </Box>
               );
@@ -1371,6 +1691,42 @@ export function AiPanel() {
                   <Text size="sm" c="dimmed" ta="center">
                     {t("ai.startConversationDescription")}
                   </Text>
+                  {availableProfiles.length > 0 && (
+                    <Stack gap="xs" w="100%" maw={520} mt="sm">
+                      {availableProfiles.map((profile) => (
+                        <Paper key={profile.id} withBorder p="sm" radius="md">
+                          <Group justify="space-between" wrap="nowrap">
+                            <Box style={{ minWidth: 0 }}>
+                              <Group gap={6} wrap="nowrap">
+                                <AssistantProfileIcon
+                                  icon={profile.icon}
+                                  size={15}
+                                />
+                                <Text fw={600} size="sm" truncate>
+                                  {profile.name}
+                                </Text>
+                                <Badge size="xs" variant="light">
+                                  v{profile.version}
+                                </Badge>
+                              </Group>
+                              {profile.description && (
+                                <Text size="xs" c="dimmed" lineClamp={2}>
+                                  {profile.description}
+                                </Text>
+                              )}
+                            </Box>
+                            <Button
+                              size="compact-sm"
+                              style={{ minHeight: 32 }}
+                              onClick={() => void startProfile(profile.id)}
+                            >
+                              {t("ai.profiles.start")}
+                            </Button>
+                          </Group>
+                        </Paper>
+                      ))}
+                    </Stack>
+                  )}
                 </Stack>
               )}
 
@@ -1621,11 +1977,91 @@ export function AiPanel() {
               onSubmit={() => void submit(draft)}
             />
           }
-          agentAvailable={availability.agentAvailable}
+          agentAvailable={profileAgentAvailable}
           agentMode={agentMode}
           spaceSearchAvailable={spaceSearchReady}
           spaceSearchEnabled={useSpaceSearch}
           settingsDisabled={Boolean(pendingRun) || updateConversation.isPending}
+          profileControl={
+            profilesQuery.data?.enabled && profileOptions.length > 1 ? (
+              isCompactMobile ? (
+                <Button
+                  variant="subtle"
+                  size="compact-sm"
+                  leftSection={<IconRobot size={15} />}
+                  disabled={Boolean(pendingRun)}
+                  aria-label={t("ai.profiles.selectorLabel")}
+                  onClick={() => setProfilePickerOpened(true)}
+                  style={{ minHeight: 32 }}
+                >
+                  <span className={classes.composerResponsiveLabel}>
+                    {selectedProfile?.name ??
+                      activeConversation?.assistantProfile.name ??
+                      t("ai.profiles.spaceAssistant")}
+                  </span>
+                </Button>
+              ) : (
+                <Group gap={4} wrap="nowrap">
+                  <Select
+                    aria-label={t("ai.profiles.selectorLabel")}
+                    data={profileOptions}
+                    value={assistantProfileId ?? "__legacy_space__"}
+                    onChange={chooseAssistantProfile}
+                    searchable
+                    allowDeselect={false}
+                    size="xs"
+                    w={190}
+                    disabled={Boolean(pendingRun)}
+                    nothingFoundMessage={t("ai.profiles.noneFound")}
+                  />
+                  <Menu position="top-end" withinPortal>
+                    <Menu.Target>
+                      <AccessibleActionIcon
+                        variant="subtle"
+                        size="sm"
+                        label={t("ai.profiles.preferences")}
+                        disabled={updateProfilePreferences.isPending}
+                      >
+                        <IconDots size={16} />
+                      </AccessibleActionIcon>
+                    </Menu.Target>
+                    <Menu.Dropdown>
+                      {selectedProfile && (
+                        <>
+                          <Menu.Item
+                            leftSection={<IconStar size={15} />}
+                            onClick={() =>
+                              togglePreferredProfile(selectedProfile.id)
+                            }
+                          >
+                            {profilePreferencesQuery.data?.preferredProfileId ===
+                            selectedProfile.id
+                              ? t("ai.profiles.clearPreferred")
+                              : t("ai.profiles.makePreferred")}
+                          </Menu.Item>
+                          <Menu.Item
+                            leftSection={<IconEyeOff size={15} />}
+                            onClick={() => hideProfile(selectedProfile.id)}
+                          >
+                            {t("ai.profiles.hide")}
+                          </Menu.Item>
+                        </>
+                      )}
+                      {(profilePreferencesQuery.data?.hiddenProfileIds.length ??
+                        0) > 0 && (
+                        <Menu.Item
+                          leftSection={<IconEye size={15} />}
+                          onClick={showHiddenProfiles}
+                        >
+                          {t("ai.profiles.showHidden")}
+                        </Menu.Item>
+                      )}
+                    </Menu.Dropdown>
+                  </Menu>
+                </Group>
+              )
+            ) : null
+          }
           externalToolsControl={
             agentMode && spaceId && availability.externalMcp?.available ? (
               <AiExternalMcpOptInControl
@@ -1993,6 +2429,109 @@ export function AiPanel() {
       </Modal>
 
       <Drawer
+        opened={Boolean(isCompactMobile && profilePickerOpened)}
+        onClose={() => setProfilePickerOpened(false)}
+        title={t("ai.profiles.selectorLabel")}
+        closeButtonProps={{ "aria-label": t("Close") }}
+        position="bottom"
+        size="100dvh"
+        transitionProps={{ duration: reduceMotion ? 0 : 180 }}
+      >
+        <Stack gap="sm">
+          <TextInput
+            value={profileQuery}
+            onChange={(event) => setProfileQuery(event.currentTarget.value)}
+            placeholder={t("ai.profiles.search")}
+            leftSection={<IconSearch size={15} />}
+            autoFocus
+          />
+          <Button
+            variant={assistantProfileId === null ? "light" : "subtle"}
+            justify="flex-start"
+            leftSection={<IconRobot size={16} />}
+            onClick={() => {
+              chooseAssistantProfile("__legacy_space__");
+              setProfilePickerOpened(false);
+            }}
+          >
+            {t("ai.profiles.spaceAssistant")}
+          </Button>
+          {availableProfiles
+            .filter((profile) =>
+              `${profile.name} ${profile.description ?? ""}`
+                .toLocaleLowerCase(i18n.language)
+                .includes(profileQuery.trim().toLocaleLowerCase(i18n.language)),
+            )
+            .map((profile) => (
+              <Group key={profile.id} gap={4} wrap="nowrap">
+                <Button
+                  variant={
+                    assistantProfileId === profile.id ? "light" : "subtle"
+                  }
+                  justify="flex-start"
+                  leftSection={
+                    <AssistantProfileIcon icon={profile.icon} size={16} />
+                  }
+                  onClick={() => {
+                    chooseAssistantProfile(profile.id);
+                    setProfilePickerOpened(false);
+                  }}
+                  style={{ flex: 1 }}
+                >
+                  <Box ta="start" style={{ minWidth: 0 }}>
+                    <Text size="sm" fw={600} truncate>
+                      {profile.name} · v{profile.version}
+                    </Text>
+                    {profile.description && (
+                      <Text size="xs" c="dimmed" truncate>
+                        {profile.description}
+                      </Text>
+                    )}
+                  </Box>
+                </Button>
+                <AccessibleActionIcon
+                  variant={
+                    profilePreferencesQuery.data?.preferredProfileId ===
+                    profile.id
+                      ? "light"
+                      : "subtle"
+                  }
+                  label={
+                    profilePreferencesQuery.data?.preferredProfileId ===
+                    profile.id
+                      ? t("ai.profiles.clearPreferred")
+                      : t("ai.profiles.makePreferred")
+                  }
+                  onClick={() => togglePreferredProfile(profile.id)}
+                  disabled={updateProfilePreferences.isPending}
+                >
+                  <IconStar size={16} />
+                </AccessibleActionIcon>
+                <AccessibleActionIcon
+                  variant="subtle"
+                  label={t("ai.profiles.hide")}
+                  onClick={() => hideProfile(profile.id)}
+                  disabled={updateProfilePreferences.isPending}
+                >
+                  <IconEyeOff size={16} />
+                </AccessibleActionIcon>
+              </Group>
+            ))}
+          {(profilePreferencesQuery.data?.hiddenProfileIds.length ?? 0) > 0 && (
+            <Button
+              variant="subtle"
+              justify="flex-start"
+              leftSection={<IconEye size={16} />}
+              onClick={showHiddenProfiles}
+              loading={updateProfilePreferences.isPending}
+            >
+              {t("ai.profiles.showHidden")}
+            </Button>
+          )}
+        </Stack>
+      </Drawer>
+
+      <Drawer
         opened={Boolean(isCompactMobile && historyOpened)}
         onClose={() => setHistoryOpened(false)}
         title={t("ai.chatHistory")}
@@ -2038,6 +2577,24 @@ export function AiPanel() {
                         ),
                       )}
                     </Text>
+                    {conversation.assistantProfile.name && (
+                      <Group gap={4} wrap="nowrap">
+                        {conversation.assistantProfile.icon && (
+                          <AssistantProfileIcon
+                            icon={conversation.assistantProfile.icon}
+                            size={12}
+                          />
+                        )}
+                        <Text size="xs" c="dimmed" truncate>
+                          {conversation.assistantProfile.name} · v
+                          {conversation.assistantProfile.version}
+                          {conversation.assistantProfile.availability !==
+                          "available"
+                            ? ` · ${t("ai.profiles.unavailable")}`
+                            : ""}
+                        </Text>
+                      </Group>
+                    )}
                   </Box>
                 </Button>
               ))}
@@ -2105,6 +2662,34 @@ export function AiPanel() {
       </Drawer>
     </Stack>
   );
+}
+
+function AssistantProfileIcon({
+  icon,
+  size,
+}: {
+  icon: AiAssistantProfileIcon;
+  size: number;
+}) {
+  const props = { size, "aria-hidden": true } as const;
+  switch (icon) {
+    case "robot":
+      return <IconRobot {...props} />;
+    case "brain":
+      return <IconBrain {...props} />;
+    case "book":
+      return <IconBook {...props} />;
+    case "briefcase":
+      return <IconBriefcase {...props} />;
+    case "code":
+      return <IconCode {...props} />;
+    case "language":
+      return <IconLanguage {...props} />;
+    case "search":
+      return <IconSearch {...props} />;
+    default:
+      return <IconSparkles {...props} />;
+  }
 }
 
 function AiStreamingPlaceholder({
