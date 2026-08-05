@@ -9,10 +9,13 @@
       "entry": [
         "src/main.ts",
         "src/app.module.ts",
-        "src/collaboration/server/main.ts",
-        "src/**/*.spec.ts"
+        "src/collaboration/server/collab-main.ts",
+        "src/database/migrations/*.ts",
+        "src/**/*.spec.ts",
+        "src/**/*.spec.tsx"
       ],
-      "project": ["src/**/*.ts"]
+      "project": ["src/**/*.ts", "src/**/*.tsx"],
+      "ignoreDependencies": ["pino-pretty"]
     },
     "apps/client": {
       "entry": ["src/main.tsx", "src/**/*.test.ts", "src/**/*.test.tsx"],

@@ -11,7 +11,7 @@
   - `packages/editor-ext` — shared TypeScript package with editor extensions.
   - `packages/api-contract` — shared API-facing TypeScript contracts.
 - Root package manager is pinned: `pnpm@10.4.0`.
-- **Only the root `package.json` `pnpm.overrides` block actually affects resolution.** The `overrides` and `patchedDependencies` blocks in `pnpm-workspace.yaml` are inert: pnpm reads those keys from that file only from v10.6 onward, and `packageManager` pins pnpm 10.4.0. `pnpm-lock.yaml` therefore records only the root overrides, and the `react-arborist` patch is not applied. See the warning comment in `pnpm-workspace.yaml` for how to activate them (requires a lockfile regeneration with network access and a full re-verification).
+- Root `package.json` `pnpm.overrides` and `pnpm.patchedDependencies` are the only dependency-resolution policy. `pnpm-workspace.yaml` only declares workspace package globs.
 - Root composite scripts call `corepack pnpm` internally, so `corepack pnpm verify:full` works even when a global `pnpm` shim is not on `PATH`.
 - `node:22-slim` is used for the production image.
 
@@ -82,7 +82,7 @@
 - `apps/server/src/database/migrations/20260730T200000-share-page-uniqueness.ts` — deterministic cleanup of duplicate page shares and database-enforced active-share uniqueness.
 - `packages/editor-ext/src/lib/{audio,pdf,transclusion,indent,page-break,tag}` — editor nodes/extensions for audio, embedded PDFs, synced blocks, paragraph/heading indentation, print page breaks, and inline TBD/TODO tags.
 - `packages/api-contract/src` — shared API-facing TypeScript contracts used by server/client code; it builds to `packages/api-contract/dist` for runtime server consumption.
-- `patches/` — pnpm patch files (for example, for `react-arborist`).
+- `patches/` — pnpm patch files referenced by root `package.json`.
 
 ### What can be safely ignored during analysis
 
@@ -251,9 +251,9 @@ Minimum:
 - Dependency updates: via `pnpm up` (targeted by package or workspace).
 - Security/audit:
   - baseline: `pnpm audit`
-  - additionally account for `overrides` in `pnpm-workspace.yaml` and root `package.json` `pnpm.overrides` (used to pin vulnerable/conflicting package versions).
+  - account for root `package.json` `pnpm.overrides` (used to pin vulnerable/conflicting package versions).
   - architecture reports: `pnpm audit:deps`, `pnpm audit:dead-code`, `pnpm audit:duplicates`, `pnpm audit:architecture` use `dependency-cruiser`, `knip`, and `jscpd`; they are non-blocking local audit commands.
-- Dependency patches: keep and maintain them in `patches/` and in `patchedDependencies` inside `pnpm-workspace.yaml`.
+- Dependency patches: keep and maintain them in `patches/` and root `package.json` `pnpm.patchedDependencies`.
 
 ---
 

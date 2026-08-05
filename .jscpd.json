@@ -12,6 +12,7 @@
     "**/dist/**",
     "**/coverage/**",
     "**/.nx/**",
+    "**/database/migrations/**",
     "apps/server/docs/api-route-inventory.generated.md"
   ],
   "minLines": 25,
