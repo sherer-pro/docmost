@@ -2,11 +2,12 @@
 
 import { Editor } from "@tiptap/core";
 import { StarterKit } from "@tiptap/starter-kit";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { IDictionaryTerm } from "@/features/dictionary/types/dictionary.types";
 import {
   DictionaryHighlightExtension,
   dictionaryHighlightPluginKey,
+  getDictionaryHighlightScanCount,
 } from "./dictionary-highlight-extension";
 
 const term: IDictionaryTerm = {
@@ -100,8 +101,7 @@ describe("DictionaryHighlightExtension", () => {
     }
   });
 
-  it("keeps rebuilds debounced for non-empty content without existing decorations", () => {
-    vi.useFakeTimers();
+  it("updates a newly matching text block immediately", () => {
     const editor = new Editor({
       extensions: [StarterKit, DictionaryHighlightExtension],
       content: "<p>No match.</p>",
@@ -126,16 +126,9 @@ describe("DictionaryHighlightExtension", () => {
 
       expect(
         dictionaryHighlightPluginKey.getState(editor.state)?.decorations.find(),
-      ).toHaveLength(0);
-
-      vi.advanceTimersByTime(250);
-
-      expect(
-        dictionaryHighlightPluginKey.getState(editor.state)?.decorations.find(),
       ).toHaveLength(1);
     } finally {
       editor.destroy();
-      vi.useRealTimers();
     }
   });
 
@@ -164,8 +157,7 @@ describe("DictionaryHighlightExtension", () => {
     }
   });
 
-  it("maps decorations during typing and rebuilds them after debounce", () => {
-    vi.useFakeTimers();
+  it("updates existing decorations immediately during typing", () => {
     const editor = createEditor();
 
     try {
@@ -187,16 +179,119 @@ describe("DictionaryHighlightExtension", () => {
 
       expect(
         dictionaryHighlightPluginKey.getState(editor.state)?.decorations.find(),
-      ).toHaveLength(2);
-
-      vi.advanceTimersByTime(250);
-
-      expect(
-        dictionaryHighlightPluginKey.getState(editor.state)?.decorations.find(),
       ).toHaveLength(3);
     } finally {
       editor.destroy();
-      vi.useRealTimers();
+    }
+  });
+
+  it("removes a deleted match immediately", () => {
+    const editor = createEditor();
+
+    try {
+      editor.view.dispatch(
+        editor.state.tr.setMeta(dictionaryHighlightPluginKey, {
+          enabled: true,
+          terms: [term],
+        }),
+      );
+
+      editor.commands.deleteRange({ from: 1, to: 6 });
+
+      expect(
+        dictionaryHighlightPluginKey.getState(editor.state)?.decorations.find(),
+      ).toHaveLength(1);
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("matches a multi-word form across marked text nodes", () => {
+    const editor = new Editor({
+      extensions: [
+        StarterKit,
+        DictionaryHighlightExtension.configure({
+          enabled: true,
+          terms: [term],
+        }),
+      ],
+      content: "<p>Alpha <strong>Beta</strong></p>",
+    });
+
+    try {
+      expect(
+        dictionaryHighlightPluginKey.getState(editor.state)?.decorations.find(),
+      ).toHaveLength(1);
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("updates phrase decorations across block splits and joins", () => {
+    const editor = new Editor({
+      extensions: [
+        StarterKit,
+        DictionaryHighlightExtension.configure({
+          enabled: true,
+          terms: [term],
+        }),
+      ],
+      content: "<p>Alpha Beta</p>",
+    });
+
+    try {
+      expect(
+        dictionaryHighlightPluginKey.getState(editor.state)?.decorations.find(),
+      ).toHaveLength(1);
+
+      editor.commands.setTextSelection(6);
+      editor.commands.splitBlock();
+
+      expect(
+        dictionaryHighlightPluginKey.getState(editor.state)?.decorations.find(),
+      ).toEqual([expect.objectContaining({ from: 1, to: 6 })]);
+
+      editor.commands.joinBackward();
+
+      expect(
+        dictionaryHighlightPluginKey.getState(editor.state)?.decorations.find(),
+      ).toEqual([expect.objectContaining({ from: 1, to: 11 })]);
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("scans only nearby blocks for a small edit in a large document", () => {
+    const editor = new Editor({
+      extensions: [
+        StarterKit,
+        DictionaryHighlightExtension.configure({
+          enabled: true,
+          terms: [term],
+        }),
+      ],
+      content: {
+        type: "doc",
+        content: Array.from({ length: 1_001 }, () => ({
+          type: "paragraph",
+          content: [{ type: "text", text: "Alpha" }],
+        })),
+      },
+    });
+
+    try {
+      expect(getDictionaryHighlightScanCount(editor.state)).toBe(1_001);
+
+      editor.commands.insertContentAt(2, "x");
+
+      expect(getDictionaryHighlightScanCount(editor.state)).toBeLessThanOrEqual(
+        2,
+      );
+      expect(
+        dictionaryHighlightPluginKey.getState(editor.state)?.decorations.find(),
+      ).toHaveLength(1_000);
+    } finally {
+      editor.destroy();
     }
   });
 });
