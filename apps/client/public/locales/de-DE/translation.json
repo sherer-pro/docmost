@@ -1351,10 +1351,7 @@
       "operationsSetup": "Konfigurieren und testen Sie für jeden Bereich das Modell und den optionalen Abruf. Genehmigen Sie zuerst die Bereitstellungsursprünge, lassen Sie die Suche deaktiviert, bis ein Adapter einsatzbereit ist, und begrenzen Sie den Zugriff über die Richtlinien für integrierte und externe Werkzeuge.",
       "operationsVerify": "Erstellen Sie für RAG Sync pro Bereich einen bereichsgebundenen RAG-Schlüssel und eine Knowledge Base. Prüfen Sie Erstellungs-, Aktualisierungs-, Lösch-, Anhangs- und Zugriffsentzugsszenarien, bevor Sie sich auf den Index verlassen.",
       "operationsMonitor": "Führen Sie RAG Sync als überwachten, dauerhaften Dienst aus. Überwachen Sie Zyklusabschlüsse, Verzögerungen, Wiederholungen, Sperrverluste, Antworten mit 429/503, den Zustand von Redis und Abrufresultate. Ein funktionierender Chat beweist nicht, dass die Bereichssuche funktioniert.",
-      "operationsRecovery": "Wiederholen Sie bei einem Fehler nur idempotente Lesevorgänge, nachdem die Abhängigkeiten wiederhergestellt wurden. Behandeln Sie PostgreSQL als maßgebliche Quelle für AI-Läufe, bewahren Sie die Knowledge Base während der Wiederherstellung von Zuordnungen und verwenden Sie den Bereitstellungsschalter für externes MCP als Notfall-Rollback.",
-      "maintenanceTitle": "Diesen Leitfaden synchron halten",
-      "maintenanceDescription": "Diese Seite ist die an Administratoren gerichtete Zusammenfassung von docs/AI_ASSISTANT_AND_RAG.md. Die genauen Laufzeiteinstellungen und der aktuelle Zustand in den jeweiligen Einstellungsregisterkarten und der Bereitstellungskonfiguration bleiben maßgeblich.",
-      "maintenanceRule": "Wenn sich Verhalten, Konfiguration, Verträge, Routen, Grenzwerte, Sicherheitsgrenzen, Werkzeuge oder Wiederherstellungsverfahren von AI, RAG oder MCP ändern, aktualisieren Sie die Markdown-Dokumentation und diesen integrierten Leitfaden in derselben Codeänderung."
+      "operationsRecovery": "Wiederholen Sie bei einem Fehler nur idempotente Lesevorgänge, nachdem die Abhängigkeiten wiederhergestellt wurden. Behandeln Sie PostgreSQL als maßgebliche Quelle für AI-Läufe, bewahren Sie die Knowledge Base während der Wiederherstellung von Zuordnungen und verwenden Sie den Bereitstellungsschalter für externes MCP als Notfall-Rollback."
     },
 
     "integrations": {

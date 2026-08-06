@@ -1351,10 +1351,7 @@
       "operationsSetup": "为每个空间配置并测试模型和可选搜索。先在部署层允许地址，在适配器就绪前不要启用搜索，并通过内置和外部工具策略收窄访问范围。",
       "operationsVerify": "为 RAG Sync 创建一个限定空间范围的 RAG 密钥，并为每个空间创建一个 Knowledge Base。使用索引前，请验证创建、更新、删除、附件和访问撤销。",
       "operationsMonitor": "将 RAG Sync 作为受监控的常驻服务运行。监控周期完成情况、延迟、重复处理、锁丢失、429/503 响应、Redis 状态和搜索结果；聊天可用并不代表空间搜索正常。",
-      "operationsRecovery": "故障后，只有在依赖项恢复后才重试幂等读取。将 PostgreSQL 视为 AI 运行的事实来源，在恢复映射时保留 Knowledge Base，并使用外部 MCP 的部署开关进行紧急回滚。",
-      "maintenanceTitle": "保持指南最新",
-      "maintenanceDescription": "本页面是 docs/AI_ASSISTANT_AND_RAG.md 的管理员说明。准确数值和当前状态由相应设置选项卡及部署配置决定。",
-      "maintenanceRule": "更改 AI、RAG 或 MCP 的行为、配置、契约、路由、限制、安全边界、工具或恢复过程时，请在同一次代码变更中更新 Markdown 文档和此内置指南。"
+      "operationsRecovery": "故障后，只有在依赖项恢复后才重试幂等读取。将 PostgreSQL 视为 AI 运行的事实来源，在恢复映射时保留 Knowledge Base，并使用外部 MCP 的部署开关进行紧急回滚。"
     },
 
     "integrations": {

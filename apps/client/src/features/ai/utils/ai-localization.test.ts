@@ -206,11 +206,7 @@ describe("AI localization contract", () => {
       key.startsWith("adminGuide."),
     );
 
-    expect(guideKeys).toHaveLength(36);
-    expect(english["adminGuide.maintenanceRule"]).toContain(
-      "Markdown documentation",
-    );
-    expect(english["adminGuide.maintenanceRule"]).toContain("embedded guide");
+    expect(guideKeys).toHaveLength(33);
 
     for (const locale of LOCALES.filter((value) => value !== "en-US")) {
       const localized = flatten(readAiLocale(locale));

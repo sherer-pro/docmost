@@ -17,7 +17,6 @@ import {
   IconChecklist,
   IconChevronRight,
   IconDatabase,
-  IconInfoCircle,
   IconPlugConnected,
   IconRefresh,
   IconSearch,
@@ -283,21 +282,6 @@ export default function AiAdminGuide() {
           </List>
         </Card>
       </SimpleGrid>
-
-      <Alert
-        color="violet"
-        variant="light"
-        icon={<IconInfoCircle size={20} />}
-        title={t("ai.adminGuide.maintenanceTitle")}
-        className={classes.maintenance}
-      >
-        <Stack gap="xs">
-          <Text size="sm">{t("ai.adminGuide.maintenanceDescription")}</Text>
-          <Text size="sm" fw={600}>
-            {t("ai.adminGuide.maintenanceRule")}
-          </Text>
-        </Stack>
-      </Alert>
     </Stack>
   );
 }

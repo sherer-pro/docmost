@@ -1351,10 +1351,7 @@
       "operationsSetup": "Configureer en test voor elke ruimte het model en de optionele ophaalfunctie. Keur eerst de implementatie-origins goed, laat zoeken uitgeschakeld totdat een adapter gereed is en gebruik het beleid voor ingebouwde en externe tools om de toegang te beperken.",
       "operationsVerify": "Maak voor RAG Sync per ruimte één afgebakende RAG-sleutel en één Knowledge Base. Controleer scenario’s voor maken, bijwerken, verwijderen, bijlagen en intrekken van toegang voordat u op de index vertrouwt.",
       "operationsMonitor": "Voer RAG Sync uit als een bewaakte permanente service. Bewaak cyclusvoltooiing, vertraging, nieuwe pogingen, verlies van vergrendeling, 429/503-responses, de status van Redis en ophaalresultaten; een werkende chat bewijst niet dat zoeken binnen de ruimte werkt.",
-      "operationsRecovery": "Probeer bij een storing alleen idempotente leesbewerkingen opnieuw nadat de afhankelijkheden zijn hersteld. Houd PostgreSQL gezaghebbend voor AI-uitvoeringen, behoud de Knowledge Base tijdens het herstel van koppelingen en gebruik de implementatieschakelaar voor extern MCP voor een noodrollback.",
-      "maintenanceTitle": "Houd deze handleiding gesynchroniseerd",
-      "maintenanceDescription": "Deze pagina is de beheerderssamenvatting van docs/AI_ASSISTANT_AND_RAG.md. De exacte runtime-instellingen en de huidige status in de relevante instellingentabbladen en implementatieconfiguratie blijven gezaghebbend.",
-      "maintenanceRule": "Wanneer gedrag, configuratie, contracten, routes, limieten, beveiligingsgrenzen, tools of herstelprocedures van AI, RAG of MCP veranderen, werkt u de Markdown-documentatie en deze ingebouwde handleiding bij binnen dezelfde codewijziging."
+      "operationsRecovery": "Probeer bij een storing alleen idempotente leesbewerkingen opnieuw nadat de afhankelijkheden zijn hersteld. Houd PostgreSQL gezaghebbend voor AI-uitvoeringen, behoud de Knowledge Base tijdens het herstel van koppelingen en gebruik de implementatieschakelaar voor extern MCP voor een noodrollback."
     },
 
     "integrations": {

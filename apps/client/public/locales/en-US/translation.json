@@ -1351,10 +1351,7 @@
       "operationsSetup": "Configure and test the model and optional retrieval for every space. Approve deployment origins first, keep search disabled until an adapter is ready, and use the built-in and external tool policies to narrow access.",
       "operationsVerify": "For RAG Sync, create one space-scoped RAG key and one Knowledge Base per space. Verify create, update, delete, attachment, and access-removal scenarios before relying on the index.",
       "operationsMonitor": "Run RAG Sync as a supervised persistent service. Monitor cycle completion, lag, retries, lock loss, 429/503 responses, Redis health, and retrieval outcomes; a working chat does not prove that space search is working.",
-      "operationsRecovery": "On failure, retry only idempotent reads after dependencies recover. Keep PostgreSQL authoritative for AI runs, preserve the Knowledge Base during mapping recovery, and use the external MCP deployment switch for emergency rollback.",
-      "maintenanceTitle": "Keep this guide synchronized",
-      "maintenanceDescription": "This page is the administrator-facing summary of docs/AI_ASSISTANT_AND_RAG.md. Exact runtime settings and current state remain authoritative in the relevant settings tabs and deployment configuration.",
-      "maintenanceRule": "When AI, RAG, or MCP behavior, configuration, contracts, routes, limits, security boundaries, tools, or recovery procedures change, update the Markdown documentation and this embedded guide in the same code change."
+      "operationsRecovery": "On failure, retry only idempotent reads after dependencies recover. Keep PostgreSQL authoritative for AI runs, preserve the Knowledge Base during mapping recovery, and use the external MCP deployment switch for emergency rollback."
     },
 
     "integrations": {
