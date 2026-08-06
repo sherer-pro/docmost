@@ -1351,10 +1351,7 @@
       "operationsSetup": "Configure e teste o modelo e a busca opcional de cada espaço. Primeiro permita os endereços no nível da implantação, não habilite a busca antes de o adaptador estar pronto e restrinja o acesso com políticas de ferramentas integradas e externas.",
       "operationsVerify": "Para o RAG Sync, crie uma chave RAG com escopo de espaço e uma Knowledge Base por espaço. Antes de usar o índice, verifique criação, atualização, exclusão, anexos e revogação de acesso.",
       "operationsMonitor": "Execute o RAG Sync como um serviço permanente monitorado. Acompanhe a conclusão dos ciclos, a defasagem, as repetições, a perda de bloqueio, as respostas 429/503, o estado do Redis e os resultados da busca; uma conversa funcionando não significa que a busca no espaço esteja saudável.",
-      "operationsRecovery": "Após uma falha, repita apenas leituras idempotentes e somente depois de restaurar as dependências. Considere o PostgreSQL a fonte da verdade para execuções de AI, preserve a Knowledge Base ao restaurar mapeamentos e use o interruptor de implantação do MCP externo para reversão de emergência.",
-      "maintenanceTitle": "Mantenha o guia atualizado",
-      "maintenanceDescription": "Esta página é a apresentação administrativa de docs/AI_ASSISTANT_AND_RAG.md. Os valores exatos e o estado atual são determinados pelas respectivas abas de configurações e pela configuração da implantação.",
-      "maintenanceRule": "Ao alterar o comportamento, a configuração, os contratos, as rotas, os limites, as fronteiras de segurança, as ferramentas ou os procedimentos de recuperação de AI, RAG ou MCP, atualize a documentação Markdown e este guia integrado na mesma alteração de código."
+      "operationsRecovery": "Após uma falha, repita apenas leituras idempotentes e somente depois de restaurar as dependências. Considere o PostgreSQL a fonte da verdade para execuções de AI, preserve a Knowledge Base ao restaurar mapeamentos e use o interruptor de implantação do MCP externo para reversão de emergência."
     },
 
     "integrations": {

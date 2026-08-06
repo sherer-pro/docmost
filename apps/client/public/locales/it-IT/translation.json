@@ -1351,10 +1351,7 @@
       "operationsSetup": "Configura e verifica il modello e il recupero opzionale per ogni spazio. Approva prima le origini di distribuzione, mantieni la ricerca disabilitata finché un adattatore non è pronto e utilizza le politiche degli strumenti integrati ed esterni per limitare l’accesso.",
       "operationsVerify": "Per RAG Sync, crea una chiave RAG con ambito limitato allo spazio e una Knowledge Base per ogni spazio. Verifica gli scenari di creazione, aggiornamento, eliminazione, allegato e revoca dell’accesso prima di fare affidamento sull’indice.",
       "operationsMonitor": "Esegui RAG Sync come servizio persistente supervisionato. Monitora il completamento dei cicli, il ritardo, i nuovi tentativi, la perdita del lock, le risposte 429/503, lo stato di Redis e gli esiti del recupero; una chat funzionante non dimostra che la ricerca nello spazio funzioni.",
-      "operationsRecovery": "In caso di errore, riprova solo le letture idempotenti dopo il ripristino delle dipendenze. Mantieni PostgreSQL come fonte autorevole per le esecuzioni AI, conserva la Knowledge Base durante il ripristino delle associazioni e usa l’interruttore di distribuzione del MCP esterno per il rollback di emergenza.",
-      "maintenanceTitle": "Mantieni sincronizzata questa guida",
-      "maintenanceDescription": "Questa pagina è il riepilogo per gli amministratori di docs/AI_ASSISTANT_AND_RAG.md. Le impostazioni di runtime esatte e lo stato corrente nelle relative schede delle impostazioni e nella configurazione della distribuzione restano autorevoli.",
-      "maintenanceRule": "Quando cambiano il comportamento, la configurazione, i contratti, le route, i limiti, i confini di sicurezza, gli strumenti o le procedure di ripristino di AI, RAG o MCP, aggiorna la documentazione Markdown e questa guida integrata nella stessa modifica al codice."
+      "operationsRecovery": "In caso di errore, riprova solo le letture idempotenti dopo il ripristino delle dipendenze. Mantieni PostgreSQL come fonte autorevole per le esecuzioni AI, conserva la Knowledge Base durante il ripristino delle associazioni e usa l’interruttore di distribuzione del MCP esterno per il rollback di emergenza."
     },
 
     "integrations": {

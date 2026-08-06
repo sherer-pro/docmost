@@ -1351,10 +1351,7 @@
       "operationsSetup": "Configurez et testez le modèle et la récupération facultative pour chaque espace. Approuvez d’abord les origines de déploiement, laissez la recherche désactivée tant qu’un adaptateur n’est pas prêt et utilisez les politiques des outils intégrés et externes pour restreindre l’accès.",
       "operationsVerify": "Pour RAG Sync, créez une clé RAG limitée à l’espace et une Knowledge Base par espace. Vérifiez les scénarios de création, de mise à jour, de suppression, de pièce jointe et de retrait d’accès avant de dépendre de l’index.",
       "operationsMonitor": "Exécutez RAG Sync en tant que service persistant supervisé. Surveillez la fin des cycles, le retard, les nouvelles tentatives, la perte de verrou, les réponses 429/503, l’état de Redis et les résultats de récupération. Une conversation fonctionnelle ne prouve pas que la recherche dans l’espace fonctionne.",
-      "operationsRecovery": "En cas d’échec, ne relancez que les lectures idempotentes après le rétablissement des dépendances. Conservez PostgreSQL comme source faisant autorité pour les exécutions AI, préservez la Knowledge Base pendant la récupération des correspondances et utilisez l’interrupteur de déploiement du MCP externe pour un retour arrière d’urgence.",
-      "maintenanceTitle": "Maintenir ce guide synchronisé",
-      "maintenanceDescription": "Cette page est le résumé destiné aux administrateurs de docs/AI_ASSISTANT_AND_RAG.md. Les paramètres d’exécution exacts et l’état actuel figurant dans les onglets de paramètres concernés et dans la configuration du déploiement restent les références faisant autorité.",
-      "maintenanceRule": "Lorsque le comportement, la configuration, les contrats, les routes, les limites, les frontières de sécurité, les outils ou les procédures de récupération de AI, RAG ou MCP changent, mettez à jour la documentation Markdown et ce guide intégré dans la même modification de code."
+      "operationsRecovery": "En cas d’échec, ne relancez que les lectures idempotentes après le rétablissement des dépendances. Conservez PostgreSQL comme source faisant autorité pour les exécutions AI, préservez la Knowledge Base pendant la récupération des correspondances et utilisez l’interrupteur de déploiement du MCP externe pour un retour arrière d’urgence."
     },
 
     "integrations": {
