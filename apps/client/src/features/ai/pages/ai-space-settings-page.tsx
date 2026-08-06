@@ -37,6 +37,7 @@ const SECTIONS: Exclude<AiSpaceSettingsSection, "all">[] = [
   "tools",
   "externalTools",
   "retrieval",
+  "ragSync",
   "limits",
 ];
 

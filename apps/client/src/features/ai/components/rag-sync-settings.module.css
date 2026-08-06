@@ -1,0 +1,54 @@
+.section {
+  min-width: 0;
+}
+
+.headerIcon {
+  flex: 0 0 auto;
+}
+
+.statusGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--mantine-spacing-sm);
+}
+
+.statusCard {
+  min-width: 0;
+  background: light-dark(
+    var(--mantine-color-gray-0),
+    var(--mantine-color-dark-6)
+  );
+}
+
+.keyAction {
+  align-self: flex-start;
+}
+
+.actionBar {
+  position: sticky;
+  z-index: 3;
+  bottom: 0;
+  padding: var(--mantine-spacing-sm) 0
+    calc(var(--mantine-spacing-sm) + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--mantine-color-default-border);
+  background: var(--mantine-color-body);
+}
+
+@media (max-width: 48em) {
+  .section {
+    padding: var(--mantine-spacing-sm);
+  }
+
+  .statusGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .actions > * {
+    width: 100%;
+  }
+}

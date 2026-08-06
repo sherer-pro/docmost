@@ -71,6 +71,7 @@ import { AiContentExclusionsSettings } from "./ai-content-exclusions-settings.ts
 import AiSpaceExternalMcpSettings from "@/features/ai-external-mcp/components/ai-space-external-mcp-settings.tsx";
 import { AiBuiltinToolSpacePolicy } from "./ai-builtin-tool-space-policy.tsx";
 import { AiAssistantProfilesSettings } from "./ai-assistant-profiles-settings.tsx";
+import { RagSyncSettings } from "./rag-sync-settings.tsx";
 
 type AiSettingsForm = {
   enabled: boolean;
@@ -146,6 +147,7 @@ export type AiSpaceSettingsSection =
   | "tools"
   | "externalTools"
   | "retrieval"
+  | "ragSync"
   | "limits";
 
 type AiSpaceSettingsProps = {
@@ -157,6 +159,14 @@ type AiSpaceSettingsProps = {
 export function AiSpaceSettings(props: AiSpaceSettingsProps) {
   if (props.section === "profiles") {
     return <AiAssistantProfilesSettings spaceId={props.spaceId} />;
+  }
+  if (props.section === "ragSync") {
+    return (
+      <RagSyncSettings
+        spaceId={props.spaceId}
+        onDirtyChange={props.onDirtyChange}
+      />
+    );
   }
   return <AiSpaceProviderSettings {...props} />;
 }

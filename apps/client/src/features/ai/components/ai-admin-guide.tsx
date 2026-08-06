@@ -55,6 +55,12 @@ const SURFACES: SurfaceCard[] = [
     titleKey: "ai.integrations.ragTitle",
   },
   {
+    color: "cyan",
+    descriptionKey: "ai.ragSync.description",
+    icon: IconRefresh,
+    titleKey: "ai.ragSync.title",
+  },
+  {
     color: "indigo",
     descriptionKey: "ai.adminGuide.inboundMcpDescription",
     icon: IconPlugConnected,
@@ -83,17 +89,18 @@ const SETTINGS_LINKS = [
 ];
 
 const SYNC_STEPS = [
-  "ai.adminGuide.syncStepStart",
+  "ai.ragSync.deploymentDisabledDescription",
+  "ai.ragSync.knowledgeIdDescription",
+  "ai.ragSync.writerKeyRequired",
   "ai.adminGuide.syncStepDelta",
-  "ai.adminGuide.syncStepScope",
-  "ai.adminGuide.syncStepRecover",
+  "ai.ragSync.cleanupRequiredDescription",
 ];
 
 const SYNC_RISKS = [
   "ai.adminGuide.riskTiming",
-  "ai.adminGuide.riskAccess",
+  "ai.ragSync.privacyDescription",
   "ai.adminGuide.riskDelivery",
-  "ai.adminGuide.riskRotation",
+  "ai.ragSync.targetMismatchDescription",
   "ai.adminGuide.riskModel",
 ];
 
@@ -106,8 +113,9 @@ const SECURITY_ITEMS = [
 
 const OPERATIONS = [
   "ai.adminGuide.operationsSetup",
-  "ai.adminGuide.operationsVerify",
-  "ai.adminGuide.operationsMonitor",
+  "ai.adminGuide.operationsRagMigration",
+  "ai.ragSync.test",
+  "ai.ragSync.lastSuccess",
   "ai.adminGuide.operationsRecovery",
 ];
 

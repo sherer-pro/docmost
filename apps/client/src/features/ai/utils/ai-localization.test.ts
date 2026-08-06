@@ -112,6 +112,9 @@ describe("AI localization contract", () => {
       "errorReason.unknown",
       "errorReason.agentToolPolicyChanged",
       "settings.title",
+      "ragSync.title",
+      "ragSync.privacyDescription",
+      "integrations.section.ragSync",
       "toolPolicy.workspaceTitle",
       "toolPolicy.deploymentDisabled",
       "toolPolicy.copyCapabilityIdentifier",
@@ -207,7 +210,7 @@ describe("AI localization contract", () => {
       key.startsWith("adminGuide."),
     );
 
-    expect(guideKeys).toHaveLength(33);
+    expect(guideKeys).toHaveLength(27);
 
     for (const locale of LOCALES.filter((value) => value !== "en-US")) {
       const localized = flatten(readAiLocale(locale));
