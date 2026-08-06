@@ -12,6 +12,7 @@ import {
   MinLength,
 } from 'class-validator';
 import { UserRole } from '../../../common/helpers/types/permission';
+import { MaxUtf8Bytes } from '../../../common/validator/max-utf8-bytes';
 
 export class InviteUserDto {
   @IsArray()
@@ -53,6 +54,7 @@ export class AcceptInviteDto extends InvitationInfoDto {
   name: string;
 
   @MinLength(8)
+  @MaxUtf8Bytes(72)
   @IsString()
   password: string;
 }

@@ -7,6 +7,7 @@ import {
   MinLength,
 } from 'class-validator';
 import { Transform, TransformFnParams } from 'class-transformer';
+import { MaxUtf8Bytes } from '../../../common/validator/max-utf8-bytes';
 
 export class CreateUserDto {
   @IsOptional()
@@ -23,6 +24,7 @@ export class CreateUserDto {
   @IsNotEmpty()
   @MinLength(8)
   @MaxLength(70)
+  @MaxUtf8Bytes(72)
   @IsString()
   password: string;
 }

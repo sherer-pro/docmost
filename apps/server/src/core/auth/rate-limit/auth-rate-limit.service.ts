@@ -237,10 +237,13 @@ export class AuthRateLimitService implements OnModuleDestroy {
         retryAfterMs: 0,
       } as const;
     } catch (error) {
-      this.logger.warn(
-        'Redis auth rate limiter failed, falling back to memory backend',
+      this.logger.error(
+        'Redis auth rate limiter failed; denying the authentication request',
       );
-      return this.consumeMemory({ ...input, now: Date.now() });
+      return {
+        allowed: false,
+        retryAfterMs: input.windowMs,
+      } as const;
     }
   }
 

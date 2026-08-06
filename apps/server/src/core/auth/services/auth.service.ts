@@ -111,24 +111,29 @@ export class AuthService {
     }
 
     const newPasswordHash = await hashPassword(dto.newPassword);
-    await this.userRepo.updateUser(
-      {
-        password: newPasswordHash,
-        hasGeneratedPassword: false,
-      },
-      userId,
-      workspaceId,
-    );
-
-    if (currentSessionId) {
-      await this.userSessionRepo.deleteAllExceptCurrent(
-        currentSessionId,
+    await executeTx(this.db, async (trx) => {
+      await this.userRepo.updateUser(
+        {
+          password: newPasswordHash,
+          hasGeneratedPassword: false,
+        },
         userId,
         workspaceId,
+        trx,
       );
-    } else {
-      await this.userSessionRepo.deleteByUserId(userId, workspaceId);
-    }
+
+      if (currentSessionId) {
+        await this.userSessionRepo.deleteAllExceptCurrent(
+          currentSessionId,
+          userId,
+          workspaceId,
+          trx,
+        );
+      } else {
+        await this.userSessionRepo.deleteByUserId(userId, workspaceId, trx);
+      }
+    });
+    await this.sessionService.notifyAuthorizationChanged(userId, workspaceId);
 
     const emailTemplate = ChangePasswordEmail({ username: user.name });
     await this.mailService.sendToQueue({
@@ -160,9 +165,7 @@ export class AuthService {
       : null;
     if (
       (forgotPasswordDto.spaceSlug && !target) ||
-      (target
-        ? target.policy.effective.enforceSso
-        : workspace.enforceSso)
+      (target ? target.policy.effective.enforceSso : workspace.enforceSso)
     ) {
       return;
     }
@@ -208,6 +211,7 @@ export class AuthService {
     if (
       !userToken ||
       userToken.type !== UserTokenType.FORGOT_PASSWORD ||
+      userToken.usedAt ||
       userToken.expiresAt < new Date()
     ) {
       throw new BadRequestException('Invalid or expired token');
@@ -229,16 +233,26 @@ export class AuthService {
       : null;
     if (
       (passwordResetDto.spaceSlug && !target) ||
-      (target
-        ? target.policy.effective.enforceSso
-        : workspace.enforceSso)
+      (target ? target.policy.effective.enforceSso : workspace.enforceSso)
     ) {
-      throw new BadRequestException('Password reset requires an eligible space');
+      throw new BadRequestException(
+        'Password reset requires an eligible space',
+      );
     }
 
     const newPasswordHash = await hashPassword(passwordResetDto.newPassword);
 
     await executeTx(this.db, async (trx) => {
+      const consumedToken = await this.userTokenRepo.consumeActiveToken(
+        userToken.id,
+        workspace.id,
+        UserTokenType.FORGOT_PASSWORD,
+        trx,
+      );
+      if (!consumedToken) {
+        throw new BadRequestException('Invalid or expired token');
+      }
+
       await this.userRepo.updateUser(
         {
           password: newPasswordHash,
@@ -254,9 +268,10 @@ export class AuthService {
         .where('userId', '=', user.id)
         .where('type', '=', UserTokenType.FORGOT_PASSWORD)
         .execute();
-    });
 
-    await this.userSessionRepo.deleteByUserId(user.id, workspace.id);
+      await this.userSessionRepo.deleteByUserId(user.id, workspace.id, trx);
+    });
+    await this.sessionService.notifyAuthorizationChanged(user.id, workspace.id);
 
     const emailTemplate = ChangePasswordEmail({ username: user.name });
     await this.mailService.sendToQueue({
@@ -292,6 +307,7 @@ export class AuthService {
     if (
       !userToken ||
       userToken.type !== userTokenDto.type ||
+      userToken.usedAt ||
       userToken.expiresAt < new Date()
     ) {
       throw new BadRequestException('Invalid or expired token');
@@ -319,12 +335,6 @@ export class AuthService {
   ): Promise<UserToken> {
     const hashedToken = hashProtectedValue(token);
 
-    const hashed = await this.userTokenRepo.findById(hashedToken, workspaceId);
-    if (hashed) {
-      return hashed;
-    }
-
-    // Backward compatibility for tokens issued before hashing rollout.
-    return this.userTokenRepo.findById(token, workspaceId);
+    return this.userTokenRepo.findById(hashedToken, workspaceId);
   }
 }

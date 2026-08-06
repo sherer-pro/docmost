@@ -55,7 +55,8 @@ export class MfaController {
     return this.mfaService.setup(user, workspace);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, AuthRateLimitGuard)
+  @AuthRateLimit({ endpoint: 'mfaVerify', accountField: 'sessionId' })
   @AuthPolicyScope('bootstrap')
   @HttpCode(HttpStatus.OK)
   @Post('enable')
@@ -76,10 +77,7 @@ export class MfaController {
 
   @HttpCode(HttpStatus.OK)
   @Post('setup-required')
-  async setupRequired(
-    @Req() req: FastifyRequest,
-    @Body() _dto: MfaSetupDto,
-  ) {
+  async setupRequired(@Req() req: FastifyRequest, @Body() _dto: MfaSetupDto) {
     const token = req.cookies?.authToken;
     if (!token) {
       throw new UnauthorizedException('MFA setup session is missing');
@@ -113,7 +111,8 @@ export class MfaController {
     };
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, AuthRateLimitGuard)
+  @AuthRateLimit({ endpoint: 'mfaVerify', accountField: 'sessionId' })
   @AuthPolicyScope('bootstrap')
   @HttpCode(HttpStatus.OK)
   @Post('step-up')
@@ -130,7 +129,8 @@ export class MfaController {
     return this.mfaService.stepUp(user, workspace.id, sessionId, dto.code);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, AuthRateLimitGuard)
+  @AuthRateLimit({ endpoint: 'mfaVerify', accountField: 'sessionId' })
   @HttpCode(HttpStatus.OK)
   @Post('disable')
   async disable(
@@ -138,9 +138,13 @@ export class MfaController {
     @AuthWorkspace() workspace: Workspace,
     @Body() dto: MfaDisableDto,
   ) {
-    const userWithPassword = await this.userRepo.findById(user.id, workspace.id, {
-      includePassword: true,
-    });
+    const userWithPassword = await this.userRepo.findById(
+      user.id,
+      workspace.id,
+      {
+        includePassword: true,
+      },
+    );
 
     if (!userWithPassword) {
       throw new UnauthorizedException('User not found');
@@ -149,7 +153,8 @@ export class MfaController {
     return this.mfaService.disable(userWithPassword, workspace.id, dto);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, AuthRateLimitGuard)
+  @AuthRateLimit({ endpoint: 'mfaVerify', accountField: 'sessionId' })
   @HttpCode(HttpStatus.OK)
   @Post('generate-backup-codes')
   async regenerateBackupCodes(
@@ -157,15 +162,23 @@ export class MfaController {
     @AuthWorkspace() workspace: Workspace,
     @Body() dto: MfaDisableDto,
   ) {
-    const userWithPassword = await this.userRepo.findById(user.id, workspace.id, {
-      includePassword: true,
-    });
+    const userWithPassword = await this.userRepo.findById(
+      user.id,
+      workspace.id,
+      {
+        includePassword: true,
+      },
+    );
 
     if (!userWithPassword) {
       throw new UnauthorizedException('User not found');
     }
 
-    return this.mfaService.regenerateBackupCodes(userWithPassword, workspace.id, dto);
+    return this.mfaService.regenerateBackupCodes(
+      userWithPassword,
+      workspace.id,
+      dto,
+    );
   }
 
   @HttpCode(HttpStatus.OK)

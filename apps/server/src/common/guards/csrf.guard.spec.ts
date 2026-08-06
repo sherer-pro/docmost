@@ -13,7 +13,7 @@ describe('CsrfGuard', () => {
       getClass: jest.fn(),
     }) as unknown as ExecutionContext;
 
-  const createGuard = () => {
+  const createGuard = (overrides: Record<string, unknown> = {}) => {
     const reflector = {
       getAllAndOverride: jest.fn().mockReturnValue(false),
     } as unknown as Reflector;
@@ -21,6 +21,9 @@ describe('CsrfGuard', () => {
     const environmentService = {
       getAppUrl: () => 'https://app.docmost.test',
       isHttps: () => true,
+      isCloud: () => false,
+      getSubdomainHost: () => 'docmost.test',
+      ...overrides,
     };
 
     return new CsrfGuard(reflector, environmentService as any);
@@ -28,6 +31,23 @@ describe('CsrfGuard', () => {
 
   it('allows same-origin mutating requests with a matching CSRF token', () => {
     const guard = createGuard();
+    const request = {
+      method: 'POST',
+      headers: {
+        host: 'app.docmost.test',
+        origin: 'https://app.docmost.test',
+        [CsrfService.HEADER_NAME]: 'csrf-token',
+      },
+      cookies: {
+        [CsrfService.COOKIE_NAME]: 'csrf-token',
+      },
+    };
+
+    expect(guard.canActivate(createContext(request))).toBe(true);
+  });
+
+  it('allows matching cloud workspace hosts under the configured root', () => {
+    const guard = createGuard({ isCloud: () => true });
     const request = {
       method: 'POST',
       headers: {
@@ -50,6 +70,43 @@ describe('CsrfGuard', () => {
       headers: {
         host: 'team.docmost.test',
         origin: 'https://attacker.test',
+        [CsrfService.HEADER_NAME]: 'csrf-token',
+      },
+      cookies: {
+        [CsrfService.COOKIE_NAME]: 'csrf-token',
+      },
+    };
+
+    expect(() => guard.canActivate(createContext(request))).toThrow(
+      'CSRF origin validation failed',
+    );
+  });
+
+  it('rejects a spoofed host even when Origin matches that host', () => {
+    const guard = createGuard();
+    const request = {
+      method: 'POST',
+      headers: {
+        host: 'attacker.test',
+        origin: 'https://attacker.test',
+        [CsrfService.HEADER_NAME]: 'csrf-token',
+      },
+      cookies: {
+        [CsrfService.COOKIE_NAME]: 'csrf-token',
+      },
+    };
+
+    expect(() => guard.canActivate(createContext(request))).toThrow(
+      'CSRF origin validation failed',
+    );
+  });
+
+  it('rejects mutating requests without Origin or Referer', () => {
+    const guard = createGuard();
+    const request = {
+      method: 'POST',
+      headers: {
+        host: 'app.docmost.test',
         [CsrfService.HEADER_NAME]: 'csrf-token',
       },
       cookies: {

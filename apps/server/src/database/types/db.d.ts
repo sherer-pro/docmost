@@ -1099,6 +1099,7 @@ export interface UserMfa {
   createdAt: Generated<Timestamp>;
   id: Generated<string>;
   isEnabled: Generated<boolean | null>;
+  lastUsedTotpCounter: Int8 | null;
   method: Generated<string>;
   secret: string | null;
   updatedAt: Generated<Timestamp>;

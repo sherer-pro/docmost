@@ -1,11 +1,15 @@
 import {
   decryptProtectedValue,
   encryptProtectedValue,
+  hashKeyedProtectedValue,
   hashProtectedValue,
   isEncryptedProtectedValue,
   isHashedProtectedValue,
+  isKeyedHashedProtectedValue,
   safeStringEqual,
+  verifyKeyedProtectedValue,
   verifyHashedProtectedValue,
+  wrapHashedProtectedValue,
 } from './credential-protection.util';
 
 describe('credential-protection.util', () => {
@@ -21,6 +25,40 @@ describe('credential-protection.util', () => {
 
     expect(verifyHashedProtectedValue('token-123', hash)).toBe(true);
     expect(verifyHashedProtectedValue('other', hash)).toBe(false);
+  });
+
+  it('protects low-entropy values with an application-secret keyed hash', () => {
+    const appSecret = 'application-secret-for-keyed-hash-tests';
+    const protectedValue = hashKeyedProtectedValue('RECOVERY1', appSecret);
+
+    expect(isKeyedHashedProtectedValue(protectedValue)).toBe(true);
+    expect(
+      verifyKeyedProtectedValue('RECOVERY1', protectedValue, appSecret),
+    ).toBe(true);
+    expect(
+      verifyKeyedProtectedValue('RECOVERY2', protectedValue, appSecret),
+    ).toBe(false);
+    expect(
+      verifyKeyedProtectedValue(
+        'RECOVERY1',
+        protectedValue,
+        'different-application-secret',
+      ),
+    ).toBe(false);
+  });
+
+  it('wraps legacy SHA-256 values without recovering their plaintext', () => {
+    const appSecret = 'application-secret-for-keyed-hash-tests';
+    const legacyHash = hashProtectedValue('RECOVERY1');
+    const wrapped = wrapHashedProtectedValue(legacyHash, appSecret);
+
+    expect(isKeyedHashedProtectedValue(wrapped)).toBe(true);
+    expect(verifyKeyedProtectedValue('RECOVERY1', wrapped, appSecret)).toBe(
+      true,
+    );
+    expect(verifyKeyedProtectedValue('RECOVERY2', wrapped, appSecret)).toBe(
+      false,
+    );
   });
 
   it('compares strings in constant-time shape and handles length mismatch', () => {

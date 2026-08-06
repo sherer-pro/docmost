@@ -9,7 +9,11 @@ import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { IS_CSRF_EXEMPT_KEY } from '../decorators/csrf-exempt.decorator';
 import { CsrfService } from '../security/csrf.service';
 import { EnvironmentService } from '../../integrations/environment/environment.service';
-import { normalizeHostHeader } from '../security/host.util';
+import {
+  getWorkspaceHostnameFromCloudHost,
+  normalizeHostHeader,
+} from '../security/host.util';
+import { safeStringEqual } from '../security/credential-protection.util';
 
 @Injectable()
 export class CsrfGuard implements CanActivate {
@@ -53,8 +57,9 @@ export class CsrfGuard implements CanActivate {
     if (
       !csrfCookie ||
       !csrfToken ||
+      typeof csrfCookie !== 'string' ||
       typeof csrfToken !== 'string' ||
-      csrfCookie !== csrfToken
+      !safeStringEqual(csrfCookie, csrfToken)
     ) {
       throw new ForbiddenException('CSRF token validation failed');
     }
@@ -68,30 +73,54 @@ export class CsrfGuard implements CanActivate {
     const sourceHeader = originHeader || refererHeader;
 
     if (!sourceHeader) {
-      return true;
+      return false;
     }
 
-    let sourceOrigin: string;
+    let sourceUrl: URL;
     try {
-      sourceOrigin = new URL(sourceHeader).origin;
+      sourceUrl = new URL(sourceHeader);
     } catch {
       return false;
     }
 
-    const trustedOrigins = new Set<string>();
     try {
-      trustedOrigins.add(this.environmentService.getAppUrl());
+      if (
+        sourceUrl.origin === new URL(this.environmentService.getAppUrl()).origin
+      ) {
+        return true;
+      }
     } catch {
       // Ignore malformed APP_URL here; environment validation reports it on boot.
     }
 
-    const requestHost = normalizeHostHeader(req.headers?.host);
-    if (requestHost) {
-      const protocol = this.environmentService.isHttps() ? 'https' : 'http';
-      trustedOrigins.add(`${protocol}://${requestHost}`);
+    if (!this.environmentService.isCloud()) {
+      return false;
     }
 
-    return trustedOrigins.has(sourceOrigin);
+    const requestHost = normalizeHostHeader(req.headers?.host);
+    const sourceHost = normalizeHostHeader(sourceUrl.host);
+    const subdomainHost = this.environmentService.getSubdomainHost();
+    const requestWorkspace = getWorkspaceHostnameFromCloudHost(
+      req.headers?.host,
+      subdomainHost,
+    );
+    const sourceWorkspace = getWorkspaceHostnameFromCloudHost(
+      sourceUrl.host,
+      subdomainHost,
+    );
+    const expectedProtocol = this.environmentService.isHttps()
+      ? 'https:'
+      : 'http:';
+
+    if (!requestHost || !sourceHost || !requestWorkspace || !sourceWorkspace) {
+      return false;
+    }
+
+    return (
+      sourceUrl.protocol === expectedProtocol &&
+      sourceHost === requestHost &&
+      sourceWorkspace === requestWorkspace
+    );
   }
 
   private firstHeaderValue(value: unknown): string | null {

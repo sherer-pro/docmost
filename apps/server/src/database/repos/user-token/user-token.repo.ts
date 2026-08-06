@@ -87,6 +87,25 @@ export class UserTokenRepo {
       .execute();
   }
 
+  async consumeActiveToken(
+    userTokenId: string,
+    workspaceId: string,
+    tokenType: string,
+    trx?: KyselyTransaction,
+  ): Promise<UserToken | undefined> {
+    const db = dbOrTx(this.db, trx);
+    return db
+      .updateTable('userTokens')
+      .set({ usedAt: new Date() })
+      .where('id', '=', userTokenId)
+      .where('workspaceId', '=', workspaceId)
+      .where('type', '=', tokenType)
+      .where('usedAt', 'is', null)
+      .where('expiresAt', '>', new Date())
+      .returningAll()
+      .executeTakeFirst();
+  }
+
   async deleteToken(token: string, trx?: KyselyTransaction): Promise<void> {
     const db = dbOrTx(this.db, trx);
     await db.deleteFrom('userTokens').where('token', '=', token).execute();

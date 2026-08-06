@@ -15,7 +15,11 @@ import { SpacePolicyService } from '../../space-policy/space-policy.service';
 
 describe('AuthService', () => {
   let service: AuthService;
-  let userTokenRepo: { findById: jest.Mock; insertUserToken: jest.Mock };
+  let userTokenRepo: {
+    findById: jest.Mock;
+    insertUserToken: jest.Mock;
+    consumeActiveToken: jest.Mock;
+  };
   let userRepo: { findByEmail: jest.Mock };
   let spacePolicy: { resolveAccessibleTarget: jest.Mock };
   let mailService: { sendToQueue: jest.Mock };
@@ -24,6 +28,7 @@ describe('AuthService', () => {
     userTokenRepo = {
       findById: jest.fn(),
       insertUserToken: jest.fn(),
+      consumeActiveToken: jest.fn(),
     };
     userRepo = { findByEmail: jest.fn() };
     spacePolicy = { resolveAccessibleTarget: jest.fn() };
@@ -39,7 +44,10 @@ describe('AuthService', () => {
         { provide: UserTokenRepo, useValue: userTokenRepo },
         { provide: UserSessionRepo, useValue: {} },
         { provide: MailService, useValue: mailService },
-        { provide: DomainService, useValue: { getUrl: () => 'https://docs.example.com' } },
+        {
+          provide: DomainService,
+          useValue: { getUrl: () => 'https://docs.example.com' },
+        },
         { provide: SpacePolicyService, useValue: spacePolicy },
         { provide: 'KyselyModuleConnectionToken', useValue: {} },
       ],
@@ -75,35 +83,41 @@ describe('AuthService', () => {
     );
   });
 
-  it('verifyUserToken keeps backward compatibility with legacy plaintext tokens', async () => {
+  it('verifyUserToken rejects legacy plaintext tokens after migration', async () => {
     const rawToken = 'legacy-token';
     const hashedToken = hashProtectedValue(rawToken);
 
-    userTokenRepo.findById
-      .mockResolvedValueOnce(undefined)
-      .mockResolvedValueOnce({
-        token: rawToken,
-        type: UserTokenType.FORGOT_PASSWORD,
-        expiresAt: new Date(Date.now() + 60_000),
-      });
+    userTokenRepo.findById.mockResolvedValueOnce(undefined);
 
     await expect(
       service.verifyUserToken(
         { token: rawToken, type: UserTokenType.FORGOT_PASSWORD } as any,
         'workspace-1',
       ),
-    ).resolves.toBeUndefined();
+    ).rejects.toBeInstanceOf(BadRequestException);
 
-    expect(userTokenRepo.findById).toHaveBeenNthCalledWith(
-      1,
+    expect(userTokenRepo.findById).toHaveBeenCalledTimes(1);
+    expect(userTokenRepo.findById).toHaveBeenCalledWith(
       hashedToken,
       'workspace-1',
     );
-    expect(userTokenRepo.findById).toHaveBeenNthCalledWith(
-      2,
-      rawToken,
-      'workspace-1',
-    );
+  });
+
+  it('verifyUserToken rejects an already consumed token', async () => {
+    const rawToken = 'consumed-token';
+    userTokenRepo.findById.mockResolvedValueOnce({
+      token: hashProtectedValue(rawToken),
+      type: UserTokenType.FORGOT_PASSWORD,
+      usedAt: new Date(),
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+
+    await expect(
+      service.verifyUserToken(
+        { token: rawToken, type: UserTokenType.FORGOT_PASSWORD } as any,
+        'workspace-1',
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('verifyUserToken rejects missing tokens', async () => {

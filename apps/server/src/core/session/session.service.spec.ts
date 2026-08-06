@@ -7,6 +7,7 @@ describe('SessionService authentication assurance', () => {
     };
     const userSessionRepo = {
       insertSession: jest.fn().mockResolvedValue({ id: 'session-1' }),
+      findActiveById: jest.fn(),
     };
     const environmentService = {
       getCookieExpiresIn: jest
@@ -49,5 +50,21 @@ describe('SessionService authentication assurance', () => {
       user,
       'session-1',
     );
+  });
+
+  it('validates that a session belongs to the expected principal', async () => {
+    const { service, userSessionRepo } = createService();
+    userSessionRepo.findActiveById.mockResolvedValue({
+      id: 'session-1',
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+    });
+
+    await expect(
+      service.isSessionActive('session-1', 'user-1', 'workspace-1'),
+    ).resolves.toBe(true);
+    await expect(
+      service.isSessionActive('session-1', 'user-2', 'workspace-1'),
+    ).resolves.toBe(false);
   });
 });

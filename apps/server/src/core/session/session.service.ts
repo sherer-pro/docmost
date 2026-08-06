@@ -92,11 +92,7 @@ export class SessionService {
     workspaceId: string,
   ): Promise<void> {
     await this.userSessionRepo.revokeById(sessionId, userId, workspaceId);
-    await this.eventEmitter?.emitAsync(EventName.AUTHORIZATION_CHANGED, {
-      workspaceId,
-      userId,
-      sessionId,
-    });
+    await this.notifyAuthorizationChanged(userId, workspaceId, sessionId);
   }
 
   async revokeAllOtherSessions(
@@ -109,15 +105,38 @@ export class SessionService {
       userId,
       workspaceId,
     );
-    await this.eventEmitter?.emitAsync(EventName.AUTHORIZATION_CHANGED, {
+    await this.notifyAuthorizationChanged(userId, workspaceId);
+  }
+
+  async isSessionActive(
+    sessionId: string,
+    userId: string,
+    workspaceId: string,
+  ): Promise<boolean> {
+    const session = await this.userSessionRepo.findActiveById(sessionId);
+    return Boolean(
+      session &&
+        session.userId === userId &&
+        session.workspaceId === workspaceId,
+    );
+  }
+
+  async notifyAuthorizationChanged(
+    userId: string,
+    workspaceId: string,
+    sessionId?: string,
+  ): Promise<void> {
+    const event = {
       workspaceId,
       userId,
-    });
+      ...(sessionId ? { sessionId } : {}),
+    };
+    await this.eventEmitter?.emitAsync(EventName.AUTHORIZATION_CHANGED, event);
   }
 
   private getUserAgent(request?: FastifyRequest): string | null {
     const header = request?.headers?.['user-agent'];
-    return Array.isArray(header) ? header[0] ?? null : header ?? null;
+    return Array.isArray(header) ? (header[0] ?? null) : (header ?? null);
   }
 
   private getIpAddress(request?: FastifyRequest): string | null {
