@@ -12,6 +12,10 @@ export const i18nReady = i18n
   // init i18next
   // for all options read: https://www.i18next.com/overview/configuration-options
   .init({
+    lng:
+      typeof navigator === "undefined"
+        ? "en-US"
+        : navigator.language || "en-US",
     fallbackLng: (code) => {
       const language = (code || "").toLowerCase();
       if (language.startsWith("ru")) return ["ru-RU"];
@@ -37,5 +41,13 @@ export const i18nReady = i18n
       useSuspense: false,
     },
   });
+
+i18n.on("languageChanged", (language) => {
+  document.documentElement.lang = language || "en-US";
+});
+
+void i18nReady.then(() => {
+  document.documentElement.lang = i18n.resolvedLanguage || "en-US";
+});
 
 export default i18n;

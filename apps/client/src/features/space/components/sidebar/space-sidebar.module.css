@@ -141,7 +141,7 @@
 }
 
 .customLinkAdd {
-  color: light-dark(var(--mantine-color-gray-6), var(--mantine-color-dark-2));
+  color: light-dark(var(--mantine-color-gray-7), var(--mantine-color-dark-1));
 }
 
 .externalLinkIcon {

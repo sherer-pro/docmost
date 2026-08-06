@@ -1,6 +1,7 @@
 import {
   NodeApi,
   NodeRendererProps,
+  RowRendererProps,
   Tree,
   TreeApi,
   SimpleTree,
@@ -575,6 +576,7 @@ function SpaceTreeComponent(
           selection={activeTreeNodeId}
           className={classes.tree}
           rowClassName={classes.row}
+          renderRow={AccessibleTreeRow}
           rowHeight={30}
           overscanCount={10}
           dndRootElement={rootElement.current}
@@ -628,6 +630,30 @@ export default SpaceTree;
 interface NodeProps extends NodeRendererProps<SpaceTreeNode> {
   isStatusFieldEnabled: boolean;
   fullSpaceAccess: boolean;
+}
+
+function AccessibleTreeRow({
+  node,
+  attrs,
+  innerRef,
+  children,
+}: RowRendererProps<SpaceTreeNode>) {
+  const { t } = useTranslation();
+  const hasExpandableChildren =
+    (node.children?.length ?? 0) > 0 || Boolean(node.data.hasChildren);
+
+  return (
+    <div
+      {...attrs}
+      ref={innerRef}
+      aria-label={node.data.name || t("untitled")}
+      aria-expanded={hasExpandableChildren ? node.isOpen : undefined}
+      onFocus={(event) => event.stopPropagation()}
+      onClick={node.handleClick}
+    >
+      {children}
+    </div>
+  );
 }
 
 function Node({
@@ -1407,8 +1433,8 @@ function PageArrow({ node, onExpandTree }: PageArrowProps) {
             : t("Expand")
           : t("Page")
       }
-      size={20}
-      minTargetSize={20}
+      size={TREE_ACTION_SIZE}
+      minTargetSize={TREE_ACTION_SIZE}
       variant="subtle"
       c="gray"
       onClick={(e) => {

@@ -1641,6 +1641,10 @@ export function AiPanel() {
           className={classes.messages}
           scrollbarSize={6}
           type="auto"
+          viewportProps={{
+            tabIndex: 0,
+            "aria-label": t("ai.title"),
+          }}
           onScrollPositionChange={({ y }) => {
             const viewport = viewportRef.current;
             if (!viewport) return;

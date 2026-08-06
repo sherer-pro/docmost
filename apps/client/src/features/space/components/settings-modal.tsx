@@ -17,6 +17,7 @@ import { hasFullSpaceAccess } from "@/features/space/permissions/export-access.t
 import { AiSpaceSettingsSummary } from "@/features/ai/components/ai-space-settings-summary.tsx";
 import { useMediaQuery } from "@mantine/hooks";
 import { useAiAssistantIdentity } from "@/features/ai/hooks/use-ai-assistant-identity.ts";
+import { useModalBackgroundInert } from "@/components/ui/use-modal-background-inert.ts";
 
 interface SpaceSettingsModalProps {
   spaceId: string;
@@ -43,6 +44,9 @@ export default function SpaceSettingsModal({
     workspaceRole: user?.role,
     spaceRole: space?.membership?.role,
   });
+  useModalBackgroundInert(
+    opened && !isLoading && Boolean(space) && canManageSpaceSettings,
+  );
 
   if (!opened || isLoading || !space || !canManageSpaceSettings) {
     return null;

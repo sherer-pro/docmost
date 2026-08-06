@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#1f1f1f" />
-    <title>Docmost — офлайн</title>
+    <title>Docmost - offline</title>
     <style>
       :root {
         color-scheme: dark light;
@@ -26,8 +26,9 @@
         color: #f6f7f9;
       }
 
-      .card {
+      .offline-card {
         max-width: 460px;
+        margin: 16px;
         padding: 24px;
         border-radius: 16px;
         border: 1px solid rgba(255, 255, 255, 0.15);
@@ -40,19 +41,39 @@
       }
 
       p {
-        margin: 0;
+        margin: 0 0 20px;
         opacity: 0.9;
         line-height: 1.45;
+      }
+
+      button {
+        min-width: 44px;
+        min-height: 44px;
+        padding: 10px 16px;
+        border: 1px solid rgba(255, 255, 255, 0.28);
+        border-radius: 8px;
+        background: #f6f7f9;
+        color: #101113;
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      button:focus-visible {
+        outline: 3px solid #74c0fc;
+        outline-offset: 3px;
       }
     </style>
   </head>
   <body>
-    <section class="card">
-      <h1>Вы офлайн</h1>
-      <p>
-        Подключение к сети отсутствует. Как только интернет вернется, просто
-        обновите страницу — сервис автоматически восстановит актуальные данные.
+    <main class="offline-card">
+      <h1 data-offline-heading>You are offline</h1>
+      <p data-offline-message>
+        There is no network connection. When the internet is available again,
+        refresh the page to load the latest data.
       </p>
-    </section>
+      <button type="button" data-offline-retry>Try again</button>
+    </main>
+    <script src="/offline.js" defer></script>
   </body>
 </html>

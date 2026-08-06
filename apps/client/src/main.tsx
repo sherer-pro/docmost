@@ -3,6 +3,7 @@ import "@mantine/spotlight/styles.css";
 import "@mantine/notifications/styles.css";
 import "@mantine/dates/styles.css";
 import "@/features/dictionary/styles/dictionary-highlight.css";
+import "@/styles/accessibility.css";
 
 import ReactDOM from "react-dom/client";
 import App from "./App.tsx";
@@ -23,6 +24,11 @@ import {
 } from "@/lib/config.ts";
 import posthog from "posthog-js";
 import { registerServiceWorker } from "@/lib/pwa/register-service-worker.ts";
+import APP_ROUTE from "@/lib/app-route.ts";
+import {
+  clearSensitiveClientState,
+  registerLogoutSync,
+} from "@/features/auth/utils/client-session-cleanup.ts";
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -33,6 +39,12 @@ export const queryClient = new QueryClient({
       staleTime: 5 * 60 * 1000,
     },
   },
+});
+
+registerLogoutSync(async () => {
+  queryClient.clear();
+  await clearSensitiveClientState();
+  window.location.replace(APP_ROUTE.AUTH.LOGIN);
 });
 
 if (isCloud() && isPostHogEnabled) {

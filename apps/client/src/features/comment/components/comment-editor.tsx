@@ -65,6 +65,10 @@ const CommentEditor = forwardRef(
         }),
       ],
       editorProps: {
+        attributes: {
+          "aria-label": t("Comment"),
+          "aria-multiline": "true",
+        },
         handleDOMEvents: {
           keydown: (_view, event) => {
             if (

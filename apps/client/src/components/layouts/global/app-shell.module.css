@@ -4,7 +4,7 @@
 
 .navbar, .aside {
   @media (max-width: 48em) {
-    width: 350px;
+    width: min(350px, 100vw);
   }
 }
 
@@ -31,6 +31,17 @@
 .main {
   min-width: 0;
   overflow-x: clip;
+}
+
+.mobileSidebarBackdrop {
+  position: fixed;
+  z-index: 99;
+  inset: 45px 0 0;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: rgba(0, 0, 0, 0.42);
+  cursor: pointer;
 }
 
 .asideResizeHandle {

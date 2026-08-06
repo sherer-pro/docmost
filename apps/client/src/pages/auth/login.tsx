@@ -13,7 +13,9 @@ export default function LoginPage() {
           {t("Login")} - {getAppName()}
         </title>
       </Helmet>
-      <LoginForm />
+      <main>
+        <LoginForm />
+      </main>
     </>
   );
 }
