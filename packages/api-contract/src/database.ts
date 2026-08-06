@@ -105,10 +105,18 @@ export interface UpdateDatabaseViewPayload {
   config?: unknown;
 }
 
+export interface DatabaseExportViewSnapshot {
+  filters?: string;
+  sortPropertyId?: string;
+  sortDirection?: "asc" | "desc";
+  visiblePropertyIds?: string[];
+}
+
 export interface ExportDatabasePayload {
   format: DatabaseExportFormat;
   includeChildren?: boolean;
   includeAttachments?: boolean;
+  currentView?: DatabaseExportViewSnapshot;
 }
 
 export interface DatabaseMarkdownResponse {

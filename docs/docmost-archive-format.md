@@ -14,6 +14,10 @@ restore payloads.
 - `files/<sourceAttachmentId>/<fileName>` contains attachment payloads.
 - Markdown page files provide a human-readable compatibility representation.
 
+All ZIP entry names are relative. Presentation exports use the same
+`files/<attachmentId>/<fileName>` layout, so an archive remains portable when
+it is extracted into any directory.
+
 Version 3 preserves `pages[].isTemplate` and `pageEmbed` occurrence IDs.
 Whole-page references to pages inside the archive are remapped to imported page
 IDs and remain live. For an accessible source outside the archive,
@@ -56,6 +60,13 @@ embeds and synced blocks. Rendering is depth-bounded; an unavailable source is
 represented by a localized neutral placeholder. Importing those formats never
 recreates a live relationship.
 
+Database Markdown, HTML, and PDF exports capture the active filters, property
+sort, and visible property columns. When descendants are requested, only rows
+in that current view and their non-row descendants are included; a selected
+nested row whose filtered parent is absent is reparented below the database
+root in the presentation archive. Docmost archive export remains canonical and
+always contains the full database with all saved views.
+
 Workspace members, access rules, public shares, comments, history, favorites,
 API keys, and personal preferences are intentionally excluded. Space identity
 and security settings are not overwritten. Portable document-field,
@@ -73,6 +84,11 @@ the import preview.
 Structural data is committed atomically. Attachment payloads are staged before
 the database transaction and removed if it fails. Re-importing an archive
 always creates a new copy; it never updates source objects.
+
+ZIP validation checks CRC32 while decompressing and applies per-entry,
+cumulative-byte, nesting-depth, and entry-count limits. Absolute paths, path
+traversal, symbolic-link entries, malformed manifests, unsupported versions,
+and attachment size or checksum mismatches are rejected before import.
 
 ## Compatibility
 

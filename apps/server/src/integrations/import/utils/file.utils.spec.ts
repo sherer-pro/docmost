@@ -110,6 +110,29 @@ describe('extractZip', () => {
     ).toBe('safe');
   });
 
+  it('rejects symbolic-link entries instead of materializing them', async () => {
+    const zip = new JSZip();
+    zip.file('outside-link', '../outside.txt', {
+      unixPermissions: 0o120777,
+    });
+    const zipBuffer = await zip.generateAsync({
+      type: 'nodebuffer',
+      platform: 'UNIX',
+    });
+    await fsp.writeFile(archivePath, zipBuffer);
+
+    await expect(extractZip(archivePath, targetDir)).rejects.toThrow(
+      /symbolic link entries are not allowed/,
+    );
+
+    expect(fs.existsSync(path.join(targetDir, 'outside-link'))).toBe(false);
+    expect(
+      warnSpy.mock.calls.some(([message]) =>
+        String(message).includes('reason=symbolic-link'),
+      ),
+    ).toBe(true);
+  });
+
   it('rejects archives with too many entries', async () => {
     await writeZip(archivePath, {
       'one.md': 'one',

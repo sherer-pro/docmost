@@ -10,6 +10,9 @@ jest.mock('../../collaboration/collaboration.util', () => ({
       if (node.type === 'transclusionSource') {
         return `<div data-type="transclusionSource" data-docmost-transclusion="true" style="border: 1px dashed"><div data-docmost-transclusion-content>${(node.content ?? []).map(render).join('')}</div></div>`;
       }
+      if (node.type === 'pageBreak') {
+        return '<div data-type="pageBreak" class="page-break"></div>';
+      }
       return `<p>${text || 'mock-content'}</p>`;
     };
 
@@ -22,26 +25,17 @@ jest.mock('../../collaboration/collaboration.util', () => ({
           return;
         }
 
-        if (node.type === 'mention') {
+        if (typeof node.type === 'string') {
           callback(
             {
-              type: { name: 'mention' },
+              type: { name: node.type },
               attrs: node.attrs ?? {},
               marks: node.marks ?? [],
-              isText: false,
+              isText: node.type === 'text',
+              text: node.type === 'text' ? (node.text ?? '') : undefined,
             },
             0,
           );
-        }
-
-        if (node.type === 'text') {
-          callback({
-            type: { name: 'text' },
-            attrs: node.attrs ?? {},
-            marks: node.marks ?? [],
-            isText: true,
-            text: node.text ?? '',
-          });
         }
 
         if (Array.isArray(node.content)) {
@@ -49,7 +43,7 @@ jest.mock('../../collaboration/collaboration.util', () => ({
         }
       };
 
-      visit(input);
+      (input.content ?? []).forEach(visit);
     },
     toJSON: () => input,
   }),
@@ -330,6 +324,14 @@ describe('ExportService PDF export', () => {
       parentPageId: null,
       text: 'Hello from page',
     });
+    (page as any).content = {
+      type: 'doc',
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: 'Before' }] },
+        { type: 'pageBreak' },
+        { type: 'paragraph', content: [{ type: 'text', text: 'After' }] },
+      ],
+    };
 
     const exported = await service.exportPage(
       ExportFormat.PDF,
@@ -342,10 +344,13 @@ describe('ExportService PDF export', () => {
     const [renderedHtml, renderOpts] =
       htmlPdfRendererService.render.mock.calls[0];
     expect(renderedHtml).toContain('<meta charset="UTF-8" />');
-    expect(renderedHtml).toContain('table-layout: auto;');
-    expect(renderedHtml).toContain('overflow-wrap: break-word;');
-    expect(renderedHtml).toContain('word-break: normal;');
-    expect(renderedHtml).not.toContain('table-layout: fixed;');
+    expect(renderedHtml).toContain('table-layout: fixed;');
+    expect(renderedHtml).toContain('overflow-wrap: anywhere;');
+    expect(renderedHtml).toContain('word-break: break-word;');
+    expect(renderedHtml).toContain('page-break-after: always;');
+    expect(renderedHtml).toContain(
+      '<div data-type="pageBreak" class="page-break"></div>',
+    );
     expect(renderOpts).toEqual({
       attachmentToken: undefined,
       attachmentTokens: {},
@@ -487,6 +492,62 @@ describe('ExportService PDF export', () => {
 
     expect(storageService.read).not.toHaveBeenCalled();
     expect(Object.keys(zip.files)).toEqual([]);
+    db.selectFrom.mockImplementation(previousSelectFromImplementation!);
+  });
+
+  it('stores exported attachments under relative archive paths', async () => {
+    const attachmentId = '11111111-1111-4111-8111-111111111111';
+    const previousSelectFromImplementation =
+      db.selectFrom.getMockImplementation();
+    db.selectFrom.mockImplementation((tableName: string) => {
+      if (tableName === 'attachments') {
+        const query: any = {
+          selectAll: () => query,
+          where: () => query,
+          execute: async () => [
+            {
+              id: attachmentId,
+              pageId: 'page-1',
+              filePath: 'page/file.png',
+              fileName: 'file.png',
+            },
+          ],
+        };
+        return query;
+      }
+
+      return previousSelectFromImplementation?.(tableName);
+    });
+    storageService.read.mockResolvedValue(Buffer.from('image'));
+    const zip = new JSZip();
+
+    await service.zipAttachments(
+      {
+        type: 'doc',
+        content: [
+          {
+            type: 'image',
+            attrs: {
+              attachmentId,
+              src: `/api/files/${attachmentId}/file.png`,
+            },
+          },
+        ],
+      },
+      'space-1',
+      'workspace-1',
+      zip,
+      new Set(['page-1']),
+    );
+
+    expect(Object.keys(zip.files)).toEqual([
+      'files/',
+      `files/${attachmentId}/`,
+      `files/${attachmentId}/file.png`,
+    ]);
+    expect(Object.keys(zip.files).every((name) => !name.startsWith('/'))).toBe(
+      true,
+    );
     db.selectFrom.mockImplementation(previousSelectFromImplementation!);
   });
 
@@ -752,6 +813,49 @@ describe('ExportService PDF export', () => {
     expect(zip.file('Root.html')).toBeDefined();
     expect(zip.file('Root/Child.html')).toBeDefined();
     expect(pageAccessService.getEffectiveAccessForPages).not.toHaveBeenCalled();
+  });
+
+  it('reparents allowed descendants whose filtered parent is omitted', async () => {
+    pageRepo.getPageAndDescendants.mockResolvedValue([
+      createPage({
+        id: 'root-page',
+        slugId: 'root-slug',
+        title: 'Root',
+        parentPageId: null,
+        text: 'Root content',
+      }),
+      createPage({
+        id: 'filtered-parent',
+        slugId: 'filtered-parent-slug',
+        title: 'Filtered parent',
+        parentPageId: 'root-page',
+        text: 'Filtered content',
+      }),
+      createPage({
+        id: 'allowed-child',
+        slugId: 'allowed-child-slug',
+        title: 'Allowed child',
+        parentPageId: 'filtered-parent',
+        text: 'Allowed content',
+      }),
+    ]);
+
+    const zipStream = await service.exportPages(
+      'root-page',
+      ExportFormat.HTML,
+      false,
+      true,
+      undefined,
+      undefined,
+      undefined,
+      new Set(['root-page', 'allowed-child']),
+    );
+    const zip = await JSZip.loadAsync(
+      await streamToBuffer(zipStream as NodeJS.ReadableStream),
+    );
+
+    expect(zip.file('Root/Allowed child.html')).toBeDefined();
+    expect(zip.file('Root/Filtered parent.html')).toBeNull();
   });
 
   it('ignores legacy page overrides in one ZIP export', async () => {
