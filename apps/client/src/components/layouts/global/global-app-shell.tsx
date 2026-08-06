@@ -39,6 +39,7 @@ export default function GlobalAppShell({
   const { t } = useTranslation();
   const assistantIdentity = useAiAssistantIdentity();
   const [mobileOpened] = useAtom(mobileSidebarAtom);
+  const setMobileOpened = useSetAtom(mobileSidebarAtom);
   const [desktopOpened] = useAtom(desktopSidebarAtom);
   const [asideState] = useAtom(asideStateAtom);
   const setAsideState = useSetAtom(asideStateAtom);
@@ -172,6 +173,9 @@ export default function GlobalAppShell({
 
   return (
     <DndProvider backend={HTML5Backend}>
+      <a href="#docmost-main-content" className="skip-link">
+        {t("Skip to main content")}
+      </a>
       <AppShell
         header={{ height: 45 }}
         navbar={
@@ -212,7 +216,19 @@ export default function GlobalAppShell({
             {isSettingsRoute && <SettingsSidebar />}
           </AppShell.Navbar>
         )}
-        <AppShell.Main className={classes.main}>
+        {!hideSidebar && isMobileViewport && mobileOpened && (
+          <button
+            type="button"
+            className={classes.mobileSidebarBackdrop}
+            aria-label={t("Close")}
+            onClick={() => setMobileOpened(false)}
+          />
+        )}
+        <AppShell.Main
+          id="docmost-main-content"
+          className={classes.main}
+          tabIndex={-1}
+        >
           {isSettingsRoute ? (
             <PageFrame size={isWideSettingsRoute ? "wide" : "settings"}>
               {children}

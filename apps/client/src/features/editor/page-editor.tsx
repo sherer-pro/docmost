@@ -81,6 +81,7 @@ import { PageTemplatePicker } from "@/features/page-template/components/page-tem
 import { FixedToolbar } from "@/features/editor/components/fixed-toolbar/fixed-toolbar";
 import { getEnabledTagDefinitions } from "@/features/editor/components/tag/tag-settings";
 import { getUserColor } from "@/features/editor/extensions/utils.ts";
+import { useTranslation } from "react-i18next";
 
 interface PageEditorProps {
   pageId: string;
@@ -111,6 +112,7 @@ export default function PageEditor({
   headingNumberingEnabled = false,
   spaceHeadingNumberingEnabled = false,
 }: PageEditorProps) {
+  const { t } = useTranslation();
   const collaborationURL = useCollaborationUrl();
   const isComponentMounted = useRef(false);
   const editorRef = useRef<Editor | null>(null);
@@ -452,6 +454,10 @@ export default function PageEditor({
       immediatelyRender: true,
       shouldRerenderOnTransaction: false,
       editorProps: {
+        attributes: {
+          "aria-label": t("Editor"),
+          "aria-multiline": "true",
+        },
         scrollThreshold: 80,
         scrollMargin: 80,
         handleDOMEvents: {

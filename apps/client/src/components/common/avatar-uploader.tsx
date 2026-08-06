@@ -107,11 +107,17 @@ export default function AvatarUploader({
         style={{ display: "none" }}
       />
 
-      <Menu shadow="md" width={200} withArrow disabled={disabled || isLoading}>
-        <Menu.Target>
-          <Box style={{ position: "relative", display: "inline-block" }}>
+      <Box style={{ position: "relative", display: "inline-block" }}>
+        <Menu
+          shadow="md"
+          width={200}
+          withArrow
+          disabled={disabled || isLoading}
+        >
+          <Menu.Target>
             <CustomAvatar
               component="button"
+              aria-label={t("Change icon")}
               size={size}
               avatarUrl={currentImageUrl}
               name={fallbackName}
@@ -123,43 +129,45 @@ export default function AvatarUploader({
               variant={variant}
               type={type}
             />
-            {isLoading && (
-              <Box
-                style={{
-                  position: "absolute",
-                  top: "50%",
-                  left: "50%",
-                  transform: "translate(-50%, -50%)",
-                  zIndex: 1000,
-                }}
-              >
-                <Loader size="sm" />
-              </Box>
-            )}
-          </Box>
-        </Menu.Target>
+          </Menu.Target>
 
-        <Menu.Dropdown>
-          <Menu.Item
-            leftSection={<IconUpload size={16} />}
-            disabled={isLoading || disabled}
-            onClick={handleUploadClick}
-          >
-            {t("Upload image")}
-          </Menu.Item>
-
-          {currentImageUrl && (
+          <Menu.Dropdown>
             <Menu.Item
-              leftSection={<IconTrash size={16} />}
-              color="red"
-              onClick={handleRemove}
+              leftSection={<IconUpload size={16} />}
               disabled={isLoading || disabled}
+              onClick={handleUploadClick}
             >
-              {t("Remove image")}
+              {t("Upload image")}
             </Menu.Item>
-          )}
-        </Menu.Dropdown>
-      </Menu>
+
+            {currentImageUrl && (
+              <Menu.Item
+                leftSection={<IconTrash size={16} />}
+                color="red"
+                onClick={handleRemove}
+                disabled={isLoading || disabled}
+              >
+                {t("Remove image")}
+              </Menu.Item>
+            )}
+          </Menu.Dropdown>
+        </Menu>
+        {isLoading && (
+          <Box
+            aria-hidden="true"
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              zIndex: 1000,
+              pointerEvents: "none",
+            }}
+          >
+            <Loader size="sm" />
+          </Box>
+        )}
+      </Box>
     </Box>
   );
 }

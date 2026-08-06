@@ -33,17 +33,20 @@ import {
   getTargetedLoginUrl,
   sanitizeRelativeReturnTo,
 } from "@/features/auth/utils/return-to.ts";
+import {
+  clearSensitiveClientState,
+  notifyOtherTabsAboutLogout,
+} from "@/features/auth/utils/client-session-cleanup.ts";
+import { useQueryClient } from "@tanstack/react-query";
 
 export default function useAuth() {
   const { t } = useTranslation();
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const queryClient = useQueryClient();
   const requestedReturnTo = searchParams.get("returnTo");
-  const returnTo = sanitizeRelativeReturnTo(
-    requestedReturnTo,
-    APP_ROUTE.HOME,
-  );
+  const returnTo = sanitizeRelativeReturnTo(requestedReturnTo, APP_ROUTE.HOME);
   const authContextQuery = (() => {
     const params = new URLSearchParams();
     const spaceSlug = searchParams.get("spaceSlug");
@@ -96,9 +99,7 @@ export default function useAuth() {
           params.set("spaceSlug", response.entrySpaceSlug);
           params.set("returnTo", getSpaceReturnTo(response.entrySpaceSlug));
         }
-        navigate(
-          `${APP_ROUTE.AUTH.LOGIN}${params.size ? `?${params}` : ""}`,
-        );
+        navigate(`${APP_ROUTE.AUTH.LOGIN}${params.size ? `?${params}` : ""}`);
       } else {
         navigate(
           response?.entrySpaceSlug
@@ -173,8 +174,11 @@ export default function useAuth() {
   };
 
   const handleLogout = async () => {
-    setCurrentUser(RESET);
     await logout();
+    setCurrentUser(RESET);
+    queryClient.clear();
+    notifyOtherTabsAboutLogout();
+    await clearSensitiveClientState();
     window.location.replace(APP_ROUTE.AUTH.LOGIN);
   };
 

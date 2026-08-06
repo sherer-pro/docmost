@@ -1,4 +1,4 @@
-import { Space, Tabs, Text } from "@mantine/core";
+import { Tabs, Text } from "@mantine/core";
 import { IconDatabase, IconPlugConnected } from "@tabler/icons-react";
 import { Helmet } from "react-helmet-async";
 import { useTranslation } from "react-i18next";
@@ -58,11 +58,17 @@ export default function WorkspaceApiKeysSettings() {
             </Text>
           </Tabs.Tab>
         </Tabs.List>
+        <Tabs.Panel value="mcp" pt="md">
+          {keyType === "mcp" && (
+            <WorkspaceApiKeysPanel key="mcp" keyType="mcp" />
+          )}
+        </Tabs.Panel>
+        <Tabs.Panel value="rag" pt="md">
+          {keyType === "rag" && (
+            <WorkspaceApiKeysPanel key="rag" keyType="rag" />
+          )}
+        </Tabs.Panel>
       </Tabs>
-
-      <Space my="md" />
-
-      <WorkspaceApiKeysPanel key={keyType} keyType={keyType} />
     </>
   );
 }

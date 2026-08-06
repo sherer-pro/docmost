@@ -10,7 +10,7 @@ export async function registerServiceWorker(): Promise<void> {
     return;
   }
 
-  window.addEventListener("load", async () => {
+  const register = async () => {
     try {
       const registration = await navigator.serviceWorker.register("/sw.js", {
         scope: "/",
@@ -44,5 +44,12 @@ export async function registerServiceWorker(): Promise<void> {
       // CSP, or invalid `/sw.js` response issues.
       console.error("Failed to register Service Worker:", error);
     }
-  });
+  };
+
+  if (document.readyState === "complete") {
+    await register();
+    return;
+  }
+
+  window.addEventListener("load", () => void register(), { once: true });
 }

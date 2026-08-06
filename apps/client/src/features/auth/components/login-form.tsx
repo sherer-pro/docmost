@@ -74,7 +74,7 @@ export function LoginForm() {
   return (
     <Container size={420} className={classes.container}>
       <Box p="xl" className={classes.containerBox}>
-        <Title order={2} ta="center" fw={500} mb="md">
+        <Title order={1} size="h2" ta="center" fw={500} mb="md">
           {t("Login")}
         </Title>
 

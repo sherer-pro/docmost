@@ -107,6 +107,9 @@ export function TitleEditor({
     immediatelyRender: true,
     shouldRerenderOnTransaction: false,
     editorProps: {
+      attributes: {
+        "aria-label": t("Title"),
+      },
       handleDOMEvents: {
         focus: () => {
           onTitleFocusChange(true);

@@ -19,6 +19,7 @@ import {
   getCustomLinkIcon,
 } from "./custom-link-icons.ts";
 import { isSafeCustomLinkUrl } from "./custom-link-utils.ts";
+import { useModalBackgroundInert } from "@/components/ui/use-modal-background-inert.ts";
 
 export interface CustomLinkFormValue {
   label: string;
@@ -47,6 +48,7 @@ export default function CustomLinkFormModal({
   const [error, setError] = useState<string | null>(null);
   const [iconPickerOpened, setIconPickerOpened] = useState(false);
   const [iconQuery, setIconQuery] = useState("");
+  useModalBackgroundInert(opened);
 
   useEffect(() => {
     if (opened) {

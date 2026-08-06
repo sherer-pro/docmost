@@ -1,10 +1,13 @@
-const CACHE_VERSION = "docmost-pwa-v6";
+const CACHE_VERSION = "docmost-pwa-v7";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
+const CACHE_PREFIX = "docmost-pwa-";
+const CURRENT_CACHES = new Set([SHELL_CACHE, RUNTIME_CACHE]);
 
 const APP_SHELL_ASSETS = [
   "/",
   "/offline.html",
+  "/offline.js",
   "/manifest.json",
   "/icons/favicon-16x16.png",
   "/icons/favicon-32x32.png",
@@ -17,7 +20,11 @@ self.addEventListener("install", (event) => {
     caches
       .open(SHELL_CACHE)
       .then((cache) => cache.addAll(APP_SHELL_ASSETS))
-      .then(() => self.skipWaiting()),
+      .then(() => self.skipWaiting())
+      .catch(async (error) => {
+        await caches.delete(SHELL_CACHE);
+        throw error;
+      }),
   );
 });
 
@@ -28,7 +35,11 @@ self.addEventListener("activate", (event) => {
       .then((cacheNames) =>
         Promise.all(
           cacheNames
-            .filter((cacheName) => !cacheName.startsWith(CACHE_VERSION))
+            .filter(
+              (cacheName) =>
+                cacheName.startsWith(CACHE_PREFIX) &&
+                !CURRENT_CACHES.has(cacheName),
+            )
             .map((cacheName) => caches.delete(cacheName)),
         ),
       )
@@ -75,6 +86,14 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.waitUntil(handleNotificationClick(event));
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type !== "CLEAR_SENSITIVE_DATA") {
+    return;
+  }
+
+  event.waitUntil(caches.delete(RUNTIME_CACHE));
 });
 
 /**
@@ -153,16 +172,20 @@ async function networkFirstForDocuments(request) {
   try {
     const response = await fetch(request);
 
-    if (response.ok) {
-      cache.put(request, response.clone());
+    if (await isValidDocumentResponse(response)) {
+      await cache.put(request, response.clone());
     }
 
     return response;
   } catch {
     const cachedResponse = await cache.match(request);
 
-    if (cachedResponse) {
+    if (cachedResponse && (await isValidDocumentResponse(cachedResponse))) {
       return cachedResponse;
+    }
+
+    if (cachedResponse) {
+      await cache.delete(request);
     }
 
     const offlinePage = await caches.match("/offline.html");
@@ -176,6 +199,33 @@ async function networkFirstForDocuments(request) {
       statusText: "Offline",
       headers: { "Content-Type": "text/plain; charset=UTF-8" },
     });
+  }
+}
+
+/**
+ * Rejects malformed or manually corrupted navigation entries before use.
+ *
+ * @param {Response} response - Candidate HTML navigation response.
+ * @returns {Promise<boolean>} Whether the response is a valid Docmost shell.
+ */
+async function isValidDocumentResponse(response) {
+  if (!response?.ok || response.type === "opaque") {
+    return false;
+  }
+
+  const contentType = response.headers.get("content-type") || "";
+  if (!contentType.toLowerCase().includes("text/html")) {
+    return false;
+  }
+
+  try {
+    const html = await response.clone().text();
+    return (
+      /<!doctype\s+html/i.test(html) &&
+      (html.includes('id="root"') || html.includes('class="offline-card"'))
+    );
+  } catch {
+    return false;
   }
 }
 

@@ -15,6 +15,7 @@ interface CustomAvatarProps {
   component?: any;
   type?: AvatarIconType;
   mt?: string | number;
+  "aria-label"?: string;
 }
 
 export const CustomAvatar = React.forwardRef<
@@ -31,6 +32,7 @@ export const CustomAvatar = React.forwardRef<
       name={avatarName}
       alt={avatarName}
       color={color ?? getInitialsColor(avatarName)}
+      autoContrast
       {...props}
     />
   );

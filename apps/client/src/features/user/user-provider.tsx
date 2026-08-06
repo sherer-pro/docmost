@@ -11,11 +11,12 @@ import { useTreeSocket } from "@/features/websocket/use-tree-socket.ts";
 import { useNotificationSocket } from "@/features/notification/hooks/use-notification-socket.ts";
 import { Error404 } from "@/components/ui/error-404.tsx";
 import { usePresenceReporter } from "@/features/presence/use-presence-reporter.ts";
+import { Button, Center, Paper, Stack, Text, Title } from "@mantine/core";
 
 export function UserProvider({ children }: React.PropsWithChildren) {
   const [, setCurrentUser] = useAtom(currentUserAtom);
   const { data, isLoading, error, isError } = useCurrentUser();
-  const { i18n } = useTranslation();
+  const { i18n, t } = useTranslation();
   const [, setSocket] = useAtom(socketAtom);
   const ssoVerified = data?.authenticationAssurance?.ssoVerified;
   const mfaVerified = data?.authenticationAssurance?.mfaVerified;
@@ -63,7 +64,21 @@ export function UserProvider({ children }: React.PropsWithChildren) {
   }
 
   if (error) {
-    return <></>;
+    return (
+      <Center component="main" mih="100dvh" p="md">
+        <Paper withBorder radius="md" p="xl" maw={460} w="100%">
+          <Stack align="flex-start">
+            <Title order={1} size="h3">
+              {navigator.onLine ? t("Error") : t("Offline")}
+            </Title>
+            <Text>{t("Failed to load page. An error occurred.")}</Text>
+            <Button onClick={() => window.location.reload()}>
+              {t("Try again")}
+            </Button>
+          </Stack>
+        </Paper>
+      </Center>
+    );
   }
 
   return <>{children}</>;
