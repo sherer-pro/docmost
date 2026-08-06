@@ -1,15 +1,24 @@
+import { existsSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { loadEnvFile } from 'node:process';
+import { fileURLToPath } from 'node:url';
 import { loadConfig } from './config.js';
 import { DocmostClient, OpenWebUiClient } from './clients.js';
 import { RedisSyncStateStore } from './redis-state.js';
 import { RagSynchronizer } from './synchronizer.js';
 import { logCycleFailures } from './cycle-logging.js';
 
-const configPath = process.env.RAG_SYNC_CONFIG_PATH;
-if (!configPath) {
-  throw new Error('RAG_SYNC_CONFIG_PATH is required');
+for (const envPath of [
+  resolve(dirname(fileURLToPath(import.meta.url)), '../../../.env'),
+  resolve(process.cwd(), '.env'),
+]) {
+  if (existsSync(envPath)) {
+    loadEnvFile(envPath);
+    break;
+  }
 }
 
-const { config, bindings } = await loadConfig(configPath);
+const { config, bindings } = loadConfig();
 const state = new RedisSyncStateStore(config.redisUrl, config.redisPrefix);
 const synchronizers = bindings.map(
   (binding) =>

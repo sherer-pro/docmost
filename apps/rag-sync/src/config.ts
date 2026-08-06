@@ -1,170 +1,124 @@
-import { readFile } from 'node:fs/promises';
-import { isAbsolute, resolve } from 'node:path';
-import type {
-  RagSyncBinding,
-  RagSyncBindingConfig,
-  RagSyncConfig,
-} from './types.js';
+import type { RagSyncBinding, RagSyncConfig } from './types.js';
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const KNOWLEDGE_ID_PATTERN = /^[A-Za-z0-9_-]{1,200}$/;
 
-export async function loadConfig(
-  configPath: string,
-): Promise<{ config: RagSyncConfig; bindings: RagSyncBinding[] }> {
-  const raw = JSON.parse(await readFile(configPath, 'utf8')) as Record<
-    string,
-    unknown
-  >;
-  const configDirectory = resolve(configPath, '..');
-  if (raw.schemaVersion !== 1 || !Array.isArray(raw.bindings)) {
-    throw new Error('RAG sync config must use schemaVersion 1 and bindings');
-  }
-  const config: RagSyncConfig = {
-    schemaVersion: 1,
-    redisUrl: requiredString(raw.redisUrl, 'redisUrl'),
-    redisPrefix: optionalString(raw.redisPrefix) || 'docmost:rag-sync',
-    pollIntervalMs: boundedNumber(
-      raw.pollIntervalMs,
-      60_000,
-      5_000,
-      3_600_000,
-      'pollIntervalMs',
-    ),
-    requestTimeoutMs: boundedNumber(
-      raw.requestTimeoutMs,
-      30_000,
-      1_000,
-      600_000,
-      'requestTimeoutMs',
-    ),
-    processingTimeoutMs: boundedNumber(
-      raw.processingTimeoutMs,
-      600_000,
-      10_000,
-      7_200_000,
-      'processingTimeoutMs',
-    ),
-    maxAttachmentBytes: boundedNumber(
-      raw.maxAttachmentBytes,
-      25 * 1024 * 1024,
-      1024,
-      100 * 1024 * 1024,
-      'maxAttachmentBytes',
-    ),
-    bindings: raw.bindings.map((value, index) =>
-      parseBinding(value, index),
-    ),
-  };
-  const ids = new Set<string>();
-  const spaces = new Set<string>();
-  for (const binding of config.bindings) {
-    if (ids.has(binding.id) || spaces.has(binding.spaceId)) {
-      throw new Error('RAG sync binding id and spaceId must be unique');
-    }
-    ids.add(binding.id);
-    spaces.add(binding.spaceId);
-  }
-
-  const bindings = await Promise.all(
-    config.bindings.map(async (binding) => ({
-      ...binding,
-      docmostApiKey: await readSecret(
-        resolvePath(configDirectory, binding.docmostApiKeyFile),
-      ),
-      openWebUiApiKey: await readSecret(
-        resolvePath(configDirectory, binding.openWebUiApiKeyFile),
-      ),
-    })),
-  );
-  return { config, bindings };
-}
-
-function parseBinding(value: unknown, index: number): RagSyncBindingConfig {
-  if (!value || typeof value !== 'object') {
-    throw new Error(`bindings[${index}] must be an object`);
-  }
-  const binding = value as Record<string, unknown>;
-  if (
-    'docmostApiKey' in binding ||
-    'openWebUiApiKey' in binding
-  ) {
-    throw new Error(
-      `bindings[${index}] must reference API key files, not inline keys`,
-    );
-  }
+export function loadConfig(
+  environment: NodeJS.ProcessEnv = process.env,
+): { config: RagSyncConfig; bindings: RagSyncBinding[] } {
   const workspaceId = requiredString(
-    binding.workspaceId,
-    `bindings[${index}].workspaceId`,
+    environment.RAG_SYNC_WORKSPACE_ID,
+    'RAG_SYNC_WORKSPACE_ID',
   );
   const spaceId = requiredString(
-    binding.spaceId,
-    `bindings[${index}].spaceId`,
+    environment.RAG_SYNC_SPACE_ID,
+    'RAG_SYNC_SPACE_ID',
   );
   if (!UUID_PATTERN.test(workspaceId) || !UUID_PATTERN.test(spaceId)) {
-    throw new Error(`bindings[${index}] workspaceId and spaceId must be UUIDs`);
+    throw new Error(
+      'RAG_SYNC_WORKSPACE_ID and RAG_SYNC_SPACE_ID must be UUIDs',
+    );
   }
+
   const knowledgeId = requiredString(
-    binding.knowledgeId,
-    `bindings[${index}].knowledgeId`,
+    environment.RAG_SYNC_KNOWLEDGE_ID,
+    'RAG_SYNC_KNOWLEDGE_ID',
   );
   if (!KNOWLEDGE_ID_PATTERN.test(knowledgeId)) {
-    throw new Error(`bindings[${index}].knowledgeId is invalid`);
+    throw new Error('RAG_SYNC_KNOWLEDGE_ID is invalid');
   }
-  return {
-    id: requiredString(binding.id, `bindings[${index}].id`),
+
+  const binding: RagSyncBinding = {
+    id: requiredString(
+      environment.RAG_SYNC_BINDING_ID,
+      'RAG_SYNC_BINDING_ID',
+    ),
     workspaceId,
     spaceId,
     docmostBaseUrl: normalizeBaseUrl(
       requiredString(
-        binding.docmostBaseUrl,
-        `bindings[${index}].docmostBaseUrl`,
+        environment.RAG_SYNC_DOCMOST_BASE_URL,
+        'RAG_SYNC_DOCMOST_BASE_URL',
       ),
+      'RAG_SYNC_DOCMOST_BASE_URL',
     ),
-    docmostApiKeyFile: requiredString(
-      binding.docmostApiKeyFile,
-      `bindings[${index}].docmostApiKeyFile`,
+    docmostApiKey: requiredString(
+      environment.RAG_SYNC_DOCMOST_API_KEY,
+      'RAG_SYNC_DOCMOST_API_KEY',
     ),
     openWebUiBaseUrl: normalizeBaseUrl(
       requiredString(
-        binding.openWebUiBaseUrl,
-        `bindings[${index}].openWebUiBaseUrl`,
+        environment.RAG_SYNC_OPEN_WEBUI_BASE_URL,
+        'RAG_SYNC_OPEN_WEBUI_BASE_URL',
       ),
+      'RAG_SYNC_OPEN_WEBUI_BASE_URL',
     ),
-    openWebUiApiKeyFile: requiredString(
-      binding.openWebUiApiKeyFile,
-      `bindings[${index}].openWebUiApiKeyFile`,
+    openWebUiApiKey: requiredString(
+      environment.RAG_SYNC_OPEN_WEBUI_API_KEY,
+      'RAG_SYNC_OPEN_WEBUI_API_KEY',
     ),
     knowledgeId,
   };
+
+  const config: RagSyncConfig = {
+    redisUrl: requiredString(
+      environment.RAG_SYNC_REDIS_URL,
+      'RAG_SYNC_REDIS_URL',
+    ),
+    redisPrefix:
+      optionalString(environment.RAG_SYNC_REDIS_PREFIX) || 'docmost:rag-sync',
+    pollIntervalMs: boundedNumber(
+      environment.RAG_SYNC_POLL_INTERVAL_MS,
+      60_000,
+      5_000,
+      3_600_000,
+      'RAG_SYNC_POLL_INTERVAL_MS',
+    ),
+    requestTimeoutMs: boundedNumber(
+      environment.RAG_SYNC_REQUEST_TIMEOUT_MS,
+      30_000,
+      1_000,
+      600_000,
+      'RAG_SYNC_REQUEST_TIMEOUT_MS',
+    ),
+    processingTimeoutMs: boundedNumber(
+      environment.RAG_SYNC_PROCESSING_TIMEOUT_MS,
+      600_000,
+      10_000,
+      7_200_000,
+      'RAG_SYNC_PROCESSING_TIMEOUT_MS',
+    ),
+    maxAttachmentBytes: boundedNumber(
+      environment.RAG_SYNC_MAX_ATTACHMENT_BYTES,
+      25 * 1024 * 1024,
+      1024,
+      100 * 1024 * 1024,
+      'RAG_SYNC_MAX_ATTACHMENT_BYTES',
+    ),
+    bindings: [binding],
+  };
+
+  return { config, bindings: config.bindings };
 }
 
-function normalizeBaseUrl(value: string): string {
-  const url = new URL(value);
-  if (
-    !['http:', 'https:'].includes(url.protocol) ||
-    url.username ||
-    url.password ||
-    url.search ||
-    url.hash ||
-    url.pathname !== '/'
-  ) {
-    throw new Error('Base URLs must be credential-free HTTP(S) origins');
+function normalizeBaseUrl(value: string, name: string): string {
+  try {
+    const url = new URL(value);
+    if (
+      !['http:', 'https:'].includes(url.protocol) ||
+      url.username ||
+      url.password ||
+      url.search ||
+      url.hash ||
+      url.pathname !== '/'
+    ) {
+      throw new Error();
+    }
+    return url.origin;
+  } catch {
+    throw new Error(`${name} must be a credential-free HTTP(S) origin`);
   }
-  return url.origin;
-}
-
-async function readSecret(filePath: string): Promise<string> {
-  const value = (await readFile(filePath, 'utf8')).trim();
-  if (!value) {
-    throw new Error('RAG sync secret file is empty');
-  }
-  return value;
-}
-
-function resolvePath(base: string, value: string): string {
-  return isAbsolute(value) ? value : resolve(base, value);
 }
 
 function requiredString(value: unknown, name: string): string {
