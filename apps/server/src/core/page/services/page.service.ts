@@ -101,7 +101,7 @@ type CopiedPageByOriginalId = Map<string, InsertablePage>;
 
 // Keep page-tree mutations for a space in a single, short critical section.
 // The namespace avoids colliding with unrelated two-key advisory locks.
-const PAGE_MOVE_LOCK_NAMESPACE = 0x70616765;
+const PAGE_TREE_LOCK_NAMESPACE = 0x70616765;
 
 @Injectable()
 export class PageService {
@@ -647,22 +647,6 @@ export class PageService {
       deferSideEffects?: boolean;
     },
   ): Promise<Page> {
-    let parentPageId = undefined;
-    let parentPage: Page = null;
-
-    // check if parent page exists
-    if (createPageDto.parentPageId) {
-      parentPage = await this.pageRepo.findById(createPageDto.parentPageId, {
-        trx: internalOptions?.trx,
-      });
-
-      if (!parentPage || parentPage.spaceId !== createPageDto.spaceId) {
-        throw new NotFoundException('Parent page not found');
-      }
-
-      parentPageId = parentPage.id;
-    }
-
     let content = undefined;
     let textContent = undefined;
     let ydoc = undefined;
@@ -678,40 +662,86 @@ export class PageService {
       ydoc = createYdocFromJson(prosemirrorJson);
     }
 
-    const page = await this.pageRepo.insertPage(
-      {
-        id: internalOptions?.pageId,
-        slugId: generateSlugId(),
-        title: createPageDto.title,
-        position: await this.nextPagePosition(
-          createPageDto.spaceId,
-          parentPageId,
-          internalOptions?.trx,
-        ),
-        icon: createPageDto.icon,
-        parentPageId: parentPageId,
-        spaceId: createPageDto.spaceId,
-        creatorId: userId,
-        workspaceId: workspaceId,
-        lastUpdatedById: userId,
-        content,
-        textContent,
-        ydoc,
-        settings: stripLegacyHeadingNumberingSetting(createPageDto.settings),
-        isTemplate: internalOptions?.isTemplate ?? false,
-      },
-      internalOptions?.trx,
-      false,
-    );
+    const persistPage = async (trx?: KyselyTransaction): Promise<Page> => {
+      let parentPageId = undefined;
+      let parentPage: Page = null;
 
-    if (parentPageId && parentPage) {
-      await this.pageAccessMutationService.copyParentRulesToChild(
-        parentPageId,
-        page,
-        userId,
-        internalOptions?.trx,
+      if (createPageDto.parentPageId) {
+        if (!trx) {
+          throw new Error('Page tree transaction is required');
+        }
+
+        await sql`select pg_advisory_xact_lock(${sql.lit(
+          PAGE_TREE_LOCK_NAMESPACE,
+        )}, hashtext(${createPageDto.spaceId}))`.execute(trx);
+
+        parentPage = await this.pageRepo.findById(createPageDto.parentPageId, {
+          withLock: true,
+          trx,
+        });
+
+        if (
+          !parentPage ||
+          parentPage.deletedAt ||
+          parentPage.spaceId !== createPageDto.spaceId
+        ) {
+          throw new NotFoundException('Parent page not found');
+        }
+
+        const parentDepth = await this.pageRepo.getPageDepth(
+          parentPage.id,
+          trx,
+        );
+        if (parentDepth + 1 > MAX_PAGE_TREE_DEPTH) {
+          throw new BadRequestException(
+            `Page tree depth cannot exceed ${MAX_PAGE_TREE_DEPTH}`,
+          );
+        }
+
+        parentPageId = parentPage.id;
+      }
+
+      const page = await this.pageRepo.insertPage(
+        {
+          id: internalOptions?.pageId,
+          slugId: generateSlugId(),
+          title: createPageDto.title,
+          position: await this.nextPagePosition(
+            createPageDto.spaceId,
+            parentPageId,
+            trx,
+          ),
+          icon: createPageDto.icon,
+          parentPageId: parentPageId,
+          spaceId: createPageDto.spaceId,
+          creatorId: userId,
+          workspaceId: workspaceId,
+          lastUpdatedById: userId,
+          content,
+          textContent,
+          ydoc,
+          settings: stripLegacyHeadingNumberingSetting(createPageDto.settings),
+          isTemplate: internalOptions?.isTemplate ?? false,
+        },
+        trx,
+        false,
       );
-    }
+
+      if (parentPageId && parentPage) {
+        await this.pageAccessMutationService.copyParentRulesToChild(
+          parentPageId,
+          page,
+          userId,
+          trx,
+        );
+      }
+
+      return page;
+    };
+
+    const page = createPageDto.parentPageId
+      ? await executeTx(this.db, persistPage, internalOptions?.trx)
+      : await persistPage(internalOptions?.trx);
 
     if (!internalOptions?.deferSideEffects) {
       await this.finalizeCreatedPage(page, userId);
@@ -1633,7 +1663,7 @@ export class PageService {
 
     const updateResult = await executeTx(this.db, async (trx) => {
       await sql`select pg_advisory_xact_lock(${sql.lit(
-        PAGE_MOVE_LOCK_NAMESPACE,
+        PAGE_TREE_LOCK_NAMESPACE,
       )}, hashtext(${movedPage.spaceId}))`.execute(trx);
 
       // Re-read after acquiring the per-space lock. The controller snapshot can
@@ -1651,6 +1681,7 @@ export class PageService {
       }
 
       let parentPageId: string | null | undefined = null;
+      let targetParentDepth = -1;
       if (lockedMovedPage.parentPageId === dto.parentPageId) {
         parentPageId = undefined;
       } else if (dto.parentPageId) {
@@ -1678,7 +1709,23 @@ export class PageService {
           );
         }
 
+        targetParentDepth = await this.pageRepo.getPageDepth(
+          parentPage.id,
+          trx,
+        );
         parentPageId = parentPage.id;
+      }
+
+      if (parentPageId !== undefined) {
+        const subtreeHeight = await this.pageRepo.getSubtreeHeight(
+          lockedMovedPage.id,
+          trx,
+        );
+        if (targetParentDepth + 1 + subtreeHeight > MAX_PAGE_TREE_DEPTH) {
+          throw new BadRequestException(
+            `Page tree depth cannot exceed ${MAX_PAGE_TREE_DEPTH}`,
+          );
+        }
       }
 
       return this.pageRepo.updatePage(

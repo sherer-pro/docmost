@@ -626,6 +626,73 @@ export class PageRepo {
     return Boolean(match);
   }
 
+  /**
+   * Returns the zero-based depth of a page in its ancestor chain.
+   *
+   * The extra traversal level lets callers detect an already malformed chain
+   * instead of treating the configured limit as a valid truncated result.
+   */
+  async getPageDepth(pageId: string, trx?: KyselyTransaction): Promise<number> {
+    const db = dbOrTx(this.db, trx);
+
+    const result = await db
+      .withRecursive('page_ancestors', (qb) =>
+        qb
+          .selectFrom('pages')
+          .select(['id', 'parentPageId', sql<number>`0`.as('level')])
+          .where('id', '=', pageId)
+          .unionAll((exp) =>
+            exp
+              .selectFrom('pages as p')
+              .select([
+                'p.id',
+                'p.parentPageId',
+                sql<number>`pa.level + 1`.as('level'),
+              ])
+              .innerJoin('page_ancestors as pa', 'pa.parentPageId', 'p.id')
+              .where(sql`pa.level`, '<', sql.lit(MAX_PAGE_TREE_DEPTH + 1)),
+          ),
+      )
+      .selectFrom('page_ancestors')
+      .select((eb) => eb.fn.max<number>('level').as('depth'))
+      .executeTakeFirst();
+
+    return Number(result?.depth ?? 0);
+  }
+
+  /**
+   * Returns the zero-based height of a page subtree, including deleted pages.
+   *
+   * Deleted descendants still keep their parent relation and may be restored,
+   * so a move must account for them when enforcing the structural depth cap.
+   */
+  async getSubtreeHeight(
+    pageId: string,
+    trx?: KyselyTransaction,
+  ): Promise<number> {
+    const db = dbOrTx(this.db, trx);
+
+    const result = await db
+      .withRecursive('page_descendants', (qb) =>
+        qb
+          .selectFrom('pages')
+          .select(['id', sql<number>`0`.as('level')])
+          .where('id', '=', pageId)
+          .unionAll((exp) =>
+            exp
+              .selectFrom('pages as p')
+              .select(['p.id', sql<number>`pd.level + 1`.as('level')])
+              .innerJoin('page_descendants as pd', 'p.parentPageId', 'pd.id')
+              .where(sql`pd.level`, '<', sql.lit(MAX_PAGE_TREE_DEPTH + 1)),
+          ),
+      )
+      .selectFrom('page_descendants')
+      .select((eb) => eb.fn.max<number>('level').as('height'))
+      .executeTakeFirst();
+
+    return Number(result?.height ?? 0);
+  }
+
   async getPageAndDescendants(
     parentPageId: string,
     opts: { includeContent: boolean },
