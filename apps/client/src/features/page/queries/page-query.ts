@@ -923,7 +923,9 @@ export function updateCacheOnMovePage(
   invalidateDatabaseTreeConsistency();
 }
 
-export function invalidateOnDeletePage(pageId: string) {
+export function invalidateOnDeletePage(
+  pageId: string,
+): SpaceTreeNode | undefined {
   /**
    * We synchronously remove a node from the atom tree using the same algorithm as drag/drop (`SimpleTree.drop`).
    *
@@ -931,6 +933,10 @@ export function invalidateOnDeletePage(pageId: string) {
    * and removes visual “ghosts” until the next server-refetch arrives.
    */
   const currentTreeData = jotaiStore.get(treeDataAtom);
+  const deletedNode =
+    currentTreeData.length > 0
+      ? new SimpleTree<SpaceTreeNode>(currentTreeData).find(pageId)?.data
+      : undefined;
   if (currentTreeData.length > 0) {
     jotaiStore.set(treeDataAtom, applyDeleteTreeNode(currentTreeData, pageId));
   }
@@ -962,4 +968,6 @@ export function invalidateOnDeletePage(pageId: string) {
   invalidateBreadcrumbs({}, { client: queryClient });
   invalidateTrashList({}, { client: queryClient });
   invalidateDatabaseTreeConsistency();
+
+  return deletedNode;
 }

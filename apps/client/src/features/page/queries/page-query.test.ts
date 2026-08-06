@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { getDefaultStore } from "jotai";
 import { beforeEach, describe, it, vi } from "vitest";
-import { invalidateOnCreatePage } from "./page-query";
+import { invalidateOnCreatePage, invalidateOnDeletePage } from "./page-query";
 import { treeDataAtom } from "@/features/page/tree/atoms/tree-data-atom";
 import type { SpaceTreeNode } from "@/features/page/tree/types";
 
@@ -207,5 +207,32 @@ describe("invalidateOnCreatePage", () => {
     assert.equal(treeData[0].children.length, 0);
     assert.equal(mocks.entries[0].data.pages[0].items.length, 1);
     assert.equal(mocks.entries[0].data.pages[0].items[0].id, "child");
+  });
+});
+
+describe("invalidateOnDeletePage", () => {
+  beforeEach(() => {
+    mocks.entries.length = 0;
+    mocks.invalidateCalls.length = 0;
+    jotaiStore.set(treeDataAtom, []);
+  });
+
+  it("returns the removed subtree so route reconciliation can inspect it", () => {
+    const child = {
+      ...createTreeNode("child"),
+      parentPageId: "parent",
+      slugId: "childslug1",
+    };
+    const parent = {
+      ...createTreeNode("parent"),
+      hasChildren: true,
+      children: [child],
+    };
+    jotaiStore.set(treeDataAtom, [parent]);
+
+    const deletedNode = invalidateOnDeletePage("parent");
+
+    assert.equal(deletedNode?.children[0].slugId, "childslug1");
+    assert.deepEqual(jotaiStore.get(treeDataAtom), []);
   });
 });

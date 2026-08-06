@@ -26,6 +26,8 @@ import {
   dropTreeNode,
   isTreeExternalDropResult,
   mapPageToTreeNode,
+  resolveActiveTreeSlug,
+  treeNodeContainsRouteSlug,
 } from "@/features/page/tree/utils";
 import { getSpaceUrl } from "@/lib/config.ts";
 import { useQueryEmit } from "@/features/websocket/use-query-emit.ts";
@@ -42,8 +44,8 @@ export function useTreeMutation<T>(spaceId: string) {
   const removePageMutation = useRemovePageMutation();
   const movePageMutation = useMovePageMutation();
   const navigate = useNavigate();
-  const { spaceSlug } = useParams();
-  const { pageSlug } = useParams();
+  const { spaceSlug, pageSlug, databaseSlug } = useParams();
+  const activeTreeSlug = resolveActiveTreeSlug({ pageSlug, databaseSlug });
   const emit = useQueryEmit();
   const [user, setUser] = useAtom(userAtom);
 
@@ -267,23 +269,6 @@ export function useTreeMutation<T>(spaceId: string) {
     }
   };
 
-  const isPageInNode = (
-    node: { data: SpaceTreeNode; children?: any[] },
-    pageSlug: string,
-  ): boolean => {
-    if (node.data.slugId === pageSlug) {
-      return true;
-    }
-    for (const item of node.children) {
-      if (item.data.slugId === pageSlug) {
-        return true;
-      } else {
-        return isPageInNode(item, pageSlug);
-      }
-    }
-    return false;
-  };
-
   const onDelete: DeleteHandler<T> = async (args: { ids: string[] }) => {
     try {
       await removePageMutation.mutateAsync(args.ids[0]);
@@ -295,8 +280,8 @@ export function useTreeMutation<T>(spaceId: string) {
 
       setData(dropTreeNode(data, args.ids[0]));
 
-      if (pageSlug && isPageInNode(node, pageSlug.split("-")[1])) {
-        navigate(getSpaceUrl(spaceSlug));
+      if (treeNodeContainsRouteSlug(node.data, activeTreeSlug)) {
+        navigate(getSpaceUrl(spaceSlug), { replace: true });
       }
 
       setTimeout(() => {

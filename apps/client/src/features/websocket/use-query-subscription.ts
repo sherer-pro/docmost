@@ -19,6 +19,12 @@ import { IComment } from "@/features/comment/types/comment.types";
 import { ISpace } from "@/features/space/types/space.types.ts";
 import { IPage } from "@/features/page/types/page.types.ts";
 import { applySpaceUpdateToCache } from "./space-query-cache";
+import {
+  resolveActiveTreeSlug,
+  treeNodeContainsRouteSlug,
+} from "@/features/page/tree/utils";
+import { useNavigate, useParams } from "react-router-dom";
+import { getSpaceUrl } from "@/lib/config.ts";
 
 const mapTreeNodeToPage = (node: {
   id: string;
@@ -47,6 +53,9 @@ const mapTreeNodeToPage = (node: {
 export const useQuerySubscription = () => {
   const queryClient = useQueryClient();
   const [socket] = useAtom(socketAtom);
+  const navigate = useNavigate();
+  const { spaceSlug, pageSlug, databaseSlug } = useParams();
+  const activeTreeSlug = resolveActiveTreeSlug({ pageSlug, databaseSlug });
 
   React.useEffect(() => {
     const handleMessage = (event: WebSocketIncomingEvent) => {
@@ -78,9 +87,17 @@ export const useQuerySubscription = () => {
             mapTreeNodeToPage(data.payload.node),
           );
           break;
-        case "deleteTreeNode":
-          invalidateOnDeletePage(data.payload.node.id);
+        case "deleteTreeNode": {
+          const deletedNode =
+            invalidateOnDeletePage(data.payload.node.id) ?? data.payload.node;
+          if (
+            spaceSlug &&
+            treeNodeContainsRouteSlug(deletedNode, activeTreeSlug)
+          ) {
+            navigate(getSpaceUrl(spaceSlug), { replace: true });
+          }
           break;
+        }
         case "updateOne":
           entity = data.entity[0];
 
@@ -167,5 +184,5 @@ export const useQuerySubscription = () => {
     return () => {
       socket?.off("message", handleMessage);
     };
-  }, [queryClient, socket]);
+  }, [activeTreeSlug, navigate, queryClient, socket, spaceSlug]);
 };

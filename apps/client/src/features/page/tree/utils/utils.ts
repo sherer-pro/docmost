@@ -6,6 +6,7 @@ import type {
   PageCustomFieldStatus,
 } from "@/features/page/types/page.types.ts";
 import { SpaceTreeNode } from "@/features/page/tree/types.ts";
+import { extractPageSlugId } from "@/lib/utils.tsx";
 import { SimpleTree } from "react-arborist";
 
 type TreePageSource = Pick<
@@ -117,6 +118,22 @@ export function resolveActiveTreeSlug({
   databaseSlug?: string;
 }): string | undefined {
   return pageSlug ?? databaseSlug;
+}
+
+export function treeNodeContainsRouteSlug(
+  node: SpaceTreeNode,
+  routeSlug?: string,
+): boolean {
+  const activeSlugId = extractPageSlugId(routeSlug);
+  if (!activeSlugId) {
+    return false;
+  }
+
+  const containsSlugId = (candidate: SpaceTreeNode): boolean =>
+    candidate.slugId === activeSlugId ||
+    candidate.children.some(containsSlugId);
+
+  return containsSlugId(node);
 }
 
 /**

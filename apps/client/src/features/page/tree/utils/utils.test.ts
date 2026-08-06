@@ -10,6 +10,7 @@ import {
   mapPageToTreeNode,
   mergeTreeNodeMetadata,
   resolveActiveTreeSlug,
+  treeNodeContainsRouteSlug,
   updateDatabaseTreeNodeMeta,
 } from "./utils";
 import { SpaceTreeNode } from "../types";
@@ -151,6 +152,23 @@ describe("active tree route", () => {
       "database-slug",
     );
     assert.equal(resolveActiveTreeSlug({}), undefined);
+  });
+
+  it("finds a selected descendant from a canonical route with hyphenated title", () => {
+    const child = {
+      ...createNode("child", [], "parent"),
+      slugId: "childslug1",
+    };
+    const parent = createNode("parent", [child]);
+
+    assert.equal(
+      treeNodeContainsRouteSlug(parent, "selected-child-title-childslug1"),
+      true,
+    );
+    assert.equal(
+      treeNodeContainsRouteSlug(parent, "unrelated-page-other-slug"),
+      false,
+    );
   });
 });
 
