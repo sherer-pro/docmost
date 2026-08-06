@@ -17,6 +17,7 @@ describe('EmailAggregationService', () => {
     }>;
     notifications?: any[];
     userRecord?: unknown;
+    accessibleNotifications?: any[];
   }) => {
     const usersQuery = {
       select: jest.fn().mockReturnThis(),
@@ -24,6 +25,7 @@ describe('EmailAggregationService', () => {
       executeTakeFirst: jest.fn().mockResolvedValue(
         options?.userRecord ?? {
           email: 'john@example.com',
+          locale: 'en-US',
           settings: {
             preferences: {
               emailEnabled: true,
@@ -57,30 +59,26 @@ describe('EmailAggregationService', () => {
     } as any;
 
     const notificationRepo = {
-      findPendingEmailDigestUsers: jest
-        .fn()
-        .mockResolvedValue(
-          options?.pendingUsers ?? [
-            {
-              userId: 'user-1',
-              workspaceId: 'ws-1',
-              firstPendingAt: new Date('2026-02-01T10:15:00.000Z'),
-            },
-          ],
-        ),
-      findUnreadUnemailedForUserBefore: jest
-        .fn()
-        .mockResolvedValue(
-          options?.notifications ?? [
-            {
-              id: 'n-1',
-              type: 'page.user_mention',
-              actor: { name: 'John' },
-              page: { title: 'Roadmap', slugId: 'roadmap' },
-              space: { slug: 'product' },
-            },
-          ],
-        ),
+      findPendingEmailDigestUsers: jest.fn().mockResolvedValue(
+        options?.pendingUsers ?? [
+          {
+            userId: 'user-1',
+            workspaceId: 'ws-1',
+            firstPendingAt: new Date('2026-02-01T10:15:00.000Z'),
+          },
+        ],
+      ),
+      findUnreadUnemailedForUserBefore: jest.fn().mockResolvedValue(
+        options?.notifications ?? [
+          {
+            id: 'n-1',
+            type: 'page.user_mention',
+            actor: { name: 'John' },
+            page: { title: 'Roadmap', slugId: 'roadmap' },
+            space: { slug: 'product' },
+          },
+        ],
+      ),
     } as any;
 
     const mailService = {
@@ -90,6 +88,12 @@ describe('EmailAggregationService', () => {
     const domainService = {
       getUrl: jest.fn().mockReturnValue('https://acme.example.com'),
     } as any;
+    const notificationService = {
+      filterAccessibleNotifications: jest.fn(
+        async (_userId, notifications) =>
+          options?.accessibleNotifications ?? notifications,
+      ),
+    } as any;
 
     return {
       service: new EmailAggregationService(
@@ -98,6 +102,7 @@ describe('EmailAggregationService', () => {
         notificationRepo,
         mailService,
         domainService,
+        notificationService,
       ),
       notificationRepo,
       mailService,
@@ -111,7 +116,9 @@ describe('EmailAggregationService', () => {
 
     await service.processDueDigests();
 
-    expect(notificationRepo.findUnreadUnemailedForUserBefore).toHaveBeenCalledWith({
+    expect(
+      notificationRepo.findUnreadUnemailedForUserBefore,
+    ).toHaveBeenCalledWith({
       userId: 'user-1',
       windowEnd: new Date('2026-02-01T11:00:00.000Z'),
     });
@@ -120,6 +127,9 @@ describe('EmailAggregationService', () => {
       expect.objectContaining({
         to: 'john@example.com',
         notificationIds: ['n-1'],
+        notificationUserId: 'user-1',
+        notificationDeliveryMode: 'digest',
+        notificationFrequency: '1h',
       }),
     );
   });
@@ -130,7 +140,9 @@ describe('EmailAggregationService', () => {
 
     await service.processDueDigests();
 
-    expect(notificationRepo.findUnreadUnemailedForUserBefore).not.toHaveBeenCalled();
+    expect(
+      notificationRepo.findUnreadUnemailedForUserBefore,
+    ).not.toHaveBeenCalled();
     expect(mailService.sendToQueue).not.toHaveBeenCalled();
   });
 
@@ -150,7 +162,9 @@ describe('EmailAggregationService', () => {
 
     await service.processDueDigests();
 
-    expect(notificationRepo.findUnreadUnemailedForUserBefore).not.toHaveBeenCalled();
+    expect(
+      notificationRepo.findUnreadUnemailedForUserBefore,
+    ).not.toHaveBeenCalled();
     expect(mailService.sendToQueue).not.toHaveBeenCalled();
   });
 
@@ -170,7 +184,9 @@ describe('EmailAggregationService', () => {
 
     await service.processDueDigests();
 
-    expect(notificationRepo.findUnreadUnemailedForUserBefore).toHaveBeenCalledWith({
+    expect(
+      notificationRepo.findUnreadUnemailedForUserBefore,
+    ).toHaveBeenCalledWith({
       userId: 'user-1',
       windowEnd: new Date('2026-02-01T11:00:00.000Z'),
     });
@@ -193,7 +209,28 @@ describe('EmailAggregationService', () => {
 
     await service.processDueDigests();
 
-    expect(notificationRepo.findUnreadUnemailedForUserBefore).not.toHaveBeenCalled();
+    expect(
+      notificationRepo.findUnreadUnemailedForUserBefore,
+    ).not.toHaveBeenCalled();
+    expect(mailService.sendToQueue).not.toHaveBeenCalled();
+  });
+
+  it('does not queue a digest containing a page whose access was revoked', async () => {
+    jest.setSystemTime(new Date('2026-02-01T12:00:00.000Z'));
+    const { service, mailService } = createService({
+      accessibleNotifications: [],
+      notifications: [
+        {
+          id: 'n-private',
+          pageId: 'page-private',
+          page: { title: 'Private canary title', slugId: 'private' },
+          space: { slug: 'private-space' },
+        },
+      ],
+    });
+
+    await service.processDueDigests();
+
     expect(mailService.sendToQueue).not.toHaveBeenCalled();
   });
 });

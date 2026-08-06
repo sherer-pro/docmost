@@ -2,20 +2,30 @@ import { Section, Text, Button } from '@react-email/components';
 import * as React from 'react';
 import { button, content, paragraph } from '../css/styles';
 import { MailBody } from '../partials/partials';
+import { isRussianNotificationLocale } from '../../../common/helpers/notification-copy';
 
 interface Props {
   actorName: string;
   pageTitle: string;
   pageUrl: string;
+  locale?: string;
 }
 
-export const PageMentionEmail = ({ actorName, pageTitle, pageUrl }: Props) => {
+export const PageMentionEmail = ({
+  actorName,
+  pageTitle,
+  pageUrl,
+  locale,
+}: Props) => {
+  const ru = isRussianNotificationLocale(locale);
+
   return (
-    <MailBody>
+    <MailBody locale={locale}>
       <Section style={content}>
-        <Text style={paragraph}>Hi there,</Text>
+        <Text style={paragraph}>{ru ? 'Здравствуйте!' : 'Hi there,'}</Text>
         <Text style={paragraph}>
-          <strong>{actorName}</strong> mentioned you in{' '}
+          <strong>{actorName}</strong>{' '}
+          {ru ? 'упоминает вас на странице' : 'mentioned you in'}{' '}
           <strong>{pageTitle}</strong>.
         </Text>
       </Section>
@@ -29,7 +39,7 @@ export const PageMentionEmail = ({ actorName, pageTitle, pageUrl }: Props) => {
         }}
       >
         <Button href={pageUrl} style={button}>
-          View
+          {ru ? 'Открыть' : 'View'}
         </Button>
       </Section>
     </MailBody>

@@ -44,6 +44,7 @@ describe('CommentNotificationService', () => {
         id: `notification-${notificationService.create.mock.calls.length}`,
       })),
       queueEmail: jest.fn(),
+      getUserLocale: jest.fn().mockResolvedValue('en-US'),
     } as any;
     const watcherRepo = {
       getPageWatcherIds: jest.fn().mockResolvedValue([]),
@@ -52,7 +53,9 @@ describe('CommentNotificationService', () => {
       dispatchOrAggregate: jest.fn(),
     } as any;
     const pageAccessService = {
-      filterUsersWithPageReadAccess: jest.fn(async (_pageId, userIds) => userIds),
+      filterUsersWithPageReadAccess: jest.fn(
+        async (_pageId, userIds) => userIds,
+      ),
     } as any;
     const recipientResolverService = {
       resolvePageRoleRecipients: jest.fn().mockResolvedValue([]),
@@ -78,6 +81,7 @@ describe('CommentNotificationService', () => {
 
   const createRootJob = (overrides = {}) =>
     ({
+      eventId: 'event-1',
       commentId: 'comment-1',
       pageId: 'page-1',
       spaceId: 'space-1',
@@ -129,9 +133,7 @@ describe('CommentNotificationService', () => {
       ]),
     );
     expect(payloads).not.toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ userId: 'actor-1' }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ userId: 'actor-1' })]),
     );
   });
 
@@ -203,18 +205,16 @@ describe('CommentNotificationService', () => {
       expect.arrayContaining([
         expect.objectContaining({
           userId: 'thread-author-1',
-          type: NotificationType.COMMENT_CREATED,
+          type: NotificationType.COMMENT_REPLY,
         }),
         expect.objectContaining({
           userId: 'thread-author-2',
-          type: NotificationType.COMMENT_CREATED,
+          type: NotificationType.COMMENT_REPLY,
         }),
       ]),
     );
     expect(payloads).not.toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ userId: 'actor-1' }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ userId: 'actor-1' })]),
     );
     expect(watcherRepo.getPageWatcherIds).not.toHaveBeenCalled();
     expect(

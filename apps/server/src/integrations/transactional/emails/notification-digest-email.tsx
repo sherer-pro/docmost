@@ -2,6 +2,10 @@ import { Button, Link, Section, Text } from '@react-email/components';
 import * as React from 'react';
 import { button, content, paragraph } from '../css/styles';
 import { MailBody } from '../partials/partials';
+import {
+  getDigestSummary,
+  isRussianNotificationLocale,
+} from '../../../common/helpers/notification-copy';
 
 export interface NotificationDigestItem {
   actorName: string;
@@ -15,6 +19,7 @@ interface Props {
   totalCount: number;
   intervalLabel: string;
   workspaceUrl: string;
+  locale?: string;
 }
 
 export const NotificationDigestEmail = ({
@@ -22,14 +27,16 @@ export const NotificationDigestEmail = ({
   totalCount,
   intervalLabel,
   workspaceUrl,
+  locale,
 }: Props) => {
+  const ru = isRussianNotificationLocale(locale);
+
   return (
-    <MailBody>
+    <MailBody locale={locale}>
       <Section style={content}>
-        <Text style={paragraph}>Hi there,</Text>
+        <Text style={paragraph}>{ru ? 'Здравствуйте!' : 'Hi there,'}</Text>
         <Text style={paragraph}>
-          You have {totalCount} unread update{totalCount === 1 ? '' : 's'} in the
-          last {intervalLabel}.
+          {getDigestSummary(totalCount, intervalLabel, locale)}
         </Text>
         {entries.map((entry, index) => (
           <Text key={`${entry.pageUrl}-${index}`} style={paragraph}>
@@ -51,7 +58,7 @@ export const NotificationDigestEmail = ({
         }}
       >
         <Button href={workspaceUrl} style={button}>
-          Open workspace
+          {ru ? 'Открыть пространство' : 'Open workspace'}
         </Button>
       </Section>
     </MailBody>

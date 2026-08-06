@@ -5,6 +5,7 @@ describe('NotificationDeliveryPolicyService', () => {
     userSettings?: unknown;
     isUnread?: boolean;
     usersWithAccess?: Set<string>;
+    usersWithPageAccess?: string[];
   }) => {
     const db = {
       selectFrom: jest.fn().mockReturnValue({
@@ -28,15 +29,22 @@ describe('NotificationDeliveryPolicyService', () => {
         .fn()
         .mockResolvedValue(options?.usersWithAccess ?? new Set(['user-1'])),
     } as any;
+    const pageAccessService = {
+      filterUsersWithPageReadAccess: jest
+        .fn()
+        .mockResolvedValue(options?.usersWithPageAccess ?? ['user-1']),
+    } as any;
 
     return {
       service: new NotificationDeliveryPolicyService(
         db,
         notificationRepo,
         spaceMemberRepo,
+        pageAccessService,
       ),
       notificationRepo,
       spaceMemberRepo,
+      pageAccessService,
     };
   };
 
@@ -49,10 +57,29 @@ describe('NotificationDeliveryPolicyService', () => {
       channel: 'push',
       userId: 'user-1',
       notificationId: 'n-1',
+    });
+
+    expect(shouldSend).toBe(false);
+    expect(notificationRepo.isUnreadForUser).not.toHaveBeenCalled();
+  });
+
+  it('returns false when page access was revoked before delivery', async () => {
+    const { service, notificationRepo, pageAccessService } = createService({
+      usersWithPageAccess: [],
+    });
+
+    const shouldSend = await service.shouldSend({
+      channel: 'push',
+      userId: 'user-1',
+      spaceId: 'space-1',
+      notificationId: 'n-1',
       pageId: 'page-1',
     });
 
     expect(shouldSend).toBe(false);
+    expect(
+      pageAccessService.filterUsersWithPageReadAccess,
+    ).toHaveBeenCalledWith('page-1', ['user-1']);
     expect(notificationRepo.isUnreadForUser).not.toHaveBeenCalled();
   });
 
@@ -74,7 +101,9 @@ describe('NotificationDeliveryPolicyService', () => {
 
   it('treats string boolean preferences as disabled values', async () => {
     const { service, notificationRepo } = createService({
-      userSettings: { preferences: { pushEnabled: '"false"', emailEnabled: 'false' } },
+      userSettings: {
+        preferences: { pushEnabled: '"false"', emailEnabled: 'false' },
+      },
     });
 
     const shouldSendPush = await service.shouldSend({
@@ -107,7 +136,10 @@ describe('NotificationDeliveryPolicyService', () => {
     });
 
     expect(shouldSend).toBe(false);
-    expect(notificationRepo.isUnreadForUser).toHaveBeenCalledWith('n-1', 'user-1');
+    expect(notificationRepo.isUnreadForUser).toHaveBeenCalledWith(
+      'n-1',
+      'user-1',
+    );
   });
 
   it('returns false for actor self-case', async () => {
@@ -135,7 +167,6 @@ describe('NotificationDeliveryPolicyService', () => {
       userId: 'user-1',
       spaceId: 'space-1',
       notificationId: 'n-1',
-      pageId: 'page-1',
     });
 
     expect(shouldSend).toBe(false);

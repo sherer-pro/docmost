@@ -4,6 +4,7 @@ import { NotificationRepo } from '@docmost/db/repos/notification/notification.re
 import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { normalizeUserSettings } from '../../user/utils/user-preferences.util';
+import { PageAccessService } from '../../page-access/page-access.service';
 
 export type NotificationDeliveryChannel = 'push' | 'email';
 
@@ -33,21 +34,32 @@ export class NotificationDeliveryPolicyService {
     @InjectKysely() private readonly db: KyselyDB,
     private readonly notificationRepo: NotificationRepo,
     private readonly spaceMemberRepo: SpaceMemberRepo,
+    private readonly pageAccessService: PageAccessService,
   ) {}
 
   /**
    * Checks whether a notification should be sent via the selected channel.
    */
   async shouldSend(input: NotificationDeliveryPolicyInput): Promise<boolean> {
-    const { channel, userId, notificationId, actorId, spaceId } = input;
+    const { channel, userId, notificationId, pageId, actorId, spaceId } = input;
 
     if (actorId && actorId === userId) {
       return false;
     }
 
-    if (spaceId) {
+    if (!pageId && spaceId) {
       const hasAccess = await this.hasSpaceAccess(userId, spaceId);
       if (!hasAccess) {
+        return false;
+      }
+    }
+
+    if (pageId) {
+      const usersWithPageAccess =
+        await this.pageAccessService.filterUsersWithPageReadAccess(pageId, [
+          userId,
+        ]);
+      if (!usersWithPageAccess.includes(userId)) {
         return false;
       }
     }
@@ -66,11 +78,12 @@ export class NotificationDeliveryPolicyService {
     return this.notificationRepo.isUnreadForUser(notificationId, userId);
   }
 
-  private async hasSpaceAccess(userId: string, spaceId: string): Promise<boolean> {
-    const usersWithAccess = await this.spaceMemberRepo.getUserIdsWithSpaceAccess(
-      [userId],
-      spaceId,
-    );
+  private async hasSpaceAccess(
+    userId: string,
+    spaceId: string,
+  ): Promise<boolean> {
+    const usersWithAccess =
+      await this.spaceMemberRepo.getUserIdsWithSpaceAccess([userId], spaceId);
 
     return usersWithAccess.has(userId);
   }
@@ -83,9 +96,14 @@ export class NotificationDeliveryPolicyService {
       .selectFrom('users')
       .select('settings')
       .where('id', '=', userId)
+      .where('deletedAt', 'is', null)
       .executeTakeFirst();
 
-    const settings = normalizeUserSettings(user?.settings);
+    if (!user) {
+      return { pushEnabled: false, emailEnabled: false };
+    }
+
+    const settings = normalizeUserSettings(user.settings);
 
     return {
       pushEnabled: settings.preferences.pushEnabled,

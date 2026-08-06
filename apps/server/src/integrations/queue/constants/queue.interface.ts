@@ -49,6 +49,7 @@ export interface INotificationCreateJob {
 }
 
 export interface ICommentNotificationJob {
+  eventId: string;
   commentId: string;
   parentCommentId?: string;
   pageId: string;
@@ -60,6 +61,7 @@ export interface ICommentNotificationJob {
 }
 
 export interface ICommentResolvedNotificationJob {
+  eventId: string;
   commentId: string;
   commentCreatorId: string;
   pageId: string;
@@ -83,6 +85,7 @@ export type PageRecipientNotificationReason =
   | 'database-user-assigned';
 
 export interface IPageRecipientNotificationJob {
+  eventId: string;
   reason: PageRecipientNotificationReason;
   pageId: string;
   spaceId: string;

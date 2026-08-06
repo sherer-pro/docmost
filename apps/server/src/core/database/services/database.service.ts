@@ -2616,6 +2616,7 @@ export class DatabaseService {
           nextUserId !== user.id
         ) {
           await this.notifyDatabaseUserAssignment({
+            eventId: generateSlugId(),
             actorId: user.id,
             pageId,
             spaceId: database.spaceId,
@@ -2768,6 +2769,7 @@ export class DatabaseService {
    * Notifies the new executor when the user cell changes.
    */
   private async notifyDatabaseUserAssignment(params: {
+    eventId: string;
     actorId: string;
     pageId: string;
     spaceId: string;
@@ -2775,6 +2777,7 @@ export class DatabaseService {
     recipientId: string;
   }): Promise<void> {
     await this.notificationQueue.add(QueueJob.PAGE_RECIPIENT_NOTIFICATION, {
+      eventId: params.eventId,
       reason: 'database-user-assigned',
       actorId: params.actorId,
       pageId: params.pageId,
