@@ -6,13 +6,28 @@ import {
 } from "@docmost/editor-ext";
 
 export interface WorkspaceTagSettings {
-  disabled?: string[];
+  disabled?: string[] | string;
 }
 
-export function normalizeDisabledTags(disabled?: string[]): BuiltInTagValue[] {
+export function normalizeDisabledTags(
+  disabled?: string[] | string,
+): BuiltInTagValue[] {
   const normalized = new Set<BuiltInTagValue>();
+  let values: unknown = disabled ?? [];
 
-  for (const value of disabled ?? []) {
+  if (typeof values === "string") {
+    try {
+      values = JSON.parse(values);
+    } catch {
+      values = [];
+    }
+  }
+
+  for (const value of Array.isArray(values) ? values : []) {
+    if (typeof value !== "string") {
+      continue;
+    }
+
     const tagValue = value.trim().toLowerCase();
     if (isBuiltInTagValue(tagValue)) {
       normalized.add(tagValue);

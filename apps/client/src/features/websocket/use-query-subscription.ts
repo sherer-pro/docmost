@@ -2,7 +2,10 @@ import React from "react";
 import { socketAtom } from "@/features/websocket/atoms/socket-atom.ts";
 import { useAtom } from "jotai";
 import { useQueryClient } from "@tanstack/react-query";
-import { WebSocketEvent, WebSocketIncomingEvent } from "@/features/websocket/types";
+import {
+  WebSocketEvent,
+  WebSocketIncomingEvent,
+} from "@/features/websocket/types";
 import { IPagination } from "@/lib/types";
 import {
   invalidateOnCreatePage,
@@ -15,6 +18,7 @@ import { RQ_KEY } from "../comment/queries/comment-query";
 import { IComment } from "@/features/comment/types/comment.types";
 import { ISpace } from "@/features/space/types/space.types.ts";
 import { IPage } from "@/features/page/types/page.types.ts";
+import { applySpaceUpdateToCache } from "./space-query-cache";
 
 const mapTreeNodeToPage = (node: {
   id: string;
@@ -106,25 +110,7 @@ export const useQuerySubscription = () => {
 
           if (entity === "space") {
             const spacePatch = data.payload as Partial<ISpace>;
-            const queryKeys: Array<[string, string]> = [];
-
-            if (data.id) {
-              queryKeys.push(["space", data.id]);
-            }
-
-            if (spacePatch.slug) {
-              queryKeys.push(["space", spacePatch.slug]);
-            }
-
-            queryKeys.forEach((queryKey) => {
-              queryClient.setQueryData(queryKey, (cachedSpace: ISpace) => {
-                if (!cachedSpace) {
-                  return cachedSpace;
-                }
-
-                return { ...cachedSpace, ...spacePatch };
-              });
-            });
+            applySpaceUpdateToCache(queryClient, data.id, spacePatch);
 
             queryClient.invalidateQueries({ queryKey: ["spaces"] });
             break;
@@ -141,8 +127,12 @@ export const useQuerySubscription = () => {
           break;
         case "refetchRootTreeNodeEvent": {
           const spaceId = data.spaceId;
-          queryClient.refetchQueries({ queryKey: ["root-sidebar-pages", spaceId] });
-          queryClient.invalidateQueries({ queryKey: ["recent-changes", spaceId] });
+          queryClient.refetchQueries({
+            queryKey: ["root-sidebar-pages", spaceId],
+          });
+          queryClient.invalidateQueries({
+            queryKey: ["recent-changes", spaceId],
+          });
           break;
         }
         case "resolveComment": {

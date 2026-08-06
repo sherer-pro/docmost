@@ -246,6 +246,7 @@ function buildDecorationsForTextBlocks(
           Decoration.inline(from, to, {
             class: "dictionary-highlight",
             "data-dictionary-term-id": match.term.id,
+            role: "button",
             tabindex: "0",
           }),
         );

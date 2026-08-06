@@ -72,6 +72,29 @@ describe('LabelService', () => {
     );
   });
 
+  it('returns normalized duplicate labels only once', async () => {
+    const { service, labelRepo } = createService();
+    const label = {
+      id: 'label-1',
+      name: 'qa-label',
+      workspaceId: 'workspace-1',
+      spaceId: 'space-1',
+      type: LabelType.PAGE,
+    };
+    labelRepo.findOrCreate.mockResolvedValue(label);
+
+    const result = await service.addLabelsToPage(
+      'page-1',
+      [' QA Label ', 'qa-label'],
+      'workspace-1',
+      'space-1',
+    );
+
+    expect(result).toEqual([label]);
+    expect(labelRepo.findOrCreate).toHaveBeenCalledTimes(1);
+    expect(labelRepo.addLabelToPage).toHaveBeenCalledTimes(1);
+  });
+
   it('rejects removing a label from a different space', async () => {
     const { service, labelRepo } = createService();
     labelRepo.findById.mockResolvedValue({

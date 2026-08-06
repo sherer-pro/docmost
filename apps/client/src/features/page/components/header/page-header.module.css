@@ -22,12 +22,23 @@
 .group {
   @media (max-width: 48em) {
     gap: var(--mantine-spacing-sm);
+    min-width: 0;
     padding-inline: 0 !important;
   }
 }
 
 .actions {
   @media (max-width: 48em) {
+    flex: 1 1 auto;
+    justify-content: flex-start !important;
+    min-width: 0;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
     padding-inline: 0 !important;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
   }
 }

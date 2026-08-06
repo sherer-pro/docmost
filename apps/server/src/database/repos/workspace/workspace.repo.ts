@@ -19,6 +19,20 @@ type WorkspaceSharingSettingsKey =
   (typeof WORKSPACE_SHARING_SETTINGS_KEYS)[number];
 type WorkspaceTagSettingsKey = (typeof WORKSPACE_TAG_SETTINGS_KEYS)[number];
 
+export function jsonbPreferenceValue(prefValue: string | boolean) {
+  return typeof prefValue === 'boolean'
+    ? sql`${prefValue}::boolean`
+    : sql`${prefValue}::text`;
+}
+
+export function jsonbTextArray(prefValue: string[]) {
+  if (prefValue.length === 0) {
+    return sql`ARRAY[]::text[]`;
+  }
+
+  return sql`ARRAY[${sql.join(prefValue.map((value) => sql`${value}`))}]::text[]`;
+}
+
 @Injectable()
 export class WorkspaceRepo {
   public baseFields: Array<keyof Workspaces> = [
@@ -164,12 +178,14 @@ export class WorkspaceRepo {
       throw new Error(`Unsupported workspace API setting key: ${prefKey}`);
     }
 
+    const value = jsonbPreferenceValue(prefValue);
+
     return this.db
       .updateTable('workspaces')
       .set({
         settings: sql`COALESCE(settings, '{}'::jsonb)
                 || jsonb_build_object('api', COALESCE(settings->'api', '{}'::jsonb)
-                || jsonb_build_object(${prefKey}::text, ${JSON.stringify(prefValue)}::jsonb))`,
+                || jsonb_build_object(${prefKey}::text, ${value}))`,
         updatedAt: new Date(),
       })
       .where('id', '=', workspaceId)
@@ -187,12 +203,14 @@ export class WorkspaceRepo {
       throw new Error(`Unsupported workspace sharing setting key: ${prefKey}`);
     }
 
+    const value = jsonbPreferenceValue(prefValue);
+
     return dbOrTx(this.db, trx)
       .updateTable('workspaces')
       .set({
         settings: sql`COALESCE(settings, '{}'::jsonb)
                 || jsonb_build_object('sharing', COALESCE(settings->'sharing', '{}'::jsonb)
-                || jsonb_build_object(${prefKey}::text, ${JSON.stringify(prefValue)}::jsonb))`,
+                || jsonb_build_object(${prefKey}::text, ${value}))`,
         updatedAt: new Date(),
       })
       .where('id', '=', workspaceId)
@@ -209,12 +227,14 @@ export class WorkspaceRepo {
       throw new Error(`Unsupported workspace tag setting key: ${prefKey}`);
     }
 
+    const value = jsonbTextArray(prefValue);
+
     return this.db
       .updateTable('workspaces')
       .set({
         settings: sql`COALESCE(settings, '{}'::jsonb)
                 || jsonb_build_object('tags', COALESCE(settings->'tags', '{}'::jsonb)
-                || jsonb_build_object(${prefKey}::text, ${JSON.stringify(prefValue)}::jsonb))`,
+                || jsonb_build_object(${prefKey}::text, ${value}))`,
         updatedAt: new Date(),
       })
       .where('id', '=', workspaceId)

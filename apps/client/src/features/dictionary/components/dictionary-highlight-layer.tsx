@@ -82,10 +82,23 @@ export function DictionaryHighlightLayer({
     const handleMouseOver = (event: Event) => showDefinition(event.target);
     const handleFocusIn = (event: Event) => showDefinition(event.target);
     const handleClick = (event: Event) => showDefinition(event.target);
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (
+        !getHighlightElement(event.target) ||
+        !["Enter", " "].includes(event.key)
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      showDefinition(event.target);
+    };
 
     root.addEventListener("mouseover", handleMouseOver);
     root.addEventListener("focusin", handleFocusIn);
     root.addEventListener("click", handleClick);
+    root.addEventListener("keydown", handleKeyDown);
     root.addEventListener("mouseout", hideDefinition);
     root.addEventListener("focusout", hideDefinition);
 
@@ -93,6 +106,7 @@ export function DictionaryHighlightLayer({
       root.removeEventListener("mouseover", handleMouseOver);
       root.removeEventListener("focusin", handleFocusIn);
       root.removeEventListener("click", handleClick);
+      root.removeEventListener("keydown", handleKeyDown);
       root.removeEventListener("mouseout", hideDefinition);
       root.removeEventListener("focusout", hideDefinition);
     };
@@ -175,7 +189,11 @@ export function DictionaryHighlightLayer({
             className={classes.selectionPopover}
             style={{ top: selection.top, left: Math.max(12, selection.left) }}
           >
-            <Button size="xs" variant="default" onClick={handleCreateFromSelection}>
+            <Button
+              size="xs"
+              variant="default"
+              onClick={handleCreateFromSelection}
+            >
               {t("Add to dictionary")}
             </Button>
           </div>,
