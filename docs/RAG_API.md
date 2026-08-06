@@ -425,10 +425,12 @@ Base maps to one Docmost space. The application:
   fence an already in-flight Open WebUI request; the next cycle reconciles any
   resulting remote artifact from `meta.data.docmost`.
 
-Configuration is loaded through `RAG_SYNC_CONFIG_PATH`. Docmost and Open WebUI
-writer keys are paths to mounted secret files, never literal values in the JSON.
-Use `rag-sync.config.example.json` as the schema reference. A Knowledge Base must
-be created in advance; the worker never creates or deletes it.
+Configuration is loaded from the `RAG_SYNC_*` environment variables in the
+shared root `.env`; Compose forwards only that prefix to the writer. One writer
+process maps one Docmost space to one Knowledge Base. Docmost and Open WebUI
+writer keys are environment values and are therefore visible in Docker
+container metadata. A Knowledge Base must be created in advance; the worker
+never creates or deletes it.
 
 ### 7.1 Initial sync
 

@@ -24,7 +24,7 @@
 - Local fullstack development: `pnpm dev` (frontend + backend in parallel).
 - Backend dev: `pnpm server:dev`.
 - Frontend dev: `pnpm client:dev`.
-- Optional Open WebUI sync: `pnpm rag-sync:build`, `pnpm rag-sync:test`, and `RAG_SYNC_CONFIG_PATH=... pnpm rag-sync:start`.
+- Optional Open WebUI sync: configure `RAG_SYNC_*` in the root `.env`, then run `pnpm rag-sync:build`, `pnpm rag-sync:test`, and `pnpm rag-sync:start`.
 - Production run for the built backend: `pnpm start` (root script → `apps/server start:prod`).
 - Realtime collaboration server: `pnpm collab` / `pnpm collab:dev`.
 - Email templates preview (backend): `pnpm email:dev`.
@@ -161,9 +161,9 @@
 ### Containers
 
 - Host development env: copy `.env.example` to `.env`, replace secrets, and point `DATABASE_URL`/`REDIS_URL` at local host services.
-- Docker Compose env: copy `.env.compose.example` to `.env`, replace `REPLACE_WITH_LONG_SECRET` and `STRONG_DB_PASSWORD`, keep `AUTH_RATE_LIMIT_STORAGE=redis`, then run `docker compose up -d`.
-- Local container startup (prebuilt image): `docker compose up -d`
-- Optional Open WebUI sync stack: `docker compose -f docker-compose.yml -f docker-compose.rag-sync.yml up -d rag-sync`
+- Docker Compose env: copy `.env.compose.example` to `.env`, replace `REPLACE_WITH_LONG_SECRET` and `STRONG_DB_PASSWORD`, keep `AUTH_RATE_LIMIT_STORAGE=redis`, then run `docker compose up -d --build`.
+- Local container startup: `docker compose up -d --build`
+- Optional Open WebUI sync stack from the main Compose file: configure `RAG_SYNC_*` in the same root `.env` used by Docmost, then run `docker compose --profile rag-sync up -d --build`. Compose forwards only this prefix. One writer container maps one Docmost space to one Open WebUI Knowledge Base; API keys in environment variables are visible in Docker metadata.
 - `Dockerfile.rag-sync` builds the workspace packages, creates a Docker-local inject-workspace lockfile for a portable production-only `pnpm deploy` directory, and runs `dist/main.js` as `USER node`; do not copy the builder `node_modules` or source tree into its runner stage.
 - Build the current code into an image: `docker build -t docmost:local .`
 - The production image starts the built backend directly with `node apps/server/dist/apps/server/src/main`; it should not invoke `pnpm start` or Corepack at runtime.
@@ -353,7 +353,7 @@ Minimum:
 - `AI_MCP_ALLOWED_ORIGINS` is a third independent SSRF boundary, used only for outbound external MCP and requiring dual approval with the workspace allowlist. `AI_EXTERNAL_MCP_ENABLED=false` makes the whole feature unreachable regardless of any workspace, space, or user setting.
 - `AI_STREAM_IDLE_TIMEOUT_MS` is a deployment-level inactivity limit, while `requestTimeoutMs` remains per-space and bounds the full provider request. The effective idle timeout is the smaller of the two.
 - `/api/rag/*` remains the API-key-only synchronization/export surface for an external index. Query-time AI retrieval selects `none`, the unchanged `http-json-v1`, or `open-webui-knowledge-v1`; it does not create a local vector index and must degrade to live document/file context when unavailable.
-- `apps/rag-sync` is the optional Open WebUI writer. One Knowledge Base maps to one Docmost space. It reads only `/api/rag/*`, uses a separate Redis namespace for locks/checkpoints/mappings, reads Docmost/Open WebUI keys from mounted secret files, and must never import server repositories, use backend queues, create a Knowledge Base, or log document content and secrets.
+- `apps/rag-sync` is the optional Open WebUI writer. One Knowledge Base maps to one Docmost space. It reads only `/api/rag/*`, uses a separate Redis namespace for locks/checkpoints/mappings, reads Docmost/Open WebUI keys from `RAG_SYNC_*` environment variables, and must never import server repositories, use backend queues, create a Knowledge Base, or log document content and secrets.
 - RAG Sync must check the current distributed-lock renewal state around every remote side effect and mapping/checkpoint write. Open WebUI processing polls must stop after observed lock loss; the lease does not fence a request already in flight, so remote artifacts left at that boundary are repaired from `meta.data.docmost` on the next cycle.
 - RAG/MCP concurrency admission uses renewable Redis leases for the full HTTP lifecycle. Any new streaming route guarded by `ApiKeyTrafficGuard` must preserve renewal until `finish`, `close`, or request abort, release by the random lease ID, and fail closed if renewal can no longer confirm the lease.
 - Typesense is selected with `SEARCH_DRIVER=typesense`. It is a candidate index only: page/attachment rows and all ACL/public-sharing decisions must be revalidated against PostgreSQL before results are returned.

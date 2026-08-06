@@ -108,11 +108,13 @@ AI chat file uploads use idempotent upload batches, deterministic storage keys, 
 The optional `apps/rag-sync` process is not part of the backend runtime. It
 consumes API-key-authenticated `/api/rag/*` cursor feeds and writes one
 pre-created Open WebUI Knowledge Base per space. It owns separate Redis
-checkpoints, mappings, and distributed locks, reads credentials from mounted
-secret files, and has no Docmost database or BullMQ access. `Dockerfile.rag-sync`
-and `docker-compose.rag-sync.yml` deploy it explicitly; the main Compose stack
-remains unchanged. The current lock-renewal state is checked around remote
-operations and every mapping/checkpoint write; observed loss stops further
+checkpoints, mappings, and distributed locks, reads credentials from
+environment variables in the shared root `.env`, and has no Docmost database
+or BullMQ access. Compose forwards only `RAG_SYNC_*` values to this service. The
+main
+`docker-compose.yml` builds it from `Dockerfile.rag-sync` and starts it only
+when the optional `rag-sync` profile is enabled. The current lock-renewal state
+is checked around remote operations and every mapping/checkpoint write; observed loss stops further
 commits, and the next cycle reconstructs remote state from versioned Docmost
 metadata. This is recovery containment, not remote fencing for an Open WebUI
 request already in flight.
