@@ -9,29 +9,31 @@ const VITE_CONFIG_PATH = 'apps/client/vite.config.ts';
 const STATIC_MODULE_PATH = 'apps/server/src/integrations/static/static.module.ts';
 const COMPOSE_PATH = 'docker-compose.yml';
 const COMPOSE_ONLY_ENV_KEYS = new Set([
+  'DOCMOST_BIND_ADDRESS',
+  'EDGE_NETWORK_EXTERNAL',
+  'EDGE_NETWORK_NAME',
   'POSTGRES_DB',
   'POSTGRES_PASSWORD',
   'POSTGRES_USER',
-  'RAG_SYNC_BINDING_ID',
-  'RAG_SYNC_DOCMOST_API_KEY',
-  'RAG_SYNC_DOCMOST_BASE_URL',
-  'RAG_SYNC_MAX_ATTACHMENT_BYTES',
-  'RAG_SYNC_OPEN_WEBUI_API_KEY',
-  'RAG_SYNC_POLL_INTERVAL_MS',
-  'RAG_SYNC_PROCESSING_TIMEOUT_MS',
-  'RAG_SYNC_REDIS_PREFIX',
-  'RAG_SYNC_REDIS_URL',
-  'RAG_SYNC_REQUEST_TIMEOUT_MS',
 ]);
 const SYNTHETIC_WINDOW_CONFIG_KEYS = new Set(['ENV']);
 const REQUIRED_COMPOSE_RUNTIME_KEYS = new Set([
   'AI_ASSISTANT_PROFILES_ENABLED',
   'AI_BUILTIN_TOOL_EXTENSIONS_ENABLED',
   'PAGE_TEMPLATES_ENABLED',
+  'RAG_SYNC_ALLOWED_ORIGINS',
+  'RAG_SYNC_DISCOVERY_INTERVAL_MS',
+  'RAG_SYNC_ENABLED',
+  'RAG_SYNC_MAX_ATTACHMENT_BYTES',
+  'RAG_SYNC_MAX_CONCURRENT_BINDINGS',
+  'RAG_SYNC_MAX_CONCURRENT_DOCUMENTS',
+  'RAG_SYNC_POLL_INTERVAL_MS',
+  'RAG_SYNC_PROCESSING_TIMEOUT_MS',
+  'RAG_SYNC_RECONCILE_INTERVAL_MS',
+  'RAG_SYNC_REDIS_PREFIX',
+  'RAG_SYNC_REQUEST_TIMEOUT_MS',
+  'RAG_SYNC_SHUTDOWN_TIMEOUT_MS',
 ]);
-const REQUIRED_RAG_SYNC_RUNTIME_KEYS = new Set(
-  [...COMPOSE_ONLY_ENV_KEYS].filter((key) => key.startsWith('RAG_SYNC_')),
-);
 
 function parseEnvKeys(filePath) {
   const content = readFileSync(filePath, 'utf8');
@@ -207,27 +209,6 @@ if (existsSync(COMPOSE_PATH)) {
     composeRuntimeNotForwarded,
   );
 
-  const ragSyncServiceEnv = extractComposeServiceEnv('rag-sync');
-  const ragSyncRuntimeMissing = sortedDiff(
-    REQUIRED_RAG_SYNC_RUNTIME_KEYS,
-    new Set(ragSyncServiceEnv.keys()),
-  );
-  const ragSyncRuntimeNotForwarded = [...REQUIRED_RAG_SYNC_RUNTIME_KEYS]
-    .filter((key) => {
-      const value = ragSyncServiceEnv.get(key) ?? '';
-      return !value.includes(`\${${key}`);
-    })
-    .sort();
-
-  issues.push(ragSyncRuntimeMissing, ragSyncRuntimeNotForwarded);
-  reportDiff(
-    'Required runtime keys missing from the rag-sync Compose service',
-    ragSyncRuntimeMissing,
-  );
-  reportDiff(
-    'Required rag-sync keys not forwarded from the Compose environment',
-    ragSyncRuntimeNotForwarded,
-  );
 }
 
 if (existsSync(LOCAL_ENV_PATH)) {

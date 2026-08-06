@@ -1,7 +1,11 @@
 .env
 .env.dev
 .env.prod
+# Keep obsolete standalone-sync files local while operators remove them.
 rag-sync.config.json
+/.rag-sync
+**/DOCMOST_RAG_KEY
+**/OPEN_WEBUI_KEY
 secrets/
 data
 # compiled output

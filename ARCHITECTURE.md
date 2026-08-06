@@ -6,7 +6,7 @@ Docmost is a pnpm workspace orchestrated by Nx. The main runtime surfaces are:
 
 - `apps/server` - NestJS API, background jobs, websocket gateway, migrations, and storage/search integrations.
 - `apps/client` - Vite and React frontend.
-- `apps/rag-sync` - optional standalone Docmost-to-Open-WebUI index synchronizer.
+- `apps/server/src/core/rag-sync` - optional built-in, per-space Docmost-to-Open-WebUI synchronizer.
 - `packages/editor-ext` - shared Tiptap/ProseMirror editor extensions consumed by the client and server-side rendering paths.
 - `packages/api-contract` - shared API-facing TypeScript contracts used by backend and frontend code.
 
@@ -105,19 +105,23 @@ AI conversation context is a versioned aggregate: the current document flag, exp
 
 AI chat file uploads use idempotent upload batches, deterministic storage keys, extraction compare-and-set, database-first tombstones, and retriable storage cleanup. The retired AI Answers routes, embedding table, and legacy indexing queue are not part of the current architecture. Core per-space AI is the only document-generation UX.
 
-The optional `apps/rag-sync` process is not part of the backend runtime. It
-consumes API-key-authenticated `/api/rag/*` cursor feeds and writes one
-pre-created Open WebUI Knowledge Base per space. It owns separate Redis
-checkpoints, mappings, and distributed locks, reads credentials from
-environment variables in the shared root `.env`, and has no Docmost database
-or BullMQ access. Compose forwards only `RAG_SYNC_*` values to this service. The
-main
-`docker-compose.yml` builds it from `Dockerfile.rag-sync` and starts it only
-when the optional `rag-sync` profile is enabled. The current lock-renewal state
-is checked around remote operations and every mapping/checkpoint write; observed loss stops further
-commits, and the next cycle reconstructs remote state from versioned Docmost
-metadata. This is recovery containment, not remote fencing for an Open WebUI
-request already in flight.
+The optional RAG Sync module runs inside the main backend process and discovers
+enabled bindings from PostgreSQL. Each space owns an independent Open WebUI
+target and encrypted writer credential. The deployment-wide
+`RAG_SYNC_ENABLED` switch and `RAG_SYNC_ALLOWED_ORIGINS` allowlist remain in the
+environment; per-space identifiers and credentials never do. The module reads
+the same content-export implementation as `/api/rag/*`, but uses a system scope
+containing every live page permitted by `AiContentPolicyService`. The public
+RAG API keeps the API-key creator's page ACL.
+
+Runtime checkpoints, mappings, operational status, a global concurrency
+semaphore, and per-binding leases use the shared Redis under a versioned prefix.
+Every state mutation is fenced by the current random lease token. Lease renewal
+is sequential, observed loss aborts in-flight work, and uncertain Open WebUI
+uploads are reconciled from versioned Docmost metadata before retry. A normal
+disable drains only Docmost-managed files; emergency force disable preserves a
+cleanup requirement and target claim so stale external data cannot be silently
+reassigned.
 
 Production startup validation requires `APP_URL` to be valid, rejects trust-all proxy configuration, and requires `AUTH_RATE_LIMIT_STORAGE=redis`.
 

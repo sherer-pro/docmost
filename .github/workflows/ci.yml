@@ -59,9 +59,6 @@ jobs:
       - name: Server tests
         run: pnpm --filter ./apps/server test
 
-      - name: RAG Sync tests
-        run: pnpm rag-sync:test
-
       - name: Security regression tests
         run: pnpm test:security
 
@@ -139,7 +136,7 @@ jobs:
         run: pnpm --filter ./apps/server test:e2e
 
   production-smoke:
-    name: Production images, MCP, collaboration, and health
+    name: Production image, embedded RAG sync, MCP, and collaboration
     needs: integration
     runs-on: ubuntu-latest
     timeout-minutes: 35
@@ -165,13 +162,7 @@ jobs:
       - name: Build the production image once
         run: docker build --build-arg PNPM_OFFLINE=0 -t docmost:ci .
 
-      - name: Build and inspect the RAG Sync image
-        run: |
-          docker build -f Dockerfile.rag-sync -t docmost-rag-sync:ci .
-          test "$(docker inspect --format '{{.Config.User}}' docmost-rag-sync:ci)" = "node"
-          docker run --rm --entrypoint node docmost-rag-sync:ci -e "const fs=require('node:fs'); if(!fs.existsSync('dist/main.js')) process.exit(1)"
-
-      - name: Start PostgreSQL and Redis
+      - name: Start PostgreSQL, Redis, and mock Open WebUI
         run: |
           docker network create docmost-ci
           docker run -d --name docmost-db --network docmost-ci \
@@ -181,19 +172,25 @@ jobs:
             postgres:18
           docker run -d --name docmost-redis --network docmost-ci redis:8 \
             redis-server --appendonly no --maxmemory-policy noeviction
+          docker run -d --name docmost-open-webui --network docmost-ci -p 18080:8080 \
+            -e MOCK_OPEN_WEBUI_PROCESSING_DELAY_MS=500 \
+            -v "$PWD/scripts/ci-open-webui-mock.mjs:/mock.mjs:ro" \
+            node:22-alpine node /mock.mjs
           for attempt in $(seq 1 30); do
-            docker exec docmost-db pg_isready -U docmost -d docmost && exit 0
+            if docker exec docmost-db pg_isready -U docmost -d docmost && \
+               docker exec docmost-redis redis-cli ping | grep -q PONG && \
+               curl --fail --silent http://127.0.0.1:18080/health >/dev/null; then
+              exit 0
+            fi
             sleep 1
           done
           exit 1
-
-      - name: Run the RAG Sync container smoke test
-        run: node scripts/ci-rag-sync-container-smoke.mjs --image docmost-rag-sync:ci
 
       - name: Run migrations from the built image
         run: |
           docker run --rm --network docmost-ci \
             -e DATABASE_URL=postgresql://docmost:docmost-ci-password@docmost-db:5432/docmost \
+            -e APP_SECRET=ci-only-app-secret-at-least-32-characters \
             --entrypoint node docmost:ci \
             apps/server/dist/apps/server/src/database/migrate.js latest
 
@@ -207,6 +204,38 @@ jobs:
             -e DATABASE_URL=postgresql://docmost:docmost-ci-password@docmost-db:5432/docmost \
             -e REDIS_URL=redis://docmost-redis:6379 \
             -e AUTH_RATE_LIMIT_STORAGE=redis \
+            -e RAG_SYNC_ENABLED=true \
+            -e RAG_SYNC_ALLOWED_ORIGINS=http://docmost-open-webui:8080 \
+            -e RAG_SYNC_REDIS_PREFIX=docmost:rag-sync-ci \
+            -e RAG_SYNC_POLL_INTERVAL_MS=5000 \
+            -e RAG_SYNC_DISCOVERY_INTERVAL_MS=5000 \
+            -e RAG_SYNC_MAX_CONCURRENT_BINDINGS=2 \
+            -e RAG_SYNC_MAX_CONCURRENT_DOCUMENTS=4 \
+            -e RAG_SYNC_REQUEST_TIMEOUT_MS=5000 \
+            -e RAG_SYNC_PROCESSING_TIMEOUT_MS=30000 \
+            -e RAG_SYNC_RECONCILE_INTERVAL_MS=60000 \
+            -e RAG_SYNC_SHUTDOWN_TIMEOUT_MS=5000 \
+            -e DISABLE_TELEMETRY=true \
+            docmost:ci
+          docker run -d --name docmost-app-replica --network docmost-ci \
+            -e NODE_ENV=production \
+            -e APP_URL=http://127.0.0.1:3000 \
+            -e COLLAB_URL=http://127.0.0.1:3001 \
+            -e APP_SECRET=ci-only-app-secret-at-least-32-characters \
+            -e DATABASE_URL=postgresql://docmost:docmost-ci-password@docmost-db:5432/docmost \
+            -e REDIS_URL=redis://docmost-redis:6379 \
+            -e AUTH_RATE_LIMIT_STORAGE=redis \
+            -e RAG_SYNC_ENABLED=true \
+            -e RAG_SYNC_ALLOWED_ORIGINS=http://docmost-open-webui:8080 \
+            -e RAG_SYNC_REDIS_PREFIX=docmost:rag-sync-ci \
+            -e RAG_SYNC_POLL_INTERVAL_MS=5000 \
+            -e RAG_SYNC_DISCOVERY_INTERVAL_MS=5000 \
+            -e RAG_SYNC_MAX_CONCURRENT_BINDINGS=2 \
+            -e RAG_SYNC_MAX_CONCURRENT_DOCUMENTS=4 \
+            -e RAG_SYNC_REQUEST_TIMEOUT_MS=5000 \
+            -e RAG_SYNC_PROCESSING_TIMEOUT_MS=30000 \
+            -e RAG_SYNC_RECONCILE_INTERVAL_MS=60000 \
+            -e RAG_SYNC_SHUTDOWN_TIMEOUT_MS=5000 \
             -e DISABLE_TELEMETRY=true \
             docmost:ci
           docker run -d --name docmost-collab --network docmost-ci -p 3001:3001 \
@@ -226,7 +255,8 @@ jobs:
         run: |
           for attempt in $(seq 1 60); do
             if curl --fail --silent http://127.0.0.1:3000/api/health >/dev/null && \
-               curl --fail --silent http://127.0.0.1:3001/api/health >/dev/null; then
+               curl --fail --silent http://127.0.0.1:3001/api/health >/dev/null && \
+               docker exec docmost-app-replica curl --fail --silent http://127.0.0.1:3000/api/health >/dev/null; then
               exit 0
             fi
             sleep 1
@@ -239,14 +269,60 @@ jobs:
           CI_SMOKE_COLLAB_URL: http://127.0.0.1:3001
         run: node scripts/ci-production-smoke.mjs
 
+      - name: Configure two embedded RAG sync bindings
+        env:
+          CI_SMOKE_BASE_URL: http://127.0.0.1:3000
+          CI_RAG_SYNC_MOCK_URL: http://127.0.0.1:18080
+          CI_RAG_SYNC_WRITER_URL: http://docmost-open-webui:8080
+          CI_RAG_SYNC_STATE_PATH: ${{ runner.temp }}/docmost-rag-sync-smoke-state.json
+        run: node scripts/ci-embedded-rag-sync-smoke.mjs prepare
+
+      - name: Verify RAG sync PostgreSQL invariants
+        run: |
+          docker exec -i docmost-db psql -U docmost -d docmost \
+            < scripts/ci-rag-sync-db-invariants.sql
+
+      - name: Restart both API replicas during the initial RAG import
+        run: |
+          docker restart --timeout 5 docmost-app docmost-app-replica
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3000/api/health >/dev/null && \
+               docker exec docmost-app-replica curl --fail --silent http://127.0.0.1:3000/api/health >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          exit 1
+
+      - name: Verify RAG resume, key isolation, and cleanup
+        env:
+          CI_SMOKE_BASE_URL: http://127.0.0.1:3000
+          CI_RAG_SYNC_MOCK_URL: http://127.0.0.1:18080
+          CI_RAG_SYNC_WRITER_URL: http://docmost-open-webui:8080
+          CI_RAG_SYNC_STATE_PATH: ${{ runner.temp }}/docmost-rag-sync-smoke-state.json
+        run: node scripts/ci-embedded-rag-sync-smoke.mjs resume
+
+      - name: Verify the embedded runtime image and Redis namespace
+        run: |
+          docker run --rm --entrypoint sh docmost:ci -c \
+            'test ! -e /app/apps/rag-sync && test ! -e /app/Dockerfile.rag-sync'
+          test "$(docker exec docmost-redis redis-cli --scan --pattern 'docmost:rag-sync-ci:v2:*' | wc -l)" -gt 0
+          if docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' docmost-app | \
+             grep -Eq '^RAG_SYNC_(CONFIG_PATH|BINDING_ID|WORKSPACE_ID|SPACE_ID|KNOWLEDGE_ID|DOCMOST_BASE_URL|DOCMOST_API_KEY|OPEN_WEBUI_API_KEY|REDIS_URL)='; then
+            echo 'Per-space RAG credentials leaked into container environment' >&2
+            exit 1
+          fi
+
       - name: Capture server logs
         if: always()
         run: |
           mkdir -p ci-artifacts
           docker logs docmost-app >ci-artifacts/server.log 2>&1 || true
+          docker logs docmost-app-replica >ci-artifacts/server-replica.log 2>&1 || true
           docker logs docmost-collab >ci-artifacts/collaboration.log 2>&1 || true
           docker logs docmost-db >ci-artifacts/postgres.log 2>&1 || true
           docker logs docmost-redis >ci-artifacts/redis.log 2>&1 || true
+          docker logs docmost-open-webui >ci-artifacts/open-webui-mock.log 2>&1 || true
 
       - name: Upload server logs on failure
         if: failure()
@@ -260,5 +336,5 @@ jobs:
       - name: Stop smoke containers
         if: always()
         run: |
-          docker rm -f docmost-app docmost-collab docmost-db docmost-redis 2>/dev/null || true
+          docker rm -f docmost-app docmost-app-replica docmost-collab docmost-open-webui docmost-db docmost-redis 2>/dev/null || true
           docker network rm docmost-ci 2>/dev/null || true

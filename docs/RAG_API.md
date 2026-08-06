@@ -164,8 +164,8 @@ Returns the current effective indexing scope:
 }
 ```
 
-`workspaceId` and `spaceId` are resolved from the authenticated RAG key. A
-standalone writer should use these values as the authoritative indexing scope
+`workspaceId` and `spaceId` are resolved from the authenticated RAG key. An
+external indexer should use these values as the authoritative indexing scope
 instead of duplicating them in deployment configuration.
 
 `syncTarget` contains the non-secret Open WebUI destination configured for the
@@ -413,13 +413,15 @@ The chat's external retrieval source types remain `page`, `database_row`, and
 conversation-context source, but that internal `database` type does not extend
 the external `http-json-v1` query contract.
 
-### 7.0.1 Open WebUI writer
+### 7.0.1 Built-in Open WebUI writer
 
-`apps/rag-sync` implements the optional Open WebUI 0.9.6 writer. One Knowledge
-Base maps to one Docmost space. The application:
+The optional server-side RAG Sync module implements the Open WebUI writer. It is
+separate from this public wire contract even though both reuse the same content
+mapping rules. One Knowledge Base maps to one Docmost space. The module:
 
-- reads only this API and never connects to the Docmost database;
-- uses a separate Redis namespace/database for inclusive checkpoints,
+- reads source content through an internal system-scope exporter, while this
+  public API retains API-key creator ACL behavior;
+- uses the shared Redis with an isolated versioned namespace for checkpoints,
   source-to-file mappings, and distributed space locks;
 - uploads a new Open WebUI file and waits for processing before replacing the
   mapping and deleting the previous file;
@@ -428,8 +430,8 @@ Base maps to one Docmost space. The application:
 - supports page, database-row, PDF, DOCX, TXT, MD, JPEG, PNG, and WebP sources;
 - logs only low-cardinality states, counters, reason codes, lag, and durations;
   stable binding, space, source, checkpoint, and fingerprint IDs are excluded;
-- reads `/api/rag/scope` before each cycle; on fingerprint change it restores
-  mappings from Open WebUI metadata, pages through `/api/rag/scope/blocked`,
+- reads the internal policy scope before each cycle; on fingerprint change it
+  restores mappings from Open WebUI metadata,
   purges inaccessible mappings, resets the live update checkpoints to `0`, and
   stores the new fingerprint only after a successful reindex cycle;
 - deletes an existing attachment mapping when the file becomes too large or
@@ -441,15 +443,23 @@ Base maps to one Docmost space. The application:
   fence an already in-flight Open WebUI request; the next cycle reconciles any
   resulting remote artifact from `meta.data.docmost`.
 
-Configuration is loaded from the `RAG_SYNC_*` environment variables in the
-shared root `.env`; Compose forwards only that prefix to the writer. One writer
-process maps one Docmost space to one Knowledge Base. The selected RAG key
-supplies the authoritative workspace and space identifiers plus the Open WebUI
-base URL and Knowledge Base ID through `/api/rag/scope`; they are not repeated
-in `.env`. Docmost and Open WebUI writer keys are environment values and are
-therefore visible in Docker container
-metadata. A Knowledge Base must be created in advance; the worker never creates
-or deletes it.
+Set `RAG_SYNC_ENABLED=true` to enable the deployment and list every exact writer
+origin in `RAG_SYNC_ALLOWED_ORIGINS`. The remaining deployment env contains only
+the Redis prefix, intervals, limits, and timeouts. Each target and encrypted
+writer key is configured in the corresponding space UI. There is no Docmost RAG
+key, per-space env variable, JSON file, standalone process, or Compose profile
+for the built-in writer. A Knowledge Base must be created in advance; Docmost
+never creates or deletes the Knowledge Base itself.
+
+The built-in index contains every page allowed by the space AI content policy,
+not only pages readable by the administrator who configured the binding. Direct
+user access to that Open WebUI Knowledge Base can therefore expose content beyond
+the user's Docmost ACL. Keep Knowledge Base access restricted and keep the
+query-time credential separate from the writer key.
+
+External indexers may continue to implement the initial and incremental flows
+below through `/api/rag/*`; none of their routes or DTOs are changed by the
+built-in writer.
 
 ### 7.1 Initial sync
 

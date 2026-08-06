@@ -21,10 +21,6 @@
       "entry": ["src/main.tsx", "src/**/*.test.ts", "src/**/*.test.tsx"],
       "project": ["src/**/*.ts", "src/**/*.tsx"]
     },
-    "apps/rag-sync": {
-      "entry": ["src/main.ts", "src/**/*.spec.ts"],
-      "project": ["src/**/*.ts"]
-    },
     "packages/api-contract": {
       "entry": ["src/index.ts"],
       "project": ["src/**/*.ts"]
