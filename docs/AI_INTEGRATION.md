@@ -318,8 +318,23 @@ API-key-scoped `/api/rag/*` feeds, stores checkpoints/mappings/space locks in a
 separate Redis namespace, and uploads files with `knowledge_id`, `file_hash`,
 and the Docmost metadata above. It never reads the Docmost database and never
 uses backend queues. Run it explicitly with
-`Dockerfile.rag-sync` and `docker-compose.rag-sync.yml`; the primary Compose
-stack does not start it.
+the `rag-sync` profile in the main `docker-compose.yml`; Compose builds it from
+`Dockerfile.rag-sync`. Use `docker compose --profile rag-sync up -d --build` to
+build and start the complete local stack. Without the profile, the primary
+Compose stack does not start the writer.
+Configure the writer through `RAG_SYNC_*` values in the same root `.env` used
+by Docmost. Compose forwards only those values to the writer. One writer
+container maps one Docmost space to one pre-created Open WebUI Knowledge Base;
+use a separate service/container with its own environment for another mapping.
+
+Release publishing produces both the main image and the companion
+`shererpro/docmost:rag-sync-<VERSION>` image. The moving production tags are
+`shererpro/docmost:latest` and `shererpro/docmost:rag-sync-latest`, and they are
+updated only after both immutable images have been pushed successfully. A
+production Compose deployment should keep the writer in a separate optional
+profile with no published ports. It may share the backend Redis service when
+the writer uses a dedicated logical database such as `/1` and the isolated
+`docmost:rag-sync` prefix.
 
 External results are candidates, not authorization decisions. Docmost resolves every returned ID against its own database, maps rows and attachments to their owning page, rejects deleted and cross-space sources, re-checks the requesting user's current page access, and constructs trusted titles and URLs locally. A run records whether retrieval was not requested, disabled, used, empty, or failed. A timeout, malformed response, authorization/rate-limit error, server error, or a result set with no currently readable sources does not fail the chat: generation continues with the live document and selected files, and the UI shows the retrieval outcome.
 
@@ -328,10 +343,11 @@ An external indexer normally uses two independent credentials:
 - a space-scoped Docmost API key to synchronize content through `/api/rag/*`;
 - an adapter credential stored by Docmost to query the external retrieval URL.
 
-Open WebUI deployments use a third security boundary: the writer credential
-mounted into `apps/rag-sync` is separate from the query credential encrypted in
-`ai_space_configs`. Secret values are read from mounted files and must not be
-placed in the sync JSON, logs, jobs, or metrics.
+Open WebUI deployments use a third security boundary: the writer credential in
+the `apps/rag-sync` environment is separate from the query credential encrypted
+in `ai_space_configs`. Environment values are visible in Docker container
+metadata, so restrict Docker daemon access and never commit the populated
+`.env`. Secret values must not be placed in logs, jobs, or metrics.
 
 ## Built-in Agent and inbound MCP tool policy
 

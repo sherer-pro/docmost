@@ -694,18 +694,41 @@ events contain counts, latency, lag, retry outcome, and low-cardinality reason
 codes; binding, space, source, checkpoint, and fingerprint identifiers are not
 logged. Per-source outcomes are aggregated into each cycle summary.
 
-Configuration is loaded from `RAG_SYNC_CONFIG_PATH`; see
-`rag-sync.config.example.json`. The JSON contains URLs, Redis settings,
-intervals, attachment size limits, and bindings. Credentials are specified
-only as paths to mounted files (`docmostApiKeyFile`,
-`openWebUiApiKeyFile`), never inline. `knowledgeId`, `workspaceId`, and
-`spaceId` are validated at startup. The Docmost read key and the Open WebUI key
-used by the main server for retrieval are independent secrets.
+Configuration is loaded from `RAG_SYNC_*` environment variables. Local runs
+read the same root `.env` as Docmost, while Compose explicitly forwards only
+that prefix to the writer. One writer process defines one binding through
+`RAG_SYNC_BINDING_ID`, `RAG_SYNC_WORKSPACE_ID`, `RAG_SYNC_SPACE_ID`,
+`RAG_SYNC_DOCMOST_BASE_URL`, `RAG_SYNC_DOCMOST_API_KEY`,
+`RAG_SYNC_OPEN_WEBUI_BASE_URL`, `RAG_SYNC_OPEN_WEBUI_API_KEY`, and
+`RAG_SYNC_KNOWLEDGE_ID`. Redis and runtime controls use
+`RAG_SYNC_REDIS_URL`, `RAG_SYNC_REDIS_PREFIX`,
+`RAG_SYNC_POLL_INTERVAL_MS`, `RAG_SYNC_REQUEST_TIMEOUT_MS`,
+`RAG_SYNC_PROCESSING_TIMEOUT_MS`, and `RAG_SYNC_MAX_ATTACHMENT_BYTES`.
+Knowledge, workspace, and space identifiers are validated at startup. The
+Docmost read key and the Open WebUI key used by the main server for retrieval
+are independent secrets. Environment values are visible in Docker container
+metadata, so Docker daemon access must be restricted and the populated `.env`
+must never be committed.
+
+For a local container build, the main `docker-compose.yml` includes the writer
+behind the optional `rag-sync` profile and builds it from
+`Dockerfile.rag-sync`. After configuring the `RAG_SYNC_*` block in the shared
+root `.env`, `docker compose --profile rag-sync up -d --build` builds and
+starts Docmost, PostgreSQL, Redis, and RAG Sync from that single Compose file.
+Without the profile, the writer is not started. A second space-to-Knowledge
+mapping requires a second writer service/container with its own environment.
 
 The production image creates an ephemeral inject-workspace lockfile in its
 builder stage and uses `pnpm deploy --prod`; the repository lockfile remains
 unchanged. The runner uses the unprivileged `node` user and contains only
 `dist`, production dependencies, and the built API-contract workspace package.
+Release publishing produces `shererpro/docmost:rag-sync-<VERSION>` alongside
+the matching main image and updates `rag-sync-latest` only after both immutable
+pushes succeed. Production Compose deployments should keep the writer in a
+separate optional profile with no published ports. Reusing the backend Redis is
+supported when the writer selects a dedicated logical database such as `/1`
+and keeps its isolated prefix; a second Redis instance inside the writer is not
+required.
 Revoking the source RAG key prevents the writer from fetching a final blocked
 feed; operators must then delete the corresponding external Knowledge Base
 contents manually.

@@ -693,12 +693,30 @@ cp .env.compose.example .env
 docker compose up -d
 ```
 
-The optional Open WebUI writer is started explicitly after configuring
-`rag-sync.config.example.json` and mounted secret files:
+The optional Open WebUI writer is built and started from the main
+`docker-compose.yml`. Configure the `RAG_SYNC_*` values in the same root `.env`
+used by Docmost, then run:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.rag-sync.yml up -d rag-sync
+docker compose --profile rag-sync up -d --build
 ```
+
+Compose forwards only `RAG_SYNC_*` values to the writer, so unrelated Docmost
+secrets are not exposed to it. One writer container maps one Docmost space to
+one pre-created Open WebUI Knowledge Base. Add another service/container with
+its own environment for another mapping. API keys passed through environment
+variables are visible in Docker container metadata; protect access to the
+Docker daemon and never commit the populated `.env`.
+
+Without the profile, `docker compose up -d --build` builds and starts only
+Docmost, PostgreSQL, and Redis. No Compose overlay is required.
+
+Published releases also provide
+`shererpro/docmost:rag-sync-<VERSION>` and
+`shererpro/docmost:rag-sync-latest`. In production, run that image as a
+separate optional Compose service/profile, without public ports. It may reuse
+the deployment Redis when `RAG_SYNC_REDIS_URL` selects a dedicated database and
+`RAG_SYNC_REDIS_PREFIX` remains isolated from backend keys.
 
 See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for system boundaries,
 [`docs/AI_ASSISTANT_AND_RAG.md`](./docs/AI_ASSISTANT_AND_RAG.md) for the
