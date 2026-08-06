@@ -18,10 +18,8 @@ const binding: RagSyncBinding = {
   workspaceId: "0198f2f5-a5a3-7000-8000-000000000001",
   spaceId: "0198f2f5-a5a3-7000-8000-000000000002",
   docmostBaseUrl: "https://docmost.example",
-  docmostApiKeyFile: "/secret/docmost",
   docmostApiKey: "docmost-key",
   openWebUiBaseUrl: "https://open-webui.example",
-  openWebUiApiKeyFile: "/secret/open-webui",
   openWebUiApiKey: "writer-key",
   knowledgeId: "knowledge-1",
 };

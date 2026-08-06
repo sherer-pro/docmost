@@ -41,14 +41,20 @@ jobs:
           test -n "$version"
           echo "VERSION=$version" >> "$GITHUB_ENV"
 
-      - name: Build the release image
-        run: docker build --build-arg PNPM_OFFLINE=0 -t shererpro/docmost:${VERSION} .
+      - name: Build the release images
+        run: |
+          docker build --build-arg PNPM_OFFLINE=0 -t shererpro/docmost:${VERSION} .
+          docker build -f Dockerfile.rag-sync -t shererpro/docmost:rag-sync-${VERSION} .
 
-      - name: Push the immutable version first
-        run: docker push shererpro/docmost:${VERSION}
+      - name: Push the immutable versions first
+        run: |
+          docker push shererpro/docmost:${VERSION}
+          docker push shererpro/docmost:rag-sync-${VERSION}
 
-      - name: Publish latest only after the versioned push succeeds
+      - name: Publish latest only after both versioned pushes succeed
         if: github.event_name == 'release'
         run: |
           docker tag shererpro/docmost:${VERSION} shererpro/docmost:latest
+          docker tag shererpro/docmost:rag-sync-${VERSION} shererpro/docmost:rag-sync-latest
           docker push shererpro/docmost:latest
+          docker push shererpro/docmost:rag-sync-latest

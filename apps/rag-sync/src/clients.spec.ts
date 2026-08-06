@@ -139,10 +139,8 @@ function binding(baseUrl: string): RagSyncBinding {
     workspaceId: '0198f2f5-a5a3-7000-8000-000000000001',
     spaceId: '0198f2f5-a5a3-7000-8000-000000000002',
     docmostBaseUrl: 'https://docmost.example',
-    docmostApiKeyFile: '/run/secrets/docmost',
     docmostApiKey: 'docmost-key',
     openWebUiBaseUrl: baseUrl,
-    openWebUiApiKeyFile: '/run/secrets/open-webui',
     openWebUiApiKey: 'writer-key',
     knowledgeId: 'knowledge-1',
   };

@@ -12,6 +12,20 @@ const COMPOSE_ONLY_ENV_KEYS = new Set([
   'POSTGRES_DB',
   'POSTGRES_PASSWORD',
   'POSTGRES_USER',
+  'RAG_SYNC_BINDING_ID',
+  'RAG_SYNC_DOCMOST_API_KEY',
+  'RAG_SYNC_DOCMOST_BASE_URL',
+  'RAG_SYNC_KNOWLEDGE_ID',
+  'RAG_SYNC_MAX_ATTACHMENT_BYTES',
+  'RAG_SYNC_OPEN_WEBUI_API_KEY',
+  'RAG_SYNC_OPEN_WEBUI_BASE_URL',
+  'RAG_SYNC_POLL_INTERVAL_MS',
+  'RAG_SYNC_PROCESSING_TIMEOUT_MS',
+  'RAG_SYNC_REDIS_PREFIX',
+  'RAG_SYNC_REDIS_URL',
+  'RAG_SYNC_REQUEST_TIMEOUT_MS',
+  'RAG_SYNC_SPACE_ID',
+  'RAG_SYNC_WORKSPACE_ID',
 ]);
 const SYNTHETIC_WINDOW_CONFIG_KEYS = new Set(['ENV']);
 const REQUIRED_COMPOSE_RUNTIME_KEYS = new Set([
@@ -19,6 +33,9 @@ const REQUIRED_COMPOSE_RUNTIME_KEYS = new Set([
   'AI_BUILTIN_TOOL_EXTENSIONS_ENABLED',
   'PAGE_TEMPLATES_ENABLED',
 ]);
+const REQUIRED_RAG_SYNC_RUNTIME_KEYS = new Set(
+  [...COMPOSE_ONLY_ENV_KEYS].filter((key) => key.startsWith('RAG_SYNC_')),
+);
 
 function parseEnvKeys(filePath) {
   const content = readFileSync(filePath, 'utf8');
@@ -78,20 +95,20 @@ function extractWindowConfigKeys() {
   );
 }
 
-function extractComposeServiceEnv() {
+function extractComposeServiceEnv(serviceName) {
   const entries = new Map();
-  let inDocmostService = false;
+  let inTargetService = false;
   let inEnvironment = false;
 
   for (const line of readFileSync(COMPOSE_PATH, 'utf8').split(/\r?\n/)) {
-    if (/^  docmost:\s*$/.test(line)) {
-      inDocmostService = true;
+    if (line === `  ${serviceName}:`) {
+      inTargetService = true;
       continue;
     }
-    if (inDocmostService && /^  \S/.test(line)) {
+    if (inTargetService && /^  \S/.test(line)) {
       break;
     }
-    if (!inDocmostService) {
+    if (!inTargetService) {
       continue;
     }
     if (/^    environment:\s*$/.test(line)) {
@@ -172,7 +189,7 @@ if (existsSync(COMPOSE_ENV_PATH)) {
 }
 
 if (existsSync(COMPOSE_PATH)) {
-  const composeServiceEnv = extractComposeServiceEnv();
+  const composeServiceEnv = extractComposeServiceEnv('docmost');
   const composeRuntimeMissing = sortedDiff(
     REQUIRED_COMPOSE_RUNTIME_KEYS,
     new Set(composeServiceEnv.keys()),
@@ -192,6 +209,28 @@ if (existsSync(COMPOSE_PATH)) {
   reportDiff(
     'Required runtime keys not forwarded from the Compose environment',
     composeRuntimeNotForwarded,
+  );
+
+  const ragSyncServiceEnv = extractComposeServiceEnv('rag-sync');
+  const ragSyncRuntimeMissing = sortedDiff(
+    REQUIRED_RAG_SYNC_RUNTIME_KEYS,
+    new Set(ragSyncServiceEnv.keys()),
+  );
+  const ragSyncRuntimeNotForwarded = [...REQUIRED_RAG_SYNC_RUNTIME_KEYS]
+    .filter((key) => {
+      const value = ragSyncServiceEnv.get(key) ?? '';
+      return !value.includes(`\${${key}`);
+    })
+    .sort();
+
+  issues.push(ragSyncRuntimeMissing, ragSyncRuntimeNotForwarded);
+  reportDiff(
+    'Required runtime keys missing from the rag-sync Compose service',
+    ragSyncRuntimeMissing,
+  );
+  reportDiff(
+    'Required rag-sync keys not forwarded from the Compose environment',
+    ragSyncRuntimeNotForwarded,
   );
 }
 

@@ -1,92 +1,95 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { afterEach, describe, it } from 'node:test';
+import { describe, it } from 'node:test';
 import { loadConfig } from './config.js';
 
-const temporaryDirectories: string[] = [];
-
-afterEach(async () => {
-  await Promise.all(
-    temporaryDirectories.splice(0).map((path) =>
-      rm(path, { recursive: true, force: true }),
-    ),
-  );
-});
+const validEnvironment: NodeJS.ProcessEnv = {
+  RAG_SYNC_REDIS_URL: 'redis://localhost:6379/1',
+  RAG_SYNC_BINDING_ID: 'space-a',
+  RAG_SYNC_WORKSPACE_ID: '0198f2f5-a5a3-7000-8000-000000000001',
+  RAG_SYNC_SPACE_ID: '0198f2f5-a5a3-7000-8000-000000000002',
+  RAG_SYNC_DOCMOST_BASE_URL: 'https://docmost.example',
+  RAG_SYNC_DOCMOST_API_KEY: 'docmost-secret',
+  RAG_SYNC_OPEN_WEBUI_BASE_URL: 'https://open-webui.example',
+  RAG_SYNC_OPEN_WEBUI_API_KEY: 'writer-secret',
+  RAG_SYNC_KNOWLEDGE_ID: 'knowledge-1',
+};
 
 describe('loadConfig', () => {
-  it('loads credentials only from secret files', async () => {
-    const directory = await makeDirectory();
-    await writeFile(join(directory, 'docmost.key'), 'docmost-secret\n');
-    await writeFile(join(directory, 'open-webui.key'), 'writer-secret\n');
-    const configPath = join(directory, 'config.json');
-    await writeFile(
-      configPath,
-      JSON.stringify({
-        schemaVersion: 1,
-        redisUrl: 'redis://localhost:6379/1',
-        bindings: [
-          {
-            id: 'space-a',
-            workspaceId: '0198f2f5-a5a3-7000-8000-000000000001',
-            spaceId: '0198f2f5-a5a3-7000-8000-000000000002',
-            docmostBaseUrl: 'https://docmost.example',
-            docmostApiKeyFile: './docmost.key',
-            openWebUiBaseUrl: 'https://open-webui.example',
-            openWebUiApiKeyFile: './open-webui.key',
-            knowledgeId: 'knowledge-1',
-          },
-        ],
-      }),
-    );
-
-    const result = await loadConfig(configPath);
+  it('loads one binding and defaults from environment variables', () => {
+    const result = loadConfig(validEnvironment);
 
     assert.equal(result.bindings[0]?.docmostApiKey, 'docmost-secret');
     assert.equal(result.bindings[0]?.openWebUiApiKey, 'writer-secret');
+    assert.equal(result.config.redisPrefix, 'docmost:rag-sync');
     assert.equal(result.config.pollIntervalMs, 60_000);
+    assert.equal(result.config.requestTimeoutMs, 30_000);
+    assert.equal(result.config.processingTimeoutMs, 600_000);
     assert.equal(result.config.maxAttachmentBytes, 25 * 1024 * 1024);
   });
 
-  it('rejects inline keys and non-origin Open WebUI URLs', async () => {
-    const directory = await makeDirectory();
-    const configPath = join(directory, 'config.json');
-    const baseBinding = {
-      id: 'space-a',
-      workspaceId: '0198f2f5-a5a3-7000-8000-000000000001',
-      spaceId: '0198f2f5-a5a3-7000-8000-000000000002',
-      docmostBaseUrl: 'https://docmost.example',
-      docmostApiKeyFile: './docmost.key',
-      openWebUiBaseUrl: 'https://open-webui.example/api',
-      openWebUiApiKeyFile: './open-webui.key',
-      knowledgeId: 'knowledge-1',
-    };
-    await writeFile(
-      configPath,
-      JSON.stringify({
-        schemaVersion: 1,
-        redisUrl: 'redis://localhost:6379/1',
-        bindings: [{ ...baseBinding, openWebUiApiKey: 'inline-secret' }],
-      }),
-    );
+  it('loads explicit tuning values', () => {
+    const result = loadConfig({
+      ...validEnvironment,
+      RAG_SYNC_REDIS_PREFIX: 'custom:sync',
+      RAG_SYNC_POLL_INTERVAL_MS: '5000',
+      RAG_SYNC_REQUEST_TIMEOUT_MS: '1000',
+      RAG_SYNC_PROCESSING_TIMEOUT_MS: '10000',
+      RAG_SYNC_MAX_ATTACHMENT_BYTES: '1024',
+    });
 
-    await assert.rejects(loadConfig(configPath), /inline keys/);
+    assert.equal(result.config.redisPrefix, 'custom:sync');
+    assert.equal(result.config.pollIntervalMs, 5_000);
+    assert.equal(result.config.requestTimeoutMs, 1_000);
+    assert.equal(result.config.processingTimeoutMs, 10_000);
+    assert.equal(result.config.maxAttachmentBytes, 1_024);
+  });
 
-    await writeFile(
-      configPath,
-      JSON.stringify({
-        schemaVersion: 1,
-        redisUrl: 'redis://localhost:6379/1',
-        bindings: [baseBinding],
-      }),
+  it('rejects missing variables without including secret values', () => {
+    assert.throws(
+      () =>
+        loadConfig({
+          ...validEnvironment,
+          RAG_SYNC_DOCMOST_API_KEY: '',
+        }),
+      /RAG_SYNC_DOCMOST_API_KEY is required/,
     );
-    await assert.rejects(loadConfig(configPath), /HTTP\(S\) origins/);
+  });
+
+  it('rejects invalid identifiers and non-origin URLs', () => {
+    assert.throws(
+      () =>
+        loadConfig({
+          ...validEnvironment,
+          RAG_SYNC_SPACE_ID: 'not-a-uuid',
+        }),
+      /must be UUIDs/,
+    );
+    assert.throws(
+      () =>
+        loadConfig({
+          ...validEnvironment,
+          RAG_SYNC_KNOWLEDGE_ID: 'invalid/id',
+        }),
+      /RAG_SYNC_KNOWLEDGE_ID is invalid/,
+    );
+    assert.throws(
+      () =>
+        loadConfig({
+          ...validEnvironment,
+          RAG_SYNC_OPEN_WEBUI_BASE_URL: 'https://open-webui.example/api',
+        }),
+      /RAG_SYNC_OPEN_WEBUI_BASE_URL must be a credential-free HTTP\(S\) origin/,
+    );
+  });
+
+  it('rejects out-of-range integer settings', () => {
+    assert.throws(
+      () =>
+        loadConfig({
+          ...validEnvironment,
+          RAG_SYNC_POLL_INTERVAL_MS: '4999',
+        }),
+      /RAG_SYNC_POLL_INTERVAL_MS must be an integer between 5000 and 3600000/,
+    );
   });
 });
-
-async function makeDirectory(): Promise<string> {
-  const directory = await mkdtemp(join(tmpdir(), 'docmost-rag-sync-'));
-  temporaryDirectories.push(directory);
-  return directory;
-}

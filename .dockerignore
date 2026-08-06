@@ -39,6 +39,10 @@ Thumbs.db
 .env*
 rag-sync.config.json
 secrets/
+**/DOCMOST_RAG_KEY
+**/OPEN_WEBUI_KEY
+/graphify-out
+/.rag-sync
 *.log
 npm-debug.log*
 pnpm-debug.log*

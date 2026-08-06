@@ -187,6 +187,9 @@ jobs:
           done
           exit 1
 
+      - name: Run the RAG Sync container smoke test
+        run: node scripts/ci-rag-sync-container-smoke.mjs --image docmost-rag-sync:ci
+
       - name: Run migrations from the built image
         run: |
           docker run --rm --network docmost-ci \
