@@ -19,6 +19,8 @@ describe('PageService move', () => {
     findById: jest.fn(),
     updatePage: jest.fn(),
     hasSelfOrAncestor: jest.fn(),
+    getPageDepth: jest.fn(),
+    getSubtreeHeight: jest.fn(),
   };
   const db = {
     transaction: () => ({ execute: (callback: any) => callback(trxStub) }),
@@ -71,6 +73,8 @@ describe('PageService move', () => {
       };
     });
     pageRepo.updatePage.mockResolvedValue({ numUpdatedRows: 1n });
+    pageRepo.getPageDepth.mockResolvedValue(0);
+    pageRepo.getSubtreeHeight.mockResolvedValue(0);
   });
 
   it('moves the page when the new parent is not part of its own subtree', async () => {
@@ -83,6 +87,11 @@ describe('PageService move', () => {
 
     expect(pageRepo.hasSelfOrAncestor).toHaveBeenCalledWith(
       PARENT_PAGE_ID,
+      MOVED_PAGE_ID,
+      trxStub,
+    );
+    expect(pageRepo.getPageDepth).toHaveBeenCalledWith(PARENT_PAGE_ID, trxStub);
+    expect(pageRepo.getSubtreeHeight).toHaveBeenCalledWith(
       MOVED_PAGE_ID,
       trxStub,
     );
@@ -153,6 +162,53 @@ describe('PageService move', () => {
     expect(pageRepo.updatePage).not.toHaveBeenCalled();
   });
 
+  it('rejects a move whose subtree would exceed the depth limit', async () => {
+    pageRepo.hasSelfOrAncestor.mockResolvedValue(false);
+    pageRepo.getPageDepth.mockResolvedValue(99);
+    pageRepo.getSubtreeHeight.mockResolvedValue(1);
+
+    await expect(
+      createService().movePage(
+        { pageId: MOVED_PAGE_ID, parentPageId: PARENT_PAGE_ID, position: 'a1' },
+        movedPage,
+      ),
+    ).rejects.toThrow('Page tree depth cannot exceed 100');
+
+    expect(pageRepo.updatePage).not.toHaveBeenCalled();
+  });
+
+  it('allows a move whose deepest node lands exactly at the depth limit', async () => {
+    pageRepo.hasSelfOrAncestor.mockResolvedValue(false);
+    pageRepo.getPageDepth.mockResolvedValue(99);
+    pageRepo.getSubtreeHeight.mockResolvedValue(0);
+
+    await createService().movePage(
+      { pageId: MOVED_PAGE_ID, parentPageId: PARENT_PAGE_ID, position: 'a1' },
+      movedPage,
+    );
+
+    expect(pageRepo.updatePage).toHaveBeenCalled();
+  });
+
+  it('rejects moving an over-depth subtree to the root', async () => {
+    const nestedMovedPage = {
+      ...movedPage,
+      parentPageId: PARENT_PAGE_ID,
+    };
+    pageRepo.findById.mockResolvedValue(nestedMovedPage);
+    pageRepo.getSubtreeHeight.mockResolvedValue(101);
+
+    await expect(
+      createService().movePage(
+        { pageId: MOVED_PAGE_ID, parentPageId: null, position: 'a1' },
+        nestedMovedPage,
+      ),
+    ).rejects.toThrow('Page tree depth cannot exceed 100');
+
+    expect(pageRepo.getPageDepth).not.toHaveBeenCalled();
+    expect(pageRepo.updatePage).not.toHaveBeenCalled();
+  });
+
   it('skips the cycle check when the parent is unchanged', async () => {
     await createService().movePage(
       { pageId: MOVED_PAGE_ID, parentPageId: null, position: 'a1' },
@@ -160,6 +216,8 @@ describe('PageService move', () => {
     );
 
     expect(pageRepo.hasSelfOrAncestor).not.toHaveBeenCalled();
+    expect(pageRepo.getPageDepth).not.toHaveBeenCalled();
+    expect(pageRepo.getSubtreeHeight).not.toHaveBeenCalled();
     expect(pageRepo.updatePage).toHaveBeenCalledWith(
       { position: 'a1', parentPageId: undefined },
       MOVED_PAGE_ID,
