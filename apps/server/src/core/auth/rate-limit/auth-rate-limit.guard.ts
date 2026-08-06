@@ -115,8 +115,13 @@ export class AuthRateLimitGuard implements CanActivate {
     const cookies = (request.cookies ?? {}) as Record<string, unknown>;
     const headers = request.headers;
     const normalizedHeaderName = accountField.toLowerCase();
+    const authenticatedSessionId =
+      accountField === 'sessionId'
+        ? (request.raw as unknown as { sessionId?: unknown }).sessionId
+        : undefined;
 
     const candidates: unknown[] = [
+      authenticatedSessionId,
       body[accountField],
       query[accountField],
       params[accountField],

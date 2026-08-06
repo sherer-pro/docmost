@@ -335,4 +335,20 @@ describe('AuthRateLimitService', () => {
     expect(metrics.rejectedRequests).toBe(1);
     expect(metrics.rejectRate).toBe(0.5);
   });
+
+  it('fails closed when the Redis backend is unavailable', async () => {
+    const redisClient = new FakeRedisClient();
+    jest.spyOn(redisClient, 'eval').mockRejectedValue(new Error('unavailable'));
+    const service = createService('redis', redisClient);
+
+    await expect(
+      service.consume({
+        endpoint: 'login',
+        scope: 'ip',
+        key: '127.0.0.1',
+        limit: 5,
+        windowMs: 10_000,
+      }),
+    ).resolves.toEqual({ allowed: false, retryAfterMs: 10_000 });
+  });
 });

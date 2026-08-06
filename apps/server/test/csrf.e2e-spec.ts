@@ -137,6 +137,7 @@ describe('CSRF guard (integration)', () => {
   it('allows mutating request with valid double-submit token', async () => {
     await request(app.getHttpServer())
       .post('/api/workspace/update')
+      .set('Origin', 'http://localhost:3000')
       .set('Cookie', ['csrfToken=test-token'])
       .set('x-csrf-token', 'test-token')
       .send({ name: 'new name' })

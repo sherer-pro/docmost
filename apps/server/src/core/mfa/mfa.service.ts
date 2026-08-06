@@ -20,15 +20,16 @@ import { SessionService } from '../session/session.service';
 import {
   decryptProtectedValue,
   encryptProtectedValue,
-  hashProtectedValue,
-  isHashedProtectedValue,
-  safeStringEqual,
-  verifyHashedProtectedValue,
+  hashKeyedProtectedValue,
+  isEncryptedProtectedValue,
+  isKeyedHashedProtectedValue,
+  verifyKeyedProtectedValue,
 } from '../../common/security/credential-protection.util';
 import { AuthenticationAssuranceService } from '../space-policy/authentication-assurance.service';
 import { SpacePolicyService } from '../space-policy/space-policy.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EventName } from '../../common/events/event.contants';
+import { executeTx } from '@docmost/db/utils';
 
 @Injectable()
 export class MfaService {
@@ -82,7 +83,8 @@ export class MfaService {
       throw new UnauthorizedException(errorMessage);
     }
 
-    const effectivePolicy = target?.policy.effective ??
+    const effectivePolicy =
+      target?.policy.effective ??
       this.spacePolicy.getWorkspaceValues(workspace);
     if (effectivePolicy.enforceSso) {
       throw new BadRequestException('This scope requires SSO login.');
@@ -111,11 +113,7 @@ export class MfaService {
       includeUserMfa: true,
     });
 
-    if (
-      !userWithMfa ||
-      userWithMfa.deletedAt ||
-      userWithMfa.deactivatedAt
-    ) {
+    if (!userWithMfa || userWithMfa.deletedAt || userWithMfa.deactivatedAt) {
       throw new UnauthorizedException('Account is not active');
     }
 
@@ -189,7 +187,8 @@ export class MfaService {
     code: string,
     sessionId?: string,
   ) {
-    if (!this.validateTotp(secret, code, 2)) {
+    const totpCounter = this.getTotpCounter(secret, code, 2);
+    if (totpCounter === null) {
       throw new BadRequestException('Invalid verification code');
     }
 
@@ -209,6 +208,7 @@ export class MfaService {
           secret: encryptedSecret,
           isEnabled: true,
           backupCodes: hashedBackupCodes,
+          lastUsedTotpCounter: totpCounter.toString(),
           updatedAt: new Date(),
         })
         .where('userId', '=', user.id)
@@ -224,6 +224,7 @@ export class MfaService {
           secret: encryptedSecret,
           isEnabled: true,
           backupCodes: hashedBackupCodes,
+          lastUsedTotpCounter: totpCounter.toString(),
         })
         .execute();
     }
@@ -267,7 +268,11 @@ export class MfaService {
     return { success: true };
   }
 
-  async regenerateBackupCodes(user: User, workspaceId: string, dto: MfaDisableDto) {
+  async regenerateBackupCodes(
+    user: User,
+    workspaceId: string,
+    dto: MfaDisableDto,
+  ) {
     await this.assertPasswordIfNeeded(user, dto);
 
     const mfa = await this.getUserMfa(user.id, workspaceId);
@@ -293,9 +298,13 @@ export class MfaService {
     request?: FastifyRequest,
   ) {
     const payload = await this.tokenService.verifyJwt(token, 'mfa_token');
-    const user = await this.userRepo.findById(payload.sub, payload.workspaceId, {
-      includeUserMfa: true,
-    });
+    const user = await this.userRepo.findById(
+      payload.sub,
+      payload.workspaceId,
+      {
+        includeUserMfa: true,
+      },
+    );
 
     if (!user || user.deletedAt || user.deactivatedAt) {
       throw new UnauthorizedException('Invalid MFA session');
@@ -306,27 +315,11 @@ export class MfaService {
       throw new BadRequestException('MFA is not enabled for this account');
     }
 
-    const normalizedCode = code.trim();
-    const totpSecret = this.getTotpSecret(mfa.secret);
-
-    let isValid = this.validateTotp(totpSecret, normalizedCode, 1);
-
-    if (!isValid) {
-      const consumeResult = this.consumeBackupCode(
-        normalizedCode,
-        mfa.backupCodes || [],
-      );
-
-      if (consumeResult.matched) {
-        isValid = true;
-        await this.db
-          .updateTable('userMfa')
-          .set({ backupCodes: consumeResult.remaining, updatedAt: new Date() })
-          .where('userId', '=', user.id)
-          .where('workspaceId', '=', payload.workspaceId)
-          .execute();
-      }
-    }
+    const isValid = await this.consumeVerificationCode(
+      user.id,
+      payload.workspaceId,
+      code,
+    );
 
     if (!isValid) {
       throw new BadRequestException('Invalid verification code');
@@ -361,12 +354,7 @@ export class MfaService {
   ) {
     const payload = await this.tokenService.verifyJwt(token, 'mfa_token');
     const { user } = await this.resolveMfaSetupPrincipal(token);
-    const enabled = await this.enable(
-      user,
-      payload.workspaceId,
-      secret,
-      code,
-    );
+    const enabled = await this.enable(user, payload.workspaceId, secret, code);
     await this.userRepo.updateLastLogin(user.id, payload.workspaceId);
     const authToken = await this.sessionService.createSessionAndToken(
       { ...user, workspaceId: payload.workspaceId },
@@ -393,25 +381,11 @@ export class MfaService {
       throw new BadRequestException('MFA is not enabled for this account');
     }
 
-    const normalizedCode = code.trim();
-    const totpSecret = this.getTotpSecret(mfa.secret);
-    let isValid = this.validateTotp(totpSecret, normalizedCode, 1);
-
-    if (!isValid) {
-      const consumeResult = this.consumeBackupCode(
-        normalizedCode,
-        mfa.backupCodes || [],
-      );
-      if (consumeResult.matched) {
-        isValid = true;
-        await this.db
-          .updateTable('userMfa')
-          .set({ backupCodes: consumeResult.remaining, updatedAt: new Date() })
-          .where('userId', '=', user.id)
-          .where('workspaceId', '=', workspaceId)
-          .execute();
-      }
-    }
+    const isValid = await this.consumeVerificationCode(
+      user.id,
+      workspaceId,
+      code,
+    );
 
     if (!isValid) {
       throw new BadRequestException('Invalid verification code');
@@ -432,7 +406,17 @@ export class MfaService {
     }
 
     try {
-      await this.tokenService.verifyJwt(token, 'access');
+      const payload = await this.tokenService.verifyJwt(token, 'access');
+      if (
+        !payload.sessionId ||
+        !(await this.sessionService.isSessionActive(
+          payload.sessionId,
+          payload.sub,
+          payload.workspaceId,
+        ))
+      ) {
+        return { valid: false };
+      }
       return { valid: true, isTransferToken: false };
     } catch {
       // If this is not an access token, try interpreting it as a temporary MFA token.
@@ -440,9 +424,13 @@ export class MfaService {
 
     try {
       const payload = await this.tokenService.verifyJwt(token, 'mfa_token');
-      const user = await this.userRepo.findById(payload.sub, payload.workspaceId, {
-        includeUserMfa: true,
-      });
+      const user = await this.userRepo.findById(
+        payload.sub,
+        payload.workspaceId,
+        {
+          includeUserMfa: true,
+        },
+      );
 
       if (!user) {
         return { valid: false };
@@ -503,7 +491,76 @@ export class MfaService {
     return { user, workspace };
   }
 
-  private validateTotp(secret: string, token: string, window = 1) {
+  private async consumeVerificationCode(
+    userId: string,
+    workspaceId: string,
+    code: string,
+  ): Promise<boolean> {
+    return executeTx(this.db, async (trx) => {
+      const mfa = await trx
+        .selectFrom('userMfa')
+        .selectAll()
+        .where('userId', '=', userId)
+        .where('workspaceId', '=', workspaceId)
+        .forUpdate()
+        .executeTakeFirst();
+      if (!mfa?.isEnabled || !mfa.secret) {
+        return false;
+      }
+
+      const normalizedCode = code.trim();
+      const totpCounter = this.getTotpCounter(
+        this.getTotpSecret(mfa.secret),
+        normalizedCode,
+        1,
+      );
+      if (totpCounter !== null) {
+        const lastUsedCounter = mfa.lastUsedTotpCounter
+          ? BigInt(mfa.lastUsedTotpCounter)
+          : null;
+        if (lastUsedCounter !== null && totpCounter <= lastUsedCounter) {
+          return false;
+        }
+
+        await trx
+          .updateTable('userMfa')
+          .set({
+            lastUsedTotpCounter: totpCounter.toString(),
+            updatedAt: new Date(),
+          })
+          .where('id', '=', mfa.id)
+          .execute();
+        return true;
+      }
+
+      const consumeResult = this.consumeBackupCode(
+        normalizedCode,
+        mfa.backupCodes ?? [],
+      );
+      if (!consumeResult.matched) {
+        return false;
+      }
+
+      await trx
+        .updateTable('userMfa')
+        .set({ backupCodes: consumeResult.remaining, updatedAt: new Date() })
+        .where('id', '=', mfa.id)
+        .execute();
+      return true;
+    });
+  }
+
+  private getTotpCounter(
+    secret: string,
+    token: string,
+    window = 1,
+    timestamp = Date.now(),
+  ): bigint | null {
+    const normalizedToken = token.trim();
+    if (!/^\d{6}$/.test(normalizedToken)) {
+      return null;
+    }
+
     const totp = new OTPAuth.TOTP({
       issuer: 'Docmost',
       algorithm: 'SHA1',
@@ -512,9 +569,12 @@ export class MfaService {
       secret,
     });
 
-    const normalizedToken = token.trim();
-    const delta = totp.validate({ token: normalizedToken, window });
-    return delta !== null;
+    const delta = totp.validate({ token: normalizedToken, window, timestamp });
+    if (delta === null) {
+      return null;
+    }
+
+    return BigInt(Math.floor(timestamp / 1000 / 30) + delta);
   }
 
   /**
@@ -525,7 +585,10 @@ export class MfaService {
   }
 
   private hashBackupCodes(codes: string[]) {
-    return codes.map((code) => hashProtectedValue(this.normalizeBackupCode(code)));
+    const appSecret = this.environmentService.getAppSecret();
+    return codes.map((code) =>
+      hashKeyedProtectedValue(this.normalizeBackupCode(code), appSecret),
+    );
   }
 
   private normalizeBackupCode(code: string): string {
@@ -534,23 +597,27 @@ export class MfaService {
 
   private getTotpSecret(secret: string): string {
     try {
-      return decryptProtectedValue(secret, this.environmentService.getAppSecret());
+      if (!isEncryptedProtectedValue(secret)) {
+        throw new Error('MFA secret is not encrypted');
+      }
+      return decryptProtectedValue(
+        secret,
+        this.environmentService.getAppSecret(),
+      );
     } catch {
       throw new BadRequestException('MFA secret is invalid');
     }
   }
 
   private backupCodeMatches(inputCode: string, storedCode: string): boolean {
-    const normalizedInput = this.normalizeBackupCode(inputCode);
-
-    if (isHashedProtectedValue(storedCode)) {
-      return verifyHashedProtectedValue(normalizedInput, storedCode);
+    if (!isKeyedHashedProtectedValue(storedCode)) {
+      return false;
     }
 
-    const normalizedStored = this.normalizeBackupCode(storedCode);
-    return safeStringEqual(
-      hashProtectedValue(normalizedInput),
-      hashProtectedValue(normalizedStored),
+    return verifyKeyedProtectedValue(
+      this.normalizeBackupCode(inputCode),
+      storedCode,
+      this.environmentService.getAppSecret(),
     );
   }
 
@@ -565,12 +632,8 @@ export class MfaService {
         continue;
       }
 
-      if (isHashedProtectedValue(storedCode)) {
+      if (isKeyedHashedProtectedValue(storedCode)) {
         remaining.push(storedCode);
-      } else {
-        remaining.push(
-          hashProtectedValue(this.normalizeBackupCode(storedCode)),
-        );
       }
     }
 

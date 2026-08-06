@@ -73,7 +73,6 @@ export default function useAuth() {
       }
     } catch (err) {
       setIsLoading(false);
-      console.log(err);
       notifications.show({
         message: err.response?.data.message,
         color: "red",
@@ -191,7 +190,6 @@ export default function useAuth() {
 
       return true;
     } catch (err) {
-      console.log(err);
       setIsLoading(false);
       notifications.show({
         message: err.response?.data.message,
@@ -209,7 +207,6 @@ export default function useAuth() {
       await verifyUserToken(data);
       setIsLoading(false);
     } catch (err) {
-      console.log(err);
       setIsLoading(false);
       notifications.show({
         message: err.response?.data.message,

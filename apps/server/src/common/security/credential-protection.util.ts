@@ -2,11 +2,14 @@ import {
   createCipheriv,
   createDecipheriv,
   createHash,
+  createHmac,
   randomBytes,
   timingSafeEqual,
 } from 'node:crypto';
 
 const HASH_PREFIX = 'sha256:';
+const KEYED_HASH_PREFIX = 'hmac-sha256:v1:raw:';
+const KEYED_DIGEST_HASH_PREFIX = 'hmac-sha256:v1:digest:';
 const ENCRYPTION_PREFIX = 'enc:v1';
 
 export function isEncryptedProtectedValue(value?: string | null): boolean {
@@ -26,6 +29,13 @@ export function hashProtectedValue(value: string): string {
  */
 export function isHashedProtectedValue(value?: string | null): boolean {
   return Boolean(value?.startsWith(HASH_PREFIX));
+}
+
+export function isKeyedHashedProtectedValue(value?: string | null): boolean {
+  return Boolean(
+    value?.startsWith(KEYED_HASH_PREFIX) ||
+      value?.startsWith(KEYED_DIGEST_HASH_PREFIX),
+  );
 }
 
 /**
@@ -61,6 +71,59 @@ export function verifyHashedProtectedValue(
 
 function deriveSymmetricKey(appSecret: string): Buffer {
   return createHash('sha256').update(appSecret, 'utf8').digest();
+}
+
+function createKeyedDigest(value: string, appSecret: string): string {
+  return createHmac('sha256', deriveSymmetricKey(appSecret))
+    .update(value, 'utf8')
+    .digest('hex');
+}
+
+/**
+ * Protects low-entropy recovery values with an application-secret keyed hash.
+ */
+export function hashKeyedProtectedValue(
+  value: string,
+  appSecret: string,
+): string {
+  return `${KEYED_HASH_PREFIX}${createKeyedDigest(value, appSecret)}`;
+}
+
+/**
+ * Adds an application-secret key to a legacy SHA-256 value without requiring
+ * the original plaintext during an upgrade migration.
+ */
+export function wrapHashedProtectedValue(
+  storedHash: string,
+  appSecret: string,
+): string {
+  if (!isHashedProtectedValue(storedHash)) {
+    throw new Error('Expected a SHA-256 protected value');
+  }
+
+  return `${KEYED_DIGEST_HASH_PREFIX}${createKeyedDigest(storedHash, appSecret)}`;
+}
+
+export function verifyKeyedProtectedValue(
+  input: string,
+  storedHash: string,
+  appSecret: string,
+): boolean {
+  if (storedHash.startsWith(KEYED_HASH_PREFIX)) {
+    return safeStringEqual(
+      hashKeyedProtectedValue(input, appSecret),
+      storedHash,
+    );
+  }
+
+  if (storedHash.startsWith(KEYED_DIGEST_HASH_PREFIX)) {
+    return safeStringEqual(
+      wrapHashedProtectedValue(hashProtectedValue(input), appSecret),
+      storedHash,
+    );
+  }
+
+  return false;
 }
 
 /**
