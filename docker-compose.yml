@@ -6,8 +6,10 @@ services:
       dockerfile: Dockerfile
     pull_policy: never
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       APP_URL: "${APP_URL:-http://localhost:3000}"
       APP_SECRET: "${APP_SECRET:-REPLACE_WITH_LONG_SECRET}"
@@ -35,6 +37,12 @@ services:
       DISABLE_TELEMETRY: true
     ports:
       - "3000:3000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
     restart: unless-stopped
     volumes:
       - docmost:/app/data/storage
@@ -46,6 +54,11 @@ services:
       POSTGRES_USER: docmost
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-STRONG_DB_PASSWORD}"
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U docmost -d docmost"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
     volumes:
       - db_data:/var/lib/postgresql
 
@@ -53,6 +66,11 @@ services:
     image: redis:8
     command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
     volumes:
       - redis_data:/data
 
@@ -77,9 +95,9 @@ services:
       RAG_SYNC_OPEN_WEBUI_API_KEY: "${RAG_SYNC_OPEN_WEBUI_API_KEY:-}"
     depends_on:
       docmost:
-        condition: service_started
+        condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
 
 volumes:
   docmost:
