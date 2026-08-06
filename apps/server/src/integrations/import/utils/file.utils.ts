@@ -8,11 +8,7 @@ import {
   type ZipReadBudget,
 } from '../../../common/security/untrusted-document.util';
 
-export {
-  readZipEntryWithBudget,
-  ZipBudgetExceededError,
-  type ZipReadBudget,
-};
+export { readZipEntryWithBudget, ZipBudgetExceededError, type ZipReadBudget };
 
 export enum FileTaskType {
   Import = 'import',
@@ -71,6 +67,14 @@ function logZipSecurityEvent(reason: string, entryName: string): void {
   console.warn(
     `[security][zip-entry-rejected] reason=${reason} entry=${sanitizeForLog(entryName)}`,
   );
+}
+
+function isZipSymbolicLink(entry: yauzl.Entry): boolean {
+  const creatorPlatform = entry.versionMadeBy >>> 8;
+  const unixMode = (entry.externalFileAttributes >>> 16) & 0xffff;
+  const unixFileType = unixMode & 0xf000;
+
+  return creatorPlatform === 3 && unixFileType === 0xa000;
 }
 
 function resolveExtractZipLimits(
@@ -183,6 +187,12 @@ function extractZipInternal(
           zipfile.readEntry();
           zipfile.once('entry', (entry) => {
             const name = entry.fileName.toString('utf8').replace(/^\/+/, '');
+            if (isZipSymbolicLink(entry)) {
+              logZipSecurityEvent('symbolic-link', name);
+              zipfile.close();
+              reject(new Error('ZIP symbolic link entries are not allowed'));
+              return;
+            }
             const isZip =
               !/\/$/.test(entry.fileName) &&
               name.toLowerCase().endsWith('.zip');
@@ -240,6 +250,13 @@ function extractZipInternal(
         zipfile.on('entry', (entry) => {
           const name = entry.fileName.toString('utf8');
           const safe = name.replace(/^\/+/, '');
+
+          if (isZipSymbolicLink(entry)) {
+            logZipSecurityEvent('symbolic-link', safe);
+            zipfile.close();
+            reject(new Error('ZIP symbolic link entries are not allowed'));
+            return;
+          }
 
           const validationError = yauzl.validateFileName(safe);
           if (validationError) {

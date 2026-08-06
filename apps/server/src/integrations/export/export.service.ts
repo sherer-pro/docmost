@@ -665,6 +665,14 @@ export class ExportService {
       [data-docmost-transclusion-label="true"] {
         line-height: 1.4;
       }
+      .page-break,
+      [data-type="pageBreak"] {
+        display: block;
+        height: 0;
+        margin: 0;
+        break-after: page;
+        page-break-after: always;
+      }
       h1,
       h2,
       h3,
@@ -720,20 +728,28 @@ export class ExportService {
         width: 100%;
         border-collapse: collapse;
         border: 1px solid #d1d5db;
-        table-layout: auto;
+        table-layout: fixed;
+        font-size: 9px;
       }
       th,
       td {
         border: 1px solid #d1d5db;
-        padding: 8px;
+        padding: 5px;
         text-align: left;
         vertical-align: top;
-        overflow-wrap: break-word;
-        word-break: normal;
+        overflow-wrap: anywhere;
+        word-break: break-word;
       }
       th {
         background: #f9fafb;
         font-weight: 600;
+      }
+      thead {
+        display: table-header-group;
+      }
+      tr {
+        break-inside: avoid;
+        page-break-inside: avoid;
       }
       .docmost-page-metadata {
         margin-bottom: 16px;
@@ -1730,6 +1746,14 @@ export class ExportService {
       }
       if (allowedPageIds) {
         pages = pages.filter((page) => allowedPageIds.has(page.id));
+        const retainedPageIds = new Set(pages.map((page) => page.id));
+        pages = pages.map((page) =>
+          page.id !== pageId &&
+          page.parentPageId &&
+          !retainedPageIds.has(page.parentPageId)
+            ? { ...page, parentPageId: pageId }
+            : page,
+        );
       }
     } else {
       // Only fetch the single page when includeChildren is false
@@ -2624,7 +2648,7 @@ export class ExportService {
               const fileBuffer = await this.storageService.read(
                 attachment.filePath,
               );
-              const filePath = `/files/${attachment.id}/${attachment.fileName}`;
+              const filePath = `files/${attachment.id}/${attachment.fileName}`;
               zip.file(filePath, fileBuffer);
             } catch (err) {
               this.logger.debug(

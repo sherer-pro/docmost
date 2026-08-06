@@ -153,31 +153,50 @@ describe('DatabaseService mixed tree flows', () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
-    const defaultPagesZip = new JSZip();
-    defaultPagesZip.file('Root.pdf', Buffer.from('root-pdf-original'));
-    defaultPagesZip.file(
-      'docmost-metadata.json',
-      JSON.stringify({
-        pages: {
-          'Root.pdf': {
-            pageId: 'db-root-page',
-            slugId: 'root-slug',
-            parentPath: null,
-            icon: null,
-            position: 'a1',
-            createdAt: '2026-01-01T00:00:00.000Z',
-            updatedAt: '2026-01-01T00:00:00.000Z',
+    const createDefaultPagesZip = (format: ExportFormat) => {
+      const extension =
+        format === ExportFormat.HTML
+          ? 'html'
+          : format === ExportFormat.Markdown
+            ? 'md'
+            : 'pdf';
+      const rootPath = `Root.${extension}`;
+      const rootContent =
+        format === ExportFormat.HTML
+          ? '<html><body><article>Root content</article></body></html>'
+          : format === ExportFormat.Markdown
+            ? '# Root\n\nRoot content'
+            : 'root-pdf-original';
+      const zip = new JSZip();
+      zip.file(rootPath, Buffer.from(rootContent));
+      zip.file(
+        'docmost-metadata.json',
+        JSON.stringify({
+          pages: {
+            [rootPath]: {
+              pageId: 'db-root-page',
+              slugId: 'root-slug',
+              parentPath: null,
+              icon: null,
+              position: 'a1',
+              createdAt: '2026-01-01T00:00:00.000Z',
+              updatedAt: '2026-01-01T00:00:00.000Z',
+            },
           },
-        },
-      }),
+        }),
+      );
+      return zip;
+    };
+
+    exportService.exportPages.mockImplementation(
+      async (_pageId: string, format: ExportFormat) =>
+        createDefaultPagesZip(format).generateNodeStream({
+          type: 'nodebuffer',
+          streamFiles: true,
+          compression: 'DEFLATE',
+        }),
     );
-    exportService.exportPages.mockResolvedValue(
-      defaultPagesZip.generateNodeStream({
-        type: 'nodebuffer',
-        streamFiles: true,
-        compression: 'DEFLATE',
-      }),
-    );
+    const defaultPagesZip = createDefaultPagesZip(ExportFormat.PDF);
     exportService.exportDatabaseArchive.mockResolvedValue({
       fileName: 'database-docmost-archive.zip',
       fileStream: defaultPagesZip.generateNodeStream({
@@ -595,6 +614,136 @@ describe('DatabaseService mixed tree flows', () => {
     expect(payload.bodyHtml).toContain('<td>true</td>');
   });
 
+  it('exports only the filtered, sorted, visible current database view', async () => {
+    const codePropertyId = '11111111-1111-4111-8111-111111111111';
+    const ownerPropertyId = '22222222-2222-4222-8222-222222222222';
+    databasePropertyRepo.findByDatabaseId.mockResolvedValue([
+      {
+        id: codePropertyId,
+        name: 'Code',
+        type: 'multiline_text',
+        settings: {},
+      },
+      {
+        id: ownerPropertyId,
+        name: 'Owner',
+        type: 'multiline_text',
+        settings: {},
+      },
+    ]);
+    databaseRowRepo.findByDatabaseId.mockResolvedValue([
+      {
+        id: 'row-a',
+        pageId: 'row-page-a',
+        pageTitle: 'Visible A',
+        cells: [
+          { propertyId: codePropertyId, value: 'KEEP-A' },
+          { propertyId: ownerPropertyId, value: 'Hidden owner A' },
+        ],
+      },
+      {
+        id: 'row-b',
+        pageId: 'row-page-b',
+        pageTitle: 'Visible B',
+        cells: [
+          { propertyId: codePropertyId, value: 'KEEP-B' },
+          { propertyId: ownerPropertyId, value: 'Hidden owner B' },
+        ],
+      },
+      {
+        id: 'row-hidden',
+        pageId: 'row-page-hidden',
+        pageTitle: 'Filtered out',
+        cells: [
+          { propertyId: codePropertyId, value: 'DROP' },
+          { propertyId: ownerPropertyId, value: 'Hidden owner C' },
+        ],
+      },
+    ]);
+    pageRepo.getPageAndDescendants.mockResolvedValue([
+      { id: 'db-root-page', parentPageId: null },
+      { id: 'row-page-a', parentPageId: 'db-root-page' },
+      { id: 'row-page-a-child', parentPageId: 'row-page-a' },
+      { id: 'row-page-hidden', parentPageId: 'row-page-a' },
+      { id: 'row-page-b', parentPageId: 'row-page-hidden' },
+      { id: 'row-page-hidden-child', parentPageId: 'row-page-hidden' },
+    ]);
+
+    await service.exportDatabase(
+      'db-1',
+      DatabaseExportFormat.PDF,
+      user,
+      'ws-1',
+      true,
+      false,
+      {
+        filters: JSON.stringify([
+          {
+            propertyId: codePropertyId,
+            operator: 'contains',
+            value: 'KEEP',
+          },
+        ]),
+        sortPropertyId: codePropertyId,
+        sortDirection: 'desc',
+        visiblePropertyIds: [codePropertyId],
+      },
+    );
+
+    const payload = exportService.renderPdfFromHtmlDocument.mock.calls[0][0];
+    expect(payload.bodyHtml).toContain('<th>Code</th>');
+    expect(payload.bodyHtml).not.toContain('<th>Owner</th>');
+    expect(payload.bodyHtml).not.toContain('Hidden owner');
+    expect(payload.bodyHtml).not.toContain('Filtered out');
+    expect(payload.bodyHtml.indexOf('KEEP-B')).toBeLessThan(
+      payload.bodyHtml.indexOf('KEEP-A'),
+    );
+
+    const allowedPageIds = exportService.exportPages.mock
+      .calls[0][7] as Set<string>;
+    expect([...allowedPageIds].sort()).toEqual(
+      ['db-root-page', 'row-page-a', 'row-page-a-child', 'row-page-b'].sort(),
+    );
+  });
+
+  it('appends the current database view to the markdown root file', async () => {
+    const codePropertyId = '11111111-1111-4111-8111-111111111111';
+    databasePropertyRepo.findByDatabaseId.mockResolvedValue([
+      {
+        id: codePropertyId,
+        name: 'Code',
+        type: 'multiline_text',
+        settings: {},
+      },
+    ]);
+    databaseRowRepo.findByDatabaseId.mockResolvedValue([
+      {
+        id: 'row-a',
+        pageId: 'row-page-a',
+        pageTitle: 'Visible row',
+        cells: [{ propertyId: codePropertyId, value: 'KEEP' }],
+      },
+    ]);
+
+    const exported = await service.exportDatabase(
+      'db-1',
+      DatabaseExportFormat.Markdown,
+      user,
+      'ws-1',
+      false,
+      false,
+      { visiblePropertyIds: [codePropertyId] },
+    );
+    const zip = await JSZip.loadAsync(
+      await streamToBuffer(exported.fileStream as NodeJS.ReadableStream),
+    );
+    const rootEntry = zip.file('Root.md');
+    expect(rootEntry).toBeDefined();
+    expect(await rootEntry?.async('text')).toContain(
+      '## Rows\n\n| Title | Code |\n| --- | --- |\n| Visible row | KEEP |',
+    );
+  });
+
   it('keeps pages-like layout and replaces only root pdf when includeChildren=true', async () => {
     databaseRepo.findById.mockResolvedValue({
       id: 'db-1',
@@ -738,6 +887,13 @@ describe('DatabaseService mixed tree flows', () => {
     );
     expect(exported.contentType).toBe('application/zip');
     expect(exported.fileName).toBe('database.zip');
+
+    const zip = await JSZip.loadAsync(
+      await streamToBuffer(exported.fileStream as NodeJS.ReadableStream),
+    );
+    expect(await zip.file('Root.html')?.async('text')).toContain(
+      'docmost-database-summary',
+    );
   });
 
   it('renames row, regenerates slug and records rename history event', async () => {

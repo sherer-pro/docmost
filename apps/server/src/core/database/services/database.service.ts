@@ -39,7 +39,10 @@ import {
   UpdateDatabasePropertyDto,
   UpdateDatabaseViewDto,
 } from '../dto/database.dto';
-import type { DatabasePropertyType } from '@docmost/api-contract';
+import type {
+  DatabaseExportViewSnapshot,
+  DatabasePropertyType,
+} from '@docmost/api-contract';
 import { QueueJob, QueueName } from '../../../integrations/queue/constants';
 import { IPageRecipientNotificationJob } from '../../../integrations/queue/constants/queue.interface';
 import { PageHistoryRecorderService } from '../../page/services/page-history-recorder.service';
@@ -80,6 +83,18 @@ interface IDatabaseRowsFilterCondition {
   propertyId: string;
   operator: 'contains' | 'equals' | 'not_equals';
   value: string;
+}
+
+interface IDatabaseExportTableState {
+  database: any;
+  properties: any[];
+  rows: any[];
+  allRowPageIds: Set<string>;
+  propertiesById: Map<
+    string,
+    { id: string; type: string | null; settings?: unknown }
+  >;
+  pageTitleById: Map<string, string>;
 }
 
 /**
@@ -1177,6 +1192,12 @@ export class DatabaseService {
       workspaceId,
     );
     const title = tableState.database.name?.trim() || 'Database';
+    return `# ${title}\n\n${this.buildDatabaseRowsMarkdown(tableState)}`;
+  }
+
+  private buildDatabaseRowsMarkdown(
+    tableState: IDatabaseExportTableState,
+  ): string {
     const header = [
       'Title',
       ...tableState.properties.map((property) => property.name || 'Column'),
@@ -1205,16 +1226,21 @@ export class DatabaseService {
       .map((line) => `| ${line.join(' | ')} |`)
       .join('\n');
 
-    return `# ${title}\n\n${table}`;
+    return table;
   }
 
   private async buildDatabaseExportTableState(
     databaseId: string,
     user: User,
     workspaceId: string,
-  ) {
+    currentView?: DatabaseExportViewSnapshot,
+  ): Promise<IDatabaseExportTableState> {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
-    await this.assertCanReadDatabasePages(user, database.spaceId);
+    const hasWorkspaceAdminAccess =
+      user.role === UserRole.OWNER || user.role === UserRole.ADMIN;
+    if (!hasWorkspaceAdminAccess) {
+      await this.assertCanReadDatabasePages(user, database.spaceId);
+    }
 
     const [properties, rows] = await Promise.all([
       this.databasePropertyRepo.findByDatabaseId(databaseId),
@@ -1226,47 +1252,80 @@ export class DatabaseService {
     ]);
 
     const normalizedProperties = this.normalizeProperties(properties);
-    const userPropertyIds = new Set(
-      normalizedProperties
-        .filter((property) => property.type === 'user')
-        .map((property) => property.id),
-    );
-    const normalizedRows = await this.enrichRowsWithUserNames(
-      rows,
-      userPropertyIds,
-      workspaceId,
-    );
     const propertiesById = new Map(
       normalizedProperties.map((property) => [
         property.id,
         { id: property.id, type: property.type, settings: property.settings },
       ]),
     );
+    const rowsFilters = this.parseRowsFilters(currentView?.filters);
+    const referencedPropertyIds = new Set([
+      ...rowsFilters.map((filter) => filter.propertyId),
+      ...(currentView?.sortPropertyId ? [currentView.sortPropertyId] : []),
+      ...(currentView?.visiblePropertyIds ?? []),
+    ]);
+
+    if (
+      [...referencedPropertyIds].some(
+        (propertyId) => !propertiesById.has(propertyId),
+      )
+    ) {
+      throw new BadRequestException(
+        'Database export view references an unknown property',
+      );
+    }
+
+    const userPropertyIds = new Set(
+      normalizedProperties
+        .filter((property) => property.type === 'user')
+        .map((property) => property.id),
+    );
+    const readableRows = hasWorkspaceAdminAccess
+      ? rows
+      : await this.filterRowsByPageAccess(rows, user, database.spaceId);
+    const normalizedRows = await this.enrichRowsWithUserNames(
+      readableRows,
+      userPropertyIds,
+      workspaceId,
+    );
     const pageTitleById = await this.resolvePageTitlesById(
       normalizedRows,
       propertiesById,
       workspaceId,
     );
+    const preparedRows = currentView
+      ? this.applyRowsServerState({
+          rows: normalizedRows,
+          filters: rowsFilters,
+          sortPropertyId: currentView.sortPropertyId,
+          sortDirection: currentView.sortDirection,
+          propertiesById,
+          pageTitleById,
+        })
+      : normalizedRows;
+    const visiblePropertyIds = currentView?.visiblePropertyIds
+      ? new Set(currentView.visiblePropertyIds)
+      : null;
 
     return {
       database,
-      properties: normalizedProperties,
-      rows: normalizedRows,
+      properties: visiblePropertyIds
+        ? normalizedProperties.filter((property) =>
+            visiblePropertyIds.has(property.id),
+          )
+        : normalizedProperties,
+      rows: preparedRows,
+      allRowPageIds: new Set(
+        normalizedRows.map((row) => row.pageId).filter(Boolean),
+      ),
       propertiesById,
       pageTitleById,
     };
   }
 
-  private async buildDatabaseRowsTableSectionHtml(
-    databaseId: string,
-    user: User,
-    workspaceId: string,
-  ): Promise<string> {
-    const tableState = await this.buildDatabaseExportTableState(
-      databaseId,
-      user,
-      workspaceId,
-    );
+  private buildDatabaseRowsTableSectionHtml(
+    tableState: IDatabaseExportTableState,
+  ): string {
     const headers = [
       'Title',
       ...tableState.properties.map((property) => property.name || 'Column'),
@@ -1352,7 +1411,7 @@ export class DatabaseService {
       .join('/');
   }
 
-  private async resolveRootPdfPathFromMetadata(zip: JSZip): Promise<{
+  private async resolveRootExportPathFromMetadata(zip: JSZip): Promise<{
     metadata: ExportMetadata;
     metadataPath: string;
     zipPath: string;
@@ -1383,7 +1442,34 @@ export class DatabaseService {
       }
     }
 
-    throw new NotFoundException('Root PDF file is missing in export archive');
+    throw new NotFoundException('Root file is missing in export archive');
+  }
+
+  private async appendDatabaseRowsToRootExport(
+    zip: JSZip,
+    format: ExportFormat.Markdown | ExportFormat.HTML,
+    tableState: IDatabaseExportTableState,
+  ): Promise<void> {
+    const rootPath = await this.resolveRootExportPathFromMetadata(zip);
+    const rootEntry = zip.file(rootPath.zipPath);
+    if (!rootEntry) {
+      throw new NotFoundException('Root file is missing in export archive');
+    }
+
+    const rootContent = await rootEntry.async('text');
+    if (format === ExportFormat.Markdown) {
+      zip.file(
+        rootPath.zipPath,
+        `${rootContent.trimEnd()}\n\n## Rows\n\n${this.buildDatabaseRowsMarkdown(tableState)}\n`,
+      );
+      return;
+    }
+
+    const tableSectionHtml = this.buildDatabaseRowsTableSectionHtml(tableState);
+    const mergedHtml = /<\/body>/i.test(rootContent)
+      ? rootContent.replace(/<\/body>/i, `${tableSectionHtml}</body>`)
+      : `${rootContent}${tableSectionHtml}`;
+    zip.file(rootPath.zipPath, mergedHtml);
   }
 
   private buildSlugIdToExportPathMap(
@@ -1405,13 +1491,13 @@ export class DatabaseService {
   }
 
   private async buildMergedRootPdfBodyHtml(params: {
-    databaseId: string;
     databasePageId: string;
     user: User;
     workspaceId: string;
     locale?: string;
     rootMetadataPath: string;
     slugIdToExportPath: Record<string, string>;
+    tableState: IDatabaseExportTableState;
   }): Promise<{
     title: string;
     bodyHtml: string;
@@ -1450,10 +1536,8 @@ export class DatabaseService {
       locale: params.locale,
       authorizedUser: params.user,
     });
-    const tableSectionHtml = await this.buildDatabaseRowsTableSectionHtml(
-      params.databaseId,
-      params.user,
-      params.workspaceId,
+    const tableSectionHtml = this.buildDatabaseRowsTableSectionHtml(
+      params.tableState,
     );
 
     return {
@@ -1473,6 +1557,7 @@ export class DatabaseService {
     workspaceId: string,
     includeChildren = false,
     includeAttachments = false,
+    currentView?: DatabaseExportViewSnapshot,
   ) {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
     if (!database.pageId) {
@@ -1510,6 +1595,21 @@ export class DatabaseService {
       };
     }
 
+    const tableState = await this.buildDatabaseExportTableState(
+      databaseId,
+      user,
+      workspaceId,
+      currentView,
+    );
+    const allowedPageIds =
+      currentView && includeChildren
+        ? await this.buildDatabaseCurrentViewAllowedPageIds(
+            database.pageId,
+            tableState.rows.map((row) => row.pageId).filter(Boolean),
+            tableState.allRowPageIds,
+          )
+        : undefined;
+
     if (format === DatabaseExportFormat.PDF) {
       const pagesZipStream = await this.exportPagesForUser(
         database.pageId,
@@ -1517,23 +1617,24 @@ export class DatabaseService {
         includeAttachments,
         includeChildren,
         user,
+        allowedPageIds,
       );
       const pagesZipBuffer = await streamToBuffer(
         pagesZipStream as NodeJS.ReadableStream,
       );
       const zip = await JSZip.loadAsync(pagesZipBuffer);
-      const rootPdfPath = await this.resolveRootPdfPathFromMetadata(zip);
+      const rootPdfPath = await this.resolveRootExportPathFromMetadata(zip);
       const slugIdToExportPath = this.buildSlugIdToExportPathMap(
         rootPdfPath.metadata,
       );
       const mergedRootPdfBody = await this.buildMergedRootPdfBodyHtml({
-        databaseId,
         databasePageId: database.pageId,
         user,
         workspaceId,
         locale: user.locale,
         rootMetadataPath: rootPdfPath.metadataPath,
         slugIdToExportPath,
+        tableState,
       });
       const mergedRootPdfBuffer =
         await this.exportService.renderPdfFromHtmlDocument({
@@ -1566,13 +1667,70 @@ export class DatabaseService {
       includeAttachments,
       includeChildren,
       user,
+      allowedPageIds,
+    );
+
+    const zipBuffer = await streamToBuffer(
+      zipFileStream as NodeJS.ReadableStream,
+    );
+    const zip = await JSZip.loadAsync(zipBuffer);
+    await this.appendDatabaseRowsToRootExport(
+      zip,
+      pageExportFormat,
+      tableState,
     );
 
     return {
       contentType: 'application/zip',
       fileName: `${safeName}.zip`,
-      fileStream: zipFileStream,
+      fileStream: zip.generateNodeStream({
+        type: 'nodebuffer',
+        streamFiles: true,
+        compression: 'DEFLATE',
+      }),
     };
+  }
+
+  private async buildDatabaseCurrentViewAllowedPageIds(
+    databasePageId: string,
+    rowPageIds: string[],
+    allRowPageIds: Set<string>,
+  ): Promise<Set<string>> {
+    const pages =
+      (await this.pageRepo.getPageAndDescendants(databasePageId, {
+        includeContent: false,
+      })) ?? [];
+    const pagesById = new Map(pages.map((page) => [page.id, page]));
+    const childrenByParentId = new Map<string, string[]>();
+
+    for (const page of pages) {
+      if (!page.parentPageId) {
+        continue;
+      }
+      const children = childrenByParentId.get(page.parentPageId) ?? [];
+      children.push(page.id);
+      childrenByParentId.set(page.parentPageId, children);
+    }
+
+    const allowedPageIds = new Set<string>([databasePageId]);
+    const selectedRowPageIds = new Set(rowPageIds);
+    const queue = rowPageIds.filter((pageId) => pagesById.has(pageId));
+    while (queue.length > 0) {
+      const pageId = queue.shift();
+      if (!pageId || allowedPageIds.has(pageId)) {
+        continue;
+      }
+      allowedPageIds.add(pageId);
+      queue.push(
+        ...(childrenByParentId.get(pageId) ?? []).filter(
+          (childPageId) =>
+            !allRowPageIds.has(childPageId) ||
+            selectedRowPageIds.has(childPageId),
+        ),
+      );
+    }
+
+    return allowedPageIds;
   }
 
   /**
@@ -1591,9 +1749,28 @@ export class DatabaseService {
     includeAttachments: boolean,
     includeChildren: boolean,
     user: User,
+    allowedPageIds?: Set<string>,
   ) {
     const headingNumberingByPageId = normalizeUserSettings(user.settings)
       .preferences.headingNumberingByPageId;
+
+    const headingNumbering =
+      Object.keys(headingNumberingByPageId).length === 0
+        ? undefined
+        : headingNumberingByPageId;
+
+    if (allowedPageIds) {
+      return this.exportService.exportPages(
+        pageId,
+        format,
+        includeAttachments,
+        includeChildren,
+        user.locale,
+        headingNumbering,
+        user,
+        allowedPageIds,
+      );
+    }
 
     return this.exportService.exportPages(
       pageId,
@@ -1601,9 +1778,7 @@ export class DatabaseService {
       includeAttachments,
       includeChildren,
       user.locale,
-      Object.keys(headingNumberingByPageId).length === 0
-        ? undefined
-        : headingNumberingByPageId,
+      headingNumbering,
       // Descendant pages must be filtered by the page access rules, which are
       // not covered by the space-level ability checks in this service.
       user,

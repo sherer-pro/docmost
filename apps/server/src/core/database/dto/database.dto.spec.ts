@@ -6,6 +6,7 @@ import {
   BatchUpdateDatabaseRowsDto,
   CreateDatabasePropertyDto,
   CreateDatabaseViewDto,
+  ExportDatabaseDto,
   UpdateDatabasePropertyDto,
 } from './database.dto';
 
@@ -97,5 +98,33 @@ describe('database DTO limits', () => {
     });
 
     expect(JSON.stringify(errors)).toContain('maxJsonDepth');
+  });
+
+  it('validates the nested current view export snapshot', async () => {
+    await expect(
+      validatePayload(ExportDatabaseDto, {
+        format: 'pdf',
+        currentView: {
+          filters: '[]',
+          sortPropertyId: uuid,
+          sortDirection: 'desc',
+          visiblePropertyIds: [uuid],
+        },
+      }),
+    ).resolves.toHaveLength(0);
+
+    const errors = await validatePayload(ExportDatabaseDto, {
+      format: 'pdf',
+      currentView: {
+        sortPropertyId: 'not-a-uuid',
+        sortDirection: 'sideways',
+        visiblePropertyIds: [uuid, uuid],
+      },
+    });
+
+    const serializedErrors = JSON.stringify(errors);
+    expect(serializedErrors).toContain('isUuid');
+    expect(serializedErrors).toContain('isIn');
+    expect(serializedErrors).toContain('arrayUnique');
   });
 });

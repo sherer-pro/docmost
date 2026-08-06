@@ -1,6 +1,7 @@
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
+  ArrayUnique,
   IsBoolean,
   IsArray,
   IsIn,
@@ -21,6 +22,7 @@ import {
 import {
   DATABASE_PROPERTY_TYPES,
   DatabaseExportFormat,
+  type DatabaseExportViewSnapshot,
   type DatabasePropertyType,
 } from '@docmost/api-contract';
 import type { JsonValue } from '../../../database/types/db';
@@ -33,6 +35,7 @@ const MAX_DATABASE_BATCH_ROWS = 200;
 const MAX_DATABASE_CELL_VALUE_BYTES = 20_000;
 const MAX_DATABASE_VIEW_CONFIG_BYTES = 50_000;
 const MAX_DATABASE_VIEW_CONFIG_DEPTH = 12;
+const MAX_DATABASE_EXPORT_PROPERTIES = 500;
 
 function getJsonStringifiedLength(value: unknown): number {
   try {
@@ -443,6 +446,30 @@ export class DatabaseRowPageIdDto {
   pageId: string;
 }
 
+export class DatabaseExportViewSnapshotDto
+  implements DatabaseExportViewSnapshot
+{
+  @IsOptional()
+  @IsString()
+  @MaxLength(MAX_DATABASE_VIEW_CONFIG_BYTES)
+  filters?: string;
+
+  @IsOptional()
+  @IsUUID()
+  sortPropertyId?: string;
+
+  @IsOptional()
+  @IsIn(['asc', 'desc'])
+  sortDirection?: 'asc' | 'desc';
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(MAX_DATABASE_EXPORT_PROPERTIES)
+  @ArrayUnique()
+  @IsUUID(undefined, { each: true })
+  visiblePropertyIds?: string[];
+}
+
 /**
  * DTO for exporting a database to a file.
  */
@@ -458,4 +485,9 @@ export class ExportDatabaseDto {
   @IsOptional()
   @IsBoolean()
   includeAttachments?: boolean;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => DatabaseExportViewSnapshotDto)
+  currentView?: DatabaseExportViewSnapshotDto;
 }

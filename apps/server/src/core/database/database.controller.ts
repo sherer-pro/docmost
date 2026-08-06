@@ -115,7 +115,6 @@ export class DatabaseController {
     await this.databaseService.deleteDatabase(databaseId, user, workspace.id);
   }
 
-
   /**
    * Converts the database back to a regular page.
    */
@@ -275,7 +274,6 @@ export class DatabaseController {
     );
   }
 
-
   @HttpCode(HttpStatus.NO_CONTENT)
   @AuthPolicyScope('resource', { resourceType: 'database', key: 'databaseId' })
   @Delete(':databaseId/rows/:pageId')
@@ -285,9 +283,13 @@ export class DatabaseController {
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
-    await this.databaseService.deleteRow(databaseId, pageId, user, workspace.id);
+    await this.databaseService.deleteRow(
+      databaseId,
+      pageId,
+      user,
+      workspace.id,
+    );
   }
-
 
   @AuthPolicyScope('page', { key: 'pageId' })
   @Get('rows/:pageId/context')
@@ -296,7 +298,11 @@ export class DatabaseController {
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
-    return this.databaseService.getRowContextByPage(dto.pageId, user, workspace.id);
+    return this.databaseService.getRowContextByPage(
+      dto.pageId,
+      user,
+      workspace.id,
+    );
   }
 
   /**
@@ -319,8 +325,6 @@ export class DatabaseController {
       workspace.id,
     );
   }
-
-
 
   /**
    * Returns a markdown representation of the database table.
@@ -361,6 +365,7 @@ export class DatabaseController {
       workspace.id,
       dto.includeChildren,
       dto.includeAttachments,
+      dto.currentView,
     );
 
     res.headers({
@@ -431,6 +436,11 @@ export class DatabaseController {
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
-    await this.databaseService.deleteView(databaseId, viewId, user, workspace.id);
+    await this.databaseService.deleteView(
+      databaseId,
+      viewId,
+      user,
+      workspace.id,
+    );
   }
 }

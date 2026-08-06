@@ -62,9 +62,7 @@ export default function ExportModal({
   }));
 
   const modalTitle =
-    type === "database"
-      ? `${t("Export")} ${t("Database")}`
-      : t(`Export ${type}`);
+    type === "database" ? t("Export database") : t(`Export ${type}`);
 
   const handleExport = async () => {
     setIsExporting(true);
@@ -163,6 +161,18 @@ export default function ExportModal({
             />
           </Group>
 
+          {type === "database" && (
+            <Text size="sm" c="dimmed" mt="sm">
+              {format === ExportFormat.Docmost
+                ? t(
+                    "Docmost archive exports the full database and all saved views.",
+                  )
+                : t(
+                    "The current filters, sorting and visible columns will be exported.",
+                  )}
+            </Text>
+          )}
+
           {showIncludeChildren && (
             <>
               <Divider my="sm" />
@@ -176,6 +186,7 @@ export default function ExportModal({
                     setIncludeChildren(event.currentTarget.checked)
                   }
                   checked={includeChildren}
+                  aria-label={t("Include subpages")}
                 />
               </Group>
 
@@ -189,6 +200,7 @@ export default function ExportModal({
                       setIncludeAttachments(event.currentTarget.checked)
                     }
                     checked={includeAttachments}
+                    aria-label={t("Include attachments")}
                   />
                 </Group>
               )}
@@ -208,6 +220,7 @@ export default function ExportModal({
                     setIncludeAttachments(event.currentTarget.checked)
                   }
                   checked={includeAttachments}
+                  aria-label={t("Include attachments")}
                 />
               </Group>
             </>
@@ -245,8 +258,8 @@ function ExportFormatSelection({
       data={options}
       value={format}
       onChange={onChange}
-      styles={{ wrapper: { maxWidth: 120 } }}
-      comboboxProps={{ width: "120" }}
+      styles={{ wrapper: { maxWidth: 180 } }}
+      comboboxProps={{ width: "180" }}
       allowDeselect={false}
       withCheckIcon={false}
       aria-label={t("Select export format")}
