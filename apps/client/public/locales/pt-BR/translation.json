@@ -2042,6 +2042,7 @@
       "deploymentDisabled": "{{count}} recursos salvos estão desativados pelas configurações da implantação. Eles permanecem configurados e voltam quando ativados.",
       "loadFailed": "Não foi possível carregar a política de ferramentas integradas.",
       "saved": "Política de ferramentas integradas salva.",
+      "copyCapabilityIdentifier": "Copiar identificador técnico do recurso: {{capability}}",
       "tool": {
         "search": "Pesquisar",
         "getTree": "Ver árvore de páginas",

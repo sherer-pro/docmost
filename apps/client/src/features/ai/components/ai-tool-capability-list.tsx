@@ -1,10 +1,13 @@
-import { Checkbox, Group, Paper, Stack, Text } from "@mantine/core";
+import { Checkbox, Group, Paper, Stack } from "@mantine/core";
+import { IconCheck, IconCopy } from "@tabler/icons-react";
 import type {
   AiBuiltinToolCapability,
   AiBuiltinToolCatalogEntry,
   AiBuiltinToolCategory,
 } from "@docmost/api-contract";
 import { useTranslation } from "react-i18next";
+import { CopyButton } from "@/components/common/copy-button.tsx";
+import { AccessibleActionIcon } from "@/components/ui/accessible-action-icon.tsx";
 
 export function AiToolCapabilityList({
   catalog,
@@ -89,9 +92,32 @@ export function AiToolCapabilityList({
                       onChange([...next]);
                     }}
                   />
-                  <Text size="xs" c="dimmed">
-                    {tool.capability}
-                  </Text>
+                  <CopyButton value={tool.capability} timeout={2000}>
+                    {({ copied, copy }) => {
+                      const label = copied
+                        ? t("Copied")
+                        : t("ai.toolPolicy.copyCapabilityIdentifier", {
+                            capability: tool.capability,
+                          });
+
+                      return (
+                        <AccessibleActionIcon
+                          variant="subtle"
+                          color={copied ? "teal" : "gray"}
+                          label={label}
+                          tooltip={label}
+                          tooltipProps={{ withArrow: true, position: "left" }}
+                          onClick={copy}
+                        >
+                          {copied ? (
+                            <IconCheck size={16} />
+                          ) : (
+                            <IconCopy size={16} />
+                          )}
+                        </AccessibleActionIcon>
+                      );
+                    }}
+                  </CopyButton>
                 </Group>
               ))}
             </Stack>

@@ -2042,6 +2042,7 @@
       "deploymentDisabled": "{{count}} capacités enregistrées sont désactivées par les paramètres de déploiement. Elles restent configurées et reviendront après activation.",
       "loadFailed": "Impossible de charger la politique des outils intégrés.",
       "saved": "Politique des outils intégrés enregistrée.",
+      "copyCapabilityIdentifier": "Copier l’identifiant technique de la capacité : {{capability}}",
       "tool": {
         "search": "Rechercher",
         "getTree": "Afficher l’arborescence des pages",

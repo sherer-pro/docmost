@@ -2042,6 +2042,7 @@
       "deploymentDisabled": "{{count}} capacità salvate sono disabilitate dalle impostazioni di deployment. Restano configurate e torneranno dopo l’abilitazione.",
       "loadFailed": "Impossibile caricare la policy degli strumenti integrati.",
       "saved": "Policy degli strumenti integrati salvata.",
+      "copyCapabilityIdentifier": "Copia identificatore tecnico della funzionalità: {{capability}}",
       "tool": {
         "search": "Cerca",
         "getTree": "Visualizza albero delle pagine",

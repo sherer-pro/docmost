@@ -114,6 +114,7 @@ describe("AI localization contract", () => {
       "settings.title",
       "toolPolicy.workspaceTitle",
       "toolPolicy.deploymentDisabled",
+      "toolPolicy.copyCapabilityIdentifier",
     ];
 
     for (const locale of LOCALES) {

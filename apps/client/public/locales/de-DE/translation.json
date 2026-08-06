@@ -2042,6 +2042,7 @@
       "deploymentDisabled": "{{count}} gespeicherte Fähigkeiten sind durch Bereitstellungseinstellungen deaktiviert. Sie bleiben konfiguriert und kehren nach der Aktivierung zurück.",
       "loadFailed": "Die Richtlinie für integrierte Werkzeuge konnte nicht geladen werden.",
       "saved": "Richtlinie für integrierte Werkzeuge gespeichert.",
+      "copyCapabilityIdentifier": "Technische Fähigkeitskennung kopieren: {{capability}}",
       "tool": {
         "search": "Suchen",
         "getTree": "Seitenbaum anzeigen",

@@ -2042,6 +2042,7 @@
       "deploymentDisabled": "{{count}} saved capabilities are disabled by deployment settings. They remain configured and return when enabled.",
       "loadFailed": "The built-in tool policy could not be loaded.",
       "saved": "Built-in tool policy saved.",
+      "copyCapabilityIdentifier": "Copy technical capability identifier: {{capability}}",
       "tool": {
         "search": "Search",
         "getTree": "View page tree",
