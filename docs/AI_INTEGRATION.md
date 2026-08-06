@@ -326,6 +326,11 @@ Configure the writer through `RAG_SYNC_*` values in the same root `.env` used
 by Docmost. Compose forwards only those values to the writer. One writer
 container maps one Docmost space to one pre-created Open WebUI Knowledge Base;
 use a separate service/container with its own environment for another mapping.
+The RAG key created for the selected space is authoritative: the writer obtains
+its `workspaceId`, `spaceId`, Open WebUI base URL, and Knowledge Base ID from
+`/api/rag/scope`. Configure the `open-webui-knowledge-v1` retrieval adapter in
+the space AI settings; these non-secret values are not repeated in `.env`.
+Restart the writer after changing its Open WebUI destination.
 
 Release publishing produces both the main image and the companion
 `shererpro/docmost:rag-sync-<VERSION>` image. The moving production tags are

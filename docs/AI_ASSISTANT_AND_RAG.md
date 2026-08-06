@@ -682,8 +682,9 @@ only low-cardinality states, counters, reason codes, lag, and durations, never
 stable binding/source IDs, document text, or secrets.
 
 Before every cycle, the writer reads `GET /api/rag/scope`. Scope schema v2
-fingerprints both content policy and the effective readable-page set. When it
-changes, the writer reconstructs mappings from Open WebUI metadata, pages
+fingerprints the key-derived workspace/space identity, content policy, and the
+effective readable-page set. When it changes, the writer reconstructs mappings
+from Open WebUI metadata, pages
 through the opaque `GET /api/rag/scope/blocked` feed, deletes inaccessible
 files/mappings, resets the live `updates` and `attachment-updates` checkpoints
 to zero, and reprocesses all allowed data. The new composite fingerprint also
@@ -697,18 +698,21 @@ logged. Per-source outcomes are aggregated into each cycle summary.
 Configuration is loaded from `RAG_SYNC_*` environment variables. Local runs
 read the same root `.env` as Docmost, while Compose explicitly forwards only
 that prefix to the writer. One writer process defines one binding through
-`RAG_SYNC_BINDING_ID`, `RAG_SYNC_WORKSPACE_ID`, `RAG_SYNC_SPACE_ID`,
-`RAG_SYNC_DOCMOST_BASE_URL`, `RAG_SYNC_DOCMOST_API_KEY`,
-`RAG_SYNC_OPEN_WEBUI_BASE_URL`, `RAG_SYNC_OPEN_WEBUI_API_KEY`, and
-`RAG_SYNC_KNOWLEDGE_ID`. Redis and runtime controls use
+`RAG_SYNC_BINDING_ID`, `RAG_SYNC_DOCMOST_BASE_URL`, `RAG_SYNC_DOCMOST_API_KEY`,
+and `RAG_SYNC_OPEN_WEBUI_API_KEY`. Redis and runtime controls use
 `RAG_SYNC_REDIS_URL`, `RAG_SYNC_REDIS_PREFIX`,
 `RAG_SYNC_POLL_INTERVAL_MS`, `RAG_SYNC_REQUEST_TIMEOUT_MS`,
 `RAG_SYNC_PROCESSING_TIMEOUT_MS`, and `RAG_SYNC_MAX_ATTACHMENT_BYTES`.
-Knowledge, workspace, and space identifiers are validated at startup. The
-Docmost read key and the Open WebUI key used by the main server for retrieval
-are independent secrets. Environment values are visible in Docker container
-metadata, so Docker daemon access must be restricted and the populated `.env`
-must never be committed.
+The Docmost RAG key selected in the UI is the single source of truth for the
+workspace and space. `GET /api/rag/scope` also returns the non-secret Open
+WebUI base URL and Knowledge Base ID configured by the
+`open-webui-knowledge-v1` retrieval adapter in the space AI settings. The
+writer uses these values for Open WebUI metadata and reconciliation instead of
+duplicating them in `.env`; restart it after changing the destination. The
+Docmost read key, the Open WebUI writer key in `.env`, and the Open WebUI key
+used by the main server for retrieval are independent secrets. Environment
+values are visible in Docker container metadata, so Docker daemon access must
+be restricted and the populated `.env` must never be committed.
 
 For a local container build, the main `docker-compose.yml` includes the writer
 behind the optional `rag-sync` profile and builds it from

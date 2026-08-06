@@ -16,12 +16,15 @@ import {
   type OpenWebUiFile,
   type OpenWebUiWriterClient,
   type RagSyncBinding,
+  type RagSyncBindingConfig,
 } from "./types.js";
+
+const KNOWLEDGE_ID_PATTERN = /^[A-Za-z0-9_-]{1,200}$/;
 
 export class DocmostClient implements DocmostSourceClient {
   private readonly http: BoundedHttpClient;
 
-  constructor(binding: RagSyncBinding, requestTimeoutMs: number) {
+  constructor(binding: RagSyncBindingConfig, requestTimeoutMs: number) {
     this.http = new BoundedHttpClient(
       binding.docmostBaseUrl,
       binding.docmostApiKey,
@@ -29,8 +32,33 @@ export class DocmostClient implements DocmostSourceClient {
     );
   }
 
-  getScope(signal?: AbortSignal): Promise<RagScope> {
-    return this.http.json("api/rag/scope", { signal }, 8 * 1024 * 1024);
+  async getScope(signal?: AbortSignal): Promise<RagScope> {
+    const scope = await this.http.json<RagScope>(
+      "api/rag/scope",
+      { signal },
+      8 * 1024 * 1024,
+    );
+    if (
+      typeof scope.workspaceId !== "string" ||
+      !scope.workspaceId ||
+      typeof scope.spaceId !== "string" ||
+      !scope.spaceId
+    ) {
+      throw new Error(
+        "Docmost RAG scope response is missing workspaceId or spaceId",
+      );
+    }
+    if (scope.syncTarget !== null) {
+      if (
+        !scope.syncTarget ||
+        scope.syncTarget.adapter !== "open-webui-knowledge-v1" ||
+        !isHttpOrigin(scope.syncTarget.baseUrl) ||
+        !KNOWLEDGE_ID_PATTERN.test(scope.syncTarget.knowledgeId)
+      ) {
+        throw new Error("Docmost RAG scope response has an invalid syncTarget");
+      }
+    }
+    return scope;
   }
 
   getBlockedPages(
@@ -141,6 +169,23 @@ export class DocmostClient implements DocmostSourceClient {
       { signal },
       8 * 1024 * 1024,
     );
+  }
+}
+
+function isHttpOrigin(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  try {
+    const url = new URL(value);
+    return (
+      ["http:", "https:"].includes(url.protocol) &&
+      !url.username &&
+      !url.password &&
+      !url.search &&
+      !url.hash &&
+      url.pathname === "/"
+    );
+  } catch {
+    return false;
   }
 }
 

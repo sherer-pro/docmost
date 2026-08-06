@@ -1331,7 +1331,7 @@
       "setupTitle": "在哪里配置",
       "setupDescription": "打开所需的设置部分。部署环境的允许地址列表和紧急开关由运维人员管理。",
       "syncTitle": "定期更新 RAG 索引",
-      "syncDescription": "Docmost 不保存本地嵌入表。对于 Open WebUI，定期更新由必须持续运行的独立进程 apps/rag-sync 完成。在容器中，请将其作为单独的可选服务或配置文件运行，并仅在使用专用数据库或前缀时共享 Redis。启用 rag-sync 配置文件后，主 docker-compose.yml 会在本地构建它，并且只从共享的根 .env 转发 RAG_SYNC_* 值。一个 writer 容器将一个 Docmost 空间映射到一个 Knowledge Base；其他映射需要另一个服务实例。环境变量中的 API 密钥可在 Docker 元数据中看到。",
+      "syncDescription": "Docmost 不保存本地嵌入表。对于 Open WebUI，定期更新由必须持续运行的独立进程 apps/rag-sync 完成。在容器中，请将其作为单独的可选服务或配置文件运行，并仅在使用专用数据库或前缀时共享 Redis。启用 rag-sync 配置文件后，主 docker-compose.yml 会在本地构建它，并且只从共享的根 .env 转发 RAG_SYNC_* 值。一个 writer 容器将一个 Docmost 空间映射到一个 Knowledge Base；其他映射需要另一个服务实例。所选 RAG 密钥会自动提供工作区和空间范围，Open WebUI 基础 URL 和 Knowledge Base ID 则来自空间的 AI 设置；不要在 .env 中重复设置这些值。环境变量中的 API 密钥可在 Docker 元数据中看到。",
       "syncStepStart": "服务会立即运行一个周期，随后使用 RAG_SYNC_POLL_INTERVAL_MS：默认值为 60 秒，允许范围为 5 秒至 1 小时。重叠的周期会被跳过。",
       "syncStepDelta": "每个周期都会读取当前范围以及更新、删除和附件的增量流。只有成功处理完整个流页面后才会推进检查点，因此可能出现至少一次的重复处理，操作必须保持幂等。",
       "syncStepScope": "AI 排除规则或实际可访问页面集合发生变化时，范围指纹也会改变。进程会删除被阻止的外部内容，重置当前流的检查点，并重新处理允许的范围。",

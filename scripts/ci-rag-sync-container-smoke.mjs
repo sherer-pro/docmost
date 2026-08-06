@@ -62,19 +62,11 @@ try {
     '-e',
     'RAG_SYNC_BINDING_ID=binding-ci',
     '-e',
-    'RAG_SYNC_WORKSPACE_ID=0198f2f5-a5a3-7000-8000-000000000001',
-    '-e',
-    'RAG_SYNC_SPACE_ID=0198f2f5-a5a3-7000-8000-000000000002',
-    '-e',
     `RAG_SYNC_DOCMOST_BASE_URL=http://host.docker.internal:${port}`,
     '-e',
     `RAG_SYNC_DOCMOST_API_KEY=${docmostToken}`,
     '-e',
-    `RAG_SYNC_OPEN_WEBUI_BASE_URL=http://host.docker.internal:${port}`,
-    '-e',
     `RAG_SYNC_OPEN_WEBUI_API_KEY=${openWebUiToken}`,
-    '-e',
-    'RAG_SYNC_KNOWLEDGE_ID=knowledge-ci',
     image,
   ]);
 
@@ -197,6 +189,13 @@ function createMockServer(
     if (url.pathname === '/api/rag/scope') {
       sendJson(response, 200, {
         schemaVersion: 2,
+        workspaceId: '0198f2f5-a5a3-7000-8000-000000000001',
+        spaceId: '0198f2f5-a5a3-7000-8000-000000000002',
+        syncTarget: {
+          adapter: 'open-webui-knowledge-v1',
+          baseUrl: `http://host.docker.internal:${server.address().port}`,
+          knowledgeId: 'knowledge-ci',
+        },
         fingerprint: 'ci-scope',
         excludedPageIds: [],
       });

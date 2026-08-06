@@ -1,13 +1,14 @@
 import type { RagScope, RagSyncSourceType } from "@docmost/api-contract";
 
-export type RagSyncBinding = {
+export type RagSyncBindingConfig = {
   id: string;
-  workspaceId: string;
-  spaceId: string;
   docmostBaseUrl: string;
   docmostApiKey: string;
-  openWebUiBaseUrl: string;
   openWebUiApiKey: string;
+};
+
+export type RagSyncBinding = RagSyncBindingConfig & {
+  openWebUiBaseUrl: string;
   knowledgeId: string;
 };
 
@@ -18,7 +19,7 @@ export type RagSyncConfig = {
   requestTimeoutMs: number;
   processingTimeoutMs: number;
   maxAttachmentBytes: number;
-  bindings: RagSyncBinding[];
+  bindings: RagSyncBindingConfig[];
 };
 
 export type DocmostMetadata = {

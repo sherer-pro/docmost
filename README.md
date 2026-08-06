@@ -703,10 +703,13 @@ docker compose --profile rag-sync up -d --build
 
 Compose forwards only `RAG_SYNC_*` values to the writer, so unrelated Docmost
 secrets are not exposed to it. One writer container maps one Docmost space to
-one pre-created Open WebUI Knowledge Base. Add another service/container with
-its own environment for another mapping. API keys passed through environment
-variables are visible in Docker container metadata; protect access to the
-Docker daemon and never commit the populated `.env`.
+one pre-created Open WebUI Knowledge Base. The selected RAG key supplies the
+workspace and space scope plus the Open WebUI base URL and Knowledge Base ID
+through `/api/rag/scope`; configure the Open WebUI retrieval adapter in the
+space AI settings instead of duplicating those values in `.env`. Add another
+service/container with its own environment for another mapping. API keys
+passed through environment variables are visible in Docker container metadata;
+protect access to the Docker daemon and never commit the populated `.env`.
 
 Without the profile, `docker compose up -d --build` builds and starts only
 Docmost, PostgreSQL, and Redis. No Compose overlay is required.

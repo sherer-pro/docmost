@@ -5,13 +5,9 @@ import { loadConfig } from './config.js';
 const validEnvironment: NodeJS.ProcessEnv = {
   RAG_SYNC_REDIS_URL: 'redis://localhost:6379/1',
   RAG_SYNC_BINDING_ID: 'space-a',
-  RAG_SYNC_WORKSPACE_ID: '0198f2f5-a5a3-7000-8000-000000000001',
-  RAG_SYNC_SPACE_ID: '0198f2f5-a5a3-7000-8000-000000000002',
   RAG_SYNC_DOCMOST_BASE_URL: 'https://docmost.example',
   RAG_SYNC_DOCMOST_API_KEY: 'docmost-secret',
-  RAG_SYNC_OPEN_WEBUI_BASE_URL: 'https://open-webui.example',
   RAG_SYNC_OPEN_WEBUI_API_KEY: 'writer-secret',
-  RAG_SYNC_KNOWLEDGE_ID: 'knowledge-1',
 };
 
 describe('loadConfig', () => {
@@ -55,30 +51,14 @@ describe('loadConfig', () => {
     );
   });
 
-  it('rejects invalid identifiers and non-origin URLs', () => {
+  it('rejects a non-origin Docmost URL', () => {
     assert.throws(
       () =>
         loadConfig({
           ...validEnvironment,
-          RAG_SYNC_SPACE_ID: 'not-a-uuid',
+          RAG_SYNC_DOCMOST_BASE_URL: 'https://docmost.example/api',
         }),
-      /must be UUIDs/,
-    );
-    assert.throws(
-      () =>
-        loadConfig({
-          ...validEnvironment,
-          RAG_SYNC_KNOWLEDGE_ID: 'invalid/id',
-        }),
-      /RAG_SYNC_KNOWLEDGE_ID is invalid/,
-    );
-    assert.throws(
-      () =>
-        loadConfig({
-          ...validEnvironment,
-          RAG_SYNC_OPEN_WEBUI_BASE_URL: 'https://open-webui.example/api',
-        }),
-      /RAG_SYNC_OPEN_WEBUI_BASE_URL must be a credential-free HTTP\(S\) origin/,
+      /RAG_SYNC_DOCMOST_BASE_URL must be a credential-free HTTP\(S\) origin/,
     );
   });
 
