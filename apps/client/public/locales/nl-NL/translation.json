@@ -2042,6 +2042,7 @@
       "deploymentDisabled": "{{count}} opgeslagen mogelijkheden zijn uitgeschakeld door implementatie-instellingen. Ze blijven geconfigureerd en keren terug na inschakeling.",
       "loadFailed": "Het beleid voor ingebouwde tools kon niet worden geladen.",
       "saved": "Beleid voor ingebouwde tools opgeslagen.",
+      "copyCapabilityIdentifier": "Technische mogelijkheid-ID kopiëren: {{capability}}",
       "tool": {
         "search": "Zoeken",
         "getTree": "Paginaboom bekijken",

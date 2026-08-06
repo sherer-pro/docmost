@@ -2042,6 +2042,7 @@
       "deploymentDisabled": "저장된 기능 {{count}}개가 배포 설정으로 비활성화되었습니다. 설정은 유지되며 활성화하면 다시 사용할 수 있습니다.",
       "loadFailed": "내장 도구 정책을 불러올 수 없습니다.",
       "saved": "내장 도구 정책을 저장했습니다.",
+      "copyCapabilityIdentifier": "기능 기술 식별자 복사: {{capability}}",
       "tool": {
         "search": "검색",
         "getTree": "페이지 트리 보기",

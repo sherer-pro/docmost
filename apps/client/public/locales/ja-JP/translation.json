@@ -2042,6 +2042,7 @@
       "deploymentDisabled": "保存済みの {{count}} 件の機能がデプロイ設定で無効になっています。設定は保持され、有効化すると復元されます。",
       "loadFailed": "組み込みツールポリシーを読み込めませんでした。",
       "saved": "組み込みツールポリシーを保存しました。",
+      "copyCapabilityIdentifier": "機能の技術識別子をコピー: {{capability}}",
       "tool": {
         "search": "検索",
         "getTree": "ページツリーを表示",

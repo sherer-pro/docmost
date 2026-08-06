@@ -2042,6 +2042,7 @@
       "deploymentDisabled": "有 {{count}} 项已保存能力被部署设置禁用。配置会保留，并在启用后恢复。",
       "loadFailed": "无法加载内置工具策略。",
       "saved": "已保存内置工具策略。",
+      "copyCapabilityIdentifier": "复制功能的技术标识符：{{capability}}",
       "tool": {
         "search": "搜索",
         "getTree": "查看页面树",

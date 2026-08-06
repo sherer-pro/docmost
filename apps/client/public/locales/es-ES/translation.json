@@ -2042,6 +2042,7 @@
       "deploymentDisabled": "{{count}} capacidades guardadas están desactivadas por la configuración del despliegue. Permanecen configuradas y volverán al activarlas.",
       "loadFailed": "No se pudo cargar la política de herramientas integradas.",
       "saved": "Política de herramientas integradas guardada.",
+      "copyCapabilityIdentifier": "Copiar identificador técnico de capacidad: {{capability}}",
       "tool": {
         "search": "Buscar",
         "getTree": "Ver árbol de páginas",
