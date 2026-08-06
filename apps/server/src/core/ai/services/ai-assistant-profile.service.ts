@@ -61,6 +61,7 @@ import { AiBuiltinToolPolicyService } from '../tools/ai-builtin-tool-policy.serv
 import { AiConfigService } from './ai-config.service';
 import { AiOperationalMetricsService } from './ai-operational-metrics.service';
 import { OpenAiCompatibleProviderService } from './openai-compatible-provider.service';
+import { postgresJsonb } from '../utils/postgres-jsonb.util';
 
 type Db = KyselyDB | KyselyTransaction;
 
@@ -89,10 +90,6 @@ type VerificationParts = {
   effectiveBuiltinCapabilities: AiBuiltinToolCapability[];
   externalToolCount: number;
 };
-
-function jsonb(value: unknown) {
-  return sql`${JSON.stringify(value)}::jsonb`;
-}
 
 function canonical(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonical);
@@ -291,11 +288,11 @@ export class AiAssistantProfileService {
             quickCommands:
               values.quickCommands === null
                 ? null
-                : (jsonb(values.quickCommands) as never),
+                : (postgresJsonb(values.quickCommands) as never),
             chatModelOverride: values.chatModelOverride,
             temperatureOverride: values.temperatureOverride,
             maxOutputTokensOverride: values.maxOutputTokensOverride,
-            allowedBuiltinCapabilities: jsonb(
+            allowedBuiltinCapabilities: postgresJsonb(
               values.allowedBuiltinCapabilities,
             ) as never,
             autoStart: values.autoStart,
@@ -361,11 +358,11 @@ export class AiAssistantProfileService {
             quickCommands:
               values.quickCommands === null
                 ? null
-                : (jsonb(values.quickCommands) as never),
+                : (postgresJsonb(values.quickCommands) as never),
             chatModelOverride: values.chatModelOverride,
             temperatureOverride: values.temperatureOverride,
             maxOutputTokensOverride: values.maxOutputTokensOverride,
-            allowedBuiltinCapabilities: jsonb(
+            allowedBuiltinCapabilities: postgresJsonb(
               values.allowedBuiltinCapabilities,
             ) as never,
             autoStart: values.autoStart,
@@ -1372,7 +1369,7 @@ export class AiAssistantProfileService {
             allowedBuiltinCapabilities:
               policy.allowedBuiltinCapabilities === null
                 ? null
-                : (jsonb(policy.allowedBuiltinCapabilities) as never),
+                : (postgresJsonb(policy.allowedBuiltinCapabilities) as never),
             createdById: userId,
           })),
         )
