@@ -8,15 +8,17 @@ import {
   PostgresIntrospector,
   PostgresQueryCompiler,
 } from 'kysely';
-import { RagService } from './rag.service';
+import { RagContentExportService as RagService } from './rag-content-export.service';
 
 class TestPostgresDialect {
+  constructor(private readonly driver: any = new DummyDriver()) {}
+
   createAdapter() {
     return new PostgresAdapter();
   }
 
   createDriver() {
-    return new DummyDriver();
+    return this.driver;
   }
 
   createIntrospector(db: Kysely<any>) {
@@ -27,6 +29,117 @@ class TestPostgresDialect {
     return new PostgresQueryCompiler();
   }
 }
+
+type MicrosecondAttachmentRow = {
+  id: string;
+  updatedAtMicroseconds: number;
+};
+
+class MicrosecondAttachmentDriver extends DummyDriver {
+  private cursor: { timestampMs: number; id: string } | null = null;
+
+  constructor(private readonly sourceRows: MicrosecondAttachmentRow[]) {
+    super();
+  }
+
+  setCursor(value?: string | null) {
+    this.cursor = value
+      ? (JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as {
+          timestampMs: number;
+          id: string;
+        })
+      : null;
+  }
+
+  override async acquireConnection() {
+    return {
+      executeQuery: async (query: any) => {
+        const usesMillisecondPrecision = query.sql.includes(
+          "date_trunc('milliseconds'",
+        );
+        const orderedRows = this.sourceRows
+          .filter((row) => {
+            if (!this.cursor) {
+              return true;
+            }
+            const timestamp = usesMillisecondPrecision
+              ? Math.floor(row.updatedAtMicroseconds / 1000)
+              : row.updatedAtMicroseconds;
+            const cursorTimestamp = usesMillisecondPrecision
+              ? this.cursor.timestampMs
+              : this.cursor.timestampMs * 1000;
+            return (
+              timestamp > cursorTimestamp ||
+              (timestamp === cursorTimestamp && row.id > this.cursor.id)
+            );
+          })
+          .sort((left, right) => {
+            const leftTimestamp = usesMillisecondPrecision
+              ? Math.floor(left.updatedAtMicroseconds / 1000)
+              : left.updatedAtMicroseconds;
+            const rightTimestamp = usesMillisecondPrecision
+              ? Math.floor(right.updatedAtMicroseconds / 1000)
+              : right.updatedAtMicroseconds;
+            return (
+              leftTimestamp - rightTimestamp || left.id.localeCompare(right.id)
+            );
+          });
+        const queryLimit = [...query.parameters]
+          .reverse()
+          .find((parameter) => Number.isSafeInteger(parameter));
+        const rows = orderedRows
+          .slice(0, typeof queryLimit === 'number' ? queryLimit : undefined)
+          .map((row) => {
+            const updatedAt = new Date(
+              Math.floor(row.updatedAtMicroseconds / 1000),
+            );
+            return {
+              id: row.id,
+              file_name: `${row.id}.txt`,
+              file_size: 1,
+              file_ext: 'txt',
+              mime_type: 'text/plain',
+              page_id: 'page-1',
+              space_id: 'space-1',
+              created_at: updatedAt,
+              updated_at: updatedAt,
+            };
+          });
+        return { rows };
+      },
+      async *streamQuery() {},
+    } as any;
+  }
+}
+
+const createService = (db: Kysely<any>) =>
+  new RagService(
+    db as any,
+    {} as any,
+    {} as any,
+    {} as any,
+    {} as any,
+    {} as any,
+    {} as any,
+    {} as any,
+    // Page access rules are not the subject of these pagination tests.
+    {
+      getSidebarAccessSnapshot: async () => ({
+        readablePageIds: new Set<string>(['page-1']),
+        visiblePageIds: { has: () => true } as unknown as Set<string>,
+        writablePageIds: { has: () => true } as unknown as Set<string>,
+      }),
+    } as any,
+    {
+      getExcludedPageIds: async () => new Set<string>(),
+    } as any,
+  );
+
+const feedCursor = (kind: string, timestampMs = 1000, id = 'page-0') =>
+  Buffer.from(
+    JSON.stringify({ version: 1, kind, timestampMs, id }),
+    'utf8',
+  ).toString('base64url');
 
 describe('RagService getUpdates SQL generation', () => {
   let queries: string[] = [];
@@ -41,27 +154,7 @@ describe('RagService getUpdates SQL generation', () => {
     },
   });
 
-  const service = new RagService(
-    db as any,
-    {} as any,
-    {} as any,
-    {} as any,
-    {} as any,
-    {} as any,
-    {} as any,
-    {} as any,
-    // Page access rules are not the subject of this SQL-shape test.
-    {
-      getSidebarAccessSnapshot: async () => ({
-        readablePageIds: new Set<string>(['page-1']),
-        visiblePageIds: { has: () => true } as unknown as Set<string>,
-        writablePageIds: { has: () => true } as unknown as Set<string>,
-      }),
-    } as any,
-    {
-      getExcludedPageIds: async () => new Set<string>(),
-    } as any,
-  );
+  const service = createService(db);
 
   const scope = {
     user: { id: 'user-1' },
@@ -110,16 +203,16 @@ describe('RagService getUpdates SQL generation', () => {
   it('pushes paginated update limits into both SQL streams', async () => {
     await service.getUpdates(scope, 0, { limit: 500 });
 
-    const pageQuery = queries.find((query) =>
-      query.includes('from "pages"'),
-    );
-    const databaseQuery = queries.find((query) =>
-      query.includes('GREATEST('),
-    );
+    const pageQuery = queries.find((query) => query.includes('from "pages"'));
+    const databaseQuery = queries.find((query) => query.includes('GREATEST('));
 
-    expect(pageQuery).toContain('order by "pages"."updated_at" asc');
+    expect(pageQuery).toContain(
+      'order by date_trunc(\'milliseconds\', "pages"."updated_at") asc',
+    );
     expect(pageQuery).toContain('limit $');
-    expect(databaseQuery).toContain('order by GREATEST(');
+    expect(databaseQuery).toContain(
+      "order by date_trunc('milliseconds', GREATEST(",
+    );
     expect(databaseQuery).toContain('limit $');
   });
 
@@ -129,15 +222,18 @@ describe('RagService getUpdates SQL generation', () => {
     await service.getAttachmentDeleted(scope, 0, { limit: 500 });
 
     const deletedQueries = queries.filter(
-      (query) =>
-        query.includes('deleted_at') || query.includes('archived_at'),
+      (query) => query.includes('deleted_at') || query.includes('archived_at'),
     );
-    expect(deletedQueries.filter((query) => query.includes('limit $')).length).toBeGreaterThanOrEqual(5);
+    expect(
+      deletedQueries.filter((query) => query.includes('limit $')).length,
+    ).toBeGreaterThanOrEqual(5);
     expect(
       queries.some(
         (query) =>
           query.includes('from "attachments"') &&
-          query.includes('order by "updated_at" asc') &&
+          query.includes(
+            'order by date_trunc(\'milliseconds\', "updated_at") asc',
+          ) &&
           query.includes('limit $'),
       ),
     ).toBe(true);
@@ -150,7 +246,9 @@ describe('RagService getUpdates SQL generation', () => {
       queries.some(
         (query) =>
           query.includes('from "pages"') &&
-          query.includes('order by "pages"."updated_at" asc') &&
+          query.includes(
+            'order by date_trunc(\'milliseconds\', "pages"."updated_at") asc',
+          ) &&
           query.includes('limit $'),
       ),
     ).toBe(true);
@@ -158,10 +256,84 @@ describe('RagService getUpdates SQL generation', () => {
       queries.some(
         (query) =>
           query.includes('from "databases"') &&
-          query.includes('order by "databases"."updated_at" asc') &&
+          query.includes(
+            'order by date_trunc(\'milliseconds\', "databases"."updated_at") asc',
+          ) &&
           query.includes('limit $'),
       ),
     ).toBe(true);
+  });
+
+  it('uses encoded-cursor millisecond precision in every feed SQL stream', async () => {
+    await service.listPages(scope, false, {
+      limit: 1,
+      cursor: feedCursor('pages'),
+    });
+    await service.getUpdates(scope, 0, {
+      limit: 1,
+      cursor: feedCursor('updates'),
+    });
+    await service.getDeleted(scope, 0, {
+      limit: 1,
+      cursor: feedCursor('deleted'),
+    });
+    await service.getAttachmentUpdates(scope, 0, {
+      limit: 1,
+      cursor: feedCursor('attachment-updates'),
+    });
+    await service.getAttachmentDeleted(scope, 0, {
+      limit: 1,
+      cursor: feedCursor('attachment-deleted'),
+    });
+
+    const boundedFeedQueries = queries.filter((query) =>
+      query.includes('limit $'),
+    );
+    expect(boundedFeedQueries).toHaveLength(9);
+    for (const query of boundedFeedQueries) {
+      expect(
+        query.match(/date_trunc\('milliseconds'/g)?.length ?? 0,
+      ).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it('does not skip sub-millisecond rows or report a false end of feed', async () => {
+    const baseTimestampMs = Date.UTC(2026, 0, 1);
+    const driver = new MicrosecondAttachmentDriver([
+      { id: 'a', updatedAtMicroseconds: baseTimestampMs * 1000 + 100 },
+      { id: 'b', updatedAtMicroseconds: baseTimestampMs * 1000 + 200 },
+      { id: 'c', updatedAtMicroseconds: baseTimestampMs * 1000 + 900 },
+      { id: 'd', updatedAtMicroseconds: (baseTimestampMs + 1) * 1000 + 100 },
+    ]);
+    const pagedDb = new Kysely<any>({
+      dialect: new TestPostgresDialect(driver) as any,
+      plugins: [new CamelCasePlugin()],
+    });
+    const pagedService = createService(pagedDb);
+    const ids: string[] = [];
+    const hasMore: boolean[] = [];
+    let cursor: string | null = null;
+
+    try {
+      for (let pageNumber = 0; pageNumber < 10; pageNumber += 1) {
+        driver.setCursor(cursor);
+        const page = await pagedService.getAttachmentUpdates(scope, 0, {
+          limit: 1,
+          ...(cursor ? { cursor } : {}),
+        });
+        ids.push(...page.items.map((item) => item.id));
+        hasMore.push(page.hasMore);
+        cursor = page.nextCursor;
+        if (!page.hasMore) {
+          break;
+        }
+      }
+    } finally {
+      await pagedDb.destroy();
+    }
+
+    expect(ids).toEqual(['a', 'b', 'c', 'd']);
+    expect(hasMore).toEqual([true, true, true, false]);
   });
 
   it('uses timestamp and id as an opaque pagination tie-breaker', () => {

@@ -3,13 +3,17 @@ import { Readable } from 'stream';
 export interface StorageDriver {
   upload(filePath: string, file: Buffer | Readable): Promise<void>;
 
-  uploadStream(filePath: string, file: Readable, options?: { recreateClient?: boolean }): Promise<void>;
+  uploadStream(
+    filePath: string,
+    file: Readable,
+    options?: { recreateClient?: boolean },
+  ): Promise<void>;
 
   copy(fromFilePath: string, toFilePath: string): Promise<void>;
 
   read(filePath: string): Promise<Buffer>;
 
-  readStream(filePath: string): Promise<Readable>;
+  readStream(filePath: string, signal?: AbortSignal): Promise<Readable>;
 
   readRangeStream(
     filePath: string,

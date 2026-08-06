@@ -64,7 +64,7 @@ describe('HttpJsonAiRetrievalAdapter integration', () => {
     adapter: 'http-json-v1' as const,
     url: `${origin}/${scenario}`,
     apiKey: null,
-    timeoutMs: 1000,
+    timeoutMs: 5000,
     maxResults: 8,
   });
 

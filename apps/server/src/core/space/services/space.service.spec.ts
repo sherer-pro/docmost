@@ -20,9 +20,16 @@ describe('SpaceService', () => {
     archiveSpace: jest.Mock;
     unarchiveSpace: jest.Mock;
     findById: jest.Mock;
+    deleteSpace: jest.Mock;
   };
   let workspaceRepo: { findById: jest.Mock };
   let shareRepo: { deleteBySpaceId: jest.Mock };
+  let ragBindingQuery: {
+    select: jest.Mock;
+    where: jest.Mock;
+    executeTakeFirst: jest.Mock;
+  };
+  let attachmentQueue: { add: jest.Mock };
 
   beforeEach(async () => {
     spaceRepo = {
@@ -33,13 +40,23 @@ describe('SpaceService', () => {
       archiveSpace: jest.fn(),
       unarchiveSpace: jest.fn(),
       findById: jest.fn(),
+      deleteSpace: jest.fn(),
     };
     workspaceRepo = { findById: jest.fn() };
     shareRepo = { deleteBySpaceId: jest.fn() };
+    ragBindingQuery = {
+      select: jest.fn(),
+      where: jest.fn(),
+      executeTakeFirst: jest.fn().mockResolvedValue(undefined),
+    };
+    ragBindingQuery.select.mockReturnValue(ragBindingQuery);
+    ragBindingQuery.where.mockReturnValue(ragBindingQuery);
+    attachmentQueue = { add: jest.fn() };
     const db = {
       transaction: jest.fn(() => ({
         execute: (callback: (trx: unknown) => unknown) => callback({}),
       })),
+      selectFrom: jest.fn().mockReturnValue(ragBindingQuery),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -52,7 +69,10 @@ describe('SpaceService', () => {
         SpacePolicyService,
         { provide: SsoEndpointPolicyService, useValue: {} },
         { provide: 'KyselyModuleConnectionToken', useValue: db },
-        { provide: getQueueToken(QueueName.ATTACHMENT_QUEUE), useValue: {} },
+        {
+          provide: getQueueToken(QueueName.ATTACHMENT_QUEUE),
+          useValue: attachmentQueue,
+        },
       ],
     }).compile();
 
@@ -147,6 +167,39 @@ describe('SpaceService', () => {
     await expect(
       service.archiveSpace('space-1', 'workspace-1'),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('blocks deleting a space until RAG Sync cleanup is complete', async () => {
+    spaceRepo.findById.mockResolvedValue({
+      id: 'space-1',
+      workspaceId: 'workspace-1',
+    });
+    ragBindingQuery.executeTakeFirst.mockResolvedValue({ id: 'binding-1' });
+
+    await expect(
+      service.deleteSpace('space-1', 'workspace-1'),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({ code: 'rag_sync_cleanup_required' }),
+    });
+    expect(spaceRepo.deleteSpace).not.toHaveBeenCalled();
+  });
+
+  it('deletes a space after its RAG Sync binding is clean', async () => {
+    const space = { id: 'space-1', workspaceId: 'workspace-1' };
+    spaceRepo.findById.mockResolvedValue(space);
+    ragBindingQuery.executeTakeFirst.mockResolvedValue(undefined);
+
+    await expect(
+      service.deleteSpace('space-1', 'workspace-1'),
+    ).resolves.toBeUndefined();
+    expect(spaceRepo.deleteSpace).toHaveBeenCalledWith(
+      'space-1',
+      'workspace-1',
+    );
+    expect(attachmentQueue.add).toHaveBeenCalledWith(
+      expect.anything(),
+      space,
+    );
   });
 
   it('rejects a space administrator transition that weakens MFA', async () => {

@@ -1,4 +1,4 @@
-import { RagService } from './rag.service';
+import { RagContentExportService as RagService } from './rag-content-export.service';
 
 class FakeQuery<T> {
   constructor(private readonly rows: T[]) {}
@@ -45,12 +45,22 @@ const scope = {
 function createService(options?: {
   readablePageIds?: string[];
   rows?: any[];
+  paginatedRows?: {
+    items: any[];
+    hasMore: boolean;
+    nextCursor: string | null;
+  };
   pages?: any[];
+  database?: any;
   deleted?: Record<string, any[]>;
   aiConfig?: Record<string, unknown>;
+  excludedPageIds?: string[];
 }) {
   const deleted = options?.deleted ?? {};
   const db = {
+    dynamic: {
+      ref: jest.fn((reference: string) => reference),
+    },
     selectFrom: jest.fn((table: string) => {
       if (table === 'aiSpaceConfigs') {
         return new FakeQuery(options?.aiConfig ? [options.aiConfig] : []);
@@ -63,6 +73,22 @@ function createService(options?: {
   };
   const databaseRowRepo = {
     findByDatabaseId: jest.fn().mockResolvedValue(options?.rows ?? []),
+    findByDatabaseIdPaginated: jest.fn().mockResolvedValue(
+      options?.paginatedRows ?? {
+        items: [],
+        hasMore: false,
+        nextCursor: null,
+      },
+    ),
+  };
+  const pageRepo = {
+    findById: jest.fn((id: string) =>
+      Promise.resolve(options?.pages?.find((page) => page.id === id)),
+    ),
+  };
+  const databaseRepo = {
+    findById: jest.fn().mockResolvedValue(options?.database ?? null),
+    findByPageId: jest.fn().mockResolvedValue(options?.database ?? null),
   };
   const pageAccess = {
     getSidebarAccessSnapshot: jest.fn().mockResolvedValue({
@@ -70,16 +96,19 @@ function createService(options?: {
     }),
   };
   const contentPolicy = {
-    getExcludedPageIds: jest.fn().mockResolvedValue(new Set<string>()),
+    getExcludedPageIds: jest
+      .fn()
+      .mockResolvedValue(new Set(options?.excludedPageIds ?? [])),
     getEffectivePolicy: jest.fn().mockResolvedValue({
       fingerprint: 'policy-fingerprint',
       excludedPageIds: [],
     }),
+    isPageExcluded: jest.fn().mockResolvedValue(false),
   };
   const service = new RagService(
     db as any,
-    {} as any,
-    {} as any,
+    pageRepo as any,
+    databaseRepo as any,
     {} as any,
     databaseRowRepo as any,
     {} as any,
@@ -88,7 +117,7 @@ function createService(options?: {
     pageAccess as any,
     contentPolicy as any,
   );
-  return { service, db };
+  return { service, db, databaseRowRepo };
 }
 
 describe('RagService security boundaries', () => {
@@ -131,6 +160,28 @@ describe('RagService security boundaries', () => {
     });
   });
 
+  it('uses every policy-allowed page for the internal system scope', async () => {
+    const { service } = createService({
+      readablePageIds: [],
+      pages: [{ id: 'page-allowed' }, { id: 'page-excluded' }],
+      excludedPageIds: ['page-excluded'],
+    });
+
+    const systemScope = {
+      accessMode: 'system' as const,
+      workspace: scope.workspace,
+      space: scope.space,
+    };
+
+    await expect(
+      service.getBlockedPages(systemScope, { limit: 10 }),
+    ).resolves.toEqual({
+      items: [{ pageId: 'page-excluded' }],
+      hasMore: false,
+      nextCursor: null,
+    });
+  });
+
   it('returns only opaque blocked page identifiers', async () => {
     const { service } = createService({
       readablePageIds: ['page-allowed'],
@@ -140,13 +191,13 @@ describe('RagService security boundaries', () => {
       ],
     });
 
-    await expect(service.getBlockedPages(scope, { limit: 10 })).resolves.toEqual(
-      {
-        items: [{ pageId: 'page-blocked' }],
-        hasMore: false,
-        nextCursor: null,
-      },
-    );
+    await expect(
+      service.getBlockedPages(scope, { limit: 10 }),
+    ).resolves.toEqual({
+      items: [{ pageId: 'page-blocked' }],
+      hasMore: false,
+      nextCursor: null,
+    });
   });
 
   it('filters database rows by the key creator page ACL before loading content', async () => {
@@ -188,6 +239,65 @@ describe('RagService security boundaries', () => {
     });
     expect(JSON.stringify(rows)).not.toContain('secret');
     expect(db.selectFrom).toHaveBeenCalledTimes(1);
+  });
+
+  it('loads internal database sync rows through a capped cursor page', async () => {
+    const databaseId = '11111111-1111-4111-8111-111111111111';
+    const row = {
+      id: 'row-1',
+      databaseId,
+      pageId: 'row-page-1',
+      pageTitle: 'Row',
+      cells: [],
+    };
+    const { service, databaseRowRepo } = createService({
+      database: {
+        id: databaseId,
+        pageId: 'database-page-1',
+        workspaceId: scope.workspace.id,
+        spaceId: scope.space.id,
+      },
+      paginatedRows: {
+        items: [row],
+        hasMore: true,
+        nextCursor: 'next-row-cursor',
+      },
+      pages: [
+        {
+          id: 'database-page-1',
+          spaceId: scope.space.id,
+          deletedAt: null,
+        },
+        {
+          id: 'row-page-1',
+          slugId: 'row',
+          title: 'Row',
+          content: null,
+        },
+      ],
+    });
+    const systemScope = {
+      accessMode: 'system' as const,
+      workspace: scope.workspace,
+      space: scope.space,
+    };
+
+    await expect(
+      service.getDatabaseSyncRowsPage(systemScope, databaseId, {
+        cursor: 'row-cursor',
+        limit: 500,
+      }),
+    ).resolves.toMatchObject({
+      items: [expect.objectContaining({ id: 'row-1' })],
+      hasMore: true,
+      nextCursor: 'next-row-cursor',
+    });
+    expect(databaseRowRepo.findByDatabaseIdPaginated).toHaveBeenCalledWith(
+      databaseId,
+      scope.workspace.id,
+      scope.space.id,
+      { cursor: 'row-cursor', limit: 100 },
+    );
   });
 
   it('returns deletion tombstones without user-controlled metadata', async () => {

@@ -70,6 +70,8 @@ import {
   PushSubscriptions,
   PushNotificationJobs,
   QueueOutbox,
+  RagSyncBindings,
+  RagSyncTargetClaims,
   JsonValue,
   PageAccessRules,
   SsoLoginStates,
@@ -170,6 +172,15 @@ export type AiAgentToolVerification = Selectable<AiAgentToolVerifications>;
 export type AiSpaceContentPolicyEntity = Selectable<AiSpaceContentPolicies>;
 export type AiSpaceContentExclusionEntity =
   Selectable<AiSpaceContentExclusions>;
+
+export type RagSyncBinding = Selectable<RagSyncBindings>;
+export type InsertableRagSyncBinding = Insertable<RagSyncBindings>;
+export type UpdatableRagSyncBinding = Updateable<Omit<RagSyncBindings, 'id'>>;
+export type RagSyncTargetClaim = Selectable<RagSyncTargetClaims>;
+export type InsertableRagSyncTargetClaim = Insertable<RagSyncTargetClaims>;
+export type UpdatableRagSyncTargetClaim = Updateable<
+  Omit<RagSyncTargetClaims, 'id'>
+>;
 
 // AI conversation
 export type AiConversation = Selectable<AiConversations>;

@@ -1,6 +1,6 @@
 jest.mock('lib0/decoding.js', () => ({ readVarString: jest.fn() }));
 
-import { RagService } from './rag.service';
+import { RagContentExportService as RagService } from './rag-content-export.service';
 
 describe('RagService AI role custom field', () => {
   const service = new RagService(

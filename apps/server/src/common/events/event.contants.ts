@@ -17,4 +17,5 @@ export enum EventName {
   WORKSPACE_MEMBER_DEACTIVATED = 'workspace.member.deactivated',
 
   AUTHORIZATION_CHANGED = 'authorization.changed',
+  RAG_SYNC_SCOPE_CHANGED = 'rag-sync.scope.changed',
 }

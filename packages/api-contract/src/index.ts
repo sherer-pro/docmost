@@ -9,5 +9,6 @@ export * from "./ai-profiles";
 export * from "./ai-external-mcp";
 export * from "./ai-tools";
 export * from "./rag";
+export * from "./rag-sync";
 export * from "./space-policy";
 export * from "./mermaid-sanitization-policy";

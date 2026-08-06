@@ -92,6 +92,54 @@ export class EnvironmentVariables {
   RAG_API_BULK_MAX_CONCURRENT: string;
 
   @IsOptional()
+  @IsIn(['true', 'false'])
+  RAG_SYNC_ENABLED: string;
+
+  @IsOptional()
+  @IsString()
+  RAG_SYNC_ALLOWED_ORIGINS: string;
+
+  @IsOptional()
+  @IsString()
+  RAG_SYNC_REDIS_PREFIX: string;
+
+  @IsOptional()
+  @Matches(/^\d+$/)
+  RAG_SYNC_POLL_INTERVAL_MS: string;
+
+  @IsOptional()
+  @Matches(/^\d+$/)
+  RAG_SYNC_DISCOVERY_INTERVAL_MS: string;
+
+  @IsOptional()
+  @Matches(/^\d+$/)
+  RAG_SYNC_MAX_CONCURRENT_BINDINGS: string;
+
+  @IsOptional()
+  @Matches(/^\d+$/)
+  RAG_SYNC_MAX_CONCURRENT_DOCUMENTS: string;
+
+  @IsOptional()
+  @Matches(/^\d+$/)
+  RAG_SYNC_REQUEST_TIMEOUT_MS: string;
+
+  @IsOptional()
+  @Matches(/^\d+$/)
+  RAG_SYNC_PROCESSING_TIMEOUT_MS: string;
+
+  @IsOptional()
+  @Matches(/^\d+$/)
+  RAG_SYNC_MAX_ATTACHMENT_BYTES: string;
+
+  @IsOptional()
+  @Matches(/^\d+$/)
+  RAG_SYNC_RECONCILE_INTERVAL_MS: string;
+
+  @IsOptional()
+  @Matches(/^\d+$/)
+  RAG_SYNC_SHUTDOWN_TIMEOUT_MS: string;
+
+  @IsOptional()
   @Matches(/^\d+$/)
   MCP_RATE_LIMIT_PER_MINUTE: string;
 

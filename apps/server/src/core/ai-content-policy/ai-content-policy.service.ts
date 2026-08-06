@@ -2,14 +2,17 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Optional,
 } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { InjectKysely } from 'nestjs-kysely';
 import { Kysely, sql } from 'kysely';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AiContextSource, AiSpaceContentPolicy } from '@docmost/api-contract';
 import { User, Workspace } from '@docmost/db/types/entity.types';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { MAX_PAGE_TREE_DEPTH } from '../../common/config/page-tree.constants';
+import { EventName } from '../../common/events/event.contants';
 import SpaceAbilityFactory from '../casl/abilities/space-ability.factory';
 import { SearchService } from '../search/search.service';
 import { WsGateway } from '../../ws/ws.gateway';
@@ -33,6 +36,7 @@ export class AiContentPolicyService {
     private readonly spaceAbility: SpaceAbilityFactory,
     private readonly searchService: SearchService,
     private readonly ws: WsGateway,
+    @Optional() private readonly eventEmitter?: EventEmitter2,
   ) {}
 
   async getEffectivePolicy(
@@ -236,6 +240,10 @@ export class AiContentPolicyService {
       spaceId,
       revision: updated.revision,
       fingerprint: updated.fingerprint,
+    });
+    this.eventEmitter?.emit(EventName.RAG_SYNC_SCOPE_CHANGED, {
+      workspaceId: workspace.id,
+      spaceId,
     });
     return this.getAdminPolicy(spaceId, user, workspace);
   }

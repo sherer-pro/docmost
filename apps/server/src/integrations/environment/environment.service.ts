@@ -213,20 +213,14 @@ export class EnvironmentService {
 
   getRagApiBulkMaxConcurrent(): number {
     return this.normalizePositiveInteger(
-      this.configService.get<string | number>(
-        'RAG_API_BULK_MAX_CONCURRENT',
-        2,
-      ),
+      this.configService.get<string | number>('RAG_API_BULK_MAX_CONCURRENT', 2),
       2,
     );
   }
 
   getMcpRateLimitPerMinute(): number {
     return this.normalizePositiveInteger(
-      this.configService.get<string | number>(
-        'MCP_RATE_LIMIT_PER_MINUTE',
-        60,
-      ),
+      this.configService.get<string | number>('MCP_RATE_LIMIT_PER_MINUTE', 60),
       60,
     );
   }

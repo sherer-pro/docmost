@@ -526,6 +526,36 @@ export interface AiSpaceContentPolicies {
   workspaceId: string;
 }
 
+export interface RagSyncBindings {
+  adapter: Generated<string>;
+  baseUrl: string | null;
+  cleanupRequired: Generated<boolean>;
+  configVersion: Generated<number>;
+  createdAt: Generated<Timestamp>;
+  createdById: string | null;
+  id: Generated<string>;
+  knowledgeId: string | null;
+  spaceId: string;
+  state: Generated<string>;
+  targetClaimId: string | null;
+  targetVersion: Generated<number>;
+  updatedAt: Generated<Timestamp>;
+  updatedById: string | null;
+  workspaceId: string;
+  writerApiKeyEncrypted: string | null;
+}
+
+export interface RagSyncTargetClaims {
+  bindingId: string;
+  createdAt: Generated<Timestamp>;
+  id: Generated<string>;
+  spaceId: string;
+  state: Generated<string>;
+  targetFingerprint: string;
+  updatedAt: Generated<Timestamp>;
+  workspaceId: string;
+}
+
 export interface ApiKeys {
   allowedCapabilities: Json | null;
   createdAt: Generated<Timestamp>;

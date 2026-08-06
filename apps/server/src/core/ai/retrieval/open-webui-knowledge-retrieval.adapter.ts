@@ -280,7 +280,7 @@ export class OpenWebUiKnowledgeRetrievalAdapter implements AiRetrievalAdapter {
     }
     const docmost = docmostValue as Record<string, unknown>;
     if (
-      docmost.schemaVersion !== 1 ||
+      ![1, 2].includes(Number(docmost.schemaVersion)) ||
       docmost.workspaceId !== request.workspaceId ||
       docmost.spaceId !== request.spaceId ||
       !['page', 'database_row', 'attachment'].includes(

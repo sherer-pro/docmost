@@ -94,13 +94,16 @@ export class LocalDriver implements StorageDriver {
     }
   }
 
-  async readStream(filePath: string): Promise<Readable> {
+  async readStream(filePath: string, signal?: AbortSignal): Promise<Readable> {
+    this.throwIfAborted(signal);
     try {
       const fullPath = this._fullPath(filePath);
       await this.assertReadableFile(fullPath);
+      this.throwIfAborted(signal);
 
       return createReadStream(fullPath);
     } catch (err) {
+      if (signal?.aborted) throw signal.reason ?? err;
       throw new Error(`Failed to read file: ${(err as Error).message}`);
     }
   }
@@ -167,5 +170,11 @@ export class LocalDriver implements StorageDriver {
     }
 
     await fs.access(fullPath, fsConstants.R_OK);
+  }
+
+  private throwIfAborted(signal?: AbortSignal): void {
+    if (signal?.aborted) {
+      throw signal.reason ?? new DOMException('Aborted', 'AbortError');
+    }
   }
 }

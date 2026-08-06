@@ -132,6 +132,7 @@ import { AiAssistantProfileService } from './services/ai-assistant-profile.servi
   ],
   exports: [
     AiConfigService,
+    AiOutboundUrlPolicyService,
     AiToolRegistryService,
     AiBuiltinToolPolicyService,
     AI_BUILTIN_TOOL_POLICY_RESOLVER,

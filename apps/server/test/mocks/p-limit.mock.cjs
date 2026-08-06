@@ -42,3 +42,7 @@ module.exports = function pLimit(concurrency) {
 
   return limit;
 };
+
+// TypeScript default imports access `.default` after Jest maps this ESM-only
+// package to the CommonJS test double.
+module.exports.default = module.exports;

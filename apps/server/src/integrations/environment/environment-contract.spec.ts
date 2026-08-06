@@ -21,6 +21,16 @@ function extractValidationKeys(source: string): string[] {
   ].sort();
 }
 
+function extractRuntimeKeys(source: string): string[] {
+  return [
+    ...new Set(
+      [...source.matchAll(/\benvironment\.([A-Z0-9_]+)/g)].map(
+        (match) => match[1],
+      ),
+    ),
+  ].sort();
+}
+
 describe('Environment contract consistency', () => {
   it('keeps EnvironmentService and EnvironmentVariables keys in sync', () => {
     const serviceSource = readFileSync(
@@ -32,7 +42,19 @@ describe('Environment contract consistency', () => {
       'utf8',
     );
 
-    const serviceKeys = extractServiceKeys(serviceSource);
+    const ragSyncRuntimeSource = readFileSync(
+      join(
+        __dirname,
+        '../../core/rag-sync/runtime/rag-sync-runtime.config.ts',
+      ),
+      'utf8',
+    );
+    const serviceKeys = [
+      ...new Set([
+        ...extractServiceKeys(serviceSource),
+        ...extractRuntimeKeys(ragSyncRuntimeSource),
+      ]),
+    ].sort();
     const validationKeys = extractValidationKeys(validationSource);
 
     const missingInValidation = serviceKeys.filter(
