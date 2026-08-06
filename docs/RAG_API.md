@@ -152,15 +152,31 @@ Returns the current effective indexing scope:
 ```json
 {
   "schemaVersion": 2,
+  "workspaceId": "<workspace-uuid>",
+  "spaceId": "<space-uuid>",
+  "syncTarget": {
+    "adapter": "open-webui-knowledge-v1",
+    "baseUrl": "https://open-webui.example",
+    "knowledgeId": "<knowledge-id>"
+  },
   "fingerprint": "<sha256>",
   "excludedPageIds": ["<page-uuid>"]
 }
 ```
 
-The fingerprint is based on both the effective content policy and the sorted
-set of pages currently readable by the key creator. ACL, group-membership,
-space-role, or exclusion changes therefore invalidate an external sync. The
-legacy `excludedPageIds` field remains for one compatibility transition.
+`workspaceId` and `spaceId` are resolved from the authenticated RAG key. A
+standalone writer should use these values as the authoritative indexing scope
+instead of duplicating them in deployment configuration.
+
+`syncTarget` contains the non-secret Open WebUI destination configured for the
+space in AI settings, or `null` when the space does not use the
+`open-webui-knowledge-v1` retrieval adapter. Credentials are never returned.
+
+The fingerprint is based on the workspace and space identifiers, the effective
+content policy, and the sorted set of pages currently readable by the key
+creator. A key-scope, ACL, group-membership, space-role, or exclusion change
+therefore invalidates an external sync. The legacy `excludedPageIds` field
+remains for one compatibility transition.
 
 ### 5.0.1 `GET /api/rag/scope/blocked`
 
@@ -427,15 +443,19 @@ Base maps to one Docmost space. The application:
 
 Configuration is loaded from the `RAG_SYNC_*` environment variables in the
 shared root `.env`; Compose forwards only that prefix to the writer. One writer
-process maps one Docmost space to one Knowledge Base. Docmost and Open WebUI
-writer keys are environment values and are therefore visible in Docker
-container metadata. A Knowledge Base must be created in advance; the worker
-never creates or deletes it.
+process maps one Docmost space to one Knowledge Base. The selected RAG key
+supplies the authoritative workspace and space identifiers plus the Open WebUI
+base URL and Knowledge Base ID through `/api/rag/scope`; they are not repeated
+in `.env`. Docmost and Open WebUI writer keys are environment values and are
+therefore visible in Docker container
+metadata. A Knowledge Base must be created in advance; the worker never creates
+or deletes it.
 
 ### 7.1 Initial sync
 
 1. Create API key scoped to the target `spaceId`.
-2. Call `GET /api/rag/scope` and store its fingerprint.
+2. Call `GET /api/rag/scope`, use its `workspaceId` and `spaceId` as the
+   authoritative scope, and store its fingerprint.
 3. Page through `GET /api/rag/pages?includeContent=true&limit=500`, following
    `nextCursor` until `hasMore=false`.
 4. For each document:

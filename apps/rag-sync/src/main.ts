@@ -7,6 +7,7 @@ import { DocmostClient, OpenWebUiClient } from './clients.js';
 import { RedisSyncStateStore } from './redis-state.js';
 import { RagSynchronizer } from './synchronizer.js';
 import { logCycleFailures } from './cycle-logging.js';
+import type { RagSyncBinding } from './types.js';
 
 for (const envPath of [
   resolve(dirname(fileURLToPath(import.meta.url)), '../../../.env'),
@@ -20,12 +21,29 @@ for (const envPath of [
 
 const { config, bindings } = loadConfig();
 const state = new RedisSyncStateStore(config.redisUrl, config.redisPrefix);
-const synchronizers = bindings.map(
-  (binding) =>
+const resolvedBindings = await Promise.all(
+  bindings.map(async (bindingConfig) => {
+    const docmost = new DocmostClient(bindingConfig, config.requestTimeoutMs);
+    const scope = await docmost.getScope();
+    if (!scope.syncTarget) {
+      throw new Error(
+        'The Docmost space selected by RAG_SYNC_DOCMOST_API_KEY has no Open WebUI Knowledge sync target; configure the open-webui-knowledge-v1 retrieval adapter in the space AI settings',
+      );
+    }
+    const binding: RagSyncBinding = {
+      ...bindingConfig,
+      openWebUiBaseUrl: scope.syncTarget.baseUrl,
+      knowledgeId: scope.syncTarget.knowledgeId,
+    };
+    return { binding, docmost };
+  }),
+);
+const synchronizers = resolvedBindings.map(
+  ({ binding, docmost }) =>
     new RagSynchronizer(
       binding,
       state,
-      new DocmostClient(binding, config.requestTimeoutMs),
+      docmost,
       new OpenWebUiClient(
         binding,
         config.requestTimeoutMs,

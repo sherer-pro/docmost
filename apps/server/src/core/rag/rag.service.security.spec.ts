@@ -30,6 +30,10 @@ class FakeQuery<T> {
   execute(): Promise<T[]> {
     return Promise.resolve(this.rows);
   }
+
+  executeTakeFirst(): Promise<T | undefined> {
+    return Promise.resolve(this.rows[0]);
+  }
 }
 
 const scope = {
@@ -43,10 +47,14 @@ function createService(options?: {
   rows?: any[];
   pages?: any[];
   deleted?: Record<string, any[]>;
+  aiConfig?: Record<string, unknown>;
 }) {
   const deleted = options?.deleted ?? {};
   const db = {
     selectFrom: jest.fn((table: string) => {
+      if (table === 'aiSpaceConfigs') {
+        return new FakeQuery(options?.aiConfig ? [options.aiConfig] : []);
+      }
       if (table === 'pages' && options?.pages) {
         return new FakeQuery(options.pages);
       }
@@ -84,15 +92,43 @@ function createService(options?: {
 }
 
 describe('RagService security boundaries', () => {
-  it('includes effective page access in the v2 scope fingerprint', async () => {
+  it('includes scope identity and effective page access in the v2 fingerprint', async () => {
     const first = createService({ readablePageIds: ['page-1'] });
     const second = createService({ readablePageIds: ['page-1', 'page-2'] });
 
     const firstScope = await first.service.getScope(scope);
     const secondScope = await second.service.getScope(scope);
+    const otherSpaceScope = await first.service.getScope({
+      ...scope,
+      space: { ...scope.space, id: 'space-2' },
+    });
 
-    expect(firstScope).toMatchObject({ schemaVersion: 2 });
+    expect(firstScope).toMatchObject({
+      schemaVersion: 2,
+      workspaceId: scope.workspace.id,
+      spaceId: scope.space.id,
+      syncTarget: null,
+    });
     expect(firstScope.fingerprint).not.toBe(secondScope.fingerprint);
+    expect(firstScope.fingerprint).not.toBe(otherSpaceScope.fingerprint);
+  });
+
+  it('returns the non-secret Open WebUI target configured for the space', async () => {
+    const { service } = createService({
+      aiConfig: {
+        retrievalAdapter: 'open-webui-knowledge-v1',
+        retrievalOpenWebuiBaseUrl: 'https://open-webui.example',
+        retrievalOpenWebuiKnowledgeId: 'knowledge-1',
+      },
+    });
+
+    await expect(service.getScope(scope)).resolves.toMatchObject({
+      syncTarget: {
+        adapter: 'open-webui-knowledge-v1',
+        baseUrl: 'https://open-webui.example',
+        knowledgeId: 'knowledge-1',
+      },
+    });
   });
 
   it('returns only opaque blocked page identifiers', async () => {

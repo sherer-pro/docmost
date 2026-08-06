@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import type { RagScope } from "@docmost/api-contract";
 import { RagSynchronizer, sourceIdentity } from "./synchronizer.js";
 import {
   OpenWebUiFileProcessingError,
@@ -15,13 +16,23 @@ import {
 
 const binding: RagSyncBinding = {
   id: "binding-1",
-  workspaceId: "0198f2f5-a5a3-7000-8000-000000000001",
-  spaceId: "0198f2f5-a5a3-7000-8000-000000000002",
   docmostBaseUrl: "https://docmost.example",
   docmostApiKey: "docmost-key",
   openWebUiBaseUrl: "https://open-webui.example",
   openWebUiApiKey: "writer-key",
   knowledgeId: "knowledge-1",
+};
+const scope: RagScope = {
+  schemaVersion: 2,
+  workspaceId: "0198f2f5-a5a3-7000-8000-000000000001",
+  spaceId: "0198f2f5-a5a3-7000-8000-000000000002",
+  syncTarget: {
+    adapter: "open-webui-knowledge-v1",
+    baseUrl: binding.openWebUiBaseUrl,
+    knowledgeId: binding.knowledgeId,
+  },
+  fingerprint: "scope-fingerprint",
+  excludedPageIds: [],
 };
 
 describe("RagSynchronizer", () => {
@@ -41,7 +52,7 @@ describe("RagSynchronizer", () => {
       (synchronizer as any).log("sync.completed", {
         durationMs: 20,
         bindingId: binding.id,
-        spaceId: binding.spaceId,
+        spaceId: scope.spaceId,
         fingerprint: "secret-fingerprint",
         sourceOutcomes: Object.fromEntries(
           (synchronizer as any).sourceOutcomes,
@@ -56,7 +67,7 @@ describe("RagSynchronizer", () => {
     assert.doesNotMatch(
       messages[0],
       new RegExp(
-        `${PAGE_ID}|${binding.id}|${binding.spaceId}|secret-fingerprint`,
+        `${PAGE_ID}|${binding.id}|${scope.spaceId}|secret-fingerprint`,
       ),
     );
   });
@@ -67,15 +78,15 @@ describe("RagSynchronizer", () => {
     const synchronizer = createSynchronizer(state, writer);
     const source = markdownSource("first");
 
-    assert.equal(await synchronizer.upsertSource(source), "uploaded");
+    assert.equal(await synchronizer.upsertSource(source, scope), "uploaded");
     assert.equal(writer.uploaded.length, 1);
     assert.deepEqual(writer.waited, ["file-1"]);
     assert.deepEqual(writer.deleted, []);
-    assert.equal(await synchronizer.upsertSource(source), "unchanged");
+    assert.equal(await synchronizer.upsertSource(source, scope), "unchanged");
     assert.equal(writer.uploaded.length, 1);
 
     const changed = markdownSource("second");
-    assert.equal(await synchronizer.upsertSource(changed), "uploaded");
+    assert.equal(await synchronizer.upsertSource(changed, scope), "uploaded");
     assert.equal(writer.uploaded.length, 2);
     assert.deepEqual(writer.deleted, ["file-1"]);
     assert.equal(
@@ -88,11 +99,11 @@ describe("RagSynchronizer", () => {
     const state = new MemoryState();
     const writer = new MemoryWriter();
     const synchronizer = createSynchronizer(state, writer);
-    await synchronizer.upsertSource(markdownSource("first"));
+    await synchronizer.upsertSource(markdownSource("first"), scope);
     writer.failProcessing = true;
 
     await assert.rejects(
-      synchronizer.upsertSource(markdownSource("changed")),
+      synchronizer.upsertSource(markdownSource("changed"), scope),
       /processing failed/,
     );
     assert.equal(
@@ -117,7 +128,7 @@ describe("RagSynchronizer", () => {
     };
 
     await assert.rejects(
-      synchronizer.upsertSource(markdownSource("first")),
+      synchronizer.upsertSource(markdownSource("first"), scope),
       /RAG sync lock was lost/,
     );
     assert.equal(writer.uploaded.length, 1);
@@ -153,7 +164,7 @@ describe("RagSynchronizer", () => {
     const activeLock = { valid: true, abortController };
     (synchronizer as any).activeLock = activeLock;
 
-    const pending = synchronizer.upsertSource(markdownSource("content"));
+    const pending = synchronizer.upsertSource(markdownSource("content"), scope);
     await started;
     activeLock.valid = false;
     abortController.abort(new Error("RAG sync lock was lost"));
@@ -177,7 +188,7 @@ describe("RagSynchronizer", () => {
     ];
     const synchronizer = createSynchronizer(state, writer);
 
-    await synchronizer.reconcileRemoteMappings();
+    await synchronizer.reconcileRemoteMappings(scope);
 
     assert.equal(
       (await state.getMapping(binding.id, sourceIdentity("page", PAGE_ID)))
@@ -198,7 +209,7 @@ describe("RagSynchronizer", () => {
     ];
     const synchronizer = createSynchronizer(state, writer);
 
-    await synchronizer.reconcileRemoteMappings();
+    await synchronizer.reconcileRemoteMappings(scope);
 
     assert.equal(
       await state.getMapping(binding.id, sourceIdentity("page", PAGE_ID)),
@@ -231,7 +242,7 @@ describe("RagSynchronizer", () => {
       slugId: "page",
       type: "page",
       title: "",
-      spaceId: binding.spaceId,
+      spaceId: scope.spaceId,
       databaseId: null,
       contentMarkdown: "",
       updatedAt: new Date(100).toISOString(),
@@ -278,7 +289,7 @@ describe("RagSynchronizer", () => {
       type: "database",
       name: "Database",
       title: "Database",
-      spaceId: binding.spaceId,
+      spaceId: scope.spaceId,
       updatedAt: new Date(100).toISOString(),
       knowledgeMarkdown: "Database summary",
       rows: [],
@@ -313,7 +324,7 @@ describe("RagSynchronizer", () => {
           mimeType: "image/png",
           fileSize: 3,
           pageId: PAGE_ID,
-          spaceId: binding.spaceId,
+          spaceId: scope.spaceId,
           createdAt: new Date(100).toISOString(),
           updatedAt: new Date(100).toISOString(),
           updatedAtMs: 100,
@@ -358,20 +369,23 @@ describe("RagSynchronizer", () => {
     });
     const synchronizer = createSynchronizer(state, writer);
 
-    await (synchronizer as any).processAttachment({
-      id: "attachment-id",
-      fileId: "attachment-id",
-      fileName: "archive.exe",
-      fileExt: ".exe",
-      mimeType: "application/octet-stream",
-      fileSize: 10,
-      pageId: PAGE_ID,
-      spaceId: binding.spaceId,
-      createdAt: new Date(100).toISOString(),
-      updatedAt: new Date(100).toISOString(),
-      updatedAtMs: 100,
-      downloadUrl: "/api/rag/attachments/attachment-id/archive.exe",
-    });
+    await (synchronizer as any).processAttachment(
+      {
+        id: "attachment-id",
+        fileId: "attachment-id",
+        fileName: "archive.exe",
+        fileExt: ".exe",
+        mimeType: "application/octet-stream",
+        fileSize: 10,
+        pageId: PAGE_ID,
+        spaceId: scope.spaceId,
+        createdAt: new Date(100).toISOString(),
+        updatedAt: new Date(100).toISOString(),
+        updatedAtMs: 100,
+        downloadUrl: "/api/rag/attachments/attachment-id/archive.exe",
+      },
+      scope,
+    );
 
     assert.deepEqual(writer.deleted, ["existing-file"]);
     assert.equal(await state.getMapping(binding.id, identity), null);
@@ -422,6 +436,9 @@ describe("RagSynchronizer", () => {
     const docmost = emptyDocmost();
     docmost.getScope = async () => ({
       schemaVersion: 2,
+      workspaceId: scope.workspaceId,
+      spaceId: scope.spaceId,
+      syncTarget: scope.syncTarget,
       fingerprint: "new-scope",
       excludedPageIds: [],
     });
@@ -463,6 +480,9 @@ describe("RagSynchronizer", () => {
     state.scopeFingerprint = "old-scope";
     const docmost = emptyDocmost();
     docmost.getScope = async () => ({
+      workspaceId: scope.workspaceId,
+      spaceId: scope.spaceId,
+      syncTarget: scope.syncTarget,
       fingerprint: "new-scope",
       excludedPageIds: [],
     });
@@ -480,6 +500,33 @@ describe("RagSynchronizer", () => {
 
     await assert.rejects(synchronizer.syncOnce(), /feed unavailable/);
     assert.equal(await state.getScopeFingerprint(binding.id), "old-scope");
+  });
+
+  it("stops writing when the Open WebUI destination changes", async () => {
+    const docmost = emptyDocmost();
+    docmost.getScope = async () => ({
+      ...scope,
+      syncTarget: {
+        ...scope.syncTarget!,
+        knowledgeId: "knowledge-2",
+      },
+    });
+    const writer = new MemoryWriter();
+    const synchronizer = new RagSynchronizer(
+      binding,
+      new MemoryState(),
+      docmost,
+      writer,
+      1024,
+      60_000,
+    );
+
+    await assert.rejects(
+      synchronizer.syncOnce(),
+      /Open WebUI sync target changed/,
+    );
+    assert.equal(writer.remoteFiles.length, 0);
+    assert.equal(writer.uploaded.length, 0);
   });
 
   it("does not mask the sync result when releasing the Redis lock fails", async () => {
@@ -532,8 +579,8 @@ function remoteFile(
       data: {
         docmost: {
           schemaVersion: 1,
-          workspaceId: binding.workspaceId,
-          spaceId: binding.spaceId,
+          workspaceId: scope.workspaceId,
+          spaceId: scope.spaceId,
           sourceType: "page",
           sourceId: PAGE_ID,
           pageId: PAGE_ID,
@@ -554,6 +601,9 @@ function emptyDocmost(): DocmostSourceClient {
   });
   return {
     getScope: async () => ({
+      workspaceId: scope.workspaceId,
+      spaceId: scope.spaceId,
+      syncTarget: scope.syncTarget,
       fingerprint: "empty-scope",
       excludedPageIds: [],
     }),

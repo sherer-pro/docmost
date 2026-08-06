@@ -6,7 +6,7 @@ import {
   type Server,
 } from 'node:http';
 import { afterEach, describe, it } from 'node:test';
-import { OpenWebUiClient } from './clients.js';
+import { DocmostClient, OpenWebUiClient } from './clients.js';
 import { BoundedHttpClient } from './http-client.js';
 import type { RagSyncBinding } from './types.js';
 
@@ -21,6 +21,87 @@ afterEach(async () => {
         }),
     ),
   );
+});
+
+describe('DocmostClient', () => {
+  it('reads the workspace and space scope carried by the RAG key', async () => {
+    const baseUrl = await startServer((request, response) => {
+      assert.equal(request.url, '/api/rag/scope');
+      assert.equal(request.headers.authorization, 'Bearer docmost-key');
+      response.setHeader('content-type', 'application/json');
+      response.end(
+        JSON.stringify({
+          schemaVersion: 2,
+          workspaceId: '0198f2f5-a5a3-7000-8000-000000000001',
+          spaceId: '0198f2f5-a5a3-7000-8000-000000000002',
+          syncTarget: {
+            adapter: 'open-webui-knowledge-v1',
+            baseUrl: 'https://open-webui.example',
+            knowledgeId: 'knowledge-1',
+          },
+          fingerprint: 'scope-fingerprint',
+          excludedPageIds: [],
+        }),
+      );
+    });
+    const client = new DocmostClient(
+      { ...binding('https://open-webui.example'), docmostBaseUrl: baseUrl },
+      5_000,
+    );
+
+    const scope = await client.getScope();
+
+    assert.equal(scope.workspaceId, '0198f2f5-a5a3-7000-8000-000000000001');
+    assert.equal(scope.spaceId, '0198f2f5-a5a3-7000-8000-000000000002');
+    assert.equal(scope.syncTarget?.knowledgeId, 'knowledge-1');
+  });
+
+  it('rejects a scope response that cannot identify the key scope', async () => {
+    const baseUrl = await startServer((_request, response) => {
+      response.setHeader('content-type', 'application/json');
+      response.end(
+        JSON.stringify({ fingerprint: 'legacy-scope', excludedPageIds: [] }),
+      );
+    });
+    const client = new DocmostClient(
+      { ...binding('https://open-webui.example'), docmostBaseUrl: baseUrl },
+      5_000,
+    );
+
+    await assert.rejects(
+      client.getScope(),
+      /scope response is missing workspaceId or spaceId/,
+    );
+  });
+
+  it('rejects an invalid Open WebUI sync target from Docmost', async () => {
+    const baseUrl = await startServer((_request, response) => {
+      response.setHeader('content-type', 'application/json');
+      response.end(
+        JSON.stringify({
+          schemaVersion: 2,
+          workspaceId: '0198f2f5-a5a3-7000-8000-000000000001',
+          spaceId: '0198f2f5-a5a3-7000-8000-000000000002',
+          syncTarget: {
+            adapter: 'open-webui-knowledge-v1',
+            baseUrl: 'https://open-webui.example/api',
+            knowledgeId: 'knowledge-1',
+          },
+          fingerprint: 'scope-fingerprint',
+          excludedPageIds: [],
+        }),
+      );
+    });
+    const client = new DocmostClient(
+      { ...binding('https://open-webui.example'), docmostBaseUrl: baseUrl },
+      5_000,
+    );
+
+    await assert.rejects(
+      client.getScope(),
+      /Docmost RAG scope response has an invalid syncTarget/,
+    );
+  });
 });
 
 describe('OpenWebUiClient', () => {
@@ -136,8 +217,6 @@ describe('BoundedHttpClient', () => {
 function binding(baseUrl: string): RagSyncBinding {
   return {
     id: 'binding-1',
-    workspaceId: '0198f2f5-a5a3-7000-8000-000000000001',
-    spaceId: '0198f2f5-a5a3-7000-8000-000000000002',
     docmostBaseUrl: 'https://docmost.example',
     docmostApiKey: 'docmost-key',
     openWebUiBaseUrl: baseUrl,

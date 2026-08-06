@@ -4,6 +4,7 @@ import type {
   RagDatabaseDetail,
   RagDeletedItem,
   RagPageDetail,
+  RagScope,
   RagUpdateItem,
 } from "@docmost/api-contract";
 import {
@@ -89,7 +90,8 @@ export class RagSynchronizer {
       const scope = await this.guarded((signal) =>
         this.docmost.getScope(signal),
       );
-      await this.reconcileRemoteMappings();
+      this.assertConfiguredSyncTarget(scope);
+      await this.reconcileRemoteMappings(scope);
       const previousScopeFingerprint = await this.guarded(() =>
         this.state.getScopeFingerprint(this.binding.id),
       );
@@ -97,6 +99,8 @@ export class RagSynchronizer {
         new TextEncoder().encode(
           JSON.stringify({
             schemaVersion: 2,
+            workspaceId: scope.workspaceId,
+            spaceId: scope.spaceId,
             serverScopeFingerprint: scope.fingerprint,
             maxAttachmentBytes: this.maxAttachmentBytes,
             supportedAttachmentExtensions: [
@@ -133,9 +137,9 @@ export class RagSynchronizer {
         );
         this.log("scope.purged", { count: purged });
       }
-      await this.processUpdateFeed();
+      await this.processUpdateFeed(scope);
       await this.processDeletedFeed();
-      await this.processAttachmentUpdateFeed();
+      await this.processAttachmentUpdateFeed(scope);
       await this.processAttachmentDeletedFeed();
       if (scopeChanged) {
         await this.guarded(() =>
@@ -172,7 +176,19 @@ export class RagSynchronizer {
     }
   }
 
-  async reconcileRemoteMappings(): Promise<void> {
+  private assertConfiguredSyncTarget(scope: RagScope): void {
+    if (
+      !scope.syncTarget ||
+      scope.syncTarget.baseUrl !== this.binding.openWebUiBaseUrl ||
+      scope.syncTarget.knowledgeId !== this.binding.knowledgeId
+    ) {
+      throw new Error(
+        "The Docmost Open WebUI sync target changed; restart RAG Sync",
+      );
+    }
+  }
+
+  async reconcileRemoteMappings(scope: RagScope): Promise<void> {
     const remoteFiles = await this.guarded((signal) =>
       this.openWebUi.listKnowledgeFiles(signal),
     );
@@ -182,7 +198,7 @@ export class RagSynchronizer {
       Array<{ file: OpenWebUiFile; metadata: DocmostMetadata }>
     >();
     for (const file of remoteFiles) {
-      const metadata = this.readRemoteMetadata(file);
+      const metadata = this.readRemoteMetadata(file, scope);
       if (!metadata) continue;
       if (file.data?.status === "failed") {
         await this.guarded((signal) =>
@@ -244,7 +260,10 @@ export class RagSynchronizer {
     }
   }
 
-  async upsertSource(source: SyncSource): Promise<"uploaded" | "unchanged"> {
+  async upsertSource(
+    source: SyncSource,
+    scope: RagScope,
+  ): Promise<"uploaded" | "unchanged"> {
     const contentHash = sha256(source.content);
     const existing = await this.guarded(() =>
       this.state.getMapping(this.binding.id, source.identity),
@@ -254,8 +273,8 @@ export class RagSynchronizer {
     }
     const metadata: DocmostMetadata = {
       schemaVersion: 1,
-      workspaceId: this.binding.workspaceId,
-      spaceId: this.binding.spaceId,
+      workspaceId: scope.workspaceId,
+      spaceId: scope.spaceId,
       sourceType: source.sourceType,
       sourceId: source.sourceId,
       pageId: source.pageId,
@@ -324,11 +343,11 @@ export class RagSynchronizer {
     this.log("source.deleted", { identity });
   }
 
-  private async processUpdateFeed(): Promise<void> {
+  private async processUpdateFeed(scope: RagScope): Promise<void> {
     await this.processFeed(
       "updates",
       (since, cursor, signal) => this.docmost.getUpdates(since, cursor, signal),
-      async (item) => this.processUpdate(item),
+      async (item) => this.processUpdate(item, scope),
       "maxUpdatedAtMs",
     );
   }
@@ -342,12 +361,12 @@ export class RagSynchronizer {
     );
   }
 
-  private async processAttachmentUpdateFeed(): Promise<void> {
+  private async processAttachmentUpdateFeed(scope: RagScope): Promise<void> {
     await this.processFeed(
       "attachment-updates",
       (since, cursor, signal) =>
         this.docmost.getAttachmentUpdates(since, cursor, signal),
-      async (item) => this.processAttachment(item),
+      async (item) => this.processAttachment(item, scope),
       "maxUpdatedAtMs",
     );
   }
@@ -411,7 +430,10 @@ export class RagSynchronizer {
     } while (cursor);
   }
 
-  private async processUpdate(item: RagUpdateItem): Promise<void> {
+  private async processUpdate(
+    item: RagUpdateItem,
+    scope: RagScope,
+  ): Promise<void> {
     if (item.type === "page") {
       const page = await this.guarded((signal) =>
         this.docmost.getPage(item.id, signal),
@@ -424,33 +446,37 @@ export class RagSynchronizer {
         });
         return;
       }
-      await this.upsertSource(pageToSource(page, item.updatedAtMs));
+      await this.upsertSource(pageToSource(page, item.updatedAtMs), scope);
       return;
     }
     const database = await this.guarded((signal) =>
       this.docmost.getDatabase(item.databaseId, signal),
     );
-    await this.upsertDatabase(database, item.updatedAtMs);
+    await this.upsertDatabase(database, item.updatedAtMs, scope);
   }
 
   private async upsertDatabase(
     database: RagDatabaseDetail,
     updatedAtMs: number,
+    scope: RagScope,
   ): Promise<void> {
     const pageContent = database.knowledgeMarkdown || database.title;
     const databasePageIdentity = sourceIdentity("page", database.id);
     try {
-      await this.upsertSource({
-        identity: databasePageIdentity,
-        sourceType: "page",
-        sourceId: database.id,
-        pageId: database.id,
-        databaseId: database.databaseId,
-        updatedAtMs,
-        fileName: safeFileName(database.title, database.id, ".md"),
-        mimeType: "text/markdown",
-        content: encodeMarkdown(`# ${database.title}\n\n${pageContent}`),
-      });
+      await this.upsertSource(
+        {
+          identity: databasePageIdentity,
+          sourceType: "page",
+          sourceId: database.id,
+          pageId: database.id,
+          databaseId: database.databaseId,
+          updatedAtMs,
+          fileName: safeFileName(database.title, database.id, ".md"),
+          mimeType: "text/markdown",
+          content: encodeMarkdown(`# ${database.title}\n\n${pageContent}`),
+        },
+        scope,
+      );
     } catch (error) {
       if (
         !(error instanceof OpenWebUiFileProcessingError) ||
@@ -483,17 +509,20 @@ export class RagSynchronizer {
       const markdown = [`# ${title}`, cells, row.rowMarkdown || ""]
         .filter(Boolean)
         .join("\n\n");
-      await this.upsertSource({
-        identity: sourceIdentity("database_row", row.id),
-        sourceType: "database_row",
-        sourceId: row.id,
-        pageId: row.pageId,
-        databaseId: database.databaseId,
-        updatedAtMs: dateToMs(row.updatedAt, updatedAtMs),
-        fileName: safeFileName(title, row.id, ".md"),
-        mimeType: "text/markdown",
-        content: encodeMarkdown(markdown),
-      });
+      await this.upsertSource(
+        {
+          identity: sourceIdentity("database_row", row.id),
+          sourceType: "database_row",
+          sourceId: row.id,
+          pageId: row.pageId,
+          databaseId: database.databaseId,
+          updatedAtMs: dateToMs(row.updatedAt, updatedAtMs),
+          fileName: safeFileName(title, row.id, ".md"),
+          mimeType: "text/markdown",
+          content: encodeMarkdown(markdown),
+        },
+        scope,
+      );
     }
     for (const mapping of await this.guarded(() =>
       this.state.listMappings(this.binding.id),
@@ -527,7 +556,10 @@ export class RagSynchronizer {
     }
   }
 
-  private async processAttachment(item: RagAttachmentItem): Promise<void> {
+  private async processAttachment(
+    item: RagAttachmentItem,
+    scope: RagScope,
+  ): Promise<void> {
     const extension = normalizeExtension(item.fileExt || item.fileName);
     const size = Number(item.fileSize);
     if (
@@ -548,16 +580,19 @@ export class RagSynchronizer {
     );
     const identity = sourceIdentity("attachment", item.id);
     try {
-      await this.upsertSource({
-        identity,
-        sourceType: "attachment",
-        sourceId: item.id,
-        pageId: item.pageId,
-        updatedAtMs: item.updatedAtMs,
-        fileName: safeFileName(item.fileName, item.id, extension),
-        mimeType: item.mimeType || "application/octet-stream",
-        content,
-      });
+      await this.upsertSource(
+        {
+          identity,
+          sourceType: "attachment",
+          sourceId: item.id,
+          pageId: item.pageId,
+          updatedAtMs: item.updatedAtMs,
+          fileName: safeFileName(item.fileName, item.id, extension),
+          mimeType: item.mimeType || "application/octet-stream",
+          content,
+        },
+        scope,
+      );
     } catch (error) {
       if (
         !(error instanceof OpenWebUiFileProcessingError) ||
@@ -598,7 +633,10 @@ export class RagSynchronizer {
     return blocked;
   }
 
-  private readRemoteMetadata(file: OpenWebUiFile): DocmostMetadata | null {
+  private readRemoteMetadata(
+    file: OpenWebUiFile,
+    scope: RagScope,
+  ): DocmostMetadata | null {
     const data = file.meta?.data;
     const candidate =
       data?.docmost && typeof data.docmost === "object"
@@ -607,8 +645,8 @@ export class RagSynchronizer {
     if (
       !candidate ||
       candidate.schemaVersion !== 1 ||
-      candidate.workspaceId !== this.binding.workspaceId ||
-      candidate.spaceId !== this.binding.spaceId ||
+      candidate.workspaceId !== scope.workspaceId ||
+      candidate.spaceId !== scope.spaceId ||
       !["page", "database_row", "attachment"].includes(
         String(candidate.sourceType),
       ) ||

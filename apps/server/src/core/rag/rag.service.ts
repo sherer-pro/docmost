@@ -87,17 +87,40 @@ export class RagService {
   }
 
   async getScope(scope: RagAuthContext) {
-    const [policy, readablePageIds] = await Promise.all([
+    const [policy, readablePageIds, aiConfig] = await Promise.all([
       this.contentPolicy.getEffectivePolicy(
         scope.space.id,
         scope.workspace.id,
       ),
       this.getReadablePageIds(scope),
+      this.db
+        .selectFrom('aiSpaceConfigs')
+        .select([
+          'retrievalAdapter',
+          'retrievalOpenWebuiBaseUrl',
+          'retrievalOpenWebuiKnowledgeId',
+        ])
+        .where('workspaceId', '=', scope.workspace.id)
+        .where('spaceId', '=', scope.space.id)
+        .executeTakeFirst(),
     ]);
+    const syncTarget =
+      aiConfig?.retrievalAdapter === 'open-webui-knowledge-v1' &&
+      aiConfig.retrievalOpenWebuiBaseUrl &&
+      aiConfig.retrievalOpenWebuiKnowledgeId
+        ? {
+            adapter: 'open-webui-knowledge-v1' as const,
+            baseUrl: aiConfig.retrievalOpenWebuiBaseUrl,
+            knowledgeId: aiConfig.retrievalOpenWebuiKnowledgeId,
+          }
+        : null;
     const fingerprint = createHash('sha256')
       .update(
         JSON.stringify({
           schemaVersion: 2,
+          workspaceId: scope.workspace.id,
+          spaceId: scope.space.id,
+          syncTarget,
           policyFingerprint: policy.fingerprint,
           readablePageIds: [...readablePageIds].sort(),
         }),
@@ -105,6 +128,9 @@ export class RagService {
       .digest('hex');
     return {
       schemaVersion: 2 as const,
+      workspaceId: scope.workspace.id,
+      spaceId: scope.space.id,
+      syncTarget,
       fingerprint,
       excludedPageIds: policy.excludedPageIds,
     };

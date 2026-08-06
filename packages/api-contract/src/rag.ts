@@ -1,8 +1,17 @@
 export type RagDocumentType = "page" | "database" | "databaseRow";
 export type RagSyncSourceType = "page" | "database_row" | "attachment";
 
+export interface RagSyncTarget {
+  adapter: "open-webui-knowledge-v1";
+  baseUrl: string;
+  knowledgeId: string;
+}
+
 export interface RagScope {
   schemaVersion?: 1 | 2;
+  workspaceId: string;
+  spaceId: string;
+  syncTarget: RagSyncTarget | null;
   fingerprint: string;
   excludedPageIds: string[];
 }

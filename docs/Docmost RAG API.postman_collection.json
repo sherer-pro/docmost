@@ -163,7 +163,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["rag", "scope"]
             },
-            "description": "Returns the effective AI/RAG exclusion fingerprint and excluded backing page ids."
+            "description": "Returns the workspace and space resolved from the RAG key, the non-secret Open WebUI sync target configured in space AI settings, and the effective AI/RAG exclusion fingerprint and excluded backing page ids."
           },
           "response": []
         },
