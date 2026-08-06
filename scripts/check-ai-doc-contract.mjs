@@ -46,6 +46,14 @@ const criticalRoutes = [
   'POST /spaces/:spaceId/ai/config/actions/test-agent',
   'POST /spaces/:spaceId/ai/config/actions/test-retrieval',
   'GET /spaces/:spaceId/ai/status',
+  'GET /spaces/:spaceId/ai/rag-sync',
+  'PATCH /spaces/:spaceId/ai/rag-sync',
+  'POST /spaces/:spaceId/ai/rag-sync/actions/test',
+  'POST /spaces/:spaceId/ai/rag-sync/actions/enable',
+  'POST /spaces/:spaceId/ai/rag-sync/actions/disable',
+  'POST /spaces/:spaceId/ai/rag-sync/actions/retry-cleanup',
+  'POST /spaces/:spaceId/ai/rag-sync/actions/force-disable',
+  'POST /spaces/:spaceId/ai/rag-sync/actions/abandon-cleanup',
   'GET /ai/profile-policy',
   'PATCH /ai/profile-policy',
   'GET /ai/tool-policy',
@@ -60,6 +68,14 @@ const operatorCriticalRoutes = [
   'POST /spaces/:spaceId/ai/config/actions/test-agent',
   'POST /spaces/:spaceId/ai/config/actions/test-retrieval',
   'GET /spaces/:spaceId/ai/status',
+  'GET /spaces/:spaceId/ai/rag-sync',
+  'PATCH /spaces/:spaceId/ai/rag-sync',
+  'POST /spaces/:spaceId/ai/rag-sync/actions/test',
+  'POST /spaces/:spaceId/ai/rag-sync/actions/enable',
+  'POST /spaces/:spaceId/ai/rag-sync/actions/disable',
+  'POST /spaces/:spaceId/ai/rag-sync/actions/retry-cleanup',
+  'POST /spaces/:spaceId/ai/rag-sync/actions/force-disable',
+  'POST /spaces/:spaceId/ai/rag-sync/actions/abandon-cleanup',
 ];
 const migrationFiles = [
   '20260728T120000-ai-integration.ts',
@@ -75,6 +91,7 @@ const migrationFiles = [
   '20260804T120000-ai-citations.ts',
   '20260805T100000-ai-assistant-profiles.ts',
   '20260805T110000-ai-builtin-tool-policy.ts',
+  '20260806T090000-rag-sync-bindings.ts',
 ];
 
 const issues = [];

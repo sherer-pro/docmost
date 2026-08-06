@@ -81,7 +81,7 @@ async function setup() {
     headers: { "content-type": "application/json", origin: baseUrl.origin },
     body: JSON.stringify({
       name: "CI Admin",
-      email: `ci-${marker}@example.test`,
+      email: "ci-admin@example.test",
       password: "CI-smoke-password-123!",
       workspaceName: "CI Workspace",
       hostname: `ci${Date.now()}`,

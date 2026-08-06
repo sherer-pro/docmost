@@ -37,12 +37,13 @@ Thumbs.db
 # env / logs
 .env
 .env*
+# Never copy obsolete standalone-sync credentials/configuration into images.
 rag-sync.config.json
-secrets/
+/.rag-sync
 **/DOCMOST_RAG_KEY
 **/OPEN_WEBUI_KEY
+secrets/
 /graphify-out
-/.rag-sync
 *.log
 npm-debug.log*
 pnpm-debug.log*

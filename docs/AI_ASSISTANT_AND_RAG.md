@@ -53,23 +53,23 @@ queue is not a state store.
 
 The main components are:
 
-| Component                                | Responsibility                                                                        |
-| ---------------------------------------- | ------------------------------------------------------------------------------------- |
-| `AiConversationService`                  | private user conversations in page context, messages, and drafts                      |
+| Component                                | Responsibility                                                                              |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `AiConversationService`                  | private user conversations in page context, messages, and drafts                            |
 | `AiAssistantProfileService`              | space-owned profile CRUD, effective resolution, immutable snapshots, and Agent verification |
-| `AiContextService`                       | versioned conversation context and source-access validation                           |
-| `AiContentPolicyService`                 | shared space exclusions for AI context, editor actions, retrieval, and the RAG API    |
-| `AiRunService` / `AiRunExecutionService` | immutable attempts, limits, idempotency, execution, and streamed response persistence |
-| `AiPromptBuilderService`                 | bounded prompt assembly from history, context, files, and retrieval results           |
-| `AiCitationService`                      | source-marker registration, validation, normalization, and context fallback           |
-| `OpenAiCompatibleProviderService`        | requests and streaming against an OpenAI-compatible provider                          |
-| `AiRetrievalService`                     | safe query-time retrieval and reauthorization of returned sources                     |
-| `AiFileService`                          | uploads, text extraction, images, tombstone deletion, and chat-file cleanup           |
-| `AiAuxRunService`                        | auxiliary jobs for automatic conversation titles and editor-selection transforms      |
-| `AiToolRegistryService`                  | access-aware tools shared by agent mode and the read-only MCP surface                 |
-| `AiBuiltinToolPolicyService`             | deployment/workspace/space/key intersections and immutable Agent tool snapshots       |
-| `AiRunStepService`                       | initiator-only approval, safe Yjs application, history, and agent resumption          |
-| `McpController` / `McpApiKeyAuthGuard`   | stateless Streamable HTTP adapter and MCP-key-only authentication                     |
+| `AiContextService`                       | versioned conversation context and source-access validation                                 |
+| `AiContentPolicyService`                 | shared space exclusions for AI context, editor actions, retrieval, and the RAG API          |
+| `AiRunService` / `AiRunExecutionService` | immutable attempts, limits, idempotency, execution, and streamed response persistence       |
+| `AiPromptBuilderService`                 | bounded prompt assembly from history, context, files, and retrieval results                 |
+| `AiCitationService`                      | source-marker registration, validation, normalization, and context fallback                 |
+| `OpenAiCompatibleProviderService`        | requests and streaming against an OpenAI-compatible provider                                |
+| `AiRetrievalService`                     | safe query-time retrieval and reauthorization of returned sources                           |
+| `AiFileService`                          | uploads, text extraction, images, tombstone deletion, and chat-file cleanup                 |
+| `AiAuxRunService`                        | auxiliary jobs for automatic conversation titles and editor-selection transforms            |
+| `AiToolRegistryService`                  | access-aware tools shared by agent mode and the read-only MCP surface                       |
+| `AiBuiltinToolPolicyService`             | deployment/workspace/space/key intersections and immutable Agent tool snapshots             |
+| `AiRunStepService`                       | initiator-only approval, safe Yjs application, history, and agent resumption                |
+| `McpController` / `McpApiKeyAuthGuard`   | stateless Streamable HTTP adapter and MCP-key-only authentication                           |
 
 Execution uses `AI_CHAT_QUEUE`. BullMQ delivery is at least once, so a worker
 atomically claims a specific `ai_runs` row from `queued` to `running`; a
@@ -494,8 +494,10 @@ individually. Duplicate identities retain the highest score.
 | `http-json-v1`            | `url`, optional API key, timeout, and maxResults                 | versioned JSON `POST` to the configured URL; expects `{ items }`       |
 | `open-webui-knowledge-v1` | base URL, Open WebUI API key, `knowledgeId`, timeout, maxResults | validates the Knowledge Base and calls Open WebUI collection retrieval |
 
-`open-webui-knowledge-v1` accepts only documents with `docmost`
-`schemaVersion: 1` metadata and matching `workspaceId` and `spaceId`. External
+`open-webui-knowledge-v1` accepts only documents with supported `docmost`
+`schemaVersion: 1 | 2` metadata and matching `workspaceId` and `spaceId`. The
+built-in writer emits version 2; version 1 remains a read/cleanup compatibility
+format. External
 result types are `page`, `database_row`, and `attachment`. A `database` may be
 explicit context but is not an external retrieval result type. The adapter
 sends `hybrid: false`, so a broken external reranker does not disable normal
@@ -604,21 +606,19 @@ the key or lease identity.
 - RAG/MCP `429` responses include `Retry-After`; `503 api_key_limit_unavailable`
   means Redis admission is unavailable. Long-running exports retain their slots
   through lease renewal until the HTTP lifecycle finishes. A `503
-  api_key_limit_lease_lost`, or a connection close after response headers, means
+api_key_limit_lease_lost`, or a connection close after response headers, means
   the active lease could no longer be confirmed; retry only an idempotent read
   after Redis admission is healthy.
-- `apps/rag-sync` checkpoints advance only after a complete feed page. On lock
-  loss it stops before another mapping/checkpoint write, and Open WebUI polling
-  checks lock ownership between polls. A remote operation that finished during
-  lock loss is reconciled from `meta.data.docmost` during the next cycle.
-- If RAG Sync state is lost, keep the Knowledge Base, restore Redis, and start
-  the writer so it reconstructs mappings and removes duplicates. Revoke or
-  rotate the Docmost RAG key only after a successful final scope cycle; if the
-  key was revoked first, inaccessible Knowledge Base content requires manual
-  removal.
+- Built-in RAG Sync commits checkpoints and mappings only through lease-fenced
+  Redis operations. On lease loss it aborts remote polling and performs remote
+  reconciliation before retrying an uncertain upload.
+- If RAG Sync state is lost, keep the Knowledge Base, restore Redis, and let the
+  main Docmost process reconstruct mappings from versioned remote metadata.
+  Writer-key rotation is performed in the space UI and never requires a
+  deployment environment change.
 - Safe local diagnostics are `pnpm check:env`,
-  `pnpm routes:inventory:check`, the targeted server AI/RAG/MCP tests,
-  `pnpm rag-sync:test`, and the low-cardinality structured summaries. Never put
+  `pnpm routes:inventory:check`, the targeted server AI/RAG/MCP/RAG-Sync tests,
+  and the low-cardinality structured summaries. Never put
   prompts, document bodies, credentials, API-key IDs, source IDs, or
   credential-bearing URLs into diagnostic logs.
 
@@ -637,105 +637,144 @@ The migration files are the schema source of truth. This ledger records the
 data treatment and rollback boundary that operators need; feature sections
 above remain authoritative for runtime rollout switches and recovery behavior.
 
-| Migration | Authoritative change and data treatment | `down` impact |
-| --- | --- | --- |
-| [`20260728T120000-ai-integration.ts`](../apps/server/src/database/migrations/20260728T120000-ai-integration.ts) | Creates per-space provider/retrieval configuration, private conversations and messages, generation runs, chat files, and message-source snapshots. | Drops every core AI table and all stored AI configuration, conversations, attempts, files, and sources. |
-| [`20260729T120000-ai-reliability.ts`](../apps/server/src/database/migrations/20260729T120000-ai-reliability.ts) | Adds immutable attempt lineage, idempotency fingerprints, upload batches, and storage-cleanup state. Backfills each run's root, terminal response snapshot, assistant-message projection, and run-scoped message sources; the migration aborts if mandatory source/run links cannot be backfilled. | Removes lineage, response snapshots, upload-batch and cleanup metadata. Base conversation/message rows remain, but the added audit and retry state is lost. |
-| [`20260729T180000-ai-context-editor-actions.ts`](../apps/server/src/database/migrations/20260729T180000-ai-context-editor-actions.ts) | Enables the current document by default, marks existing non-empty titles as manual, and adds versioned conversation context, immutable run-context/source-dependency snapshots, and expiring auxiliary title/editor runs. | Drops context, dependency, and auxiliary-run tables and their conversation/run columns. Saved selections and auxiliary history are lost. |
-| [`20260729T220000-open-webui-rag.ts`](../apps/server/src/database/migrations/20260729T220000-open-webui-rag.ts) | Adds the `open-webui-knowledge-v1` retrieval configuration, encrypted credential storage, and attachment update/delete feed indexes. | Changes affected adapters to `none`, drops the Open WebUI URL, credential, and Knowledge ID columns, and removes the attachment indexes. |
-| [`20260729T230000-ai-reasoning.ts`](../apps/server/src/database/migrations/20260729T230000-ai-reasoning.ts) | Adds the per-space reasoning switch, streamed message reasoning, and immutable run reasoning snapshot. | Deletes stored reasoning values and the configuration switch. |
-| [`20260730T120000-ai-content-policy.ts`](../apps/server/src/database/migrations/20260730T120000-ai-content-policy.ts) | Adds space-scoped exclusion policies, descendant selection, prompt-history cutoffs, and bounded expanded context snapshots. Existing conversations default to no descendant expansion. | Deletes exclusion policy and descendant-selection data and removes the associated conversation/context columns. |
-| [`20260730T130000-ai-assistant-identity.ts`](../apps/server/src/database/migrations/20260730T130000-ai-assistant-identity.ts) | Adds optional assistant name and grammatical gender. Existing spaces remain disabled and use the masculine default until explicitly configured. | Deletes saved assistant identity settings. |
-| [`20260730T140000-ai-agent-mcp.ts`](../apps/server/src/database/migrations/20260730T140000-ai-agent-mcp.ts) | Adds Agent enablement/verification, conversation and run execution modes, durable tool/approval steps, and the authoritative `rag` or `mcp` API-key type. Existing keys default to `rag`. | Deletes tool-step and approval history, Agent state, and API-key type metadata; use runtime switches for operational rollback. |
-| [`20260730T150000-remove-legacy-ee-imports-and-ai-search.ts`](../apps/server/src/database/migrations/20260730T150000-remove-legacy-ee-imports-and-ai-search.ts) | Fails in-flight retired Confluence and DOCX imports, removes legacy workspace AI-search settings, and drops `page_embeddings`. | No-op: removed settings, embeddings, and prior in-flight task state are not restorable. |
-| [`20260803T120000-ai-external-mcp.ts`](../apps/server/src/database/migrations/20260803T120000-ai-external-mcp.ts) | Adds the disabled-by-default outbound MCP catalog, encrypted headers, layered workspace/space/group/user policy, run snapshots, and read-only external step provenance. | Drops the catalog, encrypted headers, policy/preferences, run snapshots, and external step metadata. Export configuration first; use `AI_EXTERNAL_MCP_ENABLED=false` for operational rollback. |
-| [`20260804T120000-ai-citations.ts`](../apps/server/src/database/migrations/20260804T120000-ai-citations.ts) | Marks existing sources as `legacy`, adds stable candidate/citation keys and section/display metadata, snapshots citation headings, and normalizes historical `database` sources to their page identity. Historical answer text is not rewritten. | Drops citation metadata and heading snapshots. The prior `database` source type is not reconstructed from normalized page rows. |
-| [`20260805T100000-ai-assistant-profiles.ts`](../apps/server/src/database/migrations/20260805T100000-ai-assistant-profiles.ts) | Adds disabled-by-default workspace/profile/group/user policy, exact external-tool selections, immutable conversation/run/provider snapshots, and Agent verification rows. Existing conversations keep the legacy no-profile path. | Destroys profile configuration, preferences, verifications, and immutable profile/provider history; use deployment or workspace switches instead. |
-| [`20260805T110000-ai-builtin-tool-policy.ts`](../apps/server/src/database/migrations/20260805T110000-ai-builtin-tool-policy.ts) | Adds exact workspace/space capability policy and run snapshots. Seeds workspaces with the eleven legacy Agent capabilities and existing MCP keys with the seven legacy read capabilities. | Deletes saved policy, API-key capability lists, and run snapshots; use policy switches or `AI_BUILTIN_TOOL_EXTENSIONS_ENABLED=false` instead. |
+| Migration                                                                                                                                                       | Authoritative change and data treatment                                                                                                                                                                                                                                                            | `down` impact                                                                                                                                                                                  |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`20260728T120000-ai-integration.ts`](../apps/server/src/database/migrations/20260728T120000-ai-integration.ts)                                                 | Creates per-space provider/retrieval configuration, private conversations and messages, generation runs, chat files, and message-source snapshots.                                                                                                                                                 | Drops every core AI table and all stored AI configuration, conversations, attempts, files, and sources.                                                                                        |
+| [`20260729T120000-ai-reliability.ts`](../apps/server/src/database/migrations/20260729T120000-ai-reliability.ts)                                                 | Adds immutable attempt lineage, idempotency fingerprints, upload batches, and storage-cleanup state. Backfills each run's root, terminal response snapshot, assistant-message projection, and run-scoped message sources; the migration aborts if mandatory source/run links cannot be backfilled. | Removes lineage, response snapshots, upload-batch and cleanup metadata. Base conversation/message rows remain, but the added audit and retry state is lost.                                    |
+| [`20260729T180000-ai-context-editor-actions.ts`](../apps/server/src/database/migrations/20260729T180000-ai-context-editor-actions.ts)                           | Enables the current document by default, marks existing non-empty titles as manual, and adds versioned conversation context, immutable run-context/source-dependency snapshots, and expiring auxiliary title/editor runs.                                                                          | Drops context, dependency, and auxiliary-run tables and their conversation/run columns. Saved selections and auxiliary history are lost.                                                       |
+| [`20260729T220000-open-webui-rag.ts`](../apps/server/src/database/migrations/20260729T220000-open-webui-rag.ts)                                                 | Adds the `open-webui-knowledge-v1` retrieval configuration, encrypted credential storage, and attachment update/delete feed indexes.                                                                                                                                                               | Changes affected adapters to `none`, drops the Open WebUI URL, credential, and Knowledge ID columns, and removes the attachment indexes.                                                       |
+| [`20260729T230000-ai-reasoning.ts`](../apps/server/src/database/migrations/20260729T230000-ai-reasoning.ts)                                                     | Adds the per-space reasoning switch, streamed message reasoning, and immutable run reasoning snapshot.                                                                                                                                                                                             | Deletes stored reasoning values and the configuration switch.                                                                                                                                  |
+| [`20260730T120000-ai-content-policy.ts`](../apps/server/src/database/migrations/20260730T120000-ai-content-policy.ts)                                           | Adds space-scoped exclusion policies, descendant selection, prompt-history cutoffs, and bounded expanded context snapshots. Existing conversations default to no descendant expansion.                                                                                                             | Deletes exclusion policy and descendant-selection data and removes the associated conversation/context columns.                                                                                |
+| [`20260730T130000-ai-assistant-identity.ts`](../apps/server/src/database/migrations/20260730T130000-ai-assistant-identity.ts)                                   | Adds optional assistant name and grammatical gender. Existing spaces remain disabled and use the masculine default until explicitly configured.                                                                                                                                                    | Deletes saved assistant identity settings.                                                                                                                                                     |
+| [`20260730T140000-ai-agent-mcp.ts`](../apps/server/src/database/migrations/20260730T140000-ai-agent-mcp.ts)                                                     | Adds Agent enablement/verification, conversation and run execution modes, durable tool/approval steps, and the authoritative `rag` or `mcp` API-key type. Existing keys default to `rag`.                                                                                                          | Deletes tool-step and approval history, Agent state, and API-key type metadata; use runtime switches for operational rollback.                                                                 |
+| [`20260730T150000-remove-legacy-ee-imports-and-ai-search.ts`](../apps/server/src/database/migrations/20260730T150000-remove-legacy-ee-imports-and-ai-search.ts) | Fails in-flight retired Confluence and DOCX imports, removes legacy workspace AI-search settings, and drops `page_embeddings`.                                                                                                                                                                     | No-op: removed settings, embeddings, and prior in-flight task state are not restorable.                                                                                                        |
+| [`20260803T120000-ai-external-mcp.ts`](../apps/server/src/database/migrations/20260803T120000-ai-external-mcp.ts)                                               | Adds the disabled-by-default outbound MCP catalog, encrypted headers, layered workspace/space/group/user policy, run snapshots, and read-only external step provenance.                                                                                                                            | Drops the catalog, encrypted headers, policy/preferences, run snapshots, and external step metadata. Export configuration first; use `AI_EXTERNAL_MCP_ENABLED=false` for operational rollback. |
+| [`20260804T120000-ai-citations.ts`](../apps/server/src/database/migrations/20260804T120000-ai-citations.ts)                                                     | Marks existing sources as `legacy`, adds stable candidate/citation keys and section/display metadata, snapshots citation headings, and normalizes historical `database` sources to their page identity. Historical answer text is not rewritten.                                                   | Drops citation metadata and heading snapshots. The prior `database` source type is not reconstructed from normalized page rows.                                                                |
+| [`20260805T100000-ai-assistant-profiles.ts`](../apps/server/src/database/migrations/20260805T100000-ai-assistant-profiles.ts)                                   | Adds disabled-by-default workspace/profile/group/user policy, exact external-tool selections, immutable conversation/run/provider snapshots, and Agent verification rows. Existing conversations keep the legacy no-profile path.                                                                  | Destroys profile configuration, preferences, verifications, and immutable profile/provider history; use deployment or workspace switches instead.                                              |
+| [`20260805T110000-ai-builtin-tool-policy.ts`](../apps/server/src/database/migrations/20260805T110000-ai-builtin-tool-policy.ts)                                 | Adds exact workspace/space capability policy and run snapshots. Seeds workspaces with the eleven legacy Agent capabilities and existing MCP keys with the seven legacy read capabilities.                                                                                                          | Deletes saved policy, API-key capability lists, and run snapshots; use policy switches or `AI_BUILTIN_TOOL_EXTENSIONS_ENABLED=false` instead.                                                  |
+| [`20260806T090000-rag-sync-bindings.ts`](../apps/server/src/database/migrations/20260806T090000-rag-sync-bindings.ts)                                           | Adds disabled-by-default per-space RAG Sync bindings, encrypted writer credentials, lifecycle revisions, cleanup state, and unique target claims. Existing standalone env bindings and secrets are intentionally not imported.                                                                     | Deletes binding configuration, writer credentials, cleanup state, and target reservations; use `RAG_SYNC_ENABLED=false` for operational rollback instead.                                      |
 
 Apply the ordered set with `pnpm --filter ./apps/server migration:latest` only
 after a database backup and normal deployment review. A schema `down` operation
 is not an operational feature rollback unless the applicable row above states
 that its data loss is acceptable.
 
-## 5. External synchronization with Open WebUI
+## 5. Built-in synchronization with Open WebUI
 
-`apps/rag-sync` is an optional standalone process, not part of the backend
-runtime. It reads only `/api/rag/*`, imports no server repositories, has no
-Docmost database access, and does not use backend queues. One
-pre-created Open WebUI Knowledge Base maps to one Docmost space.
+RAG Sync is an optional module in the main Docmost backend. It does not require
+a second process, API key, JSON configuration, Compose profile, or Docker image.
+One binding belongs to one Docmost space and claims one pre-created Open WebUI
+Knowledge Base. A target fingerprint derived from the normalized Open WebUI
+origin and Knowledge ID prevents two spaces from writing to the same target.
+Saving a complete target reserves that claim before Test or Enable. Space
+administrators are therefore trusted not to reserve targets they do not own;
+clear an unused clean binding to release its active claim.
 
-The process stores checkpoints, source-to-file mappings, and distributed locks
-in a separate Redis namespace, `docmost:rag-sync` by default. It supports full
-and delta synchronization, advances inclusive checkpoints only after complete
-processing, reconstructs lost mappings from `meta.data.docmost`, ignores
-foreign workspace/space metadata, deletes duplicates and failed artifacts,
-skips empty pages, and replaces a file only after Open WebUI has processed the
-new file successfully. Supported objects include pages, database rows, and
-PDF, DOCX, TXT, MD, JPEG, PNG, and WebP attachments. The distributed lock is
-renewed during a cycle; remote operations and Redis state writes check the
-current renewal state before and after each awaited boundary, and file-processing
-polling stops after observed lock loss. This is not remote fencing: an Open
-WebUI request already in flight may finish, but no later mapping/checkpoint
-commit is made and the artifact is reconciled on the next cycle. Logs contain
-only low-cardinality states, counters, reason codes, lag, and durations, never
-stable binding/source IDs, document text, or secrets.
+Persistent per-space configuration is stored in PostgreSQL. The Open WebUI
+writer credential is encrypted with `APP_SECRET` and API responses expose only
+`writerApiKeyConfigured`. Query-time retrieval remains independent and keeps
+its own adapter and query credential. The public `/api/rag/*` surface also
+remains independent and continues to authorize an external indexer through a
+space-scoped RAG API key. Keep `APP_SECRET` stable across replicas and restarts.
+Before rotating it, normally disable every RAG sync binding and wait until each
+cleanup finishes: the same secret protects writer credentials and signs remote
+ownership metadata. After the rotation, re-enter the writer credentials and
+enable the bindings again. If the secret was rotated before cleanup, restore the
+previous value first so Docmost can verify and remove the existing managed
+files; do not abandon those targets merely to work around the rotation.
 
-Before every cycle, the writer reads `GET /api/rag/scope`. Scope schema v2
-fingerprints the key-derived workspace/space identity, content policy, and the
-effective readable-page set. When it changes, the writer reconstructs mappings
-from Open WebUI metadata, pages
-through the opaque `GET /api/rag/scope/blocked` feed, deletes inaccessible
-files/mappings, resets the live `updates` and `attachment-updates` checkpoints
-to zero, and reprocesses all allowed data. The new composite fingerprint also
-includes local attachment size/extension policy and is stored only after the
-entire cycle succeeds. A deterministic size/extension skip deletes an existing
-mapping; transient read/remote failures keep it for retry. Structured sync
-events contain counts, latency, lag, retry outcome, and low-cardinality reason
-codes; binding, space, source, checkpoint, and fingerprint identifiers are not
-logged. Per-source outcomes are aggregated into each cycle summary.
+The binding state machine is `disabled | enabled | draining`. Normal disable
+stops new uploads and removes only files whose versioned `docmost` metadata
+proves ownership by the binding. Cleanup completes only after two stable empty
+remote scans in the same configuration generation. Target fields remain locked
+until cleanup succeeds. After successful cleanup, the active claim remains
+attached while the target is configured; changing or clearing a clean target
+atomically releases that claim. Force disable is an emergency stop, not proof
+of remote deletion.
+Space and workspace deletion fail closed while an active or cleanup-required
+binding exists.
 
-Configuration is loaded from `RAG_SYNC_*` environment variables. Local runs
-read the same root `.env` as Docmost, while Compose explicitly forwards only
-that prefix to the writer. One writer process defines one binding through
-`RAG_SYNC_BINDING_ID`, `RAG_SYNC_DOCMOST_BASE_URL`, `RAG_SYNC_DOCMOST_API_KEY`,
-and `RAG_SYNC_OPEN_WEBUI_API_KEY`. Redis and runtime controls use
-`RAG_SYNC_REDIS_URL`, `RAG_SYNC_REDIS_PREFIX`,
-`RAG_SYNC_POLL_INTERVAL_MS`, `RAG_SYNC_REQUEST_TIMEOUT_MS`,
-`RAG_SYNC_PROCESSING_TIMEOUT_MS`, and `RAG_SYNC_MAX_ATTACHMENT_BYTES`.
-The Docmost RAG key selected in the UI is the single source of truth for the
-workspace and space. `GET /api/rag/scope` also returns the non-secret Open
-WebUI base URL and Knowledge Base ID configured by the
-`open-webui-knowledge-v1` retrieval adapter in the space AI settings. The
-writer uses these values for Open WebUI metadata and reconciliation instead of
-duplicating them in `.env`; restart it after changing the destination. The
-Docmost read key, the Open WebUI writer key in `.env`, and the Open WebUI key
-used by the main server for retrieval are independent secrets. Environment
-values are visible in Docker container metadata, so Docker daemon access must
-be restricted and the populated `.env` must never be committed.
+The source exporter uses every live page in the space except pages excluded by
+`AiContentPolicyService`. This intentionally differs from `/api/rag/*`, where
+the key creator's current page ACL remains part of the scope. Query-time Open
+WebUI results still pass through Docmost source resolution and the requesting
+user's current ACL. Direct user access to the Open WebUI Knowledge Base is not
+safe because the external index contains the full policy-allowed space scope.
 
-For a local container build, the main `docker-compose.yml` includes the writer
-behind the optional `rag-sync` profile and builds it from
-`Dockerfile.rag-sync`. After configuring the `RAG_SYNC_*` block in the shared
-root `.env`, `docker compose --profile rag-sync up -d --build` builds and
-starts Docmost, PostgreSQL, Redis, and RAG Sync from that single Compose file.
-Without the profile, the writer is not started. A second space-to-Knowledge
-mapping requires a second writer service/container with its own environment.
+The management contract is:
 
-The production image creates an ephemeral inject-workspace lockfile in its
-builder stage and uses `pnpm deploy --prod`; the repository lockfile remains
-unchanged. The runner uses the unprivileged `node` user and contains only
-`dist`, production dependencies, and the built API-contract workspace package.
-Release publishing produces `shererpro/docmost:rag-sync-<VERSION>` alongside
-the matching main image and updates `rag-sync-latest` only after both immutable
-pushes succeed. Production Compose deployments should keep the writer in a
-separate optional profile with no published ports. Reusing the backend Redis is
-supported when the writer selects a dedicated logical database such as `/1`
-and keeps its isolated prefix; a second Redis instance inside the writer is not
-required.
-Revoking the source RAG key prevents the writer from fetching a final blocked
-feed; operators must then delete the corresponding external Knowledge Base
-contents manually.
+- `GET /api/spaces/:spaceId/ai/rag-sync` reads redacted configuration and status;
+- `PATCH /api/spaces/:spaceId/ai/rag-sync` changes target fields only on a
+  disabled, clean binding, rotates its writer key while enabled, and applies
+  optimistic `expectedVersion` checking;
+- `POST /api/spaces/:spaceId/ai/rag-sync/actions/test` performs a bounded
+  upload/process/delete probe on a clean disabled binding. Before the upload it
+  durably marks cleanup as required; only a confirmed marker deletion clears
+  that flag, so an interrupted test must be recovered through cleanup;
+- `POST /api/spaces/:spaceId/ai/rag-sync/actions/enable` starts scheduling;
+- `POST /api/spaces/:spaceId/ai/rag-sync/actions/disable` enters draining;
+- `POST /api/spaces/:spaceId/ai/rag-sync/actions/retry-cleanup` resumes cleanup;
+- `POST /api/spaces/:spaceId/ai/rag-sync/actions/force-disable` stops work while
+  retaining the cleanup requirement and target claim;
+- `POST /api/spaces/:spaceId/ai/rag-sync/actions/abandon-cleanup` requires an
+  explicit acknowledgement and leaves an orphaned claim that prevents unsafe
+  target reuse.
+
+The runtime uses the shared deployment Redis under
+`RAG_SYNC_REDIS_PREFIX=docmost:rag-sync`. Versioned keys hold target-specific
+feed progress, checkpoints, mappings, scope fingerprints, reconciliation time,
+operational status, and short-lived per-space administration locks. The admin
+locks serialize Test and configuration changes without reserving a PostgreSQL
+pool connection. A global semaphore limits concurrent bindings and a
+random-token lease selects one owner per binding across backend replicas.
+Renewal is sequential. Every mapping/checkpoint mutation is a Lua operation
+that verifies the current lease token, so a stale replica cannot commit state.
+Uncertain uploads are found by deterministic operation metadata before retry.
+
+Reconciliation runs on first use, after state loss, target/scope change, and
+periodically. It accepts legacy schema-v1 metadata for adoption and cleanup but
+writes only schema v2 with binding, workspace, space, source, content hash,
+target version, and operation identity. Foreign files and whole Knowledge Base
+objects are never deleted. Deletions are scheduled ahead of updates; one feed
+page is processed per scheduling quantum so a large space cannot starve another.
+
+Deployment configuration contains no per-space identifiers or secrets:
+
+```dotenv
+RAG_SYNC_ENABLED=false
+RAG_SYNC_ALLOWED_ORIGINS=
+RAG_SYNC_REDIS_PREFIX=docmost:rag-sync
+RAG_SYNC_POLL_INTERVAL_MS=60000
+RAG_SYNC_DISCOVERY_INTERVAL_MS=30000
+RAG_SYNC_MAX_CONCURRENT_BINDINGS=4
+RAG_SYNC_MAX_CONCURRENT_DOCUMENTS=4
+RAG_SYNC_REQUEST_TIMEOUT_MS=30000
+RAG_SYNC_PROCESSING_TIMEOUT_MS=600000
+RAG_SYNC_MAX_ATTACHMENT_BYTES=26214400
+RAG_SYNC_RECONCILE_INTERVAL_MS=21600000
+RAG_SYNC_SHUTDOWN_TIMEOUT_MS=30000
+```
+
+`RAG_SYNC_ALLOWED_ORIGINS` is an exact-origin SSRF boundary independent of the
+model and retrieval allowlists. Writer requests use bounded bodies, DNS pinning,
+manual redirect handling, safe error codes, and the configured timeouts. Setting
+`RAG_SYNC_ENABLED=false` is the operational rollback and does not make Docmost
+health fail. The ordinary `docker compose up -d --build` command includes this
+runtime in the main image; there is no additional profile or release image.
+
+Upgrade from the retired standalone worker with a database backup and an
+explicit single-writer cutover: stop the old worker, deploy and migrate the new
+server with `RAG_SYNC_ENABLED=false`, configure the deployment writer allowlist,
+then enable and Test each space binding before turning it on. Do not import the
+old per-space environment secrets automatically. Revoke the old Docmost RAG API
+keys only after the embedded binding is healthy. Initial reconciliation accepts
+legacy schema-v1 ownership metadata and writes only schema v2 thereafter.
+
+Emergency rollback is the deployment switch, not migration down. Keep the new
+tables and remote Knowledge Bases. A down migration destroys encrypted writer
+credentials and target claims. The old standalone worker may return only with
+the previous application version and its previous credentials, after the
+embedded runtime has been confirmed disabled.
 
 Every server process writes a 60-second low-cardinality AI summary for queue
 wait, run/provider outcomes, timeouts, retrieval, reconciliation, and rejected
@@ -753,12 +792,12 @@ Inbound MCP is the interactive external-assistant surface. It is intended for a 
 or agent that needs to search and navigate one Docmost space while answering a
 user. It does not replace query-time retrieval or the synchronization API:
 
-| Surface                 | Caller                                      | Primary use                                              | Credential                        | Data access                                                                                               |
-| ----------------------- | ------------------------------------------- | -------------------------------------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| query-time retrieval    | the Docmost AI worker                       | add ranked external context to one answer                | provider-side                     | validated excerpts returned by the configured retrieval adapter                                           |
-| `/api/rag/*`            | an external indexer such as `apps/rag-sync` | bulk/delta synchronization and export                    | `keyType=rag`                     | pages, databases, comments, exports, and allowed attachment data                                          |
-| `/mcp` (inbound)        | an external MCP-capable assistant           | interactive search and targeted document reading         | `keyType=mcp`                     | seven baseline reads plus explicitly selected opt-in reads; no attachment body extraction                 |
-| external MCP (outbound) | the Docmost AI worker                       | call approved read-only remote tools during an agent run | per-server encrypted HTTP headers | the prompt, selected context, and page text are sent outward; the remote result returns as untrusted data |
+| Surface                 | Caller                            | Primary use                                              | Credential                        | Data access                                                                                               |
+| ----------------------- | --------------------------------- | -------------------------------------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| query-time retrieval    | the Docmost AI worker             | add ranked external context to one answer                | provider-side                     | validated excerpts returned by the configured retrieval adapter                                           |
+| `/api/rag/*`            | an external indexer               | bulk/delta synchronization and export                    | `keyType=rag`                     | pages, databases, comments, exports, and allowed attachment data                                          |
+| `/mcp` (inbound)        | an external MCP-capable assistant | interactive search and targeted document reading         | `keyType=mcp`                     | seven baseline reads plus explicitly selected opt-in reads; no attachment body extraction                 |
+| external MCP (outbound) | the Docmost AI worker             | call approved read-only remote tools during an agent run | per-server encrypted HTTP headers | the prompt, selected context, and page text are sent outward; the remote result returns as untrusted data |
 
 MCP calls do not create Docmost conversations, messages, citations, or
 `ai_runs`. They also do not use `AI_CHAT_QUEUE`, invoke the configured model,
@@ -848,30 +887,30 @@ All inputs use Docmost UUIDs and node identifiers returned by earlier tool
 calls. Optional limits are clamped by server-side validation, not only
 described in JSON Schema.
 
-| Tool             | Main inputs                         | Result and bounds                                                                                                            |
-| ---------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `search`         | `query`, optional `limit`           | accessible pages and database rows with compact highlights and breadcrumbs; default 10, maximum 20                           |
-| `getTree`        | none                                | readable hierarchy metadata, size-truncated within the 32 KiB tool limit; a hidden parent is returned as `parentPageId=null` |
-| `getPageContext` | `pageId`                            | page metadata, visible allowed breadcrumbs, and up to 50 readable direct children                                            |
-| `getPage`        | `pageId`                            | title, text, editor JSON when compact, outline fallback, update time, and a `truncated` flag                                 |
-| `getOutline`     | `pageId`                            | up to 300 structural nodes with index, optional stable ID, type, nesting level, and compact text                             |
-| `getNode`        | `pageId`, `nodeId`                  | one ProseMirror node selected by stable ID or a fallback such as `#12` from the outline index                                |
-| `searchInPage`   | `pageId`, `query`, optional `limit` | case-insensitive matches with character offsets and bounded excerpts; default 20, maximum 50                                 |
-| `getWorkspaceContext` | none | curated workspace identity and actor role; never raw workspace settings |
-| `getSpaceContext` | none | current-space metadata, explicit `spaceRole`, workspace role, and safe actor capability flags |
-| `getDatabaseContext` | `databaseId` | curated database metadata, normalized property schema, and compact views |
-| `listDatabaseRows` | `databaseId`, optional `limit`, `cursor` | readable row pages and cells; default 20, maximum 50 |
-| `getDatabaseRowContext` | `pageId` | readable row, its database root, schema, and cells |
-| `getTable` | `pageId`, `tableRef` | bounded text/cell-ID matrices for one structural table |
-| `listComments` | `pageId`, optional `limit`, `cursor` | active comments, parent/resolution state, compact content, and safe actors; maximum 50 |
-| `listPageHistory` | `pageId`, optional `limit`, `cursor` | version metadata only; maximum 50 |
-| `diffPageVersion` | `pageId`, `historyId` | bounded semantic version-to-live-Yjs diff, integrity counts, and current hash |
-| `listTransclusionReferences` | `sourcePageId`, `transclusionId`, optional pagination | readable, same-space, non-excluded reference pages |
-| `listPageAttachments` | `pageId`, optional pagination | metadata/index status only; no path, bytes, extracted text, or token; maximum 100 |
-| `getPublicShareInfo` | `pageId` | effective direct/inherited share state, indexing flag, and public URL |
-| `listPageTemplates` | optional `query`, `limit` | readable marked templates in the key/run's current space; metadata only, maximum 50 |
-| `getPageTemplateMetadata` | `pageId` | safe metadata for one readable marked template in the current scoped space |
-| `listPageTemplateUsages` | `pageId`, optional `limit` | readable consumer pages and visible occurrence count in the current scoped space; maximum 50 |
+| Tool                         | Main inputs                                           | Result and bounds                                                                                                            |
+| ---------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `search`                     | `query`, optional `limit`                             | accessible pages and database rows with compact highlights and breadcrumbs; default 10, maximum 20                           |
+| `getTree`                    | none                                                  | readable hierarchy metadata, size-truncated within the 32 KiB tool limit; a hidden parent is returned as `parentPageId=null` |
+| `getPageContext`             | `pageId`                                              | page metadata, visible allowed breadcrumbs, and up to 50 readable direct children                                            |
+| `getPage`                    | `pageId`                                              | title, text, editor JSON when compact, outline fallback, update time, and a `truncated` flag                                 |
+| `getOutline`                 | `pageId`                                              | up to 300 structural nodes with index, optional stable ID, type, nesting level, and compact text                             |
+| `getNode`                    | `pageId`, `nodeId`                                    | one ProseMirror node selected by stable ID or a fallback such as `#12` from the outline index                                |
+| `searchInPage`               | `pageId`, `query`, optional `limit`                   | case-insensitive matches with character offsets and bounded excerpts; default 20, maximum 50                                 |
+| `getWorkspaceContext`        | none                                                  | curated workspace identity and actor role; never raw workspace settings                                                      |
+| `getSpaceContext`            | none                                                  | current-space metadata, explicit `spaceRole`, workspace role, and safe actor capability flags                                |
+| `getDatabaseContext`         | `databaseId`                                          | curated database metadata, normalized property schema, and compact views                                                     |
+| `listDatabaseRows`           | `databaseId`, optional `limit`, `cursor`              | readable row pages and cells; default 20, maximum 50                                                                         |
+| `getDatabaseRowContext`      | `pageId`                                              | readable row, its database root, schema, and cells                                                                           |
+| `getTable`                   | `pageId`, `tableRef`                                  | bounded text/cell-ID matrices for one structural table                                                                       |
+| `listComments`               | `pageId`, optional `limit`, `cursor`                  | active comments, parent/resolution state, compact content, and safe actors; maximum 50                                       |
+| `listPageHistory`            | `pageId`, optional `limit`, `cursor`                  | version metadata only; maximum 50                                                                                            |
+| `diffPageVersion`            | `pageId`, `historyId`                                 | bounded semantic version-to-live-Yjs diff, integrity counts, and current hash                                                |
+| `listTransclusionReferences` | `sourcePageId`, `transclusionId`, optional pagination | readable, same-space, non-excluded reference pages                                                                           |
+| `listPageAttachments`        | `pageId`, optional pagination                         | metadata/index status only; no path, bytes, extracted text, or token; maximum 100                                            |
+| `getPublicShareInfo`         | `pageId`                                              | effective direct/inherited share state, indexing flag, and public URL                                                        |
+| `listPageTemplates`          | optional `query`, `limit`                             | readable marked templates in the key/run's current space; metadata only, maximum 50                                          |
+| `getPageTemplateMetadata`    | `pageId`                                              | safe metadata for one readable marked template in the current scoped space                                                   |
+| `listPageTemplateUsages`     | `pageId`, optional `limit`                            | readable consumer pages and visible occurrence count in the current scoped space; maximum 50                                 |
 
 Paginated built-in reads use opaque versioned keyset cursors bound to the tool
 name and target resource. Replaying a cursor for another page, database, or
@@ -1151,21 +1190,21 @@ headers.
 
 ### Administrative UI routes
 
-| Route                            | Purpose                                                                 |
-| -------------------------------- | ----------------------------------------------------------------------- |
-| `/settings/ai`                   | redirects to `/settings/ai/spaces`                                      |
-| `/settings/ai/spaces`            | AI assistant overview with per-space configuration entry points         |
-| `/settings/ai/built-in-tools`    | workspace policy for built-in Agent and inbound MCP capabilities        |
-| `/settings/ai/external-tools`    | outbound external MCP catalog, tool approvals, and the workspace switch |
-| `/settings/ai/guide`             | administrator-facing AI/RAG/MCP operation and risk guide                |
-| `/settings/ai/spaces/:spaceSlug` | sectioned full-page configuration, including per-space assistant profiles |
-| `/settings/keys`                 | "API keys" page; redirects to the MCP tab                               |
-| `/settings/keys/mcp`             | MCP onboarding and workspace MCP-key administration                     |
-| `/settings/keys/rag`             | RAG synchronization onboarding and workspace RAG-key administration     |
-| `/settings/ai/mcp`               | compatibility redirect to `/settings/keys/mcp`                          |
-| `/settings/ai/rag`               | compatibility redirect to `/settings/keys/rag`                          |
-| `/settings/account/api-keys`     | compatibility redirect to the RAG tab for admins or profile for members |
-| `/settings/api-keys`             | compatibility redirect to `/settings/keys/mcp`                          |
+| Route                            | Purpose                                                                   |
+| -------------------------------- | ------------------------------------------------------------------------- |
+| `/settings/ai`                   | redirects to `/settings/ai/spaces`                                        |
+| `/settings/ai/spaces`            | AI assistant overview with per-space configuration entry points           |
+| `/settings/ai/built-in-tools`    | workspace policy for built-in Agent and inbound MCP capabilities          |
+| `/settings/ai/external-tools`    | outbound external MCP catalog, tool approvals, and the workspace switch   |
+| `/settings/ai/guide`             | administrator-facing AI/RAG/MCP operation and risk guide                  |
+| `/settings/ai/spaces/:spaceSlug` | sectioned full-page configuration, including assistant profiles and RAG Sync |
+| `/settings/keys`                 | "API keys" page; redirects to the MCP tab                                 |
+| `/settings/keys/mcp`             | MCP onboarding and workspace MCP-key administration                       |
+| `/settings/keys/rag`             | RAG synchronization onboarding and workspace RAG-key administration       |
+| `/settings/ai/mcp`               | compatibility redirect to `/settings/keys/mcp`                            |
+| `/settings/ai/rag`               | compatibility redirect to `/settings/keys/rag`                            |
+| `/settings/account/api-keys`     | compatibility redirect to the RAG tab for admins or profile for members   |
+| `/settings/api-keys`             | compatibility redirect to `/settings/keys/mcp`                            |
 
 The space settings modal contains only an AI status summary and a link to the
 full-page configuration. Workspace owners and administrators and space
@@ -1187,43 +1226,43 @@ RAG tokens.
 These endpoints require a user JWT. Mutating routes also require the standard
 CSRF contract.
 
-| Method and path                                                  | Purpose                                                        |
-| ---------------------------------------------------------------- | -------------------------------------------------------------- |
-| `GET/PATCH /api/spaces/:spaceId/ai/config`                       | read or update space AI configuration                          |
-| `GET/PATCH /api/ai/profile-policy`                               | workspace profile and provider-override switches               |
-| `GET/POST /api/spaces/:spaceId/ai/profiles`                      | member-safe picker list or create a profile                    |
-| `GET/PATCH/DELETE /api/spaces/:spaceId/ai/profiles/:profileId`   | admin detail, optimistic update, or soft delete                |
-| `POST /api/spaces/:spaceId/ai/profiles/:profileId/actions/test-model` | test the effective profile provider                       |
-| `POST /api/spaces/:spaceId/ai/profiles/:profileId/actions/test-agent` | test and record the exact Agent verification              |
-| `GET/PUT /api/spaces/:spaceId/ai/profile-preferences`            | current user's preferred and hidden profile IDs                |
-| `GET/PATCH /api/ai/tool-policy`                                  | workspace catalog, master switch, stored exact allowlist, deployment `maximumCapabilities`, and active `effectiveCapabilities` |
-| `GET/PUT /api/spaces/:spaceId/ai/tool-policy`                    | effective policy and optional exact space narrowing            |
-| `POST /api/spaces/:spaceId/ai/config/actions/test-model`         | test the provider and optional vision                          |
-| `POST /api/spaces/:spaceId/ai/config/actions/test-agent`         | force and validate provider tool calling                       |
-| `POST /api/spaces/:spaceId/ai/config/actions/test-retrieval`     | test external retrieval                                        |
-| `GET/PUT /api/spaces/:spaceId/ai/exclusions`                     | read or replace exclusion rules with optimistic revision       |
-| `GET /api/spaces/:spaceId/ai/exclusions/candidates`              | search page candidates for exclusions                          |
-| `GET /api/spaces/:spaceId/ai/status?pageId=`                     | availability, permissions, identity, usage, and quick commands |
-| `GET/POST /api/ai/conversations`                                 | list by required `pageId` or create a conversation             |
-| `GET/PATCH/DELETE /api/ai/conversations/:id`                     | read, update, or soft-delete an owned conversation             |
-| `POST /api/ai/conversations/:id/actions/open`                    | update the last-opened time                                    |
-| `GET /api/ai/conversations/:id/messages`                         | list messages with `before` and `limit`                        |
-| `GET/PUT /api/ai/conversations/:id/context`                      | read or version-replace context                                |
-| `GET /api/ai/conversations/:id/context-sources`                  | search accessible explicit-context candidates                  |
-| `GET /api/ai/conversations/:id/context-descendants`              | lazily list accessible direct descendants of a page root       |
-| `POST /api/ai/conversations/:id/messages`                        | send a message and create a run; returns `202`                 |
-| `GET /api/ai/runs/:id`                                           | read a single attempt                                          |
-| `POST /api/ai/runs/:id/steps/:stepId/actions/approve`            | approve one pending agent write as its initiating user         |
-| `POST /api/ai/runs/:id/steps/:stepId/actions/reject`             | reject one pending agent write and resume the bounded loop     |
-| `POST /api/ai/runs/:id/actions/cancel`                           | request cancellation                                           |
-| `POST /api/ai/runs/:id/actions/retry`                            | create a new attempt; returns `202`                            |
-| `POST /api/ai/messages/:id/actions/regenerate`                   | regenerate an answer; returns `202`                            |
-| `GET/POST /api/ai/conversations/:conversationId/files`           | list files or perform idempotent multipart upload              |
-| `GET/DELETE /api/ai/conversations/:conversationId/files/:fileId` | download or delete a private chat file                         |
-| `GET /api/ai/pages/:pageId/attachments`                          | list page attachments available for context                    |
-| `POST /api/ai/editor-actions`                                    | create an editor-selection transform; returns `202`            |
-| `GET /api/ai/editor-actions/:id`                                 | read editor-action state                                       |
-| `POST /api/ai/editor-actions/:id/actions/cancel`                 | cancel an editor action                                        |
+| Method and path                                                       | Purpose                                                                                                                        |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `GET/PATCH /api/spaces/:spaceId/ai/config`                            | read or update space AI configuration                                                                                          |
+| `GET/PATCH /api/ai/profile-policy`                                    | workspace profile and provider-override switches                                                                               |
+| `GET/POST /api/spaces/:spaceId/ai/profiles`                           | member-safe picker list or create a profile                                                                                    |
+| `GET/PATCH/DELETE /api/spaces/:spaceId/ai/profiles/:profileId`        | admin detail, optimistic update, or soft delete                                                                                |
+| `POST /api/spaces/:spaceId/ai/profiles/:profileId/actions/test-model` | test the effective profile provider                                                                                            |
+| `POST /api/spaces/:spaceId/ai/profiles/:profileId/actions/test-agent` | test and record the exact Agent verification                                                                                   |
+| `GET/PUT /api/spaces/:spaceId/ai/profile-preferences`                 | current user's preferred and hidden profile IDs                                                                                |
+| `GET/PATCH /api/ai/tool-policy`                                       | workspace catalog, master switch, stored exact allowlist, deployment `maximumCapabilities`, and active `effectiveCapabilities` |
+| `GET/PUT /api/spaces/:spaceId/ai/tool-policy`                         | effective policy and optional exact space narrowing                                                                            |
+| `POST /api/spaces/:spaceId/ai/config/actions/test-model`              | test the provider and optional vision                                                                                          |
+| `POST /api/spaces/:spaceId/ai/config/actions/test-agent`              | force and validate provider tool calling                                                                                       |
+| `POST /api/spaces/:spaceId/ai/config/actions/test-retrieval`          | test external retrieval                                                                                                        |
+| `GET/PUT /api/spaces/:spaceId/ai/exclusions`                          | read or replace exclusion rules with optimistic revision                                                                       |
+| `GET /api/spaces/:spaceId/ai/exclusions/candidates`                   | search page candidates for exclusions                                                                                          |
+| `GET /api/spaces/:spaceId/ai/status?pageId=`                          | availability, permissions, identity, usage, and quick commands                                                                 |
+| `GET/POST /api/ai/conversations`                                      | list by required `pageId` or create a conversation                                                                             |
+| `GET/PATCH/DELETE /api/ai/conversations/:id`                          | read, update, or soft-delete an owned conversation                                                                             |
+| `POST /api/ai/conversations/:id/actions/open`                         | update the last-opened time                                                                                                    |
+| `GET /api/ai/conversations/:id/messages`                              | list messages with `before` and `limit`                                                                                        |
+| `GET/PUT /api/ai/conversations/:id/context`                           | read or version-replace context                                                                                                |
+| `GET /api/ai/conversations/:id/context-sources`                       | search accessible explicit-context candidates                                                                                  |
+| `GET /api/ai/conversations/:id/context-descendants`                   | lazily list accessible direct descendants of a page root                                                                       |
+| `POST /api/ai/conversations/:id/messages`                             | send a message and create a run; returns `202`                                                                                 |
+| `GET /api/ai/runs/:id`                                                | read a single attempt                                                                                                          |
+| `POST /api/ai/runs/:id/steps/:stepId/actions/approve`                 | approve one pending agent write as its initiating user                                                                         |
+| `POST /api/ai/runs/:id/steps/:stepId/actions/reject`                  | reject one pending agent write and resume the bounded loop                                                                     |
+| `POST /api/ai/runs/:id/actions/cancel`                                | request cancellation                                                                                                           |
+| `POST /api/ai/runs/:id/actions/retry`                                 | create a new attempt; returns `202`                                                                                            |
+| `POST /api/ai/messages/:id/actions/regenerate`                        | regenerate an answer; returns `202`                                                                                            |
+| `GET/POST /api/ai/conversations/:conversationId/files`                | list files or perform idempotent multipart upload                                                                              |
+| `GET/DELETE /api/ai/conversations/:conversationId/files/:fileId`      | download or delete a private chat file                                                                                         |
+| `GET /api/ai/pages/:pageId/attachments`                               | list page attachments available for context                                                                                    |
+| `POST /api/ai/editor-actions`                                         | create an editor-selection transform; returns `202`                                                                            |
+| `GET /api/ai/editor-actions/:id`                                      | read editor-action state                                                                                                       |
+| `POST /api/ai/editor-actions/:id/actions/cancel`                      | cancel an editor action                                                                                                        |
 
 Outbound external MCP adds the following. The `/ai/mcp-*` routes require
 workspace `owner|admin`; the space routes require full space access, except

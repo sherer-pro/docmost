@@ -453,22 +453,6 @@ importers:
         specifier: ^3.2.4
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.1)(happy-dom@20.9.0)(jiti@2.7.0)(jsdom@25.0.1)(less@4.2.0)(terser@5.39.0)(tsx@4.19.3)(yaml@2.9.0)
 
-  apps/rag-sync:
-    dependencies:
-      '@docmost/api-contract':
-        specifier: workspace:*
-        version: link:../../packages/api-contract
-      ioredis:
-        specifier: ^5.4.1
-        version: 5.8.2
-    devDependencies:
-      '@types/node':
-        specifier: ^22.13.4
-        version: 22.19.1
-      typescript:
-        specifier: ^5.7.3
-        version: 5.9.3
-
   apps/server:
     dependencies:
       '@aws-sdk/client-s3':

@@ -26,9 +26,21 @@ services:
       RAG_API_RATE_LIMIT_PER_MINUTE: "${RAG_API_RATE_LIMIT_PER_MINUTE:-120}"
       RAG_API_MAX_CONCURRENT: "${RAG_API_MAX_CONCURRENT:-8}"
       RAG_API_BULK_MAX_CONCURRENT: "${RAG_API_BULK_MAX_CONCURRENT:-2}"
+      RAG_SYNC_ENABLED: "${RAG_SYNC_ENABLED:-false}"
+      RAG_SYNC_ALLOWED_ORIGINS: "${RAG_SYNC_ALLOWED_ORIGINS:-}"
+      RAG_SYNC_REDIS_PREFIX: "${RAG_SYNC_REDIS_PREFIX:-docmost:rag-sync}"
+      RAG_SYNC_POLL_INTERVAL_MS: "${RAG_SYNC_POLL_INTERVAL_MS:-60000}"
+      RAG_SYNC_DISCOVERY_INTERVAL_MS: "${RAG_SYNC_DISCOVERY_INTERVAL_MS:-30000}"
+      RAG_SYNC_MAX_CONCURRENT_BINDINGS: "${RAG_SYNC_MAX_CONCURRENT_BINDINGS:-4}"
+      RAG_SYNC_MAX_CONCURRENT_DOCUMENTS: "${RAG_SYNC_MAX_CONCURRENT_DOCUMENTS:-4}"
+      RAG_SYNC_REQUEST_TIMEOUT_MS: "${RAG_SYNC_REQUEST_TIMEOUT_MS:-30000}"
+      RAG_SYNC_PROCESSING_TIMEOUT_MS: "${RAG_SYNC_PROCESSING_TIMEOUT_MS:-600000}"
+      RAG_SYNC_MAX_ATTACHMENT_BYTES: "${RAG_SYNC_MAX_ATTACHMENT_BYTES:-26214400}"
+      RAG_SYNC_RECONCILE_INTERVAL_MS: "${RAG_SYNC_RECONCILE_INTERVAL_MS:-21600000}"
+      RAG_SYNC_SHUTDOWN_TIMEOUT_MS: "${RAG_SYNC_SHUTDOWN_TIMEOUT_MS:-30000}"
       MCP_RATE_LIMIT_PER_MINUTE: "${MCP_RATE_LIMIT_PER_MINUTE:-60}"
       MCP_MAX_CONCURRENT: "${MCP_MAX_CONCURRENT:-4}"
-      DATABASE_URL: "${DATABASE_URL:-postgresql://docmost:${POSTGRES_PASSWORD:-STRONG_DB_PASSWORD}@db:5432/docmost}"
+      DATABASE_URL: "${DATABASE_URL:-postgresql://${POSTGRES_USER:-docmost}:${POSTGRES_PASSWORD:-STRONG_DB_PASSWORD}@db:5432/${POSTGRES_DB:-docmost}}"
       REDIS_URL: "${REDIS_URL:-redis://redis:6379}"
       WEB_PUSH_VAPID_PUBLIC_KEY: "${WEB_PUSH_VAPID_PUBLIC_KEY:-}"
       WEB_PUSH_VAPID_PRIVATE_KEY: "${WEB_PUSH_VAPID_PRIVATE_KEY:-}"
@@ -36,7 +48,7 @@ services:
       AUTH_RATE_LIMIT_STORAGE: "${AUTH_RATE_LIMIT_STORAGE:-redis}"
       DISABLE_TELEMETRY: true
     ports:
-      - "3000:3000"
+      - "${DOCMOST_BIND_ADDRESS:-127.0.0.1}:${PORT:-3000}:3000"
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:3000/api/health"]
       interval: 10s
@@ -44,18 +56,21 @@ services:
       retries: 12
       start_period: 20s
     restart: unless-stopped
+    networks:
+      - default
+      - edge
     volumes:
       - docmost:/app/data/storage
 
   db:
-    image: postgres:18
+    image: postgres:18-alpine
     environment:
-      POSTGRES_DB: docmost
-      POSTGRES_USER: docmost
+      POSTGRES_DB: "${POSTGRES_DB:-docmost}"
+      POSTGRES_USER: "${POSTGRES_USER:-docmost}"
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-STRONG_DB_PASSWORD}"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U docmost -d docmost"]
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -63,7 +78,7 @@ services:
       - db_data:/var/lib/postgresql
 
   redis:
-    image: redis:8
+    image: redis:8-alpine
     command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
     restart: unless-stopped
     healthcheck:
@@ -74,32 +89,12 @@ services:
     volumes:
       - redis_data:/data
 
-  rag-sync:
-    profiles: ["rag-sync"]
-    image: docmost-rag-sync-local:dev
-    build:
-      context: .
-      dockerfile: Dockerfile.rag-sync
-    pull_policy: never
-    restart: unless-stopped
-    environment:
-      RAG_SYNC_REDIS_URL: "${RAG_SYNC_REDIS_URL:-redis://redis:6379/1}"
-      RAG_SYNC_REDIS_PREFIX: "${RAG_SYNC_REDIS_PREFIX:-docmost:rag-sync}"
-      RAG_SYNC_POLL_INTERVAL_MS: "${RAG_SYNC_POLL_INTERVAL_MS:-60000}"
-      RAG_SYNC_REQUEST_TIMEOUT_MS: "${RAG_SYNC_REQUEST_TIMEOUT_MS:-30000}"
-      RAG_SYNC_PROCESSING_TIMEOUT_MS: "${RAG_SYNC_PROCESSING_TIMEOUT_MS:-600000}"
-      RAG_SYNC_MAX_ATTACHMENT_BYTES: "${RAG_SYNC_MAX_ATTACHMENT_BYTES:-26214400}"
-      RAG_SYNC_BINDING_ID: "${RAG_SYNC_BINDING_ID:-}"
-      RAG_SYNC_DOCMOST_BASE_URL: "${RAG_SYNC_DOCMOST_BASE_URL:-http://docmost:3000}"
-      RAG_SYNC_DOCMOST_API_KEY: "${RAG_SYNC_DOCMOST_API_KEY:-}"
-      RAG_SYNC_OPEN_WEBUI_API_KEY: "${RAG_SYNC_OPEN_WEBUI_API_KEY:-}"
-    depends_on:
-      docmost:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-
 volumes:
   docmost:
   db_data:
   redis_data:
+
+networks:
+  edge:
+    name: "${EDGE_NETWORK_NAME:-docmost_edge}"
+    external: "${EDGE_NETWORK_EXTERNAL:-false}"

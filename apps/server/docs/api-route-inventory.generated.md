@@ -250,6 +250,14 @@
 | PATCH | `/spaces/:spaceId/ai/profiles/:profileId` | `apps/server/src/core/ai/controllers/ai-assistant-profile.controller.ts` |
 | POST | `/spaces/:spaceId/ai/profiles/:profileId/actions/test-agent` | `apps/server/src/core/ai/controllers/ai-assistant-profile.controller.ts` |
 | POST | `/spaces/:spaceId/ai/profiles/:profileId/actions/test-model` | `apps/server/src/core/ai/controllers/ai-assistant-profile.controller.ts` |
+| GET | `/spaces/:spaceId/ai/rag-sync` | `apps/server/src/core/rag-sync/admin/rag-sync-admin.controller.ts` |
+| PATCH | `/spaces/:spaceId/ai/rag-sync` | `apps/server/src/core/rag-sync/admin/rag-sync-admin.controller.ts` |
+| POST | `/spaces/:spaceId/ai/rag-sync/actions/abandon-cleanup` | `apps/server/src/core/rag-sync/admin/rag-sync-admin.controller.ts` |
+| POST | `/spaces/:spaceId/ai/rag-sync/actions/disable` | `apps/server/src/core/rag-sync/admin/rag-sync-admin.controller.ts` |
+| POST | `/spaces/:spaceId/ai/rag-sync/actions/enable` | `apps/server/src/core/rag-sync/admin/rag-sync-admin.controller.ts` |
+| POST | `/spaces/:spaceId/ai/rag-sync/actions/force-disable` | `apps/server/src/core/rag-sync/admin/rag-sync-admin.controller.ts` |
+| POST | `/spaces/:spaceId/ai/rag-sync/actions/retry-cleanup` | `apps/server/src/core/rag-sync/admin/rag-sync-admin.controller.ts` |
+| POST | `/spaces/:spaceId/ai/rag-sync/actions/test` | `apps/server/src/core/rag-sync/admin/rag-sync-admin.controller.ts` |
 | GET | `/spaces/:spaceId/ai/status` | `apps/server/src/core/ai/controllers/ai-config.controller.ts` |
 | GET | `/spaces/:spaceId/ai/tool-policy` | `apps/server/src/core/ai/controllers/ai-builtin-tool-policy.controller.ts` |
 | PUT | `/spaces/:spaceId/ai/tool-policy` | `apps/server/src/core/ai/controllers/ai-builtin-tool-policy.controller.ts` |

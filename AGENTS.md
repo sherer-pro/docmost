@@ -24,7 +24,7 @@
 - Local fullstack development: `pnpm dev` (frontend + backend in parallel).
 - Backend dev: `pnpm server:dev`.
 - Frontend dev: `pnpm client:dev`.
-- Optional Open WebUI sync: configure `RAG_SYNC_*` in the root `.env`, then run `pnpm rag-sync:build`, `pnpm rag-sync:test`, and `pnpm rag-sync:start`.
+- Optional Open WebUI sync: enable `RAG_SYNC_ENABLED`, configure the writer allowlist in the root `.env`, and manage each space target/credential in the AI settings UI; the runtime starts with the main server.
 - Production run for the built backend: `pnpm start` (root script → `apps/server start:prod`).
 - Realtime collaboration server: `pnpm collab` / `pnpm collab:dev`.
 - Email templates preview (backend): `pnpm email:dev`.
@@ -32,7 +32,7 @@
 ### Where things are located
 
 - `apps/server/src` — main backend code.
-- `apps/rag-sync` — optional standalone `/api/rag/*` to Open WebUI Knowledge synchronizer; it has no Docmost database or queue access.
+- `apps/server/src/core/rag-sync` — optional built-in per-space Open WebUI Knowledge synchronizer with PostgreSQL configuration and Redis-fenced runtime state.
 - `apps/server/src/app.module.ts` — backend module wiring, global CSRF guard, static/client serving, Redis, queue, import/export, security, and telemetry.
 - `apps/server/src/core/api-key` — workspace API key management used by RAG integrations.
 - `apps/server/src/core/ai` — per-space AI configuration, persistent private chat, async generation, chat files, and optional external retrieval.
@@ -52,7 +52,7 @@
 - `apps/server/src/collaboration` and `apps/server/src/ws` — collaboration server, Yjs helpers, Socket.IO relay, and presence events.
 - `apps/server/src/integrations/{import,export,static,security,telemetry}` — import/export jobs, static frontend serving, security/version/robots helpers, and telemetry.
 - `ARCHITECTURE.md` — high-level repository architecture and verification map.
-- `docs/AI_ASSISTANT_AND_RAG.md` — current technical documentation for the core AI assistant, query-time retrieval, RAG sync API, Open WebUI integration, and their public contracts. The administrator-facing projection is `/settings/ai/guide`, implemented by `apps/client/src/features/ai/components/ai-admin-guide.tsx` and `ai.adminGuide.*` locale keys. Whenever changing AI/RAG/MCP behavior, configuration, routes/contracts, limits, security boundaries, tools, recovery procedures, or `apps/rag-sync`, update both the applicable Markdown documentation and the embedded guide (including every locale) in the same change.
+- `docs/AI_ASSISTANT_AND_RAG.md` — current technical documentation for the core AI assistant, query-time retrieval, RAG sync API, Open WebUI integration, and their public contracts. The administrator-facing projection is `/settings/ai/guide`, implemented by `apps/client/src/features/ai/components/ai-admin-guide.tsx` and `ai.adminGuide.*` locale keys. Whenever changing AI/RAG/MCP behavior, configuration, routes/contracts, limits, security boundaries, tools, recovery procedures, or `apps/server/src/core/rag-sync`, update both the applicable Markdown documentation and the embedded guide (including every locale) in the same change.
 - `docs/AI_INTEGRATION.md` — operator setup and troubleshooting guide; link to the canonical AI document instead of copying changing limits and recovery rules.
 - `docs/RAG_API.md` and `docs/Docmost RAG API.postman_collection.json` — external RAG wire contract and executable examples; keep them aligned with the RAG controller, DTOs, and generated route inventory.
 - `docs/documentation-audit-2026-08-01.md` — latest AI/RAG/MCP-focused documentation audit; dated audit files are historical snapshots, not current contracts.
@@ -161,10 +161,9 @@
 ### Containers
 
 - Host development env: copy `.env.example` to `.env`, replace secrets, and point `DATABASE_URL`/`REDIS_URL` at local host services.
-- Docker Compose env: copy `.env.compose.example` to `.env`, replace `REPLACE_WITH_LONG_SECRET` and `STRONG_DB_PASSWORD`, keep `AUTH_RATE_LIMIT_STORAGE=redis`, then run `docker compose up -d --build`.
+- Docker Compose env: copy `.env.compose.example` to `.env`, replace `REPLACE_WITH_LONG_SECRET` and `STRONG_DB_PASSWORD`, keep `AUTH_RATE_LIMIT_STORAGE=redis`, then run `docker compose up -d --build`. Local Compose creates `docmost_edge`; a server using the existing external proxy network sets `EDGE_NETWORK_NAME=edge` and `EDGE_NETWORK_EXTERNAL=true`.
 - Local container startup: `docker compose up -d --build`
-- Optional Open WebUI sync stack from the main Compose file: configure `RAG_SYNC_*` in the same root `.env` used by Docmost, then run `docker compose --profile rag-sync up -d --build`. Compose forwards only this prefix. One writer container maps one Docmost space to one Open WebUI Knowledge Base; API keys in environment variables are visible in Docker metadata.
-- `Dockerfile.rag-sync` builds the workspace packages, creates a Docker-local inject-workspace lockfile for a portable production-only `pnpm deploy` directory, and runs `dist/main.js` as `USER node`; do not copy the builder `node_modules` or source tree into its runner stage.
+- Built-in Open WebUI sync uses the ordinary `docker compose up -d --build` stack. `RAG_SYNC_ENABLED` and runtime limits are deployment env, while target identifiers and encrypted writer keys are configured per space in the UI. There is no separate profile, service, or image.
 - Build the current code into an image: `docker build -t docmost:local .`
 - The production image starts the built backend directly with `node apps/server/dist/apps/server/src/main`; it should not invoke `pnpm start` or Corepack at runtime.
 - Local file storage resolves to `<repo-or-runtime-root>/data/storage`; the Docker image uses runtime root `/app`, and Compose mounts the `docmost` volume at `/app/data/storage`.
@@ -209,8 +208,8 @@
 
 - Node.js: target **22.x** (from Dockerfile: `node:22-slim`).
 - pnpm: **10.4.0** (pinned in `packageManager` and Dockerfile).
-- PostgreSQL in compose: `postgres:18`.
-- Redis in compose: `redis:8`.
+- PostgreSQL in compose: `postgres:18-alpine`.
+- Redis in compose: `redis:8-alpine`.
 
 ### Required env for local backend startup
 
@@ -262,7 +261,7 @@ Minimum:
 
 - The repository includes GitHub Actions workflows:
   - `.github/workflows/docker.yml` — release/docker build and push.
-  - `.github/workflows/ci.yml` — PR validation (`install`, `build`, `routes:inventory:check`, `check:rag-docs`, `check:env`, `lint`, client/server/RAG Sync tests, RAG Sync image smoke build, `pnpm test:security`, `check:comments:en`, exception-journal validation, and `pnpm audit --prod` fail on unignored high/critical).
+  - `.github/workflows/ci.yml` — PR validation (`install`, `build`, `routes:inventory:check`, `check:rag-docs`, `check:env`, `lint`, client/server tests including embedded RAG Sync, the main production-image smoke checks, `pnpm test:security`, `check:comments:en`, exception-journal validation, and `pnpm audit --prod` fail on unignored high/critical).
 - De facto required local pipeline before PR:
   1. `pnpm install --frozen-lockfile`
   2. for quick checks on day-to-day changes: `pnpm verify:quick`.
@@ -353,8 +352,8 @@ Minimum:
 - `AI_MCP_ALLOWED_ORIGINS` is a third independent SSRF boundary, used only for outbound external MCP and requiring dual approval with the workspace allowlist. `AI_EXTERNAL_MCP_ENABLED=false` makes the whole feature unreachable regardless of any workspace, space, or user setting.
 - `AI_STREAM_IDLE_TIMEOUT_MS` is a deployment-level inactivity limit, while `requestTimeoutMs` remains per-space and bounds the full provider request. The effective idle timeout is the smaller of the two.
 - `/api/rag/*` remains the API-key-only synchronization/export surface for an external index. Query-time AI retrieval selects `none`, the unchanged `http-json-v1`, or `open-webui-knowledge-v1`; it does not create a local vector index and must degrade to live document/file context when unavailable.
-- `apps/rag-sync` is the optional Open WebUI writer. One Knowledge Base maps to one Docmost space. It reads only `/api/rag/*`, uses a separate Redis namespace for locks/checkpoints/mappings, reads Docmost/Open WebUI keys from `RAG_SYNC_*` environment variables, and must never import server repositories, use backend queues, create a Knowledge Base, or log document content and secrets.
-- RAG Sync must check the current distributed-lock renewal state around every remote side effect and mapping/checkpoint write. Open WebUI processing polls must stop after observed lock loss; the lease does not fence a request already in flight, so remote artifacts left at that boundary are repaired from `meta.data.docmost` on the next cycle.
+- Built-in RAG Sync is configured independently for each space. It indexes every live page allowed by the AI content policy, while query-time retrieval still revalidates the current user's ACL. Direct end-user access to the corresponding Open WebUI Knowledge Base is therefore unsafe. Writer credentials remain encrypted in PostgreSQL and redacted from every API response.
+- RAG Sync must fence every Redis mapping/checkpoint mutation with the current lease token, stop Open WebUI processing after observed lease loss, and reconcile uncertain remote artifacts from versioned Docmost metadata before retry. Test and configuration mutations share a renewable per-space Redis operation lock; do not hold a PostgreSQL pool connection across Open WebUI requests. Normal disable drains managed files; force disable retains cleanup state and the target claim.
 - RAG/MCP concurrency admission uses renewable Redis leases for the full HTTP lifecycle. Any new streaming route guarded by `ApiKeyTrafficGuard` must preserve renewal until `finish`, `close`, or request abort, release by the random lease ID, and fail closed if renewal can no longer confirm the lease.
 - Typesense is selected with `SEARCH_DRIVER=typesense`. It is a candidate index only: page/attachment rows and all ACL/public-sharing decisions must be revalidated against PostgreSQL before results are returned.
 - PDF/DOCX attachment extraction runs on the attachment queue with hard byte, page, ZIP-entry, text-size, and wall-clock limits. Updating an attachment clears stale extracted text before a new extraction and search-index job.

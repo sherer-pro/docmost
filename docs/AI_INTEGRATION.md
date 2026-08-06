@@ -303,6 +303,11 @@ the vector metadata, so Docmost hydrates each unique candidate from
 }
 ```
 
+The built-in synchronizer writes schema version 2, adding `bindingId`,
+`targetVersion`, and `operationId`. Query-time retrieval accepts both this
+current format and the schema-version-1 compatibility format shown above; in
+both cases it revalidates `workspaceId`, `spaceId`, and the current Docmost ACL.
+
 The adapter drops malformed, cross-workspace, and cross-space neighbors
 individually. A non-empty result without any compatible metadata is reported as
 `retrieval_invalid_response`; an empty collection is a successful empty search.
@@ -313,46 +318,92 @@ external reranker is not part of the integration contract, and an unhealthy
 global hybrid-search configuration must not make ordinary vector retrieval
 unavailable.
 
-`apps/rag-sync` is the optional writer for Open WebUI 0.9.6. It reads only the
-API-key-scoped `/api/rag/*` feeds, stores checkpoints/mappings/space locks in a
-separate Redis namespace, and uploads files with `knowledge_id`, `file_hash`,
-and the Docmost metadata above. It never reads the Docmost database and never
-uses backend queues. Run it explicitly with
-the `rag-sync` profile in the main `docker-compose.yml`; Compose builds it from
-`Dockerfile.rag-sync`. Use `docker compose --profile rag-sync up -d --build` to
-build and start the complete local stack. Without the profile, the primary
-Compose stack does not start the writer.
-Configure the writer through `RAG_SYNC_*` values in the same root `.env` used
-by Docmost. Compose forwards only those values to the writer. One writer
-container maps one Docmost space to one pre-created Open WebUI Knowledge Base;
-use a separate service/container with its own environment for another mapping.
-The RAG key created for the selected space is authoritative: the writer obtains
-its `workspaceId`, `spaceId`, Open WebUI base URL, and Knowledge Base ID from
-`/api/rag/scope`. Configure the `open-webui-knowledge-v1` retrieval adapter in
-the space AI settings; these non-secret values are not repeated in `.env`.
-Restart the writer after changing its Open WebUI destination.
+Open WebUI synchronization is built into the main Docmost process. Enable it at
+the deployment boundary, approve the exact writer origin, and start the ordinary
+stack:
 
-Release publishing produces both the main image and the companion
-`shererpro/docmost:rag-sync-<VERSION>` image. The moving production tags are
-`shererpro/docmost:latest` and `shererpro/docmost:rag-sync-latest`, and they are
-updated only after both immutable images have been pushed successfully. A
-production Compose deployment should keep the writer in a separate optional
-profile with no published ports. It may share the backend Redis service when
-the writer uses a dedicated logical database such as `/1` and the isolated
-`docmost:rag-sync` prefix.
+```dotenv
+RAG_SYNC_ENABLED=true
+RAG_SYNC_ALLOWED_ORIGINS=https://open-webui.example.com
+```
+
+```bash
+docker compose up -d --build
+```
+
+When the production reverse proxy uses the pre-existing external `edge`
+network, set `EDGE_NETWORK_NAME=edge` and `EDGE_NETWORK_EXTERNAL=true` in the
+Docmost Compose `.env`. The default local values create an isolated
+`docmost_edge` network, so local startup remains a single command.
+
+For each space, open its AI settings and configure the pre-created Knowledge
+Base URL, Knowledge ID, and a dedicated writer API key. The writer key is
+encrypted in PostgreSQL and is separate from the Open WebUI query key. Use Test,
+then Enable. Test is available only while the binding is clean and disabled;
+an interrupted probe leaves a durable cleanup requirement instead of an
+untracked remote marker. A single Knowledge Base cannot be assigned to two
+spaces. Saving a complete target reserves it immediately, so only trusted space
+administrators should configure targets and unused clean bindings should be
+cleared. Keep `APP_SECRET` stable. Before rotating it, normally disable every RAG
+sync binding and wait for cleanup to finish because this secret encrypts writer
+keys and signs remote ownership metadata. After the rotation, re-enter the
+per-space writer keys and enable synchronization again. If rotation happened
+before cleanup, restore the previous secret first so Docmost can verify and
+remove its existing managed files.
+
+Normal Disable enters draining and removes only Docmost-managed files. If the
+remote service is unavailable, Force disable stops scheduling while preserving
+the cleanup requirement and target claim. Successful cleanup keeps the
+configured target reserved for the same space until that clean target is
+changed or cleared. Retry cleanup after connectivity or credential recovery.
+Abandon cleanup is a last-resort action that requires explicit confirmation. It
+allows the binding to use a new target but leaves the previous target claim
+orphaned, preventing another space from claiming a Knowledge Base that may
+still contain managed files. Reattach that target to the same space to resume
+cleanup instead of assigning it elsewhere.
+The runtime reuses `REDIS_URL` with the isolated
+`RAG_SYNC_REDIS_PREFIX`; do not deploy a second Redis for it.
+
+When upgrading from the retired standalone worker, stop that worker before the
+new server starts so two writers cannot target the same Knowledge Base. Back up
+PostgreSQL, apply the migration, and first deploy with `RAG_SYNC_ENABLED=false`.
+Then configure the writer allowlist, enable the deployment switch, and use Save,
+Test, and Enable separately for each space. Legacy per-space environment values
+and secrets are intentionally not imported; remove them and revoke the old
+space-scoped Docmost RAG keys only after the embedded binding is healthy. The
+first reconciliation can adopt schema-v1 Docmost metadata, but every new write
+uses schema v2.
+
+For an emergency rollback, set `RAG_SYNC_ENABLED=false` and restart Docmost.
+Leave the additive tables in place and do not run the down migration, because it
+deletes encrypted writer keys and target reservations. Restore the standalone
+worker only together with the previous Docmost version and its previous keys,
+and only after confirming that the embedded runtime is disabled.
+
+The space settings UI uses these administrator routes:
+
+- `GET /api/spaces/:spaceId/ai/rag-sync`
+- `PATCH /api/spaces/:spaceId/ai/rag-sync`
+- `POST /api/spaces/:spaceId/ai/rag-sync/actions/test`
+- `POST /api/spaces/:spaceId/ai/rag-sync/actions/enable`
+- `POST /api/spaces/:spaceId/ai/rag-sync/actions/disable`
+- `POST /api/spaces/:spaceId/ai/rag-sync/actions/retry-cleanup`
+- `POST /api/spaces/:spaceId/ai/rag-sync/actions/force-disable`
+- `POST /api/spaces/:spaceId/ai/rag-sync/actions/abandon-cleanup`
 
 External results are candidates, not authorization decisions. Docmost resolves every returned ID against its own database, maps rows and attachments to their owning page, rejects deleted and cross-space sources, re-checks the requesting user's current page access, and constructs trusted titles and URLs locally. A run records whether retrieval was not requested, disabled, used, empty, or failed. A timeout, malformed response, authorization/rate-limit error, server error, or a result set with no currently readable sources does not fail the chat: generation continues with the live document and selected files, and the UI shows the retrieval outcome.
 
 An external indexer normally uses two independent credentials:
 
-- a space-scoped Docmost API key to synchronize content through `/api/rag/*`;
+- a space-scoped Docmost API key only when an external indexer uses `/api/rag/*`;
 - an adapter credential stored by Docmost to query the external retrieval URL.
 
-Open WebUI deployments use a third security boundary: the writer credential in
-the `apps/rag-sync` environment is separate from the query credential encrypted
-in `ai_space_configs`. Environment values are visible in Docker container
-metadata, so restrict Docker daemon access and never commit the populated
-`.env`. Secret values must not be placed in logs, jobs, or metrics.
+Open WebUI deployments use a third security boundary: each space stores a
+separate encrypted writer credential, while `RAG_SYNC_ALLOWED_ORIGINS` limits
+the deployment-wide writer destination. Neither writer nor query credentials
+belong in `.env`, Docker metadata, logs, jobs, or metrics. The Knowledge Base
+contains all policy-allowed space pages; do not grant end users direct access
+when Docmost page ACLs are narrower.
 
 ## Built-in Agent and inbound MCP tool policy
 
@@ -403,9 +454,9 @@ permit the read at call time.
 Policy and access are checked again during execution. A policy or registry
 version change ends an affected Agent run with `agent_tool_policy_changed`.
 The check runs before and after every provider model turn, including a final
-  answer without tool calls, so an in-flight revocation cannot be bypassed;
-  profile-aware retry or regenerate preserves the source snapshot and reruns
-  every live check. MCP `tools/list` and
+answer without tool calls, so an in-flight revocation cannot be bypassed;
+profile-aware retry or regenerate preserves the source snapshot and reruns
+every live check. MCP `tools/list` and
 `tools/call` use the same policy resolver and read the authoritative API-key row
 on every request, so revocation requires neither a token reissue nor a server
 restart.

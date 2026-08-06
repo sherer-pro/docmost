@@ -121,7 +121,7 @@ Supported capabilities include:
 
 - direct integration with Open WebUI Knowledge Base;
 
-- a dedicated `rag-sync` worker for synchronizing Docmost with Open WebUI;
+- built-in per-space synchronization from Docmost to Open WebUI Knowledge Base;
 
 - tracking of created, updated, and deleted content;
 
@@ -131,7 +131,7 @@ Supported capabilities include:
 
 - filtering and revalidation of access permissions for retrieved sources;
 
-- automatic removal from Open WebUI after page ACL or content-policy changes;
+- removal of embedded-sync files after AI content-policy changes, with page ACLs revalidated independently when retrieval results are used;
 
 - SQL-backed cursor pagination and opaque deletion feeds;
 
@@ -628,7 +628,7 @@ It also adds:
 
 The fork includes its own maintenance and development infrastructure:
 
-- Docker builds for the application and the RAG worker;
+- one Docker build for the application and its built-in RAG Sync runtime;
 
 - CI workflows;
 
@@ -690,36 +690,35 @@ Docker Compose:
 ```bash
 cp .env.compose.example .env
 # Replace REPLACE_WITH_LONG_SECRET and STRONG_DB_PASSWORD in .env.
-docker compose up -d
+docker compose up -d --build
 ```
 
-The optional Open WebUI writer is built and started from the main
-`docker-compose.yml`. Configure the `RAG_SYNC_*` values in the same root `.env`
-used by Docmost, then run:
+For the Ubuntu layout where `/opt/edge-proxy` already owns the external
+`edge` network, set `EDGE_NETWORK_NAME=edge` and
+`EDGE_NETWORK_EXTERNAL=true` in `/opt/docmost/.env`. The proxy and Drawio
+Compose files do not need changes. Local Compose keeps the defaults and creates
+its own `docmost_edge` network.
 
-```bash
-docker compose --profile rag-sync up -d --build
+Open WebUI synchronization runs inside the main Docmost process. Enable the
+deployment boundary and approve the exact Open WebUI origin in the same root
+`.env` used by Docmost:
+
+```dotenv
+RAG_SYNC_ENABLED=true
+RAG_SYNC_ALLOWED_ORIGINS=https://open-webui.example.com
 ```
 
-Compose forwards only `RAG_SYNC_*` values to the writer, so unrelated Docmost
-secrets are not exposed to it. One writer container maps one Docmost space to
-one pre-created Open WebUI Knowledge Base. The selected RAG key supplies the
-workspace and space scope plus the Open WebUI base URL and Knowledge Base ID
-through `/api/rag/scope`; configure the Open WebUI retrieval adapter in the
-space AI settings instead of duplicating those values in `.env`. Add another
-service/container with its own environment for another mapping. API keys
-passed through environment variables are visible in Docker container metadata;
-protect access to the Docker daemon and never commit the populated `.env`.
+Then configure the pre-created Knowledge Base and its writer API key in each
+space's AI settings. Writer credentials are encrypted in PostgreSQL and are not
+placed in Compose or Docker metadata. Query-time retrieval remains a separate
+per-space setting with its own credential. One Knowledge Base can be claimed by
+only one space. A normal disable drains Docmost-managed files and keeps the
+configured target reserved for that space; force disable is available when the
+remote service is unavailable.
 
-Without the profile, `docker compose up -d --build` builds and starts only
-Docmost, PostgreSQL, and Redis. No Compose overlay is required.
-
-Published releases also provide
-`shererpro/docmost:rag-sync-<VERSION>` and
-`shererpro/docmost:rag-sync-latest`. In production, run that image as a
-separate optional Compose service/profile, without public ports. It may reuse
-the deployment Redis when `RAG_SYNC_REDIS_URL` selects a dedicated database and
-`RAG_SYNC_REDIS_PREFIX` remains isolated from backend keys.
+The ordinary `docker compose up -d --build` command starts the complete local
+stack. There is no `rag-sync` profile or second image. Redis is shared with the
+backend through a versioned `RAG_SYNC_REDIS_PREFIX` namespace.
 
 See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for system boundaries,
 [`docs/AI_ASSISTANT_AND_RAG.md`](./docs/AI_ASSISTANT_AND_RAG.md) for the
