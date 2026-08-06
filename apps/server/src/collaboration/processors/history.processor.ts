@@ -87,7 +87,9 @@ export class HistoryProcessor extends WorkerHost implements OnModuleDestroy {
         page.workspaceId,
       );
 
-      await this.pageHistoryRepo.saveHistory(page, { contributorIds });
+      const history = await this.pageHistoryRepo.saveHistory(page, {
+        contributorIds,
+      });
 
       /**
        * Send the document-changed notification only after
@@ -99,6 +101,7 @@ export class HistoryProcessor extends WorkerHost implements OnModuleDestroy {
        */
       if (page.lastUpdatedById) {
         await this.notificationQueue.add(QueueJob.PAGE_RECIPIENT_NOTIFICATION, {
+          eventId: history.id,
           reason: 'document-changed',
           actorId: page.lastUpdatedById,
           pageId,

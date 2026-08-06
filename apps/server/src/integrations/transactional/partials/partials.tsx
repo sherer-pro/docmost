@@ -12,16 +12,19 @@ import * as React from 'react';
 
 interface MailBodyProps {
   children: React.ReactNode;
+  locale?: string;
 }
 
-export function MailBody({ children }: MailBodyProps) {
+export function MailBody({ children, locale }: MailBodyProps) {
+  const isRussian = locale?.toLowerCase().startsWith('ru') ?? false;
+
   return (
-    <Html>
+    <Html lang={isRussian ? 'ru' : 'en'}>
       <Head />
       <Body style={main}>
         <MailHeader />
         <Container style={container}>{children}</Container>
-        <MailFooter />
+        <MailFooter locale={locale} />
       </Body>
     </Html>
   );
@@ -35,12 +38,15 @@ export function MailHeader() {
   );
 }
 
-export function MailFooter() {
+export function MailFooter({ locale }: { locale?: string }) {
+  const isRussian = locale?.toLowerCase().startsWith('ru') ?? false;
+
   return (
     <Section style={footer}>
       <Row>
         <Text style={{ textAlign: 'center', color: '#706a7b' }}>
-          © {new Date().getFullYear()} Docmost, All Rights Reserved <br />
+          © {new Date().getFullYear()} Docmost,{' '}
+          {isRussian ? 'Все права защищены' : 'All Rights Reserved'} <br />
         </Text>
       </Row>
     </Section>

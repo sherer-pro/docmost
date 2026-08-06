@@ -13,11 +13,18 @@ import {
   NotificationDigestItem,
 } from '@docmost/transactional/emails/notification-digest-email';
 import { normalizeUserSettings } from '../../user/utils/user-preferences.util';
+import { NotificationService } from '../notification.service';
+import {
+  getDigestIntervalLabel,
+  getDigestSubject,
+  getNotificationActionText,
+} from '../../../common/helpers/notification-copy';
 
 interface UserEmailPreferences {
   email: string | null;
   emailEnabled: boolean;
   emailFrequency: string;
+  locale: string;
 }
 
 interface NotificationWithContext extends Notification {
@@ -39,6 +46,7 @@ export class EmailAggregationService {
     private readonly notificationRepo: NotificationRepo,
     private readonly mailService: MailService,
     private readonly domainService: DomainService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   /**
@@ -61,14 +69,17 @@ export class EmailAggregationService {
    * Sends digest emails for users with non-immediate email frequency.
    */
   async processDueDigests(limit = 200): Promise<void> {
-    const pendingUsers = await this.notificationRepo.findPendingEmailDigestUsers(limit);
+    const pendingUsers =
+      await this.notificationRepo.findPendingEmailDigestUsers(limit);
     if (pendingUsers.length === 0) {
       return;
     }
 
     for (const pendingUser of pendingUsers) {
       try {
-        const preferences = await this.getUserEmailPreferences(pendingUser.userId);
+        const preferences = await this.getUserEmailPreferences(
+          pendingUser.userId,
+        );
         if (!preferences?.email || !preferences.emailEnabled) {
           continue;
         }
@@ -94,32 +105,47 @@ export class EmailAggregationService {
           continue;
         }
 
-        const notifications =
+        const pendingNotifications =
           await this.notificationRepo.findUnreadUnemailedForUserBefore({
             userId: pendingUser.userId,
             windowEnd: new Date(windowEnd),
           });
+        const notifications =
+          await this.notificationService.filterAccessibleNotifications(
+            pendingUser.userId,
+            pendingNotifications,
+          );
 
         if (notifications.length === 0) {
           continue;
         }
 
-        const workspaceUrl = await this.getWorkspaceUrl(pendingUser.workspaceId);
+        const workspaceUrl = await this.getWorkspaceUrl(
+          pendingUser.workspaceId,
+        );
         const entries = this.buildDigestEntries(
           notifications as NotificationWithContext[],
           workspaceUrl,
+          preferences.locale,
         );
 
         await this.mailService.sendToQueue({
           to: preferences.email,
-          subject: this.buildSubject(entries.length),
+          subject: getDigestSubject(entries.length, preferences.locale),
           template: NotificationDigestEmail({
             entries,
             totalCount: entries.length,
-            intervalLabel: this.frequencyToLabel(preferences.emailFrequency),
+            intervalLabel: getDigestIntervalLabel(
+              preferences.emailFrequency,
+              preferences.locale,
+            ),
             workspaceUrl,
+            locale: preferences.locale,
           }),
           notificationIds: notifications.map((notification) => notification.id),
+          notificationUserId: pendingUser.userId,
+          notificationDeliveryMode: 'digest',
+          notificationFrequency: preferences.emailFrequency,
         });
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Unknown error';
@@ -147,7 +173,7 @@ export class EmailAggregationService {
   ): Promise<UserEmailPreferences | null> {
     const user = await this.db
       .selectFrom('users')
-      .select(['email', 'settings'])
+      .select(['email', 'settings', 'locale'])
       .where('id', '=', userId)
       .where('deletedAt', 'is', null)
       .executeTakeFirst();
@@ -162,12 +188,14 @@ export class EmailAggregationService {
       email: user.email,
       emailEnabled: settings.preferences.emailEnabled,
       emailFrequency: settings.preferences.emailFrequency,
+      locale: user.locale ?? 'en-US',
     };
   }
 
   private buildDigestEntries(
     notifications: NotificationWithContext[],
     workspaceUrl: string,
+    locale: string,
   ): NotificationDigestItem[] {
     return notifications.map((notification) => {
       const actorName = notification.actor?.name ?? 'Someone';
@@ -180,49 +208,11 @@ export class EmailAggregationService {
 
       return {
         actorName,
-        actionText: this.getActionText(notification.type),
+        actionText: getNotificationActionText(notification.type, locale),
         pageTitle,
         pageUrl,
       };
     });
-  }
-
-  private getActionText(type: string): string {
-    switch (type) {
-      case 'comment.user_mention':
-        return 'mentioned you in a comment on';
-      case 'comment.created':
-        return 'commented on';
-      case 'comment.reply':
-        return 'replied to your comment on';
-      case 'comment.resolved':
-        return 'resolved a comment on';
-      case 'page.user_mention':
-        return 'mentioned you on';
-      case 'page.updated_for_assignee_or_stakeholder':
-        return 'updated';
-      case 'page.assigned':
-        return 'assigned you to';
-      case 'page.stakeholder_added':
-        return 'added you as a stakeholder to';
-      default:
-        return 'updated';
-    }
-  }
-
-  private buildSubject(eventsCount: number): string {
-    return `You have ${eventsCount} update${eventsCount === 1 ? '' : 's'}`;
-  }
-
-  private frequencyToLabel(frequency: string): string {
-    const mapping: Record<string, string> = {
-      '1h': 'hour',
-      '3h': '3 hours',
-      '6h': '6 hours',
-      '24h': '24 hours',
-    };
-
-    return mapping[frequency] ?? 'period';
   }
 
   private frequencyToMs(frequency: string): number | null {

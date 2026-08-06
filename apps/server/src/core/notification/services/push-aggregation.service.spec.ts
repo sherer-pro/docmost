@@ -102,12 +102,12 @@ describe('PushAggregationService', () => {
     };
   };
 
-
   it('uses delivery policy before immediate push dispatch', async () => {
-    const { service, pushService, notificationDeliveryPolicyService } = createService({
-      pushFrequency: 'immediate',
-      shouldSend: false,
-    });
+    const { service, pushService, notificationDeliveryPolicyService } =
+      createService({
+        pushFrequency: 'immediate',
+        shouldSend: false,
+      });
 
     await service.dispatchOrAggregate(baseNotification, basePayload);
 
@@ -146,7 +146,9 @@ describe('PushAggregationService', () => {
 
     await service.processDueJobs();
 
-    expect(notificationRepo.countUnreadByUserPageInWindow).toHaveBeenCalledTimes(1);
+    expect(
+      notificationRepo.countUnreadByUserPageInWindow,
+    ).toHaveBeenCalledTimes(1);
     expect(pushService.sendToUser).not.toHaveBeenCalled();
     expect(pushNotificationJobRepo.finalizeClaimed).toHaveBeenCalledWith({
       sentIds: [],
@@ -171,8 +173,11 @@ describe('PushAggregationService', () => {
     expect(notificationDeliveryPolicyService.shouldSend).toHaveBeenCalledWith({
       channel: 'push',
       userId: 'user-1',
+      pageId: 'page-1',
     });
-    expect(notificationRepo.countUnreadByUserPageInWindow).not.toHaveBeenCalled();
+    expect(
+      notificationRepo.countUnreadByUserPageInWindow,
+    ).not.toHaveBeenCalled();
     expect(pushService.sendToUser).not.toHaveBeenCalled();
     expect(pushNotificationJobRepo.finalizeClaimed).toHaveBeenCalledWith({
       sentIds: [],
@@ -221,6 +226,34 @@ describe('PushAggregationService', () => {
     });
   });
 
+  it('cancels an aggregated job after the third transient failure', async () => {
+    const { service, pushService, pushNotificationJobRepo } = createService();
+
+    pushNotificationJobRepo.claimDuePending.mockResolvedValue([
+      {
+        ...dueJob,
+        payload: {
+          ...dueJob.payload,
+          retryMeta: { attempts: 2 },
+        },
+      },
+    ]);
+    pushService.sendToUser.mockResolvedValue({
+      sent: 0,
+      failed: 2,
+      revoked: 0,
+      outcome: 'transient-failure',
+    });
+
+    await service.processDueJobs();
+
+    expect(pushNotificationJobRepo.finalizeClaimed).toHaveBeenCalledWith({
+      sentIds: [],
+      cancelledIds: ['job-1'],
+      retryIds: [],
+    });
+  });
+
   it('treats adjacent windows as half-open intervals [start, end) without boundary overlap', async () => {
     const { service, pushService, pushNotificationJobRepo, notificationRepo } =
       createService();
@@ -264,13 +297,17 @@ describe('PushAggregationService', () => {
 
     await service.processDueJobs();
 
-    expect(notificationRepo.countUnreadByUserPageInWindow).toHaveBeenNthCalledWith(1, {
+    expect(
+      notificationRepo.countUnreadByUserPageInWindow,
+    ).toHaveBeenNthCalledWith(1, {
       userId: 'user-1',
       pageId: 'page-1',
       windowStart: new Date('2026-02-01T10:00:00.000Z'),
       windowEnd: new Date('2026-02-01T11:00:00.000Z'),
     });
-    expect(notificationRepo.countUnreadByUserPageInWindow).toHaveBeenNthCalledWith(2, {
+    expect(
+      notificationRepo.countUnreadByUserPageInWindow,
+    ).toHaveBeenNthCalledWith(2, {
       userId: 'user-1',
       pageId: 'page-1',
       windowStart: new Date('2026-02-01T11:00:00.000Z'),

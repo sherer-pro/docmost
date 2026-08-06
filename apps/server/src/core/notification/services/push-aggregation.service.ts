@@ -13,6 +13,7 @@ import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { NotificationDeliveryPolicyService } from './notification-delivery-policy.service';
 import { normalizeUserSettings } from '../../user/utils/user-preferences.util';
+import { getAggregatedPushCopy } from '../../../common/helpers/notification-copy';
 
 interface PushDispatchPayload {
   title: string;
@@ -25,9 +26,11 @@ interface PushDispatchPayload {
 
 interface UserPushPreference {
   pushFrequency: string;
+  locale: string;
 }
 
 const DEFAULT_PUSH_FREQUENCY = 'immediate';
+const MAX_AGGREGATED_PUSH_ATTEMPTS = 3;
 
 @Injectable()
 export class PushAggregationService {
@@ -71,14 +74,15 @@ export class PushAggregationService {
     const preferences = await this.getUserPushPreference(notification.userId);
 
     if (preferences.pushFrequency === 'immediate' || !notification.pageId) {
-      const shouldSend = await this.notificationDeliveryPolicyService.shouldSend({
-        channel: 'push',
-        userId: notification.userId,
-        notificationId: payload.notificationId,
-        pageId: notification.pageId ?? undefined,
-        actorId: notification.actorId,
-        spaceId: notification.spaceId,
-      });
+      const shouldSend =
+        await this.notificationDeliveryPolicyService.shouldSend({
+          channel: 'push',
+          userId: notification.userId,
+          notificationId: payload.notificationId,
+          pageId: notification.pageId ?? undefined,
+          actorId: notification.actorId,
+          spaceId: notification.spaceId,
+        });
       if (!shouldSend) {
         return;
       }
@@ -89,14 +93,15 @@ export class PushAggregationService {
 
     const windowMs = this.frequencyToMs(preferences.pushFrequency);
     if (!windowMs) {
-      const shouldSend = await this.notificationDeliveryPolicyService.shouldSend({
-        channel: 'push',
-        userId: notification.userId,
-        notificationId: payload.notificationId,
-        pageId: notification.pageId ?? undefined,
-        actorId: notification.actorId,
-        spaceId: notification.spaceId,
-      });
+      const shouldSend =
+        await this.notificationDeliveryPolicyService.shouldSend({
+          channel: 'push',
+          userId: notification.userId,
+          notificationId: payload.notificationId,
+          pageId: notification.pageId ?? undefined,
+          actorId: notification.actorId,
+          spaceId: notification.spaceId,
+        });
       if (!shouldSend) {
         return;
       }
@@ -144,13 +149,15 @@ export class PushAggregationService {
         await this.notificationDeliveryPolicyService.shouldSend({
           channel: 'push',
           userId: item.userId,
+          pageId: item.pageId,
         });
       if (!isPushStillEnabled) {
         cancelledIds.push(item.id);
         continue;
       }
 
-      const hasUnreadNotifications = await this.hasUnreadNotificationsInWindow(item);
+      const hasUnreadNotifications =
+        await this.hasUnreadNotificationsInWindow(item);
       if (!hasUnreadNotifications) {
         cancelledIds.push(item.id);
         continue;
@@ -159,16 +166,28 @@ export class PushAggregationService {
       const payload = (item.payload ?? {}) as unknown as PushDispatchPayload;
       const pageTitle = payload.pageTitle || payload.body || 'document';
       const eventCount = item.eventsCount ?? 1;
+      const preferences = await this.getUserPushPreference(item.userId);
+      const copy = getAggregatedPushCopy(
+        pageTitle,
+        eventCount,
+        preferences.locale,
+      );
 
       const pushResult = await this.pushService.sendToUser(item.userId, {
-        title: `Updates in ${pageTitle}`,
-        body: `${eventCount} event(s) in this period`,
+        title: copy.title,
+        body: copy.body,
         url: payload.url,
         type: payload.type,
         notificationId: payload.notificationId,
       });
 
-      this.applyDispatchOutcome(item.id, pushResult, sentIds, cancelledIds, retryIds);
+      this.applyDispatchOutcome(
+        item,
+        pushResult,
+        sentIds,
+        cancelledIds,
+        retryIds,
+      );
     }
 
     await this.pushNotificationJobRepo.finalizeClaimed({
@@ -182,18 +201,30 @@ export class PushAggregationService {
   }
 
   private applyDispatchOutcome(
-    jobId: string,
+    job: { id: string; payload?: unknown },
     pushResult: PushSendResult,
     sentIds: string[],
     cancelledIds: string[],
     retryIds: string[],
   ): void {
+    const jobId = job.id;
     if (pushResult.outcome === 'success') {
       sentIds.push(jobId);
       return;
     }
 
     if (pushResult.outcome === 'transient-failure') {
+      if (
+        this.getRetryAttempts(job.payload) + 1 >=
+        MAX_AGGREGATED_PUSH_ATTEMPTS
+      ) {
+        cancelledIds.push(jobId);
+        this.logger.warn(
+          `Push job ${jobId} cancelled after ${MAX_AGGREGATED_PUSH_ATTEMPTS} transient delivery attempts`,
+        );
+        return;
+      }
+
       retryIds.push(jobId);
       this.logger.warn(
         `Push job ${jobId} returned to pending after transient delivery failure (failed=${pushResult.failed}, revoked=${pushResult.revoked})`,
@@ -207,13 +238,32 @@ export class PushAggregationService {
     );
   }
 
+  private getRetryAttempts(payload: unknown): number {
+    if (!payload || typeof payload !== 'object') {
+      return 0;
+    }
+
+    const retryMeta = (payload as { retryMeta?: unknown }).retryMeta;
+    if (!retryMeta || typeof retryMeta !== 'object') {
+      return 0;
+    }
+
+    const attempts = (retryMeta as { attempts?: unknown }).attempts;
+    return typeof attempts === 'number' && Number.isFinite(attempts)
+      ? attempts
+      : 0;
+  }
+
   /**
    * Checks whether unread document notifications still exist within the aggregation window.
    * If not, the aggregated push should be canceled.
    */
-  private async hasUnreadNotificationsInWindow(
-    item: { userId: string; pageId: string; sendAfter: Date | string; windowKey: string },
-  ): Promise<boolean> {
+  private async hasUnreadNotificationsInWindow(item: {
+    userId: string;
+    pageId: string;
+    sendAfter: Date | string;
+    windowKey: string;
+  }): Promise<boolean> {
     const windowMs = this.windowMsFromWindowKey(item.windowKey);
     if (!windowMs) {
       return true;
@@ -222,12 +272,13 @@ export class PushAggregationService {
     const sendAfterDate = new Date(item.sendAfter);
     const windowStart = new Date(sendAfterDate.getTime() - windowMs);
 
-    const unreadCount = await this.notificationRepo.countUnreadByUserPageInWindow({
-      userId: item.userId,
-      pageId: item.pageId,
-      windowStart,
-      windowEnd: sendAfterDate,
-    });
+    const unreadCount =
+      await this.notificationRepo.countUnreadByUserPageInWindow({
+        userId: item.userId,
+        pageId: item.pageId,
+        windowStart,
+        windowEnd: sendAfterDate,
+      });
 
     return unreadCount > 0;
   }
@@ -247,17 +298,21 @@ export class PushAggregationService {
   /**
    * Reads user push preferences from the users.settings JSON field.
    */
-  private async getUserPushPreference(userId: string): Promise<UserPushPreference> {
+  private async getUserPushPreference(
+    userId: string,
+  ): Promise<UserPushPreference> {
     const user = await this.db
       .selectFrom('users')
-      .select('settings')
+      .select(['settings', 'locale'])
       .where('id', '=', userId)
       .executeTakeFirst();
 
     const settings = normalizeUserSettings(user?.settings);
 
     return {
-      pushFrequency: settings.preferences.pushFrequency ?? DEFAULT_PUSH_FREQUENCY,
+      pushFrequency:
+        settings.preferences.pushFrequency ?? DEFAULT_PUSH_FREQUENCY,
+      locale: user?.locale ?? 'en-US',
     };
   }
 

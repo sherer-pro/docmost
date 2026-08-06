@@ -51,7 +51,7 @@ describe('HistoryProcessor buffered page events', () => {
     collabHistory.takeBufferedEventsForProcessing.mockResolvedValue([]);
     collabHistory.hasBufferedEvents.mockResolvedValue(false);
     pageHistoryRepo.findPageLastHistory.mockResolvedValue(null);
-    pageHistoryRepo.saveHistory.mockResolvedValue(undefined);
+    pageHistoryRepo.saveHistory.mockResolvedValue({ id: 'history-1' });
     pageHistoryRepo.insertPageHistory.mockResolvedValue(undefined);
     pageRepo.findById.mockReset();
     notificationQueue.add.mockResolvedValue(undefined);
@@ -110,6 +110,7 @@ describe('HistoryProcessor buffered page events', () => {
     expect(notificationQueue.add).toHaveBeenCalledWith(
       QueueJob.PAGE_RECIPIENT_NOTIFICATION,
       expect.objectContaining({
+        eventId: 'history-1',
         reason: 'document-changed',
         actorId: 'actor-1',
         pageId: 'page-1',

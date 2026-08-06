@@ -15,6 +15,7 @@ import { getPageTitle } from '../../../common/helpers';
 import { PushAggregationService } from './push-aggregation.service';
 import { PageAccessService } from '../../page-access/page-access.service';
 import { RecipientResolverService } from './recipient-resolver.service';
+import { getNotificationTitle } from '../../../common/helpers/notification-copy';
 
 @Injectable()
 export class CommentNotificationService {
@@ -39,6 +40,7 @@ export class CommentNotificationService {
       actorId,
       mentionedUserIds,
       notifyWatchers,
+      eventId,
     } = data;
 
     const context = await this.getCommentContext(
@@ -72,16 +74,29 @@ export class CommentNotificationService {
 
     for (const userId of mentionedUserIds) {
       if (!usersWithAccess.has(userId)) continue;
+      notifiedUserIds.add(userId);
 
-      const notification = await this.notificationService.create({
-        userId,
-        workspaceId,
-        type: NotificationType.COMMENT_USER_MENTION,
-        actorId,
-        pageId,
-        spaceId,
-        commentId,
-      });
+      const locale = await this.notificationService.getUserLocale(userId);
+      const title = getNotificationTitle(
+        NotificationType.COMMENT_USER_MENTION,
+        actor.name,
+        pageTitle,
+        locale,
+      );
+
+      const notification = await this.notificationService.create(
+        {
+          userId,
+          workspaceId,
+          type: NotificationType.COMMENT_USER_MENTION,
+          actorId,
+          pageId,
+          spaceId,
+          commentId,
+        },
+        `comment:${eventId}:${NotificationType.COMMENT_USER_MENTION}:${userId}`,
+      );
+      if (!notification) continue;
 
       await this.notificationService.queueEmail(
         userId,
@@ -89,35 +104,52 @@ export class CommentNotificationService {
         pageId,
         actorId,
         spaceId,
-        `${actor.name} mentioned you in a comment`,
-        CommentMentionEmail({ actorName: actor.name, pageTitle, pageUrl }),
+        title,
+        CommentMentionEmail({
+          actorName: actor.name,
+          pageTitle,
+          pageUrl,
+          locale,
+        }),
       );
 
       await this.pushAggregationService.dispatchOrAggregate(notification, {
-        title: `${actor.name} mentioned you in a comment`,
+        title,
         body: pageTitle,
         url: pageUrl,
         type: NotificationType.COMMENT_USER_MENTION,
         notificationId: notification.id,
         pageTitle,
       });
-
-      notifiedUserIds.add(userId);
     }
 
+    const commentType = parentCommentId
+      ? NotificationType.COMMENT_REPLY
+      : NotificationType.COMMENT_CREATED;
     for (const recipientId of recipientIds) {
       if (notifiedUserIds.has(recipientId)) continue;
       if (!usersWithAccess.has(recipientId)) continue;
 
-      const notification = await this.notificationService.create({
-        userId: recipientId,
-        workspaceId,
-        type: NotificationType.COMMENT_CREATED,
-        actorId,
-        pageId,
-        spaceId,
-        commentId,
-      });
+      const locale = await this.notificationService.getUserLocale(recipientId);
+      const title = getNotificationTitle(
+        commentType,
+        actor.name,
+        pageTitle,
+        locale,
+      );
+      const notification = await this.notificationService.create(
+        {
+          userId: recipientId,
+          workspaceId,
+          type: commentType,
+          actorId,
+          pageId,
+          spaceId,
+          commentId,
+        },
+        `comment:${eventId}:${commentType}:${recipientId}`,
+      );
+      if (!notification) continue;
 
       await this.notificationService.queueEmail(
         recipientId,
@@ -125,15 +157,21 @@ export class CommentNotificationService {
         pageId,
         actorId,
         spaceId,
-        `${actor.name} commented on ${pageTitle}`,
-        CommentCreateEmail({ actorName: actor.name, pageTitle, pageUrl }),
+        title,
+        CommentCreateEmail({
+          actorName: actor.name,
+          pageTitle,
+          pageUrl,
+          locale,
+          isReply: !!parentCommentId,
+        }),
       );
 
       await this.pushAggregationService.dispatchOrAggregate(notification, {
-        title: `${actor.name} commented on ${pageTitle}`,
+        title,
         body: pageTitle,
         url: pageUrl,
-        type: NotificationType.COMMENT_CREATED,
+        type: commentType,
         notificationId: notification.id,
         pageTitle,
       });
@@ -148,6 +186,7 @@ export class CommentNotificationService {
       spaceId,
       workspaceId,
       actorId,
+      eventId,
     } = data;
 
     if (commentCreatorId === actorId) return;
@@ -163,10 +202,10 @@ export class CommentNotificationService {
 
     const { actor, pageTitle, pageUrl } = context;
 
-    const hasAccess = await this.pageAccessService.filterUsersWithPageReadAccess(
-      pageId,
-      [commentCreatorId],
-    );
+    const hasAccess =
+      await this.pageAccessService.filterUsersWithPageReadAccess(pageId, [
+        commentCreatorId,
+      ]);
 
     if (hasAccess.length === 0) {
       this.logger.debug(
@@ -175,17 +214,28 @@ export class CommentNotificationService {
       return;
     }
 
-    const notification = await this.notificationService.create({
-      userId: commentCreatorId,
-      workspaceId,
-      type: NotificationType.COMMENT_RESOLVED,
-      actorId,
-      pageId,
-      spaceId,
-      commentId,
-    });
+    const locale =
+      await this.notificationService.getUserLocale(commentCreatorId);
+    const notification = await this.notificationService.create(
+      {
+        userId: commentCreatorId,
+        workspaceId,
+        type: NotificationType.COMMENT_RESOLVED,
+        actorId,
+        pageId,
+        spaceId,
+        commentId,
+      },
+      `comment:${eventId}:${NotificationType.COMMENT_RESOLVED}:${commentCreatorId}`,
+    );
+    if (!notification) return;
 
-    const subject = `${actor.name} resolved a comment on ${pageTitle}`;
+    const subject = getNotificationTitle(
+      NotificationType.COMMENT_RESOLVED,
+      actor.name,
+      pageTitle,
+      locale,
+    );
 
     await this.notificationService.queueEmail(
       commentCreatorId,
@@ -194,7 +244,12 @@ export class CommentNotificationService {
       actorId,
       spaceId,
       subject,
-      CommentResolvedEmail({ actorName: actor.name, pageTitle, pageUrl }),
+      CommentResolvedEmail({
+        actorName: actor.name,
+        pageTitle,
+        pageUrl,
+        locale,
+      }),
     );
 
     await this.pushAggregationService.dispatchOrAggregate(notification, {

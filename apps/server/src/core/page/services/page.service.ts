@@ -860,9 +860,11 @@ export class PageService {
         currentSettings,
         nextSettings ?? null,
       );
+    const assignmentEventId = uuid7();
 
     if (assignmentDelta.newAssigneeId) {
       await this.notificationQueue.add(QueueJob.PAGE_RECIPIENT_NOTIFICATION, {
+        eventId: assignmentEventId,
         reason: 'page-assigned',
         actorId: user.id,
         pageId: page.id,
@@ -874,6 +876,7 @@ export class PageService {
 
     if (assignmentDelta.newStakeholderIds.length > 0) {
       await this.notificationQueue.add(QueueJob.PAGE_RECIPIENT_NOTIFICATION, {
+        eventId: assignmentEventId,
         reason: 'page-stakeholder-added',
         actorId: user.id,
         pageId: page.id,

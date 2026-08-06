@@ -14,6 +14,8 @@ export const PUSH_NOTIFICATION_JOB_STATUS = {
   CANCELLED: 'cancelled',
 } as const;
 
+const PUSH_RETRY_BASE_SECONDS = 20;
+
 type PushNotificationJobStatus =
   (typeof PUSH_NOTIFICATION_JOB_STATUS)[keyof typeof PUSH_NOTIFICATION_JOB_STATUS];
 
@@ -102,6 +104,14 @@ export class PushNotificationJobRepo {
           .set({
             status: PUSH_NOTIFICATION_JOB_STATUS.PENDING,
             updatedAt: new Date(),
+            sendAfter: sql`
+              now() + (
+                ${PUSH_RETRY_BASE_SECONDS} * power(
+                  2,
+                  coalesce((payload->'retryMeta'->>'attempts')::integer, 0)
+                )
+              ) * interval '1 second'
+            `,
             payload: sql`
               coalesce(payload, '{}'::jsonb) || jsonb_build_object(
                 'retryMeta',

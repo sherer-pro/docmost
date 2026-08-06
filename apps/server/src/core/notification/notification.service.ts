@@ -8,6 +8,7 @@ import { WsGateway } from '../../ws/ws.gateway';
 import { MailService } from '../../integrations/mail/mail.service';
 import { NotificationDeliveryPolicyService } from './services/notification-delivery-policy.service';
 import { normalizeUserSettings } from '../user/utils/user-preferences.util';
+import { PageAccessService } from '../page-access/page-access.service';
 
 const DEFAULT_EMAIL_FREQUENCY = 'immediate';
 
@@ -20,11 +21,17 @@ export class NotificationService {
     private readonly wsGateway: WsGateway,
     private readonly mailService: MailService,
     private readonly notificationDeliveryPolicyService: NotificationDeliveryPolicyService,
+    private readonly pageAccessService: PageAccessService,
     @InjectKysely() private readonly db: KyselyDB,
   ) {}
 
-  async create(data: InsertableNotification) {
-    const notification = await this.notificationRepo.insert(data);
+  async create(data: InsertableNotification, deduplicationKey?: string) {
+    const notification = await this.notificationRepo.insert(
+      deduplicationKey ? { ...data, deduplicationKey } : data,
+    );
+    if (!notification) {
+      return null;
+    }
 
     this.wsGateway.server
       .to(`user-${data.userId}`)
@@ -34,11 +41,18 @@ export class NotificationService {
   }
 
   async findByUserId(userId: string, pagination: PaginationOptions) {
-    return this.notificationRepo.findByUserId(userId, pagination);
+    const result = await this.notificationRepo.findByUserId(userId, pagination);
+    result.items = await this.filterAccessibleNotifications(
+      userId,
+      result.items,
+    );
+    return result;
   }
 
   async getUnreadCount(userId: string) {
-    return this.notificationRepo.getUnreadCount(userId);
+    const unread = await this.notificationRepo.findUnreadForUser(userId);
+    const accessible = await this.filterAccessibleNotifications(userId, unread);
+    return accessible.length;
   }
 
   async markAsRead(notificationId: string, userId: string) {
@@ -63,14 +77,15 @@ export class NotificationService {
     template: any,
   ) {
     try {
-      const shouldSend = await this.notificationDeliveryPolicyService.shouldSend({
-        channel: 'email',
-        userId,
-        notificationId,
-        pageId: pageId ?? undefined,
-        actorId,
-        spaceId,
-      });
+      const shouldSend =
+        await this.notificationDeliveryPolicyService.shouldSend({
+          channel: 'email',
+          userId,
+          notificationId,
+          pageId: pageId ?? undefined,
+          actorId,
+          spaceId,
+        });
 
       if (!shouldSend) return;
 
@@ -95,6 +110,9 @@ export class NotificationService {
         subject,
         template,
         notificationId,
+        notificationUserId: userId,
+        notificationDeliveryMode: 'immediate',
+        notificationFrequency: emailFrequency,
       });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error';
@@ -102,5 +120,51 @@ export class NotificationService {
         `Failed to queue email for notification ${notificationId}: ${message}`,
       );
     }
+  }
+
+  async getUserLocale(userId: string): Promise<string> {
+    const user = await this.db
+      .selectFrom('users')
+      .select('locale')
+      .where('id', '=', userId)
+      .where('deletedAt', 'is', null)
+      .executeTakeFirst();
+
+    return user?.locale ?? 'en-US';
+  }
+
+  async filterAccessibleNotifications<T extends { pageId?: string | null }>(
+    userId: string,
+    notifications: T[],
+  ): Promise<T[]> {
+    const pageIds = [
+      ...new Set(
+        notifications
+          .map((notification) => notification.pageId)
+          .filter((pageId): pageId is string => !!pageId),
+      ),
+    ];
+
+    if (pageIds.length === 0) {
+      return notifications;
+    }
+
+    const allowedPageIds = new Set<string>();
+    await Promise.all(
+      pageIds.map(async (pageId) => {
+        const allowedUserIds =
+          await this.pageAccessService.filterUsersWithPageReadAccess(pageId, [
+            userId,
+          ]);
+        if (allowedUserIds.includes(userId)) {
+          allowedPageIds.add(pageId);
+        }
+      }),
+    );
+
+    return notifications.filter(
+      (notification) =>
+        !notification.pageId || allowedPageIds.has(notification.pageId),
+    );
   }
 }

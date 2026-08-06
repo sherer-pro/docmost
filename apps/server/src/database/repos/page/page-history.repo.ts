@@ -84,8 +84,8 @@ export class PageHistoryRepo {
   async saveHistory(
     page: Page,
     opts?: { contributorIds?: string[]; trx?: KyselyTransaction },
-  ): Promise<void> {
-    await this.insertPageHistory(
+  ): Promise<PageHistory> {
+    return this.insertPageHistory(
       {
         pageId: page.id,
         slugId: page.slugId,

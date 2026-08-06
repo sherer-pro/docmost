@@ -15,6 +15,10 @@ import { getPageTitle } from '../../../common/helpers';
 import { RecipientResolverService } from './recipient-resolver.service';
 import { PushAggregationService } from './push-aggregation.service';
 import { PageAccessService } from '../../page-access/page-access.service';
+import {
+  getNotificationActionText,
+  getNotificationTitle,
+} from '../../../common/helpers/notification-copy';
 
 @Injectable()
 export class PageNotificationService {
@@ -81,7 +85,7 @@ export class PageNotificationService {
     data: IPageRecipientNotificationJob,
     appUrl: string,
   ) {
-    const { actorId, pageId, spaceId, workspaceId, reason } = data;
+    const { actorId, eventId, pageId, spaceId, workspaceId, reason } = data;
 
     const recipientIds = await this.resolveRecipientIds(data);
 
@@ -92,17 +96,26 @@ export class PageNotificationService {
 
     const { actor, pageTitle, basePageUrl } = context;
 
-    const config = this.getRecipientNotificationConfig(reason, actor.name, pageTitle);
-
     for (const recipientId of recipientIds) {
-      const notification = await this.notificationService.create({
-        userId: recipientId,
-        workspaceId,
-        type: config.notificationType,
-        actorId,
-        pageId,
-        spaceId,
-      });
+      const locale = await this.notificationService.getUserLocale(recipientId);
+      const config = this.getRecipientNotificationConfig(
+        reason,
+        actor.name,
+        pageTitle,
+        locale,
+      );
+      const notification = await this.notificationService.create(
+        {
+          userId: recipientId,
+          workspaceId,
+          type: config.notificationType,
+          actorId,
+          pageId,
+          spaceId,
+        },
+        `page-recipient:${eventId}:${config.notificationType}:${recipientId}`,
+      );
+      if (!notification) continue;
 
       await this.notificationService.queueEmail(
         recipientId,
@@ -115,6 +128,7 @@ export class PageNotificationService {
           actorName: actor.name,
           pageTitle,
           pageUrl: basePageUrl,
+          locale,
         }),
       );
 
@@ -162,6 +176,7 @@ export class PageNotificationService {
     reason: IPageRecipientNotificationJob['reason'],
     actorName: string,
     pageTitle: string,
+    locale: string,
   ): {
     notificationType: NotificationType;
     title: string;
@@ -169,54 +184,88 @@ export class PageNotificationService {
       actorName: string;
       pageTitle: string;
       pageUrl: string;
+      locale: string;
     }) => React.JSX.Element;
   } {
     /**
      * Unified text configuration for push and email.
-     * We use a single `title` source so wording stays consistent across channels.
+     * We use a single title source so wording stays consistent across channels.
      */
     switch (reason) {
       case 'page-assigned':
         return {
           notificationType: NotificationType.PAGE_ASSIGNED,
-          title: `${actorName} assigned you to ${pageTitle}`,
-          createEmail: ({ actorName, pageTitle, pageUrl }) =>
+          title: getNotificationTitle(
+            NotificationType.PAGE_ASSIGNED,
+            actorName,
+            pageTitle,
+            locale,
+          ),
+          createEmail: ({ actorName, pageTitle, pageUrl, locale }) =>
             PageRecipientEmail({
               actorName,
               pageTitle,
               pageUrl,
-              actionText: 'assigned you to',
+              locale,
+              actionText: getNotificationActionText(
+                NotificationType.PAGE_ASSIGNED,
+                locale,
+              ),
             }),
         };
       case 'page-stakeholder-added':
         return {
           notificationType: NotificationType.PAGE_STAKEHOLDER_ADDED,
-          title: `${actorName} added you as stakeholder to ${pageTitle}`,
-          createEmail: ({ actorName, pageTitle, pageUrl }) =>
+          title: getNotificationTitle(
+            NotificationType.PAGE_STAKEHOLDER_ADDED,
+            actorName,
+            pageTitle,
+            locale,
+          ),
+          createEmail: ({ actorName, pageTitle, pageUrl, locale }) =>
             PageRecipientEmail({
               actorName,
               pageTitle,
               pageUrl,
-              actionText: 'added you as stakeholder to',
+              locale,
+              actionText: getNotificationActionText(
+                NotificationType.PAGE_STAKEHOLDER_ADDED,
+                locale,
+              ),
             }),
         };
       case 'database-user-assigned':
         return {
           notificationType: NotificationType.PAGE_USER_MENTION,
-          title: `${actorName} mentioned you in ${pageTitle}`,
-          createEmail: ({ actorName, pageTitle, pageUrl }) =>
-            PageMentionEmail({ actorName, pageTitle, pageUrl }),
+          title: getNotificationTitle(
+            NotificationType.PAGE_USER_MENTION,
+            actorName,
+            pageTitle,
+            locale,
+          ),
+          createEmail: ({ actorName, pageTitle, pageUrl, locale }) =>
+            PageMentionEmail({ actorName, pageTitle, pageUrl, locale }),
         };
       default:
         return {
-          notificationType: NotificationType.PAGE_UPDATED_FOR_ASSIGNEE_OR_STAKEHOLDER,
-          title: `${actorName} updated ${pageTitle}`,
-          createEmail: ({ actorName, pageTitle, pageUrl }) =>
+          notificationType:
+            NotificationType.PAGE_UPDATED_FOR_ASSIGNEE_OR_STAKEHOLDER,
+          title: getNotificationTitle(
+            NotificationType.PAGE_UPDATED_FOR_ASSIGNEE_OR_STAKEHOLDER,
+            actorName,
+            pageTitle,
+            locale,
+          ),
+          createEmail: ({ actorName, pageTitle, pageUrl, locale }) =>
             PageRecipientEmail({
               actorName,
               pageTitle,
               pageUrl,
-              actionText: 'updated',
+              locale,
+              actionText: getNotificationActionText(
+                NotificationType.PAGE_UPDATED_FOR_ASSIGNEE_OR_STAKEHOLDER,
+                locale,
+              ),
             }),
         };
     }
@@ -236,18 +285,28 @@ export class PageNotificationService {
     const { actor, pageTitle, basePageUrl } = context;
 
     for (const { userId, mentionId } of mentions) {
-      const notification = await this.notificationService.create({
-        userId,
-        workspaceId,
-        type: NotificationType.PAGE_USER_MENTION,
-        actorId,
-        pageId,
-        spaceId,
-        data: { mentionId },
-      });
+      const locale = await this.notificationService.getUserLocale(userId);
+      const notification = await this.notificationService.create(
+        {
+          userId,
+          workspaceId,
+          type: NotificationType.PAGE_USER_MENTION,
+          actorId,
+          pageId,
+          spaceId,
+          data: { mentionId },
+        },
+        `page-mention:${mentionId}:${userId}`,
+      );
+      if (!notification) continue;
 
       const pageUrl = `${basePageUrl}`;
-      const subject = `${actor.name} mentioned you in ${pageTitle}`;
+      const subject = getNotificationTitle(
+        NotificationType.PAGE_USER_MENTION,
+        actor.name,
+        pageTitle,
+        locale,
+      );
 
       await this.notificationService.queueEmail(
         userId,
@@ -256,7 +315,12 @@ export class PageNotificationService {
         actorId,
         spaceId,
         subject,
-        PageMentionEmail({ actorName: actor.name, pageTitle, pageUrl }),
+        PageMentionEmail({
+          actorName: actor.name,
+          pageTitle,
+          pageUrl,
+          locale,
+        }),
       );
 
       await this.pushAggregationService.dispatchOrAggregate(notification, {
@@ -303,4 +367,3 @@ export class PageNotificationService {
     return { actor, pageTitle: getPageTitle(page.title), basePageUrl };
   }
 }
-

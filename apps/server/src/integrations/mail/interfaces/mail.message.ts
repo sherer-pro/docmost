@@ -7,4 +7,7 @@ export interface MailMessage {
   template?: any;
   notificationId?: string;
   notificationIds?: string[];
+  notificationUserId?: string;
+  notificationDeliveryMode?: 'immediate' | 'digest';
+  notificationFrequency?: string;
 }

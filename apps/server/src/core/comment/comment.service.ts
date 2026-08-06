@@ -29,6 +29,7 @@ import {
   COMMENT_LIMIT_REACHED_MESSAGE,
 } from './comment.constants';
 import { CommentPaginationOptions } from './dto/comments.input';
+import { v7 as uuid7 } from 'uuid';
 
 @Injectable()
 export class CommentService {
@@ -225,6 +226,7 @@ export class CommentService {
 
     if (resolveCommentDto.resolved) {
       const jobData: ICommentResolvedNotificationJob = {
+        eventId: uuid7(),
         commentId: comment.id,
         commentCreatorId: comment.creatorId,
         pageId: comment.pageId,
@@ -261,6 +263,7 @@ export class CommentService {
     if (newMentionIds.length === 0 && !notifyWatchers && !parentCommentId) return;
 
     const jobData: ICommentNotificationJob = {
+      eventId: uuid7(),
       commentId,
       parentCommentId,
       pageId,

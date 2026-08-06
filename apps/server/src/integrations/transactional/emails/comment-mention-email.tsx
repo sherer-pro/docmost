@@ -2,24 +2,32 @@ import { Section, Text, Button } from '@react-email/components';
 import * as React from 'react';
 import { button, content, paragraph } from '../css/styles';
 import { MailBody } from '../partials/partials';
+import { isRussianNotificationLocale } from '../../../common/helpers/notification-copy';
 
 interface Props {
   actorName: string;
   pageTitle: string;
   pageUrl: string;
+  locale?: string;
 }
 
 export const CommentMentionEmail = ({
   actorName,
   pageTitle,
   pageUrl,
+  locale,
 }: Props) => {
+  const ru = isRussianNotificationLocale(locale);
+
   return (
-    <MailBody>
+    <MailBody locale={locale}>
       <Section style={content}>
-        <Text style={paragraph}>Hi there,</Text>
+        <Text style={paragraph}>{ru ? 'Здравствуйте!' : 'Hi there,'}</Text>
         <Text style={paragraph}>
-          <strong>{actorName}</strong> mentioned you in a comment on{' '}
+          <strong>{actorName}</strong>{' '}
+          {ru
+            ? 'упоминает вас в комментарии к странице'
+            : 'mentioned you in a comment on'}{' '}
           <strong>{pageTitle}</strong>.
         </Text>
       </Section>
@@ -33,7 +41,7 @@ export const CommentMentionEmail = ({
         }}
       >
         <Button href={pageUrl} style={button}>
-          View
+          {ru ? 'Открыть' : 'View'}
         </Button>
       </Section>
     </MailBody>

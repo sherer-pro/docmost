@@ -68,6 +68,27 @@ export class NotificationRepo {
     return Number(result?.count ?? 0);
   }
 
+  async findUnreadForUser(
+    userId: string,
+  ): Promise<Array<{ id: string; pageId: string | null }>> {
+    return this.db
+      .selectFrom('notifications')
+      .select(['id', 'pageId'])
+      .where('userId', '=', userId)
+      .where('readAt', 'is', null)
+      .where((eb) =>
+        eb.or([
+          eb('spaceId', 'is', null),
+          eb(
+            'spaceId',
+            'in',
+            this.spaceMemberRepo.getUserSpaceIdsQuery(userId),
+          ),
+        ]),
+      )
+      .execute();
+  }
+
   /**
    * Returns users that currently have unread and unsent notifications.
    * The list is ordered by earliest pending event to preserve fair processing.
@@ -176,10 +197,13 @@ export class NotificationRepo {
     return Boolean(result);
   }
 
-  async insert(notification: InsertableNotification): Promise<Notification> {
+  async insert(
+    notification: InsertableNotification,
+  ): Promise<Notification | undefined> {
     return this.db
       .insertInto('notifications')
       .values(notification)
+      .onConflict((oc) => oc.column('deduplicationKey').doNothing())
       .returningAll()
       .executeTakeFirst();
   }

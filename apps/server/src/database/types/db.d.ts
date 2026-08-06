@@ -814,6 +814,7 @@ export interface Notifications {
   commentId: string | null;
   createdAt: Generated<Timestamp>;
   data: Json | null;
+  deduplicationKey: string | null;
   emailedAt: Timestamp | null;
   id: Generated<string>;
   pageId: string | null;
