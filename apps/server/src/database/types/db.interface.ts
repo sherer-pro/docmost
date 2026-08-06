@@ -60,6 +60,8 @@ import type {
   Shares,
   PushSubscriptions,
   QueueOutbox,
+  RagSyncBindings,
+  RagSyncTargetClaims,
   SpaceMembers,
   Spaces,
   SsoLoginStates,
@@ -133,6 +135,8 @@ export interface DbInterface {
   shares: Shares;
   pushSubscriptions: PushSubscriptions;
   queueOutbox: QueueOutbox;
+  ragSyncBindings: RagSyncBindings;
+  ragSyncTargetClaims: RagSyncTargetClaims;
   spaceMembers: SpaceMembers;
   spaces: Spaces;
   ssoLoginStates: SsoLoginStates;

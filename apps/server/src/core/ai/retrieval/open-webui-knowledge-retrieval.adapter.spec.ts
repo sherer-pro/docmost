@@ -113,6 +113,35 @@ describe('OpenWebUiKnowledgeRetrievalAdapter', () => {
     ]);
   });
 
+  it('accepts metadata written by the built-in v2 synchronizer', async () => {
+    global.fetch = jest.fn(async () =>
+      jsonResponse({
+        documents: [['v2 content']],
+        metadatas: [
+          [
+            thisMetadata({
+              schemaVersion: 2,
+              bindingId: '0198f2f5-a5a3-7000-8000-000000000007',
+              targetVersion: 3,
+              sourceId: pageId,
+              pageId,
+            }),
+          ],
+        ],
+        distances: [[0.1]],
+      }),
+    ) as any;
+
+    await expect(adapter.retrieve(config, request)).resolves.toEqual([
+      expect.objectContaining({
+        sourceType: 'page',
+        sourceId: pageId,
+        pageId,
+        text: 'v2 content',
+      }),
+    ]);
+  });
+
   it('hydrates Docmost metadata from the Open WebUI file record', async () => {
     const calledUrls: string[] = [];
     global.fetch = jest.fn(async (url) => {
@@ -280,7 +309,7 @@ describe('OpenWebUiKnowledgeRetrievalAdapter', () => {
   });
 
   function thisMetadata(
-    overrides: Partial<ReturnType<typeof docmostMetadata>>,
+    overrides: Record<string, unknown>,
   ): Record<string, unknown> {
     return { data: { docmost: docmostMetadata(overrides) } };
   }

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -317,6 +318,24 @@ export class SpaceService {
     const space = await this.spaceRepo.findById(spaceId, workspaceId);
     if (!space) {
       throw new NotFoundException('Space not found');
+    }
+
+    const blockedByRagSync = await this.db
+      .selectFrom('ragSyncBindings')
+      .select('id')
+      .where('spaceId', '=', spaceId)
+      .where((eb) =>
+        eb.or([
+          eb('state', 'in', ['enabled', 'draining']),
+          eb('cleanupRequired', '=', true),
+        ]),
+      )
+      .executeTakeFirst();
+    if (blockedByRagSync) {
+      throw new ConflictException({
+        code: 'rag_sync_cleanup_required',
+        message: 'Disable RAG sync and complete or abandon cleanup first',
+      });
     }
 
     await this.spaceRepo.deleteSpace(spaceId, workspaceId);

@@ -33,6 +33,29 @@ describe('LocalDriver', () => {
     );
   });
 
+  it('rejects an already aborted read-stream acquisition', async () => {
+    const controller = new AbortController();
+    controller.abort(new DOMException('Stopped', 'AbortError'));
+
+    await expect(
+      driver.readStream('missing/file.txt', controller.signal),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+  });
+
+  it('checks for abort again after local file acquisition', async () => {
+    const controller = new AbortController();
+    const readableCheck = jest
+      .spyOn(driver as any, 'assertReadableFile')
+      .mockImplementation(async () => {
+        controller.abort(new DOMException('Stopped', 'AbortError'));
+      });
+
+    await expect(
+      driver.readStream('file.txt', controller.signal),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(readableCheck).toHaveBeenCalled();
+  });
+
   it('rejects missing range read streams before creating a stream', async () => {
     await expect(
       driver.readRangeStream('missing/file.txt', { start: 0, end: 1 }),
@@ -64,9 +87,9 @@ describe('LocalDriver', () => {
     const escapedName = `copied-${Date.now()}.txt`;
 
     await driver.upload('source.txt', Buffer.from('source'));
-    await expect(driver.copy('source.txt', `../${escapedName}`)).rejects.toThrow(
-      /storage root/,
-    );
+    await expect(
+      driver.copy('source.txt', `../${escapedName}`),
+    ).rejects.toThrow(/storage root/);
 
     await expect(
       fs.pathExists(join(tmpDir.path, '..', escapedName)),

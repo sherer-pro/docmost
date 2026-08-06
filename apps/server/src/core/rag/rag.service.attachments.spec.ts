@@ -1,5 +1,5 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
-import { RagService } from './rag.service';
+import { RagContentExportService as RagService } from './rag-content-export.service';
 
 describe('RagService attachment download authorization', () => {
   const scope = {

@@ -34,6 +34,7 @@ import { AiModule } from './ai/ai.module';
 import { McpModule } from './mcp/mcp.module';
 import { SsoModule } from './sso/sso.module';
 import { SpacePolicyModule } from './space-policy/space-policy.module';
+import { RagSyncModule } from './rag-sync/rag-sync.module';
 
 @Module({
   imports: [
@@ -56,6 +57,7 @@ import { SpacePolicyModule } from './space-policy/space-policy.module';
     DatabaseFeatureModule,
     ApiKeyModule,
     RagModule,
+    RagSyncModule,
     PageAccessModule,
     DictionaryModule,
     SessionModule,

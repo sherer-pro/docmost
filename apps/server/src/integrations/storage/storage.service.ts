@@ -8,14 +8,18 @@ export class StorageService {
   private readonly logger = new Logger(StorageService.name);
   constructor(
     @Inject(STORAGE_DRIVER_TOKEN) private storageDriver: StorageDriver,
-  ) { }
+  ) {}
 
   async upload(filePath: string, fileContent: Buffer | Readable) {
     await this.storageDriver.upload(filePath, fileContent);
     this.logger.debug(`File uploaded successfully. Path: ${filePath}`);
   }
 
-  async uploadStream(filePath: string, fileContent: Readable, options?: { recreateClient?: boolean }) {
+  async uploadStream(
+    filePath: string,
+    fileContent: Readable,
+    options?: { recreateClient?: boolean },
+  ) {
     await this.storageDriver.uploadStream(filePath, fileContent, options);
     this.logger.debug(`File uploaded successfully. Path: ${filePath}`);
   }
@@ -29,8 +33,8 @@ export class StorageService {
     return this.storageDriver.read(filePath);
   }
 
-  async readStream(filePath: string): Promise<Readable> {
-    return this.storageDriver.readStream(filePath);
+  async readStream(filePath: string, signal?: AbortSignal): Promise<Readable> {
+    return this.storageDriver.readStream(filePath, signal);
   }
 
   async readRangeStream(
