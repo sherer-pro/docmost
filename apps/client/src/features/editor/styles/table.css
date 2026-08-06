@@ -1,7 +1,7 @@
 .tableWrapper {
   margin-top: 1rem;
   margin-bottom: 1rem;
-  overflow-x: visible;
+  overflow-x: auto;
 }
 
 .table-dnd-preview {
