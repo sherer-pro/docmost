@@ -6,6 +6,7 @@ import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { executeTx } from '@docmost/db/utils';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import { PageAccessService } from '../page-access/page-access.service';
+import { normalizeLabelName } from './utils';
 
 @Injectable()
 export class LabelService {
@@ -22,10 +23,12 @@ export class LabelService {
     spaceId: string,
   ): Promise<Label[]> {
     const attached: Label[] = [];
+    const uniqueNames = Array.from(new Set(names.map(normalizeLabelName)));
+
     await executeTx(this.db, async (trx) => {
-      for (const name of names) {
+      for (const name of uniqueNames) {
         const label = await this.labelRepo.findOrCreate(
-          name.trim(),
+          name,
           workspaceId,
           spaceId,
           LabelType.PAGE,
@@ -103,14 +106,10 @@ export class LabelService {
       pagination: PaginationOptions;
     },
   ) {
-    const result = await this.labelRepo.findPagesByLabelId(
-      labelId,
-      user.id,
-      {
-        ...opts,
-        workspaceId: user.workspaceId,
-      },
-    );
+    const result = await this.labelRepo.findPagesByLabelId(labelId, user.id, {
+      ...opts,
+      workspaceId: user.workspaceId,
+    });
     if (result.items.length === 0) {
       return result;
     }

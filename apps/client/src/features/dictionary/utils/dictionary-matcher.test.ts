@@ -39,16 +39,17 @@ describe("dictionary matcher", () => {
     const index = createDictionaryMatcherIndex([
       term("term-1", "machine learning"),
     ]);
-    const matches = findDictionaryMatches("Machine \n\t learning works.", index);
+    const matches = findDictionaryMatches(
+      "Machine \n\t learning works.",
+      index,
+    );
 
     expect(matches).toHaveLength(1);
     expect(matches[0].matchedText).toBe("Machine \n\t learning");
   });
 
   it("does not match aliases inside larger words", () => {
-    const index = createDictionaryMatcherIndex([
-      term("term-1", "cat"),
-    ]);
+    const index = createDictionaryMatcherIndex([term("term-1", "cat")]);
     const matches = findDictionaryMatches("cat scatter catalog", index);
 
     expect(matches.map((match) => match.matchedText)).toEqual(["cat"]);
@@ -81,7 +82,10 @@ describe("dictionary matcher", () => {
       term("term-1", "C++"),
       term("term-2", "price (net)"),
     ]);
-    const matches = findDictionaryMatches("C++ and price (net), not C++17.", index);
+    const matches = findDictionaryMatches(
+      "C++ and price (net), not C++17.",
+      index,
+    );
 
     expect(matches.map((match) => match.alias)).toEqual(["C++", "price (net)"]);
   });
@@ -109,5 +113,43 @@ describe("dictionary matcher", () => {
 
     expect(matches).toHaveLength(1);
     expect(matches[0].alias).toBe("alpha");
+  });
+
+  it("matches canonically equivalent composed and decomposed text", () => {
+    const index = createDictionaryMatcherIndex([term("term-1", "é")]);
+    const matches = findDictionaryMatches("Cafe e\u0301!", index);
+
+    expect(matches).toEqual([
+      expect.objectContaining({
+        from: 5,
+        to: 7,
+        matchedText: "e\u0301",
+      }),
+    ]);
+  });
+
+  it("maps compatibility-normalized matches to original positions", () => {
+    const index = createDictionaryMatcherIndex([
+      term("term-1", "ABC"),
+      term("term-2", "ffi"),
+    ]);
+    const matches = findDictionaryMatches("ＡＢＣ and ﬃ", index);
+
+    expect(
+      matches.map(({ from, to, matchedText }) => ({
+        from,
+        to,
+        matchedText,
+      })),
+    ).toEqual([
+      { from: 0, to: 3, matchedText: "ＡＢＣ" },
+      { from: 8, to: 9, matchedText: "ﬃ" },
+    ]);
+  });
+
+  it("does not end a word before a combining mark", () => {
+    const index = createDictionaryMatcherIndex([term("term-1", "e")]);
+
+    expect(findDictionaryMatches("e\u0338", index)).toHaveLength(0);
   });
 });

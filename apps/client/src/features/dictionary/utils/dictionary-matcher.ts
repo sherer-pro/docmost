@@ -19,11 +19,50 @@ export interface DictionaryMatcherIndex {
   aliasesByLookup: Map<string, DictionaryAliasCandidate>;
 }
 
-const WORD_BOUNDARY_SOURCE = "\\p{L}\\p{N}_";
+const WORD_BOUNDARY_SOURCE = "\\p{L}\\p{N}\\p{M}_";
 const ALIAS_PATTERN_CHUNK_SIZE = 500;
+const DICTIONARY_GRAPHEME_SEGMENTER = (Intl as any).Segmenter
+  ? new (Intl as any).Segmenter(undefined, { granularity: "grapheme" })
+  : null;
+
+interface NormalizedDictionaryText {
+  value: string;
+  originalStarts: number[];
+  originalEnds: number[];
+}
 
 export function normalizeDictionaryAlias(value: string): string {
   return value.normalize("NFKC").trim().replace(/\s+/g, " ");
+}
+
+function normalizeDictionaryText(value: string): NormalizedDictionaryText {
+  const segments: Array<{ segment: string; index: number }> =
+    DICTIONARY_GRAPHEME_SEGMENTER
+      ? Array.from(DICTIONARY_GRAPHEME_SEGMENTER.segment(value))
+      : Array.from(value.matchAll(/\P{M}\p{M}*|\p{M}+/gu), (match) => ({
+          segment: match[0],
+          index: match.index,
+        }));
+  const normalizedParts: string[] = [];
+  const originalStarts: number[] = [];
+  const originalEnds: number[] = [];
+
+  segments.forEach(({ segment, index }) => {
+    const normalizedSegment = segment.normalize("NFKC");
+    const originalEnd = index + segment.length;
+
+    normalizedParts.push(normalizedSegment);
+    for (let offset = 0; offset < normalizedSegment.length; offset += 1) {
+      originalStarts.push(index);
+      originalEnds.push(originalEnd);
+    }
+  });
+
+  return {
+    value: normalizedParts.join(""),
+    originalStarts,
+    originalEnds,
+  };
 }
 
 function escapeRegex(value: string): string {
@@ -33,7 +72,10 @@ function escapeRegex(value: string): string {
 function createCombinedAliasPattern(aliases: string[]): RegExp {
   const source = aliases
     .map((alias) =>
-      normalizeDictionaryAlias(alias).split(/\s+/).map(escapeRegex).join("\\s+"),
+      normalizeDictionaryAlias(alias)
+        .split(/\s+/)
+        .map(escapeRegex)
+        .join("\\s+"),
     )
     .join("|");
 
@@ -79,7 +121,9 @@ export function createDictionaryMatcherIndex(
   const candidates = buildAliasCandidates(terms);
 
   candidates.forEach((candidate) => {
-    const lookupAlias = normalizeDictionaryAlias(candidate.alias).toLocaleLowerCase();
+    const lookupAlias = normalizeDictionaryAlias(
+      candidate.alias,
+    ).toLocaleLowerCase();
 
     if (!aliasesByLookup.has(lookupAlias)) {
       aliasesByLookup.set(lookupAlias, candidate);
@@ -87,7 +131,11 @@ export function createDictionaryMatcherIndex(
   });
 
   const patterns: RegExp[] = [];
-  for (let index = 0; index < candidates.length; index += ALIAS_PATTERN_CHUNK_SIZE) {
+  for (
+    let index = 0;
+    index < candidates.length;
+    index += ALIAS_PATTERN_CHUNK_SIZE
+  ) {
     patterns.push(
       createCombinedAliasPattern(
         candidates
@@ -120,10 +168,11 @@ export function findDictionaryMatches(
   }
 
   const matches: DictionaryMatch[] = [];
+  const normalizedText = normalizeDictionaryText(text);
 
   matcherIndex.patterns.forEach((pattern) => {
     pattern.lastIndex = 0;
-    Array.from(text.matchAll(pattern)).forEach((match) => {
+    Array.from(normalizedText.value.matchAll(pattern)).forEach((match) => {
       if (typeof match.index !== "number" || !match[0]?.trim()) {
         return;
       }
@@ -136,12 +185,21 @@ export function findDictionaryMatches(
         return;
       }
 
+      const normalizedFrom = match.index;
+      const normalizedTo = match.index + match[0].length;
+      const from = normalizedText.originalStarts[normalizedFrom];
+      const to = normalizedText.originalEnds[normalizedTo - 1];
+
+      if (typeof from !== "number" || typeof to !== "number") {
+        return;
+      }
+
       matches.push({
-        from: match.index,
-        to: match.index + match[0].length,
+        from,
+        to,
         term: candidate.term,
         alias: candidate.alias,
-        matchedText: match[0],
+        matchedText: text.slice(from, to),
       });
     });
   });
