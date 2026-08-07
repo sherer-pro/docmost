@@ -1,0 +1,481 @@
+{
+  "runId": "20260807060054",
+  "workspaceId": "019eda9c-a7c8-7fb6-823b-60da18e76bd1",
+  "spaceId": "019fdacf-6e69-7996-ad58-c3b0be9325b9",
+  "spaceSlug": "aicontext20260807060054",
+  "memberId": "019fdacf-6e30-7f71-ad9f-37d12bd6da1d",
+  "memberEmail": "ai-context-reader-20260807060054@sherer.pro",
+  "currentPage": {
+    "id": "019fdacf-6ead-77db-8a6b-38d8032df812",
+    "slugId": "Wv2nja7CwF",
+    "title": "Current context page",
+    "icon": null,
+    "coverPhoto": null,
+    "position": "a04p5",
+    "parentPageId": null,
+    "creatorId": "019eda9c-a7c6-76b4-9fbd-b809bce4b50d",
+    "lastUpdatedById": "019eda9c-a7c6-76b4-9fbd-b809bce4b50d",
+    "spaceId": "019fdacf-6e69-7996-ad58-c3b0be9325b9",
+    "workspaceId": "019eda9c-a7c8-7fb6-823b-60da18e76bd1",
+    "isLocked": false,
+    "templateKind": null,
+    "templateArchivedAt": null,
+    "createdAt": "2026-08-07T06:00:55.212Z",
+    "updatedAt": "2026-08-07T06:00:55.212Z",
+    "deletedAt": null,
+    "contributorIds": [],
+    "access": {
+      "role": "writer",
+      "sources": [
+        "system"
+      ],
+      "capabilities": {
+        "canRead": true,
+        "canWrite": true,
+        "canCreateChild": true,
+        "canMoveDeleteShare": true,
+        "canManageAccess": true
+      },
+      "isSystemAccess": true
+    }
+  },
+  "pages": {
+    "root": {
+      "id": "019fdacf-6f4e-71ba-8d00-d687030b3de9",
+      "slugId": "U0ai8nfmfR",
+      "title": "Tree root",
+      "icon": null,
+      "coverPhoto": null,
+      "position": "a1Bq4",
+      "parentPageId": null,
+      "creatorId": "019eda9c-a7c6-76b4-9fbd-b809bce4b50d",
+      "lastUpdatedById": "019eda9c-a7c6-76b4-9fbd-b809bce4b50d",
+      "spaceId": "019fdacf-6e69-7996-ad58-c3b0be9325b9",
+      "workspaceId": "019eda9c-a7c8-7fb6-823b-60da18e76bd1",
+      "isLocked": false,
+      "templateKind": null,
+      "templateArchivedAt": null,
+      "createdAt": "2026-08-07T06:00:55.373Z",
+      "updatedAt": "2026-08-07T06:00:55.373Z",
+      "deletedAt": null,
+      "contributorIds": [],
+      "access": {
+        "role": "writer",
+        "sources": [
+          "system"
+        ],
+        "capabilities": {
+          "canRead": true,
+          "canWrite": true,
+          "canCreateChild": true,
+          "canMoveDeleteShare": true,
+          "canManageAccess": true
+        },
+        "isSystemAccess": true
+      }
+    },
+    "child": {
+      "id": "019fdacf-6fc8-7daa-8135-4e82c5ade456",
+      "slugId": "9lqHEa4NC6",
+      "title": "Duplicate title",
+      "icon": null,
+      "coverPhoto": null,
+      "position": "a0BGY",
+      "parentPageId": "019fdacf-6f4e-71ba-8d00-d687030b3de9",
+      "creatorId": "019eda9c-a7c6-76b4-9fbd-b809bce4b50d",
+      "lastUpdatedById": "019eda9c-a7c6-76b4-9fbd-b809bce4b50d",
+      "spaceId": "019fdacf-6e69-7996-ad58-c3b0be9325b9",
+      "workspaceId": "019eda9c-a7c8-7fb6-823b-60da18e76bd1",
+      "isLocked": false,
+      "templateKind": null,
+      "templateArchivedAt": null,
+      "createdAt": "2026-08-07T06:00:55.487Z",
+      "updatedAt": "2026-08-07T06:00:55.487Z",
+      "deletedAt": null,
+      "contributorIds": [],
+      "access": {
+        "role": "writer",
+        "sources": [
+          "system"
+        ],
+        "capabilities": {
+          "canRead": true,
+          "canWrite": true,
+          "canCreateChild": true,
+          "canMoveDeleteShare": true,
+          "canManageAccess": true
+        },
+        "isSystemAccess": true
+      }
+    },
+    "grandchild": {
+      "id": "019fdacf-702b-7862-92ea-11338f9db23e",
+      "slugId": "bZuYf7RrgM",
+      "title": "Tree grandchild",
+      "icon": null,
+      "coverPhoto": null,
+      "position": "a0BtL",
+      "parentPageId": "019fdacf-6fc8-7daa-8135-4e82c5ade456",
+      "creatorId": "019eda9c-a7c6-76b4-9fbd-b809bce4b50d",
+      "lastUpdatedById": "019eda9c-a7c6-76b4-9fbd-b809bce4b50d",
+      "spaceId": "019fdacf-6e69-7996-ad58-c3b0be9325b9",
+      "workspaceId": "019eda9c-a7c8-7fb6-823b-60da18e76bd1",
+      "isLocked": false,
+      "templateKind": null,
+      "templateArchivedAt": null,
+      "createdAt": "2026-08-07T06:00:55.589Z",
+      "updatedAt": "2026-08-07T06:00:55.589Z",
+      "deletedAt": null,
+      "contributorIds": [],
+      "access": {
+        "role": "writer",
+        "sources": [
+          "system"
+        ],
+        "capabilities": {
+          "canRead": true,
+          "canWrite": true,
+          "canCreateChild": true,
+          "canMoveDeleteShare": true,
+          "canManageAccess": true
+        },
+        "isSystemAccess": true
+      }
+    },
+    "duplicate": {
+      "id": "019fdacf-7085-74a4-a193-e263959d93f6",
+      "slugId": "rGftpFyWxy",
+      "title": "Duplicate title",
+      "icon": null,
+      "coverPhoto": null,
+      "position": "a1AjK",
+      "parentPageId": "019fdacf-6f4e-71ba-8d00-d687030b3de9",
+      "creatorId": "019eda9c-a7c6-76b4-9fbd-b809bce4b50d",
+      "lastUpdatedById": "019eda9c-a7c6-76b4-9fbd-b809bce4b50d",
+      "spaceId": "019fdacf-6e69-7996-ad58-c3b0be9325b9",
+      "workspaceId": "019eda9c-a7c8-7fb6-823b-60da18e76bd1",
+      "isLocked": false,
+      "templateKind": null,
+      "templateArchivedAt": null,
+      "createdAt": "2026-08-07T06:00:55.678Z",
+      "updatedAt": "2026-08-07T06:00:55.678Z",
+      "deletedAt": null,
+      "contributorIds": [],
+      "access": {
+        "role": "writer",
+        "sources": [
+          "system"
+        ],
+        "capabilities": {
+          "canRead": true,
+          "canWrite": true,
+          "canCreateChild": true,
+          "canMoveDeleteShare": true,
+          "canManageAccess": true
+        },
+        "isSystemAccess": true
+      }
+    },
+    "sourcePage": {
+      "id": "019fdacf-70e4-7127-a4a9-a9ccedd75f89",
+      "slugId": "TKVqkJbTyY",
+      "title": "Source page",
+      "icon": null,
+      "coverPhoto": null,
+      "position": "a29Xj",
+      "parentPageId": null,
+      "creatorId": "019eda9c-a7c6-76b4-9fbd-b809bce4b50d",
+      "lastUpdatedById": "019eda9c-a7c6-76b4-9fbd-b809bce4b50d",
+      "spaceId": "019fdacf-6e69-7996-ad58-c3b0be9325b9",
+      "workspaceId": "019eda9c-a7c8-7fb6-823b-60da18e76bd1",
+      "isLocked": false,
+      "templateKind": null,
+      "templateArchivedAt": null,
+      "createdAt": "2026-08-07T06:00:55.779Z",
+      "updatedAt": "2026-08-07T06:00:55.779Z",
+      "deletedAt": null,
+      "contributorIds": [],
+      "access": {
+        "role": "writer",
+        "sources": [
+          "system"
+        ],
+        "capabilities": {
+          "canRead": true,
+          "canWrite": true,
+          "canCreateChild": true,
+          "canMoveDeleteShare": true,
+          "canManageAccess": true
+        },
+        "isSystemAccess": true
+      }
+    },
+    "closedPage": {
+      "id": "019fdacf-7146-7487-a8a2-4a008bb8e393",
+      "slugId": "zsz3YCEkRs",
+      "title": "Closed source",
+      "icon": null,
+      "coverPhoto": null,
+      "position": "a38JA",
+      "parentPageId": null,
+      "creatorId": "019eda9c-a7c6-76b4-9fbd-b809bce4b50d",
+      "lastUpdatedById": "019eda9c-a7c6-76b4-9fbd-b809bce4b50d",
+      "spaceId": "019fdacf-6e69-7996-ad58-c3b0be9325b9",
+      "workspaceId": "019eda9c-a7c8-7fb6-823b-60da18e76bd1",
+      "isLocked": false,
+      "templateKind": null,
+      "templateArchivedAt": null,
+      "createdAt": "2026-08-07T06:00:55.877Z",
+      "updatedAt": "2026-08-07T06:00:55.877Z",
+      "deletedAt": null,
+      "contributorIds": [],
+      "access": {
+        "role": "writer",
+        "sources": [
+          "system"
+        ],
+        "capabilities": {
+          "canRead": true,
+          "canWrite": true,
+          "canCreateChild": true,
+          "canMoveDeleteShare": true,
+          "canManageAccess": true
+        },
+        "isSystemAccess": true
+      }
+    },
+    "revokePage": {
+      "id": "019fdacf-71f9-7ac1-b062-3181ce55723b",
+      "slugId": "vpOj2kaHfo",
+      "title": "Revocable source",
+      "icon": null,
+      "coverPhoto": null,
+      "position": "a541s",
+      "parentPageId": null,
+      "creatorId": "019eda9c-a7c6-76b4-9fbd-b809bce4b50d",
+      "lastUpdatedById": "019eda9c-a7c6-76b4-9fbd-b809bce4b50d",
+      "spaceId": "019fdacf-6e69-7996-ad58-c3b0be9325b9",
+      "workspaceId": "019eda9c-a7c8-7fb6-823b-60da18e76bd1",
+      "isLocked": false,
+      "templateKind": null,
+      "templateArchivedAt": null,
+      "createdAt": "2026-08-07T06:00:56.057Z",
+      "updatedAt": "2026-08-07T06:00:56.057Z",
+      "deletedAt": null,
+      "contributorIds": [],
+      "access": {
+        "role": "writer",
+        "sources": [
+          "system"
+        ],
+        "capabilities": {
+          "canRead": true,
+          "canWrite": true,
+          "canCreateChild": true,
+          "canMoveDeleteShare": true,
+          "canManageAccess": true
+        },
+        "isSystemAccess": true
+      }
+    }
+  },
+  "database": {
+    "id": "019fdacf-7334-7b44-b9ce-d7cbfa0f9bdf",
+    "pageId": "019fdacf-732b-75d7-97c7-cec19d94ef8f",
+    "rowId": "019fdacf-7356-7887-a321-50346bd223ba",
+    "rowPageId": "019fdacf-734d-7164-99af-f36a54e828f2"
+  },
+  "attachments": {
+    "docx": "019fdacf-7fad-70d9-889b-0e51d376907c",
+    "pdf": "019fdacf-7fd7-75f9-843d-cefa59441358",
+    "unreadable": "019fdacf-8030-76ca-943e-1afabc59ea6c"
+  },
+  "accessChecks": {
+    "readerClosedContext": {
+      "accepted": false,
+      "status": 400
+    },
+    "readerDeletedContext": {
+      "accepted": false,
+      "status": 400
+    },
+    "adminClosedContext": {
+      "status": "completed",
+      "markerReceived": true
+    },
+    "deletedHistory": {
+      "restricted": false,
+      "contentChars": 0
+    }
+  },
+  "attachmentIsolation": {
+    "completed": true,
+    "validSources": [
+      "safe-injection-fixture.docx",
+      "safe-injection-fixture.pdf"
+    ],
+    "unreadableSourcePresent": false,
+    "injectionConfinedToReferences": true
+  },
+  "contextWindow": {
+    "configuredTokens": 4096,
+    "sentReferenceChars": 2400,
+    "requestedSourceCount": 4,
+    "emittedSourceCount": 2
+  },
+  "searchChecks": [
+    {
+      "query": "\"quoted\"",
+      "count": 1,
+      "titles": [
+        "Search \"quoted\""
+      ]
+    },
+    {
+      "query": "(brackets)",
+      "count": 1,
+      "titles": [
+        "Search (brackets)"
+      ]
+    },
+    {
+      "query": "«guillemets»",
+      "count": 1,
+      "titles": [
+        "Search «guillemets»"
+      ]
+    },
+    {
+      "query": "Search-hyphen",
+      "count": 1,
+      "titles": [
+        "Search-hyphen"
+      ]
+    },
+    {
+      "query": "Поиск Юникод 東京",
+      "count": 1,
+      "titles": [
+        "Поиск Юникод 東京"
+      ]
+    }
+  ],
+  "pagination": {
+    "count": 27,
+    "uniqueCount": 27
+  },
+  "breadcrumbRuntimeCheck": {
+    "status": 200,
+    "title": "Tree grandchild",
+    "breadcrumbs": [
+      "Tree root",
+      "Duplicate title"
+    ]
+  },
+  "descendants": [
+    {
+      "sourceType": "page",
+      "sourceId": "019fdacf-6fc8-7daa-8135-4e82c5ade456",
+      "pageId": "019fdacf-6fc8-7daa-8135-4e82c5ade456",
+      "title": "Duplicate title",
+      "breadcrumbs": []
+    },
+    {
+      "sourceType": "page",
+      "sourceId": "019fdacf-7085-74a4-a193-e263959d93f6",
+      "pageId": "019fdacf-7085-74a4-a193-e263959d93f6",
+      "title": "Duplicate title",
+      "breadcrumbs": []
+    },
+    {
+      "sourceType": "database",
+      "sourceId": "019fdacf-7334-7b44-b9ce-d7cbfa0f9bdf",
+      "pageId": "019fdacf-732b-75d7-97c7-cec19d94ef8f",
+      "title": "Context database",
+      "breadcrumbs": []
+    }
+  ],
+  "editorActions": [
+    {
+      "commandId": "shorten",
+      "id": "019fdacf-9f4b-704b-8f24-0781527d19db",
+      "status": "completed",
+      "response": "**AI_REPLACED_TEXT**",
+      "modelRequestId": "973062c9-0702-4e94-be6e-8c08b31b9241"
+    },
+    {
+      "commandId": "explain",
+      "id": "019fdacf-a052-736f-9fea-481f969397c4",
+      "status": "completed",
+      "response": "**AI_REPLACED_TEXT**",
+      "modelRequestId": "b5aec303-9da0-4a15-994d-3cb41076c9b0"
+    },
+    {
+      "commandId": "improve",
+      "id": "019fdacf-a15a-744d-a713-6454a3bdf8d4",
+      "status": "completed",
+      "response": "**AI_REPLACED_TEXT**",
+      "modelRequestId": "f57e1f46-6dce-4f65-a2fd-b0a121146a3f"
+    },
+    {
+      "commandId": "grammar",
+      "id": "019fdacf-a259-70c9-8123-6b7904af6b3f",
+      "status": "completed",
+      "response": "**AI_REPLACED_TEXT**",
+      "modelRequestId": "5fe37015-510f-47a7-b87b-a3046a1114dd"
+    },
+    {
+      "commandId": "continue",
+      "id": "019fdacf-a356-759a-962d-da5b10d2789f",
+      "status": "completed",
+      "response": "**AI_REPLACED_TEXT**",
+      "modelRequestId": "9d6fa5cc-05e3-4045-b9a9-9de9f82507ba"
+    },
+    {
+      "commandId": "translate",
+      "id": "019fdacf-a45c-71d8-8953-84cbe90377d0",
+      "status": "completed",
+      "response": "**AI_REPLACED_TEXT**",
+      "modelRequestId": "a3a81879-2b9a-4935-a1e0-20229415f794"
+    },
+    {
+      "commandId": "tone",
+      "id": "019fdacf-a564-7375-a2f3-7e0b16d4264a",
+      "status": "completed",
+      "response": "**AI_REPLACED_TEXT**",
+      "modelRequestId": "5c52fc87-a723-4f27-bcf3-229c9e5bc01f"
+    }
+  ],
+  "parallelContextRevision": {
+    "initial": 0,
+    "committed": 1,
+    "staleStatus": 409
+  },
+  "revokeDuringGeneration": {
+    "runId": "019fdacf-aebb-769e-872a-643bf7523668",
+    "status": "failed",
+    "errorCode": "source_access_changed",
+    "contentChars": 0
+  },
+  "browser": {
+    "pageUrl": "/s/aicontext20260807060054/p/Wv2nja7CwF",
+    "citedConversationId": "019fdacf-bac4-731b-938f-909603c8eb8b",
+    "reload": "passed",
+    "parallelTabs": "passed",
+    "mobileContextPicker": "passed",
+    "selectionApplyModes": [
+      "before",
+      "after",
+      "replace"
+    ],
+    "preservedStrongFormatting": true,
+    "citationNavigation": "passed",
+    "consoleEvents": []
+  },
+  "retained": true,
+  "tools": {
+    "node": "v24.16.0",
+    "playwright": "1.62.1",
+    "deterministicModel": "local deterministic-context-model-v1"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "docx": {
+    "path": "D:\\DevProjects\\docmost\\output\\audit\\ai-context-2026-08-07\\fixtures\\safe-injection-fixture.docx",
+    "marker": "DOCX_CONTEXT_MARKER_4D2A",
+    "chars": 361
+  },
+  "pdf": {
+    "path": "D:\\DevProjects\\docmost\\output\\audit\\ai-context-2026-08-07\\fixtures\\safe-injection-fixture.pdf",
+    "marker": "PDF_CONTEXT_MARKER_8F31",
+    "chars": 271
+  },
+  "containsSecrets": false,
+  "unreadablePdf": {
+    "path": "D:\\DevProjects\\docmost\\output\\audit\\ai-context-2026-08-07\\fixtures\\unreadable-fixture.pdf",
+    "containsSecrets": false
+  }
+}
