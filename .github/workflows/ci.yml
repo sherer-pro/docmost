@@ -33,7 +33,9 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Community-edition boundary check
-        run: pnpm check:no-ee
+        run: |
+          pnpm check:no-ee
+          pnpm test:no-ee
 
       - name: Build
         run: pnpm build
