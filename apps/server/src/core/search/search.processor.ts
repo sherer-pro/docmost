@@ -45,7 +45,10 @@ export class SearchProcessor extends WorkerHost {
         return;
 
       case QueueJob.TYPESENSE_FLUSH:
-        await this.typesenseIndexService.rebuildAll();
+        await this.typesenseIndexService.rebuildAll({
+          workspaceId: job.data.workspaceId,
+          entities: job.data.entities,
+        });
         return;
 
       default:

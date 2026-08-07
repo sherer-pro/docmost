@@ -14,6 +14,7 @@ export class SearchLabelDto {
 
 export class SearchResponseDto {
   id: string;
+  slugId: string;
   title: string;
   icon: string;
   parentPageId: string;

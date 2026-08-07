@@ -246,6 +246,19 @@ describe('SearchService', () => {
     expect(service).toBeDefined();
   });
 
+  it('escapes source markup and restores only private highlight markers', () => {
+    const [result] = (service as any).normalizeSearchHighlights([
+      {
+        highlight:
+          '<b onclick="alert(1)">source</b> __DOCMOST_TS_HIGHLIGHT_START_8C527D__match__DOCMOST_TS_HIGHLIGHT_END_8C527D__ <mark>source</mark>',
+      },
+    ]);
+
+    expect(result.highlight).toBe(
+      '&lt;b onclick=&quot;alert(1)&quot;&gt;source&lt;/b&gt; <mark>match</mark> &lt;mark&gt;source&lt;/mark&gt;',
+    );
+  });
+
   it('returns readable pages for label-only search without full-text filtering', async () => {
     const row = createSearchRow();
     const { service, state } = createPageSearchService([row]);
@@ -291,15 +304,20 @@ describe('SearchService', () => {
   });
 
   it('requires both full-text and label matching when query and label are provided', async () => {
-    const row = createSearchRow({ rank: 1, highlight: '<mark>Roadmap</mark>' });
-    const { service, state } = createPageSearchService([row]);
+    const rawRow = createSearchRow({
+      rank: 1,
+      highlight:
+        '__DOCMOST_TS_HIGHLIGHT_START_8C527D__Roadmap__DOCMOST_TS_HIGHLIGHT_END_8C527D__',
+    });
+    const expectedRow = { ...rawRow, highlight: '<mark>Roadmap</mark>' };
+    const { service, state } = createPageSearchService([rawRow]);
 
     const result = await service.searchPage(
       { query: 'Roadmap', labelId: 'label-1' } as any,
       { userId: 'user-1', workspaceId: 'workspace-1' },
     );
 
-    expect(result.items).toEqual([{ ...row, breadcrumbs: [] }]);
+    expect(result.items).toEqual([{ ...expectedRow, breadcrumbs: [] }]);
     expect(state.whereCalls.some(([column]) => column === 'tsv')).toBe(true);
     expect(state.selectFromCalls).toContain('pageLabels as labelFilter');
     expect(state.orderByCalls).toContainEqual(['rank', 'desc']);

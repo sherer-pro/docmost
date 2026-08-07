@@ -1,6 +1,6 @@
 import { Spotlight } from "@mantine/spotlight";
 import { IconSearch } from "@tabler/icons-react";
-import { Group } from "@mantine/core";
+import { Button, Group } from "@mantine/core";
 import React, { useState, useMemo } from "react";
 import { useDebouncedValue } from "@mantine/hooks";
 import { useTranslation } from "react-i18next";
@@ -51,7 +51,9 @@ export function SearchSpotlight({ spaceId }: SearchSpotlightProps) {
     return params;
   }, [debouncedSearchQuery, filters]);
 
-  const { data: searchResults, isLoading } = useUnifiedSearch(searchParams);
+  const { data, isLoading, hasNextPage, fetchNextPage, isFetchingNextPage } =
+    useUnifiedSearch(searchParams);
+  const searchResults = data?.pages.flat() ?? [];
 
   // Determine result type for rendering
   const isAttachmentSearch = filters.contentType === "attachment";
@@ -62,7 +64,7 @@ export function SearchSpotlight({ spaceId }: SearchSpotlightProps) {
   const hasSearchInput =
     query.trim().length > 0 || hasLabelSearch || hasTagSearch;
 
-  const resultItems = (searchResults || []).map((result) => (
+  const resultItems = searchResults.map((result) => (
     <SearchResultItem
       key={result.id}
       result={result}
@@ -119,6 +121,16 @@ export function SearchSpotlight({ spaceId }: SearchSpotlightProps) {
           )}
 
           {resultItems.length > 0 && <>{resultItems}</>}
+          {hasNextPage && (
+            <Button
+              variant="subtle"
+              fullWidth
+              loading={isFetchingNextPage}
+              onClick={() => void fetchNextPage()}
+            >
+              {t("Load more")}
+            </Button>
+          )}
         </Spotlight.ActionsList>
       </Spotlight.Root>
     </>

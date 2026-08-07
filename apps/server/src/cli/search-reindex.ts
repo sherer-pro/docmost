@@ -32,6 +32,15 @@ async function main(): Promise<void> {
   const reextractAttachments = args['reextract-attachments'] === true;
   const retryFailed = args['retry-failed'] === true;
 
+  if (retryFailed && !reextractAttachments) {
+    throw new Error('--retry-failed requires --reextract-attachments');
+  }
+  if (reextractAttachments && !entities.includes('attachments')) {
+    throw new Error(
+      '--reextract-attachments requires attachments in --entities',
+    );
+  }
+
   const redisConfig = parseRedisUrl(requireEnv('REDIS_URL'));
   const connection = {
     host: redisConfig.host,
@@ -46,8 +55,8 @@ async function main(): Promise<void> {
   const { db, close } = createCliDatabase();
 
   try {
+    const workspaceIds = await resolveWorkspaceIds(db, workspace);
     if (reextractAttachments) {
-      const workspaceIds = await resolveWorkspaceIds(db, workspace);
       if (retryFailed) {
         const reset = await db
           .updateTable('attachments')
@@ -82,7 +91,10 @@ async function main(): Promise<void> {
     if (process.env.SEARCH_DRIVER === 'typesense') {
       await searchQueue.add(
         QueueJob.TYPESENSE_FLUSH,
-        {},
+        {
+          entities,
+          ...(workspace === 'all' ? {} : { workspaceId: workspaceIds[0] }),
+        },
         {
           attempts: 3,
           backoff: { type: 'exponential', delay: 20_000 },
@@ -91,13 +103,8 @@ async function main(): Promise<void> {
         },
       );
       console.log(
-        `Queued a Typesense rebuild for ${entities.join(' and ')}. The rebuild covers every workspace.`,
+        `Queued a Typesense rebuild for ${entities.join(' and ')} in ${workspace === 'all' ? 'all workspaces' : `workspace ${workspaceIds[0]}`}.`,
       );
-      if (workspace !== 'all') {
-        console.log(
-          'Note: the Typesense rebuild is not scoped to a single workspace.',
-        );
-      }
     } else {
       console.log(
         'SEARCH_DRIVER is not "typesense"; skipped the search index rebuild.',

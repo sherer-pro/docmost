@@ -52,6 +52,10 @@ interface SearchAncestorRow {
 
 const DEFAULT_SEARCH_LIMIT = 25;
 const MAX_SEARCH_FETCH_BATCH = 100;
+const HIGHLIGHT_START = '__DOCMOST_TS_HIGHLIGHT_START_8C527D__';
+const HIGHLIGHT_END = '__DOCMOST_TS_HIGHLIGHT_END_8C527D__';
+const TS_HEADLINE_OPTIONS = `StartSel=${HIGHLIGHT_START}, StopSel=${HIGHLIGHT_END}, MinWords=9, MaxWords=10, MaxFragments=3`;
+const ATTACHMENT_TS_HEADLINE_OPTIONS = `StartSel=${HIGHLIGHT_START}, StopSel=${HIGHLIGHT_END}, MinWords=9, MaxWords=18, MaxFragments=3`;
 
 @Injectable()
 export class SearchService {
@@ -73,12 +77,44 @@ export class SearchService {
         return result;
       }
 
+      const normalized = result.highlight
+        .replace(/\r\n|\r|\n/g, ' ')
+        .replace(/\s+/g, ' ');
+      const escaped = this.escapeHtml(normalized);
+
       return {
         ...result,
-        highlight: result.highlight
-          .replace(/\r\n|\r|\n/g, ' ')
-          .replace(/\s+/g, ' '),
+        // Escape the source fragment first, then restore only the private
+        // ts_headline selection markers as the Typesense-compatible contract.
+        highlight: escaped
+          .replaceAll(HIGHLIGHT_START, '<mark>')
+          .replaceAll(HIGHLIGHT_END, '</mark>'),
       };
+    });
+  }
+
+  private escapeHtml(value: string): string {
+    return value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  projectPublicShareResults(
+    searchResults: SearchResponseDto[],
+  ): SearchResponseDto[] {
+    return searchResults.map((result) => {
+      const { id, slugId, title, icon, rank, highlight } = result;
+      return {
+        id,
+        slugId,
+        title,
+        icon,
+        rank,
+        highlight,
+      } as unknown as SearchResponseDto;
     });
   }
 
@@ -296,7 +332,7 @@ export class SearchService {
       ? sql<number>`ts_rank(tsv, to_tsquery('english', f_unaccent(${searchQuery})))`
       : sql<number>`0`;
     const highlightExpression = hasTextQuery
-      ? sql<string>`ts_headline('english', text_content, to_tsquery('english', f_unaccent(${searchQuery})),'MinWords=9, MaxWords=10, MaxFragments=3')`
+      ? sql<string>`ts_headline('english', text_content, to_tsquery('english', f_unaccent(${searchQuery})), ${TS_HEADLINE_OPTIONS})`
       : sql<string>`${''}`;
 
     let queryResults = this.db
@@ -447,7 +483,10 @@ export class SearchService {
     }
 
     if (hasTextQuery) {
-      queryResults = queryResults.orderBy('rank', 'desc');
+      queryResults = queryResults
+        .orderBy('rank', 'desc')
+        .orderBy('updatedAt', 'desc')
+        .orderBy('id', 'desc');
     } else {
       queryResults = queryResults
         .orderBy('updatedAt', 'desc')
@@ -538,7 +577,9 @@ export class SearchService {
       const searchResultsWithBreadcrumbs =
         await this.attachBreadcrumbsToResults(searchResults);
 
-      return { items: searchResultsWithBreadcrumbs };
+      return {
+        items: this.projectPublicShareResults(searchResultsWithBreadcrumbs),
+      };
     }
   }
 
@@ -574,7 +615,7 @@ export class SearchService {
           'english',
           coalesce(attachments.text_content, ''),
           ${textQuery},
-          'MinWords=9, MaxWords=18, MaxFragments=3'
+          ${ATTACHMENT_TS_HEADLINE_OPTIONS}
         )`.as('highlight'),
       ])
       .select((eb) => [
