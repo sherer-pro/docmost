@@ -32,9 +32,11 @@ import { TransclusionService } from '../transclusion/transclusion.service';
 import { materializePageContent } from '../transclusion/utils/page-embed-materialize.util';
 import { rewriteAttachmentsForUnsync } from '../transclusion/utils/transclusion-unsync.util';
 import {
+  CreatePageTemplateDto,
   CreateFromTemplateDto,
   DetachPageEmbedDto,
   InsertPageEmbedDto,
+  PageTemplateDestinationsDto,
   PageTemplateDiscoveryDto,
 } from '../dto/page-template.dto';
 import { PageService } from './page.service';
@@ -106,6 +108,36 @@ export class PageTemplateService {
     const limit = dto.limit ?? 20;
     const candidateLimit = Math.min(limit * 5 + 1, 251);
     const offset = this.decodeCursor(dto.cursor);
+    const effective = await this.policy.resolveForUser(
+      user.workspaceId,
+      dto.spaceId,
+      user.id,
+    );
+    const ability = await this.spaceAbility.createForUser(user, dto.spaceId);
+    const enabled =
+      effective.systemEnabled &&
+      effective.workspaceEnabled &&
+      effective.templatesEnabled;
+    const capabilities = {
+      enabled,
+      createTemplate:
+        enabled &&
+        effective.allowCreateTemplate &&
+        effective.allowedActions.includes('create_template') &&
+        ability.can(SpaceCaslAction.Create, SpaceCaslSubject.Page),
+      useSnapshot:
+        enabled &&
+        effective.allowSnapshot &&
+        effective.allowedActions.includes('use_snapshot'),
+      useLiveEmbed:
+        enabled &&
+        effective.allowLiveEmbed &&
+        effective.allowedActions.includes('use_live_embed'),
+    };
+    if (!enabled) {
+      return { items: [], nextCursor: null, capabilities };
+    }
+
     let query = this.db
       .selectFrom('pages as page')
       .innerJoin('spaces as space', 'space.id', 'page.spaceId')
@@ -120,6 +152,7 @@ export class PageTemplateService {
         'space.slug as spaceSlug',
       ])
       .where('page.workspaceId', '=', user.workspaceId)
+      .where('page.spaceId', '=', dto.spaceId)
       .where('page.isTemplate', '=', true)
       .where('page.deletedAt', 'is', null)
       .where((eb) =>
@@ -148,7 +181,6 @@ export class PageTemplateService {
       .orderBy('page.id', 'desc')
       .offset(offset)
       .limit(candidateLimit);
-    if (dto.spaceId) query = query.where('page.spaceId', '=', dto.spaceId);
     if (dto.query?.trim()) {
       query = query.where('page.title', 'ilike', `%${dto.query.trim()}%`);
     }
@@ -166,17 +198,11 @@ export class PageTemplateService {
             )
             .execute()
         : [],
-      dto.spaceId
-        ? this.pageRepo.getRecentPagesInSpace(dto.spaceId, {
-            limit: 50,
-            query: undefined,
-            adminView: false,
-          })
-        : this.pageRepo.getRecentPages(user.id, {
-            limit: 50,
-            query: undefined,
-            adminView: false,
-          }),
+      this.pageRepo.getRecentPagesInSpace(dto.spaceId, {
+        limit: 50,
+        query: undefined,
+        adminView: false,
+      }),
     ]);
     const favoritePageIds = new Set(favoriteRows.map((row) => row.pageId));
     const recentPageIds = new Set(recentPages.items.map((page) => page.id));
@@ -192,29 +218,13 @@ export class PageTemplateService {
         user,
       );
       if (!access.capabilities.canRead) continue;
-      const effective = await this.policy.resolveForUser(
-        user.workspaceId,
-        page.spaceId,
-        user.id,
-      );
-      if (
-        !effective.systemEnabled ||
-        !effective.workspaceEnabled ||
-        !effective.templatesEnabled
-      ) {
-        continue;
-      }
       items.push({
         ...candidate,
         favorite: favoritePageIds.has(page.id),
         recent: recentPageIds.has(page.id),
         actions: {
-          snapshot:
-            effective.allowSnapshot &&
-            effective.allowedActions.includes('use_snapshot'),
-          liveEmbed:
-            effective.allowLiveEmbed &&
-            effective.allowedActions.includes('use_live_embed'),
+          snapshot: capabilities.useSnapshot,
+          liveEmbed: capabilities.useLiveEmbed,
           manage:
             access.capabilities.canWrite &&
             effective.allowCreateTemplate &&
@@ -228,6 +238,84 @@ export class PageTemplateService {
         candidates.length > consumed || candidates.length === candidateLimit
           ? this.encodeCursor(offset + consumed)
           : null,
+      capabilities,
+    };
+  }
+
+  async createTemplate(dto: CreatePageTemplateDto, user: User) {
+    await this.policy.assertAction(
+      user.workspaceId,
+      dto.spaceId,
+      user.id,
+      'create_template',
+    );
+    await this.assertCanCreate(dto.spaceId, undefined, user);
+    const page = await this.pageService.create(
+      user.id,
+      user.workspaceId,
+      { spaceId: dto.spaceId, title: dto.title },
+      { isTemplate: true },
+    );
+    return { page };
+  }
+
+  async listDestinations(dto: PageTemplateDestinationsDto, user: User) {
+    const ability = await this.spaceAbility.createForUser(user, dto.spaceId);
+    let query = this.db
+      .selectFrom('pages as page')
+      .select('page.id')
+      .where('page.workspaceId', '=', user.workspaceId)
+      .where('page.spaceId', '=', dto.spaceId)
+      .where('page.deletedAt', 'is', null)
+      .where((eb) =>
+        eb.not(
+          eb.exists(
+            eb
+              .selectFrom('databases')
+              .select('databases.id')
+              .whereRef('databases.pageId', '=', 'page.id')
+              .where('databases.deletedAt', 'is', null),
+          ),
+        ),
+      )
+      .where((eb) =>
+        eb.not(
+          eb.exists(
+            eb
+              .selectFrom('databaseRows')
+              .select('databaseRows.id')
+              .whereRef('databaseRows.pageId', '=', 'page.id')
+              .where('databaseRows.archivedAt', 'is', null),
+          ),
+        ),
+      )
+      .orderBy('page.updatedAt', 'desc')
+      .orderBy('page.id', 'desc')
+      .limit(Math.min((dto.limit ?? 20) * 5, 250));
+    if (dto.query?.trim()) {
+      query = query.where('page.title', 'ilike', `%${dto.query.trim()}%`);
+    }
+    const candidates = await query.execute();
+    const pages = (
+      await Promise.all(candidates.map(({ id }) => this.pageRepo.findById(id)))
+    ).filter((page): page is Page => Boolean(page && !page.deletedAt));
+    const accessByPageId =
+      await this.pageAccessService.getEffectiveAccessForPages(pages, user);
+    return {
+      rootAllowed: ability.can(SpaceCaslAction.Create, SpaceCaslSubject.Page),
+      items: pages
+        .filter(
+          (page) =>
+            accessByPageId.get(page.id)?.capabilities.canCreateChild === true,
+        )
+        .slice(0, dto.limit ?? 20)
+        .map((page) => ({
+          id: page.id,
+          slugId: page.slugId,
+          title: page.title ?? null,
+          icon: page.icon ?? null,
+          parentPageId: page.parentPageId ?? null,
+        })),
     };
   }
 
@@ -254,6 +342,9 @@ export class PageTemplateService {
       return { page: completedPage, idempotent: true };
     }
     const source = await this.requireTemplateSource(dto.templatePageId, user);
+    if (source.spaceId !== dto.spaceId) {
+      throw new NotFoundException('Template not found');
+    }
     await this.policy.assertAction(
       source.workspaceId,
       source.spaceId,
@@ -450,6 +541,9 @@ export class PageTemplateService {
       this.requirePlainDocument(dto.consumerPageId, user.workspaceId),
       this.requireTemplateSource(dto.sourcePageId, user),
     ]);
+    if (consumer.spaceId !== source.spaceId) {
+      throw new NotFoundException('Template not found');
+    }
     await this.pageAccessService.assertCanWritePage(consumer, user);
     await this.policy.assertAction(
       user.workspaceId,

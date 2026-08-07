@@ -2,6 +2,12 @@ import { PageEmbedService } from '../page-embed.service';
 
 function buildService(
   edges: Array<{ referencePageId: string; sourcePageId: string }> = [],
+  options?: {
+    pageRepo?: any;
+    pageAccessService?: any;
+    policy?: any;
+    graphLock?: any;
+  },
 ) {
   const references = {
     findPageGraph: jest.fn(async () => edges),
@@ -9,10 +15,10 @@ function buildService(
   const service = new PageEmbedService(
     null as any,
     references as any,
-    null as any,
-    null as any,
-    { getMaxPageEmbedDepth: () => 5 } as any,
-    {} as any,
+    options?.pageRepo ?? (null as any),
+    options?.pageAccessService ?? (null as any),
+    options?.policy ?? ({ getMaxPageEmbedDepth: () => 5 } as any),
+    options?.graphLock ?? ({} as any),
   );
   return { service, references };
 }
@@ -77,5 +83,124 @@ describe('PageEmbedService graph validation', () => {
         code: 'page_embed_depth_exceeded',
       }),
     });
+  });
+});
+
+describe('PageEmbedService space boundaries', () => {
+  const workspaceId = '019fdaa0-0000-7000-8000-000000000001';
+  const consumerId = '019fdaa0-0000-7000-8000-000000000002';
+  const sourceId = '019fdaa0-0000-7000-8000-000000000003';
+  const viewer = {
+    id: '019fdaa0-0000-7000-8000-000000000004',
+    workspaceId,
+  } as any;
+  const enabledPolicy = {
+    systemEnabled: true,
+    workspaceEnabled: true,
+    templatesEnabled: true,
+    allowLiveEmbed: true,
+    allowPublicLiveEmbed: true,
+    allowedActions: ['use_live_embed'],
+  };
+
+  it('returns disabled for a historical cross-space embed', async () => {
+    const pages = new Map([
+      [
+        consumerId,
+        {
+          id: consumerId,
+          workspaceId,
+          spaceId: 'space-a',
+          deletedAt: null,
+        },
+      ],
+      [
+        sourceId,
+        {
+          id: sourceId,
+          workspaceId,
+          spaceId: 'space-b',
+          slugId: 'source',
+          title: 'Source',
+          icon: null,
+          content: { type: 'doc', content: [] },
+          updatedAt: new Date(),
+          deletedAt: null,
+        },
+      ],
+    ]);
+    const pageRepo = { findById: jest.fn(async (id: string) => pages.get(id)) };
+    const pageAccessService = {
+      getEffectiveAccess: jest.fn(async () => ({
+        capabilities: { canRead: true },
+      })),
+    };
+    const policy = {
+      getMaxPageEmbedDepth: () => 5,
+      resolveForUser: jest.fn(async () => enabledPolicy),
+    };
+    const { service } = buildService([], {
+      pageRepo,
+      pageAccessService,
+      policy,
+    });
+
+    await expect(
+      service.lookup([sourceId], viewer, consumerId),
+    ).resolves.toEqual({
+      items: [{ kind: 'page', sourcePageId: sourceId, status: 'disabled' }],
+    });
+  });
+
+  it('rejects cross-space references prepared by bulk operations', async () => {
+    const pageRepo = {
+      findById: jest.fn(async () => ({
+        id: sourceId,
+        workspaceId,
+        spaceId: 'space-b',
+        deletedAt: null,
+      })),
+    };
+    const pageAccessService = { assertCanReadPage: jest.fn() };
+    const policy = {
+      getMaxPageEmbedDepth: () => 5,
+      assertAction: jest.fn(),
+    };
+    const graphLock = { acquire: jest.fn() };
+    const { service } = buildService([], {
+      pageRepo,
+      pageAccessService,
+      policy,
+      graphLock,
+    });
+
+    await expect(
+      service.prepareBulkPageReferences(
+        [
+          {
+            id: consumerId,
+            workspaceId,
+            spaceId: 'space-a',
+            content: {
+              type: 'doc',
+              content: [
+                {
+                  type: 'pageEmbed',
+                  attrs: {
+                    id: '019fdaa0-0000-7000-8000-000000000005',
+                    sourcePageId: sourceId,
+                  },
+                },
+              ],
+            },
+          },
+        ],
+        viewer,
+        'import',
+      ),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({ code: 'page_embed_cross_space' }),
+    });
+    expect(graphLock.acquire).not.toHaveBeenCalled();
   });
 });
