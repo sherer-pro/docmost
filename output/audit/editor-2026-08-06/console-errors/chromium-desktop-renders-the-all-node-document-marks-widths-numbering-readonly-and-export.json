@@ -1,0 +1,137 @@
+[
+  {
+    "type": "requestfailed",
+    "text": "net::ERR_ABORTED",
+    "url": "http://localhost:3000/api/attachments/files/019fd93b-057e-74ec-aac3-8adfa1fbbe52/audit-document.pdf"
+  },
+  {
+    "type": "requestfailed",
+    "text": "net::ERR_ABORTED",
+    "url": "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ"
+  },
+  {
+    "type": "warning",
+    "text": "[security][embed-url-rejected] {scheme: origin-not-allowed, origin: https://example.com}"
+  },
+  {
+    "type": "requestfailed",
+    "text": "net::ERR_ABORTED",
+    "url": "http://localhost:3000/api/attachments/files/019fd93b-057e-74ec-aac3-8adfa1fbbe52/audit-document.pdf"
+  },
+  {
+    "type": "requestfailed",
+    "text": "net::ERR_ABORTED",
+    "url": "http://localhost:3000/api/attachments/files/019fd93b-057e-74ec-aac3-8adfa1fbbe52/audit-document.pdf"
+  },
+  {
+    "type": "requestfailed",
+    "text": "net::ERR_ABORTED",
+    "url": "https://www.youtube-nocookie.com/s/_/ytembeds/_/js/k=ytembeds.base.en_US.ASi3xSv8Hps.2021.O/ck=ytembeds.base.DN3T9l2Ovpk.L.W.O/am=AAAAgA/d=1/exm=base,root/excm=base,root/ed=1/br=1/rs=AGKMywHeLH1XuH8uIMuoogS6cXojr82qAA/m=r78Drb"
+  },
+  {
+    "type": "requestfailed",
+    "text": "net::ERR_ABORTED",
+    "url": "https://www.youtube-nocookie.com/youtubei/v1/log_event"
+  },
+  {
+    "type": "requestfailed",
+    "text": "net::ERR_ABORTED",
+    "url": "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ"
+  },
+  {
+    "type": "requestfailed",
+    "text": "net::ERR_ABORTED",
+    "url": "http://localhost:3000/api/attachments/files/019fd93b-057e-74ec-aac3-8adfa1fbbe52/audit-document.pdf"
+  },
+  {
+    "type": "requestfailed",
+    "text": "net::ERR_ABORTED",
+    "url": "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ"
+  },
+  {
+    "type": "warning",
+    "text": "[security][embed-url-rejected] {scheme: origin-not-allowed, origin: https://example.com}"
+  },
+  {
+    "type": "requestfailed",
+    "text": "net::ERR_ABORTED",
+    "url": "http://localhost:3000/api/attachments/files/019fd93b-057e-74ec-aac3-8adfa1fbbe52/audit-document.pdf"
+  },
+  {
+    "type": "requestfailed",
+    "text": "net::ERR_ABORTED",
+    "url": "http://localhost:3000/api/attachments/files/019fd93b-057e-74ec-aac3-8adfa1fbbe52/audit-document.pdf"
+  },
+  {
+    "type": "requestfailed",
+    "text": "net::ERR_ABORTED",
+    "url": "https://www.youtube-nocookie.com/youtubei/v1/log_event"
+  },
+  {
+    "type": "requestfailed",
+    "text": "net::ERR_ABORTED",
+    "url": "https://www.youtube-nocookie.com/api/stats/atr"
+  },
+  {
+    "type": "requestfailed",
+    "text": "net::ERR_ABORTED",
+    "url": "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ"
+  },
+  {
+    "type": "warning",
+    "text": "TextSelection endpoint not pointing into a node with inline content (doc)"
+  },
+  {
+    "type": "requestfailed",
+    "text": "net::ERR_ABORTED",
+    "url": "http://localhost:3000/api/attachments/files/019fd93b-057e-74ec-aac3-8adfa1fbbe52/audit-document.pdf"
+  },
+  {
+    "type": "requestfailed",
+    "text": "net::ERR_ABORTED",
+    "url": "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ"
+  },
+  {
+    "type": "warning",
+    "text": "[security][embed-url-rejected] {scheme: origin-not-allowed, origin: https://example.com}"
+  },
+  {
+    "type": "requestfailed",
+    "text": "net::ERR_ABORTED",
+    "url": "http://localhost:3000/api/attachments/files/019fd93b-057e-74ec-aac3-8adfa1fbbe52/audit-document.pdf"
+  },
+  {
+    "type": "requestfailed",
+    "text": "net::ERR_ABORTED",
+    "url": "http://localhost:3000/api/attachments/files/019fd93b-057e-74ec-aac3-8adfa1fbbe52/audit-document.pdf"
+  },
+  {
+    "type": "requestfailed",
+    "text": "net::ERR_ABORTED",
+    "url": "https://www.youtube-nocookie.com/youtubei/v1/log_event"
+  },
+  {
+    "type": "requestfailed",
+    "text": "net::ERR_ABORTED",
+    "url": "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ"
+  },
+  {
+    "type": "requestfailed",
+    "text": "net::ERR_ABORTED",
+    "url": "http://localhost:3000/api/attachments/files/019fd93b-057e-74ec-aac3-8adfa1fbbe52/audit-document.pdf"
+  },
+  {
+    "type": "requestfailed",
+    "text": "net::ERR_ABORTED",
+    "url": "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ"
+  },
+  {
+    "type": "warning",
+    "text": "[security][embed-url-rejected] {scheme: origin-not-allowed, origin: https://example.com}"
+  },
+  {
+    "type": "requestfailed",
+    "text": "net::ERR_ABORTED",
+    "url": "http://localhost:3000/api/attachments/files/019fd93b-057e-74ec-aac3-8adfa1fbbe52/audit-document.pdf"
+  }
+]

@@ -1,0 +1,20 @@
+[
+  {
+    "type": "requestfailed",
+    "text": "net::ERR_INTERNET_DISCONNECTED",
+    "url": "http://localhost:3000/api/users/me"
+  },
+  {
+    "type": "error",
+    "text": "Failed to load resource: net::ERR_INTERNET_DISCONNECTED"
+  },
+  {
+    "type": "error",
+    "text": "Failed to load resource: the server responded with a status of 503 (Offline)"
+  },
+  {
+    "type": "requestfailed",
+    "text": "net::ERR_ABORTED",
+    "url": "http://localhost:3000/offline.js"
+  }
+]

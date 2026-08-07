@@ -1,0 +1,54 @@
+[
+  {
+    "type": "warning",
+    "text": "[security][embed-url-rejected] {scheme: origin-not-allowed, origin: https://example.com}"
+  },
+  {
+    "type": "error",
+    "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+  },
+  {
+    "type": "error",
+    "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+  },
+  {
+    "type": "error",
+    "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+  },
+  {
+    "type": "requestfailed",
+    "text": "Load request cancelled",
+    "url": "https://www.youtube-nocookie.com/s/player/854a788e/player_embed_es6.vflset/en_US/base.js"
+  },
+  {
+    "type": "requestfailed",
+    "text": "Load request cancelled",
+    "url": "https://www.youtube-nocookie.com/s/_/ytembeds/_/js/k=ytembeds.base.en_US.ASi3xSv8Hps.2021.O/am=AAAAgA/d=1/excm=base,root/br=1/rs=AGKMywFqYyNIJc32WuBi168xCKPqoGKElw/m=root,base"
+  },
+  {
+    "type": "requestfailed",
+    "text": "Load request cancelled",
+    "url": "https://fonts.gstatic.com/s/roboto/v48/KFO7CnqEu92Fr1ME7kSn66aGLdTylUAMa3yUBHMdazQ.woff2"
+  },
+  {
+    "type": "warning",
+    "text": "[security][embed-url-rejected] {scheme: origin-not-allowed, origin: https://example.com}"
+  },
+  {
+    "type": "error",
+    "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+  },
+  {
+    "type": "error",
+    "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+  },
+  {
+    "type": "requestfailed",
+    "text": "Frame load interrupted",
+    "url": "http://127.0.0.1:3000/api/attachments/files/019fd93c-6976-7233-8bc6-e496e6e39558/audit-document.pdf"
+  },
+  {
+    "type": "error",
+    "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+  }
+]

@@ -1,0 +1,1008 @@
+{
+  "project": "mobile-webkit",
+  "title": "mobile and touch rendering reflows without document-level horizontal overflow",
+  "url": "http://127.0.0.1:3000/s/editoraudit20260806223904/p/mobile-webkit-mobile-all-editor-nodes-cBRw3aaNsi",
+  "violations": [
+    {
+      "id": "aria-allowed-attr",
+      "impact": "critical",
+      "tags": [
+        "cat.aria",
+        "wcag2a",
+        "wcag412",
+        "EN-301-549",
+        "EN-9.4.1.2",
+        "RGAAv4",
+        "RGAA-7.1.1"
+      ],
+      "description": "Ensure an element's role supports its ARIA attributes",
+      "help": "Elements must only use supported ARIA attributes",
+      "helpUrl": "https://dequeuniversity.com/rules/axe/4.12/aria-allowed-attr?application=playwright",
+      "nodes": [
+        {
+          "any": [],
+          "all": [
+            {
+              "id": "aria-allowed-attr",
+              "data": [
+                "aria-multiline=\"true\""
+              ],
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "ARIA attribute is not allowed: aria-multiline=\"true\""
+            }
+          ],
+          "none": [],
+          "impact": "critical",
+          "html": "<div contenteditable=\"false\" aria-label=\"Редактор\" aria-multiline=\"true\" translate=\"no\" class=\"tiptap ProseMirror\">",
+          "target": [
+            "div[aria-label=\"Редактор\"]"
+          ],
+          "failureSummary": "Fix all of the following:\n  ARIA attribute is not allowed: aria-multiline=\"true\""
+        },
+        {
+          "any": [],
+          "all": [
+            {
+              "id": "aria-allowed-attr",
+              "data": [
+                "aria-expanded=\"false\""
+              ],
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "ARIA attribute is not allowed: aria-expanded=\"false\""
+            }
+          ],
+          "none": [],
+          "impact": "critical",
+          "html": "<div data-katex=\"true\" class=\"_mathInline_rm2sl_1   \" aria-haspopup=\"dialog\" aria-expanded=\"false\" id=\"f0e8cf5f-7b6f-44b4-8441-82152ea353d8-target\" data-node-view-wrapper=\"\" style=\"white-space: normal;\">",
+          "target": [
+            "#f0e8cf5f-7b6f-44b4-8441-82152ea353d8-target"
+          ],
+          "failureSummary": "Fix all of the following:\n  ARIA attribute is not allowed: aria-expanded=\"false\""
+        },
+        {
+          "any": [],
+          "all": [
+            {
+              "id": "aria-allowed-attr",
+              "data": [
+                "aria-expanded=\"false\""
+              ],
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "ARIA attribute is not allowed: aria-expanded=\"false\""
+            }
+          ],
+          "none": [],
+          "impact": "critical",
+          "html": "<div data-katex=\"true\" class=\"_mathBlock_rm2sl_45   \" aria-haspopup=\"dialog\" aria-expanded=\"false\" id=\"8beb023a-98b4-4036-af2e-d9f7074c36e9-target\" data-node-view-wrapper=\"\" style=\"white-space: normal;\">",
+          "target": [
+            "#\\38 beb023a-98b4-4036-af2e-d9f7074c36e9-target"
+          ],
+          "failureSummary": "Fix all of the following:\n  ARIA attribute is not allowed: aria-expanded=\"false\""
+        },
+        {
+          "any": [],
+          "all": [
+            {
+              "id": "aria-allowed-attr",
+              "data": [
+                "aria-expanded=\"false\""
+              ],
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "ARIA attribute is not allowed: aria-expanded=\"false\""
+            }
+          ],
+          "none": [],
+          "impact": "critical",
+          "html": "<div style=\"--paper-radius: var(...\" class=\"m_e615b15f mantine-C...\" data-with-border=\"true\" aria-haspopup=\"dialog\" aria-expanded=\"false\" id=\"mantine-wpsfhewle-ta...\">",
+          "target": [
+            "#mantine-wpsfhewle-target"
+          ],
+          "failureSummary": "Fix all of the following:\n  ARIA attribute is not allowed: aria-expanded=\"false\""
+        },
+        {
+          "any": [],
+          "all": [
+            {
+              "id": "aria-allowed-attr",
+              "data": [
+                "aria-multiline=\"true\""
+              ],
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "ARIA attribute is not allowed: aria-multiline=\"true\""
+            }
+          ],
+          "none": [],
+          "impact": "critical",
+          "html": "<div contenteditable=\"true\" aria-label=\"Комментарий\" aria-multiline=\"true\" translate=\"no\" class=\"tiptap ProseMirror\" tabindex=\"0\"><p data-placeholder=\"Написать комментарий\" class=\"is-empty is-editor-empty\"><br class=\"ProseMirror-trailingBreak\"></p></div>",
+          "target": [
+            "div[contenteditable=\"true\"]"
+          ],
+          "failureSummary": "Fix all of the following:\n  ARIA attribute is not allowed: aria-multiline=\"true\""
+        }
+      ]
+    },
+    {
+      "id": "aria-prohibited-attr",
+      "impact": "serious",
+      "tags": [
+        "cat.aria",
+        "wcag2a",
+        "wcag412",
+        "EN-301-549",
+        "EN-9.4.1.2",
+        "RGAAv4",
+        "RGAA-7.1.1"
+      ],
+      "description": "Ensure ARIA attributes are not prohibited for an element's role",
+      "help": "Elements must only use permitted ARIA attributes",
+      "helpUrl": "https://dequeuniversity.com/rules/axe/4.12/aria-prohibited-attr?application=playwright",
+      "nodes": [
+        {
+          "any": [],
+          "all": [],
+          "none": [
+            {
+              "id": "aria-prohibited-attr",
+              "data": {
+                "role": null,
+                "nodeName": "div",
+                "messageKey": "noRoleSingular",
+                "prohibited": [
+                  "aria-label"
+                ]
+              },
+              "relatedNodes": [],
+              "impact": "serious",
+              "message": "aria-label attribute cannot be used on a div with no valid role attribute."
+            }
+          ],
+          "impact": "serious",
+          "html": "<div contenteditable=\"true\" aria-label=\"Комментарий\" aria-multiline=\"true\" translate=\"no\" class=\"tiptap ProseMirror\" tabindex=\"0\"><p data-placeholder=\"Написать комментарий\" class=\"is-empty is-editor-empty\"><br class=\"ProseMirror-trailingBreak\"></p></div>",
+          "target": [
+            "div[contenteditable=\"true\"]"
+          ],
+          "failureSummary": "Fix all of the following:\n  aria-label attribute cannot be used on a div with no valid role attribute."
+        },
+        {
+          "any": [],
+          "all": [],
+          "none": [
+            {
+              "id": "aria-prohibited-attr",
+              "data": {
+                "role": null,
+                "nodeName": "div",
+                "messageKey": "noRoleSingular",
+                "prohibited": [
+                  "aria-label"
+                ]
+              },
+              "relatedNodes": [],
+              "impact": "serious",
+              "message": "aria-label attribute cannot be used on a div with no valid role attribute."
+            }
+          ],
+          "impact": "serious",
+          "html": "<div style=\"--drawer-size: 100%; --drawer-justify: flex-end; --mb-z-index: 200; --mb-padding: 0rem;\" class=\"m_f11b401e mantine-Drawer-root\" aria-label=\"ИИ-помощник\">",
+          "target": [
+            ".m_f11b401e"
+          ],
+          "failureSummary": "Fix all of the following:\n  aria-label attribute cannot be used on a div with no valid role attribute."
+        }
+      ]
+    },
+    {
+      "id": "button-name",
+      "impact": "critical",
+      "tags": [
+        "cat.name-role-value",
+        "wcag2a",
+        "wcag412",
+        "section508",
+        "section508.22.a",
+        "TTv5",
+        "TT6.a",
+        "EN-301-549",
+        "EN-9.4.1.2",
+        "ACT",
+        "RGAAv4",
+        "RGAA-11.9.1"
+      ],
+      "description": "Ensure buttons have discernible text",
+      "help": "Buttons must have discernible text",
+      "helpUrl": "https://dequeuniversity.com/rules/axe/4.12/button-name?application=playwright",
+      "nodes": [
+        {
+          "any": [
+            {
+              "id": "button-has-visible-text",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "Element does not have inner text that is visible to screen readers"
+            },
+            {
+              "id": "aria-label",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "aria-label attribute does not exist or is empty"
+            },
+            {
+              "id": "aria-labelledby",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty"
+            },
+            {
+              "id": "non-empty-title",
+              "data": {
+                "messageKey": "noAttr"
+              },
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "Element has no title attribute"
+            },
+            {
+              "id": "implicit-label",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "Element does not have an implicit (wrapped) <label>"
+            },
+            {
+              "id": "explicit-label",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "Element does not have an explicit <label>"
+            },
+            {
+              "id": "presentational-role",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "Element's default semantics were not overridden with role=\"none\" or role=\"presentation\""
+            }
+          ],
+          "all": [],
+          "none": [],
+          "impact": "critical",
+          "html": "<button data-type=\"detailsButton\"><div><span class=\"ProseMirror-icon ProseMirror-icon-right-line\"></span></div></button>",
+          "target": [
+            "button[data-type=\"detailsButton\"]"
+          ],
+          "failureSummary": "Fix any of the following:\n  Element does not have inner text that is visible to screen readers\n  aria-label attribute does not exist or is empty\n  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty\n  Element has no title attribute\n  Element does not have an implicit (wrapped) <label>\n  Element does not have an explicit <label>\n  Element's default semantics were not overridden with role=\"none\" or role=\"presentation\""
+        },
+        {
+          "any": [
+            {
+              "id": "button-has-visible-text",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "Element does not have inner text that is visible to screen readers"
+            },
+            {
+              "id": "aria-label",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "aria-label attribute does not exist or is empty"
+            },
+            {
+              "id": "aria-labelledby",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty"
+            },
+            {
+              "id": "non-empty-title",
+              "data": {
+                "messageKey": "noAttr"
+              },
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "Element has no title attribute"
+            },
+            {
+              "id": "implicit-label",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "Element does not have an implicit (wrapped) <label>"
+            },
+            {
+              "id": "explicit-label",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "Element does not have an explicit <label>"
+            },
+            {
+              "id": "presentational-role",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "Element's default semantics were not overridden with role=\"none\" or role=\"presentation\""
+            }
+          ],
+          "all": [],
+          "none": [],
+          "impact": "critical",
+          "html": "<button style=\"--ai-bg: transparent...\" class=\"mantine-focus-auto m...\" data-variant=\"subtle\" type=\"button\">",
+          "target": [
+            ".node-codeBlock.react-renderer:nth-child(26) > .codeBlock[data-node-view-wrapper=\"\"] > ._menuGroup_677e5_48.m_4081bf90.mantine-Group-root > .m_8d3f4000.mantine-ActionIcon-root[data-variant=\"subtle\"]"
+          ],
+          "failureSummary": "Fix any of the following:\n  Element does not have inner text that is visible to screen readers\n  aria-label attribute does not exist or is empty\n  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty\n  Element has no title attribute\n  Element does not have an implicit (wrapped) <label>\n  Element does not have an explicit <label>\n  Element's default semantics were not overridden with role=\"none\" or role=\"presentation\""
+        },
+        {
+          "any": [
+            {
+              "id": "button-has-visible-text",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "Element does not have inner text that is visible to screen readers"
+            },
+            {
+              "id": "aria-label",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "aria-label attribute does not exist or is empty"
+            },
+            {
+              "id": "aria-labelledby",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty"
+            },
+            {
+              "id": "non-empty-title",
+              "data": {
+                "messageKey": "noAttr"
+              },
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "Element has no title attribute"
+            },
+            {
+              "id": "implicit-label",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "Element does not have an implicit (wrapped) <label>"
+            },
+            {
+              "id": "explicit-label",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "Element does not have an explicit <label>"
+            },
+            {
+              "id": "presentational-role",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "Element's default semantics were not overridden with role=\"none\" or role=\"presentation\""
+            }
+          ],
+          "all": [],
+          "none": [],
+          "impact": "critical",
+          "html": "<button style=\"--ai-bg: transparent...\" class=\"mantine-focus-auto m...\" data-variant=\"subtle\" type=\"button\">",
+          "target": [
+            ".codeBlock.blockWidthWrapper[data-block-width-mode=\"wide\"] > ._menuGroup_677e5_48.m_4081bf90.mantine-Group-root > .m_8d3f4000.mantine-ActionIcon-root[data-variant=\"subtle\"]"
+          ],
+          "failureSummary": "Fix any of the following:\n  Element does not have inner text that is visible to screen readers\n  aria-label attribute does not exist or is empty\n  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty\n  Element has no title attribute\n  Element does not have an implicit (wrapped) <label>\n  Element does not have an explicit <label>\n  Element's default semantics were not overridden with role=\"none\" or role=\"presentation\""
+        },
+        {
+          "any": [
+            {
+              "id": "button-has-visible-text",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "Element does not have inner text that is visible to screen readers"
+            },
+            {
+              "id": "aria-label",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "aria-label attribute does not exist or is empty"
+            },
+            {
+              "id": "aria-labelledby",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty"
+            },
+            {
+              "id": "non-empty-title",
+              "data": {
+                "messageKey": "noAttr"
+              },
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "Element has no title attribute"
+            },
+            {
+              "id": "implicit-label",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "Element does not have an implicit (wrapped) <label>"
+            },
+            {
+              "id": "explicit-label",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "Element does not have an explicit <label>"
+            },
+            {
+              "id": "presentational-role",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "Element's default semantics were not overridden with role=\"none\" or role=\"presentation\""
+            }
+          ],
+          "all": [],
+          "none": [],
+          "impact": "critical",
+          "html": "<button style=\"--ai-bg: transparent...\" class=\"mantine-focus-auto m...\" data-variant=\"subtle\" type=\"button\">",
+          "target": [
+            "div[data-block-width-mode=\"normal\"] > ._menuGroup_677e5_48.m_4081bf90.mantine-Group-root > .m_8d3f4000.mantine-ActionIcon-root[data-variant=\"subtle\"]"
+          ],
+          "failureSummary": "Fix any of the following:\n  Element does not have inner text that is visible to screen readers\n  aria-label attribute does not exist or is empty\n  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty\n  Element has no title attribute\n  Element does not have an implicit (wrapped) <label>\n  Element does not have an explicit <label>\n  Element's default semantics were not overridden with role=\"none\" or role=\"presentation\""
+        },
+        {
+          "any": [
+            {
+              "id": "button-has-visible-text",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "Element does not have inner text that is visible to screen readers"
+            },
+            {
+              "id": "aria-label",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "aria-label attribute does not exist or is empty"
+            },
+            {
+              "id": "aria-labelledby",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty"
+            },
+            {
+              "id": "non-empty-title",
+              "data": {
+                "messageKey": "noAttr"
+              },
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "Element has no title attribute"
+            },
+            {
+              "id": "implicit-label",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "Element does not have an implicit (wrapped) <label>"
+            },
+            {
+              "id": "explicit-label",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "Element does not have an explicit <label>"
+            },
+            {
+              "id": "presentational-role",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "Element's default semantics were not overridden with role=\"none\" or role=\"presentation\""
+            }
+          ],
+          "all": [],
+          "none": [],
+          "impact": "critical",
+          "html": "<button style=\"--ai-bg: transparent...\" class=\"mantine-focus-auto m...\" data-variant=\"subtle\" type=\"button\">",
+          "target": [
+            ".codeBlock.blockWidthWrapper[data-block-width-mode=\"full\"] > ._menuGroup_677e5_48.m_4081bf90.mantine-Group-root > .m_8d3f4000.mantine-ActionIcon-root[data-variant=\"subtle\"]"
+          ],
+          "failureSummary": "Fix any of the following:\n  Element does not have inner text that is visible to screen readers\n  aria-label attribute does not exist or is empty\n  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty\n  Element has no title attribute\n  Element does not have an implicit (wrapped) <label>\n  Element does not have an explicit <label>\n  Element's default semantics were not overridden with role=\"none\" or role=\"presentation\""
+        },
+        {
+          "any": [
+            {
+              "id": "button-has-visible-text",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "Element does not have inner text that is visible to screen readers"
+            },
+            {
+              "id": "aria-label",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "aria-label attribute does not exist or is empty"
+            },
+            {
+              "id": "aria-labelledby",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty"
+            },
+            {
+              "id": "non-empty-title",
+              "data": {
+                "messageKey": "noAttr"
+              },
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "Element has no title attribute"
+            },
+            {
+              "id": "implicit-label",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "Element does not have an implicit (wrapped) <label>"
+            },
+            {
+              "id": "explicit-label",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "Element does not have an explicit <label>"
+            },
+            {
+              "id": "presentational-role",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "Element's default semantics were not overridden with role=\"none\" or role=\"presentation\""
+            }
+          ],
+          "all": [],
+          "none": [],
+          "impact": "critical",
+          "html": "<button style=\"--ai-bg: transparent...\" class=\"mantine-focus-auto m...\" data-variant=\"transparent\" type=\"button\">",
+          "target": [
+            "#mantine-wpsfhewle-target > div > .m_8d3f4000.mantine-ActionIcon-root[data-variant=\"transparent\"]"
+          ],
+          "failureSummary": "Fix any of the following:\n  Element does not have inner text that is visible to screen readers\n  aria-label attribute does not exist or is empty\n  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty\n  Element has no title attribute\n  Element does not have an implicit (wrapped) <label>\n  Element does not have an explicit <label>\n  Element's default semantics were not overridden with role=\"none\" or role=\"presentation\""
+        },
+        {
+          "any": [
+            {
+              "id": "button-has-visible-text",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "Element does not have inner text that is visible to screen readers"
+            },
+            {
+              "id": "aria-label",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "aria-label attribute does not exist or is empty"
+            },
+            {
+              "id": "aria-labelledby",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty"
+            },
+            {
+              "id": "non-empty-title",
+              "data": {
+                "messageKey": "noAttr"
+              },
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "Element has no title attribute"
+            },
+            {
+              "id": "implicit-label",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "Element does not have an implicit (wrapped) <label>"
+            },
+            {
+              "id": "explicit-label",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "Element does not have an explicit <label>"
+            },
+            {
+              "id": "presentational-role",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "Element's default semantics were not overridden with role=\"none\" or role=\"presentation\""
+            }
+          ],
+          "all": [],
+          "none": [],
+          "impact": "critical",
+          "html": "<button class=\"mantine-focus-auto mantine-active m_220c80f2 m_606cb269 mantine-Modal-close m_86a44da5 mantine-CloseButton-root m_87cf2631 mantine-UnstyledButton-root\" data-variant=\"subtle\" type=\"button\">",
+          "target": [
+            "._content_1wp5u_6 > .m_b5489c3c.m_d0e2b9cd.mantine-Modal-header > .m_606cb269.mantine-Modal-close.m_220c80f2"
+          ],
+          "failureSummary": "Fix any of the following:\n  Element does not have inner text that is visible to screen readers\n  aria-label attribute does not exist or is empty\n  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty\n  Element has no title attribute\n  Element does not have an implicit (wrapped) <label>\n  Element does not have an explicit <label>\n  Element's default semantics were not overridden with role=\"none\" or role=\"presentation\""
+        }
+      ]
+    },
+    {
+      "id": "color-contrast",
+      "impact": "serious",
+      "tags": [
+        "cat.color",
+        "wcag2aa",
+        "wcag143",
+        "TTv5",
+        "TT13.c",
+        "EN-301-549",
+        "EN-9.1.4.3",
+        "ACT",
+        "RGAAv4",
+        "RGAA-3.2.1"
+      ],
+      "description": "Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",
+      "help": "Elements must meet minimum color contrast ratio thresholds",
+      "helpUrl": "https://dequeuniversity.com/rules/axe/4.12/color-contrast?application=playwright",
+      "nodes": [
+        {
+          "any": [
+            {
+              "id": "color-contrast",
+              "data": {
+                "fgColor": "#ffffff",
+                "bgColor": "#e64980",
+                "contrastRatio": 3.73,
+                "fontSize": "7.8pt (10.4px)",
+                "fontWeight": "bold",
+                "messageKey": null,
+                "expectedContrastRatio": "4.5:1"
+              },
+              "relatedNodes": [
+                {
+                  "html": "<span class=\"m_104cd71f mantine-Avatar-placeholder\" title=\"Test Workspace\">TW</span>",
+                  "target": [
+                    "span[title=\"Test Workspace\"]"
+                  ]
+                }
+              ],
+              "impact": "serious",
+              "message": "Element has insufficient color contrast of 3.73 (foreground color: #ffffff, background color: #e64980, font size: 7.8pt (10.4px), font weight: bold). Expected contrast ratio of 4.5:1"
+            }
+          ],
+          "all": [],
+          "none": [],
+          "impact": "serious",
+          "html": "<span class=\"m_104cd71f mantine-Avatar-placeholder\" title=\"Test Workspace\">TW</span>",
+          "target": [
+            "span[title=\"Test Workspace\"]"
+          ],
+          "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.73 (foreground color: #ffffff, background color: #e64980, font size: 7.8pt (10.4px), font weight: bold). Expected contrast ratio of 4.5:1"
+        },
+        {
+          "any": [
+            {
+              "id": "color-contrast",
+              "data": {
+                "fgColor": "#d6336c",
+                "bgColor": "#f1f3f5",
+                "contrastRatio": 4.14,
+                "fontSize": "12.0pt (16px)",
+                "fontWeight": "normal",
+                "messageKey": null,
+                "expectedContrastRatio": "4.5:1"
+              },
+              "relatedNodes": [
+                {
+                  "html": "<code spellcheck=\"false\"> code</code>",
+                  "target": [
+                    "p[data-id=\"rtmjgyquocpy\"] > code"
+                  ]
+                }
+              ],
+              "impact": "serious",
+              "message": "Element has insufficient color contrast of 4.14 (foreground color: #d6336c, background color: #f1f3f5, font size: 12.0pt (16px), font weight: normal). Expected contrast ratio of 4.5:1"
+            }
+          ],
+          "all": [],
+          "none": [],
+          "impact": "serious",
+          "html": "<code spellcheck=\"false\"> code</code>",
+          "target": [
+            "p[data-id=\"rtmjgyquocpy\"] > code"
+          ],
+          "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 4.14 (foreground color: #d6336c, background color: #f1f3f5, font size: 12.0pt (16px), font weight: normal). Expected contrast ratio of 4.5:1"
+        },
+        {
+          "any": [
+            {
+              "id": "color-contrast",
+              "data": {
+                "fgColor": "#fd7e14",
+                "bgColor": "#fff2e8",
+                "contrastRatio": 2.33,
+                "fontSize": "13.5pt (18px)",
+                "fontWeight": "normal",
+                "messageKey": null,
+                "expectedContrastRatio": "4.5:1"
+              },
+              "relatedNodes": [
+                {
+                  "html": "<div style=\"--alert-bg: var(--ma...\" class=\"m_66836ed3 mantine-A...\" data-variant=\"light\" id=\"mantine-6rci8jv50\" role=\"alert\" aria-describedby=\"mantine-6rci8jv50-bo...\">",
+                  "target": [
+                    "#mantine-6rci8jv50"
+                  ]
+                },
+                {
+                  "html": "<div contenteditable=\"false\" aria-label=\"Редактор\" aria-multiline=\"true\" translate=\"no\" class=\"tiptap ProseMirror\">",
+                  "target": [
+                    "div[aria-label=\"Редактор\"]"
+                  ]
+                }
+              ],
+              "impact": "serious",
+              "message": "Element has insufficient color contrast of 2.33 (foreground color: #fd7e14, background color: #fff2e8, font size: 13.5pt (18px), font weight: normal). Expected contrast ratio of 4.5:1"
+            }
+          ],
+          "all": [],
+          "none": [],
+          "impact": "serious",
+          "html": "<span style=\"font-size: 18px;\">alert-triangle</span>",
+          "target": [
+            "._icon_7oet5_1 > span"
+          ],
+          "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 2.33 (foreground color: #fd7e14, background color: #fff2e8, font size: 13.5pt (18px), font weight: normal). Expected contrast ratio of 4.5:1"
+        },
+        {
+          "any": [
+            {
+              "id": "color-contrast",
+              "data": {
+                "fgColor": "#1b72f2",
+                "bgColor": "#f8f9fa",
+                "contrastRatio": 4.2,
+                "fontSize": "10.5pt (14px)",
+                "fontWeight": "normal",
+                "messageKey": null,
+                "expectedContrastRatio": "4.5:1"
+              },
+              "relatedNodes": [
+                {
+                  "html": "<pre spellcheck=\"false\">",
+                  "target": [
+                    ".node-codeBlock.react-renderer:nth-child(26) > .codeBlock[data-node-view-wrapper=\"\"] > pre"
+                  ]
+                }
+              ],
+              "impact": "serious",
+              "message": "Element has insufficient color contrast of 4.2 (foreground color: #1b72f2, background color: #f8f9fa, font size: 10.5pt (14px), font weight: normal). Expected contrast ratio of 4.5:1"
+            }
+          ],
+          "all": [],
+          "none": [],
+          "impact": "serious",
+          "html": "<span class=\"hljs-literal\">true</span>",
+          "target": [
+            ".hljs-literal"
+          ],
+          "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 4.2 (foreground color: #1b72f2, background color: #f8f9fa, font size: 10.5pt (14px), font weight: normal). Expected contrast ratio of 4.5:1"
+        }
+      ]
+    },
+    {
+      "id": "frame-title",
+      "impact": "serious",
+      "tags": [
+        "cat.text-alternatives",
+        "wcag2a",
+        "wcag412",
+        "section508",
+        "section508.22.i",
+        "TTv5",
+        "TT12.d",
+        "EN-301-549",
+        "EN-9.4.1.2",
+        "RGAAv4",
+        "RGAA-2.1.1"
+      ],
+      "description": "Ensure <iframe> and <frame> elements have an accessible name",
+      "help": "Frames must have an accessible name",
+      "helpUrl": "https://dequeuniversity.com/rules/axe/4.12/frame-title?application=playwright",
+      "nodes": [
+        {
+          "any": [
+            {
+              "id": "non-empty-title",
+              "data": {
+                "messageKey": "noAttr"
+              },
+              "relatedNodes": [],
+              "impact": "serious",
+              "message": "Element has no title attribute"
+            },
+            {
+              "id": "aria-label",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "serious",
+              "message": "aria-label attribute does not exist or is empty"
+            },
+            {
+              "id": "aria-labelledby",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "serious",
+              "message": "aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty"
+            },
+            {
+              "id": "presentational-role",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "serious",
+              "message": "Element's default semantics were not overridden with role=\"none\" or role=\"presentation\""
+            }
+          ],
+          "all": [],
+          "none": [],
+          "impact": "serious",
+          "html": "<iframe class=\"_pdfIframe_ze9i4_95\" src=\"http://127.0.0.1:3000/api/attachments/files/019fd93c-6976-7233-8bc6-e496e6e39558/audit-document.pdf\" loading=\"lazy\" frameborder=\"0\"></iframe>",
+          "target": [
+            "._pdfIframe_ze9i4_95"
+          ],
+          "failureSummary": "Fix any of the following:\n  Element has no title attribute\n  aria-label attribute does not exist or is empty\n  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty\n  Element's default semantics were not overridden with role=\"none\" or role=\"presentation\""
+        },
+        {
+          "any": [
+            {
+              "id": "non-empty-title",
+              "data": {
+                "messageKey": "noAttr"
+              },
+              "relatedNodes": [],
+              "impact": "serious",
+              "message": "Element has no title attribute"
+            },
+            {
+              "id": "aria-label",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "serious",
+              "message": "aria-label attribute does not exist or is empty"
+            },
+            {
+              "id": "aria-labelledby",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "serious",
+              "message": "aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty"
+            },
+            {
+              "id": "presentational-role",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "serious",
+              "message": "Element's default semantics were not overridden with role=\"none\" or role=\"presentation\""
+            }
+          ],
+          "all": [],
+          "none": [],
+          "impact": "serious",
+          "html": "<iframe width=\"640\" height=\"360\" allowfullscreen=\"true\" autoplay=\"false\" disablekbcontrols=\"false\" enableiframeapi=\"false\" endtime=\"0\" ivloadpolicy=\"0\" loop=\"false\" modestbranding=\"false\" origin=\"\" playlist=\"\" rel=\"1\" src=\"https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?rel=1\" start=\"0\"></iframe>",
+          "target": [
+            "iframe[width=\"640\"]"
+          ],
+          "failureSummary": "Fix any of the following:\n  Element has no title attribute\n  aria-label attribute does not exist or is empty\n  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty\n  Element's default semantics were not overridden with role=\"none\" or role=\"presentation\""
+        }
+      ]
+    },
+    {
+      "id": "image-alt",
+      "impact": "critical",
+      "tags": [
+        "cat.text-alternatives",
+        "wcag2a",
+        "wcag111",
+        "section508",
+        "section508.22.a",
+        "TTv5",
+        "TT7.a",
+        "TT7.b",
+        "EN-301-549",
+        "EN-9.1.1.1",
+        "ACT",
+        "RGAAv4",
+        "RGAA-1.1.1"
+      ],
+      "description": "Ensure <img> elements have alternative text or a role of none or presentation",
+      "help": "Images must have alternative text",
+      "helpUrl": "https://dequeuniversity.com/rules/axe/4.12/image-alt?application=playwright",
+      "nodes": [
+        {
+          "any": [
+            {
+              "id": "has-alt",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "Element does not have an alt attribute"
+            },
+            {
+              "id": "aria-label",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "aria-label attribute does not exist or is empty"
+            },
+            {
+              "id": "aria-labelledby",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty"
+            },
+            {
+              "id": "non-empty-title",
+              "data": {
+                "messageKey": "noAttr"
+              },
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "Element has no title attribute"
+            },
+            {
+              "id": "presentational-role",
+              "data": null,
+              "relatedNodes": [],
+              "impact": "critical",
+              "message": "Element's default semantics were not overridden with role=\"none\" or role=\"presentation\""
+            }
+          ],
+          "all": [],
+          "none": [],
+          "impact": "critical",
+          "html": "<img src=\"x\" style=\"display: flex; flex-direction: column; min-width: 80px; max-width: 80px;\">",
+          "target": [
+            "img[src=\"x\"]"
+          ],
+          "failureSummary": "Fix any of the following:\n  Element does not have an alt attribute\n  aria-label attribute does not exist or is empty\n  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty\n  Element has no title attribute\n  Element's default semantics were not overridden with role=\"none\" or role=\"presentation\""
+        }
+      ]
+    }
+  ],
+  "passes": 25,
+  "incomplete": 3
+}

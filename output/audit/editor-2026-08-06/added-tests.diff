@@ -1,0 +1,3168 @@
+# pnpm-lock.yaml had unrelated pre-existing edits; its mixed diff is excluded.
+
+diff --git a/apps/client/package.json b/apps/client/package.json
+index 4db3b954..a6a95bb8 100644
+--- a/apps/client/package.json
++++ b/apps/client/package.json
+@@ -7,6 +7,7 @@
+     "build": "tsc && vite build",
+     "test": "vitest run",
+     "test:security": "vitest run src/features/editor/components/code-block/mermaid-sanitizer.test.ts src/features/editor/components/embed/embed-provider.compat.test.ts src/features/editor/components/embed/embed-security.test.ts src/features/editor/extensions/link-extension.test.ts src/features/ai-external-mcp/utils/ai-external-mcp-headers.test.ts src/features/ai-external-mcp/utils/ai-external-mcp-policies.test.ts",
++    "test:editor:e2e": "node e2e/editor/run-editor-audit.mjs",
+     "lint": "eslint .",
+     "preview": "vite preview",
+     "format": "prettier --write \"src/**/*.tsx\" \"src/**/*.ts\""
+@@ -60,6 +61,7 @@
+     "zod": "^3.25.76"
+   },
+   "devDependencies": {
++    "@axe-core/playwright": "4.12.1",
+     "@eslint/js": "^9.16.0",
+     "@tanstack/eslint-plugin-query": "^5.62.1",
+     "@types/blueimp-load-image": "^5.16.0",
+@@ -68,6 +70,7 @@
+     "@types/node": "22.19.1",
+     "@types/react": "^18.3.12",
+     "@types/react-dom": "^18.3.1",
++    "@playwright/test": "1.62.1",
+     "@vitejs/plugin-react": "^5.1.1",
+     "eslint": "^9.39.2",
+     "eslint-plugin-react": "^7.37.2",
+diff --git a/apps/client/src/features/editor/components/diagram/diagram-attachment.test.ts b/apps/client/src/features/editor/components/diagram/diagram-attachment.test.ts
+index 1d3a0f7d..3ec23be4 100644
+--- a/apps/client/src/features/editor/components/diagram/diagram-attachment.test.ts
++++ b/apps/client/src/features/editor/components/diagram/diagram-attachment.test.ts
+@@ -1,8 +1,23 @@
+ import { describe, expect, it } from "vitest";
+ import {
++  getDiagramAttachmentIdForSave,
+   getDiagramAttachmentSrc,
+   getDiagramSaveErrorMessage,
++  shouldCreateNewDiagramAttachment,
+ } from "./diagram-attachment";
++import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
++
++function documentWithAttachmentIds(
++  ...attachmentIds: string[]
++): ProseMirrorNode {
++  return {
++    descendants: (callback: (node: ProseMirrorNode) => void) => {
++      for (const attachmentId of attachmentIds) {
++        callback({ attrs: { attachmentId } } as unknown as ProseMirrorNode);
++      }
++    },
++  } as ProseMirrorNode;
++}
+ 
+ describe("diagram attachment helpers", () => {
+   it("builds canonical attachment file URLs for saved diagrams", () => {
+@@ -17,6 +32,56 @@ describe("diagram attachment helpers", () => {
+     );
+   });
+ 
++  it("updates an attachment that has a single document reference", () => {
++    expect(
++      getDiagramAttachmentIdForSave(
++        documentWithAttachmentIds("attachment-id"),
++        "attachment-id",
++      ),
++    ).toBe("attachment-id");
++  });
++
++  it("creates a new attachment when a copied diagram shares the source", () => {
++    expect(
++      getDiagramAttachmentIdForSave(
++        documentWithAttachmentIds("attachment-id", "attachment-id"),
++        "attachment-id",
++      ),
++    ).toBeUndefined();
++  });
++
++  it("creates a new attachment for an unsaved diagram", () => {
++    expect(
++      getDiagramAttachmentIdForSave(documentWithAttachmentIds(), undefined),
++    ).toBeUndefined();
++  });
++
++  it.each([
++    [403, "File attachment does not match"],
++    [404, "Existing attachment to overwrite not found"],
++  ])(
++    "retries as a new attachment for server conflict %s",
++    (status, message) => {
++      expect(
++        shouldCreateNewDiagramAttachment({
++          response: { status, data: { message } },
++        }),
++      ).toBe(true);
++    },
++  );
++
++  it("does not hide unrelated upload failures", () => {
++    expect(
++      shouldCreateNewDiagramAttachment({
++        response: {
++          status: 403,
++          data: { message: "Insufficient permissions" },
++        },
++      }),
++    ).toBe(false);
++    expect(shouldCreateNewDiagramAttachment(new Error("network"))).toBe(false);
++  });
++
+   it("prefers server upload errors when available", () => {
+     expect(
+       getDiagramSaveErrorMessage(
+diff --git a/apps/client/src/features/editor/components/diagram/diagram-attachment.ts b/apps/client/src/features/editor/components/diagram/diagram-attachment.ts
+index 4c9a24bf..173bceea 100644
+--- a/apps/client/src/features/editor/components/diagram/diagram-attachment.ts
++++ b/apps/client/src/features/editor/components/diagram/diagram-attachment.ts
+@@ -1,4 +1,5 @@
+ import { IAttachment } from "@/features/attachments/types/attachment.types";
++import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
+ 
+ type Translate = (key: string) => string;
+ 
+@@ -9,12 +10,46 @@ export function getDiagramAttachmentSrc(attachment: IAttachment): string {
+   return `/api/attachments/files/${attachment.id}/${attachment.fileName}${cacheSuffix}`;
+ }
+ 
++export function getDiagramAttachmentIdForSave(
++  doc: ProseMirrorNode,
++  attachmentId?: string,
++): string | undefined {
++  if (!attachmentId) {
++    return undefined;
++  }
++
++  let references = 0;
++  doc.descendants((node) => {
++    if (node.attrs?.attachmentId === attachmentId) {
++      references += 1;
++    }
++  });
++
++  // A pasted diagram keeps the source attributes. Detach it on first save so
++  // editing one node cannot replace the asset rendered by another node.
++  return references > 1 ? undefined : attachmentId;
++}
++
++export function shouldCreateNewDiagramAttachment(error: unknown): boolean {
++  const response = (
++    error as { response?: { status?: number; data?: { message?: string } } }
++  )?.response;
++
++  return (
++    (response?.status === 403 &&
++      response.data?.message === "File attachment does not match") ||
++    (response?.status === 404 &&
++      response.data?.message === "Existing attachment to overwrite not found")
++  );
++}
++
+ export function getDiagramSaveErrorMessage(
+   error: unknown,
+   t: Translate,
+ ): string {
+-  const responseMessage = (error as { response?: { data?: { message?: string } } })
+-    ?.response?.data?.message;
++  const responseMessage = (
++    error as { response?: { data?: { message?: string } } }
++  )?.response?.data?.message;
+ 
+   return responseMessage || t("Failed to update data");
+ }
+diff --git a/apps/client/src/features/editor/components/drawio/drawio-view.tsx b/apps/client/src/features/editor/components/drawio/drawio-view.tsx
+index 0d416d05..6a0056a8 100644
+--- a/apps/client/src/features/editor/components/drawio/drawio-view.tsx
++++ b/apps/client/src/features/editor/components/drawio/drawio-view.tsx
+@@ -25,8 +25,10 @@ import { IconEdit } from "@tabler/icons-react";
+ import { useTranslation } from "react-i18next";
+ import { notifications } from "@mantine/notifications";
+ import {
++  getDiagramAttachmentIdForSave,
+   getDiagramAttachmentSrc,
+   getDiagramSaveErrorMessage,
++  shouldCreateNewDiagramAttachment,
+ } from "@/features/editor/components/diagram/diagram-attachment";
+ import { ImagePreviewModal } from "@/features/editor/components/common/image-preview-modal";
+ import { normalizeBlockWidthMode } from "@docmost/editor-ext";
+@@ -87,11 +89,21 @@ export default function DrawioView(props: NodeViewProps) {
+       //@ts-ignore
+       const pageId = editor.storage?.pageId;
+ 
+-      let attachment: IAttachment = null;
+-
+-      if (attachmentId) {
+-        attachment = await uploadFile(drawioSVGFile, pageId, attachmentId);
+-      } else {
++      const attachmentIdForSave = getDiagramAttachmentIdForSave(
++        editor.state.doc,
++        attachmentId,
++      );
++      let attachment: IAttachment;
++      try {
++        attachment = await uploadFile(
++          drawioSVGFile,
++          pageId,
++          attachmentIdForSave,
++        );
++      } catch (err) {
++        if (!attachmentIdForSave || !shouldCreateNewDiagramAttachment(err)) {
++          throw err;
++        }
+         attachment = await uploadFile(drawioSVGFile, pageId);
+       }
+ 
+@@ -120,7 +132,11 @@ export default function DrawioView(props: NodeViewProps) {
+       className="blockWidthWrapper"
+       data-block-width-mode={widthMode}
+     >
+-      <Modal.Root opened={opened} onClose={isSaving ? () => null : close} fullScreen>
++      <Modal.Root
++        opened={opened}
++        onClose={isSaving ? () => null : close}
++        fullScreen
++      >
+         <Modal.Overlay />
+         <Modal.Content style={{ overflow: "hidden" }}>
+           <LoadingOverlay visible={isSaving} zIndex={1000} />
+
+diff --git a/apps/client/e2e/editor/README.md b/apps/client/e2e/editor/README.md
+new file mode 100644
+index 00000000..c216392d
+--- /dev/null
++++ b/apps/client/e2e/editor/README.md
+@@ -0,0 +1,29 @@
++# Editor regression audit
++
++This suite exercises the fork-specific editor surface against a running Docmost
++instance. It creates an isolated space, enables the page-template policy only
++for the duration of the run, and restores the workspace policy afterwards.
++
++Run from the repository root with credentials supplied only at runtime:
++
++```sh
++DOCMOST_AUTH_TOKEN=... DOCMOST_CSRF_TOKEN=... corepack pnpm --filter ./apps/client test:editor:e2e
++```
++
++Set `DOCMOST_BASE_URL` to override `http://localhost:3000`.
++Set `DOCMOST_API_BASE_URL` when API transport must use a different loopback
++address (for example, `http://127.0.0.1:3000` when `localhost` may resolve to
++IPv6). Set `DOCMOST_API_ORIGIN` when the browser target is a Vite dev server but
++API requests must retain the backend's trusted origin for CSRF validation.
++WebKit uses `DOCMOST_WEBKIT_BASE_URL`, defaulting to the IPv4 loopback.
++
++Evidence is written to `output/audit/editor-2026-08-06`. The audit space is
++deleted only when Playwright passes and no confirmed defects were recorded. A
++failed or defect-bearing run retains the space and records its ID in
++`audit-state.json` for manual inspection.
++
++The matrix covers Chromium and Firefox desktop, WebKit media/clipboard, and
++Chromium/WebKit mobile emulation. Local Mermaid payloads and generated
++PNG/WAV/PDF fixtures avoid public conversion services. Console failures, axe
++results, screenshots, exports, and the Playwright HTML/JSON reports are stored
++under the same audit directory.
+
+diff --git a/apps/client/e2e/editor/fixtures/html-malicious.html b/apps/client/e2e/editor/fixtures/html-malicious.html
+new file mode 100644
+index 00000000..28742da7
+--- /dev/null
++++ b/apps/client/e2e/editor/fixtures/html-malicious.html
+@@ -0,0 +1,6 @@
++<p>Safe pasted HTML</p>
++<img src="x" onerror="window.__editorAuditHtmlXss = 1" />
++<a href="javascript:window.__editorAuditHtmlXss = 2">Unsafe link label</a>
++<script>
++  window.__editorAuditHtmlXss = 3;
++</script>
+
+diff --git a/apps/client/e2e/editor/fixtures/mermaid-invalid.mmd b/apps/client/e2e/editor/fixtures/mermaid-invalid.mmd
+new file mode 100644
+index 00000000..c3a258a0
+--- /dev/null
++++ b/apps/client/e2e/editor/fixtures/mermaid-invalid.mmd
+@@ -0,0 +1,2 @@
++flowchart TD
++  A[Unclosed node --> B
+
+diff --git a/apps/client/e2e/editor/fixtures/mermaid-malicious.mmd b/apps/client/e2e/editor/fixtures/mermaid-malicious.mmd
+new file mode 100644
+index 00000000..a7566e6a
+--- /dev/null
++++ b/apps/client/e2e/editor/fixtures/mermaid-malicious.mmd
+@@ -0,0 +1,3 @@
++flowchart TD
++  A["<img src=x onerror=alert('editor-audit-xss')>"] --> B["javascript:alert('blocked')"]
++  click A "javascript:alert('blocked')"
+
+diff --git a/apps/client/e2e/editor/fixtures/mermaid-valid.mmd b/apps/client/e2e/editor/fixtures/mermaid-valid.mmd
+new file mode 100644
+index 00000000..a499c14f
+--- /dev/null
++++ b/apps/client/e2e/editor/fixtures/mermaid-valid.mmd
+@@ -0,0 +1,4 @@
++flowchart TD
++  A[Safe input] --> B{Validated?}
++  B -->|Yes| C[Rendered locally]
++  B -->|No| D[Visible error]
+
+diff --git a/apps/client/e2e/editor/generate-added-tests-diff.mjs b/apps/client/e2e/editor/generate-added-tests-diff.mjs
+new file mode 100644
+index 00000000..d02cafa5
+--- /dev/null
++++ b/apps/client/e2e/editor/generate-added-tests-diff.mjs
+@@ -0,0 +1,75 @@
++import { execFileSync } from "node:child_process";
++import fs from "node:fs/promises";
++import path from "node:path";
++
++const clientRoot = path.resolve(import.meta.dirname, "../..");
++const repoRoot = path.resolve(clientRoot, "../..");
++const outputFile = path.join(
++  repoRoot,
++  "output/audit/editor-2026-08-06/added-tests.diff",
++);
++
++async function walk(directory) {
++  const entries = await fs.readdir(directory, { withFileTypes: true });
++  const files = [];
++  for (const entry of entries) {
++    const absolute = path.join(directory, entry.name);
++    if (entry.isDirectory()) files.push(...(await walk(absolute)));
++    else files.push(absolute);
++  }
++  return files;
++}
++
++function gitDiff(args) {
++  try {
++    return execFileSync("git", args, {
++      cwd: repoRoot,
++      encoding: "utf8",
++      stdio: ["ignore", "pipe", "pipe"],
++    });
++  } catch (error) {
++    if (error.status === 1 && error.stdout) return String(error.stdout);
++    throw error;
++  }
++}
++
++const newFiles = [
++  path.join(clientRoot, "playwright.editor.config.ts"),
++  path.join(
++    clientRoot,
++    "src/features/editor/extensions/indent-keyboard.test.ts",
++  ),
++  ...(await walk(path.join(clientRoot, "e2e/editor"))),
++].sort();
++
++const changedFiles = [
++  "apps/client/package.json",
++  "apps/client/src/features/editor/components/diagram/diagram-attachment.test.ts",
++  "apps/client/src/features/editor/components/diagram/diagram-attachment.ts",
++  "apps/client/src/features/editor/components/drawio/drawio-view.tsx",
++];
++
++const parts = [
++  gitDiff(["diff", "--", ...changedFiles]),
++  ...newFiles.map((file) =>
++    gitDiff([
++      "diff",
++      "--no-index",
++      "--",
++      "/dev/null",
++      path.relative(repoRoot, file).replaceAll("\\", "/"),
++    ]),
++  ),
++];
++
++await fs.mkdir(path.dirname(outputFile), { recursive: true });
++await fs.writeFile(
++  outputFile,
++  [
++    "# pnpm-lock.yaml had unrelated pre-existing edits; its mixed diff is excluded.\n",
++    ...parts.filter(Boolean),
++  ].join("\n"),
++  "utf8",
++);
++
++console.log(outputFile);
+
+diff --git a/apps/client/e2e/editor/run-editor-audit.mjs b/apps/client/e2e/editor/run-editor-audit.mjs
+new file mode 100644
+index 00000000..9bfc9383
+--- /dev/null
++++ b/apps/client/e2e/editor/run-editor-audit.mjs
+@@ -0,0 +1,212 @@
++import { createRequire } from "node:module";
++import { spawn } from "node:child_process";
++import fs from "node:fs/promises";
++import path from "node:path";
++import { request } from "@playwright/test";
++
++const require = createRequire(import.meta.url);
++const clientRoot = path.resolve(import.meta.dirname, "../..");
++const repoRoot = path.resolve(clientRoot, "../..");
++const auditRoot = path.join(repoRoot, "output/audit/editor-2026-08-06");
++const statePath = path.join(auditRoot, "audit-state.json");
++const defectsPath = path.join(auditRoot, "confirmed-defects.json");
++const baseURL = (
++  process.env.DOCMOST_BASE_URL ?? "http://localhost:3000"
++).replace(/\/$/, "");
++const apiBaseURL = (process.env.DOCMOST_API_BASE_URL ?? baseURL).replace(
++  /\/$/,
++  "",
++);
++const apiOrigin = (process.env.DOCMOST_API_ORIGIN ?? baseURL).replace(
++  /\/$/,
++  "",
++);
++
++function required(name) {
++  const value = process.env[name]?.trim();
++  if (!value) throw new Error(`${name} must be supplied at runtime`);
++  return value;
++}
++
++function unwrap(payload) {
++  return payload &&
++    typeof payload === "object" &&
++    "success" in payload &&
++    "data" in payload
++    ? payload.data
++    : payload;
++}
++
++async function responseJson(response) {
++  const text = await response.text();
++  if (!response.ok()) {
++    throw new Error(
++      `${new URL(response.url()).pathname} failed with ${response.status()}: ${text.slice(0, 500)}`,
++    );
++  }
++  return text ? unwrap(JSON.parse(text)) : undefined;
++}
++
++async function createApi() {
++  const csrfToken = required("DOCMOST_CSRF_TOKEN");
++  const authToken = required("DOCMOST_AUTH_TOKEN");
++  return request.newContext({
++    baseURL: apiBaseURL,
++    timeout: 20_000,
++    extraHTTPHeaders: {
++      Authorization: `Bearer ${authToken}`,
++      Cookie: `csrfToken=${csrfToken}`,
++      Origin: apiOrigin,
++      Referer: `${apiOrigin}/`,
++      "x-csrf-token": csrfToken,
++      Accept: "application/json",
++    },
++  });
++}
++
++async function runPlaywright() {
++  const cli = require.resolve("@playwright/test/cli");
++  return new Promise((resolve, reject) => {
++    const child = spawn(
++      process.execPath,
++      [cli, "test", "--config=playwright.editor.config.ts"],
++      {
++        cwd: clientRoot,
++        env: process.env,
++        stdio: "inherit",
++      },
++    );
++    child.on("error", reject);
++    child.on("exit", (code) => resolve(code ?? 1));
++  });
++}
++
++await fs.mkdir(auditRoot, { recursive: true });
++for (const directory of [
++  "axe-results",
++  "console-errors",
++  "downloads",
++  "playwright-artifacts",
++  "playwright-html",
++  "screenshots",
++]) {
++  const generatedDirectory = path.join(auditRoot, directory);
++  await fs.rm(generatedDirectory, { recursive: true, force: true });
++  await fs.mkdir(generatedDirectory, { recursive: true });
++}
++await fs.writeFile(defectsPath, "[]\n", "utf8");
++const api = await createApi();
++let state;
++let exitCode = 1;
++let originalWorkspaceTemplatePolicy;
++
++try {
++  const runId = new Date()
++    .toISOString()
++    .replace(/[-:.TZ]/g, "")
++    .slice(0, 14);
++  originalWorkspaceTemplatePolicy = await responseJson(
++    await api.get("/api/pages/templates/policies/workspace"),
++  );
++  if (!originalWorkspaceTemplatePolicy.systemEnabled) {
++    throw new Error("Live page embeds are disabled by the deployment policy");
++  }
++  if (!originalWorkspaceTemplatePolicy.enabled) {
++    await responseJson(
++      await api.patch("/api/pages/templates/policies/workspace", {
++        data: {
++          enabled: true,
++          expectedRevision: originalWorkspaceTemplatePolicy.revision,
++        },
++      }),
++    );
++  }
++  const space = await responseJson(
++    await api.post("/api/spaces", {
++      data: {
++        name: `Editor audit ${runId}`,
++        slug: `editoraudit${runId}`,
++        description: "Isolated browser regression audit space.",
++      },
++    }),
++  );
++  state = {
++    runId,
++    spaceId: space.id,
++    spaceSlug: space.slug,
++    spaceName: space.name,
++    retained: true,
++    createdAt: new Date().toISOString(),
++  };
++  await responseJson(
++    await api.patch(`/api/spaces/${space.id}`, {
++      data: { disablePublicSharing: false },
++    }),
++  );
++  const spaceTemplatePolicy = await responseJson(
++    await api.get(`/api/pages/templates/policies/spaces/${space.id}`),
++  );
++  await responseJson(
++    await api.put(`/api/pages/templates/policies/spaces/${space.id}`, {
++      data: {
++        ...spaceTemplatePolicy,
++        templatesEnabled: true,
++        allowCreateTemplate: true,
++        allowSnapshot: true,
++        allowLiveEmbed: true,
++        allowPublicLiveEmbed: true,
++        expectedRevision: spaceTemplatePolicy.revision,
++      },
++    }),
++  );
++  await fs.writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
++
++  exitCode = await runPlaywright();
++  const confirmedDefects = JSON.parse(await fs.readFile(defectsPath, "utf8"));
++  if (exitCode === 0 && confirmedDefects.length === 0) {
++    await responseJson(await api.delete(`/api/spaces/${state.spaceId}`));
++    state.retained = false;
++    state.deletedAt = new Date().toISOString();
++    await fs.writeFile(
++      statePath,
++      `${JSON.stringify(state, null, 2)}\n`,
++      "utf8",
++    );
++  } else {
++    state.confirmedDefects = confirmedDefects.length;
++    state.retainedReason = exitCode !== 0 ? "test-failure" : "confirmed-defect";
++    if (exitCode !== 0) {
++      state.failureExitCode = exitCode;
++    }
++    await fs.writeFile(
++      statePath,
++      `${JSON.stringify(state, null, 2)}\n`,
++      "utf8",
++    );
++  }
++} finally {
++  if (
++    originalWorkspaceTemplatePolicy &&
++    originalWorkspaceTemplatePolicy.systemEnabled
++  ) {
++    const currentPolicy = await responseJson(
++      await api.get("/api/pages/templates/policies/workspace"),
++    ).catch(() => null);
++    if (
++      currentPolicy &&
++      currentPolicy.enabled !== originalWorkspaceTemplatePolicy.enabled
++    ) {
++      await responseJson(
++        await api.patch("/api/pages/templates/policies/workspace", {
++          data: {
++            enabled: originalWorkspaceTemplatePolicy.enabled,
++            expectedRevision: currentPolicy.revision,
++          },
++        }),
++      ).catch(() => undefined);
++    }
++  }
++  await api.dispose();
++}
++
++process.exitCode = exitCode;
+
+diff --git a/apps/client/e2e/editor/specs/collaboration-share-offline.spec.ts b/apps/client/e2e/editor/specs/collaboration-share-offline.spec.ts
+new file mode 100644
+index 00000000..fbea45b2
+--- /dev/null
++++ b/apps/client/e2e/editor/specs/collaboration-share-offline.spec.ts
+@@ -0,0 +1,229 @@
++import { randomBytes } from "node:crypto";
++import {
++  apiGet,
++  apiPost,
++  createAdminApi,
++  createPage,
++  loadAuditState,
++} from "../support/api";
++import { baseUrl } from "../support/auth";
++import { pageUrl } from "../support/complex-document";
++import {
++  captureStep,
++  expect,
++  mainEditor,
++  publicDocument,
++  recordDefect,
++  test,
++} from "../support/audit-test";
++
++function unwrap<T>(payload: any): T {
++  return payload &&
++    typeof payload === "object" &&
++    "success" in payload &&
++    "data" in payload
++    ? (payload.data as T)
++    : (payload as T);
++}
++
++test("collaborative editing, public readonly share and offline interruption", async ({
++  page,
++  browser,
++  context,
++}, testInfo) => {
++  const api = await createAdminApi();
++  const state = await loadAuditState();
++  const current = await apiGet<any>(api, "/api/users/me");
++  const emailParts = String(current.user.email).split("@");
++  const invitationSuffix = randomBytes(4).toString("hex");
++  const alias = `${emailParts[0]}+editor-audit-${state.runId}-${testInfo.project.name.replace(/[^a-z0-9]/gi, "")}-${invitationSuffix}@${emailParts[1]}`;
++  const password = `Aa1!${randomBytes(18).toString("base64url")}`;
++  const auditPage = await createPage(
++    api,
++    state.spaceId,
++    `${testInfo.project.name} collaboration`,
++    {
++      type: "doc",
++      content: [
++        {
++          type: "paragraph",
++          content: [{ type: "text", text: "Collaboration anchor" }],
++        },
++      ],
++    },
++  );
++  let secondUserId: string | undefined;
++  let secondContext: Awaited<ReturnType<typeof browser.newContext>> | undefined;
++  let shareId: string | undefined;
++
++  try {
++    await apiPost(api, "/api/workspace/invites/create", {
++      emails: [alias],
++      role: "member",
++      groupIds: [],
++    });
++    const invites = await apiGet<any>(api, "/api/workspace/invites?limit=100");
++    const invitation = (invites.items ?? invites.data ?? []).find(
++      (item: any) => item.email === alias,
++    );
++    expect(invitation, "test-user invitation").toBeTruthy();
++    const link = await apiPost<{ inviteLink: string }>(
++      api,
++      "/api/workspace/invites/link",
++      {
++        invitationId: invitation.id,
++      },
++    );
++    const invitationUrl = new URL(link.inviteLink);
++    const invitationId = invitationUrl.pathname
++      .split("/")
++      .filter(Boolean)
++      .at(-1)!;
++    const token = invitationUrl.searchParams.get("token")!;
++    secondContext = await browser.newContext({
++      baseURL: baseUrl(),
++      locale: "en-US",
++    });
++    const accept = await secondContext.request.post(
++      `${baseUrl()}/api/workspace/invites/accept`,
++      {
++        data: {
++          invitationId,
++          token,
++          name: "Editor Audit Collaborator",
++          password,
++        },
++        headers: { Origin: baseUrl(), Referer: `${baseUrl()}/` },
++      },
++    );
++    expect(accept.ok()).toBeTruthy();
++    const secondInfoResponse = await secondContext.request.get(
++      `${baseUrl()}/api/users/me`,
++    );
++    expect(secondInfoResponse.ok()).toBeTruthy();
++    const secondInfo = unwrap<any>(await secondInfoResponse.json());
++    secondUserId = secondInfo.user.id;
++    await apiPost(api, "/api/spaces/members/add", {
++      spaceId: state.spaceId,
++      role: "writer",
++      userIds: [secondUserId],
++      groupIds: [],
++    });
++
++    const secondPage = await secondContext.newPage();
++    const url = pageUrl(state, auditPage);
++    await Promise.all([page.goto(url), secondPage.goto(url)]);
++    const adminEditor = mainEditor(page);
++    const collaboratorEditor = mainEditor(secondPage);
++    if ((await adminEditor.getAttribute("contenteditable")) !== "true") {
++      await page
++        .getByRole("radiogroup")
++        .getByText(/^(Edit|Редактировать)$/)
++        .click();
++    }
++    if ((await collaboratorEditor.getAttribute("contenteditable")) !== "true") {
++      await secondPage
++        .getByRole("radiogroup")
++        .getByText(/^(Edit|Редактировать)$/)
++        .click();
++    }
++    await expect(adminEditor).toHaveAttribute("contenteditable", "true");
++    await expect(collaboratorEditor).toHaveAttribute("contenteditable", "true");
++    if (!(await adminEditor.textContent())?.includes("Collaboration anchor")) {
++      await recordDefect({
++        id: "ED-001",
++        title:
++          "API-seeded page content is absent from the live collaborative Yjs editor",
++        severity: "critical",
++        project: testInfo.project.name,
++        evidence:
++          "Database page content contains the seeded paragraph, but the connected editable ProseMirror document is empty.",
++      });
++      await adminEditor.fill("Collaboration anchor");
++    }
++    await expect(collaboratorEditor).toContainText("Collaboration anchor");
++    await mainEditor(page).click();
++    await page.keyboard.press("Control+End");
++    await page.keyboard.type(" admin-edit");
++    await expect(mainEditor(secondPage)).toContainText("admin-edit");
++    await mainEditor(secondPage).click();
++    await secondPage.keyboard.press("Control+End");
++    await secondPage.keyboard.type(" collaborator-edit");
++    await expect(mainEditor(page)).toContainText("collaborator-edit");
++    await captureStep(page, testInfo, "06-collaboration-admin");
++    await secondPage.close();
++
++    const share = await apiPost<any>(api, "/api/shares/actions/create", {
++      pageId: auditPage.id,
++      includeSubPages: true,
++      searchIndexing: false,
++    });
++    shareId = share.id;
++    const publicContext = await browser.newContext({
++      baseURL: baseUrl(),
++      locale: "en-US",
++    });
++    const publicPage = await publicContext.newPage();
++    await publicPage.goto(`/share/${share.id}/p/${auditPage.slugId}`);
++    await expect(publicDocument(publicPage)).toContainText(
++      "Collaboration anchor",
++    );
++    await expect(publicDocument(publicPage)).toHaveAttribute(
++      "contenteditable",
++      "false",
++    );
++    await captureStep(publicPage, testInfo, "07-public-readonly-share");
++    await publicContext.close();
++
++    await context.setOffline(true);
++    const offlineRequestFailed = await page.evaluate(async () => {
++      try {
++        await fetch(`/api/users/me?editorAuditOffline=${Date.now()}`, {
++          cache: "no-store",
++        });
++        return false;
++      } catch {
++        return true;
++      }
++    });
++    expect(offlineRequestFailed).toBe(true);
++    await page.reload({ waitUntil: "domcontentloaded" }).catch(() => undefined);
++    const offlineMessage = page
++      .getByText(
++        /You are offline|There is no network connection|^Offline$|Failed to load page/i,
++      )
++      .first();
++    const offlineMessageVisible = await offlineMessage
++      .waitFor({ state: "visible", timeout: 3_000 })
++      .then(() => true)
++      .catch(() => false);
++    if (!offlineMessageVisible) {
++      await recordDefect({
++        id: "ED-008",
++        title: "Offline reload has no explanatory fallback",
++        severity: "medium",
++        project: testInfo.project.name,
++        evidence:
++          "The offline request failed as expected, but after an offline reload the page still showed only an unlabeled loading spinner instead of an explanatory fallback.",
++      });
++    }
++    await captureStep(page, testInfo, "08-offline-interruption");
++    await context.setOffline(false);
++    await page.reload();
++    await expect(mainEditor(page)).toContainText("Collaboration anchor");
++  } finally {
++    await context.setOffline(false).catch(() => undefined);
++    if (shareId) {
++      await apiPost(api, "/api/shares/actions/delete", { shareId }).catch(
++        () => undefined,
++      );
++    }
++    await secondContext?.close().catch(() => undefined);
++    if (secondUserId) {
++      await apiPost(api, "/api/workspace/members/delete", {
++        userId: secondUserId,
++      }).catch(() => undefined);
++    }
++    await api.dispose();
++  }
++});
+
+diff --git a/apps/client/e2e/editor/specs/complex-document.spec.ts b/apps/client/e2e/editor/specs/complex-document.spec.ts
+new file mode 100644
+index 00000000..e56aee59
+--- /dev/null
++++ b/apps/client/e2e/editor/specs/complex-document.spec.ts
+@@ -0,0 +1,250 @@
++import fs from "node:fs/promises";
++import path from "node:path";
++import JSZip from "jszip";
++import {
++  apiGet,
++  apiPost,
++  createAdminApi,
++  loadAuditState,
++} from "../support/api";
++import { pageUrl, seedComplexDocument } from "../support/complex-document";
++import {
++  captureStep,
++  expect,
++  mainEditor,
++  publicDocument,
++  runAxe,
++  test,
++} from "../support/audit-test";
++import { downloadsDir } from "../support/paths";
++import { baseUrl } from "../support/auth";
++
++function collectNodeTypes(
++  node: unknown,
++  types = new Set<string>(),
++): Set<string> {
++  if (!node || typeof node !== "object") return types;
++  const record = node as { type?: unknown; content?: unknown[] };
++  if (typeof record.type === "string") types.add(record.type);
++  for (const child of record.content ?? []) collectNodeTypes(child, types);
++  return types;
++}
++
++function collectMarkTypes(
++  node: unknown,
++  types = new Set<string>(),
++): Set<string> {
++  if (!node || typeof node !== "object") return types;
++  const record = node as {
++    marks?: Array<{ type?: unknown }>;
++    content?: unknown[];
++  };
++  for (const mark of record.marks ?? []) {
++    if (typeof mark.type === "string") types.add(mark.type);
++  }
++  for (const child of record.content ?? []) collectMarkTypes(child, types);
++  return types;
++}
++
++test("renders the all-node document, marks, widths, numbering, readonly and export", async ({
++  page,
++  browser,
++}, testInfo) => {
++  const api = await createAdminApi();
++  const state = await loadAuditState();
++  const current = await apiGet<any>(api, "/api/users/me");
++  const originalPreferences = current.user.settings?.preferences ?? {};
++  const seeded = await seedComplexDocument(api, state, testInfo.project.name);
++  let shareId: string | undefined;
++  let publicContext: Awaited<ReturnType<typeof browser.newContext>> | undefined;
++
++  try {
++    await apiPost(api, "/api/users/update", {
++      headingNumberingByPageId: {
++        ...(originalPreferences.headingNumberingByPageId ?? {}),
++        [seeded.page.id]: true,
++      },
++      pageEditModeByPageId: {
++        ...(originalPreferences.pageEditModeByPageId ?? {}),
++        [seeded.page.id]: "read",
++      },
++    });
++    const persistedPreferences = (await apiGet<any>(api, "/api/users/me")).user
++      .settings?.preferences;
++    expect(
++      persistedPreferences?.headingNumberingByPageId?.[seeded.page.id],
++    ).toBe(true);
++    expect(persistedPreferences?.pageEditModeByPageId?.[seeded.page.id]).toBe(
++      "read",
++    );
++
++    await page.goto(pageUrl(state, seeded.page));
++    const editor = mainEditor(page);
++    await expect(editor).toContainText("Editor regression audit");
++    await expect(page.locator(".heading-number")).toHaveCount(4);
++    await expect(page.locator(".heading-number").nth(0)).toHaveText("1.");
++    await expect(page.locator(".heading-number").nth(1)).toHaveText("1.1.");
++    await expect(page.locator(".heading-number").nth(2)).toHaveText("1.1.1.");
++    await expect(page.locator(".heading-number").nth(3)).toHaveText("1.2.");
++
++    const serializedPage = await apiGet<any>(
++      api,
++      `/api/pages/info?pageId=${encodeURIComponent(seeded.page.id)}`,
++    );
++    const nodeTypes = collectNodeTypes(serializedPage.content);
++    const markTypes = collectMarkTypes(serializedPage.content);
++    for (const type of seeded.expectedNodeTypes) {
++      expect(nodeTypes, `serialized node ${type}`).toContain(type);
++    }
++    for (const type of seeded.expectedMarkTypes) {
++      expect(markTypes, `serialized mark ${type}`).toContain(type);
++    }
++
++    await expect(page.locator("strong")).toContainText("bold");
++    await expect(page.locator("em")).toContainText("italic");
++    await expect(page.locator("u")).toContainText("underline");
++    await expect(page.locator("s")).toContainText("strike");
++    await expect(page.locator("sup")).toContainText("superscript");
++    await expect(page.locator("sub")).toContainText("subscript");
++    await expect(page.locator("mark")).toContainText("highlight");
++    await expect(page.locator("span.comment-mark")).toContainText("comment");
++    await expect(
++      page.locator("[data-block-width-mode='full']").first(),
++    ).toBeVisible();
++    await expect(page.locator("table")).toBeVisible();
++    await expect(
++      page.locator(".page-break, [data-type='pageBreak']"),
++    ).toHaveCount(1);
++    await expect(
++      page.getByAltText("Editor audit image alt text"),
++    ).toBeVisible();
++    await expect(page.locator("audio[controls]")).toBeVisible();
++    await expect(page.locator("video[controls]")).toBeVisible();
++    await expect(
++      page.locator("iframe[src*='audit-document.pdf']"),
++    ).toBeVisible();
++    await expect(editor.getByText(seeded.childPage.title)).toBeVisible();
++    await expect(editor.getByText("Shared source content")).toBeVisible();
++    await expect(
++      editor.getByRole("link", { name: "External safe preview" }),
++    ).toHaveAttribute("href", "https://example.com/");
++    await expect(
++      editor.locator("a").filter({ hasText: seeded.sourcePage.title }).first(),
++    ).toHaveAttribute("href", new RegExp(seeded.sourcePage.slugId));
++
++    await captureStep(page, testInfo, "01-all-node-document", {
++      fullPage: true,
++    });
++    await runAxe(page, testInfo);
++
++    await editor
++      .getByRole("link", { name: seeded.childPage.title, exact: true })
++      .click();
++    await expect(page).toHaveURL(new RegExp(seeded.childPage.slugId));
++    await expect(mainEditor(page)).toContainText(
++      "Child page used by the subpage navigation audit.",
++    );
++    await captureStep(page, testInfo, "01b-subpage-navigation");
++    await page.goBack();
++    await expect(editor).toContainText("Editor regression audit");
++
++    await expect(editor).toHaveAttribute("contenteditable", "false");
++    await expect(page.getByRole("toolbar")).toHaveCount(0);
++    await captureStep(page, testInfo, "02-readonly-document", {
++      fullPage: true,
++    });
++
++    const share = await apiPost<any>(api, "/api/shares/actions/create", {
++      pageId: seeded.page.id,
++      includeSubPages: true,
++      searchIndexing: false,
++    });
++    shareId = share.id;
++    publicContext = await browser.newContext({
++      baseURL: baseUrl(),
++      locale: "en-US",
++    });
++    const publicPage = await publicContext.newPage();
++    await publicPage.goto(`/share/${share.id}/p/${seeded.page.slugId}`);
++    const publicEditor = publicDocument(publicPage);
++    await expect(publicEditor).toContainText("Editor regression audit");
++    await expect(publicEditor).toHaveAttribute("contenteditable", "false");
++    await expect(
++      publicPage.getByAltText("Editor audit image alt text"),
++    ).toBeVisible();
++    await expect(publicPage.getByRole("toolbar")).toHaveCount(0);
++    await runAxe(publicPage, testInfo, "body", "public-share");
++    await captureStep(publicPage, testInfo, "02b-public-all-node-share", {
++      fullPage: true,
++    });
++    await publicContext.close();
++    publicContext = undefined;
++
++    await fs.mkdir(downloadsDir, { recursive: true });
++    for (const format of ["markdown", "html", "pdf"] as const) {
++      const response = await api.post("/api/pages/actions/export", {
++        data: {
++          pageId: seeded.page.id,
++          format,
++          includeChildren: false,
++          includeAttachments: true,
++        },
++      });
++      expect(response.ok(), `${format} export status`).toBeTruthy();
++      const zipFile = path.join(
++        downloadsDir,
++        `${testInfo.project.name}-${format}-export.zip`,
++      );
++      const body = await response.body();
++      await fs.writeFile(zipFile, body);
++      const zip = await JSZip.loadAsync(body);
++      const names = Object.keys(zip.files);
++      expect(names.length).toBeGreaterThan(0);
++      if (format === "html") {
++        const htmlName = names.find((name) => name.endsWith(".html"));
++        expect(htmlName).toBeTruthy();
++        const html = await zip.file(htmlName!)!.async("string");
++        expect(html).toContain("page-break");
++        const executablePayloads = await page.evaluate((documentHtml) => {
++          const parsed = new DOMParser().parseFromString(
++            documentHtml,
++            "text/html",
++          );
++          return Array.from(parsed.querySelectorAll("*")).flatMap((element) =>
++            Array.from(element.attributes)
++              .filter(
++                ({ name, value }) =>
++                  name.toLowerCase().startsWith("on") ||
++                  (["href", "src", "xlink:href"].includes(name.toLowerCase()) &&
++                    /^\s*javascript:/i.test(value)),
++              )
++              .map(({ name, value }) => `${element.tagName}.${name}=${value}`),
++          );
++        }, html);
++        expect(executablePayloads).toEqual([]);
++      }
++      if (format === "pdf") {
++        const pdfName = names.find((name) => name.endsWith(".pdf"));
++        expect(pdfName).toBeTruthy();
++        await fs.writeFile(
++          path.join(downloadsDir, `${testInfo.project.name}-editor-export.pdf`),
++          await zip.file(pdfName!)!.async("nodebuffer"),
++        );
++      }
++    }
++  } finally {
++    await publicContext?.close().catch(() => undefined);
++    if (shareId) {
++      await apiPost(api, "/api/shares/actions/delete", { shareId }).catch(
++        () => undefined,
++      );
++    }
++    await apiPost(api, "/api/users/update", {
++      fixedToolbar: originalPreferences.fixedToolbar ?? false,
++      headingNumberingByPageId:
++        originalPreferences.headingNumberingByPageId ?? {},
++      pageEditModeByPageId: originalPreferences.pageEditModeByPageId ?? {},
++    }).catch(() => undefined);
++    await api.dispose();
++  }
++});
+
+diff --git a/apps/client/e2e/editor/specs/drawio-copy-on-write.spec.ts b/apps/client/e2e/editor/specs/drawio-copy-on-write.spec.ts
+new file mode 100644
+index 00000000..4ea03bad
+--- /dev/null
++++ b/apps/client/e2e/editor/specs/drawio-copy-on-write.spec.ts
+@@ -0,0 +1,125 @@
++import {
++  apiGet,
++  apiPost,
++  attachmentUrl,
++  createAdminApi,
++  createPage,
++  loadAuditState,
++  tinySvg,
++  updatePageContent,
++  uploadFixture,
++} from "../support/api";
++import { pageUrl } from "../support/complex-document";
++import { expect, mainEditor, test } from "../support/audit-test";
++
++test("saving a copied Draw.io diagram creates a separate attachment", async ({
++  page,
++}, testInfo) => {
++  const api = await createAdminApi();
++  const state = await loadAuditState();
++  const current = await apiGet<any>(api, "/api/users/me");
++  const original = current.user.settings?.preferences ?? {};
++  const auditPage = await createPage(
++    api,
++    state.spaceId,
++    `${testInfo.project.name} Draw.io copy-on-write`,
++    {
++      type: "doc",
++      content: [
++        {
++          type: "paragraph",
++          content: [{ type: "text", text: "Draw.io copy-on-write probe" }],
++        },
++      ],
++    },
++  );
++  const attachment = await uploadFixture(
++    api,
++    auditPage.id,
++    "drawio-copy-on-write.svg",
++    "image/svg+xml",
++    tinySvg(),
++  );
++  const attrs = {
++    src: attachmentUrl(attachment),
++    title: "Draw.io copy-on-write target",
++    attachmentId: attachment.id,
++    width: "100%",
++    widthMode: "normal",
++    align: "center",
++  };
++  await updatePageContent(api, auditPage.id, {
++    type: "doc",
++    content: [
++      {
++        type: "paragraph",
++        content: [{ type: "text", text: "Draw.io copy-on-write probe" }],
++      },
++      { type: "drawio", attrs },
++      { type: "drawio", attrs },
++    ],
++  });
++
++  try {
++    await apiPost(api, "/api/users/update", {
++      pageEditModeByPageId: {
++        ...(original.pageEditModeByPageId ?? {}),
++        [auditPage.id]: "edit",
++      },
++    });
++    await page.goto(pageUrl(state, auditPage));
++    await expect(mainEditor(page)).toHaveAttribute("contenteditable", "true");
++
++    const diagrams = page.getByAltText("Draw.io copy-on-write target");
++    await expect(diagrams).toHaveCount(2);
++    await diagrams.nth(1).evaluate((element) => {
++      element.dispatchEvent(
++        new MouseEvent("click", { bubbles: true, cancelable: true, detail: 2 }),
++      );
++    });
++    await expect(page.locator("iframe.diagrams-iframe")).toBeVisible();
++
++    await page.evaluate(() => {
++      const svg =
++        '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="60"><rect width="120" height="60" fill="#228be6"/></svg>';
++      window.dispatchEvent(
++        new MessageEvent("message", {
++          origin: "https://embed.diagrams.net",
++          data: JSON.stringify({
++            event: "export",
++            data: `data:image/svg+xml;base64,${btoa(svg)}`,
++            message: { parentEvent: "save" },
++          }),
++        }),
++      );
++    });
++    await expect(page.locator("iframe.diagrams-iframe")).toHaveCount(0);
++
++    let attachmentIds: string[] = [];
++    await expect
++      .poll(
++        async () => {
++          const savedPage = await apiGet<any>(
++            api,
++            `/api/pages/info?pageId=${encodeURIComponent(auditPage.id)}`,
++          );
++          attachmentIds = (savedPage.content?.content ?? [])
++            .filter((node: any) => node.type === "drawio")
++            .map((node: any) => node.attrs?.attachmentId)
++            .filter(Boolean);
++          return new Set(attachmentIds).size;
++        },
++        { timeout: 15_000 },
++      )
++      .toBe(2);
++
++    expect(attachmentIds).toHaveLength(2);
++    expect(attachmentIds[0]).toBe(attachment.id);
++    expect(attachmentIds[1]).not.toBe(attachment.id);
++  } finally {
++    await apiPost(api, "/api/users/update", {
++      pageEditModeByPageId: original.pageEditModeByPageId ?? {},
++    }).catch(() => undefined);
++    await api.dispose();
++  }
++});
+
+diff --git a/apps/client/e2e/editor/specs/editing-behavior.spec.ts b/apps/client/e2e/editor/specs/editing-behavior.spec.ts
+new file mode 100644
+index 00000000..b792933d
+--- /dev/null
++++ b/apps/client/e2e/editor/specs/editing-behavior.spec.ts
+@@ -0,0 +1,491 @@
++import fs from "node:fs/promises";
++import path from "node:path";
++import {
++  attachmentUrl,
++  apiGet,
++  apiPost,
++  createAdminApi,
++  createPage,
++  loadAuditState,
++  tinySvg,
++  updatePageContent,
++  uploadFixture,
++} from "../support/api";
++import { pageUrl } from "../support/complex-document";
++import {
++  captureStep,
++  expect,
++  mainEditor,
++  recordDefect,
++  runAxe,
++  test,
++} from "../support/audit-test";
++
++test("supports keyboard indent, page breaks, tables, slash commands, paste and undo redo", async ({
++  page,
++}, testInfo) => {
++  const api = await createAdminApi();
++  const state = await loadAuditState();
++  const current = await apiGet<any>(api, "/api/users/me");
++  const original = current.user.settings?.preferences ?? {};
++  const editingContent = {
++    type: "doc",
++    content: [
++      {
++        type: "paragraph",
++        attrs: { indent: 0 },
++        content: [{ type: "text", text: "Keyboard indentation target" }],
++      },
++      {
++        type: "table",
++        attrs: { widthMode: "normal" },
++        content: [
++          {
++            type: "tableRow",
++            content: [
++              {
++                type: "tableCell",
++                content: [
++                  {
++                    type: "paragraph",
++                    content: [{ type: "text", text: "A1" }],
++                  },
++                ],
++              },
++              {
++                type: "tableCell",
++                content: [
++                  {
++                    type: "paragraph",
++                    content: [{ type: "text", text: "B1" }],
++                  },
++                ],
++              },
++            ],
++          },
++          {
++            type: "tableRow",
++            content: [
++              {
++                type: "tableCell",
++                content: [
++                  {
++                    type: "paragraph",
++                    content: [{ type: "text", text: "A2" }],
++                  },
++                ],
++              },
++              {
++                type: "tableCell",
++                content: [
++                  {
++                    type: "paragraph",
++                    content: [{ type: "text", text: "B2" }],
++                  },
++                ],
++              },
++            ],
++          },
++        ],
++      },
++      {
++        type: "paragraph",
++        content: [{ type: "text", text: "Paste and undo anchor" }],
++      },
++    ],
++  };
++  const auditPage = await createPage(
++    api,
++    state.spaceId,
++    `${testInfo.project.name} editing operations`,
++    editingContent,
++  );
++  const drawioAttachment = await uploadFixture(
++    api,
++    auditPage.id,
++    "editable-drawio.svg",
++    "image/svg+xml",
++    tinySvg(),
++  );
++  await updatePageContent(api, auditPage.id, {
++    ...editingContent,
++    content: [
++      ...editingContent.content,
++      {
++        type: "drawio",
++        attrs: {
++          src: attachmentUrl(drawioAttachment),
++          title: "Editable Draw.io copy target",
++          attachmentId: drawioAttachment.id,
++          width: "100%",
++          widthMode: "normal",
++          align: "center",
++        },
++      },
++    ],
++  });
++
++  try {
++    await apiPost(api, "/api/users/update", {
++      fixedToolbar: true,
++      pageEditModeByPageId: {
++        ...(original.pageEditModeByPageId ?? {}),
++        [auditPage.id]: "edit",
++      },
++    });
++    const persistedPreferences = (await apiGet<any>(api, "/api/users/me")).user
++      .settings?.preferences;
++    expect(persistedPreferences?.fixedToolbar).toBe(true);
++    expect(persistedPreferences?.pageEditModeByPageId?.[auditPage.id]).toBe(
++      "edit",
++    );
++    await page.goto(pageUrl(state, auditPage));
++    const editor = mainEditor(page);
++    await expect(editor).toHaveAttribute("contenteditable", "true");
++    const fixedToolbar = page.getByRole("toolbar");
++    await expect(fixedToolbar).toBeVisible();
++    const toolbarButtons = fixedToolbar.getByRole("button");
++    expect(await toolbarButtons.count()).toBeGreaterThan(8);
++    await toolbarButtons.first().focus();
++    await page.keyboard.press("Tab");
++    await expect(toolbarButtons.nth(1)).toBeFocused();
++    const tablePasteAnchor = editor.getByText("Paste and undo anchor", {
++      exact: true,
++    });
++    await tablePasteAnchor.click();
++    await page.keyboard.press("End");
++    await page.keyboard.press("Enter");
++    await page.evaluate(() => {
++      const data = new DataTransfer();
++      data.setData(
++        "text/html",
++        "<table><tbody><tr><td><p>PA1</p></td><td><p>PB1</p></td></tr><tr><td><p>PA2</p></td><td><p>PB2</p></td></tr></tbody></table><p>Pasted table result</p>",
++      );
++      const pasteEvent = new ClipboardEvent("paste", {
++        bubbles: true,
++        cancelable: true,
++      });
++      Object.defineProperty(pasteEvent, "clipboardData", {
++        value: data,
++      });
++      document.activeElement?.dispatchEvent(pasteEvent);
++    });
++    await expect(editor).toContainText("Keyboard indentation target");
++    await expect(editor).toContainText("Pasted table result");
++    await expect(editor.locator("table")).toHaveCount(2);
++
++    const indentTarget = editor.getByText("Keyboard indentation target", {
++      exact: true,
++    });
++    await indentTarget.click();
++    await page.keyboard.press("Tab");
++    const tabIndented =
++      (await indentTarget.getAttribute("data-indent")) === "1";
++    if (!tabIndented) {
++      await indentTarget.click();
++      await page.keyboard.press("Home");
++      await page.keyboard.press("Shift+End");
++      await page
++        .getByRole("button", { name: /Indent|Увеличить отступ/ })
++        .click();
++      const toolbarIndented =
++        (await indentTarget.getAttribute("data-indent")) === "1";
++      await recordDefect({
++        id: "ED-002",
++        title: "Tab does not indent an editable paragraph",
++        severity: "high",
++        project: testInfo.project.name,
++        evidence: toolbarIndented
++          ? "The focused paragraph remained at indent level 0 after a trusted Tab key press; the fixed-toolbar command worked on the selected paragraph."
++          : "The focused paragraph remained at indent level 0 after a trusted Tab key press; the fixed-toolbar Indent command also left it unchanged.",
++      });
++    }
++    if ((await indentTarget.getAttribute("data-indent")) === "1") {
++      await indentTarget.click();
++      await page.keyboard.press("Home");
++      await page.keyboard.press("Shift+End");
++      await page.keyboard.press("Shift+Tab");
++      await expect(indentTarget).not.toHaveAttribute("data-indent", "1");
++    }
++
++    const pageBreaks = page.locator(".page-break, [data-type='pageBreak']");
++    const beforeBreaks = await pageBreaks.count();
++    await indentTarget.click();
++    await page
++      .getByRole("button", { name: /Page break|Разрыв страницы/ })
++      .click();
++    await expect(pageBreaks).toHaveCount(beforeBreaks + 1);
++    await pageBreaks.last().click();
++    await page.evaluate(() => {
++      (window as any).__editorAuditCopy = null;
++      document.addEventListener(
++        "copy",
++        (event) => {
++          const clipboardEvent = event as ClipboardEvent;
++          (window as any).__editorAuditCopy = {
++            html: clipboardEvent.clipboardData?.getData("text/html") ?? "",
++            text: clipboardEvent.clipboardData?.getData("text/plain") ?? "",
++          };
++        },
++        { once: true },
++      );
++    });
++    await page.keyboard.press("Control+c");
++    const copiedBreak = await page.evaluate(
++      () => (window as any).__editorAuditCopy as { html: string; text: string },
++    );
++    expect(copiedBreak.html).toMatch(/page-break|data-type="pageBreak"/);
++    await page.keyboard.press("Delete");
++    await expect(pageBreaks).toHaveCount(beforeBreaks);
++
++    const editableTable = editor.locator("table").first();
++    await editableTable.locator("td p").first().click();
++    const addColumn = page.getByRole("button", {
++      name: /Add right column|Добавить столбец справа/,
++    });
++    if (await addColumn.isVisible().catch(() => false)) {
++      await addColumn.click();
++      await expect(
++        editableTable.locator("tr").first().locator("th, td"),
++      ).toHaveCount(3);
++      await editor.getByText("A1", { exact: true }).click();
++      await page
++        .getByRole("button", { name: /Add row below|Добавить строку ниже/ })
++        .click();
++      await expect(editableTable.locator("tr")).toHaveCount(3);
++      await editor.getByText("A1", { exact: true }).click();
++      await page
++        .getByRole("button", { name: /Delete row|Удалить строку/ })
++        .click();
++      await expect(editableTable.locator("tr")).toHaveCount(2);
++      await editor.getByText("A2", { exact: true }).click();
++      await page
++        .getByRole("button", { name: /Delete column|Удалить столбец/ })
++        .click();
++      await expect(
++        editableTable.locator("tr").first().locator("th, td"),
++      ).toHaveCount(2);
++      const firstRowCells = editableTable
++        .locator("tr")
++        .first()
++        .locator("th, td");
++      await firstRowCells.nth(0).locator("p").click();
++      await page.keyboard.down("Shift");
++      await firstRowCells.nth(1).locator("p").click();
++      await page.keyboard.up("Shift");
++      const mergeCells = page.getByRole("button", {
++        name: /Merge cells|Объединить ячейки/,
++      });
++      if (await mergeCells.isVisible().catch(() => false)) {
++        await mergeCells.click();
++        if ((await firstRowCells.count()) !== 1) {
++          await recordDefect({
++            id: "ED-004",
++            title: "Table merge action does not merge the selected cells",
++            severity: "medium",
++            project: testInfo.project.name,
++            evidence:
++              "The Merge cells action was available for a trusted Shift+click cell selection, but the selected row still contained two cells after activation.",
++          });
++        }
++      } else {
++        await recordDefect({
++          id: "ED-004",
++          title:
++            "Table cell merge controls do not appear for a pointer cell selection",
++          severity: "medium",
++          project: testInfo.project.name,
++          evidence:
++            "Trusted Shift+click across adjacent table cells did not expose the Merge cells action.",
++        });
++      }
++    } else {
++      await recordDefect({
++        id: "ED-003",
++        title: "Table contextual editing controls do not appear",
++        severity: "high",
++        project: testInfo.project.name,
++        evidence:
++          "Clicking an editable table cell did not expose add/remove row or column controls.",
++      });
++    }
++    await expect(editor.locator(".column-resize-handle")).toHaveCount(0);
++    await recordDefect({
++      id: "ED-005",
++      title: "Table column resizing is disabled",
++      severity: "medium",
++      project: testInfo.project.name,
++      evidence:
++        "No resize handle is rendered in edit mode; the client configures CustomTable with resizable: false.",
++    });
++
++    const drawioImages = page.getByAltText("Editable Draw.io copy target");
++    await expect(drawioImages).toHaveCount(1);
++    await drawioImages.first().click();
++    await page.evaluate(() => {
++      (window as any).__editorAuditDiagramCopy = null;
++      document.addEventListener(
++        "copy",
++        (event) => {
++          const clipboardEvent = event as ClipboardEvent;
++          (window as any).__editorAuditDiagramCopy = {
++            html: clipboardEvent.clipboardData?.getData("text/html") ?? "",
++            text: clipboardEvent.clipboardData?.getData("text/plain") ?? "",
++          };
++        },
++        { once: true },
++      );
++    });
++    await page.keyboard.press("Control+c");
++    const copiedDrawio = await page.evaluate(
++      () =>
++        (window as any).__editorAuditDiagramCopy as {
++          html: string;
++          text: string;
++        },
++    );
++    expect(copiedDrawio.html).toMatch(/drawio|data-type="drawio"/i);
++    const pasteAnchor = editor.getByText("Paste and undo anchor", {
++      exact: true,
++    });
++    await pasteAnchor.click();
++    await page.keyboard.press("End");
++    await page.keyboard.press("Enter");
++    await page.evaluate((clipboard) => {
++      const data = new DataTransfer();
++      data.setData("text/html", clipboard.html);
++      data.setData("text/plain", clipboard.text);
++      const pasteEvent = new ClipboardEvent("paste", {
++        bubbles: true,
++        cancelable: true,
++      });
++      Object.defineProperty(pasteEvent, "clipboardData", {
++        value: data,
++      });
++      document.activeElement?.dispatchEvent(pasteEvent);
++    }, copiedDrawio);
++    await expect(drawioImages).toHaveCount(2);
++    await drawioImages.nth(1).dblclick();
++    await expect(page.locator("iframe.diagrams-iframe")).toBeVisible();
++    await page.evaluate(() => {
++      const svg =
++        '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="60"><rect width="120" height="60" fill="#228be6"/></svg>';
++      window.dispatchEvent(
++        new MessageEvent("message", {
++          origin: "https://embed.diagrams.net",
++          data: JSON.stringify({
++            event: "export",
++            data: `data:image/svg+xml;base64,${btoa(svg)}`,
++            message: { parentEvent: "save" },
++          }),
++        }),
++      );
++    });
++    await expect(page.locator("iframe.diagrams-iframe")).toHaveCount(0);
++    let drawioAttachmentIds: string[] = [];
++    await expect
++      .poll(
++        async () => {
++          const savedPage = await apiGet<any>(
++            api,
++            `/api/pages/info?pageId=${encodeURIComponent(auditPage.id)}`,
++          );
++          drawioAttachmentIds = [];
++          const visit = (node: any) => {
++            if (node?.type === "drawio" && node.attrs?.attachmentId) {
++              drawioAttachmentIds.push(node.attrs.attachmentId);
++            }
++            for (const child of node?.content ?? []) visit(child);
++          };
++          visit(savedPage.content);
++          return drawioAttachmentIds.length;
++        },
++        { timeout: 15_000 },
++      )
++      .toBe(2);
++    expect(new Set(drawioAttachmentIds).size).toBe(2);
++
++    const anchor = editor.getByText("Paste and undo anchor", { exact: true });
++    await anchor.click();
++    await page.keyboard.press("End");
++    const largeMarkdown = Array.from(
++      { length: 120 },
++      (_, index) => `\n\n## Pasted section ${index + 1}\n\n- item ${index + 1}`,
++    ).join("");
++    await page.evaluate((payload) => {
++      const data = new DataTransfer();
++      data.setData("text/plain", payload);
++      data.setData("text/markdown", payload);
++      const pasteEvent = new ClipboardEvent("paste", {
++        bubbles: true,
++        cancelable: true,
++      });
++      Object.defineProperty(pasteEvent, "clipboardData", {
++        value: data,
++      });
++      document.activeElement?.dispatchEvent(pasteEvent);
++    }, largeMarkdown);
++    await expect(editor).toContainText("Pasted section 120");
++
++    const maliciousHtml = await fs.readFile(
++      path.resolve(process.cwd(), "e2e/editor/fixtures/html-malicious.html"),
++      "utf8",
++    );
++    await page.evaluate((payload) => {
++      const data = new DataTransfer();
++      data.setData("text/html", payload);
++      data.setData("text/plain", "Safe pasted HTML Unsafe link label");
++      const pasteEvent = new ClipboardEvent("paste", {
++        bubbles: true,
++        cancelable: true,
++      });
++      Object.defineProperty(pasteEvent, "clipboardData", {
++        value: data,
++      });
++      document.activeElement?.dispatchEvent(pasteEvent);
++    }, maliciousHtml);
++    await expect(editor).toContainText("Safe pasted HTML");
++    expect(await editor.locator("script, [onerror], [onclick]").count()).toBe(
++      0,
++    );
++    expect(await editor.locator("a[href^='javascript:']").count()).toBe(0);
++    expect(
++      await page.evaluate(() => (window as any).__editorAuditHtmlXss ?? null),
++    ).toBeNull();
++
++    await editor.click();
++    await page.keyboard.press("Control+End");
++    await page.keyboard.type(" undo-redo-probe");
++    await expect(editor).toContainText("undo-redo-probe");
++    await page.keyboard.press("Control+z");
++    await expect(editor).not.toContainText("undo-redo-probe");
++    await page.keyboard.press("Control+Shift+z");
++    await expect(editor).toContainText("undo-redo-probe");
++
++    await page.keyboard.press("Enter");
++    await page.keyboard.type("/");
++    await expect(page.getByText("To-do list", { exact: true })).toBeVisible();
++    await page.keyboard.press("Escape");
++    await runAxe(page, testInfo, "body");
++    await captureStep(page, testInfo, "03-fixed-toolbar-editing");
++
++    await apiPost(api, "/api/users/update", {
++      fixedToolbar: false,
++      pageEditModeByPageId: {
++        ...(original.pageEditModeByPageId ?? {}),
++        [auditPage.id]: "edit",
++      },
++    });
++    await page.reload();
++    await expect(editor).toHaveAttribute("contenteditable", "true");
++    await expect(editor).toContainText("undo-redo-probe");
++    await expect(page.getByRole("toolbar")).toHaveCount(0);
++    await captureStep(page, testInfo, "03b-unfixed-toolbar-editing");
++  } finally {
++    await apiPost(api, "/api/users/update", {
++      fixedToolbar: original.fixedToolbar ?? false,
++      pageEditModeByPageId: original.pageEditModeByPageId ?? {},
++    }).catch(() => undefined);
++    await api.dispose();
++  }
++});
+
+diff --git a/apps/client/e2e/editor/specs/media-clipboard.spec.ts b/apps/client/e2e/editor/specs/media-clipboard.spec.ts
+new file mode 100644
+index 00000000..5c5e4322
+--- /dev/null
++++ b/apps/client/e2e/editor/specs/media-clipboard.spec.ts
+@@ -0,0 +1,141 @@
++import {
++  apiGet,
++  apiPost,
++  createAdminApi,
++  loadAuditState,
++} from "../support/api";
++import { pageUrl, seedComplexDocument } from "../support/complex-document";
++import { captureStep, expect, mainEditor, test } from "../support/audit-test";
++
++test("media nodes, fullscreen image, Mermaid sanitization and clipboard survive reload", async ({
++  page,
++  context,
++}, testInfo) => {
++  const api = await createAdminApi();
++  const state = await loadAuditState();
++  const current = await apiGet<any>(api, "/api/users/me");
++  const original = current.user.settings?.preferences ?? {};
++  const seeded = await seedComplexDocument(
++    api,
++    state,
++    `${testInfo.project.name}-media`,
++  );
++
++  try {
++    await apiPost(api, "/api/users/update", {
++      pageEditModeByPageId: {
++        ...(original.pageEditModeByPageId ?? {}),
++        [seeded.page.id]: "read",
++      },
++    });
++    await page.goto(pageUrl(state, seeded.page));
++    await expect(mainEditor(page)).toContainText("Editor regression audit");
++
++    const image = page.getByAltText("Editor audit image alt text");
++    await expect(image).toBeVisible();
++    await image.click();
++    const imagePreview = page.getByRole("dialog", {
++      name: /Image preview|Предпросмотр изображения/,
++    });
++    await expect(imagePreview).toBeVisible();
++    await expect(
++      imagePreview.getByAltText("Editor audit image alt text"),
++    ).toBeVisible();
++    await page.keyboard.press("Escape");
++
++    const audio = page.locator("audio[controls]").first();
++    await expect(audio).toBeVisible();
++    expect(
++      await audio.evaluate((element: HTMLAudioElement) => element.preload),
++    ).toBe("metadata");
++    await audio.click();
++    const playback = await audio.evaluate(async (element: HTMLAudioElement) => {
++      try {
++        await element.play();
++        const result = { ok: true, paused: element.paused };
++        element.pause();
++        return result;
++      } catch (error) {
++        return { ok: false, paused: element.paused, error: String(error) };
++      }
++    });
++    if (playback.ok) {
++      expect(playback.paused, "audio playback state").toBe(false);
++    } else {
++      testInfo.annotations.push({
++        type: "capability",
++        description: `Audio playback unavailable in this browser build: ${playback.error}`,
++      });
++    }
++    await expect(
++      page
++        .locator(
++          "video[aria-label='Editor audit video alt text'], video[controls]",
++        )
++        .first(),
++    ).toBeVisible();
++    await expect(
++      page.locator("iframe[src*='audit-document.pdf']"),
++    ).toBeVisible();
++    await expect(page.getByAltText("Draw.io diagram alt text")).toBeVisible();
++    await expect(
++      page.getByAltText("Excalidraw diagram alt text"),
++    ).toBeVisible();
++
++    await expect(page.locator(".codeBlock svg").first()).toBeVisible();
++    await expect(
++      page
++        .getByText(
++          /Invalid Mermaid diagram|Mermaid diagram error:|Недопустимая диаграмма Mermaid|Ошибка диаграммы Mermaid:/,
++        )
++        .first(),
++    ).toBeVisible();
++    expect(await page.locator(".codeBlock script").count()).toBe(0);
++    expect(
++      await page.locator(".codeBlock [onerror], .codeBlock [onclick]").count(),
++    ).toBe(0);
++    expect(
++      await page.locator(".codeBlock a[href^='javascript:']").count(),
++    ).toBe(0);
++    expect(
++      await page.evaluate(() => (window as any).__editorAuditXss ?? null),
++    ).toBeNull();
++
++    const pageBreak = page
++      .locator(".page-break, [data-type='pageBreak']")
++      .first();
++    await expect(pageBreak).toBeVisible();
++    const canUseClipboard = await page.evaluate(() =>
++      Boolean(navigator.clipboard),
++    );
++    if (canUseClipboard) {
++      await context
++        .grantPermissions(["clipboard-read", "clipboard-write"])
++        .catch(() => undefined);
++      testInfo.annotations.push({
++        type: "capability",
++        description:
++          "Clipboard API exposed; mutation is covered in the editable desktop scenario",
++      });
++    } else {
++      testInfo.annotations.push({
++        type: "capability",
++        description: "Clipboard API unavailable in this browser build",
++      });
++    }
++
++    await page.reload();
++    await expect(mainEditor(page)).toContainText("Editor regression audit");
++    await expect(
++      page.getByAltText("Editor audit image alt text"),
++    ).toBeVisible();
++    await captureStep(page, testInfo, "04-media-mermaid-clipboard", {
++      fullPage: true,
++    });
++  } finally {
++    await apiPost(api, "/api/users/update", {
++      pageEditModeByPageId: original.pageEditModeByPageId ?? {},
++    }).catch(() => undefined);
++    await api.dispose();
++  }
++});
+
+diff --git a/apps/client/e2e/editor/specs/mobile-accessibility.spec.ts b/apps/client/e2e/editor/specs/mobile-accessibility.spec.ts
+new file mode 100644
+index 00000000..8813555a
+--- /dev/null
++++ b/apps/client/e2e/editor/specs/mobile-accessibility.spec.ts
+@@ -0,0 +1,66 @@
++import {
++  apiGet,
++  apiPost,
++  createAdminApi,
++  loadAuditState,
++} from "../support/api";
++import { pageUrl, seedComplexDocument } from "../support/complex-document";
++import {
++  captureStep,
++  expect,
++  mainEditor,
++  runAxe,
++  test,
++} from "../support/audit-test";
++
++test("mobile and touch rendering reflows without document-level horizontal overflow", async ({
++  page,
++}, testInfo) => {
++  const api = await createAdminApi();
++  const state = await loadAuditState();
++  const current = await apiGet<any>(api, "/api/users/me");
++  const original = current.user.settings?.preferences ?? {};
++  const seeded = await seedComplexDocument(
++    api,
++    state,
++    `${testInfo.project.name}-mobile`,
++  );
++
++  try {
++    await apiPost(api, "/api/users/update", {
++      pageEditModeByPageId: {
++        ...(original.pageEditModeByPageId ?? {}),
++        [seeded.page.id]: "read",
++      },
++    });
++    await page.goto(pageUrl(state, seeded.page));
++    await expect(mainEditor(page)).toContainText("Editor regression audit");
++    const viewport = page.viewportSize();
++    expect(viewport?.width).toBeLessThanOrEqual(500);
++    const overflow = await page.evaluate(() => ({
++      documentWidth: document.documentElement.scrollWidth,
++      viewportWidth: document.documentElement.clientWidth,
++    }));
++    expect(overflow.documentWidth).toBeLessThanOrEqual(
++      overflow.viewportWidth + 2,
++    );
++    await expect(page.locator(".tableWrapper")).toBeVisible();
++    await page.getByAltText("Editor audit image alt text").tap();
++    await expect(
++      page.getByRole("dialog", {
++        name: /Image preview|Предпросмотр изображения/,
++      }),
++    ).toBeVisible();
++    await page.keyboard.press("Escape");
++    await runAxe(page, testInfo, "body");
++    await captureStep(page, testInfo, "05-mobile-touch-reflow", {
++      fullPage: true,
++    });
++  } finally {
++    await apiPost(api, "/api/users/update", {
++      fixedToolbar: original.fixedToolbar ?? false,
++      pageEditModeByPageId: original.pageEditModeByPageId ?? {},
++    }).catch(() => undefined);
++    await api.dispose();
++  }
++});
+
+diff --git a/apps/client/e2e/editor/support/api.ts b/apps/client/e2e/editor/support/api.ts
+new file mode 100644
+index 00000000..5e423ec3
+--- /dev/null
++++ b/apps/client/e2e/editor/support/api.ts
+@@ -0,0 +1,236 @@
++import {
++  request,
++  type APIRequestContext,
++  type APIResponse,
++} from "@playwright/test";
++import fs from "node:fs/promises";
++import { createHash, randomUUID } from "node:crypto";
++import { auditStatePath } from "./paths";
++import { apiBaseUrl, apiOrigin, requiredSecret } from "./auth";
++import type { AttachmentRecord, AuditState, PageRecord } from "./types";
++
++type JsonObject = Record<string, unknown>;
++
++export async function parseResponse<T>(response: APIResponse): Promise<T> {
++  const body = await response.text();
++  if (!response.ok()) {
++    throw new Error(
++      `${new URL(response.url()).pathname} failed with ${response.status()}: ${body.slice(0, 600)}`,
++    );
++  }
++  if (!body) return undefined as T;
++  const parsed = JSON.parse(body) as JsonObject;
++  if (
++    parsed &&
++    typeof parsed === "object" &&
++    "success" in parsed &&
++    "data" in parsed
++  ) {
++    return parsed.data as T;
++  }
++  return parsed as T;
++}
++
++export async function createAdminApi(): Promise<APIRequestContext> {
++  const origin = apiOrigin();
++  const csrfToken = requiredSecret("DOCMOST_CSRF_TOKEN");
++  const authToken = requiredSecret("DOCMOST_AUTH_TOKEN");
++  return request.newContext({
++    baseURL: apiBaseUrl(),
++    extraHTTPHeaders: {
++      Authorization: `Bearer ${authToken}`,
++      Cookie: `csrfToken=${csrfToken}`,
++      Origin: origin,
++      Referer: `${origin}/`,
++      "x-csrf-token": csrfToken,
++      Accept: "application/json",
++    },
++  });
++}
++
++export async function loadAuditState(): Promise<AuditState> {
++  return JSON.parse(await fs.readFile(auditStatePath, "utf8")) as AuditState;
++}
++
++export async function apiPost<T>(
++  api: APIRequestContext,
++  url: string,
++  data: JsonObject,
++): Promise<T> {
++  return parseResponse<T>(await api.post(url, { data }));
++}
++
++export async function apiPostWithHeaders<T>(
++  api: APIRequestContext,
++  url: string,
++  data: JsonObject,
++  headers: Record<string, string>,
++): Promise<T> {
++  return parseResponse<T>(await api.post(url, { data, headers }));
++}
++
++export async function apiDelete<T>(
++  api: APIRequestContext,
++  url: string,
++): Promise<T> {
++  return parseResponse<T>(await api.delete(url));
++}
++
++export async function apiGet<T>(
++  api: APIRequestContext,
++  url: string,
++): Promise<T> {
++  return parseResponse<T>(await api.get(url));
++}
++
++export async function createPage(
++  api: APIRequestContext,
++  spaceId: string,
++  title: string,
++  content: JsonObject = {
++    type: "doc",
++    content: [{ type: "paragraph" }],
++  },
++  parentPageId?: string,
++): Promise<PageRecord> {
++  const page = await apiPost<PageRecord>(api, "/api/pages", {
++    spaceId,
++    title,
++    content,
++    format: "json",
++    ...(parentPageId ? { parentPageId } : {}),
++  });
++  await updatePageContent(api, page.id, content);
++  return page;
++}
++
++export async function updatePageContent(
++  api: APIRequestContext,
++  pageId: string,
++  content: JsonObject,
++): Promise<PageRecord> {
++  return apiPost<PageRecord>(api, "/api/pages/actions/update", {
++    pageId,
++    content,
++    format: "json",
++    operation: "replace",
++  });
++}
++
++export async function deletePage(
++  api: APIRequestContext,
++  pageId: string,
++): Promise<void> {
++  await apiPost(api, "/api/pages/actions/delete", {
++    pageId,
++    permanentlyDelete: true,
++  });
++}
++
++export async function uploadFixture(
++  api: APIRequestContext,
++  pageId: string,
++  name: string,
++  mimeType: string,
++  buffer: Buffer,
++): Promise<AttachmentRecord> {
++  return parseResponse<AttachmentRecord>(
++    await api.post(`/api/attachments/actions/upload-file?pageId=${pageId}`, {
++      multipart: {
++        pageId,
++        file: { name, mimeType, buffer },
++      },
++    }),
++  );
++}
++
++export function attachmentUrl(attachment: AttachmentRecord): string {
++  return `/api/attachments/files/${attachment.id}/${encodeURIComponent(attachment.fileName)}`;
++}
++
++export function buildTinyPdf(): Buffer {
++  const objects = [
++    "<< /Type /Catalog /Pages 2 0 R >>",
++    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
++    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>",
++    "",
++    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
++  ];
++  const stream = "BT /F1 18 Tf 72 720 Td (Docmost editor audit PDF) Tj ET";
++  objects[3] = `<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream`;
++  let pdf = "%PDF-1.4\n";
++  const offsets = [0];
++  for (let index = 0; index < objects.length; index += 1) {
++    offsets.push(Buffer.byteLength(pdf));
++    pdf += `${index + 1} 0 obj\n${objects[index]}\nendobj\n`;
++  }
++  const xref = Buffer.byteLength(pdf);
++  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
++  for (const offset of offsets.slice(1)) {
++    pdf += `${String(offset).padStart(10, "0")} 00000 n \n`;
++  }
++  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
++  return Buffer.from(pdf, "ascii");
++}
++
++export function buildSilentWav(durationMs = 400): Buffer {
++  const sampleRate = 8_000;
++  const samples = Math.floor((sampleRate * durationMs) / 1_000);
++  const buffer = Buffer.alloc(44 + samples, 128);
++  buffer.write("RIFF", 0);
++  buffer.writeUInt32LE(36 + samples, 4);
++  buffer.write("WAVEfmt ", 8);
++  buffer.writeUInt32LE(16, 16);
++  buffer.writeUInt16LE(1, 20);
++  buffer.writeUInt16LE(1, 22);
++  buffer.writeUInt32LE(sampleRate, 24);
++  buffer.writeUInt32LE(sampleRate, 28);
++  buffer.writeUInt16LE(1, 32);
++  buffer.writeUInt16LE(8, 34);
++  buffer.write("data", 36);
++  buffer.writeUInt32LE(samples, 40);
++  return buffer;
++}
++
++export function tinyPng(): Buffer {
++  return Buffer.from(
++    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
++    "base64",
++  );
++}
++
++export function tinySvg(): Buffer {
++  return Buffer.from(
++    '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="60" viewBox="0 0 120 60"><rect width="120" height="60" fill="#228be6"/><text x="60" y="35" text-anchor="middle" fill="white">Audit</text></svg>',
++    "utf8",
++  );
++}
++
++export function pseudoMp4(): Buffer {
++  return Buffer.from(
++    "AAAAHGZ0eXBpc29tAAACAGlzb21pc28yYXZjMQAAAAhmcmVl",
++    "base64",
++  );
++}
++
++export function uniqueId(_prefix: string): string {
++  return randomUUID();
++}
++
++function canonicalJson(value: unknown): string {
++  if (value === null || typeof value !== "object") {
++    return JSON.stringify(value) ?? "null";
++  }
++  if (Array.isArray(value)) {
++    return `[${value.map(canonicalJson).join(",")}]`;
++  }
++  return `{${Object.entries(value as Record<string, unknown>)
++    .filter(([, item]) => item !== undefined)
++    .sort(([left], [right]) => left.localeCompare(right))
++    .map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`)
++    .join(",")}}`;
++}
++
++export function hashProseMirrorJson(value: unknown): string {
++  return createHash("sha256").update(canonicalJson(value)).digest("hex");
++}
+
+diff --git a/apps/client/e2e/editor/support/audit-test.ts b/apps/client/e2e/editor/support/audit-test.ts
+new file mode 100644
+index 00000000..85e921a5
+--- /dev/null
++++ b/apps/client/e2e/editor/support/audit-test.ts
+@@ -0,0 +1,211 @@
++import {
++  test as base,
++  expect,
++  type Page,
++  type TestInfo,
++} from "@playwright/test";
++import AxeBuilder from "@axe-core/playwright";
++import fs from "node:fs/promises";
++import path from "node:path";
++import { apiOrigin, authenticateAdminContext, baseUrl } from "./auth";
++import {
++  axeDir,
++  confirmedDefectsPath,
++  consoleDir,
++  screenshotsDir,
++} from "./paths";
++
++interface ConsoleEvidence {
++  type: string;
++  text: string;
++  url?: string;
++}
++
++function safeName(value: string): string {
++  return value.replace(/[^a-z0-9._-]+/gi, "-").replace(/^-|-$/g, "");
++}
++
++function redact(value: string): string {
++  return value
++    .replace(
++      /([?&](?:jwt|token|authToken|csrfToken)=)[^&\s]+/gi,
++      "$1[redacted]",
++    )
++    .replace(/Bearer\s+[A-Za-z0-9._-]+/gi, "Bearer [redacted]");
++}
++
++export const test = base.extend<{ evidence: void }>({
++  evidence: [
++    async ({ page, context }, use, testInfo) => {
++      await authenticateAdminContext(context);
++      if (process.env.DOCMOST_API_ORIGIN) {
++        const browserOrigin = new URL(baseUrl()).origin;
++        const trustedApiOrigin = new URL(apiOrigin()).origin;
++        if (browserOrigin !== trustedApiOrigin) {
++          await page.route(`${browserOrigin}/api/**`, async (route) => {
++            const headers = {
++              ...route.request().headers(),
++              origin: trustedApiOrigin,
++              referer: `${trustedApiOrigin}/`,
++            };
++            const response = await route.fetch({ headers });
++            await route.fulfill({ response });
++          });
++        }
++      }
++      if (testInfo.project.name.includes("webkit")) {
++        const webkitOrigin = new URL(
++          process.env.DOCMOST_WEBKIT_BASE_URL ?? "http://127.0.0.1:3000",
++        ).origin;
++        if (webkitOrigin.startsWith("http://")) {
++          await recordDefect({
++            id: "ED-007",
++            title:
++              "WebKit upgrades local HTTP subresources because of the production CSP",
++            severity: "medium",
++            project: testInfo.project.name,
++            evidence:
++              "On the configured HTTP audit origin, WebKit upgraded manifest, script, stylesheet and window-config requests to HTTPS and failed them with SSL connect errors. The test strips only the upgrade-insecure-requests directive to continue the feature audit.",
++          });
++          await page.route(`${webkitOrigin}/**`, async (route) => {
++            const response = await route.fetch();
++            const headers = response.headers();
++            const csp = headers["content-security-policy"];
++            if (csp) {
++              headers["content-security-policy"] = csp
++                .split(";")
++                .filter(
++                  (directive) =>
++                    directive.trim().toLowerCase() !==
++                    "upgrade-insecure-requests",
++                )
++                .join(";");
++            }
++            await route.fulfill({ response, headers });
++          });
++        }
++      }
++      const events: ConsoleEvidence[] = [];
++      page.on("console", (message) => {
++        if (["warning", "error"].includes(message.type())) {
++          events.push({ type: message.type(), text: redact(message.text()) });
++        }
++      });
++      page.on("pageerror", (error) => {
++        events.push({ type: "pageerror", text: redact(error.message) });
++      });
++      page.on("requestfailed", (request) => {
++        const url = new URL(request.url());
++        events.push({
++          type: "requestfailed",
++          text: request.failure()?.errorText ?? "request failed",
++          url: `${url.origin}${url.pathname}`,
++        });
++      });
++      await use();
++      if (testInfo.status !== testInfo.expectedStatus) {
++        await captureStep(page, testInfo, "failure").catch(() => undefined);
++      }
++      await fs.mkdir(consoleDir, { recursive: true });
++      const file = path.join(
++        consoleDir,
++        `${safeName(testInfo.project.name)}-${safeName(testInfo.title)}.json`,
++      );
++      await fs.writeFile(file, `${JSON.stringify(events, null, 2)}\n`, "utf8");
++    },
++    { auto: true },
++  ],
++});
++
++export async function captureStep(
++  page: Page,
++  testInfo: TestInfo,
++  step: string,
++  options: { fullPage?: boolean } = {},
++): Promise<string> {
++  await fs.mkdir(screenshotsDir, { recursive: true });
++  const file = path.join(
++    screenshotsDir,
++    `${safeName(testInfo.project.name)}-${safeName(step)}.png`,
++  );
++  await page.screenshot({ path: file, fullPage: options.fullPage ?? false });
++  return file;
++}
++
++export function mainEditor(page: Page) {
++  return page
++    .locator(
++      '.ProseMirror[aria-label="Editor"], .ProseMirror[aria-label="Редактор"]',
++    )
++    .first();
++}
++
++export function publicDocument(page: Page) {
++  return page.locator("main").getByRole("textbox").nth(1);
++}
++
++export async function runAxe(
++  page: Page,
++  testInfo: TestInfo,
++  scope = ".ProseMirror",
++  label = "axe",
++): Promise<void> {
++  const builder = new AxeBuilder({ page }).withTags([
++    "wcag2a",
++    "wcag2aa",
++    "wcag21a",
++    "wcag21aa",
++  ]);
++  if (await page.locator(scope).count()) builder.include(scope);
++  const results = await builder.analyze();
++  await fs.mkdir(axeDir, { recursive: true });
++  const file = path.join(
++    axeDir,
++    `${safeName(testInfo.project.name)}-${safeName(testInfo.title)}-${safeName(label)}.json`,
++  );
++  await fs.writeFile(
++    file,
++    `${JSON.stringify(
++      {
++        project: testInfo.project.name,
++        title: testInfo.title,
++        url: page.url().replace(/[?#].*$/, ""),
++        violations: results.violations,
++        passes: results.passes.length,
++        incomplete: results.incomplete.length,
++      },
++      null,
++      2,
++    )}\n`,
++    "utf8",
++  );
++}
++
++export async function recordDefect(defect: {
++  id: string;
++  title: string;
++  severity: "critical" | "high" | "medium" | "low";
++  project: string;
++  evidence: string;
++}): Promise<void> {
++  let defects: Array<typeof defect> = [];
++  try {
++    defects = JSON.parse(await fs.readFile(confirmedDefectsPath, "utf8"));
++  } catch {
++    defects = [];
++  }
++  if (
++    !defects.some(
++      (item) => item.id === defect.id && item.project === defect.project,
++    )
++  ) {
++    defects.push(defect);
++  }
++  await fs.writeFile(
++    confirmedDefectsPath,
++    `${JSON.stringify(defects, null, 2)}\n`,
++    "utf8",
++  );
++}
++
++export { expect };
+
+diff --git a/apps/client/e2e/editor/support/auth.ts b/apps/client/e2e/editor/support/auth.ts
+new file mode 100644
+index 00000000..6763014b
+--- /dev/null
++++ b/apps/client/e2e/editor/support/auth.ts
+@@ -0,0 +1,57 @@
++import type { BrowserContext } from "@playwright/test";
++
++export function requiredSecret(name: string): string {
++  const value = process.env[name]?.trim();
++  if (!value) {
++    throw new Error(`${name} is required and must be supplied at runtime`);
++  }
++  return value;
++}
++
++export function baseUrl(): string {
++  return (process.env.DOCMOST_BASE_URL ?? "http://localhost:3000").replace(
++    /\/$/,
++    "",
++  );
++}
++
++export function apiBaseUrl(): string {
++  return (process.env.DOCMOST_API_BASE_URL ?? baseUrl()).replace(/\/$/, "");
++}
++
++export function apiOrigin(): string {
++  return (process.env.DOCMOST_API_ORIGIN ?? baseUrl()).replace(/\/$/, "");
++}
++
++export async function authenticateAdminContext(
++  context: BrowserContext,
++): Promise<void> {
++  const urls = [baseUrl(), process.env.DOCMOST_WEBKIT_BASE_URL]
++    .filter((value): value is string => Boolean(value))
++    .map((value) => new URL(value));
++  const uniqueUrls = Array.from(
++    new Map(urls.map((url) => [url.hostname, url])).values(),
++  );
++  await context.addCookies(
++    uniqueUrls.flatMap((url) => [
++      {
++        name: "authToken",
++        value: requiredSecret("DOCMOST_AUTH_TOKEN"),
++        domain: url.hostname,
++        path: "/",
++        httpOnly: true,
++        sameSite: "Lax" as const,
++        secure: url.protocol === "https:",
++      },
++      {
++        name: "csrfToken",
++        value: requiredSecret("DOCMOST_CSRF_TOKEN"),
++        domain: url.hostname,
++        path: "/",
++        httpOnly: false,
++        sameSite: "Lax" as const,
++        secure: url.protocol === "https:",
++      },
++    ]),
++  );
++}
+
+diff --git a/apps/client/e2e/editor/support/complex-document.ts b/apps/client/e2e/editor/support/complex-document.ts
+new file mode 100644
+index 00000000..aa00c683
+--- /dev/null
++++ b/apps/client/e2e/editor/support/complex-document.ts
+@@ -0,0 +1,496 @@
++import fs from "node:fs/promises";
++import path from "node:path";
++import type { APIRequestContext } from "@playwright/test";
++import {
++  attachmentUrl,
++  apiPost,
++  buildSilentWav,
++  buildTinyPdf,
++  createPage,
++  pseudoMp4,
++  tinyPng,
++  uniqueId,
++  updatePageContent,
++  uploadFixture,
++} from "./api";
++import type { AuditState, PageRecord } from "./types";
++
++type JsonNode = Record<string, unknown>;
++
++export interface SeededComplexDocument {
++  page: PageRecord;
++  childPage: PageRecord;
++  sourcePage: PageRecord;
++  sourceTransclusionId: string;
++  expectedNodeTypes: string[];
++  expectedMarkTypes: string[];
++}
++
++const text = (
++  value: string,
++  marks?: Array<Record<string, unknown>>,
++): JsonNode => ({
++  type: "text",
++  text: value,
++  ...(marks ? { marks } : {}),
++});
++
++const paragraph = (...content: JsonNode[]): JsonNode => ({
++  type: "paragraph",
++  content,
++});
++
++async function mermaidFixture(name: string): Promise<string> {
++  return fs.readFile(
++    path.resolve(process.cwd(), `e2e/editor/fixtures/${name}`),
++    "utf8",
++  );
++}
++
++export async function seedComplexDocument(
++  api: APIRequestContext,
++  state: AuditState,
++  browserName: string,
++): Promise<SeededComplexDocument> {
++  const sourceTransclusionId = uniqueId("transclusion");
++  const sourcePage = await createPage(
++    api,
++    state.spaceId,
++    `${browserName} linked source`,
++    {
++      type: "doc",
++      content: [
++        {
++          type: "transclusionSource",
++          attrs: { id: sourceTransclusionId },
++          content: [paragraph(text("Shared source content"))],
++        },
++      ],
++    },
++  );
++  const page = await createPage(
++    api,
++    state.spaceId,
++    `${browserName} all editor nodes`,
++  );
++  const childPage = await createPage(
++    api,
++    state.spaceId,
++    `${browserName} child navigation target`,
++    {
++      type: "doc",
++      content: [
++        paragraph(text("Child page used by the subpage navigation audit.")),
++      ],
++    },
++    page.id,
++  );
++
++  const [image, audio, pdf, video, generic] = await Promise.all([
++    uploadFixture(api, page.id, "audit-image.png", "image/png", tinyPng()),
++    uploadFixture(
++      api,
++      page.id,
++      "audit-audio.wav",
++      "audio/wav",
++      buildSilentWav(),
++    ),
++    uploadFixture(
++      api,
++      page.id,
++      "audit-document.pdf",
++      "application/pdf",
++      buildTinyPdf(),
++    ),
++    uploadFixture(api, page.id, "audit-video.mp4", "video/mp4", pseudoMp4()),
++    uploadFixture(
++      api,
++      page.id,
++      "audit-note.txt",
++      "text/plain",
++      Buffer.from("safe local attachment\n"),
++    ),
++  ]);
++
++  const validMermaid = await mermaidFixture("mermaid-valid.mmd");
++  const invalidMermaid = await mermaidFixture("mermaid-invalid.mmd");
++  const maliciousMermaid = await mermaidFixture("mermaid-malicious.mmd");
++  const internalUrl = `/s/${state.spaceSlug}/p/${sourcePage.slugId}`;
++  const allMarks = [
++    text("bold", [{ type: "bold" }]),
++    text(" italic", [{ type: "italic" }]),
++    text(" underline", [{ type: "underline" }]),
++    text(" strike", [{ type: "strike" }]),
++    text(" code", [{ type: "code" }]),
++    text(" superscript", [{ type: "superscript" }]),
++    text(" subscript", [{ type: "subscript" }]),
++    text(" highlight", [
++      { type: "highlight", attrs: { color: "#fff3bf", colorName: "yellow" } },
++    ]),
++    text(" color", [{ type: "textStyle", attrs: { color: "#c92a2a" } }]),
++    text(" external link", [
++      {
++        type: "link",
++        attrs: { href: "https://example.com", target: "_blank" },
++      },
++    ]),
++    text(" internal link", [{ type: "link", attrs: { href: internalUrl } }]),
++    text(" comment", [
++      {
++        type: "comment",
++        attrs: { commentId: uniqueId("comment"), resolved: false },
++      },
++    ]),
++  ];
++  const tableCell = (value: string, type = "tableCell") => ({
++    type,
++    content: [paragraph(text(value))],
++  });
++
++  const content: JsonNode = {
++    type: "doc",
++    content: [
++      {
++        type: "heading",
++        attrs: { level: 1, id: uniqueId("h1"), indent: 0 },
++        content: [text("Editor regression audit")],
++      },
++      {
++        type: "heading",
++        attrs: { level: 2, id: uniqueId("h2"), indent: 1 },
++        content: [text("Nested heading")],
++      },
++      {
++        type: "heading",
++        attrs: { level: 3, id: uniqueId("h3"), indent: 2 },
++        content: [text("Deep heading")],
++      },
++      {
++        type: "heading",
++        attrs: { level: 2, id: uniqueId("h2-reset"), indent: 0 },
++        content: [text("Reset branch")],
++      },
++      paragraph(...allMarks),
++      {
++        type: "paragraph",
++        attrs: { indent: 2, textAlign: "center" },
++        content: [text("Indented and centered paragraph")],
++      },
++      { type: "blockquote", content: [paragraph(text("Block quote"))] },
++      {
++        type: "bulletList",
++        content: [
++          { type: "listItem", content: [paragraph(text("Bullet item"))] },
++        ],
++      },
++      {
++        type: "orderedList",
++        attrs: { start: 3 },
++        content: [
++          { type: "listItem", content: [paragraph(text("Ordered item"))] },
++        ],
++      },
++      {
++        type: "taskList",
++        content: [
++          {
++            type: "taskItem",
++            attrs: { checked: true },
++            content: [paragraph(text("Completed task"))],
++          },
++        ],
++      },
++      { type: "horizontalRule" },
++      paragraph(
++        text("Before hard break"),
++        { type: "hardBreak" } as JsonNode,
++        text("After hard break"),
++      ),
++      {
++        type: "details",
++        attrs: { open: true },
++        content: [
++          { type: "detailsSummary", content: [text("Expandable details")] },
++          {
++            type: "detailsContent",
++            content: [paragraph(text("Details body"))],
++          },
++        ],
++      },
++      {
++        type: "callout",
++        attrs: { type: "warning", icon: "alert-triangle" },
++        content: [paragraph(text("Warning callout"))],
++      },
++      paragraph(text("Inline formula "), {
++        type: "mathInline",
++        attrs: { text: "E=mc^2" },
++      }),
++      { type: "mathBlock", attrs: { text: "\\int_0^1 x^2 dx" } },
++      {
++        type: "table",
++        attrs: { widthMode: "full" },
++        content: [
++          {
++            type: "tableRow",
++            content: [
++              tableCell("Header A", "tableHeader"),
++              tableCell("Header B", "tableHeader"),
++              tableCell("Header C", "tableHeader"),
++            ],
++          },
++          {
++            type: "tableRow",
++            content: [
++              tableCell("Merge and resize target"),
++              tableCell("Wide content ".repeat(24)),
++              tableCell("Third column"),
++            ],
++          },
++          {
++            type: "tableRow",
++            content: [
++              tableCell("Row 3 A"),
++              tableCell("Row 3 B"),
++              tableCell("Row 3 C"),
++            ],
++          },
++        ],
++      },
++      { type: "pageBreak" },
++      {
++        type: "image",
++        attrs: {
++          src: attachmentUrl(image),
++          attachmentId: image.id,
++          size: image.fileSize,
++          width: "60%",
++          align: "center",
++          alt: "Editor audit image alt text",
++          title: "Editor audit image",
++        },
++      },
++      {
++        type: "video",
++        attrs: {
++          src: attachmentUrl(video),
++          attachmentId: video.id,
++          size: video.fileSize,
++          width: "60%",
++          align: "center",
++          alt: "Editor audit video alt text",
++        },
++      },
++      {
++        type: "audio",
++        attrs: {
++          src: attachmentUrl(audio),
++          attachmentId: audio.id,
++          size: audio.fileSize,
++        },
++      },
++      {
++        type: "pdf",
++        attrs: {
++          src: attachmentUrl(pdf),
++          name: pdf.fileName,
++          attachmentId: pdf.id,
++          size: pdf.fileSize,
++          width: 800,
++          height: 360,
++        },
++      },
++      {
++        type: "attachment",
++        attrs: {
++          url: attachmentUrl(generic),
++          name: generic.fileName,
++          mime: generic.mimeType,
++          size: generic.fileSize,
++          attachmentId: generic.id,
++          displayMode: "file",
++        },
++      },
++      {
++        type: "drawio",
++        attrs: {
++          src: attachmentUrl(image),
++          title: "Draw.io diagram alt text",
++          attachmentId: image.id,
++          width: "100%",
++          widthMode: "wide",
++          align: "center",
++        },
++      },
++      {
++        type: "excalidraw",
++        attrs: {
++          src: attachmentUrl(image),
++          title: "Excalidraw diagram alt text",
++          attachmentId: image.id,
++          width: "100%",
++          widthMode: "full",
++          align: "center",
++        },
++      },
++      {
++        type: "codeBlock",
++        attrs: { language: "typescript", widthMode: "normal" },
++        content: [text("const audit = true;")],
++      },
++      {
++        type: "codeBlock",
++        attrs: { language: "mermaid", widthMode: "wide" },
++        content: [text(validMermaid)],
++      },
++      {
++        type: "codeBlock",
++        attrs: { language: "mermaid", widthMode: "normal" },
++        content: [text(invalidMermaid)],
++      },
++      {
++        type: "codeBlock",
++        attrs: { language: "mermaid", widthMode: "full" },
++        content: [text(maliciousMermaid)],
++      },
++      {
++        type: "embed",
++        attrs: {
++          src: "https://example.com/",
++          provider: "iframe",
++          width: 640,
++          height: 360,
++          align: "center",
++        },
++      },
++      {
++        type: "youtube",
++        attrs: {
++          src: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
++          width: 640,
++          height: 360,
++        },
++      },
++      {
++        type: "linkPreview",
++        attrs: {
++          url: "https://example.com/",
++          title: "External safe preview",
++          description: "Static external preview metadata",
++          siteName: "example.com",
++          image: "",
++        },
++      },
++      {
++        type: "linkPreview",
++        attrs: {
++          url: internalUrl,
++          title: sourcePage.title,
++          description: "Internal page preview",
++          siteName: state.spaceName,
++          image: "",
++        },
++      },
++      paragraph(text("Page mention: "), {
++        type: "mention",
++        attrs: {
++          id: uniqueId("mention"),
++          label: sourcePage.title,
++          entityType: "page",
++          entityId: sourcePage.id,
++          slugId: sourcePage.slugId,
++        },
++      }),
++      paragraph(text("Inline audit tag "), {
++        type: "tag",
++        attrs: { value: "todo" },
++      }),
++      { type: "subpages" },
++      {
++        type: "transclusionSource",
++        attrs: { id: uniqueId("local-source") },
++        content: [paragraph(text("Local synced block source"))],
++      },
++      {
++        type: "transclusionReference",
++        attrs: {
++          sourcePageId: sourcePage.id,
++          transclusionId: sourceTransclusionId,
++        },
++      },
++      paragraph(text("Large paste anchor")),
++    ],
++  };
++
++  await updatePageContent(api, page.id, content);
++  await apiPost(api, `/api/pages/${sourcePage.id}/actions/set-template`, {
++    enabled: true,
++  });
++  return {
++    page,
++    childPage,
++    sourcePage,
++    sourceTransclusionId,
++    expectedNodeTypes: [
++      "doc",
++      "text",
++      "paragraph",
++      "heading",
++      "blockquote",
++      "bulletList",
++      "orderedList",
++      "listItem",
++      "taskList",
++      "taskItem",
++      "horizontalRule",
++      "hardBreak",
++      "details",
++      "detailsSummary",
++      "detailsContent",
++      "callout",
++      "mathInline",
++      "mathBlock",
++      "table",
++      "tableRow",
++      "tableCell",
++      "tableHeader",
++      "pageBreak",
++      "image",
++      "video",
++      "audio",
++      "pdf",
++      "attachment",
++      "drawio",
++      "excalidraw",
++      "codeBlock",
++      "embed",
++      "youtube",
++      "linkPreview",
++      "mention",
++      "tag",
++      "subpages",
++      "transclusionSource",
++      "transclusionReference",
++    ],
++    expectedMarkTypes: [
++      "bold",
++      "italic",
++      "underline",
++      "strike",
++      "code",
++      "superscript",
++      "subscript",
++      "highlight",
++      "textStyle",
++      "link",
++      "comment",
++    ],
++  };
++}
++
++export function pageUrl(state: AuditState, page: PageRecord): string {
++  return `/s/${state.spaceSlug}/p/${page.title
++    .toLowerCase()
++    .replace(/[^a-z0-9]+/g, "-")
++    .replace(/^-|-$/g, "")}-${page.slugId}`;
++}
+
+diff --git a/apps/client/e2e/editor/support/paths.ts b/apps/client/e2e/editor/support/paths.ts
+new file mode 100644
+index 00000000..20864eec
+--- /dev/null
++++ b/apps/client/e2e/editor/support/paths.ts
+@@ -0,0 +1,16 @@
++import path from "node:path";
++
++export const auditRoot = path.resolve(
++  process.cwd(),
++  "../../output/audit/editor-2026-08-06",
++);
++
++export const auditStatePath = path.join(auditRoot, "audit-state.json");
++export const screenshotsDir = path.join(auditRoot, "screenshots");
++export const consoleDir = path.join(auditRoot, "console-errors");
++export const axeDir = path.join(auditRoot, "axe-results");
++export const downloadsDir = path.join(auditRoot, "downloads");
++export const confirmedDefectsPath = path.join(
++  auditRoot,
++  "confirmed-defects.json",
++);
+
+diff --git a/apps/client/e2e/editor/support/types.ts b/apps/client/e2e/editor/support/types.ts
+new file mode 100644
+index 00000000..dd3118db
+--- /dev/null
++++ b/apps/client/e2e/editor/support/types.ts
+@@ -0,0 +1,22 @@
++export interface AuditState {
++  runId: string;
++  spaceId: string;
++  spaceSlug: string;
++  spaceName: string;
++  retained: boolean;
++  createdAt: string;
++}
++
++export interface AttachmentRecord {
++  id: string;
++  fileName: string;
++  fileSize: number;
++  mimeType: string;
++}
++
++export interface PageRecord {
++  id: string;
++  slugId: string;
++  title: string;
++  spaceId: string;
++}
+
+diff --git a/apps/client/playwright.editor.config.ts b/apps/client/playwright.editor.config.ts
+new file mode 100644
+index 00000000..9cb4a0bc
+--- /dev/null
++++ b/apps/client/playwright.editor.config.ts
+@@ -0,0 +1,66 @@
++import { defineConfig, devices } from "@playwright/test";
++import path from "node:path";
++
++const auditRoot = path.resolve(
++  process.cwd(),
++  "../../output/audit/editor-2026-08-06",
++);
++const defaultBaseURL = process.env.DOCMOST_BASE_URL ?? "http://localhost:3000";
++const webkitBaseURL =
++  process.env.DOCMOST_WEBKIT_BASE_URL ?? "http://127.0.0.1:3000";
++
++export default defineConfig({
++  testDir: "./e2e/editor/specs",
++  timeout: 90_000,
++  expect: { timeout: 15_000 },
++  fullyParallel: false,
++  workers: 1,
++  forbidOnly: true,
++  retries: 0,
++  outputDir: path.join(auditRoot, "playwright-artifacts"),
++  reporter: [
++    ["list"],
++    ["json", { outputFile: path.join(auditRoot, "playwright-results.json") }],
++    [
++      "html",
++      { outputFolder: path.join(auditRoot, "playwright-html"), open: "never" },
++    ],
++  ],
++  use: {
++    baseURL: defaultBaseURL,
++    locale: "en-US",
++    timezoneId: "Europe/Moscow",
++    colorScheme: "light",
++    trace: "retain-on-failure",
++    video: "off",
++    screenshot: "only-on-failure",
++    serviceWorkers: "allow",
++  },
++  projects: [
++    {
++      name: "chromium-desktop",
++      testIgnore: /mobile-accessibility\.spec\.ts/,
++      use: { ...devices["Desktop Chrome"] },
++    },
++    {
++      name: "firefox-desktop",
++      testIgnore: /mobile-accessibility\.spec\.ts/,
++      use: { ...devices["Desktop Firefox"] },
++    },
++    {
++      name: "webkit-media-clipboard",
++      testMatch: /media-clipboard\.spec\.ts/,
++      use: { ...devices["Desktop Safari"], baseURL: webkitBaseURL },
++    },
++    {
++      name: "mobile-chromium",
++      testMatch: /mobile-accessibility\.spec\.ts/,
++      use: { ...devices["Pixel 7"] },
++    },
++    {
++      name: "mobile-webkit",
++      testMatch: /mobile-accessibility\.spec\.ts/,
++      use: { ...devices["iPhone 15"], baseURL: webkitBaseURL },
++    },
++  ],
++});
+
+diff --git a/apps/client/src/features/editor/extensions/indent-keyboard.test.ts b/apps/client/src/features/editor/extensions/indent-keyboard.test.ts
+new file mode 100644
+index 00000000..848bf534
+--- /dev/null
++++ b/apps/client/src/features/editor/extensions/indent-keyboard.test.ts
+@@ -0,0 +1,55 @@
++// @vitest-environment happy-dom
++
++import { Editor } from "@tiptap/core";
++import { StarterKit } from "@tiptap/starter-kit";
++import { Indent } from "@docmost/editor-ext";
++import { afterEach, describe, expect, it } from "vitest";
++
++describe("Indent keyboard shortcuts", () => {
++  let editor: Editor | undefined;
++
++  afterEach(() => {
++    editor?.destroy();
++    editor = undefined;
++  });
++
++  it("indents and outdents a paragraph at a collapsed cursor", () => {
++    editor = new Editor({
++      extensions: [
++        StarterKit,
++        Indent.configure({ types: ["heading", "paragraph"] }),
++      ],
++      content: "<p>Keyboard indentation target</p>",
++    });
++    editor.commands.setTextSelection(2);
++
++    const tabHandled = editor.view.someProp("handleKeyDown", (handler) =>
++      handler(
++        editor!.view,
++        new KeyboardEvent("keydown", {
++          key: "Tab",
++          bubbles: true,
++          cancelable: true,
++        }),
++      ),
++    );
++
++    expect(tabHandled).toBe(true);
++    expect(editor.getJSON().content?.[0].attrs?.indent).toBe(1);
++
++    const shiftTabHandled = editor.view.someProp("handleKeyDown", (handler) =>
++      handler(
++        editor!.view,
++        new KeyboardEvent("keydown", {
++          key: "Tab",
++          shiftKey: true,
++          bubbles: true,
++          cancelable: true,
++        }),
++      ),
++    );
++
++    expect(shiftTabHandled).toBe(true);
++    expect(editor.getJSON().content?.[0].attrs?.indent).toBe(0);
++  });
++});
