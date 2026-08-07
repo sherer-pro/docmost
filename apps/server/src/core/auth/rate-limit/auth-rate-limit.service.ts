@@ -51,6 +51,14 @@ interface RedisClientLike {
   quit?(): Promise<'OK' | unknown>;
 }
 
+export const AUTH_RATE_LIMIT_REDIS_OPTIONS = {
+  lazyConnect: true,
+  maxRetriesPerRequest: 1,
+  // The first command initiates a lazy connection. It must wait for that
+  // connection instead of being rejected before Redis has a chance to reply.
+  enableOfflineQueue: true,
+} as const;
+
 /**
  * Internal rate-limiting service for auth endpoints.
  *
@@ -332,11 +340,10 @@ export class AuthRateLimitService implements OnModuleDestroy {
   }
 
   private createRedisClient(): RedisClientLike {
-    return new Redis(this.environmentService.getRedisUrl(), {
-      lazyConnect: true,
-      maxRetriesPerRequest: 1,
-      enableOfflineQueue: false,
-    }) as unknown as RedisClientLike;
+    return new Redis(
+      this.environmentService.getRedisUrl(),
+      AUTH_RATE_LIMIT_REDIS_OPTIONS,
+    ) as unknown as RedisClientLike;
   }
 
   private getRedisBucketKey(
