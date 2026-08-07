@@ -21,6 +21,12 @@ interface IDatabaseRowsFilterCondition {
   value: string;
 }
 
+interface IDatabaseRowsComparableProperty {
+  id: string;
+  type: string | null;
+  settings?: unknown;
+}
+
 @Injectable()
 export class DatabaseRowRepo {
   constructor(@InjectKysely() private readonly db: KyselyDB) {}
@@ -117,8 +123,41 @@ export class DatabaseRowRepo {
       .where('databaseRows.archivedAt', 'is', null);
   }
 
-  private buildCellComparableTextExpression(cellAlias: string): RawBuilder<string> {
+  private buildCellStoredTextExpression(
+    cellAlias: string,
+    propertyType?: string | null,
+  ): RawBuilder<string> {
     const valueRef = sql.ref(`${cellAlias}.value`);
+    const objectValueExpression =
+      propertyType === 'select'
+        ? sql<string>`coalesce(
+            ${valueRef} ->> 'value',
+            ${valueRef} ->> 'label',
+            ${valueRef} ->> 'id',
+            ${valueRef}::text
+          )`
+        : propertyType === 'user'
+          ? sql<string>`coalesce(
+              ${valueRef} ->> 'id',
+              ${valueRef} ->> 'name',
+              ${valueRef} ->> 'value',
+              ${valueRef}::text
+            )`
+          : propertyType === 'page_reference'
+            ? sql<string>`coalesce(
+                ${valueRef} ->> 'id',
+                ${valueRef} ->> 'pageId',
+                ${valueRef} ->> 'title',
+                ${valueRef} ->> 'value',
+                ${valueRef}::text
+              )`
+            : sql<string>`coalesce(
+                ${valueRef} ->> 'name',
+                ${valueRef} ->> 'label',
+                ${valueRef} ->> 'value',
+                ${valueRef} ->> 'id',
+                ${valueRef}::text
+              )`;
 
     return sql<string>`
       lower(
@@ -131,13 +170,7 @@ export class DatabaseRowRepo {
             when jsonb_typeof(${valueRef}) = 'number'
               then ${valueRef}::text
             when jsonb_typeof(${valueRef}) = 'object'
-              then coalesce(
-                ${valueRef} ->> 'name',
-                ${valueRef} ->> 'label',
-                ${valueRef} ->> 'value',
-                ${valueRef} ->> 'id',
-                ${valueRef}::text
-              )
+              then ${objectValueExpression}
             else coalesce(${valueRef}::text, '')
           end,
           ''
@@ -146,13 +179,117 @@ export class DatabaseRowRepo {
     `;
   }
 
+  private buildSelectComparableTextExpression(
+    storedValueExpression: RawBuilder<string>,
+    settings: unknown,
+  ): RawBuilder<string> {
+    const options =
+      settings &&
+      typeof settings === 'object' &&
+      Array.isArray((settings as { options?: unknown }).options)
+        ? (settings as { options: unknown[] }).options
+        : [];
+
+    let comparableExpression = storedValueExpression;
+    for (const option of [...options].reverse()) {
+      if (!option || typeof option !== 'object') {
+        continue;
+      }
+
+      const candidate = option as Record<string, unknown>;
+      if (
+        typeof candidate.value !== 'string' ||
+        typeof candidate.label !== 'string'
+      ) {
+        continue;
+      }
+
+      comparableExpression = sql<string>`case
+        when ${storedValueExpression} = ${candidate.value.toLowerCase()}
+          then ${candidate.label.toLowerCase()}
+        else ${comparableExpression}
+      end`;
+    }
+
+    return comparableExpression;
+  }
+
+  private buildCellComparableTextExpression(params: {
+    cellAlias: string;
+    property?: IDatabaseRowsComparableProperty;
+    workspaceId: string;
+  }): RawBuilder<string> {
+    const storedValueExpression = this.buildCellStoredTextExpression(
+      params.cellAlias,
+      params.property?.type,
+    );
+
+    if (params.property?.type === 'select') {
+      return this.buildSelectComparableTextExpression(
+        storedValueExpression,
+        params.property.settings,
+      );
+    }
+
+    if (params.property?.type === 'user') {
+      const userNameQuery = this.db
+        .selectFrom('users as comparableUser')
+        .select(() =>
+          sql<string>`lower(coalesce(
+            ${sql.ref('comparableUser.name')},
+            ${sql.ref('comparableUser.id')}::text
+          ))`.as('value'),
+        )
+        .where(
+          sql<string>`${sql.ref('comparableUser.id')}::text`,
+          '=',
+          storedValueExpression,
+        )
+        .where('comparableUser.workspaceId', '=', params.workspaceId)
+        .limit(1);
+
+      return sql<string>`coalesce((${userNameQuery}), ${storedValueExpression})`;
+    }
+
+    if (params.property?.type === 'page_reference') {
+      const pageTitleQuery = this.db
+        .selectFrom('pages as comparablePage')
+        .select(() =>
+          sql<string>`lower(coalesce(
+            ${sql.ref('comparablePage.title')},
+            ${sql.ref('comparablePage.id')}::text
+          ))`.as('value'),
+        )
+        .where(
+          sql<string>`${sql.ref('comparablePage.id')}::text`,
+          '=',
+          storedValueExpression,
+        )
+        .where('comparablePage.workspaceId', '=', params.workspaceId)
+        .where('comparablePage.deletedAt', 'is', null)
+        .limit(1);
+
+      return sql<string>`coalesce((${pageTitleQuery}), ${storedValueExpression})`;
+    }
+
+    return storedValueExpression;
+  }
+
   private buildRowCellComparableValueExpression(params: {
     rowAlias: string;
     propertyId: string;
+    property?: IDatabaseRowsComparableProperty;
+    workspaceId: string;
   }): RawBuilder<string> {
     const cellQuery = this.db
       .selectFrom('databaseCells as filterCell')
-      .select(() => this.buildCellComparableTextExpression('filterCell').as('value'))
+      .select(() =>
+        this.buildCellComparableTextExpression({
+          cellAlias: 'filterCell',
+          property: params.property,
+          workspaceId: params.workspaceId,
+        }).as('value'),
+      )
       .whereRef(
         'filterCell.databaseId',
         '=',
@@ -230,6 +367,7 @@ export class DatabaseRowRepo {
       sortDirection?: 'asc' | 'desc';
       sortPropertyId?: string;
       filters?: IDatabaseRowsFilterCondition[];
+      properties?: IDatabaseRowsComparableProperty[];
     },
   ): Promise<{
     items: any[];
@@ -241,6 +379,9 @@ export class DatabaseRowRepo {
 
     let query = this.buildRowsQuery(databaseId, workspaceId, spaceId);
     const filters = options.filters ?? [];
+    const propertiesById = new Map(
+      (options.properties ?? []).map((property) => [property.id, property]),
+    );
 
     for (const condition of filters) {
       if (!condition) {
@@ -251,6 +392,8 @@ export class DatabaseRowRepo {
       const cellValueExpression = this.buildRowCellComparableValueExpression({
         rowAlias: 'databaseRows',
         propertyId: condition.propertyId,
+        property: propertiesById.get(condition.propertyId),
+        workspaceId,
       });
 
       if (condition.operator === 'equals') {
@@ -279,9 +422,11 @@ export class DatabaseRowRepo {
 
     if (isPropertySort || isTitleSort) {
       const sortValueExpression = isPropertySort
-        ? sql<string>`(${this.buildRowCellComparableValueExpression({
+          ? sql<string>`(${this.buildRowCellComparableValueExpression({
             rowAlias: 'databaseRows',
             propertyId: options.sortPropertyId as string,
+            property: propertiesById.get(options.sortPropertyId as string),
+            workspaceId,
           })}) collate "C"`
         : sql<string>`lower(coalesce(${sql.ref('pages.title')}, '')) collate "C"`;
 

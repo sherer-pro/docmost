@@ -51,6 +51,25 @@ describe('database DTO limits', () => {
     expect(JSON.stringify(errors)).toContain('arrayMaxSize');
   });
 
+  it.each([CreateDatabasePropertyDto, UpdateDatabasePropertyDto])(
+    'rejects duplicate select option values in %s',
+    async (DtoClass) => {
+      const errors = await validatePayload(DtoClass as new () => object, {
+        ...(DtoClass === CreateDatabasePropertyDto
+          ? { name: 'Status', type: 'select' }
+          : {}),
+        settings: {
+          options: [
+            { label: 'First', value: 'duplicate' },
+            { label: 'Second', value: 'duplicate' },
+          ],
+        },
+      });
+
+      expect(JSON.stringify(errors)).toContain('arrayUnique');
+    },
+  );
+
   it('rejects row cell batch payloads with too many cells', async () => {
     const errors = await validatePayload(BatchUpdateDatabaseCellsDto, {
       cells: Array.from({ length: 201 }, () => ({

@@ -1,5 +1,4 @@
 import {
-  ActionIcon,
   Checkbox,
   Button,
   Drawer,
@@ -126,6 +125,7 @@ import CopyPageModal from '@/features/page/components/copy-page-modal.tsx';
 import { PageOperationMenuItems } from '@/features/page/components/page-operation-menu-items.tsx';
 import { invalidateSidebarTree } from '@/features/page/queries/cache-invalidation.ts';
 import { DatabaseFilterEditor } from './database-filter-editor';
+import { AccessibleActionIcon } from '@/components/ui/accessible-action-icon';
 
 interface DatabaseTableViewProps {
   databaseId: string;
@@ -946,6 +946,12 @@ export function DatabaseTableView({
     setDragOverPropertyId(null);
   };
 
+  const getPropertyIdAtPoint = (clientX: number, clientY: number) =>
+    document
+      .elementFromPoint(clientX, clientY)
+      ?.closest<HTMLElement>('[data-database-property-id]')?.dataset
+      .databasePropertyId ?? null;
+
   const movePropertyByVisibleOffset = (
     propertyId: string,
     offset: -1 | 1,
@@ -1058,6 +1064,27 @@ export function DatabaseTableView({
 
     setSelectedRowPageIds({});
   }, [isEditable]);
+
+  useEffect(() => {
+    if (!editingCellKey) {
+      return;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      const activeCell = Array.from(
+        tableViewportRef.current?.querySelectorAll<HTMLElement>(
+          '[data-database-cell-key]',
+        ) ?? [],
+      ).find((cell) => cell.dataset.databaseCellKey === editingCellKey);
+      const editor = activeCell?.querySelector<HTMLElement>(
+        'textarea, input, button, [role="combobox"], [tabindex]:not([tabindex="-1"])',
+      );
+
+      (editor ?? activeCell)?.focus();
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [editingCellKey]);
 
   useEffect(() => {
     if (Object.keys(optimisticallyDeletedRowPageIds).length === 0) {
@@ -2046,7 +2073,13 @@ export function DatabaseTableView({
         title={t('View')}
         closeButtonProps={{ 'aria-label': t('Close') }}
         position="bottom"
-        size="md"
+        size="85dvh"
+        styles={{
+          body: {
+            maxHeight: 'calc(85dvh - 60px)',
+            overflowY: 'auto',
+          },
+        }}
       >
         <Stack>
           <Select
@@ -2241,6 +2274,7 @@ export function DatabaseTableView({
                   key={property.id}
                   miw={220}
                   className={classes.propertyHeader}
+                  data-database-property-id={property.id}
                   data-dragging={draggedPropertyId === property.id}
                   data-drop-target={
                     Boolean(draggedPropertyId) &&
@@ -2278,13 +2312,63 @@ export function DatabaseTableView({
                   <Group justify="space-between" gap="xs" wrap="nowrap">
                     {isEditable ? (
                       <>
-                        <ActionIcon
+                        <AccessibleActionIcon
                           className={classes.propertyDragHandle}
                           variant="subtle"
-                          size="sm"
-                          aria-label={t('Move')}
+                          label={t('Move')}
+                          tooltip={false}
                           draggable
                           disabled={updatePropertyMutation.isPending}
+                          style={{ touchAction: 'none' }}
+                          onPointerDown={(event) => {
+                            if (event.pointerType === 'mouse') {
+                              return;
+                            }
+
+                            event.preventDefault();
+                            event.currentTarget.setPointerCapture(event.pointerId);
+                            draggedPropertyIdRef.current = property.id;
+                            setDraggedPropertyId(property.id);
+                            setDragOverPropertyId(null);
+                          }}
+                          onPointerMove={(event) => {
+                            const movedPropertyId = draggedPropertyIdRef.current;
+                            if (event.pointerType === 'mouse' || !movedPropertyId) {
+                              return;
+                            }
+
+                            event.preventDefault();
+                            const targetPropertyId = getPropertyIdAtPoint(
+                              event.clientX,
+                              event.clientY,
+                            );
+                            setDragOverPropertyId(
+                              targetPropertyId && targetPropertyId !== movedPropertyId
+                                ? targetPropertyId
+                                : null,
+                            );
+                          }}
+                          onPointerUp={(event) => {
+                            if (event.pointerType === 'mouse') {
+                              return;
+                            }
+
+                            const movedPropertyId = draggedPropertyIdRef.current;
+                            const targetPropertyId = getPropertyIdAtPoint(
+                              event.clientX,
+                              event.clientY,
+                            );
+                            clearPropertyDragState();
+
+                            if (
+                              movedPropertyId &&
+                              targetPropertyId &&
+                              movedPropertyId !== targetPropertyId
+                            ) {
+                              void moveProperty(movedPropertyId, targetPropertyId);
+                            }
+                          }}
+                          onPointerCancel={clearPropertyDragState}
                           onDragStart={(event) => {
                             event.dataTransfer.effectAllowed = 'move';
                             event.dataTransfer.setData(
@@ -2310,7 +2394,7 @@ export function DatabaseTableView({
                           }}
                         >
                           <IconGripVertical size={14} />
-                        </ActionIcon>
+                        </AccessibleActionIcon>
                         <div className={classes.propertyName}>
                           <TextInput
                             aria-label={t('Property name')}
@@ -2349,13 +2433,13 @@ export function DatabaseTableView({
                     {isEditable && (
                       <Menu position="bottom-end" shadow="md" withinPortal>
                         <Menu.Target>
-                          <ActionIcon
+                          <AccessibleActionIcon
                             variant="subtle"
-                            size="sm"
-                            aria-label={t('Property actions')}
+                            label={t('Property actions')}
+                            tooltip={false}
                           >
                             <IconDotsVertical size={14} />
-                          </ActionIcon>
+                          </AccessibleActionIcon>
                         </Menu.Target>
 
                         <Menu.Dropdown>
@@ -2517,12 +2601,13 @@ export function DatabaseTableView({
                       returnFocus={false}
                     >
                       <Menu.Target>
-                        <ActionIcon
+                        <AccessibleActionIcon
                           variant="subtle"
-                          aria-label={t('Row actions')}
+                          label={t('Row actions')}
+                          tooltip={false}
                         >
                           <IconDotsVertical size={14} />
-                        </ActionIcon>
+                        </AccessibleActionIcon>
                       </Menu.Target>
 
                       <Menu.Dropdown>
@@ -2575,11 +2660,19 @@ export function DatabaseTableView({
                   return (
                     <Table.Td
                       key={property.id}
+                      data-database-cell-key={key}
                       tabIndex={0}
                       aria-label={`${property.name}: ${getRowTitle(row, t('untitled'))}`}
                       className={classes.editableCell}
                       onKeyDown={(event) => {
                         if (!isEditing) {
+                          if (
+                            event.target === event.currentTarget &&
+                            (event.key === 'Enter' || event.key === 'F2')
+                          ) {
+                            event.preventDefault();
+                            startEditing(row, property);
+                          }
                           return;
                         }
 

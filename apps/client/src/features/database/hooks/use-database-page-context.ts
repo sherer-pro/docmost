@@ -2,11 +2,14 @@ import { useMemo, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { useGetDatabaseQuery } from '@/features/database/queries/database-query.ts';
 import {
+  findDatabaseIdByPageRoute,
   resolveDatabasePageContext,
   DatabasePageContextValue,
 } from '@/features/database/hooks/database-page-context.ts';
 import { resolvePageDatabaseIds } from '@/features/page/page-id-adapter.ts';
 import { usePageQuery } from '@/features/page/queries/page-query.ts';
+import { useAtomValue } from 'jotai';
+import { treeDataAtom } from '@/features/page/tree/atoms/tree-data-atom.ts';
 
 type DatabasePageContextParams = Record<string, string | undefined>;
 
@@ -22,6 +25,11 @@ export function useDatabasePageContext(): DatabasePageContextValue {
 
   const routeSlug = databaseSlug ?? pageSlug;
   const routeIds = resolvePageDatabaseIds({ routeSlug });
+  const treeData = useAtomValue(treeDataAtom);
+  const treeDatabaseId = useMemo(
+    () => findDatabaseIdByPageRoute(treeData, routeIds.slugId),
+    [routeIds.slugId, treeData],
+  );
   const { data: pageByRoute } = usePageQuery({ pageId: routeIds.pageId });
 
   const pageIds = resolvePageDatabaseIds({
@@ -34,12 +42,17 @@ export function useDatabasePageContext(): DatabasePageContextValue {
    * Keep the last valid databaseId so brief desync periods
    * (for example right after slug rename) do not lose page linkage.
    */
-  const stableDatabaseIdRef = useRef<string | undefined>(routeIds.databaseId);
+  const stableDatabaseIdRef = useRef<string | undefined>(treeDatabaseId);
   if (pageIds.databaseId) {
     stableDatabaseIdRef.current = pageIds.databaseId;
   }
 
-  const resolvedDatabaseId = pageIds.databaseId ?? stableDatabaseIdRef.current;
+  if (treeDatabaseId) {
+    stableDatabaseIdRef.current = treeDatabaseId;
+  }
+
+  const resolvedDatabaseId =
+    pageIds.databaseId ?? treeDatabaseId ?? stableDatabaseIdRef.current;
 
   const { data: database } = useGetDatabaseQuery(resolvedDatabaseId);
 

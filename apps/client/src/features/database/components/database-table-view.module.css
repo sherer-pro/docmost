@@ -75,10 +75,8 @@
   }
 
   .titleColumn {
-    position: sticky;
-    left: var(--database-title-column-left);
-    z-index: 3;
-    box-shadow: rem(8px) 0 rem(10px) rem(-10px) rgba(0, 0, 0, 0.24);
+    position: static;
+    box-shadow: none;
   }
 
   .editableCell {

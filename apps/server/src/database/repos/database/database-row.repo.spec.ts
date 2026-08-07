@@ -47,4 +47,60 @@ describe('DatabaseRowRepo custom fields SQL', () => {
     expect(compiled.sql).toContain("'COAUTHOR'");
     expect(compiled.sql).toContain('ELSE \'"NONE"\'::jsonb');
   });
+
+  it('compares select cells by the displayed option label', () => {
+    const expression = (repo as any).buildRowCellComparableValueExpression({
+      rowAlias: 'databaseRows',
+      propertyId: 'property-1',
+      property: {
+        id: 'property-1',
+        type: 'select',
+        settings: {
+          options: [{ value: 'in_progress', label: 'In progress' }],
+        },
+      },
+      workspaceId: 'workspace-1',
+    });
+    const compiled = db
+      .selectFrom('databaseRows')
+      .select(expression.as('value'))
+      .compile();
+
+    expect(compiled.sql).toContain('case');
+    expect(compiled.parameters).toEqual(
+      expect.arrayContaining(['in_progress', 'in progress']),
+    );
+  });
+
+  it('compares user cells by the current member name', () => {
+    const expression = (repo as any).buildRowCellComparableValueExpression({
+      rowAlias: 'databaseRows',
+      propertyId: 'property-1',
+      property: { id: 'property-1', type: 'user' },
+      workspaceId: 'workspace-1',
+    });
+    const compiled = db
+      .selectFrom('databaseRows')
+      .select(expression.as('value'))
+      .compile();
+
+    expect(compiled.sql).toContain('"users" as "comparableUser"');
+    expect(compiled.sql).toContain('"comparableUser"."name"');
+  });
+
+  it('compares page reference cells by the current page title', () => {
+    const expression = (repo as any).buildRowCellComparableValueExpression({
+      rowAlias: 'databaseRows',
+      propertyId: 'property-1',
+      property: { id: 'property-1', type: 'page_reference' },
+      workspaceId: 'workspace-1',
+    });
+    const compiled = db
+      .selectFrom('databaseRows')
+      .select(expression.as('value'))
+      .compile();
+
+    expect(compiled.sql).toContain('"pages" as "comparablePage"');
+    expect(compiled.sql).toContain('"comparablePage"."title"');
+  });
 });

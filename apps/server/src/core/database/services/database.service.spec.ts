@@ -503,7 +503,7 @@ describe('DatabaseService mixed tree flows', () => {
     expect(exported.fileName).toBe('database-docmost-archive.zip');
   });
 
-  it('keeps readable nested database export unchanged', async () => {
+  it('allows a writer to export a readable nested database', async () => {
     pageRepo.findById.mockResolvedValue({
       id: 'db-root-page',
       title: 'Nested database',
@@ -533,6 +533,34 @@ describe('DatabaseService mixed tree flows', () => {
       // Descendant pages must be filtered by page access rules.
       user,
     );
+  });
+
+  it('rejects nested database export without manage-page access', async () => {
+    pageRepo.findById.mockResolvedValue({
+      id: 'db-root-page',
+      title: 'Nested database',
+      slugId: 'nested-database',
+      content: { type: 'doc', content: [] },
+      spaceId: 'space-1',
+      workspaceId: 'ws-1',
+      parentPageId: 'parent-page',
+      deletedAt: null,
+    });
+    spaceAbility.createForUser.mockResolvedValueOnce({
+      cannot: () => true,
+    } as any);
+
+    await expect(
+      service.exportDatabase(
+        'db-1',
+        DatabaseExportFormat.Markdown,
+        user,
+        'ws-1',
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(exportService.exportPages).not.toHaveBeenCalled();
+    expect(exportService.exportDatabaseArchive).not.toHaveBeenCalled();
   });
 
   it.each(['owner', 'admin'])(
