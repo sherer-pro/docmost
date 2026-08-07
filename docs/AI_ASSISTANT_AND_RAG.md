@@ -1210,6 +1210,10 @@ The space settings modal contains only an AI status summary and a link to the
 full-page configuration. Workspace owners and administrators and space
 administrators have full access to that route; writers and readers receive a
 structured access-denied state without configuration or secret flags.
+The full-page overview reports `requestsToday` and `tokensToday` from the start
+of the current UTC day, plus `requestsLast7Days` and `tokensLast7Days` from the
+seven UTC calendar days that include today. `activeRuns` remains an immediate
+count rather than a period total.
 Provider, retrieval, and agent tests validate their own sections. Unsaved
 section changes are marked and protected when switching sections or closing the
 browser page.
@@ -1242,7 +1246,7 @@ CSRF contract.
 | `POST /api/spaces/:spaceId/ai/config/actions/test-retrieval`          | test external retrieval                                                                                                        |
 | `GET/PUT /api/spaces/:spaceId/ai/exclusions`                          | read or replace exclusion rules with optimistic revision                                                                       |
 | `GET /api/spaces/:spaceId/ai/exclusions/candidates`                   | search page candidates for exclusions                                                                                          |
-| `GET /api/spaces/:spaceId/ai/status?pageId=`                          | availability, permissions, identity, usage, and quick commands                                                                 |
+| `GET /api/spaces/:spaceId/ai/status?pageId=`                          | availability, permissions, identity, daily and last-7-calendar-day usage, active runs, and quick commands                       |
 | `GET/POST /api/ai/conversations`                                      | list by required `pageId` or create a conversation                                                                             |
 | `GET/PATCH/DELETE /api/ai/conversations/:id`                          | read, update, or soft-delete an owned conversation                                                                             |
 | `POST /api/ai/conversations/:id/actions/open`                         | update the last-opened time                                                                                                    |

@@ -353,6 +353,8 @@ export interface AiAvailability {
   usage?: {
     requestsToday: number;
     tokensToday: number;
+    requestsLast7Days: number;
+    tokensLast7Days: number;
     activeRuns: number;
   };
   /**

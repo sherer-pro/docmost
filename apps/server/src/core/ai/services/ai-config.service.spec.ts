@@ -286,7 +286,11 @@ describe('AiConfigService availability', () => {
     page: any,
     options: { canManage?: boolean; config?: any } = {},
   ) {
-    const usageResults = [{ requests: 1, tokens: 25 }, { count: 0 }];
+    const usageResults = [
+      { requests: 1, tokens: 25 },
+      { requests: 8, tokens: 240 },
+      { count: 0 },
+    ];
     const db = {
       selectFrom: jest.fn(() => {
         const query: any = {
@@ -350,6 +354,13 @@ describe('AiConfigService availability', () => {
     expect(status).toMatchObject({
       canManage: true,
       canUse: true,
+      usage: {
+        requestsToday: 1,
+        tokensToday: 25,
+        requestsLast7Days: 8,
+        tokensLast7Days: 240,
+        activeRuns: 0,
+      },
       assistantIdentity: {
         name: 'Алиса',
         gender: 'feminine',

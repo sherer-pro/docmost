@@ -661,7 +661,7 @@ function AiSpaceProviderSettings({
             title={t("ai.settings.usageSection")}
             description={t("ai.settings.usageDescription")}
           >
-            <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="xs">
+            <SimpleGrid cols={{ base: 1, sm: 2, lg: 5 }} spacing="xs">
               <UsageMetric
                 label={t("ai.settings.requestsToday")}
                 value={statusQuery.data.usage.requestsToday}
@@ -669,6 +669,14 @@ function AiSpaceProviderSettings({
               <UsageMetric
                 label={t("ai.settings.tokensToday")}
                 value={statusQuery.data.usage.tokensToday}
+              />
+              <UsageMetric
+                label={t("ai.settings.requestsLast7Days")}
+                value={statusQuery.data.usage.requestsLast7Days}
+              />
+              <UsageMetric
+                label={t("ai.settings.tokensLast7Days")}
+                value={statusQuery.data.usage.tokensLast7Days}
               />
               <UsageMetric
                 label={t("ai.settings.activeRuns")}

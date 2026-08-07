@@ -78,6 +78,8 @@ export class AiConfigService {
       usage?: {
         requestsToday: number;
         tokensToday: number;
+        requestsLast7Days: number;
+        tokensLast7Days: number;
         activeRuns: number;
       };
     }
@@ -150,13 +152,17 @@ export class AiConfigService {
       | {
           requestsToday: number;
           tokensToday: number;
+          requestsLast7Days: number;
+          tokensLast7Days: number;
           activeRuns: number;
         }
       | undefined;
     if (canManage) {
       const dayStart = new Date();
       dayStart.setUTCHours(0, 0, 0, 0);
-      const [daily, active] = await Promise.all([
+      const last7DaysStart = new Date(dayStart);
+      last7DaysStart.setUTCDate(last7DaysStart.getUTCDate() - 6);
+      const [daily, last7Days, active] = await Promise.all([
         this.db
           .selectFrom('aiRuns')
           .select((eb) => [
@@ -168,6 +174,18 @@ export class AiConfigService {
           .where('workspaceId', '=', workspace.id)
           .where('spaceId', '=', spaceId)
           .where('createdAt', '>=', dayStart)
+          .executeTakeFirstOrThrow(),
+        this.db
+          .selectFrom('aiRuns')
+          .select((eb) => [
+            eb.fn.countAll<number>().as('requests'),
+            sql<number>`coalesce(sum(input_tokens + output_tokens), 0)`.as(
+              'tokens',
+            ),
+          ])
+          .where('workspaceId', '=', workspace.id)
+          .where('spaceId', '=', spaceId)
+          .where('createdAt', '>=', last7DaysStart)
           .executeTakeFirstOrThrow(),
         this.db
           .selectFrom('aiRuns')
@@ -184,6 +202,8 @@ export class AiConfigService {
       usage = {
         requestsToday: Number(daily.requests),
         tokensToday: Number(daily.tokens),
+        requestsLast7Days: Number(last7Days.requests),
+        tokensLast7Days: Number(last7Days.tokens),
         activeRuns: Number(active.count),
       };
     }
