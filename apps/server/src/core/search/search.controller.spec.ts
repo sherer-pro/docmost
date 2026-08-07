@@ -110,15 +110,21 @@ describe('SearchController', () => {
 
   it('routes public share search through Typesense without a user identity', async () => {
     environmentService.getSearchDriver.mockReturnValue('typesense');
+    const reply = { header: jest.fn() };
 
     await controller.searchShare(
       { query: 'roadmap', shareId: 'share-1' } as any,
       { id: 'workspace-1' } as any,
+      reply as any,
     );
 
     expect(typesenseSearchService.searchPages).toHaveBeenCalledWith(
       { query: 'roadmap', shareId: 'share-1' },
       { workspaceId: 'workspace-1' },
+    );
+    expect(reply.header).toHaveBeenCalledWith(
+      'Cache-Control',
+      'private, no-store',
     );
   });
 });

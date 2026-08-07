@@ -71,6 +71,7 @@ function buildBaseCspDirectives() {
     // Duplicate the rule for child contexts to keep compatibility with older browsers.
     childSrc: frameSources,
     baseUri: ["'self'"],
+    formAction: ["'self'"],
     frameAncestors: ["'self'"],
     objectSrc: ["'none'"],
     imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
