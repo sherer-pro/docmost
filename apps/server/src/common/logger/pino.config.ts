@@ -11,6 +11,48 @@ const CONTEXTS_TO_IGNORE = [
   'WebSocketsController',
 ];
 
+const SENSITIVE_ERROR_FIELDS = [
+  'access_token',
+  'client_assertion',
+  'client_secret',
+  'code',
+  'code_verifier',
+  'id_token',
+  'password',
+  'refresh_token',
+  'RelayState',
+  'SAMLResponse',
+  'state',
+] as const;
+
+export function sanitizeLogBindings(inputArgs: unknown[]) {
+  for (const arg of inputArgs) {
+    if (typeof arg !== 'object' || arg === null) {
+      continue;
+    }
+
+    const bindings = arg as Record<string, unknown>;
+    const request = bindings.req;
+    if (typeof request === 'object' && request !== null) {
+      const requestRecord = request as Record<string, unknown>;
+      requestRecord.url = sanitizeUrlForLogging(requestRecord.url);
+    }
+
+    const error = bindings.err;
+    if (typeof error === 'object' && error !== null) {
+      const errorRecord = error as Record<string, unknown>;
+      if ('params' in errorRecord) {
+        errorRecord.params = '[Redacted]';
+      }
+      for (const field of SENSITIVE_ERROR_FIELDS) {
+        if (field in errorRecord) {
+          errorRecord[field] = '[Redacted]';
+        }
+      }
+    }
+  }
+}
+
 export function createPinoConfig(): Params {
   const isProduction = process.env.NODE_ENV?.toLowerCase() === 'production';
   const isDebugMode = process.env.DEBUG_MODE?.toLowerCase() === 'true';
@@ -38,6 +80,7 @@ export function createPinoConfig(): Params {
       },
       hooks: {
         logMethod(inputArgs, method) {
+          sanitizeLogBindings(inputArgs);
           if (isProduction && !isDebugMode) {
             for (const arg of inputArgs) {
               if (typeof arg === 'object' && arg !== null && 'context' in arg) {

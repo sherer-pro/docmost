@@ -176,7 +176,7 @@ export class SsoController {
       origin,
       query,
     );
-    return response.redirect(url);
+    return response.redirect(url, HttpStatus.FOUND);
   }
 
   @AuthPolicyScope('bootstrap')
@@ -198,7 +198,7 @@ export class SsoController {
       this.getSessionId(request),
       query,
     );
-    return response.redirect(url);
+    return response.redirect(url, HttpStatus.FOUND);
   }
 
   @Public()
@@ -239,7 +239,7 @@ export class SsoController {
       new URL(origin).hostname,
       query,
     );
-    return response.redirect(url);
+    return response.redirect(url, HttpStatus.FOUND);
   }
 
   @AuthPolicyScope('bootstrap')
@@ -261,7 +261,7 @@ export class SsoController {
       this.getSessionId(request),
       query,
     );
-    return response.redirect(url);
+    return response.redirect(url, HttpStatus.FOUND);
   }
 
   @Public()
@@ -341,7 +341,7 @@ export class SsoController {
     result: SsoAuthenticationResult,
   ) {
     if (result.stepUp) {
-      return response.redirect(result.returnTo || '/home');
+      return response.redirect(result.returnTo || '/home', HttpStatus.FOUND);
     }
 
     const token = result.authToken || result.mfaToken;
@@ -350,6 +350,7 @@ export class SsoController {
     if (result.userHasMfa) {
       return response.redirect(
         this.buildAuthenticationRedirect('/login/mfa', result.returnTo),
+        HttpStatus.FOUND,
       );
     }
     if (result.requiresMfaSetup) {
@@ -358,9 +359,10 @@ export class SsoController {
           '/login/mfa/setup',
           result.returnTo,
         ),
+        HttpStatus.FOUND,
       );
     }
-    return response.redirect(result.returnTo || '/home');
+    return response.redirect(result.returnTo || '/home', HttpStatus.FOUND);
   }
 
   private buildAuthenticationRedirect(path: string, returnTo?: string) {

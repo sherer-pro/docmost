@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ForbiddenException,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { SsoService } from './sso.service';
@@ -107,7 +108,100 @@ describe('SsoService security helpers', () => {
       trx,
     );
     expect(updateQuery.set).toHaveBeenCalledWith(
-      expect.objectContaining({ verifiedAt: null, lastErrorCode: null }),
+      expect.objectContaining({
+        verifiedAt: null,
+        lastSuccessfulLoginAt: null,
+        lastErrorCode: null,
+      }),
+    );
+  });
+
+  it('does not expose an enabled provider before its configuration is verified', async () => {
+    const service = createService();
+    jest.spyOn(service as any, 'requireProvider').mockResolvedValue({
+      id: 'provider-id',
+      workspaceId: 'workspace-id',
+      type: 'oidc',
+      isEnabled: true,
+      verifiedAt: null,
+    });
+
+    await expect(
+      (service as any).requireEnabledProvider(
+        'provider-id',
+        'workspace-id',
+        'oidc',
+      ),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('preserves successful verification when a later connectivity test fails', async () => {
+    const set = jest.fn();
+    const updateQuery: any = {
+      set: jest.fn((value: unknown) => {
+        set(value);
+        return updateQuery;
+      }),
+      where: jest.fn(() => updateQuery),
+      execute: jest.fn(),
+    };
+    const service = createService({
+      updateTable: jest.fn(() => updateQuery),
+    });
+    const provider = {
+      id: 'provider-id',
+      workspaceId: 'workspace-id',
+      type: 'oidc',
+      oidcIssuer: 'https://idp.example.com',
+      oidcClientId: 'client-id',
+      oidcClientSecret: 'enc:v1:secret',
+      verifiedAt: new Date(),
+    } as any;
+    jest.spyOn(service as any, 'requireProvider').mockResolvedValue(provider);
+    jest
+      .spyOn(service as any, 'testOidcProvider')
+      .mockRejectedValue(new Error('connection timeout'));
+
+    await expect(
+      service.testProvider(provider.id, { id: provider.workspaceId } as any),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(set).toHaveBeenCalledWith({
+      lastErrorCode: 'connection_timeout',
+    });
+    expect(set).not.toHaveBeenCalledWith(
+      expect.objectContaining({ verifiedAt: null }),
+    );
+  });
+
+  it('records a login only for the verified configuration that authenticated it', async () => {
+    const where = jest.fn();
+    const set = jest.fn();
+    const query: any = {
+      set: jest.fn((value: unknown) => {
+        set(value);
+        return query;
+      }),
+      where: jest.fn((...args: unknown[]) => {
+        where(...args);
+        return query;
+      }),
+      returning: jest.fn(() => query),
+      executeTakeFirst: jest.fn().mockResolvedValue({ id: 'provider-id' }),
+    };
+    const service = createService({ updateTable: jest.fn(() => query) });
+    const updatedAt = new Date();
+
+    await (service as any).recordSuccessfulLogin({
+      id: 'provider-id',
+      workspaceId: 'workspace-id',
+      updatedAt,
+    });
+
+    expect(where).toHaveBeenCalledWith('updatedAt', '=', updatedAt);
+    expect(where).toHaveBeenCalledWith('verifiedAt', 'is not', null);
+    expect(set).not.toHaveBeenCalledWith(
+      expect.objectContaining({ verifiedAt: expect.anything() }),
     );
   });
 
@@ -294,6 +388,227 @@ describe('SsoService security helpers', () => {
         'workspace-id',
       ),
     ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('returns a safe authentication error for an invalid OIDC callback', async () => {
+    const service = createService();
+    const provider = {
+      id: 'provider-id',
+      workspaceId: 'workspace-id',
+      type: 'oidc',
+    } as any;
+    jest.spyOn(service as any, 'claimLoginState').mockResolvedValue({
+      codeVerifier: (service as any).encryptSecret('code-verifier'),
+      nonce: 'nonce',
+      purpose: 'login',
+    });
+    jest.spyOn(service as any, 'requireEnabledProvider').mockResolvedValue(provider);
+    jest.spyOn(service as any, 'createOidcClient').mockResolvedValue({
+      callback: jest.fn().mockRejectedValue(new Error('raw provider error')),
+    });
+
+    await expect(
+      service.completeOidcLogin(
+        provider.id,
+        { id: provider.workspaceId } as any,
+        'https://docs.example.com',
+        { state: 'state', code: 'invalid-code' },
+      ),
+    ).rejects.toMatchObject({
+      status: 401,
+      message: 'Invalid OIDC response',
+    });
+  });
+
+  it('returns a safe authentication error for an invalid SAML response', async () => {
+    const service = createService();
+    const provider = {
+      id: 'provider-id',
+      workspaceId: 'workspace-id',
+      type: 'saml',
+    } as any;
+    jest.spyOn(service as any, 'claimLoginState').mockResolvedValue({
+      stateHash: 'state-hash',
+      purpose: 'login',
+    });
+    jest.spyOn(service as any, 'requireEnabledProvider').mockResolvedValue(provider);
+    jest.spyOn(service as any, 'createSamlClient').mockReturnValue({
+      validatePostResponseAsync: jest
+        .fn()
+        .mockRejectedValue(new Error('raw provider error')),
+    });
+
+    await expect(
+      service.completeSamlLogin(
+        provider.id,
+        { id: provider.workspaceId } as any,
+        'https://docs.example.com',
+        { RelayState: 'state', SAMLResponse: 'unsigned-response' },
+      ),
+    ).rejects.toMatchObject({
+      status: 401,
+      message: 'Invalid SAML response',
+    });
+  });
+
+  it('rejects a signed SAML response sent to another destination', () => {
+    const service = createService();
+    const profile = {
+      getSamlResponseXml: () => `
+        <samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"
+          Destination="https://attacker.example.com/callback">
+          <saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion">
+            <saml:Subject>
+              <saml:SubjectConfirmation>
+                <saml:SubjectConfirmationData Recipient="https://docs.example.com/api/sso/saml/provider-id/callback" />
+              </saml:SubjectConfirmation>
+            </saml:Subject>
+          </saml:Assertion>
+        </samlp:Response>`,
+    };
+
+    expect(() =>
+      (service as any).assertSamlResponseTarget(
+        profile,
+        'https://docs.example.com/api/sso/saml/provider-id/callback',
+      ),
+    ).toThrow(UnauthorizedException);
+  });
+
+  it('rejects a signed SAML assertion intended for another recipient', () => {
+    const service = createService();
+    const callbackUrl =
+      'https://docs.example.com/api/sso/saml/provider-id/callback';
+    const profile = {
+      getSamlResponseXml: () => `
+        <samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"
+          Destination="${callbackUrl}">
+          <saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion">
+            <saml:Subject>
+              <saml:SubjectConfirmation>
+                <saml:SubjectConfirmationData Recipient="https://attacker.example.com/callback" />
+              </saml:SubjectConfirmation>
+            </saml:Subject>
+          </saml:Assertion>
+        </samlp:Response>`,
+    };
+
+    expect(() =>
+      (service as any).assertSamlResponseTarget(profile, callbackUrl),
+    ).toThrow(UnauthorizedException);
+  });
+
+  it('accepts exact SAML destination and recipient values', () => {
+    const service = createService();
+    const callbackUrl =
+      'https://docs.example.com/api/sso/saml/provider-id/callback';
+    const profile = {
+      getSamlResponseXml: () => `
+        <samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"
+          Destination="${callbackUrl}">
+          <saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion">
+            <saml:Subject>
+              <saml:SubjectConfirmation>
+                <saml:SubjectConfirmationData Recipient="${callbackUrl}" />
+              </saml:SubjectConfirmation>
+            </saml:Subject>
+          </saml:Assertion>
+        </samlp:Response>`,
+    };
+
+    expect(() =>
+      (service as any).assertSamlResponseTarget(profile, callbackUrl),
+    ).not.toThrow();
+  });
+
+  it('rejects a wrong SAML target before creating login side effects', async () => {
+    const service = createService();
+    const provider = {
+      id: 'provider-id',
+      workspaceId: 'workspace-id',
+      type: 'saml',
+    } as any;
+    const profile = {
+      getSamlResponseXml: () => `
+        <samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"
+          Destination="https://attacker.example.com/callback">
+          <saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion">
+            <saml:Subject>
+              <saml:SubjectConfirmation>
+                <saml:SubjectConfirmationData Recipient="https://attacker.example.com/callback" />
+              </saml:SubjectConfirmation>
+            </saml:Subject>
+          </saml:Assertion>
+        </samlp:Response>`,
+    } as any;
+    jest.spyOn(service as any, 'claimLoginState').mockResolvedValue({
+      stateHash: 'state-hash',
+      purpose: 'login',
+    });
+    jest.spyOn(service as any, 'requireEnabledProvider').mockResolvedValue(provider);
+    jest.spyOn(service as any, 'createSamlClient').mockReturnValue({
+      validatePostResponseAsync: jest.fn().mockResolvedValue({
+        profile,
+        loggedOut: false,
+      }),
+    });
+    const finishLogin = jest.spyOn(service as any, 'finishLogin');
+
+    await expect(
+      service.completeSamlLogin(
+        provider.id,
+        { id: provider.workspaceId } as any,
+        'https://docs.example.com',
+        { RelayState: 'state', SAMLResponse: 'signed-response' },
+      ),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(finishLogin).not.toHaveBeenCalled();
+  });
+
+  it('keeps SAML audience, time and request-correlation validation enabled', () => {
+    const service = createService();
+    const callbackUrl =
+      'https://docs.example.com/api/sso/saml/provider-id/callback';
+    const saml = (service as any).createSamlClient(
+      {
+        id: 'provider-id',
+        samlUrl: 'https://idp.example.com/saml',
+        samlCertificate: 'test-certificate',
+      },
+      'https://docs.example.com',
+      {},
+    );
+    const expectedAudience =
+      'https://docs.example.com/api/sso/saml/provider-id/login';
+
+    expect(saml.options).toMatchObject({
+      audience: expectedAudience,
+      callbackUrl,
+      wantAssertionsSigned: true,
+      wantAuthnResponseSigned: true,
+      validateInResponseTo: 'always',
+    });
+    expect(
+      saml.checkAudienceValidityError(expectedAudience, [
+        { Audience: [{ _: 'https://attacker.example.com/audience' }] },
+      ]),
+    ).toBeInstanceOf(Error);
+
+    const now = Date.now();
+    expect(
+      saml.checkTimestampsValidityError(
+        now,
+        new Date(now + 60_000).toISOString(),
+        new Date(now + 120_000).toISOString(),
+      ),
+    ).toBeInstanceOf(Error);
+    expect(
+      saml.checkTimestampsValidityError(
+        now,
+        new Date(now - 120_000).toISOString(),
+        new Date(now - 60_000).toISOString(),
+      ),
+    ).toBeInstanceOf(Error);
   });
 
   it('rejects step-up when the external identity belongs to another user', async () => {
@@ -551,6 +866,91 @@ describe('SsoService security helpers', () => {
     expect(trx.insertInto).not.toHaveBeenCalledWith('groups');
   });
 
+  it('revokes memberships immediately when an external group mapping changes', async () => {
+    const mapping = {
+      id: 'mapping-id',
+      authProviderId: 'provider-id',
+      externalGroupId: 'old-external-group',
+      groupId: 'group-id',
+    };
+    const selectQuery: any = {
+      select: jest.fn(() => selectQuery),
+      where: jest.fn(() => selectQuery),
+      executeTakeFirst: jest.fn().mockResolvedValue(undefined),
+    };
+    const updateQuery: any = {
+      set: jest.fn(() => updateQuery),
+      where: jest.fn(() => updateQuery),
+      returningAll: jest.fn(() => updateQuery),
+      executeTakeFirstOrThrow: jest.fn().mockResolvedValue({
+        ...mapping,
+        externalGroupId: 'new-external-group',
+      }),
+    };
+    const trx = {
+      selectFrom: jest.fn(() => selectQuery),
+      updateTable: jest.fn(() => updateQuery),
+    };
+    const db = {
+      transaction: jest.fn(() => ({
+        execute: (callback: (transaction: any) => unknown) => callback(trx),
+      })),
+    };
+    const service = createService(db);
+    jest
+      .spyOn(service as any, 'requireGroupMapping')
+      .mockResolvedValue(mapping);
+    const release = jest
+      .spyOn(service as any, 'releaseMappedGroupMemberships')
+      .mockResolvedValue(undefined);
+
+    await service.updateGroupMapping(
+      {
+        mappingId: mapping.id,
+        externalGroupId: 'new-external-group',
+      },
+      'workspace-id',
+    );
+
+    expect(release).toHaveBeenCalledWith(mapping, trx);
+  });
+
+  it('rejects a duplicate external group during mapping update', async () => {
+    const mapping = {
+      id: 'mapping-id',
+      authProviderId: 'provider-id',
+      externalGroupId: 'old-external-group',
+      groupId: 'group-id',
+    };
+    const selectQuery: any = {
+      select: jest.fn(() => selectQuery),
+      where: jest.fn(() => selectQuery),
+      executeTakeFirst: jest.fn().mockResolvedValue({ id: 'duplicate-id' }),
+    };
+    const trx = {
+      selectFrom: jest.fn(() => selectQuery),
+    };
+    const db = {
+      transaction: jest.fn(() => ({
+        execute: (callback: (transaction: any) => unknown) => callback(trx),
+      })),
+    };
+    const service = createService(db);
+    jest
+      .spyOn(service as any, 'requireGroupMapping')
+      .mockResolvedValue(mapping);
+
+    await expect(
+      service.updateGroupMapping(
+        {
+          mappingId: mapping.id,
+          externalGroupId: 'existing-external-group',
+        },
+        'workspace-id',
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
   it('requires verification and a real login before SSO can be enforced', () => {
     const base = {
       type: 'oidc' as const,
@@ -586,13 +986,83 @@ describe('SsoService security helpers', () => {
     const service = createService();
 
     expect(() =>
-      (service as any).testSamlProvider({
-        samlCertificate: [
+      (service as any).validateSamlCertificate(
+        [
           '-----BEGIN CERTIFICATE-----',
           'not base64!!!',
           '-----END CERTIFICATE-----',
         ].join('\n'),
-      }),
+      ),
     ).toThrow(BadRequestException);
+  });
+
+  it('rejects long base64 text that is not an X.509 certificate', () => {
+    const service = createService();
+
+    expect(() =>
+      (service as any).validateSamlCertificate('A'.repeat(256)),
+    ).toThrow(BadRequestException);
+  });
+
+  it('fails a SAML provider test when its endpoint is unavailable', async () => {
+    const service = createService();
+    jest
+      .spyOn(service as any, 'validateSamlCertificate')
+      .mockImplementation(() => undefined);
+    jest
+      .spyOn(service as any, 'fetchAllowedEndpoint')
+      .mockResolvedValue(new Response('', { status: 503 }));
+
+    await expect(
+      (service as any).testSamlProvider({
+        samlCertificate: 'test-certificate',
+        samlUrl: 'https://idp.example.com/saml',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejects OIDC discovery metadata with a different issuer', async () => {
+    const endpointPolicy = { assertAllowed: jest.fn().mockResolvedValue({}) };
+    const service = createService({}, { endpointPolicy });
+    jest
+      .spyOn(service as any, 'fetchAllowedEndpoint')
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify({ issuer: 'https://attacker.example.com' }),
+          { status: 200 },
+        ),
+      );
+
+    await expect(
+      (service as any).discoverOidcIssuer({
+        oidcIssuer: 'https://idp.example.com',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('fails closed when the OIDC JWKS endpoint is unavailable', async () => {
+    const service = createService();
+    jest.spyOn(service as any, 'discoverOidcIssuer').mockResolvedValue({
+      metadata: {
+        jwks_uri: 'https://idp.example.com/jwks',
+        authorization_endpoint: 'https://idp.example.com/authorize',
+        token_endpoint: 'https://idp.example.com/token',
+      },
+    });
+    jest
+      .spyOn(service as any, 'fetchAllowedEndpoint')
+      .mockRejectedValue(new BadRequestException('OIDC JWKS endpoint is unavailable'));
+    const clientFactory = jest.spyOn(
+      service as any,
+      'createOidcClientFromIssuer',
+    );
+
+    await expect(
+      (service as any).testOidcProvider(
+        { id: 'provider-id' },
+        { id: 'workspace-id' },
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(clientFactory).not.toHaveBeenCalled();
   });
 });

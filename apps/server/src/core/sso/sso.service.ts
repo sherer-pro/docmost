@@ -23,7 +23,7 @@ import {
   encryptProtectedValue,
   hashProtectedValue,
 } from '../../common/security/credential-protection.util';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, X509Certificate } from 'node:crypto';
 import {
   Client as OidcClient,
   generators,
@@ -37,6 +37,7 @@ import {
   SAML,
   ValidateInResponseTo,
 } from '@node-saml/passport-saml';
+import { DOMParser } from '@xmldom/xmldom';
 import { Client as LdapClient, Entry as LdapEntry } from 'ldapts';
 import { FastifyRequest } from 'fastify';
 import { executeTx } from '@docmost/db/utils';
@@ -66,6 +67,9 @@ import { EventName } from '../../common/events/event.contants';
 
 const REDACTED_SECRET = '********';
 const SSO_STATE_TTL_MS = 10 * 60 * 1000;
+const SSO_HTTP_TIMEOUT_MS = 10_000;
+const SSO_HTTP_MAX_REDIRECTS = 3;
+const SSO_HTTP_MAX_JSON_BYTES = 1024 * 1024;
 const MAX_SYNCED_GROUPS = 100;
 const MAX_EXTERNAL_IDENTIFIER_LENGTH = 1024;
 
@@ -208,6 +212,7 @@ export class SsoService {
 
       if (invalidatesVerification) {
         updates.verifiedAt = null;
+        updates.lastSuccessfulLoginAt = null;
         updates.lastErrorCode = null;
       }
 
@@ -318,9 +323,37 @@ export class SsoService {
         trx,
       );
 
+      if (
+        dto.externalGroupId &&
+        dto.externalGroupId !== mapping.externalGroupId
+      ) {
+        const duplicate = await trx
+          .selectFrom('authProviderGroupMappings')
+          .select('id')
+          .where('authProviderId', '=', mapping.authProviderId)
+          .where('externalGroupId', '=', dto.externalGroupId)
+          .where('id', '!=', mapping.id)
+          .executeTakeFirst();
+        if (duplicate) {
+          throw new BadRequestException(
+            'This external group is already mapped for the provider',
+          );
+        }
+      }
+
+      const changesMappingSource = Boolean(
+        (dto.externalGroupId &&
+          dto.externalGroupId !== mapping.externalGroupId) ||
+          (dto.groupId && dto.groupId !== mapping.groupId),
+      );
+
       if (dto.groupId && dto.groupId !== mapping.groupId) {
         await this.requireWorkspaceGroup(dto.groupId, workspaceId, trx);
-        // The previous group is no longer SSO-managed for this provider.
+      }
+      if (changesMappingSource) {
+        // The previous mapping is no longer authoritative. Revoke its owned
+        // memberships immediately; the next successful login applies the new
+        // mapping.
         await this.releaseMappedGroupMemberships(mapping, trx);
       }
 
@@ -489,15 +522,20 @@ export class SsoService {
     const client = await this.createOidcClient(provider, callbackUrl);
     const codeVerifier = this.decryptSecret(loginState.codeVerifier);
 
-    const tokenSet = await client.callback(
-      callbackUrl,
-      callbackParams as Record<string, string>,
-      {
-        state,
-        nonce: loginState.nonce,
-        code_verifier: codeVerifier,
-      },
-    );
+    let tokenSet: TokenSet;
+    try {
+      tokenSet = await client.callback(
+        callbackUrl,
+        callbackParams as Record<string, string>,
+        {
+          state,
+          nonce: loginState.nonce,
+          code_verifier: codeVerifier,
+        },
+      );
+    } catch {
+      throw new UnauthorizedException('Invalid OIDC response');
+    }
 
     const identity = await this.identityFromOidc(client, tokenSet);
     if (loginState.purpose === 'step_up') {
@@ -562,19 +600,26 @@ export class SsoService {
       workspace.id,
       'saml',
     );
+    const callbackUrl = this.buildCallbackUrl(origin, 'saml', provider.id);
     const saml = this.createSamlClient(
       provider,
       origin,
       this.createSamlCacheProvider(provider.id, loginState.stateHash),
     );
-    const result = await saml.validatePostResponseAsync({
-      SAMLResponse: samlResponse,
-    });
+    let result: Awaited<ReturnType<SAML['validatePostResponseAsync']>>;
+    try {
+      result = await saml.validatePostResponseAsync({
+        SAMLResponse: samlResponse,
+      });
+    } catch {
+      throw new UnauthorizedException('Invalid SAML response');
+    }
 
     if (!result.profile || result.loggedOut) {
       throw new UnauthorizedException('Invalid SAML response');
     }
 
+    this.assertSamlResponseTarget(result.profile, callbackUrl);
     const identity = this.identityFromSaml(result.profile);
     if (loginState.purpose === 'step_up') {
       return this.finishStepUp(
@@ -667,13 +712,13 @@ export class SsoService {
     );
     const identity = await this.authenticateLdap(provider, username, password);
     await this.assertStepUpIdentity(provider, workspace, identity, user.id);
+    await this.recordSuccessfulLogin(provider);
     await this.assuranceService.markSsoVerified(sessionId, provider.id);
     await this.eventEmitter?.emitAsync(EventName.AUTHORIZATION_CHANGED, {
       workspaceId: workspace.id,
       userId: user.id,
       sessionId,
     });
-    await this.recordSuccessfulLogin(provider);
     return { ssoVerified: true };
   }
 
@@ -699,6 +744,8 @@ export class SsoService {
       enforceMfa = target.policy.effective.enforceMfa;
     }
 
+    await this.recordSuccessfulLogin(provider);
+
     if (provider.groupSync && identity.groupsProvided) {
       await this.syncGroups(provider, user, identity.groups);
     }
@@ -713,8 +760,6 @@ export class SsoService {
         targetSpaceId: context.spaceId,
       },
     );
-
-    await this.recordSuccessfulLogin(provider);
 
     return {
       ...loginToken,
@@ -757,6 +802,8 @@ export class SsoService {
       }
     }
 
+    await this.recordSuccessfulLogin(provider);
+
     if (provider.groupSync && identity.groupsProvided) {
       await this.syncGroups(provider, user, identity.groups);
     }
@@ -770,8 +817,6 @@ export class SsoService {
       userId: user.id,
       sessionId: loginState.sessionId,
     });
-    await this.recordSuccessfulLogin(provider);
-
     return {
       userHasMfa: false,
       requiresMfaSetup: false,
@@ -921,16 +966,24 @@ export class SsoService {
   }
 
   private async recordSuccessfulLogin(provider: AuthProvider) {
-    await this.db
+    const updated = await this.db
       .updateTable('authProviders')
       .set({
         lastSuccessfulLoginAt: new Date(),
-        verifiedAt: provider.verifiedAt ?? new Date(),
         lastErrorCode: null,
       })
       .where('id', '=', provider.id)
       .where('workspaceId', '=', provider.workspaceId)
-      .execute();
+      .where('updatedAt', '=', provider.updatedAt)
+      .where('verifiedAt', 'is not', null)
+      .returning('id')
+      .executeTakeFirst();
+
+    if (!updated) {
+      throw new UnauthorizedException(
+        'SSO provider configuration changed during authentication',
+      );
+    }
   }
 
   /**
@@ -948,7 +1001,7 @@ export class SsoService {
       if (provider.type === 'oidc') {
         await this.testOidcProvider(provider, workspace);
       } else if (provider.type === 'saml') {
-        this.testSamlProvider(provider);
+        await this.testSamlProvider(provider);
       } else {
         await this.testLdapProvider(provider);
       }
@@ -956,7 +1009,7 @@ export class SsoService {
       const errorCode = this.toProviderErrorCode(error);
       await this.db
         .updateTable('authProviders')
-        .set({ verifiedAt: null, lastErrorCode: errorCode })
+        .set({ lastErrorCode: errorCode })
         .where('id', '=', provider.id)
         .where('workspaceId', '=', workspaceId)
         .execute();
@@ -986,17 +1039,51 @@ export class SsoService {
       'oidc',
       provider.id,
     );
-    const issuer = await Issuer.discover(provider.oidcIssuer);
-    if (!issuer.metadata.jwks_uri || !issuer.metadata.authorization_endpoint) {
+    const issuer = await this.discoverOidcIssuer(provider);
+    if (
+      !issuer.metadata.jwks_uri ||
+      !issuer.metadata.authorization_endpoint ||
+      !issuer.metadata.token_endpoint
+    ) {
       throw new BadRequestException(
-        'OIDC discovery document is missing the JWKS or authorization endpoint',
+        'OIDC discovery document is missing a required endpoint',
       );
     }
-    await this.createOidcClient(provider, callbackUrl);
+    const jwksResponse = await this.fetchAllowedEndpoint(
+      issuer.metadata.jwks_uri,
+      'OIDC JWKS',
+    );
+    const jwks = await this.readJsonResponse(jwksResponse, 'OIDC JWKS');
+    if (!Array.isArray(jwks.keys) || jwks.keys.length === 0) {
+      throw new BadRequestException('OIDC JWKS does not contain signing keys');
+    }
+    this.createOidcClientFromIssuer(provider, callbackUrl, issuer);
   }
 
-  private testSamlProvider(provider: AuthProvider) {
-    const certificate = provider.samlCertificate.trim();
+  private async testSamlProvider(provider: AuthProvider) {
+    this.validateSamlCertificate(provider.samlCertificate);
+    let response = await this.fetchAllowedEndpoint(
+      provider.samlUrl,
+      'SAML login',
+      'HEAD',
+    );
+    if (response.status === 405 || response.status === 501) {
+      response = await this.fetchAllowedEndpoint(
+        provider.samlUrl,
+        'SAML login',
+      );
+    }
+    if (
+      response.status === 404 ||
+      response.status === 410 ||
+      response.status >= 500
+    ) {
+      throw new BadRequestException('SAML login endpoint is unavailable');
+    }
+  }
+
+  private validateSamlCertificate(certificateValue: string) {
+    const certificate = certificateValue.trim();
     const normalized = certificate
       .replace(/-----(BEGIN|END) CERTIFICATE-----/g, '')
       .replace(/\s+/g, '');
@@ -1007,9 +1094,25 @@ export class SsoService {
       );
     }
 
+    const pem = [
+      '-----BEGIN CERTIFICATE-----',
+      normalized.match(/.{1,64}/g)?.join('\n') ?? normalized,
+      '-----END CERTIFICATE-----',
+    ].join('\n');
+
     try {
-      // A truncated or corrupted certificate fails to decode here.
-      Buffer.from(normalized, 'base64');
+      const parsed = new X509Certificate(pem);
+      const validFrom = Date.parse(parsed.validFrom);
+      const validTo = Date.parse(parsed.validTo);
+      const now = Date.now();
+      if (
+        !Number.isFinite(validFrom) ||
+        !Number.isFinite(validTo) ||
+        now < validFrom ||
+        now > validTo
+      ) {
+        throw new Error('Certificate is not currently valid');
+      }
     } catch {
       throw new BadRequestException('SAML signing certificate cannot be read');
     }
@@ -1686,6 +1789,46 @@ export class SsoService {
     });
   }
 
+  private assertSamlResponseTarget(profile: Profile, callbackUrl: string) {
+    const responseXml = profile.getSamlResponseXml?.();
+    if (!responseXml) {
+      throw new UnauthorizedException('Invalid SAML response');
+    }
+
+    const parseErrors: unknown[] = [];
+    const document = new DOMParser({
+      errorHandler: {
+        warning: (error) => parseErrors.push(error),
+        error: (error) => parseErrors.push(error),
+        fatalError: (error) => parseErrors.push(error),
+      },
+    }).parseFromString(responseXml, 'application/xml');
+    const response = document.documentElement;
+    const responseName = response?.localName ?? response?.nodeName.split(':').pop();
+
+    if (
+      parseErrors.length > 0 ||
+      responseName !== 'Response' ||
+      response.getAttribute('Destination') !== callbackUrl
+    ) {
+      throw new UnauthorizedException('Invalid SAML response');
+    }
+
+    const subjectConfirmations = document.getElementsByTagNameNS(
+      'urn:oasis:names:tc:SAML:2.0:assertion',
+      'SubjectConfirmationData',
+    );
+    if (subjectConfirmations.length === 0) {
+      throw new UnauthorizedException('Invalid SAML response');
+    }
+
+    for (let index = 0; index < subjectConfirmations.length; index += 1) {
+      if (subjectConfirmations.item(index)?.getAttribute('Recipient') !== callbackUrl) {
+        throw new UnauthorizedException('Invalid SAML response');
+      }
+    }
+  }
+
   private createSamlCacheProvider(
     providerId: string,
     stateHash: string,
@@ -1739,7 +1882,40 @@ export class SsoService {
   }
 
   private async createOidcClient(provider: AuthProvider, callbackUrl: string) {
-    const issuer = await Issuer.discover(provider.oidcIssuer);
+    const issuer = await this.discoverOidcIssuer(provider);
+    return this.createOidcClientFromIssuer(provider, callbackUrl, issuer);
+  }
+
+  private createOidcClientFromIssuer(
+    provider: AuthProvider,
+    callbackUrl: string,
+    issuer: Issuer,
+  ) {
+    return new issuer.Client({
+      client_id: provider.oidcClientId,
+      client_secret: this.decryptSecret(provider.oidcClientSecret),
+      redirect_uris: [callbackUrl],
+      response_types: ['code'],
+    });
+  }
+
+  private async discoverOidcIssuer(provider: AuthProvider) {
+    const discoveryUrl = `${provider.oidcIssuer.replace(/\/$/, '')}/.well-known/openid-configuration`;
+    const response = await this.fetchAllowedEndpoint(
+      discoveryUrl,
+      'OIDC discovery',
+    );
+    const metadata = await this.readJsonResponse(
+      response,
+      'OIDC discovery',
+    );
+    if (metadata.issuer !== provider.oidcIssuer) {
+      throw new BadRequestException(
+        'OIDC discovery issuer does not match the configured issuer',
+      );
+    }
+
+    const issuer = new Issuer(metadata as any);
     const metadataEndpoints = [
       issuer.metadata.authorization_endpoint,
       issuer.metadata.token_endpoint,
@@ -1753,12 +1929,68 @@ export class SsoService {
         'OIDC metadata',
       );
     }
-    return new issuer.Client({
-      client_id: provider.oidcClientId,
-      client_secret: this.decryptSecret(provider.oidcClientSecret),
-      redirect_uris: [callbackUrl],
-      response_types: ['code'],
-    });
+    return issuer;
+  }
+
+  private async fetchAllowedEndpoint(
+    rawUrl: string,
+    label: string,
+    method: 'GET' | 'HEAD' = 'GET',
+  ): Promise<Response> {
+    let currentUrl = rawUrl;
+
+    for (let redirectCount = 0; ; redirectCount += 1) {
+      await this.endpointPolicy.assertAllowed(
+        currentUrl,
+        ['http:', 'https:'],
+        label,
+      );
+
+      let response: Response;
+      try {
+        response = await fetch(currentUrl, {
+          method,
+          redirect: 'manual',
+          signal: AbortSignal.timeout(SSO_HTTP_TIMEOUT_MS),
+          headers: {
+            accept: 'application/json, text/html;q=0.9, */*;q=0.1',
+          },
+        });
+      } catch {
+        throw new BadRequestException(`${label} endpoint is unavailable`);
+      }
+
+      if (![301, 302, 303, 307, 308].includes(response.status)) {
+        return response;
+      }
+      if (redirectCount >= SSO_HTTP_MAX_REDIRECTS) {
+        throw new BadRequestException(`${label} redirected too many times`);
+      }
+
+      const location = response.headers.get('location');
+      if (!location) {
+        throw new BadRequestException(`${label} returned an invalid redirect`);
+      }
+      currentUrl = new URL(location, currentUrl).toString();
+    }
+  }
+
+  private async readJsonResponse(
+    response: Response,
+    label: string,
+  ): Promise<Record<string, any>> {
+    if (!response.ok) {
+      throw new BadRequestException(`${label} endpoint is unavailable`);
+    }
+    const body = await response.text();
+    if (Buffer.byteLength(body, 'utf8') > SSO_HTTP_MAX_JSON_BYTES) {
+      throw new BadRequestException(`${label} response is too large`);
+    }
+    try {
+      return JSON.parse(body) as Record<string, any>;
+    } catch {
+      throw new BadRequestException(`${label} response is not valid JSON`);
+    }
   }
 
   private async createLoginState(
@@ -1841,7 +2073,7 @@ export class SsoService {
     type: SsoProviderType,
   ) {
     const provider = await this.requireProvider(providerId, workspaceId);
-    if (!provider.isEnabled || provider.type !== type) {
+    if (!provider.isEnabled || provider.type !== type || !provider.verifiedAt) {
       throw new NotFoundException('SSO provider not found');
     }
     this.validateProviderConfiguration(provider);

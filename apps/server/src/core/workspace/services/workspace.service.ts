@@ -102,6 +102,7 @@ export class WorkspaceService {
       .selectAll()
       .where('workspaceId', '=', workspaceId)
       .where('isEnabled', '=', true)
+      .where('verifiedAt', 'is not', null)
       .where('deletedAt', 'is', null)
       .where('type', 'in', [...SSO_PROVIDER_TYPES])
       .execute();
@@ -109,6 +110,7 @@ export class WorkspaceService {
     const allowedProviders = (
       await Promise.all(
         providers.map(async (provider) =>
+          provider.verifiedAt &&
           isUsableSsoProvider(provider) &&
           (await this.isSsoProviderEndpointAllowed(provider))
             ? provider
