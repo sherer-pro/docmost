@@ -8,9 +8,17 @@ rag-sync.config.json
 **/OPEN_WEBUI_KEY
 secrets/
 data
+# Local audit, e2e and scratch artifacts. These runs produce gigabytes of
+# Playwright reports, traces and downloads. Curated evidence that must live in
+# the repository is added deliberately with `git add -f`.
+/output/
+/tmp/
 # compiled output
 /dist
 /node_modules
+# Build output of the retired standalone rag-sync worker.
+/apps/rag-sync/dist/
+/apps/rag-sync/node_modules/
 
 # Logs
 logs
