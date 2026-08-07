@@ -149,7 +149,11 @@ text is not reconstructed. Provider markers inside fenced or inline code are
 not citations. Unknown markers are discarded, repeated valid markers reuse the
 same citation number, and different stable sections of one page remain separate
 citations. Before a historical assistant turn is reused as provider history,
-technical `[S<n>]` and `[C<n>]` markers outside code are removed.
+technical `[S<n>]` and `[C<n>]` markers outside code are removed. The server
+also reauthorizes every stored page dependency and private chat file. If any
+dependency is deleted, excluded, no longer readable, not ready, or no longer
+owned by the conversation, the complete user/assistant history pair is omitted
+from the next provider request.
 
 Page Markdown is divided by headings whose ProseMirror `attrs.id` is a stable
 identifier. Text before the first stable heading cites the document root; later
@@ -413,7 +417,10 @@ Chat files and page attachments retain separate limits of ten and twenty.
 Context updates include `expectedRevision`; conflicts return
 `ai_context_revision_conflict`. Every run stores an allowed context snapshot,
 which makes retries reproducible without allowing lost access to expose or
-reuse derived data.
+reuse derived data. Page attachments and private chat files join the same live
+dependency guard as pages: they are checked before provider use, while output
+is flushed, and in the final transaction. An unreadable attachment is isolated
+from valid files rather than failing their entire context batch.
 
 The chat composer uses a bounded TipTap schema but keeps Markdown as its public
 draft/send format. Supported headings, lists and task lists, blockquotes, code,
@@ -437,7 +444,12 @@ loading documents, render tasks, and canvases are released on every exit path.
 
 An editor selection transform (`editor_transform`) is an `ai_aux_run`. It uses
 the selected text and a page-snapshot hash and streams its result, but it does
-not create chat messages or change chat history.
+not create chat messages or change chat history. Selected text is serialized as
+explicitly marked untrusted JSON before the final transformation instruction;
+document text cannot replace system policy. The page, exclusion policy, and
+attachment dependencies are rechecked before the provider call, during stream
+flushes, after the provider returns, and immediately before completion. A
+change fails the action with `source_access_changed` and clears partial output.
 
 The selection action stays inside the active editor toolbar: the persistent
 toolbar when fixed-toolbar mode is enabled, or the contextual bubble toolbar
@@ -494,7 +506,8 @@ and in the final transaction. If a source is deleted, archived, replaced,
 excluded, moved across scope, or becomes unreadable, the run ends with stable
 error `source_access_changed`; response text, reasoning, and citations are
 cleared. Conversation history applies the same live-source policy and presents
-the stored message as access restricted.
+the stored message as access restricted. The same fail-closed lifecycle covers
+page attachments and private chat files, not only page and retrieval sources.
 
 An external request is bounded to forty candidates, eight final results by
 default, 16 KiB of text per hit, a 1 MiB serialized request, and a 256 KiB

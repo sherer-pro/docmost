@@ -46,6 +46,7 @@ import {
   AI_MCP_INSTRUCTIONS_MAX_LENGTH,
 } from '../mcp/ai-mcp.constants';
 import { AiAssistantProfileService } from './ai-assistant-profile.service';
+import { AiSourceAccessChangedError } from './ai-source-access.service';
 
 class AiRunCancelledError extends Error {}
 
@@ -311,15 +312,17 @@ export class AiRunExecutionService {
         .where('status', '=', 'running')
         .execute();
       await this.recordSourceDependencies(run, retrievalOutcome.sources);
-      await this.assertRunSourceAccess(
-        run,
-        user as User,
-        retrievalOutcome.sources,
-      );
+      const protectedSources = [
+        ...retrievalOutcome.sources,
+        ...fileContext.citations,
+      ];
+      await this.recordSourceDependencies(run, fileContext.citations);
+      await this.assertRunSourceAccess(run, user as User, protectedSources);
 
       const buildMessages = (contextWindow: number, maxOutputTokens: number) =>
         this.promptBuilder.build({
           run,
+          user: user as User,
           instructions:
             profileSnapshot?.instructions ?? config.systemInstructions,
           assistantIdentity: this.configs.toAssistantIdentity(config),
@@ -373,11 +376,7 @@ export class AiRunExecutionService {
         ) {
           return;
         }
-        await this.assertRunSourceAccess(
-          run,
-          user as User,
-          retrievalOutcome.sources,
-        );
+        await this.assertRunSourceAccess(run, user as User, protectedSources);
         const delta = pendingDelta;
         const reasoningDelta = pendingReasoningDelta;
         pendingDelta = '';
@@ -420,11 +419,7 @@ export class AiRunExecutionService {
         providerMessages: AiProviderMessage[],
         maxOutputTokens: number,
       ) => {
-        await this.assertRunSourceAccess(
-          run,
-          user as User,
-          retrievalOutcome.sources,
-        );
+        await this.assertRunSourceAccess(run, user as User, protectedSources);
         await this.profiles.assertRunProfileCurrent(run);
         const result = await this.provider.stream(
           {
@@ -450,11 +445,7 @@ export class AiRunExecutionService {
           },
         );
         await this.profiles.assertRunProfileCurrent(run);
-        await this.assertRunSourceAccess(
-          run,
-          user as User,
-          retrievalOutcome.sources,
-        );
+        await this.assertRunSourceAccess(run, user as User, protectedSources);
         return result;
       };
       let usage: AiProviderUsage;
@@ -480,21 +471,13 @@ export class AiRunExecutionService {
 
       sequence += 1;
       const completedAt = new Date();
-      await this.assertRunSourceAccess(
-        run,
-        user as User,
-        retrievalOutcome.sources,
-      );
+      await this.assertRunSourceAccess(run, user as User, protectedSources);
       const finalized = this.citations.finalize(
         content,
         prompt.citationCandidates,
       );
       const completion = await this.db.transaction().execute(async (trx) => {
-        await this.assertRunSourceAccess(
-          run,
-          user as User,
-          retrievalOutcome.sources,
-        );
+        await this.assertRunSourceAccess(run, user as User, protectedSources);
         const updated = await trx
           .updateTable('aiRuns')
           .set({
@@ -628,7 +611,10 @@ export class AiRunExecutionService {
       ...(await this.assertCurrentBuiltinPolicy(run)),
       ...this.mcpCalls.listSnapshotDefinitions(mcpSnapshot),
     ];
-    await this.assertRunSourceAccess(run, user, retrievalOutcome.sources);
+    await this.assertRunSourceAccess(run, user, [
+      ...retrievalOutcome.sources,
+      ...fileCitations,
+    ]);
     if (definitions.length > AI_AGENT_MAX_TOOL_DEFINITIONS) {
       throw new AiAgentExecutionError(
         'agent_mcp_tool_definition_limit',
@@ -1188,15 +1174,46 @@ export class AiRunExecutionService {
   private async assertRunSourceAccess(
     run: AiRun,
     user: User,
-    sources: Array<{ sourceType: string; sourceId: string; pageId: string }> = [],
+    sources: Array<{
+      sourceType: string;
+      sourceId: string;
+      pageId: string | null;
+    }> = [],
   ): Promise<void> {
+    const chatFileIds = [
+      ...new Set(
+        sources
+          .filter((source) => source.sourceType === 'chat_file')
+          .map((source) => source.sourceId),
+      ),
+    ];
+    if (chatFileIds.length > 0) {
+      const liveChatFiles = await this.db
+        .selectFrom('aiChatFiles')
+        .select('id')
+        .where('id', 'in', chatFileIds)
+        .where('conversationId', '=', run.conversationId)
+        .where('userId', '=', run.userId)
+        .where('workspaceId', '=', run.workspaceId)
+        .where('status', '=', 'ready')
+        .where('deletedAt', 'is', null)
+        .execute();
+      if (liveChatFiles.length !== chatFileIds.length) {
+        throw new AiSourceAccessChangedError();
+      }
+    }
     const dependencies = await this.db
       .selectFrom('aiRunSourceDependencies')
       .select('pageId')
       .where('runId', '=', run.id)
       .execute();
     const references = [
-      ...sources,
+      ...sources.filter(
+        (
+          source,
+        ): source is { sourceType: string; sourceId: string; pageId: string } =>
+          source.sourceType !== 'chat_file' && Boolean(source.pageId),
+      ),
       ...dependencies.map((dependency) => ({
         sourceType: 'page',
         sourceId: dependency.pageId,
@@ -1479,7 +1496,10 @@ export class AiRunExecutionService {
     await this.assertRunSourceAccess(
       params.run,
       params.user,
-      params.retrievalOutcome.sources,
+      [
+        ...params.retrievalOutcome.sources,
+        ...params.fileCitations,
+      ],
     );
     const completedAt = new Date();
     const finalized = this.citations.finalize(
@@ -1490,7 +1510,10 @@ export class AiRunExecutionService {
       await this.assertRunSourceAccess(
         params.run,
         params.user,
-        params.retrievalOutcome.sources,
+        [
+          ...params.retrievalOutcome.sources,
+          ...params.fileCitations,
+        ],
       );
       const updated = await trx
         .updateTable('aiRuns')
