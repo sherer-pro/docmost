@@ -1,0 +1,125 @@
+name: docmost-rag-audit
+
+x-docmost-app: &docmost-app
+  image: docmost:rag-audit
+  build:
+    context: ../..
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    open-webui-fixture:
+      condition: service_healthy
+    toxiproxy:
+      condition: service_started
+  environment: &docmost-environment
+    NODE_ENV: production
+    APP_URL: http://127.0.0.1:3200
+    APP_SECRET: isolated-rag-audit-secret-at-least-32-characters
+    DATABASE_URL: postgresql://docmost:docmost-test-password@postgres:5432/docmost
+    REDIS_URL: redis://redis:6379
+    AUTH_RATE_LIMIT_STORAGE: redis
+    RAG_SYNC_ENABLED: "true"
+    RAG_SYNC_ALLOWED_ORIGINS: http://toxiproxy:8666,http://open-webui-fixture:8080,http://open-webui:8080
+    AI_RETRIEVAL_ALLOWED_ORIGINS: http://toxiproxy:8666,http://open-webui-fixture:8080,http://open-webui:8080
+    AI_PROVIDER_ALLOWED_ORIGINS: http://toxiproxy:8666,http://open-webui-fixture:8080
+    RAG_SYNC_REDIS_PREFIX: docmost:rag-audit
+    RAG_SYNC_POLL_INTERVAL_MS: "5000"
+    RAG_SYNC_DISCOVERY_INTERVAL_MS: "5000"
+    RAG_SYNC_MAX_CONCURRENT_BINDINGS: "2"
+    RAG_SYNC_MAX_CONCURRENT_DOCUMENTS: "4"
+    RAG_SYNC_REQUEST_TIMEOUT_MS: "5000"
+    RAG_SYNC_PROCESSING_TIMEOUT_MS: "30000"
+    RAG_SYNC_RECONCILE_INTERVAL_MS: "60000"
+    RAG_SYNC_SHUTDOWN_TIMEOUT_MS: "5000"
+    DISABLE_TELEMETRY: "true"
+
+services:
+  postgres:
+    image: postgres:18-alpine@sha256:9a8afca54e7861fd90fab5fdf4c42477a6b1cb7d293595148e674e0a3181de15
+    environment:
+      POSTGRES_DB: docmost
+      POSTGRES_USER: docmost
+      POSTGRES_PASSWORD: docmost-test-password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U docmost -d docmost"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  redis:
+    image: redis:8-alpine@sha256:978f0e01593e65eed801f2402944efcd936d43b5027e4908a7897baf88ed6241
+    command: ["redis-server", "--appendonly", "no", "--maxmemory-policy", "noeviction"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  open-webui-fixture:
+    image: node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32
+    command: ["node", "/fixture.mjs"]
+    environment:
+      MOCK_OPEN_WEBUI_PORT: "8080"
+      MOCK_OPEN_WEBUI_PROCESSING_DELAY_MS: "100"
+    volumes:
+      - ../../scripts/ci-open-webui-mock.mjs:/fixture.mjs:ro
+    ports:
+      - "18081:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/health"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy:2.12.0@sha256:9378ed52a28bc50edc1350f936f518f31fa95f0d15917d6eb40b8e376d1a214e
+    ports:
+      - "18474:8474"
+      - "18666:8666"
+
+  migrate:
+    <<: *docmost-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["node", "apps/server/dist/apps/server/src/database/migrate.js"]
+    command: ["latest"]
+    restart: "no"
+
+  app-one:
+    <<: *docmost-app
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      open-webui-fixture:
+        condition: service_healthy
+      toxiproxy:
+        condition: service_started
+    ports:
+      - "3200:3000"
+
+  app-two:
+    <<: *docmost-app
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      open-webui-fixture:
+        condition: service_healthy
+      toxiproxy:
+        condition: service_started
+
+  open-webui:
+    profiles: ["real-open-webui"]
+    image: ghcr.io/open-webui/open-webui:v0.11.0@sha256:72c0ba641ba75e7aa52655cb242570906ececd09b1140fb736483038a22b3228
+    environment:
+      WEBUI_AUTH: "true"
+      ENABLE_SIGNUP: "true"
+      WEBUI_SECRET_KEY: isolated-open-webui-test-secret
+    ports:
+      - "18082:8080"

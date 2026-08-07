@@ -59,6 +59,9 @@ jobs:
       - name: Server tests
         run: pnpm --filter ./apps/server test
 
+      - name: RAG Sync fixture contract
+        run: pnpm test:rag-sync:contract
+
       - name: Security regression tests
         run: pnpm test:security
 

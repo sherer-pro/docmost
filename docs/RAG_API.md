@@ -113,8 +113,10 @@ Delivery guarantee is at-least-once:
 
 Recommended consumer behavior:
 
-- store `maxUpdatedAtMs` and `maxDeletedAtMs`
-- send these values back on the next request
+- keep the original `updatedSince` or `deletedSince` together with `nextCursor`
+  until the paginated snapshot reaches `hasMore=false`
+- only then store the terminal `maxUpdatedAtMs` or `maxDeletedAtMs` and send it
+  as the next cycle's watermark
 - use idempotent upsert/delete operations
 
 ### 4.4 `customFields` contract
@@ -139,9 +141,13 @@ Rules:
 - `cursor` (optional opaque string returned as `nextCursor`).
 
 Change feeds retain `items` and `maxUpdatedAtMs|maxDeletedAtMs`; every
-paginated response includes `hasMore` and `nextCursor`. The cursor binds the
-feed kind, timestamp, and ID tie-breaker; an invalid or cross-feed cursor
-returns `400`. Consumers should not parse it.
+paginated response includes `hasMore` and `nextCursor`. Opaque cursor v2 binds
+the feed kind, workspace, space, current scope fingerprint, original watermark,
+a database-derived snapshot upper bound, and the last `(timestamp, id)` keyset
+position. Every page stays inside that fixed snapshot. A cursor from another
+feed or scope, a cursor replayed with a different `updatedSince`/`deletedSince`,
+and every legacy v1 cursor return `400 Invalid RAG feed cursor`. Consumers must
+not parse or synthesize cursors.
 
 ## 5. RAG endpoints
 
@@ -395,9 +401,15 @@ through this RAG API and expose its query endpoint to Docmost. The API key used
 by the external indexer and the credential Docmost uses to query that endpoint
 are independent secrets.
 
-Query results never grant access by themselves. The AI backend resolves returned
-Docmost source IDs and re-checks the requesting user's current page access before
-using content or creating citations.
+Query results never grant access by themselves. The AI backend computes the
+allowed source set before the adapter call, resolves returned Docmost source
+IDs, and re-checks their workspace, space, live-object state, exclusion policy,
+and requesting-user ACL after the adapter returns and immediately before model
+use. Dependencies are persisted before provider execution and rechecked during
+streaming and before the final transaction. If access narrows mid-run, generation
+fails with `source_access_changed`; partial content, reasoning, and citations are
+cleared. History applies the same checks to deleted, archived, excluded, and
+replaced sources.
 
 The query adapter keeps a separate SSRF allowlist from both this inbound sync API
 and the model provider. Its full timeout starts before DNS resolution, redirects
@@ -437,11 +449,11 @@ mapping rules. One Knowledge Base maps to one Docmost space. The module:
 - deletes an existing attachment mapping when the file becomes too large or
   its extension is no longer allowed, while retaining mappings on transient
   remote/read errors for a later retry.
-- renews the distributed lock during each cycle and checks the current renewal
-  state before and after remote operations and Redis state writes. Once loss is
-  observed, no further mapping/checkpoint commit is made. The lease does not
-  fence an already in-flight Open WebUI request; the next cycle reconciles any
-  resulting remote artifact from `meta.data.docmost`.
+- renews the distributed binding lease and global slot during each cycle. Lease
+  or slot loss aborts the current HTTP request; abort checks run before and after
+  upload, delete, list, and processing polls. No later external request or
+  unfenced mapping/checkpoint write is allowed. A remote side effect that won
+  the race with cancellation is adopted or removed by metadata reconciliation.
 
 Set `RAG_SYNC_ENABLED=true` to enable the deployment and list every exact writer
 origin in `RAG_SYNC_ALLOWED_ORIGINS`. The remaining deployment env contains only
@@ -466,8 +478,9 @@ built-in writer.
 1. Create API key scoped to the target `spaceId`.
 2. Call `GET /api/rag/scope`, use its `workspaceId` and `spaceId` as the
    authoritative scope, and store its fingerprint.
-3. Page through `GET /api/rag/pages?includeContent=true&limit=500`, following
-   `nextCursor` until `hasMore=false`.
+3. Page through `GET /api/rag/pages?includeContent=true&limit=500`, retaining
+   the original request watermark (where applicable) and following `nextCursor`
+   until `hasMore=false`.
 4. For each document:
    - `type=page` -> index as page
    - `type=database` -> call `GET /api/rag/databases/:databaseIdOrPageSlug`
@@ -489,11 +502,13 @@ built-in writer.
 3. Upsert updated documents:
    - `type=page` -> `GET /api/rag/pages/:id?includeContent=true`
    - `type=database` -> `GET /api/rag/databases/:databaseIdOrPageSlug`
-4. Follow `nextCursor` while `hasMore=true`
+4. Follow `nextCursor` while `hasMore=true`, always repeating the original
+   `updatedSince`/`deletedSince` value for that snapshot
 5. Process `/api/rag/attachments/updates` using its own checkpoint
 6. Process `/api/rag/deleted` and `/api/rag/attachments/deleted`
 7. Delete/deactivate tombstoned records in the index
-8. Update each checkpoint only after its complete feed page succeeds:
+8. Update each checkpoint only after the complete snapshot reaches
+   `hasMore=false`:
    - `lastUpdatedCheckpoint = maxUpdatedAtMs`
    - `lastDeletedCheckpoint = maxDeletedAtMs`
    - attachment update/delete checkpoints advance independently

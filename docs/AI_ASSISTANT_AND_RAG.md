@@ -64,6 +64,7 @@ The main components are:
 | `AiCitationService`                      | source-marker registration, validation, normalization, and context fallback                 |
 | `OpenAiCompatibleProviderService`        | requests and streaming against an OpenAI-compatible provider                                |
 | `AiRetrievalService`                     | safe query-time retrieval and reauthorization of returned sources                           |
+| `AiSourceAccessService`                  | shared live source, ACL, workspace/space, and exclusion guard for retrieval and history      |
 | `AiFileService`                          | uploads, text extraction, images, tombstone deletion, and chat-file cleanup                 |
 | `AiAuxRunService`                        | auxiliary jobs for automatic conversation titles and editor-selection transforms            |
 | `AiToolRegistryService`                  | access-aware tools shared by agent mode and the read-only MCP surface                       |
@@ -481,6 +482,16 @@ policy before its excerpt enters the prompt or becomes a citation. An external
 index is therefore never an authorization authority and cannot expand user
 access.
 
+The source-access guard computes the full allowed set before an outbound
+retrieval call, then rechecks only returned identities after the call and just
+before model use. The run records those page dependencies before provider
+execution and rechecks them before each stream flush, between Agent/model steps,
+and in the final transaction. If a source is deleted, archived, replaced,
+excluded, moved across scope, or becomes unreadable, the run ends with stable
+error `source_access_changed`; response text, reasoning, and citations are
+cleared. Conversation history applies the same live-source policy and presents
+the stored message as access restricted.
+
 An external request is bounded to forty candidates, eight final results by
 default, 16 KiB of text per hit, a 1 MiB serialized request, and a 256 KiB
 response. Malformed, oversized, and non-UUID candidates are rejected
@@ -729,7 +740,11 @@ pool connection. A global semaphore limits concurrent bindings and a
 random-token lease selects one owner per binding across backend replicas.
 Renewal is sequential. Every mapping/checkpoint mutation is a Lua operation
 that verifies the current lease token, so a stale replica cannot commit state.
-Uncertain uploads are found by deterministic operation metadata before retry.
+Loss of either the binding lease or global concurrency slot aborts the current
+quantum. Upload, delete, list, and processing-poll boundaries check the signal
+before and after I/O; after observed loss the runtime starts no new remote work
+and performs no unfenced state write. Uncertain side effects are found by
+deterministic operation metadata before retry.
 
 Reconciliation runs on first use, after state loss, target/scope change, and
 periodically. It accepts legacy schema-v1 metadata for adoption and cleanup but
@@ -1291,7 +1306,11 @@ cookies are rejected, and API keys are rejected outside `/api/rag/*`. The key
 contains `workspaceId`, `spaceId`, `apiKeyId`, and `sub`; key scope, current
 creator membership, page ACL, and the content policy bound all live data.
 Cursor feeds are at least once, so consumers must perform idempotent
-upsert/delete operations.
+upsert/delete operations. Opaque cursor v2 is bound to the feed, workspace,
+space, scope fingerprint, original watermark, database-derived snapshot upper
+bound, and last `(timestamp, id)` position. A watermark advances only on the
+terminal page; v1, cross-feed, cross-scope, or changed-watermark cursors fail
+with `400 Invalid RAG feed cursor`.
 
 | Path                                                            | Data                                                               |
 | --------------------------------------------------------------- | ------------------------------------------------------------------ |
@@ -1413,3 +1432,6 @@ Content and context additions include `ai_context_resolved_source_limit`,
 codes include `retrieval_request_too_large`, `retrieval_timeout`,
 `retrieval_unavailable`, `retrieval_url_rejected`,
 `retrieval_invalid_response`, and `retrieval_collection_unavailable`.
+`source_access_changed` means a previously accepted source became inaccessible
+during execution; clients discard streamed state and reload the scrubbed,
+access-restricted message.

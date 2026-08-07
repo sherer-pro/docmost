@@ -1,0 +1,40 @@
+name: Open WebUI RAG compatibility
+
+on:
+  schedule:
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compatibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Run pinned Open WebUI compatibility suite
+        run: node scripts/run-rag-open-webui-compat.mjs
+
+      - name: Capture Open WebUI logs
+        if: failure()
+        run: |
+          mkdir -p output/audit
+          docker compose -f tests/rag-sync/compose.yml --profile real-open-webui logs --no-color open-webui > output/audit/open-webui.log 2>&1 || true
+
+      - name: Upload compatibility artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rag-open-webui-compatibility
+          path: output/audit
+          if-no-files-found: ignore
+          retention-days: 7

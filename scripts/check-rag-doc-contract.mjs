@@ -17,6 +17,10 @@ const [inventoryText, collectionText] = await Promise.all([
 ]);
 const collection = JSON.parse(collectionText);
 
+if (!collection.info?.description?.includes('opaque cursor v2')) {
+  throw new Error('Postman collection does not document opaque cursor v2');
+}
+
 const inventoryRoutes = new Set(
   inventoryText
     .split(/\r?\n/)
@@ -81,6 +85,27 @@ for (const expectedPath of ['api-keys', 'api-keys/create']) {
   }
   if ('adminView' in body) {
     throw new Error(`API-key example uses retired adminView: ${item.name}`);
+  }
+}
+
+const cursorFeeds = [
+  'rag/updates',
+  'rag/deleted',
+  'rag/attachments/updates',
+  'rag/attachments/deleted',
+];
+for (const expectedPath of cursorFeeds) {
+  const item = requests.find(
+    (candidate) => candidate.request?.url?.path?.join('/') === expectedPath,
+  );
+  if (!item?.request?.description?.includes('hasMore=false')) {
+    throw new Error(`Cursor feed omits terminal watermark semantics: ${expectedPath}`);
+  }
+  const script = (item.event ?? [])
+    .flatMap((event) => event.script?.exec ?? [])
+    .join('\n');
+  if (!script.includes('hasMore === false')) {
+    throw new Error(`Cursor feed advances its watermark before terminal page: ${expectedPath}`);
   }
 }
 

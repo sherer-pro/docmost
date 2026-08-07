@@ -44,6 +44,10 @@ rag-sync.config.json
 **/OPEN_WEBUI_KEY
 secrets/
 /graphify-out
+/output
+/tmp
+# Retired local standalone-worker artifacts are not part of the embedded runtime.
+/apps/rag-sync
 *.log
 npm-debug.log*
 pnpm-debug.log*
