@@ -1363,7 +1363,6 @@
         "policy_changed": "도구 정책 변경됨"
       }
     },
-
     "ragSync": {
       "title": "Open WebUI 동기화",
       "description": "모델 및 검색 설정과 별도로 이 공간에서 허용된 AI 콘텐츠를 전용 Knowledge Base에 게시합니다.",
@@ -1444,7 +1443,6 @@
         "unknown": "RAG 동기화 요청에 실패했습니다."
       }
     },
-
     "adminGuide": {
       "tab": "가이드",
       "title": "AI, RAG 및 MCP 작동 방식",

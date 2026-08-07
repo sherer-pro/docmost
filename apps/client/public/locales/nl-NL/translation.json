@@ -1363,7 +1363,6 @@
         "policy_changed": "Hulpmiddelenbeleid gewijzigd"
       }
     },
-
     "ragSync": {
       "title": "Open WebUI-synchronisatie",
       "description": "Publiceert toegestane AI-inhoud van deze ruimte naar een eigen Knowledge Base, los van model en zoeken.",
@@ -1444,7 +1443,6 @@
         "unknown": "De RAG-synchronisatieaanvraag is mislukt."
       }
     },
-
     "adminGuide": {
       "tab": "Handleiding",
       "title": "Hoe AI, RAG en MCP werken",

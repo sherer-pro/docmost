@@ -1363,7 +1363,6 @@
         "policy_changed": "Tool policy changed"
       }
     },
-
     "ragSync": {
       "title": "Open WebUI synchronization",
       "description": "Continuously publish this space's allowed AI content to its own Open WebUI Knowledge Base. This is independent of the model and space-search settings.",
@@ -1444,7 +1443,6 @@
         "unknown": "The RAG synchronization request failed. Try again."
       }
     },
-
     "adminGuide": {
       "tab": "Guide",
       "title": "How AI, RAG, and MCP work",

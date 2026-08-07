@@ -1363,7 +1363,6 @@
         "policy_changed": "ツールポリシーが変更されました"
       }
     },
-
     "ragSync": {
       "title": "Open WebUI 同期",
       "description": "モデルや検索設定とは独立して、このスペースで許可された AI コンテンツを専用の Knowledge Base に公開します。",
@@ -1444,7 +1443,6 @@
         "unknown": "RAG 同期リクエストに失敗しました。"
       }
     },
-
     "adminGuide": {
       "tab": "ガイド",
       "title": "AI、RAG、MCP の仕組み",
