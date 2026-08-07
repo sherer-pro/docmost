@@ -14,7 +14,7 @@ vi.mock("react-i18next", () => ({
         "ai.composer.mode": "Assistant mode",
         "ai.composer.chat": "Chat",
         "ai.agent.mode": "Agent",
-        "ai.agent.modeDescription": "Agent mode description",
+        "ai.agent.modeDescription": "Chat answers questions. Agent searches and suggests edits.",
       })[key] ?? key,
   }),
 }));
