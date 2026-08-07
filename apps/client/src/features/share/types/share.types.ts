@@ -6,7 +6,6 @@ export interface IShare {
   pageId: string;
   includeSubPages: boolean;
   searchIndexing: boolean;
-  allowPublicLiveEmbed: boolean;
   creatorId: string;
   spaceId: string;
   workspaceId: string;
@@ -62,7 +61,6 @@ export interface ICreateShare {
   pageId?: string;
   includeSubPages?: boolean;
   searchIndexing?: boolean;
-  allowPublicLiveEmbed?: boolean;
 }
 
 export type IUpdateShare = ICreateShare & { shareId: string; pageId?: string };

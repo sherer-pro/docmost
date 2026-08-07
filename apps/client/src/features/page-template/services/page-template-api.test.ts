@@ -5,7 +5,9 @@ import api from "@/lib/api-client";
 import {
   discoverPageTemplates,
   getPageTemplateDestinations,
-  insertPageEmbed,
+  createPageFromTemplate,
+  hashProseMirrorJson,
+  preflightPageTemplatePublish,
 } from "./page-template-api";
 
 vi.mock("@/lib/api-client", () => ({
@@ -25,26 +27,24 @@ describe("page template idempotency", () => {
   it("reuses the same key after a lost response and clears it after success", async () => {
     post
       .mockRejectedValueOnce(new Error("network"))
-      .mockResolvedValueOnce({ data: { referenceNodeId: "node" } } as any)
-      .mockResolvedValueOnce({ data: { referenceNodeId: "node-2" } } as any);
+      .mockResolvedValueOnce({ data: { page: { id: "page" } } } as any)
+      .mockResolvedValueOnce({ data: { page: { id: "page-2" } } } as any);
     const request = {
-      consumerPageId: "consumer",
-      sourcePageId: "source",
-      from: 1,
-      to: 1,
-      baseContentHash: "a".repeat(64),
+      templatePageId: "source",
+      spaceId: "space",
+      parentPageId: "parent",
     };
 
-    await expect(insertPageEmbed(request)).rejects.toThrow("network");
-    await expect(insertPageEmbed(request)).resolves.toEqual({
-      referenceNodeId: "node",
+    await expect(createPageFromTemplate(request)).rejects.toThrow("network");
+    await expect(createPageFromTemplate(request)).resolves.toEqual({
+      page: { id: "page" },
     });
 
     const firstKey = post.mock.calls[0][2]?.headers?.["Idempotency-Key"];
     const retryKey = post.mock.calls[1][2]?.headers?.["Idempotency-Key"];
     expect(retryKey).toBe(firstKey);
 
-    await insertPageEmbed(request);
+    await createPageFromTemplate(request);
     const nextOperationKey =
       post.mock.calls[2][2]?.headers?.["Idempotency-Key"];
     expect(nextOperationKey).not.toBe(firstKey);
@@ -76,5 +76,23 @@ describe("page template idempotency", () => {
     expect(get).toHaveBeenNthCalledWith(2, "/pages/templates/destinations", {
       params: { spaceId: "space-1", query: "parent", limit: 50 },
     });
+  });
+
+  it("requests a publication preflight from the live collaboration draft", async () => {
+    post.mockResolvedValue({ data: { draftHash: "hash" } } as any);
+
+    await preflightPageTemplatePublish("page-1");
+
+    expect(post).toHaveBeenCalledWith(
+      "/pages/templates/page-1/actions/preflight-publish",
+    );
+  });
+
+  it("uses the same binary key order as the server content hash", async () => {
+    await expect(
+      hashProseMirrorJson({ type: "doc", a: 3, _meta: 2, A: 1 }),
+    ).resolves.toBe(
+      "6c58be2700954cd9d08e3601c25b522fede504bfb50a88dbed6d76024bf18a29",
+    );
   });
 });

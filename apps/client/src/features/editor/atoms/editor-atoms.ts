@@ -21,4 +21,6 @@ export const readOnlyEditorAtom = atom<Editor | null>(
 
 export const yjsConnectionStatusAtom = atom<string>("");
 
+export const pageEditorUnsyncedChangesAtom = atom<number>(0);
+
 export const activePageUsersAtom = atom<IActivePageUser[]>([]);

@@ -39,7 +39,8 @@ export interface IPage {
   spaceId: string;
   workspaceId: string;
   isLocked: boolean;
-  isTemplate: boolean;
+  templateKind: "regular" | "synced" | null;
+  templateArchivedAt: string | null;
   lastUpdatedById: string;
   createdAt: Date;
   updatedAt: Date;

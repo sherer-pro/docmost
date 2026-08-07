@@ -32,6 +32,7 @@ type SurfaceCard = {
   color: string;
   descriptionKey: string;
   icon: TablerIcon;
+  noteKey?: string;
   titleKey: string;
 };
 
@@ -52,12 +53,14 @@ const SURFACES: SurfaceCard[] = [
     color: "teal",
     descriptionKey: "ai.adminGuide.ragDescription",
     icon: IconDatabase,
+    noteKey: "ai.adminGuide.templateExportScope",
     titleKey: "ai.integrations.ragTitle",
   },
   {
     color: "cyan",
     descriptionKey: "ai.ragSync.description",
     icon: IconRefresh,
+    noteKey: "ai.adminGuide.templateExportScope",
     titleKey: "ai.ragSync.title",
   },
   {
@@ -170,6 +173,11 @@ export default function AiAdminGuide() {
                   <Text size="sm" c="dimmed">
                     {t(surface.descriptionKey)}
                   </Text>
+                  {surface.noteKey && (
+                    <Text size="xs" c="dimmed">
+                      {t(surface.noteKey)}
+                    </Text>
+                  )}
                 </Stack>
               </Card>
             );

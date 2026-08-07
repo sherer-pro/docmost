@@ -1,40 +1,22 @@
 import api from "@/lib/api-client";
 import type {
-  PageEmbedLookup,
   PageTemplateCapabilities,
   PageTemplateDestination,
   PageTemplateDiscoveryItem,
+  PageTemplateProvenance,
+  TemplateKind,
+  TemplatePublishPreflight,
+  TemplateRevision,
+  TemplateSyncRun,
 } from "../types/page-template.types";
-
-export async function lookupPageEmbeds(params: {
-  sourcePageIds: string[];
-  referencePageId?: string;
-  shareId?: string;
-}): Promise<{ items: PageEmbedLookup[]; maxDepth: number }> {
-  const body = {
-    ...(params.shareId ? { shareId: params.shareId } : {}),
-    ...(params.referencePageId
-      ? { referencePageId: params.referencePageId }
-      : {}),
-    references: params.sourcePageIds.map((sourcePageId) => ({
-      kind: "page" as const,
-      sourcePageId,
-    })),
-  };
-  const response = await api.post(
-    params.shareId
-      ? "/shares/transclusion/lookup"
-      : "/pages/transclusion/lookup",
-    body,
-  );
-  return response.data;
-}
 
 export async function discoverPageTemplates(params: {
   query?: string;
   spaceId: string;
   cursor?: string;
   limit?: number;
+  kind?: TemplateKind;
+  includeArchived?: boolean;
 }): Promise<{
   items: PageTemplateDiscoveryItem[];
   nextCursor: string | null;
@@ -47,8 +29,17 @@ export async function discoverPageTemplates(params: {
 export async function createPageTemplate(params: {
   spaceId: string;
   title?: string;
+  kind: TemplateKind;
+  sourcePageId?: string;
 }) {
   const response = await api.post("/pages/templates/actions/create", params);
+  return response.data;
+}
+
+export async function getPageTemplateProvenance(
+  pageId: string,
+): Promise<PageTemplateProvenance> {
+  const response = await api.get(`/pages/templates/${pageId}/provenance`);
   return response.data;
 }
 
@@ -61,13 +52,6 @@ export async function getPageTemplateDestinations(params: {
   return response.data;
 }
 
-export async function setPageTemplate(pageId: string, enabled: boolean) {
-  const response = await api.post(`/pages/${pageId}/actions/set-template`, {
-    enabled,
-  });
-  return response.data as { pageId: string; isTemplate: boolean };
-}
-
 export async function createPageFromTemplate(params: {
   templatePageId: string;
   spaceId: string;
@@ -77,52 +61,110 @@ export async function createPageFromTemplate(params: {
   return postIdempotent("/pages/actions/create-from-template", params);
 }
 
-export async function insertPageEmbed(params: {
-  consumerPageId: string;
-  sourcePageId: string;
-  from: number;
-  to: number;
-  baseContentHash: string;
-}) {
-  return postIdempotent(
-    "/pages/transclusion/actions/insert-page-embed",
-    params,
+export async function preflightPageTemplatePublish(
+  pageId: string,
+): Promise<TemplatePublishPreflight> {
+  const response = await api.post(
+    `/pages/templates/${pageId}/actions/preflight-publish`,
   );
+  return response.data;
 }
 
-export async function detachPageEmbed(params: {
-  consumerPageId: string;
-  referenceNodeId: string;
+export async function publishPageTemplate(params: {
+  pageId: string;
+  draftHash: string;
+  confirmationToken?: string;
+}): Promise<{ revision: TemplateRevision; syncRun: TemplateSyncRun }> {
+  const response = await api.post(
+    `/pages/templates/${params.pageId}/actions/publish`,
+    {
+      draftHash: params.draftHash,
+      confirmationToken: params.confirmationToken,
+    },
+  );
+  return response.data;
+}
+
+export async function getPageTemplateRevisions(
+  pageId: string,
+): Promise<{ items: Array<TemplateRevision & { content: unknown }> }> {
+  const response = await api.get(`/pages/templates/${pageId}/revisions`);
+  return response.data;
+}
+
+export async function getPageTemplateSyncRuns(
+  pageId: string,
+): Promise<{ items: TemplateSyncRun[] }> {
+  const response = await api.get(`/pages/templates/${pageId}/sync-runs`);
+  return response.data;
+}
+
+export async function retryPageTemplateSyncRun(
+  pageId: string,
+  runId: string,
+) {
+  const response = await api.post(
+    `/pages/templates/${pageId}/sync-runs/${runId}/actions/retry`,
+  );
+  return response.data as { accepted: true; runId: string };
+}
+
+export async function archivePageTemplate(pageId: string) {
+  const response = await api.post(
+    `/pages/templates/${pageId}/actions/archive`,
+  );
+  return response.data as { pageId: string; archived: true };
+}
+
+export async function detachSyncedPageTemplate(params: {
+  pageId: string;
   baseContentHash: string;
 }) {
-  return postIdempotent(
-    "/pages/transclusion/actions/detach-page-embed",
-    params,
+  return postIdempotent(`/pages/${params.pageId}/actions/detach-template`, {
+    confirmed: true,
+    baseContentHash: params.baseContentHash,
+  });
+}
+
+export async function getPageTemplateUsages(pageId: string) {
+  const response = await api.get(
+    `/pages/templates/${pageId}/actions/usages`,
   );
+  return response.data as {
+    totalCount: number;
+    hiddenCount: number;
+    items: Array<{
+      childPageId: string;
+      slugId: string;
+      title: string | null;
+      icon: string | null;
+      status: string;
+      appliedRevision: number | null;
+      updatedAt: string;
+    }>;
+  };
 }
 
 export type PageTemplateWorkspacePolicy = {
   enabled: boolean;
   revision: number;
   systemEnabled: boolean;
-  maxPageEmbedDepth: number;
 };
 
 export type PageTemplateSpacePolicy = {
   spaceId: string;
   templatesEnabled: boolean;
   allowCreateTemplate: boolean;
-  allowSnapshot: boolean;
-  allowLiveEmbed: boolean;
-  allowPublicLiveEmbed: boolean;
+  allowRegularTemplate: boolean;
+  allowSyncedTemplate: boolean;
   revision: number;
 };
 
 export type PageTemplateAction =
   | "create_template"
   | "manage_template"
-  | "use_snapshot"
-  | "use_live_embed";
+  | "use_regular_template"
+  | "use_synced_template";
 
 export type PageTemplateGroupPolicy = {
   groupId: string;
@@ -197,7 +239,7 @@ function canonicalJson(value: unknown): string {
   }
   return `{${Object.entries(value as Record<string, unknown>)
     .filter(([, item]) => item !== undefined)
-    .sort(([left], [right]) => left.localeCompare(right))
+    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
     .map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`)
     .join(",")}}`;
 }

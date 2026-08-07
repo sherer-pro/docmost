@@ -14,6 +14,8 @@ import { Button } from "@mantine/core";
 import { Link } from "react-router-dom";
 import { ErrorBoundary } from "react-error-boundary";
 import DocumentFieldsPanel from "@/features/page/components/document-fields/document-fields-panel.tsx";
+import { TemplateEditingAlert } from "@/features/page/components/template-editing-alert.tsx";
+import { TemplateInstanceAlert } from "@/features/page/components/template-instance-alert.tsx";
 import { useAtom } from "jotai";
 import { asideStateAtom } from "@/components/layouts/global/hooks/atoms/sidebar-atom.ts";
 import PageCommentSection from "@/features/comment/components/page-comment-section";
@@ -147,6 +149,17 @@ function PageContent({
 
         <MemoizedFullEditor
           key={page.id}
+          notice={
+            page.templateKind ? (
+              <TemplateEditingAlert
+                pageId={page.id}
+                kind={page.templateKind}
+                editable={canWritePage}
+              />
+            ) : (
+              <TemplateInstanceAlert pageId={page.id} editable={canWritePage} />
+            )
+          }
           metaPanel={
             <DocumentFieldsPanel
               page={page}
@@ -174,6 +187,7 @@ function PageContent({
           readingTimeEnabled={
             resolvedSpaceSettings?.documentFields?.readingTime === true
           }
+          templateKind={page.templateKind}
           editable={canWritePage}
         />
         <MemoizedHistoryModal pageId={page.id} />

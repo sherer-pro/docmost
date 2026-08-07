@@ -98,7 +98,6 @@ export default function ShareModal({
         pageId: pageId,
         includeSubPages: true,
         searchIndexing: false,
-        allowPublicLiveEmbed: false,
       });
       setIsPagePublic(value);
     } else {
@@ -126,15 +125,6 @@ export default function ShareModal({
     updateShareMutation.mutateAsync({
       shareId: share.id,
       searchIndexing: value,
-    });
-  };
-
-  const handlePublicLiveEmbedChange = async (
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) => {
-    updateShareMutation.mutateAsync({
-      shareId: share.id,
-      allowPublicLiveEmbed: event.currentTarget.checked,
     });
   };
 
@@ -279,21 +269,6 @@ export default function ShareModal({
                     aria-label={t("Search engine indexing")}
                     onChange={handleIndexSearchChange}
                     checked={share.searchIndexing}
-                    size="xs"
-                    disabled={readOnly}
-                  />
-                </Group>
-                <Group justify="space-between" wrap="nowrap" gap="xl" mt="sm">
-                  <div>
-                    <Text size="sm">{t("Public live page embeds")}</Text>
-                    <Text size="xs" c="dimmed">
-                      {t("Render allowed live template pages in this public share")}
-                    </Text>
-                  </div>
-                  <Switch
-                    aria-label={t("Public live page embeds")}
-                    onChange={handlePublicLiveEmbedChange}
-                    checked={share.allowPublicLiveEmbed}
                     size="xs"
                     disabled={readOnly}
                   />

@@ -15,6 +15,7 @@ import {
   WebSocketStatus,
   HocuspocusProviderWebsocket,
   onSyncedParameters,
+  onUnsyncedChangesParameters,
 } from "@hocuspocus/provider";
 import {
   Editor,
@@ -36,6 +37,7 @@ import {
 import {
   activePageUsersAtom,
   pageEditorAtom,
+  pageEditorUnsyncedChangesAtom,
   yjsConnectionStatusAtom,
 } from "@/features/editor/atoms/editor-atoms";
 import CommentDialog from "@/features/comment/components/comment-dialog";
@@ -76,12 +78,13 @@ import {
 import { useDictionaryTermsQuery } from "@/features/dictionary/queries/dictionary-query";
 import { createDictionaryMatcherIndex } from "@/features/dictionary/utils/dictionary-matcher";
 import { TransclusionLookupProvider } from "@/features/editor/components/transclusion/transclusion-lookup-context";
-import { PageEmbedLookupProvider } from "@/features/editor/components/page-embed/page-embed-lookup-context";
 import { PageTemplatePicker } from "@/features/page-template/components/page-template-picker";
 import { FixedToolbar } from "@/features/editor/components/fixed-toolbar/fixed-toolbar";
 import { getEnabledTagDefinitions } from "@/features/editor/components/tag/tag-settings";
 import { getUserColor } from "@/features/editor/extensions/utils.ts";
 import { useTranslation } from "react-i18next";
+import type { TemplateKind } from "@docmost/api-contract";
+import { TemplateBlockToolbar } from "@/features/editor/components/page-template/template-block-toolbar";
 
 interface PageEditorProps {
   pageId: string;
@@ -96,6 +99,7 @@ interface PageEditorProps {
   canCreateInlineComments?: boolean;
   headingNumberingEnabled?: boolean;
   spaceHeadingNumberingEnabled?: boolean;
+  templateKind?: TemplateKind | null;
 }
 
 export default function PageEditor({
@@ -111,6 +115,7 @@ export default function PageEditor({
   canCreateInlineComments = editable,
   headingNumberingEnabled = false,
   spaceHeadingNumberingEnabled = false,
+  templateKind = null,
 }: PageEditorProps) {
   const { t } = useTranslation();
   const collaborationURL = useCollaborationUrl();
@@ -129,6 +134,7 @@ export default function PageEditor({
   const [workspace] = useAtom(workspaceAtom);
   const [, setEditor] = useAtom(pageEditorAtom);
   const [, setActivePageUsers] = useAtom(activePageUsersAtom);
+  const [, setUnsyncedChanges] = useAtom(pageEditorUnsyncedChangesAtom);
   const [isLocalSynced, setIsLocalSynced] = useState(false);
   const [isRemoteSynced, setIsRemoteSynced] = useState(false);
   const [yjsConnectionStatus, setYjsConnectionStatus] = useAtom(
@@ -287,6 +293,11 @@ export default function PageEditor({
       const onSyncedHandler = (event: onSyncedParameters) => {
         setIsRemoteSynced(event.state);
       };
+      const onUnsyncedChangesHandler = (
+        event: onUnsyncedChangesParameters,
+      ) => {
+        setUnsyncedChanges(event.number);
+      };
       let authRefreshInFlight = false;
       const onAuthenticationFailedHandler = async () => {
         if (authRefreshInFlight || !isComponentMounted.current) {
@@ -332,6 +343,7 @@ export default function PageEditor({
         onAuthenticationFailed: onAuthenticationFailedHandler,
         onStatus: onStatusHandler,
         onSynced: onSyncedHandler,
+        onUnsyncedChanges: onUnsyncedChangesHandler,
       });
 
       /**
@@ -382,6 +394,7 @@ export default function PageEditor({
         clearTimeout(reconnectTimeout);
       }
       setActivePageUsers([]);
+      setUnsyncedChanges(0);
       providersRef.current?.socket.destroy();
       providersRef.current?.remote.destroy();
       providersRef.current?.local.destroy();
@@ -393,6 +406,7 @@ export default function PageEditor({
     hasCollabToken,
     pageId,
     setActivePageUsers,
+    setUnsyncedChanges,
     setYjsConnectionStatus,
   ]);
 
@@ -484,6 +498,7 @@ export default function PageEditor({
           setEditor(editor);
           // @ts-ignore
           editor.storage.pageId = pageId;
+          (editor.storage as any).templateKind = templateKind;
           handleScrollTo(editor);
           editorRef.current = editor;
         }
@@ -613,35 +628,35 @@ export default function PageEditor({
   if (showStatic) {
     return (
       <>
-      <TransclusionLookupProvider>
-        <PageEmbedLookupProvider referencePageId={pageId}>
-        <DictionaryHighlightLayer terms={activeDictionaryTerms}>
-          <EditorProvider
-            key={staticContentKey}
-            editable={false}
-            immediatelyRender={true}
-            extensions={staticContentExtensions}
-            content={content}
-            onCreate={({ editor: staticEditor }) => {
-              staticEditor.commands.setHeadingNumberingEnabled(
-                headingNumberingEnabled,
-              );
-            }}
-          />
-        </DictionaryHighlightLayer>
-        </PageEmbedLookupProvider>
-      </TransclusionLookupProvider>
-      <PageTemplatePicker pageId={pageId} spaceId={spaceId} />
+        <TransclusionLookupProvider>
+          <DictionaryHighlightLayer terms={activeDictionaryTerms}>
+            <EditorProvider
+              key={staticContentKey}
+              editable={false}
+              immediatelyRender={true}
+              extensions={staticContentExtensions}
+              content={content}
+              onCreate={({ editor: staticEditor }) => {
+                staticEditor.commands.setHeadingNumberingEnabled(
+                  headingNumberingEnabled,
+                );
+              }}
+            />
+          </DictionaryHighlightLayer>
+        </TransclusionLookupProvider>
+        <PageTemplatePicker pageId={pageId} spaceId={spaceId} />
       </>
     );
   }
 
   return (
     <>
-    <TransclusionLookupProvider>
-      <PageEmbedLookupProvider referencePageId={pageId}>
-      <div className="editor-container" style={{ position: "relative" }}>
+      <TransclusionLookupProvider>
+        <div className="editor-container" style={{ position: "relative" }}>
         <div ref={menuContainerRef}>
+          {editor && editorIsEditable && templateKind === "synced" && (
+            <TemplateBlockToolbar editor={editor} />
+          )}
           {editor && editorIsEditable && fixedToolbarEnabled && (
             <>
               <FixedToolbar
@@ -704,10 +719,9 @@ export default function PageEditor({
             style={{ paddingBottom: "20vh" }}
           ></div>
         )}
-      </div>
-      </PageEmbedLookupProvider>
-    </TransclusionLookupProvider>
-    <PageTemplatePicker pageId={pageId} spaceId={spaceId} />
+        </div>
+      </TransclusionLookupProvider>
+      <PageTemplatePicker pageId={pageId} spaceId={spaceId} />
     </>
   );
 }

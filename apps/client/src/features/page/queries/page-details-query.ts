@@ -7,6 +7,7 @@ import {
   getPageLabels,
   removePageLabel,
 } from "@/features/page/services/page-service";
+import { getPageTemplateProvenance } from "@/features/page-template/services/page-template-api";
 
 export const PAGE_DETAILS_QUERY_KEYS = {
   labels: (pageId?: string) => ["page-details", "labels", pageId] as const,
@@ -14,6 +15,8 @@ export const PAGE_DETAILS_QUERY_KEYS = {
     ["page-details", "backlinks-count", pageId] as const,
   backlinks: (pageId?: string, direction?: BacklinkDirection) =>
     ["page-details", "backlinks", pageId, direction] as const,
+  templateProvenance: (pageId?: string) =>
+    ["page-details", "template-provenance", pageId] as const,
 };
 
 export function usePageLabelsQuery(pageId?: string, enabled = true) {
@@ -69,6 +72,17 @@ export function useBacklinksQuery(
   return useQuery({
     queryKey: PAGE_DETAILS_QUERY_KEYS.backlinks(pageId, direction),
     queryFn: () => getBacklinks({ pageId: pageId!, direction }),
+    enabled: enabled && !!pageId,
+  });
+}
+
+export function usePageTemplateProvenanceQuery(
+  pageId?: string,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: PAGE_DETAILS_QUERY_KEYS.templateProvenance(pageId),
+    queryFn: () => getPageTemplateProvenance(pageId!),
     enabled: enabled && !!pageId,
   });
 }
