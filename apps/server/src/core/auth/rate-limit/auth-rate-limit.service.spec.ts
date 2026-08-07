@@ -1,7 +1,10 @@
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Test } from '@nestjs/testing';
 import { EnvironmentService } from '../../../integrations/environment/environment.service';
-import { AuthRateLimitService } from './auth-rate-limit.service';
+import {
+  AUTH_RATE_LIMIT_REDIS_OPTIONS,
+  AuthRateLimitService,
+} from './auth-rate-limit.service';
 
 type StorageMode = 'memory' | 'redis';
 
@@ -104,6 +107,14 @@ describe('AuthRateLimitService', () => {
       redisClient as any,
     );
   }
+
+  it('queues the first command while the lazy Redis connection becomes ready', () => {
+    expect(AUTH_RATE_LIMIT_REDIS_OPTIONS).toMatchObject({
+      lazyConnect: true,
+      enableOfflineQueue: true,
+      maxRetriesPerRequest: 1,
+    });
+  });
 
   it('is resolved by Nest DI without explicit Redis provider', async () => {
     const moduleRef = await Test.createTestingModule({
