@@ -1,6 +1,8 @@
 import api from "@/lib/api-client";
 import type {
   PageEmbedLookup,
+  PageTemplateCapabilities,
+  PageTemplateDestination,
   PageTemplateDiscoveryItem,
 } from "../types/page-template.types";
 
@@ -30,11 +32,32 @@ export async function lookupPageEmbeds(params: {
 
 export async function discoverPageTemplates(params: {
   query?: string;
-  spaceId?: string;
+  spaceId: string;
   cursor?: string;
   limit?: number;
-}): Promise<{ items: PageTemplateDiscoveryItem[]; nextCursor: string | null }> {
+}): Promise<{
+  items: PageTemplateDiscoveryItem[];
+  nextCursor: string | null;
+  capabilities: PageTemplateCapabilities;
+}> {
   const response = await api.get("/pages/templates", { params });
+  return response.data;
+}
+
+export async function createPageTemplate(params: {
+  spaceId: string;
+  title?: string;
+}) {
+  const response = await api.post("/pages/templates/actions/create", params);
+  return response.data;
+}
+
+export async function getPageTemplateDestinations(params: {
+  spaceId: string;
+  query?: string;
+  limit?: number;
+}): Promise<{ rootAllowed: boolean; items: PageTemplateDestination[] }> {
+  const response = await api.get("/pages/templates/destinations", { params });
   return response.data;
 }
 

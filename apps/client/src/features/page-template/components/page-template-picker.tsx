@@ -68,7 +68,11 @@ export function PageTemplatePicker({
     if (!request) return;
     let cancelled = false;
     setLoading(true);
-    discoverPageTemplates({ query: debouncedQuery || undefined, limit: 50 })
+    discoverPageTemplates({
+      spaceId,
+      query: debouncedQuery || undefined,
+      limit: 50,
+    })
       .then((result) => {
         if (!cancelled) {
           setItems(result.items);
@@ -87,13 +91,14 @@ export function PageTemplatePicker({
     return () => {
       cancelled = true;
     };
-  }, [debouncedQuery, request]);
+  }, [debouncedQuery, request, spaceId]);
 
   const loadMore = async () => {
     if (!nextCursor || loading) return;
     setLoading(true);
     try {
       const result = await discoverPageTemplates({
+        spaceId,
         query: debouncedQuery || undefined,
         cursor: nextCursor,
         limit: 50,

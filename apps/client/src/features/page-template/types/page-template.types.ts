@@ -27,3 +27,18 @@ export type PageTemplateDiscoveryItem = {
   recent: boolean;
   actions: { snapshot: boolean; liveEmbed: boolean; manage: boolean };
 };
+
+export type PageTemplateCapabilities = {
+  enabled: boolean;
+  createTemplate: boolean;
+  useSnapshot: boolean;
+  useLiveEmbed: boolean;
+};
+
+export type PageTemplateDestination = {
+  id: string;
+  slugId: string;
+  title: string | null;
+  icon: string | null;
+  parentPageId: string | null;
+};

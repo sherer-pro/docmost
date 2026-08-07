@@ -1,0 +1,86 @@
+.list {
+  border-block: 1px solid var(--mantine-color-default-border);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mantine-spacing-md);
+  min-height: 68px;
+  padding: var(--mantine-spacing-sm) 2px;
+  border-bottom: 1px solid var(--mantine-color-default-border);
+}
+
+.row:last-of-type {
+  border-bottom: 0;
+}
+
+.identity,
+.details {
+  min-width: 0;
+}
+
+.identity {
+  flex: 1;
+}
+
+.icon {
+  display: grid;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: var(--mantine-radius-md);
+  background: var(--mantine-color-default-hover);
+}
+
+.title {
+  color: var(--mantine-color-text);
+  text-decoration: none;
+}
+
+.title:hover {
+  text-decoration: underline;
+}
+
+.actions {
+  flex: 0 0 auto;
+}
+
+.destination {
+  width: 100%;
+  min-height: 52px;
+  padding: var(--mantine-spacing-xs) var(--mantine-spacing-sm);
+  border: 1px solid transparent;
+  border-radius: var(--mantine-radius-md);
+}
+
+.destination:hover {
+  background: var(--mantine-color-default-hover);
+}
+
+.destination[data-selected] {
+  border-color: var(--mantine-primary-color-filled);
+  background: var(--mantine-primary-color-light);
+}
+
+.destinationIcon {
+  display: grid;
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+}
+
+@media (max-width: 48em) {
+  .row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .actions {
+    align-self: stretch;
+    justify-content: flex-end;
+  }
+}

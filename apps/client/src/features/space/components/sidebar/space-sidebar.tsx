@@ -19,6 +19,7 @@ import {
   IconPlus,
   IconSquareRoundedPlus,
   IconSettings,
+  IconTemplate,
   IconTrash,
 } from "@tabler/icons-react";
 import classes from "./space-sidebar.module.css";
@@ -320,6 +321,27 @@ export function SpaceSidebar() {
               </UnstyledButton>
             )}
 
+            <UnstyledButton
+              component={Link}
+              to={`/s/${spaceSlug}/templates`}
+              className={clsx(
+                classes.menu,
+                location.pathname.toLowerCase() ===
+                  `/s/${spaceSlug}/templates`.toLowerCase()
+                  ? classes.activeButton
+                  : "",
+              )}
+            >
+              <div className={classes.menuItemInner}>
+                <IconTemplate
+                  size={18}
+                  className={classes.menuItemIcon}
+                  stroke={2}
+                />
+                <span>{t("Templates")}</span>
+              </div>
+            </UnstyledButton>
+
             {customLinks
               .filter((link) => isSafeCustomLinkUrl(link.url))
               .map((link) => {
@@ -517,11 +539,7 @@ function SpaceMenu({
     <>
       <Menu width={200} shadow="md" withArrow>
         <Menu.Target>
-          <Tooltip
-            label={t("Space menu")}
-            withArrow
-            position="top"
-          >
+          <Tooltip label={t("Space menu")} withArrow position="top">
             <ActionIcon
               variant="default"
               size={PAGE_TREE_ACTION_SIZE}
