@@ -45,11 +45,6 @@ export function PageTemplateWorkspacePolicySettings() {
           <Text size="sm" c="dimmed">
             {t("Spaces remain disabled until explicitly enabled.")}
           </Text>
-          <Text size="xs" c="dimmed" mt={4}>
-            {t("Maximum live embed depth: {{depth}}", {
-              depth: policy.maxPageEmbedDepth,
-            })}
-          </Text>
         </ResponsiveSettingsContent>
         <ResponsiveSettingsControl wide>
           <Checkbox
@@ -121,9 +116,8 @@ export function PageTemplateSpacePolicySettings({
       PageTemplateSpacePolicy,
       | "templatesEnabled"
       | "allowCreateTemplate"
-      | "allowSnapshot"
-      | "allowLiveEmbed"
-      | "allowPublicLiveEmbed"
+      | "allowRegularTemplate"
+      | "allowSyncedTemplate"
     >,
     checked: boolean,
   ) => {
@@ -154,8 +148,8 @@ export function PageTemplateSpacePolicySettings({
   const groupActions = [
     ["create_template", "Enable page templates in this space"],
     ["manage_template", "Allow creating and managing templates"],
-    ["use_snapshot", "Allow creating pages from templates"],
-    ["use_live_embed", "Allow live whole-page embeds"],
+    ["use_regular_template", "Allow using regular templates"],
+    ["use_synced_template", "Allow using synchronized templates"],
   ] as const satisfies ReadonlyArray<readonly [PageTemplateAction, string]>;
   return (
     <Stack gap="xs">
@@ -164,9 +158,8 @@ export function PageTemplateSpacePolicySettings({
         [
           ["templatesEnabled", "Enable page templates in this space"],
           ["allowCreateTemplate", "Allow creating and managing templates"],
-          ["allowSnapshot", "Allow creating pages from templates"],
-          ["allowLiveEmbed", "Allow live whole-page embeds"],
-          ["allowPublicLiveEmbed", "Allow live embeds in public shares"],
+          ["allowRegularTemplate", "Allow using regular templates"],
+          ["allowSyncedTemplate", "Allow using synchronized templates"],
         ] as const
       ).map(([key, label]) => (
         <Checkbox

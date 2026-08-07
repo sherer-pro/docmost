@@ -1,19 +1,31 @@
-import { useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import {
   ActionIcon,
   Anchor,
   Badge,
   Button,
-  Divider,
   Group,
   Modal,
+  Paper,
   SimpleGrid,
+  Skeleton,
   Stack,
   Tabs,
   Text,
   TagsInput,
+  ThemeIcon,
 } from "@mantine/core";
-import { IconPlus, IconX } from "@tabler/icons-react";
+import {
+  IconCalendar,
+  IconCheck,
+  IconFileDescription,
+  IconMinus,
+  IconPencil,
+  IconPlus,
+  IconTemplate,
+  IconUser,
+  IconX,
+} from "@tabler/icons-react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -21,15 +33,15 @@ import {
   useBacklinksCountQuery,
   useBacklinksQuery,
   usePageLabelsQuery,
+  usePageTemplateProvenanceQuery,
   useRemovePageLabelMutation,
 } from "@/features/page/queries/page-details-query";
 import { buildPageUrl } from "@/features/page/page.utils";
 import { BacklinkDirection } from "@/features/page/services/page-service";
 import { IPage } from "@/features/page/types/page.types";
 import { formattedDate } from "@/lib/time";
-import { Trans } from "react-i18next";
-import { useTimeAgo } from "@/hooks/use-time-ago";
 import { useSearchLabelsQuery } from "@/features/search/queries/search-query";
+import { getPageIcon } from "@/lib/utils";
 
 interface PageDetailsModalProps {
   pageId: string;
@@ -114,14 +126,25 @@ export default function PageDetailsModal({
   readOnly,
 }: PageDetailsModalProps) {
   const { t } = useTranslation();
-  const { data: labels } = usePageLabelsQuery(pageId, open);
-  const { data: counts } = useBacklinksCountQuery(pageId, open);
+  const { data: labels, isLoading: labelsLoading } = usePageLabelsQuery(
+    pageId,
+    open,
+  );
+  const { data: counts, isLoading: countsLoading } = useBacklinksCountQuery(
+    pageId,
+    open,
+  );
+  const {
+    data: templateProvenance,
+    isLoading: provenanceLoading,
+    isError: provenanceError,
+  } = usePageTemplateProvenanceQuery(pageId, open);
   const removeLabel = useRemovePageLabelMutation(pageId);
-  const pageUpdatedAt = useTimeAgo(page?.updatedAt ?? new Date());
   const creatorName = page?.creator?.name || t("Unknown");
   const lastUpdatedByName = page?.lastUpdatedBy?.name || t("Unknown");
   const pageStats = useMemo(
-    () => getPageTextStats((page as { content?: unknown } | undefined)?.content),
+    () =>
+      getPageTextStats((page as { content?: unknown } | undefined)?.content),
     [page],
   );
 
@@ -130,98 +153,210 @@ export default function PageDetailsModal({
       opened={open}
       onClose={onClose}
       title={t("Page details")}
-      size="lg"
+      size="xl"
+      centered
+      radius="md"
+      overlayProps={{ backgroundOpacity: 0.45, blur: 2 }}
       closeButtonProps={{ "aria-label": t("Close") }}
     >
-      <Stack gap="lg">
-        {page && (
-          <>
-            <Stack gap={4}>
-              <Text size="sm" c="dimmed" lineClamp={1}>
-                <Trans
-                  defaults="Created by: <b>{{creatorName}}</b>"
-                  values={{ creatorName }}
-                  components={{ b: <Text span fw={500} c="var(--mantine-color-text)" /> }}
-                />
+      <Stack gap="md">
+        <Paper withBorder radius="md" p="md">
+          <Group wrap="nowrap" align="flex-start">
+            <ThemeIcon size={44} radius="md" variant="light" color="gray">
+              {getPageIcon(page?.icon ?? "", 24)}
+            </ThemeIcon>
+            <Stack gap={2} style={{ minWidth: 0, flex: 1 }}>
+              <Text fw={650} size="lg" lineClamp={1}>
+                {page?.title || t("Untitled")}
               </Text>
-              {page.createdAt && (
-                <Text size="sm" c="dimmed">
-                  {t("Created at: {{time}}", {
-                    time: formattedDate(new Date(page.createdAt)),
-                  })}
-                </Text>
-              )}
-              {page.updatedAt && (
-                <Text size="sm" c="dimmed">
-                  {t("Edited by {{name}} {{time}}", {
-                    name: lastUpdatedByName,
-                    time: pageUpdatedAt,
-                  })}
+              {page?.space?.name && (
+                <Text size="sm" c="dimmed" lineClamp={1}>
+                  {page.space.name}
                 </Text>
               )}
             </Stack>
-            <Divider />
-          </>
-        )}
+          </Group>
+        </Paper>
 
-        <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="sm">
-          <Stat label={t("Words")} value={pageStats.words} />
-          <Stat label={t("Characters")} value={pageStats.characters} />
-          <Stat label={t("Backlinks")} value={counts?.incoming ?? 0} />
-          <Stat label={t("Outgoing")} value={counts?.outgoing ?? 0} />
+        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
+          <TemplateStatus
+            icon={<IconTemplate size={20} />}
+            label={t("Template status")}
+            active={Boolean(page?.templateKind)}
+            activeText={
+              page?.templateKind === "synced"
+                ? t("Synchronized template")
+                : t("Regular template")
+            }
+            inactiveText={t("Regular page")}
+            description={
+              page?.templateKind
+                ? t("Changes to this page affect future pages created from it.")
+                : t("This page is not used as a template.")
+            }
+          />
+          <TemplateStatus
+            icon={<IconFileDescription size={20} />}
+            label={t("Created from template")}
+            active={
+              provenanceError
+                ? undefined
+                : templateProvenance?.createdFromTemplate
+            }
+            loading={provenanceLoading}
+            activeText={t("Yes, created from a template")}
+            inactiveText={t("No, created without a template")}
+            unavailableText={t("Status unavailable")}
+            description={
+              templateProvenance?.createdFromTemplate
+                ? t("The page started as a snapshot of a template.")
+                : t("No source template is associated with this page.")
+            }
+          >
+            {templateProvenance?.sourceTemplate?.spaceSlug && (
+              <Anchor
+                component={Link}
+                to={buildPageUrl(
+                  templateProvenance.sourceTemplate.spaceSlug,
+                  templateProvenance.sourceTemplate.slugId,
+                  templateProvenance.sourceTemplate.title ?? undefined,
+                )}
+                size="sm"
+                fw={500}
+              >
+                {t("Source template: {{title}}", {
+                  title:
+                    templateProvenance.sourceTemplate.title || t("Untitled"),
+                })}
+              </Anchor>
+            )}
+          </TemplateStatus>
         </SimpleGrid>
 
-        <Stack gap="xs">
-          <Text fw={500}>{t("Labels")}</Text>
-          <Group gap="xs">
-            {(labels?.items ?? []).map((label) => (
-              <Group key={label.id} gap={2}>
-                <Badge
-                  color={getLabelColor(label.name)}
-                  variant="light"
-                >
-                  {label.name}
-                </Badge>
-                {!readOnly && (
-                  <ActionIcon
-                    size="xs"
-                    variant="subtle"
-                    aria-label={t("Remove label")}
-                    onClick={() => removeLabel.mutate(label.id)}
-                  >
-                    <IconX size={12} />
-                  </ActionIcon>
-                )}
-              </Group>
-            ))}
-            {labels?.items?.length === 0 && (
-              <Text size="sm" c="dimmed">
-                {t("No labels")}
-              </Text>
-            )}
-          </Group>
-          {!readOnly && (
-            <LabelPicker
-              pageId={pageId}
-              spaceId={page?.spaceId}
-              existingLabelNames={(labels?.items ?? []).map((label) => label.name)}
-            />
-          )}
-        </Stack>
-
-        <Tabs defaultValue="incoming">
-          <Tabs.List>
+        <Tabs
+          defaultValue="overview"
+          keepMounted={false}
+          styles={{ tab: { minWidth: 0, paddingInline: 6 } }}
+        >
+          <Tabs.List grow>
+            <Tabs.Tab value="overview">{t("Overview")}</Tabs.Tab>
             <Tabs.Tab value="incoming">
-              {t("Backlinks")} ({counts?.incoming ?? 0})
+              {t("Incoming")} ({counts?.incoming ?? 0})
             </Tabs.Tab>
             <Tabs.Tab value="outgoing">
               {t("Outgoing")} ({counts?.outgoing ?? 0})
             </Tabs.Tab>
           </Tabs.List>
-          <Tabs.Panel value="incoming" pt="sm">
+
+          <Tabs.Panel value="overview" pt="md">
+            <Stack gap="md">
+              {page && (
+                <Paper withBorder radius="md" p="md">
+                  <Text fw={600} mb="sm">
+                    {t("Page activity")}
+                  </Text>
+                  <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
+                    <DetailItem
+                      icon={<IconUser size={18} />}
+                      label={t("Created by")}
+                    >
+                      {creatorName}
+                    </DetailItem>
+                    {page.createdAt && (
+                      <DetailItem
+                        icon={<IconCalendar size={18} />}
+                        label={t("Created at")}
+                      >
+                        {formattedDate(new Date(page.createdAt))}
+                      </DetailItem>
+                    )}
+                    {page.updatedAt && (
+                      <DetailItem
+                        icon={<IconPencil size={18} />}
+                        label={t("Last edited")}
+                      >
+                        {t("Edited by {{name}} {{time}}", {
+                          name: lastUpdatedByName,
+                          time: formattedDate(new Date(page.updatedAt)),
+                        })}
+                      </DetailItem>
+                    )}
+                  </SimpleGrid>
+                </Paper>
+              )}
+
+              <Paper withBorder radius="md" p="md">
+                <Text fw={600} mb="sm">
+                  {t("Content statistics")}
+                </Text>
+                <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="md">
+                  <Stat label={t("Words")} value={pageStats.words} />
+                  <Stat label={t("Characters")} value={pageStats.characters} />
+                  <Stat
+                    label={t("Backlinks")}
+                    value={counts?.incoming ?? 0}
+                    loading={countsLoading}
+                  />
+                  <Stat
+                    label={t("Outgoing")}
+                    value={counts?.outgoing ?? 0}
+                    loading={countsLoading}
+                  />
+                </SimpleGrid>
+              </Paper>
+
+              <Paper withBorder radius="md" p="md">
+                <Stack gap="xs">
+                  <Text fw={600}>{t("Labels")}</Text>
+                  {labelsLoading ? (
+                    <Skeleton height={24} width="40%" />
+                  ) : (
+                    <Group gap="xs">
+                      {(labels?.items ?? []).map((label) => (
+                        <Group key={label.id} gap={2}>
+                          <Badge
+                            color={getLabelColor(label.name)}
+                            variant="light"
+                          >
+                            {label.name}
+                          </Badge>
+                          {!readOnly && (
+                            <ActionIcon
+                              size="xs"
+                              variant="subtle"
+                              aria-label={t("Remove label")}
+                              onClick={() => removeLabel.mutate(label.id)}
+                            >
+                              <IconX size={12} />
+                            </ActionIcon>
+                          )}
+                        </Group>
+                      ))}
+                      {labels?.items?.length === 0 && (
+                        <Text size="sm" c="dimmed">
+                          {t("No labels")}
+                        </Text>
+                      )}
+                    </Group>
+                  )}
+                  {!readOnly && (
+                    <LabelPicker
+                      pageId={pageId}
+                      spaceId={page?.spaceId}
+                      existingLabelNames={(labels?.items ?? []).map(
+                        (label) => label.name,
+                      )}
+                    />
+                  )}
+                </Stack>
+              </Paper>
+            </Stack>
+          </Tabs.Panel>
+
+          <Tabs.Panel value="incoming" pt="md">
             <BacklinkList pageId={pageId} direction="incoming" open={open} />
           </Tabs.Panel>
-          <Tabs.Panel value="outgoing" pt="sm">
+          <Tabs.Panel value="outgoing" pt="md">
             <BacklinkList pageId={pageId} direction="outgoing" open={open} />
           </Tabs.Panel>
         </Tabs>
@@ -230,13 +365,117 @@ export default function PageDetailsModal({
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+function TemplateStatus({
+  icon,
+  label,
+  active,
+  loading,
+  activeText,
+  inactiveText,
+  unavailableText,
+  description,
+  children,
+}: {
+  icon: ReactNode;
+  label: string;
+  active?: boolean;
+  loading?: boolean;
+  activeText: string;
+  inactiveText: string;
+  unavailableText?: string;
+  description: string;
+  children?: ReactNode;
+}) {
+  return (
+    <Paper withBorder radius="md" p="md" h="100%">
+      <Group wrap="nowrap" align="flex-start">
+        <ThemeIcon
+          color={active ? "teal" : "gray"}
+          variant="light"
+          radius="xl"
+          size="lg"
+        >
+          {icon}
+        </ThemeIcon>
+        <Stack gap={5} style={{ minWidth: 0, flex: 1 }}>
+          <Text size="xs" c="dimmed" fw={600} tt="uppercase">
+            {label}
+          </Text>
+          {loading ? (
+            <Skeleton height={22} width="70%" />
+          ) : (
+            <Badge
+              color={active === undefined ? "gray" : active ? "teal" : "gray"}
+              variant={active ? "filled" : "light"}
+              leftSection={
+                active ? <IconCheck size={12} /> : <IconMinus size={12} />
+              }
+              style={{ alignSelf: "flex-start" }}
+            >
+              {active === undefined
+                ? unavailableText
+                : active
+                  ? activeText
+                  : inactiveText}
+            </Badge>
+          )}
+          {!loading && active !== undefined && (
+            <Text size="sm" c="dimmed">
+              {description}
+            </Text>
+          )}
+          {children}
+        </Stack>
+      </Group>
+    </Paper>
+  );
+}
+
+function DetailItem({
+  icon,
+  label,
+  children,
+}: {
+  icon: ReactNode;
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <Group wrap="nowrap" align="flex-start" gap="sm">
+      <ThemeIcon variant="light" color="gray" size="lg" radius="xl">
+        {icon}
+      </ThemeIcon>
+      <Stack gap={1} style={{ minWidth: 0 }}>
+        <Text size="xs" c="dimmed">
+          {label}
+        </Text>
+        <Text size="sm">{children}</Text>
+      </Stack>
+    </Group>
+  );
+}
+
+function Stat({
+  label,
+  value,
+  loading,
+}: {
+  label: string;
+  value: number;
+  loading?: boolean;
+}) {
   return (
     <Stack gap={2}>
       <Text size="xs" c="dimmed">
         {label}
       </Text>
-      <Text fw={600}>{value.toLocaleString()}</Text>
+      {loading ? (
+        <Skeleton height={24} width={48} />
+      ) : (
+        <Text fw={650} size="lg">
+          {value.toLocaleString()}
+        </Text>
+      )}
     </Stack>
   );
 }
@@ -264,17 +503,10 @@ function LabelPicker({
     .filter((label) => !existing.has(normalizeLabelInput(label)));
 
   const submitLabels = () => {
-    const names = [
-      ...pendingLabels,
-      search,
-    ]
+    const names = [...pendingLabels, search]
       .map(normalizeLabelInput)
       .filter((label, index, labels) => {
-        return (
-          label &&
-          !existing.has(label) &&
-          labels.indexOf(label) === index
-        );
+        return label && !existing.has(label) && labels.indexOf(label) === index;
       });
 
     if (names.length === 0) {

@@ -48,6 +48,44 @@
   flex: 0 0 auto;
 }
 
+.kindGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--mantine-spacing-md);
+}
+
+.kindOption {
+  min-height: 142px;
+  padding: var(--mantine-spacing-lg);
+  border: 1px solid var(--mantine-color-default-border);
+  border-radius: var(--mantine-radius-md);
+  text-align: start;
+}
+
+.kindOption:hover {
+  background: var(--mantine-color-default-hover);
+}
+
+.kindOption:focus-visible {
+  outline: 2px solid var(--mantine-primary-color-filled);
+  outline-offset: 2px;
+}
+
+.kindOption[data-selected] {
+  border-color: var(--mantine-primary-color-filled);
+  background: var(--mantine-primary-color-light);
+}
+
+.kindIcon {
+  display: grid;
+  flex: 0 0 42px;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: var(--mantine-radius-md);
+  background: var(--mantine-color-default-hover);
+}
+
 .destination {
   width: 100%;
   min-height: 52px;
@@ -73,7 +111,15 @@
   place-items: center;
 }
 
+.wizardMobileStep {
+  display: none;
+}
+
 @media (max-width: 48em) {
+  .kindGrid {
+    grid-template-columns: 1fr;
+  }
+
   .row {
     align-items: flex-start;
     flex-direction: column;
@@ -82,5 +128,43 @@
   .actions {
     align-self: stretch;
     justify-content: flex-end;
+  }
+
+  .wizardMobileStep {
+    display: block;
+  }
+
+  .wizardStepper :global(.mantine-Stepper-stepLabel) {
+    display: none;
+  }
+
+  .wizardStepper :global(.mantine-Stepper-step) {
+    padding-inline: 0;
+  }
+
+  .wizardStepper :global(.mantine-Stepper-separator) {
+    margin-inline: var(--mantine-spacing-xs);
+  }
+
+  .sourceModeControl {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .sourceModeControl :global(.mantine-SegmentedControl-indicator) {
+    display: none;
+  }
+
+  .sourceModeControl :global(.mantine-SegmentedControl-control) {
+    width: 100%;
+  }
+
+  .sourceModeControl :global(.mantine-SegmentedControl-label) {
+    white-space: normal;
+  }
+
+  .sourceModeControl :global(.mantine-SegmentedControl-control:has(input:checked)) {
+    border-radius: var(--mantine-radius-sm);
+    background: var(--mantine-primary-color-light);
   }
 }

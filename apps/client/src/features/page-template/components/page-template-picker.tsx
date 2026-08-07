@@ -14,20 +14,15 @@ import {
 import { useDebouncedValue } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import { useTranslation } from "react-i18next";
-import type { Editor, Range } from "@tiptap/core";
 import { useNavigate } from "react-router-dom";
 import {
   createPageFromTemplate,
   discoverPageTemplates,
-  hashProseMirrorJson,
-  insertPageEmbed,
 } from "../services/page-template-api";
 import type { PageTemplateDiscoveryItem } from "../types/page-template.types";
 import classes from "./page-template-picker.module.css";
 
-type PickerRequest =
-  | { mode: "live"; editor: Editor; range: Range }
-  | { mode: "snapshot" };
+type PickerRequest = { mode: "create" };
 
 export const PAGE_TEMPLATE_PICKER_EVENT = "docmost:page-template-picker";
 type PickerTab = "all" | "favorites" | "recent";
@@ -116,9 +111,7 @@ export function PageTemplatePicker({
 
   const visibleItems = items.filter(
     (item) =>
-      (request?.mode === "snapshot"
-        ? item.actions.snapshot
-        : item.actions.liveEmbed) &&
+      item.actions.use &&
       (tab === "all" ||
         (tab === "favorites" && item.favorite) ||
         (tab === "recent" && item.recent)),
@@ -128,22 +121,12 @@ export function PageTemplatePicker({
     if (!request) return;
     setSubmittingId(template.id);
     try {
-      if (request.mode === "live") {
-        await insertPageEmbed({
-          consumerPageId: pageId,
-          sourcePageId: template.id,
-          from: request.range.from,
-          to: request.range.to,
-          baseContentHash: await hashProseMirrorJson(request.editor.getJSON()),
-        });
-      } else {
-        const result = await createPageFromTemplate({
-          templatePageId: template.id,
-          spaceId,
-          parentPageId: pageId,
-        });
-        navigate(`/p/${result.page.slugId}`);
-      }
+      const result = await createPageFromTemplate({
+        templatePageId: template.id,
+        spaceId,
+        parentPageId: pageId,
+      });
+      navigate(`/p/${result.page.slugId}`);
       setRequest(null);
     } catch (error: any) {
       notifications.show({
@@ -161,11 +144,7 @@ export function PageTemplatePicker({
     <Modal
       opened={Boolean(request)}
       onClose={() => setRequest(null)}
-      title={
-        request?.mode === "snapshot"
-          ? t("Create page from template")
-          : t("Embed template page")
-      }
+      title={t("Create page from template")}
       centered
       size="lg"
     >

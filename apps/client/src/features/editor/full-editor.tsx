@@ -12,6 +12,7 @@ import { resolvePageEditMode } from "@/features/user/utils/page-edit-mode.ts";
 import { resolvePageFullWidth } from "@/features/user/utils/page-width.ts";
 import { pageEditorAtom } from "@/features/editor/atoms/editor-atoms.ts";
 import { PageReadingTime } from "@/features/page/components/reading-time/page-reading-time.tsx";
+import type { TemplateKind } from "@docmost/api-contract";
 
 const MemoizedTitleEditor = React.memo(TitleEditor);
 const MemoizedPageEditor = React.memo(PageEditor);
@@ -28,8 +29,10 @@ export interface FullEditorProps {
   spaceHeadingNumberingEnabled?: boolean;
   readingTimeEnabled?: boolean;
   editable: boolean;
+  notice?: ReactNode;
   metaPanel?: ReactNode;
   footer?: ReactNode;
+  templateKind?: TemplateKind | null;
 }
 
 export function FullEditor({
@@ -44,8 +47,10 @@ export function FullEditor({
   spaceHeadingNumberingEnabled = false,
   readingTimeEnabled = false,
   editable,
+  notice,
   metaPanel,
   footer,
+  templateKind,
 }: FullEditorProps) {
   const [user] = useAtom(userAtom);
   const pageEditor = useAtomValue(pageEditorAtom);
@@ -87,6 +92,7 @@ export function FullEditor({
         spaceSlug={spaceSlug}
         editable={editable}
       />
+      {notice}
       <PageReadingTime
         editor={pageEditor}
         enabled={readingTimeEnabled}
@@ -105,6 +111,7 @@ export function FullEditor({
         spaceHeadingNumberingEnabled={spaceHeadingNumberingEnabled}
         canManageDictionary={editable}
         canCreateInlineComments={editable}
+        templateKind={templateKind}
       />
       {footer}
     </Container>

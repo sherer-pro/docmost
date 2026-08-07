@@ -1,38 +1,20 @@
-export type PageEmbedLookup =
-  | {
-      kind: "page";
-      sourcePageId: string;
-      slugId: string;
-      title: string | null;
-      icon: string | null;
-      content: unknown;
-      sourceUpdatedAt: string;
-    }
-  | {
-      kind: "page";
-      sourcePageId: string;
-      status: "not_found" | "no_access" | "disabled";
-    };
-
-export type PageTemplateDiscoveryItem = {
-  id: string;
-  slugId: string;
-  title: string | null;
-  icon: string | null;
-  spaceId: string;
-  spaceName: string;
-  spaceSlug: string;
-  updatedAt: string;
-  favorite: boolean;
-  recent: boolean;
-  actions: { snapshot: boolean; liveEmbed: boolean; manage: boolean };
-};
+export type {
+  PageTemplateCatalogItem as PageTemplateDiscoveryItem,
+  TemplateDraftDiff,
+  TemplateInstanceInfo,
+  TemplateInstanceStatus,
+  TemplateKind,
+  TemplatePublishPreflight,
+  TemplateRevision,
+  TemplateSyncRun,
+  TemplateSyncRunStatus,
+} from "@docmost/api-contract";
 
 export type PageTemplateCapabilities = {
   enabled: boolean;
   createTemplate: boolean;
-  useSnapshot: boolean;
-  useLiveEmbed: boolean;
+  useRegular: boolean;
+  useSynced: boolean;
 };
 
 export type PageTemplateDestination = {
@@ -41,4 +23,21 @@ export type PageTemplateDestination = {
   title: string | null;
   icon: string | null;
   parentPageId: string | null;
+};
+
+export type PageTemplateProvenance = {
+  createdFromTemplate: boolean;
+  kind?: "regular" | "synced";
+  status?: "snapshot" | "active" | "syncing" | "error" | "detached";
+  appliedRevision?: number | null;
+  latestRevision?: number | null;
+  canReadTemplate?: boolean;
+  canDetach?: boolean;
+  sourceTemplate: {
+    id: string;
+    slugId: string;
+    title: string | null;
+    icon: string | null;
+    spaceSlug: string | null;
+  } | null;
 };

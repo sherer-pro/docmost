@@ -121,43 +121,4 @@ describe("transclusion clipboard", () => {
     expect(payload.text).toBe("Ordinary text");
   });
 
-  it("materializes page embeds without preserving a live reference", () => {
-    const container = document.createElement("div");
-    container.innerHTML =
-      '<div data-type="pageEmbed" data-source-page-id="page-2"></div>';
-
-    const payload = createTransclusionClipboardPayload({
-      container,
-      schema,
-      strings,
-      resolutions: new Map(),
-      maxPageEmbedDepth: 5,
-      pageResolutions: new Map([
-        [
-          "page-2",
-          {
-            kind: "page",
-            sourcePageId: "page-2",
-            slugId: "source",
-            title: "Source",
-            icon: null,
-            sourceUpdatedAt: "2026-01-01T00:00:00.000Z",
-            content: {
-              type: "doc",
-              content: [
-                {
-                  type: "paragraph",
-                  content: [{ type: "text", text: "Snapshot text" }],
-                },
-              ],
-            },
-          },
-        ],
-      ]),
-    });
-
-    expect(payload.html).toBe("<p>Snapshot text</p>");
-    expect(payload.html).not.toContain("pageEmbed");
-    expect(payload.html).not.toContain("data-source-page-id");
-  });
 });
