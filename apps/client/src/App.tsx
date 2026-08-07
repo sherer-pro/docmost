@@ -37,9 +37,7 @@ const CloudLogin = lazy(() => import("@/features/cloud/pages/cloud-login.tsx"));
 const CreateWorkspace = lazy(
   () => import("@/features/cloud/pages/create-workspace.tsx"),
 );
-const Security = lazy(
-  () => import("@/features/security/pages/security.tsx"),
-);
+const Security = lazy(() => import("@/features/security/pages/security.tsx"));
 const SharedPage = lazy(() => import("@/pages/share/shared-page.tsx"));
 const Shares = lazy(() => import("@/pages/settings/shares/shares.tsx"));
 const ShareLayout = lazy(
@@ -61,6 +59,7 @@ const SpaceTrash = lazy(() => import("@/pages/space/space-trash.tsx"));
 const SpaceDictionary = lazy(
   () => import("@/pages/space/space-dictionary.tsx"),
 );
+const SpaceTemplates = lazy(() => import("@/pages/space/space-templates.tsx"));
 const DatabasePage = lazy(() => import("@/pages/database/database-page.tsx"));
 const DatabaseLegacyRedirect = lazy(
   () => import("@/pages/database/database-legacy-redirect.tsx"),
@@ -128,6 +127,10 @@ export default function App() {
           <Route
             path={"/s/:spaceSlug/dictionary"}
             element={<SpaceDictionary />}
+          />
+          <Route
+            path={"/s/:spaceSlug/templates"}
+            element={<SpaceTemplates />}
           />
           <Route path={"/s/:spaceSlug/trash"} element={<SpaceTrash />} />
           <Route
