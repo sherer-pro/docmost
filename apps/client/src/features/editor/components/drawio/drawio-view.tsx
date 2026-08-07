@@ -25,8 +25,10 @@ import { IconEdit } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { notifications } from "@mantine/notifications";
 import {
+  getDiagramAttachmentIdForSave,
   getDiagramAttachmentSrc,
   getDiagramSaveErrorMessage,
+  shouldCreateNewDiagramAttachment,
 } from "@/features/editor/components/diagram/diagram-attachment";
 import { ImagePreviewModal } from "@/features/editor/components/common/image-preview-modal";
 import { normalizeBlockWidthMode } from "@docmost/editor-ext";
@@ -87,11 +89,21 @@ export default function DrawioView(props: NodeViewProps) {
       //@ts-ignore
       const pageId = editor.storage?.pageId;
 
-      let attachment: IAttachment = null;
-
-      if (attachmentId) {
-        attachment = await uploadFile(drawioSVGFile, pageId, attachmentId);
-      } else {
+      const attachmentIdForSave = getDiagramAttachmentIdForSave(
+        editor.state.doc,
+        attachmentId,
+      );
+      let attachment: IAttachment;
+      try {
+        attachment = await uploadFile(
+          drawioSVGFile,
+          pageId,
+          attachmentIdForSave,
+        );
+      } catch (err) {
+        if (!attachmentIdForSave || !shouldCreateNewDiagramAttachment(err)) {
+          throw err;
+        }
         attachment = await uploadFile(drawioSVGFile, pageId);
       }
 
@@ -120,7 +132,11 @@ export default function DrawioView(props: NodeViewProps) {
       className="blockWidthWrapper"
       data-block-width-mode={widthMode}
     >
-      <Modal.Root opened={opened} onClose={isSaving ? () => null : close} fullScreen>
+      <Modal.Root
+        opened={opened}
+        onClose={isSaving ? () => null : close}
+        fullScreen
+      >
         <Modal.Overlay />
         <Modal.Content style={{ overflow: "hidden" }}>
           <LoadingOverlay visible={isSaving} zIndex={1000} />
