@@ -15,6 +15,7 @@ const NEW_PAGE_ID = '00000000-0000-4000-8000-000000000005';
 const SPACE_ID = '00000000-0000-4000-8000-000000000006';
 const OLD_ATTACHMENT_ID = '00000000-0000-4000-8000-000000000007';
 const NEW_ATTACHMENT_ID = '00000000-0000-4000-8000-000000000008';
+const TEMPLATE_SYNC_RUN_ID = '00000000-0000-4000-8000-000000000010';
 
 function createSelectQuery(invitation?: Record<string, unknown>) {
   const query: Record<string, jest.Mock> = {};
@@ -49,6 +50,10 @@ function createHarness(invitation?: Record<string, unknown>) {
   const duplicatePageAttachments = {
     process: jest.fn().mockResolvedValue(undefined),
   };
+  const pageTemplateSync = {
+    processSyncRunFromOutbox: jest.fn().mockResolvedValue(undefined),
+  };
+  const moduleRef = { get: jest.fn(() => pageTemplateSync) };
   const generalQueue = { add: jest.fn().mockResolvedValue(undefined) };
 
   const service = new QueueOutboxService(
@@ -59,6 +64,7 @@ function createHarness(invitation?: Record<string, unknown>) {
     mailService as any,
     duplicatePageAttachments as any,
     generalQueue as any,
+    moduleRef as any,
   );
 
   return {
@@ -67,6 +73,7 @@ function createHarness(invitation?: Record<string, unknown>) {
     outboxRepo,
     mailService,
     duplicatePageAttachments,
+    pageTemplateSync,
     generalQueue,
   };
 }
@@ -265,6 +272,37 @@ describe('QueueOutboxService', () => {
 
     expect(outboxRepo.enqueue.mock.calls[0][0].dedupeKey).toBe(
       `workspace-invitation-accepted-email:${INVITATION_ID}:${USER_ID}`,
+    );
+  });
+
+  it('enqueues and dispatches synchronized template runs', async () => {
+    const { service, outboxRepo, pageTemplateSync } = createHarness();
+    await service.enqueuePageTemplateSync(
+      { runId: TEMPLATE_SYNC_RUN_ID },
+      'dispatch-1',
+      {} as any,
+    );
+
+    expect(outboxRepo.enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: QueueOutboxKind.PAGE_TEMPLATE_SYNC,
+        payload: { runId: TEMPLATE_SYNC_RUN_ID },
+        dedupeKey: `page-template-sync:${TEMPLATE_SYNC_RUN_ID}:dispatch-1`,
+      }),
+      expect.anything(),
+    );
+
+    outboxRepo.claimNext.mockResolvedValueOnce({
+      id: '00000000-0000-4000-8000-000000000009',
+      kind: QueueOutboxKind.PAGE_TEMPLATE_SYNC,
+      payload: { runId: TEMPLATE_SYNC_RUN_ID },
+      secretPayload: null,
+      attemptCount: 1,
+    });
+    await service.processAvailable(1);
+
+    expect(pageTemplateSync.processSyncRunFromOutbox).toHaveBeenCalledWith(
+      TEMPLATE_SYNC_RUN_ID,
     );
   });
 });

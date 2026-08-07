@@ -3,14 +3,19 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
+  OnModuleDestroy,
+  OnModuleInit,
+  Optional,
 } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import { createHash } from 'node:crypto';
-import { v7 as uuid7 } from 'uuid';
+import { v7 as uuid7, validate as isUuid } from 'uuid';
 import { Fragment, Slice } from '@tiptap/pm/model';
 import { Transform } from '@tiptap/pm/transform';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
+import { sql } from 'kysely';
 import { Page, User } from '@docmost/db/types/entity.types';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { AttachmentRepo } from '@docmost/db/repos/attachment/attachment.repo';
@@ -43,12 +48,49 @@ import { PageService } from './page.service';
 import { executeTx } from '@docmost/db/utils';
 import type { PageEmbedGraphLease } from '../transclusion/page-embed-graph-lock.service';
 import { getAttachmentIds } from '../../../common/helpers/prosemirror/utils';
+import { PageHistoryRecorderService } from './page-history-recorder.service';
+import { QueueOutboxService } from '../../../integrations/queue/outbox/queue-outbox.service';
+import type { TemplateKind } from '@docmost/api-contract';
+import {
+  collectTemplateFields,
+  createTemplateInstanceContent,
+  detachTemplateContent,
+  isTemplateFieldFilled,
+  normalizeTemplateDraft,
+  summarizeTemplateDiff,
+} from '@docmost/editor-ext';
+import {
+  DetachSyncedTemplateDto,
+  PublishPageTemplateDto,
+} from '../dto/page-template.dto';
 
-type OperationKind = 'snapshot' | 'embed_insert' | 'embed_detach';
+type OperationKind =
+  | 'snapshot'
+  | 'embed_insert'
+  | 'embed_detach'
+  | 'template_sync'
+  | 'template_detach'
+  | 'legacy_embed_migration';
 const OPERATION_LEASE_MS = 5 * 60 * 1000;
+const PUBLISH_CONFIRMATION_TTL_MS = 10 * 60 * 1000;
+
+type LegacyAttachmentCopyPlan = {
+  source: Page;
+  copies: Array<{ oldAttachmentId: string; newAttachmentId: string }>;
+};
+
+type LegacyMigrationIssue = {
+  referenceNodeId: string;
+  sourcePageId: string | null;
+  errorCode: string;
+};
 
 @Injectable()
-export class PageTemplateService {
+export class PageTemplateService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(PageTemplateService.name);
+  private readonly activeSyncRuns = new Set<string>();
+  private syncResumeTimer?: ReturnType<typeof setInterval>;
+
   constructor(
     @InjectKysely() private readonly db: KyselyDB,
     private readonly pageRepo: PageRepo,
@@ -63,45 +105,136 @@ export class PageTemplateService {
     private readonly policy: PageTemplatePolicyService,
     private readonly pageEmbedService: PageEmbedService,
     private readonly transclusionService: TransclusionService,
+    private readonly pageHistoryRecorder: PageHistoryRecorderService,
+    @Optional() private readonly queueOutbox?: QueueOutboxService,
   ) {}
 
-  async setTemplate(pageId: string, enabled: boolean, user: User) {
-    const page = await this.requirePlainDocument(pageId, user.workspaceId);
-    await this.pageAccessService.assertCanWritePage(page, user);
-    if (page.isTemplate === enabled) {
-      return { pageId: page.id, isTemplate: enabled };
-    }
-    if (enabled) {
-      await this.policy.assertAction(
-        page.workspaceId,
-        page.spaceId,
-        user.id,
-        page.isTemplate ? 'manage_template' : 'create_template',
-      );
-    } else {
-      const effective = await this.policy.resolveForUser(
-        page.workspaceId,
-        page.spaceId,
-        user.id,
-      );
-      if (
-        effective.systemEnabled &&
-        effective.workspaceEnabled &&
-        effective.templatesEnabled
-      ) {
-        await this.policy.assertAction(
-          page.workspaceId,
-          page.spaceId,
-          user.id,
-          'manage_template',
-        );
-      }
-    }
-    await this.pageRepo.updatePage(
-      { isTemplate: enabled, lastUpdatedById: user.id, updatedAt: new Date() },
-      page.id,
+  async onModuleInit(): Promise<void> {
+    await this.migrateLegacyPageEmbeds();
+    void this.resumePendingSyncRuns();
+    this.syncResumeTimer = setInterval(
+      () => void this.resumePendingSyncRuns(),
+      15_000,
     );
-    return { pageId: page.id, isTemplate: enabled };
+    this.syncResumeTimer.unref?.();
+  }
+
+  onModuleDestroy(): void {
+    if (this.syncResumeTimer) clearInterval(this.syncResumeTimer);
+  }
+
+  async getProvenance(pageId: string, user: User) {
+    const page = await this.pageRepo.findById(pageId);
+    if (!page || page.deletedAt) {
+      throw new NotFoundException('Page not found');
+    }
+    const pageAccess = await this.pageAccessService.getEffectiveAccess(
+      page,
+      user,
+    );
+    if (!pageAccess.capabilities.canRead) throw new ForbiddenException();
+
+    const instance = await this.db
+      .selectFrom('pageTemplateInstances')
+      .selectAll()
+      .where('childPageId', '=', page.id)
+      .executeTakeFirst();
+    const legacyOperation = instance
+      ? null
+      : await this.db
+          .selectFrom('pageTemplateOperations')
+          .select(['sourcePageId'])
+          .where('workspaceId', '=', user.workspaceId)
+          .where('operationKind', '=', 'snapshot')
+          .where('status', '=', 'completed')
+          .where('resultPageId', '=', page.id)
+          .orderBy('createdAt', 'asc')
+          .executeTakeFirst();
+    if (!instance && !legacyOperation) {
+      return { createdFromTemplate: false, sourceTemplate: null };
+    }
+
+    const sourcePageId = instance?.templatePageId ?? legacyOperation?.sourcePageId;
+    const latestRevision = sourcePageId
+      ? await this.db
+          .selectFrom('pageTemplateRevisions')
+          .select((eb) => eb.fn.max<number>('revision').as('revision'))
+          .where('templatePageId', '=', sourcePageId)
+          .executeTakeFirst()
+      : null;
+    if (!sourcePageId) {
+      return {
+        createdFromTemplate: true,
+        kind: instance?.instanceKind ?? 'regular',
+        status: instance?.status ?? 'snapshot',
+        appliedRevision: instance?.appliedRevision ?? null,
+        latestRevision: latestRevision?.revision ?? null,
+        sourceTemplate: null,
+        canReadTemplate: false,
+        canDetach:
+          instance?.status === 'active' && pageAccess.capabilities.canWrite,
+      };
+    }
+
+    const source = await this.pageRepo.findById(sourcePageId, {
+      includeSpace: true,
+    });
+    if (
+      !source ||
+      source.deletedAt ||
+      source.workspaceId !== page.workspaceId ||
+      source.spaceId !== page.spaceId
+    ) {
+      return {
+        createdFromTemplate: true,
+        kind: instance?.instanceKind ?? 'regular',
+        status: instance?.status ?? 'snapshot',
+        appliedRevision: instance?.appliedRevision ?? null,
+        latestRevision: latestRevision?.revision ?? null,
+        sourceTemplate: null,
+        canReadTemplate: false,
+        canDetach:
+          instance?.status === 'active' && pageAccess.capabilities.canWrite,
+      };
+    }
+
+    const sourceAccess = await this.pageAccessService.getEffectiveAccess(
+      source,
+      user,
+    );
+    if (!sourceAccess.capabilities.canRead) {
+      return {
+        createdFromTemplate: true,
+        kind: instance?.instanceKind ?? 'regular',
+        status: instance?.status ?? 'snapshot',
+        appliedRevision: instance?.appliedRevision ?? null,
+        latestRevision: latestRevision?.revision ?? null,
+        sourceTemplate: null,
+        canReadTemplate: false,
+        canDetach:
+          instance?.status === 'active' && pageAccess.capabilities.canWrite,
+      };
+    }
+
+    return {
+      createdFromTemplate: true,
+      kind: instance?.instanceKind ?? 'regular',
+      status: instance?.status ?? 'snapshot',
+      appliedRevision: instance?.appliedRevision ?? null,
+      latestRevision: latestRevision?.revision ?? null,
+      canReadTemplate: true,
+      canDetach:
+        instance?.status === 'active' && pageAccess.capabilities.canWrite,
+      sourceTemplate: {
+        id: source.id,
+        slugId: source.slugId,
+        title: source.title,
+        icon: source.icon,
+        spaceSlug:
+          (source as typeof source & { space?: { slug?: string } }).space
+            ?.slug ?? null,
+      },
+    };
   }
 
   async discover(dto: PageTemplateDiscoveryDto, user: User) {
@@ -125,14 +258,14 @@ export class PageTemplateService {
         effective.allowCreateTemplate &&
         effective.allowedActions.includes('create_template') &&
         ability.can(SpaceCaslAction.Create, SpaceCaslSubject.Page),
-      useSnapshot:
+      useRegular:
         enabled &&
-        effective.allowSnapshot &&
-        effective.allowedActions.includes('use_snapshot'),
-      useLiveEmbed:
+        effective.allowRegularTemplate &&
+        effective.allowedActions.includes('use_regular_template'),
+      useSynced:
         enabled &&
-        effective.allowLiveEmbed &&
-        effective.allowedActions.includes('use_live_embed'),
+        effective.allowSyncedTemplate &&
+        effective.allowedActions.includes('use_synced_template'),
     };
     if (!enabled) {
       return { items: [], nextCursor: null, capabilities };
@@ -148,12 +281,14 @@ export class PageTemplateService {
         'page.icon',
         'page.spaceId',
         'page.updatedAt',
+        'page.templateKind',
+        'page.templateArchivedAt',
         'space.name as spaceName',
         'space.slug as spaceSlug',
       ])
       .where('page.workspaceId', '=', user.workspaceId)
       .where('page.spaceId', '=', dto.spaceId)
-      .where('page.isTemplate', '=', true)
+      .where('page.templateKind', 'is not', null)
       .where('page.deletedAt', 'is', null)
       .where((eb) =>
         eb.not(
@@ -181,11 +316,18 @@ export class PageTemplateService {
       .orderBy('page.id', 'desc')
       .offset(offset)
       .limit(candidateLimit);
+    if (dto.kind) {
+      query = query.where('page.templateKind', '=', dto.kind);
+    }
+    if (!dto.includeArchived) {
+      query = query.where('page.templateArchivedAt', 'is', null);
+    }
     if (dto.query?.trim()) {
       query = query.where('page.title', 'ilike', `%${dto.query.trim()}%`);
     }
     const candidates = await query.execute();
-    const [favoriteRows, recentPages] = await Promise.all([
+    const candidateIds = candidates.map((candidate) => candidate.id);
+    const [favoriteRows, recentPages, revisionRows, instanceRows] = await Promise.all([
       candidates.length > 0
         ? this.db
             .selectFrom('favorites')
@@ -203,9 +345,46 @@ export class PageTemplateService {
         query: undefined,
         adminView: false,
       }),
+      candidateIds.length > 0
+        ? this.db
+            .selectFrom('pageTemplateRevisions')
+            .select(['templatePageId'])
+            .select((eb) => eb.fn.max<number>('revision').as('revision'))
+            .select((eb) => eb.fn.max<Date>('createdAt').as('publishedAt'))
+            .where('templatePageId', 'in', candidateIds)
+            .groupBy('templatePageId')
+            .execute()
+        : [],
+      candidateIds.length > 0
+        ? this.db
+            .selectFrom('pageTemplateInstances')
+            .select(['templatePageId', 'status'])
+            .select((eb) => eb.fn.countAll<number>().as('count'))
+            .where('templatePageId', 'in', candidateIds)
+            .where('status', 'in', ['active', 'syncing', 'error'])
+            .groupBy(['templatePageId', 'status'])
+            .execute()
+        : [],
     ]);
     const favoritePageIds = new Set(favoriteRows.map((row) => row.pageId));
     const recentPageIds = new Set(recentPages.items.map((page) => page.id));
+    const revisionByTemplate = new Map(
+      revisionRows.map((row) => [row.templatePageId, row] as const),
+    );
+    const instanceCounts = new Map<
+      string,
+      { active: number; failed: number }
+    >();
+    for (const row of instanceRows) {
+      if (!row.templatePageId) continue;
+      const counts = instanceCounts.get(row.templatePageId) ?? {
+        active: 0,
+        failed: 0,
+      };
+      counts.active += Number(row.count);
+      if (row.status === 'error') counts.failed += Number(row.count);
+      instanceCounts.set(row.templatePageId, counts);
+    }
     const items: any[] = [];
     let consumed = 0;
     for (const candidate of candidates) {
@@ -220,11 +399,25 @@ export class PageTemplateService {
       if (!access.capabilities.canRead) continue;
       items.push({
         ...candidate,
+        kind: candidate.templateKind,
+        archivedAt: candidate.templateArchivedAt,
+        publishedRevision:
+          revisionByTemplate.get(candidate.id)?.revision ?? null,
+        draftChanged:
+          !revisionByTemplate.has(candidate.id) ||
+          candidate.updatedAt >
+            (revisionByTemplate.get(candidate.id)?.publishedAt ?? new Date(0)),
+        activeInstanceCount: instanceCounts.get(candidate.id)?.active ?? 0,
+        failedInstanceCount: instanceCounts.get(candidate.id)?.failed ?? 0,
         favorite: favoritePageIds.has(page.id),
         recent: recentPageIds.has(page.id),
         actions: {
-          snapshot: capabilities.useSnapshot,
-          liveEmbed: capabilities.useLiveEmbed,
+          use:
+            candidate.templateKind === 'regular'
+              ? capabilities.useRegular
+              : capabilities.useSynced &&
+                revisionByTemplate.has(candidate.id) &&
+                !candidate.templateArchivedAt,
           manage:
             access.capabilities.canWrite &&
             effective.allowCreateTemplate &&
@@ -250,13 +443,98 @@ export class PageTemplateService {
       'create_template',
     );
     await this.assertCanCreate(dto.spaceId, undefined, user);
-    const page = await this.pageService.create(
-      user.id,
-      user.workspaceId,
-      { spaceId: dto.spaceId, title: dto.title },
-      { isTemplate: true },
-    );
-    return { page };
+    const source = dto.sourcePageId
+      ? await this.requirePlainDocument(dto.sourcePageId, user.workspaceId)
+      : null;
+    if (source) {
+      await this.pageAccessService.assertCanReadPage(source, user);
+      if (source.spaceId !== dto.spaceId) {
+        throw new NotFoundException('Source page not found');
+      }
+    }
+    const sourceContent = source
+      ? await this.getLiveContent(source.id, user)
+      : { type: 'doc', content: [{ type: 'paragraph' }] };
+    const targetPageId = uuid7();
+    const materialized = source
+      ? materializePageContent(sourceContent, {
+          sourcePageId: source.id,
+          targetPageId,
+        })
+      : sourceContent;
+    const normalized =
+      dto.kind === 'synced'
+        ? normalizeTemplateDraft(materialized, uuid7)
+        : materialized;
+    const rewritten = source
+      ? rewriteAttachmentsForUnsync(normalized, () => uuid7())
+      : { content: normalized, copies: [] };
+    const content = rewritten.content;
+    strictJsonToNode(content as any);
+    const copiedPaths: string[] = [];
+    try {
+      const attachmentRows = source
+        ? await this.copyAttachments(
+            rewritten.copies,
+            source,
+            targetPageId,
+            dto.spaceId,
+            user,
+            copiedPaths,
+            false,
+          )
+        : [];
+      const page = await executeTx(this.db, async (trx) => {
+        const created = await this.pageService.create(
+          user.id,
+          user.workspaceId,
+          {
+            spaceId: dto.spaceId,
+            title: dto.title ?? source?.title ?? undefined,
+            icon: source?.icon ?? undefined,
+            content,
+            format: 'json',
+          },
+          {
+            pageId: targetPageId,
+            templateKind: dto.kind,
+            trx,
+            deferSideEffects: true,
+          },
+        );
+        for (const row of attachmentRows) {
+          await this.attachmentRepo.insertAttachment(row, trx);
+        }
+        await this.transclusionService.insertTransclusionsForPages(
+          [
+            {
+              id: created.id,
+              workspaceId: created.workspaceId,
+              content: created.content,
+            },
+          ],
+          trx,
+        );
+        await this.transclusionService.insertReferencesForPages(
+          [
+            {
+              id: created.id,
+              workspaceId: created.workspaceId,
+              content: created.content,
+            },
+          ],
+          trx,
+        );
+        return created;
+      });
+      await this.pageService.finalizeCreatedPage(page, user.id);
+      return { page };
+    } catch (error) {
+      await Promise.allSettled(
+        copiedPaths.map((path) => this.storageService.delete(path)),
+      );
+      throw error;
+    }
   }
 
   async listDestinations(dto: PageTemplateDestinationsDto, user: User) {
@@ -267,6 +545,7 @@ export class PageTemplateService {
       .where('page.workspaceId', '=', user.workspaceId)
       .where('page.spaceId', '=', dto.spaceId)
       .where('page.deletedAt', 'is', null)
+      .where('page.templateKind', 'is', null)
       .where((eb) =>
         eb.not(
           eb.exists(
@@ -345,19 +624,45 @@ export class PageTemplateService {
     if (source.spaceId !== dto.spaceId) {
       throw new NotFoundException('Template not found');
     }
+    if (source.templateArchivedAt) {
+      throw new ConflictException({
+        code: 'page_template_archived',
+        message: 'Archived templates cannot be used',
+      });
+    }
+    const templateKind = source.templateKind as TemplateKind;
     await this.policy.assertAction(
       source.workspaceId,
       source.spaceId,
       user.id,
-      'use_snapshot',
+      templateKind === 'regular'
+        ? 'use_regular_template'
+        : 'use_synced_template',
     );
     await this.assertCanCreate(dto.spaceId, dto.parentPageId, user);
     await this.policy.assertAction(
       user.workspaceId,
       dto.spaceId,
       user.id,
-      'use_snapshot',
+      templateKind === 'regular'
+        ? 'use_regular_template'
+        : 'use_synced_template',
     );
+    const publishedRevision =
+      templateKind === 'synced'
+        ? await this.db
+            .selectFrom('pageTemplateRevisions')
+            .selectAll()
+            .where('templatePageId', '=', source.id)
+            .orderBy('revision', 'desc')
+            .executeTakeFirst()
+        : null;
+    if (templateKind === 'synced' && !publishedRevision) {
+      throw new ConflictException({
+        code: 'page_template_not_published',
+        message: 'Publish the synchronized template before using it',
+      });
+    }
 
     const proposedTargetPageId = uuid7();
     const operation = await this.beginOperation(
@@ -393,7 +698,9 @@ export class PageTemplateService {
         : await this.stageMaterializedContent(
             operation.id,
             operation.leaseToken,
-            await this.getLiveContent(source.id, user),
+            templateKind === 'synced'
+              ? createTemplateInstanceContent(publishedRevision!.content)
+              : await this.getLiveContent(source.id, user),
             source.id,
             targetPageId,
             operation.attachmentMapping,
@@ -435,7 +742,7 @@ export class PageTemplateService {
           },
           {
             pageId: targetPageId,
-            isTemplate: false,
+            templateKind: null,
             trx,
             deferSideEffects: true,
           },
@@ -475,6 +782,32 @@ export class PageTemplateService {
           trx,
           graphLease,
         );
+        const templateInstance = await trx
+          .insertInto('pageTemplateInstances')
+          .values({
+            workspaceId: user.workspaceId,
+            spaceId: dto.spaceId,
+            templatePageId: source.id,
+            childPageId: createdPage.id,
+            instanceKind: templateKind,
+            createdRevision: publishedRevision?.revision ?? null,
+            appliedRevision: publishedRevision?.revision ?? null,
+            status: templateKind === 'synced' ? 'active' : 'snapshot',
+          })
+          .returning('id')
+          .executeTakeFirstOrThrow();
+        if (templateKind === 'synced' && rewritten.copies.length > 0) {
+          await trx
+            .insertInto('pageTemplateAttachmentMappings')
+            .values(
+              rewritten.copies.map((copy) => ({
+                instanceId: templateInstance.id,
+                sourceAttachmentId: copy.oldAttachmentId,
+                childAttachmentId: copy.newAttachmentId,
+              })),
+            )
+            .execute();
+        }
         return createdPage;
       });
       await this.completeOperation(
@@ -513,6 +846,431 @@ export class PageTemplateService {
     }
   }
 
+  async listUsages(pageId: string, user: User) {
+    const template = await this.requireManagedTemplate(pageId, user);
+    const rows = await this.db
+      .selectFrom('pageTemplateInstances as instance')
+      .innerJoin('pages as child', 'child.id', 'instance.childPageId')
+      .select([
+        'instance.childPageId',
+        'instance.status',
+        'instance.appliedRevision',
+        'child.slugId',
+        'child.title',
+        'child.icon',
+        'child.updatedAt',
+      ])
+      .where('instance.templatePageId', '=', template.id)
+      .where('child.deletedAt', 'is', null)
+      .orderBy('child.updatedAt', 'desc')
+      .execute();
+    const pages = (
+      await Promise.all(
+        rows.map((row) => this.pageRepo.findById(row.childPageId)),
+      )
+    ).filter((page): page is Page => Boolean(page));
+    const access = await this.pageAccessService.getEffectiveAccessForPages(
+      pages,
+      user,
+    );
+    const readableIds = new Set(
+      pages
+        .filter(
+          (page) => access.get(page.id)?.capabilities.canRead === true,
+        )
+        .map((page) => page.id),
+    );
+    return {
+      totalCount: rows.length,
+      hiddenCount: rows.filter((row) => !readableIds.has(row.childPageId))
+        .length,
+      items: rows.filter((row) => readableIds.has(row.childPageId)),
+    };
+  }
+
+  async preflightPublish(
+    pageId: string,
+    user: User,
+  ) {
+    const template = await this.requireManagedSyncedTemplate(pageId, user);
+    const liveDraft = await this.getLiveContent(template.id, user);
+    const draft = this.normalizeDraftForPublication(liveDraft);
+    return this.buildPublishPreflight(template, user, true, draft);
+  }
+
+  async publish(
+    pageId: string,
+    dto: PublishPageTemplateDto,
+    user: User,
+  ) {
+    const template = await this.requireManagedSyncedTemplate(pageId, user);
+    if (template.templateArchivedAt) {
+      throw new ConflictException({
+        code: 'page_template_archived',
+        message: 'Archived templates cannot be published',
+      });
+    }
+    const draft = this.normalizeDraftForPublication(
+      await this.getLiveContent(template.id, user),
+    );
+    const draftHash = hashProseMirrorJson(draft as any);
+    if (draftHash !== dto.draftHash) {
+      throw this.conflict(
+        'page_template_draft_changed',
+        'The template draft changed after the publication preview',
+      );
+    }
+    const preflight = await this.buildPublishPreflight(
+      template,
+      user,
+      false,
+      draft,
+    );
+    if (preflight.requiresDestructiveConfirmation) {
+      if (!dto.confirmationToken) {
+        throw this.conflict(
+          'page_template_destructive_confirmation_required',
+          'Removing populated template fields requires confirmation',
+        );
+      }
+      const confirmation = await this.db
+        .selectFrom('pageTemplatePublishConfirmations')
+        .selectAll()
+        .where('id', '=', dto.confirmationToken)
+        .where('templatePageId', '=', template.id)
+        .where('requestedById', '=', user.id)
+        .where('draftHash', '=', draftHash)
+        .where('consumedAt', 'is', null)
+        .where('expiresAt', '>', new Date())
+        .executeTakeFirst();
+      if (!confirmation) {
+        throw this.conflict(
+          'page_template_confirmation_invalid',
+          'The destructive confirmation is missing, expired, or stale',
+        );
+      }
+    }
+
+    const result = await executeTx(this.db, async (trx) => {
+      const lockedTemplate = await this.pageRepo.findById(template.id, {
+        withLock: true,
+        trx,
+      });
+      if (
+        !lockedTemplate ||
+        lockedTemplate.templateKind !== 'synced' ||
+        lockedTemplate.templateArchivedAt
+      ) {
+        throw this.conflict(
+          'page_template_publish_conflict',
+          'The template is no longer publishable',
+        );
+      }
+      if (dto.confirmationToken) {
+        const consumed = await trx
+          .updateTable('pageTemplatePublishConfirmations')
+          .set({ consumedAt: new Date() })
+          .where('id', '=', dto.confirmationToken)
+          .where('templatePageId', '=', template.id)
+          .where('requestedById', '=', user.id)
+          .where('draftHash', '=', draftHash)
+          .where('consumedAt', 'is', null)
+          .where('expiresAt', '>', new Date())
+          .returning('id')
+          .executeTakeFirst();
+        if (
+          preflight.requiresDestructiveConfirmation &&
+          !consumed
+        ) {
+          throw this.conflict(
+            'page_template_confirmation_invalid',
+            'The destructive confirmation is missing, expired, or stale',
+          );
+        }
+      }
+      const latest = await trx
+        .selectFrom('pageTemplateRevisions')
+        .select((eb) => eb.fn.max<number>('revision').as('revision'))
+        .where('templatePageId', '=', template.id)
+        .executeTakeFirst();
+      const revisionNumber = Number(latest?.revision ?? 0) + 1;
+      const revision = await trx
+        .insertInto('pageTemplateRevisions')
+        .values({
+          workspaceId: template.workspaceId,
+          spaceId: template.spaceId,
+          templatePageId: template.id,
+          revision: revisionNumber,
+          content: draft as any,
+          contentHash: draftHash,
+          publishedById: user.id,
+        })
+        .returningAll()
+        .executeTakeFirstOrThrow();
+      const instances = await trx
+        .selectFrom('pageTemplateInstances')
+        .select(['id', 'childPageId'])
+        .where('templatePageId', '=', template.id)
+        .where('instanceKind', '=', 'synced')
+        .where('status', 'in', ['active', 'syncing', 'error'])
+        .execute();
+      const run = await trx
+        .insertInto('pageTemplateSyncRuns')
+        .values({
+          workspaceId: template.workspaceId,
+          spaceId: template.spaceId,
+          templatePageId: template.id,
+          revisionId: revision.id,
+          revision: revisionNumber,
+          requestedById: user.id,
+          status: instances.length > 0 ? 'pending' : 'completed',
+          totalCount: instances.length,
+          completedAt: instances.length > 0 ? null : new Date(),
+        })
+        .returningAll()
+        .executeTakeFirstOrThrow();
+      if (instances.length > 0) {
+        await trx
+          .insertInto('pageTemplateSyncItems')
+          .values(
+            instances.map((instance) => ({
+              runId: run.id,
+              instanceId: instance.id,
+              childPageId: instance.childPageId,
+            })),
+          )
+          .execute();
+        if (!this.queueOutbox) {
+          throw new Error('page_template_sync_outbox_unavailable');
+        }
+        await this.queueOutbox.enqueuePageTemplateSync(
+          { runId: run.id },
+          revision.id,
+          trx,
+        );
+      }
+      return { revision, run };
+    });
+    if (result.run.status === 'pending') {
+      this.queueOutbox!.kick();
+    }
+    return {
+      revision: this.serializeRevision(result.revision),
+      syncRun: this.serializeSyncRun(result.run),
+    };
+  }
+
+  async listRevisions(pageId: string, user: User) {
+    const template = await this.requireManagedSyncedTemplate(pageId, user);
+    const revisions = await this.db
+      .selectFrom('pageTemplateRevisions')
+      .selectAll()
+      .where('templatePageId', '=', template.id)
+      .orderBy('revision', 'desc')
+      .execute();
+    return { items: revisions.map((revision) => this.serializeRevision(revision, true)) };
+  }
+
+  async listSyncRuns(pageId: string, user: User) {
+    const template = await this.requireManagedSyncedTemplate(pageId, user);
+    const runs = await this.db
+      .selectFrom('pageTemplateSyncRuns')
+      .selectAll()
+      .where('templatePageId', '=', template.id)
+      .orderBy('createdAt', 'desc')
+      .limit(50)
+      .execute();
+    return { items: runs.map((run) => this.serializeSyncRun(run)) };
+  }
+
+  async retrySyncRun(pageId: string, runId: string, user: User) {
+    const template = await this.requireManagedSyncedTemplate(pageId, user);
+    const run = await this.db
+      .selectFrom('pageTemplateSyncRuns')
+      .selectAll()
+      .where('id', '=', runId)
+      .where('templatePageId', '=', template.id)
+      .executeTakeFirst();
+    if (!run) throw new NotFoundException('Template synchronization run not found');
+    const dispatchId = uuid7();
+    await executeTx(this.db, async (trx) => {
+      await trx
+        .updateTable('pageTemplateSyncItems')
+        .set({ status: 'pending', errorCode: null, updatedAt: new Date() })
+        .where('runId', '=', run.id)
+        .where('status', '=', 'failed')
+        .execute();
+      await trx
+        .updateTable('pageTemplateSyncRuns')
+        .set({
+          status: 'pending',
+          errorCode: null,
+          completedAt: null,
+          updatedAt: new Date(),
+        })
+        .where('id', '=', run.id)
+        .execute();
+      if (!this.queueOutbox) {
+        throw new Error('page_template_sync_outbox_unavailable');
+      }
+      await this.queueOutbox.enqueuePageTemplateSync(
+        { runId: run.id },
+        dispatchId,
+        trx,
+      );
+    });
+    this.queueOutbox!.kick();
+    return { accepted: true, runId: run.id };
+  }
+
+  async processSyncRunFromOutbox(runId: string): Promise<void> {
+    await this.processSyncRun(runId);
+  }
+
+  async archive(pageId: string, user: User) {
+    const template = await this.requireManagedTemplate(pageId, user);
+    if (!template.templateArchivedAt) {
+      await this.pageRepo.updatePage(
+        {
+          templateArchivedAt: new Date(),
+          lastUpdatedById: user.id,
+          updatedAt: new Date(),
+        },
+        template.id,
+      );
+    }
+    return { pageId: template.id, archived: true };
+  }
+
+  async detachTemplate(
+    pageId: string,
+    dto: DetachSyncedTemplateDto,
+    idempotencyKey: string,
+    user: User,
+  ) {
+    if (!dto.confirmed) {
+      throw new BadRequestException({
+        code: 'page_template_detach_confirmation_required',
+        message: 'Detaching a synchronized page requires confirmation',
+      });
+    }
+    this.assertIdempotencyKey(idempotencyKey);
+    const page = await this.requirePlainDocument(pageId, user.workspaceId);
+    await this.pageAccessService.assertCanWritePage(page, user);
+    const instance = await this.db
+      .selectFrom('pageTemplateInstances')
+      .selectAll()
+      .where('childPageId', '=', page.id)
+      .where('instanceKind', '=', 'synced')
+      .executeTakeFirst();
+    if (!instance) throw new NotFoundException('Synchronized template link not found');
+    if (instance.status === 'detached') {
+      return { pageId: page.id, detached: true, idempotent: true };
+    }
+    const current = await this.getLiveContent(page.id, user);
+    const existingOperation = await this.findOperation(
+      'template_detach',
+      idempotencyKey,
+      user,
+    );
+    if (existingOperation?.status === 'completed') {
+      if (
+        existingOperation.requestHash !== this.hashRequest({ pageId, ...dto })
+      ) {
+        throw this.conflict(
+          'page_template_idempotency_conflict',
+          'Idempotency key was used for a different request',
+        );
+      }
+      if (
+        this.containsNodeType(current, 'templateManagedBlock') ||
+        this.containsNodeType(current, 'templateField')
+      ) {
+        throw this.conflict(
+          'page_template_detach_incomplete',
+          'The detach operation did not finish cleanly',
+        );
+      }
+      await this.db
+        .updateTable('pageTemplateInstances')
+        .set({
+          status: 'detached',
+          templatePageId: null,
+          detachedAt: new Date(),
+          detachedById: user.id,
+          lastErrorCode: null,
+          updatedAt: new Date(),
+        })
+        .where('id', '=', instance.id)
+        .where('status', '!=', 'detached')
+        .execute();
+      await this.pageHistoryRecorder.enqueuePageEvent({
+        pageId: page.id,
+        changeType: 'page.template.detached',
+        changeData: { templateKind: 'synced' },
+        actorId: user.id,
+      });
+      return {
+        pageId: page.id,
+        detached: true,
+        afterContentHash: existingOperation.afterContentHash,
+        idempotent: true,
+      };
+    }
+    if (hashProseMirrorJson(current as any) !== dto.baseContentHash) {
+      throw this.conflict('page_template_stale', 'The document changed');
+    }
+    const operation = await this.beginOperation(
+      'template_detach',
+      idempotencyKey,
+      user,
+      { pageId, ...dto },
+      {
+        sourcePageId: instance.templatePageId ?? undefined,
+        consumerPageId: page.id,
+        baseContentHash: dto.baseContentHash,
+      },
+    );
+    if (operation.status === 'completed' && instance.status === 'detached') {
+      return { pageId: page.id, detached: true, idempotent: true };
+    }
+    const next = detachTemplateContent(current);
+    const result = await this.applyMutation(
+      page.id,
+      current,
+      next,
+      dto.baseContentHash,
+      operation.id,
+      operation.leaseToken,
+      user,
+    );
+    await this.db
+      .updateTable('pageTemplateInstances')
+      .set({
+        status: 'detached',
+        templatePageId: null,
+        detachedAt: new Date(),
+        detachedById: user.id,
+        lastErrorCode: null,
+        updatedAt: new Date(),
+      })
+      .where('id', '=', instance.id)
+      .where('status', '!=', 'detached')
+      .execute();
+    await this.pageHistoryRecorder.enqueuePageEvent({
+      pageId: page.id,
+      changeType: 'page.template.detached',
+      changeData: { templateKind: 'synced' },
+      actorId: user.id,
+    });
+    return {
+      pageId: page.id,
+      detached: true,
+      afterContentHash: result.afterHash,
+      idempotent: false,
+    };
+  }
+
   async insertPageEmbed(
     dto: InsertPageEmbedDto,
     idempotencyKey: string,
@@ -549,13 +1307,13 @@ export class PageTemplateService {
       user.workspaceId,
       consumer.spaceId,
       user.id,
-      'use_live_embed',
+      'use_synced_template',
     );
     await this.policy.assertAction(
       user.workspaceId,
       source.spaceId,
       user.id,
-      'use_live_embed',
+      'use_synced_template',
     );
 
     const referenceNodeId = uuid7();
@@ -848,6 +1606,979 @@ export class PageTemplateService {
     }
   }
 
+  private async buildPublishPreflight(
+    template: Page,
+    user: User,
+    issueConfirmation: boolean,
+    suppliedDraft?: unknown,
+  ) {
+    const draft = this.normalizeDraftForPublication(
+      suppliedDraft ?? (await this.getLiveContent(template.id, user)),
+    );
+    const draftHash = hashProseMirrorJson(draft as any);
+    const latest = await this.db
+      .selectFrom('pageTemplateRevisions')
+      .selectAll()
+      .where('templatePageId', '=', template.id)
+      .orderBy('revision', 'desc')
+      .executeTakeFirst();
+    const diff = summarizeTemplateDiff(
+      latest?.content ?? { type: 'doc', content: [] },
+      draft,
+    );
+    const removedFieldIds = new Set(
+      diff.removedFields.map((field) => field.fieldId),
+    );
+    const instances = await this.db
+      .selectFrom('pageTemplateInstances as instance')
+      .innerJoin('pages as child', 'child.id', 'instance.childPageId')
+      .select(['instance.id', 'instance.childPageId', 'child.content'])
+      .where('instance.templatePageId', '=', template.id)
+      .where('instance.instanceKind', '=', 'synced')
+      .where('instance.status', 'in', ['active', 'syncing', 'error'])
+      .where('child.deletedAt', 'is', null)
+      .execute();
+    let filledRemovedFieldInstanceCount = 0;
+    for (const instance of instances) {
+      const liveContent = await this.getLiveContent(
+        instance.childPageId,
+        user,
+      ).catch(() => instance.content);
+      const fields = collectTemplateFields(liveContent);
+      if (
+        [...removedFieldIds].some((fieldId) =>
+          isTemplateFieldFilled(fields.get(fieldId)),
+        )
+      ) {
+        filledRemovedFieldInstanceCount += 1;
+      }
+    }
+    let confirmationToken: string | null = null;
+    let confirmationExpiresAt: Date | null = null;
+    const requiresDestructiveConfirmation =
+      removedFieldIds.size > 0 && instances.length > 0;
+    if (issueConfirmation && requiresDestructiveConfirmation) {
+      confirmationExpiresAt = new Date(
+        Date.now() + PUBLISH_CONFIRMATION_TTL_MS,
+      );
+      const confirmation = await this.db
+        .insertInto('pageTemplatePublishConfirmations')
+        .values({
+          templatePageId: template.id,
+          requestedById: user.id,
+          draftHash,
+          removedFieldIds: [...removedFieldIds] as any,
+          filledInstanceCount: filledRemovedFieldInstanceCount,
+          expiresAt: confirmationExpiresAt,
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      confirmationToken = confirmation.id;
+    }
+    return {
+      draftHash,
+      nextRevision: Number(latest?.revision ?? 0) + 1,
+      diff,
+      activeInstanceCount: instances.length,
+      filledRemovedFieldInstanceCount,
+      requiresDestructiveConfirmation,
+      confirmationToken,
+      confirmationExpiresAt: confirmationExpiresAt?.toISOString() ?? null,
+    };
+  }
+
+  private async requireManagedTemplate(
+    pageId: string,
+    user: User,
+  ): Promise<Page> {
+    const template = await this.requireTemplateSource(pageId, user);
+    await this.pageAccessService.assertCanWritePage(template, user);
+    await this.policy.assertAction(
+      template.workspaceId,
+      template.spaceId,
+      user.id,
+      'manage_template',
+    );
+    return template;
+  }
+
+  private async requireManagedSyncedTemplate(
+    pageId: string,
+    user: User,
+  ): Promise<Page> {
+    const template = await this.requireManagedTemplate(pageId, user);
+    if (template.templateKind !== 'synced') {
+      throw new BadRequestException({
+        code: 'page_template_synced_required',
+        message: 'This action requires a synchronized template',
+      });
+    }
+    return template;
+  }
+
+  private serializeRevision(revision: any, includeContent = false) {
+    return {
+      id: revision.id,
+      templatePageId: revision.templatePageId,
+      revision: revision.revision,
+      contentHash: revision.contentHash,
+      publishedById: revision.publishedById,
+      createdAt: new Date(revision.createdAt).toISOString(),
+      ...(includeContent ? { content: revision.content } : {}),
+    };
+  }
+
+  private normalizeDraftForPublication(content: unknown): unknown {
+    const seed = this.hashRequest(content);
+    let index = 0;
+    return normalizeTemplateDraft(content, () => {
+      const hex = createHash('sha256')
+        .update(`${seed}:${index++}`)
+        .digest('hex')
+        .slice(0, 32);
+      return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+    });
+  }
+
+  private serializeSyncRun(run: any) {
+    return {
+      id: run.id,
+      templatePageId: run.templatePageId,
+      revision: run.revision,
+      status: run.status,
+      totalCount: Number(run.totalCount),
+      processedCount: Number(run.processedCount),
+      succeededCount: Number(run.succeededCount),
+      failedCount: Number(run.failedCount),
+      errorCode: run.errorCode,
+      startedAt: run.startedAt
+        ? new Date(run.startedAt).toISOString()
+        : null,
+      completedAt: run.completedAt
+        ? new Date(run.completedAt).toISOString()
+        : null,
+      createdAt: new Date(run.createdAt).toISOString(),
+    };
+  }
+
+  private async migrateLegacyPageEmbeds(): Promise<void> {
+    const candidates = await this.findLegacyPageEmbedCandidates();
+    if (candidates.length === 0) return;
+
+    let migrated = 0;
+    let failed = 0;
+    for (const candidate of candidates) {
+      try {
+        if (await this.migrateLegacyPageEmbedsForPage(candidate.referencePageId)) {
+          migrated += 1;
+        }
+      } catch (error) {
+        failed += 1;
+        await this.recordLegacyMigrationFailure(
+          candidate.referencePageId,
+          error,
+        ).catch((journalError) => {
+          this.logger.error(
+            `Legacy page embed failure journal write failed; pageId=${candidate.referencePageId}; code=${this.errorCode(journalError)}`,
+          );
+        });
+        this.logger.error(
+          `Legacy page embed migration failed; pageId=${candidate.referencePageId}; code=${this.errorCode(error)}`,
+        );
+      }
+    }
+
+    const remainingCount = (await this.findLegacyPageEmbedCandidates()).length;
+    if (remainingCount > 0 || failed > 0) {
+      this.logger.error(
+        `Legacy page embed migration incomplete; migrated=${migrated}; failed=${failed}; remaining=${remainingCount}`,
+      );
+      throw new Error('legacy_page_embed_migration_incomplete');
+    }
+    this.logger.log(`Legacy page embed migration completed; pages=${migrated}`);
+  }
+
+  private async findLegacyPageEmbedCandidates(): Promise<
+    Array<{ referencePageId: string }>
+  > {
+    const result = await sql<{ referencePageId: string }>`
+      select distinct reference_page_id as "referencePageId"
+      from page_transclusion_references
+      where reference_kind = 'page'
+      union
+      select id as "referencePageId"
+      from pages
+      where deleted_at is null
+        and content::text like '%"type": "pageEmbed"%'
+    `.execute(this.db);
+    return result.rows;
+  }
+
+  private async recordLegacyMigrationFailure(
+    pageId: string,
+    error: unknown,
+  ): Promise<void> {
+    const page = await this.pageRepo.findById(pageId);
+    if (!page) return;
+    await this.db
+      .insertInto('pageTemplateLegacyMigrationErrors')
+      .values({
+        workspaceId: page.workspaceId,
+        consumerPageId: page.id,
+        sourcePageId: null,
+        referenceNodeId: `migration:${page.id}`,
+        errorCode: this.errorCode(error),
+      })
+      .onConflict((conflict) =>
+        conflict.columns(['consumerPageId', 'referenceNodeId']).doUpdateSet({
+          errorCode: this.errorCode(error),
+          updatedAt: new Date(),
+        }),
+      )
+      .execute();
+  }
+
+  private async migrateLegacyPageEmbedsForPage(
+    pageId: string,
+  ): Promise<boolean> {
+    const page = await this.pageRepo.findById(pageId, { includeContent: true });
+    if (!page || page.deletedAt) {
+      await this.deleteLegacyPageReferences(pageId);
+      return false;
+    }
+    const actor = await this.findLegacyMigrationActor(page);
+    if (!actor) {
+      throw this.conflict(
+        'page_embed_migration_actor_unavailable',
+        'No workspace user is available for the migration',
+      );
+    }
+    const current = await this.getLiveContent(page.id, actor).catch(
+      () => page.content,
+    );
+    if (!this.containsNodeType(current, 'pageEmbed')) {
+      await this.deleteLegacyPageReferences(page.id);
+      return false;
+    }
+
+    const baseContentHash = hashProseMirrorJson(current as any);
+    const operation = await this.beginOperation(
+      'legacy_embed_migration',
+      `legacy-page-embeds:${page.id}:${baseContentHash}`,
+      actor,
+      { pageId: page.id, baseContentHash },
+      { consumerPageId: page.id, baseContentHash },
+    );
+    if (operation.status === 'completed') {
+      await this.deleteLegacyPageReferences(page.id);
+      return false;
+    }
+
+    const resolved = await this.resolveLegacyPageEmbeds(
+      current,
+      page,
+      actor,
+      new Set([page.id]),
+      [],
+    );
+    strictJsonToNode(resolved.content as any);
+    const mappings = resolved.attachmentPlans.flatMap((plan) => plan.copies);
+    await this.db
+      .updateTable('pageTemplateOperations')
+      .set({
+        attachmentMapping: mappings as any,
+        leaseExpiresAt: new Date(Date.now() + OPERATION_LEASE_MS),
+        updatedAt: new Date(),
+      })
+      .where('id', '=', operation.id)
+      .where('status', '=', 'pending')
+      .where('leaseToken', '=', operation.leaseToken)
+      .executeTakeFirstOrThrow();
+
+    const copiedPaths: string[] = [];
+    const insertedAttachmentIds: string[] = [];
+    try {
+      for (const plan of resolved.attachmentPlans) {
+        const rows = await this.copyAttachments(
+          plan.copies,
+          plan.source,
+          page.id,
+          page.spaceId,
+          actor,
+          copiedPaths,
+          false,
+        );
+        for (const row of rows) {
+          await this.attachmentRepo.insertAttachment(row);
+          insertedAttachmentIds.push(row.id);
+        }
+      }
+      await this.assertOperationLease(operation.id, operation.leaseToken);
+      const result = await this.applyMutation(
+        page.id,
+        current,
+        resolved.content,
+        baseContentHash,
+        operation.id,
+        operation.leaseToken,
+        actor,
+        -1,
+      );
+      await this.completeOperation(
+        operation.id,
+        {
+          afterContentHash: result.afterHash,
+          attachmentMapping: mappings as any,
+        },
+        operation.leaseToken,
+      );
+      await this.recordLegacyMigrationIssues(page, resolved.issues);
+      await this.pageHistoryRecorder.enqueuePageEvent({
+        pageId: page.id,
+        changeType: 'page.template.legacy-embeds-materialized',
+        changeData: {
+          migratedEmbedCount: resolved.migratedEmbedCount,
+          unavailableEmbedCount: resolved.issues.length,
+        },
+        actorId: actor.id,
+      });
+      return true;
+    } catch (error) {
+      if (await this.ownsOperationLease(operation.id, operation.leaseToken)) {
+        await this.failOperation(
+          operation.id,
+          this.errorCode(error),
+          operation.leaseToken,
+        );
+        await Promise.allSettled(
+          insertedAttachmentIds.map((id) =>
+            this.attachmentRepo.deleteAttachmentById(id),
+          ),
+        );
+        await Promise.allSettled(
+          copiedPaths.map((path) => this.storageService.delete(path)),
+        );
+      }
+      throw error;
+    }
+  }
+
+  private async resolveLegacyPageEmbeds(
+    input: unknown,
+    target: Page,
+    actor: User,
+    ancestors: Set<string>,
+    path: number[],
+  ): Promise<{
+    content: unknown;
+    attachmentPlans: LegacyAttachmentCopyPlan[];
+    issues: LegacyMigrationIssue[];
+    migratedEmbedCount: number;
+  }> {
+    const attachmentPlans: LegacyAttachmentCopyPlan[] = [];
+    const issues: LegacyMigrationIssue[] = [];
+    let migratedEmbedCount = 0;
+
+    const visitNodes = async (nodes: any[], parentPath: number[]) => {
+      const output: any[] = [];
+      for (let index = 0; index < nodes.length; index += 1) {
+        const node = nodes[index];
+        const nodePath = [...parentPath, index];
+        if (node?.type !== 'pageEmbed') {
+          const next = structuredClone(node);
+          if (Array.isArray(next?.content)) {
+            next.content = await visitNodes(next.content, nodePath);
+          }
+          output.push(next);
+          continue;
+        }
+
+        migratedEmbedCount += 1;
+        const rawSourcePageId = node.attrs?.sourcePageId;
+        const sourcePageId =
+          typeof rawSourcePageId === 'string' && isUuid(rawSourcePageId)
+            ? rawSourcePageId
+            : null;
+        const referenceNodeId =
+          typeof node.attrs?.id === 'string' && node.attrs.id.length > 0
+            ? node.attrs.id
+            : `legacy:${nodePath.join('.')}`;
+        const source = sourcePageId
+          ? await this.pageRepo.findById(sourcePageId, { includeContent: true })
+          : null;
+        const unavailableCode = !sourcePageId
+          ? 'page_embed_invalid_source_page_id'
+          : !source || source.deletedAt
+            ? 'page_embed_source_unavailable'
+            : source.workspaceId !== target.workspaceId ||
+                source.spaceId !== target.spaceId
+              ? 'page_embed_source_scope_mismatch'
+              : ancestors.has(source.id)
+                ? 'page_embed_cycle'
+                : null;
+        if (unavailableCode) {
+          issues.push({
+            referenceNodeId,
+            sourcePageId,
+            errorCode: unavailableCode,
+          });
+          output.push(this.legacyUnavailableCallout());
+          continue;
+        }
+
+        const sourceContent = await this.getLiveContent(source!.id, actor).catch(
+          () => source!.content,
+        );
+        const materialized = materializePageContent(sourceContent, {
+          sourcePageId: source!.id,
+          targetPageId: target.id,
+        });
+        const rewritten = rewriteAttachmentsForUnsync(
+          materialized,
+          () => uuid7(),
+        );
+        if (rewritten.copies.length > 0) {
+          attachmentPlans.push({ source: source!, copies: rewritten.copies });
+        }
+        const nested = await this.resolveLegacyPageEmbeds(
+          rewritten.content,
+          target,
+          actor,
+          new Set([...ancestors, source!.id]),
+          nodePath,
+        );
+        attachmentPlans.push(...nested.attachmentPlans);
+        issues.push(...nested.issues);
+        migratedEmbedCount += nested.migratedEmbedCount;
+        const nestedDocument = nested.content as any;
+        output.push(...(Array.isArray(nestedDocument?.content)
+          ? nestedDocument.content
+          : [this.legacyUnavailableCallout()]));
+      }
+      return output;
+    };
+
+    const document = input && typeof input === 'object'
+      ? structuredClone(input as any)
+      : { type: 'doc', content: [] };
+    document.type = 'doc';
+    document.content = await visitNodes(
+      Array.isArray(document.content) ? document.content : [],
+      path,
+    );
+    if (document.content.length === 0) document.content = [{ type: 'paragraph' }];
+    return { content: document, attachmentPlans, issues, migratedEmbedCount };
+  }
+
+  private legacyUnavailableCallout() {
+    return {
+      type: 'callout',
+      attrs: { type: 'info', icon: null },
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            {
+              type: 'text',
+              text: 'Embedded page content was unavailable during migration.',
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  private async findLegacyMigrationActor(page: Page): Promise<User | null> {
+    const creator = await this.db
+      .selectFrom('users')
+      .selectAll()
+      .where('id', '=', page.creatorId)
+      .where('workspaceId', '=', page.workspaceId)
+      .executeTakeFirst();
+    if (creator) return creator;
+    return (
+      (await this.db
+        .selectFrom('users')
+        .selectAll()
+        .where('workspaceId', '=', page.workspaceId)
+        .where('deletedAt', 'is', null)
+        .where('deactivatedAt', 'is', null)
+        .orderBy('createdAt', 'asc')
+        .executeTakeFirst()) ?? null
+    );
+  }
+
+  private async recordLegacyMigrationIssues(
+    page: Page,
+    issues: LegacyMigrationIssue[],
+  ): Promise<void> {
+    if (issues.length === 0) return;
+    await this.db
+      .insertInto('pageTemplateLegacyMigrationErrors')
+      .values(
+        issues.map((issue) => ({
+          workspaceId: page.workspaceId,
+          consumerPageId: page.id,
+          sourcePageId: issue.sourcePageId,
+          referenceNodeId: issue.referenceNodeId,
+          errorCode: issue.errorCode,
+        })),
+      )
+      .onConflict((conflict) =>
+        conflict
+          .columns(['consumerPageId', 'referenceNodeId'])
+          .doUpdateSet({
+            sourcePageId: sql`excluded.source_page_id`,
+            errorCode: sql`excluded.error_code`,
+            updatedAt: new Date(),
+          }),
+      )
+      .execute();
+  }
+
+  private async deleteLegacyPageReferences(pageId: string): Promise<void> {
+    await this.db
+      .deleteFrom('pageTransclusionReferences')
+      .where('referencePageId', '=', pageId)
+      .where('referenceKind', '=', 'page')
+      .execute();
+  }
+
+  private containsNodeType(input: unknown, type: string): boolean {
+    if (!input || typeof input !== 'object') return false;
+    const node = input as any;
+    if (node.type === type) return true;
+    return Array.isArray(node.content)
+      ? node.content.some((child: unknown) => this.containsNodeType(child, type))
+      : false;
+  }
+
+  private async resumePendingSyncRuns(): Promise<void> {
+    const runs = await this.db
+      .selectFrom('pageTemplateSyncRuns')
+      .select('id')
+      .where((eb) =>
+        eb.or([
+          eb('status', '=', 'pending'),
+          eb.and([
+            eb('status', '=', 'running'),
+            eb.or([
+              eb('leaseExpiresAt', 'is', null),
+              eb('leaseExpiresAt', '<=', new Date()),
+            ]),
+          ]),
+        ]),
+      )
+      .orderBy('createdAt', 'asc')
+      .limit(10)
+      .execute();
+    for (const run of runs) void this.processSyncRun(run.id);
+  }
+
+  private async processSyncRun(runId: string): Promise<void> {
+    if (this.activeSyncRuns.has(runId)) return;
+    this.activeSyncRuns.add(runId);
+    const leaseToken = uuid7();
+    try {
+      const claimed = await this.db
+        .updateTable('pageTemplateSyncRuns')
+        .set({
+          status: 'running',
+          leaseToken,
+          leaseExpiresAt: new Date(Date.now() + OPERATION_LEASE_MS),
+          startedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where('id', '=', runId)
+        .where((eb) =>
+          eb.or([
+            eb('status', '=', 'pending'),
+            eb.and([
+              eb('status', '=', 'running'),
+              eb.or([
+                eb('leaseExpiresAt', 'is', null),
+                eb('leaseExpiresAt', '<=', new Date()),
+              ]),
+            ]),
+          ]),
+        )
+        .returningAll()
+        .executeTakeFirst();
+      if (!claimed) return;
+      await this.db
+        .updateTable('pageTemplateSyncItems')
+        .set({ status: 'pending', updatedAt: new Date() })
+        .where('runId', '=', runId)
+        .where('status', '=', 'running')
+        .execute();
+      const [revision, requestedActor] = await Promise.all([
+        this.db
+          .selectFrom('pageTemplateRevisions')
+          .selectAll()
+          .where('id', '=', claimed.revisionId)
+          .executeTakeFirst(),
+        claimed.requestedById
+          ? this.db
+              .selectFrom('users')
+              .selectAll()
+              .where('id', '=', claimed.requestedById)
+              .where('workspaceId', '=', claimed.workspaceId)
+              .executeTakeFirst()
+          : null,
+      ]);
+      let actor = requestedActor;
+      if (!actor && revision) {
+        const template = await this.pageRepo.findById(claimed.templatePageId);
+        if (template) actor = await this.findLegacyMigrationActor(template);
+      }
+      if (!revision || !actor) {
+        await this.finishSyncRun(
+          runId,
+          leaseToken,
+          'failed',
+          'page_template_sync_actor_missing',
+        );
+        return;
+      }
+      const items = await this.db
+        .selectFrom('pageTemplateSyncItems')
+        .selectAll()
+        .where('runId', '=', runId)
+        .where('status', '=', 'pending')
+        .orderBy('createdAt', 'asc')
+        .execute();
+      for (const item of items) {
+        const renewed = await this.db
+          .updateTable('pageTemplateSyncRuns')
+          .set({
+            leaseExpiresAt: new Date(Date.now() + OPERATION_LEASE_MS),
+            updatedAt: new Date(),
+          })
+          .where('id', '=', runId)
+          .where('leaseToken', '=', leaseToken)
+          .returning('id')
+          .executeTakeFirst();
+        if (!renewed) return;
+        await this.processSyncItem(claimed, revision, item, actor as User);
+      }
+      await this.recalculateSyncRun(runId, leaseToken);
+    } catch (error) {
+      this.logger.error(
+        `Template synchronization run failed; runId=${runId}; code=${this.errorCode(error)}`,
+      );
+      await this.finishSyncRun(
+        runId,
+        leaseToken,
+        'failed',
+        this.errorCode(error),
+      );
+    } finally {
+      this.activeSyncRuns.delete(runId);
+    }
+  }
+
+  private async processSyncItem(
+    run: any,
+    revision: any,
+    item: any,
+    actor: User,
+  ): Promise<void> {
+    await this.db
+      .updateTable('pageTemplateSyncItems')
+      .set({
+        status: 'running',
+        attemptCount: (item.attemptCount ?? 0) + 1,
+        errorCode: null,
+        updatedAt: new Date(),
+      })
+      .where('id', '=', item.id)
+      .execute();
+    const instance = await this.db
+      .selectFrom('pageTemplateInstances')
+      .selectAll()
+      .where('id', '=', item.instanceId)
+      .executeTakeFirst();
+    if (
+      !instance ||
+      instance.status === 'detached' ||
+      instance.templatePageId !== run.templatePageId
+    ) {
+      await this.markSyncItemCompleted(item.id);
+      return;
+    }
+    if ((instance.appliedRevision ?? 0) >= run.revision) {
+      await this.markSyncItemCompleted(item.id);
+      return;
+    }
+    const page = await this.pageRepo.findById(item.childPageId);
+    if (!page || page.deletedAt) {
+      await this.markSyncItemFailed(
+        item.id,
+        instance.id,
+        'page_template_child_missing',
+      );
+      return;
+    }
+    const publishedForInstance = await this.prepareInstanceRevisionContent(
+      instance,
+      page,
+      revision.content,
+      actor,
+    );
+    await this.db
+      .updateTable('pageTemplateInstances')
+      .set({ status: 'syncing', lastErrorCode: null, updatedAt: new Date() })
+      .where('id', '=', instance.id)
+      .where('status', '!=', 'detached')
+      .execute();
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      try {
+        const current = await this.getLiveContent(page.id, actor);
+        const next = createTemplateInstanceContent(
+          publishedForInstance,
+          current,
+        );
+        const baseHash = hashProseMirrorJson(current as any);
+        const nextHash = hashProseMirrorJson(next as any);
+        if (baseHash === nextHash) {
+          await this.db
+            .updateTable('pageTemplateInstances')
+            .set({
+              appliedRevision: run.revision,
+              status: 'active',
+              lastErrorCode: null,
+              updatedAt: new Date(),
+            })
+            .where('id', '=', instance.id)
+            .where('status', '!=', 'detached')
+            .execute();
+          await this.markSyncItemCompleted(item.id);
+          await this.pageHistoryRecorder.enqueuePageEvent({
+            pageId: page.id,
+            changeType: 'page.template.synced',
+            changeData: {
+              templateId: run.templatePageId,
+              templateRevision: run.revision,
+            },
+            actorId: actor.id,
+          });
+          return;
+        }
+        const operation = await this.beginOperation(
+          'template_sync',
+          `template-sync:${run.id}:${instance.id}:${attempt}`,
+          actor,
+          { runId: run.id, instanceId: instance.id, revision: run.revision, attempt },
+          {
+            sourcePageId: run.templatePageId,
+            consumerPageId: page.id,
+            baseContentHash: baseHash,
+          },
+        );
+        await this.applyMutation(
+          page.id,
+          current,
+          next,
+          baseHash,
+          operation.id,
+          operation.leaseToken,
+          actor,
+          run.revision,
+        );
+        await this.db
+          .updateTable('pageTemplateInstances')
+          .set({
+            appliedRevision: run.revision,
+            status: 'active',
+            lastErrorCode: null,
+            updatedAt: new Date(),
+          })
+          .where('id', '=', instance.id)
+          .where('status', '!=', 'detached')
+          .execute();
+        await this.markSyncItemCompleted(item.id);
+        await this.pageHistoryRecorder.enqueuePageEvent({
+          pageId: page.id,
+          changeType: 'page.template.synced',
+          changeData: {
+            templateId: run.templatePageId,
+            templateRevision: run.revision,
+          },
+          actorId: actor.id,
+        });
+        return;
+      } catch (error) {
+        lastError = error;
+        if (this.errorCode(error) !== 'page_embed_stale') break;
+      }
+    }
+    await this.markSyncItemFailed(
+      item.id,
+      instance.id,
+      this.errorCode(lastError),
+    );
+  }
+
+  private async markSyncItemCompleted(itemId: string): Promise<void> {
+    await this.db
+      .updateTable('pageTemplateSyncItems')
+      .set({ status: 'completed', errorCode: null, updatedAt: new Date() })
+      .where('id', '=', itemId)
+      .execute();
+  }
+
+  private async prepareInstanceRevisionContent(
+    instance: any,
+    childPage: Page,
+    publishedContent: unknown,
+    actor: User,
+  ): Promise<unknown> {
+    const mappings = await this.db
+      .selectFrom('pageTemplateAttachmentMappings')
+      .select(['sourceAttachmentId', 'childAttachmentId'])
+      .where('instanceId', '=', instance.id)
+      .execute();
+    const mappedIds = new Map(
+      mappings.map((mapping) => [
+        mapping.sourceAttachmentId,
+        mapping.childAttachmentId,
+      ]),
+    );
+    const rewritten = rewriteAttachmentsForUnsync(
+      publishedContent,
+      (sourceAttachmentId) =>
+        mappedIds.get(sourceAttachmentId ?? '') ?? uuid7(),
+    );
+    const newCopies = rewritten.copies.filter(
+      (copy) => !mappedIds.has(copy.oldAttachmentId),
+    );
+    if (newCopies.length === 0) return rewritten.content;
+    const source = instance.templatePageId
+      ? await this.pageRepo.findById(instance.templatePageId)
+      : null;
+    if (!source || source.deletedAt) {
+      throw this.conflict(
+        'page_template_source_missing',
+        'The template source is unavailable',
+      );
+    }
+    const copiedPaths: string[] = [];
+    try {
+      const attachmentRows = await this.copyAttachments(
+        newCopies,
+        source,
+        childPage.id,
+        childPage.spaceId,
+        actor,
+        copiedPaths,
+        false,
+      );
+      await executeTx(this.db, async (trx) => {
+        for (const row of attachmentRows) {
+          await this.attachmentRepo.insertAttachment(row, trx);
+        }
+        await trx
+          .insertInto('pageTemplateAttachmentMappings')
+          .values(
+            newCopies.map((copy) => ({
+              instanceId: instance.id,
+              sourceAttachmentId: copy.oldAttachmentId,
+              childAttachmentId: copy.newAttachmentId,
+            })),
+          )
+          .onConflict((conflict) =>
+            conflict
+              .columns(['instanceId', 'sourceAttachmentId'])
+              .doNothing(),
+          )
+          .execute();
+      });
+      return rewritten.content;
+    } catch (error) {
+      await Promise.allSettled(
+        copiedPaths.map((path) => this.storageService.delete(path)),
+      );
+      throw error;
+    }
+  }
+
+  private async markSyncItemFailed(
+    itemId: string,
+    instanceId: string,
+    errorCode: string,
+  ): Promise<void> {
+    await executeTx(this.db, async (trx) => {
+      await trx
+        .updateTable('pageTemplateSyncItems')
+        .set({ status: 'failed', errorCode, updatedAt: new Date() })
+        .where('id', '=', itemId)
+        .execute();
+      await trx
+        .updateTable('pageTemplateInstances')
+        .set({ status: 'error', lastErrorCode: errorCode, updatedAt: new Date() })
+        .where('id', '=', instanceId)
+        .where('status', '!=', 'detached')
+        .execute();
+    });
+  }
+
+  private async recalculateSyncRun(
+    runId: string,
+    leaseToken: string,
+  ): Promise<void> {
+    const rows = await this.db
+      .selectFrom('pageTemplateSyncItems')
+      .select('status')
+      .select((eb) => eb.fn.countAll<number>().as('count'))
+      .where('runId', '=', runId)
+      .groupBy('status')
+      .execute();
+    const counts = new Map(rows.map((row) => [row.status, Number(row.count)]));
+    const succeeded = counts.get('completed') ?? 0;
+    const failed = counts.get('failed') ?? 0;
+    const processed = succeeded + failed;
+    const status =
+      failed === 0 ? 'completed' : succeeded > 0 ? 'partial' : 'failed';
+    await this.db
+      .updateTable('pageTemplateSyncRuns')
+      .set({
+        status,
+        processedCount: processed,
+        succeededCount: succeeded,
+        failedCount: failed,
+        errorCode: failed > 0 ? 'page_template_sync_partial_failure' : null,
+        completedAt: new Date(),
+        leaseToken: null,
+        leaseExpiresAt: null,
+        updatedAt: new Date(),
+      })
+      .where('id', '=', runId)
+      .where('leaseToken', '=', leaseToken)
+      .execute();
+  }
+
+  private async finishSyncRun(
+    runId: string,
+    leaseToken: string,
+    status: 'failed',
+    errorCode: string,
+  ): Promise<void> {
+    await this.db
+      .updateTable('pageTemplateSyncRuns')
+      .set({
+        status,
+        errorCode,
+        completedAt: new Date(),
+        leaseToken: null,
+        leaseExpiresAt: null,
+        updatedAt: new Date(),
+      })
+      .where('id', '=', runId)
+      .where('leaseToken', '=', leaseToken)
+      .execute();
+  }
+
   private async getLiveContent(pageId: string, user: User): Promise<any> {
     return this.collaborationGateway.handleYjsEvent(
       'getAiPageContent',
@@ -864,6 +2595,7 @@ export class PageTemplateService {
     mutationId: string,
     operationLeaseToken: string,
     user: User,
+    systemSyncRevision?: number,
   ): Promise<{ beforeHash: string; afterHash: string }> {
     return this.collaborationGateway.handleYjsEvent(
       'applyPageTemplateMutation',
@@ -875,6 +2607,7 @@ export class PageTemplateService {
         mutationId,
         operationLeaseToken,
         workspaceId: user.workspaceId,
+        systemSyncRevision,
         user,
       },
     ) as Promise<{ beforeHash: string; afterHash: string }>;
@@ -886,7 +2619,7 @@ export class PageTemplateService {
   ): Promise<Page> {
     const page = await this.requirePlainDocument(pageId, user.workspaceId);
     await this.pageAccessService.assertCanReadPage(page, user);
-    if (!page.isTemplate) {
+    if (!page.templateKind) {
       throw new BadRequestException({
         code: 'page_template_marker_required',
         message: 'The source page is not a template',
@@ -1434,6 +3167,34 @@ export class PageTemplateService {
         leaseToken,
       );
     }
+    if (operation.operationKind === 'legacy_embed_migration') {
+      if (this.containsNodeType(page.content, 'pageEmbed')) return false;
+      return this.completeOperation(
+        operation.id,
+        { afterContentHash: hashProseMirrorJson(page.content as any) },
+        leaseToken,
+      );
+    }
+    if (operation.operationKind === 'template_detach') {
+      const instance = await this.db
+        .selectFrom('pageTemplateInstances')
+        .select('status')
+        .where('childPageId', '=', page.id)
+        .executeTakeFirst();
+      if (
+        instance?.status !== 'detached' &&
+        (this.containsNodeType(page.content, 'templateManagedBlock') ||
+          this.containsNodeType(page.content, 'templateField'))
+      ) {
+        return false;
+      }
+      return this.completeOperation(
+        operation.id,
+        { afterContentHash: hashProseMirrorJson(page.content as any) },
+        leaseToken,
+      );
+    }
+    if (operation.operationKind === 'template_sync') return false;
     const occurrence = this.findPageEmbed(
       page.content,
       operation.referenceNodeId,

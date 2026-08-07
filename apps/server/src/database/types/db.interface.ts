@@ -50,8 +50,15 @@ import type {
   PageTransclusions,
   PageTransclusionReferences,
   PageTemplateGroupPolicies,
+  PageTemplateAttachmentMappings,
+  PageTemplateInstances,
+  PageTemplateLegacyMigrationErrors,
   PageTemplateOperations,
+  PageTemplatePublishConfirmations,
+  PageTemplateRevisions,
   PageTemplateSpacePolicies,
+  PageTemplateSyncItems,
+  PageTemplateSyncRuns,
   PageTemplateWorkspacePolicies,
   PageAccessRules,
   PushNotificationJobs,
@@ -125,8 +132,15 @@ export interface DbInterface {
   pageTransclusions: PageTransclusions;
   pageTransclusionReferences: PageTransclusionReferences;
   pageTemplateGroupPolicies: PageTemplateGroupPolicies;
+  pageTemplateAttachmentMappings: PageTemplateAttachmentMappings;
+  pageTemplateInstances: PageTemplateInstances;
+  pageTemplateLegacyMigrationErrors: PageTemplateLegacyMigrationErrors;
   pageTemplateOperations: PageTemplateOperations;
+  pageTemplatePublishConfirmations: PageTemplatePublishConfirmations;
+  pageTemplateRevisions: PageTemplateRevisions;
   pageTemplateSpacePolicies: PageTemplateSpacePolicies;
+  pageTemplateSyncItems: PageTemplateSyncItems;
+  pageTemplateSyncRuns: PageTemplateSyncRuns;
   pageTemplateWorkspacePolicies: PageTemplateWorkspacePolicies;
   pushNotificationJobs: PushNotificationJobs;
   pageHistory: PageHistory;

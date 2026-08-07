@@ -910,7 +910,6 @@ export interface Pages {
   icon: string | null;
   id: Generated<string>;
   isLocked: Generated<boolean>;
-  isTemplate: Generated<boolean>;
   lastUpdatedById: string | null;
   parentPageId: string | null;
   position: string | null;
@@ -918,6 +917,8 @@ export interface Pages {
   slugId: string;
   spaceId: string;
   textContent: string | null;
+  templateArchivedAt: Timestamp | null;
+  templateKind: string | null;
   title: string | null;
   tsv: string | null;
   updatedAt: Generated<Timestamp>;
@@ -947,9 +948,8 @@ export interface PageTemplateWorkspacePolicies {
 
 export interface PageTemplateSpacePolicies {
   allowCreateTemplate: Generated<boolean>;
-  allowLiveEmbed: Generated<boolean>;
-  allowPublicLiveEmbed: Generated<boolean>;
-  allowSnapshot: Generated<boolean>;
+  allowRegularTemplate: Generated<boolean>;
+  allowSyncedTemplate: Generated<boolean>;
   createdAt: Generated<Timestamp>;
   revision: Generated<number>;
   spaceId: string;
@@ -994,6 +994,100 @@ export interface PageTemplateOperations {
   status: Generated<string>;
   updatedAt: Generated<Timestamp>;
   workspaceId: string;
+}
+
+export interface PageTemplateRevisions {
+  content: Json;
+  contentHash: string;
+  createdAt: Generated<Timestamp>;
+  id: Generated<string>;
+  publishedById: string | null;
+  revision: number;
+  spaceId: string;
+  templatePageId: string;
+  workspaceId: string;
+}
+
+export interface PageTemplateInstances {
+  appliedRevision: number | null;
+  childPageId: string;
+  createdAt: Generated<Timestamp>;
+  createdRevision: number | null;
+  detachedAt: Timestamp | null;
+  detachedById: string | null;
+  id: Generated<string>;
+  instanceKind: string;
+  lastErrorCode: string | null;
+  spaceId: string;
+  status: Generated<string>;
+  templatePageId: string | null;
+  updatedAt: Generated<Timestamp>;
+  workspaceId: string;
+}
+
+export interface PageTemplateLegacyMigrationErrors {
+  consumerPageId: string;
+  createdAt: Generated<Timestamp>;
+  errorCode: string;
+  id: Generated<string>;
+  referenceNodeId: string;
+  sourcePageId: string | null;
+  updatedAt: Generated<Timestamp>;
+  workspaceId: string;
+}
+
+export interface PageTemplateSyncRuns {
+  completedAt: Timestamp | null;
+  createdAt: Generated<Timestamp>;
+  errorCode: string | null;
+  failedCount: Generated<number>;
+  id: Generated<string>;
+  leaseExpiresAt: Timestamp | null;
+  leaseToken: string | null;
+  processedCount: Generated<number>;
+  requestedById: string | null;
+  revision: number;
+  revisionId: string;
+  spaceId: string;
+  startedAt: Timestamp | null;
+  status: Generated<string>;
+  succeededCount: Generated<number>;
+  templatePageId: string;
+  totalCount: Generated<number>;
+  updatedAt: Generated<Timestamp>;
+  workspaceId: string;
+}
+
+export interface PageTemplateSyncItems {
+  attemptCount: Generated<number>;
+  childPageId: string;
+  createdAt: Generated<Timestamp>;
+  errorCode: string | null;
+  id: Generated<string>;
+  instanceId: string;
+  runId: string;
+  status: Generated<string>;
+  updatedAt: Generated<Timestamp>;
+}
+
+export interface PageTemplateAttachmentMappings {
+  childAttachmentId: string;
+  createdAt: Generated<Timestamp>;
+  id: Generated<string>;
+  instanceId: string;
+  sourceAttachmentId: string;
+}
+
+export interface PageTemplatePublishConfirmations {
+  consumedAt: Timestamp | null;
+  createdAt: Generated<Timestamp>;
+  draftHash: string;
+  expiresAt: Timestamp;
+  filledInstanceCount: Generated<number>;
+  id: Generated<string>;
+  removedFieldIds: Json;
+  requestedById: string;
+  templatePageId: string;
 }
 
 export interface PageEmbedGraphFences {
@@ -1062,7 +1156,6 @@ export interface QueueOutbox {
 }
 
 export interface Shares {
-  allowPublicLiveEmbed: Generated<boolean>;
   createdAt: Generated<Timestamp>;
   creatorId: string | null;
   deletedAt: Timestamp | null;
@@ -1289,8 +1382,15 @@ export interface DB {
   pageTransclusionReferences: PageTransclusionReferences;
   pageTransclusions: PageTransclusions;
   pageTemplateGroupPolicies: PageTemplateGroupPolicies;
+  pageTemplateAttachmentMappings: PageTemplateAttachmentMappings;
+  pageTemplateInstances: PageTemplateInstances;
+  pageTemplateLegacyMigrationErrors: PageTemplateLegacyMigrationErrors;
   pageTemplateOperations: PageTemplateOperations;
+  pageTemplatePublishConfirmations: PageTemplatePublishConfirmations;
+  pageTemplateRevisions: PageTemplateRevisions;
   pageTemplateSpacePolicies: PageTemplateSpacePolicies;
+  pageTemplateSyncItems: PageTemplateSyncItems;
+  pageTemplateSyncRuns: PageTemplateSyncRuns;
   pageTemplateWorkspacePolicies: PageTemplateWorkspacePolicies;
   pushNotificationJobs: PushNotificationJobs;
   pushSubscriptions: PushSubscriptions;

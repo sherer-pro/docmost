@@ -105,6 +105,7 @@ export class RagContentExportService {
         .where('workspaceId', '=', scope.workspace.id)
         .where('spaceId', '=', scope.space.id)
         .where('deletedAt', 'is', null)
+        .where('templateKind', 'is', null)
         .execute();
       return new Set(
         pages.map((page) => page.id).filter((pageId) => !excluded.has(pageId)),
@@ -193,6 +194,7 @@ export class RagContentExportService {
         .where('workspaceId', '=', scope.workspace.id)
         .where('spaceId', '=', scope.space.id)
         .where('deletedAt', 'is', null)
+        .where('templateKind', 'is', null)
         .where('createdAt', '<=', new Date(snapshot.snapshotUpperBoundMs));
       if (afterId) {
         query = query.where('id', '>', afterId);
@@ -588,6 +590,7 @@ export class RagContentExportService {
       .where('pages.spaceId', '=', scope.space.id)
       .where('pages.id', 'in', [...readablePageIds])
       .where('pages.deletedAt', 'is', null)
+      .where('pages.templateKind', 'is', null)
       .where(
         pageUpdatedAtMs,
         '<=',
@@ -814,6 +817,7 @@ export class RagContentExportService {
       .where('pages.workspaceId', '=', scope.workspace.id)
       .where('pages.spaceId', '=', scope.space.id)
       .where('pages.deletedAt', 'is', null)
+      .where('pages.templateKind', 'is', null)
       .where('pages.updatedAt', '>=', updatedSince)
       .where(pageUpdatedAtMs, '<=', new Date(snapshot.snapshotUpperBoundMs))
       .$if(Boolean(readablePageIds), (qb) =>
@@ -1057,6 +1061,7 @@ export class RagContentExportService {
       .where('pages.workspaceId', '=', scope.workspace.id)
       .where('pages.spaceId', '=', scope.space.id)
       .where('pages.deletedAt', 'is not', null)
+      .where('pages.templateKind', 'is', null)
       .where('pages.deletedAt', '>=', deletedSince)
       .where(pageDeletedAtMs, '<=', new Date(snapshot.snapshotUpperBoundMs))
       .where(({ not, exists, selectFrom }) =>

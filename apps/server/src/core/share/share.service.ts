@@ -24,7 +24,6 @@ import { sql } from 'kysely';
 import { MAX_PAGE_TREE_DEPTH } from '../../common/config/page-tree.constants';
 import { validate as isValidUUID } from 'uuid';
 import { TransclusionService } from '../page/transclusion/transclusion.service';
-import { PageEmbedService } from '../page/transclusion/page-embed.service';
 import { resolveHeadingNumberingEnabled } from '../page/utils/heading-numbering-settings.utils';
 import { executeTx } from '@docmost/db/utils';
 import { PublicSharingPolicyService } from './public-sharing-policy.service';
@@ -38,7 +37,6 @@ export class ShareService {
     private readonly pageRepo: PageRepo,
     @InjectKysely() private readonly db: KyselyDB,
     private readonly transclusionService: TransclusionService,
-    private readonly pageEmbedService: PageEmbedService,
     private readonly publicSharingPolicy: PublicSharingPolicyService,
   ) {}
 
@@ -118,8 +116,6 @@ export class ShareService {
         {
           key: nanoIdGen().toLowerCase(),
           pageId: page.id,
-          allowPublicLiveEmbed:
-            createShareDto.allowPublicLiveEmbed ?? false,
           includeSubPages: createShareDto.includeSubPages ?? false,
           searchIndexing: createShareDto.searchIndexing ?? false,
           creatorId: authUserId,
@@ -137,7 +133,6 @@ export class ShareService {
         {
           includeSubPages: updateShareDto.includeSubPages,
           searchIndexing: updateShareDto.searchIndexing,
-          allowPublicLiveEmbed: updateShareDto.allowPublicLiveEmbed,
         },
         shareId,
       );
@@ -245,7 +240,6 @@ export class ShareService {
             'shares.id as shareId',
             'shares.key as shareKey',
             'shares.includeSubPages',
-            'shares.allowPublicLiveEmbed',
             'shares.searchIndexing',
             'shares.creatorId',
             'shares.spaceId',
@@ -272,7 +266,6 @@ export class ShareService {
                   's.id as shareId',
                   's.key as shareKey',
                   's.includeSubPages',
-                  's.allowPublicLiveEmbed',
                   's.searchIndexing',
                   's.creatorId',
                   's.spaceId',
@@ -317,7 +310,6 @@ export class ShareService {
       id: share.shareId,
       key: share.shareKey,
       includeSubPages: share.includeSubPages,
-      allowPublicLiveEmbed: share.allowPublicLiveEmbed,
       searchIndexing: share.searchIndexing,
       pageId: share.id,
       creatorId: share.creatorId,
@@ -401,9 +393,8 @@ export class ShareService {
   async lookupTransclusionForShare(
     shareId: string,
     references: Array<{
-      kind?: 'block' | 'page';
       sourcePageId: string;
-      transclusionId?: string;
+      transclusionId: string;
     }>,
     workspaceId: string,
   ) {
@@ -438,51 +429,17 @@ export class ShareService {
       }
     }
 
-    const blockReferences = references
-      .map((reference, index) => ({ reference, index }))
-      .filter(({ reference }) => (reference.kind ?? 'block') === 'block');
-    const pageReferences = references
-      .map((reference, index) => ({ reference, index }))
-      .filter(({ reference }) => reference.kind === 'page');
-    const [blocks, pages] = await Promise.all([
-      this.transclusionService.lookupWithAccessSet(
-        blockReferences.map(({ reference }) => ({
-          sourcePageId: reference.sourcePageId,
-          transclusionId: reference.transclusionId!,
-        })),
-        accessiblePageIds,
-        workspaceId,
-      ),
-      share.allowPublicLiveEmbed
-        ? this.pageEmbedService.lookupWithAccessSet(
-            pageReferences.map(({ reference }) => reference.sourcePageId),
-            accessiblePageIds,
-            workspaceId,
-            undefined,
-            true,
-            share.spaceId,
-          )
-        : Promise.resolve({
-            items: pageReferences.map(({ reference }) => ({
-              kind: 'page' as const,
-              sourcePageId: reference.sourcePageId,
-              status: 'disabled' as const,
-            })),
-          }),
-    ]);
-    for (const item of [...blocks.items, ...pages.items]) {
+    const result = await this.transclusionService.lookupWithAccessSet(
+      references,
+      accessiblePageIds,
+      workspaceId,
+    );
+    for (const item of result.items) {
       if (item && 'content' in item) {
         item.content = await this.updatePublicContentAttachments(item.content);
       }
     }
-    const items = new Array(references.length);
-    blockReferences.forEach(({ index }, resultIndex) => {
-      items[index] = blocks.items[resultIndex];
-    });
-    pageReferences.forEach(({ index }, resultIndex) => {
-      items[index] = pages.items[resultIndex];
-    });
-    return { items, maxDepth: this.pageEmbedService.getMaxDepth() };
+    return result;
   }
 
   async isSharingAllowed(

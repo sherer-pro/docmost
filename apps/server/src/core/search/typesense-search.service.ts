@@ -283,6 +283,7 @@ export class TypesenseSearchService {
       .where('pages.id', 'in', ids)
       .where('pages.workspaceId', '=', workspaceId)
       .where('pages.deletedAt', 'is', null)
+      .where('pages.templateKind', 'is', null)
       .where('spaces.archivedAt', 'is', null)
       .where('spaces.deletedAt', 'is', null)
       .execute();
@@ -329,6 +330,7 @@ export class TypesenseSearchService {
       .where('attachments.workspaceId', '=', workspaceId)
       .where('attachments.deletedAt', 'is', null)
       .where('pages.deletedAt', 'is', null)
+      .where('pages.templateKind', 'is', null)
       .where('spaces.archivedAt', 'is', null)
       .where('spaces.deletedAt', 'is', null)
       .execute();

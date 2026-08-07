@@ -21,6 +21,10 @@ route and that its API-key examples explicitly create and list RAG keys.
 
 ## 2. Authentication and scope
 
+Template catalog entries are outside RAG scope. Pages created from regular or
+synchronized templates are ordinary materialized pages and remain eligible for
+feeds and direct reads under the usual key, ACL, and content-policy checks.
+
 ### 2.1 Token type
 
 `/api/rag/*` accepts only workspace API keys in the `Authorization` header:

@@ -19,9 +19,6 @@ export class CreateShareDto {
   @IsBoolean()
   searchIndexing: boolean;
 
-  @IsOptional()
-  @IsBoolean()
-  allowPublicLiveEmbed?: boolean;
 }
 
 export class UpdateShareDto extends CreateShareDto {

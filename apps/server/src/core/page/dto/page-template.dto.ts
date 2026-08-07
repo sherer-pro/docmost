@@ -12,11 +12,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
-
-export class SetPageTemplateDto {
-  @IsBoolean()
-  enabled!: boolean;
-}
+import { TEMPLATE_KINDS, TemplateKind } from '@docmost/api-contract';
 
 export class PageTemplateDiscoveryDto {
   @IsOptional()
@@ -26,6 +22,15 @@ export class PageTemplateDiscoveryDto {
 
   @IsUUID()
   spaceId!: string;
+
+  @IsOptional()
+  @IsIn(TEMPLATE_KINDS)
+  kind?: TemplateKind;
+
+  @IsOptional()
+  @Transform(({ value }) => value === 'true')
+  @IsBoolean()
+  includeArchived?: boolean = false;
 
   @IsOptional()
   @IsString()
@@ -60,6 +65,13 @@ export class CreatePageTemplateDto {
   @IsUUID()
   spaceId!: string;
 
+  @IsIn(TEMPLATE_KINDS)
+  kind!: TemplateKind;
+
+  @IsOptional()
+  @IsUUID()
+  sourcePageId?: string;
+
   @IsOptional()
   @IsString()
   @MaxLength(500)
@@ -81,6 +93,25 @@ export class CreateFromTemplateDto {
   @IsString()
   @MaxLength(500)
   title?: string;
+}
+
+export class PublishPageTemplateDto {
+  @IsString()
+  @Length(64, 64)
+  draftHash!: string;
+
+  @IsOptional()
+  @IsUUID()
+  confirmationToken?: string;
+}
+
+export class DetachSyncedTemplateDto {
+  @IsBoolean()
+  confirmed!: boolean;
+
+  @IsString()
+  @Length(64, 64)
+  baseContentHash!: string;
 }
 
 export class InsertPageEmbedDto {
@@ -134,13 +165,10 @@ export class PageTemplateSpacePolicyDto {
   allowCreateTemplate!: boolean;
 
   @IsBoolean()
-  allowSnapshot!: boolean;
+  allowRegularTemplate!: boolean;
 
   @IsBoolean()
-  allowLiveEmbed!: boolean;
-
-  @IsBoolean()
-  allowPublicLiveEmbed!: boolean;
+  allowSyncedTemplate!: boolean;
 
   @IsInt()
   @Min(0)
@@ -151,7 +179,12 @@ export class PageTemplateGroupPolicyDto {
   @IsOptional()
   @IsArray()
   @IsIn(
-    ['create_template', 'manage_template', 'use_snapshot', 'use_live_embed'],
+    [
+      'create_template',
+      'manage_template',
+      'use_regular_template',
+      'use_synced_template',
+    ],
     { each: true },
   )
   allowedActions?: string[] | null;

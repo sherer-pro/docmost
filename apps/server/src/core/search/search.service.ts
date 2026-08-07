@@ -353,7 +353,8 @@ export class SearchService {
       .$if(Boolean(searchParams.creatorId), (qb) =>
         qb.where('creatorId', '=', searchParams.creatorId),
       )
-      .where('deletedAt', 'is', null);
+      .where('deletedAt', 'is', null)
+      .where('templateKind', 'is', null);
 
     if (hasTextQuery) {
       queryResults = queryResults.where(
@@ -642,6 +643,7 @@ export class SearchService {
       .where('attachments.pageId', 'is not', null)
       .where('attachments.spaceId', 'is not', null)
       .where('pages.deletedAt', 'is', null)
+      .where('pages.templateKind', 'is', null)
       .where('spaces.archivedAt', 'is', null)
       .where('spaces.deletedAt', 'is', null)
       .where('attachments.tsv', '@@', textQuery)

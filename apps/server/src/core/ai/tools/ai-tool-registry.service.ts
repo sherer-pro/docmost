@@ -796,7 +796,7 @@ export class AiToolRegistryService {
       {
         name: 'listPageTemplates',
         description:
-          'List readable marked page templates in the current space without page content.',
+          'List readable regular and synchronized page templates in the current space without page content.',
         inputSchema: {
           type: 'object',
           additionalProperties: false,
@@ -822,7 +822,7 @@ export class AiToolRegistryService {
       {
         name: 'getPageTemplateMetadata',
         description:
-          'Read safe metadata for one marked template page in the current space.',
+          'Read safe metadata for one regular or synchronized template in the current space.',
         inputSchema: {
           type: 'object',
           additionalProperties: false,
@@ -845,7 +845,7 @@ export class AiToolRegistryService {
       {
         name: 'listPageTemplateUsages',
         description:
-          'List readable live-embed occurrences for one template. Only consumers in the current scoped space are counted.',
+          'List readable pages created from one template. Detached pages are excluded and only consumers in the current scoped space are counted.',
         inputSchema: {
           type: 'object',
           additionalProperties: false,
@@ -1809,6 +1809,7 @@ export class AiToolRegistryService {
         'page.slugId',
         'page.icon',
         'page.updatedAt',
+        'page.templateKind',
       ])
       .where('reference.sourcePageId', '=', sourcePageId)
       .where('reference.transclusionId', '=', transclusionId)
@@ -1982,7 +1983,8 @@ export class AiToolRegistryService {
       ])
       .where('page.workspaceId', '=', context.workspaceId)
       .where('page.spaceId', '=', context.spaceId)
-      .where('page.isTemplate', '=', true)
+      .where('page.templateKind', 'is not', null)
+      .where('page.templateArchivedAt', 'is', null)
       .where('page.deletedAt', 'is', null)
       .where('page.id', 'in', readablePageIds)
       .where((eb) =>
@@ -2034,7 +2036,7 @@ export class AiToolRegistryService {
   ): Promise<AiToolExecutionResult> {
     await this.assertPageTemplateToolPolicy(context);
     const page = await this.getReadablePage(pageId, context);
-    if (!page.isTemplate) throw new NotFoundException('Template not found');
+    if (!page.templateKind) throw new NotFoundException('Template not found');
     return {
       content: {
         id: page.id,
@@ -2043,7 +2045,8 @@ export class AiToolRegistryService {
         icon: page.icon,
         spaceId: page.spaceId,
         updatedAt: page.updatedAt,
-        isTemplate: true,
+        templateKind: page.templateKind,
+        archivedAt: page.templateArchivedAt,
       },
       citations: await this.pageCitations(page, undefined, context),
     };
@@ -2056,7 +2059,7 @@ export class AiToolRegistryService {
   ): Promise<AiToolExecutionResult> {
     await this.assertPageTemplateToolPolicy(context);
     const source = await this.getReadablePage(pageId, context);
-    if (!source.isTemplate) throw new NotFoundException('Template not found');
+    if (!source.templateKind) throw new NotFoundException('Template not found');
     const [snapshot, excluded] = await Promise.all([
       this.pageAccess.getSidebarAccessSnapshot(context.user, context.spaceId),
       this.contentPolicy.getExcludedPageIds(
@@ -2071,44 +2074,40 @@ export class AiToolRegistryService {
       readablePageIds.length === 0
         ? []
         : await this.db
-            .selectFrom('pageTransclusionReferences as reference')
-            .innerJoin('pages as page', 'page.id', 'reference.referencePageId')
+            .selectFrom('pageTemplateInstances as instance')
+            .innerJoin('pages as page', 'page.id', 'instance.childPageId')
             .select([
               'page.id',
               'page.title',
               'page.slugId',
               'page.icon',
               'page.updatedAt',
-              'reference.referenceNodeId',
+              'instance.instanceKind',
+              'instance.status',
+              'instance.appliedRevision',
             ])
-            .where('reference.workspaceId', '=', context.workspaceId)
-            .where('reference.referenceKind', '=', 'page')
-            .where('reference.sourcePageId', '=', pageId)
+            .where('instance.workspaceId', '=', context.workspaceId)
+            .where('instance.templatePageId', '=', pageId)
+            .where('instance.status', 'in', [
+              'snapshot',
+              'active',
+              'syncing',
+              'error',
+            ])
             .where('page.workspaceId', '=', context.workspaceId)
             .where('page.spaceId', '=', context.spaceId)
             .where('page.deletedAt', 'is', null)
             .where('page.id', 'in', readablePageIds)
             .orderBy('page.updatedAt', 'desc')
             .execute();
-    const grouped = new Map<
-      string,
-      (typeof rows)[number] & { occurrenceCount: number }
-    >();
-    for (const row of rows) {
-      const existing = grouped.get(row.id);
-      if (existing) existing.occurrenceCount += 1;
-      else grouped.set(row.id, { ...row, occurrenceCount: 1 });
-    }
-    const items = Array.from(grouped.values())
-      .slice(0, limit)
-      .map(({ referenceNodeId: _referenceNodeId, ...item }) => item);
+    const items = rows.slice(0, limit);
     const fitted = fitAiToolItems(items, 12 * 1024);
     return {
       content: {
         source: { id: source.id, title: source.title, slugId: source.slugId },
         items: fitted.items,
         occurrenceCount: rows.length,
-        truncated: grouped.size > limit || fitted.truncated,
+        truncated: rows.length > limit || fitted.truncated,
       },
       citations: [
         ...(await this.pageCitations(source, undefined, context)),
@@ -2133,7 +2132,12 @@ export class AiToolRegistryService {
       !policy.workspaceEnabled ||
       !policy.templatesEnabled ||
       !policy.allowedActions.some((action) =>
-        ['manage_template', 'use_snapshot', 'use_live_embed'].includes(action),
+        [
+          'create_template',
+          'manage_template',
+          'use_regular_template',
+          'use_synced_template',
+        ].includes(action),
       )
     ) {
       throw new ForbiddenException('Page templates are disabled by policy');

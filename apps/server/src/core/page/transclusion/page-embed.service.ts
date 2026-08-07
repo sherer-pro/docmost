@@ -210,7 +210,7 @@ export class PageEmbedService {
         actor.workspaceId,
         spaceId,
         actor.id,
-        'use_live_embed',
+        'use_synced_template',
       );
     }
     const externalSourcesById = new Map<string, Page>();
@@ -446,8 +446,8 @@ export class PageEmbedService {
         !consumerPolicy.systemEnabled ||
         !consumerPolicy.workspaceEnabled ||
         !consumerPolicy.templatesEnabled ||
-        !consumerPolicy.allowLiveEmbed ||
-        !consumerPolicy.allowedActions.includes('use_live_embed')
+        !consumerPolicy.allowSyncedTemplate ||
+        !consumerPolicy.allowedActions.includes('use_synced_template')
       ) {
         return {
           items: sourcePageIds.map((sourcePageId) => ({
@@ -478,26 +478,14 @@ export class PageEmbedService {
     consumerSpaceId?: string,
   ): Promise<{ items: PageEmbedLookup[] }> {
     const unique = [...new Set(sourcePageIds)];
-    if (publicShare && consumerSpaceId) {
-      const consumerPolicy = await this.policy.resolvePublic(
-        workspaceId,
-        consumerSpaceId,
-      );
-      if (
-        !consumerPolicy.systemEnabled ||
-        !consumerPolicy.workspaceEnabled ||
-        !consumerPolicy.templatesEnabled ||
-        !consumerPolicy.allowLiveEmbed ||
-        !consumerPolicy.allowPublicLiveEmbed
-      ) {
-        return {
-          items: sourcePageIds.map((sourcePageId) => ({
-            kind: 'page',
-            sourcePageId,
-            status: 'disabled',
-          })),
-        };
-      }
+    if (publicShare) {
+      return {
+        items: sourcePageIds.map((sourcePageId) => ({
+          kind: 'page',
+          sourcePageId,
+          status: 'disabled',
+        })),
+      };
     }
     const pageById = new Map<string, Page>();
     await Promise.all(
@@ -538,10 +526,10 @@ export class PageEmbedService {
         sourcePolicy.systemEnabled &&
         sourcePolicy.workspaceEnabled &&
         sourcePolicy.templatesEnabled &&
-        sourcePolicy.allowLiveEmbed &&
+        sourcePolicy.allowSyncedTemplate &&
         (!publicShare
-          ? sourcePolicy.allowedActions.includes('use_live_embed')
-          : sourcePolicy.allowPublicLiveEmbed);
+          ? sourcePolicy.allowedActions.includes('use_synced_template')
+          : false);
       if (!enabled) {
         items.push({ kind: 'page', sourcePageId, status: 'disabled' });
         continue;

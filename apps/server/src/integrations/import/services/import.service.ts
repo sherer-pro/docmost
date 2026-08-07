@@ -47,6 +47,7 @@ import { Readable } from 'node:stream';
 import {
   DOCMOST_ARCHIVE_SCHEMA_VERSION,
   DOCMOST_ARCHIVE_LEGACY_SCHEMA_VERSION,
+  DOCMOST_ARCHIVE_PAGE_EMBED_SCHEMA_VERSION,
   type DocmostArchiveData,
   type DocmostArchiveManifest,
   type DocmostImportOptions,
@@ -571,6 +572,7 @@ export class ImportService {
     }
     if (
       manifestSchemaVersion !== DOCMOST_ARCHIVE_LEGACY_SCHEMA_VERSION &&
+      manifestSchemaVersion !== DOCMOST_ARCHIVE_PAGE_EMBED_SCHEMA_VERSION &&
       manifestSchemaVersion !== DOCMOST_ARCHIVE_SCHEMA_VERSION
     ) {
       throw new BadRequestException(

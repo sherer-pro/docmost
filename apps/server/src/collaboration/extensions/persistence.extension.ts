@@ -47,6 +47,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EventName } from '../../common/events/event.contants';
 import { hashProseMirrorJson } from '../../common/helpers/prosemirror/ai-page-operation';
 import type { PageEmbedGraphLease } from '../../core/page/transclusion/page-embed-graph-lock.service';
+import { validateTemplateInstanceMutation } from '@docmost/editor-ext';
 
 @Injectable()
 export class PersistenceExtension implements Extension {
@@ -186,19 +187,35 @@ export class PersistenceExtension implements Extension {
             return;
           }
 
-          let contributorIds = undefined;
-          try {
-            const existingContributors = lockedPage.contributorIds || [];
-            contributorIds = Array.from(
-              new Set([
-                ...existingContributors,
-                ...editingUserIds,
-                lockedPage.creatorId,
-              ]),
-            );
-          } catch (err) {
-            //this.logger.debug('Contributors error:' + err?.['message']);
+          if (!context?.pageTemplateMutationId) {
+            const syncedInstance = await trx
+              .selectFrom('pageTemplateInstances')
+              .select('id')
+              .where('childPageId', '=', pageId)
+              .where('instanceKind', '=', 'synced')
+              .where('status', 'in', ['active', 'syncing', 'error'])
+              .executeTakeFirst();
+            if (
+              syncedInstance &&
+              !validateTemplateInstanceMutation(lockedPage.content, tiptapJson)
+            ) {
+              throw new ConflictException({
+                code: 'page_template_managed_content_read_only',
+                message:
+                  'Template-managed blocks can only be changed in the source template',
+              });
+            }
           }
+
+          const contributorIds = context?.pageTemplateSystemSyncRevision
+            ? undefined
+            : Array.from(
+                new Set([
+                  ...(lockedPage.contributorIds || []),
+                  ...editingUserIds,
+                  lockedPage.creatorId,
+                ]),
+              );
 
           await this.pageRepo.updatePage(
             {
@@ -260,17 +277,17 @@ export class PersistenceExtension implements Extension {
       } catch (err) {
         persistenceError = err;
         page = null;
-        const integrityCode = this.getPageEmbedIntegrityErrorCode(err);
+        const integrityCode = this.getContentIntegrityErrorCode(err);
         if (integrityCode && !context?.pageTemplateMutationId) {
           await this.restorePersistedDocument(document, pageId);
           document.broadcastStateless(
             JSON.stringify({
-              type: 'page_embed_integrity_error',
+              type: 'page_content_integrity_error',
               code: integrityCode,
             }),
           );
           for (const socket of document.connections.keys()) {
-            socket.close(4409, 'page_embed_integrity_error');
+            socket.close(4409, 'page_content_integrity_error');
           }
         }
         if (context?.pageTemplateMutationId || integrityCode) {
@@ -302,7 +319,7 @@ export class PersistenceExtension implements Extension {
     this.clearDocumentDirty(documentName);
     this.removeContributors(documentName, editingUserIds);
 
-    if (page) {
+    if (page && !context?.pageTemplateSystemSyncRevision) {
       await this.runSuccessSideEffects(
         documentName,
         page,
@@ -559,17 +576,21 @@ export class PersistenceExtension implements Extension {
     );
   }
 
-  private getPageEmbedIntegrityErrorCode(error: unknown): string | null {
+  private getContentIntegrityErrorCode(error: unknown): string | null {
     if (!(error instanceof HttpException)) {
       const message = (error as Error)?.message;
-      return typeof message === 'string' && message.startsWith('page_embed_')
+      return typeof message === 'string' &&
+        (message.startsWith('page_embed_') ||
+          message.startsWith('page_template_managed_'))
         ? message
         : null;
     }
     const response = error.getResponse();
     if (!response || typeof response !== 'object') return null;
     const code = (response as { code?: unknown }).code;
-    return typeof code === 'string' && code.startsWith('page_embed_')
+    return typeof code === 'string' &&
+      (code.startsWith('page_embed_') ||
+        code.startsWith('page_template_managed_'))
       ? code
       : null;
   }

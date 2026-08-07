@@ -4,6 +4,7 @@ export const QueueOutboxKind = {
   WORKSPACE_INVITATION_EMAIL: 'workspace_invitation_email',
   WORKSPACE_INVITATION_ACCEPTED_EMAIL: 'workspace_invitation_accepted_email',
   DUPLICATE_PAGE_ATTACHMENTS: 'duplicate_page_attachments',
+  PAGE_TEMPLATE_SYNC: 'page_template_sync',
 } as const;
 
 export type QueueOutboxKind =
@@ -28,6 +29,16 @@ export interface WorkspaceInvitationAcceptedEmailOutboxPayload {
 
 export type DuplicatePageAttachmentsOutboxPayload =
   IDuplicatePageAttachmentsJob;
+
+export interface PageTemplateSyncOutboxPayload {
+  runId: string;
+}
+
+export const PAGE_TEMPLATE_SYNC_HANDLER = 'PAGE_TEMPLATE_SYNC_HANDLER';
+
+export interface PageTemplateSyncOutboxHandler {
+  processSyncRunFromOutbox(runId: string): Promise<void>;
+}
 
 export interface WorkspaceInvitationEmailSecretPayload {
   inviteToken: string;

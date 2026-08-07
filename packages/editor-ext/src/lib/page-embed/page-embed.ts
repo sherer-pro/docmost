@@ -7,25 +7,12 @@ export interface PageEmbedOptions {
   view: any;
 }
 
-export interface PageEmbedAttributes {
-  id?: string | null;
-  sourcePageId?: string | null;
-}
-
-declare module '@tiptap/core' {
-  interface Commands<ReturnType> {
-    pageEmbed: {
-      insertPageEmbed: (attributes: PageEmbedAttributes) => ReturnType;
-    };
-  }
-}
-
 /**
- * A live, read-only whole-page reference.
+ * Compatibility-only node used while legacy whole-page references are
+ * materialized during server startup.
  *
- * Only identifiers are persisted in the consumer document. Source metadata and
- * content are resolved at read time so revoked access never leaves a fallback
- * copy in the ProseMirror document.
+ * It intentionally exposes no editor command or client NodeView, so new
+ * references cannot be created.
  */
 export const PageEmbed = Node.create<PageEmbedOptions>({
   name: 'pageEmbed',
@@ -78,18 +65,6 @@ export const PageEmbed = Node.create<PageEmbedOptions>({
         HTMLAttributes,
       ),
     ];
-  },
-
-  addCommands() {
-    return {
-      insertPageEmbed:
-        (attributes) =>
-        ({ commands }) =>
-          commands.insertContent({
-            type: this.name,
-            attrs: attributes,
-          }),
-    };
   },
 
   addNodeView() {

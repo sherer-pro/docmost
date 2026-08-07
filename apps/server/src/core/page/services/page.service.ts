@@ -85,6 +85,7 @@ import {
   remapDatabaseViewConfig,
 } from '../../database/utils/database-copy.utils';
 import { QueueOutboxService } from '../../../integrations/queue/outbox/queue-outbox.service';
+import type { TemplateKind } from '@docmost/api-contract';
 
 interface IHistoryUserRef {
   id: string;
@@ -642,7 +643,7 @@ export class PageService {
     createPageDto: CreatePageDto,
     internalOptions?: {
       pageId?: string;
-      isTemplate?: boolean;
+      templateKind?: TemplateKind | null;
       trx?: KyselyTransaction;
       deferSideEffects?: boolean;
     },
@@ -683,6 +684,7 @@ export class PageService {
         if (
           !parentPage ||
           parentPage.deletedAt ||
+          parentPage.templateKind !== null ||
           parentPage.spaceId !== createPageDto.spaceId
         ) {
           throw new NotFoundException('Parent page not found');
@@ -721,7 +723,7 @@ export class PageService {
           textContent,
           ydoc,
           settings: stripLegacyHeadingNumberingSetting(createPageDto.settings),
-          isTemplate: internalOptions?.isTemplate ?? false,
+          templateKind: internalOptions?.templateKind ?? null,
         },
         trx,
         false,
@@ -989,7 +991,7 @@ export class PageService {
     actorId: string,
   ): Promise<{ databaseId: string; pageId: string }> {
     if (
-      page.isTemplate ||
+      page.templateKind !== null ||
       (await this.pageEmbedService?.hasIncomingUsages(
         page.id,
         page.workspaceId,
@@ -1175,7 +1177,8 @@ export class PageService {
                 .selectFrom('pages as child')
                 .select('child.id')
                 .whereRef('child.parentPageId', '=', 'pages.id')
-                .where('child.deletedAt', 'is', null),
+                .where('child.deletedAt', 'is', null)
+                .where('child.templateKind', 'is', null),
             ),
             eb.exists(
               eb
@@ -1196,6 +1199,7 @@ export class PageService {
         end`.as('hasChildren'),
       ])
       .where('pages.deletedAt', 'is', null)
+      .where('pages.templateKind', 'is', null)
       .where('pages.spaceId', '=', spaceId)
       .where('linkedDatabase.id', 'is', null)
       .$if(!!pageId, (qb) => qb.where('pages.parentPageId', '=', pageId))
@@ -1521,7 +1525,7 @@ export class PageService {
           title: title,
           icon: page.icon,
           settings: page.settings,
-          isTemplate: false,
+          templateKind: null,
           content: prosemirrorJson,
           textContent: jsonToText(prosemirrorJson),
           ydoc: createYdocFromJson(prosemirrorJson),
@@ -1675,6 +1679,7 @@ export class PageService {
       if (
         !lockedMovedPage ||
         lockedMovedPage.deletedAt ||
+        lockedMovedPage.templateKind !== null ||
         lockedMovedPage.spaceId !== movedPage.spaceId
       ) {
         throw new NotFoundException('Page not found');
@@ -1692,6 +1697,7 @@ export class PageService {
         if (
           !parentPage ||
           parentPage.deletedAt ||
+          parentPage.templateKind !== null ||
           parentPage.spaceId !== lockedMovedPage.spaceId
         ) {
           throw new NotFoundException('Parent page not found');
@@ -1849,6 +1855,7 @@ export class PageService {
   }
 
   async forceDelete(pageId: string, workspaceId: string): Promise<void> {
+    await this.assertTemplateCanBeDeleted(pageId, workspaceId);
     // Get all descendant IDs (including the page itself) using recursive CTE
     const descendants = await this.db
       .withRecursive('page_descendants', (db) =>
@@ -1902,7 +1909,36 @@ export class PageService {
     userId: string,
     workspaceId: string,
   ): Promise<void> {
+    await this.assertTemplateCanBeDeleted(pageId, workspaceId);
     await this.pageRepo.removePage(pageId, userId, workspaceId);
+  }
+
+  private async assertTemplateCanBeDeleted(
+    pageId: string,
+    workspaceId: string,
+  ): Promise<void> {
+    const page = await this.pageRepo.findById(pageId);
+    if (
+      !page ||
+      page.workspaceId !== workspaceId ||
+      page.templateKind !== 'synced'
+    ) {
+      return;
+    }
+    const active = await this.db
+      .selectFrom('pageTemplateInstances')
+      .select('id')
+      .where('templatePageId', '=', page.id)
+      .where('status', 'in', ['active', 'syncing', 'error'])
+      .limit(1)
+      .executeTakeFirst();
+    if (active) {
+      throw new ConflictException({
+        code: 'page_template_has_active_instances',
+        message:
+          'Archive this template or detach every linked page before deleting it',
+      });
+    }
   }
 
   private async parseProsemirrorContent(

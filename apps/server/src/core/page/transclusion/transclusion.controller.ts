@@ -14,15 +14,11 @@ import { LookupDto } from './dto/lookup.dto';
 import { ReferencesDto } from './dto/references.dto';
 import { UnsyncReferenceDto } from './dto/unsync-reference.dto';
 import { AuthPolicyScope } from '../../../common/decorators/auth-policy-scope.decorator';
-import { PageEmbedService } from './page-embed.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('pages/transclusion')
 export class TransclusionController {
-  constructor(
-    private readonly transclusionService: TransclusionService,
-    private readonly pageEmbedService: PageEmbedService,
-  ) {}
+  constructor(private readonly transclusionService: TransclusionService) {}
 
   @HttpCode(HttpStatus.OK)
   @AuthPolicyScope('page', {
@@ -32,34 +28,7 @@ export class TransclusionController {
   })
   @Post('lookup')
   async lookup(@Body() dto: LookupDto, @AuthUser() user: User) {
-    const blockReferences = dto.references
-      .map((reference, index) => ({ reference, index }))
-      .filter(({ reference }) => (reference.kind ?? 'block') === 'block');
-    const pageReferences = dto.references
-      .map((reference, index) => ({ reference, index }))
-      .filter(({ reference }) => reference.kind === 'page');
-    const [blockResult, pageResult] = await Promise.all([
-      this.transclusionService.lookup(
-        blockReferences.map(({ reference }) => ({
-          sourcePageId: reference.sourcePageId,
-          transclusionId: reference.transclusionId!,
-        })),
-        user,
-      ),
-      this.pageEmbedService.lookup(
-        pageReferences.map(({ reference }) => reference.sourcePageId),
-        user,
-        dto.referencePageId,
-      ),
-    ]);
-    const items = new Array(dto.references.length);
-    blockReferences.forEach(({ index }, resultIndex) => {
-      items[index] = blockResult.items[resultIndex];
-    });
-    pageReferences.forEach(({ index }, resultIndex) => {
-      items[index] = pageResult.items[resultIndex];
-    });
-    return { items, maxDepth: this.pageEmbedService.getMaxDepth() };
+    return this.transclusionService.lookup(dto.references, user);
   }
 
   @HttpCode(HttpStatus.OK)

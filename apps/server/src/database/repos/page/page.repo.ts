@@ -52,7 +52,8 @@ export class PageRepo {
     'workspaceId',
     'settings',
     'isLocked',
-    'isTemplate',
+    'templateKind',
+    'templateArchivedAt',
     'createdAt',
     'updatedAt',
     'deletedAt',
@@ -428,7 +429,8 @@ export class PageRepo {
       .select((eb) => this.withSpace(eb))
       .select((eb) => this.withDatabaseId(eb))
       .where('spaceId', '=', spaceId)
-      .where('deletedAt', 'is', null);
+      .where('deletedAt', 'is', null)
+      .where('templateKind', 'is', null);
 
     return executeWithCursorPagination(query, {
       perPage: pagination.limit,
@@ -452,7 +454,8 @@ export class PageRepo {
       .select((eb) => this.withSpace(eb))
       .select((eb) => this.withDatabaseId(eb))
       .where('spaceId', 'in', this.spaceMemberRepo.getUserSpaceIdsQuery(userId))
-      .where('deletedAt', 'is', null);
+      .where('deletedAt', 'is', null)
+      .where('templateKind', 'is', null);
 
     return executeWithCursorPagination(query, {
       perPage: pagination.limit,
@@ -581,6 +584,7 @@ export class PageRepo {
       )
       .whereRef('child.parentPageId', '=', 'pages.id')
       .where('child.deletedAt', 'is', null)
+      .where('child.templateKind', 'is', null)
       .limit(1)
       .as('hasChildren');
   }
@@ -719,6 +723,7 @@ export class PageRepo {
             .$if(opts?.includeContent, (qb) => qb.select('content'))
             .where('id', '=', parentPageId)
             .where('deletedAt', 'is', null)
+            .where('templateKind', 'is', null)
             .unionAll((exp) =>
               exp
                 .selectFrom('pages as p')
@@ -739,6 +744,7 @@ export class PageRepo {
                 .$if(opts?.includeContent, (qb) => qb.select('p.content'))
                 .innerJoin('page_hierarchy as ph', 'p.parentPageId', 'ph.id')
                 .where('p.deletedAt', 'is', null)
+                .where('p.templateKind', 'is', null)
                 .where(sql`ph.level`, '<', sql.lit(MAX_PAGE_TREE_DEPTH)),
             ),
         )

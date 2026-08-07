@@ -42,6 +42,8 @@ import {
   TransclusionSource,
   TransclusionReference,
   PageEmbed,
+  TemplateField,
+  TemplateManagedBlock,
   addUniqueIdsToDoc,
   htmlToMarkdown,
 } from '@docmost/editor-ext';
@@ -109,6 +111,8 @@ export const tiptapExtensions = [
   TransclusionSource,
   TransclusionReference,
   PageEmbed,
+  TemplateManagedBlock,
+  TemplateField,
 ] as any;
 
 export function jsonToHtml(tiptapJson: any) {

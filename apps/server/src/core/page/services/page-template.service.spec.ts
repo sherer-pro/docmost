@@ -18,6 +18,7 @@ function buildService(options?: {
   pageAccessService?: any;
   spaceAbility?: any;
   policy?: any;
+  transclusion?: any;
 }) {
   const pageRepo = options?.pageRepo ?? { findById: jest.fn() };
   const pageService = options?.pageService ?? { create: jest.fn() };
@@ -46,6 +47,7 @@ function buildService(options?: {
     {} as any,
     policy,
     {} as any,
+    options?.transclusion ?? ({} as any),
     {} as any,
   );
   return {
@@ -59,6 +61,119 @@ function buildService(options?: {
 }
 
 describe('PageTemplateService space boundaries', () => {
+  it('returns the readable source template for a completed snapshot', async () => {
+    const results = [null, { sourcePageId }, { revision: null }];
+    const db = {
+      selectFrom: jest.fn(() => {
+        const query: any = {};
+        for (const method of ['select', 'selectAll', 'where', 'orderBy']) {
+          query[method] = jest.fn(() => query);
+        }
+        query.executeTakeFirst = jest.fn(async () => results.shift());
+        return query;
+      }),
+    };
+    const targetPage = {
+      id: consumerPageId,
+      workspaceId: user.workspaceId,
+      spaceId: sourceSpaceId,
+      deletedAt: null,
+    };
+    const sourcePage = {
+      id: sourcePageId,
+      slugId: 'source-slug',
+      title: 'Source template',
+      icon: '📄',
+      workspaceId: user.workspaceId,
+      spaceId: sourceSpaceId,
+      deletedAt: null,
+      space: { slug: 'docs' },
+    };
+    const pageRepo = {
+      findById: jest.fn(async (id: string) =>
+        id === consumerPageId ? targetPage : sourcePage,
+      ),
+    };
+    const pageAccessService = {
+      assertCanReadPage: jest.fn(),
+      getEffectiveAccess: jest.fn(async () => ({
+        capabilities: { canRead: true },
+      })),
+    };
+    const { service } = buildService({ db, pageRepo, pageAccessService });
+
+    await expect(service.getProvenance(consumerPageId, user)).resolves.toEqual({
+      createdFromTemplate: true,
+      kind: 'regular',
+      status: 'snapshot',
+      appliedRevision: null,
+      latestRevision: null,
+      canReadTemplate: true,
+      canDetach: false,
+      sourceTemplate: {
+        id: sourcePageId,
+        slugId: 'source-slug',
+        title: 'Source template',
+        icon: '📄',
+        spaceSlug: 'docs',
+      },
+    });
+    expect(pageAccessService.getEffectiveAccess).toHaveBeenCalledWith(
+      targetPage,
+      user,
+    );
+  });
+
+  it('does not expose a source template from another space', async () => {
+    const results = [null, { sourcePageId }, { revision: null }];
+    const db = {
+      selectFrom: jest.fn(() => {
+        const query: any = {};
+        for (const method of ['select', 'selectAll', 'where', 'orderBy']) {
+          query[method] = jest.fn(() => query);
+        }
+        query.executeTakeFirst = jest.fn(async () => results.shift());
+        return query;
+      }),
+    };
+    const targetPage = {
+      id: consumerPageId,
+      workspaceId: user.workspaceId,
+      spaceId: targetSpaceId,
+      deletedAt: null,
+    };
+    const sourcePage = {
+      id: sourcePageId,
+      workspaceId: user.workspaceId,
+      spaceId: sourceSpaceId,
+      deletedAt: null,
+    };
+    const pageRepo = {
+      findById: jest.fn(async (id: string) =>
+        id === consumerPageId ? targetPage : sourcePage,
+      ),
+    };
+    const pageAccessService = {
+      assertCanReadPage: jest.fn(),
+      getEffectiveAccess: jest.fn(async () => ({
+        capabilities: { canRead: true, canWrite: false },
+      })),
+    };
+    const { service } = buildService({ db, pageRepo, pageAccessService });
+
+    await expect(service.getProvenance(consumerPageId, user)).resolves.toEqual({
+      createdFromTemplate: true,
+      kind: 'regular',
+      status: 'snapshot',
+      appliedRevision: null,
+      latestRevision: null,
+      canReadTemplate: false,
+      canDetach: false,
+      sourceTemplate: null,
+    });
+    expect(pageAccessService.getEffectiveAccess).toHaveBeenCalledTimes(1);
+  });
+
   it('returns disabled discovery capabilities without querying pages', async () => {
     const policy = {
       resolveForUser: jest.fn(async () => ({
@@ -66,9 +181,13 @@ describe('PageTemplateService space boundaries', () => {
         workspaceEnabled: true,
         templatesEnabled: false,
         allowCreateTemplate: true,
-        allowSnapshot: true,
-        allowLiveEmbed: true,
-        allowedActions: ['create_template', 'use_snapshot', 'use_live_embed'],
+        allowRegularTemplate: true,
+        allowSyncedTemplate: true,
+        allowedActions: [
+          'create_template',
+          'use_regular_template',
+          'use_synced_template',
+        ],
       })),
     };
     const { service } = buildService({ policy });
@@ -81,32 +200,10 @@ describe('PageTemplateService space boundaries', () => {
       capabilities: {
         enabled: false,
         createTemplate: false,
-        useSnapshot: false,
-        useLiveEmbed: false,
+        useRegular: false,
+        useSynced: false,
       },
     });
-  });
-
-  it('creates a blank root template through PageService', async () => {
-    const createdPage = { id: sourcePageId, spaceId: sourceSpaceId };
-    const pageService = { create: jest.fn(async () => createdPage) };
-    const { service, policy } = buildService({ pageService });
-
-    await expect(
-      service.createTemplate({ spaceId: sourceSpaceId }, user),
-    ).resolves.toEqual({ page: createdPage });
-    expect(policy.assertAction).toHaveBeenCalledWith(
-      user.workspaceId,
-      sourceSpaceId,
-      user.id,
-      'create_template',
-    );
-    expect(pageService.create).toHaveBeenCalledWith(
-      user.id,
-      user.workspaceId,
-      { spaceId: sourceSpaceId, title: undefined },
-      { isTemplate: true },
-    );
   });
 
   it('rejects cross-space snapshots before checking destination policy', async () => {
@@ -118,7 +215,7 @@ describe('PageTemplateService space boundaries', () => {
       id: sourcePageId,
       workspaceId: user.workspaceId,
       spaceId: sourceSpaceId,
-      isTemplate: true,
+      templateKind: 'regular',
     });
 
     await expect(
@@ -131,37 +228,167 @@ describe('PageTemplateService space boundaries', () => {
     expect(policy.assertAction).not.toHaveBeenCalled();
   });
 
-  it('rejects cross-space live embeds before mutating the consumer', async () => {
-    const { service, policy } = buildService();
-    jest
-      .spyOn(service as any, 'findCompletedOperation')
-      .mockResolvedValue(null);
-    jest.spyOn(service as any, 'requirePlainDocument').mockResolvedValueOnce({
-      id: consumerPageId,
-      workspaceId: user.workspaceId,
-      spaceId: targetSpaceId,
-    });
-    jest.spyOn(service as any, 'requireTemplateSource').mockResolvedValue({
+  it('materializes legacy page embeds and plans attachment copies', async () => {
+    const source = {
       id: sourcePageId,
       workspaceId: user.workspaceId,
       spaceId: sourceSpaceId,
-      isTemplate: true,
+      deletedAt: null,
+      content: null,
+    };
+    const pageRepo = { findById: jest.fn(async () => source) };
+    const { service } = buildService({ pageRepo });
+    jest.spyOn(service as any, 'getLiveContent').mockResolvedValue({
+      type: 'doc',
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: 'Materialized' }] },
+        {
+          type: 'image',
+          attrs: {
+            attachmentId: '019fdaa0-0000-7000-8000-000000000070',
+            src: '/api/files/019fdaa0-0000-7000-8000-000000000070/image.png',
+          },
+        },
+      ],
     });
 
+    const result = await (service as any).resolveLegacyPageEmbeds(
+      {
+        type: 'doc',
+        content: [
+          {
+            type: 'pageEmbed',
+            attrs: {
+              id: '019fdaa0-0000-7000-8000-000000000080',
+              sourcePageId,
+            },
+          },
+        ],
+      },
+      {
+        id: consumerPageId,
+        workspaceId: user.workspaceId,
+        spaceId: sourceSpaceId,
+      },
+      user,
+      new Set([consumerPageId]),
+      [],
+    );
+
+    expect(JSON.stringify(result.content)).not.toContain('pageEmbed');
+    expect(JSON.stringify(result.content)).toContain('Materialized');
+    expect(result.attachmentPlans).toHaveLength(1);
+    expect(result.attachmentPlans[0].source.id).toBe(sourcePageId);
+    expect(result.issues).toEqual([]);
+  });
+
+  it('replaces an unavailable legacy source with an informational block', async () => {
+    const { service } = buildService({
+      pageRepo: { findById: jest.fn(async () => null) },
+    });
+    const result = await (service as any).resolveLegacyPageEmbeds(
+      {
+        type: 'doc',
+        content: [
+          {
+            type: 'pageEmbed',
+            attrs: {
+              id: 'legacy-node',
+              sourcePageId,
+            },
+          },
+        ],
+      },
+      {
+        id: consumerPageId,
+        workspaceId: user.workspaceId,
+        spaceId: sourceSpaceId,
+      },
+      user,
+      new Set([consumerPageId]),
+      [],
+    );
+
+    expect(result.content.content[0].type).toBe('callout');
+    expect(result.issues).toEqual([
+      {
+        referenceNodeId: 'legacy-node',
+        sourcePageId,
+        errorCode: 'page_embed_source_unavailable',
+      },
+    ]);
+  });
+
+  it('fails startup when legacy page embeds remain after migration', async () => {
+    const { service } = buildService();
+    jest
+      .spyOn(service as any, 'findLegacyPageEmbedCandidates')
+      .mockResolvedValueOnce([{ referencePageId: consumerPageId }])
+      .mockResolvedValueOnce([{ referencePageId: consumerPageId }]);
+    jest
+      .spyOn(service as any, 'migrateLegacyPageEmbedsForPage')
+      .mockResolvedValue(false);
+
     await expect(
-      service.insertPageEmbed(
+      (service as any).migrateLegacyPageEmbeds(),
+    ).rejects.toThrow('legacy_page_embed_migration_incomplete');
+  });
+
+  it('requires confirmation when a removed field could receive a concurrent value', async () => {
+    const fieldId = '019fdaa0-0000-7000-8000-000000000090';
+    const previous = {
+      type: 'doc',
+      content: [
         {
-          consumerPageId,
-          sourcePageId,
-          from: 1,
-          to: 1,
-          baseContentHash: 'a'.repeat(64),
+          type: 'templateField',
+          attrs: { fieldId, label: 'Owner', placeholder: 'Enter a value' },
+          content: [{ type: 'paragraph' }],
         },
-        'embed-key',
-        user,
-      ),
-    ).rejects.toBeInstanceOf(NotFoundException);
-    expect(policy.assertAction).not.toHaveBeenCalled();
+      ],
+    };
+    const queryFor = (table: string) => {
+      const query: any = {};
+      for (const method of [
+        'select',
+        'selectAll',
+        'innerJoin',
+        'where',
+        'orderBy',
+      ]) {
+        query[method] = jest.fn(() => query);
+      }
+      query.executeTakeFirst = jest.fn(async () =>
+        table === 'pageTemplateRevisions'
+          ? { revision: 1, content: previous }
+          : undefined,
+      );
+      query.execute = jest.fn(async () =>
+        table === 'pageTemplateInstances as instance'
+          ? [
+              {
+                id: 'instance-1',
+                childPageId: consumerPageId,
+                content: previous,
+              },
+            ]
+          : [],
+      );
+      return query;
+    };
+    const db = { selectFrom: jest.fn((table: string) => queryFor(table)) };
+    const { service } = buildService({ db });
+    jest.spyOn(service as any, 'getLiveContent').mockResolvedValue(previous);
+
+    const result = await (service as any).buildPublishPreflight(
+      { id: sourcePageId },
+      user,
+      false,
+      { type: 'doc', content: [{ type: 'paragraph' }] },
+    );
+
+    expect(result.filledRemovedFieldInstanceCount).toBe(0);
+    expect(result.requiresDestructiveConfirmation).toBe(true);
+    expect(result.confirmationToken).toBeNull();
   });
 
   it('returns only destinations where child creation is allowed', async () => {

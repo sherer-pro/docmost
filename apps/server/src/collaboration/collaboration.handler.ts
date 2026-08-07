@@ -126,6 +126,7 @@ export class CollaborationHandler {
           mutationId: string;
           operationLeaseToken: string;
           workspaceId: string;
+          systemSyncRevision?: number;
           user: User;
         },
       ) => {
@@ -136,6 +137,7 @@ export class CollaborationHandler {
           mutationId,
           operationLeaseToken,
           workspaceId,
+          systemSyncRevision,
           user,
         } = payload;
         strictJsonToNode(nextContent as any);
@@ -153,6 +155,7 @@ export class CollaborationHandler {
               user,
               pageTemplateMutationId: mutationId,
               pageTemplateOperationLeaseToken: operationLeaseToken,
+              pageTemplateSystemSyncRevision: systemSyncRevision,
               pageEmbedGraphLease: graphLease,
             },
             (doc) => {

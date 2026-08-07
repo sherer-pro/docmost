@@ -4,13 +4,13 @@ Docmost archive is the lossless ZIP format used to move content between
 spaces. Markdown, HTML, and PDF are presentation formats and are not canonical
 restore payloads.
 
-## Version 3 layout
+## Version 4 layout
 
 - `docmost-metadata.json` is the manifest with `source: "docmost"`,
-  `schemaVersion: 3`, export scope, display name, and the legacy page-path map.
+  `schemaVersion: 4`, export scope, display name, and the legacy page-path map.
 - `docmost-data.json` contains canonical ProseMirror page JSON, portable space
   settings, databases, labels, dictionary terms, user references, attachment
-  descriptors, synced-block snapshots, and whole-page embed snapshots.
+  descriptors, synced-block snapshots, and page template kinds.
 - `files/<sourceAttachmentId>/<fileName>` contains attachment payloads.
 - Markdown page files provide a human-readable compatibility representation.
 
@@ -18,19 +18,15 @@ All ZIP entry names are relative. Presentation exports use the same
 `files/<attachmentId>/<fileName>` layout, so an archive remains portable when
 it is extracted into any directory.
 
-Version 3 preserves `pages[].isTemplate` and `pageEmbed` occurrence IDs.
-Whole-page references to pages inside the archive are remapped to imported page
-IDs and remain live. For an accessible source outside the archive,
-`pageEmbedSnapshots` stores a presentation snapshot keyed by
-`referencePageId + referenceNodeId + sourcePageId`. The key is occurrence-scoped,
-so policy and attachment fallback are evaluated independently for each consumer.
-Referenced attachments are copied with a stable per-consumer mapping and owned
-by the imported consumer page; import materializes the snapshot as ordinary
-editable content. If no safe
-snapshot exists, import writes a neutral placeholder and never retains the
-cross-workspace reference. Derived reference rows are rebuilt from page content.
+Version 4 preserves `pages[].templateKind`. Regular templates remain independent
+snapshots when used. Synchronized templates are restored as unpublished template
+drafts; imported ordinary pages keep their materialized content and never gain an
+implicit cross-workspace template dependency.
 
-The importer continues to accept version 2 archives. It rejects archives made
+The importer continues to accept version 2 and 3 archives. Version 3
+`pageEmbed` nodes and their optional `pageEmbedSnapshots` are materialized into
+ordinary editable content during import; no live whole-page relationship is
+recreated. It rejects archives made
 with a newer schema and archives containing editor nodes unsupported by the
 running server. It never silently drops an unknown node. Attachment descriptors
 include SHA-256 checksums; preview verifies both size and checksum before a task
@@ -39,24 +35,23 @@ can start.
 ## Imported and excluded data
 
 The archive restores pages, page settings, databases and views, attachments,
-labels, dictionary terms, synced blocks, template markers, and supported live
-page relationships. All entity identifiers are regenerated. Page, attachment,
+  labels, dictionary terms, synced blocks, and template kinds. All entity
+  identifiers are regenerated. Page, attachment,
 and user references are remapped before the transaction commits.
 
-Database roots, database rows, and database content cannot contain live
-`pageEmbed` nodes in v1. Import clears a template marker on those pages and
-replaces any such node with a neutral placeholder.
+Database roots, database rows, and database content cannot contain legacy
+`pageEmbed` nodes. Import clears a template kind on those pages and materializes
+or replaces each such node with a neutral placeholder.
 
-### Synced blocks and page embeds
+### Synced blocks and legacy page embeds
 
-References whose source page is in the same archive are remapped and remain
-synchronized. Accessible external synced blocks use `transclusionSnapshots`;
-accessible external page embeds use `pageEmbedSnapshots`. Both become ordinary
-editable content on import. Sources the exporting user cannot read are never
-included as snapshots.
+Synced-block references whose source page is in the same archive are remapped and
+remain synchronized. Accessible external synced blocks use
+`transclusionSnapshots` and become ordinary editable content on import. Version 3
+page-embed snapshots are accepted only for backward-compatible materialization.
 
-Markdown, HTML, and PDF recursively materialize currently permitted live page
-embeds and synced blocks. Rendering is depth-bounded; an unavailable source is
+Markdown, HTML, and PDF materialize legacy page embeds and synced blocks.
+Rendering is depth-bounded; an unavailable source is
 represented by a localized neutral placeholder. Importing those formats never
 recreates a live relationship.
 
@@ -92,7 +87,8 @@ and attachment size or checksum mismatches are rejected before import.
 
 ## Compatibility
 
-Version 2 and 3 archives keep the legacy Markdown page map for older consumers.
-Version 2 has no template marker or whole-page snapshot sidecar, so only its
-existing data is restored. Heading-number compatibility follows the same
-materialized-number rules used by the generic importer.
+Version 2, 3, and 4 archives keep the legacy Markdown page map for older
+consumers. Version 2 has no template marker or whole-page snapshot sidecar.
+Version 3 `isTemplate` is imported as `regular`; version 4 uses `templateKind`.
+Heading-number compatibility follows the same materialized-number rules used by
+the generic importer.

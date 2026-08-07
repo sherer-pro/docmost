@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { InjectQueue } from '@nestjs/bullmq';
 import { InjectKysely } from 'nestjs-kysely';
 import { Queue } from 'bullmq';
@@ -23,6 +24,9 @@ import { QueueJob, QueueName } from '../constants';
 import { DuplicatePageAttachmentsService } from '../services/duplicate-page-attachments.service';
 import {
   DuplicatePageAttachmentsOutboxPayload,
+  PAGE_TEMPLATE_SYNC_HANDLER,
+  PageTemplateSyncOutboxHandler,
+  PageTemplateSyncOutboxPayload,
   QueueOutboxKind,
   WorkspaceInvitationAcceptedEmailOutboxPayload,
   WorkspaceInvitationEmailOutboxPayload,
@@ -60,6 +64,7 @@ export class QueueOutboxService {
     private readonly duplicatePageAttachments: DuplicatePageAttachmentsService,
     @InjectQueue(QueueName.GENERAL_QUEUE)
     private readonly generalQueue: Queue,
+    private readonly moduleRef: ModuleRef,
   ) {}
 
   async enqueueWorkspaceInvitationEmail(
@@ -108,6 +113,21 @@ export class QueueOutboxService {
         kind: QueueOutboxKind.DUPLICATE_PAGE_ATTACHMENTS,
         payload: payload as unknown as JsonValue,
         dedupeKey: `duplicate-page-attachments:${payload.rootPageId}:${payload.newPageId}`,
+      },
+      trx,
+    );
+  }
+
+  async enqueuePageTemplateSync(
+    payload: PageTemplateSyncOutboxPayload,
+    dispatchId: string,
+    trx: KyselyTransaction,
+  ): Promise<void> {
+    await this.outboxRepo.enqueue(
+      {
+        kind: QueueOutboxKind.PAGE_TEMPLATE_SYNC,
+        payload: payload as unknown as JsonValue,
+        dedupeKey: `page-template-sync:${payload.runId}:${dispatchId}`,
       },
       trx,
     );
@@ -324,6 +344,15 @@ export class QueueOutboxService {
           this.parseDuplicatePageAttachments(entry.payload),
         );
         return 'completed';
+      case QueueOutboxKind.PAGE_TEMPLATE_SYNC: {
+        const payload = this.parsePageTemplateSync(entry.payload);
+        const handler = this.moduleRef.get<PageTemplateSyncOutboxHandler>(
+          PAGE_TEMPLATE_SYNC_HANDLER,
+          { strict: false },
+        );
+        await handler.processSyncRunFromOutbox(payload.runId);
+        return 'completed';
+      }
       default:
         throw new PermanentOutboxError('unknown_outbox_kind');
     }
@@ -529,6 +558,21 @@ export class QueueOutboxService {
           ),
         };
       }),
+    };
+  }
+
+  private parsePageTemplateSync(
+    rawPayload: unknown,
+  ): PageTemplateSyncOutboxPayload {
+    const payload = this.requireRecord(
+      rawPayload,
+      'invalid_page_template_sync_payload',
+    );
+    return {
+      runId: this.requireUuid(
+        payload.runId,
+        'invalid_page_template_sync_payload',
+      ),
     };
   }
 
