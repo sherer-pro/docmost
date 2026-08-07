@@ -12,6 +12,7 @@ import {
 } from "./transclusion-lookup-context-value";
 
 const RETRY_DELAYS_MS = [250, 1_000, 2_000, 5_000, 10_000, 30_000];
+const LOOKUP_BATCH_SIZE = 50;
 
 export function TransclusionLookupProvider({
   children,
@@ -110,11 +111,6 @@ export function TransclusionLookupProvider({
 
     for (const k of keys) inFlightRef.current.add(k);
 
-    const references = keys.map((k) => {
-      const [sourcePageId, transclusionId] = k.split("::");
-      return { sourcePageId, transclusionId };
-    });
-
     const resolveWaiters = (key: LookupKey) => {
       const waiters = pendingRef.current.get(key);
       if (!waiters) return;
@@ -139,47 +135,66 @@ export function TransclusionLookupProvider({
       retryDueAtRef.current.set(key, Date.now() + delay);
     };
 
-    try {
-      const activeShareId = shareIdRef.current;
-      const { items } = activeShareId
-        ? await lookupTransclusionForShare({
-            shareId: activeShareId,
-            references,
-          })
-        : await lookupTransclusion({ references });
-      const returnedKeys = new Set<LookupKey>();
-      for (const r of items) {
-        if (!r) {
-          continue;
-        }
-
-        const key = `${r.sourcePageId}::${r.transclusionId}`;
-        returnedKeys.add(key);
-        clearRetry(key);
-        resultCacheRef.current.set(key, r);
-        inFlightRef.current.delete(key);
-        const subs = subscribersRef.current.get(key);
-        if (subs) {
-          for (const s of subs) s.setResult(r);
-        }
-        resolveWaiters(key);
-      }
-      for (const key of keys) {
-        if (returnedKeys.has(key)) continue;
-        inFlightRef.current.delete(key);
-        resolveWaiters(key);
-        scheduleRetry(key);
-      }
-    } catch {
-      // Keep active subscribers pending and retry transient lookup failures.
-      for (const k of keys) {
-        inFlightRef.current.delete(k);
-        resolveWaiters(k);
-        scheduleRetry(k);
-      }
-    } finally {
-      armRetryTimerRef.current();
+    const batches: LookupKey[][] = [];
+    for (let index = 0; index < keys.length; index += LOOKUP_BATCH_SIZE) {
+      batches.push(keys.slice(index, index + LOOKUP_BATCH_SIZE));
     }
+
+    await Promise.all(
+      batches.map(async (batchKeys) => {
+        const references = batchKeys.map((key) => {
+          const [sourcePageId, transclusionId] = key.split("::");
+          return { sourcePageId, transclusionId };
+        });
+        const batchKeySet = new Set(batchKeys);
+
+        try {
+          const activeShareId = shareIdRef.current;
+          const { items } = activeShareId
+            ? await lookupTransclusionForShare({
+                shareId: activeShareId,
+                references,
+              })
+            : await lookupTransclusion({ references });
+          const returnedKeys = new Set<LookupKey>();
+
+          for (const result of items) {
+            if (!result) continue;
+
+            const key = `${result.sourcePageId}::${result.transclusionId}`;
+            if (!batchKeySet.has(key)) continue;
+
+            returnedKeys.add(key);
+            clearRetry(key);
+            resultCacheRef.current.set(key, result);
+            inFlightRef.current.delete(key);
+            const subscribers = subscribersRef.current.get(key);
+            if (subscribers) {
+              for (const subscriber of subscribers) {
+                subscriber.setResult(result);
+              }
+            }
+            resolveWaiters(key);
+          }
+
+          for (const key of batchKeys) {
+            if (returnedKeys.has(key)) continue;
+            inFlightRef.current.delete(key);
+            resolveWaiters(key);
+            scheduleRetry(key);
+          }
+        } catch {
+          // Retry only the failed chunk; successful chunks stay cached.
+          for (const key of batchKeys) {
+            inFlightRef.current.delete(key);
+            resolveWaiters(key);
+            scheduleRetry(key);
+          }
+        }
+      }),
+    );
+
+    armRetryTimerRef.current();
   }, []);
   flushRef.current = flush;
 

@@ -35,7 +35,7 @@ export const TransclusionReference = Node.create<TransclusionReferenceOptions>({
   group: 'block',
   atom: true,
   selectable: true,
-  draggable: false,
+  draggable: true,
 
   addAttributes() {
     return {
@@ -90,7 +90,6 @@ export const TransclusionReference = Node.create<TransclusionReferenceOptions>({
 
   addNodeView() {
     if (!this.options.view) return null;
-    this.editor.isInitialized = true;
     return ReactNodeViewRenderer(this.options.view);
   },
 });

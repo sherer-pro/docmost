@@ -25,28 +25,37 @@ import {
 import { buildPageUrl } from "@/features/page/page.utils";
 import { getTransclusionReferenceKey } from "@docmost/editor-ext";
 import type { TransclusionClipboardStorage } from "@/features/editor/extensions/transclusion-clipboard";
+import { useTransclusionViewport } from "./use-transclusion-viewport";
 
 export default function TransclusionReferenceView(props: NodeViewProps) {
   const isEditable = props.editor.isEditable;
   const sourcePageId: string | null = props.node.attrs.sourcePageId ?? null;
   const transclusionId: string | null = props.node.attrs.transclusionId ?? null;
   const [openMenus, setOpenMenus] = useState(0);
+  const { viewportRef, isNearViewport } = useTransclusionViewport();
   const trackOpen = (open: boolean) =>
     setOpenMenus((n) => Math.max(0, n + (open ? 1 : -1)));
+  const renderEditor = isNearViewport || props.selected || openMenus > 0;
 
   return (
     <NodeViewWrapper
+      ref={viewportRef}
       className={classes.includeWrap}
       data-editable={isEditable ? "true" : "false"}
       data-focused={isEditable && props.selected ? "true" : "false"}
       data-menu-open={openMenus > 0 ? "true" : "false"}
+      data-type="transclusionReference"
       contentEditable={false}
     >
       <ErrorBoundary
         resetKeys={[sourcePageId, transclusionId]}
         fallback={<ErrorPlaceholder />}
       >
-        <TransclusionReferenceBody {...props} trackOpen={trackOpen} />
+        <TransclusionReferenceBody
+          {...props}
+          trackOpen={trackOpen}
+          renderEditor={renderEditor}
+        />
       </ErrorBoundary>
     </NodeViewWrapper>
   );
@@ -58,7 +67,11 @@ function TransclusionReferenceBody({
   deleteNode,
   getPos,
   trackOpen,
-}: NodeViewProps & { trackOpen: (open: boolean) => void }) {
+  renderEditor,
+}: NodeViewProps & {
+  trackOpen: (open: boolean) => void;
+  renderEditor: boolean;
+}) {
   const { t } = useTranslation();
   const sourcePageId: string | null = node.attrs.sourcePageId ?? null;
   const transclusionId: string | null = node.attrs.transclusionId ?? null;
@@ -95,7 +108,7 @@ function TransclusionReferenceBody({
   const referencesQuery = useReferencesQuery(
     sourcePageId,
     transclusionId,
-    isEditable,
+    isEditable && renderEditor,
   );
   const sourcePageHref = (() => {
     const source = referencesQuery.data?.source;
@@ -145,6 +158,7 @@ function TransclusionReferenceBody({
               currentPageId={hostPageId}
               mode="reference"
               onOpenChange={trackOpen}
+              enabled={renderEditor}
             />
           )}
           <span className={classes.controlsDivider} />
@@ -213,7 +227,10 @@ function TransclusionReferenceBody({
       ) : !result ? (
         <div style={{ minHeight: 24 }} />
       ) : !("status" in result) ? (
-        <TransclusionContent content={result.content} />
+        <TransclusionContent
+          content={result.content}
+          renderEditor={renderEditor}
+        />
       ) : result.status === "no_access" ? (
         <NoAccessPlaceholder />
       ) : (

@@ -320,3 +320,181 @@ describe('TransclusionService.syncPageReferences', () => {
     expect(refRepo.deleteByReferenceAndKeys).not.toHaveBeenCalled();
   });
 });
+
+describe('TransclusionService.listReferences', () => {
+  let service: TransclusionService;
+  let refRepo: jest.Mocked<PageTransclusionReferencesRepo>;
+  let pageRepo: jest.Mocked<PageRepo>;
+  let pageAccessService: jest.Mocked<PageAccessService>;
+
+  const sourcePageId = '00000000-0000-0000-0000-000000000001';
+  const visibleReferencePageId = '00000000-0000-0000-0000-000000000002';
+  const hiddenReferencePageId = '00000000-0000-0000-0000-000000000003';
+  const deletedReferencePageId = '00000000-0000-0000-0000-000000000004';
+  const workspaceId = '00000000-0000-0000-0000-000000000099';
+  const viewer = { id: 'user-1', workspaceId } as any;
+
+  beforeEach(async () => {
+    const pages = new Map(
+      [
+        {
+          id: sourcePageId,
+          slugId: 'source',
+          title: 'Source',
+          icon: null,
+          spaceId: 'space-1',
+          workspaceId,
+          deletedAt: null,
+          updatedAt: new Date(),
+          space: { slug: 'space' },
+        },
+        {
+          id: visibleReferencePageId,
+          slugId: 'visible',
+          title: 'Visible',
+          icon: null,
+          spaceId: 'space-1',
+          workspaceId,
+          deletedAt: null,
+          updatedAt: new Date(),
+          space: { slug: 'space' },
+        },
+        {
+          id: hiddenReferencePageId,
+          slugId: 'hidden',
+          title: 'Hidden',
+          icon: null,
+          spaceId: 'space-1',
+          workspaceId,
+          deletedAt: null,
+          updatedAt: new Date(),
+          space: { slug: 'space' },
+        },
+        {
+          id: deletedReferencePageId,
+          slugId: 'deleted',
+          title: 'Deleted',
+          icon: null,
+          spaceId: 'space-1',
+          workspaceId,
+          deletedAt: new Date(),
+          updatedAt: new Date(),
+          space: { slug: 'space' },
+        },
+      ].map((page) => [page.id, page]),
+    );
+    const mockRefRepo: jest.Mocked<Partial<PageTransclusionReferencesRepo>> = {
+      findReferencePageIdsByTransclusion: jest.fn(),
+      hasLiveReferences: jest.fn(),
+    };
+    const mockPageRepo: jest.Mocked<Partial<PageRepo>> = {
+      findById: jest.fn(async (id) => pages.get(id) as any),
+    };
+    const mockPageAccessService: jest.Mocked<Partial<PageAccessService>> = {
+      getEffectiveAccessForPages: jest.fn(),
+    };
+    const module = await Test.createTestingModule({
+      providers: [
+        TransclusionService,
+        { provide: PageTransclusionsRepo, useValue: {} },
+        { provide: PageTransclusionReferencesRepo, useValue: mockRefRepo },
+        { provide: PageRepo, useValue: mockPageRepo },
+        { provide: AttachmentRepo, useValue: {} },
+        { provide: StorageService, useValue: {} },
+        { provide: PageAccessService, useValue: mockPageAccessService },
+      ],
+    }).compile();
+
+    service = module.get(TransclusionService);
+    refRepo = module.get(PageTransclusionReferencesRepo);
+    pageRepo = module.get(PageRepo);
+    pageAccessService = module.get(PageAccessService);
+  });
+
+  it('reports hidden live references without exposing their page metadata', async () => {
+    refRepo.findReferencePageIdsByTransclusion.mockResolvedValue([
+      visibleReferencePageId,
+      hiddenReferencePageId,
+    ]);
+    refRepo.hasLiveReferences.mockResolvedValue(true);
+    pageAccessService.getEffectiveAccessForPages.mockImplementation(
+      async (pages) =>
+        new Map(
+          pages.map((page) => [
+            page.id,
+            {
+              capabilities: {
+                canRead: page.id !== hiddenReferencePageId,
+              },
+            } as any,
+          ]),
+        ),
+    );
+
+    const result = await service.listReferences({
+      sourcePageId,
+      transclusionId: 'block-1',
+      viewer,
+    });
+
+    expect(result.hasReferences).toBe(true);
+    expect(result.source?.id).toBe(sourcePageId);
+    expect(result.references.map((page) => page.id)).toEqual([
+      visibleReferencePageId,
+    ]);
+    expect(pageAccessService.getEffectiveAccessForPages).toHaveBeenCalledTimes(
+      1,
+    );
+    expect(pageRepo.findById).toHaveBeenCalledWith(hiddenReferencePageId);
+  });
+
+  it('reports an unreferenced source', async () => {
+    refRepo.findReferencePageIdsByTransclusion.mockResolvedValue([]);
+    refRepo.hasLiveReferences.mockResolvedValue(false);
+    pageAccessService.getEffectiveAccessForPages.mockResolvedValue(
+      new Map([
+        [
+          sourcePageId,
+          { capabilities: { canRead: true } } as any,
+        ],
+      ]),
+    );
+
+    const result = await service.listReferences({
+      sourcePageId,
+      transclusionId: 'block-1',
+      viewer,
+    });
+
+    expect(result.hasReferences).toBe(false);
+    expect(result.references).toEqual([]);
+  });
+
+  it('does not count or expose references on deleted pages', async () => {
+    refRepo.findReferencePageIdsByTransclusion.mockResolvedValue([
+      deletedReferencePageId,
+    ]);
+    refRepo.hasLiveReferences.mockResolvedValue(false);
+    pageAccessService.getEffectiveAccessForPages.mockResolvedValue(
+      new Map([
+        [
+          sourcePageId,
+          { capabilities: { canRead: true } } as any,
+        ],
+      ]),
+    );
+
+    const result = await service.listReferences({
+      sourcePageId,
+      transclusionId: 'block-1',
+      viewer,
+    });
+
+    expect(result.hasReferences).toBe(false);
+    expect(result.references).toEqual([]);
+    expect(pageAccessService.getEffectiveAccessForPages).toHaveBeenCalledWith(
+      [expect.objectContaining({ id: sourcePageId })],
+      viewer,
+    );
+  });
+});

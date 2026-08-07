@@ -337,16 +337,23 @@ export class TransclusionService {
   }): Promise<{
     source: ReferencingPageInfo | null;
     references: ReferencingPageInfo[];
+    hasReferences: boolean;
   }> {
     const { sourcePageId, transclusionId, viewer } = opts;
     const workspaceId = viewer.workspaceId;
 
-    const referencePageIds =
-      await this.pageTransclusionReferencesRepo.findReferencePageIdsByTransclusion(
+    const [referencePageIds, hasReferences] = await Promise.all([
+      this.pageTransclusionReferencesRepo.findReferencePageIdsByTransclusion(
         sourcePageId,
         transclusionId,
         workspaceId,
-      );
+      ),
+      this.pageTransclusionReferencesRepo.hasLiveReferences(
+        sourcePageId,
+        transclusionId,
+        workspaceId,
+      ),
+    ]);
 
     const candidatePageIds = Array.from(
       new Set([sourcePageId, ...referencePageIds]),
@@ -360,7 +367,7 @@ export class TransclusionService {
       accessibleSet.has(id),
     );
     if (accessibleIds.length === 0) {
-      return { source: null, references: [] };
+      return { source: null, references: [], hasReferences };
     }
 
     const rows = await Promise.all(
@@ -387,7 +394,7 @@ export class TransclusionService {
       .map((id) => byId.get(id))
       .filter((p): p is ReferencingPageInfo => Boolean(p));
 
-    return { source, references };
+    return { source, references, hasReferences };
   }
 
   /**
@@ -497,17 +504,21 @@ export class TransclusionService {
     const readablePageIds = new Set<string>();
     const uniquePageIds = [...new Set(pageIds.filter(Boolean))];
 
-    for (const pageId of uniquePageIds) {
-      const page = await this.pageRepo.findById(pageId);
-      if (!page || page.deletedAt || page.workspaceId !== user.workspaceId) {
-        continue;
-      }
+    const pages = (
+      await Promise.all(
+        uniquePageIds.map((pageId) => this.pageRepo.findById(pageId)),
+      )
+    ).filter(
+      (page): page is Page =>
+        Boolean(page) &&
+        !page.deletedAt &&
+        page.workspaceId === user.workspaceId,
+    );
+    const accessByPageId =
+      await this.requirePageAccess().getEffectiveAccessForPages(pages, user);
 
-      const access = await this.requirePageAccess().getEffectiveAccess(
-        page,
-        user,
-      );
-      if (access.capabilities.canRead) {
+    for (const page of pages) {
+      if (accessByPageId.get(page.id)?.capabilities.canRead) {
         readablePageIds.add(page.id);
       }
     }
