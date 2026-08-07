@@ -44,6 +44,17 @@ function createWriter() {
 describe('OpenWebUiWriterService', () => {
   afterEach(() => jest.restoreAllMocks());
 
+  it('does not resolve or send a remote request after abort', async () => {
+    const { writer, outboundPolicy } = createWriter();
+    const controller = new AbortController();
+    controller.abort(new Error('lease lost'));
+
+    await expect(
+      writer.deleteFile(binding, 'file-1', controller.signal),
+    ).rejects.toThrow('lease lost');
+    expect(outboundPolicy.resolveAllowed).not.toHaveBeenCalled();
+  });
+
   it('recognizes v2 ownership and compatible legacy ownership', () => {
     const { writer } = createWriter();
     const common = {

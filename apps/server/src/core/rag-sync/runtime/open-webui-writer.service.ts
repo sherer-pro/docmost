@@ -116,6 +116,7 @@ export class OpenWebUiWriterService {
     },
     signal?: AbortSignal,
   ): Promise<OpenWebUiFile> {
+    throwIfAborted(signal);
     if (input.content.byteLength > this.config.maxAttachmentBytes) {
       throw new RagSyncRuntimeError(
         'rag_sync_source_too_large',
@@ -153,6 +154,7 @@ export class OpenWebUiWriterService {
         signal,
       },
     );
+    throwIfAborted(signal);
     if (!response.id || !FILE_ID_PATTERN.test(response.id)) {
       throw new OpenWebUiWriterError('rag_sync_invalid_response', false);
     }
@@ -164,14 +166,17 @@ export class OpenWebUiWriterService {
     fileId: string,
     signal?: AbortSignal,
   ): Promise<void> {
+    throwIfAborted(signal);
     this.assertFileId(fileId);
     const deadline = Date.now() + this.config.processingTimeoutMs;
     while (Date.now() < deadline) {
+      throwIfAborted(signal);
       const result = await this.requestJson<{ status?: unknown }>(
         binding,
         `api/v1/files/${encodeURIComponent(fileId)}/process/status`,
         { maxResponseBytes: 16 * 1024, retrySafe: true, signal },
       );
+      throwIfAborted(signal);
       if (result.status === 'completed') return;
       if (result.status === 'failed' || result.status === 'not_found') {
         throw new OpenWebUiProcessingError(fileId, result.status);
@@ -186,6 +191,7 @@ export class OpenWebUiWriterService {
     fileId: string,
     signal?: AbortSignal,
   ): Promise<void> {
+    throwIfAborted(signal);
     this.assertFileId(fileId);
     await this.request(binding, `api/v1/files/${encodeURIComponent(fileId)}`, {
       method: 'DELETE',
@@ -194,6 +200,7 @@ export class OpenWebUiWriterService {
       retrySafe: true,
       signal,
     });
+    throwIfAborted(signal);
   }
 
   async listKnowledgeFilesPage(
@@ -201,6 +208,7 @@ export class OpenWebUiWriterService {
     page: number,
     signal?: AbortSignal,
   ): Promise<{ items: OpenWebUiFile[]; total: number; hasMore: boolean }> {
+    throwIfAborted(signal);
     this.assertKnowledgeId(binding.knowledgeId);
     if (!Number.isSafeInteger(page) || page < 1) {
       throw new OpenWebUiWriterError('rag_sync_invalid_response', false);
@@ -210,6 +218,7 @@ export class OpenWebUiWriterService {
       `api/v1/knowledge/${encodeURIComponent(binding.knowledgeId)}/files?page=${page}&limit=${KNOWLEDGE_PAGE_SIZE}&include_content=false`,
       { maxResponseBytes: MAX_JSON_RESPONSE_BYTES, retrySafe: true, signal },
     );
+    throwIfAborted(signal);
     if (!isRecord(response) || !Array.isArray(response.items)) {
       throw new OpenWebUiWriterError('rag_sync_invalid_response', false);
     }
@@ -306,7 +315,7 @@ export class OpenWebUiWriterService {
       fileId = uploaded.id;
       await this.waitUntilProcessed(binding, fileId, signal);
     } finally {
-      if (fileId) {
+      if (fileId && !signal?.aborted) {
         await this.deleteFile(
           binding,
           fileId,
@@ -448,6 +457,7 @@ export class OpenWebUiWriterService {
     path: string,
     options: WriterRequest,
   ): Promise<WriterResponse> {
+    throwIfAborted(options.signal);
     this.assertBinding(binding);
     if (
       (options.requestBytes ?? 0) >
@@ -459,8 +469,11 @@ export class OpenWebUiWriterService {
     const attempts = options.retrySafe ? 4 : 1;
     let lastError: unknown;
     for (let attempt = 0; attempt < attempts; attempt += 1) {
+      throwIfAborted(options.signal);
       try {
-        return await this.performRequest(binding, target, options);
+        const response = await this.performRequest(binding, target, options);
+        throwIfAborted(options.signal);
+        return response;
       } catch (error) {
         lastError = error;
         if (
@@ -482,6 +495,7 @@ export class OpenWebUiWriterService {
     target: string,
     options: WriterRequest,
   ): Promise<WriterResponse> {
+    throwIfAborted(options.signal);
     let resolved;
     try {
       resolved = await this.outboundPolicy.resolveAllowed(target, {
@@ -490,7 +504,9 @@ export class OpenWebUiWriterService {
         allowQuery: true,
         requireExplicitOrigin: true,
       });
+      throwIfAborted(options.signal);
     } catch {
+      throwIfAborted(options.signal);
       throw new OpenWebUiWriterError('rag_sync_url_rejected', false);
     }
 
@@ -504,7 +520,9 @@ export class OpenWebUiWriterService {
       : timeoutController.signal;
     const pinned = createAiPinnedDispatcher(resolved.addresses);
     try {
+      throwIfAborted(options.signal);
       const writerApiKey = await this.resolveWriterApiKey(binding);
+      throwIfAborted(options.signal);
       const response = await fetch(resolved.url, {
         method: options.method ?? 'GET',
         body: options.body,
@@ -519,6 +537,7 @@ export class OpenWebUiWriterService {
             : {}),
         },
       } as RequestInit & { dispatcher: Dispatcher });
+      throwIfAborted(options.signal);
       const accepted = options.acceptedStatuses?.includes(response.status);
       if (response.status >= 300 && response.status < 400) {
         await response.body?.cancel();
@@ -532,6 +551,7 @@ export class OpenWebUiWriterService {
         response,
         options.maxResponseBytes ?? MAX_JSON_RESPONSE_BYTES,
       );
+      throwIfAborted(options.signal);
       return { status: response.status, bytes };
     } catch (error) {
       if (options.signal?.aborted) {
@@ -768,4 +788,10 @@ function delay(ms: number, signal?: AbortSignal): Promise<void> {
     };
     signal?.addEventListener('abort', onAbort, { once: true });
   });
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw signal.reason ?? new DOMException('Aborted', 'AbortError');
+  }
 }

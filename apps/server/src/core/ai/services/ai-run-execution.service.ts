@@ -310,6 +310,12 @@ export class AiRunExecutionService {
         .where('id', '=', run.id)
         .where('status', '=', 'running')
         .execute();
+      await this.recordSourceDependencies(run, retrievalOutcome.sources);
+      await this.assertRunSourceAccess(
+        run,
+        user as User,
+        retrievalOutcome.sources,
+      );
 
       const buildMessages = (contextWindow: number, maxOutputTokens: number) =>
         this.promptBuilder.build({
@@ -367,6 +373,11 @@ export class AiRunExecutionService {
         ) {
           return;
         }
+        await this.assertRunSourceAccess(
+          run,
+          user as User,
+          retrievalOutcome.sources,
+        );
         const delta = pendingDelta;
         const reasoningDelta = pendingReasoningDelta;
         pendingDelta = '';
@@ -409,6 +420,11 @@ export class AiRunExecutionService {
         providerMessages: AiProviderMessage[],
         maxOutputTokens: number,
       ) => {
+        await this.assertRunSourceAccess(
+          run,
+          user as User,
+          retrievalOutcome.sources,
+        );
         await this.profiles.assertRunProfileCurrent(run);
         const result = await this.provider.stream(
           {
@@ -434,6 +450,11 @@ export class AiRunExecutionService {
           },
         );
         await this.profiles.assertRunProfileCurrent(run);
+        await this.assertRunSourceAccess(
+          run,
+          user as User,
+          retrievalOutcome.sources,
+        );
         return result;
       };
       let usage: AiProviderUsage;
@@ -459,11 +480,21 @@ export class AiRunExecutionService {
 
       sequence += 1;
       const completedAt = new Date();
+      await this.assertRunSourceAccess(
+        run,
+        user as User,
+        retrievalOutcome.sources,
+      );
       const finalized = this.citations.finalize(
         content,
         prompt.citationCandidates,
       );
       const completion = await this.db.transaction().execute(async (trx) => {
+        await this.assertRunSourceAccess(
+          run,
+          user as User,
+          retrievalOutcome.sources,
+        );
         const updated = await trx
           .updateTable('aiRuns')
           .set({
@@ -551,11 +582,12 @@ export class AiRunExecutionService {
         return;
       }
       this.logger.warn(`AI run failed: ${run.id}`);
+      const errorCode = this.errorCode(error);
       await this.fail(
         run,
-        content,
-        reasoning,
-        this.errorCode(error),
+        errorCode === 'source_access_changed' ? '' : content,
+        errorCode === 'source_access_changed' ? '' : reasoning,
+        errorCode,
         'AI generation failed',
       );
     }
@@ -596,6 +628,7 @@ export class AiRunExecutionService {
       ...(await this.assertCurrentBuiltinPolicy(run)),
       ...this.mcpCalls.listSnapshotDefinitions(mcpSnapshot),
     ];
+    await this.assertRunSourceAccess(run, user, retrievalOutcome.sources);
     if (definitions.length > AI_AGENT_MAX_TOOL_DEFINITIONS) {
       throw new AiAgentExecutionError(
         'agent_mcp_tool_definition_limit',
@@ -668,14 +701,18 @@ export class AiRunExecutionService {
       if (await this.isCancelled(run.id)) {
         throw new AiRunCancelledError();
       }
-      const response = await this.withCurrentBuiltinPolicy(run, user, () =>
-        this.provider.completeWithTools(
-          providerConfig,
-          messages,
-          providerTools,
-          'auto',
-          () => this.isCancelled(run.id),
-        ),
+      const response = await this.withCurrentBuiltinPolicy(
+        run,
+        user,
+        () =>
+          this.provider.completeWithTools(
+            providerConfig,
+            messages,
+            providerTools,
+            'auto',
+            () => this.isCancelled(run.id),
+          ),
+        retrievalOutcome.sources,
       );
       if (await this.isCancelled(run.id)) {
         throw new AiRunCancelledError();
@@ -705,6 +742,7 @@ export class AiRunExecutionService {
           userContent,
           dailyTokenLimitPerSpace: Number(config.dailyTokenLimitPerSpace),
           citationCandidates,
+          user,
         });
         return;
       }
@@ -788,27 +826,31 @@ export class AiRunExecutionService {
 
         const external = this.asExternalDefinition(definition);
         try {
-          const execution = await this.withCurrentBuiltinPolicy(run, user, () =>
-            external
-              ? this.mcpCalls.execute(call.function.name, args, {
-                  run,
-                  user,
-                  snapshot: mcpSnapshot!,
-                  isCancelled: () => this.isCancelled(run.id),
-                })
-              : (async () => {
-                  await this.builtinToolPolicy.assertRunToolAllowed(
+          const execution = await this.withCurrentBuiltinPolicy(
+            run,
+            user,
+            () =>
+              external
+                ? this.mcpCalls.execute(call.function.name, args, {
                     run,
-                    call.function.name,
-                  );
-                  return this.tools.execute(call.function.name, args, {
                     user,
-                    workspaceId: run.workspaceId,
-                    spaceId: run.spaceId,
-                    currentPageId: run.pageId,
-                    source: 'agent',
-                  });
-                })(),
+                    snapshot: mcpSnapshot!,
+                    isCancelled: () => this.isCancelled(run.id),
+                  })
+                : (async () => {
+                    await this.builtinToolPolicy.assertRunToolAllowed(
+                      run,
+                      call.function.name,
+                    );
+                    return this.tools.execute(call.function.name, args, {
+                      user,
+                      workspaceId: run.workspaceId,
+                      spaceId: run.spaceId,
+                      currentPageId: run.pageId,
+                      source: 'agent',
+                    });
+                  })(),
+            retrievalOutcome.sources,
           );
           const executionContent = external
             ? this.neutralizeExternalCitationMarkers(execution.content)
@@ -844,7 +886,7 @@ export class AiRunExecutionService {
           }
 
           if (!external && execution.citations?.length) {
-            await this.recordToolSourceDependencies(run, execution.citations);
+            await this.recordSourceDependencies(run, execution.citations);
           }
 
           const step = await this.insertToolStep({
@@ -960,7 +1002,9 @@ export class AiRunExecutionService {
     run: AiRun,
     user: User,
     operation: () => Promise<T>,
+    sources: Array<{ sourceType: string; sourceId: string; pageId: string }> = [],
   ): Promise<T> {
+    await this.assertRunSourceAccess(run, user, sources);
     await this.assertCurrentAgentPageAccess(run, user);
     await this.profiles.assertRunProfileCurrent(run);
     await this.assertCurrentBuiltinPolicy(run);
@@ -968,6 +1012,7 @@ export class AiRunExecutionService {
     await this.assertCurrentBuiltinPolicy(run);
     await this.profiles.assertRunProfileCurrent(run);
     await this.assertCurrentAgentPageAccess(run, user);
+    await this.assertRunSourceAccess(run, user, sources);
     return result;
   }
 
@@ -1114,9 +1159,9 @@ export class AiRunExecutionService {
     }
   }
 
-  private async recordToolSourceDependencies(
+  private async recordSourceDependencies(
     run: AiRun,
-    sources: Array<Omit<AiCitationCandidate, 'marker'>>,
+    sources: Array<{ pageId: string | null }>,
   ): Promise<void> {
     const pageIds = [
       ...new Set(
@@ -1138,6 +1183,32 @@ export class AiRunExecutionService {
       )
       .onConflict((oc) => oc.columns(['runId', 'pageId']).doNothing())
       .execute();
+  }
+
+  private async assertRunSourceAccess(
+    run: AiRun,
+    user: User,
+    sources: Array<{ sourceType: string; sourceId: string; pageId: string }> = [],
+  ): Promise<void> {
+    const dependencies = await this.db
+      .selectFrom('aiRunSourceDependencies')
+      .select('pageId')
+      .where('runId', '=', run.id)
+      .execute();
+    const references = [
+      ...sources,
+      ...dependencies.map((dependency) => ({
+        sourceType: 'page',
+        sourceId: dependency.pageId,
+        pageId: dependency.pageId,
+      })),
+    ];
+    await this.retrieval.assertSourcesAccessible({
+      sources: references,
+      user,
+      workspaceId: run.workspaceId,
+      spaceId: run.spaceId,
+    });
   }
 
   /**
@@ -1403,13 +1474,24 @@ export class AiRunExecutionService {
     userContent: string;
     dailyTokenLimitPerSpace: number;
     citationCandidates: AiCitationCandidate[];
+    user: User;
   }): Promise<void> {
+    await this.assertRunSourceAccess(
+      params.run,
+      params.user,
+      params.retrievalOutcome.sources,
+    );
     const completedAt = new Date();
     const finalized = this.citations.finalize(
       params.content,
       params.citationCandidates,
     );
     const completion = await this.db.transaction().execute(async (trx) => {
+      await this.assertRunSourceAccess(
+        params.run,
+        params.user,
+        params.retrievalOutcome.sources,
+      );
       const updated = await trx
         .updateTable('aiRuns')
         .set({
@@ -1584,6 +1666,10 @@ export class AiRunExecutionService {
     errorCode: string,
     errorMessage: string,
   ): Promise<void> {
+    if (errorCode === 'source_access_changed') {
+      content = '';
+      reasoning = '';
+    }
     const now = new Date();
     const failed = await this.db.transaction().execute(async (trx) => {
       const updated = await trx
@@ -1618,6 +1704,12 @@ export class AiRunExecutionService {
         .where('id', '=', run.assistantMessageId)
         .where('currentRunId', '=', run.id)
         .execute();
+      if (errorCode === 'source_access_changed') {
+        await trx
+          .deleteFrom('aiMessageSources')
+          .where('messageId', '=', run.assistantMessageId)
+          .execute();
+      }
       return updated;
     });
     if (failed) {
@@ -1633,6 +1725,9 @@ export class AiRunExecutionService {
   private errorCode(error: unknown): string {
     if (error instanceof AiAgentExecutionError) {
       return error.code;
+    }
+    if ((error as any)?.aiErrorCode === 'source_access_changed') {
+      return 'source_access_changed';
     }
     const responseCode = (error as any)?.response?.code;
     if (typeof responseCode === 'string') {

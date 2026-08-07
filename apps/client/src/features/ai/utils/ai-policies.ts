@@ -19,6 +19,7 @@ const AI_ERROR_TRANSLATION_KEYS: Record<string, string> = {
   idempotency_key_reused: "ai.errorReason.idempotencyKeyReused",
   page_write_required: "ai.errorReason.pageWriteRequired",
   page_unavailable: "ai.errorReason.pageUnavailable",
+  source_access_changed: "ai.errorReason.sourceAccessChanged",
   provider_timeout: "ai.errorReason.providerTimeout",
   provider_url_rejected: "ai.errorReason.providerConfiguration",
   provider_invalid_response: "ai.errorReason.providerInvalidResponse",

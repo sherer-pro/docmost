@@ -100,4 +100,36 @@ describe('RagSyncBindingRuntime', () => {
     expect(processor.processQuantum).not.toHaveBeenCalled();
     expect(state.releaseGlobalSlot).toHaveBeenCalledTimes(1);
   });
+
+  it('aborts the active quantum as soon as lease renewal loses ownership', async () => {
+    jest.useFakeTimers();
+    const { state, processor, runtime } = createRuntime();
+    state.renewLease.mockResolvedValue(false);
+    let observedSignal: AbortSignal | undefined;
+    processor.processQuantum.mockImplementation(
+      async (_binding: unknown, context: { signal: AbortSignal }) => {
+        observedSignal = context.signal;
+        return new Promise((_resolve, reject) => {
+          context.signal.addEventListener(
+            'abort',
+            () => reject(context.signal.reason),
+            { once: true },
+          );
+        });
+      },
+    );
+
+    try {
+      const run = runtime.run(binding, new AbortController().signal);
+      const rejected = expect(run).rejects.toMatchObject({
+        code: 'rag_sync_lease_lost',
+      });
+      await jest.advanceTimersByTimeAsync(10_000);
+      await rejected;
+      expect(observedSignal?.aborted).toBe(true);
+      expect(state.renewGlobalSlot).toHaveBeenCalledTimes(1);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });

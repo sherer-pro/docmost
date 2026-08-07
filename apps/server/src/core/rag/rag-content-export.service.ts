@@ -50,10 +50,24 @@ type RagFeedPagination = {
 };
 
 type RagFeedCursor = {
-  version: 1;
+  version: 2;
   kind: string;
+  workspaceId: string;
+  spaceId: string;
+  scopeFingerprint: string;
+  watermarkMs: number | null;
+  snapshotUpperBoundMs: number;
   timestampMs: number;
   id: string;
+};
+
+type RagFeedSnapshot = {
+  cursor: RagFeedCursor | null;
+  workspaceId: string;
+  spaceId: string;
+  scopeFingerprint: string;
+  watermarkMs: number | null;
+  snapshotUpperBoundMs: number;
 };
 
 @Injectable()
@@ -165,16 +179,21 @@ export class RagContentExportService {
     pagination: RagFeedPagination = {},
   ) {
     const readablePageIds = await this.getReadablePageIds(scope);
-    const cursor = pagination.cursor
-      ? this.decodeFeedCursor(pagination.cursor, 'scope-blocked')
-      : null;
+    const snapshot = await this.prepareFeedSnapshot(
+      scope,
+      'scope-blocked',
+      null,
+      pagination.cursor,
+    );
+    const cursor = snapshot.cursor;
     const loadBatch = async (afterId?: string) => {
       let query = this.db
         .selectFrom('pages')
         .select('id')
         .where('workspaceId', '=', scope.workspace.id)
         .where('spaceId', '=', scope.space.id)
-        .where('deletedAt', 'is', null);
+        .where('deletedAt', 'is', null)
+        .where('createdAt', '<=', new Date(snapshot.snapshotUpperBoundMs));
       if (afterId) {
         query = query.where('id', '>', afterId);
       }
@@ -214,6 +233,7 @@ export class RagContentExportService {
       pagination,
       () => 0,
       (item) => item.pageId,
+      snapshot,
     );
     return {
       items: page.items,
@@ -537,9 +557,13 @@ export class RagContentExportService {
   ) {
     const documentFields = this.getDocumentFieldsConfig(scope.space);
     const readablePageIds = await this.getReadablePageIds(scope);
-    const cursor = pagination.cursor
-      ? this.decodeFeedCursor(pagination.cursor, 'pages')
-      : null;
+    const snapshot = await this.prepareFeedSnapshot(
+      scope,
+      'pages',
+      null,
+      pagination.cursor,
+    );
+    const cursor = snapshot.cursor;
     const queryLimit = pagination.limit ? pagination.limit + 1 : null;
     const pageUpdatedAtMs = this.millisecondTimestamp('pages.updatedAt');
     const databaseUpdatedAtMs = this.millisecondTimestamp(
@@ -564,6 +588,11 @@ export class RagContentExportService {
       .where('pages.spaceId', '=', scope.space.id)
       .where('pages.id', 'in', [...readablePageIds])
       .where('pages.deletedAt', 'is', null)
+      .where(
+        pageUpdatedAtMs,
+        '<=',
+        new Date(snapshot.snapshotUpperBoundMs),
+      )
       .where(({ not, exists, selectFrom }) =>
         not(
           exists(
@@ -606,7 +635,12 @@ export class RagContentExportService {
       .where('databases.spaceId', '=', scope.space.id)
       .where('databases.deletedAt', 'is', null)
       .where('pages.deletedAt', 'is', null)
-      .where('pages.id', 'in', [...readablePageIds]);
+      .where('pages.id', 'in', [...readablePageIds])
+      .where(
+        databaseUpdatedAtMs,
+        '<=',
+        new Date(snapshot.snapshotUpperBoundMs),
+      );
     if (cursor) {
       const cursorDate = new Date(cursor.timestampMs);
       regularPagesQuery = regularPagesQuery.where((eb) =>
@@ -704,6 +738,7 @@ export class RagContentExportService {
       pagination,
       (item) => new Date(item.updatedAt).getTime(),
       (item) => item.id,
+      snapshot,
     );
   }
 
@@ -763,9 +798,13 @@ export class RagContentExportService {
     const readablePageIds = this.isSystemContext(scope)
       ? null
       : await this.getReadablePageIds(scope);
-    const cursor = pagination.cursor
-      ? this.decodeFeedCursor(pagination.cursor, 'updates')
-      : null;
+    const snapshot = await this.prepareFeedSnapshot(
+      scope,
+      'updates',
+      updatedSinceMs,
+      pagination.cursor,
+    );
+    const cursor = snapshot.cursor;
     const queryLimit = pagination.limit ? pagination.limit + 1 : null;
     const pageUpdatedAtMs = this.millisecondTimestamp('pages.updatedAt');
 
@@ -776,6 +815,7 @@ export class RagContentExportService {
       .where('pages.spaceId', '=', scope.space.id)
       .where('pages.deletedAt', 'is', null)
       .where('pages.updatedAt', '>=', updatedSince)
+      .where(pageUpdatedAtMs, '<=', new Date(snapshot.snapshotUpperBoundMs))
       .$if(Boolean(readablePageIds), (qb) =>
         qb.where('pages.id', 'in', [...readablePageIds!]),
       )
@@ -895,7 +935,12 @@ export class RagContentExportService {
       .$if(Boolean(readablePageIds), (qb) =>
         qb.where('databasePages.id', 'in', [...readablePageIds!]),
       )
-      .where(lastChangedAtExpression, '>=', updatedSince);
+      .where(lastChangedAtExpression, '>=', updatedSince)
+      .where(
+        lastChangedAtMsExpression,
+        '<=',
+        new Date(snapshot.snapshotUpperBoundMs),
+      );
     if (cursor) {
       const cursorDate = new Date(cursor.timestampMs);
       activeDatabasesQuery = activeDatabasesQuery.where(
@@ -968,14 +1013,17 @@ export class RagContentExportService {
       pagination,
       (item) => item.updatedAtMs,
       (item) => item.id,
+      snapshot,
     );
 
     return {
       items: page.items,
-      maxUpdatedAtMs:
-        page.items.length > 0
-          ? Math.max(...page.items.map((item) => item.updatedAtMs))
-          : updatedSinceMs,
+      maxUpdatedAtMs: this.feedWatermark(
+        page,
+        (item) => item.updatedAtMs,
+        updatedSinceMs,
+        snapshot.snapshotUpperBoundMs,
+      ),
       hasMore: page.hasMore,
       nextCursor: page.nextCursor,
     };
@@ -987,9 +1035,13 @@ export class RagContentExportService {
     pagination: RagFeedPagination = {},
   ) {
     const deletedSince = new Date(deletedSinceMs);
-    const cursor = pagination.cursor
-      ? this.decodeFeedCursor(pagination.cursor, 'deleted')
-      : null;
+    const snapshot = await this.prepareFeedSnapshot(
+      scope,
+      'deleted',
+      deletedSinceMs,
+      pagination.cursor,
+    );
+    const cursor = snapshot.cursor;
     const queryLimit = pagination.limit ? pagination.limit + 1 : null;
     const pageDeletedAtMs = this.millisecondTimestamp('pages.deletedAt');
     const databaseDeletedAtMs = this.millisecondTimestamp(
@@ -1006,6 +1058,7 @@ export class RagContentExportService {
       .where('pages.spaceId', '=', scope.space.id)
       .where('pages.deletedAt', 'is not', null)
       .where('pages.deletedAt', '>=', deletedSince)
+      .where(pageDeletedAtMs, '<=', new Date(snapshot.snapshotUpperBoundMs))
       .where(({ not, exists, selectFrom }) =>
         not(
           exists(
@@ -1034,7 +1087,12 @@ export class RagContentExportService {
       .where('databases.workspaceId', '=', scope.workspace.id)
       .where('databases.spaceId', '=', scope.space.id)
       .where('databases.deletedAt', 'is not', null)
-      .where('databases.deletedAt', '>=', deletedSince);
+      .where('databases.deletedAt', '>=', deletedSince)
+      .where(
+        databaseDeletedAtMs,
+        '<=',
+        new Date(snapshot.snapshotUpperBoundMs),
+      );
     let deletedRowsQuery = this.db
       .selectFrom('databaseRows')
       .innerJoin('databases', 'databases.id', 'databaseRows.databaseId')
@@ -1048,7 +1106,8 @@ export class RagContentExportService {
       .where('databases.workspaceId', '=', scope.workspace.id)
       .where('databases.spaceId', '=', scope.space.id)
       .where('databaseRows.archivedAt', 'is not', null)
-      .where('databaseRows.archivedAt', '>=', deletedSince);
+      .where('databaseRows.archivedAt', '>=', deletedSince)
+      .where(rowArchivedAtMs, '<=', new Date(snapshot.snapshotUpperBoundMs));
     if (cursor) {
       const cursorDate = new Date(cursor.timestampMs);
       deletedPagesQuery = deletedPagesQuery.where((eb) =>
@@ -1142,14 +1201,17 @@ export class RagContentExportService {
       pagination,
       (item) => item.deletedAtMs,
       (item) => String(item.id),
+      snapshot,
     );
 
     return {
       items: page.items,
-      maxDeletedAtMs:
-        page.items.length > 0
-          ? Math.max(...page.items.map((item) => item.deletedAtMs))
-          : deletedSinceMs,
+      maxDeletedAtMs: this.feedWatermark(
+        page,
+        (item) => item.deletedAtMs,
+        deletedSinceMs,
+        snapshot.snapshotUpperBoundMs,
+      ),
       hasMore: page.hasMore,
       nextCursor: page.nextCursor,
     };
@@ -1163,9 +1225,13 @@ export class RagContentExportService {
     const readablePageIds = this.isSystemContext(scope)
       ? null
       : await this.getReadablePageIds(scope);
-    const cursor = pagination.cursor
-      ? this.decodeFeedCursor(pagination.cursor, 'attachment-updates')
-      : null;
+    const snapshot = await this.prepareFeedSnapshot(
+      scope,
+      'attachment-updates',
+      updatedSinceMs,
+      pagination.cursor,
+    );
+    const cursor = snapshot.cursor;
     const queryLimit = pagination.limit ? pagination.limit + 1 : null;
     const updatedAtMs = this.millisecondTimestamp('updatedAt');
     let rowsQuery = this.db
@@ -1188,7 +1254,8 @@ export class RagContentExportService {
         qb.where('pageId', 'in', [...readablePageIds!]),
       )
       .where('deletedAt', 'is', null)
-      .where('updatedAt', '>=', new Date(updatedSinceMs));
+      .where('updatedAt', '>=', new Date(updatedSinceMs))
+      .where(updatedAtMs, '<=', new Date(snapshot.snapshotUpperBoundMs));
     if (cursor) {
       const cursorDate = new Date(cursor.timestampMs);
       rowsQuery = rowsQuery.where((eb) =>
@@ -1234,13 +1301,16 @@ export class RagContentExportService {
       pagination,
       (item) => item.updatedAtMs,
       (item) => item.id,
+      snapshot,
     );
     return {
       items: page.items,
-      maxUpdatedAtMs:
-        page.items.length > 0
-          ? Math.max(...page.items.map((item) => item.updatedAtMs))
-          : updatedSinceMs,
+      maxUpdatedAtMs: this.feedWatermark(
+        page,
+        (item) => item.updatedAtMs,
+        updatedSinceMs,
+        snapshot.snapshotUpperBoundMs,
+      ),
       hasMore: page.hasMore,
       nextCursor: page.nextCursor,
     };
@@ -1251,9 +1321,13 @@ export class RagContentExportService {
     deletedSinceMs: number,
     pagination: RagFeedPagination = {},
   ) {
-    const cursor = pagination.cursor
-      ? this.decodeFeedCursor(pagination.cursor, 'attachment-deleted')
-      : null;
+    const snapshot = await this.prepareFeedSnapshot(
+      scope,
+      'attachment-deleted',
+      deletedSinceMs,
+      pagination.cursor,
+    );
+    const cursor = snapshot.cursor;
     const queryLimit = pagination.limit ? pagination.limit + 1 : null;
     const deletedAtMs = this.millisecondTimestamp('deletedAt');
     let rowsQuery = this.db
@@ -1262,7 +1336,8 @@ export class RagContentExportService {
       .where('workspaceId', '=', scope.workspace.id)
       .where('spaceId', '=', scope.space.id)
       .where('deletedAt', 'is not', null)
-      .where('deletedAt', '>=', new Date(deletedSinceMs));
+      .where('deletedAt', '>=', new Date(deletedSinceMs))
+      .where(deletedAtMs, '<=', new Date(snapshot.snapshotUpperBoundMs));
     if (cursor) {
       const cursorDate = new Date(cursor.timestampMs);
       rowsQuery = rowsQuery.where((eb) =>
@@ -1299,13 +1374,16 @@ export class RagContentExportService {
       pagination,
       (item) => item.deletedAtMs,
       (item) => item.id,
+      snapshot,
     );
     return {
       items: page.items,
-      maxDeletedAtMs:
-        page.items.length > 0
-          ? Math.max(...page.items.map((item) => item.deletedAtMs))
-          : deletedSinceMs,
+      maxDeletedAtMs: this.feedWatermark(
+        page,
+        (item) => item.deletedAtMs,
+        deletedSinceMs,
+        snapshot.snapshotUpperBoundMs,
+      ),
       hasMore: page.hasMore,
       nextCursor: page.nextCursor,
     };
@@ -1637,20 +1715,90 @@ export class RagContentExportService {
     return sql<Date>`date_trunc('milliseconds', ${this.db.dynamic.ref(reference)})`;
   }
 
+  private async prepareFeedSnapshot(
+    scope: RagReadContext,
+    kind: string,
+    watermarkMs: number | null,
+    cursorValue?: string,
+  ): Promise<RagFeedSnapshot> {
+    const scopeFingerprint = await this.getFeedScopeFingerprint(scope);
+    if (cursorValue) {
+      const cursor = this.decodeFeedCursor(cursorValue, {
+        kind,
+        workspaceId: scope.workspace.id,
+        spaceId: scope.space.id,
+        scopeFingerprint,
+        watermarkMs,
+      });
+      return {
+        cursor,
+        workspaceId: cursor.workspaceId,
+        spaceId: cursor.spaceId,
+        scopeFingerprint: cursor.scopeFingerprint,
+        watermarkMs: cursor.watermarkMs,
+        snapshotUpperBoundMs: cursor.snapshotUpperBoundMs,
+      };
+    }
+    const snapshot = await this.db
+      .selectFrom('workspaces')
+      .select(
+        sql<Date>`date_trunc('milliseconds', clock_timestamp())`.as(
+          'snapshotUpperBound',
+        ),
+      )
+      .where('id', '=', scope.workspace.id)
+      .executeTakeFirst();
+    const snapshotUpperBoundMs = snapshot?.snapshotUpperBound
+      ? new Date(snapshot.snapshotUpperBound).getTime()
+      : Date.now();
+    if (!Number.isSafeInteger(snapshotUpperBoundMs) || snapshotUpperBoundMs < 0) {
+      throw new BadRequestException('Invalid RAG feed cursor');
+    }
+    return {
+      cursor: null,
+      workspaceId: scope.workspace.id,
+      spaceId: scope.space.id,
+      scopeFingerprint,
+      watermarkMs,
+      snapshotUpperBoundMs,
+    };
+  }
+
+  private async getFeedScopeFingerprint(
+    scope: RagReadContext,
+  ): Promise<string> {
+    const policy = await this.contentPolicy.getEffectivePolicy(
+      scope.space.id,
+      scope.workspace.id,
+    );
+    return createHash('sha256')
+      .update(
+        JSON.stringify({
+          schemaVersion: 2,
+          workspaceId: scope.workspace.id,
+          spaceId: scope.space.id,
+          policyFingerprint: policy.fingerprint,
+          principal: this.isSystemContext(scope)
+            ? { accessMode: 'system' }
+            : { userId: scope.user.id, userRole: scope.user.role ?? null },
+        }),
+      )
+      .digest('hex');
+  }
+
   private paginateFeed<T>(
     items: T[],
     kind: string,
     pagination: RagFeedPagination,
     timestamp: (item: T) => number,
     identity: (item: T) => string,
+    snapshot: RagFeedSnapshot,
   ): {
     items: T[];
     hasMore: boolean;
     nextCursor: string | null;
   } {
-    const cursor = pagination.cursor
-      ? this.decodeFeedCursor(pagination.cursor, kind)
-      : null;
+    const cursor = snapshot.cursor;
     const remaining = cursor
       ? items.filter((item) => {
           const itemTimestamp = timestamp(item);
@@ -1672,8 +1820,13 @@ export class RagContentExportService {
         hasMore && last
           ? Buffer.from(
               JSON.stringify({
-                version: 1,
+                version: 2,
                 kind,
+                workspaceId: snapshot.workspaceId,
+                spaceId: snapshot.spaceId,
+                scopeFingerprint: snapshot.scopeFingerprint,
+                watermarkMs: snapshot.watermarkMs,
+                snapshotUpperBoundMs: snapshot.snapshotUpperBoundMs,
                 timestampMs: timestamp(last),
                 id: identity(last),
               } satisfies RagFeedCursor),
@@ -1683,16 +1836,44 @@ export class RagContentExportService {
     };
   }
 
-  private decodeFeedCursor(value: string, kind: string): RagFeedCursor {
+  private feedWatermark<T>(
+    page: { items: T[]; hasMore: boolean },
+    timestamp: (item: T) => number,
+    initialWatermarkMs: number,
+    snapshotUpperBoundMs: number,
+  ): number {
+    if (!page.hasMore) return snapshotUpperBoundMs;
+    return page.items.length > 0
+      ? Math.max(...page.items.map(timestamp))
+      : initialWatermarkMs;
+  }
+
+  private decodeFeedCursor(
+    value: string,
+    expected: {
+      kind: string;
+      workspaceId: string;
+      spaceId: string;
+      scopeFingerprint: string;
+      watermarkMs: number | null;
+    },
+  ): RagFeedCursor {
     try {
       const parsed = JSON.parse(
         Buffer.from(value, 'base64url').toString('utf8'),
       ) as Partial<RagFeedCursor>;
       if (
-        parsed.version !== 1 ||
-        parsed.kind !== kind ||
+        parsed.version !== 2 ||
+        parsed.kind !== expected.kind ||
+        parsed.workspaceId !== expected.workspaceId ||
+        parsed.spaceId !== expected.spaceId ||
+        parsed.scopeFingerprint !== expected.scopeFingerprint ||
+        parsed.watermarkMs !== expected.watermarkMs ||
+        !Number.isSafeInteger(parsed.snapshotUpperBoundMs) ||
+        Number(parsed.snapshotUpperBoundMs) < 0 ||
         !Number.isSafeInteger(parsed.timestampMs) ||
         Number(parsed.timestampMs) < 0 ||
+        Number(parsed.timestampMs) > Number(parsed.snapshotUpperBoundMs) ||
         typeof parsed.id !== 'string' ||
         parsed.id.length === 0
       ) {

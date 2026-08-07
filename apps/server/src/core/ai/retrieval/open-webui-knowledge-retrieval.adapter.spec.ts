@@ -8,6 +8,7 @@ describe('OpenWebUiKnowledgeRetrievalAdapter', () => {
   const pageId = '0198f2f5-a5a3-7000-8000-000000000003';
   const secondPageId = '0198f2f5-a5a3-7000-8000-000000000004';
   const fileId = '0198f2f5-a5a3-7000-8000-000000000006';
+  const secondFileId = '0198f2f5-a5a3-7000-8000-000000000007';
   const config = {
     adapter: 'open-webui-knowledge-v1' as const,
     url: null,
@@ -168,6 +169,29 @@ describe('OpenWebUiKnowledgeRetrievalAdapter', () => {
     expect(calledUrls).toEqual([
       'https://open-webui.example.test/api/v1/retrieval/query/collection',
       `https://open-webui.example.test/api/v1/files/${fileId}`,
+    ]);
+  });
+
+  it('keeps valid hits when one hydrated file record is unreadable', async () => {
+    global.fetch = jest.fn(async (url) => {
+      const value = String(url);
+      if (value.endsWith(`/api/v1/files/${fileId}`)) {
+        return new Response('', { status: 403 });
+      }
+      if (value.endsWith(`/api/v1/files/${secondFileId}`)) {
+        return jsonResponse({
+          meta: thisMetadata({ sourceId: pageId, pageId }),
+        });
+      }
+      return jsonResponse({
+        documents: [['unreadable', 'valid sibling']],
+        metadatas: [[{ file_id: fileId }, { file_id: secondFileId }]],
+        distances: [[0.1, 0.2]],
+      });
+    }) as any;
+
+    await expect(adapter.retrieve(config, request)).resolves.toEqual([
+      expect.objectContaining({ text: 'valid sibling', sourceId: pageId }),
     ]);
   });
 
