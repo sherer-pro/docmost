@@ -211,6 +211,97 @@ describe('agent tool source dependencies', () => {
   });
 });
 
+describe('AI run file source access guard', () => {
+  function buildAccessGuardService(liveChatFileIds: string[] = []) {
+    const chatFileQuery: any = {
+      select: jest.fn(() => chatFileQuery),
+      where: jest.fn(() => chatFileQuery),
+      execute: jest.fn(async () =>
+        liveChatFileIds.map((id) => ({ id })),
+      ),
+    };
+    const dependencyQuery: any = {
+      select: jest.fn(() => dependencyQuery),
+      where: jest.fn(() => dependencyQuery),
+      execute: jest.fn(async () => []),
+    };
+    const assertSourcesAccessible = jest.fn(async () => undefined);
+    const service = new AiRunExecutionService(
+      {
+        selectFrom: jest.fn((table: string) =>
+          table === 'aiChatFiles' ? chatFileQuery : dependencyQuery,
+        ),
+      } as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      { assertSourcesAccessible } as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+    return { service, assertSourcesAccessible };
+  }
+
+  it('rejects a private chat file that was deleted during generation', async () => {
+    const { service, assertSourcesAccessible } = buildAccessGuardService();
+
+    await expect(
+      (service as any).assertRunSourceAccess(
+        {
+          id: 'run-1',
+          conversationId: 'conversation-1',
+          userId: 'user-1',
+          workspaceId: 'workspace-1',
+          spaceId: 'space-1',
+        },
+        { id: 'user-1' },
+        [
+          {
+            sourceType: 'chat_file',
+            sourceId: 'file-1',
+            pageId: null,
+          },
+        ],
+      ),
+    ).rejects.toMatchObject({ aiErrorCode: 'source_access_changed' });
+    expect(assertSourcesAccessible).not.toHaveBeenCalled();
+  });
+
+  it('passes page attachments to the live source identity and ACL check', async () => {
+    const { service, assertSourcesAccessible } = buildAccessGuardService();
+    const attachment = {
+      sourceType: 'attachment',
+      sourceId: 'attachment-1',
+      pageId: 'page-1',
+    };
+
+    await (service as any).assertRunSourceAccess(
+      {
+        id: 'run-1',
+        conversationId: 'conversation-1',
+        userId: 'user-1',
+        workspaceId: 'workspace-1',
+        spaceId: 'space-1',
+      },
+      { id: 'user-1' },
+      [attachment],
+    );
+
+    expect(assertSourcesAccessible).toHaveBeenCalledWith(
+      expect.objectContaining({ sources: [attachment] }),
+    );
+  });
+});
+
 describe('AiRunExecutionService claim', () => {
   it('allows only one worker to claim the same queued run', async () => {
     const run = {

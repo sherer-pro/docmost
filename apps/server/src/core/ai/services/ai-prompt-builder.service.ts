@@ -1,6 +1,6 @@
-import { Injectable, Optional } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
-import { AiRun } from '@docmost/db/types/entity.types';
+import { AiRun, User } from '@docmost/db/types/entity.types';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 import {
   AiCitationCandidate,
@@ -13,8 +13,8 @@ import type {
   AiDocumentHeading,
 } from '@docmost/api-contract';
 import type { AiResolvedRunContextSource } from './ai-context.service';
-import { AiContentPolicyService } from '../../ai-content-policy/ai-content-policy.service';
 import { AiCitationService } from './ai-citation.service';
+import { AiSourceAccessService } from './ai-source-access.service';
 
 interface PromptFileSource {
   sourceType: 'attachment' | 'chat_file';
@@ -35,13 +35,13 @@ interface PromptImage {
 export class AiPromptBuilderService {
   constructor(
     @InjectKysely() private readonly db: KyselyDB,
-    @Optional()
-    private readonly contentPolicy: AiContentPolicyService | undefined,
+    private readonly sourceAccess: AiSourceAccessService,
     private readonly citations: AiCitationService,
   ) {}
 
   async build(params: {
     run: AiRun;
+    user: User;
     instructions: string | null;
     currentUserContent: string;
     fileText: string;
@@ -55,6 +55,7 @@ export class AiPromptBuilderService {
   }): Promise<AiPromptBuildResult> {
     const {
       run,
+      user,
       instructions,
       currentUserContent,
       fileText,
@@ -274,7 +275,7 @@ export class AiPromptBuilderService {
       images.length > 0,
     );
 
-    const history = await this.loadCompleteHistory(run, historyBudget);
+    const history = await this.loadCompleteHistory(run, user, historyBudget);
     return {
       messages: [
         { role: 'system', content: baseInstructions },
@@ -413,6 +414,7 @@ export class AiPromptBuilderService {
 
   private async loadCompleteHistory(
     run: AiRun,
+    user: User,
     budget: number,
   ): Promise<AiProviderMessage[]> {
     if (budget <= 0) return [];
@@ -448,25 +450,96 @@ export class AiPromptBuilderService {
     }
     const rows = await query.execute();
     const blockedMessageIds = new Set<string>();
-    if (this.contentPolicy && rows.length > 0) {
-      const excluded = await this.contentPolicy.getExcludedPageIds(
-        run.spaceId,
-        run.workspaceId,
-      );
-      if (excluded.size > 0) {
-        const dependencies = await this.db
+    if (rows.length > 0) {
+      const messageIds = rows.map((row) => row.id);
+      const [dependencies, sources] = await Promise.all([
+        this.db
           .selectFrom('aiRunSourceDependencies')
-          .select('messageId')
-          .where(
-            'messageId',
-            'in',
-            rows.map((row) => row.id),
+          .select(['messageId', 'pageId'])
+          .where('messageId', 'in', messageIds)
+          .execute(),
+        this.db
+          .selectFrom('aiMessageSources')
+          .select(['messageId', 'sourceType', 'sourceId', 'pageId'])
+          .where('messageId', 'in', messageIds)
+          .where('citationState', '!=', 'candidate')
+          .execute(),
+      ]);
+      const pageReferences = [
+        ...dependencies.map((dependency) => ({
+          messageId: dependency.messageId,
+          sourceType: 'page',
+          sourceId: dependency.pageId,
+          pageId: dependency.pageId,
+        })),
+        ...sources
+          .filter(
+            (source) => source.sourceType !== 'chat_file' && source.pageId,
           )
-          .where('pageId', 'in', [...excluded])
+          .map((source) => ({
+            messageId: source.messageId,
+            sourceType: source.sourceType,
+            sourceId: source.sourceId,
+            pageId: source.pageId!,
+          })),
+      ];
+      const accessible = await this.sourceAccess.filterAccessible(
+        pageReferences,
+        {
+          user,
+          workspaceId: run.workspaceId,
+          spaceId: run.spaceId,
+        },
+      );
+      const accessibleKeys = new Set(
+        accessible.map((source) =>
+          this.sourceAccessKey(
+            source.messageId,
+            source.sourceType,
+            source.sourceId,
+            source.pageId,
+          ),
+        ),
+      );
+      for (const reference of pageReferences) {
+        if (
+          !accessibleKeys.has(
+            this.sourceAccessKey(
+              reference.messageId,
+              reference.sourceType,
+              reference.sourceId,
+              reference.pageId,
+            ),
+          )
+        ) {
+          blockedMessageIds.add(reference.messageId);
+        }
+      }
+
+      const chatFileSources = sources.filter(
+        (source) => source.sourceType === 'chat_file',
+      );
+      if (chatFileSources.length > 0) {
+        const liveChatFiles = await this.db
+          .selectFrom('aiChatFiles')
+          .select('id')
+          .where(
+            'id',
+            'in',
+            chatFileSources.map((source) => source.sourceId),
+          )
+          .where('conversationId', '=', run.conversationId)
+          .where('userId', '=', user.id)
+          .where('workspaceId', '=', run.workspaceId)
+          .where('status', '=', 'ready')
+          .where('deletedAt', 'is', null)
           .execute();
-        dependencies.forEach((dependency) =>
-          blockedMessageIds.add(dependency.messageId),
-        );
+        const liveChatFileIds = new Set(liveChatFiles.map((file) => file.id));
+        chatFileSources.forEach((source) => {
+          if (!liveChatFileIds.has(source.sourceId)) {
+            blockedMessageIds.add(source.messageId);
+          }
+        });
       }
     }
 
@@ -505,6 +578,15 @@ export class AiPromptBuilderService {
       remaining -= pairChars;
     }
     return selected.reverse().flat();
+  }
+
+  private sourceAccessKey(
+    messageId: string,
+    sourceType: string,
+    sourceId: string,
+    pageId: string,
+  ): string {
+    return `${messageId}:${sourceType}:${sourceId}:${pageId}`;
   }
 
   private truncate(value: string, limit: number): string {
