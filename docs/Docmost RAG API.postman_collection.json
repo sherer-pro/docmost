@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "37163490-6653-4c21-8984-d48b99762f6e",
     "name": "Docmost RAG API",
-    "description": "Postman collection for testing Docmost RAG API and space-scoped API keys. See docs/RAG_API.md for full API contract.",
+    "description": "Postman collection for testing Docmost RAG API and space-scoped API keys. Paginated feeds use opaque cursor v2: retain the starting watermark while following nextCursor and advance it only when hasMore=false. Legacy v1 and cross-feed/scope/watermark cursors are rejected. See docs/RAG_API.md for the full contract.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
     "_exporter_id": "1347003"
   },
@@ -270,7 +270,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "const res = pm.response.json();",
-                  "if (typeof res?.maxUpdatedAtMs === 'number') {",
+                  "if (res?.hasMore === false && typeof res?.maxUpdatedAtMs === 'number') {",
                   "  pm.collectionVariables.set('updatedSince', String(res.maxUpdatedAtMs));",
                   "}"
                 ]
@@ -310,7 +310,7 @@
                 }
               ]
             },
-            "description": "Incremental updates; maxUpdatedAtMs is auto-saved into updatedSince."
+            "description": "Incremental updates in one fixed cursor-v2 snapshot. Keep the original updatedSince while following nextCursor; maxUpdatedAtMs is saved only on the terminal hasMore=false page."
           },
           "response": []
         },
@@ -323,7 +323,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "const res = pm.response.json();",
-                  "if (typeof res?.maxDeletedAtMs === 'number') {",
+                  "if (res?.hasMore === false && typeof res?.maxDeletedAtMs === 'number') {",
                   "  pm.collectionVariables.set('deletedSince', String(res.maxDeletedAtMs));",
                   "}"
                 ]
@@ -363,7 +363,7 @@
                 }
               ]
             },
-            "description": "Incremental deletions; maxDeletedAtMs is auto-saved into deletedSince."
+            "description": "Incremental deletions in one fixed cursor-v2 snapshot. Keep the original deletedSince while following nextCursor; maxDeletedAtMs is saved only on the terminal hasMore=false page."
           },
           "response": []
         },
@@ -376,7 +376,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "const res = pm.response.json();",
-                  "if (typeof res?.maxUpdatedAtMs === 'number') {",
+                  "if (res?.hasMore === false && typeof res?.maxUpdatedAtMs === 'number') {",
                   "  pm.collectionVariables.set('attachmentUpdatedSince', String(res.maxUpdatedAtMs));",
                   "}"
                 ]
@@ -416,7 +416,7 @@
                 }
               ]
             },
-            "description": "Incremental attachment updates with an independent checkpoint."
+            "description": "Incremental attachment updates with an independent cursor-v2 snapshot and a checkpoint advanced only when hasMore=false."
           },
           "response": []
         },
@@ -429,7 +429,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "const res = pm.response.json();",
-                  "if (typeof res?.maxDeletedAtMs === 'number') {",
+                  "if (res?.hasMore === false && typeof res?.maxDeletedAtMs === 'number') {",
                   "  pm.collectionVariables.set('attachmentDeletedSince', String(res.maxDeletedAtMs));",
                   "}"
                 ]
@@ -469,7 +469,7 @@
                 }
               ]
             },
-            "description": "Incremental attachment tombstones with an independent checkpoint."
+            "description": "Incremental attachment tombstones with an independent cursor-v2 snapshot and a checkpoint advanced only when hasMore=false."
           },
           "response": []
         },

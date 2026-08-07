@@ -205,7 +205,7 @@ self-reference. This applies to new Send, Retry, and Regenerate attempts without
 changing request fingerprints or historical messages. Conversation-title and
 selection-only auxiliary prompts intentionally do not receive the identity.
 
-The worker resolves every explicit source with current workspace/space/deletion/ACL checks before first use and stores immutable Markdown in `ai_run_context_sources`. Retry and Regenerate copy those snapshots instead of reading changed pages. Databases contribute their description and only readable rows within the shared budget. Every page that actually contributed content is recorded in `ai_run_source_dependencies`; losing access to any dependency hides the complete derived assistant response.
+The worker resolves every explicit source with current workspace/space/live-object/exclusion/ACL checks before first use and stores immutable Markdown in `ai_run_context_sources`. Retry and Regenerate copy those snapshots instead of reading changed pages. Databases contribute their description and only readable rows within the shared budget. Every page that actually contributed content is recorded in `ai_run_source_dependencies`; losing access to any dependency hides the complete derived assistant response.
 
 Selection AI captures the page ID, selected range/text, and canonical editor hash before focus leaves the editor. Its auxiliary run receives only the command and selection, without chat history, files, or retrieval. Replace/Insert actions require explicit confirmation, a current write check, and the unchanged hash. A stale result remains copyable but cannot mutate the editor.
 
@@ -363,6 +363,18 @@ still contain managed files. Reattach that target to the same space to resume
 cleanup instead of assigning it elsewhere.
 The runtime reuses `REDIS_URL` with the isolated
 `RAG_SYNC_REDIS_PREFIX`; do not deploy a second Redis for it.
+The owner lease and global concurrency slot are renewed sequentially. Losing
+either aborts the active quantum and its upload, delete, list, or processing
+poll; boundary checks prevent later remote calls and unfenced checkpoint or
+mapping writes. Metadata reconciliation adopts or removes a side effect that
+completed before cancellation reached the remote service.
+
+Public `/api/rag/*` feed pagination uses opaque cursor v2. It binds the feed,
+workspace, space, scope fingerprint, starting watermark, a database-derived
+snapshot upper bound, and the last `(timestamp, id)` position. Keep the starting
+watermark together with `nextCursor` and advance a checkpoint only after
+`hasMore=false`. Legacy v1, cross-feed, cross-scope, and changed-watermark
+cursors return `400 Invalid RAG feed cursor`.
 
 When upgrading from the retired standalone worker, stop that worker before the
 new server starts so two writers cannot target the same Knowledge Base. Back up
@@ -391,7 +403,7 @@ The space settings UI uses these administrator routes:
 - `POST /api/spaces/:spaceId/ai/rag-sync/actions/force-disable`
 - `POST /api/spaces/:spaceId/ai/rag-sync/actions/abandon-cleanup`
 
-External results are candidates, not authorization decisions. Docmost resolves every returned ID against its own database, maps rows and attachments to their owning page, rejects deleted and cross-space sources, re-checks the requesting user's current page access, and constructs trusted titles and URLs locally. A run records whether retrieval was not requested, disabled, used, empty, or failed. A timeout, malformed response, authorization/rate-limit error, server error, or a result set with no currently readable sources does not fail the chat: generation continues with the live document and selected files, and the UI shows the retrieval outcome.
+External results are candidates, not authorization decisions. Docmost computes the allowed set before the request, resolves every returned ID against its own database, maps rows and attachments to their owning page, and re-checks workspace/space, live-object state, exclusions, and the requesting user's ACL after retrieval and immediately before provider use. Retrieval dependencies are stored before provider execution and checked before stream flushes, between model steps, and before commit. If access changes, the run fails with `source_access_changed`, clears partial text/reasoning/citations, and the client reloads the access-restricted message. Ordinary timeout, malformed response, authorization/rate-limit error, server error, or an initially empty readable result still degrades to live document and file context.
 
 An external indexer normally uses two independent credentials:
 
