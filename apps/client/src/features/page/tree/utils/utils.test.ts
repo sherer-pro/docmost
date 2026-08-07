@@ -6,9 +6,11 @@ import {
   dropTreeNode,
   insertDatabaseRowNode,
   insertOrUpdateTreeNode,
+  findTreeNodesByIds,
   mapDatabaseToTreeNode,
   mapPageToTreeNode,
   mergeTreeNodeMetadata,
+  orderBreadcrumbNodes,
   resolveActiveTreeSlug,
   treeNodeContainsRouteSlug,
   updateDatabaseTreeNodeMeta,
@@ -209,6 +211,36 @@ describe("mergeTreeNodeMetadata", () => {
     assert.equal(restoredRow.nodeType, "databaseRow");
     assert.equal(restoredRow.databaseId, "database-id");
     assert.equal(restoredRow.parentPageId, "database-page");
+  });
+
+  it("selects only breadcrumb metadata from a larger sidebar tree", () => {
+    const database = {
+      ...createNode("database-page"),
+      nodeType: "database" as const,
+      databaseId: "database-id",
+    };
+    const unrelated = createNode("unrelated");
+
+    const matches = findTreeNodesByIds(
+      [createNode("root", [database, unrelated])],
+      new Set(["root", "database-page"]),
+    );
+
+    assert.deepEqual(
+      matches.map((node) => node.id),
+      ["root", "database-page"],
+    );
+  });
+
+  it("orders an unordered breadcrumb chain from root to current page", () => {
+    const database = createNode("database");
+    const row = createNode("row", [], "database");
+    const child = createNode("child", [], "row");
+
+    assert.deepEqual(
+      orderBreadcrumbNodes([database, child, row]).map((node) => node.id),
+      ["database", "row", "child"],
+    );
   });
 });
 

@@ -253,6 +253,7 @@ export class SelectPropertyOptionDto {
 export class SelectPropertySettingsDto {
   @IsArray()
   @ArrayMaxSize(MAX_SELECT_PROPERTY_OPTIONS)
+  @ArrayUnique((option: SelectPropertyOptionDto) => option.value)
   @ValidateNested({ each: true })
   @Type(() => SelectPropertyOptionDto)
   options: SelectPropertyOptionDto[];

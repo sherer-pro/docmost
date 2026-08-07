@@ -167,6 +167,54 @@ export function mergeTreeNodeMetadata(
   return Array.from(nodesById.values());
 }
 
+export function findTreeNodesByIds(
+  nodes: SpaceTreeNode[],
+  nodeIds: ReadonlySet<string>,
+): SpaceTreeNode[] {
+  const matches: SpaceTreeNode[] = [];
+
+  for (const node of nodes) {
+    if (nodeIds.has(node.id)) {
+      matches.push(node);
+    }
+    matches.push(...findTreeNodesByIds(node.children, nodeIds));
+  }
+
+  return matches;
+}
+
+export function orderBreadcrumbNodes(
+  nodes: SpaceTreeNode[],
+): SpaceTreeNode[] {
+  if (nodes.length < 2) {
+    return nodes;
+  }
+
+  const nodesById = new Map(nodes.map((node) => [node.id, node] as const));
+  const root = nodes.find(
+    (node) => !node.parentPageId || !nodesById.has(node.parentPageId),
+  );
+  if (!root) {
+    return nodes;
+  }
+
+  const orderedNodes: SpaceTreeNode[] = [];
+  const visitedNodeIds = new Set<string>();
+  let currentNode: SpaceTreeNode | undefined = root;
+
+  while (currentNode && !visitedNodeIds.has(currentNode.id)) {
+    orderedNodes.push(currentNode);
+    visitedNodeIds.add(currentNode.id);
+    currentNode = nodes.find(
+      (node) =>
+        node.parentPageId === currentNode?.id &&
+        !visitedNodeIds.has(node.id),
+    );
+  }
+
+  return orderedNodes.length === nodes.length ? orderedNodes : nodes;
+}
+
 export function findBreadcrumbPath(
   tree: SpaceTreeNode[],
   pageId: string,

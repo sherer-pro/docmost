@@ -112,6 +112,7 @@ function ResolvedDatabaseUserViewValue({
 function DatabaseUserEditor({
   value,
   spaceId,
+  ariaLabel,
   autoFocus,
   onChange,
   onSave,
@@ -119,6 +120,7 @@ function DatabaseUserEditor({
 }: {
   value: unknown;
   spaceId: string;
+  ariaLabel: string;
   autoFocus: boolean;
   onChange: (value: unknown) => void;
   onSave: (value?: unknown) => void;
@@ -145,6 +147,7 @@ function DatabaseUserEditor({
   return (
     <Select
       autoFocus={autoFocus}
+      aria-label={ariaLabel}
       data={memberOptions}
       value={selectedUserId}
       onChange={(nextValue) => {
@@ -360,6 +363,7 @@ export function DatabaseCellRenderer({
       return (
         <DictionaryTextarea
           autoFocus={isEditing}
+          aria-label={cellLabel ?? property.name}
           autosize
           minRows={2}
           spaceId={spaceId}
@@ -375,6 +379,7 @@ export function DatabaseCellRenderer({
       return (
         <DictionaryTextarea
           autoFocus={isEditing}
+          aria-label={cellLabel ?? property.name}
           autosize
           minRows={3}
           ff="monospace"
@@ -439,6 +444,7 @@ export function DatabaseCellRenderer({
         <DatabaseUserEditor
           value={editorValue}
           spaceId={spaceId}
+          ariaLabel={cellLabel ?? property.name}
           autoFocus={isEditing}
           onChange={onChange}
           onSave={onSave}

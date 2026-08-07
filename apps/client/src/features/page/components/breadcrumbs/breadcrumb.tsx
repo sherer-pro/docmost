@@ -1,7 +1,13 @@
 import { useAtomValue } from "jotai";
 import { treeDataAtom } from "@/features/page/tree/atoms/tree-data-atom.ts";
 import React, { useCallback, useEffect, useState } from "react";
-import { findBreadcrumbPath } from "@/features/page/tree/utils";
+import {
+  buildTree,
+  findBreadcrumbPath,
+  findTreeNodesByIds,
+  mergeTreeNodeMetadata,
+  orderBreadcrumbNodes,
+} from "@/features/page/tree/utils";
 import {
   Button,
   Anchor,
@@ -16,7 +22,10 @@ import { Link, useParams } from "react-router-dom";
 import classes from "./breadcrumb.module.css";
 import { SpaceTreeNode } from "@/features/page/tree/types.ts";
 import { buildDatabaseUrl, buildPageUrl } from "@/features/page/page.utils.ts";
-import { usePageQuery } from "@/features/page/queries/page-query.ts";
+import {
+  usePageBreadcrumbsQuery,
+  usePageQuery,
+} from "@/features/page/queries/page-query.ts";
 import { extractPageSlugId } from "@/lib";
 import { useMediaQuery } from "@mantine/hooks";
 import { useTranslation } from "react-i18next";
@@ -50,14 +59,36 @@ export default function Breadcrumb() {
   const { data: currentPage } = usePageQuery({
     pageId: extractPageSlugId(routeSlug),
   });
+  const { data: serverBreadcrumbs } = usePageBreadcrumbsQuery(
+    currentPage?.id ?? "",
+  );
   const isMobile = useMediaQuery("(max-width: 48em)");
 
   useEffect(() => {
-    if (treeData?.length > 0 && currentPage) {
-      const breadcrumb = findBreadcrumbPath(treeData, currentPage.id);
-      setBreadcrumbNodes(breadcrumb || null);
+    if (!currentPage) {
+      setBreadcrumbNodes(null);
+      return;
     }
-  }, [currentPage?.id, treeData]);
+
+    if (Array.isArray(serverBreadcrumbs) && serverBreadcrumbs.length > 0) {
+      const breadcrumbTreeNodes = buildTree(serverBreadcrumbs);
+      const breadcrumbNodeIds = new Set(
+        breadcrumbTreeNodes.map((node) => node.id),
+      );
+      setBreadcrumbNodes(
+        orderBreadcrumbNodes(
+          mergeTreeNodeMetadata(
+          breadcrumbTreeNodes,
+          findTreeNodesByIds(treeData ?? [], breadcrumbNodeIds),
+          ),
+        ),
+      );
+      return;
+    }
+
+    const localBreadcrumb = findBreadcrumbPath(treeData ?? [], currentPage.id);
+    setBreadcrumbNodes(localBreadcrumb || null);
+  }, [currentPage, serverBreadcrumbs, treeData]);
 
   const HiddenNodesTooltipContent = () =>
     breadcrumbNodes?.slice(1, -1).map((node) => (

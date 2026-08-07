@@ -1821,9 +1821,10 @@ export class PageService {
         'deletedAt',
         'hasChildren',
       ])
+      .orderBy('level', 'desc')
       .execute();
 
-    return ancestors.reverse();
+    return ancestors;
   }
 
   async getRecentSpacePages(

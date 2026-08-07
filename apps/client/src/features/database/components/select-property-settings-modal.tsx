@@ -1,5 +1,4 @@
 import {
-  ActionIcon,
   Button,
   Group,
   Modal,
@@ -17,6 +16,7 @@ import {
   IDatabaseSelectOption,
   IDatabaseSelectPropertySettings,
 } from '@/features/database/types/database.types';
+import { AccessibleActionIcon } from '@/components/ui/accessible-action-icon';
 
 interface SelectPropertySettingsModalProps {
   opened: boolean;
@@ -207,16 +207,17 @@ export function SelectPropertySettingsModal({
               }}
               allowDeselect={false}
             />
-            <ActionIcon
+            <AccessibleActionIcon
               color="red"
               variant="light"
-              aria-label={t('Remove option')}
+              label={t('Remove option')}
+              tooltip={false}
               mb={2}
               onClick={() => setOptions((prev) => prev.filter((_, optionIndex) => optionIndex !== index))}
               disabled={options.length === 1}
             >
               <IconTrash size={14} />
-            </ActionIcon>
+            </AccessibleActionIcon>
           </Group>
         ))}
 

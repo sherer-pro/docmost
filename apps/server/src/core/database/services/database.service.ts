@@ -1572,7 +1572,7 @@ export class DatabaseService {
     const hasWorkspaceAdminAccess =
       user.role === UserRole.OWNER || user.role === UserRole.ADMIN;
     if (!hasWorkspaceAdminAccess) {
-      await this.assertCanReadDatabasePages(user, database.spaceId);
+      await this.assertCanManageDatabasePages(user, database.spaceId);
     }
 
     if (databasePage.parentPageId == null) {
@@ -2441,6 +2441,11 @@ export class DatabaseService {
         sortDirection: query.sortDirection,
         sortPropertyId: query.sortPropertyId,
         filters: rowsFilters,
+        properties: normalizedProperties.map((property) => ({
+          id: property.id,
+          type: property.type,
+          settings: property.settings,
+        })),
       },
     );
 

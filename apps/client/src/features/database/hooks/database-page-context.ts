@@ -1,6 +1,7 @@
 import { IDatabase } from '@/features/database/types/database.types.ts';
 import { resolvePageDatabaseIds } from '@/features/page/page-id-adapter.ts';
 import { IPage } from '@/features/page/types/page.types.ts';
+import { SpaceTreeNode } from '@/features/page/tree/types.ts';
 
 export interface ResolveDatabasePageContextInput {
   databaseSlug?: string;
@@ -17,6 +18,35 @@ export interface DatabasePageContextValue {
   spaceSlug?: string;
   pageByRoute?: IPage;
   database?: IDatabase;
+}
+
+export function findDatabaseIdByPageRoute(
+  nodes: SpaceTreeNode[],
+  pageRouteId?: string,
+): string | undefined {
+  if (!pageRouteId) {
+    return undefined;
+  }
+
+  for (const node of nodes) {
+    if (
+      node.nodeType === 'database' &&
+      (node.id === pageRouteId || node.slugId === pageRouteId) &&
+      node.databaseId
+    ) {
+      return node.databaseId;
+    }
+
+    const nestedDatabaseId = findDatabaseIdByPageRoute(
+      node.children,
+      pageRouteId,
+    );
+    if (nestedDatabaseId) {
+      return nestedDatabaseId;
+    }
+  }
+
+  return undefined;
 }
 
 /**

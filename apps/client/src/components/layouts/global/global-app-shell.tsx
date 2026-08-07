@@ -114,6 +114,13 @@ export default function GlobalAppShell({
   }, [resize, stopResizing]);
 
   const location = useLocation();
+
+  useEffect(() => {
+    if (isMobileViewport) {
+      setMobileOpened(false);
+    }
+  }, [isMobileViewport, location.pathname, setMobileOpened]);
+
   const isSettingsRoute = location.pathname.startsWith("/settings");
   const isWideSettingsRoute =
     location.pathname.startsWith("/settings/ai") ||
