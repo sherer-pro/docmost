@@ -31,6 +31,7 @@ import { AiRunEventService } from './ai-run-event.service';
 import { AiConfigService } from './ai-config.service';
 import { AiContentPolicyService } from '../../ai-content-policy/ai-content-policy.service';
 import { AiAssistantProfileService } from './ai-assistant-profile.service';
+import { AiSourceAccessService } from './ai-source-access.service';
 
 @Injectable()
 export class AiConversationService {
@@ -42,6 +43,7 @@ export class AiConversationService {
     private readonly configService: AiConfigService,
     private readonly contentPolicy: AiContentPolicyService,
     private readonly profiles: AiAssistantProfileService,
+    private readonly sourceAccess: AiSourceAccessService,
   ) {}
 
   async list(pageId: string, user: User, workspace: Workspace) {
@@ -424,13 +426,34 @@ export class AiConversationService {
     const runByMessageId = new Map(
       runs.map((run) => [run.assistantMessageId, run]),
     );
-    const readable = await this.currentReadablePageIds(
-      [
-        ...sources.map((source) => source.pageId).filter(Boolean),
-        ...dependencies.map((dependency) => dependency.pageId),
-      ] as string[],
-      conversation.spaceId,
-      user,
+    const sourceReferences = [
+      ...sources
+        .filter(
+          (source) => source.sourceType !== 'chat_file' && source.pageId,
+        )
+        .map((source) => ({
+          sourceType: source.sourceType,
+          sourceId: source.sourceId,
+          pageId: source.pageId!,
+        })),
+      ...dependencies.map((dependency) => ({
+        sourceType: 'page',
+        sourceId: dependency.pageId,
+        pageId: dependency.pageId,
+      })),
+    ];
+    const accessibleReferences = await this.sourceAccess.filterAccessible(
+      sourceReferences,
+      {
+        user,
+        workspaceId: workspace.id,
+        spaceId: conversation.spaceId,
+      },
+    );
+    const accessibleKeys = new Set(
+      accessibleReferences.map((source) =>
+        this.sourceAccessKey(source.sourceType, source.sourceId, source.pageId),
+      ),
     );
     const chatFileSourceIds = sources
       .filter((source) => source.sourceType === 'chat_file')
@@ -450,7 +473,15 @@ export class AiConversationService {
     const sourcesByMessage = new Map<string, AiCitation[]>();
     const restrictedMessages = new Set<string>();
     for (const dependency of dependencies) {
-      if (!readable.has(dependency.pageId)) {
+      if (
+        !accessibleKeys.has(
+          this.sourceAccessKey(
+            'page',
+            dependency.pageId,
+            dependency.pageId,
+          ),
+        )
+      ) {
         restrictedMessages.add(dependency.messageId);
       }
     }
@@ -458,7 +489,14 @@ export class AiConversationService {
       if (
         source.sourceType === 'chat_file'
           ? !liveChatFileIds.has(source.sourceId)
-          : !source.pageId || !readable.has(source.pageId)
+          : !source.pageId ||
+            !accessibleKeys.has(
+              this.sourceAccessKey(
+                source.sourceType,
+                source.sourceId,
+                source.pageId,
+              ),
+            )
       ) {
         restrictedMessages.add(source.messageId);
         continue;
@@ -597,19 +635,12 @@ export class AiConversationService {
     }
   }
 
-  private async currentReadablePageIds(
-    pageIds: string[],
-    spaceId: string,
-    user: User,
-  ): Promise<Set<string>> {
-    if (pageIds.length === 0) {
-      return new Set();
-    }
-    const snapshot = await this.pageAccessService.getSidebarAccessSnapshot(
-      user,
-      spaceId,
-    );
-    return new Set(pageIds.filter((id) => snapshot.readablePageIds.has(id)));
+  private sourceAccessKey(
+    sourceType: string,
+    sourceId: string,
+    pageId: string,
+  ): string {
+    return `${sourceType}:${sourceId}:${pageId}`;
   }
 
   async toConversation(

@@ -64,6 +64,7 @@ import {
   AiAssistantProfilePolicyController,
 } from './controllers/ai-assistant-profile.controller';
 import { AiAssistantProfileService } from './services/ai-assistant-profile.service';
+import { AiSourceAccessService } from './services/ai-source-access.service';
 
 @Module({
   imports: [
@@ -125,6 +126,7 @@ import { AiAssistantProfileService } from './services/ai-assistant-profile.servi
     AiMcpPolicyService,
     AiMcpToolCallService,
     AiAssistantProfileService,
+    AiSourceAccessService,
     HttpJsonAiRetrievalAdapter,
     OpenWebUiKnowledgeRetrievalAdapter,
     NoopAiRetrievalAdapter,

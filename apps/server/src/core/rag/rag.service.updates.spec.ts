@@ -132,12 +132,32 @@ const createService = (db: Kysely<any>) =>
     } as any,
     {
       getExcludedPageIds: async () => new Set<string>(),
+      getEffectivePolicy: async () => ({
+        fingerprint: 'policy-fingerprint',
+        excludedPageIds: [],
+      }),
     } as any,
   );
 
-const feedCursor = (kind: string, timestampMs = 1000, id = 'page-0') =>
+const feedCursor = (
+  kind: string,
+  scopeFingerprint: string,
+  watermarkMs: number | null,
+  timestampMs = 1000,
+  id = 'page-0',
+) =>
   Buffer.from(
-    JSON.stringify({ version: 1, kind, timestampMs, id }),
+    JSON.stringify({
+      version: 2,
+      kind,
+      workspaceId: 'workspace-1',
+      spaceId: 'space-1',
+      scopeFingerprint,
+      watermarkMs,
+      snapshotUpperBoundMs: Date.UTC(2030, 0, 1),
+      timestampMs,
+      id,
+    }),
     'utf8',
   ).toString('base64url');
 
@@ -171,9 +191,8 @@ describe('RagService getUpdates SQL generation', () => {
   });
 
   it('uses snake_case identifiers in updates aggregation SQL', async () => {
-    await expect(service.getUpdates(scope, 0)).resolves.toEqual({
+    await expect(service.getUpdates(scope, 0)).resolves.toMatchObject({
       items: [],
-      maxUpdatedAtMs: 0,
       hasMore: false,
       nextCursor: null,
     });
@@ -265,25 +284,28 @@ describe('RagService getUpdates SQL generation', () => {
   });
 
   it('uses encoded-cursor millisecond precision in every feed SQL stream', async () => {
+    const scopeFingerprint = await (service as any).getFeedScopeFingerprint(
+      scope,
+    );
     await service.listPages(scope, false, {
       limit: 1,
-      cursor: feedCursor('pages'),
+      cursor: feedCursor('pages', scopeFingerprint, null),
     });
     await service.getUpdates(scope, 0, {
       limit: 1,
-      cursor: feedCursor('updates'),
+      cursor: feedCursor('updates', scopeFingerprint, 0),
     });
     await service.getDeleted(scope, 0, {
       limit: 1,
-      cursor: feedCursor('deleted'),
+      cursor: feedCursor('deleted', scopeFingerprint, 0),
     });
     await service.getAttachmentUpdates(scope, 0, {
       limit: 1,
-      cursor: feedCursor('attachment-updates'),
+      cursor: feedCursor('attachment-updates', scopeFingerprint, 0),
     });
     await service.getAttachmentDeleted(scope, 0, {
       limit: 1,
-      cursor: feedCursor('attachment-deleted'),
+      cursor: feedCursor('attachment-deleted', scopeFingerprint, 0),
     });
 
     const boundedFeedQueries = queries.filter((query) =>
@@ -348,13 +370,36 @@ describe('RagService getUpdates SQL generation', () => {
       { limit: 1 },
       (item: any) => item.updatedAtMs,
       (item: any) => item.id,
+      {
+        cursor: null,
+        workspaceId: 'workspace-1',
+        spaceId: 'space-1',
+        scopeFingerprint: 'scope-fingerprint',
+        watermarkMs: 0,
+        snapshotUpperBoundMs: 1000,
+      },
     );
+    const decoded = (service as any).decodeFeedCursor(first.nextCursor, {
+      kind: 'updates',
+      workspaceId: 'workspace-1',
+      spaceId: 'space-1',
+      scopeFingerprint: 'scope-fingerprint',
+      watermarkMs: 0,
+    });
     const second = (service as any).paginateFeed(
       items,
       'updates',
       { limit: 2, cursor: first.nextCursor },
       (item: any) => item.updatedAtMs,
       (item: any) => item.id,
+      {
+        cursor: decoded,
+        workspaceId: 'workspace-1',
+        spaceId: 'space-1',
+        scopeFingerprint: 'scope-fingerprint',
+        watermarkMs: 0,
+        snapshotUpperBoundMs: 1000,
+      },
     );
 
     expect(first).toMatchObject({
@@ -371,11 +416,25 @@ describe('RagService getUpdates SQL generation', () => {
     });
   });
 
-  it('rejects cursors from another feed', () => {
-    const cursor = Buffer.from(
+  it('rejects v1 cursors and cursors from another feed', () => {
+    const v1Cursor = Buffer.from(
       JSON.stringify({
         version: 1,
+        kind: 'updates',
+        timestampMs: 100,
+        id: 'a',
+      }),
+      'utf8',
+    ).toString('base64url');
+    const cursor = Buffer.from(
+      JSON.stringify({
+        version: 2,
         kind: 'deleted',
+        workspaceId: 'workspace-1',
+        spaceId: 'space-1',
+        scopeFingerprint: 'scope-fingerprint',
+        watermarkMs: 0,
+        snapshotUpperBoundMs: 1000,
         timestampMs: 100,
         id: 'a',
       }),
@@ -383,13 +442,82 @@ describe('RagService getUpdates SQL generation', () => {
     ).toString('base64url');
 
     expect(() =>
-      (service as any).paginateFeed(
-        [],
-        'updates',
-        { limit: 1, cursor },
-        (item: any) => item.updatedAtMs,
-        (item: any) => item.id,
-      ),
+      (service as any).decodeFeedCursor(cursor, {
+        kind: 'updates',
+        workspaceId: 'workspace-1',
+        spaceId: 'space-1',
+        scopeFingerprint: 'scope-fingerprint',
+        watermarkMs: 0,
+      }),
     ).toThrow('Invalid RAG feed cursor');
+    expect(() =>
+      (service as any).decodeFeedCursor(v1Cursor, {
+        kind: 'updates',
+        workspaceId: 'workspace-1',
+        spaceId: 'space-1',
+        scopeFingerprint: 'scope-fingerprint',
+        watermarkMs: 0,
+      }),
+    ).toThrow('Invalid RAG feed cursor');
+  });
+
+  it('rejects cursor reuse across scope and watermark changes', () => {
+    const cursor = feedCursor('updates', 'scope-fingerprint', 100, 200, 'a');
+    for (const expected of [
+      {
+        kind: 'updates',
+        workspaceId: 'other-workspace',
+        spaceId: 'space-1',
+        scopeFingerprint: 'scope-fingerprint',
+        watermarkMs: 100,
+      },
+      {
+        kind: 'updates',
+        workspaceId: 'workspace-1',
+        spaceId: 'space-1',
+        scopeFingerprint: 'changed-fingerprint',
+        watermarkMs: 100,
+      },
+      {
+        kind: 'updates',
+        workspaceId: 'workspace-1',
+        spaceId: 'space-1',
+        scopeFingerprint: 'scope-fingerprint',
+        watermarkMs: 101,
+      },
+    ]) {
+      expect(() =>
+        (service as any).decodeFeedCursor(cursor, expected),
+      ).toThrow('Invalid RAG feed cursor');
+    }
+  });
+
+  it('publishes the snapshot upper watermark only on the terminal page', () => {
+    expect(
+      (service as any).feedWatermark(
+        { items: [{ updatedAtMs: 120 }], hasMore: true },
+        (item: any) => item.updatedAtMs,
+        100,
+        500,
+      ),
+    ).toBe(120);
+    expect(
+      (service as any).feedWatermark(
+        { items: [], hasMore: false },
+        (item: any) => item.updatedAtMs,
+        100,
+        500,
+      ),
+    ).toBe(500);
+  });
+
+  it('keeps cursor scope stable across ordinary content-set changes', async () => {
+    const first = await (service as any).getFeedScopeFingerprint(scope);
+    const second = await (service as any).getFeedScopeFingerprint({
+      ...scope,
+      space: { ...scope.space, updatedAt: new Date() },
+    });
+
+    expect(second).toBe(first);
   });
 });

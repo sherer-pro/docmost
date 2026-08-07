@@ -11,6 +11,7 @@ describe('AiConversationService message serialization', () => {
     {} as any,
     {} as any,
     {} as any,
+    {} as any,
   );
   const row = {
     id: 'message-id',

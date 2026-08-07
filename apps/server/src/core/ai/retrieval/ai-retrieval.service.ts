@@ -14,6 +14,10 @@ import { NoopAiRetrievalAdapter } from './noop-ai-retrieval.adapter';
 import { OpenWebUiKnowledgeRetrievalAdapter } from './open-webui-knowledge-retrieval.adapter';
 import { AiOperationalMetricsService } from '../services/ai-operational-metrics.service';
 import { AiContentPolicyService } from '../../ai-content-policy/ai-content-policy.service';
+import {
+  AiSourceAccessReference,
+  AiSourceAccessService,
+} from '../services/ai-source-access.service';
 
 export type AiRetrievalOutcome = {
   status: 'not_requested' | 'disabled' | 'used' | 'empty' | 'failed';
@@ -34,7 +38,42 @@ export class AiRetrievalService {
     private readonly openWebUiAdapter?: OpenWebUiKnowledgeRetrievalAdapter,
     @Optional()
     private readonly contentPolicy?: AiContentPolicyService,
+    @Optional()
+    private readonly sourceAccess?: AiSourceAccessService,
   ) {}
+
+  async assertSourcesAccessible(params: {
+    sources: AiSourceAccessReference[];
+    user: User;
+    workspaceId: string;
+    spaceId: string;
+  }): Promise<void> {
+    if (this.sourceAccess) {
+      await this.sourceAccess.assertAccessible(params.sources, params);
+      return;
+    }
+    const snapshot = await this.pageAccessService.getSidebarAccessSnapshot(
+      params.user,
+      params.spaceId,
+    );
+    const excluded = this.contentPolicy
+      ? await this.contentPolicy.getExcludedPageIds(
+          params.spaceId,
+          params.workspaceId,
+        )
+      : new Set<string>();
+    if (
+      params.sources.some(
+        (source) =>
+          !snapshot.readablePageIds.has(source.pageId) ||
+          excluded.has(source.pageId),
+      )
+    ) {
+      throw Object.assign(new Error('Source access changed'), {
+        aiErrorCode: 'source_access_changed',
+      });
+    }
+  }
 
   async test(
     config: AiRetrievalConfig,
@@ -43,19 +82,13 @@ export class AiRetrievalService {
   ) {
     const adapter = this.getAdapter(config);
     const result = await adapter.test(config, request);
-    const snapshot = await this.pageAccessService.getSidebarAccessSnapshot(
-      user,
-      request.spaceId,
-    );
-    const excluded = this.contentPolicy
-      ? await this.contentPolicy.getExcludedPageIds(
-          request.spaceId,
-          request.workspaceId,
-        )
-      : new Set<string>();
-    const allowedPageIds = [...snapshot.readablePageIds].filter(
-      (pageId) => !excluded.has(pageId),
-    );
+    const allowedPageIds = [
+      ...(await this.currentAllowedPageIds(
+        user,
+        request.workspaceId,
+        request.spaceId,
+      )),
+    ];
     const hits = await adapter.retrieve(config, {
       ...request,
       allowedPageIds,
@@ -92,19 +125,13 @@ export class AiRetrievalService {
 
     try {
       const retrievalStartedAt = Date.now();
-      const snapshot = await this.pageAccessService.getSidebarAccessSnapshot(
-        params.user,
-        params.request.spaceId,
-      );
-      const excluded = this.contentPolicy
-        ? await this.contentPolicy.getExcludedPageIds(
-            params.request.spaceId,
-            params.request.workspaceId,
-          )
-        : new Set<string>();
-      const allowedPageIds = [...snapshot.readablePageIds].filter(
-        (pageId) => !excluded.has(pageId),
-      );
+      const allowedPageIds = [
+        ...(await this.currentAllowedPageIds(
+          params.user,
+          params.request.workspaceId,
+          params.request.spaceId,
+        )),
+      ];
       const hits = await adapter.retrieve(
         params.config,
         {
@@ -113,13 +140,24 @@ export class AiRetrievalService {
         },
         params.signal,
       );
-      const sources = await this.resolveSafeSources(
+      let sources = await this.resolveSafeSources(
         hits,
-        new Set(allowedPageIds),
+        await this.currentAllowedPageIds(
+          params.user,
+          params.request.workspaceId,
+          params.request.spaceId,
+        ),
         params.request.workspaceId,
         params.request.spaceId,
         params.config.maxResults,
       );
+      if (this.sourceAccess) {
+        sources = await this.sourceAccess.filterAccessible(sources, {
+          user: params.user,
+          workspaceId: params.request.workspaceId,
+          spaceId: params.request.spaceId,
+        });
+      }
       this.metrics.observeRetrievalQuery(
         Date.now() - retrievalStartedAt,
         hits.length,
@@ -144,6 +182,30 @@ export class AiRetrievalService {
   private outcome(value: AiRetrievalOutcome): AiRetrievalOutcome {
     this.metrics.observeRetrieval(value.status);
     return value;
+  }
+
+  private async currentAllowedPageIds(
+    user: User,
+    workspaceId: string,
+    spaceId: string,
+  ): Promise<Set<string>> {
+    if (this.sourceAccess) {
+      return this.sourceAccess.getAllowedPageIds({
+        user,
+        workspaceId,
+        spaceId,
+      });
+    }
+    const snapshot = await this.pageAccessService.getSidebarAccessSnapshot(
+      user,
+      spaceId,
+    );
+    const excluded = this.contentPolicy
+      ? await this.contentPolicy.getExcludedPageIds(spaceId, workspaceId)
+      : new Set<string>();
+    return new Set(
+      [...snapshot.readablePageIds].filter((id) => !excluded.has(id)),
+    );
   }
 
   private getAdapter(config: AiRetrievalConfig) {

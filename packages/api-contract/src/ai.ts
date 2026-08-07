@@ -178,6 +178,7 @@ export const AI_ERROR_CODES = [
   "idempotency_key_reused",
   "page_write_required",
   "page_unavailable",
+  "source_access_changed",
   "provider_timeout",
   "provider_url_rejected",
   "provider_unavailable",

@@ -124,6 +124,11 @@ export function useAiSocket() {
       const event = unwrapAiEvent(rawEvent);
       if (deltaFrame !== undefined) {
         window.cancelAnimationFrame(deltaFrame);
+        if (event.errorCode === "source_access_changed") {
+          pendingDeltas = pendingDeltas.filter(
+            (pending) => pending.runId !== event.runId,
+          );
+        }
         flushPendingDeltas();
       }
 
@@ -156,6 +161,12 @@ export function useAiSocket() {
         });
         recoveryConversationId = transition.recoveryConversationId;
         terminalConversationId = transition.terminalConversationId;
+        if (event.errorCode === "source_access_changed") {
+          return reduceAiRunState(transition.runs, {
+            type: "prune",
+            runId: event.runId,
+          }).runs;
+        }
         return transition.runs;
       });
 

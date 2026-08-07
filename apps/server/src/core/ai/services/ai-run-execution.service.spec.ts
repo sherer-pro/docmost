@@ -35,13 +35,19 @@ describe('agent built-in policy guard', () => {
   function buildPolicyGuardService(
     assertRunPolicyCurrent: jest.Mock,
     assertReadablePage = jest.fn(async () => undefined),
+    assertSourcesAccessible = jest.fn(async () => undefined),
   ) {
+    const dependencyQuery: any = {
+      select: jest.fn(() => dependencyQuery),
+      where: jest.fn(() => dependencyQuery),
+      execute: jest.fn(async () => []),
+    };
     return new AiRunExecutionService(
-      {} as any,
+      { selectFrom: jest.fn(() => dependencyQuery) } as any,
       {} as any,
       { assertReadablePage } as any,
       {} as any,
-      {} as any,
+      { assertSourcesAccessible } as any,
       {} as any,
       {} as any,
       {} as any,
@@ -120,6 +126,43 @@ describe('agent built-in policy guard', () => {
     ).rejects.toMatchObject({ code: 'page_write_required' });
     expect(operation).not.toHaveBeenCalled();
   });
+
+  it('rejects a provider result when a retrieval source is revoked mid-turn', async () => {
+    const accessError = Object.assign(new Error('revoked'), {
+      aiErrorCode: 'source_access_changed',
+    });
+    const assertSourcesAccessible = jest
+      .fn()
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(accessError);
+    const service = buildPolicyGuardService(
+      jest.fn(async () => []),
+      jest.fn(async () => undefined),
+      assertSourcesAccessible,
+    );
+    const operation = jest.fn(async () => ({ content: 'stale answer' }));
+    const source = {
+      sourceType: 'page',
+      sourceId: 'source-page',
+      pageId: 'source-page',
+    };
+
+    await expect(
+      (service as any).withCurrentBuiltinPolicy(
+        {
+          id: 'run-1',
+          pageId: 'current-page',
+          workspaceId: 'workspace-1',
+          spaceId: 'space-1',
+        },
+        { id: 'user-1' },
+        operation,
+        [source],
+      ),
+    ).rejects.toMatchObject({ aiErrorCode: 'source_access_changed' });
+    expect(operation).toHaveBeenCalledTimes(1);
+    expect(assertSourcesAccessible).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('agent tool source dependencies', () => {
@@ -152,7 +195,7 @@ describe('agent tool source dependencies', () => {
       {} as any,
     );
 
-    await (service as any).recordToolSourceDependencies(
+    await (service as any).recordSourceDependencies(
       { id: 'run-1', assistantMessageId: 'message-1' },
       [
         { pageId: 'database-root' },
@@ -389,5 +432,78 @@ describe('AiRunExecutionService claim', () => {
         errorMessage: 'AI generation failed',
       },
     );
+  });
+
+  it('scrubs partial output and citations after source access changes', async () => {
+    const run = {
+      id: 'run',
+      assistantMessageId: 'assistant',
+      status: 'running',
+      sequence: 1,
+    };
+    let runPatch: Record<string, unknown> = {};
+    let messagePatch: Record<string, unknown> = {};
+    const deleteQuery: any = {
+      where: jest.fn(() => deleteQuery),
+      execute: jest.fn(async () => undefined),
+    };
+    const trx = {
+      updateTable: jest.fn((table: string) => {
+        const query: any = {
+          set: jest.fn((patch) => {
+            if (table === 'aiRuns') runPatch = patch;
+            if (table === 'aiMessages') messagePatch = patch;
+            return query;
+          }),
+          where: jest.fn(() => query),
+          returningAll: jest.fn(() => query),
+          executeTakeFirst: jest.fn(async () =>
+            table === 'aiRuns'
+              ? { ...run, ...runPatch, status: 'failed', sequence: 2 }
+              : undefined,
+          ),
+          execute: jest.fn(async () => undefined),
+        };
+        return query;
+      }),
+      deleteFrom: jest.fn(() => deleteQuery),
+    };
+    const service = new AiRunExecutionService(
+      {
+        transaction: () => ({
+          execute: (callback: (value: typeof trx) => unknown) => callback(trx),
+        }),
+      } as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      { emitStatus: jest.fn() } as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+
+    await (service as any).fail(
+      run,
+      'partial secret',
+      'partial reasoning',
+      'source_access_changed',
+      'AI generation failed',
+    );
+
+    expect(runPatch).toMatchObject({
+      responseSnapshot: '',
+      reasoningSnapshot: '',
+    });
+    expect(messagePatch).toMatchObject({ content: '', reasoning: '' });
+    expect(trx.deleteFrom).toHaveBeenCalledWith('aiMessageSources');
   });
 });

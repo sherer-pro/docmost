@@ -372,4 +372,78 @@ describe('AiRetrievalService', () => {
       sources: [],
     });
   });
+
+  it('drops a delayed retrieval hit when access is revoked during the adapter call', async () => {
+    const adapter = {
+      kind: 'http-json-v1',
+      isConfigured: jest.fn(() => true),
+      retrieve: jest.fn(async () => [
+        {
+          sourceType: 'page',
+          sourceId: 'page-id',
+          pageId: 'page-id',
+          text: 'stale secret',
+        },
+      ]),
+    };
+    const sourceAccess = {
+      getAllowedPageIds: jest
+        .fn()
+        .mockResolvedValueOnce(new Set(['page-id']))
+        .mockResolvedValueOnce(new Set<string>()),
+      filterAccessible: jest.fn(async () => []),
+      assertAccessible: jest.fn(async () => undefined),
+    };
+    const service = new AiRetrievalService(
+      { selectFrom: jest.fn(() => queryReturning([])) } as any,
+      {
+        getSidebarAccessSnapshot: jest.fn(async () => ({
+          readablePageIds: new Set(['page-id']),
+        })),
+      } as any,
+      adapter as any,
+      { kind: 'none' } as any,
+      {
+        observeRetrieval: jest.fn(),
+        observeRetrievalQuery: jest.fn(),
+      } as any,
+      undefined,
+      {
+        getExcludedPageIds: jest.fn(async () => new Set<string>()),
+      } as any,
+      sourceAccess as any,
+    );
+
+    await expect(
+      service.retrieveSafe({
+        config: {
+          adapter: 'http-json-v1',
+          url: 'https://retrieval.example/query',
+          apiKey: null,
+          timeoutMs: 8000,
+          maxResults: 8,
+        },
+        user: {} as any,
+        requested: true,
+        request: {
+          schemaVersion: 1,
+          requestId: 'request-id',
+          workspaceId: 'workspace-id',
+          spaceId: 'space-id',
+          pageId: 'page-id',
+          query: 'query',
+          allowedPageIds: [],
+          sourceTypes: ['page'],
+          limit: 8,
+          candidateLimit: 40,
+        },
+      }),
+    ).resolves.toEqual({ status: 'empty', sources: [] });
+    expect(adapter.retrieve).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ allowedPageIds: ['page-id'] }),
+      undefined,
+    );
+    expect(sourceAccess.getAllowedPageIds).toHaveBeenCalledTimes(2);
+  });
 });

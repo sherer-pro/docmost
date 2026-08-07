@@ -352,10 +352,10 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
       return this.result(session, true);
     }
 
-    const nextCheckpoint =
-      page.items.length > 0
-        ? settledCheckpoint(progress.baseCheckpoint, progress.maxSeen)
-        : progress.baseCheckpoint;
+    const nextCheckpoint = settledCheckpoint(
+      progress.baseCheckpoint,
+      progress.maxSeen,
+    );
     await this.state.setCheckpoint(session.context.lease, kind, nextCheckpoint);
     await this.state.setFeedProgress(session.context.lease, kind, null);
     return page.items.length > 0 ? this.result(session, true) : null;

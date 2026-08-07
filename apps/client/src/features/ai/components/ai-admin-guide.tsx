@@ -105,6 +105,7 @@ const SYNC_RISKS = [
 ];
 
 const SECURITY_ITEMS = [
+  "ai.adminGuide.securitySourceAccess",
   "ai.adminGuide.securityInbound",
   "ai.adminGuide.securityOutbound",
   "ai.adminGuide.securitySecrets",
