@@ -24,7 +24,6 @@ export interface IApiKeySpace {
 export interface IApiKey {
   id: string;
   name: string;
-  token?: string;
   creatorId: string;
   workspaceId: string;
   spaceId: string;
@@ -35,6 +34,10 @@ export interface IApiKey {
   allowedCapabilities: AiBuiltinToolCapability[] | null;
   creator: Partial<IUser>;
   space?: IApiKeySpace;
+}
+
+export interface ICreatedApiKey extends IApiKey {
+  token: string;
 }
 
 export interface ICreateApiKeyRequest {

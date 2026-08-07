@@ -153,46 +153,13 @@ describe('AttachmentFileAccessService', () => {
     ).resolves.toBeDefined();
   });
 
-  it('revalidates share and embed policy for an embedded-source cookie', async () => {
+  it('rejects a legacy embedded-source cookie after public page embeds are retired', async () => {
     const { service, shareService, tokenService } = createService();
     tokenService.verifyJwt.mockResolvedValueOnce({
       workspaceId: workspace.id,
       pageId,
       shareId: 'share-1',
       pageEmbedSource: true,
-    });
-
-    await expect(
-      service.getPublicFile(
-        { headers: {}, cookies: {} } as any,
-        createReply(),
-        workspace,
-        fileId,
-        'share-token',
-      ),
-    ).resolves.toBeDefined();
-    expect(shareService.getShareForPage).toHaveBeenCalledWith(
-      'source-page',
-      workspace.id,
-      'share-1',
-    );
-    expect(shareService.lookupTransclusionForShare).toHaveBeenCalledWith(
-      'share-1',
-      [{ kind: 'page', sourcePageId: pageId }],
-      workspace.id,
-    );
-  });
-
-  it('rejects a stale embedded-source cookie after public access is lost', async () => {
-    const { service, shareService, tokenService } = createService();
-    tokenService.verifyJwt.mockResolvedValueOnce({
-      workspaceId: workspace.id,
-      pageId,
-      shareId: 'share-1',
-      pageEmbedSource: true,
-    });
-    shareService.lookupTransclusionForShare.mockResolvedValueOnce({
-      items: [{ kind: 'page', sourcePageId: pageId, status: 'disabled' }],
     });
 
     await expect(
@@ -204,6 +171,12 @@ describe('AttachmentFileAccessService', () => {
         'share-token',
       ),
     ).rejects.toThrow('File not found');
+    expect(shareService.getShareForPage).toHaveBeenCalledWith(
+      'source-page',
+      workspace.id,
+      'share-1',
+    );
+    expect(shareService.lookupTransclusionForShare).not.toHaveBeenCalled();
   });
 
   it('keeps trusted inline image responses inline', async () => {

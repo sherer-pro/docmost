@@ -192,6 +192,42 @@ describe('ApiKeyTrafficService', () => {
     ).resolves.toMatchObject({ allowed: false, reason: 'concurrency' });
   });
 
+  it('lets only the random lease owner renew or release a concurrency slot', async () => {
+    const redis = new SharedRedisFake();
+    const service = new ApiKeyTrafficService({
+      getOrThrow: () => redis,
+    } as any);
+    const limits = { ratePerMinute: 100, maxConcurrent: 1 };
+    const lease = await service.acquire({
+      profile: 'mcp',
+      apiKeyId: 'key-1',
+      bulk: false,
+      limits,
+    });
+    const forgedLease = { ...lease, leaseId: 'not-the-owner' };
+
+    await expect(service.renew(forgedLease)).resolves.toBe(false);
+    await service.release(forgedLease);
+    await expect(
+      service.acquire({
+        profile: 'mcp',
+        apiKeyId: 'key-1',
+        bulk: false,
+        limits,
+      }),
+    ).resolves.toMatchObject({ allowed: false, reason: 'concurrency' });
+
+    await service.release(lease);
+    await expect(
+      service.acquire({
+        profile: 'mcp',
+        apiKeyId: 'key-1',
+        bulk: false,
+        limits,
+      }),
+    ).resolves.toMatchObject({ allowed: true });
+  });
+
   it('logs low-cardinality edge summaries and resets the interval', async () => {
     const log = jest.spyOn(Logger.prototype, 'log').mockImplementation();
     const service = new ApiKeyTrafficService({

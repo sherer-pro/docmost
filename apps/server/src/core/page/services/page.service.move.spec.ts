@@ -58,6 +58,7 @@ describe('PageService move', () => {
     spaceId: 'space-1',
     workspaceId: 'workspace-1',
     parentPageId: null,
+    templateKind: null,
   } as any;
 
   beforeEach(() => {
@@ -70,6 +71,7 @@ describe('PageService move', () => {
         id: PARENT_PAGE_ID,
         spaceId: 'space-1',
         deletedAt: null,
+        templateKind: null,
       };
     });
     pageRepo.updatePage.mockResolvedValue({ numUpdatedRows: 1n });
@@ -148,6 +150,7 @@ describe('PageService move', () => {
         id: PARENT_PAGE_ID,
         spaceId: 'space-2',
         deletedAt: null,
+        templateKind: null,
       };
     });
 

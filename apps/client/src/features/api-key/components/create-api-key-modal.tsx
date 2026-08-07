@@ -16,7 +16,7 @@ import { useTranslation } from "react-i18next";
 import { IconCalendar, IconInfoCircle } from "@tabler/icons-react";
 import { useModalBackgroundInert } from "@/components/ui/use-modal-background-inert";
 import { useCreateApiKeyMutation } from "@/features/api-key/queries/api-key-query";
-import { IApiKey, type McpClientPreset } from "@/features/api-key";
+import { ICreatedApiKey, type McpClientPreset } from "@/features/api-key";
 import { useGetSpacesQuery } from "@/features/space/queries/space-query.ts";
 import type { AiBuiltinToolCapability } from "@docmost/api-contract";
 import { useAiBuiltinToolSpacePolicyQuery } from "@/features/ai/queries/ai-tool-policy-query.ts";
@@ -37,7 +37,7 @@ const DateInput = lazy(() =>
 interface CreateApiKeyModalProps {
   opened: boolean;
   onClose: () => void;
-  onSuccess: (response: IApiKey, client: McpClientPreset) => void;
+  onSuccess: (response: ICreatedApiKey, client: McpClientPreset) => void;
   keyType: "rag" | "mcp";
 }
 
@@ -219,6 +219,7 @@ export function CreateApiKeyModal({
       ...(keyType === "mcp" ? { allowedCapabilities } : {}),
     });
     onSuccess(createdKey, keyType === "mcp" ? client : "universal");
+    createApiKeyMutation.reset();
     reset();
     onClose();
   };

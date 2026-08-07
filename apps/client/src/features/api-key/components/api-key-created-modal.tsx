@@ -21,7 +21,7 @@ import {
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useModalBackgroundInert } from "@/components/ui/use-modal-background-inert";
-import { IApiKey, type McpClientPreset } from "@/features/api-key";
+import { ICreatedApiKey, type McpClientPreset } from "@/features/api-key";
 import CopyTextButton from "@/components/common/copy.tsx";
 import { getAppUrl, getServerAppUrl } from "@/lib/config.ts";
 import {
@@ -33,7 +33,7 @@ import { useGetApiKeysQuery } from "@/features/api-key/queries/api-key-query.ts"
 interface ApiKeyCreatedModalProps {
   opened: boolean;
   onClose: () => void;
-  apiKey: IApiKey | null;
+  apiKey: ICreatedApiKey | null;
   preferredClient?: McpClientPreset;
 }
 
@@ -59,7 +59,7 @@ export function ApiKeyCreatedModal({
     if (opened) setClient(preferredClient);
   }, [opened, preferredClient]);
 
-  if (!apiKey?.token) return null;
+  if (!apiKey) return null;
 
   const endpoint = getDocmostMcpEndpoint(getServerAppUrl() || getAppUrl());
   const presets = buildDocmostMcpPresets(endpoint, apiKey.token);

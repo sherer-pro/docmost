@@ -12,6 +12,7 @@ import Paginate from "@/components/common/paginate";
 import { useCursorPaginate } from "@/hooks/use-cursor-paginate";
 import { useGetApiKeysQuery } from "@/features/api-key/queries/api-key-query.ts";
 import {
+  ICreatedApiKey,
   IApiKey,
   type ApiKeyType,
   type McpClientPreset,
@@ -25,7 +26,8 @@ export function WorkspaceApiKeysPanel({ keyType }: WorkspaceApiKeysPanelProps) {
   const { t } = useTranslation();
   const { cursor, goNext, goPrev } = useCursorPaginate();
   const [createModalOpened, setCreateModalOpened] = useState(false);
-  const [createdApiKey, setCreatedApiKey] = useState<IApiKey | null>(null);
+  const [createdApiKey, setCreatedApiKey] =
+    useState<ICreatedApiKey | null>(null);
   const [createdClient, setCreatedClient] =
     useState<McpClientPreset>("universal");
   const [updateModalOpened, setUpdateModalOpened] = useState(false);
@@ -42,7 +44,10 @@ export function WorkspaceApiKeysPanel({ keyType }: WorkspaceApiKeysPanelProps) {
       : "ai.integrations.mcpDescription",
   );
 
-  const handleCreateSuccess = (response: IApiKey, client: McpClientPreset) => {
+  const handleCreateSuccess = (
+    response: ICreatedApiKey,
+    client: McpClientPreset,
+  ) => {
     setCreatedApiKey(response);
     setCreatedClient(client);
   };

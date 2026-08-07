@@ -158,6 +158,24 @@ describe('ApiKeyService', () => {
     expect(result).toEqual(expect.objectContaining({ authType: 'api_key' }));
   });
 
+  it('uses the creator current downgraded role and membership on every use', async () => {
+    const downgradedCreator = { ...ownerUser, role: UserRole.MEMBER } as any;
+    stubValidKey(downgradedCreator);
+    spaceMemberRepo.getUserSpaceRoles.mockResolvedValue([
+      { userId: downgradedCreator.id, role: 'reader' } as any,
+    ]);
+
+    const result = await service.validateApiKey(
+      validPayload(downgradedCreator),
+    );
+
+    expect(result.user.role).toBe(UserRole.MEMBER);
+    expect(spaceMemberRepo.getUserSpaceRoles).toHaveBeenCalledWith(
+      downgradedCreator.id,
+      'space-1',
+    );
+  });
+
   it('does not require space membership for workspace admins and owners', async () => {
     stubValidKey(ownerUser);
 
@@ -298,6 +316,58 @@ describe('ApiKeyService', () => {
 
     await expect(
       service.validateApiKey(validPayload(ownerUser), 'mcp'),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('rejects revoked and expired keys before resolving their live scope', async () => {
+    apiKeyRepo.findById
+      .mockResolvedValueOnce({
+        id: 'key-1',
+        deletedAt: new Date(),
+      } as any)
+      .mockResolvedValueOnce({
+        id: 'key-1',
+        creatorId: ownerUser.id,
+        workspaceId: workspace.id,
+        spaceId: 'space-1',
+        keyType: 'rag',
+        deletedAt: null,
+        expiresAt: new Date(Date.now() - 1_000),
+      } as any);
+
+    await expect(
+      service.validateApiKey(validPayload(ownerUser)),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(
+      service.validateApiKey(validPayload(ownerUser)),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+
+    expect(workspaceRepo.findById).not.toHaveBeenCalled();
+  });
+
+  it('rejects a key after its scoped space is deleted', async () => {
+    stubValidKey(ownerUser);
+    spaceRepo.findById.mockResolvedValue(null);
+
+    await expect(
+      service.validateApiKey(validPayload(ownerUser)),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('allows stateless replay only while the key and creator remain valid', async () => {
+    stubValidKey(memberUser);
+    spaceMemberRepo.getUserSpaceRoles.mockResolvedValue([
+      { userId: memberUser.id, role: 'reader' } as any,
+    ]);
+
+    await service.validateApiKey(validPayload(memberUser));
+    await service.validateApiKey(validPayload(memberUser));
+
+    expect(apiKeyRepo.updateApiKey).toHaveBeenCalledTimes(2);
+
+    spaceMemberRepo.getUserSpaceRoles.mockResolvedValue([]);
+    await expect(
+      service.validateApiKey(validPayload(memberUser)),
     ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
