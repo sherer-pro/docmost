@@ -62,6 +62,9 @@ export class ShareSeoController {
     @Param('shareId') shareId: string,
     @Param('pageSlug') pageSlug: string,
   ) {
+    res.header('Cache-Control', 'private, no-store');
+    res.header('Pragma', 'no-cache');
+    res.header('Expires', '0');
     // Nestjs does not to apply middlewares to paths excluded from the global /api prefix
     // https://github.com/nestjs/nest/issues/9124
     // https://github.com/nestjs/nest/issues/11572

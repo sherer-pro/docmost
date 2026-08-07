@@ -66,6 +66,7 @@ describe('ShareSeoController', () => {
     const res = {
       type: jest.fn().mockReturnThis(),
       send: jest.fn(),
+      header: jest.fn(),
     };
 
     await controller.getShare(
@@ -121,6 +122,7 @@ describe('ShareSeoController', () => {
     const res = {
       type: jest.fn().mockReturnThis(),
       send: jest.fn(),
+      header: jest.fn(),
     };
 
     await controller.getShare(
@@ -162,6 +164,7 @@ describe('ShareSeoController', () => {
     const res = {
       type: jest.fn().mockReturnThis(),
       send: jest.fn(),
+      header: jest.fn(),
     };
 
     await controller.getShare(
@@ -209,6 +212,7 @@ describe('ShareSeoController', () => {
     const res = {
       type: jest.fn().mockReturnThis(),
       send: jest.fn(),
+      header: jest.fn(),
     };
 
     await controller.getShare(
@@ -239,6 +243,7 @@ describe('ShareSeoController', () => {
     const res = {
       type: jest.fn().mockReturnThis(),
       send: jest.fn(),
+      header: jest.fn(),
     };
 
     await controller.getShare(
@@ -251,5 +256,28 @@ describe('ShareSeoController', () => {
     expect(workspaceRepo.findByHostname).not.toHaveBeenCalled();
     expect(shareService.getShareForPage).not.toHaveBeenCalled();
     expect(res.send).toHaveBeenCalledWith('index-stream');
+  });
+
+  it('marks share HTML as non-cacheable', async () => {
+    const resolveClientDistPathMock =
+      resolveClientDistPath as jest.MockedFunction<typeof resolveClientDistPath>;
+    resolveClientDistPathMock.mockReturnValue(undefined);
+    const res = {
+      header: jest.fn(),
+      type: jest.fn().mockReturnThis(),
+      send: jest.fn(),
+    };
+
+    await controller.getShare(
+      res as any,
+      { raw: { headers: {} } } as any,
+      'share-1',
+      'page-1',
+    );
+
+    expect(res.header).toHaveBeenCalledWith(
+      'Cache-Control',
+      'private, no-store',
+    );
   });
 });

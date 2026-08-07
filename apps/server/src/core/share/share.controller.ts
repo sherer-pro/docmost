@@ -77,8 +77,12 @@ export class ShareController {
   @Get('/info')
   @UseGuards(AuthRateLimitGuard)
   @AuthRateLimit({ endpoint: 'shareRead', accountField: 'shareId' })
-  async getShareViaQuery(@Query() dto: ShareIdDto) {
-    return this.getShare(dto);
+  async getShareViaQuery(
+    @Query() dto: ShareIdDto,
+    @AuthWorkspace() workspace: Workspace,
+    @Res({ passthrough: true }) res: FastifyReply,
+  ) {
+    return this.getShare(dto, workspace, res);
   }
 
   @HttpCode(HttpStatus.OK)
@@ -144,6 +148,7 @@ export class ShareController {
     @AuthWorkspace() workspace: Workspace,
     @Res({ passthrough: true }) res: FastifyReply,
   ) {
+    this.setPublicDataNoStore(res);
     const result = await this.shareService.lookupTransclusionForShare(
       dto.shareId,
       dto.references,
@@ -156,7 +161,6 @@ export class ShareController {
           item.sourcePageId,
           workspace.id,
           dto.shareId,
-          item.kind === 'page',
           false,
         );
       } else if (item?.sourcePageId) {
@@ -174,8 +178,15 @@ export class ShareController {
   async getSharePageTreeViaQuery(
     @Query() dto: ShareIdDto,
     @AuthWorkspace() workspace: Workspace,
+    @Res({ passthrough: true }) res: FastifyReply,
   ) {
-    return this.getSharePageTree(dto, workspace);
+    return this.getSharePageTree(dto, workspace, res);
+  }
+
+  private setPublicDataNoStore(res: FastifyReply): void {
+    res.header('Cache-Control', 'private, no-store');
+    res.header('Pragma', 'no-cache');
+    res.header('Expires', '0');
   }
 
   private async setAttachmentAccessCookie(
@@ -183,14 +194,12 @@ export class ShareController {
     pageId: string,
     workspaceId: string,
     shareId?: string,
-    pageEmbedSource = false,
     includeLegacy = true,
   ) {
     const token = await this.tokenService.generateAttachmentPageToken({
       pageId,
       workspaceId,
       shareId,
-      pageEmbedSource,
     });
 
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
@@ -229,6 +238,7 @@ export class ShareController {
     @AuthWorkspace() workspace: Workspace,
     @Res({ passthrough: true }) res: FastifyReply,
   ) {
+    this.setPublicDataNoStore(res);
     if (!dto.pageId && !dto.shareId) {
       throw new BadRequestException();
     }
@@ -253,12 +263,21 @@ export class ShareController {
     return shareData;
   }
 
-  async getShare(@Body() dto: ShareIdDto) {
+  async getShare(
+    @Body() dto: ShareIdDto,
+    @AuthWorkspace() workspace: Workspace,
+    @Res({ passthrough: true }) res: FastifyReply,
+  ) {
+    this.setPublicDataNoStore(res);
     const share = (await this.shareRepo.findById(dto.shareId, {
       includeSharedPage: true,
     })) as (Share & { sharedPage?: { id: string } | null }) | undefined;
 
-    if (!share || !share.sharedPage) {
+    if (
+      !share ||
+      share.workspaceId !== workspace.id ||
+      !share.sharedPage
+    ) {
       throw new NotFoundException('Share not found');
     }
 
@@ -344,7 +363,9 @@ export class ShareController {
   async getSharePageTree(
     @Body() dto: ShareIdDto,
     @AuthWorkspace() workspace: Workspace,
+    @Res({ passthrough: true }) res: FastifyReply,
   ) {
+    this.setPublicDataNoStore(res);
     const treeData = await this.shareService.getShareTree(
       dto.shareId,
       workspace.id,

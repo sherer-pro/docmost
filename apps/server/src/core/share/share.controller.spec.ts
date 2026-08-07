@@ -11,7 +11,9 @@ describe('ShareController', () => {
     isSharingAllowed: jest.fn(),
     lookupTransclusionForShare: jest.fn(),
   };
-  const shareRepo = {};
+  const shareRepo = {
+    findById: jest.fn(),
+  };
   const pageRepo = {
     findById: jest.fn(),
   };
@@ -58,6 +60,12 @@ describe('ShareController', () => {
     });
     shareService.isSharingAllowed.mockResolvedValue(true);
     tokenService.generateAttachmentPageToken.mockResolvedValue('token-1');
+    shareRepo.findById.mockResolvedValue({
+      id: 'share-1',
+      workspaceId: 'workspace-1',
+      spaceId: 'space-1',
+      sharedPage: { id: 'page-uuid' },
+    });
   });
 
   it('resolves UUID input through findById and requests share by canonical slugId', async () => {
@@ -77,6 +85,7 @@ describe('ShareController', () => {
   it('sets page-scoped and legacy attachment token cookies for shared page access', async () => {
     const res = {
       setCookie: jest.fn(),
+      header: jest.fn(),
     };
 
     await controller.getSharedPageInfo(
@@ -91,7 +100,6 @@ describe('ShareController', () => {
       pageId: 'page-uuid',
       workspaceId: 'workspace-1',
       shareId: 'share-1',
-      pageEmbedSource: false,
     });
 
     expect(res.setCookie).toHaveBeenCalledWith(
@@ -114,30 +122,39 @@ describe('ShareController', () => {
     );
   });
 
-  it('sets and clears page-scoped cookies for embedded share sources', async () => {
+  it('sets and clears page-scoped cookies for public synced blocks', async () => {
     shareService.lookupTransclusionForShare.mockResolvedValueOnce({
       items: [
         {
-          kind: 'page',
           sourcePageId: 'source-readable',
+          transclusionId: 'block-readable',
           content: { type: 'doc', content: [] },
         },
         {
-          kind: 'page',
           sourcePageId: 'source-hidden',
+          transclusionId: 'block-hidden',
           status: 'no_access',
         },
       ],
-      maxDepth: 5,
     });
-    const res = { setCookie: jest.fn(), clearCookie: jest.fn() };
+    const res = {
+      setCookie: jest.fn(),
+      clearCookie: jest.fn(),
+      header: jest.fn(),
+    };
 
     await controller.lookupTransclusion(
       {
         shareId: 'share-1',
         references: [
-          { kind: 'page', sourcePageId: 'source-readable' },
-          { kind: 'page', sourcePageId: 'source-hidden' },
+          {
+            sourcePageId: 'source-readable',
+            transclusionId: 'block-readable',
+          },
+          {
+            sourcePageId: 'source-hidden',
+            transclusionId: 'block-hidden',
+          },
         ],
       } as any,
       { id: 'workspace-1' } as any,
@@ -153,7 +170,6 @@ describe('ShareController', () => {
       pageId: 'source-readable',
       workspaceId: 'workspace-1',
       shareId: 'share-1',
-      pageEmbedSource: true,
     });
     expect(res.setCookie).not.toHaveBeenCalledWith(
       LEGACY_ATTACHMENT_TOKEN_COOKIE,
@@ -164,5 +180,42 @@ describe('ShareController', () => {
       getAttachmentTokenCookieName('source-hidden'),
       expect.objectContaining({ path: '/api' }),
     );
+  });
+
+  it('rejects a public share that belongs to another workspace', async () => {
+    shareRepo.findById.mockResolvedValueOnce({
+      id: 'share-foreign',
+      workspaceId: 'workspace-2',
+      spaceId: 'space-2',
+      sharedPage: { id: 'page-foreign' },
+    });
+    const res = { header: jest.fn() };
+
+    await expect(
+      controller.getShare(
+        { shareId: 'share-foreign' },
+        { id: 'workspace-1' } as any,
+        res as any,
+      ),
+    ).rejects.toThrow('Share not found');
+
+    expect(shareService.isSharingAllowed).not.toHaveBeenCalled();
+  });
+
+  it('marks public share data as non-cacheable', async () => {
+    const res = { header: jest.fn() };
+
+    await controller.getShare(
+      { shareId: 'share-1' },
+      { id: 'workspace-1' } as any,
+      res as any,
+    );
+
+    expect(res.header).toHaveBeenCalledWith(
+      'Cache-Control',
+      'private, no-store',
+    );
+    expect(res.header).toHaveBeenCalledWith('Pragma', 'no-cache');
+    expect(res.header).toHaveBeenCalledWith('Expires', '0');
   });
 });

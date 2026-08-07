@@ -8,6 +8,7 @@ import {
   HttpStatus,
   Post,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import { SearchService } from './search.service';
@@ -27,6 +28,7 @@ import { AuthRateLimitGuard } from '../auth/rate-limit/auth-rate-limit.guard';
 import { AuthRateLimit } from '../auth/rate-limit/auth-rate-limit.decorator';
 import { TypesenseSearchService } from './typesense-search.service';
 import { AuthPolicyScope } from '../../common/decorators/auth-policy-scope.decorator';
+import { FastifyReply } from 'fastify';
 
 @UseGuards(JwtAuthGuard)
 @Controller('search')
@@ -145,7 +147,11 @@ export class SearchController {
   async searchShare(
     @Body() searchDto: SearchShareDTO,
     @AuthWorkspace() workspace: Workspace,
+    @Res({ passthrough: true }) res: FastifyReply,
   ) {
+    res.header('Cache-Control', 'private, no-store');
+    res.header('Pragma', 'no-cache');
+    res.header('Expires', '0');
     delete searchDto.spaceId;
     delete searchDto.labelId;
     delete searchDto.tag;
