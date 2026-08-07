@@ -75,6 +75,7 @@ describe('PageService convertPageToDatabase reversibility', () => {
       workspaceId: 'ws-1',
       title: 'Root',
       icon: '📚',
+      templateKind: null,
     } as any;
 
     databaseRepo.findByPageIdIncludingDeleted.mockResolvedValue({

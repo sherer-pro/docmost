@@ -1,6 +1,7 @@
 import api from "@/lib/api-client";
 import {
   ICreateApiKeyRequest,
+  ICreatedApiKey,
   IApiKey,
   ApiKeyQueryParams,
   IUpdateApiKeyRequest,
@@ -16,8 +17,8 @@ export async function getApiKeys(
 
 export async function createApiKey(
   data: ICreateApiKeyRequest,
-): Promise<IApiKey> {
-  const req = await api.post<IApiKey>("/api-keys/create", data);
+): Promise<ICreatedApiKey> {
+  const req = await api.post<ICreatedApiKey>("/api-keys/create", data);
   return req.data;
 }
 

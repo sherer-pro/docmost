@@ -54,7 +54,6 @@ describe('ShareService public sharing invariants', () => {
       {} as any,
       db as any,
       {} as any,
-      {} as any,
       publicSharingPolicy as any,
     );
     jest.spyOn(service as any, 'lockSharePage').mockResolvedValue(undefined);
@@ -127,7 +126,6 @@ describe('ShareService getSharedPage', () => {
     service = new ShareService(
       shareRepo as any,
       pageRepo as any,
-      {} as any,
       {} as any,
       {} as any,
       {} as any,

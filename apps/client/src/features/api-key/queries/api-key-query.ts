@@ -9,6 +9,7 @@ import {
 import {
   createApiKey,
   getApiKeys,
+  ICreatedApiKey,
   IApiKey,
   ApiKeyQueryParams,
   ICreateApiKeyRequest,
@@ -67,7 +68,7 @@ export function useCreateApiKeyMutation() {
   const queryClient = useQueryClient();
   const { t } = useTranslation();
 
-  return useMutation<IApiKey, Error, ICreateApiKeyRequest>({
+  return useMutation<ICreatedApiKey, Error, ICreateApiKeyRequest>({
     mutationFn: (data) => createApiKey(data),
     onSuccess: () => {
       notifications.show({ message: t("API key created successfully") });

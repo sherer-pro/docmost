@@ -5,6 +5,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { once } from 'node:events';
 import { createServer, Server as HttpServer } from 'node:http';
 import { AddressInfo } from 'node:net';
+import { ForbiddenException } from '@nestjs/common';
 import { McpController } from './mcp.controller';
 
 describe('McpController protocol', () => {
@@ -84,6 +85,12 @@ describe('McpController protocol', () => {
     await once(httpServer, 'close');
   });
 
+  beforeEach(() => {
+    execute.mockClear();
+    toolPolicy.assertMcpToolAllowed.mockReset();
+    toolPolicy.assertMcpToolAllowed.mockResolvedValue(undefined);
+  });
+
   it('lists only read-only MCP tools with safety annotations', async () => {
     const response = await client.listTools();
 
@@ -121,5 +128,33 @@ describe('McpController protocol', () => {
       expect.any(Number),
       expect.any(Number),
     );
+  });
+
+  it('fails closed when a caller names a tool outside the live MCP policy', async () => {
+    toolPolicy.assertMcpToolAllowed.mockRejectedValueOnce(
+      new ForbiddenException('MCP tool is not allowed'),
+    );
+
+    const response = await client.callTool({
+      name: 'editPageText',
+      arguments: {},
+    });
+
+    expect(response.isError).toBe(true);
+    expect(response.content).toEqual([
+      expect.objectContaining({
+        type: 'text',
+        text: 'MCP tool is not allowed',
+      }),
+    ]);
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('supports stateless replay without issuing a session identifier', async () => {
+    const first = await client.listTools();
+    const second = await client.listTools();
+
+    expect(first.tools.map((tool) => tool.name)).toEqual(['getPage']);
+    expect(second.tools.map((tool) => tool.name)).toEqual(['getPage']);
   });
 });

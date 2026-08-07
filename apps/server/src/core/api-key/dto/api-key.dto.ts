@@ -1,6 +1,7 @@
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import {
   ArrayUnique,
+  Equals,
   IsArray,
   IsDateString,
   IsNotEmpty,
@@ -59,6 +60,18 @@ export class UpdateApiKeyDto {
   @ArrayUnique()
   @IsIn(AI_BUILTIN_TOOL_CAPABILITIES, { each: true })
   allowedCapabilities?: AiBuiltinToolCapability[];
+
+  @Equals(undefined, { message: 'keyType cannot be updated' })
+  keyType?: never;
+
+  @Equals(undefined, { message: 'spaceId cannot be updated' })
+  spaceId?: never;
+
+  @Equals(undefined, { message: 'creatorId cannot be updated' })
+  creatorId?: never;
+
+  @Equals(undefined, { message: 'expiresAt cannot be updated' })
+  expiresAt?: never;
 }
 
 export class RevokeApiKeyDto {

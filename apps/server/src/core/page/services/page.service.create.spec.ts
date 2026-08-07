@@ -95,6 +95,7 @@ describe('PageService create', () => {
       id: 'parent-1',
       spaceId: 'space-1',
       deletedAt: null,
+      templateKind: null,
     });
     pageRepo.getPageDepth.mockResolvedValue(100);
 
@@ -113,6 +114,7 @@ describe('PageService create', () => {
       id: 'parent-1',
       spaceId: 'space-1',
       deletedAt: null,
+      templateKind: null,
     });
     pageRepo.getPageDepth.mockResolvedValue(99);
     pageRepo.insertPage.mockResolvedValue({

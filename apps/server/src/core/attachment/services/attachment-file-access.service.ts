@@ -244,19 +244,9 @@ export class AttachmentFileAccessService {
       );
       if (!inheritedShare) throw new NotFoundException('File not found');
       if (jwtPayload.pageEmbedSource) {
-        const result = await this.shareService.lookupTransclusionForShare(
-          jwtPayload.shareId,
-          [
-            {
-              kind: 'page',
-              sourcePageId: page.id,
-            },
-          ],
-          workspace.id,
-        );
-        if (!result.items[0] || !('content' in result.items[0])) {
-          throw new NotFoundException('File not found');
-        }
+        // Public page embeds are retired. Reject legacy embed-source cookies
+        // instead of letting them fall back to ordinary inherited-share access.
+        throw new NotFoundException('File not found');
       }
     }
 
