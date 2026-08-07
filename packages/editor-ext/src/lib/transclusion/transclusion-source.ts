@@ -42,6 +42,8 @@ export const TransclusionSource = Node.create<TransclusionSourceOptions>({
   content: TRANSCLUSION_SOURCE_CONTENT_EXPRESSION,
   defining: true,
   isolating: true,
+  selectable: true,
+  draggable: true,
 
   addAttributes() {
     return {
@@ -145,8 +147,6 @@ export const TransclusionSource = Node.create<TransclusionSourceOptions>({
 
   addNodeView() {
     if (!this.options.view) return null;
-    // Force the react node view to render immediately using flush sync
-    this.editor.isInitialized = true;
     return ReactNodeViewRenderer(this.options.view);
   },
 });

@@ -59,6 +59,28 @@ export class PageTransclusionReferencesRepo {
     return rows.map((r) => r.referencePageId);
   }
 
+  async hasLiveReferences(
+    sourcePageId: string,
+    transclusionId: string,
+    workspaceId: string,
+    trx?: KyselyTransaction,
+  ): Promise<boolean> {
+    const row = await dbOrTx(this.db, trx)
+      .selectFrom('pageTransclusionReferences as reference')
+      .innerJoin('pages as page', 'page.id', 'reference.referencePageId')
+      .select('reference.id')
+      .where('reference.workspaceId', '=', workspaceId)
+      .where('reference.sourcePageId', '=', sourcePageId)
+      .where('reference.transclusionId', '=', transclusionId)
+      .where('reference.referenceKind', '=', 'block')
+      .where('page.workspaceId', '=', workspaceId)
+      .where('page.deletedAt', 'is', null)
+      .limit(1)
+      .executeTakeFirst();
+
+    return Boolean(row);
+  }
+
   async insertMany(
     rows: InsertablePageTransclusionReference[],
     trx?: KyselyTransaction,

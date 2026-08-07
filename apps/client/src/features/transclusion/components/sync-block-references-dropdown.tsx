@@ -25,6 +25,8 @@ type Props = {
   mode: "source" | "reference";
   /** Notified whenever the dropdown opens/closes (for keep-chrome-visible). */
   onOpenChange?: (open: boolean) => void;
+  /** Defers metadata loading while an offscreen reference cannot be used. */
+  enabled?: boolean;
 };
 
 export default function SyncBlockReferencesDropdown({
@@ -33,6 +35,7 @@ export default function SyncBlockReferencesDropdown({
   currentPageId,
   mode,
   onOpenChange,
+  enabled: queryEnabled = true,
 }: Props) {
   const { t } = useTranslation();
   const [opened, setOpened] = useState(false);
@@ -42,10 +45,10 @@ export default function SyncBlockReferencesDropdown({
     onOpenChange?.(next);
   };
 
-  // Fetch eagerly so the "Synced to N other pages" count is correct even
-  // before the dropdown is opened. The cache is keyed on (sourcePageId,
-  // transclusionId), so two views (source + reference) share one fetch.
-  const enabled = !!sourcePageId && !!transclusionId;
+  // Fetch eagerly for sources and nearby references so the "Synced to N other
+  // pages" count is ready before the dropdown opens. Offscreen references can
+  // defer this request. The cache is shared by (sourcePageId, transclusionId).
+  const enabled = queryEnabled && !!sourcePageId && !!transclusionId;
   const { data, isLoading } = useReferencesQuery(
     sourcePageId,
     transclusionId,

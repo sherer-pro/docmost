@@ -20,4 +20,5 @@ export type ReferencingPage = {
 export type ReferencingPagesResponse = {
   source: ReferencingPage | null;
   references: ReferencingPage[];
+  hasReferences: boolean;
 };

@@ -241,4 +241,111 @@ describe("TransclusionLookupProvider", () => {
       });
     });
   });
+
+  it("splits 51 unique references at the API limit", async () => {
+    lookup.mockImplementation(async ({ references }) => ({
+      items: references.map(({ sourcePageId, transclusionId }) => ({
+        sourcePageId,
+        transclusionId,
+        status: "not_found" as const,
+      })),
+    }));
+
+    await act(async () => {
+      root.render(
+        <TransclusionLookupProvider>
+          {Array.from({ length: 51 }, (_, index) => (
+            <Probe
+              key={index}
+              pageId={`page-${index}`}
+              blockId={`block-${index}`}
+            />
+          ))}
+        </TransclusionLookupProvider>,
+      );
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10);
+    });
+
+    expect(lookup).toHaveBeenCalledTimes(2);
+    expect(
+      lookup.mock.calls.map(([params]) => params.references.length).sort(),
+    ).toEqual([1, 50]);
+  });
+
+  it("splits 120 unique references into bounded chunks", async () => {
+    lookup.mockImplementation(async ({ references }) => ({
+      items: references.map(({ sourcePageId, transclusionId }) => ({
+        sourcePageId,
+        transclusionId,
+        status: "not_found" as const,
+      })),
+    }));
+
+    await act(async () => {
+      root.render(
+        <TransclusionLookupProvider>
+          {Array.from({ length: 120 }, (_, index) => (
+            <Probe
+              key={index}
+              pageId={`page-${index}`}
+              blockId={`block-${index}`}
+            />
+          ))}
+        </TransclusionLookupProvider>,
+      );
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10);
+    });
+
+    expect(lookup).toHaveBeenCalledTimes(3);
+    expect(
+      lookup.mock.calls.map(([params]) => params.references.length).sort(),
+    ).toEqual([20, 50, 50]);
+  });
+
+  it("retries only a failed chunk", async () => {
+    let rejectedLargeChunk = false;
+    lookup.mockImplementation(async ({ references }) => {
+      if (references.length === 50 && !rejectedLargeChunk) {
+        rejectedLargeChunk = true;
+        throw new Error("network");
+      }
+      return {
+        items: references.map(({ sourcePageId, transclusionId }) => ({
+          sourcePageId,
+          transclusionId,
+          status: "not_found" as const,
+        })),
+      };
+    });
+
+    await act(async () => {
+      root.render(
+        <TransclusionLookupProvider>
+          {Array.from({ length: 51 }, (_, index) => (
+            <Probe
+              key={index}
+              pageId={`page-${index}`}
+              blockId={`block-${index}`}
+            />
+          ))}
+        </TransclusionLookupProvider>,
+      );
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10);
+    });
+
+    expect(lookup).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(260);
+    });
+
+    expect(lookup).toHaveBeenCalledTimes(3);
+    expect(lookup.mock.calls[2][0].references).toHaveLength(50);
+  });
 });

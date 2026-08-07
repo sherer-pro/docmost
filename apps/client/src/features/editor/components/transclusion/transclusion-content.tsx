@@ -1,50 +1,74 @@
 import { EditorProvider } from "@tiptap/react";
-import { useMemo } from "react";
-import { mainExtensions } from "@/features/editor/extensions/extensions";
-import { UniqueID } from "@docmost/editor-ext";
+import { memo, useEffect, useRef, useState } from "react";
+import type { DragEvent, SyntheticEvent } from "react";
+import { transclusionContentExtensions } from "@/features/editor/extensions/extensions";
 import classes from "./transclusion.module.css";
 
 type Props = {
   content: unknown;
+  renderEditor?: boolean;
 };
 
-export default function TransclusionContent({ content }: Props) {
-  const extensions = useMemo(() => {
-    const filtered = mainExtensions.filter(
-      (e: any) => e.name !== "uniqueID" && e.name !== "globalDragHandle",
-    );
-    return [
-      ...filtered,
-      UniqueID.configure({
-        types: ["heading", "paragraph", "transclusionSource", "pageEmbed"],
-        updateDocument: false,
-      }),
-    ];
-  }, []);
+function TransclusionContent({ content, renderEditor = true }: Props) {
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  const [measuredHeight, setMeasuredHeight] = useState<number | null>(null);
+
+  useEffect(() => {
+    const element = contentRef.current;
+    if (!renderEditor || !element || typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    const observer = new ResizeObserver((entries) => {
+      const height = entries[0]?.contentRect.height;
+      if (height && height > 0) setMeasuredHeight(Math.ceil(height));
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [renderEditor]);
 
   // Isolate the nested read-only editor's events from the host editor:
   // - mousedown/click would otherwise make the host node-select the atom
   //   wrapper, blocking native text selection inside.
-  // - dragstart/dragover/drop would otherwise let the host treat events
-  //   inside the nested view as drops on the host, duplicating dropped
-  //   files at the transclusion's position.
-  const stop = (e: React.SyntheticEvent) => e.stopPropagation();
-
+  // - dragstart from the nested view must not initiate a host block drag
+  // - external file dragover/drop must stay isolated to avoid duplicate
+  //   uploads, while ProseMirror block drags must reach the host editor.
   return (
     <div
+      ref={contentRef}
       className={classes.transclusionContent}
-      onMouseDown={stop}
-      onClick={stop}
-      onDragStart={stop}
-      onDragOver={stop}
-      onDrop={stop}
+      style={
+        renderEditor
+          ? undefined
+          : { height: measuredHeight ?? 24, overflow: "hidden" }
+      }
+      onMouseDown={stopPropagation}
+      onClick={stopPropagation}
+      onDragStart={stopPropagation}
+      onDragOver={stopFileDropPropagation}
+      onDrop={stopFileDropPropagation}
     >
-      <EditorProvider
-        editable={false}
-        immediatelyRender={true}
-        extensions={extensions}
-        content={content as any}
-      />
+      {renderEditor && (
+        <EditorProvider
+          editable={false}
+          immediatelyRender={false}
+          shouldRerenderOnTransaction={false}
+          extensions={transclusionContentExtensions}
+          content={content as any}
+        />
+      )}
     </div>
   );
 }
+
+function stopPropagation(event: SyntheticEvent) {
+  event.stopPropagation();
+}
+
+function stopFileDropPropagation(event: DragEvent) {
+  if (Array.from(event.dataTransfer.types).includes("Files")) {
+    event.stopPropagation();
+  }
+}
+
+export default memo(TransclusionContent);

@@ -98,6 +98,8 @@ import { MarkdownClipboard } from "@/features/editor/extensions/markdown-clipboa
 import EmojiCommand from "./emoji-command";
 import { InlineCodeNoWrap } from "./inline-code-no-wrap";
 import { TransclusionClipboard } from "./transclusion-clipboard";
+import { TransclusionDeletionGuard } from "./transclusion-deletion-guard";
+import { notifications } from "@mantine/notifications";
 
 const lowlight = createLowlight(common);
 lowlight.register("mermaid", plaintext);
@@ -167,7 +169,9 @@ export const mainExtensions = [
   }),
   Typography,
   TrailingNode,
-  GlobalDragHandle,
+  GlobalDragHandle.configure({
+    customNodes: ["transclusionSource", "transclusionReference"],
+  }),
   TextStyle,
   Color,
   SlashCommand,
@@ -290,6 +294,22 @@ export const mainExtensions = [
   PageEmbed.configure({
     view: PageEmbedView,
   }),
+  TransclusionDeletionGuard.configure({
+    onBlocked: (reason) => {
+      notifications.show({
+        id: "transclusion-source-deletion-blocked",
+        color: "orange",
+        message:
+          reason === "referenced"
+            ? i18n.t(
+                "Delete or unsync all copies before removing this synced block.",
+              )
+            : i18n.t(
+                "Could not verify synced block copies. Refresh the page and try again.",
+              ),
+      });
+    },
+  }),
   TransclusionClipboard,
   MarkdownClipboard.configure({
     transformPastedText: true,
@@ -318,6 +338,28 @@ export const mainExtensions = [
     },
   }).configure(),
 ] as any;
+
+const transclusionReadOnlyExcludedExtensions = new Set([
+  "uniqueID",
+  "globalDragHandle",
+  "placeholder",
+  "trailingNode",
+  "slash-command",
+  "emoji-command",
+  "selection",
+  "table-drag-and-drop",
+  "tablePaste",
+  "transclusionDeletionGuard",
+  "transclusionClipboard",
+  "markdownClipboard",
+  "characterCount",
+  "searchAndReplace",
+]);
+
+export const transclusionContentExtensions = mainExtensions.filter(
+  (extension: any) =>
+    !transclusionReadOnlyExcludedExtensions.has(extension.name),
+);
 
 export interface MainExtensionsOptions {
   tagDefinitions?: readonly TagDefinition[];

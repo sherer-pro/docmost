@@ -8,7 +8,7 @@ import {
   IconLinkOff,
   IconTrash,
 } from "@tabler/icons-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import classes from "./transclusion.module.css";
 import SyncBlockReferencesDropdown from "@/features/transclusion/components/sync-block-references-dropdown";
@@ -16,6 +16,11 @@ import {
   buildSyncedBlockClipboardPayload,
   writeTransclusionClipboard,
 } from "@/features/editor/extensions/transclusion-clipboard";
+import { useReferencesQuery } from "@/features/transclusion/queries/transclusion-query";
+import type {
+  TransclusionDeletionGuardStorage,
+  TransclusionSourceState,
+} from "@/features/editor/extensions/transclusion-deletion-guard";
 
 export default function TransclusionView(props: NodeViewProps) {
   const { editor, node, deleteNode } = props;
@@ -28,6 +33,40 @@ export default function TransclusionView(props: NodeViewProps) {
   // @ts-ignore - editor.storage.pageId is set by the host editor (page-editor.tsx onCreate)
   const sourcePageId: string | undefined = editor.storage?.pageId;
   const transclusionId: string | null = node.attrs.id ?? null;
+  const referencesQuery = useReferencesQuery(
+    sourcePageId ?? null,
+    transclusionId,
+    isEditable,
+  );
+  const sourceState: TransclusionSourceState = referencesQuery.data
+    ? referencesQuery.data.hasReferences === true
+      ? "referenced"
+      : referencesQuery.data.hasReferences === false
+        ? "unreferenced"
+        : "unknown"
+    : referencesQuery.isError
+      ? "error"
+      : "unknown";
+  const sourceDeletionBlocked = sourceState !== "unreferenced";
+  const sourceDeletionHint =
+    sourceState === "referenced"
+      ? t("Delete or unsync all copies before removing this synced block.")
+      : t(
+          "Could not verify synced block copies. Refresh the page and try again.",
+        );
+
+  useEffect(() => {
+    if (!isEditable || !transclusionId) return;
+    const storage = (editor.storage as any)
+      .transclusionDeletionGuard as TransclusionDeletionGuardStorage;
+    storage?.sourceStates.set(transclusionId, sourceState);
+
+    return () => {
+      if (storage?.sourceStates.get(transclusionId) === sourceState) {
+        storage.sourceStates.delete(transclusionId);
+      }
+    };
+  }, [editor, isEditable, sourceState, transclusionId]);
 
   const [copied, setCopied] = useState(false);
   const handleCopy = async () => {
@@ -64,6 +103,7 @@ export default function TransclusionView(props: NodeViewProps) {
       data-editable={isEditable ? "true" : "false"}
       data-menu-open={openMenus > 0 ? "true" : "false"}
       data-id={transclusionId ?? undefined}
+      data-type="transclusionSource"
     >
       {isEditable && (
         <div
@@ -105,6 +145,8 @@ export default function TransclusionView(props: NodeViewProps) {
               <Menu.Item
                 leftSection={<IconLinkOff size={14} />}
                 onClick={handleUnsync}
+                disabled={sourceDeletionBlocked}
+                title={sourceDeletionBlocked ? sourceDeletionHint : undefined}
               >
                 {t("Unsync")}
               </Menu.Item>
@@ -112,9 +154,14 @@ export default function TransclusionView(props: NodeViewProps) {
                 color="red"
                 leftSection={<IconTrash size={14} />}
                 onClick={() => deleteNode()}
+                disabled={sourceDeletionBlocked}
+                title={sourceDeletionBlocked ? sourceDeletionHint : undefined}
               >
                 {t("Delete synced block")}
               </Menu.Item>
+              {sourceDeletionBlocked && (
+                <Menu.Label>{sourceDeletionHint}</Menu.Label>
+              )}
             </Menu.Dropdown>
           </Menu>
         </div>
