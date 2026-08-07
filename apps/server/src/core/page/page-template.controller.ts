@@ -28,17 +28,15 @@ import {
 import {
   CreatePageTemplateDto,
   CreateFromTemplateDto,
-  DetachPageEmbedDto,
-  InsertPageEmbedDto,
+  DetachSyncedTemplateDto,
   PageTemplateDestinationsDto,
   PageTemplateDiscoveryDto,
   PageTemplateGroupPolicyDto,
+  PublishPageTemplateDto,
   PageTemplateSpacePolicyDto,
   PageTemplateWorkspacePolicyDto,
-  SetPageTemplateDto,
 } from './dto/page-template.dto';
 import { PageTemplatePolicyService } from './transclusion/page-template-policy.service';
-import { PageEmbedService } from './transclusion/page-embed.service';
 import { PageTemplateService } from './services/page-template.service';
 
 @UseGuards(JwtAuthGuard)
@@ -47,7 +45,6 @@ export class PageTemplateController {
   constructor(
     private readonly templates: PageTemplateService,
     private readonly policy: PageTemplatePolicyService,
-    private readonly pageEmbeds: PageEmbedService,
     private readonly spaceAbility: SpaceAbilityFactory,
   ) {}
 
@@ -78,15 +75,13 @@ export class PageTemplateController {
     return this.templates.createTemplate(dto, user);
   }
 
-  @HttpCode(HttpStatus.OK)
+  @Get('templates/:pageId/provenance')
   @AuthPolicyScope('page', { source: 'params', key: 'pageId' })
-  @Post(':pageId/actions/set-template')
-  async setTemplate(
+  async getProvenance(
     @Param('pageId', ParseUUIDPipe) pageId: string,
-    @Body() dto: SetPageTemplateDto,
     @AuthUser() user: User,
   ) {
-    return this.templates.setTemplate(pageId, dto.enabled, user);
+    return this.templates.getProvenance(pageId, user);
   }
 
   @HttpCode(HttpStatus.OK)
@@ -100,34 +95,79 @@ export class PageTemplateController {
     return this.templates.createFromTemplate(dto, idempotencyKey, user);
   }
 
-  @HttpCode(HttpStatus.OK)
-  @AuthPolicyScope('page', { source: 'body', key: 'consumerPageId' })
-  @Post('transclusion/actions/insert-page-embed')
-  async insertPageEmbed(
-    @Body() dto: InsertPageEmbedDto,
-    @Headers('idempotency-key') idempotencyKey: string,
-    @AuthUser() user: User,
-  ) {
-    return this.templates.insertPageEmbed(dto, idempotencyKey, user);
-  }
-
-  @HttpCode(HttpStatus.OK)
-  @AuthPolicyScope('page', { source: 'body', key: 'consumerPageId' })
-  @Post('transclusion/actions/detach-page-embed')
-  async detachPageEmbed(
-    @Body() dto: DetachPageEmbedDto,
-    @Headers('idempotency-key') idempotencyKey: string,
-    @AuthUser() user: User,
-  ) {
-    return this.templates.detachPageEmbed(dto, idempotencyKey, user);
-  }
-
   @Get('templates/:pageId/actions/usages')
   async listUsages(
     @Param('pageId', ParseUUIDPipe) pageId: string,
     @AuthUser() user: User,
   ) {
-    return this.pageEmbeds.listUsages(pageId, user);
+    return this.templates.listUsages(pageId, user);
+  }
+
+  @Post('templates/:pageId/actions/preflight-publish')
+  @AuthPolicyScope('page', { source: 'params', key: 'pageId' })
+  async preflightPublish(
+    @Param('pageId', ParseUUIDPipe) pageId: string,
+    @AuthUser() user: User,
+  ) {
+    return this.templates.preflightPublish(pageId, user);
+  }
+
+  @Post('templates/:pageId/actions/publish')
+  @AuthPolicyScope('page', { source: 'params', key: 'pageId' })
+  async publish(
+    @Param('pageId', ParseUUIDPipe) pageId: string,
+    @Body() dto: PublishPageTemplateDto,
+    @AuthUser() user: User,
+  ) {
+    return this.templates.publish(pageId, dto, user);
+  }
+
+  @Get('templates/:pageId/revisions')
+  @AuthPolicyScope('page', { source: 'params', key: 'pageId' })
+  async listRevisions(
+    @Param('pageId', ParseUUIDPipe) pageId: string,
+    @AuthUser() user: User,
+  ) {
+    return this.templates.listRevisions(pageId, user);
+  }
+
+  @Get('templates/:pageId/sync-runs')
+  @AuthPolicyScope('page', { source: 'params', key: 'pageId' })
+  async listSyncRuns(
+    @Param('pageId', ParseUUIDPipe) pageId: string,
+    @AuthUser() user: User,
+  ) {
+    return this.templates.listSyncRuns(pageId, user);
+  }
+
+  @Post('templates/:pageId/sync-runs/:runId/actions/retry')
+  @AuthPolicyScope('page', { source: 'params', key: 'pageId' })
+  async retrySyncRun(
+    @Param('pageId', ParseUUIDPipe) pageId: string,
+    @Param('runId', ParseUUIDPipe) runId: string,
+    @AuthUser() user: User,
+  ) {
+    return this.templates.retrySyncRun(pageId, runId, user);
+  }
+
+  @Post('templates/:pageId/actions/archive')
+  @AuthPolicyScope('page', { source: 'params', key: 'pageId' })
+  async archive(
+    @Param('pageId', ParseUUIDPipe) pageId: string,
+    @AuthUser() user: User,
+  ) {
+    return this.templates.archive(pageId, user);
+  }
+
+  @Post(':pageId/actions/detach-template')
+  @AuthPolicyScope('page', { source: 'params', key: 'pageId' })
+  async detachTemplate(
+    @Param('pageId', ParseUUIDPipe) pageId: string,
+    @Body() dto: DetachSyncedTemplateDto,
+    @Headers('idempotency-key') idempotencyKey: string,
+    @AuthUser() user: User,
+  ) {
+    return this.templates.detachTemplate(pageId, dto, idempotencyKey, user);
   }
 
   @Get('templates/policies/workspace')

@@ -729,12 +729,15 @@ of remote deletion.
 Space and workspace deletion fail closed while an active or cleanup-required
 binding exists.
 
-The source exporter uses every live page in the space except pages excluded by
-`AiContentPolicyService`. This intentionally differs from `/api/rag/*`, where
-the key creator's current page ACL remains part of the scope. Query-time Open
-WebUI results still pass through Docmost source resolution and the requesting
-user's current ACL. Direct user access to the Open WebUI Knowledge Base is not
-safe because the external index contains the full policy-allowed space scope.
+The source exporter uses every live non-template page in the space except pages
+excluded by `AiContentPolicyService`. Template catalog entries are not indexed;
+pages created from regular or synchronized templates are ordinary materialized
+pages and are indexed normally. This intentionally differs from `/api/rag/*`,
+where the key creator's current page ACL remains part of the scope. Query-time
+Open WebUI results still pass through Docmost source resolution and the
+requesting user's current ACL. Direct user access to the Open WebUI Knowledge
+Base is not safe because the external index contains the full policy-allowed
+space scope.
 
 The management contract is:
 
@@ -1335,6 +1338,8 @@ only `Authorization: Bearer <token>` from a workspace API key. User JWTs and
 cookies are rejected, and API keys are rejected outside `/api/rag/*`. The key
 contains `workspaceId`, `spaceId`, `apiKeyId`, and `sub`; key scope, current
 creator membership, page ACL, and the content policy bound all live data.
+Template catalog entries are excluded from feeds and direct page reads; pages
+created from templates remain ordinary materialized pages in scope.
 Cursor feeds are at least once, so consumers must perform idempotent
 upsert/delete operations. Opaque cursor v2 is bound to the feed, workspace,
 space, scope fingerprint, original watermark, database-derived snapshot upper

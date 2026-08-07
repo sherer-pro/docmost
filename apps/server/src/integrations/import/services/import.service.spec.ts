@@ -41,7 +41,10 @@ jest.mock('../../../collaboration/collaboration.util', () => ({
 import * as JSZip from 'jszip';
 import { createHash } from 'node:crypto';
 import { ImportService } from './import.service';
-import { DOCMOST_ARCHIVE_SCHEMA_VERSION } from '@docmost/api-contract';
+import {
+  DOCMOST_ARCHIVE_PAGE_EMBED_SCHEMA_VERSION,
+  DOCMOST_ARCHIVE_SCHEMA_VERSION,
+} from '@docmost/api-contract';
 
 describe('ImportService Docmost archive preview', () => {
   const service = new ImportService(
@@ -191,6 +194,18 @@ describe('ImportService Docmost archive preview', () => {
         await buildArchive({ schemaVersion: 999 }),
       ),
     ).rejects.toThrow('newer than supported');
+  });
+
+  it('accepts a version 3 archive for legacy page-embed materialization', async () => {
+    const preview = await (service as any).inspectDocmostArchive(
+      await buildArchive({
+        schemaVersion: DOCMOST_ARCHIVE_PAGE_EMBED_SCHEMA_VERSION,
+      }),
+    );
+
+    expect(preview.schemaVersion).toBe(
+      DOCMOST_ARCHIVE_PAGE_EMBED_SCHEMA_VERSION,
+    );
   });
 
   it('rejects an archive with a missing attachment payload', async () => {

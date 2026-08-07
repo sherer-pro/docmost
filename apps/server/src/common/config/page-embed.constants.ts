@@ -7,8 +7,8 @@ export const PAGE_EMBED_GRAPH_MAX_EDGES = 50_000;
 export const PAGE_TEMPLATE_ACTIONS = [
   'create_template',
   'manage_template',
-  'use_snapshot',
-  'use_live_embed',
+  'use_regular_template',
+  'use_synced_template',
 ] as const;
 
 export type PageTemplateAction = (typeof PAGE_TEMPLATE_ACTIONS)[number];

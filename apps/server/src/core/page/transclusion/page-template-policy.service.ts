@@ -19,11 +19,9 @@ export interface EffectivePageTemplatePolicy {
   workspaceEnabled: boolean;
   templatesEnabled: boolean;
   allowCreateTemplate: boolean;
-  allowSnapshot: boolean;
-  allowLiveEmbed: boolean;
-  allowPublicLiveEmbed: boolean;
+  allowRegularTemplate: boolean;
+  allowSyncedTemplate: boolean;
   allowedActions: PageTemplateAction[];
-  maxPageEmbedDepth: number;
 }
 
 @Injectable()
@@ -86,9 +84,9 @@ export class PageTemplatePolicyService {
     const actionEnabled =
       action === 'create_template' || action === 'manage_template'
         ? policy.allowCreateTemplate
-        : action === 'use_snapshot'
-          ? policy.allowSnapshot
-          : policy.allowLiveEmbed;
+        : action === 'use_regular_template'
+          ? policy.allowRegularTemplate
+          : policy.allowSyncedTemplate;
     if (
       !policy.systemEnabled ||
       !policy.workspaceEnabled ||
@@ -114,7 +112,6 @@ export class PageTemplatePolicyService {
       enabled: row?.enabled ?? false,
       revision: row?.revision ?? 0,
       systemEnabled: this.environment.isPageTemplatesEnabled(),
-      maxPageEmbedDepth: this.environment.getMaxPageEmbedDepth(),
     };
   }
 
@@ -167,9 +164,8 @@ export class PageTemplatePolicyService {
       spaceId,
       templatesEnabled: row?.templatesEnabled ?? false,
       allowCreateTemplate: row?.allowCreateTemplate ?? false,
-      allowSnapshot: row?.allowSnapshot ?? false,
-      allowLiveEmbed: row?.allowLiveEmbed ?? false,
-      allowPublicLiveEmbed: row?.allowPublicLiveEmbed ?? false,
+      allowRegularTemplate: row?.allowRegularTemplate ?? false,
+      allowSyncedTemplate: row?.allowSyncedTemplate ?? false,
       revision: row?.revision ?? 0,
     };
   }
@@ -181,18 +177,16 @@ export class PageTemplatePolicyService {
     expectedRevision: number;
     templatesEnabled: boolean;
     allowCreateTemplate: boolean;
-    allowSnapshot: boolean;
-    allowLiveEmbed: boolean;
-    allowPublicLiveEmbed: boolean;
+    allowRegularTemplate: boolean;
+    allowSyncedTemplate: boolean;
   }) {
     const values = {
       workspaceId: params.workspaceId,
       spaceId: params.spaceId,
       templatesEnabled: params.templatesEnabled,
       allowCreateTemplate: params.allowCreateTemplate,
-      allowSnapshot: params.allowSnapshot,
-      allowLiveEmbed: params.allowLiveEmbed,
-      allowPublicLiveEmbed: params.allowPublicLiveEmbed,
+      allowRegularTemplate: params.allowRegularTemplate,
+      allowSyncedTemplate: params.allowSyncedTemplate,
       updatedById: params.userId,
     };
     const updated =
@@ -208,9 +202,8 @@ export class PageTemplatePolicyService {
             .set({
               templatesEnabled: params.templatesEnabled,
               allowCreateTemplate: params.allowCreateTemplate,
-              allowSnapshot: params.allowSnapshot,
-              allowLiveEmbed: params.allowLiveEmbed,
-              allowPublicLiveEmbed: params.allowPublicLiveEmbed,
+              allowRegularTemplate: params.allowRegularTemplate,
+              allowSyncedTemplate: params.allowSyncedTemplate,
               revision: params.expectedRevision + 1,
               updatedById: params.userId,
               updatedAt: new Date(),
@@ -322,10 +315,8 @@ export class PageTemplatePolicyService {
       workspaceEnabled: workspace.enabled,
       templatesEnabled: space.templatesEnabled,
       allowCreateTemplate: space.allowCreateTemplate,
-      allowSnapshot: space.allowSnapshot,
-      allowLiveEmbed: space.allowLiveEmbed,
-      allowPublicLiveEmbed: space.allowPublicLiveEmbed,
-      maxPageEmbedDepth: workspace.maxPageEmbedDepth,
+      allowRegularTemplate: space.allowRegularTemplate,
+      allowSyncedTemplate: space.allowSyncedTemplate,
     };
   }
 }

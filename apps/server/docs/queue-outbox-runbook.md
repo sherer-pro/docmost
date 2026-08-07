@@ -9,7 +9,8 @@ Current producers are:
 
 - workspace invitation creation and resend (`workspace_invitation_email`);
 - workspace invitation acceptance (`workspace_invitation_accepted_email`);
-- page duplication with attachment copies (`duplicate_page_attachments`).
+- page duplication with attachment copies (`duplicate_page_attachments`);
+- synchronized template publication and retry dispatch (`page_template_sync`).
 
 The producer inserts its outbox row in the same PostgreSQL transaction as the
 corresponding domain change. Do not replace this with a direct BullMQ write or
@@ -36,7 +37,9 @@ external mail provider accepted a message but before PostgreSQL records
 completion, so an invitation or acceptance email can be sent more than once.
 Attachment duplication reuses deterministic attachment IDs and validates an
 existing destination row and storage object, making a reclaimed attempt
-idempotent. Downstream search/content-index jobs are also safe to repeat.
+idempotent. Template synchronization dispatches a durable sync run whose items,
+leases, and applied revisions make reclaimed attempts idempotent. Downstream
+search/content-index jobs are also safe to repeat.
 
 ## Secret and privacy handling
 

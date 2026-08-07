@@ -1,5 +1,6 @@
 export const DOCMOST_ARCHIVE_LEGACY_SCHEMA_VERSION = 2 as const;
-export const DOCMOST_ARCHIVE_SCHEMA_VERSION = 3 as const;
+export const DOCMOST_ARCHIVE_PAGE_EMBED_SCHEMA_VERSION = 3 as const;
+export const DOCMOST_ARCHIVE_SCHEMA_VERSION = 4 as const;
 
 export type DocmostArchiveScope = "space" | "page" | "database";
 
@@ -35,6 +36,7 @@ export interface DocmostArchivePage {
   content: unknown;
   settings: unknown;
   isTemplate?: boolean;
+  templateKind?: "regular" | "synced" | null;
 }
 
 export interface DocmostArchiveAttachment {
@@ -154,19 +156,33 @@ export interface DocmostArchiveDataV2 {
 
 export interface DocmostArchiveManifestV3
   extends Omit<DocmostArchiveManifestV2, "schemaVersion"> {
-  schemaVersion: typeof DOCMOST_ARCHIVE_SCHEMA_VERSION;
+  schemaVersion: typeof DOCMOST_ARCHIVE_PAGE_EMBED_SCHEMA_VERSION;
 }
 
 export interface DocmostArchiveDataV3
   extends Omit<DocmostArchiveDataV2, "schemaVersion"> {
-  schemaVersion: typeof DOCMOST_ARCHIVE_SCHEMA_VERSION;
+  schemaVersion: typeof DOCMOST_ARCHIVE_PAGE_EMBED_SCHEMA_VERSION;
   pageEmbedSnapshots: DocmostArchivePageEmbedSnapshot[];
+}
+
+export interface DocmostArchiveManifestV4
+  extends Omit<DocmostArchiveManifestV2, "schemaVersion"> {
+  schemaVersion: typeof DOCMOST_ARCHIVE_SCHEMA_VERSION;
+}
+
+export interface DocmostArchiveDataV4
+  extends Omit<DocmostArchiveDataV2, "schemaVersion"> {
+  schemaVersion: typeof DOCMOST_ARCHIVE_SCHEMA_VERSION;
 }
 
 export type DocmostArchiveManifest =
   | DocmostArchiveManifestV2
-  | DocmostArchiveManifestV3;
-export type DocmostArchiveData = DocmostArchiveDataV2 | DocmostArchiveDataV3;
+  | DocmostArchiveManifestV3
+  | DocmostArchiveManifestV4;
+export type DocmostArchiveData =
+  | DocmostArchiveDataV2
+  | DocmostArchiveDataV3
+  | DocmostArchiveDataV4;
 
 export interface ImportPreview {
   fileTaskId: string;

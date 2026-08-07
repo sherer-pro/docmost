@@ -1509,6 +1509,7 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
             .where('workspaceId', '=', session.binding.workspaceId)
             .where('spaceId', '=', session.binding.spaceId)
             .where('deletedAt', 'is', null)
+            .where('templateKind', 'is', null)
             .where('id', 'in', [...pageIds])
             .execute(),
       databaseIds.size === 0

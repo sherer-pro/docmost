@@ -64,7 +64,7 @@ import { resolveHeadingNumberingEnabled } from '../../core/page/utils/heading-nu
 import {
   DOCMOST_ARCHIVE_SCHEMA_VERSION,
   type DocmostArchiveAttachment,
-  type DocmostArchiveDataV3,
+  type DocmostArchiveDataV4,
   type DocmostArchiveDatabase,
   type DocmostArchiveDatabaseCell,
   type DocmostArchiveDatabaseProperty,
@@ -72,8 +72,7 @@ import {
   type DocmostArchiveDatabaseView,
   type DocmostArchiveDictionaryTerm,
   type DocmostArchiveLabel,
-  type DocmostArchiveManifestV3,
-  type DocmostArchivePageEmbedSnapshot,
+  type DocmostArchiveManifestV4,
   type DocmostArchivePage,
   type DocmostArchiveScope,
   type DocmostArchiveTransclusionSnapshot,
@@ -84,7 +83,6 @@ import {
 } from '@docmost/api-contract';
 import { sanitize } from 'sanitize-filename-ts';
 import { collectReferencesFromPmJson } from '../../core/page/transclusion/utils/transclusion-prosemirror.util';
-import { collectPageEmbedsFromPmJson } from '../../core/page/transclusion/utils/transclusion-prosemirror.util';
 import { createHash } from 'node:crypto';
 import { TransclusionService } from '../../core/page/transclusion/transclusion.service';
 import { PageEmbedService } from '../../core/page/transclusion/page-embed.service';
@@ -2061,7 +2059,10 @@ export class ExportService {
           : page.parentPageId,
       content: getProsemirrorContent(page.content),
       settings: normalizePageSettings(page.settings),
-      isTemplate: page.isTemplate,
+      templateKind:
+        page.templateKind === 'regular' || page.templateKind === 'synced'
+          ? page.templateKind
+          : null,
     }));
     const transclusionSnapshots: DocmostArchiveTransclusionSnapshot[] = [];
     for (const page of archivePages) {
@@ -2079,31 +2080,6 @@ export class ExportService {
           referencePageId: page.id,
           sourcePageId: item.sourcePageId,
           transclusionId: item.transclusionId,
-          content: item.content,
-        });
-      }
-    }
-
-    const pageEmbedSnapshots: DocmostArchivePageEmbedSnapshot[] = [];
-    for (const page of archivePages) {
-      const references = collectPageEmbedsFromPmJson(page.content).filter(
-        (reference) => !pageIdSet.has(reference.sourcePageId),
-      );
-      if (references.length === 0) continue;
-      const lookup = await this.pageEmbedService.lookup(
-        references.map((reference) => reference.sourcePageId),
-        params.authorizedUser,
-        page.id,
-      );
-      for (let index = 0; index < references.length; index += 1) {
-        const item = lookup.items[index];
-        if (!item || !('content' in item)) continue;
-        pageEmbedSnapshots.push({
-          referencePageId: page.id,
-          referenceNodeId: references[index].referenceNodeId,
-          sourcePageId: item.sourcePageId,
-          title: item.title,
-          icon: item.icon,
           content: item.content,
         });
       }
@@ -2277,11 +2253,6 @@ export class ExportService {
         allowAttachment(attachmentId, snapshot.sourcePageId);
       }
     }
-    for (const snapshot of pageEmbedSnapshots) {
-      for (const attachmentId of getAttachmentIds(snapshot.content)) {
-        allowAttachment(attachmentId, snapshot.sourcePageId);
-      }
-    }
     for (const cell of archiveCells) {
       if (cell.attachmentId) allowAttachment(cell.attachmentId, cell.pageId);
     }
@@ -2356,12 +2327,6 @@ export class ExportService {
         referencedIds.add(userId);
       }
     }
-    for (const snapshot of pageEmbedSnapshots) {
-      this.collectUuidStrings(snapshot.content, referencedIds);
-      for (const userId of extractUserMentionIdsFromJson(snapshot.content)) {
-        referencedIds.add(userId);
-      }
-    }
     for (const cell of archiveCells) {
       this.collectUuidStrings(cell.value, referencedIds);
     }
@@ -2408,7 +2373,7 @@ export class ExportService {
       : ({ pages: {} } as ExportMetadata);
 
     const portableSpaceSettings = this.getPortableSpaceSettings(space.settings);
-    const data: DocmostArchiveDataV3 = {
+    const data: DocmostArchiveDataV4 = {
       schemaVersion: DOCMOST_ARCHIVE_SCHEMA_VERSION,
       scope: params.scope,
       sourceSpace: {
@@ -2420,7 +2385,6 @@ export class ExportService {
       attachments: archiveAttachments,
       users,
       transclusionSnapshots,
-      pageEmbedSnapshots,
       databases: archiveDatabases,
       databaseProperties: archiveProperties,
       databaseRows: archiveRows,
@@ -2429,7 +2393,7 @@ export class ExportService {
       labels: Array.from(labelsById.values()),
       dictionary,
     };
-    const manifest: DocmostArchiveManifestV3 = {
+    const manifest: DocmostArchiveManifestV4 = {
       source: 'docmost',
       schemaVersion: DOCMOST_ARCHIVE_SCHEMA_VERSION,
       version: this.appVersion,

@@ -12,6 +12,7 @@ import { FileTask } from '@docmost/db/types/entity.types';
 import {
   DOCMOST_ARCHIVE_SCHEMA_VERSION,
   DOCMOST_ARCHIVE_LEGACY_SCHEMA_VERSION,
+  DOCMOST_ARCHIVE_PAGE_EMBED_SCHEMA_VERSION,
   type DocmostArchiveData,
   type DocmostArchiveManifest,
   type DocmostImportOptions,
@@ -122,8 +123,9 @@ export class DocmostArchiveImportService {
       manifest.source !== 'docmost' ||
       ![
         DOCMOST_ARCHIVE_LEGACY_SCHEMA_VERSION,
+        DOCMOST_ARCHIVE_PAGE_EMBED_SCHEMA_VERSION,
         DOCMOST_ARCHIVE_SCHEMA_VERSION,
-      ].includes(manifest.schemaVersion as 2 | 3)
+      ].includes(manifest.schemaVersion as 2 | 3 | 4)
     ) {
       throw new BadRequestException('Unsupported Docmost archive');
     }
@@ -252,13 +254,7 @@ export class DocmostArchiveImportService {
       fileTask.spaceId,
       actor.id,
     );
-    const allowPageEmbeds = Boolean(
-      effectivePolicy?.systemEnabled &&
-        effectivePolicy.workspaceEnabled &&
-        effectivePolicy.templatesEnabled &&
-        effectivePolicy.allowLiveEmbed &&
-        effectivePolicy.allowedActions.includes('use_live_embed'),
-    );
+    const allowPageEmbeds = false;
     if (!allowPageEmbeds) {
       const archivePageById = new Map(
         data.pages.map((page) => [page.id, page]),
@@ -686,6 +682,13 @@ export class DocmostArchiveImportService {
         params.userIdMap,
         params.report,
       );
+      const templateKind = isDatabasePage
+        ? null
+        : page.templateKind === 'synced'
+          ? 'synced'
+          : page.templateKind === 'regular' || page.isTemplate
+            ? 'regular'
+            : null;
       result.push({
         id: params.pageIdMap.get(page.id)!,
         slugId: params.slugIdMap.get(page.slugId)!,
@@ -696,11 +699,13 @@ export class DocmostArchiveImportService {
         ydoc: await this.importService.createYdoc(content),
         position:
           position ?? generateJitteredKeyBetween(previousRootPosition, null),
-        parentPageId: isSourceRoot
-          ? params.rootContainerId
-          : params.pageIdMap.get(page.parentPageId!)!,
+        parentPageId: templateKind
+          ? null
+          : isSourceRoot
+            ? params.rootContainerId
+            : params.pageIdMap.get(page.parentPageId!)!,
         settings,
-        isTemplate: isDatabasePage ? false : (page.isTemplate ?? false),
+        templateKind,
         spaceId: params.fileTask.spaceId!,
         workspaceId: params.fileTask.workspaceId,
         creatorId: params.fileTask.creatorId!,

@@ -99,7 +99,6 @@ describe('PageEmbedService space boundaries', () => {
     workspaceEnabled: true,
     templatesEnabled: true,
     allowLiveEmbed: true,
-    allowPublicLiveEmbed: true,
     allowedActions: ['use_live_embed'],
   };
 

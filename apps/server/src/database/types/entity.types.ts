@@ -44,8 +44,15 @@ import {
   PageTransclusions,
   PageTransclusionReferences,
   PageTemplateGroupPolicies,
+  PageTemplateAttachmentMappings,
+  PageTemplateInstances,
+  PageTemplateLegacyMigrationErrors,
   PageTemplateOperations,
+  PageTemplatePublishConfirmations,
+  PageTemplateRevisions,
   PageTemplateSpacePolicies,
+  PageTemplateSyncItems,
+  PageTemplateSyncRuns,
   PageTemplateWorkspacePolicies,
   Pages,
   Spaces,
@@ -413,6 +420,16 @@ export type PageTemplateWorkspacePolicy =
 export type PageTemplateSpacePolicy = Selectable<PageTemplateSpacePolicies>;
 export type PageTemplateGroupPolicy = Selectable<PageTemplateGroupPolicies>;
 export type PageTemplateOperation = Selectable<PageTemplateOperations>;
+export type PageTemplateRevision = Selectable<PageTemplateRevisions>;
+export type PageTemplateInstance = Selectable<PageTemplateInstances>;
+export type PageTemplateLegacyMigrationError =
+  Selectable<PageTemplateLegacyMigrationErrors>;
+export type PageTemplateSyncRun = Selectable<PageTemplateSyncRuns>;
+export type PageTemplateSyncItem = Selectable<PageTemplateSyncItems>;
+export type PageTemplateAttachmentMapping =
+  Selectable<PageTemplateAttachmentMappings>;
+export type PageTemplatePublishConfirmation =
+  Selectable<PageTemplatePublishConfirmations>;
 
 // Attachment
 export type Attachment = Selectable<Attachments>;

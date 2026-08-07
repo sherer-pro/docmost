@@ -16,6 +16,7 @@ import { PageTemplateController } from './page-template.controller';
 import { PageTemplateService } from './services/page-template.service';
 import { PageAccessModule } from '../page-access/page-access.module';
 import { PageAccessMutationService } from './services/page-access-mutation.service';
+import { PAGE_TEMPLATE_SYNC_HANDLER } from '../../integrations/queue/outbox/queue-outbox.types';
 
 @Module({
   controllers: [PageController, PageTemplateController],
@@ -28,6 +29,10 @@ import { PageAccessMutationService } from './services/page-access-mutation.servi
     BacklinkService,
     LinkPreviewService,
     PageTemplateService,
+    {
+      provide: PAGE_TEMPLATE_SYNC_HANDLER,
+      useExisting: PageTemplateService,
+    },
   ],
   exports: [PageService, PageHistoryService, PageHistoryRecorderService],
   imports: [

@@ -36,8 +36,14 @@ const persistedPage = () => ({
 });
 
 function createHarness() {
+  const instanceQuery = {
+    select: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    executeTakeFirst: jest.fn().mockResolvedValue(undefined),
+  };
   const trx = {
     updateTable: jest.fn(),
+    selectFrom: jest.fn().mockReturnValue(instanceQuery),
   };
   const db = {
     transaction: () => ({
@@ -84,6 +90,7 @@ function createHarness() {
     notificationQueue,
     collabHistory,
     eventEmitter,
+    instanceQuery,
   };
 }
 

@@ -26,7 +26,6 @@ export class ShareRepo {
     'id',
     'key',
     'pageId',
-    'allowPublicLiveEmbed',
     'includeSubPages',
     'searchIndexing',
     'creatorId',

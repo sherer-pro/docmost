@@ -16,7 +16,7 @@ const PAGE = {
   slugId: 'page-slug',
   title: 'Page',
   deletedAt: null,
-  isTemplate: true,
+  templateKind: 'regular',
   content: { type: 'doc', content: [] },
 };
 
@@ -122,7 +122,7 @@ function buildRegistry(options?: {
         systemEnabled: true,
         workspaceEnabled: true,
         templatesEnabled: true,
-        allowedActions: ['use_snapshot', 'use_live_embed'],
+        allowedActions: ['use_regular_template', 'use_synced_template'],
       })),
     } as any,
     {
@@ -227,12 +227,14 @@ describe('extended built-in AI read tools', () => {
       slugId: `consumer-${index}`,
       icon: null,
       updatedAt: new Date(2026, 7, 4, 0, 0, 0, 200 - index),
-      referenceNodeId: `occurrence-${index}`,
+      instanceKind: 'synced',
+      status: 'active',
+      appliedRevision: 1,
     }));
     const { registry } = buildRegistry({
       readablePageIds: usages.map((page) => page.id),
       rows: {
-        'pageTransclusionReferences as reference': usages,
+        'pageTemplateInstances as instance': usages,
         pages: [PAGE, ...usages],
         spaces: [{ slug: 'space' }],
       },

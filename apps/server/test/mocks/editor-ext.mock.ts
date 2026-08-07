@@ -34,7 +34,19 @@ export const TableView = {} as any;
 export const TransclusionSource = {} as any;
 export const TransclusionReference = {} as any;
 export const PageEmbed = {} as any;
+export const TemplateField = {} as any;
+export const TemplateManagedBlock = {} as any;
 export const TRANSCLUSION_LABEL_STYLE = 'font-weight: 600';
+
+export {
+  collectTemplateFields,
+  createTemplateInstanceContent,
+  detachTemplateContent,
+  isTemplateFieldFilled,
+  normalizeTemplateDraft,
+  summarizeTemplateDiff,
+  validateTemplateInstanceMutation,
+} from '../../../../packages/editor-ext/src/lib/page-template/template-content';
 
 export function collectPageEmbedPresentationReferences(document: any) {
   const sourcePageIds = new Set<string>();

@@ -161,6 +161,7 @@ export class TypesenseIndexService implements OnApplicationBootstrap {
       ])
       .where('pages.id', 'in', uniqueIds)
       .where('pages.deletedAt', 'is', null)
+      .where('pages.templateKind', 'is', null)
       .where('spaces.archivedAt', 'is', null)
       .where('spaces.deletedAt', 'is', null)
       .execute();
@@ -205,6 +206,7 @@ export class TypesenseIndexService implements OnApplicationBootstrap {
       .where('attachments.id', 'in', uniqueIds)
       .where('attachments.deletedAt', 'is', null)
       .where('pages.deletedAt', 'is', null)
+      .where('pages.templateKind', 'is', null)
       .where('spaces.archivedAt', 'is', null)
       .where('spaces.deletedAt', 'is', null)
       .execute();
@@ -251,6 +253,7 @@ export class TypesenseIndexService implements OnApplicationBootstrap {
         .select('id')
         .where('spaceId', '=', spaceId)
         .where('deletedAt', 'is', null)
+        .where('templateKind', 'is', null)
         .orderBy('id', 'asc')
         .limit(INDEX_BATCH_SIZE);
       if (cursor) {
@@ -292,6 +295,7 @@ export class TypesenseIndexService implements OnApplicationBootstrap {
           'pages.updatedAt',
         ])
         .where('pages.deletedAt', 'is', null)
+        .where('pages.templateKind', 'is', null)
         .where('spaces.archivedAt', 'is', null)
         .where('spaces.deletedAt', 'is', null)
         .$if(Boolean(workspaceId), (qb) =>
@@ -333,6 +337,7 @@ export class TypesenseIndexService implements OnApplicationBootstrap {
         ])
         .where('attachments.deletedAt', 'is', null)
         .where('pages.deletedAt', 'is', null)
+        .where('pages.templateKind', 'is', null)
         .where('spaces.archivedAt', 'is', null)
         .where('spaces.deletedAt', 'is', null)
         .$if(Boolean(workspaceId), (qb) =>
@@ -378,6 +383,7 @@ export class TypesenseIndexService implements OnApplicationBootstrap {
       .where('attachments.pageId', 'in', pageIds)
       .where('attachments.deletedAt', 'is', null)
       .where('pages.deletedAt', 'is', null)
+      .where('pages.templateKind', 'is', null)
       .where('spaces.archivedAt', 'is', null)
       .where('spaces.deletedAt', 'is', null)
       .execute();
@@ -511,6 +517,7 @@ export class TypesenseIndexService implements OnApplicationBootstrap {
           .select('pages.id')
           .where('pages.id', 'in', ids)
           .where('pages.deletedAt', 'is', null)
+          .where('pages.templateKind', 'is', null)
           .where('spaces.archivedAt', 'is', null)
           .where('spaces.deletedAt', 'is', null)
           .execute();
@@ -536,6 +543,7 @@ export class TypesenseIndexService implements OnApplicationBootstrap {
           .where('attachments.id', 'in', ids)
           .where('attachments.deletedAt', 'is', null)
           .where('pages.deletedAt', 'is', null)
+          .where('pages.templateKind', 'is', null)
           .where('spaces.archivedAt', 'is', null)
           .where('spaces.deletedAt', 'is', null)
           .execute();
