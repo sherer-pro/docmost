@@ -26,9 +26,11 @@ import {
   SpaceCaslSubject,
 } from '../casl/interfaces/space-ability.type';
 import {
+  CreatePageTemplateDto,
   CreateFromTemplateDto,
   DetachPageEmbedDto,
   InsertPageEmbedDto,
+  PageTemplateDestinationsDto,
   PageTemplateDiscoveryDto,
   PageTemplateGroupPolicyDto,
   PageTemplateSpacePolicyDto,
@@ -50,11 +52,30 @@ export class PageTemplateController {
   ) {}
 
   @Get('templates')
+  @AuthPolicyScope('space', { source: 'query', key: 'spaceId' })
   async discover(
     @Query() dto: PageTemplateDiscoveryDto,
     @AuthUser() user: User,
   ) {
     return this.templates.discover(dto, user);
+  }
+
+  @Get('templates/destinations')
+  @AuthPolicyScope('space', { source: 'query', key: 'spaceId' })
+  async listDestinations(
+    @Query() dto: PageTemplateDestinationsDto,
+    @AuthUser() user: User,
+  ) {
+    return this.templates.listDestinations(dto, user);
+  }
+
+  @Post('templates/actions/create')
+  @AuthPolicyScope('space', { source: 'body', key: 'spaceId' })
+  async createTemplate(
+    @Body() dto: CreatePageTemplateDto,
+    @AuthUser() user: User,
+  ) {
+    return this.templates.createTemplate(dto, user);
   }
 
   @HttpCode(HttpStatus.OK)
@@ -69,6 +90,7 @@ export class PageTemplateController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('space', { source: 'body', key: 'spaceId' })
   @Post('actions/create-from-template')
   async createFromTemplate(
     @Body() dto: CreateFromTemplateDto,

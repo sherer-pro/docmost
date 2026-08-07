@@ -109,7 +109,12 @@ export class PageEmbedService {
       }
       await this.referencesRepo.lockWorkspaceGraph(workspaceId, trx);
       await this.assertFencingToken(workspaceId, graphLease.fencingToken, trx);
-      await this.assertSourcesAvailable(changedOrAdded, workspaceId, trx);
+      await this.assertSourcesAvailable(
+        changedOrAdded,
+        workspaceId,
+        referencePageId,
+        trx,
+      );
       await this.assertGraphValid(
         workspaceId,
         referencePageId,
@@ -197,7 +202,7 @@ export class PageEmbedService {
         `A ${operationKind} operation cannot create cross-workspace page embeds`,
       );
     }
-    const internalPageIds = new Set(pages.map((page) => page.id));
+    const internalPagesById = new Map(pages.map((page) => [page.id, page]));
     for (const spaceId of new Set(
       references.map((reference) => reference.consumerSpaceId),
     )) {
@@ -208,22 +213,35 @@ export class PageEmbedService {
         'use_live_embed',
       );
     }
-    for (const sourcePageId of new Set(
-      references.map((reference) => reference.sourcePageId),
-    )) {
-      if (internalPageIds.has(sourcePageId)) continue;
-      const source = await this.pageRepo.findById(sourcePageId);
-      if (
-        !source ||
-        source.deletedAt ||
-        source.workspaceId !== actor.workspaceId
-      ) {
+    const externalSourcesById = new Map<string, Page>();
+    for (const reference of references) {
+      const internalSource = internalPagesById.get(reference.sourcePageId);
+      let sourceSpaceId = internalSource?.spaceId;
+      if (!internalSource) {
+        let source = externalSourcesById.get(reference.sourcePageId);
+        if (!source) {
+          source = await this.pageRepo.findById(reference.sourcePageId);
+          if (
+            !source ||
+            source.deletedAt ||
+            source.workspaceId !== actor.workspaceId
+          ) {
+            throw this.graphError(
+              'page_embed_source_unavailable',
+              'Page embed source is unavailable',
+            );
+          }
+          await this.requirePageAccess().assertCanReadPage(source, actor);
+          externalSourcesById.set(source.id, source);
+        }
+        sourceSpaceId = source.spaceId;
+      }
+      if (sourceSpaceId !== reference.consumerSpaceId) {
         throw this.graphError(
-          'page_embed_source_unavailable',
-          'Page embed source is unavailable',
+          'page_embed_cross_space',
+          `A ${operationKind} operation cannot create cross-space page embeds`,
         );
       }
-      await this.requirePageAccess().assertCanReadPage(source, actor);
     }
     return this.graphLock.acquire(actor.workspaceId);
   }
@@ -263,7 +281,7 @@ export class PageEmbedService {
         const desired = collectPageEmbedsFromPmJson(page.content);
         if (desired.length === 0) continue;
         graphLease.assertOwned();
-        await this.assertSourcesAvailable(desired, workspaceId, trx);
+        await this.assertSourcesAvailable(desired, workspaceId, page.id, trx);
         await this.assertGraphValid(
           workspaceId,
           page.id,
@@ -390,6 +408,7 @@ export class PageEmbedService {
     referencePageId?: string,
   ): Promise<{ items: PageEmbedLookup[] }> {
     const accessible = await this.filterReadablePageIds(sourcePageIds, viewer);
+    let consumerSpaceId: string | undefined;
     if (referencePageId) {
       const consumer = await this.pageRepo.findById(referencePageId);
       if (
@@ -438,6 +457,7 @@ export class PageEmbedService {
           })),
         };
       }
+      consumerSpaceId = consumer.spaceId;
     }
     return this.lookupWithAccessSet(
       sourcePageIds,
@@ -445,6 +465,7 @@ export class PageEmbedService {
       viewer.workspaceId,
       viewer,
       false,
+      consumerSpaceId,
     );
   }
 
@@ -454,13 +475,13 @@ export class PageEmbedService {
     workspaceId: string,
     viewer?: User,
     publicShare = false,
-    publicConsumerSpaceId?: string,
+    consumerSpaceId?: string,
   ): Promise<{ items: PageEmbedLookup[] }> {
     const unique = [...new Set(sourcePageIds)];
-    if (publicShare && publicConsumerSpaceId) {
+    if (publicShare && consumerSpaceId) {
       const consumerPolicy = await this.policy.resolvePublic(
         workspaceId,
-        publicConsumerSpaceId,
+        consumerSpaceId,
       );
       if (
         !consumerPolicy.systemEnabled ||
@@ -500,6 +521,10 @@ export class PageEmbedService {
       const page = pageById.get(sourcePageId);
       if (!page) {
         items.push({ kind: 'page', sourcePageId, status: 'not_found' });
+        continue;
+      }
+      if (consumerSpaceId && page.spaceId !== consumerSpaceId) {
+        items.push({ kind: 'page', sourcePageId, status: 'disabled' });
         continue;
       }
       const sourcePolicy = publicShare
@@ -570,10 +595,14 @@ export class PageEmbedService {
       occurrenceCount: number;
     }> = [];
     let hiddenCount = 0;
-    for (const [pageId, occurrenceCount] of byPage) {
+    let totalOccurrenceCount = 0;
+    for (const [pageId, pageOccurrenceCount] of byPage) {
       const page = await this.pageRepo.findById(pageId);
-      if (!page || page.deletedAt) {
-        hiddenCount += occurrenceCount;
+      if (!page) continue;
+      if (page.spaceId !== source.spaceId) continue;
+      totalOccurrenceCount += pageOccurrenceCount;
+      if (page.deletedAt) {
+        hiddenCount += pageOccurrenceCount;
         continue;
       }
       const access = await this.requirePageAccess().getEffectiveAccess(
@@ -581,7 +610,7 @@ export class PageEmbedService {
         viewer,
       );
       if (!access.capabilities.canRead) {
-        hiddenCount += occurrenceCount;
+        hiddenCount += pageOccurrenceCount;
         continue;
       }
       references.push({
@@ -590,13 +619,13 @@ export class PageEmbedService {
         title: page.title ?? null,
         icon: page.icon ?? null,
         spaceId: page.spaceId,
-        occurrenceCount,
+        occurrenceCount: pageOccurrenceCount,
       });
     }
     return {
       references,
       hiddenCount,
-      occurrenceCount: usages.length,
+      occurrenceCount: totalOccurrenceCount,
     };
   }
 
@@ -672,8 +701,20 @@ export class PageEmbedService {
   private async assertSourcesAvailable(
     additions: Array<{ sourcePageId: string }>,
     workspaceId: string,
+    referencePageId: string,
     trx: KyselyTransaction,
   ): Promise<void> {
+    const consumer = await this.pageRepo.findById(referencePageId, { trx });
+    if (
+      !consumer ||
+      consumer.deletedAt ||
+      consumer.workspaceId !== workspaceId
+    ) {
+      throw this.graphError(
+        'page_embed_consumer_unavailable',
+        'Page embed consumer is unavailable',
+      );
+    }
     for (const sourcePageId of new Set(
       additions.map((addition) => addition.sourcePageId),
     )) {
@@ -682,6 +723,12 @@ export class PageEmbedService {
         throw this.graphError(
           'page_embed_source_unavailable',
           'Page embed source is unavailable',
+        );
+      }
+      if (page.spaceId !== consumer.spaceId) {
+        throw this.graphError(
+          'page_embed_cross_space',
+          'A page cannot embed a page from another space',
         );
       }
     }

@@ -171,6 +171,8 @@
 | GET | `/pages/sidebar-pages` | `apps/server/src/core/page/page.controller.ts` |
 | GET | `/pages/templates` | `apps/server/src/core/page/page-template.controller.ts` |
 | GET | `/pages/templates/:pageId/actions/usages` | `apps/server/src/core/page/page-template.controller.ts` |
+| POST | `/pages/templates/actions/create` | `apps/server/src/core/page/page-template.controller.ts` |
+| GET | `/pages/templates/destinations` | `apps/server/src/core/page/page-template.controller.ts` |
 | GET | `/pages/templates/policies/spaces/:spaceId` | `apps/server/src/core/page/page-template.controller.ts` |
 | PUT | `/pages/templates/policies/spaces/:spaceId` | `apps/server/src/core/page/page-template.controller.ts` |
 | GET | `/pages/templates/policies/spaces/:spaceId/groups/:groupId` | `apps/server/src/core/page/page-template.controller.ts` |

@@ -24,9 +24,8 @@ export class PageTemplateDiscoveryDto {
   @MaxLength(200)
   query?: string;
 
-  @IsOptional()
   @IsUUID()
-  spaceId?: string;
+  spaceId!: string;
 
   @IsOptional()
   @IsString()
@@ -38,6 +37,33 @@ export class PageTemplateDiscoveryDto {
   @Min(1)
   @Max(50)
   limit = 20;
+}
+
+export class PageTemplateDestinationsDto {
+  @IsUUID()
+  spaceId!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  query?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  limit = 20;
+}
+
+export class CreatePageTemplateDto {
+  @IsUUID()
+  spaceId!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  title?: string;
 }
 
 export class CreateFromTemplateDto {
@@ -125,12 +151,7 @@ export class PageTemplateGroupPolicyDto {
   @IsOptional()
   @IsArray()
   @IsIn(
-    [
-      'create_template',
-      'manage_template',
-      'use_snapshot',
-      'use_live_embed',
-    ],
+    ['create_template', 'manage_template', 'use_snapshot', 'use_live_embed'],
     { each: true },
   )
   allowedActions?: string[] | null;
