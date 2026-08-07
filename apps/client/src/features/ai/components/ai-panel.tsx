@@ -115,6 +115,10 @@ import {
 import { resolveAiErrorMessage } from "@/features/ai/utils/ai-policies.ts";
 import { AiContextPicker } from "./ai-context-picker.tsx";
 import { AiComposerShell } from "./ai-composer-shell.tsx";
+import {
+  AI_LEGACY_SPACE_PROFILE_VALUE,
+  resolveAiComposerProfileLabel,
+} from "./ai-profile-display.ts";
 import AiExternalMcpOptInControl from "@/features/ai-external-mcp/components/ai-external-mcp-opt-in-control.tsx";
 import { AccessibleActionIcon } from "@/components/ui/accessible-action-icon.tsx";
 import { useQueryClient } from "@tanstack/react-query";
@@ -1326,17 +1330,25 @@ export function AiPanel() {
     label: string;
     disabled?: boolean;
   }> = [
-    { value: "__legacy_space__", label: t("ai.profiles.spaceAssistant") },
+    {
+      value: AI_LEGACY_SPACE_PROFILE_VALUE,
+      label: t("ai.profiles.spaceAssistant"),
+    },
     ...availableProfiles.map((profile) => ({
       value: profile.id,
       label: `${profile.name} · v${profile.version}`,
     })),
     ...(activeSnapshotProfileOption ? [activeSnapshotProfileOption] : []),
   ];
-  const currentProfileValue = assistantProfileId ?? "__legacy_space__";
-  const currentProfileLabel =
-    profileOptions.find((option) => option.value === currentProfileValue)
-      ?.label ?? t("ai.profiles.spaceAssistant");
+  const currentProfileValue =
+    assistantProfileId ?? AI_LEGACY_SPACE_PROFILE_VALUE;
+  const currentProfileLabel = resolveAiComposerProfileLabel({
+    activeProfile: activeConversation?.assistantProfile,
+    assistantProfileId,
+    options: profileOptions,
+    spaceAssistantLabel: t("ai.profiles.spaceAssistant"),
+    unavailableLabel: t("ai.profiles.unavailable"),
+  });
   const visibleComposerProfileOptions = profileOptions.filter((option) =>
     option.label
       .toLocaleLowerCase(i18n.language)
@@ -1370,7 +1382,7 @@ export function AiPanel() {
   };
 
   const chooseAssistantProfile = (value: string | null) => {
-    const profileId = value === "__legacy_space__" ? null : value;
+    const profileId = value === AI_LEGACY_SPACE_PROFILE_VALUE ? null : value;
     if (profileId === assistantProfileId) return;
     if (!activeConversation) {
       beginLocalDraftWithProfile(profileId);

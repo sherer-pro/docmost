@@ -3,6 +3,7 @@ export * from "./database-property-type";
 export * from "./database";
 export * from "./page-custom-field";
 export * from "./page";
+export * from "./page-template";
 export * from "./docmost-archive";
 export * from "./ai";
 export * from "./ai-profiles";
