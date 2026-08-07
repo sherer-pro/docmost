@@ -1,0 +1,53 @@
+[
+  {
+    "priority": 100,
+    "httpRequest": { "method": "POST", "path": "/v1/chat/completions", "body": { "type": "REGEX", "regex": ".*AUDIT_DELAY.*" } },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": [{ "name": "Content-Type", "values": ["text/event-stream"] }],
+      "delay": { "timeUnit": "SECONDS", "value": 8 },
+      "body": "data: {\"id\":\"audit-delay\",\"choices\":[{\"delta\":{\"content\":\"late answer\"}}]}\n\ndata: [DONE]\n\n"
+    }
+  },
+  {
+    "priority": 90,
+    "httpRequest": { "method": "POST", "path": "/v1/chat/completions", "body": { "type": "REGEX", "regex": ".*AUDIT_REASONING.*" } },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": [{ "name": "Content-Type", "values": ["text/event-stream"] }],
+      "body": "data: {\"id\":\"audit-reasoning\",\"choices\":[{\"delta\":{\"reasoning_content\":\"deterministic reasoning\"}}]}\n\ndata: {\"id\":\"audit-reasoning\",\"choices\":[{\"delta\":{\"content\":\"Deterministic mock answer\"}}]}\n\ndata: [DONE]\n\n"
+    }
+  },
+  {
+    "priority": 85,
+    "httpRequest": { "method": "POST", "path": "/v1/chat/completions", "body": { "type": "REGEX", "regex": ".*AUDIT_EMPTY.*" } },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": [{ "name": "Content-Type", "values": ["text/event-stream"] }],
+      "body": "data: [DONE]\n\n"
+    }
+  },
+  {
+    "priority": 85,
+    "httpRequest": { "method": "POST", "path": "/v1/chat/completions", "body": { "type": "REGEX", "regex": ".*AUDIT_MALFORMED.*" } },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": [{ "name": "Content-Type", "values": ["text/event-stream"] }],
+      "body": "data: {not-json}\n\ndata: [DONE]\n\n"
+    }
+  },
+  {
+    "priority": 85,
+    "httpRequest": { "method": "POST", "path": "/v1/chat/completions", "body": { "type": "REGEX", "regex": ".*AUDIT_DISCONNECT.*" } },
+    "httpResponse": { "connectionOptions": { "closeSocket": true } }
+  },
+  {
+    "priority": 0,
+    "httpRequest": { "method": "POST", "path": "/v1/chat/completions" },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": [{ "name": "Content-Type", "values": ["text/event-stream"] }],
+      "body": "data: {\"id\":\"audit-normal\",\"choices\":[{\"delta\":{\"content\":\"Deterministic \"}}]}\n\ndata: {\"id\":\"audit-normal\",\"choices\":[{\"delta\":{\"content\":\"mock answer\"}}]}\n\ndata: [DONE]\n\n"
+    }
+  }
+]
