@@ -212,6 +212,7 @@ export function AiPanel() {
   );
   const [profilePickerOpened, setProfilePickerOpened] = useState(false);
   const [profileQuery, setProfileQuery] = useState("");
+  const [composerProfileQuery, setComposerProfileQuery] = useState("");
   const [renameOpened, setRenameOpened] = useState(false);
   const [renameValue, setRenameValue] = useState("");
   const [quickCommandQuery, setQuickCommandQuery] = useState("");
@@ -1320,7 +1321,11 @@ export function AiPanel() {
           disabled: true,
         }
       : null;
-  const profileOptions = [
+  const profileOptions: Array<{
+    value: string;
+    label: string;
+    disabled?: boolean;
+  }> = [
     { value: "__legacy_space__", label: t("ai.profiles.spaceAssistant") },
     ...availableProfiles.map((profile) => ({
       value: profile.id,
@@ -1328,6 +1333,18 @@ export function AiPanel() {
     })),
     ...(activeSnapshotProfileOption ? [activeSnapshotProfileOption] : []),
   ];
+  const currentProfileValue = assistantProfileId ?? "__legacy_space__";
+  const currentProfileLabel =
+    profileOptions.find((option) => option.value === currentProfileValue)
+      ?.label ?? t("ai.profiles.spaceAssistant");
+  const visibleComposerProfileOptions = profileOptions.filter((option) =>
+    option.label
+      .toLocaleLowerCase(i18n.language)
+      .includes(composerProfileQuery.trim().toLocaleLowerCase(i18n.language)),
+  );
+  const showComposerProfileControl = Boolean(
+    profilesQuery.data?.enabled && profileOptions.length > 1,
+  );
 
   const beginLocalDraftWithProfile = (profileId: string | null) => {
     if (!pageId) return;
@@ -1993,86 +2010,6 @@ export function AiPanel() {
           spaceSearchAvailable={spaceSearchReady}
           spaceSearchEnabled={useSpaceSearch}
           settingsDisabled={Boolean(pendingRun) || updateConversation.isPending}
-          profileControl={
-            profilesQuery.data?.enabled && profileOptions.length > 1 ? (
-              isCompactMobile ? (
-                <Button
-                  variant="subtle"
-                  size="compact-sm"
-                  leftSection={<IconRobot size={15} />}
-                  disabled={Boolean(pendingRun)}
-                  aria-label={t("ai.profiles.selectorLabel")}
-                  onClick={() => setProfilePickerOpened(true)}
-                  style={{ minHeight: 32 }}
-                >
-                  <span className={classes.composerResponsiveLabel}>
-                    {selectedProfile?.name ??
-                      activeConversation?.assistantProfile.name ??
-                      t("ai.profiles.spaceAssistant")}
-                  </span>
-                </Button>
-              ) : (
-                <Group gap={4} wrap="nowrap">
-                  <Select
-                    aria-label={t("ai.profiles.selectorLabel")}
-                    data={profileOptions}
-                    value={assistantProfileId ?? "__legacy_space__"}
-                    onChange={chooseAssistantProfile}
-                    searchable
-                    allowDeselect={false}
-                    size="xs"
-                    w={190}
-                    disabled={Boolean(pendingRun)}
-                    nothingFoundMessage={t("ai.profiles.noneFound")}
-                  />
-                  <Menu position="top-end" withinPortal>
-                    <Menu.Target>
-                      <AccessibleActionIcon
-                        variant="subtle"
-                        size="sm"
-                        label={t("ai.profiles.preferences")}
-                        disabled={updateProfilePreferences.isPending}
-                      >
-                        <IconDots size={16} />
-                      </AccessibleActionIcon>
-                    </Menu.Target>
-                    <Menu.Dropdown>
-                      {selectedProfile && (
-                        <>
-                          <Menu.Item
-                            leftSection={<IconStar size={15} />}
-                            onClick={() =>
-                              togglePreferredProfile(selectedProfile.id)
-                            }
-                          >
-                            {profilePreferencesQuery.data
-                              ?.preferredProfileId === selectedProfile.id
-                              ? t("ai.profiles.clearPreferred")
-                              : t("ai.profiles.makePreferred")}
-                          </Menu.Item>
-                          <Menu.Item
-                            leftSection={<IconEyeOff size={15} />}
-                            onClick={() => hideProfile(selectedProfile.id)}
-                          >
-                            {t("ai.profiles.hide")}
-                          </Menu.Item>
-                        </>
-                      )}
-                      {(profilePreferencesQuery.data?.hiddenProfileIds.length ??
-                        0) > 0 && (
-                        <Menu.Item
-                          leftSection={<IconEye size={15} />}
-                          onClick={showHiddenProfiles}
-                        >
-                          {t("ai.profiles.showHidden")}
-                        </Menu.Item>
-                      )}
-                    </Menu.Dropdown>
-                  </Menu>
-                </Group>
-              )
-            ) : null
-          }
           externalToolsControl={
             agentMode && spaceId && availability.externalMcp?.available ? (
               <AiExternalMcpOptInControl
@@ -2085,11 +2022,194 @@ export function AiPanel() {
           onSpaceSearchChange={toggleSpaceSearch}
         >
           <Group
-            justify="space-between"
+            justify="flex-start"
             gap="xs"
             wrap="nowrap"
             className={classes.composerFooter}
           >
+            {showComposerProfileControl && (
+              <Group
+                gap={4}
+                wrap="nowrap"
+                className={classes.composerProfileGroup}
+              >
+                {isCompactMobile ? (
+                  <Button
+                    variant="default"
+                    size="compact-sm"
+                    leftSection={
+                      selectedProfile ? (
+                        <AssistantProfileIcon
+                          icon={selectedProfile.icon}
+                          size={16}
+                        />
+                      ) : (
+                        <IconRobot size={16} />
+                      )
+                    }
+                    disabled={Boolean(pendingRun)}
+                    aria-label={t("ai.profiles.selectorLabel")}
+                    onClick={() => setProfilePickerOpened(true)}
+                    className={classes.composerProfileButton}
+                  >
+                    <span className={classes.composerResponsiveLabel}>
+                      {currentProfileLabel}
+                    </span>
+                  </Button>
+                ) : (
+                  <>
+                    <Menu
+                      position="top-start"
+                      withinPortal
+                      offset={8}
+                      onOpen={() => setComposerProfileQuery("")}
+                    >
+                      <Menu.Target>
+                        <Button
+                          variant="default"
+                          size="compact-sm"
+                          leftSection={
+                            selectedProfile ? (
+                              <AssistantProfileIcon
+                                icon={selectedProfile.icon}
+                                size={16}
+                              />
+                            ) : activeConversation?.assistantProfile.icon ? (
+                              <AssistantProfileIcon
+                                icon={activeConversation.assistantProfile.icon}
+                                size={16}
+                              />
+                            ) : (
+                              <IconRobot size={16} />
+                            )
+                          }
+                          rightSection={<IconChevronDown size={13} />}
+                          disabled={Boolean(pendingRun)}
+                          aria-label={t("ai.profiles.selectorLabel")}
+                          className={classes.composerProfileButton}
+                        >
+                          <span className={classes.composerProfileLabel}>
+                            {currentProfileLabel}
+                          </span>
+                        </Button>
+                      </Menu.Target>
+                      <Menu.Dropdown className={classes.composerProfileMenu}>
+                        <Menu.Label>
+                          {t("ai.profiles.selectorLabel")}
+                        </Menu.Label>
+                        {profileOptions.length > 6 && (
+                          <TextInput
+                            value={composerProfileQuery}
+                            onChange={(event) =>
+                              setComposerProfileQuery(event.currentTarget.value)
+                            }
+                            placeholder={t("ai.profiles.search")}
+                            leftSection={<IconSearch size={14} />}
+                            size="xs"
+                            mx="xs"
+                            mb="xs"
+                            onKeyDown={(event) => event.stopPropagation()}
+                          />
+                        )}
+                        {visibleComposerProfileOptions.map((option) => {
+                          const profile = availableProfiles.find(
+                            (item) => item.id === option.value,
+                          );
+
+                          return (
+                            <Menu.Item
+                              key={option.value}
+                              leftSection={
+                                profile ? (
+                                  <AssistantProfileIcon
+                                    icon={profile.icon}
+                                    size={16}
+                                  />
+                                ) : (
+                                  <IconRobot size={16} />
+                                )
+                              }
+                              rightSection={
+                                option.value === currentProfileValue ? (
+                                  <IconCheck size={15} />
+                                ) : null
+                              }
+                              disabled={option.disabled}
+                              data-selected={
+                                option.value === currentProfileValue
+                              }
+                              className={classes.composerProfileMenuItem}
+                              onClick={() =>
+                                chooseAssistantProfile(option.value)
+                              }
+                            >
+                              {option.label}
+                            </Menu.Item>
+                          );
+                        })}
+                        {visibleComposerProfileOptions.length === 0 && (
+                          <Text size="xs" c="dimmed" ta="center" py="sm">
+                            {t("ai.profiles.noneFound")}
+                          </Text>
+                        )}
+                      </Menu.Dropdown>
+                    </Menu>
+
+                    <Menu position="top-end" withinPortal>
+                      <Menu.Target>
+                        <AccessibleActionIcon
+                          variant="default"
+                          size={32}
+                          label={t("ai.profiles.preferences")}
+                          disabled={updateProfilePreferences.isPending}
+                          className={classes.composerProfilePreferences}
+                        >
+                          <IconDots size={16} />
+                        </AccessibleActionIcon>
+                      </Menu.Target>
+                      <Menu.Dropdown>
+                        {selectedProfile && (
+                          <>
+                            <Menu.Item
+                              leftSection={<IconStar size={15} />}
+                              onClick={() =>
+                                togglePreferredProfile(selectedProfile.id)
+                              }
+                            >
+                              {profilePreferencesQuery.data
+                                ?.preferredProfileId === selectedProfile.id
+                                ? t("ai.profiles.clearPreferred")
+                                : t("ai.profiles.makePreferred")}
+                            </Menu.Item>
+                            <Menu.Item
+                              leftSection={<IconEyeOff size={15} />}
+                              onClick={() => hideProfile(selectedProfile.id)}
+                            >
+                              {t("ai.profiles.hide")}
+                            </Menu.Item>
+                          </>
+                        )}
+                        {(profilePreferencesQuery.data?.hiddenProfileIds
+                          .length ?? 0) > 0 && (
+                          <Menu.Item
+                            leftSection={<IconEye size={15} />}
+                            onClick={showHiddenProfiles}
+                          >
+                            {t("ai.profiles.showHidden")}
+                          </Menu.Item>
+                        )}
+                      </Menu.Dropdown>
+                    </Menu>
+                  </>
+                )}
+
+                <Box
+                  className={classes.composerFooterDivider}
+                  aria-hidden="true"
+                />
+              </Group>
+            )}
+
             {isCompactMobile ? (
               <Tooltip label={t("ai.composer.templates")} withArrow>
                 <Button

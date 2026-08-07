@@ -350,6 +350,62 @@
   padding: 6px 8px;
 }
 
+.composerProfileGroup {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.composerProfileButton {
+  flex: 0 1 auto;
+  min-width: 0;
+  min-height: 32px;
+  max-width: 180px;
+  padding-inline: 10px;
+  background: light-dark(
+    var(--mantine-color-gray-0),
+    var(--mantine-color-dark-5)
+  );
+}
+
+.composerProfileButton :global(.mantine-Button-label) {
+  min-width: 0;
+}
+
+.composerProfileLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composerProfilePreferences {
+  flex: 0 0 auto;
+}
+
+.composerFooterDivider {
+  width: 1px;
+  height: 24px;
+  margin-inline: 4px;
+  background: light-dark(
+    var(--mantine-color-gray-3),
+    var(--mantine-color-dark-4)
+  );
+}
+
+.composerProfileMenu {
+  min-width: 260px;
+  max-width: min(320px, calc(100vw - 24px));
+  max-height: min(360px, 50vh);
+  overflow-y: auto;
+}
+
+.composerProfileMenuItem[data-selected="true"] {
+  color: light-dark(var(--mantine-color-blue-8), var(--mantine-color-blue-1));
+  background: light-dark(
+    var(--mantine-color-blue-0),
+    color-mix(in srgb, var(--mantine-color-blue-9) 32%, transparent)
+  );
+}
+
 .composerFooterButton {
   flex: 0 0 auto;
   min-height: 32px;
@@ -828,6 +884,7 @@
 
   .composerSearchButton,
   .composerInlineAction,
+  .composerProfileButton,
   .composerFooterButton,
   .sendButton {
     min-width: 44px;
@@ -836,6 +893,20 @@
 
   .composerSearchButton {
     padding-inline: 0;
+  }
+
+  .composerProfileButton {
+    max-width: 44px;
+    padding-inline: 0;
+  }
+
+  .composerProfileButton
+    :global(.mantine-Button-section[data-position="right"]) {
+    display: none;
+  }
+
+  .composerFooterDivider {
+    margin-inline: 1px;
   }
 
   .composerFooterButton
