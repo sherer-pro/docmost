@@ -15,7 +15,7 @@ describe('WorkspaceService', () => {
   const workspaceId = 'workspace-id';
   const actor = { id: 'actor-id', role: UserRole.ADMIN } as any;
 
-  const createService = (ssoEndpointAllowed = true) => {
+  const createService = (ssoEndpointAllowed = true, db: any = {}) => {
     const workspaceRepo = {
       findById: jest.fn(),
       updateTagSettings: jest.fn(),
@@ -48,7 +48,7 @@ describe('WorkspaceService', () => {
       {} as any,
       {} as any,
       {} as any,
-      {} as any,
+      db,
       {} as any,
       eventEmitter as any,
       ssoEndpointPolicy as any,
@@ -63,6 +63,63 @@ describe('WorkspaceService', () => {
       ssoEndpointPolicy,
     };
   };
+
+  it('publishes only verified SSO providers on the login screen', async () => {
+    const where = jest.fn();
+    const workspaceQuery: any = {
+      select: jest.fn(() => workspaceQuery),
+      where: jest.fn(() => workspaceQuery),
+      executeTakeFirst: jest.fn().mockResolvedValue({
+        id: workspaceId,
+        name: 'Workspace',
+        logo: null,
+        hostname: null,
+        enforceSso: false,
+      }),
+    };
+    const providerQuery: any = {
+      selectAll: jest.fn(() => providerQuery),
+      where: jest.fn((...args: unknown[]) => {
+        where(...args);
+        return providerQuery;
+      }),
+      execute: jest.fn().mockResolvedValue([
+        {
+          id: 'verified-provider',
+          name: 'Verified',
+          type: 'oidc',
+          oidcIssuer: 'https://idp.example.com',
+          oidcClientId: 'client-id',
+          oidcClientSecret: 'encrypted-secret',
+          verifiedAt: new Date(),
+        },
+        {
+          id: 'unverified-provider',
+          name: 'Unverified',
+          type: 'oidc',
+          oidcIssuer: 'https://idp.example.com',
+          oidcClientId: 'client-id',
+          oidcClientSecret: 'encrypted-secret',
+          verifiedAt: null,
+        },
+      ]),
+    };
+    const db = {
+      selectFrom: jest.fn((table: string) =>
+        table === 'workspaces' ? workspaceQuery : providerQuery,
+      ),
+    };
+    const { service } = createService(true, db);
+
+    await expect(service.getWorkspacePublicData(workspaceId)).resolves.toEqual(
+      expect.objectContaining({
+        authProviders: [
+          { id: 'verified-provider', name: 'Verified', type: 'oidc' },
+        ],
+      }),
+    );
+    expect(where).toHaveBeenCalledWith('verifiedAt', 'is not', null);
+  });
 
   it('requires an endpoint-policy-approved provider before SSO enforcement', async () => {
     const provider = {

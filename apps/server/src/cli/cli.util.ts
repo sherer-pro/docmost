@@ -1,5 +1,5 @@
 import * as dotenv from 'dotenv';
-import { Kysely } from 'kysely';
+import { CamelCasePlugin, Kysely } from 'kysely';
 import { PostgresJSDialect } from 'kysely-postgres-js';
 import { envPath, normalizePostgresUrl } from '../common/helpers';
 import { postgres } from '../database/postgres-client';
@@ -52,6 +52,7 @@ export function createCliDatabase(): {
   const client = postgres(normalizePostgresUrl(requireEnv('DATABASE_URL')));
   const db = new Kysely<any>({
     dialect: new PostgresJSDialect({ postgres: client }),
+    plugins: [new CamelCasePlugin()],
   });
 
   return {
