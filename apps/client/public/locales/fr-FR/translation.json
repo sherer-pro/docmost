@@ -1363,7 +1363,6 @@
         "policy_changed": "Politique d’outils modifiée"
       }
     },
-
     "ragSync": {
       "title": "Synchronisation Open WebUI",
       "description": "Publie le contenu AI autorisé de cet espace dans sa propre Knowledge Base, indépendamment du modèle et de la recherche.",
@@ -1444,7 +1443,6 @@
         "unknown": "La demande de synchronisation RAG a échoué."
       }
     },
-
     "adminGuide": {
       "tab": "Mode d’emploi",
       "title": "Fonctionnement de AI, RAG et MCP",

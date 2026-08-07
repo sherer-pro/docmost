@@ -1363,7 +1363,6 @@
         "policy_changed": "工具策略已更改"
       }
     },
-
     "ragSync": {
       "title": "Open WebUI 同步",
       "description": "独立于模型和搜索设置，将此空间允许的 AI 内容发布到专属 Knowledge Base。",
@@ -1444,7 +1443,6 @@
         "unknown": "RAG 同步请求失败。"
       }
     },
-
     "adminGuide": {
       "tab": "指南",
       "title": "AI、RAG 和 MCP 的工作方式",

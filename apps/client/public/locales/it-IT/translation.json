@@ -1363,7 +1363,6 @@
         "policy_changed": "Criteri degli strumenti modificati"
       }
     },
-
     "ragSync": {
       "title": "Sincronizzazione Open WebUI",
       "description": "Pubblica i contenuti AI consentiti dello spazio nella propria Knowledge Base, indipendentemente dal modello e dalla ricerca.",
@@ -1444,7 +1443,6 @@
         "unknown": "La richiesta di sincronizzazione RAG non è riuscita."
       }
     },
-
     "adminGuide": {
       "tab": "Guida",
       "title": "Come funzionano AI, RAG e MCP",

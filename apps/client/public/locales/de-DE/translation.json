@@ -1363,7 +1363,6 @@
         "policy_changed": "Werkzeugrichtlinie geändert"
       }
     },
-
     "ragSync": {
       "title": "Open-WebUI-Synchronisierung",
       "description": "Veröffentlicht die erlaubten AI-Inhalte dieses Bereichs in einer eigenen Open WebUI Knowledge Base, unabhängig von Modell und Suche.",
@@ -1444,7 +1443,6 @@
         "unknown": "Die RAG-Synchronisierungsanfrage ist fehlgeschlagen."
       }
     },
-
     "adminGuide": {
       "tab": "Leitfaden",
       "title": "So funktionieren AI, RAG und MCP",
