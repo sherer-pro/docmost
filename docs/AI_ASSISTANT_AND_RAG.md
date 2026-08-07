@@ -422,6 +422,12 @@ dependency guard as pages: they are checked before provider use, while output
 is flushed, and in the final transaction. An unreadable attachment is isolated
 from valid files rather than failing their entire context batch.
 
+Context-source search normalizes quotes, parentheses, guillemets, hyphens, and
+Unicode without passing punctuation as PostgreSQL `tsquery` structure. Page and
+attachment search vectors replace guillemet delimiters before `f_unaccent`, so
+words enclosed in `«…»` remain indexed. Pagination advances by consumed raw
+rows and deduplicates canonical `sourceType:sourceId` identities.
+
 The chat composer uses a bounded TipTap schema but keeps Markdown as its public
 draft/send format. Supported headings, lists and task lists, blockquotes, code,
 bold/italic/strike, and sanitized links can be entered through Markdown input
@@ -681,6 +687,7 @@ above remain authoritative for runtime rollout switches and recovery behavior.
 | [`20260805T100000-ai-assistant-profiles.ts`](../apps/server/src/database/migrations/20260805T100000-ai-assistant-profiles.ts)                                   | Adds disabled-by-default workspace/profile/group/user policy, exact external-tool selections, immutable conversation/run/provider snapshots, and Agent verification rows. Existing conversations keep the legacy no-profile path.                                                                  | Destroys profile configuration, preferences, verifications, and immutable profile/provider history; use deployment or workspace switches instead.                                              |
 | [`20260805T110000-ai-builtin-tool-policy.ts`](../apps/server/src/database/migrations/20260805T110000-ai-builtin-tool-policy.ts)                                 | Adds exact workspace/space capability policy and run snapshots. Seeds workspaces with the eleven legacy Agent capabilities and existing MCP keys with the seven legacy read capabilities.                                                                                                          | Deletes saved policy, API-key capability lists, and run snapshots; use policy switches or `AI_BUILTIN_TOOL_EXTENSIONS_ENABLED=false` instead.                                                  |
 | [`20260806T090000-rag-sync-bindings.ts`](../apps/server/src/database/migrations/20260806T090000-rag-sync-bindings.ts)                                           | Adds disabled-by-default per-space RAG Sync bindings, encrypted writer credentials, lifecycle revisions, cleanup state, and unique target claims. Existing standalone env bindings and secrets are intentionally not imported.                                                                     | Deletes binding configuration, writer credentials, cleanup state, and target reservations; use `RAG_SYNC_ENABLED=false` for operational rollback instead.                                      |
+| [`20260807T140000-search-guillemet-indexing.ts`](../apps/server/src/database/migrations/20260807T140000-search-guillemet-indexing.ts)                           | Rebuilds page and attachment search vectors after removing guillemet delimiters before `f_unaccent`, preserving the enclosed searchable terms for AI context and ordinary search.                                                                                                                   | Restores the prior trigger expressions and rebuilds both vectors; words enclosed in guillemets may again disappear from search.                                                               |
 
 Apply the ordered set with `pnpm --filter ./apps/server migration:latest` only
 after a database backup and normal deployment review. A schema `down` operation
