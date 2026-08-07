@@ -150,10 +150,10 @@ export function useCreateAiAssistantProfileMutation(spaceId: string) {
   return useMutation({
     mutationFn: (data: CreateAiAssistantProfileRequest) =>
       createAiAssistantProfile(spaceId, data),
-    onSuccess: (preferences) => {
+    onSuccess: (profile) => {
       queryClient.setQueryData(
-        AI_QUERY_KEYS.profilePreferences(spaceId),
-        preferences,
+        AI_QUERY_KEYS.profile(spaceId, profile.id),
+        profile,
       );
       return queryClient.invalidateQueries({
         queryKey: AI_QUERY_KEYS.profiles(spaceId),
@@ -189,10 +189,22 @@ export function useDeleteAiAssistantProfileMutation(spaceId: string) {
   return useMutation({
     mutationFn: (profileId: string) =>
       deleteAiAssistantProfile(spaceId, profileId),
-    onSuccess: () =>
-      queryClient.invalidateQueries({
-        queryKey: AI_QUERY_KEYS.profiles(spaceId),
-      }),
+    onSuccess: async (_, profileId) => {
+      queryClient.removeQueries({
+        queryKey: AI_QUERY_KEYS.profile(spaceId, profileId),
+      });
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: AI_QUERY_KEYS.profiles(spaceId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: AI_QUERY_KEYS.profilePreferences(spaceId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: AI_QUERY_KEYS.config(spaceId),
+        }),
+      ]);
+    },
   });
 }
 
@@ -226,10 +238,15 @@ export function useUpdateAiAssistantProfilePreferencesMutation(
   return useMutation({
     mutationFn: (data: UpdateAiAssistantProfilePreferencesRequest) =>
       updateAiAssistantProfilePreferences(spaceId, data),
-    onSuccess: () =>
-      queryClient.invalidateQueries({
+    onSuccess: (preferences) => {
+      queryClient.setQueryData(
+        AI_QUERY_KEYS.profilePreferences(spaceId),
+        preferences,
+      );
+      return queryClient.invalidateQueries({
         queryKey: AI_QUERY_KEYS.profiles(spaceId),
-      }),
+      });
+    },
   });
 }
 

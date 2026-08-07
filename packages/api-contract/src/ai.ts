@@ -215,6 +215,7 @@ export const AI_ERROR_CODES = [
   "agent_write_not_allowed",
   "agent_tool_policy_changed",
   "ai_profile_disabled",
+  "ai_profile_name_conflict",
   "ai_profile_not_allowed",
   "ai_profile_locked",
   "ai_profile_version_conflict",

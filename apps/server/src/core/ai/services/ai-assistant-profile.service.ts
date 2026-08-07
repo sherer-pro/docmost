@@ -699,9 +699,9 @@ export class AiAssistantProfileService {
       undefined,
       undefined,
       db,
-      false,
+      true,
     );
-    if (!row.enabled) {
+    if (row.deletedAt || !row.enabled) {
       throw this.profileRunError(
         'ai_profile_disabled',
         'The assistant profile is disabled',
@@ -2149,13 +2149,17 @@ export class AiAssistantProfileService {
   }
 
   private translateUniqueNameError(error: unknown): void {
+    const constraint = String(
+      (error as any)?.constraint ?? (error as any)?.constraint_name ?? '',
+    );
     if (
       (error as any)?.code === '23505' &&
-      String((error as any)?.constraint ?? '').includes(
-        'ai_assistant_profiles_active_name_unique',
-      )
+      constraint.includes('ai_assistant_profiles_active_name_unique')
     ) {
-      throw new ConflictException('Assistant profile name already exists');
+      throw new ConflictException({
+        code: 'ai_profile_name_conflict',
+        message: 'Assistant profile name already exists',
+      });
     }
   }
 

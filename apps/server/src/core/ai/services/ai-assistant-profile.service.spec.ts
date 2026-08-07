@@ -268,4 +268,53 @@ describe('AiAssistantProfileService snapshots', () => {
       }),
     ).toThrow('An external MCP tool was revoked or changed during the run');
   });
+
+  it('maps a deleted profile behind a frozen snapshot to a stable run error', async () => {
+    const profiles = service();
+    jest
+      .spyOn(profiles as any, 'assertProfilesEnabledForRun')
+      .mockResolvedValue(undefined);
+    const getProfileRow = jest
+      .spyOn(profiles as any, 'getProfileRow')
+      .mockResolvedValue({
+        id: 'profile',
+        enabled: false,
+        deletedAt: new Date(),
+      });
+
+    await expect(
+      profiles.assertSnapshotLive(snapshot(), 'user'),
+    ).rejects.toMatchObject({
+      response: {
+        code: 'ai_profile_disabled',
+      },
+    });
+    expect(getProfileRow).toHaveBeenCalledWith(
+      'profile',
+      undefined,
+      undefined,
+      expect.anything(),
+      true,
+    );
+  });
+
+  it.each(['constraint', 'constraint_name'])(
+    'maps PostgreSQL uniqueness from %s to a conflict',
+    (field) => {
+      const profiles = service();
+
+      expect(() =>
+        (profiles as any).translateUniqueNameError({
+          code: '23505',
+          [field]: 'ai_assistant_profiles_active_name_unique',
+        }),
+      ).toThrow(
+        expect.objectContaining({
+          response: expect.objectContaining({
+            code: 'ai_profile_name_conflict',
+          }),
+        }),
+      );
+    },
+  );
 });

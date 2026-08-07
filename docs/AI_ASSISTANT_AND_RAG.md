@@ -219,6 +219,10 @@ for that profile. Names are unique case-insensitively among non-deleted profiles
 in one space, at most fifty active rows are allowed, updates require
 `expectedVersion`, and normal deletion is soft.
 
+A duplicate active name returns HTTP `409` with the stable
+`ai_profile_name_conflict` code. Clients should keep the editor open, reload the
+space profile list if needed, and ask the administrator to choose another name.
+
 Selection precedence for a new local draft is the user's available preferred
 profile, then the available space default, then `legacy_space`. Hidden IDs affect
 only the picker. An empty persisted conversation may replace its profile
@@ -856,8 +860,10 @@ The creation UI provides verified presets for:
   Claude restart, and stores the Bearer token in the local Claude
   configuration.
 
-The token appears only in the post-creation step. Ordinary key lists contain
-metadata only. The step polls `lastUsedAt` and reports when the first
+The token appears only in the post-creation step. Ordinary key lists, update
+responses, React Query list caches, and browser storage contain metadata only;
+the create mutation discards its response immediately after handing the token
+to the one-time modal. The step polls `lastUsedAt` and reports when the first
 connection reaches Docmost.
 
 ### Creating and validating an MCP key
@@ -878,6 +884,10 @@ revoked or migrated and continue through the normal live validation rules.
 The plaintext token is returned during creation and must be stored securely.
 The UI always selects an explicit 30, 60, 90, or 365 day expiry (or a valid
 custom future date); it does not present an unlimited option.
+`keyType`, `spaceId`, `creatorId`, and `expiresAt` are immutable after
+creation. Supplying any of them to the update endpoint is rejected with `400`
+rather than silently ignored; rotate the key to change scope, type, creator, or
+expiry.
 
 The JWT embeds `apiKeyId`, creator `sub`, `workspaceId`, `spaceId`, and
 `keyType=mcp`, but the database row remains authoritative. Every request
@@ -923,9 +933,9 @@ described in JSON Schema.
 | `listTransclusionReferences` | `sourcePageId`, `transclusionId`, optional pagination | readable, same-space, non-excluded reference pages                                                                           |
 | `listPageAttachments`        | `pageId`, optional pagination                         | metadata/index status only; no path, bytes, extracted text, or token; maximum 100                                            |
 | `getPublicShareInfo`         | `pageId`                                              | effective direct/inherited share state, indexing flag, and public URL                                                        |
-| `listPageTemplates`          | optional `query`, `limit`                             | readable marked templates in the key/run's current space; metadata only, maximum 50                                          |
-| `getPageTemplateMetadata`    | `pageId`                                              | safe metadata for one readable marked template in the current scoped space                                                   |
-| `listPageTemplateUsages`     | `pageId`, optional `limit`                            | readable consumer pages and visible occurrence count in the current scoped space; maximum 50                                 |
+| `listPageTemplates`          | optional `query`, `limit`                             | readable regular and synchronized templates in the key/run's current space; metadata only, maximum 50                        |
+| `getPageTemplateMetadata`    | `pageId`                                              | safe metadata, kind, and archive state for one readable regular or synchronized template in the current scoped space          |
+| `listPageTemplateUsages`     | `pageId`, optional `limit`                            | readable pages created from the template, excluding detached pages; maximum 50                                               |
 
 Paginated built-in reads use opaque versioned keyset cursors bound to the tool
 name and target resource. Replaying a cursor for another page, database, or

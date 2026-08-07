@@ -47,6 +47,7 @@ const AI_ERROR_TRANSLATION_KEYS: Record<string, string> = {
   agent_disabled: "ai.errorReason.agentDisabled",
   agent_provider_unverified: "ai.errorReason.agentProviderUnverified",
   ai_profile_disabled: "ai.errorReason.profileDisabled",
+  ai_profile_name_conflict: "ai.errorReason.profileNameConflict",
   ai_profile_not_allowed: "ai.errorReason.profileNotAllowed",
   ai_profile_locked: "ai.errorReason.profileLocked",
   ai_profile_version_conflict: "ai.errorReason.profileVersionConflict",
