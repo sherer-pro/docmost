@@ -1,9 +1,21 @@
 import { describe, expect, it } from "vitest";
 import {
+  getUnifiedSearchNextPageParam,
   getUnifiedSearchBackendParams,
   getUnifiedSearchType,
   isUnifiedSearchEnabled,
 } from "./use-unified-search";
+
+describe("getUnifiedSearchNextPageParam", () => {
+  it("continues with an offset after a full page", () => {
+    expect(getUnifiedSearchNextPageParam(25, 1)).toBe(25);
+    expect(getUnifiedSearchNextPageParam(25, 2)).toBe(50);
+  });
+
+  it("stops after a partial page", () => {
+    expect(getUnifiedSearchNextPageParam(24, 2)).toBeUndefined();
+  });
+});
 
 describe("getUnifiedSearchType", () => {
   it("routes attachment content type to attachment search", () => {

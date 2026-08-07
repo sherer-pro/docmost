@@ -84,6 +84,7 @@ export class TypesenseSearchService {
           }),
           prefix: true,
           prioritize_exact_match: true,
+          sort_by: '_text_match:desc,updatedAt:desc',
           highlight_fields: 'title',
           exclude_fields: 'content',
           offset: rawOffset,
@@ -149,11 +150,14 @@ export class TypesenseSearchService {
           ]),
         )
       : undefined;
+    const items = await this.searchService.attachBreadcrumbsToResults(
+      results,
+      visiblePageIdsBySpaceId,
+    );
     return {
-      items: await this.searchService.attachBreadcrumbsToResults(
-        results,
-        visiblePageIdsBySpaceId,
-      ),
+      items: publicShare
+        ? this.searchService.projectPublicShareResults(items)
+        : items,
     };
   }
 
@@ -195,6 +199,7 @@ export class TypesenseSearchService {
           }),
           prefix: true,
           prioritize_exact_match: true,
+          sort_by: '_text_match:desc,updatedAt:desc',
           highlight_fields: 'fileName',
           exclude_fields: 'content',
           offset: rawOffset,

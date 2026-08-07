@@ -54,6 +54,8 @@ export interface IPageSearchParams {
   shareId?: string;
   labelId?: string;
   tag?: TagValue;
+  limit?: number;
+  offset?: number;
 }
 
 export interface SearchLabelParams {

@@ -8,6 +8,7 @@ import { QueueJob, QueueName } from '../../../integrations/queue/constants';
 import {
   createZipReadBudget,
   readZipEntryWithBudget,
+  ZipBudgetExceededError,
 } from '../../../common/security/untrusted-document.util';
 import * as yauzl from 'yauzl';
 import { executeTx } from '@docmost/db/utils';
@@ -41,7 +42,10 @@ class UnextractableAttachmentError extends Error {
 
 /** Raised for infrastructure failures that should be retried later. */
 class TransientExtractionError extends Error {
-  constructor(readonly code: string, readonly cause: unknown) {
+  constructor(
+    readonly code: string,
+    readonly cause: unknown,
+  ) {
     super(code);
   }
 }
@@ -131,7 +135,6 @@ export class AttachmentContentService implements OnApplicationBootstrap {
         'fileName',
         'fileExt',
         'fileSize',
-        'updatedAt',
         'contentIndexStatus',
         'contentIndexVersion',
       ])
@@ -145,7 +148,7 @@ export class AttachmentContentService implements OnApplicationBootstrap {
 
     const extension = attachment.fileExt?.toLowerCase();
     if (!this.isSupportedExtension(extension)) {
-      await this.markTerminalState(attachment, 'skipped', 'unsupported_type');
+      await this.markUnsupportedAttachment(attachment);
       return;
     }
 
@@ -162,7 +165,11 @@ export class AttachmentContentService implements OnApplicationBootstrap {
       return;
     }
 
-    if (!(await this.claimForProcessing(attachment, opts.retryFailed))) {
+    const claimStartedAt = await this.claimForProcessing(
+      attachment,
+      opts.retryFailed,
+    );
+    if (!claimStartedAt) {
       return;
     }
 
@@ -174,8 +181,14 @@ export class AttachmentContentService implements OnApplicationBootstrap {
 
       let buffer: Buffer;
       try {
+        if (!(await this.storageService.exists(attachment.filePath))) {
+          throw new UnextractableAttachmentError('storage_missing');
+        }
         buffer = await this.storageService.read(attachment.filePath);
       } catch (error) {
+        if (error instanceof UnextractableAttachmentError) {
+          throw error;
+        }
         throw new TransientExtractionError('storage_unavailable', error);
       }
       if (buffer.byteLength > MAX_ATTACHMENT_FILE_BYTES) {
@@ -188,9 +201,13 @@ export class AttachmentContentService implements OnApplicationBootstrap {
           ? await this.extractPdfText(buffer, deadline)
           : await this.extractDocxText(buffer, deadline);
 
-      await this.saveExtractedText(attachment, this.normalizeText(extracted));
+      await this.saveExtractedText(
+        attachment,
+        this.normalizeText(extracted),
+        claimStartedAt,
+      );
     } catch (error) {
-      await this.handleExtractionError(attachment, error);
+      await this.handleExtractionError(attachment, error, claimStartedAt);
     }
   }
 
@@ -263,21 +280,22 @@ export class AttachmentContentService implements OnApplicationBootstrap {
    * Moves an attachment into `processing` only if no other worker owns it.
    */
   private async claimForProcessing(
-    attachment: { id: string; updatedAt: Date },
+    attachment: { id: string; filePath: string },
     retryFailed?: boolean,
-  ): Promise<boolean> {
+  ): Promise<Date | null> {
     const claimable: AttachmentContentIndexStatus[] = retryFailed
       ? ['pending', 'failed']
       : ['pending'];
+    const claimStartedAt = new Date();
     const claimed = await this.db
       .updateTable('attachments')
       .set({
         contentIndexStatus: 'processing',
-        contentIndexStartedAt: new Date(),
+        contentIndexStartedAt: claimStartedAt,
         contentIndexError: null,
       })
       .where('id', '=', attachment.id)
-      .where('updatedAt', '=', attachment.updatedAt)
+      .where('filePath', '=', attachment.filePath)
       .where('deletedAt', 'is', null)
       .where((eb) =>
         eb.or([
@@ -288,16 +306,17 @@ export class AttachmentContentService implements OnApplicationBootstrap {
       .returning('id')
       .executeTakeFirst();
 
-    return Boolean(claimed);
+    return claimed ? claimStartedAt : null;
   }
 
   private async handleExtractionError(
-    attachment: { id: string; updatedAt: Date },
+    attachment: { id: string; filePath: string },
     error: unknown,
+    claimStartedAt: Date,
   ): Promise<void> {
     if (error instanceof TransientExtractionError) {
       // Release the claim so a later attempt can pick the attachment up again.
-      await this.markTerminalState(attachment, 'pending', error.code);
+      await this.finishClaim(attachment, claimStartedAt, 'pending', error.code);
       throw error.cause;
     }
 
@@ -314,7 +333,7 @@ export class AttachmentContentService implements OnApplicationBootstrap {
     this.logger.warn(
       `Attachment ${attachment.id} content extraction ended as ${status}/${code}`,
     );
-    await this.markTerminalState(attachment, status, code);
+    await this.finishClaim(attachment, claimStartedAt, status, code);
   }
 
   private classifyExtractionError(error: unknown): string {
@@ -327,14 +346,19 @@ export class AttachmentContentService implements OnApplicationBootstrap {
     if (message.includes('timed out')) {
       return 'extraction_timeout';
     }
-    if (message.includes('too many entries') || message.includes('budget')) {
+    if (
+      error instanceof ZipBudgetExceededError ||
+      message.includes('too many entries') ||
+      message.includes('budget')
+    ) {
       return 'archive_limits_exceeded';
     }
     return 'unreadable_document';
   }
 
-  private async markTerminalState(
-    attachment: { id: string; updatedAt: Date },
+  private async finishClaim(
+    attachment: { id: string; filePath: string },
+    claimStartedAt: Date,
     status: AttachmentContentIndexStatus,
     errorCode: string | null,
   ): Promise<void> {
@@ -347,8 +371,29 @@ export class AttachmentContentService implements OnApplicationBootstrap {
         contentIndexedAt: status === 'ready' ? new Date() : null,
       })
       .where('id', '=', attachment.id)
-      .where('updatedAt', '=', attachment.updatedAt)
+      .where('filePath', '=', attachment.filePath)
       .where('deletedAt', 'is', null)
+      .where('contentIndexStatus', '=', 'processing')
+      .where('contentIndexStartedAt', '=', claimStartedAt)
+      .execute();
+  }
+
+  private async markUnsupportedAttachment(attachment: {
+    id: string;
+    filePath: string;
+  }): Promise<void> {
+    await this.db
+      .updateTable('attachments')
+      .set({
+        contentIndexStatus: 'skipped',
+        contentIndexError: 'unsupported_type',
+        contentIndexStartedAt: null,
+        contentIndexedAt: null,
+      })
+      .where('id', '=', attachment.id)
+      .where('filePath', '=', attachment.filePath)
+      .where('deletedAt', 'is', null)
+      .where('contentIndexStatus', 'is', null)
       .execute();
   }
 
@@ -356,9 +401,9 @@ export class AttachmentContentService implements OnApplicationBootstrap {
     attachment: {
       id: string;
       filePath: string;
-      updatedAt: Date;
     },
     textContent: string,
+    claimStartedAt: Date,
   ): Promise<void> {
     await executeTx(this.db, async (trx) => {
       const updated = await trx
@@ -373,8 +418,9 @@ export class AttachmentContentService implements OnApplicationBootstrap {
         })
         .where('id', '=', attachment.id)
         .where('filePath', '=', attachment.filePath)
-        .where('updatedAt', '=', attachment.updatedAt)
         .where('deletedAt', 'is', null)
+        .where('contentIndexStatus', '=', 'processing')
+        .where('contentIndexStartedAt', '=', claimStartedAt)
         .returning('id')
         .executeTakeFirst();
 
@@ -401,13 +447,18 @@ export class AttachmentContentService implements OnApplicationBootstrap {
     deadline: number,
   ): Promise<string> {
     await this.withDeadline(this.assertDocxEntryCount(buffer), deadline);
-    const JSZip = (await import('jszip')).default;
-    const archive = await JSZip.loadAsync(buffer, {
-      // CRC validation in loadAsync eagerly inflates every entry before the
-      // byte budget below can stop a decompression bomb.
-      checkCRC32: false,
-      createFolders: false,
-    });
+    const jsZipModule = await this.withDeadline(import('jszip'), deadline);
+    const JSZip = (jsZipModule.default ??
+      jsZipModule) as typeof import('jszip');
+    const archive = await this.withDeadline(
+      JSZip.loadAsync(buffer, {
+        // CRC validation in loadAsync eagerly inflates every entry before the
+        // byte budget below can stop a decompression bomb.
+        checkCRC32: false,
+        createFolders: false,
+      }),
+      deadline,
+    );
     const budget = createZipReadBudget({
       maxEntryUncompressedBytes: MAX_DOCX_ENTRY_BYTES,
       maxTotalUncompressedBytes: MAX_DOCX_UNCOMPRESSED_BYTES,
@@ -420,11 +471,14 @@ export class AttachmentContentService implements OnApplicationBootstrap {
 
     for (const entry of entries) {
       if (!entry.dir) {
-        await this.withDeadline(readZipEntryWithBudget(entry, budget), deadline);
+        await this.withDeadline(
+          readZipEntryWithBudget(entry, budget),
+          deadline,
+        );
       }
     }
 
-    const mammoth = await import('mammoth');
+    const mammoth = await this.withDeadline(import('mammoth'), deadline);
     return (
       await this.withDeadline(mammoth.extractRawText({ buffer }), deadline)
     ).value;
@@ -456,7 +510,10 @@ export class AttachmentContentService implements OnApplicationBootstrap {
     buffer: Buffer,
     deadline: number,
   ): Promise<string> {
-    const pdfjs: any = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    const pdfjs: any = await this.withDeadline(
+      import('pdfjs-dist/legacy/build/pdf.mjs'),
+      deadline,
+    );
     const loadingTask = pdfjs.getDocument({
       data: new Uint8Array(buffer),
       isEvalSupported: false,
@@ -484,8 +541,14 @@ export class AttachmentContentService implements OnApplicationBootstrap {
           break;
         }
 
-        const page = await document.getPage(pageNumber);
-        const content = await page.getTextContent();
+        const page: any = await this.withDeadline(
+          document.getPage(pageNumber),
+          deadline,
+        );
+        const content: any = await this.withDeadline(
+          page.getTextContent(),
+          deadline,
+        );
         const pageText = content.items
           .map((item: any) => (typeof item.str === 'string' ? item.str : ''))
           .join(' ');

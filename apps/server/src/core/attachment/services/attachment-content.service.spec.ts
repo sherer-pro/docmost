@@ -44,8 +44,12 @@ describe('AttachmentContentService', () => {
     opts: { claim?: boolean } = {},
   ) => {
     const { db, updates } = createDb(attachment, opts);
+    const storageWithExists = {
+      exists: jest.fn().mockResolvedValue(true),
+      ...storage,
+    };
     const service = new AttachmentContentService(
-      storage as any,
+      storageWithExists as any,
       db as any,
       { add: jest.fn() } as any,
       { add: jest.fn() } as any,
@@ -170,6 +174,41 @@ describe('AttachmentContentService', () => {
     );
   });
 
+  it('releases the claim when storage disappears between exists and read', async () => {
+    const storage = {
+      exists: jest.fn().mockResolvedValue(true),
+      read: jest
+        .fn()
+        .mockRejectedValue(
+          Object.assign(new Error('file disappeared'), { code: 'ENOENT' }),
+        ),
+    };
+    const { service, updates } = createService(
+      {
+        id: 'attachment-1',
+        filePath: 'files/disappearing.pdf',
+        fileName: 'disappearing.pdf',
+        fileExt: '.pdf',
+        fileSize: 100,
+        contentIndexStatus: 'pending',
+      },
+      storage,
+    );
+
+    await expect(service.indexAttachment('attachment-1')).rejects.toThrow(
+      'file disappeared',
+    );
+
+    expect(storage.exists).toHaveBeenCalledWith('files/disappearing.pdf');
+    expect(storage.read).toHaveBeenCalledWith('files/disappearing.pdf');
+    expect(updates).toContainEqual(
+      expect.objectContaining({
+        contentIndexStatus: 'pending',
+        contentIndexError: 'storage_unavailable',
+      }),
+    );
+  });
+
   it('does not re-extract content that is already at the current version', async () => {
     const storage = { read: jest.fn() };
     const { service, updates } = createService(
@@ -233,6 +272,7 @@ describe('AttachmentContentService', () => {
         updatedAt: new Date('2026-01-01T00:00:00Z'),
       },
       'indexed content',
+      new Date('2026-01-01T00:00:01Z'),
     );
 
     expect(set).toHaveBeenCalledWith(
@@ -247,6 +287,45 @@ describe('AttachmentContentService', () => {
       'search-index-attachment',
       { attachmentIds: ['attachment-1'] },
       expect.objectContaining({ attempts: 3 }),
+    );
+  });
+
+  it('does not publish extracted text after the attachment is deleted', async () => {
+    const updateQuery: any = {
+      set: jest.fn(() => updateQuery),
+      where: jest.fn(() => updateQuery),
+      returning: jest.fn(() => updateQuery),
+      executeTakeFirst: jest.fn().mockResolvedValue(undefined),
+    };
+    const searchQueue = { add: jest.fn() };
+    const db = {
+      transaction: jest.fn(() => ({
+        execute: (callback: (trx: unknown) => unknown) =>
+          callback({ updateTable: jest.fn(() => updateQuery) }),
+      })),
+    };
+    const service = new AttachmentContentService(
+      {} as any,
+      db as any,
+      {} as any,
+      searchQueue as any,
+    );
+
+    await (service as any).saveExtractedText(
+      {
+        id: 'attachment-1',
+        filePath: 'files/deleted.pdf',
+      },
+      'must not be published',
+      new Date('2026-01-01T00:00:01Z'),
+    );
+
+    expect(searchQueue.add).not.toHaveBeenCalled();
+    expect(updateQuery.where).toHaveBeenCalledWith('deletedAt', 'is', null);
+    expect(updateQuery.where).toHaveBeenCalledWith(
+      'contentIndexStatus',
+      '=',
+      'processing',
     );
   });
 });

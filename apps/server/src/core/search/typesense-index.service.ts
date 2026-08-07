@@ -34,6 +34,13 @@ export interface TypesenseAttachmentDocument {
 
 const INDEX_BATCH_SIZE = 500;
 
+export type TypesenseRebuildEntity = 'pages' | 'attachments';
+
+export interface TypesenseRebuildOptions {
+  workspaceId?: string;
+  entities?: TypesenseRebuildEntity[];
+}
+
 @Injectable()
 export class TypesenseIndexService implements OnApplicationBootstrap {
   private readonly logger = new Logger(TypesenseIndexService.name);
@@ -118,12 +125,19 @@ export class TypesenseIndexService implements OnApplicationBootstrap {
       .search(params, {});
   }
 
-  async rebuildAll(): Promise<void> {
+  async rebuildAll(options: TypesenseRebuildOptions = {}): Promise<void> {
     await this.ensureCollections();
-    await this.indexAllPages();
-    await this.indexAllAttachments();
-    await this.removeStalePages();
-    await this.removeStaleAttachments();
+    const entities = new Set<TypesenseRebuildEntity>(
+      options.entities ?? ['pages', 'attachments'],
+    );
+    if (entities.has('pages')) {
+      await this.indexAllPages(options.workspaceId);
+      await this.removeStalePages(options.workspaceId);
+    }
+    if (entities.has('attachments')) {
+      await this.indexAllAttachments(options.workspaceId);
+      await this.removeStaleAttachments(options.workspaceId);
+    }
   }
 
   async reconcilePages(pageIds: string[]): Promise<void> {
@@ -261,7 +275,7 @@ export class TypesenseIndexService implements OnApplicationBootstrap {
     ]);
   }
 
-  private async indexAllPages(): Promise<void> {
+  private async indexAllPages(workspaceId?: string): Promise<void> {
     let cursor: string | null = null;
 
     while (true) {
@@ -280,6 +294,9 @@ export class TypesenseIndexService implements OnApplicationBootstrap {
         .where('pages.deletedAt', 'is', null)
         .where('spaces.archivedAt', 'is', null)
         .where('spaces.deletedAt', 'is', null)
+        .$if(Boolean(workspaceId), (qb) =>
+          qb.where('pages.workspaceId', '=', workspaceId!),
+        )
         .orderBy('pages.id', 'asc')
         .limit(INDEX_BATCH_SIZE);
 
@@ -297,7 +314,7 @@ export class TypesenseIndexService implements OnApplicationBootstrap {
     }
   }
 
-  private async indexAllAttachments(): Promise<void> {
+  private async indexAllAttachments(workspaceId?: string): Promise<void> {
     let cursor: string | null = null;
 
     while (true) {
@@ -318,6 +335,9 @@ export class TypesenseIndexService implements OnApplicationBootstrap {
         .where('pages.deletedAt', 'is', null)
         .where('spaces.archivedAt', 'is', null)
         .where('spaces.deletedAt', 'is', null)
+        .$if(Boolean(workspaceId), (qb) =>
+          qb.where('attachments.workspaceId', '=', workspaceId!),
+        )
         .orderBy('attachments.id', 'asc')
         .limit(INDEX_BATCH_SIZE);
 
@@ -481,7 +501,7 @@ export class TypesenseIndexService implements OnApplicationBootstrap {
       .delete({ filter_by: filterBy, ignore_not_found: true });
   }
 
-  private async removeStalePages(): Promise<void> {
+  private async removeStalePages(workspaceId?: string): Promise<void> {
     await this.forEachExportedIdBatch(
       TYPESENSE_PAGE_COLLECTION,
       async (ids) => {
@@ -500,10 +520,11 @@ export class TypesenseIndexService implements OnApplicationBootstrap {
           ids.filter((id) => !activeIds.has(id)),
         );
       },
+      workspaceId,
     );
   }
 
-  private async removeStaleAttachments(): Promise<void> {
+  private async removeStaleAttachments(workspaceId?: string): Promise<void> {
     await this.forEachExportedIdBatch(
       TYPESENSE_ATTACHMENT_COLLECTION,
       async (ids) => {
@@ -524,17 +545,24 @@ export class TypesenseIndexService implements OnApplicationBootstrap {
           ids.filter((id) => !activeIds.has(id)),
         );
       },
+      workspaceId,
     );
   }
 
   private async forEachExportedIdBatch(
     collection: string,
     callback: (ids: string[]) => Promise<void>,
+    workspaceId?: string,
   ): Promise<void> {
     const stream = await this.getClient()
       .collections(collection)
       .documents()
-      .exportStream({ include_fields: 'id' });
+      .exportStream({
+        include_fields: 'id',
+        ...(workspaceId
+          ? { filter_by: `workspaceId:=${this.filterValue(workspaceId)}` }
+          : {}),
+      });
     let remainder = '';
     let ids: string[] = [];
 

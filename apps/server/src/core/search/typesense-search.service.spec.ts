@@ -77,6 +77,16 @@ describe('TypesenseSearchService', () => {
       attachBreadcrumbsToResults: jest
         .fn()
         .mockImplementation(async (items) => items),
+      projectPublicShareResults: jest.fn().mockImplementation((items) =>
+        items.map(({ id, slugId, title, icon, rank, highlight }: any) => ({
+          id,
+          slugId,
+          title,
+          icon,
+          rank,
+          highlight,
+        })),
+      ),
     };
     const service = new TypesenseSearchService(
       {} as any,
@@ -95,8 +105,13 @@ describe('TypesenseSearchService', () => {
     jest.spyOn(service as any, 'loadPages').mockResolvedValue([
       {
         id: 'page-1',
+        slugId: 'result-page',
         title: 'Result',
         textContent: 'Current result content',
+        creatorId: 'private-user-id',
+        parentPageId: 'private-parent-id',
+        createdAt: new Date(),
+        updatedAt: new Date(),
         spaceId: 'space-1',
         space: { id: 'space-1', name: 'Private space', slug: 'private' },
       },
@@ -108,6 +123,9 @@ describe('TypesenseSearchService', () => {
     );
 
     expect(result.items[0].space).toBeUndefined();
+    expect(result.items[0]).not.toHaveProperty('creatorId');
+    expect(result.items[0]).not.toHaveProperty('parentPageId');
+    expect(result.items[0]).not.toHaveProperty('breadcrumbs');
   });
 
   it('never returns a stale Typesense content snippet', () => {
