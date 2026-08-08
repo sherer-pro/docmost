@@ -21,6 +21,7 @@ const apiOrigin = (process.env.DOCMOST_API_ORIGIN ?? baseURL).replace(
   /\/$/,
   "",
 );
+process.env.DOCMOST_WEBKIT_BASE_URL ??= baseURL;
 
 function required(name) {
   const value = process.env[name]?.trim();
@@ -64,6 +65,43 @@ async function createApi() {
   });
 }
 
+async function ensureRuntimeAuth() {
+  if (
+    process.env.DOCMOST_AUTH_TOKEN?.trim() &&
+    process.env.DOCMOST_CSRF_TOKEN?.trim()
+  ) {
+    return;
+  }
+  const email = required("DOCMOST_ADMIN_EMAIL");
+  const password = required("DOCMOST_ADMIN_PASSWORD");
+  const loginContext = await request.newContext({
+    baseURL: apiBaseURL,
+    extraHTTPHeaders: { Origin: apiOrigin, Referer: `${apiOrigin}/` },
+  });
+  try {
+    const response = await loginContext.post("/api/auth/login", {
+      data: { email, password },
+    });
+    if (!response.ok()) {
+      throw new Error(`Audit admin login failed with ${response.status()}`);
+    }
+    const storage = await loginContext.storageState();
+    const authToken = storage.cookies.find(
+      (cookie) => cookie.name === "authToken",
+    )?.value;
+    const csrfToken = storage.cookies.find(
+      (cookie) => cookie.name === "csrfToken",
+    )?.value;
+    if (!authToken || !csrfToken) {
+      throw new Error("Audit admin login did not return the required cookies");
+    }
+    process.env.DOCMOST_AUTH_TOKEN = authToken;
+    process.env.DOCMOST_CSRF_TOKEN = csrfToken;
+  } finally {
+    await loginContext.dispose();
+  }
+}
+
 async function runPlaywright() {
   const cli = require.resolve("@playwright/test/cli");
   return new Promise((resolve, reject) => {
@@ -95,6 +133,7 @@ for (const directory of [
   await fs.mkdir(generatedDirectory, { recursive: true });
 }
 await fs.writeFile(defectsPath, "[]\n", "utf8");
+await ensureRuntimeAuth();
 const api = await createApi();
 let state;
 let exitCode = 1;

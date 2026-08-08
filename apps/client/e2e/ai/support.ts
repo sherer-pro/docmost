@@ -42,12 +42,29 @@ export function pageUrl(state: AuditState): string {
   return `/s/${state.spaceSlug}/p/${slug}-${state.pageSlugId}`;
 }
 
+export function messageComposer(page: Page) {
+  return page.locator(
+    '[role="textbox"][aria-label="Ask about this document…"], [role="textbox"][aria-label="Спросите об этом документе…"]',
+  );
+}
+
 export async function openAssistant(page: Page, state: AuditState): Promise<void> {
   await page.goto(pageUrl(state));
-  const composer = page.getByRole("textbox", { name: /Ask about this document|Спросите об этом документе/i });
-  if (await composer.isVisible()) return;
+  const composer = messageComposer(page);
   const openButton = page.getByRole("button", { name: /Open AI assistant|Открыть AI-помощника/i });
-  if (await openButton.isVisible()) await openButton.click({ force: true });
+  const aside = page.locator("#docmost-context-aside");
+
+  if (await composer.isVisible()) return;
+  const restoredPanel = await composer
+    .waitFor({ state: "visible", timeout: 2_000 })
+    .then(() => true)
+    .catch(() => false);
+  if (restoredPanel) return;
+
+  await expect(openButton).toBeAttached();
+  if ((await aside.count()) === 0 || (await aside.getAttribute("aria-hidden")) === "true") {
+    await openButton.click({ force: true });
+  }
   await expect(composer).toBeVisible();
 }
 

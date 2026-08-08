@@ -53,21 +53,25 @@ export async function seedComplexDocument(
   browserName: string,
 ): Promise<SeededComplexDocument> {
   const sourceTransclusionId = uniqueId("transclusion");
-  const sourcePage = await createPage(
+  const { page: sourcePage } = await apiPost<{ page: PageRecord }>(
     api,
-    state.spaceId,
-    `${browserName} linked source`,
+    "/api/pages/templates/actions/create",
     {
-      type: "doc",
-      content: [
-        {
-          type: "transclusionSource",
-          attrs: { id: sourceTransclusionId },
-          content: [paragraph(text("Shared source content"))],
-        },
-      ],
+      spaceId: state.spaceId,
+      kind: "regular",
+      title: `${browserName} linked source`,
     },
   );
+  await updatePageContent(api, sourcePage.id, {
+    type: "doc",
+    content: [
+      {
+        type: "transclusionSource",
+        attrs: { id: sourceTransclusionId },
+        content: [paragraph(text("Shared source content"))],
+      },
+    ],
+  });
   const page = await createPage(
     api,
     state.spaceId,
@@ -423,9 +427,6 @@ export async function seedComplexDocument(
   };
 
   await updatePageContent(api, page.id, content);
-  await apiPost(api, `/api/pages/${sourcePage.id}/actions/set-template`, {
-    enabled: true,
-  });
   return {
     page,
     childPage,

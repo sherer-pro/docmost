@@ -124,7 +124,13 @@ test("renders the all-node document, marks, widths, numbering, readonly and expo
       page.locator("iframe[src*='audit-document.pdf']"),
     ).toBeVisible();
     await expect(editor.getByText(seeded.childPage.title)).toBeVisible();
-    await expect(editor.getByText("Shared source content")).toBeVisible();
+    const transclusionReference = editor
+      .locator('[data-type="transclusionReference"]')
+      .first();
+    await transclusionReference.scrollIntoViewIfNeeded();
+    await expect(
+      transclusionReference.getByText("Shared source content"),
+    ).toBeVisible();
     await expect(
       editor.getByRole("link", { name: "External safe preview" }),
     ).toHaveAttribute("href", "https://example.com/");

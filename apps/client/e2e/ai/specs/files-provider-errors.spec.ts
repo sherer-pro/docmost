@@ -1,4 +1,4 @@
-import { expect, loadState, openAssistant, test } from "../support";
+import { expect, loadState, messageComposer, openAssistant, test } from "../support";
 
 test("supported image and unsupported file are handled without leaking state", async ({ page }) => {
   const state = await loadState();
@@ -21,7 +21,7 @@ for (const scenario of ["AUDIT_EMPTY", "AUDIT_MALFORMED", "AUDIT_DISCONNECT"] as
     const state = await loadState();
     await openAssistant(page, state);
     await page.getByRole("button", { name: /New chat|Новый чат/i }).click();
-    const composer = page.getByRole("textbox", { name: /Ask about this document|Спросите об этом документе/i });
+    const composer = messageComposer(page);
     await composer.fill(scenario);
     await composer.press("Enter");
     await expect(page.getByText(/AI generation failed|Ошибка генерации|Не удалось сгенерировать/i)).toBeVisible();
