@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { useAtom } from "jotai";
 import {
   asideStateAtom,
@@ -18,7 +18,7 @@ export function AiPanelPreferencesSync() {
   const hydratedUserId = useRef<string | null>(null);
   const skipNextPersist = useRef(false);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!user || hydratedUserId.current === user.id) {
       return;
     }
