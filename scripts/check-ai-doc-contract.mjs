@@ -1,5 +1,6 @@
 import { access, readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { normalizeLineEndings } from './text-normalization.mjs';
 
 const root = process.cwd();
 const paths = {
@@ -13,7 +14,7 @@ const paths = {
 const entries = await Promise.all(
   Object.entries(paths).map(async ([name, filePath]) => [
     name,
-    await readFile(path.join(root, filePath), 'utf8'),
+    normalizeLineEndings(await readFile(path.join(root, filePath), 'utf8')),
   ]),
 );
 const files = Object.fromEntries(entries);

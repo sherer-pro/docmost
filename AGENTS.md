@@ -106,6 +106,7 @@
 - Targeted root builds: `pnpm server:build`, `pnpm client:build`, `pnpm editor-ext:build`
 - Quick local verification (env contract + lint + backend test + frontend smoke + security suite): `pnpm verify:quick`
 - Full local verification (env contract + build → lint → backend tests + frontend smoke + frontend unit + security suite): `pnpm verify:full`
+- Release-candidate verification (full local verification plus route/docs/text/audit contracts and AI/editor browser acceptance): `pnpm verify:release`; it requires the production-like PostgreSQL, Redis, API, and collaboration runtime plus the documented audit environment variables.
 - Clean build artifacts: `pnpm clean`
 - Check `.env.example`, `.env.compose.example`, local `.env`, server validation, and frontend runtime env drift: `pnpm check:env`
 - Regenerate backend route inventory from controllers: `pnpm routes:inventory`
@@ -142,6 +143,10 @@
 - Frontend smoke test equivalent (build-based temporary target): `pnpm --filter ./apps/client build`
 - Frontend unit tests (Vitest): `pnpm --filter ./apps/client test`
 - Editor extension package-local tests (run through client Vitest): `pnpm test:editor-ext`
+- Editor browser acceptance matrix: `pnpm test:editor:e2e`
+- AI assistant browser acceptance matrix: `pnpm test:ai:e2e`
+- AI context, citations, retrieval, and editor-selection acceptance: `pnpm test:ai-context:e2e`
+- Cross-platform line-ending contract tests for generated docs and route inventory: `pnpm test:text-contracts`
 - Frontend security subset (Mermaid + link/embed sanitize/sandbox): `pnpm --filter ./apps/client test:security`
 - Backend coverage: `pnpm --filter ./apps/server test:cov`
 - Backend coverage smoke (fast regression check): `pnpm --filter ./apps/server test:cov:smoke`
@@ -261,7 +266,7 @@ Minimum:
 
 - The repository includes GitHub Actions workflows:
   - `.github/workflows/docker.yml` — release/docker build and push.
-  - `.github/workflows/ci.yml` — PR validation (`install`, `build`, `routes:inventory:check`, `check:rag-docs`, `check:env`, `lint`, client/server tests including embedded RAG Sync, the main production-image smoke checks, `pnpm test:security`, `check:comments:en`, exception-journal validation, and `pnpm audit --prod` fail on unignored high/critical).
+  - `.github/workflows/ci.yml` — PR validation (`install`, `build`, route/AI/RAG/text contract checks, `check:env`, `lint`, client/server tests including embedded RAG Sync, production-image MCP/collaboration smoke, editor and AI browser acceptance, `pnpm test:security`, `check:comments:en`, exception-journal validation, and `pnpm audit --prod` fail on unignored high/critical).
 - De facto required local pipeline before PR:
   1. `pnpm install --frozen-lockfile`
   2. for quick checks on day-to-day changes: `pnpm verify:quick`.
