@@ -50,6 +50,7 @@ import {
   getAiContextScopeSummary,
   getAiContextTriggerCount,
 } from "@/features/ai/utils/ai-context.ts";
+import { AI_CHAT_FILE_ACCEPT } from "@/features/ai/utils/ai-files.ts";
 import classes from "./ai-panel.module.css";
 
 interface AiContextPickerProps {
@@ -600,7 +601,7 @@ function OverviewView(
           action={
             <FileButton
               onChange={(files) => void props.onUpload(files)}
-              accept=".pdf,.docx,.txt,.md,.jpg,.jpeg,.png,.webp"
+              accept={AI_CHAT_FILE_ACCEPT}
               multiple
             >
               {(fileButtonProps) => (

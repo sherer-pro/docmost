@@ -138,6 +138,7 @@ import { isAiChatNearBottom } from "@/features/ai/utils/ai-scroll.ts";
 import { asideStateAtom } from "@/components/layouts/global/hooks/atoms/sidebar-atom.ts";
 import { clearAiPageActivity } from "@/features/ai/utils/ai-activity.ts";
 import { resolveAiAssistantText } from "@/features/ai/utils/ai-identity.ts";
+import { isSupportedAiChatFileName } from "@/features/ai/utils/ai-files.ts";
 import { AiApprovalPreview } from "./ai-approval-preview.tsx";
 import {
   getAiLocalDraftKey,
@@ -865,6 +866,13 @@ export function AiPanel() {
 
   const uploadFiles = async (files: File[]) => {
     if (files.length === 0) {
+      return;
+    }
+    if (files.some((file) => !isSupportedAiChatFileName(file.name))) {
+      notifications.show({
+        message: t("ai.errorReason.unsupportedFileType"),
+        color: "red",
+      });
       return;
     }
     try {

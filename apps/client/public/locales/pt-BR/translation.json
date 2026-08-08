@@ -1713,6 +1713,7 @@
       "retrievalConfiguration": "O endereço de pesquisa espacial foi rejeitado pela política de segurança.",
       "fileProcessingFailed": "Um arquivo selecionado não pôde ser processado. Remova-o ou carregue-o novamente.",
       "fileUploadFailed": "O arquivo não pôde ser carregado. Tente novamente.",
+      "unsupportedFileType": "Este tipo de arquivo não é compatível.",
       "contextRevisionConflict": "O contexto do chat mudou em outra aba. Revise-o e tente novamente.",
       "contextSourceLimit": "Você pode adicionar até 10 páginas, bancos de dados ou linhas.",
       "contextResolvedSourceLimit": "As raízes selecionadas incluem documentos demais. Reduza a seleção de descendentes.",

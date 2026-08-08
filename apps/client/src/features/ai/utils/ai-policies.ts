@@ -34,6 +34,7 @@ const AI_ERROR_TRANSLATION_KEYS: Record<string, string> = {
   retrieval_collection_unavailable:
     "ai.errorReason.retrievalCollectionUnavailable",
   ai_file_processing_failed: "ai.errorReason.fileProcessingFailed",
+  ai_file_validation_failed: "ai.errorReason.fileUploadFailed",
   ai_file_upload_failed: "ai.errorReason.fileUploadFailed",
   ai_context_revision_conflict: "ai.errorReason.contextRevisionConflict",
   ai_context_source_limit: "ai.errorReason.contextSourceLimit",

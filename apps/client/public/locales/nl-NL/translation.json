@@ -1713,6 +1713,7 @@
       "retrievalConfiguration": "Het ruimtezoekadres werd afgewezen door het beveiligingsbeleid.",
       "fileProcessingFailed": "Een geselecteerd bestand kon niet worden verwerkt. Verwijder het of upload het opnieuw.",
       "fileUploadFailed": "Het bestand kon niet worden geüpload. Probeer het opnieuw.",
+      "unsupportedFileType": "Dit bestandstype wordt niet ondersteund.",
       "contextRevisionConflict": "De chatcontext is gewijzigd in een ander tabblad. Controleer het en probeer het opnieuw.",
       "contextSourceLimit": "U kunt maximaal tien pagina's, databases of rijen toevoegen.",
       "contextResolvedSourceLimit": "De geselecteerde hoofdelementen omvatten te veel documenten. Beperk de selectie van onderliggende pagina’s.",
