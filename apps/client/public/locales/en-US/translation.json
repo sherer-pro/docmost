@@ -1713,6 +1713,7 @@
       "retrievalConfiguration": "The space search address was rejected by the security policy.",
       "fileProcessingFailed": "A selected file could not be processed. Remove it or upload it again.",
       "fileUploadFailed": "The file could not be uploaded. Try again.",
+      "unsupportedFileType": "This file type is not supported.",
       "contextRevisionConflict": "The chat context changed in another tab. Review it and try again.",
       "contextSourceLimit": "You can add up to 10 pages, databases, or rows.",
       "contextResolvedSourceLimit": "The selected roots resolve to too many documents. Narrow the descendant selection.",

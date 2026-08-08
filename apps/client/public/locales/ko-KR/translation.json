@@ -1713,6 +1713,7 @@
       "retrievalConfiguration": "보안 정책에 의해 공간 검색 주소가 거부되었습니다.",
       "fileProcessingFailed": "선택한 파일을 처리할 수 없습니다. 삭제하거나 다시 업로드하세요.",
       "fileUploadFailed": "파일을 업로드할 수 없습니다. 다시 시도해 보세요.",
+      "unsupportedFileType": "이 파일 형식은 지원되지 않습니다.",
       "contextRevisionConflict": "다른 탭에서 채팅 컨텍스트가 변경되었습니다. 검토한 후 다시 시도하세요.",
       "contextSourceLimit": "최대 10개의 페이지, 데이터베이스 또는 행을 추가할 수 있습니다.",
       "contextResolvedSourceLimit": "선택한 루트에 포함된 문서가 너무 많습니다. 하위 페이지 선택 범위를 줄이세요.",

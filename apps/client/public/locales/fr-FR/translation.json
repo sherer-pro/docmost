@@ -1713,6 +1713,7 @@
       "retrievalConfiguration": "L'adresse de recherche d'espace a été rejetée par la politique de sécurité.",
       "fileProcessingFailed": "Un fichier sélectionné n'a pas pu être traité. Supprimez-le ou téléchargez-le à nouveau.",
       "fileUploadFailed": "Le fichier n'a pas pu être téléchargé. Essayer à nouveau.",
+      "unsupportedFileType": "Ce type de fichier n'est pas pris en charge.",
       "contextRevisionConflict": "Le contexte du chat a changé dans un autre onglet. Vérifiez-le et réessayez.",
       "contextSourceLimit": "Vous pouvez ajouter jusqu'à 10 pages, bases de données ou lignes.",
       "contextResolvedSourceLimit": "Les racines sélectionnées incluent trop de documents. Réduisez la sélection des descendants.",

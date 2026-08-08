@@ -1713,6 +1713,7 @@
       "retrievalConfiguration": "空间搜索地址被安全策略拒绝。",
       "fileProcessingFailed": "无法处理选定的文件。删除它或重新上传。",
       "fileUploadFailed": "文件无法上传。再试一次。",
+      "unsupportedFileType": "不支持此文件类型。",
       "contextRevisionConflict": "聊天上下文在另一个选项卡中发生了变化。查看并重试。",
       "contextSourceLimit": "您最多可以添加 10 个页面、数据库或行。",
       "contextResolvedSourceLimit": "所选根节点包含的文档过多。请缩小后代页面的选择范围。",

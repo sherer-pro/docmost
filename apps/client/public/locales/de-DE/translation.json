@@ -1713,6 +1713,7 @@
       "retrievalConfiguration": "Die Space-Suchadresse wurde von der Sicherheitsrichtlinie abgelehnt.",
       "fileProcessingFailed": "Eine ausgewählte Datei konnte nicht verarbeitet werden. Entfernen Sie es oder laden Sie es erneut hoch.",
       "fileUploadFailed": "Die Datei konnte nicht hochgeladen werden. Versuchen Sie es erneut.",
+      "unsupportedFileType": "Dieser Dateityp wird nicht unterstützt.",
       "contextRevisionConflict": "Der Chat-Kontext hat sich in einem anderen Tab geändert. Überprüfen Sie es und versuchen Sie es erneut.",
       "contextSourceLimit": "Sie können bis zu 10 Seiten, Datenbanken oder Zeilen hinzufügen.",
       "contextResolvedSourceLimit": "Die ausgewählten Wurzeln ergeben zu viele Dokumente. Schränken Sie die Auswahl der Unterseiten ein.",

@@ -181,14 +181,27 @@ export class AiFileService {
         !item.buffer ||
         !mimeAllowed
       ) {
-        throw new BadRequestException(SAFE_FILE_VALIDATION_ERROR_MESSAGE);
+        throw new BadRequestException({
+          code: 'ai_file_validation_failed',
+          message: SAFE_FILE_VALIDATION_ERROR_MESSAGE,
+        });
       }
-      await validateFileExtensionAndSignature({
-        fileName: item.fileName,
-        fileBuffer: item.buffer,
-        allowedExtensions: [...AI_ALLOWED_CHAT_FILE_EXTENSIONS],
-        safeErrorMessage: SAFE_FILE_VALIDATION_ERROR_MESSAGE,
-      });
+      try {
+        await validateFileExtensionAndSignature({
+          fileName: item.fileName,
+          fileBuffer: item.buffer,
+          allowedExtensions: [...AI_ALLOWED_CHAT_FILE_EXTENSIONS],
+          safeErrorMessage: SAFE_FILE_VALIDATION_ERROR_MESSAGE,
+        });
+      } catch (error) {
+        if (error instanceof BadRequestException) {
+          throw new BadRequestException({
+            code: 'ai_file_validation_failed',
+            message: SAFE_FILE_VALIDATION_ERROR_MESSAGE,
+          });
+        }
+        throw error;
+      }
       if (
         preparedBytes + item.fileSize >
         AI_CHAT_LIMITS.maxConversationFileBytes

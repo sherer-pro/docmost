@@ -1713,6 +1713,7 @@
       "retrievalConfiguration": "スペース検索アドレスはセキュリティ ポリシーによって拒否されました。",
       "fileProcessingFailed": "選択したファイルを処理できませんでした。削除するか、再度アップロードしてください。",
       "fileUploadFailed": "ファイルをアップロードできませんでした。もう一度やり直してください。",
+      "unsupportedFileType": "このファイル形式はサポートされていません。",
       "contextRevisionConflict": "チャットのコンテキストが別のタブで変更されました。内容を確認して、もう一度試してください。",
       "contextSourceLimit": "最大 10 個のページ、データベース、または行を追加できます。",
       "contextResolvedSourceLimit": "選択したルートに含まれるドキュメントが多すぎます。子孫の選択を絞り込んでください。",
