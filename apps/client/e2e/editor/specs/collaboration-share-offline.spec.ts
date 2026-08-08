@@ -33,10 +33,8 @@ test("collaborative editing, public readonly share and offline interruption", as
 }, testInfo) => {
   const api = await createAdminApi();
   const state = await loadAuditState();
-  const current = await apiGet<any>(api, "/api/users/me");
-  const emailParts = String(current.user.email).split("@");
   const invitationSuffix = randomBytes(4).toString("hex");
-  const alias = `${emailParts[0]}+editor-audit-${state.runId}-${testInfo.project.name.replace(/[^a-z0-9]/gi, "")}-${invitationSuffix}@${emailParts[1]}`;
+  const alias = `editor-${invitationSuffix}@example.com`;
   const password = `Aa1!${randomBytes(18).toString("base64url")}`;
   const auditPage = await createPage(
     api,

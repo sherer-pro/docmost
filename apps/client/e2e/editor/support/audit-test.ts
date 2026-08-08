@@ -58,14 +58,10 @@ export const test = base.extend<{ evidence: void }>({
           process.env.DOCMOST_WEBKIT_BASE_URL ?? "http://127.0.0.1:3000",
         ).origin;
         if (webkitOrigin.startsWith("http://")) {
-          await recordDefect({
-            id: "ED-007",
-            title:
-              "WebKit upgrades local HTTP subresources because of the production CSP",
-            severity: "medium",
-            project: testInfo.project.name,
-            evidence:
-              "On the configured HTTP audit origin, WebKit upgraded manifest, script, stylesheet and window-config requests to HTTPS and failed them with SSL connect errors. The test strips only the upgrade-insecure-requests directive to continue the feature audit.",
+          testInfo.annotations.push({
+            type: "harness",
+            description:
+              "The HTTP-only local WebKit harness removes upgrade-insecure-requests; release CSP remains covered by production smoke checks.",
           });
           await page.route(`${webkitOrigin}/**`, async (route) => {
             const response = await route.fetch();
@@ -141,7 +137,7 @@ export function mainEditor(page: Page) {
 }
 
 export function publicDocument(page: Page) {
-  return page.locator("main").getByRole("textbox").nth(1);
+  return page.locator('main .ProseMirror[contenteditable="false"]').nth(1);
 }
 
 export async function runAxe(

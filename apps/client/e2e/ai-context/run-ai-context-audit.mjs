@@ -10,7 +10,19 @@ const auditRoot = path.join(repoRoot, "output/audit/ai-context-2026-08-07");
 const fixtureRoot = path.join(auditRoot, "fixtures");
 const baseURL = (process.env.DOCMOST_BASE_URL ?? "http://localhost:3000").replace(/\/$/, "");
 const apiOrigin = new URL(baseURL).origin;
-const modelUrl = "http://127.0.0.1:1080";
+const modelPort = Number(process.env.DOCMOST_AI_CONTEXT_MODEL_PORT ?? 1080);
+if (!Number.isInteger(modelPort) || modelPort < 1 || modelPort > 65535) {
+  throw new Error("DOCMOST_AI_CONTEXT_MODEL_PORT must be a valid TCP port");
+}
+const modelUrl = `http://127.0.0.1:${modelPort}`;
+const modelProviderUrl =
+  process.env.DOCMOST_AI_CONTEXT_MODEL_PROVIDER_URL ??
+  `http://host.docker.internal:${modelPort}/v1`;
+const modelRetrievalUrl =
+  process.env.DOCMOST_AI_CONTEXT_RETRIEVAL_URL ??
+  `http://host.docker.internal:${modelPort}/retrieval`;
+const collaborationUrl =
+  process.env.DOCMOST_AI_CONTEXT_COLLAB_URL ?? "http://localhost:3001";
 const runId = new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
 const results = [];
 
@@ -54,6 +66,43 @@ async function adminApiContext() {
       Accept: "application/json",
     },
   });
+}
+
+async function ensureRuntimeAuth() {
+  if (
+    process.env.DOCMOST_AUTH_TOKEN?.trim() &&
+    process.env.DOCMOST_CSRF_TOKEN?.trim()
+  ) {
+    return;
+  }
+  const email = required("DOCMOST_ADMIN_EMAIL");
+  const password = required("DOCMOST_ADMIN_PASSWORD");
+  const loginContext = await request.newContext({
+    baseURL,
+    extraHTTPHeaders: { Origin: apiOrigin, Referer: `${apiOrigin}/` },
+  });
+  try {
+    const response = await loginContext.post("/api/auth/login", {
+      data: { email, password },
+    });
+    if (!response.ok()) {
+      throw new Error(`Audit admin login failed with ${response.status()}`);
+    }
+    const storage = await loginContext.storageState();
+    const authToken = storage.cookies.find(
+      (cookie) => cookie.name === "authToken",
+    )?.value;
+    const csrfToken = storage.cookies.find(
+      (cookie) => cookie.name === "csrfToken",
+    )?.value;
+    if (!authToken || !csrfToken) {
+      throw new Error("Audit admin login did not return the required cookies");
+    }
+    process.env.DOCMOST_AUTH_TOKEN = authToken;
+    process.env.DOCMOST_CSRF_TOKEN = csrfToken;
+  } finally {
+    await loginContext.dispose();
+  }
 }
 
 function adminBrowserStorageState() {
@@ -394,7 +443,7 @@ async function browserEvidenceV2(storageState, state, citedCase) {
       const match = body.match(/^window\.CONFIG=(.*);$/s);
       assert(match, "Runtime window configuration could not be parsed");
       const config = JSON.parse(match[1]);
-      config.COLLAB_URL = "http://localhost:3001";
+      config.COLLAB_URL = collaborationUrl;
       await route.fulfill({
         response,
         body: `window.CONFIG=${JSON.stringify(config)};`,
@@ -413,7 +462,7 @@ async function browserEvidenceV2(storageState, state, citedCase) {
   const pageUrl = `/s/${state.spaceSlug}/p/${state.currentPage.slugId}`;
   const assistantComposerName = /Спросите об этом документе|Ask about this document/i;
   const openAssistantName = /Открыть ИИ-помощника|Open AI assistant/i;
-  const selectionActionName = /Обработать выделение с помощью ИИ|Process selection with AI/i;
+  const selectionActionName = /Обработать выделение с помощью ИИ|Use AI on selection|Process selection with AI/i;
 
   const enabledSelectionAction = () =>
     page
@@ -466,23 +515,36 @@ async function browserEvidenceV2(storageState, state, citedCase) {
       "The synchronized page editor is not editable",
     );
     const marker = editorLocator.getByText("CURRENT_PAGE_MARKER_A11C", { exact: true }).first();
-    const markerBox = await marker.boundingBox();
-    assert(markerBox, "The current-page marker has no visible bounding box");
-    const selectionY = markerBox.y + markerBox.height / 2;
-    await page.mouse.move(markerBox.x + 2, selectionY);
-    await page.mouse.down();
-    await page.mouse.move(
-      markerBox.x + Math.min(markerBox.width - 2, 260),
-      selectionY,
-      { steps: 12 },
-    );
-    await page.mouse.up();
+    await marker.click({ clickCount: 3 });
     await waitFor(
-      "non-empty editor selection",
-      () => page.evaluate(() => Boolean(window.getSelection()?.toString().trim())),
+      "current-page marker selection",
+      () =>
+        page.evaluate(() =>
+          window
+            .getSelection()
+            ?.toString()
+            .includes("CURRENT_PAGE_MARKER_A11C"),
+        ),
       5_000,
     );
-    await enabledSelectionAction().waitFor({ state: "visible" });
+    try {
+      await enabledSelectionAction().waitFor({ state: "visible", timeout: 5_000 });
+    } catch (error) {
+      const actions = page.getByRole("button", { name: selectionActionName });
+      const actionState = await actions.evaluateAll((buttons) =>
+        buttons.map((button) => ({
+          disabled: button.hasAttribute("disabled"),
+          visible: Boolean(button.getClientRects().length),
+        })),
+      );
+      await page.screenshot({
+        path: path.join(auditRoot, "screenshots", "selection-action-unavailable.png"),
+        fullPage: true,
+      });
+      throw new Error(
+        `Selection action unavailable: ${JSON.stringify(actionState)}; ${error.message}`,
+      );
+    }
   };
 
   const applySelectionAction = async (mode) => {
@@ -631,12 +693,21 @@ async function browserEvidenceV2(storageState, state, citedCase) {
 
 await fs.mkdir(path.join(auditRoot, "screenshots"), { recursive: true });
 await fs.mkdir(path.join(auditRoot, "traces"), { recursive: true });
+const fixtureGeneration = spawnSync(
+  process.env.DOCMOST_AUDIT_PYTHON ?? "python",
+  [path.join(import.meta.dirname, "generate-fixtures.py"), fixtureRoot],
+  { encoding: "utf8" },
+);
+assert(
+  fixtureGeneration.status === 0,
+  `Fixture generation failed: ${(fixtureGeneration.stderr || fixtureGeneration.stdout).trim()}`,
+);
 if (await fetch(`${modelUrl}/health`).then((response) => response.ok).catch(() => false)) {
   throw new Error(`Deterministic model port is already occupied: ${modelUrl}`);
 }
 const model = spawn(process.execPath, [path.join(import.meta.dirname, "deterministic-model.mjs")], {
   cwd: clientRoot,
-  env: { ...process.env, DOCMOST_AI_CONTEXT_MODEL_PORT: "1080" },
+  env: { ...process.env, DOCMOST_AI_CONTEXT_MODEL_PORT: String(modelPort) },
   stdio: ["ignore", "pipe", "pipe"],
 });
 let modelError = "";
@@ -646,6 +717,7 @@ let admin;
 let member;
 try {
   await waitFor("deterministic model", () => fetch(`${modelUrl}/health`).then((response) => response.ok).catch(() => false), 15_000);
+  await ensureRuntimeAuth();
   admin = await adminApiContext();
   const workspace = (await api(admin, "GET", "/api/workspace/info")).payload;
   const invited = await createMember(admin, workspace.id, "reader");
@@ -714,7 +786,7 @@ try {
     enabled: true,
     agentEnabled: false,
     provider: "openai-compatible",
-    baseUrl: "http://host.docker.internal:1080/v1",
+    baseUrl: modelProviderUrl,
     chatModel: "deterministic-context-model-v1",
     apiKey: `isolated-test-key-${runId}`,
     temperature: 0,
@@ -725,7 +797,7 @@ try {
     visionEnabled: false,
     retrieval: {
       adapter: "http-json-v1",
-      url: "http://host.docker.internal:1080/retrieval",
+      url: modelRetrievalUrl,
       apiKey: `isolated-retrieval-key-${runId}`,
       timeoutMs: 5000,
       maxResults: 5,

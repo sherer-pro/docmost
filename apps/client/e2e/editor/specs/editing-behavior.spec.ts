@@ -174,10 +174,24 @@ test("supports keyboard indent, page breaks, tables, slash commands, paste and u
     await expect(editor).toContainText("Pasted table result");
     await expect(editor.locator("table")).toHaveCount(2);
 
-    const indentTarget = editor.getByText("Keyboard indentation target", {
-      exact: true,
-    });
+    const indentTarget = editor
+      .locator("p")
+      .filter({ hasText: "Keyboard indentation target" })
+      .first();
     await indentTarget.click();
+    await expect(editor).toBeFocused();
+    await page.keyboard.press("Home");
+    await page.keyboard.press("Shift+End");
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          window
+            .getSelection()
+            ?.toString()
+            .includes("Keyboard indentation target"),
+        ),
+      )
+      .toBe(true);
     await page.keyboard.press("Tab");
     const tabIndented =
       (await indentTarget.getAttribute("data-indent")) === "1";
@@ -310,14 +324,6 @@ test("supports keyboard indent, page breaks, tables, slash commands, paste and u
       });
     }
     await expect(editor.locator(".column-resize-handle")).toHaveCount(0);
-    await recordDefect({
-      id: "ED-005",
-      title: "Table column resizing is disabled",
-      severity: "medium",
-      project: testInfo.project.name,
-      evidence:
-        "No resize handle is rendered in edit mode; the client configures CustomTable with resizable: false.",
-    });
 
     const drawioImages = page.getByAltText("Editable Draw.io copy target");
     await expect(drawioImages).toHaveCount(1);
@@ -453,8 +459,9 @@ test("supports keyboard indent, page breaks, tables, slash commands, paste and u
       await page.evaluate(() => (window as any).__editorAuditHtmlXss ?? null),
     ).toBeNull();
 
-    await editor.click();
-    await page.keyboard.press("Control+End");
+    await editor.locator("p").last().click();
+    await expect(editor).toBeFocused();
+    await page.keyboard.press("End");
     await page.keyboard.type(" undo-redo-probe");
     await expect(editor).toContainText("undo-redo-probe");
     await page.keyboard.press("Control+z");

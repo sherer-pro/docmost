@@ -1,9 +1,9 @@
-import { expect, loadState, openAssistant, test } from "../support";
+import { expect, loadState, messageComposer, openAssistant, test } from "../support";
 
 test("streaming survives reload and a delayed run can be stopped", async ({ page, context }) => {
   const state = await loadState();
   await openAssistant(page, state);
-  const composer = page.getByRole("textbox", { name: /Ask about this document|Спросите об этом документе/i });
+  const composer = messageComposer(page);
   await composer.fill("AUDIT_DELAY");
   await composer.press("Enter");
   const stop = page.getByRole("button", { name: /Stop|Остановить/i });
