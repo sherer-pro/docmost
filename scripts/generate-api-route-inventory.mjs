@@ -6,6 +6,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { join, relative } from 'node:path';
+import { normalizeLineEndings } from './text-normalization.mjs';
 
 const SERVER_SRC_DIR = 'apps/server/src';
 const OUTPUT_PATH = 'apps/server/docs/api-route-inventory.generated.md';
@@ -151,7 +152,7 @@ if (shouldCheck) {
     process.exit(1);
   }
 
-  const current = readFileSync(OUTPUT_PATH, 'utf8');
+  const current = normalizeLineEndings(readFileSync(OUTPUT_PATH, 'utf8'));
   if (current !== output) {
     console.error(
       `Route inventory is out of date. Run: node scripts/generate-api-route-inventory.mjs`,
