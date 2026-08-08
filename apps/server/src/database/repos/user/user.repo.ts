@@ -458,7 +458,10 @@ export class UserRepo {
       .set({
         settings: sql`COALESCE(settings, '{}'::jsonb)
                 || jsonb_build_object('preferences', COALESCE(settings->'preferences', '{}'::jsonb) 
-                || jsonb_build_object(${prefKey}::text, ${JSON.stringify(prefValue)}::jsonb))`,
+                || jsonb_build_object(
+                  ${prefKey}::text,
+                  (${JSON.stringify(prefValue)}::text)::jsonb
+                ))`,
         updatedAt: new Date(),
       })
       .where('id', '=', userId)
@@ -488,7 +491,10 @@ export class UserRepo {
                     THEN settings #> '{preferences,pageEditModeByPageId}'
                   ELSE '{}'::jsonb
                 END
-              ) || jsonb_build_object(${pageId}::text, ${JSON.stringify(mode)}::jsonb)
+              ) || jsonb_build_object(
+                ${pageId}::text,
+                (${JSON.stringify(mode)}::text)::jsonb
+              )
             ),
           true
         )`,

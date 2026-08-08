@@ -1,10 +1,13 @@
 import type postgresTypes from 'postgres';
 import Redis from 'ioredis';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { CamelCasePlugin, Kysely } from 'kysely';
 import { PostgresJSDialect } from 'kysely-postgres-js';
 import { v7 as uuid7 } from 'uuid';
 import { postgres } from '../src/database/postgres-client';
 import { QueueOutboxRepo } from '../src/database/repos/queue-outbox/queue-outbox.repo';
+import { SpaceRepo } from '../src/database/repos/space/space.repo';
+import { UserRepo } from '../src/database/repos/user/user.repo';
 import type { DB } from '../src/database/types/db';
 import type { KyselyDB } from '../src/database/types/kysely.types';
 
@@ -15,6 +18,8 @@ describe('server infrastructure (e2e)', () => {
   let repositoryClient: postgresTypes.Sql;
   let kysely: KyselyDB;
   let outboxRepo: QueueOutboxRepo;
+  let spaceRepo: SpaceRepo;
+  let userRepo: UserRepo;
   let redis: Redis;
 
   beforeAll(async () => {
@@ -25,6 +30,8 @@ describe('server infrastructure (e2e)', () => {
       plugins: [new CamelCasePlugin()],
     });
     outboxRepo = new QueueOutboxRepo(kysely);
+    spaceRepo = new SpaceRepo(kysely, new EventEmitter2());
+    userRepo = new UserRepo(kysely);
     redis = new Redis(process.env.REDIS_URL!, { maxRetriesPerRequest: 1 });
     await Promise.all([database`select 1`, redis.ping()]);
   });
@@ -45,6 +52,102 @@ describe('server infrastructure (e2e)', () => {
 
     expect(databaseResult[0].healthy).toBe(1);
     expect(redisResult).toBe('PONG');
+  });
+
+  it('stores user preference primitives as native JSONB values', async () => {
+    const workspaceId = uuid7();
+    const userId = uuid7();
+    const pageId = uuid7();
+    const spaceId = uuid7();
+
+    try {
+      await database`
+        insert into workspaces (id, name)
+        values (${workspaceId}::uuid, 'Preference types e2e')
+      `;
+      await database`
+        insert into users (id, name, email, role, workspace_id)
+        values (
+          ${userId}::uuid,
+          'Preference types user',
+          ${`preference-types-${userId}@example.test`},
+          'owner',
+          ${workspaceId}::uuid
+        )
+      `;
+      await database`
+        insert into spaces (id, name, slug, workspace_id)
+        values (${spaceId}::uuid, 'Preference types space', ${`preference-types-${spaceId}`}, ${workspaceId}::uuid)
+      `;
+
+      await userRepo.updatePreference(userId, workspaceId, 'aiPanelOpen', true);
+      await userRepo.updatePreference(userId, workspaceId, 'aiPanelWidth', 420);
+      await userRepo.updatePreference(userId, workspaceId, 'aiPanelTab', 'ai');
+      await userRepo.updatePageEditModeByPageId(
+        userId,
+        workspaceId,
+        pageId,
+        'edit',
+      );
+      await spaceRepo.updateSharingSettings(
+        spaceId,
+        workspaceId,
+        'disabled',
+        true,
+      );
+
+      const [stored] = await database<
+        Array<{
+          open_type: string;
+          width_type: string;
+          tab_type: string;
+          open_value: string;
+          width_value: string;
+          tab_value: string;
+          page_mode_type: string;
+          page_mode_value: string;
+        }>
+      >`
+        select
+          jsonb_typeof(settings #> '{preferences,aiPanelOpen}') as open_type,
+          jsonb_typeof(settings #> '{preferences,aiPanelWidth}') as width_type,
+          jsonb_typeof(settings #> '{preferences,aiPanelTab}') as tab_type,
+          settings #>> '{preferences,aiPanelOpen}' as open_value,
+          settings #>> '{preferences,aiPanelWidth}' as width_value,
+          settings #>> '{preferences,aiPanelTab}' as tab_value,
+          jsonb_typeof(settings #> ARRAY['preferences', 'pageEditModeByPageId', ${pageId}::text]) as page_mode_type,
+          settings #>> ARRAY['preferences', 'pageEditModeByPageId', ${pageId}::text] as page_mode_value
+        from users
+        where id = ${userId}::uuid
+      `;
+      const [storedSpace] = await database<
+        Array<{ disabled_type: string; disabled_value: string }>
+      >`
+        select
+          jsonb_typeof(settings #> '{sharing,disabled}') as disabled_type,
+          settings #>> '{sharing,disabled}' as disabled_value
+        from spaces
+        where id = ${spaceId}::uuid
+      `;
+
+      expect(stored).toEqual({
+        open_type: 'boolean',
+        width_type: 'number',
+        tab_type: 'string',
+        open_value: 'true',
+        width_value: '420',
+        tab_value: 'ai',
+        page_mode_type: 'string',
+        page_mode_value: 'edit',
+      });
+      expect(storedSpace).toEqual({
+        disabled_type: 'boolean',
+        disabled_value: 'true',
+      });
+    } finally {
+      await database`delete from users where id = ${userId}::uuid`;
+      await database`delete from workspaces where id = ${workspaceId}::uuid`;
+    }
   });
 
   it('persists a deduplicated pending record on the migrated outbox schema', async () => {
