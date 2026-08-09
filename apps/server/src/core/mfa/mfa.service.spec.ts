@@ -10,7 +10,10 @@ import * as OTPAuth from 'otpauth';
 describe('MfaService security helpers', () => {
   const appSecret = 'very-strong-app-secret-for-tests-only';
 
-  const createSerializedMfaDb = (row: Record<string, any>) => {
+  const createSerializedMfaDb = (
+    row: Record<string, any>,
+    challengeState?: { active: boolean },
+  ) => {
     let transactionTail = Promise.resolve();
     const selectQuery: any = {
       selectAll: jest.fn(() => selectQuery),
@@ -29,9 +32,23 @@ describe('MfaService security helpers', () => {
         Object.assign(row, pendingUpdate);
       }),
     };
+    const challengeUpdateQuery: any = {
+      set: jest.fn(() => challengeUpdateQuery),
+      where: jest.fn(() => challengeUpdateQuery),
+      returning: jest.fn(() => challengeUpdateQuery),
+      executeTakeFirst: jest.fn(async () => {
+        if (!challengeState?.active) {
+          return undefined;
+        }
+        challengeState.active = false;
+        return { id: 'challenge-1' };
+      }),
+    };
     const trx = {
       selectFrom: jest.fn(() => selectQuery),
-      updateTable: jest.fn(() => updateQuery),
+      updateTable: jest.fn((table: string) =>
+        table === 'userTokens' ? challengeUpdateQuery : updateQuery,
+      ),
     };
     const transaction = {
       execute: jest.fn((callback: (trx: any) => Promise<any>) => {
@@ -144,6 +161,62 @@ describe('MfaService security helpers', () => {
     }
   });
 
+  it('consumes an MFA login challenge only once across concurrent codes', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-08-06T20:00:00.000Z'));
+    try {
+      const secret = new OTPAuth.Secret({ size: 20 }).base32;
+      const row = {
+        id: 'mfa-1',
+        userId: 'user-1',
+        workspaceId: 'workspace-1',
+        isEnabled: true,
+        secret: encryptProtectedValue(secret, appSecret),
+        backupCodes: [],
+        lastUsedTotpCounter: null,
+      };
+      const challengeState = { active: true };
+      const service = new MfaService(
+        createSerializedMfaDb(row, challengeState) as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        { getAppSecret: () => appSecret } as any,
+        {} as any,
+        {} as any,
+      );
+      const totp = new OTPAuth.TOTP({
+        issuer: 'Docmost',
+        algorithm: 'SHA1',
+        digits: 6,
+        period: 30,
+        secret,
+      });
+      const firstCode = totp.generate({ timestamp: Date.now() });
+      const secondCode = totp.generate({ timestamp: Date.now() + 30_000 });
+
+      const results = await Promise.all([
+        (service as any).consumeVerificationCode(
+          'user-1',
+          'workspace-1',
+          firstCode,
+          'challenge-raw',
+        ),
+        (service as any).consumeVerificationCode(
+          'user-1',
+          'workspace-1',
+          secondCode,
+          'challenge-raw',
+        ),
+      ]);
+
+      expect(results.filter(Boolean)).toHaveLength(1);
+      expect(challengeState.active).toBe(false);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('consumes a backup code only once across concurrent attempts', async () => {
     const backupCode = 'ABCD1234';
     const row = {
@@ -240,6 +313,42 @@ describe('MfaService security helpers', () => {
     expect(assurance.clearMfaForUser).toHaveBeenCalledWith(
       'user-1',
       'workspace-1',
+    );
+  });
+
+  it('upserts MFA enrollment through the database user uniqueness key', async () => {
+    const conflictBuilder = {
+      column: jest.fn(() => conflictBuilder),
+      doUpdateSet: jest.fn(() => conflictBuilder),
+    };
+    const insertQuery: any = {
+      values: jest.fn(() => insertQuery),
+      onConflict: jest.fn((callback: (builder: any) => any) => {
+        callback(conflictBuilder);
+        return insertQuery;
+      }),
+      execute: jest.fn().mockResolvedValue(undefined),
+    };
+    const service = createService();
+
+    await (service as any).persistMfaEnrollment(
+      { insertInto: jest.fn(() => insertQuery) },
+      'user-1',
+      'workspace-1',
+      {
+        encryptedSecret: 'encrypted-secret',
+        backupCodeHashes: ['hashed-code'],
+        totpCounter: 123n,
+      },
+    );
+
+    expect(conflictBuilder.column).toHaveBeenCalledWith('userId');
+    expect(conflictBuilder.doUpdateSet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        secret: 'encrypted-secret',
+        backupCodes: ['hashed-code'],
+        lastUsedTotpCounter: '123',
+      }),
     );
   });
 });

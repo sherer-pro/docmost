@@ -51,6 +51,8 @@ export function ForgotPasswordForm() {
           {!isTokenSent && (
             <TextInput
               id="email"
+              name="email"
+              autoComplete="email"
               type="email"
               label="Email"
               placeholder="email@example.com"

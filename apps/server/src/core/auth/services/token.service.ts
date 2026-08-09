@@ -155,9 +155,10 @@ export class TokenService {
     user: User,
     workspaceId: string,
     context: {
+      challengeId: string;
       ssoAuthProviderId?: string;
       targetSpaceId?: string;
-    } = {},
+    },
   ): Promise<string> {
     if (user.deactivatedAt || user.deletedAt) {
       throw new ForbiddenException();
@@ -166,6 +167,7 @@ export class TokenService {
     const payload: JwtMfaTokenPayload = {
       sub: user.id,
       workspaceId,
+      challengeId: context.challengeId,
       ssoAuthProviderId: context.ssoAuthProviderId,
       targetSpaceId: context.targetSpaceId,
       type: JwtType.MFA_TOKEN,

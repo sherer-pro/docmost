@@ -22,6 +22,7 @@ import { useWorkspacePublicDataQuery } from "@/features/workspace/queries/worksp
 import { Error404 } from "@/components/ui/error-404.tsx";
 import React from "react";
 import { sanitizeRelativeReturnTo } from "@/features/auth/utils/return-to.ts";
+import { isPasswordWithinUtf8Limit } from "@/features/auth/utils/password-validation.ts";
 
 const createFormSchema = (t: (key: string) => string) =>
   z.object({
@@ -29,7 +30,12 @@ const createFormSchema = (t: (key: string) => string) =>
       .string()
       .min(1, { message: t("Email is required") })
       .email({ message: t("Invalid email address") }),
-    password: z.string().min(1, { message: t("Password is required") }),
+    password: z
+      .string()
+      .min(1, { message: t("Password is required") })
+      .refine(isPasswordWithinUtf8Limit, {
+        message: t("Password is too long"),
+      }),
   });
 
 export function LoginForm() {
@@ -85,6 +91,8 @@ export function LoginForm() {
             <form onSubmit={form.onSubmit(onSubmit)}>
               <TextInput
                 id="email"
+                name="email"
+                autoComplete="email"
                 type="email"
                 label={t("Email")}
                 placeholder="email@example.com"
@@ -93,6 +101,8 @@ export function LoginForm() {
               />
 
               <PasswordInput
+                name="password"
+                autoComplete="current-password"
                 label={t("Password")}
                 placeholder={t("Your password")}
                 variant="filled"

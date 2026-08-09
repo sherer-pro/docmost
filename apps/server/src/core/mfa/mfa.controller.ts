@@ -213,4 +213,15 @@ export class MfaController {
   async validateAccess(@Req() req: FastifyRequest) {
     return this.mfaService.validateMfaAccess(req.cookies?.authToken);
   }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('cancel-login')
+  async cancelLogin(
+    @Req() req: FastifyRequest,
+    @Res({ passthrough: true }) res: FastifyReply,
+  ) {
+    await this.mfaService.cancelLogin(req.cookies?.authToken);
+    this.authCookieService.clearAuthCookies(res);
+    return { success: true };
+  }
 }

@@ -102,6 +102,32 @@ pnpm verify:quick
    - confirm a non-owner cannot renew or release the current owner's lease.
    - interrupt the owner's Redis renewal path and confirm it closes the local document; confirm only then can the second instance acquire ownership.
 
+## APP_SECRET rotation and authentication recovery
+
+`APP_SECRET` protects more than ordinary access-token signatures. Rotating it
+immediately invalidates existing access, collaboration, MFA login, MFA access,
+and other application-signed JWTs. Active `user_sessions` rows may remain in
+PostgreSQL, but tokens signed with the previous secret can no longer authenticate.
+
+MFA recovery needs an explicit plan before rotation:
+
+- TOTP seeds in `user_mfa.secret` are encrypted with a key derived from
+  `APP_SECRET`. They cannot be decrypted after an uncoordinated rotation.
+- Current backup-code hashes are keyed with `APP_SECRET`. Existing recovery
+  codes stop matching after the key changes.
+- Password-reset and invitation values use one-way SHA-256 storage rather than
+  the application-keyed MFA format, but their surrounding signed sessions and
+  post-reset login state are still affected by the rotation.
+
+Before rotating a shared environment, take a recoverable database/configuration
+snapshot, preserve the previous secret in the approved secret-management system,
+schedule a maintenance window, and prepare an administrator-assisted MFA reset
+or a controlled re-encryption/migration procedure. Verify login, reset, invite,
+MFA enrollment, backup-code recovery, access-token rejection, and collaboration
+reconnection in an isolated restored snapshot first. If recovery fails, roll
+back both the application secret and the database state together. Never rotate
+the shared environment secret as an exploratory test.
+
 ## Alerting and triage
 
 Watch application logs for:

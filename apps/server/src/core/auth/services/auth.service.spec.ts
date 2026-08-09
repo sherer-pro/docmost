@@ -23,6 +23,8 @@ describe('AuthService', () => {
   let userRepo: { findByEmail: jest.Mock };
   let spacePolicy: { resolveAccessibleTarget: jest.Mock };
   let mailService: { sendToQueue: jest.Mock };
+  let signupService: { initialSetup: jest.Mock };
+  let sessionService: { createSessionAndToken: jest.Mock };
 
   beforeEach(async () => {
     userTokenRepo = {
@@ -33,13 +35,15 @@ describe('AuthService', () => {
     userRepo = { findByEmail: jest.fn() };
     spacePolicy = { resolveAccessibleTarget: jest.fn() };
     mailService = { sendToQueue: jest.fn() };
+    signupService = { initialSetup: jest.fn() };
+    sessionService = { createSessionAndToken: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
-        { provide: SignupService, useValue: {} },
+        { provide: SignupService, useValue: signupService },
         { provide: TokenService, useValue: {} },
-        { provide: SessionService, useValue: {} },
+        { provide: SessionService, useValue: sessionService },
         { provide: UserRepo, useValue: userRepo },
         { provide: UserTokenRepo, useValue: userTokenRepo },
         { provide: UserSessionRepo, useValue: {} },
@@ -58,6 +62,24 @@ describe('AuthService', () => {
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  it('passes setup request metadata to the created session', async () => {
+    const request = { headers: { 'user-agent': 'browser' } } as any;
+    signupService.initialSetup.mockResolvedValue({
+      workspace: { id: 'workspace-1' },
+      user: { id: 'user-1' },
+    });
+    sessionService.createSessionAndToken.mockResolvedValue('auth-token');
+
+    await expect(service.setup({} as any, request)).resolves.toEqual({
+      workspace: { id: 'workspace-1' },
+      authToken: 'auth-token',
+    });
+    expect(sessionService.createSessionAndToken).toHaveBeenCalledWith(
+      { id: 'user-1' },
+      request,
+    );
   });
 
   it('verifyUserToken accepts hashed token records', async () => {

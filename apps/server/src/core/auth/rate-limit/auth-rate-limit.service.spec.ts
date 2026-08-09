@@ -360,6 +360,10 @@ describe('AuthRateLimitService', () => {
         limit: 5,
         windowMs: 10_000,
       }),
-    ).resolves.toEqual({ allowed: false, retryAfterMs: 10_000 });
+    ).resolves.toEqual({
+      allowed: false,
+      retryAfterMs: 10_000,
+      storageAvailable: false,
+    });
   });
 });
