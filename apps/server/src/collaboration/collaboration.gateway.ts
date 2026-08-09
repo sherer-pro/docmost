@@ -110,11 +110,18 @@ export class CollaborationGateway {
 
       // Forward raw WebSocket messages to the extension
       client.on('message', (data: ArrayBuffer) => {
-        this.redisSync!.onSocketMessage(
-          wrappedSocket as any,
-          serializedHTTPRequest,
-          data,
-        );
+        void this.redisSync!
+          .onSocketMessage(
+            wrappedSocket as any,
+            serializedHTTPRequest,
+            data,
+          )
+          .catch(() => {
+            this.logger.error(
+              'Failed to forward a collaboration message through Redis',
+            );
+            wrappedSocket.close(1011, 'Collaboration forwarding failed');
+          });
       });
 
       // Forward close events
