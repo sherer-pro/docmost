@@ -2,7 +2,7 @@ module.exports = {
   forbidden: [
     {
       name: "no-circular",
-      severity: "warn",
+      severity: "error",
       comment: "Circular dependencies make module boundaries harder to change.",
       from: {},
       to: {
