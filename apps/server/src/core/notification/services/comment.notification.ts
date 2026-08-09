@@ -84,34 +84,29 @@ export class CommentNotificationService {
         locale,
       );
 
-      const notification = await this.notificationService.create(
-        {
-          userId,
-          workspaceId,
-          type: NotificationType.COMMENT_USER_MENTION,
-          actorId,
-          pageId,
-          spaceId,
-          commentId,
-        },
-        `comment:${eventId}:${NotificationType.COMMENT_USER_MENTION}:${userId}`,
-      );
+      const notification =
+        await this.notificationService.createWithImmediateEmail(
+          {
+            userId,
+            workspaceId,
+            type: NotificationType.COMMENT_USER_MENTION,
+            actorId,
+            pageId,
+            spaceId,
+            commentId,
+          },
+          `comment:${eventId}:${NotificationType.COMMENT_USER_MENTION}:${userId}`,
+          {
+            subject: title,
+            template: CommentMentionEmail({
+              actorName: actor.name,
+              pageTitle,
+              pageUrl,
+              locale,
+            }),
+          },
+        );
       if (!notification) continue;
-
-      await this.notificationService.queueEmail(
-        userId,
-        notification.id,
-        pageId,
-        actorId,
-        spaceId,
-        title,
-        CommentMentionEmail({
-          actorName: actor.name,
-          pageTitle,
-          pageUrl,
-          locale,
-        }),
-      );
 
       await this.pushAggregationService.dispatchOrAggregate(notification, {
         title,
@@ -137,35 +132,30 @@ export class CommentNotificationService {
         pageTitle,
         locale,
       );
-      const notification = await this.notificationService.create(
-        {
-          userId: recipientId,
-          workspaceId,
-          type: commentType,
-          actorId,
-          pageId,
-          spaceId,
-          commentId,
-        },
-        `comment:${eventId}:${commentType}:${recipientId}`,
-      );
+      const notification =
+        await this.notificationService.createWithImmediateEmail(
+          {
+            userId: recipientId,
+            workspaceId,
+            type: commentType,
+            actorId,
+            pageId,
+            spaceId,
+            commentId,
+          },
+          `comment:${eventId}:${commentType}:${recipientId}`,
+          {
+            subject: title,
+            template: CommentCreateEmail({
+              actorName: actor.name,
+              pageTitle,
+              pageUrl,
+              locale,
+              isReply: !!parentCommentId,
+            }),
+          },
+        );
       if (!notification) continue;
-
-      await this.notificationService.queueEmail(
-        recipientId,
-        notification.id,
-        pageId,
-        actorId,
-        spaceId,
-        title,
-        CommentCreateEmail({
-          actorName: actor.name,
-          pageTitle,
-          pageUrl,
-          locale,
-          isReply: !!parentCommentId,
-        }),
-      );
 
       await this.pushAggregationService.dispatchOrAggregate(notification, {
         title,
@@ -216,41 +206,35 @@ export class CommentNotificationService {
 
     const locale =
       await this.notificationService.getUserLocale(commentCreatorId);
-    const notification = await this.notificationService.create(
-      {
-        userId: commentCreatorId,
-        workspaceId,
-        type: NotificationType.COMMENT_RESOLVED,
-        actorId,
-        pageId,
-        spaceId,
-        commentId,
-      },
-      `comment:${eventId}:${NotificationType.COMMENT_RESOLVED}:${commentCreatorId}`,
-    );
-    if (!notification) return;
-
     const subject = getNotificationTitle(
       NotificationType.COMMENT_RESOLVED,
       actor.name,
       pageTitle,
       locale,
     );
-
-    await this.notificationService.queueEmail(
-      commentCreatorId,
-      notification.id,
-      pageId,
-      actorId,
-      spaceId,
-      subject,
-      CommentResolvedEmail({
-        actorName: actor.name,
-        pageTitle,
-        pageUrl,
-        locale,
-      }),
-    );
+    const notification =
+      await this.notificationService.createWithImmediateEmail(
+        {
+          userId: commentCreatorId,
+          workspaceId,
+          type: NotificationType.COMMENT_RESOLVED,
+          actorId,
+          pageId,
+          spaceId,
+          commentId,
+        },
+        `comment:${eventId}:${NotificationType.COMMENT_RESOLVED}:${commentCreatorId}`,
+        {
+          subject,
+          template: CommentResolvedEmail({
+            actorName: actor.name,
+            pageTitle,
+            pageUrl,
+            locale,
+          }),
+        },
+      );
+    if (!notification) return;
 
     await this.pushAggregationService.dispatchOrAggregate(notification, {
       title: subject,

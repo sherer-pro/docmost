@@ -111,6 +111,42 @@ export class QueueOutboxRepo {
     });
   }
 
+  async markNotificationEmailCompleted(
+    id: string,
+    leaseToken: string,
+    notificationId: string,
+  ): Promise<boolean> {
+    return this.db.transaction().execute(async (trx) => {
+      const finalized = await trx
+        .updateTable('queueOutbox')
+        .set({
+          status: QUEUE_OUTBOX_STATUS.COMPLETED,
+          completedAt: new Date(),
+          secretPayload: null,
+          leaseToken: null,
+          leaseExpiresAt: null,
+          updatedAt: new Date(),
+        })
+        .where('id', '=', id)
+        .where('status', '=', QUEUE_OUTBOX_STATUS.PROCESSING)
+        .where('leaseToken', '=', leaseToken)
+        .returning('id')
+        .executeTakeFirst();
+
+      if (!finalized) {
+        return false;
+      }
+
+      await trx
+        .updateTable('notifications')
+        .set({ emailedAt: new Date() })
+        .where('id', '=', notificationId)
+        .where('emailedAt', 'is', null)
+        .execute();
+      return true;
+    });
+  }
+
   async markCancelled(id: string, leaseToken: string): Promise<boolean> {
     return this.finalize(id, leaseToken, {
       status: QUEUE_OUTBOX_STATUS.CANCELLED,

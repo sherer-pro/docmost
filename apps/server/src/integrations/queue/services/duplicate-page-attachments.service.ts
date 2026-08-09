@@ -38,9 +38,7 @@ export class DuplicatePageAttachmentsService {
 
     const attachmentIds = Array.from(mappingByOldAttachmentId.keys());
     if (attachmentIds.length === 0) {
-      this.logger.debug(
-        `Duplicate attachments task skipped: no attachments. rootPageId=${data.rootPageId}, newPageId=${data.newPageId}`,
-      );
+      this.logger.debug({ event: 'duplicate_attachments_skipped_empty' });
       return;
     }
 
@@ -79,17 +77,13 @@ export class DuplicatePageAttachmentsService {
           const mapping = mappingByOldAttachmentId.get(attachment.id);
           if (!mapping) {
             errorCount += 1;
-            this.logger.warn(
-              `Duplicate attachment mapping not found. attachmentId=${attachment.id}, rootPageId=${data.rootPageId}, newPageId=${data.newPageId}`,
-            );
+            this.logger.warn({ event: 'duplicate_attachment_mapping_missing' });
             return;
           }
 
           if (attachment.pageId !== mapping.oldPageId) {
             errorCount += 1;
-            this.logger.warn(
-              `Duplicate attachment page mismatch. attachmentId=${attachment.id}, expectedPageId=${mapping.oldPageId}, actualPageId=${attachment.pageId}, rootPageId=${data.rootPageId}`,
-            );
+            this.logger.warn({ event: 'duplicate_attachment_page_mismatch' });
             return;
           }
 
@@ -164,12 +158,9 @@ export class DuplicatePageAttachmentsService {
             ) {
               contentAttachmentIds.push(mapping.newAttachmentId);
             }
-          } catch (error) {
+          } catch {
             errorCount += 1;
-            this.logger.error(
-              `Duplicate attachment copy failed. attachmentId=${attachment.id}, newAttachmentId=${mapping.newAttachmentId}, oldPageId=${mapping.oldPageId}, newPageId=${mapping.newPageId}, rootPageId=${data.rootPageId}, workspaceId=${data.workspaceId}`,
-              error,
-            );
+            this.logger.error({ event: 'duplicate_attachment_copy_failed' });
           }
         }),
       ),
@@ -178,9 +169,10 @@ export class DuplicatePageAttachmentsService {
     const missingCount = data.attachmentMappings.length - attachments.length;
     if (missingCount > 0) {
       errorCount += missingCount;
-      this.logger.warn(
-        `Duplicate attachments missing source records. missing=${missingCount}, rootPageId=${data.rootPageId}, newPageId=${data.newPageId}, workspaceId=${data.workspaceId}`,
-      );
+      this.logger.warn({
+        event: 'duplicate_attachment_sources_missing',
+        missingCount,
+      });
     }
 
     if (indexedAttachmentIds.length > 0) {
@@ -211,14 +203,15 @@ export class DuplicatePageAttachmentsService {
     );
 
     const durationMs = Date.now() - startedAt;
-    this.logger.log(
-      `Duplicate attachments task finished. rootPageId=${data.rootPageId}, newPageId=${data.newPageId}, workspaceId=${data.workspaceId}, durationMs=${durationMs}, successCount=${successCount}, errorCount=${errorCount}`,
-    );
+    this.logger.log({
+      event: 'duplicate_attachments_completed',
+      durationMs,
+      successCount,
+      errorCount,
+    });
 
     if (errorCount > 0) {
-      throw new Error(
-        `Duplicate attachments task has partial errors. rootPageId=${data.rootPageId}, newPageId=${data.newPageId}, workspaceId=${data.workspaceId}, successCount=${successCount}, errorCount=${errorCount}`,
-      );
+      throw new Error('duplicate_attachments_partial_failure');
     }
   }
 }

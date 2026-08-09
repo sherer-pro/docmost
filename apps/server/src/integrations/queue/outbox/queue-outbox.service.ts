@@ -24,6 +24,9 @@ import { QueueJob, QueueName } from '../constants';
 import { DuplicatePageAttachmentsService } from '../services/duplicate-page-attachments.service';
 import {
   DuplicatePageAttachmentsOutboxPayload,
+  NotificationEmailOutboxPayload,
+  NotificationEmailSecretPayload,
+  NotificationDispatchOutboxPayload,
   PAGE_TEMPLATE_SYNC_HANDLER,
   PageTemplateSyncOutboxHandler,
   PageTemplateSyncOutboxPayload,
@@ -64,6 +67,8 @@ export class QueueOutboxService {
     private readonly duplicatePageAttachments: DuplicatePageAttachmentsService,
     @InjectQueue(QueueName.GENERAL_QUEUE)
     private readonly generalQueue: Queue,
+    @InjectQueue(QueueName.NOTIFICATION_QUEUE)
+    private readonly notificationQueue: Queue,
     private readonly moduleRef: ModuleRef,
   ) {}
 
@@ -128,6 +133,48 @@ export class QueueOutboxService {
         kind: QueueOutboxKind.PAGE_TEMPLATE_SYNC,
         payload: payload as unknown as JsonValue,
         dedupeKey: `page-template-sync:${payload.runId}:${dispatchId}`,
+      },
+      trx,
+    );
+  }
+
+  async enqueueNotificationEmail(
+    notificationId: string,
+    message: NotificationEmailSecretPayload['message'],
+    trx: KyselyTransaction,
+  ): Promise<void> {
+    if (
+      Object.prototype.hasOwnProperty.call(message, 'template') ||
+      message.notificationId !== notificationId ||
+      message.notificationDeliveryMode !== 'immediate'
+    ) {
+      throw new Error('notification_email_message_not_prepared');
+    }
+
+    const secretPayload = encryptProtectedValue(
+      JSON.stringify({ message } satisfies NotificationEmailSecretPayload),
+      this.environmentService.getAppSecret(),
+    );
+    await this.outboxRepo.enqueue(
+      {
+        kind: QueueOutboxKind.NOTIFICATION_EMAIL,
+        payload: { notificationId } satisfies NotificationEmailOutboxPayload,
+        secretPayload,
+        dedupeKey: `notification-email:${notificationId}`,
+      },
+      trx,
+    );
+  }
+
+  async enqueueNotificationDispatch(
+    payload: NotificationDispatchOutboxPayload,
+    trx: KyselyTransaction,
+  ): Promise<void> {
+    await this.outboxRepo.enqueue(
+      {
+        kind: QueueOutboxKind.NOTIFICATION_DISPATCH,
+        payload: payload as unknown as JsonValue,
+        dedupeKey: `notification-dispatch:${payload.jobName}:${payload.jobData.eventId}`,
       },
       trx,
     );
@@ -220,7 +267,13 @@ export class QueueOutboxService {
     if (!processingError && outcome) {
       const finalized =
         outcome === 'completed'
-          ? await this.outboxRepo.markCompleted(entry.id, leaseToken)
+          ? entry.kind === QueueOutboxKind.NOTIFICATION_EMAIL
+            ? await this.outboxRepo.markNotificationEmailCompleted(
+                entry.id,
+                leaseToken,
+                this.parseNotificationEmail(entry.payload).notificationId,
+              )
+            : await this.outboxRepo.markCompleted(entry.id, leaseToken)
           : await this.outboxRepo.markCancelled(entry.id, leaseToken);
       if (!finalized) {
         this.logger.warn(
@@ -353,9 +406,40 @@ export class QueueOutboxService {
         await handler.processSyncRunFromOutbox(payload.runId);
         return 'completed';
       }
+      case QueueOutboxKind.NOTIFICATION_EMAIL:
+        return this.processNotificationEmail(entry);
+      case QueueOutboxKind.NOTIFICATION_DISPATCH: {
+        const payload = this.parseNotificationDispatch(entry.payload);
+        await this.notificationQueue.add(payload.jobName, payload.jobData, {
+          jobId: `notification-dispatch-${payload.jobData.eventId}`,
+        });
+        return 'completed';
+      }
       default:
         throw new PermanentOutboxError('unknown_outbox_kind');
     }
+  }
+
+  private async processNotificationEmail(
+    entry: QueueOutboxEntry,
+  ): Promise<ProcessingOutcome> {
+    const payload = this.parseNotificationEmail(entry.payload);
+    const secret = this.parseNotificationEmailSecret(entry.secretPayload);
+    if (secret.message.notificationId !== payload.notificationId) {
+      throw new PermanentOutboxError('notification_email_id_mismatch');
+    }
+
+    const notification = await this.db
+      .selectFrom('notifications')
+      .select(['id', 'readAt', 'emailedAt'])
+      .where('id', '=', payload.notificationId)
+      .executeTakeFirst();
+    if (!notification || notification.readAt || notification.emailedAt) {
+      return 'cancelled';
+    }
+
+    await this.mailService.sendEmail(secret.message);
+    return 'completed';
   }
 
   private async processWorkspaceInvitationEmail(
@@ -574,6 +658,172 @@ export class QueueOutboxService {
         'invalid_page_template_sync_payload',
       ),
     };
+  }
+
+  private parseNotificationEmail(
+    rawPayload: unknown,
+  ): NotificationEmailOutboxPayload {
+    const payload = this.requireRecord(
+      rawPayload,
+      'invalid_notification_email_payload',
+    );
+    return {
+      notificationId: this.requireUuid(
+        payload.notificationId,
+        'invalid_notification_email_payload',
+      ),
+    };
+  }
+
+  private parseNotificationEmailSecret(
+    secretPayload: string | null,
+  ): NotificationEmailSecretPayload {
+    if (!isEncryptedProtectedValue(secretPayload)) {
+      throw new PermanentOutboxError('missing_notification_email_secret');
+    }
+
+    try {
+      const decrypted = decryptProtectedValue(
+        secretPayload!,
+        this.environmentService.getAppSecret(),
+      );
+      const secret = this.requireRecord(
+        JSON.parse(decrypted),
+        'invalid_notification_email_secret',
+      );
+      const message = this.requireRecord(
+        secret.message,
+        'invalid_notification_email_secret',
+      );
+      const notificationDeliveryMode = this.requireString(
+        message.notificationDeliveryMode,
+        'invalid_notification_email_secret',
+      );
+      if (notificationDeliveryMode !== 'immediate') {
+        throw new PermanentOutboxError('invalid_notification_email_secret');
+      }
+      return {
+        message: {
+          to: this.requireString(
+            message.to,
+            'invalid_notification_email_secret',
+          ),
+          subject: this.requireString(
+            message.subject,
+            'invalid_notification_email_secret',
+          ),
+          text: this.optionalString(
+            message.text,
+            'invalid_notification_email_secret',
+          ),
+          html: this.optionalString(
+            message.html,
+            'invalid_notification_email_secret',
+          ),
+          notificationId: this.requireUuid(
+            message.notificationId,
+            'invalid_notification_email_secret',
+          ),
+          notificationUserId: this.requireUuid(
+            message.notificationUserId,
+            'invalid_notification_email_secret',
+          ),
+          notificationDeliveryMode,
+          notificationFrequency: this.requireString(
+            message.notificationFrequency,
+            'invalid_notification_email_secret',
+          ),
+        },
+      };
+    } catch (error) {
+      if (error instanceof PermanentOutboxError) {
+        throw error;
+      }
+      throw new PermanentOutboxError('invalid_notification_email_secret');
+    }
+  }
+
+  private parseNotificationDispatch(
+    rawPayload: unknown,
+  ): NotificationDispatchOutboxPayload {
+    const payload = this.requireRecord(
+      rawPayload,
+      'invalid_notification_dispatch_payload',
+    );
+    const jobName = this.requireString(
+      payload.jobName,
+      'invalid_notification_dispatch_payload',
+    );
+    const jobData = this.requireRecord(
+      payload.jobData,
+      'invalid_notification_dispatch_payload',
+    );
+    const common = {
+      eventId: this.requireUuid(
+        jobData.eventId,
+        'invalid_notification_dispatch_payload',
+      ),
+      commentId: this.requireUuid(
+        jobData.commentId,
+        'invalid_notification_dispatch_payload',
+      ),
+      pageId: this.requireUuid(
+        jobData.pageId,
+        'invalid_notification_dispatch_payload',
+      ),
+      spaceId: this.requireUuid(
+        jobData.spaceId,
+        'invalid_notification_dispatch_payload',
+      ),
+      workspaceId: this.requireUuid(
+        jobData.workspaceId,
+        'invalid_notification_dispatch_payload',
+      ),
+      actorId: this.requireUuid(
+        jobData.actorId,
+        'invalid_notification_dispatch_payload',
+      ),
+    };
+
+    if (jobName === QueueJob.COMMENT_RESOLVED_NOTIFICATION) {
+      return {
+        jobName,
+        jobData: {
+          ...common,
+          commentCreatorId: this.requireUuid(
+            jobData.commentCreatorId,
+            'invalid_notification_dispatch_payload',
+          ),
+        },
+      };
+    }
+    if (jobName === QueueJob.COMMENT_NOTIFICATION) {
+      if (
+        !Array.isArray(jobData.mentionedUserIds) ||
+        typeof jobData.notifyWatchers !== 'boolean'
+      ) {
+        throw new PermanentOutboxError('invalid_notification_dispatch_payload');
+      }
+      return {
+        jobName,
+        jobData: {
+          ...common,
+          parentCommentId:
+            jobData.parentCommentId === undefined ||
+            jobData.parentCommentId === null
+              ? undefined
+              : this.requireUuid(
+                  jobData.parentCommentId,
+                  'invalid_notification_dispatch_payload',
+                ),
+          mentionedUserIds: jobData.mentionedUserIds.map((id) =>
+            this.requireUuid(id, 'invalid_notification_dispatch_payload'),
+          ),
+          notifyWatchers: jobData.notifyWatchers,
+        },
+      };
+    }
+    throw new PermanentOutboxError('invalid_notification_dispatch_job');
   }
 
   private requireRecord(

@@ -30,6 +30,7 @@ import {
 } from './comment.constants';
 import { CommentPaginationOptions } from './dto/comments.input';
 import { v7 as uuid7 } from 'uuid';
+import { QueueOutboxService } from '../../integrations/queue/outbox/queue-outbox.service';
 
 @Injectable()
 export class CommentService {
@@ -41,8 +42,7 @@ export class CommentService {
     @InjectKysely() private readonly db: KyselyDB,
     @InjectQueue(QueueName.GENERAL_QUEUE)
     private generalQueue: Queue,
-    @InjectQueue(QueueName.NOTIFICATION_QUEUE)
-    private notificationQueue: Queue,
+    private readonly queueOutboxService: QueueOutboxService,
   ) {}
 
   async findById(commentId: string) {
@@ -84,6 +84,8 @@ export class CommentService {
           : CommentType.INLINE;
     }
 
+    const isReply = !!createCommentDto.parentCommentId;
+    let notificationQueued = false;
     const comment = await executeTx(this.db, async (trx) => {
       const lockedPage = await this.pageRepo.findById(page.id, {
         withLock: true,
@@ -102,7 +104,7 @@ export class CommentService {
         throw new ConflictException(COMMENT_LIMIT_REACHED_MESSAGE);
       }
 
-      return this.commentRepo.insertComment(
+      const inserted = await this.commentRepo.insertComment(
         {
           pageId: page.id,
           content: commentContent,
@@ -115,6 +117,25 @@ export class CommentService {
         },
         trx,
       );
+      const jobData = this.buildCommentNotificationJob(
+        commentContent,
+        [],
+        inserted.id,
+        page.id,
+        page.spaceId,
+        workspaceId,
+        userId,
+        !isReply,
+        createCommentDto.parentCommentId,
+      );
+      if (jobData) {
+        await this.queueOutboxService.enqueueNotificationDispatch(
+          { jobName: QueueJob.COMMENT_NOTIFICATION, jobData },
+          trx,
+        );
+        notificationQueued = true;
+      }
+      return inserted;
     });
 
     this.generalQueue
@@ -124,23 +145,10 @@ export class CommentService {
         spaceId: page.spaceId,
         workspaceId,
       })
-      .catch((err) =>
-        this.logger.warn(`Failed to queue add-page-watchers: ${err.message}`),
+      .catch(() =>
+        this.logger.warn({ event: 'add_page_watchers_queue_failed' }),
       );
-
-    const isReply = !!createCommentDto.parentCommentId;
-
-    await this.queueCommentNotification(
-      commentContent,
-      [],
-      comment.id,
-      page.id,
-      page.spaceId,
-      workspaceId,
-      userId,
-      !isReply,
-      createCommentDto.parentCommentId,
-    );
+    if (notificationQueued) this.queueOutboxService.kick();
 
     return comment;
   }
@@ -173,16 +181,7 @@ export class CommentService {
 
     const editedAt = new Date();
 
-    await this.commentRepo.updateComment(
-      {
-        content: commentContent,
-        editedAt: editedAt,
-        updatedAt: editedAt,
-      },
-      comment.id,
-    );
-
-    await this.queueCommentNotification(
+    const jobData = this.buildCommentNotificationJob(
       commentContent,
       oldMentionIds,
       comment.id,
@@ -192,6 +191,24 @@ export class CommentService {
       authUser.id,
       false,
     );
+    await executeTx(this.db, async (trx) => {
+      await this.commentRepo.updateComment(
+        {
+          content: commentContent,
+          editedAt: editedAt,
+          updatedAt: editedAt,
+        },
+        comment.id,
+        trx,
+      );
+      if (jobData) {
+        await this.queueOutboxService.enqueueNotificationDispatch(
+          { jobName: QueueJob.COMMENT_NOTIFICATION, jobData },
+          trx,
+        );
+      }
+    });
+    if (jobData) this.queueOutboxService.kick();
 
     comment.content = commentContent;
     comment.editedAt = editedAt;
@@ -199,7 +216,6 @@ export class CommentService {
 
     return comment;
   }
-
 
   /**
    * Moves a comment to "resolved" state or reopens it.
@@ -215,36 +231,41 @@ export class CommentService {
     const resolvedAt = resolveCommentDto.resolved ? new Date() : null;
     const resolvedById = resolveCommentDto.resolved ? authUser.id : null;
 
-    await this.commentRepo.updateComment(
-      {
-        resolvedAt,
-        resolvedById,
-        updatedAt: new Date(),
-      },
-      comment.id,
-    );
-
-    if (resolveCommentDto.resolved) {
-      const jobData: ICommentResolvedNotificationJob = {
-        eventId: uuid7(),
-        commentId: comment.id,
-        commentCreatorId: comment.creatorId,
-        pageId: comment.pageId,
-        spaceId: comment.spaceId,
-        workspaceId: comment.workspaceId,
-        actorId: authUser.id,
-      };
-
-      await this.notificationQueue.add(
-        QueueJob.COMMENT_RESOLVED_NOTIFICATION,
-        jobData,
+    const jobData: ICommentResolvedNotificationJob | undefined =
+      resolveCommentDto.resolved
+        ? {
+            eventId: uuid7(),
+            commentId: comment.id,
+            commentCreatorId: comment.creatorId,
+            pageId: comment.pageId,
+            spaceId: comment.spaceId,
+            workspaceId: comment.workspaceId,
+            actorId: authUser.id,
+          }
+        : undefined;
+    await executeTx(this.db, async (trx) => {
+      await this.commentRepo.updateComment(
+        {
+          resolvedAt,
+          resolvedById,
+          updatedAt: new Date(),
+        },
+        comment.id,
+        trx,
       );
-    }
+      if (jobData) {
+        await this.queueOutboxService.enqueueNotificationDispatch(
+          { jobName: QueueJob.COMMENT_RESOLVED_NOTIFICATION, jobData },
+          trx,
+        );
+      }
+    });
+    if (jobData) this.queueOutboxService.kick();
 
     return this.findById(comment.id);
   }
 
-  private async queueCommentNotification(
+  private buildCommentNotificationJob(
     content: any,
     oldMentionIds: string[],
     commentId: string,
@@ -254,13 +275,15 @@ export class CommentService {
     actorId: string,
     notifyWatchers: boolean,
     parentCommentId?: string,
-  ) {
+  ): ICommentNotificationJob | undefined {
     const mentionedUserIds = extractUserMentionIdsFromJson(content);
     const newMentionIds = mentionedUserIds.filter(
       (id) => id !== actorId && !oldMentionIds.includes(id),
     );
 
-    if (newMentionIds.length === 0 && !notifyWatchers && !parentCommentId) return;
+    if (newMentionIds.length === 0 && !notifyWatchers && !parentCommentId) {
+      return undefined;
+    }
 
     const jobData: ICommentNotificationJob = {
       eventId: uuid7(),
@@ -274,9 +297,6 @@ export class CommentService {
       notifyWatchers,
     };
 
-    await this.notificationQueue.add(
-      QueueJob.COMMENT_NOTIFICATION,
-      jobData,
-    );
+    return jobData;
   }
 }

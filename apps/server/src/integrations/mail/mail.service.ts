@@ -35,16 +35,22 @@ export class MailService {
   }
 
   async sendToQueue(message: MailMessage): Promise<void> {
+    const prepared = await this.prepareQueueMessage(message);
+    await this.emailQueue.add(QueueJob.SEND_EMAIL, prepared);
+  }
+
+  async prepareQueueMessage(message: MailMessage): Promise<MailMessage> {
+    const prepared = { ...message };
     if (message.template) {
       // transform the React object because it gets lost when sent via the queue
-      message.html = await render(message.template, {
+      prepared.html = await render(message.template, {
         pretty: true,
       });
-      message.text = await render(message.template, {
+      prepared.text = await render(message.template, {
         plainText: true,
       });
-      delete message.template;
+      delete prepared.template;
     }
-    await this.emailQueue.add(QueueJob.SEND_EMAIL, message);
+    return prepared;
   }
 }

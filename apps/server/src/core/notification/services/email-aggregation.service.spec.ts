@@ -18,6 +18,7 @@ describe('EmailAggregationService', () => {
     notifications?: any[];
     userRecord?: unknown;
     accessibleNotifications?: any[];
+    mailError?: Error;
   }) => {
     const usersQuery = {
       select: jest.fn().mockReturnThis(),
@@ -82,7 +83,9 @@ describe('EmailAggregationService', () => {
     } as any;
 
     const mailService = {
-      sendToQueue: jest.fn(),
+      sendToQueue: options?.mailError
+        ? jest.fn().mockRejectedValue(options.mailError)
+        : jest.fn(),
     } as any;
 
     const domainService = {
@@ -232,5 +235,23 @@ describe('EmailAggregationService', () => {
     await service.processDueDigests();
 
     expect(mailService.sendToQueue).not.toHaveBeenCalled();
+  });
+
+  it('does not log a user identifier or raw mail error', async () => {
+    jest.setSystemTime(new Date('2026-02-01T12:00:00.000Z'));
+    const { service } = createService({
+      mailError: new Error(
+        'provider rejected recipient@example.test?token=mail-secret-canary',
+      ),
+    });
+    const logger = { error: jest.fn(), debug: jest.fn() };
+    (service as any).logger = logger;
+
+    await service.processDueDigests();
+
+    const serialized = JSON.stringify(logger.error.mock.calls);
+    expect(serialized).not.toContain('user-1');
+    expect(serialized).not.toContain('recipient@example.test');
+    expect(serialized).not.toContain('mail-secret-canary');
   });
 });

@@ -104,33 +104,28 @@ export class PageNotificationService {
         pageTitle,
         locale,
       );
-      const notification = await this.notificationService.create(
-        {
-          userId: recipientId,
-          workspaceId,
-          type: config.notificationType,
-          actorId,
-          pageId,
-          spaceId,
-        },
-        `page-recipient:${eventId}:${config.notificationType}:${recipientId}`,
-      );
+      const notification =
+        await this.notificationService.createWithImmediateEmail(
+          {
+            userId: recipientId,
+            workspaceId,
+            type: config.notificationType,
+            actorId,
+            pageId,
+            spaceId,
+          },
+          `page-recipient:${eventId}:${config.notificationType}:${recipientId}`,
+          {
+            subject: config.title,
+            template: config.createEmail({
+              actorName: actor.name,
+              pageTitle,
+              pageUrl: basePageUrl,
+              locale,
+            }),
+          },
+        );
       if (!notification) continue;
-
-      await this.notificationService.queueEmail(
-        recipientId,
-        notification.id,
-        pageId,
-        actorId,
-        spaceId,
-        config.title,
-        config.createEmail({
-          actorName: actor.name,
-          pageTitle,
-          pageUrl: basePageUrl,
-          locale,
-        }),
-      );
 
       await this.pushAggregationService.dispatchOrAggregate(notification, {
         title: config.title,
@@ -286,20 +281,6 @@ export class PageNotificationService {
 
     for (const { userId, mentionId } of mentions) {
       const locale = await this.notificationService.getUserLocale(userId);
-      const notification = await this.notificationService.create(
-        {
-          userId,
-          workspaceId,
-          type: NotificationType.PAGE_USER_MENTION,
-          actorId,
-          pageId,
-          spaceId,
-          data: { mentionId },
-        },
-        `page-mention:${mentionId}:${userId}`,
-      );
-      if (!notification) continue;
-
       const pageUrl = `${basePageUrl}`;
       const subject = getNotificationTitle(
         NotificationType.PAGE_USER_MENTION,
@@ -307,21 +288,29 @@ export class PageNotificationService {
         pageTitle,
         locale,
       );
-
-      await this.notificationService.queueEmail(
-        userId,
-        notification.id,
-        pageId,
-        actorId,
-        spaceId,
-        subject,
-        PageMentionEmail({
-          actorName: actor.name,
-          pageTitle,
-          pageUrl,
-          locale,
-        }),
-      );
+      const notification =
+        await this.notificationService.createWithImmediateEmail(
+          {
+            userId,
+            workspaceId,
+            type: NotificationType.PAGE_USER_MENTION,
+            actorId,
+            pageId,
+            spaceId,
+            data: { mentionId },
+          },
+          `page-mention:${mentionId}:${userId}`,
+          {
+            subject,
+            template: PageMentionEmail({
+              actorName: actor.name,
+              pageTitle,
+              pageUrl,
+              locale,
+            }),
+          },
+        );
+      if (!notification) continue;
 
       await this.pushAggregationService.dispatchOrAggregate(notification, {
         title: subject,

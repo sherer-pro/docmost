@@ -39,11 +39,10 @@ describe('CommentNotificationService', () => {
 
   const createService = () => {
     const notificationService = {
-      create: jest.fn(async (data) => ({
+      createWithImmediateEmail: jest.fn(async (data) => ({
         ...data,
-        id: `notification-${notificationService.create.mock.calls.length}`,
+        id: `notification-${notificationService.createWithImmediateEmail.mock.calls.length}`,
       })),
-      queueEmail: jest.fn(),
       getUserLocale: jest.fn().mockResolvedValue('en-US'),
     } as any;
     const watcherRepo = {
@@ -93,7 +92,9 @@ describe('CommentNotificationService', () => {
     }) as any;
 
   const createdPayloads = (notificationService: any) =>
-    notificationService.create.mock.calls.map(([payload]) => payload);
+    notificationService.createWithImmediateEmail.mock.calls.map(
+      ([payload]) => payload,
+    );
 
   it('notifies root comment watchers and page roles once', async () => {
     const {
