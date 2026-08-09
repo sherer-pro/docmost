@@ -76,15 +76,31 @@ test('rejects enterprise package references in the lockfile', () => {
   assert.match(auditNoEe(repoRoot).join('\n'), /@docmost\/ee alias/);
 });
 
-test('rejects static and dynamic enterprise module specifiers', () => {
+test('rejects static and dynamic enterprise module specifier variants', () => {
   const repoRoot = createRepository({
     'apps/server/src/core/static.ts': "import legacy from '../../ee/runtime';\n",
     'apps/client/src/dynamic.ts': "const legacy = import('@docmost/ee/sso');\n",
+    'apps/client/src/alias-dynamic.ts':
+      'const legacy = import(`@/ee/runtime`);\n',
+    'apps/server/src/resolve.cjs':
+      "const legacy = require.resolve('../../enterprise/runtime');\n",
   });
 
   const failures = auditNoEe(repoRoot).join('\n');
   assert.match(failures, /EE or enterprise module specifier/);
   assert.match(failures, /@docmost\/ee alias/);
+});
+
+test('rejects retired routes in generated inventories and documentation', () => {
+  const repoRoot = createRepository({
+    'apps/server/docs/api-route-inventory.generated.md':
+      '| GET | `/api/billing/info` | legacy |\n',
+  });
+
+  assert.match(
+    auditNoEe(repoRoot).join('\n'),
+    /retired license or billing API or settings route/,
+  );
 });
 
 test('rejects retired runtime symbols, routes, and config references', () => {
@@ -96,7 +112,10 @@ test('rejects retired runtime symbols, routes, and config references', () => {
 
   const failures = auditNoEe(repoRoot).join('\n');
   assert.match(failures, /retired license, billing, or trial runtime symbol/);
-  assert.match(failures, /retired license or billing API route/);
+  assert.match(
+    failures,
+    /retired license or billing API or settings route/,
+  );
 });
 
 test('does not allow legacy schema names in a new migration', () => {
