@@ -693,6 +693,37 @@ cp .env.compose.example .env
 docker compose up -d --build
 ```
 
+Compose starts the API and dedicated collaboration process from the same
+application image. Required credentials from `.env` are mounted as Docker
+secrets and are not copied into container configuration metadata. Optional
+credential secrets are defined but not granted by the base stack, so disabled
+S3, SMTP, Postmark, Typesense, and Web Push integrations do not require dummy
+values.
+
+When an optional integration is enabled, grant only its secret to both
+application services from a non-versioned `docker-compose.override.yml`. For
+example, Typesense uses the existing `TYPESENSE_API_KEY` value from `.env`:
+
+```yaml
+services:
+  docmost:
+    environment:
+      TYPESENSE_API_KEY_FILE: /run/secrets/docmost_typesense_api_key
+    secrets:
+      - docmost_typesense_api_key
+  collab:
+    environment:
+      TYPESENSE_API_KEY_FILE: /run/secrets/docmost_typesense_api_key
+    secrets:
+      - docmost_typesense_api_key
+```
+
+The available optional secret names are
+`docmost_aws_s3_secret_access_key`, `docmost_smtp_password`,
+`docmost_postmark_token`, `docmost_typesense_api_key`, and
+`docmost_web_push_vapid_private_key`. Granting a secret with an unset source is
+a Compose error, and an empty or unreadable mounted secret is a startup error.
+
 For the Ubuntu layout where `/opt/edge-proxy` already owns the external
 `edge` network, set `EDGE_NETWORK_NAME=edge` and
 `EDGE_NETWORK_EXTERNAL=true` in `/opt/docmost/.env`. The proxy and Drawio
@@ -717,8 +748,9 @@ configured target reserved for that space; force disable is available when the
 remote service is unavailable.
 
 The ordinary `docker compose up -d --build` command starts the complete local
-stack. There is no `rag-sync` profile or second image. Redis is shared with the
-backend through a versioned `RAG_SYNC_REDIS_PREFIX` namespace.
+stack. The collaboration process uses the same image and compiled server
+artifact. There is no `rag-sync` profile, service, or second image. Redis is
+shared with the backend through a versioned `RAG_SYNC_REDIS_PREFIX` namespace.
 
 See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for system boundaries,
 [`docs/AI_ASSISTANT_AND_RAG.md`](./docs/AI_ASSISTANT_AND_RAG.md) for the
