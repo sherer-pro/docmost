@@ -2,7 +2,7 @@ import {
   Global,
   Logger,
   Module,
-  OnApplicationBootstrap,
+  OnModuleInit,
   BeforeApplicationShutdown,
 } from '@nestjs/common';
 import { InjectKysely, KyselyModule } from 'nestjs-kysely';
@@ -159,9 +159,7 @@ import { DatabaseReadinessService } from '@docmost/db/services/database-readines
     DatabaseReadinessService,
   ],
 })
-export class DatabaseModule
-  implements OnApplicationBootstrap, BeforeApplicationShutdown
-{
+export class DatabaseModule implements OnModuleInit, BeforeApplicationShutdown {
   private readonly logger = new Logger(DatabaseModule.name);
 
   constructor(
@@ -171,7 +169,7 @@ export class DatabaseModule
     private readonly readinessService: DatabaseReadinessService,
   ) {}
 
-  async onApplicationBootstrap() {
+  async onModuleInit() {
     await this.establishConnection();
 
     if (this.environmentService.getNodeEnv() === 'production') {
