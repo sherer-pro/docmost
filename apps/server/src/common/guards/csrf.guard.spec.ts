@@ -101,6 +101,25 @@ describe('CsrfGuard', () => {
     );
   });
 
+  it('rejects a spoofed host when Origin matches the configured APP_URL', () => {
+    const guard = createGuard();
+    const request = {
+      method: 'POST',
+      headers: {
+        host: 'attacker.test',
+        origin: 'https://app.docmost.test',
+        [CsrfService.HEADER_NAME]: 'csrf-token',
+      },
+      cookies: {
+        [CsrfService.COOKIE_NAME]: 'csrf-token',
+      },
+    };
+
+    expect(() => guard.canActivate(createContext(request))).toThrow(
+      'CSRF origin validation failed',
+    );
+  });
+
   it('rejects mutating requests without Origin or Referer', () => {
     const guard = createGuard();
     const request = {
