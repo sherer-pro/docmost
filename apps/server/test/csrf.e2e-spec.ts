@@ -81,6 +81,8 @@ class WorkspaceTestController {
       provide: EnvironmentService,
       useValue: {
         getAppUrl: () => 'http://localhost:3000',
+        getSubdomainHost: () => '',
+        isCloud: () => false,
         isHttps: () => false,
       },
     },
@@ -137,11 +139,23 @@ describe('CSRF guard (integration)', () => {
   it('allows mutating request with valid double-submit token', async () => {
     await request(app.getHttpServer())
       .post('/api/workspace/update')
+      .set('Host', 'localhost:3000')
       .set('Origin', 'http://localhost:3000')
       .set('Cookie', ['csrfToken=test-token'])
       .set('x-csrf-token', 'test-token')
       .send({ name: 'new name' })
       .expect(200);
+  });
+
+  it('rejects a valid token when the request host is spoofed', async () => {
+    await request(app.getHttpServer())
+      .post('/api/workspace/update')
+      .set('Host', 'attacker.test')
+      .set('Origin', 'http://localhost:3000')
+      .set('Cookie', ['csrfToken=test-token'])
+      .set('x-csrf-token', 'test-token')
+      .send({ name: 'new name' })
+      .expect(403);
   });
 
   it('keeps login/logout/forgot-password endpoints exempt from CSRF', async () => {
