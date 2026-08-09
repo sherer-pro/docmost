@@ -48,6 +48,7 @@ test("collaborative editing, public readonly share and offline interruption", as
   try {
     member = await provisionAuditMember({
       api,
+      browser,
       spaceId: state.spaceId,
       role: "writer",
     });
