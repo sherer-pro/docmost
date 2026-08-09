@@ -2,7 +2,7 @@ import { BubbleMenu, BubbleMenuProps } from "@tiptap/react/menus";
 import { isNodeSelection, useEditorState } from "@tiptap/react";
 import type { Editor } from "@tiptap/react";
 import { FC, useEffect, useRef, useState } from "react";
-import { IconMessage, IconBook2 } from "@tabler/icons-react";
+import { IconMessage, IconBook2, IconRefresh } from "@tabler/icons-react";
 import clsx from "clsx";
 import classes from "./bubble-menu.module.css";
 import { ActionIcon, Tooltip } from "@mantine/core";
@@ -30,6 +30,7 @@ import {
   useInlineTextToolbarItems,
 } from "@/features/editor/components/bubble-menu/toolbar-items";
 import { AiSelectionActionButton } from "@/features/ai/components/ai-selection-action";
+import { canCreateSyncedBlock } from "./can-create-synced-block";
 
 type EditorBubbleMenuProps = Omit<BubbleMenuProps, "children" | "editor"> & {
   editor: Editor | null;
@@ -64,6 +65,8 @@ export const EditorBubbleMenu: FC<EditorBubbleMenuProps> = (props) => {
 
       return {
         isComment: ctx.editor.isActive("comment"),
+        isNodeSelection: isNodeSelection(ctx.editor.state.selection),
+        canCreateSyncedBlock: canCreateSyncedBlock(ctx.editor),
       };
     },
   });
@@ -85,6 +88,13 @@ export const EditorBubbleMenu: FC<EditorBubbleMenuProps> = (props) => {
       setShowCommentPopup(true);
     },
     icon: IconMessage,
+  };
+  const syncedBlockItem: EditorToolbarItem = {
+    name: "Create synced block",
+    command: () => {
+      props.editor?.chain().focus().toggleTransclusionSource().run();
+    },
+    icon: IconRefresh,
   };
 
   const openDictionaryModal = () => {
@@ -113,15 +123,15 @@ export const EditorBubbleMenu: FC<EditorBubbleMenuProps> = (props) => {
 
       if (
         !editor.isEditable ||
-        editor.isActive("image") ||
         empty ||
-        isNodeSelection(selection) ||
         isCellSelection(selection) ||
         showCommentPopupRef?.current
       ) {
         return false;
       }
-      return isTextSelected(editor);
+      return isNodeSelection(selection)
+        ? canCreateSyncedBlock(editor)
+        : isTextSelected(editor);
     },
     options: {
       placement: "top",
@@ -147,103 +157,118 @@ export const EditorBubbleMenu: FC<EditorBubbleMenuProps> = (props) => {
         style={{ zIndex: 200, position: "relative" }}
       >
         <div className={classes.bubbleMenu}>
-          <NodeSelector
-            editor={props.editor}
-            isOpen={isNodeSelectorOpen}
-            setIsOpen={() => {
-              setIsNodeSelectorOpen(!isNodeSelectorOpen);
-              setIsTextAlignmentOpen(false);
-              setIsLinkSelectorOpen(false);
-              setIsColorSelectorOpen(false);
-            }}
-          />
-
-          <TextAlignmentSelector
-            editor={props.editor}
-            isOpen={isTextAlignmentSelectorOpen}
-            setIsOpen={() => {
-              setIsTextAlignmentOpen(!isTextAlignmentSelectorOpen);
-              setIsNodeSelectorOpen(false);
-              setIsLinkSelectorOpen(false);
-              setIsColorSelectorOpen(false);
-            }}
-          />
-
-          <ActionIcon.Group>
-            {textItems.map((item) => (
-              <ToolbarActionButton
-                key={item.name}
-                item={item}
-                activeClassName={classes.active}
+          {editorState?.isNodeSelection ? (
+            editorState.canCreateSyncedBlock && (
+              <ToolbarActionButton item={syncedBlockItem} />
+            )
+          ) : (
+            <>
+              <NodeSelector
+                editor={props.editor}
+                isOpen={isNodeSelectorOpen}
+                setIsOpen={() => {
+                  setIsNodeSelectorOpen(!isNodeSelectorOpen);
+                  setIsTextAlignmentOpen(false);
+                  setIsLinkSelectorOpen(false);
+                  setIsColorSelectorOpen(false);
+                }}
               />
-            ))}
-          </ActionIcon.Group>
 
-          <LinkSelector
-            editor={props.editor}
-            isOpen={isLinkSelectorOpen}
-            setIsOpen={(value) => {
-              setIsLinkSelectorOpen(value);
-              setIsNodeSelectorOpen(false);
-              setIsTextAlignmentOpen(false);
-              setIsColorSelectorOpen(false);
-            }}
-          />
+              <TextAlignmentSelector
+                editor={props.editor}
+                isOpen={isTextAlignmentSelectorOpen}
+                setIsOpen={() => {
+                  setIsTextAlignmentOpen(!isTextAlignmentSelectorOpen);
+                  setIsNodeSelectorOpen(false);
+                  setIsLinkSelectorOpen(false);
+                  setIsColorSelectorOpen(false);
+                }}
+              />
 
-          <ColorSelector
-            editor={props.editor}
-            isOpen={isColorSelectorOpen}
-            setIsOpen={() => {
-              setIsColorSelectorOpen(!isColorSelectorOpen);
-              setIsNodeSelectorOpen(false);
-              setIsTextAlignmentOpen(false);
-              setIsLinkSelectorOpen(false);
-            }}
-          />
+              <ActionIcon.Group>
+                {textItems.map((item) => (
+                  <ToolbarActionButton
+                    key={item.name}
+                    item={item}
+                    activeClassName={classes.active}
+                  />
+                ))}
+                {editorState?.canCreateSyncedBlock && (
+                  <ToolbarActionButton item={syncedBlockItem} />
+                )}
+              </ActionIcon.Group>
 
-          {props.editor && props.pageId && props.spaceId && (
-            <AiSelectionActionButton
-              editor={props.editor}
-              pageId={props.pageId}
-              spaceId={props.spaceId}
-            />
-          )}
+              <LinkSelector
+                editor={props.editor}
+                isOpen={isLinkSelectorOpen}
+                setIsOpen={(value) => {
+                  setIsLinkSelectorOpen(value);
+                  setIsNodeSelectorOpen(false);
+                  setIsTextAlignmentOpen(false);
+                  setIsColorSelectorOpen(false);
+                }}
+              />
 
-          {props.spaceId &&
-            props.dictionaryEnabled &&
-            props.canManageDictionary && (
-              <Tooltip
-                label={t("Add to dictionary")}
-                withArrow
-                withinPortal={false}
-              >
-                <ActionIcon
-                  variant="default"
-                  size="lg"
-                  radius="6px"
-                  aria-label={t("Add to dictionary")}
-                  style={{ border: "none" }}
-                  onClick={openDictionaryModal}
+              <ColorSelector
+                editor={props.editor}
+                isOpen={isColorSelectorOpen}
+                setIsOpen={() => {
+                  setIsColorSelectorOpen(!isColorSelectorOpen);
+                  setIsNodeSelectorOpen(false);
+                  setIsTextAlignmentOpen(false);
+                  setIsLinkSelectorOpen(false);
+                }}
+              />
+
+              {props.editor && props.pageId && props.spaceId && (
+                <AiSelectionActionButton
+                  editor={props.editor}
+                  pageId={props.pageId}
+                  spaceId={props.spaceId}
+                />
+              )}
+
+              {props.spaceId &&
+                props.dictionaryEnabled &&
+                props.canManageDictionary && (
+                  <Tooltip
+                    label={t("Add to dictionary")}
+                    withArrow
+                    withinPortal={false}
+                  >
+                    <ActionIcon
+                      variant="default"
+                      size="lg"
+                      radius="6px"
+                      aria-label={t("Add to dictionary")}
+                      style={{ border: "none" }}
+                      onClick={openDictionaryModal}
+                    >
+                      <IconBook2 size={16} stroke={2} />
+                    </ActionIcon>
+                  </Tooltip>
+                )}
+
+              {canCreateInlineComments && (
+                <Tooltip
+                  label={t(commentItem.name)}
+                  withArrow
+                  withinPortal={false}
                 >
-                  <IconBook2 size={16} stroke={2} />
-                </ActionIcon>
-              </Tooltip>
-            )}
-
-          {canCreateInlineComments && (
-            <Tooltip label={t(commentItem.name)} withArrow withinPortal={false}>
-              <ActionIcon
-                variant="default"
-                size="lg"
-                radius="6px"
-                aria-label={t(commentItem.name)}
-                className={clsx(commentItem.isActive && classes.active)}
-                style={{ border: "none" }}
-                onClick={commentItem.command}
-              >
-                <IconMessage size={16} stroke={2} />
-              </ActionIcon>
-            </Tooltip>
+                  <ActionIcon
+                    variant="default"
+                    size="lg"
+                    radius="6px"
+                    aria-label={t(commentItem.name)}
+                    className={clsx(commentItem.isActive && classes.active)}
+                    style={{ border: "none" }}
+                    onClick={commentItem.command}
+                  >
+                    <IconMessage size={16} stroke={2} />
+                  </ActionIcon>
+                </Tooltip>
+              )}
+            </>
           )}
         </div>
       </BubbleMenu>

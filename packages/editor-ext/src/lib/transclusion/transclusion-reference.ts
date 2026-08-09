@@ -1,6 +1,7 @@
 import { mergeAttributes, Node } from '@tiptap/core';
 import { ReactNodeViewRenderer } from '@tiptap/react';
 import { getTransclusionPresentationAttributes } from './transclusion-presentation';
+import { isValidTransclusionIdentifier } from './constants';
 
 export interface TransclusionReferenceOptions {
   HTMLAttributes: Record<string, any>;
@@ -59,7 +60,20 @@ export const TransclusionReference = Node.create<TransclusionReferenceOptions>({
   },
 
   parseHTML() {
-    return [{ tag: `div[data-type="${this.name}"]` }];
+    return [
+      {
+        tag: `div[data-type="${this.name}"]`,
+        getAttrs: (element) =>
+          isValidTransclusionIdentifier(
+            element.getAttribute('data-source-page-id'),
+          ) &&
+          isValidTransclusionIdentifier(
+            element.getAttribute('data-transclusion-id'),
+          )
+            ? null
+            : false,
+      },
+    ];
   },
 
   renderHTML({ HTMLAttributes }) {

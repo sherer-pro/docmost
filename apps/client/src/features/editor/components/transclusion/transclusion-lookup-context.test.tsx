@@ -3,8 +3,11 @@
 import React from "react";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { getDefaultStore, type PrimitiveAtom } from "jotai";
+import type { Socket } from "socket.io-client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { lookupTransclusion } from "@/features/transclusion/services/transclusion-api";
+import { socketAtom } from "@/features/websocket/atoms/socket-atom";
 import { TransclusionLookupProvider } from "./transclusion-lookup-context";
 import { useTransclusionLookup } from "./use-transclusion-lookup";
 
@@ -20,6 +23,23 @@ const lookup = vi.mocked(lookupTransclusion);
 
 let container: HTMLDivElement;
 let root: Root;
+const socketHandlers = new Map<string, Set<() => void>>();
+const fakeSocket = {
+  on: vi.fn((event: string, handler: () => void) => {
+    const handlers = socketHandlers.get(event) ?? new Set();
+    handlers.add(handler);
+    socketHandlers.set(event, handlers);
+    return fakeSocket;
+  }),
+  off: vi.fn((event: string, handler: () => void) => {
+    socketHandlers.get(event)?.delete(handler);
+    return fakeSocket;
+  }),
+};
+
+function emitSocketEvent(event: string) {
+  for (const handler of socketHandlers.get(event) ?? []) handler();
+}
 
 function Probe({
   pageId = "page-1",
@@ -43,6 +63,13 @@ function Probe({
 
 beforeEach(() => {
   vi.useFakeTimers();
+  socketHandlers.clear();
+  fakeSocket.on.mockClear();
+  fakeSocket.off.mockClear();
+  getDefaultStore().set(
+    socketAtom as PrimitiveAtom<Socket | null>,
+    fakeSocket as any,
+  );
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -51,6 +78,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   container.remove();
+  getDefaultStore().set(socketAtom as PrimitiveAtom<Socket | null>, null);
   lookup.mockReset();
   vi.useRealTimers();
 });
@@ -240,6 +268,78 @@ describe("TransclusionLookupProvider", () => {
         ],
       });
     });
+  });
+
+  it("coalesces realtime invalidations and keeps cached content visible", async () => {
+    lookup
+      .mockResolvedValueOnce({
+        items: [
+          {
+            sourcePageId: "page-1",
+            transclusionId: "block-1",
+            content: {
+              type: "doc",
+              content: [
+                {
+                  type: "paragraph",
+                  content: [{ type: "text", text: "Before" }],
+                },
+              ],
+            },
+            sourceUpdatedAt: "2026-08-05T00:00:00.000Z",
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        items: [
+          {
+            sourcePageId: "page-1",
+            transclusionId: "block-1",
+            content: {
+              type: "doc",
+              content: [
+                {
+                  type: "paragraph",
+                  content: [{ type: "text", text: "After" }],
+                },
+              ],
+            },
+            sourceUpdatedAt: "2026-08-05T00:01:00.000Z",
+          },
+        ],
+      });
+
+    await act(async () => {
+      root.render(
+        <TransclusionLookupProvider>
+          <Probe />
+        </TransclusionLookupProvider>,
+      );
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10);
+    });
+
+    const content = container.querySelector('[data-testid="content-block-1"]');
+    expect(content?.textContent).toContain("Before");
+    expect(fakeSocket.on).toHaveBeenCalledWith(
+      "page-embed:invalidate",
+      expect.any(Function),
+    );
+
+    await act(async () => {
+      emitSocketEvent("page-embed:invalidate");
+      emitSocketEvent("page-embed:invalidate");
+      await vi.advanceTimersByTimeAsync(49);
+    });
+    expect(lookup).toHaveBeenCalledTimes(1);
+    expect(content?.textContent).toContain("Before");
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(11);
+    });
+    expect(lookup).toHaveBeenCalledTimes(2);
+    expect(content?.textContent).toContain("After");
   });
 
   it("splits 51 unique references at the API limit", async () => {

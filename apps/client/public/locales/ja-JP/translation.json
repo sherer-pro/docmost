@@ -1208,6 +1208,7 @@
   "Backlinks": "Backlinks",
   "Outgoing": "Outgoing",
   "Synced block": "同期ブロック",
+  "Create synced block": "同期ブロックを作成",
   "Synced block content unavailable": "同期ブロックのコンテンツを利用できません",
   "Failed to copy as Markdown": "Markdown としてコピーできませんでした",
   "Copied. Paste on any page to embed this synced block.": "Copied. Paste on any page to embed this synced block.",

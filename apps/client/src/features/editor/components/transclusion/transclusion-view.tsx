@@ -128,6 +128,7 @@ export default function TransclusionView(props: NodeViewProps) {
               variant="subtle"
               color={copied ? "teal" : "gray"}
               size="sm"
+              aria-label={copied ? t("Copied") : t("Copy synced block")}
               onClick={handleCopy}
               disabled={!sourcePageId || !transclusionId}
             >
@@ -137,7 +138,12 @@ export default function TransclusionView(props: NodeViewProps) {
 
           <Menu position="bottom-end" withinPortal onChange={trackOpen}>
             <Menu.Target>
-              <ActionIcon variant="subtle" color="gray" size="sm">
+              <ActionIcon
+                variant="subtle"
+                color="gray"
+                size="sm"
+                aria-label={t("More options")}
+              >
                 <IconDots size={14} />
               </ActionIcon>
             </Menu.Target>

@@ -1208,6 +1208,7 @@
   "Backlinks": "Backlinks",
   "Outgoing": "Outgoing",
   "Synced block": "Gesynchroniseerd blok",
+  "Create synced block": "Gesynchroniseerd blok maken",
   "Synced block content unavailable": "De inhoud van het gesynchroniseerde blok is niet beschikbaar",
   "Failed to copy as Markdown": "Kopiëren als Markdown is mislukt",
   "Copied. Paste on any page to embed this synced block.": "Copied. Paste on any page to embed this synced block.",

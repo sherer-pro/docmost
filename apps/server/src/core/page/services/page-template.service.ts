@@ -50,6 +50,7 @@ import type { PageEmbedGraphLease } from '../transclusion/page-embed-graph-lock.
 import { getAttachmentIds } from '../../../common/helpers/prosemirror/utils';
 import { PageHistoryRecorderService } from './page-history-recorder.service';
 import { QueueOutboxService } from '../../../integrations/queue/outbox/queue-outbox.service';
+import { MAX_PAGE_TREE_DEPTH } from '../../../common/config/page-tree.constants';
 import type { TemplateKind } from '@docmost/api-contract';
 import {
   collectTemplateFields,
@@ -154,7 +155,8 @@ export class PageTemplateService implements OnModuleInit, OnModuleDestroy {
       return { createdFromTemplate: false, sourceTemplate: null };
     }
 
-    const sourcePageId = instance?.templatePageId ?? legacyOperation?.sourcePageId;
+    const sourcePageId =
+      instance?.templatePageId ?? legacyOperation?.sourcePageId;
     const latestRevision = sourcePageId
       ? await this.db
           .selectFrom('pageTemplateRevisions')
@@ -327,45 +329,46 @@ export class PageTemplateService implements OnModuleInit, OnModuleDestroy {
     }
     const candidates = await query.execute();
     const candidateIds = candidates.map((candidate) => candidate.id);
-    const [favoriteRows, recentPages, revisionRows, instanceRows] = await Promise.all([
-      candidates.length > 0
-        ? this.db
-            .selectFrom('favorites')
-            .select('pageId')
-            .where('userId', '=', user.id)
-            .where(
-              'pageId',
-              'in',
-              candidates.map((candidate) => candidate.id),
-            )
-            .execute()
-        : [],
-      this.pageRepo.getRecentPagesInSpace(dto.spaceId, {
-        limit: 50,
-        query: undefined,
-        adminView: false,
-      }),
-      candidateIds.length > 0
-        ? this.db
-            .selectFrom('pageTemplateRevisions')
-            .select(['templatePageId'])
-            .select((eb) => eb.fn.max<number>('revision').as('revision'))
-            .select((eb) => eb.fn.max<Date>('createdAt').as('publishedAt'))
-            .where('templatePageId', 'in', candidateIds)
-            .groupBy('templatePageId')
-            .execute()
-        : [],
-      candidateIds.length > 0
-        ? this.db
-            .selectFrom('pageTemplateInstances')
-            .select(['templatePageId', 'status'])
-            .select((eb) => eb.fn.countAll<number>().as('count'))
-            .where('templatePageId', 'in', candidateIds)
-            .where('status', 'in', ['active', 'syncing', 'error'])
-            .groupBy(['templatePageId', 'status'])
-            .execute()
-        : [],
-    ]);
+    const [favoriteRows, recentPages, revisionRows, instanceRows] =
+      await Promise.all([
+        candidates.length > 0
+          ? this.db
+              .selectFrom('favorites')
+              .select('pageId')
+              .where('userId', '=', user.id)
+              .where(
+                'pageId',
+                'in',
+                candidates.map((candidate) => candidate.id),
+              )
+              .execute()
+          : [],
+        this.pageRepo.getRecentPagesInSpace(dto.spaceId, {
+          limit: 50,
+          query: undefined,
+          adminView: false,
+        }),
+        candidateIds.length > 0
+          ? this.db
+              .selectFrom('pageTemplateRevisions')
+              .select(['templatePageId'])
+              .select((eb) => eb.fn.max<number>('revision').as('revision'))
+              .select((eb) => eb.fn.max<Date>('createdAt').as('publishedAt'))
+              .where('templatePageId', 'in', candidateIds)
+              .groupBy('templatePageId')
+              .execute()
+          : [],
+        candidateIds.length > 0
+          ? this.db
+              .selectFrom('pageTemplateInstances')
+              .select(['templatePageId', 'status'])
+              .select((eb) => eb.fn.countAll<number>().as('count'))
+              .where('templatePageId', 'in', candidateIds)
+              .where('status', 'in', ['active', 'syncing', 'error'])
+              .groupBy(['templatePageId', 'status'])
+              .execute()
+          : [],
+      ]);
     const favoritePageIds = new Set(favoriteRows.map((row) => row.pageId));
     const recentPageIds = new Set(recentPages.items.map((page) => page.id));
     const revisionByTemplate = new Map(
@@ -875,9 +878,7 @@ export class PageTemplateService implements OnModuleInit, OnModuleDestroy {
     );
     const readableIds = new Set(
       pages
-        .filter(
-          (page) => access.get(page.id)?.capabilities.canRead === true,
-        )
+        .filter((page) => access.get(page.id)?.capabilities.canRead === true)
         .map((page) => page.id),
     );
     return {
@@ -888,21 +889,14 @@ export class PageTemplateService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
-  async preflightPublish(
-    pageId: string,
-    user: User,
-  ) {
+  async preflightPublish(pageId: string, user: User) {
     const template = await this.requireManagedSyncedTemplate(pageId, user);
     const liveDraft = await this.getLiveContent(template.id, user);
     const draft = this.normalizeDraftForPublication(liveDraft);
     return this.buildPublishPreflight(template, user, true, draft);
   }
 
-  async publish(
-    pageId: string,
-    dto: PublishPageTemplateDto,
-    user: User,
-  ) {
+  async publish(pageId: string, dto: PublishPageTemplateDto, user: User) {
     const template = await this.requireManagedSyncedTemplate(pageId, user);
     if (template.templateArchivedAt) {
       throw new ConflictException({
@@ -978,10 +972,7 @@ export class PageTemplateService implements OnModuleInit, OnModuleDestroy {
           .where('expiresAt', '>', new Date())
           .returning('id')
           .executeTakeFirst();
-        if (
-          preflight.requiresDestructiveConfirmation &&
-          !consumed
-        ) {
+        if (preflight.requiresDestructiveConfirmation && !consumed) {
           throw this.conflict(
             'page_template_confirmation_invalid',
             'The destructive confirmation is missing, expired, or stale',
@@ -1068,7 +1059,11 @@ export class PageTemplateService implements OnModuleInit, OnModuleDestroy {
       .where('templatePageId', '=', template.id)
       .orderBy('revision', 'desc')
       .execute();
-    return { items: revisions.map((revision) => this.serializeRevision(revision, true)) };
+    return {
+      items: revisions.map((revision) =>
+        this.serializeRevision(revision, true),
+      ),
+    };
   }
 
   async listSyncRuns(pageId: string, user: User) {
@@ -1091,7 +1086,8 @@ export class PageTemplateService implements OnModuleInit, OnModuleDestroy {
       .where('id', '=', runId)
       .where('templatePageId', '=', template.id)
       .executeTakeFirst();
-    if (!run) throw new NotFoundException('Template synchronization run not found');
+    if (!run)
+      throw new NotFoundException('Template synchronization run not found');
     const dispatchId = uuid7();
     await executeTx(this.db, async (trx) => {
       await trx
@@ -1163,7 +1159,8 @@ export class PageTemplateService implements OnModuleInit, OnModuleDestroy {
       .where('childPageId', '=', page.id)
       .where('instanceKind', '=', 'synced')
       .executeTakeFirst();
-    if (!instance) throw new NotFoundException('Synchronized template link not found');
+    if (!instance)
+      throw new NotFoundException('Synchronized template link not found');
     if (instance.status === 'detached') {
       return { pageId: page.id, detached: true, idempotent: true };
     }
@@ -1751,9 +1748,7 @@ export class PageTemplateService implements OnModuleInit, OnModuleDestroy {
       succeededCount: Number(run.succeededCount),
       failedCount: Number(run.failedCount),
       errorCode: run.errorCode,
-      startedAt: run.startedAt
-        ? new Date(run.startedAt).toISOString()
-        : null,
+      startedAt: run.startedAt ? new Date(run.startedAt).toISOString() : null,
       completedAt: run.completedAt
         ? new Date(run.completedAt).toISOString()
         : null,
@@ -1769,7 +1764,9 @@ export class PageTemplateService implements OnModuleInit, OnModuleDestroy {
     let failed = 0;
     for (const candidate of candidates) {
       try {
-        if (await this.migrateLegacyPageEmbedsForPage(candidate.referencePageId)) {
+        if (
+          await this.migrateLegacyPageEmbedsForPage(candidate.referencePageId)
+        ) {
           migrated += 1;
         }
       } catch (error) {
@@ -1975,6 +1972,7 @@ export class PageTemplateService implements OnModuleInit, OnModuleDestroy {
     issues: LegacyMigrationIssue[];
     migratedEmbedCount: number;
   }> {
+    const maxDepth = this.pageEmbedService.getMaxDepth();
     const attachmentPlans: LegacyAttachmentCopyPlan[] = [];
     const issues: LegacyMigrationIssue[] = [];
     let migratedEmbedCount = 0;
@@ -2003,19 +2001,25 @@ export class PageTemplateService implements OnModuleInit, OnModuleDestroy {
           typeof node.attrs?.id === 'string' && node.attrs.id.length > 0
             ? node.attrs.id
             : `legacy:${nodePath.join('.')}`;
-        const source = sourcePageId
-          ? await this.pageRepo.findById(sourcePageId, { includeContent: true })
-          : null;
+        const depthExceeded = ancestors.size > maxDepth;
+        const source =
+          sourcePageId && !depthExceeded
+            ? await this.pageRepo.findById(sourcePageId, {
+                includeContent: true,
+              })
+            : null;
         const unavailableCode = !sourcePageId
           ? 'page_embed_invalid_source_page_id'
-          : !source || source.deletedAt
-            ? 'page_embed_source_unavailable'
-            : source.workspaceId !== target.workspaceId ||
-                source.spaceId !== target.spaceId
-              ? 'page_embed_source_scope_mismatch'
-              : ancestors.has(source.id)
-                ? 'page_embed_cycle'
-                : null;
+          : depthExceeded
+            ? 'page_embed_depth_exceeded'
+            : !source || source.deletedAt
+              ? 'page_embed_source_unavailable'
+              : source.workspaceId !== target.workspaceId ||
+                  source.spaceId !== target.spaceId
+                ? 'page_embed_source_scope_mismatch'
+                : ancestors.has(source.id)
+                  ? 'page_embed_cycle'
+                  : null;
         if (unavailableCode) {
           issues.push({
             referenceNodeId,
@@ -2026,16 +2030,43 @@ export class PageTemplateService implements OnModuleInit, OnModuleDestroy {
           continue;
         }
 
-        const sourceContent = await this.getLiveContent(source!.id, actor).catch(
-          () => source!.content,
+        const sourceAccess = await this.pageAccessService
+          .getEffectiveAccess(source!, actor)
+          .catch(() => null);
+        if (!sourceAccess?.capabilities.canRead) {
+          issues.push({
+            referenceNodeId,
+            sourcePageId,
+            errorCode: 'page_embed_source_no_access',
+          });
+          output.push(this.legacyUnavailableCallout());
+          continue;
+        }
+
+        const audienceCompatible = await this.canMaterializeLegacySource(
+          target,
+          source!,
         );
+        if (!audienceCompatible) {
+          issues.push({
+            referenceNodeId,
+            sourcePageId,
+            errorCode: 'page_embed_source_audience_mismatch',
+          });
+          output.push(this.legacyUnavailableCallout());
+          continue;
+        }
+
+        const sourceContent = await this.getLiveContent(
+          source!.id,
+          actor,
+        ).catch(() => source!.content);
         const materialized = materializePageContent(sourceContent, {
           sourcePageId: source!.id,
           targetPageId: target.id,
         });
-        const rewritten = rewriteAttachmentsForUnsync(
-          materialized,
-          () => uuid7(),
+        const rewritten = rewriteAttachmentsForUnsync(materialized, () =>
+          uuid7(),
         );
         if (rewritten.copies.length > 0) {
           attachmentPlans.push({ source: source!, copies: rewritten.copies });
@@ -2051,23 +2082,79 @@ export class PageTemplateService implements OnModuleInit, OnModuleDestroy {
         issues.push(...nested.issues);
         migratedEmbedCount += nested.migratedEmbedCount;
         const nestedDocument = nested.content as any;
-        output.push(...(Array.isArray(nestedDocument?.content)
-          ? nestedDocument.content
-          : [this.legacyUnavailableCallout()]));
+        output.push(
+          ...(Array.isArray(nestedDocument?.content)
+            ? nestedDocument.content
+            : [this.legacyUnavailableCallout()]),
+        );
       }
       return output;
     };
 
-    const document = input && typeof input === 'object'
-      ? structuredClone(input as any)
-      : { type: 'doc', content: [] };
+    const document =
+      input && typeof input === 'object'
+        ? structuredClone(input as any)
+        : { type: 'doc', content: [] };
     document.type = 'doc';
     document.content = await visitNodes(
       Array.isArray(document.content) ? document.content : [],
       path,
     );
-    if (document.content.length === 0) document.content = [{ type: 'paragraph' }];
+    if (document.content.length === 0)
+      document.content = [{ type: 'paragraph' }];
     return { content: document, attachmentPlans, issues, migratedEmbedCount };
+  }
+
+  private async canMaterializeLegacySource(
+    target: Page,
+    source: Page,
+  ): Promise<boolean> {
+    const publicAccess = await sql<{ isShared: boolean }>`
+      with recursive page_ancestors as (
+        select id, parent_page_id, workspace_id, space_id, 0 as level
+        from pages
+        where id = ${target.id}::uuid
+          and deleted_at is null
+        union all
+        select p.id, p.parent_page_id, p.workspace_id, p.space_id, a.level + 1
+        from pages p
+        inner join page_ancestors a on a.parent_page_id = p.id
+        where p.deleted_at is null
+          and a.level < ${MAX_PAGE_TREE_DEPTH}
+      )
+      select exists (
+        select 1
+        from page_ancestors a
+        inner join shares s on s.page_id = a.id
+        where s.workspace_id = ${target.workspaceId}::uuid
+          and s.space_id = ${target.spaceId}::uuid
+          and a.workspace_id = s.workspace_id
+          and a.space_id = s.space_id
+          and (a.level = 0 or s.include_sub_pages = true)
+      ) as "isShared"
+    `.execute(this.db);
+    if (publicAccess.rows[0]?.isShared) return false;
+
+    const users = await this.db
+      .selectFrom('users')
+      .select('id')
+      .where('workspaceId', '=', target.workspaceId)
+      .where('deletedAt', 'is', null)
+      .where('deactivatedAt', 'is', null)
+      .execute();
+    const candidateIds = users.map((candidate) => candidate.id);
+    const [targetReaders, sourceReaders] = await Promise.all([
+      this.pageAccessService.filterUsersWithPageReadAccess(
+        target.id,
+        candidateIds,
+      ),
+      this.pageAccessService.filterUsersWithPageReadAccess(
+        source.id,
+        candidateIds,
+      ),
+    ]);
+    const sourceReaderIds = new Set(sourceReaders);
+    return targetReaders.every((readerId) => sourceReaderIds.has(readerId));
   }
 
   private legacyUnavailableCallout() {
@@ -2094,6 +2181,8 @@ export class PageTemplateService implements OnModuleInit, OnModuleDestroy {
       .selectAll()
       .where('id', '=', page.creatorId)
       .where('workspaceId', '=', page.workspaceId)
+      .where('deletedAt', 'is', null)
+      .where('deactivatedAt', 'is', null)
       .executeTakeFirst();
     if (creator) return creator;
     return (
@@ -2125,13 +2214,11 @@ export class PageTemplateService implements OnModuleInit, OnModuleDestroy {
         })),
       )
       .onConflict((conflict) =>
-        conflict
-          .columns(['consumerPageId', 'referenceNodeId'])
-          .doUpdateSet({
-            sourcePageId: sql`excluded.source_page_id`,
-            errorCode: sql`excluded.error_code`,
-            updatedAt: new Date(),
-          }),
+        conflict.columns(['consumerPageId', 'referenceNodeId']).doUpdateSet({
+          sourcePageId: sql`excluded.source_page_id`,
+          errorCode: sql`excluded.error_code`,
+          updatedAt: new Date(),
+        }),
       )
       .execute();
   }
@@ -2149,7 +2236,9 @@ export class PageTemplateService implements OnModuleInit, OnModuleDestroy {
     const node = input as any;
     if (node.type === type) return true;
     return Array.isArray(node.content)
-      ? node.content.some((child: unknown) => this.containsNodeType(child, type))
+      ? node.content.some((child: unknown) =>
+          this.containsNodeType(child, type),
+        )
       : false;
   }
 
@@ -2369,7 +2458,12 @@ export class PageTemplateService implements OnModuleInit, OnModuleDestroy {
           'template_sync',
           `template-sync:${run.id}:${instance.id}:${attempt}`,
           actor,
-          { runId: run.id, instanceId: instance.id, revision: run.revision, attempt },
+          {
+            runId: run.id,
+            instanceId: instance.id,
+            revision: run.revision,
+            attempt,
+          },
           {
             sourcePageId: run.templatePageId,
             consumerPageId: page.id,
@@ -2488,9 +2582,7 @@ export class PageTemplateService implements OnModuleInit, OnModuleDestroy {
             })),
           )
           .onConflict((conflict) =>
-            conflict
-              .columns(['instanceId', 'sourceAttachmentId'])
-              .doNothing(),
+            conflict.columns(['instanceId', 'sourceAttachmentId']).doNothing(),
           )
           .execute();
       });
@@ -2516,7 +2608,11 @@ export class PageTemplateService implements OnModuleInit, OnModuleDestroy {
         .execute();
       await trx
         .updateTable('pageTemplateInstances')
-        .set({ status: 'error', lastErrorCode: errorCode, updatedAt: new Date() })
+        .set({
+          status: 'error',
+          lastErrorCode: errorCode,
+          updatedAt: new Date(),
+        })
         .where('id', '=', instanceId)
         .where('status', '!=', 'detached')
         .execute();

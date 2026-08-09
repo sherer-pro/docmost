@@ -167,6 +167,7 @@ function TransclusionReferenceBody({
               variant="subtle"
               color="gray"
               size="sm"
+              aria-label={t("Refresh")}
               onClick={handleRefresh}
               loading={refreshing}
               disabled={!sourcePageId || !transclusionId}
@@ -182,6 +183,7 @@ function TransclusionReferenceBody({
                 variant="subtle"
                 color="gray"
                 size="sm"
+                aria-label={t("Edit source")}
                 style={{
                   textDecoration: "none",
                   borderBottom: "none",
@@ -193,7 +195,12 @@ function TransclusionReferenceBody({
           )}
           <Menu position="bottom-end" withinPortal onChange={trackOpen}>
             <Menu.Target>
-              <ActionIcon variant="subtle" color="gray" size="sm">
+              <ActionIcon
+                variant="subtle"
+                color="gray"
+                size="sm"
+                aria-label={t("More options")}
+              >
                 <IconDots size={14} />
               </ActionIcon>
             </Menu.Target>
@@ -230,6 +237,7 @@ function TransclusionReferenceBody({
         <TransclusionContent
           content={result.content}
           renderEditor={renderEditor}
+          version={result.sourceUpdatedAt}
         />
       ) : result.status === "no_access" ? (
         <NoAccessPlaceholder />
