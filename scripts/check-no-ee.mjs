@@ -32,16 +32,20 @@ export const FORBIDDEN_PATTERNS = [
   {
     name: "EE or enterprise module specifier",
     regex:
-      /\b(?:from\s+|import\s*\(|require\s*\()\s*['"](?:@docmost\/ee(?:\/[^'"]*)?|(?:\.{0,2}[/\\])*(?:ee|enterprise)(?:[/\\][^'"]*)?)['"]/,
+      /\b(?:from\s+|import\s*\(|require(?:\.resolve)?\s*\()\s*(?:\/\*[\s\S]*?\*\/\s*)?["'`](?:@docmost\/ee(?:\/[^"'`]*)?|(?:[^"'`]*[/\\])?(?:ee|enterprise)(?:[/\\][^"'`]*)?)["'`]/,
+    scanTextContract: true,
   },
   {
     name: "retired license, billing, or trial runtime symbol",
     regex:
       /\b(?:EE_LICENSE_KEY|ENTERPRISE_LICENSE_KEY|DOCMOST_LICENSE_KEY|LICENSE_KEY|BILLING_API_KEY|BILLING_URL|TRIAL_DAYS)\b/,
+    scanTextContract: true,
   },
   {
-    name: "retired license or billing API route",
-    regex: /['"]\/(?:api\/)?(?:license|billing)(?:\/[^'"]*)?['"]/,
+    name: "retired license or billing API or settings route",
+    regex:
+      /\/(?:(?:api|settings)\/)?(?:license|billing)(?:\/[A-Za-z0-9._~!$&'()*+,;=:@%/-]+)?\b|\/settings\/(?:trial|plans?)(?:\/[A-Za-z0-9._~!$&'()*+,;=:@%/-]+)?\b/,
+    scanTextContract: true,
   },
   {
     name: "retired billing or trial runtime reference",
@@ -56,6 +60,7 @@ export const FORBIDDEN_PATTERNS = [
   {
     name: "historical EE source path reference",
     regex: /apps[/\\](?:client|server)[/\\]src[/\\]ee\b|packages[/\\]ee\b/,
+    scanTextContract: true,
   },
 ];
 
@@ -82,6 +87,14 @@ const SCANNED_BASENAMES = new Set([
   "pnpm-workspace.yaml",
 ]);
 
+const TEXT_CONTRACT_EXTENSIONS = new Set([
+  ".css",
+  ".html",
+  ".md",
+  ".scss",
+  ".svg",
+]);
+
 const IGNORED_FILES = new Set([
   "scripts/check-no-ee.mjs",
   "scripts/check-no-ee.test.mjs",
@@ -106,6 +119,10 @@ function shouldScan(file) {
     basename.startsWith(".env") ||
     basename.startsWith("Dockerfile.")
   );
+}
+
+function isTextContract(file) {
+  return TEXT_CONTRACT_EXTENSIONS.has(path.posix.extname(file));
 }
 
 export function auditNoEe(repoRoot = defaultRepoRoot) {
@@ -135,7 +152,8 @@ export function auditNoEe(repoRoot = defaultRepoRoot) {
   for (const file of trackedFiles(repoRoot)) {
     if (IGNORED_FILES.has(file)) continue;
     if (IGNORED_PREFIXES.some((prefix) => file.startsWith(prefix))) continue;
-    if (!shouldScan(file)) continue;
+    const textContract = isTextContract(file);
+    if (!shouldScan(file) && !textContract) continue;
 
     let content;
     try {
@@ -145,6 +163,7 @@ export function auditNoEe(repoRoot = defaultRepoRoot) {
     }
 
     for (const pattern of FORBIDDEN_PATTERNS) {
+      if (textContract && !pattern.scanTextContract) continue;
       if (
         pattern.allowHistoricalMigration &&
         HISTORICAL_EE_MIGRATIONS.has(file)
