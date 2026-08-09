@@ -96,6 +96,9 @@ COPY --chown=node:node --from=builder /app/packages/api-contract/package.json /a
 # Copy production dependencies without carrying package-manager tooling into runtime.
 COPY --chown=node:node --from=runtime-dependencies /app/node_modules /app/node_modules
 
+RUN find /app/apps /app/packages -type f \( -name '*.map' -o -name '*.d.ts' \) -delete \
+  && find /app/node_modules -type f \( -name '.env' -o -name '.env.*' \) -delete
+
 RUN rm -rf \
       /usr/local/lib/node_modules/npm \
       /usr/local/lib/node_modules/corepack \
