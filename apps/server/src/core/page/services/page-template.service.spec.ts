@@ -1,5 +1,6 @@
 jest.mock('lib0/decoding.js', () => ({ readVarString: jest.fn() }));
-import { NotFoundException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
+import { hashProseMirrorJson } from '../../../common/helpers/prosemirror/ai-page-operation';
 import { PageTemplateService } from './page-template.service';
 
 const user = {
@@ -19,6 +20,7 @@ function buildService(options?: {
   spaceAbility?: any;
   policy?: any;
   transclusion?: any;
+  queueOutbox?: any;
 }) {
   const pageRepo = options?.pageRepo ?? { findById: jest.fn() };
   const pageService = options?.pageService ?? { create: jest.fn() };
@@ -55,6 +57,7 @@ function buildService(options?: {
     { getMaxDepth: () => 5 } as any,
     options?.transclusion ?? ({} as any),
     {} as any,
+    options?.queueOutbox,
   );
   return {
     service,
@@ -67,6 +70,196 @@ function buildService(options?: {
 }
 
 describe('PageTemplateService space boundaries', () => {
+  it('keeps stable error codes and redacts raw failure messages', () => {
+    const { service } = buildService();
+
+    expect(
+      (service as any).errorCode(
+        new ConflictException({
+          code: 'page_template_sync_conflict',
+          message: 'The template changed',
+        }),
+      ),
+    ).toBe('page_template_sync_conflict');
+    expect(
+      (service as any).errorCode(
+        new Error(
+          'storage failed for /private/G24_CANARY_SECRET/customer.pdf',
+        ),
+      ),
+    ).toBe('page_template_operation_failed');
+    expect(
+      (service as any).errorCode(
+        new Error('duplicate_attachments_partial_failure'),
+      ),
+    ).toBe('page_template_operation_failed');
+  });
+
+  it('persists a retry dispatch in the run transaction before signaling the queue', async () => {
+    const runId = '019fdaa0-0000-7000-8000-000000000099';
+    const runQuery: Record<string, jest.Mock> = {};
+    for (const method of ['selectAll', 'where']) {
+      runQuery[method] = jest.fn(() => runQuery);
+    }
+    runQuery.executeTakeFirst = jest.fn().mockResolvedValue({
+      id: runId,
+      templatePageId: sourcePageId,
+    });
+    const updateQuery = () => {
+      const query: Record<string, jest.Mock> = {};
+      query.set = jest.fn(() => query);
+      query.where = jest.fn(() => query);
+      query.execute = jest.fn().mockResolvedValue(undefined);
+      return query;
+    };
+    const trx = { updateTable: jest.fn(() => updateQuery()) };
+    let transactionCommitted = false;
+    const db = {
+      selectFrom: jest.fn(() => runQuery),
+      transaction: () => ({
+        execute: async (callback: (trx: any) => Promise<unknown>) => {
+          const result = await callback(trx);
+          transactionCommitted = true;
+          return result;
+        },
+      }),
+    };
+    const queueOutbox = {
+      enqueuePageTemplateSync: jest.fn(async (_payload, _dispatchId, tx) => {
+        expect(tx).toBe(trx);
+        expect(transactionCommitted).toBe(false);
+      }),
+      kick: jest.fn(() => expect(transactionCommitted).toBe(true)),
+    };
+    const { service } = buildService({ db, queueOutbox });
+    jest
+      .spyOn(service as any, 'requireManagedSyncedTemplate')
+      .mockResolvedValue({ id: sourcePageId });
+
+    await expect(
+      service.retrySyncRun(sourcePageId, runId, user),
+    ).resolves.toEqual({ accepted: true, runId });
+
+    expect(queueOutbox.enqueuePageTemplateSync).toHaveBeenCalledWith(
+      { runId },
+      expect.any(String),
+      trx,
+    );
+    expect(queueOutbox.kick).toHaveBeenCalledTimes(1);
+  });
+
+  it('commits a published revision and its dispatch before signaling the queue', async () => {
+    const draft = { type: 'doc', content: [{ type: 'paragraph' }] };
+    const template = {
+      id: sourcePageId,
+      workspaceId: user.workspaceId,
+      spaceId: sourceSpaceId,
+      templateKind: 'synced',
+      templateArchivedAt: null,
+    };
+    const revision = {
+      id: '019fdaa0-0000-7000-8000-000000000091',
+      revision: 1,
+    };
+    const run = {
+      id: '019fdaa0-0000-7000-8000-000000000092',
+      status: 'pending',
+    };
+    const selectQuery = (result: unknown, many = false) => {
+      const query: Record<string, jest.Mock> = {};
+      for (const method of ['select', 'where']) {
+        query[method] = jest.fn(() => query);
+      }
+      query.executeTakeFirst = jest.fn().mockResolvedValue(result);
+      query.execute = jest.fn().mockResolvedValue(many ? result : []);
+      return query;
+    };
+    const insertQuery = (result?: unknown) => {
+      const query: Record<string, jest.Mock> = {};
+      query.values = jest.fn(() => query);
+      query.returningAll = jest.fn(() => query);
+      query.executeTakeFirstOrThrow = jest.fn().mockResolvedValue(result);
+      query.execute = jest.fn().mockResolvedValue(undefined);
+      return query;
+    };
+    const trx = {
+      selectFrom: jest.fn((table: string) =>
+        table === 'pageTemplateRevisions'
+          ? selectQuery({ revision: 0 })
+          : selectQuery(
+              [
+                {
+                  id: '019fdaa0-0000-7000-8000-000000000093',
+                  childPageId: consumerPageId,
+                },
+              ],
+              true,
+            ),
+      ),
+      insertInto: jest.fn((table: string) => {
+        if (table === 'pageTemplateRevisions') return insertQuery(revision);
+        if (table === 'pageTemplateSyncRuns') return insertQuery(run);
+        return insertQuery();
+      }),
+    };
+    let transactionCommitted = false;
+    const db = {
+      transaction: () => ({
+        execute: async (callback: (trx: any) => Promise<unknown>) => {
+          const result = await callback(trx);
+          transactionCommitted = true;
+          return result;
+        },
+      }),
+    };
+    const queueOutbox = {
+      enqueuePageTemplateSync: jest.fn(async (_payload, _dispatchId, tx) => {
+        expect(tx).toBe(trx);
+        expect(transactionCommitted).toBe(false);
+      }),
+      kick: jest.fn(() => expect(transactionCommitted).toBe(true)),
+    };
+    const { service } = buildService({
+      db,
+      pageRepo: { findById: jest.fn().mockResolvedValue(template) },
+      queueOutbox,
+    });
+    jest
+      .spyOn(service as any, 'requireManagedSyncedTemplate')
+      .mockResolvedValue(template);
+    jest.spyOn(service as any, 'getLiveContent').mockResolvedValue(draft);
+    jest
+      .spyOn(service as any, 'normalizeDraftForPublication')
+      .mockReturnValue(draft);
+    jest.spyOn(service as any, 'buildPublishPreflight').mockResolvedValue({
+      requiresDestructiveConfirmation: false,
+    });
+    jest
+      .spyOn(service as any, 'serializeRevision')
+      .mockReturnValue({ id: revision.id });
+    jest
+      .spyOn(service as any, 'serializeSyncRun')
+      .mockReturnValue({ id: run.id });
+
+    await expect(
+      service.publish(
+        sourcePageId,
+        { draftHash: hashProseMirrorJson(draft as any) },
+        user,
+      ),
+    ).resolves.toEqual({
+      revision: { id: revision.id },
+      syncRun: { id: run.id },
+    });
+
+    expect(queueOutbox.enqueuePageTemplateSync).toHaveBeenCalledWith(
+      { runId: run.id },
+      revision.id,
+      trx,
+    );
+    expect(queueOutbox.kick).toHaveBeenCalledTimes(1);
+  });
+
   it('returns the readable source template for a completed snapshot', async () => {
     const results = [null, { sourcePageId }, { revision: null }];
     const db = {
