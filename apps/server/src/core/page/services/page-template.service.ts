@@ -3389,11 +3389,12 @@ export class PageTemplateService implements OnModuleInit, OnModuleDestroy {
       error && typeof error === 'object' && 'getResponse' in error
         ? (error as any).getResponse()
         : undefined;
-    return (
-      response?.code ??
-      (error as Error)?.message ??
-      'page_template_operation_failed'
-    );
+    const code = response?.code;
+    return typeof code === 'string' &&
+      code.length <= 120 &&
+      /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/.test(code)
+      ? code
+      : 'page_template_operation_failed';
   }
 
   private conflict(code: string, message: string): ConflictException {
