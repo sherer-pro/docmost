@@ -1,13 +1,18 @@
 import { createRequire } from "node:module";
 import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { request } from "@playwright/test";
+import { sanitizeAuditArtifacts } from "./sanitize-artifacts.mjs";
 
 const require = createRequire(import.meta.url);
 const clientRoot = path.resolve(import.meta.dirname, "../..");
 const repoRoot = path.resolve(clientRoot, "../..");
-const auditRoot = path.join(repoRoot, "output/audit/editor-2026-08-06");
+const auditRoot = path.resolve(
+  process.env.DOCMOST_EDITOR_AUDIT_ROOT ??
+    path.join(repoRoot, "output/audit/page-templates-transclusion-2026-08-09"),
+);
 const statePath = path.join(auditRoot, "audit-state.json");
 const defectsPath = path.join(auditRoot, "confirmed-defects.json");
 const baseURL = (
@@ -65,6 +70,82 @@ async function createApi() {
   });
 }
 
+async function provisionSharedAuditMember(api, spaceId) {
+  const workspace = await responseJson(await api.get("/api/workspace/info"));
+  const emailDomain = workspace.emailDomains?.[0] ?? "example.com";
+  const suffix = randomBytes(5).toString("hex");
+  const email = `templates-transclusion-${suffix}@${emailDomain}`;
+  const password = `Aa1!${randomBytes(18).toString("base64url")}`;
+
+  await responseJson(
+    await api.post("/api/workspace/invites/create", {
+      data: { emails: [email], role: "member", groupIds: [] },
+    }),
+  );
+  const invites = await responseJson(
+    await api.get("/api/workspace/invites?limit=100"),
+  );
+  const invitation = (invites.items ?? invites.data ?? []).find(
+    (item) => item.email === email,
+  );
+  if (!invitation) throw new Error("Shared audit invitation was not found");
+  const link = await responseJson(
+    await api.post("/api/workspace/invites/link", {
+      data: { invitationId: invitation.id },
+    }),
+  );
+  const invitationUrl = new URL(link.inviteLink);
+  const invitationId = invitationUrl.pathname.split("/").filter(Boolean).at(-1);
+  const token = invitationUrl.searchParams.get("token");
+  if (!invitationId || !token) {
+    throw new Error("Shared audit invitation link is incomplete");
+  }
+
+  const memberApi = await request.newContext({
+    baseURL: apiBaseURL,
+    extraHTTPHeaders: { Origin: apiOrigin, Referer: `${apiOrigin}/` },
+  });
+  try {
+    await responseJson(
+      await memberApi.post("/api/workspace/invites/accept", {
+        data: {
+          invitationId,
+          token,
+          name: "Templates and transclusion audit member",
+          password,
+        },
+      }),
+    );
+    const member = await responseJson(await memberApi.get("/api/users/me"));
+    const storage = await memberApi.storageState();
+    const authToken = storage.cookies.find(
+      (cookie) => cookie.name === "authToken",
+    )?.value;
+    const csrfToken = storage.cookies.find(
+      (cookie) => cookie.name === "csrfToken",
+    )?.value;
+    if (!authToken || !csrfToken || !member.user?.id) {
+      throw new Error("Shared audit member session is incomplete");
+    }
+    await responseJson(
+      await api.post("/api/spaces/members/add", {
+        data: {
+          spaceId,
+          role: "writer",
+          userIds: [member.user.id],
+          groupIds: [],
+        },
+      }),
+    );
+    process.env.DOCMOST_AUDIT_MEMBER_AUTH_TOKEN = authToken;
+    process.env.DOCMOST_AUDIT_MEMBER_CSRF_TOKEN = csrfToken;
+    process.env.DOCMOST_AUDIT_MEMBER_USER_ID = member.user.id;
+    return member.user.id;
+  } finally {
+    await memberApi.dispose();
+  }
+}
+
 async function ensureRuntimeAuth() {
   if (
     process.env.DOCMOST_AUTH_TOKEN?.trim() &&
@@ -104,10 +185,14 @@ async function ensureRuntimeAuth() {
 
 async function runPlaywright() {
   const cli = require.resolve("@playwright/test/cli");
+  const selectedFiles = (process.env.DOCMOST_EDITOR_AUDIT_FILES ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
   return new Promise((resolve, reject) => {
     const child = spawn(
       process.execPath,
-      [cli, "test", "--config=playwright.editor.config.ts"],
+      [cli, "test", "--config=playwright.editor.config.ts", ...selectedFiles],
       {
         cwd: clientRoot,
         env: process.env,
@@ -138,6 +223,7 @@ const api = await createApi();
 let state;
 let exitCode = 1;
 let originalWorkspaceTemplatePolicy;
+let sharedAuditMemberUserId;
 
 try {
   const runId = new Date()
@@ -148,7 +234,7 @@ try {
     await api.get("/api/pages/templates/policies/workspace"),
   );
   if (!originalWorkspaceTemplatePolicy.systemEnabled) {
-    throw new Error("Live page embeds are disabled by the deployment policy");
+    throw new Error("Page templates are disabled by the deployment policy");
   }
   if (!originalWorkspaceTemplatePolicy.enabled) {
     await responseJson(
@@ -191,16 +277,37 @@ try {
         ...spaceTemplatePolicy,
         templatesEnabled: true,
         allowCreateTemplate: true,
-        allowSnapshot: true,
-        allowLiveEmbed: true,
-        allowPublicLiveEmbed: true,
+        allowRegularTemplate: true,
+        allowSyncedTemplate: true,
         expectedRevision: spaceTemplatePolicy.revision,
       },
     }),
   );
+  try {
+    sharedAuditMemberUserId = await provisionSharedAuditMember(api, space.id);
+  } catch (error) {
+    await responseJson(await api.delete(`/api/spaces/${space.id}`)).catch(
+      () => undefined,
+    );
+    state.retained = false;
+    state.deletedAt = new Date().toISOString();
+    state.setupFailure = true;
+    await fs.writeFile(
+      statePath,
+      `${JSON.stringify(state, null, 2)}\n`,
+      "utf8",
+    );
+    throw error;
+  }
   await fs.writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
 
   exitCode = await runPlaywright();
+  const sanitization = await sanitizeAuditArtifacts(auditRoot);
+  if (sanitization.credentialFindings > 0) {
+    throw new Error(
+      "Sanitized editor audit artifacts still contain credentials",
+    );
+  }
   const confirmedDefects = JSON.parse(await fs.readFile(defectsPath, "utf8"));
   if (exitCode === 0 && confirmedDefects.length === 0) {
     await responseJson(await api.delete(`/api/spaces/${state.spaceId}`));
@@ -224,6 +331,16 @@ try {
     );
   }
 } finally {
+  if (sharedAuditMemberUserId) {
+    await responseJson(
+      await api.post("/api/workspace/members/delete", {
+        data: { userId: sharedAuditMemberUserId },
+      }),
+    ).catch(() => undefined);
+  }
+  delete process.env.DOCMOST_AUDIT_MEMBER_AUTH_TOKEN;
+  delete process.env.DOCMOST_AUDIT_MEMBER_CSRF_TOKEN;
+  delete process.env.DOCMOST_AUDIT_MEMBER_USER_ID;
   if (
     originalWorkspaceTemplatePolicy &&
     originalWorkspaceTemplatePolicy.systemEnabled

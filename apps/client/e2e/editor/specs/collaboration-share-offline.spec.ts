@@ -1,6 +1,4 @@
-import { randomBytes } from "node:crypto";
 import {
-  apiGet,
   apiPost,
   createAdminApi,
   createPage,
@@ -16,15 +14,11 @@ import {
   recordDefect,
   test,
 } from "../support/audit-test";
-
-function unwrap<T>(payload: any): T {
-  return payload &&
-    typeof payload === "object" &&
-    "success" in payload &&
-    "data" in payload
-    ? (payload.data as T)
-    : (payload as T);
-}
+import {
+  provisionAuditMember,
+  removeAuditMember,
+  type AuditMember,
+} from "../support/member";
 
 test("collaborative editing, public readonly share and offline interruption", async ({
   page,
@@ -33,9 +27,6 @@ test("collaborative editing, public readonly share and offline interruption", as
 }, testInfo) => {
   const api = await createAdminApi();
   const state = await loadAuditState();
-  const invitationSuffix = randomBytes(4).toString("hex");
-  const alias = `editor-${invitationSuffix}@example.com`;
-  const password = `Aa1!${randomBytes(18).toString("base64url")}`;
   const auditPage = await createPage(
     api,
     state.spaceId,
@@ -50,63 +41,17 @@ test("collaborative editing, public readonly share and offline interruption", as
       ],
     },
   );
-  let secondUserId: string | undefined;
+  let member: AuditMember | undefined;
   let secondContext: Awaited<ReturnType<typeof browser.newContext>> | undefined;
   let shareId: string | undefined;
 
   try {
-    await apiPost(api, "/api/workspace/invites/create", {
-      emails: [alias],
-      role: "member",
-      groupIds: [],
-    });
-    const invites = await apiGet<any>(api, "/api/workspace/invites?limit=100");
-    const invitation = (invites.items ?? invites.data ?? []).find(
-      (item: any) => item.email === alias,
-    );
-    expect(invitation, "test-user invitation").toBeTruthy();
-    const link = await apiPost<{ inviteLink: string }>(
+    member = await provisionAuditMember({
       api,
-      "/api/workspace/invites/link",
-      {
-        invitationId: invitation.id,
-      },
-    );
-    const invitationUrl = new URL(link.inviteLink);
-    const invitationId = invitationUrl.pathname
-      .split("/")
-      .filter(Boolean)
-      .at(-1)!;
-    const token = invitationUrl.searchParams.get("token")!;
-    secondContext = await browser.newContext({
-      baseURL: baseUrl(),
-      locale: "en-US",
-    });
-    const accept = await secondContext.request.post(
-      `${baseUrl()}/api/workspace/invites/accept`,
-      {
-        data: {
-          invitationId,
-          token,
-          name: "Editor Audit Collaborator",
-          password,
-        },
-        headers: { Origin: baseUrl(), Referer: `${baseUrl()}/` },
-      },
-    );
-    expect(accept.ok()).toBeTruthy();
-    const secondInfoResponse = await secondContext.request.get(
-      `${baseUrl()}/api/users/me`,
-    );
-    expect(secondInfoResponse.ok()).toBeTruthy();
-    const secondInfo = unwrap<any>(await secondInfoResponse.json());
-    secondUserId = secondInfo.user.id;
-    await apiPost(api, "/api/spaces/members/add", {
       spaceId: state.spaceId,
       role: "writer",
-      userIds: [secondUserId],
-      groupIds: [],
     });
+    secondContext = member.context;
 
     const secondPage = await secondContext.newPage();
     const url = pageUrl(state, auditPage);
@@ -216,12 +161,7 @@ test("collaborative editing, public readonly share and offline interruption", as
         () => undefined,
       );
     }
-    await secondContext?.close().catch(() => undefined);
-    if (secondUserId) {
-      await apiPost(api, "/api/workspace/members/delete", {
-        userId: secondUserId,
-      }).catch(() => undefined);
-    }
+    await removeAuditMember(api, member);
     await api.dispose();
   }
 });
