@@ -27,9 +27,9 @@ import { CommonSecurityModule } from './common/security/security.module';
   imports: [
     LoggerModule,
     CommonSecurityModule,
-    CoreModule,
     DatabaseModule,
     EnvironmentModule,
+    CoreModule,
     RedisModule.forRootAsync({
       useClass: RedisConfigService,
     }),
