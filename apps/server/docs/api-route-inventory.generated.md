@@ -118,6 +118,7 @@
 | GET | `/health/live` | `apps/server/src/integrations/health/health.controller.ts` |
 | POST | `/labels` | `apps/server/src/core/label/label.controller.ts` |
 | POST | `/labels/pages` | `apps/server/src/core/label/label.controller.ts` |
+| POST | `/mfa/cancel-login` | `apps/server/src/core/mfa/mfa.controller.ts` |
 | POST | `/mfa/disable` | `apps/server/src/core/mfa/mfa.controller.ts` |
 | POST | `/mfa/enable` | `apps/server/src/core/mfa/mfa.controller.ts` |
 | POST | `/mfa/enable-required` | `apps/server/src/core/mfa/mfa.controller.ts` |
