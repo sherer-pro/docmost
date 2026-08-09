@@ -76,11 +76,12 @@ export class AuthController {
   @Post('setup')
   @CsrfExempt()
   async setupWorkspace(
+    @Req() req: FastifyRequest,
     @Res({ passthrough: true }) res: FastifyReply,
     @Body() createAdminUserDto: CreateAdminUserDto,
   ) {
     const { workspace, authToken } =
-      await this.authService.setup(createAdminUserDto);
+      await this.authService.setup(createAdminUserDto, req);
 
     this.authCookieService.setAuthCookies(res, authToken);
     return workspace;
@@ -122,6 +123,7 @@ export class AuthController {
   @UseGuards(AuthRateLimitGuard)
   @AuthRateLimit({ endpoint: 'passwordReset', accountField: 'token' })
   async passwordReset(
+    @Req() req: FastifyRequest,
     @Res({ passthrough: true }) res: FastifyReply,
     @Body() passwordResetDto: PasswordResetDto,
     @AuthWorkspace() workspace: Workspace,
@@ -129,6 +131,7 @@ export class AuthController {
     const result = await this.authService.passwordReset(
       passwordResetDto,
       workspace,
+      req,
     );
 
     if (result.requiresLogin) {
