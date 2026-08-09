@@ -179,6 +179,44 @@ describe('QueueOutboxService', () => {
     );
   });
 
+  it('cancels an expired invitation without sending mail', async () => {
+    const token = 'expired-token';
+    const tokenHash = createHash('sha256').update(token).digest('hex');
+    const { service, outboxRepo, mailService } = createHarness({
+      workspaceId: WORKSPACE_ID,
+      email: 'invitee@example.test',
+      tokenHash,
+      expiresAt: new Date(Date.now() - 1),
+    });
+    const entry = invitationEntry(token, tokenHash);
+    outboxRepo.claimNext.mockResolvedValueOnce(entry);
+
+    await service.processAvailable(1);
+
+    expect(mailService.sendEmail).not.toHaveBeenCalled();
+    expect(outboxRepo.markCancelled).toHaveBeenCalledWith(
+      entry.id,
+      expect.any(String),
+    );
+  });
+
+  it('fails a mismatched encrypted invitation secret without sending mail', async () => {
+    const token = 'stored-token';
+    const tokenHash = createHash('sha256').update('different-token').digest('hex');
+    const { service, outboxRepo, mailService } = createHarness();
+    const entry = invitationEntry(token, tokenHash);
+    outboxRepo.claimNext.mockResolvedValueOnce(entry);
+
+    await service.processAvailable(1);
+
+    expect(mailService.sendEmail).not.toHaveBeenCalled();
+    expect(outboxRepo.markFailed).toHaveBeenCalledWith(
+      entry.id,
+      expect.any(String),
+      'invitation_secret_hash_mismatch',
+    );
+  });
+
   it('marks an unencrypted invitation secret as a terminal failure', async () => {
     const tokenHash = createHash('sha256').update('token').digest('hex');
     const { service, outboxRepo } = createHarness();
@@ -230,6 +268,66 @@ describe('QueueOutboxService', () => {
       expect.any(Date),
       'transient_processing_error',
     );
+  });
+
+  it('uses bounded exponential retry delays', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-08-09T12:00:00.000Z'));
+    try {
+      const { service, outboxRepo, duplicatePageAttachments } =
+        createHarness();
+      duplicatePageAttachments.process.mockRejectedValueOnce(
+        new Error('storage unavailable'),
+      );
+      const entry = {
+        id: '00000000-0000-4000-8000-000000000009',
+        kind: QueueOutboxKind.DUPLICATE_PAGE_ATTACHMENTS,
+        payload: {
+          workspaceId: WORKSPACE_ID,
+          rootPageId: PAGE_ID,
+          newPageId: NEW_PAGE_ID,
+          spaceId: SPACE_ID,
+          attachmentMappings: [],
+        },
+        secretPayload: null,
+        attemptCount: 3,
+      } as any;
+      outboxRepo.claimNext.mockResolvedValueOnce(entry);
+
+      await service.processAvailable(1);
+
+      expect(outboxRepo.markForRetry).toHaveBeenCalledWith(
+        entry.id,
+        expect.any(String),
+        new Date('2026-08-09T12:00:20.000Z'),
+        'transient_processing_error',
+      );
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('leaves a sent side effect reclaimable when finalization loses the database', async () => {
+    const token = 'current-token';
+    const tokenHash = createHash('sha256').update(token).digest('hex');
+    const { service, outboxRepo, mailService } = createHarness({
+      workspaceId: WORKSPACE_ID,
+      email: 'invitee@example.test',
+      tokenHash,
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    const entry = invitationEntry(token, tokenHash);
+    outboxRepo.claimNext.mockResolvedValueOnce(entry);
+    outboxRepo.markCompleted.mockRejectedValueOnce(
+      new Error('database unavailable after send'),
+    );
+
+    await expect(service.processAvailable(1)).rejects.toThrow(
+      'database unavailable after send',
+    );
+
+    expect(mailService.sendEmail).toHaveBeenCalledTimes(1);
+    expect(outboxRepo.markForRetry).not.toHaveBeenCalled();
+    expect(outboxRepo.markFailed).not.toHaveBeenCalled();
   });
 
   it('fails a transient task after the bounded attempt budget', async () => {

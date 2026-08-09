@@ -143,18 +143,25 @@ After changing the schema or processing behavior, run:
 
 ```bash
 pnpm --filter ./apps/server migration:latest
-pnpm --filter ./apps/server test -- --runInBand \
+pnpm --filter ./apps/server test --runInBand \
   --runTestsByPath \
   src/integrations/queue/outbox/queue-outbox.service.spec.ts \
   src/integrations/queue/outbox/queue-outbox-bootstrap.service.spec.ts \
+  src/integrations/queue/services/duplicate-page-attachments.service.spec.ts \
   src/core/workspace/services/workspace-invitation.service.spec.ts \
-  src/core/page/services/page.service.duplicate.spec.ts
-pnpm --filter ./apps/server test:e2e -- --runInBand
+  src/core/page/services/page.service.duplicate.spec.ts \
+  src/core/page/services/page-template.service.spec.ts
+pnpm --filter ./apps/server test:e2e --runInBand \
+  --runTestsByPath test/app.e2e-spec.ts
 ```
 
-The e2e suite requires disposable PostgreSQL and Redis services and verifies a
+Do not insert an extra standalone `--` before the Jest options: pnpm passes it
+through literally and Jest can silently skip the requested paths or report that
+no tests were found.
+
+The targeted e2e spec requires disposable PostgreSQL and Redis services and verifies a
 fresh migrated `queue_outbox` schema, deduplication, expired-lease recovery,
-owner fencing, and real Redis lease ownership behavior.
+owner fencing, concurrent claims, and terminal secret cleanup.
 
 ## Aggregated push notification jobs
 

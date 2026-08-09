@@ -238,18 +238,26 @@ describe('server infrastructure (e2e)', () => {
 
     expect(id).toBeDefined();
     try {
-      const firstClaim = await outboxRepo.claimNext(firstLeaseToken, 60_000);
+      const [firstAttempt, competingAttempt] = await Promise.all([
+        outboxRepo.claimNext(firstLeaseToken, 60_000),
+        outboxRepo.claimNext(secondLeaseToken, 60_000),
+      ]);
+      const firstClaim = firstAttempt ?? competingAttempt;
+      const firstOwnerToken = firstAttempt
+        ? firstLeaseToken
+        : secondLeaseToken;
+      const takeoverToken = firstAttempt ? secondLeaseToken : firstLeaseToken;
       expect(firstClaim).toMatchObject({
         id,
         status: 'processing',
         attemptCount: 1,
-        leaseToken: firstLeaseToken,
+        leaseToken: firstOwnerToken,
       });
+      expect(firstAttempt === undefined || competingAttempt === undefined).toBe(
+        true,
+      );
       await expect(
-        outboxRepo.claimNext(secondLeaseToken, 60_000),
-      ).resolves.toBeUndefined();
-      await expect(
-        outboxRepo.renewLease(id!, secondLeaseToken, 60_000),
+        outboxRepo.renewLease(id!, takeoverToken, 60_000),
       ).resolves.toBe(false);
 
       await database`
@@ -258,18 +266,29 @@ describe('server infrastructure (e2e)', () => {
         where id = ${id!}::uuid
       `;
 
-      const reclaimed = await outboxRepo.claimNext(secondLeaseToken, 60_000);
+      const reclaimed = await outboxRepo.claimNext(takeoverToken, 60_000);
       expect(reclaimed).toMatchObject({
         id,
         status: 'processing',
         attemptCount: 2,
-        leaseToken: secondLeaseToken,
+        leaseToken: takeoverToken,
       });
       await expect(
-        outboxRepo.markCompleted(id!, firstLeaseToken),
+        outboxRepo.markCompleted(id!, firstOwnerToken),
       ).resolves.toBe(false);
       await expect(
-        outboxRepo.markCompleted(id!, secondLeaseToken),
+        outboxRepo.markForRetry(
+          id!,
+          firstOwnerToken,
+          new Date(),
+          'forged_owner',
+        ),
+      ).resolves.toBe(false);
+      await expect(
+        outboxRepo.markFailed(id!, firstOwnerToken, 'forged_owner'),
+      ).resolves.toBe(false);
+      await expect(
+        outboxRepo.markCompleted(id!, takeoverToken),
       ).resolves.toBe(true);
 
       const [persisted] = await database<
