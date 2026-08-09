@@ -99,6 +99,7 @@ export class RedisSyncExtension<TCE extends CustomEvents> implements Extension {
   private readonly serverId: ServerId;
   private readonly customEventTTL: number;
   private readonly lockTTL: number;
+  private readonly onLeaseLoss?: Configuration<TCE>['onLeaseLoss'];
   private instance!: Hocuspocus;
   private destroyed = false;
   private readonly customEvents: TCE;
@@ -122,6 +123,7 @@ export class RedisSyncExtension<TCE extends CustomEvents> implements Extension {
       prefix,
       customEvents,
       customEventTTL,
+      onLeaseLoss,
     } = configuration;
     this.source = redis;
     this.pub = redis.duplicate();
@@ -131,6 +133,7 @@ export class RedisSyncExtension<TCE extends CustomEvents> implements Extension {
     this.serverId = serverId;
     this.lockTTL = lockTTL ?? 10_000;
     this.customEventTTL = customEventTTL ?? 30_000;
+    this.onLeaseLoss = onLeaseLoss;
     this.prefix = prefix ?? 'collab';
     this.lockPrefix = `${this.prefix}Lock`;
     this.msgChannel = `${this.prefix}Msg`;
@@ -431,6 +434,7 @@ export class RedisSyncExtension<TCE extends CustomEvents> implements Extension {
       }
 
       this.instance.closeConnections(documentName);
+      await this.onLeaseLoss?.(documentName);
       const document = this.instance.documents.get(documentName);
       if (document) {
         await this.instance.unloadDocument(document);

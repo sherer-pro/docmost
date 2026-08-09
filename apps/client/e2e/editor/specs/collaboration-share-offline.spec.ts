@@ -12,6 +12,7 @@ import {
   mainEditor,
   publicDocument,
   recordDefect,
+  runAxe,
   test,
 } from "../support/audit-test";
 import {
@@ -48,6 +49,7 @@ test("collaborative editing, public readonly share and offline interruption", as
   try {
     member = await provisionAuditMember({
       api,
+      browser,
       spaceId: state.spaceId,
       role: "writer",
     });
@@ -89,10 +91,21 @@ test("collaborative editing, public readonly share and offline interruption", as
     await page.keyboard.press("Control+End");
     await page.keyboard.type(" admin-edit");
     await expect(mainEditor(secondPage)).toContainText("admin-edit");
+    await page.keyboard.press("Control+b");
+    await page.keyboard.type(" bold-edit");
+    await page.keyboard.press("Control+b");
+    await expect(mainEditor(secondPage).locator("strong")).toContainText(
+      "bold-edit",
+    );
     await mainEditor(secondPage).click();
     await secondPage.keyboard.press("Control+End");
     await secondPage.keyboard.type(" collaborator-edit");
     await expect(mainEditor(page)).toContainText("collaborator-edit");
+    await secondPage.keyboard.press("Enter");
+    await secondPage.keyboard.type("/table");
+    await secondPage.getByText("Table", { exact: true }).click();
+    await expect(mainEditor(page).locator("table")).toHaveCount(1);
+    await runAxe(page, testInfo, ".ProseMirror", "collaboration-editor");
     await captureStep(page, testInfo, "06-collaboration-admin");
     await secondPage.close();
 
@@ -115,6 +128,7 @@ test("collaborative editing, public readonly share and offline interruption", as
       "contenteditable",
       "false",
     );
+    await runAxe(publicPage, testInfo, "main", "public-readonly-share");
     await captureStep(publicPage, testInfo, "07-public-readonly-share");
     await publicContext.close();
 
@@ -150,6 +164,7 @@ test("collaborative editing, public readonly share and offline interruption", as
           "The offline request failed as expected, but after an offline reload the page still showed only an unlabeled loading spinner instead of an explanatory fallback.",
       });
     }
+    await runAxe(page, testInfo, "body", "offline-interruption");
     await captureStep(page, testInfo, "08-offline-interruption");
     await context.setOffline(false);
     await page.reload();
