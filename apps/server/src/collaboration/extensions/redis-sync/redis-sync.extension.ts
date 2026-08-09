@@ -82,6 +82,7 @@ export function deserializeCustomEventError(
 export class RedisSyncExtension<TCE extends CustomEvents> implements Extension {
   priority = 1000;
   private readonly logger = new Logger(RedisSyncExtension.name);
+  private readonly source: RedisClient;
   private readonly pub: RedisClient;
   private sub: RedisClient;
   private readonly pack: Pack;
@@ -122,6 +123,7 @@ export class RedisSyncExtension<TCE extends CustomEvents> implements Extension {
       customEvents,
       customEventTTL,
     } = configuration;
+    this.source = redis;
     this.pub = redis.duplicate();
     this.sub = redis.duplicate();
     this.pack = pack;
@@ -162,6 +164,12 @@ export class RedisSyncExtension<TCE extends CustomEvents> implements Extension {
       );
       delete this.proxySockets[socketId];
     }
+  }
+
+  closeProxyConnectionsForShutdown(): void {
+    Object.keys(this.proxySockets).forEach((socketId) =>
+      this.closeProxy(socketId),
+    );
   }
 
   private pongProxy(socketId: string) {
@@ -622,6 +630,7 @@ export class RedisSyncExtension<TCE extends CustomEvents> implements Extension {
 
   async onDestroy() {
     this.destroyed = true;
+    this.closeProxyConnectionsForShutdown();
     Object.keys(this.locks).forEach((documentName) =>
       this.stopMaintainingLock(documentName),
     );
@@ -630,6 +639,7 @@ export class RedisSyncExtension<TCE extends CustomEvents> implements Extension {
       reject(new Error('Collaboration server is shutting down'));
     });
     this.pendingReplies = {};
+    this.source.disconnect(false);
     this.pub.disconnect(false);
     this.sub.disconnect(false);
   }
