@@ -38,6 +38,8 @@ jest.setTimeout(30_000);
 
 describe('RedisSyncExtension with Redis (e2e)', () => {
   let redis: Redis;
+  let firstRedis: Redis;
+  let secondRedis: Redis;
   let first: RedisSyncExtension<TestEvents>;
   let second: RedisSyncExtension<TestEvents>;
   let key: string;
@@ -48,9 +50,15 @@ describe('RedisSyncExtension with Redis (e2e)', () => {
     redis = new Redis(process.env.REDIS_URL!, {
       maxRetriesPerRequest: 1,
     });
-    await redis.ping();
-    first = createExtension(redis, prefix, 'server-a');
-    second = createExtension(redis, prefix, 'server-b');
+    firstRedis = new Redis(process.env.REDIS_URL!, {
+      maxRetriesPerRequest: 1,
+    });
+    secondRedis = new Redis(process.env.REDIS_URL!, {
+      maxRetriesPerRequest: 1,
+    });
+    await Promise.all([redis.ping(), firstRedis.ping(), secondRedis.ping()]);
+    first = createExtension(firstRedis, prefix, 'server-a');
+    second = createExtension(secondRedis, prefix, 'server-b');
     await first.onConfigure({ instance: createInstance() } as any);
     await second.onConfigure({ instance: createInstance() } as any);
   });
