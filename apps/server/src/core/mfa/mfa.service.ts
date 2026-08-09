@@ -778,7 +778,7 @@ export class MfaService {
         lastUsedTotpCounter: enrollment.totpCounter.toString(),
       })
       .onConflict((oc) =>
-        oc.columns(['userId', 'workspaceId']).doUpdateSet({
+        oc.column('userId').doUpdateSet({
           method: 'totp',
           secret: enrollment.encryptedSecret,
           isEnabled: true,
