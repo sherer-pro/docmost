@@ -76,7 +76,10 @@ export class AttachmentFileAccessService {
         limits: { fileSize: maxFileSize, fields: 3, files: 1 },
       });
     } catch (err: any) {
-      this.logger.error(err.message);
+      this.logger.error({
+        event: 'attachment_upload_parse_failed',
+        tooLarge: err?.statusCode === 413,
+      });
       if (err?.statusCode === 413) {
         throw new BadRequestException(
           `File too large. Exceeds the ${this.environmentService.getFileUploadSizeLimit()} limit`,
@@ -119,11 +122,14 @@ export class AttachmentFileAccessService {
     } catch (err: any) {
       if (err?.statusCode === 413) {
         const errMessage = `File too large. Exceeds the ${this.environmentService.getFileUploadSizeLimit()} limit`;
-        this.logger.error(errMessage);
+        this.logger.error({
+          event: 'attachment_upload_rejected',
+          reason: 'size_limit',
+        });
         throw new BadRequestException(errMessage);
       }
 
-      this.logger.error(err);
+      this.logger.error({ event: 'attachment_upload_processing_failed' });
       throw new BadRequestException('Error processing file upload.');
     }
   }
@@ -158,8 +164,8 @@ export class AttachmentFileAccessService {
 
     try {
       return await this.sendFileResponse(req, res, attachment, 'private');
-    } catch (err) {
-      this.logger.error(err);
+    } catch {
+      this.logger.error({ event: 'attachment_private_read_failed' });
       throw new NotFoundException('File not found');
     }
   }
@@ -256,8 +262,8 @@ export class AttachmentFileAccessService {
 
     try {
       return await this.sendFileResponse(req, res, attachment, 'public');
-    } catch (err) {
-      this.logger.error(err);
+    } catch {
+      this.logger.error({ event: 'attachment_public_read_failed' });
       throw new NotFoundException('File not found');
     }
   }

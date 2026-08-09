@@ -206,8 +206,8 @@ export class AttachmentController {
       );
 
       return res.send(fileResponse);
-    } catch (err: any) {
-      this.logger.error(err);
+    } catch {
+      this.logger.error({ event: 'attachment_image_upload_failed' });
       throw new BadRequestException('Error processing file upload.');
     }
   }

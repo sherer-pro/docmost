@@ -77,9 +77,10 @@ export class GeneralQueueProcessor
 
   @OnWorkerEvent('failed')
   onError(job: Job): void {
-    this.logger.error(
-      `Error processing ${job.name} job. Reason: ${job.failedReason}`,
-    );
+    this.logger.error({
+      event: 'general_queue_job_failed',
+      jobName: job.name,
+    });
   }
 
   @OnWorkerEvent('completed')

@@ -1,4 +1,9 @@
-import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnApplicationBootstrap,
+  OnModuleDestroy,
+} from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
@@ -33,6 +38,8 @@ export interface TypesenseAttachmentDocument {
 }
 
 const INDEX_BATCH_SIZE = 500;
+const TYPESENSE_RECONCILIATION_INTERVAL_MS = 15 * 60_000;
+const TYPESENSE_SCHEDULER_RETRY_MS = 60_000;
 
 export type TypesenseRebuildEntity = 'pages' | 'attachments';
 
@@ -42,11 +49,16 @@ export interface TypesenseRebuildOptions {
 }
 
 @Injectable()
-export class TypesenseIndexService implements OnApplicationBootstrap {
+export class TypesenseIndexService
+  implements OnApplicationBootstrap, OnModuleDestroy
+{
   private readonly logger = new Logger(TypesenseIndexService.name);
   private readonly client: Client | null;
   private collectionsReady: Promise<void> | null = null;
   private collectionsCreated = false;
+  private schedulerTimer?: NodeJS.Timeout;
+  private schedulerPromise?: Promise<void>;
+  private destroyed = false;
 
   constructor(
     private readonly environmentService: EnvironmentService,
@@ -70,6 +82,12 @@ export class TypesenseIndexService implements OnApplicationBootstrap {
       return;
     }
 
+    await this.registerReconciliationSafely();
+    this.schedulerTimer = setInterval(() => {
+      void this.registerReconciliationSafely();
+    }, TYPESENSE_SCHEDULER_RETRY_MS);
+    this.schedulerTimer.unref?.();
+
     try {
       await this.ensureCollections();
 
@@ -79,10 +97,47 @@ export class TypesenseIndexService implements OnApplicationBootstrap {
       if (this.collectionsCreated) {
         await this.enqueueRebuild('typesense-core-backfill-bootstrap');
       }
-    } catch (error) {
-      this.logger.error(
-        `Failed to initialize Typesense: ${this.errorMessage(error)}`,
-      );
+    } catch {
+      this.logger.error({ event: 'typesense_initialization_failed' });
+    }
+  }
+
+  async onModuleDestroy(): Promise<void> {
+    this.destroyed = true;
+    if (this.schedulerTimer) {
+      clearInterval(this.schedulerTimer);
+    }
+    await this.schedulerPromise;
+  }
+
+  private async registerReconciliationSafely(): Promise<void> {
+    if (this.destroyed || this.schedulerPromise) {
+      return;
+    }
+
+    const registration = this.searchQueue
+      .add(
+        QueueJob.TYPESENSE_FLUSH,
+        {},
+        {
+          jobId: 'typesense-full-reconciliation',
+          repeat: { every: TYPESENSE_RECONCILIATION_INTERVAL_MS },
+          attempts: 1,
+          removeOnComplete: true,
+          removeOnFail: 10,
+        },
+      )
+      .then(() => undefined)
+      .catch(() => {
+        this.logger.warn({ event: 'typesense_reconciliation_schedule_failed' });
+      });
+    this.schedulerPromise = registration;
+    try {
+      await registration;
+    } finally {
+      if (this.schedulerPromise === registration) {
+        this.schedulerPromise = undefined;
+      }
     }
   }
 
@@ -126,6 +181,7 @@ export class TypesenseIndexService implements OnApplicationBootstrap {
   }
 
   async rebuildAll(options: TypesenseRebuildOptions = {}): Promise<void> {
+    const startedAt = Date.now();
     await this.ensureCollections();
     const entities = new Set<TypesenseRebuildEntity>(
       options.entities ?? ['pages', 'attachments'],
@@ -138,6 +194,12 @@ export class TypesenseIndexService implements OnApplicationBootstrap {
       await this.indexAllAttachments(options.workspaceId);
       await this.removeStaleAttachments(options.workspaceId);
     }
+    this.logger.log({
+      event: 'typesense_reconciliation_completed',
+      durationMs: Date.now() - startedAt,
+      entityCount: entities.size,
+      scoped: Boolean(options.workspaceId),
+    });
   }
 
   async reconcilePages(pageIds: string[]): Promise<void> {

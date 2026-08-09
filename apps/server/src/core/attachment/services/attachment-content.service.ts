@@ -1,4 +1,9 @@
-import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnApplicationBootstrap,
+  OnModuleDestroy,
+} from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
@@ -24,6 +29,7 @@ const MAX_DOCX_ENTRIES = 10_000;
 const EXTRACTION_TIMEOUT_MS = 60_000;
 const BACKFILL_CONCURRENCY = 2;
 const BACKFILL_BATCH_SIZE = 100;
+const RECOVERY_INTERVAL_MS = 60_000;
 export const ATTACHMENT_CONTENT_INDEX_VERSION = 1;
 
 export type AttachmentContentIndexStatus =
@@ -51,8 +57,13 @@ class TransientExtractionError extends Error {
 }
 
 @Injectable()
-export class AttachmentContentService implements OnApplicationBootstrap {
+export class AttachmentContentService
+  implements OnApplicationBootstrap, OnModuleDestroy
+{
   private readonly logger = new Logger(AttachmentContentService.name);
+  private recoveryTimer?: NodeJS.Timeout;
+  private recoveryPromise?: Promise<void>;
+  private destroyed = false;
 
   constructor(
     private readonly storageService: StorageService,
@@ -64,38 +75,66 @@ export class AttachmentContentService implements OnApplicationBootstrap {
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
-    try {
-      await this.recoverStuckExtractions();
+    await this.runRecoverySafely();
+    this.recoveryTimer = setInterval(() => {
+      void this.runRecoverySafely();
+    }, RECOVERY_INTERVAL_MS);
+    this.recoveryTimer.unref?.();
+  }
 
-      const workspaces = await this.db
-        .selectFrom('attachments')
-        .select('workspaceId')
-        .distinct()
-        .where('deletedAt', 'is', null)
-        .where('contentIndexStatus', '=', 'pending')
-        .execute();
-
-      await Promise.all(
-        workspaces.map(({ workspaceId }) =>
-          this.attachmentQueue.add(
-            QueueJob.ATTACHMENT_INDEXING,
-            { workspaceId },
-            {
-              jobId: `attachment-content-backfill-${workspaceId}`,
-              delay: 30_000,
-              attempts: 3,
-              backoff: { type: 'exponential', delay: 20_000 },
-              removeOnComplete: true,
-              removeOnFail: true,
-            },
-          ),
-        ),
-      );
-    } catch (error) {
-      this.logger.warn(
-        `Failed to schedule attachment content backfill: ${this.errorMessage(error)}`,
-      );
+  async onModuleDestroy(): Promise<void> {
+    this.destroyed = true;
+    if (this.recoveryTimer) {
+      clearInterval(this.recoveryTimer);
     }
+    await this.recoveryPromise;
+  }
+
+  private async runRecoverySafely(): Promise<void> {
+    if (this.destroyed || this.recoveryPromise) {
+      return;
+    }
+
+    const recovery = this.schedulePendingWorkspaces().catch(() => {
+      this.logger.warn({ event: 'attachment_content_recovery_failed' });
+    });
+    this.recoveryPromise = recovery;
+    try {
+      await recovery;
+    } finally {
+      if (this.recoveryPromise === recovery) {
+        this.recoveryPromise = undefined;
+      }
+    }
+  }
+
+  private async schedulePendingWorkspaces(): Promise<void> {
+    await this.recoverStuckExtractions();
+
+    const workspaces = await this.db
+      .selectFrom('attachments')
+      .select('workspaceId')
+      .distinct()
+      .where('deletedAt', 'is', null)
+      .where('contentIndexStatus', '=', 'pending')
+      .execute();
+
+    await Promise.all(
+      workspaces.map(({ workspaceId }) =>
+        this.attachmentQueue.add(
+          QueueJob.ATTACHMENT_INDEXING,
+          { workspaceId },
+          {
+            jobId: `attachment-content-backfill-${workspaceId}`,
+            delay: 30_000,
+            attempts: 3,
+            backoff: { type: 'exponential', delay: 20_000 },
+            removeOnComplete: true,
+            removeOnFail: true,
+          },
+        ),
+      ),
+    );
   }
 
   /**
@@ -252,20 +291,22 @@ export class AttachmentContentService implements OnApplicationBootstrap {
             processedCount += 1;
             try {
               await this.indexAttachment(id, opts);
-            } catch (error) {
+            } catch {
               transientFailureCount += 1;
-              this.logger.warn(
-                `Attachment content indexing failed for ${id}: ${this.errorMessage(error)}`,
-              );
+              this.logger.warn({
+                event: 'attachment_content_indexing_failed',
+              });
             }
           }
         }),
       );
     }
 
-    this.logger.log(
-      `Attachment content backfill finished. workspaceId=${workspaceId}, processedCount=${processedCount}, transientFailureCount=${transientFailureCount}`,
-    );
+    this.logger.log({
+      event: 'attachment_content_backfill_completed',
+      processedCount,
+      transientFailureCount,
+    });
 
     // Only infrastructure failures are worth another queue attempt; content
     // that can never be parsed is already recorded as a terminal state.
@@ -330,9 +371,11 @@ export class AttachmentContentService implements OnApplicationBootstrap {
         ? 'skipped'
         : 'failed';
 
-    this.logger.warn(
-      `Attachment ${attachment.id} content extraction ended as ${status}/${code}`,
-    );
+    this.logger.warn({
+      event: 'attachment_content_extraction_terminal',
+      status,
+      errorCode: code,
+    });
     await this.finishClaim(attachment, claimStartedAt, status, code);
   }
 

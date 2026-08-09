@@ -28,7 +28,10 @@ export class FileTaskProcessor extends WorkerHost implements OnModuleDestroy {
           break;
       }
     } catch (err) {
-      this.logger.error('File task failed', err);
+      this.logger.error({
+        event: 'file_task_processing_failed',
+        jobName: job.name,
+      });
       throw err;
     }
   }
@@ -40,18 +43,17 @@ export class FileTaskProcessor extends WorkerHost implements OnModuleDestroy {
 
   @OnWorkerEvent('failed')
   async onFailed(job: Job) {
-    this.logger.error(
-      `Error processing ${job.name} job. Import Task ID: ${job.data.fileTaskId}. Reason: ${job.failedReason}`,
-    );
+    this.logger.error({
+      event: 'file_task_queue_job_failed',
+      jobName: job.name,
+    });
 
     await this.handleFailedJob(job);
   }
 
   @OnWorkerEvent('completed')
   async onCompleted(job: Job) {
-    this.logger.log(
-      `Completed ${job.name} job for File task ID ${job.data.fileTaskId}`,
-    );
+    this.logger.log(`Completed ${job.name} job`);
 
     try {
       const fileTask = await this.fileTaskService.getFileTask(
@@ -59,30 +61,28 @@ export class FileTaskProcessor extends WorkerHost implements OnModuleDestroy {
       );
       if (fileTask) {
         await this.storageService.delete(fileTask.filePath);
-        this.logger.debug(`Deleted imported zip file: ${fileTask.filePath}`);
+        this.logger.debug('Deleted imported zip file');
       }
-    } catch (err) {
-      this.logger.error(`Failed to delete imported zip file:`, err);
+    } catch {
+      this.logger.error('Failed to delete imported zip file');
     }
   }
 
   private async handleFailedJob(job: Job) {
     try {
       const fileTaskId = job.data.fileTaskId;
-      const reason = job.failedReason || 'Unknown error';
-
       await this.fileTaskService.updateTaskStatus(
         fileTaskId,
         FileTaskStatus.Failed,
-        reason,
+        'file_task_processing_failed',
       );
 
       const fileTask = await this.fileTaskService.getFileTask(fileTaskId);
       if (fileTask) {
         await this.storageService.delete(fileTask.filePath);
       }
-    } catch (err) {
-      this.logger.error(err);
+    } catch {
+      this.logger.error('Failed to persist file task failure state');
     }
   }
 

@@ -49,9 +49,7 @@ export class EmailProcessor extends WorkerHost implements OnModuleDestroy {
       try {
         await this.notificationRepo.markAsEmailed(job.data.notificationId);
       } catch (err) {
-        this.logger.warn(
-          `Failed to mark notification ${job.data.notificationId} as emailed`,
-        );
+        this.logger.warn('Failed to mark notification as emailed');
       }
     }
   }
@@ -161,9 +159,10 @@ export class EmailProcessor extends WorkerHost implements OnModuleDestroy {
 
   @OnWorkerEvent('failed')
   onError(job: Job) {
-    this.logger.error(
-      `Error processing ${job.name} job. Reason: ${job.failedReason}`,
-    );
+    this.logger.error({
+      event: 'email_queue_job_failed',
+      jobName: job.name,
+    });
   }
 
   @OnWorkerEvent('completed')
