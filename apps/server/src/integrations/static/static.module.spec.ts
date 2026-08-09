@@ -2,6 +2,7 @@ import {
   getClientStaticCacheControl,
   IMMUTABLE_ASSET_CACHE_CONTROL,
   injectWindowConfigScript,
+  isApiRequestPath,
   SERVICE_WORKER_CACHE_CONTROL,
   WINDOW_CONFIG_SCRIPT_TAG,
 } from './static.module';
@@ -42,13 +43,33 @@ describe('getClientStaticCacheControl', () => {
 
   it('allows long-lived caching for hashed build assets', () => {
     expect(
-      getClientStaticCacheControl('/app/apps/client/dist/assets/page-abc123.js'),
+      getClientStaticCacheControl(
+        '/app/apps/client/dist/assets/page-abc123.js',
+      ),
     ).toBe(IMMUTABLE_ASSET_CACHE_CONTROL);
   });
 
   it('leaves other static files on the default cache policy', () => {
     expect(
-      getClientStaticCacheControl('/app/apps/client/dist/icons/favicon-32x32.png'),
+      getClientStaticCacheControl(
+        '/app/apps/client/dist/icons/favicon-32x32.png',
+      ),
     ).toBeNull();
   });
+});
+
+describe('isApiRequestPath', () => {
+  it.each(['/api', '/api/', '/api/unknown', '/api/unknown?source=browser'])(
+    'recognizes the API namespace for %s',
+    (requestUrl) => {
+      expect(isApiRequestPath(requestUrl)).toBe(true);
+    },
+  );
+
+  it.each(['/', '/home', '/settings/security', '/api-client'])(
+    'keeps frontend routes in the SPA fallback for %s',
+    (requestUrl) => {
+      expect(isApiRequestPath(requestUrl)).toBe(false);
+    },
+  );
 });
