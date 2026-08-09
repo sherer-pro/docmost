@@ -2,8 +2,11 @@ import { defineConfig, devices } from "@playwright/test";
 import path from "node:path";
 
 const auditRoot = path.resolve(
-  process.cwd(),
-  "../../output/audit/editor-2026-08-06",
+  process.env.DOCMOST_EDITOR_AUDIT_ROOT ??
+    path.join(
+      process.cwd(),
+      "../../output/audit/page-templates-transclusion-2026-08-09",
+    ),
 );
 const defaultBaseURL = process.env.DOCMOST_BASE_URL ?? "http://localhost:3000";
 const webkitBaseURL =

@@ -1,8 +1,11 @@
 import path from "node:path";
 
 export const auditRoot = path.resolve(
-  process.cwd(),
-  "../../output/audit/editor-2026-08-06",
+  process.env.DOCMOST_EDITOR_AUDIT_ROOT ??
+    path.join(
+      process.cwd(),
+      "../../output/audit/page-templates-transclusion-2026-08-09",
+    ),
 );
 
 export const auditStatePath = path.join(auditRoot, "audit-state.json");
