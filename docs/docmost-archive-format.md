@@ -53,7 +53,10 @@ page-embed snapshots are accepted only for backward-compatible materialization.
 Markdown, HTML, and PDF materialize legacy page embeds and synced blocks.
 Rendering is depth-bounded; an unavailable source is
 represented by a localized neutral placeholder. Importing those formats never
-recreates a live relationship.
+recreates a live relationship. Presentation output contains neither
+`transclusionReference` nodes nor `data-source-page-id` or
+`data-transclusion-id` service attributes. Source ACL is evaluated for the
+exporting user; denied and deleted sources never contribute their content.
 
 Database Markdown, HTML, and PDF exports capture the active filters, property
 sort, and visible property columns. When descendants are requested, only rows
