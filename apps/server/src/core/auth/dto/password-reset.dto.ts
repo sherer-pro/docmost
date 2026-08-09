@@ -3,6 +3,7 @@ import { MaxUtf8Bytes } from '../../../common/validator/max-utf8-bytes';
 
 export class PasswordResetDto {
   @IsString()
+  @MaxLength(512)
   token: string;
 
   @IsString()

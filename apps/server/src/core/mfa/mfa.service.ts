@@ -11,6 +11,7 @@ import {
 } from '@docmost/db/types/kysely.types';
 import { User, Workspace } from '@docmost/db/types/entity.types';
 import { LoginDto } from '../auth/dto/login.dto';
+import { DUMMY_PASSWORD_HASH } from '../auth/password-assurance.constants';
 import { comparePasswordHash, nanoIdGen } from '../../common/helpers';
 import { TokenService } from '../auth/services/token.service';
 import { UserRepo } from '@docmost/db/repos/user/user.repo';
@@ -65,6 +66,7 @@ export class MfaService {
 
     const errorMessage = 'Email or password does not match';
     if (!user || user.deletedAt) {
+      await comparePasswordHash(loginDto.password, DUMMY_PASSWORD_HASH);
       throw new UnauthorizedException(errorMessage);
     }
 
