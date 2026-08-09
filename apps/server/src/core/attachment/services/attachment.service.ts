@@ -158,8 +158,8 @@ export class AttachmentService {
           pageId,
         });
       }
-    } catch (err) {
-      this.logger.error('Failed to persist uploaded attachment metadata', err);
+    } catch {
+      this.logger.error({ event: 'attachment_metadata_persist_failed' });
 
       if (
         !isUpdate ||
@@ -197,8 +197,8 @@ export class AttachmentService {
             removeOnFail: true,
           },
         );
-      } catch (err) {
-        this.logger.error('Failed to queue attachment indexing', err);
+      } catch {
+        this.logger.error({ event: 'attachment_content_enqueue_failed' });
       }
     }
 
@@ -213,8 +213,8 @@ export class AttachmentService {
           removeOnFail: true,
         },
       );
-    } catch (err) {
-      this.logger.error('Failed to queue attachment search indexing', err);
+    } catch {
+      this.logger.error({ event: 'attachment_search_enqueue_failed' });
     }
 
     return attachment;
@@ -327,16 +327,16 @@ export class AttachmentService {
     try {
       await this.storageService.delete(filePath);
       await this.attachmentRepo.deleteAttachmentByFilePath(filePath);
-    } catch (error) {
-      this.logger.error('deleteRedundantFile', error);
+    } catch {
+      this.logger.error({ event: 'attachment_redundant_delete_failed' });
     }
   }
 
   async uploadToDrive(filePath: string, fileContent: Buffer | Readable) {
     try {
       await this.storageService.upload(filePath, fileContent);
-    } catch (err) {
-      this.logger.error('Error uploading file to drive:', err);
+    } catch {
+      this.logger.error({ event: 'attachment_storage_upload_failed' });
       throw new BadRequestException('Error uploading file to drive');
     }
   }
@@ -409,20 +409,15 @@ export class AttachmentService {
           try {
             await this.storageService.delete(attachment.filePath);
             await this.attachmentRepo.deleteAttachmentById(attachment.id);
-          } catch (err) {
+          } catch {
             failedDeletions.push(attachment.id);
-            this.logger.log(
-              `DeleteSpaceAttachments: failed to delete attachment ${attachment.id}:`,
-              err,
-            );
+            this.logger.error({ event: 'space_attachment_delete_failed' });
           }
         }),
       );
 
       if (failedDeletions.length === attachments.length) {
-        throw new Error(
-          `Failed to delete any attachments for spaceId: ${spaceId}`,
-        );
+        throw new Error('space_attachment_delete_failed');
       }
     } catch (err) {
       throw err;
@@ -447,11 +442,8 @@ export class AttachmentService {
           try {
             await this.storageService.delete(attachment.filePath);
             await this.attachmentRepo.deleteAttachmentById(attachment.id);
-          } catch (err) {
-            this.logger.log(
-              `DeleteUserAvatar: failed to delete user avatar ${attachment.id}:`,
-              err,
-            );
+          } catch {
+            this.logger.error({ event: 'user_avatar_delete_failed' });
           }
         }),
       );
@@ -482,26 +474,21 @@ export class AttachmentService {
             await this.storageService.delete(attachment.filePath);
             // Delete from database
             await this.attachmentRepo.deleteAttachmentById(attachment.id);
-          } catch (err) {
+          } catch {
             failedDeletions.push(attachment.id);
-            this.logger.error(
-              `Failed to delete attachment ${attachment.id} for page ${pageId}:`,
-              err,
-            );
+            this.logger.error({ event: 'page_attachment_delete_failed' });
           }
         }),
       );
 
       if (failedDeletions.length > 0) {
-        this.logger.warn(
-          `Failed to delete ${failedDeletions.length} attachments for page ${pageId}`,
-        );
+        this.logger.warn({
+          event: 'page_attachment_delete_batch_incomplete',
+          failedCount: failedDeletions.length,
+        });
       }
     } catch (err) {
-      this.logger.error(
-        `Error in handleDeletePageAttachments for page ${pageId}:`,
-        err,
-      );
+      this.logger.error({ event: 'page_attachment_delete_batch_failed' });
       throw err;
     }
   }

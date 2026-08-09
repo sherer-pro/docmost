@@ -272,16 +272,15 @@ export class HistoryProcessor extends WorkerHost implements OnModuleDestroy {
 
   @OnWorkerEvent('active')
   onActive(job: Job) {
-    const pageId = (job.data as { pageId?: string })?.pageId ?? 'unknown';
-    this.logger.debug(`Processing ${job.name} for page: ${pageId}`);
+    this.logger.debug(`Processing ${job.name} job`);
   }
 
   @OnWorkerEvent('failed')
   onError(job: Job) {
-    const pageId = (job.data as { pageId?: string })?.pageId ?? 'unknown';
-    this.logger.error(
-      `Failed ${job.name} for page: ${pageId}. Reason: ${job.failedReason}`,
-    );
+    this.logger.error({
+      event: 'history_queue_job_failed',
+      jobName: job.name,
+    });
   }
 
   async onModuleDestroy(): Promise<void> {

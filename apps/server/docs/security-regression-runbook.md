@@ -33,6 +33,8 @@ pnpm verify:quick
 - Public invitation/share/search/hostname endpoints are covered by auth rate-limit buckets.
 - Workspace invitation links require token validation; stored invitation tokens are hashed and expire.
 - Invitation create/resend/accept side effects are committed through the transactional outbox. Raw invitation tokens are encrypted outside the regular JSON payload, checked against the live invitation immediately before delivery, and cleared in every terminal state.
+- Queue worker failure logs omit BullMQ `failedReason`, domain identifiers, mail addresses, URL query values, and raw provider errors. CI production-smoke logs are redacted as a stream and scanned before artifact upload.
+- Aggregated push rows use expiring owner tokens plus row revisions; a new event cannot steal an active lease, and an expired owner cannot finalize after takeover.
 - Logged URLs exclude query values, and mail logs exclude recipients, subjects, bodies, invitation links, and raw provider errors.
 - Redis collaboration leases renew and release only for their random owner token; renewal failure closes the local document before another instance can take ownership.
 - Legacy public attachment `?jwt=` query tokens are lower priority than header/cookie tokens and emit deprecation headers when used.
