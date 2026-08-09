@@ -11,6 +11,8 @@ import { ExpressionBuilder } from 'kysely';
 import type { DB } from '@docmost/db/types/db';
 import { jsonObjectFrom } from 'kysely/helpers/postgres';
 import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
+import { KyselyTransaction } from '@docmost/db/types/kysely.types';
+import { dbOrTx } from '@docmost/db/utils';
 
 @Injectable()
 export class NotificationRepo {
@@ -199,8 +201,9 @@ export class NotificationRepo {
 
   async insert(
     notification: InsertableNotification,
+    trx?: KyselyTransaction,
   ): Promise<Notification | undefined> {
-    return this.db
+    return dbOrTx(this.db, trx)
       .insertInto('notifications')
       .values(notification)
       .onConflict((oc) => oc.column('deduplicationKey').doNothing())

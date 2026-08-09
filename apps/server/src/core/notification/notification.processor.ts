@@ -102,8 +102,10 @@ export class NotificationProcessor
           this.logger.warn(`Unknown notification job: ${job.name}`);
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Unknown error';
-      this.logger.error(`Failed to process ${job.name}: ${message}`);
+      this.logger.error({
+        event: 'notification_queue_processing_failed',
+        jobName: job.name,
+      });
       throw err;
     }
   }
@@ -120,9 +122,10 @@ export class NotificationProcessor
 
   @OnWorkerEvent('failed')
   onError(job: Job) {
-    this.logger.error(
-      `Error processing ${job.name} job. Reason: ${job.failedReason}`,
-    );
+    this.logger.error({
+      event: 'notification_queue_job_failed',
+      jobName: job.name,
+    });
   }
 
   async onModuleDestroy(): Promise<void> {

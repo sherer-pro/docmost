@@ -1,8 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import {
   PUSH_NOTIFICATION_JOB_STATUS,
+  ClaimedPushNotificationJobRef,
   PushNotificationJobRepo,
 } from '@docmost/db/repos/push-notification-job/push-notification-job.repo';
 import { NotificationRepo } from '@docmost/db/repos/notification/notification.repo';
@@ -14,6 +15,7 @@ import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { NotificationDeliveryPolicyService } from './notification-delivery-policy.service';
 import { normalizeUserSettings } from '../../user/utils/user-preferences.util';
 import { getAggregatedPushCopy } from '../../../common/helpers/notification-copy';
+import { PushAggregationMetricsService } from './push-aggregation-metrics.service';
 
 interface PushDispatchPayload {
   title: string;
@@ -31,10 +33,13 @@ interface UserPushPreference {
 
 const DEFAULT_PUSH_FREQUENCY = 'immediate';
 const MAX_AGGREGATED_PUSH_ATTEMPTS = 3;
+const PUSH_PROCESSING_LEASE_MS = 2 * 60_000;
+const PUSH_LEASE_RENEW_INTERVAL_MS = 30_000;
 
 @Injectable()
-export class PushAggregationService {
+export class PushAggregationService implements OnModuleDestroy {
   private readonly logger = new Logger(PushAggregationService.name);
+  private shuttingDown = false;
 
   constructor(
     @InjectKysely() private readonly db: KyselyDB,
@@ -44,7 +49,12 @@ export class PushAggregationService {
     private readonly notificationRepo: NotificationRepo,
     private readonly pushService: PushService,
     private readonly notificationDeliveryPolicyService: NotificationDeliveryPolicyService,
+    private readonly metrics: PushAggregationMetricsService,
   ) {}
+
+  onModuleDestroy(): void {
+    this.shuttingDown = true;
+  }
 
   /**
    * Schedules a recurring BullMQ job that processes aggregated push notifications.
@@ -135,16 +145,28 @@ export class PushAggregationService {
    * With claim semantics via SKIP LOCKED, multiple workers can run in parallel without duplicates.
    */
   async processDueJobs(limit = 200): Promise<void> {
-    const dueItems = await this.pushNotificationJobRepo.claimDuePending(limit);
-    if (dueItems.length === 0) {
+    const startedAt = Date.now();
+    const claim = await this.pushNotificationJobRepo.claimDuePending(
+      limit,
+      PUSH_PROCESSING_LEASE_MS,
+    );
+    this.metrics.recordClaim(claim.jobs.length, claim.reclaimed);
+    if (claim.jobs.length === 0) {
       return;
     }
 
-    const sentIds: string[] = [];
-    const cancelledIds: string[] = [];
-    const retryIds: string[] = [];
+    const renewal = this.startLeaseRenewal(
+      claim.jobs.map((item) => item.id),
+      claim.leaseToken,
+    );
+    const sent: ClaimedPushNotificationJobRef[] = [];
+    const cancelled: ClaimedPushNotificationJobRef[] = [];
+    const retry: ClaimedPushNotificationJobRef[] = [];
 
-    for (const item of dueItems) {
+    for (const item of claim.jobs) {
+      if (this.shuttingDown || renewal.lost) {
+        break;
+      }
       const isPushStillEnabled =
         await this.notificationDeliveryPolicyService.shouldSend({
           channel: 'push',
@@ -152,14 +174,14 @@ export class PushAggregationService {
           pageId: item.pageId,
         });
       if (!isPushStillEnabled) {
-        cancelledIds.push(item.id);
+        cancelled.push(this.claimedRef(item));
         continue;
       }
 
       const hasUnreadNotifications =
         await this.hasUnreadNotificationsInWindow(item);
       if (!hasUnreadNotifications) {
-        cancelledIds.push(item.id);
+        cancelled.push(this.claimedRef(item));
         continue;
       }
 
@@ -181,61 +203,142 @@ export class PushAggregationService {
         notificationId: payload.notificationId,
       });
 
-      this.applyDispatchOutcome(
-        item,
-        pushResult,
-        sentIds,
-        cancelledIds,
-        retryIds,
-      );
+      this.applyDispatchOutcome(item, pushResult, sent, cancelled, retry);
     }
 
-    await this.pushNotificationJobRepo.finalizeClaimed({
-      sentIds,
-      cancelledIds,
-      retryIds,
+    await renewal.stop();
+    if (this.shuttingDown || renewal.lost) {
+      this.metrics.recordLeaseLost();
+      this.logger.warn({
+        event: 'push_aggregation_lease_lost',
+        claimed: claim.jobs.length,
+      });
+      return;
+    }
+
+    const finalized = await this.pushNotificationJobRepo.finalizeClaimed({
+      leaseToken: claim.leaseToken,
+      sent,
+      cancelled,
+      retry,
     });
-    this.logger.debug(
-      `Processed ${sentIds.length} aggregated push job(s), cancelled ${cancelledIds.length}, retry queued ${retryIds.length}`,
-    );
+    const durationMs = Date.now() - startedAt;
+    this.metrics.recordFinalized(finalized, durationMs);
+    this.logger.log({
+      event: 'push_aggregation_batch',
+      claimed: claim.jobs.length,
+      reconciled: claim.reclaimed,
+      durationMs,
+      ...finalized,
+    });
   }
 
   private applyDispatchOutcome(
-    job: { id: string; payload?: unknown },
+    job: { id: string; revision: number; payload?: unknown },
     pushResult: PushSendResult,
-    sentIds: string[],
-    cancelledIds: string[],
-    retryIds: string[],
+    sent: ClaimedPushNotificationJobRef[],
+    cancelled: ClaimedPushNotificationJobRef[],
+    retry: ClaimedPushNotificationJobRef[],
   ): void {
-    const jobId = job.id;
+    const ref = this.claimedRef(job);
     if (pushResult.outcome === 'success') {
-      sentIds.push(jobId);
+      sent.push(ref);
       return;
     }
+
+    this.metrics.recordDeliveryFailure();
 
     if (pushResult.outcome === 'transient-failure') {
       if (
         this.getRetryAttempts(job.payload) + 1 >=
         MAX_AGGREGATED_PUSH_ATTEMPTS
       ) {
-        cancelledIds.push(jobId);
-        this.logger.warn(
-          `Push job ${jobId} cancelled after ${MAX_AGGREGATED_PUSH_ATTEMPTS} transient delivery attempts`,
-        );
+        cancelled.push(ref);
+        this.logger.warn({
+          event: 'push_aggregation_retry_exhausted',
+          maxAttempts: MAX_AGGREGATED_PUSH_ATTEMPTS,
+        });
         return;
       }
 
-      retryIds.push(jobId);
-      this.logger.warn(
-        `Push job ${jobId} returned to pending after transient delivery failure (failed=${pushResult.failed}, revoked=${pushResult.revoked})`,
-      );
+      retry.push(ref);
+      this.logger.warn({
+        event: 'push_aggregation_retry_scheduled',
+        failed: pushResult.failed,
+        revoked: pushResult.revoked,
+      });
       return;
     }
 
-    cancelledIds.push(jobId);
-    this.logger.warn(
-      `Push job ${jobId} cancelled with outcome ${pushResult.outcome} (sent=${pushResult.sent}, failed=${pushResult.failed}, revoked=${pushResult.revoked})`,
-    );
+    cancelled.push(ref);
+    this.logger.warn({
+      event: 'push_aggregation_cancelled',
+      outcome: pushResult.outcome,
+      sent: pushResult.sent,
+      failed: pushResult.failed,
+      revoked: pushResult.revoked,
+    });
+  }
+
+  private claimedRef(job: {
+    id: string;
+    revision: number;
+  }): ClaimedPushNotificationJobRef {
+    return { id: job.id, revision: job.revision };
+  }
+
+  private startLeaseRenewal(
+    ids: string[],
+    leaseToken: string,
+  ): {
+    readonly lost: boolean;
+    stop: () => Promise<void>;
+  } {
+    let lost = false;
+    let stopped = false;
+    let timer: NodeJS.Timeout | undefined;
+    let inFlight = Promise.resolve();
+
+    const schedule = () => {
+      if (stopped || lost || this.shuttingDown) {
+        return;
+      }
+      timer = setTimeout(() => {
+        inFlight = (async () => {
+          try {
+            const renewed = await this.pushNotificationJobRepo.renewLease(
+              ids,
+              leaseToken,
+              PUSH_PROCESSING_LEASE_MS,
+            );
+            if (!renewed) {
+              lost = true;
+              return;
+            }
+          } catch {
+            lost = true;
+            return;
+          }
+          schedule();
+        })();
+      }, PUSH_LEASE_RENEW_INTERVAL_MS);
+      timer.unref?.();
+    };
+
+    schedule();
+
+    return {
+      get lost() {
+        return lost;
+      },
+      stop: async () => {
+        stopped = true;
+        if (timer) {
+          clearTimeout(timer);
+        }
+        await inFlight;
+      },
+    };
   }
 
   private getRetryAttempts(payload: unknown): number {

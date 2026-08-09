@@ -5,6 +5,7 @@ import {
 } from '../../../common/security/credential-protection.util';
 import { QueueOutboxKind } from './queue-outbox.types';
 import { QueueOutboxService } from './queue-outbox.service';
+import { QueueJob } from '../constants';
 
 const APP_SECRET = 'outbox-test-secret-at-least-32-characters';
 const WORKSPACE_ID = '00000000-0000-4000-8000-000000000001';
@@ -34,6 +35,7 @@ function createHarness(invitation?: Record<string, unknown>) {
     claimNext: jest.fn(),
     renewLease: jest.fn().mockResolvedValue(true),
     markCompleted: jest.fn().mockResolvedValue(true),
+    markNotificationEmailCompleted: jest.fn().mockResolvedValue(true),
     markCancelled: jest.fn().mockResolvedValue(true),
     markFailed: jest.fn().mockResolvedValue(true),
     markForRetry: jest.fn().mockResolvedValue(true),
@@ -55,6 +57,7 @@ function createHarness(invitation?: Record<string, unknown>) {
   };
   const moduleRef = { get: jest.fn(() => pageTemplateSync) };
   const generalQueue = { add: jest.fn().mockResolvedValue(undefined) };
+  const notificationQueue = { add: jest.fn().mockResolvedValue(undefined) };
 
   const service = new QueueOutboxService(
     db as any,
@@ -64,6 +67,7 @@ function createHarness(invitation?: Record<string, unknown>) {
     mailService as any,
     duplicatePageAttachments as any,
     generalQueue as any,
+    notificationQueue as any,
     moduleRef as any,
   );
 
@@ -75,6 +79,7 @@ function createHarness(invitation?: Record<string, unknown>) {
     duplicatePageAttachments,
     pageTemplateSync,
     generalQueue,
+    notificationQueue,
   };
 }
 
@@ -303,6 +308,88 @@ describe('QueueOutboxService', () => {
 
     expect(pageTemplateSync.processSyncRunFromOutbox).toHaveBeenCalledWith(
       TEMPLATE_SYNC_RUN_ID,
+    );
+  });
+
+  it('encrypts immediate notification mail and finalizes it with the current lease', async () => {
+    const { service, outboxRepo, mailService } = createHarness({
+      id: USER_ID,
+      readAt: null,
+      emailedAt: null,
+    });
+    const message = {
+      to: 'recipient@example.test',
+      subject: 'Private subject',
+      html: '<p>Private content</p>',
+      text: 'Private content',
+      notificationId: USER_ID,
+      notificationUserId: WORKSPACE_ID,
+      notificationDeliveryMode: 'immediate' as const,
+      notificationFrequency: 'immediate',
+    };
+
+    await service.enqueueNotificationEmail(USER_ID, message, {} as any);
+    const inserted = outboxRepo.enqueue.mock.calls[0][0];
+    expect(inserted.payload).toEqual({ notificationId: USER_ID });
+    expect(JSON.stringify(inserted.payload)).not.toContain(message.to);
+    expect(inserted.secretPayload).not.toContain(message.subject);
+
+    outboxRepo.claimNext.mockResolvedValueOnce({
+      id: INVITATION_ID,
+      kind: QueueOutboxKind.NOTIFICATION_EMAIL,
+      payload: { notificationId: USER_ID },
+      secretPayload: inserted.secretPayload,
+      attemptCount: 1,
+    });
+    await service.processAvailable(1);
+
+    expect(mailService.sendEmail).toHaveBeenCalledWith(message);
+    expect(outboxRepo.markNotificationEmailCompleted).toHaveBeenCalledWith(
+      INVITATION_ID,
+      expect.any(String),
+      USER_ID,
+    );
+    expect(outboxRepo.markCompleted).not.toHaveBeenCalled();
+  });
+
+  it('reconciles a durable notification dispatch with a deterministic Redis job id', async () => {
+    const { service, outboxRepo, notificationQueue } = createHarness();
+    const jobData = {
+      eventId: INVITATION_ID,
+      commentId: OLD_ATTACHMENT_ID,
+      pageId: PAGE_ID,
+      spaceId: SPACE_ID,
+      workspaceId: WORKSPACE_ID,
+      actorId: USER_ID,
+      mentionedUserIds: [],
+      notifyWatchers: true,
+    };
+    await service.enqueueNotificationDispatch(
+      { jobName: QueueJob.COMMENT_NOTIFICATION, jobData },
+      {} as any,
+    );
+    const inserted = outboxRepo.enqueue.mock.calls[0][0];
+    expect(inserted.dedupeKey).toBe(
+      `notification-dispatch:${QueueJob.COMMENT_NOTIFICATION}:${INVITATION_ID}`,
+    );
+
+    outboxRepo.claimNext.mockResolvedValueOnce({
+      id: NEW_ATTACHMENT_ID,
+      kind: QueueOutboxKind.NOTIFICATION_DISPATCH,
+      payload: inserted.payload,
+      secretPayload: null,
+      attemptCount: 1,
+    });
+    await service.processAvailable(1);
+
+    expect(notificationQueue.add).toHaveBeenCalledWith(
+      QueueJob.COMMENT_NOTIFICATION,
+      jobData,
+      { jobId: `notification-dispatch-${INVITATION_ID}` },
+    );
+    expect(outboxRepo.markCompleted).toHaveBeenCalledWith(
+      NEW_ATTACHMENT_ID,
+      expect.any(String),
     );
   });
 });

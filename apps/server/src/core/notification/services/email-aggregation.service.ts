@@ -147,11 +147,8 @@ export class EmailAggregationService {
           notificationDeliveryMode: 'digest',
           notificationFrequency: preferences.emailFrequency,
         });
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        this.logger.error(
-          `Failed to queue digest email for user ${pendingUser.userId}: ${message}`,
-        );
+      } catch {
+        this.logger.error({ event: 'email_digest_queue_failed' });
       }
     }
 

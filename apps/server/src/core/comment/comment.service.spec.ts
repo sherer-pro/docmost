@@ -39,8 +39,9 @@ describe('CommentService', () => {
       add: jest.fn().mockResolvedValue(undefined),
     } as any;
 
-    const notificationQueue = {
-      add: jest.fn().mockResolvedValue(undefined),
+    const queueOutboxService = {
+      enqueueNotificationDispatch: jest.fn().mockResolvedValue(undefined),
+      kick: jest.fn(),
     } as any;
 
     const service = new CommentService(
@@ -48,7 +49,7 @@ describe('CommentService', () => {
       pageRepo,
       db,
       generalQueue,
-      notificationQueue,
+      queueOutboxService,
     );
 
     return {
@@ -58,7 +59,7 @@ describe('CommentService', () => {
       db,
       trx,
       generalQueue,
-      notificationQueue,
+      queueOutboxService,
     };
   };
 
@@ -162,7 +163,7 @@ describe('CommentService', () => {
   });
 
   it('blocks creating comments after the page reaches the comment limit', async () => {
-    const { service, commentRepo, generalQueue, notificationQueue } =
+    const { service, commentRepo, generalQueue, queueOutboxService } =
       createService();
     commentRepo.countPageComments.mockResolvedValue(COMMENT_LIMIT);
 
@@ -185,11 +186,13 @@ describe('CommentService', () => {
 
     expect(commentRepo.insertComment).not.toHaveBeenCalled();
     expect(generalQueue.add).not.toHaveBeenCalled();
-    expect(notificationQueue.add).not.toHaveBeenCalled();
+    expect(
+      queueOutboxService.enqueueNotificationDispatch,
+    ).not.toHaveBeenCalled();
   });
 
   it('queues only comment notification for root comments', async () => {
-    const { service, commentRepo, notificationQueue } = createService();
+    const { service, commentRepo, queueOutboxService, trx } = createService();
     commentRepo.insertComment.mockResolvedValue({
       id: 'comment-root',
       workspaceId: 'workspace-1',
@@ -210,19 +213,21 @@ describe('CommentService', () => {
       } as any,
     );
 
-    expect(notificationQueue.add).toHaveBeenCalledTimes(1);
-    expect(notificationQueue.add).toHaveBeenCalledWith(
-      QueueJob.COMMENT_NOTIFICATION,
+    expect(
+      queueOutboxService.enqueueNotificationDispatch,
+    ).toHaveBeenCalledTimes(1);
+    expect(queueOutboxService.enqueueNotificationDispatch).toHaveBeenCalledWith(
       expect.objectContaining({
-        commentId: 'comment-root',
-        pageId: 'page-1',
-        notifyWatchers: true,
+        jobName: QueueJob.COMMENT_NOTIFICATION,
+        jobData: expect.objectContaining({
+          commentId: 'comment-root',
+          pageId: 'page-1',
+          notifyWatchers: true,
+        }),
       }),
+      trx,
     );
-    expect(notificationQueue.add).not.toHaveBeenCalledWith(
-      QueueJob.PAGE_RECIPIENT_NOTIFICATION,
-      expect.anything(),
-    );
+    expect(queueOutboxService.kick).toHaveBeenCalledTimes(1);
   });
 
   it('inherits parent type for replies and ignores dto.type', async () => {
@@ -303,7 +308,7 @@ describe('CommentService', () => {
   });
 
   it('resolves comment and enqueues resolved notification', async () => {
-    const { service, commentRepo, notificationQueue } = createService();
+    const { service, commentRepo, queueOutboxService, trx } = createService();
     commentRepo.findById.mockResolvedValue({
       id: 'comment-3',
       creatorId: 'user-2',
@@ -337,15 +342,19 @@ describe('CommentService', () => {
         resolvedById: 'user-1',
       }),
       'comment-3',
+      trx,
     );
 
-    expect(notificationQueue.add).toHaveBeenCalledWith(
-      QueueJob.COMMENT_RESOLVED_NOTIFICATION,
+    expect(queueOutboxService.enqueueNotificationDispatch).toHaveBeenCalledWith(
       expect.objectContaining({
-        commentId: 'comment-3',
-        commentCreatorId: 'user-2',
-        actorId: 'user-1',
+        jobName: QueueJob.COMMENT_RESOLVED_NOTIFICATION,
+        jobData: expect.objectContaining({
+          commentId: 'comment-3',
+          commentCreatorId: 'user-2',
+          actorId: 'user-1',
+        }),
       }),
+      trx,
     );
   });
 });

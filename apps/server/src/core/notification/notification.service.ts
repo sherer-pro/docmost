@@ -9,6 +9,9 @@ import { MailService } from '../../integrations/mail/mail.service';
 import { NotificationDeliveryPolicyService } from './services/notification-delivery-policy.service';
 import { normalizeUserSettings } from '../user/utils/user-preferences.util';
 import { PageAccessService } from '../page-access/page-access.service';
+import { QueueOutboxService } from '../../integrations/queue/outbox/queue-outbox.service';
+import { NotificationEmailSecretPayload } from '../../integrations/queue/outbox/queue-outbox.types';
+import { v7 as uuid7 } from 'uuid';
 
 const DEFAULT_EMAIL_FREQUENCY = 'immediate';
 
@@ -22,6 +25,7 @@ export class NotificationService {
     private readonly mailService: MailService,
     private readonly notificationDeliveryPolicyService: NotificationDeliveryPolicyService,
     private readonly pageAccessService: PageAccessService,
+    private readonly queueOutboxService: QueueOutboxService,
     @InjectKysely() private readonly db: KyselyDB,
   ) {}
 
@@ -37,6 +41,51 @@ export class NotificationService {
       .to(`user-${data.userId}`)
       .emit('notification', { id: notification.id, type: notification.type });
 
+    return notification;
+  }
+
+  async createWithImmediateEmail(
+    data: InsertableNotification,
+    deduplicationKey: string,
+    email: { subject: string; template: any },
+  ) {
+    const notificationId = uuid7();
+    const preparedEmail = await this.prepareImmediateEmail(
+      data.userId,
+      notificationId,
+      data.pageId ?? null,
+      data.actorId ?? '',
+      data.spaceId ?? '',
+      email.subject,
+      email.template,
+    );
+
+    const notification = await this.db.transaction().execute(async (trx) => {
+      const inserted = await this.notificationRepo.insert(
+        { ...data, id: notificationId, deduplicationKey },
+        trx,
+      );
+      if (!inserted || !preparedEmail) {
+        return inserted;
+      }
+      await this.queueOutboxService.enqueueNotificationEmail(
+        inserted.id,
+        preparedEmail,
+        trx,
+      );
+      return inserted;
+    });
+    if (!notification) {
+      return null;
+    }
+
+    this.wsGateway.server.to(`user-${data.userId}`).emit('notification', {
+      id: notification.id,
+      type: notification.type,
+    });
+    if (preparedEmail) {
+      this.queueOutboxService.kick();
+    }
     return notification;
   }
 
@@ -77,49 +126,70 @@ export class NotificationService {
     template: any,
   ) {
     try {
-      const shouldSend =
-        await this.notificationDeliveryPolicyService.shouldSend({
-          channel: 'email',
-          userId,
-          notificationId,
-          pageId: pageId ?? undefined,
-          actorId,
-          spaceId,
-        });
-
-      if (!shouldSend) return;
-
-      const user = await this.db
-        .selectFrom('users')
-        .select(['email', 'settings'])
-        .where('id', '=', userId)
-        .where('deletedAt', 'is', null)
-        .executeTakeFirst();
-
-      if (!user?.email) return;
-
-      const settings = normalizeUserSettings(user.settings);
-      const emailFrequency = settings.preferences.emailFrequency;
-
-      if (emailFrequency !== DEFAULT_EMAIL_FREQUENCY) {
-        return;
-      }
-
-      await this.mailService.sendToQueue({
-        to: user.email,
+      const message = await this.prepareImmediateEmail(
+        userId,
+        notificationId,
+        pageId,
+        actorId,
+        spaceId,
         subject,
         template,
-        notificationId,
-        notificationUserId: userId,
-        notificationDeliveryMode: 'immediate',
-        notificationFrequency: emailFrequency,
-      });
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Unknown error';
-      this.logger.error(
-        `Failed to queue email for notification ${notificationId}: ${message}`,
       );
+      if (message) await this.mailService.sendToQueue(message);
+    } catch {
+      this.logger.error({ event: 'notification_email_queue_failed' });
     }
+  }
+
+  private async prepareImmediateEmail(
+    userId: string,
+    notificationId: string,
+    pageId: string | null,
+    actorId: string,
+    spaceId: string,
+    subject: string,
+    template: any,
+  ): Promise<NotificationEmailSecretPayload['message'] | undefined> {
+    const shouldSend = await this.notificationDeliveryPolicyService.shouldSend({
+      channel: 'email',
+      userId,
+      pageId: pageId ?? undefined,
+      actorId: actorId || undefined,
+      spaceId: spaceId || undefined,
+    });
+    if (!shouldSend) return undefined;
+
+    const user = await this.db
+      .selectFrom('users')
+      .select(['email', 'settings'])
+      .where('id', '=', userId)
+      .where('deletedAt', 'is', null)
+      .executeTakeFirst();
+    if (!user?.email) return undefined;
+
+    const emailFrequency = normalizeUserSettings(user.settings).preferences
+      .emailFrequency;
+    if (emailFrequency !== DEFAULT_EMAIL_FREQUENCY) return undefined;
+
+    const prepared = await this.mailService.prepareQueueMessage({
+      to: user.email,
+      subject,
+      template,
+      notificationId,
+      notificationUserId: userId,
+      notificationDeliveryMode: 'immediate',
+      notificationFrequency: emailFrequency,
+    });
+    return {
+      to: prepared.to,
+      subject: prepared.subject,
+      text: prepared.text,
+      html: prepared.html,
+      notificationId,
+      notificationUserId: userId,
+      notificationDeliveryMode: 'immediate',
+      notificationFrequency: emailFrequency,
+    };
   }
 
   async getUserLocale(userId: string): Promise<string> {

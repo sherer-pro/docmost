@@ -1,4 +1,5 @@
 import { PushAggregationService } from './push-aggregation.service';
+import { PushAggregationMetricsService } from './push-aggregation-metrics.service';
 
 describe('PushAggregationService', () => {
   const baseNotification = {
@@ -19,6 +20,7 @@ describe('PushAggregationService', () => {
 
   const dueJob = {
     id: 'job-1',
+    revision: 1,
     userId: 'user-1',
     pageId: 'page-1',
     windowKey: '1h:2026-02-01T10:00:00.000Z',
@@ -31,6 +33,75 @@ describe('PushAggregationService', () => {
       type: 'page-updated',
     },
   };
+
+  const claim = (jobs: any[]) => ({
+    leaseToken: 'lease-1',
+    jobs,
+    reclaimed: 0,
+  });
+
+  it('carries the claim owner and row revision through finalization', async () => {
+    const { service, pushNotificationJobRepo } = createService();
+
+    pushNotificationJobRepo.claimDuePending.mockResolvedValue({
+      leaseToken: 'lease-1',
+      jobs: [dueJob],
+      reclaimed: 0,
+    });
+
+    await service.processDueJobs();
+
+    expect(pushNotificationJobRepo.finalizeClaimed).toHaveBeenCalledWith({
+      leaseToken: 'lease-1',
+      sent: [{ id: 'job-1', revision: 1 }],
+      cancelled: [],
+      retry: [],
+    });
+  });
+
+  it('fails closed when the processing lease is lost during delivery', async () => {
+    jest.useFakeTimers();
+
+    try {
+      const { service, pushService, pushNotificationJobRepo } = createService();
+      let resolveDelivery: ((result: unknown) => void) | undefined;
+
+      pushNotificationJobRepo.claimDuePending.mockResolvedValue(
+        claim([dueJob]),
+      );
+      pushNotificationJobRepo.renewLease.mockResolvedValue(false);
+      pushService.sendToUser.mockReturnValue(
+        new Promise((resolve) => {
+          resolveDelivery = resolve;
+        }),
+      );
+
+      const processing = service.processDueJobs();
+      for (let index = 0; index < 10; index += 1) {
+        await Promise.resolve();
+      }
+      expect(pushService.sendToUser).toHaveBeenCalledTimes(1);
+
+      await jest.advanceTimersByTimeAsync(30_000);
+      expect(pushNotificationJobRepo.renewLease).toHaveBeenCalledWith(
+        ['job-1'],
+        'lease-1',
+        120_000,
+      );
+
+      resolveDelivery?.({
+        sent: 1,
+        failed: 0,
+        revoked: 0,
+        outcome: 'success',
+      });
+      await processing;
+
+      expect(pushNotificationJobRepo.finalizeClaimed).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 
   const createService = (options?: {
     pushFrequency?: string;
@@ -61,7 +132,13 @@ describe('PushAggregationService', () => {
     const pushNotificationJobRepo = {
       upsertPending: jest.fn(),
       claimDuePending: jest.fn(),
-      finalizeClaimed: jest.fn(),
+      renewLease: jest.fn().mockResolvedValue(true),
+      finalizeClaimed: jest.fn().mockResolvedValue({
+        sent: 0,
+        cancelled: 0,
+        retried: 0,
+        superseded: 0,
+      }),
     } as any;
     const notificationRepo = {
       isUnreadForUser: jest
@@ -91,6 +168,7 @@ describe('PushAggregationService', () => {
       notificationRepo,
       pushService,
       notificationDeliveryPolicyService,
+      new PushAggregationMetricsService(),
     );
 
     return {
@@ -142,7 +220,7 @@ describe('PushAggregationService', () => {
     const { service, pushService, pushNotificationJobRepo, notificationRepo } =
       createService({ unreadCountInWindow: 0 });
 
-    pushNotificationJobRepo.claimDuePending.mockResolvedValue([dueJob]);
+    pushNotificationJobRepo.claimDuePending.mockResolvedValue(claim([dueJob]));
 
     await service.processDueJobs();
 
@@ -151,9 +229,10 @@ describe('PushAggregationService', () => {
     ).toHaveBeenCalledTimes(1);
     expect(pushService.sendToUser).not.toHaveBeenCalled();
     expect(pushNotificationJobRepo.finalizeClaimed).toHaveBeenCalledWith({
-      sentIds: [],
-      cancelledIds: ['job-1'],
-      retryIds: [],
+      leaseToken: 'lease-1',
+      sent: [],
+      cancelled: [{ id: 'job-1', revision: 1 }],
+      retry: [],
     });
   });
 
@@ -166,7 +245,7 @@ describe('PushAggregationService', () => {
       notificationDeliveryPolicyService,
     } = createService({ shouldSend: false });
 
-    pushNotificationJobRepo.claimDuePending.mockResolvedValue([dueJob]);
+    pushNotificationJobRepo.claimDuePending.mockResolvedValue(claim([dueJob]));
 
     await service.processDueJobs();
 
@@ -180,16 +259,17 @@ describe('PushAggregationService', () => {
     ).not.toHaveBeenCalled();
     expect(pushService.sendToUser).not.toHaveBeenCalled();
     expect(pushNotificationJobRepo.finalizeClaimed).toHaveBeenCalledWith({
-      sentIds: [],
-      cancelledIds: ['job-1'],
-      retryIds: [],
+      leaseToken: 'lease-1',
+      sent: [],
+      cancelled: [{ id: 'job-1', revision: 1 }],
+      retry: [],
     });
   });
 
   it('does not mark a job as sent on transient delivery failure', async () => {
     const { service, pushService, pushNotificationJobRepo } = createService();
 
-    pushNotificationJobRepo.claimDuePending.mockResolvedValue([dueJob]);
+    pushNotificationJobRepo.claimDuePending.mockResolvedValue(claim([dueJob]));
     pushService.sendToUser.mockResolvedValue({
       sent: 1,
       failed: 1,
@@ -200,16 +280,17 @@ describe('PushAggregationService', () => {
     await service.processDueJobs();
 
     expect(pushNotificationJobRepo.finalizeClaimed).toHaveBeenCalledWith({
-      sentIds: [],
-      cancelledIds: [],
-      retryIds: ['job-1'],
+      leaseToken: 'lease-1',
+      sent: [],
+      cancelled: [],
+      retry: [{ id: 'job-1', revision: 1 }],
     });
   });
 
   it('keeps a job pending for retry on complete delivery failure caused by a transient error', async () => {
     const { service, pushService, pushNotificationJobRepo } = createService();
 
-    pushNotificationJobRepo.claimDuePending.mockResolvedValue([dueJob]);
+    pushNotificationJobRepo.claimDuePending.mockResolvedValue(claim([dueJob]));
     pushService.sendToUser.mockResolvedValue({
       sent: 0,
       failed: 2,
@@ -220,24 +301,27 @@ describe('PushAggregationService', () => {
     await service.processDueJobs();
 
     expect(pushNotificationJobRepo.finalizeClaimed).toHaveBeenCalledWith({
-      sentIds: [],
-      cancelledIds: [],
-      retryIds: ['job-1'],
+      leaseToken: 'lease-1',
+      sent: [],
+      cancelled: [],
+      retry: [{ id: 'job-1', revision: 1 }],
     });
   });
 
   it('cancels an aggregated job after the third transient failure', async () => {
     const { service, pushService, pushNotificationJobRepo } = createService();
 
-    pushNotificationJobRepo.claimDuePending.mockResolvedValue([
-      {
-        ...dueJob,
-        payload: {
-          ...dueJob.payload,
-          retryMeta: { attempts: 2 },
+    pushNotificationJobRepo.claimDuePending.mockResolvedValue(
+      claim([
+        {
+          ...dueJob,
+          payload: {
+            ...dueJob.payload,
+            retryMeta: { attempts: 2 },
+          },
         },
-      },
-    ]);
+      ]),
+    );
     pushService.sendToUser.mockResolvedValue({
       sent: 0,
       failed: 2,
@@ -248,9 +332,10 @@ describe('PushAggregationService', () => {
     await service.processDueJobs();
 
     expect(pushNotificationJobRepo.finalizeClaimed).toHaveBeenCalledWith({
-      sentIds: [],
-      cancelledIds: ['job-1'],
-      retryIds: [],
+      leaseToken: 'lease-1',
+      sent: [],
+      cancelled: [{ id: 'job-1', revision: 1 }],
+      retry: [],
     });
   });
 
@@ -271,10 +356,9 @@ describe('PushAggregationService', () => {
       sendAfter: new Date('2026-02-01T12:00:00.000Z'),
     };
 
-    pushNotificationJobRepo.claimDuePending.mockResolvedValue([
-      firstWindowJob,
-      secondWindowJob,
-    ]);
+    pushNotificationJobRepo.claimDuePending.mockResolvedValue(
+      claim([firstWindowJob, secondWindowJob]),
+    );
     notificationRepo.countUnreadByUserPageInWindow.mockImplementation(
       ({ windowStart, windowEnd }) => {
         if (
@@ -315,9 +399,10 @@ describe('PushAggregationService', () => {
     });
     expect(pushService.sendToUser).toHaveBeenCalledTimes(1);
     expect(pushNotificationJobRepo.finalizeClaimed).toHaveBeenCalledWith({
-      sentIds: ['job-2'],
-      cancelledIds: ['job-1'],
-      retryIds: [],
+      leaseToken: 'lease-1',
+      sent: [{ id: 'job-2', revision: 1 }],
+      cancelled: [{ id: 'job-1', revision: 1 }],
+      retry: [],
     });
   });
 });

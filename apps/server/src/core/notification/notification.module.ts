@@ -7,6 +7,7 @@ import { PageNotificationService } from './services/page.notification';
 import { RecipientResolverService } from './services/recipient-resolver.service';
 import { PushAggregationService } from './services/push-aggregation.service';
 import { PushAggregationBootstrapService } from './services/push-aggregation-bootstrap.service';
+import { PushAggregationMetricsService } from './services/push-aggregation-metrics.service';
 import { EmailAggregationService } from './services/email-aggregation.service';
 import { EmailAggregationBootstrapService } from './services/email-aggregation-bootstrap.service';
 import { NotificationDeliveryPolicyService } from './services/notification-delivery-policy.service';
@@ -24,6 +25,7 @@ import { PushModule } from '../push/push.module';
     RecipientResolverService,
     PushAggregationService,
     PushAggregationBootstrapService,
+    PushAggregationMetricsService,
     EmailAggregationService,
     EmailAggregationBootstrapService,
     NotificationDeliveryPolicyService,
@@ -32,6 +34,7 @@ import { PushModule } from '../push/push.module';
     NotificationService,
     RecipientResolverService,
     PushAggregationService,
+    PushAggregationMetricsService,
     EmailAggregationService,
     NotificationDeliveryPolicyService,
   ],

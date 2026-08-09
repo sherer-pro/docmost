@@ -1111,8 +1111,11 @@ export interface PushNotificationJobs {
   eventsCount: Generated<number>;
   id: Generated<string>;
   idempotencyKey: string;
+  leaseExpiresAt: Timestamp | null;
+  leaseToken: string | null;
   pageId: string;
   payload: Json | null;
+  revision: Generated<number>;
   sendAfter: Timestamp;
   sentAt: Timestamp | null;
   status: Generated<string>;

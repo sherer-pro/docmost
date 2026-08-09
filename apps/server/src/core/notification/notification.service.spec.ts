@@ -10,13 +10,15 @@ describe('NotificationService', () => {
     usersWithPageAccess?: string[];
   }) => {
     const notificationRepo = {
-      insert: jest
-        .fn()
-        .mockResolvedValue(
-          typeof options?.insertResult === 'undefined'
-            ? { id: 'notification-1', type: 'page.user_mention' }
-            : options.insertResult,
-        ),
+      insert: jest.fn().mockImplementation(async (data) =>
+        typeof options?.insertResult === 'undefined'
+          ? {
+              ...data,
+              id: data.id ?? 'notification-1',
+              type: 'page.user_mention',
+            }
+          : options.insertResult,
+      ),
       findByUserId: jest.fn().mockResolvedValue(
         options?.listResult ?? {
           items: [],
@@ -36,6 +38,16 @@ describe('NotificationService', () => {
     } as any;
     const mailService = {
       sendToQueue: jest.fn(),
+      prepareQueueMessage: jest.fn().mockImplementation(async (message) => ({
+        ...message,
+        template: undefined,
+        html: '<p>Prepared</p>',
+        text: 'Prepared',
+      })),
+    } as any;
+    const queueOutboxService = {
+      enqueueNotificationEmail: jest.fn().mockResolvedValue(undefined),
+      kick: jest.fn(),
     } as any;
     const notificationDeliveryPolicyService = {
       shouldSend: jest.fn().mockResolvedValue(options?.shouldSend ?? true),
@@ -45,6 +57,7 @@ describe('NotificationService', () => {
         .fn()
         .mockResolvedValue(options?.usersWithPageAccess ?? ['user-1']),
     } as any;
+    const trx = {} as any;
     const db = {
       selectFrom: jest.fn().mockReturnValue({
         select: jest.fn().mockReturnThis(),
@@ -56,6 +69,9 @@ describe('NotificationService', () => {
           },
         ),
       }),
+      transaction: jest.fn().mockReturnValue({
+        execute: jest.fn((callback) => callback(trx)),
+      }),
     } as any;
 
     return {
@@ -65,6 +81,7 @@ describe('NotificationService', () => {
         mailService,
         notificationDeliveryPolicyService,
         pageAccessService,
+        queueOutboxService,
         db,
       ),
       mailService,
@@ -72,9 +89,47 @@ describe('NotificationService', () => {
       wsGateway,
       notificationDeliveryPolicyService,
       pageAccessService,
+      queueOutboxService,
       db,
+      trx,
     };
   };
+
+  it('commits a notification and its immediate email intent atomically before waking Redis', async () => {
+    const { service, notificationRepo, queueOutboxService, mailService, trx } =
+      createService();
+
+    const result = await service.createWithImmediateEmail(
+      {
+        userId: 'user-1',
+        workspaceId: 'workspace-1',
+        type: 'page.user_mention',
+        actorId: 'actor-1',
+        pageId: 'page-1',
+        spaceId: 'space-1',
+      } as any,
+      'event-1:user-1',
+      { subject: 'Subject', template: {} },
+    );
+
+    expect(result).toEqual(expect.objectContaining({ id: expect.any(String) }));
+    expect(notificationRepo.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ deduplicationKey: 'event-1:user-1' }),
+      trx,
+    );
+    expect(mailService.prepareQueueMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        notificationId: expect.any(String),
+        notificationDeliveryMode: 'immediate',
+      }),
+    );
+    expect(queueOutboxService.enqueueNotificationEmail).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ html: '<p>Prepared</p>' }),
+      trx,
+    );
+    expect(queueOutboxService.kick).toHaveBeenCalledTimes(1);
+  });
 
   it('queues email immediately for immediate frequency', async () => {
     const { service, mailService } = createService();
@@ -92,7 +147,8 @@ describe('NotificationService', () => {
     expect(mailService.sendToQueue).toHaveBeenCalledWith({
       to: 'john@example.com',
       subject: 'Subject',
-      template: {},
+      html: '<p>Prepared</p>',
+      text: 'Prepared',
       notificationId: 'n-1',
       notificationUserId: 'user-1',
       notificationDeliveryMode: 'immediate',
