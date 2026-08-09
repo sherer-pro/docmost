@@ -5,58 +5,58 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 12565 nodes · 36543 edges · 646 communities (491 shown, 155 thin omitted)
+- 12567 nodes · 36542 edges · 637 communities (476 shown, 161 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 194 edges (avg confidence: 0.75)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `f039e568`
+- Built from commit: `13042a64`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
-- database-table-query.ts
+- database-table-view.tsx
 - app.module.ts
 - space-query.ts
 - entity.types.ts
 - api.ts
 - LinkPreviewService
-- RagService
-- comment.notification.ts
+- .resolvePageInScope
+- NotificationController
 - collaboration.module.ts
 - AiAssistantProfileService
 - openai-compatible-provider.service.ts
-- database-table-view.tsx
+- useQueryEmit
 - workspace-api-keys.tsx
 - User
-- executeTx
+- dictionary.service.ts
 - EnvironmentService
 - AiAuxRunService
 - dependencies
-- useUserRole
-- AuthWorkspace
+- space-members.tsx
+- Workspace
 - DatabaseService
 - KyselyDB
 - ai-mcp-tool-schema.util.ts
 - PageTemplateService
 - history-summary.ts
-- page-header-menu.tsx
+- AiRunStepService
 - PageRepo
 - TestPostgresDialect
 - AiRetrievalConfig
-- config.ts
+- ai-integrations-settings.tsx
 - App.tsx
-- PageTemplateController
+- AuthUser
 - normalizeUserSettings
-- page-details-modal.tsx
-- docmost-archive-import.service.ts
+- token.service.ts
+- CommentController
 - use-auth.ts
-- ai-mcp-admin.service.spec.ts
-- QueueOutboxRepo
+- ai-mcp-admin.service.ts
+- sanitizeRelativeReturnTo
 - space-tree.tsx
 - mail.provider.ts
 - dependencies
-- file-import-task.service.ts
+- AiFileService
 - email-aggregation.service.ts
 - redis-sync.extension.ts
 - RagContentExportService
@@ -68,74 +68,73 @@
 - AiContextService
 - WorkspaceRepo
 - dependencies
-- UserRepo
+- auth.service.ts
 - document-fields-panel.tsx
 - db.d.ts
 - csrf.guard.ts
 - page-editor.tsx
 - PageAccessService
 - page.service.ts
-- AddLabelsDto
+- label.dto.ts
 - space-sidebar.tsx
 - ai-mcp.constants.ts
-- favorite.controller.ts
-- page.notification.ts
-- ai-file.service.ts
+- getAppUrl
+- WorkspaceInvitationService
+- persistence.extension.ts
 - bubble-menu.tsx
 - TypesenseIndexService
 - overrides
-- page.utils.ts
-- group-query.ts
+- buildPageUrl
+- mfa.controller.ts
 - security-query.ts
-- extractPageSlugId
+- .createFromTemplate
 - .updateSpace
-- page-query.ts
+- AiBuiltinToolPolicyService
 - extensions.ts
 - search-reindex.ts
 - styles.ts
 - editor-ext.mock.ts
-- database.service.ts
+- database.controller.ts
 - health.module.ts
 - scripts
 - AiConfigService
 - check-audit-exceptions.mjs
 - notification-query.ts
 - devDependencies
-- StorageService
+- AttachmentFileAccessService
 - AuthRateLimitService
-- page-template.service.ts
+- page-template.service.spec.ts
 - targets
-- RagSyncAdminController
+- rag-sync-admin.controller.ts
 - rag-sync-source.service.ts
 - AiRun
 - PageHistoryService
 - RagSyncSourceService
-- SsoController
+- sso.controller.ts
 - transclusion-reference-view.tsx
 - compilerOptions
 - page-service.ts
-- PushAggregationService
-- persistence.extension.ts
+- .removeIcon
+- CollabHistoryService
 - scripts
 - devDependencies
 - UpdateSpaceDto
 - .attachmentSearch
-- environment.service.ts
+- database.service.ts
 - core.module.ts
 - LocalDriver
 - AiRunService
-- label.repo.ts
-- CreateDictionaryTermDto
-- favorite-list.tsx
+- environment.module.ts
+- invite-sign-up-form.tsx
+- IPage
 - Q: сделай коммиты
 - 20260608T121000-repair-stringified-page-content.ts
-- mail.service.ts
 - compilerOptions
 - Q: Implement the approved full redesign of the Docmost AI assistant and MCP onboarding, including the UUID status fix, lazy conversations, agent approval previews, settings IA, accessibility, localization, presets, tests, and browser QA.
 - ai-mcp-pinned-fetch.ts
 - transclusion-deletion-guard.ts
 - ai-tool-registry.service.ts
-- workspace.service.ts
+- SpacePolicyService
 - current-user-atom.ts
 - client/project.json
 - share-seo.controller.ts
@@ -144,110 +143,111 @@
 - check-env-contract.mjs
 - Docmost Client README
 - HtmlPdfRendererService
-- .removeIcon
+- .upload
 - search-query.ts
 - auth-rate-limit.service.ts
 - AiMcpAdminService
-- notification.module.ts
+- EmailAggregationService
+- .delete
 - Core AI assistant audit — 2026-08-07
 - RagSyncAdminService
-- AiAssistantProfileController
+- auth-rate-limit.guard.ts
 - PageListener
 - transclusion-content.tsx
 - PresenceService
 - ignore
 - manifest.json
-- user-provider.tsx
+- .confirmImportZipAction
 - readonly-page-editor.tsx
 - share.service.ts
-- PageTemplatePolicyService
+- GroupIdDto
 - devDependencies
 - rag-sync-browser-e2e.mjs
-- UpdateAiMcpServerDto
-- integrations/security/security.module.ts
+- ai-mcp-settings.controller.ts
+- telemetry.service.ts
 - ai-query.ts
 - ai-external-mcp-policies.ts
 - AiToolRegistryService
 - PersistenceExtension
 - mfa-service.ts
 - scripts
-- AiConfigController
-- slash-command.ts
+- ai-config.controller.ts
+- session-query.ts
 - API Route Generator
 - AiConversationService
 - AiMcpServersController
-- drawio-view.tsx
+- client-session-cleanup.ts
 - global-app-shell.tsx
 - run-ai-audit.mjs
 - Excalidraw Editor
-- ai-mcp-policy.service.ts
+- AiMcpPolicyService
 - RagSyncAdminRepo
-- comment.service.ts
+- PageCommentsQueryDto
 - vite.config.ts
-- materializePageContent
+- .resolveLegacyPageEmbeds
 - support.ts
 - page-template-api.ts
 - Docmost archive format
 - package.json
 - Comment Linting Tool
 - compilerOptions
-- credential-protection.util.ts
+- sso.service.ts
 - ai-selection-action.tsx
 - AiMcpClientPoolService
 - queue-outbox.service.ts
 - Built-in AI integration
 - Package Metadata
-- AiRunController
+- .create
 - Q: Пример того, как отобразилась ГОРИЗОНТАЛЬНЫЕ диаграмма mermaid и PNG-картинка с бизнес-процессом. Если картинка вертикальная (портрет), то нужно показывать в высоту, если горизонтальная (ландшафт), то в ширину. Пропорционально
 - rag-sync-admin.service.ts
 - UpdatePageDto
-- jwt-auth.guard.ts
+- page.controller.ts
 - ai-outbound-url-policy.service.ts
 - copy-markdown-with-comments.service.ts
 - sw.js
-- SearchDTO
-- AiConversationController
+- SearchService
+- SsoEndpointPolicyService
 - NestJS CLI Config
-- AiContentPolicyService
+- ai.module.ts
 - CreateAiAssistantProfileDto
 - menu-items.ts
 - reading-time-locales.test.ts
-- history.processor.ts
+- .constructor
 - Code Block Editor
 - 6. Inbound MCP for external assistants
 - .getUserInfo
 - ci-embedded-rag-sync-smoke.mjs
 - ai-tool-policy-query.ts
 - PaginationOptions
-- .revokeSession
+- session.controller.ts
 - AiOperationalMetricsService
 - .candidates
 - Space
 - Architecture Audit Tool
 - Queue Outbox Runbook
 - Workspace Invitation Migration
-- helpers/utils.ts
+- attachment-public-token.util.ts
 - Service Infrastructure
 - Workspace Build Targets
 - ai-external-mcp-query.ts
-- QueueOutboxService
+- CreateGroupDto
 - compilerOptions
 - exclude
 - push.controller.ts
 - .create
 - ShareTransclusionLookupDto
 - emoji-menu/utils.ts
-- AiMcpUrlPolicyService
-- .copyMarkdownWithCommentsAction
+- AttachmentProcessor
+- EmailProcessor
 - FakeRedis
 - DOM Mocking
 - CI Workflow Config
 - AGENTS.md — practical automation cheat sheet for `docmost`
 - Frontend Features
 - inline-code-no-wrap.ts
-- skip-transform.decorator.ts
-- ApiKeyService
-- page.controller.ts
+- change-password.tsx
+- api-key.service.ts
+- CreateSpaceDto
 - Database Migrations
 - Database Query Repositories
 - Docker Image Workflow
@@ -255,25 +255,26 @@
 - SsoService
 - Design QA
 - Улучшения, специфичные для форка
-- MovePageDto
+- UpdateWorkspaceUserRoleDto
 - Q: Столбцы в базах данных должно быть можно перемещать. Соответственно, в строках они тоже меняют местоположение (включая отдельные страницы строк)
-- api-key.repo.ts
-- UpdateWorkspaceDto
+- App
+- ai-assistant-profile.service.spec.ts
 - Documentation Audit 2026-06-20
 - Q: В браузере ошибка `{"error":{"code":"NOT_FOUND","message":"Маршрут не найден","requestId":"req-6f"}}`
 - CollabProxySocket
 - Q: Лог сервера: диагностика ошибки corrupted migrations для ai-citations и ai-builtin-tool-policy
-- UpdateRagSyncSpaceConfigDto
+- RagSyncActionDto
 - Release note: legacy database/page route fallback
 - Q: Diagnose the attached Docker Compose output where rag-sync restarts
 - Q: Are RAG_SYNC_WORKSPACE_ID and RAG_SYNC_SPACE_ID configured in the project UI?
 - Q: Синхронизируемый блок иногда вставляется пустым, нужно перезагружать страницу, чтобы его содержимое отобразилось
 - Q: А `pnpm --filter ./apps/server migration:latest` выполняется самостоятельно перед сборкой Docker?
-- page.dto.ts
+- MarkNotificationsReadDto
 - api-route-inventory.generated.md
 - mermaid-view.tsx
 - AI assistant, smart search (RAG), and MCP (inbound and outbound)
-- .getFile
+- legacy-files.controller.ts
+- hashProseMirrorJson
 - buildDatabaseNodeUrl
 - Q: А во время сборки сервера?
 - check-no-ee.mjs
@@ -303,11 +304,11 @@
 - check-rag-doc-contract.mjs
 - .findById
 - WsGateway
-- ApiKeyAuthGuard
+- rag.module.ts
 - dictionary-highlight-extension.ts
 - Q: На /settings/ai/built-in-tools не хватает переводов
 - Q: 1. Иконка ИИ-помощника при stycky toolbar не должна дублироваться у выделенного текста всплывающим меню. 2. В меню редактирования (toolbar) текста элемент с выбором цвета button[data-text-color,data-highlight-color] сейчас с границей, должна быть без границы.
-- ai.module.ts
+- ai-context.service.ts
 - Q: Что такое page.node.delete.propose и page.public_share.read, нужно ли их переводить?
 - Q: Добавить отображение процесса reasoning для поддерживающих моделей, настройку пространства и раскрывающийся блок в чате
 - Q: Проверь работоспособность поиска по пространству
@@ -328,7 +329,7 @@
 - Q: сделай коммит
 - Q: В консоли браузера: TypeError: Cannot read properties of null (reading 'pageId')
 - 2. AI assistant flow
-- RagSyncActionDto
+- CheckHostnameDto
 - Q: Создать полную инструкцию по запуску и настройке apps/rag-sync на Ubuntu и Windows
 - create_docx
 - Q: А куда исчезла кнопка вызова быстрых команд для выделенного текста?
@@ -342,8 +343,8 @@
 - AiMcpSpaceController
 - Q: Где проходит поток AI chat reasoning от OpenAI-compatible provider до UI и какие границы нужно сохранить?
 - Q: Сейчас Redis внутри основного контейнера. Это важно? Нужно вынести его в общий или поднять в rag-sync свой?
-- TransclusionController
-- .removeConnection
+- database-description-editor.tsx
+- TestPostgresDialect
 - Q: Проверь реализацию переопределения политик безопасности и исправь найденные дефекты
 - 8. API
 - Q: Реализуй разделение Redis и RAG Sync, пришли архив со всеми файлами, учитывая общую сеть edge и https-portal
@@ -360,28 +361,26 @@
 - Q: PLEASE IMPLEMENT THIS PLAN: # Разделение Docmost и опционального `rag-sync`
 - Q: доработай так, чтобы локально всё это тоже собиралось через один docker compose (включая rag-sync)
 - Q: Error: RAG_SYNC_DOCMOST_API_KEY is required. Check all keys and refactor if necessary.
-- ai-mcp-admin.service.ts
+- ai-mcp-headers.util.ts
 - 20260608T120000-clean-malformed-leading-table-rows.ts
 - Q: А действительно ли в .env нужны RAG_SYNC_DOCMOST_API_KEY и RAG_SYNC_OPEN_WEBUI_API_KEY, если оба задаются через UI?
-- SidebarPagesQueryDto
+- TestPostgresDialect
 - playwright.ai.config.ts
 - Q: В база данных (тип записей) не работает смена порядка столбцов перетаскиванием
-- api-client.ts
+- config.ts
 - Q: У разных пространств Docmost могут быть разные ИИ-помощники, Open WebUI, LLM и другие настройки.
 - ci-production-smoke.mjs
-- TrashCleanupService
 - helpers/constants.ts
 - @nestjs/event-emitter
 - fastify
-- attachment.types.ts
-- backlink.dto.ts
+- Injectable
+- Optional
 - Q: Составь подробный план реализации, с исследованием и, при необходимости, рефакторингом
 - rag-sync-source.service.spec.ts
 - ai-markdown-composer.test.ts
 - TestPostgresDialect
 - @hocuspocus/transformer
 - mermaid
-- UserService
 - Q: How do the embedded per-space RAG sync admin, binding registry, and source processor integrate?
 - 20260805T110000-ai-builtin-tool-policy.ts
 - Q: Why do leaf pages show a disabled expand button and why can a long descendant-selection title overflow the dialog?
@@ -406,7 +405,6 @@
 - Q: Проверь и исправь stale-документацию/локали после удаления standalone apps/rag-sync.
 - Q: Исправить bounded fairness во встроенном rag-sync: ограничить database rows и reconciliation одним quantum с lease fencing
 - redis-sync.extension.spec.ts
-- presence.types.ts
 - Q: В верхнем меню страниц и баз данных есть кнопка Делиться, сделай её только иконкой, как остальные рядом.
 - Q: Implement the approved per-space embedded RAG Sync UI
 - cache-manager
@@ -428,7 +426,7 @@
 - Q: Проверь, внесены ли изменения RAG Sync в справку и интерфейсы настроек
 - tseep
 - 7. Outbound external MCP servers
-- attachment.service.ts
+- docmost-archive-import.service.ts
 - Q: Исправить недостатки документации и встроенной справки RAG Sync и сделать коммиты функциональности чата
 - active-tree-selection.test.tsx
 - mammoth
@@ -447,7 +445,7 @@
 - locales-coverage.test.ts
 - @nestjs/websockets
 - FavoriteController
-- rag-open-webui-compat.mjs
+- .createDocmostArchive
 - KyselyTransaction
 - Q: Исправь везде, на всех языках.
 - otpauth
@@ -463,10 +461,8 @@
 - undici
 - @napi-rs/canvas
 - Q: SSO: OIDC, SAML, LDAP и group mappings
-- transclusion-unsync.util.ts
 - Q: Как встроить многопространственную синхронизацию Docmost в Open WebUI и устранить зависимость от отдельного сервиса rag-sync?
-- Workspace
-- .constructor
+- .createForUser
 - blueimp-load-image
 - clsx
 - emoji-mart
@@ -496,7 +492,7 @@
 - fs-extra
 - jsonwebtoken
 - 3) Style conventions (as observed)
-- AttachmentContentService
+- .error
 - WorkspaceListener
 - kysely-migration-cli
 - ldapts
@@ -538,8 +534,7 @@
 - uuid
 - @nestjs/bullmq
 - dompurify
-- CreateUserDto
-- invitation.dto.ts
+- auth.controller.ts
 - p-limit
 - pino-http
 - yauzl
@@ -550,15 +545,11 @@
 - ai-page-operation.ts
 - tmp-promise
 - 20260807T140000-search-guillemet-indexing.ts
-- MaxUtf8Bytes
-- export.service.ts
+- generateHTML.ts
 - WsMessageDto
 - @tiptap/pm
 - audit-inbound-mcp.mjs
-- .constructor
 - run-ai-context-audit.mjs
-- page.module.ts
-- ws.gateway.spec.ts
 
 ## God Nodes (most connected - your core abstractions)
 1. `KyselyDB` - 790 edges
@@ -567,7 +558,7 @@
 4. `AuthUser` - 358 edges
 5. `KyselyTransaction` - 323 edges
 6. `AuthWorkspace` - 293 edges
-7. `EnvironmentService` - 204 edges
+7. `EnvironmentService` - 203 edges
 8. `dbOrTx()` - 174 edges
 9. `AuthPolicyScope()` - 155 edges
 10. `PaginationOptions` - 126 edges
@@ -577,10 +568,10 @@
   apps/server/src/integrations/import/utils/file.utils.spec.ts → package.json
 - `loadEntry()` --references--> `jszip`  [EXTRACTED]
   apps/server/src/integrations/import/utils/file.utils.spec.ts → package.json
-- `createDocx()` --references--> `jszip`  [EXTRACTED]
-  scripts/rag-open-webui-compat.mjs → package.json
 - `PageEditor()` --references--> `@hocuspocus/provider`  [EXTRACTED]
   apps/client/src/features/editor/page-editor.tsx → package.json
+- `createDocx()` --references--> `jszip`  [EXTRACTED]
+  scripts/rag-open-webui-compat.mjs → package.json
 - `parseResponse()` --references--> `ApiResponse`  [EXTRACTED]
   apps/client/e2e/editor/support/api.ts → apps/client/src/lib/types.ts
 
@@ -594,23 +585,23 @@
 ## Hyperedges (group relationships)
 - **Core Module Functionalities** — apps_server_src_core_module, apps_server_src_database_repos, apps_server_src_database_migrations [EXTRACTED 0.90]
 
-## Communities (646 total, 155 thin omitted)
+## Communities (637 total, 161 thin omitted)
 
-### Community 0 - "database-table-query.ts"
-Cohesion: 0.06
-Nodes (76): jotaiStore, syncDatabaseTreeNode(), useConvertDatabaseToPageMutation(), useCreateDatabaseMutation(), useGetDatabasesBySpaceQuery(), useUpdateDatabaseMutation(), normalizeDatabaseRowsResponse(), useBatchUpdateDatabaseCellsMutation() (+68 more)
+### Community 0 - "database-table-view.tsx"
+Cohesion: 0.02
+Nodes (193): DocumentCommonActionItems(), DocumentCommonActionItemsProps, databaseTableExportStateAtom, defaultDatabaseTableExportState, DatabaseCellRendererProps, DatabaseFilterEditor(), DatabaseFilterEditorProps, DATABASE_PROPERTY_TYPE_ICONS (+185 more)
 
 ### Community 1 - "app.module.ts"
-Cohesion: 0.10
-Nodes (22): AppController, Controller, Get, AppService, Injectable, CollabAppModule, Module, LoggerModule (+14 more)
+Cohesion: 0.08
+Nodes (27): AppController, Controller, Get, AppService, Injectable, LoggerModule, Module, CoreModule (+19 more)
 
 ### Community 2 - "space-query.ts"
-Cohesion: 0.04
-Nodes (76): RoleMenuProps, AiSpaceSettings(), AiSpaceSettingsSection, AiSpaceSettingsPage(), SECTIONS, IFavorite, AddSpaceMemberModalProps, AddSpaceMembersModal() (+68 more)
+Cohesion: 0.03
+Nodes (109): RoleButton, RoleButtonProps, RoleMenuProps, AiSpaceSettings(), AiSpaceSettingsSection, AiSpaceSettingsPage(), SECTIONS, AddGroupMemberModal() (+101 more)
 
 ### Community 3 - "entity.types.ts"
 Cohesion: 0.02
-Nodes (109): Injectable, InjectKysely, UserTokenRepo, AiAgentToolVerification, AiAssistantProfileGroupPolicy, AiAssistantProfileMcpTool, AiAssistantProfileUserPreference, AiAssistantProfileWorkspaceSetting (+101 more)
+Nodes (125): RagDocumentFieldsConfig, RagFeedCursor, RagFeedPagination, RagFeedSnapshot, RagReadContext, defaultDecodeCursor(), defaultEncodeCursor(), DatabasePropertyRepo (+117 more)
 
 ### Community 4 - "api.ts"
 Cohesion: 0.10
@@ -620,29 +611,25 @@ Nodes (51): apiDelete(), apiGet(), apiPost(), apiPostWithHeaders(), attachmentUr
 Cohesion: 0.11
 Nodes (9): LINK_PREVIEW_BLOCKED_HOST_SUFFIXES, LINK_PREVIEW_BLOCKLIST, LinkPreviewAddress, LinkPreviewFetchResult, LinkPreviewLookupCallback, LinkPreviewResponse, LinkPreviewResult, LinkPreviewService (+1 more)
 
-### Community 6 - "RagService"
-Cohesion: 0.11
-Nodes (8): AiContentPolicyModule, Module, RagAuthContext, RagModule, Module, RagService, Tail, Injectable
-
-### Community 7 - "comment.notification.ts"
-Cohesion: 0.13
-Nodes (10): getNotificationTitle(), NotificationType, NotificationService, Injectable, CommentNotificationService, Injectable, InsertableNotification, CommentCreateEmail() (+2 more)
+### Community 7 - "NotificationController"
+Cohesion: 0.18
+Nodes (8): NotificationController, Body, Controller, Get, HttpCode, Post, Query, UseGuards
 
 ### Community 8 - "collaboration.module.ts"
-Cohesion: 0.06
-Nodes (18): CollabWsAdapter, CollaborationGateway, Injectable, CollabEventHandlers, CollaborationModule, Module, LoggerExtension, Injectable (+10 more)
+Cohesion: 0.05
+Nodes (27): CollabWsAdapter, CollaborationGateway, Injectable, CollabEventHandlers, CollaborationHandler, ParagraphWithId, testExtensions, testSchema (+19 more)
 
 ### Community 9 - "AiAssistantProfileService"
 Cohesion: 0.08
-Nodes (6): AiAssistantProfileService, fingerprint(), Injectable, postgresJsonb(), AiAssistantProfile, AiSpaceConfig
+Nodes (7): AiAssistantProfileService, canonical(), fingerprint(), Injectable, postgresJsonb(), AiAssistantProfile, AiSpaceConfig
 
 ### Community 10 - "openai-compatible-provider.service.ts"
-Cohesion: 0.12
-Nodes (14): AiProviderConfig, AiProviderTool, AiProviderToolCall, AiProviderToolResponse, AiProviderUsage, InjectKysely, AiPinnedDispatcher, AiProviderEmptyResponseError (+6 more)
+Cohesion: 0.13
+Nodes (12): AiProviderConfig, AiProviderTool, AiProviderToolCall, AiProviderToolResponse, AiProviderUsage, AiProviderEmptyResponseError, AiProviderInvalidResponseError, AiProviderRequestCancelledError (+4 more)
 
-### Community 11 - "database-table-view.tsx"
-Cohesion: 0.07
-Nodes (62): databaseTableExportStateAtom, defaultDatabaseTableExportState, DatabaseFilterEditor(), DatabaseFilterEditorProps, DATABASE_PROPERTY_TYPE_ICONS, DatabaseTableView(), DatabaseTableViewProps, getPropertyTypeIcon() (+54 more)
+### Community 11 - "useQueryEmit"
+Cohesion: 0.09
+Nodes (36): DictionaryHighlightLayer(), DictionaryHighlightLayerProps, PopoverState, SelectionState, term, DictionaryMarkdown(), DictionaryMarkdownProps, DictionaryTermModal() (+28 more)
 
 ### Community 12 - "workspace-api-keys.tsx"
 Cohesion: 0.08
@@ -650,131 +637,131 @@ Nodes (48): restoreRoot(), RootAccessibilityState, setRootInert(), Harness(), us
 
 ### Community 13 - "User"
 Cohesion: 0.06
-Nodes (51): jsonToHtml(), jsonToMarkdown(), AuthUser, extractUserMentionIdsFromJson(), CommentController, Body, Controller, Get (+43 more)
+Nodes (35): jsonToHtml(), jsonToMarkdown(), BacklinkDirection, BacklinksListDto, BacklinksListQueryDto, IsIn, IsNotEmpty, IsString (+27 more)
 
-### Community 14 - "executeTx"
-Cohesion: 0.05
-Nodes (22): DictionaryService, PreparedAlias, Injectable, InjectKysely, DictionaryExportResponse, DictionaryImportResult, DictionaryPortableTerm, DictionaryTermResponse (+14 more)
+### Community 14 - "dictionary.service.ts"
+Cohesion: 0.07
+Nodes (36): DictionaryModule, Module, DictionaryService, PreparedAlias, PreparedImportTerm, Injectable, InjectKysely, DictionaryExportResponse (+28 more)
 
 ### Community 15 - "EnvironmentService"
 Cohesion: 0.04
 Nodes (8): InjectKysely, Get, InjectKysely, InjectQueue, EnvironmentService, Injectable, StaticModule, Module
 
 ### Community 16 - "AiAuxRunService"
-Cohesion: 0.06
-Nodes (12): AiAuxRunExecutionService, buildEditorActionMessages(), Injectable, AiAuxRunService, Injectable, AiQueueReconcilerService, Injectable, InjectKysely (+4 more)
+Cohesion: 0.11
+Nodes (9): AiAuxRunExecutionService, buildEditorActionMessages(), Injectable, AiAuxRunService, Injectable, fallbackAiConversationTitle(), normalizeAiConversationTitle(), TITLE_STOP_WORDS (+1 more)
 
 ### Community 17 - "dependencies"
 Cohesion: 0.03
 Nodes (61): dependencies, bcrypt, bullmq, cheerio, class-transformer, class-validator, cookie, @fastify/multipart (+53 more)
 
-### Community 18 - "useUserRole"
-Cohesion: 0.05
-Nodes (80): NoTableResults(), NoTableResultsProps, PagePaginationProps, Paginate(), isDatabaseNode(), Props, RecentChangeNode, RecentChanges() (+72 more)
-
-### Community 19 - "AuthWorkspace"
+### Community 18 - "space-members.tsx"
 Cohesion: 0.06
-Nodes (50): AuthWorkspace, buildWorkspaceAdminAbility(), buildWorkspaceMemberAbility(), buildWorkspaceOwnerAbility(), AddGroupUserDto, ArrayMaxSize, ArrayMinSize, IsArray (+42 more)
+Nodes (68): NoTableResults(), NoTableResultsProps, PagePaginationProps, Paginate(), isDatabaseNode(), Props, RecentChangeNode, RecentChanges() (+60 more)
+
+### Community 19 - "Workspace"
+Cohesion: 0.05
+Nodes (55): AuthWorkspace, AiAssistantProfileController, AiAssistantProfilePolicyController, Body, Controller, Delete, Get, Param (+47 more)
+
+### Community 20 - "DatabaseService"
+Cohesion: 0.07
+Nodes (3): DatabaseService, Injectable, DatabaseRow
 
 ### Community 21 - "KyselyDB"
-Cohesion: 0.02
-Nodes (49): InjectKysely, InjectQueue, InjectKysely, InjectKysely, InjectKysely, InjectQueue, NotificationDeliveryPolicyService, Injectable (+41 more)
+Cohesion: 0.03
+Nodes (44): InjectKysely, InjectKysely, InjectKysely, InjectQueue, InjectKysely, InjectKysely, LabelService, Injectable (+36 more)
 
 ### Community 22 - "ai-mcp-tool-schema.util.ts"
-Cohesion: 0.10
-Nodes (36): AI_MCP_MAX_SCHEMA_DEPTH, AI_MCP_MAX_SCHEMA_ENUM_MEMBERS, AI_MCP_MAX_SCHEMA_NODES, AI_MCP_MAX_SCHEMA_PROPERTIES, AI_MCP_TOOL_HASH_LENGTH, AI_MCP_TOOL_NAME_MAX_LENGTH, AI_MCP_TOOL_SLUG_MAX_LENGTH, readHint() (+28 more)
-
-### Community 23 - "PageTemplateService"
-Cohesion: 0.08
-Nodes (7): row(), strictJsonToNode(), hashProseMirrorJson(), PageTemplateService, Injectable, rewriteAttachmentsForUnsync(), expectAssuranceError()
+Cohesion: 0.09
+Nodes (34): extractAiApprovalPreview(), AI_MCP_MAX_SCHEMA_BYTES, AI_MCP_MAX_SCHEMA_DEPTH, AI_MCP_MAX_SCHEMA_ENUM_MEMBERS, AI_MCP_MAX_SCHEMA_NODES, AI_MCP_MAX_SCHEMA_PROPERTIES, AI_MCP_TOOL_HASH_LENGTH, AI_MCP_TOOL_NAME_MAX_LENGTH (+26 more)
 
 ### Community 24 - "history-summary.ts"
 Cohesion: 0.07
 Nodes (58): activeHistoryIdAtom, activeHistoryPrevIdAtom, DiffCounts, diffCountsAtom, highlightChangesAtom, historyAtoms, HistoryEditor(), HistoryEditorProps (+50 more)
 
-### Community 25 - "page-header-menu.tsx"
-Cohesion: 0.07
-Nodes (49): CopyButton(), CopyButtonProps, DocumentCommonActionItems(), DatabaseHeader(), DatabaseHeaderProps, DatabaseHeaderMenu(), DatabaseHeaderMenuProps, normalizeRowsResponse() (+41 more)
+### Community 25 - "AiRunStepService"
+Cohesion: 0.08
+Nodes (6): AiQueueReconcilerService, Injectable, InjectKysely, approvedStepRecoveryAction, AiRunStepService, Injectable
 
 ### Community 26 - "PageRepo"
 Cohesion: 0.04
-Nodes (28): InjectKysely, Optional, InjectKysely, InjectKysely, InjectKysely, InjectKysely, SpaceAbilityFactory, Injectable (+20 more)
+Nodes (29): InjectKysely, InjectKysely, InjectQueue, InjectKysely, InjectQueue, ResolveCommentDto, IsBoolean, IsUUID (+21 more)
 
 ### Community 28 - "AiRetrievalConfig"
 Cohesion: 0.05
-Nodes (34): findings, hit(), report, root, secrets, AI_RETRIEVAL_DEFAULTS, AiRetrievalConfig, AiRetrievalHit (+26 more)
+Nodes (35): findings, hit(), report, root, secrets, AiRetrievalConfig, AiRetrievalHit, AiRetrievalRequest (+27 more)
 
-### Community 29 - "config.ts"
-Cohesion: 0.03
-Nodes (79): SettingsTitle(), AuthenticatedError404(), Error404(), AiAdminGuide(), OPERATIONS, SECURITY_ITEMS, SETTINGS_LINKS, SurfaceCard (+71 more)
+### Community 29 - "ai-integrations-settings.tsx"
+Cohesion: 0.17
+Nodes (13): AiAdminGuide(), OPERATIONS, SECURITY_ITEMS, SETTINGS_LINKS, SurfaceCard, SURFACES, SYNC_RISKS, SYNC_STEPS (+5 more)
 
 ### Community 30 - "App.tsx"
-Cohesion: 0.03
-Nodes (76): AccountPreferences, AccountSettings, AiIntegrationsSettings, AiSpaceSettingsPage, App(), CloudLogin, CreateWorkspace, DatabaseLegacyRedirect (+68 more)
+Cohesion: 0.05
+Nodes (35): AccountPreferences, AccountSettings, AiIntegrationsSettings, AiSpaceSettingsPage, CloudLogin, CreateWorkspace, DatabaseLegacyRedirect, DatabasePage (+27 more)
 
-### Community 31 - "PageTemplateController"
-Cohesion: 0.14
-Nodes (11): PageTemplateController, Body, Controller, Get, Headers, HttpCode, Param, Post (+3 more)
+### Community 31 - "AuthUser"
+Cohesion: 0.08
+Nodes (32): AuthPolicyScope(), AuthUser, DatabaseController, Body, Controller, Delete, Get, HttpCode (+24 more)
 
 ### Community 32 - "normalizeUserSettings"
-Cohesion: 0.22
-Nodes (18): validateSsoEnforcement(), AsideTabPreference, isRecord(), normalizeAiPanelWidth(), normalizeAsideTabPreference(), normalizeBooleanPreferenceByPageId(), normalizeNotificationFrequency(), normalizePageEditModeByPageId() (+10 more)
+Cohesion: 0.17
+Nodes (20): validateSsoEnforcement(), Injectable, UserService, AsideTabPreference, isRecord(), normalizeAiPanelWidth(), normalizeAsideTabPreference(), normalizeBooleanPreferenceByPageId() (+12 more)
 
-### Community 33 - "page-details-modal.tsx"
-Cohesion: 0.12
-Nodes (28): BacklinkList(), extractTextFromDoc(), getLabelColor(), getPageTextStats(), LABEL_COLORS, LabelPicker(), normalizeLabelInput(), PageDetailsModal() (+20 more)
+### Community 33 - "token.service.ts"
+Cohesion: 0.11
+Nodes (16): CollabAuthenticationContext, extractBearerTokenFromHeader(), JwtApiKeyPayload, JwtAttachmentPayload, JwtCollabPayload, JwtExchangePayload, JwtMfaTokenPayload, JwtPayload (+8 more)
 
-### Community 34 - "docmost-archive-import.service.ts"
-Cohesion: 0.12
-Nodes (13): extractMentions(), extractPageMentions(), extractReferenceId(), remapDatabasePageReference(), remapDatabaseViewConfig(), collectReferencesFromPmJson(), FileTask, ArchiveSnapshotValue (+5 more)
+### Community 34 - "CommentController"
+Cohesion: 0.13
+Nodes (16): CommentController, Body, Controller, Get, HttpCode, Post, Query, UseGuards (+8 more)
 
 ### Community 35 - "use-auth.ts"
-Cohesion: 0.06
-Nodes (64): TopMenu(), createFormSchema(), ForgotPasswordForm(), formSchema, FormValues, InviteSignUpForm(), createFormSchema(), LoginForm() (+56 more)
+Cohesion: 0.13
+Nodes (30): createFormSchema(), PasswordResetForm(), PasswordResetFormProps, createFormSchema(), SetupWorkspaceForm(), useAuth(), getCollabTokenRetryDelay(), shouldRetryCollabToken() (+22 more)
 
-### Community 36 - "ai-mcp-admin.service.spec.ts"
-Cohesion: 0.32
-Nodes (6): approve(), build(), fakeDb(), Row, USER, WORKSPACE
-
-### Community 37 - "QueueOutboxRepo"
+### Community 36 - "ai-mcp-admin.service.ts"
 Cohesion: 0.18
-Nodes (4): QueueOutboxRepo, Injectable, InjectKysely, InsertableQueueOutboxEntry
+Nodes (14): approve(), build(), fakeDb(), Row, USER, WORKSPACE, AI_MCP_TRANSPORT, AiMcpStoredApprovedTool (+6 more)
+
+### Community 37 - "sanitizeRelativeReturnTo"
+Cohesion: 0.13
+Nodes (21): createFormSchema(), ForgotPasswordForm(), createFormSchema(), LoginForm(), useRedirectIfAuthenticated(), getSpaceReturnTo(), getTargetedLoginUrl(), hasControlCharacters() (+13 more)
 
 ### Community 38 - "space-tree.tsx"
-Cohesion: 0.04
-Nodes (82): STATUS_COLOR_MAP, StatusIndicator(), StatusIndicatorProps, SubpagesView(), Breadcrumb(), buildNodeUrl(), getTitle(), PageHeader() (+74 more)
+Cohesion: 0.03
+Nodes (142): STATUS_COLOR_MAP, StatusIndicator(), StatusIndicatorProps, MentionListProps, MentionSuggestionItem, TitleEditor(), TitleEditorProps, useNotificationSocket() (+134 more)
 
 ### Community 39 - "mail.provider.ts"
-Cohesion: 0.12
-Nodes (15): LogConfig, MailConfig, MailModuleOptions, MailOption, MailOptions, MailOptionsFactory, PostmarkConfig, SMTPConfig (+7 more)
+Cohesion: 0.09
+Nodes (26): MailDriver, LogDriver, PostmarkDriver, SmtpDriver, LogConfig, MailConfig, MailModuleOptions, MailOption (+18 more)
 
 ### Community 40 - "dependencies"
 Cohesion: 0.03
 Nodes (63): @braintree/sanitize-url, cross-env, date-fns, @floating-ui/dom, fractional-indexing-jittered, image-dimensions, @joplin/turndown, @joplin/turndown-plugin-gfm (+55 more)
 
-### Community 41 - "file-import-task.service.ts"
-Cohesion: 0.05
-Nodes (37): getProsemirrorContent(), ExportMetadata, ZipReadBudget, ImportPageNode, FileTaskProcessor, OnWorkerEvent, Processor, FileImportTaskService (+29 more)
+### Community 41 - "AiFileService"
+Cohesion: 0.06
+Nodes (30): assertPdfCanvasWithinBudget(), createZipReadBudget(), PdfCanvasBudget, readZipEntryWithBudget(), safeEntryName(), withDeadline(), ZipBudgetExceededError, ZipReadableEntry (+22 more)
 
 ### Community 42 - "email-aggregation.service.ts"
-Cohesion: 0.16
-Nodes (17): getAggregatedPushCopy(), getDigestIntervalLabel(), getDigestSubject(), getDigestSummary(), getNotificationActionText(), getNotificationLocale(), isRussianNotificationLocale(), NotificationLocale (+9 more)
+Cohesion: 0.19
+Nodes (17): getAggregatedPushCopy(), getDigestIntervalLabel(), getDigestSubject(), getDigestSummary(), getNotificationActionText(), getNotificationLocale(), getNotificationTitle(), isRussianNotificationLocale() (+9 more)
 
 ### Community 43 - "redis-sync.extension.ts"
 Cohesion: 0.11
 Nodes (22): DocumentName, RELEASE_DOCUMENT_LOCK_SCRIPT, RENEW_DOCUMENT_LOCK_SCRIPT, ServerId, SocketId, BaseWebSocket, Configuration, CustomEventName (+14 more)
 
 ### Community 44 - "RagContentExportService"
-Cohesion: 0.14
-Nodes (3): mapPageSettings(), RagContentExportService, Injectable
+Cohesion: 0.11
+Nodes (6): RagAuthContext, RagContentExportService, Injectable, RagService, Tail, Injectable
 
 ### Community 45 - "ExportService"
-Cohesion: 0.07
-Nodes (12): PageAiRole, normalizeSettings(), resolveHeadingNumberingEnabled(), SettingsContainer, ExportService, Injectable, buildTree(), computeLocalPath() (+4 more)
+Cohesion: 0.09
+Nodes (3): PageAiRole, ExportService, Injectable
 
 ### Community 46 - "database-page.tsx"
 Cohesion: 0.03
-Nodes (117): AiDocumentContextSync(), COMMENT_LIMIT, CommentActions(), CommentActionsProps, CommentEditor, CommentEditorProps, CommentListItem(), CommentListItemProps (+109 more)
+Nodes (105): PAGE_FRAME_SIZES, PageFrame(), PageFrameProps, PageFrameSize, SectionHeaderProps, COMMENT_LIMIT, CommentActions(), CommentActionsProps (+97 more)
 
 ### Community 47 - "ai-markdown-composer.tsx"
 Cohesion: 0.45
@@ -785,124 +772,120 @@ Cohesion: 0.17
 Nodes (21): configIdentity(), EMPTY_FORM, ERROR_KEYS, HEALTH_COLORS, isHttpOrigin(), normalizeOrigin(), RagSyncForm, RagSyncSettings() (+13 more)
 
 ### Community 50 - "AiContextService"
-Cohesion: 0.12
-Nodes (5): service(), AiContextService, createService(), Injectable, AiRunContextSource
+Cohesion: 0.17
+Nodes (3): AiContextService, Injectable, AiRunContextSource
 
 ### Community 51 - "WorkspaceRepo"
 Cohesion: 0.06
-Nodes (19): generateRandomSuffixNumbers(), InjectKysely, InjectQueue, SetupGuard, Injectable, Injectable, WorkspaceService, DISALLOWED_HOSTNAMES (+11 more)
+Nodes (23): DomainMiddleware, Injectable, SetupGuard, Injectable, Controller, UseGuards, UserController, jsonbPreferenceValue() (+15 more)
 
 ### Community 52 - "dependencies"
 Cohesion: 0.05
 Nodes (41): dependencies, axios, @docmost/editor-ext, @emoji-mart/react, @excalidraw/excalidraw, highlightjs-sap-abap, i18next-http-backend, jotai-optics (+33 more)
 
-### Community 53 - "UserRepo"
-Cohesion: 0.03
-Nodes (80): AuthenticationExtension, CollabAuthenticationContext, Injectable, EventName, nanoIdGen, comparePasswordHash(), extractBearerTokenFromHeader(), hashPassword() (+72 more)
+### Community 53 - "auth.service.ts"
+Cohesion: 0.04
+Nodes (41): nanoIdGen, comparePasswordHash(), hashPassword(), UserTokenType, AuthService, Injectable, InjectKysely, SignupService (+33 more)
 
 ### Community 54 - "document-fields-panel.tsx"
-Cohesion: 0.09
-Nodes (49): DatabaseCellRenderer(), DatabaseCellRendererProps, DatabasePageReferenceOption, DatabaseUserEditor(), DatabaseUserViewValue(), ResolvedDatabaseUserViewValue(), IDatabaseProperty, BOOLEAN_FALSE_TOKENS (+41 more)
+Cohesion: 0.10
+Nodes (43): DatabaseCellRenderer(), DatabasePageReferenceOption, DatabaseUserEditor(), DatabaseUserViewValue(), ResolvedDatabaseUserViewValue(), BOOLEAN_FALSE_TOKENS, BOOLEAN_TRUE_TOKENS, buildDatabaseCellPayloadValue() (+35 more)
 
 ### Community 55 - "db.d.ts"
 Cohesion: 0.02
 Nodes (91): AiAgentToolVerifications, AiAssistantProfileGroupPolicies, AiAssistantProfileMcpTools, AiAssistantProfiles, AiAssistantProfileUserPreferences, AiAssistantProfileWorkspaceSettings, AiAuxRuns, AiBuiltinToolSpacePolicies (+83 more)
 
 ### Community 56 - "csrf.guard.ts"
-Cohesion: 0.09
-Nodes (12): IS_CSRF_EXEMPT_KEY, CsrfGuard, Injectable, DomainMiddleware, TODO: unify, Injectable, CsrfService, Injectable (+4 more)
+Cohesion: 0.08
+Nodes (15): IS_CSRF_EXEMPT_KEY, CsrfGuard, Injectable, TODO: unify, AuthCookieService, Injectable, CsrfService, Injectable (+7 more)
 
 ### Community 57 - "page-editor.tsx"
-Cohesion: 0.05
-Nodes (49): activePageUsersAtom, IActivePageUser, pageEditorUnsyncedChangesAtom, yjsConnectionStatusAtom, AudioMenu(), ReadOnlyCommentBubbleMenu(), CalloutMenu(), BlockWidthModeSelector() (+41 more)
+Cohesion: 0.06
+Nodes (46): AudioMenu(), CalloutMenu(), BlockWidthModeSelector(), BlockWidthModeSelectorProps, WIDTH_MODE_ITEMS, WidthModeItem, ImageWidthProps, NodeWidthResize (+38 more)
 
 ### Community 58 - "PageAccessService"
-Cohesion: 0.05
-Nodes (31): PageAccessEffect, PageAccessPrincipalType, PageRole, SpaceRole, SpaceVisibility, UserRole, InjectKysely, InjectKysely (+23 more)
+Cohesion: 0.03
+Nodes (59): getPageTitle(), SpaceRole, NotificationProcessor, InjectKysely, OnWorkerEvent, Processor, NotificationService, Injectable (+51 more)
 
 ### Community 59 - "page.service.ts"
 Cohesion: 0.05
-Nodes (36): jsonToText(), generateSlugId, createYdocFromJson(), ContentFormat, CreatePageDto, IsIn, IsObject, IsOptional (+28 more)
+Nodes (36): MAX_PAGE_TREE_DEPTH, InjectKysely, ContentFormat, CopyPageMapEntry, DuplicatePageDto, ICopyPageAttachment, IsNotEmpty, IsOptional (+28 more)
 
-### Community 60 - "AddLabelsDto"
-Cohesion: 0.20
-Nodes (16): AddLabelsDto, FindPagesByLabelDto, FindPagesByLabelRequestDto, ListLabelsDto, ListLabelsRequestDto, ArrayMaxSize, ArrayMinSize, IsArray (+8 more)
+### Community 60 - "label.dto.ts"
+Cohesion: 0.19
+Nodes (18): AddLabelsDto, FindPagesByLabelDto, FindPagesByLabelRequestDto, ListLabelsDto, ListLabelsRequestDto, RemoveLabelDto, SUPPORTED_LABEL_TYPES, ArrayMaxSize (+10 more)
 
 ### Community 61 - "space-sidebar.tsx"
-Cohesion: 0.09
-Nodes (28): getFileTaskById(), getRecentDocmostImportReports(), IFileTask, ImportFormatSelection, PageImportModal(), PageImportModalProps, cancelDocmostImport(), confirmDocmostImport() (+20 more)
+Cohesion: 0.08
+Nodes (35): FullEditor(), FullEditorProps, MemoizedPageEditor, MemoizedTitleEditor, treeApiAtom, SpaceTree, SpaceTreeBulkState, SpaceTreeHandle (+27 more)
 
 ### Community 62 - "ai-mcp.constants.ts"
 Cohesion: 0.06
-Nodes (50): AiMcpAcquireParams, AiMcpProbeParams, CacheEntry, CLIENT_INFO, Connection, ServerState, addServer(), build() (+42 more)
+Nodes (51): AiMcpAcquireParams, AiMcpProbeParams, CacheEntry, CLIENT_INFO, Connection, ServerState, addServer(), build() (+43 more)
 
-### Community 63 - "favorite.controller.ts"
-Cohesion: 0.11
-Nodes (14): ListFavoritesDto, ListFavoritesQueryDto, IsIn, IsOptional, IsString, IsUUID, FavoriteService, Injectable (+6 more)
+### Community 63 - "getAppUrl"
+Cohesion: 0.14
+Nodes (23): CommonSsoFormValues, SsoCommonControls(), SsoCommonControlsProps, SsoFormProps, SSOFormValues, SsoLDAPForm(), ssoSchema, SsoFormProps (+15 more)
 
-### Community 64 - "page.notification.ts"
-Cohesion: 0.12
-Nodes (20): getPageTitle(), MentionNode, NotificationProcessor, OnWorkerEvent, Processor, PageNotificationService, Injectable, IAddPageWatchersJob (+12 more)
+### Community 64 - "WorkspaceInvitationService"
+Cohesion: 0.13
+Nodes (5): validateAllowedEmail(), workspace, Injectable, WorkspaceInvitationService, WorkspaceInvitation
 
-### Community 65 - "ai-file.service.ts"
+### Community 65 - "persistence.extension.ts"
 Cohesion: 0.04
-Nodes (48): assertPdfCanvasWithinBudget(), createZipReadBudget(), PdfCanvasBudget, readZipEntryWithBudget(), safeEntryName(), withDeadline(), ZipBudgetExceededError, ZipReadableEntry (+40 more)
+Nodes (54): HISTORY_EVENT_AGGREGATION_WINDOW, HISTORY_EVENT_BUFFER_TTL, HISTORY_FAST_INTERVAL, HISTORY_FAST_THRESHOLD, HISTORY_INTERVAL, HISTORY_MAX_INTERVAL, HistoryQueueJobData, HistoryDirtyKind (+46 more)
 
 ### Community 66 - "bubble-menu.tsx"
 Cohesion: 0.08
-Nodes (33): activeCommentIdAtom, draftCommentIdAtom, DraftCommentRange, draftCommentRangeAtom, showCommentPopupAtom, CommentDialog(), CommentDialogProps, EditorBubbleMenu() (+25 more)
-
-### Community 67 - "TypesenseIndexService"
-Cohesion: 0.15
-Nodes (4): SearchProcessor, Processor, Injectable, TypesenseIndexService
+Nodes (34): activeCommentIdAtom, draftCommentIdAtom, DraftCommentRange, draftCommentRangeAtom, showCommentPopupAtom, CommentDialog(), CommentDialogProps, EditorBubbleMenu() (+26 more)
 
 ### Community 68 - "overrides"
 Cohesion: 0.08
 Nodes (25): axios, @babel/core, dompurify, engine.io, fast-uri, fast-xml-parser, find-my-way, hono (+17 more)
 
-### Community 69 - "page.utils.ts"
-Cohesion: 0.05
-Nodes (67): AppHeader(), mobileSidebarAtom, useToggleSidebar(), ThemeToggle(), EmojiPicker(), EmojiPickerInterface, Picker, SidebarToggle (+59 more)
+### Community 69 - "buildPageUrl"
+Cohesion: 0.03
+Nodes (98): CopyButton(), CopyButtonProps, CopyProps, CopyTextButton(), AppHeader(), mobileSidebarAtom, useToggleSidebar(), ThemeToggle() (+90 more)
 
-### Community 70 - "group-query.ts"
-Cohesion: 0.09
-Nodes (32): AddGroupMemberModal(), CreateGroupForm(), formSchema, FormValues, CreateGroupModal(), EditGroupForm(), EditGroupFormProps, formSchema (+24 more)
+### Community 70 - "mfa.controller.ts"
+Cohesion: 0.22
+Nodes (15): AuthRateLimit(), MfaEnableDto, MfaSetupDto, MfaVerifyDto, IsString, Length, Matches, MfaController (+7 more)
 
 ### Community 71 - "security-query.ts"
-Cohesion: 0.08
-Nodes (50): CopyProps, CopyTextButton(), OpenIdIcon(), Props, CreateSsoProvider(), CommonSsoFormValues, SsoCommonControls(), SsoCommonControlsProps (+42 more)
+Cohesion: 0.13
+Nodes (27): OpenIdIcon(), Props, CreateSsoProvider(), SsoGroupMappings(), SsoGroupMappingsProps, SsoProviderList(), SsoProviderModal(), useCreateSsoGroupMappingMutation() (+19 more)
 
-### Community 72 - "extractPageSlugId"
-Cohesion: 0.09
-Nodes (33): DatabasePageContextValue, findDatabaseIdByPageRoute(), resolveDatabasePageContext(), ResolveDatabasePageContextInput, DatabasePageContextParams, useGetDatabaseQuery(), getDatabase(), IDatabase (+25 more)
+### Community 72 - ".createFromTemplate"
+Cohesion: 0.19
+Nodes (3): row(), strictJsonToNode(), rewriteAttachmentsForUnsync()
 
 ### Community 73 - ".updateSpace"
-Cohesion: 0.17
-Nodes (9): AiBuiltinToolSpacePolicyController, AiBuiltinToolWorkspacePolicyController, Body, Controller, Get, Param, Patch, Put (+1 more)
+Cohesion: 0.10
+Nodes (17): AiBuiltinToolSpacePolicyController, AiBuiltinToolWorkspacePolicyController, Body, Controller, Get, Param, Patch, Put (+9 more)
 
-### Community 74 - "page-query.ts"
-Cohesion: 0.08
-Nodes (50): invalidateBreadcrumbs(), InvalidateOptions, invalidateRecentChanges(), invalidateTrashList(), QueryClientLike, InvalidatePayload, DEFAULT_SIDEBAR_NODE_TYPES, getParentSidebarCacheKeys() (+42 more)
+### Community 74 - "AiBuiltinToolPolicyService"
+Cohesion: 0.15
+Nodes (8): InjectKysely, InjectKysely, InjectQueue, AiBuiltinToolPolicyService, Injectable, AiBuiltinToolRunSnapshot, AiToolDefinition, AiToolExposure
 
 ### Community 75 - "extensions.ts"
-Cohesion: 0.06
-Nodes (30): DatabaseDescriptionEditor(), DatabaseDescriptionEditorProps, { mockPageEditor }, CalloutView(), getCalloutColor(), getCalloutIcon(), CodeBlockView(), MermaidView (+22 more)
+Cohesion: 0.05
+Nodes (45): IAttachment, AttachmentDisplayMode, AttachmentView(), isPdfAttachment(), AudioView(), CalloutView(), getCalloutColor(), getCalloutIcon() (+37 more)
 
 ### Community 76 - "search-reindex.ts"
-Cohesion: 0.14
-Nodes (22): kysely, CliArgs, createCliDatabase(), loadCliEnv(), parseCliArgs(), requireEnv(), requireStringArg(), runCli() (+14 more)
+Cohesion: 0.09
+Nodes (27): kysely, CliArgs, createCliDatabase(), loadCliEnv(), parseCliArgs(), requireEnv(), requireStringArg(), runCli() (+19 more)
 
 ### Community 77 - "styles.ts"
-Cohesion: 0.14
-Nodes (21): button, container, content, fontFamily, footer, h1, link, logo (+13 more)
+Cohesion: 0.10
+Nodes (28): button, container, content, fontFamily, footer, h1, link, logo (+20 more)
 
 ### Community 78 - "editor-ext.mock.ts"
 Cohesion: 0.04
 Nodes (36): Attachment, builtInTagValues, Callout, Comment, CustomCodeBlock, Details, DetailsContent, DetailsSummary (+28 more)
 
-### Community 79 - "database.service.ts"
-Cohesion: 0.11
-Nodes (49): BatchUpdateDatabaseCellsDto, BatchUpdateDatabaseCellValueDto, BatchUpdateDatabaseRowDto, BatchUpdateDatabaseRowsDto, CreateDatabaseDto, CreateDatabasePropertyDto, CreateDatabaseRowDto, CreateDatabaseViewDto (+41 more)
+### Community 79 - "database.controller.ts"
+Cohesion: 0.16
+Nodes (38): BatchUpdateDatabaseCellsDto, BatchUpdateDatabaseCellValueDto, BatchUpdateDatabaseRowDto, BatchUpdateDatabaseRowsDto, CreateDatabaseDto, CreateDatabasePropertyDto, CreateDatabaseRowDto, CreateDatabaseViewDto (+30 more)
 
 ### Community 80 - "health.module.ts"
 Cohesion: 0.16
@@ -928,45 +911,37 @@ Nodes (24): NotificationItem(), NotificationItemProps, NotificationList(), Notif
 Cohesion: 0.03
 Nodes (63): devDependencies, eslint, eslint-config-prettier, @eslint/js, globals, jest, kysely-codegen, @nestjs/cli (+55 more)
 
-### Community 86 - "StorageService"
-Cohesion: 0.06
-Nodes (13): AttachmentFileAccessService, Injectable, Attachment, InjectKysely, InjectQueue, InjectKysely, InjectQueue, STORAGE_CONFIG_TOKEN (+5 more)
+### Community 86 - "AttachmentFileAccessService"
+Cohesion: 0.35
+Nodes (3): AttachmentFileAccessService, Injectable, Attachment
 
 ### Community 87 - "AuthRateLimitService"
-Cohesion: 0.12
+Cohesion: 0.13
 Nodes (4): AuthRateLimitService, RedisClientLike, Injectable, Optional
-
-### Community 88 - "page-template.service.ts"
-Cohesion: 0.17
-Nodes (28): CreateFromTemplateDto, CreatePageTemplateDto, DetachPageEmbedDto, DetachSyncedTemplateDto, InsertPageEmbedDto, PageTemplateDestinationsDto, PageTemplateDiscoveryDto, PageTemplateGroupPolicyDto (+20 more)
 
 ### Community 89 - "targets"
 Cohesion: 0.09
 Nodes (32): dependsOn, executor, options, outputs, dependsOn, executor, options, dependsOn (+24 more)
 
-### Community 90 - "RagSyncAdminController"
-Cohesion: 0.27
-Nodes (8): RagSyncAdminController, Body, Controller, Get, Param, Patch, Post, UseGuards
+### Community 90 - "rag-sync-admin.controller.ts"
+Cohesion: 0.20
+Nodes (9): RagSyncAdminController, Body, Controller, Get, Param, Patch, Post, UseGuards (+1 more)
 
 ### Community 91 - "rag-sync-source.service.ts"
-Cohesion: 0.10
-Nodes (21): appendScanDigest(), dateToMs(), encodeMarkdown(), FeedPage, InternalRagAttachmentDeletedItem, InternalRagAttachmentItem, InternalRagDatabaseDetail, InternalRagDatabaseRowsPage (+13 more)
+Cohesion: 0.11
+Nodes (20): dateToMs(), encodeMarkdown(), FeedPage, InternalRagAttachmentDeletedItem, InternalRagAttachmentItem, InternalRagDatabaseDetail, InternalRagDatabaseRowsPage, InternalRagDeletedItem (+12 more)
 
 ### Community 92 - "AiRun"
 Cohesion: 0.07
-Nodes (20): AiCitationCandidate, AiPromptBuildResult, AiProviderMessage, AiSafeRetrievalSource, AI_CITATION_CANDIDATE_LIMIT, AiCitationService, CitationState, Injectable (+12 more)
-
-### Community 93 - "PageHistoryService"
-Cohesion: 0.22
-Nodes (3): PageHistoryService, Injectable, PageHistory
+Nodes (19): AiCitationCandidate, AiPromptBuildResult, AiProviderMessage, AI_CITATION_CANDIDATE_LIMIT, AiCitationService, CitationState, Injectable, AiResolvedRunContextSource (+11 more)
 
 ### Community 94 - "RagSyncSourceService"
-Cohesion: 0.20
-Nodes (6): RagSyncSourceService, runConcurrently(), settledCheckpoint(), sha256(), sourceIdentity(), Injectable
+Cohesion: 0.17
+Nodes (7): appendScanDigest(), RagSyncSourceService, runConcurrently(), settledCheckpoint(), sha256(), sourceIdentity(), Injectable
 
-### Community 95 - "SsoController"
-Cohesion: 0.11
-Nodes (35): CsrfExempt(), Public(), CreateSsoGroupMappingDto, CreateSsoProviderDto, LdapLoginDto, LdapStepUpDto, SsoGroupMappingIdDto, SsoLoginContextDto (+27 more)
+### Community 95 - "sso.controller.ts"
+Cohesion: 0.08
+Nodes (45): CsrfExempt(), Public(), AuthController, Body, Controller, Get, HttpCode, Post (+37 more)
 
 ### Community 96 - "transclusion-reference-view.tsx"
 Cohesion: 0.09
@@ -977,16 +952,16 @@ Cohesion: 0.06
 Nodes (33): compilerOptions, allowSyntheticDefaultImports, baseUrl, declaration, emitDecoratorMetadata, experimentalDecorators, forceConsistentCasingInFileNames, incremental (+25 more)
 
 ### Community 98 - "page-service.ts"
-Cohesion: 0.06
-Nodes (48): ExportFormatSelectionProps, ExportModal(), ExportModalProps, ExportTargetType, getExportFormatValues(), isSpaceExportFormat(), shouldShowAttachments(), shouldShowIncludeChildren() (+40 more)
+Cohesion: 0.04
+Nodes (70): ExportFormatSelectionProps, ExportModal(), ExportModalProps, ExportTargetType, getExportFormatValues(), isSpaceExportFormat(), shouldShowAttachments(), shouldShowIncludeChildren() (+62 more)
 
-### Community 99 - "PushAggregationService"
-Cohesion: 0.18
-Nodes (5): PushAggregationBootstrapService, Injectable, PushAggregationService, Injectable, PushSendResult
+### Community 99 - ".removeIcon"
+Cohesion: 0.15
+Nodes (18): AttachmentController, Body, Controller, Get, HttpCode, Param, Post, Query (+10 more)
 
-### Community 100 - "persistence.extension.ts"
-Cohesion: 0.07
-Nodes (18): HISTORY_EVENT_AGGREGATION_WINDOW, HISTORY_EVENT_BUFFER_TTL, HISTORY_FAST_INTERVAL, HISTORY_FAST_THRESHOLD, HISTORY_INTERVAL, HISTORY_MAX_INTERVAL, HistoryProcessor, OnWorkerEvent (+10 more)
+### Community 100 - "CollabHistoryService"
+Cohesion: 0.09
+Nodes (8): HistoryProcessor, OnWorkerEvent, Processor, CollabHistoryService, IBufferedPageHistoryEvent, IHistoryDirtyState, Injectable, InjectQueue
 
 ### Community 101 - "scripts"
 Cohesion: 0.07
@@ -1004,33 +979,33 @@ Nodes (19): SPACE_CUSTOM_LINK_ICONS, SPACE_CUSTOM_LINKS_MAX, ArrayMaxSize, IsArr
 Cohesion: 0.15
 Nodes (15): SearchController, Body, Controller, Get, HttpCode, Post, Query, Res (+7 more)
 
-### Community 105 - "environment.service.ts"
-Cohesion: 0.05
-Nodes (31): InjectKysely, InjectQueue, DEFAULT_MAX_PAGE_EMBED_DEPTH, MAX_CONFIGURED_PAGE_EMBED_DEPTH, MIN_PAGE_EMBED_DEPTH, PAGE_EMBED_GRAPH_MAX_EDGES, PAGE_EMBED_GRAPH_MAX_NODES, PAGE_TEMPLATE_ACTIONS (+23 more)
+### Community 105 - "database.service.ts"
+Cohesion: 0.03
+Nodes (100): jsonToNode(), InjectKysely, InjectQueue, DEFAULT_MAX_PAGE_EMBED_DEPTH, MAX_CONFIGURED_PAGE_EMBED_DEPTH, MIN_PAGE_EMBED_DEPTH, PAGE_EMBED_GRAPH_MAX_EDGES, PAGE_EMBED_GRAPH_MAX_NODES (+92 more)
 
 ### Community 106 - "core.module.ts"
 Cohesion: 0.07
-Nodes (43): AiModule, Module, ApiKeyModule, Module, AttachmentModule, Module, AuthModule, Module (+35 more)
+Nodes (44): AiModule, Module, ApiKeyModule, Module, AttachmentModule, Module, AuthModule, Module (+36 more)
 
 ### Community 107 - "LocalDriver"
-Cohesion: 0.06
-Nodes (12): LocalDriver, S3Driver, LocalStorageConfig, S3StorageConfig, StorageConfig, StorageModuleOptions, StorageOption, StorageOptions (+4 more)
+Cohesion: 0.04
+Nodes (16): STORAGE_CONFIG_TOKEN, STORAGE_DRIVER_TOKEN, LocalDriver, S3Driver, StorageDriver, LocalStorageConfig, S3StorageConfig, StorageConfig (+8 more)
 
 ### Community 108 - "AiRunService"
-Cohesion: 0.09
-Nodes (5): AiRunService, Injectable, AiRunStepService, Injectable, AiMessage
-
-### Community 109 - "label.repo.ts"
 Cohesion: 0.13
-Nodes (10): SUPPORTED_LABEL_TYPES, LabelService, Injectable, InjectKysely, normalizeLabelName(), LabelRepo, LabelType, Injectable (+2 more)
+Nodes (4): AiRunActionDto, AiRunService, Injectable, AiMessage
 
-### Community 110 - "CreateDictionaryTermDto"
-Cohesion: 0.22
-Nodes (17): PreparedImportTerm, CreateDictionaryTermDto, DictionaryImportTermDto, ExportDictionaryTermsDto, ImportDictionaryTermsDto, ListDictionaryTermsQueryDto, MAX_DICTIONARY_IMPORT_TERMS, ArrayMaxSize (+9 more)
+### Community 109 - "environment.module.ts"
+Cohesion: 0.12
+Nodes (17): IS_ISO6391, IsISO6391, AI_STREAM_IDLE_TIMEOUT_DEFAULT_MS, AI_STREAM_IDLE_TIMEOUT_MAX_MS, AI_STREAM_IDLE_TIMEOUT_MIN_MS, EnvironmentVariables, getRuntimeContractErrors(), IsIn (+9 more)
 
-### Community 111 - "favorite-list.tsx"
-Cohesion: 0.22
-Nodes (16): FavoriteButton(), FavoriteButtonProps, favoriteHref(), FavoriteList(), FavoriteListProps, favoriteTitle(), FAVORITE_QUERY_KEYS, useFavoriteIdsQuery() (+8 more)
+### Community 110 - "invite-sign-up-form.tsx"
+Cohesion: 0.15
+Nodes (15): formSchema, FormValues, InviteSignUpForm(), IRegister, createFormSchema(), LdapLoginModal(), LdapLoginModalProps, SsoLogin() (+7 more)
+
+### Community 111 - "IPage"
+Cohesion: 0.14
+Nodes (23): FavoriteButton(), FavoriteButtonProps, favoriteHref(), FavoriteList(), FavoriteListProps, favoriteTitle(), FAVORITE_QUERY_KEYS, useFavoriteIdsQuery() (+15 more)
 
 ### Community 112 - "Q: сделай коммиты"
 Cohesion: 0.40
@@ -1039,10 +1014,6 @@ Nodes (4): Answer, Outcome, Q: сделай коммиты, Source Nodes
 ### Community 113 - "20260608T121000-repair-stringified-page-content.ts"
 Cohesion: 0.21
 Nodes (16): cleanMalformedLeadingTableRows(), convertRowCellsToHeaders(), getTableRowColumnCount(), hasMeaningfulContent(), isEmptyTableRow(), isHeaderOnlyRow(), isJsonNode(), isRegularCellOnlyRow() (+8 more)
-
-### Community 114 - "mail.service.ts"
-Cohesion: 0.25
-Nodes (9): MailDriver, LogDriver, PostmarkDriver, SmtpDriver, MailMessage, getMailErrorMetadata(), getMailLogMetadata(), MailLogMetadata (+1 more)
 
 ### Community 115 - "compilerOptions"
 Cohesion: 0.06
@@ -1053,24 +1024,24 @@ Cohesion: 0.40
 Nodes (4): Answer, Outcome, Q: Implement the approved full redesign of the Docmost AI assistant and MCP onboarding, including the UUID status fix, lazy conversations, agent approval previews, settings IA, accessibility, localization, presets, tests, and browser QA., Source Nodes
 
 ### Community 117 - "ai-mcp-pinned-fetch.ts"
-Cohesion: 0.14
-Nodes (13): AI_MCP_MAX_WIRE_BYTES, AiMcpFetchLike, AiMcpPinnedFetch, AiMcpTransportError, capResponseBytes(), createAiMcpPinnedFetch(), CreateOptions, ADDRESSES (+5 more)
+Cohesion: 0.16
+Nodes (12): AI_MCP_MAX_WIRE_BYTES, AiMcpFetchLike, AiMcpPinnedFetch, capResponseBytes(), createAiMcpPinnedFetch(), CreateOptions, ADDRESSES, build() (+4 more)
 
 ### Community 118 - "transclusion-deletion-guard.ts"
 Cohesion: 0.15
 Nodes (11): Storage, createEditor(), editors, rangeDocument, sourceDocument, TestTransclusionSource, @tiptap/core, TransclusionDeletionGuard (+3 more)
 
 ### Community 119 - "ai-tool-registry.service.ts"
-Cohesion: 0.05
-Nodes (44): ArrayUnique, IsArray, IsBoolean, IsIn, ValidateIf, UpdateAiBuiltinToolSpacePolicyDto, UpdateAiBuiltinToolWorkspacePolicyDto, canonical() (+36 more)
+Cohesion: 0.09
+Nodes (23): AiAgentExecutionError, AiRunCancelledError, getEmptyResponseFallbackLimits(), database(), registry(), service(), AI_AGENT_MAX_MODEL_STEPS, AI_AGENT_MAX_RUN_MODEL_STEPS (+15 more)
 
-### Community 120 - "workspace.service.ts"
-Cohesion: 0.04
-Nodes (52): AuthPolicyScopeMetadata, AddSpaceMembersDto, ArrayMaxSize, IsArray, IsEnum, IsUUID, CreateSpaceDto, IsAlphanumeric (+44 more)
+### Community 120 - "SpacePolicyService"
+Cohesion: 0.07
+Nodes (17): AuthenticationExtension, Injectable, AuthPolicyScopeMetadata, InjectKysely, AuthenticationAssuranceService, expectAssuranceError(), Injectable, InjectKysely (+9 more)
 
 ### Community 121 - "current-user-atom.ts"
 Cohesion: 0.03
-Nodes (110): UserInfoProps, ResponsiveSettingsContent(), ResponsiveSettingsContentProps, ResponsiveSettingsControl(), ResponsiveSettingsControlProps, ResponsiveSettingsRow(), ResponsiveSettingsRowProps, DocumentCommonActionItemsProps (+102 more)
+Nodes (132): AvatarUploader(), AvatarUploaderProps, TopMenu(), SettingsTitle(), { useCurrentUserMock }, WorkspaceAdminRoute(), AuthenticatedError404(), CustomAvatarProps (+124 more)
 
 ### Community 122 - "client/project.json"
 Cohesion: 0.13
@@ -1086,7 +1057,7 @@ Nodes (14): ResizableWrapper(), ResizableWrapperProps, GENERIC_IFRAME_SANDBOX, g
 
 ### Community 125 - "main.ts"
 Cohesion: 0.06
-Nodes (39): AppModule, Module, bootstrap(), API_PREFIX_EXCLUDES, InternalLogFilter, createCorsOptions(), createCorsOriginValidator(), getAllowedCorsOrigins() (+31 more)
+Nodes (36): AppModule, Module, CollabAppModule, Module, bootstrap(), API_PREFIX_EXCLUDES, SKIP_TRANSFORM_KEY, ResponseContractSmokeController (+28 more)
 
 ### Community 126 - "check-env-contract.mjs"
 Cohesion: 0.11
@@ -1094,35 +1065,39 @@ Nodes (13): COMPOSE_ONLY_ENV_KEYS, exampleKeys, extractWindowConfigKeys(), extra
 
 ### Community 128 - "HtmlPdfRendererService"
 Cohesion: 0.09
-Nodes (14): DeprecatedRouteInterceptor, DeprecatedRouteOptions, sanitizeUrlForLogging(), CONTEXTS_TO_IGNORE, createPinoConfig(), sanitizeLogBindings(), SENSITIVE_ERROR_FIELDS, getClientIpFromRawRequest() (+6 more)
+Nodes (13): DeprecatedRouteInterceptor, DeprecatedRouteOptions, sanitizeUrlForLogging(), CONTEXTS_TO_IGNORE, createPinoConfig(), sanitizeLogBindings(), SENSITIVE_ERROR_FIELDS, allowedPdfAttachmentPathPrefixes (+5 more)
 
-### Community 129 - ".removeIcon"
-Cohesion: 0.08
-Nodes (24): AiFileController, AiPageAttachmentController, Controller, Delete, Get, Headers, Param, Post (+16 more)
+### Community 129 - ".upload"
+Cohesion: 0.12
+Nodes (12): AiFileController, AiPageAttachmentController, Controller, Delete, Get, Headers, Param, Post (+4 more)
 
 ### Community 130 - "search-query.ts"
-Cohesion: 0.09
-Nodes (39): getSearchContentTypeOptions(), getSearchFilterPayload(), SearchFilterPayload, SearchFilterPayloadInput, SelectedSearchLabel, SearchResultItem(), SearchResultItemProps, SearchSpotlightFilters() (+31 more)
+Cohesion: 0.08
+Nodes (41): getSearchContentTypeOptions(), getSearchFilterPayload(), SearchFilterPayload, SearchFilterPayloadInput, SelectedSearchLabel, SearchResultItemProps, SearchSpotlightFilters(), SearchSpotlightFiltersProps (+33 more)
 
 ### Community 131 - "auth-rate-limit.service.ts"
 Cohesion: 0.11
 Nodes (11): AUTH_RATE_LIMIT_REDIS_OPTIONS, AuthRateLimitExceededEvent, AuthRateLimitOperationMetrics, BucketState, FakeRedisClient, StorageMode, TelemetryCounter, AuthRateLimitAlertHook (+3 more)
 
 ### Community 132 - "AiMcpAdminService"
-Cohesion: 0.16
-Nodes (5): AiMcpAdminService, jsonb(), parseOriginList(), Injectable, AiMcpStoredDiscoveredTool
-
-### Community 134 - "notification.module.ts"
 Cohesion: 0.17
-Nodes (6): EmailAggregationBootstrapService, Injectable, RecipientResolverService, Injectable, PushModule, Module
+Nodes (6): AiMcpAdminService, jsonb(), parseOriginList(), Injectable, decryptAiMcpHeaders(), encryptAiMcpHeaders()
+
+### Community 134 - "EmailAggregationService"
+Cohesion: 0.21
+Nodes (4): EmailAggregationBootstrapService, Injectable, EmailAggregationService, Injectable
+
+### Community 135 - ".delete"
+Cohesion: 0.19
+Nodes (3): FileTaskProcessor, OnWorkerEvent, Processor
 
 ### Community 136 - "Core AI assistant audit — 2026-08-07"
 Cohesion: 0.08
 Nodes (23): Automated coverage added, Browser matrix, Chat, queue, persistence, and realtime delivery, Client behavior and errors, Commit inventory, Contracts and configuration, Core AI assistant audit — 2026-08-07, Credential and privacy review (+15 more)
 
-### Community 138 - "AiAssistantProfileController"
-Cohesion: 0.16
-Nodes (11): AiAssistantProfileController, AiAssistantProfilePolicyController, Body, Controller, Delete, Get, Param, Patch (+3 more)
+### Community 138 - "auth-rate-limit.guard.ts"
+Cohesion: 0.23
+Nodes (6): AUTH_RATE_LIMITS, AuthRateLimitEndpoint, AUTH_RATE_LIMIT_METADATA, AuthRateLimitMetadata, AuthRateLimitGuard, Injectable
 
 ### Community 139 - "PageListener"
 Cohesion: 0.35
@@ -1133,8 +1108,8 @@ Cohesion: 0.10
 Nodes (10): Props, stopFileDropPropagation(), stopPropagation(), content, Probe(), TestIntersectionObserver, TestResizeObserver, TransclusionReferenceView() (+2 more)
 
 ### Community 141 - "PresenceService"
-Cohesion: 0.21
-Nodes (6): PresenceService, Injectable, MemberPresence, PresenceConnectionContext, PresenceLocation, PresenceUpdateInput
+Cohesion: 0.12
+Nodes (16): PresenceUpdateDto, IsIn, IsOptional, IsString, MaxLength, PresenceService, Injectable, MemberPresence (+8 more)
 
 ### Community 142 - "ignore"
 Cohesion: 0.06
@@ -1144,17 +1119,21 @@ Nodes (36): entry, project, entry, ignoreDependencies, project, ignore, **/dist/
 Cohesion: 0.10
 Nodes (19): background_color, categories, description, display, display_override, icons, id, name (+11 more)
 
-### Community 144 - "user-provider.tsx"
-Cohesion: 0.12
-Nodes (19): useNotificationSocket(), buildPresencePayload(), getTabId(), PresencePayload, usePresenceReporter(), UserProvider(), socketAtom, SOCKET_URL (+11 more)
+### Community 144 - ".confirmImportZipAction"
+Cohesion: 0.32
+Nodes (8): ImportController, Body, Controller, HttpCode, Post, Req, UseGuards, UseInterceptors
 
 ### Community 145 - "readonly-page-editor.tsx"
 Cohesion: 0.12
-Nodes (19): readOnlyEditorAtom, useEditorScroll(), waitForState(), PageEditorProps, ReadonlyPageEditor(), PageReadingTime(), PageReadingTimeProps, ReadingTimeStyle (+11 more)
+Nodes (18): useEditorScroll(), waitForState(), PageEditorProps, ReadonlyPageEditor(), PageReadingTime(), PageReadingTimeProps, ReadingTimeStyle, estimateReadingTime() (+10 more)
 
 ### Community 146 - "share.service.ts"
-Cohesion: 0.04
-Nodes (34): MAX_PAGE_TREE_DEPTH, InjectKysely, SidebarAccessSnapshot, AttachmentSearchResponseDto, SearchBreadcrumbDto, SearchLabelDto, SearchResponseDto, buildSearchTsQuery() (+26 more)
+Cohesion: 0.06
+Nodes (25): dangerousDownloadMimeTypes, trustedInlineMimeTypesByExtension, createAttachmentQueryBuilder(), createAttachmentSearchService(), createExpressionBuilder(), createPageSearchService(), createShareSearchService(), createSubqueryBuilder() (+17 more)
+
+### Community 147 - "GroupIdDto"
+Cohesion: 0.21
+Nodes (11): AddGroupUserDto, ArrayMaxSize, ArrayMinSize, IsArray, IsUUID, GroupIdDto, GroupMembersQueryDto, IsNotEmpty (+3 more)
 
 ### Community 148 - "devDependencies"
 Cohesion: 0.10
@@ -1164,11 +1143,11 @@ Nodes (21): concurrently, jscpd, nx, @nx/js, devDependencies, concurrently, depe
 Cohesion: 0.11
 Nodes (19): admin, baseUrl, cookies, createConversation(), createPage(), findObject(), fixtureUrl, form (+11 more)
 
-### Community 150 - "UpdateAiMcpServerDto"
-Cohesion: 0.23
+### Community 150 - "ai-mcp-settings.controller.ts"
+Cohesion: 0.22
 Nodes (20): AiMcpPreferenceItemDto, AiMcpToolApprovalDto, CreateAiMcpServerDto, PutAiMcpBindingDto, PutAiMcpPreferencesDto, ArrayMaxSize, ArrayUnique, IsArray (+12 more)
 
-### Community 151 - "integrations/security/security.module.ts"
+### Community 151 - "telemetry.service.ts"
 Cohesion: 0.11
 Nodes (14): getAppVersion(), RobotsTxtController, Controller, Get, HttpCode, SecurityModule, Module, Controller (+6 more)
 
@@ -1182,43 +1161,43 @@ Nodes (17): AiExternalMcpOptInControl(), hostOf(), Props, AI_EXTERNAL_MCP_TOOL_N
 
 ### Community 154 - "AiToolRegistryService"
 Cohesion: 0.14
-Nodes (6): getAiPageOutline(), getProseMirrorText(), ProseMirrorJson, AiToolRegistryService, fitAiToolItems(), Injectable
+Nodes (4): ProseMirrorJson, AiToolRegistryService, fitAiToolItems(), Injectable
 
 ### Community 155 - "PersistenceExtension"
 Cohesion: 0.13
-Nodes (9): getPageId(), PersistenceExtension, createHarness(), createStorePayload(), doc(), persistedPage(), ydocFor(), Injectable (+1 more)
+Nodes (8): getPageId(), PersistenceExtension, createHarness(), createStorePayload(), doc(), persistedPage(), ydocFor(), Injectable
 
 ### Community 156 - "mfa-service.ts"
-Cohesion: 0.09
-Nodes (35): MfaBackupCodesModal(), MfaBackupCodesModalProps, MfaDisableModal(), MfaDisableModalProps, MfaSettings(), createSetupSchema(), MfaSetupModal(), MfaSetupModalProps (+27 more)
+Cohesion: 0.13
+Nodes (25): createSetupSchema(), MfaSetupModal(), MfaSetupModalProps, SetupData, enableMfa(), enableRequiredMfa(), getMfaStatus(), setupMfa() (+17 more)
 
 ### Community 157 - "scripts"
 Cohesion: 0.14
 Nodes (13): name, private, scripts, build, dev, format, lint, preview (+5 more)
 
-### Community 158 - "AiConfigController"
-Cohesion: 0.21
+### Community 158 - "ai-config.controller.ts"
+Cohesion: 0.20
 Nodes (10): AiConfigController, AiStatusController, Body, Controller, Get, Param, Patch, Post (+2 more)
 
-### Community 159 - "slash-command.ts"
-Cohesion: 0.21
-Nodes (10): CommandList(), getSuggestionItems(), renderItems(), CommandListProps, CommandProps, SlashMenuGroupedItemsType, SlashMenuItemType, Command (+2 more)
+### Community 159 - "session-query.ts"
+Cohesion: 0.35
+Nodes (9): SessionList(), useGetSessionsQuery(), useRevokeAllSessionsMutation(), useRevokeSessionMutation(), getSessions(), revokeAllSessions(), revokeSession(), SessionListResponse (+1 more)
 
 ### Community 160 - "API Route Generator"
 Cohesion: 0.21
 Nodes (10): args, controllerFiles, extractRoutes(), joinRoute(), lines, normalizeSegment(), parseDecoratorPaths(), routes (+2 more)
 
 ### Community 161 - "AiConversationService"
-Cohesion: 0.18
-Nodes (5): AiConversationService, Injectable, InjectKysely, InjectQueue, AiConversation
+Cohesion: 0.17
+Nodes (5): InjectKysely, InjectQueue, AiConversationService, Injectable, AiConversation
 
 ### Community 162 - "AiMcpServersController"
-Cohesion: 0.15
-Nodes (11): AiMcpServersController, AiMcpSettingsController, Body, Controller, Delete, Get, HttpCode, Param (+3 more)
+Cohesion: 0.17
+Nodes (10): AiMcpServersController, AiMcpSettingsController, Body, Controller, Delete, HttpCode, Param, Patch (+2 more)
 
-### Community 163 - "drawio-view.tsx"
-Cohesion: 0.15
-Nodes (19): IAttachment, AttachmentDisplayMode, AttachmentView(), isPdfAttachment(), AudioView(), ImagePreviewModal(), ImagePreviewModalProps, getDiagramAttachmentIdForSave() (+11 more)
+### Community 163 - "client-session-cleanup.ts"
+Cohesion: 0.29
+Nodes (9): clearPageDatabases(), clearRuntimeCaches(), clearSensitiveClientState(), deleteDatabase(), registerLogoutSync(), removeStorageEntries(), SENSITIVE_LOCAL_STORAGE_KEYS, SENSITIVE_LOCAL_STORAGE_PREFIXES (+1 more)
 
 ### Community 164 - "global-app-shell.tsx"
 Cohesion: 0.10
@@ -1232,20 +1211,20 @@ Nodes (16): apiBaseURL, apiOrigin, auditRoot, baseURL, clientRoot, createApi(), 
 Cohesion: 0.22
 Nodes (5): ExcalidrawEditorProps, LibraryItems, LibraryPersistedData, LibraryPersistenceAdapter, localStorageLibraryAdapter
 
-### Community 167 - "ai-mcp-policy.service.ts"
-Cohesion: 0.10
-Nodes (18): AI_MCP_DEFAULT_PROFILE_KEY, AI_MCP_MAX_SNAPSHOT_BYTES, AiMcpStoredApprovedTool, toApprovedToolView(), AiMcpPolicyService, EffectiveRow, jsonb(), ALL_OPEN (+10 more)
+### Community 167 - "AiMcpPolicyService"
+Cohesion: 0.07
+Nodes (21): AI_MCP_MAX_SNAPSHOT_BYTES, toApprovedToolView(), AiMcpPolicyService, jsonb(), ALL_OPEN, approvedTool(), build(), Gate (+13 more)
 
 ### Community 168 - "RagSyncAdminRepo"
 Cohesion: 0.10
 Nodes (9): DbOrTx, RagSyncAdminRepo, RagSyncBindingValues, Injectable, InjectKysely, RagSyncBindingRegistryService, Injectable, RagSyncBinding (+1 more)
 
-### Community 169 - "comment.service.ts"
-Cohesion: 0.21
-Nodes (12): COMMENT_LIMIT, COMMENT_LIMIT_REACHED_MESSAGE, CommentPaginationOptions, PageCommentsQueryDto, PageIdDto, IsInt, IsOptional, IsString (+4 more)
+### Community 169 - "PageCommentsQueryDto"
+Cohesion: 0.12
+Nodes (18): COMMENT_LIMIT, COMMENT_LIMIT_REACHED_MESSAGE, CommentPaginationOptions, PageCommentsQueryDto, PageIdDto, IsInt, IsOptional, IsString (+10 more)
 
-### Community 171 - "materializePageContent"
-Cohesion: 0.60
+### Community 171 - ".resolveLegacyPageEmbeds"
+Cohesion: 0.38
 Nodes (3): materializePageContent(), MaterializePageContentOptions, STRUCTURAL_ID_NODE_TYPES
 
 ### Community 172 - "support.ts"
@@ -1253,8 +1232,8 @@ Cohesion: 0.20
 Nodes (9): auditRoot, AuditState, loadState(), openAssistant(), pageUrl(), runtimeAuthToken, runtimeCsrfToken, statePath (+1 more)
 
 ### Community 173 - "page-template-api.ts"
-Cohesion: 0.08
-Nodes (43): RevisionWithContent, TemplateEditingAlert(), TemplateEditingAlertProps, waitForDraftSync(), PAGE_TEMPLATE_PICKER_EVENT, PageTemplatePicker(), PickerRequest, PickerTab (+35 more)
+Cohesion: 0.04
+Nodes (86): AiDocumentContextSync(), HeadingNumberingMenuItems(), HeadingNumberingMenuItemsProps, createCurrentUser(), renderMenu(), TestMenu(), { updateUserMock }, PageHeader() (+78 more)
 
 ### Community 174 - "Docmost archive format"
 Cohesion: 0.29
@@ -1272,21 +1251,21 @@ Nodes (6): CODE_EXTENSIONS, CODE_TARGET_DIRS, DOC_EXTENSIONS, DOC_TARGET_DIRS, R
 Cohesion: 0.22
 Nodes (8): compilerOptions, allowSyntheticDefaultImports, composite, module, moduleResolution, skipLibCheck, include, vite.config.ts
 
-### Community 178 - "credential-protection.util.ts"
-Cohesion: 0.29
-Nodes (15): createKeyedDigest(), decryptProtectedValue(), deriveSymmetricKey(), encryptProtectedValue(), hashKeyedProtectedValue(), hashProtectedValue(), isEncryptedProtectedValue(), isHashedProtectedValue() (+7 more)
+### Community 178 - "sso.service.ts"
+Cohesion: 0.18
+Nodes (22): createKeyedDigest(), decryptProtectedValue(), deriveSymmetricKey(), encryptProtectedValue(), hashKeyedProtectedValue(), hashProtectedValue(), isEncryptedProtectedValue(), isHashedProtectedValue() (+14 more)
 
 ### Community 179 - "ai-selection-action.tsx"
 Cohesion: 0.07
 Nodes (34): AiMessageCard, ApplyMode, AiMessageContent, EMPTY_SOURCES, AiReasoningDisclosure(), { sanitizeAiMarkdown }, AiSelectionActionButton(), AiSelectionActionButtonProps (+26 more)
 
 ### Community 180 - "AiMcpClientPoolService"
-Cohesion: 0.16
+Cohesion: 0.15
 Nodes (3): AiMcpClientPoolService, Injectable, AiMcpLease
 
 ### Community 181 - "queue-outbox.service.ts"
-Cohesion: 0.16
-Nodes (15): PermanentOutboxError, ProcessingOutcome, createHarness(), createSelectQuery(), invitationEntry(), DuplicatePageAttachmentsOutboxPayload, PAGE_TEMPLATE_SYNC_HANDLER, PageTemplateSyncOutboxHandler (+7 more)
+Cohesion: 0.08
+Nodes (20): QueueOutboxRepo, Injectable, InjectKysely, InsertableQueueOutboxEntry, QueueOutboxEntry, PermanentOutboxError, ProcessingOutcome, QueueOutboxService (+12 more)
 
 ### Community 182 - "Built-in AI integration"
 Cohesion: 0.18
@@ -1296,73 +1275,69 @@ Nodes (11): Answer citations, API and permissions, Assistant profiles, Built-in 
 Cohesion: 0.29
 Nodes (6): author, description, license, name, private, version
 
-### Community 185 - "AiRunController"
-Cohesion: 0.28
-Nodes (8): AiRunController, Body, Controller, Get, HttpCode, Param, Post, UseGuards
+### Community 185 - ".create"
+Cohesion: 0.35
+Nodes (6): ApiKeyController, Body, Controller, HttpCode, Post, UseGuards
 
 ### Community 186 - "Q: Пример того, как отобразилась ГОРИЗОНТАЛЬНЫЕ диаграмма mermaid и PNG-картинка с бизнес-процессом. Если картинка вертикальная (портрет), то нужно показывать в высоту, если горизонтальная (ландшафт), то в ширину. Пропорционально"
 Cohesion: 0.40
 Nodes (4): Answer, Outcome, Q: Пример того, как отобразилась ГОРИЗОНТАЛЬНЫЕ диаграмма mermaid и PNG-картинка с бизнес-процессом. Если картинка вертикальная (портрет), то нужно показывать в высоту, если горизонтальная (ландшафт), то в ширину. Пропорционально, Source Nodes
 
 ### Community 187 - "rag-sync-admin.service.ts"
-Cohesion: 0.12
+Cohesion: 0.13
 Nodes (17): RAG_SYNC_CONTROL, RAG_SYNC_OPERATION_LOCK, RAG_SYNC_STATUS_READER, RAG_SYNC_WRITER, RagSyncControl, RagSyncOperationLock, RagSyncOperationLockError, RagSyncStatusReader (+9 more)
 
 ### Community 188 - "UpdatePageDto"
-Cohesion: 0.18
-Nodes (12): ArrayUnique, IsArray, IsIn, IsOptional, IsString, IsUUID, Transform, Type (+4 more)
+Cohesion: 0.08
+Nodes (31): CreatePageDto, IsIn, IsObject, IsOptional, IsString, IsUUID, Transform, ValidateIf (+23 more)
 
-### Community 189 - "jwt-auth.guard.ts"
+### Community 189 - "page.controller.ts"
 Cohesion: 0.04
-Nodes (72): AUTH_POLICY_SCOPE_KEY, AuthPolicyResourceType, AuthPolicyScopeType, IS_PUBLIC_KEY, JwtAuthGuard, Injectable, FileInterceptor, Injectable (+64 more)
+Nodes (80): AUTH_POLICY_SCOPE_KEY, AuthPolicyResourceType, AuthPolicyScopeType, IS_PUBLIC_KEY, JwtAuthGuard, Injectable, SpaceVisibility, UserRole (+72 more)
 
 ### Community 190 - "ai-outbound-url-policy.service.ts"
-Cohesion: 0.13
-Nodes (14): InjectKysely, AiOutboundUrlPolicyService, AiResolvedOutboundUrl, isAiLinkLocalAddress(), isAiLoopbackAddress(), isAiMulticastAddress(), isAiUnspecifiedAddress(), parseIpv4Octets() (+6 more)
+Cohesion: 0.11
+Nodes (13): AiMcpUrlPolicyService, lookupMock, Injectable, AiOutboundUrlPolicy, AiOutboundUrlPolicyService, isAiLinkLocalAddress(), isAiLoopbackAddress(), isAiMulticastAddress() (+5 more)
 
 ### Community 191 - "copy-markdown-with-comments.service.ts"
-Cohesion: 0.13
-Nodes (15): CommentContextState, CommentLocationContext, HeadingContext, ProseMirrorJsonNode, headingNode(), textNode(), CopyMarkdownWithCommentsDto, ExportFormat (+7 more)
+Cohesion: 0.10
+Nodes (23): CommentContextState, CommentLocationContext, HeadingContext, ProseMirrorJsonNode, headingNode(), textNode(), CopyMarkdownWithCommentsDto, ExportFormat (+15 more)
 
 ### Community 192 - "sw.js"
 Cohesion: 0.25
 Nodes (4): APP_SHELL_ASSETS, CURRENT_CACHES, isValidDocumentResponse(), networkFirstForDocuments()
 
-### Community 193 - "SearchDTO"
-Cohesion: 0.12
-Nodes (18): SearchDTO, SearchShareDTO, SearchSuggestionDTO, IsBoolean, IsNotEmpty, IsNumber, IsOptional, IsString (+10 more)
-
-### Community 194 - "AiConversationController"
-Cohesion: 0.16
-Nodes (11): AiConversationController, Body, Controller, Delete, Get, Param, Patch, Post (+3 more)
+### Community 193 - "SearchService"
+Cohesion: 0.07
+Nodes (27): SidebarAccessSnapshot, SearchDTO, SearchShareDTO, SearchSuggestionDTO, IsBoolean, IsNotEmpty, IsNumber, IsOptional (+19 more)
 
 ### Community 195 - "NestJS CLI Config"
 Cohesion: 0.33
 Nodes (5): collection, compilerOptions, deleteOutDir, $schema, sourceRoot
 
-### Community 196 - "AiContentPolicyService"
-Cohesion: 0.08
-Nodes (20): AiContentPolicyService, TestPostgresDialect, Injectable, AiContentExclusionInputDto, AiContentPolicyCandidatesQueryDto, ArrayMaxSize, IsArray, IsBoolean (+12 more)
+### Community 196 - "ai.module.ts"
+Cohesion: 0.05
+Nodes (50): AI_ALLOWED_CHAT_FILE_EXTENSIONS, AI_ALLOWED_CHAT_FILE_MIME_TYPES, AI_CHAT_LIMITS, AI_CONCURRENCY_LIMITS, AI_DEFAULTS, AI_RETRIEVAL_DEFAULTS, AiContentPolicyModule, Module (+42 more)
 
 ### Community 197 - "CreateAiAssistantProfileDto"
 Cohesion: 0.19
 Nodes (23): AiAssistantProfileExternalToolDto, AiAssistantProfileGroupPolicyDto, CreateAiAssistantProfileDto, ArrayMaxSize, ArrayUnique, IsArray, IsBoolean, IsIn (+15 more)
 
 ### Community 198 - "menu-items.ts"
-Cohesion: 0.05
-Nodes (52): AirtableIcon(), Props, FigmaIcon(), Props, FramerIcon(), Props, GoogleDriveIcon(), Props (+44 more)
+Cohesion: 0.04
+Nodes (61): AirtableIcon(), Props, FigmaIcon(), Props, FramerIcon(), Props, GoogleDriveIcon(), Props (+53 more)
 
-### Community 200 - "history.processor.ts"
-Cohesion: 0.10
-Nodes (14): HistoryQueueJobData, InjectQueue, InjectKysely, IRecordPageHistoryEventInput, IRecordPageHistoryEventsInput, PAGE_HISTORY_EVENT_VERSION, PageHistoryChangeData, PageHistoryChangeType (+6 more)
+### Community 200 - ".constructor"
+Cohesion: 0.06
+Nodes (19): InjectQueue, InjectKysely, IRecordPageHistoryEventInput, IRecordPageHistoryEventsInput, PAGE_HISTORY_EVENT_VERSION, PageHistoryChangeData, PageHistoryChangeType, PageHistoryRecorderService (+11 more)
 
 ### Community 202 - "6. Inbound MCP for external assistants"
 Cohesion: 0.25
 Nodes (8): 6. Inbound MCP for external assistants, Attribution, Creating and validating an MCP key, Deployment checklist, Endpoint and transport, Purpose and relationship to RAG, Read tools, Result, error, and content boundaries
 
 ### Community 203 - ".getUserInfo"
-Cohesion: 0.16
-Nodes (9): Body, Controller, Get, HttpCode, Post, Req, UseGuards, UserController (+1 more)
+Cohesion: 0.25
+Nodes (6): Body, Get, HttpCode, Post, Req, Header
 
 ### Community 204 - "ci-embedded-rag-sync-smoke.mjs"
 Cohesion: 0.31
@@ -1373,23 +1348,23 @@ Cohesion: 0.23
 Nodes (13): AiBuiltinToolSpacePolicy(), AiBuiltinToolWorkspacePolicy(), AiToolCapabilityList(), catalog, AI_TOOL_POLICY_QUERY_KEYS, useAiBuiltinToolSpacePolicyQuery(), useAiBuiltinToolWorkspacePolicyQuery(), useUpdateAiBuiltinToolSpacePolicyMutation() (+5 more)
 
 ### Community 206 - "PaginationOptions"
-Cohesion: 0.03
-Nodes (76): DefaultGroup, GroupService, TODO: use queue instead, Injectable, InjectKysely, GroupUserService, TODO: use queue instead, Injectable (+68 more)
+Cohesion: 0.02
+Nodes (105): InjectKysely, ListFavoritesDto, ListFavoritesQueryDto, IsIn, IsOptional, IsString, IsUUID, FavoriteService (+97 more)
 
-### Community 208 - ".revokeSession"
-Cohesion: 0.24
-Nodes (8): SessionController, Body, Controller, Get, HttpCode, Post, Req, UseGuards
+### Community 208 - "session.controller.ts"
+Cohesion: 0.18
+Nodes (11): RevokeSessionDto, IsNotEmpty, IsUUID, SessionController, Body, Controller, Get, HttpCode (+3 more)
 
 ### Community 209 - "AiOperationalMetricsService"
-Cohesion: 0.08
-Nodes (11): AiMcpExecuteContext, AiMcpToolCallService, Injectable, AiAssistantProfileOutcome, AiMcpCacheEvent, AiMcpObservedOutcome, AiOperationalMetricsService, DurationMetric (+3 more)
+Cohesion: 0.13
+Nodes (6): InjectKysely, AiAssistantProfileOutcome, AiMcpCacheEvent, AiOperationalMetricsService, DurationMetric, Injectable
 
 ### Community 210 - ".candidates"
-Cohesion: 0.21
+Cohesion: 0.19
 Nodes (8): AiContentPolicyController, Body, Controller, Get, Param, Put, Query, UseGuards
 
 ### Community 211 - "Space"
-Cohesion: 0.08
+Cohesion: 0.07
 Nodes (45): All, AuthApiKey, AuthSpace, SkipTransform(), ApiKeyTraffic(), McpController, Body, Controller (+37 more)
 
 ### Community 212 - "Architecture Audit Tool"
@@ -1400,9 +1375,9 @@ Nodes (4): auditCommands, quoteCmdArg(), runArchitectureAudit(), runAudit()
 Cohesion: 0.29
 Nodes (6): Delivery and lifecycle, Monitoring, Queue Outbox Runbook, Recovery, Secret and privacy handling, Verification
 
-### Community 215 - "helpers/utils.ts"
-Cohesion: 0.18
-Nodes (7): createByteCountingStream(), createRetryStrategy(), parseRedisUrl(), RedisConfig, RedisConfigService, Injectable, WsRedisIoAdapter
+### Community 215 - "attachment-public-token.util.ts"
+Cohesion: 0.38
+Nodes (7): ATTACHMENT_TOKEN_COOKIE_PREFIX, AttachmentAccessTokenResolution, AttachmentAccessTokenSource, getAttachmentTokenCookieName(), LEGACY_ATTACHMENT_TOKEN_COOKIE, resolveAttachmentAccessToken(), resolveAttachmentAccessTokenDetails()
 
 ### Community 216 - "Service Infrastructure"
 Cohesion: 0.83
@@ -1412,9 +1387,9 @@ Nodes (3): db service, docmost service, redis service
 Cohesion: 0.08
 Nodes (55): AiSpaceExternalMcpSettings(), Props, ExternalMcpConnectionActions(), Props, ExternalMcpHeaderFields(), MASK, Props, ExternalMcpServerDetail() (+47 more)
 
-### Community 219 - "QueueOutboxService"
-Cohesion: 0.27
-Nodes (3): QueueOutboxEntry, QueueOutboxService, Injectable
+### Community 219 - "CreateGroupDto"
+Cohesion: 0.22
+Nodes (9): CreateGroupDto, ArrayMaxSize, IsArray, IsOptional, IsString, IsUUID, MaxLength, MinLength (+1 more)
 
 ### Community 220 - "compilerOptions"
 Cohesion: 0.29
@@ -1426,10 +1401,10 @@ Nodes (7): exclude, extends, dist, ./tsconfig.json, node_modules, **/*spec.ts, t
 
 ### Community 278 - "push.controller.ts"
 Cohesion: 0.06
-Nodes (30): CreatePushSubscriptionDto, DeletePushSubscriptionByEndpointDto, DeletePushSubscriptionParamsDto, PushSubscriptionKeysDto, IsNotEmpty, IsObject, IsOptional, IsString (+22 more)
+Nodes (32): CreatePushSubscriptionDto, DeletePushSubscriptionByEndpointDto, DeletePushSubscriptionParamsDto, PushSubscriptionKeysDto, IsNotEmpty, IsObject, IsOptional, IsString (+24 more)
 
 ### Community 279 - ".create"
-Cohesion: 0.22
+Cohesion: 0.20
 Nodes (8): AiEditorActionController, Body, Controller, Get, HttpCode, Param, Post, UseGuards
 
 ### Community 280 - "ShareTransclusionLookupDto"
@@ -1437,16 +1412,16 @@ Cohesion: 0.20
 Nodes (10): ShareTransclusionLookupDto, ShareTransclusionReferenceDto, ArrayMaxSize, IsArray, IsNotEmpty, IsString, IsUUID, MaxLength (+2 more)
 
 ### Community 281 - "emoji-menu/utils.ts"
-Cohesion: 0.18
-Nodes (16): getEmojiItems(), searchEmoji(), EmojiList(), renderEmojiItems(), CommandProps, EmojiMartFrequentlyType, EmojiMenuItemType, DEFAULT_FREQUENTLY_USED_EMOJI_MART (+8 more)
+Cohesion: 0.23
+Nodes (13): getEmojiItems(), searchEmoji(), EmojiList(), renderEmojiItems(), CommandProps, EmojiMartFrequentlyType, EmojiMenuItemType, DEFAULT_FREQUENTLY_USED_EMOJI_MART (+5 more)
 
-### Community 282 - "AiMcpUrlPolicyService"
-Cohesion: 0.16
-Nodes (6): InjectKysely, InjectKysely, AiMcpUrlPolicyService, lookupMock, Injectable, AiOutboundUrlPolicy
+### Community 282 - "AttachmentProcessor"
+Cohesion: 0.32
+Nodes (3): AttachmentProcessor, OnWorkerEvent, Processor
 
-### Community 283 - ".copyMarkdownWithCommentsAction"
-Cohesion: 0.35
-Nodes (8): PageExportController, SpaceExportController, Body, Controller, HttpCode, Post, Res, UseGuards
+### Community 283 - "EmailProcessor"
+Cohesion: 0.32
+Nodes (3): EmailProcessor, OnWorkerEvent, Processor
 
 ### Community 287 - "AGENTS.md — practical automation cheat sheet for `docmost`"
 Cohesion: 0.14
@@ -1456,21 +1431,21 @@ Nodes (14): 0) Quick repository profile, 10) Rule for keeping this file up to da
 Cohesion: 0.24
 Nodes (9): createInlineCodeNoWrapDecorations(), getInlineCodeNoWrapRanges(), INLINE_CODE_NO_WRAP_MAX_LENGTH, InlineCodeNoWrap, inlineCodeNoWrapPluginKey, InlineCodeRange, shouldKeepInlineCodeOnOneLine(), Splitter (+1 more)
 
-### Community 295 - "skip-transform.decorator.ts"
-Cohesion: 0.17
-Nodes (8): SKIP_TRANSFORM_KEY, ResponseContractSmokeController, ResponseContractSmokeModule, Controller, Get, Module, TransformHttpResponseInterceptor, Injectable
+### Community 295 - "change-password.tsx"
+Cohesion: 0.33
+Nodes (6): changePassword(), ChangePassword(), ChangePasswordForm(), ChangePasswordFormProps, formSchema, FormValues
 
-### Community 297 - "ApiKeyService"
-Cohesion: 0.11
-Nodes (22): ApiKeyController, Body, Controller, HttpCode, Post, UseGuards, ApiKeyService, Injectable (+14 more)
+### Community 297 - "api-key.service.ts"
+Cohesion: 0.09
+Nodes (23): AI_BUILTIN_TOOL_POLICY_RESOLVER, AiBuiltinToolPolicyResolver, ApiKeyService, Inject, Injectable, CreateApiKeyDto, ListApiKeysDto, RevokeApiKeyDto (+15 more)
 
-### Community 298 - "page.controller.ts"
-Cohesion: 0.13
-Nodes (21): DeletedPageDto, DeletedPagesQueryDto, IsNotEmpty, IsString, DuplicatePageDto, IsNotEmpty, IsOptional, IsString (+13 more)
+### Community 298 - "CreateSpaceDto"
+Cohesion: 0.29
+Nodes (7): CreateSpaceDto, IsAlphanumeric, IsOptional, IsString, MaxLength, MinLength, Transform
 
 ### Community 305 - "SsoService"
-Cohesion: 0.06
-Nodes (6): SsoService, Injectable, AuthProvider, SsoLoginState, SsoEndpointPolicyService, Injectable
+Cohesion: 0.09
+Nodes (4): SsoService, Injectable, AuthProvider, SsoLoginState
 
 ### Community 306 - "Design QA"
 Cohesion: 0.29
@@ -1480,21 +1455,17 @@ Nodes (6): Browser verification, Checks completed, Design QA, Final result, Sour
 Cohesion: 0.11
 Nodes (18): 10. Импорт, экспорт и переносимость данных, 11. Комментарии и совместная работа, 12. Уведомления, 13. Управление доступом, 14. Безопасность, 15. PWA, интерфейс и навигация, 16. Эксплуатация и разработка, 1. Встроенный AI-помощник для каждого пространства (+10 more)
 
-### Community 308 - "MovePageDto"
-Cohesion: 0.25
-Nodes (8): MovePageDto, MovePageToSpaceDto, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength, MinLength
+### Community 308 - "UpdateWorkspaceUserRoleDto"
+Cohesion: 0.29
+Nodes (4): IsNotEmpty, IsString, IsUUID, UpdateWorkspaceUserRoleDto
 
 ### Community 309 - "Q: Столбцы в базах данных должно быть можно перемещать. Соответственно, в строках они тоже меняют местоположение (включая отдельные страницы строк)"
 Cohesion: 0.40
 Nodes (4): Answer, Outcome, Q: Столбцы в базах данных должно быть можно перемещать. Соответственно, в строках они тоже меняют местоположение (включая отдельные страницы строк), Source Nodes
 
-### Community 310 - "api-key.repo.ts"
-Cohesion: 0.24
-Nodes (6): ApiKeyRepo, Injectable, InjectKysely, ApiKey, InsertableApiKey, UpdatableApiKey
-
-### Community 311 - "UpdateWorkspaceDto"
-Cohesion: 0.12
-Nodes (17): CreateWorkspaceDto, IsAlphanumeric, IsOptional, IsString, MaxLength, MinLength, Transform, ArrayUnique (+9 more)
+### Community 310 - "App"
+Cohesion: 0.47
+Nodes (3): App(), settingsOriginAtom, useTrackOrigin()
 
 ### Community 312 - "Documentation Audit 2026-06-20"
 Cohesion: 0.33
@@ -1508,9 +1479,9 @@ Nodes (4): Answer, Outcome, Q: В браузере ошибка `{"error":{"code
 Cohesion: 0.40
 Nodes (4): Answer, Outcome, Q: Лог сервера: диагностика ошибки corrupted migrations для ai-citations и ai-builtin-tool-policy, Source Nodes
 
-### Community 316 - "UpdateRagSyncSpaceConfigDto"
-Cohesion: 0.14
-Nodes (12): RagSyncTargetUpdateDto, IsBoolean, IsIn, IsNotEmpty, IsOptional, IsString, Matches, MaxLength (+4 more)
+### Community 316 - "RagSyncActionDto"
+Cohesion: 0.15
+Nodes (15): RagSyncActionDto, RagSyncTargetUpdateDto, IsBoolean, IsIn, IsInt, IsNotEmpty, IsOptional, IsString (+7 more)
 
 ### Community 317 - "Release note: legacy database/page route fallback"
 Cohesion: 0.40
@@ -1532,9 +1503,9 @@ Nodes (4): Answer, Outcome, Q: Синхронизируемый блок ино�
 Cohesion: 0.40
 Nodes (4): Answer, Outcome, Q: А `pnpm --filter ./apps/server migration:latest` выполняется самостоятельно перед сборкой Docker?, Source Nodes
 
-### Community 322 - "page.dto.ts"
-Cohesion: 0.20
-Nodes (12): DeletePageDto, PageHistoryQueryDto, PageInfoDto, PageLabelsQueryDto, SpaceIdDto, IsBoolean, IsIn, IsNotEmpty (+4 more)
+### Community 322 - "MarkNotificationsReadDto"
+Cohesion: 0.40
+Nodes (5): MarkNotificationsReadDto, NotificationIdDto, IsArray, IsOptional, IsUUID
 
 ### Community 324 - "mermaid-view.tsx"
 Cohesion: 0.13
@@ -1544,8 +1515,8 @@ Nodes (19): ALLOWED_DATA_IMAGE_MIME_TYPES, ALLOWED_PROTOCOLS, compactUrlForProto
 Cohesion: 0.17
 Nodes (12): 1. System components and boundaries, 3. Smart search during an answer, 4. Configuration and operation, 5. Built-in synchronization with Open WebUI, 9. Contracts, AI and RAG migration ledger, AI assistant, smart search (RAG), and MCP (inbound and outbound), Enablement and data flow (+4 more)
 
-### Community 326 - ".getFile"
-Cohesion: 0.27
+### Community 326 - "legacy-files.controller.ts"
+Cohesion: 0.26
 Nodes (9): DeprecatedRoute(), LegacyFilesController, Controller, Get, Param, Query, Req, Res (+1 more)
 
 ### Community 330 - "Q: А во время сборки сервера?"
@@ -1581,20 +1552,20 @@ Cohesion: 0.17
 Nodes (10): collection, collectionPath, cursorFeeds, extra, inventoryPath, inventoryRoutes, missing, postmanRoutes (+2 more)
 
 ### Community 357 - ".findById"
-Cohesion: 0.06
-Nodes (29): AuthController, Body, Controller, Get, HttpCode, Post, Query, Req (+21 more)
+Cohesion: 0.15
+Nodes (4): MfaDisableDto, IsOptional, MfaService, Injectable
 
 ### Community 358 - "WsGateway"
-Cohesion: 0.18
-Nodes (4): OnEvent, WsGateway, WebSocketGateway, WebSocketServer
+Cohesion: 0.12
+Nodes (8): BroadcastToMock, SocketMock, OnEvent, WsGateway, MessageBody, SubscribeMessage, WebSocketGateway, WebSocketServer
 
-### Community 359 - "ApiKeyAuthGuard"
-Cohesion: 0.29
-Nodes (4): ApiKeyAuthGuard, Injectable, McpApiKeyAuthGuard, Injectable
+### Community 359 - "rag.module.ts"
+Cohesion: 0.15
+Nodes (10): ApiKeyAuthGuard, Injectable, ApiKeyTrafficModule, Module, McpApiKeyAuthGuard, Injectable, McpModule, Module (+2 more)
 
 ### Community 360 - "dictionary-highlight-extension.ts"
-Cohesion: 0.08
-Nodes (40): DictionaryHighlightLayer(), DictionaryHighlightLayerProps, PopoverState, SelectionState, term, DictionaryTermModalProps, DictionaryTextHighlighter(), DictionaryTextHighlighterProps (+32 more)
+Cohesion: 0.10
+Nodes (35): DictionaryTextHighlighter(), DictionaryTextHighlighterProps, buildDecorations(), buildDecorationsForTextBlocks(), buildPluginState(), collectChangedTextBlocks(), collectTextBlocks(), collectTextNodes() (+27 more)
 
 ### Community 361 - "Q: На /settings/ai/built-in-tools не хватает переводов"
 Cohesion: 0.40
@@ -1604,9 +1575,9 @@ Nodes (4): Answer, Outcome, Q: На /settings/ai/built-in-tools не хвата�
 Cohesion: 0.40
 Nodes (4): Answer, Outcome, Q: 1. Иконка ИИ-помощника при stycky toolbar не должна дублироваться у выделенного текста всплывающим меню. 2. В меню редактирования (toolbar) текста элемент с выбором цвета button[data-text-color,data-highlight-color] сейчас с границей, должна быть без границы., Source Nodes
 
-### Community 363 - "ai.module.ts"
-Cohesion: 0.08
-Nodes (57): extractAiApprovalPreview(), AI_CONCURRENCY_LIMITS, AI_DEFAULTS, Db, EffectivePolicy, AiContextDescendantsQueryDto, AiContextSourceInputDto, AiContextSourceSearchQueryDto (+49 more)
+### Community 363 - "ai-context.service.ts"
+Cohesion: 0.18
+Nodes (40): AiContextDescendantsQueryDto, AiContextSourceInputDto, AiContextSourceSearchQueryDto, AiConversationListQueryDto, AiDescendantSelectionDto, AiDocumentHeadingDto, AiMessagesQueryDto, AiQuickCommandDto (+32 more)
 
 ### Community 364 - "Q: Что такое page.node.delete.propose и page.public_share.read, нужно ли их переводить?"
 Cohesion: 0.40
@@ -1688,9 +1659,9 @@ Nodes (4): Answer, Outcome, Q: В консоли браузера: TypeError: Ca
 Cohesion: 0.29
 Nodes (7): 2. AI assistant flow, Agent mode, Citation contract, Context, files, and editor actions, Normal chat response, Per-space assistant profiles, Shared content exclusion policy
 
-### Community 385 - "RagSyncActionDto"
-Cohesion: 0.29
-Nodes (4): RagSyncActionDto, RagSyncDestructiveActionDto, IsInt, Min
+### Community 385 - "CheckHostnameDto"
+Cohesion: 0.33
+Nodes (5): CheckHostnameDto, Matches, MaxLength, MinLength, Transform
 
 ### Community 386 - "Q: Создать полную инструкцию по запуску и настройке apps/rag-sync на Ubuntu и Windows"
 Cohesion: 0.40
@@ -1733,7 +1704,7 @@ Cohesion: 0.40
 Nodes (4): Answer, Outcome, Q: А зачем вообще JSON? Нельзя через .env всё задавать? Ответь, не изменяй код, Source Nodes
 
 ### Community 401 - "AiMcpSpaceController"
-Cohesion: 0.20
+Cohesion: 0.17
 Nodes (9): AiMcpSpaceController, Body, Controller, Delete, Get, HttpCode, Param, Put (+1 more)
 
 ### Community 402 - "Q: Где проходит поток AI chat reasoning от OpenAI-compatible provider до UI и какие границы нужно сохранить?"
@@ -1744,13 +1715,9 @@ Nodes (3): Answer, Outcome, Q: Где проходит поток AI chat reason
 Cohesion: 0.40
 Nodes (4): Answer, Outcome, Q: Сейчас Redis внутри основного контейнера. Это важно? Нужно вынести его в общий или поднять в rag-sync свой?, Source Nodes
 
-### Community 404 - "TransclusionController"
-Cohesion: 0.39
-Nodes (6): TransclusionController, Body, Controller, HttpCode, Post, UseGuards
-
-### Community 405 - ".removeConnection"
-Cohesion: 0.25
-Nodes (3): StoredPresenceConnection, MessageBody, SubscribeMessage
+### Community 404 - "database-description-editor.tsx"
+Cohesion: 0.50
+Nodes (3): DatabaseDescriptionEditor(), DatabaseDescriptionEditorProps, { mockPageEditor }
 
 ### Community 406 - "Q: Проверь реализацию переопределения политик безопасности и исправь найденные дефекты"
 Cohesion: 0.40
@@ -1770,7 +1737,7 @@ Nodes (6): BUILTIN_TOOL_NAMES, LOCALES, PROFILE_ERROR_REASON_KEYS, PROFILE_IDENT
 
 ### Community 411 - "workspace-query.ts"
 Cohesion: 0.05
-Nodes (67): AppVersion(), CloudLoginForm(), createFormSchema(), JoinedWorkspaces(), CloudLogin(), useJoinedWorkspacesQuery(), getJoinedWorkspaces(), AllowedDomains() (+59 more)
+Nodes (74): exchangeTokenRedirectUrl(), getHostnameUrl(), CloudLoginForm(), createFormSchema(), JoinedWorkspaces(), CloudLogin(), useJoinedWorkspacesQuery(), getJoinedWorkspaces() (+66 more)
 
 ### Community 413 - "Q: Что если Docmost, Redis и RAG Sync объединить в один контейнер, а RAG Sync запускать опционально: риски и преимущества?"
 Cohesion: 0.40
@@ -1816,9 +1783,9 @@ Nodes (4): Answer, Outcome, Q: доработай так, чтобы локал�
 Cohesion: 0.40
 Nodes (4): Answer, Outcome, Q: Error: RAG_SYNC_DOCMOST_API_KEY is required. Check all keys and refactor if necessary., Source Nodes
 
-### Community 426 - "ai-mcp-admin.service.ts"
-Cohesion: 0.16
-Nodes (16): AI_MCP_MAX_HEADER_VALUE_BYTES, AI_MCP_MAX_HEADERS, AI_MCP_MAX_HEADERS_TOTAL_BYTES, AI_MCP_TRANSPORT, AiMcpHeaderValidation, BLOCKED_HEADER_NAMES, decryptAiMcpHeaders(), encryptAiMcpHeaders() (+8 more)
+### Community 426 - "ai-mcp-headers.util.ts"
+Cohesion: 0.18
+Nodes (13): AI_MCP_MAX_HEADER_VALUE_BYTES, AI_MCP_MAX_HEADERS, AI_MCP_MAX_HEADERS_TOTAL_BYTES, AiMcpHeaderValidation, BLOCKED_HEADER_NAMES, CR, DEL, expectRejected() (+5 more)
 
 ### Community 428 - "20260608T120000-clean-malformed-leading-table-rows.ts"
 Cohesion: 0.29
@@ -1828,17 +1795,13 @@ Nodes (14): cleanMalformedLeadingTableRows(), convertRowCellsToHeaders(), getTab
 Cohesion: 0.40
 Nodes (4): Answer, Outcome, Q: А действительно ли в .env нужны RAG_SYNC_DOCMOST_API_KEY и RAG_SYNC_OPEN_WEBUI_API_KEY, если оба задаются через UI?, Source Nodes
 
-### Community 430 - "SidebarPagesQueryDto"
-Cohesion: 0.33
-Nodes (8): SidebarNodeType, sidebarNodeTypes, SidebarPageDto, SidebarPagesQueryDto, IsArray, IsIn, IsOptional, IsUUID
-
 ### Community 432 - "Q: В база данных (тип записей) не работает смена порядка столбцов перетаскиванием"
 Cohesion: 0.40
 Nodes (4): Answer, Outcome, Q: В база данных (тип записей) не работает смена порядка столбцов перетаскиванием, Source Nodes
 
-### Community 433 - "api-client.ts"
-Cohesion: 0.09
-Nodes (25): { stepUpMock, shellMock, state }, AuthenticatedLayout(), Layout(), SessionList(), useGetSessionsQuery(), useRevokeAllSessionsMutation(), useRevokeSessionMutation(), getSessions() (+17 more)
+### Community 433 - "config.ts"
+Cohesion: 0.04
+Nodes (60): { stepUpMock, shellMock, state }, AuthenticatedLayout(), Layout(), AppVersion(), prefetchApiKeyManagement(), prefetchGroups(), prefetchShares(), prefetchSpaces() (+52 more)
 
 ### Community 434 - "Q: У разных пространств Docmost могут быть разные ИИ-помощники, Open WebUI, LLM и другие настройки."
 Cohesion: 0.40
@@ -1848,21 +1811,9 @@ Nodes (4): Answer, Outcome, Q: У разных пространств Docmost м
 Cohesion: 0.22
 Nodes (18): @hocuspocus/provider, @hocuspocus/provider, api(), baseUrl, callMcp(), client, collabEndpoint, collaborationSmoke() (+10 more)
 
-### Community 437 - "TrashCleanupService"
-Cohesion: 0.29
-Nodes (5): TrashCleanupService, Injectable, InjectKysely, InjectQueue, Interval
-
 ### Community 439 - "helpers/constants.ts"
 Cohesion: 0.38
 Nodes (5): APP_DATA_PATH, LOCAL_STORAGE_DIR, LOCAL_STORAGE_PATH, resolveAppRoot(), resolveLocalStoragePath()
-
-### Community 442 - "attachment.types.ts"
-Cohesion: 0.16
-Nodes (18): AvatarUploader(), AvatarUploaderProps, CustomAvatarProps, compressAndResizeIcon(), removeAvatar(), removeIcon(), removeSpaceIcon(), removeWorkspaceIcon() (+10 more)
-
-### Community 443 - "backlink.dto.ts"
-Cohesion: 0.43
-Nodes (6): BacklinkDirection, BacklinksListDto, BacklinksListQueryDto, IsIn, IsNotEmpty, IsString
 
 ### Community 444 - "Q: Составь подробный план реализации, с исследованием и, при необходимости, рефакторингом"
 Cohesion: 0.40
@@ -1901,8 +1852,8 @@ Cohesion: 0.40
 Nodes (4): Answer, Outcome, Q: В `.env` строка `AI_EXTERNAL_MCP_ENABLED=true`, а всё равно в интерфейсе `AI_EXTERNAL_MCP_ENABLED is off`. Если это ошибка, исправь её, Source Nodes
 
 ### Community 462 - "ApiKeyTrafficService"
-Cohesion: 0.07
-Nodes (16): API_KEY_TRAFFIC_PROFILE, ApiKeyTrafficProfile, ApiKeyTrafficGuard, Injectable, ApiKeyTrafficModule, Module, ApiKeyTrafficLease, ApiKeyTrafficLimits (+8 more)
+Cohesion: 0.08
+Nodes (12): API_KEY_TRAFFIC_PROFILE, ApiKeyTrafficProfile, ApiKeyTrafficGuard, Injectable, ApiKeyTrafficLease, ApiKeyTrafficLimits, ApiKeyTrafficService, RequestOutcome (+4 more)
 
 ### Community 464 - "Q: Исправь найденные недостатки"
 Cohesion: 0.40
@@ -1947,10 +1898,6 @@ Nodes (4): Answer, Outcome, Q: Исправить bounded fairness во встр
 ### Community 482 - "redis-sync.extension.spec.ts"
 Cohesion: 0.12
 Nodes (7): deserializeCustomEventError(), serializeCustomEventError(), SerializedCustomEventError, MemoryRedisBackend, MemoryRedisClient, TestEvents, RSAMessageProxy
-
-### Community 483 - "presence.types.ts"
-Cohesion: 0.24
-Nodes (9): PresenceUpdateDto, IsIn, IsOptional, IsString, MaxLength, MemberPresenceSession, PRESENCE_LOCATION_TYPES, PresenceLocationType (+1 more)
 
 ### Community 484 - "Q: В верхнем меню страниц и баз данных есть кнопка Делиться, сделай её только иконкой, как остальные рядом."
 Cohesion: 0.40
@@ -2000,9 +1947,9 @@ Nodes (4): Answer, Outcome, Q: Проверь, внесены ли измене�
 Cohesion: 0.18
 Nodes (11): 7. Outbound external MCP servers, Connection pooling, Lifecycle, Network policy, Observability, Rollout and rollback, Run integration, Secrets (+3 more)
 
-### Community 507 - "attachment.service.ts"
-Cohesion: 0.06
-Nodes (38): getMimeType(), detectFileTypeFromBuffer(), readMagicBytesFromStream(), resolveTrustedMimeType(), SAFE_FILE_VALIDATION_ERROR_MESSAGE, SIGNATURE_RULES, validateFileExtensionAndSignature(), sanitizeFileName() (+30 more)
+### Community 507 - "docmost-archive-import.service.ts"
+Cohesion: 0.03
+Nodes (82): htmlToJson(), jsonToText(), stripUnknownNodes(), tiptapExtensions, getMimeType(), detectFileTypeFromBuffer(), readMagicBytesFromStream(), resolveTrustedMimeType() (+74 more)
 
 ### Community 510 - "Q: Исправить недостатки документации и встроенной справки RAG Sync и сделать коммиты функциональности чата"
 Cohesion: 0.40
@@ -2021,8 +1968,8 @@ Cohesion: 0.29
 Nodes (7): 2) Reusable commands (runbook), Containers, Database migrations (backend), Development, Installation and baseline checks, Linting and formatting, Tests
 
 ### Community 515 - "ShareController"
-Cohesion: 0.10
-Nodes (27): ATTACHMENT_TOKEN_COOKIE_PREFIX, AttachmentAccessTokenResolution, AttachmentAccessTokenSource, getAttachmentTokenCookieName(), LEGACY_ATTACHMENT_TOKEN_COOKIE, resolveAttachmentAccessToken(), resolveAttachmentAccessTokenDetails(), CreateShareDto (+19 more)
+Cohesion: 0.14
+Nodes (20): CreateShareDto, ShareIdDto, ShareInfoDto, SharePageIdDto, SpaceIdDto, IsBoolean, IsNotEmpty, IsOptional (+12 more)
 
 ### Community 516 - "LookupDto"
 Cohesion: 0.20
@@ -2044,13 +1991,13 @@ Nodes (4): __dirname, __filename, FlatTranslations, localesDir
 Cohesion: 0.11
 Nodes (21): AddFavoriteDto, RemoveFavoriteDto, IsIn, IsNotEmpty, IsOptional, IsString, IsUUID, FavoriteIdsDto (+13 more)
 
-### Community 528 - "rag-open-webui-compat.mjs"
-Cohesion: 0.25
-Nodes (4): baseUrl, createDocx(), headers, uploadedFileIds
+### Community 528 - ".createDocmostArchive"
+Cohesion: 0.09
+Nodes (19): normalizeSettings(), resolveHeadingNumberingEnabled(), SettingsContainer, buildTree(), computeLocalPath(), computeRelativePath(), extractPageSlugId(), getExportExtension() (+11 more)
 
 ### Community 529 - "KyselyTransaction"
-Cohesion: 0.03
-Nodes (67): InjectKysely, InjectQueue, InjectKysely, InjectQueue, Optional, ReferencingPageInfo, Optional, RagDocumentFieldsConfig (+59 more)
+Cohesion: 0.02
+Nodes (55): PageAccessEffect, PageAccessPrincipalType, PageRole, InjectKysely, InjectQueue, PageAccessMutationService, Injectable, InjectKysely (+47 more)
 
 ### Community 530 - "Q: Исправь везде, на всех языках."
 Cohesion: 0.40
@@ -2076,9 +2023,9 @@ Nodes (4): Answer, Outcome, Q: SSO: OIDC, SAML, LDAP и group mappings, Source N
 Cohesion: 0.50
 Nodes (3): Answer, Outcome, Q: Как встроить многопространственную синхронизацию Docmost в Open WebUI и устранить зависимость от отдельного сервиса rag-sync?
 
-### Community 547 - "Workspace"
-Cohesion: 0.06
-Nodes (47): AuthPolicyScope(), DatabaseController, Body, Controller, Delete, Get, HttpCode, Param (+39 more)
+### Community 547 - ".createForUser"
+Cohesion: 0.08
+Nodes (31): buildSpaceAbility(), DictionaryController, Body, Controller, Delete, Get, HttpCode, Param (+23 more)
 
 ### Community 569 - "SpaceListener"
 Cohesion: 0.36
@@ -2092,9 +2039,9 @@ Nodes (5): LinkPreviewDto, IsNotEmpty, IsString, IsUrl, MaxLength
 Cohesion: 0.40
 Nodes (5): 3) Style conventions (as observed), Commit message format (based on history), ESLint practices, Frontend UI conventions, TypeScript/JS style
 
-### Community 579 - "AttachmentContentService"
-Cohesion: 0.11
-Nodes (7): AttachmentProcessor, OnWorkerEvent, Processor, AttachmentContentService, Injectable, InjectKysely, InjectQueue
+### Community 579 - ".error"
+Cohesion: 0.17
+Nodes (4): AttachmentContentService, Injectable, InjectKysely, InjectQueue
 
 ### Community 580 - "WorkspaceListener"
 Cohesion: 0.33
@@ -2108,13 +2055,9 @@ Nodes (4): 1) Code navigation, Entry points, What can be safely ignored during a
 Cohesion: 0.14
 Nodes (3): CommentWithActors, CopyMarkdownWithCommentsService, Injectable
 
-### Community 638 - "CreateUserDto"
-Cohesion: 0.13
-Nodes (15): CreateAdminUserDto, IsNotEmpty, IsOptional, IsString, MaxLength, MinLength, Transform, CreateUserDto (+7 more)
-
-### Community 642 - "invitation.dto.ts"
-Cohesion: 0.15
-Nodes (15): AcceptInviteDto, InvitationIdDto, InvitationInfoDto, InviteUserDto, ArrayMaxSize, ArrayMinSize, IsArray, IsEmail (+7 more)
+### Community 638 - "auth.controller.ts"
+Cohesion: 0.04
+Nodes (59): MAX_UTF8_BYTES, MaxUtf8Bytes, ChangePasswordDto, IsNotEmpty, IsString, MinLength, CollabTokenQueryDto, IsNotEmpty (+51 more)
 
 ### Community 658 - "20260526T124000-clean-legacy-quote-content.ts"
 Cohesion: 0.50
@@ -2125,16 +2068,8 @@ Cohesion: 0.22
 Nodes (6): ActiveMarkdownSyntax, activeMarkdownSyntaxPluginKey, MarkdownLinkInput, MarkdownSyntax, markdownSyntaxByMark, MarkdownTaskListInput
 
 ### Community 670 - "ai-page-operation.ts"
-Cohesion: 0.12
-Nodes (24): CollaborationHandler, ParagraphWithId, testExtensions, testSchema, Injectable, prosemirrorNodeToYElement(), addMissingNodeIds(), AiPageOperation (+16 more)
-
-### Community 684 - "MaxUtf8Bytes"
-Cohesion: 0.18
-Nodes (11): MAX_UTF8_BYTES, MaxUtf8Bytes, ChangePasswordDto, IsNotEmpty, IsString, MinLength, PasswordResetDto, IsOptional (+3 more)
-
-### Community 688 - "export.service.ts"
-Cohesion: 0.10
-Nodes (26): htmlToJson(), jsonToNode(), stripUnknownNodes(), tiptapExtensions, generateHTML(), generateJSON(), getHTMLFromFragment(), getAttachmentIds() (+18 more)
+Cohesion: 0.21
+Nodes (19): addMissingNodeIds(), AiPageOutlineItem, applyAiPageOperation(), assertSafeAiPageOperation(), assertUniqueNodeIds(), buildAiApprovalPreview(), canonicalJsonString(), findNode() (+11 more)
 
 ### Community 693 - "WsMessageDto"
 Cohesion: 0.20
@@ -2148,43 +2083,39 @@ Nodes (6): auditInboundMcp(), main(), parseJsonResponse(), request(), rpc(), sum
 Cohesion: 0.11
 Nodes (33): adminApiContext(), adminBrowserStorageState(), api(), assert(), auditRoot, baseURL, browserEvidence(), browserEvidenceV2() (+25 more)
 
-### Community 729 - "page.module.ts"
-Cohesion: 0.09
-Nodes (24): CaslModule, Global, Module, DatabaseFeatureModule, Module, LabelModule, Module, NotificationModule (+16 more)
-
 ## Knowledge Gaps
-- **2196 isolated node(s):** `port`, `requests`, `retrievalRequests`, `server`, `clientRoot` (+2191 more)
+- **2196 isolated node(s):** `StorageMode`, `BucketState`, `TelemetryCounter`, `AuthRateLimitOperationMetrics`, `port` (+2191 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **155 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **161 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Work-memory lessons
 
 **Preferred sources** — corroborated by past sessions; start here.
-- `docker-compose.yml` (14× useful, score=13.630220728)
-- `RagService` (8× useful, score=7.8343007)
-- `OpenWebUiKnowledgeRetrievalAdapter` (7× useful, score=6.052726999)
-- `ai-localization.test.ts` (5× useful, score=4.870793813)
-- `MigrationService` (5× useful, score=4.803477151)
-- `page-editor.tsx` (5× useful, score=4.13379737)
-- `RagSyncAdminService` (4× useful, score=3.932491469)
-- `ai-panel.tsx` (4× useful, score=3.783150676)
-- `ai-space-settings.tsx` (3× useful, score=2.938574848)
-- `ai-admin-guide.tsx` (3× useful, score=2.930140244)
+- `docker-compose.yml` (14× useful, score=13.629856158)
+- `RagService` (8× useful, score=7.834091154)
+- `OpenWebUiKnowledgeRetrievalAdapter` (7× useful, score=6.052565105)
+- `ai-localization.test.ts` (5× useful, score=4.870663532)
+- `MigrationService` (5× useful, score=4.803348671)
+- `page-editor.tsx` (5× useful, score=4.133686803)
+- `RagSyncAdminService` (4× useful, score=3.932386286)
+- `ai-panel.tsx` (4× useful, score=3.783049487)
+- `ai-space-settings.tsx` (3× useful, score=2.938496249)
+- `ai-admin-guide.tsx` (3× useful, score=2.930061871)
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `KyselyDB` connect `KyselyDB` to `DatabaseReadinessService`, `entity.types.ts`, `comment.notification.ts`, `AiAssistantProfileService`, `openai-compatible-provider.service.ts`, `User`, `executeTx`, `EnvironmentService`, `AiAuxRunService`, `KyselyTransaction`, `DatabaseService`, `PageTemplateService`, `PageRepo`, `AiRetrievalConfig`, `PageTemplateController`, `docmost-archive-import.service.ts`, `Workspace`, `QueueOutboxRepo`, `file-import-task.service.ts`, `email-aggregation.service.ts`, `RagContentExportService`, `ExportService`, `AiContextService`, `WorkspaceRepo`, `UserRepo`, `PageAccessService`, `page.service.ts`, `ai-mcp.constants.ts`, `favorite.controller.ts`, `page.notification.ts`, `ai-file.service.ts`, `AttachmentContentService`, `TypesenseIndexService`, `.updateSpace`, `database.service.ts`, `health.module.ts`, `AiConfigService`, `StorageService`, `page-template.service.ts`, `rag-sync-source.service.ts`, `AiRun`, `PageHistoryService`, `RagSyncSourceService`, `PushAggregationService`, `persistence.extension.ts`, `environment.service.ts`, `AiRunService`, `label.repo.ts`, `ai-tool-registry.service.ts`, `workspace.service.ts`, `.removeIcon`, `AiMcpAdminService`, `notification.module.ts`, `RagSyncAdminService`, `share.service.ts`, `PageTemplatePolicyService`, `AiToolRegistryService`, `AiConversationService`, `ai-mcp-policy.service.ts`, `RagSyncAdminRepo`, `comment.service.ts`, `export.service.ts`, `AiMcpClientPoolService`, `queue-outbox.service.ts`, `ai-outbound-url-policy.service.ts`, `SearchDTO`, `AiConversationController`, `AiContentPolicyService`, `history.processor.ts`, `.getUserInfo`, `PaginationOptions`, `.candidates`, `.constructor`, `Space`, `QueueOutboxService`, `push.controller.ts`, `AiMcpUrlPolicyService`, `SsoService`, `api-key.repo.ts`, `.publish`, `.findById`, `ai.module.ts`, `AiMcpSpaceController`, `ai-mcp-admin.service.ts`, `TrashCleanupService`, `attachment.service.ts`?**
-  _High betweenness centrality (0.142) - this node is a cross-community bridge._
-- **Why does `User` connect `User` to `ShareController`, `entity.types.ts`, `RagService`, `AiAssistantProfileService`, `executeTx`, `FavoriteController`, `AiAuxRunService`, `KyselyTransaction`, `AuthWorkspace`, `DatabaseService`, `PageTemplateService`, `PageRepo`, `AiRetrievalConfig`, `PageTemplateController`, `docmost-archive-import.service.ts`, `Workspace`, `ExportService`, `AiContextService`, `UserRepo`, `PageAccessService`, `page.service.ts`, `ai-mcp.constants.ts`, `favorite.controller.ts`, `ai-file.service.ts`, `.updateSpace`, `database.service.ts`, `CopyMarkdownWithCommentsService`, `AiConfigService`, `page-template.service.ts`, `RagSyncAdminController`, `AiRun`, `SsoController`, `.attachmentSearch`, `environment.service.ts`, `AiRunService`, `ai-tool-registry.service.ts`, `workspace.service.ts`, `.removeIcon`, `AiMcpAdminService`, `RagSyncAdminService`, `AiAssistantProfileController`, `PresenceService`, `share.service.ts`, `AiConfigController`, `ai-page-operation.ts`, `AiConversationService`, `AiMcpServersController`, `ai-mcp-policy.service.ts`, `comment.service.ts`, `export.service.ts`, `AiRunController`, `rag-sync-admin.service.ts`, `jwt-auth.guard.ts`, `copy-markdown-with-comments.service.ts`, `AiConversationController`, `AiContentPolicyService`, `.getUserInfo`, `PaginationOptions`, `.revokeSession`, `.candidates`, `Space`, `push.controller.ts`, `.create`, `.copyMarkdownWithCommentsAction`, `ApiKeyService`, `page.controller.ts`, `SsoService`, `.getFile`, `.publish`, `.findById`, `ai.module.ts`, `.findPagesByLabel`, `RagSyncActionDto`, `AiMcpSpaceController`, `TransclusionController`, `ai-mcp-admin.service.ts`, `presence.types.ts`, `attachment.service.ts`?**
-  _High betweenness centrality (0.112) - this node is a cross-community bridge._
-- **Why does `DatabaseTableView()` connect `database-table-view.tsx` to `database-table-query.ts`, `current-user-atom.ts`, `space-tree.tsx`, `dictionary-highlight-extension.ts`, `database-page.tsx`, `document-fields-panel.tsx`, `PageTemplateService`, `page-header-menu.tsx`?**
-  _High betweenness centrality (0.062) - this node is a cross-community bridge._
-- **What connects `port`, `requests`, `retrievalRequests` to the rest of the system?**
+- **Why does `KyselyDB` connect `KyselyDB` to `DatabaseReadinessService`, `entity.types.ts`, `.resolvePageInScope`, `AiAssistantProfileService`, `User`, `dictionary.service.ts`, `EnvironmentService`, `AiAuxRunService`, `KyselyTransaction`, `.createDocmostArchive`, `Workspace`, `DatabaseService`, `PageTemplateService`, `AiRunStepService`, `PageRepo`, `AiRetrievalConfig`, `token.service.ts`, `CommentController`, `.createForUser`, `ai-mcp-admin.service.ts`, `AiFileService`, `email-aggregation.service.ts`, `RagContentExportService`, `ExportService`, `AiContextService`, `WorkspaceRepo`, `auth.service.ts`, `PageAccessService`, `page.service.ts`, `ai-mcp.constants.ts`, `WorkspaceInvitationService`, `persistence.extension.ts`, `.error`, `TypesenseIndexService`, `.createFromTemplate`, `.updateSpace`, `AiBuiltinToolPolicyService`, `search-reindex.ts`, `health.module.ts`, `AiConfigService`, `rag-sync-source.service.ts`, `AiRun`, `RagSyncSourceService`, `database.service.ts`, `AiRunService`, `.updateProvider`, `ai-tool-registry.service.ts`, `SpacePolicyService`, `.upload`, `AiMcpAdminService`, `EmailAggregationService`, `.delete`, `RagSyncAdminService`, `share.service.ts`, `telemetry.service.ts`, `AiToolRegistryService`, `AiConversationService`, `AiMcpPolicyService`, `RagSyncAdminRepo`, `sso.service.ts`, `AiMcpClientPoolService`, `queue-outbox.service.ts`, `UpdatePageDto`, `page.controller.ts`, `SearchService`, `ai.module.ts`, `.constructor`, `PaginationOptions`, `AiOperationalMetricsService`, `.candidates`, `Space`, `push.controller.ts`, `api-key.service.ts`, `SsoService`, `UpdateWorkspaceUserRoleDto`, `hashProseMirrorJson`, `.findById`, `ai-context.service.ts`, `AiMcpSpaceController`, `docmost-archive-import.service.ts`?**
+  _High betweenness centrality (0.147) - this node is a cross-community bridge._
+- **Why does `User` connect `User` to `entity.types.ts`, `ShareController`, `NotificationController`, `collaboration.module.ts`, `AiAssistantProfileService`, `dictionary.service.ts`, `FavoriteController`, `AiAuxRunService`, `KyselyTransaction`, `.createDocmostArchive`, `Workspace`, `DatabaseService`, `PageTemplateService`, `AiRunStepService`, `PageRepo`, `AiRetrievalConfig`, `AuthUser`, `token.service.ts`, `CommentController`, `.createForUser`, `ai-mcp-admin.service.ts`, `RagContentExportService`, `ExportService`, `AiContextService`, `auth.service.ts`, `PageAccessService`, `page.service.ts`, `ai-mcp.constants.ts`, `WorkspaceInvitationService`, `mfa.controller.ts`, `.createFromTemplate`, `.updateSpace`, `database.controller.ts`, `CopyMarkdownWithCommentsService`, `AiConfigService`, `rag-sync-admin.controller.ts`, `AiRun`, `sso.controller.ts`, `.removeIcon`, `.attachmentSearch`, `database.service.ts`, `AiRunService`, `ai-tool-registry.service.ts`, `SpacePolicyService`, `auth.controller.ts`, `.upload`, `AiMcpAdminService`, `RagSyncAdminService`, `PresenceService`, `.confirmImportZipAction`, `share.service.ts`, `ai-mcp-settings.controller.ts`, `AiToolRegistryService`, `ai-config.controller.ts`, `AiConversationService`, `AiMcpServersController`, `AiMcpPolicyService`, `.resolveLegacyPageEmbeds`, `sso.service.ts`, `.create`, `rag-sync-admin.service.ts`, `UpdatePageDto`, `page.controller.ts`, `copy-markdown-with-comments.service.ts`, `SearchService`, `ai.module.ts`, `CreateAiAssistantProfileDto`, `.getUserInfo`, `PaginationOptions`, `session.controller.ts`, `.candidates`, `Space`, `push.controller.ts`, `.create`, `api-key.service.ts`, `SsoService`, `UpdateWorkspaceUserRoleDto`, `legacy-files.controller.ts`, `hashProseMirrorJson`, `.findById`, `ai-context.service.ts`, `.findPagesByLabel`, `AiMcpSpaceController`, `docmost-archive-import.service.ts`?**
+  _High betweenness centrality (0.116) - this node is a cross-community bridge._
+- **Why does `DatabaseTableView()` connect `database-table-view.tsx` to `.error`, `buildPageUrl`, `space-tree.tsx`, `dictionary-highlight-extension.ts`, `useQueryEmit`, `database-page.tsx`, `document-fields-panel.tsx`, `space-sidebar.tsx`?**
+  _High betweenness centrality (0.070) - this node is a cross-community bridge._
+- **What connects `StorageMode`, `BucketState`, `TelemetryCounter` to the rest of the system?**
   _2196 weakly-connected nodes found - possible documentation gaps or missing edges._
-- **Should `database-table-query.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.057946069994262765 - nodes in this community are weakly interconnected._
+- **Should `database-table-view.tsx` be split into smaller, more focused modules?**
+  _Cohesion score 0.024220032840722498 - nodes in this community are weakly interconnected._
 - **Should `app.module.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.09659090909090909 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.07827260458839407 - nodes in this community are weakly interconnected._
 - **Should `space-query.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.04165733482642777 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.029290853031860225 - nodes in this community are weakly interconnected._
