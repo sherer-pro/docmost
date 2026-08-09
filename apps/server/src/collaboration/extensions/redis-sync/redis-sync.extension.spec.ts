@@ -63,6 +63,7 @@ function createExtension(
   backend: MemoryRedisBackend,
   serverId: string,
   lockTTL = 1_000,
+  onLeaseLoss?: (documentName: string) => Promise<void> | void,
 ): RedisSyncExtension<TestEvents> {
   return new RedisSyncExtension<TestEvents>({
     redis: new MemoryRedisClient(backend) as any,
@@ -73,6 +74,7 @@ function createExtension(
     customEvents: {
       noop: async () => undefined,
     },
+    onLeaseLoss,
   });
 }
 
@@ -204,6 +206,44 @@ describe('RedisSyncExtension document lease', () => {
     expect(instance.closeConnections).toHaveBeenCalledWith('page-1');
     expect(instance.unloadDocument).toHaveBeenCalledWith({ name: 'page-1' });
     expect(instance.documents.has('page-1')).toBe(false);
+
+    await extension.onDestroy();
+  });
+
+  it('abandons a dirty local document before lease-loss unload', async () => {
+    const backend = new MemoryRedisBackend();
+    let dirty = true;
+    const onLeaseLoss = jest.fn(async () => {
+      dirty = false;
+    });
+    const extension = createExtension(
+      backend,
+      'server-a',
+      1_000,
+      onLeaseLoss,
+    );
+    const documents = new Map<string, any>([
+      ['page-1', { name: 'page-1' }],
+    ]);
+    const instance = {
+      documents,
+      closeConnections: jest.fn(),
+      unloadDocument: jest.fn(async (document: { name: string }) => {
+        if (!dirty) {
+          documents.delete(document.name);
+        }
+      }),
+    };
+    await extension.onConfigure({ instance } as any);
+    await extension.lockDocument('page-1');
+
+    backend.locks.set('collabLock:page-1', 'server-b');
+    jest.advanceTimersByTime(500);
+    await flushPromises();
+
+    expect(onLeaseLoss).toHaveBeenCalledWith('page-1');
+    expect(instance.unloadDocument).toHaveBeenCalled();
+    expect(documents.has('page-1')).toBe(false);
 
     await extension.onDestroy();
   });
