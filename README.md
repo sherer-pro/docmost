@@ -383,9 +383,11 @@ The editor includes the following additional capabilities:
 
 - rich link previews;
 
-- transclusion of one document inside another;
+- regular and synchronized page templates with workspace, space, role, and group availability policies;
 
 - synced blocks created from selected document fragments, with reference lookup and safe unsyncing;
+
+- compatibility-only materialization of legacy whole-page `pageEmbed` data; creating new whole-page live embeds is not part of the editor or API contract;
 
 - audio file upload and playback;
 
@@ -412,6 +414,10 @@ The export system for pages, spaces, and databases has been redesigned:
 
 - more accurate PDF rendering of tables, diagrams, and system blocks.
 
+Markdown, HTML, and PDF exports materialize accessible synced content and replace
+denied or deleted sources with a neutral message. They do not expose internal
+transclusion identifiers.
+
 
 A custom portable Docmost archive format has also been added:
 
@@ -426,6 +432,10 @@ A custom portable Docmost archive format has also been added:
 - operation reports;
 
 - protection against corrupted and excessively large ZIP archives.
+
+Schema-v4 Docmost archives preserve and remap only synced relationships whose
+source is inside the archive. External relationships are exported with an
+access-checked snapshot and become ordinary content during import.
 
 ![Import and export options](./docs/images/fork-specific-enhancements/en/import-export.png)
 
