@@ -158,6 +158,7 @@ export function MfaSetupModal({
       onClose={handleClose}
       title={t("Set up two-factor authentication")}
       size="md"
+      closeButtonProps={{ "aria-label": t("Close MFA setup") }}
     >
       <Stepper active={active} size="sm" orientation="vertical">
         <Stepper.Step
@@ -222,6 +223,7 @@ export function MfaSetupModal({
                               <ActionIcon
                                 color={copied ? "green" : "gray"}
                                 onClick={copy}
+                                aria-label={copied ? t("Copied") : t("Copy")}
                               >
                                 {copied ? (
                                   <IconCheck size={16} />
@@ -243,10 +245,17 @@ export function MfaSetupModal({
                   <Stack align="center">
                     <PinInput
                       length={6}
+                      name="verificationCode"
                       type="number"
                       autoFocus
                       data-autofocus
                       oneTimeCode
+                      getInputProps={(index) => ({
+                        "aria-label": t(
+                          "Verification code digit {{digit}} of {{total}}",
+                          { digit: index + 1, total: 6 },
+                        ),
+                      })}
                       {...form.getInputProps("verificationCode")}
                       styles={{
                         input: {
@@ -272,11 +281,17 @@ export function MfaSetupModal({
                   </Button>
                 </>
               ) : (
-                <Center py="xl">
+                <Stack align="center" py="xl">
                   <Text size="sm" c="dimmed">
                     {t("Failed to generate QR code. Please try again.")}
                   </Text>
-                </Center>
+                  <Button
+                    variant="default"
+                    onClick={() => setupMutation.mutate()}
+                  >
+                    {t("Try again")}
+                  </Button>
+                </Stack>
               )}
             </Stack>
           </form>

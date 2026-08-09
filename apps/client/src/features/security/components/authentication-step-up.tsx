@@ -31,6 +31,7 @@ import {
 } from "@/features/mfa/services/mfa-service.ts";
 import { MfaSetupModal } from "@/features/mfa/components/mfa-setup-modal.tsx";
 import { sanitizeRelativeReturnTo } from "@/features/auth/utils/return-to.ts";
+import useAuth from "@/features/auth/hooks/use-auth.ts";
 
 type AuthenticationStepUpProps = {
   requirements: AuthenticationRequirement[];
@@ -48,6 +49,7 @@ export function AuthenticationStepUp({
   spaces = [],
 }: AuthenticationStepUpProps) {
   const { t } = useTranslation();
+  const { logout, isLoading: isLogoutPending } = useAuth();
   const location = useLocation();
   const queryClient = useQueryClient();
   const [mfaCode, setMfaCode] = useState("");
@@ -156,6 +158,8 @@ export function AuthenticationStepUp({
                         <Stack mt="sm">
                           <TextInput
                             label={t("LDAP username")}
+                            name="username"
+                            autoComplete="username"
                             value={ldapUsername}
                             onChange={(event) =>
                               setLdapUsername(event.currentTarget.value)
@@ -163,6 +167,8 @@ export function AuthenticationStepUp({
                           />
                           <PasswordInput
                             label={t("LDAP password")}
+                            name="password"
+                            autoComplete="current-password"
                             value={ldapPassword}
                             onChange={(event) =>
                               setLdapPassword(event.currentTarget.value)
@@ -214,6 +220,7 @@ export function AuthenticationStepUp({
                     {t("Enter a code from your authenticator or a backup code.")}
                   </Text>
                   <TextInput
+                    name="mfaCode"
                     value={mfaCode}
                     onChange={(event) => setMfaCode(event.currentTarget.value)}
                     autoComplete="one-time-code"
@@ -260,6 +267,15 @@ export function AuthenticationStepUp({
               </Group>
             </div>
           )}
+
+          <Button
+            variant="subtle"
+            color="gray"
+            loading={isLogoutPending}
+            onClick={() => void logout()}
+          >
+            {t("Logout")}
+          </Button>
         </Stack>
       </Paper>
 
