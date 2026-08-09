@@ -76,6 +76,8 @@ export class CollaborationGateway {
         unpack,
         // @ts-ignore
         customEvents: this.localHandlers,
+        onLeaseLoss: (documentName) =>
+          this.persistenceExtension.discardUnpersistedDocument(documentName),
       });
       this.hocuspocus.configuration.extensions.push(this.redisSync);
       // @ts-ignore
