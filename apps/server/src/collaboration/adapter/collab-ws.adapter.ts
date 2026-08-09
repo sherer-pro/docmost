@@ -1,10 +1,14 @@
 import { WebSocketServer } from 'ws';
+import { COLLAB_MAX_PAYLOAD_BYTES } from '../constants';
 
 export class CollabWsAdapter {
   private readonly wss: WebSocketServer;
 
   constructor() {
-    this.wss = new WebSocketServer({ noServer: true });
+    this.wss = new WebSocketServer({
+      noServer: true,
+      maxPayload: COLLAB_MAX_PAYLOAD_BYTES,
+    });
   }
 
   handleUpgrade(path: string, httpServer: any) {
