@@ -7,12 +7,18 @@ import { EnvironmentService } from '../environment/environment.service';
 import { resolveClientDistPath } from '../../common/utils/client-dist-path';
 
 export const WINDOW_CONFIG_PLACEHOLDER = '<!--window-config-->';
-export const WINDOW_CONFIG_SCRIPT_TAG = '<script src="/window-config.js"></script>';
+export const WINDOW_CONFIG_SCRIPT_TAG =
+  '<script src="/window-config.js"></script>';
 export const HTML_CACHE_CONTROL = 'no-store, max-age=0';
 export const SERVICE_WORKER_CACHE_CONTROL =
   'no-cache, no-store, max-age=0, must-revalidate';
 export const IMMUTABLE_ASSET_CACHE_CONTROL =
   'public, max-age=31536000, immutable';
+
+export function isApiRequestPath(requestUrl: string): boolean {
+  const path = requestUrl.split(/[?#]/, 1)[0];
+  return path === '/api' || path.startsWith('/api/');
+}
 
 export function injectWindowConfigScript(html: string): string {
   if (html.includes(WINDOW_CONFIG_PLACEHOLDER)) {
@@ -69,8 +75,7 @@ export class StaticModule implements OnModuleInit {
           this.environmentService.getFileUploadSizeLimit(),
         FILE_IMPORT_SIZE_LIMIT:
           this.environmentService.getFileImportSizeLimit(),
-        EMBED_ALLOWED_ORIGINS:
-          this.environmentService.getEmbedAllowedOrigins(),
+        EMBED_ALLOWED_ORIGINS: this.environmentService.getEmbedAllowedOrigins(),
         DRAWIO_URL: this.environmentService.getDrawioUrl(),
         SUBDOMAIN_HOST: this.environmentService.isCloud()
           ? this.environmentService.getSubdomainHost()
@@ -105,7 +110,21 @@ export class StaticModule implements OnModuleInit {
         },
       });
 
-      app.get(RENDER_PATH, (_req: any, res: any) => {
+      app.get(RENDER_PATH, (req: any, res: any) => {
+        const requestUrl = req.raw?.url ?? req.url ?? '';
+
+        if (isApiRequestPath(requestUrl)) {
+          return res
+            .code(404)
+            .header('Cache-Control', HTML_CACHE_CONTROL)
+            .type('application/json; charset=utf-8')
+            .send({
+              statusCode: 404,
+              error: 'Not Found',
+              message: 'API route not found',
+            });
+        }
+
         res
           .header('Cache-Control', HTML_CACHE_CONTROL)
           .type('text/html; charset=utf-8')
