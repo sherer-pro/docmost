@@ -315,4 +315,40 @@ describe('MfaService security helpers', () => {
       'workspace-1',
     );
   });
+
+  it('upserts MFA enrollment through the database user uniqueness key', async () => {
+    const conflictBuilder = {
+      column: jest.fn(() => conflictBuilder),
+      doUpdateSet: jest.fn(() => conflictBuilder),
+    };
+    const insertQuery: any = {
+      values: jest.fn(() => insertQuery),
+      onConflict: jest.fn((callback: (builder: any) => any) => {
+        callback(conflictBuilder);
+        return insertQuery;
+      }),
+      execute: jest.fn().mockResolvedValue(undefined),
+    };
+    const service = createService();
+
+    await (service as any).persistMfaEnrollment(
+      { insertInto: jest.fn(() => insertQuery) },
+      'user-1',
+      'workspace-1',
+      {
+        encryptedSecret: 'encrypted-secret',
+        backupCodeHashes: ['hashed-code'],
+        totpCounter: 123n,
+      },
+    );
+
+    expect(conflictBuilder.column).toHaveBeenCalledWith('userId');
+    expect(conflictBuilder.doUpdateSet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        secret: 'encrypted-secret',
+        backupCodes: ['hashed-code'],
+        lastUsedTotpCounter: '123',
+      }),
+    );
+  });
 });
