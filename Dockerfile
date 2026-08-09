@@ -1,11 +1,13 @@
-# syntax=docker/dockerfile:1.6
+# syntax=docker/dockerfile:1.6@sha256:ac85f380a63b13dfcefa89046420e1781752bab202122f8f50032edf31be0021
 
-FROM node:22-slim@sha256:6c74791e557ce11fc957704f6d4fe134a7bc8d6f5ca4403205b2966bd488f6b3 AS base
+FROM node:22-slim@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436 AS node-base
 LABEL org.opencontainers.image.source="https://github.com/sherer-pro/docmost"
+
+FROM node-base AS build-base
 
 RUN npm install -g pnpm@10.4.0
 
-FROM base AS builder
+FROM build-base AS builder
 
 WORKDIR /app
 
@@ -40,7 +42,27 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
 # 6) Build.
 RUN pnpm build
 
-FROM base AS installer
+FROM build-base AS runtime-dependencies
+
+WORKDIR /app
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY patches ./patches
+COPY apps/server/package.json ./apps/server/package.json
+COPY packages/editor-ext/package.json ./packages/editor-ext/package.json
+COPY packages/api-contract/package.json ./packages/api-contract/package.json
+
+ARG PNPM_OFFLINE=1
+
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
+    pnpm config set store-dir /pnpm/store && \
+    if [ "$PNPM_OFFLINE" = "1" ]; then \
+      pnpm install --frozen-lockfile --prod --offline; \
+    else \
+      pnpm install --frozen-lockfile --prod; \
+    fi
+
+FROM node-base AS installer
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
@@ -60,42 +82,35 @@ ENV PDF_RENDER_TIMEOUT_MS=60000
 ENV NODE_ENV=production
 
 # Copy apps
-COPY --from=builder /app/apps/server/dist /app/apps/server/dist
-COPY --from=builder /app/apps/client/dist /app/apps/client/dist
-COPY --from=builder /app/apps/server/package.json /app/apps/server/package.json
+COPY --chown=node:node --from=builder /app/apps/server/dist /app/apps/server/dist
+COPY --chown=node:node --from=builder /app/apps/client/dist /app/apps/client/dist
+COPY --chown=node:node --from=builder /app/apps/server/package.json /app/apps/server/package.json
+COPY --chown=node:node --from=runtime-dependencies /app/apps/server/node_modules /app/apps/server/node_modules
 
 # Copy packages
-COPY --from=builder /app/packages/editor-ext/dist /app/packages/editor-ext/dist
-COPY --from=builder /app/packages/editor-ext/package.json /app/packages/editor-ext/package.json
-COPY --from=builder /app/packages/api-contract/dist /app/packages/api-contract/dist
-COPY --from=builder /app/packages/api-contract/package.json /app/packages/api-contract/package.json
+COPY --chown=node:node --from=builder /app/packages/editor-ext/dist /app/packages/editor-ext/dist
+COPY --chown=node:node --from=builder /app/packages/editor-ext/package.json /app/packages/editor-ext/package.json
+COPY --chown=node:node --from=builder /app/packages/api-contract/dist /app/packages/api-contract/dist
+COPY --chown=node:node --from=builder /app/packages/api-contract/package.json /app/packages/api-contract/package.json
 
-# Copy root package files
-COPY --from=builder /app/package.json /app/package.json
-COPY --from=builder /app/pnpm-lock.yaml /app/pnpm-lock.yaml
-COPY --from=builder /app/pnpm-workspace.yaml /app/pnpm-workspace.yaml
-COPY --from=builder /app/.npmrc /app/.npmrc
+# Copy production dependencies without carrying package-manager tooling into runtime.
+COPY --chown=node:node --from=runtime-dependencies /app/node_modules /app/node_modules
 
-# Copy patches
-COPY --from=builder /app/patches /app/patches
+RUN rm -rf \
+      /usr/local/lib/node_modules/npm \
+      /usr/local/lib/node_modules/corepack \
+  && rm -f \
+      /usr/local/bin/npm \
+      /usr/local/bin/npx \
+      /usr/local/bin/corepack \
+      /usr/local/bin/pnpm \
+      /usr/local/bin/pnpx \
+      /usr/local/bin/yarn \
+      /usr/local/bin/yarnpkg
 
-RUN chown -R node:node /app
+RUN mkdir -p /app/data/storage && chown -R node:node /app/data
 
 USER node
-
-# Installation mode for runtime layer (same switch).
-ARG PNPM_OFFLINE=1
-
-# Runtime dependencies (prod). Offline from cache locally, online in production/CI.
-RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
-    pnpm config set store-dir /pnpm/store && \
-    if [ "$PNPM_OFFLINE" = "1" ]; then \
-      pnpm install --frozen-lockfile --prod --offline; \
-    else \
-      pnpm install --frozen-lockfile --prod; \
-    fi
-
-RUN mkdir -p /app/data/storage
 
 VOLUME ["/app/data/storage"]
 
