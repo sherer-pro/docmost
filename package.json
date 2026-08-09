@@ -14,6 +14,7 @@
     "test:editor-ext": "corepack pnpm --filter ./apps/client exec vitest run --config ../../packages/editor-ext/vitest.config.ts",
     "test:text-contracts": "node --test scripts/text-normalization.test.mjs",
     "test:ai:e2e": "corepack pnpm --filter ./apps/client test:ai:e2e",
+    "test:ai-external-mcp:e2e": "corepack pnpm --filter ./apps/client test:ai-external-mcp:e2e",
     "test:ai-context:e2e": "node apps/client/e2e/ai-context/run-ai-context-audit.mjs",
     "test:editor:e2e": "corepack pnpm --filter ./apps/client test:editor:e2e",
     "test:security": "corepack pnpm --filter ./apps/server test:security && corepack pnpm --filter ./apps/client test:security",

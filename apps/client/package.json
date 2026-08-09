@@ -9,6 +9,7 @@
     "test:security": "vitest run src/features/editor/components/code-block/mermaid-sanitizer.test.ts src/features/editor/components/embed/embed-provider.compat.test.ts src/features/editor/components/embed/embed-security.test.ts src/features/editor/extensions/link-extension.test.ts src/features/ai-external-mcp/utils/ai-external-mcp-headers.test.ts src/features/ai-external-mcp/utils/ai-external-mcp-policies.test.ts",
     "test:editor:e2e": "node e2e/editor/run-editor-audit.mjs",
     "test:ai:e2e": "node e2e/ai/run-ai-audit.mjs",
+    "test:ai-external-mcp:e2e": "node e2e/ai-external-mcp/run-ai-external-mcp-audit.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "format": "prettier --write \"src/**/*.tsx\" \"src/**/*.ts\""
