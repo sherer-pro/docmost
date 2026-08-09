@@ -3,7 +3,7 @@ import { IncomingMessage } from 'http';
 import WebSocket from 'ws';
 import { AuthenticationExtension } from './extensions/authentication.extension';
 import { PersistenceExtension } from './extensions/persistence.extension';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { EnvironmentService } from '../integrations/environment/environment.service';
 import {
   createRetryStrategy,
@@ -28,6 +28,7 @@ import {
 
 @Injectable()
 export class CollaborationGateway {
+  private readonly logger = new Logger(CollaborationGateway.name);
   private readonly hocuspocus: Hocuspocus;
   private redisConfig: RedisConfig;
   // @ts-ignore
@@ -173,6 +174,13 @@ export class CollaborationGateway {
   }
 
   async destroy(collabWsAdapter: CollabWsAdapter): Promise<void> {
+    const documentsAtShutdown = this.hocuspocus.getDocumentsCount();
+    this.logger.log(
+      `Closing collaboration runtime; documents=${documentsAtShutdown}, connections=${this.hocuspocus.getConnectionsCount()}`,
+    );
+    this.hocuspocus.configuration.unloadImmediately = true;
+    this.redisSync?.closeProxyConnectionsForShutdown();
+
     // eslint-disable-next-line no-async-promise-executor
     await new Promise(async (resolve) => {
       try {
@@ -193,5 +201,6 @@ export class CollaborationGateway {
     });
 
     await this.hocuspocus.hooks('onDestroy', { instance: this.hocuspocus });
+    this.logger.log('Collaboration runtime closed');
   }
 }

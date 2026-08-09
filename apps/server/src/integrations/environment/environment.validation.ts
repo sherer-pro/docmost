@@ -17,6 +17,7 @@ import {
   AI_STREAM_IDLE_TIMEOUT_MAX_MS,
   AI_STREAM_IDLE_TIMEOUT_MIN_MS,
 } from './environment.constants';
+import { resolveEnvironmentFileSecrets } from './environment-file-secrets';
 
 export class EnvironmentVariables {
   @IsOptional()
@@ -255,6 +256,7 @@ export class EnvironmentVariables {
   AWS_S3_BUCKET: string;
 
   @IsOptional()
+  @ValidateIf((_obj, value) => value !== '' && value != null)
   @IsUrl({ protocols: ['http', 'https'], require_tld: false })
   AWS_S3_ENDPOINT: string;
 
@@ -263,6 +265,7 @@ export class EnvironmentVariables {
   AWS_S3_FORCE_PATH_STYLE: string;
 
   @IsOptional()
+  @ValidateIf((_obj, value) => value !== '' && value != null)
   @IsUrl({ protocols: ['http', 'https'], require_tld: false })
   AWS_S3_URL: string;
 
@@ -353,10 +356,12 @@ export class EnvironmentVariables {
   LOG_HTTP: string;
 
   @IsOptional()
+  @ValidateIf((_obj, value) => value !== '' && value != null)
   @IsUrl({ protocols: ['http', 'https'], require_tld: false })
   DRAWIO_URL: string;
 
   @IsOptional()
+  @ValidateIf((_obj, value) => value !== '' && value != null)
   @IsUrl({ protocols: ['http', 'https'], require_tld: false })
   POSTHOG_HOST: string;
 
@@ -416,10 +421,14 @@ export class EnvironmentVariables {
 }
 
 export function validate(config: Record<string, any>) {
+  const fileSecretErrors = resolveEnvironmentFileSecrets(config);
   const validatedConfig = plainToInstance(EnvironmentVariables, config);
 
   const errors = validateSync(validatedConfig);
-  const runtimeContractErrors = getRuntimeContractErrors(config);
+  const runtimeContractErrors = [
+    ...fileSecretErrors,
+    ...getRuntimeContractErrors(config),
+  ];
 
   if (errors.length > 0 || runtimeContractErrors.length > 0) {
     console.error(
