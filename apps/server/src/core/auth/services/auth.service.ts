@@ -25,6 +25,7 @@ import { UserTokenRepo } from '@docmost/db/repos/user-token/user-token.repo';
 import { PasswordResetDto } from '../dto/password-reset.dto';
 import { User, UserToken, Workspace } from '@docmost/db/types/entity.types';
 import { UserTokenType } from '../auth.constants';
+import { DUMMY_PASSWORD_HASH } from '../password-assurance.constants';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { InjectKysely } from 'nestjs-kysely';
 import { executeTx } from '@docmost/db/utils';
@@ -33,6 +34,7 @@ import { DomainService } from '../../../integrations/environment/domain.service'
 import { hashProtectedValue } from '../../../common/security/credential-protection.util';
 import { UserSessionRepo } from '@docmost/db/repos/session/user-session.repo';
 import { SpacePolicyService } from '../../space-policy/space-policy.service';
+import { FastifyRequest } from 'fastify';
 
 @Injectable()
 export class AuthService {
@@ -56,6 +58,7 @@ export class AuthService {
 
     const errorMessage = 'Email or password does not match';
     if (!user || user?.deletedAt) {
+      await comparePasswordHash(loginDto.password, DUMMY_PASSWORD_HASH);
       throw new UnauthorizedException(errorMessage);
     }
 
@@ -79,11 +82,17 @@ export class AuthService {
     return this.sessionService.createSessionAndToken(user);
   }
 
-  async setup(createAdminUserDto: CreateAdminUserDto) {
+  async setup(
+    createAdminUserDto: CreateAdminUserDto,
+    request?: FastifyRequest,
+  ) {
     const { workspace, user } =
       await this.signupService.initialSetup(createAdminUserDto);
 
-    const authToken = await this.sessionService.createSessionAndToken(user);
+    const authToken = await this.sessionService.createSessionAndToken(
+      user,
+      request,
+    );
     return { workspace, authToken };
   }
 
@@ -202,6 +211,7 @@ export class AuthService {
   async passwordReset(
     passwordResetDto: PasswordResetDto,
     workspace: Workspace,
+    request?: FastifyRequest,
   ) {
     const userToken = await this.findUserTokenByRawToken(
       passwordResetDto.token,
@@ -291,7 +301,10 @@ export class AuthService {
       };
     }
 
-    const authToken = await this.sessionService.createSessionAndToken(user);
+    const authToken = await this.sessionService.createSessionAndToken(
+      user,
+      request,
+    );
     return { authToken };
   }
 

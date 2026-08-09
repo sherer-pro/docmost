@@ -6,12 +6,16 @@ import { Box, Button, Container, PasswordInput, Title } from "@mantine/core";
 import classes from "./auth.module.css";
 import { useRedirectIfAuthenticated } from "@/features/auth/hooks/use-redirect-if-authenticated.ts";
 import { useTranslation } from "react-i18next";
+import { isPasswordWithinUtf8Limit } from "@/features/auth/utils/password-validation.ts";
 
 const createFormSchema = (t: (key: string) => string) =>
   z.object({
     newPassword: z
       .string()
-      .min(8, { message: t("Password must contain at least 8 characters") }),
+      .min(8, { message: t("Password must contain at least 8 characters") })
+      .refine(isPasswordWithinUtf8Limit, {
+        message: t("Password is too long"),
+      }),
   });
 
 interface PasswordResetFormProps {
@@ -52,6 +56,8 @@ export function PasswordResetForm({
 
         <form onSubmit={form.onSubmit(onSubmit)}>
           <PasswordInput
+            name="newPassword"
+            autoComplete="new-password"
             label={t("New password")}
             placeholder={t("Your new password")}
             variant="filled"

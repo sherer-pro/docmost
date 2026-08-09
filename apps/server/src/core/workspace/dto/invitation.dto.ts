@@ -21,6 +21,7 @@ export class InviteUserDto {
   })
   @ArrayMinSize(1)
   @IsEmail({}, { each: true })
+  @MaxLength(254, { each: true })
   emails: string[];
 
   @IsOptional()
@@ -44,6 +45,7 @@ export class InvitationIdDto {
 export class InvitationInfoDto extends InvitationIdDto {
   @IsNotEmpty()
   @IsString()
+  @MaxLength(512)
   token: string;
 }
 

@@ -83,9 +83,19 @@ export class CsrfGuard implements CanActivate {
       return false;
     }
 
+    const requestHost = normalizeHostHeader(req.headers?.host);
+    const sourceHost = normalizeHostHeader(sourceUrl.host);
+
     try {
+      const appUrl = new URL(this.environmentService.getAppUrl());
+      const appHost = normalizeHostHeader(appUrl.host);
       if (
-        sourceUrl.origin === new URL(this.environmentService.getAppUrl()).origin
+        sourceUrl.origin === appUrl.origin &&
+        requestHost &&
+        sourceHost &&
+        appHost &&
+        requestHost === sourceHost &&
+        sourceHost === appHost
       ) {
         return true;
       }
@@ -97,8 +107,6 @@ export class CsrfGuard implements CanActivate {
       return false;
     }
 
-    const requestHost = normalizeHostHeader(req.headers?.host);
-    const sourceHost = normalizeHostHeader(sourceUrl.host);
     const subdomainHost = this.environmentService.getSubdomainHost();
     const requestWorkspace = getWorkspaceHostnameFromCloudHost(
       req.headers?.host,

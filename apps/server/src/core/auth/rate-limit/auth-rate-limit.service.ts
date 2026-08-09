@@ -243,6 +243,7 @@ export class AuthRateLimitService implements OnModuleDestroy {
       return {
         allowed: true,
         retryAfterMs: 0,
+        storageAvailable: true,
       } as const;
     } catch (error) {
       this.logger.error(
@@ -251,6 +252,7 @@ export class AuthRateLimitService implements OnModuleDestroy {
       return {
         allowed: false,
         retryAfterMs: input.windowMs,
+        storageAvailable: false,
       } as const;
     }
   }
@@ -282,12 +284,14 @@ export class AuthRateLimitService implements OnModuleDestroy {
       return {
         allowed: false,
         retryAfterMs,
+        storageAvailable: true,
       } as const;
     }
 
     return {
       allowed: true,
       retryAfterMs: 0,
+      storageAvailable: true,
     } as const;
   }
 

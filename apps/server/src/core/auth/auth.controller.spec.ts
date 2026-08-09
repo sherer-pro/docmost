@@ -47,12 +47,17 @@ describe('AuthController', () => {
 
   it('delegates targeted password reset enforcement to the auth service', async () => {
     const { controller, authService } = createController();
+    const req = {} as any;
     const dto = { spaceSlug: 'eligible-space' } as any;
     const workspace = { enforceSso: true } as any;
 
     await expect(
-      controller.passwordReset({} as any, dto, workspace),
+      controller.passwordReset(req, {} as any, dto, workspace),
     ).resolves.toEqual({ requiresLogin: true });
-    expect(authService.passwordReset).toHaveBeenCalledWith(dto, workspace);
+    expect(authService.passwordReset).toHaveBeenCalledWith(
+      dto,
+      workspace,
+      req,
+    );
   });
 });

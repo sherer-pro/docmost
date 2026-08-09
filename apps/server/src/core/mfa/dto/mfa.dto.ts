@@ -1,4 +1,5 @@
 import { IsOptional, IsString, Length, Matches } from 'class-validator';
+import { MaxUtf8Bytes } from '../../../common/validator/max-utf8-bytes';
 
 /**
  * DTO for initializing 2FA setup.
@@ -29,6 +30,7 @@ export class MfaEnableDto {
 export class MfaDisableDto {
   @IsOptional()
   @IsString()
+  @MaxUtf8Bytes(72)
   confirmPassword?: string;
 }
 

@@ -80,7 +80,7 @@ export default function SessionList() {
       {otherSessions.length > 0 && (
         <>
           <div>
-            <Text fw={500}>{t("Log out of all devices")}</Text>
+            <Text fw={500}>{t("Log out of other devices")}</Text>
             <Group justify="space-between" align="center" mt={4}>
               <Text size="sm" c="dimmed">
                 {t("Log out of all sessions except this device")}
@@ -92,7 +92,7 @@ export default function SessionList() {
                 loading={revokeAllSessionsMutation.isPending}
                 onClick={() => revokeAllSessionsMutation.mutate()}
               >
-                {t("Log out of all devices")}
+                {t("Log out of other devices")}
               </Button>
             </Group>
           </div>

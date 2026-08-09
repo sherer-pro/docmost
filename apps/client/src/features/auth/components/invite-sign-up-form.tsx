@@ -20,16 +20,24 @@ import { useGetInvitationQuery } from "@/features/workspace/queries/workspace-qu
 import { useRedirectIfAuthenticated } from "@/features/auth/hooks/use-redirect-if-authenticated.ts";
 import { useTranslation } from "react-i18next";
 import SsoLogin from "@/features/security/components/sso-login.tsx";
+import { isPasswordWithinUtf8Limit } from "@/features/auth/utils/password-validation.ts";
 
-const formSchema = z.object({
-  name: z.string().trim().min(1),
-  password: z.string().min(8),
-});
+const createFormSchema = (t: (key: string) => string) =>
+  z.object({
+    name: z.string().trim().min(1),
+    password: z
+      .string()
+      .min(8)
+      .refine(isPasswordWithinUtf8Limit, {
+        message: t("Password is too long"),
+      }),
+  });
 
-type FormValues = z.infer<typeof formSchema>;
+type FormValues = z.infer<ReturnType<typeof createFormSchema>>;
 
 export function InviteSignUpForm() {
   const { t } = useTranslation();
+  const formSchema = createFormSchema(t);
   const params = useParams();
   const [searchParams] = useSearchParams();
   const invitationToken = searchParams.get("token") ?? "";
@@ -80,6 +88,8 @@ export function InviteSignUpForm() {
             <form onSubmit={form.onSubmit(onSubmit)}>
               <TextInput
                 id="name"
+                name="name"
+                autoComplete="name"
                 type="text"
                 label={t("Name")}
                 placeholder={t("enter your full name")}
@@ -89,6 +99,8 @@ export function InviteSignUpForm() {
 
               <TextInput
                 id="email"
+                name="email"
+                autoComplete="email"
                 type="email"
                 label={t("Email")}
                 value={invitation.email}
@@ -98,6 +110,8 @@ export function InviteSignUpForm() {
               />
 
               <PasswordInput
+                name="password"
+                autoComplete="new-password"
                 label={t("Password")}
                 placeholder={t("Your password")}
                 variant="filled"
