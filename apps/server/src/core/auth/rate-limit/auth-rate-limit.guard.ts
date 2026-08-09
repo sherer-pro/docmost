@@ -52,6 +52,16 @@ export class AuthRateLimitGuard implements CanActivate {
       windowMs: rules.ip.windowMs,
     });
 
+    if (!ipCheck.storageAvailable) {
+      throw new HttpException(
+        {
+          message: 'Authentication rate limiter temporarily unavailable',
+          endpoint: metadata.endpoint,
+        },
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
+
     if (!ipCheck.allowed) {
       throw new HttpException(
         {
@@ -71,6 +81,16 @@ export class AuthRateLimitGuard implements CanActivate {
       limit: rules.account.limit,
       windowMs: rules.account.windowMs,
     });
+
+    if (!accountCheck.storageAvailable) {
+      throw new HttpException(
+        {
+          message: 'Authentication rate limiter temporarily unavailable',
+          endpoint: metadata.endpoint,
+        },
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
 
     if (!accountCheck.allowed) {
       throw new HttpException(
