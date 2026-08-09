@@ -9,6 +9,7 @@ import {
   IsObject,
   IsOptional,
   IsString,
+  IsUUID,
   Matches,
   MaxLength,
   ValidateNested,
@@ -153,6 +154,34 @@ export class PutAiMcpBindingDto {
   @IsString()
   @MaxLength(AI_MCP_INSTRUCTIONS_MAX_LENGTH)
   instructions?: string | null;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @ArrayUnique((item: AiMcpGroupPolicyDto) => item.groupId)
+  @ValidateNested({ each: true })
+  @Type(() => AiMcpGroupPolicyDto)
+  groupPolicies?: AiMcpGroupPolicyDto[];
+}
+
+export class AiMcpGroupPolicyDto {
+  @IsUUID()
+  groupId: string;
+
+  @IsBoolean()
+  denyConnection: boolean;
+
+  @IsOptional()
+  @IsIn(AI_EXTERNAL_MCP_TOOL_SELECTION_MODES)
+  toolSelection?: AiExternalMcpToolSelectionMode;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(AI_MCP_MAX_DISCOVERED_TOOLS)
+  @ArrayUnique()
+  @IsString({ each: true })
+  @MaxLength(64, { each: true })
+  toolNames?: string[];
 }
 
 export class AiMcpPreferenceItemDto {

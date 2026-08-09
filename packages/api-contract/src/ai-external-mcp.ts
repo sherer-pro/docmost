@@ -162,6 +162,21 @@ export interface AiExternalMcpCatalogEntry {
   approvedTools: AiExternalMcpApprovedTool[];
 }
 
+/**
+ * Extra narrowing applied to members of one workspace group.
+ *
+ * `toolSelection: "all"` means the group adds no tool narrowing. A selected
+ * list is intersected with the workspace and space allowlists. A connection
+ * deny always wins over every allowlist and user opt-in.
+ */
+export interface AiExternalMcpGroupPolicy {
+  groupId: string;
+  denyConnection: boolean;
+  toolSelection: AiExternalMcpToolSelectionMode;
+  /** Meaningful when `toolSelection` is "selected". */
+  toolNames: string[];
+}
+
 export interface CreateAiExternalMcpServerRequest {
   name: string;
   namespace: string;
@@ -226,6 +241,8 @@ export interface AiExternalMcpBinding {
   toolNames: string[];
   availableTools: AiExternalMcpApprovedTool[];
   instructions: string | null;
+  /** Full group-policy projection for space administrators. */
+  groupPolicies: AiExternalMcpGroupPolicy[];
   deniedByGroup: boolean;
   policyVersion: number;
   createdAt: string;
@@ -246,6 +263,8 @@ export interface PutAiExternalMcpBindingRequest {
   toolSelection?: AiExternalMcpToolSelectionMode;
   toolNames?: string[];
   instructions?: string | null;
+  /** When present, fully replaces the binding's group policies. */
+  groupPolicies?: AiExternalMcpGroupPolicy[];
 }
 
 export interface AiExternalMcpUserPreference {
