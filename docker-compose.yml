@@ -1,3 +1,83 @@
+x-docmost-environment: &docmost-environment
+  APP_URL: "${APP_URL:-http://localhost:3000}"
+  APP_SECRET_FILE: /run/secrets/docmost_app_secret
+  TRUSTED_PROXIES: "${TRUSTED_PROXIES:-}"
+  EMBED_ALLOWED_ORIGINS: "${EMBED_ALLOWED_ORIGINS:-}"
+  AI_PROVIDER_ALLOWED_ORIGINS: "${AI_PROVIDER_ALLOWED_ORIGINS:-}"
+  AI_RETRIEVAL_ALLOWED_ORIGINS: "${AI_RETRIEVAL_ALLOWED_ORIGINS:-}"
+  AI_ASSISTANT_PROFILES_ENABLED: "${AI_ASSISTANT_PROFILES_ENABLED:-false}"
+  AI_BUILTIN_TOOL_EXTENSIONS_ENABLED: "${AI_BUILTIN_TOOL_EXTENSIONS_ENABLED:-false}"
+  AI_EXTERNAL_MCP_ENABLED: "${AI_EXTERNAL_MCP_ENABLED:-false}"
+  AI_MCP_ALLOWED_ORIGINS: "${AI_MCP_ALLOWED_ORIGINS:-}"
+  AI_STREAM_IDLE_TIMEOUT_MS: "${AI_STREAM_IDLE_TIMEOUT_MS:-120000}"
+  PAGE_TEMPLATES_ENABLED: "${PAGE_TEMPLATES_ENABLED:-false}"
+  MAX_PAGE_EMBED_DEPTH: "${MAX_PAGE_EMBED_DEPTH:-5}"
+  SSO_ALLOWED_ENDPOINTS: "${SSO_ALLOWED_ENDPOINTS:-}"
+  RAG_API_RATE_LIMIT_PER_MINUTE: "${RAG_API_RATE_LIMIT_PER_MINUTE:-120}"
+  RAG_API_MAX_CONCURRENT: "${RAG_API_MAX_CONCURRENT:-8}"
+  RAG_API_BULK_MAX_CONCURRENT: "${RAG_API_BULK_MAX_CONCURRENT:-2}"
+  RAG_SYNC_ENABLED: "${RAG_SYNC_ENABLED:-false}"
+  RAG_SYNC_ALLOWED_ORIGINS: "${RAG_SYNC_ALLOWED_ORIGINS:-}"
+  RAG_SYNC_REDIS_PREFIX: "${RAG_SYNC_REDIS_PREFIX:-docmost:rag-sync}"
+  RAG_SYNC_POLL_INTERVAL_MS: "${RAG_SYNC_POLL_INTERVAL_MS:-60000}"
+  RAG_SYNC_DISCOVERY_INTERVAL_MS: "${RAG_SYNC_DISCOVERY_INTERVAL_MS:-30000}"
+  RAG_SYNC_MAX_CONCURRENT_BINDINGS: "${RAG_SYNC_MAX_CONCURRENT_BINDINGS:-4}"
+  RAG_SYNC_MAX_CONCURRENT_DOCUMENTS: "${RAG_SYNC_MAX_CONCURRENT_DOCUMENTS:-4}"
+  RAG_SYNC_REQUEST_TIMEOUT_MS: "${RAG_SYNC_REQUEST_TIMEOUT_MS:-30000}"
+  RAG_SYNC_PROCESSING_TIMEOUT_MS: "${RAG_SYNC_PROCESSING_TIMEOUT_MS:-600000}"
+  RAG_SYNC_MAX_ATTACHMENT_BYTES: "${RAG_SYNC_MAX_ATTACHMENT_BYTES:-26214400}"
+  RAG_SYNC_RECONCILE_INTERVAL_MS: "${RAG_SYNC_RECONCILE_INTERVAL_MS:-21600000}"
+  RAG_SYNC_SHUTDOWN_TIMEOUT_MS: "${RAG_SYNC_SHUTDOWN_TIMEOUT_MS:-30000}"
+  MCP_RATE_LIMIT_PER_MINUTE: "${MCP_RATE_LIMIT_PER_MINUTE:-60}"
+  MCP_MAX_CONCURRENT: "${MCP_MAX_CONCURRENT:-4}"
+  DATABASE_URL_FILE: /run/secrets/docmost_database_url
+  DATABASE_MAX_POOL: "${DATABASE_MAX_POOL:-10}"
+  REDIS_URL_FILE: /run/secrets/docmost_redis_url
+  JWT_TOKEN_EXPIRES_IN: "${JWT_TOKEN_EXPIRES_IN:-30d}"
+  COLLAB_URL: "${COLLAB_URL:-http://localhost:3001}"
+  COLLAB_PORT: "${COLLAB_PORT:-3001}"
+  COLLAB_DISABLE_REDIS: "${COLLAB_DISABLE_REDIS:-false}"
+  COLLAB_SHOW_STATS: "${COLLAB_SHOW_STATS:-false}"
+  AUTH_RATE_LIMIT_STORAGE: "${AUTH_RATE_LIMIT_STORAGE:-redis}"
+  STORAGE_DRIVER: "${STORAGE_DRIVER:-local}"
+  FILE_UPLOAD_SIZE_LIMIT: "${FILE_UPLOAD_SIZE_LIMIT:-50mb}"
+  FILE_IMPORT_SIZE_LIMIT: "${FILE_IMPORT_SIZE_LIMIT:-200mb}"
+  AWS_S3_ACCESS_KEY_ID: "${AWS_S3_ACCESS_KEY_ID:-}"
+  AWS_S3_REGION: "${AWS_S3_REGION:-}"
+  AWS_S3_BUCKET: "${AWS_S3_BUCKET:-}"
+  AWS_S3_ENDPOINT: "${AWS_S3_ENDPOINT:-}"
+  AWS_S3_FORCE_PATH_STYLE: "${AWS_S3_FORCE_PATH_STYLE:-false}"
+  AWS_S3_URL: "${AWS_S3_URL:-}"
+  MAIL_DRIVER: "${MAIL_DRIVER:-log}"
+  MAIL_FROM_ADDRESS: "${MAIL_FROM_ADDRESS:-hello@example.com}"
+  MAIL_FROM_NAME: "${MAIL_FROM_NAME:-Docmost}"
+  SMTP_HOST: "${SMTP_HOST:-127.0.0.1}"
+  SMTP_PORT: "${SMTP_PORT:-587}"
+  SMTP_USERNAME: "${SMTP_USERNAME:-}"
+  SMTP_SECURE: "${SMTP_SECURE:-false}"
+  SMTP_IGNORETLS: "${SMTP_IGNORETLS:-false}"
+  WEB_PUSH_VAPID_PUBLIC_KEY: "${WEB_PUSH_VAPID_PUBLIC_KEY:-}"
+  WEB_PUSH_SUBJECT: "${WEB_PUSH_SUBJECT:-}"
+  DRAWIO_URL: "${DRAWIO_URL:-}"
+  CLOUD: "${CLOUD:-false}"
+  SUBDOMAIN_HOST: "${SUBDOMAIN_HOST:-}"
+  DISABLE_TELEMETRY: "${DISABLE_TELEMETRY:-true}"
+  POSTHOG_HOST: "${POSTHOG_HOST:-}"
+  POSTHOG_KEY: "${POSTHOG_KEY:-}"
+  SEARCH_DRIVER: "${SEARCH_DRIVER:-database}"
+  TYPESENSE_URL: "${TYPESENSE_URL:-http://localhost:8108}"
+  TYPESENSE_LOCALE: "${TYPESENSE_LOCALE:-en}"
+  PDF_CHROMIUM_EXECUTABLE_PATH: "${PDF_CHROMIUM_EXECUTABLE_PATH:-/usr/bin/chromium}"
+  PDF_RENDER_TIMEOUT_MS: "${PDF_RENDER_TIMEOUT_MS:-60000}"
+  DEBUG_MODE: "${DEBUG_MODE:-false}"
+  DEBUG_DB: "${DEBUG_DB:-false}"
+  LOG_HTTP: "${LOG_HTTP:-false}"
+
+x-docmost-secrets: &docmost-secrets
+  - docmost_app_secret
+  - docmost_database_url
+  - docmost_redis_url
+
 services:
   docmost:
     image: docmost-local:dev
@@ -10,43 +90,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    environment:
-      APP_URL: "${APP_URL:-http://localhost:3000}"
-      APP_SECRET: "${APP_SECRET:-REPLACE_WITH_LONG_SECRET}"
-      TRUSTED_PROXIES: "${TRUSTED_PROXIES:-}"
-      EMBED_ALLOWED_ORIGINS: "${EMBED_ALLOWED_ORIGINS:-}"
-      AI_PROVIDER_ALLOWED_ORIGINS: "${AI_PROVIDER_ALLOWED_ORIGINS:-}"
-      AI_RETRIEVAL_ALLOWED_ORIGINS: "${AI_RETRIEVAL_ALLOWED_ORIGINS:-}"
-      AI_ASSISTANT_PROFILES_ENABLED: "${AI_ASSISTANT_PROFILES_ENABLED:-false}"
-      AI_BUILTIN_TOOL_EXTENSIONS_ENABLED: "${AI_BUILTIN_TOOL_EXTENSIONS_ENABLED:-false}"
-      AI_EXTERNAL_MCP_ENABLED: "${AI_EXTERNAL_MCP_ENABLED:-false}"
-      AI_MCP_ALLOWED_ORIGINS: "${AI_MCP_ALLOWED_ORIGINS:-}"
-      AI_STREAM_IDLE_TIMEOUT_MS: "${AI_STREAM_IDLE_TIMEOUT_MS:-120000}"
-      PAGE_TEMPLATES_ENABLED: "${PAGE_TEMPLATES_ENABLED:-false}"
-      RAG_API_RATE_LIMIT_PER_MINUTE: "${RAG_API_RATE_LIMIT_PER_MINUTE:-120}"
-      RAG_API_MAX_CONCURRENT: "${RAG_API_MAX_CONCURRENT:-8}"
-      RAG_API_BULK_MAX_CONCURRENT: "${RAG_API_BULK_MAX_CONCURRENT:-2}"
-      RAG_SYNC_ENABLED: "${RAG_SYNC_ENABLED:-false}"
-      RAG_SYNC_ALLOWED_ORIGINS: "${RAG_SYNC_ALLOWED_ORIGINS:-}"
-      RAG_SYNC_REDIS_PREFIX: "${RAG_SYNC_REDIS_PREFIX:-docmost:rag-sync}"
-      RAG_SYNC_POLL_INTERVAL_MS: "${RAG_SYNC_POLL_INTERVAL_MS:-60000}"
-      RAG_SYNC_DISCOVERY_INTERVAL_MS: "${RAG_SYNC_DISCOVERY_INTERVAL_MS:-30000}"
-      RAG_SYNC_MAX_CONCURRENT_BINDINGS: "${RAG_SYNC_MAX_CONCURRENT_BINDINGS:-4}"
-      RAG_SYNC_MAX_CONCURRENT_DOCUMENTS: "${RAG_SYNC_MAX_CONCURRENT_DOCUMENTS:-4}"
-      RAG_SYNC_REQUEST_TIMEOUT_MS: "${RAG_SYNC_REQUEST_TIMEOUT_MS:-30000}"
-      RAG_SYNC_PROCESSING_TIMEOUT_MS: "${RAG_SYNC_PROCESSING_TIMEOUT_MS:-600000}"
-      RAG_SYNC_MAX_ATTACHMENT_BYTES: "${RAG_SYNC_MAX_ATTACHMENT_BYTES:-26214400}"
-      RAG_SYNC_RECONCILE_INTERVAL_MS: "${RAG_SYNC_RECONCILE_INTERVAL_MS:-21600000}"
-      RAG_SYNC_SHUTDOWN_TIMEOUT_MS: "${RAG_SYNC_SHUTDOWN_TIMEOUT_MS:-30000}"
-      MCP_RATE_LIMIT_PER_MINUTE: "${MCP_RATE_LIMIT_PER_MINUTE:-60}"
-      MCP_MAX_CONCURRENT: "${MCP_MAX_CONCURRENT:-4}"
-      DATABASE_URL: "${DATABASE_URL:-postgresql://${POSTGRES_USER:-docmost}:${POSTGRES_PASSWORD:-STRONG_DB_PASSWORD}@db:5432/${POSTGRES_DB:-docmost}}"
-      REDIS_URL: "${REDIS_URL:-redis://redis:6379}"
-      WEB_PUSH_VAPID_PUBLIC_KEY: "${WEB_PUSH_VAPID_PUBLIC_KEY:-}"
-      WEB_PUSH_VAPID_PRIVATE_KEY: "${WEB_PUSH_VAPID_PRIVATE_KEY:-}"
-      WEB_PUSH_SUBJECT: "${WEB_PUSH_SUBJECT:-}"
-      AUTH_RATE_LIMIT_STORAGE: "${AUTH_RATE_LIMIT_STORAGE:-redis}"
-      DISABLE_TELEMETRY: true
+    environment: *docmost-environment
+    secrets: *docmost-secrets
     ports:
       - "${DOCMOST_BIND_ADDRESS:-127.0.0.1}:${PORT:-3000}:3000"
     healthcheck:
@@ -62,12 +107,46 @@ services:
     volumes:
       - docmost:/app/data/storage
 
+  collab:
+    image: docmost-local:dev
+    pull_policy: never
+    command:
+      - node
+      - apps/server/dist/apps/server/src/collaboration/server/collab-main.js
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment: *docmost-environment
+    secrets: *docmost-secrets
+    ports:
+      - "${DOCMOST_BIND_ADDRESS:-127.0.0.1}:${COLLAB_PORT:-3001}:${COLLAB_PORT:-3001}"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://localhost:$${COLLAB_PORT:-3001}/api/health",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+    networks:
+      - default
+      - edge
+    volumes:
+      - docmost:/app/data/storage
+
   db:
-    image: postgres:18-alpine
+    image: postgres:18-alpine@sha256:9a8afca54e7861fd90fab5fdf4c42477a6b1cb7d293595148e674e0a3181de15
     environment:
       POSTGRES_DB: "${POSTGRES_DB:-docmost}"
       POSTGRES_USER: "${POSTGRES_USER:-docmost}"
-      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-STRONG_DB_PASSWORD}"
+      POSTGRES_PASSWORD_FILE: /run/secrets/docmost_postgres_password
+    secrets:
+      - docmost_postgres_password
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
@@ -78,7 +157,7 @@ services:
       - db_data:/var/lib/postgresql
 
   redis:
-    image: redis:8-alpine
+    image: redis:8-alpine@sha256:978f0e01593e65eed801f2402944efcd936d43b5027e4908a7897baf88ed6241
     command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
     restart: unless-stopped
     healthcheck:
@@ -98,3 +177,23 @@ networks:
   edge:
     name: "${EDGE_NETWORK_NAME:-docmost_edge}"
     external: "${EDGE_NETWORK_EXTERNAL:-false}"
+
+secrets:
+  docmost_app_secret:
+    environment: APP_SECRET
+  docmost_database_url:
+    environment: DATABASE_URL
+  docmost_redis_url:
+    environment: REDIS_URL
+  docmost_postgres_password:
+    environment: POSTGRES_PASSWORD
+  docmost_aws_s3_secret_access_key:
+    environment: AWS_S3_SECRET_ACCESS_KEY
+  docmost_smtp_password:
+    environment: SMTP_PASSWORD
+  docmost_postmark_token:
+    environment: POSTMARK_TOKEN
+  docmost_typesense_api_key:
+    environment: TYPESENSE_API_KEY
+  docmost_web_push_vapid_private_key:
+    environment: WEB_PUSH_VAPID_PRIVATE_KEY

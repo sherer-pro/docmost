@@ -207,4 +207,28 @@ describe('RedisSyncExtension document lease', () => {
 
     await extension.onDestroy();
   });
+
+  it('closes proxy sockets locally during shutdown', async () => {
+    const backend = new MemoryRedisBackend();
+    const extension = createExtension(backend, 'server-a');
+    const proxySocket = { emit: jest.fn() };
+    (extension as any).proxySockets = { socket: proxySocket };
+
+    extension.closeProxyConnectionsForShutdown();
+
+    expect(proxySocket.emit).toHaveBeenCalledWith(
+      'close',
+      1000,
+      Buffer.from('provider_initiated', 'utf-8'),
+    );
+    expect((extension as any).proxySockets).toEqual({});
+
+    await extension.onDestroy();
+    expect(backend.clients).toHaveLength(3);
+    expect(
+      backend.clients.every(
+        (client) => client.disconnect.mock.calls.length === 1,
+      ),
+    ).toBe(true);
+  });
 });
