@@ -45,6 +45,7 @@ export type JwtAttachmentPayload = {
 export interface JwtMfaTokenPayload {
   sub: string;
   workspaceId: string;
+  challengeId: string;
   ssoAuthProviderId?: string;
   targetSpaceId?: string;
   type: 'mfa_token';

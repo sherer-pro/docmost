@@ -19,12 +19,14 @@ import classes from "@/features/auth/components/auth.module.css";
 import { notifications } from "@mantine/notifications";
 import { useMfaPageProtection } from "@/features/mfa/hooks/use-mfa-page-protection";
 import { sanitizeRelativeReturnTo } from "@/features/auth/utils/return-to";
+import { cancelMfaLogin } from "@/features/mfa/services/mfa-service";
 
 export function MfaSetupRequiredPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const [setupModalOpen, setSetupModalOpen] = useState(false);
+  const [isCanceling, setIsCanceling] = useState(false);
   const { isValid } = useMfaPageProtection();
 
   const handleSetupComplete = async () => {
@@ -41,8 +43,14 @@ export function MfaSetupRequiredPage() {
     });
   };
 
-  const handleLogout = () => {
-    navigate(APP_ROUTE.AUTH.LOGIN);
+  const handleLogout = async () => {
+    setIsCanceling(true);
+    try {
+      await cancelMfaLogin();
+    } finally {
+      navigate(APP_ROUTE.AUTH.LOGIN, { replace: true });
+      setIsCanceling(false);
+    }
   };
 
   if (!isValid) {
@@ -97,7 +105,8 @@ export function MfaSetupRequiredPage() {
               fullWidth
               variant="subtle"
               color="gray"
-              onClick={handleLogout}
+              loading={isCanceling}
+              onClick={() => void handleLogout()}
             >
               {t("Cancel and logout")}
             </Button>

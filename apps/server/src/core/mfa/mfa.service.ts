@@ -5,7 +5,10 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
-import { KyselyDB } from '@docmost/db/types/kysely.types';
+import {
+  KyselyDB,
+  KyselyTransaction,
+} from '@docmost/db/types/kysely.types';
 import { User, Workspace } from '@docmost/db/types/entity.types';
 import { LoginDto } from '../auth/dto/login.dto';
 import { comparePasswordHash, nanoIdGen } from '../../common/helpers';
@@ -21,6 +24,7 @@ import {
   decryptProtectedValue,
   encryptProtectedValue,
   hashKeyedProtectedValue,
+  hashProtectedValue,
   isEncryptedProtectedValue,
   isKeyedHashedProtectedValue,
   verifyKeyedProtectedValue,
@@ -30,6 +34,8 @@ import { SpacePolicyService } from '../space-policy/space-policy.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EventName } from '../../common/events/event.contants';
 import { executeTx } from '@docmost/db/utils';
+import { UserTokenType } from '../auth/auth.constants';
+import { JwtMfaTokenPayload } from '../auth/dto/jwt-payload';
 
 @Injectable()
 export class MfaService {
@@ -139,10 +145,15 @@ export class MfaService {
       };
     }
 
+    const challengeId = await this.createMfaChallenge(
+      userWithMfa.id,
+      workspace.id,
+    );
     const mfaToken = await this.tokenService.generateMfaToken(
       userWithMfa,
       workspace.id,
       {
+        challengeId,
         ssoAuthProviderId: context.ssoAuthProviderId,
         targetSpaceId: context.targetSpaceId,
       },
@@ -187,47 +198,13 @@ export class MfaService {
     code: string,
     sessionId?: string,
   ) {
-    const totpCounter = this.getTotpCounter(secret, code, 2);
-    if (totpCounter === null) {
-      throw new BadRequestException('Invalid verification code');
-    }
-
-    const backupCodes = this.generateBackupCodes();
-    const encryptedSecret = encryptProtectedValue(
-      secret,
-      this.environmentService.getAppSecret(),
+    const preparedMfa = this.prepareMfaEnrollment(secret, code);
+    await this.persistMfaEnrollment(
+      this.db,
+      user.id,
+      workspaceId,
+      preparedMfa,
     );
-    const hashedBackupCodes = this.hashBackupCodes(backupCodes);
-    const existing = await this.getUserMfa(user.id, workspaceId);
-
-    if (existing) {
-      await this.db
-        .updateTable('userMfa')
-        .set({
-          method: 'totp',
-          secret: encryptedSecret,
-          isEnabled: true,
-          backupCodes: hashedBackupCodes,
-          lastUsedTotpCounter: totpCounter.toString(),
-          updatedAt: new Date(),
-        })
-        .where('userId', '=', user.id)
-        .where('workspaceId', '=', workspaceId)
-        .execute();
-    } else {
-      await this.db
-        .insertInto('userMfa')
-        .values({
-          userId: user.id,
-          workspaceId,
-          method: 'totp',
-          secret: encryptedSecret,
-          isEnabled: true,
-          backupCodes: hashedBackupCodes,
-          lastUsedTotpCounter: totpCounter.toString(),
-        })
-        .execute();
-    }
 
     if (sessionId) {
       await this.authenticationAssurance.markMfaVerified(sessionId);
@@ -238,7 +215,7 @@ export class MfaService {
       });
     }
 
-    return { success: true, backupCodes };
+    return { success: true, backupCodes: preparedMfa.backupCodes };
   }
 
   async getStatus(userId: string, workspaceId: string) {
@@ -319,6 +296,7 @@ export class MfaService {
       user.id,
       payload.workspaceId,
       code,
+      payload.challengeId,
     );
 
     if (!isValid) {
@@ -352,9 +330,20 @@ export class MfaService {
     code: string,
     request?: FastifyRequest,
   ) {
-    const payload = await this.tokenService.verifyJwt(token, 'mfa_token');
-    const { user } = await this.resolveMfaSetupPrincipal(token);
-    const enabled = await this.enable(user, payload.workspaceId, secret, code);
+    const { payload, user } = await this.resolveMfaSetupPrincipal(token);
+    const preparedMfa = this.prepareMfaEnrollment(secret, code);
+    await executeTx(this.db, async (trx) => {
+      const challengeConsumed = await this.consumeMfaChallenge(payload, trx);
+      if (!challengeConsumed) {
+        throw new UnauthorizedException('Invalid MFA setup session');
+      }
+      await this.persistMfaEnrollment(
+        trx,
+        user.id,
+        payload.workspaceId,
+        preparedMfa,
+      );
+    });
     await this.userRepo.updateLastLogin(user.id, payload.workspaceId);
     const authToken = await this.sessionService.createSessionAndToken(
       { ...user, workspaceId: payload.workspaceId },
@@ -364,7 +353,11 @@ export class MfaService {
         ssoAuthProviderId: payload.ssoAuthProviderId,
       },
     );
-    return { ...enabled, authToken };
+    return {
+      success: true,
+      backupCodes: preparedMfa.backupCodes,
+      authToken,
+    };
   }
 
   async stepUp(
@@ -424,6 +417,9 @@ export class MfaService {
 
     try {
       const payload = await this.tokenService.verifyJwt(token, 'mfa_token');
+      if (!(await this.isMfaChallengeActive(payload))) {
+        return { valid: false };
+      }
       const user = await this.userRepo.findById(
         payload.sub,
         payload.workspaceId,
@@ -469,6 +465,9 @@ export class MfaService {
 
   private async resolveMfaSetupPrincipal(token: string) {
     const payload = await this.tokenService.verifyJwt(token, 'mfa_token');
+    if (!(await this.isMfaChallengeActive(payload))) {
+      throw new UnauthorizedException('Invalid MFA setup session');
+    }
     const [user, workspace] = await Promise.all([
       this.userRepo.findById(payload.sub, payload.workspaceId, {
         includeUserMfa: true,
@@ -488,13 +487,14 @@ export class MfaService {
     ) {
       throw new UnauthorizedException('Invalid MFA setup session');
     }
-    return { user, workspace };
+    return { payload, user, workspace };
   }
 
   private async consumeVerificationCode(
     userId: string,
     workspaceId: string,
     code: string,
+    challengeId?: string,
   ): Promise<boolean> {
     return executeTx(this.db, async (trx) => {
       const mfa = await trx
@@ -522,6 +522,16 @@ export class MfaService {
           return false;
         }
 
+        if (
+          challengeId &&
+          !(await this.consumeMfaChallenge(
+            { sub: userId, workspaceId, challengeId } as JwtMfaTokenPayload,
+            trx,
+          ))
+        ) {
+          return false;
+        }
+
         await trx
           .updateTable('userMfa')
           .set({
@@ -538,6 +548,16 @@ export class MfaService {
         mfa.backupCodes ?? [],
       );
       if (!consumeResult.matched) {
+        return false;
+      }
+
+      if (
+        challengeId &&
+        !(await this.consumeMfaChallenge(
+          { sub: userId, workspaceId, challengeId } as JwtMfaTokenPayload,
+          trx,
+        ))
+      ) {
         return false;
       }
 
@@ -647,5 +667,124 @@ export class MfaService {
       .where('userId', '=', userId)
       .where('workspaceId', '=', workspaceId)
       .executeTakeFirst();
+  }
+
+  async cancelLogin(token?: string): Promise<void> {
+    if (!token) {
+      return;
+    }
+
+    try {
+      const payload = await this.tokenService.verifyJwt(token, 'mfa_token');
+      await executeTx(this.db, (trx) => this.consumeMfaChallenge(payload, trx));
+    } catch {
+      // Cancellation is intentionally idempotent and does not disclose token state.
+    }
+  }
+
+  private async createMfaChallenge(userId: string, workspaceId: string) {
+    const challengeId = nanoIdGen(32);
+    await this.db
+      .insertInto('userTokens')
+      .values({
+        token: hashProtectedValue(challengeId),
+        userId,
+        workspaceId,
+        type: UserTokenType.MFA_CHALLENGE,
+        expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+      })
+      .execute();
+    return challengeId;
+  }
+
+  private async isMfaChallengeActive(payload: JwtMfaTokenPayload) {
+    if (!payload.challengeId) {
+      return false;
+    }
+
+    const challenge = await this.db
+      .selectFrom('userTokens')
+      .select('id')
+      .where('token', '=', hashProtectedValue(payload.challengeId))
+      .where('userId', '=', payload.sub)
+      .where('workspaceId', '=', payload.workspaceId)
+      .where('type', '=', UserTokenType.MFA_CHALLENGE)
+      .where('usedAt', 'is', null)
+      .where('expiresAt', '>', new Date())
+      .executeTakeFirst();
+    return Boolean(challenge);
+  }
+
+  private async consumeMfaChallenge(
+    payload: Pick<
+      JwtMfaTokenPayload,
+      'sub' | 'workspaceId' | 'challengeId'
+    >,
+    trx: KyselyTransaction,
+  ) {
+    if (!payload.challengeId) {
+      return false;
+    }
+
+    const consumed = await trx
+      .updateTable('userTokens')
+      .set({ usedAt: new Date() })
+      .where('token', '=', hashProtectedValue(payload.challengeId))
+      .where('userId', '=', payload.sub)
+      .where('workspaceId', '=', payload.workspaceId)
+      .where('type', '=', UserTokenType.MFA_CHALLENGE)
+      .where('usedAt', 'is', null)
+      .where('expiresAt', '>', new Date())
+      .returning('id')
+      .executeTakeFirst();
+    return Boolean(consumed);
+  }
+
+  private prepareMfaEnrollment(secret: string, code: string) {
+    const totpCounter = this.getTotpCounter(secret, code, 2);
+    if (totpCounter === null) {
+      throw new BadRequestException('Invalid verification code');
+    }
+
+    const backupCodes = this.generateBackupCodes();
+    return {
+      backupCodes,
+      backupCodeHashes: this.hashBackupCodes(backupCodes),
+      encryptedSecret: encryptProtectedValue(
+        secret,
+        this.environmentService.getAppSecret(),
+      ),
+      totpCounter,
+    };
+  }
+
+  private async persistMfaEnrollment(
+    db: KyselyDB | KyselyTransaction,
+    userId: string,
+    workspaceId: string,
+    enrollment: ReturnType<MfaService['prepareMfaEnrollment']>,
+  ) {
+    await db
+      .insertInto('userMfa')
+      .values({
+        userId,
+        workspaceId,
+        method: 'totp',
+        secret: enrollment.encryptedSecret,
+        isEnabled: true,
+        backupCodes: enrollment.backupCodeHashes,
+        lastUsedTotpCounter: enrollment.totpCounter.toString(),
+      })
+      .onConflict((oc) =>
+        oc.columns(['userId', 'workspaceId']).doUpdateSet({
+          method: 'totp',
+          secret: enrollment.encryptedSecret,
+          isEnabled: true,
+          backupCodes: enrollment.backupCodeHashes,
+          lastUsedTotpCounter: enrollment.totpCounter.toString(),
+          updatedAt: new Date(),
+        }),
+      )
+      .execute();
   }
 }

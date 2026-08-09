@@ -78,3 +78,8 @@ export async function validateMfaAccess(): Promise<MfaAccessValidationResponse> 
     return { valid: false };
   }
 }
+
+export async function cancelMfaLogin(): Promise<{ success: boolean }> {
+  const req = await api.post<{ success: boolean }>("/mfa/cancel-login");
+  return req.data;
+}
