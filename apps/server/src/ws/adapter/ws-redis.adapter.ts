@@ -11,6 +11,8 @@ import {
 export class WsRedisIoAdapter extends IoAdapter {
   private adapterConstructor: ReturnType<typeof createAdapter>;
   private redisConfig: RedisConfig;
+  private pubClient?: Redis;
+  private subClient?: Redis;
 
   async connectToRedis(): Promise<void> {
     this.redisConfig = parseRedisUrl(process.env.REDIS_URL);
@@ -20,18 +22,25 @@ export class WsRedisIoAdapter extends IoAdapter {
       retryStrategy: createRetryStrategy(),
     };
 
-    const pubClient = new Redis(process.env.REDIS_URL, options);
-    const subClient = new Redis(process.env.REDIS_URL, options);
+    this.pubClient = new Redis(process.env.REDIS_URL, options);
+    this.subClient = new Redis(process.env.REDIS_URL, options);
 
-    pubClient.on('error', (err) => () => {});
-    subClient.on('error', (err) => () => {});
+    this.pubClient.on('error', () => {});
+    this.subClient.on('error', () => {});
 
-    this.adapterConstructor = createAdapter(pubClient, subClient);
+    this.adapterConstructor = createAdapter(this.pubClient, this.subClient);
   }
 
   createIOServer(port: number, options?: ServerOptions): any {
     const server = super.createIOServer(port, options);
     server.adapter(this.adapterConstructor);
     return server;
+  }
+
+  async dispose(): Promise<void> {
+    this.pubClient?.disconnect(false);
+    this.subClient?.disconnect(false);
+    this.pubClient = undefined;
+    this.subClient = undefined;
   }
 }
