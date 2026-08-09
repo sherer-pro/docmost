@@ -6,7 +6,6 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
-import { createHash } from 'node:crypto';
 import { sql } from 'kysely';
 import {
   AI_ASSISTANT_PROFILE_ICONS,
@@ -60,6 +59,7 @@ import { AiMcpRunSnapshot } from '../mcp/ai-mcp-snapshot.types';
 import { AiBuiltinToolPolicyService } from '../tools/ai-builtin-tool-policy.service';
 import { AiConfigService } from './ai-config.service';
 import { AiOperationalMetricsService } from './ai-operational-metrics.service';
+import { hashCanonicalJson } from '../../../common/helpers/canonical-json.util';
 import { OpenAiCompatibleProviderService } from './openai-compatible-provider.service';
 import { postgresJsonb } from '../utils/postgres-jsonb.util';
 
@@ -91,20 +91,8 @@ type VerificationParts = {
   externalToolCount: number;
 };
 
-function canonical(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(canonical);
-  if (!value || typeof value !== 'object') return value;
-  return Object.fromEntries(
-    Object.entries(value as Record<string, unknown>)
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, item]) => [key, canonical(item)]),
-  );
-}
-
 function fingerprint(value: unknown): string {
-  return createHash('sha256')
-    .update(JSON.stringify(canonical(value)), 'utf8')
-    .digest('hex');
+  return hashCanonicalJson(value);
 }
 
 @Injectable()

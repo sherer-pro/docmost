@@ -121,6 +121,39 @@ describe('AiBuiltinToolPolicyService', () => {
     ]);
   });
 
+  it('distinguishes inherited null from an explicit empty space allowlist', async () => {
+    const workspace = {
+      enabled: true,
+      allowedCapabilities: [...AI_LEGACY_AGENT_CAPABILITIES],
+      policyVersion: 3,
+    };
+    const inherited = service(
+      {
+        workspace,
+        space: { allowedCapabilities: null, policyVersion: 1 },
+      },
+      true,
+    );
+    const denied = service(
+      {
+        workspace,
+        space: { allowedCapabilities: [], policyVersion: 2 },
+      },
+      true,
+    );
+
+    await expect(
+      inherited.getEffectiveCapabilities(
+        'workspace-1',
+        'space-1',
+        'agent',
+      ),
+    ).resolves.toEqual(AI_LEGACY_AGENT_CAPABILITIES);
+    await expect(
+      denied.getEffectiveCapabilities('workspace-1', 'space-1', 'agent'),
+    ).resolves.toEqual([]);
+  });
+
   it('uses the deployment switch as an absolute maximum', async () => {
     const policy = service(
       {
@@ -167,6 +200,40 @@ describe('AiBuiltinToolPolicyService', () => {
     await expect(policy.assertRunPolicyCurrent(run)).rejects.toMatchObject({
       response: { code: 'agent_tool_policy_changed' },
     });
+  });
+
+  it('keeps the run snapshot fingerprint stable after jsonb key reordering', async () => {
+    const rows = {
+      workspace: {
+        enabled: true,
+        allowedCapabilities: [...AI_LEGACY_AGENT_CAPABILITIES],
+        policyVersion: 1,
+      },
+    };
+    const policy = service(rows, true);
+    const snapshot = (await policy.buildRunSnapshot(database(rows), {
+      workspaceId: 'workspace-1',
+      spaceId: 'space-1',
+      executionMode: 'agent',
+    }))!;
+    const jsonbOrdered = {
+      toolNames: snapshot.toolNames,
+      capabilities: snapshot.capabilities,
+      schemaVersion: snapshot.schemaVersion,
+      spacePolicyVersion: snapshot.spacePolicyVersion,
+      workspacePolicyVersion: snapshot.workspacePolicyVersion,
+      registryManifestFingerprint: snapshot.registryManifestFingerprint,
+    };
+
+    expect(policy.fingerprintSnapshot(jsonbOrdered)).toBe(
+      policy.fingerprintSnapshot(snapshot),
+    );
+    expect(
+      policy.listForRun({
+        builtinToolPolicySnapshot: jsonbOrdered,
+        builtinToolPolicyFingerprint: policy.fingerprintSnapshot(snapshot),
+      } as any),
+    ).toHaveLength(11);
   });
 
   it('applies live revocation to legacy runs without a stored snapshot', async () => {

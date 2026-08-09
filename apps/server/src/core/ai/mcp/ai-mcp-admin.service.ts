@@ -50,10 +50,7 @@ import {
   UpdateAiMcpServerDto,
   UpdateAiMcpSettingsDto,
 } from '../dto/ai-mcp.dto';
-
-function jsonb(value: unknown) {
-  return sql`${JSON.stringify(value ?? null)}::jsonb`;
-}
+import { postgresJsonb } from '../utils/postgres-jsonb.util';
 
 function parseOriginList(raw: string): string[] {
   return raw
@@ -225,7 +222,7 @@ export class AiMcpAdminService {
             headers.map,
             this.environmentService.getAppSecret(),
           ),
-          headerNames: jsonb(headers.names) as never,
+          headerNames: postgresJsonb(headers.names) as never,
           // Always created disabled: an administrator must test and approve
           // tools before anything reaches an agent run.
           enabled: false,
@@ -286,11 +283,11 @@ export class AiMcpAdminService {
         headers.map,
         this.environmentService.getAppSecret(),
       );
-      update.headerNames = jsonb(headers.names);
+      update.headerNames = postgresJsonb(headers.names);
       connectionChanged = true;
     } else if (dto.clearHeaders) {
       update.headersEncrypted = null;
-      update.headerNames = jsonb([]);
+      update.headerNames = postgresJsonb([]);
       connectionChanged = true;
     }
 
@@ -299,7 +296,7 @@ export class AiMcpAdminService {
 
     if (dto.tools !== undefined) {
       approved = this.applyApprovals(dto.tools, discovered, approved, user.id);
-      update.approvedTools = jsonb(approved);
+      update.approvedTools = postgresJsonb(approved);
       connectionChanged = true;
     }
 
@@ -466,10 +463,10 @@ export class AiMcpAdminService {
     const updated = await this.db
       .updateTable('aiMcpServers')
       .set({
-        discoveredTools: jsonb(stored) as never,
+        discoveredTools: postgresJsonb(stored) as never,
         discoveryToolCount: stored.length,
         discoveredAt: now,
-        approvedTools: jsonb(retainedApprovals) as never,
+        approvedTools: postgresJsonb(retainedApprovals) as never,
         // Discovery is a capability snapshot. Every successful replacement gets
         // a new version, including an apparently identical result.
         configVersion: Number(row.configVersion) + 1,

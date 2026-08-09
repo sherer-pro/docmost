@@ -2,6 +2,7 @@ jest.mock('lib0/decoding.js', () => ({ readVarString: jest.fn() }));
 
 import {
   AI_TOOL_RESULT_MAX_BYTES,
+  AiToolResultLimitError,
   AiToolRegistryService,
   fitAiToolItems,
 } from './ai-tool-registry.service';
@@ -113,6 +114,41 @@ describe('built-in AI tool names', () => {
 
     try {
       expect(() => buildRegistry()).toThrow(/reserved mcp__ prefix/);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('reports an individual built-in result overflow as a typed limit error', async () => {
+    const spy = jest
+      .spyOn(AiToolRegistryService.prototype as any, 'createTools')
+      .mockReturnValue([
+        {
+          name: 'oversizedResult',
+          description: 'returns an oversized test result',
+          inputSchema: { type: 'object', properties: {} },
+          writeClass: 'read_only',
+          exposures: ['agent'],
+          capability: 'search.query',
+          category: 'search',
+          targetScope: 'current_space',
+          approvalMode: 'none',
+          maxResultBytes: 16,
+          annotations: {
+            idempotent: true,
+            destructive: false,
+            openWorld: false,
+          },
+          execute: async () => ({ content: { value: 'x'.repeat(64) } }),
+        },
+      ]);
+
+    try {
+      await expect(
+        buildRegistry().execute('oversizedResult', {}, {
+          source: 'agent',
+        } as any),
+      ).rejects.toBeInstanceOf(AiToolResultLimitError);
     } finally {
       spy.mockRestore();
     }

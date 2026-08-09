@@ -9,7 +9,6 @@ import {
 import { InjectQueue } from '@nestjs/bullmq';
 import { InjectKysely } from 'nestjs-kysely';
 import { Queue } from 'bullmq';
-import { createHash } from 'node:crypto';
 import { sql } from 'kysely';
 import { v7 as uuidv7 } from 'uuid';
 import { AiEditorActionRun } from '@docmost/api-contract';
@@ -27,6 +26,7 @@ import { AiConversationService } from './ai-conversation.service';
 import { AiAuxRunEventService } from './ai-aux-run-event.service';
 import { AI_CONCURRENCY_LIMITS } from '../ai.constants';
 import { AiContentPolicyService } from '../../ai-content-policy/ai-content-policy.service';
+import { hashCanonicalJson } from '../../../common/helpers/canonical-json.util';
 
 @Injectable()
 export class AiAuxRunService {
@@ -587,7 +587,7 @@ export class AiAuxRunService {
   }
 
   private fingerprint(value: unknown): string {
-    return createHash('sha256').update(JSON.stringify(value)).digest('hex');
+    return hashCanonicalJson(value);
   }
 
   private jobId(runId: string): string {

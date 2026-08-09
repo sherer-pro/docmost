@@ -5,6 +5,7 @@
   AI_AGENT_MAX_RUN_TOOL_CALLS: 64,
   AI_TOOL_RESULTS_TOTAL_MAX_BYTES: 128 * 1024,
   AI_WRITE_PROPOSAL_TTL_MS: 60 * 60 * 1000,
+  AiToolResultLimitError: class AiToolResultLimitError extends Error {},
   AiToolRegistryService: class AiToolRegistryService {},
 }));
 

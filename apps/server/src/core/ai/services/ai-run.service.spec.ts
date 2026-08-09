@@ -53,6 +53,30 @@ describe('AiRunService', () => {
     ).resolves.toBe(false);
   });
 
+  it('uses a canonical request fingerprint for idempotent retries', () => {
+    const service = createService({});
+    const left = {
+      content: 'same request',
+      selection: { from: 1, to: 2, context: { b: true, a: false } },
+      attachmentIds: ['first', 'second'],
+    };
+    const right = {
+      attachmentIds: ['first', 'second'],
+      selection: { context: { a: false, b: true }, to: 2, from: 1 },
+      content: 'same request',
+    };
+
+    expect((service as any).fingerprint(left)).toBe(
+      (service as any).fingerprint(right),
+    );
+    expect((service as any).fingerprint(left)).not.toBe(
+      (service as any).fingerprint({
+        ...right,
+        attachmentIds: ['second', 'first'],
+      }),
+    );
+  });
+
   it('admits a sixth active AI run for the user', async () => {
     const results = [
       { count: 0 },
@@ -325,6 +349,83 @@ describe('AiRunService', () => {
     );
   });
 
+  it('cancels an awaiting approval and expires its proposal atomically', async () => {
+    const run = createRun('awaiting_approval');
+    let runPatch: Record<string, unknown> = {};
+    let stepPatch: Record<string, unknown> = {};
+    const runSelect: any = {
+      selectAll: jest.fn(() => runSelect),
+      where: jest.fn(() => runSelect),
+      forUpdate: jest.fn(() => runSelect),
+      executeTakeFirstOrThrow: jest.fn(async () => run),
+    };
+    const messageSelect: any = {
+      select: jest.fn(() => messageSelect),
+      where: jest.fn(() => messageSelect),
+      executeTakeFirst: jest.fn(async () => ({ content: '', reasoning: '' })),
+    };
+    const runUpdate: any = {
+      set: jest.fn((patch) => {
+        runPatch = patch;
+        return runUpdate;
+      }),
+      where: jest.fn(() => runUpdate),
+      returningAll: jest.fn(() => runUpdate),
+      executeTakeFirst: jest.fn(async () => ({ ...run, ...runPatch })),
+    };
+    const messageUpdate: any = {
+      set: jest.fn(() => messageUpdate),
+      where: jest.fn(() => messageUpdate),
+      execute: jest.fn(async () => undefined),
+    };
+    const stepUpdate: any = {
+      set: jest.fn((patch) => {
+        stepPatch = patch;
+        return stepUpdate;
+      }),
+      where: jest.fn(() => stepUpdate),
+      execute: jest.fn(async () => undefined),
+    };
+    const trx = {
+      selectFrom: jest.fn((table) =>
+        table === 'aiRuns' ? runSelect : messageSelect,
+      ),
+      updateTable: jest.fn((table) =>
+        table === 'aiRuns'
+          ? runUpdate
+          : table === 'aiRunSteps'
+            ? stepUpdate
+            : messageUpdate,
+      ),
+    };
+    const service = new AiRunService(
+      {
+        transaction: jest.fn(() => ({
+          execute: (callback: (transaction: any) => unknown) => callback(trx),
+        })),
+      } as any,
+      { getJob: jest.fn(async () => undefined) } as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      { emitStatus: jest.fn() } as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+    jest.spyOn(service as any, 'getOwnedRun').mockResolvedValue(run);
+
+    await expect(
+      service.cancel('run-id', { id: 'user-id' } as any, {} as any),
+    ).resolves.toMatchObject({ status: 'cancelled' });
+    expect(stepPatch).toMatchObject({
+      status: 'expired',
+      errorCode: 'cancelled',
+      decidedById: 'user-id',
+    });
+  });
+
   it('marks a running run with cancelRequestedAt without terminating it', async () => {
     const run = createRun('running');
     let runPatch: Record<string, unknown> = {};
@@ -379,7 +480,7 @@ describe('AiRunService', () => {
   });
 });
 
-function createRun(status: 'queued' | 'running') {
+function createRun(status: 'queued' | 'running' | 'awaiting_approval') {
   const createdAt = new Date('2026-07-29T12:00:00.000Z');
   return {
     id: 'run-id',

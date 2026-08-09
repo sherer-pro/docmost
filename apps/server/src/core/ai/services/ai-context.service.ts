@@ -4,7 +4,6 @@ import {
   Injectable,
 } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
-import { createHash } from 'node:crypto';
 import { jsonToMarkdown } from '../../../collaboration/collaboration.util';
 import { SearchService } from '../../search/search.service';
 import { PageAccessService } from '../../page-access/page-access.service';
@@ -35,6 +34,7 @@ import {
 import { AiConversationService } from './ai-conversation.service';
 import { AiContentPolicyService } from '../../ai-content-policy/ai-content-policy.service';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
+import { hashCanonicalJson } from '../../../common/helpers/canonical-json.util';
 
 export interface AiResolvedRunContextSource {
   sourceType: AiContextSourceType;
@@ -1697,7 +1697,7 @@ export class AiContextService {
   }
 
   private fingerprint(value: unknown): string {
-    return createHash('sha256').update(JSON.stringify(value)).digest('hex');
+    return hashCanonicalJson(value);
   }
 
   private contextUnavailable(): BadRequestException {
