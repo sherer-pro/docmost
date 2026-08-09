@@ -43,7 +43,7 @@
     "dev": "corepack pnpm concurrently -n \"frontend,backend\" -c \"cyan,green\" \"corepack pnpm run client:dev\" \"corepack pnpm run server:dev\"",
     "clean": "node scripts/clean.mjs",
     "check:comments:en": "node scripts/check-english-comments.mjs",
-    "check:env": "node scripts/check-env-contract.mjs",
+    "check:env": "node --test scripts/check-env-contract.test.mjs && node scripts/check-env-contract.mjs",
     "check:no-ee": "node scripts/check-no-ee.mjs",
     "test:no-ee": "node --test scripts/check-no-ee.test.mjs",
     "check:audit-exceptions": "node scripts/check-audit-exceptions.mjs",

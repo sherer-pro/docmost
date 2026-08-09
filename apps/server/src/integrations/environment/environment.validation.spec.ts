@@ -46,4 +46,21 @@ describe('Environment validation', () => {
       );
     },
   );
+
+  it('accepts empty optional URL values forwarded by Compose', () => {
+    expect(
+      validate({
+        ...validConfig,
+        AWS_S3_ENDPOINT: '',
+        AWS_S3_URL: '',
+        DRAWIO_URL: '',
+        POSTHOG_HOST: '',
+      }),
+    ).toMatchObject({
+      AWS_S3_ENDPOINT: '',
+      AWS_S3_URL: '',
+      DRAWIO_URL: '',
+      POSTHOG_HOST: '',
+    });
+  });
 });
