@@ -1,7 +1,7 @@
-import { createHash } from 'node:crypto';
 import { sanitizeUrl } from '@docmost/editor-ext';
 import { nanoid } from 'nanoid';
 import type { AiApprovalPreview } from '@docmost/api-contract';
+import { hashCanonicalJson } from '../canonical-json.util';
 
 export type ProseMirrorJson = {
   type?: string;
@@ -95,32 +95,7 @@ type NodeLocation = {
 };
 
 export function hashProseMirrorJson(document: ProseMirrorJson): string {
-  return createHash('sha256')
-    .update(canonicalJsonString(document))
-    .digest('hex');
-}
-
-/**
- * Serializes a document so that the hash only depends on its values.
- * The same document reaches this helper both as a `jsonb` column, which
- * returns object keys in PostgreSQL storage order, and as ProseMirror JSON
- * produced from the live Yjs document, which uses insertion order. Sorting
- * object keys keeps both representations comparable.
- */
-function canonicalJsonString(value: unknown): string {
-  if (value === null || typeof value !== 'object') {
-    return JSON.stringify(value) ?? 'null';
-  }
-  if (Array.isArray(value)) {
-    return `[${value.map(canonicalJsonString).join(',')}]`;
-  }
-  const entries = Object.entries(value as Record<string, unknown>)
-    .filter(([, item]) => item !== undefined)
-    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
-    .map(
-      ([key, item]) => `${JSON.stringify(key)}:${canonicalJsonString(item)}`,
-    );
-  return `{${entries.join(',')}}`;
+  return hashCanonicalJson(document);
 }
 
 export function getProseMirrorText(node: ProseMirrorJson): string {

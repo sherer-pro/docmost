@@ -21,6 +21,7 @@ import {
   AI_AGENT_MAX_RUN_MODEL_STEPS,
   AI_AGENT_MAX_RUN_TOOL_CALLS,
   AI_AGENT_MAX_TOOL_CALLS,
+  AiToolResultLimitError,
   AI_TOOL_RESULTS_TOTAL_MAX_BYTES,
   AI_WRITE_PROPOSAL_TTL_MS,
   AiCallableToolDefinition,
@@ -903,6 +904,12 @@ export class AiRunExecutionService {
         } catch (error) {
           if (error instanceof AiAgentExecutionError) {
             throw error;
+          }
+          if (error instanceof AiToolResultLimitError) {
+            throw new AiAgentExecutionError(
+              'agent_result_limit',
+              'The agent exceeded a tool result limit',
+            );
           }
           // A policy failure ends the run: access was withdrawn or the
           // configuration moved, and retrying the same call cannot succeed.

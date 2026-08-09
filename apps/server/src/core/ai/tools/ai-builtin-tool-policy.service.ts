@@ -34,10 +34,8 @@ import {
   UpdateAiBuiltinToolSpacePolicyDto,
   UpdateAiBuiltinToolWorkspacePolicyDto,
 } from '../dto/ai-builtin-tool-policy.dto';
-
-function jsonb(value: unknown) {
-  return sql`${JSON.stringify(value)}::jsonb`;
-}
+import { hashCanonicalJson } from '../../../common/helpers/canonical-json.util';
+import { postgresJsonb } from '../utils/postgres-jsonb.util';
 
 @Injectable()
 export class AiBuiltinToolPolicyService {
@@ -146,13 +144,13 @@ export class AiBuiltinToolPolicyService {
       .values({
         workspaceId: workspace.id,
         enabled: dto.enabled,
-        allowedCapabilities: jsonb(allowedCapabilities) as never,
+        allowedCapabilities: postgresJsonb(allowedCapabilities) as never,
         updatedById: user.id,
       })
       .onConflict((oc) =>
         oc.column('workspaceId').doUpdateSet({
           enabled: dto.enabled,
-          allowedCapabilities: jsonb(allowedCapabilities) as never,
+          allowedCapabilities: postgresJsonb(allowedCapabilities) as never,
           policyVersion: sql<number>`ai_builtin_tool_workspace_policies.policy_version + 1`,
           updatedById: user.id,
           updatedAt: new Date(),
@@ -207,13 +205,13 @@ export class AiBuiltinToolPolicyService {
         workspaceId: workspace.id,
         spaceId,
         allowedCapabilities:
-          requested === null ? null : (jsonb(requested) as never),
+          requested === null ? null : (postgresJsonb(requested) as never),
         updatedById: user.id,
       })
       .onConflict((oc) =>
         oc.column('spaceId').doUpdateSet({
           allowedCapabilities:
-            requested === null ? null : (jsonb(requested) as never),
+            requested === null ? null : (postgresJsonb(requested) as never),
           policyVersion: sql<number>`ai_builtin_tool_space_policies.policy_version + 1`,
           updatedById: user.id,
           updatedAt: new Date(),
@@ -287,9 +285,7 @@ export class AiBuiltinToolPolicyService {
   }
 
   fingerprintSnapshot(snapshot: AiBuiltinToolRunSnapshot): string {
-    return createHash('sha256')
-      .update(JSON.stringify(snapshot), 'utf8')
-      .digest('hex');
+    return hashCanonicalJson(snapshot);
   }
 
   readRunSnapshot(run: AiRun): AiBuiltinToolRunSnapshot | null {
@@ -394,9 +390,10 @@ export class AiBuiltinToolPolicyService {
       .where('workspaceId', '=', workspaceId)
       .where('spaceId', '=', spaceId)
       .executeTakeFirst();
-    const spaceAllowedCapabilities = space
-      ? this.readCapabilities(space.allowedCapabilities)
-      : null;
+    const spaceAllowedCapabilities =
+      !space || space.allowedCapabilities === null
+        ? null
+        : this.readCapabilities(space.allowedCapabilities);
     const system = new Set(this.systemCapabilities(exposure));
     let capabilities = workspace.enabled
       ? workspace.allowedCapabilities.filter((capability) =>

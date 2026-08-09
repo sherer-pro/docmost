@@ -61,6 +61,13 @@ export const AI_AGENT_MAX_RUN_MODEL_STEPS = 32;
 export const AI_AGENT_MAX_RUN_TOOL_CALLS = 64;
 export const AI_TOOL_RESULT_MAX_BYTES = 32 * 1024;
 export const AI_TOOL_RESULTS_TOTAL_MAX_BYTES = 128 * 1024;
+
+export class AiToolResultLimitError extends Error {
+  constructor() {
+    super('AI tool result exceeds its configured limit');
+    this.name = 'AiToolResultLimitError';
+  }
+}
 export const AI_WRITE_PROPOSAL_TTL_MS = 60 * 60 * 1000;
 
 const AI_TOOL_CURSOR_VERSION = 1;
@@ -324,9 +331,7 @@ export class AiToolRegistryService {
     const result = await tool.execute(args as Record<string, unknown>, context);
     const size = Buffer.byteLength(JSON.stringify(result.content), 'utf8');
     if (size > tool.maxResultBytes) {
-      throw new BadRequestException(
-        'AI tool result exceeds its configured limit',
-      );
+      throw new AiToolResultLimitError();
     }
     return result;
   }

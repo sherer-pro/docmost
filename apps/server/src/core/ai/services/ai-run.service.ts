@@ -11,7 +11,6 @@ import {
 import { InjectQueue } from '@nestjs/bullmq';
 import { InjectKysely } from 'nestjs-kysely';
 import { Queue } from 'bullmq';
-import { createHash } from 'node:crypto';
 import { sql } from 'kysely';
 import { v7 as uuidv7 } from 'uuid';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
@@ -41,6 +40,7 @@ import { toAiRunStepContract } from '../utils/ai-run-step.mapper';
 import { AiMcpPolicyService } from '../mcp/ai-mcp-policy.service';
 import { AiBuiltinToolPolicyService } from '../tools/ai-builtin-tool-policy.service';
 import { AiAssistantProfileService } from './ai-assistant-profile.service';
+import { hashCanonicalJson } from '../../../common/helpers/canonical-json.util';
 
 @Injectable()
 export class AiRunService {
@@ -1282,7 +1282,7 @@ export class AiRunService {
   }
 
   private fingerprint(value: unknown): string {
-    return createHash('sha256').update(JSON.stringify(value)).digest('hex');
+    return hashCanonicalJson(value);
   }
 
   private runJobId(runId: string): string {
