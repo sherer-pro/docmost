@@ -138,3 +138,20 @@ Root composite scripts call `corepack pnpm` internally. If the local `pnpm` shim
 Security regression coverage is available through `pnpm test:security`, and production dependency audit is run in CI with `pnpm audit --prod --audit-level high`.
 
 Backend e2e coverage uses disposable PostgreSQL and Redis services. The CI integration stage first applies every migration to an empty database, then verifies transactional outbox deduplication, expired-lease recovery, and owner fencing and runs two collaboration instances against real Redis to prove owner-checked lease renewal and release. CI additionally starts the production API and collaboration images and waits for both health endpoints.
+
+`pnpm check:architecture` is a blocking dependency-cruiser gate; circular
+dependencies are errors. `pnpm check:release-gates` verifies the reusable CI
+workflow chain `publish -> gates -> production-smoke`, includes a negative
+smoke execution that must return non-zero, and tests stream redaction plus the
+exact-secret/credential-pattern artifact scan. Production-smoke logs are
+sanitized before they are written and can be uploaded only after that scan
+creates its success marker.
+
+Typesense remains the selected external search projection; there is no hidden
+PostgreSQL fallback when that driver is enabled. Lifecycle jobs provide low
+latency, while a deterministic full reconciliation runs every 15 minutes and
+converges missed DB-to-Redis events, including after Redis metadata loss. Each
+application replica retries registration once per minute with the same BullMQ
+identity. Attachment content indexing separately treats PostgreSQL status as
+authoritative: every minute it recovers expired `processing` claims and
+re-enqueues deterministic per-workspace work for remaining `pending` rows.

@@ -37,6 +37,11 @@ jobs:
           pnpm check:no-ee
           pnpm test:no-ee
 
+      - name: Blocking architecture and release gate contracts
+        run: |
+          pnpm check:architecture
+          pnpm check:release-gates
+
       - name: Build
         run: pnpm build
 
@@ -85,7 +90,7 @@ jobs:
     timeout-minutes: 20
     services:
       postgres:
-        image: postgres:18
+        image: postgres:18-alpine@sha256:9a8afca54e7861fd90fab5fdf4c42477a6b1cb7d293595148e674e0a3181de15
         env:
           POSTGRES_DB: docmost
           POSTGRES_USER: docmost
@@ -98,7 +103,7 @@ jobs:
           --health-timeout 5s
           --health-retries 12
       redis:
-        image: redis:8
+        image: redis:8-alpine@sha256:978f0e01593e65eed801f2402944efcd936d43b5027e4908a7897baf88ed6241
         ports:
           - 6379:6379
         options: >-
@@ -188,8 +193,9 @@ jobs:
             -e POSTGRES_DB=docmost \
             -e POSTGRES_USER=docmost \
             -e POSTGRES_PASSWORD=docmost-ci-password \
-            postgres:18
-          docker run -d --name docmost-redis --network docmost-ci redis:8 \
+            postgres:18-alpine@sha256:9a8afca54e7861fd90fab5fdf4c42477a6b1cb7d293595148e674e0a3181de15
+          docker run -d --name docmost-redis --network docmost-ci \
+            redis:8-alpine@sha256:978f0e01593e65eed801f2402944efcd936d43b5027e4908a7897baf88ed6241 \
             redis-server --appendonly no --maxmemory-policy noeviction
           docker run -d --name docmost-open-webui --network docmost-ci -p 18080:8080 \
             -e MOCK_OPEN_WEBUI_PROCESSING_DELAY_MS=500 \
@@ -378,17 +384,24 @@ jobs:
 
       - name: Capture server logs
         if: always()
+        env:
+          CI_LOG_CANARIES: "ci-only-app-secret-at-least-32-characters;docmost-ci-password;CI-smoke-password-123!"
         run: |
           mkdir -p ci-artifacts
-          docker logs docmost-app >ci-artifacts/server.log 2>&1 || true
-          docker logs docmost-app-replica >ci-artifacts/server-replica.log 2>&1 || true
-          docker logs docmost-collab >ci-artifacts/collaboration.log 2>&1 || true
-          docker logs docmost-db >ci-artifacts/postgres.log 2>&1 || true
-          docker logs docmost-redis >ci-artifacts/redis.log 2>&1 || true
-          docker logs docmost-open-webui >ci-artifacts/open-webui-mock.log 2>&1 || true
+          capture_log() {
+            docker logs "$1" 2>&1 | node scripts/sanitize-ci-log-stream.mjs >"ci-artifacts/$2" || true
+          }
+          capture_log docmost-app server.log
+          capture_log docmost-app-replica server-replica.log
+          capture_log docmost-collab collaboration.log
+          capture_log docmost-db postgres.log
+          capture_log docmost-redis redis.log
+          capture_log docmost-open-webui open-webui-mock.log
+          node scripts/scan-ci-artifacts.mjs ci-artifacts
+          touch ci-artifacts/.sanitized
 
       - name: Upload server logs on failure
-        if: failure()
+        if: failure() && hashFiles('ci-artifacts/.sanitized') != ''
         uses: actions/upload-artifact@v4
         with:
           name: production-smoke-logs
