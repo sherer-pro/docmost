@@ -116,6 +116,7 @@ export interface Configuration<TCE> {
   customEventTTL?: number;
   prefix?: string;
   customEvents?: TCE;
+  onLeaseLoss?: (documentName: string) => Promise<void> | void;
 }
 
 export type BaseWebSocket = EventEmitter & {

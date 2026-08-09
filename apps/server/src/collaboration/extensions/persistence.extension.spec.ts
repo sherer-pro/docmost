@@ -235,4 +235,26 @@ describe('PersistenceExtension failure boundary', () => {
     if (loadedDocument) await server.unloadDocument(loadedDocument);
     consoleError.mockRestore();
   });
+
+  it('cancels dirty retries when a lost lease forces local discard', async () => {
+    const { extension, pageRepo } = createHarness();
+    pageRepo.updatePage.mockRejectedValue(
+      Object.assign(new Error('constraint violation'), { code: '23514' }),
+    );
+    const payload = createStorePayload();
+    await extension.onChange({
+      documentName: DOCUMENT_NAME,
+      context: { user: { id: USER_ID } },
+    } as any);
+
+    await extension.onStoreDocument(payload);
+    expect(extension['dirtyDocuments'].has(DOCUMENT_NAME)).toBe(true);
+    expect(extension['dirtyRetryTimers'].has(DOCUMENT_NAME)).toBe(true);
+
+    (extension as any).discardUnpersistedDocument(DOCUMENT_NAME);
+
+    expect(extension['dirtyDocuments'].has(DOCUMENT_NAME)).toBe(false);
+    expect(extension['dirtyRetryTimers'].has(DOCUMENT_NAME)).toBe(false);
+    expect(extension['contributors'].has(DOCUMENT_NAME)).toBe(false);
+  });
 });

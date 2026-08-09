@@ -138,6 +138,15 @@ export class PersistenceExtension implements Extension {
     }
   }
 
+  discardUnpersistedDocument(documentName: string): void {
+    if (!this.dirtyDocuments.has(documentName)) return;
+    this.clearDocumentDirty(documentName);
+    this.contributors.delete(documentName);
+    this.logger.warn(
+      `Discarded unpersisted collaboration state after lease loss; pageId=${getPageId(documentName)}`,
+    );
+  }
+
   private async storeDocument(
     data: onStoreDocumentPayload,
     backgroundRetry: boolean,
