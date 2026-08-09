@@ -12,6 +12,7 @@ export type {
   AiExternalMcpDiscoverResult,
   AiExternalMcpDiscoveredTool,
   AiExternalMcpDiscoverySnapshot,
+  AiExternalMcpGroupPolicy,
   AiExternalMcpPreferencesView,
   AiExternalMcpServer,
   AiExternalMcpServerListItem,

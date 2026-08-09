@@ -11,6 +11,7 @@ import {
   AiExternalMcpBinding,
   AiExternalMcpBindingsView,
   AiExternalMcpCatalogEntry,
+  AiExternalMcpGroupPolicy,
   AiExternalMcpPreferencesView,
   AiExternalMcpUnavailableReason,
   AiExternalMcpUserPreference,
@@ -37,10 +38,8 @@ import {
   AI_MCP_MAX_SNAPSHOT_BYTES,
 } from './ai-mcp.constants';
 import { PutAiMcpBindingDto, PutAiMcpPreferencesDto } from '../dto/ai-mcp.dto';
-
-function jsonb(value: unknown) {
-  return sql`${JSON.stringify(value ?? null)}::jsonb`;
-}
+import { hashCanonicalJson } from '../../../common/helpers/canonical-json.util';
+import { postgresJsonb } from '../utils/postgres-jsonb.util';
 
 type EffectiveRow = {
   bindingId: string;
@@ -111,6 +110,9 @@ export class AiMcpPolicyService {
     const denied = await this.deniedBindingIds(
       bindings.map((row) => row.bindingId),
     );
+    const groupPolicies = await this.bindingGroupPolicies(
+      bindings.map((row) => row.bindingId),
+    );
 
     const boundServerIds = new Set(bindings.map((row) => row.serverId));
     const catalogRows = await this.db
@@ -125,7 +127,13 @@ export class AiMcpPolicyService {
       spaceId,
       deploymentEnabled: this.isDeploymentEnabled(),
       workspaceEnabled: settings.enabled,
-      bindings: bindings.map((row) => this.toBindingView(row, denied)),
+      bindings: bindings.map((row) =>
+        this.toBindingView(
+          row,
+          denied,
+          groupPolicies.get(row.bindingId) ?? [],
+        ),
+      ),
       catalog: catalogRows
         .filter((row) => !boundServerIds.has(row.id))
         .map((row) => this.toCatalogEntry(row)),
@@ -175,39 +183,76 @@ export class AiMcpPolicyService {
     }
 
     const stored = selection === 'selected' ? toolNames : [];
+    const groupPolicies =
+      dto.groupPolicies === undefined
+        ? undefined
+        : await this.validateGroupPolicies(
+            dto.groupPolicies,
+            workspace.id,
+            new Set(selection === 'selected' ? stored : approvedNames),
+          );
     const now = new Date();
     const instructions = dto.instructions?.trim() || null;
-    await this.db
-      .insertInto('aiMcpSpaceBindings')
-      .values({
-        workspaceId: workspace.id,
-        spaceId,
-        serverId,
-        enabled: dto.enabled,
-        allowedTools: jsonb(stored) as never,
-        profileAllowedTools: jsonb({
-          [AI_MCP_DEFAULT_PROFILE_KEY]: stored,
-        }) as never,
-        instructions,
-        createdById: user.id,
-        updatedById: user.id,
-      })
-      .onConflict((oc) =>
-        oc.columns(['spaceId', 'serverId']).doUpdateSet({
+    await this.db.transaction().execute(async (trx) => {
+      const binding = await trx
+        .insertInto('aiMcpSpaceBindings')
+        .values({
+          workspaceId: workspace.id,
+          spaceId,
+          serverId,
           enabled: dto.enabled,
-          allowedTools: jsonb(stored) as never,
-          profileAllowedTools: jsonb({
+          allowedTools: postgresJsonb(stored) as never,
+          profileAllowedTools: postgresJsonb({
             [AI_MCP_DEFAULT_PROFILE_KEY]: stored,
           }) as never,
           instructions,
-          // Atomic increment prevents two concurrent writes from publishing
-          // the same version for different policies.
-          policyVersion: sql<number>`ai_mcp_space_bindings.policy_version + 1`,
+          createdById: user.id,
           updatedById: user.id,
-          updatedAt: now,
-        }),
-      )
-      .execute();
+        })
+        .onConflict((oc) =>
+          oc.columns(['spaceId', 'serverId']).doUpdateSet({
+            enabled: dto.enabled,
+            allowedTools: postgresJsonb(stored) as never,
+            profileAllowedTools: postgresJsonb({
+              [AI_MCP_DEFAULT_PROFILE_KEY]: stored,
+            }) as never,
+            instructions,
+            // Atomic increment prevents two concurrent writes from publishing
+            // the same version for different policies.
+            policyVersion: sql<number>`ai_mcp_space_bindings.policy_version + 1`,
+            updatedById: user.id,
+            updatedAt: now,
+          }),
+        )
+        .returning('id')
+        .executeTakeFirstOrThrow();
+
+      if (groupPolicies === undefined) {
+        return;
+      }
+
+      await trx
+        .deleteFrom('aiMcpGroupPolicies')
+        .where('bindingId', '=', binding.id)
+        .execute();
+      if (groupPolicies.length > 0) {
+        await trx
+          .insertInto('aiMcpGroupPolicies')
+          .values(
+            groupPolicies.map((policy) => ({
+              bindingId: binding.id,
+              groupId: policy.groupId,
+              denyConnection: policy.denyConnection,
+              allowedTools:
+                policy.toolSelection === 'selected'
+                  ? (postgresJsonb(policy.toolNames) as never)
+                  : null,
+              createdById: user.id,
+            })),
+          )
+          .execute();
+      }
+    });
 
     return this.getBindingsView(spaceId, user, workspace);
   }
@@ -471,9 +516,7 @@ export class AiMcpPolicyService {
   }
 
   fingerprintSnapshot(snapshot: AiMcpRunSnapshot): string {
-    return createHash('sha256')
-      .update(JSON.stringify(snapshot), 'utf8')
-      .digest('hex');
+    return hashCanonicalJson(snapshot);
   }
 
   async maximumProfilePolicyFingerprint(
@@ -793,6 +836,81 @@ export class AiMcpPolicyService {
     return new Set(rows.map((row) => row.bindingId));
   }
 
+  private async bindingGroupPolicies(
+    bindingIds: string[],
+  ): Promise<Map<string, AiExternalMcpGroupPolicy[]>> {
+    if (bindingIds.length === 0) {
+      return new Map();
+    }
+    const rows = await this.db
+      .selectFrom('aiMcpGroupPolicies')
+      .select(['bindingId', 'groupId', 'denyConnection', 'allowedTools'])
+      .where('bindingId', 'in', bindingIds)
+      .orderBy('groupId', 'asc')
+      .execute();
+    const result = new Map<string, AiExternalMcpGroupPolicy[]>();
+    for (const row of rows) {
+      const selected = Array.isArray(row.allowedTools);
+      const current = result.get(row.bindingId) ?? [];
+      current.push({
+        groupId: row.groupId,
+        denyConnection: row.denyConnection,
+        toolSelection: selected ? 'selected' : 'all',
+        toolNames: selected ? this.readStringArray(row.allowedTools) : [],
+      });
+      result.set(row.bindingId, current);
+    }
+    return result;
+  }
+
+  private async validateGroupPolicies(
+    policies: NonNullable<PutAiMcpBindingDto['groupPolicies']>,
+    workspaceId: string,
+    availableToolNames: Set<string>,
+  ): Promise<AiExternalMcpGroupPolicy[]> {
+    if (policies.length === 0) {
+      return [];
+    }
+    const groupIds = policies.map((policy) => policy.groupId);
+    const groups = await this.db
+      .selectFrom('groups')
+      .select('id')
+      .where('workspaceId', '=', workspaceId)
+      .where('id', 'in', groupIds)
+      .execute();
+    if (groups.length !== groupIds.length) {
+      throw new BadRequestException(
+        'Every external MCP group policy must reference this workspace',
+      );
+    }
+
+    return policies.map((policy) => {
+      const toolSelection = policy.toolSelection ?? 'all';
+      const toolNames = policy.toolNames ?? [];
+      if (toolSelection === 'selected' && toolNames.length === 0) {
+        throw new BadRequestException(
+          'Select at least one group tool or choose all allowed tools',
+        );
+      }
+      if (toolSelection === 'selected') {
+        for (const toolName of toolNames) {
+          if (!availableToolNames.has(toolName)) {
+            throw new BadRequestException({
+              code: 'external_mcp_tool_not_approved',
+              message: `Group tool is not available in this space: ${toolName}`,
+            });
+          }
+        }
+      }
+      return {
+        groupId: policy.groupId,
+        denyConnection: policy.denyConnection,
+        toolSelection,
+        toolNames: toolSelection === 'selected' ? toolNames : [],
+      };
+    });
+  }
+
   /**
    * Intersection of every applicable allowlist.
    *
@@ -851,7 +969,11 @@ export class AiMcpPolicyService {
     return null;
   }
 
-  private toBindingView(row: any, denied: Set<string>): AiExternalMcpBinding {
+  private toBindingView(
+    row: any,
+    denied: Set<string>,
+    groupPolicies: AiExternalMcpGroupPolicy[],
+  ): AiExternalMcpBinding {
     const approved = this.readApproved(row.approvedTools);
     const spaceAllowed = this.readStringArray(row.allowedTools);
     return {
@@ -872,6 +994,7 @@ export class AiMcpPolicyService {
         } as never),
       ),
       instructions: row.instructions,
+      groupPolicies,
       deniedByGroup: denied.has(row.bindingId),
       policyVersion: Number(row.bindingPolicyVersion),
       createdAt: row.createdAt.toISOString(),

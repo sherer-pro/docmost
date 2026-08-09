@@ -1072,8 +1072,13 @@ profile-aware runs do not inherit it.
    description for each.
 5. Only then can the server be enabled, and only with at least one approved
    tool.
-6. A space administrator binds the server and optionally narrows the tool list
-   and adds prompt hints.
+6. A space administrator binds the server, optionally narrows the tool list,
+   adds prompt hints, and manages per-group deny or tool-narrowing rules. When
+   `groupPolicies` is present in the binding `PUT`, it fully replaces the
+   binding's group rules in the same transaction and with the same single
+   `policyVersion` increment; omitting it preserves the existing rules for API
+   compatibility. A deny wins, while `toolSelection: "all"` adds no narrowing
+   and a non-empty selected list is intersected with higher-scope allowlists.
 7. Each user opts in per binding. Absence of a stored preference is opt-out.
 
 ### Why remote text is untrusted
@@ -1328,7 +1333,7 @@ workspace `owner|admin`; the space routes require full space access, except
 | `POST /api/ai/mcp-servers/:serverId/actions/test`           | probe the connection without caching a client                                         |
 | `POST /api/ai/mcp-servers/:serverId/actions/discover`       | list remote tools and store a sanitized snapshot                                      |
 | `GET /api/spaces/:spaceId/ai/mcp-bindings`                  | read space bindings plus the bindable catalog                                         |
-| `PUT/DELETE /api/spaces/:spaceId/ai/mcp-bindings/:serverId` | bind and narrow, or remove the binding                                                |
+| `PUT/DELETE /api/spaces/:spaceId/ai/mcp-bindings/:serverId` | bind and narrow, fully replace optional group deny/tool rules, or remove the binding |
 | `GET/PUT /api/spaces/:spaceId/ai/mcp-preferences`           | read or fully replace the calling user's opt-in set; omitted bindings become disabled |
 
 ### Synchronization RAG API
@@ -1407,6 +1412,7 @@ Outbound external MCP contracts live in
 `AiExternalMcpServerListItem`, `AiExternalMcpServer`,
 `AiExternalMcpCatalogEntry`, `AiExternalMcpDiscoveredTool`,
 `AiExternalMcpApprovedTool`, `AiExternalMcpBinding`,
+`AiExternalMcpGroupPolicy`,
 `AiExternalMcpUserPreference`, and their request types. `AiRunStep` gains
 `toolSource` (`builtin | external_mcp`) and `toolNamespace`, and `AiAvailability`
 gains an optional `externalMcp` block. Two invariants hold by construction: no

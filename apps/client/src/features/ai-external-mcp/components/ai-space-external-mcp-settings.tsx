@@ -6,6 +6,7 @@ import {
   Checkbox,
   Group,
   Loader,
+  MultiSelect,
   Paper,
   Radio,
   Select,
@@ -22,6 +23,7 @@ import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { EmptyState } from "@/components/ui/empty-state.tsx";
 import { useUserRole } from "@/hooks/use-user-role.tsx";
+import { useGetGroupsQuery } from "@/features/group/queries/group-query.ts";
 import {
   useAiExternalMcpBindingsQuery,
   useDeleteAiExternalMcpBindingMutation,
@@ -29,6 +31,7 @@ import {
 } from "@/features/ai-external-mcp/queries/ai-external-mcp-query.ts";
 import type {
   AiExternalMcpBinding,
+  AiExternalMcpGroupPolicy,
   AiExternalMcpToolSelectionMode,
 } from "@/features/ai-external-mcp/types/ai-external-mcp.types.ts";
 
@@ -47,6 +50,7 @@ export default function AiSpaceExternalMcpSettings({ spaceId }: Props) {
   const { t } = useTranslation();
   const { isAdmin } = useUserRole();
   const bindingsQuery = useAiExternalMcpBindingsQuery(spaceId);
+  const groupsQuery = useGetGroupsQuery({ limit: 100 });
   const putBinding = usePutAiExternalMcpBindingMutation(spaceId);
   const deleteBinding = useDeleteAiExternalMcpBindingMutation(spaceId);
 
@@ -63,6 +67,7 @@ export default function AiSpaceExternalMcpSettings({ spaceId }: Props) {
       toolSelection?: AiExternalMcpToolSelectionMode;
       toolNames?: string[];
       instructions?: string | null;
+      groupPolicies?: AiExternalMcpGroupPolicy[];
     },
   ) => {
     try {
@@ -72,6 +77,7 @@ export default function AiSpaceExternalMcpSettings({ spaceId }: Props) {
           enabled: patch.enabled ?? binding.enabled,
           toolSelection: patch.toolSelection ?? binding.toolSelection,
           toolNames: patch.toolNames ?? binding.toolNames,
+          groupPolicies: patch.groupPolicies ?? binding.groupPolicies,
           instructions:
             patch.instructions !== undefined
               ? patch.instructions
@@ -106,6 +112,10 @@ export default function AiSpaceExternalMcpSettings({ spaceId }: Props) {
   }
 
   const gateClosed = !view.deploymentEnabled || !view.workspaceEnabled;
+  const groupOptions = (groupsQuery.data?.items ?? []).map((group) => ({
+    value: group.id,
+    label: group.name,
+  }));
 
   return (
     <Stack gap="md">
@@ -298,6 +308,147 @@ export default function AiSpaceExternalMcpSettings({ spaceId }: Props) {
                       </Stack>
                     </Checkbox.Group>
                   )}
+
+                  <MultiSelect
+                    label={t("ai.externalTools.groupPolicies")}
+                    description={t(
+                      "ai.externalTools.groupPoliciesDescription",
+                    )}
+                    data={groupOptions}
+                    searchable
+                    clearable
+                    value={binding.groupPolicies.map((policy) => policy.groupId)}
+                    onChange={(groupIds) => {
+                      const current = new Map(
+                        binding.groupPolicies.map((policy) => [
+                          policy.groupId,
+                          policy,
+                        ]),
+                      );
+                      void save(binding, {
+                        groupPolicies: groupIds.map(
+                          (groupId) =>
+                            current.get(groupId) ?? {
+                              groupId,
+                              denyConnection: true,
+                              toolSelection: "all",
+                              toolNames: [],
+                            },
+                        ),
+                      });
+                    }}
+                    disabled={
+                      !binding.enabled ||
+                      gateClosed ||
+                      groupsQuery.isLoading ||
+                      putBinding.isPending
+                    }
+                  />
+
+                  {binding.groupPolicies.map((policy) => {
+                    const groupName =
+                      groupOptions.find(
+                        (option) => option.value === policy.groupId,
+                      )?.label ?? policy.groupId;
+                    return (
+                      <Paper key={policy.groupId} withBorder p="sm">
+                        <Stack gap="xs">
+                          <Checkbox
+                            label={t("ai.externalTools.groupDeny", {
+                              group: groupName,
+                            })}
+                            checked={policy.denyConnection}
+                            onChange={(event) =>
+                              void save(binding, {
+                                groupPolicies: binding.groupPolicies.map(
+                                  (candidate) =>
+                                    candidate.groupId === policy.groupId
+                                      ? {
+                                          ...candidate,
+                                          denyConnection:
+                                            event.currentTarget.checked,
+                                        }
+                                      : candidate,
+                                ),
+                              })
+                            }
+                            disabled={gateClosed || putBinding.isPending}
+                          />
+                          <Radio.Group
+                            label={t("ai.externalTools.groupToolSelection")}
+                            value={policy.toolSelection}
+                            onChange={(value) =>
+                              void save(binding, {
+                                groupPolicies: binding.groupPolicies.map(
+                                  (candidate) =>
+                                    candidate.groupId === policy.groupId
+                                      ? {
+                                          ...candidate,
+                                          toolSelection:
+                                            value as AiExternalMcpToolSelectionMode,
+                                          toolNames:
+                                            value === "selected"
+                                              ? binding.availableTools.map(
+                                                  (tool) => tool.toolName,
+                                                )
+                                              : [],
+                                        }
+                                      : candidate,
+                                ),
+                              })
+                            }
+                          >
+                            <Group gap="md" mt={6}>
+                              <Radio
+                                value="all"
+                                label={t(
+                                  "ai.externalTools.groupToolSelectionAll",
+                                )}
+                                disabled={gateClosed || putBinding.isPending}
+                              />
+                              <Radio
+                                value="selected"
+                                label={t(
+                                  "ai.externalTools.groupToolSelectionSelected",
+                                )}
+                                disabled={gateClosed || putBinding.isPending}
+                              />
+                            </Group>
+                          </Radio.Group>
+                          {policy.toolSelection === "selected" && (
+                            <MultiSelect
+                              label={t("ai.externalTools.groupTools")}
+                              data={binding.availableTools.map((tool) => ({
+                                value: tool.toolName,
+                                label: tool.toolName,
+                              }))}
+                              value={policy.toolNames}
+                              onChange={(toolNames) => {
+                                if (toolNames.length === 0) {
+                                  notifications.show({
+                                    color: "red",
+                                    message: t(
+                                      "ai.externalTools.groupToolSelectionEmpty",
+                                    ),
+                                  });
+                                  return;
+                                }
+                                void save(binding, {
+                                  groupPolicies: binding.groupPolicies.map(
+                                    (candidate) =>
+                                      candidate.groupId === policy.groupId
+                                        ? { ...candidate, toolNames }
+                                        : candidate,
+                                  ),
+                                });
+                              }}
+                              disabled={gateClosed || putBinding.isPending}
+                            />
+                          )}
+                        </Stack>
+                      </Paper>
+                    );
+                  })}
 
                   <Textarea
                     label={t("ai.externalTools.instructions")}

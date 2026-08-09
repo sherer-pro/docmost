@@ -210,6 +210,172 @@ describe('AiMcpPolicyService preference authorization and replacement', () => {
   });
 });
 
+describe('AiMcpPolicyService managed group policies', () => {
+  const user = { id: USER_ID } as never;
+  const workspace = { id: WORKSPACE_ID } as never;
+
+  it('replaces validated group policies in the binding transaction', async () => {
+    const groupPolicyValues: unknown[] = [];
+    const serverQuery: any = {
+      select: () => serverQuery,
+      where: () => serverQuery,
+      executeTakeFirst: async () => ({
+        id: SERVER_ID,
+        enabled: true,
+        approvedTools: [approvedTool()],
+      }),
+    };
+    const groupQuery: any = {
+      select: () => groupQuery,
+      where: () => groupQuery,
+      execute: async () => [{ id: 'group-1' }],
+    };
+    const bindingInsert: any = {
+      values: () => bindingInsert,
+      onConflict: () => bindingInsert,
+      returning: () => bindingInsert,
+      executeTakeFirstOrThrow: async () => ({ id: 'binding-1' }),
+    };
+    const deletePolicies: any = {
+      where: () => deletePolicies,
+      execute: async () => undefined,
+    };
+    const groupPolicyInsert: any = {
+      values: (values: unknown[]) => {
+        groupPolicyValues.push(...values);
+        return groupPolicyInsert;
+      },
+      execute: async () => undefined,
+    };
+    const trx: any = {
+      insertInto: (table: string) =>
+        table === 'aiMcpSpaceBindings' ? bindingInsert : groupPolicyInsert,
+      deleteFrom: () => deletePolicies,
+    };
+    const db: any = {
+      selectFrom: (table: string) =>
+        table === 'aiMcpServers' ? serverQuery : groupQuery,
+      transaction: () => ({
+        execute: (callback: (transaction: unknown) => unknown) => callback(trx),
+      }),
+    };
+    const service = new AiMcpPolicyService(
+      db,
+      { isAiExternalMcpEnabled: () => true } as never,
+      { assertHasFullSpaceAccess: jest.fn(async () => undefined) } as never,
+    );
+    jest.spyOn(service, 'getBindingsView').mockResolvedValue({
+      spaceId: SPACE_ID,
+      deploymentEnabled: true,
+      workspaceEnabled: true,
+      bindings: [],
+      catalog: [],
+    });
+
+    await service.putBinding(
+      SPACE_ID,
+      SERVER_ID,
+      {
+        enabled: true,
+        toolSelection: 'all',
+        groupPolicies: [
+          {
+            groupId: 'group-1',
+            denyConnection: false,
+            toolSelection: 'selected',
+            toolNames: [TOOL_NAME],
+          },
+        ],
+      },
+      user,
+      workspace,
+    );
+
+    expect(groupPolicyValues).toEqual([
+      expect.objectContaining({
+        bindingId: 'binding-1',
+        groupId: 'group-1',
+        denyConnection: false,
+        createdById: USER_ID,
+      }),
+    ]);
+  });
+
+  it('rejects groups outside the workspace before writing the binding', async () => {
+    const groupQuery: any = {
+      select: () => groupQuery,
+      where: () => groupQuery,
+      execute: async () => [],
+    };
+    const service = new AiMcpPolicyService(
+      { selectFrom: () => groupQuery } as never,
+      { isAiExternalMcpEnabled: () => true } as never,
+      {} as never,
+    );
+
+    await expect(
+      (
+        service as never as {
+          validateGroupPolicies: (
+            policies: unknown[],
+            workspaceId: string,
+            tools: Set<string>,
+          ) => Promise<unknown>;
+        }
+      ).validateGroupPolicies(
+        [
+          {
+            groupId: 'foreign-group',
+            denyConnection: true,
+            toolSelection: 'all',
+            toolNames: [],
+          },
+        ],
+        WORKSPACE_ID,
+        new Set([TOOL_NAME]),
+      ),
+    ).rejects.toThrow('must reference this workspace');
+  });
+
+  it('rejects group tools outside the effective space allowlist', async () => {
+    const groupQuery: any = {
+      select: () => groupQuery,
+      where: () => groupQuery,
+      execute: async () => [{ id: 'group-1' }],
+    };
+    const service = new AiMcpPolicyService(
+      { selectFrom: () => groupQuery } as never,
+      { isAiExternalMcpEnabled: () => true } as never,
+      {} as never,
+    );
+
+    await expect(
+      (
+        service as never as {
+          validateGroupPolicies: (
+            policies: unknown[],
+            workspaceId: string,
+            tools: Set<string>,
+          ) => Promise<unknown>;
+        }
+      ).validateGroupPolicies(
+        [
+          {
+            groupId: 'group-1',
+            denyConnection: false,
+            toolSelection: 'selected',
+            toolNames: ['mcp__remote__other_0000000000000000'],
+          },
+        ],
+        WORKSPACE_ID,
+        new Set([TOOL_NAME]),
+      ),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({ code: 'external_mcp_tool_not_approved' }),
+    });
+  });
+});
+
 describe('AiMcpPolicyService gate truth table', () => {
   it('offers the tool only when every gate is open', async () => {
     const snapshot = await snapshotFor(ALL_OPEN);
@@ -427,9 +593,15 @@ describe('AiMcpPolicyService snapshot content', () => {
   it('produces a stable fingerprint', async () => {
     const { service } = build(ALL_OPEN);
     const snapshot = (await snapshotFor(ALL_OPEN)) as AiMcpRunSnapshot;
+    const jsonbOrdered = {
+      connections: snapshot.connections,
+      workspacePolicyVersion: snapshot.workspacePolicyVersion,
+      profileKey: snapshot.profileKey,
+      schemaVersion: snapshot.schemaVersion,
+    };
 
     expect(service.fingerprintSnapshot(snapshot)).toBe(
-      service.fingerprintSnapshot(snapshot),
+      service.fingerprintSnapshot(jsonbOrdered),
     );
     expect(service.fingerprintSnapshot(snapshot)).toHaveLength(64);
   });
