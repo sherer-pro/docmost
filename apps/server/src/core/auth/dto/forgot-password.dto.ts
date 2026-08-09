@@ -3,6 +3,7 @@ import { IsEmail, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-vali
 export class ForgotPasswordDto {
   @IsNotEmpty()
   @IsEmail()
+  @MaxLength(254)
   email: string;
 
   @IsOptional()

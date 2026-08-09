@@ -25,6 +25,7 @@ import { UserTokenRepo } from '@docmost/db/repos/user-token/user-token.repo';
 import { PasswordResetDto } from '../dto/password-reset.dto';
 import { User, UserToken, Workspace } from '@docmost/db/types/entity.types';
 import { UserTokenType } from '../auth.constants';
+import { DUMMY_PASSWORD_HASH } from '../password-assurance.constants';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { InjectKysely } from 'nestjs-kysely';
 import { executeTx } from '@docmost/db/utils';
@@ -57,6 +58,7 @@ export class AuthService {
 
     const errorMessage = 'Email or password does not match';
     if (!user || user?.deletedAt) {
+      await comparePasswordHash(loginDto.password, DUMMY_PASSWORD_HASH);
       throw new UnauthorizedException(errorMessage);
     }
 
