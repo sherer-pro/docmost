@@ -1,6 +1,9 @@
 import { mergeAttributes, Node } from '@tiptap/core';
 import { ReactNodeViewRenderer } from '@tiptap/react';
-import { TRANSCLUSION_SOURCE_CONTENT_EXPRESSION } from './constants';
+import {
+  isValidTransclusionIdentifier,
+  TRANSCLUSION_SOURCE_CONTENT_EXPRESSION,
+} from './constants';
 import {
   getTransclusionPresentationAttributes,
   TRANSCLUSION_CONTENT_ATTRIBUTE,
@@ -59,6 +62,10 @@ export const TransclusionSource = Node.create<TransclusionSourceOptions>({
     return [
       {
         tag: `div[data-type="${this.name}"]`,
+        getAttrs: (element) =>
+          isValidTransclusionIdentifier(element.getAttribute('data-id'))
+            ? null
+            : false,
         contentElement: (element) => {
           const htmlElement = element as HTMLElement;
           return (

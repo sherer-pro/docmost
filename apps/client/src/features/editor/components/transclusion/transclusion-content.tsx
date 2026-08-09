@@ -7,9 +7,14 @@ import classes from "./transclusion.module.css";
 type Props = {
   content: unknown;
   renderEditor?: boolean;
+  version?: string;
 };
 
-function TransclusionContent({ content, renderEditor = true }: Props) {
+function TransclusionContent({
+  content,
+  renderEditor = true,
+  version,
+}: Props) {
   const contentRef = useRef<HTMLDivElement | null>(null);
   const [measuredHeight, setMeasuredHeight] = useState<number | null>(null);
 
@@ -50,6 +55,7 @@ function TransclusionContent({ content, renderEditor = true }: Props) {
     >
       {renderEditor && (
         <EditorProvider
+          key={version}
           editable={false}
           immediatelyRender={false}
           shouldRerenderOnTransaction={false}

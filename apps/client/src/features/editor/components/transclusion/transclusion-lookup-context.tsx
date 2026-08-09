@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef } from "react";
+import { useAtomValue } from "jotai";
 import {
   lookupTransclusion,
   lookupTransclusionForShare,
 } from "@/features/transclusion/services/transclusion-api";
 import type { TransclusionLookup } from "@/features/transclusion/types/transclusion.types";
+import { socketAtom } from "@/features/websocket/atoms/socket-atom";
 import {
   TransclusionLookupContext,
   type ContextValue,
@@ -13,6 +15,7 @@ import {
 
 const RETRY_DELAYS_MS = [250, 1_000, 2_000, 5_000, 10_000, 30_000];
 const LOOKUP_BATCH_SIZE = 50;
+const INVALIDATION_COALESCE_MS = 50;
 
 export function TransclusionLookupProvider({
   children,
@@ -27,6 +30,7 @@ export function TransclusionLookupProvider({
    */
   shareId?: string;
 }) {
+  const socket = useAtomValue(socketAtom);
   const subscribersRef = useRef(new Map<LookupKey, Subscriber[]>());
   const queueRef = useRef(new Set<LookupKey>());
   const tickRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -46,6 +50,10 @@ export function TransclusionLookupProvider({
   const retryAttemptsRef = useRef(new Map<LookupKey, number>());
   const retryDueAtRef = useRef(new Map<LookupKey, number>());
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const invalidationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const requestVersionRef = useRef(new Map<LookupKey, number>());
   const flushRef = useRef<() => void>(() => undefined);
   const armRetryTimerRef = useRef<() => void>(() => undefined);
   // Resolvers waiting on the next response for a key. Populated by refresh()
@@ -110,6 +118,12 @@ export function TransclusionLookupProvider({
     if (keys.length === 0) return;
 
     for (const k of keys) inFlightRef.current.add(k);
+    const requestVersions = new Map(
+      keys.map((key) => [key, requestVersionRef.current.get(key) ?? 0]),
+    );
+
+    const isCurrentRequest = (key: LookupKey) =>
+      requestVersions.get(key) === (requestVersionRef.current.get(key) ?? 0);
 
     const resolveWaiters = (key: LookupKey) => {
       const waiters = pendingRef.current.get(key);
@@ -163,6 +177,7 @@ export function TransclusionLookupProvider({
 
             const key = `${result.sourcePageId}::${result.transclusionId}`;
             if (!batchKeySet.has(key)) continue;
+            if (!isCurrentRequest(key)) continue;
 
             returnedKeys.add(key);
             clearRetry(key);
@@ -179,6 +194,7 @@ export function TransclusionLookupProvider({
 
           for (const key of batchKeys) {
             if (returnedKeys.has(key)) continue;
+            if (!isCurrentRequest(key)) continue;
             inFlightRef.current.delete(key);
             resolveWaiters(key);
             scheduleRetry(key);
@@ -186,6 +202,7 @@ export function TransclusionLookupProvider({
         } catch {
           // Retry only the failed chunk; successful chunks stay cached.
           for (const key of batchKeys) {
+            if (!isCurrentRequest(key)) continue;
             inFlightRef.current.delete(key);
             resolveWaiters(key);
             scheduleRetry(key);
@@ -228,6 +245,7 @@ export function TransclusionLookupProvider({
           subscribersRef.current.delete(s.key);
           retryDueAtRef.current.delete(s.key);
           retryAttemptsRef.current.delete(s.key);
+          requestVersionRef.current.delete(s.key);
           armRetryTimerRef.current();
         } else subscribersRef.current.set(s.key, next);
       };
@@ -238,6 +256,10 @@ export function TransclusionLookupProvider({
   const refresh = useCallback<ContextValue["refresh"]>(
     (key) =>
       new Promise<void>((resolve) => {
+        requestVersionRef.current.set(
+          key,
+          (requestVersionRef.current.get(key) ?? 0) + 1,
+        );
         inFlightRef.current.delete(key);
         retryDueAtRef.current.delete(key);
         retryAttemptsRef.current.delete(key);
@@ -250,12 +272,48 @@ export function TransclusionLookupProvider({
     [enqueue],
   );
 
+  useEffect(() => {
+    if (!socket || shareId) return;
+
+    const refreshActiveLookups = () => {
+      if (invalidationTimerRef.current) return;
+
+      invalidationTimerRef.current = setTimeout(() => {
+        invalidationTimerRef.current = null;
+        for (const key of subscribersRef.current.keys()) {
+          requestVersionRef.current.set(
+            key,
+            (requestVersionRef.current.get(key) ?? 0) + 1,
+          );
+          inFlightRef.current.delete(key);
+          retryDueAtRef.current.delete(key);
+          retryAttemptsRef.current.delete(key);
+          enqueue(key);
+        }
+        armRetryTimerRef.current();
+      }, INVALIDATION_COALESCE_MS);
+    };
+
+    socket.on("page-embed:invalidate", refreshActiveLookups);
+    return () => {
+      socket.off("page-embed:invalidate", refreshActiveLookups);
+      if (invalidationTimerRef.current) {
+        clearTimeout(invalidationTimerRef.current);
+        invalidationTimerRef.current = null;
+      }
+    };
+  }, [enqueue, shareId, socket]);
+
   useEffect(
     () => () => {
       if (tickRef.current) clearTimeout(tickRef.current);
       if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+      if (invalidationTimerRef.current) {
+        clearTimeout(invalidationTimerRef.current);
+      }
       retryDueAtRef.current.clear();
       retryAttemptsRef.current.clear();
+      requestVersionRef.current.clear();
       for (const waiters of pendingRef.current.values()) {
         for (const resolve of waiters) resolve();
       }

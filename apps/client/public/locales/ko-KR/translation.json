@@ -1208,6 +1208,7 @@
   "Backlinks": "Backlinks",
   "Outgoing": "Outgoing",
   "Synced block": "동기화된 블록",
+  "Create synced block": "동기화된 블록 만들기",
   "Synced block content unavailable": "동기화된 블록 콘텐츠를 사용할 수 없습니다",
   "Failed to copy as Markdown": "Markdown으로 복사하지 못했습니다",
   "Copied. Paste on any page to embed this synced block.": "Copied. Paste on any page to embed this synced block.",

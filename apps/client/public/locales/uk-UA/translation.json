@@ -1208,6 +1208,7 @@
   "Backlinks": "Backlinks",
   "Outgoing": "Outgoing",
   "Synced block": "Синхронізований блок",
+  "Create synced block": "Створити синхронізований блок",
   "Synced block content unavailable": "Вміст синхронізованого блоку недоступний",
   "Failed to copy as Markdown": "Не вдалося скопіювати як Markdown",
   "Copied. Paste on any page to embed this synced block.": "Copied. Paste on any page to embed this synced block.",

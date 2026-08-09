@@ -22,7 +22,13 @@ function buildService(options?: {
 }) {
   const pageRepo = options?.pageRepo ?? { findById: jest.fn() };
   const pageService = options?.pageService ?? { create: jest.fn() };
-  const pageAccessService = options?.pageAccessService ?? {};
+  const pageAccessService =
+    options?.pageAccessService ??
+    ({
+      getEffectiveAccess: jest.fn(async () => ({
+        capabilities: { canRead: true },
+      })),
+    } as any);
   const spaceAbility =
     options?.spaceAbility ??
     ({
@@ -46,7 +52,7 @@ function buildService(options?: {
     {} as any,
     {} as any,
     policy,
-    {} as any,
+    { getMaxDepth: () => 5 } as any,
     options?.transclusion ?? ({} as any),
     {} as any,
   );
@@ -238,10 +244,16 @@ describe('PageTemplateService space boundaries', () => {
     };
     const pageRepo = { findById: jest.fn(async () => source) };
     const { service } = buildService({ pageRepo });
+    jest
+      .spyOn(service as any, 'canMaterializeLegacySource')
+      .mockResolvedValue(true);
     jest.spyOn(service as any, 'getLiveContent').mockResolvedValue({
       type: 'doc',
       content: [
-        { type: 'paragraph', content: [{ type: 'text', text: 'Materialized' }] },
+        {
+          type: 'paragraph',
+          content: [{ type: 'text', text: 'Materialized' }],
+        },
         {
           type: 'image',
           attrs: {
@@ -319,6 +331,170 @@ describe('PageTemplateService space boundaries', () => {
     ]);
   });
 
+  it('replaces legacy embeds beyond the configured depth without loading the source', async () => {
+    const pageRepo = { findById: jest.fn() };
+    const { service } = buildService({ pageRepo });
+
+    const result = await (service as any).resolveLegacyPageEmbeds(
+      {
+        type: 'doc',
+        content: [
+          {
+            type: 'pageEmbed',
+            attrs: { id: 'too-deep', sourcePageId },
+          },
+        ],
+      },
+      {
+        id: consumerPageId,
+        workspaceId: user.workspaceId,
+        spaceId: sourceSpaceId,
+      },
+      user,
+      new Set([
+        consumerPageId,
+        'depth-1',
+        'depth-2',
+        'depth-3',
+        'depth-4',
+        'depth-5',
+      ]),
+      [],
+    );
+
+    expect(result.content.content[0].type).toBe('callout');
+    expect(result.issues).toEqual([
+      {
+        referenceNodeId: 'too-deep',
+        sourcePageId,
+        errorCode: 'page_embed_depth_exceeded',
+      },
+    ]);
+    expect(pageRepo.findById).not.toHaveBeenCalled();
+  });
+
+  it('does not materialize a legacy source the migration actor cannot read', async () => {
+    const source = {
+      id: sourcePageId,
+      workspaceId: user.workspaceId,
+      spaceId: sourceSpaceId,
+      deletedAt: null,
+      content: {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [{ type: 'text', text: 'Restricted content' }],
+          },
+        ],
+      },
+    };
+    const pageAccessService = {
+      getEffectiveAccess: jest.fn(async () => ({
+        capabilities: { canRead: false },
+      })),
+    };
+    const { service } = buildService({
+      pageRepo: { findById: jest.fn(async () => source) },
+      pageAccessService,
+    });
+    const getLiveContent = jest.spyOn(service as any, 'getLiveContent');
+
+    const result = await (service as any).resolveLegacyPageEmbeds(
+      {
+        type: 'doc',
+        content: [
+          {
+            type: 'pageEmbed',
+            attrs: { id: 'legacy-node', sourcePageId },
+          },
+        ],
+      },
+      {
+        id: consumerPageId,
+        workspaceId: user.workspaceId,
+        spaceId: sourceSpaceId,
+      },
+      user,
+      new Set([consumerPageId]),
+      [],
+    );
+
+    expect(JSON.stringify(result.content)).not.toContain('Restricted content');
+    expect(result.content.content[0].type).toBe('callout');
+    expect(result.issues).toEqual([
+      {
+        referenceNodeId: 'legacy-node',
+        sourcePageId,
+        errorCode: 'page_embed_source_no_access',
+      },
+    ]);
+    expect(pageAccessService.getEffectiveAccess).toHaveBeenCalledWith(
+      source,
+      user,
+    );
+    expect(getLiveContent).not.toHaveBeenCalled();
+  });
+
+  it('does not materialize legacy content for a broader consumer audience', async () => {
+    const restrictedContent = {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [{ type: 'text', text: 'Restricted content' }],
+        },
+      ],
+    };
+    const source = {
+      id: sourcePageId,
+      workspaceId: user.workspaceId,
+      spaceId: sourceSpaceId,
+      deletedAt: null,
+      content: restrictedContent,
+    };
+    const { service } = buildService({
+      pageRepo: { findById: jest.fn(async () => source) },
+    });
+    jest
+      .spyOn(service as any, 'canMaterializeLegacySource')
+      .mockResolvedValue(false);
+    const getLiveContent = jest
+      .spyOn(service as any, 'getLiveContent')
+      .mockResolvedValue(restrictedContent);
+
+    const result = await (service as any).resolveLegacyPageEmbeds(
+      {
+        type: 'doc',
+        content: [
+          {
+            type: 'pageEmbed',
+            attrs: { id: 'legacy-node', sourcePageId },
+          },
+        ],
+      },
+      {
+        id: consumerPageId,
+        workspaceId: user.workspaceId,
+        spaceId: sourceSpaceId,
+      },
+      user,
+      new Set([consumerPageId]),
+      [],
+    );
+
+    expect(JSON.stringify(result.content)).not.toContain('Restricted content');
+    expect(result.content.content[0].type).toBe('callout');
+    expect(result.issues).toEqual([
+      {
+        referenceNodeId: 'legacy-node',
+        sourcePageId,
+        errorCode: 'page_embed_source_audience_mismatch',
+      },
+    ]);
+    expect(getLiveContent).not.toHaveBeenCalled();
+  });
+
   it('fails startup when legacy page embeds remain after migration', async () => {
     const { service } = buildService();
     jest
@@ -329,9 +505,9 @@ describe('PageTemplateService space boundaries', () => {
       .spyOn(service as any, 'migrateLegacyPageEmbedsForPage')
       .mockResolvedValue(false);
 
-    await expect(
-      (service as any).migrateLegacyPageEmbeds(),
-    ).rejects.toThrow('legacy_page_embed_migration_incomplete');
+    await expect((service as any).migrateLegacyPageEmbeds()).rejects.toThrow(
+      'legacy_page_embed_migration_incomplete',
+    );
   });
 
   it('requires confirmation when a removed field could receive a concurrent value', async () => {

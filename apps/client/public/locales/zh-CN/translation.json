@@ -1208,6 +1208,7 @@
   "Backlinks": "Backlinks",
   "Outgoing": "Outgoing",
   "Synced block": "同步块",
+  "Create synced block": "创建同步块",
   "Synced block content unavailable": "同步块内容不可用",
   "Failed to copy as Markdown": "无法复制为 Markdown",
   "Copied. Paste on any page to embed this synced block.": "Copied. Paste on any page to embed this synced block.",

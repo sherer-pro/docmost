@@ -6,6 +6,7 @@ import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { AttachmentRepo } from '@docmost/db/repos/attachment/attachment.repo';
 import { StorageService } from '../../../../integrations/storage/storage.service';
 import { PageAccessService } from '../../../page-access/page-access.service';
+import { ForbiddenException } from '@nestjs/common';
 
 describe('TransclusionService.syncPageTransclusions', () => {
   let service: TransclusionService;
@@ -77,9 +78,7 @@ describe('TransclusionService.syncPageTransclusions', () => {
     ]);
     const newContent = {
       type: 'doc',
-      content: [
-        { type: 'paragraph', content: [{ type: 'text', text: 'X' }] },
-      ],
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: 'X' }] }],
     };
     const pm = {
       type: 'doc',
@@ -160,7 +159,11 @@ describe('TransclusionService.syncPageTransclusions', () => {
 
   it('handles empty doc → noop', async () => {
     repo.findByPageId.mockResolvedValue([]);
-    const result = await service.syncPageTransclusions(pageId, workspaceId, null);
+    const result = await service.syncPageTransclusions(
+      pageId,
+      workspaceId,
+      null,
+    );
     expect(result).toEqual({ inserted: 0, updated: 0, deleted: 0 });
     expect(repo.insert).not.toHaveBeenCalled();
     expect(repo.update).not.toHaveBeenCalled();
@@ -213,7 +216,11 @@ describe('TransclusionService.syncPageReferences', () => {
       ],
     };
 
-    const result = await service.syncPageReferences(referencePageId, workspaceId, pm);
+    const result = await service.syncPageReferences(
+      referencePageId,
+      workspaceId,
+      pm,
+    );
 
     expect(result).toEqual({ inserted: 2, deleted: 0 });
     expect(refRepo.insertMany).toHaveBeenCalledWith(
@@ -277,7 +284,11 @@ describe('TransclusionService.syncPageReferences', () => {
     ]);
     const pm = { type: 'doc', content: [{ type: 'paragraph' }] };
 
-    const result = await service.syncPageReferences(referencePageId, workspaceId, pm);
+    const result = await service.syncPageReferences(
+      referencePageId,
+      workspaceId,
+      pm,
+    );
 
     expect(result).toEqual({ inserted: 0, deleted: 1 });
     expect(refRepo.deleteByReferenceAndKeys).toHaveBeenCalledWith(
@@ -313,7 +324,11 @@ describe('TransclusionService.syncPageReferences', () => {
       ],
     };
 
-    const result = await service.syncPageReferences(referencePageId, workspaceId, pm);
+    const result = await service.syncPageReferences(
+      referencePageId,
+      workspaceId,
+      pm,
+    );
 
     expect(result).toEqual({ inserted: 0, deleted: 0 });
     expect(refRepo.insertMany).not.toHaveBeenCalled();
@@ -452,12 +467,7 @@ describe('TransclusionService.listReferences', () => {
     refRepo.findReferencePageIdsByTransclusion.mockResolvedValue([]);
     refRepo.hasLiveReferences.mockResolvedValue(false);
     pageAccessService.getEffectiveAccessForPages.mockResolvedValue(
-      new Map([
-        [
-          sourcePageId,
-          { capabilities: { canRead: true } } as any,
-        ],
-      ]),
+      new Map([[sourcePageId, { capabilities: { canRead: true } } as any]]),
     );
 
     const result = await service.listReferences({
@@ -476,12 +486,7 @@ describe('TransclusionService.listReferences', () => {
     ]);
     refRepo.hasLiveReferences.mockResolvedValue(false);
     pageAccessService.getEffectiveAccessForPages.mockResolvedValue(
-      new Map([
-        [
-          sourcePageId,
-          { capabilities: { canRead: true } } as any,
-        ],
-      ]),
+      new Map([[sourcePageId, { capabilities: { canRead: true } } as any]]),
     );
 
     const result = await service.listReferences({
@@ -495,6 +500,161 @@ describe('TransclusionService.listReferences', () => {
     expect(pageAccessService.getEffectiveAccessForPages).toHaveBeenCalledWith(
       [expect.objectContaining({ id: sourcePageId })],
       viewer,
+    );
+  });
+});
+
+describe('TransclusionService lookup and unsync access boundaries', () => {
+  const workspaceId = '00000000-0000-0000-0000-000000000099';
+  const referencePageId = '00000000-0000-0000-0000-000000000001';
+  const sourcePageId = '00000000-0000-0000-0000-000000000002';
+  const viewer = { id: 'user-1', workspaceId } as any;
+  const referencePage = {
+    id: referencePageId,
+    workspaceId,
+    spaceId: 'space-1',
+    deletedAt: null,
+  } as any;
+  const sourcePage = {
+    id: sourcePageId,
+    workspaceId,
+    spaceId: 'space-1',
+    deletedAt: null,
+    updatedAt: new Date('2026-08-09T00:00:00.000Z'),
+  } as any;
+
+  it('returns no_access without reading a denied source block', async () => {
+    const transclusions = {
+      findManyByPageAndTransclusion: jest.fn(async () => []),
+    } as any;
+    const pages = {
+      findById: jest.fn(async () => sourcePage),
+    } as any;
+    const access = {
+      getEffectiveAccessForPages: jest.fn(
+        async () =>
+          new Map([[sourcePageId, { capabilities: { canRead: false } }]]),
+      ),
+    } as any;
+    const service = new TransclusionService(
+      transclusions,
+      {} as any,
+      pages,
+      {} as any,
+      {} as any,
+      access,
+    );
+
+    await expect(
+      service.lookup(
+        [{ sourcePageId, transclusionId: 'restricted-block' }],
+        viewer,
+      ),
+    ).resolves.toEqual({
+      items: [
+        {
+          sourcePageId,
+          transclusionId: 'restricted-block',
+          status: 'no_access',
+        },
+      ],
+    });
+    expect(transclusions.findManyByPageAndTransclusion).toHaveBeenCalledWith(
+      [],
+      workspaceId,
+    );
+  });
+
+  it('checks reference write and source read access before unsyncing', async () => {
+    const transclusions = {
+      findByPageAndTransclusion: jest.fn(),
+    } as any;
+    const references = { deleteOne: jest.fn() } as any;
+    const pages = {
+      findById: jest.fn(async (id: string) =>
+        id === referencePageId ? referencePage : sourcePage,
+      ),
+    } as any;
+    const access = {
+      assertCanWritePage: jest.fn(),
+      assertCanReadPage: jest.fn(async () => {
+        throw new ForbiddenException();
+      }),
+    } as any;
+    const service = new TransclusionService(
+      transclusions,
+      references,
+      pages,
+      {} as any,
+      {} as any,
+      access,
+    );
+
+    await expect(
+      service.unsyncReference(
+        referencePageId,
+        sourcePageId,
+        'restricted-block',
+        viewer,
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(access.assertCanWritePage).toHaveBeenCalledWith(
+      referencePage,
+      viewer,
+    );
+    expect(access.assertCanReadPage).toHaveBeenCalledWith(sourcePage, viewer);
+    expect(transclusions.findByPageAndTransclusion).not.toHaveBeenCalled();
+    expect(references.deleteOne).not.toHaveBeenCalled();
+  });
+
+  it('materializes an allowed reference without mutating the source block', async () => {
+    const sourceContent = {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [{ type: 'text', text: 'Original source' }],
+        },
+      ],
+    };
+    const originalSnapshot = structuredClone(sourceContent);
+    const transclusions = {
+      findByPageAndTransclusion: jest.fn(async () => ({
+        content: sourceContent,
+      })),
+    } as any;
+    const references = { deleteOne: jest.fn() } as any;
+    const pages = {
+      findById: jest.fn(async (id: string) =>
+        id === referencePageId ? referencePage : sourcePage,
+      ),
+    } as any;
+    const access = {
+      assertCanWritePage: jest.fn(),
+      assertCanReadPage: jest.fn(),
+    } as any;
+    const service = new TransclusionService(
+      transclusions,
+      references,
+      pages,
+      { findByIds: jest.fn(async () => []) } as any,
+      {} as any,
+      access,
+    );
+
+    await expect(
+      service.unsyncReference(
+        referencePageId,
+        sourcePageId,
+        'shared-block',
+        viewer,
+      ),
+    ).resolves.toEqual({ content: originalSnapshot });
+    expect(sourceContent).toEqual(originalSnapshot);
+    expect(references.deleteOne).toHaveBeenCalledWith(
+      referencePageId,
+      sourcePageId,
+      'shared-block',
     );
   });
 });

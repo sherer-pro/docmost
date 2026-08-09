@@ -75,6 +75,9 @@ describe('WsGateway.handleMessage', () => {
     updateConnection: jest.fn(),
     removeConnection: jest.fn(),
   };
+  const pageTransclusionReferencesRepo = {
+    findUsagesBySource: jest.fn(async () => []),
+  };
 
   beforeAll(async () => {
     ({ WsGateway: WsGatewayClass } = await import('./ws.gateway'));
@@ -91,7 +94,7 @@ describe('WsGateway.handleMessage', () => {
       presenceService as any,
       {} as any,
       {} as any,
-      { findPageUsagesBySource: jest.fn(async () => []) } as any,
+      pageTransclusionReferencesRepo as any,
     );
     (gateway as any).server = {
       sockets: {
@@ -105,6 +108,41 @@ describe('WsGateway.handleMessage', () => {
       .spyOn(gateway as any, 'refreshClientAuthorization')
       .mockResolvedValue(true);
     jest.clearAllMocks();
+  });
+
+  it('invalidates block consumers when an update omits workspaceId', async () => {
+    pageRepo.findById
+      .mockResolvedValueOnce({
+        id: 'source-page',
+        workspaceId: 'workspace-a',
+        spaceId: 'space-source',
+        deletedAt: null,
+      })
+      .mockResolvedValueOnce({
+        id: 'consumer-page',
+        workspaceId: 'workspace-a',
+        spaceId: 'space-consumer',
+        deletedAt: null,
+      });
+    pageTransclusionReferencesRepo.findUsagesBySource.mockResolvedValueOnce([
+      {
+        referenceKind: 'block',
+        referencePageId: 'consumer-page',
+        sourcePageId: 'source-page',
+      },
+    ]);
+    const emitInvalidation = jest
+      .spyOn(gateway, 'emitPageEmbedInvalidation')
+      .mockImplementation(() => undefined);
+
+    await gateway.handlePageEmbedSourceUpdated({ pageIds: ['source-page'] });
+
+    expect(
+      pageTransclusionReferencesRepo.findUsagesBySource,
+    ).toHaveBeenCalledWith('source-page', 'workspace-a');
+    expect(emitInvalidation).toHaveBeenCalledWith(
+      new Set(['space-consumer']),
+    );
   });
 
   it('relays a message only to an authorized space room', async () => {

@@ -1208,6 +1208,7 @@
   "Backlinks": "Backlinks",
   "Outgoing": "Outgoing",
   "Synced block": "Synced block",
+  "Create synced block": "Create synced block",
   "Synced block content unavailable": "Synced block content is unavailable",
   "Failed to copy as Markdown": "Failed to copy as Markdown",
   "Copied. Paste on any page to embed this synced block.": "Copied. Paste on any page to embed this synced block.",

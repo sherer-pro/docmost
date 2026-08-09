@@ -98,8 +98,8 @@ describe('PageEmbedService space boundaries', () => {
     systemEnabled: true,
     workspaceEnabled: true,
     templatesEnabled: true,
-    allowLiveEmbed: true,
-    allowedActions: ['use_live_embed'],
+    allowSyncedTemplate: true,
+    allowedActions: ['use_synced_template'],
   };
 
   it('returns disabled for a historical cross-space embed', async () => {

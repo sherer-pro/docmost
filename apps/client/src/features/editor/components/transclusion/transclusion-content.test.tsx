@@ -92,6 +92,36 @@ describe("TransclusionContent", () => {
     );
   });
 
+  it("remounts the nested editor when the lookup version changes", async () => {
+    await act(async () => {
+      root.render(<TransclusionContent content={content} version="before" />);
+    });
+    expect(container.querySelector(".ProseMirror")?.textContent).toBe(
+      "Synced content",
+    );
+
+    await act(async () => {
+      root.render(
+        <TransclusionContent
+          content={{
+            type: "doc",
+            content: [
+              {
+                type: "paragraph",
+                content: [{ type: "text", text: "Updated synced content" }],
+              },
+            ],
+          }}
+          version="after"
+        />,
+      );
+    });
+
+    expect(container.querySelector(".ProseMirror")?.textContent).toBe(
+      "Updated synced content",
+    );
+  });
+
   it("lets editor drags bubble but isolates file drops", () => {
     const onDragOver = vi.fn();
     act(() => {

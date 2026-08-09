@@ -58,15 +58,20 @@ export class WsGateway
   @OnEvent(EventName.PAGE_UPDATED)
   async handlePageEmbedSourceUpdated(event: {
     pageIds: string[];
-    workspaceId: string;
+    workspaceId?: string;
   }): Promise<void> {
     try {
       const spaceIds = new Set<string>();
-      for (const sourcePageId of event.pageIds) {
+      for (const pageIdentifier of event.pageIds) {
+        const sourcePage = await this.pageRepo.findById(pageIdentifier);
+        const sourcePageId = sourcePage?.id ?? pageIdentifier;
+        const workspaceId = event.workspaceId ?? sourcePage?.workspaceId;
+        if (!workspaceId) continue;
+
         const usages =
-          await this.pageTransclusionReferencesRepo.findPageUsagesBySource(
+          await this.pageTransclusionReferencesRepo.findUsagesBySource(
             sourcePageId,
-            event.workspaceId,
+            workspaceId,
           );
         for (const consumerPageId of new Set(
           usages.map((usage) => usage.referencePageId),

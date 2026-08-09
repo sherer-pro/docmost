@@ -203,6 +203,19 @@ export class PageTransclusionReferencesRepo {
       .execute();
   }
 
+  async findUsagesBySource(
+    sourcePageId: string,
+    workspaceId: string,
+    trx?: KyselyTransaction,
+  ): Promise<PageTransclusionReference[]> {
+    return dbOrTx(this.db, trx)
+      .selectFrom('pageTransclusionReferences')
+      .selectAll()
+      .where('workspaceId', '=', workspaceId)
+      .where('sourcePageId', '=', sourcePageId)
+      .execute();
+  }
+
   async lockWorkspaceGraph(
     workspaceId: string,
     trx: KyselyTransaction,
