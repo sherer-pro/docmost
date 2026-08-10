@@ -30,6 +30,9 @@ export class SearchDTO {
       ? dto.query.trim().length > 0 || (!dto.labelId && !dto.tag)
       : !dto.labelId && !dto.tag,
   )
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   @IsNotEmpty()
   @IsString()
   @MaxLength(512)
