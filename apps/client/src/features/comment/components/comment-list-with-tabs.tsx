@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useEffect, useMemo } from "react";
 import {
   Text,
   ScrollArea,
@@ -26,13 +26,11 @@ import { useAtomValue } from "jotai";
 import { activeCommentIdAtom } from "@/features/comment/atoms/comment-atom";
 import { COMMENT_LIMIT } from "@/features/comment/comment.constants";
 import { CommentThreadList } from "./comment-thread-list";
+import { shouldRevealResolvedComments } from "../utils/comment-collapse";
 
 function CommentListWithTabs() {
   const { t } = useTranslation();
-  const {
-    databasePageId,
-    pageByRoute,
-  } = useDatabasePageContext();
+  const { databasePageId, pageByRoute } = useDatabasePageContext();
 
   /**
    * Single pageId used by query keys, list rendering, and all comment mutations.
@@ -58,14 +56,14 @@ function CommentListWithTabs() {
 
   const canComment: boolean = spaceAbility.can(
     SpaceCaslAction.Create,
-    SpaceCaslSubject.Page
+    SpaceCaslSubject.Page,
   );
 
   // Resolve/re-open actions are validated on the server via Edit Page permission.
   // Mirror that behavior on the client to avoid showing unavailable actions.
   const canResolveComments: boolean = spaceAbility.can(
     SpaceCaslAction.Edit,
-    SpaceCaslSubject.Page
+    SpaceCaslSubject.Page,
   );
 
   /**
@@ -79,18 +77,31 @@ function CommentListWithTabs() {
 
     const parentComments = comments.items.filter(
       (comment: IComment) =>
-        comment.parentCommentId === null && isInlineOrLegacyComment(comment)
+        comment.parentCommentId === null && isInlineOrLegacyComment(comment),
     );
 
     const active = parentComments.filter(
-      (comment: IComment) => !comment.resolvedAt
+      (comment: IComment) => !comment.resolvedAt,
     );
     const resolved = parentComments.filter(
-      (comment: IComment) => comment.resolvedAt
+      (comment: IComment) => comment.resolvedAt,
     );
 
     return { activeComments: active, resolvedComments: resolved };
   }, [comments]);
+
+  useEffect(() => {
+    if (
+      comments?.items &&
+      shouldRevealResolvedComments(
+        comments.items,
+        resolvedComments,
+        activeCommentId,
+      )
+    ) {
+      setShowResolved(true);
+    }
+  }, [activeCommentId, comments?.items, resolvedComments]);
 
   const handleAddReply = useCallback(
     async (commentId: string, content: string) => {
@@ -109,17 +120,29 @@ function CommentListWithTabs() {
 
         await createCommentMutation.mutateAsync(commentData);
 
-        emit({
-          operation: "invalidateComment",
-          pageId: commentsPageId,
-        }, { spaceId: pageByRoute?.spaceId, workspaceId: pageByRoute?.workspaceId });
+        emit(
+          {
+            operation: "invalidateComment",
+            pageId: commentsPageId,
+          },
+          {
+            spaceId: pageByRoute?.spaceId,
+            workspaceId: pageByRoute?.workspaceId,
+          },
+        );
       } catch (error) {
         console.error("Failed to post comment:", error);
       } finally {
         setIsLoading(false);
       }
     },
-    [commentsPageId, createCommentMutation, emit, pageByRoute?.spaceId, pageByRoute?.workspaceId]
+    [
+      commentsPageId,
+      createCommentMutation,
+      emit,
+      pageByRoute?.spaceId,
+      pageByRoute?.workspaceId,
+    ],
   );
 
   if (isCommentsLoading) {
@@ -148,7 +171,6 @@ function CommentListWithTabs() {
         <Text size="sm" fw={600}>
           {t("Open comments")}
         </Text>
-
       </Group>
 
       <ScrollArea style={{ flex: "1 1 auto" }} scrollbarSize={5} type="scroll">
@@ -179,8 +201,11 @@ function CommentListWithTabs() {
           {resolvedComments.length > 0 && (
             <>
               <Button
-                variant="default" color="gray"
+                variant="default"
+                color="gray"
                 size="xs"
+                aria-controls="inline-resolved-comments"
+                aria-expanded={showResolved}
                 onClick={() => setShowResolved((prev) => !prev)}
                 style={{
                   marginTop: "15px",
@@ -193,7 +218,7 @@ function CommentListWithTabs() {
                 </Badge>
               </Button>
 
-              <Collapse in={showResolved}>
+              <Collapse id="inline-resolved-comments" in={showResolved}>
                 <Text size="sm" fw={600} mb="sm">
                   {t("Resolved comments")}
                 </Text>

@@ -7,6 +7,10 @@
 }
 
 .textSelection {
+    display: block;
+    width: 100%;
+    color: inherit;
+    text-align: left;
     margin-top: 4px;
     border-left: 2px solid var(--mantine-color-gray-6);
     padding: 8px;
@@ -61,4 +65,3 @@
 
     }
 }
-
