@@ -1,6 +1,7 @@
 .env
-.env.dev
-.env.prod
+.env.*
+!.env.example
+!.env.compose.example
 # Keep obsolete standalone-sync files local while operators remove them.
 rag-sync.config.json
 /.rag-sync
@@ -56,6 +57,15 @@ lerna-debug.log*
 .nx/installation
 .nx/cache
 
+# Local tool state and agent worktrees
+/.graphify/
+/.graphify-cache/
+/.claude/worktrees/
+/.codex/worktrees/
+/.agents/worktrees/
+/.worktrees/
+/.junie/
+
 # Graphify
 graphify-out/*
 !graphify-out/graph.json
@@ -65,3 +75,10 @@ graphify-out/*
 !graphify-out/manifest.json
 !graphify-out/.graphify_labels.json
 .claude/settings.local.json
+
+# TypeScript incremental build metadata
+*.tsbuildinfo
+
+# Windows
+Thumbs.db
+Desktop.ini
