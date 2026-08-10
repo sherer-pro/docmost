@@ -420,7 +420,7 @@ export class SearchService {
 
     if (tag) {
       queryResults = queryResults.where(
-        sql<boolean>`jsonb_path_exists(${sql.ref('pages.content')}, '$.** ? (@.type == "tag" && @.attrs.value == $tag)', jsonb_build_object('tag', ${tag}))`,
+        sql<boolean>`jsonb_path_exists(${sql.ref('pages.content')}, '$.** ? (@.type == "tag" && @.attrs.value == $tag)', jsonb_build_object('tag', ${tag}::text))`,
       );
     }
 
