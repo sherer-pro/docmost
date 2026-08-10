@@ -1477,7 +1477,7 @@
       "operationsSetup": "각 스페이스에서 모델과 선택적 검색을 구성하고 테스트하세요. 먼저 배포 수준에서 주소를 허용하고 어댑터가 준비되기 전에는 검색을 활성화하지 말며 내장 및 외부 도구 정책으로 접근 범위를 좁히세요.",
       "operationsProfileNames": "어시스턴트 프로필 이름은 스페이스 내에서 고유해야 합니다. 중복이면 ai_profile_name_conflict가 포함된 409가 반환됩니다. 필요하면 목록을 다시 불러오고 다른 이름을 선택하세요.",
       "operationsRagMigration": "독립형 RAG worker를 교체할 때는 먼저 중지하고 RAG_SYNC_ENABLED=false로 마이그레이션한 다음 각 스페이스를 구성하고 Test와 Enable을 수행하세요. 이전 환경 비밀은 가져오지 않습니다. 롤백에는 migration down이 아니라 배포 스위치를 사용하세요.",
-      "operationsRecovery": "장애 후에는 먼저 종속성을 복구하고 PostgreSQL을 신뢰할 수 있는 기준으로 유지하며 매핑 복구 중에는 Knowledge Base를 보존하세요. RAG Sync를 긴급 롤백하려면 RAG_SYNC_ENABLED=false로 설정하고 Docmost를 다시 시작하세요. AI_EXTERNAL_MCP_ENABLED는 아웃바운드 MCP만 제어합니다.",
+      "operationsRecovery": "장애 후에는 먼저 종속성을 복구하고 PostgreSQL을 신뢰할 수 있는 기준으로 유지하며 매핑 복구 중에는 Knowledge Base를 보존하세요. 동일한 Idempotency-Key로 비공개 파일 업로드를 반복하면 프로세스 장애 후에도 새 파일 행을 만들지 않고 예약된 배치를 재개합니다. RAG Sync를 긴급 롤백하려면 RAG_SYNC_ENABLED=false로 설정하고 Docmost를 다시 시작하세요. AI_EXTERNAL_MCP_ENABLED는 아웃바운드 MCP만 제어합니다.",
       "templateExportScope": "템플릿 카탈로그 항목은 제외됩니다. 템플릿에서 만든 페이지는 일반적인 구체화된 페이지로 내보내집니다."
     },
     "integrations": {

@@ -1477,7 +1477,7 @@
       "operationsSetup": "为每个空间配置并测试模型和可选搜索。先在部署层允许地址，在适配器就绪前不要启用搜索，并通过内置和外部工具策略收窄访问范围。",
       "operationsProfileNames": "助手配置文件名称在每个空间内必须唯一。重复名称会返回带有 ai_profile_name_conflict 的 409；如有需要，请重新加载列表并选择其他名称。",
       "operationsRagMigration": "替换独立 RAG worker 时，请先停止它，使用 RAG_SYNC_ENABLED=false 完成迁移，然后逐个空间配置、Test 并 Enable。旧的环境秘密不会导入。回滚应使用部署开关，而不是 migration down。",
-      "operationsRecovery": "发生故障后，请先恢复依赖项，将 PostgreSQL 作为权威数据源，并在恢复映射时保留 Knowledge Base。要紧急回滚 RAG Sync，请设置 RAG_SYNC_ENABLED=false 并重启 Docmost；AI_EXTERNAL_MCP_ENABLED 仅控制出站 MCP。",
+      "operationsRecovery": "发生故障后，请先恢复依赖项，将 PostgreSQL 作为权威数据源，并在恢复映射时保留 Knowledge Base。进程故障后，使用相同 Idempotency-Key 重复上传私有文件会继续预留的批次，而不会创建新的文件行。要紧急回滚 RAG Sync，请设置 RAG_SYNC_ENABLED=false 并重启 Docmost；AI_EXTERNAL_MCP_ENABLED 仅控制出站 MCP。",
       "templateExportScope": "模板目录条目不会导出。从模板创建的页面会作为普通的实体化页面导出。"
     },
     "integrations": {
