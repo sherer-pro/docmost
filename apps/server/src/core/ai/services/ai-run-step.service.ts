@@ -51,46 +51,34 @@ export class AiRunStepService {
   ) {
     const run = await this.runs.getOwnedRun(runId, user, workspace);
     const step = await this.getPendingStep(run.id, stepId);
-    const now = new Date();
-    if (!step.expiresAt || step.expiresAt <= now) {
-      const resumed = await this.decideAndResume({
-        run,
-        stepId,
-        status: 'expired',
-        user,
-        result: {
-          ok: false,
-          error: 'The write proposal expired before approval',
-        },
-        existingResult: step.result,
-        errorCode: 'agent_write_expired',
-        errorMessage: 'The write proposal expired before approval',
-      });
-      throw new ConflictException({
-        code: 'agent_write_expired',
-        message: 'The write proposal expired',
-        run: this.runs.toRun(resumed.run),
-      });
+    if (!step.expiresAt || step.expiresAt <= new Date()) {
+      await this.expireApprovalAndThrow(run, step, user);
     }
 
     const claimed = await this.runs.withProviderAdmission<
       AiRunStepEntity | undefined
-    >(run, (trx) =>
-      trx
+    >(run, (trx) => {
+      const decidedAt = new Date();
+      return trx
         .updateTable('aiRunSteps')
         .set({
           status: 'approved',
-          decidedAt: now,
+          decidedAt,
           decidedById: user.id,
-          updatedAt: now,
+          updatedAt: decidedAt,
         })
         .where('id', '=', step.id)
         .where('runId', '=', run.id)
         .where('status', '=', 'pending_approval')
+        .where('expiresAt', '>', sql<Date>`now()`)
         .returningAll()
-        .executeTakeFirst(),
-    );
+        .executeTakeFirst();
+    });
     if (!claimed) {
+      const currentStep = await this.getPendingStep(run.id, step.id);
+      if (!currentStep.expiresAt || currentStep.expiresAt <= new Date()) {
+        await this.expireApprovalAndThrow(run, currentStep, user);
+      }
       throw new ConflictException('The write proposal was already decided');
     }
     const resumed = await this.recoverApprovedStep(run.id, claimed.id);
@@ -270,6 +258,31 @@ export class AiRunStepService {
     }
     await this.publishResume(resumed.run, resumed.step);
     return resumed;
+  }
+
+  private async expireApprovalAndThrow(
+    run: any,
+    step: AiRunStepEntity,
+    user: User,
+  ): Promise<never> {
+    const resumed = await this.decideAndResume({
+      run,
+      stepId: step.id,
+      status: 'expired',
+      user,
+      result: {
+        ok: false,
+        error: 'The write proposal expired before approval',
+      },
+      existingResult: step.result,
+      errorCode: 'agent_write_expired',
+      errorMessage: 'The write proposal expired before approval',
+    });
+    throw new ConflictException({
+      code: 'agent_write_expired',
+      message: 'The write proposal expired',
+      run: this.runs.toRun(resumed.run),
+    });
   }
 
   private async recoverApprovedStep(runId: string, stepId: string) {

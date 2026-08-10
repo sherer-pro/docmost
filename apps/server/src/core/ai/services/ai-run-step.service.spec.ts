@@ -109,6 +109,75 @@ describe('AiRunStepService approval lifecycle', () => {
     expect(runs.withProviderAdmission).not.toHaveBeenCalled();
   });
 
+  it('rechecks expiry after waiting for provider admission', async () => {
+    jest.useFakeTimers();
+    const startedAt = new Date('2026-08-11T00:00:00.000Z');
+    jest.setSystemTime(startedAt);
+    const expiringStep = {
+      ...pendingStep,
+      expiresAt: new Date(startedAt.getTime() + 1_000),
+    };
+    const { service, runs } = createService();
+    (service as any).getPendingStep.mockResolvedValue(expiringStep);
+    const decide = jest
+      .spyOn(service as any, 'decideAndResume')
+      .mockResolvedValue({
+        run: { ...run, status: 'queued' },
+        step: { ...expiringStep, status: 'expired' },
+      });
+    const whereClauses: unknown[][] = [];
+    const updateQuery: any = {
+      set: jest.fn(() => updateQuery),
+      where: jest.fn((...args: unknown[]) => {
+        whereClauses.push(args);
+        return updateQuery;
+      }),
+      returningAll: jest.fn(() => updateQuery),
+      executeTakeFirst: jest.fn(async () => {
+        const expiryClause = whereClauses.find(
+          ([column, operator]) => column === 'expiresAt' && operator === '>',
+        );
+        if (expiryClause) {
+          return undefined;
+        }
+        return {
+          ...expiringStep,
+          status: 'approved',
+          decidedById: user.id,
+        };
+      }),
+    };
+    (runs.withProviderAdmission as jest.Mock).mockImplementation(
+      async (_run: unknown, operation: (trx: any) => unknown) => {
+        jest.setSystemTime(new Date(startedAt.getTime() + 2_000));
+        return operation({ updateTable: jest.fn(() => updateQuery) });
+      },
+    );
+    const recover = jest
+      .spyOn(service as any, 'recoverApprovedStep')
+      .mockResolvedValue({
+        run: { ...run, status: 'queued' },
+        step: { ...expiringStep, status: 'approved' },
+      });
+
+    try {
+      await expect(
+        service.approve(run.id, expiringStep.id, user, workspace),
+      ).rejects.toMatchObject({
+        response: expect.objectContaining({ code: 'agent_write_expired' }),
+      });
+      expect(decide).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 'expired',
+          errorCode: 'agent_write_expired',
+        }),
+      );
+      expect(recover).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('claims and recovers one approval while a duplicate fails closed', async () => {
     const { service, runs } = createService();
     const recovered = {
