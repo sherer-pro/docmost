@@ -1,4 +1,4 @@
-import { Spotlight } from "@mantine/spotlight";
+import { Spotlight, useSpotlight } from "@mantine/spotlight";
 import { IconSearch } from "@tabler/icons-react";
 import { Button, Group } from "@mantine/core";
 import React, { useState, useMemo } from "react";
@@ -9,6 +9,7 @@ import { SearchSpotlightFilters } from "./search-spotlight-filters.tsx";
 import { useUnifiedSearch } from "../hooks/use-unified-search.ts";
 import { SearchResultItem } from "./search-result-item.tsx";
 import type { TagValue } from "@docmost/editor-ext";
+import { useModalBackgroundInert } from "@/components/ui/use-modal-background-inert.ts";
 
 interface SearchSpotlightProps {
   spaceId?: string;
@@ -23,6 +24,7 @@ interface SearchFilters {
 
 export function SearchSpotlight({ spaceId }: SearchSpotlightProps) {
   const { t } = useTranslation();
+  const { opened } = useSpotlight(searchSpotlightStore);
   const [query, setQuery] = useState("");
   const [debouncedSearchQuery] = useDebouncedValue(query, 300);
   const [filters, setFilters] = useState<SearchFilters>({
@@ -63,6 +65,7 @@ export function SearchSpotlight({ spaceId }: SearchSpotlightProps) {
     Boolean(filters.tag) && filters.contentType !== "attachment";
   const hasSearchInput =
     query.trim().length > 0 || hasLabelSearch || hasTagSearch;
+  useModalBackgroundInert(opened);
 
   const resultItems = searchResults.map((result) => (
     <SearchResultItem

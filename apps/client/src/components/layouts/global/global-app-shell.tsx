@@ -300,11 +300,19 @@ export default function GlobalAppShell({
             size="100%"
             withCloseButton={false}
             padding={0}
-            title={null}
-            aria-label={assistantIdentity.name}
+            title={assistantIdentity.name}
             keepMounted
             transitionProps={{ duration: reduceMotion ? 0 : 180 }}
             styles={{
+              header: {
+                position: "absolute",
+                width: 1,
+                height: 1,
+                padding: 0,
+                overflow: "hidden",
+                clipPath: "inset(50%)",
+                whiteSpace: "nowrap",
+              },
               body: {
                 height: "100dvh",
                 paddingTop: "env(safe-area-inset-top)",

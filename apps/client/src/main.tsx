@@ -24,6 +24,7 @@ import {
 } from "@/lib/config.ts";
 import posthog from "posthog-js";
 import { registerServiceWorker } from "@/lib/pwa/register-service-worker.ts";
+import { registerStaleClientRecovery } from "@/lib/pwa/stale-client-recovery.ts";
 import APP_ROUTE from "@/lib/app-route.ts";
 import {
   clearSensitiveClientState,
@@ -40,6 +41,8 @@ export const queryClient = new QueryClient({
     },
   },
 });
+
+registerStaleClientRecovery();
 
 registerLogoutSync(async () => {
   queryClient.clear();

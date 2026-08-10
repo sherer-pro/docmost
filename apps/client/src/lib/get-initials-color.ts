@@ -11,12 +11,12 @@ function hashCode(input: string) {
 }
 
 export const defaultInitialsColors: MantineColor[] = [
-  "blue",
-  "grape",
-  "indigo",
-  "pink",
-  "red",
-  "violet",
+  "blue.9",
+  "grape.9",
+  "indigo.9",
+  "pink.9",
+  "red.9",
+  "violet.9",
 ];
 
 export function getInitialsColor(
