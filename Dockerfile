@@ -60,7 +60,8 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
       pnpm install --frozen-lockfile --prod --offline; \
     else \
       pnpm install --frozen-lockfile --prod; \
-    fi
+    fi && \
+    node -e "require('@napi-rs/canvas')"
 
 FROM node-base AS installer
 
@@ -95,6 +96,11 @@ COPY --chown=node:node --from=builder /app/packages/api-contract/package.json /a
 
 # Copy production dependencies without carrying package-manager tooling into runtime.
 COPY --chown=node:node --from=runtime-dependencies /app/node_modules /app/node_modules
+
+# PDF ingestion imports pdfjs-dist before it opens a document. Fail the image
+# build if pnpm's platform-optional canvas binding is absent from the runtime
+# dependency layer instead of shipping an image where every PDF is unreadable.
+RUN node --input-type=module -e "await import('pdfjs-dist/legacy/build/pdf.mjs'); await import('@napi-rs/canvas')"
 
 RUN find /app/apps /app/packages -type f \( -name '*.map' -o -name '*.d.ts' \) -delete \
   && find /app/node_modules -type f \( -name '.env' -o -name '.env.*' \) -delete
