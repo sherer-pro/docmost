@@ -110,7 +110,11 @@ export function useCreateDatabaseViewMutation(databaseId?: string) {
   return useMutation({
     mutationFn: (payload: ICreateDatabaseViewPayload) =>
       createDatabaseView(databaseId as string, payload),
-    onSuccess: () => {
+    onSuccess: (createdView) => {
+      queryClient.setQueryData<IDatabaseView[]>(
+        DATABASE_QUERY_KEYS.views(databaseId),
+        (previousViews = []) => [...previousViews, createdView],
+      );
       queryClient.invalidateQueries({
         queryKey: DATABASE_QUERY_KEYS.views(databaseId),
       });
@@ -127,7 +131,14 @@ export function useUpdateDatabaseViewMutation(databaseId?: string) {
       viewId: string;
       payload: IUpdateDatabaseViewPayload;
     }) => updateDatabaseView(databaseId as string, viewId, payload),
-    onSuccess: () => {
+    onSuccess: (updatedView) => {
+      queryClient.setQueryData<IDatabaseView[]>(
+        DATABASE_QUERY_KEYS.views(databaseId),
+        (previousViews = []) =>
+          previousViews.map((view) =>
+            view.id === updatedView.id ? updatedView : view,
+          ),
+      );
       queryClient.invalidateQueries({
         queryKey: DATABASE_QUERY_KEYS.views(databaseId),
       });
@@ -139,7 +150,12 @@ export function useDeleteDatabaseViewMutation(databaseId?: string) {
   return useMutation({
     mutationFn: (viewId: string) =>
       deleteDatabaseView(databaseId as string, viewId),
-    onSuccess: () => {
+    onSuccess: (_result, deletedViewId) => {
+      queryClient.setQueryData<IDatabaseView[]>(
+        DATABASE_QUERY_KEYS.views(databaseId),
+        (previousViews = []) =>
+          previousViews.filter((view) => view.id !== deletedViewId),
+      );
       queryClient.invalidateQueries({
         queryKey: DATABASE_QUERY_KEYS.views(databaseId),
       });

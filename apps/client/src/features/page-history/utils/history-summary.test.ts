@@ -29,15 +29,22 @@ function createHistoryItem(overrides: Partial<IPageHistory>): IPageHistory {
 
 describe("history summary/details formatter", () => {
   it("formats custom field details with translated history keys", () => {
-    const t = vi.fn((key: string, options?: Record<string, unknown>) =>
-      `${key}${options ? ` ${JSON.stringify(options)}` : ""}`,
+    const t = vi.fn(
+      (key: string, options?: Record<string, unknown>) =>
+        `${key}${options ? ` ${JSON.stringify(options)}` : ""}`,
     );
 
     const details = formatHistoryEventDetails(
       createHistoryItem({
         changeType: "page.custom-fields.updated",
         changeData: {
-          changes: [{ field: "assigneeId", oldValue: null, newValue: { id: "u-2", name: "Jane" } }],
+          changes: [
+            {
+              field: "assigneeId",
+              oldValue: null,
+              newValue: { id: "u-2", name: "Jane" },
+            },
+          ],
         },
       }),
       t,
@@ -74,7 +81,9 @@ describe("history summary/details formatter", () => {
     );
 
     expect(details).toHaveLength(2);
-    expect(details[0].title).toContain("history.event.database.property.created");
+    expect(details[0].title).toContain(
+      "history.event.database.property.created",
+    );
     expect(details[1].title).toContain("history.event.database.row.created");
   });
 
@@ -152,6 +161,24 @@ describe("history summary/details formatter", () => {
 
     expect(details[0].title).toContain("history.event.database.row.renamed");
     expect(details[0].lines[1]).toContain("history.event.field.slug");
+  });
+
+  it("uses the sanitized descendant count for database row deletion", () => {
+    const t = (key: string, options?: Record<string, unknown>) =>
+      `${key}${options ? ` ${JSON.stringify(options)}` : ""}`;
+
+    const details = formatHistoryEventDetails(
+      createHistoryItem({
+        changeType: "database.row.deleted",
+        changeData: {
+          databaseId: "database-1",
+          rowContext: { rowPageId: "row-1", descendantCount: 3 },
+        },
+      }),
+      t,
+    );
+
+    expect(details[0].title).toContain('"deletedCount":3');
   });
 
   it("returns structured rows for event-details table", () => {

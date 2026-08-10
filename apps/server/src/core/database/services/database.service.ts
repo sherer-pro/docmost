@@ -70,8 +70,8 @@ interface IDatabaseUserCellValue {
 
 interface IDatabasePageReferenceCellValue {
   id: string;
-  title: string;
-  slugId: string | null;
+  title?: string;
+  slugId?: string | null;
 }
 
 interface IDatabaseHistorySelectOption {
@@ -185,24 +185,6 @@ export class DatabaseService {
     return database;
   }
 
-  private async buildDatabaseHistoryTargetPageIds(
-    databaseId: string,
-    workspaceId: string,
-    spaceId: string,
-    extras: string[] = [],
-  ): Promise<string[]> {
-    const rows = await this.databaseRowRepo.findByDatabaseId(
-      databaseId,
-      workspaceId,
-      spaceId,
-    );
-    const rowPageIds = (rows ?? [])
-      .map((row) => row.pageId)
-      .filter((pageId): pageId is string => Boolean(pageId));
-
-    return [...new Set([...rowPageIds, ...extras])];
-  }
-
   private async recordDatabaseHistoryEvent(params: {
     pageIds: string[];
     actorId?: string | null;
@@ -225,6 +207,63 @@ export class DatabaseService {
       actorId: params.actorId,
       changeType: params.changeType,
       changeData: params.changeData,
+    });
+  }
+
+  /**
+   * Records row details only on the row timeline. The database root receives a
+   * summary without titles or cell values, so a reader of the root page cannot
+   * learn data from a row denied by page access rules.
+   */
+  private async recordDatabaseRowHistoryEvent(params: {
+    database: {
+      id: string;
+      pageId?: string | null;
+    };
+    rowPageId: string;
+    actorId?: string | null;
+    changeType:
+      | 'database.row.created'
+      | 'database.row.renamed'
+      | 'database.row.deleted'
+      | 'database.row.cells.updated';
+    changeData: Record<string, unknown>;
+  }): Promise<void> {
+    await this.recordDatabaseHistoryEvent({
+      pageIds: [params.rowPageId],
+      actorId: params.actorId,
+      changeType: params.changeType,
+      changeData: params.changeData,
+    });
+
+    const databasePageId = params.database.pageId;
+    if (!databasePageId || databasePageId === params.rowPageId) {
+      return;
+    }
+
+    const rowContext =
+      params.changeData.rowContext &&
+      typeof params.changeData.rowContext === 'object' &&
+      !Array.isArray(params.changeData.rowContext)
+        ? (params.changeData.rowContext as Record<string, unknown>)
+        : {};
+    const descendantPageIds = Array.isArray(rowContext.descendantPageIds)
+      ? rowContext.descendantPageIds
+      : [];
+
+    await this.recordDatabaseHistoryEvent({
+      pageIds: [databasePageId],
+      actorId: params.actorId,
+      changeType: params.changeType,
+      changeData: {
+        databaseId: params.database.id,
+        rowContext: {
+          rowPageId: params.rowPageId,
+          ...(descendantPageIds.length > 0
+            ? { descendantCount: descendantPageIds.length }
+            : {}),
+        },
+      },
     });
   }
 
@@ -395,7 +434,8 @@ export class DatabaseService {
   }
 
   /**
-   * Resolves page_reference value to page id/title/slug payload.
+   * Stores only the reference id. Viewer-specific metadata is resolved when
+   * history is read so a readable row cannot disclose a restricted page.
    */
   private async resolveHistoryPageReferenceValue(
     value: unknown,
@@ -412,13 +452,8 @@ export class DatabaseService {
       return cachedPageRef;
     }
 
-    const page = await this.pageRepo.findById(pageId);
-    const canUsePageMeta =
-      !!page && page.workspaceId === workspaceId && page.deletedAt === null;
     const pageRef: IDatabasePageReferenceCellValue = {
       id: pageId,
-      title: canUsePageMeta ? page.title?.trim() || pageId : pageId,
-      slugId: canUsePageMeta ? (page.slugId ?? null) : null,
     };
 
     cache.set(pageId, pageRef);
@@ -1241,6 +1276,7 @@ export class DatabaseService {
     if (!hasWorkspaceAdminAccess) {
       await this.assertCanReadDatabasePages(user, database.spaceId);
     }
+    await this.assertCanAccessDatabasePage(database, workspaceId, user);
 
     const [properties, rows] = await Promise.all([
       this.databasePropertyRepo.findByDatabaseId(databaseId),
@@ -1574,6 +1610,7 @@ export class DatabaseService {
     if (!hasWorkspaceAdminAccess) {
       await this.assertCanManageDatabasePages(user, database.spaceId);
     }
+    await this.assertCanAccessDatabasePage(database, workspaceId, user);
 
     if (databasePage.parentPageId == null) {
       await this.spaceAbility.assertHasFullSpaceAccess(user, database.spaceId);
@@ -1832,6 +1869,25 @@ export class DatabaseService {
     await this.pageAccessService.assertCanWritePage(page, user);
   }
 
+  private async assertCanAccessDatabasePage(
+    database: { pageId?: string | null; spaceId: string },
+    workspaceId: string,
+    user: User,
+    mode: 'read' | 'write' = 'read',
+  ): Promise<void> {
+    if (!database.pageId) {
+      return;
+    }
+
+    await this.assertCanAccessTargetPage(
+      database.pageId,
+      workspaceId,
+      database.spaceId,
+      user,
+      mode,
+    );
+  }
+
   /**
    * Creates a new database in the specified workspace/space.
    */
@@ -1875,6 +1931,7 @@ export class DatabaseService {
   async getDatabase(databaseId: string, user: User, workspaceId: string) {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
     await this.assertCanReadDatabasePages(user, database.spaceId);
+    await this.assertCanAccessDatabasePage(database, workspaceId, user);
 
     return database;
   }
@@ -1884,8 +1941,15 @@ export class DatabaseService {
    */
   async listBySpace(spaceId: string, user: User, workspaceId: string) {
     await this.assertCanReadDatabasePages(user, spaceId);
+    const [databases, accessSnapshot] = await Promise.all([
+      this.databaseRepo.findBySpaceId(spaceId, workspaceId),
+      this.pageAccessService.getSidebarAccessSnapshot(user, spaceId),
+    ]);
 
-    return this.databaseRepo.findBySpaceId(spaceId, workspaceId);
+    return databases.filter(
+      (database) =>
+        !database.pageId || accessSnapshot.readablePageIds.has(database.pageId),
+    );
   }
 
   /**
@@ -1902,6 +1966,12 @@ export class DatabaseService {
   > {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
     await this.assertCanManageDatabasePages(actor, database.spaceId);
+    await this.assertCanAccessDatabasePage(
+      database,
+      workspaceId,
+      actor,
+      'write',
+    );
     const hasNameChanged =
       typeof dto.name === 'string' && dto.name !== database.name;
 
@@ -1953,6 +2023,12 @@ export class DatabaseService {
   async deleteDatabase(databaseId: string, user: User, workspaceId: string) {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
     await this.assertCanManageDatabasePages(user, database.spaceId);
+    await this.assertCanAccessDatabasePage(
+      database,
+      workspaceId,
+      user,
+      'write',
+    );
 
     await this.databaseCellRepo.softDeleteByDatabaseId(databaseId, workspaceId);
     await this.databaseViewRepo.softDeleteByDatabaseId(databaseId, workspaceId);
@@ -1991,6 +2067,12 @@ export class DatabaseService {
   ) {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
     await this.assertCanManageDatabasePages(actor, database.spaceId);
+    await this.assertCanAccessDatabasePage(
+      database,
+      workspaceId,
+      actor,
+      'write',
+    );
 
     const currentProperties =
       await this.databasePropertyRepo.findByDatabaseId(databaseId);
@@ -2005,15 +2087,8 @@ export class DatabaseService {
       position: currentProperties.length,
     });
 
-    const historyPageIds = await this.buildDatabaseHistoryTargetPageIds(
-      database.id,
-      workspaceId,
-      database.spaceId,
-      database.pageId ? [database.pageId] : [],
-    );
-
     await this.recordDatabaseHistoryEvent({
-      pageIds: historyPageIds,
+      pageIds: database.pageId ? [database.pageId] : [],
       actorId: actor.id,
       changeType: 'database.property.created',
       changeData: {
@@ -2035,6 +2110,7 @@ export class DatabaseService {
   async listProperties(databaseId: string, user: User, workspaceId: string) {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
     await this.assertCanReadDatabasePages(user, database.spaceId);
+    await this.assertCanAccessDatabasePage(database, workspaceId, user);
 
     const properties =
       await this.databasePropertyRepo.findByDatabaseId(databaseId);
@@ -2053,6 +2129,12 @@ export class DatabaseService {
   ) {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
     await this.assertCanManageDatabasePages(actor, database.spaceId);
+    await this.assertCanAccessDatabasePage(
+      database,
+      workspaceId,
+      actor,
+      'write',
+    );
 
     const property = await this.databasePropertyRepo.findById(propertyId);
     if (!property || property.databaseId !== databaseId) {
@@ -2171,15 +2253,8 @@ export class DatabaseService {
       });
     }
 
-    const historyPageIds = await this.buildDatabaseHistoryTargetPageIds(
-      database.id,
-      workspaceId,
-      database.spaceId,
-      database.pageId ? [database.pageId] : [],
-    );
-
     await this.recordDatabaseHistoryEvent({
-      pageIds: historyPageIds,
+      pageIds: database.pageId ? [database.pageId] : [],
       actorId: actor.id,
       changeType: 'database.property.updated',
       changeData: {
@@ -2207,6 +2282,12 @@ export class DatabaseService {
   ) {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
     await this.assertCanManageDatabasePages(actor, database.spaceId);
+    await this.assertCanAccessDatabasePage(
+      database,
+      workspaceId,
+      actor,
+      'write',
+    );
 
     const property = await this.databasePropertyRepo.findById(propertyId);
     if (!property || property.databaseId !== databaseId) {
@@ -2215,15 +2296,8 @@ export class DatabaseService {
 
     await this.databasePropertyRepo.softDeleteProperty(propertyId);
 
-    const historyPageIds = await this.buildDatabaseHistoryTargetPageIds(
-      database.id,
-      workspaceId,
-      database.spaceId,
-      database.pageId ? [database.pageId] : [],
-    );
-
     await this.recordDatabaseHistoryEvent({
-      pageIds: historyPageIds,
+      pageIds: database.pageId ? [database.pageId] : [],
       actorId: actor.id,
       changeType: 'database.property.deleted',
       changeData: {
@@ -2248,6 +2322,12 @@ export class DatabaseService {
   ) {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
     await this.assertCanManageDatabasePages(user, database.spaceId);
+    await this.assertCanAccessDatabasePage(
+      database,
+      workspaceId,
+      user,
+      'write',
+    );
 
     /**
      * Calculate the parent of the new line:
@@ -2311,15 +2391,9 @@ export class DatabaseService {
       updatedById: user.id,
     });
 
-    const historyPageIds = await this.buildDatabaseHistoryTargetPageIds(
-      database.id,
-      workspaceId,
-      database.spaceId,
-      database.pageId ? [database.pageId] : [],
-    );
-
-    await this.recordDatabaseHistoryEvent({
-      pageIds: historyPageIds,
+    await this.recordDatabaseRowHistoryEvent({
+      database,
+      rowPageId: page.id,
       actorId: user.id,
       changeType: 'database.row.created',
       changeData: {
@@ -2378,6 +2452,7 @@ export class DatabaseService {
   ): Promise<any[] | IListDatabaseRowsResponse<any>> {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
     await this.assertCanReadDatabasePages(user, database.spaceId);
+    await this.assertCanAccessDatabasePage(database, workspaceId, user);
 
     const properties =
       await this.databasePropertyRepo.findByDatabaseId(databaseId);
@@ -2478,6 +2553,12 @@ export class DatabaseService {
   ): Promise<IUpdatedDatabaseRowResponse> {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
     await this.assertCanManageDatabasePages(user, database.spaceId);
+    await this.assertCanAccessDatabasePage(
+      database,
+      workspaceId,
+      user,
+      'write',
+    );
     await this.assertCanAccessTargetPage(
       pageId,
       workspaceId,
@@ -2530,15 +2611,9 @@ export class DatabaseService {
       throw new NotFoundException('Database row page not found');
     }
 
-    const historyPageIds = await this.buildDatabaseHistoryTargetPageIds(
-      database.id,
-      workspaceId,
-      database.spaceId,
-      database.pageId ? [database.pageId] : [],
-    );
-
-    await this.recordDatabaseHistoryEvent({
-      pageIds: historyPageIds,
+    await this.recordDatabaseRowHistoryEvent({
+      database,
+      rowPageId: pageId,
       actorId: user.id,
       changeType: 'database.row.renamed',
       changeData: {
@@ -2581,6 +2656,12 @@ export class DatabaseService {
   ) {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
     await this.assertCanManageDatabasePages(user, database.spaceId);
+    await this.assertCanAccessDatabasePage(
+      database,
+      workspaceId,
+      user,
+      'write',
+    );
 
     await this.assertCanAccessTargetPage(
       pageId,
@@ -2602,13 +2683,6 @@ export class DatabaseService {
     });
 
     const descendantPageIds = pages.map((page) => page.id);
-    const historyPageIds = await this.buildDatabaseHistoryTargetPageIds(
-      database.id,
-      workspaceId,
-      database.spaceId,
-      [...descendantPageIds, ...(database.pageId ? [database.pageId] : [])],
-    );
-
     for (const descendantPageId of descendantPageIds) {
       await this.databaseRowRepo.softDetachRowLink(
         databaseId,
@@ -2617,8 +2691,9 @@ export class DatabaseService {
       );
     }
 
-    await this.recordDatabaseHistoryEvent({
-      pageIds: historyPageIds,
+    await this.recordDatabaseRowHistoryEvent({
+      database,
+      rowPageId: pageId,
       actorId: user.id,
       changeType: 'database.row.deleted',
       changeData: {
@@ -2645,6 +2720,14 @@ export class DatabaseService {
 
     const database = await this.getOrFailDatabase(row.databaseId, workspaceId);
     await this.assertCanReadDatabasePages(user, database.spaceId);
+    await this.assertCanAccessDatabasePage(database, workspaceId, user);
+    await this.assertCanAccessTargetPage(
+      pageId,
+      workspaceId,
+      database.spaceId,
+      user,
+      'read',
+    );
 
     const [properties, cells] = await Promise.all([
       this.databasePropertyRepo.findByDatabaseId(database.id),
@@ -2671,6 +2754,12 @@ export class DatabaseService {
   ) {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
     await this.assertCanManageDatabasePages(user, database.spaceId);
+    await this.assertCanAccessDatabasePage(
+      database,
+      workspaceId,
+      user,
+      'write',
+    );
     await this.assertCanAccessTargetPage(
       pageId,
       workspaceId,
@@ -2678,10 +2767,23 @@ export class DatabaseService {
       user,
     );
 
-    const existingRow = await this.databaseRowRepo.findByDatabaseAndPage(
-      databaseId,
-      pageId,
+    const [existingRow, existingCells, properties] = await Promise.all([
+      this.databaseRowRepo.findByDatabaseAndPage(databaseId, pageId),
+      this.databaseCellRepo.findByDatabaseAndPage(databaseId, pageId),
+      this.databasePropertyRepo.findByDatabaseId(databaseId),
+    ]);
+
+    const normalizedProperties = this.normalizeProperties(properties);
+    const propertyById = new Map(
+      normalizedProperties.map((property) => [property.id, property]),
     );
+    for (const cell of dto.cells) {
+      if (!propertyById.has(cell.propertyId)) {
+        throw new BadRequestException(
+          'Database cell property does not belong to this database',
+        );
+      }
+    }
 
     const row =
       existingRow ??
@@ -2693,23 +2795,12 @@ export class DatabaseService {
         updatedById: user.id,
       }));
 
-    const [existingCells, properties] = await Promise.all([
-      this.databaseCellRepo.findByDatabaseAndPage(databaseId, pageId),
-      this.databasePropertyRepo.findByDatabaseId(databaseId),
-    ]);
-
-    const normalizedProperties = this.normalizeProperties(properties);
-
     const previousCellsByPropertyId = new Map(
       existingCells.map((existingCell) => [
         existingCell.propertyId,
         existingCell,
       ]),
     );
-    const propertyById = new Map(
-      normalizedProperties.map((property) => [property.id, property]),
-    );
-
     const cells = [];
     const historyUserNameCache = new Map<string, string>();
     const historyPageReferenceCache = new Map<
@@ -2827,15 +2918,9 @@ export class DatabaseService {
     }
 
     if (cellChanges.length > 0) {
-      const historyPageIds = await this.buildDatabaseHistoryTargetPageIds(
-        database.id,
-        workspaceId,
-        database.spaceId,
-        database.pageId ? [database.pageId] : [],
-      );
-
-      await this.recordDatabaseHistoryEvent({
-        pageIds: historyPageIds,
+      await this.recordDatabaseRowHistoryEvent({
+        database,
+        rowPageId: pageId,
         actorId: user.id,
         changeType: 'database.row.cells.updated',
         changeData: {
@@ -2863,6 +2948,12 @@ export class DatabaseService {
   }> {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
     await this.assertCanManageDatabasePages(user, database.spaceId);
+    await this.assertCanAccessDatabasePage(
+      database,
+      workspaceId,
+      user,
+      'write',
+    );
 
     const updatedRows: string[] = [];
     const deletedRows: string[] = [];
@@ -2989,6 +3080,12 @@ export class DatabaseService {
   ) {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
     await this.assertCanManageDatabasePages(actor, database.spaceId);
+    await this.assertCanAccessDatabasePage(
+      database,
+      workspaceId,
+      actor,
+      'write',
+    );
 
     return this.databaseViewRepo.insertView({
       databaseId,
@@ -3006,6 +3103,7 @@ export class DatabaseService {
   async listViews(databaseId: string, user: User, workspaceId: string) {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
     await this.assertCanReadDatabasePages(user, database.spaceId);
+    await this.assertCanAccessDatabasePage(database, workspaceId, user);
 
     return this.databaseViewRepo.findByDatabaseId(databaseId);
   }
@@ -3022,6 +3120,12 @@ export class DatabaseService {
   ) {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
     await this.assertCanManageDatabasePages(user, database.spaceId);
+    await this.assertCanAccessDatabasePage(
+      database,
+      workspaceId,
+      user,
+      'write',
+    );
 
     const view = await this.databaseViewRepo.findById(viewId);
     if (!view || view.databaseId !== databaseId) {
@@ -3045,6 +3149,12 @@ export class DatabaseService {
   ) {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
     await this.assertCanManageDatabasePages(user, database.spaceId);
+    await this.assertCanAccessDatabasePage(
+      database,
+      workspaceId,
+      user,
+      'write',
+    );
 
     const view = await this.databaseViewRepo.findById(viewId);
     if (!view || view.databaseId !== databaseId) {
@@ -3068,6 +3178,12 @@ export class DatabaseService {
   ) {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
     await this.assertCanManageDatabasePages(user, database.spaceId);
+    await this.assertCanAccessDatabasePage(
+      database,
+      workspaceId,
+      user,
+      'write',
+    );
 
     const updatedAt = new Date();
 

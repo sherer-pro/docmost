@@ -21,7 +21,10 @@ describe('DatabaseService page access enforcement', () => {
   const user = { id: 'u-1', locale: 'en-US', workspaceId: 'ws-1' } as any;
 
   function createService(readablePageIds: string[]) {
-    const databaseRepo = { findById: jest.fn(async () => DATABASE) };
+    const databaseRepo = {
+      findById: jest.fn(async () => DATABASE),
+      findBySpaceId: jest.fn(async () => [DATABASE]),
+    };
     const databaseRowRepo = {
       findByDatabaseId: jest.fn(async () => [
         { id: 'row-1', pageId: 'allowed-page', cells: [] },
@@ -36,6 +39,11 @@ describe('DatabaseService page access enforcement', () => {
         hasMore: false,
       })),
       findByDatabaseAndPage: jest.fn(),
+      findActiveByPageId: jest.fn(async () => ({
+        id: 'row-2',
+        databaseId: DATABASE.id,
+        pageId: 'denied-page',
+      })),
     };
     const databasePropertyRepo = { findByDatabaseId: jest.fn(async () => []) };
     const pageRepo = {
@@ -59,9 +67,15 @@ describe('DatabaseService page access enforcement', () => {
         visiblePageIds: readable,
         writablePageIds: readable,
       })),
-      assertCanReadPage: jest.fn(async () => undefined),
-      assertCanWritePage: jest.fn(async () => undefined),
-      assertCanCreateChild: jest.fn(async () => undefined),
+      assertCanReadPage: jest.fn(
+        async (_page?: unknown, _user?: unknown) => undefined,
+      ),
+      assertCanWritePage: jest.fn(
+        async (_page?: unknown, _user?: unknown) => undefined,
+      ),
+      assertCanCreateChild: jest.fn(
+        async (_page?: unknown, _user?: unknown) => undefined,
+      ),
     };
 
     const service = new DatabaseService(
@@ -145,5 +159,41 @@ describe('DatabaseService page access enforcement', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
 
     expect(pageAccessService.assertCanCreateChild).toHaveBeenCalled();
+  });
+
+  it('refuses to return row context when the row page is denied', async () => {
+    const { service, pageAccessService } = createService(['allowed-page']);
+    pageAccessService.assertCanReadPage.mockImplementation(
+      async (page?: unknown) => {
+        if ((page as { id?: string } | undefined)?.id === 'denied-page') {
+          throw new ForbiddenException();
+        }
+      },
+    );
+
+    await expect(
+      service.getRowContextByPage('denied-page', user, 'ws-1'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(pageAccessService.assertCanReadPage).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'denied-page' }),
+      user,
+    );
+  });
+
+  it('refuses to return database metadata when its root page is denied', async () => {
+    const { service, pageAccessService } = createService(['allowed-page']);
+    pageAccessService.assertCanReadPage.mockRejectedValue(
+      new ForbiddenException(),
+    );
+
+    await expect(
+      service.getDatabase(DATABASE.id, user, 'ws-1'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(pageAccessService.assertCanReadPage).toHaveBeenCalledWith(
+      expect.objectContaining({ id: DATABASE.pageId }),
+      user,
+    );
   });
 });
