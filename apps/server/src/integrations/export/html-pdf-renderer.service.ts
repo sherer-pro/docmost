@@ -93,6 +93,7 @@ export class HtmlPdfRendererService {
         timeout,
       });
       await this.renderMermaidDiagrams(page);
+      await this.assertAttachmentImagesLoaded(page);
 
       const pdfBuffer = await page.pdf({
         format: 'A4',
@@ -296,6 +297,31 @@ export class HtmlPdfRendererService {
       }, MERMAID_SANITIZATION_POLICY);
     } catch (err) {
       this.logger.warn('Failed to render Mermaid diagrams for PDF export', err);
+    }
+  }
+
+  private async assertAttachmentImagesLoaded(
+    page: Awaited<ReturnType<Browser['newPage']>>,
+  ): Promise<void> {
+    const failedAttachmentImages = await page.evaluate((pathPrefixes) => {
+      return Array.from(document.images).filter((image) => {
+        if (!image.complete || image.naturalWidth > 0) {
+          return false;
+        }
+
+        try {
+          const pathname = new URL(image.currentSrc || image.src).pathname;
+          return pathPrefixes.some((prefix) => pathname.startsWith(prefix));
+        } catch {
+          return false;
+        }
+      }).length;
+    }, allowedPdfAttachmentPathPrefixes);
+
+    if (failedAttachmentImages > 0) {
+      throw new Error(
+        `PDF export failed to load ${failedAttachmentImages} attachment image resource(s)`,
+      );
     }
   }
 
