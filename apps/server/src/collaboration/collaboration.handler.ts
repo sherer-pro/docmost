@@ -58,32 +58,67 @@ export class CollaborationHandler {
           });
         }
         this.logger.debug('Updating page content via yjs', documentName);
-        await this.withYdocConnection(
-          hocuspocus,
-          documentName,
-          { user },
-          (doc) => {
-            const fragment = doc.getXmlFragment('default');
+        let originalContent: unknown;
+        let mutationAfterHash: string | undefined;
+        let mutationApplied = false;
+        try {
+          await this.withYdocConnection(
+            hocuspocus,
+            documentName,
+            { user },
+            (doc) => {
+              originalContent = TiptapTransformer.fromYdoc(doc, 'default');
+              const fragment = doc.getXmlFragment('default');
 
-            if (operation === 'replace') {
-              if (fragment.length > 0) {
-                fragment.delete(0, fragment.length);
+              if (operation === 'replace') {
+                if (fragment.length > 0) {
+                  fragment.delete(0, fragment.length);
+                }
+
+                const newDoc = TiptapTransformer.toYdoc(
+                  prosemirrorJson,
+                  'default',
+                  tiptapExtensions,
+                );
+                Y.applyUpdate(doc, Y.encodeStateAsUpdate(newDoc));
+              } else {
+                const newContent = prosemirrorJson.content || [];
+                const yElements = newContent.map(prosemirrorNodeToYElement);
+                const position = operation === 'prepend' ? 0 : fragment.length;
+                fragment.insert(position, yElements);
               }
-
-              const newDoc = TiptapTransformer.toYdoc(
-                prosemirrorJson,
-                'default',
-                tiptapExtensions,
+              mutationAfterHash = hashProseMirrorJson(
+                TiptapTransformer.fromYdoc(doc, 'default'),
               );
-              Y.applyUpdate(doc, Y.encodeStateAsUpdate(newDoc));
-            } else {
-              const newContent = prosemirrorJson.content || [];
-              const yElements = newContent.map(prosemirrorNodeToYElement);
-              const position = operation === 'prepend' ? 0 : fragment.length;
-              fragment.insert(position, yElements);
-            }
-          },
-        );
+              mutationApplied = true;
+            },
+          );
+        } catch (error) {
+          if (!mutationApplied || !mutationAfterHash || !originalContent) {
+            throw error;
+          }
+          try {
+            await this.withYdocConnection(
+              hocuspocus,
+              documentName,
+              { user, pageTemplateRecovery: true },
+              (doc) => {
+                const current = TiptapTransformer.fromYdoc(doc, 'default');
+                if (hashProseMirrorJson(current) !== mutationAfterHash) {
+                  return false;
+                }
+                this.replaceDocumentContent(doc, originalContent);
+                return true;
+              },
+            );
+          } catch (recoveryError) {
+            this.logger.error(
+              `Failed to restore rejected page content update for ${documentName}`,
+              recoveryError as Error,
+            );
+          }
+          throw error;
+        }
       },
       applyAiPageOperation: async (
         documentName: string,

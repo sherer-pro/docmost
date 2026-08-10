@@ -89,6 +89,77 @@ describe('CollaborationHandler approved AI writes', () => {
     expect(hocuspocus.openDirectConnection).not.toHaveBeenCalled();
   });
 
+  it('restores live Yjs content when persistence rejects an update', async () => {
+    const hocuspocus = {} as Hocuspocus;
+    const handler = new CollaborationHandler({} as never);
+    const initial = {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [{ type: 'text', text: 'persisted' }],
+        },
+      ],
+    };
+    const rejected = {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [{ type: 'text', text: 'rejected' }],
+        },
+      ],
+    };
+    const live = TiptapTransformer.toYdoc(
+      initial,
+      'default',
+      testExtensions,
+    );
+    jest
+      .spyOn(handler as any, 'replaceDocumentContent')
+      .mockImplementation((...args: unknown[]) => {
+        const doc = args[0] as Y.Doc;
+        const content = args[1];
+        const fragment = doc.getXmlFragment('default');
+        if (fragment.length > 0) fragment.delete(0, fragment.length);
+        const restored = TiptapTransformer.toYdoc(
+          content as any,
+          'default',
+          testExtensions,
+        );
+        Y.applyUpdate(doc, Y.encodeStateAsUpdate(restored));
+      });
+    const connection = jest
+      .spyOn(handler as any, 'withYdocConnection')
+      .mockImplementation(async (...args: unknown[]) => {
+        const context = args[2] as Record<string, unknown>;
+        const callback = args[3] as (doc: Y.Doc) => unknown;
+        let result: unknown;
+        live.transact(() => {
+          result = callback(live);
+        });
+        if (!context.pageTemplateRecovery) {
+          throw new Error('persistence_rejected');
+        }
+        return result;
+      });
+
+    const handlers = handler.getHandlers(hocuspocus);
+    await expect(
+      handlers.updatePageContent('page.test', {
+        operation: 'append',
+        prosemirrorJson: rejected,
+        user: { id: 'user-1' } as never,
+      }),
+    ).rejects.toThrow('persistence_rejected');
+
+    expect(TiptapTransformer.fromYdoc(live, 'default')).toEqual(initial);
+    expect(connection).toHaveBeenCalledTimes(2);
+    expect(connection.mock.calls[1][2]).toMatchObject({
+      pageTemplateRecovery: true,
+    });
+  });
+
   it('preserves unchanged Yjs node identity and RelativePosition', async () => {
     const hocuspocus = new Hocuspocus({
       quiet: true,
