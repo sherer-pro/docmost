@@ -59,7 +59,7 @@
     .hljs-type,
     .hljs-params {
       color: light-dark(
-        var(--mantine-color-blue-7),
+        var(--mantine-color-blue-8),
         var(--mantine-color-cyan-5)
       );
     }
@@ -104,7 +104,7 @@
 
     @mixin where-light {
       background-color: var(--code-bg, var(--mantine-color-gray-1));
-      color: var(--mantine-color-pink-7);
+      color: var(--mantine-color-pink-8);
     }
 
     @mixin where-dark {

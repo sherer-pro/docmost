@@ -66,7 +66,7 @@ export default function ImageView(props: NodeViewProps) {
               radius="md"
               fit="contain"
               src={imageUrl}
-              alt={alt || title}
+              alt={alt || title || t("Image preview")}
               onClick={() => setIsLightboxOpened(true)}
             />
 
@@ -79,7 +79,7 @@ export default function ImageView(props: NodeViewProps) {
                 radius="md"
                 fit="contain"
                 src={imageUrl}
-                alt={alt || title}
+                alt={alt || title || t("Image preview")}
               />
             </ImagePreviewModal>
           </>

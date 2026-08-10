@@ -232,6 +232,7 @@ export default function ExcalidrawView(props: NodeViewProps) {
               onClick={handleOpen}
               variant="default"
               color="gray"
+              aria-label={t("Double-click to edit Excalidraw diagram")}
               mx="xs"
               className="print-hide"
               style={{
@@ -258,7 +259,12 @@ export default function ExcalidrawView(props: NodeViewProps) {
           className={clsx(selected ? "ProseMirror-selectednode" : "")}
         >
           <div style={{ display: "flex", alignItems: "center" }}>
-            <ActionIcon variant="transparent" color="gray">
+            <ActionIcon
+              component="span"
+              variant="transparent"
+              color="gray"
+              aria-hidden="true"
+            >
               <IconEdit size={18} />
             </ActionIcon>
 

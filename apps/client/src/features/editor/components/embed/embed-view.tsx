@@ -54,6 +54,8 @@ export default function EmbedView(props: NodeViewProps) {
     () => sanitizeEmbedUrlForProvider(embedUrl, embedProviderId),
     [embedProviderId, embedUrl],
   );
+  const providerName = getEmbedProviderById(embedProviderId)?.name;
+  const embedLabel = t("Embed {{provider}}", { provider: providerName });
 
   const embedForm = useForm<{ url: string }>({
     initialValues: {
@@ -126,6 +128,7 @@ export default function EmbedView(props: NodeViewProps) {
           <iframe
             className={classes.embedIframe}
             src={safeEmbedUrl}
+            title={embedLabel}
             allow="encrypted-media"
             sandbox={getEmbedIframeSandbox(embedProviderId)}
             allowFullScreen
@@ -142,6 +145,9 @@ export default function EmbedView(props: NodeViewProps) {
         >
           <Popover.Target>
             <Card
+              component="button"
+              type="button"
+              aria-label={embedLabel}
               radius="md"
               p="xs"
               style={{
@@ -153,7 +159,12 @@ export default function EmbedView(props: NodeViewProps) {
               className={clsx(selected ? "ProseMirror-selectednode" : "")}
             >
               <div style={{ display: "flex", alignItems: "center" }}>
-                <ActionIcon variant="transparent" color="gray">
+                <ActionIcon
+                  component="span"
+                  variant="transparent"
+                  color="gray"
+                  aria-hidden="true"
+                >
                   <IconEdit size={18} />
                 </ActionIcon>
 
