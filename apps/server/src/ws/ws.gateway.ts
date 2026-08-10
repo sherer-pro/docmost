@@ -151,6 +151,9 @@ export class WsGateway
         socket.emit('page-embed:invalidate', {
           operation: 'page_embed_invalidate',
         });
+        socket.emit('access:invalidate', {
+          operation: 'access_invalidate',
+        });
       }
     }
   }
