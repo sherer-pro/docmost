@@ -67,6 +67,7 @@ const CommentEditor = forwardRef(
       ],
       editorProps: {
         attributes: {
+          role: "textbox",
           "aria-label": t("Comment"),
           "aria-multiline": "true",
         },

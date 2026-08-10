@@ -131,6 +131,7 @@ export default function PdfView(props: NodeViewProps) {
           <iframe
             className={classes.pdfIframe}
             src={safeSrc}
+            title={node.attrs.name || t("PDF embedded document preview")}
             loading="lazy"
             frameBorder="0"
             onError={() => setHasError(true)}

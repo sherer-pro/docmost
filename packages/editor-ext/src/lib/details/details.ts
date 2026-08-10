@@ -19,6 +19,7 @@ declare module "@tiptap/core" {
 
 export interface DetailsOptions {
   HTMLAttributes: Record<string, any>;
+  getToggleButtonLabel: () => string;
 }
 
 export const Details = Node.create<DetailsOptions>({
@@ -32,6 +33,7 @@ export const Details = Node.create<DetailsOptions>({
   addOptions() {
     return {
       HTMLAttributes: {},
+      getToggleButtonLabel: () => "Toggle details",
     };
   },
 
@@ -78,6 +80,8 @@ export const Details = Node.create<DetailsOptions>({
 
       dom.setAttribute("data-type", this.name);
       btn.setAttribute("data-type", `${this.name}Button`);
+      btn.setAttribute("type", "button");
+      btn.setAttribute("aria-label", this.options.getToggleButtonLabel());
       div.setAttribute("data-type", `${this.name}Container`);
 
       if (editor.isEditable) {
