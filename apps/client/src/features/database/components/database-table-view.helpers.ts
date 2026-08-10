@@ -66,6 +66,21 @@ export const shouldShowDatabaseFilterRemove = (filterCount: number): boolean => 
   return filterCount > 1;
 };
 
+export const shouldHandleDatabaseMatrixPaste = (
+  pastedText: string,
+  isEditing: boolean,
+  propertyType: DatabasePropertyType,
+): boolean => {
+  if (!pastedText.includes('\n') && !pastedText.includes('\t')) {
+    return false;
+  }
+
+  return !(
+    isEditing &&
+    (propertyType === 'multiline_text' || propertyType === 'code')
+  );
+};
+
 export const mergePinnedDatabaseRow = (
   rows: IDatabaseRowWithCells[],
   pinnedRow: IDatabaseRowWithCells | null,

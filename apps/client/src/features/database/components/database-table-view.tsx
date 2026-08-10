@@ -119,6 +119,7 @@ import {
   reorderDatabaseProperties,
   resolveDraggedDatabasePropertyId,
   resolveDatabasePropertyRename,
+  shouldHandleDatabaseMatrixPaste,
   shouldShowDatabaseFilterRemove,
   shouldDeleteCellPayload,
 } from '@/features/database/components/database-table-view.helpers.ts';
@@ -2873,7 +2874,13 @@ export function DatabaseTableView({
                         }
 
                         const pastedText = event.clipboardData.getData('text');
-                        if (!pastedText.includes('\n') && !pastedText.includes('\t')) {
+                        if (
+                          !shouldHandleDatabaseMatrixPaste(
+                            pastedText,
+                            isEditing,
+                            property.type,
+                          )
+                        ) {
                           return;
                         }
 

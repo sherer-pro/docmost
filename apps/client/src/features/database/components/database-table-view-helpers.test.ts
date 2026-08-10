@@ -10,6 +10,7 @@ import {
   reorderDatabaseProperties,
   resolveDraggedDatabasePropertyId,
   resolveDatabasePropertyRename,
+  shouldHandleDatabaseMatrixPaste,
   shouldShowDatabaseFilterRemove,
   shouldDeleteCellPayload,
 } from './database-table-view.helpers';
@@ -24,6 +25,21 @@ describe('database-table-view helpers', () => {
     expect(shouldShowDatabaseFilterRemove(0)).toBe(false);
     expect(shouldShowDatabaseFilterRemove(1)).toBe(false);
     expect(shouldShowDatabaseFilterRemove(2)).toBe(true);
+  });
+
+  it('keeps multiline paste inside active text and code editors', () => {
+    expect(
+      shouldHandleDatabaseMatrixPaste('first\nsecond', true, 'multiline_text'),
+    ).toBe(false);
+    expect(shouldHandleDatabaseMatrixPaste('first\nsecond', true, 'code')).toBe(
+      false,
+    );
+    expect(
+      shouldHandleDatabaseMatrixPaste('first\nsecond', false, 'code'),
+    ).toBe(true);
+    expect(
+      shouldHandleDatabaseMatrixPaste('first\tsecond', true, 'select'),
+    ).toBe(true);
   });
 
   it('pins a newly created row first without duplicating canonical data', () => {
