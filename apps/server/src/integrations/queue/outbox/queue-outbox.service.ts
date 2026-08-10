@@ -25,6 +25,8 @@ import { DuplicatePageAttachmentsService } from '../services/duplicate-page-atta
 import {
   DuplicatePageAttachmentsOutboxPayload,
   NotificationEmailOutboxPayload,
+  NOTIFICATION_EMAIL_DELIVERY_POLICY_HANDLER,
+  NotificationEmailDeliveryPolicyHandler,
   NotificationEmailSecretPayload,
   NotificationDispatchOutboxPayload,
   PAGE_TEMPLATE_SYNC_HANDLER,
@@ -427,6 +429,19 @@ export class QueueOutboxService {
     const secret = this.parseNotificationEmailSecret(entry.secretPayload);
     if (secret.message.notificationId !== payload.notificationId) {
       throw new PermanentOutboxError('notification_email_id_mismatch');
+    }
+
+    const deliveryPolicy =
+      this.moduleRef.get<NotificationEmailDeliveryPolicyHandler>(
+        NOTIFICATION_EMAIL_DELIVERY_POLICY_HANDLER,
+        { strict: false },
+      );
+    if (
+      !(await deliveryPolicy.isNotificationEmailStillDeliverable(
+        secret.message,
+      ))
+    ) {
+      return 'cancelled';
     }
 
     const notification = await this.db

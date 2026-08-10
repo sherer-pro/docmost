@@ -319,6 +319,7 @@ const MentionList = forwardRef<any, MentionListProps>((props, ref) => {
               <UnstyledButton
                 data-item-index={index}
                 key={index}
+                onPointerDown={(event) => event.preventDefault()}
                 onClick={() => selectItem(index)}
                 className={clsx(classes.menuBtn, {
                   [classes.selectedItem]: index === selectedIndex,
@@ -345,6 +346,7 @@ const MentionList = forwardRef<any, MentionListProps>((props, ref) => {
               <UnstyledButton
                 data-item-index={index}
                 key={index}
+                onPointerDown={(event) => event.preventDefault()}
                 onClick={() => selectItem(index)}
                 className={clsx(classes.menuBtn, {
                   [classes.selectedItem]: index === selectedIndex,
@@ -382,6 +384,7 @@ const MentionList = forwardRef<any, MentionListProps>((props, ref) => {
             {(hasUsers || hasPages) && <Divider my={6} />}
             <UnstyledButton
               data-item-index={renderItems.indexOf(createPageItemData)}
+              onPointerDown={(event) => event.preventDefault()}
               onClick={() => selectItem(renderItems.indexOf(createPageItemData))}
               className={clsx(classes.menuBtn, {
                 [classes.selectedItem]: renderItems.indexOf(createPageItemData) === selectedIndex,

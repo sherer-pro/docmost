@@ -1,7 +1,8 @@
-import { ActionIcon, Menu, Tooltip } from "@mantine/core";
+import { Menu, Tooltip } from "@mantine/core";
 import { IconDots, IconEdit, IconTrash, IconCircleCheck, IconCircleCheckFilled } from "@tabler/icons-react";
 import { modals } from "@mantine/modals";
 import { useTranslation } from "react-i18next";
+import { AccessibleActionIcon } from "@/components/ui/accessible-action-icon";
 
 type CommentMenuProps = {
   onEditComment: () => void;
@@ -39,9 +40,13 @@ function CommentMenu({
   return (
     <Menu shadow="md" width={200}>
       <Menu.Target>
-        <ActionIcon variant="default" style={{ border: "none" }}>
+        <AccessibleActionIcon
+          label={t("More options")}
+          variant="default"
+          style={{ border: "none" }}
+        >
           <IconDots size={20} stroke={2} />
-        </ActionIcon>
+        </AccessibleActionIcon>
       </Menu.Target>
 
       <Menu.Dropdown>

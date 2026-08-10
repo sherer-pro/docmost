@@ -32,13 +32,25 @@ export class PushSubscriptionRepo {
       .executeTakeFirstOrThrow();
   }
 
-  async findActiveByUserId(userId: string): Promise<PushSubscription[]> {
-    return this.db
+  async findActiveByUserId(
+    userId: string,
+    subscriptionIds?: string[],
+  ): Promise<PushSubscription[]> {
+    if (subscriptionIds?.length === 0) {
+      return [];
+    }
+
+    let query = this.db
       .selectFrom('pushSubscriptions')
       .selectAll()
       .where('userId', '=', userId)
-      .where('revokedAt', 'is', null)
-      .execute();
+      .where('revokedAt', 'is', null);
+
+    if (subscriptionIds) {
+      query = query.where('id', 'in', subscriptionIds);
+    }
+
+    return query.execute();
   }
 
   async revokeByEndpoint(endpoint: string): Promise<void> {
@@ -50,7 +62,10 @@ export class PushSubscriptionRepo {
       .execute();
   }
 
-  async revokeByEndpointForUser(endpoint: string, userId: string): Promise<boolean> {
+  async revokeByEndpointForUser(
+    endpoint: string,
+    userId: string,
+  ): Promise<boolean> {
     const result = await this.db
       .updateTable('pushSubscriptions')
       .set({ revokedAt: new Date(), updatedAt: new Date() })

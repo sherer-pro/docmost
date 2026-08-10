@@ -6,17 +6,28 @@ describe('NotificationDeliveryPolicyService', () => {
     isUnread?: boolean;
     usersWithAccess?: Set<string>;
     usersWithPageAccess?: string[];
+    userActive?: boolean;
   }) => {
     const db = {
       selectFrom: jest.fn().mockReturnValue({
         select: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
-        executeTakeFirst: jest.fn().mockResolvedValue({
-          settings:
-            typeof options?.userSettings !== 'undefined'
-              ? options.userSettings
-              : { preferences: { pushEnabled: true, emailEnabled: true } },
-        }),
+        executeTakeFirst: jest.fn().mockResolvedValue(
+          options?.userActive === false
+            ? undefined
+            : {
+                id: 'user-1',
+                settings:
+                  typeof options?.userSettings !== 'undefined'
+                    ? options.userSettings
+                    : {
+                        preferences: {
+                          pushEnabled: true,
+                          emailEnabled: true,
+                        },
+                      },
+              },
+        ),
       }),
     } as any;
 
@@ -60,6 +71,25 @@ describe('NotificationDeliveryPolicyService', () => {
     });
 
     expect(shouldSend).toBe(false);
+    expect(notificationRepo.isUnreadForUser).not.toHaveBeenCalled();
+  });
+
+  it('returns false for a deleted or deactivated recipient', async () => {
+    const { service, notificationRepo, pageAccessService } = createService({
+      userActive: false,
+    });
+
+    const shouldSend = await service.shouldSend({
+      channel: 'push',
+      userId: 'user-1',
+      notificationId: 'n-1',
+      pageId: 'page-1',
+    });
+
+    expect(shouldSend).toBe(false);
+    expect(
+      pageAccessService.filterUsersWithPageReadAccess,
+    ).not.toHaveBeenCalled();
     expect(notificationRepo.isUnreadForUser).not.toHaveBeenCalled();
   });
 

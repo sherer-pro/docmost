@@ -24,6 +24,11 @@ interface PushDispatchPayload {
   type: string;
   notificationId?: string;
   pageTitle?: string;
+  actorId?: string | null;
+  retryMeta?: {
+    attempts?: number;
+    subscriptionIds?: string[];
+  };
 }
 
 interface UserPushPreference {
@@ -97,7 +102,11 @@ export class PushAggregationService implements OnModuleDestroy {
         return;
       }
 
-      await this.pushService.sendToUser(notification.userId, payload);
+      const pushResult = await this.pushService.sendToUser(
+        notification.userId,
+        payload,
+      );
+      await this.scheduleImmediateRetry(notification, payload, pushResult);
       return;
     }
 
@@ -116,7 +125,11 @@ export class PushAggregationService implements OnModuleDestroy {
         return;
       }
 
-      await this.pushService.sendToUser(notification.userId, payload);
+      const pushResult = await this.pushService.sendToUser(
+        notification.userId,
+        payload,
+      );
+      await this.scheduleImmediateRetry(notification, payload, pushResult);
       return;
     }
 
@@ -167,41 +180,65 @@ export class PushAggregationService implements OnModuleDestroy {
       if (this.shuttingDown || renewal.lost) {
         break;
       }
+      const payload = (item.payload ?? {}) as unknown as PushDispatchPayload;
+      const isImmediateRetry = item.windowKey.startsWith('immediate:');
       const isPushStillEnabled =
         await this.notificationDeliveryPolicyService.shouldSend({
           channel: 'push',
           userId: item.userId,
           pageId: item.pageId,
+          notificationId: isImmediateRetry ? payload.notificationId : undefined,
+          actorId: isImmediateRetry
+            ? (payload.actorId ?? undefined)
+            : undefined,
         });
       if (!isPushStillEnabled) {
         cancelled.push(this.claimedRef(item));
         continue;
       }
 
-      const hasUnreadNotifications =
-        await this.hasUnreadNotificationsInWindow(item);
-      if (!hasUnreadNotifications) {
-        cancelled.push(this.claimedRef(item));
-        continue;
+      if (!isImmediateRetry) {
+        const hasUnreadNotifications =
+          await this.hasUnreadNotificationsInWindow(item);
+        if (!hasUnreadNotifications) {
+          cancelled.push(this.claimedRef(item));
+          continue;
+        }
       }
 
-      const payload = (item.payload ?? {}) as unknown as PushDispatchPayload;
-      const pageTitle = payload.pageTitle || payload.body || 'document';
-      const eventCount = item.eventsCount ?? 1;
-      const preferences = await this.getUserPushPreference(item.userId);
-      const copy = getAggregatedPushCopy(
-        pageTitle,
-        eventCount,
-        preferences.locale,
-      );
+      let dispatchPayload: PushDispatchPayload;
+      if (isImmediateRetry) {
+        dispatchPayload = {
+          title: payload.title,
+          body: payload.body,
+          url: payload.url,
+          type: payload.type,
+          notificationId: payload.notificationId,
+        };
+      } else {
+        const pageTitle = payload.pageTitle || payload.body || 'document';
+        const eventCount = item.eventsCount ?? 1;
+        const preferences = await this.getUserPushPreference(item.userId);
+        const copy = getAggregatedPushCopy(
+          pageTitle,
+          eventCount,
+          preferences.locale,
+        );
+        dispatchPayload = {
+          title: copy.title,
+          body: copy.body,
+          url: payload.url,
+          type: payload.type,
+          notificationId: payload.notificationId,
+        };
+      }
 
-      const pushResult = await this.pushService.sendToUser(item.userId, {
-        title: copy.title,
-        body: copy.body,
-        url: payload.url,
-        type: payload.type,
-        notificationId: payload.notificationId,
-      });
+      const retrySubscriptionIds = this.getRetrySubscriptionIds(item.payload);
+      const pushResult = retrySubscriptionIds.length
+        ? await this.pushService.sendToUser(item.userId, dispatchPayload, {
+            subscriptionIds: retrySubscriptionIds,
+          })
+        : await this.pushService.sendToUser(item.userId, dispatchPayload);
 
       this.applyDispatchOutcome(item, pushResult, sent, cancelled, retry);
     }
@@ -233,6 +270,43 @@ export class PushAggregationService implements OnModuleDestroy {
     });
   }
 
+  private async scheduleImmediateRetry(
+    notification: Notification,
+    payload: PushDispatchPayload,
+    pushResult: PushSendResult,
+  ): Promise<void> {
+    if (
+      pushResult.outcome !== 'transient-failure' ||
+      pushResult.retrySubscriptionIds.length === 0 ||
+      !notification.pageId
+    ) {
+      return;
+    }
+
+    await this.pushNotificationJobRepo.upsertPending({
+      userId: notification.userId,
+      workspaceId: notification.workspaceId,
+      pageId: notification.pageId,
+      windowKey: `immediate:${notification.id}`,
+      idempotencyKey: `push-immediate:${notification.id}`,
+      sendAfter: new Date(),
+      status: PUSH_NOTIFICATION_JOB_STATUS.PENDING,
+      payload: {
+        title: payload.title,
+        body: payload.body,
+        url: payload.url,
+        type: payload.type,
+        notificationId: payload.notificationId,
+        pageTitle: payload.pageTitle,
+        actorId: notification.actorId,
+        retryMeta: {
+          attempts: 0,
+          subscriptionIds: pushResult.retrySubscriptionIds,
+        },
+      },
+    });
+  }
+
   private applyDispatchOutcome(
     job: { id: string; revision: number; payload?: unknown },
     pushResult: PushSendResult,
@@ -261,7 +335,7 @@ export class PushAggregationService implements OnModuleDestroy {
         return;
       }
 
-      retry.push(ref);
+      retry.push(this.claimedRef(job, pushResult.retrySubscriptionIds));
       this.logger.warn({
         event: 'push_aggregation_retry_scheduled',
         failed: pushResult.failed,
@@ -280,11 +354,16 @@ export class PushAggregationService implements OnModuleDestroy {
     });
   }
 
-  private claimedRef(job: {
-    id: string;
-    revision: number;
-  }): ClaimedPushNotificationJobRef {
-    return { id: job.id, revision: job.revision };
+  private claimedRef(
+    job: {
+      id: string;
+      revision: number;
+    },
+    retrySubscriptionIds?: string[],
+  ): ClaimedPushNotificationJobRef {
+    return retrySubscriptionIds?.length
+      ? { id: job.id, revision: job.revision, retrySubscriptionIds }
+      : { id: job.id, revision: job.revision };
   }
 
   private startLeaseRenewal(
@@ -355,6 +434,28 @@ export class PushAggregationService implements OnModuleDestroy {
     return typeof attempts === 'number' && Number.isFinite(attempts)
       ? attempts
       : 0;
+  }
+
+  private getRetrySubscriptionIds(payload: unknown): string[] {
+    if (!payload || typeof payload !== 'object') {
+      return [];
+    }
+
+    const retryMeta = (payload as { retryMeta?: unknown }).retryMeta;
+    if (!retryMeta || typeof retryMeta !== 'object') {
+      return [];
+    }
+
+    const subscriptionIds = (retryMeta as { subscriptionIds?: unknown })
+      .subscriptionIds;
+    if (!Array.isArray(subscriptionIds)) {
+      return [];
+    }
+
+    return subscriptionIds.filter(
+      (subscriptionId): subscriptionId is string =>
+        typeof subscriptionId === 'string' && subscriptionId.length > 0,
+    );
   }
 
   /**

@@ -297,6 +297,7 @@ export class CommentNotificationService {
         .selectFrom('pages')
         .select(['id', 'title', 'slugId'])
         .where('id', '=', pageId)
+        .where('deletedAt', 'is', null)
         .executeTakeFirst(),
       this.db
         .selectFrom('spaces')

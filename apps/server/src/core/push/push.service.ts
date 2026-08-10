@@ -24,6 +24,11 @@ export interface PushSendResult {
   failed: number;
   revoked: number;
   outcome: PushSendOutcome;
+  retrySubscriptionIds: string[];
+}
+
+interface PushSendOptions {
+  subscriptionIds?: string[];
 }
 
 @Injectable()
@@ -37,8 +42,7 @@ export class PushService {
   ) {
     const vapidSubject = this.environmentService.getWebPushSubject();
     const vapidPublicKey = this.environmentService.getWebPushVapidPublicKey();
-    const vapidPrivateKey =
-      this.environmentService.getWebPushVapidPrivateKey();
+    const vapidPrivateKey = this.environmentService.getWebPushVapidPrivateKey();
 
     this.isConfigured = !!(vapidSubject && vapidPublicKey && vapidPrivateKey);
 
@@ -55,6 +59,7 @@ export class PushService {
   async sendToUser(
     userId: string,
     payload: PushPayload,
+    options?: PushSendOptions,
   ): Promise<PushSendResult> {
     if (!this.isConfigured) {
       return {
@@ -62,11 +67,13 @@ export class PushService {
         failed: 0,
         revoked: 0,
         outcome: 'disabled',
+        retrySubscriptionIds: [],
       };
     }
 
     const subscriptions = await this.pushSubscriptionRepo.findActiveByUserId(
       userId,
+      options?.subscriptionIds,
     );
 
     if (subscriptions.length === 0) {
@@ -75,6 +82,7 @@ export class PushService {
         failed: 0,
         revoked: 0,
         outcome: 'no-subscriptions',
+        retrySubscriptionIds: [],
       };
     }
 
@@ -83,6 +91,7 @@ export class PushService {
     let revoked = 0;
     let hasTransientFailures = false;
     let hasFatalFailures = false;
+    const retrySubscriptionIds: string[] = [];
 
     await Promise.all(
       subscriptions.map(async (subscription) => {
@@ -123,43 +132,74 @@ export class PushService {
 
           if (isTransientError) {
             hasTransientFailures = true;
+            retrySubscriptionIds.push(subscription.id);
           } else {
             hasFatalFailures = true;
           }
 
-          const message = error instanceof Error ? error.message : String(error);
-
           if (isTransientError) {
-            this.logger.warn(
-              `Transient push error for endpoint ${subscription.endpoint}: ${message}`,
-            );
+            this.logger.warn({
+              event: 'push_delivery_transient_failure',
+              statusCode: statusCode ?? null,
+            });
             return;
           }
 
-          this.logger.error(
-            `Fatal push error for endpoint ${subscription.endpoint}: ${message}`,
-          );
+          this.logger.error({
+            event: 'push_delivery_fatal_failure',
+            statusCode: statusCode ?? null,
+          });
         }
       }),
     );
 
     if (failed === 0 && sent > 0) {
-      return { sent, failed, revoked, outcome: 'success' };
+      return {
+        sent,
+        failed,
+        revoked,
+        outcome: 'success',
+        retrySubscriptionIds,
+      };
     }
 
     if (sent === 0 && failed === 0 && revoked > 0) {
-      return { sent, failed, revoked, outcome: 'unrecoverable-failure' };
+      return {
+        sent,
+        failed,
+        revoked,
+        outcome: 'unrecoverable-failure',
+        retrySubscriptionIds,
+      };
     }
 
     if (hasTransientFailures) {
-      return { sent, failed, revoked, outcome: 'transient-failure' };
+      return {
+        sent,
+        failed,
+        revoked,
+        outcome: 'transient-failure',
+        retrySubscriptionIds,
+      };
     }
 
     if (hasFatalFailures) {
-      return { sent, failed, revoked, outcome: 'fatal-failure' };
+      return {
+        sent,
+        failed,
+        revoked,
+        outcome: 'fatal-failure',
+        retrySubscriptionIds,
+      };
     }
 
-    return { sent, failed, revoked, outcome: 'unrecoverable-failure' };
+    return {
+      sent,
+      failed,
+      revoked,
+      outcome: 'unrecoverable-failure',
+      retrySubscriptionIds,
+    };
   }
 
   private isTransientNetworkError(error: unknown): boolean {
@@ -168,7 +208,12 @@ export class PushService {
     }
 
     const networkCode = String(error.code);
-    const transientCodes = ['ECONNRESET', 'ETIMEDOUT', 'EAI_AGAIN', 'ECONNREFUSED'];
+    const transientCodes = [
+      'ECONNRESET',
+      'ETIMEDOUT',
+      'EAI_AGAIN',
+      'ECONNREFUSED',
+    ];
 
     return transientCodes.includes(networkCode);
   }

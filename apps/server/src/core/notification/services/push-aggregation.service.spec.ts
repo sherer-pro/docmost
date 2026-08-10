@@ -200,6 +200,35 @@ describe('PushAggregationService', () => {
     expect(pushService.sendToUser).not.toHaveBeenCalled();
   });
 
+  it('persists only transiently failed subscriptions for an immediate retry', async () => {
+    const { service, pushService, pushNotificationJobRepo } = createService({
+      pushFrequency: 'immediate',
+    });
+    pushService.sendToUser.mockResolvedValue({
+      sent: 1,
+      failed: 1,
+      revoked: 0,
+      outcome: 'transient-failure',
+      retrySubscriptionIds: ['subscription-2'],
+    });
+
+    await service.dispatchOrAggregate(baseNotification, basePayload);
+
+    expect(pushNotificationJobRepo.upsertPending).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user-1',
+        pageId: 'page-1',
+        windowKey: 'immediate:n-1',
+        idempotencyKey: 'push-immediate:n-1',
+        payload: expect.objectContaining({
+          retryMeta: expect.objectContaining({
+            subscriptionIds: ['subscription-2'],
+          }),
+        }),
+      }),
+    );
+  });
+
   it('aggregates push when frequency is quoted but valid', async () => {
     const { service, pushService, pushNotificationJobRepo } = createService({
       userSettings: {
@@ -275,6 +304,7 @@ describe('PushAggregationService', () => {
       failed: 1,
       revoked: 0,
       outcome: 'transient-failure',
+      retrySubscriptionIds: ['subscription-2'],
     });
 
     await service.processDueJobs();
@@ -283,7 +313,13 @@ describe('PushAggregationService', () => {
       leaseToken: 'lease-1',
       sent: [],
       cancelled: [],
-      retry: [{ id: 'job-1', revision: 1 }],
+      retry: [
+        {
+          id: 'job-1',
+          revision: 1,
+          retrySubscriptionIds: ['subscription-2'],
+        },
+      ],
     });
   });
 
