@@ -937,6 +937,38 @@ export function invalidateOnDeletePage(
     currentTreeData.length > 0
       ? new SimpleTree<SpaceTreeNode>(currentTreeData).find(pageId)?.data
       : undefined;
+
+  const deletedPageIds = new Set<string>([pageId]);
+  const deletedPageIdentifiers = new Set<string>([pageId]);
+  const collectDeletedPageIdentifiers = (node: SpaceTreeNode) => {
+    deletedPageIds.add(node.id);
+    deletedPageIdentifiers.add(node.id);
+    if (node.slugId) {
+      deletedPageIdentifiers.add(node.slugId);
+    }
+    node.children?.forEach(collectDeletedPageIdentifiers);
+  };
+  if (deletedNode) {
+    collectDeletedPageIdentifiers(deletedNode);
+  }
+
+  queryClient.removeQueries({
+    predicate: (query) => {
+      if (query.queryKey[0] !== QUERY_KEY_SPACE.pages) {
+        return false;
+      }
+
+      const queryIdentifier = query.queryKey[1];
+      const cachedPage = query.state.data as IPage | undefined;
+      return (
+        (typeof queryIdentifier === "string" &&
+          deletedPageIdentifiers.has(queryIdentifier)) ||
+        (typeof cachedPage?.id === "string" &&
+          deletedPageIds.has(cachedPage.id))
+      );
+    },
+  });
+
   if (currentTreeData.length > 0) {
     jotaiStore.set(treeDataAtom, applyDeleteTreeNode(currentTreeData, pageId));
   }
