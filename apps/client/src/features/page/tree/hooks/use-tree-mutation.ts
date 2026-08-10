@@ -35,10 +35,47 @@ import { userAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { PageEditMode } from "@/features/user/types/user.types.ts";
 import { buildPageEditModeByPageId } from "@/features/user/utils/page-edit-mode.ts";
 
+function applyConfirmedTreeMove(
+  currentData: SpaceTreeNode[],
+  draggedNodeId: string,
+  parentId: string | null,
+  index: number,
+  position: string,
+): SpaceTreeNode[] {
+  const confirmedTree = new SimpleTree<SpaceTreeNode>(
+    structuredClone(currentData),
+  );
+  const draggedNode = confirmedTree.find(draggedNodeId);
+  const previousParent = draggedNode?.parent;
+
+  confirmedTree.move({ id: draggedNodeId, parentId, index });
+  confirmedTree.update({
+    id: draggedNodeId,
+    changes: { position, parentPageId: parentId } as any,
+  });
+
+  if (
+    previousParent &&
+    previousParent.id !== parentId &&
+    previousParent.id !== "ROOT" &&
+    previousParent.children.length === 0
+  ) {
+    confirmedTree.update({
+      id: previousParent.id,
+      changes: { hasChildren: false } as any,
+    });
+  }
+
+  return confirmedTree.data;
+}
+
 export function useTreeMutation<T>(spaceId: string) {
   const dndManager = useDragDropManager();
   const [data, setData] = useAtom(treeDataAtom);
-  const tree = useMemo(() => new SimpleTree<SpaceTreeNode>(data), [data]);
+  const tree = useMemo(
+    () => new SimpleTree<SpaceTreeNode>(structuredClone(data)),
+    [data],
+  );
   const createPageMutation = useCreatePageMutation({ syncTree: false });
   const updatePageMutation = useUpdatePageMutation();
   const removePageMutation = useRemovePageMutation();
@@ -169,36 +206,6 @@ export function useTreeMutation<T>(spaceId: string) {
       newPosition = generateJitteredKeyBetween(afterPosition, beforePosition);
     }
 
-    // update the node position in tree
-    tree.update({
-      id: draggedNodeId,
-      changes: {
-        position: newPosition,
-        parentPageId: args.parentId,
-      } as any,
-    });
-
-    const previousParent = args.dragNodes[0].parent;
-    if (
-      previousParent.id !== args.parentId &&
-      previousParent.id !== "__REACT_ARBORIST_INTERNAL_ROOT__"
-    ) {
-      // if the page was moved to another parent,
-      // check if the previous still has children
-      // if no children left, change 'hasChildren' to false, to make the page toggle arrows work properly
-      const childrenCount = previousParent.children.filter(
-        (child) => child.id !== draggedNodeId,
-      ).length;
-      if (childrenCount === 0) {
-        tree.update({
-          id: previousParent.id,
-          changes: { ...previousParent.data, hasChildren: false } as any,
-        });
-      }
-    }
-
-    setData(tree.data);
-
     const payload: IMovePage = {
       pageId: draggedNodeId,
       position: newPosition,
@@ -231,6 +238,16 @@ export function useTreeMutation<T>(spaceId: string) {
     try {
       await movePageMutation.mutateAsync(payload);
 
+      setData((currentData) =>
+        applyConfirmedTreeMove(
+          currentData,
+          draggedNodeId,
+          args.parentId,
+          args.index,
+          newPosition,
+        ),
+      );
+
       updateCacheOnMovePage(
         spaceId,
         draggedNodeId,
@@ -254,6 +271,7 @@ export function useTreeMutation<T>(spaceId: string) {
         });
       }, 50);
     } catch (error) {
+      setData((currentData) => structuredClone(currentData));
       console.error("Error moving page:", error);
     }
   };
