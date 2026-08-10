@@ -146,6 +146,20 @@ test("supports keyboard indent, page breaks, tables, slash commands, paste and u
     await expect(fixedToolbar).toBeVisible();
     const toolbarButtons = fixedToolbar.getByRole("button");
     expect(await toolbarButtons.count()).toBeGreaterThan(8);
+    const unnamedToolbarButtons = await fixedToolbar
+      .locator("button")
+      .evaluateAll((buttons) =>
+        buttons
+          .filter(
+            (button) =>
+              !button.getAttribute("aria-label") &&
+              !button.getAttribute("aria-labelledby") &&
+              !button.getAttribute("title") &&
+              !button.textContent?.trim(),
+          )
+          .map((button) => button.outerHTML),
+      );
+    expect(unnamedToolbarButtons).toEqual([]);
     await toolbarButtons.first().focus();
     await page.keyboard.press("Tab");
     await expect(toolbarButtons.nth(1)).toBeFocused();
@@ -192,9 +206,18 @@ test("supports keyboard indent, page breaks, tables, slash commands, paste and u
         ),
       )
       .toBe(true);
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        ),
+    );
     await page.keyboard.press("Tab");
-    const tabIndented =
-      (await indentTarget.getAttribute("data-indent")) === "1";
+    const tabIndented = await expect
+      .poll(() => indentTarget.getAttribute("data-indent"), { timeout: 2_000 })
+      .toBe("1")
+      .then(() => true)
+      .catch(() => false);
     if (!tabIndented) {
       await indentTarget.click();
       await page.keyboard.press("Home");

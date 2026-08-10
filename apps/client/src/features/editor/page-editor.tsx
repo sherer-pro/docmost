@@ -469,6 +469,7 @@ export default function PageEditor({
       shouldRerenderOnTransaction: false,
       editorProps: {
         attributes: {
+          role: "textbox",
           "aria-label": t("Editor"),
           "aria-multiline": "true",
         },
@@ -636,6 +637,13 @@ export default function PageEditor({
               immediatelyRender={true}
               extensions={staticContentExtensions}
               content={content}
+              editorProps={{
+                attributes: {
+                  role: "textbox",
+                  "aria-label": t("Editor"),
+                  "aria-multiline": "true",
+                },
+              }}
               onCreate={({ editor: staticEditor }) => {
                 staticEditor.commands.setHeadingNumberingEnabled(
                   headingNumberingEnabled,

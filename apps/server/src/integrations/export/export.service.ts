@@ -265,20 +265,32 @@ export class ExportService {
       params.locale,
       params.spaceAiRoleEnabled,
     );
+    const allowedPageIds = new Set(attachmentPageIds ?? [params.page.id]);
     const bodyHtml = await this.buildPagePdfBodyHtml(
       pageHtml,
       metadataRows,
       params.page,
+      allowedPageIds,
     );
     const attachmentTokens = await this.createPdfAttachmentTokens(
-      attachmentIds ?? this.extractAttachmentIdsFromHtml(bodyHtml),
-      new Set(attachmentPageIds ?? [params.page.id]),
+      [
+        ...new Set([
+          ...(attachmentIds ?? []),
+          ...this.extractAttachmentIdsFromHtml(bodyHtml),
+        ]),
+      ],
+      allowedPageIds,
+      params.page.workspaceId,
+    );
+    const inlinedBodyHtml = await this.inlineAuthorizedPdfRasterImages(
+      bodyHtml,
+      new Set(Object.keys(attachmentTokens)),
       params.page.workspaceId,
     );
 
     return {
       title: pageTitle,
-      bodyHtml,
+      bodyHtml: inlinedBodyHtml,
       attachmentTokens,
     };
   }
@@ -620,6 +632,78 @@ export class ExportService {
     return Array.from(ids);
   }
 
+  private async inlineAuthorizedPdfRasterImages(
+    html: string,
+    authorizedAttachmentIds: Set<string>,
+    workspaceId: string,
+  ): Promise<string> {
+    if (authorizedAttachmentIds.size === 0) return html;
+
+    const $ = cheerio.load(`<div data-docmost-pdf-root>${html}</div>`);
+    const root = $('[data-docmost-pdf-root]');
+    const imageNodesByAttachmentId = new Map<string, cheerio.Cheerio<any>[]>();
+
+    root.find('img[src]').each((_, node) => {
+      const image = $(node);
+      const attachmentId = this.extractAttachmentIdFromUrl(
+        image.attr('src') || '',
+      );
+      if (!attachmentId || !authorizedAttachmentIds.has(attachmentId)) return;
+
+      const images = imageNodesByAttachmentId.get(attachmentId) ?? [];
+      images.push(image);
+      imageNodesByAttachmentId.set(attachmentId, images);
+    });
+
+    const attachmentIds = Array.from(imageNodesByAttachmentId.keys());
+    if (attachmentIds.length === 0) return html;
+
+    const attachments = await this.db
+      .selectFrom('attachments')
+      .select(['id', 'filePath', 'mimeType'])
+      .where('id', 'in', attachmentIds)
+      .where('workspaceId', '=', workspaceId)
+      .where('deletedAt', 'is', null)
+      .execute();
+
+    const allowedMimeTypes = new Set([
+      'image/png',
+      'image/jpeg',
+      'image/gif',
+      'image/webp',
+    ]);
+
+    await Promise.all(
+      attachments.map(async (attachment) => {
+        const mimeType = attachment.mimeType?.trim().toLowerCase();
+        if (
+          !attachment.filePath ||
+          !mimeType ||
+          !allowedMimeTypes.has(mimeType)
+        ) {
+          return;
+        }
+
+        try {
+          const fileBuffer = await this.storageService.read(
+            attachment.filePath,
+          );
+          const dataUrl = `data:${mimeType};base64,${fileBuffer.toString('base64')}`;
+          for (const image of imageNodesByAttachmentId.get(attachment.id) ?? []) {
+            image.attr('src', dataUrl);
+          }
+        } catch (err) {
+          this.logger.debug(
+            `Failed to inline raster attachment ${attachment.id} for PDF export`,
+            err,
+          );
+        }
+      }),
+    );
+
+    return root.html() || '';
+  }
+
   private removeColgroupTags(html: string): string {
     return html.replace(/<colgroup[^>]*>[\s\S]*?<\/colgroup>/gim, '');
   }
@@ -840,6 +924,7 @@ export class ExportService {
     pageHtml: string,
     metadataRows: Array<{ label: string; value: string }>,
     page: Pick<Page, 'workspaceId'>,
+    allowedPageIds: Set<string>,
   ): Promise<string> {
     const metadataBlock =
       metadataRows.length > 0
@@ -858,6 +943,7 @@ export class ExportService {
     const pageContentHtml = await this.applyPdfCustomBlockFallbacks(
       pageHtml,
       page,
+      allowedPageIds,
     );
 
     return `${metadataBlock}<article class="docmost-page-content">${pageContentHtml}</article>`;
@@ -1198,6 +1284,7 @@ export class ExportService {
   private async applyPdfCustomBlockFallbacks(
     pageHtml: string,
     page: Pick<Page, 'workspaceId'>,
+    allowedPageIds: Set<string>,
   ): Promise<string> {
     const $ = cheerio.load(
       `<div class="docmost-page-content-root">${pageHtml}</div>`,
@@ -1305,6 +1392,29 @@ export class ExportService {
       embedNode.replaceWith(embedCard);
     });
 
+    root.find('iframe').each((_, node) => {
+      const iframe = $(node);
+      const src = this.normalizePdfUrl(iframe.attr('src') || '');
+      const isAttachment = Boolean(this.extractAttachmentIdFromUrl(src));
+      const fallback = $('<section></section>').addClass('docmost-embed-card');
+      fallback.append(
+        $('<p></p>')
+          .addClass('docmost-fallback-title')
+          .text(isAttachment ? 'PDF attachment' : 'Embedded content'),
+      );
+      if (src) {
+        fallback.append(
+          $('<a></a>')
+            .addClass('docmost-fallback-link')
+            .attr('href', src)
+            .attr('target', '_blank')
+            .attr('rel', 'noopener noreferrer')
+            .text(src),
+        );
+      }
+      iframe.replaceWith(fallback);
+    });
+
     const diagramNodes = root
       .find('div[data-type="drawio"], div[data-type="excalidraw"]')
       .toArray();
@@ -1329,17 +1439,19 @@ export class ExportService {
         attachmentId,
         diagramType: typeName,
         workspaceId: page.workspaceId,
+        allowedPageIds,
       });
       const normalizedSrc = diagramSource.src;
       const inlineSvgHtml = diagramSource.inlineSvgHtml;
 
       if (existingImage.length > 0) {
         if (inlineSvgHtml) {
+          diagramNode.removeAttr('data-src').removeAttr('src');
           existingImage.replaceWith(inlineSvgHtml);
           continue;
         }
 
-        if (!existingImage.attr('src') && normalizedSrc) {
+        if (normalizedSrc) {
           existingImage.attr('src', normalizedSrc);
         }
         if (!existingImage.attr('alt')) {
@@ -1410,6 +1522,7 @@ export class ExportService {
     attachmentId?: string;
     diagramType?: string;
     workspaceId: string;
+    allowedPageIds: Set<string>;
   }): Promise<{ src: string; inlineSvgHtml: string | null }> {
     const normalizedSrc = this.normalizePdfUrl(params.src);
     const attachmentId =
@@ -1423,21 +1536,26 @@ export class ExportService {
     try {
       const attachment = await this.db
         .selectFrom('attachments')
-        .select(['id', 'filePath', 'mimeType'])
+        .select(['id', 'filePath', 'mimeType', 'pageId', 'deletedAt'])
         .where('id', '=', attachmentId)
         .where('workspaceId', '=', params.workspaceId)
         .executeTakeFirst();
 
-      if (!attachment?.filePath) {
+      if (
+        !attachment?.filePath ||
+        attachment.deletedAt ||
+        !attachment.pageId ||
+        !params.allowedPageIds.has(attachment.pageId)
+      ) {
         return { src: normalizedSrc, inlineSvgHtml: null };
       }
 
       const fileBuffer = await this.storageService.read(attachment.filePath);
       const mimeType = attachment.mimeType?.trim() || 'image/svg+xml';
-      const inlineSvgHtml =
-        params.diagramType === 'excalidraw'
-          ? this.tryBuildInlineSvgFromBuffer(fileBuffer, mimeType)
-          : null;
+      const inlineSvgHtml = this.tryBuildInlineSvgFromBuffer(
+        fileBuffer,
+        mimeType,
+      );
 
       return {
         src: `data:${mimeType};base64,${fileBuffer.toString('base64')}`,
@@ -1473,7 +1591,10 @@ export class ExportService {
 
     // Drop scripts and inline event handlers before embedding into export HTML.
     svgNode.find('script').remove();
-    svgNode.find('*').each((_, childNode) => {
+    const svgElements = [svgNode.get(0), ...svgNode.find('*').toArray()].filter(
+      Boolean,
+    );
+    for (const childNode of svgElements) {
       const child = $(childNode);
       const attributes = child.attr() || {};
       for (const attributeName of Object.keys(attributes)) {
@@ -1481,7 +1602,7 @@ export class ExportService {
           child.removeAttr(attributeName);
         }
       }
-    });
+    }
 
     svgNode.addClass('docmost-diagram-image');
     return $.xml(svgNode);

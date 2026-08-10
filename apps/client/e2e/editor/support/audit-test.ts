@@ -45,6 +45,7 @@ export const test = base.extend<{ evidence: void }>({
           await page.route(`${browserOrigin}/api/**`, async (route) => {
             const headers = {
               ...route.request().headers(),
+              host: new URL(trustedApiOrigin).host,
               origin: trustedApiOrigin,
               referer: `${trustedApiOrigin}/`,
             };
@@ -52,6 +53,25 @@ export const test = base.extend<{ evidence: void }>({
             await route.fulfill({ response });
           });
         }
+      }
+      const drawioAuditUrl = process.env.DOCMOST_DRAWIO_AUDIT_URL?.trim();
+      if (drawioAuditUrl) {
+        const parsedDrawioUrl = new URL(drawioAuditUrl);
+        testInfo.annotations.push({
+          type: "harness",
+          description:
+            "Draw.io uses a local synthetic iframe endpoint; no diagram data is sent to a remote service.",
+        });
+        await page.route(
+          `${parsedDrawioUrl.origin}${parsedDrawioUrl.pathname}**`,
+          async (route) => {
+            await route.fulfill({
+              status: 200,
+              contentType: "text/html; charset=utf-8",
+              body: "<!doctype html><html><body data-drawio-audit-shim></body></html>",
+            });
+          },
+        );
       }
       if (testInfo.project.name.includes("webkit")) {
         const webkitOrigin = new URL(
@@ -130,9 +150,7 @@ export async function captureStep(
 
 export function mainEditor(page: Page) {
   return page
-    .locator(
-      '.ProseMirror[aria-label="Editor"], .ProseMirror[aria-label="Редактор"]',
-    )
+    .locator('.ProseMirror[role="textbox"][aria-multiline="true"]')
     .first();
 }
 
