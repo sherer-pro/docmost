@@ -228,22 +228,23 @@ export class CommentService {
     resolveCommentDto: ResolveCommentDto,
     authUser: User,
   ): Promise<Comment> {
-    const resolvedAt = resolveCommentDto.resolved ? new Date() : null;
-    const resolvedById = resolveCommentDto.resolved ? authUser.id : null;
-
-    const jobData: ICommentResolvedNotificationJob | undefined =
-      resolveCommentDto.resolved
-        ? {
-            eventId: uuid7(),
-            commentId: comment.id,
-            commentCreatorId: comment.creatorId,
-            pageId: comment.pageId,
-            spaceId: comment.spaceId,
-            workspaceId: comment.workspaceId,
-            actorId: authUser.id,
-          }
-        : undefined;
+    let notificationQueued = false;
     await executeTx(this.db, async (trx) => {
+      const lockedComment = await this.commentRepo.findById(comment.id, {
+        trx,
+        withLock: true,
+      });
+      if (!lockedComment) {
+        throw new NotFoundException('Comment not found');
+      }
+
+      const isResolved = lockedComment.resolvedAt !== null;
+      if (isResolved === resolveCommentDto.resolved) {
+        return;
+      }
+
+      const resolvedAt = resolveCommentDto.resolved ? new Date() : null;
+      const resolvedById = resolveCommentDto.resolved ? authUser.id : null;
       await this.commentRepo.updateComment(
         {
           resolvedAt,
@@ -253,14 +254,24 @@ export class CommentService {
         comment.id,
         trx,
       );
-      if (jobData) {
+      if (resolveCommentDto.resolved) {
+        const jobData: ICommentResolvedNotificationJob = {
+          eventId: uuid7(),
+          commentId: lockedComment.id,
+          commentCreatorId: lockedComment.creatorId,
+          pageId: lockedComment.pageId,
+          spaceId: lockedComment.spaceId,
+          workspaceId: lockedComment.workspaceId,
+          actorId: authUser.id,
+        };
         await this.queueOutboxService.enqueueNotificationDispatch(
           { jobName: QueueJob.COMMENT_RESOLVED_NOTIFICATION, jobData },
           trx,
         );
+        notificationQueued = true;
       }
     });
-    if (jobData) this.queueOutboxService.kick();
+    if (notificationQueued) this.queueOutboxService.kick();
 
     return this.findById(comment.id);
   }
