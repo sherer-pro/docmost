@@ -43,40 +43,42 @@ describe('extractZip', () => {
     fs.rmSync(tempRoot, { recursive: true, force: true });
   });
 
-  it('prevents parent-directory traversal and keeps valid files', async () => {
+  it('rejects parent-directory traversal without writing archive files', async () => {
     await writeZip(archivePath, {
       '../escape.txt': 'pwned',
       'safe.md': '# Safe',
     });
 
-    await extractZip(archivePath, targetDir);
+    await expect(extractZip(archivePath, targetDir)).rejects.toThrow(
+      'Unsafe ZIP entry path',
+    );
 
     expect(fs.existsSync(path.join(tempRoot, 'escape.txt'))).toBe(false);
-    expect(fs.readFileSync(path.join(targetDir, 'safe.md'), 'utf8')).toBe(
-      '# Safe',
-    );
+    expect(fs.existsSync(path.join(targetDir, 'safe.md'))).toBe(false);
     expect(warnSpy).toHaveBeenCalledWith(
       expect.stringContaining('[security][zip-entry-rejected]'),
     );
     expect(
       warnSpy.mock.calls.some(([message]) =>
-        String(message).includes('reason=invalid-entry'),
+        String(message).includes('reason=invalid-entry-path'),
       ),
     ).toBe(true);
   });
 
-  it('normalizes absolute-path entries into the target directory', async () => {
+  it('rejects absolute-path entries instead of normalizing them', async () => {
     await writeZip(archivePath, {
       '/absolute-escape.txt': 'pwned',
     });
 
-    await extractZip(archivePath, targetDir);
+    await expect(extractZip(archivePath, targetDir)).rejects.toThrow(
+      /absolute path entries are not allowed/,
+    );
 
     expect(fs.existsSync(path.join(tempRoot, 'absolute-escape.txt'))).toBe(
       false,
     );
     expect(fs.existsSync(path.join(targetDir, 'absolute-escape.txt'))).toBe(
-      true,
+      false,
     );
   });
 
@@ -85,7 +87,9 @@ describe('extractZip', () => {
       '..\\windows-escape.txt': 'pwned',
     });
 
-    await extractZip(archivePath, targetDir);
+    await expect(extractZip(archivePath, targetDir)).rejects.toThrow(
+      'Unsafe ZIP entry path',
+    );
 
     expect(fs.existsSync(path.join(tempRoot, 'windows-escape.txt'))).toBe(
       false,
@@ -102,12 +106,14 @@ describe('extractZip', () => {
       'payload.zip': innerZipBuffer,
     });
 
-    await extractZip(archivePath, targetDir);
+    await expect(extractZip(archivePath, targetDir)).rejects.toThrow(
+      'Unsafe ZIP entry path',
+    );
 
     expect(fs.existsSync(path.join(tempRoot, 'nested-escape.txt'))).toBe(false);
-    expect(
-      fs.readFileSync(path.join(targetDir, 'nested', 'safe.txt'), 'utf8'),
-    ).toBe('safe');
+    expect(fs.existsSync(path.join(targetDir, 'nested', 'safe.txt'))).toBe(
+      false,
+    );
   });
 
   it('rejects symbolic-link entries instead of materializing them', async () => {

@@ -77,6 +77,33 @@ function isZipSymbolicLink(entry: yauzl.Entry): boolean {
   return creatorPlatform === 3 && unixFileType === 0xa000;
 }
 
+function validateZipEntryName(entryName: string): string {
+  if (
+    entryName.startsWith('/') ||
+    entryName.startsWith('\\') ||
+    /^[a-zA-Z]:[\\/]/.test(entryName)
+  ) {
+    throw new Error('ZIP absolute path entries are not allowed');
+  }
+
+  const slashName = entryName.replace(/\\/g, '/');
+  const normalized = path.posix.normalize(slashName);
+  if (
+    normalized === '..' ||
+    normalized.startsWith('../') ||
+    normalized.includes('/../')
+  ) {
+    throw new Error('Unsafe ZIP entry path');
+  }
+
+  const validationError = yauzl.validateFileName(entryName);
+  if (validationError) {
+    throw new Error(`Invalid ZIP entry path: ${validationError}`);
+  }
+
+  return normalized;
+}
+
 function resolveExtractZipLimits(
   options?: ExtractZipOptions,
 ): ExtractZipLimits {
@@ -121,6 +148,99 @@ export function createZipReadBudget(
 ): ZipReadBudget {
   const limits = resolveExtractZipLimits(options);
   return createBoundedZipReadBudget(limits);
+}
+
+/**
+ * Validates central-directory metadata before a library such as JSZip can
+ * collapse duplicate names or hide Unix file types from the caller.
+ */
+export function validateZipArchiveBuffer(
+  source: Buffer,
+  options?: ExtractZipOptions,
+): Promise<void> {
+  const limits = resolveExtractZipLimits(options);
+  return new Promise((resolve, reject) => {
+    yauzl.fromBuffer(
+      source,
+      { lazyEntries: true, decodeStrings: false, autoClose: true },
+      (error, zipfile) => {
+        if (error) return reject(error);
+        if (zipfile.entryCount > limits.maxEntries) {
+          zipfile.close();
+          return reject(
+            new Error(`ZIP entry count exceeds ${limits.maxEntries}`),
+          );
+        }
+
+        const state: ExtractZipState = {
+          entryCount: 0,
+          totalUncompressedBytes: 0,
+        };
+        const entryNames = new Set<string>();
+        let settled = false;
+        const fail = (reason: string, entryName: string, cause: Error) => {
+          if (settled) return;
+          settled = true;
+          logZipSecurityEvent(reason, entryName);
+          zipfile.close();
+          reject(cause);
+        };
+
+        zipfile.on('entry', (entry) => {
+          const rawName = entry.fileName.toString('utf8');
+          let normalizedName: string;
+          try {
+            normalizedName = validateZipEntryName(rawName);
+          } catch (entryError) {
+            fail('invalid-entry-path', rawName, entryError as Error);
+            return;
+          }
+          if (entryNames.has(normalizedName)) {
+            fail(
+              'duplicate-entry',
+              rawName,
+              new Error('ZIP archive contains a duplicate ZIP entry'),
+            );
+            return;
+          }
+          entryNames.add(normalizedName);
+          if (isZipSymbolicLink(entry)) {
+            fail(
+              'symbolic-link',
+              rawName,
+              new Error('ZIP symbolic link entries are not allowed'),
+            );
+            return;
+          }
+          try {
+            ensureZipEntryWithinLimits(
+              normalizedName,
+              entry.uncompressedSize,
+              limits,
+              state,
+            );
+          } catch (limitError) {
+            fail('quota-exceeded', rawName, limitError as Error);
+            return;
+          }
+          zipfile.readEntry();
+        });
+        zipfile.once('end', () => {
+          if (!settled) {
+            settled = true;
+            resolve();
+          }
+        });
+        zipfile.once('error', (zipError) => {
+          if (!settled) {
+            settled = true;
+            reject(zipError);
+          }
+        });
+        zipfile.readEntry();
+      },
+    );
+  });
 }
 
 export function getFileTaskFolderPath(
@@ -182,11 +302,22 @@ function extractZipInternal(
           );
         }
 
+        const entryNames = new Set<string>();
+
         // Handle one level of nested ZIP if allowed
         if (allowNested && zipfile.entryCount === 1) {
           zipfile.readEntry();
           zipfile.once('entry', (entry) => {
-            const name = entry.fileName.toString('utf8').replace(/^\/+/, '');
+            const rawName = entry.fileName.toString('utf8');
+            let name: string;
+            try {
+              name = validateZipEntryName(rawName);
+            } catch (entryError) {
+              logZipSecurityEvent('invalid-entry-path', rawName);
+              zipfile.close();
+              reject(entryError);
+              return;
+            }
             if (isZipSymbolicLink(entry)) {
               logZipSecurityEvent('symbolic-link', name);
               zipfile.close();
@@ -249,22 +380,28 @@ function extractZipInternal(
         zipfile.readEntry();
         zipfile.on('entry', (entry) => {
           const name = entry.fileName.toString('utf8');
-          const safe = name.replace(/^\/+/, '');
+          let safe: string;
+          try {
+            safe = validateZipEntryName(name);
+          } catch (entryError) {
+            logZipSecurityEvent('invalid-entry-path', name);
+            zipfile.close();
+            reject(entryError);
+            return;
+          }
+
+          if (entryNames.has(safe)) {
+            logZipSecurityEvent('duplicate-entry', name);
+            zipfile.close();
+            reject(new Error('ZIP archive contains a duplicate ZIP entry'));
+            return;
+          }
+          entryNames.add(safe);
 
           if (isZipSymbolicLink(entry)) {
             logZipSecurityEvent('symbolic-link', safe);
             zipfile.close();
             reject(new Error('ZIP symbolic link entries are not allowed'));
-            return;
-          }
-
-          const validationError = yauzl.validateFileName(safe);
-          if (validationError) {
-            logZipSecurityEvent(
-              `invalid-entry:${validationError}`,
-              entry.fileName.toString('utf8'),
-            );
-            zipfile.readEntry();
             return;
           }
 
@@ -294,7 +431,8 @@ function extractZipInternal(
 
           if (!resolved.startsWith(targetResolved + path.sep)) {
             logZipSecurityEvent('outside-target', safe);
-            zipfile.readEntry();
+            zipfile.close();
+            reject(new Error('ZIP entry resolves outside extraction target'));
             return;
           }
 
