@@ -173,6 +173,7 @@ export class EmailAggregationService {
       .select(['email', 'settings', 'locale'])
       .where('id', '=', userId)
       .where('deletedAt', 'is', null)
+      .where('deactivatedAt', 'is', null)
       .executeTakeFirst();
 
     if (!user) {

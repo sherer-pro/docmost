@@ -106,9 +106,7 @@ export class NotificationRepo {
    * Returns users that currently have unread and unsent notifications.
    * The list is ordered by earliest pending event to preserve fair processing.
    */
-  async findPendingEmailDigestUsers(
-    limit = 200,
-  ): Promise<
+  async findPendingEmailDigestUsers(limit = 200): Promise<
     Array<{
       userId: string;
       workspaceId: string;
@@ -125,6 +123,7 @@ export class NotificationRepo {
       .where('notifications.emailedAt', 'is', null)
       .where('notifications.archivedAt', 'is', null)
       .where('users.deletedAt', 'is', null)
+      .where('users.deactivatedAt', 'is', null)
       .where('users.email', 'is not', null)
       .where(
         sql<boolean>`

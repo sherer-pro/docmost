@@ -47,6 +47,10 @@ export class NotificationDeliveryPolicyService {
       return false;
     }
 
+    if (!(await this.canReceiveNotifications(userId))) {
+      return false;
+    }
+
     if (!pageId && spaceId) {
       const hasAccess = await this.hasSpaceAccess(userId, spaceId);
       if (!hasAccess) {
@@ -78,6 +82,18 @@ export class NotificationDeliveryPolicyService {
     return this.notificationRepo.isUnreadForUser(notificationId, userId);
   }
 
+  async canReceiveNotifications(userId: string): Promise<boolean> {
+    const user = await this.db
+      .selectFrom('users')
+      .select('id')
+      .where('id', '=', userId)
+      .where('deletedAt', 'is', null)
+      .where('deactivatedAt', 'is', null)
+      .executeTakeFirst();
+
+    return Boolean(user);
+  }
+
   private async hasSpaceAccess(
     userId: string,
     spaceId: string,
@@ -97,6 +113,7 @@ export class NotificationDeliveryPolicyService {
       .select('settings')
       .where('id', '=', userId)
       .where('deletedAt', 'is', null)
+      .where('deactivatedAt', 'is', null)
       .executeTakeFirst();
 
     if (!user) {

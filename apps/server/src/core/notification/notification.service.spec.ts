@@ -8,6 +8,7 @@ describe('NotificationService', () => {
     listResult?: unknown;
     unreadNotifications?: Array<{ id: string; pageId: string | null }>;
     usersWithPageAccess?: string[];
+    recipientActive?: boolean;
   }) => {
     const notificationRepo = {
       insert: jest.fn().mockImplementation(async (data) =>
@@ -52,6 +53,9 @@ describe('NotificationService', () => {
     } as any;
     const notificationDeliveryPolicyService = {
       shouldSend: jest.fn().mockResolvedValue(options?.shouldSend ?? true),
+      canReceiveNotifications: jest
+        .fn()
+        .mockResolvedValue(options?.recipientActive ?? true),
     } as any;
     const pageAccessService = {
       filterUsersWithPageReadAccess: jest
@@ -130,6 +134,29 @@ describe('NotificationService', () => {
       trx,
     );
     expect(queueOutboxService.kick).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not create or deliver a notification for a deactivated recipient', async () => {
+    const { service, notificationRepo, queueOutboxService, wsGateway } =
+      createService({ recipientActive: false });
+
+    const result = await service.createWithImmediateEmail(
+      {
+        userId: 'user-1',
+        workspaceId: 'workspace-1',
+        type: 'page.user_mention',
+        actorId: 'actor-1',
+        pageId: 'page-1',
+        spaceId: 'space-1',
+      } as any,
+      'event-deactivated:user-1',
+      { subject: 'Subject', template: {} },
+    );
+
+    expect(result).toBeNull();
+    expect(notificationRepo.insert).not.toHaveBeenCalled();
+    expect(queueOutboxService.enqueueNotificationEmail).not.toHaveBeenCalled();
+    expect(wsGateway.server.to).not.toHaveBeenCalled();
   });
 
   it('queues email immediately for immediate frequency', async () => {
