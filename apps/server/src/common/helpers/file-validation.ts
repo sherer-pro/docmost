@@ -71,10 +71,18 @@ export function resolveTrustedMimeType(opts: {
   fallbackMimeType?: string;
 }): string {
   const { fileExtension, fileBuffer, fallbackMimeType } = opts;
-  const expectedSignatures = SIGNATURE_RULES[fileExtension.toLowerCase()];
+  const normalizedExtension = fileExtension.toLowerCase();
+  const expectedSignatures = SIGNATURE_RULES[normalizedExtension];
   const detected = detectFileTypeFromBuffer(fileBuffer);
 
-  if (expectedSignatures && detected && expectedSignatures.includes(detected.ext)) {
+  if (
+    expectedSignatures &&
+    detected &&
+    expectedSignatures.includes(detected.ext)
+  ) {
+    if (normalizedExtension === '.docx' && detected.ext === 'zip') {
+      return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    }
     return detected.mime;
   }
 
