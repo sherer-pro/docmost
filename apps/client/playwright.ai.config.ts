@@ -2,8 +2,8 @@ import { defineConfig, devices } from "@playwright/test";
 import path from "node:path";
 
 const auditRoot = path.resolve(
-  process.cwd(),
-  "../../output/audit/ai-assistant-2026-08-07",
+  process.env.DOCMOST_AI_AUDIT_ROOT ??
+    path.resolve(process.cwd(), "../../output/audit/ai-assistant-2026-08-07"),
 );
 const baseURL = process.env.DOCMOST_BASE_URL ?? "http://localhost:3000";
 
