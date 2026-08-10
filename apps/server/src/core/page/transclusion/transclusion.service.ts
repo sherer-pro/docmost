@@ -4,9 +4,11 @@ import {
   ForbiddenException,
   NotFoundException,
   Optional,
+  ConflictException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { isDeepStrictEqual } from 'node:util';
-import { v7 as uuid7 } from 'uuid';
+import { v5 as uuid5 } from 'uuid';
 import { KyselyTransaction } from '@docmost/db/types/kysely.types';
 import { PageTransclusionsRepo } from '@docmost/db/repos/page-transclusions/page-transclusions.repo';
 import { PageTransclusionReferencesRepo } from '@docmost/db/repos/page-transclusions/page-transclusion-references.repo';
@@ -30,6 +32,8 @@ type ReferencingPageInfo = {
   spaceId: string;
   spaceSlug: string | null;
 };
+
+const UNSYNC_ATTACHMENT_NAMESPACE = '6ba7b811-9dad-11d1-80b4-00c04fd430c8';
 
 @Injectable()
 export class TransclusionService {
@@ -399,13 +403,13 @@ export class TransclusionService {
 
   /**
    * Convert a `transclusionReference` into a self-contained copy on the
-   * reference page: load source content, generate fresh attachment ids, copy storage
-   * files, insert new attachment rows, return rewritten content. The caller
+   * reference page: load source content, generate deterministic attachment ids,
+   * copy storage files, insert new attachment rows, return rewritten content. The caller
    * (controller) returns the content blob to the client which then performs
-   * `editor.commands.insertContentAt(range, content)` to replace the
-   * reference node. The next Yjs save naturally cleans up the
-   * page_transclusion_references row, but we also delete it eagerly here so a
-   * crash between server response and client save doesn't leave a stale row.
+   * `editor.commands.insertContentAt(range, content)` to replace the reference
+   * node. Reference-graph cleanup is intentionally left to the next atomic Yjs
+   * persistence pass; deleting it before the client saves can lose a still-live
+   * edge when the page has another matching reference or the client disconnects.
    */
   async unsyncReference(
     referencePageId: string,
@@ -445,56 +449,139 @@ export class TransclusionService {
 
     const { content, copies } = rewriteAttachmentsForUnsync(
       transclusion.content,
-      () => uuid7(),
+      (oldAttachmentId) =>
+        uuid5(
+          `${referencePageId}:${sourcePageId}:${transclusionId}:${oldAttachmentId ?? ''}`,
+          UNSYNC_ATTACHMENT_NAMESPACE,
+        ),
     );
 
     if (copies.length > 0) {
-      const oldIds = copies.map((c) => c.oldAttachmentId);
-      const oldRows = await this.attachmentRepo.findByIds(oldIds);
-      const byOldId = new Map(
-        oldRows.filter((a) => a.pageId === sourcePageId).map((a) => [a.id, a]),
-      );
-
-      for (const plan of copies) {
-        const old = byOldId.get(plan.oldAttachmentId);
-        if (!old) continue;
-
-        const newFilePath = old.filePath
-          .split(plan.oldAttachmentId)
-          .join(plan.newAttachmentId);
-        try {
-          await this.storageService.copy(old.filePath, newFilePath);
-        } catch (err) {
-          this.logger.error(
-            `unsync: failed to copy attachment ${old.id}`,
-            err as Error,
-          );
-          continue;
-        }
-        await this.attachmentRepo.insertAttachment({
-          id: plan.newAttachmentId,
-          type: old.type,
-          filePath: newFilePath,
-          fileName: old.fileName,
-          fileSize: old.fileSize,
-          mimeType: old.mimeType,
-          fileExt: old.fileExt,
-          creatorId: user.id,
-          workspaceId: referencePage.workspaceId,
-          pageId: referencePageId,
-          spaceId: referencePage.spaceId,
-          textContent: old.textContent,
-        });
-      }
+      await this.materializeUnsyncedAttachments({
+        copies,
+        referencePage,
+        sourcePageId,
+        user,
+      });
     }
 
-    await this.pageTransclusionReferencesRepo.deleteOne(
-      referencePageId,
-      sourcePageId,
-      transclusionId,
-    );
-
     return { content };
+  }
+
+  private async materializeUnsyncedAttachments(opts: {
+    copies: Array<{ oldAttachmentId: string; newAttachmentId: string }>;
+    referencePage: Page;
+    sourcePageId: string;
+    user: User;
+  }): Promise<void> {
+    const { copies, referencePage, sourcePageId, user } = opts;
+    const copiedPaths: string[] = [];
+
+    try {
+      await this.pageTransclusionReferencesRepo.withWorkspaceGraphLock(
+        referencePage.workspaceId,
+        async (trx) => {
+          const attachmentIds = Array.from(
+            new Set(
+              copies.flatMap((copy) => [
+                copy.oldAttachmentId,
+                copy.newAttachmentId,
+              ]),
+            ),
+          );
+          const rows = await this.attachmentRepo.findByIds(attachmentIds, {
+            trx,
+          });
+          const byId = new Map(rows.map((row) => [row.id, row]));
+
+          for (const plan of copies) {
+            const old = byId.get(plan.oldAttachmentId);
+            const existing = byId.get(plan.newAttachmentId);
+
+            if (
+              existing &&
+              (existing.pageId !== referencePage.id ||
+                existing.workspaceId !== referencePage.workspaceId)
+            ) {
+              throw new ConflictException(
+                'Synced block attachment target is unavailable',
+              );
+            }
+
+            if (
+              existing &&
+              (await this.storageService.exists(existing.filePath))
+            ) {
+              continue;
+            }
+
+            if (!old || old.pageId !== sourcePageId) {
+              throw new ConflictException(
+                'Synced block attachment source is unavailable',
+              );
+            }
+
+            const newFilePath = old.filePath
+              .split(plan.oldAttachmentId)
+              .join(plan.newAttachmentId);
+            if (newFilePath === old.filePath) {
+              throw new ConflictException(
+                'Synced block attachment path cannot be materialized',
+              );
+            }
+            if (existing && existing.filePath !== newFilePath) {
+              throw new ConflictException(
+                'Synced block attachment target is inconsistent',
+              );
+            }
+
+            await this.storageService.copy(old.filePath, newFilePath);
+            copiedPaths.push(newFilePath);
+
+            if (!existing) {
+              await this.attachmentRepo.insertAttachment(
+                {
+                  id: plan.newAttachmentId,
+                  type: old.type,
+                  filePath: newFilePath,
+                  fileName: old.fileName,
+                  fileSize: old.fileSize,
+                  mimeType: old.mimeType,
+                  fileExt: old.fileExt,
+                  creatorId: user.id,
+                  workspaceId: referencePage.workspaceId,
+                  pageId: referencePage.id,
+                  spaceId: referencePage.spaceId,
+                  textContent: old.textContent,
+                },
+                trx,
+              );
+            }
+          }
+        },
+      );
+    } catch (error) {
+      let cleanupFailedCount = 0;
+      for (const filePath of copiedPaths.reverse()) {
+        try {
+          await this.storageService.delete(filePath);
+        } catch {
+          cleanupFailedCount += 1;
+        }
+      }
+
+      if (error instanceof ConflictException) {
+        throw error;
+      }
+      this.logger.error({
+        event: 'transclusion_unsync_attachment_materialization_failed',
+        copiedCount: copiedPaths.length,
+        cleanupFailedCount,
+      });
+      throw new InternalServerErrorException(
+        'Could not materialize synced block attachments',
+      );
+    }
   }
 
   private async filterReadablePageIds(

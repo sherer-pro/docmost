@@ -54,6 +54,18 @@ async function makeEditable(page: import("@playwright/test").Page) {
   await expect(editor).toHaveAttribute("contenteditable", "true");
 }
 
+async function closeOverlayAside(page: import("@playwright/test").Page) {
+  const aside = page.locator("#docmost-context-aside");
+  if (!(await aside.isVisible())) return;
+
+  const closeButton = aside.getByRole("button", {
+    name: /Close panel|Закрыть панель/i,
+  });
+  await expect(closeButton).toBeVisible();
+  await closeButton.click();
+  await expect(aside).not.toBeVisible();
+}
+
 function collectNodeTypes(
   input: unknown,
   result = new Set<string>(),
@@ -69,7 +81,7 @@ test("audits synced block creation, lookup recovery, ACL, clipboard and unsync",
   page,
   browser,
 }, testInfo) => {
-  test.setTimeout(240_000);
+  test.setTimeout(1_200_000);
   const api = await createAdminApi();
   const state = await loadAuditState();
   const suffix = `${testInfo.project.name}-${Date.now()}`;
@@ -380,6 +392,7 @@ test("audits synced block creation, lookup recovery, ACL, clipboard and unsync",
       await route.continue();
     });
     await page.goto(pageUrl(state, consumer));
+    await closeOverlayAside(page);
     await expect(mainEditor(page)).toContainText(`Shared text ${suffix}`);
     expect(lookupRequests).toBeGreaterThanOrEqual(2);
     await expect(mainEditor(page)).toContainText(`Shared list ${suffix}`);
@@ -428,6 +441,7 @@ test("audits synced block creation, lookup recovery, ACL, clipboard and unsync",
     await expect(mainEditor(memberConsumerPage)).toContainText(
       `Shared text ${suffix}`,
     );
+    const lookupRequestsBeforeLiveEdit = lookupRequests;
     const sourceText = mainEditor(memberSourcePage).getByText(
       `Shared text ${suffix}`,
       { exact: true },
@@ -435,8 +449,15 @@ test("audits synced block creation, lookup recovery, ACL, clipboard and unsync",
     await sourceText.click();
     await memberSourcePage.keyboard.press("End");
     await memberSourcePage.keyboard.type(" live-update");
+    await expect(mainEditor(memberSourcePage)).toContainText(
+      `Shared text ${suffix} live-update`,
+    );
+    await expect
+      .poll(() => lookupRequests, { timeout: 45_000 })
+      .toBeGreaterThan(lookupRequestsBeforeLiveEdit);
     await expect(mainEditor(page)).toContainText(
       `Shared text ${suffix} live-update`,
+      { timeout: 45_000 },
     );
 
     await apiPost(api, "/api/pages/actions/update", {

@@ -342,6 +342,68 @@ describe("TransclusionLookupProvider", () => {
     expect(content?.textContent).toContain("After");
   });
 
+  it("refreshes mounted references after the realtime socket reconnects", async () => {
+    lookup
+      .mockResolvedValueOnce({
+        items: [
+          {
+            sourcePageId: "page-1",
+            transclusionId: "block-1",
+            content: {
+              type: "doc",
+              content: [
+                {
+                  type: "paragraph",
+                  content: [{ type: "text", text: "Before reconnect" }],
+                },
+              ],
+            },
+            sourceUpdatedAt: "2026-08-05T00:00:00.000Z",
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        items: [
+          {
+            sourcePageId: "page-1",
+            transclusionId: "block-1",
+            content: {
+              type: "doc",
+              content: [
+                {
+                  type: "paragraph",
+                  content: [{ type: "text", text: "After reconnect" }],
+                },
+              ],
+            },
+            sourceUpdatedAt: "2026-08-05T00:01:00.000Z",
+          },
+        ],
+      });
+
+    await act(async () => {
+      root.render(
+        <TransclusionLookupProvider>
+          <Probe />
+        </TransclusionLookupProvider>,
+      );
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10);
+    });
+    const content = container.querySelector('[data-testid="content-block-1"]');
+    expect(content?.textContent).toContain("Before reconnect");
+    expect(fakeSocket.on).toHaveBeenCalledWith("connect", expect.any(Function));
+
+    await act(async () => {
+      emitSocketEvent("connect");
+      await vi.advanceTimersByTimeAsync(60);
+    });
+
+    expect(lookup).toHaveBeenCalledTimes(2);
+    expect(content?.textContent).toContain("After reconnect");
+  });
+
   it("splits 51 unique references at the API limit", async () => {
     lookup.mockImplementation(async ({ references }) => ({
       items: references.map(({ sourcePageId, transclusionId }) => ({

@@ -1,4 +1,9 @@
-import { ConflictException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
 import { Hocuspocus, Document } from '@hocuspocus/server';
 import { TiptapTransformer } from '@hocuspocus/transformer';
 import {
@@ -44,6 +49,14 @@ export class CollaborationHandler {
         },
       ) => {
         const { prosemirrorJson, operation, user } = payload;
+        try {
+          strictJsonToNode(prosemirrorJson).check();
+        } catch {
+          throw new BadRequestException({
+            code: 'invalid_page_content',
+            message: 'Invalid page content',
+          });
+        }
         this.logger.debug('Updating page content via yjs', documentName);
         await this.withYdocConnection(
           hocuspocus,
