@@ -927,6 +927,12 @@ describe('DatabaseService mixed tree flows', () => {
   it('renames row, regenerates slug and records rename history event', async () => {
     pageRepo.findById
       .mockResolvedValueOnce({
+        id: 'db-root-page',
+        workspaceId: 'ws-1',
+        spaceId: 'space-1',
+        deletedAt: null,
+      })
+      .mockResolvedValueOnce({
         id: 'row-page-1',
         workspaceId: 'ws-1',
         spaceId: 'space-1',
@@ -1289,7 +1295,12 @@ describe('DatabaseService mixed tree flows', () => {
   });
 
   it('converts database to page without deleting row cell values', async () => {
-    pageRepo.findById.mockResolvedValue({ id: 'db-root-page' });
+    pageRepo.findById.mockResolvedValue({
+      id: 'db-root-page',
+      workspaceId: 'ws-1',
+      spaceId: 'space-1',
+      deletedAt: null,
+    });
 
     await service.convertDatabaseToPage('db-1', user, 'ws-1');
 
@@ -1724,6 +1735,11 @@ describe('DatabaseService mixed tree flows', () => {
       pageId: 'row-page-1',
       archivedAt: null,
     });
+    databasePropertyRepo.findByDatabaseId.mockResolvedValue([
+      { id: 'prop-checkbox', type: 'checkbox', name: 'Checkbox' },
+      { id: 'prop-text', type: 'multiline_text', name: 'Text' },
+      { id: 'prop-object', type: 'multiline_text', name: 'Object' },
+    ]);
 
     databaseCellRepo.upsertCell
       .mockResolvedValueOnce({
@@ -1805,6 +1821,9 @@ describe('DatabaseService mixed tree flows', () => {
       pageId: 'row-page-1',
       archivedAt: null,
     });
+    databasePropertyRepo.findByDatabaseId.mockResolvedValue([
+      { id: 'prop-delete', type: 'multiline_text', name: 'Delete me' },
+    ]);
     databaseCellRepo.upsertCell.mockResolvedValue({
       id: 'cell-delete',
       propertyId: 'prop-delete',
@@ -1890,6 +1909,11 @@ describe('DatabaseService mixed tree flows', () => {
       propertyId: 'prop-text',
       value: 'new value',
     });
+    databaseRowRepo.findByDatabaseId.mockResolvedValue(
+      Array.from({ length: 1_000 }, (_, index) => ({
+        pageId: `unrelated-row-page-${index}`,
+      })),
+    );
 
     await service.batchUpdateRowCells(
       'db-1',
@@ -1899,16 +1923,71 @@ describe('DatabaseService mixed tree flows', () => {
       'ws-1',
     );
 
-    expect(pageHistoryRecorder.enqueuePageEvents).toHaveBeenCalledWith(
+    expect(databaseRowRepo.findByDatabaseId).not.toHaveBeenCalled();
+    expect(pageHistoryRecorder.enqueuePageEvents).toHaveBeenNthCalledWith(
+      1,
       expect.objectContaining({
+        pageIds: ['row-page-1'],
         changeType: 'database.row.cells.updated',
+        changeData: expect.objectContaining({
+          changes: expect.any(Array),
+        }),
       }),
     );
+    expect(pageHistoryRecorder.enqueuePageEvents).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        pageIds: ['db-root-page'],
+        changeType: 'database.row.cells.updated',
+        changeData: {
+          databaseId: 'db-1',
+          rowContext: { rowPageId: 'row-page-1' },
+        },
+      }),
+    );
+  });
+
+  it('rejects a cell property from another database before writing anything', async () => {
+    pageRepo.findById.mockResolvedValue({
+      id: 'row-page-1',
+      workspaceId: 'ws-1',
+      spaceId: 'space-1',
+      deletedAt: null,
+    });
+    databaseRowRepo.findByDatabaseAndPage.mockResolvedValue({
+      id: 'row-1',
+      databaseId: 'db-1',
+      pageId: 'row-page-1',
+      archivedAt: null,
+    });
+    databasePropertyRepo.findByDatabaseId.mockResolvedValue([
+      { id: 'prop-local', type: 'multiline_text', name: 'Notes' },
+    ]);
+
+    await expect(
+      service.batchUpdateRowCells(
+        'db-1',
+        'row-page-1',
+        { cells: [{ propertyId: 'prop-foreign', value: 'canary' }] },
+        user,
+        'ws-1',
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(databaseCellRepo.upsertCell).not.toHaveBeenCalled();
+    expect(databaseCellRepo.updateCell).not.toHaveBeenCalled();
+    expect(pageHistoryRecorder.enqueuePageEvents).not.toHaveBeenCalled();
   });
 
   it('stores readable history payload for select, user, and page reference cells', async () => {
     pageRepo.findById.mockImplementation(async (pageId: string) => {
       const pages: Record<string, any> = {
+        'db-root-page': {
+          id: 'db-root-page',
+          workspaceId: 'ws-1',
+          spaceId: 'space-1',
+          deletedAt: null,
+        },
         'row-page-1': {
           id: 'row-page-1',
           workspaceId: 'ws-1',

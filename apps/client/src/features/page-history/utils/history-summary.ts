@@ -1,10 +1,7 @@
 import { IPageHistory } from "@/features/page-history/types/page.types";
 import { PAGE_AI_ROLE } from "@docmost/api-contract";
 
-type TranslateFn = (
-  key: string,
-  options?: Record<string, unknown>,
-) => string;
+type TranslateFn = (key: string, options?: Record<string, unknown>) => string;
 
 export interface IHistoryEventDetailRow {
   id: string;
@@ -285,14 +282,20 @@ function formatFieldChangeRow(
   };
 }
 
-function formatPropertyName(changeData: Record<string, unknown>, t: TranslateFn): string {
+function formatPropertyName(
+  changeData: Record<string, unknown>,
+  t: TranslateFn,
+): string {
   const property = isRecord(changeData.property) ? changeData.property : {};
   return typeof property.name === "string" && property.name
     ? property.name
     : tHistory(t, "history.event.property.untitled");
 }
 
-function formatRowTitle(changeData: Record<string, unknown>, t: TranslateFn): string {
+function formatRowTitle(
+  changeData: Record<string, unknown>,
+  t: TranslateFn,
+): string {
   const row = isRecord(changeData.row) ? changeData.row : {};
   return typeof row.title === "string" && row.title.trim()
     ? row.title
@@ -426,12 +429,21 @@ function buildEventDetail(
   }
 
   if (changeType === "database.row.deleted") {
-    const rowContext = isRecord(changeData.rowContext) ? changeData.rowContext : {};
-    const deletedCount = asArray(rowContext.descendantPageIds).length;
+    const rowContext = isRecord(changeData.rowContext)
+      ? changeData.rowContext
+      : {};
+    const deletedCount =
+      typeof rowContext.descendantCount === "number" &&
+      Number.isSafeInteger(rowContext.descendantCount) &&
+      rowContext.descendantCount >= 0
+        ? rowContext.descendantCount
+        : asArray(rowContext.descendantPageIds).length;
 
     return {
       id,
-      title: tHistory(t, "history.event.database.row.deleted", { deletedCount }),
+      title: tHistory(t, "history.event.database.row.deleted", {
+        deletedCount,
+      }),
       lines: [],
       rows: [],
     };
@@ -469,9 +481,13 @@ function buildEventDetail(
       id,
       title:
         uniqueFields.length > 0
-          ? tHistory(t, "history.event.database.row.cells.updated.with-fields", {
-              fields: uniqueFields.join(", "),
-            })
+          ? tHistory(
+              t,
+              "history.event.database.row.cells.updated.with-fields",
+              {
+                fields: uniqueFields.join(", "),
+              },
+            )
           : tHistory(t, "history.event.database.row.cells.updated"),
       lines: rows.map((row) => row.line),
       rows,
@@ -513,7 +529,9 @@ export function formatHistoryEventDetails(
     return [];
   }
 
-  const changeData = isRecord(historyItem.changeData) ? historyItem.changeData : {};
+  const changeData = isRecord(historyItem.changeData)
+    ? historyItem.changeData
+    : {};
 
   if (changeType === "page.events.combined") {
     const events = asArray(changeData.events);
@@ -528,9 +546,7 @@ export function formatHistoryEventDetails(
       }
 
       const nestedType =
-        typeof event.changeType === "string"
-          ? event.changeType
-          : "";
+        typeof event.changeType === "string" ? event.changeType : "";
       const nestedData = isRecord(event.changeData) ? event.changeData : {};
 
       return buildEventDetail(
