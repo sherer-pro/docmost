@@ -34,6 +34,7 @@ import {
   FileTaskType,
   getFileTaskFolderPath,
   readZipEntryWithBudget,
+  validateZipArchiveBuffer,
   ZipBudgetExceededError,
   type ZipReadBudget,
 } from '../utils/file.utils';
@@ -477,6 +478,16 @@ export class ImportService {
   private async inspectDocmostArchive(
     fileBuffer: Buffer,
   ): Promise<Omit<ImportPreview, 'fileTaskId'>> {
+    try {
+      await validateZipArchiveBuffer(fileBuffer);
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error
+          ? error.message
+          : 'Invalid or corrupted ZIP archive',
+      );
+    }
+
     let zip: JSZip;
     try {
       zip = await JSZip.loadAsync(fileBuffer, {
