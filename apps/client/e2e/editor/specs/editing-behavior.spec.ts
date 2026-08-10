@@ -206,9 +206,18 @@ test("supports keyboard indent, page breaks, tables, slash commands, paste and u
         ),
       )
       .toBe(true);
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        ),
+    );
     await page.keyboard.press("Tab");
-    const tabIndented =
-      (await indentTarget.getAttribute("data-indent")) === "1";
+    const tabIndented = await expect
+      .poll(() => indentTarget.getAttribute("data-indent"), { timeout: 2_000 })
+      .toBe("1")
+      .then(() => true)
+      .catch(() => false);
     if (!tabIndented) {
       await indentTarget.click();
       await page.keyboard.press("Home");

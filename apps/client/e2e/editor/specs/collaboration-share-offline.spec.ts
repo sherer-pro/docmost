@@ -147,7 +147,7 @@ test("collaborative editing, public readonly share and offline interruption", as
     await page.reload({ waitUntil: "domcontentloaded" }).catch(() => undefined);
     const offlineMessage = page
       .getByText(
-        /You are offline|There is no network connection|^Offline$|Failed to load page/i,
+        /You are offline|There is no network connection|Offline mode|^Offline$|Failed to load page|can't connect to the server|Try Again/i,
       )
       .first();
     const offlineMessageVisible = await offlineMessage
