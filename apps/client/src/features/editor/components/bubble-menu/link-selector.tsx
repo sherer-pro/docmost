@@ -39,6 +39,7 @@ export const LinkSelector: FC<LinkSelectorProps> = ({
             variant="default"
             size="lg"
             radius="0"
+            aria-label={t("Add link")}
             style={{
               border: "none",
             }}

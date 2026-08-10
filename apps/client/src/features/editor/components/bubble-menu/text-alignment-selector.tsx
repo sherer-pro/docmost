@@ -94,6 +94,7 @@ export const TextAlignmentSelector: FC<TextAlignmentProps> = ({
         >
           <Button
             variant="default"
+            aria-label={t("Text align")}
             style={{ border: "none", height: "34px" }}
             px="5"
             radius="0"
