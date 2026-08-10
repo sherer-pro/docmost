@@ -79,6 +79,7 @@ export class EmailProcessor
       .select(['email', 'settings'])
       .where('id', '=', message.notificationUserId)
       .where('deletedAt', 'is', null)
+      .where('deactivatedAt', 'is', null)
       .executeTakeFirst();
 
     if (!user?.email || user.email !== message.to) {
