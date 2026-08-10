@@ -2,7 +2,11 @@ import { Injectable } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import { ExpressionBuilder, SelectQueryBuilder, sql } from 'kysely';
 import { jsonObjectFrom } from 'kysely/helpers/postgres';
-import { InsertableFavorite, Favorite } from '@docmost/db/types/entity.types';
+import {
+  InsertableFavorite,
+  Favorite,
+  Page,
+} from '@docmost/db/types/entity.types';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import { executeWithCursorPagination } from '@docmost/db/pagination/cursor-pagination';
@@ -82,6 +86,20 @@ export class FavoriteRepo {
         .filter(Boolean),
       meta: result.meta,
     };
+  }
+
+  async findPagesByIds(pageIds: string[]): Promise<Page[]> {
+    if (pageIds.length === 0) {
+      return [];
+    }
+
+    const pages = await this.db
+      .selectFrom('pages')
+      .select(['id', 'spaceId', 'workspaceId', 'deletedAt'])
+      .where('id', 'in', pageIds)
+      .execute();
+
+    return pages as Page[];
   }
 
   async findUserFavorites(
