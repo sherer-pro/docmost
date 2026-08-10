@@ -35,6 +35,7 @@ describe('AttachmentContentService', () => {
         updateTable: jest.fn(() => updateQuery),
       },
       updates,
+      updateQuery,
     };
   };
 
@@ -43,7 +44,7 @@ describe('AttachmentContentService', () => {
     storage = { read: jest.fn() },
     opts: { claim?: boolean } = {},
   ) => {
-    const { db, updates } = createDb(attachment, opts);
+    const { db, updates, updateQuery } = createDb(attachment, opts);
     const storageWithExists = {
       exists: jest.fn().mockResolvedValue(true),
       ...storage,
@@ -54,7 +55,7 @@ describe('AttachmentContentService', () => {
       { add: jest.fn() } as any,
       { add: jest.fn() } as any,
     );
-    return { service, updates };
+    return { service, updates, updateQuery };
   };
 
   it('normalizes extracted text and enforces the character cap', () => {
@@ -231,6 +232,44 @@ describe('AttachmentContentService', () => {
     expect(updates).toHaveLength(0);
   });
 
+  it('claims ready content again when its extraction version is stale', async () => {
+    const storage = { read: jest.fn().mockResolvedValue(Buffer.from('pdf')) };
+    const { service, updateQuery } = createService(
+      {
+        id: 'attachment-1',
+        filePath: 'files/document.pdf',
+        fileName: 'document.pdf',
+        fileExt: '.pdf',
+        fileSize: 100,
+        contentIndexStatus: 'ready',
+        contentIndexVersion: ATTACHMENT_CONTENT_INDEX_VERSION - 1,
+      },
+      storage,
+    );
+    jest
+      .spyOn(service as any, 'extractPdfText')
+      .mockResolvedValue('fresh content');
+    jest
+      .spyOn(service as any, 'saveExtractedText')
+      .mockResolvedValue(undefined);
+
+    await service.indexAttachment('attachment-1');
+
+    const statusPredicate = updateQuery.where.mock.calls.find(
+      ([predicate]: [unknown]) => typeof predicate === 'function',
+    )?.[0] as ((eb: any) => unknown) | undefined;
+    const eb: any = (column: string, operator: string, value: unknown) => ({
+      column,
+      operator,
+      value,
+    });
+    eb.and = (expressions: unknown[]) => expressions;
+    eb.or = (expressions: unknown[]) => expressions;
+    expect(statusPredicate).toBeDefined();
+    expect(JSON.stringify(statusPredicate?.(eb))).toContain('ready');
+    expect(storage.read).toHaveBeenCalled();
+  });
+
   it('aborts extraction work that outlives the deadline', async () => {
     const { service } = createService({});
     const neverSettles = new Promise(() => undefined);
@@ -287,6 +326,48 @@ describe('AttachmentContentService', () => {
       'search-index-attachment',
       { attachmentIds: ['attachment-1'] },
       expect.objectContaining({ attempts: 3 }),
+    );
+  });
+
+  it('keeps successfully extracted text ready when search queueing is unavailable', async () => {
+    const updateQuery: any = {
+      set: jest.fn(() => updateQuery),
+      where: jest.fn(() => updateQuery),
+      returning: jest.fn(() => updateQuery),
+      executeTakeFirst: jest.fn().mockResolvedValue({ id: 'attachment-1' }),
+    };
+    const searchQueue = {
+      add: jest.fn().mockRejectedValue(new Error('synthetic Redis outage')),
+    };
+    const db = {
+      transaction: jest.fn(() => ({
+        execute: (callback: (trx: unknown) => unknown) =>
+          callback({ updateTable: jest.fn(() => updateQuery) }),
+      })),
+    };
+    const service = new AttachmentContentService(
+      {} as any,
+      db as any,
+      {} as any,
+      searchQueue as any,
+    );
+
+    await expect(
+      (service as any).saveExtractedText(
+        {
+          id: 'attachment-1',
+          filePath: 'files/document.pdf',
+        },
+        'indexed content',
+        new Date('2026-01-01T00:00:01Z'),
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(updateQuery.set).toHaveBeenCalledWith(
+      expect.objectContaining({
+        textContent: 'indexed content',
+        contentIndexStatus: 'ready',
+      }),
     );
   });
 
