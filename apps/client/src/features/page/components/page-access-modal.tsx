@@ -28,7 +28,7 @@ import {
   PageAccessGroupRuleEntry,
   PageAccessUserEntry,
 } from "@/features/page/types/page.types";
-import { stopPageAccessModalEvent } from "@/features/page/utils/page-access-ui";
+import { pageAccessModalEventHandlers } from "@/features/page/utils/page-access-ui";
 import { useSearchSuggestionsQuery } from "@/features/search/queries/search-query.ts";
 
 interface PageAccessModalProps {
@@ -271,7 +271,7 @@ export default function PageAccessModal({
       onClose={onClose}
       size="lg"
       centered
-      onClick={stopPageAccessModalEvent}
+      {...pageAccessModalEventHandlers}
     >
       <Modal.Overlay />
       <Modal.Content>

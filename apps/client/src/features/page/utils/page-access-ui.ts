@@ -24,10 +24,16 @@ export function canOpenPageAccessModal(input: {
 }
 
 /**
- * Prevents click events inside access modal from reaching parent page links.
+ * Prevents pointer and keyboard events inside the access modal from reaching
+ * parent page-tree handlers.
  */
 export function stopPageAccessModalEvent(event: {
   stopPropagation: () => void;
 }): void {
   event.stopPropagation();
 }
+
+export const pageAccessModalEventHandlers = {
+  onClick: stopPageAccessModalEvent,
+  onKeyDown: stopPageAccessModalEvent,
+} as const;
