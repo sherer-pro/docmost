@@ -8,7 +8,37 @@ jest.mock('../../collaboration/collaboration.util', () => ({
       return content.text;
     }
 
-    return '';
+    const inlineText = (node: any): string => {
+      if (node?.type === 'text') return node.text ?? '';
+      return (node?.content ?? []).map(inlineText).join('');
+    };
+    const renderBlock = (node: any): string => {
+      if (node?.type === 'doc') {
+        return (node.content ?? []).map(renderBlock).join('\n\n');
+      }
+      if (node?.type === 'heading') {
+        return `${'#'.repeat(node.attrs?.level ?? 1)} ${inlineText(node)}`;
+      }
+      if (node?.type === 'bulletList') {
+        return (node.content ?? [])
+          .map((item: any) => `- ${inlineText(item)}`)
+          .join('\n');
+      }
+      if (node?.type === 'table') {
+        const rows = (node.content ?? []).map((row: any) =>
+          (row.content ?? []).map(inlineText),
+        );
+        if (rows.length === 0) return '';
+        return [
+          `| ${rows[0].join(' | ')} |`,
+          `| ${rows[0].map(() => '---').join(' | ')} |`,
+          ...rows.slice(1).map((row: string[]) => `| ${row.join(' | ')} |`),
+        ].join('\n');
+      }
+      return inlineText(node);
+    };
+
+    return renderBlock(content);
   },
 }));
 
@@ -172,6 +202,82 @@ describe('CopyMarkdownWithCommentsService', () => {
     );
   });
 
+  it('uses the rendered Markdown line for comments inside lists', async () => {
+    exportService.exportPage.mockResolvedValue(
+      [
+        '# Page title',
+        '',
+        '## G17 section',
+        '',
+        '- First item',
+        '- Second item Unicode Привет 東京',
+        '',
+        '| Header A | Header B |',
+        '| --- | --- |',
+        '| Cell A | Cell B |',
+        '',
+        'After table',
+      ].join('\n'),
+    );
+    commentRepo.findAllPageCommentsWithActors.mockResolvedValue([
+      createComment({
+        id: 'list-comment',
+        selection: 'Second item Unicode Привет 東京',
+        content: { text: 'List body' },
+      }),
+    ]);
+
+    const renderedPage = {
+      ...page,
+      content: {
+        type: 'doc',
+        content: [
+          headingNode(2, 'G17 section'),
+          {
+            type: 'bulletList',
+            content: [
+              {
+                type: 'listItem',
+                content: [paragraphNode([textNode('First item')])],
+              },
+              {
+                type: 'listItem',
+                content: [
+                  paragraphNode([
+                    textNode('Second item Unicode Привет 東京', 'list-comment'),
+                  ]),
+                ],
+              },
+            ],
+          },
+          {
+            type: 'table',
+            content: [
+              {
+                type: 'tableRow',
+                content: [
+                  tableCellNode('tableHeader', 'Header A'),
+                  tableCellNode('tableHeader', 'Header B'),
+                ],
+              },
+              {
+                type: 'tableRow',
+                content: [
+                  tableCellNode('tableCell', 'Cell A'),
+                  tableCellNode('tableCell', 'Cell B'),
+                ],
+              },
+            ],
+          },
+          paragraphNode([textNode('After table')]),
+        ],
+      },
+    } as any;
+    const markdown = await service.build(renderedPage, user);
+
+    expect(markdown).toContain('- Markdown line: 6');
+  });
+
   it('keeps malformed page and comment content from breaking markdown generation', async () => {
     commentRepo.findAllPageCommentsWithActors.mockResolvedValue([
       createComment({
@@ -244,5 +350,13 @@ function textNode(text: string, commentId?: string) {
           ],
         }
       : {}),
+  };
+}
+
+function tableCellNode(type: 'tableHeader' | 'tableCell', text: string) {
+  return {
+    type,
+    attrs: { colspan: 1, rowspan: 1, colwidth: null },
+    content: [paragraphNode([textNode(text)])],
   };
 }
