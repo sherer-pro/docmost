@@ -100,7 +100,7 @@ describe('OpenAiCompatibleProviderService', () => {
     expect(reasoningChunks).toEqual(['fallback', 'preferred']);
   });
 
-  it('discards reasoning when no reasoning handler is configured', async () => {
+  it('rejects a reasoning-only stream when reasoning is disabled', async () => {
     global.fetch = jest.fn(
       async () =>
         new Response(
@@ -113,7 +113,31 @@ describe('OpenAiCompatibleProviderService', () => {
       service.stream(config, [{ role: 'user', content: 'Hi' }], {
         onText: jest.fn(),
       }),
+    ).rejects.toMatchObject({
+      status: 502,
+      message: 'AI provider returned no content',
+    });
+  });
+
+  it('keeps visible content when hidden reasoning is disabled', async () => {
+    global.fetch = jest.fn(
+      async () =>
+        new Response(
+          'data: {"choices":[{"delta":{"reasoning_content":"hidden"}}]}\n\n' +
+            'data: {"choices":[{"delta":{"content":"Visible"}}]}\n\n' +
+            'data: [DONE]\n\n',
+        ),
+    ) as any;
+    const chunks: string[] = [];
+
+    await expect(
+      service.stream(config, [{ role: 'user', content: 'Hi' }], {
+        onText: (text) => {
+          chunks.push(text);
+        },
+      }),
     ).resolves.toEqual({ inputTokens: 0, outputTokens: 0 });
+    expect(chunks).toEqual(['Visible']);
   });
 
   it('ignores structured reasoning payloads', async () => {
