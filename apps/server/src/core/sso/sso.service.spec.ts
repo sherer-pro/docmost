@@ -413,11 +413,72 @@ describe('SsoService security helpers', () => {
         { id: provider.workspaceId } as any,
         'https://docs.example.com',
         { state: 'state', code: 'invalid-code' },
+        undefined,
+        { value: 'state', enforced: true },
       ),
     ).rejects.toMatchObject({
       status: 401,
       message: 'Invalid OIDC response',
     });
+  });
+
+  it('refuses an OIDC callback that the initiating browser cannot prove', async () => {
+    const service = createService();
+    const provider = {
+      id: 'provider-id',
+      workspaceId: 'workspace-id',
+      type: 'oidc',
+    } as any;
+    const claimLoginState = jest
+      .spyOn(service as any, 'claimLoginState')
+      .mockResolvedValue({ purpose: 'login' });
+
+    for (const binding of [
+      { value: undefined, enforced: true },
+      { value: 'a-different-state', enforced: true },
+    ]) {
+      await expect(
+        service.completeOidcLogin(
+          provider.id,
+          { id: provider.workspaceId } as any,
+          'https://docs.example.com',
+          { state: 'state', code: 'code' },
+          undefined,
+          binding,
+        ),
+      ).rejects.toMatchObject({
+        status: 401,
+        message: 'SSO login was not started in this browser',
+      });
+    }
+
+    // The state must not be consumed by a request that never owned it.
+    expect(claimLoginState).not.toHaveBeenCalled();
+  });
+
+  it('refuses a SAML callback whose RelayState was issued to another browser', async () => {
+    const service = createService();
+    const provider = {
+      id: 'provider-id',
+      workspaceId: 'workspace-id',
+      type: 'saml',
+    } as any;
+    const claimLoginState = jest.spyOn(service as any, 'claimLoginState');
+
+    await expect(
+      service.completeSamlLogin(
+        provider.id,
+        { id: provider.workspaceId } as any,
+        'https://docs.example.com',
+        { RelayState: 'state', SAMLResponse: 'response' },
+        undefined,
+        { value: 'another-state', enforced: true },
+      ),
+    ).rejects.toMatchObject({
+      status: 401,
+      message: 'SSO login was not started in this browser',
+    });
+    expect(claimLoginState).not.toHaveBeenCalled();
   });
 
   it('returns a safe authentication error for an invalid SAML response', async () => {
@@ -444,6 +505,8 @@ describe('SsoService security helpers', () => {
         { id: provider.workspaceId } as any,
         'https://docs.example.com',
         { RelayState: 'state', SAMLResponse: 'unsigned-response' },
+        undefined,
+        { value: 'state', enforced: true },
       ),
     ).rejects.toMatchObject({
       status: 401,
@@ -560,6 +623,8 @@ describe('SsoService security helpers', () => {
         { id: provider.workspaceId } as any,
         'https://docs.example.com',
         { RelayState: 'state', SAMLResponse: 'signed-response' },
+        undefined,
+        { value: 'state', enforced: true },
       ),
     ).rejects.toBeInstanceOf(UnauthorizedException);
     expect(finishLogin).not.toHaveBeenCalled();
