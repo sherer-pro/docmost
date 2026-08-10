@@ -143,11 +143,13 @@ Backend e2e coverage uses disposable PostgreSQL and Redis services. The CI integ
 
 `pnpm check:architecture` is a blocking dependency-cruiser gate; circular
 dependencies are errors. `pnpm check:release-gates` verifies the reusable CI
-workflow chain `publish -> gates -> production-smoke`, includes a negative
-smoke execution that must return non-zero, and tests stream redaction plus the
-exact-secret/credential-pattern artifact scan. Production-smoke logs are
-sanitized before they are written and can be uploaded only after that scan
-creates its success marker.
+workflow chain `publish -> gates -> production-smoke`, the required commands in
+each CI job and root `verify:*` target, least-privilege workflow permissions,
+concurrency policy, and immutable commit pins for third-party actions. It also
+includes a negative smoke execution that must return non-zero and tests stream
+redaction plus the exact-secret/credential-pattern artifact scan.
+Production-smoke logs are sanitized before they are written and can be uploaded
+only after that scan creates its success marker.
 
 Typesense remains the selected external search projection; there is no hidden
 PostgreSQL fallback when that driver is enabled. Lifecycle jobs provide low
