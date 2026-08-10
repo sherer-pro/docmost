@@ -56,9 +56,61 @@ test("mobile and touch rendering reflows without document-level horizontal overf
     await captureStep(page, testInfo, "05-mobile-touch-reflow", {
       fullPage: true,
     });
+
   } finally {
     await apiPost(api, "/api/users/update", {
       fixedToolbar: original.fixedToolbar ?? false,
+      pageEditModeByPageId: original.pageEditModeByPageId ?? {},
+    }).catch(() => undefined);
+    await api.dispose();
+  }
+});
+
+test("mobile assistant drawer has an accessible name", async ({
+  page,
+}, testInfo) => {
+  const api = await createAdminApi();
+  const state = await loadAuditState();
+  const current = await apiGet<any>(api, "/api/users/me");
+  const original = current.user.settings?.preferences ?? {};
+  const seeded = await seedComplexDocument(
+    api,
+    state,
+    `${testInfo.project.name}-assistant-drawer`,
+  );
+
+  try {
+    await apiPost(api, "/api/users/update", {
+      pageEditModeByPageId: {
+        ...(original.pageEditModeByPageId ?? {}),
+        [seeded.page.id]: "edit",
+      },
+    });
+    await page.goto(pageUrl(state, seeded.page));
+    await expect(mainEditor(page)).toContainText("Editor regression audit");
+    const openAssistant = page
+      .getByRole("button", {
+        name: /AI|ИИ|assistant|помощник|ассистент/i,
+      })
+      .first();
+    const assistantDialog = page.locator('[role="dialog"]:visible');
+    if (!(await assistantDialog.isVisible().catch(() => false))) {
+      await openAssistant.tap();
+    }
+    await expect(assistantDialog).toBeVisible();
+    await expect(assistantDialog).toHaveAccessibleName(/.+/);
+    const overflow = await page.evaluate(() => ({
+      documentWidth: document.documentElement.scrollWidth,
+      viewportWidth: document.documentElement.clientWidth,
+    }));
+    expect(overflow.documentWidth).toBeLessThanOrEqual(
+      overflow.viewportWidth + 2,
+    );
+    await captureStep(page, testInfo, "06-mobile-assistant-dialog", {
+      fullPage: false,
+    });
+  } finally {
+    await apiPost(api, "/api/users/update", {
       pageEditModeByPageId: original.pageEditModeByPageId ?? {},
     }).catch(() => undefined);
     await api.dispose();
