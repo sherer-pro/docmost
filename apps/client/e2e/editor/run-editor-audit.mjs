@@ -240,12 +240,22 @@ let state;
 let exitCode = 1;
 let originalWorkspaceTemplatePolicy;
 let sharedAuditMemberUserId;
+let restoreAdminAiPanel = false;
 
 try {
   const runId = new Date()
     .toISOString()
     .replace(/[-:.TZ]/g, "")
     .slice(0, 14);
+  const currentUser = await responseJson(await api.get("/api/users/me"));
+  if (currentUser.user?.settings?.preferences?.aiPanelOpen) {
+    await responseJson(
+      await api.post("/api/users/update", {
+        data: { aiPanelOpen: false },
+      }),
+    );
+    restoreAdminAiPanel = true;
+  }
   originalWorkspaceTemplatePolicy = await responseJson(
     await api.get("/api/pages/templates/policies/workspace"),
   );
@@ -359,6 +369,13 @@ try {
   delete process.env.DOCMOST_AUDIT_MEMBER_AUTH_TOKEN;
   delete process.env.DOCMOST_AUDIT_MEMBER_CSRF_TOKEN;
   delete process.env.DOCMOST_AUDIT_MEMBER_USER_ID;
+  if (restoreAdminAiPanel) {
+    await responseJson(
+      await api.post("/api/users/update", {
+        data: { aiPanelOpen: true },
+      }),
+    ).catch(() => undefined);
+  }
   if (
     originalWorkspaceTemplatePolicy &&
     originalWorkspaceTemplatePolicy.systemEnabled
