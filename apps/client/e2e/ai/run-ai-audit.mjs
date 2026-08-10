@@ -351,18 +351,23 @@ try {
     }),
   );
   const members = [];
-  for (let index = 1; index <= 5; index += 1) {
+  for (let index = 1; index <= 6; index += 1) {
     members.push(await provisionAuditMember(api, spaceId, index));
   }
   const [member] = members;
   process.env.DOCMOST_MEMBER_AUTH_TOKEN = member.authToken;
   process.env.DOCMOST_MEMBER_CSRF_TOKEN = member.csrfToken;
   process.env.DOCMOST_CONCURRENCY_IDENTITIES = JSON.stringify(
-    members.map(({ id, authToken, csrfToken }) => ({
+    members.slice(0, 5).map(({ id, authToken, csrfToken }) => ({
       id,
       authToken,
       csrfToken,
     })),
+  );
+  process.env.DOCMOST_QUOTA_IDENTITY = JSON.stringify(
+    (({ id, authToken, csrfToken }) => ({ id, authToken, csrfToken }))(
+      members[5],
+    ),
   );
   process.env.DOCMOST_AUDIT_EXTRA_SECRETS = members
     .flatMap(({ authToken, csrfToken }) => [authToken, csrfToken])

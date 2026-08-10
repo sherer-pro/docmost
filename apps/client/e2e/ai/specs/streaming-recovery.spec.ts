@@ -11,11 +11,23 @@ test("streaming survives reload and a delayed run can be stopped", async ({ page
   await stop.click();
   await expect(page.getByText(/generation stopped|Генерация ответа остановлена/i)).toBeVisible();
 
-  await composer.fill("AUDIT_NORMAL_AFTER_STOP");
-  await composer.press("Enter");
-  await expect(page.getByText("Deterministic mock answer", { exact: false })).toBeVisible();
+  await page
+    .getByRole("button", { name: /Retry|Повторить/i })
+    .last()
+    .click();
+  await expect(page.getByText("late answer", { exact: true }).last()).toBeVisible();
+
+  await page.getByRole("button", { name: /New chat|Новый чат/i }).click();
+  const nextComposer = messageComposer(page);
+  await nextComposer.fill("AUDIT_NORMAL_AFTER_STOP");
+  await nextComposer.press("Enter");
+  await expect(
+    page.getByText("Deterministic mock answer", { exact: false }).last(),
+  ).toBeVisible();
   await context.setOffline(true);
   await context.setOffline(false);
   await page.reload();
-  await expect(page.getByText("Deterministic mock answer", { exact: false })).toBeVisible();
+  await expect(
+    page.getByText("Deterministic mock answer", { exact: false }).last(),
+  ).toBeVisible();
 });
