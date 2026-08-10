@@ -70,8 +70,8 @@ interface IDatabaseUserCellValue {
 
 interface IDatabasePageReferenceCellValue {
   id: string;
-  title: string;
-  slugId: string | null;
+  title?: string;
+  slugId?: string | null;
 }
 
 interface IDatabaseHistorySelectOption {
@@ -434,7 +434,8 @@ export class DatabaseService {
   }
 
   /**
-   * Resolves page_reference value to page id/title/slug payload.
+   * Stores only the reference id. Viewer-specific metadata is resolved when
+   * history is read so a readable row cannot disclose a restricted page.
    */
   private async resolveHistoryPageReferenceValue(
     value: unknown,
@@ -451,13 +452,8 @@ export class DatabaseService {
       return cachedPageRef;
     }
 
-    const page = await this.pageRepo.findById(pageId);
-    const canUsePageMeta =
-      !!page && page.workspaceId === workspaceId && page.deletedAt === null;
     const pageRef: IDatabasePageReferenceCellValue = {
       id: pageId,
-      title: canUsePageMeta ? page.title?.trim() || pageId : pageId,
-      slugId: canUsePageMeta ? (page.slugId ?? null) : null,
     };
 
     cache.set(pageId, pageRef);

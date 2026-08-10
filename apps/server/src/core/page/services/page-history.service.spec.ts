@@ -17,15 +17,28 @@ describe('PageHistoryService', () => {
     const databasePropertyRepo = {
       findById: jest.fn(),
     };
+    const pageAccessService = {
+      getEffectiveAccess: jest.fn().mockResolvedValue({
+        capabilities: { canRead: true },
+      }),
+    };
 
     const service = new PageHistoryService(
       pageHistoryRepo as any,
       userRepo as any,
       pageRepo as any,
       databasePropertyRepo as any,
+      pageAccessService as any,
     );
 
-    return { service, pageHistoryRepo, userRepo, pageRepo, databasePropertyRepo };
+    return {
+      service,
+      pageHistoryRepo,
+      userRepo,
+      pageRepo,
+      databasePropertyRepo,
+      pageAccessService,
+    };
   };
 
   it('loads history entry by id with content', async () => {
@@ -77,7 +90,13 @@ describe('PageHistoryService', () => {
   });
 
   it('enriches readable values for legacy row cell changes on read', async () => {
-    const { service, pageHistoryRepo, userRepo, pageRepo, databasePropertyRepo } = createService();
+    const {
+      service,
+      pageHistoryRepo,
+      userRepo,
+      pageRepo,
+      databasePropertyRepo,
+    } = createService();
     const history = {
       id: 'history-1',
       workspaceId: 'ws-1',
@@ -143,7 +162,10 @@ describe('PageHistoryService', () => {
       },
     });
 
-    const result = await service.findById('history-1');
+    const result = await service.findById('history-1', {
+      id: 'viewer-1',
+      workspaceId: 'ws-1',
+    } as any);
     const changes = (result.changeData as any).changes;
 
     expect(changes[0].newValue).toEqual({
@@ -169,5 +191,62 @@ describe('PageHistoryService', () => {
       value: 'metka-4-2ejm',
       label: 'Метка 4',
     });
+  });
+
+  it('does not expose page reference metadata without viewer access', async () => {
+    const { service, pageHistoryRepo, pageRepo, pageAccessService } =
+      createService();
+    pageAccessService.getEffectiveAccess.mockResolvedValue({
+      capabilities: { canRead: false },
+    });
+    const restrictedHistory = {
+      id: 'history-1',
+      workspaceId: 'ws-1',
+      changeType: 'database.row.cells.updated',
+      changeData: {
+        changes: [
+          {
+            propertyId: 'prop-page',
+            propertyType: 'page_reference',
+            oldValue: null,
+            newValue: {
+              id: 'restricted-page',
+              title: 'G09_CANARY_HISTORY_SECRET',
+              slugId: 'restricted-page-slug',
+            },
+          },
+        ],
+      },
+    };
+    pageHistoryRepo.findById.mockResolvedValue(restrictedHistory);
+    pageHistoryRepo.findPageHistoryByPageId.mockResolvedValue({
+      items: [restrictedHistory],
+      meta: {},
+    });
+    pageRepo.findById.mockResolvedValue({
+      id: 'restricted-page',
+      workspaceId: 'ws-1',
+      deletedAt: null,
+      title: 'G09_CANARY_HISTORY_SECRET',
+      slugId: 'restricted-page-slug',
+    });
+
+    const result = await service.findById('history-1', {
+      id: 'viewer-1',
+      workspaceId: 'ws-1',
+    } as any);
+    const changes = (result.changeData as any).changes;
+
+    expect(changes[0].newValue).toBeNull();
+    expect(JSON.stringify(result)).not.toContain('G09_CANARY_HISTORY_SECRET');
+
+    const listResult = await service.findHistoryByPageId(
+      'row-page',
+      { limit: 20 } as any,
+      { id: 'viewer-1', workspaceId: 'ws-1' } as any,
+    );
+    expect(JSON.stringify(listResult)).not.toContain(
+      'G09_CANARY_HISTORY_SECRET',
+    );
   });
 });
