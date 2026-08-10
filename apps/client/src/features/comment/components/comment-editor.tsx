@@ -10,6 +10,7 @@ import { useTranslation } from "react-i18next";
 import EmojiCommand from "@/features/editor/extensions/emoji-command";
 import mentionRenderItems from "@/features/editor/components/mention/mention-suggestion";
 import MentionView from "@/features/editor/components/mention/mention-view";
+import { handleCommentEditorKeydown } from "./comment-editor-keydown";
 
 interface CommentEditorProps {
   defaultContent?: any;
@@ -70,30 +71,8 @@ const CommentEditor = forwardRef(
           "aria-multiline": "true",
         },
         handleDOMEvents: {
-          keydown: (_view, event) => {
-            if (
-              [
-                "ArrowUp",
-                "ArrowDown",
-                "ArrowLeft",
-                "ArrowRight",
-                "Enter",
-              ].includes(event.key)
-            ) {
-              const emojiCommand = document.querySelector("#emoji-command");
-              const mentionPopup = document.querySelector("#mention");
-              if (emojiCommand || mentionPopup) {
-                return true;
-              }
-            }
-
-            if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
-              event.preventDefault();
-              if (onSave) onSave();
-
-              return true;
-            }
-          },
+          keydown: (_view, event) =>
+            handleCommentEditorKeydown(event, onSave),
         },
       },
       onUpdate({ editor }) {
