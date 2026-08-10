@@ -46,6 +46,9 @@ describe('translation locale coverage', () => {
 
       const currentTranslations = flattenTranslations(loadLocale(locale));
       const missingKeys = baseKeys.filter((key) => !(key in currentTranslations));
+      const extraKeys = Object.keys(currentTranslations).filter(
+        (key) => !(key in baseTranslations),
+      );
       const emptyKeys = Object.entries(currentTranslations)
         .filter(([, value]) => value === '' || value === null || value === undefined)
         .map(([key]) => key);
@@ -54,6 +57,11 @@ describe('translation locale coverage', () => {
         missingKeys,
         [],
         `${locale} is missing ${missingKeys.length} key(s): ${missingKeys.join(', ')}`,
+      );
+      assert.deepEqual(
+        extraKeys,
+        [],
+        `${locale} has ${extraKeys.length} extra key(s): ${extraKeys.join(', ')}`,
       );
       assert.deepEqual(
         emptyKeys,
