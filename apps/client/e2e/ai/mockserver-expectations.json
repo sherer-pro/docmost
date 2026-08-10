@@ -1,7 +1,60 @@
 [
   {
+    "priority": 120,
+    "httpRequest": { "method": "GET", "path": "/v1/models" },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": [{ "name": "Content-Type", "values": ["application/json"] }],
+      "body": "{\"object\":\"list\",\"data\":[{\"id\":\"docmost-audit-model\",\"object\":\"model\"}]}"
+    }
+  },
+  {
+    "priority": 120,
+    "httpRequest": {
+      "method": "POST",
+      "path": "/v1/chat/completions",
+      "headers": { "Authorization": ["Bearer audit-invalid-key"] }
+    },
+    "httpResponse": {
+      "statusCode": 401,
+      "headers": [{ "name": "Content-Type", "values": ["application/json"] }],
+      "body": "{\"error\":{\"message\":\"synthetic unauthorized\"}}"
+    }
+  },
+  {
+    "priority": 110,
+    "httpRequest": {
+      "method": "POST",
+      "path": "/v1/chat/completions",
+      "body": { "type": "REGEX", "regex": ".*audit-timeout-model.*" }
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": [{ "name": "Content-Type", "values": ["application/json"] }],
+      "delay": { "timeUnit": "SECONDS", "value": 3 },
+      "body": "{\"choices\":[{\"message\":{\"content\":\"OK\"}}]}"
+    }
+  },
+  {
     "priority": 100,
-    "httpRequest": { "method": "POST", "path": "/v1/chat/completions", "body": { "type": "REGEX", "regex": ".*AUDIT_DELAY.*" } },
+    "httpRequest": {
+      "method": "POST",
+      "path": "/v1/chat/completions",
+      "body": { "type": "REGEX", "regex": ".*\\\"stream\\\":false.*" }
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": [{ "name": "Content-Type", "values": ["application/json"] }],
+      "body": "{\"choices\":[{\"message\":{\"content\":\"OK\"}}],\"usage\":{\"prompt_tokens\":3,\"completion_tokens\":1}}"
+    }
+  },
+  {
+    "priority": 100,
+    "httpRequest": {
+      "method": "POST",
+      "path": "/v1/chat/completions",
+      "body": { "type": "REGEX", "regex": ".*AUDIT_DELAY.*" }
+    },
     "httpResponse": {
       "statusCode": 200,
       "headers": [{ "name": "Content-Type", "values": ["text/event-stream"] }],
@@ -11,7 +64,11 @@
   },
   {
     "priority": 90,
-    "httpRequest": { "method": "POST", "path": "/v1/chat/completions", "body": { "type": "REGEX", "regex": ".*AUDIT_REASONING.*" } },
+    "httpRequest": {
+      "method": "POST",
+      "path": "/v1/chat/completions",
+      "body": { "type": "REGEX", "regex": ".*AUDIT_REASONING.*" }
+    },
     "httpResponse": {
       "statusCode": 200,
       "headers": [{ "name": "Content-Type", "values": ["text/event-stream"] }],
@@ -20,7 +77,11 @@
   },
   {
     "priority": 85,
-    "httpRequest": { "method": "POST", "path": "/v1/chat/completions", "body": { "type": "REGEX", "regex": ".*AUDIT_EMPTY.*" } },
+    "httpRequest": {
+      "method": "POST",
+      "path": "/v1/chat/completions",
+      "body": { "type": "REGEX", "regex": ".*AUDIT_EMPTY.*" }
+    },
     "httpResponse": {
       "statusCode": 200,
       "headers": [{ "name": "Content-Type", "values": ["text/event-stream"] }],
@@ -29,7 +90,11 @@
   },
   {
     "priority": 85,
-    "httpRequest": { "method": "POST", "path": "/v1/chat/completions", "body": { "type": "REGEX", "regex": ".*AUDIT_MALFORMED.*" } },
+    "httpRequest": {
+      "method": "POST",
+      "path": "/v1/chat/completions",
+      "body": { "type": "REGEX", "regex": ".*AUDIT_MALFORMED.*" }
+    },
     "httpResponse": {
       "statusCode": 200,
       "headers": [{ "name": "Content-Type", "values": ["text/event-stream"] }],
@@ -38,7 +103,11 @@
   },
   {
     "priority": 85,
-    "httpRequest": { "method": "POST", "path": "/v1/chat/completions", "body": { "type": "REGEX", "regex": ".*AUDIT_DISCONNECT.*" } },
+    "httpRequest": {
+      "method": "POST",
+      "path": "/v1/chat/completions",
+      "body": { "type": "REGEX", "regex": ".*AUDIT_DISCONNECT.*" }
+    },
     "httpResponse": { "connectionOptions": { "closeSocket": true } }
   },
   {
