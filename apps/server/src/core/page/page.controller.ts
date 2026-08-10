@@ -683,7 +683,7 @@ export class PageController {
       includeContributors: true,
     });
 
-    if (!page) {
+    if (!page || page.deletedAt) {
       throw new NotFoundException('Page not found');
     }
 

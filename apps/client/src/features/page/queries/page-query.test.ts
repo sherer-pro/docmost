@@ -13,6 +13,7 @@ type QueryEntry = {
 const mocks = vi.hoisted(() => {
   const entries: QueryEntry[] = [];
   const invalidateCalls: any[] = [];
+  const removeCalls: any[] = [];
 
   const keyMatchesPrefix = (
     queryKey: readonly unknown[],
@@ -29,6 +30,7 @@ const mocks = vi.hoisted(() => {
   return {
     entries,
     invalidateCalls,
+    removeCalls,
     queryClient: {
       getQueriesData: (filters: any = {}) =>
         entries
@@ -67,6 +69,20 @@ const mocks = vi.hoisted(() => {
         invalidateCalls.push(payload);
         return Promise.resolve();
       },
+      removeQueries: (filters: any = {}) => {
+        removeCalls.push(filters);
+        for (let index = entries.length - 1; index >= 0; index -= 1) {
+          const entry = entries[index];
+          if (
+            filters.predicate?.({
+              queryKey: entry.key,
+              state: { data: entry.data },
+            })
+          ) {
+            entries.splice(index, 1);
+          }
+        }
+      },
     },
   };
 });
@@ -98,6 +114,7 @@ describe("invalidateOnCreatePage", () => {
   beforeEach(() => {
     mocks.entries.length = 0;
     mocks.invalidateCalls.length = 0;
+    mocks.removeCalls.length = 0;
     jotaiStore.set(treeDataAtom, []);
   });
 
@@ -214,6 +231,7 @@ describe("invalidateOnDeletePage", () => {
   beforeEach(() => {
     mocks.entries.length = 0;
     mocks.invalidateCalls.length = 0;
+    mocks.removeCalls.length = 0;
     jotaiStore.set(treeDataAtom, []);
   });
 
@@ -234,5 +252,36 @@ describe("invalidateOnDeletePage", () => {
 
     assert.equal(deletedNode?.children[0].slugId, "childslug1");
     assert.deepEqual(jotaiStore.get(treeDataAtom), []);
+  });
+
+  it("removes id and slug caches for every loaded page in the deleted subtree", () => {
+    const child = {
+      ...createTreeNode("child"),
+      parentPageId: "parent",
+      slugId: "childslug1",
+    };
+    const parent = {
+      ...createTreeNode("parent"),
+      slugId: "parentslug1",
+      hasChildren: true,
+      children: [child],
+    };
+    jotaiStore.set(treeDataAtom, [parent]);
+    mocks.entries.push(
+      { key: ["pages", "parent"], data: { id: "parent" } },
+      { key: ["pages", "parentslug1"], data: { id: "parent" } },
+      { key: ["pages", "childslug1"], data: { id: "child" } },
+      { key: ["pages", "unrelated"], data: { id: "unrelated" } },
+    );
+
+    invalidateOnDeletePage("parent");
+
+    assert.deepEqual(
+      mocks.entries
+        .filter((entry) => entry.key[0] === "pages")
+        .map((entry) => entry.key[1]),
+      ["unrelated"],
+    );
+    assert.equal(mocks.removeCalls.length, 1);
   });
 });
