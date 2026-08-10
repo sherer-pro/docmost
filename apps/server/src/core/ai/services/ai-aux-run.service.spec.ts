@@ -135,4 +135,59 @@ describe('AiAuxRunService', () => {
       },
     });
   });
+
+  it('does not return a completed editor result after page access is revoked', async () => {
+    const run = {
+      id: 'run-id',
+      kind: 'editor_transform',
+      userId: 'user-id',
+      workspaceId: 'workspace-id',
+      spaceId: 'space-id',
+      pageId: 'page-id',
+      clientRequestId: 'request-id',
+      commandId: 'replace',
+      selectionText: 'selected text',
+      selectionFrom: 1,
+      selectionTo: 14,
+      snapshotHash: 'snapshot-hash',
+      status: 'completed',
+      sequence: 3,
+      responseSnapshot: 'derived secret',
+      inputTokens: 1,
+      outputTokens: 2,
+      cancelRequestedAt: null,
+      completedAt: new Date('2026-08-10T10:01:00.000Z'),
+      errorCode: null,
+      createdAt: new Date('2026-08-10T10:00:00.000Z'),
+      updatedAt: new Date('2026-08-10T10:01:00.000Z'),
+    };
+    const query: any = {
+      selectAll: jest.fn(() => query),
+      where: jest.fn(() => query),
+      executeTakeFirst: jest.fn(async () => run),
+    };
+    const service = new AiAuxRunService(
+      { selectFrom: jest.fn(() => query) } as any,
+      {} as any,
+      {} as any,
+      {
+        assertWritablePage: jest.fn(async () => {
+          throw new Error('revoked');
+        }),
+      } as any,
+      {} as any,
+      { isPageExcluded: jest.fn(async () => false) } as any,
+    );
+
+    await expect(
+      service.getEditorAction(
+        run.id,
+        { id: run.userId } as any,
+        { id: run.workspaceId } as any,
+      ),
+    ).rejects.toMatchObject({
+      status: 403,
+      response: { code: 'source_access_changed' },
+    });
+  });
 });

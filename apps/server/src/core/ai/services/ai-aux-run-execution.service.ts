@@ -97,8 +97,8 @@ export class AiAuxRunExecutionService {
     }
     try {
       await this.assertEditorActionAccess(run, user);
-    } catch {
-      await this.fail(run, 'page_write_required');
+    } catch (error) {
+      await this.fail(run, this.errorCode(error));
       return;
     }
     if (

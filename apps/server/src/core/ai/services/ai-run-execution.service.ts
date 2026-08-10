@@ -314,6 +314,7 @@ export class AiRunExecutionService {
         .execute();
       await this.recordSourceDependencies(run, retrievalOutcome.sources);
       const protectedSources = [
+        ...contextSources,
         ...retrievalOutcome.sources,
         ...fileContext.citations,
       ];
