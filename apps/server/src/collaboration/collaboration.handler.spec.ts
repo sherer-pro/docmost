@@ -1,7 +1,8 @@
-import { getSchema } from '@tiptap/core';
+import { getSchema, Node as TiptapNode } from '@tiptap/core';
 import { Paragraph } from '@tiptap/extension-paragraph';
 import { StarterKit } from '@tiptap/starter-kit';
 import { Node as ProseMirrorNode } from '@tiptap/pm/model';
+import { BadRequestException } from '@nestjs/common';
 import { Hocuspocus } from '@hocuspocus/server';
 import { TiptapTransformer } from '@hocuspocus/transformer';
 import * as Y from 'yjs';
@@ -16,9 +17,21 @@ const ParagraphWithId = Paragraph.extend({
     return { id: { default: null } };
   },
 });
+const TestTransclusionSource = TiptapNode.create({
+  name: 'transclusionSource',
+  group: 'block',
+  content: 'paragraph+',
+});
+const TestTransclusionReference = TiptapNode.create({
+  name: 'transclusionReference',
+  group: 'block',
+  atom: true,
+});
 const testExtensions = [
   StarterKit.configure({ paragraph: false }),
   ParagraphWithId,
+  TestTransclusionSource,
+  TestTransclusionReference,
 ];
 const testSchema = getSchema(testExtensions);
 
@@ -32,6 +45,50 @@ jest.mock('./collaboration.util', () => {
 });
 
 describe('CollaborationHandler approved AI writes', () => {
+  it('rejects schema-invalid page content before opening the live document', async () => {
+    const hocuspocus = {
+      openDirectConnection: jest.fn(),
+    } as unknown as Hocuspocus;
+    const handler = new CollaborationHandler({} as never);
+    const handlers = handler.getHandlers(hocuspocus);
+
+    const result = handlers.updatePageContent(
+      'page.550e8400-e29b-41d4-a716-446655440000',
+      {
+        operation: 'replace',
+        prosemirrorJson: {
+          type: 'doc',
+          content: [
+            {
+              type: 'transclusionSource',
+              attrs: { id: '550e8400-e29b-41d4-a716-446655440001' },
+              content: [
+                {
+                  type: 'transclusionReference',
+                  attrs: {
+                    sourcePageId: '550e8400-e29b-41d4-a716-446655440000',
+                    transclusionId: '550e8400-e29b-41d4-a716-446655440002',
+                  },
+                },
+              ],
+            },
+          ],
+        },
+        user: { id: 'user-1' } as never,
+      },
+    );
+
+    await expect(result).rejects.toBeInstanceOf(BadRequestException);
+    await expect(result).rejects.toMatchObject({
+      response: {
+        code: 'invalid_page_content',
+        message: 'Invalid page content',
+      },
+      status: 400,
+    });
+    expect(hocuspocus.openDirectConnection).not.toHaveBeenCalled();
+  });
+
   it('preserves unchanged Yjs node identity and RelativePosition', async () => {
     const hocuspocus = new Hocuspocus({
       quiet: true,

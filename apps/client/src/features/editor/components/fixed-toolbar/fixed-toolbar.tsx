@@ -10,6 +10,7 @@ import {
   IconListNumbers,
   IconMessage,
   IconPageBreak,
+  IconRefresh,
 } from "@tabler/icons-react";
 import { isTextRangeSelected } from "@docmost/editor-ext";
 import clsx from "clsx";
@@ -34,6 +35,7 @@ import {
   useInlineTextToolbarItems,
 } from "@/features/editor/components/bubble-menu/toolbar-items";
 import { AiSelectionActionButton } from "@/features/ai/components/ai-selection-action";
+import { canCreateSyncedBlock } from "@/features/editor/components/bubble-menu/can-create-synced-block";
 import classes from "./fixed-toolbar.module.css";
 
 interface FixedToolbarProps {
@@ -79,6 +81,7 @@ export function FixedToolbar({
         isTaskItem: ctx.editor.isActive("taskItem"),
         isComment: ctx.editor.isActive("comment"),
         hasTextSelection: isTextRangeSelected(ctx.editor),
+        canCreateSyncedBlock: canCreateSyncedBlock(ctx.editor),
         selectedText,
         canOutdent: ctx.editor.can().chain().outdent().run(),
         canIndent: ctx.editor.can().chain().indent().run(),
@@ -130,6 +133,12 @@ export function FixedToolbar({
       icon: IconPageBreak,
     },
   ];
+  const syncedBlockItem: EditorToolbarItem = {
+    name: "Create synced block",
+    command: () =>
+      editor.chain().focus().toggleTransclusionSource().run(),
+    icon: IconRefresh,
+  };
 
   const openDictionaryModal = () => {
     const selectedText = editorState?.selectedText ?? "";
@@ -245,6 +254,12 @@ export function FixedToolbar({
                 onBeforeRun={closeSelectorPopovers}
               />
             ))}
+            {editorState?.canCreateSyncedBlock && (
+              <ToolbarActionButton
+                item={syncedBlockItem}
+                onBeforeRun={closeSelectorPopovers}
+              />
+            )}
           </ActionIcon.Group>
 
           {showRightActions && (
