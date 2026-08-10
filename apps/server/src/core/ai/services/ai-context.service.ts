@@ -20,6 +20,7 @@ import {
   AiConversation,
   AiRun,
   AiRunContextSource,
+  AiRunSourceDependency,
   User,
   Workspace,
 } from '@docmost/db/types/entity.types';
@@ -55,6 +56,27 @@ interface AiContextRoot {
   source: AiContextSource;
   descendants: AiDescendantSelection;
   origin: 'current_document' | 'explicit';
+}
+
+export interface PreparedAiRunContext {
+  clearCurrentDocumentSnapshot: boolean;
+  snapshots: Array<{
+    origin: 'current_document' | 'explicit';
+    sourceType: string;
+    sourceId: string;
+    pageId: string;
+    sourceTitle: string;
+    sourceUrl: string | null;
+    markdownSnapshot: string;
+    citationHeadings: AiDocumentHeading[];
+    contentSha256: string;
+    position: number;
+  }>;
+}
+
+export interface PreparedAiCopiedRunContext {
+  sources: AiRunContextSource[];
+  dependencies: AiRunSourceDependency[];
 }
 
 @Injectable()
@@ -485,20 +507,18 @@ export class AiContextService {
     };
   }
 
-  async captureRunContext(
-    trx: any,
-    runId: string,
+  async prepareRunContext(
     conversation: AiConversation,
     dto: SendAiMessageDto,
     user: User,
-  ): Promise<void> {
+  ): Promise<PreparedAiRunContext> {
     if (conversation.contextRevision !== dto.contextRevision) {
       throw new ConflictException({
         code: 'ai_context_revision_conflict',
         message: 'AI conversation context was updated elsewhere',
       });
     }
-    const explicit = await trx
+    const explicit = await this.db
       .selectFrom('aiConversationContextSources')
       .selectAll()
       .where('conversationId', '=', conversation.id)
@@ -508,22 +528,8 @@ export class AiContextService {
       conversation.spaceId,
       conversation.workspaceId,
     );
-    if (
-      conversation.includeCurrentDocument &&
-      excluded.has(conversation.pageId)
-    ) {
-      await trx
-        .updateTable('aiRuns')
-        .set({
-          documentSnapshot: null,
-          snapshotHash: null,
-          selectionText: null,
-          selectionFrom: null,
-          selectionTo: null,
-        })
-        .where('id', '=', runId)
-        .execute();
-    }
+    const clearCurrentDocumentSnapshot =
+      conversation.includeCurrentDocument && excluded.has(conversation.pageId);
     const inputs = explicit.map((source: any) => ({
       sourceType: source.sourceType as AiContextSourceType,
       sourceId: source.sourceId,
@@ -589,19 +595,7 @@ export class AiContextService {
     if (expanded.length > AI_CONTEXT_LIMITS.resolvedSources) {
       throw this.resolvedSourceLimit(expanded.length, roots);
     }
-    const snapshots: Array<{
-      runId: string;
-      origin: 'current_document' | 'explicit';
-      sourceType: string;
-      sourceId: string;
-      pageId: string;
-      sourceTitle: string;
-      sourceUrl: string | null;
-      markdownSnapshot: string;
-      citationHeadings: AiDocumentHeading[];
-      contentSha256: string;
-      position: number;
-    }> = [];
+    const snapshots: PreparedAiRunContext['snapshots'] = [];
 
     for (const item of expanded) {
       if (
@@ -613,7 +607,6 @@ export class AiContextService {
       const markdown =
         item.origin === 'current_document' ? dto.documentSnapshot! : '';
       snapshots.push({
-        runId,
         origin: item.origin,
         sourceType: item.source.sourceType,
         sourceId: item.source.sourceId,
@@ -630,31 +623,53 @@ export class AiContextService {
         position: snapshots.length,
       });
     }
-    if (snapshots.length > 0) {
-      await trx.insertInto('aiRunContextSources').values(snapshots).execute();
+
+    return { clearCurrentDocumentSnapshot, snapshots };
+  }
+
+  async captureRunContext(
+    trx: any,
+    runId: string,
+    prepared: PreparedAiRunContext,
+  ): Promise<void> {
+    if (prepared.clearCurrentDocumentSnapshot) {
+      await trx
+        .updateTable('aiRuns')
+        .set({
+          documentSnapshot: null,
+          snapshotHash: null,
+          selectionText: null,
+          selectionFrom: null,
+          selectionTo: null,
+        })
+        .where('id', '=', runId)
+        .execute();
+    }
+    if (prepared.snapshots.length > 0) {
+      await trx
+        .insertInto('aiRunContextSources')
+        .values(
+          prepared.snapshots.map((snapshot) => ({
+            ...snapshot,
+            runId,
+          })),
+        )
+        .execute();
     }
   }
 
-  async copyRunContext(
-    trx: any,
-    sourceRunId: string,
-    targetRunId: string,
-    assistantMessageId: string,
+  async prepareCopiedRunContext(
+    sourceRun: Pick<AiRun, 'id' | 'spaceId' | 'workspaceId'>,
     user: User,
-  ): Promise<void> {
-    const sourceRun = await trx
-      .selectFrom('aiRuns')
-      .select(['spaceId', 'workspaceId'])
-      .where('id', '=', sourceRunId)
-      .executeTakeFirstOrThrow();
+  ): Promise<PreparedAiCopiedRunContext> {
     const excluded = await this.contentPolicy.getExcludedPageIds(
       sourceRun.spaceId,
       sourceRun.workspaceId,
     );
-    const dependencies = await trx
+    const dependencies = await this.db
       .selectFrom('aiRunSourceDependencies')
       .selectAll()
-      .where('runId', '=', sourceRunId)
+      .where('runId', '=', sourceRun.id)
       .execute();
     const excludedContextSourceIds = new Set(
       dependencies
@@ -667,10 +682,10 @@ export class AiContextService {
       sourceRun.spaceId,
     );
     const sources = (
-      await trx
+      await this.db
         .selectFrom('aiRunContextSources')
         .selectAll()
-        .where('runId', '=', sourceRunId)
+        .where('runId', '=', sourceRun.id)
         .orderBy('position', 'asc')
         .execute()
     ).filter(
@@ -679,8 +694,27 @@ export class AiContextService {
         readable.readablePageIds.has(source.pageId) &&
         !excludedContextSourceIds.has(source.id),
     );
+    const sourceIds = new Set(sources.map((source) => source.id));
+    return {
+      sources,
+      dependencies: dependencies.filter(
+        (dependency) =>
+          !excluded.has(dependency.pageId) &&
+          readable.readablePageIds.has(dependency.pageId) &&
+          (!dependency.contextSourceId ||
+            sourceIds.has(dependency.contextSourceId)),
+      ),
+    };
+  }
+
+  async copyRunContext(
+    trx: any,
+    targetRunId: string,
+    assistantMessageId: string,
+    prepared: PreparedAiCopiedRunContext,
+  ): Promise<void> {
     const sourceIdMap = new Map<string, string>();
-    for (const [position, source] of sources.entries()) {
+    for (const [position, source] of prepared.sources.entries()) {
       const inserted = await trx
         .insertInto('aiRunContextSources')
         .values({
@@ -700,18 +734,11 @@ export class AiContextService {
         .executeTakeFirstOrThrow();
       sourceIdMap.set(source.id, inserted.id);
     }
-    const allowedDependencies = dependencies.filter(
-      (dependency: any) =>
-        !excluded.has(dependency.pageId) &&
-        readable.readablePageIds.has(dependency.pageId) &&
-        (!dependency.contextSourceId ||
-          sourceIdMap.has(dependency.contextSourceId)),
-    );
-    if (allowedDependencies.length > 0) {
+    if (prepared.dependencies.length > 0) {
       await trx
         .insertInto('aiRunSourceDependencies')
         .values(
-          allowedDependencies.map((dependency: any) => ({
+          prepared.dependencies.map((dependency) => ({
             runId: targetRunId,
             messageId: assistantMessageId,
             contextSourceId: dependency.contextSourceId
