@@ -6,7 +6,10 @@ import { chromium, request } from "@playwright/test";
 
 const clientRoot = path.resolve(import.meta.dirname, "../..");
 const repoRoot = path.resolve(clientRoot, "../..");
-const auditRoot = path.join(repoRoot, "output/audit/ai-context-2026-08-07");
+const auditRoot = path.resolve(
+  process.env.DOCMOST_AI_CONTEXT_AUDIT_ROOT ??
+    path.join(repoRoot, "output/audit/ai-context-2026-08-07"),
+);
 const fixtureRoot = path.join(auditRoot, "fixtures");
 const baseURL = (process.env.DOCMOST_BASE_URL ?? "http://localhost:3000").replace(/\/$/, "");
 const apiOrigin = new URL(baseURL).origin;
