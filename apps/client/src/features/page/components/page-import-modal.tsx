@@ -37,6 +37,11 @@ import { formatBytes } from "@/lib";
 import { getFileTaskById } from "@/features/file-task/services/file-task-service.ts";
 import { getRecentDocmostImportReports } from "@/features/file-task/services/file-task-service.ts";
 import type { IFileTask } from "@/features/file-task/types/file-task.types.ts";
+import {
+  clearPendingDocmostImport,
+  loadPendingDocmostImport,
+  storePendingDocmostImport,
+} from "@/features/file-task/utils/pending-docmost-import.ts";
 import { queryClient } from "@/main.tsx";
 import { useQueryEmit } from "@/features/websocket/use-query-emit.ts";
 import type {
@@ -184,6 +189,23 @@ function ImportFormatSelection({
       });
   }, [open, spaceId]);
 
+  useEffect(() => {
+    const pendingTaskId = loadPendingDocmostImport(spaceId);
+    if (!pendingTaskId) return;
+
+    setFileTaskId(pendingTaskId);
+    notifications.show({
+      id: "import",
+      title: t("Importing Docmost archive"),
+      message: t(
+        "The archive is being restored. You can safely return later.",
+      ),
+      loading: true,
+      withCloseButton: true,
+      autoClose: false,
+    });
+  }, [spaceId, t]);
+
   const handleDocmostUpload = async (selectedFile: File | null) => {
     if (!selectedFile) return;
     setIsInspecting(true);
@@ -218,6 +240,7 @@ function ImportFormatSelection({
         docmostOptions,
       );
       onPendingDocmostTaskChange(null);
+      storePendingDocmostImport(spaceId, task.id);
       setFileTaskId(task.id);
       setDocmostPreview(null);
       docmostFileRef.current?.();
@@ -311,12 +334,18 @@ function ImportFormatSelection({
   useEffect(() => {
     if (!fileTaskId) return;
 
-    const intervalId = setInterval(async () => {
+    let requestInFlight = false;
+    let terminal = false;
+    const poll = async () => {
+      if (requestInFlight || terminal) return;
+      requestInFlight = true;
       try {
         const fileTask = await getFileTaskById(fileTaskId);
         const status = fileTask.status;
 
         if (status === "success") {
+          terminal = true;
+          clearPendingDocmostImport(spaceId);
           const report = fileTask.result?.report;
           notifications.update({
             id: "import",
@@ -332,7 +361,6 @@ function ImportFormatSelection({
             withCloseButton: true,
             autoClose: false,
           });
-          clearInterval(intervalId);
           setFileTaskId(null);
           if (fileTask.source === "docmost") {
             setRecentDocmostImports((current) => [
@@ -358,6 +386,8 @@ function ImportFormatSelection({
         }
 
         if (status === "failed") {
+          terminal = true;
+          clearPendingDocmostImport(spaceId);
           notifications.update({
             id: "import",
             color: "red",
@@ -373,32 +403,37 @@ function ImportFormatSelection({
             withCloseButton: true,
             autoClose: false,
           });
-          clearInterval(intervalId);
           setFileTaskId(null);
           console.error(fileTask.errorMessage);
         }
-      } catch (err) {
-        notifications.update({
-          id: "import",
-          color: "red",
-          title: t("Import failed"),
-          message: t(
-            "Something went wrong while importing pages: {{reason}}.",
-            {
-              reason: err.response?.data.message,
-            },
-          ),
-          icon: <IconX size={18} />,
-          loading: false,
-          withCloseButton: true,
-          autoClose: false,
-        });
-        clearInterval(intervalId);
-        setFileTaskId(null);
-        console.error("Failed to fetch import status", err);
+      } catch (err: any) {
+        const status = err?.response?.status;
+        if (status === 403 || status === 404) {
+          terminal = true;
+          clearPendingDocmostImport(spaceId);
+          notifications.update({
+            id: "import",
+            color: "red",
+            title: t("Import failed"),
+            message: err?.response?.data?.message ?? t("Import failed"),
+            icon: <IconX size={18} />,
+            loading: false,
+            withCloseButton: true,
+            autoClose: false,
+          });
+          setFileTaskId(null);
+        } else {
+          console.warn("Unable to load import status; retrying", err);
+        }
+      } finally {
+        requestInFlight = false;
       }
-    }, 3000);
-  }, [fileTaskId]);
+    };
+
+    void poll();
+    const intervalId = setInterval(() => void poll(), 3000);
+    return () => clearInterval(intervalId);
+  }, [emit, fileTaskId, spaceId, t]);
 
   const handleFileUpload = async (selectedFiles: File[]) => {
     if (!selectedFiles) {
