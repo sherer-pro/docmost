@@ -4,7 +4,7 @@ import {
   FavoriteType,
 } from '@docmost/db/repos/favorite/favorite.repo';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
-import { InsertableFavorite, Page } from '@docmost/db/types/entity.types';
+import { InsertableFavorite, Page, User } from '@docmost/db/types/entity.types';
 import { PageAccessService } from '../page-access/page-access.service';
 import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 
@@ -17,13 +17,13 @@ export class FavoriteService {
   ) {}
 
   async getFavoriteIds(
-    userId: string,
+    user: User,
     workspaceId: string,
     type: FavoriteType,
     spaceId?: string,
   ) {
     const result = await this.favoriteRepo.getFavoriteIds(
-      userId,
+      user.id,
       workspaceId,
       type,
       spaceId,
@@ -33,8 +33,22 @@ export class FavoriteService {
       return result;
     }
 
-    if (type === FavoriteType.SPACE) {
-      const userSpaceIds = await this.spaceMemberRepo.getUserSpaceIds(userId);
+    if (type === FavoriteType.PAGE) {
+      const pages = await this.favoriteRepo.findPagesByIds(result.items);
+      const accessByPageId =
+        await this.pageAccessService.getEffectiveAccessForPages(pages, user);
+      const readablePageIds = new Set(
+        pages
+          .filter(
+            (page) =>
+              !page.deletedAt &&
+              accessByPageId.get(page.id)?.capabilities.canRead === true,
+          )
+          .map((page) => page.id),
+      );
+      result.items = result.items.filter((id) => readablePageIds.has(id));
+    } else if (type === FavoriteType.SPACE) {
+      const userSpaceIds = await this.spaceMemberRepo.getUserSpaceIds(user.id);
       const spaceSet = new Set(userSpaceIds);
       result.items = result.items.filter((id) => spaceSet.has(id));
     }
