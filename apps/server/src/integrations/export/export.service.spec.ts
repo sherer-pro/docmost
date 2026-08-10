@@ -416,8 +416,12 @@ describe('ExportService PDF export', () => {
           where: () => query,
           executeTakeFirst: async () => undefined,
           execute: async () => [
-            { id: firstAttachmentId, pageId: 'page-1' },
-            { id: secondAttachmentId, pageId: 'embedded-page' },
+            { id: firstAttachmentId, pageId: 'page-1', filePath: null },
+            {
+              id: secondAttachmentId,
+              pageId: 'embedded-page',
+              filePath: null,
+            },
           ],
         };
         return query;
@@ -429,6 +433,7 @@ describe('ExportService PDF export', () => {
       page: page as any,
       pageHtml: `<p><img src="/api/files/${firstAttachmentId}/image.png?t=10" alt="img" /></p><div data-type="drawio" data-src="/api/files/${secondAttachmentId}/diagram.drawio.svg"></div>`,
       attachmentPageIds: ['page-1', 'embedded-page'],
+      attachmentIds: [],
     });
 
     expect(body.bodyHtml).toContain(
@@ -572,6 +577,8 @@ describe('ExportService PDF export', () => {
                   id: attachmentId,
                   filePath: 'storage/diagram.excalidraw.svg',
                   mimeType: 'image/svg+xml',
+                  pageId: 'page-1',
+                  deletedAt: null,
                 }),
               }),
             }),
@@ -599,6 +606,201 @@ describe('ExportService PDF export', () => {
     );
     expect(body.bodyHtml).toContain('<svg');
     expect(body.bodyHtml).toContain('docmost-diagram-image');
+  });
+
+  it('replaces an existing Draw.io image with sanitized inline svg', async () => {
+    const page = createPage({
+      id: 'page-1',
+      slugId: 'slug-1',
+      title: 'Root',
+      parentPageId: null,
+      text: 'Hello from page',
+    });
+    const attachmentId = '11111111-1111-4111-8111-111111111111';
+    const previousSelectFromImplementation =
+      db.selectFrom.getMockImplementation();
+    db.selectFrom.mockImplementation((tableName: string) => {
+      if (tableName === 'attachments') {
+        return {
+          select: () => ({
+            where: () => ({
+              where: () => ({
+                executeTakeFirst: async () => ({
+                  id: attachmentId,
+                  filePath: 'storage/diagram.drawio.svg',
+                  mimeType: 'image/svg+xml',
+                  pageId: 'page-1',
+                  deletedAt: null,
+                }),
+              }),
+            }),
+          }),
+        };
+      }
+
+      if (previousSelectFromImplementation) {
+        return previousSelectFromImplementation(tableName);
+      }
+
+      return null;
+    });
+    storageService.read.mockResolvedValueOnce(
+      Buffer.from(
+        '<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"><script>alert(1)</script><rect width="20" height="20" /></svg>',
+      ),
+    );
+
+    const body = await service.buildPagePdfBody({
+      page: page as any,
+      pageHtml: `<div data-type="drawio" data-src="/api/files/${attachmentId}/diagram.drawio.svg" data-attachment-id="${attachmentId}" data-title="Draw.io"><img src="/api/files/${attachmentId}/diagram.drawio.svg" alt="Draw.io" /></div>`,
+    });
+
+    expect(storageService.read).toHaveBeenCalledWith(
+      'storage/diagram.drawio.svg',
+    );
+    expect(body.bodyHtml).toContain('<svg');
+    expect(body.bodyHtml).toContain('docmost-diagram-image');
+    expect(body.bodyHtml).not.toContain('<script');
+    expect(body.bodyHtml).not.toContain('onload');
+    expect(body.bodyHtml).not.toContain('/api/files/public/');
+  });
+
+  it('does not inline a diagram attachment owned by an unauthorized page', async () => {
+    const page = createPage({
+      id: 'page-1',
+      slugId: 'slug-1',
+      title: 'Root',
+      parentPageId: null,
+      text: 'Hello from page',
+    });
+    const attachmentId = '11111111-1111-4111-8111-111111111111';
+    const previousSelectFromImplementation =
+      db.selectFrom.getMockImplementation();
+    db.selectFrom.mockImplementation((tableName: string) => {
+      if (tableName === 'attachments') {
+        const attachment = {
+          id: attachmentId,
+          filePath: 'storage/private.drawio.svg',
+          mimeType: 'image/svg+xml',
+          pageId: 'private-page',
+          deletedAt: null,
+        };
+        const query: any = {
+          select: () => query,
+          where: () => query,
+          executeTakeFirst: async () => attachment,
+          execute: async () => [attachment],
+        };
+        return query;
+      }
+
+      return previousSelectFromImplementation?.(tableName);
+    });
+
+    const body = await service.buildPagePdfBody({
+      page: page as any,
+      pageHtml: `<div data-type="drawio" data-src="/api/files/${attachmentId}/private.drawio.svg" data-attachment-id="${attachmentId}"></div>`,
+      attachmentPageIds: ['page-1'],
+    });
+
+    expect(storageService.read).not.toHaveBeenCalled();
+    expect(body.bodyHtml).toContain('/api/files/public/');
+    expect(body.bodyHtml).not.toContain('<svg');
+    expect(body.attachmentTokens).toEqual({});
+    db.selectFrom.mockImplementation(previousSelectFromImplementation!);
+  });
+
+  it('inlines authorized raster images for deterministic PDF rendering', async () => {
+    const page = createPage({
+      id: 'page-1',
+      slugId: 'slug-1',
+      title: 'Root',
+      parentPageId: null,
+      text: 'Hello from page',
+    });
+    const attachmentId = '11111111-1111-4111-8111-111111111111';
+    const previousSelectFromImplementation =
+      db.selectFrom.getMockImplementation();
+    db.selectFrom.mockImplementation((tableName: string) => {
+      if (tableName === 'attachments') {
+        const query: any = {
+          select: () => query,
+          where: () => query,
+          executeTakeFirst: async () => undefined,
+          execute: async () => [
+            {
+              id: attachmentId,
+              pageId: 'page-1',
+              filePath: 'storage/image.png',
+              mimeType: 'image/png',
+              deletedAt: null,
+            },
+          ],
+        };
+        return query;
+      }
+
+      return previousSelectFromImplementation?.(tableName);
+    });
+    storageService.read.mockResolvedValueOnce(Buffer.from('png-bytes'));
+
+    const body = await service.buildPagePdfBody({
+      page: page as any,
+      pageHtml: `<p><img src="/api/files/${attachmentId}/image.png" alt="Audit image" /></p>`,
+      attachmentPageIds: ['page-1'],
+    });
+
+    expect(storageService.read).toHaveBeenCalledWith('storage/image.png');
+    expect(body.bodyHtml).toContain(
+      `src="data:image/png;base64,${Buffer.from('png-bytes').toString('base64')}"`,
+    );
+    expect(body.attachmentTokens).toEqual({
+      [attachmentId]: `attachment-token:${attachmentId}`,
+    });
+    db.selectFrom.mockImplementation(previousSelectFromImplementation!);
+  });
+
+  it('replaces PDF and built-in iframe viewers with printable fallbacks', async () => {
+    const page = createPage({
+      id: 'page-1',
+      slugId: 'slug-1',
+      title: 'Root',
+      parentPageId: null,
+      text: 'Hello from page',
+    });
+    const attachmentId = '11111111-1111-4111-8111-111111111111';
+    const previousSelectFromImplementation =
+      db.selectFrom.getMockImplementation();
+    db.selectFrom.mockImplementation((tableName: string) => {
+      if (tableName === 'attachments') {
+        const query: any = {
+          select: () => query,
+          where: () => query,
+          executeTakeFirst: async () => undefined,
+          execute: async () => [
+            { id: attachmentId, pageId: 'page-1', filePath: null },
+          ],
+        };
+        return query;
+      }
+
+      return previousSelectFromImplementation?.(tableName);
+    });
+
+    const body = await service.buildPagePdfBody({
+      page: page as any,
+      pageHtml: `<iframe src="/api/files/${attachmentId}/document.pdf"></iframe><iframe src="https://www.youtube.com/embed/audit"></iframe>`,
+      attachmentPageIds: ['page-1'],
+    });
+
+    expect(body.bodyHtml).not.toContain('<iframe');
+    expect(body.bodyHtml).toContain('PDF attachment');
+    expect(body.bodyHtml).toContain('Embedded content');
+    expect(body.bodyHtml).toContain(
+      `http://localhost:3000/api/files/public/${attachmentId}/document.pdf`,
+    );
+    expect(body.bodyHtml).toContain('https://www.youtube.com/embed/audit');
+    db.selectFrom.mockImplementation(previousSelectFromImplementation!);
   });
 
   it('localizes custom field labels and omits metadata heading', async () => {
