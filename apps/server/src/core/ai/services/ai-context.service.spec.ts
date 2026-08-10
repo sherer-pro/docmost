@@ -151,6 +151,113 @@ describe('AiContextService revisions', () => {
   });
 });
 
+describe('AiContextService run capture', () => {
+  it('persists prepared context without opening a nested database query', async () => {
+    const db = { selectFrom: jest.fn() };
+    const updateQuery: any = {
+      set: jest.fn(() => updateQuery),
+      where: jest.fn(() => updateQuery),
+      execute: jest.fn(async () => undefined),
+    };
+    const insertQuery: any = {
+      values: jest.fn(() => insertQuery),
+      execute: jest.fn(async () => undefined),
+    };
+    const trx = {
+      updateTable: jest.fn(() => updateQuery),
+      insertInto: jest.fn(() => insertQuery),
+    };
+    const service = new AiContextService(
+      db as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+
+    await service.captureRunContext(trx, 'run-id', {
+      clearCurrentDocumentSnapshot: true,
+      snapshots: [
+        {
+          origin: 'current_document',
+          sourceType: 'page',
+          sourceId: 'page-id',
+          pageId: 'page-id',
+          sourceTitle: 'Page',
+          sourceUrl: null,
+          markdownSnapshot: '# Page',
+          citationHeadings: [],
+          contentSha256: 'hash',
+          position: 0,
+        },
+      ],
+    });
+
+    expect(db.selectFrom).not.toHaveBeenCalled();
+    expect(trx.updateTable).toHaveBeenCalledWith('aiRuns');
+    expect(trx.insertInto).toHaveBeenCalledWith('aiRunContextSources');
+    expect(insertQuery.values).toHaveBeenCalledWith([
+      expect.objectContaining({ runId: 'run-id', sourceId: 'page-id' }),
+    ]);
+  });
+
+  it('copies prepared retry context without opening a nested database query', async () => {
+    const db = { selectFrom: jest.fn() };
+    const insertQuery: any = {
+      values: jest.fn(() => insertQuery),
+      returning: jest.fn(() => insertQuery),
+      executeTakeFirstOrThrow: jest.fn(async () => ({ id: 'copied-source' })),
+      execute: jest.fn(async () => undefined),
+    };
+    const trx = { insertInto: jest.fn(() => insertQuery) };
+    const service = new AiContextService(
+      db as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+
+    await service.copyRunContext(trx, 'target-run', 'assistant-message', {
+      sources: [
+        {
+          id: 'source-context',
+          origin: 'explicit',
+          sourceType: 'page',
+          sourceId: 'page-id',
+          pageId: 'page-id',
+          sourceTitle: 'Page',
+          sourceUrl: null,
+          markdownSnapshot: '# Page',
+          citationHeadings: [],
+          contentSha256: 'hash',
+        } as any,
+      ],
+      dependencies: [
+        {
+          contextSourceId: 'source-context',
+          pageId: 'page-id',
+        } as any,
+      ],
+    });
+
+    expect(db.selectFrom).not.toHaveBeenCalled();
+    expect(trx.insertInto).toHaveBeenCalledWith('aiRunContextSources');
+    expect(trx.insertInto).toHaveBeenCalledWith('aiRunSourceDependencies');
+    expect(insertQuery.values).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          runId: 'target-run',
+          messageId: 'assistant-message',
+          contextSourceId: 'copied-source',
+        }),
+      ]),
+    );
+  });
+});
+
 describe('AiContextService search', () => {
   it('returns row icons and accessible breadcrumbs', async () => {
     const rowQuery: any = {

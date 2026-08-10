@@ -193,6 +193,7 @@ export const AI_ERROR_CODES = [
   "retrieval_collection_unavailable",
   "ai_file_processing_failed",
   "ai_file_upload_failed",
+  "ai_vision_required",
   "ai_context_revision_conflict",
   "ai_context_source_limit",
   "ai_context_resolved_source_limit",
@@ -729,8 +730,6 @@ export interface SendAiMessageRequest {
   snapshotHash?: string;
   documentHeadings?: AiDocumentHeading[];
   selection?: AiSelection;
-  fileIds?: string[];
-  attachmentIds?: string[];
   useSpaceSearch?: boolean;
 }
 

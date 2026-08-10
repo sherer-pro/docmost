@@ -71,4 +71,16 @@ describe('validateFileExtensionAndSignature', () => {
       }),
     ).toBe('video/mp4');
   });
+
+  it('keeps the canonical DOCX mime type after validating its ZIP signature', () => {
+    expect(
+      resolveTrustedMimeType({
+        fileExtension: '.docx',
+        fileBuffer: zipBuffer,
+        fallbackMimeType: 'application/zip',
+      }),
+    ).toBe(
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    );
+  });
 });

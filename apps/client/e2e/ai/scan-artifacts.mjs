@@ -8,6 +8,7 @@ const secrets = [
   process.env.DOCMOST_AUDIT_CANARY,
   process.env.DOCMOST_AUTH_TOKEN,
   process.env.DOCMOST_CSRF_TOKEN,
+  ...(process.env.DOCMOST_AUDIT_EXTRA_SECRETS ?? "").split(","),
 ].filter((value) => typeof value === "string" && value.length > 0);
 
 async function filesBelow(directory) {

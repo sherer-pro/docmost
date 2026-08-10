@@ -237,160 +237,183 @@ export class AiFileService {
       )
       .digest('hex');
 
-    const reservation = await this.db.transaction().execute(async (trx) => {
+    const lockKey = `ai-file-upload:${conversation.id}`;
+    return this.db.connection().execute(async (connection) => {
       await sql`
-        select pg_advisory_xact_lock(
-          hashtextextended(${`ai-file-upload:${conversation.id}`}, 0)
-        )
-      `.execute(trx);
-      const existingBatch = await trx
-        .selectFrom('aiFileUploadBatches')
-        .selectAll()
-        .where('conversationId', '=', conversation.id)
-        .where('idempotencyKey', '=', idempotencyKey)
-        .executeTakeFirst();
-      if (existingBatch) {
-        if (existingBatch.requestFingerprint !== requestFingerprint) {
-          throw new ConflictException({
-            code: 'idempotency_key_reused',
-            message: 'The idempotency key was already used for another upload',
+        select pg_advisory_lock(hashtextextended(${lockKey}, 0))
+      `.execute(connection);
+      try {
+        const reservation = await connection
+          .transaction()
+          .execute(async (trx) => {
+            const existingBatch = await trx
+              .selectFrom('aiFileUploadBatches')
+              .selectAll()
+              .where('conversationId', '=', conversation.id)
+              .where('idempotencyKey', '=', idempotencyKey)
+              .executeTakeFirst();
+            if (existingBatch) {
+              if (existingBatch.requestFingerprint !== requestFingerprint) {
+                throw new ConflictException({
+                  code: 'idempotency_key_reused',
+                  message:
+                    'The idempotency key was already used for another upload',
+                });
+              }
+              const rows = await trx
+                .selectFrom('aiChatFiles')
+                .selectAll()
+                .where('uploadBatchId', '=', existingBatch.id)
+                .orderBy('uploadOrdinal', 'asc')
+                .execute();
+              return { batch: existingBatch, rows, existing: true };
+            }
+
+            const usage = await trx
+              .selectFrom('aiChatFiles')
+              .select((eb) => [
+                eb.fn.countAll<number>().as('count'),
+                eb.fn.sum<number>('size').as('size'),
+              ])
+              .where('conversationId', '=', conversation.id)
+              .where('deletedAt', 'is', null)
+              .executeTakeFirstOrThrow();
+            const totalBytes =
+              Number(usage.size ?? 0) +
+              prepared.reduce((sum, file) => sum + file.size, 0);
+            if (
+              Number(usage.count) + prepared.length >
+                AI_CHAT_LIMITS.maxFilesPerConversation ||
+              totalBytes > AI_CHAT_LIMITS.maxConversationFileBytes
+            ) {
+              throw new BadRequestException('AI chat file quota exceeded');
+            }
+
+            const batchId = uuidv7();
+            const batch = await trx
+              .insertInto('aiFileUploadBatches')
+              .values({
+                id: batchId,
+                conversationId: conversation.id,
+                userId: user.id,
+                workspaceId: workspace.id,
+                idempotencyKey,
+                requestFingerprint,
+                status: 'processing',
+              })
+              .returningAll()
+              .executeTakeFirstOrThrow();
+            const rows = await trx
+              .insertInto('aiChatFiles')
+              .values(
+                prepared.map((file, ordinal) => {
+                  const id = uuidv7();
+                  return {
+                    id,
+                    conversationId: conversation.id,
+                    userId: user.id,
+                    workspaceId: workspace.id,
+                    spaceId: conversation.spaceId,
+                    uploadBatchId: batchId,
+                    uploadOrdinal: ordinal,
+                    contentSha256: file.sha256,
+                    name: file.name,
+                    mimeType: file.mimeType,
+                    size: file.size,
+                    storageKey: `${workspace.id}/ai-chat/${conversation.id}/${id}/${file.name}`,
+                    status: 'pending',
+                  };
+                }),
+              )
+              .returningAll()
+              .execute();
+            return { batch, rows, existing: false };
+          });
+
+        if (reservation.existing && reservation.batch.status !== 'processing') {
+          return this.toUploadBatch(reservation.batch, reservation.rows);
+        }
+        if (
+          reservation.rows.length !== prepared.length ||
+          reservation.rows.some(
+            (row, index) =>
+              row.uploadOrdinal !== index ||
+              row.contentSha256 !== prepared[index].sha256,
+          )
+        ) {
+          throw new ServiceUnavailableException({
+            code: 'ai_file_upload_failed',
+            message: 'AI chat file upload state is incomplete',
           });
         }
-        const rows = await trx
-          .selectFrom('aiChatFiles')
-          .selectAll()
-          .where('uploadBatchId', '=', existingBatch.id)
-          .orderBy('uploadOrdinal', 'asc')
-          .execute();
-        return { batch: existingBatch, rows, existing: true };
-      }
 
-      const usage = await trx
-        .selectFrom('aiChatFiles')
-        .select((eb) => [
-          eb.fn.countAll<number>().as('count'),
-          eb.fn.sum<number>('size').as('size'),
-        ])
-        .where('conversationId', '=', conversation.id)
-        .where('deletedAt', 'is', null)
-        .executeTakeFirstOrThrow();
-      const totalBytes =
-        Number(usage.size ?? 0) +
-        prepared.reduce((sum, file) => sum + file.size, 0);
-      if (
-        Number(usage.count) + prepared.length >
-          AI_CHAT_LIMITS.maxFilesPerConversation ||
-        totalBytes > AI_CHAT_LIMITS.maxConversationFileBytes
-      ) {
-        throw new BadRequestException('AI chat file quota exceeded');
+        this.metrics.observeFileLifecycle('upload_started');
+        const uploaded: AiChatFileEntity[] = [];
+        try {
+          for (const [index, row] of reservation.rows.entries()) {
+            await this.storage.upload(row.storageKey, prepared[index].buffer);
+            uploaded.push(row);
+          }
+          const now = new Date();
+          const rows = await connection.transaction().execute(async (trx) => {
+            await trx
+              .updateTable('aiChatFiles')
+              .set({ uploadedAt: now, updatedAt: now })
+              .where('uploadBatchId', '=', reservation.batch.id)
+              .execute();
+            await trx
+              .updateTable('aiFileUploadBatches')
+              .set({ status: 'completed', updatedAt: now })
+              .where('id', '=', reservation.batch.id)
+              .execute();
+            return trx
+              .selectFrom('aiChatFiles')
+              .selectAll()
+              .where('uploadBatchId', '=', reservation.batch.id)
+              .orderBy('uploadOrdinal', 'asc')
+              .execute();
+          });
+          for (const row of rows) {
+            await this.enqueueExtraction(row.id);
+          }
+          this.metrics.observeFileLifecycle('upload_completed');
+          return this.toUploadBatch(
+            { ...reservation.batch, status: 'completed', updatedAt: now },
+            rows,
+          );
+        } catch {
+          this.metrics.observeFileLifecycle('upload_failed');
+          const now = new Date();
+          await connection.transaction().execute(async (trx) => {
+            await trx
+              .updateTable('aiChatFiles')
+              .set({ deletedAt: now, updatedAt: now })
+              .where('uploadBatchId', '=', reservation.batch.id)
+              .execute();
+            await trx
+              .updateTable('aiFileUploadBatches')
+              .set({
+                status: 'failed',
+                errorCode: 'ai_file_upload_failed',
+                updatedAt: now,
+              })
+              .where('id', '=', reservation.batch.id)
+              .execute();
+          });
+          await Promise.allSettled(
+            uploaded.map((row) => this.storage.delete(row.storageKey)),
+          );
+          throw new ServiceUnavailableException({
+            code: 'ai_file_upload_failed',
+            message: 'AI chat files could not be uploaded',
+          });
+        }
+      } finally {
+        await sql`
+          select pg_advisory_unlock(hashtextextended(${lockKey}, 0))
+        `.execute(connection);
       }
-
-      const batchId = uuidv7();
-      const batch = await trx
-        .insertInto('aiFileUploadBatches')
-        .values({
-          id: batchId,
-          conversationId: conversation.id,
-          userId: user.id,
-          workspaceId: workspace.id,
-          idempotencyKey,
-          requestFingerprint,
-          status: 'processing',
-        })
-        .returningAll()
-        .executeTakeFirstOrThrow();
-      const rows = await trx
-        .insertInto('aiChatFiles')
-        .values(
-          prepared.map((file, ordinal) => {
-            const id = uuidv7();
-            return {
-              id,
-              conversationId: conversation.id,
-              userId: user.id,
-              workspaceId: workspace.id,
-              spaceId: conversation.spaceId,
-              uploadBatchId: batchId,
-              uploadOrdinal: ordinal,
-              contentSha256: file.sha256,
-              name: file.name,
-              mimeType: file.mimeType,
-              size: file.size,
-              storageKey: `${workspace.id}/ai-chat/${conversation.id}/${id}/${file.name}`,
-              status: 'pending',
-            };
-          }),
-        )
-        .returningAll()
-        .execute();
-      return { batch, rows, existing: false };
     });
-
-    if (reservation.existing) {
-      return this.toUploadBatch(reservation.batch, reservation.rows);
-    }
-
-    this.metrics.observeFileLifecycle('upload_started');
-    const uploaded: AiChatFileEntity[] = [];
-    try {
-      for (const [index, row] of reservation.rows.entries()) {
-        await this.storage.upload(row.storageKey, prepared[index].buffer);
-        uploaded.push(row);
-      }
-      const now = new Date();
-      const rows = await this.db.transaction().execute(async (trx) => {
-        await trx
-          .updateTable('aiChatFiles')
-          .set({ uploadedAt: now, updatedAt: now })
-          .where('uploadBatchId', '=', reservation.batch.id)
-          .execute();
-        await trx
-          .updateTable('aiFileUploadBatches')
-          .set({ status: 'completed', updatedAt: now })
-          .where('id', '=', reservation.batch.id)
-          .execute();
-        return trx
-          .selectFrom('aiChatFiles')
-          .selectAll()
-          .where('uploadBatchId', '=', reservation.batch.id)
-          .orderBy('uploadOrdinal', 'asc')
-          .execute();
-      });
-      for (const row of rows) {
-        await this.enqueueExtraction(row.id);
-      }
-      this.metrics.observeFileLifecycle('upload_completed');
-      return this.toUploadBatch(
-        { ...reservation.batch, status: 'completed', updatedAt: now },
-        rows,
-      );
-    } catch {
-      this.metrics.observeFileLifecycle('upload_failed');
-      const now = new Date();
-      await this.db.transaction().execute(async (trx) => {
-        await trx
-          .updateTable('aiChatFiles')
-          .set({ deletedAt: now, updatedAt: now })
-          .where('uploadBatchId', '=', reservation.batch.id)
-          .execute();
-        await trx
-          .updateTable('aiFileUploadBatches')
-          .set({
-            status: 'failed',
-            errorCode: 'ai_file_upload_failed',
-            updatedAt: now,
-          })
-          .where('id', '=', reservation.batch.id)
-          .execute();
-      });
-      await Promise.allSettled(
-        uploaded.map((row) => this.storage.delete(row.storageKey)),
-      );
-      throw new ServiceUnavailableException({
-        code: 'ai_file_upload_failed',
-        message: 'AI chat files could not be uploaded',
-      });
-    }
   }
 
   async remove(
@@ -887,7 +910,13 @@ export class AiFileService {
       deadline,
       'AI document extraction timed out',
     );
-    const JSZip = (await import('jszip')).default;
+    const jsZipModule = await withDeadline(
+      import('jszip'),
+      deadline,
+      'AI document extraction timed out',
+    );
+    const JSZip = (jsZipModule.default ??
+      jsZipModule) as typeof import('jszip');
     const archive = await withDeadline(
       JSZip.loadAsync(buffer, { checkCRC32: false, createFolders: false }),
       deadline,

@@ -170,6 +170,11 @@ export class AiRunService {
       workspace.id,
       user,
     );
+    const preparedRunContext = await this.contexts.prepareRunContext(
+      conversation,
+      dto,
+      user,
+    );
 
     const userMessageId = uuidv7();
     const assistantMessageId = uuidv7();
@@ -207,7 +212,8 @@ export class AiRunService {
         ) {
           throw new ConflictException({
             code: 'ai_profile_locked',
-            message: 'The assistant profile changed before the message was sent',
+            message:
+              'The assistant profile changed before the message was sent',
           });
         }
         const lockedConfig = await trx
@@ -271,6 +277,13 @@ export class AiRunService {
           this.assertFingerprint(raced.requestFingerprint, fingerprint);
           return raced;
         }
+
+        await this.assertVisionCompatibleInputs(
+          trx,
+          chatFileIds,
+          attachmentIds,
+          lockedConfig.visionEnabled,
+        );
 
         await this.assertQuotaAndConcurrency(
           trx,
@@ -390,9 +403,7 @@ export class AiRunService {
         await this.contexts.captureRunContext(
           trx,
           inserted.id,
-          lockedConversation,
-          dto,
-          user,
+          preparedRunContext,
         );
         await trx
           .updateTable('aiMessages')
@@ -752,6 +763,10 @@ export class AiRunService {
       config,
     );
     const frozenProvider = this.profiles.providerSnapshotForRun(source, config);
+    const preparedRunContext = await this.contexts.prepareCopiedRunContext(
+      source,
+      user,
+    );
 
     let created: AiRunEntity;
     try {
@@ -885,10 +900,9 @@ export class AiRunService {
           .executeTakeFirstOrThrow();
         await this.contexts.copyRunContext(
           trx,
-          locked.id,
           run.id,
           locked.assistantMessageId,
-          user,
+          preparedRunContext,
         );
         await trx
           .updateTable('aiMessages')
@@ -1238,6 +1252,59 @@ export class AiRunService {
     if (rows.some((row) => !snapshot.readablePageIds.has(row.pageId!))) {
       throw new ForbiddenException('Attachment access denied');
     }
+  }
+
+  private async assertVisionCompatibleInputs(
+    db: any,
+    chatFileIds: string[],
+    attachmentIds: string[],
+    visionEnabled: boolean,
+  ): Promise<void> {
+    if (
+      visionEnabled ||
+      (chatFileIds.length === 0 && attachmentIds.length === 0)
+    ) {
+      return;
+    }
+    const chatFiles = chatFileIds.length
+      ? await db
+          .selectFrom('aiChatFiles')
+          .select(['mimeType', 'extractedText'])
+          .where('id', 'in', chatFileIds)
+          .execute()
+      : [];
+    const attachments = attachmentIds.length
+      ? await db
+          .selectFrom('attachments')
+          .select(['mimeType', 'textContent'])
+          .where('id', 'in', attachmentIds)
+          .execute()
+      : [];
+    const needsVision =
+      chatFiles.some((file: any) =>
+        this.isVisualOnlyInput(file.mimeType, file.extractedText),
+      ) ||
+      attachments.some((file: any) =>
+        this.isVisualOnlyInput(file.mimeType, file.textContent),
+      );
+    if (needsVision) {
+      throw new BadRequestException({
+        code: 'ai_vision_required',
+        message:
+          'Vision must be enabled before sending selected images or image-only PDFs',
+      });
+    }
+  }
+
+  private isVisualOnlyInput(
+    mimeType: string | null,
+    extractedText: string | null,
+  ): boolean {
+    return (
+      (mimeType?.startsWith('image/') === true ||
+        mimeType === 'application/pdf') &&
+      !extractedText?.trim()
+    );
   }
 
   private async findIdempotentRun(
