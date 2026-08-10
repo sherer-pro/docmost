@@ -28,6 +28,7 @@ describe('NotificationService', () => {
       findUnreadForUser: jest
         .fn()
         .mockResolvedValue(options?.unreadNotifications ?? []),
+      archive: jest.fn().mockResolvedValue(undefined),
     } as any;
     const wsGateway = {
       server: {
@@ -262,5 +263,16 @@ describe('NotificationService', () => {
     });
 
     await expect(service.getUnreadCount('user-1')).resolves.toBe(1);
+  });
+
+  it('archives only through the recipient-scoped repository operation', async () => {
+    const { service, notificationRepo } = createService();
+
+    await service.archive('notification-1', 'user-1');
+
+    expect(notificationRepo.archive).toHaveBeenCalledWith(
+      'notification-1',
+      'user-1',
+    );
   });
 });

@@ -13,7 +13,10 @@ import { AuthUser } from '../../common/decorators/auth-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import { User } from '@docmost/db/types/entity.types';
-import { MarkNotificationsReadDto } from './dto/notification.dto';
+import {
+  MarkNotificationsReadDto,
+  NotificationIdDto,
+} from './dto/notification.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller('notifications')
@@ -53,6 +56,12 @@ export class NotificationController {
   @Post('mark-all-read')
   async markAllAsRead(@AuthUser() user: User) {
     await this.notificationService.markAllAsRead(user.id);
+  }
+
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Post('archive')
+  async archive(@Body() dto: NotificationIdDto, @AuthUser() user: User) {
+    await this.notificationService.archive(dto.notificationId, user.id);
   }
 
   async getNotifications(

@@ -4,10 +4,19 @@
   cursor: pointer;
 }
 
+.notificationMainAction {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+
 .notificationItem:hover {
   background-color: var(--mantine-color-default-hover);
 }
 
 .divider {
-  border-color: light-dark(var(--mantine-color-gray-2), var(--mantine-color-dark-5));
+  border-color: light-dark(
+    var(--mantine-color-gray-2),
+    var(--mantine-color-dark-5)
+  );
 }

@@ -18,15 +18,15 @@ export function NotificationList({
   onNavigate,
 }: NotificationListProps) {
   const { t } = useTranslation();
-  const {
-    data,
-    isLoading,
-    hasNextPage,
-    fetchNextPage,
-    isFetchingNextPage,
-  } = useNotificationsQuery();
+  const { data, isLoading, hasNextPage, fetchNextPage, isFetchingNextPage } =
+    useNotificationsQuery();
 
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const allNotifications = data?.pages.flatMap((page) => page.items) ?? [];
+  const filtered =
+    filter === "unread"
+      ? allNotifications.filter((notification) => !notification.readAt)
+      : allNotifications;
 
   useEffect(() => {
     const sentinel = sentinelRef.current;
@@ -45,6 +45,23 @@ export function NotificationList({
     return () => observer.disconnect();
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
+  useEffect(() => {
+    if (
+      !isLoading &&
+      filtered.length === 0 &&
+      hasNextPage &&
+      !isFetchingNextPage
+    ) {
+      void fetchNextPage();
+    }
+  }, [
+    fetchNextPage,
+    filtered.length,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading,
+  ]);
+
   if (isLoading) {
     return (
       <Center py="xl">
@@ -53,19 +70,23 @@ export function NotificationList({
     );
   }
 
-  const allNotifications =
-    data?.pages.flatMap((page) => page.items) ?? [];
-
-  const filtered =
-    filter === "unread"
-      ? allNotifications.filter((n) => !n.readAt)
-      : allNotifications;
-
   if (filtered.length === 0) {
+    if (isFetchingNextPage) {
+      return (
+        <Center py="xl">
+          <Loader size="sm" />
+        </Center>
+      );
+    }
+
     return (
       <Center py="xl">
         <Stack align="center" gap="xs">
-          <IconBellOff size={32} stroke={1.5} color="var(--mantine-color-dimmed)" />
+          <IconBellOff
+            size={32}
+            stroke={1.5}
+            color="var(--mantine-color-dimmed)"
+          />
           <Text size="sm" c="dimmed">
             {filter === "unread"
               ? t("No unread notifications")

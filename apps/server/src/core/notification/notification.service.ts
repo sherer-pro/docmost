@@ -116,6 +116,10 @@ export class NotificationService {
     return this.notificationRepo.markAllAsRead(userId);
   }
 
+  async archive(notificationId: string, userId: string) {
+    return this.notificationRepo.archive(notificationId, userId);
+  }
+
   async queueEmail(
     userId: string,
     notificationId: string,

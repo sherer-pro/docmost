@@ -10,6 +10,7 @@ import {
   getUnreadCount,
   markNotificationsRead,
   markAllNotificationsRead,
+  archiveNotification,
 } from "../services/notification-service";
 import {
   invalidateNotificationQueries,
@@ -54,6 +55,17 @@ export function useMarkAllReadMutation() {
 
   return useMutation({
     mutationFn: markAllNotificationsRead,
+    onSuccess: async () => {
+      await invalidateNotificationQueries(queryClient);
+    },
+  });
+}
+
+export function useArchiveNotificationMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: archiveNotification,
     onSuccess: async () => {
       await invalidateNotificationQueries(queryClient);
     },
