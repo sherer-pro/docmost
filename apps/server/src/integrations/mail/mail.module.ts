@@ -6,10 +6,17 @@ import {
 import { MailModuleOptions } from './interfaces';
 import { MailService } from './mail.service';
 import { EmailProcessor } from './processors/email.processor';
+import { NOTIFICATION_EMAIL_DELIVERY_POLICY_HANDLER } from '../queue/outbox/queue-outbox.types';
 
 @Global()
 @Module({
-  providers: [EmailProcessor],
+  providers: [
+    EmailProcessor,
+    {
+      provide: NOTIFICATION_EMAIL_DELIVERY_POLICY_HANDLER,
+      useExisting: EmailProcessor,
+    },
+  ],
 })
 export class MailModule {
   static forRootAsync(options: MailModuleOptions): DynamicModule {
