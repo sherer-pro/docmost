@@ -446,6 +446,69 @@ describe('ExportService PDF export', () => {
     db.selectFrom.mockImplementation(previousSelectFromImplementation!);
   });
 
+  it('keeps source-page attachment authorization for pre-materialized PDF content', async () => {
+    const page = createPage({
+      id: 'page-1',
+      slugId: 'slug-1',
+      title: 'Root',
+      parentPageId: null,
+      text: 'unused',
+    });
+    const attachmentId = '11111111-1111-4111-8111-111111111111';
+    (page as any).content = {
+      type: 'doc',
+      content: [
+        {
+          type: 'transclusionSource',
+          attrs: { transclusionId: 'block-1' },
+          content: [
+            {
+              type: 'image',
+              attrs: {
+                attachmentId,
+                src: `/api/attachments/files/${attachmentId}/image.png`,
+              },
+            },
+          ],
+        },
+      ],
+    };
+    const previousSelectFromImplementation =
+      db.selectFrom.getMockImplementation();
+    db.selectFrom.mockImplementation((tableName: string) => {
+      if (tableName === 'attachments') {
+        const query: any = {
+          select: () => query,
+          where: () => query,
+          execute: async () => [{ id: attachmentId, pageId: 'source-1' }],
+        };
+        return query;
+      }
+      return previousSelectFromImplementation?.(tableName);
+    });
+
+    await service.exportPage(
+      ExportFormat.PDF,
+      page,
+      false,
+      undefined,
+      undefined,
+      undefined,
+      { id: 'user-1', workspaceId: 'ws-1' },
+      new Set(['page-1', 'source-1']),
+    );
+
+    expect(htmlPdfRendererService.render).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        attachmentTokens: {
+          [attachmentId]: `attachment-token:${attachmentId}`,
+        },
+      }),
+    );
+    db.selectFrom.mockImplementation(previousSelectFromImplementation!);
+  });
+
   it('does not ZIP an attachment whose proven owner page is outside the materialized set', async () => {
     const attachmentId = '11111111-1111-4111-8111-111111111111';
     const previousSelectFromImplementation =

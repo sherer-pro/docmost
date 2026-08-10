@@ -172,6 +172,7 @@ export class ExportService {
     spaceHeadingNumberingEnabled?: boolean,
     spaceAiRoleEnabled?: boolean,
     authorizedUser?: User,
+    preMaterializedAttachmentPageIds?: ReadonlySet<string>,
   ) {
     const {
       title: pageTitle,
@@ -184,6 +185,7 @@ export class ExportService {
       spaceHeadingNumberingEnabled,
       authorizedUser,
       locale,
+      preMaterializedAttachmentPageIds,
     );
 
     if (format === ExportFormat.HTML) {
@@ -289,6 +291,7 @@ export class ExportService {
     spaceHeadingNumberingEnabled?: boolean,
     authorizedUser?: User,
     locale?: string,
+    preMaterializedAttachmentPageIds?: ReadonlySet<string>,
   ): Promise<{
     title: string;
     pageHtml: string;
@@ -301,12 +304,20 @@ export class ExportService {
       content: [{ type: 'text', text: getPageTitle(page.title) }],
     };
 
-    const materialized = await this.materializeTransclusionsWithAccess(
-      getProsemirrorContent(page.content),
-      authorizedUser,
-      locale,
-      page.id,
-    );
+    const materialized = preMaterializedAttachmentPageIds
+      ? {
+          content: getProsemirrorContent(page.content),
+          attachmentPageIds: new Set([
+            page.id,
+            ...preMaterializedAttachmentPageIds,
+          ]),
+        }
+      : await this.materializeTransclusionsWithAccess(
+          getProsemirrorContent(page.content),
+          authorizedUser,
+          locale,
+          page.id,
+        );
     let prosemirrorJson: any = materialized.content;
 
     if (singlePage) {
@@ -2543,6 +2554,7 @@ export class ExportService {
           pageHeadingNumberingEnabled,
           spaceAiRoleEnabled,
           authorizedUser,
+          materialized.attachmentPageIds,
         );
 
         folder.file(
