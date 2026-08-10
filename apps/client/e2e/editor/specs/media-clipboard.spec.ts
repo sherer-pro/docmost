@@ -30,17 +30,44 @@ test("media nodes, fullscreen image, Mermaid sanitization and clipboard survive 
     });
     await page.goto(pageUrl(state, seeded.page));
     await expect(mainEditor(page)).toContainText("Editor regression audit");
+    await expect(page.locator(".editor-container")).toBeVisible({
+      timeout: 20_000,
+    });
 
     const image = page.getByAltText("Editor audit image alt text");
     await expect(image).toBeVisible();
     await image.click();
-    const imagePreview = page.getByRole("dialog", {
-      name: /Image preview|Предпросмотр изображения/,
+    const imagePreview = page.getByRole("dialog").filter({
+      has: page.getByAltText("Editor audit image alt text"),
     });
     await expect(imagePreview).toBeVisible();
     await expect(
       imagePreview.getByAltText("Editor audit image alt text"),
     ).toBeVisible();
+    const closePreview = imagePreview.getByRole("button").first();
+    await expect(closePreview).toHaveAttribute("aria-label", /\S+/);
+    await closePreview.focus();
+    for (let index = 0; index < 4; index += 1) {
+      await page.keyboard.press("Tab");
+      expect(
+        await page.evaluate(() =>
+          Boolean(document.activeElement?.closest('[role="dialog"]')),
+        ),
+      ).toBe(true);
+    }
+    await page.evaluate(() => {
+      document.documentElement.style.zoom = "2";
+    });
+    const zoomedDialog = await imagePreview.boundingBox();
+    expect(zoomedDialog).not.toBeNull();
+    expect(zoomedDialog!.x).toBeGreaterThanOrEqual(-1);
+    expect(zoomedDialog!.width).toBeLessThanOrEqual(
+      (page.viewportSize()?.width ?? zoomedDialog!.width) + 1,
+    );
+    await captureStep(page, testInfo, "04a-image-preview-200-percent");
+    await page.evaluate(() => {
+      document.documentElement.style.zoom = "";
+    });
     await page.keyboard.press("Escape");
 
     const audio = page.locator("audio[controls]").first();
