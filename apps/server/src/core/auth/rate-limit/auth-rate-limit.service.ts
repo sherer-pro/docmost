@@ -234,9 +234,13 @@ export class AuthRateLimitService implements OnModuleDestroy {
         );
         this.handleLimitExceeded(input, retryAfterMs);
 
+        // Redis answered, so this is a quota rejection (429). Leaving
+        // `storageAvailable` unset would make the guard report 503 and hide a
+        // real storage outage behind ordinary rate limiting.
         return {
           allowed: false,
           retryAfterMs,
+          storageAvailable: true,
         } as const;
       }
 

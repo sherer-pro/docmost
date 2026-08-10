@@ -264,6 +264,58 @@ describe('AuthRateLimitService', () => {
     },
   );
 
+  it.each<StorageMode>(['memory', 'redis'])(
+    'reports the storage as available when %s rejects on quota',
+    async (storage) => {
+      const redisClient =
+        storage === 'redis' ? new FakeRedisClient() : undefined;
+      const service = createService(storage, redisClient);
+
+      const allowed = await service.consume({
+        endpoint: 'login',
+        scope: 'ip',
+        key: '10.1.2.3',
+        limit: 1,
+        windowMs: 1_000,
+      });
+      const rejected = await service.consume({
+        endpoint: 'login',
+        scope: 'ip',
+        key: '10.1.2.3',
+        limit: 1,
+        windowMs: 1_000,
+      });
+
+      expect(allowed).toMatchObject({ allowed: true, storageAvailable: true });
+      // A quota rejection must stay distinguishable from a storage outage,
+      // otherwise the guard answers 503 and hides a real Redis failure.
+      expect(rejected).toMatchObject({
+        allowed: false,
+        storageAvailable: true,
+      });
+    },
+  );
+
+  it('reports the storage as unavailable when redis fails', async () => {
+    const failingClient = {
+      eval: jest.fn().mockRejectedValue(new Error('redis down')),
+      pttl: jest.fn(),
+      scan: jest.fn(),
+      del: jest.fn(),
+    };
+    const service = createService('redis', failingClient as never);
+
+    await expect(
+      service.consume({
+        endpoint: 'login',
+        scope: 'ip',
+        key: '10.1.2.4',
+        limit: 5,
+        windowMs: 1_000,
+      }),
+    ).resolves.toMatchObject({ allowed: false, storageAvailable: false });
+  });
+
   it('returns equivalent results in memory and redis modes', async () => {
     const memoryService = createService('memory');
     const redisService = createService('redis', new FakeRedisClient());
