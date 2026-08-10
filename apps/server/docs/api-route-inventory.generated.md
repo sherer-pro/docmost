@@ -130,6 +130,7 @@
 | POST | `/mfa/validate-access` | `apps/server/src/core/mfa/mfa.controller.ts` |
 | POST | `/mfa/verify` | `apps/server/src/core/mfa/mfa.controller.ts` |
 | GET | `/notifications` | `apps/server/src/core/notification/notification.controller.ts` |
+| POST | `/notifications/archive` | `apps/server/src/core/notification/notification.controller.ts` |
 | POST | `/notifications/mark-all-read` | `apps/server/src/core/notification/notification.controller.ts` |
 | POST | `/notifications/mark-read` | `apps/server/src/core/notification/notification.controller.ts` |
 | GET | `/notifications/unread-count` | `apps/server/src/core/notification/notification.controller.ts` |

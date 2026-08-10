@@ -24,16 +24,18 @@ describe('EmailAggregationService', () => {
       select: jest.fn().mockReturnThis(),
       where: jest.fn().mockReturnThis(),
       executeTakeFirst: jest.fn().mockResolvedValue(
-        options?.userRecord ?? {
-          email: 'john@example.com',
-          locale: 'en-US',
-          settings: {
-            preferences: {
-              emailEnabled: true,
-              emailFrequency: '1h',
-            },
-          },
-        },
+        typeof options?.userRecord === 'undefined'
+          ? {
+              email: 'john@example.com',
+              locale: 'en-US',
+              settings: {
+                preferences: {
+                  emailEnabled: true,
+                  emailFrequency: '1h',
+                },
+              },
+            }
+          : options.userRecord,
       ),
     };
 
@@ -161,6 +163,20 @@ describe('EmailAggregationService', () => {
           },
         },
       },
+    });
+
+    await service.processDueDigests();
+
+    expect(
+      notificationRepo.findUnreadUnemailedForUserBefore,
+    ).not.toHaveBeenCalled();
+    expect(mailService.sendToQueue).not.toHaveBeenCalled();
+  });
+
+  it('does not send a digest to a deactivated recipient', async () => {
+    jest.setSystemTime(new Date('2026-02-01T12:00:00.000Z'));
+    const { service, notificationRepo, mailService } = createService({
+      userRecord: null,
     });
 
     await service.processDueDigests();

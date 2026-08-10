@@ -58,6 +58,15 @@ export interface NotificationEmailSecretPayload {
   };
 }
 
+export const NOTIFICATION_EMAIL_DELIVERY_POLICY_HANDLER =
+  'NOTIFICATION_EMAIL_DELIVERY_POLICY_HANDLER';
+
+export interface NotificationEmailDeliveryPolicyHandler {
+  isNotificationEmailStillDeliverable(
+    message: NotificationEmailSecretPayload['message'],
+  ): Promise<boolean>;
+}
+
 export interface NotificationDispatchOutboxPayload {
   jobName:
     | QueueJob.COMMENT_NOTIFICATION

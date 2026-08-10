@@ -49,6 +49,14 @@ export class NotificationService {
     deduplicationKey: string,
     email: { subject: string; template: any },
   ) {
+    if (
+      !(await this.notificationDeliveryPolicyService.canReceiveNotifications(
+        data.userId,
+      ))
+    ) {
+      return null;
+    }
+
     const notificationId = uuid7();
     const preparedEmail = await this.prepareImmediateEmail(
       data.userId,
@@ -116,6 +124,10 @@ export class NotificationService {
     return this.notificationRepo.markAllAsRead(userId);
   }
 
+  async archive(notificationId: string, userId: string) {
+    return this.notificationRepo.archive(notificationId, userId);
+  }
+
   async queueEmail(
     userId: string,
     notificationId: string,
@@ -164,6 +176,7 @@ export class NotificationService {
       .select(['email', 'settings'])
       .where('id', '=', userId)
       .where('deletedAt', 'is', null)
+      .where('deactivatedAt', 'is', null)
       .executeTakeFirst();
     if (!user?.email) return undefined;
 
@@ -198,6 +211,7 @@ export class NotificationService {
       .select('locale')
       .where('id', '=', userId)
       .where('deletedAt', 'is', null)
+      .where('deactivatedAt', 'is', null)
       .executeTakeFirst();
 
     return user?.locale ?? 'en-US';

@@ -7,7 +7,7 @@ import {
 } from '@docmost/db/types/entity.types';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import { executeWithCursorPagination } from '@docmost/db/pagination/cursor-pagination';
-import { ExpressionBuilder } from 'kysely';
+import { ExpressionBuilder, sql } from 'kysely';
 import type { DB } from '@docmost/db/types/db';
 import { jsonObjectFrom } from 'kysely/helpers/postgres';
 import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
@@ -37,10 +37,15 @@ export class NotificationRepo {
       .select((eb) => this.withPage(eb))
       .select((eb) => this.withSpace(eb))
       .where('userId', '=', userId)
+      .where('archivedAt', 'is', null)
       .where((eb) =>
         eb.or([
           eb('spaceId', 'is', null),
-          eb('spaceId', 'in', this.spaceMemberRepo.getUserSpaceIdsQuery(userId)),
+          eb(
+            'spaceId',
+            'in',
+            this.spaceMemberRepo.getUserSpaceIdsQuery(userId),
+          ),
         ]),
       );
 
@@ -59,10 +64,15 @@ export class NotificationRepo {
       .select((eb) => eb.fn.count('id').as('count'))
       .where('userId', '=', userId)
       .where('readAt', 'is', null)
+      .where('archivedAt', 'is', null)
       .where((eb) =>
         eb.or([
           eb('spaceId', 'is', null),
-          eb('spaceId', 'in', this.spaceMemberRepo.getUserSpaceIdsQuery(userId)),
+          eb(
+            'spaceId',
+            'in',
+            this.spaceMemberRepo.getUserSpaceIdsQuery(userId),
+          ),
         ]),
       )
       .executeTakeFirst();
@@ -78,6 +88,7 @@ export class NotificationRepo {
       .select(['id', 'pageId'])
       .where('userId', '=', userId)
       .where('readAt', 'is', null)
+      .where('archivedAt', 'is', null)
       .where((eb) =>
         eb.or([
           eb('spaceId', 'is', null),
@@ -95,21 +106,52 @@ export class NotificationRepo {
    * Returns users that currently have unread and unsent notifications.
    * The list is ordered by earliest pending event to preserve fair processing.
    */
-  async findPendingEmailDigestUsers(
-    limit = 200,
-  ): Promise<Array<{ userId: string; workspaceId: string; firstPendingAt: Date | string }>> {
+  async findPendingEmailDigestUsers(limit = 200): Promise<
+    Array<{
+      userId: string;
+      workspaceId: string;
+      firstPendingAt: Date | string;
+    }>
+  > {
     return this.db
       .selectFrom('notifications')
-      .select('userId')
-      .select('workspaceId')
-      .select((eb) => eb.fn.min('createdAt').as('firstPendingAt'))
-      .where('readAt', 'is', null)
-      .where('emailedAt', 'is', null)
-      .groupBy(['userId', 'workspaceId'])
+      .innerJoin('users', 'users.id', 'notifications.userId')
+      .select('notifications.userId as userId')
+      .select('notifications.workspaceId as workspaceId')
+      .select((eb) => eb.fn.min('notifications.createdAt').as('firstPendingAt'))
+      .where('notifications.readAt', 'is', null)
+      .where('notifications.emailedAt', 'is', null)
+      .where('notifications.archivedAt', 'is', null)
+      .where('users.deletedAt', 'is', null)
+      .where('users.deactivatedAt', 'is', null)
+      .where('users.email', 'is not', null)
+      .where(
+        sql<boolean>`
+        lower(
+          trim(both '"' from coalesce(
+            users.settings #>> '{preferences,emailEnabled}',
+            'true'
+          ))
+        ) <> 'false'
+      `,
+      )
+      .where(
+        sql<boolean>`
+        trim(both '"' from coalesce(
+          users.settings #>> '{preferences,emailFrequency}',
+          'immediate'
+        )) in ('1h', '3h', '6h', '24h')
+      `,
+      )
+      .groupBy(['notifications.userId', 'notifications.workspaceId'])
       .orderBy('firstPendingAt', 'asc')
       .limit(limit)
       .execute() as Promise<
-      Array<{ userId: string; workspaceId: string; firstPendingAt: Date | string }>
+      Array<{
+        userId: string;
+        workspaceId: string;
+        firstPendingAt: Date | string;
+      }>
     >;
   }
 
@@ -129,6 +171,7 @@ export class NotificationRepo {
       .where('userId', '=', params.userId)
       .where('readAt', 'is', null)
       .where('emailedAt', 'is', null)
+      .where('archivedAt', 'is', null)
       .where('createdAt', '<', params.windowEnd)
       .where((eb) =>
         eb.or([
@@ -161,6 +204,7 @@ export class NotificationRepo {
       .where('userId', '=', params.userId)
       .where('pageId', '=', params.pageId)
       .where('readAt', 'is', null)
+      .where('archivedAt', 'is', null)
       .where('createdAt', '>=', params.windowStart)
       .where('createdAt', '<', params.windowEnd)
       .where((eb) =>
@@ -181,17 +225,25 @@ export class NotificationRepo {
   /**
    * Checks that the notification is still unread and belongs to the user.
    */
-  async isUnreadForUser(notificationId: string, userId: string): Promise<boolean> {
+  async isUnreadForUser(
+    notificationId: string,
+    userId: string,
+  ): Promise<boolean> {
     const result = await this.db
       .selectFrom('notifications')
       .select('id')
       .where('id', '=', notificationId)
       .where('userId', '=', userId)
       .where('readAt', 'is', null)
+      .where('archivedAt', 'is', null)
       .where((eb) =>
         eb.or([
           eb('spaceId', 'is', null),
-          eb('spaceId', 'in', this.spaceMemberRepo.getUserSpaceIdsQuery(userId)),
+          eb(
+            'spaceId',
+            'in',
+            this.spaceMemberRepo.getUserSpaceIdsQuery(userId),
+          ),
         ]),
       )
       .executeTakeFirst();
@@ -218,10 +270,15 @@ export class NotificationRepo {
       .where('id', '=', notificationId)
       .where('userId', '=', userId)
       .where('readAt', 'is', null)
+      .where('archivedAt', 'is', null)
       .where((eb) =>
         eb.or([
           eb('spaceId', 'is', null),
-          eb('spaceId', 'in', this.spaceMemberRepo.getUserSpaceIdsQuery(userId)),
+          eb(
+            'spaceId',
+            'in',
+            this.spaceMemberRepo.getUserSpaceIdsQuery(userId),
+          ),
         ]),
       )
       .execute();
@@ -240,10 +297,15 @@ export class NotificationRepo {
       .where('id', 'in', notificationIds)
       .where('userId', '=', userId)
       .where('readAt', 'is', null)
+      .where('archivedAt', 'is', null)
       .where((eb) =>
         eb.or([
           eb('spaceId', 'is', null),
-          eb('spaceId', 'in', this.spaceMemberRepo.getUserSpaceIdsQuery(userId)),
+          eb(
+            'spaceId',
+            'in',
+            this.spaceMemberRepo.getUserSpaceIdsQuery(userId),
+          ),
         ]),
       )
       .execute();
@@ -277,12 +339,27 @@ export class NotificationRepo {
       .set({ readAt: new Date() })
       .where('userId', '=', userId)
       .where('readAt', 'is', null)
+      .where('archivedAt', 'is', null)
       .where((eb) =>
         eb.or([
           eb('spaceId', 'is', null),
-          eb('spaceId', 'in', this.spaceMemberRepo.getUserSpaceIdsQuery(userId)),
+          eb(
+            'spaceId',
+            'in',
+            this.spaceMemberRepo.getUserSpaceIdsQuery(userId),
+          ),
         ]),
       )
+      .execute();
+  }
+
+  async archive(notificationId: string, userId: string): Promise<void> {
+    await this.db
+      .updateTable('notifications')
+      .set({ archivedAt: new Date() })
+      .where('id', '=', notificationId)
+      .where('userId', '=', userId)
+      .where('archivedAt', 'is', null)
       .execute();
   }
 

@@ -90,6 +90,19 @@ describe('EmailProcessor notification delivery recheck', () => {
     ).not.toHaveBeenCalled();
   });
 
+  it('suppresses a queued email when the notification was archived', async () => {
+    const { processor, mailService, pageAccessService } = createProcessor({
+      notification: { archivedAt: new Date() },
+    });
+
+    await processor.process({ data: notificationMessage } as any);
+
+    expect(mailService.sendEmail).not.toHaveBeenCalled();
+    expect(
+      pageAccessService.filterUsersWithPageReadAccess,
+    ).not.toHaveBeenCalled();
+  });
+
   it('suppresses the complete queued payload after page access is revoked', async () => {
     const { processor, mailService } = createProcessor({ pageAccess: [] });
 

@@ -26,6 +26,7 @@ export interface PushNotificationJobClaim {
 export interface ClaimedPushNotificationJobRef {
   id: string;
   revision: number;
+  retrySubscriptionIds?: string[];
 }
 
 export interface PushNotificationFinalizeResult {
@@ -242,7 +243,10 @@ export class PushNotificationJobRepo {
                 'retryMeta',
                 jsonb_build_object(
                   'attempts', coalesce((payload->'retryMeta'->>'attempts')::integer, 0) + 1,
-                  'lastTransientFailureAt', now()
+                  'lastTransientFailureAt', now(),
+                  'subscriptionIds', ${JSON.stringify(
+                    item.retrySubscriptionIds ?? [],
+                  )}::jsonb
                 )
               )
             `,
