@@ -1453,7 +1453,7 @@
       "title": "AI、RAG 和 MCP 的工作方式",
       "description": "关于 AI 助手、外部搜索、同步以及 MCP 安全边界的实用指南。",
       "overviewTitle": "各个流程负责什么",
-      "assistantDescription": "内置助手通过为空间配置的提供商维护与页面关联的私密聊天。空间设置会显示今天和最近 7 天的请求数与令牌使用量。代理模式可以调用获准的 Docmost 工具，但只有在发起操作的用户确认后才会应用页面更改。",
+      "assistantDescription": "内置助手通过为空间配置的提供商维护与页面关联的私密聊天。空间设置会显示今天和最近 7 天的请求数与令牌使用量。代理模式可以调用获准的 Docmost 工具，但只有在发起操作的用户确认后才会应用页面更改。在应用更改之前，服务器会再次检查当前页面的写入权限，以及 deployment、workspace、space、profile 和 group 各层级的工具策略。",
       "retrievalDescription": "空间搜索在生成回答时执行。它从外部索引请求候选项，随后 Docmost 根据数据库、当前访问权限和 AI 排除规则重新验证每个来源。搜索失败不会中断聊天。",
       "ragDescription": "只读 API /api/rag/* 将完整和增量内容流导出到外部索引器。它既不执行搜索，也不回答问题，并且每个 RAG 密钥仅限一个空间。",
       "inboundMcpDescription": "外部助手使用受限范围的 MCP 密钥连接到根 endpoint /mcp。该 endpoint 不保存状态，并且只提供密钥精确能力策略所允许的只读工具。",
