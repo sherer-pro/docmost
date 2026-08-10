@@ -4,6 +4,7 @@ import { updateUser } from "../services/user-service";
 import { useAtom } from "jotai";
 import { userAtom } from "../atoms/current-user-atom";
 import { useState } from "react";
+import { notifications } from "@mantine/notifications";
 
 export default function AccountLanguage() {
   const { t } = useTranslation();
@@ -27,14 +28,28 @@ function LanguageSwitcher() {
   const [language, setLanguage] = useState(
     user?.locale === "en" ? "en-US" : user?.locale,
   );
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleChange = async (value: string) => {
-    const updatedUser = await updateUser({ locale: value });
+  const handleChange = async (value: string | null) => {
+    if (!value || value === language) {
+      return;
+    }
 
-    setLanguage(value);
-    setUser(updatedUser);
+    setIsSaving(true);
+    try {
+      const updatedUser = await updateUser({ locale: value });
 
-    i18n.changeLanguage(value);
+      setLanguage(value);
+      setUser(updatedUser);
+      await i18n.changeLanguage(value);
+    } catch {
+      notifications.show({
+        color: "red",
+        message: t("Failed to update data"),
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -55,7 +70,9 @@ function LanguageSwitcher() {
         { value: "zh-CN", label: t("accountLanguage.locale.zhCN") },
       ]}
       value={language || "en-US"}
-      onChange={handleChange}
+      disabled={isSaving}
+      aria-busy={isSaving}
+      onChange={(value) => void handleChange(value)}
       allowDeselect={false}
       checkIconPosition="right"
     />
