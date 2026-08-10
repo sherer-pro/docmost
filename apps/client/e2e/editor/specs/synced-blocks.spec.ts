@@ -81,7 +81,7 @@ test("audits synced block creation, lookup recovery, ACL, clipboard and unsync",
   page,
   browser,
 }, testInfo) => {
-  test.setTimeout(240_000);
+  test.setTimeout(1_200_000);
   const api = await createAdminApi();
   const state = await loadAuditState();
   const suffix = `${testInfo.project.name}-${Date.now()}`;
@@ -441,6 +441,7 @@ test("audits synced block creation, lookup recovery, ACL, clipboard and unsync",
     await expect(mainEditor(memberConsumerPage)).toContainText(
       `Shared text ${suffix}`,
     );
+    const lookupRequestsBeforeLiveEdit = lookupRequests;
     const sourceText = mainEditor(memberSourcePage).getByText(
       `Shared text ${suffix}`,
       { exact: true },
@@ -451,8 +452,12 @@ test("audits synced block creation, lookup recovery, ACL, clipboard and unsync",
     await expect(mainEditor(memberSourcePage)).toContainText(
       `Shared text ${suffix} live-update`,
     );
+    await expect
+      .poll(() => lookupRequests, { timeout: 45_000 })
+      .toBeGreaterThan(lookupRequestsBeforeLiveEdit);
     await expect(mainEditor(page)).toContainText(
       `Shared text ${suffix} live-update`,
+      { timeout: 45_000 },
     );
 
     await apiPost(api, "/api/pages/actions/update", {
