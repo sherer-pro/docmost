@@ -39,7 +39,7 @@ unqualified release-wide PASS:
 | Audit worktree | `D:\DevProjects\docmost-qa-G11` |
 | Final tested branch image source | `ca49d4643a77e1d3a76ef44370ffbf4d28248e83` |
 | Final image | `docmost-g11:ca49d464`, image ID `sha256:5956e1d4015a...` |
-| Final local-main HEAD after merge | `PENDING_LOCAL_MERGE` |
+| Local-main G11 integration merge | `a02cfd814903ff7bd0f9960900103a85a6c24aac` (`v1.0.0-159-ga02cfd81`) |
 
 The original checkout had only user-owned `graphify-out/*` modifications.
 They were never staged, reverted, or merged. Graphify generated the same class
