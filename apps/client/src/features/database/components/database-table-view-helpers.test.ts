@@ -144,6 +144,7 @@ describe('database-table-view helpers', () => {
         {
           filters: [
             { propertyId: 'property-a', operator: 'contains', value: 'keep' },
+            { propertyId: '', operator: 'contains', value: '' },
             { propertyId: 'missing', operator: 'equals', value: 'drop' },
           ],
           sortState: { propertyId: 'property-b', direction: 'desc' },
