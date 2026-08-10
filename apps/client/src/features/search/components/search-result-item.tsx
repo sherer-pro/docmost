@@ -94,6 +94,7 @@ export function SearchResultItem({
           <ActionIcon
             variant="subtle"
             color="gray"
+            size={32}
             aria-label={t("Download attachment")}
             onClick={handleDownload}
           >

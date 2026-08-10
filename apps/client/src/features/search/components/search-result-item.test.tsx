@@ -202,6 +202,7 @@ describe("SearchResultItem", () => {
       buildPageUrl("engineering", "slug-2", "Regular Page"),
     );
     expect(downloadButton.props["aria-label"]).toBe("Download attachment");
+    expect(downloadButton.props.size).toBe(32);
 
     const openSpy = vi.fn();
     vi.stubGlobal("window", { open: openSpy });
