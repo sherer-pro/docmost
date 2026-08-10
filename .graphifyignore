@@ -64,7 +64,6 @@ data/
 .copilot/
 .junie/
 .github/copilot-instructions.local.md
-CONTRIBUTING.md
 
 # Agent worktrees / temporary agent branches
 .claude/worktrees/
@@ -92,8 +91,8 @@ var/cache/
 var/log/
 logs/
 log/
-runtime/
-run/
+/runtime/
+/run/
 
 *.tmp
 *.temp
@@ -136,6 +135,7 @@ access.log
 .env
 .env.*
 !.env.example
+!.env.compose.example
 !.env.sample
 !.env.template
 
@@ -165,6 +165,9 @@ id_ed25519.*
 
 secrets/
 .rag-sync/
+rag-sync.config.json
+**/DOCMOST_RAG_KEY
+**/OPEN_WEBUI_KEY
 .secret/
 .secrets/
 credentials/
@@ -448,7 +451,6 @@ obj/
 *.sln.docstates
 TestResult*/
 TestResults/
-packages/
 
 
 # ---------------------------------------------------------------------
@@ -494,7 +496,6 @@ DerivedData/
 *.xcodeproj/xcuserdata/
 *.xcuserstate
 .swiftpm/
-Packages/
 Package.resolved
 Pods/
 Carthage/Build/
@@ -737,3 +738,12 @@ $RECYCLE.BIN/
 *.bmp
 *.tiff
 *.avif
+
+
+# ---------------------------------------------------------------------
+# Project source exceptions
+# These files collide with generic dump/tool patterns above but are part
+# of the Docmost source and operational contract.
+# ---------------------------------------------------------------------
+
+!scripts/ci-rag-sync-db-invariants.sql
