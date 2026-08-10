@@ -1,5 +1,10 @@
 import { DatabasePropertyType } from '@docmost/api-contract';
-import type { IDatabaseRowWithCells } from '@/features/database/types/database-table.types';
+import type {
+  IDatabaseFilterCondition,
+  IDatabaseRowWithCells,
+  IDatabaseSortState,
+} from '@/features/database/types/database-table.types';
+import type { IDatabaseViewConfig } from '@/features/database/types/database.types';
 
 export const DATABASE_PROPERTY_DRAG_MIME =
   'application/x-docmost-database-property';
@@ -128,4 +133,42 @@ export const resolveDatabasePropertyRename = (
   }
 
   return nextName;
+};
+
+export const normalizeDatabaseViewConfig = (
+  config: IDatabaseViewConfig | null,
+  propertyIds: string[],
+): {
+  filters: IDatabaseFilterCondition[];
+  sortState: IDatabaseSortState | null;
+  visibleColumns: Record<string, boolean>;
+} => {
+  const activePropertyIds = new Set(propertyIds);
+  const filters = Array.isArray(config?.filters)
+    ? config.filters
+        .filter(
+          (filter): filter is IDatabaseFilterCondition =>
+            Boolean(filter) &&
+            activePropertyIds.has(filter.propertyId) &&
+            (filter.operator === 'contains' ||
+              filter.operator === 'equals' ||
+              filter.operator === 'not_equals') &&
+            typeof filter.value === 'string',
+        )
+        .slice(0, 10)
+    : [];
+  const sortState =
+    config?.sortState &&
+    activePropertyIds.has(config.sortState.propertyId) &&
+    (config.sortState.direction === 'asc' || config.sortState.direction === 'desc')
+      ? config.sortState
+      : null;
+  const visibleColumns = Object.fromEntries(
+    Object.entries(config?.visibleColumns ?? {}).filter(
+      ([propertyId, isVisible]) =>
+        activePropertyIds.has(propertyId) && typeof isVisible === 'boolean',
+    ),
+  );
+
+  return { filters, sortState, visibleColumns };
 };

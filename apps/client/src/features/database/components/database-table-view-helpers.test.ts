@@ -6,6 +6,7 @@ import {
   isDatabaseFilterControlsVisible,
   isSameCellPayloadValue,
   mergePinnedDatabaseRow,
+  normalizeDatabaseViewConfig,
   reorderDatabaseProperties,
   resolveDraggedDatabasePropertyId,
   resolveDatabasePropertyRename,
@@ -119,5 +120,29 @@ describe('database-table-view helpers', () => {
       'page-visible-1',
       'page-visible-2',
     ]);
+  });
+
+  it('normalizes saved view configuration against active properties', () => {
+    expect(
+      normalizeDatabaseViewConfig(
+        {
+          filters: [
+            { propertyId: 'property-a', operator: 'contains', value: 'keep' },
+            { propertyId: 'missing', operator: 'equals', value: 'drop' },
+          ],
+          sortState: { propertyId: 'property-b', direction: 'desc' },
+          visibleColumns: {
+            'property-a': false,
+            'property-b': true,
+            missing: false,
+          },
+        },
+        ['property-a', 'property-b'],
+      ),
+    ).toEqual({
+      filters: [{ propertyId: 'property-a', operator: 'contains', value: 'keep' }],
+      sortState: { propertyId: 'property-b', direction: 'desc' },
+      visibleColumns: { 'property-a': false, 'property-b': true },
+    });
   });
 });
