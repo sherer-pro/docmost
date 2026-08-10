@@ -2108,16 +2108,8 @@ describe('DatabaseService mixed tree flows', () => {
             }),
             expect.objectContaining({
               propertyId: 'prop-page',
-              oldValue: {
-                id: 'ref-page-1',
-                title: 'Reference page one',
-                slugId: 'ref-page-one',
-              },
-              newValue: {
-                id: 'ref-page-2',
-                title: 'Reference page two',
-                slugId: 'ref-page-two',
-              },
+              oldValue: { id: 'ref-page-1' },
+              newValue: { id: 'ref-page-2' },
             }),
           ]),
         }),

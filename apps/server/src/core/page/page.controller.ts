@@ -524,9 +524,7 @@ export class PageController {
   @AuthPolicyScope('page', {
     source: 'body',
     key: 'pageId',
-    additionalTargets: [
-      { scope: 'space', source: 'body', key: 'spaceId' },
-    ],
+    additionalTargets: [{ scope: 'space', source: 'body', key: 'spaceId' }],
   })
   @Post('move-to-space')
   async movePageToSpace(
@@ -958,14 +956,14 @@ export class PageController {
 
     await this.pageAccessService.assertCanReadPage(page, user);
 
-    return this.pageHistoryService.findHistoryByPageId(page.id, dto);
+    return this.pageHistoryService.findHistoryByPageId(page.id, dto, user);
   }
 
   async getPageHistoryInfo(
     @Body() dto: PageHistoryIdDto,
     @AuthUser() user: User,
   ) {
-    const history = await this.pageHistoryService.findById(dto.historyId);
+    const history = await this.pageHistoryService.findById(dto.historyId, user);
     if (!history) {
       throw new NotFoundException('Page history not found');
     }

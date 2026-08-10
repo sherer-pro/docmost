@@ -1,11 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { PageHistoryRepo } from '@docmost/db/repos/page/page-history.repo';
-import { PageHistory } from '@docmost/db/types/entity.types';
+import { PageHistory, User } from '@docmost/db/types/entity.types';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import { CursorPaginationResult } from '@docmost/db/pagination/cursor-pagination';
 import { UserRepo } from '@docmost/db/repos/user/user.repo';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { DatabasePropertyRepo } from '@docmost/db/repos/database/database-property.repo';
+import { PageAccessService } from '../../page-access/page-access.service';
 
 @Injectable()
 export class PageHistoryService {
@@ -14,6 +15,7 @@ export class PageHistoryService {
     private userRepo: UserRepo,
     private pageRepo: PageRepo,
     private databasePropertyRepo: DatabasePropertyRepo,
+    private pageAccessService: PageAccessService,
   ) {}
 
   private isRecord(value: unknown): value is Record<string, unknown> {
@@ -115,7 +117,8 @@ export class PageHistoryService {
       return cachedUser;
     }
 
-    let resolvedUser: { name?: string; avatarUrl?: string | null } | null = null;
+    let resolvedUser: { name?: string; avatarUrl?: string | null } | null =
+      null;
     try {
       resolvedUser = await this.userRepo.findById(userId, workspaceId);
     } catch {
@@ -135,21 +138,40 @@ export class PageHistoryService {
   private async resolveHistoryPageRef(
     pageId: string,
     workspaceId: string,
-    pageCache: Map<string, Record<string, unknown>>,
-  ): Promise<Record<string, unknown>> {
-    const cachedPage = pageCache.get(pageId);
-    if (cachedPage) {
-      return cachedPage;
+    user: User | undefined,
+    pageCache: Map<string, Record<string, unknown> | null>,
+  ): Promise<Record<string, unknown> | null> {
+    if (pageCache.has(pageId)) {
+      return pageCache.get(pageId) ?? null;
     }
 
-    const page = await this.pageRepo.findById(pageId);
-    const canUsePageMeta =
-      !!page && page.workspaceId === workspaceId && page.deletedAt === null;
-    const pageRef: Record<string, unknown> = {
-      id: pageId,
-      title: canUsePageMeta ? page.title?.trim() || pageId : pageId,
-      slugId: canUsePageMeta ? page.slugId ?? null : null,
-    };
+    if (!user) {
+      pageCache.set(pageId, null);
+      return null;
+    }
+
+    let pageRef: Record<string, unknown> | null = null;
+    try {
+      const page = await this.pageRepo.findById(pageId);
+      const canUsePageMeta =
+        !!page && page.workspaceId === workspaceId && page.deletedAt === null;
+
+      if (canUsePageMeta) {
+        const access = await this.pageAccessService.getEffectiveAccess(
+          page,
+          user,
+        );
+        if (access.capabilities.canRead) {
+          pageRef = {
+            id: pageId,
+            title: page.title?.trim() || pageId,
+            slugId: page.slugId ?? null,
+          };
+        }
+      }
+    } catch {
+      pageRef = null;
+    }
 
     pageCache.set(pageId, pageRef);
     return pageRef;
@@ -199,8 +221,9 @@ export class PageHistoryService {
     propertyType: string | null;
     propertyId: string | null;
     workspaceId: string;
+    user?: User;
     userCache: Map<string, Record<string, unknown>>;
-    pageCache: Map<string, Record<string, unknown>>;
+    pageCache: Map<string, Record<string, unknown> | null>;
     selectCache: Map<string, Map<string, string>>;
   }): Promise<unknown> {
     const { value, propertyType, propertyId, workspaceId } = params;
@@ -223,7 +246,12 @@ export class PageHistoryService {
         return value;
       }
 
-      return this.resolveHistoryPageRef(pageId, workspaceId, params.pageCache);
+      return this.resolveHistoryPageRef(
+        pageId,
+        workspaceId,
+        params.user,
+        params.pageCache,
+      );
     }
 
     if (propertyType === 'select') {
@@ -233,7 +261,11 @@ export class PageHistoryService {
       }
 
       const optionLabel = propertyId
-        ? await this.resolveSelectLabel(propertyId, optionValue, params.selectCache)
+        ? await this.resolveSelectLabel(
+            propertyId,
+            optionValue,
+            params.selectCache,
+          )
         : optionValue;
 
       return {
@@ -303,11 +335,19 @@ export class PageHistoryService {
     changeType: string | null;
     changeData: unknown;
     workspaceId: string;
+    user?: User;
     userCache: Map<string, Record<string, unknown>>;
-    pageCache: Map<string, Record<string, unknown>>;
+    pageCache: Map<string, Record<string, unknown> | null>;
     selectCache: Map<string, Map<string, string>>;
   }): Promise<unknown> {
-    const { changeType, changeData, workspaceId, userCache, pageCache, selectCache } = params;
+    const {
+      changeType,
+      changeData,
+      workspaceId,
+      userCache,
+      pageCache,
+      selectCache,
+    } = params;
     if (!this.isRecord(changeData)) {
       return changeData;
     }
@@ -329,6 +369,7 @@ export class PageHistoryService {
               changeType: eventChangeType,
               changeData: event.changeData,
               workspaceId,
+              user: params.user,
               userCache,
               pageCache,
               selectCache,
@@ -366,7 +407,9 @@ export class PageHistoryService {
           }
 
           const propertyType =
-            typeof change.propertyType === 'string' ? change.propertyType : null;
+            typeof change.propertyType === 'string'
+              ? change.propertyType
+              : null;
           const propertyId =
             typeof change.propertyId === 'string' ? change.propertyId : null;
 
@@ -377,6 +420,7 @@ export class PageHistoryService {
               propertyType,
               propertyId,
               workspaceId,
+              user: params.user,
               userCache,
               pageCache,
               selectCache,
@@ -386,6 +430,7 @@ export class PageHistoryService {
               propertyType,
               propertyId,
               workspaceId,
+              user: params.user,
               userCache,
               pageCache,
               selectCache,
@@ -403,13 +448,16 @@ export class PageHistoryService {
     return changeData;
   }
 
-  private async enrichHistoryEntry(history: PageHistory): Promise<PageHistory> {
+  private async enrichHistoryEntry(
+    history: PageHistory,
+    user?: User,
+  ): Promise<PageHistory> {
     if (!history || !history.changeType || !history.changeData) {
       return history;
     }
 
     const userCache = new Map<string, Record<string, unknown>>();
-    const pageCache = new Map<string, Record<string, unknown>>();
+    const pageCache = new Map<string, Record<string, unknown> | null>();
     const selectCache = new Map<string, Map<string, string>>();
 
     return {
@@ -418,6 +466,7 @@ export class PageHistoryService {
         changeType: history.changeType,
         changeData: history.changeData,
         workspaceId: history.workspaceId,
+        user,
         userCache,
         pageCache,
         selectCache,
@@ -425,7 +474,10 @@ export class PageHistoryService {
     };
   }
 
-  async findById(historyId: string): Promise<PageHistory | undefined> {
+  async findById(
+    historyId: string,
+    user?: User,
+  ): Promise<PageHistory | undefined> {
     const history = await this.pageHistoryRepo.findById(historyId, {
       includeContent: true,
     });
@@ -434,7 +486,7 @@ export class PageHistoryService {
       return history;
     }
 
-    return this.enrichHistoryEntry(history);
+    return this.enrichHistoryEntry(history, user);
   }
 
   async findMetadataById(
@@ -450,6 +502,7 @@ export class PageHistoryService {
   async findHistoryByPageId(
     pageId: string,
     paginationOptions: PaginationOptions,
+    user?: User,
   ): Promise<CursorPaginationResult<PageHistory>> {
     const result = await this.pageHistoryRepo.findPageHistoryByPageId(
       pageId,
@@ -457,7 +510,7 @@ export class PageHistoryService {
     );
 
     const enrichedItems = await Promise.all(
-      result.items.map((history) => this.enrichHistoryEntry(history)),
+      result.items.map((history) => this.enrichHistoryEntry(history, user)),
     );
 
     return {
