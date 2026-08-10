@@ -18,6 +18,7 @@ import { buildPageUrl } from "@/features/page/page.utils";
 import { formatRelativeTime } from "../notification.utils";
 import classes from "../notification.module.css";
 import { AccessibleActionIcon } from "@/components/ui/accessible-action-icon";
+import { getInitialsColor } from "@/lib/get-initials-color";
 
 type NotificationItemProps = {
   notification: INotification;
@@ -35,6 +36,7 @@ export function NotificationItem({
   const [hovered, setHovered] = useState(false);
 
   const isUnread = !notification.readAt;
+  const actorName = notification.actor?.name || "?";
 
   const getNotificationMessage = (): string => {
     switch (notification.type) {
@@ -105,7 +107,9 @@ export function NotificationItem({
           <Group wrap="nowrap" align="flex-start" gap="sm">
             <CustomAvatar
               avatarUrl={notification.actor?.avatarUrl}
-              name={notification.actor?.name || "?"}
+              name={actorName}
+              color={`${getInitialsColor(actorName)}.8`}
+              variant="filled"
               size="sm"
             />
 
