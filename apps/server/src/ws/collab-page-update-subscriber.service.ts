@@ -35,6 +35,7 @@ export class CollabPageUpdateSubscriberService
     try {
       this.subscriber = this.redisService.getOrThrow().duplicate();
       this.subscriber.on('message', this.handleMessage);
+      this.subscriber.on('error', this.handleError);
       void this.subscriber
         .subscribe(COLLAB_PAGE_UPDATE_REDIS_CHANNEL)
         .catch(() => {
@@ -48,6 +49,7 @@ export class CollabPageUpdateSubscriberService
   async onModuleDestroy(): Promise<void> {
     if (!this.subscriber) return;
     this.subscriber.removeListener('message', this.handleMessage);
+    this.subscriber.removeListener('error', this.handleError);
     await this.subscriber.quit().catch(() => undefined);
     this.subscriber = null;
   }
@@ -65,6 +67,10 @@ export class CollabPageUpdateSubscriberService
       .catch(() => {
         this.logger.warn('Collaboration page update dispatch failed');
       });
+  };
+
+  private readonly handleError = (): void => {
+    this.logger.warn('Collaboration page update channel interrupted');
   };
 
   private parseMessage(raw: string): CollabPageUpdateMessage | null {

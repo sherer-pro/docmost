@@ -49,6 +49,7 @@ describe('CollabPageUpdateSubscriberService', () => {
     expect(subscriber.subscribe).toHaveBeenCalledWith(
       COLLAB_PAGE_UPDATE_REDIS_CHANNEL,
     );
+    expect(subscriber.on).toHaveBeenCalledWith('error', expect.any(Function));
     expect(eventEmitter.emitAsync).toHaveBeenCalledWith(
       EventName.PAGE_UPDATED,
       { pageIds: [pageId], workspaceId },
@@ -57,6 +58,10 @@ describe('CollabPageUpdateSubscriberService', () => {
     expect(subscriber.removeListener).toHaveBeenCalledWith(
       'message',
       service['handleMessage'],
+    );
+    expect(subscriber.removeListener).toHaveBeenCalledWith(
+      'error',
+      service['handleError'],
     );
     expect(subscriber.quit).toHaveBeenCalled();
   });
