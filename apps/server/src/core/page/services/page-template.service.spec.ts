@@ -83,9 +83,7 @@ describe('PageTemplateService space boundaries', () => {
     ).toBe('page_template_sync_conflict');
     expect(
       (service as any).errorCode(
-        new Error(
-          'storage failed for /private/G24_CANARY_SECRET/customer.pdf',
-        ),
+        new Error('storage failed for /private/G24_CANARY_SECRET/customer.pdf'),
       ),
     ).toBe('page_template_operation_failed');
     expect(
@@ -93,6 +91,93 @@ describe('PageTemplateService space boundaries', () => {
         new Error('duplicate_attachments_partial_failure'),
       ),
     ).toBe('page_template_operation_failed');
+  });
+
+  it('treats an older sync item as completed when a newer revision wins the persistence race', async () => {
+    const query: any = {
+      selectAll: jest.fn(() => query),
+      where: jest.fn(() => query),
+      executeTakeFirst: jest.fn().mockResolvedValue({
+        id: 'instance-1',
+        templatePageId: sourcePageId,
+        appliedRevision: 0,
+        status: 'active',
+      }),
+    };
+    const updateQuery: any = {
+      set: jest.fn(() => updateQuery),
+      where: jest.fn(() => updateQuery),
+      execute: jest.fn().mockResolvedValue(undefined),
+    };
+    const db = {
+      selectFrom: jest.fn(() => query),
+      updateTable: jest.fn(() => updateQuery),
+    };
+    const pageRepo = {
+      findById: jest.fn().mockResolvedValue({
+        id: consumerPageId,
+        deletedAt: null,
+      }),
+    };
+    const { service } = buildService({ db, pageRepo });
+    const current = {
+      type: 'doc',
+      content: [
+        {
+          type: 'templateManagedBlock',
+          attrs: { templateBlockId: 'block-1', locked: true },
+          content: [{ type: 'paragraph' }],
+        },
+      ],
+    };
+    jest
+      .spyOn(service as any, 'prepareInstanceRevisionContent')
+      .mockResolvedValue(current);
+    jest.spyOn(service as any, 'getLiveContent').mockResolvedValue({
+      ...current,
+      content: [
+        {
+          ...current.content[0],
+          content: [
+            {
+              type: 'paragraph',
+              content: [{ type: 'text', text: 'old' }],
+            },
+          ],
+        },
+      ],
+    });
+    jest.spyOn(service as any, 'beginOperation').mockResolvedValue({
+      id: 'operation-1',
+      leaseToken: 'lease-1',
+    });
+    jest.spyOn(service as any, 'applyMutation').mockRejectedValue(
+      new ConflictException({
+        code: 'page_template_revision_stale',
+        message: 'A newer revision won',
+      }),
+    );
+    const completed = jest
+      .spyOn(service as any, 'markSyncItemCompleted')
+      .mockResolvedValue(undefined);
+    const failed = jest
+      .spyOn(service as any, 'markSyncItemFailed')
+      .mockResolvedValue(undefined);
+
+    await (service as any).processSyncItem(
+      { id: 'run-1', templatePageId: sourcePageId, revision: 1 },
+      { content: current },
+      {
+        id: 'item-1',
+        instanceId: 'instance-1',
+        childPageId: consumerPageId,
+        attemptCount: 0,
+      },
+      user,
+    );
+
+    expect(completed).toHaveBeenCalledWith('item-1');
+    expect(failed).not.toHaveBeenCalled();
   });
 
   it('persists a retry dispatch in the run transaction before signaling the queue', async () => {
