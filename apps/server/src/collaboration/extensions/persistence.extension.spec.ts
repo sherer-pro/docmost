@@ -69,6 +69,9 @@ function createHarness() {
     syncPageReferences: jest.fn().mockResolvedValue(undefined),
   };
   const eventEmitter = { emitAsync: jest.fn().mockResolvedValue(undefined) };
+  const collabPageUpdates = {
+    publish: jest.fn().mockResolvedValue(undefined),
+  };
   const extension = new PersistenceExtension(
     pageRepo as never,
     db as never,
@@ -78,6 +81,7 @@ function createHarness() {
     transclusionService as never,
     pageEmbedService as never,
     eventEmitter as never,
+    collabPageUpdates as never,
   );
   jest.spyOn(extension['logger'], 'debug').mockImplementation(() => undefined);
   jest.spyOn(extension['logger'], 'warn').mockImplementation(() => undefined);
@@ -90,6 +94,7 @@ function createHarness() {
     notificationQueue,
     collabHistory,
     eventEmitter,
+    collabPageUpdates,
     instanceQuery,
   };
 }
@@ -112,7 +117,13 @@ describe('PersistenceExtension failure boundary', () => {
   });
 
   it('retries a classified transient error while the Y.Doc is available', async () => {
-    const { extension, pageRepo, generalQueue, eventEmitter } = createHarness();
+    const {
+      extension,
+      pageRepo,
+      generalQueue,
+      eventEmitter,
+      collabPageUpdates,
+    } = createHarness();
     pageRepo.updatePage
       .mockRejectedValueOnce(
         Object.assign(new Error('serialization'), { code: '40001' }),
@@ -124,6 +135,10 @@ describe('PersistenceExtension failure boundary', () => {
     expect(pageRepo.updatePage).toHaveBeenCalledTimes(2);
     expect(generalQueue.add).toHaveBeenCalledTimes(1);
     expect(eventEmitter.emitAsync).toHaveBeenCalledTimes(1);
+    expect(collabPageUpdates.publish).toHaveBeenCalledWith({
+      pageIds: [PAGE_ID],
+      workspaceId: 'workspace-1',
+    });
     expect(extension['dirtyDocuments']).toHaveProperty('size', 0);
   });
 

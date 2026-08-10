@@ -21,6 +21,7 @@ import { WatcherModule } from '../core/watcher/watcher.module';
 import { TransclusionPersistenceModule } from '../core/page/transclusion/transclusion.module';
 import { PageAccessModule } from '../core/page-access/page-access.module';
 import { SpacePolicyModule } from '../core/space-policy/space-policy.module';
+import { CollabPageUpdatePublisherService } from './services/collab-page-update-publisher.service';
 
 @Module({
   providers: [
@@ -31,6 +32,7 @@ import { SpacePolicyModule } from '../core/space-policy/space-policy.module';
     HistoryProcessor,
     CollabHistoryService,
     CollaborationHandler,
+    CollabPageUpdatePublisherService,
   ],
   exports: [CollaborationGateway, CollabHistoryService],
   imports: [
