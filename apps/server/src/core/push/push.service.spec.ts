@@ -92,4 +92,55 @@ describe('PushService', () => {
       }),
     );
   });
+
+  it('disables delivery without VAPID configuration', async () => {
+    const environmentService = {
+      getWebPushSubject: jest.fn(() => undefined),
+      getWebPushVapidPublicKey: jest.fn(() => undefined),
+      getWebPushVapidPrivateKey: jest.fn(() => undefined),
+    } as any;
+    const pushSubscriptionRepo = {
+      findActiveByUserId: jest.fn(),
+      revokeByEndpoint: jest.fn(),
+    } as any;
+    const service = new PushService(
+      environmentService,
+      pushSubscriptionRepo,
+    );
+
+    await expect(
+      service.sendToUser('user-1', { title: 'Title', body: 'Body' }),
+    ).resolves.toEqual({
+      sent: 0,
+      failed: 0,
+      revoked: 0,
+      outcome: 'disabled',
+      retrySubscriptionIds: [],
+    });
+    expect(pushSubscriptionRepo.findActiveByUserId).not.toHaveBeenCalled();
+    expect(webpush.sendNotification).not.toHaveBeenCalled();
+  });
+
+  it.each([404, 410])(
+    'revokes an expired subscription after provider status %s',
+    async (statusCode) => {
+      jest
+        .mocked(webpush.sendNotification)
+        .mockRejectedValue(Object.assign(new Error('expired'), { statusCode }));
+      const { service, pushSubscriptionRepo } = createService();
+
+      await expect(
+        service.sendToUser('user-1', { title: 'Title', body: 'Body' }),
+      ).resolves.toEqual({
+        sent: 0,
+        failed: 0,
+        revoked: 1,
+        outcome: 'unrecoverable-failure',
+        retrySubscriptionIds: [],
+      });
+      expect(pushSubscriptionRepo.revokeByEndpoint).toHaveBeenCalledWith(
+        endpoint,
+      );
+    },
+  );
 });
