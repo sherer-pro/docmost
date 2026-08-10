@@ -71,16 +71,23 @@ export class FileTaskProcessor extends WorkerHost implements OnModuleDestroy {
   private async handleFailedJob(job: Job) {
     try {
       const fileTaskId = job.data.fileTaskId;
+      const fileTask = await this.fileTaskService.getFileTask(fileTaskId);
+      if (!fileTask) {
+        return;
+      }
+
+      if (fileTask.status === FileTaskStatus.Success) {
+        await this.storageService.delete(fileTask.filePath);
+        return;
+      }
+
       await this.fileTaskService.updateTaskStatus(
         fileTaskId,
         FileTaskStatus.Failed,
         'file_task_processing_failed',
       );
 
-      const fileTask = await this.fileTaskService.getFileTask(fileTaskId);
-      if (fileTask) {
-        await this.storageService.delete(fileTask.filePath);
-      }
+      await this.storageService.delete(fileTask.filePath);
     } catch {
       this.logger.error('Failed to persist file task failure state');
     }
