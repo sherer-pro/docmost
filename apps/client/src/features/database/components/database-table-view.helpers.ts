@@ -9,6 +9,19 @@ import type { IDatabaseViewConfig } from '@/features/database/types/database.typ
 export const DATABASE_PROPERTY_DRAG_MIME =
   'application/x-docmost-database-property';
 
+export const DATABASE_ROW_VIRTUALIZATION_MIN_ROWS = 100;
+
+export const getDatabaseTableViewportHeight = (
+  rowCount: number,
+  isMobileViewport: boolean,
+): number | undefined => {
+  if (rowCount < DATABASE_ROW_VIRTUALIZATION_MIN_ROWS) {
+    return undefined;
+  }
+
+  return isMobileViewport ? 520 : 620;
+};
+
 export const resolveDraggedDatabasePropertyId = (
   activePropertyId: string | null,
   dataTransfer: Pick<DataTransfer, 'getData'>,
