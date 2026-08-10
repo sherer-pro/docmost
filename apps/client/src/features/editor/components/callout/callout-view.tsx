@@ -35,7 +35,10 @@ export default function CalloutView(props: NodeViewProps) {
 function getCalloutIcon(type: CalloutType, customIcon?: string) {
   if (customIcon && customIcon.trim() !== "") {
     return (
-      <span aria-hidden="true" style={{ fontSize: "18px" }}>
+      <span
+        aria-hidden="true"
+        style={{ fontSize: "18px", color: "var(--mantine-color-text)" }}
+      >
         {customIcon}
       </span>
     );
