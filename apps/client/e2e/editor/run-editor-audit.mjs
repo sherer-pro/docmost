@@ -26,6 +26,7 @@ const apiOrigin = (process.env.DOCMOST_API_ORIGIN ?? baseURL).replace(
   /\/$/,
   "",
 );
+const apiHost = new URL(apiOrigin).host;
 process.env.DOCMOST_WEBKIT_BASE_URL ??= baseURL;
 
 function required(name) {
@@ -62,6 +63,7 @@ async function createApi() {
     extraHTTPHeaders: {
       Authorization: `Bearer ${authToken}`,
       Cookie: `csrfToken=${csrfToken}`,
+      Host: apiHost,
       Origin: apiOrigin,
       Referer: `${apiOrigin}/`,
       "x-csrf-token": csrfToken,
@@ -103,7 +105,11 @@ async function provisionSharedAuditMember(api, spaceId) {
 
   const memberApi = await request.newContext({
     baseURL: apiBaseURL,
-    extraHTTPHeaders: { Origin: apiOrigin, Referer: `${apiOrigin}/` },
+    extraHTTPHeaders: {
+      Host: apiHost,
+      Origin: apiOrigin,
+      Referer: `${apiOrigin}/`,
+    },
   });
   try {
     await responseJson(

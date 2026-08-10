@@ -45,6 +45,7 @@ export const test = base.extend<{ evidence: void }>({
           await page.route(`${browserOrigin}/api/**`, async (route) => {
             const headers = {
               ...route.request().headers(),
+              host: new URL(trustedApiOrigin).host,
               origin: trustedApiOrigin,
               referer: `${trustedApiOrigin}/`,
             };
