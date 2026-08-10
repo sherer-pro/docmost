@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB, KyselyTransaction } from '@docmost/db/types/kysely.types';
-import { dbOrTx } from '@docmost/db/utils';
+import { dbOrTx, executeTx } from '@docmost/db/utils';
 import { sql } from 'kysely';
 import {
   InsertablePageTransclusionReference,
@@ -223,5 +223,15 @@ export class PageTransclusionReferencesRepo {
     await sql`select pg_advisory_xact_lock(hashtext(${workspaceId}), 188543327)`.execute(
       trx,
     );
+  }
+
+  async withWorkspaceGraphLock<T>(
+    workspaceId: string,
+    callback: (trx: KyselyTransaction) => Promise<T>,
+  ): Promise<T> {
+    return executeTx(this.db, async (trx) => {
+      await this.lockWorkspaceGraph(workspaceId, trx);
+      return callback(trx);
+    });
   }
 }

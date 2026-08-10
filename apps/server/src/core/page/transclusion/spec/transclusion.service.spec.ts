@@ -651,10 +651,250 @@ describe('TransclusionService lookup and unsync access boundaries', () => {
       ),
     ).resolves.toEqual({ content: originalSnapshot });
     expect(sourceContent).toEqual(originalSnapshot);
-    expect(references.deleteOne).toHaveBeenCalledWith(
+    expect(references.deleteOne).not.toHaveBeenCalled();
+  });
+
+  it('keeps the live reference when an attachment copy fails', async () => {
+    const attachmentId = '00000000-0000-7000-8000-000000000010';
+    const transclusions = {
+      findByPageAndTransclusion: jest.fn(async () => ({
+        content: {
+          type: 'doc',
+          content: [
+            {
+              type: 'image',
+              attrs: {
+                attachmentId,
+                src: `/api/attachments/files/${attachmentId}/source.png`,
+              },
+            },
+          ],
+        },
+      })),
+    } as any;
+    const references = {
+      deleteOne: jest.fn(),
+      withWorkspaceGraphLock: jest.fn(
+        async (_workspaceId: string, callback: (trx: any) => Promise<void>) =>
+          callback({}),
+      ),
+    } as any;
+    const pages = {
+      findById: jest.fn(async (id: string) =>
+        id === referencePageId ? referencePage : sourcePage,
+      ),
+    } as any;
+    const attachments = {
+      findByIds: jest.fn(async () => [
+        {
+          id: attachmentId,
+          pageId: sourcePageId,
+          filePath: `workspace/${sourcePageId}/${attachmentId}/source.png`,
+          fileName: 'source.png',
+          fileSize: 4,
+          mimeType: 'image/png',
+          fileExt: 'png',
+          type: 'file',
+          textContent: null,
+        },
+      ]),
+      insertAttachment: jest.fn(),
+    } as any;
+    const storage = {
+      exists: jest.fn(async () => false),
+      copy: jest.fn(async () => {
+        throw new Error('synthetic copy failure');
+      }),
+      delete: jest.fn(),
+    } as any;
+    const access = {
+      assertCanWritePage: jest.fn(),
+      assertCanReadPage: jest.fn(),
+    } as any;
+    const service = new TransclusionService(
+      transclusions,
+      references,
+      pages,
+      attachments,
+      storage,
+      access,
+    );
+
+    await expect(
+      service.unsyncReference(
+        referencePageId,
+        sourcePageId,
+        'shared-block',
+        viewer,
+      ),
+    ).rejects.toThrow('Could not materialize synced block attachments');
+    expect(storage.copy).toHaveBeenCalledTimes(1);
+    expect(storage.delete).not.toHaveBeenCalled();
+    expect(attachments.insertAttachment).not.toHaveBeenCalled();
+    expect(references.deleteOne).not.toHaveBeenCalled();
+  });
+
+  it('reuses deterministic attachment copies when unsync is requested twice', async () => {
+    const attachmentId = '00000000-0000-7000-8000-000000000020';
+    const sourceAttachment = {
+      id: attachmentId,
+      pageId: sourcePageId,
+      workspaceId,
+      filePath: `workspace/${sourcePageId}/${attachmentId}/source.png`,
+      fileName: 'source.png',
+      fileSize: 4,
+      mimeType: 'image/png',
+      fileExt: 'png',
+      type: 'file',
+      textContent: null,
+    };
+    let materializedAttachment: any;
+    const transclusions = {
+      findByPageAndTransclusion: jest.fn(async () => ({
+        content: {
+          type: 'doc',
+          content: [
+            {
+              type: 'image',
+              attrs: {
+                attachmentId,
+                src: `/api/attachments/files/${attachmentId}/source.png`,
+              },
+            },
+          ],
+        },
+      })),
+    } as any;
+    const references = {
+      deleteOne: jest.fn(),
+      withWorkspaceGraphLock: jest.fn(
+        async (_workspaceId: string, callback: (trx: any) => Promise<void>) =>
+          callback({}),
+      ),
+    } as any;
+    const attachments = {
+      findByIds: jest.fn(async () => [
+        sourceAttachment,
+        ...(materializedAttachment ? [materializedAttachment] : []),
+      ]),
+      insertAttachment: jest.fn(async (data: any) => {
+        materializedAttachment = data;
+        return data;
+      }),
+    } as any;
+    const storage = {
+      exists: jest.fn(async () => Boolean(materializedAttachment)),
+      copy: jest.fn(),
+      delete: jest.fn(),
+    } as any;
+    const access = {
+      assertCanWritePage: jest.fn(),
+      assertCanReadPage: jest.fn(),
+    } as any;
+    const service = new TransclusionService(
+      transclusions,
+      references,
+      {
+        findById: jest.fn(async (id: string) =>
+          id === referencePageId ? referencePage : sourcePage,
+        ),
+      } as any,
+      attachments,
+      storage,
+      access,
+    );
+
+    const first = await service.unsyncReference(
       referencePageId,
       sourcePageId,
       'shared-block',
+      viewer,
     );
+    const second = await service.unsyncReference(
+      referencePageId,
+      sourcePageId,
+      'shared-block',
+      viewer,
+    );
+
+    expect(second).toEqual(first);
+    expect(storage.copy).toHaveBeenCalledTimes(1);
+    expect(attachments.insertAttachment).toHaveBeenCalledTimes(1);
+    expect(references.deleteOne).not.toHaveBeenCalled();
+  });
+
+  it('removes staged files when a later attachment copy fails', async () => {
+    const firstId = '00000000-0000-7000-8000-000000000030';
+    const secondId = '00000000-0000-7000-8000-000000000031';
+    const sourceRows = [firstId, secondId].map((id) => ({
+      id,
+      pageId: sourcePageId,
+      workspaceId,
+      filePath: `workspace/${sourcePageId}/${id}/source.png`,
+      fileName: 'source.png',
+      fileSize: 4,
+      mimeType: 'image/png',
+      fileExt: 'png',
+      type: 'file',
+      textContent: null,
+    }));
+    const references = {
+      deleteOne: jest.fn(),
+      withWorkspaceGraphLock: jest.fn(
+        async (_workspaceId: string, callback: (trx: any) => Promise<void>) =>
+          callback({}),
+      ),
+    } as any;
+    const attachments = {
+      findByIds: jest.fn(async () => sourceRows),
+      insertAttachment: jest.fn(async (data: any) => data),
+    } as any;
+    const storage = {
+      exists: jest.fn(async () => false),
+      copy: jest
+        .fn()
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(new Error('synthetic second copy failure')),
+      delete: jest.fn(),
+    } as any;
+    const service = new TransclusionService(
+      {
+        findByPageAndTransclusion: jest.fn(async () => ({
+          content: {
+            type: 'doc',
+            content: sourceRows.map((row) => ({
+              type: 'image',
+              attrs: {
+                attachmentId: row.id,
+                src: `/api/attachments/files/${row.id}/source.png`,
+              },
+            })),
+          },
+        })),
+      } as any,
+      references,
+      {
+        findById: jest.fn(async (id: string) =>
+          id === referencePageId ? referencePage : sourcePage,
+        ),
+      } as any,
+      attachments,
+      storage,
+      {
+        assertCanWritePage: jest.fn(),
+        assertCanReadPage: jest.fn(),
+      } as any,
+    );
+
+    await expect(
+      service.unsyncReference(
+        referencePageId,
+        sourcePageId,
+        'shared-block',
+        viewer,
+      ),
+    ).rejects.toThrow('Could not materialize synced block attachments');
+    expect(storage.delete).toHaveBeenCalledTimes(1);
+    expect(references.deleteOne).not.toHaveBeenCalled();
   });
 });
