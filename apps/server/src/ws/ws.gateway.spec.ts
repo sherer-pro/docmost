@@ -410,6 +410,31 @@ describe('WsGateway.handleMessage', () => {
     });
   });
 
+  it('targets access invalidation while broadcasting embed invalidation', () => {
+    const affected = createSocketMock(['workspace-workspace-1']);
+    affected.data.user = { id: 'user-1', workspaceId: 'workspace-1' };
+    const unaffected = createSocketMock(['workspace-workspace-1']);
+    unaffected.data.user = { id: 'user-2', workspaceId: 'workspace-1' };
+    (gateway as any).server.sockets.sockets.set(affected.id, affected);
+    (gateway as any).server.sockets.sockets.set('socket-2', unaffected);
+
+    gateway.handlePageEmbedVisibilityChanged({
+      workspaceId: 'workspace-1',
+      accessUserIds: ['user-1'],
+    });
+
+    expect(affected.emit).toHaveBeenCalledWith('access:invalidate', {
+      operation: 'access_invalidate',
+    });
+    expect(unaffected.emit).toHaveBeenCalledWith('page-embed:invalidate', {
+      operation: 'page_embed_invalidate',
+    });
+    expect(unaffected.emit).not.toHaveBeenCalledWith(
+      'access:invalidate',
+      expect.anything(),
+    );
+  });
+
   it('removes a space room immediately when its effective policy becomes stricter', async () => {
     const memberRepo = {
       getUserSpaceIds: jest.fn().mockResolvedValue(['space-a']),

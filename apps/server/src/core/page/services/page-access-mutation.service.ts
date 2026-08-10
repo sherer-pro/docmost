@@ -321,8 +321,20 @@ export class PageAccessMutationService {
       trx: input.trx,
     });
 
+    const accessUserIds =
+      input.principalType === PageAccessPrincipalType.USER
+        ? [input.principalId]
+        : (
+            await this.db
+              .selectFrom('groupUsers')
+              .select('userId')
+              .where('groupId', '=', input.principalId)
+              .execute()
+          ).map((membership) => membership.userId);
+
     this.eventEmitter.emit(EventName.PAGE_EMBED_VISIBILITY_CHANGED, {
       workspaceId: input.page.workspaceId,
+      accessUserIds,
     });
   }
 }

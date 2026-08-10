@@ -1,6 +1,7 @@
 import { SpaceMemberService } from './space-member.service';
 import { SpaceRole } from '../../../common/helpers/types/permission';
 import { executeTx } from '@docmost/db/utils';
+import { EventName } from '../../../common/events/event.contants';
 
 jest.mock('@docmost/db/utils', () => ({
   executeTx: jest.fn(),
@@ -26,6 +27,10 @@ describe('SpaceMemberService', () => {
     const watcherRepo = {
       deleteByUsersWithoutSpaceAccess: jest.fn().mockResolvedValue(undefined),
     };
+    const eventEmitter = {
+      emit: jest.fn(),
+      emitAsync: jest.fn().mockResolvedValue([]),
+    };
 
     const service = new SpaceMemberService(
       spaceMemberRepo as any,
@@ -34,6 +39,7 @@ describe('SpaceMemberService', () => {
       watcherRepo as any,
       {} as any,
       fakeDb,
+      eventEmitter as any,
     );
 
     (executeTx as jest.Mock).mockImplementation(async (_db, handler) =>
@@ -60,6 +66,14 @@ describe('SpaceMemberService', () => {
       ['user-id'],
       'space-id',
       { trx: fakeTrx },
+    );
+    expect(eventEmitter.emit).toHaveBeenCalledWith(
+      EventName.PAGE_EMBED_VISIBILITY_CHANGED,
+      { workspaceId: 'workspace-id', accessUserIds: ['user-id'] },
+    );
+    expect(eventEmitter.emitAsync).toHaveBeenCalledWith(
+      EventName.AUTHORIZATION_CHANGED,
+      { workspaceId: 'workspace-id', userId: 'user-id' },
     );
   });
 
