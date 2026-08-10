@@ -113,7 +113,7 @@ export default function SsoProviderList() {
                         color={provider.isEnabled ? "blue" : "gray"}
                         variant="light"
                       >
-                        {provider.isEnabled ? "Active" : "InActive"}
+                        {provider.isEnabled ? t("Active") : t("Inactive")}
                       </Badge>
                     </Table.Td>
                     <Table.Td>

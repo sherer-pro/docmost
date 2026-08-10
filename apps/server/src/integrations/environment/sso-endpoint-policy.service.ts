@@ -34,15 +34,23 @@ export class SsoEndpointPolicyService {
       this.environmentService.getSsoAllowedEndpoints(),
     );
     const endpoint = this.normalizeEndpoint(url);
+    const isAllowlisted = allowedEndpoints.has(endpoint);
+
+    // A host that is not allowlisted is rejected before any name resolution, so
+    // an endpoint an administrator is not permitted to reach never turns into
+    // an outbound DNS lookup for an attacker-chosen name.
+    if (!isAllowlisted && !this.environmentService.isDevelopment()) {
+      throw new BadRequestException(
+        `${label} endpoint is not in SSO_ALLOWED_ENDPOINTS`,
+      );
+    }
+
     const addresses = await this.resolveAddresses(url.hostname, label);
     const loopbackOnly = addresses.every((address) =>
       this.isLoopbackAddress(address),
     );
 
-    if (
-      !allowedEndpoints.has(endpoint) &&
-      (!this.environmentService.isDevelopment() || !loopbackOnly)
-    ) {
+    if (!isAllowlisted && !loopbackOnly) {
       throw new BadRequestException(
         `${label} endpoint is not in SSO_ALLOWED_ENDPOINTS`,
       );

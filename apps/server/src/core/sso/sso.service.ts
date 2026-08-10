@@ -22,6 +22,7 @@ import {
   decryptProtectedValue,
   encryptProtectedValue,
   hashProtectedValue,
+  safeStringEqual,
 } from '../../common/security/credential-protection.util';
 import { randomBytes, X509Certificate } from 'node:crypto';
 import {
@@ -92,6 +93,19 @@ interface SsoLoginContext {
 
 interface SsoLoginRequestContext extends SsoLoginContext {
   spaceSlug?: string;
+}
+
+/**
+ * Ties a redirect-based SSO flow to the browser that started it.
+ *
+ * `value` is the state issued at initiation and echoed back from the browser's
+ * own cookie. `enforced` is false only where the browser cannot send that
+ * cookie back at all — a cross-site SAML POST over plain HTTP, where
+ * `SameSite=None` is unavailable because the cookie cannot be `Secure`.
+ */
+export interface SsoBrowserBinding {
+  value?: string | null;
+  enforced: boolean;
 }
 
 export interface SsoAuthenticationResult {
@@ -489,7 +503,7 @@ export class SsoService {
       ...context,
     });
 
-    return client.authorizationUrl({
+    const url = client.authorizationUrl({
       scope: 'openid email profile groups',
       response_type: 'code',
       redirect_uri: callbackUrl,
@@ -498,6 +512,8 @@ export class SsoService {
       code_challenge: generators.codeChallenge(codeVerifier),
       code_challenge_method: 'S256',
     });
+
+    return { url, state };
   }
 
   async completeOidcLogin(
@@ -506,8 +522,10 @@ export class SsoService {
     origin: string,
     callbackParams: Record<string, string | string[] | undefined>,
     request?: FastifyRequest,
+    browserBinding: SsoBrowserBinding = { enforced: true },
   ) {
     const state = this.requireSingleString(callbackParams.state, 'state');
+    this.assertBrowserBinding(state, browserBinding);
     const loginState = await this.claimLoginState(
       state,
       providerId,
@@ -575,7 +593,8 @@ export class SsoService {
       this.createSamlCacheProvider(provider.id, this.hashState(state)),
     );
 
-    return saml.getAuthorizeUrlAsync(state, host, {});
+    const url = await saml.getAuthorizeUrlAsync(state, host, {});
+    return { url, state };
   }
 
   async completeSamlLogin(
@@ -584,12 +603,14 @@ export class SsoService {
     origin: string,
     body: Record<string, string | undefined>,
     request?: FastifyRequest,
+    browserBinding: SsoBrowserBinding = { enforced: true },
   ) {
     const state = this.requireSingleString(body.RelayState, 'RelayState');
     const samlResponse = this.requireSingleString(
       body.SAMLResponse,
       'SAMLResponse',
     );
+    this.assertBrowserBinding(state, browserBinding);
     const loginState = await this.claimLoginState(
       state,
       providerId,
@@ -681,7 +702,7 @@ export class SsoService {
     input?: { spaceSlug?: string; returnTo?: string },
   ) {
     const target = await this.resolveLoginContext(workspace, input);
-    const url = await this.getSamlAuthorizeUrl(
+    return this.getSamlAuthorizeUrl(
       providerId,
       workspace,
       origin,
@@ -694,7 +715,6 @@ export class SsoService {
         returnTo: target.returnTo,
       },
     );
-    return url;
   }
 
   async stepUpWithLdap(
@@ -2024,6 +2044,25 @@ export class SsoService {
       .deleteFrom('ssoLoginStates')
       .where('expiresAt', '<', new Date())
       .execute();
+  }
+
+  /**
+   * Rejects a callback that the initiating browser cannot prove it started.
+   *
+   * Without this an attacker can run the whole authorization dance themselves
+   * and hand the resulting callback URL to a victim, whose browser is then
+   * silently signed in as the attacker (OAuth 2.0 login CSRF, RFC 6749 §10.12).
+   */
+  private assertBrowserBinding(state: string, binding: SsoBrowserBinding) {
+    if (!binding.enforced) {
+      return;
+    }
+
+    if (!binding.value || !safeStringEqual(binding.value, state)) {
+      throw new UnauthorizedException(
+        'SSO login was not started in this browser',
+      );
+    }
   }
 
   private async claimLoginState(

@@ -36,9 +36,22 @@ export class MigrationService {
     }
   }
 
+  /**
+   * Returns the connection migrations must run on.
+   *
+   * Migrations address columns by their physical snake_case names, exactly like
+   * the standalone `migration:latest` CLI does. Running them through the
+   * application instance would add CamelCasePlugin and hand every row back with
+   * camelCase keys, so a migration reading `row.some_column` would silently see
+   * `undefined` and "succeed" without doing its work.
+   */
+  getMigrationDb(db: KyselyDB): KyselyDB {
+    return db.withoutPlugins() as KyselyDB;
+  }
+
   private async runMigrations(db: KyselyDB): Promise<boolean> {
     const migrator = new Migrator({
-      db,
+      db: this.getMigrationDb(db),
       provider: new FileMigrationProvider({
         fs,
         path,
