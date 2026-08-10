@@ -489,12 +489,12 @@ describe('ExportService PDF export', () => {
 
     await service.exportPage(
       ExportFormat.PDF,
-      page,
+      page as any,
       false,
       undefined,
       undefined,
       undefined,
-      { id: 'user-1', workspaceId: 'ws-1' },
+      { id: 'user-1', workspaceId: 'ws-1' } as any,
       new Set(['page-1', 'source-1']),
     );
 
