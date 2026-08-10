@@ -1,4 +1,4 @@
-const CACHE_VERSION = "docmost-pwa-v7";
+const CACHE_VERSION = "docmost-pwa-v8";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const CACHE_PREFIX = "docmost-pwa-";
@@ -77,7 +77,9 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  event.respondWith(staleWhileRevalidate(request));
+  const networkResponsePromise = updateRuntimeCache(request);
+  event.waitUntil(networkResponsePromise.then(() => undefined));
+  event.respondWith(staleWhileRevalidate(request, networkResponsePromise));
 });
 
 self.addEventListener("push", (event) => {
@@ -241,7 +243,7 @@ async function networkFirstForResource(request) {
   try {
     const response = await fetch(request);
     if (response.ok) {
-      cache.put(request, response.clone());
+      await cache.put(request, response.clone());
     }
     return response;
   } catch {
@@ -261,21 +263,12 @@ async function networkFirstForResource(request) {
  * Stale-While-Revalidate strategy for assets (JS/CSS/images).
  *
  * @param {Request} request - Original request for a static resource.
+ * @param {Promise<Response|null>} networkResponsePromise - In-flight cache update.
  * @returns {Promise<Response>} Fast response from cache or network with follow-up cache update.
  */
-async function staleWhileRevalidate(request) {
+async function staleWhileRevalidate(request, networkResponsePromise) {
   const cache = await caches.open(RUNTIME_CACHE);
   const cachedResponse = await cache.match(request);
-
-  const networkResponsePromise = fetch(request)
-    .then((networkResponse) => {
-      if (networkResponse.ok) {
-        cache.put(request, networkResponse.clone());
-      }
-
-      return networkResponse;
-    })
-    .catch(() => null);
 
   if (cachedResponse) {
     return cachedResponse;
@@ -292,4 +285,25 @@ async function staleWhileRevalidate(request) {
     statusText: "Offline",
     headers: { "Content-Type": "text/plain; charset=UTF-8" },
   });
+}
+
+/**
+ * Refreshes a runtime resource and keeps the cache write inside the fetch
+ * event lifetime through event.waitUntil().
+ *
+ * @param {Request} request - Original request for a static resource.
+ * @returns {Promise<Response|null>} Network response or null when offline.
+ */
+async function updateRuntimeCache(request) {
+  const cache = await caches.open(RUNTIME_CACHE);
+
+  try {
+    const networkResponse = await fetch(request);
+    if (networkResponse.ok) {
+      await cache.put(request, networkResponse.clone());
+    }
+    return networkResponse;
+  } catch {
+    return null;
+  }
 }
