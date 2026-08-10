@@ -65,6 +65,19 @@ describe("service worker safety policy", () => {
     expect(registrationSource).toContain("{ once: true }");
   });
 
+  it("subscribes to updatefound before starting an explicit update check", () => {
+    expect(registrationSource.indexOf('addEventListener("updatefound"')).toBeLessThan(
+      registrationSource.indexOf("await registration.update()"),
+    );
+    expect(registrationSource).toContain("observeWorker(registration.installing)");
+  });
+
+  it("keeps background runtime cache writes inside the fetch event lifetime", () => {
+    expect(source).toContain("event.waitUntil(networkResponsePromise");
+    expect(source).toContain("await cache.put(request, response.clone())");
+    expect(source).toContain("await cache.put(request, networkResponse.clone())");
+  });
+
   it("displays the aggregated push payload with its target URL", async () => {
     const { listeners, showNotification } = createServiceWorkerHarness();
     let pending: Promise<void> | undefined;
