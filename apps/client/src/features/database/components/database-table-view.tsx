@@ -893,11 +893,10 @@ export function DatabaseTableView({
       return;
     }
 
-    const config: IDatabaseViewConfig = {
-      filters,
-      sortState,
-      visibleColumns,
-    };
+    const config = normalizeDatabaseViewConfig(
+      { filters, sortState, visibleColumns },
+      activeProperties.map((property) => property.id),
+    );
 
     try {
       if (selectedViewId) {
