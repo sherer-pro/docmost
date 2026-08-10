@@ -4,7 +4,10 @@ import { IconSearch } from "@tabler/icons-react";
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { useDebouncedValue } from "@mantine/hooks";
-import { useShareSearchQuery } from "@/features/search/queries/search-query";
+import {
+  hasNonWhitespaceSearchQuery,
+  useShareSearchQuery,
+} from "@/features/search/queries/search-query";
 import { buildSharedPageUrl } from "@/features/page/page.utils.ts";
 import { getPageIcon } from "@/lib";
 import { useTranslation } from "react-i18next";
@@ -18,6 +21,7 @@ export function ShareSearchSpotlight({ shareId }: ShareSearchSpotlightProps) {
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
   const [debouncedSearchQuery] = useDebouncedValue(query, 300);
+  const hasSearchInput = hasNonWhitespaceSearchQuery(query);
 
   const { data: searchResults } = useShareSearchQuery({
     query: debouncedSearchQuery,
@@ -64,6 +68,8 @@ export function ShareSearchSpotlight({ shareId }: ShareSearchSpotlightProps) {
   return (
     <>
       <Spotlight.Root
+        role="dialog"
+        aria-label={t("Search")}
         store={shareSearchSpotlightStore}
         query={query}
         onQueryChange={setQuery}
@@ -77,11 +83,11 @@ export function ShareSearchSpotlight({ shareId }: ShareSearchSpotlightProps) {
           leftSection={<IconSearch size={20} stroke={1.5} />}
         />
         <Spotlight.ActionsList>
-          {query.length === 0 && pages.length === 0 && (
+          {!hasSearchInput && pages.length === 0 && (
             <Spotlight.Empty>{t("Start typing to search...")}</Spotlight.Empty>
           )}
 
-          {query.length > 0 && pages.length === 0 && (
+          {hasSearchInput && pages.length === 0 && (
             <Spotlight.Empty>{t("No results found...")}</Spotlight.Empty>
           )}
 

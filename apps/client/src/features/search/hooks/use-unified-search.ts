@@ -17,6 +17,13 @@ export interface UseUnifiedSearchParams extends IPageSearchParams {
 
 export const UNIFIED_SEARCH_PAGE_SIZE = 25;
 
+export const UNIFIED_SEARCH_CACHE_POLICY = {
+  staleTime: 0,
+  gcTime: 0,
+  refetchOnMount: "always" as const,
+  refetchOnWindowFocus: true,
+};
+
 export function getUnifiedSearchNextPageParam(
   lastPageLength: number,
   loadedPageCount: number,
@@ -65,6 +72,7 @@ export function useUnifiedSearch(
 
   return useInfiniteQuery({
     queryKey: ["unified-search", searchType, params],
+    ...UNIFIED_SEARCH_CACHE_POLICY,
     queryFn: async ({ pageParam }) => {
       const backendParams = getUnifiedSearchBackendParams(params, searchType);
       const paginatedParams = {

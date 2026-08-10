@@ -116,7 +116,22 @@ export class AttachmentContentService
       .select('workspaceId')
       .distinct()
       .where('deletedAt', 'is', null)
-      .where('contentIndexStatus', '=', 'pending')
+      .where((eb) =>
+        eb.or([
+          eb('contentIndexStatus', '=', 'pending'),
+          eb.and([
+            eb('contentIndexStatus', '=', 'ready'),
+            eb.or([
+              eb('contentIndexVersion', 'is', null),
+              eb(
+                'contentIndexVersion',
+                '!=',
+                ATTACHMENT_CONTENT_INDEX_VERSION,
+              ),
+            ]),
+          ]),
+        ]),
+      )
       .execute();
 
     await Promise.all(
@@ -267,7 +282,22 @@ export class AttachmentContentService
         .select('id')
         .where('workspaceId', '=', workspaceId)
         .where('deletedAt', 'is', null)
-        .where('contentIndexStatus', 'in', statuses)
+        .where((eb) =>
+          eb.or([
+            eb('contentIndexStatus', 'in', statuses),
+            eb.and([
+              eb('contentIndexStatus', '=', 'ready'),
+              eb.or([
+                eb('contentIndexVersion', 'is', null),
+                eb(
+                  'contentIndexVersion',
+                  '!=',
+                  ATTACHMENT_CONTENT_INDEX_VERSION,
+                ),
+              ]),
+            ]),
+          ]),
+        )
         .orderBy('id', 'asc')
         .limit(BACKFILL_BATCH_SIZE);
       if (cursor) {
@@ -321,12 +351,20 @@ export class AttachmentContentService
    * Moves an attachment into `processing` only if no other worker owns it.
    */
   private async claimForProcessing(
-    attachment: { id: string; filePath: string },
+    attachment: {
+      id: string;
+      filePath: string;
+      contentIndexStatus: string | null;
+      contentIndexVersion: number | null;
+    },
     retryFailed?: boolean,
   ): Promise<Date | null> {
     const claimable: AttachmentContentIndexStatus[] = retryFailed
       ? ['pending', 'failed']
       : ['pending'];
+    const isOutdatedReady =
+      attachment.contentIndexStatus === 'ready' &&
+      attachment.contentIndexVersion !== ATTACHMENT_CONTENT_INDEX_VERSION;
     const claimStartedAt = new Date();
     const claimed = await this.db
       .updateTable('attachments')
@@ -342,6 +380,21 @@ export class AttachmentContentService
         eb.or([
           eb('contentIndexStatus', 'is', null),
           eb('contentIndexStatus', 'in', claimable),
+          ...(isOutdatedReady
+            ? [
+                eb.and([
+                  eb('contentIndexStatus', '=', 'ready'),
+                  eb.or([
+                    eb('contentIndexVersion', 'is', null),
+                    eb(
+                      'contentIndexVersion',
+                      '!=',
+                      ATTACHMENT_CONTENT_INDEX_VERSION,
+                    ),
+                  ]),
+                ]),
+              ]
+            : []),
         ]),
       )
       .returning('id')
@@ -448,8 +501,8 @@ export class AttachmentContentService
     textContent: string,
     claimStartedAt: Date,
   ): Promise<void> {
-    await executeTx(this.db, async (trx) => {
-      const updated = await trx
+    const updated = await executeTx(this.db, async (trx) => {
+      return trx
         .updateTable('attachments')
         .set({
           textContent,
@@ -466,11 +519,13 @@ export class AttachmentContentService
         .where('contentIndexStartedAt', '=', claimStartedAt)
         .returning('id')
         .executeTakeFirst();
+    });
 
-      if (!updated) {
-        return;
-      }
+    if (!updated) {
+      return;
+    }
 
+    try {
       await this.searchQueue.add(
         QueueJob.SEARCH_INDEX_ATTACHMENT,
         { attachmentIds: [attachment.id] },
@@ -482,7 +537,13 @@ export class AttachmentContentService
           removeOnFail: true,
         },
       );
-    });
+    } catch {
+      // PostgreSQL search is already current. The deterministic Typesense
+      // reconciliation job repairs a missed best-effort lifecycle enqueue.
+      this.logger.warn({
+        event: 'attachment_search_enqueue_failed_after_extraction',
+      });
+    }
   }
 
   private async extractDocxText(
