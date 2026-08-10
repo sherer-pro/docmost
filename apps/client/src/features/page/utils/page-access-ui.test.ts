@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it, vi } from "vitest";
 import {
   canOpenPageAccessModal,
+  pageAccessModalEventHandlers,
   stopPageAccessModalEvent,
   supportsPageAccessEntity,
 } from "./page-access-ui";
@@ -41,5 +42,20 @@ describe("stopPageAccessModalEvent", () => {
     const stopPropagation = vi.fn();
     stopPageAccessModalEvent({ stopPropagation });
     assert.equal(stopPropagation.mock.calls.length, 1);
+  });
+
+  it("guards pointer and keyboard events at the modal boundary", () => {
+    const pointerStopPropagation = vi.fn();
+    const keyboardStopPropagation = vi.fn();
+
+    pageAccessModalEventHandlers.onClick({
+      stopPropagation: pointerStopPropagation,
+    });
+    pageAccessModalEventHandlers.onKeyDown({
+      stopPropagation: keyboardStopPropagation,
+    });
+
+    assert.equal(pointerStopPropagation.mock.calls.length, 1);
+    assert.equal(keyboardStopPropagation.mock.calls.length, 1);
   });
 });
