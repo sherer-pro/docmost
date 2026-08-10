@@ -1310,38 +1310,80 @@ export class PageService {
   }
 
   async movePageToSpace(rootPage: Page, spaceId: string) {
-    const rootDatabaseRow = await this.databaseRowRepo.findActiveByPageId(
-      rootPage.id,
-      rootPage.workspaceId,
-    );
+    const pageIds = await executeTx(this.db, async (trx) => {
+      const lockedSpaceIds = [rootPage.spaceId, spaceId].sort();
+      for (const lockedSpaceId of lockedSpaceIds) {
+        await sql`select pg_advisory_xact_lock(${sql.lit(
+          PAGE_TREE_LOCK_NAMESPACE,
+        )}, hashtext(${lockedSpaceId}))`.execute(trx);
+      }
 
-    await executeTx(this.db, async (trx) => {
-      // Update root page
-      const nextPosition = await this.nextPagePosition(spaceId);
-      await this.pageRepo.updatePage(
-        { spaceId, parentPageId: null, position: nextPosition },
-        rootPage.id,
+      const lockedSpaces = await trx
+        .selectFrom('spaces')
+        .select(['id', 'archivedAt'])
+        .where('workspaceId', '=', rootPage.workspaceId)
+        .where('id', 'in', lockedSpaceIds)
+        .forUpdate()
+        .execute();
+      if (
+        lockedSpaces.length !== lockedSpaceIds.length ||
+        lockedSpaces.some((space) => space.archivedAt !== null)
+      ) {
+        throw new NotFoundException('Source or destination space not found');
+      }
+
+      const lockedRootPage = await this.pageRepo.findById(rootPage.id, {
+        withLock: true,
+        trx,
+      });
+      if (
+        !lockedRootPage ||
+        lockedRootPage.deletedAt ||
+        lockedRootPage.templateKind !== null ||
+        lockedRootPage.workspaceId !== rootPage.workspaceId ||
+        lockedRootPage.spaceId !== rootPage.spaceId
+      ) {
+        throw new NotFoundException('Page to move not found');
+      }
+
+      const rootDatabaseRow = await this.databaseRowRepo.findActiveByPageId(
+        lockedRootPage.id,
+        lockedRootPage.workspaceId,
         trx,
       );
-      const pageIds = await this.pageRepo
-        .getPageAndDescendants(rootPage.id, { includeContent: false })
+
+      // Update root page
+      const nextPosition = await this.nextPagePosition(spaceId, undefined, trx);
+      await this.pageRepo.updatePage(
+        { spaceId, parentPageId: null, position: nextPosition },
+        lockedRootPage.id,
+        trx,
+        false,
+      );
+      const movedPageIds = await this.pageRepo
+        .getPageAndDescendants(lockedRootPage.id, {
+          includeContent: false,
+          includeDeleted: true,
+          trx,
+        })
         .then((pages) => pages.map((page) => page.id));
       // The first id is the root page id
-      if (pageIds.length > 1) {
+      if (movedPageIds.length > 1) {
         // Here we pass only the UUID `id`; The repository method also supports `slugId`.
         await this.pageRepo.updatePages(
           { spaceId },
-          pageIds.filter((id) => id !== rootPage.id),
+          movedPageIds.filter((id) => id !== lockedRootPage.id),
           trx,
+          false,
         );
       }
 
-      if (pageIds.length > 0) {
+      if (movedPageIds.length > 0) {
         if (rootDatabaseRow) {
           await this.databaseRowRepo.archiveByPageIds(
             rootDatabaseRow.databaseId,
-            rootPage.workspaceId,
-            pageIds,
+            lockedRootPage.workspaceId,
+            movedPageIds,
             trx,
           );
         }
@@ -1349,8 +1391,8 @@ export class PageService {
         await trx
           .updateTable('databases')
           .set({ spaceId, updatedAt: new Date() })
-          .where('pageId', 'in', pageIds)
-          .where('workspaceId', '=', rootPage.workspaceId)
+          .where('pageId', 'in', movedPageIds)
+          .where('workspaceId', '=', lockedRootPage.workspaceId)
           .where('deletedAt', 'is', null)
           .execute();
 
@@ -1358,37 +1400,46 @@ export class PageService {
         await trx
           .updateTable('shares')
           .set({ spaceId: spaceId })
-          .where('pageId', 'in', pageIds)
+          .where('pageId', 'in', movedPageIds)
           .execute();
 
         // Update comments
         await trx
           .updateTable('comments')
           .set({ spaceId: spaceId })
-          .where('pageId', 'in', pageIds)
+          .where('pageId', 'in', movedPageIds)
           .execute();
 
         // Update attachments
         await this.attachmentRepo.updateAttachmentsByPageId(
           { spaceId },
-          pageIds,
+          movedPageIds,
           trx,
         );
 
         // Page ACL rules are space-bound and must be reset when subtree moves to another space.
-        await this.pageAccessMutationService.clearRulesByPageIds(pageIds, trx);
+        await this.pageAccessMutationService.clearRulesByPageIds(
+          movedPageIds,
+          trx,
+        );
 
         // Update watchers and remove those without access to new space
-        await this.watcherService.movePageWatchersToSpace(pageIds, spaceId, {
-          trx,
-        });
-
-        await this.eventEmitter.emitAsync(EventName.PAGE_UPDATED, {
-          pageIds,
-          workspaceId: rootPage.workspaceId,
-        });
+        await this.watcherService.movePageWatchersToSpace(
+          movedPageIds,
+          spaceId,
+          { trx },
+        );
       }
+
+      return movedPageIds;
     });
+
+    if (pageIds.length > 0) {
+      this.eventEmitter.emit(EventName.PAGE_UPDATED, {
+        pageIds,
+        workspaceId: rootPage.workspaceId,
+      });
+    }
   }
 
   async duplicatePage(
