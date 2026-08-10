@@ -50,9 +50,13 @@ import {
   useCreateDatabasePropertyMutation,
   useCreateDatabaseRowMutation,
   useDeleteDatabasePropertyMutation,
+  useDeleteDatabaseViewMutation,
   useDatabasePropertiesQuery,
+  useDatabaseViewsQuery,
+  useCreateDatabaseViewMutation,
   useUpdateDatabaseRowMutation,
   useUpdateDatabasePropertyMutation,
+  useUpdateDatabaseViewMutation,
   useDatabaseRowsQuery,
 } from '@/features/database/queries/database-table-query';
 import {
@@ -65,6 +69,7 @@ import {
 import {
   IDatabaseProperty,
   IDatabaseSelectPropertySettings,
+  IDatabaseViewConfig,
 } from '@/features/database/types/database.types';
 import { SelectPropertySettingsModal } from '@/features/database/components/select-property-settings-modal';
 import {
@@ -105,14 +110,18 @@ import {
 } from '@/features/database/utils/database-cell-value.ts';
 import {
   DATABASE_PROPERTY_DRAG_MIME,
+  DATABASE_ROW_VIRTUALIZATION_MIN_ROWS,
+  getDatabaseTableViewportHeight,
   getSelectedPreparedRowIds,
   isDatabaseFilterControlsVisible,
   getCheckboxFilterOptions,
   isSameCellPayloadValue,
   mergePinnedDatabaseRow,
+  normalizeDatabaseViewConfig,
   reorderDatabaseProperties,
   resolveDraggedDatabasePropertyId,
   resolveDatabasePropertyRename,
+  shouldHandleDatabaseMatrixPaste,
   shouldShowDatabaseFilterRemove,
   shouldDeleteCellPayload,
 } from '@/features/database/components/database-table-view.helpers.ts';
@@ -144,13 +153,13 @@ interface SelectPropertyCreationDraft {
 interface IPersistedDatabaseTableState {
   filters: IDatabaseFilterCondition[];
   sortState: IDatabaseSortState | null;
+  selectedViewId?: string | null;
 }
 
 const DEFAULT_FILTER: IDatabaseFilterCondition = defaultDatabaseTableExportState.filters[0];
 const ROWS_PAGE_SIZE = 100;
 const MAX_FILTERS = 10;
 const DELETE_GRACE_PERIOD_MS = 6000;
-const ROW_VIRTUALIZATION_MIN_ROWS = 100;
 const ROW_VIRTUALIZATION_ESTIMATED_HEIGHT = 48;
 const ROW_VIRTUALIZATION_OVERSCAN = 8;
 const DATABASE_TABLE_STATE_STORAGE_PREFIX = 'docmost:database-table-state';
@@ -201,6 +210,8 @@ export function DatabaseTableView({
 }: DatabaseTableViewProps) {
   const { t } = useTranslation();
   const { data: properties = [] } = useDatabasePropertiesQuery(databaseId);
+  const { data: databaseViews = [], isSuccess: areDatabaseViewsLoaded } =
+    useDatabaseViewsQuery(databaseId);
   const { data: dictionaryTerms = [] } = useDictionaryTermsQuery(
     spaceId,
     dictionaryEnabled,
@@ -222,6 +233,9 @@ export function DatabaseTableView({
   const deletePropertyMutation = useDeleteDatabasePropertyMutation(databaseId);
   const updatePropertyMutation = useUpdateDatabasePropertyMutation(databaseId);
   const updateRowMutation = useUpdateDatabaseRowMutation(databaseId);
+  const createViewMutation = useCreateDatabaseViewMutation(databaseId);
+  const updateViewMutation = useUpdateDatabaseViewMutation(databaseId);
+  const deleteViewMutation = useDeleteDatabaseViewMutation(databaseId);
   const batchUpdateRowsMutationRef = useRef(batchUpdateRowsMutation);
   const deletePropertyMutationRef = useRef(deletePropertyMutation);
 
@@ -238,6 +252,8 @@ export function DatabaseTableView({
   const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({});
   const [filters, setFilters] = useState<IDatabaseFilterCondition[]>([DEFAULT_FILTER]);
   const [sortState, setSortState] = useState<IDatabaseSortState | null>(null);
+  const [selectedViewId, setSelectedViewId] = useState<string | null>(null);
+  const [viewNameDraft, setViewNameDraft] = useState('');
   const activeServerFilters = useMemo(
     () =>
       filters.filter((condition) => condition.propertyId && condition.value),
@@ -421,6 +437,7 @@ export function DatabaseTableView({
     if (typeof window === 'undefined') {
       setFilters(fallbackFilters);
       setSortState(null);
+      setSelectedViewId(null);
       hasRestoredTableStateRef.current = true;
       return;
     }
@@ -429,6 +446,7 @@ export function DatabaseTableView({
     if (!rawState) {
       setFilters(fallbackFilters);
       setSortState(null);
+      setSelectedViewId(null);
       hasRestoredTableStateRef.current = true;
       return;
     }
@@ -463,10 +481,16 @@ export function DatabaseTableView({
 
       setFilters(normalizedFilters.length > 0 ? normalizedFilters : fallbackFilters);
       setSortState(normalizedSortState);
+      setSelectedViewId(
+        typeof parsedState.selectedViewId === 'string'
+          ? parsedState.selectedViewId
+          : null,
+      );
     } catch {
       window.localStorage.removeItem(tableStateStorageKey);
       setFilters(fallbackFilters);
       setSortState(null);
+      setSelectedViewId(null);
     }
 
     hasRestoredTableStateRef.current = true;
@@ -480,10 +504,11 @@ export function DatabaseTableView({
     const stateToPersist: IPersistedDatabaseTableState = {
       filters,
       sortState,
+      selectedViewId,
     };
 
     window.localStorage.setItem(tableStateStorageKey, JSON.stringify(stateToPersist));
-  }, [filters, sortState, tableStateStorageKey]);
+  }, [filters, selectedViewId, sortState, tableStateStorageKey]);
 
   useEffect(() => {
     if (!hasRestoredTableStateRef.current) {
@@ -832,6 +857,82 @@ export function DatabaseTableView({
     [optimisticallyDeletedPropertyIds, properties],
   );
 
+  useEffect(() => {
+    if (!selectedViewId || !areDatabaseViewsLoaded) {
+      return;
+    }
+
+    const selectedView = databaseViews.find((view) => view.id === selectedViewId);
+    if (!selectedView) {
+      setSelectedViewId(null);
+      setViewNameDraft('');
+      return;
+    }
+
+    const normalizedConfig = normalizeDatabaseViewConfig(
+      selectedView.config,
+      activeProperties.map((property) => property.id),
+    );
+    setViewNameDraft(selectedView.name);
+    setFilters(
+      normalizedConfig.filters.length > 0
+        ? normalizedConfig.filters
+        : [{ ...DEFAULT_FILTER }],
+    );
+    setSortState(normalizedConfig.sortState);
+    setVisibleColumns(normalizedConfig.visibleColumns);
+  }, [
+    activeProperties,
+    areDatabaseViewsLoaded,
+    databaseViews,
+    selectedViewId,
+  ]);
+
+  const saveCurrentView = async () => {
+    const name = viewNameDraft.trim();
+    if (!name) {
+      return;
+    }
+
+    const config = normalizeDatabaseViewConfig(
+      { filters, sortState, visibleColumns },
+      activeProperties.map((property) => property.id),
+    );
+
+    try {
+      if (selectedViewId) {
+        await updateViewMutation.mutateAsync({
+          viewId: selectedViewId,
+          payload: { name, type: 'table', config },
+        });
+        return;
+      }
+
+      const createdView = await createViewMutation.mutateAsync({
+        name,
+        type: 'table',
+        config,
+      });
+      setSelectedViewId(createdView.id);
+    } catch {
+      // The shared API error handler reports the failure. Keep the current draft.
+    }
+  };
+
+  const deleteCurrentView = async () => {
+    if (!selectedViewId) {
+      return;
+    }
+
+    try {
+      await deleteViewMutation.mutateAsync(selectedViewId);
+      setSelectedViewId(null);
+      setViewNameDraft('');
+    } catch {
+      // The shared API error handler reports the failure. Keep the selected view.
+    }
+  };
+
   const visibleRows = useMemo(
     () =>
       mergePinnedDatabaseRow(
@@ -1012,7 +1113,7 @@ export function DatabaseTableView({
 
   const virtualizedRows = useMemo(() => {
     if (
-      preparedRows.length < ROW_VIRTUALIZATION_MIN_ROWS ||
+      preparedRows.length < DATABASE_ROW_VIRTUALIZATION_MIN_ROWS ||
       tableViewportHeight <= 0
     ) {
       return {
@@ -1978,6 +2079,58 @@ export function DatabaseTableView({
         )}
 
         <Group wrap="wrap">
+          <Group gap="xs" wrap="wrap">
+            <Select
+              aria-label={t('View')}
+              placeholder={t('View')}
+              w={200}
+              data={databaseViews.map((view) => ({
+                value: view.id,
+                label: view.name,
+              }))}
+              value={selectedViewId}
+              onChange={(viewId) => {
+                setSelectedViewId(viewId);
+                if (!viewId) {
+                  setViewNameDraft('');
+                }
+              }}
+              clearable
+            />
+            {isEditable && (
+              <>
+                <TextInput
+                  aria-label={t('Name')}
+                  placeholder={t('Name')}
+                  w={180}
+                  value={viewNameDraft}
+                  onChange={(event) => setViewNameDraft(event.currentTarget.value)}
+                />
+                <Button
+                  variant="default"
+                  onClick={() => void saveCurrentView()}
+                  loading={
+                    createViewMutation.isPending || updateViewMutation.isPending
+                  }
+                  disabled={!viewNameDraft.trim()}
+                >
+                  {t('Save')}
+                </Button>
+                {selectedViewId && (
+                  <AccessibleActionIcon
+                    label={t('Delete')}
+                    color="red"
+                    variant="subtle"
+                    loading={deleteViewMutation.isPending}
+                    onClick={() => void deleteCurrentView()}
+                  >
+                    <IconTrash size={16} />
+                  </AccessibleActionIcon>
+                )}
+              </>
+            )}
+          </Group>
+
           {isMobileViewport && (
             <Button
               variant="default"
@@ -2232,6 +2385,10 @@ export function DatabaseTableView({
         )}
         <ScrollArea
           viewportRef={tableViewportRef}
+          h={getDatabaseTableViewportHeight(
+            preparedRows.length,
+            Boolean(isMobileViewport),
+          )}
           mah={isMobileViewport ? 520 : 620}
           onScrollPositionChange={(position) => setTableScrollTop(position.y)}
           className={classes.databaseScroll}
@@ -2721,7 +2878,13 @@ export function DatabaseTableView({
                         }
 
                         const pastedText = event.clipboardData.getData('text');
-                        if (!pastedText.includes('\n') && !pastedText.includes('\t')) {
+                        if (
+                          !shouldHandleDatabaseMatrixPaste(
+                            pastedText,
+                            isEditing,
+                            property.type,
+                          )
+                        ) {
                           return;
                         }
 

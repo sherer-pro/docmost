@@ -1,19 +1,31 @@
 import { describe, expect, it } from 'vitest';
 import {
   DATABASE_PROPERTY_DRAG_MIME,
+  DATABASE_ROW_VIRTUALIZATION_MIN_ROWS,
+  getDatabaseTableViewportHeight,
   getCheckboxFilterOptions,
   getSelectedPreparedRowIds,
   isDatabaseFilterControlsVisible,
   isSameCellPayloadValue,
   mergePinnedDatabaseRow,
+  normalizeDatabaseViewConfig,
   reorderDatabaseProperties,
   resolveDraggedDatabasePropertyId,
   resolveDatabasePropertyRename,
+  shouldHandleDatabaseMatrixPaste,
   shouldShowDatabaseFilterRemove,
   shouldDeleteCellPayload,
 } from './database-table-view.helpers';
 
 describe('database-table-view helpers', () => {
+  it('uses a bounded viewport when row virtualization becomes active', () => {
+    expect(getDatabaseTableViewportHeight(99, false)).toBeUndefined();
+    expect(
+      getDatabaseTableViewportHeight(DATABASE_ROW_VIRTUALIZATION_MIN_ROWS, false),
+    ).toBe(620);
+    expect(getDatabaseTableViewportHeight(1000, true)).toBe(520);
+  });
+
   it('hides filter controls on mobile while keeping state applicability intact', () => {
     expect(isDatabaseFilterControlsVisible(true)).toBe(false);
     expect(isDatabaseFilterControlsVisible(false)).toBe(true);
@@ -23,6 +35,21 @@ describe('database-table-view helpers', () => {
     expect(shouldShowDatabaseFilterRemove(0)).toBe(false);
     expect(shouldShowDatabaseFilterRemove(1)).toBe(false);
     expect(shouldShowDatabaseFilterRemove(2)).toBe(true);
+  });
+
+  it('keeps multiline paste inside active text and code editors', () => {
+    expect(
+      shouldHandleDatabaseMatrixPaste('first\nsecond', true, 'multiline_text'),
+    ).toBe(false);
+    expect(shouldHandleDatabaseMatrixPaste('first\nsecond', true, 'code')).toBe(
+      false,
+    );
+    expect(
+      shouldHandleDatabaseMatrixPaste('first\nsecond', false, 'code'),
+    ).toBe(true);
+    expect(
+      shouldHandleDatabaseMatrixPaste('first\tsecond', true, 'select'),
+    ).toBe(true);
   });
 
   it('pins a newly created row first without duplicating canonical data', () => {
@@ -119,5 +146,30 @@ describe('database-table-view helpers', () => {
       'page-visible-1',
       'page-visible-2',
     ]);
+  });
+
+  it('normalizes saved view configuration against active properties', () => {
+    expect(
+      normalizeDatabaseViewConfig(
+        {
+          filters: [
+            { propertyId: 'property-a', operator: 'contains', value: 'keep' },
+            { propertyId: '', operator: 'contains', value: '' },
+            { propertyId: 'missing', operator: 'equals', value: 'drop' },
+          ],
+          sortState: { propertyId: 'property-b', direction: 'desc' },
+          visibleColumns: {
+            'property-a': false,
+            'property-b': true,
+            missing: false,
+          },
+        },
+        ['property-a', 'property-b'],
+      ),
+    ).toEqual({
+      filters: [{ propertyId: 'property-a', operator: 'contains', value: 'keep' }],
+      sortState: { propertyId: 'property-b', direction: 'desc' },
+      visibleColumns: { 'property-a': false, 'property-b': true },
+    });
   });
 });
