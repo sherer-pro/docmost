@@ -10,9 +10,13 @@ import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { PageAccessService } from '../../../core/page-access/page-access.service';
 import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 import { normalizeUserSettings } from '../../../core/user/utils/user-preferences.util';
+import { NotificationEmailDeliveryPolicyHandler } from '../../queue/outbox/queue-outbox.types';
 
 @Processor(QueueName.EMAIL_QUEUE)
-export class EmailProcessor extends WorkerHost implements OnModuleDestroy {
+export class EmailProcessor
+  extends WorkerHost
+  implements OnModuleDestroy, NotificationEmailDeliveryPolicyHandler
+{
   private readonly logger = new Logger(EmailProcessor.name);
   constructor(
     private readonly mailService: MailService,
@@ -54,7 +58,7 @@ export class EmailProcessor extends WorkerHost implements OnModuleDestroy {
     }
   }
 
-  private async isNotificationEmailStillDeliverable(
+  async isNotificationEmailStillDeliverable(
     message: MailMessage,
   ): Promise<boolean> {
     const notificationIds = [
@@ -107,6 +111,7 @@ export class EmailProcessor extends WorkerHost implements OnModuleDestroy {
           notification.userId !== message.notificationUserId ||
           notification.readAt ||
           notification.emailedAt ||
+          notification.archivedAt ||
           notification.actorId === message.notificationUserId,
       )
     ) {

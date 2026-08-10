@@ -55,7 +55,16 @@ function createHarness(invitation?: Record<string, unknown>) {
   const pageTemplateSync = {
     processSyncRunFromOutbox: jest.fn().mockResolvedValue(undefined),
   };
-  const moduleRef = { get: jest.fn(() => pageTemplateSync) };
+  const notificationEmailDeliveryPolicy = {
+    isNotificationEmailStillDeliverable: jest.fn().mockResolvedValue(true),
+  };
+  const moduleRef = {
+    get: jest.fn((token: string) =>
+      token === 'NOTIFICATION_EMAIL_DELIVERY_POLICY_HANDLER'
+        ? notificationEmailDeliveryPolicy
+        : pageTemplateSync,
+    ),
+  };
   const generalQueue = { add: jest.fn().mockResolvedValue(undefined) };
   const notificationQueue = { add: jest.fn().mockResolvedValue(undefined) };
 
@@ -78,6 +87,7 @@ function createHarness(invitation?: Record<string, unknown>) {
     mailService,
     duplicatePageAttachments,
     pageTemplateSync,
+    notificationEmailDeliveryPolicy,
     generalQueue,
     notificationQueue,
   };
@@ -202,7 +212,9 @@ describe('QueueOutboxService', () => {
 
   it('fails a mismatched encrypted invitation secret without sending mail', async () => {
     const token = 'stored-token';
-    const tokenHash = createHash('sha256').update('different-token').digest('hex');
+    const tokenHash = createHash('sha256')
+      .update('different-token')
+      .digest('hex');
     const { service, outboxRepo, mailService } = createHarness();
     const entry = invitationEntry(token, tokenHash);
     outboxRepo.claimNext.mockResolvedValueOnce(entry);
@@ -273,8 +285,7 @@ describe('QueueOutboxService', () => {
   it('uses bounded exponential retry delays', async () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-08-09T12:00:00.000Z'));
     try {
-      const { service, outboxRepo, duplicatePageAttachments } =
-        createHarness();
+      const { service, outboxRepo, duplicatePageAttachments } = createHarness();
       duplicatePageAttachments.process.mockRejectedValueOnce(
         new Error('storage unavailable'),
       );
@@ -410,7 +421,12 @@ describe('QueueOutboxService', () => {
   });
 
   it('encrypts immediate notification mail and finalizes it with the current lease', async () => {
-    const { service, outboxRepo, mailService } = createHarness({
+    const {
+      service,
+      outboxRepo,
+      mailService,
+      notificationEmailDeliveryPolicy,
+    } = createHarness({
       id: USER_ID,
       readAt: null,
       emailedAt: null,
@@ -441,6 +457,9 @@ describe('QueueOutboxService', () => {
     });
     await service.processAvailable(1);
 
+    expect(
+      notificationEmailDeliveryPolicy.isNotificationEmailStillDeliverable,
+    ).toHaveBeenCalledWith(message);
     expect(mailService.sendEmail).toHaveBeenCalledWith(message);
     expect(outboxRepo.markNotificationEmailCompleted).toHaveBeenCalledWith(
       INVITATION_ID,
@@ -448,6 +467,49 @@ describe('QueueOutboxService', () => {
       USER_ID,
     );
     expect(outboxRepo.markCompleted).not.toHaveBeenCalled();
+  });
+
+  it('cancels an immediate notification email when delivery policy changes before dispatch', async () => {
+    const {
+      service,
+      outboxRepo,
+      mailService,
+      notificationEmailDeliveryPolicy,
+    } = createHarness({
+      id: USER_ID,
+      readAt: null,
+      emailedAt: null,
+    });
+    notificationEmailDeliveryPolicy.isNotificationEmailStillDeliverable.mockResolvedValue(
+      false,
+    );
+    const message = {
+      to: 'recipient@example.test',
+      subject: 'Private subject',
+      text: 'Private content',
+      notificationId: USER_ID,
+      notificationUserId: WORKSPACE_ID,
+      notificationDeliveryMode: 'immediate' as const,
+      notificationFrequency: 'immediate',
+    };
+
+    await service.enqueueNotificationEmail(USER_ID, message, {} as any);
+    const inserted = outboxRepo.enqueue.mock.calls[0][0];
+    outboxRepo.claimNext.mockResolvedValueOnce({
+      id: INVITATION_ID,
+      kind: QueueOutboxKind.NOTIFICATION_EMAIL,
+      payload: { notificationId: USER_ID },
+      secretPayload: inserted.secretPayload,
+      attemptCount: 1,
+    });
+
+    await service.processAvailable(1);
+
+    expect(mailService.sendEmail).not.toHaveBeenCalled();
+    expect(outboxRepo.markCancelled).toHaveBeenCalledWith(
+      INVITATION_ID,
+      expect.any(String),
+    );
   });
 
   it('reconciles a durable notification dispatch with a deterministic Redis job id', async () => {
