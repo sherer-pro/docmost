@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { CreateGroupDto, DefaultGroup } from '../dto/create-group.dto';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
@@ -17,6 +18,8 @@ import { WatcherRepo } from '@docmost/db/repos/watcher/watcher.repo';
 import { executeTx } from '@docmost/db/utils';
 import { InjectKysely } from 'nestjs-kysely';
 import { UserRole } from '../../../common/helpers/types/permission';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventName } from '../../../common/events/event.contants';
 
 @Injectable()
 export class GroupService {
@@ -27,6 +30,7 @@ export class GroupService {
     private groupUserService: GroupUserService,
     private readonly watcherRepo: WatcherRepo,
     @InjectKysely() private readonly db: KyselyDB,
+    @Optional() private readonly eventEmitter?: EventEmitter2,
   ) {}
 
   async getGroupInfo(
@@ -179,6 +183,25 @@ export class GroupService {
         );
       }
     });
+    await this.emitAccessChanged(workspaceId, userIds);
   }
 
+  private async emitAccessChanged(
+    workspaceId: string,
+    userIds: string[],
+  ): Promise<void> {
+    const accessUserIds = [...new Set(userIds)];
+    this.eventEmitter?.emit(EventName.PAGE_EMBED_VISIBILITY_CHANGED, {
+      workspaceId,
+      accessUserIds,
+    });
+    await Promise.all(
+      accessUserIds.map((userId) =>
+        this.eventEmitter?.emitAsync(EventName.AUTHORIZATION_CHANGED, {
+          workspaceId,
+          userId,
+        }),
+      ),
+    );
+  }
 }
