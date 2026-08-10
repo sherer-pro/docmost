@@ -47,4 +47,20 @@ describe('SsoEndpointPolicyService', () => {
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
+
+  it('refuses a non-allowlisted endpoint before resolving its hostname', async () => {
+    const service = createService('https://idp.example.com');
+    const resolveAddresses = jest.spyOn(service as any, 'resolveAddresses');
+
+    await expect(
+      service.assertAllowed(
+        'https://not-allowed.audit.invalid/issuer',
+        ['http:', 'https:'],
+        'OIDC issuer',
+      ),
+    ).rejects.toThrow('not in SSO_ALLOWED_ENDPOINTS');
+    // An endpoint the deployment never allowed must not become an outbound DNS
+    // lookup for an attacker-chosen name.
+    expect(resolveAddresses).not.toHaveBeenCalled();
+  });
 });
