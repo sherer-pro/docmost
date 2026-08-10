@@ -438,8 +438,11 @@ the existing API. Active inline formatting shows its Markdown delimiters, and
 Private multipart uploads require an `Idempotency-Key` header. Supported types
 are PDF, DOCX, TXT, Markdown, JPEG, PNG, and WebP. Limits are ten files,
 25 MiB per file, and 100 MiB per conversation. Text extraction is asynchronous.
-Images are sent to the provider only when `visionEnabled` is true. Deletion
-first commits a database tombstone and then performs retryable storage cleanup.
+Images are sent to the provider only when `visionEnabled` is true. A send that
+selects an image or an image-only PDF while vision is disabled is rejected with
+`ai_vision_required`; Docmost never accepts and silently drops that input.
+Deletion first commits a database tombstone and then performs retryable storage
+cleanup.
 
 Untrusted document parsing has additional worker budgets. DOCX extraction is
 limited to 25 MiB per ZIP entry, 100 MiB decompressed total, 10,000 entries,
