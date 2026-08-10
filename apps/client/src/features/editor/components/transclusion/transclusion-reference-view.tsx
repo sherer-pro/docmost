@@ -26,9 +26,10 @@ import { buildPageUrl } from "@/features/page/page.utils";
 import { getTransclusionReferenceKey } from "@docmost/editor-ext";
 import type { TransclusionClipboardStorage } from "@/features/editor/extensions/transclusion-clipboard";
 import { useTransclusionViewport } from "./use-transclusion-viewport";
+import { useEditorEditable } from "./use-editor-editable";
 
 export default function TransclusionReferenceView(props: NodeViewProps) {
-  const isEditable = props.editor.isEditable;
+  const isEditable = useEditorEditable(props.editor);
   const sourcePageId: string | null = props.node.attrs.sourcePageId ?? null;
   const transclusionId: string | null = props.node.attrs.transclusionId ?? null;
   const [openMenus, setOpenMenus] = useState(0);
@@ -75,7 +76,7 @@ function TransclusionReferenceBody({
   const { t } = useTranslation();
   const sourcePageId: string | null = node.attrs.sourcePageId ?? null;
   const transclusionId: string | null = node.attrs.transclusionId ?? null;
-  const isEditable = editor.isEditable;
+  const isEditable = useEditorEditable(editor);
 
   const { result, refresh } = useTransclusionLookup(
     sourcePageId,
