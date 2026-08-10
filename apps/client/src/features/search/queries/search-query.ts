@@ -16,13 +16,20 @@ import {
   SearchSuggestionParams,
 } from '@/features/search/types/search.types';
 
+export function hasNonWhitespaceSearchQuery(query: string) {
+  return query.trim().length > 0;
+}
+
 export function usePageSearchQuery(
   params: IPageSearchParams,
 ): UseQueryResult<IPageSearch[], Error> {
   return useQuery({
     queryKey: ["page-search", params],
     queryFn: () => searchPage(params),
-    enabled: !!params.query || !!params.labelId || !!params.tag,
+    enabled:
+      hasNonWhitespaceSearchQuery(params.query) ||
+      !!params.labelId ||
+      !!params.tag,
   });
 }
 
@@ -80,7 +87,11 @@ export function useShareSearchQuery(
   return useQuery({
     queryKey: ["share-search", params],
     queryFn: () => searchShare(params),
-    enabled: !!params.query,
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    enabled: hasNonWhitespaceSearchQuery(params.query),
   });
 }
 
@@ -90,6 +101,6 @@ export function useAttachmentSearchQuery(
   return useQuery({
     queryKey: ["attachment-search", params],
     queryFn: () => searchAttachments(params),
-    enabled: !!params.query,
+    enabled: hasNonWhitespaceSearchQuery(params.query),
   });
 }

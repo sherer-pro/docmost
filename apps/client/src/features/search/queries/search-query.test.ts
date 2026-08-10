@@ -3,7 +3,16 @@ import { describe, it } from "vitest";
 import {
   getSearchLabelsQueryKey,
   getSearchSuggestionQueryKey,
+  hasNonWhitespaceSearchQuery,
 } from "./search-query";
+
+describe("hasNonWhitespaceSearchQuery", () => {
+  it("rejects empty and whitespace-only input", () => {
+    assert.equal(hasNonWhitespaceSearchQuery(""), false);
+    assert.equal(hasNonWhitespaceSearchQuery(" \t\r\n"), false);
+    assert.equal(hasNonWhitespaceSearchQuery(" PublicNeedle "), true);
+  });
+});
 
 describe("getSearchSuggestionQueryKey", () => {
   it("separates user/group suggestions from page mention suggestions", () => {
