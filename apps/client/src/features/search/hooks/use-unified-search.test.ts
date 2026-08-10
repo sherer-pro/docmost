@@ -4,6 +4,7 @@ import {
   getUnifiedSearchBackendParams,
   getUnifiedSearchType,
   isUnifiedSearchEnabled,
+  UNIFIED_SEARCH_CACHE_POLICY,
 } from "./use-unified-search";
 
 describe("getUnifiedSearchNextPageParam", () => {
@@ -69,6 +70,17 @@ describe("getUnifiedSearchType", () => {
     ).toEqual({
       query: "report",
       spaceId: "space-1",
+    });
+  });
+});
+
+describe("UNIFIED_SEARCH_CACHE_POLICY", () => {
+  it("does not retain ACL-sensitive results after the search becomes inactive", () => {
+    expect(UNIFIED_SEARCH_CACHE_POLICY).toEqual({
+      staleTime: 0,
+      gcTime: 0,
+      refetchOnMount: "always",
+      refetchOnWindowFocus: true,
     });
   });
 });

@@ -395,6 +395,21 @@ describe('WsGateway.handleMessage', () => {
     );
   });
 
+  it('invalidates access-sensitive client caches after page access changes', () => {
+    const socket = createSocketMock(['workspace-workspace-1']);
+    socket.data.user = { workspaceId: 'workspace-1' };
+    (gateway as any).server.sockets.sockets.set(socket.id, socket);
+
+    gateway.handlePageEmbedVisibilityChanged({ workspaceId: 'workspace-1' });
+
+    expect(socket.emit).toHaveBeenCalledWith('page-embed:invalidate', {
+      operation: 'page_embed_invalidate',
+    });
+    expect(socket.emit).toHaveBeenCalledWith('access:invalidate', {
+      operation: 'access_invalidate',
+    });
+  });
+
   it('removes a space room immediately when its effective policy becomes stricter', async () => {
     const memberRepo = {
       getUserSpaceIds: jest.fn().mockResolvedValue(['space-a']),
