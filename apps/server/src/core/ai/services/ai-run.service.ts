@@ -170,6 +170,11 @@ export class AiRunService {
       workspace.id,
       user,
     );
+    const preparedRunContext = await this.contexts.prepareRunContext(
+      conversation,
+      dto,
+      user,
+    );
 
     const userMessageId = uuidv7();
     const assistantMessageId = uuidv7();
@@ -207,7 +212,8 @@ export class AiRunService {
         ) {
           throw new ConflictException({
             code: 'ai_profile_locked',
-            message: 'The assistant profile changed before the message was sent',
+            message:
+              'The assistant profile changed before the message was sent',
           });
         }
         const lockedConfig = await trx
@@ -390,9 +396,7 @@ export class AiRunService {
         await this.contexts.captureRunContext(
           trx,
           inserted.id,
-          lockedConversation,
-          dto,
-          user,
+          preparedRunContext,
         );
         await trx
           .updateTable('aiMessages')
@@ -752,6 +756,10 @@ export class AiRunService {
       config,
     );
     const frozenProvider = this.profiles.providerSnapshotForRun(source, config);
+    const preparedRunContext = await this.contexts.prepareCopiedRunContext(
+      source,
+      user,
+    );
 
     let created: AiRunEntity;
     try {
@@ -885,10 +893,9 @@ export class AiRunService {
           .executeTakeFirstOrThrow();
         await this.contexts.copyRunContext(
           trx,
-          locked.id,
           run.id,
           locked.assistantMessageId,
-          user,
+          preparedRunContext,
         );
         await trx
           .updateTable('aiMessages')
