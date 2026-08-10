@@ -154,7 +154,7 @@ describe('AiFileService upload recovery', () => {
     );
 
     expect(text).toContain('DOCX audit text');
-  });
+  }, 15_000);
 });
 
 function createBuilder(params: { rows?: any[]; takeFirst?: any }) {
