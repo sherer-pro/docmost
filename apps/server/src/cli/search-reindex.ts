@@ -1,6 +1,8 @@
 import { Queue } from 'bullmq';
+import { validate as isUuid } from 'uuid';
 import { createRetryStrategy, parseRedisUrl } from '../common/helpers';
 import { QueueJob, QueueName } from '../integrations/queue/constants';
+import { CONTENT_INDEXABLE_EXTENSIONS } from '../core/attachment/attachment.constants';
 import {
   CliArgs,
   createCliDatabase,
@@ -14,6 +16,20 @@ import {
 const VALID_ENTITIES = ['pages', 'attachments'] as const;
 type Entity = (typeof VALID_ENTITIES)[number];
 
+const SEARCH_REINDEX_USAGE = `Usage:
+  pnpm --filter ./apps/server search:reindex -- \\
+    --workspace=<uuid|all> \\
+    [--entities=pages,attachments] \\
+    [--reextract-attachments] \\
+    [--retry-failed]
+
+Options:
+  --workspace=<uuid|all>       Required workspace scope.
+  --entities=<list>            pages, attachments, or both (default: both).
+  --reextract-attachments      Reset supported ready/skipped files and queue extraction.
+  --retry-failed               Also reset failed files; requires --reextract-attachments.
+  --help                       Show this help without connecting to services.`;
+
 /**
  * Queues a full search rebuild and, optionally, attachment text re-extraction.
  *
@@ -24,10 +40,18 @@ type Entity = (typeof VALID_ENTITIES)[number];
  *   --retry-failed
  */
 async function main(): Promise<void> {
+  const args = parseCliArgs(process.argv.slice(2));
+  if (args.help === true) {
+    console.log(SEARCH_REINDEX_USAGE);
+    return;
+  }
+
   loadCliEnv();
 
-  const args = parseCliArgs(process.argv.slice(2));
   const workspace = requireStringArg(args, 'workspace');
+  if (workspace !== 'all' && !isUuid(workspace)) {
+    throw new Error('--workspace must be a UUID or "all"');
+  }
   const entities = parseEntities(args);
   const reextractAttachments = args['reextract-attachments'] === true;
   const retryFailed = args['retry-failed'] === true;
@@ -57,19 +81,27 @@ async function main(): Promise<void> {
   try {
     const workspaceIds = await resolveWorkspaceIds(db, workspace);
     if (reextractAttachments) {
-      if (retryFailed) {
-        const reset = await db
-          .updateTable('attachments')
-          .set({ contentIndexStatus: 'pending', contentIndexError: null })
-          .where('contentIndexStatus', '=', 'failed')
-          .where('deletedAt', 'is', null)
-          .$if(workspace !== 'all', (qb) =>
-            qb.where('workspaceId', 'in', workspaceIds),
-          )
-          .returning('id')
-          .execute();
-        console.log(`Reset ${reset.length} failed attachment extraction(s).`);
-      }
+      const resettableStatuses = retryFailed
+        ? ['ready', 'skipped', 'failed']
+        : ['ready', 'skipped'];
+      const reset = await db
+        .updateTable('attachments')
+        .set({
+          contentIndexStatus: 'pending',
+          contentIndexError: null,
+          contentIndexStartedAt: null,
+          contentIndexedAt: null,
+          contentIndexVersion: null,
+        })
+        .where('contentIndexStatus', 'in', resettableStatuses)
+        .where('fileExt', 'in', [...CONTENT_INDEXABLE_EXTENSIONS])
+        .where('deletedAt', 'is', null)
+        .$if(workspace !== 'all', (qb) =>
+          qb.where('workspaceId', 'in', workspaceIds),
+        )
+        .returning('id')
+        .execute();
+      console.log(`Reset ${reset.length} attachment extraction state(s).`);
 
       for (const workspaceId of workspaceIds) {
         await attachmentQueue.add(
