@@ -1,5 +1,5 @@
 import { Group, Center, Text } from "@mantine/core";
-import { Spotlight } from "@mantine/spotlight";
+import { Spotlight, useSpotlight } from "@mantine/spotlight";
 import { IconSearch } from "@tabler/icons-react";
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
@@ -13,15 +13,18 @@ import { getPageIcon } from "@/lib";
 import { useTranslation } from "react-i18next";
 import { shareSearchSpotlightStore } from "@/features/search/constants.ts";
 import DOMPurify from "dompurify";
+import { useModalBackgroundInert } from "@/components/ui/use-modal-background-inert.ts";
 
 interface ShareSearchSpotlightProps {
   shareId?: string;
 }
 export function ShareSearchSpotlight({ shareId }: ShareSearchSpotlightProps) {
   const { t } = useTranslation();
+  const { opened } = useSpotlight(shareSearchSpotlightStore);
   const [query, setQuery] = useState("");
   const [debouncedSearchQuery] = useDebouncedValue(query, 300);
   const hasSearchInput = hasNonWhitespaceSearchQuery(query);
+  useModalBackgroundInert(opened);
 
   const { data: searchResults } = useShareSearchQuery({
     query: debouncedSearchQuery,
