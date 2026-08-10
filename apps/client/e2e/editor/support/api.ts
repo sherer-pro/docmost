@@ -40,6 +40,7 @@ export async function createAdminApi(): Promise<APIRequestContext> {
     extraHTTPHeaders: {
       Authorization: `Bearer ${authToken}`,
       Cookie: `csrfToken=${csrfToken}`,
+      Host: new URL(origin).host,
       Origin: origin,
       Referer: `${origin}/`,
       "x-csrf-token": csrfToken,

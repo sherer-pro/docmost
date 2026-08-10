@@ -15,6 +15,8 @@ Set `DOCMOST_API_BASE_URL` when API transport must use a different loopback
 address (for example, `http://127.0.0.1:3000` when `localhost` may resolve to
 IPv6). Set `DOCMOST_API_ORIGIN` when the browser target is a Vite dev server but
 API requests must retain the backend's trusted origin for CSRF validation.
+The harness also aligns the HTTP `Host` header with that origin, so a separate
+IPv4 transport address remains compatible with request-host-bound CSRF checks.
 WebKit uses `DOCMOST_WEBKIT_BASE_URL`, defaulting to the IPv4 loopback.
 For focused iteration, `DOCMOST_EDITOR_AUDIT_FILES` accepts a comma-separated
 list of spec paths; the final acceptance run should leave it unset.
