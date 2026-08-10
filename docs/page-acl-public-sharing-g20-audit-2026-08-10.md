@@ -43,8 +43,9 @@ PASS is not possible on this snapshot for the following reasons:
 | Audit worktree | `D:\DevProjects\docmost-qa-G20` |
 | Final tested branch HEAD | `915f08adca6a46b1b2164ecbf79a0603215fe68d` |
 | Final tested describe | `v1.0.0-173-g915f08ad` |
-| Final tested image | `docmost-local:dev`, image ID `sha256:81597657d859319033af52e878f3418844458383492f83f05288592d5eae39f4` |
-| Local-main integration | Performed after this report commit; exact final `main` HEAD is recorded in the task handoff. |
+| Final branch image | `docmost-local:dev`, image ID `sha256:81597657d859319033af52e878f3418844458383492f83f05288592d5eae39f4` |
+| Local-main integration | Merge commit `add1889ea697082c54e662a51aae64fe29b8cb07` / `v1.0.0-175-gadd1889e` |
+| Post-merge image | `docmost-local:dev`, image ID `sha256:ee200035427a8f433447810715f8d832cb3647d33a5d91a273c5d2d924229467`; container healthy |
 
 The original checkout had only user-owned changes under `graphify-out/*`.
 They were not staged, reverted, overwritten, or merged. Graphify generated the
@@ -199,7 +200,7 @@ flowchart LR
 
 | Tool | Provenance and exact version | Isolation and data |
 | --- | --- | --- |
-| Docmost | Local production Dockerfile, branch image at `915f08ad`; image ID `sha256:81597657...` | Main local Compose project; app bound to `127.0.0.1:3000`. Only synthetic audit workspaces/pages and the supplied test session were used. |
+| Docmost | Local production Dockerfile; post-merge image at `add1889e`, image ID `sha256:ee200035...` | Main local Compose project; app bound to `127.0.0.1:3000`. Only synthetic audit workspaces/pages and the supplied test session were used. |
 | PostgreSQL | Official `postgres:18-alpine@sha256:9a8afca54e7861fd90fab5fdf4c42477a6b1cb7d293595148e674e0a3181de15` | Main DB stayed inside Compose. Final backend E2E used an additional `--rm` container on `127.0.0.1:55432` with synthetic credentials, then removed it. |
 | Redis | Official `redis:8-alpine@sha256:978f0e01593e65eed801f2402944efcd936d43b5027e4908a7897baf88ed6241`; server 8.10.0 | Main Redis stayed inside Compose. Final E2E used an additional `--rm` container on `127.0.0.1:56379`, then removed it. |
 | Browser | Repository Playwright 1.62.1, bundled Chromium, plus Codex in-app Chromium inspection | Local browser contexts only; owner/member contexts were isolated and concurrent where the scenario required it. No source, cookies, or traces were sent to SaaS. |
@@ -268,6 +269,11 @@ The material commands and all observed failures are listed below.
 | Full `corepack pnpm --filter ./apps/client test` baseline | 1 | 125 files; 612/614 tests passed. Failures: missing `de-DE` `Inactive`; AI guide count expected 30, found 31. Not changed by G20. |
 | `corepack pnpm verify:release` | Not run | Serial wrapper would deterministically stop at the known full-client failures. All relevant available substeps were run separately. |
 | Initial migration count query against nonexistent table `migrations` | 1 | Audit command error only; corrected to `kysely_migration`, which returned 101/latest. |
+| `git merge --no-ff codex/g20-page-acl-public-sharing` on local `main` | 0 | Merge commit `add1889ea697082c54e662a51aae64fe29b8cb07`; pre-existing `graphify-out/*` changes preserved. |
+| Post-merge `docker compose build docmost` and `docker compose up -d docmost` | 0 | Image `sha256:ee200035...`; recreated container healthy on `127.0.0.1:3000`. |
+| Post-merge targeted server and client regression | 0 | Server 8 suites/56 tests; client 3 files/12 tests passed. |
+| Post-merge public-share header probe | 0 | Existing share returned 200 with `Cache-Control: private, no-store`, `Pragma: no-cache`, `Expires: 0`, and CSP `form-action 'self'`. |
+| `git diff --exit-code 78e28b90..add1889e -- apps packages` | 0 | The merged production tree is identical to the fully tested G20 branch tree. |
 | Public share HTTP probes | 0 | Info/data/SEO 200 before revoke; no-store/CSP/cookie attributes present; immediate 404/empty after disable. |
 | `sanitize-traces.mjs` and `scan-artifacts.mjs` for ACL and AI evidence | 0 | Both exact-secret scans clean; no findings. |
 | Final count-only canary scan | 0 | PostgreSQL 0, live Redis payloads 0, storage 0, app logs 0, queue_outbox 0. |
@@ -468,8 +474,9 @@ present in this report. Exact auth/csrf scans report zero findings.
 3. `915f08adca6a46b1b2164ecbf79a0603215fe68d` -
    `fix(client): contain page ACL modal keyboard events`
 
-The audit report is committed separately. No push, pull request, tag, or
-release was created.
+The audit report is committed separately. Local `main` integration is merge
+commit `add1889ea697082c54e662a51aae64fe29b8cb07`. No push, pull request, tag,
+or release was created.
 
 ### Test-only changes and cleanup
 
