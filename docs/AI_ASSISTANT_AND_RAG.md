@@ -438,8 +438,11 @@ the existing API. Active inline formatting shows its Markdown delimiters, and
 Private multipart uploads require an `Idempotency-Key` header. Supported types
 are PDF, DOCX, TXT, Markdown, JPEG, PNG, and WebP. Limits are ten files,
 25 MiB per file, and 100 MiB per conversation. Text extraction is asynchronous.
-Images are sent to the provider only when `visionEnabled` is true. Deletion
-first commits a database tombstone and then performs retryable storage cleanup.
+Images are sent to the provider only when `visionEnabled` is true. A send that
+selects an image or an image-only PDF while vision is disabled is rejected with
+`ai_vision_required`; Docmost never accepts and silently drops that input.
+Deletion first commits a database tombstone and then performs retryable storage
+cleanup.
 
 Untrusted document parsing has additional worker budgets. DOCX extraction is
 limited to 25 MiB per ZIP entry, 100 MiB decompressed total, 10,000 entries,
@@ -631,6 +634,11 @@ the key or lease identity.
   heartbeat. A stale attempt with a recorded cancellation request becomes
   `cancelled`; every other stale attempt fails with `worker_lost`. The
   reconciler never repeats a stale provider call automatically.
+- Private chat file uploads hold a conversation-scoped PostgreSQL advisory lock
+  across the storage write. Repeating the same multipart request and
+  `Idempotency-Key` after a process failure resumes the reserved batch and its
+  existing file rows; completed and failed batches remain terminal. Reusing the
+  key with different file metadata or content returns `409`.
 - An `awaiting_approval` run with a decided step is recovered by the hash rules
   in **Agent mode** above. Do not repair it by editing Yjs content or reopening a
   terminal `ai_runs` row.

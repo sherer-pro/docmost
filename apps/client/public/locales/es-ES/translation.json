@@ -1474,10 +1474,10 @@
       "securitySecrets": "Las credenciales del proveedor, la recuperación, el writer de Open WebUI, RAG y los MCP entrante y saliente son secretos independientes. No guarde credenciales por espacio en el entorno ni en los metadatos de Docker, registros o URLs. Antes de cambiar APP_SECRET, desactive todos los bindings RAG y espere a que termine la limpieza; el secreto también firma los metadatos de propiedad remota. Si se cambió demasiado pronto, restaure el valor anterior antes de limpiar y vuelva a introducir después las credenciales cifradas.",
       "securityRemote": "El MCP saliente envía datos seleccionados de Docmost a otro sistema. Las descripciones, los esquemas y los resultados remotos no son de confianza; «solo lectura» es una clasificación de la política de Docmost, no una prueba de que la implementación remota no tenga efectos secundarios.",
       "operationsTitle": "Lista de comprobación del administrador",
-      "operationsSetup": "Configure y pruebe el modelo y la recuperación opcional en cada espacio. Apruebe primero los orígenes del despliegue, mantenga deshabilitada la búsqueda hasta que haya un adaptador preparado y restrinja el acceso mediante las políticas de herramientas integradas y externas.",
+      "operationsSetup": "Configure y pruebe el modelo y la recuperación opcional en cada espacio. Apruebe primero los orígenes del despliegue, mantenga deshabilitada la búsqueda hasta que haya un adaptador preparado y restrinja el acceso mediante las políticas de herramientas integradas y externas. Active la comprensión de imágenes antes de enviar imágenes o PDF que solo contengan imágenes; de lo contrario, el servidor rechazará esos datos en vez de omitirlos silenciosamente.",
       "operationsProfileNames": "Los nombres de perfiles del asistente deben ser únicos en cada espacio. Un duplicado devuelve 409 con ai_profile_name_conflict; vuelva a cargar la lista si es necesario y elija otro nombre.",
       "operationsRagMigration": "Al sustituir el worker RAG independiente, deténgalo primero, migre con RAG_SYNC_ENABLED=false y después configure, pruebe y habilite cada espacio. Los secretos antiguos del entorno no se importan. Para revertir, use el interruptor de despliegue y no migration down.",
-      "operationsRecovery": "Después de un fallo, restaure primero las dependencias, mantenga PostgreSQL como fuente autoritativa y conserve la Knowledge Base durante la recuperación de correspondencias. Para una reversión de emergencia de RAG Sync, establezca RAG_SYNC_ENABLED=false y reinicie Docmost; AI_EXTERNAL_MCP_ENABLED controla únicamente el MCP saliente.",
+      "operationsRecovery": "Después de un fallo, restaure primero las dependencias, mantenga PostgreSQL como fuente autoritativa y conserve la Knowledge Base durante la recuperación de correspondencias. Repetir la carga de un archivo privado con el mismo Idempotency-Key reanuda el lote reservado tras un fallo del proceso sin crear otra fila de archivo. Para una reversión de emergencia de RAG Sync, establezca RAG_SYNC_ENABLED=false y reinicie Docmost; AI_EXTERNAL_MCP_ENABLED controla únicamente el MCP saliente.",
       "templateExportScope": "Las entradas del catálogo de plantillas se excluyen. Las páginas creadas a partir de plantillas se exportan como páginas materializadas normales."
     },
     "integrations": {
@@ -1717,6 +1717,7 @@
       "retrievalUnavailable": "La búsqueda de espacio no está disponible temporalmente. La solicitud puede continuar sin él.",
       "retrievalConfiguration": "La dirección de búsqueda de espacio fue rechazada por la política de seguridad.",
       "fileProcessingFailed": "No se pudo procesar un archivo seleccionado. Elimínalo o súbelo nuevamente.",
+      "visionRequired": "Activa la comprensión de imágenes antes de enviar imágenes seleccionadas o archivos PDF que solo contengan imágenes.",
       "fileUploadFailed": "No se pudo cargar el archivo. Intentar otra vez.",
       "unsupportedFileType": "Este tipo de archivo no es compatible.",
       "contextRevisionConflict": "El contexto del chat cambió en otra pestaña. Revíselo y vuelva a intentarlo.",

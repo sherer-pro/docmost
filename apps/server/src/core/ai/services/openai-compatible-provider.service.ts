@@ -192,8 +192,11 @@ export class OpenAiCompatibleProviderService {
         await handlers.onText(text);
       },
       onReasoning: async (text: string) => {
+        if (!handlers.onReasoning) {
+          return;
+        }
         trackStreamText(text);
-        await handlers.onReasoning?.(text);
+        await handlers.onReasoning(text);
       },
     };
 

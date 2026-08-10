@@ -77,6 +77,67 @@ describe('AiRunService', () => {
     );
   });
 
+  it('rejects visual-only inputs when vision is disabled', async () => {
+    const rows = [[{ mimeType: 'image/png', extractedText: null }]];
+    const query: any = {
+      select: jest.fn(() => query),
+      where: jest.fn(() => query),
+      execute: jest.fn(async () => rows.shift() ?? []),
+    };
+    const db = { selectFrom: jest.fn(() => query) };
+    const service = createService({});
+
+    await expect(
+      (service as any).assertVisionCompatibleInputs(
+        db,
+        ['chat-file'],
+        [],
+        false,
+      ),
+    ).rejects.toMatchObject({
+      status: 400,
+      response: { code: 'ai_vision_required' },
+    });
+  });
+
+  it('allows extracted PDF text when vision is disabled', async () => {
+    const rows = [
+      [{ mimeType: 'application/pdf', extractedText: 'Readable text' }],
+      [{ mimeType: 'application/pdf', textContent: 'Indexed text' }],
+    ];
+    const query: any = {
+      select: jest.fn(() => query),
+      where: jest.fn(() => query),
+      execute: jest.fn(async () => rows.shift() ?? []),
+    };
+    const db = { selectFrom: jest.fn(() => query) };
+    const service = createService({});
+
+    await expect(
+      (service as any).assertVisionCompatibleInputs(
+        db,
+        ['chat-file'],
+        ['attachment'],
+        false,
+      ),
+    ).resolves.toBeUndefined();
+  });
+
+  it('does not query input metadata when vision is enabled', async () => {
+    const db = { selectFrom: jest.fn() };
+    const service = createService({});
+
+    await expect(
+      (service as any).assertVisionCompatibleInputs(
+        db,
+        ['chat-file'],
+        ['attachment'],
+        true,
+      ),
+    ).resolves.toBeUndefined();
+    expect(db.selectFrom).not.toHaveBeenCalled();
+  });
+
   it('admits a sixth active AI run for the user', async () => {
     const results = [
       { count: 0 },
