@@ -45,6 +45,7 @@ vi.mock("@tabler/icons-react", () => {
     IconListNumbers: Icon,
     IconMessage: Icon,
     IconPageBreak: Icon,
+    IconRefresh: Icon,
   };
 });
 
@@ -99,7 +100,22 @@ vi.mock(
 vi.mock(
   "@/features/editor/components/bubble-menu/toolbar-action-button",
   () => ({
-    ToolbarActionButton: () => null,
+    ToolbarActionButton: ({
+      item,
+    }: {
+      item: { name: string; command: () => void };
+    }) => (
+      <button type="button" onClick={item.command}>
+        {item.name}
+      </button>
+    ),
+  }),
+);
+
+vi.mock(
+  "@/features/editor/components/bubble-menu/can-create-synced-block",
+  () => ({
+    canCreateSyncedBlock: () => true,
   }),
 );
 
@@ -118,7 +134,13 @@ vi.mock("@/features/ai/components/ai-selection-action", () => ({
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
-const editor = {} as Editor;
+const run = vi.fn();
+const chain = {
+  focus: vi.fn(() => chain),
+  toggleTransclusionSource: vi.fn(() => chain),
+  run,
+};
+const editor = { chain: () => chain } as unknown as Editor;
 
 describe("FixedToolbar", () => {
   let root: Root | null = null;
@@ -133,6 +155,9 @@ describe("FixedToolbar", () => {
     container = null;
     aiSelectionActionMock.mockReset();
     editorStateMock.mockReset();
+    run.mockReset();
+    chain.focus.mockClear();
+    chain.toggleTransclusionSource.mockClear();
   });
 
   it("renders the AI selection action in the toolbar", () => {
@@ -186,5 +211,30 @@ describe("FixedToolbar", () => {
     expect(aiSelectionActionMock).toHaveBeenCalledWith(
       expect.objectContaining({ disabled: true }),
     );
+  });
+
+  it("offers synced block creation when the selected range can be wrapped", () => {
+    editorStateMock.mockReturnValue({
+      canCreateSyncedBlock: true,
+      hasTextSelection: true,
+      selectedText: "Selected text",
+    });
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root?.render(<FixedToolbar editor={editor} />);
+    });
+
+    const action = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Create synced block",
+    );
+    expect(action).toBeDefined();
+
+    act(() => action?.click());
+    expect(chain.focus).toHaveBeenCalledTimes(1);
+    expect(chain.toggleTransclusionSource).toHaveBeenCalledTimes(1);
+    expect(run).toHaveBeenCalledTimes(1);
   });
 });
