@@ -295,6 +295,14 @@ describe('SearchService', () => {
         ([condition]) => typeof condition === 'object' && condition !== null,
       ),
     ).toBe(true);
+    const tagCondition = state.whereCalls.find(
+      ([condition]) =>
+        typeof (condition as { toOperationNode?: unknown })?.toOperationNode ===
+        'function',
+    )?.[0] as { toOperationNode: () => { sqlFragments?: string[] } };
+    expect(tagCondition.toOperationNode().sqlFragments?.join('')).toContain(
+      '::text',
+    );
     expect(state.orderByCalls).toEqual(
       expect.arrayContaining([
         ['updatedAt', 'desc'],
