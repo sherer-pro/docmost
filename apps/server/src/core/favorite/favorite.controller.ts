@@ -166,7 +166,7 @@ export class FavoriteController {
     @AuthWorkspace() workspace: Workspace,
   ) {
     return this.favoriteService.getFavoriteIds(
-      user.id,
+      user,
       workspace.id,
       dto.type as FavoriteType,
       dto.spaceId,

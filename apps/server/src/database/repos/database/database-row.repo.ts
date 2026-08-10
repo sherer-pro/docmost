@@ -497,8 +497,9 @@ export class DatabaseRowRepo {
   async findActiveByPageId(
     pageId: string,
     workspaceId: string,
+    trx?: KyselyTransaction,
   ): Promise<DatabaseRow> {
-    return this.db
+    return dbOrTx(this.db, trx)
       .selectFrom('databaseRows')
       .selectAll()
       .where('pageId', '=', pageId)
