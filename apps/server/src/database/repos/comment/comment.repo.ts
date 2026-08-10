@@ -36,21 +36,24 @@ export class CommentRepo {
   // todo, add workspaceId
   async findById(
     commentId: string,
-    opts?: { includeCreator: boolean; includeResolvedBy: boolean },
+    opts?: {
+      includeCreator?: boolean;
+      includeResolvedBy?: boolean;
+      trx?: KyselyTransaction;
+      withLock?: boolean;
+    },
   ): Promise<Comment> {
-    return await this.db
+    return await dbOrTx(this.db, opts?.trx)
       .selectFrom('comments')
       .selectAll('comments')
       .$if(opts?.includeCreator, (qb) => qb.select(this.withCreator))
       .$if(opts?.includeResolvedBy, (qb) => qb.select(this.withResolvedBy))
       .where('id', '=', commentId)
+      .$if(opts?.withLock, (qb) => qb.forUpdate())
       .executeTakeFirst();
   }
 
-  async findPageComments(
-    pageId: string,
-    pagination: CommentPaginationOptions,
-  ) {
+  async findPageComments(pageId: string, pagination: CommentPaginationOptions) {
     const query = this.db
       .selectFrom('comments')
       .selectAll('comments')
@@ -154,7 +157,10 @@ export class CommentRepo {
     return Number(result?.count) > 0;
   }
 
-  async hasChildrenFromOtherUsers(commentId: string, userId: string): Promise<boolean> {
+  async hasChildrenFromOtherUsers(
+    commentId: string,
+    userId: string,
+  ): Promise<boolean> {
     const result = await this.db
       .selectFrom('comments')
       .select((eb) => eb.fn.count('id').as('count'))
