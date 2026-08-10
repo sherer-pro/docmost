@@ -729,8 +729,6 @@ export interface SendAiMessageRequest {
   snapshotHash?: string;
   documentHeadings?: AiDocumentHeading[];
   selection?: AiSelection;
-  fileIds?: string[];
-  attachmentIds?: string[];
   useSpaceSearch?: boolean;
 }
 
