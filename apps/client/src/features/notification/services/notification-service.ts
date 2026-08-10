@@ -26,3 +26,9 @@ export async function markNotificationsRead(
 export async function markAllNotificationsRead(): Promise<void> {
   await api.post("/notifications/mark-all-read");
 }
+
+export async function archiveNotification(
+  notificationId: string,
+): Promise<void> {
+  await api.post("/notifications/archive", { notificationId });
+}
